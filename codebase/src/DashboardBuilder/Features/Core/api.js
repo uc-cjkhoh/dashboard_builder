@@ -8,6 +8,23 @@ const BASE = basePathFrom(import.meta.url);
 // Thin fetch wrapper for the JSON API. Parses the body, and on a non-2xx response throws
 // an Error carrying the server's { error } message so callers can surface it in a toast. An optional
 // AbortSignal cancels the request (the worksheet aborts a query a newer one supersedes).
+export function errorMessage(status, data) {
+  if (data && typeof data.error === "string" && data.error) return data.error;
+  if (data && typeof data.title === "string" && data.title) return data.title;
+  return status >= 500 ? `Server error (${status}).` : `Request failed (${status}).`;
+}
+function httpError(status, data) {
+  const e = new Error(errorMessage(status, data));
+  e.status = status; e.field = data?.field ?? null;
+  return e;
+}
+async function guardedFetch(url, opts) {
+  try { return await fetch(url, opts); } catch (e) {
+    if (e?.name === "AbortError") throw e;
+    throw new Error("Can't reach the server — check your network and try again.");
+  }
+}
+
 async function request(method, url, body, signal) {
   const opts = { method, headers: {}, signal };
   if (body !== undefined) {
@@ -15,7 +32,7 @@ async function request(method, url, body, signal) {
     opts.body = JSON.stringify(body);
   }
 
-  const res = await fetch(BASE + url, opts);
+  const res = await guardedFetch(BASE + url, opts);
   const text = await res.text();
   let data = null;
   if (text) {
@@ -23,8 +40,7 @@ async function request(method, url, body, signal) {
   }
 
   if (!res.ok) {
-    const message = data && data.error ? data.error : `Request failed (${res.status}).`;
-    throw new Error(message);
+    throw httpError(res.status, data);
   }
   return data;
 }
@@ -59,15 +75,15 @@ export const api = {
   query: (plan, { signal } = {}) => request("POST", "/api/query", plan, signal),
   /** Export the worksheet query's rows as CSV text (P13). Bounded server-side; returns raw text. */
   async exportCsv(plan) {
-    const res = await fetch(BASE + "/api/query/export.csv", {
+    const res = await guardedFetch(BASE + "/api/query/export.csv", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(plan),
     });
     if (!res.ok) {
-      let msg = `Export failed (${res.status}).`;
-      try { const j = await res.json(); if (j && j.error) msg = j.error; } catch { /* non-JSON */ }
-      throw new Error(msg);
+      let data = null;
+      try { data = await res.json(); } catch { /* non-JSON */ }
+      throw httpError(res.status, data);
     }
     return res.text();
   },

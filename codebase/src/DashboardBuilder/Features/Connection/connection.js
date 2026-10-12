@@ -1,5 +1,6 @@
 import { api } from "../Core/api.js";
-import { show, hide, toggle, toast, setPill } from "../Core/ui.js";
+import { show, hide, toggle, toast, setPill, fieldError, checkField } from "../Core/ui.js";
+import { host, port, text, LIMITS } from "../Core/validate.js";
 
 // The sidebar connection flow (P2, refined). Drives the indicator pill and gates the schema
 // browser + canvas. Once connected the form is replaced by a compact summary showing the
@@ -102,19 +103,17 @@ export function initConnection() {
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
 
-    const payload = {
-      host: hostEl.value.trim(),
-      port: portEl.value ? Number(portEl.value) : undefined,
-      user: userEl.value.trim(),
-      password: passEl.value,
-      secure: secureEl.checked,
-      // Only meaningful under TLS; the server also gates it on `secure`.
-      allowInvalidCert: secureEl.checked && allowCertEl.checked,
+    const fields = { host: hostEl, port: portEl, user: userEl, password: passEl };
+    const values = {
+      host: checkField(hostEl, host(hostEl.value)),
+      port: checkField(portEl, port(portEl.value)),
+      user: checkField(userEl, text(userEl.value, { label: "User", max: LIMITS.user, required: true })),
+      password: checkField(passEl, text(passEl.value, { label: "Password", max: LIMITS.password, trim: false })),
     };
-    if (!payload.host || !payload.user) {
-      toast("Host and user are required.", "danger");
-      return;
-    }
+    const firstBad = Object.values(fields).find((i) => i.getAttribute("aria-invalid") === "true");
+    if (firstBad) { firstBad.focus(); return; }
+    // allowInvalidCert only matters under TLS; the server also gates it on `secure`.
+    const payload = { ...values, secure: secureEl.checked, allowInvalidCert: secureEl.checked && allowCertEl.checked };
 
     setPill(pill, "connecting");
     connectBtn.disabled = true;
@@ -124,7 +123,8 @@ export function initConnection() {
       toast(`Connected to ${view.host}.`, "ok");
     } catch (err) {
       setPill(pill, "failed", "Failed");
-      toast(err.message, "danger");
+      if (err.field && fields[err.field]) fieldError(fields[err.field], err.message);
+      else toast(err.message, "danger");
     } finally {
       connectBtn.disabled = false;
     }
