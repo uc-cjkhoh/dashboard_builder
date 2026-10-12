@@ -1,4 +1,5 @@
 import { api } from "../Core/api.js";
+import { icon } from "../Core/icons.js";
 import { show, hide, toggle, confirmDialog, toast } from "../Core/ui.js";
 import { entities, relationshipsFor, emit, bus, isModelActive, showModel } from "../Core/store.js";
 
@@ -52,7 +53,7 @@ export function initCanvas() {
     addTableFromUser(payload?.db, payload?.table, Math.max(0, x), Math.max(0, y));
   });
 
-  // Non-drag fallback (accessibility): schema.js dispatches this from a chip's ＋ button.
+  // Non-drag fallback (accessibility): schema.js dispatches this from a chip's plus button.
   // A table always goes to the shared Data Model; switch there if a dashboard is showing.
   document.addEventListener("table:add", (event) => {
     const { db, table } = event.detail;
@@ -163,7 +164,7 @@ export function initCanvas() {
     collapse.className = "iconbtn entity__toggle";
     collapse.setAttribute("aria-label", "Collapse columns");
     collapse.setAttribute("aria-expanded", "true");
-    collapse.textContent = "▾";
+    collapse.append(icon("chevron"));
     collapse.addEventListener("click", () => toggleCollapsed(entity, collapse));
 
     const title = document.createElement("span");
@@ -175,7 +176,7 @@ export function initCanvas() {
     remove.type = "button";
     remove.className = "iconbtn iconbtn--danger";
     remove.setAttribute("aria-label", `Remove ${entity.db}.${entity.table}`);
-    remove.textContent = "✕";
+    remove.append(icon("close"));
     remove.addEventListener("click", () => removeEntity(entity));
 
     head.append(collapse, title, remove);
@@ -239,13 +240,13 @@ export function initCanvas() {
     const pill = document.createElement("span");
     if (state === "loading") {
       pill.className = "pill pill--warn";
-      pill.textContent = "◐ Loading…";
+      pill.append(icon("refresh", { size: 14 }), " Loading…");
       statusEl.append(pill);
       return;
     }
     // failed
     pill.className = "pill pill--danger";
-    pill.textContent = "✕ Failed to load";
+    pill.append(icon("error", { size: 14 }), " Failed to load");
     const retry = document.createElement("button");
     retry.type = "button";
     retry.className = "btn btn--danger";

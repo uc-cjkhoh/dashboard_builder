@@ -1,3 +1,5 @@
+import { icon } from "./icons.js";
+
 // Small shared UI helpers. Visibility is always toggled via the `hidden` attribute — never
 // inline style.display — so the one `[hidden]{display:none!important}` rule stays in charge
 // (CLAUDE.md golden rule 5 / DESIGN.md).
@@ -7,20 +9,26 @@ export const hide = (el) => { if (el) el.hidden = true; };
 export const toggle = (el, visible) => { if (el) el.hidden = !visible; };
 
 let toastTimer;
+let toastText; // ONE persistent live region, created once; its text is replaced per toast
 
 /** Transient message. `kind` is one of "ok" | "danger" | "info". Danger toasts stay until dismissed. */
 export function toast(message, kind = "info") {
   const el = document.getElementById("toast");
   if (!el) return;
-  const text = document.createElement("span");
-  text.className = "toast__text"; text.setAttribute("role", "status"); text.setAttribute("aria-live", "polite");
-  const close = makeButton("×", "toast__close");
-  close.setAttribute("aria-label", "Dismiss");
-  close.addEventListener("click", () => hide(el));
-  el.replaceChildren(text, close);
-  text.textContent = message; // set after insertion so the live region announces it
+  if (!toastText || !el.contains(toastText)) {
+    toastText = document.createElement("span");
+    toastText.className = "toast__text"; toastText.setAttribute("role", "status"); toastText.setAttribute("aria-live", "polite");
+    // The dismiss button sits OUTSIDE the live region so it is not announced with the message.
+    const close = makeButton("", "toast__close");
+    close.append(icon("close", { size: 14 }));
+    close.setAttribute("aria-label", "Dismiss");
+    close.addEventListener("click", () => hide(el));
+    el.replaceChildren(toastText, close);
+  }
   el.className = `toast toast--${kind}`;
   show(el);
+  toastText.textContent = ""; // clear then set, so a repeated message is announced again
+  toastText.textContent = message;
   clearTimeout(toastTimer);
   if (kind !== "danger") toastTimer = setTimeout(() => hide(el), 5000);
 }
@@ -31,7 +39,7 @@ export function fieldError(input, message) {
   const msg = document.createElement("p");
   msg.className = "field-error"; msg.id = `field-error-${++fieldErrorSeq}`;
   const glyph = document.createElement("span");
-  glyph.className = "field-error__icon"; glyph.setAttribute("aria-hidden", "true"); glyph.textContent = "⚠";
+  glyph.className = "field-error__icon"; glyph.setAttribute("aria-hidden", "true"); glyph.append(icon("warning", { size: 14 }));
   msg.append(glyph, document.createTextNode(" " + message));
   input.setAttribute("aria-invalid", "true");
   input.setAttribute("aria-describedby", msg.id);
@@ -69,10 +77,10 @@ export function listDialog(title, items) {
 
 // Status is icon + text + color, never color alone (accessibility — DESIGN.md).
 const PILL = {
-  idle:       { cls: "pill--muted",  glyph: "○", label: "Idle" },
-  connecting: { cls: "pill--warn",   glyph: "◐", label: "Connecting…" },
-  connected:  { cls: "pill--ok",     glyph: "●", label: "Connected" },
-  failed:     { cls: "pill--danger", glyph: "✕", label: "Failed" },
+  idle:       { cls: "pill--muted",  glyph: "dot", label: "Idle" },
+  connecting: { cls: "pill--warn",   glyph: "refresh", label: "Connecting…" },
+  connected:  { cls: "pill--ok",     glyph: "check", label: "Connected" },
+  failed:     { cls: "pill--danger", glyph: "error", label: "Failed" },
 };
 
 // --- Dialogs (native <dialog>; falls back to the `open` attribute where showModal is
@@ -131,7 +139,7 @@ export function setPill(el, state, text) {
   const glyph = document.createElement("span");
   glyph.className = "pill__glyph";
   glyph.setAttribute("aria-hidden", "true");
-  glyph.textContent = p.glyph;
+  glyph.append(icon(p.glyph, { size: 14 }));
 
   el.append(glyph, document.createTextNode(" " + (text ?? p.label)));
 }

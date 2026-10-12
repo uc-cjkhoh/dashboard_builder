@@ -2,6 +2,7 @@ import {
   dashboards, isModelActive, activeDashboardId, showModel, createDashboard,
   switchDashboard, renameDashboard, closeDashboard, dashboardHasContent, bus,
 } from "../Core/store.js";
+import { icon } from "../Core/icons.js";
 import { confirmDialog, toast } from "../Core/ui.js";
 import { text, LIMITS } from "../Core/validate.js";
 
@@ -61,7 +62,7 @@ export function initTabs() {
     close.type = "button";
     close.className = "tab__close";
     close.setAttribute("aria-label", `Close ${dash.name}`);
-    close.textContent = "×";
+    close.append(icon("close", { size: 12 }));
     close.addEventListener("click", (event) => { event.stopPropagation(); requestClose(dash); });
 
     el.addEventListener("keydown", (event) => {

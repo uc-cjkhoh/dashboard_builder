@@ -62,7 +62,7 @@ export function initConnection() {
       hostLabel.title = view.host;
       // Flag a bypassed-certificate connection so the risk stays visible after connecting.
       const transport = view.secure
-        ? (view.allowInvalidCertificate ? "TLS ⚠ cert unverified" : "TLS")
+        ? (view.allowInvalidCertificate ? "TLS, cert unverified" : "TLS")
         : "plain";
       metaLabel.textContent = `${view.user} · ${transport} · :${view.port}`;
       metaLabel.title = view.allowInvalidCertificate
@@ -130,7 +130,7 @@ export function initConnection() {
     }
   });
 
-  // ✎ change connection — reveal the form (still connected until a new connect succeeds).
+  // edit icon: change connection — reveal the form (still connected until a new connect succeeds).
   changeBtn?.addEventListener("click", () => showForm({ cancellable: true }));
 
   // Cancel out of "change" mode, back to the active connection's summary.

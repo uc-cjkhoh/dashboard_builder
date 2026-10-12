@@ -138,6 +138,10 @@ button { font: inherit; }
 /* Inline-SVG icon inside an icon button (e.g. the Disconnect power glyph) — inherits the button's
    colour via stroke=currentColor; block display avoids the inline baseline gap. */
 .iconbtn__svg { display: block; }
+.icon { flex: none; display: block; }
+.icon--up { transform: rotate(180deg); }
+.toast__close, .field-error__icon, .table-chip__icon, .pill__glyph, .ws-tool__icon, .ws-select__icon, .ws-drill__icon { display: inline-grid; place-items: center; }
+.ws-toolpanel__title, .ws-toolbtn, .ws-field__add, .workbook__btn { display: inline-flex; align-items: center; gap: var(--s1); }
 
 /* ---- Inputs -------------------------------------------------------------- */
 .input, .select { height: var(--ctl-h); padding: 0 var(--s3); border: 1px solid var(--line-2); border-radius: var(--r-ctl);

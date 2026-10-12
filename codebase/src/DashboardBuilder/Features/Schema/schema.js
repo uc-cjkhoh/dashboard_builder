@@ -1,4 +1,5 @@
 import { api } from "../Core/api.js";
+import { icon } from "../Core/icons.js";
 import { show, hide, toast } from "../Core/ui.js";
 
 // Schema browser (P3): fills the database <select> and renders the selected database's tables
@@ -64,10 +65,10 @@ export function initSchema() {
     chip.dataset.db = db;
     chip.dataset.table = table;
 
-    const icon = document.createElement("span");
-    icon.className = "table-chip__icon";
-    icon.setAttribute("aria-hidden", "true");
-    icon.textContent = "▦";
+    const iconEl = document.createElement("span");
+    iconEl.className = "table-chip__icon";
+    iconEl.setAttribute("aria-hidden", "true");
+    iconEl.append(icon("table"));
 
     const name = document.createElement("span");
     name.className = "table-chip__name";
@@ -80,7 +81,7 @@ export function initSchema() {
     add.type = "button";
     add.className = "iconbtn";
     add.setAttribute("aria-label", `Add ${table} to the canvas`);
-    add.textContent = "＋";
+    add.append(icon("plus"));
     add.addEventListener("click", () => {
       document.dispatchEvent(new CustomEvent("table:add", { detail: { db, table } }));
     });
@@ -93,7 +94,7 @@ export function initSchema() {
     });
     chip.addEventListener("dragend", () => chip.classList.remove("table-chip--dragging"));
 
-    chip.append(icon, name, add);
+    chip.append(iconEl, name, add);
     return chip;
   }
 

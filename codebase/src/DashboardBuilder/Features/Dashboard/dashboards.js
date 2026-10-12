@@ -1,4 +1,5 @@
 import { api } from "../Core/api.js";
+import { icon, PATHS } from "../Core/icons.js";
 import { toggle, makeButton, toast, fieldError } from "../Core/ui.js";
 import { LIMITS } from "../Core/validate.js";
 import { aggsFor, checkFilter, statFilters, withCategories, TEXT_VALUE_TYPES } from "./filter-rules.js";
@@ -271,11 +272,12 @@ export function initDashboards() {
     const payload = { db: t.db, table: t.table, column: col.name, category: col.category };
     chip.append(el("span", "ws-field__name", col.name));
 
-    // Keyboard/non-drag path (a11y): a focusable ＋ adds the field to its natural shelf without
-    // dragging — measures to Rows, dimensions to Columns (mirrors the sidebar table chip's ＋).
+    // Keyboard/non-drag path (a11y): a focusable plus button adds the field to its natural shelf without
+    // dragging — measures to Rows, dimensions to Columns (mirrors the sidebar table chip's plus button).
     const shelfKey = role === "measure" ? "rows" : "columns";
     const shelfLabel = role === "measure" ? "Rows" : "Columns";
-    const add = el("button", "ws-field__add", "＋");
+    const add = el("button", "ws-field__add");
+    add.append(icon("plus", { size: 14 }));
     add.type = "button";
     add.setAttribute("aria-label", `Add ${col.name} to ${shelfLabel}`);
     add.title = `Add to ${shelfLabel}`;
@@ -339,7 +341,7 @@ export function initDashboards() {
   function selectionChip(dash, s) {
     const sel = s.selection;
     const wrap = el("div", "ws-select");
-    wrap.append(el("span", "ws-select__icon", "◎"), el("span", "ws-select__label", `Selected: ${sel.label}`));
+    wrap.append(iconSpan("ws-select__icon", "filter"), el("span", "ws-select__label", `Selected: ${sel.label}`));
     const setAction = (a) => { sel.action = sel.action === a ? null : a; commit(dash, s); };
     const btn = (label, a) => {
       const b = makeButton(label, `ws-select__btn${sel.action === a ? " is-active" : ""}`);
@@ -347,7 +349,7 @@ export function initDashboards() {
       b.addEventListener("click", () => setAction(a));
       return b;
     };
-    const clear = iconButton("✕", "Clear selection");
+    const clear = iconButton("close", "Clear selection");
     clear.addEventListener("click", () => { s.selection = null; commit(dash, s); });
     wrap.append(btn("Keep only", "keep"), btn("Exclude", "exclude"), clear);
     return wrap;
@@ -392,7 +394,7 @@ export function initDashboards() {
   function drillChip(dash, s) {
     const d = s.drill;
     const wrap = el("div", "ws-drill");
-    wrap.append(el("span", "ws-drill__icon", "⤵"), el("span", "ws-select__label", "Drill"));
+    wrap.append(iconSpan("ws-drill__icon", "drill"), el("span", "ws-select__label", "Drill"));
     const crumbs = el("div", "ws-drill__crumbs");
     const labels = ["All", ...(d.path ?? []).map((p) => p.label)];
     labels.forEach((text, j) => {
@@ -450,7 +452,9 @@ export function initDashboards() {
   }
 
   function formatToggle() {
-    const btn = makeButton(`Format ${formatOpen ? "▴" : "▾"}`, `ws-toolbtn${formatOpen ? " is-active" : ""}`);
+    const btn = makeButton("Format", `ws-toolbtn${formatOpen ? " is-active" : ""}`);
+    btn.append(" ", icon("chevron", { size: 14 }));
+    if (formatOpen) btn.lastChild.classList.add("icon--up");
     btn.setAttribute("aria-expanded", String(formatOpen));
     btn.addEventListener("click", () => { formatOpen = !formatOpen; if (formatOpen) openTool = null; renderShelves(); });
     return btn;
@@ -462,7 +466,8 @@ export function initDashboards() {
   // (Table/KPI render as native DOM, so it isn't offered there).
   function exportControl(dash, s) {
     const wrap = el("div", "ws-export");
-    const btn = makeButton("Export ▾", "ws-toolbtn");
+    const btn = makeButton("Export", "ws-toolbtn");
+    btn.append(" ", icon("chevron", { size: 14 }));
     btn.setAttribute("aria-haspopup", "true");
     btn.setAttribute("aria-expanded", "false");
     const menu = el("div", "ws-export__menu");
@@ -602,7 +607,7 @@ export function initDashboards() {
     const p = el("div", "ws-pill");
     p.append(el("span", "ws-pill__text", text));
     if (extra) p.append(extra);
-    const x = iconButton("✕", "Remove field");
+    const x = iconButton("close", "Remove field");
     x.addEventListener("click", onRemove);
     p.append(x);
     return p;
@@ -853,41 +858,41 @@ export function initDashboards() {
     const drillLevels = s.drill?.levels ?? [];
     const one = (field, clear) => (field ? [markPill(field, clear)] : []); // single-field pill list
     return [
-      { group: "marks", key: "color", icon: "◑", label: "Color", count: colorFields.length,
+      { group: "marks", key: "color", icon: "color", label: "Color", count: colorFields.length,
         pills: colorFields.map((f, i) => colorPill(dash, s, f, i)), onDrop: (f) => addColor(dash, f),
         hint: "Drop a field — categorical = colour series, numeric = gradient",
         note: colorFields.length && colorMode(s) === "discrete" && !COLOR_USES.has(s.chartType)
           ? "Discrete colour needs Bar/Line/Area/Stacked/Table — or drop a numeric field for a gradient." : null },
-      { group: "marks", key: "size", icon: "◉", label: "Size", count: m.size ? 1 : 0,
+      { group: "marks", key: "size", icon: "size", label: "Size", count: m.size ? 1 : 0,
         pills: one(m.size, () => { m.size = null; commit(dash, s); }), onDrop: (f) => addSize(dash, f),
         hint: "Drop a numeric field to size the marks (scatter bubbles)" },
       { group: "marks", key: "label", icon: "A", label: "Label", count: m.label ? 1 : 0,
         pills: one(m.label, () => { m.label = null; commit(dash, s); }), onDrop: (f) => addMarkSingle(dash, "label", f),
         hint: "Drop a field to write its value on each mark" },
-      { group: "marks", key: "detail", icon: "⋯", label: "Detail", count: (m.detail ?? []).length,
+      { group: "marks", key: "detail", icon: "detail", label: "Detail", count: (m.detail ?? []).length,
         pills: (m.detail ?? []).map((f, i) => markPill(f, () => { m.detail.splice(i, 1); commit(dash, s); })), onDrop: (f) => addMarkList(dash, "detail", f),
         hint: "Drop dimensions to add mark granularity (no visual channel)" },
-      { group: "marks", key: "tooltip", icon: "ⓘ", label: "Tooltip", count: (m.tooltip ?? []).length,
+      { group: "marks", key: "tooltip", icon: "tooltip", label: "Tooltip", count: (m.tooltip ?? []).length,
         pills: (m.tooltip ?? []).map((f, i) => markPill(f, () => { m.tooltip.splice(i, 1); commit(dash, s); })), onDrop: (f) => addMarkList(dash, "tooltip", f),
         hint: "Drop fields to list in each mark's tooltip" },
-      { group: "marks", key: "shape", icon: "◇", label: "Shape", count: m.shape ? 1 : 0,
+      { group: "marks", key: "shape", icon: "shape", label: "Shape", count: m.shape ? 1 : 0,
         pills: one(m.shape, () => { m.shape = null; commit(dash, s); }), onDrop: (f) => addShape(dash, f),
         hint: "Drop a categorical field for per-value point symbols (scatter)",
         note: m.shape && !SCATTER_TYPES.has(s.chartType) ? "Shape encodes Scatter / Square / Circle points." : null },
-      { group: "marks", key: "path", icon: "⤳", label: "Path", count: m.path ? 1 : 0,
+      { group: "marks", key: "path", icon: "path", label: "Path", count: m.path ? 1 : 0,
         pills: one(m.path, () => { m.path = null; commit(dash, s); }), onDrop: (f) => addMarkSingle(dash, "path", f),
         hint: "Drop a field to order a line/area's vertices" },
-      { group: "marks", key: "angle", icon: "∠", label: "Angle", count: m.angle ? 1 : 0,
+      { group: "marks", key: "angle", icon: "angle", label: "Angle", count: m.angle ? 1 : 0,
         pills: one(m.angle, () => { m.angle = null; commit(dash, s); }), onDrop: (f) => addAngle(dash, f),
         hint: "A radial magnitude — pie already maps its measure to angle" },
-      { group: "more", key: "filters", icon: "▽", label: "Filters", count: s.filters.length,
+      { group: "more", key: "filters", icon: "filter", label: "Filters", count: s.filters.length,
         pills: s.filters.map((f, i) => filterPill(dash, s, f, i)), onDrop: (f) => addFilter(dash, f),
         hint: "Drop a field to filter the view by it" },
-      { group: "more", key: "drill", icon: "⤵", label: "Drill", count: drillLevels.length,
+      { group: "more", key: "drill", icon: "drill", label: "Drill", count: drillLevels.length,
         pills: drillLevels.map((f, i) => drillLevelPill(dash, s, f, i)), onDrop: (f) => addDrillLevel(dash, f),
         hint: "Drop ≥2 same-table fields to build a drill hierarchy (year → quarter → month)",
         note: drillLevels.length === 1 ? "Add another same-table field to drill." : null },
-      { group: "more", key: "pages", icon: "▦", label: "Pages", count: s.pages ? 1 : 0,
+      { group: "more", key: "pages", icon: "pages", label: "Pages", count: s.pages ? 1 : 0,
         pills: s.pages ? [pagesPill(dash, s)] : [], onDrop: (f) => addPages(dash, f),
         hint: "Drop a dimension to step/animate the view through its members" },
     ];
@@ -901,7 +906,7 @@ export function initDashboards() {
     btn.setAttribute("aria-pressed", String(openTool === tool.key));
     btn.setAttribute("aria-label", `${tool.label}${set ? ` (${tool.count} field${tool.count > 1 ? "s" : ""})` : " (empty)"}`);
     btn.title = tool.hint || tool.label;
-    btn.append(el("span", "ws-tool__icon", tool.icon), el("span", "ws-tool__txt", tool.label));
+    btn.append(iconSpan("ws-tool__icon", tool.icon), el("span", "ws-tool__txt", tool.label));
     if (set) btn.append(el("span", "ws-tool__badge", String(tool.count)));
     btn.addEventListener("click", () => { openTool = openTool === tool.key ? null : tool.key; formatOpen = false; renderShelves(); });
     btn.addEventListener("dragover", (e) => { if (hasField(e)) { e.preventDefault(); btn.classList.add("is-over"); } });
@@ -918,8 +923,10 @@ export function initDashboards() {
   function toolPanel(dash, s, tool) {
     const panel = el("div", "ws-toolpanel");
     const head = el("div", "ws-toolpanel__head");
-    head.append(el("span", "ws-toolpanel__title", `${tool.icon}  ${tool.label}`));
-    const close = iconButton("✕", "Close editor");
+    const title = el("span", "ws-toolpanel__title");
+    title.append(icon(tool.icon), ` ${tool.label}`);
+    head.append(title);
+    const close = iconButton("close", "Close editor");
     close.addEventListener("click", () => { openTool = null; renderShelves(); });
     head.append(close);
     panel.append(head);
@@ -938,7 +945,7 @@ export function initDashboards() {
     zone.addEventListener("dragleave", () => zone.classList.remove("is-over"));
     zone.addEventListener("drop", (e) => { zone.classList.remove("is-over"); const f = readField(e); if (f) { e.preventDefault(); onDrop(f); } });
   }
-  // A marks-encoding pill: table.column + a remove ✕, tinted as a marks pill.
+  // A marks-encoding pill: table.column + a remove button, tinted as a marks pill.
   function markPill(f, remove) {
     const p = pill(`${f.table}.${f.column}`, remove);
     p.classList.add("ws-pill--mark");
@@ -1113,7 +1120,7 @@ export function initDashboards() {
   // The status line between the shelves and the chart (e.g. "Showing the top 50 — more exist").
   function setNotice(text) {
     if (!statusEl) return;
-    statusEl.textContent = text ? `ⓘ ${text}` : "";
+    statusEl.replaceChildren(...(text ? [icon("info", { size: 14 }), ` ${text}`] : []));
     toggle(statusEl, Boolean(text));
   }
 
@@ -1723,7 +1730,7 @@ export function initDashboards() {
     return columnsCache.get(k);
   }
   function iconButton(glyph, label) {
-    const b = el("button", "iconbtn", glyph); b.type = "button"; b.setAttribute("aria-label", label);
+    const b = el("button", "iconbtn"); b.append(PATHS[glyph] ? icon(glyph) : glyph); b.type = "button"; b.setAttribute("aria-label", label);
     return b;
   }
 }
@@ -1750,6 +1757,7 @@ function el(tag, className, text) {
   if (text !== undefined) e.textContent = text;
   return e;
 }
+function iconSpan(cls, name) { const s = el("span", cls); s.append(icon(name)); return s; }
 function hint(text) { return el("div", "ws-hint", text); }
 function warn(text) { return el("div", "ws-hint ws-hint--warn", text); }
 

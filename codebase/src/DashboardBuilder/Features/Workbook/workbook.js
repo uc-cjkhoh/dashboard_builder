@@ -2,6 +2,7 @@ import {
   entities, relationships, dashboards, bus, activeDashboardId,
   createDashboard, updateSheet, closeDashboard, showModel, switchDashboard,
 } from "../Core/store.js";
+import { icon } from "../Core/icons.js";
 import { toast, confirmDialog, toggle, listDialog } from "../Core/ui.js";
 import { addEntity, clearModel } from "../Canvas/canvas.js";
 import { restoreRelationship } from "../Relations/relations.js";
@@ -74,7 +75,7 @@ function keepUnreadable(saved, err) {
     : `Couldn't restore your saved workbook: ${reason}. No backup copy could be kept, so the stored workbook was left untouched.`, "danger");
   if (!kept) {
     blockedKey = key; // no backup exists, so the unreadable entry is the only copy — never overwrite it
-    setStatus("⚠ Not saved — your previous workbook couldn't be read and has been left untouched. Use Export to keep a copy.");
+    setStatus("Not saved — your previous workbook couldn't be read and has been left untouched. Use Export to keep a copy.", "warning");
   }
 }
 
@@ -92,14 +93,14 @@ function save() {
   timer = null;
   if (!key || restoring) return;
   if (key === blockedKey) {
-    setStatus("⚠ Not saved — your previous workbook couldn't be read and has been left untouched. Use Export to keep a copy.");
+    setStatus("Not saved — your previous workbook couldn't be read and has been left untouched. Use Export to keep a copy.", "warning");
     return;
   }
   try {
     localStorage.setItem(key, JSON.stringify(serializeWorkbook(currentState())));
-    setStatus("✓ Saved in this browser");
+    setStatus("Saved in this browser", "check");
   } catch {
-    setStatus("⚠ Not saved — browser storage is unavailable. Use Export to keep a copy.");
+    setStatus("Not saved — browser storage is unavailable. Use Export to keep a copy.", "warning");
   }
 }
 
@@ -186,8 +187,8 @@ function currentState() {
 const isEmpty = () => entities.size === 0 && dashboards.length === 0;
 const count = (n, noun) => `${n} ${noun}${n === 1 ? "" : "s"}`;
 
-function setStatus(text) {
+function setStatus(text, iconName) {
   if (!statusEl) return;
-  statusEl.textContent = text;
+  statusEl.replaceChildren(...(text && iconName ? [icon(iconName, { size: 14 }), " "] : []), text);
   toggle(statusEl, Boolean(text));
 }

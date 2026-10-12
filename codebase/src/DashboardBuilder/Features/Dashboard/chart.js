@@ -1,4 +1,5 @@
 import { makeValueFormatter } from "../Core/format.js";
+import { pickInk } from "./contrast.js";
 
 // Charting adapter (P9; formatting P10). Renders worksheet results through the self-hosted ECharts library
 // (wwwroot/js/vendor/echarts.min.js, loaded as a global before the module graph — no CDN).
@@ -34,16 +35,16 @@ function tokens() {
   return {
     series: t("--chart-series", "#2563eb"),
     cat,
-    axis: t("--chart-axis", "#d4d4d8"),
-    grid: t("--chart-grid", "#e4e4e7"),
-    label: t("--chart-label", "#3f3f46"),
-    muted: t("--chart-muted", "#71717a"),
+    axis: t("--chart-axis", "#cbd5e1"),
+    grid: t("--chart-grid", "#e2e8f0"),
+    label: t("--chart-label", "#334155"),
+    muted: t("--chart-muted", "#5b6b81"),
     surface: t("--surface", "#ffffff"),
-    ink: t("--ink", "#0a0a0a"),
+    ink: t("--ink", "#0f172a"),
     font: t("--font", "system-ui, sans-serif"),
     // Brand stops for the sequential heatmap ramp (single-hue soft→saturated, token-driven).
     brand: t("--accent", "#2563eb"),
-    brandSoft: t("--accent-soft", "#fce8e8"),
+    brandSoft: t("--accent-soft", "#eff4ff"),
   };
 }
 
@@ -508,6 +509,11 @@ function buildHeatmap({ xCats, yCats, cells, format = {} }) {
 function buildTreemap({ tree, format = {} }) {
   const c = tokens();
   const fmtVal = makeValueFormatter(format);
+  // Label ink per tile: the tile colour is the top-level node's category colour (by index), and every
+  // descendant keeps that hue, so pick the ink with the best contrast against it (>= 4.5:1).
+  const inks = [c.ink, c.surface, "#000000", "#ffffff"];
+  const withInk = (node, ink) => ({ ...node, label: { ...node.label, color: ink }, ...(node.children ? { children: node.children.map((k) => withInk(k, ink)) } : {}) });
+  const data = tree.map((n, i) => withInk(n, pickInk(c.cat[i % c.cat.length], inks)));
   return {
     textStyle: { fontFamily: c.font, color: c.label },
     tooltip: {
@@ -516,9 +522,9 @@ function buildTreemap({ tree, format = {} }) {
       formatter: (p) => `<span style="color:${c.muted}">${escapeHtml(String(p.name))}</span><br><b>${fmtVal(p.value)}</b>`,
     },
     series: [{
-      type: "treemap", data: tree, roam: false, nodeClick: false,
+      type: "treemap", data, roam: false, nodeClick: false,
       breadcrumb: { show: false },
-      label: { show: true, color: "#fff", fontFamily: c.font, formatter: (p) => p.name },
+      label: { show: true, fontFamily: c.font, formatter: (p) => p.name },
       itemStyle: { borderColor: c.surface, borderWidth: 2, gapWidth: 2 },
       levels: [{ color: c.cat, colorMappingBy: "index" }],
     }],

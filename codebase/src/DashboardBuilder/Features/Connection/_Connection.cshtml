@@ -4,7 +4,7 @@
     <div class="sidebar__title-row">
         <h2 class="sidebar__title" id="conn-title">Connection</h2>
         <span class="pill pill--muted" id="conn-status" role="status" aria-live="polite">
-            <span class="pill__glyph" aria-hidden="true">○</span> Idle
+            <span class="pill__glyph" aria-hidden="true" data-icon="dot"></span> Idle
         </span>
     </div>
 
@@ -16,9 +16,9 @@
             <span class="conn-summary__meta" id="conn-meta">—</span>
         </div>
         <button type="button" class="iconbtn conn-summary__btn" id="conn-change"
-                aria-label="Change connection" title="Change connection">✎</button>
+                aria-label="Change connection" title="Change connection"><span data-icon="edit"></span></button>
         <button type="button" class="iconbtn iconbtn--danger conn-summary__btn" id="conn-disconnect"
-                aria-label="Disconnect" title="Disconnect"><svg class="iconbtn__svg" viewBox="0 0 20 20" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M10 3 v6" /><path d="M6.2 5.4 a5.2 5.2 0 1 0 7.6 0" /></svg></button>
+                aria-label="Disconnect" title="Disconnect"><span data-icon="power"></span></button>
     </div>
 
     <form class="conn-form" id="conn-form" autocomplete="off">
