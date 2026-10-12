@@ -1,0 +1,13 @@
+@* Dashboard view = a Tableau-style worksheet: drag fields onto shelves to build a chart. Driven by
+   Dashboard/dashboards.js (shelves/marks) + Dashboard/chart.js (rendering). *@
+<section class="view view--dashboard" id="dashboard-view" aria-label="Worksheet" hidden>
+    <div class="worksheet">
+        <aside class="ws-fields" id="ws-fields" aria-label="Fields"></aside>
+        <div class="ws-main">
+            <div class="ws-shelves" id="ws-shelves"></div>
+            @* Result notices, e.g. "Showing the top 50 — more exist" (toggled via `hidden`). *@
+            <p class="ws-status" id="ws-status" role="status" aria-live="polite" hidden></p>
+            <div class="ws-chart" id="ws-chart"></div>
+        </div>
+    </div>
+</section>

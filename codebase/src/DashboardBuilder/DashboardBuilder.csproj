@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>DashboardBuilder</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Read-only ClickHouse access over the HTTP(S) interface (ADO.NET). See
+         docs/clickhouse-integration.md. -->
+    <PackageReference Include="ClickHouse.Client" Version="7.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Let the test project exercise pure internal helpers (bucket clamp, filter-clause builder). -->
+    <InternalsVisibleTo Include="DashboardBuilder.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Each feature's CSS/JS is co-located with its controller/view under Features/ (not wwwroot) and
+         served at runtime from /features via a restricted static-file provider (see Program.cs). They
+         live outside wwwroot, so the SDK won't publish them by default — copy them to the publish output
+         so the /features provider finds them in production. `dotnet run`/tests use the source tree as the
+         content root, so no copy-to-output is needed there. -->
+    <Content Include="Features\**\*.css;Features\**\*.js"
+             CopyToOutputDirectory="Never" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

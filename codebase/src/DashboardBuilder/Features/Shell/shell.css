@@ -1,0 +1,121 @@
+/* Shell — app grid, sidebar chrome + resizer, and the canvas/view scaffold. */
+
+/* --------------------------------------------------------------------------
+   App shell: black sidebar (fixed width) + white canvas
+   -------------------------------------------------------------------------- */
+.app {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) 1fr;
+  height: 100%;
+}
+
+/* ---- Sidebar (chrome) ---------------------------------------------------- */
+.sidebar {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;               /* allow the inner list to scroll, not the page */
+  background: linear-gradient(180deg, color-mix(in srgb, var(--side-bg), var(--side-ink) 5%) 0%, var(--side-bg) 60%);
+  color: var(--side-ink);
+  /* hairline separator + a faint red glow down the right edge */
+  box-shadow: inset -1px 0 0 rgba(0, 0, 0, .5), 2px 0 18px color-mix(in srgb, var(--brand) 8%, transparent);
+}
+
+.sidebar__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s4) var(--s4) var(--s3);
+  border-bottom: 1px solid var(--side-line);
+}
+.sidebar__mark {
+  flex: none;
+  width: 34px; height: 34px;
+  border-radius: 9px;
+  background: var(--brand);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, .08), 0 4px 14px color-mix(in srgb, var(--brand) 45%, transparent);
+  animation: dot-pulse 3.2s var(--ease) infinite;
+}
+.sidebar__mark svg { width: 18px; height: 18px; }
+.sidebar__brand-text { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
+.sidebar__brand-name { font-weight: 700; font-size: var(--fs-body); letter-spacing: .01em; }
+.sidebar__brand-sub { font-size: var(--fs-xs); color: var(--side-muted); }
+
+.sidebar__section { padding: var(--s4); border-bottom: 1px solid var(--side-line); }
+.sidebar__section--grow { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.sidebar__title {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  color: var(--side-muted);
+  margin-bottom: var(--s3);
+}
+.sidebar__title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--s3);
+}
+.sidebar__title-row .sidebar__title { margin-bottom: 0; }
+
+/* Resize handle on the sidebar's right edge (drag → up to 30% of the viewport) */
+.sidebar__resizer {
+  position: absolute;
+  top: 0; right: -3px; bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 3;
+}
+.sidebar__resizer::after {
+  content: "";
+  position: absolute;
+  top: 0; bottom: 0; right: 3px;
+  width: 2px;
+  background: transparent;
+  transition: background var(--motion) var(--ease);
+}
+.sidebar__resizer:hover::after,
+.sidebar__resizer:focus-visible::after,
+body.is-resizing .sidebar__resizer::after { background: var(--brand); }
+.sidebar__resizer:focus-visible { outline: none; }
+body.is-resizing { cursor: col-resize; user-select: none; }
+
+/* ---- Canvas (workspace) -------------------------------------------------- */
+.canvas {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;           /* bar stays put; the active view scrolls internally */
+  background: var(--bg);
+}
+/* Each view fills the area below the bar and scrolls on its own. */
+.view { position: relative; flex: 1; min-height: 0; overflow: auto; padding: var(--s5); }
+.view--model {
+  /* A faint dot grid + a soft brand glow give the workspace depth so cards float above it. */
+  background:
+    radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--ink) 7%, transparent) 1px, transparent 1.6px) 0 0 / 24px 24px,
+    radial-gradient(1100px 520px at 78% -8%, color-mix(in srgb, var(--brand) 6%, transparent), transparent 70%),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface), var(--ink) 1%), var(--bg));
+}
+.view--dashboard { background: linear-gradient(180deg, color-mix(in srgb, var(--surface), var(--ink) 1%), var(--bg)); }
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* The view strip (Data Model + dashboards) sits at the top of the canvas column. */
+.canvas__bar {
+  flex: none;
+  display: flex;
+  align-items: flex-end;
+  gap: var(--s3);
+  padding: var(--s3) var(--s4) 0;
+  background: color-mix(in srgb, var(--surface), var(--ink) 3%);
+  border-bottom: 1px solid var(--line);
+}
+

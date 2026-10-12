@@ -1,0 +1,16 @@
+# .NET build output
+bin/
+obj/
+out/
+publish/
+
+# User-specific
+*.user
+
+# IDE / OS
+.vs/
+.idea/
+.DS_Store
+
+# ASP.NET Data Protection key ring (secret)
+keys/

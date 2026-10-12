@@ -1,0 +1,83 @@
+// When the app is hosted under a path prefix (e.g. /dashboardbuilder behind a reverse
+// proxy), API calls must carry that prefix. Derive it from this module's own URL —
+// .../<base>/features/Core/api.js → "/<base>" — so it's "" when served at the site root.
+export const basePathFrom = (moduleUrl) =>
+  new URL(".", moduleUrl).pathname.replace(/\/features\/Core\/$/i, "");
+const BASE = basePathFrom(import.meta.url);
+
+// Thin fetch wrapper for the JSON API. Parses the body, and on a non-2xx response throws
+// an Error carrying the server's { error } message so callers can surface it in a toast. An optional
+// AbortSignal cancels the request (the worksheet aborts a query a newer one supersedes).
+async function request(method, url, body, signal) {
+  const opts = { method, headers: {}, signal };
+  if (body !== undefined) {
+    opts.headers["Content-Type"] = "application/json";
+    opts.body = JSON.stringify(body);
+  }
+
+  const res = await fetch(BASE + url, opts);
+  const text = await res.text();
+  let data = null;
+  if (text) {
+    try { data = JSON.parse(text); } catch { /* non-JSON body */ }
+  }
+
+  if (!res.ok) {
+    const message = data && data.error ? data.error : `Request failed (${res.status}).`;
+    throw new Error(message);
+  }
+  return data;
+}
+
+export const api = {
+  /** Current session connection status (password-free). */
+  getConnection: () => request("GET", "/api/connection"),
+  /** Validate + store a connection. Resolves to the connection view, or throws with a message. */
+  connect: (payload) => request("POST", "/api/connection", payload),
+  /** Drop the session connection. Uses POST **with a body** — the Apache proxy 403s DELETE outright and
+   *  also 403s body-less POSTs, so a JSON body is required to pass it (like /connection and /query). */
+  disconnect: () => request("POST", "/api/connection/disconnect", {}),
+
+  /** List databases on the current connection. */
+  databases: () => request("GET", "/api/databases"),
+  /** List tables in a database. */
+  tables: (db) => request("GET", `/api/databases/${encodeURIComponent(db)}/tables`),
+  /** Column names + types (with display category) for a table. */
+  columns: (db, table) =>
+    request("GET", `/api/databases/${encodeURIComponent(db)}/tables/${encodeURIComponent(table)}/columns`),
+  /** A bounded row preview: { columns, rows }. */
+  preview: (db, table, limit = 50) =>
+    request("GET", `/api/databases/${encodeURIComponent(db)}/tables/${encodeURIComponent(table)}/preview?limit=${encodeURIComponent(limit)}`),
+  /** Total row count: { count }. */
+  count: (db, table) =>
+    request("GET", `/api/databases/${encodeURIComponent(db)}/tables/${encodeURIComponent(table)}/count`),
+  /** Distinct values of a column for a filter dropdown (P14): bounded string list. */
+  distinct: (db, table, column, limit = 200) =>
+    request("GET", `/api/databases/${encodeURIComponent(db)}/tables/${encodeURIComponent(table)}/columns/${encodeURIComponent(column)}/distinct?limit=${encodeURIComponent(limit)}`),
+  /** Aggregate query for a chart: plan in, { rows: [{label, value}] } out. */
+  aggregate: (db, table, plan) =>
+    request("POST", `/api/databases/${encodeURIComponent(db)}/tables/${encodeURIComponent(table)}/aggregate`, plan),
+  /** Histogram (P12): equal-width bins over a numeric column → { bins: [{x0, x1, count}] }. */
+  histogram: (db, table, plan, { signal } = {}) =>
+    request("POST", `/api/databases/${encodeURIComponent(db)}/tables/${encodeURIComponent(table)}/histogram`, plan, signal),
+  /** Box plot (P12): five-number summary per group → { groups: [{label, min, q1, median, q3, max}] }. */
+  boxplot: (db, table, plan, { signal } = {}) =>
+    request("POST", `/api/databases/${encodeURIComponent(db)}/tables/${encodeURIComponent(table)}/boxplot`, plan, signal),
+  /** Worksheet query (may join related tables): { rowDimensions, columnDimensions, measures, rows,
+   *  truncated } — `truncated` is true when more groups exist beyond the plan's limit. */
+  query: (plan, { signal } = {}) => request("POST", "/api/query", plan, signal),
+  /** Export the worksheet query's rows as CSV text (P13). Bounded server-side; returns raw text. */
+  async exportCsv(plan) {
+    const res = await fetch(BASE + "/api/query/export.csv", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(plan),
+    });
+    if (!res.ok) {
+      let msg = `Export failed (${res.status}).`;
+      try { const j = await res.json(); if (j && j.error) msg = j.error; } catch { /* non-JSON */ }
+      throw new Error(msg);
+    }
+    return res.text();
+  },
+};

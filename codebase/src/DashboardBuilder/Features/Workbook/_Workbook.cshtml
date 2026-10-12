@@ -1,0 +1,8 @@
+@* Workbook actions, right of the tab strip. Driven by Workbook/workbook.js: auto-save to this
+   browser + Export/Import as a JSON file. The file never contains the connection or a password. *@
+<div class="workbook" role="group" aria-label="Workbook">
+    <span class="workbook__status" id="wb-status" role="status" aria-live="polite" hidden></span>
+    <button type="button" class="btn workbook__btn" id="wb-import" title="Open a workbook file">⤒ Import</button>
+    <button type="button" class="btn workbook__btn" id="wb-export" title="Download this workbook as a file">⤓ Export</button>
+    <input type="file" id="wb-file" accept="application/json,.json" hidden />
+</div>

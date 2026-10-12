@@ -1,0 +1,95 @@
+/* Canvas feature — the data-model empty state + entity cards + preview data grid. */
+
+.canvas__empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  color: var(--ink-3);
+  text-align: center;
+  pointer-events: none;
+}
+.canvas__empty .empty__title { font-size: var(--fs-lead); color: var(--ink-2); }
+.canvas--dragover { outline: 2px dashed var(--brand); outline-offset: -8px; }
+
+/* ---- Entity card (a dropped table) --------------------------------------- */
+.entity {
+  position: absolute;
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-grad);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: var(--elev-2);
+  overflow: hidden;
+  animation: entity-in var(--motion-slow) var(--ease-back);
+  transition: box-shadow var(--motion) var(--ease), border-color var(--motion) var(--ease), transform var(--motion) var(--ease);
+}
+.entity:hover { transform: translateY(-3px); box-shadow: var(--elev-3); border-color: var(--line-2); }
+.entity--dragging { box-shadow: var(--elev-3); transform: scale(1.03) rotate(-.6deg); animation: none; cursor: grabbing; }
+.entity__toggle { transition: transform var(--motion) var(--ease); }
+.entity--collapsed .entity__toggle { transform: rotate(-90deg); }
+/* Smoothly collapse the columns + preview; the head stays visible. */
+.entity__body { transition: max-height var(--motion-slow) var(--ease), opacity var(--motion) var(--ease); max-height: 1200px; }
+.entity--collapsed .entity__body { max-height: 0; opacity: 0; }
+.entity__head {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s2) var(--s3);
+  background: var(--head-grad);
+  border-bottom: 1px solid var(--line);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5);
+  cursor: grab;
+  user-select: none;
+}
+.entity--dragging .entity__head { cursor: grabbing; }
+.entity__title { flex: 1; font-size: var(--fs-sm); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.entity__status { padding: var(--s3); display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
+.entity__error { flex-basis: 100%; margin: 0; color: var(--danger-ink); font-size: var(--fs-xs); }
+.entity__body { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+
+/* Uniform-height, scrollable column list (no data preview in the entity view). */
+.entity__cols { height: 240px; overflow: auto; padding: var(--s1) 0; }
+.col-row { display: flex; align-items: center; gap: var(--s2); padding: var(--s1) var(--s3); font-size: var(--fs-sm); cursor: pointer; transition: background var(--motion) var(--ease); }
+.col-row:hover { background: var(--surface-2); }
+.data tbody tr { transition: background var(--motion) var(--ease); }
+.data tbody tr:hover { background: var(--surface-2); }
+.col-row__key { flex: none; }
+.col-row__name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.col-row--key .col-row__name { color: var(--brand-ink); font-weight: 600; }
+.col-row__type {
+  flex: none;
+  max-width: 130px;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: var(--fs-xs);
+  color: var(--ink-2);
+  background: var(--head-grad);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  box-shadow: var(--elev-1);
+  padding: 1px var(--s1);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* ---- Preview data grid (scrolls internally) ------------------------------ */
+.entity__grid { overflow: auto; min-height: 0; }
+.entity__grid .empty { padding: var(--s3); color: var(--ink-3); font-size: var(--fs-xs); }
+.data { border-collapse: collapse; width: 100%; font-size: var(--fs-xs); }
+.data th, .data td {
+  padding: var(--s1) var(--s2);
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  white-space: nowrap;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.data th { position: sticky; top: 0; background: var(--head-grad); color: var(--ink-2); font-weight: 600; box-shadow: inset 0 -1px 0 var(--line); }
+.data td.num, .data th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.data td.null { color: var(--ink-3); font-style: italic; }
+

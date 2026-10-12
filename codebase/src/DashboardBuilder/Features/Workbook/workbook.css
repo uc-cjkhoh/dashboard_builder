@@ -1,0 +1,7 @@
+/* Workbook feature — save status + Export/Import, at the right end of the tab bar. */
+.workbook {
+  display: flex; align-items: center; gap: var(--s2);
+  margin-left: auto; padding-bottom: var(--s2); flex: none;
+}
+.workbook__status { font-size: var(--fs-xs); color: var(--ink-3); white-space: nowrap; }
+.workbook__btn { height: var(--ctl-h); font-size: var(--fs-sm); }

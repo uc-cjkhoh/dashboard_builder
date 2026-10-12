@@ -1,0 +1,31 @@
+/* Relations feature — SVG relationship links + connector handles. */
+
+/* ---- Relationships: SVG overlay, links, connector handles ----------------- */
+.rel-svg { position: absolute; top: 0; left: 0; pointer-events: none; overflow: visible; }
+.rel-link { pointer-events: auto; cursor: pointer; filter: drop-shadow(0 1px 2px rgba(16, 16, 20, .18)); transition: filter var(--motion) var(--ease); }
+.rel-link:hover { filter: drop-shadow(0 2px 5px rgba(16, 16, 20, .28)); }
+.rel-link__hit { stroke: transparent; stroke-width: 14; fill: none; }
+.rel-link__line { stroke: var(--ink-2); stroke-width: 2; fill: none; transition: stroke var(--motion) var(--ease); }
+.rel-end { stroke: var(--ink-2); stroke-width: 2; fill: none; }
+.rel-link--selected .rel-link__line,
+.rel-link--selected .rel-end { stroke: var(--brand); stroke-width: 2.5; }
+.rel-badge rect { fill: var(--surface); stroke: var(--line-2); }
+.rel-badge text { fill: var(--ink-2); font-size: 11px; font-weight: 600; }
+.rel-link--selected .rel-badge rect { stroke: var(--brand); }
+.rel-link--selected .rel-badge text { fill: var(--brand-ink); }
+
+.rel-connector {
+  flex: none;
+  width: 14px; height: 14px;
+  margin-left: var(--s1);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  cursor: crosshair;
+  padding: 0;
+}
+.rel-connector { transition: border-color var(--motion) var(--ease), background var(--motion) var(--ease), transform var(--motion) var(--ease); }
+.rel-connector:hover { border-color: var(--brand); background: var(--brand-soft); transform: scale(1.25); box-shadow: var(--glow-brand-sm); }
+.rel-connector.is-linking { border-color: var(--brand); background: var(--brand); animation: pulse-ring 1.2s var(--ease) infinite; }
+.rel-connector:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+
