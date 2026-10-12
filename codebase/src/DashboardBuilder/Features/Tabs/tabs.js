@@ -2,7 +2,8 @@ import {
   dashboards, isModelActive, activeDashboardId, showModel, createDashboard,
   switchDashboard, renameDashboard, closeDashboard, dashboardHasContent, bus,
 } from "../Core/store.js";
-import { confirmDialog } from "../Core/ui.js";
+import { confirmDialog, toast } from "../Core/ui.js";
+import { text, LIMITS } from "../Core/validate.js";
 
 // The view strip: a pinned "Data Model" tab (the shared entity canvas) followed by the dashboard
 // subtabs and a [+] to add one. Clicking switches the active view; dashboards rename on
@@ -63,6 +64,11 @@ export function initTabs() {
     close.textContent = "×";
     close.addEventListener("click", (event) => { event.stopPropagation(); requestClose(dash); });
 
+    el.addEventListener("keydown", (event) => {
+      if (event.target !== label) return;
+      if (event.key === "F2" || (event.key === "Enter" && active)) { event.preventDefault(); beginRename(dash, label); }
+    });
+
     el.append(label, close);
     return el;
   }
@@ -93,6 +99,7 @@ export function initTabs() {
     const input = document.createElement("input");
     input.className = "tab__rename";
     input.value = dash.name;
+    input.maxLength = LIMITS.tabName;
     input.setAttribute("aria-label", "Rename dashboard");
     labelEl.replaceWith(input);
     input.focus();
@@ -102,8 +109,9 @@ export function initTabs() {
     const commit = () => {
       if (done) return;
       done = true;
-      const value = input.value.trim();
-      if (value) renameDashboard(dash.id, value);
+      const r = text(input.value, { label: "Tab name", max: LIMITS.tabName, required: true });
+      if (!r.ok) toast(r.error, "danger"); // keep dash.name
+      else renameDashboard(dash.id, r.value);
       render();
     };
     input.addEventListener("blur", commit);

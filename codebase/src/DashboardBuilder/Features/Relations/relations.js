@@ -1,4 +1,5 @@
 import { entities, relationships, bus, emit } from "../Core/store.js";
+import { linkProblem } from "./relation-rules.js";
 import { toast, makeButton, openDialog, closeDialog } from "../Core/ui.js";
 
 // Relationships (P5): logical, typed links the user draws between the join keys checked on two
@@ -74,10 +75,11 @@ function onConnectorClick(entityId, column, handle) {
     toast("Pick a join key on another entity to relate.", "info");
     return;
   }
-  if (pending.entityId === entityId) {
-    toast("Pick a key on a different entity.", "danger");
-    return;
-  }
+  const end = (id, col) => { const e = entities.get(id); return { cat: e?.columns?.find((c) => c.name === col)?.category, label: `${e?.table}.${col}` }; };
+  const p = end(pending.entityId, pending.column), q = end(entityId, column);
+  const problem = linkProblem({ relationships: relationships.values(), from: { entityId: pending.entityId, column: pending.column },
+    to: { entityId, column }, fromCategory: p.cat, toCategory: q.cat, fromLabel: p.label, toLabel: q.label });
+  if (problem) { clearPending(); toast(problem, "danger"); return; }
   const from = { entityId: pending.entityId, column: pending.column };
   const to = { entityId, column };
   clearPending();

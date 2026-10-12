@@ -1,5 +1,5 @@
 import { api } from "../Core/api.js";
-import { show, hide, toggle, confirmDialog } from "../Core/ui.js";
+import { show, hide, toggle, confirmDialog, toast } from "../Core/ui.js";
 import { entities, relationshipsFor, emit, bus, isModelActive, showModel } from "../Core/store.js";
 
 // Data Model canvas + entity cards. A table dropped from the sidebar (or added via the
@@ -49,7 +49,7 @@ export function initCanvas() {
     const rect = canvas.getBoundingClientRect();
     const x = event.clientX - rect.left + canvas.scrollLeft - 24;
     const y = event.clientY - rect.top + canvas.scrollTop - 12;
-    createEntity(payload.db, payload.table, Math.max(0, x), Math.max(0, y));
+    addTableFromUser(payload?.db, payload?.table, Math.max(0, x), Math.max(0, y));
   });
 
   // Non-drag fallback (accessibility): schema.js dispatches this from a chip's ＋ button.
@@ -58,7 +58,7 @@ export function initCanvas() {
     const { db, table } = event.detail;
     showModel();
     const offset = 24 * (entities.size % 8);
-    createEntity(db, table, 24 + offset, 24 + offset);
+    addTableFromUser(db, table, 24 + offset, 24 + offset);
   });
 
   // Show the model view only when it's the active view (dashboards render elsewhere).
@@ -69,6 +69,19 @@ export function initCanvas() {
   clearModelImpl = clearAll;
 
   // --- entity lifecycle ----------------------------------------------------
+  function addTableFromUser(db, table, x, y) {
+    if (typeof db !== "string" || !db || typeof table !== "string" || !table) return; // malformed drag payload
+    const existing = [...entities.values()].find((e) => e.db === db && e.table === table);
+    if (existing) {
+      existing.el.scrollIntoView({ block: "nearest", inline: "nearest" });
+      existing.el.classList.add("is-flash");
+      setTimeout(() => existing.el.classList.remove("is-flash"), 1200);
+      toast(`${db}.${table} is already on the canvas.`, "info");
+      return;
+    }
+    createEntity(db, table, x, y);
+  }
+
   function createEntity(db, table, x, y, { joinKeys = [] } = {}) {
     const entity = { id: `${db}.${table}#${++seq}`, db, table, x, y, columns: [], joinKeys: new Set(), el: null };
     entity.pendingKeys = joinKeys; // ticked after the columns load (workbook open)
