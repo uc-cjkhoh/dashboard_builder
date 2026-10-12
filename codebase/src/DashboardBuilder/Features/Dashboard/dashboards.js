@@ -1,5 +1,7 @@
 import { api } from "../Core/api.js";
 import { icon, PATHS } from "../Core/icons.js";
+import { wireMenu } from "../Core/menu.js";
+import { visibleTools } from "./toolbar-rules.js";
 import { toggle, makeButton, toast, fieldError } from "../Core/ui.js";
 import { LIMITS } from "../Core/validate.js";
 import { aggsFor, checkFilter, statFilters, withCategories, TEXT_VALUE_TYPES } from "./filter-rules.js";
@@ -200,6 +202,8 @@ function chartOrientation(sheet) {
 const keyOf = (db, table) => `${db}\u0000${table}`;
 const splitKey = (k) => k.split("\u0000");
 const columnsCache = new Map();
+let headerAbort = null; // aborts the menus wired during the previous header render
+const TYPE_ICONS = { numeric: "type-number", text: "type-text", temporal: "type-date", boolean: "type-bool" };
 
 export function initDashboards() {
   const view = document.getElementById("dashboard-view");
@@ -255,8 +259,9 @@ export function initDashboards() {
     }
     for (const t of tables) {
       const cols = await columnsFor(t.db, t.table);
-      const group = el("div", "ws-table");
-      group.append(el("div", "ws-table__name", `${t.db}.${t.table}`));
+      const group = el("details", "ws-table ws-fieldset");
+      group.open = true;
+      group.append(el("summary", "ws-table__name", `${t.db}.${t.table}`));
       const dims = cols.filter((c) => c.category !== "numeric");
       const meas = cols.filter((c) => c.category === "numeric");
       if (dims.length) { group.append(el("div", "ws-field-group", "Dimensions")); for (const c of dims) group.append(fieldChip(t, c, "dimension")); }
@@ -270,7 +275,9 @@ export function initDashboards() {
     chip.draggable = true;
     chip.title = `${col.name} · ${col.type}`;
     const payload = { db: t.db, table: t.table, column: col.name, category: col.category };
-    chip.append(el("span", "ws-field__name", col.name));
+    const typeIcon = icon(TYPE_ICONS[col.category] ?? "type-other", { size: 14 });
+    typeIcon.classList.add("ws-field__type");
+    chip.append(typeIcon, el("span", "ws-field__name", col.name));
 
     // Keyboard/non-drag path (a11y): a focusable plus button adds the field to its natural shelf without
     // dragging — measures to Rows, dimensions to Columns (mirrors the sidebar table chip's plus button).
@@ -309,6 +316,7 @@ export function initDashboards() {
     const vbLeft = el("div", "ws-viewbar__group");
     vbLeft.append(chartTypeToggle(dash, s));
     const vbRight = el("div", "ws-viewbar__group ws-viewbar__group--right");
+    headerAbort?.abort(); headerAbort = new AbortController();
     vbRight.append(sortControl(dash, s), formatToggle(), exportControl(dash, s), refreshButton(dash));
     viewbar.append(vbLeft, vbRight);
 
@@ -316,12 +324,22 @@ export function initDashboards() {
     const rows = shelf("Rows", "rows", s.rows.map((f, i) => fieldPill(dash, s, "rows", f, i)), (f) => addField(dash, "rows", f));
 
     const tools = buildTools(dash, s);
+    const { visible, more } = visibleTools(s.chartType, tools);
     const toolbar = el("div", "ws-toolbar");
-    toolbar.append(el("span", "ws-toolbar__label", "Marks"));
-    let lastGroup = "marks";
-    for (const t of tools) {
-      if (t.group !== lastGroup) { toolbar.append(el("span", "ws-tool-sep")); lastGroup = t.group; }
-      toolbar.append(toolButton(dash, s, t));
+    for (const t of visible) toolbar.append(toolButton(dash, s, t));
+    if (more.length) {
+      const wrap = el("div", "menu ws-more");
+      const btn = el("button", "ws-tool"); btn.type = "button";
+      btn.append(icon("more"), el("span", "ws-tool__text", "More"));
+      const list = el("div", "menu__list glass"); list.setAttribute("role", "menu"); list.hidden = true;
+      for (const t of more) {
+        const item = el("button", "menu__item"); item.type = "button"; item.setAttribute("role", "menuitem");
+        item.append(icon(t.icon), document.createTextNode(t.label));
+        item.addEventListener("click", () => { openTool = t.key; formatOpen = false; renderShelves(); });
+        list.append(item);
+      }
+      wrap.append(btn, list); toolbar.append(wrap);
+      wireMenu(btn, list, { signal: headerAbort.signal });
     }
 
     const children = [viewbar, columns, rows, toolbar];
@@ -447,17 +465,17 @@ export function initDashboards() {
   // caps the LIMIT). All state lives on sheet.format so it persists for the session (O1).
   // Re-run the query against ClickHouse, bypassing the result cache (data may have changed).
   function refreshButton(dash) {
-    const btn = makeButton("Refresh", "ws-toolbtn");
-    btn.prepend(icon("refresh", { size: 14 }), " ");
+    const btn = iconButton("refresh", "Refresh");
+    btn.classList.add("ws-viewbar__btn");
     btn.title = "Re-run the query against ClickHouse";
     btn.addEventListener("click", () => { results.clear(dash.id); runChart(); });
     return btn;
   }
 
   function formatToggle() {
-    const btn = makeButton("Format", `ws-toolbtn${formatOpen ? " is-active" : ""}`);
-    btn.append(" ", icon("chevron", { size: 14 }));
-    if (formatOpen) btn.lastChild.classList.add("icon--up");
+    const btn = iconButton("format", "Format");
+    btn.className = `iconbtn ws-viewbar__btn${formatOpen ? " is-active" : ""}`;
+    btn.title = "Format";
     btn.setAttribute("aria-expanded", String(formatOpen));
     btn.addEventListener("click", () => { formatOpen = !formatOpen; if (formatOpen) openTool = null; renderShelves(); });
     return btn;
@@ -469,27 +487,20 @@ export function initDashboards() {
   // (Table/KPI render as native DOM, so it isn't offered there).
   function exportControl(dash, s) {
     const wrap = el("div", "ws-export");
-    const btn = makeButton("Export", "ws-toolbtn");
-    btn.append(" ", icon("chevron", { size: 14 }));
-    btn.setAttribute("aria-haspopup", "true");
-    btn.setAttribute("aria-expanded", "false");
+    const btn = iconButton("export", "Export");
+    btn.classList.add("ws-viewbar__btn");
+    btn.title = "Export";
     const menu = el("div", "ws-export__menu");
+    menu.setAttribute("role", "menu");
     menu.hidden = true;
 
-    const close = () => { menu.hidden = true; btn.setAttribute("aria-expanded", "false"); };
-    const item = (label, on) => { const b = makeButton(label, "ws-menu-item"); b.addEventListener("click", () => { close(); on(); }); return b; };
+    const item = (label, on) => { const b = makeButton(label, "ws-menu-item"); b.setAttribute("role", "menuitem"); b.addEventListener("click", on); return b; };
     menu.append(
       item("PNG image", () => exportImage(dash, s, "png")),
       item("SVG image", () => exportImage(dash, s, "svg")),
       item("CSV data", () => exportCsvRows(dash, s)),
     );
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const willOpen = menu.hidden;
-      menu.hidden = !willOpen;
-      btn.setAttribute("aria-expanded", String(willOpen));
-      if (willOpen) document.addEventListener("click", close, { once: true });
-    });
+    wireMenu(btn, menu, { signal: headerAbort?.signal }); // click toggles; Esc/outside/item click close; arrows move
     wrap.append(btn, menu);
     return wrap;
   }
@@ -569,7 +580,9 @@ export function initDashboards() {
       commit(dash, s);
     });
     const desc = s.sort?.dir === "desc";
-    const dir = makeButton(desc ? "Desc ↓" : "Asc ↑", "ws-toolbtn ws-sort__dir");
+    const dir = iconButton("sort", desc ? "Sorting descending" : "Sorting ascending");
+    dir.classList.add("ws-viewbar__btn", "ws-sort__dir");
+    dir.append(el("span", "ws-sort__dir-text", desc ? "Desc" : "Asc"));
     dir.setAttribute("aria-label", desc ? "Sorting descending; click for ascending" : "Sorting ascending; click for descending");
     dir.addEventListener("click", () => {
       s.sort = { by: s.sort?.by ?? current.id, dir: desc ? "asc" : "desc" };
@@ -741,6 +754,7 @@ export function initDashboards() {
     }
     const p = pill(`${f.table}.${f.column}`, () => { s.filters.splice(i, 1); commit(dash, s); }, cfg);
     p.classList.toggle("ws-pill--invalid", chk.state === "invalid");
+    if (chk.state === "invalid") p.prepend(icon("warning", { size: 14 }));
     return p;
   }
 
@@ -869,7 +883,7 @@ export function initDashboards() {
       { group: "marks", key: "size", icon: "size", label: "Size", count: m.size ? 1 : 0,
         pills: one(m.size, () => { m.size = null; commit(dash, s); }), onDrop: (f) => addSize(dash, f),
         hint: "Drop a numeric field to size the marks (scatter bubbles)" },
-      { group: "marks", key: "label", icon: "A", label: "Label", count: m.label ? 1 : 0,
+      { group: "marks", key: "label", icon: "label", label: "Label", count: m.label ? 1 : 0,
         pills: one(m.label, () => { m.label = null; commit(dash, s); }), onDrop: (f) => addMarkSingle(dash, "label", f),
         hint: "Drop a field to write its value on each mark" },
       { group: "marks", key: "detail", icon: "detail", label: "Detail", count: (m.detail ?? []).length,
@@ -909,7 +923,7 @@ export function initDashboards() {
     btn.setAttribute("aria-pressed", String(openTool === tool.key));
     btn.setAttribute("aria-label", `${tool.label}${set ? ` (${tool.count} field${tool.count > 1 ? "s" : ""})` : " (empty)"}`);
     btn.title = tool.hint || tool.label;
-    btn.append(iconSpan("ws-tool__icon", tool.icon), el("span", "ws-tool__txt", tool.label));
+    btn.append(icon(tool.icon), el("span", "ws-tool__text", tool.label));
     if (set) btn.append(el("span", "ws-tool__badge", String(tool.count)));
     btn.addEventListener("click", () => { openTool = openTool === tool.key ? null : tool.key; formatOpen = false; renderShelves(); });
     btn.addEventListener("dragover", (e) => { if (hasField(e)) { e.preventDefault(); btn.classList.add("is-over"); } });

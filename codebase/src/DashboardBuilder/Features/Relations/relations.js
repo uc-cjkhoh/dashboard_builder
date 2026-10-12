@@ -112,6 +112,7 @@ export function restoreRelationship(from, to, cardinality) {
 }
 
 function onEntityRemoved(entityId) {
+  if (pending?.entityId === entityId) clearPending(); // a half-made link to a removed card is void
   for (const rel of relationships.values()) {
     if (rel.from.entityId === entityId || rel.to.entityId === entityId) relationships.delete(rel.id);
   }

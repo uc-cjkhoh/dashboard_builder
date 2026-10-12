@@ -20,8 +20,6 @@ export function initConnection() {
   const disconnectBtn = document.getElementById("conn-disconnect");
   const schemaSection = document.getElementById("schema-section");
   const tablesSection = document.getElementById("tables-section");
-  const emptyTitle = document.getElementById("canvas-empty-title");
-  const emptySub = document.getElementById("canvas-empty-sub");
 
   const hostEl = document.getElementById("conn-host");
   const portEl = document.getElementById("conn-port");
@@ -92,17 +90,6 @@ export function initConnection() {
 
     toggle(schemaSection, connected);
     if (!connected) hide(tablesSection);
-
-    if (emptyTitle) {
-      emptyTitle.textContent = connected
-        ? "Select a database to browse its tables"
-        : "Connect to a ClickHouse server to begin";
-    }
-    if (emptySub) {
-      emptySub.textContent = connected
-        ? "Then drag a table here to inspect it as an entity."
-        : "Add a connection in the sidebar to get started.";
-    }
 
     document.dispatchEvent(new CustomEvent("connection:changed", {
       detail: view ?? { connected: false },

@@ -25,12 +25,11 @@
 .conn-summary__btn:hover { color: var(--ink); }
 .conn-summary__btn.iconbtn--danger:hover { color: var(--danger-ink); }
 
-.conn-form { animation: fade-in var(--dur) var(--ease); }
 .conn-form__actions { display: flex; gap: var(--s2); }
 .conn-form__actions .btn { flex: 1; }
 
 /* ---- Connection form ----------------------------------------------------- */
-.conn-form { display: grid; gap: var(--s3); }
+.conn-form { display: grid; gap: var(--s3); animation: fade-in var(--dur) var(--ease); }
 .conn-advanced { display: grid; gap: var(--s2); }
 .conn-advanced > summary { cursor: pointer; color: var(--ink-2); font-size: var(--fs-sm); }
 .conn-advanced[open] > summary { margin-bottom: var(--s2); }

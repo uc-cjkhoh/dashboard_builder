@@ -28,7 +28,23 @@ export function initCanvas() {
 
   let seq = 0; // entities/relationships live in the shared store (store.js)
 
-  const refreshEmpty = () => toggle(empty, entities.size === 0);
+  const emptyTitle = document.getElementById("canvas-empty-title");
+  const emptyAction = document.getElementById("canvas-empty-action");
+  let connected = false;
+
+  // One sentence + one button, by state. The buttons focus controls Task 11 kept addressable by id.
+  const refreshEmpty = () => {
+    toggle(empty, entities.size === 0);
+    if (emptyTitle) emptyTitle.textContent = connected
+      ? "Drag a table here from the sidebar to start your data model."
+      : "Connect to a ClickHouse server to begin.";
+    if (emptyAction) emptyAction.textContent = connected ? "Find a table" : "Connect";
+  };
+  emptyAction?.addEventListener("click", () => {
+    document.getElementById(connected ? "table-search" : "conn-host")?.focus();
+  });
+  document.addEventListener("connection:changed", (e) => { connected = Boolean(e.detail?.connected); refreshEmpty(); });
+  refreshEmpty();
 
   // --- drop target ---------------------------------------------------------
   canvas.addEventListener("dragover", (event) => {
@@ -75,6 +91,7 @@ export function initCanvas() {
     const existing = [...entities.values()].find((e) => e.db === db && e.table === table);
     if (existing) {
       existing.el.scrollIntoView({ block: "nearest", inline: "nearest" });
+      existing.el.focus({ preventScroll: true });
       existing.el.classList.add("is-flash");
       setTimeout(() => existing.el.classList.remove("is-flash"), 1200);
       toast(`${db}.${table} is already on the canvas.`, "info");
@@ -152,6 +169,7 @@ export function initCanvas() {
   function renderCard(entity) {
     const card = document.createElement("section");
     card.className = "entity";
+    card.tabIndex = -1; // focusable by script (a duplicate drop focuses the existing card)
     card.dataset.entityId = entity.id;
     card.style.left = `${entity.x}px`;
     card.style.top = `${entity.y}px`;
@@ -169,8 +187,14 @@ export function initCanvas() {
 
     const title = document.createElement("span");
     title.className = "entity__title";
-    title.textContent = `${entity.db}.${entity.table}`;
-    title.title = title.textContent;
+    const dbPart = document.createElement("span");
+    dbPart.className = "entity__db";
+    dbPart.textContent = `${entity.db}.`;
+    const tablePart = document.createElement("span");
+    tablePart.className = "entity__table";
+    tablePart.textContent = entity.table;
+    title.append(dbPart, tablePart);
+    title.title = `${entity.db}.${entity.table}`;
 
     const remove = document.createElement("button");
     remove.type = "button";
@@ -212,9 +236,14 @@ export function initCanvas() {
         if (key.checked) entity.joinKeys.add(col.name);
         else entity.joinKeys.delete(col.name);
         row.classList.toggle("col-row--key", key.checked);
+        keyIcon.hidden = !key.checked;
         // relations.js adds/removes the connector handle and prunes dropped links.
         emit("joinkey:changed", { entityId: entity.id, column: col.name, checked: key.checked });
       });
+
+      const keyIcon = icon("key", { size: 14 }); // shown while this column is a join key
+      keyIcon.classList.add("col-row__keyicon");
+      keyIcon.hidden = !key.checked;
 
       const name = document.createElement("span");
       name.className = "col-row__name";
@@ -227,7 +256,7 @@ export function initCanvas() {
       type.textContent = col.type;
       type.title = `${col.type} (${col.category})`;
 
-      row.append(key, name, type);
+      row.append(key, keyIcon, name, type);
       cols.append(row);
     }
   }

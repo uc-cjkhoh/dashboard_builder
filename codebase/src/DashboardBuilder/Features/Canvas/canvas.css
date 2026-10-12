@@ -3,15 +3,15 @@
 .canvas__empty {
   position: absolute;
   inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--s2);
-  color: var(--ink-3);
+  display: grid;
+  place-items: center;
+  place-content: center;
+  gap: var(--s3);
+  color: var(--ink-2);
   text-align: center;
   pointer-events: none;
 }
+.canvas__empty .btn { pointer-events: auto; }
 .canvas__empty .empty__title { font-size: var(--fs-lead); color: var(--ink-2); }
 .canvas--dragover { outline: 2px dashed var(--accent); outline-offset: -8px; }
 
@@ -24,13 +24,14 @@
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r);
-  box-shadow: var(--elev-8);
+  box-shadow: var(--elev-2);
   overflow: hidden;
   animation: rise-in var(--dur-slow) var(--ease-out);
-  transition: box-shadow var(--dur) var(--ease), border-color var(--dur) var(--ease), transform var(--dur) var(--ease);
+  transition: box-shadow var(--dur) var(--ease), border-color var(--dur) var(--ease);
 }
-.entity:hover { box-shadow: var(--elev-16); border-color: var(--line-2); }
-.entity--dragging { box-shadow: var(--elev-28); animation: none; cursor: grabbing; }
+.entity:hover { box-shadow: var(--elev-8); border-color: var(--line-2); }
+.entity.is-flash { outline: 2px solid var(--accent); outline-offset: 2px; }
+.entity--dragging { box-shadow: var(--elev-16); animation: none; cursor: grabbing; }
 .entity__toggle { transition: transform var(--dur) var(--ease); }
 .entity--collapsed .entity__toggle { transform: rotate(-90deg); }
 /* Smoothly collapse the columns + preview; the head stays visible. */
@@ -41,12 +42,15 @@
   align-items: center;
   gap: var(--s2);
   padding: var(--s2) var(--s3);
-  background: var(--surface);
+  background: transparent;
   border-bottom: 1px solid var(--line);
   cursor: grab;
   user-select: none;
 }
 .entity--dragging .entity__head { cursor: grabbing; }
+.entity__db { color: var(--ink-3); font-weight: 400; }
+.entity__table { font-weight: 600; }
+.col-row__keyicon { flex: none; color: var(--accent-ink); }
 .entity__title { flex: 1; font-size: var(--fs-sm); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .entity__status { padding: var(--s3); display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
 .entity__error { flex-basis: 100%; margin: 0; color: var(--danger-ink); font-size: var(--fs-xs); }

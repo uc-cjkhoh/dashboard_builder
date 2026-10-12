@@ -82,7 +82,8 @@
 /* Main: header (view bar + shelf lanes) + chart */
 .ws-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 /* P17 two-tier header: the container stacks the view bar, the (optional) format card, and the shelf lanes. */
-.ws-shelves { display: flex; flex-direction: column; gap: var(--s2); padding: var(--s2) var(--s4); border-bottom: 1px solid var(--line); background: var(--surface); }
+.ws-shelves { background: var(--glass); border-bottom: 1px solid var(--glass-line); -webkit-backdrop-filter: blur(24px) saturate(160%); backdrop-filter: blur(24px) saturate(160%);
+  padding: var(--s3) var(--s5); display: grid; gap: var(--s2); }
 
 /* Tier 1 — view bar: presentation controls only, split left (chart) / right (sort · format). */
 .ws-viewbar { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; }
@@ -122,7 +123,8 @@
 .ws-pill.is-drop-target { box-shadow: -3px 0 0 0 var(--accent); }
 /* Pill colour tracks the field's role, not the shelf (both shelves mix roles now): a categorical
    dimension is brand-soft (the .ws-pill default), a numeric measure is green. */
-.ws-pill--measure { background: var(--ok-bg); border-color: var(--ok-line); color: var(--ok-ink); }
+.ws-pill--dimension { background: var(--dim-bg); border-color: var(--dim-line); color: var(--dim-ink); }
+.ws-pill--measure { background: var(--meas-bg); border-color: var(--meas-line); color: var(--meas-ink); }
 /* Colour-mark pill (P7): violet, distinct from dimension (red) and measure (green). */
 .ws-pill--color { background: var(--enc-bg); border-color: var(--enc-line); color: var(--enc-ink); }
 .ws-pill__agg, .ws-pill__op { font-size: 11px; padding: 1px 4px; border-radius: 4px; box-shadow: none; }
@@ -212,31 +214,26 @@
 /* Encodings toolbar (redesign 2): every non-Columns/Rows encoding as a compact icon+text tool button.
    Keeps the header to one short row; a clicked tool opens a single editor panel below. */
 .ws-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); }
-.ws-toolbar__label {
-  font-size: 10px; font-weight: 700; color: var(--ink-3);
-  text-transform: uppercase; letter-spacing: .06em; margin-right: 2px;
-}
-.ws-tool-sep { width: 1px; align-self: stretch; min-height: 20px; background: var(--line); margin: 0 var(--s1); }
 .ws-tool {
-  display: inline-flex; align-items: center; gap: 5px;
-  height: calc(var(--ctl-h) - 2px); padding: 0 var(--s2) 0 var(--s2);
-  font-size: var(--fs-xs); font-weight: 600; color: var(--ink-2);
-  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-pill); cursor: pointer;
-  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease), color var(--dur) var(--ease);
+  display: inline-flex; align-items: center; gap: var(--s1); height: var(--ctl-h); padding: 0 var(--s2);
+  border: 0; border-radius: var(--r-ctl); background: transparent; color: var(--ink-2);
+  font-size: var(--fs-sm); cursor: pointer;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
 }
-.ws-tool:hover { background: var(--surface-2); color: var(--ink); }
-.ws-tool__icon { font-size: 12px; line-height: 1; opacity: .75; }
-.ws-tool__txt { line-height: 1; }
-/* Assigned (holds ≥1 field): brand-tinted with a count badge. Open editor: solid brand outline. */
-.ws-tool.is-set { border-color: var(--accent-line); color: var(--accent-ink); }
-.ws-tool.is-set .ws-tool__icon { opacity: 1; color: var(--accent); }
-.ws-tool.is-active { border-color: var(--accent); color: var(--accent-ink); box-shadow: inset 0 0 0 1px var(--accent); }
-.ws-tool.is-over { border-color: var(--accent); border-style: dashed; background: var(--accent-soft); }
+.ws-tool:hover, .ws-tool.is-active { background: var(--surface-3); color: var(--ink); }
+.ws-tool.is-set { color: var(--accent-ink); }
+.ws-tool__text { line-height: 1; }
+.ws-tool.is-over { outline: 1px dashed var(--accent); background: var(--accent-soft); }
 .ws-tool__badge {
-  min-width: 15px; height: 15px; padding: 0 3px; border-radius: 999px;
+  min-width: 16px; height: 16px; padding: 0 4px; border-radius: var(--r-pill);
   display: inline-flex; align-items: center; justify-content: center;
-  font-size: 9px; font-weight: 700; color: var(--on-accent); background: var(--accent);
+  font-size: 11px; font-weight: 700; color: var(--on-accent); background: var(--accent);
 }
+.ws-more { display: inline-flex; }
+.ws-viewbar__btn.is-active { background: var(--surface-3); color: var(--accent-ink); }
+.ws-sort__dir { width: auto; gap: var(--s1); padding: 0 var(--s2); font-size: var(--fs-xs); font-weight: 600; }
+.ws-fieldset > summary { cursor: pointer; }
+.ws-field__type { flex: none; color: var(--ink-3); }
 /* The one open tool's editor: a card with its pills over a drop zone. */
 .ws-toolpanel {
   display: flex; flex-direction: column; gap: var(--s2);
@@ -251,7 +248,7 @@
   transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
 }
 .ws-toolpanel__zone.is-over { border-color: var(--accent); border-style: solid; background: var(--accent-soft); }
-.ws-pill--mark { background: var(--surface-2); border-color: var(--line); color: var(--ink); }
+.ws-pill--mark { background: var(--enc-bg); border-color: var(--enc-line); color: var(--enc-ink); }
 
 /* Pages control (P20): a thin bar under the shelves to step/animate through a dimension's members. */
 .ws-pages {
@@ -280,7 +277,8 @@
 .ws-fmt-select { padding: 0 var(--s1); max-width: 116px; }
 .ws-fmt-input { padding: 0 var(--s2); width: 96px; }
 
-.ws-chart { position: relative; flex: 1; min-height: 0; overflow: auto; padding: var(--s5); }
+.ws-chart { position: relative; flex: 1; min-height: 0; overflow: auto; padding: var(--s5); background: var(--surface);
+  border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--elev-2); margin: var(--s4) var(--s5); }
 /* The library needs a definitely-sized host; fill the chart pane inside its padding. */
 .ws-chart-canvas { position: absolute; inset: var(--s4); min-height: 240px; }
 .ws-kpi-row { display: flex; flex-wrap: wrap; gap: var(--s5); align-items: stretch; justify-content: center; height: 100%; }
@@ -318,6 +316,6 @@
 
 
 /* P34: honest worksheet notices — invalid filter pill + "first 200 values" cap note */
-.ws-pill--invalid { border-color: var(--danger-line); background: var(--danger-bg); }
+.ws-pill--invalid { border-style: dashed; border-color: var(--danger-line); background: var(--danger-bg); color: var(--danger-ink); }
 .ws-pill__in-wrap { display: inline-flex; flex-direction: column; gap: 2px; }
 .ws-note { margin: 2px 0 0; font-size: var(--fs-xs); color: var(--ink-3); }

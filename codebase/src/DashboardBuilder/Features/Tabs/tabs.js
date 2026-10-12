@@ -62,7 +62,7 @@ export function initTabs() {
     close.type = "button";
     close.className = "tab__close";
     close.setAttribute("aria-label", `Close ${dash.name}`);
-    close.append(icon("close", { size: 12 }));
+    close.append(icon("close", { size: 14 }));
     close.addEventListener("click", (event) => { event.stopPropagation(); requestClose(dash); });
 
     el.addEventListener("keydown", (event) => {
@@ -80,7 +80,7 @@ export function initTabs() {
     add.className = "tab-add";
     add.setAttribute("aria-label", "Add dashboard");
     add.title = "Add dashboard";
-    add.textContent = "+";
+    add.append(icon("plus"));
     add.addEventListener("click", () => createDashboard());
     return add;
   }
@@ -107,18 +107,24 @@ export function initTabs() {
     input.select();
 
     let done = false;
-    const commit = () => {
+    const commit = (refocus) => {
       if (done) return;
       done = true;
       const r = text(input.value, { label: "Tab name", max: LIMITS.tabName, required: true });
       if (!r.ok) toast(r.error, "danger"); // keep dash.name
       else renameDashboard(dash.id, r.value);
       render();
+      if (refocus) refocusLabel();
     };
-    input.addEventListener("blur", commit);
+    // render() rebuilt the strip — put keyboard focus back on this tab's label.
+    const refocusLabel = () => {
+      const idx = dashboards.findIndex((d) => d.id === dash.id);
+      strip.querySelectorAll(".tab:not(.tab--model) .tab__label")[idx]?.focus();
+    };
+    input.addEventListener("blur", (event) => commit(!event.relatedTarget)); // Tab/click to another control keeps its focus
     input.addEventListener("keydown", (event) => {
       if (event.key === "Enter") { event.preventDefault(); input.blur(); }
-      else if (event.key === "Escape") { done = true; render(); }
+      else if (event.key === "Escape") { done = true; render(); refocusLabel(); }
     });
   }
 }

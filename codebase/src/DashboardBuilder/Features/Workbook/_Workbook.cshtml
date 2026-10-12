@@ -1,8 +1,13 @@
 @* Workbook actions, right of the tab strip. Driven by Workbook/workbook.js: auto-save to this
-   browser + Export/Import as a JSON file. The file never contains the connection or a password. *@
+   browser + Export/Import as a JSON file from the "more" menu. The file never contains the connection or a password. *@
 <div class="workbook" role="group" aria-label="Workbook">
-    <span class="workbook__status" id="wb-status" role="status" aria-live="polite" hidden></span>
-    <button type="button" class="btn workbook__btn" id="wb-import" title="Open a workbook file"><span data-icon="import"></span> Import</button>
-    <button type="button" class="btn workbook__btn" id="wb-export" title="Download this workbook as a file"><span data-icon="export"></span> Export</button>
+    <span class="workbook__status" id="wb-status" role="status" aria-live="polite" title="Saved in this browser" hidden></span>
+    <div class="menu">
+        <button type="button" class="iconbtn" id="wb-menu-btn" aria-controls="wb-menu-list" aria-label="Workbook" title="Workbook"><span data-icon="more"></span></button>
+        <div class="menu__list glass" id="wb-menu-list" role="menu" hidden>
+            <button type="button" class="menu__item" role="menuitem" id="wb-import"><span data-icon="import"></span>Import workbook…</button>
+            <button type="button" class="menu__item" role="menuitem" id="wb-export"><span data-icon="export"></span>Export workbook</button>
+        </div>
+    </div>
     <input type="file" id="wb-file" accept="application/json,.json" hidden />
 </div>

@@ -3,6 +3,7 @@ import {
   createDashboard, updateSheet, closeDashboard, showModel, switchDashboard,
 } from "../Core/store.js";
 import { icon } from "../Core/icons.js";
+import { wireMenu } from "../Core/menu.js";
 import { toast, confirmDialog, toggle, listDialog } from "../Core/ui.js";
 import { addEntity, clearModel } from "../Canvas/canvas.js";
 import { restoreRelationship } from "../Relations/relations.js";
@@ -31,6 +32,9 @@ export function initWorkbook() {
   const fileInput = document.getElementById("wb-file");
   statusEl = document.getElementById("wb-status");
   if (!exportBtn || !importBtn || !fileInput) return;
+
+  const menuBtn = document.getElementById("wb-menu-btn"), menuList = document.getElementById("wb-menu-list");
+  if (menuBtn && menuList) wireMenu(menuBtn, menuList);
 
   document.addEventListener("connection:changed", (e) => onConnection(e.detail ?? {}));
   for (const type of CHANGE_EVENTS) bus.addEventListener(type, scheduleSave);
@@ -98,7 +102,7 @@ function save() {
   }
   try {
     localStorage.setItem(key, JSON.stringify(serializeWorkbook(currentState())));
-    setStatus("Saved in this browser", "check");
+    setStatus("Saved");
   } catch {
     setStatus("Not saved — browser storage is unavailable. Use Export to keep a copy.", "warning");
   }
@@ -189,6 +193,7 @@ const count = (n, noun) => `${n} ${noun}${n === 1 ? "" : "s"}`;
 
 function setStatus(text, iconName) {
   if (!statusEl) return;
+  statusEl.classList.toggle("workbook__status--warn", iconName === "warning");
   statusEl.replaceChildren(...(text && iconName ? [icon(iconName, { size: 14 }), " "] : []), text);
   toggle(statusEl, Boolean(text));
 }
