@@ -1,6 +1,7 @@
 import { api } from "../Core/api.js";
 import { show, hide, toggle, toast, setPill, fieldError, checkField } from "../Core/ui.js";
 import { host, port, text, LIMITS } from "../Core/validate.js";
+import { advancedShouldOpen } from "./connection-rules.js";
 
 // The sidebar connection flow (P2, refined). Drives the indicator pill and gates the schema
 // browser + canvas. Once connected the form is replaced by a compact summary showing the
@@ -30,6 +31,7 @@ export function initConnection() {
   const allowCertEl = document.getElementById("conn-allowcert");
   const allowCertRow = document.getElementById("conn-allowcert-row");
   const allowCertWarn = document.getElementById("conn-allowcert-warn");
+  const advancedEl = document.getElementById("conn-advanced");
 
   let current = null; // last connected view, for Cancel-back-to-summary
 
@@ -45,7 +47,13 @@ export function initConnection() {
   allowCertEl.addEventListener("change", syncCertControls);
   syncCertControls();
 
+  // Advanced stays collapsed for the common (TLS, verified) case; open it when it holds a deviation.
+  function syncAdvanced() {
+    if (advancedEl) advancedEl.open = advancedShouldOpen({ secure: secureEl.checked, allowInvalidCert: allowCertEl.checked });
+  }
+
   function showForm({ cancellable }) {
+    syncAdvanced();
     hide(summary);
     show(form);
     toggle(cancelBtn, cancellable);
@@ -76,6 +84,7 @@ export function initConnection() {
       hide(cancelBtn);
     } else {
       setPill(pill, "idle", "Idle");
+      syncAdvanced();
       show(form);
       hide(summary);
       hide(cancelBtn);

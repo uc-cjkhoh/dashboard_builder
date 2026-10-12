@@ -22,7 +22,7 @@ public class ConnectionEndpointTests : IClassFixture<WebApplicationFactory<Progr
     {
         var client = _factory.CreateClient();
         var html = await client.GetStringAsync("/");
-        Assert.Contains("class=\"sidebar\"", html);
+        Assert.Contains("class=\"sidebar glass\"", html);
         Assert.Contains("class=\"canvas\"", html);
     }
 

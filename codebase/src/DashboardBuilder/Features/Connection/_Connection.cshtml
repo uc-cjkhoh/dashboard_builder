@@ -40,19 +40,22 @@
             <label for="conn-password">Password</label>
             <input type="password" id="conn-password" name="password" maxlength="256" />
         </div>
-        <label class="form-check">
-            <input type="checkbox" id="conn-secure" name="secure" checked />
-            Secure (TLS)
-        </label>
-        <!-- Certificate validation is on by default (P8/D10). This opt-in trusts an
-             invalid/self-signed cert — only shown under TLS, and it warns when checked. -->
-        <label class="form-check form-check--sub" id="conn-allowcert-row">
-            <input type="checkbox" id="conn-allowcert" name="allowInvalidCert" />
-            Trust invalid / self-signed certificate
-        </label>
-        <p class="form-warn" id="conn-allowcert-warn" hidden>
-            Certificate validation is off — only for a server whose cert you trust.
-        </p>
+        <details class="conn-advanced" id="conn-advanced">
+            <summary>Advanced</summary>
+            <label class="form-check">
+                <input type="checkbox" id="conn-secure" name="secure" checked />
+                Secure (TLS)
+            </label>
+            <!-- Certificate validation is on by default (P8/D10). This opt-in trusts an
+                 invalid/self-signed cert — only shown under TLS, and it warns when checked. -->
+            <label class="form-check form-check--sub" id="conn-allowcert-row">
+                <input type="checkbox" id="conn-allowcert" name="allowInvalidCert" />
+                Trust invalid / self-signed certificate
+            </label>
+            <p class="form-warn" id="conn-allowcert-warn" hidden>
+                Certificate validation is off — only for a server whose cert you trust.
+            </p>
+        </details>
         <div class="conn-form__actions">
             <button type="submit" class="btn btn--primary" id="conn-connect">Connect</button>
             <button type="button" class="btn" id="conn-cancel" hidden>Cancel</button>

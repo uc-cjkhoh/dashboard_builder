@@ -68,7 +68,7 @@
 .ws-field::before { content: ""; flex: none; width: 8px; height: 8px; }
 .ws-field--dimension::before { background: var(--ink-3); border-radius: 2px; }
 .ws-field--measure::before { background: var(--up); border-radius: 999px; }
-.ws-field:hover { background: var(--surface-2); border-color: var(--line-2); transform: translateX(2px); }
+.ws-field:hover { background: var(--surface-2); border-color: var(--line-2); }
 .ws-field__name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Keyboard/non-drag path to add a field to a shelf (a11y — mirrors the sidebar table chip's plus icon). */
 .ws-field__add {

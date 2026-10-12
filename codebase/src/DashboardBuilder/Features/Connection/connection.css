@@ -8,7 +8,7 @@
   padding: var(--s2) var(--s3);
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: var(--r-ctl);
+  border-radius: var(--r);
   animation: rise-in var(--dur) var(--ease-out);
 }
 .conn-summary__dot {
@@ -30,7 +30,10 @@
 .conn-form__actions .btn { flex: 1; }
 
 /* ---- Connection form ----------------------------------------------------- */
-.conn-form { display: flex; flex-direction: column; gap: var(--s3); }
+.conn-form { display: grid; gap: var(--s3); }
+.conn-advanced { display: grid; gap: var(--s2); }
+.conn-advanced > summary { cursor: pointer; color: var(--ink-2); font-size: var(--fs-sm); }
+.conn-advanced[open] > summary { margin-bottom: var(--s2); }
 .form-field { display: flex; flex-direction: column; gap: var(--s1); }
 .form-row { display: flex; gap: var(--s3); }
 .form-row .form-field { flex: 1; }

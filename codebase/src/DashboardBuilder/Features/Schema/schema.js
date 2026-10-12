@@ -1,6 +1,7 @@
 import { api } from "../Core/api.js";
 import { icon } from "../Core/icons.js";
-import { show, hide, toast } from "../Core/ui.js";
+import { show, hide, toggle, toast } from "../Core/ui.js";
+import { matchTables } from "./table-filter.js";
 
 // Schema browser (P3): fills the database <select> and renders the selected database's tables
 // as draggable chips. Driven by the `connection:changed` event from connection.js — it does
@@ -10,8 +11,27 @@ export function initSchema() {
   const tablesSection = document.getElementById("tables-section");
   const tableList = document.getElementById("table-list");
   if (!dbSelect || !tableList) return;
+  const searchEl = document.getElementById("table-search");
+  const emptyEl = document.getElementById("table-empty");
+  let names = []; // tables of the selected database, for the search box
+
+  function applyFilter() {
+    const shown = new Set(matchTables(names, searchEl?.value ?? ""));
+    for (const chip of tableList.querySelectorAll(".table-chip")) chip.hidden = !shown.has(chip.dataset.table);
+    toggle(emptyEl, names.length > 0 && shown.size === 0);
+  }
+  function clearSearch() {
+    if (searchEl) searchEl.value = "";
+    names = [];
+    hide(emptyEl);
+  }
+  searchEl?.addEventListener("input", applyFilter);
+  searchEl?.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && searchEl.value) { searchEl.value = ""; applyFilter(); }
+  });
 
   function reset() {
+    clearSearch();
     dbSelect.replaceChildren();
     tableList.replaceChildren();
     hide(tablesSection);
@@ -25,6 +45,7 @@ export function initSchema() {
       placeholder.disabled = true;
       placeholder.selected = true;
       dbSelect.add(placeholder);
+      clearSearch();
       for (const db of dbs) dbSelect.add(new Option(db, db));
       tableList.replaceChildren();
       hide(tablesSection);
@@ -35,6 +56,7 @@ export function initSchema() {
 
   async function loadTables(db) {
     tableList.replaceChildren();
+    clearSearch();
     if (!db) { hide(tablesSection); return; }
     try {
       const tables = await api.tables(db);
@@ -55,7 +77,9 @@ export function initSchema() {
       tableList.append(empty);
       return;
     }
+    names = tables;
     for (const table of tables) tableList.append(makeChip(db, table));
+    applyFilter();
   }
 
   function makeChip(db, table) {

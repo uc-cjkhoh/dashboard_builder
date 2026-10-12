@@ -30,7 +30,7 @@
   transition: box-shadow var(--dur) var(--ease), border-color var(--dur) var(--ease), transform var(--dur) var(--ease);
 }
 .entity:hover { box-shadow: var(--elev-16); border-color: var(--line-2); }
-.entity--dragging { box-shadow: var(--elev-28); transform: scale(1.03) rotate(-.6deg); animation: none; cursor: grabbing; }
+.entity--dragging { box-shadow: var(--elev-28); animation: none; cursor: grabbing; }
 .entity__toggle { transition: transform var(--dur) var(--ease); }
 .entity--collapsed .entity__toggle { transform: rotate(-90deg); }
 /* Smoothly collapse the columns + preview; the head stays visible. */

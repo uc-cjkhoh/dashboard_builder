@@ -6,5 +6,11 @@
 
 <section class="sidebar__section sidebar__section--grow" hidden id="tables-section" aria-labelledby="tables-title">
     <h2 class="sidebar__title" id="tables-title">Tables</h2>
+    <label class="table-search">
+        <span data-icon="search" aria-hidden="true"></span>
+        <input type="search" class="input" id="table-search" placeholder="Search tables" aria-label="Search tables"
+               maxlength="100" autocomplete="off" spellcheck="false" />
+    </label>
+    <p class="table-list__empty" id="table-empty" hidden>No tables match.</p>
     <div class="table-list" id="table-list"></div>
 </section>

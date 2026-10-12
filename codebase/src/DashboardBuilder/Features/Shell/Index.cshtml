@@ -20,8 +20,8 @@
 </head>
 <body>
     <div class="app">
-        <!-- Black chrome: connection + schema browser -->
-        <aside class="sidebar">
+        <!-- Glass chrome: connection + schema browser -->
+        <aside class="sidebar glass">
             <div class="sidebar__brand">
                 <span class="sidebar__mark" aria-hidden="true">
                     <svg viewBox="0 0 24 24" fill="currentColor">
@@ -45,9 +45,9 @@
                  aria-orientation="vertical" aria-label="Resize sidebar" tabindex="0"></div>
         </aside>
 
-        <!-- White workspace: entity cards, relationships, subtabs -->
+        <!-- Workspace: entity cards, relationships, subtabs -->
         <main class="canvas" id="canvas">
-            <div class="canvas__bar">
+            <div class="canvas__bar glass">
                 <h1 class="sr-only">Data model and dashboards</h1>
                 <div class="tabs" id="tabs" role="tablist" aria-label="Data model and dashboards"></div>
                 <partial name="~/Features/Workbook/_Workbook.cshtml" />
