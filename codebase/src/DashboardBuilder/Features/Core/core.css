@@ -337,6 +337,8 @@ button { font: inherit; }
 /* ---- Inline field validation (ui.js fieldError) ---- */
 .field-error { margin: var(--s1) 0 0; font-size: var(--fs-sm); color: var(--danger-ink); }
 [aria-invalid="true"] { border-color: var(--brand); }
+.sidebar .field-error { color: var(--danger-line); }
+.form-field input[type][aria-invalid="true"] { border-color: var(--danger-line); }
 .dialog__title { margin: 0; padding: var(--s3) var(--s4); border-bottom: 1px solid var(--line); background: var(--head-grad); font-size: var(--fs-sm); font-weight: 600; }
 .dialog__list { margin: 0; padding: var(--s3) var(--s4) var(--s3) calc(var(--s4) + var(--s4)); font-size: var(--fs-sm); }
 

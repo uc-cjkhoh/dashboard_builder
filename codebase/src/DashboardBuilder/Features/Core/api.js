@@ -5,9 +5,6 @@ export const basePathFrom = (moduleUrl) =>
   new URL(".", moduleUrl).pathname.replace(/\/features\/Core\/$/i, "");
 const BASE = basePathFrom(import.meta.url);
 
-// Thin fetch wrapper for the JSON API. Parses the body, and on a non-2xx response throws
-// an Error carrying the server's { error } message so callers can surface it in a toast. An optional
-// AbortSignal cancels the request (the worksheet aborts a query a newer one supersedes).
 export function errorMessage(status, data) {
   if (data && typeof data.error === "string" && data.error) return data.error;
   if (data && typeof data.title === "string" && data.title) return data.title;
@@ -25,6 +22,9 @@ async function guardedFetch(url, opts) {
   }
 }
 
+// Thin fetch wrapper for the JSON API. Parses the body, and on a non-2xx response throws
+// an Error carrying the server's { error } message so callers can surface it in a toast. An optional
+// AbortSignal cancels the request (the worksheet aborts a query a newer one supersedes).
 async function request(method, url, body, signal) {
   const opts = { method, headers: {}, signal };
   if (body !== undefined) {

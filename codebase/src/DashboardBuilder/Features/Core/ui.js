@@ -13,11 +13,12 @@ export function toast(message, kind = "info") {
   const el = document.getElementById("toast");
   if (!el) return;
   const text = document.createElement("span");
-  text.className = "toast__text"; text.textContent = message;
+  text.className = "toast__text"; text.setAttribute("role", "status"); text.setAttribute("aria-live", "polite");
   const close = makeButton("×", "toast__close");
   close.setAttribute("aria-label", "Dismiss");
   close.addEventListener("click", () => hide(el));
   el.replaceChildren(text, close);
+  text.textContent = message; // set after insertion so the live region announces it
   el.className = `toast toast--${kind}`;
   show(el);
   clearTimeout(toastTimer);
