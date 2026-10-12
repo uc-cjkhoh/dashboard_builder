@@ -13,7 +13,7 @@ public sealed class ConnectionController : ApiControllerBase
     public ConnectionController(ConnectionRegistry registry, ClickHouseGateway gateway, ILoggerFactory loggers)
         : base(registry, gateway, loggers) { }
 
-    /// <summary>Connection request from the sidebar form. Port/Secure default to the TLS pair.</summary>
+    /// <summary>Connection request from the sidebar form. Port is required; Secure defaults to true.</summary>
     public sealed record ConnectRequest(
         string? Host, int? Port, string? User, string? Password, bool? Secure, bool? AllowInvalidCert);
 
@@ -24,19 +24,16 @@ public sealed class ConnectionController : ApiControllerBase
     [HttpPost("connection")]
     public async Task<IResult> Connect([FromBody] ConnectRequest req, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(req.Host) || string.IsNullOrWhiteSpace(req.User))
-            return Results.BadRequest(new ApiError("Host and user are required."));
+        try { RequestRules.ValidateConnect(req.Host, req.Port, req.User, req.Password); }
+        catch (RequestValidationException ex) { return Invalid(ex); }
 
-        // Secure (TLS) is the default; the port defaults to the matching secure/plain port.
         var secure = req.Secure ?? true;
-        var port = req.Port ?? (secure ? 8443 : 8123);
-        if (port is < 1 or > 65535)
-            return Results.BadRequest(new ApiError("Port must be between 1 and 65535."));
+        var port = req.Port!.Value;
 
         var info = new ClickHouseConnectionInfo(
-            Host: req.Host.Trim(),
+            Host: req.Host!.Trim(),
             Port: port,
-            User: req.User.Trim(),
+            User: req.User!.Trim(),
             Password: req.Password ?? string.Empty,
             Secure: secure,
             // Safe by default (P8 hardening / decision D11): a TLS connection validates the

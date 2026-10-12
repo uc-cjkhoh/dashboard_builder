@@ -20,20 +20,21 @@ public sealed class QueryController : ApiControllerBase
 
     [HttpPost("databases/{db}/tables/{table}/histogram")]
     public Task<IResult> Histogram(string db, string table, [FromBody] HistogramRequest request, CancellationToken ct)
-        => RunAsync(async info => Results.Ok(await Gateway.HistogramAsync(info, db, table, request, ct)));
+        => RunAsync(async info => { RequestRules.ValidateHistogram(request); return Results.Ok(await Gateway.HistogramAsync(info, db, table, request, ct)); });
 
     [HttpPost("databases/{db}/tables/{table}/boxplot")]
     public Task<IResult> BoxPlot(string db, string table, [FromBody] BoxPlotRequest request, CancellationToken ct)
-        => RunAsync(async info => Results.Ok(await Gateway.BoxPlotAsync(info, db, table, request, ct)));
+        => RunAsync(async info => { RequestRules.ValidateBoxPlot(request); return Results.Ok(await Gateway.BoxPlotAsync(info, db, table, request, ct)); });
 
     [HttpPost("query")]
     public Task<IResult> Query([FromBody] QueryRequest request, CancellationToken ct)
-        => RunAsync(async info => Results.Ok(await Gateway.QueryAsync(info, request, ct)));
+        => RunAsync(async info => { RequestRules.ValidateQuery(request); return Results.Ok(await Gateway.QueryAsync(info, request, ct)); });
 
     [HttpPost("query/export.csv")]
     public Task<IResult> ExportCsv([FromBody] QueryRequest request, CancellationToken ct)
         => RunAsync(async info =>
         {
+            RequestRules.ValidateQuery(request);
             // Same bounded, identifier-safe worksheet query as /api/query — just serialised to CSV.
             var result = await Gateway.QueryAsync(info, request, ct);
             var csv = CsvUtil.FromQueryResult(result);

@@ -35,5 +35,5 @@ public sealed class SchemaController : ApiControllerBase
 
     [HttpGet("databases/{db}/tables/{table}/columns/{column}/distinct")]
     public Task<IResult> Distinct(string db, string table, string column, int? limit, CancellationToken ct)
-        => RunAsync(async info => Results.Ok(await Gateway.DistinctValuesAsync(info, db, table, column, limit, ct)), StatusCodes.Status404NotFound);
+        => RunAsync(async info => { RequestRules.ValidateDistinctLimit(limit); return Results.Ok(await Gateway.DistinctValuesAsync(info, db, table, column, limit, ct)); }, StatusCodes.Status404NotFound);
 }

@@ -305,7 +305,7 @@ public sealed class ClickHouseGateway
 
     // A sort target must be one of the SELECT aliases we generate: k{n} (dimension, n < dimCount) or
     // v{n} (measure, n < measureCount). Anything else is ignored (never interpolated blindly).
-    private static bool IsValidSortAlias(string? alias, int dimCount, int measureCount)
+    internal static bool IsValidSortAlias(string? alias, int dimCount, int measureCount)
     {
         if (string.IsNullOrEmpty(alias) || (alias[0] != 'k' && alias[0] != 'v')) return false;
         if (!int.TryParse(alias.AsSpan(1), out var idx) || idx < 0) return false;
@@ -318,15 +318,15 @@ public sealed class ClickHouseGateway
 
     /// <summary>How many histogram bins to allow — clamped so a bucketing query can never explode
     /// into an unbounded number of groups (P12). Default 20 when unset.</summary>
-    internal static int ClampBuckets(int? buckets) => Math.Clamp(buckets ?? 20, 1, 100);
+    internal static int ClampBuckets(int? buckets) => Math.Clamp(buckets ?? 20, 1, ApiLimits.MaxBuckets);
 
     /// <summary>How many distinct values a filter dropdown may pull (P14) — bounded so it can never
     /// stream a high-cardinality column into the browser. Default 200 when unset.</summary>
-    internal static int ClampDistinct(int? limit) => Math.Clamp(limit ?? 200, 1, 1000);
+    internal static int ClampDistinct(int? limit) => Math.Clamp(limit ?? 200, 1, ApiLimits.MaxDistinct);
 
     /// <summary>The SQL <c>LIMIT</c> for a bounded grouped query: the requested limit (default 50,
     /// clamped 1..500) plus one probe row, so the server can tell whether more rows exist.</summary>
-    internal static int ProbeLimit(int? requested) => Math.Clamp(requested ?? 50, 1, 500) + 1;
+    internal static int ProbeLimit(int? requested) => Math.Clamp(requested ?? 50, 1, ApiLimits.MaxRowLimit) + 1;
 
     /// <summary>Drop the probe row if the result reached it. Returns whether the result was truncated.</summary>
     internal static bool TrimProbeRow<T>(List<T> rows, int probeLimit)
@@ -336,7 +336,6 @@ public sealed class ClickHouseGateway
         return true;
     }
 
-    private const int MaxInValues = 500; // cap an IN list so a filter can't smuggle an unbounded array
 
     /// <summary>
     /// Build one filter condition for an already-qualified, quoted <paramref name="expr"/>, appending
@@ -354,7 +353,7 @@ public sealed class ClickHouseGateway
         {
             case "in":
             {
-                var vals = (values ?? []).Where(v => v is not null).Take(MaxInValues).ToList();
+                var vals = (values ?? []).Where(v => v is not null).Take(ApiLimits.MaxInValues).ToList();
                 if (vals.Count == 0) return string.Empty; // empty IN → skip (never emit "IN ()")
                 if (numeric && vals.All(v => double.TryParse(v, NumberStyles.Any, CultureInfo.InvariantCulture, out _)))
                 {
@@ -412,7 +411,7 @@ public sealed class ClickHouseGateway
         List<(string Name, string Type, object Value)> parameters)
     {
         var conditions = new List<string>();
-        for (var i = 0; i < filters.Count && i < 8; i++)
+        for (var i = 0; i < filters.Count; i++)
         {
             var f = filters[i];
             if (string.IsNullOrEmpty(f.Column) || !byName.TryGetValue(f.Column, out var ci))
@@ -477,7 +476,7 @@ public sealed class ClickHouseGateway
         var parameters = new List<(string Name, string Type, object Value)>();
         var filters = req.Filters ?? [];
         var conditions = new List<string>();
-        for (var i = 0; i < filters.Length && i < 8; i++)
+        for (var i = 0; i < filters.Length; i++)
         {
             var f = filters[i];
             var col = Require(f.Column);
@@ -500,7 +499,7 @@ public sealed class ClickHouseGateway
         if (conditions.Count > 0) sql.Append(" WHERE ").Append(string.Join(" AND ", conditions));
 
         if (dimension is not null) sql.Append(" GROUP BY label");
-        sql.Append(" ORDER BY value DESC LIMIT ").Append(Math.Clamp(req.Limit ?? 50, 1, 500));
+        sql.Append(" ORDER BY value DESC LIMIT ").Append(Math.Clamp(req.Limit ?? 50, 1, ApiLimits.MaxRowLimit));
 
         using var httpClient = CreateHttpClient(info);
         await using var conn = new ClickHouseConnection(BuildConnectionString(info), httpClient);
@@ -751,7 +750,7 @@ public sealed class ClickHouseGateway
         var parameters = new List<(string Name, string Type, object Value)>();
         var conditions = new List<string>();
         var filters = req.Filters ?? [];
-        for (var i = 0; i < filters.Length && i < 8; i++)
+        for (var i = 0; i < filters.Length; i++)
         {
             var f = filters[i];
             var expr = await QualifyAsync(f.Db, f.Table, f.Column);      // validates + quotes the column

@@ -41,7 +41,7 @@ public class ConnectionEndpointTests : IClassFixture<WebApplicationFactory<Progr
     {
         var client = _factory.CreateClient();
         var resp = await client.PostAsJsonAsync("/api/connection",
-            new { host = "", user = "", password = "x", secure = true });
+            new { host = "", port = 8443, user = "", password = "x", secure = true });
         Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
     }
 
