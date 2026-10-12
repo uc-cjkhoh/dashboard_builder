@@ -867,7 +867,7 @@ export function initDashboards() {
   // --- encodings toolbar (redesign 2) --------------------------------------
   // All non-Columns/Rows encodings live in one compact icon+text toolbar. Each entry is a "tool": a
   // button that (a) is a drop target for a field, and (b) toggles a small editor panel showing/removing
-  // its current field(s). `group` splits the Marks channels from Filters/Drill/Pages with a divider.
+  // its current field(s). Which tools stay visible vs. in "More" is decided by toolbar-rules.js.
   // Everything still feeds the SAME bounded query (planDims/planMeasures) — no new query shape.
   function buildTools(dash, s) {
     const m = s.marks ?? (s.marks = defaultMarks());
@@ -875,41 +875,41 @@ export function initDashboards() {
     const drillLevels = s.drill?.levels ?? [];
     const one = (field, clear) => (field ? [markPill(field, clear)] : []); // single-field pill list
     return [
-      { group: "marks", key: "color", icon: "color", label: "Color", count: colorFields.length,
+      { key: "color", icon: "color", label: "Color", count: colorFields.length,
         pills: colorFields.map((f, i) => colorPill(dash, s, f, i)), onDrop: (f) => addColor(dash, f),
         hint: "Drop a field — categorical = colour series, numeric = gradient",
         note: colorFields.length && colorMode(s) === "discrete" && !COLOR_USES.has(s.chartType)
           ? "Discrete colour needs Bar/Line/Area/Stacked/Table — or drop a numeric field for a gradient." : null },
-      { group: "marks", key: "size", icon: "size", label: "Size", count: m.size ? 1 : 0,
+      { key: "size", icon: "size", label: "Size", count: m.size ? 1 : 0,
         pills: one(m.size, () => { m.size = null; commit(dash, s); }), onDrop: (f) => addSize(dash, f),
         hint: "Drop a numeric field to size the marks (scatter bubbles)" },
-      { group: "marks", key: "label", icon: "label", label: "Label", count: m.label ? 1 : 0,
+      { key: "label", icon: "label", label: "Label", count: m.label ? 1 : 0,
         pills: one(m.label, () => { m.label = null; commit(dash, s); }), onDrop: (f) => addMarkSingle(dash, "label", f),
         hint: "Drop a field to write its value on each mark" },
-      { group: "marks", key: "detail", icon: "detail", label: "Detail", count: (m.detail ?? []).length,
+      { key: "detail", icon: "detail", label: "Detail", count: (m.detail ?? []).length,
         pills: (m.detail ?? []).map((f, i) => markPill(f, () => { m.detail.splice(i, 1); commit(dash, s); })), onDrop: (f) => addMarkList(dash, "detail", f),
         hint: "Drop dimensions to add mark granularity (no visual channel)" },
-      { group: "marks", key: "tooltip", icon: "tooltip", label: "Tooltip", count: (m.tooltip ?? []).length,
+      { key: "tooltip", icon: "tooltip", label: "Tooltip", count: (m.tooltip ?? []).length,
         pills: (m.tooltip ?? []).map((f, i) => markPill(f, () => { m.tooltip.splice(i, 1); commit(dash, s); })), onDrop: (f) => addMarkList(dash, "tooltip", f),
         hint: "Drop fields to list in each mark's tooltip" },
-      { group: "marks", key: "shape", icon: "shape", label: "Shape", count: m.shape ? 1 : 0,
+      { key: "shape", icon: "shape", label: "Shape", count: m.shape ? 1 : 0,
         pills: one(m.shape, () => { m.shape = null; commit(dash, s); }), onDrop: (f) => addShape(dash, f),
         hint: "Drop a categorical field for per-value point symbols (scatter)",
         note: m.shape && !SCATTER_TYPES.has(s.chartType) ? "Shape encodes Scatter / Square / Circle points." : null },
-      { group: "marks", key: "path", icon: "path", label: "Path", count: m.path ? 1 : 0,
+      { key: "path", icon: "path", label: "Path", count: m.path ? 1 : 0,
         pills: one(m.path, () => { m.path = null; commit(dash, s); }), onDrop: (f) => addMarkSingle(dash, "path", f),
         hint: "Drop a field to order a line/area's vertices" },
-      { group: "marks", key: "angle", icon: "angle", label: "Angle", count: m.angle ? 1 : 0,
+      { key: "angle", icon: "angle", label: "Angle", count: m.angle ? 1 : 0,
         pills: one(m.angle, () => { m.angle = null; commit(dash, s); }), onDrop: (f) => addAngle(dash, f),
         hint: "A radial magnitude — pie already maps its measure to angle" },
-      { group: "more", key: "filters", icon: "filter", label: "Filters", count: s.filters.length,
+      { key: "filters", icon: "filter", label: "Filters", count: s.filters.length,
         pills: s.filters.map((f, i) => filterPill(dash, s, f, i)), onDrop: (f) => addFilter(dash, f),
         hint: "Drop a field to filter the view by it" },
-      { group: "more", key: "drill", icon: "drill", label: "Drill", count: drillLevels.length,
+      { key: "drill", icon: "drill", label: "Drill", count: drillLevels.length,
         pills: drillLevels.map((f, i) => drillLevelPill(dash, s, f, i)), onDrop: (f) => addDrillLevel(dash, f),
         hint: "Drop ≥2 same-table fields to build a drill hierarchy (year → quarter → month)",
         note: drillLevels.length === 1 ? "Add another same-table field to drill." : null },
-      { group: "more", key: "pages", icon: "pages", label: "Pages", count: s.pages ? 1 : 0,
+      { key: "pages", icon: "pages", label: "Pages", count: s.pages ? 1 : 0,
         pills: s.pages ? [pagesPill(dash, s)] : [], onDrop: (f) => addPages(dash, f),
         hint: "Drop a dimension to step/animate the view through its members" },
     ];

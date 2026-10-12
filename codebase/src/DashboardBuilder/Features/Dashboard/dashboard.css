@@ -83,7 +83,8 @@
 .ws-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 /* P17 two-tier header: the container stacks the view bar, the (optional) format card, and the shelf lanes. */
 .ws-shelves { background: var(--glass); border-bottom: 1px solid var(--glass-line); -webkit-backdrop-filter: blur(24px) saturate(160%); backdrop-filter: blur(24px) saturate(160%);
-  padding: var(--s3) var(--s5); display: grid; gap: var(--s2); }
+  padding: var(--s3) var(--s5); display: grid; gap: var(--s2);
+  position: relative; z-index: 2; /* its backdrop-filter is a stacking context: lift the popovers above .ws-chart */ }
 
 /* Tier 1 — view bar: presentation controls only, split left (chart) / right (sort · format). */
 .ws-viewbar { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; }

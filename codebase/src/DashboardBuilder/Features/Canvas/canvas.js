@@ -1,3 +1,4 @@
+import { emptyState } from "./empty-state.js";
 import { api } from "../Core/api.js";
 import { icon } from "../Core/icons.js";
 import { show, hide, toggle, confirmDialog, toast } from "../Core/ui.js";
@@ -32,17 +33,18 @@ export function initCanvas() {
   const emptyAction = document.getElementById("canvas-empty-action");
   let connected = false;
 
-  // One sentence + one button, by state. The buttons focus controls Task 11 kept addressable by id.
+  const dbSelect = document.getElementById("db-select");
+  const currentEmpty = () => emptyState({ connected, databaseSelected: Boolean(dbSelect?.value) });
+
+  // One sentence + one button, by state. The buttons focus controls that are visible in that state.
   const refreshEmpty = () => {
     toggle(empty, entities.size === 0);
-    if (emptyTitle) emptyTitle.textContent = connected
-      ? "Drag a table here from the sidebar to start your data model."
-      : "Connect to a ClickHouse server to begin.";
-    if (emptyAction) emptyAction.textContent = connected ? "Find a table" : "Connect";
+    const st = currentEmpty();
+    if (emptyTitle) emptyTitle.textContent = st.text;
+    if (emptyAction) emptyAction.textContent = st.action;
   };
-  emptyAction?.addEventListener("click", () => {
-    document.getElementById(connected ? "table-search" : "conn-host")?.focus();
-  });
+  emptyAction?.addEventListener("click", () => { document.getElementById(currentEmpty().focusId)?.focus(); });
+  dbSelect?.addEventListener("change", refreshEmpty);
   document.addEventListener("connection:changed", (e) => { connected = Boolean(e.detail?.connected); refreshEmpty(); });
   refreshEmpty();
 

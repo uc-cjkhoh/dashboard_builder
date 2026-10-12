@@ -4,8 +4,8 @@
   position: absolute;
   inset: 0;
   display: grid;
-  place-items: center;
   place-content: center;
+  justify-items: center;
   gap: var(--s3);
   color: var(--ink-2);
   text-align: center;

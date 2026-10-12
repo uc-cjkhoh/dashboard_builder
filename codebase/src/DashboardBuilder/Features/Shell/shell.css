@@ -109,5 +109,6 @@ body.is-resizing { cursor: col-resize; user-select: none; }
   padding: var(--s3) var(--s4) 0;
   border-width: 0 0 1px;
   border-radius: 0;
+  position: relative; z-index: 3;  /* the Workbook menu must paint above the view below */
 }
 

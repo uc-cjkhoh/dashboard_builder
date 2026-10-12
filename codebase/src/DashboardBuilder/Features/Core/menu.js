@@ -7,7 +7,7 @@ export function wireMenu(button, list, { signal } = {}) {
     if (open) items()[0]?.focus();
   };
   button.setAttribute("aria-haspopup", "menu"); button.setAttribute("aria-expanded", "false");
-  button.addEventListener("click", (e) => { e.stopPropagation(); setOpen(list.hidden); }, { signal });
+  button.addEventListener("click", (e) => { setOpen(list.hidden); }, { signal });
   list.addEventListener("click", (e) => { if (e.target.closest('[role="menuitem"]')) setOpen(false); }, { signal });
   list.addEventListener("keydown", (e) => {
     const all = items(), i = all.indexOf(document.activeElement);
@@ -15,6 +15,6 @@ export function wireMenu(button, list, { signal } = {}) {
     else if (e.key === "ArrowUp") { e.preventDefault(); all[(i - 1 + all.length) % all.length]?.focus(); }
     else if (e.key === "Escape") { setOpen(false); button.focus(); }
   }, { signal });
-  document.addEventListener("click", (e) => { if (!list.hidden && !list.contains(e.target)) setOpen(false); }, { signal });
+  document.addEventListener("click", (e) => { if (!list.hidden && !list.contains(e.target) && !button.contains(e.target)) setOpen(false); }, { signal });
   return { close: () => setOpen(false) };
 }
