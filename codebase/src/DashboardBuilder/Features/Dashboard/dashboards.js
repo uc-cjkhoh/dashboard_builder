@@ -14,8 +14,14 @@ import { createLatestGate, createResultCache, requestKey, isAbortError, truncati
 const FIELD_MIME = "application/x-ch-field";
 // Column category from the Data Model catalog (entity.columns), for filters saved without one.
 function categoryOf(db, table, column) {
-  for (const e of entities.values())
-    if (e.db === db && e.table === table) { const c = e.columns?.find((x) => x.name === column); if (c) return c.category; }
+  try {
+    // The worksheet's own column cache is warm by render time (buildFields awaited it); the Data Model's
+    // entity columns (loaded asynchronously by the canvas) are the fallback.
+    const cached = columnsCache.get(keyOf(db, table))?.find((x) => x.name === column);
+    if (cached?.category) return cached.category;
+    for (const e of entities.values())
+      if (e.db === db && e.table === table) { const c = e.columns?.find((x) => x.name === column); if (c?.category) return c.category; }
+  } catch { /* total: an odd catalog just means "unknown" */ }
   return undefined;
 }
 const FILTER_PLACEHOLDER = { numeric: "number", temporal: "YYYY-MM-DD", boolean: "true or false" };
@@ -214,6 +220,15 @@ export function initDashboards() {
 
   bus.addEventListener("view:changed", sync);
   bus.addEventListener("dashboard:changed", () => { if (!isModelActive()) { renderShelves(); runChart(); } });
+  // Safety net: an entity's columns finishing after the first render may be the only source of a
+  // restored filter's category — re-render once if any filter is still waiting for one.
+  bus.addEventListener("entity:loaded", () => {
+    const dash = activeDashboard();
+    if (!dash || isModelActive() || !dash.sheet.filters.some((f) => !f.category)) return;
+    const missing = dash.sheet.filters.filter((f) => !f.category).length;
+    withCategories(dash.sheet.filters, categoryOf);
+    if (dash.sheet.filters.filter((f) => !f.category).length < missing) { renderShelves(); runChart(); }
+  });
   sync();
 
   async function sync() {
