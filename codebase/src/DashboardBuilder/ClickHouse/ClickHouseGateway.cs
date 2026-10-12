@@ -295,7 +295,7 @@ public sealed class ClickHouseGateway
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         var values = new List<string?>();
         while (await reader.ReadAsync(ct))
-            values.Add(reader.IsDBNull(0) ? null : reader.GetValue(0)?.ToString());
+            values.Add(reader.IsDBNull(0) ? null : FormatKey(reader.GetValue(0)));
         return values;
     }
 
@@ -346,13 +346,14 @@ public sealed class ClickHouseGateway
     /// </summary>
     internal static string BuildCondition(
         string? op, string paramBase, string expr, string category, string column, string field,
-        string? value, IReadOnlyList<string>? values, List<(string Name, string Type, object Value)> parameters)
+        string? value, IReadOnlyList<string>? values, List<(string Name, string Type, object Value)> parameters,
+        bool dateOnly = false)
     {
         switch ((op ?? string.Empty).ToLowerInvariant())
         {
             case "in":
             {
-                var typed = (values ?? []).Select(v => FilterValues.Coerce(category, column, v ?? "", field)).ToList();
+                var typed = (values ?? []).Select(v => FilterValues.Coerce(category, column, v ?? "", field, dateOnly)).ToList();
                 if (typed.Count == 0) throw new RequestValidationException("Pick at least one value.", field);
                 var type = typed[0].Type;
                 object arr = type switch
@@ -367,8 +368,8 @@ public sealed class ClickHouseGateway
             case "between":
             {
                 if (values is not { Count: 2 }) throw new RequestValidationException("A range filter needs both From and To.", field);
-                var lo = FilterValues.Coerce(category, column, values[0] ?? "", field);
-                var hi = FilterValues.Coerce(category, column, values[1] ?? "", field);
+                var lo = FilterValues.Coerce(category, column, values[0] ?? "", field, dateOnly);
+                var hi = FilterValues.Coerce(category, column, values[1] ?? "", field, dateOnly);
                 if (FilterValues.Compare(category, lo.Value, hi.Value) > 0)
                     throw new RequestValidationException($"From must be less than or equal to To for column {column}.", field);
                 var (na, nb) = ($"{paramBase}a", $"{paramBase}b");
@@ -379,7 +380,7 @@ public sealed class ClickHouseGateway
             default:
             {
                 if (!Operators.TryGetValue(op ?? string.Empty, out var sqlOp)) throw new UnknownIdentifierException("Unknown operator.");
-                var (type, typedValue) = FilterValues.Coerce(category, column, value ?? "", field);
+                var (type, typedValue) = FilterValues.Coerce(category, column, value ?? "", field, dateOnly);
                 parameters.Add((paramBase, type, typedValue));
                 return $"{expr} {sqlOp} {{{paramBase}:{type}}}";
             }
@@ -404,7 +405,7 @@ public sealed class ClickHouseGateway
         {
             var f = filters[i];
             if (string.IsNullOrEmpty(f.Column) || !byName.TryGetValue(f.Column, out var ci)) throw new UnknownIdentifierException("Unknown column.");
-            conditions.Add(BuildCondition(f.Op, $"p{i}", Identifier.Quote(f.Column), ci.Category, f.Column, $"filters[{i}]", f.Value, f.Values, parameters));
+            conditions.Add(BuildCondition(f.Op, $"p{i}", Identifier.Quote(f.Column), ci.Category, f.Column, $"filters[{i}]", f.Value, f.Values, parameters, ClickHouseType.IsDateOnly(ci.Type)));
         }
         return conditions.Count > 0 ? " WHERE " + string.Join(" AND ", conditions) : string.Empty;
     }
@@ -527,13 +528,7 @@ public sealed class ClickHouseGateway
 
         // lo/hi from the same filtered set; width guards against a zero span (all-equal column).
         // `bin` is clamped to the last bucket so the maximum value lands inside, not in an extra bin.
-        var sql =
-            $"WITH (SELECT min({qname}) FROM {qualified}{where}) AS lo, " +
-            $"(SELECT max({qname}) FROM {qualified}{where}) AS hi, " +
-            $"if(hi > lo, (hi - lo) / {bins}, 1) AS width " +
-            $"SELECT least(toUInt32(floor(({qname} - lo) / width)), {bins - 1}) AS bin, " +
-            $"lo + bin * width AS x0, lo + (bin + 1) * width AS x1, count() AS c " +
-            $"FROM {qualified}{where} GROUP BY bin, x0, x1 ORDER BY bin";
+        var sql = BuildHistogramSql(qname, qualified, where, bins);
 
         using var httpClient = CreateHttpClient(info);
         await using var conn = new ClickHouseConnection(BuildConnectionString(info), httpClient);
@@ -546,9 +541,27 @@ public sealed class ClickHouseGateway
         var doub = (int i) => reader.IsDBNull(i) ? double.NaN : Convert.ToDouble(reader.GetValue(i), CultureInfo.InvariantCulture);
         var binsOut = new List<HistogramBin>();
         while (await reader.ReadAsync(ct))
-            binsOut.Add(new HistogramBin(doub(1), doub(2),
+        {
+            double x0 = doub(1), x1 = doub(2);
+            if (!double.IsFinite(x0) || !double.IsFinite(x1)) continue; // defensive: JSON can't carry NaN/∞
+            binsOut.Add(new HistogramBin(x0, x1,
                 reader.IsDBNull(3) ? 0L : Convert.ToInt64(reader.GetValue(3), CultureInfo.InvariantCulture)));
+        }
         return new HistogramResult(binsOut);
+    }
+
+    /// <summary>The bucketing query. NULLs are excluded (a NULL value has no bin); <paramref name="where"/> is
+    /// empty or " WHERE …" from the user filters, which the guard is combined with.</summary>
+    internal static string BuildHistogramSql(string qname, string qualified, string where, int bins)
+    {
+        var w = where.Length == 0 ? $" WHERE {qname} IS NOT NULL" : $"{where} AND {qname} IS NOT NULL";
+        return
+            $"WITH (SELECT min({qname}) FROM {qualified}{w}) AS lo, " +
+            $"(SELECT max({qname}) FROM {qualified}{w}) AS hi, " +
+            $"if(hi > lo, (hi - lo) / {bins}, 1) AS width " +
+            $"SELECT least(toUInt32(floor(({qname} - lo) / width)), {bins - 1}) AS bin, " +
+            $"lo + bin * width AS x0, lo + (bin + 1) * width AS x1, count() AS c " +
+            $"FROM {qualified}{w} GROUP BY bin, x0, x1 ORDER BY bin";
     }
 
     /// <summary>
@@ -593,16 +606,15 @@ public sealed class ClickHouseGateway
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         var b = hasDim ? 1 : 0; // column offset for the stats when a label column is present
         var doub = (int i) => reader.IsDBNull(i) ? double.NaN : Convert.ToDouble(reader.GetValue(i), CultureInfo.InvariantCulture);
-        var groups = new List<BoxPlotGroup>();
+        var groups = new List<BoxPlotGroup?>(); // null = a no-row group (nan stats); dropped after the truncation probe
         while (await reader.ReadAsync(ct))
         {
-            var label = hasDim ? (reader.IsDBNull(0) ? null : reader.GetValue(0)?.ToString()) : null;
+            var label = hasDim ? (reader.IsDBNull(0) ? null : FormatKey(reader.GetValue(0))) : null;
             double lo = doub(b), q1 = doub(b + 1), med = doub(b + 2), q3 = doub(b + 3), hi = doub(b + 4);
-            if (!new[] { lo, q1, med, q3, hi }.All(double.IsFinite)) continue; // a no-row group yields nan
-            groups.Add(new BoxPlotGroup(label, lo, q1, med, q3, hi));
+            groups.Add(new[] { lo, q1, med, q3, hi }.All(double.IsFinite) ? new BoxPlotGroup(label, lo, q1, med, q3, hi) : null);
         }
         var truncated = TrimProbeRow(groups, limit);
-        return new BoxPlotResult(groups, truncated);
+        return new BoxPlotResult(groups.OfType<BoxPlotGroup>().ToList(), truncated);
     }
 
     /// <summary>
@@ -621,6 +633,7 @@ public sealed class ClickHouseGateway
     {
         var aliases = new Dictionary<string, string>();                 // "db\0table" -> alias
         var categories = new Dictionary<string, Dictionary<string, string>>(); // "db\0table" -> col -> category
+        var rawTypes = new Dictionary<string, Dictionary<string, string>>();   // same shape, raw ClickHouse type
         static string Key(string db, string table) => $"{db}\0{table}";
 
         async Task<Dictionary<string, string>> ColumnsOf(string db, string table)
@@ -631,6 +644,7 @@ public sealed class ClickHouseGateway
                 var cols = await DescribeColumnsAsync(info, db, table, ct); // validates db + table
                 map = cols.ToDictionary(c => c.Name, c => c.Category, StringComparer.Ordinal);
                 categories[key] = map;
+                rawTypes[key] = cols.ToDictionary(c => c.Name, c => c.Type, StringComparer.Ordinal);
             }
             return map;
         }
@@ -692,13 +706,17 @@ public sealed class ClickHouseGateway
         var measExprs = new List<string>();
         var measNames = new List<string>();
         var measNumeric = new List<bool>();
+        var measIndex = 0;
         foreach (var m in req.Measures ?? [])
         {
+            var mIdx = measIndex++;
             var mAgg = (m.Agg ?? "count").ToLowerInvariant();
             if (!Aggregations.Contains(mAgg)) throw new UnknownIdentifierException("Unknown aggregation.");
+            if (mAgg != "count" && !(await ColumnsOf(m.Db, m.Table)).ContainsKey(m.Column))
+                throw new UnknownIdentifierException("Unknown column.");
             var category = mAgg == "count" ? ClickHouseType.Numeric : (await ColumnsOf(m.Db, m.Table)).GetValueOrDefault(m.Column, ClickHouseType.Other);
             if (mAgg is "sum" or "avg" && category != ClickHouseType.Numeric)
-                throw new RequestValidationException($"{mAgg} needs a numeric column — {m.Column} is {category}.", "measures");
+                throw new RequestValidationException($"{char.ToUpperInvariant(mAgg[0])}{mAgg[1..]} needs a numeric column — {m.Column} is {category}.", $"measures[{mIdx}]");
             measNumeric.Add(mAgg is "count" or "countdistinct" or "sum" or "avg" || category == ClickHouseType.Numeric);
             if (mAgg == "count")
             {
@@ -736,7 +754,8 @@ public sealed class ClickHouseGateway
         {
             var f = filters[i];
             var expr = await QualifyAsync(f.Db, f.Table, f.Column);      // validates + quotes the column
-            conditions.Add(BuildCondition(f.Op, $"p{i}", expr, categories[Key(f.Db, f.Table)][f.Column], f.Column, $"filters[{i}]", f.Value, f.Values, parameters));
+            conditions.Add(BuildCondition(f.Op, $"p{i}", expr, categories[Key(f.Db, f.Table)][f.Column], f.Column, $"filters[{i}]", f.Value, f.Values, parameters,
+                ClickHouseType.IsDateOnly(rawTypes[Key(f.Db, f.Table)][f.Column])));
         }
         if (conditions.Count > 0) sql.Append(" WHERE ").Append(string.Join(" AND ", conditions));
         if (dimExprs.Count > 0)
@@ -775,7 +794,7 @@ public sealed class ClickHouseGateway
         {
             var keys = new string?[dimExprs.Count];
             for (var i = 0; i < dimExprs.Count; i++)
-                keys[i] = reader.IsDBNull(i) ? null : reader.GetValue(i)?.ToString();
+                keys[i] = reader.IsDBNull(i) ? null : FormatKey(reader.GetValue(i));
             var values = new object?[measExprs.Count];
             for (var i = 0; i < measExprs.Count; i++)
             {
@@ -809,6 +828,14 @@ public sealed class ClickHouseGateway
 
     // Reduce a cell value to a display string. Numbers use the invariant culture; arrays/tuples/maps
     // render compactly; byte blobs become hex. Nulls are handled by the caller (kept as JSON null).
+    /// <summary>A group-key / distinct-value label: dates render as ISO (so they round-trip as filter values), everything else as before.</summary>
+    internal static string? FormatKey(object? value) => value switch
+    {
+        null => null,
+        DateTime or DateTimeOffset => FormatCell(value),
+        _ => value.ToString(),
+    };
+
     internal static string FormatCell(object value) => value switch
     {
         string s => s,

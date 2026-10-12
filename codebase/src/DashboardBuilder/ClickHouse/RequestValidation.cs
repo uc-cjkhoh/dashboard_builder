@@ -126,7 +126,7 @@ public static class FilterValues
     // Digits, optional sign, one '.', optional exponent — rejects "1,000", "1 000", "0x10", "NaN", "Infinity".
     private static readonly Regex PlainNumber = new(@"^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$", RegexOptions.CultureInvariant);
 
-    public static (string Type, object Value) Coerce(string category, string column, string raw, string field)
+    public static (string Type, object Value) Coerce(string category, string column, string raw, string field, bool dateOnly = false)
     {
         var v = raw.Trim();
         switch (category)
@@ -137,7 +137,11 @@ public static class FilterValues
                 throw new RequestValidationException($"'{raw}' is not a number for column {column}.", field);
             case ClickHouseType.Temporal:
                 if (DateTime.TryParseExact(v, DateFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var t))
+                {
+                    if (dateOnly && v.Length > 10)
+                        throw new RequestValidationException($"'{raw}' has a time, but column {column} holds dates only — use YYYY-MM-DD.", field);
                     return ("String", t.ToString(v.Length == 10 ? "yyyy-MM-dd" : "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
+                }
                 throw new RequestValidationException($"'{raw}' is not a date (YYYY-MM-DD or YYYY-MM-DD HH:MM:SS) for column {column}.", field);
             case ClickHouseType.Boolean:
                 return v.ToLowerInvariant() switch

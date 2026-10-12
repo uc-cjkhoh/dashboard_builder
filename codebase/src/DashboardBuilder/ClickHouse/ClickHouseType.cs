@@ -35,6 +35,9 @@ public static class ClickHouseType
         return Other;
     }
 
+    /// <summary>True for <c>Date</c>/<c>Date32</c> (after unwrapping Nullable/LowCardinality) — columns that hold no time of day.</summary>
+    public static bool IsDateOnly(string? type) => BaseName(Unwrap(type ?? string.Empty)) is "Date" or "Date32";
+
     // Strip outer Nullable(...) / LowCardinality(...) wrappers, possibly nested.
     private static string Unwrap(string type)
     {
