@@ -42,3 +42,39 @@ test("a filter whose column is not in the catalog stays visibly invalid", () => 
   withCategories([f], () => undefined);
   const r = checkFilter(f); assert.equal(r.state, "invalid"); assert.match(r.error, /can't be compared/);
 });
+
+import { checkAdd, viewCounts } from "../../src/DashboardBuilder/Features/Dashboard/filter-rules.js";
+import { LIMITS } from "../../src/DashboardBuilder/Features/Core/validate.js";
+const dim = (i) => ({ db: "s", table: "t", column: `d${i}`, category: "text", role: "dimension" });
+const mea = (i) => ({ db: "s", table: "t", column: `m${i}`, category: "numeric", role: "measure", agg: "sum" });
+const sheetOf = (o) => ({ columns: [], rows: [], color: [], marks: {}, ...o });
+test("a shelf accepts up to pillsPerShelf fields and refuses the next", () => {
+  const n = LIMITS.pillsPerShelf;
+  // spread over rows+columns so the 12-dimension cap is not what stops it: use detail (dimension) -> use tooltip (text, no count)
+  const full = sheetOf({ marks: { tooltip: Array.from({ length: n - 1 }, (_, i) => dim(i)) } });
+  assert.equal(checkAdd(full, "tooltip", dim(99)).ok, true);
+  const over = sheetOf({ marks: { tooltip: Array.from({ length: n }, (_, i) => dim(i)) } });
+  const r = checkAdd(over, "tooltip", dim(99));
+  assert.equal(r.ok, false); assert.match(r.error, /Tooltip shelf can hold at most 20 fields/);
+});
+test("dimension cap: 12 allowed, 13th refused", () => {
+  const at11 = sheetOf({ columns: Array.from({ length: 11 }, (_, i) => dim(i)) });
+  assert.equal(checkAdd(at11, "rows", dim(50), "dimension").ok, true);
+  const at12 = sheetOf({ columns: Array.from({ length: 12 }, (_, i) => dim(i)) });
+  const r = checkAdd(at12, "rows", dim(50), "dimension");
+  assert.equal(r.ok, false); assert.equal(r.error, "A view can group by at most 12 fields.");
+  assert.equal(checkAdd(at12, "rows", mea(1), "measure").ok, true);
+});
+test("measure cap: 10 allowed, 11th refused", () => {
+  const at9 = sheetOf({ rows: Array.from({ length: 9 }, (_, i) => mea(i)) });
+  assert.equal(checkAdd(at9, "columns", mea(50), "measure").ok, true);
+  const at10 = sheetOf({ rows: Array.from({ length: 10 }, (_, i) => mea(i)) });
+  const r = checkAdd(at10, "columns", mea(50), "measure");
+  assert.equal(r.ok, false); assert.equal(r.error, "A view can show at most 10 measures.");
+});
+test("replacing a single-slot encoding at the cap is allowed; counts include marks", () => {
+  const s = sheetOf({ columns: Array.from({ length: 11 }, (_, i) => dim(i)), color: [dim(90)] });
+  assert.deepEqual(viewCounts(s), { dims: 12, measures: 0 });
+  assert.equal(checkAdd(s, "color", dim(91), "dimension").ok, true);
+  assert.equal(checkAdd(s, "detail", dim(92)).ok, false);
+});

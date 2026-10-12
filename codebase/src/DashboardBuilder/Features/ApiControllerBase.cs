@@ -8,7 +8,7 @@ namespace DashboardBuilder.Features;
 /// Shared base for the read-only ClickHouse API controllers. Holds the session-scoped connection
 /// store and the gateway, plus the two standard failure results. All endpoints are read-only
 /// against ClickHouse (CLAUDE.md golden rule 1); the password lives only in the session and is
-/// never echoed back (golden rule 3).
+/// never echoed back (golden rule 4).
 /// </summary>
 [ApiController]
 [Route("api")]

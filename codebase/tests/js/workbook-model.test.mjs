@@ -199,3 +199,21 @@ test("a dashboard with no name falls back with the required-field message", () =
   assert.equal(wb.dashboards[0].name, "Dashboard");
   assert.ok(wb.issues.some((i) => /Tab name is required/.test(i)));
 });
+
+test("non-list entities, relationships and dashboards are reported, not silently reset", () => {
+  const wb = parseWorkbook(wbText({ entities: {}, relationships: "x", dashboards: 5 }));
+  assert.ok(wb.issues.some((i) => /tables weren't a list/.test(i)));
+  assert.ok(wb.issues.some((i) => /relationships weren't a list/.test(i)));
+  assert.ok(wb.issues.some((i) => /dashboards weren't a list/.test(i)));
+});
+test("a non-object sheet or marks, and an invalid active index, are reported", () => {
+  const wb = parseWorkbook(wbText({ dashboards: [{ name: "A", sheet: "oops" }, { name: "B", sheet: { marks: [] } }], active: 7 }));
+  assert.ok(wb.issues.some((i) => /settings weren't an object/.test(i)));
+  assert.ok(wb.issues.some((i) => /marks weren't an object/.test(i)));
+  assert.ok(wb.issues.some((i) => /active dashboard was invalid/.test(i)));
+  assert.equal(wb.active, null);
+});
+test("a valid or absent active index adds no issue", () => {
+  assert.equal(parseWorkbook(wbText({ dashboards: [{ name: "A", sheet: {} }], active: 0 })).issues.length, 0);
+  assert.equal(parseWorkbook(wbText({ dashboards: [{ name: "A", sheet: {} }] })).issues.length, 0);
+});

@@ -58,8 +58,12 @@ function onConnection(view) {
   try { wb = parseWorkbook(saved); } catch (err) { keepUnreadable(saved, err); return; }
   if (!wb.entities.length && !wb.dashboards.length) return;
   if (!openWorkbook(wb)) { blockedKey = key; return; } // partial state must not overwrite the stored entry
-  toast(`Restored your last workbook (${count(wb.entities.length, "table")}, ${count(wb.dashboards.length, "dashboard")}).`, "ok");
-  if (wb.issues.length) toast(`Restored your last workbook — ${wb.issues.length} part(s) were reset.`, "info");
+  const restored = `Restored your last workbook (${count(wb.entities.length, "table")}, ${count(wb.dashboards.length, "dashboard")}).`;
+  if (wb.issues.length) {
+    toast(`${restored} ${wb.issues.length} part(s) were reset.`, "info");
+    listDialog(`Restored your last workbook with ${wb.issues.length} issue(s)`,
+      wb.issues.slice(0, 20).concat(wb.issues.length > 20 ? [`…and ${wb.issues.length - 20} more.`] : []));
+  } else toast(restored, "ok");
 }
 
 /** A saved workbook that can't be read: keep a backup copy if there is room; autosave is blocked only when no backup could be kept. */

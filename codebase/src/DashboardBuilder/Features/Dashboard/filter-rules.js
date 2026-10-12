@@ -44,3 +44,46 @@ export function withCategories(filters, categoryOf) {
   for (const f of filters) if (!f.category) { const c = categoryOf(f.db, f.table, f.column); if (c) f.category = c; }
   return filters;
 }
+
+// --- shelf / view caps (pure) -------------------------------------------------
+const roleOfField = (f) => f.role ?? (f.category === "numeric" ? "measure" : "dimension");
+const SHELF_SLOTS = new Set(["columns", "rows", "color", "detail", "tooltip"]);
+/** Dimensions and measures a view would send to the server (a conservative count, whatever the chart type). */
+export function viewCounts(sheet) {
+  const m = sheet.marks ?? {};
+  const numeric = (f) => Boolean(f) && f.category === "numeric";
+  const shelf = [...(sheet.columns ?? []), ...(sheet.rows ?? [])];
+  const cf = (sheet.color ?? [])[0];
+  let dims = shelf.filter((f) => roleOfField(f) === "dimension").length + (m.detail ?? []).length;
+  if (m.shape) dims++;
+  if (cf && !numeric(cf)) dims++;
+  if (sheet.drill) dims++;
+  let measures = shelf.filter((f) => roleOfField(f) === "measure").length;
+  if (numeric(m.size)) measures++;
+  if (numeric(cf)) measures++;
+  for (const f of [m.label, m.path, ...(m.tooltip ?? [])]) if (numeric(f)) measures++;
+  return { dims, measures };
+}
+/** May `field` go into `slot` ("columns"|"rows"|"color"|"detail"|"tooltip"|"size"|"label"|"path"|"shape")?
+ *  Returns { ok: true } or { ok: false, error } — a full sentence naming the cap. */
+export function checkAdd(sheet, slot, field, role) {
+  const marks = { ...(sheet.marks ?? {}) };
+  const next = { ...sheet, marks };
+  const entry = { ...field, ...(role ? { role } : {}) };
+  if (slot === "columns" || slot === "rows") {
+    if ((sheet[slot] ?? []).length >= LIMITS.pillsPerShelf)
+      return { ok: false, error: `The ${slot === "columns" ? "Columns" : "Rows"} shelf can hold at most ${LIMITS.pillsPerShelf} fields.` };
+    next[slot] = [...sheet[slot], entry];
+  } else if (slot === "detail" || slot === "tooltip") {
+    if ((marks[slot] ?? []).length >= LIMITS.pillsPerShelf)
+      return { ok: false, error: `The ${slot === "detail" ? "Detail" : "Tooltip"} shelf can hold at most ${LIMITS.pillsPerShelf} fields.` };
+    marks[slot] = [...(marks[slot] ?? []), entry];
+  } else if (slot === "color") next.color = [entry];
+  else if (slot === "size" || slot === "label" || slot === "path" || slot === "shape") marks[slot] = entry;
+  const before = viewCounts(sheet), after = viewCounts(next);
+  if (after.dims > LIMITS.dimensions && after.dims > before.dims)
+    return { ok: false, error: `A view can group by at most ${LIMITS.dimensions} fields.` };
+  if (after.measures > LIMITS.measures && after.measures > before.measures)
+    return { ok: false, error: `A view can show at most ${LIMITS.measures} measures.` };
+  return { ok: true };
+}

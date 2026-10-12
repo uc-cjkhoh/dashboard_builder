@@ -6,7 +6,7 @@ namespace DashboardBuilder.Features.Connection;
 /// <summary>
 /// The session connection endpoints (P1). All read-only against ClickHouse: connecting only
 /// validates with <c>SELECT 1</c>. The password is accepted in the request body, stored in the
-/// session, and never echoed back (CLAUDE.md golden rule 3).
+/// session, and never echoed back (CLAUDE.md golden rule 4).
 /// </summary>
 public sealed class ConnectionController : ApiControllerBase
 {

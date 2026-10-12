@@ -62,6 +62,7 @@ export function parseWorkbook(source) {
   const seenIds = new Set(), seenTables = new Set();
   let skipped = 0;
   const entities = [];
+  if (raw.entities !== undefined && !Array.isArray(raw.entities)) issues.push("The tables weren't a list — none were opened.");
   const entList = Array.isArray(raw.entities) ? raw.entities.slice() : [];
   if (entList.length > LIMITS.entities) {
     issues.push(`Only the first ${LIMITS.entities} tables were opened.`);
@@ -85,6 +86,7 @@ export function parseWorkbook(source) {
   const ids = new Set(entities.map((e) => e.id));
   const endpoint = (p) => p && ids.has(p.entityId) && isStr(p.column);
 
+  if (raw.relationships !== undefined && !Array.isArray(raw.relationships)) issues.push("The relationships weren't a list — none were opened.");
   const relList = Array.isArray(raw.relationships) ? raw.relationships.slice() : [];
   if (relList.length > LIMITS.relationships) {
     issues.push(`Only the first ${LIMITS.relationships} relationships were opened.`);
@@ -100,6 +102,7 @@ export function parseWorkbook(source) {
   const droppedRels = relList.length - relationships.length;
   if (droppedRels > 0) issues.push(`Skipped ${droppedRels} relationship(s) that referenced missing tables or had an unknown cardinality.`);
 
+  if (raw.dashboards !== undefined && !Array.isArray(raw.dashboards)) issues.push("The dashboards weren't a list — none were opened.");
   const allDash = Array.isArray(raw.dashboards) ? raw.dashboards : [];
   const list = allDash.filter((d) => d && typeof d === "object");
   if (list.length < allDash.length) issues.push(`Skipped ${allDash.length - list.length} entry(ies) that were not a dashboard.`);
@@ -117,6 +120,8 @@ export function parseWorkbook(source) {
     return { name, sheet: sanitizeSheet(d.sheet, `Sheet "${name}"`, issues) };
   });
 
+  if (raw.active != null && !(Number.isInteger(raw.active) && raw.active >= 0 && raw.active < dashboards.length))
+    issues.push("The saved active dashboard was invalid — the data model view was opened.");
   const active = Number.isInteger(raw.active) && raw.active >= 0 && raw.active < dashboards.length ? raw.active : null;
   return { entities, relationships, dashboards, active, issues: [...new Set(issues)] };
 }
@@ -156,7 +161,8 @@ const oneOf = (set, v, fallback, where, what, issues) => {
  *  reset and described in `issues`. */
 export function sanitizeSheet(saved, where, issues) {
   const base = emptySheet();
-  const s = saved && typeof saved === "object" ? saved : {};
+  if (saved != null && (typeof saved !== "object" || Array.isArray(saved))) issues.push(`${where}: its settings weren't an object — reset to defaults.`);
+  const s = saved && typeof saved === "object" && !Array.isArray(saved) ? saved : {};
   const sheet = { ...base };
   sheet.chartType = s.chartType === undefined ? base.chartType : CHART_TYPE_IDS.has(s.chartType) ? s.chartType
     : (issues.push(`${where}: unknown chart type "${s.chartType}" — reset to Bar.`), "bar");
@@ -170,7 +176,8 @@ export function sanitizeSheet(saved, where, issues) {
     if (!okShape) issues.push(`${where}: skipped a filter on ${f.table}.${f.column} with an unknown operator or value.`);
     return okShape;
   });
-  const m = s.marks && typeof s.marks === "object" ? s.marks : {};
+  if (s.marks != null && (typeof s.marks !== "object" || Array.isArray(s.marks))) issues.push(`${where}: marks weren't an object — reset.`);
+  const m = s.marks && typeof s.marks === "object" && !Array.isArray(s.marks) ? s.marks : {};
   sheet.marks = { ...base.marks };
   for (const k of ["size", "label", "shape", "path", "angle"]) sheet.marks[k] = m[k] == null ? null : cleanPill(m[k], `${where} ${k}`, issues);
   for (const k of ["detail", "tooltip"]) sheet.marks[k] = cleanPills(m[k], `${where} ${k}`, issues);

@@ -15,6 +15,16 @@ export function wireMenu(button, list, { signal } = {}) {
     else if (e.key === "ArrowUp") { e.preventDefault(); all[(i - 1 + all.length) % all.length]?.focus(); }
     else if (e.key === "Escape") { setOpen(false); button.focus(); }
   }, { signal });
+  // Tabbing out of the open menu closes it (focus moved to something outside the button and list).
+  const onFocusOut = (e) => {
+    if (list.hidden) return;
+    const to = e.relatedTarget;
+    if (to && (list.contains(to) || button.contains(to))) return;
+    if (!to) return; // window blur / click on non-focusable — the outside-click handler decides
+    setOpen(false);
+  };
+  list.addEventListener("focusout", onFocusOut, { signal });
+  button.addEventListener("focusout", onFocusOut, { signal });
   document.addEventListener("click", (e) => { if (!list.hidden && !list.contains(e.target) && !button.contains(e.target)) setOpen(false); }, { signal });
   return { close: () => setOpen(false) };
 }

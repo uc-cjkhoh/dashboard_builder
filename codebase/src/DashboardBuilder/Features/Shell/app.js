@@ -13,7 +13,11 @@ import { toast } from "../Core/ui.js";
 import { icon } from "../Core/icons.js";
 
 // Last-resort handlers: an unexpected error is told to the user, never only logged. Aborted queries are normal.
-window.addEventListener("error", (e) => { console.error(e.error ?? e.message); toast("Something went wrong — try again.", "danger"); });
+window.addEventListener("error", (e) => {
+  // The browser's benign "ResizeObserver loop completed…" notice carries no error object — not a failure.
+  if (!e.error || /ResizeObserver loop/.test(e.message ?? "")) return;
+  console.error(e.error); toast("Something went wrong — try again.", "danger");
+});
 window.addEventListener("unhandledrejection", (e) => {
   if (e.reason?.name === "AbortError") return;
   console.error(e.reason); toast("Something went wrong — try again.", "danger");

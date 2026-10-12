@@ -8,6 +8,7 @@ export const LIMITS = Object.freeze({
   inValues: 500, dashboards: 50, pillsPerShelf: 20,
   entities: 100,       // tables on the canvas a workbook may open
   relationships: 200,  // links a workbook may open
+  dimensions: 12, measures: 10, // per view (server MaxDimensions / MaxMeasures)
   drillLevels: 6, // keeps user filters (8) + drill path (≤5) + page + selection within the server's 16
 });
 export const HOST_MESSAGES = Object.freeze({

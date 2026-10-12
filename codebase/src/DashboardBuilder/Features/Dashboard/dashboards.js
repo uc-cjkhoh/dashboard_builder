@@ -4,7 +4,7 @@ import { wireMenu } from "../Core/menu.js";
 import { visibleTools } from "./toolbar-rules.js";
 import { toggle, makeButton, toast, fieldError } from "../Core/ui.js";
 import { LIMITS } from "../Core/validate.js";
-import { aggsFor, checkFilter, statFilters, withCategories, TEXT_VALUE_TYPES } from "./filter-rules.js";
+import { aggsFor, checkAdd, checkFilter, viewCounts, statFilters, withCategories, TEXT_VALUE_TYPES } from "./filter-rules.js";
 import { entities, relationships, activeDashboard, isModelActive, updateSheet, bus, defaultFormat, defaultMarks } from "../Core/store.js";
 import { renderChart as renderSeriesChart, disposeChart, exportChart, hasChartInstance } from "./chart.js";
 import { makeValueFormatter, makeCategoryFormatter } from "../Core/format.js";
@@ -691,6 +691,9 @@ export function initDashboards() {
     const s = dash.sheet;
     const src = s[fromShelf];
     if (fromIndex < 0 || fromIndex >= src.length) return;
+    if (fromShelf !== toShelf && s[toShelf].length >= LIMITS.pillsPerShelf) {
+      toast(`The ${toShelf === "columns" ? "Columns" : "Rows"} shelf can hold at most ${LIMITS.pillsPerShelf} fields.`, "info"); return;
+    }
     const [moved] = src.splice(fromIndex, 1);
     let ti = toIndex;
     if (fromShelf === toShelf && fromIndex < ti) ti -= 1; // removal shifted later slots left
@@ -710,6 +713,14 @@ export function initDashboards() {
   // Flip a field between dimension and measure. Becoming a measure gets a sensible default agg
   // (sum for numbers, count otherwise); becoming a dimension drops the agg.
   function setRole(dash, s, f, role) {
+    const was = f.role;
+    f.role = role;
+    const c = viewCounts(s);
+    f.role = was;
+    if (role === "dimension" ? c.dims > LIMITS.dimensions : c.measures > LIMITS.measures) {
+      toast(role === "dimension" ? `A view can group by at most ${LIMITS.dimensions} fields.` : `A view can show at most ${LIMITS.measures} measures.`, "info");
+      return;
+    }
     f.role = role;
     if (role === "measure") f.agg = f.agg ?? (f.category === "numeric" ? "sum" : "count");
     else delete f.agg;
@@ -846,10 +857,17 @@ export function initDashboards() {
     if (list.some((x) => x.db === f.db && x.table === f.table && x.column === f.column)) return;
     const entry = { db: f.db, table: f.table, column: f.column, category: f.category };
     entry.role = f.category === "numeric" ? "measure" : "dimension";
+    if (!allowed(dash, shelfKey, f, entry.role)) return;
     if (entry.role === "measure") entry.agg = "sum";
     list.push(entry);
     normaliseShelf(dash.sheet, shelfKey); // keep dimensions ahead of measures
     commit(dash, dash.sheet);
+  }
+  // Refuse a drop that would break a shelf or view cap, telling the user why (same style as the filter cap).
+  function allowed(dash, slot, f, role) {
+    const r = checkAdd(dash.sheet, slot, f, role);
+    if (!r.ok) toast(r.error, "info");
+    return r.ok;
   }
   function addFilter(dash, f) {
     if (dash.sheet.filters.length >= LIMITS.filters) { toast(`A view can have at most ${LIMITS.filters} filters.`, "info"); return; }
@@ -860,6 +878,7 @@ export function initDashboards() {
   // series); a numeric field is continuous (P18 gradient — see colorMode/planMeasures). Capped at one —
   // a second drop replaces the first, matching Tableau's single Colour slot.
   function addColor(dash, f) {
+    if (!allowed(dash, "color", f, "dimension")) return;
     dash.sheet.color = [{ db: f.db, table: f.table, column: f.column, category: f.category, role: "dimension" }];
     commit(dash, dash.sheet);
   }
@@ -971,12 +990,14 @@ export function initDashboards() {
   // Size takes one NUMERIC field (it scales the mark — a bubble); non-numeric is nudged away.
   function addSize(dash, f) {
     if (f.category !== "numeric") { toast("Size needs a numeric field (it scales the mark).", "info"); return; }
+    if (!allowed(dash, "size", f)) return;
     const m = dash.sheet.marks ?? (dash.sheet.marks = defaultMarks());
     m.size = { db: f.db, table: f.table, column: f.column, category: f.category, agg: "sum" };
     commit(dash, dash.sheet);
   }
   // Label holds one field of any kind (numeric → its aggregate; categorical → its grouped value).
   function addMarkSingle(dash, key, f) {
+    if (!allowed(dash, key, f)) return;
     const m = dash.sheet.marks ?? (dash.sheet.marks = defaultMarks());
     m[key] = { db: f.db, table: f.table, column: f.column, category: f.category, ...(f.category === "numeric" ? { agg: "sum" } : {}) };
     commit(dash, dash.sheet);
@@ -986,12 +1007,14 @@ export function initDashboards() {
     const m = dash.sheet.marks ?? (dash.sheet.marks = defaultMarks());
     const list = m[key] ?? (m[key] = []);
     if (list.some((x) => sameField(x, f))) return;
+    if (!allowed(dash, key, f)) return;
     list.push({ db: f.db, table: f.table, column: f.column, category: f.category, ...(f.category === "numeric" ? { agg: "sum" } : {}) });
     commit(dash, dash.sheet);
   }
   // Shape (P19) takes one CATEGORICAL field (distinct point symbols); numeric is nudged away.
   function addShape(dash, f) {
     if (f.category === "numeric") { toast("Shape needs a categorical field (each value gets its own symbol).", "info"); return; }
+    if (!allowed(dash, "shape", f)) return;
     const m = dash.sheet.marks ?? (dash.sheet.marks = defaultMarks());
     m.shape = { db: f.db, table: f.table, column: f.column, category: f.category };
     commit(dash, dash.sheet);

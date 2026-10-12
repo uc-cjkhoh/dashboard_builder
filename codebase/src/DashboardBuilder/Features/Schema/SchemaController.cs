@@ -5,7 +5,7 @@ namespace DashboardBuilder.Features.Schema;
 
 /// <summary>
 /// Read-only schema browsing (P3): list databases and the tables in a database, describe columns,
-/// preview rows, count, and distinct values — all scoped to the session's connection. No identifier
+/// and list distinct values — all scoped to the session's connection. No identifier
 /// reaches SQL without catalog-validation + quoting (handled in <see cref="ClickHouseGateway"/>).
 /// </summary>
 public sealed class SchemaController : ApiControllerBase

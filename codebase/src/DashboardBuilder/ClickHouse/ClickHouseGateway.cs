@@ -9,9 +9,9 @@ namespace DashboardBuilder.ClickHouse;
 
 /// <summary>
 /// The one place SQL is run against ClickHouse. Everything here is <strong>read-only</strong>
-/// (validate / introspect / bounded preview) — there is deliberately no DDL/DML path
-/// (CLAUDE.md golden rule 1). Covers connection validation (P1) and schema browsing (P3);
-/// columns/preview land in P4.
+/// (validate / introspect / bounded aggregate and join queries) — there is deliberately no DDL/DML path
+/// (CLAUDE.md golden rule 1). Covers connection validation, schema introspection, distinct values and
+/// the worksheet's aggregate queries.
 /// </summary>
 public sealed class ClickHouseGateway
 {
