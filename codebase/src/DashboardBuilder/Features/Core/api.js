@@ -45,18 +45,9 @@ export const api = {
   /** Column names + types (with display category) for a table. */
   columns: (db, table) =>
     request("GET", `/api/databases/${encodeURIComponent(db)}/tables/${encodeURIComponent(table)}/columns`),
-  /** A bounded row preview: { columns, rows }. */
-  preview: (db, table, limit = 50) =>
-    request("GET", `/api/databases/${encodeURIComponent(db)}/tables/${encodeURIComponent(table)}/preview?limit=${encodeURIComponent(limit)}`),
-  /** Total row count: { count }. */
-  count: (db, table) =>
-    request("GET", `/api/databases/${encodeURIComponent(db)}/tables/${encodeURIComponent(table)}/count`),
   /** Distinct values of a column for a filter dropdown (P14): bounded string list. */
   distinct: (db, table, column, limit = 200) =>
     request("GET", `/api/databases/${encodeURIComponent(db)}/tables/${encodeURIComponent(table)}/columns/${encodeURIComponent(column)}/distinct?limit=${encodeURIComponent(limit)}`),
-  /** Aggregate query for a chart: plan in, { rows: [{label, value}] } out. */
-  aggregate: (db, table, plan) =>
-    request("POST", `/api/databases/${encodeURIComponent(db)}/tables/${encodeURIComponent(table)}/aggregate`, plan),
   /** Histogram (P12): equal-width bins over a numeric column → { bins: [{x0, x1, count}] }. */
   histogram: (db, table, plan, { signal } = {}) =>
     request("POST", `/api/databases/${encodeURIComponent(db)}/tables/${encodeURIComponent(table)}/histogram`, plan, signal),

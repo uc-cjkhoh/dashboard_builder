@@ -40,29 +40,16 @@ public class SchemaEndpointTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.Equal(HttpStatusCode.Conflict, resp.StatusCode);
     }
 
-    [Fact]
-    public async Task Preview_without_a_connection_returns_409()
+    [Theory]
+    [InlineData("GET", "/api/databases/default/tables/t/preview?limit=10")]
+    [InlineData("GET", "/api/databases/default/tables/t/count")]
+    [InlineData("POST", "/api/databases/default/tables/t/aggregate")]
+    public async Task Removed_endpoints_are_gone(string method, string url)
     {
-        var client = _factory.CreateClient();
-        var resp = await client.GetAsync("/api/databases/default/tables/t/preview?limit=10");
-        Assert.Equal(HttpStatusCode.Conflict, resp.StatusCode);
-    }
-
-    [Fact]
-    public async Task Count_without_a_connection_returns_409()
-    {
-        var client = _factory.CreateClient();
-        var resp = await client.GetAsync("/api/databases/default/tables/t/count");
-        Assert.Equal(HttpStatusCode.Conflict, resp.StatusCode);
-    }
-
-    [Fact]
-    public async Task Aggregate_without_a_connection_returns_409()
-    {
-        var client = _factory.CreateClient();
-        var resp = await client.PostAsJsonAsync("/api/databases/default/tables/t/aggregate",
-            new { agg = "count" });
-        Assert.Equal(HttpStatusCode.Conflict, resp.StatusCode);
+        var req = new HttpRequestMessage(new HttpMethod(method), url);
+        if (method == "POST") req.Content = JsonContent.Create(new { });
+        var resp = await _factory.CreateClient().SendAsync(req);
+        Assert.Equal(HttpStatusCode.NotFound, resp.StatusCode);
     }
 
     [Fact]

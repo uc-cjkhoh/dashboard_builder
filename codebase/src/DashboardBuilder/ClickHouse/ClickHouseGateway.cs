@@ -184,10 +184,6 @@ public sealed class ClickHouseGateway
         return await QueryStringColumnAsync(info, sql, ct);
     }
 
-    /// <summary>The largest number of rows a single preview may pull — a preview must never try
-    /// to stream a huge table into the browser (CLAUDE.md gotcha).</summary>
-    public const int MaxPreviewRows = 500;
-
     /// <summary>
     /// Column names + types for a table: <c>DESCRIBE TABLE `db`.`table`</c>, each type reduced to a
     /// display category. Both identifiers are catalog-validated and quoted (rule 2 / D6).
@@ -215,58 +211,6 @@ public sealed class ClickHouseGateway
             columns.Add(new ColumnInfo(name, type, ClickHouseType.Categorize(type)));
         }
         return columns;
-    }
-
-    /// <summary>
-    /// A bounded row preview: <c>SELECT * FROM `db`.`table` LIMIT n</c>. Identifiers are
-    /// catalog-validated and quoted; <c>n</c> is a validated integer clamped to
-    /// <see cref="MaxPreviewRows"/> — never a huge or client-controlled scan.
-    /// </summary>
-    /// <exception cref="UnknownIdentifierException">No such database or table for this connection.</exception>
-    public async Task<PreviewResult> PreviewAsync(
-        ClickHouseConnectionInfo info, string database, string table, int limit, CancellationToken ct)
-    {
-        await EnsureTableExistsAsync(info, database, table, ct);
-        var n = Math.Clamp(limit, 1, MaxPreviewRows);
-        var sql = $"SELECT * FROM {Identifier.QualifiedName(database, table)} LIMIT {n}";
-
-        using var httpClient = CreateHttpClient(info);
-        await using var conn = new ClickHouseConnection(BuildConnectionString(info), httpClient);
-        await conn.OpenAsync(ct);
-
-        await using var cmd = conn.CreateCommand();
-        cmd.CommandText = sql;
-
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        var names = new string[reader.FieldCount];
-        for (var i = 0; i < reader.FieldCount; i++) names[i] = reader.GetName(i);
-
-        var rows = new List<object?[]>();
-        while (await reader.ReadAsync(ct))
-        {
-            var row = new object?[reader.FieldCount];
-            for (var i = 0; i < reader.FieldCount; i++)
-                row[i] = reader.IsDBNull(i) ? null : FormatCell(reader.GetValue(i));
-            rows.Add(row);
-        }
-        return new PreviewResult(names, rows);
-    }
-
-    /// <summary>Total row count for a table: <c>SELECT count() FROM `db`.`table`</c> (KPI widget).</summary>
-    /// <exception cref="UnknownIdentifierException">No such database or table for this connection.</exception>
-    public async Task<long> RowCountAsync(
-        ClickHouseConnectionInfo info, string database, string table, CancellationToken ct)
-    {
-        await EnsureTableExistsAsync(info, database, table, ct);
-        var sql = $"SELECT count() FROM {Identifier.QualifiedName(database, table)}";
-
-        using var httpClient = CreateHttpClient(info);
-        await using var conn = new ClickHouseConnection(BuildConnectionString(info), httpClient);
-        await conn.OpenAsync(ct);
-
-        await using var cmd = conn.CreateCommand();
-        cmd.CommandText = sql;
-        return Convert.ToInt64(await cmd.ExecuteScalarAsync(ct));
     }
 
     /// <summary>
@@ -408,97 +352,6 @@ public sealed class ClickHouseGateway
             conditions.Add(BuildCondition(f.Op, $"p{i}", Identifier.Quote(f.Column), ci.Category, f.Column, $"filters[{i}]", f.Value, f.Values, parameters, ClickHouseType.IsDateOnly(ci.Type)));
         }
         return conditions.Count > 0 ? " WHERE " + string.Join(" AND ", conditions) : string.Empty;
-    }
-
-    /// <summary>
-    /// Run a single-table aggregate for a chart (2a): <c>SELECT dim, agg(measure) FROM db.table
-    /// [WHERE …] [GROUP BY dim] ORDER BY value DESC LIMIT n</c>. Columns are catalog-validated and
-    /// quoted; the aggregation and operators come from whitelists; filter values are bound as typed
-    /// parameters (never interpolated). The row count is bounded.
-    /// </summary>
-    /// <exception cref="UnknownIdentifierException">An identifier / aggregation / operator is not allowed.</exception>
-    public async Task<AggregateResult> AggregateAsync(
-        ClickHouseConnectionInfo info, string database, string table, AggregateRequest req, CancellationToken ct)
-    {
-        var columns = await DescribeColumnsAsync(info, database, table, ct); // also validates db+table
-        var byName = columns.ToDictionary(c => c.Name, c => c, StringComparer.Ordinal);
-
-        string Require(string? name)
-        {
-            if (string.IsNullOrEmpty(name) || !byName.ContainsKey(name))
-                throw new UnknownIdentifierException("Unknown column.");
-            return name;
-        }
-
-        var agg = (req.Agg ?? "count").ToLowerInvariant();
-        if (!Aggregations.Contains(agg))
-            throw new UnknownIdentifierException("Unknown aggregation.");
-
-        var hasDimension = !string.IsNullOrEmpty(req.Dimension);
-        var dimension = hasDimension ? Require(req.Dimension) : null;
-
-        var valueExpr = agg switch
-        {
-            "count" => "count()",
-            "countdistinct" => $"uniqExact({Identifier.Quote(Require(req.Measure))})",
-            _ => $"{agg}({Identifier.Quote(Require(req.Measure))})",
-        };
-
-        var sql = new StringBuilder("SELECT ");
-        if (dimension is not null) sql.Append($"{Identifier.Quote(dimension)} AS label, ");
-        sql.Append(valueExpr).Append(" AS value FROM ").Append(Identifier.QualifiedName(database, table));
-
-        var parameters = new List<(string Name, string Type, object Value)>();
-        var filters = req.Filters ?? [];
-        var conditions = new List<string>();
-        for (var i = 0; i < filters.Length; i++)
-        {
-            var f = filters[i];
-            var col = Require(f.Column);
-            if (!Operators.TryGetValue(f.Op, out var op))
-                throw new UnknownIdentifierException("Unknown operator.");
-
-            var name = $"p{i}";
-            if (byName[col].Category == ClickHouseType.Numeric
-                && double.TryParse(f.Value, NumberStyles.Any, CultureInfo.InvariantCulture, out var num))
-            {
-                parameters.Add((name, "Float64", num));
-                conditions.Add($"{Identifier.Quote(col)} {op} {{{name}:Float64}}");
-            }
-            else
-            {
-                parameters.Add((name, "String", f.Value ?? string.Empty));
-                conditions.Add($"{Identifier.Quote(col)} {op} {{{name}:String}}");
-            }
-        }
-        if (conditions.Count > 0) sql.Append(" WHERE ").Append(string.Join(" AND ", conditions));
-
-        if (dimension is not null) sql.Append(" GROUP BY label");
-        sql.Append(" ORDER BY value DESC LIMIT ").Append(Math.Clamp(req.Limit ?? 50, 1, ApiLimits.MaxRowLimit));
-
-        using var httpClient = CreateHttpClient(info);
-        await using var conn = new ClickHouseConnection(BuildConnectionString(info), httpClient);
-        await conn.OpenAsync(ct);
-
-        await using var cmd = conn.CreateCommand();
-        cmd.CommandText = sql.ToString();
-        foreach (var (name, type, value) in parameters)
-            cmd.AddParameter(name, type, value);
-
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        var valueIdx = dimension is not null ? 1 : 0;
-        var rows = new List<AggregateRow>();
-        while (await reader.ReadAsync(ct))
-        {
-            var label = dimension is not null
-                ? (reader.IsDBNull(0) ? null : reader.GetValue(0)?.ToString())
-                : null;
-            var value = reader.IsDBNull(valueIdx)
-                ? 0d
-                : Convert.ToDouble(reader.GetValue(valueIdx), CultureInfo.InvariantCulture);
-            rows.Add(new AggregateRow(label, value));
-        }
-        return new AggregateResult(rows);
     }
 
     /// <summary>
@@ -826,8 +679,6 @@ public sealed class ClickHouseGateway
             throw new UnknownIdentifierException("Unknown table.");
     }
 
-    // Reduce a cell value to a display string. Numbers use the invariant culture; arrays/tuples/maps
-    // render compactly; byte blobs become hex. Nulls are handled by the caller (kept as JSON null).
     /// <summary>A group-key / distinct-value label: dates render as ISO (so they round-trip as filter values), everything else as before.</summary>
     internal static string? FormatKey(object? value) => value switch
     {
@@ -836,6 +687,8 @@ public sealed class ClickHouseGateway
         _ => value.ToString(),
     };
 
+    // Reduce a cell value to a display string. Numbers use the invariant culture; arrays/tuples/maps
+    // render compactly; byte blobs become hex. Nulls are handled by the caller (kept as JSON null).
     internal static string FormatCell(object value) => value switch
     {
         string s => s,

@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace DashboardBuilder.Features.Dashboard;
 
 /// <summary>
-/// The worksheet query endpoints that back the Dashboard feature: single-table aggregate/histogram/
+/// The worksheet query endpoints that back the Dashboard feature: single-table histogram/
 /// box-plot chart data, the cross-table joined <c>/api/query</c>, and its CSV export. All bounded and
 /// identifier-safe (validated + backtick-quoted in <see cref="ClickHouseGateway"/>); read-only —
 /// there is no DDL/DML endpoint (CLAUDE.md golden rule 1).
@@ -13,10 +13,6 @@ public sealed class QueryController : ApiControllerBase
 {
     public QueryController(ConnectionRegistry registry, ClickHouseGateway gateway, ILoggerFactory loggers)
         : base(registry, gateway, loggers) { }
-
-    [HttpPost("databases/{db}/tables/{table}/aggregate")]
-    public Task<IResult> Aggregate(string db, string table, [FromBody] AggregateRequest request, CancellationToken ct)
-        => RunAsync(async info => Results.Ok(await Gateway.AggregateAsync(info, db, table, request, ct)));
 
     [HttpPost("databases/{db}/tables/{table}/histogram")]
     public Task<IResult> Histogram(string db, string table, [FromBody] HistogramRequest request, CancellationToken ct)
