@@ -9,26 +9,28 @@ export const hide = (el) => { if (el) el.hidden = true; };
 export const toggle = (el, visible) => { if (el) el.hidden = !visible; };
 
 let toastTimer;
-let toastText; // ONE persistent live region, created once; its text is replaced per toast
+let toastText; // the visible message span (NOT a live region)
 
-/** Transient message. `kind` is one of "ok" | "danger" | "info". Danger toasts stay until dismissed. */
+/** Transient message. `kind` is one of "ok" | "danger" | "info". Danger toasts stay until dismissed.
+ *  Announcement goes through ONE persistent, always-rendered visually-hidden live region (#toast-live) that sits
+ *  outside the `hidden` #toast container (a display:none live region is not announced). */
 export function toast(message, kind = "info") {
   const el = document.getElementById("toast");
   if (!el) return;
   if (!toastText || !el.contains(toastText)) {
     toastText = document.createElement("span");
-    toastText.className = "toast__text"; toastText.setAttribute("role", "status"); toastText.setAttribute("aria-live", "polite");
-    // The dismiss button sits OUTSIDE the live region so it is not announced with the message.
+    toastText.className = "toast__text";
     const close = makeButton("", "toast__close");
     close.append(icon("close", { size: 14 }));
     close.setAttribute("aria-label", "Dismiss");
     close.addEventListener("click", () => hide(el));
     el.replaceChildren(toastText, close);
   }
+  toastText.textContent = message;
   el.className = `toast toast--${kind}`;
   show(el);
-  toastText.textContent = ""; // clear then set, so a repeated message is announced again
-  toastText.textContent = message;
+  const live = document.getElementById("toast-live");
+  if (live) { live.textContent = ""; setTimeout(() => { live.textContent = message; }, 50); } // clear then set so repeats re-announce
   clearTimeout(toastTimer);
   if (kind !== "danger") toastTimer = setTimeout(() => hide(el), 5000);
 }

@@ -211,7 +211,7 @@ export function initDashboards() {
 
   // Latest-wins queries + recent results per dashboard: a superseded query is aborted (its answer can
   // never overwrite a newer chart), and presentation-only changes re-render from the cached result
-  // instead of re-querying ClickHouse. ⟳ Refresh drops the dashboard's cache and re-queries.
+  // instead of re-querying ClickHouse. The Refresh button drops the dashboard's cache and re-queries.
   const gate = createLatestGate();
   const results = createResultCache();
 
@@ -390,7 +390,7 @@ export function initDashboards() {
   }
 
   // Breadcrumb + drill-up. Crumb j targets depth j: "All" (top) then each pinned ancestor value; the
-  // crumb at the current depth is inert. "▲ Up" ascends one level. Clicking a crumb truncates the path.
+  // crumb at the current depth is inert. the Up button ascends one level. Clicking a crumb truncates the path.
   function drillChip(dash, s) {
     const d = s.drill;
     const wrap = el("div", "ws-drill");
@@ -410,7 +410,9 @@ export function initDashboards() {
     wrap.append(crumbs);
     const showing = d.levels[Math.min(d.depth, d.levels.length - 1)]?.column;
     wrap.append(el("span", "ws-drill__level", `Showing: ${showing}`));
-    const up = makeButton("▲ Up", "ws-drill__crumb ws-drill__up");
+    const up = makeButton("Up", "ws-drill__crumb ws-drill__up");
+    up.prepend(icon("chevron", { size: 14 }));
+    up.firstChild.classList.add("icon--up");
     up.disabled = d.depth === 0;
     up.setAttribute("aria-label", "Drill up one level");
     up.addEventListener("click", () => drillTo(d, dash, s, d.depth - 1));
@@ -445,7 +447,8 @@ export function initDashboards() {
   // caps the LIMIT). All state lives on sheet.format so it persists for the session (O1).
   // Re-run the query against ClickHouse, bypassing the result cache (data may have changed).
   function refreshButton(dash) {
-    const btn = makeButton("⟳ Refresh", "ws-toolbtn");
+    const btn = makeButton("Refresh", "ws-toolbtn");
+    btn.prepend(icon("refresh", { size: 14 }), " ");
     btn.title = "Re-run the query against ClickHouse";
     btn.addEventListener("click", () => { results.clear(dash.id); runChart(); });
     return btn;

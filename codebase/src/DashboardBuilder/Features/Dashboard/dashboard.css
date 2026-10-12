@@ -70,7 +70,7 @@
 .ws-field--measure::before { background: var(--up); border-radius: 999px; }
 .ws-field:hover { background: var(--surface-2); border-color: var(--line-2); transform: translateX(2px); }
 .ws-field__name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* Keyboard/non-drag path to add a field to a shelf (a11y — mirrors the sidebar table chip's ＋). */
+/* Keyboard/non-drag path to add a field to a shelf (a11y — mirrors the sidebar table chip's plus icon). */
 .ws-field__add {
   flex: none; border: 0; background: none; cursor: pointer; padding: 0;
   width: 18px; height: 18px; line-height: 1; border-radius: var(--r-ctl);
@@ -134,7 +134,7 @@
 .ws-pill__range .ws-pill__val { width: 56px; }
 .ws-pill__range-sep { color: var(--ink-3); }
 .ws-pill__ctl { display: inline-flex; gap: 4px; align-items: center; }
-/* Convert-role toggle: a bordered chip so it reads as an action distinct from the remove ×. */
+/* Convert-role toggle: a bordered chip so it reads as an action distinct from the remove icon. */
 .ws-pill__conv { border: 1px solid currentColor; border-radius: 4px; opacity: .65; font-weight: 700; line-height: 1; padding: 1px 4px; }
 .ws-pill__conv:hover { opacity: 1; }
 .ws-pill .iconbtn { color: inherit; padding: 0 2px; }
@@ -294,7 +294,7 @@
 .ws-hint--warn { color: var(--danger-ink); }
 .ws-loading { color: var(--ink-3); padding: var(--s5); }
 /* Result notice between the shelves and the chart (truncated results). Neutral info styling — it is
-   not a status pill; the ⓘ glyph + text carry the meaning, never colour alone. */
+   not a status pill; the info icon + text carry the meaning, never colour alone. */
 .ws-status {
   flex: none; margin: var(--s2) var(--s5) 0; padding: var(--s2) var(--s3);
   font-size: var(--fs-sm); color: var(--ink-2);

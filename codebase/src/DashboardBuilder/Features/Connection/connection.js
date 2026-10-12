@@ -136,7 +136,7 @@ export function initConnection() {
   // Cancel out of "change" mode, back to the active connection's summary.
   cancelBtn?.addEventListener("click", () => { if (current) applyState(current); });
 
-  // ⏻ disconnect.
+  // power icon: disconnect.
   disconnectBtn?.addEventListener("click", async () => {
     try {
       const view = await api.disconnect();

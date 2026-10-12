@@ -240,7 +240,10 @@ export function initCanvas() {
     const pill = document.createElement("span");
     if (state === "loading") {
       pill.className = "pill pill--warn";
-      pill.append(icon("refresh", { size: 14 }), " Loading…");
+      const g = document.createElement("span");
+      g.className = "pill__glyph";
+      g.append(icon("refresh", { size: 14 }));
+      pill.append(g, " Loading…");
       statusEl.append(pill);
       return;
     }
