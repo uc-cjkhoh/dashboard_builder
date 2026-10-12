@@ -15,7 +15,7 @@ export function makeValueFormatter(fmt = {}) {
   return (n) => {
     if (n == null) return "—";
     const v = Number(n);
-    if (Number.isNaN(v)) return "—";
+    if (Number.isNaN(v)) return typeof n === "string" && n ? n : "—";
     switch (style) {
       case "compact": return compactNumber(v, dec);
       case "currency": return (fmt.currencySymbol || "$") + v.toLocaleString(undefined, opts);

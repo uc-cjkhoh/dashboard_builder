@@ -6,6 +6,7 @@ export const LIMITS = Object.freeze({
   // The user's OWN filters. The server allows 16 per query (these + drill path + page + selection).
   filters: 8,
   inValues: 500, dashboards: 50, pillsPerShelf: 20,
+  drillLevels: 6, // keeps user filters (8) + drill path (≤5) + page + selection within the server's 16
 });
 export const HOST_MESSAGES = Object.freeze({
   scheme: "Enter the host name only — no http:// or https://.",

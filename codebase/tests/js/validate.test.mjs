@@ -49,3 +49,4 @@ test("a range needs From ≤ To", () => {
   assert.match(err(range("numeric", "9", "1", "amount")), /From must be less than or equal to To/);
   assert.deepEqual(range("temporal", "2024-01-01", "2024-02-01", "d").value, ["2024-01-01", "2024-02-01"]);
 });
+test("a drill hierarchy is capped at 6 levels", () => assert.equal(LIMITS.drillLevels, 6));

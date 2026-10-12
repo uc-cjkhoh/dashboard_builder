@@ -1,5 +1,7 @@
 import { api } from "../Core/api.js";
-import { toggle, makeButton, toast } from "../Core/ui.js";
+import { toggle, makeButton, toast, fieldError } from "../Core/ui.js";
+import { LIMITS } from "../Core/validate.js";
+import { aggsFor, checkFilter, statFilters, TEXT_VALUE_TYPES } from "./filter-rules.js";
 import { entities, relationships, activeDashboard, isModelActive, updateSheet, bus, defaultFormat, defaultMarks } from "../Core/store.js";
 import { renderChart as renderSeriesChart, disposeChart, exportChart, hasChartInstance } from "./chart.js";
 import { makeValueFormatter, makeCategoryFormatter } from "../Core/format.js";
@@ -10,19 +12,9 @@ import { createLatestGate, createResultCache, requestKey, isAbortError, truncati
 // identifier-safe query. Fields from *different* tables are joined automatically along the
 // relationships drawn in the Data Model (a join path found by BFS over the relationship graph).
 const FIELD_MIME = "application/x-ch-field";
-// Aggregations offered when a field is used as a measure. Numeric fields get the full set; non-numeric
-// fields only the type-agnostic ones. "countDistinct" counts unique values (ClickHouse uniqExact).
-const AGGS_NUMERIC = ["sum", "avg", "min", "max", "count", "countDistinct"];
-const AGGS_TEXT = ["count", "countDistinct", "min", "max"];
+const FILTER_PLACEHOLDER = { numeric: "number", temporal: "YYYY-MM-DD", boolean: "true or false" };
 const OPS = ["=", "!=", ">", ">=", "<", "<=", "in", "between"];
-// Which filter operators need the multi-value `values` array rather than the single `value` (P14).
-const MULTI_OPS = new Set(["in", "between"]);
-// A filter contributes to the query only when it carries a usable value (an empty control is a no-op).
-function isActiveFilter(f) {
-  if (f.op === "in") return Array.isArray(f.values) && f.values.length > 0;
-  if (f.op === "between") return Array.isArray(f.values) && f.values[0] != null && f.values[0] !== "" && f.values[1] != null && f.values[1] !== "";
-  return f.value != null && f.value !== "";
-}
+// A filter contributes to the query only when checkFilter() says "ok" (empty = no-op, invalid = not applied).
 // Map a client filter to the server QueryFilter shape (value for scalar ops, values for in/between).
 const toFilter = (f) => ({ db: f.db, table: f.table, column: f.column, op: f.op, value: f.value ?? "", values: f.values ?? null });
 // A field's role can be overridden on its pill (Tableau's convert-to-dimension/measure). Default:
@@ -30,7 +22,6 @@ const toFilter = (f) => ({ db: f.db, table: f.table, column: f.column, op: f.op,
 // dimension groups by its raw values; any field made a measure is aggregated (count/countDistinct
 // always valid, sum/avg only meaningful for numbers).
 const roleOf = (f) => f.role ?? (f.category === "numeric" ? "measure" : "dimension");
-const aggsFor = (f) => (f.category === "numeric" ? AGGS_NUMERIC : AGGS_TEXT);
 
 // Display name of a measure — matches the server's measure naming (see QueryAsync).
 function measureName(f) {
@@ -350,6 +341,10 @@ export function initDashboards() {
       return;
     }
     if (d.levels.some((l) => l.column === f.column)) return; // a level can't repeat
+    if (d.levels.length >= LIMITS.drillLevels) {
+      toast(`A drill hierarchy can have at most ${LIMITS.drillLevels} levels.`, "info");
+      return;
+    }
     d.levels.push({ db: f.db, table: f.table, column: f.column, category: f.category });
     d.depth = 0; d.path = []; // redefining the hierarchy resets the descent to the top level
     commit(dash, s);
@@ -507,7 +502,7 @@ export function initDashboards() {
     // Chart-only controls.
     if (isChart) {
       panel.append(
-        fmtSelect("Top N", [["null", "All"], ["5", "5"], ["10", "10"], ["20", "20"], ["50", "50"], ["100", "100"]],
+        fmtSelect(s.chartType === "histogram" ? "Bins" : "Top N", [["null", "All"], ["5", "5"], ["10", "10"], ["20", "20"], ["50", "50"], ["100", "100"]],
           f.topN ?? "null", (v) => set({ topN: v === "null" ? null : Number(v) })),
         fmtSelect("Legend", [["auto", "Auto"], ["hidden", "Hidden"], ["top", "Top"], ["bottom", "Bottom"], ["left", "Left"], ["right", "Right"]],
           f.legend, (v) => set({ legend: v })),
@@ -595,7 +590,7 @@ export function initDashboards() {
     const isMeasure = roleOf(f) === "measure";
     const controls = el("span", "ws-pill__ctl");
     if (isMeasure) {
-      const opts = aggsFor(f);
+      const opts = aggsFor(f.category);
       const agg = select(opts, f.agg ?? opts[0], "ws-pill__agg", `Aggregation for ${f.table}.${f.column}`);
       agg.addEventListener("change", () => { f.agg = agg.value; commit(dash, s); });
       controls.append(agg);
@@ -695,7 +690,11 @@ export function initDashboards() {
     });
     const cfg = el("span", "ws-pill__filter");
     cfg.append(op, filterValueControl(dash, s, f));
-    return pill(`${f.table}.${f.column}`, () => { s.filters.splice(i, 1); commit(dash, s); }, cfg);
+    const chk = checkFilter(f);
+    if (chk.state === "invalid") { const inp = cfg.querySelector("input"); if (inp) fieldError(inp, chk.error); }
+    const p = pill(`${f.table}.${f.column}`, () => { s.filters.splice(i, 1); commit(dash, s); }, cfg);
+    p.classList.toggle("ws-pill--invalid", chk.state === "invalid");
+    return p;
   }
 
   // The value editor for a filter, by operator (P14).
@@ -704,14 +703,18 @@ export function initDashboards() {
       const sel = el("select", "select select--light ws-pill__in");
       sel.multiple = true; sel.size = 4;
       sel.setAttribute("aria-label", `Values for ${f.table}.${f.column}`);
+      const wrap = el("span", "ws-pill__in-wrap");
+      wrap.append(sel);
       populateDistinct(sel, f);                // async, cached; preselects f.values
       sel.addEventListener("change", () => { f.values = [...sel.selectedOptions].map((o) => o.value); commit(dash, s); });
-      return sel;
+      return wrap;
     }
     if (f.op === "between") {
       const wrap = el("span", "ws-pill__range");
       const lo = el("input", "input ws-pill__val"); lo.placeholder = "from"; lo.value = f.values?.[0] ?? "";
       const hi = el("input", "input ws-pill__val"); hi.placeholder = "to"; hi.value = f.values?.[1] ?? "";
+      lo.maxLength = hi.maxLength = LIMITS.filterValue;
+      if (f.category === "numeric") lo.inputMode = hi.inputMode = "decimal";
       lo.setAttribute("aria-label", `From value for ${f.table}.${f.column}`);
       hi.setAttribute("aria-label", `To value for ${f.table}.${f.column}`);
       const sync = () => { f.values = [lo.value, hi.value]; commit(dash, s); };
@@ -720,7 +723,9 @@ export function initDashboards() {
       return wrap;
     }
     const val = el("input", "input ws-pill__val");
-    val.value = f.value ?? ""; val.placeholder = "value";
+    val.value = f.value ?? ""; val.maxLength = LIMITS.filterValue;
+    val.placeholder = FILTER_PLACEHOLDER[f.category] ?? "value";
+    if (f.category === "numeric") val.inputMode = "decimal";
     val.setAttribute("aria-label", `Value for ${f.table}.${f.column}`);
     val.addEventListener("change", () => { f.value = val.value; commit(dash, s); });
     return val;
@@ -730,6 +735,7 @@ export function initDashboards() {
   // whatever is already chosen. Failures degrade to a disabled note rather than an error.
   async function populateDistinct(sel, f) {
     sel.append(new Option("Loading…", ""));
+    let note = null; // "first 200" cap note, placed beside the select once it is in the DOM
     try {
       const vals = await distinctFor(f.db, f.table, f.column);
       sel.replaceChildren();
@@ -740,9 +746,11 @@ export function initDashboards() {
         sel.add(opt);
       }
       if (!vals.length) sel.append(new Option("(no values)", ""));
+      if (vals.length >= 200) note = el("p", "ws-note", "Showing the first 200 values — more exist.");
     } catch {
       sel.replaceChildren(new Option("(couldn't load values)", ""));
     }
+    if (note && sel.parentNode) sel.parentNode.append(note);
   }
   const distinctCache = new Map();
   async function distinctFor(db, table, column) {
@@ -782,6 +790,7 @@ export function initDashboards() {
     commit(dash, dash.sheet);
   }
   function addFilter(dash, f) {
+    if (dash.sheet.filters.length >= LIMITS.filters) { toast(`A view can have at most ${LIMITS.filters} filters.`, "info"); return; }
     dash.sheet.filters.push({ db: f.db, table: f.table, column: f.column, op: "=", value: "" });
     commit(dash, dash.sheet);
   }
@@ -955,7 +964,7 @@ export function initDashboards() {
     try {
       const vals = await distinctFor(p.db, p.table, p.column);
       if (dash.sheet.pages === p) { p.members = vals; p.index = Math.min(p.index ?? 0, Math.max(0, vals.length - 1)); commit(dash, s); }
-    } catch { /* leave members = [] */ }
+    } catch (err) { p.loadError = `Couldn't load members: ${err.message}`; if (dash.sheet.pages === p) commit(dash, s); }
   }
   // The page control: current member + count, ◀ ▶ step (wrapping), and Play/Pause. Play is omitted
   // under prefers-reduced-motion (done-when: no autoplay when reduced motion is set).
@@ -964,7 +973,7 @@ export function initDashboards() {
     const wrap = el("div", "ws-pages");
     wrap.append(el("span", "ws-pages__icon", "▤"), el("span", "ws-select__label", `Page: ${p.column}`));
     if (!Array.isArray(p.members)) { wrap.append(el("span", "ws-shelf__hint", "loading members…")); ensurePagesMembers(dash, s); return wrap; }
-    if (!p.members.length) { wrap.append(el("span", "ws-shelf__hint", "couldn't load members")); return wrap; }
+    if (!p.members.length) { wrap.append(el("span", "ws-shelf__hint", p.loadError ?? "couldn't load members")); return wrap; }
 
     const n = p.members.length;
     const idx = Math.max(0, Math.min(p.index ?? 0, n - 1));
@@ -973,6 +982,7 @@ export function initDashboards() {
     const prev = makeButton("◀", "ws-pages__btn"); prev.setAttribute("aria-label", "Previous page"); prev.addEventListener("click", () => step(-1));
     const next = makeButton("▶", "ws-pages__btn"); next.setAttribute("aria-label", "Next page"); next.addEventListener("click", () => step(1));
     wrap.append(prev, el("span", "ws-pages__member", `${cur == null ? "—" : cur}  ·  ${idx + 1}/${n}`), next);
+    if (n >= 200) wrap.append(el("p", "ws-note", "Showing the first 200 values — more exist."));
 
     const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (!reduce) {
@@ -1001,10 +1011,11 @@ export function initDashboards() {
     if (!dash) return;
     const ticket = gate.begin(); // aborts any in-flight query for the previous state
     disposeChart(); // tear down any live ECharts instance before we repaint the chart pane
-    setNotice(null);
     const s = dash.sheet;
+    const filterNote = invalidFilterNotice(s);
+    setNotice(filterNote);
     // P12 statistical charts that run their own single-table endpoint (histogram / box plot).
-    if (STAT_SINGLE_TABLE.has(s.chartType)) { await runStatChart(dash, s, ticket); return; }
+    if (STAT_SINGLE_TABLE.has(s.chartType)) { await runStatChart(dash, s, ticket, filterNote); return; }
     const colorInPlay = s.color?.length && COLOR_USES.has(s.chartType);
     const drillInPlay = isDrillActive(s); // a hierarchy alone can drive a view (implicit count on the level)
     const m = s.marks ?? {};
@@ -1020,8 +1031,20 @@ export function initDashboards() {
     }
     const result = await fetchCached(dash, ticket, requestKey("query", plan), (signal) => api.query(plan, { signal }));
     if (!result) return;
-    renderChart(s, result);
-    setNotice(truncationNotice({ truncated: result.truncated, chartType: s.chartType, limit: Math.min(plan.limit ?? 50, 500) }));
+    try {
+      renderChart(s, result);
+      setNotice(joinNotices(filterNote, truncationNotice({ truncated: result.truncated, chartType: s.chartType, limit: Math.min(plan.limit ?? 50, 500) })));
+    } catch (err) {
+      console.error(err);
+      chartEl.replaceChildren(warn("This view couldn't be drawn — try another chart type or remove a field."));
+    }
+  }
+
+  // Status-line helpers: invalid filters are skipped by the query, so say so; notices join with " · ".
+  const joinNotices = (...parts) => parts.filter(Boolean).join(" · ") || null;
+  function invalidFilterNotice(sheet) {
+    const n = sheet.filters.filter((f) => checkFilter(f).state === "invalid").length;
+    return n ? `${n} filter${n === 1 ? "" : "s"} not applied — fix the highlighted value.` : null;
   }
 
   // Serve a request from the dashboard's result cache, or run it under the latest-wins ticket.
@@ -1054,7 +1077,7 @@ export function initDashboards() {
   // a box plot summarises one numeric measure, optionally grouped by one same-table dimension. They
   // use their own endpoints (a bucketing / quantile query shape), so they read fields directly rather
   // than through buildPlan. All fields must live on ONE table (the endpoints don't join).
-  async function runStatChart(dash, s, ticket) {
+  async function runStatChart(dash, s, ticket, filterNote = null) {
     const allFields = [...s.columns, ...s.rows];
     const numeric = allFields.find((f) => f.category === "numeric");
     if (!numeric) {
@@ -1062,11 +1085,11 @@ export function initDashboards() {
       return;
     }
     const { db, table } = numeric;
-    // Only same-table, scalar-op filters apply (the single-table endpoints take {column,op,value};
-    // in/between are worksheet-query only).
-    const filters = s.filters
-      .filter((f) => f.db === db && f.table === table && !MULTI_OPS.has(f.op) && f.value !== "")
-      .map((f) => ({ column: f.column, op: f.op, value: f.value }));
+    // Only same-table, usable filters apply (the single-table endpoints take in/between too);
+    // the rest are counted and reported in the notice.
+    const { apply: filters, ignored } = statFilters(s.filters, db, table);
+    const kind = s.chartType === "histogram" ? "histogram" : "box plot";
+    const ignoredNote = ignored > 0 ? `${ignored} filter${ignored === 1 ? "" : "s"} on other tables ${ignored === 1 ? "doesn't" : "don't"} apply to a ${kind}.` : null;
 
     if (s.chartType === "histogram") {
       // Reuse Top-N as the bucket count when set (else the server default); server clamps 1..100.
@@ -1077,6 +1100,7 @@ export function initDashboards() {
       if (!result.bins?.length) { chartEl.replaceChildren(hint("No data for this field.")); return; }
       chartEl.replaceChildren();
       renderSeriesChart(chartEl, { type: "histogram", bins: result.bins, format: s.format ?? defaultFormat() });
+      setNotice(joinNotices(filterNote, ignoredNote));
     } else {
       // Box plot: group by the first same-table dimension, if any.
       const dim = allFields.find((f) => f.category !== "numeric" && f.db === db && f.table === table);
@@ -1087,7 +1111,7 @@ export function initDashboards() {
       if (!result.groups?.length) { chartEl.replaceChildren(hint("No data for this field.")); return; }
       chartEl.replaceChildren();
       renderSeriesChart(chartEl, { type: "boxplot", boxes: result.groups, format: s.format ?? defaultFormat() });
-      setNotice(truncationNotice({ truncated: result.truncated, chartType: "boxplot", limit: Math.min(req.limit ?? 50, 500) }));
+      setNotice(joinNotices(filterNote, ignoredNote, truncationNotice({ truncated: result.truncated, chartType: "boxplot", limit: Math.min(req.limit ?? 50, 500) })));
     }
   }
 
@@ -1138,7 +1162,7 @@ export function initDashboards() {
       measures,
       // ...plus P16 drill (each pinned ancestor as a bound `=` filter) and P20 pages (the current
       // member as a bound `=` filter, only when its table is already in the query — never forces a join).
-      filters: [...sheet.filters.filter(isActiveFilter).map(toFilter), ...selFilters, ...drillPathFilters(sheet), ...pageFilters],
+      filters: [...sheet.filters.filter((f) => checkFilter(f).state === "ok").map(toFilter), ...selFilters, ...drillPathFilters(sheet), ...pageFilters],
       // Top-N (P10): a chart caps categories via the query LIMIT (server sorts, then limits);
       // the table shows the full bounded set. Server re-clamps to 1..500 regardless.
       limit: sheet.chartType === "table" ? 500 : (sheet.format?.topN ?? 50),
@@ -1209,6 +1233,11 @@ export function initDashboards() {
     const fmtVal = makeValueFormatter(format);
     const fmtCat = makeCategoryFormatter(format);
     const type = sheet.chartType;
+    // Min/Max of a text or date field comes back as text — only Table, Text and KPI can show that.
+    if (!TEXT_VALUE_TYPES.has(type) && rows.some((r) => r.values.some((v) => typeof v === "string"))) {
+      chartEl.replaceChildren(hint("Min/Max of a text or date field shows as Table, Text or KPI — switch the chart type, or use Count."));
+      return;
+    }
     // Table + P19 Text mark both render as the crosstab text grid (values written into cells).
     if (type === "table" || type === "text") { chartEl.append(crosstabTable(sheet, result, fmtVal, fmtCat)); return; }
 
@@ -1776,7 +1805,7 @@ function fmtText(labelText, value, onChange) {
   const inp = el("input", "input ws-fmt-input");
   inp.type = "text";
   inp.value = value ?? "";
-  inp.placeholder = "auto";
+  inp.placeholder = "auto"; inp.maxLength = LIMITS.axisTitle;
   inp.addEventListener("change", () => onChange(inp.value.trim() || null));
   wrap.append(inp);
   return wrap;
