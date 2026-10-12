@@ -8,20 +8,20 @@
   gap: var(--s1);
   padding: var(--s1) var(--s1) var(--s1) var(--s3);
   border: 1px solid var(--line);
-  border-radius: var(--r-sm) var(--r-sm) 0 0;
+  border-radius: var(--r-ctl) var(--r-ctl) 0 0;
   background: color-mix(in srgb, var(--surface), var(--ink) 4%);
   color: var(--ink-2);
-  box-shadow: var(--elev-1);
-  transition: background var(--motion) var(--ease), color var(--motion) var(--ease),
-              transform var(--motion) var(--ease), box-shadow var(--motion) var(--ease);
-  animation: rise-in var(--motion) var(--ease-back);
+  box-shadow: var(--elev-2);
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease),
+              transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+  animation: rise-in var(--dur) var(--ease-out);
 }
-.tab:hover { background: var(--surface); transform: translateY(-1px); }
+.tab:hover { background: var(--surface); }
 .tab.is-active {
-  background: var(--surface-grad);
+  background: var(--surface);
   color: var(--ink);
   border-bottom-color: var(--surface);
-  box-shadow: var(--elev-2);
+  box-shadow: var(--elev-8);
 }
 .tab__label {
   border: 0; background: transparent; color: inherit; cursor: pointer;
@@ -29,29 +29,29 @@
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   padding: var(--s1) 0;
 }
-.tab.is-active .tab__label { color: var(--brand-ink); }
+.tab.is-active .tab__label { color: var(--accent-ink); }
 .tab__close {
   border: 0; background: transparent; color: var(--ink-3); cursor: pointer;
   border-radius: var(--r-pill); width: 20px; height: 20px; line-height: 1;
-  transition: background var(--motion) var(--ease), color var(--motion) var(--ease);
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
 }
-.tab__close:hover { background: var(--danger-soft); color: var(--brand); }
+.tab__close:hover { background: var(--danger-bg); color: var(--danger-ink); }
 .tab__rename {
   font-size: var(--fs-sm); font-weight: 600; width: 130px;
   padding: var(--s1) var(--s2);
-  border: 1px solid var(--brand); border-radius: var(--r-sm);
+  border: 1px solid var(--accent); border-radius: var(--r-ctl);
   background: var(--surface); color: var(--ink);
 }
-.tab__rename:focus { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 30%, transparent); }
+.tab__rename:focus { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent); }
 .tab-add {
   border: 1px dashed var(--line-2); background: transparent; color: var(--ink-3);
-  cursor: pointer; border-radius: var(--r-sm); width: 28px; height: 28px; font-size: var(--fs-lead);
-  transition: color var(--motion) var(--ease), border-color var(--motion) var(--ease),
-              background var(--motion) var(--ease), transform var(--motion) var(--ease);
+  cursor: pointer; border-radius: var(--r-ctl); width: 28px; height: 28px; font-size: var(--fs-lead);
+  transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease),
+              background var(--dur) var(--ease), transform var(--dur) var(--ease);
 }
-.tab-add:hover { color: var(--brand); border-color: var(--brand); background: var(--brand-soft); transform: translateY(-1px); }
+.tab-add:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
 /* The model tab has no close button, so give it symmetric padding to align with the rest. */
 .tab--model { padding: var(--s1) var(--s3); border-color: var(--line-2); }
 .tab--model .tab__label { padding: var(--s1) 0; }
-.tab--model.is-active .tab__label { color: var(--brand-ink); }
+.tab--model.is-active .tab__label { color: var(--accent-ink); }
 

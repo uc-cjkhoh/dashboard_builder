@@ -16,10 +16,10 @@
   display: flex;
   flex-direction: column;
   min-height: 0;               /* allow the inner list to scroll, not the page */
-  background: linear-gradient(180deg, color-mix(in srgb, var(--side-bg), var(--side-ink) 5%) 0%, var(--side-bg) 60%);
-  color: var(--side-ink);
+  background: var(--glass);
+  color: var(--ink);
   /* hairline separator + a faint red glow down the right edge */
-  box-shadow: inset -1px 0 0 rgba(0, 0, 0, .5), 2px 0 18px color-mix(in srgb, var(--brand) 8%, transparent);
+  border-right: 1px solid var(--glass-line); -webkit-backdrop-filter: blur(24px) saturate(160%); backdrop-filter: blur(24px) saturate(160%);
 }
 
 .sidebar__brand {
@@ -27,32 +27,31 @@
   align-items: center;
   gap: var(--s3);
   padding: var(--s4) var(--s4) var(--s3);
-  border-bottom: 1px solid var(--side-line);
+  border-bottom: 1px solid var(--line);
 }
 .sidebar__mark {
   flex: none;
   width: 34px; height: 34px;
   border-radius: 9px;
-  background: var(--brand);
-  color: #fff;
+  background: var(--accent);
+  color: var(--on-accent);
   display: grid;
   place-items: center;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, .08), 0 4px 14px color-mix(in srgb, var(--brand) 45%, transparent);
-  animation: dot-pulse 3.2s var(--ease) infinite;
+  box-shadow: var(--elev-2);
 }
 .sidebar__mark svg { width: 18px; height: 18px; }
 .sidebar__brand-text { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
 .sidebar__brand-name { font-weight: 700; font-size: var(--fs-body); letter-spacing: .01em; }
-.sidebar__brand-sub { font-size: var(--fs-xs); color: var(--side-muted); }
+.sidebar__brand-sub { font-size: var(--fs-xs); color: var(--ink-3); }
 
-.sidebar__section { padding: var(--s4); border-bottom: 1px solid var(--side-line); }
+.sidebar__section { padding: var(--s4); border-bottom: 1px solid var(--line); }
 .sidebar__section--grow { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .sidebar__title {
   font-size: 10.5px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: .09em;
-  color: var(--side-muted);
+  color: var(--ink-3);
   margin-bottom: var(--s3);
 }
 .sidebar__title-row {
@@ -77,11 +76,11 @@
   top: 0; bottom: 0; right: 3px;
   width: 2px;
   background: transparent;
-  transition: background var(--motion) var(--ease);
+  transition: background var(--dur) var(--ease);
 }
 .sidebar__resizer:hover::after,
 .sidebar__resizer:focus-visible::after,
-body.is-resizing .sidebar__resizer::after { background: var(--brand); }
+body.is-resizing .sidebar__resizer::after { background: var(--accent); }
 .sidebar__resizer:focus-visible { outline: none; }
 body.is-resizing { cursor: col-resize; user-select: none; }
 
@@ -99,7 +98,7 @@ body.is-resizing { cursor: col-resize; user-select: none; }
   /* A faint dot grid + a soft brand glow give the workspace depth so cards float above it. */
   background:
     radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--ink) 7%, transparent) 1px, transparent 1.6px) 0 0 / 24px 24px,
-    radial-gradient(1100px 520px at 78% -8%, color-mix(in srgb, var(--brand) 6%, transparent), transparent 70%),
+    radial-gradient(1100px 520px at 78% -8%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 70%),
     linear-gradient(180deg, color-mix(in srgb, var(--surface), var(--ink) 1%), var(--bg));
 }
 .view--dashboard { background: linear-gradient(180deg, color-mix(in srgb, var(--surface), var(--ink) 1%), var(--bg)); }

@@ -12,17 +12,17 @@
 .widget {
   display: flex;
   flex-direction: column;
-  background: var(--surface-grad);
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r);
-  box-shadow: var(--elev-2);
+  box-shadow: var(--elev-8);
   overflow: hidden;
   min-height: 132px;
-  animation: entity-in var(--motion-slow) var(--ease-back);
-  transition: box-shadow var(--motion) var(--ease), transform var(--motion) var(--ease);
+  animation: rise-in var(--dur-slow) var(--ease-out);
+  transition: box-shadow var(--dur) var(--ease), transform var(--dur) var(--ease);
 }
-.widget:hover { transform: translateY(-3px); box-shadow: var(--elev-3); }
-.widget__head { display: flex; align-items: center; gap: var(--s2); padding: var(--s2) var(--s3); background: var(--head-grad); border-bottom: 1px solid var(--line); }
+.widget:hover { box-shadow: var(--elev-16); }
+.widget__head { display: flex; align-items: center; gap: var(--s2); padding: var(--s2) var(--s3); background: var(--surface); border-bottom: 1px solid var(--line); }
 .widget__title { flex: 1; font-size: var(--fs-sm); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .widget__body { flex: 1; padding: var(--s4); min-height: 0; }
 .widget__body--loading { color: var(--ink-3); font-size: var(--fs-sm); }
@@ -60,10 +60,10 @@
 .ws-field-group { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); margin-top: var(--s1); }
 .ws-field {
   display: flex; align-items: center; gap: var(--s2);
-  padding: var(--s1) var(--s2); border-radius: var(--r-sm);
+  padding: var(--s1) var(--s2); border-radius: var(--r-ctl);
   font-size: var(--fs-sm); color: var(--ink); cursor: grab;
   border: 1px solid transparent; background: var(--surface);
-  transition: background var(--motion) var(--ease), border-color var(--motion) var(--ease), transform var(--motion) var(--ease);
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease), transform var(--dur) var(--ease);
 }
 .ws-field::before { content: ""; flex: none; width: 8px; height: 8px; }
 .ws-field--dimension::before { background: var(--ink-3); border-radius: 2px; }
@@ -73,11 +73,11 @@
 /* Keyboard/non-drag path to add a field to a shelf (a11y — mirrors the sidebar table chip's ＋). */
 .ws-field__add {
   flex: none; border: 0; background: none; cursor: pointer; padding: 0;
-  width: 18px; height: 18px; line-height: 1; border-radius: var(--r-sm);
-  color: var(--ink-3); opacity: 0; transition: opacity var(--motion) var(--ease), color var(--motion) var(--ease);
+  width: 18px; height: 18px; line-height: 1; border-radius: var(--r-ctl);
+  color: var(--ink-3); opacity: 0; transition: opacity var(--dur) var(--ease), color var(--dur) var(--ease);
 }
 .ws-field:hover .ws-field__add, .ws-field__add:focus-visible { opacity: 1; }
-.ws-field__add:hover, .ws-field__add:focus-visible { color: var(--brand); }
+.ws-field__add:hover, .ws-field__add:focus-visible { color: var(--accent); }
 
 /* Main: header (view bar + shelf lanes) + chart */
 .ws-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
@@ -97,10 +97,10 @@
 .ws-shelf__zone {
   display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap;
   min-width: 0; min-height: var(--ctl-h); padding: 4px var(--s2);
-  border: 1px dashed var(--line-2); border-radius: var(--r-sm); background: var(--surface-2);
-  transition: border-color var(--motion) var(--ease), background var(--motion) var(--ease);
+  border: 1px dashed var(--line-2); border-radius: var(--r-ctl); background: var(--surface-2);
+  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
 }
-.ws-shelf__zone.is-over { border-color: var(--brand); border-style: solid; background: var(--brand-soft); }
+.ws-shelf__zone.is-over { border-color: var(--accent); border-style: solid; background: var(--accent-soft); }
 .ws-shelf__hint { font-size: var(--fs-xs); color: var(--ink-3); }
 /* Lane note (e.g. the Color lane when the chart type can't use it) — muted, italic, so it reads as
    guidance beside the pill rather than a droppable hint. */
@@ -109,9 +109,9 @@
 .ws-pill {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 3px 4px 3px 9px; border-radius: var(--r-pill);
-  background: var(--brand-soft); border: 1px solid var(--danger-line);
-  color: var(--brand-ink); font-size: var(--fs-xs); font-weight: 600; white-space: nowrap;
-  animation: rise-in var(--motion) var(--ease-back);
+  background: var(--accent-soft); border: 1px solid var(--accent-line);
+  color: var(--accent-ink); font-size: var(--fs-xs); font-weight: 600; white-space: nowrap;
+  animation: rise-in var(--dur) var(--ease-out);
 }
 /* Drag-to-reorder (Columns/Rows): a grip is the only draggable part so the pill's controls still work.
    The dragged pill dims; a hovered drop-target pill shows an insertion outline. */
@@ -119,12 +119,12 @@
 .ws-pill__grip:hover { opacity: .9; }
 .ws-pill__grip:active { cursor: grabbing; }
 .ws-pill.is-dragging { opacity: .45; }
-.ws-pill.is-drop-target { box-shadow: -3px 0 0 0 var(--brand); }
+.ws-pill.is-drop-target { box-shadow: -3px 0 0 0 var(--accent); }
 /* Pill colour tracks the field's role, not the shelf (both shelves mix roles now): a categorical
    dimension is brand-soft (the .ws-pill default), a numeric measure is green. */
 .ws-pill--measure { background: var(--ok-bg); border-color: var(--ok-line); color: var(--ok-ink); }
 /* Colour-mark pill (P7): violet, distinct from dimension (red) and measure (green). */
-.ws-pill--color { background: var(--info-bg); border-color: var(--info-line); color: var(--info-ink); }
+.ws-pill--color { background: var(--enc-bg); border-color: var(--enc-line); color: var(--enc-ink); }
 .ws-pill__agg, .ws-pill__op { font-size: 11px; padding: 1px 4px; border-radius: 4px; box-shadow: none; }
 .ws-pill__val { width: 78px; padding: 1px var(--s2); font-size: 11px; }
 .ws-pill__filter { display: inline-flex; gap: 4px; align-items: center; }
@@ -138,7 +138,7 @@
 .ws-pill__conv { border: 1px solid currentColor; border-radius: 4px; opacity: .65; font-weight: 700; line-height: 1; padding: 1px 4px; }
 .ws-pill__conv:hover { opacity: 1; }
 .ws-pill .iconbtn { color: inherit; padding: 0 2px; }
-.ws-pill .iconbtn:hover { color: var(--brand); background: transparent; }
+.ws-pill .iconbtn:hover { color: var(--accent); background: transparent; }
 
 /* View controls (Sort · Chart · Format): a right-aligned cluster split from the field shelves by a
    hairline, so the toolbar reads data-left / view-right. `.ws-sort` carries the margin + divider, so
@@ -151,22 +151,22 @@
 .ws-toolbtn {
   height: var(--ctl-h); display: inline-flex; align-items: center; gap: var(--s1);
   padding: 0 var(--s3); font-size: var(--fs-xs); font-weight: 600; color: var(--ink-2);
-  border: 1px solid var(--line-2); background: var(--surface); border-radius: var(--r-sm); cursor: pointer;
-  transition: color var(--motion) var(--ease), border-color var(--motion) var(--ease), background var(--motion) var(--ease);
+  border: 1px solid var(--line-2); background: var(--surface); border-radius: var(--r-ctl); cursor: pointer;
+  transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease), background var(--dur) var(--ease);
 }
 .ws-toolbtn:hover { color: var(--ink); background: var(--surface-2); }
-.ws-toolbtn.is-active { color: var(--brand-ink); border-color: var(--brand); }
+.ws-toolbtn.is-active { color: var(--accent-ink); border-color: var(--accent); }
 
 /* Export menu (P13): a small popover under the Export button. Toggled via the `hidden` attribute. */
 .ws-export { position: relative; display: inline-flex; }
 .ws-export__menu {
   position: absolute; top: calc(var(--ctl-h) + 4px); right: 0; z-index: 20;
   display: flex; flex-direction: column; min-width: 130px; padding: var(--s1);
-  background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r-sm); box-shadow: var(--shadow, 0 4px 14px rgba(0,0,0,.12));
+  background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r-ctl); box-shadow: var(--elev-16);
 }
 .ws-menu-item {
   text-align: left; padding: var(--s2) var(--s3); font-size: var(--fs-xs); color: var(--ink-2);
-  background: none; border: 0; border-radius: var(--r-sm); cursor: pointer;
+  background: none; border: 0; border-radius: var(--r-ctl); cursor: pointer;
 }
 .ws-menu-item:hover, .ws-menu-item:focus-visible { background: var(--surface-2); color: var(--ink); }
 
@@ -175,37 +175,37 @@
 .ws-select {
   display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap;
   padding: var(--s2) var(--s3); font-size: var(--fs-xs);
-  background: var(--info-bg); border: 1px solid var(--info-line); border-radius: var(--r-sm); color: var(--info-ink);
+  background: var(--enc-bg); border: 1px solid var(--enc-line); border-radius: var(--r-ctl); color: var(--enc-ink);
 }
 .ws-select__icon { font-weight: 700; }
 .ws-select__label { font-weight: 600; }
 .ws-select__btn {
   height: calc(var(--ctl-h) - 4px); padding: 0 var(--s2); font-size: var(--fs-xs); font-weight: 600;
-  color: var(--info-ink); background: var(--surface); border: 1px solid var(--info-line); border-radius: var(--r-sm); cursor: pointer;
+  color: var(--enc-ink); background: var(--surface); border: 1px solid var(--enc-line); border-radius: var(--r-ctl); cursor: pointer;
 }
 .ws-select__btn:hover { background: var(--surface-2); }
-.ws-select__btn.is-active { background: var(--info-ink); color: #fff; border-color: var(--info-ink); }
-.ws-select .iconbtn:hover { color: var(--brand); background: transparent; }
+.ws-select__btn.is-active { background: var(--enc-ink); color: var(--on-ink); border-color: var(--enc-ink); }
+.ws-select .iconbtn:hover { color: var(--accent); background: transparent; }
 
 /* Drill hierarchy (P16): the Drill-down lane's level pills, plus a breadcrumb bar (under the shelves)
-   showing the descent with drill-up. Amber (--pend-*) reads as navigational — distinct from the red
+   showing the descent with drill-up. Amber (--warn-*) reads as navigational — distinct from the red
    dimension, green measure and violet colour pills; status stays icon + text + colour, never colour
    alone (DESIGN.md a11y). */
-.ws-pill--drill { background: var(--pend-bg); border-color: var(--pend-line); color: var(--pend-ink); }
+.ws-pill--drill { background: var(--warn-bg); border-color: var(--warn-line); color: var(--warn-ink); }
 .ws-drill {
   display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap;
   padding: var(--s2) var(--s3); font-size: var(--fs-xs);
-  background: var(--pend-bg); border: 1px solid var(--pend-line); border-radius: var(--r-sm); color: var(--pend-ink);
+  background: var(--warn-bg); border: 1px solid var(--warn-line); border-radius: var(--r-ctl); color: var(--warn-ink);
 }
 .ws-drill__icon { font-weight: 700; }
 .ws-drill__crumbs { display: flex; align-items: center; gap: var(--s1); flex-wrap: wrap; }
-.ws-drill__sep { color: var(--pend-ink); opacity: .6; }
+.ws-drill__sep { color: var(--warn-ink); opacity: .6; }
 .ws-drill__crumb {
   height: calc(var(--ctl-h) - 6px); padding: 0 var(--s2); font-size: var(--fs-xs); font-weight: 600;
-  color: var(--pend-ink); background: var(--surface); border: 1px solid var(--pend-line); border-radius: var(--r-sm); cursor: pointer;
+  color: var(--warn-ink); background: var(--surface); border: 1px solid var(--warn-line); border-radius: var(--r-ctl); cursor: pointer;
 }
 .ws-drill__crumb:hover { background: var(--surface-2); }
-.ws-drill__crumb.is-current { background: var(--pend-ink); color: #fff; border-color: var(--pend-ink); cursor: default; }
+.ws-drill__crumb.is-current { background: var(--warn-ink); color: var(--on-ink); border-color: var(--warn-ink); cursor: default; }
 .ws-drill__up:disabled { opacity: .45; cursor: default; }
 .ws-drill__level { font-weight: 600; font-style: italic; }
 
@@ -222,56 +222,56 @@
   height: calc(var(--ctl-h) - 2px); padding: 0 var(--s2) 0 var(--s2);
   font-size: var(--fs-xs); font-weight: 600; color: var(--ink-2);
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-pill); cursor: pointer;
-  transition: border-color var(--motion) var(--ease), background var(--motion) var(--ease), color var(--motion) var(--ease);
+  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease), color var(--dur) var(--ease);
 }
 .ws-tool:hover { background: var(--surface-2); color: var(--ink); }
 .ws-tool__icon { font-size: 12px; line-height: 1; opacity: .75; }
 .ws-tool__txt { line-height: 1; }
 /* Assigned (holds ≥1 field): brand-tinted with a count badge. Open editor: solid brand outline. */
-.ws-tool.is-set { border-color: var(--danger-line); color: var(--brand-ink); }
-.ws-tool.is-set .ws-tool__icon { opacity: 1; color: var(--brand); }
-.ws-tool.is-active { border-color: var(--brand); color: var(--brand-ink); box-shadow: inset 0 0 0 1px var(--brand); }
-.ws-tool.is-over { border-color: var(--brand); border-style: dashed; background: var(--brand-soft); }
+.ws-tool.is-set { border-color: var(--accent-line); color: var(--accent-ink); }
+.ws-tool.is-set .ws-tool__icon { opacity: 1; color: var(--accent); }
+.ws-tool.is-active { border-color: var(--accent); color: var(--accent-ink); box-shadow: inset 0 0 0 1px var(--accent); }
+.ws-tool.is-over { border-color: var(--accent); border-style: dashed; background: var(--accent-soft); }
 .ws-tool__badge {
   min-width: 15px; height: 15px; padding: 0 3px; border-radius: 999px;
   display: inline-flex; align-items: center; justify-content: center;
-  font-size: 9px; font-weight: 700; color: #fff; background: var(--brand);
+  font-size: 9px; font-weight: 700; color: var(--on-accent); background: var(--accent);
 }
 /* The one open tool's editor: a card with its pills over a drop zone. */
 .ws-toolpanel {
   display: flex; flex-direction: column; gap: var(--s2);
-  padding: var(--s3); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-sm);
+  padding: var(--s3); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-ctl);
 }
 .ws-toolpanel__head { display: flex; align-items: center; justify-content: space-between; }
 .ws-toolpanel__title { font-size: var(--fs-xs); font-weight: 700; color: var(--ink-2); }
 .ws-toolpanel__zone {
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2);
   min-height: var(--ctl-h); padding: 4px var(--s2);
-  border: 1px dashed var(--line-2); border-radius: var(--r-sm); background: var(--surface);
-  transition: border-color var(--motion) var(--ease), background var(--motion) var(--ease);
+  border: 1px dashed var(--line-2); border-radius: var(--r-ctl); background: var(--surface);
+  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
 }
-.ws-toolpanel__zone.is-over { border-color: var(--brand); border-style: solid; background: var(--brand-soft); }
+.ws-toolpanel__zone.is-over { border-color: var(--accent); border-style: solid; background: var(--accent-soft); }
 .ws-pill--mark { background: var(--surface-2); border-color: var(--line); color: var(--ink); }
 
 /* Pages control (P20): a thin bar under the shelves to step/animate through a dimension's members. */
 .ws-pages {
   display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap;
   padding: var(--s2) var(--s3); font-size: var(--fs-xs);
-  background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-sm); color: var(--ink);
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-ctl); color: var(--ink);
 }
 .ws-pages__icon { font-weight: 700; color: var(--ink-3); }
 .ws-pages__member { font-weight: 600; font-variant-numeric: tabular-nums; }
 .ws-pages__btn {
   height: calc(var(--ctl-h) - 4px); padding: 0 var(--s2); font-size: var(--fs-xs); font-weight: 600;
-  color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm); cursor: pointer;
+  color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-ctl); cursor: pointer;
 }
 .ws-pages__btn:hover { background: var(--surface-2); }
-.ws-pages__btn.is-active { background: var(--brand); color: #fff; border-color: var(--brand); }
+.ws-pages__btn.is-active { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 
 /* Format panel (P10): opens as a card directly under the view bar (P17). */
 .ws-format {
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s4);
-  padding: var(--s3); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-sm);
+  padding: var(--s3); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-ctl);
 }
 .ws-fmt-field { display: inline-flex; align-items: center; gap: var(--s2); font-size: var(--fs-xs); color: var(--ink-3); }
 .ws-fmt-check { cursor: pointer; gap: var(--s1); }
@@ -287,8 +287,8 @@
 .ws-kpi { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; min-width: 120px; }
 /* KPI sparkline (P11): inline SVG trend under the headline number, brand-accented. */
 .ws-spark { width: 132px; height: 30px; margin: var(--s2) 0 2px; overflow: visible; }
-.ws-spark__line { stroke: var(--brand); stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
-.ws-spark__dot { fill: var(--brand); }
+.ws-spark__line { stroke: var(--accent); stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.ws-spark__dot { fill: var(--accent); }
 .ws-charttype__sel { font-size: var(--fs-xs); max-width: 150px; }
 .ws-hint { color: var(--ink-3); font-size: var(--fs-sm); padding: var(--s5); text-align: center; max-width: 480px; margin: auto; line-height: 1.5; }
 .ws-hint--warn { color: var(--danger-ink); }
@@ -298,7 +298,7 @@
 .ws-status {
   flex: none; margin: var(--s2) var(--s5) 0; padding: var(--s2) var(--s3);
   font-size: var(--fs-sm); color: var(--ink-2);
-  background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-ctl);
 }
 
 /* Crosstab (pivot) — Rows shelf = left stub, Columns shelf = top header, measures = cells.
@@ -309,15 +309,15 @@
 /* Multi-row header can't all stick at top:0 without overlapping — opt out of the flat-table sticky. */
 .xtab th { position: static; }
 .xt-corner { background: var(--surface-2); color: var(--ink-3); font-weight: 700; vertical-align: bottom; }
-.xt-colhdr { text-align: center; background: var(--head-grad); color: var(--ink-2); }
+.xt-colhdr { text-align: center; background: var(--surface); color: var(--ink-2); }
 .xt-rowhdr { text-align: left; vertical-align: top; background: var(--surface-2); color: var(--ink-2); font-weight: 600; }
 /* Measure-name band (top or left) reads as secondary to the dimension headers. */
-.xt-meas { font-weight: 600; color: var(--brand-ink); background: var(--surface-2); }
+.xt-meas { font-weight: 600; color: var(--accent-ink); background: var(--surface-2); }
 .xtab thead .xt-meas { text-align: right; }
 .mono { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
 
 
 /* P34: honest worksheet notices — invalid filter pill + "first 200 values" cap note */
-.ws-pill--invalid { border-color: var(--danger-line); background: var(--danger-soft); }
+.ws-pill--invalid { border-color: var(--danger-line); background: var(--danger-bg); }
 .ws-pill__in-wrap { display: inline-flex; flex-direction: column; gap: 2px; }
 .ws-note { margin: 2px 0 0; font-size: var(--fs-xs); color: var(--ink-3); }

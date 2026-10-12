@@ -229,6 +229,8 @@ export function initDashboards() {
     withCategories(dash.sheet.filters, categoryOf);
     if (dash.sheet.filters.filter((f) => !f.category).length < missing) { renderShelves(); runChart(); }
   });
+  // chart.js reads colours from :root at render time — redraw when the OS theme flips (a cache hit, no query).
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if (!isModelActive()) runChart(); });
   sync();
 
   async function sync() {

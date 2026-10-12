@@ -1,7 +1,7 @@
 /* Schema feature — the database picker section + draggable table chip list. */
 
 /* ---- Table list + draggable chips (schema browser) ----------------------- */
-#schema-section, #tables-section { animation: fade-in var(--motion) var(--ease); }
+#schema-section, #tables-section { animation: fade-in var(--dur) var(--ease); }
 .table-list {
   display: flex;
   flex-direction: column;
@@ -17,13 +17,13 @@
   padding: var(--s2) var(--s3);
   background: transparent;
   border: 1px solid transparent;
-  border-radius: var(--r-sm);
-  color: var(--side-muted);
+  border-radius: var(--r-ctl);
+  color: var(--ink-3);
   font-size: var(--fs-sm);
   font-weight: 500;
   cursor: grab;
-  animation: rise-in var(--motion) var(--ease) both;
-  transition: background var(--motion) var(--ease), color var(--motion) var(--ease), transform var(--motion) var(--ease);
+  animation: rise-in var(--dur) var(--ease) both;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease), transform var(--dur) var(--ease);
 }
 /* Stagger the chip entrance for a lively list reveal. */
 .table-chip:nth-child(1) { animation-delay: 20ms; }
@@ -33,10 +33,10 @@
 .table-chip:nth-child(5) { animation-delay: 120ms; }
 .table-chip:nth-child(6) { animation-delay: 145ms; }
 .table-chip:nth-child(n+7) { animation-delay: 170ms; }
-.table-chip:hover { background: var(--side-elev); color: var(--side-ink); transform: translateX(2px); }
-.table-chip--dragging { opacity: .55; cursor: grabbing; background: var(--side-elev); color: var(--side-ink); }
-.table-chip__icon { color: var(--side-muted); transition: color var(--motion) var(--ease); }
-.table-chip:hover .table-chip__icon { color: var(--brand); }
+.table-chip:hover { background: var(--surface-2); color: var(--ink); transform: translateX(2px); }
+.table-chip--dragging { opacity: .55; cursor: grabbing; background: var(--surface-2); color: var(--ink); }
+.table-chip__icon { color: var(--ink-3); transition: color var(--dur) var(--ease); }
+.table-chip:hover .table-chip__icon { color: var(--accent); }
 .table-chip__name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.table-list .empty { color: var(--side-muted); font-size: var(--fs-sm); padding: var(--s2); }
+.table-list .empty { color: var(--ink-3); font-size: var(--fs-sm); padding: var(--s2); }
 

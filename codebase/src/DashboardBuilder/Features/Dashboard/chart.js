@@ -18,7 +18,7 @@ let resizeObserver = null;
 function tokens() {
   const cs = getComputedStyle(document.documentElement);
   // Resolve one level of var() indirection in case a browser returns a custom property
-  // (e.g. --chart-series: var(--brand)) unsubstituted — belt-and-braces over getComputedStyle.
+  // (e.g. --chart-series: var(--accent)) unsubstituted — belt-and-braces over getComputedStyle.
   const t = (name, fallback) => {
     let v = cs.getPropertyValue(name).trim();
     const m = v.match(/^var\((--[\w-]+)\)$/);
@@ -32,7 +32,7 @@ function tokens() {
   const catFallback = ["#2a78d6", "#008300", "#e87ba4", "#eda100", "#1baf7a", "#eb6834", "#4a3aa7", "#e34948"];
   const cat = catFallback.map((hex, i) => t(`--chart-cat-${i + 1}`, hex));
   return {
-    series: t("--chart-series", "#cc0000"),
+    series: t("--chart-series", "#2563eb"),
     cat,
     axis: t("--chart-axis", "#d4d4d8"),
     grid: t("--chart-grid", "#e4e4e7"),
@@ -42,8 +42,8 @@ function tokens() {
     ink: t("--ink", "#0a0a0a"),
     font: t("--font", "system-ui, sans-serif"),
     // Brand stops for the sequential heatmap ramp (single-hue soft→saturated, token-driven).
-    brand: t("--brand", "#cc0000"),
-    brandSoft: t("--brand-soft", "#fce8e8"),
+    brand: t("--accent", "#2563eb"),
+    brandSoft: t("--accent-soft", "#fce8e8"),
   };
 }
 
