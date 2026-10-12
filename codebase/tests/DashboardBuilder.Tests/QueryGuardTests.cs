@@ -85,7 +85,7 @@ public class QueryGuardTests
     public void A_server_side_timeout_becomes_a_504_with_an_actionable_message()
     {
         var (status, message) = ApiControllerBase.DescribeFailure(
-            new ClickHouseServerException("Timeout exceeded", "SELECT …", 159));
+            new ClickHouseServerException("Timeout exceeded", "SELECT …", 159), "t");
         Assert.Equal(504, status);
         Assert.Contains($"{ClickHouseGateway.MaxExecutionSeconds} seconds", message);
     }
@@ -95,7 +95,7 @@ public class QueryGuardTests
     {
         // Without the server-side limit (a stepped-down connection) the HTTP timeout stops the query.
         var (status, message) = ApiControllerBase.DescribeFailure(
-            new TaskCanceledException("timed out", new TimeoutException()));
+            new TaskCanceledException("timed out", new TimeoutException()), "t");
         Assert.Equal(504, status);
         Assert.Contains($"{ClickHouseGateway.HttpTimeoutSeconds} seconds", message);
     }
@@ -112,7 +112,7 @@ public class QueryGuardTests
     public void Other_failures_stay_a_generic_credential_free_502()
     {
         var (status, message) = ApiControllerBase.DescribeFailure(
-            new ClickHouseServerException("password=secret leaked", "SELECT 1", 516));
+            new ClickHouseServerException("password=secret leaked", "SELECT 1", 516), "t");
         Assert.Equal(502, status);
         Assert.DoesNotContain("secret", message);
     }

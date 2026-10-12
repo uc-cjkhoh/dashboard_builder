@@ -1,4 +1,7 @@
 using DashboardBuilder.ClickHouse;
+using DashboardBuilder.Features;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc.Razor;
 using Microsoft.AspNetCore.StaticFiles;
@@ -6,7 +9,8 @@ using Microsoft.Extensions.FileProviders;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllersWithViews();
+builder.Services.AddControllersWithViews()
+    .ConfigureApiBehaviorOptions(o => o.InvalidModelStateResponseFactory = ctx => ApiErrors.FromModelState(ctx.ModelState));
 
 // Feature folders: a view lives next to its controller under /Features/{Feature}/, not under /Views.
 // {1} = controller name (e.g. Shell), {0} = view name (e.g. Index) → /Features/Shell/Index.cshtml.
@@ -60,6 +64,10 @@ if (!string.IsNullOrWhiteSpace(pathBase))
 {
     app.UsePathBase(pathBase);
 }
+
+// One error shape for everything a controller doesn't catch, and a hard cap on API body size.
+app.UseExceptionHandler(new ExceptionHandlerOptions { ExceptionHandler = ApiErrors.WriteUnhandledAsync });
+app.UseApiBodyLimit();
 
 // Force revalidation of static assets. The page's <script>/<link> tags are not version-stamped and
 // the ES-module imports (../Core/store.js, ../Core/ui.js, …) certainly aren't — so without this a

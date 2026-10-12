@@ -11,106 +11,32 @@ namespace DashboardBuilder.Features.Dashboard;
 /// </summary>
 public sealed class QueryController : ApiControllerBase
 {
-    private const string LogCategory = "DashboardBuilder.Features.Query";
-
     public QueryController(ConnectionRegistry registry, ClickHouseGateway gateway, ILoggerFactory loggers)
         : base(registry, gateway, loggers) { }
 
     [HttpPost("databases/{db}/tables/{table}/aggregate")]
-    public async Task<IResult> Aggregate(string db, string table, [FromBody] AggregateRequest request, CancellationToken ct)
-    {
-        var info = Registry.Current;
-        if (info is null) return NotConnected();
-        try
-        {
-            return Results.Ok(await Gateway.AggregateAsync(info, db, table, request, ct));
-        }
-        catch (UnknownIdentifierException ex)
-        {
-            return Results.BadRequest(new { error = ex.Message });
-        }
-        catch (Exception ex) when (!IsClientAbort(ex))
-        {
-            return SafeError(ex, LogCategory);
-        }
-    }
+    public Task<IResult> Aggregate(string db, string table, [FromBody] AggregateRequest request, CancellationToken ct)
+        => RunAsync(async info => Results.Ok(await Gateway.AggregateAsync(info, db, table, request, ct)));
 
     [HttpPost("databases/{db}/tables/{table}/histogram")]
-    public async Task<IResult> Histogram(string db, string table, [FromBody] HistogramRequest request, CancellationToken ct)
-    {
-        var info = Registry.Current;
-        if (info is null) return NotConnected();
-        try
-        {
-            return Results.Ok(await Gateway.HistogramAsync(info, db, table, request, ct));
-        }
-        catch (UnknownIdentifierException ex)
-        {
-            return Results.BadRequest(new { error = ex.Message });
-        }
-        catch (Exception ex) when (!IsClientAbort(ex))
-        {
-            return SafeError(ex, LogCategory);
-        }
-    }
+    public Task<IResult> Histogram(string db, string table, [FromBody] HistogramRequest request, CancellationToken ct)
+        => RunAsync(async info => Results.Ok(await Gateway.HistogramAsync(info, db, table, request, ct)));
 
     [HttpPost("databases/{db}/tables/{table}/boxplot")]
-    public async Task<IResult> BoxPlot(string db, string table, [FromBody] BoxPlotRequest request, CancellationToken ct)
-    {
-        var info = Registry.Current;
-        if (info is null) return NotConnected();
-        try
-        {
-            return Results.Ok(await Gateway.BoxPlotAsync(info, db, table, request, ct));
-        }
-        catch (UnknownIdentifierException ex)
-        {
-            return Results.BadRequest(new { error = ex.Message });
-        }
-        catch (Exception ex) when (!IsClientAbort(ex))
-        {
-            return SafeError(ex, LogCategory);
-        }
-    }
+    public Task<IResult> BoxPlot(string db, string table, [FromBody] BoxPlotRequest request, CancellationToken ct)
+        => RunAsync(async info => Results.Ok(await Gateway.BoxPlotAsync(info, db, table, request, ct)));
 
     [HttpPost("query")]
-    public async Task<IResult> Query([FromBody] QueryRequest request, CancellationToken ct)
-    {
-        var info = Registry.Current;
-        if (info is null) return NotConnected();
-        try
-        {
-            return Results.Ok(await Gateway.QueryAsync(info, request, ct));
-        }
-        catch (UnknownIdentifierException ex)
-        {
-            return Results.BadRequest(new { error = ex.Message });
-        }
-        catch (Exception ex) when (!IsClientAbort(ex))
-        {
-            return SafeError(ex, LogCategory);
-        }
-    }
+    public Task<IResult> Query([FromBody] QueryRequest request, CancellationToken ct)
+        => RunAsync(async info => Results.Ok(await Gateway.QueryAsync(info, request, ct)));
 
     [HttpPost("query/export.csv")]
-    public async Task<IResult> ExportCsv([FromBody] QueryRequest request, CancellationToken ct)
-    {
-        var info = Registry.Current;
-        if (info is null) return NotConnected();
-        try
+    public Task<IResult> ExportCsv([FromBody] QueryRequest request, CancellationToken ct)
+        => RunAsync(async info =>
         {
             // Same bounded, identifier-safe worksheet query as /api/query — just serialised to CSV.
             var result = await Gateway.QueryAsync(info, request, ct);
             var csv = CsvUtil.FromQueryResult(result);
             return Results.Text(csv, "text/csv", System.Text.Encoding.UTF8);
-        }
-        catch (UnknownIdentifierException ex)
-        {
-            return Results.BadRequest(new { error = ex.Message });
-        }
-        catch (Exception ex) when (!IsClientAbort(ex))
-        {
-            return SafeError(ex, LogCategory);
-        }
-    }
+        });
 }

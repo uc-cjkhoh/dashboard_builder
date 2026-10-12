@@ -25,13 +25,13 @@ public sealed class ConnectionController : ApiControllerBase
     public async Task<IResult> Connect([FromBody] ConnectRequest req, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(req.Host) || string.IsNullOrWhiteSpace(req.User))
-            return Results.BadRequest(new { error = "Host and user are required." });
+            return Results.BadRequest(new ApiError("Host and user are required."));
 
         // Secure (TLS) is the default; the port defaults to the matching secure/plain port.
         var secure = req.Secure ?? true;
         var port = req.Port ?? (secure ? 8443 : 8123);
         if (port is < 1 or > 65535)
-            return Results.BadRequest(new { error = "Port must be between 1 and 65535." });
+            return Results.BadRequest(new ApiError("Port must be between 1 and 65535."));
 
         var info = new ClickHouseConnectionInfo(
             Host: req.Host.Trim(),
@@ -49,7 +49,7 @@ public sealed class ConnectionController : ApiControllerBase
         // returns.
         var (error, validated) = await Gateway.ValidateAsync(info, ct);
         if (error is not null)
-            return Results.Json(new { error }, statusCode: StatusCodes.Status502BadGateway);
+            return Results.Json(new ApiError(error), statusCode: StatusCodes.Status502BadGateway);
 
         Registry.Save(validated);
         return Results.Ok(validated.ToClientView()); // password-free view

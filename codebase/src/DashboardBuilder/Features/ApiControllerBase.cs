@@ -27,31 +27,54 @@ public abstract class ApiControllerBase : ControllerBase
 
     /// <summary>409 when there is no session connection to run a query against.</summary>
     protected static IResult NotConnected()
-        => Results.Json(new { error = "Not connected to a ClickHouse server." },
-                        statusCode: StatusCodes.Status409Conflict);
+        => Results.Json(new ApiError("Not connected to a ClickHouse server."), statusCode: StatusCodes.Status409Conflict);
 
-    /// <summary>
-    /// A credential-safe 502: logs the exception <em>type</em> only — messages/URIs can carry host or
-    /// credential material — and returns a generic body.
-    /// </summary>
-    protected IResult SafeError(Exception ex, string category)
+    protected static IResult Invalid(RequestValidationException ex)
+        => Results.Json(new ApiError(ex.Message, ex.Field), statusCode: StatusCodes.Status400BadRequest);
+
+    /// <summary>The one action wrapper: 409 when not connected, 400 for rule breaks, <paramref name="unknownIdentifierStatus"/>
+    /// for catalog misses, 502/504 for ClickHouse, 500 for our own bugs. Client aborts are left to the framework.</summary>
+    protected async Task<IResult> RunAsync(Func<ClickHouseConnectionInfo, Task<IResult>> work, int unknownIdentifierStatus = StatusCodes.Status400BadRequest)
     {
-        _loggers.CreateLogger(category).LogWarning("Query failed: {ErrorType}", ex.GetType().Name);
-        var (status, message) = DescribeFailure(ex);
-        return Results.Json(new { error = message }, statusCode: status);
+        var info = Registry.Current;
+        if (info is null) return NotConnected();
+        try { return await work(info); }
+        catch (RequestValidationException ex) { return Invalid(ex); }
+        catch (UnknownIdentifierException ex) { return Results.Json(new ApiError(ex.Message), statusCode: unknownIdentifierStatus); }
+        catch (Exception ex) when (!IsClientAbort(ex)) { return SafeError(ex); }
     }
 
     /// <summary>
-    /// The status + client message for a failed query. Never echoes the exception message (it can
-    /// carry host or credential material): a timeout — server-side (ClickHouse code 159, from the
-    /// gateway's <c>max_execution_time</c>) or, on a connection without that limit, the HTTP
-    /// timeout — gets an actionable 504; everything else a generic 502.
+    /// A credential-safe failure: logs the exception <em>type</em> only — messages/URIs can carry host or
+    /// credential material — and returns a generic body.
     /// </summary>
-    internal static (int Status, string Message) DescribeFailure(Exception ex) => ex switch
+    protected IResult SafeError(Exception ex)
+    {
+        var trace = HttpContext.TraceIdentifier;
+        var (status, message) = DescribeFailure(ex, trace);
+        var log = _loggers.CreateLogger(GetType().FullName!);
+        if (status == 500) log.LogError("Unexpected {ErrorType} (ref {TraceId})", ex.GetType().Name, trace);
+        else log.LogWarning("Query failed: {ErrorType}", ex.GetType().Name);
+        return Results.Json(new ApiError(message), statusCode: status);
+    }
+
+    /// <summary>
+    /// The status + client message for a failed action. Never echoes the exception message: a timeout
+    /// (ClickHouse code 159, or the HTTP timeout) gets an actionable 504; upstream failures a generic
+    /// 502; anything else is our bug — a 500 with a trace reference.
+    /// </summary>
+    internal static (int Status, string Message) DescribeFailure(Exception ex, string traceId) => ex switch
     {
         ClickHouseServerException { ErrorCode: 159 } => TimedOut(ClickHouseGateway.MaxExecutionSeconds),
         _ when ClickHouseGateway.IsHttpTimeout(ex) => TimedOut(ClickHouseGateway.HttpTimeoutSeconds),
-        _ => (StatusCodes.Status502BadGateway, "Query failed against ClickHouse."),
+        _ when IsUpstreamFailure(ex) => (StatusCodes.Status502BadGateway, "Query failed against ClickHouse."),
+        _ => (StatusCodes.Status500InternalServerError, $"Unexpected error (ref {traceId})."),
+    };
+
+    internal static bool IsUpstreamFailure(Exception ex) => ex switch
+    {
+        ClickHouseServerException or HttpRequestException or IOException or System.Security.Authentication.AuthenticationException => true,
+        _ => ex.InnerException is { } inner && IsUpstreamFailure(inner),
     };
 
     private static (int Status, string Message) TimedOut(int seconds) => (StatusCodes.Status504GatewayTimeout,
