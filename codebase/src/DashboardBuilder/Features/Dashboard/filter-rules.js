@@ -37,3 +37,10 @@ export function statFilters(filters, db, table) {
     ignored: usable.length - mine.length,
   };
 }
+// Fill a missing `category` on filters (saved workbooks and older drops carry none) from the column
+// catalog. Mutates and returns the filters so the filled category is persisted. A column absent from
+// the catalog stays category-less and so reads as invalid (visible), never silently dropped.
+export function withCategories(filters, categoryOf) {
+  for (const f of filters) if (!f.category) { const c = categoryOf(f.db, f.table, f.column); if (c) f.category = c; }
+  return filters;
+}

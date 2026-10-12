@@ -320,4 +320,4 @@
 /* P34: honest worksheet notices — invalid filter pill + "first 200 values" cap note */
 .ws-pill--invalid { border-color: var(--danger-line); background: var(--danger-soft); }
 .ws-pill__in-wrap { display: inline-flex; flex-direction: column; gap: 2px; }
-.ws-note { margin: 2px 0 0; font-size: 11px; opacity: 0.75; }
+.ws-note { margin: 2px 0 0; font-size: var(--fs-xs); color: var(--ink-3); }

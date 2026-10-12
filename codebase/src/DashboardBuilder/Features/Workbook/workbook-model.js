@@ -35,7 +35,7 @@ export function serializeWorkbook({ entities, relationships, dashboards, active 
 
 function savedSheet(sheet) {
   const copy = structuredClone(sheet);
-  if (copy.pages) { delete copy.pages.members; delete copy.pages.loadError; } // re-fetched from the bounded distinct query
+  if (copy.pages) { delete copy.pages.members; delete copy.pages.loadError; delete copy.pages.more; } // re-fetched from the bounded distinct query
   return copy;
 }
 

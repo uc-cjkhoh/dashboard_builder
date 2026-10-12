@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { aggsFor, checkFilter, statFilters } from "../../src/DashboardBuilder/Features/Dashboard/filter-rules.js";
+import { aggsFor, checkFilter, statFilters, withCategories } from "../../src/DashboardBuilder/Features/Dashboard/filter-rules.js";
 const F = (o) => ({ db: "s", table: "orders", column: "amount", category: "numeric", op: "=", value: "", values: null, ...o });
 test("aggregations match the column category", () => {
   assert.ok(aggsFor("numeric").includes("sum"));
@@ -25,4 +25,20 @@ test("stat charts apply same-table ok filters and count the rest", () => {
   const r = statFilters([F({ value: "5" }), F({ table: "customers", value: "1" }), F({ value: "x" }), F({ op: "in", values: ["1", "2"] })], "s", "orders");
   assert.deepEqual(r.apply, [{ column: "amount", op: "=", value: "5", values: null }, { column: "amount", op: "in", value: "", values: ["1", "2"] }]);
   assert.equal(r.ignored, 1);
+});
+test("a filter in addFilter's shape (with category) is ok", () => {
+  const f = { db: "s", table: "orders", column: "amount", category: "numeric", op: "=", value: "5" };
+  assert.equal(checkFilter(f).state, "ok");
+});
+test("a filter without a category is backfilled from the catalog", () => {
+  const f = { db: "s", table: "orders", column: "amount", op: "=", value: "5" };
+  withCategories([f], (db, t, c) => (c === "amount" ? "numeric" : undefined));
+  assert.equal(f.category, "numeric"); assert.equal(checkFilter(f).state, "ok");
+  const g = { ...f, category: "text" };
+  withCategories([g], () => "numeric"); assert.equal(g.category, "text");
+});
+test("a filter whose column is not in the catalog stays visibly invalid", () => {
+  const f = { db: "s", table: "orders", column: "gone", op: "=", value: "5" };
+  withCategories([f], () => undefined);
+  const r = checkFilter(f); assert.equal(r.state, "invalid"); assert.match(r.error, /can't be compared/);
 });

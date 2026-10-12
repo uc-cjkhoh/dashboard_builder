@@ -1,7 +1,7 @@
 import { api } from "../Core/api.js";
 import { toggle, makeButton, toast, fieldError } from "../Core/ui.js";
 import { LIMITS } from "../Core/validate.js";
-import { aggsFor, checkFilter, statFilters, TEXT_VALUE_TYPES } from "./filter-rules.js";
+import { aggsFor, checkFilter, statFilters, withCategories, TEXT_VALUE_TYPES } from "./filter-rules.js";
 import { entities, relationships, activeDashboard, isModelActive, updateSheet, bus, defaultFormat, defaultMarks } from "../Core/store.js";
 import { renderChart as renderSeriesChart, disposeChart, exportChart, hasChartInstance } from "./chart.js";
 import { makeValueFormatter, makeCategoryFormatter } from "../Core/format.js";
@@ -12,6 +12,12 @@ import { createLatestGate, createResultCache, requestKey, isAbortError, truncati
 // identifier-safe query. Fields from *different* tables are joined automatically along the
 // relationships drawn in the Data Model (a join path found by BFS over the relationship graph).
 const FIELD_MIME = "application/x-ch-field";
+// Column category from the Data Model catalog (entity.columns), for filters saved without one.
+function categoryOf(db, table, column) {
+  for (const e of entities.values())
+    if (e.db === db && e.table === table) { const c = e.columns?.find((x) => x.name === column); if (c) return c.category; }
+  return undefined;
+}
 const FILTER_PLACEHOLDER = { numeric: "number", temporal: "YYYY-MM-DD", boolean: "true or false" };
 const OPS = ["=", "!=", ">", ">=", "<", "<=", "in", "between"];
 // A filter contributes to the query only when checkFilter() says "ok" (empty = no-op, invalid = not applied).
@@ -274,6 +280,7 @@ export function initDashboards() {
     const dash = activeDashboard();
     if (!dash) return;
     const s = dash.sheet;
+    withCategories(s.filters, categoryOf);
     // Clean three-tier header (redesign 2). Tier 1 — VIEW BAR: chart type (left); sort · format · export
     // (right). Tier 2 — the two PRIMARY data shelves, **Columns** and **Rows**, always visible at the top.
     // Tier 3 — every other encoding (the Marks channels + Filters/Drill/Pages) as a compact **icon+text
@@ -502,8 +509,11 @@ export function initDashboards() {
     // Chart-only controls.
     if (isChart) {
       panel.append(
-        fmtSelect(s.chartType === "histogram" ? "Bins" : "Top N", [["null", "All"], ["5", "5"], ["10", "10"], ["20", "20"], ["50", "50"], ["100", "100"]],
-          f.topN ?? "null", (v) => set({ topN: v === "null" ? null : Number(v) })),
+        s.chartType === "histogram"
+          ? fmtSelect("Bins", [["5", "5"], ["10", "10"], ["20", "20"], ["50", "50"], ["100", "100"]],
+            f.topN ?? 20, (v) => set({ topN: Number(v) }))
+          : fmtSelect("Top N", [["null", "All"], ["5", "5"], ["10", "10"], ["20", "20"], ["50", "50"], ["100", "100"]],
+            f.topN ?? "null", (v) => set({ topN: v === "null" ? null : Number(v) })),
         fmtSelect("Legend", [["auto", "Auto"], ["hidden", "Hidden"], ["top", "Top"], ["bottom", "Bottom"], ["left", "Left"], ["right", "Right"]],
           f.legend, (v) => set({ legend: v })),
         fmtCheck("Data labels", f.dataLabels, (v) => set({ dataLabels: v })),
@@ -591,6 +601,10 @@ export function initDashboards() {
     const controls = el("span", "ws-pill__ctl");
     if (isMeasure) {
       const opts = aggsFor(f.category);
+      if (f.agg && !opts.includes(f.agg)) {
+        toast(`${f.agg} isn't available for ${label}; switched to ${opts[0]}.`, "info");
+        f.agg = opts[0]; // keep the screen in step with the query
+      }
       const agg = select(opts, f.agg ?? opts[0], "ws-pill__agg", `Aggregation for ${f.table}.${f.column}`);
       agg.addEventListener("change", () => { f.agg = agg.value; commit(dash, s); });
       controls.append(agg);
@@ -691,7 +705,15 @@ export function initDashboards() {
     const cfg = el("span", "ws-pill__filter");
     cfg.append(op, filterValueControl(dash, s, f));
     const chk = checkFilter(f);
-    if (chk.state === "invalid") { const inp = cfg.querySelector("input"); if (inp) fieldError(inp, chk.error); }
+    if (chk.state === "invalid") {
+      const inputs = [...cfg.querySelectorAll("input")];
+      // For a range, mark the bound that actually failed (a half range blames the empty one).
+      const bad = f.op === "between" && inputs.length === 2
+        ? (!String(f.values?.[0] ?? "").trim() ? inputs[0] : !String(f.values?.[1] ?? "").trim() ? inputs[1]
+          : (checkFilter({ ...f, op: "=", value: f.values[0] }).state === "invalid" ? inputs[0] : inputs[1]))
+        : inputs[0];
+      if (bad) fieldError(bad, chk.error);
+    }
     const p = pill(`${f.table}.${f.column}`, () => { s.filters.splice(i, 1); commit(dash, s); }, cfg);
     p.classList.toggle("ws-pill--invalid", chk.state === "invalid");
     return p;
@@ -740,23 +762,24 @@ export function initDashboards() {
       const vals = await distinctFor(f.db, f.table, f.column);
       sel.replaceChildren();
       const chosen = new Set(f.values ?? []);
-      for (const v of vals) {
+      for (const v of vals.slice(0, DISTINCT_SHOWN)) {
         const opt = new Option(v == null ? "—" : String(v), v == null ? "" : String(v));
         if (chosen.has(opt.value)) opt.selected = true;
         sel.add(opt);
       }
       if (!vals.length) sel.append(new Option("(no values)", ""));
-      if (vals.length >= 200) note = el("p", "ws-note", "Showing the first 200 values — more exist.");
+      if (vals.length > DISTINCT_SHOWN) note = el("p", "ws-note", "Showing the first 200 values — more exist.");
     } catch {
       sel.replaceChildren(new Option("(couldn't load values)", ""));
     }
     if (note && sel.parentNode) sel.parentNode.append(note);
   }
+  const DISTINCT_SHOWN = 200, DISTINCT_FETCH = DISTINCT_SHOWN + 1; // ask for one extra to know whether more exist
   const distinctCache = new Map();
   async function distinctFor(db, table, column) {
     const k = `${db}.${table}.${column}`;
     if (!distinctCache.has(k)) {
-      try { distinctCache.set(k, await api.distinct(db, table, column)); }
+      try { distinctCache.set(k, await api.distinct(db, table, column, DISTINCT_FETCH)); }
       catch (e) { distinctCache.delete(k); throw e; }
     }
     return distinctCache.get(k);
@@ -791,7 +814,7 @@ export function initDashboards() {
   }
   function addFilter(dash, f) {
     if (dash.sheet.filters.length >= LIMITS.filters) { toast(`A view can have at most ${LIMITS.filters} filters.`, "info"); return; }
-    dash.sheet.filters.push({ db: f.db, table: f.table, column: f.column, op: "=", value: "" });
+    dash.sheet.filters.push({ db: f.db, table: f.table, column: f.column, category: f.category, op: "=", value: "" });
     commit(dash, dash.sheet);
   }
   // Drop a field onto Color (P7/P18 marks). A categorical field is discrete (group-by → coloured
@@ -963,7 +986,10 @@ export function initDashboards() {
     p.members = []; // in-flight guard against re-entry
     try {
       const vals = await distinctFor(p.db, p.table, p.column);
-      if (dash.sheet.pages === p) { p.members = vals; p.index = Math.min(p.index ?? 0, Math.max(0, vals.length - 1)); commit(dash, s); }
+      if (dash.sheet.pages === p) {
+        p.more = vals.length > DISTINCT_SHOWN;
+        p.members = vals.slice(0, DISTINCT_SHOWN); p.index = Math.min(p.index ?? 0, Math.max(0, p.members.length - 1)); commit(dash, s);
+      }
     } catch (err) { p.loadError = `Couldn't load members: ${err.message}`; if (dash.sheet.pages === p) commit(dash, s); }
   }
   // The page control: current member + count, ◀ ▶ step (wrapping), and Play/Pause. Play is omitted
@@ -982,7 +1008,7 @@ export function initDashboards() {
     const prev = makeButton("◀", "ws-pages__btn"); prev.setAttribute("aria-label", "Previous page"); prev.addEventListener("click", () => step(-1));
     const next = makeButton("▶", "ws-pages__btn"); next.setAttribute("aria-label", "Next page"); next.addEventListener("click", () => step(1));
     wrap.append(prev, el("span", "ws-pages__member", `${cur == null ? "—" : cur}  ·  ${idx + 1}/${n}`), next);
-    if (n >= 200) wrap.append(el("p", "ws-note", "Showing the first 200 values — more exist."));
+    if (p.more) wrap.append(el("p", "ws-note", "Showing the first 200 values — more exist."));
 
     const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (!reduce) {
@@ -1012,6 +1038,7 @@ export function initDashboards() {
     const ticket = gate.begin(); // aborts any in-flight query for the previous state
     disposeChart(); // tear down any live ECharts instance before we repaint the chart pane
     const s = dash.sheet;
+    withCategories(s.filters, categoryOf);
     const filterNote = invalidFilterNotice(s);
     setNotice(filterNote);
     // P12 statistical charts that run their own single-table endpoint (histogram / box plot).
@@ -1097,7 +1124,7 @@ export function initDashboards() {
       const result = await fetchCached(dash, ticket, requestKey("histogram", { db, table, req }),
         (signal) => api.histogram(db, table, req, { signal }));
       if (!result) return;
-      if (!result.bins?.length) { chartEl.replaceChildren(hint("No data for this field.")); return; }
+      if (!result.bins?.length) { chartEl.replaceChildren(hint("No data for this field.")); setNotice(joinNotices(filterNote, ignoredNote)); return; }
       chartEl.replaceChildren();
       renderSeriesChart(chartEl, { type: "histogram", bins: result.bins, format: s.format ?? defaultFormat() });
       setNotice(joinNotices(filterNote, ignoredNote));
@@ -1108,7 +1135,7 @@ export function initDashboards() {
       const result = await fetchCached(dash, ticket, requestKey("boxplot", { db, table, req }),
         (signal) => api.boxplot(db, table, req, { signal }));
       if (!result) return;
-      if (!result.groups?.length) { chartEl.replaceChildren(hint("No data for this field.")); return; }
+      if (!result.groups?.length) { chartEl.replaceChildren(hint("No data for this field.")); setNotice(joinNotices(filterNote, ignoredNote)); return; }
       chartEl.replaceChildren();
       renderSeriesChart(chartEl, { type: "boxplot", boxes: result.groups, format: s.format ?? defaultFormat() });
       setNotice(joinNotices(filterNote, ignoredNote, truncationNotice({ truncated: result.truncated, chartType: "boxplot", limit: Math.min(req.limit ?? 50, 500) })));
