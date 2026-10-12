@@ -6,6 +6,8 @@ export const LIMITS = Object.freeze({
   // The user's OWN filters. The server allows 16 per query (these + drill path + page + selection).
   filters: 8,
   inValues: 500, dashboards: 50, pillsPerShelf: 20,
+  entities: 100,       // tables on the canvas a workbook may open
+  relationships: 200,  // links a workbook may open
   drillLevels: 6, // keeps user filters (8) + drill path (≤5) + page + selection within the server's 16
 });
 export const HOST_MESSAGES = Object.freeze({

@@ -57,27 +57,39 @@ export function parseWorkbook(source) {
     throw new Error("This workbook was saved by a newer version of Dashboard Builder.");
 
   const issues = [];
-  const num = (v) => (Number.isFinite(v) ? Math.max(0, v) : 0);
 
   // entities: keep the first of each id and of each db.table; report the rest
   const seenIds = new Set(), seenTables = new Set();
   let skipped = 0;
   const entities = [];
-  for (const e of Array.isArray(raw.entities) ? raw.entities : []) {
+  const entList = Array.isArray(raw.entities) ? raw.entities.slice() : [];
+  if (entList.length > LIMITS.entities) {
+    issues.push(`Only the first ${LIMITS.entities} tables were opened.`);
+    entList.length = LIMITS.entities;
+  }
+  for (const e of entList) {
     if (!(e && isStr(e.id) && isStr(e.db) && isStr(e.table))) { skipped++; continue; }
     if (seenIds.has(e.id)) { issues.push(`Skipped a table with a duplicate id (${e.id}).`); continue; }
     if (seenTables.has(`${e.db}.${e.table}`)) { issues.push(`Skipped a second copy of ${e.db}.${e.table}.`); continue; }
     seenIds.add(e.id); seenTables.add(`${e.db}.${e.table}`);
-    entities.push({
-      id: e.id, db: e.db, table: e.table, x: num(e.x), y: num(e.y),
-      joinKeys: Array.isArray(e.joinKeys) ? e.joinKeys.filter(isStr) : [],
-    });
+    const coord = (v) => {
+      if (Number.isFinite(v) && v >= 0) return v;
+      issues.push(`${e.db}.${e.table}: its position was invalid — reset.`); return 0;
+    };
+    const keys = Array.isArray(e.joinKeys) ? e.joinKeys : [];
+    if (e.joinKeys !== undefined && !Array.isArray(e.joinKeys)) issues.push(`${e.db}.${e.table}: its join keys weren't a list — cleared.`);
+    if (keys.some((k) => !isStr(k))) issues.push(`${e.db}.${e.table}: dropped a join key that wasn't a column name.`);
+    entities.push({ id: e.id, db: e.db, table: e.table, x: coord(e.x), y: coord(e.y), joinKeys: keys.filter(isStr) });
   }
   if (skipped) issues.push(`Skipped ${skipped} table(s) with missing details.`);
   const ids = new Set(entities.map((e) => e.id));
   const endpoint = (p) => p && ids.has(p.entityId) && isStr(p.column);
 
-  const relList = Array.isArray(raw.relationships) ? raw.relationships : [];
+  const relList = Array.isArray(raw.relationships) ? raw.relationships.slice() : [];
+  if (relList.length > LIMITS.relationships) {
+    issues.push(`Only the first ${LIMITS.relationships} relationships were opened.`);
+    relList.length = LIMITS.relationships;
+  }
   const relationships = relList
     .filter((r) => r && endpoint(r.from) && endpoint(r.to) && CARDINALITIES.has(r.cardinality))
     .map((r) => ({
@@ -88,13 +100,16 @@ export function parseWorkbook(source) {
   const droppedRels = relList.length - relationships.length;
   if (droppedRels > 0) issues.push(`Skipped ${droppedRels} relationship(s) that referenced missing tables or had an unknown cardinality.`);
 
-  const list = (Array.isArray(raw.dashboards) ? raw.dashboards : []).filter((d) => d && typeof d === "object");
+  const allDash = Array.isArray(raw.dashboards) ? raw.dashboards : [];
+  const list = allDash.filter((d) => d && typeof d === "object");
+  if (list.length < allDash.length) issues.push(`Skipped ${allDash.length - list.length} entry(ies) that were not a dashboard.`);
   if (list.length > LIMITS.dashboards) {
     issues.push(`Only the first ${LIMITS.dashboards} dashboards were opened.`);
     list.length = LIMITS.dashboards;
   }
   const dashboards = list.map((d) => {
-    const r = text(d.name, { label: "Tab name", max: LIMITS.tabName, required: true });
+    const r = typeof d.name === "string" ? text(d.name, { label: "Tab name", max: LIMITS.tabName, required: true })
+      : { ok: false, error: "The dashboard name must be text." };
     let name = "Dashboard";
     if (r.ok) name = r.value;
     else issues.push(`A dashboard name was reset to "Dashboard": ${r.error}`);
@@ -116,7 +131,9 @@ function cleanPill(raw, where, issues, needCategory = true) {
     issues.push(`${where}: skipped a field with missing details.`); return null;
   }
   const p = { ...raw };
-  if (p.role !== undefined && p.role !== "dimension" && p.role !== "measure") delete p.role;
+  if (p.role !== undefined && p.role !== "dimension" && p.role !== "measure") {
+    issues.push(`${where}: ${p.table}.${p.column} had an unknown role "${p.role}" — cleared.`); delete p.role;
+  }
   if (p.agg !== undefined && p.category !== undefined && !aggsFor(p.category).includes(p.agg)) {
     issues.push(`${where}: ${p.table}.${p.column} can't use "${p.agg}" — reset to ${defAgg(p)}.`); p.agg = defAgg(p);
   }
@@ -144,8 +161,11 @@ export function sanitizeSheet(saved, where, issues) {
     : (issues.push(`${where}: unknown chart type "${s.chartType}" — reset to Bar.`), "bar");
   for (const k of ["columns", "rows", "color"]) sheet[k] = cleanPills(s[k], `${where} ${k}`, issues);
   sheet.filters = cleanPills(s.filters, `${where} filters`, issues, LIMITS.filters, false).filter((f) => {
-    const okShape = FILTER_OPS.has(f.op) && (f.op === "in" || f.op === "between"
-      ? Array.isArray(f.values) && f.values.every((v) => typeof v === "string") : typeof (f.value ?? "") === "string");
+    const multi = f.op === "in" || f.op === "between";
+    if (FILTER_OPS.has(f.op) && !multi && f.value !== undefined && f.value !== null && typeof f.value !== "string") {
+      issues.push(`${where}: the value of the filter on ${f.table}.${f.column} wasn't text — reset to empty.`); f.value = "";
+    }
+    const okShape = FILTER_OPS.has(f.op) && (multi ? Array.isArray(f.values) && f.values.every((v) => typeof v === "string") : true);
     if (!okShape) issues.push(`${where}: skipped a filter on ${f.table}.${f.column} with an unknown operator or value.`);
     return okShape;
   });
@@ -190,10 +210,16 @@ function cleanFormat(f0, where, issues) {
   out.decimals = f.decimals == null ? null : Number.isInteger(f.decimals) && f.decimals >= 0 && f.decimals <= MAX_DECIMALS ? f.decimals
     : (issues.push(`${w}: decimals "${f.decimals}" — reset to Auto.`), null);
   out.topN = f.topN == null ? null : TOP_N.has(f.topN) ? f.topN : (issues.push(`${w}: Top N "${f.topN}" — reset to All.`), null);
-  for (const k of ["dataLabels", "colorByDimension"]) out[k] = f[k] === undefined ? base[k] : Boolean(f[k]);
-  out.currencySymbol = typeof f.currencySymbol === "string" && f.currencySymbol.length <= 8 ? f.currencySymbol : base.currencySymbol;
+  for (const k of ["dataLabels", "colorByDimension"]) {
+    if (f[k] === undefined || typeof f[k] === "boolean") out[k] = f[k] ?? base[k];
+    else issues.push(`${w}: ${k} must be on or off — reset.`);
+  }
+  if (f.currencySymbol === undefined) out.currencySymbol = base.currencySymbol;
+  else if (typeof f.currencySymbol === "string" && f.currencySymbol.length <= 8) out.currencySymbol = f.currencySymbol;
+  else issues.push(`${w}: the currency symbol was invalid — reset to ${base.currencySymbol}.`);
   for (const k of ["xTitle", "yTitle"]) {
-    const r = f[k] == null ? null : text(f[k], { label: "Axis title", max: LIMITS.axisTitle });
+    const r = f[k] == null ? null : typeof f[k] !== "string" ? { ok: false, error: "Axis title must be text" }
+      : text(f[k], { label: "Axis title", max: LIMITS.axisTitle });
     out[k] = r === null ? null : r.ok ? r.value || null : (issues.push(`${w}: ${r.error} — cleared.`), null);
   }
   return out;

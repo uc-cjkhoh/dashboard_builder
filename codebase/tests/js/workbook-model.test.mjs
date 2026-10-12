@@ -159,3 +159,38 @@ test("duplicate entity ids and duplicate tables are skipped and reported", () =>
   const wb = parseWorkbook(wbText({ entities: [e, { ...e }, { ...e, id: "b" }] }));
   assert.equal(wb.entities.length, 1); assert.equal(wb.issues.length, 2);
 });
+
+test("tables and relationships are capped with an issue", () => {
+  const ents = Array.from({ length: 120 }, (_, i) => ({ id: `e${i}`, db: "s", table: `t${i}`, x: 0, y: 0, joinKeys: [] }));
+  const rels = Array.from({ length: 250 }, () => ({ from: { entityId: "e0", column: "a" }, to: { entityId: "e1", column: "b" }, cardinality: "1:1" }));
+  const wb = parseWorkbook(wbText({ entities: ents, relationships: rels }));
+  assert.equal(wb.entities.length, 100); assert.equal(wb.relationships.length, 200);
+  assert.ok(wb.issues.includes("Only the first 100 tables were opened."));
+  assert.ok(wb.issues.includes("Only the first 200 relationships were opened."));
+});
+test("every remaining reset is reported, never silent", () => {
+  const e = { id: "a", db: "s", table: "t", x: -5, y: "no", joinKeys: ["k", 3] };
+  const wb = parseWorkbook(wbText({
+    entities: [e],
+    dashboards: [5, { name: 7, sheet: {
+      rows: [pill({ role: "bogus" })],
+      format: { dataLabels: "yes", colorByDimension: 1, currencySymbol: 99, xTitle: 5 },
+    } }],
+  }));
+  assert.equal(wb.entities[0].x, 0); assert.equal(wb.entities[0].y, 0);
+  assert.deepEqual(wb.entities[0].joinKeys, ["k"]);
+  assert.equal(wb.dashboards.length, 1); assert.equal(wb.dashboards[0].name, "Dashboard");
+  const sh = wb.dashboards[0].sheet;
+  assert.equal(sh.rows[0].role, undefined);
+  assert.equal(sh.format.dataLabels, false); assert.equal(sh.format.colorByDimension, false);
+  assert.equal(sh.format.currencySymbol, "$"); assert.equal(sh.format.xTitle, null);
+  for (const re of [/position/, /join key/, /not a dashboard/i, /name/, /role/, /dataLabels/, /colorByDimension/, /currency/, /axis title/i])
+    assert.ok(wb.issues.some((i) => re.test(i)), String(re));
+});
+test("a non-string filter value keeps the filter, resets the value and reports it", () => {
+  const f = { db: "s", table: "orders", column: "amount", op: "=", value: 5 };
+  const wb = sheetOf({ filters: [f] });
+  assert.equal(wb.dashboards[0].sheet.filters.length, 1);
+  assert.equal(wb.dashboards[0].sheet.filters[0].value, "");
+  assert.equal(wb.issues.length, 1);
+});
