@@ -47,7 +47,7 @@ public class StatisticalTests : IClassFixture<WebApplicationFactory<Program>>
     {
         var p = new List<(string Name, string Type, object Value)>();
         var sql = ClickHouseGateway.BuildSingleTableFilters(
-            [new AggregateFilter("age", ">=", "18")], Cols(), p);
+            [new StatFilter("age", ">=", "18")], Cols(), p);
         Assert.Equal(" WHERE `age` >= {p0:Float64}", sql);
         Assert.Single(p);
         Assert.Equal("Float64", p[0].Type);
@@ -59,7 +59,7 @@ public class StatisticalTests : IClassFixture<WebApplicationFactory<Program>>
     {
         var p = new List<(string Name, string Type, object Value)>();
         var sql = ClickHouseGateway.BuildSingleTableFilters(
-            [new AggregateFilter("name", "=", "amy")], Cols(), p);
+            [new StatFilter("name", "=", "amy")], Cols(), p);
         Assert.Equal(" WHERE `name` = {p0:String}", sql);
         Assert.Equal("String", p[0].Type);
         Assert.Equal("amy", p[0].Value);
@@ -70,7 +70,7 @@ public class StatisticalTests : IClassFixture<WebApplicationFactory<Program>>
     {
         var p = new List<(string, string, object)>();
         Assert.Throws<UnknownIdentifierException>(() =>
-            ClickHouseGateway.BuildSingleTableFilters([new AggregateFilter("nope", "=", "x")], Cols(), p));
+            ClickHouseGateway.BuildSingleTableFilters([new StatFilter("nope", "=", "x")], Cols(), p));
     }
 
     [Fact]
@@ -80,7 +80,7 @@ public class StatisticalTests : IClassFixture<WebApplicationFactory<Program>>
         // A hostile column name is not in the live catalog → rejected before it can reach SQL.
         Assert.Throws<UnknownIdentifierException>(() =>
             ClickHouseGateway.BuildSingleTableFilters(
-                [new AggregateFilter("age`) OR 1=1 --", "=", "x")], Cols(), p));
+                [new StatFilter("age`) OR 1=1 --", "=", "x")], Cols(), p));
     }
 
     [Fact]
@@ -88,7 +88,7 @@ public class StatisticalTests : IClassFixture<WebApplicationFactory<Program>>
     {
         var p = new List<(string, string, object)>();
         Assert.Throws<UnknownIdentifierException>(() =>
-            ClickHouseGateway.BuildSingleTableFilters([new AggregateFilter("age", "LIKE", "x")], Cols(), p));
+            ClickHouseGateway.BuildSingleTableFilters([new StatFilter("age", "LIKE", "x")], Cols(), p));
     }
 
     // --- endpoints without a connection → 409 -------------------------------

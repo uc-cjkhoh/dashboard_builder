@@ -9,7 +9,10 @@ namespace DashboardBuilder.ClickHouse;
 public sealed record HistogramRequest(
     string Column,
     int? Buckets,
-    AggregateFilter[]? Filters);
+    StatFilter[]? Filters);
+
+/// <summary>A filter on a stat chart's source table: scalar <see cref="Value"/>, or <see cref="Values"/> for <c>in</c>/<c>between</c>.</summary>
+public sealed record StatFilter(string Column, string Op, string? Value, string[]? Values = null);
 
 /// <summary>One histogram bin: the half-open range <c>[X0, X1)</c> and how many rows fell in it.</summary>
 public sealed record HistogramBin(double X0, double X1, long Count);
@@ -26,7 +29,7 @@ public sealed record HistogramResult(IReadOnlyList<HistogramBin> Bins);
 public sealed record BoxPlotRequest(
     string? Dimension,
     string Measure,
-    AggregateFilter[]? Filters,
+    StatFilter[]? Filters,
     int? Limit);
 
 /// <summary>One box: the (optional) group label and its five-number summary.</summary>

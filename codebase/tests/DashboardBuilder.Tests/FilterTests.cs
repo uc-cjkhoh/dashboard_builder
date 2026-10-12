@@ -31,7 +31,7 @@ public class FilterTests : IClassFixture<WebApplicationFactory<Program>>
     public void Scalar_numeric_binds_float64()
     {
         var p = Bag();
-        var sql = ClickHouseGateway.BuildCondition(">=", "p0", "`age`", numeric: true, value: "18", values: null, p);
+        var sql = ClickHouseGateway.BuildCondition(">=", "p0", "`age`", ClickHouseType.Numeric, "age", "filters[0]", "18", null, p);
         Assert.Equal("`age` >= {p0:Float64}", sql);
         Assert.Equal("Float64", p[0].Type);
         Assert.Equal(18d, p[0].Value);
@@ -41,7 +41,7 @@ public class FilterTests : IClassFixture<WebApplicationFactory<Program>>
     public void Scalar_text_binds_string()
     {
         var p = Bag();
-        var sql = ClickHouseGateway.BuildCondition("=", "p0", "`name`", numeric: false, value: "amy", values: null, p);
+        var sql = ClickHouseGateway.BuildCondition("=", "p0", "`name`", ClickHouseType.Text, "name", "filters[0]", "amy", null, p);
         Assert.Equal("`name` = {p0:String}", sql);
         Assert.Equal("String", p[0].Type);
     }
@@ -51,7 +51,7 @@ public class FilterTests : IClassFixture<WebApplicationFactory<Program>>
     {
         var p = Bag();
         Assert.Throws<UnknownIdentifierException>(() =>
-            ClickHouseGateway.BuildCondition("DROP", "p0", "`x`", false, "1", null, p));
+            ClickHouseGateway.BuildCondition("DROP", "p0", "`x`", ClickHouseType.Text, "x", "filters[0]", "1", null, p));
     }
 
     // --- in ------------------------------------------------------------------
@@ -59,8 +59,7 @@ public class FilterTests : IClassFixture<WebApplicationFactory<Program>>
     public void In_binds_a_string_array()
     {
         var p = Bag();
-        var sql = ClickHouseGateway.BuildCondition("in", "p0", "`city`", numeric: false, value: null,
-            values: ["NY", "LA"], parameters: p);
+        var sql = ClickHouseGateway.BuildCondition("in", "p0", "`city`", ClickHouseType.Text, "city", "filters[0]", null, ["NY", "LA"], p);
         Assert.Equal("`city` IN {p0:Array(String)}", sql);
         Assert.Equal("Array(String)", p[0].Type);
         Assert.Equal(new[] { "NY", "LA" }, (string[])p[0].Value);
@@ -70,18 +69,17 @@ public class FilterTests : IClassFixture<WebApplicationFactory<Program>>
     public void In_with_all_numeric_values_binds_a_float_array()
     {
         var p = Bag();
-        var sql = ClickHouseGateway.BuildCondition("in", "p0", "`age`", numeric: true, value: null,
-            values: ["18", "21"], parameters: p);
+        var sql = ClickHouseGateway.BuildCondition("in", "p0", "`age`", ClickHouseType.Numeric, "age", "filters[0]", null, ["18", "21"], p);
         Assert.Equal("`age` IN {p0:Array(Float64)}", sql);
         Assert.Equal(new[] { 18d, 21d }, (double[])p[0].Value);
     }
 
     [Fact]
-    public void Empty_in_is_a_no_op()
+    public void Empty_in_is_rejected()
     {
         var p = Bag();
-        var sql = ClickHouseGateway.BuildCondition("in", "p0", "`city`", false, null, values: [], parameters: p);
-        Assert.Equal(string.Empty, sql);
+        Assert.Throws<RequestValidationException>(() =>
+            ClickHouseGateway.BuildCondition("in", "p0", "`city`", ClickHouseType.Text, "city", "filters[0]", null, [], p));
         Assert.Empty(p);
     }
 
@@ -90,8 +88,7 @@ public class FilterTests : IClassFixture<WebApplicationFactory<Program>>
     public void Between_numeric_binds_two_bounds()
     {
         var p = Bag();
-        var sql = ClickHouseGateway.BuildCondition("between", "p0", "`age`", numeric: true, value: null,
-            values: ["18", "65"], parameters: p);
+        var sql = ClickHouseGateway.BuildCondition("between", "p0", "`age`", ClickHouseType.Numeric, "age", "filters[0]", null, ["18", "65"], p);
         Assert.Equal("`age` >= {p0a:Float64} AND `age` <= {p0b:Float64}", sql);
         Assert.Equal(2, p.Count);
         Assert.Equal(18d, p[0].Value);
@@ -99,11 +96,11 @@ public class FilterTests : IClassFixture<WebApplicationFactory<Program>>
     }
 
     [Fact]
-    public void Between_missing_bound_is_a_no_op()
+    public void Between_missing_bound_is_rejected()
     {
         var p = Bag();
-        var sql = ClickHouseGateway.BuildCondition("between", "p0", "`age`", true, null, values: ["18"], parameters: p);
-        Assert.Equal(string.Empty, sql);
+        Assert.Throws<RequestValidationException>(() =>
+            ClickHouseGateway.BuildCondition("between", "p0", "`age`", ClickHouseType.Numeric, "age", "filters[0]", null, ["18"], p));
         Assert.Empty(p);
     }
 

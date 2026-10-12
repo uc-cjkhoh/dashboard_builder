@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using System.Text.RegularExpressions;
@@ -107,13 +108,55 @@ public static class RequestRules
     public static void ValidateHistogram(HistogramRequest r) { ValidateRange(r.Buckets, ApiLimits.MaxBuckets, "Bins", "buckets"); ValidateStatFilters(r.Filters); }
     public static void ValidateBoxPlot(BoxPlotRequest r) { ValidateRange(r.Limit, ApiLimits.MaxRowLimit, "Limit", "limit"); ValidateStatFilters(r.Filters); }
     public static void ValidateDistinctLimit(int? limit) => ValidateRange(limit, ApiLimits.MaxDistinct, "Limit", "limit");
-    private static void ValidateStatFilters(AggregateFilter[]? filters) // Task 3 changes the type to StatFilter[] and passes f.Values
+    private static void ValidateStatFilters(StatFilter[]? filters)
     {
         if ((filters?.Length ?? 0) > ApiLimits.MaxFilters) throw Bad($"A view can have at most {ApiLimits.MaxFilters} filters.", "filters");
         for (var i = 0; i < (filters?.Length ?? 0); i++)
         {
             if (filters![i] is not { } f) throw Bad($"'filters[{i}]' is required.", $"filters[{i}]");
-            ValidateFilterShape(f.Op, f.Value, null, $"filters[{i}]");
+            ValidateFilterShape(f.Op, f.Value, f.Values, $"filters[{i}]");
         }
     }
+}
+
+/// <summary>Converts a filter value to its column's category before it is bound — a value that doesn't fit is a 400, not a ClickHouse 502.</summary>
+public static class FilterValues
+{
+    private static readonly string[] DateFormats = ["yyyy-MM-dd", "yyyy-MM-dd HH:mm", "yyyy-MM-dd HH:mm:ss", "yyyy-MM-ddTHH:mm", "yyyy-MM-ddTHH:mm:ss"];
+    // Digits, optional sign, one '.', optional exponent — rejects "1,000", "1 000", "0x10", "NaN", "Infinity".
+    private static readonly Regex PlainNumber = new(@"^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$", RegexOptions.CultureInvariant);
+
+    public static (string Type, object Value) Coerce(string category, string column, string raw, string field)
+    {
+        var v = raw.Trim();
+        switch (category)
+        {
+            case ClickHouseType.Numeric:
+                if (PlainNumber.IsMatch(v) && double.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out var d) && double.IsFinite(d))
+                    return ("Float64", d);
+                throw new RequestValidationException($"'{raw}' is not a number for column {column}.", field);
+            case ClickHouseType.Temporal:
+                if (DateTime.TryParseExact(v, DateFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var t))
+                    return ("String", t.ToString(v.Length == 10 ? "yyyy-MM-dd" : "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
+                throw new RequestValidationException($"'{raw}' is not a date (YYYY-MM-DD or YYYY-MM-DD HH:MM:SS) for column {column}.", field);
+            case ClickHouseType.Boolean:
+                return v.ToLowerInvariant() switch
+                {
+                    "true" or "1" => ("UInt8", (byte)1),
+                    "false" or "0" => ("UInt8", (byte)0),
+                    _ => throw new RequestValidationException($"'{raw}' is not true or false for column {column}.", field),
+                };
+            case ClickHouseType.Text:
+                return ("String", raw);
+            default:
+                throw new RequestValidationException($"Column {column} can't be filtered — its type can't be compared.", field);
+        }
+    }
+    /// <summary>Order two coerced values; 0 for categories where order isn't checked (text).</summary>
+    public static int Compare(string category, object a, object b) => category switch
+    {
+        ClickHouseType.Numeric => ((double)a).CompareTo((double)b),
+        ClickHouseType.Temporal => string.CompareOrdinal((string)a, (string)b),
+        _ => 0,
+    };
 }

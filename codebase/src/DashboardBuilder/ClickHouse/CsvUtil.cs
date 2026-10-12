@@ -46,7 +46,7 @@ public static class CsvUtil
         {
             var cells = new List<string>(row.Keys.Count + row.Values.Count);
             cells.AddRange(row.Keys.Select(k => Escape(k)));
-            cells.AddRange(row.Values.Select(v => Escape(v.ToString(CultureInfo.InvariantCulture))));
+            cells.AddRange(row.Values.Select(v => Escape(v switch { null => "", double d => d.ToString(CultureInfo.InvariantCulture), _ => v.ToString() ?? "" })));
             sb.Append(string.Join(",", cells)).Append("\r\n");
         }
         return sb.ToString();

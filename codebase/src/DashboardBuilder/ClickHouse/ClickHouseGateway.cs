@@ -341,58 +341,47 @@ public sealed class ClickHouseGateway
     /// Build one filter condition for an already-qualified, quoted <paramref name="expr"/>, appending
     /// bound parameters (P14). Pure + testable. Handles the scalar operators plus <c>in</c> (binds an
     /// <c>Array(String|Float64)</c>) and <c>between</c> (binds two bounds). Values are always bound as
-    /// parameters — never interpolated. Returns the SQL condition, or an empty string when the filter
-    /// is a no-op (an empty <c>in</c> list, or a <c>between</c> missing a bound). Unknown operators throw.
+    /// parameters — never interpolated. Values are coerced to the column's category; a value that
+    /// doesn't fit, an empty <c>in</c>, or a half/inverted <c>between</c> throws <see cref="RequestValidationException"/>.
     /// </summary>
     internal static string BuildCondition(
-        string? op, string paramBase, string expr, bool numeric,
-        string? value, IReadOnlyList<string>? values,
-        List<(string Name, string Type, object Value)> parameters)
+        string? op, string paramBase, string expr, string category, string column, string field,
+        string? value, IReadOnlyList<string>? values, List<(string Name, string Type, object Value)> parameters)
     {
         switch ((op ?? string.Empty).ToLowerInvariant())
         {
             case "in":
             {
-                var vals = (values ?? []).Where(v => v is not null).Take(ApiLimits.MaxInValues).ToList();
-                if (vals.Count == 0) return string.Empty; // empty IN → skip (never emit "IN ()")
-                if (numeric && vals.All(v => double.TryParse(v, NumberStyles.Any, CultureInfo.InvariantCulture, out _)))
+                var typed = (values ?? []).Select(v => FilterValues.Coerce(category, column, v ?? "", field)).ToList();
+                if (typed.Count == 0) throw new RequestValidationException("Pick at least one value.", field);
+                var type = typed[0].Type;
+                object arr = type switch
                 {
-                    var nums = vals.Select(v => double.Parse(v, NumberStyles.Any, CultureInfo.InvariantCulture)).ToArray();
-                    parameters.Add((paramBase, "Array(Float64)", nums));
-                    return $"{expr} IN {{{paramBase}:Array(Float64)}}";
-                }
-                parameters.Add((paramBase, "Array(String)", vals.ToArray()));
-                return $"{expr} IN {{{paramBase}:Array(String)}}";
+                    "Float64" => typed.Select(t => (double)t.Value).ToArray(),
+                    "UInt8" => typed.Select(t => (byte)t.Value).ToArray(),
+                    _ => typed.Select(t => (string)t.Value).ToArray(),
+                };
+                parameters.Add((paramBase, $"Array({type})", arr));
+                return $"{expr} IN {{{paramBase}:Array({type})}}";
             }
             case "between":
             {
-                var lo = values is { Count: > 0 } ? values[0] : null;
-                var hi = values is { Count: > 1 } ? values[1] : null;
-                if (lo is null || hi is null) return string.Empty;
+                if (values is not { Count: 2 }) throw new RequestValidationException("A range filter needs both From and To.", field);
+                var lo = FilterValues.Coerce(category, column, values[0] ?? "", field);
+                var hi = FilterValues.Coerce(category, column, values[1] ?? "", field);
+                if (FilterValues.Compare(category, lo.Value, hi.Value) > 0)
+                    throw new RequestValidationException($"From must be less than or equal to To for column {column}.", field);
                 var (na, nb) = ($"{paramBase}a", $"{paramBase}b");
-                if (numeric
-                    && double.TryParse(lo, NumberStyles.Any, CultureInfo.InvariantCulture, out var dlo)
-                    && double.TryParse(hi, NumberStyles.Any, CultureInfo.InvariantCulture, out var dhi))
-                {
-                    parameters.Add((na, "Float64", dlo));
-                    parameters.Add((nb, "Float64", dhi));
-                    return $"{expr} >= {{{na}:Float64}} AND {expr} <= {{{nb}:Float64}}";
-                }
-                parameters.Add((na, "String", lo));
-                parameters.Add((nb, "String", hi));
-                return $"{expr} >= {{{na}:String}} AND {expr} <= {{{nb}:String}}";
+                parameters.Add((na, lo.Type, lo.Value));
+                parameters.Add((nb, hi.Type, hi.Value));
+                return $"{expr} >= {{{na}:{lo.Type}}} AND {expr} <= {{{nb}:{hi.Type}}}";
             }
             default:
             {
-                if (!Operators.TryGetValue(op ?? string.Empty, out var sqlOp))
-                    throw new UnknownIdentifierException("Unknown operator.");
-                if (numeric && double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var num))
-                {
-                    parameters.Add((paramBase, "Float64", num));
-                    return $"{expr} {sqlOp} {{{paramBase}:Float64}}";
-                }
-                parameters.Add((paramBase, "String", value ?? string.Empty));
-                return $"{expr} {sqlOp} {{{paramBase}:String}}";
+                if (!Operators.TryGetValue(op ?? string.Empty, out var sqlOp)) throw new UnknownIdentifierException("Unknown operator.");
+                var (type, typedValue) = FilterValues.Coerce(category, column, value ?? "", field);
+                parameters.Add((paramBase, type, typedValue));
+                return $"{expr} {sqlOp} {{{paramBase}:{type}}}";
             }
         }
     }
@@ -406,7 +395,7 @@ public sealed class ClickHouseGateway
     /// conditions. The filter count is validated upstream by <see cref="RequestRules"/>.
     /// </summary>
     internal static string BuildSingleTableFilters(
-        IReadOnlyList<AggregateFilter> filters,
+        IReadOnlyList<StatFilter> filters,
         IReadOnlyDictionary<string, ColumnInfo> byName,
         List<(string Name, string Type, object Value)> parameters)
     {
@@ -414,23 +403,8 @@ public sealed class ClickHouseGateway
         for (var i = 0; i < filters.Count; i++)
         {
             var f = filters[i];
-            if (string.IsNullOrEmpty(f.Column) || !byName.TryGetValue(f.Column, out var ci))
-                throw new UnknownIdentifierException("Unknown column.");
-            if (!Operators.TryGetValue(f.Op, out var op))
-                throw new UnknownIdentifierException("Unknown operator.");
-
-            var name = $"p{i}";
-            if (ci.Category == ClickHouseType.Numeric
-                && double.TryParse(f.Value, NumberStyles.Any, CultureInfo.InvariantCulture, out var num))
-            {
-                parameters.Add((name, "Float64", num));
-                conditions.Add($"{Identifier.Quote(f.Column)} {op} {{{name}:Float64}}");
-            }
-            else
-            {
-                parameters.Add((name, "String", f.Value ?? string.Empty));
-                conditions.Add($"{Identifier.Quote(f.Column)} {op} {{{name}:String}}");
-            }
+            if (string.IsNullOrEmpty(f.Column) || !byName.TryGetValue(f.Column, out var ci)) throw new UnknownIdentifierException("Unknown column.");
+            conditions.Add(BuildCondition(f.Op, $"p{i}", Identifier.Quote(f.Column), ci.Category, f.Column, $"filters[{i}]", f.Value, f.Values, parameters));
         }
         return conditions.Count > 0 ? " WHERE " + string.Join(" AND ", conditions) : string.Empty;
     }
@@ -569,7 +543,7 @@ public sealed class ClickHouseGateway
         foreach (var (name, type, value) in parameters) cmd.AddParameter(name, type, value);
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);
-        var doub = (int i) => reader.IsDBNull(i) ? 0d : Convert.ToDouble(reader.GetValue(i), CultureInfo.InvariantCulture);
+        var doub = (int i) => reader.IsDBNull(i) ? double.NaN : Convert.ToDouble(reader.GetValue(i), CultureInfo.InvariantCulture);
         var binsOut = new List<HistogramBin>();
         while (await reader.ReadAsync(ct))
             binsOut.Add(new HistogramBin(doub(1), doub(2),
@@ -618,12 +592,14 @@ public sealed class ClickHouseGateway
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         var b = hasDim ? 1 : 0; // column offset for the stats when a label column is present
-        var doub = (int i) => reader.IsDBNull(i) ? 0d : Convert.ToDouble(reader.GetValue(i), CultureInfo.InvariantCulture);
+        var doub = (int i) => reader.IsDBNull(i) ? double.NaN : Convert.ToDouble(reader.GetValue(i), CultureInfo.InvariantCulture);
         var groups = new List<BoxPlotGroup>();
         while (await reader.ReadAsync(ct))
         {
             var label = hasDim ? (reader.IsDBNull(0) ? null : reader.GetValue(0)?.ToString()) : null;
-            groups.Add(new BoxPlotGroup(label, doub(b), doub(b + 1), doub(b + 2), doub(b + 3), doub(b + 4)));
+            double lo = doub(b), q1 = doub(b + 1), med = doub(b + 2), q3 = doub(b + 3), hi = doub(b + 4);
+            if (!new[] { lo, q1, med, q3, hi }.All(double.IsFinite)) continue; // a no-row group yields nan
+            groups.Add(new BoxPlotGroup(label, lo, q1, med, q3, hi));
         }
         var truncated = TrimProbeRow(groups, limit);
         return new BoxPlotResult(groups, truncated);
@@ -715,10 +691,15 @@ public sealed class ClickHouseGateway
         // an implicit count() so every view (bar/line/KPI) has a value to plot.
         var measExprs = new List<string>();
         var measNames = new List<string>();
+        var measNumeric = new List<bool>();
         foreach (var m in req.Measures ?? [])
         {
             var mAgg = (m.Agg ?? "count").ToLowerInvariant();
             if (!Aggregations.Contains(mAgg)) throw new UnknownIdentifierException("Unknown aggregation.");
+            var category = mAgg == "count" ? ClickHouseType.Numeric : (await ColumnsOf(m.Db, m.Table)).GetValueOrDefault(m.Column, ClickHouseType.Other);
+            if (mAgg is "sum" or "avg" && category != ClickHouseType.Numeric)
+                throw new RequestValidationException($"{mAgg} needs a numeric column — {m.Column} is {category}.", "measures");
+            measNumeric.Add(mAgg is "count" or "countdistinct" or "sum" or "avg" || category == ClickHouseType.Numeric);
             if (mAgg == "count")
             {
                 measExprs.Add("count()");
@@ -739,6 +720,7 @@ public sealed class ClickHouseGateway
         {
             measExprs.Add("count()");
             measNames.Add("count");
+            measNumeric.Add(true);
         }
 
         var sql = new StringBuilder("SELECT ");
@@ -754,9 +736,7 @@ public sealed class ClickHouseGateway
         {
             var f = filters[i];
             var expr = await QualifyAsync(f.Db, f.Table, f.Column);      // validates + quotes the column
-            var numeric = categories[Key(f.Db, f.Table)][f.Column] == ClickHouseType.Numeric;
-            var cond = BuildCondition(f.Op, $"p{i}", expr, numeric, f.Value, f.Values, parameters);
-            if (cond.Length > 0) conditions.Add(cond);                    // empty = no-op (empty IN / partial range)
+            conditions.Add(BuildCondition(f.Op, $"p{i}", expr, categories[Key(f.Db, f.Table)][f.Column], f.Column, $"filters[{i}]", f.Value, f.Values, parameters));
         }
         if (conditions.Count > 0) sql.Append(" WHERE ").Append(string.Join(" AND ", conditions));
         if (dimExprs.Count > 0)
@@ -796,16 +776,26 @@ public sealed class ClickHouseGateway
             var keys = new string?[dimExprs.Count];
             for (var i = 0; i < dimExprs.Count; i++)
                 keys[i] = reader.IsDBNull(i) ? null : reader.GetValue(i)?.ToString();
-            var values = new double[measExprs.Count];
+            var values = new object?[measExprs.Count];
             for (var i = 0; i < measExprs.Count; i++)
             {
                 var idx = dimExprs.Count + i;
-                values[i] = reader.IsDBNull(idx) ? 0d : Convert.ToDouble(reader.GetValue(idx), CultureInfo.InvariantCulture);
+                values[i] = reader.IsDBNull(idx) ? null : ToResultValue(reader.GetValue(idx), measNumeric[i]);
             }
             rows.Add(new QueryResultRow(keys, values));
         }
         var truncated = TrimProbeRow(rows, limit);
         return new QueryResult(rowDimNames, colDimNames, measNames, rows, truncated);
+    }
+
+    /// <summary>A measure cell for JSON: finite double, display string for non-numeric min/max, or null
+    /// (SQL NULL, or NaN/∞ from an aggregate over no rows — System.Text.Json can't write those).</summary>
+    internal static object? ToResultValue(object? raw, bool numeric)
+    {
+        if (raw is null or DBNull) return null;
+        if (!numeric) return FormatCell(raw);
+        var d = Convert.ToDouble(raw, CultureInfo.InvariantCulture);
+        return double.IsFinite(d) ? d : null;
     }
 
     /// <summary>Confirm a table exists in a database for this connection (validates the db too).</summary>
@@ -819,13 +809,15 @@ public sealed class ClickHouseGateway
 
     // Reduce a cell value to a display string. Numbers use the invariant culture; arrays/tuples/maps
     // render compactly; byte blobs become hex. Nulls are handled by the caller (kept as JSON null).
-    private static string FormatCell(object value) => value switch
+    internal static string FormatCell(object value) => value switch
     {
         string s => s,
         bool b => b ? "true" : "false",
         byte[] bytes => Convert.ToHexString(bytes),
         System.Collections.IEnumerable items and not string =>
             "[" + string.Join(", ", items.Cast<object?>().Select(x => x?.ToString() ?? "NULL")) + "]",
+        DateTime dt => dt.ToString(dt.TimeOfDay == TimeSpan.Zero ? "yyyy-MM-dd" : "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
+        DateTimeOffset dto => dto.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
         IFormattable f => f.ToString(null, System.Globalization.CultureInfo.InvariantCulture),
         _ => value.ToString() ?? string.Empty,
     };

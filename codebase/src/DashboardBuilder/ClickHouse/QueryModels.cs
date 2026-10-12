@@ -50,7 +50,7 @@ public sealed record SortRef(string Column, bool Desc);
 
 /// <summary>One grouped row: the dimension key labels in <c>[rowDim…, colDim…]</c> order, then an
 /// aggregated value per measure (in request order).</summary>
-public sealed record QueryResultRow(IReadOnlyList<string?> Keys, IReadOnlyList<double> Values);
+public sealed record QueryResultRow(IReadOnlyList<string?> Keys, IReadOnlyList<object?> Values);
 
 /// <summary>
 /// A worksheet result. <see cref="RowDimensions"/> and <see cref="ColumnDimensions"/> name the group
