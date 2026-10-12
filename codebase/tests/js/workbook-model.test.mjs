@@ -104,3 +104,58 @@ test("join keys still waiting for their table's columns to load are kept", () =>
   const saved = serializeWorkbook(state);
   assert.deepEqual(saved.entities[0].joinKeys, ["customer_id"]);
 });
+
+const wbText = (patch) => JSON.stringify({ format: WORKBOOK_FORMAT, version: 1, entities: [], relationships: [], dashboards: [], ...patch });
+const sheetOf = (sheet) => parseWorkbook(wbText({ dashboards: [{ name: "S", sheet }] }));
+const pill = (o = {}) => ({ db: "s", table: "orders", column: "amount", category: "numeric", ...o });
+
+test("a missing or non-numeric version is refused with the right message", () => {
+  assert.throws(() => parseWorkbook(wbText({ version: undefined })), /no valid version number/);
+  assert.throws(() => parseWorkbook(wbText({ version: "1" })), /no valid version number/);
+  assert.throws(() => parseWorkbook(wbText({ version: 2 })), /newer version/);
+});
+test("a clean workbook has no issues", () => assert.deepEqual(sheetOf({ chartType: "line" }).issues, []));
+test("an unknown chart type is reset to Bar and reported", () => {
+  const wb = sheetOf({ chartType: "radar" });
+  assert.equal(wb.dashboards[0].sheet.chartType, "bar"); assert.match(wb.issues[0], /radar/);
+});
+test("out-of-range format values are reset and reported", () => {
+  const wb = sheetOf({ format: { decimals: 99, topN: "abc", legend: "middle" } });
+  const f = wb.dashboards[0].sheet.format;
+  assert.equal(f.decimals, null); assert.equal(f.topN, null); assert.equal(f.legend, "auto");
+  assert.equal(wb.issues.length, 3);
+});
+test("a null pill is dropped and reported; a wrong aggregation is reset", () => {
+  const wb = sheetOf({ rows: [null, pill({ category: "text", agg: "sum" })] });
+  assert.equal(wb.dashboards[0].sheet.rows.length, 1);
+  assert.equal(wb.dashboards[0].sheet.rows[0].agg, "count");
+  assert.equal(wb.issues.length, 2);
+});
+test("a drill without a depth is cleared and reported", () => {
+  const wb = sheetOf({ drill: { levels: [pill(), pill({ column: "x" })], path: [] } });
+  assert.equal(wb.dashboards[0].sheet.drill, null); assert.equal(wb.issues.length, 1);
+});
+test("a drill with more than 6 levels keeps the first 6 and reports it", () => {
+  const levels = Array.from({ length: 8 }, (_, i) => pill({ column: `c${i}` }));
+  const wb = sheetOf({ drill: { levels, depth: 0, path: [] } });
+  assert.equal(wb.dashboards[0].sheet.drill.levels.length, 6);
+  assert.ok(wb.issues.some((i) => /drill kept the first 6 levels\./.test(i)));
+});
+test("a filter without a category survives with no issue; a bad category is rejected", () => {
+  const f = { db: "s", table: "orders", column: "amount", op: "=", value: "5" };
+  const wb = sheetOf({ filters: [f, { ...f, category: "weird" }] });
+  assert.equal(wb.dashboards[0].sheet.filters.length, 1);
+  assert.equal(wb.dashboards[0].sheet.filters[0].category, undefined);
+  assert.equal(wb.issues.length, 1);
+  assert.deepEqual(sheetOf({ filters: [f] }).issues, []);
+});
+test("bloated files are capped with an issue", () => {
+  const wb = parseWorkbook(wbText({ dashboards: Array.from({ length: 60 }, () => ({ name: "D", sheet: { rows: Array(25).fill(pill()) } })) }));
+  assert.equal(wb.dashboards.length, 50); assert.equal(wb.dashboards[0].sheet.rows.length, 20);
+  assert.ok(wb.issues.some((i) => /first 50 dashboards/.test(i)));
+});
+test("duplicate entity ids and duplicate tables are skipped and reported", () => {
+  const e = { id: "a", db: "s", table: "t", x: 0, y: 0, joinKeys: [] };
+  const wb = parseWorkbook(wbText({ entities: [e, { ...e }, { ...e, id: "b" }] }));
+  assert.equal(wb.entities.length, 1); assert.equal(wb.issues.length, 2);
+});

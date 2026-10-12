@@ -2,7 +2,7 @@ import {
   entities, relationships, dashboards, bus, activeDashboardId,
   createDashboard, updateSheet, closeDashboard, showModel, switchDashboard,
 } from "../Core/store.js";
-import { toast, confirmDialog, toggle } from "../Core/ui.js";
+import { toast, confirmDialog, toggle, listDialog } from "../Core/ui.js";
 import { addEntity, clearModel } from "../Canvas/canvas.js";
 import { restoreRelationship } from "../Relations/relations.js";
 import { serializeWorkbook, parseWorkbook, storageKey } from "./workbook-model.js";
@@ -53,8 +53,10 @@ function onConnection(view) {
     if (!wb.entities.length && !wb.dashboards.length) return;
     openWorkbook(wb);
     toast(`Restored your last workbook (${count(wb.entities.length, "table")}, ${count(wb.dashboards.length, "dashboard")}).`, "ok");
-  } catch {
-    // A corrupt or newer-format entry: leave it in place and start empty.
+    if (wb.issues.length) toast(`Restored your last workbook — ${wb.issues.length} part(s) were reset.`, "info");
+  } catch (err) {
+    try { localStorage.setItem(`${key}:backup-${new Date().toISOString()}`, saved); } catch { /* storage full or blocked */ }
+    toast(`Couldn't restore your saved workbook (${err.message}). A backup copy was kept in this browser.`, "danger");
   }
 }
 
@@ -107,6 +109,9 @@ function openWorkbook(wb) {
     });
     if (wb.active !== null && opened[wb.active]) switchDashboard(opened[wb.active].id);
     else showModel();
+  } catch (err) {
+    console.error(err);
+    toast("Part of the workbook couldn't be opened — check the dashboards.", "danger");
   } finally {
     restoring = false;
   }
@@ -140,7 +145,10 @@ async function importFile(input) {
     if (!ok) return;
   }
   openWorkbook(wb);
-  toast(`Opened ${file.name}.`, "ok");
+  if (wb.issues.length) {
+    await listDialog(`Opened ${file.name} with ${wb.issues.length} issue(s)`,
+      wb.issues.slice(0, 20).concat(wb.issues.length > 20 ? [`…and ${wb.issues.length - 20} more.`] : []));
+  } else toast(`Opened ${file.name}.`, "ok");
 }
 
 // --- helpers -----------------------------------------------------------------
