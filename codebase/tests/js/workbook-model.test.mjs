@@ -194,3 +194,8 @@ test("a non-string filter value keeps the filter, resets the value and reports i
   assert.equal(wb.dashboards[0].sheet.filters[0].value, "");
   assert.equal(wb.issues.length, 1);
 });
+test("a dashboard with no name falls back with the required-field message", () => {
+  const wb = parseWorkbook(wbText({ dashboards: [{ sheet: {} }] }));
+  assert.equal(wb.dashboards[0].name, "Dashboard");
+  assert.ok(wb.issues.some((i) => /Tab name is required/.test(i)));
+});

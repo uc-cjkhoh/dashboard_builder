@@ -108,7 +108,8 @@ export function parseWorkbook(source) {
     list.length = LIMITS.dashboards;
   }
   const dashboards = list.map((d) => {
-    const r = typeof d.name === "string" ? text(d.name, { label: "Tab name", max: LIMITS.tabName, required: true })
+    const r = d.name == null || typeof d.name === "string"
+      ? text(d.name, { label: "Tab name", max: LIMITS.tabName, required: true })
       : { ok: false, error: "The dashboard name must be text." };
     let name = "Dashboard";
     if (r.ok) name = r.value;

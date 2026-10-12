@@ -57,9 +57,8 @@ function onConnection(view) {
   if (wb.issues.length) toast(`Restored your last workbook — ${wb.issues.length} part(s) were reset.`, "info");
 }
 
-/** A saved workbook that can't be read: keep a backup copy if there is room, and never autosave over it. */
+/** A saved workbook that can't be read: keep a backup copy if there is room; autosave is blocked only when no backup could be kept. */
 function keepUnreadable(saved, err) {
-  blockedKey = key;
   const prefix = `${key}:backup-`;
   let kept = false;
   try {
@@ -71,9 +70,12 @@ function keepUnreadable(saved, err) {
   } catch { /* storage full or blocked */ }
   const reason = String(err.message ?? "").replace(/\.$/, "");
   toast(kept
-    ? `Couldn't restore your saved workbook: ${reason}. A backup copy was kept in this browser.`
+    ? `Couldn't restore your saved workbook: ${reason}. A backup copy was kept in this browser, and saving continues normally.`
     : `Couldn't restore your saved workbook: ${reason}. No backup copy could be kept, so the stored workbook was left untouched.`, "danger");
-  setStatus("⚠ Not saved — your previous workbook couldn't be read and has been left untouched. Use Export to keep a copy.");
+  if (!kept) {
+    blockedKey = key; // no backup exists, so the unreadable entry is the only copy — never overwrite it
+    setStatus("⚠ Not saved — your previous workbook couldn't be read and has been left untouched. Use Export to keep a copy.");
+  }
 }
 
 function scheduleSave() {
