@@ -10,7 +10,7 @@ public static class ApiLimits
 {
     public const int MaxBodyBytes = 256 * 1024;
     public const int MaxHostLength = 253, MaxUserLength = 64, MaxPasswordLength = 256;
-    public const int MaxDimensions = 12, MaxMeasures = 10, MaxJoins = 10, MaxFilters = 8;
+    public const int MaxDimensions = 12, MaxMeasures = 10, MaxJoins = 10, MaxFilters = 16; // user filters (client cap 8) + drill path + page + selection
     public const int MaxInValues = 500, MaxFilterValueLength = 1000;
     public const int MaxRowLimit = 500, MaxBuckets = 100, MaxDistinct = 1000;
 }

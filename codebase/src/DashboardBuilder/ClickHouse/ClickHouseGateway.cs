@@ -403,7 +403,7 @@ public sealed class ClickHouseGateway
     /// is looked up in <paramref name="byName"/> (unknown → 400), each operator whitelisted, and each
     /// value bound (numeric columns as Float64 when the value parses, else String) — never interpolated.
     /// Returns the clause **including** a leading <c>" WHERE "</c>, or an empty string when there are no
-    /// conditions. At most 8 filters are honoured.
+    /// conditions. The filter count is validated upstream by <see cref="RequestRules"/>.
     /// </summary>
     internal static string BuildSingleTableFilters(
         IReadOnlyList<AggregateFilter> filters,
