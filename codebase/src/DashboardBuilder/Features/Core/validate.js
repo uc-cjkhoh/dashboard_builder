@@ -5,11 +5,17 @@ export const LIMITS = Object.freeze({
   host: 253, user: 64, password: 256, tabName: 60, axisTitle: 80, filterValue: 1000,
   // The user's OWN filters. The server allows 16 per query (these + drill path + page + selection).
   filters: 8,
+  sharedFilters: 4, // P40: filters shared by every dashboard (server MaxFilters 20 = 8 + 4 + drill 5 + page + selection + date range)
+  fieldChoices: 8,
+  bookmarks: 30,
+  fieldSettings: 2000, // P28: renamed / hidden / default-aggregation fields per workbook    // P39: saved views per workbook  // P40: alternative fields one shelf slot can switch between
   inValues: 500, dashboards: 50, pillsPerShelf: 20,
   entities: 100,       // tables on the canvas a workbook may open
   relationships: 200,  // links a workbook may open
   dimensions: 12, measures: 10, // per view (server MaxDimensions / MaxMeasures)
   drillLevels: 6, // keeps user filters (8) + drill path (≤5) + page + selection within the server's 16
+  rows: 5000, // groups one chart query returns: Top-N "All" (server MaxRowLimit); the Table pages instead
+  exportRows: 100000, // rows in a CSV export (server MaxExportRows)
 });
 export const HOST_MESSAGES = Object.freeze({
   scheme: "Enter the host name only — no http:// or https://.",

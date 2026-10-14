@@ -3,11 +3,22 @@
 <section class="view view--dashboard" id="dashboard-view" aria-label="Worksheet" hidden>
     <div class="worksheet">
         <aside class="ws-fields" id="ws-fields" aria-label="Fields"></aside>
+        <!-- Drag (or ←/→) to resize the field pane (Core/resizer.js); width remembered in this browser. -->
+        <div class="resizer ws-fields__resizer" id="ws-fields-resizer" role="separator"
+             aria-orientation="vertical" aria-controls="ws-fields" aria-label="Resize field list" tabindex="0"></div>
         <div class="ws-main">
+            @* Data controls: Columns, Rows, Marks (+ the open tool's editor). *@
             <div class="ws-shelves" id="ws-shelves"></div>
-            @* Result notices, e.g. "Showing the top 50 — more exist" (toggled via `hidden`). *@
-            <p class="ws-status" id="ws-status" role="status" aria-live="polite" hidden></p>
-            <div class="ws-chart" id="ws-chart"></div>
+            <div class="ws-chart-card">
+                @* View controls for this chart: type picker · sort · format · export · refresh (+ Format card). *@
+                <div class="ws-chart-head" id="ws-chart-head"></div>
+                @* Result notice at the top of the card, e.g. "Showing the top 50 — more exist" (toggled via
+                   `hidden`). A sibling of #ws-chart, so a re-render of the chart pane never wipes it. *@
+                <p class="ws-chart-notice" id="ws-chart-notice" role="status" aria-live="polite" hidden></p>
+                <div class="ws-chart" id="ws-chart"></div>
+                @* P23 status bar: marks · rows × columns · measures · selection (toggled via `hidden`). *@
+                <p class="ws-statusbar" id="ws-statusbar" role="status" aria-live="polite" hidden></p>
+            </div>
         </div>
     </div>
 </section>

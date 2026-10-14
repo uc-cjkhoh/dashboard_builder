@@ -73,13 +73,19 @@ test("no notice when the result is complete", () => {
 
 test("a truncated chart says how many are shown and how to see more", () => {
   const note = truncationNotice({ truncated: true, chartType: "bar", limit: 50 });
-  assert.match(note, /top 50/);
+  assert.match(note, /first 50 in sort order/);
   assert.match(note, /Top-N/);
 });
 
+test("a chart at the 5,000 cap (Top-N All) doesn't suggest raising Top-N", () => {
+  const note = truncationNotice({ truncated: true, chartType: "bar", limit: 5000 });
+  assert.match(note, /first 5,000 in sort order/);
+  assert.doesNotMatch(note, /Top-N/);
+});
+
 test("a truncated table says how many rows are shown", () => {
-  const note = truncationNotice({ truncated: true, chartType: "table", limit: 500 });
-  assert.match(note, /first 500 rows/);
+  const note = truncationNotice({ truncated: true, chartType: "table", limit: 5000 });
+  assert.match(note, /first 5,000 rows/);
 });
 
 test("going back to an earlier request is served from the cache (e.g. paging back)", () => {

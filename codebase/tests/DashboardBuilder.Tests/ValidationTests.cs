@@ -34,12 +34,12 @@ public class ValidationTests
     private static string? FieldOf(QueryRequest q) => Assert.Throws<RequestValidationException>(() => RequestRules.ValidateQuery(q)).Field;
 
     [Fact] public void At_the_limits_a_query_passes()
-        => RequestRules.ValidateQuery(Q(dims: 12, measures: 10, joins: 10, filters: Enumerable.Repeat(F(), 16).ToArray(), limit: 500));
+        => RequestRules.ValidateQuery(Q(dims: 12, measures: 10, joins: 10, filters: Enumerable.Repeat(F(), 20).ToArray(), limit: 5000));
     [Fact] public void Thirteen_dimensions_are_rejected() => Assert.Equal("rowDimensions", FieldOf(Q(dims: 13)));
     [Fact] public void Eleven_measures_are_rejected() => Assert.Equal("measures", FieldOf(Q(measures: 11)));
     [Fact] public void Eleven_joins_are_rejected() => Assert.Equal("joins", FieldOf(Q(joins: 11)));
-    [Fact] public void Seventeen_filters_are_rejected_not_dropped() => Assert.Equal("filters", FieldOf(Q(filters: Enumerable.Repeat(F(), 17).ToArray())));
-    [Theory] [InlineData(0)] [InlineData(501)] public void Out_of_range_limits_are_rejected(int limit) => Assert.Equal("limit", FieldOf(Q(limit: limit)));
+    [Fact] public void Twenty_one_filters_are_rejected_not_dropped() => Assert.Equal("filters", FieldOf(Q(filters: Enumerable.Repeat(F(), 21).ToArray())));
+    [Theory] [InlineData(0)] [InlineData(5001)] public void Out_of_range_limits_are_rejected(int limit) => Assert.Equal("limit", FieldOf(Q(limit: limit)));
     [Fact] public void Valid_in_and_between_filters_pass()
         => RequestRules.ValidateQuery(Q(filters: [F("in", null, ["a", "b"]), F("between", null, ["1", "9"])]));
     [Fact] public void An_unknown_operator_is_rejected() => Assert.Equal("filters[0].op", FieldOf(Q(filters: [F("LIKE")])));

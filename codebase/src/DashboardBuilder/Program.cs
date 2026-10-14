@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc.Razor;
+using Microsoft.AspNetCore.ResponseCompression;
+using System.IO.Compression;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.FileProviders;
 
@@ -49,8 +51,23 @@ builder.Services.AddSession(options =>
 });
 builder.Services.AddHttpContextAccessor();
 
+// Compress API responses (JSON results and CSV export shrink 5–10×; a table page or a 5,000-group
+// chart is mostly repeated keys). Fastest level: the win is bytes on the wire, not ratio. HTTPS is on
+// because the API carries no secrets to leak through compression (no tokens; credentials never sent back).
+builder.Services.AddResponseCompression(o =>
+{
+    o.EnableForHttps = true;
+    o.Providers.Add<BrotliCompressionProvider>();
+    o.Providers.Add<GzipCompressionProvider>();
+    o.MimeTypes = ResponseCompressionDefaults.MimeTypes.Concat(["text/csv"]);
+});
+builder.Services.Configure<BrotliCompressionProviderOptions>(o => o.Level = CompressionLevel.Fastest);
+builder.Services.Configure<GzipCompressionProviderOptions>(o => o.Level = CompressionLevel.Fastest);
+
 // Session-scoped connection store + the read-only ClickHouse gateway.
 builder.Services.AddScoped<ConnectionRegistry>();
+// P33: worksheet results are reused for a minute per server + user + request (bounded: ~256 units).
+builder.Services.AddMemoryCache(o => o.SizeLimit = 256);
 builder.Services.AddScoped<ClickHouseGateway>();
 
 var app = builder.Build();
@@ -66,6 +83,7 @@ if (!string.IsNullOrWhiteSpace(pathBase))
 }
 
 // One error shape for everything a controller doesn't catch, and a hard cap on API body size.
+app.UseResponseCompression();
 app.UseExceptionHandler(new ExceptionHandlerOptions { ExceptionHandler = ApiErrors.WriteUnhandledAsync });
 app.UseApiBodyLimit();
 

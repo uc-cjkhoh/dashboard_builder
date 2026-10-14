@@ -30,9 +30,10 @@ public sealed class QueryController : ApiControllerBase
     public Task<IResult> ExportCsv([FromBody] QueryRequest request, CancellationToken ct)
         => RunAsync(async info =>
         {
-            RequestRules.ValidateQuery(request);
-            // Same bounded, identifier-safe worksheet query as /api/query — just serialised to CSV.
-            var result = await Gateway.QueryAsync(info, request, ct);
+            RequestRules.ValidateQuery(request, ApiLimits.MaxExportRows);
+            // Same bounded, identifier-safe worksheet query as /api/query — just serialised to CSV, with a
+            // higher row cap (the whole result, up to 100,000 rows) and never an "Other" row.
+            var result = await Gateway.QueryAsync(info, request with { OtherBucket = false, WithTotal = false }, ct, ApiLimits.MaxExportRows);
             var csv = CsvUtil.FromQueryResult(result);
             return Results.Text(csv, "text/csv", System.Text.Encoding.UTF8);
         });

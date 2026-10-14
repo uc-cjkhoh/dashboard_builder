@@ -138,7 +138,7 @@ export function initConnection() {
       const view = await api.disconnect();
       applyState(view);
       passEl.value = "";
-      toast("Disconnected.", "info");
+      toast("Disconnected — your tables and dashboards come back when you reconnect.", "info");
     } catch (err) {
       toast(err.message, "danger");
     }

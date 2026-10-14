@@ -14,7 +14,8 @@ public class TruncationTests
     [InlineData(null, 51)]   // default limit 50 + probe row
     [InlineData(10, 11)]
     [InlineData(0, 2)]       // clamped up to 1
-    [InlineData(100000, 501)] // clamped down to 500
+    [InlineData(5000, 5001)]  // "All" / Table ask for the cap
+    [InlineData(100000, 5001)] // clamped down to 5000
     public void The_sql_limit_is_the_clamped_limit_plus_one_probe_row(int? requested, int expected)
         => Assert.Equal(expected, ClickHouseGateway.ProbeLimit(requested));
 

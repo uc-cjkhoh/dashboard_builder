@@ -48,6 +48,12 @@
   user-select: none;
 }
 .entity--dragging .entity__head { cursor: grabbing; }
+/* Ghost icon buttons are 32px boxes around a 16px glyph: pull them out by the 8px slack so the glyphs,
+   not the boxes, align — chevron over the row checkboxes, ✕ flush with the type badges. */
+.entity__head > .iconbtn:first-child { margin-left: calc(-1 * var(--s2)); }
+.entity__head > .iconbtn:last-child { margin-right: calc(-1 * var(--s2)); }
+/* Title text starts where the column names do (checkbox + key icon below = chevron box + 12px). */
+.entity__head > .entity__title { padding-left: var(--s3); }
 .entity__db { color: var(--ink-3); font-weight: 400; }
 .entity__table { font-weight: 600; }
 .col-row__keyicon { flex: none; color: var(--accent-ink); }
@@ -62,7 +68,7 @@
 .col-row:hover { background: var(--surface-2); }
 .data tbody tr { transition: background var(--dur) var(--ease); }
 .data tbody tr:hover { background: var(--surface-2); }
-.col-row__key { flex: none; }
+.col-row__key { flex: none; width: 14px; height: 14px; margin: 0; }
 .col-row__name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .col-row--key .col-row__name { color: var(--accent-ink); font-weight: 600; }
 .col-row__type {

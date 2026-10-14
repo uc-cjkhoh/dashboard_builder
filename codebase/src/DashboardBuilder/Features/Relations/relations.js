@@ -85,7 +85,7 @@ function onConnectorClick(entityId, column, handle) {
   clearPending();
   openCardinalityDialog({
     current: "1:N",
-    onPick: (cardinality) => createRelationship(from, to, cardinality),
+    onPick: (cardinality, joinType) => createRelationship(from, to, cardinality, joinType),
   });
 }
 
@@ -95,18 +95,18 @@ function clearPending() {
 }
 
 // --- relationship lifecycle ---------------------------------------------------
-function createRelationship(from, to, cardinality) {
+function createRelationship(from, to, cardinality, joinType = "inner") {
   const id = `rel#${++seq}`;
-  relationships.set(id, { id, from, to, cardinality });
+  relationships.set(id, { id, from, to, cardinality, joinType });
   emit("rel:changed", { id });
   select(id);
   render();
 }
 
 /** Recreate a saved relationship (workbook open). Drawn once both endpoints' key rows exist. */
-export function restoreRelationship(from, to, cardinality) {
+export function restoreRelationship(from, to, cardinality, joinType = "inner") {
   const id = `rel#${++seq}`;
-  relationships.set(id, { id, from, to, cardinality });
+  relationships.set(id, { id, from, to, cardinality, joinType });
   emit("rel:changed", { id });
   render();
 }
@@ -181,10 +181,12 @@ function endMarker(p, u, kind) {
 
 function badge(rel, mid) {
   const g = svgEl("g", { class: "rel-badge" });
-  const w = 34, h = 18;
+  // P31: a left join says so on the badge ("1:N · left") — words, not a colour.
+  const label = rel.joinType === "left" ? `${rel.cardinality} · left` : rel.cardinality;
+  const w = rel.joinType === "left" ? 64 : 34, h = 18;
   g.append(
     svgEl("rect", { x: mid.x - w / 2, y: mid.y - h / 2, width: w, height: h, rx: 5 }),
-    svgEl("text", { x: mid.x, y: mid.y, "text-anchor": "middle", "dominant-baseline": "central" }, rel.cardinality),
+    svgEl("text", { x: mid.x, y: mid.y, "text-anchor": "middle", "dominant-baseline": "central" }, label),
   );
   return g;
 }
@@ -194,7 +196,8 @@ function editRelationship(rel) {
   select(rel.id);
   openCardinalityDialog({
     current: rel.cardinality,
-    onPick: (cardinality) => { rel.cardinality = cardinality; emit("rel:changed", { id: rel.id }); render(); },
+    joinType: rel.joinType ?? "inner",
+    onPick: (cardinality, joinType) => { rel.cardinality = cardinality; rel.joinType = joinType; emit("rel:changed", { id: rel.id }); render(); },
     onDelete: () => { relationships.delete(rel.id); emit("rel:changed", { id: rel.id }); select(null); render(); },
   });
 }
@@ -205,7 +208,7 @@ function select(id) {
 }
 
 // --- cardinality dialog -------------------------------------------------------
-function openCardinalityDialog({ current = "1:N", onPick, onDelete }) {
+function openCardinalityDialog({ current = "1:N", joinType = "inner", onPick, onDelete }) {
   const dlg = document.createElement("dialog");
   dlg.className = "dialog dialog--sm";
 
@@ -215,11 +218,29 @@ function openCardinalityDialog({ current = "1:N", onPick, onDelete }) {
 
   const body = document.createElement("div");
   body.className = "dialog__body";
+  // P31: how the second table joins — Inner (only matching rows) or Left (keep the rows of the tables
+  // already in the view even with no match). Pick it first; picking a cardinality saves both.
+  let join = joinType;
+  const joinRow = document.createElement("fieldset");
+  joinRow.className = "join-choice";
+  const legend = document.createElement("legend");
+  legend.textContent = "Join";
+  joinRow.append(legend);
+  for (const [v, text] of [["inner", "Inner — only rows that match"], ["left", "Left — keep rows with no match"]]) {
+    const lab = document.createElement("label");
+    lab.className = "form-check";
+    const r = document.createElement("input");
+    r.type = "radio"; r.name = "join-type"; r.value = v; r.checked = v === join;
+    r.addEventListener("change", () => { if (r.checked) join = v; });
+    lab.append(r, document.createTextNode(` ${text}`));
+    joinRow.append(lab);
+  }
+  body.append(joinRow);
   const choices = document.createElement("div");
   choices.className = "card-choices";
   for (const c of CARDINALITIES) {
     const b = makeButton(c, `card-choice${c === current ? " is-active" : ""}`);
-    b.addEventListener("click", () => { closeDialog(dlg); onPick(c); });
+    b.addEventListener("click", () => { closeDialog(dlg); onPick(c, join); });
     choices.append(b);
   }
   body.append(choices);

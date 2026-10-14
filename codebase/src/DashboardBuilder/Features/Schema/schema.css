@@ -8,22 +8,28 @@
   gap: var(--s2);
   overflow: auto;          /* the list scrolls internally; the page never does */
   min-height: 0;
-  padding: 2px;            /* room for chip shadows */
+  padding: 2px;            /* room for chip shadows… */
+  margin-inline: -2px;     /* …without insetting the chips from the 20px gutter (edges match the search box) */
 }
+/* Tier-2 glass control on the glass sidebar: frosted fill + ≥ 3:1 edge + rim; lifts on hover, sinks on
+   press, floats while dragged. A grip appears on hover / focus as the drag affordance. */
 .table-chip {
   display: flex;
   align-items: center;
   gap: var(--s2);
-  padding: var(--s2) var(--s3);
-  background: var(--surface);
-  border: 1px solid var(--line);
+  min-height: 40px;
+  padding: var(--s1) var(--s1) var(--s1) var(--s2);
+  background: var(--glass-ctl);
+  border: 1px solid var(--ctl-edge);
   border-radius: var(--r-ctl);
+  box-shadow: inset 0 1px 0 var(--glass-rim), var(--elev-2);
   color: var(--ink-2);
   font-size: var(--fs-sm);
   font-weight: 500;
   cursor: grab;
   animation: rise-in var(--dur) var(--ease) both;
-  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease),
+              box-shadow var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease), opacity var(--dur-fast) var(--ease);
 }
 /* Stagger the chip entrance for a lively list reveal. */
 .table-chip:nth-child(1) { animation-delay: 20ms; }
@@ -33,10 +39,18 @@
 .table-chip:nth-child(5) { animation-delay: 120ms; }
 .table-chip:nth-child(6) { animation-delay: 145ms; }
 .table-chip:nth-child(n+7) { animation-delay: 170ms; }
-.table-chip:hover { background: var(--surface-3); color: var(--ink); }
-.table-chip--dragging { opacity: .55; cursor: grabbing; background: var(--surface-3); color: var(--ink); }
+.table-chip:hover, .table-chip:focus-within { background: var(--glass-ctl-hover); border-color: var(--ink-3); color: var(--ink);
+  box-shadow: inset 0 1px 0 var(--glass-rim), var(--elev-8); }
+.table-chip:active { transform: scale(.98); box-shadow: inset 0 1px 0 var(--glass-rim); }
+.table-chip--dragging { cursor: grabbing; opacity: .85; border-color: var(--accent); color: var(--ink); box-shadow: var(--elev-16); }
+.table-chip__grip { color: var(--ink-2); opacity: 0; width: 14px; margin-right: calc(-1 * var(--s1)); transition: opacity var(--dur-fast) var(--ease); }
+.table-chip:hover .table-chip__grip, .table-chip:focus-within .table-chip__grip, .table-chip--dragging .table-chip__grip { opacity: 1; }
 .table-chip__icon { color: var(--ink-3); transition: color var(--dur) var(--ease); }
-.table-chip:hover .table-chip__icon { color: var(--accent); }
+.table-chip:hover .table-chip__icon, .table-chip--dragging .table-chip__icon { color: var(--accent); }
+.table-chip__grip svg { stroke-width: 3; }
+/* Inset ring: the + sits near the chip edge, so an outside ring would collide with the chip border. */
+.table-chip .iconbtn:focus-visible { outline-offset: -2px; }
+@media (pointer: coarse) { .table-chip { min-height: 44px; } .table-chip__grip { opacity: 1; } }
 .table-chip__name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .table-list .empty { color: var(--ink-3); font-size: var(--fs-sm); padding: var(--s2); }
 

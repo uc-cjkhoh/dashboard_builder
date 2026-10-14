@@ -1,9 +1,15 @@
 import {
   entities, relationships, dashboards, bus, activeDashboardId,
-  createDashboard, updateSheet, closeDashboard, showModel, switchDashboard,
+  createDashboard, updateSheet, closeDashboard, showModel, switchDashboard, currentTheme, setTheme,
+  sharedFilters, setSharedFilters, bookmarks, setBookmarks, fieldMeta, setAllFieldMeta, parameters, setParameters,
 } from "../Core/store.js";
+import { DEFAULT_THEME } from "../Core/theme-model.js";
+import { openThemeDialog } from "./theme-dialog.js";
+import { saveBookmarkDialog, openBookmarksDialog } from "./bookmarks-dialog.js";
+import { openParametersDialog } from "./parameters-dialog.js";
 import { icon } from "../Core/icons.js";
 import { wireMenu } from "../Core/menu.js";
+import { exit } from "../Core/motion.js";
 import { toast, confirmDialog, toggle, listDialog } from "../Core/ui.js";
 import { addEntity, clearModel } from "../Canvas/canvas.js";
 import { restoreRelationship } from "../Relations/relations.js";
@@ -11,13 +17,14 @@ import { serializeWorkbook, parseWorkbook, storageKey } from "./workbook-model.j
 
 // Workbook: the whole builder state survives a reload. It auto-saves to this browser's storage —
 // one workbook per connected server + user — and reopens on the next connect when the canvas is
-// empty. Export / Import move it as a JSON file. Never stores the connection or a password; there is
+// empty. Disconnecting clears the screen (the saved copy stays, so reconnecting to the same server
+// brings it back). Export / Import move it as a JSON file. Never stores the connection or a password; there is
 // still no server-side database (decision D21).
 const SAVE_DELAY_MS = 500;
 const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
 const CHANGE_EVENTS = [
   "entity:added", "entity:moved", "entity:removed", "joinkey:changed",
-  "rel:changed", "tabs:changed", "dashboard:changed",
+  "rel:changed", "tabs:changed", "dashboard:changed", "theme:changed", "bookmarks:changed", "fields:changed", "parameters:changed",
 ];
 
 let key = null;        // storage key for the connected server + user; null while disconnected
@@ -40,6 +47,10 @@ export function initWorkbook() {
   for (const type of CHANGE_EVENTS) bus.addEventListener(type, scheduleSave);
 
   exportBtn.addEventListener("click", exportFile);
+  document.getElementById("wb-theme")?.addEventListener("click", openThemeDialog);
+  document.getElementById("wb-bookmark-add")?.addEventListener("click", saveBookmarkDialog);
+  document.getElementById("wb-bookmarks")?.addEventListener("click", openBookmarksDialog);
+  document.getElementById("wb-parameters")?.addEventListener("click", openParametersDialog);
   importBtn.addEventListener("click", () => {
     if (!key) { toast("Connect to ClickHouse first — a workbook opens against the connected server.", "info"); return; }
     fileInput.click();
@@ -51,7 +62,8 @@ export function initWorkbook() {
 function onConnection(view) {
   flushSave(); // finish saving under the previous server's key
   key = storageKey(view);
-  if (!key || !isEmpty()) return;
+  if (!key) { clearWorkspace(); return; }
+  if (!isEmpty()) return;
   const saved = readStorage(key);
   if (!saved) return;
   let wb;
@@ -64,6 +76,29 @@ function onConnection(view) {
     listDialog(`Restored your last workbook with ${wb.issues.length} issue(s)`,
       wb.issues.slice(0, 20).concat(wb.issues.length > 20 ? [`…and ${wb.issues.length - 20} more.`] : []));
   } else toast(restored, "ok");
+}
+
+/** Disconnected: fade the cards and dashboard tabs out, then clear the model and close every dashboard.
+ *  Nothing is saved meanwhile (key is null), so the stored workbook for that server is untouched. */
+async function clearWorkspace() {
+  setStatus("");
+  if (isEmpty()) return;
+  const leaving = [...[...entities.values()].map((e) => e.el), ...document.querySelectorAll(".tab:not(.tab--model)")];
+  await Promise.all(leaving.filter(Boolean).map((el) => exit(el, { y: 0, scale: .98 })));
+  if (key) return; // reconnected while fading out — keep the workspace
+  restoring = true;
+  try {
+    clearModel();
+    for (const d of [...dashboards]) closeDashboard(d.id);
+    showModel();
+    setTheme(DEFAULT_THEME); // the saved workbook keeps its theme; it comes back on reconnect
+    setSharedFilters([]);
+    setBookmarks([]);
+    setAllFieldMeta({});
+    setParameters([]);
+  } finally {
+    restoring = false;
+  }
 }
 
 /** A saved workbook that can't be read: keep a backup copy if there is room; autosave is blocked only when no backup could be kept. */
@@ -124,6 +159,9 @@ function openWorkbook(wb) {
   try {
     clearModel();
     for (const d of [...dashboards]) closeDashboard(d.id);
+    setSharedFilters(wb.sharedFilters ?? []); // before the dashboards, so their first query applies them
+    setAllFieldMeta(wb.fields ?? {});
+    setParameters(wb.parameters ?? []); // before the dashboards, so their first query reads them
 
     const ids = new Map(); // saved entity id → new entity id
     for (const e of wb.entities) ids.set(e.id, addEntity(e.db, e.table, e.x, e.y, { joinKeys: e.joinKeys }));
@@ -132,6 +170,7 @@ function openWorkbook(wb) {
         { entityId: ids.get(r.from.entityId), column: r.from.column },
         { entityId: ids.get(r.to.entityId), column: r.to.column },
         r.cardinality,
+        r.joinType,
       );
     }
 
@@ -140,8 +179,11 @@ function openWorkbook(wb) {
       updateSheet(dash.id, d.sheet);
       return dash;
     });
+    // P39: bookmarks point at their dashboard by index; a missing one is recreated when applied.
+    setBookmarks((wb.bookmarks ?? []).map((b) => ({ ...b, dashId: b.dashboard !== null ? opened[b.dashboard]?.id ?? null : null })));
     if (wb.active !== null && opened[wb.active]) switchDashboard(opened[wb.active].id);
     else showModel();
+    setTheme(wb.theme ?? DEFAULT_THEME);
   } catch (err) {
     console.error(err);
     toast("Part of the workbook couldn't be opened — check the dashboards.", "danger");
@@ -189,7 +231,7 @@ async function importFile(input) {
 // --- helpers -----------------------------------------------------------------
 function currentState() {
   const id = activeDashboardId();
-  return { entities, relationships, dashboards, active: id ? { kind: "dashboard", id } : { kind: "model" } };
+  return { entities, relationships, dashboards, active: id ? { kind: "dashboard", id } : { kind: "model" }, theme: currentTheme(), sharedFilters, bookmarks, fieldMeta, parameters };
 }
 
 const isEmpty = () => entities.size === 0 && dashboards.length === 0;

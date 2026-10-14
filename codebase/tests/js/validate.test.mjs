@@ -50,3 +50,4 @@ test("a range needs From ≤ To", () => {
   assert.deepEqual(range("temporal", "2024-01-01", "2024-02-01", "d").value, ["2024-01-01", "2024-02-01"]);
 });
 test("a drill hierarchy is capped at 6 levels", () => assert.equal(LIMITS.drillLevels, 6));
+test("a worksheet query returns at most 5,000 groups (server MaxRowLimit)", () => assert.equal(LIMITS.rows, 5000));

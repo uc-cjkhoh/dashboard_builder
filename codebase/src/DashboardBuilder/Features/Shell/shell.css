@@ -27,7 +27,9 @@
   display: flex;
   align-items: center;
   gap: var(--s3);
-  padding: var(--s4) var(--s4) var(--s3);
+  flex: none;
+  min-height: var(--topbar-h);  /* lines up with .canvas__bar */
+  padding: var(--s2) var(--s5);  /* same 20px gutter as .sidebar__section: mark + toggle align with the content below */
   border-bottom: 1px solid var(--glass-line);
 }
 .sidebar__mark {
@@ -43,6 +45,19 @@
 .sidebar__brand-text { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
 .sidebar__brand-name { font-weight: 700; font-size: var(--fs-body); letter-spacing: .01em; }
 .sidebar__brand-sub { font-size: var(--fs-xs); color: var(--ink-3); }
+/* One line each, so the toggle never pushes the brand taller than --topbar-h. */
+.sidebar__brand-name, .sidebar__brand-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Ghost button: pulled out by its 8px glyph slack so the glyph's edge, not the box's, meets the gutter. */
+.sidebar__toggle { flex: none; margin-left: auto; margin-right: calc(-1 * var(--s2)); }
+/* Connection + schema; hidden (not removed) while the sidebar is collapsed. */
+.sidebar__body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+
+/* Collapsed: a rail as wide as the top bar is tall, holding only the expand button. */
+.app.is-sidebar-collapsed { grid-template-columns: var(--topbar-h) 1fr; }
+.is-sidebar-collapsed .sidebar__brand { justify-content: center; padding-inline: 0; }
+.is-sidebar-collapsed .sidebar__mark,
+.is-sidebar-collapsed .sidebar__brand-text { display: none; }
+.is-sidebar-collapsed .sidebar__toggle { margin-inline: 0; }
 
 .sidebar__section { padding: var(--s4) var(--s5); border-bottom: 1px solid var(--glass-line); }
 .sidebar__section--grow { flex: 1; min-height: 0; display: flex; flex-direction: column; }
@@ -62,27 +77,8 @@
 }
 .sidebar__title-row .sidebar__title { margin-bottom: 0; }
 
-/* Resize handle on the sidebar's right edge (drag → up to 30% of the viewport) */
-.sidebar__resizer {
-  position: absolute;
-  top: 0; right: -3px; bottom: 0;
-  width: 6px;
-  cursor: col-resize;
-  z-index: 3;
-}
-.sidebar__resizer::after {
-  content: "";
-  position: absolute;
-  top: 0; bottom: 0; right: 3px;
-  width: 2px;
-  background: transparent;
-  transition: background var(--dur) var(--ease);
-}
-.sidebar__resizer:hover::after,
-.sidebar__resizer:focus-visible::after,
-body.is-resizing .sidebar__resizer::after { background: var(--accent); }
-.sidebar__resizer:focus-visible { outline: none; }
-body.is-resizing { cursor: col-resize; user-select: none; }
+/* Resize handle on the sidebar's right edge (drag → up to 30% of the viewport); look in core.css .resizer. */
+.sidebar__resizer { position: absolute; top: 0; right: -3px; bottom: 0; z-index: 3; }
 
 /* ---- Canvas (workspace) -------------------------------------------------- */
 .canvas {
@@ -94,6 +90,9 @@ body.is-resizing { cursor: col-resize; user-select: none; }
 }
 /* Each view fills the area below the bar and scrolls on its own. */
 .view { position: relative; flex: 1; min-height: 0; overflow: auto; padding: var(--s5); }
+/* Switching tabs: the incoming view fades in and rises 4px (CSS replays on each un-hide; dashboards.js
+   replays it when one dashboard replaces another in the same view). */
+.view:not([hidden]) { animation: view-in var(--dur) var(--ease-out); }
 .view--model, .view--dashboard { background: transparent; }
 .sr-only {
   position: absolute; width: 1px; height: 1px;
@@ -104,9 +103,10 @@ body.is-resizing { cursor: col-resize; user-select: none; }
 .canvas__bar {
   flex: none;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: var(--s3);
-  padding: var(--s3) var(--s4) 0;
+  min-height: var(--topbar-h);  /* lines up with .sidebar__brand; grows if the tabs wrap */
+  padding: var(--s2) var(--s5);  /* same 20px gutter as .view: tabs + menu align with the content below */
   border-width: 0 0 1px;
   border-radius: 0;
   position: relative; z-index: 3;  /* the Workbook menu must paint above the view below */

@@ -35,13 +35,19 @@
                     <span class="sidebar__brand-name">Dashboard Builder</span>
                     <span class="sidebar__brand-sub">ClickHouse explorer</span>
                 </span>
+                <!-- Collapse to a narrow rail (Shell/sidebar.js); the choice is remembered in this browser. -->
+                <button type="button" class="iconbtn sidebar__toggle" id="sidebar-toggle"
+                        aria-controls="sidebar-body" aria-expanded="true"
+                        aria-label="Collapse sidebar" title="Collapse sidebar"><span data-icon="sidebar"></span></button>
             </div>
 
-            <partial name="~/Features/Connection/_Connection.cshtml" />
-            <partial name="~/Features/Schema/_Schema.cshtml" />
+            <div class="sidebar__body" id="sidebar-body">
+                <partial name="~/Features/Connection/_Connection.cshtml" />
+                <partial name="~/Features/Schema/_Schema.cshtml" />
+            </div>
 
             <!-- Drag to resize the sidebar (up to 30% of the screen). -->
-            <div class="sidebar__resizer" id="sidebar-resizer" role="separator"
+            <div class="resizer sidebar__resizer" id="sidebar-resizer" role="separator"
                  aria-orientation="vertical" aria-label="Resize sidebar" tabindex="0"></div>
         </aside>
 

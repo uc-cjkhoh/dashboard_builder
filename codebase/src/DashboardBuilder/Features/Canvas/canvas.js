@@ -3,6 +3,7 @@ import { api } from "../Core/api.js";
 import { icon } from "../Core/icons.js";
 import { show, hide, toggle, confirmDialog, toast } from "../Core/ui.js";
 import { entities, relationshipsFor, emit, bus, isModelActive, showModel } from "../Core/store.js";
+import { expandSidebar } from "../Shell/sidebar.js";
 
 // Data Model canvas + entity cards. A table dropped from the sidebar (or added via the
 // `table:add` fallback) becomes an entity card: a db.table head over a fixed-height, scrollable
@@ -43,7 +44,7 @@ export function initCanvas() {
     if (emptyTitle) emptyTitle.textContent = st.text;
     if (emptyAction) emptyAction.textContent = st.action;
   };
-  emptyAction?.addEventListener("click", () => { document.getElementById(currentEmpty().focusId)?.focus(); });
+  emptyAction?.addEventListener("click", () => { expandSidebar(); document.getElementById(currentEmpty().focusId)?.focus(); });
   dbSelect?.addEventListener("change", refreshEmpty);
   document.addEventListener("connection:changed", (e) => { connected = Boolean(e.detail?.connected); refreshEmpty(); });
   refreshEmpty();
@@ -76,8 +77,8 @@ export function initCanvas() {
   document.addEventListener("table:add", (event) => {
     const { db, table } = event.detail;
     showModel();
-    const offset = 24 * (entities.size % 8);
-    addTableFromUser(db, table, 24 + offset, 24 + offset);
+    const { x, y } = freeSlot();
+    addTableFromUser(db, table, x, y);
   });
 
   // Show the model view only when it's the active view (dashboards render elsewhere).
@@ -86,6 +87,19 @@ export function initCanvas() {
 
   createEntityImpl = createEntity;
   clearModelImpl = clearAll;
+
+  // First grid slot (left→right, top→bottom, fitted to the visible width) that no card overlaps, so a
+  // card added with the + button never hides another card's title. Dropped cards keep the drop point.
+  function freeSlot() {
+    const pad = 20, gap = 24, w = 300, h = 300;  // pad = the view gutter (.view --s5), so cards line up with the tab strip
+    const boxes = [...entities.values()].map(({ el }) => ({ x: el.offsetLeft, y: el.offsetTop, w: el.offsetWidth, h: el.offsetHeight }));
+    const perRow = Math.max(1, Math.floor((canvas.clientWidth - 2 * pad + gap) / (w + gap)));
+    for (let i = 0; i < 400; i++) {
+      const x = pad + (i % perRow) * (w + gap), y = pad + Math.floor(i / perRow) * (h + gap);
+      if (!boxes.some((b) => x < b.x + b.w + gap && b.x < x + w + gap && y < b.y + b.h + gap && b.y < y + h + gap)) return { x, y };
+    }
+    return { x: pad, y: pad };
+  }
 
   // --- entity lifecycle ----------------------------------------------------
   function addTableFromUser(db, table, x, y) {

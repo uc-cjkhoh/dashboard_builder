@@ -11,9 +11,11 @@ public static class ApiLimits
 {
     public const int MaxBodyBytes = 256 * 1024;
     public const int MaxHostLength = 253, MaxUserLength = 64, MaxPasswordLength = 256;
-    public const int MaxDimensions = 12, MaxMeasures = 10, MaxJoins = 10, MaxFilters = 16; // user filters (client cap 8) + drill path + page + selection
+    public const int MaxDimensions = 12, MaxMeasures = 10, MaxJoins = 10, MaxFilters = 20; // user filters (client cap 8) + shared filters (4) + drill path (5) + page + selection + date range
     public const int MaxInValues = 500, MaxFilterValueLength = 1000;
-    public const int MaxRowLimit = 500, MaxBuckets = 100, MaxDistinct = 1000;
+    public const int MaxRowLimit = 5000, MaxBuckets = 100, MaxDistinct = 1000;
+    public const int MaxExportRows = 100_000; // CSV export of a whole worksheet result
+    public const int MaxOffset = 10_000_000;  // how deep a table may page
 }
 
 /// <summary>Input rules for every API request. Throws <see cref="RequestValidationException"/>; never clamps.</summary>
@@ -25,7 +27,8 @@ public static class RequestRules
     public const string HostInvalidMessage = "Enter a valid host name or IP address.";
     private static readonly Regex HostName = new(
         @"^[A-Za-z0-9_]([A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?(\.[A-Za-z0-9_]([A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?)*\.?$", RegexOptions.CultureInvariant);
-    private static readonly HashSet<string> Ops = new(StringComparer.OrdinalIgnoreCase) { "=", "!=", ">", ">=", "<", "<=", "in", "between" };
+    private static readonly HashSet<string> Ops = new(StringComparer.OrdinalIgnoreCase)
+        { "=", "!=", ">", ">=", "<", "<=", "in", "between", "contains", "startsWith", "endsWith", "top" }; // P30: text match + top-N
     private static RequestValidationException Bad(string message, string field) => new(message, field);
 
     /// <summary>Null when the host is valid, else the user-facing reason (same text as validate.js).</summary>
@@ -71,6 +74,13 @@ public static class RequestRules
             case "between":
                 if (values is not { Length: 2 } || values.Any(string.IsNullOrWhiteSpace)) throw Bad("A range filter needs both From and To.", field + ".values");
                 break;
+            case "contains" or "startswith" or "endswith":
+                if (string.IsNullOrWhiteSpace(value)) throw Bad("Enter the text to match.", field + ".value");
+                break;
+            case "top":
+                if (!int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var n) || n < 1 || n > 1000)
+                    throw Bad("Top-N must be a whole number from 1 to 1000.", field + ".value");
+                break;
             default:
                 if (value is null) throw Bad("A filter value is required.", field + ".value");
                 break;
@@ -85,7 +95,17 @@ public static class RequestRules
     private static void NoNulls<T>(T?[]? items, string field) where T : class
     { for (var i = 0; i < (items?.Length ?? 0); i++) if (items![i] is null) throw Bad($"'{field}[{i}]' is required.", $"{field}[{i}]"); }
 
-    public static void ValidateQuery(QueryRequest r)
+    /// <summary>P26 per-dimension date parts: "auto" / "exact", truncations, and discrete parts.</summary>
+    public static readonly IReadOnlySet<string> DateParts = new HashSet<string>(StringComparer.Ordinal)
+        { "auto", "exact", "year", "quarter", "month", "week", "day", "hour", "quarterOfYear", "monthOfYear", "dayOfWeek", "hourOfDay" };
+
+    public static readonly IReadOnlySet<string> DateBuckets = new HashSet<string>(StringComparer.Ordinal)
+        { "auto", "hour", "day", "week", "month", "quarter", "year" };
+
+    public static void ValidateQuery(QueryRequest r) => ValidateQuery(r, ApiLimits.MaxRowLimit);
+
+    /// <summary>A worksheet query; <paramref name="maxLimit"/> is higher for CSV export.</summary>
+    public static void ValidateQuery(QueryRequest r, int maxLimit)
     {
         if (r.From is null) throw Bad("'from' is required.", "from");
         NoNulls(r.Joins, "joins"); NoNulls(r.RowDimensions, "rowDimensions"); NoNulls(r.ColumnDimensions, "columnDimensions"); NoNulls(r.Measures, "measures");
@@ -94,14 +114,26 @@ public static class RequestRules
         var measures = r.Measures?.Length ?? 0;
         if (measures > ApiLimits.MaxMeasures) throw Bad($"A view can show at most {ApiLimits.MaxMeasures} measures.", "measures");
         if ((r.Joins?.Length ?? 0) > ApiLimits.MaxJoins) throw Bad($"A view can join at most {ApiLimits.MaxJoins} tables.", "joins");
+        for (var i = 0; i < (r.Joins?.Length ?? 0); i++)
+            if (r.Joins![i].Type is { } jt && jt != "inner" && jt != "left") throw Bad("A join is inner or left.", $"joins[{i}].type");
         var filters = r.Filters ?? [];
         if (filters.Length > ApiLimits.MaxFilters) throw Bad($"A view can have at most {ApiLimits.MaxFilters} filters.", "filters");
         for (var i = 0; i < filters.Length; i++)
         {
             if (filters[i] is not { } f) throw Bad($"'filters[{i}]' is required.", $"filters[{i}]");
             ValidateFilterShape(f.Op, f.Value, f.Values, $"filters[{i}]");
+            if (string.Equals(f.Op, "top", StringComparison.OrdinalIgnoreCase) && f.TopBy is null)
+                throw Bad("A top-N filter needs a measure to rank by.", $"filters[{i}].topBy");
         }
-        ValidateRange(r.Limit, ApiLimits.MaxRowLimit, "Limit", "limit");
+        ValidateRange(r.Limit, maxLimit, "Limit", "limit");
+        if (r.Offset is { } off && (off < 0 || off > ApiLimits.MaxOffset))
+            throw Bad($"Offset must be between 0 and {ApiLimits.MaxOffset}.", "offset");
+        var dimList = (r.RowDimensions ?? []).Concat(r.ColumnDimensions ?? []).ToArray();
+        for (var i = 0; i < dimList.Length; i++)
+            if (dimList[i].DatePart is { } part && !DateParts.Contains(part))
+                throw Bad("Date part must be auto, exact, year, quarter, month, week, day, hour, quarter of year, month of year, day of week or hour of day.", "datePart");
+        if (r.DateBucket is { } b && !DateBuckets.Contains(b))
+            throw Bad("Date grouping must be auto, hour, day, week, month, quarter or year.", "dateBucket");
         if (r.Sort is { } s && !ClickHouseGateway.IsValidSortAlias(s.Column, dims, Math.Max(1, measures)))
             throw Bad("Unknown sort column.", "sort.column");
     }
@@ -115,6 +147,8 @@ public static class RequestRules
         {
             if (filters![i] is not { } f) throw Bad($"'filters[{i}]' is required.", $"filters[{i}]");
             ValidateFilterShape(f.Op, f.Value, f.Values, $"filters[{i}]");
+            if (string.Equals(f.Op, "top", StringComparison.OrdinalIgnoreCase))
+                throw Bad("Top-N filters apply to the worksheet query, not a histogram or box plot.", $"filters[{i}].op");
         }
     }
 }

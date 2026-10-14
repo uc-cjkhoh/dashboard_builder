@@ -14,6 +14,13 @@ export function initTabs() {
   if (!strip) return;
 
   bus.addEventListener("tabs:changed", render);
+  // Delegated on the strip, which outlives render(): switching on the first click rebuilds the tabs,
+  // so a listener on the old label would never see the double-click.
+  strip.addEventListener("dblclick", (event) => {
+    const label = event.target.closest?.(".tab__label[data-dash-id]");
+    const dash = label && dashboards.find((d) => d.id === label.dataset.dashId);
+    if (dash) beginRename(dash, label);
+  });
   render();
 
   function render() {
@@ -54,9 +61,10 @@ export function initTabs() {
     label.type = "button";
     label.className = "tab__label";
     label.textContent = dash.name;
+    label.dataset.dashId = dash.id;
     label.title = "Click to switch, double-click to rename";
-    label.addEventListener("click", () => switchDashboard(dash.id));
-    label.addEventListener("dblclick", () => beginRename(dash, label));
+    // Already showing: no switch, so no re-render under a double-click.
+    label.addEventListener("click", () => { if (activeDashboardId() !== dash.id) switchDashboard(dash.id); });
 
     const close = document.createElement("button");
     close.type = "button";

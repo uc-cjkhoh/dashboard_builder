@@ -15,6 +15,74 @@
 //                view:changed / tabs:changed / dashboard:changed {id}          (views)
 export const bus = new EventTarget();
 
+// P41 workbook theme: { accent: preset id | "#rrggbb", palette } (Core/theme-model.js). Applied to the
+// :root tokens by Core/theme.js on "theme:changed"; saved with the workbook.
+let theme = { accent: "crimson", palette: "default" };
+
+// P40 shared filters: filter objects (same shape as sheet.filters) that every dashboard applies where
+// their table is in its view. Workbook-level; edited from any dashboard's Filters tool.
+export const sharedFilters = [];
+export function setSharedFilters(list) { sharedFilters.splice(0, sharedFilters.length, ...list); }
+
+// P28 field settings, per workbook: "db.table.column" → { alias?, agg?, hidden? }. The alias is display
+// only (the SQL keeps the real, catalog-validated column); `agg` is the default aggregation when the field
+// becomes a measure; `hidden` leaves it out of the field pane.
+export const fieldMeta = new Map();
+export const fieldKey = (f) => `${f.db}.${f.table}.${f.column}`;
+export const metaOf = (f) => (f ? fieldMeta.get(fieldKey(f)) : undefined) ?? {};
+/** Display name: the alias, else table.column. */
+export const nameOf = (f) => metaOf(f).alias || `${f.table}.${f.column}`;
+export function setFieldMeta(f, patch) {
+  const k = fieldKey(f);
+  const next = { ...(fieldMeta.get(k) ?? {}), ...patch };
+  for (const p of Object.keys(next)) if (next[p] === undefined || next[p] === null || next[p] === "" || next[p] === false) delete next[p];
+  if (Object.keys(next).length) fieldMeta.set(k, next); else fieldMeta.delete(k);
+  emit("fields:changed");
+}
+export function setAllFieldMeta(obj) {
+  fieldMeta.clear();
+  for (const [k, v] of Object.entries(obj ?? {})) fieldMeta.set(k, v);
+  emit("fields:changed");
+}
+
+// P32 parameters: workbook-level named, typed values (Core/parameters-model.js).
+export const parameters = [];
+let paramSeq = 0;
+export function setParameters(list) {
+  parameters.splice(0, parameters.length, ...list);
+  for (const p of list) { const n = Number(String(p.id).slice(3)); if (n > paramSeq) paramSeq = n; }
+  emit("parameters:changed");
+}
+export function addParameter(p) { paramSeq += 1; const np = { ...p, id: `prm${paramSeq}` }; parameters.push(np); emit("parameters:changed"); return np; }
+export function updateParameter(id, patch) {
+  const p = parameters.find((x) => x.id === id);
+  if (p) { Object.assign(p, patch); emit("parameters:changed"); }
+}
+export function removeParameter(id) {
+  const i = parameters.findIndex((x) => x.id === id);
+  if (i >= 0) { parameters.splice(i, 1); emit("parameters:changed"); }
+}
+
+// P39 bookmarks: named snapshots of one dashboard's view (its sheet, incl. selection / drill / page /
+// format) plus the shared filters at the time. { id, name, dashId, dashName, sheet, sharedFilters, savedAt }
+export const bookmarks = [];
+let bookmarkSeq = 0;
+export function addBookmark(b) {
+  bookmarkSeq += 1;
+  bookmarks.push({ ...b, id: `bm#${bookmarkSeq}` });
+  emit("bookmarks:changed");
+}
+export function removeBookmark(id) {
+  const i = bookmarks.findIndex((b) => b.id === id);
+  if (i >= 0) { bookmarks.splice(i, 1); emit("bookmarks:changed"); }
+}
+export function setBookmarks(list) {
+  bookmarks.splice(0, bookmarks.length, ...list.map((b) => ({ ...b, id: `bm#${++bookmarkSeq}` })));
+  emit("bookmarks:changed");
+}
+export const currentTheme = () => theme;
+export function setTheme(next) { theme = { ...next }; emit("theme:changed"); }
+
 // The shared data model.
 export const entities = new Map();
 export const relationships = new Map();
@@ -67,6 +135,12 @@ export function showModel() {
 export const emptySheet = () => ({
   columns: [], rows: [], color: [], filters: [], chartType: "bar", sort: null,
   selection: null, drill: null, marks: defaultMarks(), pages: null, format: defaultFormat(),
+  // P35: a date range on one date field + an optional comparison range (Dashboard/period-model.js).
+  // null | { db, table, column, category, preset, from, to, compare, compareFrom, compareTo }
+  period: null,
+  title: null, caption: null, showTitle: true, showFilterCards: true, // P30 filter cards above the chart
+  analytics: null, // P21: { ref, band, trend, forecast, totals } (Dashboard/analytics-model.js); null = none // P23: null = the tab name / an automatic summary
+  urlAction: null, // P39: { label, template } — "Open <label>" on the selection chip (Dashboard/action-model.js)
 });
 
 // Marks card (P18): a cluster of encoding targets that map a field onto a mark property. All stay on
@@ -87,22 +161,31 @@ export const defaultMarks = () => ({ size: null, label: null, detail: [], toolti
 //  numberFormat: "auto" | "compact" | "currency" | "percent"  — how measure values read
 //  decimals:     null (auto) | 0..3                            — fixed fraction digits
 //  dateFormat:   "auto" | "date" | "month" | "year" | "datetime" — reformat date-like dimension labels
-//  topN:         null (default 50) | number                    — cap categories in a chart (query LIMIT)
+//  topN:         null (All — up to 5,000) | number             — cap categories in a chart (query LIMIT)
+//  dateBucket:   "auto" | "exact" | "hour" … "year"            — group a chart's date/time axis by a calendar grain
 //  legend:       "auto" | "hidden" | "top" | "bottom" | "left" | "right"
 //  dataLabels:   show value labels on marks
 //  colorByDimension: colour a single-measure bar chart's bars by their category
 //  xTitle/yTitle: axis titles (null = none)
+//  target:       null | number — a KPI scorecard's goal (P35); downIsGood: a fall shows as good
+//  conditional:  { [measureKey]: { mode, scale, mid, rules } } — Table / Text cell formatting (P37)
 export const defaultFormat = () => ({
   numberFormat: "auto",
   decimals: null,
   currencySymbol: "$",
   dateFormat: "auto",
   topN: null,
+  dateBucket: "auto",
   legend: "auto",
   dataLabels: false,
   colorByDimension: false,
   xTitle: null,
   yTitle: null,
+  target: null,
+  downIsGood: false,
+  conditional: {},
+  fit: "standard", // P23: standard | width | height | entire
+  approximate: false, // P33: estimate distinct counts / read a 10% sample where the table allows
 });
 
 export function createDashboard(name) {
@@ -128,7 +211,7 @@ export function dashboardHasContent(id) {
   const s = dashboards.find((d) => d.id === id)?.sheet;
   const m = s?.marks;
   const hasMarks = Boolean(m && (m.size || m.label || (m.detail?.length ?? 0) > 0 || (m.tooltip?.length ?? 0) > 0 || m.shape || m.path || m.angle));
-  return Boolean(s && ((s.columns?.length ?? 0) > 0 || (s.rows?.length ?? 0) > 0 || (s.color?.length ?? 0) > 0 || (s.filters?.length ?? 0) > 0 || ((s.drill?.levels?.length ?? 0) > 0) || hasMarks || s.pages));
+  return Boolean(s && ((s.columns?.length ?? 0) > 0 || (s.rows?.length ?? 0) > 0 || (s.color?.length ?? 0) > 0 || (s.filters?.length ?? 0) > 0 || ((s.drill?.levels?.length ?? 0) > 0) || hasMarks || s.pages || s.period));
 }
 
 export function switchDashboard(id) {

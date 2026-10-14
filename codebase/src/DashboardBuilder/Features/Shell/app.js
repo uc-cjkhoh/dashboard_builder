@@ -9,6 +9,7 @@ import { initRelations } from "../Relations/relations.js";
 import { initTabs } from "../Tabs/tabs.js";
 import { initDashboards } from "../Dashboard/dashboards.js";
 import { initWorkbook } from "../Workbook/workbook.js";
+import { initTheme } from "../Core/theme.js";
 import { toast } from "../Core/ui.js";
 import { icon } from "../Core/icons.js";
 
@@ -29,6 +30,7 @@ for (const el of document.querySelectorAll("[data-icon]")) el.replaceChildren(ic
 // Schema + canvas + relations + tabs + dashboards first so their `connection:changed` /
 // `table:add` / bus listeners are registered before the connection module's initial status
 // check fires an event.
+initTheme();   // P41 — the workbook theme's tokens (default until a workbook opens)
 initSidebar();
 initSchema();
 initCanvas();

@@ -89,6 +89,13 @@ export function initSchema() {
     chip.dataset.db = db;
     chip.dataset.table = table;
 
+    // Drag affordance: a grip that shows on hover / keyboard focus (decorative — the + button is the
+    // non-drag path).
+    const grip = document.createElement("span");
+    grip.className = "table-chip__grip";
+    grip.setAttribute("aria-hidden", "true");
+    grip.append(icon("grip", { size: 14 }));
+
     const iconEl = document.createElement("span");
     iconEl.className = "table-chip__icon";
     iconEl.setAttribute("aria-hidden", "true");
@@ -105,6 +112,7 @@ export function initSchema() {
     add.type = "button";
     add.className = "iconbtn";
     add.setAttribute("aria-label", `Add ${table} to the canvas`);
+    add.title = "Add to the canvas (or drag the table)";
     add.append(icon("plus"));
     add.addEventListener("click", () => {
       document.dispatchEvent(new CustomEvent("table:add", { detail: { db, table } }));
@@ -118,7 +126,8 @@ export function initSchema() {
     });
     chip.addEventListener("dragend", () => chip.classList.remove("table-chip--dragging"));
 
-    chip.append(iconEl, name, add);
+    chip.title = `Drag ${table} onto the canvas`;
+    chip.append(grip, iconEl, name, add);
     return chip;
   }
 

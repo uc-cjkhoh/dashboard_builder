@@ -1,0 +1,66 @@
+// P32 parameters — pure, DOM-free (unit-tested in tests/js/parameters-model.test.mjs). A workbook holds up to
+// 20 named, typed values: { id, name, type: number | text | date, value, allowed: { kind: any | list | range,
+// list?, min?, max?, step? } }. A filter value or a top-N count can read one; Format → Top N can follow a
+// number parameter. The value reaches ClickHouse only ever as a bound filter value / validated limit.
+import { number, dateTime, text } from "./validate.js";
+
+export const PARAM_TYPES = ["number", "text", "date"];
+export const MAX_PARAMS = 20;
+export const MAX_LIST = 50;
+
+/** Check a raw value against a parameter's type and allowed values: { ok, value } or { ok: false, error }. */
+export function checkValue(p, raw) {
+  const s = String(raw ?? "").trim();
+  if (!s) return { ok: false, error: `${p.name} needs a value.` };
+  let v;
+  if (p.type === "number") { const r = number(s); if (!r.ok) return { ok: false, error: `${p.name}: ${r.error}` }; v = r.value; }
+  else if (p.type === "date") { const r = dateTime(s); if (!r.ok) return { ok: false, error: `${p.name}: ${r.error}` }; v = r.value; }
+  else { const r = text(s, { label: p.name, max: 1000, required: true }); if (!r.ok) return r; v = r.value; }
+  const a = p.allowed ?? { kind: "any" };
+  if (a.kind === "list" && !(a.list ?? []).map(String).includes(String(v))) return { ok: false, error: `${p.name} must be one of its listed values.` };
+  if (a.kind === "range" && p.type === "number") {
+    if (a.min != null && v < a.min) return { ok: false, error: `${p.name} must be at least ${a.min}.` };
+    if (a.max != null && v > a.max) return { ok: false, error: `${p.name} must be at most ${a.max}.` };
+  }
+  return { ok: true, value: v };
+}
+
+/** The parameter types a filter on a field of `category` can read. */
+export const paramTypeFor = (category) => (category === "numeric" ? "number" : category === "temporal" ? "date" : category === "text" ? "text" : null);
+
+/** A filter with its parameter's current value filled in (unchanged without a parameter). */
+export function withParamValue(f, params) {
+  if (!f?.param) return f;
+  const p = params.find((x) => x.id === f.param);
+  return p ? { ...f, value: String(p.value) } : { ...f, value: "" }; // a missing parameter reads as empty (not applied)
+}
+
+/** Top-N for a chart: the number parameter's value when Format follows one (clamped to 1..cap), else topN. */
+export function effectiveTopN(format, params, cap) {
+  if (format?.topNParam) {
+    const p = params.find((x) => x.id === format.topNParam && x.type === "number");
+    const n = p ? Math.round(Number(p.value)) : NaN;
+    if (Number.isFinite(n)) return Math.max(1, Math.min(cap, n));
+  }
+  return format?.topN ?? null;
+}
+
+/** A saved parameter, checked — or null (with an issue). */
+export function cleanParameter(raw, issues) {
+  const name = raw && typeof raw === "object" ? text(raw.name, { label: "Parameter name", max: 60, required: true }) : { ok: false };
+  if (!name.ok || !/^prm\d{1,6}$/.test(raw.id ?? "") || !PARAM_TYPES.includes(raw.type)) { issues.push("Skipped a parameter with no name, id or type."); return null; }
+  const a = raw.allowed && typeof raw.allowed === "object" ? raw.allowed : { kind: "any" };
+  let allowed = { kind: "any" };
+  if (a.kind === "list" && Array.isArray(a.list) && a.list.length) {
+    const list = a.list.slice(0, MAX_LIST).map(String).filter((x) => checkValue({ name: name.value, type: raw.type }, x).ok);
+    if (list.length) allowed = { kind: "list", list };
+  } else if (a.kind === "range" && raw.type === "number") {
+    const n = (x) => (typeof x === "number" && Number.isFinite(x) ? x : null);
+    allowed = { kind: "range", min: n(a.min), max: n(a.max), step: n(a.step) };
+  }
+  const p = { id: raw.id, name: name.value, type: raw.type, allowed, value: null };
+  const v = checkValue(p, raw.value);
+  p.value = v.ok ? v.value : allowed.kind === "list" ? allowed.list[0] : raw.type === "number" ? (allowed.min ?? 0) : "";
+  if (!v.ok) issues.push(`Parameter "${name.value}": its value was invalid — reset.`);
+  return p;
+}

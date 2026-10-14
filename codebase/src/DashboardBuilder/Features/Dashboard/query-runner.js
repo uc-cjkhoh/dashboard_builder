@@ -5,6 +5,8 @@
 //    changes (legend, decimals, axis titles…) re-render from it instead of re-querying ClickHouse.
 //  • truncationNotice: the "more rows exist" line shown when the server reports a truncated result.
 
+import { LIMITS } from "../Core/validate.js";
+
 /** Latest-wins gate. `begin()` returns a ticket `{ signal, isCurrent }` for one request. */
 export function createLatestGate() {
   let seq = 0;
@@ -59,7 +61,10 @@ export const requestKey = (kind, request) => `${kind}:${JSON.stringify(request)}
 /** The notice for a truncated result, or null when the result is complete. */
 export function truncationNotice({ truncated, chartType, limit }) {
   if (!truncated) return null;
+  const n = Number(limit).toLocaleString("en-US");
   if (chartType === "table" || chartType === "text")
-    return `Showing the first ${limit} rows — more exist. Add a filter to narrow the table.`;
-  return `Showing the top ${limit} — more exist. Raise Top-N in Format, or add a filter.`;
+    return `Showing the first ${n} rows — more exist. Add a filter to narrow the table.`;
+  // "All" asks for the cap: there is no higher Top-N to raise it to.
+  if (limit >= LIMITS.rows) return `Showing the first ${n} in sort order — more exist. Add a filter to narrow it.`;
+  return `Showing the first ${n} in sort order — more exist. Raise Top-N in Format, or add a filter.`;
 }

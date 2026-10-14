@@ -29,7 +29,7 @@ test("a saved workbook round-trips tables, keys, links and dashboards", () => {
   assert.deepEqual(wb.entities[0], { id: "sales.orders#1", db: "sales", table: "orders", x: 10, y: 20, joinKeys: ["customer_id"] });
   assert.deepEqual(wb.relationships[0], {
     from: { entityId: "sales.orders#1", column: "customer_id" },
-    to: { entityId: "sales.customers#2", column: "id" }, cardinality: "N:1" });
+    to: { entityId: "sales.customers#2", column: "id" }, cardinality: "N:1", joinType: "inner" });
   assert.equal(wb.dashboards[0].name, "Revenue");
   assert.equal(wb.dashboards[0].sheet.chartType, "line");
   assert.equal(wb.active, 0);
@@ -216,4 +216,160 @@ test("a non-object sheet or marks, and an invalid active index, are reported", (
 test("a valid or absent active index adds no issue", () => {
   assert.equal(parseWorkbook(wbText({ dashboards: [{ name: "A", sheet: {} }], active: 0 })).issues.length, 0);
   assert.equal(parseWorkbook(wbText({ dashboards: [{ name: "A", sheet: {} }] })).issues.length, 0);
+});
+
+test("a date range (P35) and scorecard target round-trip", () => {
+  const period = { db: "sales", table: "orders", column: "created", category: "temporal", preset: "custom",
+    from: "2026-09-01", to: "2026-09-30", compare: "lastYear", compareFrom: null, compareTo: null };
+  const r = sheetOf({ chartType: "kpi", period, format: { target: 5000, downIsGood: true } });
+  assert.deepEqual(r.issues, []);
+  assert.deepEqual(r.dashboards[0].sheet.period, period);
+  assert.equal(r.dashboards[0].sheet.format.target, 5000);
+  assert.equal(r.dashboards[0].sheet.format.downIsGood, true);
+});
+test("a bad date range is cleared and reported", () => {
+  const base = { db: "sales", table: "orders", column: "created", category: "temporal", preset: "last30", compare: "previous" };
+  for (const bad of [{ ...base, preset: "forever" }, { ...base, compare: "tomorrow" }, { ...base, category: "text" },
+    { ...base, from: "1st of May" }, { ...base, column: "" }]) {
+    const r = sheetOf({ period: bad });
+    assert.equal(r.dashboards[0].sheet.period, null);
+    assert.ok(r.issues.some((i) => /date range cleared/.test(i)), JSON.stringify(r.issues));
+  }
+});
+test("a non-numeric target is cleared and reported", () => {
+  const r = sheetOf({ format: { target: "lots" } });
+  assert.equal(r.dashboards[0].sheet.format.target, null);
+  assert.match(r.issues.join(" "), /target/);
+});
+
+test("conditional formatting (P37) round-trips; bad parts are dropped and reported", () => {
+  const good = { "s.orders.amount:sum": { mode: "scale", scale: "diverging", mid: 0, rules: [{ op: ">", value: 100, tone: "good" }] } };
+  const ok = sheetOf({ chartType: "table", format: { conditional: good } });
+  assert.deepEqual(ok.issues, []);
+  assert.deepEqual(ok.dashboards[0].sheet.format.conditional, good);
+  const bad = sheetOf({ format: { conditional: {
+    a: { mode: "rainbow", scale: "sequential", mid: null, rules: [] },
+    b: { mode: "bars", scale: "sequential", mid: null, rules: [{ op: ">", value: "lots", tone: "good" }, { op: "<", value: 1, tone: "bad" }] },
+  } } });
+  assert.deepEqual(Object.keys(bad.dashboards[0].sheet.format.conditional), ["b"]);
+  assert.equal(bad.dashboards[0].sheet.format.conditional.b.rules.length, 1);
+  assert.equal(bad.issues.length, 2);
+});
+
+test("the workbook theme (P41) round-trips; a missing one is the default", () => {
+  const st = sampleState();
+  const wb = parseWorkbook(JSON.stringify(serializeWorkbook({ ...st, theme: { accent: "violet", palette: "okabe" } })));
+  assert.deepEqual(wb.theme, { accent: "violet", palette: "okabe" });
+  assert.deepEqual(sheetOf({}).theme, { accent: "crimson", palette: "default" });
+});
+
+test("shared filters (P40) round-trip, are checked, and capped at 4", () => {
+  const f = (column) => ({ db: "s", table: "orders", column, category: "text", op: "=", value: "x" });
+  const st = sampleState();
+  const wb = parseWorkbook(JSON.stringify(serializeWorkbook({ ...st, sharedFilters: [f("region")] })));
+  assert.deepEqual(wb.sharedFilters, [f("region")]);
+  const many = parseWorkbook(wbText({ sharedFilters: [f("a"), f("b"), f("c"), f("d"), f("e"), { ...f("z"), op: "like" }] }));
+  assert.equal(many.sharedFilters.length, 4);
+  assert.ok(many.issues.some((i) => /first 4/.test(i)));
+  assert.deepEqual(parseWorkbook(wbText({})).sharedFilters, []);
+});
+test("field choices (P40) are kept, include the shown field, and drop junk", () => {
+  const shown = { db: "s", table: "orders", column: "region", category: "text" };
+  const alt = { db: "s", table: "orders", column: "country", category: "text" };
+  const r = sheetOf({ columns: [{ ...shown, choices: [alt, { db: "", column: "x" }] }] });
+  assert.deepEqual(r.dashboards[0].sheet.columns[0].choices, [shown, alt]);
+  assert.ok(r.issues.some((i) => /field choices/.test(i)));
+  const lone = sheetOf({ columns: [{ ...shown, choices: [shown] }] });
+  assert.equal(lone.dashboards[0].sheet.columns[0].choices, undefined);
+});
+
+test("bookmarks (P39) round-trip with their dashboard, selection and shared filters", () => {
+  const st = sampleState();
+  const sheet = { ...st.dashboards[0].sheet, chartType: "bar",
+    selection: { db: "s", table: "orders", column: "region", value: "EU", label: "orders.region = EU", action: "keep" } };
+  const sf = [{ db: "s", table: "orders", column: "region", category: "text", op: "=", value: "EU" }];
+  const bm = { id: "bm#1", name: "EU view", dashId: "dash#1", dashName: "Revenue", sheet, sharedFilters: sf, savedAt: "2026-10-13T00:00:00Z" };
+  const wb = parseWorkbook(JSON.stringify(serializeWorkbook({ ...st, bookmarks: [bm, { ...bm, name: "Closed", dashId: "dash#gone" }] })));
+  assert.equal(wb.bookmarks.length, 2);
+  assert.equal(wb.bookmarks[0].dashboard, 0);
+  assert.equal(wb.bookmarks[1].dashboard, null);
+  assert.equal(wb.bookmarks[0].sheet.selection.action, "keep");
+  assert.deepEqual(wb.bookmarks[0].sharedFilters, sf);
+  assert.equal(wb.bookmarks[0].sheet.pages.members, undefined);
+});
+test("bad bookmarks are skipped and reported; a bad link action is removed", () => {
+  const r = parseWorkbook(wbText({ bookmarks: [{ name: "", sheet: {} }, { name: "No view" }, { name: "Ok", sheet: { urlAction: { label: "x", template: "http://bad/{value}" } } }] }));
+  assert.equal(r.bookmarks.length, 1);
+  assert.equal(r.bookmarks[0].sheet.urlAction, null);
+  assert.ok(r.issues.some((i) => /link action/.test(i)));
+});
+
+test("a date part (P26) is kept on a date pill and reset elsewhere", () => {
+  const d = { db: "s", table: "orders", column: "created", category: "temporal" };
+  assert.equal(sheetOf({ columns: [{ ...d, datePart: "month" }] }).dashboards[0].sheet.columns[0].datePart, "month");
+  const bad = sheetOf({ columns: [{ ...d, datePart: "fortnight" }, { db: "s", table: "orders", column: "region", category: "text", datePart: "year" }] });
+  assert.equal(bad.dashboards[0].sheet.columns[0].datePart, undefined);
+  assert.equal(bad.dashboards[0].sheet.columns[1].datePart, undefined);
+  assert.equal(bad.issues.filter((i) => /date part/.test(i)).length, 2);
+});
+
+test("a table calculation (P27) is kept when valid and removed when not", () => {
+  const m = { db: "s", table: "orders", column: "amount", category: "numeric" };
+  assert.deepEqual(sheetOf({ rows: [{ ...m, tableCalc: { type: "moving", along: "rows", window: 5 } }] }).dashboards[0].sheet.rows[0].tableCalc,
+    { type: "moving", along: "rows", window: 5 });
+  const bad = sheetOf({ rows: [{ ...m, tableCalc: { type: "median-ish" } }, { ...m, column: "qty", tableCalc: { type: "moving", window: 99 } }] });
+  assert.equal(bad.dashboards[0].sheet.rows[0].tableCalc, undefined);
+  assert.equal(bad.dashboards[0].sheet.rows[1].tableCalc, undefined);
+  assert.equal(bad.issues.filter((i) => /table calculation/.test(i)).length, 2);
+});
+
+test("field settings (P28) round-trip; bad ones are dropped and counted", () => {
+  const st = sampleState();
+  const meta = new Map([["s.orders.amount", { alias: "Revenue", agg: "avg" }], ["s.orders.secret", { hidden: true }]]);
+  const wb = parseWorkbook(JSON.stringify(serializeWorkbook({ ...st, fieldMeta: meta })));
+  assert.deepEqual(wb.fields, { "s.orders.amount": { alias: "Revenue", agg: "avg" }, "s.orders.secret": { hidden: true } });
+  const bad = parseWorkbook(wbText({ fields: { "nodots": { alias: "x" }, "s.t.c": { alias: "", agg: "median", hidden: "yes" }, "s.t.ok": { alias: "Fine" } } }));
+  assert.deepEqual(bad.fields, { "s.t.ok": { alias: "Fine" } });
+  assert.ok(bad.issues.some((i) => /4 field setting/.test(i)));
+});
+
+test("title, caption, showTitle and fit (P23) are checked", () => {
+  const ok = sheetOf({ title: "Sales", caption: "By region", showTitle: false, format: { fit: "entire" } }).dashboards[0].sheet;
+  assert.deepEqual([ok.title, ok.caption, ok.showTitle, ok.format.fit], ["Sales", "By region", false, "entire"]);
+  const bad = sheetOf({ title: 7, caption: "x".repeat(301), format: { fit: "stretch" } });
+  const s = bad.dashboards[0].sheet;
+  assert.deepEqual([s.title, s.caption, s.format.fit], [null, null, "standard"]);
+  assert.equal(bad.issues.length, 3);
+});
+
+test("analytics settings (P21) are kept when valid and reset part by part", () => {
+  const ok = sheetOf({ analytics: { ref: { kind: "constant", value: 5 }, band: { from: 9, to: 2 }, trend: "poly2", forecast: 6, totals: { grand: true } } }).dashboards[0].sheet.analytics;
+  assert.deepEqual(ok, { ref: { kind: "constant", value: 5 }, band: { from: 2, to: 9 }, trend: "poly2", forecast: 6, totals: { grand: true, sub: false } });
+  const bad = sheetOf({ analytics: { ref: { kind: "mode" }, trend: "cubic", forecast: 99 } });
+  assert.deepEqual(bad.dashboards[0].sheet.analytics.trend, "none");
+  assert.ok(bad.issues.some((i) => /analytics/.test(i)));
+});
+
+test("a relationship's join type (P31) round-trips; anything but left reads as inner", () => {
+  const st = sampleState();
+  [...st.relationships.values()][0].joinType = "left";
+  const wb = parseWorkbook(JSON.stringify(serializeWorkbook(st)));
+  assert.equal(wb.relationships[0].joinType, "left");
+  const raw = JSON.parse(JSON.stringify(serializeWorkbook(st)));
+  raw.relationships[0].joinType = "full outer";
+  assert.equal(parseWorkbook(JSON.stringify(raw)).relationships[0].joinType, "inner");
+});
+
+test("parameters (P32) round-trip; references to a missing parameter are unlinked", () => {
+  const st = sampleState();
+  const params = [{ id: "prm1", name: "TopN", type: "number", value: 10, allowed: { kind: "any" } }];
+  st.dashboards[0].sheet.format = { ...st.dashboards[0].sheet.format, topNParam: "prm1" };
+  const wb = parseWorkbook(JSON.stringify(serializeWorkbook({ ...st, parameters: params })));
+  assert.deepEqual(wb.parameters, params);
+  assert.equal(wb.dashboards[0].sheet.format.topNParam, "prm1");
+  const orphan = parseWorkbook(wbText({ dashboards: [{ name: "S", sheet: { format: { topNParam: "prm7" },
+    filters: [{ db: "s", table: "t", column: "c", category: "numeric", op: "=", value: "1", param: "prm8" }] } }] }));
+  assert.equal(orphan.dashboards[0].sheet.format.topNParam, undefined);
+  assert.equal(orphan.dashboards[0].sheet.filters[0].param, undefined);
+  assert.equal(orphan.issues.filter((i) => /parameter is missing/.test(i)).length, 2);
 });

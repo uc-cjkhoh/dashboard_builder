@@ -1,5 +1,6 @@
 import { makeValueFormatter } from "../Core/format.js";
 import { pickInk } from "./contrast.js";
+import { chartFit, markCount, applyFitMode, FIT } from "./chart-fit.js";
 
 // Charting adapter (P9; formatting P10). Renders worksheet results through the self-hosted ECharts library
 // (wwwroot/js/vendor/echarts.min.js, loaded as a global before the module graph — no CDN).
@@ -14,6 +15,8 @@ import { pickInk } from "./contrast.js";
 
 let instance = null;
 let resizeObserver = null;
+let lastOption = null; // the option on screen — re-drawn as SVG for export when the chart is on canvas
+let onCanvas = false;
 
 // Pull themed values from :root so the chart tracks the design tokens (and any future retheme).
 function tokens() {
@@ -33,18 +36,18 @@ function tokens() {
   const catFallback = ["#2a78d6", "#008300", "#e87ba4", "#eda100", "#1baf7a", "#eb6834", "#4a3aa7", "#e34948"];
   const cat = catFallback.map((hex, i) => t(`--chart-cat-${i + 1}`, hex));
   return {
-    series: t("--chart-series", "#2563eb"),
+    series: t("--chart-series", "#c4142c"),
     cat,
-    axis: t("--chart-axis", "#cbd5e1"),
-    grid: t("--chart-grid", "#e2e8f0"),
-    label: t("--chart-label", "#334155"),
-    muted: t("--chart-muted", "#5b6b81"),
+    axis: t("--chart-axis", "#d9cfd1"),
+    grid: t("--chart-grid", "#ebe4e5"),
+    label: t("--chart-label", "#423a3d"),
+    muted: t("--chart-muted", "#6b6165"),
     surface: t("--surface", "#ffffff"),
-    ink: t("--ink", "#0f172a"),
+    ink: t("--ink", "#1c1719"),
     font: t("--font", "system-ui, sans-serif"),
     // Brand stops for the sequential heatmap ramp (single-hue soft→saturated, token-driven).
-    brand: t("--accent", "#2563eb"),
-    brandSoft: t("--accent-soft", "#eff4ff"),
+    brand: t("--accent", "#c4142c"),
+    brandSoft: t("--accent-soft", "#fdeff1"),
   };
 }
 
@@ -63,20 +66,131 @@ export function renderChart(container, spec) {
   host.className = "ws-chart-canvas";
   container.append(host);
 
-  // SVG renderer: crisp at any zoom, no canvas-sizing surprises, lighter DOM for our small charts.
-  instance = window.echarts.init(host, null, { renderer: "svg" });
-  instance.setOption(buildOption(spec));
+  // Every category keeps a slot and a label: a chart with more categories than fit takes the room it
+  // needs and the pane (#ws-chart) scrolls, instead of squeezing bars and skipping labels.
+  const inset = () => 2 * parseFloat(getComputedStyle(host).left || 0);
+  const paneWidth = () => container.clientWidth - inset();
+  const paneHeight = () => container.clientHeight - inset();
+  const fitMode = spec.format?.fit ?? "standard"; // P23 Format → Fit
+  let fit = applyFitMode(chartFit(spec, paneWidth(), paneHeight()), fitMode);
+  host.style.setProperty("--chart-min-w", `${fit.minWidth}px`);
+  host.style.setProperty("--chart-min-h", `${fit.minHeight}px`);
+
+  // SVG renderer: crisp at any zoom, no canvas-sizing surprises, lighter DOM for our small charts. A
+  // big chart (thousands of marks) draws on canvas instead — SVG slows down with that many nodes.
+  onCanvas = markCount(spec) > FIT.canvasMarks;
+  instance = window.echarts.init(host, null, { renderer: onCanvas ? "canvas" : "svg" });
+  const option = buildOption(spec.type === "multiples" ? { ...spec, width: paneWidth(), height: paneHeight() } : spec);
+  if (spec.type !== "multiples") showEveryCategory(option, fit.rotate, fit); // panels keep their own sparse labels
+  if (fit.zoom) addZoom(option, fit);
+  if (onCanvas) tuneForSize(option);
+  lastOption = option;
+  instance.setOption({ ...option, ...motionOption(animateNext && !onCanvas) });
 
   // P15 click-to-filter: forward mark clicks to the caller, which maps dataIndex → a dimension value.
-  if (typeof spec.onSelect === "function") instance.on("click", spec.onSelect);
+  if (typeof spec.onSelect === "function") instance.on("click", (p) => { if (p.componentType !== "legend") spec.onSelect(p); });
+  // P29: a legend click highlights (and can select) instead of hiding the series — ECharts toggles the
+  // item, so every item is shown again straight away and the click goes to the worksheet.
+  if (typeof spec.onLegend === "function") instance.on("legendselectchanged", (p) => {
+    instance.dispatchAction({ type: "legendAllSelect" });
+    // Next tick: the worksheet may re-render (dispose this instance) — not while ECharts is mid-event.
+    setTimeout(() => spec.onLegend(p.name), 0);
+  });
+  if (spec.focus) focusSeries(spec.focus, spec.type);
 
-  resizeObserver = new ResizeObserver(() => instance && instance.resize());
+  resizeObserver = new ResizeObserver(() => {
+    if (!instance) return;
+    instance.resize();
+    const next = applyFitMode(chartFit(spec, paneWidth(), paneHeight()), fitMode);
+    if (next.rotate !== fit.rotate) {
+      fit = next;
+      instance.setOption({ xAxis: [].concat(option.xAxis).map(() => ({ axisLabel: { rotate: fit.rotate } })) });
+    }
+  });
   resizeObserver.observe(host);
   return instance;
 }
 
+// Past FIT.maxSlots categories an axis gets a slider (and wheel/drag inside the plot) showing a window
+// of categories at a time, instead of a pane thousands of pixels wide. Colours from the chart tokens.
+function addZoom(option, fit) {
+  const c = tokens();
+  const slider = {
+    type: "slider", height: 16, borderColor: c.grid, backgroundColor: "transparent", fillerColor: c.brandSoft,
+    dataBackground: { lineStyle: { color: c.axis }, areaStyle: { color: c.grid } },
+    handleStyle: { color: c.surface, borderColor: c.series }, moveHandleStyle: { color: c.axis },
+    textStyle: { color: c.muted, fontFamily: c.font }, brushSelect: false,
+  };
+  const zooms = [];
+  const grid = option.grid ?? (option.grid = {});
+  if (fit.zoom.includes("x")) {
+    const w = { startValue: 0, endValue: Math.max(0, fit.window - 1) };
+    zooms.push({ type: "inside", xAxisIndex: 0, ...w }, { ...slider, xAxisIndex: 0, bottom: 4, ...w });
+    grid.bottom = (Number(grid.bottom) || 0) + 28;
+  }
+  if (fit.zoom.includes("y")) {
+    const w = { startValue: 0, endValue: Math.max(0, fit.windowY - 1) };
+    zooms.push({ type: "inside", yAxisIndex: 0, ...w }, { ...slider, yAxisIndex: 0, orient: "vertical", right: 4, width: 16, height: null, ...w });
+    grid.right = (Number(grid.right) || 0) + 28;
+  }
+  option.dataZoom = zooms;
+}
+
+// Canvas-sized charts: bars draw in ECharts' large mode, lines keep their shape with LTTB sampling
+// (peaks and dips survive) when there are more points than pixels.
+function tuneForSize(option) {
+  for (const sr of [].concat(option.series ?? [])) {
+    // Large mode draws plain values only — skip it when a bar carries its own style (Other, colour-by).
+    if (sr.type === "bar" && (sr.data ?? []).every((v) => v === null || typeof v !== "object"))
+      Object.assign(sr, { large: true, largeThreshold: 2000 });
+    if (sr.type === "line") sr.sampling = "lttb";
+  }
+}
+
+// Category axes label every category (no skipping); long labels truncate (the tooltip has the full
+// name), and bottom labels tilt when they can't sit side by side.
+function showEveryCategory(option, rotate, fit = {}) {
+  const fix = (axis, bottom) => {
+    if (!axis || axis.type !== "category") return axis;
+    // A fitted axis (P23) shares the pane: labels thin out instead of forcing a slot each.
+    if (bottom ? fit.fittedX : fit.fittedY) return { ...axis, axisLabel: { ...axis.axisLabel, hideOverlap: true, width: bottom ? FIT.labelMax : FIT.sideMax, overflow: "truncate" } };
+    return { ...axis, axisLabel: { ...axis.axisLabel, interval: 0, hideOverlap: false,
+      width: bottom ? FIT.labelMax : FIT.sideMax, overflow: "truncate", ...(bottom ? { rotate } : {}) } };
+  };
+  const each = (axes, bottom) => (Array.isArray(axes) ? axes.map((a) => fix(a, bottom)) : fix(axes, bottom));
+  if (option.xAxis) option.xAxis = each(option.xAxis, true);
+  if (option.yAxis) option.yAxis = each(option.yAxis, false);
+}
+
+/** P29: highlight one series (or a pie slice) and dim the rest; null clears. */
+export function focusSeries(name, type) {
+  if (!instance) return;
+  instance.dispatchAction({ type: "downplay" });
+  if (name == null) return;
+  if (type === "pie" || type === "donut" || type === "funnel") instance.dispatchAction({ type: "highlight", name });
+  else instance.dispatchAction({ type: "highlight", seriesName: name });
+}
+
 /** Is there a live ECharts instance to export? (Table/KPI render as native DOM, so there isn't.) */
 export function hasChartInstance() { return instance !== null; }
+
+// Motion: a short, decelerating entrance (300ms, not ECharts' default 1s) when the data is fresh from
+// ClickHouse; none when re-rendering a cached result or under prefers-reduced-motion.
+let animateNext = true;
+/** Draw the live chart at a fixed size (printing), or back to its pane's size with null. */
+export function sizeChart(size) {
+  if (!instance) return;
+  instance.resize(size ? { ...size, animation: { duration: 0 } } : { width: "auto", height: "auto", animation: { duration: 0 } });
+}
+
+/** Whether the next renderChart animates its entrance (the worksheet sets this per result). */
+export function animateNextChart(on) { animateNext = Boolean(on); }
+function motionOption(on) {
+  const reduce = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  return on && !reduce
+    ? { animation: true, animationDuration: 300, animationEasing: "cubicOut", animationDurationUpdate: 250, animationEasingUpdate: "cubicInOut" }
+    : { animation: false };
+}
 
 /**
  * Export the current chart as an image (P13). We use the SVG renderer, so the SVG is already in the
@@ -89,11 +203,38 @@ export async function exportChart(kind) {
   const w = (instance.getWidth && instance.getWidth()) || 800;
   const h = (instance.getHeight && instance.getHeight()) || 450;
 
+  // A canvas chart: PNG straight from the canvas; SVG by redrawing the same option off-screen as SVG.
+  if (onCanvas) {
+    if (kind === "png") {
+      const surface = getComputedStyle(document.documentElement).getPropertyValue("--surface").trim() || "#ffffff";
+      const url = instance.getDataURL({ type: "png", pixelRatio: 2, backgroundColor: surface });
+      return { blob: await (await fetch(url)).blob(), ext: "png" };
+    }
+    const svg = offscreenSvg(w, h);
+    return svg ? { blob: new Blob([svg], { type: "image/svg+xml;charset=utf-8" }), ext: "svg" } : null;
+  }
+
   let svg = currentSvgString(w, h);
   if (!svg) return null;
   if (kind === "svg") return { blob: new Blob([svg], { type: "image/svg+xml;charset=utf-8" }), ext: "svg" };
   const blob = await svgToPng(svg, w, h);
   return blob ? { blob, ext: "png" } : null;
+}
+
+// Draw the on-screen option once more with the SVG renderer, in a detached box of the same size.
+function offscreenSvg(w, h) {
+  if (!lastOption) return null;
+  const box = document.createElement("div");
+  box.style.cssText = `position:fixed;left:-100000px;top:0;width:${w}px;height:${h}px`;
+  document.body.append(box);
+  const tmp = window.echarts.init(box, null, { renderer: "svg", width: w, height: h });
+  try {
+    tmp.setOption({ ...lastOption, animation: false });
+    const el = box.querySelector("svg");
+    let svg = el ? new XMLSerializer().serializeToString(el) : null;
+    if (svg && !/xmlns=/.test(svg)) svg = svg.replace(/<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+    return svg;
+  } finally { tmp.dispose(); box.remove(); }
 }
 
 // The chart's SVG as a standalone string. Prefer the DOM <svg> ECharts rendered (SVG renderer);
@@ -147,6 +288,7 @@ function svgToPng(svg, w, h) {
 export function disposeChart() {
   if (resizeObserver) { resizeObserver.disconnect(); resizeObserver = null; }
   if (instance) { instance.dispose(); instance = null; }
+  lastOption = null; onCanvas = false;
 }
 
 // Dispatch by chart-type family (P11): circular (pie/donut), scatter (two value axes), or the
@@ -159,6 +301,13 @@ function buildOption(spec) {
   if (spec.type === "treemap") return buildTreemap(spec);
   if (spec.type === "histogram") return buildHistogram(spec);
   if (spec.type === "boxplot") return buildBoxplot(spec);
+  // P36 types.
+  if (spec.type === "waterfall") return buildWaterfall(spec);
+  if (spec.type === "funnel") return buildFunnel(spec);
+  if (spec.type === "gauge") return buildGauge(spec);
+  if (spec.type === "bullet") return buildBullet(spec);
+  if (spec.type === "sankey") return buildSankey(spec);
+  if (spec.type === "multiples") return buildMultiples(spec);
   return buildCartesian(spec);
 }
 
@@ -185,10 +334,14 @@ function legendFor(format, c, names, defaultOn) {
 // (the default). `orientation` is decided by the caller from the shelves; combo stays vertical (its
 // dual value axis is on y). Axis *titles* name the physical axes (xTitle = bottom, yTitle = left)
 // regardless of orientation, so the Format controls stay literal.
-function buildCartesian({ type, categories, series, format = {}, orientation = "vertical", pointLabels, tooltipExtra }) {
+function buildCartesian({ type, categories, series, format = {}, orientation = "vertical", pointLabels, tooltipExtra, otherIndex = -1, analytics = null }) {
   const c = tokens();
   const labels = (categories ?? []).map((l) => l ?? "—");
-  const multi = series.length > 1;
+  // P35 comparison series (compare: true) ride beside their measure: they don't make a chart "multi"
+  // (the main series keeps the brand colour), but they do bring the legend so the dashed line is named.
+  const mainCount = series.filter((s) => !s.compare).length;
+  const hasCompare = mainCount < series.length;
+  const multi = mainCount > 1;
   const isCombo = type === "combo";
   const horizontal = orientation === "horizontal" && !isCombo;
   const fmtVal = makeValueFormatter(format); // P10 — measure value format (tooltip, axis, labels)
@@ -198,7 +351,7 @@ function buildCartesian({ type, categories, series, format = {}, orientation = "
   // category axis already labels each bar, so colour restates identity (never colour-alone).
   const colorByDim = type === "bar" && !multi && !!format.colorByDimension;
 
-  const { show: showLegend, pos, legend } = legendFor(format, c, series.map((s) => s.name), multi || isCombo);
+  const { show: showLegend, pos, legend } = legendFor(format, c, series.map((s) => s.name), multi || isCombo || hasCompare);
   const xTitle = format.xTitle || null;
   const yTitle = format.yTitle || null;
 
@@ -275,6 +428,19 @@ function buildCartesian({ type, categories, series, format = {}, orientation = "
   };
 
   base.series = series.map((s, i) => {
+    // A comparison series wears its measure's colour, faded and dashed (line) or muted (bar).
+    if (s.compare) {
+      const color = colorFor(i - mainCount);
+      const asLine = type === "line" || type === "area";
+      return asLine
+        ? { name: s.name, type: "line", data: s.data, showSymbol: false, z: 1,
+            lineStyle: { width: 2, type: "dashed", color, opacity: 0.7 }, itemStyle: { color, opacity: 0.7 }, emphasis: { focus: "series" } }
+        : { name: s.name, type: "bar", data: s.data, barMaxWidth: 40,
+            // Hatched as well as faded, so it reads as "the other period" without relying on colour.
+            itemStyle: { color: c.muted, opacity: 0.55, borderRadius: horizontal ? [0, 4, 4, 0] : [4, 4, 0, 0],
+              decal: { symbol: "rect", symbolSize: 1, dashArrayX: [1, 0], dashArrayY: [2, 4], rotation: Math.PI / 4, color: c.surface } },
+            emphasis: { itemStyle: { opacity: 0.8 } } };
+    }
     const color = colorFor(i);
     // line/area always draw as a line; in a combo the 1st measure is a bar and the rest are lines.
     const asLine = type === "line" || type === "area" || (isCombo && i >= 1);
@@ -295,30 +461,60 @@ function buildCartesian({ type, categories, series, format = {}, orientation = "
     const stacked = type === "stacked";
     // Round the "growing" end of the bar: top for vertical, right for horizontal; none when stacked.
     const barRadius = stacked ? [0, 0, 0, 0] : (horizontal ? [0, 4, 4, 0] : [4, 4, 0, 0]);
+    // The "Other" bar (everything past the limit) wears the muted ink (≥ 3:1 on the surface, apart from
+    // the series hue); its label says what it is.
+    const otherItem = (v) => ({ value: v, itemStyle: { color: c.muted, borderRadius: barRadius } });
     return {
       name: s.name, type: "bar",
       yAxisIndex: 0,
       stack: stacked ? "total" : undefined,
       // Colour-by-dimension: per-bar colours; otherwise the series colour.
       data: colorByDim
-        ? s.data.map((v, di) => ({ value: v, itemStyle: { color: c.cat[di % c.cat.length], borderRadius: barRadius } }))
-        : s.data,
+        ? s.data.map((v, di) => (di === otherIndex ? otherItem(v) : { value: v, itemStyle: { color: c.cat[di % c.cat.length], borderRadius: barRadius } }))
+        : s.data.map((v, di) => (di === otherIndex ? otherItem(v) : v)),
       barMaxWidth: 40,
       itemStyle: { color, borderRadius: barRadius },
       label: dataLabel,
-      emphasis: { itemStyle: colorByDim ? { opacity: 0.85 } : { color, opacity: 0.85 } },
+      emphasis: { focus: "series", itemStyle: colorByDim ? { opacity: 0.85 } : { color, opacity: 0.85 } },
     };
   });
+  if (analytics) addAnalytics(base, analytics, { c, fmtVal, horizontal });
   return base;
+}
+
+// P21 analytics overlays on a cartesian chart: a dashed reference line (labelled with its value), a
+// shaded band (labelled), and a dotted trend line named at its end — each carries words, never colour alone.
+function addAnalytics(base, a, { c, fmtVal, horizontal }) {
+  const s0 = base.series[0];
+  if (!s0) return;
+  const axis = horizontal ? "xAxis" : "yAxis";
+  if (a.ref) {
+    s0.markLine = { silent: true, symbol: "none", animation: false,
+      lineStyle: { color: c.ink, type: "dashed", width: 1.5 },
+      label: { formatter: `${a.ref.name}: ${fmtVal(a.ref.value)}`, color: c.label, fontFamily: c.font, position: horizontal ? "insideEndTop" : "insideEndTop" },
+      data: [{ [axis]: a.ref.value }] };
+  }
+  if (a.band) {
+    s0.markArea = { silent: true, animation: false, itemStyle: { color: c.grid, opacity: 0.7 },
+      label: { show: true, formatter: `Band ${fmtVal(a.band.from)}–${fmtVal(a.band.to)}`, color: c.muted, fontFamily: c.font, position: "insideTopLeft" },
+      data: [[{ [axis]: a.band.from }, { [axis]: a.band.to }]] };
+  }
+  if (a.trend) {
+    base.series.push({ name: a.trend.name, type: "line", data: a.trend.data, showSymbol: false, z: 4, animation: false,
+      lineStyle: { width: 2, type: "dotted", color: c.muted }, itemStyle: { color: c.muted },
+      endLabel: { show: true, formatter: a.trend.short ?? a.trend.name, color: c.muted, fontFamily: c.font, fontSize: 11 },
+      tooltip: { valueFormatter: fmtVal } });
+    base.grid.right = (Number(base.grid.right) || 0) + 84; // room for the short end label
+  }
 }
 
 // pie / donut — one dimension (slices) × one measure (size). Colour IS the encoding, so a legend
 // shows by default (dataviz: identity never colour-alone; the legend supplies the labels).
-function buildPie({ type, categories, series, format = {}, pointLabels, tooltipExtra }) {
+function buildPie({ type, categories, series, format = {}, pointLabels, tooltipExtra, otherIndex = -1 }) {
   const c = tokens();
   const fmtVal = makeValueFormatter(format);
   const labels = (categories ?? []).map((l) => l ?? "—");
-  const data = labels.map((name, i) => ({ name, value: series[0].data[i] }));
+  const data = labels.map((name, i) => ({ name, value: series[0].data[i], ...(i === otherIndex ? { itemStyle: { color: c.muted } } : {}) }));
   const { pos, legend } = legendFor(format, c, labels, true);
   const showLabels = !!format.dataLabels || !!pointLabels; // P18 Label field forces slice labels on
 
@@ -455,7 +651,7 @@ function buildScatterShapes({ groups, xName, yName, hasSize, sizeName, format = 
     series: groups.map((g, i) => ({
       name: g.name, type: "scatter", symbol: SHAPE_SYMBOLS[i % SHAPE_SYMBOLS.length], symbolSize,
       data: g.points, itemStyle: { color: c.cat[i % c.cat.length], opacity: 0.85 },
-      emphasis: { focus: "self", itemStyle: { borderColor: c.ink, borderWidth: 1 } },
+      emphasis: { focus: "series", itemStyle: { borderColor: c.ink, borderWidth: 1 } },
     })),
   };
 }
@@ -608,6 +804,216 @@ function buildBoxplot({ boxes, format = {} }) {
       itemStyle: { color: c.brandSoft, borderColor: c.series },
       emphasis: { itemStyle: { borderColor: c.ink } },
     }],
+  };
+}
+
+// --- P36 chart types ----------------------------------------------------------
+const tipBox = (c) => ({ backgroundColor: c.surface, borderColor: c.grid, borderWidth: 1, textStyle: { color: c.ink, fontFamily: c.font } });
+const valueAxis = (c, fmtVal, extra = {}) => ({
+  type: "value", axisLine: { show: false }, axisTick: { show: false },
+  splitLine: { lineStyle: { color: c.grid } }, axisLabel: { color: c.muted, formatter: fmtVal }, ...extra,
+});
+const catAxis = (c, data, extra = {}) => ({
+  type: "category", data, axisLine: { lineStyle: { color: c.axis } }, axisTick: { show: false },
+  axisLabel: { color: c.muted, hideOverlap: true }, ...extra,
+});
+
+/**
+ * Waterfall steps: each category's value is a change from the running total, then a final Total bar.
+ * Returns [{ name, start, end, kind: up | down | total }] (pure — exported for tests).
+ */
+export function waterfallSteps(categories, values) {
+  const steps = [];
+  let run = 0;
+  categories.forEach((name, i) => {
+    const v = Number(values[i]);
+    const d = Number.isFinite(v) ? v : 0;
+    steps.push({ name, start: run, end: run + d, kind: d < 0 ? "down" : "up", value: d });
+    run += d;
+  });
+  steps.push({ name: "Total", start: 0, end: run, kind: "total", value: run });
+  return steps;
+}
+
+// waterfall — floating bars drawn as a custom series (so a running total below zero still works);
+// increases blue, decreases orange, Total muted — each named in the legend and signed in its label.
+function buildWaterfall({ categories, series, format = {} }) {
+  const c = tokens();
+  const fmtVal = makeValueFormatter(format);
+  const steps = waterfallSteps(categories ?? [], series[0]?.data ?? []);
+  const colour = { up: c.cat[0], down: c.cat[5], total: c.muted };
+  const names = { up: "Increase", down: "Decrease", total: "Total" };
+  const signed = (v) => (v > 0 ? `+${fmtVal(v)}` : v < 0 ? `−${fmtVal(-v)}` : fmtVal(v));
+  return {
+    textStyle: { fontFamily: c.font, color: c.label },
+    legend: { top: 0, left: "center", data: ["Increase", "Decrease", "Total"], textStyle: { color: c.label, fontFamily: c.font }, icon: "roundRect" },
+    grid: { left: 6, right: 18, top: 36, bottom: 6, containLabel: true },
+    tooltip: { trigger: "item", ...tipBox(c),
+      formatter: (p) => { const st = steps[p.dataIndex]; return st ? `<span style="color:${c.muted}">${escapeHtml(String(st.name))}</span><br><b>${st.kind === "total" ? fmtVal(st.value) : signed(st.value)}</b>${st.kind === "total" ? "" : `<br>running total ${fmtVal(st.end)}`}` : ""; } },
+    xAxis: catAxis(c, steps.map((st) => st.name)),
+    yAxis: valueAxis(c, fmtVal),
+    series: [
+      { type: "custom", name: "steps", data: steps.map((st, i) => [i, st.start, st.end]),
+        encode: { x: 0, y: [1, 2] },
+        renderItem: (params, api) => {
+          const st = steps[params.dataIndex];
+          const a = api.coord([api.value(0), api.value(1)]), b = api.coord([api.value(0), api.value(2)]);
+          const w = Math.min(40, api.size([1, 0])[0] * 0.6);
+          const top = Math.min(a[1], b[1]), h = Math.max(1, Math.abs(a[1] - b[1]));
+          return {
+            type: "group", children: [
+              { type: "rect", shape: { x: a[0] - w / 2, y: top, width: w, height: h, r: 2 }, style: { fill: colour[st.kind] } },
+              { type: "text", style: { text: st.kind === "total" ? fmtVal(st.value) : signed(st.value), x: a[0], y: top - 4,
+                  align: "center", verticalAlign: "bottom", fill: c.label, font: `11px ${c.font}` } },
+            ],
+          };
+        } },
+      // Legend swatches only (no data).
+      ...["up", "down", "total"].map((k) => ({ type: "bar", name: names[k], data: [], itemStyle: { color: colour[k] } })),
+    ],
+  };
+}
+
+// funnel — stages by value, widest first; each stage labelled with its value and % of the first.
+function buildFunnel({ categories, series, format = {} }) {
+  const c = tokens();
+  const fmtVal = makeValueFormatter(format);
+  // Each stage's label ink is picked for contrast against its own palette colour (≥ 4.5:1).
+  const inks = [c.ink, c.surface, "#000000", "#ffffff"];
+  const data = (categories ?? []).map((name, i) => ({ name, value: Number(series[0].data[i]) || 0,
+    label: { color: pickInk(c.cat[i % c.cat.length], inks) } }));
+  const top = Math.max(...data.map((d) => d.value), 0) || 1;
+  const { legend } = legendFor(format, c, data.map((d) => d.name), false);
+  return {
+    color: c.cat, textStyle: { fontFamily: c.font, color: c.label }, legend,
+    tooltip: { trigger: "item", ...tipBox(c), formatter: (p) => `<span style="color:${c.muted}">${escapeHtml(String(p.name))}</span><br><b>${fmtVal(p.value)}</b> (${((p.value / top) * 100).toFixed(1)}% of the first)` },
+    series: [{
+      type: "funnel", sort: "descending", gap: 2, left: "10%", right: "10%", top: legend ? 36 : 12, bottom: 12, minSize: "8%",
+      data, itemStyle: { borderColor: c.surface, borderWidth: 1 },
+      label: { show: true, position: "inside", fontFamily: c.font, lineHeight: 16,
+        formatter: (p) => `${p.name}\n${fmtVal(p.value)} · ${((p.value / top) * 100).toFixed(0)}%` },
+    }],
+  };
+}
+
+/** A round axis maximum just above `v` (1, 2, 2.5, 5 × 10^n). */
+export function niceMax(v) {
+  const n = Math.abs(Number(v)) || 1;
+  const p = 10 ** Math.floor(Math.log10(n));
+  for (const m of [1, 2, 2.5, 5, 10]) if (m * p >= n) return m * p;
+  return 10 * p;
+}
+
+// gauge — one value on an arc from 0 to the Target (Format) or a round maximum; the value and "of
+// <target>" are written in the middle, so the arc never carries the meaning alone.
+function buildGauge({ value, name, target, format = {} }) {
+  const c = tokens();
+  const fmtVal = makeValueFormatter(format);
+  const v = Number(value) || 0;
+  const max = target != null && Number(target) > 0 ? Number(target) : niceMax(v);
+  return {
+    textStyle: { fontFamily: c.font, color: c.label },
+    tooltip: { ...tipBox(c), formatter: () => `${escapeHtml(String(name))}: <b>${fmtVal(v)}</b>${target != null ? ` of ${fmtVal(target)}` : ""}` },
+    series: [{
+      type: "gauge", min: 0, max, startAngle: 210, endAngle: -30, radius: "88%", center: ["50%", "58%"],
+      progress: { show: true, width: 16, itemStyle: { color: target != null && v >= max ? c.cat[4] : c.series } },
+      axisLine: { lineStyle: { width: 16, color: [[1, c.grid]] } },
+      pointer: { show: false }, axisTick: { show: false }, splitLine: { show: false },
+      axisLabel: { distance: 22, color: c.muted, fontFamily: c.font, formatter: (x) => (x === 0 || x === max ? fmtVal(x) : "") },
+      title: { offsetCenter: [0, "34%"], color: c.label, fontFamily: c.font, fontSize: 13 },
+      detail: { offsetCenter: [0, "4%"], valueAnimation: true, color: c.ink, fontFamily: c.font, fontSize: 28, fontWeight: 600,
+        formatter: () => (target != null ? `${fmtVal(v)}\n{t|${((v / max) * 100).toFixed(0)}% of ${fmtVal(target)}}` : fmtVal(v)),
+        rich: { t: { fontSize: 12, color: c.muted, fontWeight: 400, padding: [6, 0, 0, 0] } } },
+      data: [{ value: Math.min(v, max), name }],
+    }],
+  };
+}
+
+// bullet — per category, the actual value (a dark bar) over three bands (< 50 %, 50–75 %, 75–100 % of
+// target) with the target as a tick. Horizontal, first category on top.
+function buildBullet({ categories, values, target, name, format = {} }) {
+  const c = tokens();
+  const fmtVal = makeValueFormatter(format);
+  const t = Number(target);
+  const cats = categories ?? [];
+  const vals = (values ?? []).map((v) => Number(v) || 0);
+  const max = niceMax(Math.max(t * 1.1, ...vals));
+  const band = (from, to) => cats.map(() => t * (to - from));
+  const bands = [["Below 50% of target", 0, 0.5, 0.12], ["50–75%", 0.5, 0.75, 0.22], ["75–100%", 0.75, 1, 0.32]];
+  return {
+    textStyle: { fontFamily: c.font, color: c.label },
+    legend: { top: 0, left: "center", textStyle: { color: c.label, fontFamily: c.font }, data: [name, "Target", ...bands.map((b) => b[0])] },
+    grid: { left: 6, right: 24, top: 36, bottom: 6, containLabel: true },
+    tooltip: { trigger: "axis", axisPointer: { type: "shadow" }, ...tipBox(c),
+      formatter: (p) => { const i = (Array.isArray(p) ? p[0] : p).dataIndex; return `<span style="color:${c.muted}">${escapeHtml(String(cats[i] ?? ""))}</span><br><b>${escapeHtml(String(name))}:</b> ${fmtVal(vals[i])}<br><b>Target:</b> ${fmtVal(t)} (${((vals[i] / t) * 100).toFixed(0)}%)`; } },
+    xAxis: valueAxis(c, fmtVal, { max }),
+    yAxis: catAxis(c, cats, { inverse: true }),
+    series: [
+      ...bands.map(([label, from, to, op]) => ({ type: "bar", name: label, stack: "bands", silent: true, barWidth: "60%",
+        data: band(from, to), itemStyle: { color: c.muted, opacity: op } })),
+      { type: "bar", name, data: vals, barWidth: "24%", barGap: "-70%", z: 3, itemStyle: { color: c.ink } },
+      { type: "scatter", name: "Target", data: cats.map((_, i) => [t, i]), symbol: "rect", symbolSize: [3, 26], z: 4,
+        itemStyle: { color: c.series } },
+    ],
+  };
+}
+
+// sankey — flows from the first dimension's members (left) to the second's (right), width = measure.
+// Node ids carry a side prefix so a value present on both sides stays two nodes; labels strip it.
+function buildSankey({ links, format = {} }) {
+  const c = tokens();
+  const fmtVal = makeValueFormatter(format);
+  const nodes = [...new Set(links.flatMap((l) => [l.source, l.target]))].map((n) => ({ name: n }));
+  const label = (id) => String(id).slice(2);
+  return {
+    color: c.cat, textStyle: { fontFamily: c.font, color: c.label },
+    tooltip: { trigger: "item", ...tipBox(c),
+      formatter: (p) => (p.dataType === "edge"
+        ? `${escapeHtml(label(p.data.source))} → ${escapeHtml(label(p.data.target))}<br><b>${fmtVal(p.data.value)}</b>`
+        : `${escapeHtml(label(p.name))}<br><b>${fmtVal(p.value)}</b>`) },
+    series: [{
+      type: "sankey", left: 8, right: 120, top: 12, bottom: 12, nodeGap: 10, nodeWidth: 14, draggable: false,
+      emphasis: { focus: "adjacency" }, data: nodes, links,
+      label: { color: c.label, fontFamily: c.font, formatter: (p) => label(p.name) },
+      lineStyle: { color: "gradient", opacity: 0.35, curveness: 0.5 },
+      itemStyle: { borderColor: c.surface, borderWidth: 1 },
+    }],
+  };
+}
+
+/** Grid layout for n small-multiple panels in a w × h box: { cols, rows } close to the box's shape. */
+export function multiplesGrid(n, w = 4, h = 3) {
+  const cols = Math.max(1, Math.min(n, Math.round(Math.sqrt((n * w) / h)) || 1));
+  return { cols, rows: Math.ceil(n / cols) };
+}
+
+// small multiples — one mini line chart per member of the first dimension, the second dimension along
+// each x axis, all panels on one shared y scale so their heights compare honestly.
+function buildMultiples({ panels, xCats, seriesNames, format = {}, width = 800, height = 450 }) {
+  const c = tokens();
+  const fmtVal = makeValueFormatter(format);
+  const { cols, rows } = multiplesGrid(panels.length, width, height);
+  const all = panels.flatMap((p) => p.series.flatMap((s) => s)).map(Number).filter(Number.isFinite);
+  const yMax = all.length ? niceMax(Math.max(...all, 0)) : 1;
+  const yMin = all.length && Math.min(...all) < 0 ? -niceMax(-Math.min(...all)) : 0;
+  const cw = 100 / cols, rh = 100 / rows;
+  const titles = [], grids = [], xAxes = [], yAxes = [], series = [];
+  panels.forEach((p, i) => {
+    const col = i % cols, row = Math.floor(i / cols);
+    titles.push({ text: p.name, left: `${col * cw + 1}%`, top: `${row * rh}%`, textStyle: { color: c.label, fontFamily: c.font, fontSize: 12, fontWeight: 600 } });
+    grids.push({ left: `${col * cw + 3}%`, width: `${cw - 5}%`, top: `${row * rh + 5}%`, height: `${rh - 12}%`, containLabel: true });
+    xAxes.push({ ...catAxis(c, xCats), gridIndex: i, axisLabel: { color: c.muted, hideOverlap: true, fontSize: 10 } });
+    yAxes.push({ ...valueAxis(c, fmtVal), gridIndex: i, min: yMin, max: yMax, splitNumber: 2, axisLabel: { color: c.muted, formatter: fmtVal, fontSize: 10, show: col === 0 } });
+    p.series.forEach((data, si) => series.push({
+      type: "line", name: seriesNames[si], xAxisIndex: i, yAxisIndex: i, data, showSymbol: data.length <= 30, symbolSize: 5,
+      lineStyle: { width: 1.5, color: seriesNames.length > 1 ? c.cat[si % c.cat.length] : c.series },
+      itemStyle: { color: seriesNames.length > 1 ? c.cat[si % c.cat.length] : c.series },
+    }));
+  });
+  return {
+    textStyle: { fontFamily: c.font, color: c.label }, title: titles, grid: grids, xAxis: xAxes, yAxis: yAxes, series,
+    legend: seriesNames.length > 1 ? { bottom: 0, left: "center", textStyle: { color: c.label, fontFamily: c.font } } : undefined,
+    tooltip: { trigger: "axis", ...tipBox(c), valueFormatter: fmtVal },
   };
 }
 

@@ -12,6 +12,11 @@ export function makeValueFormatter(fmt = {}) {
   const opts = dec == null
     ? { maximumFractionDigits: 2 }
     : { minimumFractionDigits: dec, maximumFractionDigits: dec };
+  // `suffix` (e.g. "%" for a percent table calculation, already in percent units) follows the number.
+  if (fmt.suffix) {
+    const base = makeValueFormatter({ ...fmt, suffix: undefined, numberFormat: "auto" });
+    return (n) => { const s = base(n); return s === "—" ? s : s + fmt.suffix; };
+  }
   return (n) => {
     if (n == null) return "—";
     const v = Number(n);

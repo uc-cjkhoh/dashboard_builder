@@ -3,68 +3,88 @@
    Source of truth for the visual language: DESIGN.md — never hardcode a hex outside :root. */
 
 /* ==========================================================================
-   Dashboard Builder — design tokens (Fluent / Flat 2.0, slate + blue, light + dark).
+   Dashboard Builder — design tokens (Flat 2.0 + glass, warm neutrals + crimson, light + dark).
+   Glass is for chrome that only ever sits over the background wash (sidebar, tab bar, worksheet
+   header). Anything that floats over content — menus, popovers, toasts, dialogs — is solid, so no
+   text shows through behind other text (DESIGN.md).
    ========================================================================== */
 :root {
   color-scheme: light dark;
   /* Surfaces & ink */
-  --bg: #eef2f7; --surface: #ffffff; --surface-2: #f6f8fb; --surface-3: #eef2f7;
-  --glass: rgb(255 255 255 / .68); --glass-line: rgb(15 23 42 / .08);
-  --ink: #0f172a; --ink-2: #334155; --ink-3: #5b6b81; --line: #e2e8f0; --line-2: #cbd5e1;
-  /* One accent; red means danger only */
-  --accent: #2563eb; --accent-hover: #1d4ed8; --accent-pressed: #1e40af; --accent-ink: #1d4ed8;
-  --accent-soft: #eff4ff; --accent-line: #bfd3fe; --on-accent: #ffffff; --on-ink: var(--surface);
+  --bg: #f6f3f3; --surface: #ffffff; --surface-2: #faf7f7; --surface-3: #f2eded;
+  --ink: #1c1719; --ink-2: #423a3d; --ink-3: #6b6165; --line: #ebe4e5; --line-2: #d9cfd1;
+  /* Glass (chrome over the wash only): tint, rim, top highlight, blur */
+  --glass: rgb(255 255 255 / .72); --glass-line: rgb(60 20 28 / .10); --glass-rim: rgb(255 255 255 / .9);
+  --glass-blur: blur(20px) saturate(150%);
+  /* Controls on glass sit one tier more solid than the panel; --ctl-edge keeps their outline ≥ 3:1
+     against the glass (WCAG 1.4.11) whatever the wash does beneath it. */
+  --glass-ctl: rgb(255 255 255 / .80); --glass-ctl-hover: #fbf1f2; --ctl-edge: #8f8487; /* hover: a faint rose tint — white on near-white glass would not show */
+  /* One accent — crimson. Danger is a separate vermilion and always carries an icon + words */
+  --accent: #c4142c; --accent-hover: #a8102a; --accent-pressed: #8c0d22; --accent-ink: #b01229;
+  --accent-soft: #fdeff1; --accent-line: #f3c3ca; --on-accent: #ffffff; --on-ink: var(--surface);
+  --focus: var(--ink);
   --ok-bg: #ecfdf3; --ok-ink: #067647; --ok-line: #abefc6;
-  --warn-bg: #fffaeb; --warn-ink: #93370d; --warn-line: #fedf89;
-  --danger-bg: #fef3f2; --danger-ink: #b42318; --danger-line: #fecdca; --danger-solid: #d92d20;
-  /* Field roles (pills) */
-  --dim-bg: var(--accent-soft); --dim-ink: var(--accent-ink); --dim-line: var(--accent-line);
-  --meas-bg: #ecfeff; --meas-ink: #0e7490; --meas-line: #a5f3fc;
-  --enc-bg: #f4f3ff; --enc-ink: #5925dc; --enc-line: #d9d6fe;
+  --warn-bg: #fff6e6; --warn-ink: #8a3a0a; --warn-line: #fbd38d;
+  --danger-bg: #fff1ee; --danger-ink: #a3150c; --danger-line: #fbc5b6; --danger-solid: #c2410c;
+  /* Field roles (pills) — blue dimension, teal measure, violet mark: never red, so a pill never reads as an error */
+  --dim-bg: #edf4fd; --dim-ink: #1f5fb8; --dim-line: #bcd5f7;
+  --meas-bg: #e9f8f8; --meas-ink: #0b6e75; --meas-line: #a6e3e6;
+  --enc-bg: #f3f0fe; --enc-ink: #5b2fc9; --enc-line: #d6cdfc;
   --up: var(--ok-ink); --down: var(--danger-ink);
   /* Charts */
+  --print-paper: #ffffff; --print-ink: #000000; /* P41 print: always black on white, whatever the scheme */
   --chart-series: var(--accent); --chart-axis: var(--line-2); --chart-grid: var(--line);
   --chart-label: var(--ink-2); --chart-muted: var(--ink-3);
   --chart-cat-1: #2a78d6; --chart-cat-2: #008300; --chart-cat-3: #e87ba4; --chart-cat-4: #eda100;
   --chart-cat-5: #1baf7a; --chart-cat-6: #eb6834; --chart-cat-7: #4a3aa7; --chart-cat-8: #e34948;
-  /* Background wash — gives the glass something to blur */
-  --wash: radial-gradient(1200px 800px at 85% -10%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 60%),
-          radial-gradient(900px 700px at -10% 110%, color-mix(in srgb, #14b8a6 6%, transparent), transparent 60%);
+  /* Background wash — the soft colour field the glass chrome blurs */
+  --wash: radial-gradient(1100px 760px at 88% -12%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 62%),
+          radial-gradient(900px 700px at -8% 108%, color-mix(in srgb, #f59e0b 9%, transparent), transparent 60%),
+          radial-gradient(700px 520px at 40% 45%, color-mix(in srgb, #e11d48 4%, transparent), transparent 70%);
   /* Type, space, shape, depth, motion */
   --font: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   --fs-xs: 12px; --fs-sm: 13px; --fs-body: 14px; --fs-lead: 16px; --fs-title: 20px; --fs-kpi: 30px;
   --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 20px; --s6: 24px; --s7: 32px;
-  --r-ctl: 4px; --r: 8px; --r-lg: 12px; --r-pill: 999px; --ctl-h: 32px; --sidebar-w: 264px;
-  --elev-2: 0 1px 2px rgb(15 23 42 / .06), 0 0 2px rgb(15 23 42 / .06);
-  --elev-8: 0 4px 8px rgb(15 23 42 / .08), 0 0 2px rgb(15 23 42 / .06);
-  --elev-16: 0 8px 16px rgb(15 23 42 / .10), 0 0 2px rgb(15 23 42 / .06);
-  --elev-28: 0 14px 28px rgb(15 23 42 / .16), 0 0 8px rgb(15 23 42 / .08);
-  --dur-fast: 150ms; --dur: 200ms; --dur-slow: 250ms;
-  --ease: cubic-bezier(.33, 0, .67, 1); --ease-out: cubic-bezier(.1, .9, .2, 1);
+  --r-ctl: 6px; --r: 10px; --r-lg: 14px; --r-pill: 999px; --ctl-h: 32px; --sidebar-w: 264px;
+  --topbar-h: 60px;            /* shared height of the sidebar brand and the canvas tab bar */
+  --elev-2: 0 1px 2px rgb(40 12 18 / .06), 0 0 1px rgb(40 12 18 / .08);
+  --elev-8: 0 4px 10px rgb(40 12 18 / .08), 0 0 1px rgb(40 12 18 / .10);
+  --elev-16: 0 10px 24px rgb(40 12 18 / .12), 0 0 1px rgb(40 12 18 / .12);
+  --elev-28: 0 18px 40px rgb(40 12 18 / .18), 0 0 1px rgb(40 12 18 / .14);
+  --scrim: rgb(28 23 25 / .38);
+  /* Motion (Fluent-style): ~150–250ms; entrances decelerate (--ease-out), exits accelerate (--ease-in)
+     and are quicker (--dur-exit). Only opacity/transform animate. Core/motion.js mirrors these. */
+  --dur-exit: 100ms; --dur-fast: 150ms; --dur: 200ms; --dur-slow: 250ms;
+  --ease: cubic-bezier(.33, 0, .67, 1); --ease-out: cubic-bezier(.1, .9, .2, 1); --ease-in: cubic-bezier(.5, 0, .75, 0);
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0b1220; --surface: #111a2b; --surface-2: #162133; --surface-3: #1c2940;
-    --glass: rgb(17 26 43 / .66); --glass-line: rgb(255 255 255 / .08);
-    --ink: #e2e8f0; --ink-2: #cbd5e1; --ink-3: #94a3b8; --line: #1f2a3d; --line-2: #2b3a52;
-    --accent-ink: #93c5fd; --accent-soft: rgb(59 130 246 / .16); --accent-line: rgb(59 130 246 / .4);
-    --ok-bg: rgb(23 178 106 / .14); --ok-ink: #75e0a7; --ok-line: rgb(23 178 106 / .4);
-    --warn-bg: rgb(247 144 9 / .14); --warn-ink: #fec84b; --warn-line: rgb(247 144 9 / .4);
-    --danger-bg: rgb(240 68 56 / .14); --danger-ink: #fda29b; --danger-line: rgb(240 68 56 / .4); --danger-solid: #f04438;
-    --meas-bg: rgb(6 182 212 / .14); --meas-ink: #67e8f9; --meas-line: rgb(6 182 212 / .4);
-    --enc-bg: rgb(122 90 248 / .16); --enc-ink: #bdb4fe; --enc-line: rgb(122 90 248 / .4);
+    --bg: #141113; --surface: #1c181b; --surface-2: #221d21; --surface-3: #2b2529;
+    --ink: #f3eeef; --ink-2: #d8cfd2; --ink-3: #a89ea2; --line: #2e282c; --line-2: #42393e;
+    --glass: rgb(28 24 27 / .70); --glass-line: rgb(255 170 180 / .10); --glass-rim: rgb(255 190 198 / .08);
+    --glass-ctl: rgb(43 37 41 / .85); --glass-ctl-hover: rgb(56 48 53 / .96); --ctl-edge: #7d7377;
+    --accent: #d42a3c; --accent-hover: #b81f30; --accent-pressed: #9c1828; --accent-ink: #ff8f99;
+    --accent-soft: #3a1a20; --accent-line: #6b2a33;
+    --ok-bg: #112a1d; --ok-ink: #75e0a7; --ok-line: #1f5c3c;
+    --warn-bg: #2d2210; --warn-ink: #fdc56b; --warn-line: #6b4a12;
+    --danger-bg: #341a14; --danger-ink: #ffa48c; --danger-line: #7a3322; --danger-solid: #f97350;
+    --dim-bg: #172235; --dim-ink: #8cbcff; --dim-line: #2c4a78;
+    --meas-bg: #10292b; --meas-ink: #6fdde3; --meas-line: #1d5a5e;
+    --enc-bg: #231d3a; --enc-ink: #c3b5ff; --enc-line: #4b3c8a;
     --chart-cat-1: #4d95ea; --chart-cat-2: #3ba55c; --chart-cat-3: #f08fb6; --chart-cat-4: #f5b83d;
     --chart-cat-5: #2ec48c; --chart-cat-6: #f2834f; --chart-cat-7: #9d8cf2; --chart-cat-8: #f26b6a;
-    --elev-2: 0 1px 2px rgb(0 0 0 / .4); --elev-8: 0 4px 8px rgb(0 0 0 / .4);
-    --elev-16: 0 8px 16px rgb(0 0 0 / .45); --elev-28: 0 14px 28px rgb(0 0 0 / .55);
+    --elev-2: 0 1px 2px rgb(0 0 0 / .45); --elev-8: 0 4px 10px rgb(0 0 0 / .45);
+    --elev-16: 0 10px 24px rgb(0 0 0 / .5); --elev-28: 0 18px 40px rgb(0 0 0 / .6);
+    --scrim: rgb(0 0 0 / .55);
   }
 }
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) { :root { --glass: var(--surface-2); } }
-@media (prefers-reduced-transparency: reduce) { :root { --glass: var(--surface-2); } }
+/* No backdrop-filter, or the user asked for less transparency: glass falls back to an opaque surface. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) { :root { --glass: var(--surface-2); --glass-ctl: var(--surface); } }
+@media (prefers-reduced-transparency: reduce) { :root { --glass: var(--surface-2); --glass-ctl: var(--surface); --glass-blur: none; } }
 
 /* Respect users who prefer less motion — collapse all animation/transition to instant. */
 @media (prefers-reduced-motion: reduce) {
-  :root { --dur-fast: 0ms; --dur: 0ms; --dur-slow: 0ms; }
+  :root { --dur-exit: 0ms; --dur-fast: 0ms; --dur: 0ms; --dur-slow: 0ms; }
   *, *::before, *::after {
     animation-duration: 0ms !important;
     animation-iteration-count: 1 !important;
@@ -76,6 +96,7 @@
 /* Shared keyframes */
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes rise-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes view-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 @keyframes toast-in {
   from { opacity: 0; transform: translateX(-50%) translateY(14px); }
   to   { opacity: 1; transform: translateX(-50%); }
@@ -92,7 +113,9 @@
    internally (CLAUDE.md golden rule 8 / DESIGN.md). */
 html, body { height: 100%; overflow: hidden; }
 
-body { margin: 0; background: var(--bg) var(--wash) fixed; color: var(--ink); font: var(--fs-body)/1.45 var(--font); }
+/* The colour layer must come last in a multi-layer background, so the wash and the base are set apart. */
+body { margin: 0; background-color: var(--bg); background-image: var(--wash); background-attachment: fixed;
+  color: var(--ink); font: var(--fs-body)/1.45 var(--font); }
 
 /* The single, reliable show/hide switch app-wide (CLAUDE.md golden rule 6). */
 [hidden] { display: none !important; }
@@ -100,9 +123,36 @@ body { margin: 0; background: var(--bg) var(--wash) fixed; color: var(--ink); fo
 h1, h2, h3, p { margin: 0; }
 button { font: inherit; }
 
-.glass { background: var(--glass); border: 1px solid var(--glass-line);
-  -webkit-backdrop-filter: blur(24px) saturate(160%); backdrop-filter: blur(24px) saturate(160%); }
-:where(button, input, select, textarea, a, [tabindex]):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Glass — only on chrome with nothing but the wash beneath it (sidebar, tab bar, worksheet header).
+   Never on menus, popovers, toasts or dialogs: those sit over content and stay solid. */
+.glass { background: var(--glass); border: 1px solid var(--glass-line); box-shadow: inset 0 1px 0 var(--glass-rim);
+  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); transform: translateZ(0); }
+/* ---- Controls on glass — the state ladder ------------------------------------
+   Tier 1 is the glass panel; tier 2 (a control on it) is more solid with a ≥ 3:1 edge; tier 3 (the
+   primary action) is solid accent. Every state changes at least two of fill / edge / shadow / ink:
+   rest → hover (solid fill, darker edge, deeper shadow) → pressed (sinks: smaller, flatter) →
+   selected (accent fill + edge + underline + 600 weight) → disabled (flat, faded, inert).
+   Ghost buttons on glass (icon buttons, encoding tools) have no fill at rest and become a frosted
+   pill on hover. Feature sheets apply the same ladder to tabs, table chips and worksheet tools. */
+.glass .iconbtn, .ws-shelves .iconbtn { border: 1px solid transparent; }
+.glass .iconbtn:not(:disabled):hover, .ws-shelves .iconbtn:not(:disabled):hover {
+  background: var(--glass-ctl-hover); border-color: var(--ctl-edge); color: var(--ink);
+  box-shadow: inset 0 1px 0 var(--glass-rim), var(--elev-2); }
+.glass .iconbtn:not(:disabled):active, .ws-shelves .iconbtn:not(:disabled):active { transform: scale(.96); box-shadow: none; }
+.glass .iconbtn--danger:not(:disabled):hover { color: var(--danger-ink); border-color: var(--danger-line); background: var(--danger-bg); }
+.iconbtn { transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease),
+  box-shadow var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease); }
+.iconbtn:disabled { opacity: .5; cursor: not-allowed; }
+/* Inputs on glass get the ≥ 3:1 control edge too (on solid surfaces --line-2 is enough beside a label). */
+.glass :is(.input, .select, input[type="text"], input[type="number"], input[type="password"], input[type="search"]),
+.ws-shelves :is(.input, .select, select) { border-color: var(--ctl-edge); }
+/* Touch: glass controls grow to a 44px target. */
+@media (pointer: coarse) {
+  .glass .iconbtn, .ws-shelves .iconbtn { min-width: 44px; min-height: 44px; }
+}
+
+/* Neutral focus ring: a red ring would read as an error now that the accent is red. */
+:where(button, input, select, textarea, a, [tabindex]):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 /* Thin, themed scrollbars — muted ink thumb on the glass sidebar, line-coloured in the content, accent on hover */
 .table-list { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--ink-3) 45%, transparent) transparent; }
@@ -119,14 +169,37 @@ button { font: inherit; }
 
 /* ---- Menu (button + popover list; Core/menu.js) -------------------------- */
 .menu { position: relative; }
+/* Solid, never glass: the list floats over content, and blurred text behind it would read through. */
 .menu__list { position: absolute; right: 0; top: calc(100% + var(--s1)); z-index: 50; min-width: 200px; padding: var(--s1);
-  border-radius: var(--r); box-shadow: var(--elev-8); display: grid; }
+  background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r); box-shadow: var(--elev-16); display: grid; }
 .menu__item { display: flex; align-items: center; gap: var(--s2); height: var(--ctl-h); padding: 0 var(--s3); border: 0;
   border-radius: var(--r-ctl); background: transparent; color: var(--ink); text-align: left; cursor: pointer; font-size: var(--fs-sm); }
 .menu__item:hover, .menu__item:focus-visible { background: var(--surface-3); }
+.menu__item:focus-visible { outline-offset: -2px; }
+.menu__list { transform-origin: top right; }
+/* Left-anchored list (its button sits at a row's start): grows from the button's left edge. */
+.menu__list--start { left: 0; right: auto; transform-origin: top left; }
+.menu__item .icon { flex: none; color: var(--ink-2); }
+.menu__label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Radio items: the chosen one is bold + ticked — never colour alone. */
+.menu__item[aria-checked="true"] { font-weight: 600; }
+.menu__item .menu__check { margin-left: auto; color: var(--accent-ink); visibility: hidden; }
+.menu__item[aria-checked="true"] .menu__check { visibility: visible; }
+.menu__heading { padding: var(--s1) var(--s3) 2px; font-size: var(--fs-xs); font-weight: 600; color: var(--ink-3); grid-column: 1 / -1; }
+.menu__sep { height: 1px; margin: var(--s1) 0; background: var(--line); grid-column: 1 / -1; }
+
+/* ---- Resize handle (Core/resizer.js) — a 6px hit strip with a 2px accent line on hover/focus/drag ---- */
+.resizer { width: 6px; cursor: col-resize; touch-action: none; }
+.resizer::after {
+  content: ""; position: absolute; top: 0; bottom: 0; left: 2px; width: 2px;
+  background: transparent; transition: background var(--dur) var(--ease);
+}
+.resizer:hover::after, .resizer:focus-visible::after, body.is-resizing .resizer::after { background: var(--accent); }
+.resizer:focus-visible { outline: none; }
+body.is-resizing { cursor: col-resize; user-select: none; }
 
 /* ---- Buttons ------------------------------------------------------------- */
-.btn { display: inline-flex; align-items: center; gap: var(--s2); height: var(--ctl-h); padding: 0 var(--s3);
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--s2); height: var(--ctl-h); padding: 0 var(--s3);
   border: 1px solid var(--line-2); border-radius: var(--r-ctl); background: var(--surface); color: var(--ink);
   font-size: var(--fs-sm); font-weight: 600; cursor: pointer; transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease); }
 .btn:hover { background: var(--surface-3); }
@@ -148,14 +221,14 @@ button { font: inherit; }
 .iconbtn__svg { display: block; }
 .icon { flex: none; display: block; }
 .icon--up { transform: rotate(180deg); }
-.toast__close, .field-error__icon, .table-chip__icon, .pill__glyph, .ws-tool__icon, .ws-select__icon, .ws-drill__icon { display: inline-grid; place-items: center; }
+.toast__close, .field-error__icon, .table-chip__icon, .table-chip__grip, .pill__glyph, .ws-tool__icon, .ws-select__icon, .ws-drill__icon { display: inline-grid; place-items: center; }
 .ws-toolpanel__title, .ws-toolbtn, .ws-drill__up, .ws-field__add, .workbook__btn { display: inline-flex; align-items: center; gap: var(--s1); }
 
 /* ---- Inputs -------------------------------------------------------------- */
 .input, .select { height: var(--ctl-h); padding: 0 var(--s3); border: 1px solid var(--line-2); border-radius: var(--r-ctl);
   background: var(--surface); color: var(--ink); font: inherit; font-size: var(--fs-sm); min-width: 0; transition: border-color var(--dur-fast) var(--ease); }
 .input:hover, .select:hover { border-color: var(--ink-3); }
-.input:focus, .select:focus { outline: none; border-color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent); }
+.input:focus, .select:focus { outline: none; border-color: var(--ink-3); box-shadow: inset 0 -2px 0 var(--accent); }
 .input[aria-invalid="true"], .select[aria-invalid="true"] { border-color: var(--danger-solid); box-shadow: inset 0 -2px 0 var(--danger-solid); }
 .field-error { display: flex; gap: var(--s1); margin-top: var(--s1); color: var(--danger-ink); font-size: var(--fs-xs); }
 /* Higher specificity so the connection inputs' own border rule doesn't win. */
@@ -187,11 +260,11 @@ button { font: inherit; }
 .entity .iconbtn--danger:hover, .widget .iconbtn--danger:hover { color: var(--danger-ink); background: var(--danger-bg); }
 
 /* ---- Dialog (native <dialog>) -------------------------------------------- */
-.toast, .dialog { background: var(--glass); border: 1px solid var(--glass-line);
-  -webkit-backdrop-filter: blur(24px) saturate(160%); backdrop-filter: blur(24px) saturate(160%); }
+/* Toast and dialog float over content, so they are solid surfaces (flat 2.0 + elevation), not glass. */
+.toast, .dialog { background: var(--surface); border: 1px solid var(--line-2); }
 .dialog { padding: 0; overflow: hidden; min-width: 280px; border-radius: var(--r-lg); color: var(--ink); box-shadow: var(--elev-28); animation: dialog-in var(--dur-slow) var(--ease-out); }
 .dialog--sm { max-width: 340px; }
-.dialog::backdrop { background: color-mix(in srgb, var(--bg) 45%, transparent); backdrop-filter: blur(4px); animation: fade-in var(--dur) var(--ease); }
+.dialog::backdrop { background: var(--scrim); animation: fade-in var(--dur) var(--ease); }
 .dialog__head { padding: var(--s3) var(--s4); border-bottom: 1px solid var(--line); font-weight: 600; }
 .dialog__title { margin: 0; padding: var(--s4) var(--s4) 0; font-size: var(--fs-lead); font-weight: 600; }
 .dialog__list { margin: var(--s3) 0 0; padding: 0 var(--s4) 0 var(--s7); max-height: 50vh; overflow: auto; color: var(--ink-2); font-size: var(--fs-sm); }
@@ -211,7 +284,41 @@ button { font: inherit; }
   gap: var(--s3); max-width: min(560px, calc(100vw - 2 * var(--s4))); padding: var(--s3) var(--s2) var(--s3) var(--s4);
   border-radius: var(--r); box-shadow: var(--elev-16); color: var(--ink); font-size: var(--fs-sm); font-weight: 500;
   animation: toast-in var(--dur-slow) var(--ease-out); }
-.toast--ok { border-left: 3px solid var(--ok-ink); } .toast--info { border-left: 3px solid var(--accent); }
+.toast--ok { border-left: 3px solid var(--ok-ink); } .toast--info { border-left: 3px solid var(--ink-3); }
 .toast--danger { border-left: 3px solid var(--danger-solid); }
 .toast__close { margin-left: auto; border: 0; background: transparent; color: var(--ink-3); width: 24px; height: 24px; border-radius: var(--r-ctl); cursor: pointer; }
 .toast__close:hover { background: var(--surface-3); color: var(--ink); }
+
+/* P41 theme dialog (Workbook → Theme…): labelled swatch options — never colour alone. */
+.theme-dialog { width: min(520px, calc(100vw - 32px)); }
+.theme-dialog__body { display: grid; gap: var(--s4); }
+.theme-group { border: 0; margin: 0; padding: 0; display: grid; gap: var(--s2); }
+.theme-group__title { font-size: var(--fs-sm); font-weight: 600; color: var(--ink); padding: 0; margin-bottom: var(--s1); }
+.theme-options { display: grid; gap: var(--s1); }
+.theme-option { display: flex; align-items: center; gap: var(--s2); min-height: var(--ctl-h); padding: 0 var(--s2);
+  border: 1px solid transparent; border-radius: var(--r-ctl); cursor: pointer; font-size: var(--fs-sm); }
+.theme-option:hover { background: var(--surface-2); border-color: var(--line); }
+.theme-option:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+.theme-option input[type="radio"] { margin: 0; accent-color: var(--accent); }
+.theme-swatches { display: inline-flex; gap: 2px; }
+.theme-swatch { width: 14px; height: 14px; border-radius: 3px; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 20%, transparent); }
+.theme-option__label { flex: 1; }
+.theme-picker { width: 32px; height: 24px; padding: 0; border: 1px solid var(--line-2); border-radius: var(--r-ctl); background: none; }
+.theme-hex { width: 96px; height: 28px; font-variant-numeric: tabular-nums; }
+.theme-error { margin-left: var(--s6); }
+
+/* P39 bookmarks dialog: one row per bookmark — name + where/when, then Apply / Delete. */
+.bookmark-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s2); max-height: 50vh; overflow: auto; min-width: min(460px, calc(100vw - 64px)); }
+.bookmark { display: flex; align-items: center; gap: var(--s2); padding: var(--s2) var(--s3); border: 1px solid var(--line); border-radius: var(--r-ctl); }
+.bookmark__info { flex: 1; min-width: 0; display: grid; }
+.bookmark__name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bookmark__meta { font-size: var(--fs-xs); color: var(--ink-3); }
+.bookmark-note { margin: var(--s2) 0 0; font-size: var(--fs-sm); color: var(--ink-3); max-width: 420px; }
+
+/* P32 parameters dialog: the edit form wraps its fields. */
+.params-dialog { width: min(640px, calc(100vw - 32px)); }
+.params-edit { display: grid; gap: var(--s2); align-items: stretch; }
+.params-form { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s3); }
+.params-field { display: grid; gap: 2px; min-width: 120px; }
+.params-field__label { font-size: var(--fs-xs); font-weight: 600; color: var(--ink-2); }
+.params-actions { display: flex; gap: var(--s2); }

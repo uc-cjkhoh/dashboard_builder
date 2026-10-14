@@ -4,6 +4,7 @@ using System.Text;
 using ClickHouse.Client;
 using ClickHouse.Client.ADO;
 using ClickHouse.Client.Utility; // AddParameter extension
+using Microsoft.Extensions.Caching.Memory;
 
 namespace DashboardBuilder.ClickHouse;
 
@@ -17,7 +18,16 @@ public sealed class ClickHouseGateway
 {
     private readonly ILogger<ClickHouseGateway> _logger;
 
-    public ClickHouseGateway(ILogger<ClickHouseGateway> logger) => _logger = logger;
+    private readonly IMemoryCache? _cache;
+    public ClickHouseGateway(ILogger<ClickHouseGateway> logger, IMemoryCache? cache = null) { _logger = logger; _cache = cache; }
+
+    /// <summary>P33: how long a worksheet result is reused for the same server + user + request.</summary>
+    internal static readonly TimeSpan CacheTtl = TimeSpan.FromSeconds(60);
+    internal const double SampleFraction = 0.1;
+
+    /// <summary>The cache key: server identity (never the password) + the request (minus Fresh) + the row cap.</summary>
+    internal static string CacheKey(ClickHouseConnectionInfo info, QueryRequest req, int maxLimit) =>
+        $"q|{info.Host}|{info.Port}|{info.User}|{info.Secure}|{maxLimit}|" + System.Text.Json.JsonSerializer.Serialize(req with { Fresh = null });
 
     /// <summary>
     /// Build the ADO.NET connection string. Contains the password, so the result is a secret:
@@ -269,8 +279,52 @@ public sealed class ClickHouseGateway
     internal static int ClampDistinct(int? limit) => Math.Clamp(limit ?? 200, 1, ApiLimits.MaxDistinct);
 
     /// <summary>The SQL <c>LIMIT</c> for a bounded grouped query: the requested limit (default 50,
-    /// clamped 1..500) plus one probe row, so the server can tell whether more rows exist.</summary>
-    internal static int ProbeLimit(int? requested) => Math.Clamp(requested ?? 50, 1, ApiLimits.MaxRowLimit) + 1;
+    /// clamped 1..ApiLimits.MaxRowLimit) plus one probe row, so the server can tell whether more rows exist.</summary>
+    internal static int ProbeLimit(int? requested, int max = ApiLimits.MaxRowLimit) => Math.Clamp(requested ?? 50, 1, max) + 1;
+
+    /// <summary>The most buckets "auto" date grouping aims for (and the distinct-value count below which
+    /// it leaves the dimension exact).</summary>
+    internal const int AutoBucketTarget = 400;
+
+    /// <summary>The whitelisted truncation for a calendar grain over an already-quoted expression.</summary>
+    /// <summary>P26: the whitelisted expression for a dimension's date part, or null for auto / exact.
+    /// Truncations reuse <see cref="BucketExpression"/>; discrete parts return a number.</summary>
+    internal static string? DatePartExpression(string? part, string expr, bool dateOnly) => part switch
+    {
+        null or "auto" or "exact" => null,
+        "hour" when dateOnly => BucketExpression("day", expr),
+        "year" or "quarter" or "month" or "week" or "day" or "hour" => BucketExpression(part, expr),
+        "quarterOfYear" => $"toQuarter({expr})",
+        "monthOfYear" => $"toMonth({expr})",
+        "dayOfWeek" => $"toDayOfWeek({expr})",
+        "hourOfDay" => dateOnly ? throw new RequestValidationException("Hour of day needs a date-time column.", "datePart") : $"toHour({expr})",
+        _ => throw new RequestValidationException("Unknown date part.", "datePart"),
+    };
+
+    internal static string BucketExpression(string grain, string expr) => grain switch
+    {
+        "hour" => $"toStartOfHour({expr})",
+        "day" => $"toDate({expr})",
+        "week" => $"toMonday({expr})",
+        "month" => $"toStartOfMonth({expr})",
+        "quarter" => $"toStartOfQuarter({expr})",
+        "year" => $"toStartOfYear({expr})",
+        _ => throw new RequestValidationException("Unknown date grouping.", "dateBucket"),
+    };
+
+    /// <summary>The finest grain that keeps a span within <see cref="AutoBucketTarget"/> buckets, or null
+    /// (stay exact) when the values are already few.</summary>
+    internal static string? PickGrain(long distinct, DateTime min, DateTime max, bool dateOnly)
+    {
+        if (distinct <= AutoBucketTarget) return null;
+        var span = max - min;
+        if (!dateOnly && span.TotalHours <= AutoBucketTarget) return "hour";
+        if (span.TotalDays <= AutoBucketTarget) return "day";
+        if (span.TotalDays / 7 <= AutoBucketTarget) return "week";
+        if (span.TotalDays / 30.44 <= AutoBucketTarget) return "month";
+        if (span.TotalDays / 91.31 <= AutoBucketTarget) return "quarter";
+        return "year";
+    }
 
     /// <summary>Drop the probe row if the result reached it. Returns whether the result was truncated.</summary>
     internal static bool TrimProbeRow<T>(List<T> rows, int probeLimit)
@@ -295,6 +349,21 @@ public sealed class ClickHouseGateway
     {
         switch ((op ?? string.Empty).ToLowerInvariant())
         {
+            // P30 text match: case-insensitive, the text bound as a String — no LIKE pattern to escape.
+            case "contains" or "startswith" or "endswith":
+            {
+                if (category != ClickHouseType.Text)
+                    throw new RequestValidationException($"Text matching needs a text column — {column} isn't one.", field);
+                parameters.Add((paramBase, "String", value ?? ""));
+                return (op ?? "").ToLowerInvariant() switch
+                {
+                    "contains" => $"positionCaseInsensitiveUTF8({expr}, {{{paramBase}:String}}) > 0",
+                    "startswith" => $"startsWith(lowerUTF8({expr}), lowerUTF8({{{paramBase}:String}}))",
+                    _ => $"endsWith(lowerUTF8({expr}), lowerUTF8({{{paramBase}:String}}))",
+                };
+            }
+            case "top":
+                throw new RequestValidationException("Top-N filters apply to the worksheet query only.", field);
             case "in":
             {
                 var typed = (values ?? []).Select(v => FilterValues.Coerce(category, column, v ?? "", field, dateOnly)).ToList();
@@ -482,7 +551,30 @@ public sealed class ClickHouseGateway
     /// validated and quoted, aggregations/operators whitelisted, and filter values bound.
     /// </summary>
     /// <exception cref="UnknownIdentifierException">An identifier/agg/op is unknown or references a table not in the query.</exception>
-    public async Task<QueryResult> QueryAsync(ClickHouseConnectionInfo info, QueryRequest req, CancellationToken ct)
+    public async Task<QueryResult> QueryAsync(ClickHouseConnectionInfo info, QueryRequest req, CancellationToken ct, int maxLimit = ApiLimits.MaxRowLimit)
+    {
+        // P33 result cache: the same request on the same server + user within a minute is answered from
+        // memory (logged); Fresh (Refresh) skips the lookup and replaces the entry.
+        var key = _cache is null ? null : CacheKey(info, req, maxLimit);
+        if (key is not null && req.Fresh != true && _cache!.TryGetValue(key, out QueryResult? hit) && hit is not null)
+        {
+            _logger.LogInformation("Worksheet query served from the result cache.");
+            return hit with { Cached = true };
+        }
+        QueryResult result;
+        try { result = await QueryCoreAsync(info, req, ct, maxLimit, sample: req.Approximate == true); }
+        catch (ClickHouseServerException ex) when (req.Approximate == true && ex.ErrorCode != 159)
+        {
+            // A sampled query the server refuses (e.g. SAMPLE syntax / key) runs once more unsampled.
+            _logger.LogWarning("Sampled query failed ({Code}); running it without the sample.", ex.ErrorCode);
+            result = await QueryCoreAsync(info, req, ct, maxLimit, sample: false);
+        }
+        if (key is not null)
+            _cache!.Set(key, result, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = CacheTtl, Size = 1 + result.Rows.Count / 500 });
+        return result;
+    }
+
+    private async Task<QueryResult> QueryCoreAsync(ClickHouseConnectionInfo info, QueryRequest req, CancellationToken ct, int maxLimit, bool sample)
     {
         var aliases = new Dictionary<string, string>();                 // "db\0table" -> alias
         var categories = new Dictionary<string, Dictionary<string, string>>(); // "db\0table" -> col -> category
@@ -515,8 +607,13 @@ public sealed class ClickHouseGateway
         aliases[Key(req.From.Db, req.From.Table)] = "t0";
         var from = new StringBuilder(" FROM ")
             .Append(Identifier.QualifiedName(req.From.Db, req.From.Table)).Append(" AS t0");
+        // P33: in approximate mode a base table with a sampling key is read as a 10% sample; counts and sums
+        // are scaled back by its _sample_factor below.
+        var sampled = sample && await HasSamplingKeyAsync(info, req.From.Db, req.From.Table, ct);
+        if (sampled) from.Append(" SAMPLE ").Append(SampleFraction.ToString(CultureInfo.InvariantCulture));
 
         var next = 1;
+        var anyLeft = false; // P31
         foreach (var j in req.Joins ?? [])
         {
             if (!aliases.ContainsKey(Key(j.Left.Db, j.Left.Table)))
@@ -531,7 +628,8 @@ public sealed class ClickHouseGateway
             {
                 rightAlias = $"t{next++}";
                 aliases[rightKey] = rightAlias;
-                from.Append(" INNER JOIN ").Append(Identifier.QualifiedName(j.Right.Db, j.Right.Table))
+                if (j.Type == "left") anyLeft = true;
+                from.Append(j.Type == "left" ? " LEFT JOIN " : " INNER JOIN ").Append(Identifier.QualifiedName(j.Right.Db, j.Right.Table))
                     .Append(" AS ").Append(rightAlias)
                     .Append(" ON ").Append(leftExpr).Append(" = ")
                     .Append(rightAlias).Append('.').Append(Identifier.Quote(j.Right.Column));
@@ -543,15 +641,18 @@ public sealed class ClickHouseGateway
         var dimExprs = new List<string>();
         var rowDimNames = new List<string>();
         var colDimNames = new List<string>();
+        var dimRefs = new List<ColumnRef>();
         foreach (var d in req.RowDimensions ?? [])
         {
             dimExprs.Add(await QualifyAsync(d.Db, d.Table, d.Column));
             rowDimNames.Add($"{d.Table}.{d.Column}");
+            dimRefs.Add(d);
         }
         foreach (var d in req.ColumnDimensions ?? [])
         {
             dimExprs.Add(await QualifyAsync(d.Db, d.Table, d.Column));
             colDimNames.Add($"{d.Table}.{d.Column}");
+            dimRefs.Add(d);
         }
 
         // Measures → aggregated columns, selected as v0, v1, … (in request order). No measures →
@@ -573,50 +674,113 @@ public sealed class ClickHouseGateway
             measNumeric.Add(mAgg is "count" or "countdistinct" or "sum" or "avg" || category == ClickHouseType.Numeric);
             if (mAgg == "count")
             {
-                measExprs.Add("count()");
+                measExprs.Add(sampled ? "sum(t0._sample_factor)" : "count()");
                 measNames.Add("count");
             }
             else if (mAgg == "countdistinct")
             {
-                measExprs.Add($"uniqExact({await QualifyAsync(m.Db, m.Table, m.Column)})");
+                // P33: approximate mode estimates distinct counts (uniq, HyperLogLog-style) — much cheaper.
+                measExprs.Add($"{(req.Approximate == true ? "uniq" : "uniqExact")}({await QualifyAsync(m.Db, m.Table, m.Column)})");
                 measNames.Add($"distinct {m.Column}");
             }
             else
             {
-                measExprs.Add($"{mAgg}({await QualifyAsync(m.Db, m.Table, m.Column)})");
+                var col = await QualifyAsync(m.Db, m.Table, m.Column);
+                measExprs.Add(sampled && mAgg == "sum" ? $"sum({col} * t0._sample_factor)" : $"{mAgg}({col})");
                 measNames.Add($"{mAgg} {m.Column}");
             }
         }
         if (measExprs.Count == 0)
         {
-            measExprs.Add("count()");
+            measExprs.Add(sampled ? "sum(t0._sample_factor)" : "count()");
             measNames.Add("count");
             measNumeric.Add(true);
         }
 
-        var sql = new StringBuilder("SELECT ");
-        var selects = new List<string>();
-        for (var i = 0; i < dimExprs.Count; i++) selects.Add($"{dimExprs[i]} AS k{i}");
-        for (var i = 0; i < measExprs.Count; i++) selects.Add($"{measExprs[i]} AS v{i}");
-        sql.Append(string.Join(", ", selects)).Append(from);
-
         var parameters = new List<(string Name, string Type, object Value)>();
         var conditions = new List<string>();
         var filters = req.Filters ?? [];
+        var tops = new List<(QueryFilter F, int Index)>();
         for (var i = 0; i < filters.Length; i++)
         {
             var f = filters[i];
+            if (string.Equals(f.Op, "top", StringComparison.OrdinalIgnoreCase)) { tops.Add((f, i)); continue; } // after the others
             var expr = await QualifyAsync(f.Db, f.Table, f.Column);      // validates + quotes the column
             conditions.Add(BuildCondition(f.Op, $"p{i}", expr, categories[Key(f.Db, f.Table)][f.Column], f.Column, $"filters[{i}]", f.Value, f.Values, parameters,
                 ClickHouseType.IsDateOnly(rawTypes[Key(f.Db, f.Table)][f.Column])));
         }
-        if (conditions.Count > 0) sql.Append(" WHERE ").Append(string.Join(" AND ", conditions));
-        if (dimExprs.Count > 0)
-            sql.Append(" GROUP BY ").Append(string.Join(", ", Enumerable.Range(0, dimExprs.Count).Select(i => $"k{i}")));
+        // P30 top-N filters: the column's members ranked by an aggregate over the same joins and the other
+        // filters — `col IN (SELECT col … GROUP BY col ORDER BY agg DESC LIMIT n)`. Column and measure are
+        // catalog-validated, the aggregation whitelisted, n a validated integer.
+        var others = conditions.Count > 0 ? " WHERE " + string.Join(" AND ", conditions) : "";
+        foreach (var (f, i) in tops)
+        {
+            var expr = await QualifyAsync(f.Db, f.Table, f.Column);
+            var by = f.TopBy!;
+            var agg = (by.Agg ?? "sum").ToLowerInvariant();
+            if (!Aggregations.Contains(agg)) throw new UnknownIdentifierException("Unknown aggregation.");
+            string rank;
+            if (agg == "count") rank = "count()";
+            else
+            {
+                var byCols = await ColumnsOf(by.Db, by.Table);
+                if (!byCols.TryGetValue(by.Column, out var byCat)) throw new UnknownIdentifierException("Unknown column.");
+                if (agg is "sum" or "avg" && byCat != ClickHouseType.Numeric)
+                    throw new RequestValidationException($"Top-N can't rank by {agg} of {by.Column} — it isn't numeric.", $"filters[{i}].topBy");
+                var byExpr = await QualifyAsync(by.Db, by.Table, by.Column);
+                rank = agg == "countdistinct" ? $"uniqExact({byExpr})" : $"{agg}({byExpr})";
+            }
+            var n = int.Parse(f.Value!, CultureInfo.InvariantCulture);
+            conditions.Add($"{expr} IN (SELECT {expr}{from}{others} GROUP BY {expr} ORDER BY {rank} {(f.Bottom == true ? "ASC" : "DESC")} LIMIT {n})");
+        }
+        var where = conditions.Count > 0 ? " WHERE " + string.Join(" AND ", conditions) : "";
+
+        // Date grouping: the first date/time dimension is truncated to a calendar grain (whitelisted
+        // function over the already-quoted column), so a long time axis returns months, not millions
+        // of timestamps. "auto" asks ClickHouse for the range first.
+        // P26: a dimension's own date part comes first (whitelisted function); only a date dimension left on
+        // "auto" (or unset) takes part in the chart-wide grouping below.
+        for (var i = 0; i < dimRefs.Count; i++)
+        {
+            var d = dimRefs[i];
+            if (d.DatePart is null or "auto" or "exact") continue;
+            if (categories[Key(d.Db, d.Table)][d.Column] != ClickHouseType.Temporal)
+                throw new RequestValidationException($"A date part needs a date column — {d.Column} isn't one.", "datePart");
+            dimExprs[i] = DatePartExpression(d.DatePart, dimExprs[i], ClickHouseType.IsDateOnly(rawTypes[Key(d.Db, d.Table)][d.Column]))!;
+        }
+
+        DateBucketApplied? bucket = null;
+        if (req.DateBucket is { } wanted)
+        {
+            var bi = dimRefs.FindIndex(d => d.DatePart is null or "auto" && categories[Key(d.Db, d.Table)][d.Column] == ClickHouseType.Temporal);
+            if (bi >= 0)
+            {
+                var dateOnly = ClickHouseType.IsDateOnly(rawTypes[Key(dimRefs[bi].Db, dimRefs[bi].Table)][dimRefs[bi].Column]);
+                var grain = wanted == "auto"
+                    ? await AutoGrainAsync(info, dimExprs[bi], from.ToString(), where + Settings(anyLeft, info), parameters, dateOnly, ct)
+                    : wanted;
+                if (grain == "hour" && dateOnly) grain = "day";
+                if (grain is not null)
+                {
+                    dimExprs[bi] = BucketExpression(grain, dimExprs[bi]);
+                    bucket = new DateBucketApplied(bi, grain);
+                }
+            }
+        }
+
+        var selects = new List<string>();
+        for (var i = 0; i < dimExprs.Count; i++) selects.Add($"{dimExprs[i]} AS k{i}");
+        for (var i = 0; i < measExprs.Count; i++) selects.Add($"{measExprs[i]} AS v{i}");
+        var groupBy = dimExprs.Count > 0
+            ? " GROUP BY " + string.Join(", ", Enumerable.Range(0, dimExprs.Count).Select(i => $"k{i}"))
+            : "";
+        var grouped = "SELECT " + string.Join(", ", selects) + from + where + groupBy;
+
         // ORDER BY: the requested sort column (a generated k{n}/v{n} alias, validated against the
         // dimension/measure counts) in the chosen direction, defaulting to ascending by the first
         // dimension (or first measure if there are none). The remaining dimension keys are always
-        // appended ascending so the crosstab's nested layout stays stable regardless of the sort.
+        // appended ascending so the crosstab's nested layout stays stable regardless of the sort —
+        // and so paging with OFFSET is deterministic (group keys are unique).
         var sortCol = dimExprs.Count > 0 ? "k0" : "v0";
         var sortDesc = false;
         if (req.Sort is { } srt && IsValidSortAlias(srt.Column, dimExprs.Count, measExprs.Count))
@@ -630,34 +794,141 @@ public sealed class ClickHouseGateway
             var a = $"k{i}";
             if (a != sortCol) orderParts.Add($"{a} ASC");
         }
-        sql.Append(" ORDER BY ").Append(string.Join(", ", orderParts));
-        var limit = ProbeLimit(req.Limit);
-        sql.Append(" LIMIT ").Append(limit);
+        var ordered = grouped + " ORDER BY " + string.Join(", ", orderParts);
+        var limit = ProbeLimit(req.Limit, maxLimit);
+        var offset = req.Offset is > 0 ? $" OFFSET {req.Offset.Value}" : "";
 
-        using var httpClient = CreateHttpClient(info);
-        await using var conn = new ClickHouseConnection(BuildConnectionString(info), httpClient);
-        await conn.OpenAsync(ct);
-        await using var cmd = conn.CreateCommand();
-        cmd.CommandText = sql.ToString();
-        foreach (var (name, type, value) in parameters) cmd.AddParameter(name, type, value);
+        // The group count runs alongside the page (its own connection), only when asked.
+        var totalTask = req.WithTotal == true
+            ? (dimExprs.Count == 0 ? Task.FromResult<long?>(1) : CountGroupsAsync(info, grouped, parameters, ct, Settings(anyLeft, info)))
+            : Task.FromResult<long?>(null);
 
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
         var rows = new List<QueryResultRow>();
-        while (await reader.ReadAsync(ct))
+        await using (var conn = await OpenAsync(info, ct))
         {
-            var keys = new string?[dimExprs.Count];
-            for (var i = 0; i < dimExprs.Count; i++)
-                keys[i] = reader.IsDBNull(i) ? null : FormatKey(reader.GetValue(i));
-            var values = new object?[measExprs.Count];
-            for (var i = 0; i < measExprs.Count; i++)
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = ordered + $" LIMIT {limit}" + offset + Settings(anyLeft, info);
+            foreach (var (name, type, value) in parameters) cmd.AddParameter(name, type, value);
+
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct))
             {
-                var idx = dimExprs.Count + i;
-                values[i] = reader.IsDBNull(idx) ? null : ToResultValue(reader.GetValue(idx), measNumeric[i]);
+                var keys = new string?[dimExprs.Count];
+                for (var i = 0; i < dimExprs.Count; i++)
+                    keys[i] = reader.IsDBNull(i) ? null : FormatKey(reader.GetValue(i));
+                var values = new object?[measExprs.Count];
+                for (var i = 0; i < measExprs.Count; i++)
+                {
+                    var idx = dimExprs.Count + i;
+                    values[i] = reader.IsDBNull(idx) ? null : ToResultValue(reader.GetValue(idx), measNumeric[i]);
+                }
+                rows.Add(new QueryResultRow(keys, values));
             }
-            rows.Add(new QueryResultRow(keys, values));
         }
         var truncated = TrimProbeRow(rows, limit);
-        return new QueryResult(rowDimNames, colDimNames, measNames, rows, truncated);
+
+        // "Other": everything past this page's groups, aggregated by the same measures. Only for one
+        // dimension (a single category axis) — the shown keys are the same ordered query, so the two
+        // agree exactly. NULL keys match in IN (transform_null_in) so a shown NULL group isn't recounted.
+        OtherGroup? other = null;
+        if (req.OtherBucket == true && truncated && dimExprs.Count == 1 && req.Offset is null or 0)
+        {
+            var shown = $"SELECT k0 FROM ({ordered} LIMIT {limit - 1})";
+            var otherSql = "SELECT uniqExact(" + dimExprs[0] + ") AS n, "
+                + string.Join(", ", measExprs.Select((m, i) => $"{m} AS v{i}")) + from
+                + (where.Length > 0 ? where + " AND " : " WHERE ") + $"{dimExprs[0]} NOT IN ({shown})"
+                + " SETTINGS transform_null_in = 1" + (anyLeft && info.Guards != QueryGuards.None ? ", join_use_nulls = 1" : "");
+            try { other = await OtherAsync(info, otherSql, parameters, measNumeric, ct); }
+            catch (ClickHouseServerException ex)
+            {
+                // A server that refuses the setting (e.g. a readonly=1 profile) still gets its chart — just
+                // without the "Other" bar. The main result above is unaffected.
+                _logger.LogWarning("Other-bucket query failed ({Code}); returning the chart without it.", ex.ErrorCode);
+            }
+        }
+
+        var approx = req.Approximate == true
+            ? new ApproxApplied((req.Measures ?? []).Any(m => string.Equals(m.Agg, "countDistinct", StringComparison.OrdinalIgnoreCase)), sampled ? SampleFraction : null)
+            : null;
+        return new QueryResult(rowDimNames, colDimNames, measNames, rows, truncated, await totalTask, other, bucket, false, approx);
+    }
+
+    /// <summary>An open connection that also disposes the HttpClient it was built on.</summary>
+    private sealed class OpenConnection(ClickHouseConnection conn, HttpClient http) : IAsyncDisposable
+    {
+        public ClickHouseCommand CreateCommand() => conn.CreateCommand();
+        public async ValueTask DisposeAsync() { await conn.DisposeAsync(); http.Dispose(); }
+    }
+
+    private async Task<OpenConnection> OpenAsync(ClickHouseConnectionInfo info, CancellationToken ct)
+    {
+        var http = CreateHttpClient(info);
+        var conn = new ClickHouseConnection(BuildConnectionString(info), http);
+        try { await conn.OpenAsync(ct); }
+        catch { await conn.DisposeAsync(); http.Dispose(); throw; }
+        return new OpenConnection(conn, http);
+    }
+
+    /// <summary>P31: a left join's unmatched side reads as NULL (ClickHouse's default is the type's zero / ""),
+    /// unless the server refuses settings (then the defaults show).</summary>
+    internal static string Settings(bool anyLeft, ClickHouseConnectionInfo info) =>
+        anyLeft && info.Guards != QueryGuards.None ? " SETTINGS join_use_nulls = 1" : "";
+
+    /// <summary>P33: whether a table declares a sampling key (only then can it be read with SAMPLE).</summary>
+    private async Task<bool> HasSamplingKeyAsync(ClickHouseConnectionInfo info, string db, string table, CancellationToken ct)
+    {
+        await using var conn = await OpenAsync(info, ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT sampling_key FROM system.tables WHERE database = {db:String} AND name = {t:String}";
+        cmd.AddParameter("db", "String", db);
+        cmd.AddParameter("t", "String", table);
+        var v = await cmd.ExecuteScalarAsync(ct);
+        return v is string key && key.Length > 0;
+    }
+
+    /// <summary>The "Other" row: group count + each measure over everything past the shown groups.</summary>
+    private async Task<OtherGroup?> OtherAsync(ClickHouseConnectionInfo info, string sql,
+        List<(string Name, string Type, object Value)> parameters, List<bool> measNumeric, CancellationToken ct)
+    {
+        await using var conn = await OpenAsync(info, ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = sql;
+        foreach (var (name, type, value) in parameters) cmd.AddParameter(name, type, value);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct)) return null;
+        var n = reader.IsDBNull(0) ? 0L : Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture);
+        var values = new object?[measNumeric.Count];
+        for (var i = 0; i < measNumeric.Count; i++)
+            values[i] = reader.IsDBNull(i + 1) ? null : ToResultValue(reader.GetValue(i + 1), measNumeric[i]);
+        return n > 0 ? new OtherGroup(n, values) : null;
+    }
+
+    /// <summary>How many groups a grouped query returns (the table's "of N rows").</summary>
+    private async Task<long?> CountGroupsAsync(ClickHouseConnectionInfo info, string grouped,
+        List<(string Name, string Type, object Value)> parameters, CancellationToken ct, string settings = "")
+    {
+        await using var conn = await OpenAsync(info, ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = $"SELECT count() FROM ({grouped}){settings}";
+        foreach (var (name, type, value) in parameters) cmd.AddParameter(name, type, value);
+        var n = await cmd.ExecuteScalarAsync(ct);
+        return n is null or DBNull ? 0 : Convert.ToInt64(n, CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>"auto" date grouping: read the dimension's distinct count and range under the view's
+    /// filters, then <see cref="PickGrain"/>.</summary>
+    private async Task<string?> AutoGrainAsync(ClickHouseConnectionInfo info, string expr, string from, string where,
+        List<(string Name, string Type, object Value)> parameters, bool dateOnly, CancellationToken ct)
+    {
+        await using var conn = await OpenAsync(info, ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = $"SELECT uniq({expr}), min({expr}), max({expr}){from}{where}";
+        foreach (var (name, type, value) in parameters) cmd.AddParameter(name, type, value);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct) || reader.IsDBNull(1) || reader.IsDBNull(2)) return null;
+        var distinct = Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture);
+        static DateTime AsDate(object v) => v switch { DateTimeOffset o => o.UtcDateTime, DateTime d => d, _ => Convert.ToDateTime(v, CultureInfo.InvariantCulture) };
+        return PickGrain(distinct, AsDate(reader.GetValue(1)), AsDate(reader.GetValue(2)), dateOnly);
     }
 
     /// <summary>A measure cell for JSON: finite double, display string for non-numeric min/max, or null

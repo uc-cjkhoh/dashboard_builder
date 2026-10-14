@@ -46,13 +46,15 @@
 
 /* ---- Worksheet (drag fields onto shelves) -------------------------------- */
 .view--dashboard { padding: 0; overflow: hidden; }
-.worksheet { display: grid; grid-template-columns: 220px 1fr; height: 100%; min-height: 0; }
+.worksheet { --ws-fields-w: 236px; position: relative; display: grid; grid-template-columns: var(--ws-fields-w) 1fr; height: 100%; min-height: 0; }
+/* Field-pane resize handle on the pane's right edge (shared .resizer look, Core/core.css). */
+.ws-fields__resizer { position: absolute; top: 0; bottom: 0; left: calc(var(--ws-fields-w) - 3px); z-index: 3; }
 
 /* Field pane */
 .ws-fields {
   border-right: 1px solid var(--line);
   background: color-mix(in srgb, var(--surface), var(--ink) 2%);
-  overflow: auto; padding: var(--s3);
+  overflow: auto; padding: var(--s3) var(--s5);
   display: flex; flex-direction: column; gap: var(--s3);
 }
 .ws-table { display: flex; flex-direction: column; gap: 3px; }
@@ -82,14 +84,13 @@
 /* Main: header (view bar + shelf lanes) + chart */
 .ws-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 /* P17 two-tier header: the container stacks the view bar, the (optional) format card, and the shelf lanes. */
-.ws-shelves { background: var(--glass); border-bottom: 1px solid var(--glass-line); -webkit-backdrop-filter: blur(24px) saturate(160%); backdrop-filter: blur(24px) saturate(160%);
+/* Glass: the header only ever has the wash beneath it (the chart sits below, never under). Its own
+   popovers (More, Export) are solid. */
+.ws-shelves { background: var(--glass); border-bottom: 1px solid var(--glass-line); box-shadow: inset 0 1px 0 var(--glass-rim);
+  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
   padding: var(--s3) var(--s5); display: grid; gap: var(--s2);
   position: relative; z-index: 2; /* its backdrop-filter is a stacking context: lift the popovers above .ws-chart */ }
 
-/* Tier 1 — view bar: presentation controls only, split left (chart) / right (sort · format). */
-.ws-viewbar { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; }
-.ws-viewbar__group { display: flex; align-items: center; gap: var(--s3); }
-.ws-viewbar__group--right { margin-left: auto; }
 
 /* Tier 2 — the primary shelves (Columns/Rows) are direct children of .ws-shelves; each shelf is a
    full-width row of [aligned label | drop zone]. */
@@ -110,10 +111,9 @@
 
 .ws-pill {
   display: inline-flex; align-items: center; gap: 6px;
-  padding: 3px 4px 3px 9px; border-radius: var(--r-pill);
-  background: var(--accent-soft); border: 1px solid var(--accent-line);
-  color: var(--accent-ink); font-size: var(--fs-xs); font-weight: 600; white-space: nowrap;
-  animation: rise-in var(--dur) var(--ease-out);
+  min-height: 22px; padding: 1px 2px 1px 9px; border-radius: var(--r-pill);
+  background: var(--dim-bg); border: 1px solid var(--dim-line);
+  color: var(--dim-ink); font-size: var(--fs-xs); font-weight: 600; white-space: nowrap;
 }
 /* Drag-to-reorder (Columns/Rows): a grip is the only draggable part so the pill's controls still work.
    The dragged pill dims; a hovered drop-target pill shows an insertion outline. */
@@ -123,10 +123,10 @@
 .ws-pill.is-dragging { opacity: .45; }
 .ws-pill.is-drop-target { box-shadow: -3px 0 0 0 var(--accent); }
 /* Pill colour tracks the field's role, not the shelf (both shelves mix roles now): a categorical
-   dimension is brand-soft (the .ws-pill default), a numeric measure is green. */
+   dimension is blue, a numeric measure is teal — never the red accent, so no pill reads as an error. */
 .ws-pill--dimension { background: var(--dim-bg); border-color: var(--dim-line); color: var(--dim-ink); }
 .ws-pill--measure { background: var(--meas-bg); border-color: var(--meas-line); color: var(--meas-ink); }
-/* Colour-mark pill (P7): violet, distinct from dimension (red) and measure (green). */
+/* Colour-mark pill (P7): violet, distinct from dimension (blue) and measure (teal). */
 .ws-pill--color { background: var(--enc-bg); border-color: var(--enc-line); color: var(--enc-ink); }
 .ws-pill__agg, .ws-pill__op { font-size: 11px; padding: 1px 4px; border-radius: 4px; box-shadow: none; }
 .ws-pill__val { width: 78px; padding: 1px var(--s2); font-size: 11px; }
@@ -140,38 +140,13 @@
 /* Convert-role toggle: a bordered chip so it reads as an action distinct from the remove icon. */
 .ws-pill__conv { border: 1px solid currentColor; border-radius: 4px; opacity: .65; font-weight: 700; line-height: 1; padding: 1px 4px; }
 .ws-pill__conv:hover { opacity: 1; }
-.ws-pill .iconbtn { color: inherit; padding: 0 2px; }
+.ws-pill .iconbtn { color: inherit; width: 18px; height: 18px; padding: 0; }
+.ws-pill .iconbtn.ws-pill__conv { width: auto; min-width: 18px; padding: 0 4px; }
+.ws-pill .select { height: 18px; }
 .ws-pill .iconbtn:hover { color: var(--accent); background: transparent; }
 
-/* View controls (Sort · Chart · Format): a right-aligned cluster split from the field shelves by a
-   hairline, so the toolbar reads data-left / view-right. `.ws-sort` carries the margin + divider, so
-   everything after it rides along to the right. */
-.ws-sort { display: flex; align-items: center; gap: var(--s2); }
-.ws-charttype { display: flex; align-items: center; gap: var(--s2); }
-.ws-sort__by, .ws-charttype__sel { height: var(--ctl-h); padding: 0 var(--s2); font-size: var(--fs-xs); max-width: 150px; }
 
-/* Uniform toolbar button — the sort-direction toggle and the Format toggle share one look/height. */
-.ws-toolbtn {
-  height: var(--ctl-h); display: inline-flex; align-items: center; gap: var(--s1);
-  padding: 0 var(--s3); font-size: var(--fs-xs); font-weight: 600; color: var(--ink-2);
-  border: 1px solid var(--line-2); background: var(--surface); border-radius: var(--r-ctl); cursor: pointer;
-  transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease), background var(--dur) var(--ease);
-}
-.ws-toolbtn:hover { color: var(--ink); background: var(--surface-2); }
-.ws-toolbtn.is-active { color: var(--accent-ink); border-color: var(--accent); }
 
-/* Export menu (P13): a small popover under the Export button. Toggled via the `hidden` attribute. */
-.ws-export { position: relative; display: inline-flex; }
-.ws-export__menu {
-  position: absolute; top: calc(var(--ctl-h) + 4px); right: 0; z-index: 20;
-  display: flex; flex-direction: column; min-width: 130px; padding: var(--s1);
-  background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r-ctl); box-shadow: var(--elev-16);
-}
-.ws-menu-item {
-  text-align: left; padding: var(--s2) var(--s3); font-size: var(--fs-xs); color: var(--ink-2);
-  background: none; border: 0; border-radius: var(--r-ctl); cursor: pointer;
-}
-.ws-menu-item:hover, .ws-menu-item:focus-visible { background: var(--surface-2); color: var(--ink); }
 
 /* Click-to-filter selection chip (P15): a thin bar under the shelves showing the clicked mark and its
    Keep only / Exclude / clear actions. */
@@ -191,8 +166,8 @@
 .ws-select .iconbtn:hover { color: var(--accent); background: transparent; }
 
 /* Drill hierarchy (P16): the Drill-down lane's level pills, plus a breadcrumb bar (under the shelves)
-   showing the descent with drill-up. Amber (--warn-*) reads as navigational — distinct from the red
-   dimension, green measure and violet colour pills; status stays icon + text + colour, never colour
+   showing the descent with drill-up. Amber (--warn-*) reads as navigational — distinct from the blue
+   dimension, teal measure and violet colour pills; status stays icon + text + colour, never colour
    alone (DESIGN.md a11y). */
 .ws-pill--drill { background: var(--warn-bg); border-color: var(--warn-line); color: var(--warn-ink); }
 .ws-drill {
@@ -214,14 +189,25 @@
 
 /* Encodings toolbar (redesign 2): every non-Columns/Rows encoding as a compact icon+text tool button.
    Keeps the header to one short row; a clicked tool opens a single editor panel below. */
-.ws-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); }
+/* Sits in the Marks lane's zone column: a tool's (hover) box starts on the drop zones' edge and its
+   icon on the pills' content x. */
+.ws-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); min-width: 0; }
+/* Ghost on glass: no fill at rest (the icon + label identify it); a frosted pill on hover; sinks on press;
+   the open tool reads as selected (accent fill + edge + underline + weight). */
 .ws-tool {
   display: inline-flex; align-items: center; gap: var(--s1); height: var(--ctl-h); padding: 0 var(--s2);
-  border: 0; border-radius: var(--r-ctl); background: transparent; color: var(--ink-2);
+  border: 1px solid transparent; border-radius: var(--r-ctl); background: transparent; color: var(--ink-2);
   font-size: var(--fs-sm); cursor: pointer;
-  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease),
+              box-shadow var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
 }
-.ws-tool:hover, .ws-tool.is-active { background: var(--surface-3); color: var(--ink); }
+.ws-tool:not(:disabled):hover { background: var(--glass-ctl-hover); border-color: var(--ctl-edge); color: var(--ink);
+  box-shadow: inset 0 1px 0 var(--glass-rim), var(--elev-2); }
+.ws-tool:not(:disabled):active { transform: scale(.97); box-shadow: none; }
+.ws-tool.is-active { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); font-weight: 600;
+  box-shadow: inset 0 -2px 0 var(--accent); }
+.ws-tool:disabled { opacity: .5; cursor: not-allowed; }
+@media (pointer: coarse) { .ws-tool, .ws-pick__btn { min-height: 44px; } }
 .ws-tool.is-set { color: var(--accent-ink); }
 .ws-tool__text { line-height: 1; }
 .ws-tool.is-over { outline: 1px dashed var(--accent); background: var(--accent-soft); }
@@ -231,8 +217,6 @@
   font-size: 11px; font-weight: 700; color: var(--on-accent); background: var(--accent);
 }
 .ws-more { display: inline-flex; }
-.ws-viewbar__btn.is-active { background: var(--surface-3); color: var(--accent-ink); }
-.ws-sort__dir { width: auto; gap: var(--s1); padding: 0 var(--s2); font-size: var(--fs-xs); font-weight: 600; }
 .ws-fieldset > summary { cursor: pointer; }
 .ws-field__type { flex: none; color: var(--ink-3); }
 /* The one open tool's editor: a card with its pills over a drop zone. */
@@ -241,6 +225,7 @@
   padding: var(--s3); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-ctl);
 }
 .ws-toolpanel__head { display: flex; align-items: center; justify-content: space-between; }
+.ws-toolpanel__head > .iconbtn:last-child { margin-right: calc(-1 * var(--s2)); }  /* ✕ glyph flush with the zone's edge */
 .ws-toolpanel__title { font-size: var(--fs-xs); font-weight: 700; color: var(--ink-2); }
 .ws-toolpanel__zone {
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2);
@@ -278,27 +263,65 @@
 .ws-fmt-select { padding: 0 var(--s1); max-width: 116px; }
 .ws-fmt-input { padding: 0 var(--s2); width: 96px; }
 
-.ws-chart { position: relative; flex: 1; min-height: 0; overflow: auto; padding: var(--s5); background: var(--surface);
+/* The chart card: view-control head, optional result notice, then the chart pane (scrolls on its own).
+   Not overflow-clipped, so the head's menus can extend past the card. */
+.ws-chart-card { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--surface);
   border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--elev-2); margin: var(--s4) var(--s5); }
-/* The library needs a definitely-sized host; fill the chart pane inside its padding. */
-.ws-chart-canvas { position: absolute; inset: var(--s4); min-height: 240px; }
+.ws-chart { position: relative; flex: 1; min-height: 0; overflow: auto; padding: var(--s5); border-radius: 0 0 var(--r) var(--r); }
+/* A result fresh from ClickHouse fades in (ECharts animates its own canvas). */
+.ws-chart.is-fresh > :not(.ws-chart-canvas) { animation: fade-in var(--dur) var(--ease-out); }
+
+/* View bar (chart card head): chart type on the left; sort · format · export · refresh on the right.
+   Quiet ghost controls — the current value is the label, no field captions. */
+.ws-chart-head { position: relative; z-index: 2; flex: none; padding: var(--s3) var(--s5) 0; display: grid; gap: var(--s2); }
+.ws-viewbar { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; }
+.ws-viewbar__group { display: flex; align-items: center; gap: var(--s3); min-width: 0; }
+.ws-viewbar__group--right { margin-left: auto; }
+.ws-viewbar__icons { display: flex; align-items: center; gap: var(--s1); }
+.ws-viewbar__btn.is-active { background: var(--accent-soft); color: var(--accent-ink); box-shadow: inset 0 -2px 0 var(--accent); }
+/* Ghost controls at the row's ends overhang by their 8px glyph slack, so the glyphs meet the card's inset. */
+.ws-viewbar .ws-pick--chart { margin-left: calc(-1 * var(--s2)); }
+.ws-viewbar__icons > :last-child { margin-right: calc(-1 * var(--s2)); }
+.ws-export { display: inline-flex; }
+
+/* Picker: a ghost button whose label is the current value, with a caret; opens a .menu__list. */
+.ws-pick { display: inline-flex; min-width: 0; }
+.ws-pick__btn {
+  display: inline-flex; align-items: center; gap: var(--s2); height: var(--ctl-h); min-width: 0; padding: 0 var(--s2);
+  border: 1px solid transparent; border-radius: var(--r-ctl); background: transparent; color: var(--ink);
+  font: inherit; font-size: var(--fs-sm); font-weight: 600; cursor: pointer;
+  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.ws-pick__btn .icon { flex: none; color: var(--ink-2); }
+.ws-pick__btn:not(:disabled):hover { background: var(--surface-2); border-color: var(--line-2); }
+.ws-pick__btn[aria-expanded="true"] { background: var(--accent-soft); border-color: var(--accent); }
+.ws-pick__btn:disabled { color: var(--ink-3); font-weight: 400; cursor: not-allowed; }
+.ws-pick__text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
+.ws-pick--sort .ws-pick__btn { font-weight: 500; color: var(--ink-2); }
+.ws-pick__btn .ws-pick__caret { color: var(--ink-3); margin-left: calc(-1 * var(--s1)); transition: transform var(--dur-fast) var(--ease); }
+.ws-pick__btn[aria-expanded="true"] .ws-pick__caret { transform: rotate(180deg); }
+/* The chart-type menu: a two-column grid of icon + name. */
+.ws-charttypes { grid-template-columns: repeat(2, minmax(176px, 1fr)); }
+/* Result notice (truncated result, skipped filters): quiet info line on the card's own inset — the
+   info icon + text carry the meaning, never colour alone. */
+.ws-chart-notice {
+  flex: none; display: flex; align-items: center; gap: var(--s1);
+  margin: 0; padding: var(--s2) var(--s5) 0; font-size: var(--fs-xs); color: var(--ink-3);
+  animation: fade-in var(--dur) var(--ease-out);
+}
+.ws-chart-notice .icon { flex: none; }
+/* The library needs a definitely-sized host; fill the chart pane inside its padding. --chart-min-w /
+   --chart-min-h (chart.js, chartFit) keep a slot per category; past that, the pane scrolls. */
+.ws-chart-canvas { position: absolute; inset: var(--s4); min-width: var(--chart-min-w, 0px); min-height: max(240px, var(--chart-min-h, 0px)); }
 .ws-kpi-row { display: flex; flex-wrap: wrap; gap: var(--s5); align-items: stretch; justify-content: center; height: 100%; }
 .ws-kpi { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; min-width: 120px; }
 /* KPI sparkline (P11): inline SVG trend under the headline number, brand-accented. */
 .ws-spark { width: 132px; height: 30px; margin: var(--s2) 0 2px; overflow: visible; }
 .ws-spark__line { stroke: var(--accent); stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
 .ws-spark__dot { fill: var(--accent); }
-.ws-charttype__sel { font-size: var(--fs-xs); max-width: 150px; }
 .ws-hint { color: var(--ink-3); font-size: var(--fs-sm); padding: var(--s5); text-align: center; max-width: 480px; margin: auto; line-height: 1.5; }
 .ws-hint--warn { color: var(--danger-ink); }
-.ws-loading { color: var(--ink-3); padding: var(--s5); }
-/* Result notice between the shelves and the chart (truncated results). Neutral info styling — it is
-   not a status pill; the info icon + text carry the meaning, never colour alone. */
-.ws-status {
-  flex: none; margin: var(--s2) var(--s5) 0; padding: var(--s2) var(--s3);
-  font-size: var(--fs-sm); color: var(--ink-2);
-  background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-ctl);
-}
+.ws-loading { color: var(--ink-3); padding: var(--s5); animation: fade-in var(--dur) var(--ease) 150ms both; } /* only shows if the wait is noticeable */
 
 /* Crosstab (pivot) — Rows shelf = left stub, Columns shelf = top header, measures = cells.
    Natural width so wide pivots scroll horizontally inside .ws-chart. */
@@ -320,3 +343,177 @@
 .ws-pill--invalid { border-style: dashed; border-color: var(--danger-line); background: var(--danger-bg); color: var(--danger-ink); }
 .ws-pill__in-wrap { display: inline-flex; flex-direction: column; gap: 2px; }
 .ws-note { margin: 2px 0 0; font-size: var(--fs-xs); color: var(--ink-3); }
+
+/* P35 Date range editor (in the Date range tool panel): the range, comparison and resolved days. */
+.ws-period { display: grid; gap: var(--s2); }
+.ws-period__row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s4); }
+.ws-period input[type="date"] { width: auto; }
+.ws-shelf__note--warn { color: var(--danger-ink); }
+
+/* P35 scorecard: change vs the comparison (arrow + signed % + tone — never colour alone) and target bar. */
+.ws-kpi__change { display: inline-flex; align-items: center; gap: 2px; margin-top: var(--s1); font-size: var(--fs-sm); font-weight: 600; }
+.ws-kpi__change--good { color: var(--up); }
+.ws-kpi__change--bad { color: var(--down); }
+.ws-kpi__change--neutral { color: var(--ink-3); }
+.ws-kpi__arrow { font-size: 0.8em; }
+.ws-kpi__target { width: 132px; height: 6px; margin-top: var(--s2); border-radius: var(--r-pill); background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line); overflow: hidden; }
+.ws-kpi__target-fill { display: block; height: 100%; background: var(--accent); border-radius: inherit; }
+.ws-kpi__target.is-met .ws-kpi__target-fill { background: var(--up); }
+
+
+/* P37 conditional formatting — crosstab cells, the key above the table, and the Format-card editor.
+   Rules wear the status tokens plus an icon (never colour alone); scale tints / inks are set inline from
+   the chart tokens (conditional-model.js), and data bars sit behind the number. */
+.xtab td.xt-cf { position: relative; }
+.xt-cf__num { position: relative; }
+.xt-cf__icon { position: relative; display: inline-flex; vertical-align: -3px; margin-right: var(--s1); }
+.xt-cf__icon .icon { width: 14px; height: 14px; }
+.xt-bar { position: absolute; top: 3px; bottom: 3px; border-radius: 2px; background: color-mix(in srgb, var(--chart-cat-1) 30%, transparent); }
+.xt-bar--neg { background: color-mix(in srgb, var(--chart-cat-6) 34%, transparent); }
+.xt-rule--good { background: var(--ok-bg); color: var(--ok-ink); }
+.xt-rule--bad { background: var(--danger-bg); color: var(--danger-ink); }
+.xt-rule--warn { background: var(--warn-bg); color: var(--warn-ink); }
+.xt-rule--info { background: var(--surface-3); color: var(--ink); } /* neutral: the accent is the brand red */
+.xt-legend { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s4); font-size: var(--fs-xs); color: var(--ink-2); }
+.xt-legend__item { display: inline-flex; align-items: center; gap: var(--s1); }
+.xt-legend__rule { padding: 1px var(--s2); border-radius: var(--r-ctl); }
+.xt-legend__name { font-weight: 600; }
+.xt-legend__scale { width: 64px; height: 8px; border-radius: var(--r-pill); box-shadow: inset 0 0 0 1px var(--line); }
+.xt-legend__note { color: var(--ink-3); font-style: italic; }
+.ws-cf { flex-basis: 100%; display: grid; gap: var(--s2); padding-top: var(--s2); border-top: 1px solid var(--line); }
+.ws-cf__title { font-weight: 600; }
+.ws-cf__row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s4); }
+.ws-cf__num { width: 96px; }
+.ws-cf__add { justify-self: start; }
+
+/* ---- P41 presentation: full screen, print, phone ------------------------- */
+/* Full screen: the chart card alone, edge to edge (Fullscreen API, or the .is-presenting fallback). */
+.ws-chart-card:fullscreen, .ws-chart-card.is-presenting { margin: 0; border-radius: 0; border: 0; background: var(--surface); }
+.ws-chart-card.is-presenting { position: fixed; inset: 0; z-index: 50; }
+.ws-chart-card:fullscreen .ws-chart, .ws-chart-card.is-presenting .ws-chart { padding: var(--s7); }
+
+/* The field-pane toggle exists only for the phone layout. */
+.ws-fields-toggle { display: none; justify-self: start; gap: var(--s1); }
+.ws-fields-toggle.is-active { background: var(--accent-soft); border-color: var(--accent); }
+
+/* Phone (≤ 640px): one column — data header, then the chart card at a usable height; the main column
+   scrolls inside itself (the page still never does). The field pane opens over it from "Fields". */
+@media (max-width: 640px) {
+  .worksheet { grid-template-columns: 1fr; }
+  .ws-fields__resizer { display: none; }
+  .ws-fields { display: none; position: absolute; inset: 0 auto 0 0; width: min(300px, 86%); z-index: 6;
+    box-shadow: var(--elev-28); }
+  .worksheet.is-fields-open .ws-fields { display: flex; }
+  .ws-fields-toggle { display: inline-flex; }
+  .ws-main { overflow: auto; }
+  .ws-shelves { padding: var(--s2) var(--s3); }
+  .ws-shelf { grid-template-columns: 68px 1fr; }
+  .ws-chart-card { flex: none; min-height: 380px; margin: var(--s3); }
+  .ws-chart-head { padding-inline: var(--s3); }
+  /* The view bar wraps: chart type on its own line, then sort + the icon group sharing the next. */
+  .ws-viewbar__group--right { margin-left: 0; width: 100%; justify-content: space-between; flex-wrap: wrap; gap: var(--s2); }
+  .ws-viewbar__icons > :last-child { margin-right: 0; }
+  .ws-pick__text { max-width: 140px; }
+}
+
+/* Print / PDF: the active chart card only, with its print header (dashboards.js beginPrint). */
+.ws-print-head { display: none; }
+@media print {
+  @page { size: landscape; margin: 12mm; }
+  html, body { height: auto; overflow: visible; background: var(--print-paper); }
+  .sidebar, .canvas__bar, .ws-fields, .ws-fields__resizer, .ws-shelves, .ws-chart-head, .toast, #toast-live { display: none !important; }
+  .app, .worksheet, .ws-main, .view--dashboard { display: block; height: auto; overflow: visible; }
+  .ws-chart-card { margin: 0; border: 0; box-shadow: none; break-inside: avoid; }
+  .ws-chart-notice { display: none; }
+  .ws-print-head { display: block; margin-bottom: 8mm; color: var(--print-ink); }
+  .ws-print-head__title { margin: 0 0 2mm; font-size: 18pt; }
+  .ws-print-head__line { margin: 0; font-size: 9pt; }
+  .ws-chart { overflow: visible; padding: 0; }
+  .ws-chart-canvas { position: relative; inset: auto; width: 1000px; height: 560px; }
+  .xtab { font-size: 8pt; }
+  .xtab thead { display: table-header-group; } /* repeat the header on every page */
+}
+
+/* ---- P40 shared filters & field choices ----------------------------------- */
+.ws-pill__badge { flex: none; padding: 0 var(--s1); border-radius: var(--r-ctl); background: var(--surface-3); color: var(--ink-2);
+  font-size: 10px; font-weight: 700; letter-spacing: .02em; line-height: 16px; }
+.ws-pill--shared { box-shadow: inset 0 0 0 1px var(--line-2); }
+.ws-pill__share[aria-pressed="true"], .ws-pill__swap.is-set { color: var(--accent-ink); }
+.ws-pill__swap[aria-pressed="true"] { background: var(--accent-soft); }
+/* The chart card's "show" switchers (one per slot with choices), under the view bar. */
+.ws-switchers { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s4); }
+.ws-switchers .ws-fmt-select { max-width: 260px; }
+/* P39 link action: the template field is wide; the selection bar's link button carries the link icon. */
+.ws-link__tpl { width: min(360px, 60vw); }
+.ws-select__link { display: inline-flex; align-items: center; gap: var(--s1); }
+
+/* ---- P26 date part on a date pill: − [part] + ------------------------------- */
+.ws-pill__part { height: 18px; padding: 0 var(--s1); font-size: 11px; max-width: 120px; }
+.ws-pill__step { width: 18px; height: 18px; min-width: 18px; font-size: 13px; line-height: 1; }
+.ws-pill__step .icon { width: 12px; height: 12px; }
+.ws-pill__step:disabled { opacity: .35; cursor: default; }
+/* P27: the measure pill's table-calculation button, accent-coloured when one is set. */
+.ws-pill__calc.is-set { color: var(--accent-ink); }
+.ws-pill__calc[aria-pressed="true"] { background: var(--accent-soft); }
+
+/* ---- P28 field pane: search, hidden toggle, ⋯ menu, rename ------------------- */
+.ws-fieldtools { display: grid; gap: var(--s2); position: sticky; top: calc(-1 * var(--s3)); z-index: 2; padding-block: var(--s1);
+  background: color-mix(in srgb, var(--surface), var(--ink) 2%); }
+.ws-fieldtools__search { width: 100%; height: var(--ctl-h); }
+.ws-fieldtools__hidden { justify-self: start; height: 26px; font-size: var(--fs-xs); }
+.ws-field__menu { flex: none; }
+.ws-field__more { width: 20px; height: 20px; opacity: 0; transition: opacity var(--dur) var(--ease); }
+.ws-field:hover .ws-field__more, .ws-field__more:focus-visible, .ws-field__more[aria-expanded="true"] { opacity: 1; }
+.ws-field__menu .menu__list { right: 0; left: auto; min-width: 200px; }
+.ws-field.is-renamed .ws-field__name { font-style: italic; }
+.ws-field.is-hidden { opacity: .55; }
+.ws-field__rename { flex: 1; min-width: 0; height: 24px; font-size: var(--fs-sm); padding: 0 var(--s1); }
+@media (pointer: coarse) { .ws-field__more { opacity: 1; } }
+
+/* ---- P23 worksheet chrome: undo/redo, title + caption, status bar ------------ */
+.ws-undo { display: inline-flex; gap: 2px; }
+.ws-undo .iconbtn:disabled { opacity: .35; cursor: default; }
+.ws-titleblock { display: grid; gap: 2px; }
+.ws-titleblock__btn { justify-self: start; max-width: 100%; border: 1px solid transparent; border-radius: var(--r-ctl); background: none;
+  padding: 0 var(--s1); margin-inline: calc(-1 * var(--s1)); color: var(--ink); cursor: text; text-align: left; font: inherit; }
+.ws-titleblock__btn:hover { border-color: var(--line-2); background: var(--surface-2); }
+.ws-titleblock__btn h2 { margin: 0; font-size: var(--fs-lead); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-titleblock__btn p { margin: 0; font-size: var(--fs-xs); color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-titleblock__btn.is-auto.ws-titleblock__caption p { font-style: italic; }
+.ws-titleblock__input.ws-titleblock__title { font-size: var(--fs-lead); font-weight: 600; height: 30px; width: min(480px, 100%); }
+.ws-titleblock__input.ws-titleblock__caption { font-size: var(--fs-xs); height: 24px; width: min(640px, 100%); }
+.ws-statusbar { flex: none; margin: 0; padding: var(--s1) var(--s5) var(--s2); font-size: var(--fs-xs); color: var(--ink-3);
+  border-top: 1px solid var(--line); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media print { .ws-statusbar, .ws-titleblock { display: none !important; } }
+
+/* P33: the loading line carries a Cancel button. */
+.ws-loading { display: flex; align-items: center; gap: var(--s3); }
+.ws-loading__cancel { height: 28px; }
+
+/* ---- P30 filter cards (above the chart) and the new filter editors ---------- */
+.ws-filtercards { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: flex-start; }
+.ws-fcard { display: grid; gap: 2px; min-width: 150px; max-width: 280px; padding: var(--s1) var(--s2); border: 1px solid var(--line); border-radius: var(--r-ctl); background: var(--surface-2); }
+.ws-fcard.is-invalid { border-style: dashed; border-color: var(--danger-line); }
+.ws-fcard__head { display: flex; align-items: center; gap: var(--s1); }
+.ws-fcard__name { flex: 1; min-width: 0; font-size: var(--fs-xs); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-fcard__body { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1); font-size: var(--fs-xs); }
+.ws-fcard__op { color: var(--ink-3); }
+.ws-fcard__list { display: grid; gap: 2px; max-height: 96px; overflow: auto; font-size: var(--fs-xs); }
+.ws-fcard__item { display: flex; align-items: center; gap: var(--s1); cursor: pointer; }
+.ws-fcard__item input { margin: 0; width: 14px; height: 14px; }
+.ws-pill__top { display: inline-flex; align-items: center; gap: var(--s1); }
+.ws-pill__topn { width: 48px; }
+.ws-pill__topby, .ws-pill__topdir, .ws-pill__rel { height: 22px; font-size: 11px; max-width: 160px; }
+/* P21 totals: bold on a tinted row / column, a heavier rule above the grand total. */
+.xtab .xt-total { font-weight: 600; background: var(--surface-2); }
+.xtab tr.xt-grand > * { border-top: 2px solid var(--line-2); }
+
+/* ---- P32 parameters: controls on the card, bound filter values ---------------- */
+.ws-params { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s4); align-items: center; }
+.ws-param { display: inline-flex; align-items: center; gap: var(--s2); font-size: var(--fs-xs); }
+.ws-param__name { font-weight: 600; color: var(--ink-2); }
+.ws-param__range { width: 140px; accent-color: var(--accent); }
+.ws-param__num { width: 96px; height: 28px; }
+.ws-pill__pwrap { display: inline-flex; align-items: center; gap: 2px; }
+.ws-pill__paramsel { height: 22px; font-size: 11px; max-width: 170px; }
+.ws-pill__param[aria-pressed="true"] { color: var(--accent-ink); background: var(--accent-soft); }
