@@ -2,7 +2,7 @@ import { api } from "../Core/api.js";
 import { icon, PATHS } from "../Core/icons.js";
 import { wireMenu } from "../Core/menu.js";
 import { visibleTools } from "./toolbar-rules.js";
-import { roleOf, COLOR_SPLIT_TYPES, STAT_SINGLE_TABLE, chartIssue, TEXT_VALUE_HINT, COLOR_SPLIT_HINT, statFieldHint } from "./show-me-rules.js";
+import { roleOf, COLOR_SPLIT_TYPES, STAT_SINGLE_TABLE, chartIssue, TEXT_VALUE_HINT, COLOR_SPLIT_HINT, statFieldHint, showMeOptions, placeFor, samePlacement } from "./show-me-rules.js";
 import { toggle, makeButton, toast, fieldError, confirmDialog } from "../Core/ui.js";
 import { LIMITS, number } from "../Core/validate.js";
 import { aggsFor, checkAdd, checkFilter, viewCounts, statFilters, withCategories, TEXT_VALUE_TYPES, opsFor, OP_LABELS, serverFilter } from "./filter-rules.js";
@@ -219,6 +219,21 @@ function chartOrientation(sheet) {
   const colDims = sheet.columns.filter((f) => roleOf(f) === "dimension").length;
   return rowDims > 0 && colDims === 0 ? "horizontal" : "vertical";
 }
+// P22 Show Me: the field counts one candidate chart type sees — the same dims the chart hint counts
+// (planDims with that type: drill, shelf, Detail, Shape, discrete Colour) and the shelf measures.
+function showMeCounts(sheet, type) {
+  const shelf = [...sheet.columns, ...sheet.rows];
+  const measures = shelf.filter((f) => roleOf(f) === "measure");
+  return {
+    dims: planDims({ ...sheet, chartType: type }).keyOrder.length,
+    shelfDims: (drillActiveDim(sheet) ? 1 : 0) + shelf.filter((f) => roleOf(f) === "dimension").length,
+    measures: measures.length,
+    hasDate: shelf.some((f) => roleOf(f) === "dimension" && f.category === "temporal"),
+    textValue: measures.some((f) => f.category !== "numeric" && (f.agg === "min" || f.agg === "max")),
+    discreteColor: colorMode(sheet) === "discrete",
+    numericField: shelf.some((f) => f.category === "numeric"),
+  };
+}
 const keyOf = (db, table) => `${db}\u0000${table}`;
 const splitKey = (k) => k.split("\u0000");
 const columnsCache = new Map();
@@ -256,6 +271,7 @@ export function initDashboards() {
 
   let formatOpen = false; // whether the Format panel (P10) is expanded — ephemeral UI state
   let analyticsOpen = false; // P21: whether the Analytics card is open
+  let showMeOpen = false; // P22: whether the Show Me card is open
   let shownPanel = null;  // the tool/format panel on screen last render, so only a newly opened one animates in
   let shownPills = new Set(); // pill keys on screen last render, so only a newly added pill animates in
   let shownFor = null;        // the dashboard those were rendered for (switching dashboards animates nothing)
@@ -506,7 +522,7 @@ export function initDashboards() {
       for (const t of more) {
         const item = el("button", "menu__item"); item.type = "button"; item.setAttribute("role", "menuitem");
         item.append(icon(t.icon), document.createTextNode(t.label));
-        item.addEventListener("click", () => { openTool = t.key; formatOpen = false; renderShelves(); });
+        item.addEventListener("click", () => { openTool = t.key; formatOpen = false; showMeOpen = false; renderShelves(); });
         list.append(item);
       }
       wrap.append(btn, list); toolbar.append(wrap);
@@ -531,9 +547,9 @@ export function initDashboards() {
     vbIcons.append(formatToggle(), analyticsToggle(), exportControl(dash, s), refreshButton(dash), sheetActions(dash, s), fullScreenButton());
     vbRight.append(sortControl(dash, s), vbIcons);
     const vbLeft = el("div", "ws-viewbar__group");
-    vbLeft.append(chartTypePicker(dash, s), undoButtons(dash));
+    vbLeft.append(chartTypePicker(dash, s), showMeToggle(), undoButtons(dash));
     viewbar.append(vbLeft, vbRight);
-    const fmtEl = formatOpen ? formatPanel(dash, s) : analyticsOpen ? analyticsPanel(dash, s) : null; // P10 format / P21 analytics card
+    const fmtEl = showMeOpen ? showMePanel(dash, s) : formatOpen ? formatPanel(dash, s) : analyticsOpen ? analyticsPanel(dash, s) : null; // P10 format / P21 analytics card
     const swEl = switchers(dash, s); // P40
     const titleEl = s.showTitle === false ? null : titleBlock(dash, s); // P23
     const cardsEl = filterCards(dash, s); // P30
@@ -541,7 +557,7 @@ export function initDashboards() {
     headEl.replaceChildren(viewbar, ...(swEl ? [swEl] : []), ...(fmtEl ? [fmtEl] : []), ...(titleEl ? [titleEl] : []), ...(paramsEl ? [paramsEl] : []), ...(cardsEl ? [cardsEl] : []));
 
     // Motion only for what is new since the last render (every edit re-renders the header).
-    const panelKey = toolEl ? `tool:${openTool}` : fmtEl ? "format" : null;
+    const panelKey = toolEl ? `tool:${openTool}` : fmtEl ? (showMeOpen ? "showme" : "format") : null;
     if (panelKey && panelKey !== shownPanel) enter(toolEl ?? fmtEl);
     shownPanel = panelKey;
     const pillKeys = new Set();
@@ -693,7 +709,7 @@ export function initDashboards() {
     btn.setAttribute("aria-pressed", String(analyticsOpen));
     btn.setAttribute("aria-expanded", String(analyticsOpen));
     btn.title = "Analytics — reference lines, trend, forecast, totals";
-    btn.addEventListener("click", () => { analyticsOpen = !analyticsOpen; if (analyticsOpen) { openTool = null; formatOpen = false; } renderShelves(); });
+    btn.addEventListener("click", () => { analyticsOpen = !analyticsOpen; if (analyticsOpen) { openTool = null; formatOpen = false; showMeOpen = false; } renderShelves(); });
     return btn;
   }
   function analyticsPanel(dash, s) {
@@ -727,8 +743,58 @@ export function initDashboards() {
     btn.setAttribute("aria-pressed", String(formatOpen));
     btn.title = "Format";
     btn.setAttribute("aria-expanded", String(formatOpen));
-    btn.addEventListener("click", () => { formatOpen = !formatOpen; if (formatOpen) { openTool = null; analyticsOpen = false; } renderShelves(); });
+    btn.addEventListener("click", () => { formatOpen = !formatOpen; if (formatOpen) { openTool = null; analyticsOpen = false; showMeOpen = false; } renderShelves(); });
     return btn;
+  }
+  // P22 Show Me: every chart type, greyed with the reason when the sheet's fields can't draw it, the best
+  // one outlined; a click sets the type and lays Columns / Rows out for it (one commit = one undo step).
+  function showMeToggle() {
+    const btn = iconButton("show-me", "Show Me");
+    btn.className = `iconbtn ws-viewbar__btn ws-showme-toggle${showMeOpen ? " is-active" : ""}`;
+    btn.append(el("span", null, "Show Me"));
+    btn.setAttribute("aria-pressed", String(showMeOpen));
+    btn.setAttribute("aria-expanded", String(showMeOpen));
+    btn.title = "Show Me — chart types that fit these fields";
+    btn.addEventListener("click", () => { showMeOpen = !showMeOpen; if (showMeOpen) { openTool = null; formatOpen = false; analyticsOpen = false; } renderShelves(); });
+    return btn;
+  }
+  function showMePanel(dash, s) {
+    const panel = el("div", "ws-format ws-showme");
+    panel.append(el("span", "ws-shelf__label", "Show Me"));
+    const status = el("p", "ws-shelf__note ws-showme__status");
+    status.setAttribute("aria-live", "polite");
+    if (!s.columns.length && !s.rows.length) status.textContent = "Add fields to Columns or Rows to see suggestions.";
+    const grid = el("div", "ws-showme__grid");
+    for (const o of showMeOptions(CHART_TYPES.map(([id]) => id), (type) => showMeCounts(s, type))) {
+      const tile = el("button", "ws-showme__tile"); tile.type = "button"; tile.dataset.type = o.id;
+      tile.append(icon(chartIcon(o.id)), el("span", "ws-showme__label", chartLabel(o.id)));
+      const current = o.id === s.chartType;
+      tile.setAttribute("aria-pressed", String(current));
+      if (current) { const tick = icon("check", { size: 14 }); tick.classList.add("ws-showme__check"); tile.append(tick); }
+      if (o.recommended) { tile.classList.add("is-recommended"); tile.append(el("span", "ws-showme__badge", "Recommended")); }
+      if (o.issue) {
+        tile.setAttribute("aria-disabled", "true"); tile.title = o.issue;
+        const why = el("span", null, o.issue); why.id = `ws-showme-why-${o.id}`; why.hidden = true;
+        tile.setAttribute("aria-describedby", why.id); tile.append(why);
+        tile.addEventListener("click", () => { status.textContent = `${chartLabel(o.id)}: ${o.issue}`; });
+      } else {
+        tile.addEventListener("click", () => {
+          const placed = placeFor(o.id, s.columns, s.rows);
+          if (current && samePlacement(placed, s)) return; // already laid out — no empty undo step
+          s.chartType = o.id; s.columns = placed.columns; s.rows = placed.rows;
+          commit(dash, s); // re-renders the header synchronously
+          headEl.querySelector(`.ws-showme__tile[data-type="${o.id}"]`)?.focus();
+        });
+      }
+      grid.append(tile);
+    }
+    panel.append(grid, status);
+    panel.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape") return;
+      e.stopPropagation(); showMeOpen = false; renderShelves();
+      headEl.querySelector(".ws-showme-toggle")?.focus();
+    });
+    return panel;
   }
 
   // --- export (P13) --------------------------------------------------------
@@ -1181,7 +1247,7 @@ export function initDashboards() {
       fx.classList.add("ws-pill__calc");
       if (on) fx.classList.add("is-set");
       fx.setAttribute("aria-pressed", String(Boolean(open)));
-      fx.addEventListener("click", () => { calcFor = open ? null : { shelf: shelfKey, index: i }; if (calcFor) { openTool = null; choicesFor = null; } formatOpen = false; renderShelves(); });
+      fx.addEventListener("click", () => { calcFor = open ? null : { shelf: shelfKey, index: i }; if (calcFor) { openTool = null; choicesFor = null; } formatOpen = false; showMeOpen = false; renderShelves(); });
       controls.append(fx);
     }
     // P26: a date dimension picks its part here, and +/− step through year → quarter → month → day → hour.
@@ -1208,7 +1274,7 @@ export function initDashboards() {
     if (n >= 2) sw.classList.add("is-set");
     const open = choicesFor && choicesFor.shelf === shelfKey && choicesFor.index === i;
     sw.setAttribute("aria-pressed", String(Boolean(open)));
-    sw.addEventListener("click", () => { choicesFor = open ? null : { shelf: shelfKey, index: i }; if (choicesFor) { openTool = null; calcFor = null; } formatOpen = false; renderShelves(); });
+    sw.addEventListener("click", () => { choicesFor = open ? null : { shelf: shelfKey, index: i }; if (choicesFor) { openTool = null; calcFor = null; } formatOpen = false; showMeOpen = false; renderShelves(); });
     controls.append(sw);
     const p = pill(label, remove, controls);
     p.classList.add(isMeasure ? "ws-pill--measure" : "ws-pill--dimension");
@@ -1844,7 +1910,7 @@ export function initDashboards() {
     btn.title = tool.hint || tool.label;
     btn.append(icon(tool.icon), el("span", "ws-tool__text", tool.label));
     if (set) btn.append(el("span", "ws-tool__badge", String(tool.count)));
-    btn.addEventListener("click", () => { openTool = openTool === tool.key ? null : tool.key; choicesFor = null; calcFor = null; formatOpen = false; renderShelves(); });
+    btn.addEventListener("click", () => { openTool = openTool === tool.key ? null : tool.key; choicesFor = null; calcFor = null; formatOpen = false; showMeOpen = false; renderShelves(); });
     btn.addEventListener("dragover", (e) => { if (hasField(e)) { e.preventDefault(); btn.classList.add("is-over"); } });
     btn.addEventListener("dragleave", () => btn.classList.remove("is-over"));
     btn.addEventListener("drop", (e) => {

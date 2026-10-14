@@ -302,6 +302,28 @@
 .ws-pick__btn[aria-expanded="true"] .ws-pick__caret { transform: rotate(180deg); }
 /* The chart-type menu: a two-column grid of icon + name. */
 .ws-charttypes { grid-template-columns: repeat(2, minmax(176px, 1fr)); }
+/* P22 Show Me: a grid of every chart type. Greyed = the fields can't draw it (reason in title + status);
+   recommended = accent outline + "Recommended" text; current = soft fill + check icon (never colour alone). */
+.ws-showme-toggle { display: inline-flex; align-items: center; gap: var(--s1); width: auto; padding-inline: var(--s2); font-size: var(--fs-xs); }
+.ws-showme { flex: none; flex-direction: column; flex-wrap: nowrap; align-items: stretch; }
+/* Rows keep their natural height; past ~3 rows the grid scrolls inside the card so the chart keeps its room. */
+.ws-showme__grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); grid-auto-rows: auto; align-content: start;
+  gap: var(--s2); max-height: calc(var(--ctl-h) * 6.5); overflow-y: auto;
+}
+.ws-showme__tile {
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--s1);
+  min-height: calc(var(--ctl-h) * 2); padding: var(--s2); font-size: var(--fs-xs); color: var(--ink);
+  background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r-ctl); cursor: pointer;
+}
+.ws-showme__tile:hover:not([aria-disabled="true"]) { border-color: var(--accent); }
+.ws-showme__tile[aria-pressed="true"] { background: var(--accent-soft); }
+.ws-showme__tile.is-recommended { border: 2px solid var(--accent); }
+.ws-showme__tile[aria-disabled="true"] { color: var(--ink-3); background: var(--surface-2); cursor: not-allowed; }
+.ws-showme__tile[aria-disabled="true"] svg { opacity: .5; }
+.ws-showme__badge { font-weight: 600; color: var(--accent-ink); }
+.ws-showme__check { position: absolute; top: var(--s1); right: var(--s1); color: var(--accent-ink); }
+.ws-showme__status { margin: 0; min-height: 1lh; }
 /* Result notice (truncated result, skipped filters): quiet info line on the card's own inset — the
    info icon + text carry the meaning, never colour alone. */
 .ws-chart-notice {
