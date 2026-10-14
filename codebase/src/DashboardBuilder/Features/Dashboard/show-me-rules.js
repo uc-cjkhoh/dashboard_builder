@@ -73,3 +73,57 @@ export function issueFor(type, counts) {
   if (STAT_SINGLE_TABLE.has(type) && !counts.numericField) return statFieldHint(type);
   return chartIssue(type, counts.dims, counts.measures);
 }
+
+// --- Recommendation: the type Show Me outlines. `shelfDims` (Columns / Rows + drill) steers it, never
+// encodings — a colour-split bar keeps recommending Bar. First match wins.
+export function bestType(c) {
+  const d = c.shelfDims, m = c.measures;
+  if (d === 0 && m === 0) return null;
+  if (c.textValue) return "table";
+  if (d >= 3) return "table";
+  if (d === 0) return m === 2 ? "scatter" : "kpi";
+  if (c.hasDate && m >= 1) return "line";
+  if (d === 1 && m >= 1) return "bar";
+  if (d === 2 && m === 1) return "heatmap";
+  return "table";
+}
+
+/** Every type with why it can't draw the sheet (null = it can); the best type is flagged only if valid. */
+export function showMeOptions(types, countsFor) {
+  if (!types.length) return [];
+  const options = types.map((id) => ({ id, issue: issueFor(id, countsFor(id)), recommended: false }));
+  const best = bestType(countsFor(types[0])); // shelfDims / measures don't vary by type
+  const hit = options.find((o) => o.id === best && o.issue === null);
+  if (hit) hit.recommended = true;
+  return options;
+}
+
+// --- Placement: where Columns / Rows pills go for a picked type. D = dimensions in group-by key order
+// (Rows, then Columns), M = measures in series order (Columns, then Rows) — planDims / planMeasures order.
+const HORIZONTAL_TYPES = new Set(["bar", "stacked"]);
+const TIME_TYPES = new Set(["line", "area", "combo"]);
+const XY_TYPES = new Set(["scatter", "square", "circle"]);
+const TWO_DIM_TYPES = new Set(["heatmap", "sankey", "multiples"]);
+const TEXT_TYPES = new Set(["table", "text"]);
+const isDim = (f) => roleOf(f) === "dimension";
+
+export function placeFor(type, columns, rows) {
+  const dims = [...rows.filter(isDim), ...columns.filter(isDim)];
+  const meas = [...columns.filter((f) => !isDim(f)), ...rows.filter((f) => !isDim(f))];
+  if (TEXT_TYPES.has(type)) return { columns: meas, rows: dims };
+  if (XY_TYPES.has(type)) return { columns: [...dims, ...meas.slice(0, 1)], rows: meas.slice(1) };
+  if (TWO_DIM_TYPES.has(type)) return { columns: [...dims.slice(1), ...meas], rows: dims.slice(0, 1) };
+  if (TIME_TYPES.has(type)) {
+    const temporal = dims.filter((f) => f.category === "temporal");
+    return { columns: [...temporal, ...dims.filter((f) => f.category !== "temporal")], rows: meas };
+  }
+  const horizontal = rows.some(isDim) && !columns.some(isDim); // chartOrientation's rule
+  if (HORIZONTAL_TYPES.has(type) && horizontal) return { columns: meas, rows: dims };
+  return { columns: dims, rows: meas };
+}
+
+/** True when two `{ columns, rows }` hold the same pill objects in the same order. */
+export function samePlacement(a, b) {
+  const same = (x, y) => x.length === y.length && x.every((f, i) => f === y[i]);
+  return same(a.columns, b.columns) && same(a.rows, b.rows);
+}
