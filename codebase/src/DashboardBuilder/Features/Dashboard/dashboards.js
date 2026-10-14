@@ -755,7 +755,11 @@ export function initDashboards() {
     btn.setAttribute("aria-pressed", String(showMeOpen));
     btn.setAttribute("aria-expanded", String(showMeOpen));
     btn.title = "Show Me — chart types that fit these fields";
-    btn.addEventListener("click", () => { showMeOpen = !showMeOpen; if (showMeOpen) { openTool = null; formatOpen = false; analyticsOpen = false; } renderShelves(); });
+    btn.addEventListener("click", () => {
+      showMeOpen = !showMeOpen; if (showMeOpen) { openTool = null; formatOpen = false; analyticsOpen = false; }
+      renderShelves();
+      headEl.querySelector(".ws-showme-toggle")?.focus(); // the re-render replaced this button
+    });
     return btn;
   }
   function showMePanel(dash, s) {
@@ -763,7 +767,8 @@ export function initDashboards() {
     panel.append(el("span", "ws-shelf__label", "Show Me"));
     const status = el("p", "ws-shelf__note ws-showme__status");
     status.setAttribute("aria-live", "polite");
-    if (!s.columns.length && !s.rows.length) status.textContent = "Add fields to Columns or Rows to see suggestions.";
+    const empty = !s.columns.length && !s.rows.length; // a drill level alone isn't "fields to suggest for"
+    if (empty) status.textContent = "Add fields to Columns or Rows to see suggestions.";
     const grid = el("div", "ws-showme__grid");
     for (const o of showMeOptions(CHART_TYPES.map(([id]) => id), (type) => showMeCounts(s, type))) {
       const tile = el("button", "ws-showme__tile"); tile.type = "button"; tile.dataset.type = o.id;
@@ -771,7 +776,7 @@ export function initDashboards() {
       const current = o.id === s.chartType;
       tile.setAttribute("aria-pressed", String(current));
       if (current) { const tick = icon("check", { size: 14 }); tick.classList.add("ws-showme__check"); tile.append(tick); }
-      if (o.recommended) { tile.classList.add("is-recommended"); tile.append(el("span", "ws-showme__badge", "Recommended")); }
+      if (o.recommended && !empty) { tile.classList.add("is-recommended"); tile.append(el("span", "ws-showme__badge", "Recommended")); }
       if (o.issue) {
         tile.setAttribute("aria-disabled", "true"); tile.title = o.issue;
         const why = el("span", null, o.issue); why.id = `ws-showme-why-${o.id}`; why.hidden = true;

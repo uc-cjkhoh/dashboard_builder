@@ -109,3 +109,9 @@ test("roleOf: an explicit role wins, else numeric → measure", () => {
   assert.equal(roleOf({ category: "numeric", role: "dimension" }), "dimension");
   assert.equal(roleOf({ category: "text", role: "measure" }), "measure");
 });
+test("a discrete Colour split with one measure is valid on the split types (the chart draws it)", () => {
+  // renderChart sends a one-measure colour split to renderColorSplit before the rule table — Stacked
+  // stacks the colour series, so its "two or more measures" need doesn't apply.
+  const c = counts({ discreteColor: true, measures: 1, dims: 2 });
+  for (const t of ["bar", "stacked", "line", "area"]) assert.equal(issueFor(t, c), null, t);
+});

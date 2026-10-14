@@ -69,7 +69,8 @@ export function chartIssue(type, dimCount, measureCount) {
 /** Why `type` can't draw the sheet described by `counts` (first rule that fails), or null. */
 export function issueFor(type, counts) {
   if (counts.textValue && !TEXT_VALUE_TYPES.has(type)) return TEXT_VALUE_HINT;
-  if (counts.discreteColor && COLOR_SPLIT_TYPES.has(type) && counts.measures !== 1) return COLOR_SPLIT_HINT;
+  // A one-measure colour split renders before the rule table (renderColorSplit), so it skips CHART_NEEDS.
+  if (counts.discreteColor && COLOR_SPLIT_TYPES.has(type)) return counts.measures !== 1 ? COLOR_SPLIT_HINT : null;
   if (STAT_SINGLE_TABLE.has(type) && !counts.numericField) return statFieldHint(type);
   return chartIssue(type, counts.dims, counts.measures);
 }
