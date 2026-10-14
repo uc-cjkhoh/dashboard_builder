@@ -2,6 +2,7 @@ import { api } from "../Core/api.js";
 import { icon, PATHS } from "../Core/icons.js";
 import { wireMenu } from "../Core/menu.js";
 import { visibleTools } from "./toolbar-rules.js";
+import { roleOf, COLOR_SPLIT_TYPES, STAT_SINGLE_TABLE, chartIssue, TEXT_VALUE_HINT, COLOR_SPLIT_HINT, statFieldHint } from "./show-me-rules.js";
 import { toggle, makeButton, toast, fieldError, confirmDialog } from "../Core/ui.js";
 import { LIMITS, number } from "../Core/validate.js";
 import { aggsFor, checkAdd, checkFilter, viewCounts, statFilters, withCategories, TEXT_VALUE_TYPES, opsFor, OP_LABELS, serverFilter } from "./filter-rules.js";
@@ -58,7 +59,7 @@ const toFilter = (f) => serverFilter(f, { resolve: (preset) => resolveRange({ pr
 // numeric → measure (aggregated), everything else → dimension (grouped). A numeric field made a
 // dimension groups by its raw values; any field made a measure is aggregated (count/countDistinct
 // always valid, sum/avg only meaningful for numbers).
-const roleOf = (f) => f.role ?? (f.category === "numeric" ? "measure" : "dimension");
+// (roleOf itself lives in show-me-rules.js.)
 
 // Display name of a measure — matches the server's measure naming (see QueryAsync).
 function measureName(f) {
@@ -162,14 +163,10 @@ const NO_AXES = new Set(["pie", "donut", "funnel", "gauge", "sankey"]);
 const TARGET_TYPES = new Set(["kpi", "gauge", "bullet"]);
 // Small multiples draw at most this many panels.
 const MAX_PANELS = 24;
-// P12 statistical charts that run their OWN single-table endpoint (not /api/query): histogram +
-// box plot bypass buildPlan. Heatmap/treemap reuse the normal multi-dimension aggregate query.
-const STAT_SINGLE_TABLE = new Set(["histogram", "boxplot"]);
 // Chart types that consume a Color dimension (P7 marks). SPLIT types pivot it into one coloured
 // series per value; a Table takes it as an extra group-by that renders as a free top-header level.
 // Types outside COLOR_USES ignore a Color pill (pie already slices by colour; scatter/combo/KPI
 // don't split) — the Color lane shows a note so it's honest, never a silent no-op.
-const COLOR_SPLIT_TYPES = new Set(["bar", "stacked", "line", "area"]);
 const COLOR_USES = new Set(["bar", "stacked", "line", "area", "table"]);
 // Chart types whose marks map 1:1 to a category and so support click-to-filter (P15).
 // P21: chart types that take reference lines / bands / a trend.
@@ -2236,7 +2233,7 @@ export function initDashboards() {
     const allFields = [...s.columns, ...s.rows];
     const numeric = allFields.find((f) => f.category === "numeric");
     if (!numeric) {
-      chartEl.replaceChildren(hint(`${s.chartType === "histogram" ? "A histogram" : "A box plot"} needs a numeric field — add one to Columns or Rows.`));
+      chartEl.replaceChildren(hint(statFieldHint(s.chartType)));
       return;
     }
     const { db, table } = numeric;
@@ -2419,7 +2416,7 @@ export function initDashboards() {
     const type = sheet.chartType;
     // Min/Max of a text or date field comes back as text — only Table, Text and KPI can show that.
     if (!TEXT_VALUE_TYPES.has(type) && rows.some((r) => r.values.some((v) => typeof v === "string"))) {
-      chartEl.replaceChildren(hint("Min/Max of a text or date field shows as Table, Text or KPI — switch the chart type, or use Count."));
+      chartEl.replaceChildren(hint(TEXT_VALUE_HINT));
       return;
     }
     // Table + P19 Text mark both render as the crosstab text grid (values written into cells).
@@ -2437,7 +2434,7 @@ export function initDashboards() {
     // series per distinct value (bar → grouped, stacked → stacked, line/area → one per value).
     if (colorMode(sheet) === "discrete" && COLOR_SPLIT_TYPES.has(type)) {
       if (shelfCount !== 1) {
-        chartEl.append(hint("Colour splits a single measure across series — use exactly one measure, or remove the Colour field."));
+        chartEl.append(hint(COLOR_SPLIT_HINT));
         return;
       }
       renderColorSplit(type, result, format, fmtCat);
@@ -2722,66 +2719,6 @@ export function initDashboards() {
       };
     }
     commit(dash, s);
-  }
-
-  // Field mappings a chart type needs; returns a friendly hint when unmet (P11 done-when: a hint,
-  // not an error). bar/line/area/kpi accept any mapping (0 dimensions → KPI tiles).
-  function chartIssue(type, dimCount, measureCount) {
-    switch (type) {
-      case "pie":
-      case "donut":
-        if (measureCount !== 1) return "Pie/Donut shows one measure — put exactly one measure on a shelf.";
-        if (dimCount < 1) return "Pie/Donut needs a dimension to slice by — add a dimension.";
-        return null;
-      case "scatter":
-      case "square":   // P19 point marks share the scatter mapping (two measures → X/Y)
-      case "circle":
-        if (measureCount < 2) return "A point chart plots two measures (X and Y) — add a second measure.";
-        return null;
-      case "combo":
-        if (measureCount < 2) return "Combo (dual-axis) needs two measures — add a second measure.";
-        if (dimCount < 1) return "Combo needs a dimension for the category axis — add a dimension.";
-        return null;
-      case "stacked":
-        if (measureCount < 2) return "Stacked bar stacks two or more measures — add another measure.";
-        if (dimCount < 1) return "Stacked bar needs a dimension for the category axis — add a dimension.";
-        return null;
-      case "heatmap":
-        if (dimCount !== 2) return "Heatmap needs exactly two dimensions (the axes) — put one on Columns and one on Rows.";
-        if (measureCount < 1) return "Heatmap colours by one measure — add a measure.";
-        return null;
-      case "treemap":
-        if (dimCount < 1 || dimCount > 2) return "Treemap nests by one or two dimensions — add one or two.";
-        if (measureCount < 1) return "Treemap sizes by one measure — add a measure.";
-        return null;
-      // P36
-      case "waterfall":
-        if (measureCount !== 1) return "Waterfall shows one measure as a run of changes — use exactly one measure.";
-        if (dimCount < 1) return "Waterfall needs a dimension for its steps (e.g. month or category) — add one.";
-        return null;
-      case "funnel":
-        if (measureCount !== 1) return "Funnel sizes its stages by one measure — use exactly one measure.";
-        if (dimCount !== 1) return "Funnel needs exactly one dimension for its stages.";
-        return null;
-      case "gauge":
-        if (measureCount !== 1) return "Gauge shows one measure — use exactly one measure.";
-        if (dimCount !== 0) return "Gauge shows a single value — remove the dimensions (or use Bullet to compare categories).";
-        return null;
-      case "bullet":
-        if (measureCount !== 1) return "Bullet compares one measure with a target — use exactly one measure.";
-        if (dimCount > 1) return "Bullet takes at most one dimension (one bar per member).";
-        return null;
-      case "sankey":
-        if (dimCount !== 2) return "Sankey draws flows between two dimensions — put one on Columns and one on Rows.";
-        if (measureCount !== 1) return "Sankey sizes each flow by one measure — use exactly one measure.";
-        return null;
-      case "multiples":
-        if (dimCount !== 2) return "Small multiples needs two dimensions: the first makes a panel per member, the second runs along each panel.";
-        if (measureCount < 1) return "Small multiples plots a measure — add one.";
-        return null;
-      default:
-        return null;
-    }
   }
 
   // Pivot a Color-encoded result into one series per colour value and render it (P7 marks). The colour
