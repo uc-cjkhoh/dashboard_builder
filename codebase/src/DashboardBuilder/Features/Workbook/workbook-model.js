@@ -8,6 +8,7 @@ import { aggsFor } from "../Dashboard/filter-rules.js";
 import { cleanTheme, DEFAULT_THEME } from "../Core/theme-model.js";
 import { cleanAction } from "../Dashboard/action-model.js";
 import { cleanParameter, MAX_PARAMS } from "../Core/parameters-model.js";
+import { cleanCalculations } from "../Calc/calc-workbook.js";
 import {
   CHART_TYPE_IDS, CATEGORIES, FILTER_OPS, NUMBER_FORMATS, DATE_FORMATS, LEGENDS, TOP_N, MAX_DECIMALS, DATE_BUCKETS,
   PERIOD_PRESETS, PERIOD_COMPARES, DATE_PARTS, TABLE_CALCS, CALC_ALONG, FIT_MODES, REF_KINDS, TRENDS, FORECASTS, CF_MODES, CF_SCALES, CF_OPS, CF_TONES, CF_MAX_RULES, CF_MAX_MEASURES,
@@ -20,7 +21,7 @@ const NOT_A_WORKBOOK = "This file is not a Dashboard Builder workbook.";
 
 /** Builder state → a plain JSON-safe object. DOM nodes, fetched columns and lazily-loaded page
  *  members are left out (they are re-fetched on open). */
-export function serializeWorkbook({ entities, relationships, dashboards, active, theme, sharedFilters = [], bookmarks = [], fieldMeta = new Map(), parameters = [] }) {
+export function serializeWorkbook({ entities, relationships, dashboards, active, theme, sharedFilters = [], bookmarks = [], fieldMeta = new Map(), parameters = [], calculations = [] }) {
   const activeIndex = active?.kind === "dashboard" ? dashboards.findIndex((d) => d.id === active.id) : -1;
   return {
     format: WORKBOOK_FORMAT,
@@ -44,6 +45,7 @@ export function serializeWorkbook({ entities, relationships, dashboards, active,
     sharedFilters: structuredClone(sharedFilters),
     fields: Object.fromEntries(fieldMeta), // P28
     parameters: structuredClone(parameters), // P32
+    calculations: calculations.map((c) => ({ id: c.id, name: c.name, formula: c.formula })), // Plan B (no parsed tree)
     // P39: each bookmark points at its dashboard by index (null when that dashboard was closed).
     bookmarks: bookmarks.map((b) => {
       const i = dashboards.findIndex((d) => d.id === b.dashId);
@@ -148,7 +150,10 @@ export function parseWorkbook(source) {
   const paramIds = new Set(parameters.map((p) => p.id));
   for (const d of dashboards) unlinkParams(d.sheet, paramIds, `Sheet "${d.name}"`, issues);
   for (const f of sharedFilters) if (f.param && !paramIds.has(f.param)) { delete f.param; issues.push("A shared filter's parameter is missing — unlinked."); }
-  return { entities, relationships, dashboards, active, theme, sharedFilters, bookmarks, fields, parameters, issues: [...new Set(issues)] };
+  const calculations = cleanCalculations(raw.calculations, issues); // Plan B
+  const calcIds = new Set(calculations.map((c) => c.id));
+  for (const d of dashboards) dropMissingCalcs(d.sheet, calcIds, `Sheet "${d.name}"`, issues);
+  return { entities, relationships, dashboards, active, theme, sharedFilters, bookmarks, fields, parameters, calculations, issues: [...new Set(issues)] };
 }
 
 const isStr = (v) => typeof v === "string" && v.length > 0;
@@ -157,8 +162,15 @@ const defAgg = (p) => (p.category === "numeric" ? "sum" : "count");
 // `needCategory: false` is for filters: workbooks from older builds saved filters without a category,
 // and the worksheet backfills it from the column catalog at runtime.
 function cleanPill(raw, where, issues, needCategory = true) {
+  // A calculated field (E7/B1) is identified by `calc`; its db/table/column are only a fallback label.
+  if (raw && typeof raw === "object" && raw.calc !== undefined) {
+    if (!/^calc\d{1,6}$/.test(raw.calc ?? "") || !CATEGORIES.has(raw.category)) { issues.push(`${where}: skipped a field with missing details.`); return null; }
+    raw = { ...raw, db: typeof raw.db === "string" ? raw.db : "", table: typeof raw.table === "string" ? raw.table : "", column: typeof raw.column === "string" ? raw.column : "" };
+    delete raw.choices; // field choices are whole table fields; a calculated field has none
+  }
   const catOk = raw && (raw.category === undefined && !needCategory ? true : CATEGORIES.has(raw.category));
-  if (!raw || typeof raw !== "object" || !isStr(raw.db) || !isStr(raw.table) || !isStr(raw.column) || !catOk) {
+  const isCalc = raw && typeof raw === "object" && raw.calc !== undefined;
+  if (!raw || typeof raw !== "object" || (!isCalc && (!isStr(raw.db) || !isStr(raw.table) || !isStr(raw.column))) || !catOk) {
     issues.push(`${where}: skipped a field with missing details.`); return null;
   }
   const p = { ...raw };
@@ -307,6 +319,15 @@ function cleanParameters(list, issues) {
   }
   if (list.length > MAX_PARAMS) issues.push(`Only the first ${MAX_PARAMS} parameters were opened.`);
   return out;
+}
+// A pill whose calculated field is gone (not in the workbook's list) is removed, on shelves and mark slots.
+function dropMissingCalcs(sheet, ids, where, issues) {
+  const gone = (p) => p && p.calc !== undefined && !ids.has(p.calc);
+  const msg = (k) => issues.push(`${where} ${k}: a calculated field that no longer exists was removed.`);
+  for (const k of ["columns", "rows", "color", "filters"]) if (Array.isArray(sheet[k]) && sheet[k].some(gone)) { sheet[k] = sheet[k].filter((p) => !gone(p)); msg(k); }
+  for (const k of ["size", "label", "shape", "path", "angle"]) if (gone(sheet.marks?.[k])) { sheet.marks[k] = null; msg(k); }
+  for (const k of ["detail", "tooltip"]) if (sheet.marks?.[k]?.some?.(gone)) { sheet.marks[k] = sheet.marks[k].filter((p) => !gone(p)); msg(k); }
+  if (gone(sheet.pages)) { sheet.pages = null; msg("pages"); }
 }
 function unlinkParams(sheet, ids, where, issues) {
   for (const f of sheet.filters ?? []) if (f.param && !ids.has(f.param)) { delete f.param; issues.push(`${where}: a filter's parameter is missing — unlinked.`); }

@@ -1,7 +1,7 @@
 import {
   entities, relationships, dashboards, bus, activeDashboardId,
   createDashboard, updateSheet, closeDashboard, showModel, switchDashboard, currentTheme, setTheme,
-  sharedFilters, setSharedFilters, bookmarks, setBookmarks, fieldMeta, setAllFieldMeta, parameters, setParameters,
+  sharedFilters, setSharedFilters, bookmarks, setBookmarks, fieldMeta, setAllFieldMeta, parameters, setParameters, calculations, setCalculations,
 } from "../Core/store.js";
 import { DEFAULT_THEME } from "../Core/theme-model.js";
 import { openThemeDialog } from "./theme-dialog.js";
@@ -24,7 +24,7 @@ const SAVE_DELAY_MS = 500;
 const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
 const CHANGE_EVENTS = [
   "entity:added", "entity:moved", "entity:removed", "joinkey:changed",
-  "rel:changed", "tabs:changed", "dashboard:changed", "theme:changed", "bookmarks:changed", "fields:changed", "parameters:changed",
+  "rel:changed", "tabs:changed", "dashboard:changed", "theme:changed", "bookmarks:changed", "fields:changed", "parameters:changed", "calculations:changed",
 ];
 
 let key = null;        // storage key for the connected server + user; null while disconnected
@@ -96,6 +96,7 @@ async function clearWorkspace() {
     setBookmarks([]);
     setAllFieldMeta({});
     setParameters([]);
+    setCalculations([]);
   } finally {
     restoring = false;
   }
@@ -162,6 +163,7 @@ function openWorkbook(wb) {
     setSharedFilters(wb.sharedFilters ?? []); // before the dashboards, so their first query applies them
     setAllFieldMeta(wb.fields ?? {});
     setParameters(wb.parameters ?? []); // before the dashboards, so their first query reads them
+    setCalculations(wb.calculations ?? []); // likewise: pills read their calculation by id
 
     const ids = new Map(); // saved entity id → new entity id
     for (const e of wb.entities) ids.set(e.id, addEntity(e.db, e.table, e.x, e.y, { joinKeys: e.joinKeys }));
@@ -231,7 +233,7 @@ async function importFile(input) {
 // --- helpers -----------------------------------------------------------------
 function currentState() {
   const id = activeDashboardId();
-  return { entities, relationships, dashboards, active: id ? { kind: "dashboard", id } : { kind: "model" }, theme: currentTheme(), sharedFilters, bookmarks, fieldMeta, parameters };
+  return { entities, relationships, dashboards, active: id ? { kind: "dashboard", id } : { kind: "model" }, theme: currentTheme(), sharedFilters, bookmarks, fieldMeta, parameters, calculations };
 }
 
 const isEmpty = () => entities.size === 0 && dashboards.length === 0;

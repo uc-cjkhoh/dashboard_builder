@@ -373,3 +373,28 @@ test("parameters (P32) round-trip; references to a missing parameter are unlinke
   assert.equal(orphan.dashboards[0].sheet.filters[0].param, undefined);
   assert.equal(orphan.issues.filter((i) => /parameter is missing/.test(i)).length, 2);
 });
+
+test("calculations (Plan B) round-trip without a tree; old workbooks still open", () => {
+  const st = sampleState();
+  const calcs = [{ id: "calc1", name: "Margin", formula: "SUM([orders.a])", tree: { x: 1 } }];
+  const saved = serializeWorkbook({ ...st, calculations: calcs });
+  assert.deepEqual(saved.calculations, [{ id: "calc1", name: "Margin", formula: "SUM([orders.a])" }]);
+  const wb = parseWorkbook(JSON.stringify(saved));
+  assert.deepEqual(wb.calculations, [{ id: "calc1", name: "Margin", formula: "SUM([orders.a])" }]);
+  const old = parseWorkbook(wbText({}));
+  assert.deepEqual(old.calculations, []);
+  assert.equal(old.issues.filter((i) => /calculat/i.test(i)).length, 0);
+});
+
+test("a calc pill is valid without db/table/column; one pointing at a missing calculation is removed", () => {
+  const ok = { calc: "calc1", db: "", table: "", column: "Margin", category: "numeric", role: "measure", agg: "sum" };
+  const bare = { calc: "calc1", category: "numeric" };
+  const gone = { calc: "calc9", db: "", table: "", column: "Old", category: "numeric" };
+  const wb = parseWorkbook(wbText({ calculations: [{ id: "calc1", name: "Margin", formula: "1" }],
+    dashboards: [{ name: "X", sheet: { rows: [ok, gone], columns: [bare], marks: { size: gone } } }] }));
+  const s = wb.dashboards[0].sheet;
+  assert.equal(s.rows.length, 1); assert.equal(s.rows[0].calc, "calc1");
+  assert.equal(s.columns.length, 1);
+  assert.equal(s.marks.size, null);
+  assert.ok(wb.issues.includes('Sheet "X" rows: a calculated field that no longer exists was removed.'));
+});
