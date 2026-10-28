@@ -1238,18 +1238,18 @@ export function initDashboards() {
     lines.push(`Printed ${new Date().toLocaleString()}`);
     for (const l of lines) printHead.append(el("p", "ws-print-head__line", l));
     card.prepend(printHead);
-    sizeChart({ width: 1000, height: 560 });
+    sizeChart(chartEl, { width: 1000, height: 560 });
   }
   function endPrint() {
     printHead?.remove(); printHead = null;
-    sizeChart(null);
+    sizeChart(chartEl, null);
   }
   function printView() { window.print(); }
 
   async function exportImage(dash, s, kind) {
-    if (!hasChartInstance()) { toast("This view has no chart image to export — switch to a chart type (Table/KPI export as CSV).", "info"); return; }
+    if (!hasChartInstance(chartEl)) { toast("This view has no chart image to export — switch to a chart type (Table/KPI export as CSV).", "info"); return; }
     try {
-      const out = await exportChart(kind);
+      const out = await exportChart(chartEl, kind);
       if (!out) { toast(kind === "png" ? "Couldn't rasterise the chart — try SVG." : "Nothing to export yet.", "danger"); return; }
       downloadBlob(out.blob, `${exportBaseName(dash)}.${out.ext}`);
     } catch { toast("Image export failed.", "danger"); }
@@ -2530,7 +2530,7 @@ export function initDashboards() {
     const dash = activeDashboard();
     if (!dash) return;
     const ticket = gate.begin(); // aborts any in-flight query for the previous state
-    disposeChart(); // tear down any live ECharts instance before we repaint the chart pane
+    disposeChart(chartEl); // tear down any live ECharts instance before we repaint the chart pane
     chartEl.onscroll = null; // only the Table view loads on scroll (runTable sets it)
     setStatusBar(null, null);
     const s = dash.sheet;
@@ -2677,7 +2677,7 @@ export function initDashboards() {
   // A result straight from ClickHouse animates in (ECharts' entrance, or a fade for the table/KPI);
   // a re-render from the cache (format tweaks, theme flip) repaints without motion.
   function markFresh(fresh) {
-    animateNextChart(fresh);
+    animateNextChart(chartEl, fresh);
     chartEl.classList.toggle("is-fresh", fresh);
   }
 
@@ -3062,7 +3062,7 @@ export function initDashboards() {
           }
           commit(dash, sheet);
         } else {
-          focusSeries(legendFocus, sheet.chartType);
+          focusSeries(chartEl, legendFocus, sheet.chartType);
         }
       },
     };

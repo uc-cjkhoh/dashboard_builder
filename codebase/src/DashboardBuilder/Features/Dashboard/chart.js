@@ -11,17 +11,25 @@ import { chartFit, markCount, applyFitMode, FIT } from "./chart-fit.js";
 // (wwwroot/js/vendor/echarts.min.js, loaded as a global before the module graph — no CDN).
 // The rest of the app stays vanilla-JS: this is a thin mapper from our { categories, series }
 // result to an ECharts option, themed entirely from the CSS design tokens so charts match the
-// RED/BLACK/WHITE system. One live instance at a time; call disposeChart() before re-rendering.
+// RED/BLACK/WHITE system. One live instance per container (P24a: state in a WeakMap keyed by the container element); rendering into a
+// container disposes only that container's previous chart.
 //
 // Series: one per measure (multiple Rows/Columns measures → multiple series); the category axis
 // carries the concatenated dimension keys. A single series wears the brand accent; multiple series
 // draw from the dataviz-validated categorical palette in fixed order (with a legend, since identity
 // must never be colour-alone). See references/palette.md and site.css --chart-cat-*.
 
-let instance = null;
-let resizeObserver = null;
-let lastOption = null; // the option on screen — re-drawn as SVG for export when the chart is on canvas
-let onCanvas = false;
+// Per-container state: { instance, resizeObserver, lastOption (the option on screen — re-drawn as SVG for export
+// when the chart is on canvas), onCanvas, animateNext (a short entrance for fresh data) }.
+const states = new WeakMap();
+function stateOf(container) {
+  let st = states.get(container);
+  if (!st) states.set(container, st = { instance: null, resizeObserver: null, lastOption: null, onCanvas: false, animateNext: true });
+  return st;
+}
+// The container being drawn right now: buildOption runs synchronously inside renderChart, and builders that need
+// the live chart later (a symbolSize callback) capture it at build time.
+let drawing = null;
 // T01-20 / T03-33: set per render — palette order reversed, and displayed member name -> user colour.
 let paletteReverse = false;
 let memberColors = new Map();
@@ -71,7 +79,9 @@ function tokens() {
  *              format?: sheet format config (P10 — value/date format, axis titles, legend, labels, colour-by) }
  */
 export function renderChart(container, spec) {
-  disposeChart();
+  disposeChart(container);
+  const st = stateOf(container);
+  drawing = st;
   paletteReverse = !!spec.format?.paletteReverse;
   memberColors = spec.memberColors instanceof Map ? spec.memberColors : new Map();
   const host = document.createElement("div");
@@ -90,14 +100,15 @@ export function renderChart(container, spec) {
 
   // SVG renderer: crisp at any zoom, no canvas-sizing surprises, lighter DOM for our small charts. A
   // big chart (thousands of marks) draws on canvas instead — SVG slows down with that many nodes.
-  onCanvas = markCount(spec) > FIT.canvasMarks;
-  instance = window.echarts.init(host, null, { renderer: onCanvas ? "canvas" : "svg" });
+  const onCanvas = st.onCanvas = markCount(spec) > FIT.canvasMarks;
+  const instance = st.instance = window.echarts.init(host, null, { renderer: onCanvas ? "canvas" : "svg" });
   const option = buildOption(spec.type === "multiples" ? { ...spec, width: paneWidth(), height: paneHeight() } : spec);
   if (spec.type !== "multiples") showEveryCategory(option, fit.rotate, fit); // panels keep their own sparse labels
   if (fit.zoom) addZoom(option, fit);
   if (onCanvas) tuneForSize(option);
-  lastOption = option;
-  instance.setOption({ ...option, ...motionOption(animateNext && !onCanvas) });
+  st.lastOption = option;
+  drawing = null;
+  instance.setOption({ ...option, ...motionOption(st.animateNext && !onCanvas) });
 
   // P15 click-to-filter: forward mark clicks to the caller, which maps dataIndex → a dimension value.
   if (typeof spec.onSelect === "function") instance.on("click", (p) => { if (p.componentType !== "legend") spec.onSelect(p); });
@@ -108,10 +119,10 @@ export function renderChart(container, spec) {
     // Next tick: the worksheet may re-render (dispose this instance) — not while ECharts is mid-event.
     setTimeout(() => spec.onLegend(p.name), 0);
   });
-  if (spec.focus) focusSeries(spec.focus, spec.type);
+  if (spec.focus) focusSeries(container, spec.focus, spec.type);
 
-  resizeObserver = new ResizeObserver(() => {
-    if (!instance) return;
+  st.resizeObserver = new ResizeObserver(() => {
+    if (st.instance !== instance) return;
     instance.resize();
     const next = applyFitMode(chartFit(spec, paneWidth(), paneHeight()), fitMode);
     if (next.rotate !== fit.rotate) {
@@ -119,7 +130,7 @@ export function renderChart(container, spec) {
       instance.setOption({ xAxis: [].concat(option.xAxis).map(() => ({ axisLabel: { rotate: fit.rotate } })) });
     }
   });
-  resizeObserver.observe(host);
+  st.resizeObserver.observe(host);
   return instance;
 }
 
@@ -175,7 +186,8 @@ function showEveryCategory(option, rotate, fit = {}) {
 }
 
 /** P29: highlight one series (or a pie slice) and dim the rest; null clears. */
-export function focusSeries(name, type) {
+export function focusSeries(container, name, type) {
+  const instance = stateOf(container).instance;
   if (!instance) return;
   instance.dispatchAction({ type: "downplay" });
   if (name == null) return;
@@ -184,19 +196,19 @@ export function focusSeries(name, type) {
 }
 
 /** Is there a live ECharts instance to export? (Table/KPI render as native DOM, so there isn't.) */
-export function hasChartInstance() { return instance !== null; }
+export function hasChartInstance(container) { return stateOf(container).instance !== null; }
 
 // Motion: a short, decelerating entrance (300ms, not ECharts' default 1s) when the data is fresh from
 // ClickHouse; none when re-rendering a cached result or under prefers-reduced-motion.
-let animateNext = true;
 /** Draw the live chart at a fixed size (printing), or back to its pane's size with null. */
-export function sizeChart(size) {
+export function sizeChart(container, size) {
+  const instance = stateOf(container).instance;
   if (!instance) return;
   instance.resize(size ? { ...size, animation: { duration: 0 } } : { width: "auto", height: "auto", animation: { duration: 0 } });
 }
 
 /** Whether the next renderChart animates its entrance (the worksheet sets this per result). */
-export function animateNextChart(on) { animateNext = Boolean(on); }
+export function animateNextChart(container, on) { stateOf(container).animateNext = Boolean(on); }
 function motionOption(on) {
   const reduce = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
   return on && !reduce
@@ -210,7 +222,8 @@ function motionOption(on) {
  * SSR instances). PNG is rasterised from the SVG through a canvas. Returns { blob, ext } or null.
  * @param kind "svg" | "png"
  */
-export async function exportChart(kind) {
+export async function exportChart(container, kind) {
+  const { instance, onCanvas, lastOption } = stateOf(container);
   if (!instance) return null;
   const w = (instance.getWidth && instance.getWidth()) || 800;
   const h = (instance.getHeight && instance.getHeight()) || 450;
@@ -222,11 +235,11 @@ export async function exportChart(kind) {
       const url = instance.getDataURL({ type: "png", pixelRatio: 2, backgroundColor: surface });
       return { blob: await (await fetch(url)).blob(), ext: "png" };
     }
-    const svg = offscreenSvg(w, h);
+    const svg = offscreenSvg(lastOption, w, h);
     return svg ? { blob: new Blob([svg], { type: "image/svg+xml;charset=utf-8" }), ext: "svg" } : null;
   }
 
-  let svg = currentSvgString(w, h);
+  let svg = currentSvgString(instance, w, h);
   if (!svg) return null;
   if (kind === "svg") return { blob: new Blob([svg], { type: "image/svg+xml;charset=utf-8" }), ext: "svg" };
   const blob = await svgToPng(svg, w, h);
@@ -234,7 +247,7 @@ export async function exportChart(kind) {
 }
 
 // Draw the on-screen option once more with the SVG renderer, in a detached box of the same size.
-function offscreenSvg(w, h) {
+function offscreenSvg(lastOption, w, h) {
   if (!lastOption) return null;
   const box = document.createElement("div");
   box.style.cssText = `position:fixed;left:-100000px;top:0;width:${w}px;height:${h}px`;
@@ -252,7 +265,7 @@ function offscreenSvg(w, h) {
 // The chart's SVG as a standalone string. Prefer the DOM <svg> ECharts rendered (SVG renderer);
 // fall back to renderToSVGString / getDataURL if present. Ensures xmlns + explicit width/height so
 // the file opens on its own and rasterises at a known size.
-function currentSvgString(w, h) {
+function currentSvgString(instance, w, h) {
   let svg = null;
   const dom = instance.getDom && instance.getDom();
   const svgEl = dom && dom.querySelector("svg");
@@ -297,10 +310,12 @@ function svgToPng(svg, w, h) {
 }
 
 // Tear down the live instance + its observer. Safe to call when nothing is rendered.
-export function disposeChart() {
-  if (resizeObserver) { resizeObserver.disconnect(); resizeObserver = null; }
-  if (instance) { instance.dispose(); instance = null; }
-  lastOption = null; onCanvas = false;
+export function disposeChart(container) {
+  const st = states.get(container);
+  if (!st) return;
+  if (st.resizeObserver) { st.resizeObserver.disconnect(); st.resizeObserver = null; }
+  if (st.instance) { st.instance.dispose(); st.instance = null; }
+  st.lastOption = null; st.onCanvas = false;
 }
 
 // Dispatch by chart-type family (P11): circular (pie/donut), scatter (two value axes), or the
@@ -680,6 +695,7 @@ function buildScatterShapes({ groups, xName, yName, hasSize, sizeName, format = 
 // here, so a continuous visualMap legend accompanies it (identity also comes from the x/y labels).
 // spec: { xCats:string[], yCats:string[], cells:[[xi, yi, value]], format }
 function buildHeatmap({ xCats, yCats, cells, format = {} }) {
+  const live = drawing ?? { instance: null }; // this container's state, read when ECharts sizes the circles
   const c = tokens();
   const fmtVal = makeValueFormatter(format);
   const circles = format.heatmapShape === "circle"; // T03-10
@@ -718,7 +734,7 @@ function buildHeatmap({ xCats, yCats, cells, format = {} }) {
       ? {
         // Empty cells draw nothing; the size is re-read from the live chart on every draw, so it follows the pane.
         type: "scatter", data: circleCells(cells), symbol: "circle",
-        symbolSize: () => circleSize((instance?.getWidth() ?? 800) - HEATMAP_GUTTER.x, (instance?.getHeight() ?? 450) - HEATMAP_GUTTER.y, xCats.length, yCats.length),
+        symbolSize: () => circleSize((live.instance?.getWidth() ?? 800) - HEATMAP_GUTTER.x, (live.instance?.getHeight() ?? 450) - HEATMAP_GUTTER.y, xCats.length, yCats.length),
         label: { show: !!format.dataLabels, color: c.ink, fontFamily: c.font, formatter: (p) => fmtVal(p.value[2]) },
         itemStyle: { opacity: 1, borderColor: c.surface, borderWidth: 1 },
         emphasis: { itemStyle: { borderColor: c.ink, borderWidth: 2 } },
