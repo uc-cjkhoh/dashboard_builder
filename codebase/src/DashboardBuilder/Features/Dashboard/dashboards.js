@@ -2,42 +2,35 @@ import { api } from "../Core/api.js";
 import { icon, PATHS } from "../Core/icons.js";
 import { wireMenu } from "../Core/menu.js";
 import { visibleTools } from "./toolbar-rules.js";
-import { roleOf, COLOR_SPLIT_TYPES, STAT_SINGLE_TABLE, chartIssue, TEXT_VALUE_HINT, COLOR_SPLIT_HINT, showMeOptions, placeFor, samePlacement } from "./show-me-rules.js";
+import { roleOf, STAT_SINGLE_TABLE, showMeOptions, placeFor, samePlacement } from "./show-me-rules.js";
 import { toggle, makeButton, toast, fieldError, confirmDialog } from "../Core/ui.js";
 import { LIMITS, number } from "../Core/validate.js";
-import { aggsFor, checkAdd, checkFilter, viewCounts, withCategories, TEXT_VALUE_TYPES, opsFor, OP_LABELS } from "./filter-rules.js";
-import { entities, relationships, activeDashboard, isModelActive, updateSheet, bus, defaultFormat, defaultMarks, sharedFilters,
-  metaOf, nameOf, setFieldMeta, emptySheet, parameters, updateParameter, calculations, dashboards, addCalculation, removeCalculation } from "../Core/store.js";
+import { aggsFor, checkAdd, checkFilter, viewCounts, withCategories, opsFor, OP_LABELS } from "./filter-rules.js";
+import { entities, relationships, activeDashboard, isModelActive, updateSheet, bus, defaultFormat, defaultMarks, sharedFilters, metaOf, nameOf, setFieldMeta, emptySheet, parameters, updateParameter, calculations, dashboards, addCalculation, removeCalculation } from "../Core/store.js";
 import { checkValue, paramTypeFor } from "../Core/parameters-model.js";
-import { renderChart as renderSeriesChart, exportChart, hasChartInstance, sizeChart, focusSeries } from "./chart.js";
-import { createWorksheetView, joinNotices, periodNotice } from "./worksheet-view.js";
+import { exportChart, hasChartInstance, sizeChart, focusSeries } from "./chart.js";
+import { createWorksheetView, periodNotice } from "./worksheet-view.js";
 import { el, hint, warn, iconSpan } from "./render-dom.js";
-import { ANALYTICS_TYPES, CLICK_TYPES, P36_TYPES, MAX_PANELS, scatterSymbol, sameField, cmpValues, primaryDim, chartOrientation, aliasNames, pathOrderedRows,
-  statusText, captionText, marksChannels, scatterShapeGroups, colorSplitData, heatmapData, treemapTree, sankeyLinks, multiplesData } from "./result-model.js";
-import { tupleKey, uniqueTuples } from "./grid-model.js";
-import { crosstabTable } from "./render-table.js";
-import { kpiView } from "./render-kpi.js";
-import { makeValueFormatter, makeCategoryFormatter } from "../Core/format.js";
+import { ANALYTICS_TYPES, CLICK_TYPES, sameField, statusText, captionText } from "./result-model.js";
+import { makeCategoryFormatter } from "../Core/format.js";
 import { createResultCache } from "./query-runner.js";
 import { CHART_TYPES, chartIcon, chartLabel, sortSummary } from "./viewbar-model.js";
 import { enter, MOTION } from "../Core/motion.js";
 import { wireResizer } from "../Core/resizer.js";
-import { PRESET_CHOICES, COMPARE_CHOICES, COMPARE_TYPES, newPeriod, resolveRange, compareRange, rangeLabel,
-  changeOf, toneOf, pctText, alignCompare, targetProgress } from "./period-model.js";
-import { CF_MODE_CHOICES, CF_SCALE_CHOICES, CF_OP_CHOICES, CF_TONE_CHOICES, CF_MAX_RULES, TONE_ICON, measureKey, emptyRule,
-  extentOf, scaleColors, barGeometry, matchRule, isActive, midpointOf } from "./conditional-model.js";
+import { PRESET_CHOICES, COMPARE_CHOICES, COMPARE_TYPES, newPeriod, resolveRange, compareRange, rangeLabel } from "./period-model.js";
+import { CF_MODE_CHOICES, CF_SCALE_CHOICES, CF_OP_CHOICES, CF_TONE_CHOICES, CF_MAX_RULES, measureKey, emptyRule, isActive } from "./conditional-model.js";
 import { templateError, buildActionUrl, MAX_LABEL, MAX_TEMPLATE } from "./action-model.js";
-import { DATE_PART_CHOICES, isGroupingPart, stepPart, labelParts } from "./date-parts.js";
-import { CALC_CHOICES, ALONG_CHOICES, WINDOW_CHOICES, applyTableCalcs, isCalc, calcName } from "./table-calc.js";
-import { tooltipCatalog, tooltipHtml, lookupFrom, checkTooltipText, parseTooltip } from "./tooltip-model.js";
-import { SWATCHES, memberKey, fieldColorKey, setMemberColor, clearFieldColors, colourOf, colorsByName } from "./colour-model.js";
+import { DATE_PART_CHOICES, stepPart } from "./date-parts.js";
+import { CALC_CHOICES, ALONG_CHOICES, WINDOW_CHOICES, isCalc, calcName } from "./table-calc.js";
+import { tooltipHtml, lookupFrom, checkTooltipText, parseTooltip } from "./tooltip-model.js";
+import { SWATCHES, memberKey, fieldColorKey, setMemberColor, clearFieldColors, colourOf } from "./colour-model.js";
 import { createHistory } from "./history.js";
 import { LINE_STYLE_CHOICES, linesTakeStyle } from "./line-style-model.js";
 import { HEATMAP_SHAPE_CHOICES } from "./heatmap-model.js";
-import { targetChoices, bulletTargets, effectiveTargetMeasure } from "./bullet-model.js";
-import { keyOf, marksOf, SCATTER_TYPES, COLOR_USES, colorMode, isDrillActive, drillActiveDim, planDims, planMeasures, sortTargets as planSortTargets, measureName as planMeasureName, buildPlan as planQuery, periodFilters as planPeriodFilters, calcContext, appliedShared as planAppliedShared, withParams, toServerFilter, isDateOnlyType } from "./sheet-plan.js";
+import { targetChoices, effectiveTargetMeasure } from "./bullet-model.js";
+import { keyOf, SCATTER_TYPES, COLOR_USES, colorMode, isDrillActive, drillActiveDim, planDims, planMeasures, sortTargets as planSortTargets, measureName as planMeasureName, buildPlan as planQuery, periodFilters as planPeriodFilters, calcContext, appliedShared as planAppliedShared, withParams, toServerFilter, isDateOnlyType } from "./sheet-plan.js";
 import { catalogFromEntities } from "../Calc/calc-resolve.js";
-import { isCalcPill, sameCalcPill, makeCalcPill, refusal, syncCalcPills, clearCalcPills, clearFilterCalc, usesCalc, CALC_AGGS } from "../Calc/calc-pill.js";
+import { isCalcPill, makeCalcPill, refusal, syncCalcPills, clearCalcPills, clearFilterCalc, usesCalc, CALC_AGGS } from "../Calc/calc-pill.js";
 import { openCalcDialog } from "../Calc/calc-dialog.js";
 import { openRowsDialog } from "../Rows/rows-dialog.js";
 import { buildRowsRequest } from "../Rows/rows-model.js";
@@ -45,10 +38,10 @@ import { evaluationInput } from "../Calc/eval-order.js";
 import { explainControl } from "../Calc/explain-popover.js";
 import { paneState, deleteCalcPlan, roleChoice, setRoleChoice } from "../Calc/calc-pane-model.js";
 import { checkName } from "../Calc/calc-workbook.js";
-import { calcProblem, aggWord, topByRef, topByKey } from "../Calc/calc-plan.js";
-import { REF_CHOICES, TREND_CHOICES, FORECAST_CHOICES, defaultAnalytics, refValue, trendSeries, combine } from "./analytics-model.js";
+import { calcProblem, topByRef, topByKey } from "../Calc/calc-plan.js";
+import { REF_CHOICES, TREND_CHOICES, FORECAST_CHOICES, defaultAnalytics } from "./analytics-model.js";
 import { castChoices, castLabel, effectiveCategory, syncCastCategories } from "./cast-model.js";
-import { withOther, OTHER_TYPES, BUCKET_TYPES, DATE_BUCKET_CHOICES } from "./scale-model.js";
+import { BUCKET_TYPES, DATE_BUCKET_CHOICES } from "./scale-model.js";
 
 // Tableau-style worksheet: each dashboard is one sheet. Drag fields from the field pane onto the
 // Columns (dimension), Rows (measure) and Filters shelves; the chart renders from a bounded,
@@ -152,17 +145,17 @@ export function initDashboards() {
   // supplies the drawing of a result (renderChart below) and the editor-only state around it.
   const sheetView = createWorksheetView(chartEl, () => ({
     dash: activeDashboard(), noticeEl, results, plan: planCtx(), categoryOf, castOf,
-    render: renderChart, extraNotice: () => extraNotice, statusBar: setStatusBar, sharedNote,
-  }));
+  }), {
+    interactive: true, onSelect: toggleSelection, onDrill: (raw) => drillDown(raw), onLegend: legendClick, legendFocus: () => legendFocus,
+    onTooltipFields: (sheet, list) => setTooltipCat(sheet, list), onMemberColors: (sheet, field, members) => setMemberState(sheet, field, members),
+    statusBar: setStatusBar, notices: sharedNote,
+  });
   const runChart = () => sheetView.run();
 
   let legendFocus = null; // P29: the legend item the user clicked (highlighted), or null
   let calcFor = null;     // P27: the measure slot whose table-calculation editor is open — { shelf, index } or null
-  let calcPercent = new Set(); // P27: result measure indexes whose values are percentages (per-cell "%")
   let choicesFor = null;  // P40: the shelf slot whose field-choices editor is open — { shelf, index } or null
-  let extraNotice = null; // a line the last render wants in the notice (e.g. the small-multiples panel cap)
   let cfMeasure = null;   // which measure the Format card's conditional-formatting editor shows (P37)
-  let bucketedKey = null; // which group key the last result grouped by date grain (its marks can't be click-filtered)
 
   let formatOpen = false; // whether the Format panel (P10) is expanded — ephemeral UI state
   let analyticsOpen = false; // P21: whether the Analytics card is open
@@ -2097,11 +2090,6 @@ export function initDashboards() {
   let memberOpen = false;
   let memberRedraw = null;
   const setMemberState = (sheet, field, members) => { memberState = { sheet, field, members }; memberRedraw?.(); };
-  // The chart spec's name -> colour map for a sheet's member field (also records the members for the editor).
-  function memberSpec(sheet, field, members) {
-    setMemberState(sheet, field, members);
-    return { memberColors: colorsByName(sheet.memberColors?.[fieldColorKey(field)], members) };
-  }
   function memberColourEditor(dash, s) {
     const box = el("div", "ws-memcol");
     const head = el("button", "btn btn--ghost ws-memcol__toggle"); head.type = "button";
@@ -2331,269 +2319,23 @@ export function initDashboards() {
   };
   const commitQuiet = (dash, sheet) => { lastSnap.set(dash.id, structuredClone(sheet)); updateSheet(dash.id, sheet); };
 
-  // result = { rowDimensions:[name…], columnDimensions:[name…], measures:[name…],
-  //            rows:[{ keys:[rowVals…, colVals…], values:[…] }] }
-  function renderChart(sheet, result, cmp = null) {
-    chartEl.replaceChildren();
-    setTooltipCat(sheet, []);
-    setMemberState(sheet, null, []);
-    extraNotice = null;
-    // Date-grouped key: its labels are bucket starts, not values a filter could match — no click-to-filter.
-    bucketedKey = result.bucket ? result.bucket.key : null;
-    // "Other": the server's aggregate of every group past the limit, drawn as one last mark.
-    if (result.other && OTHER_TYPES.has(sheet.chartType)) result = { ...result, rows: withOther(result.rows, result.other) };
-    // P26: date-part keys read as "Mar 2024" / "Q1" / "Mon"; like a date-grouped axis, they aren't click-filterable.
-    const parts = planDims(sheet).keyOrder.map((f) => f?.datePart ?? null);
-    result = labelParts(result, parts);
-    if (cmp) cmp = { ...cmp, result: labelParts(cmp.result, parts) };
-    if (isGroupingPart(parts[0])) bucketedKey = 0;
-    // P28: display names on axes, legends and headers (the query used the real columns).
-    result = aliasNames(sheet, result, metaOf);
-    // P27: quick table calculations replace their measure's values (over the rows on hand).
-    const calcs = planMeasures(sheet).map((e) => (e.role === "shelf" ? e.field.tableCalc ?? null : null));
-    const applied = applyTableCalcs(result, calcs, result.rowDimensions.length, result.columnDimensions.length);
-    result = applied.result;
-    calcPercent = applied.percent;
-    if (cmp) cmp = { ...cmp, result: applyTableCalcs(cmp.result, calcs, result.rowDimensions.length, result.columnDimensions.length).result };
-    if (calcs.some(isCalc) && (result.truncated || result.partial))
-      extraNotice = "Table calculations use only the rows shown — more exist.";
-    const { rowDimensions, columnDimensions, measures, rows } = result;
-    if (!rows.length) { chartEl.append(hint("No data for these fields.")); return; }
-    // P10 formatters: measure values + date-like dimension labels, from the sheet's format config.
-    let format = sheet.format ?? defaultFormat(); // let: a percent table calculation adds a "%" suffix
-    const fmtVal = makeValueFormatter(format);
-    const fmtCat = makeCategoryFormatter(format);
-    const type = sheet.chartType;
-    // Min/Max of a text or date field comes back as text — only Table, Text and KPI can show that.
-    if (!TEXT_VALUE_TYPES.has(type) && rows.some((r) => r.values.some((v) => typeof v === "string"))) {
-      chartEl.replaceChildren(hint(TEXT_VALUE_HINT));
-      return;
-    }
-    // Table + P19 Text mark both render as the crosstab text grid (values written into cells).
-    if (type === "table" || type === "text") { chartEl.append(crosstabTable(sheet, result, fmtVal, fmtCat, result.partial, calcPercent)); return; }
-
-    // P18 marks: re-derive the measure roles so size / continuous-colour / aux columns don't turn into
-    // spurious series. Shelf measures (only) become series; the rest feed the mark channels below.
-    const mplan = planMeasures(sheet);
-    const seriesIdx = mplan.map((e, i) => (e.role === "shelf" ? i : -1)).filter((i) => i >= 0);
-    const sizeIdx = mplan.findIndex((e) => e.role === "size");
-    const colorMeasureIdx = mplan.findIndex((e) => e.role === "color");
-    const shelfCount = seriesIdx.length;
-
-    // Discrete Colour (P7): a categorical Colour dimension pivots the trailing group-by key into one
-    // series per distinct value (bar → grouped, stacked → stacked, line/area → one per value).
-    if (colorMode(sheet) === "discrete" && COLOR_SPLIT_TYPES.has(type)) {
-      if (shelfCount !== 1) {
-        chartEl.append(hint(COLOR_SPLIT_HINT));
-        return;
-      }
-      renderColorSplit(type, result, format, fmtCat);
-      return;
-    }
-
-    // P11: an unsupported field mapping shows a hint, never an error (the done-when).
-    const issue = chartIssue(type, rowDimensions.length + columnDimensions.length, shelfCount);
-    if (issue) { chartEl.append(hint(issue)); return; }
-
-    // P19 Shape: on the scatter family, split points by a Shape dimension into one symbol per value.
-    if (SCATTER_TYPES.has(type) && marksOf(sheet).shape) { renderScatterShapes(sheet, result, seriesIdx, sizeIdx, format, fmtVal, fmtCat); return; }
-
-    // P19 Path: a line/area orders its vertices by the Path field's value (not the category order).
-    const usePath = type === "line" || type === "area";
-    const rowsOrdered = usePath ? (pathOrderedRows(sheet, result, mplan) ?? rows) : rows;
-
-    // Flatten both dimension axes onto the category axis; one series per SHELF measure (P7 layout).
-    const dimCount = rowDimensions.length + columnDimensions.length;
-    const categories = rowsOrdered.map((r) => r.keys.map((k) => (k == null ? "—" : fmtCat(k))).join(" / "));
-    const series = seriesIdx.map((mi) => ({ name: measures[mi], data: rowsOrdered.map((r) => r.values[mi]) }));
-    const seriesNames = seriesIdx.map((mi) => measures[mi]);
-    // P27: a chart whose measures are all percentage calculations reads its values with "%".
-    if (seriesIdx.length && seriesIdx.every((mi) => calcPercent.has(mi))) format = { ...format, suffix: "%" };
-    // P35: the comparison range's values, lined up with these rows — by position when the first key is
-    // the range's own date field (day 1 with day 1), else by the same group keys.
-    const byPosition = Boolean(sheet.period) && sameField(planDims(sheet).keyOrder[0] ?? {}, sheet.period);
-    const aligned = cmp ? alignCompare(rowsOrdered, cmp.result.rows, byPosition) : null;
-
-    // P12 heatmap/treemap reuse this multi-dimension result but pivot it differently.
-    if (type === "heatmap") { renderHeatmap(result, format, fmtCat, fmtVal); return; }
-    if (type === "treemap") { renderTreemap(result, format, fmtCat); return; }
-    if (P36_TYPES.has(type)) { renderP36(type, rowsOrdered, categories, series, seriesNames, format, fmtCat); return; }
-
-    // KPI: explicit type, or a plain series chart with no dimensions (one value per measure).
-    if (type === "kpi" || (dimCount === 0 && (type === "bar" || type === "stacked" || type === "line" || type === "area"))) {
-      const prev = cmp && dimCount === 0 ? seriesIdx.map((mi) => cmp.result.rows[0]?.values[mi] ?? null) : null;
-      chartEl.append(kpiView(seriesNames, categories, series, dimCount, fmtVal, { prev, name: cmp?.name, format }));
-      return;
-    }
-    // P18 mark channels: Size (bubble), continuous Colour (gradient), field-driven Label + custom
-    // Tooltip. All read columns already in `result`; missing/unsupported mappings degrade to a note.
-    const marks = marksChannelSpec(sheet, result, mplan, sizeIdx, colorMeasureIdx, fmtVal, fmtCat, rowsOrdered);
-    if (marks.note) chartEl.append(hint(marks.note)); // a Marks hint sits above the chart, never blocks it
-    // P15 click-to-filter: marks map 1:1 to result rows here, so a click's dataIndex → rowsOrdered[i].keys[0]
-    // (the primary dimension's raw value).
-    const onSelect = selectHandler(sheet, primaryDim(sheet), type, rowsOrdered.map((r) => (r.isOther ? null : r.keys[0])));
-    const otherIndex = rowsOrdered.findIndex((r) => r.isOther);
-    // P29: on a pie / donut the legend lists the primary dimension's members; elsewhere it names measures
-    // (highlight only — a measure isn't a member to keep or exclude).
-    const legendSpec = (type === "pie" || type === "donut")
-      ? legendHandler(sheet, primaryDim(sheet), new Map(rowsOrdered.map((r, i) => [categories[i], r.isOther ? undefined : r.keys[0]])))
-      : legendHandler(sheet, null, new Map());
-    const compareSeries = aligned && (type === "bar" || type === "line" || type === "area")
-      ? seriesIdx.map((mi) => ({ name: `${measures[mi]} (${cmp.name})`, data: aligned.map((r) => (r ? r.values[mi] : null)), compare: true }))
-      : [];
-    // P21 analytics on the first measure: reference line, band, trend (+ forecast categories appended).
-    let catsOut = categories, seriesOut = [...series, ...compareSeries], analytics = null;
-    const A = sheet.analytics;
-    if (A && ANALYTICS_TYPES.has(type) && series.length) {
-      const vals = series[0].data;
-      const refKind = A.ref?.kind ?? "none";
-      const rv = refKind === "none" ? null : refValue(refKind, vals, A.ref.value);
-      const fc = type === "line" || type === "area" ? A.forecast ?? 0 : 0;
-      const t = (A.trend && A.trend !== "none") || fc ? trendSeries(A.trend ?? "none", vals, fc) : null;
-      const trendLabel = TREND_CHOICES.find(([v]) => v === (A.trend && A.trend !== "none" ? A.trend : "linear"))[1].toLowerCase();
-      analytics = {
-        ref: rv == null ? null : { name: refKind === "constant" ? "Reference" : REF_CHOICES.find(([v]) => v === refKind)[1], value: rv },
-        band: A.band ? { from: A.band.from, to: A.band.to } : null,
-        trend: t ? { name: `Trend (${trendLabel}${fc ? ` + ${fc} forecast` : ""}) R² ${t.r2.toFixed(2)}`, short: `Trend · R² ${t.r2.toFixed(2)}`, data: t.data } : null,
-      };
-      if (t && t.extra) {
-        catsOut = [...categories, ...Array.from({ length: t.extra }, (_, i) => `Forecast +${i + 1}`)];
-        seriesOut = seriesOut.map((sr) => ({ ...sr, data: [...sr.data, ...new Array(t.extra).fill(null)] }));
-      }
-      if ((t || rv != null) && (result.truncated || result.partial)) extraNotice = joinNotices(extraNotice, "Analytics use only the rows shown — more exist.");
-    }
-    // T01-20: members coloured by a field — pie / donut slices and a single-measure bar coloured by category.
-    const byMember = (type === "pie" || type === "donut" || (type === "bar" && format.colorByDimension && series.length === 1 && !compareSeries.length)) && primaryDim(sheet) && !isCalcPill(primaryDim(sheet));
-    const memberColourSpec = byMember
-      ? memberSpec(sheet, primaryDim(sheet), rowsOrdered.map((r, i) => ({ name: categories[i], raw: r.keys[0], other: r.isOther })).filter((m) => !m.other))
-      : {};
-    renderSeriesChart(chartEl, { type, symbol: SCATTER_TYPES.has(type) ? scatterSymbol(type) : undefined, categories: catsOut, series: seriesOut, format, onSelect, orientation: chartOrientation(sheet), otherIndex, analytics, ...memberColourSpec, ...legendSpec, ...marks.spec });
-  }
-
-  // P36: waterfall / funnel / gauge / bullet / Sankey / small multiples, from the rows already fetched.
-  function renderP36(type, rows, categories, series, seriesNames, format, fmtCat) {
-    const label = (k) => (k == null ? "—" : fmtCat(k));
-    const target = format.target ?? null;
-    if (type === "gauge") {
-      renderSeriesChart(chartEl, { type, value: series[0].data[0], name: seriesNames[0], target, format });
-      return;
-    }
-    if (type === "bullet") {
-      const cats = categories.some((x) => x) ? categories : [seriesNames[0]]; // no dimension → one bar named after the measure
-      const targets = bulletTargets({ fixed: target, measureIndex: format.targetMeasure, series, count: cats.length }); // T03-12
-      if (!targets) { chartEl.append(hint("Bullet compares each value with a target — set Target in Format, or pick a Target field.")); return; }
-      renderSeriesChart(chartEl, { type, categories: cats, values: series[0].data, targets, name: seriesNames[0], format });
-      return;
-    }
-    if (type === "sankey") {
-      // Bipartite links, side-prefixed so a member on both sides stays two nodes; non-positive flows skipped.
-      const links = [];
-      for (const r of rows) {
-        const v = Number(r.values[0]);
-        if (Number.isFinite(v) && v > 0) links.push({ source: `s:${label(r.keys[0])}`, target: `t:${label(r.keys[1])}`, value: v });
-      }
-      if (!links.length) { chartEl.append(hint("No positive values to draw as flows.")); return; }
-      renderSeriesChart(chartEl, { type, links, format });
-      return;
-    }
-    if (type === "multiples") {
-      // x categories = the second key in first-seen order; one panel per first-key member (result order,
-      // capped), each holding one array per measure. `series[si].data` is aligned with `rows`.
-      const xCats = [], xIndex = new Map(), panels = new Map();
-      for (const r of rows) {
-        const x = label(r.keys[1]);
-        if (!xIndex.has(x)) { xIndex.set(x, xCats.length); xCats.push(x); }
-      }
-      rows.forEach((r, ri) => {
-        const name = label(r.keys[0]);
-        if (!panels.has(name)) {
-          if (panels.size >= MAX_PANELS) return;
-          panels.set(name, { name, series: seriesNames.map(() => new Array(xCats.length).fill(null)) });
-        }
-        const p = panels.get(name), xi = xIndex.get(label(r.keys[1]));
-        seriesNames.forEach((_, si) => { p.series[si][xi] = series[si].data[ri]; });
-      });
-      const distinct = new Set(rows.map((r) => label(r.keys[0]))).size;
-      extraNotice = distinct > MAX_PANELS ? `Showing the first ${MAX_PANELS} of ${distinct} panels — filter or lower Top-N to see others.` : null;
-      renderSeriesChart(chartEl, { type, panels: [...panels.values()], xCats, seriesNames, format });
-      return;
-    }
-    // waterfall / funnel: one measure over the flattened categories.
-    renderSeriesChart(chartEl, { type, categories, series: [series[0]], format });
-  }
-
-  // P29 legend interaction: { onLegend, focus } for renderSeriesChart. A click highlights that item (a
-  // second click clears it); when the legend lists a dimension's members (`field` + `rawByName`), it
-  // also selects the member, so the selection bar offers Keep only / Exclude (the click-to-filter path).
-  function legendHandler(sheet, field, rawByName) {
+  // P29: a legend click highlights that item (a second click clears it); on a legend that lists a dimension's members
+  // (`field` + `raw`) it also selects the member, so the selection bar offers Keep only / Exclude (the click-to-filter path).
+  function legendClick({ sheet, field, name, raw, bucketed }) {
     const dash = activeDashboard();
-    return {
-      focus: legendFocus,
-      onLegend: (name) => {
-        const again = legendFocus === name;
-        legendFocus = again ? null : name;
-        const raw = rawByName.get(name);
-        if (field && !isCalcPill(field) && dash && raw !== undefined && raw !== null && bucketedKey === null) { // E12: a calculated field can't be click-filtered; the legend still highlights
-          if (again) sheet.selection = null;
-          else {
-            const fmtCat = makeCategoryFormatter(sheet.format ?? defaultFormat());
-            sheet.selection = { db: field.db, table: field.table, column: field.column, value: raw,
-              label: `${nameOf(field)} = ${fmtCat(raw)}`, action: null };
-          }
-          commit(dash, sheet);
-        } else {
-          focusSeries(chartEl, legendFocus, sheet.chartType);
-        }
-      },
-    };
-  }
-
-  // P19 Shape (scatter family): group rows by the Shape dimension's value → one scatter series per
-  // value, each a distinct symbol (identity survives greyscale). X/Y are the two shelf measures.
-  function renderScatterShapes(sheet, result, seriesIdx, sizeIdx, format, fmtVal, fmtCat) {
-    if (seriesIdx.length < 2) { chartEl.append(hint("A shape scatter plots two measures (X and Y) — add a second measure.")); return; }
-    const { keyOrder } = planDims(sheet);
-    const si = keyOrder.findIndex((f) => sameField(f, marksOf(sheet).shape));
-    const xIdx = seriesIdx[0], yIdx = seriesIdx[1];
-    const groupsMap = new Map();
-    for (const r of result.rows) {
-      const sv = si >= 0 ? r.keys[si] : null;
-      const gk = tupleKey([sv]);
-      if (!groupsMap.has(gk)) groupsMap.set(gk, { name: sv == null ? "—" : fmtCat(sv), points: [] });
-      const pt = [Number(r.values[xIdx]) || 0, Number(r.values[yIdx]) || 0];
-      if (sizeIdx >= 0) pt.push(Number(r.values[sizeIdx]) || 0);
-      const label = r.keys.map((k, i) => (i === si ? null : (k == null ? "—" : fmtCat(k)))).filter((v) => v != null).join(" / ");
-      groupsMap.get(gk).points.push({ value: pt, name: label });
+    const again = legendFocus === name;
+    legendFocus = again ? null : name;
+    if (field && !isCalcPill(field) && dash && raw !== undefined && raw !== null && bucketed === null) { // E12: a calculated field can't be click-filtered; the legend still highlights
+      if (again) sheet.selection = null;
+      else {
+        const fmtCat = makeCategoryFormatter(sheet.format ?? defaultFormat());
+        sheet.selection = { db: field.db, table: field.table, column: field.column, value: raw,
+          label: `${nameOf(field)} = ${fmtCat(raw)}`, action: null };
+      }
+      commit(dash, sheet);
+    } else {
+      focusSeries(chartEl, legendFocus, sheet.chartType);
     }
-    // P29: legend items are Shape members.
-    const byName = new Map([...groupsMap.entries()].map(([gk, g]) => [g.name, JSON.parse(gk)[0]]));
-    renderSeriesChart(chartEl, {
-      ...legendHandler(sheet, marksOf(sheet).shape, byName),
-      type: "scatterShapes", groups: [...groupsMap.values()], format,
-      xName: format.xTitle || result.measures[xIdx] || "x",
-      yName: format.yTitle || result.measures[yIdx] || "y",
-      hasSize: sizeIdx >= 0, sizeName: sizeIdx >= 0 ? result.measures[sizeIdx] : null,
-    });
-  }
-
-  // The P18 mark-channel spec (result-model.js); the Tooltip editor learns the fields the chart offers.
-  function marksChannelSpec(sheet, result, mplan, sizeIdx, colorMeasureIdx, fmtVal, fmtCat, rowsOrdered) {
-    const out = marksChannels(sheet, result, mplan, sizeIdx, colorMeasureIdx, fmtVal, fmtCat, rowsOrdered, SCATTER_TYPES, measureName);
-    setTooltipCat(sheet, out.tooltipCat);
-    return out;
-  }
-
-  // Build the ECharts click handler that turns a mark click into a selection on the primary dimension
-  // (P15). Returns undefined when the chart type or field mapping can't support click-to-filter.
-  function selectHandler(sheet, dimField, type, rawByIndex) {
-    if (!dimField || !CLICK_TYPES.has(type) || bucketedKey === 0) return undefined;
-    const drilling = isDrillActive(sheet); // P16: on a drill hierarchy a click descends instead of selecting
-    return (params) => {
-      const raw = rawByIndex[params.dataIndex];
-      if (raw === undefined || raw === null) return; // can't cleanly filter/drill a null value
-      if (drilling) drillDown(raw);
-      else toggleSelection(dimField, raw);
-    };
   }
 
   // Toggle the click selection: a fresh click selects (action reset to a plain highlight); clicking the
@@ -2616,83 +2358,6 @@ export function initDashboards() {
       };
     }
     commit(dash, s);
-  }
-
-  // Pivot a Color-encoded result into one series per colour value and render it (P7 marks). The colour
-  // dimension is the trailing group-by key; the remaining keys form the category axis. Missing
-  // (category × colour) cells become null so series stay aligned. One measure only (guarded by caller).
-  function renderColorSplit(type, result, format, fmtCat) {
-    const { rowDimensions, columnDimensions, rows } = result;
-    const colorIdx = rowDimensions.length + columnDimensions.length - 1;
-    const catOf = (keys) => keys.filter((_, i) => i !== colorIdx);
-
-    const catTuples = uniqueTuples(rows.map((r) => catOf(r.keys)));
-    const colorVals = [];
-    const seen = new Set();
-    for (const r of rows) {
-      const cv = r.keys[colorIdx];
-      const k = tupleKey([cv]);
-      if (!seen.has(k)) { seen.add(k); colorVals.push(cv); }
-    }
-    const cell = new Map();
-    for (const r of rows) cell.set(tupleKey(catOf(r.keys)) + "|" + tupleKey([r.keys[colorIdx]]), r.values[0]);
-
-    const categories = catTuples.map((t) => (t.length ? t.map((k) => (k == null ? "—" : fmtCat(k))).join(" / ") : ""));
-    const series = colorVals.map((cv) => ({
-      name: cv == null ? "—" : fmtCat(cv),
-      data: catTuples.map((t) => cell.get(tupleKey(t) + "|" + tupleKey([cv])) ?? null),
-    }));
-    // P15: click a mark → the primary (first non-colour) dimension value = catTuples[dataIndex][0].
-    const sheet = activeDashboard()?.sheet;
-    const onSelect = sheet ? selectHandler(sheet, primaryDim(sheet), type, catTuples.map((t) => t[0])) : undefined;
-    const orientation = sheet ? chartOrientation(sheet) : "vertical";
-    // P29: each legend item is a Colour member — clicking it highlights that series and selects the member.
-    const byName = new Map(series.map((sr, i) => [sr.name, colorVals[i]]));
-    const legend = sheet ? legendHandler(sheet, sheet.color?.[0], byName) : {};
-    const cf = sheet?.color?.[0];
-    const memberColourSpec = sheet && cf && !isCalcPill(cf)
-      ? memberSpec(sheet, cf, series.map((sr, i) => ({ name: sr.name, raw: colorVals[i] }))) : {};
-    renderSeriesChart(chartEl, { type, categories, series, format, onSelect, orientation, ...memberColourSpec, ...legend });
-  }
-
-  // P12 heatmap: two dimensions → axes, first measure → colour. Key order is [rowDim, colDim] (guarded
-  // to exactly two dims by chartIssue), so dim 0 is the Y axis and dim 1 the X axis. Cells carry the
-  // [xIndex, yIndex, value] triples ECharts' heatmap expects.
-  function renderHeatmap(result, format, fmtCat, fmtVal) {
-    const rows = result.rows;
-    const yVals = [], xVals = [], ySeen = new Set(), xSeen = new Set();
-    for (const r of rows) {
-      const y = tupleKey([r.keys[0]]); if (!ySeen.has(y)) { ySeen.add(y); yVals.push(r.keys[0]); }
-      const x = tupleKey([r.keys[1]]); if (!xSeen.has(x)) { xSeen.add(x); xVals.push(r.keys[1]); }
-    }
-    const yCats = yVals.map((v) => (v == null ? "—" : fmtCat(v)));
-    const xCats = xVals.map((v) => (v == null ? "—" : fmtCat(v)));
-    const yIdx = new Map(yVals.map((v, i) => [tupleKey([v]), i]));
-    const xIdx = new Map(xVals.map((v, i) => [tupleKey([v]), i]));
-    const cells = rows.map((r) => [xIdx.get(tupleKey([r.keys[1]])), yIdx.get(tupleKey([r.keys[0]])), r.values[0]]);
-    renderSeriesChart(chartEl, { type: "heatmap", xCats, yCats, cells, format });
-  }
-
-  // P12 treemap: one or two dimensions form the hierarchy; the first measure sizes the rectangles.
-  // One dim → a flat list of leaves; two dims → dim 0 groups, dim 1 nests under it (values summed).
-  function renderTreemap(result, format, fmtCat) {
-    const dimCount = result.rowDimensions.length + result.columnDimensions.length;
-    const rows = result.rows;
-    let tree;
-    if (dimCount === 1) {
-      tree = rows.map((r) => ({ name: r.keys[0] == null ? "—" : fmtCat(r.keys[0]), value: r.values[0] }));
-    } else {
-      const parents = new Map();
-      for (const r of rows) {
-        const pk = tupleKey([r.keys[0]]);
-        if (!parents.has(pk)) parents.set(pk, { name: r.keys[0] == null ? "—" : fmtCat(r.keys[0]), value: 0, children: [] });
-        const node = parents.get(pk);
-        node.value += Number(r.values[0]) || 0;
-        node.children.push({ name: r.keys[1] == null ? "—" : fmtCat(r.keys[1]), value: r.values[0] });
-      }
-      tree = [...parents.values()];
-    }
-    renderSeriesChart(chartEl, { type: "treemap", tree, format });
   }
 
   // The Format card's editor: pick a measure, then its scale / bars and rules.

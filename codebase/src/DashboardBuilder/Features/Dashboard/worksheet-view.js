@@ -3,55 +3,57 @@ import { icon } from "../Core/icons.js";
 import { toggle, makeButton, toast } from "../Core/ui.js";
 import { LIMITS } from "../Core/validate.js";
 import { defaultFormat } from "../Core/store.js";
-import { renderChart as renderSeriesChart, disposeChart, animateNextChart } from "./chart.js";
+import { disposeChart, animateNextChart } from "./chart.js";
+import { renderWorksheet } from "./worksheet-render.js";
+import { renderHistogram, renderBoxplot } from "./render-special.js";
 import { createLatestGate, isAbortError, requestKey, truncationNotice } from "./query-runner.js";
 import { STAT_SINGLE_TABLE, statFieldHint } from "./show-me-rules.js";
-import { checkFilter, statFilters, withCategories } from "./filter-rules.js";
+import { statFilters, withCategories } from "./filter-rules.js";
 import { statCastProblem } from "./cast-model.js";
-import { resolveRange, compareRange, compareName, rangeLabel, COMPARE_TYPES } from "./period-model.js";
+import { resolveRange, compareRange, compareName, COMPARE_TYPES } from "./period-model.js";
 import { tableProgress, needsNextPage, OTHER_TYPES, bucketNotice } from "./scale-model.js";
-import { approxNotice } from "./speed-notice.js";
 import { buildPlan, calcContext, appliedShared, withParams, toServerFilter, isDrillActive, COLOR_USES } from "./sheet-plan.js";
 import { planTables, calcProblem, statCalcProblem } from "../Calc/calc-plan.js";
 import { isCalcPill, pillSlots } from "../Calc/calc-pill.js";
 import { el, hint, warn } from "./render-dom.js";
+import { joinNotices, periodNotice, speedNotice, invalidFilterNotice } from "./notices.js";
 
 // The worksheet's query-and-render lifecycle (P24a): plan -> latest-wins fetch (shared result cache) -> draw into one
 // container. One view owns one container, one latest-wins gate and its own table pager and fresh flag, so several
-// views never abort or overwrite each other; the chart itself is keyed by the container (chart.js).
-// The drawing of a result into marks, tables and KPIs stays with the host (the editor), passed in as `render`.
+// views never abort or overwrite each other; the chart itself is keyed by the container (chart.js). The drawing of a
+// result is worksheet-render.js, so a view needs no editor to show a worksheet.
 //
-//   createWorksheetView(container, getContext) -> { run(), refresh(), cancel(), destroy() }
-//   getContext() -> { dash: { id, sheet } | null, noticeEl, results (createResultCache), plan (the sheet-plan.js context),
-//                     categoryOf(db, table, column), castOf(field), render(sheet, result, cmp), extraNotice() -> string | null,
-//                     statusBar(sheet, result), sharedNote(sheet) -> string | null }
+//   createWorksheetView(container, getContext, options) -> { run(), refresh(), cancel(), destroy() }
+//   getContext() -> { dash: { id, sheet } | null, noticeEl | null, results (createResultCache), plan (the sheet-plan.js context),
+//                     categoryOf(db, table, column), castOf(field) }
+//   options (static for the view's life; every one optional):
+//     interactive      false = a static, non-selectable widget: no mark selection, drill or legend handlers, no status bar
+//                      (default true)
+//     onSelect(dimField, raw)  a mark click selects (the host stores the selection);  onDrill(raw)  a click on a drill hierarchy
+//     onLegend({ sheet, field, name, raw, bucketed })  a legend click;  legendFocus() -> the highlighted legend item or null
+//     onTooltipFields(sheet, list), onMemberColors(sheet, field, members)  the editor panels that learn what the chart offers
+//     statusBar(sheet, result | null)  the host's status line (marks, rows x columns, selection)
+//     notices(sheet) -> string | null  a host line joined into the notice (the editor: shared filters not applied here)
+//     draw(container, sheet, result, cmp, renderOptions)  the drawing function (default renderWorksheet; a test seam)
 
 export { el, hint, warn };
 
-/** Notices join with " · "; null when none. */
-export const joinNotices = (...parts) => parts.filter(Boolean).join(" · ") || null;
+export { joinNotices, periodNotice, speedNotice, invalidFilterNotice };
 
-/** The range line for the notice: "1 Sep – 30 Sep 2026 vs 2 Aug – 31 Aug 2026". */
-export function periodNotice(s, cmp) {
-  const range = s.period ? resolveRange(s.period) : null;
-  if (!range) return s.period ? "Date range not applied — pick both days." : null;
-  return `${rangeLabel(range)}${cmp ? ` vs ${rangeLabel(cmp.range)}` : ""}`;
-}
-
-/** P33: say when a result is approximate or came from the server's cache. */
-export function speedNotice(result, plan) {
-  const parts = [];
-  if (result.approx) parts.push(approxNotice(result.approx, plan.measures));
-  if (result.cached) parts.push("From the server cache (under a minute old) — Refresh re-runs it");
-  return parts.join(" · ") || null;
-}
-/** Invalid filters are skipped by the query, so say so. */
-export function invalidFilterNotice(sheet) {
-  const n = sheet.filters.filter((f) => checkFilter(f).state === "invalid").length;
-  return n ? `${n} filter${n === 1 ? "" : "s"} not applied — fix the highlighted value.` : null;
-}
-
-export function createWorksheetView(container, getContext) {
+export function createWorksheetView(container, getContext, options = {}) {
+  const interactive = options.interactive !== false;
+  const draw = options.draw ?? renderWorksheet;
+  const statusBar = interactive ? options.statusBar ?? (() => {}) : () => {};
+  const hostNotice = (sheet) => options.notices?.(sheet) ?? null;
+  // What the drawing may do with the editor-only state around it (render-handlers.js): nothing when not interactive.
+  const renderOptions = () => ({ plan: getContext().plan, interactive, hooks: {
+    onSelect: options.onSelect, onDrill: options.onDrill, onLegend: options.onLegend, legendFocus: options.legendFocus,
+    onTooltipFields: options.onTooltipFields, onMemberColors: options.onMemberColors } });
+  let extraNotice = null; // the line the last drawing wants in the notice (small-multiples cap, calculations on partial rows)
+  const drawResult = (s, result, cmp) => {
+    extraNotice = null;
+    extraNotice = draw(container, s, result, cmp ?? null, renderOptions())?.extraNotice ?? null;
+  };
   const gate = createLatestGate();
   // Table scroll-loading: the pages loaded so far for the table on screen (re-used while its plan stays the same, so a
   // format tweak keeps what was loaded). { dashId, key, plan, rows, total, loading, ctl, first }.
@@ -128,7 +130,7 @@ export function createWorksheetView(container, getContext) {
     const ticket = gate.begin(); // aborts any in-flight query for the previous state
     disposeChart(container); // tear down any live ECharts instance before we repaint
     container.onscroll = null; // only the Table view loads on scroll (runTable sets it)
-    c.statusBar(null, null);
+    statusBar(null, null);
     const s = dash.sheet;
     withCategories(s.filters, c.categoryOf);
     const filterNote = invalidFilterNotice(s);
@@ -169,11 +171,11 @@ export function createWorksheetView(container, getContext) {
     const cmp = await fetchCompare(c, s, ticket);
     if (cmp === undefined) return; // superseded while the comparison ran
     try {
-      c.render(s, result, cmp);
-      c.statusBar(s, result);
+      drawResult(s, result, cmp);
+      statusBar(s, result);
       // An "Other" mark already says how much is past the limit, so no truncation line on top of it.
       const shownOther = result.other && OTHER_TYPES.has(s.chartType);
-      setNotice(c.noticeEl, joinNotices(filterNote, speedNotice(result, plan), c.sharedNote(s), periodNotice(s, cmp), c.extraNotice(), shownOther ? null : truncationNotice({ truncated: result.truncated, chartType: s.chartType, limit: plan.limit }), bucketNotice(result.bucket)));
+      setNotice(c.noticeEl, joinNotices(filterNote, speedNotice(result, plan), hostNotice(s), periodNotice(s, cmp), extraNotice, shownOther ? null : truncationNotice({ truncated: result.truncated, chartType: s.chartType, limit: plan.limit }), bucketNotice(result.bucket)));
     } catch (err) {
       console.error(err);
       container.replaceChildren(warn("This view couldn't be drawn — try another chart type or remove a field."));
@@ -192,10 +194,10 @@ export function createWorksheetView(container, getContext) {
     tablePager = reuse ?? { dashId: dash.id, key, plan, rows: first.rows, total: first.total ?? first.rows.length, loading: false, ctl: null, first };
     const draw = () => {
       const top = container.scrollTop;
-      try { c.render(s, { ...tablePager.first, rows: tablePager.rows, partial: tablePager.rows.length < tablePager.total }); c.statusBar(s, { ...tablePager.first, rows: tablePager.rows }); }
+      try { drawResult(s, { ...tablePager.first, rows: tablePager.rows, partial: tablePager.rows.length < tablePager.total }); statusBar(s, { ...tablePager.first, rows: tablePager.rows }); }
       catch (err) { console.error(err); container.replaceChildren(warn("This view couldn't be drawn — try another chart type or remove a field.")); }
       container.scrollTop = top;
-      setNotice(c.noticeEl, joinNotices(filterNote, periodNotice(s, null), c.extraNotice(), tableProgress(tablePager.rows.length, tablePager.total)));
+      setNotice(c.noticeEl, joinNotices(filterNote, periodNotice(s, null), extraNotice, tableProgress(tablePager.rows.length, tablePager.total)));
     };
     draw();
     const pager = tablePager;
@@ -243,8 +245,7 @@ export function createWorksheetView(container, getContext) {
       const result = await fetchCached(c, ticket, requestKey("histogram", { db, table, req }), (signal) => api.histogram(db, table, req, { signal }));
       if (!result) return;
       if (!result.bins?.length) { container.replaceChildren(hint("No data for this field.")); setNotice(c.noticeEl, joinNotices(filterNote, ignoredNote)); return; }
-      container.replaceChildren();
-      renderSeriesChart(container, { type: "histogram", bins: result.bins, format });
+      renderHistogram(container, result.bins, format);
       setNotice(c.noticeEl, joinNotices(filterNote, ignoredNote));
     } else {
       // Box plot: group by the first same-table dimension, if any.
@@ -253,8 +254,7 @@ export function createWorksheetView(container, getContext) {
       const result = await fetchCached(c, ticket, requestKey("boxplot", { db, table, req }), (signal) => api.boxplot(db, table, req, { signal }));
       if (!result) return;
       if (!result.groups?.length) { container.replaceChildren(hint("No data for this field.")); setNotice(c.noticeEl, joinNotices(filterNote, ignoredNote)); return; }
-      container.replaceChildren();
-      renderSeriesChart(container, { type: "boxplot", boxes: result.groups, format });
+      renderBoxplot(container, result.groups, format);
       setNotice(c.noticeEl, joinNotices(filterNote, ignoredNote, truncationNotice({ truncated: result.truncated, chartType: "boxplot", limit: req.limit })));
     }
   }

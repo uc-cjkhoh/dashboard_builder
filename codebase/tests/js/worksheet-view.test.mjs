@@ -33,7 +33,7 @@ const host = (id, table, results, drawn) => {
   const container = fakeEl();
   const view = createWorksheetView(container, () => ({
     dash: { id, sheet: sheetOn(table) }, noticeEl: fakeEl(), results, plan: planCtx, categoryOf: () => undefined, castOf: () => undefined,
-    render: (sheet, result) => drawn.push([id, result.rows[0].keys[0]]), extraNotice: () => null, statusBar() {}, sharedNote: () => null }));
+  }), { draw: (_c, _sheet, result) => { drawn.push([id, result.rows[0].keys[0]]); return { extraNotice: null }; } });
   return { container, view };
 };
 
