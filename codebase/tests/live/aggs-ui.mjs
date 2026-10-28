@@ -131,13 +131,13 @@ try {
   const setAgg = (v) => ev(`(() => { const s = document.querySelector('.ws-shelf--rows .ws-pill .ws-pill__agg'); s.value = ${J(v)}; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
   const fmsg = () => ev(`${dlg}.querySelector('[id^=calc-fmsg]').textContent.trim()`);
 
-  await check('pill menu: a numeric measure offers median, stddev, variance and attr; percentile is not a plain-measure option', async () => {
+  await check('pill menu: a numeric measure offers median, stddev, variance, attr and percentile', async () => {
     await dragChip('region', `__t.zone('columns')`);
     await dragChip('amount', `__t.zone('rows')`);
     await waitFor(`__t.pills('rows').length === 1`, 'amount pill on Rows');
     const opts = await pillAggs();
     for (const a of ['median', 'stddev', 'variance', 'attr']) must(opts.includes(a), `${a} missing from ${J(opts)}`);
-    must(!opts.includes('percentile'), `percentile offered on a plain measure: ${J(opts)}`);
+    must(opts.includes('percentile'), `percentile missing from ${J(opts)}`);
     await b.screenshot(join(SHOTS, 'pill-menu.png'));
   });
   await check('choosing median sends agg "median" and names the measure', async () => {

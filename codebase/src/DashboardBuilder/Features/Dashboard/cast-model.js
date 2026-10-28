@@ -45,7 +45,7 @@ function syncRef(r, castOf, baseCategory) {
   if (r.category === cat) return false;
   r.category = cat;
   if (cat !== "temporal") delete r.datePart; // a date part only means something on a date field
-  if (r.agg && !aggsFor(cat).includes(r.agg)) r.agg = aggsFor(cat)[0];
+  if (r.agg && !aggsFor(cat).includes(r.agg)) { r.agg = aggsFor(cat)[0]; delete r.p; }
   if (r.op && !opsFor(cat).includes(r.op)) { r.op = "="; r.value = ""; r.values = null; delete r.topBy; delete r.bottom; }
   return true;
 }

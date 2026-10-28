@@ -128,6 +128,9 @@ public static class RequestRules
         if (CalcValidator.ContainsAggregate(calc)) throw Bad("A dimension can't contain an aggregate. Put it in a measure instead.", field + ".calc");
     }
 
+    /// <summary>The percentile fraction rule (finite, 0..1) — never clamped.</summary>
+    public const string PercentileMessage = "Percentile must be between 0 and 100 percent.";
+
     private static void CheckCalcMeasure(MeasureRef m, string field)
     {
         CheckCast(m.Cast, m.Calc is not null, field);
@@ -135,8 +138,15 @@ public static class RequestRules
         {
             // Agg binds as nullable (an aggregate calculation has none), so a plain measure's is required here.
             if (m.Agg is null) throw Bad($"'{field}.agg' is required.", field + ".agg");
+            if (string.Equals(m.Agg, "percentile", StringComparison.OrdinalIgnoreCase))
+            {
+                if (m.P is not { } p) throw Bad($"'{field}.p' is required for a percentile.", field + ".p");
+                if (!double.IsFinite(p) || p < 0 || p > 1) throw Bad(PercentileMessage, field + ".p");
+            }
+            else if (m.P is not null) throw Bad("Only a percentile takes a fraction.", field + ".p");
             return;
         }
+        if (m.P is not null) throw Bad("A calculation takes no percentile fraction.", field + ".p");
         CheckCalcTree(calc, m.Column, field);
         if (CalcValidator.ContainsAggregate(calc))
         {

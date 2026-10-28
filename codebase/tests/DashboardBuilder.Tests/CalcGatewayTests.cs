@@ -303,7 +303,7 @@ public class CalcGatewayTests
     [Theory] [InlineData("median")] [InlineData("stddev")] [InlineData("variance")] [InlineData("attr")]
     public void Plain_measures_accept_the_new_aggregations(string agg) => Assert.Contains(agg, ClickHouseGateway.Aggregations);
 
-    [Fact] public void Plain_measures_have_no_percentile_yet() => Assert.DoesNotContain("percentile", ClickHouseGateway.Aggregations);
+    [Fact] public void Plain_measures_accept_percentile() => Assert.Contains("percentile", ClickHouseGateway.Aggregations);
 
     [Theory]
     [InlineData("median", "quantileExactInclusive(0.5)(x)")]
@@ -324,4 +324,38 @@ public class CalcGatewayTests
     [InlineData("attr", "status", "attr status")]
     public void MeasureName_names_a_plain_measure_the_way_the_client_labels_it(string agg, string column, string expected)
         => Assert.Equal(expected, ClickHouseGateway.MeasureName(agg, column));
+
+    // Plain percentile (T04-07): a stable label, the shared writer with a bound fraction, never an interpolated value.
+    [Theory]
+    [InlineData(0.9, "p90 amount")]
+    [InlineData(0.5, "p50 amount")]
+    [InlineData(0.995, "p99.5 amount")]
+    [InlineData(0.0, "p0 amount")]
+    [InlineData(1.0, "p100 amount")]
+    [InlineData(0.07, "p7 amount")]
+    [InlineData(0.000001, "p0.0001 amount")]
+    public void MeasureName_labels_a_percentile_with_its_percent(double p, string expected)
+        => Assert.Equal(expected, ClickHouseGateway.MeasureName("percentile", "amount", p));
+
+    [Fact] public void A_plain_percentile_is_written_by_the_shared_writer_with_a_bound_fraction()
+    {
+        var ps = new List<(string Name, string Type, object Value)>();
+        var frac = ClickHouseGateway.BindFraction(0.9, "mp0", "measures[0].p", ps);
+        Assert.Equal("{mp0:Float64}", frac);
+        Assert.Equal([("mp0", "Float64", (object)0.9)], ps);
+        Assert.Equal("quantileExactInclusive({mp0:Float64})(t0.`amount`)", ClickHouseGateway.AggregateSql("percentile", "t0.`amount`", true, true, frac));
+        Assert.Equal("quantileExactInclusive({tp1:Float64})(x)", ClickHouseGateway.PlainRankSql("percentile", "x", "{tp1:Float64}"));
+    }
+
+    [Theory] [InlineData(double.NaN)] [InlineData(double.PositiveInfinity)] [InlineData(double.NegativeInfinity)] [InlineData(-0.1)] [InlineData(1.0000001)]
+    public void BindFraction_refuses_a_hostile_fraction_and_binds_nothing(double p)
+    {
+        var ps = new List<(string Name, string Type, object Value)>();
+        var e = Assert.Throws<RequestValidationException>(() => ClickHouseGateway.BindFraction(p, "mp0", "measures[0].p", ps));
+        Assert.Equal("measures[0].p", e.Field);
+        Assert.Empty(ps);
+    }
+
+    [Fact] public void BindFraction_refuses_a_missing_fraction() =>
+        Assert.Throws<RequestValidationException>(() => ClickHouseGateway.BindFraction(null, "mp0", "measures[0].p", []));
 }

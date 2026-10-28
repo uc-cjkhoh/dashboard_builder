@@ -129,6 +129,13 @@
 /* Colour-mark pill (P7): violet, distinct from dimension (blue) and measure (teal). */
 .ws-pill--color { background: var(--enc-bg); border-color: var(--enc-line); color: var(--enc-ink); }
 .ws-pill__agg, .ws-pill__op { font-size: 11px; padding: 1px 4px; border-radius: 4px; box-shadow: none; }
+/* T04-07 percentile box: a narrow input, its % unit, and an inline message (icon + text) when the value is not 0-100. */
+.ws-pill__pct { display: inline-flex; align-items: center; gap: 2px; flex-wrap: wrap; }
+.ws-pill__pctbox { display: inline-flex; align-items: center; gap: 2px; flex: none; }
+.ws-pill__val.ws-pill__pctin { width: 44px; text-align: right; }
+.ws-pill__unit { font-size: 11px; }
+.ws-pill__pcterr { display: inline-flex; align-items: center; gap: var(--s1); flex-basis: 100%; color: var(--danger-ink); font-size: var(--fs-xs); white-space: normal; }
+.ws-pill__pcterr[hidden] { display: none; }
 .ws-pill__val { width: 78px; padding: 1px var(--s2); font-size: 11px; }
 .ws-pill__filter { display: inline-flex; gap: 4px; align-items: center; }
 /* P14 filter controls: a compact multi-select for `in`, two bounds for `between`. */
