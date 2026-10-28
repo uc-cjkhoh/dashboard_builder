@@ -83,6 +83,17 @@ public class CalcRulesTests
         Assert.Equal("filters[0].topBy.column", FieldOf(Q(filters: [F(M(Aggregate, null, new string('x', 61)))])));
     }
 
+    // MeasureRef.Agg is nullable on the wire (an aggregate calculation has none), so a plain measure's missing
+    // aggregation is this rule's 400 — the same message and field model binding used to give.
+    [Fact] public void A_plain_measure_still_needs_an_aggregation()
+    {
+        var e = Assert.Throws<RequestValidationException>(() => RequestRules.ValidateQuery(Q(measures: [new MeasureRef("db", "t", "amount", null)])));
+        Assert.Equal("measures[0].agg", e.Field);
+        Assert.Equal("'measures[0].agg' is required.", e.Message);
+        QueryFilter F(MeasureRef by) => new("db", "t", "region", "top", "5", null, by);
+        Assert.Equal("filters[0].topBy.agg", FieldOf(Q(filters: [F(new MeasureRef("db", "t", "amount", null))])));
+    }
+
     [Fact] public void ContainsAggregate_finds_an_aggregate_anywhere()
     {
         Assert.True(CalcValidator.ContainsAggregate(Aggregate));

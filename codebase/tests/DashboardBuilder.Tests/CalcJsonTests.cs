@@ -95,4 +95,16 @@ public class CalcJsonTests(WebApplicationFactory<Program> factory) : IClassFixtu
         var json = JsonDocument.Parse(await r.Content.ReadAsStringAsync()).RootElement;
         Assert.True(json.TryGetProperty("error", out var e) && e.GetString()!.Length > 0);
     }
+
+    // An aggregate calculation carries no aggregation, so `agg` must bind as absent / null (not a "required" 400):
+    // with no connection the request reaches the 409 gate.
+    [Theory]
+    [InlineData("""{"from":{"db":"d","table":"t"},"measures":[{"db":"d","table":"t","column":"M","calc":{"k":"agg","fn":"sum","arg":{"k":"num","v":1}}}]}""")]
+    [InlineData("""{"from":{"db":"d","table":"t"},"measures":[{"db":"d","table":"t","column":"M","agg":null,"calc":{"k":"agg","fn":"sum","arg":{"k":"num","v":1}}}]}""")]
+    [InlineData("""{"from":{"db":"d","table":"t"},"filters":[{"db":"d","table":"t","column":"c","op":"top","value":"2","topBy":{"db":"d","table":"t","column":"R","calc":{"k":"agg","fn":"sum","arg":{"k":"num","v":1}}}}]}""")]
+    public async Task An_aggregate_calc_without_agg_binds(string body)
+    {
+        var r = await factory.CreateClient().PostAsync("/api/query", new StringContent(body, Encoding.UTF8, "application/json"));
+        Assert.Equal(HttpStatusCode.Conflict, r.StatusCode);
+    }
 }

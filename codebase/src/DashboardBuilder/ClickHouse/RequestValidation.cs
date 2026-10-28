@@ -119,7 +119,12 @@ public static class RequestRules
 
     private static void CheckCalcMeasure(MeasureRef m, string field)
     {
-        if (m.Calc is not { } calc) return;
+        if (m.Calc is not { } calc)
+        {
+            // Agg binds as nullable (an aggregate calculation has none), so a plain measure's is required here.
+            if (m.Agg is null) throw Bad($"'{field}.agg' is required.", field + ".agg");
+            return;
+        }
         CheckCalcTree(calc, m.Column, field);
         if (CalcValidator.ContainsAggregate(calc))
         {

@@ -17,8 +17,10 @@ public sealed record ColumnRef(string Db, string Table, string Column, string? D
 public sealed record JoinRef(ColumnRef Left, ColumnRef Right, string? Type = null);
 
 /// <summary>A measure column + its aggregation. When <see cref="Calc"/> is set (calculated measure) the
-/// tree replaces Db/Table/Column/Agg, and <see cref="Column"/> is only a display label echoed in the result.</summary>
-public sealed record MeasureRef(string Db, string Table, string Column, string Agg, ExprNode? Calc = null);
+/// tree replaces Db/Table/Column/Agg, and <see cref="Column"/> is only a display label echoed in the result.
+/// <see cref="Agg"/> is nullable on the wire because an aggregate calculation carries none; a plain measure
+/// without one is rejected by <c>RequestRules</c> ("'measures[i].agg' is required.").</summary>
+public sealed record MeasureRef(string Db, string Table, string Column, string? Agg, ExprNode? Calc = null);
 
 /// <summary>
 /// A filter condition on a column (P14). For the scalar operators (<c>= != &lt; &lt;= &gt; &gt;=</c>)
