@@ -1,0 +1,74 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+
+// Two worksheet views side by side (P24a): own container, own latest-wins gate, shared result cache.
+// A fake DOM and a fake fetch are all the view needs.
+const fakeEl = (tag = "div") => ({ tag, className: "", children: [], hidden: false, textContent: "", onscroll: null, scrollTop: 0,
+  classList: { toggle() {}, add() {}, remove() {} }, style: { setProperty() {} }, clientWidth: 600, clientHeight: 400,
+  append(...c) { this.children.push(...c); }, replaceChildren(...c) { this.children = c; }, addEventListener() {}, setAttribute() {},
+  get firstChild() { return this.children[0]; } });
+globalThis.document = { createElement: fakeEl, createElementNS: fakeEl, documentElement: {} };
+const calls = [];
+let gate = null;
+globalThis.fetch = (url, opts) => {
+  const body = JSON.parse(opts.body);
+  calls.push(body);
+  return new Promise((res, rej) => {
+    const answer = () => res({ ok: true, status: 200, text: async () => JSON.stringify({ rowDimensions: ["region"], columnDimensions: [], measures: ["v0"], rows: [{ keys: [body.from.table], values: [1] }], truncated: false }) });
+    opts.signal?.addEventListener("abort", () => rej(Object.assign(new Error("aborted"), { name: "AbortError" })));
+    if (gate) gate.then(answer); else answer();
+  });
+};
+
+const { createWorksheetView } = await import("../../src/DashboardBuilder/Features/Dashboard/worksheet-view.js");
+const { createResultCache } = await import("../../src/DashboardBuilder/Features/Dashboard/query-runner.js");
+
+const ent = (id, table) => ({ id, db: "shop", table, columns: [{ name: "id", type: "UInt32", category: "numeric" }, { name: "region", type: "String", category: "text" }] });
+const planCtx = { calculations: [], entities: new Map([["e1", ent("e1", "orders")], ["e2", ent("e2", "people")]]), relationships: new Map(),
+  sharedFilters: [], parameters: [], metaOf: () => ({}), nameOf: (f) => f.column, columnType: () => "" };
+const sheetOn = (table) => ({ columns: [{ db: "shop", table, column: "region", category: "text" }], rows: [{ db: "shop", table, column: "id", category: "numeric", agg: "sum" }],
+  color: [], filters: [], chartType: "bar", sort: null, selection: null, drill: null, pages: null, format: {}, period: null,
+  marks: { size: null, label: null, detail: [], tooltip: [], shape: null, path: null, angle: null } });
+const host = (id, table, results, drawn) => {
+  const container = fakeEl();
+  const view = createWorksheetView(container, () => ({
+    dash: { id, sheet: sheetOn(table) }, noticeEl: fakeEl(), results, plan: planCtx, categoryOf: () => undefined, castOf: () => undefined,
+    render: (sheet, result) => drawn.push([id, result.rows[0].keys[0]]), extraNotice: () => null, statusBar() {}, sharedNote: () => null }));
+  return { container, view };
+};
+
+test("two views run independently into their own containers", async () => {
+  calls.length = 0;
+  const results = createResultCache(), drawn = [];
+  const a = host("ws#1", "orders", results, drawn), b = host("ws#2", "people", results, drawn);
+  await Promise.all([a.view.run(), b.view.run()]);
+  assert.deepEqual(drawn.map((d) => d.join(":")).sort(), ["ws#1:orders", "ws#2:people"]);
+  assert.equal(calls.length, 2);
+});
+test("a view re-runs from the shared cache; refresh bypasses it", async () => {
+  calls.length = 0;
+  const results = createResultCache(), drawn = [];
+  const a = host("ws#1", "orders", results, drawn);
+  await a.view.run(); await a.view.run();
+  assert.equal(calls.length, 1, "the second run is a cache hit");
+  await a.view.refresh();
+  assert.equal(calls.length, 2);
+  assert.equal(calls[1].fresh, true, "refresh asks the server to skip its cache");
+});
+test("cancelling one view never aborts or blanks another's query", async () => {
+  calls.length = 0;
+  let release; gate = new Promise((r) => { release = r; });
+  const results = createResultCache(), drawn = [];
+  const a = host("ws#1", "orders", results, drawn), b = host("ws#2", "people", results, drawn);
+  const pa = a.view.run(), pb = b.view.run();
+  a.view.cancel();
+  release(); gate = null;
+  await Promise.all([pa, pb]);
+  assert.deepEqual(drawn, [["ws#2", "people"]], "only the cancelled view stayed undrawn");
+});
+test("destroy is safe to call twice and leaves nothing to draw", async () => {
+  const drawn = [];
+  const a = host("ws#1", "orders", createResultCache(), drawn);
+  a.view.destroy(); a.view.destroy();
+  assert.equal(drawn.length, 0);
+});

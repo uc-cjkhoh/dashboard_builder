@@ -1,0 +1,282 @@
+import { api } from "../Core/api.js";
+import { icon } from "../Core/icons.js";
+import { toggle, makeButton, toast } from "../Core/ui.js";
+import { LIMITS } from "../Core/validate.js";
+import { defaultFormat } from "../Core/store.js";
+import { renderChart as renderSeriesChart, disposeChart, animateNextChart } from "./chart.js";
+import { createLatestGate, isAbortError, requestKey, truncationNotice } from "./query-runner.js";
+import { STAT_SINGLE_TABLE, statFieldHint } from "./show-me-rules.js";
+import { checkFilter, statFilters, withCategories } from "./filter-rules.js";
+import { statCastProblem } from "./cast-model.js";
+import { resolveRange, compareRange, compareName, rangeLabel, COMPARE_TYPES } from "./period-model.js";
+import { tableProgress, needsNextPage, OTHER_TYPES, bucketNotice } from "./scale-model.js";
+import { approxNotice } from "./speed-notice.js";
+import { buildPlan, calcContext, appliedShared, withParams, toServerFilter, isDrillActive, COLOR_USES } from "./sheet-plan.js";
+import { planTables, calcProblem, statCalcProblem } from "../Calc/calc-plan.js";
+import { isCalcPill, pillSlots } from "../Calc/calc-pill.js";
+
+// The worksheet's query-and-render lifecycle (P24a): plan -> latest-wins fetch (shared result cache) -> draw into one
+// container. One view owns one container, one latest-wins gate and its own table pager and fresh flag, so several
+// views never abort or overwrite each other; the chart itself is keyed by the container (chart.js).
+// The drawing of a result into marks, tables and KPIs stays with the host (the editor), passed in as `render`.
+//
+//   createWorksheetView(container, getContext) -> { run(), refresh(), cancel(), destroy() }
+//   getContext() -> { dash: { id, sheet } | null, noticeEl, results (createResultCache), plan (the sheet-plan.js context),
+//                     categoryOf(db, table, column), castOf(field), render(sheet, result, cmp), extraNotice() -> string | null,
+//                     statusBar(sheet, result), sharedNote(sheet) -> string | null }
+
+export function el(tag, className, text) {
+  const e = document.createElement(tag);
+  if (className) e.className = className;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+export const hint = (text) => el("div", "ws-hint", text);
+export const warn = (text) => el("div", "ws-hint ws-hint--warn", text);
+
+/** Notices join with " · "; null when none. */
+export const joinNotices = (...parts) => parts.filter(Boolean).join(" · ") || null;
+
+/** The range line for the notice: "1 Sep – 30 Sep 2026 vs 2 Aug – 31 Aug 2026". */
+export function periodNotice(s, cmp) {
+  const range = s.period ? resolveRange(s.period) : null;
+  if (!range) return s.period ? "Date range not applied — pick both days." : null;
+  return `${rangeLabel(range)}${cmp ? ` vs ${rangeLabel(cmp.range)}` : ""}`;
+}
+
+/** P33: say when a result is approximate or came from the server's cache. */
+export function speedNotice(result, plan) {
+  const parts = [];
+  if (result.approx) parts.push(approxNotice(result.approx, plan.measures));
+  if (result.cached) parts.push("From the server cache (under a minute old) — Refresh re-runs it");
+  return parts.join(" · ") || null;
+}
+/** Invalid filters are skipped by the query, so say so. */
+export function invalidFilterNotice(sheet) {
+  const n = sheet.filters.filter((f) => checkFilter(f).state === "invalid").length;
+  return n ? `${n} filter${n === 1 ? "" : "s"} not applied — fix the highlighted value.` : null;
+}
+
+export function createWorksheetView(container, getContext) {
+  const gate = createLatestGate();
+  // Table scroll-loading: the pages loaded so far for the table on screen (re-used while its plan stays the same, so a
+  // format tweak keeps what was loaded). { dashId, key, plan, rows, total, loading, ctl, first }.
+  let tablePager = null;
+  let freshNext = false; // P33: the next query skips the server's result cache (Refresh)
+
+  const setNotice = (noticeEl, text) => {
+    if (!noticeEl) return;
+    noticeEl.replaceChildren(...(text ? [icon("info", { size: 14 }), el("span", null, text)] : []));
+    toggle(noticeEl, Boolean(text));
+  };
+  // A result straight from ClickHouse animates in (ECharts' entrance, or a fade for the table/KPI); a re-render from the
+  // cache (format tweaks, theme flip) repaints without motion.
+  function markFresh(fresh) {
+    animateNextChart(container, fresh);
+    container.classList.toggle("is-fresh", fresh);
+  }
+  // P33: "Loading…" with a Cancel button — it aborts the request (and the server stops the ClickHouse query when the
+  // browser goes away), leaving a note to run it again.
+  function loadingView(noticeEl) {
+    const box = el("div", "ws-loading");
+    box.append(el("span", null, "Loading…"));
+    const cancel = makeButton("Cancel", "btn ws-loading__cancel");
+    cancel.addEventListener("click", () => {
+      gate.cancel();
+      container.replaceChildren(hint("Query cancelled — Refresh runs it again."));
+      setNotice(noticeEl, null);
+    });
+    box.append(cancel);
+    return box;
+  }
+  // Serve a request from the result cache, or run it under the latest-wins ticket. Resolves to the result, or null when
+  // the request was superseded (silently) or failed (the error is shown in the container).
+  async function fetchCached(c, ticket, key, run) {
+    const cached = c.results.get(c.dash.id, key);
+    if (cached) { markFresh(false); return cached; }
+    container.replaceChildren(loadingView(c.noticeEl));
+    try {
+      const result = await run(ticket.signal);
+      if (!ticket.isCurrent()) return null;
+      c.results.set(c.dash.id, key, result);
+      markFresh(true);
+      return result;
+    } catch (err) {
+      if (!ticket.isCurrent() || isAbortError(err)) return null;
+      container.replaceChildren(warn(err.message));
+      return null;
+    }
+  }
+  // The comparison result for the current view, or null (no comparison / not drawn for this chart / failed).
+  // undefined = superseded by a newer query.
+  async function fetchCompare(c, s, ticket) {
+    const p = s.period;
+    if (!p || !COMPARE_TYPES.has(s.chartType)) return null;
+    const range = compareRange(p, resolveRange(p));
+    if (!range) return null;
+    const plan = buildPlan(s, range, c.plan);
+    if (!plan) return null;
+    const key = requestKey("query", plan);
+    let result = c.results.get(c.dash.id, key);
+    if (!result) {
+      try { result = await api.query(plan, { signal: ticket.signal }); }
+      catch (err) { if (!ticket.isCurrent() || isAbortError(err)) return undefined; toast(`Comparison failed: ${err.message}`, "danger"); return null; }
+      if (!ticket.isCurrent()) return undefined;
+      c.results.set(c.dash.id, key, result);
+    }
+    return { result, range, name: compareName(p.compare) };
+  }
+
+  async function run() {
+    const c = getContext();
+    const dash = c.dash;
+    if (!dash) return;
+    const ticket = gate.begin(); // aborts any in-flight query for the previous state
+    disposeChart(container); // tear down any live ECharts instance before we repaint
+    container.onscroll = null; // only the Table view loads on scroll (runTable sets it)
+    c.statusBar(null, null);
+    const s = dash.sheet;
+    withCategories(s.filters, c.categoryOf);
+    const filterNote = invalidFilterNotice(s);
+    setNotice(c.noticeEl, filterNote);
+    // P12 statistical charts that run their own single-table endpoint (histogram / box plot).
+    if (STAT_SINGLE_TABLE.has(s.chartType)) {
+      const noCalc = statCalcProblem(s); // the single-table endpoints can't take a calculation: say so, send nothing
+      if (noCalc) { container.replaceChildren(hint(noCalc)); return; }
+      const noCast = statCastProblem(s, c.castOf); // nor a data type cast
+      if (noCast) { container.replaceChildren(hint(noCast)); return; }
+      await runStat(c, s, ticket, filterNote); return; }
+    const colorInPlay = s.color?.length && COLOR_USES.has(s.chartType);
+    const drillInPlay = isDrillActive(s); // a hierarchy alone can drive a view (implicit count on the level)
+    const m = s.marks ?? {};
+    const marksInPlay = Boolean(m.detail?.length || m.size || m.label || m.tooltip?.length || m.shape || m.path || m.angle || s.color?.length); // P18/P19
+    if (!s.columns.length && !s.rows.length && !colorInPlay && !drillInPlay && !marksInPlay) {
+      container.replaceChildren(hint("Drag fields onto Columns and Rows to build a chart — categorical fields group, numeric fields aggregate."));
+      return;
+    }
+    const cctx = calcContext(c.plan);
+    const problem = calcProblem(s, cctx, appliedShared(c.plan)); // E15: a calculation that can't be computed — say why, send nothing
+    if (problem) { container.replaceChildren(warn(problem)); return; }
+    const plan = buildPlan(s, undefined, c.plan);
+    if (!plan) {
+      // Only field-less calculations (e.g. 1+2) and nothing from a table: there is nothing to relate, so say what to add.
+      const tableInvolved = [...pillSlots(s)].some((f) => !isCalcPill(f) || planTables(f, cctx).length)
+        || s.filters.length || s.drill?.levels?.length || s.pages || s.period;
+      container.replaceChildren(tableInvolved
+        ? warn("These fields come from tables with no relationship between them — draw one in the Data Model.")
+        : hint("Add a field from a table — a calculation with no field in it has nothing to group or total."));
+      return;
+    }
+    const key = requestKey("query", plan);
+    if (s.chartType === "table") { await runTable(c, s, plan, key, ticket, filterNote); return; }
+    const fresh = freshNext; freshNext = false;
+    const result = await fetchCached(c, ticket, key, (signal) => api.query(fresh ? { ...plan, fresh: true } : plan, { signal }));
+    if (!result) return;
+    const cmp = await fetchCompare(c, s, ticket);
+    if (cmp === undefined) return; // superseded while the comparison ran
+    try {
+      c.render(s, result, cmp);
+      c.statusBar(s, result);
+      // An "Other" mark already says how much is past the limit, so no truncation line on top of it.
+      const shownOther = result.other && OTHER_TYPES.has(s.chartType);
+      setNotice(c.noticeEl, joinNotices(filterNote, speedNotice(result, plan), c.sharedNote(s), periodNotice(s, cmp), c.extraNotice(), shownOther ? null : truncationNotice({ truncated: result.truncated, chartType: s.chartType, limit: plan.limit }), bucketNotice(result.bucket)));
+    } catch (err) {
+      console.error(err);
+      container.replaceChildren(warn("This view couldn't be drawn — try another chart type or remove a field."));
+    }
+  }
+
+  // Table view: the first page (cached like any result), then each further page as the pane scrolls near its end. Every
+  // page is the same ordered query with a growing OFFSET, so they line up exactly; the crosstab is redrawn from all
+  // loaded rows (a pivot row split across two pages fills in).
+  async function runTable(c, s, plan, key, ticket, filterNote) {
+    const dash = c.dash;
+    const reuse = tablePager && tablePager.dashId === dash.id && tablePager.key === key ? tablePager : null;
+    if (tablePager && !reuse) tablePager.ctl?.abort();
+    const first = await fetchCached(c, ticket, key, (signal) => api.query(plan, { signal }));
+    if (!first) return;
+    tablePager = reuse ?? { dashId: dash.id, key, plan, rows: first.rows, total: first.total ?? first.rows.length, loading: false, ctl: null, first };
+    const draw = () => {
+      const top = container.scrollTop;
+      try { c.render(s, { ...tablePager.first, rows: tablePager.rows, partial: tablePager.rows.length < tablePager.total }); c.statusBar(s, { ...tablePager.first, rows: tablePager.rows }); }
+      catch (err) { console.error(err); container.replaceChildren(warn("This view couldn't be drawn — try another chart type or remove a field.")); }
+      container.scrollTop = top;
+      setNotice(c.noticeEl, joinNotices(filterNote, periodNotice(s, null), c.extraNotice(), tableProgress(tablePager.rows.length, tablePager.total)));
+    };
+    draw();
+    const pager = tablePager;
+    const more = async () => {
+      if (pager !== tablePager || pager.loading || !needsNextPage(container, pager.rows.length, pager.total)) return;
+      pager.loading = true;
+      pager.ctl = new AbortController();
+      try {
+        const page = await api.query({ ...pager.plan, offset: pager.rows.length, withTotal: false }, { signal: pager.ctl.signal });
+        if (pager !== tablePager) return;
+        pager.rows = pager.rows.concat(page.rows);
+        if (!page.rows.length) pager.total = pager.rows.length; // the data shrank under us — stop asking
+        draw();
+      } catch (err) {
+        if (!isAbortError(err) && pager === tablePager) toast(err.message, "danger");
+        pager.total = pager.rows.length; // don't retry in a loop; Refresh starts over
+      } finally {
+        pager.loading = false;
+      }
+      if (pager === tablePager) more(); // a tall pane may need another page straight away
+    };
+    container.onscroll = more;
+    more();
+  }
+
+  // P12 histogram / box plot: single-table distribution charts. Histogram buckets one numeric column; a box plot
+  // summarises one numeric measure, optionally grouped by one same-table dimension. They use their own endpoints (a
+  // bucketing / quantile query shape), so they read fields directly rather than through buildPlan. All fields must live
+  // on ONE table (the endpoints don't join).
+  async function runStat(c, s, ticket, filterNote = null) {
+    const allFields = [...s.columns, ...s.rows];
+    const numeric = allFields.find((f) => f.category === "numeric");
+    if (!numeric) { container.replaceChildren(hint(statFieldHint(s.chartType))); return; }
+    const { db, table } = numeric;
+    // Only same-table, usable filters apply (the single-table endpoints take in/between too); the rest are counted and
+    // reported in the notice.
+    const { apply: filters, ignored } = statFilters(s.filters.map((f) => withParams(f, c.plan)), db, table, (f) => toServerFilter(f, c.plan));
+    const kind = s.chartType === "histogram" ? "histogram" : "box plot";
+    const ignoredNote = ignored > 0 ? `${ignored} filter${ignored === 1 ? "" : "s"} on other tables ${ignored === 1 ? "doesn't" : "don't"} apply to a ${kind}.` : null;
+    const format = s.format ?? defaultFormat();
+
+    if (s.chartType === "histogram") {
+      // Reuse Top-N as the bucket count when set (else the server default); server clamps 1..100.
+      const req = { column: numeric.column, buckets: s.format?.topN ?? null, filters };
+      const result = await fetchCached(c, ticket, requestKey("histogram", { db, table, req }), (signal) => api.histogram(db, table, req, { signal }));
+      if (!result) return;
+      if (!result.bins?.length) { container.replaceChildren(hint("No data for this field.")); setNotice(c.noticeEl, joinNotices(filterNote, ignoredNote)); return; }
+      container.replaceChildren();
+      renderSeriesChart(container, { type: "histogram", bins: result.bins, format });
+      setNotice(c.noticeEl, joinNotices(filterNote, ignoredNote));
+    } else {
+      // Box plot: group by the first same-table dimension, if any.
+      const dim = allFields.find((f) => f.category !== "numeric" && f.db === db && f.table === table);
+      const req = { dimension: dim ? dim.column : null, measure: numeric.column, filters, limit: s.format?.topN ?? LIMITS.rows };
+      const result = await fetchCached(c, ticket, requestKey("boxplot", { db, table, req }), (signal) => api.boxplot(db, table, req, { signal }));
+      if (!result) return;
+      if (!result.groups?.length) { container.replaceChildren(hint("No data for this field.")); setNotice(c.noticeEl, joinNotices(filterNote, ignoredNote)); return; }
+      container.replaceChildren();
+      renderSeriesChart(container, { type: "boxplot", boxes: result.groups, format });
+      setNotice(c.noticeEl, joinNotices(filterNote, ignoredNote, truncationNotice({ truncated: result.truncated, chartType: "boxplot", limit: req.limit })));
+    }
+  }
+
+  return {
+    run,
+    /** Re-run against ClickHouse, bypassing the result cache (data may have changed). */
+    refresh() {
+      const c = getContext();
+      if (c.dash) c.results.clear(c.dash.id);
+      tablePager?.ctl?.abort(); tablePager = null; freshNext = true;
+      return run();
+    },
+    /** Abort the in-flight query and make its answer stale. */
+    cancel() { gate.cancel(); },
+    /** Stop everything and release the container's chart. */
+    destroy() { gate.cancel(); tablePager?.ctl?.abort(); tablePager = null; container.onscroll = null; disposeChart(container); },
+  };
+}

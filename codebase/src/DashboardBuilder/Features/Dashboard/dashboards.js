@@ -2,21 +2,22 @@ import { api } from "../Core/api.js";
 import { icon, PATHS } from "../Core/icons.js";
 import { wireMenu } from "../Core/menu.js";
 import { visibleTools } from "./toolbar-rules.js";
-import { roleOf, COLOR_SPLIT_TYPES, STAT_SINGLE_TABLE, chartIssue, TEXT_VALUE_HINT, COLOR_SPLIT_HINT, statFieldHint, showMeOptions, placeFor, samePlacement } from "./show-me-rules.js";
+import { roleOf, COLOR_SPLIT_TYPES, STAT_SINGLE_TABLE, chartIssue, TEXT_VALUE_HINT, COLOR_SPLIT_HINT, showMeOptions, placeFor, samePlacement } from "./show-me-rules.js";
 import { toggle, makeButton, toast, fieldError, confirmDialog } from "../Core/ui.js";
 import { LIMITS, number } from "../Core/validate.js";
-import { aggsFor, checkAdd, checkFilter, viewCounts, statFilters, withCategories, TEXT_VALUE_TYPES, opsFor, OP_LABELS } from "./filter-rules.js";
+import { aggsFor, checkAdd, checkFilter, viewCounts, withCategories, TEXT_VALUE_TYPES, opsFor, OP_LABELS } from "./filter-rules.js";
 import { entities, relationships, activeDashboard, isModelActive, updateSheet, bus, defaultFormat, defaultMarks, sharedFilters,
   metaOf, nameOf, setFieldMeta, emptySheet, parameters, updateParameter, calculations, dashboards, addCalculation, removeCalculation } from "../Core/store.js";
 import { checkValue, paramTypeFor } from "../Core/parameters-model.js";
-import { renderChart as renderSeriesChart, disposeChart, exportChart, hasChartInstance, animateNextChart, sizeChart, focusSeries } from "./chart.js";
+import { renderChart as renderSeriesChart, exportChart, hasChartInstance, sizeChart, focusSeries } from "./chart.js";
+import { createWorksheetView, el, hint, warn, joinNotices, periodNotice } from "./worksheet-view.js";
 import { makeValueFormatter, makeCategoryFormatter } from "../Core/format.js";
-import { createLatestGate, createResultCache, requestKey, isAbortError, truncationNotice } from "./query-runner.js";
+import { createResultCache } from "./query-runner.js";
 import { CHART_TYPES, chartIcon, chartLabel, sortSummary } from "./viewbar-model.js";
 import { enter, MOTION } from "../Core/motion.js";
 import { wireResizer } from "../Core/resizer.js";
 import { PRESET_CHOICES, COMPARE_CHOICES, COMPARE_TYPES, newPeriod, resolveRange, compareRange, rangeLabel,
-  compareName, changeOf, toneOf, pctText, alignCompare, targetProgress } from "./period-model.js";
+  changeOf, toneOf, pctText, alignCompare, targetProgress } from "./period-model.js";
 import { CF_MODE_CHOICES, CF_SCALE_CHOICES, CF_OP_CHOICES, CF_TONE_CHOICES, CF_MAX_RULES, TONE_ICON, measureKey, emptyRule,
   extentOf, scaleColors, barGeometry, matchRule, isActive, midpointOf } from "./conditional-model.js";
 import { templateError, buildActionUrl, MAX_LABEL, MAX_TEMPLATE } from "./action-model.js";
@@ -30,7 +31,7 @@ import { HEATMAP_SHAPE_CHOICES } from "./heatmap-model.js";
 import { targetChoices, bulletTargets, effectiveTargetMeasure } from "./bullet-model.js";
 import { keyOf, marksOf, SCATTER_TYPES, COLOR_USES, colorMode, isDrillActive, drillActiveDim, planDims, planMeasures, sortTargets as planSortTargets, measureName as planMeasureName, buildPlan as planQuery, periodFilters as planPeriodFilters, calcContext, appliedShared as planAppliedShared, withParams, toServerFilter, isDateOnlyType } from "./sheet-plan.js";
 import { catalogFromEntities } from "../Calc/calc-resolve.js";
-import { isCalcPill, sameCalcPill, makeCalcPill, refusal, pillSlots, syncCalcPills, clearCalcPills, clearFilterCalc, usesCalc, CALC_AGGS } from "../Calc/calc-pill.js";
+import { isCalcPill, sameCalcPill, makeCalcPill, refusal, syncCalcPills, clearCalcPills, clearFilterCalc, usesCalc, CALC_AGGS } from "../Calc/calc-pill.js";
 import { openCalcDialog } from "../Calc/calc-dialog.js";
 import { openRowsDialog } from "../Rows/rows-dialog.js";
 import { buildRowsRequest } from "../Rows/rows-model.js";
@@ -38,11 +39,10 @@ import { evaluationInput } from "../Calc/eval-order.js";
 import { explainControl } from "../Calc/explain-popover.js";
 import { paneState, deleteCalcPlan, roleChoice, setRoleChoice } from "../Calc/calc-pane-model.js";
 import { checkName } from "../Calc/calc-workbook.js";
-import { planTables, calcProblem, statCalcProblem, aggWord, topByRef, topByKey } from "../Calc/calc-plan.js";
-import { approxNotice } from "./speed-notice.js";
+import { calcProblem, aggWord, topByRef, topByKey } from "../Calc/calc-plan.js";
 import { REF_CHOICES, TREND_CHOICES, FORECAST_CHOICES, defaultAnalytics, refValue, trendSeries, combine } from "./analytics-model.js";
-import { castChoices, castLabel, effectiveCategory, syncCastCategories, statCastProblem } from "./cast-model.js";
-import { withOther, bucketNotice, tableProgress, needsNextPage, OTHER_TYPES, BUCKET_TYPES, DATE_BUCKET_CHOICES } from "./scale-model.js";
+import { castChoices, castLabel, effectiveCategory, syncCastCategories } from "./cast-model.js";
+import { withOther, OTHER_TYPES, BUCKET_TYPES, DATE_BUCKET_CHOICES } from "./scale-model.js";
 
 // Tableau-style worksheet: each dashboard is one sheet. Drag fields from the field pane onto the
 // Columns (dimension), Rows (measure) and Filters shelves; the chart renders from a bounded,
@@ -187,12 +187,7 @@ export function initDashboards() {
   // instead of re-querying ClickHouse. The Refresh button drops the dashboard's cache and re-queries.
   const history = createHistory(); // P23 undo / redo per dashboard
   const lastSnap = new Map();       // dashId → the sheet as last committed (the "before" of the next edit)
-  const gate = createLatestGate();
   const results = createResultCache();
-  // Table scroll-loading: the pages loaded so far for the table on screen (re-used while its plan stays
-  // the same, so a format tweak keeps what was loaded). { dashId, key, plan, rows, total, loading, ctl }.
-  let tablePager = null;
-  let freshNext = false; // P33: the next query skips the server's result cache (Refresh)
   let legendFocus = null; // P29: the legend item the user clicked (highlighted), or null
   let calcFor = null;     // P27: the measure slot whose table-calculation editor is open — { shelf, index } or null
   let calcPercent = new Set(); // P27: result measure indexes whose values are percentages (per-cell "%")
@@ -273,7 +268,7 @@ export function initDashboards() {
     legendFocus = null; // P29: a highlight belongs to the chart it was made on
     openTool = null; // close any open tool editor when the view changes
     toggle(view, !isModelActive());
-    if (isModelActive()) { gate.cancel(); shownDash = null; return; }
+    if (isModelActive()) { sheetView.cancel(); shownDash = null; return; }
     const id = activeDashboard()?.id ?? null;
     if (shownDash && id !== shownDash) enter(view.querySelector(".worksheet"), { y: 4, duration: MOTION.view });
     shownDash = id;
@@ -803,7 +798,7 @@ export function initDashboards() {
   function refreshButton(dash) {
     const btn = iconButton("refresh", "Refresh");
     btn.title = "Re-run the query against ClickHouse";
-    btn.addEventListener("click", () => { results.clear(dash.id); tablePager?.ctl?.abort(); tablePager = null; freshNext = true; runChart(); });
+    btn.addEventListener("click", () => sheetView.refresh());
     return btn;
   }
 
@@ -2265,32 +2260,6 @@ export function initDashboards() {
     wrap.append(inp);
     return wrap;
   }
-  // The comparison result for the current view, or null (no comparison / not drawn for this chart / failed).
-  // undefined = superseded by a newer query.
-  async function fetchCompare(dash, s, ticket) {
-    const p = s.period;
-    if (!p || !COMPARE_TYPES.has(s.chartType)) return null;
-    const range = compareRange(p, resolveRange(p));
-    if (!range) return null;
-    const plan = buildPlan(s, range);
-    if (!plan) return null;
-    const key = requestKey("query", plan);
-    let result = results.get(dash.id, key);
-    if (!result) {
-      try { result = await api.query(plan, { signal: ticket.signal }); }
-      catch (err) { if (!ticket.isCurrent() || isAbortError(err)) return undefined; toast(`Comparison failed: ${err.message}`, "danger"); return null; }
-      if (!ticket.isCurrent()) return undefined;
-      results.set(dash.id, key, result);
-    }
-    return { result, range, name: compareName(p.compare) };
-  }
-  // The range line for the notice: "1 Sep – 30 Sep 2026 vs 2 Aug – 31 Aug 2026".
-  function periodNotice(s, cmp) {
-    const range = s.period ? resolveRange(s.period) : null;
-    if (!range) return s.period ? "Date range not applied — pick both days." : null;
-    return `${rangeLabel(range)}${cmp ? ` vs ${rangeLabel(cmp.range)}` : ""}`;
-  }
-
   // Wire a zone as a field-only drop target (no pill reorder). Shared by the tool panel.
   function wireFieldDrop(zone, onDrop) {
     zone.addEventListener("dragover", (e) => { if (hasField(e)) { e.preventDefault(); zone.classList.add("is-over"); } });
@@ -2427,209 +2396,13 @@ export function initDashboards() {
   const commitQuiet = (dash, sheet) => { lastSnap.set(dash.id, structuredClone(sheet)); updateSheet(dash.id, sheet); };
 
   // --- chart ---------------------------------------------------------------
-  async function runChart() {
-    const dash = activeDashboard();
-    if (!dash) return;
-    const ticket = gate.begin(); // aborts any in-flight query for the previous state
-    disposeChart(chartEl); // tear down any live ECharts instance before we repaint the chart pane
-    chartEl.onscroll = null; // only the Table view loads on scroll (runTable sets it)
-    setStatusBar(null, null);
-    const s = dash.sheet;
-    withCategories(s.filters, categoryOf);
-    const filterNote = invalidFilterNotice(s);
-    setNotice(filterNote);
-    // P12 statistical charts that run their own single-table endpoint (histogram / box plot).
-    if (STAT_SINGLE_TABLE.has(s.chartType)) {
-      const noCalc = statCalcProblem(s); // the single-table endpoints can't take a calculation: say so, send nothing
-      if (noCalc) { chartEl.replaceChildren(hint(noCalc)); return; }
-      const noCast = statCastProblem(s, castOf); // nor a data type cast
-      if (noCast) { chartEl.replaceChildren(hint(noCast)); return; }
-      await runStatChart(dash, s, ticket, filterNote); return; }
-    const colorInPlay = s.color?.length && COLOR_USES.has(s.chartType);
-    const drillInPlay = isDrillActive(s); // a hierarchy alone can drive a view (implicit count on the level)
-    const m = s.marks ?? {};
-    const marksInPlay = Boolean(m.detail?.length || m.size || m.label || m.tooltip?.length || m.shape || m.path || m.angle || s.color?.length); // P18/P19
-    if (!s.columns.length && !s.rows.length && !colorInPlay && !drillInPlay && !marksInPlay) {
-      chartEl.replaceChildren(hint("Drag fields onto Columns and Rows to build a chart — categorical fields group, numeric fields aggregate."));
-      return;
-    }
-    const problem = calcProblem(s, calcFieldCtx(), appliedShared()); // E15: a calculation that can't be computed — say why, send nothing
-    if (problem) { chartEl.replaceChildren(warn(problem)); return; }
-    const plan = buildPlan(s);
-    if (!plan) {
-      // Only field-less calculations (e.g. 1+2) and nothing from a table: there is nothing to relate, so say what to add.
-      const cctx = calcFieldCtx();
-      const tableInvolved = [...pillSlots(s)].some((f) => !isCalcPill(f) || planTables(f, cctx).length)
-        || s.filters.length || s.drill?.levels?.length || s.pages || s.period;
-      chartEl.replaceChildren(tableInvolved
-        ? warn("These fields come from tables with no relationship between them — draw one in the Data Model.")
-        : hint("Add a field from a table — a calculation with no field in it has nothing to group or total."));
-      return;
-    }
-    const key = requestKey("query", plan);
-    if (s.chartType === "table") { await runTable(dash, s, plan, key, ticket, filterNote); return; }
-    const fresh = freshNext; freshNext = false;
-    const result = await fetchCached(dash, ticket, key, (signal) => api.query(fresh ? { ...plan, fresh: true } : plan, { signal }));
-    if (!result) return;
-    const cmp = await fetchCompare(dash, s, ticket);
-    if (cmp === undefined) return; // superseded while the comparison ran
-    try {
-      renderChart(s, result, cmp);
-      setStatusBar(s, result);
-      // An "Other" mark already says how much is past the limit, so no truncation line on top of it.
-      const shownOther = result.other && OTHER_TYPES.has(s.chartType);
-      setNotice(joinNotices(filterNote, speedNotice(result, plan), sharedNote(s), periodNotice(s, cmp), extraNotice, shownOther ? null : truncationNotice({ truncated: result.truncated, chartType: s.chartType, limit: plan.limit }), bucketNotice(result.bucket)));
-    } catch (err) {
-      console.error(err);
-      chartEl.replaceChildren(warn("This view couldn't be drawn — try another chart type or remove a field."));
-    }
-  }
-
-  // Table view: the first page (cached like any result), then each further page as the pane scrolls near
-  // its end. Every page is the same ordered query with a growing OFFSET, so they line up exactly; the
-  // crosstab is redrawn from all loaded rows (a pivot row split across two pages fills in).
-  async function runTable(dash, s, plan, key, ticket, filterNote) {
-    const reuse = tablePager && tablePager.dashId === dash.id && tablePager.key === key ? tablePager : null;
-    if (tablePager && !reuse) tablePager.ctl?.abort();
-    const first = await fetchCached(dash, ticket, key, (signal) => api.query(plan, { signal }));
-    if (!first) return;
-    tablePager = reuse ?? { dashId: dash.id, key, plan, rows: first.rows, total: first.total ?? first.rows.length, loading: false, ctl: null, first };
-    const draw = () => {
-      const top = chartEl.scrollTop;
-      try { renderChart(s, { ...tablePager.first, rows: tablePager.rows, partial: tablePager.rows.length < tablePager.total }); setStatusBar(s, { ...tablePager.first, rows: tablePager.rows }); }
-      catch (err) { console.error(err); chartEl.replaceChildren(warn("This view couldn't be drawn — try another chart type or remove a field.")); }
-      chartEl.scrollTop = top;
-      setNotice(joinNotices(filterNote, periodNotice(s, null), extraNotice, tableProgress(tablePager.rows.length, tablePager.total)));
-    };
-    draw();
-    const pager = tablePager;
-    const more = async () => {
-      if (pager !== tablePager || pager.loading || !needsNextPage(chartEl, pager.rows.length, pager.total)) return;
-      pager.loading = true;
-      pager.ctl = new AbortController();
-      try {
-        const page = await api.query({ ...pager.plan, offset: pager.rows.length, withTotal: false }, { signal: pager.ctl.signal });
-        if (pager !== tablePager) return;
-        pager.rows = pager.rows.concat(page.rows);
-        if (!page.rows.length) pager.total = pager.rows.length; // the data shrank under us — stop asking
-        draw();
-      } catch (err) {
-        if (!isAbortError(err) && pager === tablePager) toast(err.message, "danger");
-        pager.total = pager.rows.length; // don't retry in a loop; Refresh starts over
-      } finally {
-        pager.loading = false;
-      }
-      if (pager === tablePager) more(); // a tall pane may need another page straight away
-    };
-    chartEl.onscroll = more;
-    more();
-  }
-
-  // P33: say when a result is approximate or came from the server's cache.
-  function speedNotice(result, plan) {
-    const parts = [];
-    if (result.approx) parts.push(approxNotice(result.approx, plan.measures));
-    if (result.cached) parts.push("From the server cache (under a minute old) — Refresh re-runs it");
-    return parts.join(" · ") || null;
-  }
-
-  // Status-line helpers: invalid filters are skipped by the query, so say so; notices join with " · ".
-  const joinNotices = (...parts) => parts.filter(Boolean).join(" · ") || null;
-  function invalidFilterNotice(sheet) {
-    const n = sheet.filters.filter((f) => checkFilter(f).state === "invalid").length;
-    return n ? `${n} filter${n === 1 ? "" : "s"} not applied — fix the highlighted value.` : null;
-  }
-
-  // Serve a request from the dashboard's result cache, or run it under the latest-wins ticket.
-  // Resolves to the result, or null when the request was superseded (silently) or failed (the error
-  // is shown in the chart pane).
-  async function fetchCached(dash, ticket, key, run) {
-    const cached = results.get(dash.id, key);
-    if (cached) { markFresh(false); return cached; }
-    chartEl.replaceChildren(loadingView());
-    try {
-      const result = await run(ticket.signal);
-      if (!ticket.isCurrent()) return null;
-      results.set(dash.id, key, result);
-      markFresh(true);
-      return result;
-    } catch (err) {
-      if (!ticket.isCurrent() || isAbortError(err)) return null;
-      chartEl.replaceChildren(warn(err.message));
-      return null;
-    }
-  }
-
-  // P33: "Loading…" with a Cancel button — it aborts the request (and the server stops the ClickHouse
-  // query when the browser goes away), leaving a note to run it again.
-  function loadingView() {
-    const box = el("div", "ws-loading");
-    box.append(el("span", null, "Loading…"));
-    const cancel = makeButton("Cancel", "btn ws-loading__cancel");
-    cancel.addEventListener("click", () => {
-      gate.cancel();
-      chartEl.replaceChildren(hint("Query cancelled — Refresh runs it again."));
-      setNotice(null);
-    });
-    box.append(cancel);
-    return box;
-  }
-
-  // A result straight from ClickHouse animates in (ECharts' entrance, or a fade for the table/KPI);
-  // a re-render from the cache (format tweaks, theme flip) repaints without motion.
-  function markFresh(fresh) {
-    animateNextChart(chartEl, fresh);
-    chartEl.classList.toggle("is-fresh", fresh);
-  }
-
-  // The notice line at the top of the chart card (e.g. "Showing the top 50 — more exist").
-  function setNotice(text) {
-    if (!noticeEl) return;
-    noticeEl.replaceChildren(...(text ? [icon("info", { size: 14 }), el("span", null, text)] : []));
-    toggle(noticeEl, Boolean(text));
-  }
-
-  // P12 histogram / box plot: single-table distribution charts. Histogram buckets one numeric column;
-  // a box plot summarises one numeric measure, optionally grouped by one same-table dimension. They
-  // use their own endpoints (a bucketing / quantile query shape), so they read fields directly rather
-  // than through buildPlan. All fields must live on ONE table (the endpoints don't join).
-  async function runStatChart(dash, s, ticket, filterNote = null) {
-    const allFields = [...s.columns, ...s.rows];
-    const numeric = allFields.find((f) => f.category === "numeric");
-    if (!numeric) {
-      chartEl.replaceChildren(hint(statFieldHint(s.chartType)));
-      return;
-    }
-    const { db, table } = numeric;
-    // Only same-table, usable filters apply (the single-table endpoints take in/between too);
-    // the rest are counted and reported in the notice.
-    const { apply: filters, ignored } = statFilters(s.filters.map(pv), db, table, toFilter);
-    const kind = s.chartType === "histogram" ? "histogram" : "box plot";
-    const ignoredNote = ignored > 0 ? `${ignored} filter${ignored === 1 ? "" : "s"} on other tables ${ignored === 1 ? "doesn't" : "don't"} apply to a ${kind}.` : null;
-
-    if (s.chartType === "histogram") {
-      // Reuse Top-N as the bucket count when set (else the server default); server clamps 1..100.
-      const req = { column: numeric.column, buckets: s.format?.topN ?? null, filters };
-      const result = await fetchCached(dash, ticket, requestKey("histogram", { db, table, req }),
-        (signal) => api.histogram(db, table, req, { signal }));
-      if (!result) return;
-      if (!result.bins?.length) { chartEl.replaceChildren(hint("No data for this field.")); setNotice(joinNotices(filterNote, ignoredNote)); return; }
-      chartEl.replaceChildren();
-      renderSeriesChart(chartEl, { type: "histogram", bins: result.bins, format: s.format ?? defaultFormat() });
-      setNotice(joinNotices(filterNote, ignoredNote));
-    } else {
-      // Box plot: group by the first same-table dimension, if any.
-      const dim = allFields.find((f) => f.category !== "numeric" && f.db === db && f.table === table);
-      const req = { dimension: dim ? dim.column : null, measure: numeric.column, filters, limit: s.format?.topN ?? LIMITS.rows };
-      const result = await fetchCached(dash, ticket, requestKey("boxplot", { db, table, req }),
-        (signal) => api.boxplot(db, table, req, { signal }));
-      if (!result) return;
-      if (!result.groups?.length) { chartEl.replaceChildren(hint("No data for this field.")); setNotice(joinNotices(filterNote, ignoredNote)); return; }
-      chartEl.replaceChildren();
-      renderSeriesChart(chartEl, { type: "boxplot", boxes: result.groups, format: s.format ?? defaultFormat() });
-      setNotice(joinNotices(filterNote, ignoredNote, truncationNotice({ truncated: result.truncated, chartType: "boxplot", limit: req.limit })));
-    }
-  }
+  // The query-and-render lifecycle is worksheet-view.js (P24a); the editor owns exactly one view, on #ws-chart, and
+  // supplies the drawing of a result (renderChart below) and the editor-only state around it.
+  const sheetView = createWorksheetView(chartEl, () => ({
+    dash: activeDashboard(), noticeEl, results, plan: planCtx(), categoryOf, castOf,
+    render: renderChart, extraNotice: () => extraNotice, statusBar: setStatusBar, sharedNote,
+  }));
+  const runChart = () => sheetView.run();
 
   // result = { rowDimensions:[name…], columnDimensions:[name…], measures:[name…],
   //            rows:[{ keys:[rowVals…, colVals…], values:[…] }] }
@@ -3488,15 +3261,8 @@ function readPill(e) {
   if (!raw) return null;
   try { return JSON.parse(raw); } catch { return null; }
 }
-function el(tag, className, text) {
-  const e = document.createElement(tag);
-  if (className) e.className = className;
-  if (text !== undefined) e.textContent = text;
-  return e;
-}
 function iconSpan(cls, name) { const s = el("span", cls); s.append(icon(name)); return s; }
-function hint(text) { return el("div", "ws-hint", text); }
-function warn(text) { return el("div", "ws-hint ws-hint--warn", text); }
+
 
 // --- export helpers (P13) ---------------------------------------------------
 // Trigger a browser download of a Blob, cleaning up the object URL afterwards.
