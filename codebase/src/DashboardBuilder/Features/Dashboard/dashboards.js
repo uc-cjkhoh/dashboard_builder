@@ -24,7 +24,7 @@ import { DATE_PART_CHOICES, isGroupingPart, stepPart, labelParts } from "./date-
 import { CALC_CHOICES, ALONG_CHOICES, WINDOW_CHOICES, applyTableCalcs, isCalc, calcName } from "./table-calc.js";
 import { createHistory } from "./history.js";
 import { catalogFromEntities } from "../Calc/calc-resolve.js";
-import { isCalcPill, calcPillId, sameCalcPill, makeCalcPill, refusal, pillSlots, syncCalcPills, clearCalcPills } from "../Calc/calc-pill.js";
+import { isCalcPill, calcPillId, sameCalcPill, makeCalcPill, refusal, pillSlots, syncCalcPills, clearCalcPills, usesCalc } from "../Calc/calc-pill.js";
 import { openCalcDialog } from "../Calc/calc-dialog.js";
 import { paneState, deleteCalcPlan, roleChoice, setRoleChoice } from "../Calc/calc-pane-model.js";
 import { checkName } from "../Calc/calc-workbook.js";
@@ -530,7 +530,13 @@ export function initDashboards() {
       const n = plan.usedInSheets;
       const go = await confirmDialog(`“${calc.name}” is used in ${n} worksheet${n === 1 ? "" : "s"}. Deleting it removes it from ${n === 1 ? "that worksheet" : "those worksheets"}.`, { danger: true, confirmText: "Delete" });
       if (!go) return;
-      for (const d of dashboards) clearCalcPills(d.sheet, calc.id);
+      // Commit every sheet that lost pills (the calculations:changed sync below sees them already cleared and wouldn't).
+      const active = activeDashboard();
+      for (const d of dashboards) {
+        if (!usesCalc(d.sheet, calc.id)) continue;
+        clearCalcPills(d.sheet, calc.id);
+        if (d === active && !isModelActive()) commit(d, d.sheet); else commitQuiet(d, d.sheet);
+      }
     }
     setRoleChoice(calc.id, null);
     removeCalculation(calc.id);
@@ -1412,7 +1418,7 @@ export function initDashboards() {
     const open = choicesFor && choicesFor.shelf === shelfKey && choicesFor.index === i;
     sw.setAttribute("aria-pressed", String(Boolean(open)));
     sw.addEventListener("click", () => { choicesFor = open ? null : { shelf: shelfKey, index: i }; if (choicesFor) { openTool = null; calcFor = null; } formatOpen = false; showMeOpen = false; renderShelves(); });
-    controls.append(sw);
+    if (!isCalcPill(f)) controls.append(sw); // E12: a calculated field has no field choices
     const p = pill(label, remove, controls);
     p.classList.add(isMeasure ? "ws-pill--measure" : "ws-pill--dimension");
 
@@ -1619,6 +1625,8 @@ export function initDashboards() {
   function choicesOf(f) { return f.choices?.length ? f.choices : [{ db: f.db, table: f.table, column: f.column, category: f.category }]; }
   function addChoice(dash, s, shelf, index, field) {
     const f = s[shelf][index];
+    const refused = refusal(field, "choice") ?? (isCalcPill(f) ? refusal(f, "choice") : null); // E12: neither a calc dropped here nor a calc slot takes choices
+    if (refused) { toast(refused, "info"); return; }
     const list = choicesOf(f);
     if (list.some((c) => sameRef(c, field))) return;
     if (list.length >= LIMITS.fieldChoices) { toast(`A slot can switch between at most ${LIMITS.fieldChoices} fields.`, "info"); return; }
@@ -1642,7 +1650,7 @@ export function initDashboards() {
   function choicesPanel(dash, s) {
     const { shelf, index } = choicesFor;
     const f = s[shelf]?.[index];
-    if (!f) { choicesFor = null; return null; }
+    if (!f || isCalcPill(f)) { choicesFor = null; return null; }
     const panel = el("div", "ws-toolpanel ws-choices");
     const head = el("div", "ws-toolpanel__head");
     const title = el("span", "ws-toolpanel__title");
@@ -2198,6 +2206,8 @@ export function initDashboards() {
   }
   // Shape (P19) takes one CATEGORICAL field (distinct point symbols); numeric is nudged away.
   function addShape(dash, f) {
+    const refused = refusal(f, "shape");
+    if (refused) { toast(refused, "info"); return; }
     if (f.category === "numeric") { toast("Shape needs a categorical field (each value gets its own symbol).", "info"); return; }
     if (!allowed(dash, "shape", f)) return;
     const m = dash.sheet.marks ?? (dash.sheet.marks = defaultMarks());
@@ -2206,6 +2216,8 @@ export function initDashboards() {
   }
   // Angle (P19) takes one NUMERIC field (a radial magnitude — pie already maps its measure to angle).
   function addAngle(dash, f) {
+    const refused = refusal(f, "angle");
+    if (refused) { toast(refused, "info"); return; }
     if (f.category !== "numeric") { toast("Angle needs a numeric field (it drives a radial magnitude).", "info"); return; }
     const m = dash.sheet.marks ?? (dash.sheet.marks = defaultMarks());
     m.angle = { db: f.db, table: f.table, column: f.column, category: f.category, agg: "sum" };

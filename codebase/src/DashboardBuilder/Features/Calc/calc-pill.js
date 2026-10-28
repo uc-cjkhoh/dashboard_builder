@@ -6,7 +6,7 @@ import { compileCalculation } from "./calc-resolve.js";
 
 const CATEGORY = { number: "numeric", text: "text", date: "temporal", boolean: "boolean" };
 export const REFUSAL = "Calculated fields can't be used here yet.";
-const ENTRIES = new Set(["filter", "pages", "drill", "period", "sharedFilter", "selection"]);
+const ENTRIES = new Set(["filter", "pages", "drill", "period", "sharedFilter", "selection", "shape", "angle", "choice"]);
 
 export const isCalcPill = (f) => Boolean(f) && typeof f === "object" && typeof f.calc === "string";
 

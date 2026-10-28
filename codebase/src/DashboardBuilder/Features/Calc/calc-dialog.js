@@ -90,7 +90,7 @@ export function openCalcDialog(calcId = null) {
   // --- live state -------------------------------------------------------------
   let nameTouched = Boolean(existing);
   let current = null;       // the last evaluateDraft result for the real name
-  let items = [], active = -1, range = null;
+  let items = [], active = -1, range = null, arrowed = false;
 
   const message = (host, text, pos, formula) => {
     host.replaceChildren();
@@ -142,7 +142,7 @@ export function openCalcDialog(calcId = null) {
   };
 
   // --- autocomplete ---------------------------------------------------------
-  const closeList = () => { list.hidden = true; items = []; active = -1; ta.setAttribute("aria-expanded", "false"); ta.removeAttribute("aria-activedescendant"); };
+  const closeList = () => { arrowed = false; list.hidden = true; items = []; active = -1; ta.setAttribute("aria-expanded", "false"); ta.removeAttribute("aria-activedescendant"); };
   const setActive = (i) => {
     active = i;
     [...list.children].forEach((li, k) => li.setAttribute("aria-selected", String(k === i)));
@@ -151,7 +151,7 @@ export function openCalcDialog(calcId = null) {
   const openList = () => {
     const s = suggest(normaliseFormula(ta.value), ta.selectionStart, ctx);
     if (!s.items.length) { closeList(); return; }
-    range = s; items = s.items;
+    range = s; items = s.items; arrowed = false;
     list.replaceChildren(...items.map((it, k) => {
       const li = el("li"); li.id = `${list.id}-${k}`; li.setAttribute("role", "option");
       li.append(icon(it.kind === "calc" ? "calc" : "table", { size: 14 }), el("span", "name", it.label), el("span", "kind", kinds.get(it.label) ?? it.kind));
@@ -177,9 +177,10 @@ export function openCalcDialog(calcId = null) {
   ta.addEventListener("blur", closeList);
   ta.addEventListener("keydown", (e) => {
     if (list.hidden) return;
-    if (e.key === "ArrowDown") { e.preventDefault(); setActive((active + 1) % items.length); }
-    else if (e.key === "ArrowUp") { e.preventDefault(); setActive((active - 1 + items.length) % items.length); }
-    else if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); accept(active); }
+    if (e.key === "ArrowDown") { e.preventDefault(); arrowed = true; setActive((active + 1) % items.length); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); arrowed = true; setActive((active - 1 + items.length) % items.length); }
+    else if (e.key === "Enter") { e.preventDefault(); accept(active); }
+    else if (e.key === "Tab") { if (arrowed) { e.preventDefault(); accept(active); } else closeList(); } // Tab accepts only after arrowing; otherwise focus moves on
     else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeList(); } // close the list, not the dialog
   });
   name.addEventListener("input", () => { nameTouched = true; refresh(); });

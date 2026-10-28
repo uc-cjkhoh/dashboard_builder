@@ -39,7 +39,7 @@ test("isCalcPill, calcPillId, sameCalcPill", () => {
 
 test("refusal: exact message for every entry, null for plain", () => {
   const p = { calc: "c1" };
-  for (const e of ["filter", "pages", "drill", "period", "sharedFilter", "selection"]) {
+  for (const e of ["filter", "pages", "drill", "period", "sharedFilter", "selection", "shape", "angle", "choice"]) {
     assert.equal(refusal(p, e), "Calculated fields can't be used here yet.");
     assert.equal(refusal({ db: "a", table: "b", column: "c" }, e), null);
   }
