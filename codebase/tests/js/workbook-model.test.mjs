@@ -478,3 +478,14 @@ test("a not in filter round-trips with its values; a non-text member is rejected
   assert.equal(bad.dashboards[0].sheet.filters.length, 0);
   assert.equal(bad.issues.length, 1);
 });
+
+test("right and full join types (T02-12/13) round-trip; an old workbook without joinType still reads as inner", () => {
+  for (const t of ["right", "full"]) {
+    const st = sampleState();
+    [...st.relationships.values()][0].joinType = t;
+    assert.equal(parseWorkbook(JSON.stringify(serializeWorkbook(st))).relationships[0].joinType, t);
+  }
+  const raw = JSON.parse(JSON.stringify(serializeWorkbook(sampleState())));
+  delete raw.relationships[0].joinType;
+  assert.equal(parseWorkbook(JSON.stringify(raw)).relationships[0].joinType, "inner");
+});

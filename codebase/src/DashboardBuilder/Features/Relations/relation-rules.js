@@ -14,3 +14,28 @@ export function linkProblem({ relationships, from, to, fromCategory, toCategory,
     return `Can't relate ${fromLabel} (${fromCategory}) to ${toLabel} (${toCategory}) — join keys must hold the same kind of value.`;
   return null;
 }
+
+// T02-12 / T02-13 join types. A relationship runs FROM → TO: FROM is the left side, TO the right.
+// "left" keeps every row of FROM's table, "right" every row of TO's table, "full" both; "inner" only matches.
+export const JOIN_TYPES = ["inner", "left", "right", "full"];
+export const normalizeJoinType = (t) => (JOIN_TYPES.includes(t) ? t : "inner");
+
+/** The dialog's radio options, worded with the two table names (never colour alone). */
+export function joinChoices(fromTable, toTable) {
+  return [
+    { value: "inner", text: "Inner — only rows that match" },
+    { value: "left", text: `Keep all rows of ${fromTable}` },
+    { value: "right", text: `Keep all rows of ${toTable}` },
+    { value: "full", text: "Keep all rows of both" },
+  ];
+}
+
+/** The type to send for one join step. The view joins tables outward from its base, so a relationship
+ *  crossed TO → FROM (forward = false) has its sides swapped: left and right trade places. */
+export function planJoinType(type, forward) {
+  const t = normalizeJoinType(type);
+  if (forward || (t !== "left" && t !== "right")) return t;
+  return t === "left" ? "right" : "left";
+}
+
+export const joinBadge = (cardinality, type) => (normalizeJoinType(type) === "inner" ? cardinality : `${cardinality} · ${type}`);

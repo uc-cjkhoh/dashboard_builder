@@ -7,6 +7,7 @@ import { LIMITS, text } from "../Core/validate.js";
 import { aggsFor } from "../Dashboard/filter-rules.js";
 import { CASTS } from "../Dashboard/cast-model.js";
 import { cleanTheme, DEFAULT_THEME } from "../Core/theme-model.js";
+import { normalizeJoinType } from "../Relations/relation-rules.js";
 import { cleanAction } from "../Dashboard/action-model.js";
 import { cleanMemberColors } from "../Dashboard/colour-model.js";
 import { checkTooltipText } from "../Dashboard/tooltip-model.js";
@@ -41,7 +42,7 @@ export function serializeWorkbook({ entities, relationships, dashboards, active,
       from: { entityId: r.from.entityId, column: r.from.column },
       to: { entityId: r.to.entityId, column: r.to.column },
       cardinality: r.cardinality,
-      joinType: r.joinType === "left" ? "left" : "inner", // P31
+      joinType: normalizeJoinType(r.joinType), // P31 / T02-12
     })),
     dashboards: dashboards.map((d) => ({ name: d.name, sheet: savedSheet(d.sheet) })),
     active: activeIndex >= 0 ? activeIndex : null,
@@ -121,7 +122,7 @@ export function parseWorkbook(source) {
       from: { entityId: r.from.entityId, column: r.from.column },
       to: { entityId: r.to.entityId, column: r.to.column },
       cardinality: r.cardinality,
-      joinType: r.joinType === "left" ? "left" : "inner", // P31 — anything else reads as inner
+      joinType: normalizeJoinType(r.joinType), // P31 — anything unknown reads as inner
     }));
   const droppedRels = relList.length - relationships.length;
   if (droppedRels > 0) issues.push(`Skipped ${droppedRels} relationship(s) that referenced missing tables or had an unknown cardinality.`);

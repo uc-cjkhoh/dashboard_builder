@@ -14,7 +14,7 @@ public sealed record TableRef(string Db, string Table);
 public sealed record ColumnRef(string Db, string Table, string Column, string? DatePart = null, ExprNode? Calc = null, string? Cast = null);
 
 /// <summary>A join edge: <c>left.column = right.column</c>. <c>Left</c> must already be in the query.</summary>
-/// <summary>P31: <see cref="Type"/> is "inner" (default) or "left" — a whitelisted keyword, never user text.</summary>
+/// <summary>P31: <see cref="Type"/> is "inner" (default), "left", "right" or "full" — a whitelisted keyword, never user text.</summary>
 public sealed record JoinRef(ColumnRef Left, ColumnRef Right, string? Type = null);
 
 /// <summary>A measure column + its aggregation. When <see cref="Calc"/> is set (calculated measure) the

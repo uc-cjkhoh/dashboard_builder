@@ -770,11 +770,17 @@ public sealed class ClickHouseGateway
             .Append(Identifier.QualifiedName(req.From.Db, req.From.Table)).Append(" AS t0");
         // P33: in approximate mode a base table with a sampling key is read as a 10% sample; counts and sums
         // are scaled back by its _sample_factor below.
-        var sampled = sample && await HasSamplingKeyAsync(info, req.From.Db, req.From.Table, ct);
+        // T02-12/13: a right or full join can produce rows with no base-table row, which a base sample + its scale factor
+        // can't represent — those views are read exactly (the result's approx note then reports no sample).
+        var joinTypes = (req.Joins ?? []).Select(j => j.Type).ToList();
+        var anyBeyondInner = joinTypes.Any(IsOuter);
+        if (NullsUnavailable(joinTypes, info))
+            throw new RequestValidationException("Right and full joins need the server to accept the join_use_nulls setting — this connection's profile refuses settings.", "joins");
+        var sampled = sample && CanSample(joinTypes) && await HasSamplingKeyAsync(info, req.From.Db, req.From.Table, ct);
         if (sampled) from.Append(" SAMPLE ").Append(SampleFraction.ToString(CultureInfo.InvariantCulture));
 
         var next = 1;
-        var anyLeft = false; // P31
+        var anyLeft = anyBeyondInner; // P31/T02-12: any outer join asks the server for NULLs (join_use_nulls)
         foreach (var j in req.Joins ?? [])
         {
             if (!aliases.ContainsKey(Key(j.Left.Db, j.Left.Table)))
@@ -789,8 +795,7 @@ public sealed class ClickHouseGateway
             {
                 rightAlias = $"t{next++}";
                 aliases[rightKey] = rightAlias;
-                if (j.Type == "left") anyLeft = true;
-                from.Append(j.Type == "left" ? " LEFT JOIN " : " INNER JOIN ").Append(Identifier.QualifiedName(j.Right.Db, j.Right.Table))
+                from.Append(JoinKeyword(j.Type)).Append(Identifier.QualifiedName(j.Right.Db, j.Right.Table))
                     .Append(" AS ").Append(rightAlias)
                     .Append(" ON ").Append(leftExpr).Append(" = ")
                     .Append(rightAlias).Append('.').Append(Identifier.Quote(j.Right.Column));
@@ -1050,6 +1055,19 @@ public sealed class ClickHouseGateway
         catch { await conn.DisposeAsync(); http.Dispose(); throw; }
         return new OpenConnection(conn, http);
     }
+
+    /// <summary>The whitelisted JOIN keyword for a validated join type (null/inner/left/right/full) — never user text.</summary>
+    internal static string JoinKeyword(string? type) => type switch
+    {
+        "left" => " LEFT JOIN ", "right" => " RIGHT JOIN ", "full" => " FULL JOIN ", _ => " INNER JOIN ",
+    };
+    /// <summary>A join that can leave one side unmatched (left, right, full).</summary>
+    internal static bool IsOuter(string? type) => type is "left" or "right" or "full";
+    /// <summary>Only inner and left joins keep every result row tied to a base-table row, which sampling needs.</summary>
+    internal static bool CanSample(IEnumerable<string?> types) => !types.Any(t => t is "right" or "full");
+    /// <summary>Right/full joins give wrong keys without join_use_nulls (unmatched sides read as 0 / ''), so they need the setting.</summary>
+    internal static bool NullsUnavailable(IEnumerable<string?> types, ClickHouseConnectionInfo info) =>
+        info.Guards == QueryGuards.None && types.Any(t => t is "right" or "full");
 
     /// <summary>P31: a left join's unmatched side reads as NULL (ClickHouse's default is the type's zero / ""),
     /// unless the server refuses settings (then the defaults show).</summary>

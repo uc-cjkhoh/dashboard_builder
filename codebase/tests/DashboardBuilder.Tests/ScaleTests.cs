@@ -146,15 +146,31 @@ public class JoinTypeTests
 {
     private static QueryRequest Q(string? type) => new(new TableRef("db", "a"),
         [new JoinRef(new ColumnRef("db", "a", "id"), new ColumnRef("db", "b", "a_id"), type)], null, null, null, null, null, null);
-    [Theory] [InlineData(null)] [InlineData("inner")] [InlineData("left")]
-    public void Inner_and_left_are_accepted(string? t) => RequestRules.ValidateQuery(Q(t));
-    [Theory] [InlineData("right")] [InlineData("LEFT")] [InlineData("left; DROP TABLE x")] [InlineData("cross")]
+    [Theory] [InlineData(null)] [InlineData("inner")] [InlineData("left")] [InlineData("right")] [InlineData("full")]
+    public void Join_types_are_accepted(string? t) => RequestRules.ValidateQuery(Q(t));
+    [Theory] [InlineData("RIGHT")] [InlineData("LEFT")] [InlineData("full outer")] [InlineData("left; DROP TABLE x")] [InlineData("cross")]
     public void Anything_else_is_rejected(string t) => Assert.Equal("joins[0].type", Assert.Throws<RequestValidationException>(() => RequestRules.ValidateQuery(Q(t))).Field);
+    [Theory] [InlineData(null, " INNER JOIN ")] [InlineData("inner", " INNER JOIN ")] [InlineData("left", " LEFT JOIN ")]
+    [InlineData("right", " RIGHT JOIN ")] [InlineData("full", " FULL JOIN ")]
+    public void Join_keyword_is_a_whitelisted_literal(string? t, string kw) => Assert.Equal(kw, ClickHouseGateway.JoinKeyword(t));
+    [Theory] [InlineData(null, false)] [InlineData("inner", false)] [InlineData("left", true)] [InlineData("right", true)] [InlineData("full", true)]
+    public void Outer_joins_need_nulls(string? t, bool outer) => Assert.Equal(outer, ClickHouseGateway.IsOuter(t));
+    [Theory] [InlineData("right")] [InlineData("full")]
+    public void Right_and_full_joins_refuse_a_top_n_filter(string t)
+    {
+        var q = Q(t) with { Filters = [new QueryFilter("db", "a", "id", "top", "5", null, new MeasureRef("db", "a", "id", "count"))] };
+        Assert.Equal("filters[0]", Assert.Throws<RequestValidationException>(() => RequestRules.ValidateQuery(q)).Field);
+        RequestRules.ValidateQuery(q with { Joins = [q.Joins![0] with { Type = "left" }] }); // left still allows it
+    }
+    [Fact] public void Right_and_full_joins_do_not_sample() { Assert.True(ClickHouseGateway.CanSample(["inner", "left", null])); Assert.False(ClickHouseGateway.CanSample(["left", "full"])); Assert.False(ClickHouseGateway.CanSample(["right"])); }
     [Fact] public void Left_joins_ask_for_nulls_unless_settings_are_refused()
     {
         var info = new ClickHouseConnectionInfo("h", 8443, "u", "p", true, false);
         Assert.Equal(" SETTINGS join_use_nulls = 1", ClickHouseGateway.Settings(true, info));
         Assert.Equal("", ClickHouseGateway.Settings(false, info));
         Assert.Equal("", ClickHouseGateway.Settings(true, info with { Guards = QueryGuards.None }));
+        Assert.True(ClickHouseGateway.NullsUnavailable(["full"], info with { Guards = QueryGuards.None }));
+        Assert.False(ClickHouseGateway.NullsUnavailable(["left"], info with { Guards = QueryGuards.None }));
+        Assert.False(ClickHouseGateway.NullsUnavailable(["full"], info));
     }
 }

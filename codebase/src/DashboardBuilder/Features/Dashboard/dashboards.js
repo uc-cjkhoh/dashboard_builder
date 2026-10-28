@@ -25,6 +25,7 @@ import { CALC_CHOICES, ALONG_CHOICES, WINDOW_CHOICES, applyTableCalcs, isCalc, c
 import { tooltipCatalog, tooltipHtml, lookupFrom, checkTooltipText, parseTooltip } from "./tooltip-model.js";
 import { SWATCHES, memberKey, fieldColorKey, setMemberColor, clearFieldColors, colourOf, colorsByName } from "./colour-model.js";
 import { createHistory } from "./history.js";
+import { planJoinType } from "../Relations/relation-rules.js";
 import { catalogFromEntities } from "../Calc/calc-resolve.js";
 import { isCalcPill, calcPillId, sameCalcPill, makeCalcPill, refusal, pillSlots, syncCalcPills, clearCalcPills, clearFilterCalc, usesCalc, CALC_AGGS } from "../Calc/calc-pill.js";
 import { openCalcDialog } from "../Calc/calc-dialog.js";
@@ -2796,7 +2797,7 @@ export function initDashboards() {
       if (!path) return null;
       for (const edge of path) {
         if (!included.has(edge.to.key)) {
-          joins.push({ left: col(edge.from), right: col(edge.to), ...(edge.type === "left" ? { type: "left" } : {}) }); // P31
+          joins.push({ left: col(edge.from), right: col(edge.to), ...(edge.type !== "inner" ? { type: edge.type } : {}) }); // P31 / T02-12
           included.add(edge.to.key);
         }
       }
@@ -2805,9 +2806,9 @@ export function initDashboards() {
   }
   function relationshipGraph() {
     const g = new Map();
-    const link = (a, b) => {
+    const link = (a, b, forward) => {
       if (!g.has(a.key)) g.set(a.key, []);
-      g.get(a.key).push({ from: a, to: b, type });
+      g.get(a.key).push({ from: a, to: b, type: planJoinType(type, forward) }); // T02-12: FROM is the left side
     };
     let type = "inner";
     for (const rel of relationships.values()) {
@@ -2816,8 +2817,8 @@ export function initDashboards() {
       const a = { key: keyOf(fe.db, fe.table), db: fe.db, table: fe.table, column: rel.from.column };
       const b = { key: keyOf(te.db, te.table), db: te.db, table: te.table, column: rel.to.column };
       if (a.key === b.key) continue;
-      type = rel.joinType === "left" ? "left" : "inner";
-      link(a, b); link(b, a);
+      type = rel.joinType;
+      link(a, b, true); link(b, a, false);
     }
     return g;
   }
