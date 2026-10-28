@@ -48,7 +48,7 @@ export const CHART_NEEDS = Object.freeze({
     need("measures", 1, 1, "Gauge shows one measure — use exactly one measure."),
     need("dims", 0, 0, "Gauge shows a single value — remove the dimensions (or use Bullet to compare categories).")]),
   bullet: Object.freeze([
-    need("measures", 1, 1, "Bullet compares one measure with a target — use exactly one measure."),
+    need("measures", 1, 2, "Bullet compares one measure with a target — use one measure, plus an optional second measure as its target."),
     need("dims", 0, 1, "Bullet takes at most one dimension (one bar per member).")]),
   sankey: Object.freeze([
     need("dims", 2, 2, "Sankey draws flows between two dimensions — put one on Columns and one on Rows."),

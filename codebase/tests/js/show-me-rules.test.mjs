@@ -46,7 +46,7 @@ function legacyChartIssue(type, dimCount, measureCount) {
       if (dimCount !== 0) return "Gauge shows a single value — remove the dimensions (or use Bullet to compare categories).";
       return null;
     case "bullet":
-      if (measureCount !== 1) return "Bullet compares one measure with a target — use exactly one measure.";
+      if (measureCount < 1 || measureCount > 2) return "Bullet compares one measure with a target — use one measure, plus an optional second measure as its target.";
       if (dimCount > 1) return "Bullet takes at most one dimension (one bar per member).";
       return null;
     case "sankey":

@@ -2,6 +2,9 @@ import { makeValueFormatter } from "../Core/format.js";
 import { pickInk } from "./contrast.js";
 import { orderedPalette, rampStops } from "./colour-model.js";
 import { tooltipHtml } from "./tooltip-model.js";
+import { lineStep } from "./line-style-model.js";
+import { circleSize, circleCells, HEATMAP_GUTTER } from "./heatmap-model.js";
+import { bandsFor } from "./bullet-model.js";
 import { chartFit, markCount, applyFitMode, FIT } from "./chart-fit.js";
 
 // Charting adapter (P9; formatting P10). Renders worksheet results through the self-hosted ECharts library
@@ -437,13 +440,14 @@ function buildCartesian({ type, categories, series, format = {}, orientation = "
     yAxis,
   };
 
+  const step = lineStep(format.lineStyle); // T03-05: false | "end" | "middle"
   base.series = series.map((s, i) => {
     // A comparison series wears its measure's colour, faded and dashed (line) or muted (bar).
     if (s.compare) {
       const color = colorFor(i - mainCount);
       const asLine = type === "line" || type === "area";
       return asLine
-        ? { name: s.name, type: "line", data: s.data, showSymbol: false, z: 1,
+        ? { name: s.name, type: "line", step, data: s.data, showSymbol: false, z: 1,
             lineStyle: { width: 2, type: "dashed", color, opacity: 0.7 }, itemStyle: { color, opacity: 0.7 }, emphasis: { focus: "series" } }
         : { name: s.name, type: "bar", data: s.data, barMaxWidth: 40,
             // Hatched as well as faded, so it reads as "the other period" without relying on colour.
@@ -456,7 +460,7 @@ function buildCartesian({ type, categories, series, format = {}, orientation = "
     const asLine = type === "line" || type === "area" || (isCombo && i >= 1);
     if (asLine) {
       return {
-        name: s.name, type: "line",
+        name: s.name, type: "line", step,
         yAxisIndex: isCombo ? 1 : 0,
         data: s.data,
         showSymbol: s.data.length <= 60,     // dots only when they won't crowd
@@ -678,6 +682,7 @@ function buildScatterShapes({ groups, xName, yName, hasSize, sizeName, format = 
 function buildHeatmap({ xCats, yCats, cells, format = {} }) {
   const c = tokens();
   const fmtVal = makeValueFormatter(format);
+  const circles = format.heatmapShape === "circle"; // T03-10
   const vals = cells.map((d) => d[2]).filter((v) => v != null);
   const min = vals.length ? Math.min(...vals) : 0;
   const max = vals.length ? Math.max(...vals) : 1;
@@ -693,26 +698,37 @@ function buildHeatmap({ xCats, yCats, cells, format = {} }) {
     },
     grid: { left: 6, right: 12, top: 12, bottom: 60, containLabel: true },
     xAxis: {
-      type: "category", data: xCats, splitArea: { show: true },
+      type: "category", data: xCats, splitArea: { show: !circles },
       axisLine: { lineStyle: { color: c.axis } }, axisTick: { show: false },
       axisLabel: { color: c.muted, hideOverlap: true },
     },
     yAxis: {
-      type: "category", data: yCats, splitArea: { show: true },
+      type: "category", data: yCats, splitArea: { show: !circles },
       axisLine: { lineStyle: { color: c.axis } }, axisTick: { show: false },
       axisLabel: { color: c.muted },
     },
     visualMap: {
-      min, max, calculable: true, orient: "horizontal", left: "center", bottom: 6,
+      min, max, calculable: true, dimension: 2, orient: "horizontal", left: "center", bottom: 6,
       inRange: { color: c.ramp },   // single-hue sequential (soft → saturated), tokens
       textStyle: { color: c.muted, fontFamily: c.font }, formatter: (v) => fmtVal(v),
     },
-    series: [{
-      type: "heatmap", data: cells,
-      label: { show: !!format.dataLabels, color: c.ink, fontFamily: c.font, formatter: (p) => fmtVal(p.value[2]) },
-      itemStyle: { borderColor: c.surface, borderWidth: 1 },
-      emphasis: { itemStyle: { shadowBlur: 8, shadowColor: "rgba(0,0,0,0.25)" } },
-    }],
+    series: [circles
+      // T03-10: circles = scatter marks on the same category grid, sized by the cell, coloured by the
+      // value through the same visualMap (dimension 2); the value label sits inside each circle.
+      ? {
+        // Empty cells draw nothing; the size is re-read from the live chart on every draw, so it follows the pane.
+        type: "scatter", data: circleCells(cells), symbol: "circle",
+        symbolSize: () => circleSize((instance?.getWidth() ?? 800) - HEATMAP_GUTTER.x, (instance?.getHeight() ?? 450) - HEATMAP_GUTTER.y, xCats.length, yCats.length),
+        label: { show: !!format.dataLabels, color: c.ink, fontFamily: c.font, formatter: (p) => fmtVal(p.value[2]) },
+        itemStyle: { opacity: 1, borderColor: c.surface, borderWidth: 1 },
+        emphasis: { itemStyle: { borderColor: c.ink, borderWidth: 2 } },
+      }
+      : {
+        type: "heatmap", data: cells,
+        label: { show: !!format.dataLabels, color: c.ink, fontFamily: c.font, formatter: (p) => fmtVal(p.value[2]) },
+        itemStyle: { borderColor: c.surface, borderWidth: 1 },
+        emphasis: { itemStyle: { shadowBlur: 8, shadowColor: "rgba(0,0,0,0.25)" } },
+      }],
   };
 }
 
@@ -947,28 +963,28 @@ function buildGauge({ value, name, target, format = {} }) {
 
 // bullet — per category, the actual value (a dark bar) over three bands (< 50 %, 50–75 %, 75–100 % of
 // target) with the target as a tick. Horizontal, first category on top.
-function buildBullet({ categories, values, target, name, format = {} }) {
+function buildBullet({ categories, values, target, targets, name, format = {} }) {
   const c = tokens();
   const fmtVal = makeValueFormatter(format);
-  const t = Number(target);
   const cats = categories ?? [];
   const vals = (values ?? []).map((v) => Number(v) || 0);
-  const max = niceMax(Math.max(t * 1.1, ...vals));
-  const band = (from, to) => cats.map(() => t * (to - from));
+  const ts = targets ?? cats.map(() => Number(target)); // T03-12: one target per category, or the fixed one
+  const max = niceMax(Math.max(...ts.map((t) => (t ?? 0) * 1.1), ...vals, 1e-9));
   const bands = [["Below 50% of target", 0, 0.5, 0.12], ["50–75%", 0.5, 0.75, 0.22], ["75–100%", 0.75, 1, 0.32]];
+  const pctText = (i) => (ts[i] ? ` (${((vals[i] / ts[i]) * 100).toFixed(0)}%)` : "");
   return {
     textStyle: { fontFamily: c.font, color: c.label },
     legend: { top: 0, left: "center", textStyle: { color: c.label, fontFamily: c.font }, data: [name, "Target", ...bands.map((b) => b[0])] },
     grid: { left: 6, right: 24, top: 36, bottom: 6, containLabel: true },
     tooltip: { trigger: "axis", axisPointer: { type: "shadow" }, ...tipBox(c),
-      formatter: (p) => { const i = (Array.isArray(p) ? p[0] : p).dataIndex; return `<span style="color:${c.muted}">${escapeHtml(String(cats[i] ?? ""))}</span><br><b>${escapeHtml(String(name))}:</b> ${fmtVal(vals[i])}<br><b>Target:</b> ${fmtVal(t)} (${((vals[i] / t) * 100).toFixed(0)}%)`; } },
+      formatter: (p) => { const i = (Array.isArray(p) ? p[0] : p).dataIndex; return `<span style="color:${c.muted}">${escapeHtml(String(cats[i] ?? ""))}</span><br><b>${escapeHtml(String(name))}:</b> ${fmtVal(vals[i])}<br><b>Target:</b> ${ts[i] == null ? "—" : fmtVal(ts[i])}${pctText(i)}`; } },
     xAxis: valueAxis(c, fmtVal, { max }),
     yAxis: catAxis(c, cats, { inverse: true }),
     series: [
       ...bands.map(([label, from, to, op]) => ({ type: "bar", name: label, stack: "bands", silent: true, barWidth: "60%",
-        data: band(from, to), itemStyle: { color: c.muted, opacity: op } })),
+        data: bandsFor(ts, from, to), itemStyle: { color: c.muted, opacity: op } })),
       { type: "bar", name, data: vals, barWidth: "24%", barGap: "-70%", z: 3, itemStyle: { color: c.ink } },
-      { type: "scatter", name: "Target", data: cats.map((_, i) => [t, i]), symbol: "rect", symbolSize: [3, 26], z: 4,
+      { type: "scatter", name: "Target", data: cats.map((_, i) => (ts[i] == null ? null : [ts[i], i])), symbol: "rect", symbolSize: [3, 26], z: 4,
         itemStyle: { color: c.series } },
     ],
   };
