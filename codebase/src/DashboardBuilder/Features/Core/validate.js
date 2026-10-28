@@ -23,6 +23,7 @@ export const LIMITS = Object.freeze({
   tooltipText: 300,  // characters in a sheet's tooltip template (T01-19; client-side only, the server never sees it)
   memberColors: 100,      // coloured members per field (T01-20; client-side only)
   memberColorFields: 20,  // fields with member colours per sheet
+  memberField: 200,       // characters in a coloured field's key (table.column)
   memberKey: 100,         // characters in a coloured member's key
   calcName: 60,      // characters in a calculation's name / label (server CalcLimits.MaxName)
 });

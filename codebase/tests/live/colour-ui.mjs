@@ -163,6 +163,16 @@ try {
     await settle(400);
     must(!(await fills()).includes('#000000'), 'reset restored the palette colour');
   });
+  await check('Reset all for this field clears every stored member colour', async () => {
+    const sw = (i, k) => `document.querySelectorAll('.ws-memcol__row')[${i}].querySelectorAll('.ws-memcol__swatch')[${k}].click()`;
+    await ev(sw(0, 15)); await settle(400); await ev(sw(2, 15)); await settle(400);
+    must((await fills()).filter((f) => f === '#000000').length >= 2, 'black slices');
+    must((await ev(`document.querySelector('.ws-memcol__clear').textContent`)).includes('(2)'), 'count shown');
+    await ev(`document.querySelector('.ws-memcol__clear').click()`);
+    await settle(400);
+    must(!(await fills()).includes('#000000'), 'all reset');
+    must(await ev(`document.querySelector('.ws-memcol__clear').disabled`), 'button disabled when nothing stored');
+  });
   await check('Reverse palette reverses the slice colours', async () => {
     const a = await fills();
     await ev(`[...document.querySelectorAll('.ws-fmt-check, label')].find((l) => l.textContent.includes('Reverse palette')).querySelector('input').click()`);

@@ -23,7 +23,7 @@ import { templateError, buildActionUrl, MAX_LABEL, MAX_TEMPLATE } from "./action
 import { DATE_PART_CHOICES, isGroupingPart, stepPart, labelParts } from "./date-parts.js";
 import { CALC_CHOICES, ALONG_CHOICES, WINDOW_CHOICES, applyTableCalcs, isCalc, calcName } from "./table-calc.js";
 import { tooltipCatalog, tooltipHtml, lookupFrom, checkTooltipText, parseTooltip } from "./tooltip-model.js";
-import { SWATCHES, memberKey, fieldColorKey, setMemberColor, colorsByName } from "./colour-model.js";
+import { SWATCHES, memberKey, fieldColorKey, setMemberColor, clearFieldColors, colourOf, colorsByName } from "./colour-model.js";
 import { createHistory } from "./history.js";
 import { catalogFromEntities } from "../Calc/calc-resolve.js";
 import { isCalcPill, calcPillId, sameCalcPill, makeCalcPill, refusal, pillSlots, syncCalcPills, clearCalcPills, clearFilterCalc, usesCalc, CALC_AGGS } from "../Calc/calc-pill.js";
@@ -2218,7 +2218,8 @@ export function initDashboards() {
     const draw = () => {
       if (!box.isConnected && body.childElementCount) return;
       const st = memberState.sheet === s ? memberState : { field: null, members: [] };
-      const colours = s.memberColors?.[st.field ? fieldColorKey(st.field) : ""] ?? {};
+      const fieldKey = st.field ? fieldColorKey(st.field) : "";
+      const colours = Object.prototype.hasOwnProperty.call(s.memberColors ?? {}, fieldKey) ? s.memberColors[fieldKey] : {};
       head.textContent = `${memberOpen ? "Hide" : "Edit"} member colours`;
       head.setAttribute("aria-expanded", String(memberOpen));
       head.disabled = !st.field;
@@ -2232,7 +2233,7 @@ export function initDashboards() {
         s.memberColors = r.value; commit(dash, s);
       };
       for (const m of st.members.slice(0, LIMITS.memberColors)) {
-        const cur = colours[memberKey(m.raw)];
+        const cur = colourOf(colours, memberKey(m.raw));
         const row = el("div", "ws-memcol__row");
         const dot = el("span", "ws-memcol__dot"); dot.dataset.colour = cur ?? "";
         if (cur) dot.style.backgroundColor = cur;
@@ -2250,6 +2251,11 @@ export function initDashboards() {
         row.append(sw, reset);
         body.append(row);
       }
+      const stored = Object.keys(colours).length;
+      const clearAll = el("button", "btn btn--ghost ws-memcol__clear", `Reset all for this field (${stored})`); clearAll.type = "button"; clearAll.disabled = !stored;
+      clearAll.title = "Also removes colours of members that are no longer in the view";
+      clearAll.addEventListener("click", () => { s.memberColors = clearFieldColors(s.memberColors, fieldKey).value; commit(dash, s); });
+      body.append(clearAll);
       if (st.members.length > LIMITS.memberColors) body.append(el("p", "ws-memcol__note", `Only the first ${LIMITS.memberColors} members can be coloured.`));
     };
     head.addEventListener("click", () => { memberOpen = !memberOpen; draw(); });

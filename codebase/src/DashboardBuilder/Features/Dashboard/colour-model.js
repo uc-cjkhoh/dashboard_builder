@@ -5,6 +5,7 @@
 // categorical order and the continuous ramp.
 import { LIMITS } from "../Core/validate.js";
 
+
 const HEX = /^#[0-9a-f]{6}$/i;
 const NULL_KEY = "\u0000null";
 /** Fixed swatches the picker offers — the three workbook palettes' light colours, de-duplicated. */
@@ -20,21 +21,33 @@ export const memberKey = (raw) => (raw == null ? NULL_KEY : String(raw));
 export const fieldColorKey = (f) => `${f.table}.${f.column}`;
 
 const isPlain = (o) => o && typeof o === "object" && !Array.isArray(o);
+const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+/** A map with no prototype, so member names like "constructor" or "__proto__" are ordinary keys. */
+const bare = (entries = {}) => Object.assign(Object.create(null), entries);
+/** The stored colour of one member in a field's map (own keys only), or undefined. */
+export const colourOf = (fieldMap, member) => (isPlain(fieldMap) && has(fieldMap, member) && HEX.test(fieldMap[member]) ? fieldMap[member] : undefined);
 
 /** Set (hex) or clear (null) one member's colour: { ok, value } with a new map, or { ok:false, error }. */
 export function setMemberColor(map, field, member, hex) {
-  const next = {};
-  for (const [f, m] of Object.entries(map ?? {})) next[f] = { ...m };
+  const next = bare();
+  for (const [f, m] of Object.entries(map ?? {})) next[f] = bare(m);
   if (hex == null) {
     if (next[field]) { delete next[field][member]; if (!Object.keys(next[field]).length) delete next[field]; }
     return { ok: true, value: next };
   }
   if (!HEX.test(hex)) return { ok: false, error: "Enter a colour as #rrggbb." };
   if (member.length > LIMITS.memberKey) return { ok: false, error: `A member name must be at most ${LIMITS.memberKey} characters to be coloured.` };
-  const cur = next[field] ?? {};
-  if (!(member in cur) && Object.keys(cur).length >= LIMITS.memberColors) return { ok: false, error: `At most ${LIMITS.memberColors} members per field can have a colour.` };
-  if (!(field in next) && Object.keys(next).length >= LIMITS.memberColorFields) return { ok: false, error: `At most ${LIMITS.memberColorFields} fields can have member colours.` };
-  next[field] = { ...cur, [member]: hex.toLowerCase() };
+  const cur = has(next, field) ? next[field] : bare();
+  if (!has(cur, member) && Object.keys(cur).length >= LIMITS.memberColors) return { ok: false, error: `At most ${LIMITS.memberColors} members per field can have a colour.` };
+  if (!has(next, field) && Object.keys(next).length >= LIMITS.memberColorFields) return { ok: false, error: `At most ${LIMITS.memberColorFields} fields can have member colours.` };
+  next[field] = bare({ ...cur, [member]: hex.toLowerCase() });
+  return { ok: true, value: next };
+}
+
+/** Remove every colour of one field: { ok, value } with a new map. */
+export function clearFieldColors(map, field) {
+  const next = bare();
+  for (const [f, m] of Object.entries(map ?? {})) if (f !== field) next[f] = bare(m);
   return { ok: true, value: next };
 }
 
@@ -42,14 +55,15 @@ export function setMemberColor(map, field, member, hex) {
 export function cleanMemberColors(raw, where, issues) {
   if (raw == null) return {};
   if (!isPlain(raw)) { issues.push(`${where}: member colours weren't an object — cleared.`); return {}; }
-  const out = {};
+  const out = bare();
   let dropped = 0;
-  for (const [field, members] of Object.entries(raw)) {
-    if (!isPlain(members) || field.length > 200) { dropped++; continue; }
+  for (const field of Object.keys(raw)) {
+    const members = has(raw, field) ? raw[field] : undefined;
+    if (field === "__proto__" || !isPlain(members) || field.length > LIMITS.memberField) { dropped++; continue; }
     if (Object.keys(out).length >= LIMITS.memberColorFields) { dropped++; continue; }
-    const kept = {};
+    const kept = bare();
     for (const [m, hex] of Object.entries(members)) {
-      if (typeof hex !== "string" || !HEX.test(hex) || m.length > LIMITS.memberKey || Object.keys(kept).length >= LIMITS.memberColors) { dropped++; continue; }
+      if (m === "__proto__" || typeof hex !== "string" || !HEX.test(hex) || m.length > LIMITS.memberKey || Object.keys(kept).length >= LIMITS.memberColors) { dropped++; continue; }
       kept[m] = hex.toLowerCase();
     }
     if (Object.keys(kept).length) out[field] = kept;
@@ -63,8 +77,8 @@ export function colorsByName(fieldMap, members) {
   const out = new Map();
   if (!isPlain(fieldMap)) return out;
   for (const { name, raw } of members ?? []) {
-    const c = fieldMap[memberKey(raw)];
-    if (typeof c === "string" && HEX.test(c)) out.set(name, c);
+    const c = colourOf(fieldMap, memberKey(raw));
+    if (c) out.set(name, c);
   }
   return out;
 }
@@ -74,6 +88,3 @@ export const orderedPalette = (cat, reverse) => (reverse ? [...cat].reverse() : 
 /** The continuous ramp's two stops, low → high (swapped when `reverse`). */
 export const rampStops = (low, high, reverse) => (reverse ? [high, low] : [low, high]);
 
-/** The readable label ink for a (possibly custom) background: whichever candidate contrasts most. */
-export function inkFor(bg, ...inks) { return pickInk(bg, inks); }
-import { pickInk } from "./contrast.js";

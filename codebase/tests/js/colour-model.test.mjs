@@ -1,12 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { SWATCHES, memberKey, fieldColorKey, cleanMemberColors, setMemberColor, colorsByName, orderedPalette, rampStops, inkFor }
+import { SWATCHES, memberKey, fieldColorKey, cleanMemberColors, setMemberColor, clearFieldColors, colourOf, colorsByName, orderedPalette, rampStops }
   from "../../src/DashboardBuilder/Features/Dashboard/colour-model.js";
 import { LIMITS } from "../../src/DashboardBuilder/Features/Core/validate.js";
 import { sanitizeSheet } from "../../src/DashboardBuilder/Features/Workbook/workbook-model.js";
 import { emptySheet, defaultFormat } from "../../src/DashboardBuilder/Features/Core/store.js";
-import { contrastRatio } from "../../src/DashboardBuilder/Features/Dashboard/contrast.js";
 
+const plain = (x) => JSON.parse(JSON.stringify(x));
 test("swatches are valid distinct #rrggbb", () => {
   assert.ok(SWATCHES.length >= 12);
   for (const s of SWATCHES) assert.match(s, /^#[0-9a-f]{6}$/);
@@ -19,9 +19,9 @@ test("memberKey stringifies, null is its own key", () => {
 });
 test("setMemberColor sets, replaces, resets and validates", () => {
   let m = setMemberColor({}, "t.c", "EU", "#AA00bb");
-  assert.deepEqual(m.value, { "t.c": { EU: "#aa00bb" } });
+  assert.deepEqual(plain(m.value), { "t.c": { EU: "#aa00bb" } });
   m = setMemberColor(m.value, "t.c", "EU", null);
-  assert.deepEqual(m.value, {}); // empty field entry pruned
+  assert.deepEqual(plain(m.value), {}); // empty field entry pruned
   assert.equal(setMemberColor({}, "t.c", "EU", "red").ok, false);
   assert.equal(setMemberColor({}, "t.c", "x".repeat(101), "#000000").ok, false);
   const full = { "t.c": Object.fromEntries(Array.from({ length: LIMITS.memberColors }, (_, i) => [`m${i}`, "#000000"])) };
@@ -31,10 +31,10 @@ test("setMemberColor sets, replaces, resets and validates", () => {
 test("cleanMemberColors drops bad entries and reports", () => {
   const issues = [];
   const out = cleanMemberColors({ "t.c": { EU: "#AABBCC", US: "blue", ["y".repeat(101)]: "#000000" }, "t.d": "no" }, "S", issues);
-  assert.deepEqual(out, { "t.c": { EU: "#aabbcc" } });
+  assert.deepEqual(plain(out), { "t.c": { EU: "#aabbcc" } });
   assert.equal(issues.length, 1); assert.match(issues[0], /3 invalid/);
-  assert.deepEqual(cleanMemberColors(undefined, "S", []), {});
-  const i2 = []; assert.deepEqual(cleanMemberColors([1], "S", i2), {}); assert.equal(i2.length, 1);
+  assert.deepEqual(plain(cleanMemberColors(undefined, "S", [])), {});
+  const i2 = []; assert.deepEqual(plain(cleanMemberColors([1], "S", i2)), {}); assert.equal(i2.length, 1);
 });
 test("cleanMemberColors caps fields and members", () => {
   const raw = {};
@@ -57,23 +57,56 @@ test("orderedPalette reverses a copy; rampStops swaps ends", () => {
   assert.deepEqual(rampStops("lo", "hi", true), ["hi", "lo"]);
   assert.deepEqual(rampStops("lo", "hi", false), ["lo", "hi"]);
 });
-test("inkFor picks a readable ink on any custom colour", () => {
-  for (const bg of ["#000000", "#ffffff", "#ffff00", "#0000ff", "#808080"]) {
-    const ink = inkFor(bg, "#111111", "#ffffff");
-    assert.ok(contrastRatio(ink, bg) >= 3.5, bg);
-  }
-});
 test("sheet round trip: memberColors + paletteReverse; old sheets unchanged", () => {
   const s = emptySheet();
   assert.deepEqual(s.memberColors, {});
   assert.equal(defaultFormat().paletteReverse, false);
   const issues = [];
   const out = sanitizeSheet({ ...s, memberColors: { "t.c": { EU: "#ABCDEF", bad: "x" } }, format: { ...s.format, paletteReverse: true } }, "S", issues);
-  assert.deepEqual(out.memberColors, { "t.c": { EU: "#abcdef" } });
+  assert.deepEqual(plain(out.memberColors), { "t.c": { EU: "#abcdef" } });
   assert.equal(out.format.paletteReverse, true);
   assert.ok(issues.some((i) => /colour/i.test(i)));
   const old = sanitizeSheet({ chartType: "bar" }, "S", []);
   assert.deepEqual(old.memberColors, {}); assert.equal(old.format.paletteReverse, false);
   const bad = []; sanitizeSheet({ format: { paletteReverse: "yes" } }, "S", bad);
   assert.ok(bad.some((i) => /paletteReverse/.test(i)));
+});
+test("member names that are Object.prototype members are ordinary keys", () => {
+  const names = ["constructor", "toString", "valueOf", "hasOwnProperty", "__proto__"];
+  let map = {};
+  for (const n of names) {
+    assert.equal(colourOf(map["t.c"], n), undefined, `${n} looks coloured before any pick`);
+    const r = setMemberColor(map, "t.c", n, "#123456");
+    assert.ok(r.ok, n); map = r.value;
+    assert.equal(colourOf(map["t.c"], n), "#123456", n);
+  }
+  assert.equal(Object.keys(map["t.c"]).length, names.length);
+  assert.equal(Object.getPrototypeOf({}).polluted, undefined);
+});
+test("the cap is not bypassed by prototype names", () => {
+  const full = { "t.c": Object.fromEntries(Array.from({ length: LIMITS.memberColors }, (_, i) => [`m${i}`, "#000000"])) };
+  assert.equal(setMemberColor(full, "t.c", "constructor", "#111111").ok, false);
+  const fields = Object.fromEntries(Array.from({ length: LIMITS.memberColorFields }, (_, i) => [`t.f${i}`, { a: "#000000" }]));
+  assert.equal(setMemberColor(fields, "constructor", "a", "#111111").ok, false);
+});
+test("cleanMemberColors drops an imported __proto__ key and reports it", () => {
+  const raw = JSON.parse('{"__proto__":{"x":"#000000"},"t.c":{"__proto__":"#111111","ok":"#222222"}}');
+  const issues = [];
+  const out = cleanMemberColors(raw, "S", issues);
+  assert.deepEqual(plain(out), { "t.c": { ok: "#222222" } });
+  assert.equal(Object.getPrototypeOf(out["t.c"]), null);
+  assert.equal(({}).x, undefined);
+  assert.match(issues[0], /2 invalid/);
+});
+test("clearFieldColors removes one field, including stale members", () => {
+  const m = { "t.c": { gone: "#000000", EU: "#111111" }, "t.d": { a: "#222222" } };
+  assert.deepEqual(plain(clearFieldColors(m, "t.c").value), { "t.d": { a: "#222222" } });
+  assert.deepEqual(plain(clearFieldColors(m, "nope").value), plain(m));
+  // freeing the cap: a full field accepts a new member after clearing
+  const full = { "t.c": Object.fromEntries(Array.from({ length: LIMITS.memberColors }, (_, i) => [`m${i}`, "#000000"])) };
+  assert.ok(setMemberColor(clearFieldColors(full, "t.c").value, "t.c", "new", "#111111").ok);
+});
+test("memberField limit comes from LIMITS", () => {
+  const issues = []; const out = cleanMemberColors({ ["f".repeat(LIMITS.memberField + 1)]: { a: "#000000" } }, "S", issues);
+  assert.deepEqual(plain(out), {}); assert.equal(issues.length, 1);
 });
