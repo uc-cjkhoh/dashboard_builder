@@ -92,6 +92,7 @@ internal static class CalcSql
     /// <summary>A calculated dimension groups by its row-level expression (E4); an aggregate tree there is a 400.</summary>
     internal static string CalcDimensionSql(CompiledCalc c, string field) => c.Info.IsAggregate
         ? throw new RequestValidationException("A dimension can't contain an aggregate. Put it in a measure instead.", field + ".calc")
+        : c.Info.Type == CalcType.Boolean ? $"toString({c.Sql})" // a calculated true/false group reads "true"/"false"; a plain Bool field keeps its own spelling
         : c.Sql;
 
     /// <summary>The name a calculated dimension or measure has in the result: its label, or "calculation".</summary>
