@@ -3,8 +3,8 @@
 // messages, the same error paths, the same check order. The shared fixture tests/fixtures/calc-cases.json is
 // the contract — change one side and the other in the same commit.
 
-/** Calculation limits (`count`: largest LEFT/RIGHT length or SPLIT position; `separator`: longest SPLIT separator; `concat`: most CONCAT arguments); mirrored in ClickHouse/Calc/CalcLimits (and the workbook ones in Core/validate.js LIMITS). */
-export const CALC_LIMITS = Object.freeze({ formula: 500, depth: 12, nodes: 200, calcs: 20, name: 60, string: 100, count: 1000, separator: 20, concat: 10 });
+/** Calculation limits (`count`: largest LEFT/RIGHT length or SPLIT position; `separator`: longest SPLIT separator; `concat`: most CONCAT arguments; `dateAmount`: largest DATEADD amount, either sign); mirrored in ClickHouse/Calc/CalcLimits (and the workbook ones in Core/validate.js LIMITS). */
+export const CALC_LIMITS = Object.freeze({ formula: 500, depth: 12, nodes: 200, calcs: 20, name: 60, string: 100, count: 1000, separator: 20, concat: 10, dateAmount: 100000 });
 
 const NUMBER_ONLY = ["number"];
 const ORDERABLE = ["number", "date", "text"];
@@ -26,9 +26,13 @@ export const FUNCTIONS = Object.freeze({
   attr: { accepts: ANYTHING, result: null },
 });
 
-/** The row-level text functions (wire node `{ k: "fn", fn, args }`). `args` are kinds in order: `text` (any text expression),
+/** The units DATEDIFF and DATEADD take, written as a text literal (any case). Twin of CalcCatalog.DateUnits. */
+export const DATE_UNITS = Object.freeze(["year", "quarter", "month", "week", "day", "hour", "minute", "second"]);
+
+/** The row-level text and date functions (wire node `{ k: "fn", fn, args }`). `args` are kinds in order: `text` (any text expression),
  *  `length` (a whole-number literal 0..count), `position` (a whole-number literal 1..count), `separator` (a non-empty text
- *  literal, at most `separator` characters). `max` above `args.length` repeats the last kind (CONCAT). Twin of CalcCatalog.RowFunctions. */
+ *  literal, at most `separator` characters); the date kinds: `date` (a date expression), `unit` (a DATE_UNITS text literal),
+ *  `amount` (a whole-number literal, either sign, at most `dateAmount`). `max` above `args.length` repeats the last kind (CONCAT). Twin of CalcCatalog.RowFunctions. */
 export const ROW_FUNCTIONS = Object.freeze({
   lower: { args: ["text"], result: "text" },
   upper: { args: ["text"], result: "text" },
@@ -42,6 +46,15 @@ export const ROW_FUNCTIONS = Object.freeze({
   startswith: { args: ["text", "text"], result: "boolean" },
   endswith: { args: ["text", "text"], result: "boolean" },
   split: { args: ["text", "separator", "position"], result: "text" },
+  datediff: { args: ["unit", "date", "date"], result: "number" },
+  dateadd: { args: ["unit", "amount", "date"], result: "date" },
+  year: { args: ["date"], result: "number" },
+  month: { args: ["date"], result: "number" },
+  day: { args: ["date"], result: "number" },
+  quarter: { args: ["date"], result: "number" },
+  week: { args: ["date"], result: "number" },
+  weekday: { args: ["date"], result: "number" },
+  date: { args: ["text"], result: "date" },
 });
 
 // Catalog category (ClickHouseType) -> calculation type; any other category can't be used.
@@ -191,6 +204,17 @@ function typeOf(node, path, categoryOf) {
             throw new CalcError(kind === "length"
               ? `${upper}'s length must be a whole number from 0 to ${CALC_LIMITS.count} written in the formula.`
               : `${upper}'s position must be a whole number from 1 to ${CALC_LIMITS.count} written in the formula.`, ap);
+          }
+        } else if (kind === "date") {
+          if (t.type !== "date") throw new CalcError(`${upper} needs a date — ${t.name} is ${t.type}.${t.type === "text" ? " Use DATE() to turn text into a date." : ""}`, ap);
+        } else if (kind === "unit") {
+          if (a.k !== "str" || !DATE_UNITS.includes(a.v.toLowerCase())) {
+            throw new CalcError(`${upper}'s unit must be one of ${DATE_UNITS.slice(0, -1).map((u) => `'${u}'`).join(", ")} or '${DATE_UNITS[DATE_UNITS.length - 1]}' written in the formula as text.`, ap);
+          }
+        } else if (kind === "amount") {
+          const lit = a.k === "un" && a.op === "-" && isNode(a.arg) && a.arg.k === "num" ? -a.arg.v : a.k === "num" ? a.v : NaN;
+          if (!Number.isInteger(lit) || Math.abs(lit) > CALC_LIMITS.dateAmount) {
+            throw new CalcError(`${upper}'s amount must be a whole number from -${CALC_LIMITS.dateAmount} to ${CALC_LIMITS.dateAmount} written in the formula.`, ap);
           }
         } else if (a.k !== "str" || a.v.length < 1 || a.v.length > CALC_LIMITS.separator) {
           throw new CalcError(`${upper}'s separator must be text written in the formula, 1 to ${CALC_LIMITS.separator} characters.`, ap);

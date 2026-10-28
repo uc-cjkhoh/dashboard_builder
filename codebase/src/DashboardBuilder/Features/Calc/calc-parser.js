@@ -14,6 +14,7 @@
 //              | "CASE" [expr] ("WHEN" expr "THEN" expr)+ ["ELSE" expr] "END"
 //   text      := ("LOWER" | "UPPER" | "TRIM" | "LEN" | "LEFT" | "RIGHT" | "REPLACE" | "CONCAT" | "CONTAINS" | "STARTSWITH" | "ENDSWITH" | "SPLIT")
 //                "(" expr ("," expr)* ")"        -- argument count and kinds are checked by check(), not here
+//   date      := ("DATEDIFF" | "DATEADD" | "YEAR" | "MONTH" | "DAY" | "QUARTER" | "WEEK" | "WEEKDAY" | "DATE") "(" expr ("," expr)* ")"   -- same shape as text
 //   string    := "'" text "'"        (a quote inside is doubled: 'it''s')
 //   ref       := "[" name "]"
 //

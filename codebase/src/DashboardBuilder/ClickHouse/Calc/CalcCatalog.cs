@@ -27,6 +27,8 @@ public static class CalcLimits
     public const int MaxSeparator = 20;
     /// <summary>The most arguments <c>CONCAT</c> takes.</summary>
     public const int MaxConcat = 10;
+    /// <summary>The largest whole number (either sign) a <c>DATEADD</c> amount may be.</summary>
+    public const int MaxDateAmount = 100000;
 }
 
 /// <summary>The type of a calculation value.</summary>
@@ -45,8 +47,10 @@ public sealed record AggSpec(IReadOnlyList<string> Accepts, string? Result, bool
 
 /// <summary>What a row-level function argument must be. <c>Text</c>: any text expression. <c>Length</c>: a whole number
 /// literal 0..<see cref="CalcLimits.MaxCount"/>. <c>Position</c>: a whole number literal 1..<see cref="CalcLimits.MaxCount"/>.
-/// <c>Separator</c>: a non-empty text literal of at most <see cref="CalcLimits.MaxSeparator"/> characters.</summary>
-public enum FnArg { Text, Length, Position, Separator }
+/// <c>Separator</c>: a non-empty text literal of at most <see cref="CalcLimits.MaxSeparator"/> characters.
+/// <c>Date</c>: any date expression. <c>Unit</c>: a text literal naming one of <see cref="CalcCatalog.DateUnits"/> (any case).
+/// <c>Amount</c>: a whole-number literal, either sign, at most <see cref="CalcLimits.MaxDateAmount"/>.</summary>
+public enum FnArg { Text, Length, Position, Separator, Date, Unit, Amount }
 
 /// <summary>One row-level function: its arguments in order and its result type. <c>MaxArgs</c> above <c>Args.Count</c> lets
 /// the last argument kind repeat (<c>CONCAT</c>).</summary>
@@ -77,9 +81,12 @@ public static class CalcCatalog
         ["attr"] = new(Anything, null),
     };
 
+    /// <summary>The units <c>DATEDIFF</c> and <c>DATEADD</c> take, in display order. The only unit words that ever reach SQL.</summary>
+    public static readonly IReadOnlyList<string> DateUnits = ["year", "quarter", "month", "week", "day", "hour", "minute", "second"];
+
     private static FnSpec Fn(string result, params FnArg[] args) => new(args, result);
 
-    /// <summary>The row-level text functions (<c>FnNode</c>). Names are the lowercase wire names. Written with <c>Fn(</c>, not <c>new(</c>,
+    /// <summary>The row-level text and date functions (<c>FnNode</c>). Names are the lowercase wire names. Written with <c>Fn(</c>, not <c>new(</c>,
     /// so the aggregate-table check in <c>calc-limits.test.mjs</c> does not mistake them for aggregates.</summary>
     public static readonly IReadOnlyDictionary<string, FnSpec> RowFunctions = new Dictionary<string, FnSpec>(StringComparer.Ordinal)
     {
@@ -95,6 +102,15 @@ public static class CalcCatalog
         ["startswith"] = Fn(CalcType.Boolean, FnArg.Text, FnArg.Text),
         ["endswith"] = Fn(CalcType.Boolean, FnArg.Text, FnArg.Text),
         ["split"] = Fn(CalcType.Text, FnArg.Text, FnArg.Separator, FnArg.Position),
+        ["datediff"] = Fn(CalcType.Number, FnArg.Unit, FnArg.Date, FnArg.Date),
+        ["dateadd"] = Fn(CalcType.Date, FnArg.Unit, FnArg.Amount, FnArg.Date),
+        ["year"] = Fn(CalcType.Number, FnArg.Date),
+        ["month"] = Fn(CalcType.Number, FnArg.Date),
+        ["day"] = Fn(CalcType.Number, FnArg.Date),
+        ["quarter"] = Fn(CalcType.Number, FnArg.Date),
+        ["week"] = Fn(CalcType.Number, FnArg.Date),
+        ["weekday"] = Fn(CalcType.Number, FnArg.Date),
+        ["date"] = Fn(CalcType.Date, FnArg.Text),
     };
 
     /// <summary>E13: what a row-level calculation in a measure may be aggregated by (<c>count</c> of rows would ignore it).
