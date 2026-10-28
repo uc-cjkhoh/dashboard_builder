@@ -4,6 +4,7 @@ using System.Text;
 using ClickHouse.Client;
 using ClickHouse.Client.ADO;
 using ClickHouse.Client.Utility; // AddParameter extension
+using DashboardBuilder.ClickHouse.Calc;
 using Microsoft.Extensions.Caching.Memory;
 
 namespace DashboardBuilder.ClickHouse;
@@ -271,8 +272,125 @@ public sealed class ClickHouseGateway
     };
 
     // "countdistinct" counts unique values — mapped to ClickHouse uniqExact() in the SELECT builders.
-    private static readonly HashSet<string> Aggregations =
-        new(StringComparer.OrdinalIgnoreCase) { "count", "sum", "avg", "min", "max", "countdistinct" };
+    // "countnonnull" (E11) counts non-NULL values of the column; "count" counts rows.
+    internal static readonly HashSet<string> Aggregations =
+        new(StringComparer.OrdinalIgnoreCase) { "count", "sum", "avg", "min", "max", "countdistinct", "countnonnull" };
+
+    /// <summary>A plain Top-N rank aggregate over an already-quoted column (lowercase whitelisted <paramref name="agg"/>,
+    /// not <c>count</c>). Exact and unscaled: only the order matters.</summary>
+    internal static string PlainRankSql(string agg, string expr) => agg switch
+    {
+        "countdistinct" => $"uniqExact({expr})",
+        "countnonnull" => $"count({expr})",
+        _ => $"{agg}({expr})",
+    };
+
+    /// <summary>Every field reference in a calculation tree, in tree order (left to right).</summary>
+    internal static List<FieldNode> CalcFields(ExprNode node)
+    {
+        var found = new List<FieldNode>();
+        Walk(node);
+        return found;
+        void Walk(ExprNode n)
+        {
+            switch (n)
+            {
+                case FieldNode f: found.Add(f); break;
+                case UnNode u: Walk(u.Arg); break;
+                case BinNode b: Walk(b.L); Walk(b.R); break;
+                case AggNode a: Walk(a.Arg); break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Validate a calculation against the already-resolved fields and compile it. <paramref name="refs"/> maps each
+    /// field the catalog knows to its qualified, quoted SQL and category (a field missing from it is unknown);
+    /// <paramref name="field"/> is the request path (<c>measures[0]</c>) a rejection names, as <c>….calc.&lt;node&gt;</c>.
+    /// Number literals are bound into <paramref name="parameters"/> as <c>{prefix}p{n}</c> — the prefix must be
+    /// unique per compiled calculation in one request.
+    /// </summary>
+    internal static CompiledCalc CompileCalc(
+        ExprNode calc, string field,
+        IReadOnlyDictionary<(string, string, string), (string Sql, string Category)> refs,
+        List<(string Name, string Type, object Value)> parameters, string prefix, bool sampled, bool approximate)
+    {
+        CalcInfo info;
+        try { info = CalcValidator.Validate(calc, (d, t, c) => refs.TryGetValue((d, t, c), out var r) ? r.Category : null); }
+        catch (CalcException e) { throw new RequestValidationException(e.Message, e.Path.Length == 0 ? $"{field}.calc" : $"{field}.calc.{e.Path}"); }
+        return new CompiledCalc(CalcCompiler.Compile(calc, (d, t, c) => refs[(d, t, c)], parameters, prefix, sampled, approximate), info);
+    }
+
+    // E13: what a row-level calculation in a measure may be aggregated by (count of rows would ignore it).
+    private static readonly HashSet<string> CalcRowAggregations = new(StringComparer.Ordinal)
+        { "sum", "avg", "min", "max", "countdistinct", "countnonnull" };
+
+    /// <summary>
+    /// A calculated measure's SQL and whether its values are numbers (E4/E13): an aggregate tree is used as is (no
+    /// <paramref name="agg"/>); a row-level tree is aggregated by the pill through <see cref="AggregateSql"/>.
+    /// Re-checks the role rules <see cref="RequestRules"/> applies, plus the type (no sum/avg of text).
+    /// </summary>
+    internal static (string Sql, bool Numeric) CalcMeasureSql(string? agg, CompiledCalc c, string field, bool sampled, bool approximate)
+    {
+        if (c.Info.IsAggregate)
+        {
+            if (agg is not null) throw new RequestValidationException("A calculation that already aggregates takes no further aggregation.", field + ".calc");
+            return (c.Sql, c.Info.Type == CalcType.Number);
+        }
+        var a = agg?.ToLowerInvariant();
+        if (a is null || !CalcRowAggregations.Contains(a))
+            throw new RequestValidationException("Choose how to aggregate this calculation: sum, average, min, max, distinct count or non-null count.", field + ".calc");
+        if (a is "sum" or "avg" && c.Info.Type != CalcType.Number)
+            throw new RequestValidationException($"{(a == "sum" ? "Sum" : "Avg")} needs a number — this calculation is {c.Info.Type}.", field + ".calc");
+        return (AggregateSql(a, c.Sql, sampled, approximate), a is "sum" or "avg" or "countdistinct" or "countnonnull" || c.Info.Type == CalcType.Number);
+    }
+
+    /// <summary>A calculated dimension groups by its row-level expression (E4); an aggregate tree there is a 400.</summary>
+    internal static string CalcDimensionSql(CompiledCalc c, string field) => c.Info.IsAggregate
+        ? throw new RequestValidationException("A dimension can't contain an aggregate. Put it in a measure instead.", field + ".calc")
+        : c.Sql;
+
+    /// <summary>The name a calculated dimension or measure has in the result: its label, or "calculation".</summary>
+    internal static string CalcLabel(string? label) =>
+        string.IsNullOrEmpty(label) || label.Length > CalcLimits.MaxName ? "calculation" : label;
+
+    /// <summary>P33: whether any measure counts distinct values (estimated in approximate mode) — a plain or
+    /// row-level <c>countDistinct</c>, or a <c>COUNTD</c> inside a calculation.</summary>
+    internal static bool UsesDistinctCount(IEnumerable<MeasureRef> measures) => measures.Any(m =>
+        string.Equals(m.Agg, "countDistinct", StringComparison.OrdinalIgnoreCase) || (m.Calc is { } c && HasCountD(c)));
+
+    private static bool HasCountD(ExprNode n) => n switch
+    {
+        AggNode a => a.Fn == "countd" || HasCountD(a.Arg),
+        UnNode u => HasCountD(u.Arg),
+        BinNode b => HasCountD(b.L) || HasCountD(b.R),
+        _ => false,
+    };
+
+    /// <summary>The parameters whose <c>{name:</c> placeholder appears in <paramref name="sql"/> — for a statement
+    /// that reuses only part of the request (the auto date-grain probe), so it never carries parameters it lacks.</summary>
+    internal static List<(string Name, string Type, object Value)> ParametersUsedBy(
+        string sql, List<(string Name, string Type, object Value)> parameters) =>
+        parameters.Where(p => sql.Contains("{" + p.Name + ":", StringComparison.Ordinal)).ToList();
+
+    /// <summary>P30 top-N condition: <paramref name="expr"/>'s members ranked by <paramref name="rank"/> under the other filters.</summary>
+    private static string TopCondition(string expr, string from, string others, string rank, QueryFilter f)
+    {
+        var n = int.Parse(f.Value!, CultureInfo.InvariantCulture);
+        return $"{expr} IN (SELECT {expr}{from}{others} GROUP BY {expr} ORDER BY {rank} {(f.Bottom == true ? "ASC" : "DESC")} LIMIT {n})";
+    }
+
+    /// <summary>The "Other" statement: group count + each measure (the same SQL as the main query, so the same
+    /// parameters) over everything past the shown groups. <paramref name="limit"/> is the probe limit.</summary>
+    internal static string OtherSql(string dimExpr, IReadOnlyList<string> measExprs, string from, string where,
+        string ordered, int limit, string extraSettings)
+    {
+        var shown = $"SELECT k0 FROM ({ordered} LIMIT {limit - 1})";
+        return "SELECT uniqExact(" + dimExpr + ") AS n, "
+            + string.Join(", ", measExprs.Select((m, i) => $"{m} AS v{i}")) + from
+            + (where.Length > 0 ? where + " AND " : " WHERE ") + $"{dimExpr} NOT IN ({shown})"
+            + " SETTINGS transform_null_in = 1" + extraSettings;
+    }
 
     // A sort target must be one of the SELECT aliases we generate: k{n} (dimension, n < dimCount) or
     // v{n} (measure, n < measureCount). Anything else is ignored (never interpolated blindly).
@@ -659,16 +777,38 @@ public sealed class ClickHouseGateway
         var rowDimNames = new List<string>();
         var colDimNames = new List<string>();
         var dimRefs = new List<ColumnRef>();
+        // Every bound value of the request — filter values and calculation literals — goes in this one list, which every
+        // statement below (page, total, Other) is sent with; each calculation is compiled ONCE with its own prefix c{n}.
+        var parameters = new List<(string Name, string Type, object Value)>();
+        var approximate = req.Approximate == true;
+        var calcCount = 0;
+        async Task<CompiledCalc> CompileCalcAsync(ExprNode calc, string field)
+        {
+            // Each field goes through QualifyAsync (catalog check + quote; a table not in the query is the usual error).
+            // A column the catalog doesn't know is left out, so the validator names it with its path.
+            var refs = new Dictionary<(string, string, string), (string Sql, string Category)>();
+            foreach (var f in CalcFields(calc))
+            {
+                if (refs.ContainsKey((f.Db, f.Table, f.Column))) continue;
+                if (!(await ColumnsOf(f.Db, f.Table)).TryGetValue(f.Column, out var category)) continue;
+                refs[(f.Db, f.Table, f.Column)] = (await QualifyAsync(f.Db, f.Table, f.Column), category);
+            }
+            return CompileCalc(calc, field, refs, parameters, $"c{calcCount++}", sampled, approximate);
+        }
+        var rowIndex = 0;
         foreach (var d in req.RowDimensions ?? [])
         {
-            dimExprs.Add(await QualifyAsync(d.Db, d.Table, d.Column));
-            rowDimNames.Add($"{d.Table}.{d.Column}");
+            var field = $"rowDimensions[{rowIndex++}]";
+            dimExprs.Add(d.Calc is { } calc ? CalcDimensionSql(await CompileCalcAsync(calc, field), field) : await QualifyAsync(d.Db, d.Table, d.Column));
+            rowDimNames.Add(d.Calc is null ? $"{d.Table}.{d.Column}" : CalcLabel(d.Column));
             dimRefs.Add(d);
         }
+        var colIndex = 0;
         foreach (var d in req.ColumnDimensions ?? [])
         {
-            dimExprs.Add(await QualifyAsync(d.Db, d.Table, d.Column));
-            colDimNames.Add($"{d.Table}.{d.Column}");
+            var field = $"columnDimensions[{colIndex++}]";
+            dimExprs.Add(d.Calc is { } calc ? CalcDimensionSql(await CompileCalcAsync(calc, field), field) : await QualifyAsync(d.Db, d.Table, d.Column));
+            colDimNames.Add(d.Calc is null ? $"{d.Table}.{d.Column}" : CalcLabel(d.Column));
             dimRefs.Add(d);
         }
 
@@ -681,6 +821,15 @@ public sealed class ClickHouseGateway
         foreach (var m in req.Measures ?? [])
         {
             var mIdx = measIndex++;
+            if (m.Calc is { } mCalc)
+            {
+                // E4: an aggregate tree as is; a row-level tree aggregated by the pill. No "count" default here.
+                var (calcSql, calcNumeric) = CalcMeasureSql(m.Agg, await CompileCalcAsync(mCalc, $"measures[{mIdx}]"), $"measures[{mIdx}]", sampled, approximate);
+                measExprs.Add(calcSql);
+                measNames.Add(CalcLabel(m.Column));
+                measNumeric.Add(calcNumeric);
+                continue;
+            }
             var mAgg = (m.Agg ?? "count").ToLowerInvariant();
             if (!Aggregations.Contains(mAgg)) throw new UnknownIdentifierException("Unknown aggregation.");
             if (mAgg != "count" && !(await ColumnsOf(m.Db, m.Table)).ContainsKey(m.Column))
@@ -688,33 +837,24 @@ public sealed class ClickHouseGateway
             var category = mAgg == "count" ? ClickHouseType.Numeric : (await ColumnsOf(m.Db, m.Table)).GetValueOrDefault(m.Column, ClickHouseType.Other);
             if (mAgg is "sum" or "avg" && category != ClickHouseType.Numeric)
                 throw new RequestValidationException($"{char.ToUpperInvariant(mAgg[0])}{mAgg[1..]} needs a numeric column — {m.Column} is {category}.", $"measures[{mIdx}]");
-            measNumeric.Add(mAgg is "count" or "countdistinct" or "sum" or "avg" || category == ClickHouseType.Numeric);
-            if (mAgg == "count")
+            measNumeric.Add(mAgg is "count" or "countdistinct" or "countnonnull" or "sum" or "avg" || category == ClickHouseType.Numeric);
+            // E10: one aggregate writer for plain and calculated measures. P33: sampled sums/counts are scaled back,
+            // approximate mode estimates distinct counts (uniq).
+            measExprs.Add(AggregateSql(mAgg, mAgg == "count" ? "" : await QualifyAsync(m.Db, m.Table, m.Column), sampled, approximate));
+            measNames.Add(mAgg switch
             {
-                measExprs.Add(sampled ? "sum(t0._sample_factor)" : "count()");
-                measNames.Add("count");
-            }
-            else if (mAgg == "countdistinct")
-            {
-                // P33: approximate mode estimates distinct counts (uniq, HyperLogLog-style) — much cheaper.
-                measExprs.Add($"{(req.Approximate == true ? "uniq" : "uniqExact")}({await QualifyAsync(m.Db, m.Table, m.Column)})");
-                measNames.Add($"distinct {m.Column}");
-            }
-            else
-            {
-                var col = await QualifyAsync(m.Db, m.Table, m.Column);
-                measExprs.Add(sampled && mAgg == "sum" ? $"sum({col} * t0._sample_factor)" : $"{mAgg}({col})");
-                measNames.Add($"{mAgg} {m.Column}");
-            }
+                "count" => "count",
+                "countdistinct" => $"distinct {m.Column}",
+                _ => $"{mAgg} {m.Column}",
+            });
         }
         if (measExprs.Count == 0)
         {
-            measExprs.Add(sampled ? "sum(t0._sample_factor)" : "count()");
+            measExprs.Add(AggregateSql("count", "", sampled, approximate));
             measNames.Add("count");
             measNumeric.Add(true);
         }
 
-        var parameters = new List<(string Name, string Type, object Value)>();
         var conditions = new List<string>();
         var filters = req.Filters ?? [];
         var tops = new List<(QueryFilter F, int Index)>();
@@ -734,9 +874,16 @@ public sealed class ClickHouseGateway
         {
             var expr = await QualifyAsync(f.Db, f.Table, f.Column);
             var by = f.TopBy!;
+            string rank;
+            if (by.Calc is { } byCalc)
+            {
+                // Compiled once; its literals join `parameters`, which the page and total statements carry.
+                rank = CalcMeasureSql(by.Agg, await CompileCalcAsync(byCalc, $"filters[{i}].topBy"), $"filters[{i}].topBy", sampled, approximate).Sql;
+                conditions.Add(TopCondition(expr, from.ToString(), others, rank, f));
+                continue;
+            }
             var agg = (by.Agg ?? "sum").ToLowerInvariant();
             if (!Aggregations.Contains(agg)) throw new UnknownIdentifierException("Unknown aggregation.");
-            string rank;
             if (agg == "count") rank = "count()";
             else
             {
@@ -745,10 +892,9 @@ public sealed class ClickHouseGateway
                 if (agg is "sum" or "avg" && byCat != ClickHouseType.Numeric)
                     throw new RequestValidationException($"Top-N can't rank by {agg} of {by.Column} — it isn't numeric.", $"filters[{i}].topBy");
                 var byExpr = await QualifyAsync(by.Db, by.Table, by.Column);
-                rank = agg == "countdistinct" ? $"uniqExact({byExpr})" : $"{agg}({byExpr})";
+                rank = PlainRankSql(agg, byExpr);
             }
-            var n = int.Parse(f.Value!, CultureInfo.InvariantCulture);
-            conditions.Add($"{expr} IN (SELECT {expr}{from}{others} GROUP BY {expr} ORDER BY {rank} {(f.Bottom == true ? "ASC" : "DESC")} LIMIT {n})");
+            conditions.Add(TopCondition(expr, from.ToString(), others, rank, f));
         }
         var where = conditions.Count > 0 ? " WHERE " + string.Join(" AND ", conditions) : "";
 
@@ -760,7 +906,7 @@ public sealed class ClickHouseGateway
         for (var i = 0; i < dimRefs.Count; i++)
         {
             var d = dimRefs[i];
-            if (d.DatePart is null or "auto" or "exact") continue;
+            if (d.Calc is not null || d.DatePart is null or "auto" or "exact") continue; // E12: a calculation is never date-grouped
             if (categories[Key(d.Db, d.Table)][d.Column] != ClickHouseType.Temporal)
                 throw new RequestValidationException($"A date part needs a date column — {d.Column} isn't one.", "datePart");
             dimExprs[i] = DatePartExpression(d.DatePart, dimExprs[i], ClickHouseType.IsDateOnly(rawTypes[Key(d.Db, d.Table)][d.Column]))!;
@@ -769,12 +915,13 @@ public sealed class ClickHouseGateway
         DateBucketApplied? bucket = null;
         if (req.DateBucket is { } wanted)
         {
-            var bi = dimRefs.FindIndex(d => d.DatePart is null or "auto" && categories[Key(d.Db, d.Table)][d.Column] == ClickHouseType.Temporal);
+            var bi = dimRefs.FindIndex(d => d.Calc is null && d.DatePart is null or "auto" && categories[Key(d.Db, d.Table)][d.Column] == ClickHouseType.Temporal);
             if (bi >= 0)
             {
                 var dateOnly = ClickHouseType.IsDateOnly(rawTypes[Key(dimRefs[bi].Db, dimRefs[bi].Table)][dimRefs[bi].Column]);
                 var grain = wanted == "auto"
-                    ? await AutoGrainAsync(info, dimExprs[bi], from.ToString(), where + Settings(anyLeft, info), parameters, dateOnly, ct)
+                    ? await AutoGrainAsync(info, dimExprs[bi], from.ToString(), where + Settings(anyLeft, info),
+                        ParametersUsedBy(dimExprs[bi] + where, parameters), dateOnly, ct)
                     : wanted;
                 if (grain == "hour" && dateOnly) grain = "day";
                 if (grain is not null)
@@ -850,11 +997,9 @@ public sealed class ClickHouseGateway
         OtherGroup? other = null;
         if (req.OtherBucket == true && truncated && dimExprs.Count == 1 && req.Offset is null or 0)
         {
-            var shown = $"SELECT k0 FROM ({ordered} LIMIT {limit - 1})";
-            var otherSql = "SELECT uniqExact(" + dimExprs[0] + ") AS n, "
-                + string.Join(", ", measExprs.Select((m, i) => $"{m} AS v{i}")) + from
-                + (where.Length > 0 ? where + " AND " : " WHERE ") + $"{dimExprs[0]} NOT IN ({shown})"
-                + " SETTINGS transform_null_in = 1" + (anyLeft && info.Guards != QueryGuards.None ? ", join_use_nulls = 1" : "");
+            // Reuses the compiled dimension and measure SQL, so it is sent with the same `parameters` as the page.
+            var otherSql = OtherSql(dimExprs[0], measExprs, from.ToString(), where, ordered, limit,
+                anyLeft && info.Guards != QueryGuards.None ? ", join_use_nulls = 1" : "");
             try { other = await OtherAsync(info, otherSql, parameters, measNumeric, ct); }
             catch (ClickHouseServerException ex)
             {
@@ -865,7 +1010,7 @@ public sealed class ClickHouseGateway
         }
 
         var approx = req.Approximate == true
-            ? new ApproxApplied((req.Measures ?? []).Any(m => string.Equals(m.Agg, "countDistinct", StringComparison.OrdinalIgnoreCase)), sampled ? SampleFraction : null)
+            ? new ApproxApplied(UsesDistinctCount(req.Measures ?? []), sampled ? SampleFraction : null)
             : null;
         return new QueryResult(rowDimNames, colDimNames, measNames, rows, truncated, await totalTask, other, bucket, false, approx);
     }
@@ -1011,3 +1156,6 @@ public sealed class ClickHouseGateway
 
 /// <summary>Thrown when a client-supplied identifier isn't present in the live catalog.</summary>
 public sealed class UnknownIdentifierException(string message) : Exception(message);
+
+/// <summary>A validated, compiled calculation: its SQL (parameters already appended) and what it is.</summary>
+internal sealed record CompiledCalc(string Sql, CalcInfo Info);

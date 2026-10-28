@@ -151,7 +151,11 @@ public static class RequestRules
         if (measures > ApiLimits.MaxMeasures) throw Bad($"A view can show at most {ApiLimits.MaxMeasures} measures.", "measures");
         if ((r.Joins?.Length ?? 0) > ApiLimits.MaxJoins) throw Bad($"A view can join at most {ApiLimits.MaxJoins} tables.", "joins");
         for (var i = 0; i < (r.Joins?.Length ?? 0); i++)
+        {
             if (r.Joins![i].Type is { } jt && jt != "inner" && jt != "left") throw Bad("A join is inner or left.", $"joins[{i}].type");
+            if (r.Joins[i].Left?.Calc is not null) throw Bad("Calculations can't be used as a join key.", $"joins[{i}].left.calc");
+            if (r.Joins[i].Right?.Calc is not null) throw Bad("Calculations can't be used as a join key.", $"joins[{i}].right.calc");
+        }
         for (var i = 0; i < (r.RowDimensions?.Length ?? 0); i++) CheckCalcDimension(r.RowDimensions![i], $"rowDimensions[{i}]");
         for (var i = 0; i < (r.ColumnDimensions?.Length ?? 0); i++) CheckCalcDimension(r.ColumnDimensions![i], $"columnDimensions[{i}]");
         for (var i = 0; i < (r.Measures?.Length ?? 0); i++) CheckCalcMeasure(r.Measures![i], $"measures[{i}]");
