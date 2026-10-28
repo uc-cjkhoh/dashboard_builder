@@ -35,7 +35,7 @@ export function refusal(f, entry) {
 }
 
 const SINGLES = ["size", "label", "shape", "path", "angle"];
-function* pillSlots(sheet) {
+export function* pillSlots(sheet) {
   for (const k of ["rows", "columns", "color"]) for (const f of sheet[k] ?? []) yield f;
   const m = sheet.marks ?? {};
   for (const k of SINGLES) if (m[k]) yield m[k];

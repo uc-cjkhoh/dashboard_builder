@@ -65,16 +65,16 @@ export function checkFilter(f) {
 /**
  * What the server receives for a filter: relative dates become a bound `between` over whole days
  * (`resolve(preset)` → { from, to }; a Date column takes days, a DateTime the first / last second), top-N
- * carries its ranking measure; everything else as is.
+ * carries its ranking measure (`wireTopBy` turns a calculated one into its tree); everything else as is.
  */
-export function serverFilter(f, { resolve, dateOnly } = {}) {
+export function serverFilter(f, { resolve, dateOnly, wireTopBy } = {}) {
   const base = { db: f.db, table: f.table, column: f.column, op: f.op, value: f.value ?? "", values: f.values ?? null };
   if (f.op === "relative") {
     const r = resolve ? resolve(f.value) : null;
     if (!r) return null;
     return { ...base, op: "between", value: "", values: dateOnly ? [r.from, r.to] : [`${r.from} 00:00:00`, `${r.to} 23:59:59`] };
   }
-  if (f.op === "top") return { ...base, value: String(f.value).trim(), topBy: { db: f.topBy.db, table: f.topBy.table, column: f.topBy.column, agg: f.topBy.agg ?? "sum" }, bottom: Boolean(f.bottom) };
+  if (f.op === "top") return { ...base, value: String(f.value).trim(), topBy: wireTopBy ? wireTopBy(f.topBy) : { db: f.topBy.db, table: f.topBy.table, column: f.topBy.column, agg: f.topBy.agg ?? "sum" }, bottom: Boolean(f.bottom) };
   return base;
 }
 export function statFilters(filters, db, table, convert = (f) => serverFilter(f)) {

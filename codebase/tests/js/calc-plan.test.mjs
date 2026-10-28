@@ -1,0 +1,106 @@
+// Calculated fields in the worksheet query plan — the pure seam (wireDim, wireMeasure, planTables, calcProblem, Top-N).
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { wireDim, wireMeasure, planTables, calcProblem, measureLabel, topByRef, topByKey, wireTopBy, resolveSortTarget }
+  from "../../src/DashboardBuilder/Features/Calc/calc-plan.js";
+import { makeCalcPill } from "../../src/DashboardBuilder/Features/Calc/calc-pill.js";
+import { catalogFromEntities, compileCalculation } from "../../src/DashboardBuilder/Features/Calc/calc-resolve.js";
+import { serverFilter } from "../../src/DashboardBuilder/Features/Dashboard/filter-rules.js";
+
+const entities = [
+  { id: "e1", db: "shop", table: "orders", columns: [{ name: "amount", category: "numeric" }, { name: "status", category: "text" }, { name: "cid", category: "numeric" }] },
+  { id: "e2", db: "shop", table: "customers", columns: [{ name: "id", category: "numeric" }, { name: "region", category: "text" }] },
+];
+const catalog = catalogFromEntities(entities);
+const mk = (id, name, formula) => ({ id, name, formula });
+const calcs = [
+  mk("c1", "Net", "[orders.amount] * 2"),
+  mk("c2", "Label", "[orders.status]"),
+  mk("c3", "Ratio", "SUM([orders.amount]) / COUNT([orders.cid])"),
+  mk("c4", "Cross", "[orders.amount] + [customers.id]"),
+  mk("c5", "Const", "1+2"),
+  mk("c6", "Gone", "[orders.missing] * 2"),
+];
+const ctx = { calcs, catalog };
+const pillOf = (id, role) => { const c = calcs.find((x) => x.id === id); return makeCalcPill(c, compileCalculation(c, calcs, catalog).info, role); };
+
+test("wireMeasure: aggregate calc has a tree and no agg", () => {
+  const p = pillOf("c3");
+  const w = wireMeasure({ field: p, role: "shelf", agg: "sum" }, ctx);
+  assert.equal(w.column, "Ratio"); assert.equal(w.db, ""); assert.equal(w.table, "");
+  assert.equal(w.calc.k, "bin"); assert.equal("agg" in w, false);
+});
+
+test("wireMeasure: row-level SUM pill carries agg; plain measure unchanged", () => {
+  const p = pillOf("c1");
+  const w = wireMeasure({ field: p, role: "shelf", agg: "sum" }, ctx);
+  assert.equal(w.agg, "sum"); assert.ok(w.calc);
+  assert.equal(wireMeasure({ field: { ...p, agg: "avg" }, role: "shelf", agg: "avg" }, ctx).agg, "avg");
+  const plain = { db: "shop", table: "orders", column: "amount" };
+  assert.deepEqual(wireMeasure({ field: plain, role: "shelf", agg: "max" }, ctx), { db: "shop", table: "orders", column: "amount", agg: "max" });
+});
+
+test("wireDim: calc dimension has tree and label; plain keeps datePart", () => {
+  const w = wireDim(pillOf("c2"), ctx);
+  assert.deepEqual([w.db, w.table, w.column], ["", "", "Label"]); assert.ok(w.calc);
+  assert.equal("datePart" in w, false);
+  const plain = { db: "shop", table: "orders", column: "d", category: "temporal", datePart: "month" };
+  assert.deepEqual(wireDim(plain, ctx), { db: "shop", table: "orders", column: "d", datePart: "month" });
+  assert.deepEqual(wireDim({ ...plain, datePart: "auto" }, ctx), { db: "shop", table: "orders", column: "d" });
+});
+
+test("planTables: sorted multi-table, constant is empty, plain is its own table", () => {
+  assert.deepEqual(planTables(pillOf("c4"), ctx), ["shop.customers", "shop.orders"]);
+  assert.deepEqual(planTables(pillOf("c5"), ctx), []);
+  assert.deepEqual(planTables({ db: "shop", table: "orders", column: "amount" }, ctx), ["shop.orders"]);
+  assert.deepEqual(planTables({ calc: "nope", db: "", table: "", column: "x" }, ctx), []);
+});
+
+test("calcProblem: E15 message for a vanished field or calc; null otherwise", () => {
+  const ok = { rows: [pillOf("c2")], columns: [pillOf("c1")], color: [], marks: {} };
+  assert.equal(calcProblem(ok, ctx), null);
+  const bad = { rows: [], columns: [{ calc: "c6", db: "", table: "", column: "Gone", category: "numeric", role: "measure", agg: "sum" }], color: [], marks: {} };
+  assert.equal(calcProblem(bad, ctx), "Calculation 'Gone' can't be computed: orders.missing isn't in the model.");
+  const del = { rows: [{ calc: "zz", db: "", table: "", column: "Old", category: "numeric", role: "measure" }], columns: [], marks: {} };
+  assert.match(calcProblem(del, ctx), /^Calculation 'Old' can't be computed: /);
+  assert.equal(calcProblem({ rows: [{ db: "a", table: "b", column: "c" }], columns: [] }, ctx), null);
+  const inMark = { rows: [], columns: [], marks: { tooltip: [bad.columns[0]] } };
+  assert.match(calcProblem(inMark, ctx), /^Calculation 'Gone'/);
+});
+
+test("a sheet whose only pill is 1+2 involves no tables", () => {
+  assert.deepEqual(planTables(pillOf("c5"), ctx), []);
+  assert.equal(calcProblem({ rows: [], columns: [pillOf("c5")], marks: {} }, ctx), null);
+});
+
+test("measureLabel: calc pill is the live name only; plain is agg + name", () => {
+  const p = pillOf("c1");
+  assert.equal(measureLabel({ ...p, column: "stale" }, calcs), "Net");
+  assert.equal(measureLabel({ db: "d", table: "t", column: "a", agg: "avg" }, calcs, "a"), "avg a");
+});
+
+test("Top-N topBy from a calc measure carries calc and label; wired to the tree", () => {
+  const p = pillOf("c1");
+  const ref = topByRef({ field: p, agg: "sum" }, ctx);
+  assert.deepEqual(ref, { db: "", table: "", column: "Net", calc: "c1", agg: "sum" });
+  const agg = topByRef({ field: pillOf("c3"), agg: "sum" }, ctx);
+  assert.equal("agg" in agg, false);
+  const w = wireTopBy(ref, ctx);
+  assert.equal(w.column, "Net"); assert.equal(w.calc.k, "bin"); assert.equal(w.agg, "sum");
+  assert.equal("agg" in wireTopBy(agg, ctx), false);
+  assert.equal(wireTopBy({ db: "d", table: "t", column: "a" }, ctx).agg, "sum");
+  assert.equal(topByKey({ field: p, agg: "sum" }), "calc:c1:sum");
+  assert.equal(topByKey({ field: { db: "d", table: "t", column: "a" }, agg: "avg" }), "d.t.a:avg");
+  const sf = serverFilter({ db: "shop", table: "orders", column: "status", op: "top", value: "5", topBy: ref }, { wireTopBy: (t) => wireTopBy(t, ctx) });
+  assert.ok(sf.topBy.calc.k); assert.equal(sf.topBy.column, "Net"); assert.equal(sf.topBy.agg, "sum");
+});
+
+test("resolveSortTarget tolerates a stale agg suffix on a calc pill", () => {
+  const targets = [{ alias: "k0", id: "dimension:d.t.c:" }, { alias: "v0", id: "measure:calc:c1:avg" }];
+  assert.equal(resolveSortTarget(targets, "measure:calc:c1:avg").alias, "v0");
+  assert.equal(resolveSortTarget(targets, "measure:calc:c1:sum").alias, "v0");
+  assert.equal(resolveSortTarget(targets, "measure:calc:c1:").alias, "v0");
+  assert.equal(resolveSortTarget(targets, "measure:calc:c9:sum"), undefined);
+  assert.equal(resolveSortTarget(targets, "dimension:d.t.c:").alias, "k0");
+  assert.equal(resolveSortTarget(targets, "dimension:d.t.x:"), undefined);
+});
