@@ -253,6 +253,23 @@ public sealed class ClickHouseGateway
         return values;
     }
 
+    /// <summary>
+    /// The one place an aggregate call is written. <paramref name="agg"/> is a lowercase whitelisted name
+    /// (<c>sum|avg|min|max|count|countnonnull|countdistinct</c>); <paramref name="expr"/> is already validated
+    /// and quoted SQL. <c>count</c> counts all rows (no argument); <c>countnonnull</c> counts non-NULL values.
+    /// When <paramref name="sampled"/> (P33), counts and sums are scaled back by <c>t0._sample_factor</c>;
+    /// <paramref name="approximate"/> estimates distinct counts with <c>uniq</c>.
+    /// </summary>
+    internal static string AggregateSql(string agg, string expr, bool sampled, bool approximate) => agg switch
+    {
+        "sum" => sampled ? $"sum({expr} * t0._sample_factor)" : $"sum({expr})",
+        "count" => sampled ? "sum(t0._sample_factor)" : "count()",
+        "countnonnull" => sampled ? $"sum(if(isNotNull({expr}), t0._sample_factor, 0))" : $"count({expr})",
+        "avg" or "min" or "max" => $"{agg}({expr})",
+        "countdistinct" => approximate ? $"uniq({expr})" : $"uniqExact({expr})",
+        _ => throw new InvalidOperationException($"Unknown aggregate '{agg}'."),
+    };
+
     // "countdistinct" counts unique values — mapped to ClickHouse uniqExact() in the SELECT builders.
     private static readonly HashSet<string> Aggregations =
         new(StringComparer.OrdinalIgnoreCase) { "count", "sum", "avg", "min", "max", "countdistinct" };
