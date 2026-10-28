@@ -141,7 +141,7 @@ export function initTabs() {
       item.append(icon(k.icon), k.title);
       item.addEventListener("click", () => {
         const tab = kind === "dashboard" ? createDashboard() : createWorksheet();
-        if (!tab) { toast(tabLimitError(), "danger"); return; }
+        if (!tab) { toast(tabLimitError(), "danger"); strip.querySelector(".tab-add")?.focus(); return; } // the menu closed: keep focus on [+]
         strip.querySelector(".tab.is-active .tab__label")?.focus(); // render() rebuilt the strip
       });
       list.append(item);

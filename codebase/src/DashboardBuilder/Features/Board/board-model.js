@@ -12,7 +12,6 @@ export const DEFAULT_SIZE = Object.freeze({ sheet: { w: 6, h: 4 }, text: { w: 12
 const KINDS = new Set(["sheet", "text"]);
 const minH = (kind) => (kind === "text" ? LIMITS.textMinH : LIMITS.widgetMinH);
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-const isCount = (n) => Number.isInteger(n) && n >= 0;
 
 /** True when two widgets share at least one cell (touching edges do not overlap). */
 export const overlaps = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;

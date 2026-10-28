@@ -1,4 +1,4 @@
-// Browser checks for the two tab kinds (P24b stage 1): the [+] menu, worksheet / dashboard tabs, the dashboard placeholder body,
+// Browser checks for the two tab kinds (P24b stage 1): the [+] menu, worksheet / dashboard tabs, the empty board body,
 // closing a worksheet used by a dashboard, workbook format v2 (export, autosave, v1 file + v1 autosave open with zero issues),
 // and the 50-tab limit. The real dev app (APP_URL, default http://localhost:5193) in headless Chromium; every /api/* call is
 // mocked. Any page error fails the run (cdp.mjs). Screenshots (light + dark) go to SHOTS_DIR.
@@ -100,13 +100,13 @@ try {
     must(await ev(`document.activeElement === document.querySelector('.tab.is-active .tab__label')`), 'new tab label not focused');
   });
 
-  await check('New dashboard: "Dashboard 1", placeholder body, no duplicate button, bookmark action hidden', async () => {
+  await check('New dashboard: "Dashboard 1", empty board body, no duplicate button, bookmark action hidden', async () => {
     await addTab('dashboard');
     await waitFor(`!document.getElementById('board-view').hidden`, 'board view');
     must(J(await labels()) === J(['Worksheet 1', 'Dashboard 1']), `tabs: ${J(await labels())}`);
     must(await ev(`document.getElementById('worksheet-view').hidden`), 'worksheet view visible on a dashboard');
-    must(await ev(`document.getElementById('board-title').textContent`) === 'Dashboard 1', 'placeholder title');
-    must(await ev(`document.getElementById('board-text').textContent`) === 'This dashboard has no worksheets yet.', 'placeholder text');
+    must(await ev(`document.getElementById('board-title').textContent`) === 'Dashboard 1', 'board title');
+    must(/This dashboard is empty/.test(await ev(`document.getElementById('board-empty').textContent`)) && await ev(`!document.getElementById('board-empty').hidden`), 'empty-board message');
     must(await ev(`!!document.querySelector('.tab--dashboard .tab__kind')`), 'no dashboard icon');
     must(await ev(`document.querySelector('.tab--dashboard .tab__label').getAttribute('aria-label') === 'Dashboard 1 (dashboard)'`), 'accessible name');
     must(await ev(`!document.querySelector('.tab--dashboard .tab__dup') && !!document.querySelector('.tab--worksheet .tab__dup')`), 'duplicate button on the wrong kind');
@@ -193,7 +193,7 @@ try {
       await b.setScheme(scheme);
       await ev(`document.documentElement.setAttribute('data-theme', ${J(scheme)})`);
       await b.sleep(150);
-      await b.screenshot(join(SHOTS, `board-${scheme}.png`)); // the dashboard tab's placeholder body
+      await b.screenshot(join(SHOTS, `board-${scheme}.png`)); // the dashboard tab's empty board
       await ev(`document.querySelector('.tab-add').click()`);
       await waitFor(`!document.querySelector('.tab-menu__list').hidden`, 'menu open');
       await b.sleep(250);
@@ -241,6 +241,7 @@ try {
     await waitFor(`!document.getElementById('toast').hidden && /at most 50 tabs/.test(document.getElementById('toast').textContent)`, 'limit toast');
     await ev(`document.querySelector('.tab-add').click(); document.querySelector('[data-new-tab=worksheet]').click()`);
     must(await store(`return st.tabs.length === 50;`), 'a 51st tab was added');
+    must(await ev(`document.activeElement === document.querySelector('.tab-add')`), 'focus not returned to [+] after the refusal');
   });
 
   if (b.consoleErrors.length) { console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  ')); failed++; }

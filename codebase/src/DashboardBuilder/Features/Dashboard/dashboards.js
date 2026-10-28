@@ -43,15 +43,15 @@ import { REF_CHOICES, TREND_CHOICES, FORECAST_CHOICES, defaultAnalytics } from "
 import { castChoices, castLabel, effectiveCategory, syncCastCategories } from "./cast-model.js";
 import { BUCKET_TYPES, DATE_BUCKET_CHOICES } from "./scale-model.js";
 
-// Tableau-style worksheet: each dashboard is one sheet. Drag fields from the field pane onto the
+// Tableau-style worksheet: each worksheet tab is one sheet. Drag fields from the field pane onto the
 // Columns (dimension), Rows (measure) and Filters shelves; the chart renders from a bounded,
 // identifier-safe query. Fields from *different* tables are joined automatically along the
 // relationships drawn in the Data Model (a join path found by BFS over the relationship graph).
 const FIELD_MIME = "application/x-ch-field";
 // Column category from the Data Model catalog (entity.columns), for filters saved without one.
 // T02-34: a field's cast (field setting) decides the category its pills, filters and the field pane use.
-const castOf = (f) => metaOf(f).cast;
-const categoryOf = (db, table, column) => {
+export const castOf = (f) => metaOf(f).cast;
+export const categoryOf = (db, table, column) => {
   const base = baseCategoryOf(db, table, column);
   return base ? effectiveCategory(base, castOf({ db, table, column })) : undefined;
 };
@@ -75,7 +75,9 @@ const isDateOnlyColumn = (db, table, column) => isDateOnlyType(columnType(db, ta
 const FILTER_PLACEHOLDER = { numeric: "number", temporal: "YYYY-MM-DD", boolean: "true or false" };
 const OPS = ["=", "!=", ">", ">=", "<", "<=", "in", "notin", "between"];
 // The plan inputs the pure planner reads (sheet-plan.js): live store state plus the field-pane column cache.
-const planCtx = () => ({ calculations, entities, relationships, sharedFilters, parameters, metaOf, nameOf, columnType });
+/** Recent query results per worksheet id — shared by the editor and the dashboard widgets, so a widget draws what the editor just ran. */
+export const sharedResults = createResultCache();
+export const planCtx = () => ({ calculations, entities, relationships, sharedFilters, parameters, metaOf, nameOf, columnType });
 const calcFieldCtx = () => calcContext(planCtx());
 const appliedShared = () => planAppliedShared(planCtx());
 // A client filter as the server QueryFilter (only filters checkFilter() calls "ok" are sent; P30 relative dates, top-N).
@@ -134,12 +136,12 @@ export function initDashboards() {
   if (!view) return;
   initFieldResizer();
 
-  // Latest-wins queries + recent results per dashboard: a superseded query is aborted (its answer can
+  // Latest-wins queries + recent results per worksheet: a superseded query is aborted (its answer can
   // never overwrite a newer chart), and presentation-only changes re-render from the cached result
-  // instead of re-querying ClickHouse. The Refresh button drops the dashboard's cache and re-queries.
+  // instead of re-querying ClickHouse. The Refresh button drops the worksheet's cache and re-queries.
   const history = createHistory(); // P23 undo / redo per worksheet
   const lastSnap = new Map();       // worksheet id → the sheet as last committed (the "before" of the next edit)
-  const results = createResultCache();
+  const results = sharedResults;
   // The editor's one worksheet view — created before anything (sync() below) can use it.
   // The query-and-render lifecycle is worksheet-view.js (P24a); the editor owns exactly one view, on #ws-chart, and
   // supplies the drawing of a result (worksheet-render.js) and the editor-only state around it.
@@ -162,8 +164,8 @@ export function initDashboards() {
   let showMeOpen = false; // P22: whether the Show Me card is open
   let shownPanel = null;  // the tool/format panel on screen last render, so only a newly opened one animates in
   let shownPills = new Set(); // pill keys on screen last render, so only a newly added pill animates in
-  let shownFor = null;        // the dashboard those were rendered for (switching dashboards animates nothing)
-  let shownDash = null;       // the dashboard on screen, so switching between two replays the view entrance
+  let shownFor = null;        // the worksheet those were rendered for (switching worksheets animates nothing)
+  let shownDash = null;       // the worksheet on screen, so switching between two replays the view entrance
   let freshResult = false; // the last result came from ClickHouse (not the cache): animate the chart in
   let openTool = null;    // which toolbar tool's editor panel is open (Color/Size/…/Filters/Drill/Pages), or null
   let pageTimer = null;   // P20 Pages autoplay interval id (transient; never persisted)
@@ -225,7 +227,7 @@ export function initDashboards() {
   sync();
 
   async function sync() {
-    stopPaging();  // switching view/dashboard halts any running Pages animation
+    stopPaging();  // switching view/worksheet halts any running Pages animation
     legendFocus = null; // P29: a highlight belongs to the chart it was made on
     openTool = null; // close any open tool editor when the view changes
     toggle(view, isWorksheetActive());
@@ -1064,7 +1066,7 @@ export function initDashboards() {
       if (card.classList.contains("is-presenting")) card.classList.remove("is-presenting");
       if (document.fullscreenElement === card) document.exitFullscreen().catch(() => {});
     });
-    // Print: a header naming the dashboard, its filters / range and the notice; the chart drawn at page
+    // Print: a header naming the worksheet, its filters / range and the notice; the chart drawn at page
     // size (print.css rules in dashboard.css hide everything else). Removed after printing.
     window.addEventListener("beforeprint", () => { if (isWorksheetActive()) beginPrint(); });
     window.addEventListener("afterprint", endPrint);
@@ -2308,7 +2310,7 @@ export function initDashboards() {
     }
     return wrap;
   }
-  // Every edit goes through commit() → dashboard:changed → renderShelves + runChart. P23: each commit also
+  // Every edit goes through commit() → worksheet:changed → renderShelves + runChart. P23: each commit also
   // records the previous committed sheet for undo (edits mutate the sheet in place, so the "before" is
   // the snapshot taken at the last commit). commitQuiet skips the history (Pages autoplay).
   const commit = (dash, sheet) => {

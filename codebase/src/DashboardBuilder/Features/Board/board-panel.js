@@ -1,0 +1,44 @@
+import { icon } from "../Core/icons.js";
+
+// The board's side panel: the workbook's worksheets, each with an Add button, and Add text. It re-renders only when
+// the list of worksheets (ids + names) changes, so a button never loses focus when a widget is added.
+const h = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+
+function addButton(label, text, onClick, cls = "btn board-panel__add") {
+  const b = h("button", cls);
+  b.type = "button";
+  b.setAttribute("aria-label", label);
+  b.title = label;
+  b.append(icon("plus", { size: 14 }), h("span", null, text));
+  b.addEventListener("click", onClick);
+  return b;
+}
+
+/** `handlers` = { onAddSheet(sheetId), onAddText() }. Returns { render(worksheets) }. */
+export function createPanel(root, handlers) {
+  let shown = null;
+  return {
+    render(worksheets) {
+      const sig = worksheets.map((w) => `${w.id}\u0000${w.name}`).join("\u0001");
+      if (sig === shown) return;
+      shown = sig;
+      root.replaceChildren();
+      root.append(h("h3", "board-panel__title", "Worksheets"));
+      if (!worksheets.length) {
+        root.append(h("p", "board-panel__empty", "No worksheets yet — create one with + in the tab strip, then add it here."));
+      } else {
+        const list = h("ul", "board-panel__list");
+        for (const w of worksheets) {
+          const li = h("li", "board-panel__item");
+          li.dataset.sheetId = w.id;
+          const name = h("span", "board-panel__name", w.name);
+          name.title = w.name;
+          li.append(icon("chart-bar", { size: 14 }), name, addButton(`Add the worksheet “${w.name}” to the dashboard`, "Add", () => handlers.onAddSheet(w.id)));
+          list.append(li);
+        }
+        root.append(list);
+      }
+      root.append(h("h3", "board-panel__title", "Text"), addButton("Add a text block to the dashboard", "Add text", () => handlers.onAddText(), "btn board-panel__add board-panel__add-text"));
+    },
+  };
+}

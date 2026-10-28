@@ -1,8 +1,20 @@
-@* Dashboard tab body. Driven by Board/board.js: for now a placeholder panel (the board canvas of worksheet and text widgets replaces it). *@
+@* Dashboard tab body. Driven by Board/board.js: the side panel (worksheets to add) + the 12-column canvas of widgets. *@
 <section class="view view--board" id="board-view" aria-label="Dashboard" hidden>
-    <div class="board-empty" id="board-empty">
-        <span class="board-empty__icon" data-icon="dashboard"></span>
-        <h2 class="board-empty__title" id="board-title"></h2>
-        <p class="board-empty__text" id="board-text" role="status"></p>
+    <div class="board" id="board">
+        <aside class="board-panel" id="board-panel" aria-label="Add to the dashboard"></aside>
+        <div class="board-main" id="board-main">
+            <div class="board-bar">
+                <h2 class="board-bar__title" id="board-title"></h2>
+                <p class="board-bar__count" id="board-count"></p>
+                <div class="board-bar__tools" id="board-tools"></div>
+            </div>
+            <div class="board-scroll" id="board-scroll">
+                <div class="board-grid" id="board-grid" role="group" aria-label="Dashboard widgets"></div>
+                <div class="board-empty" id="board-empty" role="status" hidden>
+                    <span class="board-empty__icon" data-icon="dashboard"></span>
+                    <p class="board-empty__text">This dashboard is empty — add a worksheet or a text block from the list on the left.</p>
+                </div>
+            </div>
+        </div>
     </div>
 </section>

@@ -1,7 +1,65 @@
-/* Board feature — the dashboard tab's body (a placeholder panel until the canvas lands). */
-.view--board { background: transparent; display: grid; place-items: center; }
-.board-empty { display: grid; justify-items: center; gap: var(--s2); max-width: 420px; text-align: center; color: var(--ink-2); }
+/* Board feature — the dashboard tab: side panel + a 12-column canvas that scrolls inside its panel (golden rule 8). */
+.view--board { padding: 0; overflow: hidden; background: transparent; }
+.board { display: grid; grid-template-columns: 240px minmax(0, 1fr); height: 100%; min-height: 0; }
+
+/* Side panel (the field-pane slot) */
+.board-panel { border-right: 1px solid var(--line); background: color-mix(in srgb, var(--surface), var(--ink) 2%);
+  overflow: auto; padding: var(--s3) var(--s4); display: flex; flex-direction: column; gap: var(--s2); min-height: 0; }
+.board-panel__title { margin: var(--s2) 0 0; font-size: var(--fs-xs); font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-3); }
+.board-panel__empty { margin: 0; font-size: var(--fs-sm); color: var(--ink-3); line-height: 1.5; }
+.board-panel__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s1); }
+.board-panel__item { display: flex; align-items: center; gap: var(--s2); min-width: 0; padding: var(--s1) var(--s1) var(--s1) var(--s2);
+  border: 1px solid var(--line); border-radius: var(--r-ctl); background: var(--surface); color: var(--meas-ink); }
+.board-panel__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); font-size: var(--fs-sm); }
+.board-panel__add { height: 28px; padding: 0 var(--s2); font-size: var(--fs-sm); flex: none; }
+.board-panel__add-text { align-self: flex-start; }
+
+/* Main column: bar + scrolling canvas */
+.board-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: transparent; }
+.board-main:fullscreen, .board-main.is-presenting { background: var(--bg); }
+.board-main.is-presenting { position: fixed; inset: 0; z-index: 50; }
+.board-bar { flex: none; display: flex; align-items: center; gap: var(--s3); padding: var(--s3) var(--s5) 0; min-width: 0; }
+.board-bar__title { margin: 0; font-size: var(--fs-lead); font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.board-bar__count { margin: 0; font-size: var(--fs-sm); color: var(--ink-3); white-space: nowrap; }
+.board-bar__tools { margin-left: auto; display: flex; gap: var(--s2); flex: none; }
+.board-bar__btn { height: 28px; font-size: var(--fs-sm); }
+.board-scroll { flex: 1; min-height: 0; overflow: auto; padding: var(--s4) var(--s5) var(--s5); scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
+.board-grid { position: relative; width: 100%; }
+.board-empty { display: grid; justify-items: center; gap: var(--s2); padding: var(--s7) var(--s4); text-align: center; color: var(--ink-2); }
+.board-empty[hidden] { display: none; }
 .board-empty__icon { color: var(--ink-3); }
 .board-empty__icon .icon { width: 40px; height: 40px; }
-.board-empty__title { margin: 0; font-size: var(--fs-lead); font-weight: 600; color: var(--ink); overflow-wrap: anywhere; }
-.board-empty__text { margin: 0; font-size: var(--fs-sm); }
+.board-empty__text { margin: 0; max-width: 360px; font-size: var(--fs-sm); line-height: 1.5; }
+
+/* Widgets */
+.board-widget { position: absolute; display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--elev-2); }
+.board-widget__head { flex: none; display: flex; align-items: center; gap: var(--s2); padding: var(--s1) var(--s1) var(--s1) var(--s3);
+  border-bottom: 1px solid var(--line); background: var(--surface-2); min-width: 0; }
+.board-widget__title { flex: 1; min-width: 0; margin: 0; font-size: var(--fs-sm); font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board-widget__tools { flex: none; display: flex; gap: var(--s1); }
+.board-widget__btn { width: 28px; height: 28px; }
+.board-widget__notice { margin: 0; border-radius: 0; flex: none; }
+.board-widget__body { flex: 1; min-height: 0; overflow: auto; }
+/* A worksheet view inside a widget: .ws-chart's padding and chart inset shrink to suit a small cell. */
+.board-widget__body.ws-chart { padding: var(--s2); border-radius: 0; }
+.board-widget__body .ws-chart-canvas { inset: var(--s2); min-height: 0; }
+.board-widget .ws-hint { padding: var(--s3); }
+.board-text { padding: var(--s2) var(--s3); }
+.board-text__body { margin: 0; font-size: var(--fs-body); color: var(--ink-2); line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* Phone width: the panel moves above the canvas (a compact, scrolling strip of worksheets); widgets stack (board-layout.js). */
+@media (max-width: 760px) {
+  .board { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .board-panel { border-right: 0; border-bottom: 1px solid var(--line); max-height: 9rem; padding: var(--s2) var(--s3); }
+  .board-bar { padding: var(--s2) var(--s3) 0; flex-wrap: wrap; }
+  .board-scroll { padding: var(--s3); }
+}
+
+/* Print: the canvas only, at page width. */
+@media print {
+  .view--board, .board, .board-main, .board-scroll { display: block; height: auto; overflow: visible; }
+  .board-panel, .board-bar__tools, .board-widget__tools { display: none !important; }
+  .board-grid { width: 1000px; }
+  .board-widget { box-shadow: none; break-inside: avoid; }
+}

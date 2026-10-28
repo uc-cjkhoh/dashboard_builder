@@ -144,10 +144,7 @@ export const worksheetById = (id) => { const t = tabById(id); return t?.kind ===
 export const isModelActive = () => activeView.kind === "model";
 export const isWorksheetActive = () => activeView.kind === "worksheet";
 export const isDashboardActive = () => activeView.kind === "dashboard";
-export const activeViewKind = () => activeView.kind;
-export const activeWorksheetId = () => (activeView.kind === "worksheet" ? activeView.id : null);
 export const activeWorksheet = () => (activeView.kind === "worksheet" ? worksheetById(activeView.id) : null);
-export const activeDashboardId = () => (activeView.kind === "dashboard" ? activeView.id : null);
 export const activeDashboard = () => (activeView.kind === "dashboard" ? tabById(activeView.id) : null);
 /** The workbook's saved `active` view, as a copy. */
 export const currentView = () => ({ ...activeView });
