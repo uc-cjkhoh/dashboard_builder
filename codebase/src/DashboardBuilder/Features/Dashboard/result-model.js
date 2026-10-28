@@ -29,7 +29,7 @@ export function cmpValues(a, b) {
   return String(a ?? "").localeCompare(String(b ?? ""));
 }
 /** A group-by key's label: "—" for null, else the (date-aware) category formatter. */
-export const keyLabel = (fmtCat) => (k) => (k == null ? "—" : fmtCat(k));
+export const keyLabel = (fmtCat) => (k, i) => (k == null ? "—" : fmtCat(k, i));
 
 /**
  * The sheet's primary dimension = the first group-by key (Rows-shelf dims first, then Columns-shelf), matching
@@ -119,7 +119,7 @@ export function captionText(s, names) {
 export function markFieldValues(sheet, rows, mplan, field, fmtVal, fmtCat, measureName) {
   const { keyOrder } = planDims(sheet);
   const ki = keyOrder.findIndex((f) => sameField(f, field));
-  if (ki >= 0) return { name: `${field.table}.${field.column}`, values: rows.map((r) => (r.keys[ki] == null ? "—" : fmtCat(r.keys[ki]))) };
+  if (ki >= 0) return { name: `${field.table}.${field.column}`, values: rows.map((r) => (r.keys[ki] == null ? "—" : fmtCat(r.keys[ki], ki))) };
   const mi = mplan.findIndex((e) => sameField(e.field, field));
   if (mi >= 0) return { name: measureName(mplan[mi].field.agg ? mplan[mi].field : { ...mplan[mi].field, agg: mplan[mi].agg }), values: rows.map((r) => fmtVal(r.values[mi])) };
   return null;
@@ -192,10 +192,10 @@ export function scatterShapeGroups(sheet, result, seriesIdx, sizeIdx, fmtCat) {
   for (const r of result.rows) {
     const sv = si >= 0 ? r.keys[si] : null;
     const gk = tupleKey([sv]);
-    if (!groupsMap.has(gk)) groupsMap.set(gk, { name: sv == null ? "—" : fmtCat(sv), points: [], raw: sv });
+    if (!groupsMap.has(gk)) groupsMap.set(gk, { name: sv == null ? "—" : fmtCat(sv, si), points: [], raw: sv });
     const pt = [Number(r.values[xIdx]) || 0, Number(r.values[yIdx]) || 0];
     if (sizeIdx >= 0) pt.push(Number(r.values[sizeIdx]) || 0);
-    const label = r.keys.map((k, i) => (i === si ? null : (k == null ? "—" : fmtCat(k)))).filter((v) => v != null).join(" / ");
+    const label = r.keys.map((k, i) => (i === si ? null : (k == null ? "—" : fmtCat(k, i)))).filter((v) => v != null).join(" / ");
     groupsMap.get(gk).points.push({ value: pt, name: label });
   }
   const groups = [...groupsMap.values()];
@@ -221,9 +221,9 @@ export function colorSplitData(result, fmtCat) {
   }
   const cell = new Map();
   for (const r of rows) cell.set(tupleKey(catOf(r.keys)) + "|" + tupleKey([r.keys[colorIdx]]), r.values[0]);
-  const categories = catTuples.map((t) => (t.length ? t.map((k) => (k == null ? "—" : fmtCat(k))).join(" / ") : ""));
+  const categories = catTuples.map((t) => (t.length ? t.map((k, i) => (k == null ? "—" : fmtCat(k, i))).join(" / ") : ""));
   const series = colorVals.map((cv) => ({
-    name: cv == null ? "—" : fmtCat(cv),
+    name: cv == null ? "—" : fmtCat(cv, colorIdx),
     data: catTuples.map((t) => cell.get(tupleKey(t) + "|" + tupleKey([cv])) ?? null),
   }));
   return { categories, series, catTuples, colorVals };
@@ -237,8 +237,8 @@ export function heatmapData(result, fmtCat) {
     const y = tupleKey([r.keys[0]]); if (!ySeen.has(y)) { ySeen.add(y); yVals.push(r.keys[0]); }
     const x = tupleKey([r.keys[1]]); if (!xSeen.has(x)) { xSeen.add(x); xVals.push(r.keys[1]); }
   }
-  const yCats = yVals.map((v) => (v == null ? "—" : fmtCat(v)));
-  const xCats = xVals.map((v) => (v == null ? "—" : fmtCat(v)));
+  const yCats = yVals.map((v) => (v == null ? "—" : fmtCat(v, 0)));
+  const xCats = xVals.map((v) => (v == null ? "—" : fmtCat(v, 1)));
   const yIdx = new Map(yVals.map((v, i) => [tupleKey([v]), i]));
   const xIdx = new Map(xVals.map((v, i) => [tupleKey([v]), i]));
   const cells = rows.map((r) => [xIdx.get(tupleKey([r.keys[1]])), yIdx.get(tupleKey([r.keys[0]])), r.values[0]]);
@@ -249,14 +249,14 @@ export function heatmapData(result, fmtCat) {
 export function treemapTree(result, fmtCat) {
   const dimCount = result.rowDimensions.length + result.columnDimensions.length;
   const rows = result.rows;
-  if (dimCount === 1) return rows.map((r) => ({ name: r.keys[0] == null ? "—" : fmtCat(r.keys[0]), value: r.values[0] }));
+  if (dimCount === 1) return rows.map((r) => ({ name: r.keys[0] == null ? "—" : fmtCat(r.keys[0], 0), value: r.values[0] }));
   const parents = new Map();
   for (const r of rows) {
     const pk = tupleKey([r.keys[0]]);
-    if (!parents.has(pk)) parents.set(pk, { name: r.keys[0] == null ? "—" : fmtCat(r.keys[0]), value: 0, children: [] });
+    if (!parents.has(pk)) parents.set(pk, { name: r.keys[0] == null ? "—" : fmtCat(r.keys[0], 0), value: 0, children: [] });
     const node = parents.get(pk);
     node.value += Number(r.values[0]) || 0;
-    node.children.push({ name: r.keys[1] == null ? "—" : fmtCat(r.keys[1]), value: r.values[0] });
+    node.children.push({ name: r.keys[1] == null ? "—" : fmtCat(r.keys[1], 1), value: r.values[0] });
   }
   return [...parents.values()];
 }
@@ -266,7 +266,7 @@ export function sankeyLinks(rows, label) {
   const links = [];
   for (const r of rows) {
     const v = Number(r.values[0]);
-    if (Number.isFinite(v) && v > 0) links.push({ source: `s:${label(r.keys[0])}`, target: `t:${label(r.keys[1])}`, value: v });
+    if (Number.isFinite(v) && v > 0) links.push({ source: `s:${label(r.keys[0], 0)}`, target: `t:${label(r.keys[1], 1)}`, value: v });
   }
   return links;
 }
@@ -279,19 +279,19 @@ export function sankeyLinks(rows, label) {
 export function multiplesData(rows, series, seriesNames, label) {
   const xCats = [], xIndex = new Map(), panels = new Map();
   for (const r of rows) {
-    const x = label(r.keys[1]);
+    const x = label(r.keys[1], 1);
     if (!xIndex.has(x)) { xIndex.set(x, xCats.length); xCats.push(x); }
   }
   rows.forEach((r, ri) => {
-    const name = label(r.keys[0]);
+    const name = label(r.keys[0], 0);
     if (!panels.has(name)) {
       if (panels.size >= MAX_PANELS) return;
       panels.set(name, { name, series: seriesNames.map(() => new Array(xCats.length).fill(null)) });
     }
-    const p = panels.get(name), xi = xIndex.get(label(r.keys[1]));
+    const p = panels.get(name), xi = xIndex.get(label(r.keys[1], 1));
     seriesNames.forEach((_, si) => { p.series[si][xi] = series[si].data[ri]; });
   });
-  const distinct = new Set(rows.map((r) => label(r.keys[0]))).size;
+  const distinct = new Set(rows.map((r) => label(r.keys[0], 0))).size;
   return { panels: [...panels.values()], xCats, distinct,
     notice: distinct > MAX_PANELS ? `Showing the first ${MAX_PANELS} of ${distinct} panels — filter or lower Top-N to see others.` : null };
 }

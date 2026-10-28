@@ -41,6 +41,7 @@ import { checkName } from "../Calc/calc-workbook.js";
 import { calcProblem, topByRef, topByKey } from "../Calc/calc-plan.js";
 import { REF_CHOICES, TREND_CHOICES, FORECAST_CHOICES, defaultAnalytics } from "./analytics-model.js";
 import { castChoices, castLabel, effectiveCategory, syncCastCategories } from "./cast-model.js";
+import { aliasOf, labelOf } from "./member-labels.js";
 import { BUCKET_TYPES, DATE_BUCKET_CHOICES } from "./scale-model.js";
 
 // Tableau-style worksheet: each worksheet tab is one sheet. Drag fields from the field pane onto the
@@ -748,7 +749,7 @@ export function initDashboards() {
     const d = s.drill;
     if (d.depth >= d.levels.length - 1) return; // nothing finer to drill into
     const fmtCat = makeCategoryFormatter(s.format ?? defaultFormat());
-    d.path = [...(d.path ?? []).slice(0, d.depth), { column: d.levels[d.depth].column, value: rawValue, label: fmtCat(rawValue) }];
+    d.path = [...(d.path ?? []).slice(0, d.depth), { column: d.levels[d.depth].column, value: rawValue, label: labelOf(metaOf(d.levels[d.depth]), rawValue, fmtCat) }];
     d.depth += 1;
     s.selection = null; // a drill supersedes any P15 mark selection
     commit(dash, s);
@@ -1807,6 +1808,7 @@ export function initDashboards() {
     distinctFor(f.db, f.table, f.column).then((vals) => {
       box.replaceChildren();
       const chosen = new Set(f.values ?? []);
+      const aliases = metaOf(f).memberAliases;
       for (const v of vals.slice(0, DISTINCT_SHOWN)) {
         const val = v == null ? "" : String(v);
         const row = el("label", "ws-fcard__item");
@@ -1817,7 +1819,9 @@ export function initDashboards() {
           f.values = [...set];
           commit(dash, s);
         });
-        row.append(cb, el("span", null, v == null ? "—" : String(v)));
+        const lab = aliasOf(aliases, v); // T02-29: show the label; the raw value stays the filter value (and the tooltip / secondary text)
+        row.append(cb, el("span", null, v == null ? "—" : lab ?? String(v)));
+        if (lab !== undefined) { row.title = String(v); row.append(el("span", "ws-fcard__raw", String(v))); }
         box.append(row);
       }
       if (vals.length > DISTINCT_SHOWN) box.append(el("span", "ws-note", "Showing the first 200 values — more exist."));
@@ -1836,7 +1840,9 @@ export function initDashboards() {
       sel.replaceChildren();
       const chosen = new Set(f.values ?? []);
       for (const v of vals.slice(0, DISTINCT_SHOWN)) {
-        const opt = new Option(v == null ? "—" : String(v), v == null ? "" : String(v));
+        const lab = aliasOf(metaOf(f).memberAliases, v); // T02-29: the option shows the label, its value (and title) stay raw
+        const opt = new Option(v == null ? "—" : lab ?? String(v), v == null ? "" : String(v));
+        if (lab !== undefined) opt.title = String(v);
         if (chosen.has(opt.value)) opt.selected = true;
         sel.add(opt);
       }
@@ -2332,7 +2338,7 @@ export function initDashboards() {
       else {
         const fmtCat = makeCategoryFormatter(sheet.format ?? defaultFormat());
         sheet.selection = { db: field.db, table: field.table, column: field.column, value: raw,
-          label: `${nameOf(field)} = ${fmtCat(raw)}`, action: null };
+          label: `${nameOf(field)} = ${labelOf(metaOf(field), raw, fmtCat)}`, action: null };
       }
       commit(dash, sheet);
     } else {
@@ -2356,7 +2362,7 @@ export function initDashboards() {
       const fmtCat = makeCategoryFormatter(s.format ?? defaultFormat());
       s.selection = {
         db: dimField.db, table: dimField.table, column: dimField.column, value: rawValue,
-        label: `${dimField.table}.${dimField.column} = ${fmtCat(rawValue)}`, action: null,
+        label: `${dimField.table}.${dimField.column} = ${labelOf(metaOf(dimField), rawValue, fmtCat)}`, action: null,
       };
     }
     commit(dash, s);

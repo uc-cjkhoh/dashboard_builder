@@ -87,7 +87,7 @@ export function setCalculations(list, nextId) {
 }
 /** The number the next new calculation gets (saved so a deleted id is never reused). */
 export const nextCalcId = () => calcSeq + 1;
-export function addCalculation({ name, formula }) { calcSeq += 1; const c = { id: `calc${calcSeq}`, name, formula }; calculations.push(c); emit("calculations:changed"); return c; }
+export function addCalculation({ name, formula, group }) { calcSeq += 1; const c = { id: `calc${calcSeq}`, name, formula, ...(group ? { group } : {}) }; calculations.push(c); emit("calculations:changed"); return c; }
 export function updateCalculation(id, patch) {
   const c = calculations.find((x) => x.id === id);
   if (!c) return;

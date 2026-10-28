@@ -4,6 +4,7 @@
 import { parseFormula } from "./calc-parser.js";
 import { check } from "./calc-types.js";
 import { expandCalcs, roleOfCalc } from "./calc-model.js";
+import { groupTree } from "./group-model.js";
 
 const USABLE = new Set(["numeric", "text", "temporal", "boolean"]);
 const offered = (s) => typeof s === "string" && s !== "" && !/[.[\]]/.test(s);
@@ -70,6 +71,7 @@ export function compileCalculation(calc, calcs, catalog) {
   const prefix = (message) => `Calculation '${calc.name}' can't be computed: ${message}`;
   const parse = (c) => {
     resolverError = false;
+    if (c.group) return { ast: groupTree(c.group) }; // T02-30: a group field is a tree, never formula text
     if (typeof c.formula !== "string") return { error: { message: "Write a formula." } };
     const p = parseFormula(c.formula, resolve);
     return p.error && resolverError ? { error: { message: p.error.message, pos: p.error.pos, resolver: true } } : p;

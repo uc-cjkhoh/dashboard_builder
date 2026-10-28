@@ -14,6 +14,7 @@ import { kpiView } from "./render-kpi.js";
 import { renderHeatmap, renderTreemap, renderP36 } from "./render-special.js";
 import { renderColorSplit, renderScatterShapes, renderSeries } from "./render-cartesian.js";
 import { P36_TYPES, sameField, aliasNames, pathOrderedRows } from "./result-model.js";
+import { keyAliasMaps, withMemberLabels } from "./member-labels.js";
 
 // Drawing a worksheet's result into a container (P24a): the one entry point every view uses, the editor's included.
 // It prepares the result (Other mark, date-part labels, display names, table calculations), then dispatches to the family
@@ -74,7 +75,8 @@ function draw(container, rc, sheet, result, cmp) {
   // P10 formatters: measure values + date-like dimension labels, from the sheet's format config.
   let format = sheet.format ?? defaultFormat(); // let: a percent table calculation adds a "%" suffix
   const fmtVal = makeValueFormatter(format);
-  const fmtCat = makeCategoryFormatter(format);
+  // T02-29: a member label replaces the text drawn for a member (key position i = planDims order); clicks, grouping and sorting keep the raw value.
+  const fmtCat = withMemberLabels(makeCategoryFormatter(format), keyAliasMaps(planDims(sheet).keyOrder, rc.plan.metaOf));
   const type = sheet.chartType;
   // Min/Max of a text or date field comes back as text — only Table, Text and KPI can show that.
   if (!TEXT_VALUE_TYPES.has(type) && rows.some((r) => r.values.some((v) => typeof v === "string"))) {
@@ -113,7 +115,7 @@ function draw(container, rc, sheet, result, cmp) {
 
   // Flatten both dimension axes onto the category axis; one series per SHELF measure (P7 layout).
   const dimCount = rowDimensions.length + columnDimensions.length;
-  const categories = rowsOrdered.map((r) => r.keys.map((k) => (k == null ? "—" : fmtCat(k))).join(" / "));
+  const categories = rowsOrdered.map((r) => r.keys.map((k, i) => (k == null ? "—" : fmtCat(k, i))).join(" / "));
   const series = seriesIdx.map((mi) => ({ name: measures[mi], data: rowsOrdered.map((r) => r.values[mi]) }));
   const seriesNames = seriesIdx.map((mi) => measures[mi]);
   // P27: a chart whose measures are all percentage calculations reads its values with "%".

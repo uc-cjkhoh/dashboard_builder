@@ -8,6 +8,7 @@ import { emptySheet, defaultFormat } from "../Core/store.js";
 import { LIMITS, text } from "../Core/validate.js";
 import { aggsFor } from "../Dashboard/filter-rules.js";
 import { CASTS } from "../Dashboard/cast-model.js";
+import { cleanMemberAliases } from "../Dashboard/member-labels.js";
 import { cleanTheme, DEFAULT_THEME } from "../Core/theme-model.js";
 import { normalizeJoinType } from "../Relations/relation-rules.js";
 import { cleanAction } from "../Dashboard/action-model.js";
@@ -63,7 +64,7 @@ export function serializeWorkbook({ entities, relationships, tabs, active, theme
     sharedFilters: structuredClone(sharedFilters),
     fields: Object.fromEntries(fieldMeta), // P28
     parameters: structuredClone(parameters), // P32
-    calculations: calculations.map((c) => ({ id: c.id, name: c.name, formula: c.formula })), // Plan B (no parsed tree)
+    calculations: calculations.map((c) => ({ id: c.id, name: c.name, formula: c.formula, ...(c.group ? { group: structuredClone(c.group) } : {}) })), // Plan B (no parsed tree); T02-30 a group field saves its definition
     // The next calculation number, so a deleted highest id is never handed out again (absent when there never were any).
     ...(calculations.length || nextCalcId ? { nextCalcId: Math.max(Number.isInteger(nextCalcId) ? nextCalcId : 0, ...calculations.map((c) => Number(String(c.id).slice(4)) + 1)) } : {}),
     // P39: each bookmark points at its worksheet by index (null when that worksheet was closed).
@@ -463,6 +464,7 @@ function cleanFieldMeta(raw, issues) {
     if (v.agg !== undefined) { if (AGG_NAMES.has(v.agg)) m.agg = v.agg; else bad++; }
     if (v.cast !== undefined) { if (CASTS.includes(v.cast)) m.cast = v.cast; else bad++; } // T02-34
     if (v.hidden !== undefined) { if (v.hidden === true) m.hidden = true; else if (v.hidden !== false) bad++; }
+    if (v.memberAliases !== undefined) { const ma = cleanMemberAliases(v.memberAliases, `Field ${k}`, issues); if (ma) m.memberAliases = ma; } // T02-29
     if (Object.keys(m).length) out[k] = m;
   }
   if (bad) issues.push(`${bad} field setting(s) were invalid and were dropped.`);

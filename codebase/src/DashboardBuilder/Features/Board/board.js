@@ -3,7 +3,8 @@ import { toggle, toast, makeButton } from "../Core/ui.js";
 import { icon } from "../Core/icons.js";
 import { LIMITS } from "../Core/validate.js";
 import { makeCategoryFormatter } from "../Core/format.js";
-import { defaultFormat } from "../Core/store.js";
+import { defaultFormat, metaOf } from "../Core/store.js";
+import { labelOf } from "../Dashboard/member-labels.js";
 import { sharedResults } from "../Dashboard/dashboards.js";
 import { nextSelection, selectionRefusal, crossFor, chipText, stillValid, UNSELECTABLE_NOTE } from "../Dashboard/dashboard-select.js";
 import { placeNew } from "./board-model.js";
@@ -106,7 +107,8 @@ export function initBoard() {
     const refused = selectionRefusal(field);
     if (refused) { status(refused, true); return; }
     const sheet = worksheetById(widget.sheetId)?.sheet;
-    const next = nextSelection(selection, field, raw, makeCategoryFormatter(sheet?.format ?? defaultFormat()), widget.id);
+    const fmt = makeCategoryFormatter(sheet?.format ?? defaultFormat());
+    const next = nextSelection(selection, field, raw, (v) => labelOf(metaOf(field), v, fmt), widget.id); // T02-29: the chip names the member by its label; the value stays raw
     if (next === selection) return; // a null mark: nothing happens
     setSelection(next);
     status(next ? `Filtering the other widgets by ${next.label}.` : "Dashboard filter cleared.");

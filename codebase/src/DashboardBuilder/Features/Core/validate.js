@@ -26,6 +26,11 @@ export const LIMITS = Object.freeze({
   memberColorFields: 20,  // fields with member colours per sheet
   memberField: 200,       // characters in a coloured field's key (table.column)
   memberKey: 100,         // characters in a coloured member's key
+  memberAliases: 200,     // T02-29: member labels per field (client-side only)
+  memberLabel: 80,        // characters in one member label
+  groups: 50,             // T02-30: named groups in one group field
+  groupMembers: 500,      // members across the groups of one group field (the node budget, Calc/group-model.js, binds first)
+  groupName: 80,          // characters in a group name
   // P24b dashboard board (Board/board-model.js; client-side only — the server never sees a dashboard).
   widgets: 12,         // widgets per dashboard
   gridCols: 12,        // the snap grid's columns

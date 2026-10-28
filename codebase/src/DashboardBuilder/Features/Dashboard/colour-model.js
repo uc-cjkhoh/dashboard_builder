@@ -21,9 +21,9 @@ export const memberKey = (raw) => (raw == null ? NULL_KEY : String(raw));
 export const fieldColorKey = (f) => `${f.table}.${f.column}`;
 
 const isPlain = (o) => o && typeof o === "object" && !Array.isArray(o);
-const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+export const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 /** A map with no prototype, so member names like "constructor" or "__proto__" are ordinary keys. */
-const bare = (entries = {}) => Object.assign(Object.create(null), entries);
+export const bare = (entries = {}) => Object.assign(Object.create(null), entries);
 /** The stored colour of one member in a field's map (own keys only), or undefined. */
 export const colourOf = (fieldMap, member) => (isPlain(fieldMap) && has(fieldMap, member) && HEX.test(fieldMap[member]) ? fieldMap[member] : undefined);
 

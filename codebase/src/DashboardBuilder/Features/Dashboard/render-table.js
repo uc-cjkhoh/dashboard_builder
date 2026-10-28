@@ -19,7 +19,7 @@ export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, ca
   const { rowDimensions, columnDimensions, measures, rows } = result;
   const cf = conditionalFor(sheet, measures, rows); // P37: per measure index, or null
   const rd = rowDimensions.length, cd = columnDimensions.length;
-  const dimLabel = (v) => (v == null ? "—" : fmtCat(v)); // date-aware header label (P10)
+  const dimLabel = (v, i) => (v == null ? "—" : fmtCat(v, i)); // date-aware header label (P10)
 
   const colMeasures = sheet.columns.filter((f) => roleOf(f) === "measure");
   const rowMeasures = sheet.rows.filter((f) => roleOf(f) === "measure");
@@ -69,7 +69,7 @@ export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, ca
       tr.append(el("th", "num", ""));                         // single unlabeled value column
     } else if (tl < cd) {
       for (const g of runs(topLeaves, (lf) => tupleKey(lf.tuple.slice(0, tl + 1)))) {
-        const th = el("th", "xt-colhdr", dimLabel(g.leaf.tuple[tl]));
+        const th = el("th", "xt-colhdr", dimLabel(g.leaf.tuple[tl], rd + tl));
         th.colSpan = g.span;
         tr.append(th);
       }
@@ -94,7 +94,7 @@ export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, ca
     for (let ll = 0; ll < rd; ll++) {
       const span = dimStarts[ll][ri];
       if (!span) continue;                                    // covered by a rowSpan above
-      const th = el("th", "xt-rowhdr", dimLabel(leftLeaf.tuple[ll]));
+      const th = el("th", "xt-rowhdr", dimLabel(leftLeaf.tuple[ll], ll));
       if (span > 1) th.rowSpan = span;
       tr.append(th);
     }
@@ -114,7 +114,7 @@ export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, ca
     const next = leftLeaves[ri + 1];
     if (tot.sub && rd >= 2 && !measureOnLeft && (!next || tupleKey([next.tuple[0]]) !== tupleKey([leftLeaf.tuple[0]]))) {
       const group = rowTuples.filter((t) => tupleKey([t[0]]) === tupleKey([leftLeaf.tuple[0]]));
-      tbody.append(totalRow(`Subtotal · ${dimLabel(leftLeaf.tuple[0])}`, group, null, "xt-subtotal"));
+      tbody.append(totalRow(`Subtotal · ${dimLabel(leftLeaf.tuple[0], 0)}`, group, null, "xt-subtotal"));
     }
   });
   // Grand-total row(s): one, or one per measure when measures run down the left.
