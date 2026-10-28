@@ -30,7 +30,7 @@ public static class RequestRules
     private static readonly Regex HostName = new(
         @"^[A-Za-z0-9_]([A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?(\.[A-Za-z0-9_]([A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?)*\.?$", RegexOptions.CultureInvariant);
     private static readonly HashSet<string> Ops = new(StringComparer.OrdinalIgnoreCase)
-        { "=", "!=", ">", ">=", "<", "<=", "in", "between", "contains", "startsWith", "endsWith", "top" }; // P30: text match + top-N
+        { "=", "!=", ">", ">=", "<", "<=", "in", "notin", "between", "contains", "startsWith", "endsWith", "top" }; // P30: text match + top-N
     private static RequestValidationException Bad(string message, string field) => new(message, field);
 
     /// <summary>Null when the host is valid, else the user-facing reason (same text as validate.js).</summary>
@@ -69,9 +69,9 @@ public static class RequestRules
         if (op is null || !Ops.Contains(op)) throw Bad("Unknown filter operator.", field + ".op");
         switch (op.ToLowerInvariant())
         {
-            case "in":
+            case "in" or "notin":
                 if (values is not { Length: > 0 }) throw Bad("Pick at least one value.", field + ".values");
-                if (values.Length > ApiLimits.MaxInValues) throw Bad($"An 'in' filter can list at most {ApiLimits.MaxInValues} values.", field + ".values");
+                if (values.Length > ApiLimits.MaxInValues) throw Bad($"A{(op.Equals("notin", StringComparison.OrdinalIgnoreCase) ? " 'not in'" : "n 'in'")} filter can list at most {ApiLimits.MaxInValues} values.", field + ".values");
                 break;
             case "between":
                 if (values is not { Length: 2 } || values.Any(string.IsNullOrWhiteSpace)) throw Bad("A range filter needs both From and To.", field + ".values");

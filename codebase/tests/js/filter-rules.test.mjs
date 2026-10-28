@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { aggsFor, checkFilter, statFilters, withCategories } from "../../src/DashboardBuilder/Features/Dashboard/filter-rules.js";
+import { aggsFor, opsFor, OP_LABELS, serverFilter, checkFilter, statFilters, withCategories } from "../../src/DashboardBuilder/Features/Dashboard/filter-rules.js";
 const F = (o) => ({ db: "s", table: "orders", column: "amount", category: "numeric", op: "=", value: "", values: null, ...o });
 test("aggregations match the column category", () => {
   assert.ok(aggsFor("numeric").includes("sum"));
@@ -77,4 +77,18 @@ test("replacing a single-slot encoding at the cap is allowed; counts include mar
   assert.deepEqual(viewCounts(s), { dims: 12, measures: 0 });
   assert.equal(checkAdd(s, "color", dim(91), "dimension").ok, true);
   assert.equal(checkAdd(s, "detail", dim(92)).ok, false);
+});
+test("not in is offered beside in, labelled, and checked like in", () => {
+  for (const c of ["text", "numeric", "temporal", "boolean"]) assert.ok(opsFor(c).includes("notin"), c);
+  assert.equal(OP_LABELS.notin, "not in");
+  assert.equal(checkFilter(F({ op: "notin", values: [] })).state, "empty");
+  assert.equal(checkFilter(F({ op: "notin", values: ["1", "2"] })).state, "ok");
+  const big = Array.from({ length: 501 }, (_, i) => String(i));
+  const r = checkFilter(F({ op: "notin", values: big }));
+  assert.equal(r.state, "invalid"); assert.match(r.error, /'not in' filter can list at most 500/);
+});
+test("not in goes to the server as-is, and to stat charts", () => {
+  const f = F({ op: "notin", values: ["1", "2"] });
+  assert.deepEqual(serverFilter(f), { db: "s", table: "orders", column: "amount", op: "notin", value: "", values: ["1", "2"] });
+  assert.deepEqual(statFilters([f], "s", "orders").apply, [{ column: "amount", op: "notin", value: "", values: ["1", "2"] }]);
 });

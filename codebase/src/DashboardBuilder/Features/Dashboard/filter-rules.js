@@ -15,10 +15,10 @@ const blank = (v) => v == null || !String(v).trim();
 // P30 richer filters. Text match (bound, case-insensitive), relative date (a period preset, resolved to a
 // `between` in the browser) and top-N by a measure (a bound subquery on the server).
 export const TEXT_OPS = new Set(["contains", "startsWith", "endsWith"]);
-export const OP_LABELS = { contains: "contains", startsWith: "starts with", endsWith: "ends with", relative: "in the", top: "top" };
+export const OP_LABELS = { contains: "contains", startsWith: "starts with", endsWith: "ends with", notin: "not in", relative: "in the", top: "top" };
 /** The operators that make sense for a field's category. */
 export function opsFor(category) {
-  const base = ["=", "!=", ">", ">=", "<", "<=", "in", "between"];
+  const base = ["=", "!=", ">", ">=", "<", "<=", "in", "notin", "between"];
   if (category === "text") return [...base, "contains", "startsWith", "endsWith", "top"];
   if (category === "temporal") return [...base, "relative", "top"];
   if (category === "numeric") return base;
@@ -45,11 +45,11 @@ export function checkFilter(f) {
     if (!f.topBy?.column) return { state: "invalid", error: "Pick a measure to rank by." };
     return { state: "ok" };
   }
-  if (f.op === "in") {
+  if (f.op === "in" || f.op === "notin") {
     const vals = Array.isArray(f.values) ? f.values : [];
     if (!vals.length) return { state: "empty" };
     return vals.length > LIMITS.inValues
-      ? { state: "invalid", error: `An 'in' filter can list at most ${LIMITS.inValues} values.` } : { state: "ok" };
+      ? { state: "invalid", error: `A${f.op === "notin" ? " 'not in'" : "n 'in'"} filter can list at most ${LIMITS.inValues} values.` } : { state: "ok" };
   }
   if (f.op === "between") {
     const [lo, hi] = Array.isArray(f.values) ? f.values : [];

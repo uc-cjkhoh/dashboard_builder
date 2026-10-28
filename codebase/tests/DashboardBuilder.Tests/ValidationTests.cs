@@ -43,6 +43,12 @@ public class ValidationTests
     [Fact] public void Valid_in_and_between_filters_pass()
         => RequestRules.ValidateQuery(Q(filters: [F("in", null, ["a", "b"]), F("between", null, ["1", "9"])]));
     [Fact] public void An_unknown_operator_is_rejected() => Assert.Equal("filters[0].op", FieldOf(Q(filters: [F("LIKE")])));
+    [Fact] public void A_notin_filter_needs_values_and_shares_the_in_limit()
+    {
+        RequestRules.ValidateQuery(Q(filters: [F("notin", null, ["a", "b"])]));
+        Assert.Equal("filters[0].values", FieldOf(Q(filters: [F("notin", null, [])])));
+        Assert.Equal("filters[0].values", FieldOf(Q(filters: [F("notin", null, Enumerable.Repeat("x", 501).ToArray())])));
+    }
     [Fact] public void An_empty_in_list_is_rejected() => Assert.Equal("filters[0].values", FieldOf(Q(filters: [F("in", null, [])])));
     [Fact] public void A_501_value_in_list_is_rejected() => Assert.Equal("filters[0].values", FieldOf(Q(filters: [F("in", null, Enumerable.Repeat("x", 501).ToArray())])));
     [Fact] public void A_half_range_is_rejected() => Assert.Equal("filters[0].values", FieldOf(Q(filters: [F("between", null, ["1", " "])])));

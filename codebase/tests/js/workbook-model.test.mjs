@@ -469,3 +469,12 @@ test("nextCalcId round-trips; absent or invalid falls back to undefined", () => 
   assert.equal(parseWorkbook(wbText({})).nextCalcId, undefined);
   assert.equal(parseWorkbook(wbText({ nextCalcId: -3 })).nextCalcId, undefined);
 });
+test("a not in filter round-trips with its values; a non-text member is rejected", () => {
+  const f = { db: "s", table: "orders", column: "city", category: "text", op: "notin", value: "", values: ["NY", "LA"] };
+  const ok = sheetOf({ filters: [f] });
+  assert.deepEqual(ok.issues, []);
+  assert.deepEqual(ok.dashboards[0].sheet.filters[0].values, ["NY", "LA"]);
+  const bad = sheetOf({ filters: [{ ...f, values: [1] }] });
+  assert.equal(bad.dashboards[0].sheet.filters.length, 0);
+  assert.equal(bad.issues.length, 1);
+});

@@ -83,6 +83,36 @@ public class FilterTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.Empty(p);
     }
 
+    // --- notin (Exclude): NULL rows are kept, not dropped by three-valued logic ---
+    [Fact]
+    public void Notin_binds_a_string_array_and_keeps_null_rows()
+    {
+        var p = Bag();
+        var sql = ClickHouseGateway.BuildCondition("notin", "p0", "`city`", ClickHouseType.Text, "city", "filters[0]", null, ["NY", "LA"], p);
+        Assert.Equal("(`city` NOT IN {p0:Array(String)} OR isNull(`city`))", sql);
+        Assert.Equal("Array(String)", p[0].Type);
+        Assert.Equal(new[] { "NY", "LA" }, (string[])p[0].Value);
+    }
+
+    [Fact]
+    public void Notin_with_numeric_values_binds_a_float_array()
+    {
+        var p = Bag();
+        var sql = ClickHouseGateway.BuildCondition("NotIn", "p0", "`age`", ClickHouseType.Numeric, "age", "filters[0]", null, ["18", "21"], p);
+        Assert.Equal("(`age` NOT IN {p0:Array(Float64)} OR isNull(`age`))", sql);
+        Assert.Equal(new[] { 18d, 21d }, (double[])p[0].Value);
+    }
+
+    [Fact]
+    public void Notin_rejects_empty_and_a_value_that_does_not_fit_the_column()
+    {
+        var p = Bag();
+        Assert.Throws<RequestValidationException>(() =>
+            ClickHouseGateway.BuildCondition("notin", "p0", "`city`", ClickHouseType.Text, "city", "filters[0]", null, [], p));
+        Assert.Throws<RequestValidationException>(() =>
+            ClickHouseGateway.BuildCondition("notin", "p0", "`age`", ClickHouseType.Numeric, "age", "filters[0]", null, ["x"], p));
+    }
+
     // --- between -------------------------------------------------------------
     [Fact]
     public void Between_numeric_binds_two_bounds()

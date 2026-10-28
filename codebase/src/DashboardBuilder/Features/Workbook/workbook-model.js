@@ -224,7 +224,7 @@ function cleanPill(raw, where, issues, needCategory = true) {
 export function cleanFilters(list, where, issues, max) {
   return cleanPills(list, where, issues, max, false).filter((f) => {
     if (f.calc !== undefined) { issues.push(`${where}: a calculated field can't be used as a filter — removed.`); return false; } // E12
-    const multi = f.op === "in" || f.op === "between";
+    const multi = f.op === "in" || f.op === "notin" || f.op === "between";
     if (FILTER_OPS.has(f.op) && !multi && f.value !== undefined && f.value !== null && typeof f.value !== "string") {
       issues.push(`${where}: the value of the filter on ${f.table}.${f.column} wasn't text — reset to empty.`); f.value = "";
     }

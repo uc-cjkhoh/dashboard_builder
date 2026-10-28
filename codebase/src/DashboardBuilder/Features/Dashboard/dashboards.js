@@ -58,7 +58,7 @@ function isDateOnlyColumn(db, table, column) {
   return /^(Nullable\()?(LowCardinality\()?Date(32)?\)*$/.test(t);
 }
 const FILTER_PLACEHOLDER = { numeric: "number", temporal: "YYYY-MM-DD", boolean: "true or false" };
-const OPS = ["=", "!=", ">", ">=", "<", "<=", "in", "between"];
+const OPS = ["=", "!=", ">", ">=", "<", "<=", "in", "notin", "between"];
 // A filter contributes to the query only when checkFilter() says "ok" (empty = no-op, invalid = not applied).
 // Map a client filter to the server QueryFilter shape (value for scalar ops, values for in/between).
 // P30: relative dates resolve to a bound `between` (whole days), top-N carries its ranking measure.
@@ -1536,7 +1536,7 @@ export function initDashboards() {
         const e = planMeasures(s).find((m) => m.role === "shelf");
         if (e) f.topBy = topByRef(e, calcFieldCtx());
       }
-      if (f.op === "in" && !Array.isArray(f.values)) f.values = [];
+      if ((f.op === "in" || f.op === "notin") && !Array.isArray(f.values)) f.values = [];
       if (f.op === "between" && !Array.isArray(f.values)) f.values = ["", ""];
       commit(dash, s); // re-render so the matching value control appears
     });
@@ -1735,7 +1735,7 @@ export function initDashboards() {
       wrap.append(sel, paramBinding(dash, s, f));
       return wrap;
     }
-    if (f.op === "in") {
+    if (f.op === "in" || f.op === "notin") {
       const sel = el("select", "select select--light ws-pill__in");
       sel.multiple = true; sel.size = 4;
       sel.setAttribute("aria-label", `Values for ${f.table}.${f.column}`);
@@ -1879,7 +1879,10 @@ export function initDashboards() {
       x.addEventListener("click", () => { src.splice(i, 1); commit(dash, s); });
       head.append(x);
       card.append(head);
-      if (f.op === "in") card.append(checklist(dash, s, f));
+      if (f.op === "in" || f.op === "notin") {
+        if (f.op === "notin") card.append(el("span", "ws-fcard__op", OP_LABELS.notin)); // Exclude says so; plain `in` is the default
+        card.append(checklist(dash, s, f));
+      }
       else {
         const body = el("div", "ws-fcard__body");
         if (f.op !== "top") body.append(el("span", "ws-fcard__op", OP_LABELS[f.op] ?? f.op)); // top-N names itself

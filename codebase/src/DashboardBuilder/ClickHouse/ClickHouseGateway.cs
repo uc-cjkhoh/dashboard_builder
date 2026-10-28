@@ -428,8 +428,9 @@ public sealed class ClickHouseGateway
             }
             case "top":
                 throw new RequestValidationException("Top-N filters apply to the worksheet query only.", field);
-            case "in":
+            case "in" or "notin":
             {
+                var negate = string.Equals(op, "notin", StringComparison.OrdinalIgnoreCase);
                 var typed = (values ?? []).Select(v => FilterValues.Coerce(category, column, v ?? "", field, dateOnly)).ToList();
                 if (typed.Count == 0) throw new RequestValidationException("Pick at least one value.", field);
                 var type = typed[0].Type;
@@ -440,7 +441,8 @@ public sealed class ClickHouseGateway
                     _ => typed.Select(t => (string)t.Value).ToArray(),
                 };
                 parameters.Add((paramBase, $"Array({type})", arr));
-                return $"{expr} IN {{{paramBase}:Array({type})}}";
+                // Exclude keeps NULL rows: a bare NOT IN is NULL (so dropped) for them in SQL three-valued logic.
+                return negate ? $"({expr} NOT IN {{{paramBase}:Array({type})}} OR isNull({expr}))" : $"{expr} IN {{{paramBase}:Array({type})}}";
             }
             case "between":
             {

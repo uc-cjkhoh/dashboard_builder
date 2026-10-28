@@ -4,7 +4,7 @@ export const CHART_TYPE_IDS = new Set(["bar", "stacked", "line", "area", "pie", 
   "square", "circle", "heatmap", "treemap", "histogram", "boxplot", "kpi", "text", "table",
   "waterfall", "funnel", "gauge", "bullet", "sankey", "multiples"]);
 export const CATEGORIES = new Set(["numeric", "text", "temporal", "boolean", "compound", "other"]);
-export const FILTER_OPS = new Set(["=", "!=", ">", ">=", "<", "<=", "in", "between",
+export const FILTER_OPS = new Set(["=", "!=", ">", ">=", "<", "<=", "in", "notin", "between",
   "contains", "startsWith", "endsWith", "relative", "top"]); // P30
 export const NUMBER_FORMATS = new Set(["auto", "compact", "currency", "percent"]);
 export const DATE_FORMATS = new Set(["auto", "date", "month", "year", "datetime"]);
