@@ -55,7 +55,7 @@
 /* ---- Field pane: Calculated fields ---- */
 .calc-group { display: flex; flex-direction: column; gap: 3px; margin-bottom: var(--s2); }
 .calc-group__title { font-size: var(--fs-xs); font-weight: 700; color: var(--ink-2); }
-.calc-group__new { width: 100%; justify-content: flex-start; gap: var(--s2); }
+.calc-group__new { width: 100%; justify-content: flex-start; gap: var(--s2); padding-inline: var(--s2); white-space: nowrap; }
 .calc-group__new:focus-visible, .calc-field .ws-field__add:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .calc-field::before { display: none; }
 .calc-field { border-color: var(--line); background: var(--surface-2); }
@@ -64,12 +64,13 @@
 .calc-field--dim .calc-field__type { color: var(--dim-ink); }
 .calc-field--error { border-color: var(--danger-line); }
 .calc-field--error .calc-field__type { color: var(--danger-ink); }
-.calc-field .calc-chip { height: 18px; padding: 0 var(--s1); flex: none; }
+.calc-field .calc-chip { height: 18px; padding: 0 var(--s1); flex: 0 100 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.calc-field .ws-field__name { flex: 1 1 auto; min-width: 6ch; } /* the name is what you pick by: the kind tag gives way first */
 .calc-field .ws-field__more { opacity: 1; }
 
 /* ---- View bar: How this is computed ---- */
 .explain { position: relative; display: inline-flex; }
-.explain__btn { gap: var(--s1); }
+.explain__btn { display: inline-flex; align-items: center; gap: var(--s1); width: auto; padding-inline: var(--s2); font-size: var(--fs-xs); white-space: nowrap; }
 .explain__btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .explain__pop { position: absolute; top: calc(100% + var(--s1)); left: 0; z-index: 30; width: min(380px, 90vw); max-height: 60vh; overflow: auto;
   padding: var(--s3); background: var(--surface); color: var(--ink); border: 1px solid var(--line-2); border-radius: var(--r); box-shadow: var(--elev-8); }

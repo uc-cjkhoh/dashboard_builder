@@ -1369,13 +1369,17 @@ export function initDashboards() {
     const remove = () => { s[shelfKey].splice(i, 1); commit(dash, s); };
     const isMeasure = roleOf(f) === "measure";
     const controls = el("span", "ws-pill__ctl");
-    if (isMeasure) {
+    const calcPill = isCalcPill(f);
+    // A calculated measure aggregates itself: only a row-level number (it carries `agg`) picks an aggregation, and only that
+    // one may flip dimension <-> measure (E4); an aggregate or non-number calculation has nothing to choose.
+    const rowLevelNumber = !calcPill || (f.category === "numeric" && (f.role === "dimension" || Boolean(f.agg)));
+    if (isMeasure && (!calcPill || f.agg)) {
       const opts = aggsFor(f.category);
       if (f.agg && !opts.includes(f.agg)) {
         toast(`${f.agg} isn't available for ${label}; switched to ${opts[0]}.`, "info");
         f.agg = opts[0]; // keep the screen in step with the query
       }
-      const agg = select(opts, f.agg ?? opts[0], "ws-pill__agg", `Aggregation for ${f.table}.${f.column}`);
+      const agg = select(opts, f.agg ?? opts[0], "ws-pill__agg", `Aggregation for ${calcPill ? label : `${f.table}.${f.column}`}`);
       agg.addEventListener("change", () => { f.agg = agg.value; commit(dash, s); });
       controls.append(agg);
     }
@@ -1384,7 +1388,7 @@ export function initDashboards() {
       isMeasure ? "Use as dimension (group by values)" : "Use as measure (aggregate)");
     conv.classList.add("ws-pill__conv");
     conv.addEventListener("click", () => setRole(dash, s, f, isMeasure ? "dimension" : "measure"));
-    controls.append(conv);
+    if (rowLevelNumber) controls.append(conv);
     // P27: a measure's quick table calculation (opens its editor); the pill names the calculation when set.
     if (isMeasure) {
       const on = isCalc(f.tableCalc);
