@@ -191,6 +191,16 @@ try {
     await shot('tooltip-dark.png');
   });
 
+  await check('an empty sheet offers no stale chips; the note names the views that keep the automatic tooltip', async () => {
+    await ev(`document.querySelector('.tab-add').click()`);
+    await settle(400);
+    await ev(`${tipTool}.click()`);
+    await waitFor(`!!document.querySelector('.ws-tipedit__text')`, 'tooltip editor on the new sheet');
+    must(await ev(`document.querySelectorAll('.ws-tipedit__chip').length`) === 0, 'stale chips offered');
+    must((await ev(`document.querySelector('.ws-tipedit__chips').textContent`)).includes('Add fields'), 'empty state text');
+    must((await ev(`document.querySelector('.ws-tipedit__preview + .ws-shelf__note').textContent`)).includes('automatic tooltip kept on'), 'automatic-views note');
+  });
+
   if (b.consoleErrors.length) console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  '));
 } catch (e) {
   console.log(`FAIL harness: ${e.stack}`); failed++;

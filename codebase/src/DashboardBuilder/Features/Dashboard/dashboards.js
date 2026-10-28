@@ -2119,8 +2119,12 @@ export function initDashboards() {
 
   // --- Tooltip text (T01-19) ---------------------------------------------
   // The fields the last drawn chart offers ([{ name, sample }]) — the editor's chips and live preview.
-  let tooltipCat = [];
+  // Keyed by sheet and cleared at the top of renderChart, so it only ever holds the drawn view's fields.
+  let tooltipCatState = { sheet: null, list: [] };
+  let tooltipRedraw = null; // the open editor's chip/preview redraw (the chart may finish after the panel opened)
+  const setTooltipCat = (sheet, list) => { tooltipCatState = { sheet, list }; tooltipRedraw?.(); };
   function tooltipEditor(dash, s) {
+    const cat = () => (tooltipCatState.sheet === s ? tooltipCatState.list : []);
     const box = el("div", "ws-tipedit");
     const label = el("label", "ws-fmt-field");
     label.append(el("span", "ws-fmt-label", "Tooltip text"));
@@ -2132,7 +2136,9 @@ export function initDashboards() {
     label.append(ta);
     box.append(label);
     const chips = el("div", "ws-tipedit__chips");
-    for (const f of tooltipCat) {
+    const drawChips = () => {
+    chips.replaceChildren();
+    for (const f of cat()) {
       const b = el("button", "btn btn--ghost ws-tipedit__chip", f.name);
       b.type = "button";
       b.title = `Insert <${f.name}>`;
@@ -2143,18 +2149,19 @@ export function initDashboards() {
       });
       chips.append(b);
     }
-    if (!tooltipCat.length) chips.append(el("span", "ws-shelf__note", "Build a chart to insert its fields."));
+    if (!cat().length) chips.append(el("span", "ws-shelf__note", "Add fields to the view to insert them."));
+    };
     box.append(chips);
     const preview = el("div", "ws-tipedit__preview");
     preview.setAttribute("aria-label", "Tooltip preview");
     const note = el("span", "ws-shelf__note");
     const refresh = () => {
       const r = checkTooltipText(ta.value);
-      const sample = lookupFrom(Object.fromEntries(tooltipCat.map((f) => [f.name, f.sample])));
+      const sample = lookupFrom(Object.fromEntries(cat().map((f) => [f.name, f.sample])));
       preview.innerHTML = r.ok && r.value ? tooltipHtml(r.value, sample) : ""; // escaped parts only (tooltip-model.js)
       if (!r.ok || !r.value) preview.textContent = "Automatic tooltip";
       const unknown = r.ok && r.value ? parseTooltip(r.value).fields.filter((n) => sample(n) === undefined) : [];
-      note.textContent = r.ok ? `${ta.value.length}/${LIMITS.tooltipText}${unknown.length ? ` · not in this view: ${unknown.map((n) => `<${n}>`).join(" ")}` : ""}` : r.error;
+      note.textContent = r.ok ? `${ta.value.length}/${LIMITS.tooltipText} · automatic tooltip kept on Table, Text, KPI, Heatmap, Treemap, discrete-colour splits, Scatter with Shape and the other special chart types${unknown.length ? ` · not in this view: ${unknown.map((n) => `<${n}>`).join(" ")}` : ""}` : r.error;
     };
     const save = () => {
       const r = checkTooltipText(ta.value);
@@ -2164,6 +2171,9 @@ export function initDashboards() {
     ta.addEventListener("input", refresh);
     ta.addEventListener("change", save);
     box.append(preview, note);
+    const redraw = () => { if (!box.isConnected) return; drawChips(); refresh(); };
+    tooltipRedraw = redraw;
+    drawChips();
     refresh();
     return box;
   }
@@ -2703,6 +2713,7 @@ export function initDashboards() {
   //            rows:[{ keys:[rowVals…, colVals…], values:[…] }] }
   function renderChart(sheet, result, cmp = null) {
     chartEl.replaceChildren();
+    setTooltipCat(sheet, []);
     extraNotice = null;
     // Date-grouped key: its labels are bucket starts, not values a filter could match — no click-to-filter.
     bucketedKey = result.bucket ? result.bucket.key : null;
@@ -2990,7 +3001,9 @@ export function initDashboards() {
     // T01-19 tooltip text: the template + every group-by / Tooltip field's per-mark values (measures come from the series).
     const dimVals = planDims(sheet).keyOrder.map((f) => markFieldValues(sheet, rows, mplan, f, fmtVal, fmtCat)).filter(Boolean);
     const tipFields = [...dimVals, ...tips].map((t) => ({ name: t.name, values: t.values }));
-    tooltipCat = tooltipCatalog(tipFields, result.measures, (result.measures ?? []).map((_, i) => (rows[0] ? fmtVal(rows[0].values[i]) : "")));
+    // Chips offer only placeholders that resolve: group-by / Tooltip fields and the shelf (series) measures.
+    const shelfNames = (result.measures ?? []).slice(0, mplan.filter((e) => e.role === "shelf").length);
+    setTooltipCat(sheet, tooltipCatalog(tipFields, shelfNames, shelfNames.map((_, i) => (rows[0] ? fmtVal(rows[0].values[i]) : ""))));
     if (sheet.tooltipText) { spec.tooltipText = sheet.tooltipText; spec.tooltipFields = tipFields; }
     // Angle: pie/donut already map their measure to slice angle; elsewhere a radial angle has no mark.
     if (m.angle && type !== "pie" && type !== "donut") notes.push("Angle drives a Pie/Donut slice — that mapping is already implicit there.");
