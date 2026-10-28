@@ -640,16 +640,19 @@ export function initDashboards() {
     const meta = metaOf(f);
     list.append(item("Rename…", () => renameField(f, col, nameEl)));
     if (meta.alias) list.append(item("Use the column name", () => setFieldMeta(f, { alias: null })));
-    if (col.category === "numeric") {
+    const effCat = effectiveCategory(col.category, meta.cast); // T02-34: a text column cast to Number aggregates like a number
+    if (effCat === "numeric") {
       list.append(el("div", "menu__sep"), el("div", "menu__heading", "Default aggregation"));
-      for (const a of aggsFor(col.category))
+      for (const a of aggsFor(effCat))
         list.append(item(a, () => setFieldMeta(f, { agg: a === "sum" ? null : a }), { role: "menuitemradio", checked: (meta.agg ?? "sum") === a }));
     }
     // T02-34: read the field as another type (the server converts; a value that doesn't fit becomes empty).
     list.append(el("div", "menu__sep"), el("div", "menu__heading", "Data type"));
-    list.append(item("Original", () => setFieldMeta(f, { cast: null }), { role: "menuitemradio", checked: !meta.cast }));
+    // A stored default aggregation the new type doesn't offer is cleared with the cast.
+    const setCast = (c) => setFieldMeta(f, { cast: c, ...(meta.agg && !aggsFor(effectiveCategory(col.category, c)).includes(meta.agg) ? { agg: null } : {}) });
+    list.append(item("Original", () => setCast(null), { role: "menuitemradio", checked: !meta.cast }));
     for (const c of castChoices(col.category))
-      list.append(item(castLabel(c), () => setFieldMeta(f, { cast: c }), { role: "menuitemradio", checked: meta.cast === c }));
+      list.append(item(castLabel(c), () => setCast(c), { role: "menuitemradio", checked: meta.cast === c }));
     list.append(el("div", "menu__sep"), item(meta.hidden ? "Show in the field list" : "Hide from the field list", () => setFieldMeta(f, { hidden: !meta.hidden })));
     wireMenu(btn, list);
     wrap.append(btn, list);
@@ -1253,7 +1256,7 @@ export function initDashboards() {
     if (problem) { toast(problem, "danger"); return; }
     const plan = buildPlan({ ...s, selection: null }); // the mark is added back as a plain `=`, whatever Keep / Exclude did
     if (!plan) { toast("Add fields before viewing data.", "info"); return; }
-    const { request, notes } = buildRowsRequest({ plan, selection: ofMark ? s.selection : null });
+    const { request, notes } = buildRowsRequest({ plan, selection: ofMark ? s.selection : null, castOf });
     openRowsDialog({ title: ofMark ? `Data behind ${s.selection.label}` : "Data behind this view", subtitle: `${request.db}.${request.table}`, request, notes, filename: `${exportBaseName(dash)}-data` });
   }
 

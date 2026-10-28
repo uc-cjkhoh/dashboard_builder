@@ -18,10 +18,10 @@ public class TypeCastTests
     [InlineData("text", "boolean", "toString(t0.`c`)")]
     [InlineData("text", "other", "toString(t0.`c`)")]
     [InlineData("text", "text", "t0.`c`")]
-    [InlineData("number", "text", "toFloat64OrNull(toString(t0.`c`))")]
+    [InlineData("number", "text", "if(isFinite(toFloat64OrNull(toString(t0.`c`))), toFloat64OrNull(toString(t0.`c`)), NULL)")]
     [InlineData("number", "boolean", "toFloat64(t0.`c`)")]
     [InlineData("number", "numeric", "t0.`c`")]
-    [InlineData("date", "text", "parseDateTimeBestEffortOrNull(toString(t0.`c`))")]
+    [InlineData("date", "text", "if(match(toString(t0.`c`), '^[0-9 ,.+]+$') AND NOT match(toString(t0.`c`), '^ *[0-9]{8} *$'), NULL, parseDateTimeBestEffortOrNull(toString(t0.`c`)))")]
     [InlineData("date", "temporal", "t0.`c`")]
     public void Each_pairing_maps_to_one_safe_expression(string cast, string category, string sql) => Assert.Equal(sql, Apply(cast, category));
 
@@ -37,7 +37,9 @@ public class TypeCastTests
     [Theory] [InlineData("text", "text")] [InlineData("number", "numeric")] [InlineData("date", "temporal")]
     public void A_cast_decides_the_category(string cast, string category) => Assert.Equal(category, TypeCast.TargetCategory(cast));
     [Fact] public void The_effective_category_is_the_columns_own_without_a_cast() => Assert.Equal("text", TypeCast.EffectiveCategory("text", null));
-    [Fact] public void A_date_cast_is_never_date_only() { Assert.False(TypeCast.DateOnly("date", true)); Assert.True(TypeCast.DateOnly(null, true)); }
+    [Fact] public void A_date_cast_of_a_real_Date_column_stays_date_only() { Assert.True(TypeCast.DateOnly("date", true)); Assert.True(TypeCast.DateOnly(null, true)); }
+    [Fact] public void A_date_cast_of_text_is_a_date_time() => Assert.False(TypeCast.DateOnly("date", false));
+    [Fact] public void A_text_cast_of_a_Date_column_is_not_date_only() => Assert.False(TypeCast.DateOnly("text", true));
 
     // --- request rules -----------------------------------------------------------------
     private static QueryRequest Q(ColumnRef[]? rows = null, MeasureRef[]? measures = null, QueryFilter[]? filters = null) =>

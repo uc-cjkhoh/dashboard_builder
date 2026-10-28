@@ -32,21 +32,24 @@ export function tableRowsRequest(db, table, limit = PREVIEW_LIMIT, columns) {
  * a joined table, a NULL mark and Top-N rankings can't be applied to a single-table read: they are left out
  * and named in `notes`, never dropped silently.
  */
-export function buildRowsRequest({ plan, selection = null, limit }) {
+export function buildRowsRequest({ plan, selection = null, limit, castOf = () => undefined }) {
   const { db, table } = plan.from;
   const here = (x) => x.db === db && x.table === table;
   const notes = [];
   const filters = [];
-  let joined = 0, top = 0;
+  let joined = 0, top = 0, casted = 0;
   for (const f of plan.filters ?? []) {
     if (f.op === "top") top++;
+    else if (f.cast) casted++; // T02-34: /api/rows compares the stored column, so a cast field's filter would match wrong rows
     else if (!here(f)) joined++;
     else filters.push(wire(f));
   }
   if (joined) notes.push(`${plural(joined, "filter", "filters")} on a joined table ${joined === 1 ? "isn't" : "aren't"} applied.`);
   if (top) notes.push("Top-N filters aren't applied to rows.");
+  if (casted) notes.push(`${plural(casted, "filter", "filters")} on a field with a data type cast ${casted === 1 ? "isn't" : "aren't"} applied to rows.`);
   if (selection) {
     if (!here(selection)) notes.push("The selected mark is on a joined table, so it isn't applied.");
+    else if (castOf(selection)) notes.push("The selected mark is on a field with a data type cast, so it isn't applied to rows.");
     else if (selection.value === null || selection.value === undefined) notes.push("The selected mark is NULL, which can't be matched — it isn't applied.");
     else filters.push({ column: selection.column, op: "=", value: String(selection.value), values: null });
   }

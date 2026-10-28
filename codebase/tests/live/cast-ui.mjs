@@ -107,6 +107,9 @@ try {
     must(clip.paneScroll <= clip.pane + 1, `field pane scrolls sideways: ${J(clip)}`);
     must(await ev(`!!__t.chip('qty_s').querySelector('.ws-field__type')`), 'the type icon stays beside the name (icon + text, never colour alone)');
     must((await group('qty_s')) === 'Measures', `group is ${await group('qty_s')}`);
+    await ev(`__t.chip('qty_s').querySelector('.ws-field__more').click()`);
+    must(await ev(`/Default aggregation/.test(__t.chip('qty_s').querySelector('.menu__list').textContent)`), 'a text field cast to Number offers a default aggregation');
+    await ev(`document.body.click()`);
     await drag('region', 'columns');
     await drag('qty_s', 'rows');
     await waitFor(`document.querySelectorAll('.ws-shelf--rows .ws-pill').length === 1`, 'pill on Rows');
@@ -137,7 +140,7 @@ try {
     const q = lastQuery();
     const d = [...(q.rowDimensions ?? []), ...(q.columnDimensions ?? [])].find((x) => x.column === 'when_s');
     must(d && !('cast' in d) && !('datePart' in d), `dimension: ${J(d)}`);
-    must(!(await ev(`!!__t.chip('when_s').querySelector('.ws-cast')`)), 'chip tag stays');
+    must(!(await ev(`!!__t.chip('when_s').querySelector('.ws-cast')`)), 'the chip still shows a cast tag after going back to Original');
   });
 
   await check('histogram refuses a cast field with a hint and sends no request', async () => {

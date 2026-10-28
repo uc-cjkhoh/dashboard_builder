@@ -40,14 +40,23 @@ public static class TypeCast
             (Text, ClickHouseType.Text) => expr,
             (Text, _) => $"toString({expr})",
             (Number, ClickHouseType.Numeric) => expr,
-            (Number, ClickHouseType.Text) => $"toFloat64OrNull(toString({expr}))",
+            (Number, ClickHouseType.Text) => FiniteOrNull($"toFloat64OrNull(toString({expr}))"),
             (Number, ClickHouseType.Boolean) => $"toFloat64({expr})",
             (Date, ClickHouseType.Temporal) => expr,
-            (Date, ClickHouseType.Text) => $"parseDateTimeBestEffortOrNull(toString({expr}))",
+            (Date, ClickHouseType.Text) => DateOrNull($"toString({expr})"),
             _ => throw new RequestValidationException($"{column} is {category} and can't be read as {cast}.", field),
         };
     }
 
-    /// <summary>A cast column is never a Date/Date32 (a date cast yields a date-time), so date-only handling is off.</summary>
-    public static bool DateOnly(string? cast, bool raw) => cast is null && raw;
+    // Best-effort parsing reads a short run of digits ("10", "1,5") as a day of the CURRENT month — a different answer
+    // every month. Text made only of digits, spaces, signs, commas and dots is therefore NULL unless it is YYYYMMDD.
+    private static string DateOrNull(string text) =>
+        $"if(match({text}, '^[0-9 ,.+]+$') AND NOT match({text}, '^ *[0-9]{{8}} *$'), NULL, parseDateTimeBestEffortOrNull({text}))";
+
+    // 'inf', 'nan' and '1e999' parse as non-finite numbers; they are as unusable as text that doesn't parse, so NULL.
+    private static string FiniteOrNull(string parsed) => $"if(isFinite({parsed}), {parsed}, NULL)";
+
+    /// <summary>A text-to-date cast yields a date-time, so it is never date-only; a number or date cast of a real
+    /// Date column leaves the expression unchanged, so the column's own date-only-ness holds.</summary>
+    public static bool DateOnly(string? cast, bool raw) => (cast is null or Date) && raw;
 }

@@ -15,7 +15,7 @@ async function ch(sql) {
   const text = await res.text();
   if (!res.ok) throw new Error(`ClickHouse ${res.status}: ${text.trim().slice(0, 400)}`);
 }
-const write = (sql) => { assert.match(sql, /^(CREATE TABLE|INSERT INTO|DROP TABLE IF EXISTS) test_cj\.bk_cast\b/); return ch(sql); };
+const write = (sql) => { assert.match(sql, /^(CREATE TABLE|INSERT INTO|DROP TABLE IF EXISTS) test_cj\.bk_cast(_edge)?\b/); return ch(sql); };
 
 let cookie = '';
 async function app(method, path, body) {
@@ -44,6 +44,7 @@ const ok = (name) => console.log(`ok ${++n} ${name}`);
 
 async function main() {
   await write(`DROP TABLE IF EXISTS test_cj.bk_cast`);
+  await write(`DROP TABLE IF EXISTS test_cj.bk_cast_edge`);
   await write(`CREATE TABLE test_cj.bk_cast (id UInt32, grp String, s_num Nullable(String), s_date Nullable(String), n Int32, d Date, flag Bool) ENGINE = MergeTree ORDER BY id`);
   await write(`INSERT INTO test_cj.bk_cast VALUES
     (1,'a','10','2024-01-15',5,'2024-03-01',true),
@@ -92,6 +93,30 @@ async function main() {
   r = await q({ measures: [ref('flag', { agg: 'sum', cast: 'number' })] }, 'bool');
   assert.equal(r.rows[0].values[0], 3); ok('Bool cast to number sums to 3');
 
+  // ---- the nastiest data: one string column, one id per value (pinned by hand, see the comments) ----
+  await write(`CREATE TABLE test_cj.bk_cast_edge (id UInt32, s String) ENGINE = MergeTree ORDER BY id`);
+  const EDGE = ['inf', 'nan', '1e999', '-inf', ' 12 ', '99999999999999999999', '12', '2026-13-45', '20240115', '10', ' 2024-01-15 ', '2024-01-15', '+5', '1,5', '0x10'];
+  await write(`INSERT INTO test_cj.bk_cast_edge VALUES ${EDGE.map((v, i) => `(${i + 1}, '${v}')`).join(',')}`);
+  const edge = async (cast) => {
+    const res = await app('POST', '/api/query', { from: { db: DB, table: 'bk_cast_edge' }, rowDimensions: [{ db: DB, table: 'bk_cast_edge', column: 'id' }],
+      measures: [{ db: DB, table: 'bk_cast_edge', column: 's', agg: 'max', cast }], limit: 100 });
+    assert.equal(res.status, 200, `edge ${cast}: ${res.status} ${res.text.slice(0, 300)}`);
+    return Object.fromEntries(res.json.rows.map((r) => [EDGE[Number(r.keys[0]) - 1], r.values[0]]));
+  };
+  // Pinned by hand: a number cast keeps only text that parses to a FINITE number; padding, commas and hex are not numbers.
+  const asNum = await edge('number');
+  assert.deepEqual(asNum, { 'inf': null, 'nan': null, '1e999': null, '-inf': null, ' 12 ': null, '99999999999999999999': 1e20, '12': 12,
+    '2026-13-45': null, '20240115': 20240115, '10': 10, ' 2024-01-15 ': null, '2024-01-15': null, '+5': 5, '1,5': null, '0x10': null });
+  ok('number cast: inf / nan / 1e999 / padded / comma / hex text are NULL, 1e20 and +5 parse');
+  // Date cast: ISO text parses (padding trimmed); an impossible date is NULL; digits only are NULL unless YYYYMMDD
+  // (never "day of this month", which would change with the calendar).
+  const asDate = await edge('date');
+  assert.deepEqual(asDate, { 'inf': null, 'nan': null, '1e999': null, '-inf': null, ' 12 ': null, '99999999999999999999': null, '12': null,
+    '2026-13-45': null, '20240115': '2024-01-15', '10': null, ' 2024-01-15 ': '2024-01-15', '2024-01-15': '2024-01-15', '+5': null, '1,5': null, '0x10': null });
+  ok('date cast: ISO and YYYYMMDD parse, impossible dates and digit-only text are NULL');
+  // text cast of the huge integer column value is the text itself, and a number cast aggregates finite values only
+  let r2 = await app('POST', '/api/query', { from: { db: DB, table: 'bk_cast_edge' }, measures: [{ db: DB, table: 'bk_cast_edge', column: 's', agg: 'countNonNull', cast: 'number' }] });
+  assert.equal(r2.json.rows[0].values[0], 5); ok('5 of 15 values count as numbers (1e20, 12, 20240115, 10, +5)');
   // refusals
   await bad({ measures: [ref('d', { agg: 'max', cast: 'number' })] }, 'date cast to number', /measures\[0\]/);
   await bad({ rowDimensions: [ref('n', { cast: 'date' })] }, 'number cast to date', /rowDimensions\[0\]/);
@@ -104,6 +129,6 @@ async function main() {
 
 let failed = false;
 try { await main(); } catch (e) { failed = true; console.log(`FAIL: ${e.stack}`); }
-finally { try { await write(`DROP TABLE IF EXISTS test_cj.bk_cast`); console.log('dropped test_cj.bk_cast'); } catch (e) { console.log(`cleanup failed: ${e.message}`); failed = true; } }
+finally { try { await write(`DROP TABLE IF EXISTS test_cj.bk_cast_edge`); await write(`DROP TABLE IF EXISTS test_cj.bk_cast`); console.log('dropped test_cj.bk_cast'); } catch (e) { console.log(`cleanup failed: ${e.message}`); failed = true; } }
 console.log(failed ? 'FAILED' : `${n} ok`);
 process.exit(failed ? 1 : 0);
