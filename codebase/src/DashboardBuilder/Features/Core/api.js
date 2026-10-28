@@ -70,6 +70,9 @@ export const api = {
   /** Box plot (P12): five-number summary per group → { groups: [{label, min, q1, median, q3, max}] }. */
   boxplot: (db, table, plan, { signal } = {}) =>
     request("POST", `/api/databases/${encodeURIComponent(db)}/tables/${encodeURIComponent(table)}/boxplot`, plan, signal),
+  /** Column profile: rows, NULLs, approximate distinct, min/max and top values of one column over the table's first rows. */
+  profile: (db, table, req, { signal } = {}) =>
+    request("POST", `/api/databases/${encodeURIComponent(db)}/tables/${encodeURIComponent(table)}/profile`, req, signal),
   /** Worksheet query (may join related tables): { rowDimensions, columnDimensions, measures, rows,
    *  truncated } — `truncated` is true when more groups exist beyond the plan's limit. */
   query: (plan, { signal } = {}) => request("POST", "/api/query", plan, signal),

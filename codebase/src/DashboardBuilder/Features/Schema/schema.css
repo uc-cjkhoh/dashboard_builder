@@ -60,3 +60,39 @@
 .table-search .icon { position: absolute; left: var(--s2); top: 50%; transform: translateY(-50%); color: var(--ink-3); pointer-events: none; }
 .table-search .input { width: 100%; padding-left: calc(var(--s2) + 20px); }
 .table-list__empty { color: var(--ink-3); font-size: var(--fs-sm); padding: var(--s2) 0; }
+
+/* ---- Column profile dialog (field properties + distinct / null share / top values). Tokens only; solid surface; neutral bars (red means danger). */
+.col-profile { width: min(560px, calc(100vw - 2 * var(--s5))); max-height: min(84vh, 760px); display: flex; flex-direction: column; }
+.col-profile[open] { display: flex; }
+.col-profile__head { display: flex; align-items: flex-start; gap: var(--s3); padding: var(--s4) var(--s4) var(--s2); }
+.col-profile__titles { flex: 1; min-width: 0; }
+.col-profile__title { padding: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.col-profile__sub { margin: 2px 0 0; font-size: var(--fs-xs); color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.col-profile__body { flex: 1; min-height: 120px; overflow: auto; padding: 0 var(--s4); display: grid; gap: var(--s3); align-content: start; }
+.col-profile__status { margin: 0; padding: var(--s5); text-align: center; color: var(--ink-3); font-size: var(--fs-sm); }
+.col-profile__status--error { color: var(--danger-ink); }
+.col-profile__glyph { display: inline-flex; vertical-align: middle; }
+.col-profile__props { display: grid; grid-template-columns: auto 1fr auto 1fr; gap: var(--s1) var(--s3); margin: 0; font-size: var(--fs-sm); }
+.col-profile__props dt { color: var(--ink-3); }
+.col-profile__props dd { margin: 0; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.col-profile__note { margin: 0; padding: var(--s1) var(--s2); font-size: var(--fs-sm); color: var(--warn-ink); background: var(--warn-bg); border: 1px solid var(--warn-line); border-radius: var(--r-ctl); }
+.col-profile__tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: var(--s2); }
+.col-profile__tile { display: grid; gap: 2px; padding: var(--s2) var(--s3); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-ctl); min-width: 0; }
+.col-profile__tile-label { font-size: var(--fs-xs); color: var(--ink-3); }
+.col-profile__tile-value { font-size: var(--fs-lead); font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.col-profile__tile-note { font-size: var(--fs-xs); color: var(--ink-3); }
+.col-profile__h { margin: 0; font-size: var(--fs-sm); font-weight: 600; color: var(--ink-2); }
+.col-profile__top { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s1); }
+.col-profile__row { display: grid; grid-template-columns: minmax(80px, 1.2fr) minmax(60px, 1fr) 10ch 6ch; align-items: center; gap: var(--s2); font-size: var(--fs-sm); }
+.col-profile__label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+.col-profile__row--null .col-profile__label, .col-profile__row--empty .col-profile__label { color: var(--ink-3); font-style: italic; }
+.col-profile__bar { height: 8px; border-radius: 4px; background: var(--surface-3); overflow: hidden; }
+.col-profile__fill { display: block; height: 100%; width: var(--w, 0); background: var(--ink-3); border-radius: 4px; }
+.col-profile__count { text-align: right; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.col-profile__share { text-align: right; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.col-profile__foot { align-items: center; padding-top: var(--s3); }
+.col-profile__foot .btn--primary { margin-left: auto; }
+/* The field-row action on a canvas card: shown on hover / focus like the table chip's preview button, always reachable by keyboard. */
+.col-row__profile { opacity: 0; flex: none; transition: opacity var(--dur-fast) var(--ease); }
+.col-row:hover .col-row__profile, .col-row:focus-within .col-row__profile { opacity: 1; }
+@media (pointer: coarse) { .col-row__profile { opacity: 1; } }
