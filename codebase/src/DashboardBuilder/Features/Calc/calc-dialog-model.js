@@ -10,7 +10,7 @@ const SUGGEST_MAX = 12;
 const offered = (s) => typeof s === "string" && s !== "" && !/[.[\]]/.test(s);
 
 /**
- * Validates an unsaved draft `{ name, formula, selfId }`. `ctx` = `{ calcs, catalog }`. Never throws; messages are the
+ * Validates an unsaved draft `{ name, formula, selfId }`. `ctx` = `{ calcs, catalog, params }`. Never throws; messages are the
  * plain text for the person editing (no "Calculation 'X' can't be computed:" prefix).
  */
 export function evaluateDraft(draft, ctx) {
@@ -18,12 +18,13 @@ export function evaluateDraft(draft, ctx) {
   const calcs = Array.isArray(ctx?.calcs) ? ctx.calcs : [];
   const n = checkName(name, calcs, selfId);
   if (!n.ok) return { ok: false, field: "name", message: n.error };
+  if (n.value.startsWith("@")) return { ok: false, field: "name", message: "Name can't start with '@' — that marks a parameter, [@Name]." };
   if (typeof formula !== "string" || formula.trim() === "") return { ok: false, field: "formula", message: "Write a formula." };
   if (formula.length > LIMITS.calcFormula) return { ok: false, field: "formula", message: `A formula can be at most ${LIMITS.calcFormula} characters.` };
   if (CONTROL.test(formula)) return { ok: false, field: "formula", message: "That formula has a character that isn't allowed." };
   let r;
   try {
-    r = compileCalculation({ id: selfId, name: n.value, formula }, calcs, ctx.catalog);
+    r = compileCalculation({ id: selfId, name: n.value, formula }, calcs, ctx.catalog, ctx.params);
   } catch {
     return { ok: false, field: "formula", message: "That formula can't be read." };
   }
@@ -51,7 +52,7 @@ export function chipFor(info, role) {
  * item's `insert` (the text between the brackets). Outside brackets and text literals, after a letter prefix: function
  * names (`kind: "function"`, `hint` = the signature, `insert` = the text to put in place of the prefix, e.g. `LOWER(`).
  * Items are empty otherwise.
- * `ctx` = `{ calcs, catalog, selfId? }`.
+ * `ctx` = `{ calcs, catalog, params?, selfId? }`. After `[@` only parameters are offered (`kind: "param"`).
  */
 export function suggest(formula, caret, ctx) {
   const none = { from: 0, to: 0, items: [] };
@@ -60,6 +61,13 @@ export function suggest(formula, caret, ctx) {
   const before = formula.slice(0, to);
   const open = before.lastIndexOf("[");
   if (open < 0 || before.indexOf("]", open) >= 0) return functionSuggest(formula, before, to) ?? { ...none, from: to, to };
+  if (before[open + 1] === "@") { // [@ — the workbook's parameters, and only those
+    const typedParam = before.slice(open + 2).toLowerCase();
+    const pItems = (Array.isArray(ctx?.params) ? ctx.params : [])
+      .filter((p) => typeof p.name === "string" && !/[[\]]/.test(p.name) && p.name.toLowerCase().startsWith(typedParam))
+      .map((p) => ({ label: p.name, insert: p.name, kind: "param", type: p.type }));
+    return { from: open + 2, to, items: pItems.slice(0, SUGGEST_MAX) };
+  }
   const from = open + 1;
   const typed = before.slice(from).trim().toLowerCase();
   const items = [];

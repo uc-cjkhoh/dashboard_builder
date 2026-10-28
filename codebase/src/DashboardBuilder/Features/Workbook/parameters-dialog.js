@@ -1,9 +1,10 @@
 // P32 — Workbook menu → Parameters…: add, edit and delete the workbook's parameters (name, type, allowed
 // values, current value). Each value is checked by Core/parameters-model.js before it is kept.
-import { parameters, addParameter, updateParameter, removeParameter } from "../Core/store.js";
-import { PARAM_TYPES, MAX_PARAMS, MAX_LIST, checkValue } from "../Core/parameters-model.js";
+import { parameters, calculations, addParameter, updateParameter, removeParameter } from "../Core/store.js";
+import { PARAM_TYPES, MAX_PARAMS, MAX_LIST, checkValue, checkStep } from "../Core/parameters-model.js";
 import { text } from "../Core/validate.js";
-import { makeButton, openDialog, closeDialog, toast } from "../Core/ui.js";
+import { calcsUsingParam } from "../Calc/calc-params.js";
+import { makeButton, openDialog, closeDialog, toast, confirmDialog } from "../Core/ui.js";
 
 export function openParametersDialog() {
   const dlg = el("dialog", "dialog params-dialog");
@@ -22,7 +23,7 @@ export function openParametersDialog() {
   const render = () => {
     body.replaceChildren();
     if (!parameters.length && editing !== "new")
-      body.append(el("p", "bookmark-note", "No parameters yet. A parameter is a named value a filter or Top N can follow — change it once and every view that uses it re-runs."));
+      body.append(el("p", "bookmark-note", "No parameters yet. A parameter is a named value a filter, Top N, reference line or calculated field ([@Name]) can follow — change it once and every view that uses it re-runs."));
     const list = el("ul", "bookmark-list");
     for (const p of parameters) {
       if (editing === p.id) { list.append(editor(p)); continue; }
@@ -32,7 +33,11 @@ export function openParametersDialog() {
       const edit = makeButton("Edit", "btn"); edit.setAttribute("aria-label", `Edit parameter ${p.name}`);
       edit.addEventListener("click", () => { editing = p.id; render(); });
       const del = makeButton("Delete", "btn"); del.setAttribute("aria-label", `Delete parameter ${p.name}`);
-      del.addEventListener("click", () => { removeParameter(p.id); render(); });
+      del.addEventListener("click", async () => {
+        const users = calcsUsingParam(calculations, p.name); // a calculated field that reads it would stop computing
+        if (users.length && !(await confirmDialog(`“${p.name}” is read by ${users.length === 1 ? "calculation" : "calculations"} ${users.map((u) => `'${u}'`).join(", ")}. Deleting it leaves ${users.length === 1 ? "it" : "them"} unable to compute until you edit the formula or add a parameter with that name.`, { danger: true, confirmText: "Delete" }))) return;
+        removeParameter(p.id); render();
+      });
       li.append(info, edit, del);
       list.append(li);
     }
@@ -52,11 +57,12 @@ export function openParametersDialog() {
     for (const [v, t] of [["any", "Any value"], ["list", "A list"], ["range", "A range (numbers)"]]) kind.add(new Option(t, v, false, (p?.allowed?.kind ?? "any") === v));
     const listIn = input("List (comma-separated)", (p?.allowed?.list ?? []).join(", "), 2000);
     const min = input("Min", p?.allowed?.min ?? "", 30), max = input("Max", p?.allowed?.max ?? "", 30);
+    const step = input("Step size (optional)", p?.allowed?.step ?? "", 30);
     const value = input("Current value", p?.value ?? "", 1000);
     const err = el("p", "field-error"); err.hidden = true; err.setAttribute("role", "alert");
     const sync = () => {
       listIn.parentNode.hidden = kind.value !== "list";
-      min.parentNode.hidden = max.parentNode.hidden = kind.value !== "range" || type.value !== "number";
+      min.parentNode.hidden = max.parentNode.hidden = step.parentNode.hidden = kind.value !== "range" || type.value !== "number";
     };
     kind.addEventListener("change", sync); type.addEventListener("change", sync);
     const save = makeButton("Save", "btn btn--primary"), cancel = makeButton("Cancel", "btn");
@@ -77,7 +83,9 @@ export function openParametersDialog() {
       } else if (kind.value === "range" && type.value === "number") {
         const lo = min.value.trim() === "" ? null : Number(min.value), hi = max.value.trim() === "" ? null : Number(max.value);
         if ((lo != null && !Number.isFinite(lo)) || (hi != null && !Number.isFinite(hi)) || (lo != null && hi != null && lo > hi)) return fail("Min and max must be numbers, min ≤ max.");
-        allowed = { kind: "range", min: lo, max: hi, step: null };
+        const st = checkStep(step.value);
+        if (!st.ok) return fail(st.error);
+        allowed = { kind: "range", min: lo, max: hi, step: st.value };
       }
       const draft = { name: n.value, type: type.value, allowed };
       const v = checkValue(draft, value.value || (allowed.kind === "list" ? allowed.list[0] : ""));
@@ -86,7 +94,7 @@ export function openParametersDialog() {
       editing = null; render();
       toast(`Saved parameter “${n.value}”.`, "ok");
     });
-    form.append(name.parentNode, labelled("Type", type), labelled("Allowed", kind), listIn.parentNode, min.parentNode, max.parentNode, value.parentNode);
+    form.append(name.parentNode, labelled("Type", type), labelled("Allowed", kind), listIn.parentNode, min.parentNode, max.parentNode, step.parentNode, value.parentNode);
     const actions = el("div", "params-actions"); actions.append(save, cancel);
     li.append(form, err, actions);
     queueMicrotask(sync);
@@ -103,7 +111,7 @@ export function openParametersDialog() {
 }
 
 const describe = (p) => (p.allowed?.kind === "list" ? `one of ${p.allowed.list.join(", ")}`
-  : p.allowed?.kind === "range" ? `${p.allowed.min ?? "−∞"} to ${p.allowed.max ?? "∞"}` : "any value");
+  : p.allowed?.kind === "range" ? `${p.allowed.min ?? "−∞"} to ${p.allowed.max ?? "∞"}${p.allowed.step ? `, step ${p.allowed.step}` : ""}` : "any value");
 function input(label, value, max) {
   const i = el("input", "input"); i.value = String(value ?? ""); i.maxLength = max;
   labelled(label, i);

@@ -255,6 +255,8 @@ export function initBoard() {
   });
   // Colours are read at render time: redraw from the result cache (no query) when light / dark or the workbook theme flips.
   for (const type of ["scheme:changed", "theme:changed"]) bus.addEventListener(type, runAll);
+  // A parameter's new value reaches a widget through its filters, Top N, calculated fields and reference line: re-plan (the result cache keys on the request, so an unchanged widget costs no query).
+  bus.addEventListener("parameters:changed", runAll);
   // After a reload a widget may show a hint before its tables' columns arrive: those (only) run again once they do.
   let columnsTimer = 0;
   bus.addEventListener("entity:loaded", () => { clearTimeout(columnsTimer); columnsTimer = setTimeout(() => { for (const e of entries.values()) e.retryIfBlank(); }, 100); });

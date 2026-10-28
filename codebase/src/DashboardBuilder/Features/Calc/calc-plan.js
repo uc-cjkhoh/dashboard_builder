@@ -1,6 +1,6 @@
 // Calculated fields in the worksheet query plan (pure, DOM-free; tests/js/calc-plan.test.mjs).
 // `buildPlan` (Dashboard/sheet-plan.js) calls these to turn pills into wire refs, list the tables a pill reads, and
-// refuse (E15) before any query when a calculation can't be computed. ctx = { calcs, catalog }.
+// refuse (E15) before any query when a calculation can't be computed. ctx = { calcs, catalog, params } (params: the workbook parameters a formula may read).
 import { compileCalculation, calcTables } from "./calc-resolve.js";
 import { isCalcPill, pillName, pillSlots } from "./calc-pill.js";
 import { STAT_SINGLE_TABLE } from "../Dashboard/show-me-rules.js";
@@ -14,7 +14,7 @@ const find = (f, ctx) => (ctx.calcs ?? []).find((c) => c.id === f.calc);
 /** `{ calc, c }` — the stored calculation and its compile, or `null` when the calculation is gone. */
 function compiled(f, ctx) {
   const calc = find(f, ctx);
-  return calc ? compileCalculation(calc, ctx.calcs, ctx.catalog) : null;
+  return calc ? compileCalculation(calc, ctx.calcs, ctx.catalog, ctx.params) : null;
 }
 
 /** The group-by ref for a pill (E12: a calculated dimension is never date-grouped). */

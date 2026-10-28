@@ -2,13 +2,19 @@
 // computed in the browser over the rows the query returned: reference lines / bands, a trend line (with
 // R²) and a short forecast that extends it, and crosstab totals that respect each measure's aggregation.
 // sheet.analytics = { ref: { kind, value? }, band: { from, to } | null, trend: none|linear|log|poly2,
-//                     forecast: 0|3|6|12, totals: { grand, sub } }
+//                     forecast: 0|3|6|12, totals: { grand, sub } }; a constant ref may carry `param` (a number parameter's id): refConstant().
 export const REF_CHOICES = [["none", "None"], ["average", "Average"], ["median", "Median"], ["min", "Minimum"], ["max", "Maximum"], ["constant", "Constant"]];
 export const TREND_CHOICES = [["none", "None"], ["linear", "Linear"], ["log", "Logarithmic"], ["poly2", "Polynomial (2nd order)"]];
 export const FORECAST_CHOICES = [[0, "None"], [3, "3 steps"], [6, "6 steps"], [12, "12 steps"]];
 export const defaultAnalytics = () => ({ ref: { kind: "none" }, band: null, trend: "none", forecast: 0, totals: { grand: false, sub: false } });
 
 const nums = (values) => values.map((v) => (v == null || v === "" ? NaN : Number(v))).filter(Number.isFinite);
+
+/** A constant reference line's number: the bound number parameter's current value, else its own `value`. A bound parameter that is gone (or not a number) falls back to `value`. */
+export function refConstant(ref, params) {
+  const p = ref?.param ? (params ?? []).find((x) => x.id === ref.param && x.type === "number") : null;
+  return p && Number.isFinite(Number(p.value)) ? Number(p.value) : ref?.value;
+}
 
 /** The reference line's value for a measure's values, or null. */
 export function refValue(kind, values, constant) {

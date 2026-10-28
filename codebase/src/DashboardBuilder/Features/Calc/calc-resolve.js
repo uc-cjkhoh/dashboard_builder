@@ -3,6 +3,7 @@
 // (parse -> expand references -> check) into a tree the plan seam can use.
 import { parseFormula } from "./calc-parser.js";
 import { check } from "./calc-types.js";
+import { substituteParams, missingParam } from "./calc-params.js";
 import { expandCalcs, roleOfCalc } from "./calc-model.js";
 
 const USABLE = new Set(["numeric", "text", "temporal", "boolean"]);
@@ -28,8 +29,10 @@ export function catalogFromEntities(entities) {
 }
 
 /** The `resolve(parts)` the parser takes (E8, E14). */
-export function makeResolve(catalog, calcNames) {
-  return (parts) => {
+export function makeResolve(catalog, calcNames, params = []) {
+  const paramNames = new Set((params ?? []).map((p) => p.name));
+  return (parts, kind) => {
+    if (kind === "param") return paramNames.has(parts[0]) ? { param: { name: parts[0] } } : { error: missingParam(parts[0]) };
     if (parts.length === 1) return calcNames.has(parts[0]) ? { calc: { name: parts[0] } } : null;
     let db, table, column;
     if (parts.length === 2) {
@@ -51,19 +54,19 @@ export function makeResolve(catalog, calcNames) {
 }
 
 /**
- * Compiles one calculation against all `calcs` (`{ id, name, formula }`) and the catalog. Returns
+ * Compiles one calculation against all `calcs` (`{ id, name, formula }`), the catalog and the workbook `params`. Returns
  * `{ ast, info, role }` or `{ error: { message, pos? } }`. Syntax errors keep their position; unknown fields,
  * dangling references, cycles and type errors read `Calculation 'X' can't be computed: ...` (E15).
  */
-export function compileCalculation(calc, calcs, catalog) {
+export function compileCalculation(calc, calcs, catalog, params = []) {
   // The draft is registered only under its own current name: a saved copy of it (same id) is stale.
   const others = (calcs ?? []).filter((c) => c.id !== calc.id);
   const names = new Set(others.map((c) => c.name));
   names.add(calc.name);
   let resolverError = false;
-  const base = makeResolve(catalog, names);
-  const resolve = (parts) => {
-    const r = base(parts);
+  const base = makeResolve(catalog, names, params);
+  const resolve = (parts, kind) => {
+    const r = base(parts, kind);
     if (r && r.error) resolverError = true;
     return r;
   };
@@ -94,9 +97,11 @@ export function compileCalculation(calc, calcs, catalog) {
     const dep = m && depErrors.get(m[1]);
     return { error: { message: prefix(dep ? dep : ex.error.message) } };
   }
-  const info = check(ex.ast, catalog.categoryOf);
+  const sub = substituteParams(ex.ast, params); // parameters become literals here, so check(), the cache key and the wire see only values
+  if (sub.error) return { error: { message: prefix(sub.error.message) } };
+  const info = check(sub.ast, catalog.categoryOf);
   if (info.error) return { error: { message: prefix(info.error.message) } };
-  return { ast: ex.ast, info, role: roleOfCalc(info) };
+  return { ast: sub.ast, info, role: roleOfCalc(info) };
 }
 
 /** `"db.table"` strings the calculation reads (empty for a constant). */

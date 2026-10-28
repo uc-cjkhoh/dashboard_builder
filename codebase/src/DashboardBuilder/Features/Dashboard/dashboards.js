@@ -30,7 +30,7 @@ import { HEATMAP_SHAPE_CHOICES } from "./heatmap-model.js";
 import { targetChoices, effectiveTargetMeasure } from "./bullet-model.js";
 import { keyOf, SCATTER_TYPES, COLOR_USES, colorMode, isDrillActive, drillActiveDim, planDims, planMeasures, sortTargets as planSortTargets, measureName as planMeasureName, buildPlan as planQuery, periodFilters as planPeriodFilters, calcContext, appliedShared as planAppliedShared, withParams, toServerFilter, isDateOnlyType } from "./sheet-plan.js";
 import { catalogFromEntities } from "../Calc/calc-resolve.js";
-import { isCalcPill, makeCalcPill, refusal, syncCalcPills, clearCalcPills, clearFilterCalc, usesCalc, CALC_AGGS } from "../Calc/calc-pill.js";
+import { isCalcPill, makeCalcPill, refusal, syncCalcPills, pillSlots, clearCalcPills, clearFilterCalc, usesCalc, CALC_AGGS } from "../Calc/calc-pill.js";
 import { openCalcDialog } from "../Calc/calc-dialog.js";
 import { openRowsDialog } from "../Rows/rows-dialog.js";
 import { buildRowsRequest } from "../Rows/rows-model.js";
@@ -38,6 +38,7 @@ import { evaluationInput } from "../Calc/eval-order.js";
 import { explainControl } from "../Calc/explain-popover.js";
 import { paneState, deleteCalcPlan, roleChoice, setRoleChoice } from "../Calc/calc-pane-model.js";
 import { checkName } from "../Calc/calc-workbook.js";
+import { calcParamNames } from "../Calc/calc-params.js";
 import { calcProblem, topByRef, topByKey } from "../Calc/calc-plan.js";
 import { REF_CHOICES, TREND_CHOICES, FORECAST_CHOICES, defaultAnalytics } from "./analytics-model.js";
 import { castChoices, castLabel, effectiveCategory, syncCastCategories } from "./cast-model.js";
@@ -175,7 +176,7 @@ export function initDashboards() {
     // A change from outside commit() (bookmark, workbook open, undo) becomes the new baseline.
     const d = activeWorksheet();
     // ...and a restored sheet's calculated pills take the live calculation's type / role (undo, bookmark, open).
-    if (d && isWorksheetActive()) syncCalcPills(d.sheet, calculations, catalogFromEntities([...entities.values()]));
+    if (d && isWorksheetActive()) syncCalcPills(d.sheet, calculations, catalogFromEntities([...entities.values()]), parameters);
     if (d && isWorksheetActive()) lastSnap.set(d.id, structuredClone(d.sheet));
     if (isWorksheetActive()) { renderShelves(); runChart(); }
   });
@@ -207,22 +208,24 @@ export function initDashboards() {
   });
   // Calculated fields: a new / edited / renamed / deleted calculation refreshes every sheet's pills (category, role, live name),
   // the field pane and the chart. An unchanged sheet is just redrawn; a changed one goes through commit().
-  bus.addEventListener("calculations:changed", () => {
+  const refreshCalcs = () => {
     const catalog = catalogFromEntities([...entities.values()]);
     const active = activeWorksheet();
     let activeChanged = false;
     for (const d of worksheets()) {
       const before = JSON.stringify(d.sheet);
-      syncCalcPills(d.sheet, calculations, catalog);
+      syncCalcPills(d.sheet, calculations, catalog, parameters);
       if (JSON.stringify(d.sheet) === before) continue;
       if (d === active && isWorksheetActive()) activeChanged = true; else commitQuiet(d, d.sheet);
     }
     if (!isWorksheetActive()) return;
     buildFields();
     if (activeChanged) commit(active, active.sheet); else { renderShelves(); runChart(); }
-  });
-  // P32: a parameter's new value re-runs the view (its filters / Top N read it at plan time).
-  bus.addEventListener("parameters:changed", () => { if (!isWorksheetActive()) return; renderShelves(); runChart(); });
+  };
+  bus.addEventListener("calculations:changed", refreshCalcs);
+  // P32: a parameter's new value re-runs the view (its filters / Top N / calculated fields / reference line read it at plan time);
+  // the same refresh re-types calculated pills (a parameter's type, or its deletion, changes what a formula compiles to).
+  bus.addEventListener("parameters:changed", refreshCalcs);
   initPresentation();
   sync();
 
@@ -335,7 +338,7 @@ export function initDashboards() {
     const head = el("div", "calc-group__title", "Calculated fields");
     head.id = "calc-group-title";
     const catalog = catalogFromEntities([...entities.values()]);
-    const state = paneState(calculations, catalog);
+    const state = paneState(calculations, catalog, parameters);
     const add = makeButton("", "btn calc-group__new");
     add.append(icon("plus", { size: 14 }), document.createTextNode("New calculated field"));
     add.disabled = !state.canAdd;
@@ -783,7 +786,15 @@ export function initDashboards() {
     const isTable = s.chartType === "table" || s.chartType === "text";
     if (ANALYTICS_TYPES.has(s.chartType)) {
       panel.append(fmtSelect("Reference line", REF_CHOICES, a.ref.kind, (v) => set({ ref: { kind: v, ...(v === "constant" ? { value: a.ref.value ?? 0 } : {}) } })));
-      if (a.ref.kind === "constant") panel.append(fmtNumber("at", a.ref.value, "0", (v) => set({ ref: { kind: "constant", value: v ?? 0 } })));
+      if (a.ref.kind === "constant") {
+        const numParams = parameters.filter((p) => p.type === "number");
+        const bound = numParams.some((p) => p.id === a.ref.param) ? a.ref.param : "";
+        if (bound) panel.append(fmtSelect("at", [["", "A typed value"], ...numParams.map((p) => [p.id, `Parameter: ${p.name}`])], bound, (v) => set({ ref: { kind: "constant", value: a.ref.value ?? 0, ...(v ? { param: v } : {}) } })));
+        else {
+          panel.append(fmtNumber("at", a.ref.value, "0", (v) => set({ ref: { kind: "constant", value: v ?? 0 } })));
+          if (numParams.length) panel.append(fmtSelect("or follow", [["", "Choose a parameter"], ...numParams.map((p) => [p.id, p.name])], "", (v) => set({ ref: { kind: "constant", value: a.ref.value ?? 0, ...(v ? { param: v } : {}) } })));
+        }
+      }
       panel.append(fmtNumber("Band from", a.band?.from ?? null, "none", (v) => set({ band: v == null ? null : { from: v, to: a.band?.to ?? v } })),
         fmtNumber("to", a.band?.to ?? null, "none", (v) => set({ band: v == null ? null : { from: a.band?.from ?? v, to: v } })),
         fmtSelect("Trend", TREND_CHOICES, a.trend, (v) => set({ trend: v })));
@@ -1729,6 +1740,10 @@ export function initDashboards() {
   function paramControls(s) {
     const used = new Set([...s.filters, ...sharedFilters].map((f) => f.param).filter(Boolean));
     if (s.format?.topNParam) used.add(s.format.topNParam);
+    if (s.analytics?.ref?.param) used.add(s.analytics.ref.param);
+    const calcNames = new Set();
+    for (const f of pillSlots(s)) if (isCalcPill(f)) calcParamNames(calculations, f.calc).forEach((n) => calcNames.add(n));
+    for (const p of parameters) if (calcNames.has(p.name)) used.add(p.id); // a calculated field reads it as [@Name]
     const ps = parameters.filter((p) => used.has(p.id));
     if (!ps.length) return null;
     const row = el("div", "ws-params");

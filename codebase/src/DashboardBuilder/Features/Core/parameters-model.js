@@ -1,7 +1,7 @@
 // P32 parameters — pure, DOM-free (unit-tested in tests/js/parameters-model.test.mjs). A workbook holds up to
 // 20 named, typed values: { id, name, type: number | text | date, value, allowed: { kind: any | list | range,
 // list?, min?, max?, step? } }. A filter value or a top-N count can read one; Format → Top N can follow a
-// number parameter. The value reaches ClickHouse only ever as a bound filter value / validated limit.
+// number parameter; a calculated field reads one as [@Name] (Calc/calc-params.js). The value reaches ClickHouse only ever as a bound filter value / validated limit.
 import { number, dateTime, text } from "./validate.js";
 
 export const PARAM_TYPES = ["number", "text", "date"];
@@ -23,6 +23,15 @@ export function checkValue(p, raw) {
     if (a.max != null && v > a.max) return { ok: false, error: `${p.name} must be at most ${a.max}.` };
   }
   return { ok: true, value: v };
+}
+
+/** A step-size input: empty is no step; otherwise a positive finite number. { ok, value } or { ok: false, error }. */
+export function checkStep(raw) {
+  const s = String(raw ?? "").trim();
+  if (!s) return { ok: true, value: null };
+  const r = number(s);
+  if (!r.ok || !(r.value > 0)) return { ok: false, error: "Step must be a positive number." };
+  return { ok: true, value: r.value };
 }
 
 /** The parameter types a filter on a field of `category` can read. */
@@ -56,7 +65,8 @@ export function cleanParameter(raw, issues) {
     if (list.length) allowed = { kind: "list", list };
   } else if (a.kind === "range" && raw.type === "number") {
     const n = (x) => (typeof x === "number" && Number.isFinite(x) ? x : null);
-    allowed = { kind: "range", min: n(a.min), max: n(a.max), step: n(a.step) };
+    const step = n(a.step);
+    allowed = { kind: "range", min: n(a.min), max: n(a.max), step: step !== null && step > 0 ? step : null };
   }
   const p = { id: raw.id, name: name.value, type: raw.type, allowed, value: null };
   const v = checkValue(p, raw.value);

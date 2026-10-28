@@ -19,6 +19,7 @@
 //                worksheet:changed {id}  (a worksheet's sheet was replaced),
 //                dashboard:changed {id}  (a dashboard's widgets changed: layout, text, add, remove)
 import { renameInFormulas } from "../Calc/calc-workbook.js";
+import { renameParamInFormulas } from "../Calc/calc-params.js";
 import { copyName, copySheet, canDuplicate } from "../Tabs/duplicate-model.js";
 import { LIMITS } from "./validate.js";
 import { removeSheetWidgets, defaultTabName } from "../Board/board-model.js";
@@ -68,7 +69,13 @@ export function setParameters(list) {
 export function addParameter(p) { paramSeq += 1; const np = { ...p, id: `prm${paramSeq}` }; parameters.push(np); emit("parameters:changed"); return np; }
 export function updateParameter(id, patch) {
   const p = parameters.find((x) => x.id === id);
-  if (p) { Object.assign(p, patch); emit("parameters:changed"); }
+  if (!p) return;
+  const old = p.name;
+  Object.assign(p, patch);
+  if (patch.name !== undefined && patch.name !== old) { // [@Old] in formulas follows the rename
+    renameParamInFormulas(calculations, old, p.name).forEach((r, i) => { calculations[i].formula = r.formula; });
+  }
+  emit("parameters:changed");
 }
 export function removeParameter(id) {
   const i = parameters.findIndex((x) => x.id === id);
