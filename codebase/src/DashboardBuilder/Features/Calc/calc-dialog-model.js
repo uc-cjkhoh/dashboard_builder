@@ -3,6 +3,7 @@
 import { LIMITS } from "../Core/validate.js";
 import { checkName } from "./calc-workbook.js";
 import { compileCalculation } from "./calc-resolve.js";
+import { functionItems } from "./function-help.js";
 
 const CONTROL = /[\u0000-\u0008\u000B-\u001F\u007F-\u009F]/;
 const SUGGEST_MAX = 12;
@@ -46,8 +47,10 @@ export function chipFor(info, role) {
 }
 
 /**
- * Autocomplete inside an unclosed `[`. Returns `{ from, to, items }`: replace `formula.slice(from, to)` with an
- * item's `insert` (the text between the brackets). Items are empty when the caret isn't inside an open bracket.
+ * Autocomplete. Inside an unclosed `[`: returns `{ from, to, items }`; replace `formula.slice(from, to)` with an
+ * item's `insert` (the text between the brackets). Outside brackets and text literals, after a letter prefix: function
+ * names (`kind: "function"`, `hint` = the signature, `insert` = the text to put in place of the prefix, e.g. `LOWER(`).
+ * Items are empty otherwise.
  * `ctx` = `{ calcs, catalog, selfId? }`.
  */
 export function suggest(formula, caret, ctx) {
@@ -56,7 +59,7 @@ export function suggest(formula, caret, ctx) {
   const to = Math.max(0, Math.min(Number.isInteger(caret) ? caret : formula.length, formula.length));
   const before = formula.slice(0, to);
   const open = before.lastIndexOf("[");
-  if (open < 0 || before.indexOf("]", open) >= 0) return { ...none, from: to, to };
+  if (open < 0 || before.indexOf("]", open) >= 0) return functionSuggest(before, to) ?? { ...none, from: to, to };
   const from = open + 1;
   const typed = before.slice(from).trim().toLowerCase();
   const items = [];
@@ -71,4 +74,13 @@ export function suggest(formula, caret, ctx) {
     if (c.id !== ctx.selfId && offered(c.name)) push(c.name, "calc");
   }
   return { from, to, items: items.slice(0, SUGGEST_MAX) };
+}
+
+// A word being typed outside any [ ] or '…' (the caller already knows there is no open bracket).
+function functionSuggest(before, to) {
+  if ((before.match(/'/g) ?? []).length % 2 === 1) return null;
+  const m = /(?<![A-Za-z0-9_.])[A-Za-z_][A-Za-z0-9_]*$/.exec(before);
+  if (!m) return null;
+  const items = functionItems(m[0], SUGGEST_MAX);
+  return items.length ? { from: m.index, to, items } : null;
 }

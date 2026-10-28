@@ -3,7 +3,9 @@
 
 /* ---- Dialog ---- */
 .calc-dialog { width: min(520px, calc(100vw - 2 * var(--s5))); }
-.calc-dialog__body { display: grid; gap: var(--s4); }
+.calc-dialog[open] { display: flex; flex-direction: column; max-height: calc(100vh - 2 * var(--s5)); }
+.calc-dialog__body { display: grid; gap: var(--s4); overflow: auto; min-height: 0; }
+.calc-dialog .dialog__foot { flex: none; }
 .calc-dialog .field > label, .calc-dialog .field > .label { display: block; font-size: var(--fs-sm); font-weight: 600; margin-bottom: var(--s1); }
 .calc-dialog .input { width: 100%; }
 .calc-dialog .hint { color: var(--ink-3); font-size: var(--fs-xs); margin-top: var(--s1); }
@@ -85,3 +87,22 @@
 .explain__list li::marker { color: var(--ink-3); font-weight: 600; }
 .explain__list strong { display: block; color: var(--ink-2); font-size: var(--fs-xs); }
 .explain__list span { color: var(--ink); }
+
+/* ---- Function help (inside the dialog) ---- */
+.calc-fn__btn { margin-top: var(--s2); gap: var(--s1); }
+.calc-fn__btn:focus-visible, .calc-fn__item:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.calc-fn { margin-top: var(--s2); padding: var(--s2); border: 1px solid var(--line-2); border-radius: var(--r); background: var(--surface-2); display: grid; gap: var(--s2); }
+.calc-fn__list { max-height: 180px; overflow: auto; border: 1px solid var(--line); border-radius: var(--r-ctl); background: var(--surface); padding: var(--s1); }
+.calc-fn__group { margin: var(--s1) var(--s2) 2px; font-size: var(--fs-xs); font-weight: 700; color: var(--ink-2); }
+.calc-fn__items { list-style: none; margin: 0; padding: 0; }
+.calc-fn__item { display: flex; align-items: baseline; gap: var(--s2); width: 100%; padding: 4px var(--s2); border: 0; border-radius: var(--r-ctl); background: none; color: var(--ink);
+  font-family: inherit; font-size: var(--fs-sm); line-height: 1.4; text-align: left; cursor: pointer; }
+.calc-fn__item:hover, .calc-fn__item:focus-visible { background: var(--surface-3); box-shadow: inset 2px 0 0 var(--accent); }
+.calc-fn__item .name { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-weight: 600; flex: none; min-width: 9ch; }
+.calc-fn__item .sig { color: var(--ink-3); font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: var(--fs-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.calc-fn__detail { font-size: var(--fs-sm); min-height: 3.5em; }
+.calc-fn__detail p { margin: var(--s1) 0 0; }
+.calc-fn__detail code, .calc-fn__sig { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
+.calc-fn__sig { display: block; font-weight: 600; }
+.calc-fn__line strong { color: var(--ink-2); font-size: var(--fs-xs); }
+.calc-fn > .btn { justify-self: start; }

@@ -6,6 +6,7 @@ import { LIMITS } from "../Core/validate.js";
 import { makeButton, openDialog, closeDialog, toast } from "../Core/ui.js";
 import { catalogFromEntities } from "./calc-resolve.js";
 import { evaluateDraft, chipFor, suggest } from "./calc-dialog-model.js";
+import { searchHelp, groupHelp } from "./function-help.js";
 import { normaliseFormula, showUseAs, useAsRole, roleChoice, setRoleChoice, paneState } from "./calc-pane-model.js";
 
 const TYPE_WORD = { numeric: "number", text: "text", temporal: "date", boolean: "boolean" };
@@ -52,14 +53,19 @@ export function openCalcDialog(calcId = null) {
   ta.setAttribute("role", "combobox");
   ta.setAttribute("aria-autocomplete", "list"); ta.setAttribute("aria-expanded", "false");
   const list = el("ul", "suggest"); list.id = `calc-sug-${n}`; list.setAttribute("role", "listbox");
-  list.setAttribute("aria-label", "Fields and calculations"); list.hidden = true;
+  list.setAttribute("aria-label", "Fields, calculations and functions"); list.hidden = true;
   ta.setAttribute("aria-controls", list.id);
   const hint = el("div", "hint"); hint.id = `calc-hint-${n}`;
-  hint.append("Type ", el("code", null, "["), " to pick a field or another calculation.");
+  hint.append("Type ", el("code", null, "["), " to pick a field or another calculation, or the start of a function name (", el("code", null, "LO"), ").");
+  const fnBtn = makeButton("Functions", "btn calc-fn__btn"); fnBtn.type = "button";
+  fnBtn.prepend(icon("search", { size: 14 }));
+  const panel = el("div", "calc-fn"); panel.id = `calc-fn-${n}`; panel.hidden = true;
+  panel.setAttribute("role", "group"); panel.setAttribute("aria-label", "Function help");
+  fnBtn.setAttribute("aria-expanded", "false"); fnBtn.setAttribute("aria-controls", panel.id);
   const fMsg = el("div"); fMsg.id = `calc-fmsg-${n}`; fMsg.setAttribute("role", "alert");
   ta.setAttribute("aria-describedby", `${hint.id} ${fMsg.id}`);
   wrap.append(ta, list);
-  formulaField.append(fLabel, wrap, hint, fMsg);
+  formulaField.append(fLabel, wrap, hint, fnBtn, panel, fMsg);
 
   // Role chip + "Use as"
   const row = el("div", "row calc-dialog__row");
@@ -154,7 +160,7 @@ export function openCalcDialog(calcId = null) {
     range = s; items = s.items; arrowed = false;
     list.replaceChildren(...items.map((it, k) => {
       const li = el("li"); li.id = `${list.id}-${k}`; li.setAttribute("role", "option");
-      li.append(icon(it.kind === "calc" ? "calc" : "table", { size: 14 }), el("span", "name", it.label), el("span", "kind", kinds.get(it.label) ?? it.kind));
+      li.append(icon(it.kind === "field" ? "table" : "calc", { size: 14 }), el("span", "name", it.label), el("span", "kind", it.hint ?? kinds.get(it.label) ?? it.kind));
       li.addEventListener("mousedown", (e) => { e.preventDefault(); accept(k); }); // keep focus in the textarea
       return li;
     }));
@@ -165,9 +171,10 @@ export function openCalcDialog(calcId = null) {
     const it = items[k]; if (!it) return;
     const text = normaliseFormula(ta.value);
     const tail = text.slice(range.to);
-    const close = tail.startsWith("]") ? "" : "]";
+    const fn = it.kind === "function";
+    const close = fn || tail.startsWith("]") ? "" : "]";
     ta.value = `${text.slice(0, range.from)}${it.insert}${close}${tail}`;
-    const caret = range.from + it.insert.length + 1;
+    const caret = range.from + it.insert.length + (fn ? 0 : 1);
     ta.setSelectionRange(caret, caret);
     closeList(); refresh();
   };
@@ -186,6 +193,57 @@ export function openCalcDialog(calcId = null) {
   name.addEventListener("input", () => { nameTouched = true; refresh(); });
   name.addEventListener("blur", () => { nameTouched = true; refresh(); });
   name.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); ta.focus(); } });
+
+  // --- function help ----------------------------------------------------------
+  const search = el("input", "input calc-fn__search"); search.type = "search"; search.autocomplete = "off";
+  search.placeholder = "Search functions, e.g. date"; search.setAttribute("aria-label", "Search functions");
+  const fnList = el("div", "calc-fn__list");
+  const detail = el("div", "calc-fn__detail"); detail.id = `${panel.id}-detail`;
+  const insertBtn = makeButton("Insert example", "btn"); insertBtn.type = "button"; insertBtn.hidden = true;
+  panel.append(search, fnList, detail, insertBtn);
+  let shown = null;
+  const insertText = (text) => {
+    const v = ta.value, a = ta.selectionStart ?? v.length, z = ta.selectionEnd ?? a;
+    ta.value = `${v.slice(0, a)}${text}${v.slice(z)}`;
+    ta.focus(); ta.setSelectionRange(a + text.length, a + text.length);
+    closeList(); refresh();
+  };
+  const show = (h) => {
+    shown = h; insertBtn.hidden = !h;
+    detail.replaceChildren();
+    if (!h) { detail.append(el("p", "hint", "Hover or focus a function for details.")); return; }
+    const row = (label, value, code) => { const p = el("p", "calc-fn__line"); p.append(el("strong", null, `${label} `), code ? el("code", null, value) : value); detail.append(p); };
+    detail.append(el("code", "calc-fn__sig", h.signature), el("p", "calc-fn__sum", h.summary));
+    row("Takes", h.arguments); row("Gives", h.result); row("Example", h.example, true); row("Empty values", h.note);
+  };
+  const renderList = () => {
+    const found = searchHelp(search.value);
+    fnList.replaceChildren();
+    if (!found.length) fnList.append(el("p", "hint", "No function matches."));
+    for (const g of groupHelp(found)) {
+      const head = el("h4", "calc-fn__group", g.group), ul = el("ul", "calc-fn__items");
+      ul.setAttribute("aria-label", g.group);
+      for (const h of g.items) {
+        const li = el("li"), b = el("button", "calc-fn__item"); b.type = "button";
+        b.append(el("span", "name", h.name), el("span", "sig", h.signature));
+        b.setAttribute("aria-describedby", detail.id);
+        b.addEventListener("mouseenter", () => show(h));
+        b.addEventListener("focus", () => show(h));
+        b.addEventListener("click", () => { show(h); insertText(h.signature); });
+        li.append(b); ul.append(li);
+      }
+      fnList.append(head, ul);
+    }
+    if (shown && !found.includes(shown)) show(null);
+  };
+  const togglePanel = (open) => {
+    panel.hidden = !open; fnBtn.setAttribute("aria-expanded", String(open));
+    if (open) { renderList(); show(null); search.focus(); } else ta.focus();
+  };
+  fnBtn.addEventListener("click", () => togglePanel(panel.hidden));
+  search.addEventListener("input", renderList);
+  insertBtn.addEventListener("click", () => { if (shown) insertText(shown.example); });
+  panel.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); togglePanel(false); } }); // close the panel, not the dialog
 
   // --- finish ---------------------------------------------------------------
   const finish = () => closeDialog(dlg);
