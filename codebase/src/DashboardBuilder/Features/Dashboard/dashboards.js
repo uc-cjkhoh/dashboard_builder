@@ -67,7 +67,7 @@ function baseCategoryOf(db, table, column) {
   } catch { /* total: an odd catalog just means "unknown" */ }
   return undefined;
 }
-// A Date / Date32 column holds days only (no time) — its range filter is sent as plain days.
+// A column's type from the field pane's cache, else the Data Model's catalog ("" when unknown).
 function columnType(db, table, column) {
   return columnsCache.get(keyOf(db, table))?.find((x) => x.name === column)?.type
     ?? [...entities.values()].find((e) => e.db === db && e.table === table)?.columns?.find((x) => x.name === column)?.type ?? "";
@@ -75,14 +75,11 @@ function columnType(db, table, column) {
 const isDateOnlyColumn = (db, table, column) => isDateOnlyType(columnType(db, table, column));
 const FILTER_PLACEHOLDER = { numeric: "number", temporal: "YYYY-MM-DD", boolean: "true or false" };
 const OPS = ["=", "!=", ">", ">=", "<", "<=", "in", "notin", "between"];
-// A filter contributes to the query only when checkFilter() says "ok" (empty = no-op, invalid = not applied).
-// Map a client filter to the server QueryFilter shape (value for scalar ops, values for in/between).
-// P30: relative dates resolve to a bound `between` (whole days), top-N carries its ranking measure.
-// Calculated fields: the context the pure plan seam (Calc/calc-plan.js) compiles pills against.
 // The plan inputs the pure planner reads (sheet-plan.js): live store state plus the field-pane column cache.
 const planCtx = () => ({ calculations, entities, relationships, sharedFilters, parameters, metaOf, nameOf, columnType });
 const calcFieldCtx = () => calcContext(planCtx());
 const appliedShared = () => planAppliedShared(planCtx());
+// A client filter as the server QueryFilter (only filters checkFilter() calls "ok" are sent; P30 relative dates, top-N).
 const toFilter = (f) => toServerFilter(f, planCtx());
 // A field's role can be overridden on its pill (Tableau's convert-to-dimension/measure). Default:
 // numeric → measure (aggregated), everything else → dimension (grouped). A numeric field made a
@@ -188,6 +185,15 @@ export function initDashboards() {
   const history = createHistory(); // P23 undo / redo per dashboard
   const lastSnap = new Map();       // dashId → the sheet as last committed (the "before" of the next edit)
   const results = createResultCache();
+  // The editor's one worksheet view — created before anything (sync() below) can use it.
+  // The query-and-render lifecycle is worksheet-view.js (P24a); the editor owns exactly one view, on #ws-chart, and
+  // supplies the drawing of a result (renderChart below) and the editor-only state around it.
+  const sheetView = createWorksheetView(chartEl, () => ({
+    dash: activeDashboard(), noticeEl, results, plan: planCtx(), categoryOf, castOf,
+    render: renderChart, extraNotice: () => extraNotice, statusBar: setStatusBar, sharedNote,
+  }));
+  const runChart = () => sheetView.run();
+
   let legendFocus = null; // P29: the legend item the user clicked (highlighted), or null
   let calcFor = null;     // P27: the measure slot whose table-calculation editor is open — { shelf, index } or null
   let calcPercent = new Set(); // P27: result measure indexes whose values are percentages (per-cell "%")
@@ -2394,15 +2400,6 @@ export function initDashboards() {
     updateSheet(dash.id, sheet);
   };
   const commitQuiet = (dash, sheet) => { lastSnap.set(dash.id, structuredClone(sheet)); updateSheet(dash.id, sheet); };
-
-  // --- chart ---------------------------------------------------------------
-  // The query-and-render lifecycle is worksheet-view.js (P24a); the editor owns exactly one view, on #ws-chart, and
-  // supplies the drawing of a result (renderChart below) and the editor-only state around it.
-  const sheetView = createWorksheetView(chartEl, () => ({
-    dash: activeDashboard(), noticeEl, results, plan: planCtx(), categoryOf, castOf,
-    render: renderChart, extraNotice: () => extraNotice, statusBar: setStatusBar, sharedNote,
-  }));
-  const runChart = () => sheetView.run();
 
   // result = { rowDimensions:[name…], columnDimensions:[name…], measures:[name…],
   //            rows:[{ keys:[rowVals…, colVals…], values:[…] }] }

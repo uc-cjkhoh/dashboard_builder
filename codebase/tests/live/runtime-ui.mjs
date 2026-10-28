@@ -20,6 +20,10 @@ try {
   await b.mock(({ path }) => (path === '/api/connection' ? { json: { connected: false } } : null));
   await b.goto(APP + '/');
   await b.waitFor(`!!document.getElementById('conn-connect')`, { label: 'app loaded' });
+  await check('the default Data Model view loads with zero page errors (no uncaught exception, rejection or console.error)', async () => {
+    await b.sleep(800); // sync() and the first render are async — give any rejection time to surface
+    must(b.consoleErrors.length === 0, `page errors: ${b.consoleErrors.map((e) => String(e).split('\n')[0]).join(' | ')}`);
+  });
   await b.evaluate(`(async () => {
     const chart = await import('/features/Dashboard/chart.js');
     window.__chart = chart;

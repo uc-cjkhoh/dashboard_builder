@@ -60,6 +60,7 @@ export async function launch({ port, width = 1400, height = 900 } = {}) {
 
   const consoleErrors = [];
   on('Runtime.exceptionThrown', (p) => consoleErrors.push(p.exceptionDetails?.exception?.description ?? p.exceptionDetails?.text));
+  on('Runtime.consoleAPICalled', (p) => { if (p.type === 'error') consoleErrors.push('console.error: ' + (p.args ?? []).map((x) => x.value ?? x.description ?? '').join(' ')); });
   await send('Page.enable'); await send('Runtime.enable'); await send('DOM.enable');
   await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
 
@@ -115,7 +116,16 @@ export async function launch({ port, width = 1400, height = 900 } = {}) {
         }).catch(() => {});
       });
     },
-    async close() { try { ws.close(); } catch {} cleanup(); await sleep(100); },
+    /** Close the browser. Any uncaught exception / unhandled rejection / console.error seen on the page fails the check
+     *  (printed as `FAIL page errors: ...`, which run-ui-all.mjs counts); set ALLOW_PAGE_ERRORS=1 to only list them. */
+    async close() {
+      try { ws.close(); } catch {} cleanup(); await sleep(100);
+      if (consoleErrors.length) {
+        const uniq = [...new Set(consoleErrors.map((e) => String(e).split('\n')[0]))];
+        console.log(`${process.env.ALLOW_PAGE_ERRORS ? 'warn' : 'FAIL'} page errors (${consoleErrors.length}): ${uniq.slice(0, 5).join(' | ')}`);
+        if (!process.env.ALLOW_PAGE_ERRORS) process.exitCode = 1;
+      }
+    },
   };
   return api;
   } catch (e) { cleanup(); throw e; } // a failed start must not leave Chromium or its profile behind

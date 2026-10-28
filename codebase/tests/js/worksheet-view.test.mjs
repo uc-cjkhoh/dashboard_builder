@@ -66,9 +66,36 @@ test("cancelling one view never aborts or blanks another's query", async () => {
   await Promise.all([pa, pb]);
   assert.deepEqual(drawn, [["ws#2", "people"]], "only the cancelled view stayed undrawn");
 });
-test("destroy is safe to call twice and leaves nothing to draw", async () => {
+test("destroy aborts the in-flight request, disposes the chart and clears onscroll; twice is safe", async () => {
+  calls.length = 0;
+  const signals = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (url, opts) => { signals.push(opts.signal); return realFetch(url, opts); };
+  let release; gate = new Promise((r) => { release = r; });
+  // a chart already live in the container, as after an earlier draw
+  const inst = { disposed: false, setOption() {}, on() {}, dispatchAction() {}, resize() {}, dispose() { this.disposed = true; }, getWidth: () => 600, getHeight: () => 400, getDom: () => ({}) };
+  globalThis.window = { echarts: { init: () => inst } };
+  globalThis.getComputedStyle = () => ({ getPropertyValue: () => "", left: "0" });
+  globalThis.ResizeObserver = class { observe() {} disconnect() {} };
+  const { renderChart, hasChartInstance } = await import("../../src/DashboardBuilder/Features/Dashboard/chart.js");
   const drawn = [];
   const a = host("ws#1", "orders", createResultCache(), drawn);
+  renderChart(a.container, { type: "bar", categories: ["a"], series: [{ name: "v", data: [1] }], format: {} });
+  a.container.onscroll = () => {};
+  assert.ok(hasChartInstance(a.container));
+  const p = a.view.run();            // pending on the gated fetch (run() disposes the old chart first)
+  inst.disposed = false;
+  renderChart(a.container, { type: "bar", categories: ["a"], series: [{ name: "v", data: [1] }], format: {} }); // a chart drawn while the request is pending
+  assert.ok(hasChartInstance(a.container));
+  a.container.onscroll = () => {};
   a.view.destroy(); a.view.destroy();
-  assert.equal(drawn.length, 0);
+  release(); gate = null;
+  await p;
+  globalThis.fetch = realFetch;
+  assert.equal(signals.length, 1);
+  assert.equal(signals[0].aborted, true, "the request was aborted");
+  assert.equal(inst.disposed, true, "the chart was disposed");
+  assert.equal(hasChartInstance(a.container), false);
+  assert.equal(a.container.onscroll, null);
+  assert.equal(drawn.length, 0, "nothing drawn after destroy");
 });

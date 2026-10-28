@@ -81,7 +81,6 @@ function tokens() {
 export function renderChart(container, spec) {
   disposeChart(container);
   const st = stateOf(container);
-  drawing = st;
   paletteReverse = !!spec.format?.paletteReverse;
   memberColors = spec.memberColors instanceof Map ? spec.memberColors : new Map();
   const host = document.createElement("div");
@@ -102,12 +101,13 @@ export function renderChart(container, spec) {
   // big chart (thousands of marks) draws on canvas instead — SVG slows down with that many nodes.
   const onCanvas = st.onCanvas = markCount(spec) > FIT.canvasMarks;
   const instance = st.instance = window.echarts.init(host, null, { renderer: onCanvas ? "canvas" : "svg" });
-  const option = buildOption(spec.type === "multiples" ? { ...spec, width: paneWidth(), height: paneHeight() } : spec);
+  let option;
+  drawing = st; // builders that size marks later (heatmap circles) capture this container's state
+  try { option = buildOption(spec.type === "multiples" ? { ...spec, width: paneWidth(), height: paneHeight() } : spec); } finally { drawing = null; }
   if (spec.type !== "multiples") showEveryCategory(option, fit.rotate, fit); // panels keep their own sparse labels
   if (fit.zoom) addZoom(option, fit);
   if (onCanvas) tuneForSize(option);
   st.lastOption = option;
-  drawing = null;
   instance.setOption({ ...option, ...motionOption(st.animateNext && !onCanvas) });
 
   // P15 click-to-filter: forward mark clicks to the caller, which maps dataIndex → a dimension value.

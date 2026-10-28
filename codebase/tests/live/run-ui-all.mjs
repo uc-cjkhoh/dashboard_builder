@@ -12,9 +12,20 @@ const root = join(here, '..', '..');
 const port = Number(process.env.UI_PORT ?? 5193);
 const only = process.env.ONLY ? process.env.ONLY.split(',') : null;
 const files = readdirSync(here).filter((f) => f.endsWith('-ui.mjs') && (!only || only.includes(f.replace('-ui.mjs', '')))).sort();
-const stop = () => spawnSync('fuser', ['-k', `${port}/tcp`], { stdio: 'ignore' });
+const fuser = (args) => {
+  const r = spawnSync('fuser', args, { stdio: 'ignore' });
+  if (r.error) { console.error(`run-ui-all: cannot run fuser (${r.error.code ?? r.error.message}) — install psmisc; refusing to continue`); process.exit(2); }
+  return r.status;
+};
+const stop = () => fuser(['-k', `${port}/tcp`]);
 
-stop();
+// Never kill an unrelated listener: only a previous dev run of THIS app (a DashboardBuilder page) may be on the port.
+if (fuser([`${port}/tcp`]) === 0) {
+  let ours = false;
+  try { ours = /Dashboard Builder|ws-chart|dashboard-view/.test(await (await fetch(`http://localhost:${port}/`)).text()); } catch { /* not HTTP */ }
+  if (!ours) { console.error(`run-ui-all: port ${port} has an unrelated listener; set UI_PORT to a free port`); process.exit(2); }
+  stop();
+}
 const app = spawn('dotnet', ['run', '--no-launch-profile', '--urls', `http://localhost:${port}`], {
   cwd: join(root, 'src', 'DashboardBuilder'), stdio: 'ignore', detached: true });
 let up = false;
