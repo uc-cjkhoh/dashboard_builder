@@ -11,6 +11,9 @@ import { entities, relationships, activeDashboard, isModelActive, updateSheet, b
 import { checkValue, paramTypeFor } from "../Core/parameters-model.js";
 import { renderChart as renderSeriesChart, exportChart, hasChartInstance, sizeChart, focusSeries } from "./chart.js";
 import { createWorksheetView, el, hint, warn, joinNotices, periodNotice } from "./worksheet-view.js";
+import { ANALYTICS_TYPES, CLICK_TYPES, P36_TYPES, MAX_PANELS, scatterSymbol, sameField, cmpValues, primaryDim, chartOrientation, aliasNames, pathOrderedRows,
+  statusText, captionText, marksChannels, scatterShapeGroups, colorSplitData, heatmapData, treemapTree, sankeyLinks, multiplesData } from "./result-model.js";
+import { tupleKey, uniqueTuples, expandLeaves, runs, levelSpans } from "./grid-model.js";
 import { makeValueFormatter, makeCategoryFormatter } from "../Core/format.js";
 import { createResultCache } from "./query-runner.js";
 import { CHART_TYPES, chartIcon, chartLabel, sortSummary } from "./viewbar-model.js";
@@ -96,60 +99,16 @@ const periodFilters = (sheet, range) => planPeriodFilters(sheet, range, planCtx(
 // The canonical query shape lives in planDims()/planMeasures(): buildPlan sends exactly these, and
 // renderChart re-derives the same ordering to know which result column is a series vs. a mark channel.
 // With no marks set, both reduce to the pre-P18 ordering, so existing charts are byte-identical.
-// Scatter-family types (P11 scatter + P19 square/circle marks): point charts that plot two measures
-// and can carry a Shape encoding. They share buildScatter with a symbol override.
-const scatterSymbol = (type) => (type === "square" ? "rect" : type === "circle" ? "circle" : "circle");
-const sameField = (a, b) => Boolean(a) && Boolean(b) && (isCalcPill(a) || isCalcPill(b) ? sameCalcPill(a, b) : a.db === b.db && a.table === b.table && a.column === b.column);
-// Ordering comparator for Path (P19): numeric when both look numeric, else a locale string compare.
-function cmpValues(a, b) {
-  const na = Number(a), nb = Number(b);
-  if (Number.isFinite(na) && Number.isFinite(nb)) return na - nb;
-  return String(a ?? "").localeCompare(String(b ?? ""));
-}
 const shelfMeasureCount = (sheet) => planMeasures(sheet).filter((e) => e.role === "shelf").length;
 const CHART_LIKE = new Set([
   "bar", "stacked", "line", "area", "pie", "donut", "scatter", "combo", "square", "circle",
   "heatmap", "treemap", "histogram", "boxplot",
   "waterfall", "funnel", "gauge", "bullet", "sankey", "multiples", // P36
 ]);
-// P36 types drawn by renderP36 (each from the ordinary /api/query result).
-const P36_TYPES = new Set(["waterfall", "funnel", "gauge", "bullet", "sankey", "multiples"]);
 // Charts without x / y axes: no axis-title controls in Format.
 const NO_AXES = new Set(["pie", "donut", "funnel", "gauge", "sankey"]);
 // Charts that read Format → Target (P35 scorecard; P36 gauge maximum / bullet target).
 const TARGET_TYPES = new Set(["kpi", "gauge", "bullet"]);
-// Small multiples draw at most this many panels.
-const MAX_PANELS = 24;
-// Chart types that consume a Color dimension (P7 marks). SPLIT types pivot it into one coloured
-// series per value; a Table takes it as an extra group-by that renders as a free top-header level.
-// Types outside COLOR_USES ignore a Color pill (pie already slices by colour; scatter/combo/KPI
-// don't split) — the Color lane shows a note so it's honest, never a silent no-op.
-// Chart types whose marks map 1:1 to a category and so support click-to-filter (P15).
-// P21: chart types that take reference lines / bands / a trend.
-const ANALYTICS_TYPES = new Set(["bar", "line", "area"]);
-const CLICK_TYPES = new Set(["bar", "stacked", "line", "area", "combo", "pie", "donut", "scatter"]);
-// The sheet's primary dimension = the first group-by key (Rows-shelf dims first, then Columns-shelf),
-// matching buildPlan()'s key order. A click filters on this dimension's value. When a drill hierarchy
-// is active its current level LEADS the group-by (see buildPlan), so it is the primary dimension.
-function primaryDim(sheet) {
-  const dd = drillActiveDim(sheet);
-  if (dd) return dd;
-  const first = [
-    ...sheet.rows.filter((f) => roleOf(f) === "dimension"),
-    ...sheet.columns.filter((f) => roleOf(f) === "dimension"),
-  ][0] ?? null;
-  return isCalcPill(first) ? null : first; // E12: a calculated dimension has no column to filter on
-}
-
-// --- drill hierarchy (P16) --------------------------------------------------
-// Chart orientation, Tableau-style: a dimension on **Rows** (and none on Columns) → **horizontal**
-// bars (category down the left, value along the bottom); otherwise **vertical** (the default). Only
-// the cartesian bar/stacked/line/area types honour it (combo keeps its dual y-axis vertical).
-function chartOrientation(sheet) {
-  const rowDims = sheet.rows.filter((f) => roleOf(f) === "dimension").length;
-  const colDims = sheet.columns.filter((f) => roleOf(f) === "dimension").length;
-  return rowDims > 0 && colDims === 0 ? "horizontal" : "vertical";
-}
 // P22 Show Me: the field counts one candidate chart type sees — the same dims the chart hint counts
 // (planDims with that type: drill, shelf, Detail, Shape, discrete Colour) and the shelf measures.
 function showMeCounts(sheet, type) {
@@ -1027,15 +986,7 @@ export function initDashboards() {
   }
   const dashboardHasContentSheet = (s) => Boolean(s.columns.length || s.rows.length || s.filters.length || s.color?.length || s.period || s.drill || s.pages);
   // The automatic caption: "sum amount by customers.name, customers.country · 2 filters".
-  function autoCaption(s) {
-    const ms = planMeasures(s).filter((e) => e.role === "shelf").map((e) => measureName({ ...e.field, agg: e.agg }));
-    const ds = planDims(s).keyOrder.filter(Boolean).map(nameOf);
-    const parts = [];
-    if (ms.length || ds.length) parts.push(`${ms.length ? ms.join(", ") : "count"}${ds.length ? ` by ${ds.join(", ")}` : ""}`);
-    const nf = s.filters.filter((f) => checkFilter(f).state === "ok").length;
-    if (nf) parts.push(`${nf} filter${nf === 1 ? "" : "s"}`);
-    return parts.join(" · ");
-  }
+  const autoCaption = (s) => captionText(s, { measureName, nameOf });
   // Title (defaults to the tab name) and caption (defaults to autoCaption): click to edit, Enter saves,
   // Esc cancels; an empty value goes back to the automatic one.
   function titleBlock(dash, s) {
@@ -1073,14 +1024,7 @@ export function initDashboards() {
     const bar = document.getElementById("ws-statusbar");
     if (!bar) return;
     if (!result) { bar.replaceChildren(); toggle(bar, false); return; }
-    const parts = [`${result.rows.length.toLocaleString("en-US")} mark${result.rows.length === 1 ? "" : "s"}`];
-    const tuples = (from, n) => new Set(result.rows.map((r) => JSON.stringify(r.keys.slice(from, from + n)))).size;
-    const rd = result.rowDimensions.length, cd = result.columnDimensions.length;
-    if (s.chartType === "table" || s.chartType === "text")
-      parts.push(`${tuples(0, rd).toLocaleString("en-US")} row${tuples(0, rd) === 1 ? "" : "s"} × ${tuples(rd, cd).toLocaleString("en-US")} column${tuples(rd, cd) === 1 ? "" : "s"}`);
-    parts.push(`${result.measures.length} measure${result.measures.length === 1 ? "" : "s"}`);
-    if (s.selection) parts.push(`Selected: ${s.selection.label}`);
-    bar.textContent = parts.join(" · ");
+    bar.textContent = statusText(s, result);
     toggle(bar, true);
   }
 
@@ -1572,23 +1516,6 @@ export function initDashboards() {
   function sharedNote(sheet) {
     const skipped = sharedSkipped(sheet);
     return skipped.length ? `${skipped.map((f) => `${f.table}.${f.column}`).join(", ")}: shared, but not applied here — its table isn't in this view.` : null;
-  }
-
-  // P28: rename a result's dimension and measure labels by the fields' display names.
-  function aliasNames(sheet, result) {
-    const { rowDims, colDims } = planDims(sheet);
-    const mplan = planMeasures(sheet);
-    const dimName = (f, fallback) => (f && metaOf(f).alias) || fallback;
-    const measures = result.measures.map((m, mi) => {
-      const e = mplan[mi];
-      if (!e || e.agg === "count" || isCalcPill(e.field)) return m;
-      const alias = metaOf(e.field).alias;
-      return alias ? `${aggWord(e.agg)} ${alias}` : m;
-    });
-    return { ...result,
-      rowDimensions: result.rowDimensions.map((n, i) => dimName(rowDims[i], n)),
-      columnDimensions: result.columnDimensions.map((n, i) => dimName(colDims[i], n)),
-      measures };
   }
 
   // P27: the table-calculation editor for one measure slot.
@@ -2418,7 +2345,7 @@ export function initDashboards() {
     if (cmp) cmp = { ...cmp, result: labelParts(cmp.result, parts) };
     if (isGroupingPart(parts[0])) bucketedKey = 0;
     // P28: display names on axes, legends and headers (the query used the real columns).
-    result = aliasNames(sheet, result);
+    result = aliasNames(sheet, result, metaOf);
     // P27: quick table calculations replace their measure's values (over the rows on hand).
     const calcs = planMeasures(sheet).map((e) => (e.role === "shelf" ? e.field.tableCalc ?? null : null));
     const applied = applyTableCalcs(result, calcs, result.rowDimensions.length, result.columnDimensions.length);
@@ -2497,7 +2424,7 @@ export function initDashboards() {
     }
     // P18 mark channels: Size (bubble), continuous Colour (gradient), field-driven Label + custom
     // Tooltip. All read columns already in `result`; missing/unsupported mappings degrade to a note.
-    const marks = marksChannels(sheet, result, mplan, sizeIdx, colorMeasureIdx, fmtVal, fmtCat, rowsOrdered);
+    const marks = marksChannelSpec(sheet, result, mplan, sizeIdx, colorMeasureIdx, fmtVal, fmtCat, rowsOrdered);
     if (marks.note) chartEl.append(hint(marks.note)); // a Marks hint sits above the chart, never blocks it
     // P15 click-to-filter: marks map 1:1 to result rows here, so a click's dataIndex → rowsOrdered[i].keys[0]
     // (the primary dimension's raw value).
@@ -2618,19 +2545,6 @@ export function initDashboards() {
     };
   }
 
-  // P19 Path: order rows by the Path field's value — a group-by dimension's key or a numeric measure.
-  // Returns a reordered copy, or null when no Path field is set / it isn't in the query.
-  function pathOrderedRows(sheet, result, mplan) {
-    const pf = marksOf(sheet).path;
-    if (!pf) return null;
-    const { keyOrder } = planDims(sheet);
-    const ki = keyOrder.findIndex((f) => sameField(f, pf));
-    if (ki >= 0) return [...result.rows].sort((a, b) => cmpValues(a.keys[ki], b.keys[ki]));
-    const mi = mplan.findIndex((e) => sameField(e.field, pf));
-    if (mi >= 0) return [...result.rows].sort((a, b) => (Number(a.values[mi]) || 0) - (Number(b.values[mi]) || 0));
-    return null;
-  }
-
   // P19 Shape (scatter family): group rows by the Shape dimension's value → one scatter series per
   // value, each a distinct symbol (identity survives greyscale). X/Y are the two shelf measures.
   function renderScatterShapes(sheet, result, seriesIdx, sizeIdx, format, fmtVal, fmtCat) {
@@ -2659,66 +2573,11 @@ export function initDashboards() {
     });
   }
 
-  // Build the P18 mark-channel spec fed to chart.js: { spec: { sizes?, sizeName?, colorValues?,
-  // colorName?, pointLabels?, tooltipExtra? }, note? }. Only channels valid for the current type/mapping
-  // are populated; anything unmet becomes a friendly `note` (P11 rule: a hint, never an error).
-  function marksChannels(sheet, result, mplan, sizeIdx, colorMeasureIdx, fmtVal, fmtCat, rowsOrdered) {
-    const m = marksOf(sheet);
-    const spec = {};
-    const notes = [];
-    const type = sheet.chartType;
-    const rows = rowsOrdered ?? result.rows; // align channel arrays with the (possibly Path-ordered) rows
-
-    // Size → the scatter family's bubbles (variable bar/line width is out of scope for v1).
-    if (m.size) {
-      if (SCATTER_TYPES.has(type) && sizeIdx >= 0) {
-        spec.sizes = rows.map((r) => r.values[sizeIdx]);
-        spec.sizeName = result.measures[sizeIdx];
-      } else if (!SCATTER_TYPES.has(type)) {
-        notes.push("Size shapes a Scatter (bubble) chart — switch to Scatter to use it.");
-      }
-    }
-    // Continuous Colour → a token-derived gradient on scatter points, with a visualMap legend.
-    if (colorMeasureIdx >= 0) {
-      if (SCATTER_TYPES.has(type)) {
-        spec.colorValues = rows.map((r) => r.values[colorMeasureIdx]);
-        spec.colorName = result.measures[colorMeasureIdx];
-      } else {
-        notes.push("Continuous colour applies to Scatter — drop a categorical field on Colour for other chart types.");
-      }
-    }
-    // Label → the field's value written on each mark. Numeric labels ride along as an aux measure;
-    // categorical labels must be a group-by (on a shelf / Detail / Colour) to have one value per mark.
-    if (m.label) {
-      const resolved = markFieldValues(sheet, rows, mplan, m.label, fmtVal, fmtCat);
-      if (resolved) spec.pointLabels = resolved.values;
-      else notes.push("Label by a numeric field, or add the Label field to Columns/Rows/Detail so it groups.");
-    }
-    // Tooltip → extra lines listing each chosen field's per-mark value.
-    const tips = (m.tooltip ?? []).map((f) => markFieldValues(sheet, rows, mplan, f, fmtVal, fmtCat)).filter(Boolean);
-    if (tips.length) spec.tooltipExtra = tips.map((t) => ({ name: t.name, values: t.values }));
-    // T01-19 tooltip text: the template + every group-by / Tooltip field's per-mark values (measures come from the series).
-    const dimVals = planDims(sheet).keyOrder.map((f) => markFieldValues(sheet, rows, mplan, f, fmtVal, fmtCat)).filter(Boolean);
-    const tipFields = [...dimVals, ...tips].map((t) => ({ name: t.name, values: t.values }));
-    // Chips offer only placeholders that resolve: group-by / Tooltip fields and the shelf (series) measures.
-    const shelfNames = (result.measures ?? []).slice(0, mplan.filter((e) => e.role === "shelf").length);
-    setTooltipCat(sheet, tooltipCatalog(tipFields, shelfNames, shelfNames.map((_, i) => (rows[0] ? fmtVal(rows[0].values[i]) : ""))));
-    if (sheet.tooltipText) { spec.tooltipText = sheet.tooltipText; spec.tooltipFields = tipFields; }
-    // Angle: pie/donut already map their measure to slice angle; elsewhere a radial angle has no mark.
-    if (m.angle && type !== "pie" && type !== "donut") notes.push("Angle drives a Pie/Donut slice — that mapping is already implicit there.");
-
-    return { spec, note: notes.length ? notes.join(" ") : null };
-  }
-
-  // Per-row display values for a marks field over the given rows: a group-by dimension reads its key
-  // (date-aware), a measure reads its aggregated value. null when the field isn't in the query.
-  function markFieldValues(sheet, rows, mplan, field, fmtVal, fmtCat) {
-    const { keyOrder } = planDims(sheet);
-    const ki = keyOrder.findIndex((f) => sameField(f, field));
-    if (ki >= 0) return { name: `${field.table}.${field.column}`, values: rows.map((r) => (r.keys[ki] == null ? "—" : fmtCat(r.keys[ki]))) };
-    const mi = mplan.findIndex((e) => sameField(e.field, field));
-    if (mi >= 0) return { name: measureName(mplan[mi].field.agg ? mplan[mi].field : { ...mplan[mi].field, agg: mplan[mi].agg }), values: rows.map((r) => fmtVal(r.values[mi])) };
-    return null;
+  // The P18 mark-channel spec (result-model.js); the Tooltip editor learns the fields the chart offers.
+  function marksChannelSpec(sheet, result, mplan, sizeIdx, colorMeasureIdx, fmtVal, fmtCat, rowsOrdered) {
+    const out = marksChannels(sheet, result, mplan, sizeIdx, colorMeasureIdx, fmtVal, fmtCat, rowsOrdered, SCATTER_TYPES, measureName);
+    setTooltipCat(sheet, out.tooltipCat);
+    return out;
   }
 
   // Build the ECharts click handler that turns a mark click into a selection on the primary dimension
@@ -3279,49 +3138,6 @@ function exportBaseName(dash) {
   return raw.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "worksheet";
 }
 
-// --- crosstab (pivot) helpers ----------------------------------------------
-// NUL joins tuple cells into a comparison key without colliding on legitimate separators.
-function tupleKey(tuple) { return tuple.map((v) => (v ?? "")).join("\u0000"); }
-// Distinct tuples, preserving first-seen order (the backend already sorts by dimension keys).
-function uniqueTuples(list) {
-  const seen = new Set(); const out = [];
-  for (const t of list) { const k = tupleKey(t); if (!seen.has(k)) { seen.add(k); out.push(t); } }
-  return out;
-}
-// Expand tuples into header/stub leaves. measureCount 0 → one leaf per tuple (mi:null); >0 → one leaf
-// per (tuple × measure). No tuples (no dims on that axis) → a single empty tuple so a value still shows.
-function expandLeaves(tuples, measureCount) {
-  const src = tuples.length ? tuples : [[]];
-  const out = [];
-  for (const t of src) {
-    if (measureCount === 0) out.push({ tuple: t, mi: null });
-    else for (let mi = 0; mi < measureCount; mi++) out.push({ tuple: t, mi });
-  }
-  return out;
-}
-// Run-length groups of consecutive leaves sharing keyFn — for colSpan on the top header.
-function runs(leaves, keyFn) {
-  const out = [];
-  for (let i = 0; i < leaves.length;) {
-    let j = i + 1; const k = keyFn(leaves[i]);
-    while (j < leaves.length && keyFn(leaves[j]) === k) j++;
-    out.push({ leaf: leaves[i], span: j - i });
-    i = j;
-  }
-  return out;
-}
-// Per-leaf rowSpan for dimension level `ll`: the group size at each group's first leaf, else 0
-// (that cell is covered by the rowSpan above) — for merging repeated row-stub headers.
-function levelSpans(leaves, ll) {
-  const spans = new Array(leaves.length).fill(0);
-  for (let i = 0; i < leaves.length;) {
-    let j = i + 1; const k = tupleKey(leaves[i].tuple.slice(0, ll + 1));
-    while (j < leaves.length && tupleKey(leaves[j].tuple.slice(0, ll + 1)) === k) j++;
-    spans[i] = j - i;
-    i = j;
-  }
-  return spans;
-}
 function select(options, selected, className, label) {
   const sel = el("select", `select select--light ${className ?? ""}`.trim());
   if (label) sel.setAttribute("aria-label", label); // accessible name (a11y — no visible <label>)
