@@ -166,7 +166,7 @@ export function initBoard() {
   undoBtn.addEventListener("click", () => step("undo"));
   redoBtn.addEventListener("click", () => step("redo"));
   document.addEventListener("keydown", (e) => {
-    if (!(e.ctrlKey || e.metaKey) || !isDashboardActive() || view.hidden) return;
+    if (!(e.ctrlKey || e.metaKey) || !isDashboardActive() || view.hidden || interact.dragging) return; // never mid-drag
     if (e.target.closest?.("input, textarea, select, [contenteditable='true'], dialog")) return; // the field's own undo
     const k = e.key.toLowerCase();
     if (k === "z" && !e.shiftKey) { e.preventDefault(); step("undo"); }
@@ -181,6 +181,8 @@ export function initBoard() {
     grid, scroll: $("board-scroll"), getDash: activeDashboard, nameOf, metrics: readMetrics, commit, status,
     addAt(sheetId, cand) { const dash = activeDashboard(); if (dash && worksheetById(sheetId)) addWidget(dash, "sheet", sheetId, cand); },
   });
+
+  bus.addEventListener("dashboard:changed", () => interact.cancelIfGone());
 
   const runAll = () => { for (const e of entries.values()) e.run(); };
   for (const type of ["view:changed", "tabs:changed", "dashboard:changed"]) bus.addEventListener(type, sync);

@@ -413,6 +413,40 @@ try {
     await waitFor(`!document.getElementById('board-view').hidden && document.querySelectorAll('.board-widget').length === ${c.length}`, 'board back');
   });
 
+  await check('Ctrl+Z mid-drag is ignored; a drag whose widget disappears ends with no ghost; a second pointer cannot move or end a drag', async () => {
+    const before = await cells();
+    // (a) Ctrl+Z while dragging does nothing to the board, and the release still completes normally
+    let m = await metrics(), p = await headPoint('A');
+    await drag(p, 0, m.sy * 3, { release: false });
+    must((await ghost()) !== null, 'no ghost mid-drag');
+    await keyPress('z', 90, 2);
+    must(J(await cells()) === J(before), 'Ctrl+Z changed the board mid-drag');
+    await mouse('mouseReleased', p.x, p.y + m.sy * 3);
+    await waitFor(`document.querySelector('.board-ghost').hidden`, 'ghost hidden after release');
+    await clickBar('Undo'); // put A back where it was (the drag above was a committed move)
+    must(J(await cells()) === J(before), 'undo after the drag');
+    // (b) the dragged widget is removed underneath the drag (a store change): the gesture ends, nothing is committed, the next drag works
+    m = await metrics(); p = await headPoint('A');
+    await drag(p, m.sx, 0, { release: false });
+    await store(`const d = st.dashboards()[0]; st.setWidgets(d.id, d.widgets.filter((w) => w.id !== ${J(ID.A)})); return true;`);
+    await waitFor(`document.querySelector('.board-ghost').hidden && !document.getElementById('board-grid').classList.contains('is-dragging')`, 'ghost and drag state cleared');
+    await mouse('mouseReleased', p.x + m.sx, p.y);
+    must(!(await cells()).some((c) => c === null) && (await cells()).length === before.length - 1, 'a stale commit resurrected the widget');
+    await store(`const d = st.dashboards()[0]; st.setWidgets(d.id, ${J(await store(`return st.dashboards()[0].widgets;`))}.concat([{ id: ${J(ID.A)}, kind: 'sheet', sheetId: st.worksheets()[0].id, x: 0, y: 7, w: 4, h: 3 }])); return true;`);
+    await waitFor(`!!document.querySelector(${J(wsel('A'))})`, 'A back');
+    m = await metrics(); p = await headPoint('A');
+    await drag(p, 0, m.sy, { release: true });
+    await waitFor(`document.getElementById('board-status').textContent.startsWith('Moved to column 1, row 9')`, 'the next drag works');
+    // (c) a second pointer's move / up / cancel does not touch the running drag
+    m = await metrics(); p = await headPoint('A');
+    await drag(p, 0, m.sy, { release: false });
+    const handle = wsel('A') + ' .board-widget__head';
+    await ev(`(() => { const h = document.querySelector(${J(handle)}); for (const t of ['pointermove', 'pointerup', 'pointercancel']) h.dispatchEvent(new PointerEvent(t, { bubbles: true, pointerId: 77, clientX: 5, clientY: 5 })); return true; })()`);
+    must((await ghost()) !== null && await ev(`document.querySelector(${J(wsel('A'))}).classList.contains('is-dragging')`), 'a second pointer ended or hijacked the drag');
+    await mouse('mouseReleased', p.x, p.y + m.sy);
+    await waitFor(`document.querySelector('.board-ghost').hidden`, 'ghost hidden');
+  });
+
   await check('after a reload the layout is kept (autosave) but undo history is gone (in memory only)', async () => {
     const want = await cells();
     await b.sleep(900);

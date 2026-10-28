@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   overlaps, inBounds, firstFreeSpot, cleanWidgets, placeNew, checkPlacement, removeSheetWidgets, dashboardsUsing, defaultTabName,
-  savedWidgets, DEFAULT_SIZE,
+  savedWidgets, DEFAULT_SIZE, explainRefusal,
 } from "../../src/DashboardBuilder/Features/Board/board-model.js";
 import { LIMITS } from "../../src/DashboardBuilder/Features/Core/validate.js";
 
@@ -203,4 +203,12 @@ test("defaultTabName numbers each kind from the first unused number", () => {
   assert.equal(defaultTabName("worksheet", ["Worksheet 2"]), "Worksheet 1");
   assert.equal(defaultTabName("dashboard", ["Worksheet 1", "Dashboard 1"]), "Dashboard 2");
   assert.equal(defaultTabName("dashboard", ["Worksheet 1"]), "Dashboard 1");
+});
+
+test("non-integer cells are refused as 'snap to whole grid cells' by checkPlacement and explainRefusal", () => {
+  for (const bad of [{ x: 0.5, y: 0, w: 4, h: 3 }, { x: 0, y: 1.2, w: 4, h: 3 }, { x: 0, y: 0, w: 4.5, h: 3 }, { x: 0, y: 0, w: 4, h: NaN }]) {
+    const c = { id: "a", kind: "sheet", ...bad };
+    assert.deepEqual(checkPlacement([], c), { ok: false, error: "Widgets snap to whole grid cells." });
+    assert.equal(explainRefusal([], c, "move"), "Can't move: widgets snap to whole grid cells.");
+  }
 });

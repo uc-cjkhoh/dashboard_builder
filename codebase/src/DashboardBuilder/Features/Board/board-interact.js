@@ -21,6 +21,7 @@ export function initInteract(ctx) {
   ghost.append(ghostLabel);
   grid.append(ghost);
   let dragEl = null; // the widget being dragged
+  let abort = null, dragId = null; // ends the running gesture without committing
 
   const point = (e) => { const r = grid.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
   const cctx = () => { const dash = ctx.getDash(); return { widgets: dash?.widgets ?? [], panelWidth: grid.clientWidth, metrics: ctx.metrics(), nameOf: ctx.nameOf }; };
@@ -48,7 +49,9 @@ export function initInteract(ctx) {
     const handle = grip ?? head;
     dragEl = wEl;
     try { handle.setPointerCapture(e.pointerId); } catch { /* a synthetic pointer id: the window listeners below still work */ }
+    const mine = (ev) => ev.pointerId === e.pointerId; // a second pointer (another finger) never moves or ends this drag
     const onMove = (ev) => {
+      if (!mine(ev)) return;
       const g = drag.move(point(ev), cctx());
       if (!g) return;
       dragEl.classList.add("is-dragging");
@@ -60,7 +63,8 @@ export function initInteract(ctx) {
       handle.removeEventListener("pointerup", onUp);
       handle.removeEventListener("pointercancel", onCancel);
       handle.removeEventListener("lostpointercapture", onLost);
-      window.removeEventListener("blur", onCancel);
+      window.removeEventListener("blur", onBlur);
+      abort = null;
       document.removeEventListener("keydown", onKey, true);
       const widgetEl = dragEl;
       if (!commit) { drag.cancel(); endDrag(); return; }
@@ -73,15 +77,18 @@ export function initInteract(ctx) {
       } else if (r.type === "revert") ctx.status(r.error, true); // snapped back: nothing moved
       widgetEl?.focus({ preventScroll: true });
     };
-    const onUp = (ev) => finish(true, ev);
-    const onCancel = () => finish(false); // pointercancel, lost capture, window blur: no ghost left behind
-    const onLost = () => { if (drag.pressed) finish(false); };
+    const onUp = (ev) => { if (mine(ev)) finish(true, ev); };
+    const onCancel = (ev) => { if (mine(ev)) finish(false); }; // pointercancel: no ghost left behind
+    const onLost = (ev) => { if (mine(ev) && drag.pressed) finish(false); };
+    const onBlur = () => finish(false); // only `blur` listens on window: losing focus mid-drag cancels
+    abort = () => finish(false);
+    dragId = widget.id;
     const onKey = (ev) => { if (ev.key === "Escape") { ev.preventDefault(); ev.stopPropagation(); finish(false); } };
     handle.addEventListener("pointermove", onMove);
     handle.addEventListener("pointerup", onUp);
     handle.addEventListener("pointercancel", onCancel);
     handle.addEventListener("lostpointercapture", onLost);
-    window.addEventListener("blur", onCancel);
+    window.addEventListener("blur", onBlur);
     document.addEventListener("keydown", onKey, true);
   });
 
@@ -121,5 +128,10 @@ export function initInteract(ctx) {
   });
   document.addEventListener("dragend", hideGhost);
 
-  return { cancel: () => { drag.cancel(); endDrag(); }, get dragging() { return drag.active; } };
+  return {
+    cancel: () => { if (abort) abort(); else { drag.cancel(); endDrag(); } },
+    /** The widget list changed (an undo, a removal): a gesture on a widget that no longer exists ends, committing nothing. */
+    cancelIfGone: () => { if (abort && !ctx.getDash()?.widgets.some((w) => w.id === dragId)) abort(); },
+    get dragging() { return drag.pressed; },
+  };
 }
