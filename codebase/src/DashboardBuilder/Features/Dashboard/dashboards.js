@@ -23,6 +23,7 @@ import { templateError, buildActionUrl, MAX_LABEL, MAX_TEMPLATE } from "./action
 import { DATE_PART_CHOICES, isGroupingPart, stepPart, labelParts } from "./date-parts.js";
 import { CALC_CHOICES, ALONG_CHOICES, WINDOW_CHOICES, applyTableCalcs, isCalc, calcName } from "./table-calc.js";
 import { tooltipCatalog, tooltipHtml, lookupFrom, checkTooltipText, parseTooltip } from "./tooltip-model.js";
+import { SWATCHES, memberKey, fieldColorKey, setMemberColor, colorsByName } from "./colour-model.js";
 import { createHistory } from "./history.js";
 import { catalogFromEntities } from "../Calc/calc-resolve.js";
 import { isCalcPill, calcPillId, sameCalcPill, makeCalcPill, refusal, pillSlots, syncCalcPills, clearCalcPills, clearFilterCalc, usesCalc, CALC_AGGS } from "../Calc/calc-pill.js";
@@ -1269,6 +1270,7 @@ export function initDashboards() {
       );
       if (canColourByCat)
         panel.append(fmtCheck("Colour by category", f.colorByDimension, (v) => set({ colorByDimension: v })));
+      panel.append(fmtCheck("Reverse palette", f.paletteReverse, (v) => set({ paletteReverse: v })), memberColourEditor(dash, s)); // T03-33, T01-20
       if (hasAxes)
         panel.append(
           fmtText("X title", f.xTitle, (v) => set({ xTitle: v })),
@@ -2178,6 +2180,67 @@ export function initDashboards() {
     return box;
   }
 
+  // --- Member colours (T01-20) ---------------------------------------------
+  // The members the last drawn chart colours by a discrete field ({ field, members: [{ name, raw }] }), keyed
+  // by sheet and cleared at the top of renderChart. The editor lists them; a pick stores a validated #rrggbb
+  // in sheet.memberColors (Dashboard/colour-model.js) and re-draws.
+  let memberState = { sheet: null, field: null, members: [] };
+  let memberOpen = false;
+  let memberRedraw = null;
+  const setMemberState = (sheet, field, members) => { memberState = { sheet, field, members }; memberRedraw?.(); };
+  // The chart spec's name -> colour map for a sheet's member field (also records the members for the editor).
+  function memberSpec(sheet, field, members) {
+    setMemberState(sheet, field, members);
+    return { memberColors: colorsByName(sheet.memberColors?.[fieldColorKey(field)], members) };
+  }
+  function memberColourEditor(dash, s) {
+    const box = el("div", "ws-memcol");
+    const head = el("button", "btn btn--ghost ws-memcol__toggle"); head.type = "button";
+    const body = el("div", "ws-memcol__body");
+    const draw = () => {
+      if (!box.isConnected && body.childElementCount) return;
+      const st = memberState.sheet === s ? memberState : { field: null, members: [] };
+      const colours = s.memberColors?.[st.field ? fieldColorKey(st.field) : ""] ?? {};
+      head.textContent = `${memberOpen ? "Hide" : "Edit"} member colours`;
+      head.setAttribute("aria-expanded", String(memberOpen));
+      head.disabled = !st.field;
+      head.title = st.field ? "" : "Colour by a field (Colour shelf, Pie slices, or Colour by category) to colour its members";
+      body.hidden = !memberOpen || !st.field;
+      body.replaceChildren();
+      if (body.hidden) return;
+      const pick = (m, hex) => {
+        const r = setMemberColor(s.memberColors, fieldColorKey(st.field), memberKey(m.raw), hex);
+        if (!r.ok) { toast(r.error, "danger"); return; }
+        s.memberColors = r.value; commit(dash, s);
+      };
+      for (const m of st.members.slice(0, LIMITS.memberColors)) {
+        const cur = colours[memberKey(m.raw)];
+        const row = el("div", "ws-memcol__row");
+        const dot = el("span", "ws-memcol__dot"); dot.dataset.colour = cur ?? "";
+        if (cur) dot.style.backgroundColor = cur;
+        row.append(dot, el("span", "ws-memcol__name", m.name));
+        const sw = el("span", "ws-memcol__swatches");
+        for (const hex of SWATCHES) {
+          const b = el("button", "ws-memcol__swatch"); b.type = "button"; b.style.backgroundColor = hex;
+          b.setAttribute("aria-label", `Colour ${m.name} ${hex}`); b.setAttribute("aria-pressed", String(cur === hex));
+          if (cur === hex) b.textContent = "\u2713";
+          b.addEventListener("click", () => pick(m, hex));
+          sw.append(b);
+        }
+        const reset = el("button", "btn btn--ghost ws-memcol__reset", "Reset"); reset.type = "button"; reset.disabled = !cur;
+        reset.addEventListener("click", () => pick(m, null));
+        row.append(sw, reset);
+        body.append(row);
+      }
+      if (st.members.length > LIMITS.memberColors) body.append(el("p", "ws-memcol__note", `Only the first ${LIMITS.memberColors} members can be coloured.`));
+    };
+    head.addEventListener("click", () => { memberOpen = !memberOpen; draw(); });
+    box.append(head, body);
+    memberRedraw = draw;
+    draw();
+    return box;
+  }
+
   // --- Date range & comparison (P35) ---------------------------------------
   function setPeriod(dash, f) {
     const refused = refusal(f, "period");
@@ -2714,6 +2777,7 @@ export function initDashboards() {
   function renderChart(sheet, result, cmp = null) {
     chartEl.replaceChildren();
     setTooltipCat(sheet, []);
+    setMemberState(sheet, null, []);
     extraNotice = null;
     // Date-grouped key: its labels are bucket starts, not values a filter could match — no click-to-filter.
     bucketedKey = result.bucket ? result.bucket.key : null;
@@ -2839,7 +2903,12 @@ export function initDashboards() {
       }
       if ((t || rv != null) && (result.truncated || result.partial)) extraNotice = joinNotices(extraNotice, "Analytics use only the rows shown — more exist.");
     }
-    renderSeriesChart(chartEl, { type, symbol: SCATTER_TYPES.has(type) ? scatterSymbol(type) : undefined, categories: catsOut, series: seriesOut, format, onSelect, orientation: chartOrientation(sheet), otherIndex, analytics, ...legendSpec, ...marks.spec });
+    // T01-20: members coloured by a field — pie / donut slices and a single-measure bar coloured by category.
+    const byMember = (type === "pie" || type === "donut" || (type === "bar" && format.colorByDimension && series.length === 1 && !compareSeries.length)) && primaryDim(sheet) && !isCalcPill(primaryDim(sheet));
+    const memberColourSpec = byMember
+      ? memberSpec(sheet, primaryDim(sheet), rowsOrdered.map((r, i) => ({ name: categories[i], raw: r.keys[0], other: r.isOther })).filter((m) => !m.other))
+      : {};
+    renderSeriesChart(chartEl, { type, symbol: SCATTER_TYPES.has(type) ? scatterSymbol(type) : undefined, categories: catsOut, series: seriesOut, format, onSelect, orientation: chartOrientation(sheet), otherIndex, analytics, ...memberColourSpec, ...legendSpec, ...marks.spec });
   }
 
   // P36: waterfall / funnel / gauge / bullet / Sankey / small multiples, from the rows already fetched.
@@ -3088,7 +3157,10 @@ export function initDashboards() {
     // P29: each legend item is a Colour member — clicking it highlights that series and selects the member.
     const byName = new Map(series.map((sr, i) => [sr.name, colorVals[i]]));
     const legend = sheet ? legendHandler(sheet, sheet.color?.[0], byName) : {};
-    renderSeriesChart(chartEl, { type, categories, series, format, onSelect, orientation, ...legend });
+    const cf = sheet?.color?.[0];
+    const memberColourSpec = sheet && cf && !isCalcPill(cf)
+      ? memberSpec(sheet, cf, series.map((sr, i) => ({ name: sr.name, raw: colorVals[i] }))) : {};
+    renderSeriesChart(chartEl, { type, categories, series, format, onSelect, orientation, ...memberColourSpec, ...legend });
   }
 
   // P12 heatmap: two dimensions → axes, first measure → colour. Key order is [rowDim, colDim] (guarded

@@ -7,6 +7,7 @@ import { LIMITS, text } from "../Core/validate.js";
 import { aggsFor } from "../Dashboard/filter-rules.js";
 import { cleanTheme, DEFAULT_THEME } from "../Core/theme-model.js";
 import { cleanAction } from "../Dashboard/action-model.js";
+import { cleanMemberColors } from "../Dashboard/colour-model.js";
 import { checkTooltipText } from "../Dashboard/tooltip-model.js";
 import { cleanParameter, MAX_PARAMS } from "../Core/parameters-model.js";
 import { cleanCalculations } from "../Calc/calc-workbook.js";
@@ -289,6 +290,7 @@ export function sanitizeSheet(saved, where, issues) {
     sheet.tooltipText = r.ok ? r.value : null;
     if (!r.ok) issues.push(`${where}: the tooltip text was invalid — reset.`);
   }
+  sheet.memberColors = cleanMemberColors(s.memberColors, where, issues); // T01-20
   sheet.showFilterCards = s.showFilterCards !== false; // P30
   sheet.analytics = cleanAnalytics(s.analytics, where, issues); // P21
   sheet.showTitle = s.showTitle === undefined ? true : s.showTitle === true || (s.showTitle !== false && (issues.push(`${where}: showTitle must be on or off — reset.`), true));
@@ -460,7 +462,7 @@ function cleanFormat(f0, where, issues) {
   out.fit = oneOf(FIT_MODES, f.fit, base.fit, w, "fit", issues); // P23
   out.target = f.target == null ? null : typeof f.target === "number" && Number.isFinite(f.target) ? f.target
     : (issues.push(`${w}: target "${f.target}" — cleared.`), null);
-  for (const k of ["dataLabels", "colorByDimension", "downIsGood", "approximate"]) {
+  for (const k of ["dataLabels", "colorByDimension", "paletteReverse", "downIsGood", "approximate"]) {
     if (f[k] === undefined || typeof f[k] === "boolean") out[k] = f[k] ?? base[k];
     else issues.push(`${w}: ${k} must be on or off — reset.`);
   }

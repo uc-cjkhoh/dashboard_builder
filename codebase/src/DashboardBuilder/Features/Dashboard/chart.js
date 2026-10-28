@@ -1,5 +1,6 @@
 import { makeValueFormatter } from "../Core/format.js";
 import { pickInk } from "./contrast.js";
+import { orderedPalette, rampStops } from "./colour-model.js";
 import { tooltipHtml } from "./tooltip-model.js";
 import { chartFit, markCount, applyFitMode, FIT } from "./chart-fit.js";
 
@@ -18,6 +19,10 @@ let instance = null;
 let resizeObserver = null;
 let lastOption = null; // the option on screen — re-drawn as SVG for export when the chart is on canvas
 let onCanvas = false;
+// T01-20 / T03-33: set per render — palette order reversed, and displayed member name -> user colour.
+let paletteReverse = false;
+let memberColors = new Map();
+const memberColor = (name, fallback) => memberColors.get(name) ?? fallback;
 
 // Pull themed values from :root so the chart tracks the design tokens (and any future retheme).
 function tokens() {
@@ -35,7 +40,7 @@ function tokens() {
   // CSS tokens with the validated hexes as fallback. A single-series chart uses the brand accent
   // instead (below), keeping the common case on-brand.
   const catFallback = ["#2a78d6", "#008300", "#e87ba4", "#eda100", "#1baf7a", "#eb6834", "#4a3aa7", "#e34948"];
-  const cat = catFallback.map((hex, i) => t(`--chart-cat-${i + 1}`, hex));
+  const cat = orderedPalette(catFallback.map((hex, i) => t(`--chart-cat-${i + 1}`, hex)), paletteReverse);
   return {
     series: t("--chart-series", "#c4142c"),
     cat,
@@ -49,6 +54,7 @@ function tokens() {
     // Brand stops for the sequential heatmap ramp (single-hue soft→saturated, token-driven).
     brand: t("--accent", "#c4142c"),
     brandSoft: t("--accent-soft", "#fdeff1"),
+    ramp: rampStops(t("--accent-soft", "#fdeff1"), t("--accent", "#c4142c"), paletteReverse), // continuous low -> high
   };
 }
 
@@ -63,6 +69,8 @@ function tokens() {
  */
 export function renderChart(container, spec) {
   disposeChart();
+  paletteReverse = !!spec.format?.paletteReverse;
+  memberColors = spec.memberColors instanceof Map ? spec.memberColors : new Map();
   const host = document.createElement("div");
   host.className = "ws-chart-canvas";
   container.append(host);
@@ -347,7 +355,7 @@ function buildCartesian({ type, categories, series, format = {}, orientation = "
   const horizontal = orientation === "horizontal" && !isCombo;
   const fmtVal = makeValueFormatter(format); // P10 — measure value format (tooltip, axis, labels)
 
-  const colorFor = (i) => (multi ? c.cat[i % c.cat.length] : c.series);
+  const colorFor = (i, name) => (multi ? memberColor(name, c.cat[i % c.cat.length]) : c.series);
   // Colour-by-dimension (P10): a single-measure bar chart colours each bar by its category. The
   // category axis already labels each bar, so colour restates identity (never colour-alone).
   const colorByDim = type === "bar" && !multi && !!format.colorByDimension;
@@ -443,7 +451,7 @@ function buildCartesian({ type, categories, series, format = {}, orientation = "
               decal: { symbol: "rect", symbolSize: 1, dashArrayX: [1, 0], dashArrayY: [2, 4], rotation: Math.PI / 4, color: c.surface } },
             emphasis: { itemStyle: { opacity: 0.8 } } };
     }
-    const color = colorFor(i);
+    const color = colorFor(i, s.name);
     // line/area always draw as a line; in a combo the 1st measure is a bar and the rest are lines.
     const asLine = type === "line" || type === "area" || (isCombo && i >= 1);
     if (asLine) {
@@ -472,7 +480,7 @@ function buildCartesian({ type, categories, series, format = {}, orientation = "
       stack: stacked ? "total" : undefined,
       // Colour-by-dimension: per-bar colours; otherwise the series colour.
       data: colorByDim
-        ? s.data.map((v, di) => (di === otherIndex ? otherItem(v) : { value: v, itemStyle: { color: c.cat[di % c.cat.length], borderRadius: barRadius } }))
+        ? s.data.map((v, di) => (di === otherIndex ? otherItem(v) : { value: v, itemStyle: { color: memberColor(labels[di], c.cat[di % c.cat.length]), borderRadius: barRadius } }))
         : s.data.map((v, di) => (di === otherIndex ? otherItem(v) : v)),
       barMaxWidth: 40,
       itemStyle: { color, borderRadius: barRadius },
@@ -516,7 +524,7 @@ function buildPie({ type, categories, series, format = {}, pointLabels, tooltipE
   const c = tokens();
   const fmtVal = makeValueFormatter(format);
   const labels = (categories ?? []).map((l) => l ?? "—");
-  const data = labels.map((name, i) => ({ name, value: series[0].data[i], ...(i === otherIndex ? { itemStyle: { color: c.muted } } : {}) }));
+  const data = labels.map((name, i) => ({ name, value: series[0].data[i], ...(i === otherIndex ? { itemStyle: { color: c.muted } } : memberColors.has(name) ? { itemStyle: { color: memberColors.get(name) } } : {}) }));
   const { pos, legend } = legendFor(format, c, labels, true);
   const showLabels = !!format.dataLabels || !!pointLabels; // P18 Label field forces slice labels on
 
@@ -567,7 +575,7 @@ function buildScatter({ categories, series, format = {}, sizes, sizeName, colorV
     const arr = [num(series[0].data[i]), num(series[1].data[i])];
     if (sizeDim >= 0) arr.push(num(sizes[i]));
     if (colorDim >= 0) arr.push(num(colorValues[i]));
-    return { value: arr, name, ...(colorByDim ? { itemStyle: { color: c.cat[i % c.cat.length] } } : {}) };
+    return { value: arr, name, ...(colorByDim ? { itemStyle: { color: memberColor(name, c.cat[i % c.cat.length]) } } : {}) };
   });
   const symbolSize = sizeDim >= 0 ? sizeScaler(sizes, (v) => v[sizeDim]) : 14;
   const visualMap = colorDim >= 0 ? continuousVisualMap(colorValues, colorDim, c, fmtVal, colorName) : undefined;
@@ -696,7 +704,7 @@ function buildHeatmap({ xCats, yCats, cells, format = {} }) {
     },
     visualMap: {
       min, max, calculable: true, orient: "horizontal", left: "center", bottom: 6,
-      inRange: { color: [c.brandSoft, c.brand] },   // single-hue sequential (soft → saturated), tokens
+      inRange: { color: c.ramp },   // single-hue sequential (soft → saturated), tokens
       textStyle: { color: c.muted, fontFamily: c.font }, formatter: (v) => fmtVal(v),
     },
     series: [{
@@ -1046,7 +1054,7 @@ function continuousVisualMap(values, dimension, c, fmtVal, name) {
   return {
     type: "continuous", min, max, dimension, calculable: true,
     orient: "horizontal", left: "center", bottom: 0,
-    inRange: { color: [c.brandSoft, c.brand] },
+    inRange: { color: c.ramp },
     text: name ? [String(name), ""] : undefined,
     textStyle: { color: c.muted, fontFamily: c.font }, formatter: (v) => fmtVal(v),
   };

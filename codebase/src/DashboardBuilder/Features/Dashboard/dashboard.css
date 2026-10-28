@@ -546,3 +546,15 @@
 .ws-tipedit__chips { display: flex; flex-wrap: wrap; gap: var(--s1); }
 .ws-tipedit__chip { font-size: var(--fs-xs); padding: 2px var(--s2); }
 .ws-tipedit__preview { padding: var(--s2) var(--s3); border: 1px solid var(--line-2); border-radius: var(--r-ctl); background: var(--surface-2); color: var(--ink); font-size: var(--fs-xs); overflow-wrap: anywhere; }
+
+/* Member colours (T01-20): a list of members, each with the fixed swatches and Reset. The swatch/dot
+   fill is the user's chosen data colour (workbook data), set inline; chrome uses tokens. */
+.ws-memcol { display: grid; gap: var(--s2); }
+.ws-memcol__body { display: grid; gap: var(--s2); max-height: 260px; overflow: auto; }
+.ws-memcol__row { display: grid; grid-template-columns: auto minmax(60px, 120px) 1fr auto; align-items: center; gap: var(--s2); }
+.ws-memcol__dot { width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--line-2); background: var(--surface-2); }
+.ws-memcol__name { font-size: var(--fs-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-memcol__swatches { display: flex; flex-wrap: wrap; gap: 3px; }
+.ws-memcol__swatch { width: 16px; height: 16px; padding: 0; border: 1px solid var(--line-2); border-radius: 3px; color: var(--ink); font-size: 10px; line-height: 1; cursor: pointer; }
+.ws-memcol__swatch[aria-pressed="true"] { outline: 2px solid var(--ink); outline-offset: 1px; }
+.ws-memcol__note { margin: 0; color: var(--ink-3); font-size: var(--fs-xs); }
