@@ -38,7 +38,9 @@ public static class CalcValidator
     }
 
     // Const: a number literal (or arithmetic over only literals) — it carries no field and no aggregate.
-    private readonly record struct Typed(string Type, bool IsAggregate, bool Const, HashSet<string> Tables, string Name);
+    private readonly record struct Typed(string Type, bool IsAggregate, bool Const, SortedSet<string> Tables, string Name);
+
+    private static SortedSet<string> Tables(params string[] tables) => new(tables, StringComparer.Ordinal);
 
     private static string Child(string path, string name) => path.Length == 0 ? name : path + "." + name;
 
@@ -48,7 +50,7 @@ public static class CalcValidator
         {
             case NumNode n:
                 if (!double.IsFinite(n.V)) throw new CalcException("That number is out of range.", path);
-                return new Typed(CalcType.Number, false, true, [], "that value");
+                return new Typed(CalcType.Number, false, true, Tables(), "that value");
 
             case FieldNode f:
             {
@@ -62,7 +64,7 @@ public static class CalcValidator
                     ClickHouseType.Boolean => CalcType.Boolean,
                     _ => throw new CalcException($"{name} can't be used in a calculation.", path),
                 };
-                return new Typed(type, false, false, [$"{f.Db}.{f.Table}"], name);
+                return new Typed(type, false, false, Tables($"{f.Db}.{f.Table}"), name);
             }
 
             case UnNode u:

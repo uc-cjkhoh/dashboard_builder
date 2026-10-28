@@ -53,7 +53,45 @@ public class CalcValidatorTests
         Assert.Equal(expect.GetProperty("isAggregate").GetBoolean(), info.IsAggregate);
         Assert.Equal(
             expect.GetProperty("tables").EnumerateArray().Select(t => t.GetString()!),
-            info.Tables.OrderBy(t => t, StringComparer.Ordinal));
+            info.Tables);
+    }
+
+    [Fact]
+    public void Every_fixture_case_is_well_formed()
+    {
+        var names = new HashSet<string>();
+        foreach (var c in Fixture.GetProperty("cases").EnumerateArray())
+        {
+            var name = c.TryGetProperty("name", out var n) && n.ValueKind == JsonValueKind.String ? n.GetString() : null;
+            Assert.False(string.IsNullOrWhiteSpace(name), "a fixture case has no name: " + c.GetRawText());
+            Assert.True(names.Add(name!), $"duplicate fixture case name: {name}");
+
+            var hasAst = c.TryGetProperty("ast", out _);
+            var hasParseError = c.TryGetProperty("parseError", out _);
+            Assert.True(hasAst ^ hasParseError, $"case '{name}' must have exactly one of ast / parseError");
+            if (!hasAst) continue;
+
+            Assert.True(c.TryGetProperty("expect", out var expect) && expect.ValueKind == JsonValueKind.Object,
+                $"case '{name}' has no expect object");
+            if (expect.TryGetProperty("error", out var error))
+            {
+                Assert.Equal(JsonValueKind.String, error.ValueKind);
+                Assert.True(expect.TryGetProperty("path", out var path) && path.ValueKind == JsonValueKind.String,
+                    $"case '{name}': expect.error needs a string expect.path");
+            }
+            else
+            {
+                Assert.True(expect.TryGetProperty("type", out var type) && type.ValueKind == JsonValueKind.String,
+                    $"case '{name}': expect needs error+path or type+isAggregate+tables (type)");
+                Assert.True(expect.TryGetProperty("isAggregate", out var agg)
+                    && agg.ValueKind is JsonValueKind.True or JsonValueKind.False,
+                    $"case '{name}': expect.isAggregate must be a boolean");
+                Assert.True(expect.TryGetProperty("tables", out var tables) && tables.ValueKind == JsonValueKind.Array
+                    && tables.EnumerateArray().All(t => t.ValueKind == JsonValueKind.String),
+                    $"case '{name}': expect.tables must be an array of strings");
+            }
+        }
+        Assert.NotEmpty(names);
     }
 
     [Fact]
