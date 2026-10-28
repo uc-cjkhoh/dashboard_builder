@@ -80,6 +80,27 @@ export function pagesFilter(sheet) {
   return { db: p.db, table: p.table, column: p.column, op: "=", value: String(v), values: null };
 }
 
+/** A click selection as the bound-parameter filter it becomes (`=` keep, `!=` exclude): the one shape the worksheet and the dashboard share. */
+export const selectionFilter = (sel, op) => ({ db: sel.db, table: sel.table, column: sel.column, op, value: String(sel.value), values: null });
+
+/** The tables a sheet's query involves ("db\0table" keys), in query order — the base first (the fields, filters and period bring them in). */
+function involvedKeys(sheet, rangeFilters, cctx, keyOrder, mplan) {
+  const involved = [];
+  const addKey = (k) => { if (!involved.includes(k)) involved.push(k); };
+  const add = (ref) => {
+    if (!ref) return;
+    if (isCalcPill(ref)) { planTables(ref, cctx).forEach((k) => { const i = k.indexOf("."); addKey(keyOf(k.slice(0, i), k.slice(i + 1))); }); return; } // none for a constant
+    addKey(keyOf(ref.db, ref.table));
+  };
+  keyOrder.forEach(add); mplan.forEach((e) => add(e.field)); sheet.filters.forEach(add);
+  rangeFilters.forEach(add);
+  return involved;
+}
+export function involvedTables(sheet, periodRange, ctx) {
+  const { keyOrder } = planDims(sheet);
+  return involvedKeys(sheet, periodFilters(sheet, periodRange, ctx), calcContext(ctx), keyOrder, planMeasures(sheet));
+}
+
 /** Group-by dimensions in SELECT key order: [drill?, rows-dims, cols-dims, Detail-dims, discrete-Color]. Discrete Colour stays last. */
 export function planDims(sheet) {
   const dd = drillActiveDim(sheet);
@@ -148,7 +169,7 @@ export function periodFilters(sheet, range, ctx) {
  * top header), numeric pills are measures sent column-shelf-first so the result's measure order lines up with the
  * renderer. P26: a date pill's part rides along (auto = left to the chart-wide Group dates).
  */
-export function buildPlan(sheet, periodRange, ctx) {
+export function buildPlan(sheet, periodRange, ctx, { crossFilter = null } = {}) {
   const cctx = calcContext(ctx); // calculated fields: pills compile to trees (Calc/calc-plan.js)
   const toDim = (f) => wireDim(f, cctx);
   const pv = (f) => withParams(f, ctx);
@@ -161,16 +182,8 @@ export function buildPlan(sheet, periodRange, ctx) {
   const mplan = planMeasures(sheet);
   const measures = mplan.map((e) => wireMeasure(e, cctx));
 
-  const involved = [];
-  const addKey = (k) => { if (!involved.includes(k)) involved.push(k); };
-  const add = (ref) => {
-    if (!ref) return;
-    if (isCalcPill(ref)) { planTables(ref, cctx).forEach((k) => { const i = k.indexOf("."); addKey(keyOf(k.slice(0, i), k.slice(i + 1))); }); return; } // none for a constant
-    addKey(keyOf(ref.db, ref.table));
-  };
-  keyOrder.forEach(add); mplan.forEach((e) => add(e.field)); sheet.filters.forEach(add);
   const rangeFilters = periodFilters(sheet, periodRange, ctx); // P35 — like a filter, it may bring its table in
-  rangeFilters.forEach(add);
+  const involved = involvedKeys(sheet, rangeFilters, cctx, keyOrder, mplan);
   if (!involved.length) return null;
   const base = involved[0];
   const joins = buildJoins(base, involved.slice(1), ctx);
@@ -178,10 +191,14 @@ export function buildPlan(sheet, periodRange, ctx) {
   const [db, table] = splitKey(base);
   // P15: a click selection with an action (keep/exclude) becomes a bound-parameter filter — but only when its table
   // is already in the query, so it never forces an unresolved join. keep -> `col = value`, exclude -> `col != value`.
+  // P24c: a dashboard's selection (crossFilter) is the same bound `=` on the same terms, and takes that one slot: it replaces
+  // the worksheet's own selection when its table is in the query, and is simply not sent when it isn't.
   const sel = sheet.selection;
-  const selFilters = (sel && sel.action && sel.value != null && involved.includes(keyOf(sel.db, sel.table)))
-    ? [{ db: sel.db, table: sel.table, column: sel.column, op: sel.action === "keep" ? "=" : "!=", value: String(sel.value), values: null }]
-    : [];
+  const crossApplies = Boolean(crossFilter) && involved.includes(keyOf(crossFilter.db, crossFilter.table));
+  const selFilters = crossApplies ? [selectionFilter(crossFilter, "=")]
+    : (sel && sel.action && sel.value != null && involved.includes(keyOf(sel.db, sel.table)))
+      ? [selectionFilter(sel, sel.action === "keep" ? "=" : "!=")]
+      : [];
   // P40 shared filters: applied when their table is already in the query (never forcing a join).
   const shared = ctx.sharedFilters.map(pv).filter((f) => checkFilter(f).state === "ok" && involved.includes(keyOf(f.db, f.table))).map(toFilter).filter(Boolean);
   // P20 pages: the current member as a bound `=` filter, only when its table is already in the query.

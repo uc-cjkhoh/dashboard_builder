@@ -5,7 +5,8 @@ import { CLICK_TYPES } from "./result-model.js";
 
 // The interaction wiring of a drawn worksheet (P15 click-to-filter, P16 drill, P29 legend, T01-20 member colours), kept
 // apart from the drawing. Every function reads the render context `rc` (worksheet-render.js): when `rc.interactive` is
-// false none of the handlers exist, so a widget draws marks that cannot be selected, drilled or legend-clicked. The
+// false none of the editor handlers exist, so a widget draws marks that cannot be drilled or legend-clicked; `rc.select`
+// (interactive true or "select") additionally lets a mark click select (P24c: a dashboard widget selects, never drills). The
 // behaviour itself is the host's: rc.hooks = { onSelect(dimField, raw), onDrill(raw), onLegend({ sheet, field, name, raw,
 // bucketed }), legendFocus(), onTooltipFields(sheet, list), onMemberColors(sheet, field, members) }.
 
@@ -15,8 +16,8 @@ import { CLICK_TYPES } from "./result-model.js";
  * support click-to-filter (a date-grouped first key has no value a filter could match).
  */
 export function selectHandler(rc, sheet, dimField, type, rawByIndex) {
-  if (!rc.interactive || !dimField || !CLICK_TYPES.has(type) || rc.bucketedKey === 0) return undefined;
-  const drilling = isDrillActive(sheet);
+  if (!rc.select || !dimField || !CLICK_TYPES.has(type) || rc.bucketedKey === 0) return undefined;
+  const drilling = rc.interactive && isDrillActive(sheet); // a select-only view selects the current level, even on a hierarchy
   return (params) => {
     const raw = rawByIndex[params.dataIndex];
     if (raw === undefined || raw === null) return; // can't cleanly filter/drill a null value
@@ -31,7 +32,7 @@ export function selectHandler(rc, sheet, dimField, type, rawByIndex) {
  * (non-interactive) view is highlight-only: no host hook, no selection, and no series is ever hidden.
  */
 export function legendSpec(rc, sheet, field, rawByName) {
-  if (!rc.interactive) {
+  if (!rc.interactive) { // false and "select" alike: the legend never selects
     // Static widget: the legend highlights (a second click clears) and never hides a series or reaches a host hook.
     // Registering a handler is what makes chart.js re-select every item after ECharts' default toggle.
     let focus = null;

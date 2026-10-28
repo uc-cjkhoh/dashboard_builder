@@ -12,7 +12,8 @@ import { statFilters, withCategories } from "./filter-rules.js";
 import { statCastProblem } from "./cast-model.js";
 import { resolveRange, compareRange, compareName, COMPARE_TYPES } from "./period-model.js";
 import { tableProgress, needsNextPage, OTHER_TYPES, bucketNotice } from "./scale-model.js";
-import { buildPlan, calcContext, appliedShared, withParams, toServerFilter, isDrillActive, COLOR_USES } from "./sheet-plan.js";
+import { buildPlan, involvedTables, calcContext, appliedShared, withParams, toServerFilter, isDrillActive, COLOR_USES } from "./sheet-plan.js";
+import { appliesTo, notAppliedNote, statNote, crossSignature } from "./dashboard-select.js";
 import { planTables, calcProblem, statCalcProblem } from "../Calc/calc-plan.js";
 import { isCalcPill, pillSlots } from "../Calc/calc-pill.js";
 import { el, hint, warn } from "./render-dom.js";
@@ -23,12 +24,16 @@ import { joinNotices, periodNotice, speedNotice, invalidFilterNotice } from "./n
 // views never abort or overwrite each other; the chart itself is keyed by the container (chart.js). The drawing of a
 // result is worksheet-render.js, so a view needs no editor to show a worksheet.
 //
-//   createWorksheetView(container, getContext, options) -> { run(), refresh(), cancel(), destroy() }
+//   createWorksheetView(container, getContext, options) -> { run(), sync(), refresh(), cancel(), destroy() }
 //   getContext() -> { dash: { id, sheet } | null, noticeEl | null, results (createResultCache), plan (the sheet-plan.js context),
 //                     categoryOf(db, table, column), castOf(field) }
 //   options (static for the view's life; every one optional):
-//     interactive      false = a static, non-selectable widget: no mark selection, drill or legend handlers, no status bar
-//                      (default true)
+//     interactive      true (default) = the editor: mark selection, drill, legend, status bar;  "select" = a dashboard widget that
+//                      selects but never drills (only onSelect is called; the legend highlights, no status bar, no editor panels);
+//                      false = a static, non-selectable widget: no mark selection, drill or legend handlers, no status bar
+//     cross() -> { filter: selection } | { selected: selection } | null  the dashboard selection this view obeys (P24c, dashboard-select.js):
+//                      `filter` = a bound `=` added to its query where the selected table is already in it (else a note, never a join);
+//                      `selected` = this is the source: it highlights that mark and is never filtered. sync() re-runs when it changed.
 //     onSelect(dimField, raw)  a mark click selects (the host stores the selection);  onDrill(raw)  a click on a drill hierarchy
 //     onLegend({ sheet, field, name, raw, bucketed })  a legend click;  legendFocus() -> the highlighted legend item or null
 //     onTooltipFields(sheet, list), onMemberColors(sheet, field, members)  the editor panels that learn what the chart offers
@@ -42,14 +47,21 @@ export { el, hint, warn };
 export { joinNotices, periodNotice, speedNotice, invalidFilterNotice };
 
 export function createWorksheetView(container, getContext, options = {}) {
-  const interactive = options.interactive !== false;
+  const mode = options.interactive ?? true; // true | "select" | false
+  const interactive = mode === true;
   const draw = options.draw ?? renderWorksheet;
   const statusBar = interactive ? options.statusBar ?? (() => {}) : () => {};
   const hostNotice = (sheet) => options.notices?.(sheet) ?? null;
-  // What the drawing may do with the editor-only state around it (render-handlers.js): nothing when not interactive.
-  const renderOptions = () => ({ plan: getContext().plan, interactive, hooks: {
-    onSelect: options.onSelect, onDrill: options.onDrill, onLegend: options.onLegend, legendFocus: options.legendFocus,
-    onTooltipFields: options.onTooltipFields, onMemberColors: options.onMemberColors } });
+  let cross = null;   // the dashboard selection this run obeys (options.cross() read when a run begins)
+  let crossSig = null; // what that selection made the view show — sync() compares against it
+  // What the drawing may do with the editor-only state around it (render-handlers.js): nothing when not interactive, and a
+  // "select" view hands the host only onSelect.
+  const renderOptions = () => ({ plan: getContext().plan, interactive: mode, selected: cross?.selected ?? null,
+    hooks: mode === "select" ? { onSelect: options.onSelect } : {
+      onSelect: options.onSelect, onDrill: options.onDrill, onLegend: options.onLegend, legendFocus: options.legendFocus,
+      onTooltipFields: options.onTooltipFields, onMemberColors: options.onMemberColors } });
+  // The tables the sheet's query involves (never throws: a sheet that can't be planned reaches nothing).
+  const involvedOf = (c, s) => { try { return involvedTables(s, undefined, c.plan); } catch { return []; } };
   let extraNotice = null; // the line the last drawing wants in the notice (small-multiples cap, calculations on partial rows)
   const drawResult = (s, result, cmp) => {
     extraNotice = null;
@@ -113,7 +125,7 @@ export function createWorksheetView(container, getContext, options = {}) {
     if (!p || !COMPARE_TYPES.has(s.chartType)) return null;
     const range = compareRange(p, resolveRange(p));
     if (!range) return null;
-    const plan = buildPlan(s, range, c.plan);
+    const plan = buildPlan(s, range, c.plan, { crossFilter: cross?.filter ?? null });
     if (!plan) return null;
     const key = requestKey("query", plan);
     let result = c.results.get(c.dash.id, key);
@@ -135,8 +147,11 @@ export function createWorksheetView(container, getContext, options = {}) {
     container.onscroll = null; // only the Table view loads on scroll (runTable sets it)
     statusBar(null, null);
     const s = dash.sheet;
+    cross = options.cross?.() ?? null;
+    crossSig = crossSignature(cross, involvedOf(c, s));
+    const crossNote = cross?.filter && !appliesTo(involvedOf(c, s), cross.filter) ? notAppliedNote(cross.filter) : null; // C3: its table isn't here — say so, never join
     withCategories(s.filters, c.categoryOf);
-    const filterNote = invalidFilterNotice(s);
+    const filterNote = joinNotices(invalidFilterNotice(s), crossNote);
     setNotice(c.noticeEl, filterNote);
     // P12 statistical charts that run their own single-table endpoint (histogram / box plot).
     if (STAT_SINGLE_TABLE.has(s.chartType)) {
@@ -144,7 +159,7 @@ export function createWorksheetView(container, getContext, options = {}) {
       if (noCalc) { container.replaceChildren(hint(noCalc)); return; }
       const noCast = statCastProblem(s, c.castOf); // nor a data type cast
       if (noCast) { container.replaceChildren(hint(noCast)); return; }
-      await runStat(c, s, ticket, filterNote); return; }
+      await runStat(c, s, ticket, joinNotices(filterNote, cross?.filter && !crossNote ? statNote(cross.filter) : null)); return; }
     const colorInPlay = s.color?.length && COLOR_USES.has(s.chartType);
     const drillInPlay = isDrillActive(s); // a hierarchy alone can drive a view (implicit count on the level)
     const m = s.marks ?? {};
@@ -156,7 +171,7 @@ export function createWorksheetView(container, getContext, options = {}) {
     const cctx = calcContext(c.plan);
     const problem = calcProblem(s, cctx, appliedShared(c.plan)); // E15: a calculation that can't be computed — say why, send nothing
     if (problem) { container.replaceChildren(warn(problem)); return; }
-    const plan = buildPlan(s, undefined, c.plan);
+    const plan = buildPlan(s, undefined, c.plan, { crossFilter: cross?.filter ?? null });
     if (!plan) {
       // Only field-less calculations (e.g. 1+2) and nothing from a table: there is nothing to relate, so say what to add.
       const tableInvolved = [...pillSlots(s)].some((f) => !isCalcPill(f) || planTables(f, cctx).length)
@@ -264,6 +279,13 @@ export function createWorksheetView(container, getContext, options = {}) {
 
   return {
     run,
+    /** Run again only if the dashboard selection changed what this view shows (P24c) — a widget it can't reach, or the same selection, stays put. */
+    sync() {
+      const c = getContext();
+      if (!c.dash) return Promise.resolve();
+      const next = options.cross?.() ?? null;
+      return crossSignature(next, involvedOf(c, c.dash.sheet)) === crossSig ? Promise.resolve() : run();
+    },
     /** Re-run against ClickHouse, bypassing the result cache (data may have changed). */
     refresh() {
       const c = getContext();

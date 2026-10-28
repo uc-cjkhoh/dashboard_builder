@@ -99,3 +99,76 @@ test("destroy aborts the in-flight request, disposes the chart and clears onscro
   assert.equal(a.container.onscroll, null);
   assert.equal(drawn.length, 0, "nothing drawn after destroy");
 });
+
+// --- P24c: a view obeys the dashboard selection (options.cross) ---
+const sel = (table, column, value, sourceWidgetId = "w#src") => ({ db: "shop", table, column, value, label: `${table}.${column} = ${value}`, sourceWidgetId });
+const crossHost = (id, table, results, drawn, crossRef, noticeEl = fakeEl(), draws = []) => {
+  const container = fakeEl();
+  const view = createWorksheetView(container, () => ({ dash: { id, sheet: sheetOn(table) }, noticeEl, results, plan: planCtx, categoryOf: () => undefined, castOf: () => undefined }),
+    { interactive: "select", cross: () => crossRef.current, draw: (_c, _s, result, _cmp, o) => { drawn.push([id, result.rows[0].keys[0]]); draws.push(o); return { extraNotice: null }; } });
+  return { container, view, noticeEl };
+};
+const noticeText = (n) => n.children.map((c) => c.textContent ?? "").join("");
+
+test("a target whose table holds the selected column sends the bound `=` filter; a source and an unreachable widget send none", async () => {
+  calls.length = 0;
+  const results = createResultCache(), drawn = [], draws = [];
+  const cross = { current: { filter: sel("orders", "region", "EU") } };
+  const target = crossHost("ws#1", "orders", results, drawn, cross, fakeEl(), draws);
+  const away = crossHost("ws#2", "people", results, drawn, cross);
+  await Promise.all([target.view.run(), away.view.run()]);
+  const byTable = Object.fromEntries(calls.map((q) => [q.from.table, q]));
+  assert.deepEqual(byTable.orders.filters, [{ db: "shop", table: "orders", column: "region", op: "=", value: "EU", values: null }]);
+  assert.deepEqual(byTable.people.filters, [], "no filter where the table isn't in the query");
+  assert.match(noticeText(away.noticeEl), /orders\.region: selected on another sheet, not applied here/);
+  assert.equal(noticeText(target.noticeEl), "");
+});
+test("the source is never filtered: it is handed the selection to highlight", async () => {
+  calls.length = 0;
+  const draws = [];
+  const cross = { current: { selected: sel("orders", "region", "EU") } };
+  const src = crossHost("ws#1", "orders", createResultCache(), [], cross, fakeEl(), draws);
+  await src.view.run();
+  assert.deepEqual(calls[0].filters, []);
+  assert.equal(draws[0].selected.value, "EU");
+  assert.equal(draws[0].interactive, "select");
+  assert.deepEqual(Object.keys(draws[0].hooks), ["onSelect"], "a select-only view gets no drill / legend / editor hooks");
+});
+test("sync re-runs only when the selection changes what the view shows", async () => {
+  calls.length = 0;
+  const results = createResultCache(), drawn = [];
+  const cross = { current: null };
+  const target = crossHost("ws#1", "orders", results, drawn, cross);
+  const away = crossHost("ws#2", "people", results, drawn, cross);
+  await Promise.all([target.view.run(), away.view.run()]);
+  assert.equal(calls.length, 2);
+  cross.current = { filter: sel("orders", "region", "EU") };
+  await Promise.all([target.view.sync(), away.view.sync()]);
+  assert.equal(calls.length, 3, "only the reachable widget queried");
+  assert.equal(drawn.length, 4, "the unreachable one redrew once, from its cache, to show its note");
+  cross.current = { filter: sel("orders", "region", "US") };
+  await Promise.all([target.view.sync(), away.view.sync()]);
+  assert.equal(calls.length, 4, "the target queried the new value");
+  assert.equal(drawn.length, 5, "the unreachable widget did not run again (same note)");
+  await target.view.sync();
+  assert.equal(calls.length, 4, "an unchanged selection is a no-op");
+  cross.current = null;
+  await Promise.all([target.view.sync(), away.view.sync()]);
+  assert.equal(calls.length, 4, "clearing is a cache hit: the unfiltered result is still cached");
+  assert.equal(noticeText(away.noticeEl), "", "the note goes with the selection");
+});
+test("two selections in quick succession: only the second one's result is drawn", async () => {
+  calls.length = 0;
+  const results = createResultCache(), drawn = [], cross = { current: null };
+  const t = crossHost("ws#1", "orders", results, drawn, cross);
+  await t.view.run(); drawn.length = 0;
+  let release; gate = new Promise((r) => { release = r; });
+  cross.current = { filter: sel("orders", "region", "EU") };
+  const first = t.view.sync();
+  cross.current = { filter: sel("orders", "region", "US") };
+  const second = t.view.sync();
+  release(); gate = null;
+  await Promise.all([first, second]);
+  assert.equal(drawn.length, 1);
+  assert.equal(calls.at(-1).filters[0].value, "US");
+});

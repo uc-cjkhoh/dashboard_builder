@@ -24,7 +24,9 @@ import { P36_TYPES, sameField, aliasNames, pathOrderedRows } from "./result-mode
 /**
  * Render options (all optional) — the editor-only state of the old renderChart as explicit inputs:
  *   plan         the sheet-plan.js context (metaOf, calculations, ...): display names and measure labels; defaults to no aliases
- *   interactive  false = a static widget: no mark selection, drill or legend handlers (default true)
+ *   interactive  true (default) = the editor: select, drill, legend; "select" = marks select but nothing drills and the legend only
+ *                highlights; false = a static widget: no mark selection, drill or legend handlers
+ *   selected     the dashboard selection the source widget highlights ({ db, table, column, value }) — bar / stacked / pie / donut fade the rest
  *   hooks        { onSelect(dimField, raw), onDrill(raw), onLegend({ sheet, field, name, raw, bucketed }), legendFocus(),
  *                  onTooltipFields(sheet, list), onMemberColors(sheet, field, members) } — what the host does with them
  */
@@ -36,7 +38,8 @@ import { P36_TYPES, sameField, aliasNames, pathOrderedRows } from "./result-mode
  * the small-multiples panel cap) — or throws when the result can't be drawn (the view shows its own message).
  */
 export function renderWorksheet(container, sheet, result, cmp, options = {}) {
-  const rc = { container, plan: options.plan ?? { metaOf: () => ({}) }, interactive: options.interactive !== false, hooks: options.hooks ?? {},
+  const rc = { container, plan: options.plan ?? { metaOf: () => ({}) }, interactive: options.interactive !== false && options.interactive !== "select",
+    select: options.interactive !== false, selected: options.selected ?? null, hooks: options.hooks ?? {},
     bucketedKey: null, calcPercent: new Set(), extraNotice: null };
   draw(container, rc, sheet, result, cmp);
   return { extraNotice: rc.extraNotice };

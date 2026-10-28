@@ -107,3 +107,37 @@ test("a render without a plan context still draws (no aliases), and drawing agai
   assert.equal(insts.length, 2);
   assert.equal(insts[0].disposed, true);
 });
+
+// --- P24c: interactive "select" — a dashboard widget's marks select, nothing else is interactive ---
+test('interactive:"select": a mark click calls onSelect only — even on a drill hierarchy — and the legend is highlight-only', () => {
+  const log = [];
+  const hooks = { onSelect: (f, raw) => log.push([f.column, raw]), onDrill: () => log.push("drilled"), onLegend: () => log.push("legend hook") };
+  const s = sheet({ drill: { levels: [dim("region"), dim("channel")], depth: 0, path: [] } });
+  renderWorksheet(fakeEl(), s, result(), null, { plan, hooks, interactive: "select" });
+  assert.deepEqual(events(0).sort(), ["click", "legendselectchanged"]);
+  insts[0].handlers.find(([e]) => e === "click")[1]({ dataIndex: 1, componentType: "series" });
+  assert.deepEqual(log, [["region", "US"]]);
+});
+test('interactive:"select": null marks, date-grouped keys, calculated dimensions and non-click chart types stay inert', () => {
+  const log = [];
+  const hooks = { onSelect: (f, raw) => log.push(raw) };
+  renderWorksheet(fakeEl(), sheet(), result([[null, 1], ["US", 2]]), null, { plan, hooks, interactive: "select" });
+  insts[0].handlers.find(([e]) => e === "click")[1]({ dataIndex: 0, componentType: "series" });
+  assert.deepEqual(log, [], "a null mark selects nothing");
+  renderWorksheet(fakeEl(), sheet(), { ...result(), bucket: { key: 0 } }, null, { plan, hooks, interactive: "select" });
+  assert.ok(!events(1).includes("click"), "date-grouped");
+  const calcDim = { calc: "c1", db: "", table: "", column: "Calc", category: "text", role: "dimension" };
+  renderWorksheet(fakeEl(), sheet({ columns: [calcDim] }), result(), null, { plan, hooks, interactive: "select" });
+  assert.ok(!events(2).includes("click"), "a calculated primary dimension has no column to filter on");
+  renderWorksheet(fakeEl(), sheet({ chartType: "treemap" }), { ...result(), rowDimensions: ["region", "channel"], rows: [{ keys: ["EU", "web"], values: [1] }] }, null, { plan, hooks, interactive: "select" });
+  assert.ok(!insts[3].handlers.some(([e]) => e === "click"), "a treemap is not selectable");
+});
+test("the source widget fades every mark but the selected one (bar and pie); a selection from another column fades nothing", () => {
+  const selected = { db: "shop", table: "orders", column: "region", value: "US" };
+  renderWorksheet(fakeEl(), sheet(), result(), null, { plan, interactive: "select", selected });
+  assert.deepEqual(insts[0].lastSet.series[0].data.map((d) => d.itemStyle?.opacity ?? 1), [0.35, 1]);
+  renderWorksheet(fakeEl(), sheet({ chartType: "pie" }), result(), null, { plan, interactive: "select", selected });
+  assert.deepEqual(insts[1].lastSet.series[0].data.map((d) => d.itemStyle?.opacity ?? 1), [0.35, 1]);
+  renderWorksheet(fakeEl(), sheet(), result(), null, { plan, interactive: "select", selected: { ...selected, column: "channel" } });
+  assert.ok(insts[2].lastSet.series[0].data.every((d) => typeof d === "number"), "another column's selection fades nothing");
+});

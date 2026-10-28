@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildPlan, planDims, planMeasures, sortTargets, fieldId, measureName, periodFilters, isDateOnlyType, colorMode, pagesFilter, drillPathFilters }
+import { buildPlan, planDims, planMeasures, sortTargets, fieldId, measureName, periodFilters, isDateOnlyType, colorMode, pagesFilter, drillPathFilters, involvedTables, selectionFilter, keyOf }
   from "../../src/DashboardBuilder/Features/Dashboard/sheet-plan.js";
 
 // The plan reads only its explicit context (P24a): two contexts side by side never touch each other.
@@ -71,4 +71,48 @@ test("drill path and pages filters are bound equalities", () => {
   const s = sheet({ drill: { levels: [lv("a"), lv("b")], depth: 1, path: [{ column: "a", value: 3 }] }, pages: { db: "shop", table: "orders", column: "region", members: ["EU", "US"], index: 1 } });
   assert.deepEqual(drillPathFilters(s), [{ db: "shop", table: "orders", column: "a", op: "=", value: "3", values: null }]);
   assert.equal(pagesFilter(s).value, "US");
+});
+
+// --- P24c: the dashboard's cross-widget selection as a plan option ---
+const rel = { from: { entityId: "e1", column: "id" }, to: { entityId: "e2", column: "id" }, joinType: "inner" };
+const crossCtx = () => mkCtx({ relationships: new Map([["r1", rel]]) });
+const country = { db: "shop", table: "customers", column: "country", value: "DE", label: "customers.country = DE", sourceWidgetId: "w#1" };
+const crossFilter = { db: "shop", table: "customers", column: "country", op: "=", value: "DE", values: null };
+const withCustomers = (over = {}) => sheet({ columns: [dim("customers", "country")], rows: [meas("orders", "id")], ...over });
+const onlyOrders = (over = {}) => sheet({ columns: [dim("orders", "region")], rows: [meas("orders", "id")], ...over });
+
+test("involvedTables lists the query's tables in query order, the base first", () => {
+  assert.deepEqual(involvedTables(withCustomers(), undefined, crossCtx()), [keyOf("shop", "customers"), keyOf("shop", "orders")]);
+  assert.deepEqual(involvedTables(onlyOrders(), undefined, crossCtx()), [keyOf("shop", "orders")]);
+});
+test("selectionFilter is the one bound-value filter a selection becomes (= keep, != exclude)", () => {
+  assert.deepEqual(selectionFilter(country, "="), crossFilter);
+  assert.equal(selectionFilter({ ...country, value: 7 }, "!=").value, "7");
+  assert.equal(selectionFilter({ ...country, value: 7 }, "!=").op, "!=");
+});
+test("buildPlan: a cross filter whose table is in the query is one bound `=` filter; otherwise the plan is unchanged", () => {
+  const withIt = buildPlan(withCustomers(), undefined, crossCtx(), { crossFilter: country });
+  assert.deepEqual(withIt.filters, [crossFilter]);
+  assert.deepEqual(buildPlan(onlyOrders(), undefined, crossCtx(), { crossFilter: country }), buildPlan(onlyOrders(), undefined, crossCtx()), "never forces a join");
+  assert.deepEqual(buildPlan(withCustomers(), undefined, crossCtx(), { crossFilter: null }), buildPlan(withCustomers(), undefined, crossCtx()));
+});
+test("buildPlan: the cross filter replaces the worksheet's own selection only when it applies", () => {
+  const own = { db: "shop", table: "customers", column: "country", value: "FR", label: "x", action: "keep" };
+  const applied = buildPlan(withCustomers({ selection: own }), undefined, crossCtx(), { crossFilter: country });
+  assert.deepEqual(applied.filters, [crossFilter], "one selection filter, the dashboard's");
+  const away = buildPlan(onlyOrders({ selection: { ...own, table: "orders", column: "region" } }), undefined, crossCtx(), { crossFilter: country });
+  assert.equal(away.filters.length, 1, "the worksheet's own selection stays when the dashboard's can't apply");
+  assert.equal(away.filters[0].value, "FR");
+});
+test("buildPlan: every filter slot in use plus a cross filter is exactly the server's 20", () => {
+  const f = (i) => ({ db: "shop", table: "orders", column: "region", category: "text", op: "=", value: String(i) });
+  const s = withCustomers({
+    filters: Array.from({ length: 8 }, (_, i) => f(i)),
+    drill: { levels: Array.from({ length: 6 }, (_, i) => ({ db: "shop", table: "orders", column: `c${i}`, category: "text" })), depth: 5, path: Array.from({ length: 5 }, (_, i) => ({ column: `c${i}`, value: `v${i}` })) },
+    pages: { db: "shop", table: "orders", column: "region", members: ["a"], index: 0 },
+    period: { db: "shop", table: "orders", column: "placed", preset: "last30" } });
+  const ctx = crossCtx();
+  ctx.sharedFilters = Array.from({ length: 4 }, (_, i) => ({ ...f(100 + i), column: "channel" }));
+  const p = buildPlan(s, undefined, ctx, { crossFilter: country });
+  assert.equal(p.filters.length, 20, JSON.stringify(p.filters.map((x) => x.column)));
 });

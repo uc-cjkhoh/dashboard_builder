@@ -6,6 +6,7 @@ import { lineStep } from "./line-style-model.js";
 import { circleSize, circleCells, HEATMAP_GUTTER } from "./heatmap-model.js";
 import { bandsFor } from "./bullet-model.js";
 import { chartFit, markCount, applyFitMode, FIT } from "./chart-fit.js";
+import { applySelectionDim } from "./selection-dim.js";
 
 // Charting adapter (P9; formatting P10). Renders worksheet results through the self-hosted ECharts library
 // (wwwroot/js/vendor/echarts.min.js, loaded as a global before the module graph — no CDN).
@@ -78,7 +79,8 @@ function tokens() {
  * One series per measure; the category axis carries the concatenated dimension keys.
  * @param container the #ws-chart element (a positioned host is created inside it)
  * @param spec { type, categories: string[], series: [{ name, data: number[] }],
- *              format?: sheet format config (P10 — value/date format, axis titles, legend, labels, colour-by) }
+ *              format?: sheet format config (P10 — value/date format, axis titles, legend, labels, colour-by),
+ *              selectedIndex?: the category index of the dashboard-selected mark (bar / stacked / pie / donut fade the rest) }
  */
 export function renderChart(container, spec) {
   disposeChart(container);
@@ -107,6 +109,7 @@ export function renderChart(container, spec) {
   drawing = st; // builders that size marks later (heatmap circles) capture this container's state
   try {
     option = buildOption(spec.type === "multiples" ? { ...spec, width: paneWidth(), height: paneHeight() } : spec);
+    option = applySelectionDim(option, spec.type, spec.selectedIndex); // P24c: the dashboard's source widget fades the unselected marks
     if (spec.type !== "multiples") showEveryCategory(option, fit.rotate, fit); // panels keep their own sparse labels
     if (fit.zoom) addZoom(option, fit);
     if (onCanvas) tuneForSize(option);
