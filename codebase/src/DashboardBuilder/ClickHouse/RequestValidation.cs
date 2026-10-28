@@ -167,7 +167,7 @@ public static class RequestRules
         if ((r.Joins?.Length ?? 0) > ApiLimits.MaxJoins) throw Bad($"A view can join at most {ApiLimits.MaxJoins} tables.", "joins");
         for (var i = 0; i < (r.Joins?.Length ?? 0); i++)
         {
-            if (r.Joins![i].Type is { } jt && jt != "inner" && jt != "left") throw Bad("A join is inner or left.", $"joins[{i}].type");
+            if (r.Joins![i].Type is { } jt && jt is not ("inner" or "left" or "right" or "full")) throw Bad("A join is inner, left, right or full.", $"joins[{i}].type");
             if (r.Joins[i].Left?.Calc is not null) throw Bad("Calculations can't be used as a join key.", $"joins[{i}].left.calc");
             if (r.Joins[i].Right?.Calc is not null) throw Bad("Calculations can't be used as a join key.", $"joins[{i}].right.calc");
         }
@@ -175,12 +175,15 @@ public static class RequestRules
         for (var i = 0; i < (r.ColumnDimensions?.Length ?? 0); i++) CheckCalcDimension(r.ColumnDimensions![i], $"columnDimensions[{i}]");
         for (var i = 0; i < (r.Measures?.Length ?? 0); i++) CheckCalcMeasure(r.Measures![i], $"measures[{i}]");
         var filters = r.Filters ?? [];
+        var rightOrFull = (r.Joins ?? []).Any(j => j.Type is "right" or "full");
         if (filters.Length > ApiLimits.MaxFilters) throw Bad($"A view can have at most {ApiLimits.MaxFilters} filters.", "filters");
         for (var i = 0; i < filters.Length; i++)
         {
             if (filters[i] is not { } f) throw Bad($"'filters[{i}]' is required.", $"filters[{i}]");
             ValidateFilterShape(f.Op, f.Value, f.Values, $"filters[{i}]");
             CheckCast(f.Cast, false, $"filters[{i}]");
+            if (rightOrFull && string.Equals(f.Op, "top", StringComparison.OrdinalIgnoreCase))
+                throw Bad("A top-N filter can't be combined with a right or full join — unmatched rows have no key to rank.", $"filters[{i}]");
             if (string.Equals(f.Op, "top", StringComparison.OrdinalIgnoreCase) && f.TopBy is null)
                 throw Bad("A top-N filter needs a measure to rank by.", $"filters[{i}].topBy");
             if (f.TopBy is { } by) CheckCalcMeasure(by, $"filters[{i}].topBy");

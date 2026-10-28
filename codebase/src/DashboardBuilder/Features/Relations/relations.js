@@ -1,5 +1,5 @@
 import { entities, relationships, bus, emit } from "../Core/store.js";
-import { linkProblem } from "./relation-rules.js";
+import { linkProblem, joinChoices, joinBadge, joinSelection, joinFromSelection, isLegacyLeft } from "./relation-rules.js";
 import { toast, makeButton, openDialog, closeDialog } from "../Core/ui.js";
 
 // Relationships (P5): logical, typed links the user draws between the join keys checked on two
@@ -85,7 +85,8 @@ function onConnectorClick(entityId, column, handle) {
   clearPending();
   openCardinalityDialog({
     current: "1:N",
-    onPick: (cardinality, joinType) => createRelationship(from, to, cardinality, joinType),
+    tables: [entities.get(from.entityId)?.table ?? "first table", entities.get(to.entityId)?.table ?? "second table"],
+    onPick: (cardinality, sel) => createRelationship(from, to, cardinality, joinFromSelection(sel)),
   });
 }
 
@@ -95,18 +96,18 @@ function clearPending() {
 }
 
 // --- relationship lifecycle ---------------------------------------------------
-function createRelationship(from, to, cardinality, joinType = "inner") {
+function createRelationship(from, to, cardinality, { joinType, joinFixed } = { joinType: "inner", joinFixed: true }) {
   const id = `rel#${++seq}`;
-  relationships.set(id, { id, from, to, cardinality, joinType });
+  relationships.set(id, { id, from, to, cardinality, joinType, joinFixed });
   emit("rel:changed", { id });
   select(id);
   render();
 }
 
 /** Recreate a saved relationship (workbook open). Drawn once both endpoints' key rows exist. */
-export function restoreRelationship(from, to, cardinality, joinType = "inner") {
+export function restoreRelationship(from, to, cardinality, joinType = "inner", joinFixed = false) {
   const id = `rel#${++seq}`;
-  relationships.set(id, { id, from, to, cardinality, joinType });
+  relationships.set(id, { id, from, to, cardinality, joinType, joinFixed });
   emit("rel:changed", { id });
   render();
 }
@@ -181,9 +182,9 @@ function endMarker(p, u, kind) {
 
 function badge(rel, mid) {
   const g = svgEl("g", { class: "rel-badge" });
-  // P31: a left join says so on the badge ("1:N · left") — words, not a colour.
-  const label = rel.joinType === "left" ? `${rel.cardinality} · left` : rel.cardinality;
-  const w = rel.joinType === "left" ? 64 : 34, h = 18;
+  // P31: an outer join says so on the badge ("1:N · left", "· right", "· full") — words, not a colour.
+  const label = joinBadge(rel.cardinality, rel.joinType);
+  const w = label === rel.cardinality ? 34 : label.length > 10 ? 70 : 64, h = 18;
   g.append(
     svgEl("rect", { x: mid.x - w / 2, y: mid.y - h / 2, width: w, height: h, rx: 5 }),
     svgEl("text", { x: mid.x, y: mid.y, "text-anchor": "middle", "dominant-baseline": "central" }, label),
@@ -196,8 +197,10 @@ function editRelationship(rel) {
   select(rel.id);
   openCardinalityDialog({
     current: rel.cardinality,
-    joinType: rel.joinType ?? "inner",
-    onPick: (cardinality, joinType) => { rel.cardinality = cardinality; rel.joinType = joinType; emit("rel:changed", { id: rel.id }); render(); },
+    joinType: joinSelection(rel.joinType, rel.joinFixed),
+    legacy: isLegacyLeft(rel.joinType, rel.joinFixed),
+    tables: [entities.get(rel.from.entityId)?.table ?? "first table", entities.get(rel.to.entityId)?.table ?? "second table"],
+    onPick: (cardinality, sel) => { rel.cardinality = cardinality; Object.assign(rel, joinFromSelection(sel)); emit("rel:changed", { id: rel.id }); render(); },
     onDelete: () => { relationships.delete(rel.id); emit("rel:changed", { id: rel.id }); select(null); render(); },
   });
 }
@@ -208,25 +211,25 @@ function select(id) {
 }
 
 // --- cardinality dialog -------------------------------------------------------
-function openCardinalityDialog({ current = "1:N", joinType = "inner", onPick, onDelete }) {
+function openCardinalityDialog({ current = "1:N", joinType = "inner", tables = ["first table", "second table"], legacy = false, onPick, onDelete }) {
   const dlg = document.createElement("dialog");
   dlg.className = "dialog dialog--sm";
 
   const head = document.createElement("div");
   head.className = "dialog__head";
-  head.textContent = "Relationship cardinality";
+  head.textContent = "Relationship: join and cardinality";
 
   const body = document.createElement("div");
   body.className = "dialog__body";
-  // P31: how the second table joins — Inner (only matching rows) or Left (keep the rows of the tables
-  // already in the view even with no match). Pick it first; picking a cardinality saves both.
+  // P31 / T02-12: how the two tables join — only matching rows, or keep every row of the first table (left),
+  // the second (right) or both (full). The link runs first → second. Pick it first; picking a cardinality saves both.
   let join = joinType;
   const joinRow = document.createElement("fieldset");
   joinRow.className = "join-choice";
   const legend = document.createElement("legend");
   legend.textContent = "Join";
   joinRow.append(legend);
-  for (const [v, text] of [["inner", "Inner — only rows that match"], ["left", "Left — keep rows with no match"]]) {
+  for (const { value: v, text } of joinChoices(tables[0], tables[1], legacy)) {
     const lab = document.createElement("label");
     lab.className = "form-check";
     const r = document.createElement("input");
