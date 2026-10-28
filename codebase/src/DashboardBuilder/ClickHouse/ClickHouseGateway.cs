@@ -381,12 +381,13 @@ public sealed class ClickHouseGateway
     }
 
     /// <summary>The "Other" statement: group count + each measure (the same SQL as the main query, so the same
-    /// parameters) over everything past the shown groups. <paramref name="limit"/> is the probe limit.</summary>
+    /// parameters) over everything past the shown groups. <paramref name="limit"/> is the probe limit. The group
+    /// count adds one for a NULL group (uniqExact skips NULL — e.g. a calculation's <c>nullIf</c> division key).</summary>
     internal static string OtherSql(string dimExpr, IReadOnlyList<string> measExprs, string from, string where,
         string ordered, int limit, string extraSettings)
     {
         var shown = $"SELECT k0 FROM ({ordered} LIMIT {limit - 1})";
-        return "SELECT uniqExact(" + dimExpr + ") AS n, "
+        return $"SELECT uniqExact({dimExpr}) + max(isNull({dimExpr})) AS n, "
             + string.Join(", ", measExprs.Select((m, i) => $"{m} AS v{i}")) + from
             + (where.Length > 0 ? where + " AND " : " WHERE ") + $"{dimExpr} NOT IN ({shown})"
             + " SETTINGS transform_null_in = 1" + extraSettings;

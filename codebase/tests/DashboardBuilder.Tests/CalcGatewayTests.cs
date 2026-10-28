@@ -219,14 +219,15 @@ public class CalcGatewayTests
         var ordered = $"SELECT {dim.Sql} AS k0, {meas} AS v0{from}{where} GROUP BY k0 ORDER BY v0 DESC";
         var sql = ClickHouseGateway.OtherSql(dim.Sql, [meas], from, where, ordered, 11, "");
         Assert.Equal(
-            $"SELECT uniqExact({dim.Sql}) AS n, {meas} AS v0{from}{where} AND {dim.Sql} NOT IN (SELECT k0 FROM ({ordered} LIMIT 10)) SETTINGS transform_null_in = 1",
+            $"SELECT uniqExact({dim.Sql}) + max(isNull({dim.Sql})) AS n, {meas} AS v0{from}{where} AND {dim.Sql} NOT IN (SELECT k0 FROM ({ordered} LIMIT 10)) SETTINGS transform_null_in = 1",
             sql);
         Assert.Equal(["p0", "c0p0", "c1p0"], ClickHouseGateway.ParametersUsedBy(sql, ps).Select(p => p.Name));
     }
 
+    // uniqExact skips NULL, so a NULL group past the limit (e.g. a nullIf division key) is counted separately.
     [Fact]
     public void The_other_statement_without_filters_starts_its_own_where() =>
-        Assert.Equal("SELECT uniqExact(k) AS n, m AS v0 FROM t WHERE k NOT IN (SELECT k0 FROM (o LIMIT 4)) SETTINGS transform_null_in = 1, join_use_nulls = 1",
+        Assert.Equal("SELECT uniqExact(k) + max(isNull(k)) AS n, m AS v0 FROM t WHERE k NOT IN (SELECT k0 FROM (o LIMIT 4)) SETTINGS transform_null_in = 1, join_use_nulls = 1",
             ClickHouseGateway.OtherSql("k", ["m"], " FROM t", "", "o", 5, ", join_use_nulls = 1"));
 
     [Fact]
