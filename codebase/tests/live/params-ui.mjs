@@ -283,6 +283,23 @@ try {
     must(J(lastQuery().measures[0].calc.r) === J({ k: 'num', v: 0.5 }), `healed literal: ${J(lastQuery().measures?.[0])}`);
   });
 
+  await check('dashboard: a widget whose sheet has a calculated pill reading the parameter re-queries with the new literal when it changes', async () => {
+    const store = (code) => ev(`(async () => { const st = await import('/features/Core/store.js'); ${code} })()`);
+    await store(`st.createDashboard('Board'); return true;`);
+    await waitFor(`!document.getElementById('board-view').hidden`, 'board shown');
+    await ev(`document.querySelector('.board-panel__item button').click()`);
+    await waitFor(`document.querySelectorAll('.board-widget .ws-chart-canvas svg, .board-widget .ws-chart-canvas canvas').length === 1`, 'widget drawn');
+    await settle();
+    must(J(lastQuery().measures?.[0]?.calc?.r) === J({ k: 'num', v: 0.5 }), `widget request lacks the literal: ${J(lastQuery().measures?.[0])}`);
+    const n = queries.length;
+    await store(`const p = st.parameters.find((x) => x.name === 'Tax'); st.updateParameter(p.id, { value: 0.9 }); return true;`);
+    await settle();
+    must(queries.length > n, 'the widget did not re-query');
+    must(J(lastQuery().measures?.[0]?.calc?.r) === J({ k: 'num', v: 0.9 }), `new literal missing: ${J(lastQuery().measures?.[0])}`);
+    await ev(`document.querySelectorAll('.tab:not(.tab--model) .tab__label')[0].click()`);
+    await waitFor(`!document.getElementById('worksheet-view').hidden`, 'worksheet shown again');
+  });
+
   // screenshots, light + dark
   const shots = [];
   for (const scheme of ['light', 'dark']) {

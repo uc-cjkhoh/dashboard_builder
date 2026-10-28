@@ -155,3 +155,42 @@ test("a parameter can supply a literal-only argument: LEFT length, DATEADD unit 
   assert.match(compile("LEFT([orders.status], [@N])", [P("prm1", "N", "number", 2.5)]).error.message, /whole number/);
   assert.match(compile("DATEADD([@Unit], 1, [orders.placed])", [P("prm2", "Unit", "text", "fortnight")]).error.message, /unit must be one of/);
 });
+
+import { mapRefs, checkName, renameInFormulas } from "../../src/DashboardBuilder/Features/Calc/calc-workbook.js";
+import { checkParamName, cleanParameter } from "../../src/DashboardBuilder/Features/Core/parameters-model.js";
+
+test("rename skips text literals (parameter and calculation), keeps real refs", () => {
+  const cs = [calc("c1", "A", "CONTAINS([orders.status], '[@Rate]') AND [@Rate] > 1 AND CONTAINS([orders.status], 'it''s [@Rate]')")];
+  assert.equal(renameParamInFormulas(cs, "Rate", "Tax")[0].formula, "CONTAINS([orders.status], '[@Rate]') AND [@Tax] > 1 AND CONTAINS([orders.status], 'it''s [@Rate]')");
+  const cc = [calc("c1", "Net", "1"), calc("c2", "B", "CONTAINS([orders.status], '[Net]') AND [Net] > 1")];
+  assert.equal(renameInFormulas(cc, "Net", "Z")[1].formula, "CONTAINS([orders.status], '[Net]') AND [Z] > 1");
+  // a quote inside a bracketed name is part of the name, not a literal
+  assert.equal(mapRefs("[o.it's] + [@Rate] + 'x'", (i) => (i === "@Rate" ? "@T" : undefined)), "[o.it's] + [@T] + 'x'");
+  assert.equal(mapRefs("'open [@Rate]", () => "X"), "'open [@Rate]"); // unterminated literal runs to the end
+});
+
+test("hostile parameter values", () => {
+  const num = (v) => compile("[@V]", [P("prm1", "V", "number", v)]);
+  assert.match(num("1e400").error.message, /usable number/);
+  assert.match(num("0x10").error.message, /usable number/);
+  assert.match(num("0b11").error.message, /usable number/);
+  assert.match(num("Infinity").error.message, /usable number/);
+  assert.match(num("").error.message, /usable number/);
+  assert.deepEqual(num(-0).ast, { k: "num", v: 0 });
+  assert.equal(Object.is(num("-0").ast.v, 0), true);
+  assert.deepEqual(num("1e3").ast, { k: "num", v: 1000 });
+  const t = compile("[@V]", [P("prm1", "V", "text", "a\nb\u0000c\t")]);
+  assert.deepEqual(t.ast, { k: "str", v: "a\nb\u0000c\t" }); // a bound value, never formula text
+  for (const bad of ["2026-13-01", "2026-02-30", "x", "", "2026-02-28; DROP"]) assert.match(compile("[@V]", [P("prm1", "V", "date", bad)]).error.message, /isn't a date/, bad);
+});
+
+test("names: a parameter can't hold [ ]; a calculation can't start with @ (dialog and import)", () => {
+  assert.equal(checkParamName("a[b").ok, false);
+  assert.equal(checkParamName("a]").ok, false);
+  assert.equal(checkParamName("Tax.rate").ok, true);
+  const issues = [];
+  assert.equal(cleanParameter({ id: "prm1", name: "bad]", type: "number", value: 1 }, issues), null);
+  assert.equal(issues.length, 1);
+  assert.equal(checkName("@x", [], null).ok, false);
+  assert.equal(checkName("x@", [], null).ok, true);
+});

@@ -18,7 +18,6 @@ export function evaluateDraft(draft, ctx) {
   const calcs = Array.isArray(ctx?.calcs) ? ctx.calcs : [];
   const n = checkName(name, calcs, selfId);
   if (!n.ok) return { ok: false, field: "name", message: n.error };
-  if (n.value.startsWith("@")) return { ok: false, field: "name", message: "Name can't start with '@' — that marks a parameter, [@Name]." };
   if (typeof formula !== "string" || formula.trim() === "") return { ok: false, field: "formula", message: "Write a formula." };
   if (formula.length > LIMITS.calcFormula) return { ok: false, field: "formula", message: `A formula can be at most ${LIMITS.calcFormula} characters.` };
   if (CONTROL.test(formula)) return { ok: false, field: "formula", message: "That formula has a character that isn't allowed." };

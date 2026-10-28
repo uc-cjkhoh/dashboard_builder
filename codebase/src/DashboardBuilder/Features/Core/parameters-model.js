@@ -25,6 +25,14 @@ export function checkValue(p, raw) {
   return { ok: true, value: v };
 }
 
+/** A parameter name: 1-60 characters, no `[` or `]` (a formula could not name it). { ok, value } or { ok: false, error }. */
+export function checkParamName(raw) {
+  const n = text(raw, { label: "Name", max: 60, required: true });
+  if (!n.ok) return n;
+  if (/[[\]]/.test(n.value)) return { ok: false, error: "Name can't contain '[' or ']'." };
+  return n;
+}
+
 /** A step-size input: empty is no step; otherwise a positive finite number. { ok, value } or { ok: false, error }. */
 export function checkStep(raw) {
   const s = String(raw ?? "").trim();
@@ -56,7 +64,7 @@ export function effectiveTopN(format, params, cap) {
 
 /** A saved parameter, checked — or null (with an issue). */
 export function cleanParameter(raw, issues) {
-  const name = raw && typeof raw === "object" ? text(raw.name, { label: "Parameter name", max: 60, required: true }) : { ok: false };
+  const name = raw && typeof raw === "object" ? checkParamName(raw.name) : { ok: false };
   if (!name.ok || !/^prm\d{1,6}$/.test(raw.id ?? "") || !PARAM_TYPES.includes(raw.type)) { issues.push("Skipped a parameter with no name, id or type."); return null; }
   const a = raw.allowed && typeof raw.allowed === "object" ? raw.allowed : { kind: "any" };
   let allowed = { kind: "any" };

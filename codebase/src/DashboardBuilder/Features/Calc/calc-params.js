@@ -4,7 +4,8 @@
 // substituteParams() after expanding calculation references, so the tree that is checked, cached and sent holds only
 // literals (`num`, `str`, or `fn date` over a `str`). The server never sees a parameter, only bound literals.
 import { CALC_LIMITS } from "./calc-types.js";
-import { dateTime } from "../Core/validate.js";
+import { dateTime, number as plainNumber } from "../Core/validate.js";
+import { mapRefs } from "./calc-workbook.js";
 
 /** Longest text parameter a formula can read (the text-literal limit). */
 export const PARAM_TEXT_MAX = CALC_LIMITS.string;
@@ -15,7 +16,8 @@ export const missingParam = (name) => `Parameter [@${name}] was deleted or doesn
 /** The literal node for one parameter, or `{ error }`. A negative number is `-` over its magnitude (the parser's shape). */
 export function paramLiteral(p) {
   if (p.type === "number") {
-    const n = typeof p.value === "number" ? p.value : (typeof p.value === "string" && p.value.trim() !== "" ? Number(p.value) : NaN);
+    // A string must be a plain decimal (no 0x10, 0b11, Infinity); `1e400` overflows to a non-finite number and is refused.
+    const n = typeof p.value === "number" ? p.value : (typeof p.value === "string" ? (plainNumber(p.value).value ?? NaN) : NaN);
     if (!Number.isFinite(n)) return { error: `Parameter [@${p.name}] isn't a usable number.` };
     return n < 0 ? { node: { k: "un", op: "-", arg: { k: "num", v: -n } } } : { node: { k: "num", v: n === 0 ? 0 : n } };
   }
@@ -60,9 +62,9 @@ export function paramRefs(formula) {
 /** Names of the calculations whose formula reads parameter `name`. */
 export const calcsUsingParam = (calcs, name) => (calcs ?? []).filter((c) => paramRefs(c.formula).includes(name)).map((c) => c.name);
 
-/** `[@Old]` becomes `[@New]` in every formula. Returns a new array. */
+/** `[@Old]` becomes `[@New]` in every formula, outside text literals (`'[@Old]'` is just text). Returns a new array. */
 export function renameParamInFormulas(calcs, oldName, newName) {
-  return calcs.map((c) => ({ ...c, formula: String(c.formula).replace(REF, (all, inner) => (inner === oldName ? `[@${newName}]` : all)) }));
+  return calcs.map((c) => ({ ...c, formula: mapRefs(c.formula, (inner) => (inner === `@${oldName}` ? `@${newName}` : undefined)) }));
 }
 
 const CALC_REF = /\[([^[\]@][^[\]]*)\]/g;

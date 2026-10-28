@@ -1,7 +1,7 @@
 // P32 — Workbook menu → Parameters…: add, edit and delete the workbook's parameters (name, type, allowed
 // values, current value). Each value is checked by Core/parameters-model.js before it is kept.
 import { parameters, calculations, addParameter, updateParameter, removeParameter } from "../Core/store.js";
-import { PARAM_TYPES, MAX_PARAMS, MAX_LIST, checkValue, checkStep } from "../Core/parameters-model.js";
+import { PARAM_TYPES, MAX_PARAMS, MAX_LIST, checkValue, checkStep, checkParamName } from "../Core/parameters-model.js";
 import { text } from "../Core/validate.js";
 import { calcsUsingParam } from "../Calc/calc-params.js";
 import { makeButton, openDialog, closeDialog, toast, confirmDialog } from "../Core/ui.js";
@@ -69,7 +69,7 @@ export function openParametersDialog() {
     cancel.addEventListener("click", () => { editing = null; render(); });
     save.addEventListener("click", () => {
       const fail = (m) => { err.textContent = m; err.hidden = false; };
-      const n = text(name.value, { label: "Name", max: 60, required: true });
+      const n = checkParamName(name.value);
       if (!n.ok) return fail(n.error);
       if (parameters.some((x) => x.name === n.value && x.id !== p?.id)) return fail("Another parameter has that name.");
       let allowed = { kind: "any" };
