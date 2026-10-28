@@ -74,7 +74,11 @@ export function serverFilter(f, { resolve, dateOnly, wireTopBy } = {}) {
     if (!r) return null;
     return { ...base, op: "between", value: "", values: dateOnly ? [r.from, r.to] : [`${r.from} 00:00:00`, `${r.to} 23:59:59`] };
   }
-  if (f.op === "top") return { ...base, value: String(f.value).trim(), topBy: wireTopBy ? wireTopBy(f.topBy) : { db: f.topBy.db, table: f.topBy.table, column: f.topBy.column, agg: f.topBy.agg ?? "sum" }, bottom: Boolean(f.bottom) };
+  if (f.op === "top") {
+    const topBy = wireTopBy ? wireTopBy(f.topBy) : { db: f.topBy.db, table: f.topBy.table, column: f.topBy.column, agg: f.topBy.agg ?? "sum" };
+    if (!topBy) return null; // a ranking that can't be wired (its calculation is gone) is never sent as `topBy: null`
+    return { ...base, value: String(f.value).trim(), topBy, bottom: Boolean(f.bottom) };
+  }
   return base;
 }
 export function statFilters(filters, db, table, convert = (f) => serverFilter(f)) {

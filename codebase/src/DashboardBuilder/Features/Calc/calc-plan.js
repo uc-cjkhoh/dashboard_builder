@@ -44,8 +44,9 @@ export function planTables(f, ctx) {
   return c && !c.error ? calcTables(c.info).sort() : [];
 }
 
-/** First E15 message among the sheet's calculated-field pills, or `null`. */
-export function calcProblem(sheet, ctx) {
+/** First E15 message among the sheet's calculated-field pills, or `null`. `shared` are the applied shared
+ *  filters: a shared Top-N ranked by a calculation that is gone must stop the view, not send `topBy: null`. */
+export function calcProblem(sheet, ctx, shared = []) {
   const seen = new Set();
   for (const f of pillSlots(sheet)) {
     if (!isCalcPill(f) || seen.has(f.calc)) continue;
@@ -54,7 +55,7 @@ export function calcProblem(sheet, ctx) {
     if (!c) return `Calculation '${f.column}' can't be computed: it no longer exists.`;
     if (c.error) return c.error.message;
   }
-  for (const x of sheet.filters ?? []) { // a Top-N ranked by a calculation
+  for (const x of [...(sheet.filters ?? []), ...shared]) { // a Top-N ranked by a calculation
     const t = x?.op === "top" ? x.topBy : null;
     if (!t || typeof t.calc !== "string" || seen.has(t.calc)) continue;
     seen.add(t.calc);

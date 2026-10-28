@@ -133,3 +133,12 @@ test("statCalcProblem: histogram / box plot refuse calc pills with a hint, other
   assert.equal(statCalcProblem({ chartType: "bar", columns: [pillOf("c1")], rows: [] }), null);
   assert.equal(statCalcProblem({ chartType: "histogram", columns: [{ db: "a", table: "b", column: "c", category: "numeric" }], rows: [] }), null);
 });
+
+test("calcProblem also reports a shared Top-N ranked by a calculation that is gone or can't be computed", () => {
+  const empty = { rows: [], columns: [], color: [], marks: {}, filters: [] };
+  const top = (calc, column) => ({ db: "shop", table: "orders", column: "status", op: "top", value: "5", topBy: { db: "", table: "", column, calc } });
+  assert.equal(calcProblem(empty, ctx, [top("c3", "Ratio")]), null);
+  assert.equal(calcProblem(empty, ctx, [top("c6", "Gone")]), "Calculation 'Gone' can't be computed: orders.missing isn't in the model.");
+  assert.match(calcProblem(empty, ctx, [top("zz", "Old")]), /^Calculation 'Old' can't be computed: it no longer exists\./);
+  assert.equal(calcProblem(empty, ctx), null); // the shared list is optional
+});

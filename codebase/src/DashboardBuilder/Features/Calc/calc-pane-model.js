@@ -1,17 +1,22 @@
 // Calculated fields — pure helpers for the dialog and the field-pane group (DOM-free; tests/js/calc-pane-model.test.mjs).
 import { LIMITS } from "../Core/validate.js";
 import { usedBy } from "./calc-workbook.js";
-import { usesCalc } from "./calc-pill.js";
+import { usesCalc, filtersUseCalc } from "./calc-pill.js";
 import { compileCalculation } from "./calc-resolve.js";
 import { chipFor } from "./calc-dialog-model.js";
 
 /** A textarea can hold CRLF; the formula model rejects CR, so the dialog normalises first. */
 export const normaliseFormula = (s) => String(s ?? "").replace(/\r\n?/g, "\n");
 
-/** B4: `{ refusedBy: [names] | null, usedInSheets: n }` for deleting calculation `id` from `sheets`. */
-export function deleteCalcPlan(calcs, sheets, id) {
+/** B4: `{ refusedBy: [names] | null, usedInSheets: n, usedInShared: n }` for deleting calculation `id`;
+ *  `shared` are the workbook's shared filters (a shared Top-N can be ranked by a calculation too). */
+export function deleteCalcPlan(calcs, sheets, id, shared = []) {
   const by = usedBy(calcs, id);
-  return { refusedBy: by.length ? by : null, usedInSheets: sheets.filter((s) => usesCalc(s, id)).length };
+  return {
+    refusedBy: by.length ? by : null,
+    usedInSheets: sheets.filter((s) => usesCalc(s, id)).length,
+    usedInShared: shared.filter((f) => filtersUseCalc([f], id)).length,
+  };
 }
 
 /** E4: the "Use as" control is only for a row-level number. */

@@ -70,10 +70,18 @@ export function syncCalcPills(sheet, calcs, catalog) {
 
 export function usesCalc(sheet, id) {
   for (const f of pillSlots(sheet)) if (isCalcPill(f) && f.calc === id) return true;
-  return sortPointsAt(sheet, id) || (sheet.filters ?? []).some((x) => topByUses(x, id));
+  return sortPointsAt(sheet, id) || filtersUseCalc(sheet.filters, id);
 }
 
 const topByUses = (f, id) => f?.op === "top" && f.topBy?.calc === id;
+
+/** Whether a (sheet or shared) filter list holds a Top-N ranked by calculation `id`. */
+export const filtersUseCalc = (filters, id) => (filters ?? []).some((x) => topByUses(x, id));
+
+/** A Top-N ranked by it keeps its filter but loses the ranking; the filter panel re-applies "first shelf measure". */
+export function clearFilterCalc(filters, id) {
+  for (const x of filters ?? []) if (topByUses(x, id)) x.topBy = null;
+}
 
 const sortPointsAt = (sheet, id) => typeof sheet.sort?.by === "string" && sheet.sort.by.split(":")[1] === "calc" && sheet.sort.by.split(":")[2] === id;
 
@@ -87,6 +95,5 @@ export function clearCalcPills(sheet, id) {
     for (const k of ["detail", "tooltip"]) if (Array.isArray(m[k])) m[k] = m[k].filter(keep);
   }
   if (sortPointsAt(sheet, id)) sheet.sort = null;
-  // A Top-N ranked by it keeps its filter but loses the ranking; the filter panel re-applies "first shelf measure".
-  for (const x of sheet.filters ?? []) if (topByUses(x, id)) x.topBy = null;
+  clearFilterCalc(sheet.filters, id);
 }

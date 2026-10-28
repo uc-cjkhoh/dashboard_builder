@@ -24,7 +24,7 @@ import { DATE_PART_CHOICES, isGroupingPart, stepPart, labelParts } from "./date-
 import { CALC_CHOICES, ALONG_CHOICES, WINDOW_CHOICES, applyTableCalcs, isCalc, calcName } from "./table-calc.js";
 import { createHistory } from "./history.js";
 import { catalogFromEntities } from "../Calc/calc-resolve.js";
-import { isCalcPill, calcPillId, sameCalcPill, makeCalcPill, refusal, pillSlots, syncCalcPills, clearCalcPills, usesCalc, CALC_AGGS } from "../Calc/calc-pill.js";
+import { isCalcPill, calcPillId, sameCalcPill, makeCalcPill, refusal, pillSlots, syncCalcPills, clearCalcPills, clearFilterCalc, usesCalc, CALC_AGGS } from "../Calc/calc-pill.js";
 import { openCalcDialog } from "../Calc/calc-dialog.js";
 import { evaluationInput } from "../Calc/eval-order.js";
 import { explainControl } from "../Calc/explain-popover.js";
@@ -64,6 +64,8 @@ const OPS = ["=", "!=", ">", ">=", "<", "<=", "in", "between"];
 // P30: relative dates resolve to a bound `between` (whole days), top-N carries its ranking measure.
 // Calculated fields: the context the pure plan seam (Calc/calc-plan.js) compiles pills against.
 const calcFieldCtx = () => ({ calcs: calculations, catalog: catalogFromEntities([...entities.values()]) });
+// Shared filters that actually reach the query (a calculated Top-N ranking among them must be computable).
+const appliedShared = () => sharedFilters.filter((f) => checkFilter(f).state === "ok");
 const toFilter = (f) => serverFilter(f, { resolve: (preset) => resolveRange({ preset }), dateOnly: isDateOnlyColumn(f.db, f.table, f.column), wireTopBy: (t) => wireTopBy(t, calcFieldCtx()) });
 // A field's role can be overridden on its pill (Tableau's convert-to-dimension/measure). Default:
 // numeric → measure (aggregated), everything else → dimension (grouped). A numeric field made a
@@ -528,12 +530,17 @@ export function initDashboards() {
   }
   // B4: refuse while another calculation uses it; ask first when worksheets use it; else just delete.
   async function deleteCalcField(calc) {
-    const plan = deleteCalcPlan(calculations, dashboards.map((d) => d.sheet), calc.id);
+    const plan = deleteCalcPlan(calculations, dashboards.map((d) => d.sheet), calc.id, sharedFilters);
     if (plan.refusedBy) { toast(`Used by calculation '${plan.refusedBy.join("', '")}'.`, "info"); return; }
-    if (plan.usedInSheets) {
-      const n = plan.usedInSheets;
-      const go = await confirmDialog(`“${calc.name}” is used in ${n} worksheet${n === 1 ? "" : "s"}. Deleting it removes it from ${n === 1 ? "that worksheet" : "those worksheets"}.`, { danger: true, confirmText: "Delete" });
+    if (plan.usedInSheets || plan.usedInShared) {
+      const n = plan.usedInSheets, m = plan.usedInShared;
+      const where = [
+        n ? `${n} worksheet${n === 1 ? "" : "s"}` : "",
+        m ? `${m} shared Top N filter${m === 1 ? "" : "s"}` : "",
+      ].filter(Boolean).join(" and ");
+      const go = await confirmDialog(`“${calc.name}” is used in ${where}. Deleting it removes it from ${n + m === 1 ? "it" : "them"}.`, { danger: true, confirmText: "Delete" });
       if (!go) return;
+      clearFilterCalc(sharedFilters, calc.id); // saved with the workbook by the calculations:changed below
       // Commit every sheet that lost pills (the calculations:changed sync below sees them already cleared and wouldn't).
       const active = activeDashboard();
       for (const d of dashboards) {
@@ -1199,7 +1206,7 @@ export function initDashboards() {
 
   async function exportCsvRows(dash, s) {
     if (STAT_SINGLE_TABLE.has(s.chartType)) { toast("CSV export isn't available for histogram / box plot yet — export the chart image instead.", "info"); return; }
-    const problem = calcProblem(s, calcFieldCtx());
+    const problem = calcProblem(s, calcFieldCtx(), appliedShared());
     if (problem) { toast(problem, "danger"); return; }
     const view = buildPlan(s);
     if (!view) { toast("Add fields from related tables before exporting.", "info"); return; }
@@ -2340,7 +2347,7 @@ export function initDashboards() {
       chartEl.replaceChildren(hint("Drag fields onto Columns and Rows to build a chart — categorical fields group, numeric fields aggregate."));
       return;
     }
-    const problem = calcProblem(s, calcFieldCtx()); // E15: a calculation that can't be computed — say why, send nothing
+    const problem = calcProblem(s, calcFieldCtx(), appliedShared()); // E15: a calculation that can't be computed — say why, send nothing
     if (problem) { chartEl.replaceChildren(warn(problem)); return; }
     const plan = buildPlan(s);
     if (!plan) {

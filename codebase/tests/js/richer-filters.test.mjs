@@ -47,3 +47,9 @@ test("countNonNull is offered for numeric, text, temporal and other fields", asy
   const { aggsFor } = await import("../../src/DashboardBuilder/Features/Dashboard/filter-rules.js");
   for (const c of ["numeric", "text", "temporal", "boolean", "other"]) assert.ok(aggsFor(c).includes("countNonNull"), c);
 });
+
+test("serverFilter never sends a Top-N whose ranking could not be wired (topBy null)", () => {
+  const f = { db: "d", table: "t", column: "region", op: "top", value: "5", topBy: { db: "", table: "", column: "Net", calc: "c1" } };
+  assert.equal(serverFilter(f, { wireTopBy: () => null }), null);
+  assert.equal(serverFilter(f, { wireTopBy: () => ({ db: "", table: "", column: "Net", calc: { k: "num", v: 1 } }) }).topBy.column, "Net");
+});

@@ -15,11 +15,11 @@ const pill = (id) => ({ calc: id, db: "", table: "", column: "x", category: "num
 const sheet = (...ids) => ({ rows: ids.map(pill), columns: [], color: [], marks: {}, filters: [] });
 
 test("deleteCalcPlan refuses when another calculation uses it", () => {
-  assert.deepEqual(deleteCalcPlan(calcs, [sheet("calc1")], "calc1"), { refusedBy: ["Ratio"], usedInSheets: 1 });
+  assert.deepEqual(deleteCalcPlan(calcs, [sheet("calc1")], "calc1"), { refusedBy: ["Ratio"], usedInSheets: 1, usedInShared: 0 });
 });
 test("deleteCalcPlan counts worksheets using it, else deletes freely", () => {
-  assert.deepEqual(deleteCalcPlan(calcs, [sheet("calc2"), sheet("calc2"), sheet()], "calc2"), { refusedBy: null, usedInSheets: 2 });
-  assert.deepEqual(deleteCalcPlan(calcs, [sheet("calc2")], "calc3"), { refusedBy: null, usedInSheets: 0 });
+  assert.deepEqual(deleteCalcPlan(calcs, [sheet("calc2"), sheet("calc2"), sheet()], "calc2"), { refusedBy: null, usedInSheets: 2, usedInShared: 0 });
+  assert.deepEqual(deleteCalcPlan(calcs, [sheet("calc2")], "calc3"), { refusedBy: null, usedInSheets: 0, usedInShared: 0 });
 });
 
 test("Use as is offered only for a row-level number", () => {
@@ -54,10 +54,15 @@ test("paneState: button disabled at the limit; error flag per calculation", () =
 
 test("deleteCalcPlan counts a worksheet whose Top-N is ranked by the calculation", () => {
   const s = { rows: [], columns: [], color: [], marks: {}, filters: [{ op: "top", topBy: { calc: "calc3", column: "Solo" } }] };
-  assert.deepEqual(deleteCalcPlan(calcs, [s], "calc3"), { refusedBy: null, usedInSheets: 1 });
+  assert.deepEqual(deleteCalcPlan(calcs, [s], "calc3"), { refusedBy: null, usedInSheets: 1, usedInShared: 0 });
 });
 test("clearRoleChoices forgets every session role choice", () => {
   setRoleChoice("calc1", "dimension"); setRoleChoice("calc2", "measure");
   clearRoleChoices();
   assert.equal(roleChoice("calc1"), null); assert.equal(roleChoice("calc2"), null);
+});
+
+test("deleteCalcPlan counts shared Top-N filters ranked by the calculation", () => {
+  const shared = [{ op: "top", topBy: { calc: "calc3", column: "Solo" } }, { op: "top", topBy: { calc: "calc2", column: "Ratio" } }, { op: "=", value: "x" }];
+  assert.deepEqual(deleteCalcPlan(calcs, [sheet()], "calc3", shared), { refusedBy: null, usedInSheets: 0, usedInShared: 1 });
 });

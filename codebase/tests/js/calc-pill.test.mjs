@@ -1,7 +1,7 @@
 // Calculated-field pills — shape, naming, refusals, sync (pure).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { makeCalcPill, isCalcPill, pillName, calcPillId, sameCalcPill, refusal, syncCalcPills, usesCalc, clearCalcPills, CALC_AGGS }
+import { makeCalcPill, isCalcPill, pillName, calcPillId, sameCalcPill, refusal, syncCalcPills, usesCalc, clearCalcPills, filtersUseCalc, clearFilterCalc, CALC_AGGS }
   from "../../src/DashboardBuilder/Features/Calc/calc-pill.js";
 import { catalogFromEntities, compileCalculation, calcTables } from "../../src/DashboardBuilder/Features/Calc/calc-resolve.js";
 import { emptySheet, nameOf, setCalculations } from "../../src/DashboardBuilder/Features/Core/store.js";
@@ -152,4 +152,17 @@ test("syncCalcPills drops a datePart from a calculated dimension (E12: never dat
   const s = { ...emptySheet(), rows: [pill] };
   syncCalcPills(s, [d], catalog);
   assert.equal("datePart" in s.rows[0], false);
+});
+
+test("filtersUseCalc / clearFilterCalc: a (shared) Top-N ranked by a calculation", () => {
+  const top = (calc) => ({ db: "shop", table: "orders", column: "status", op: "top", value: "5", topBy: { db: "", table: "", column: "Net", calc } });
+  const plain = { db: "shop", table: "orders", column: "status", op: "top", value: "5", topBy: { db: "shop", table: "orders", column: "amount", agg: "sum" } };
+  const shared = [top("c1"), top("c2"), plain, { db: "shop", table: "orders", column: "status", op: "=", value: "x" }];
+  assert.equal(filtersUseCalc(shared, "c1"), true);
+  assert.equal(filtersUseCalc(shared, "c9"), false);
+  clearFilterCalc(shared, "c1");
+  assert.equal(shared[0].topBy, null);
+  assert.equal(shared[1].topBy.calc, "c2");
+  assert.equal(shared[2].topBy.column, "amount");
+  assert.equal(filtersUseCalc(shared, "c1"), false);
 });
