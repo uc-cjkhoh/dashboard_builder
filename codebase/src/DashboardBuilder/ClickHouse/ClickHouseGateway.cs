@@ -489,6 +489,80 @@ public sealed class ClickHouseGateway
         return conditions.Count > 0 ? " WHERE " + string.Join(" AND ", conditions) : string.Empty;
     }
 
+    /// <summary>One more than the row limit (default 100): the probe row that tells the client more exist.</summary>
+    internal static int RowsProbeLimit(int? requested) => (requested ?? ApiLimits.DefaultRowsLimit) + 1;
+
+    /// <summary>The columns a row read returns: the requested ones (each must be in the catalog; order kept), else the
+    /// table's first <see cref="ApiLimits.MaxRowsColumns"/>. The flag says the default set was cut.</summary>
+    internal static (IReadOnlyList<ColumnInfo> Columns, bool Truncated) PickRowColumns(IReadOnlyList<ColumnInfo> all, string[]? requested)
+    {
+        if (requested is { Length: > 0 })
+        {
+            var byName = all.ToDictionary(c => c.Name, c => c, StringComparer.Ordinal);
+            return (requested.Select(n => byName.TryGetValue(n, out var c) ? c : throw new UnknownIdentifierException("Unknown column.")).ToList(), false);
+        }
+        return (all.Take(ApiLimits.MaxRowsColumns).ToList(), all.Count > ApiLimits.MaxRowsColumns);
+    }
+
+    /// <summary>The row-read statement. Every name is quoted; <paramref name="where"/> is empty or " WHERE …" with bound
+    /// parameters; there is no ORDER BY (the first rows in storage order) and a hard LIMIT.</summary>
+    internal static string BuildRowsSql(string database, string table, IReadOnlyList<string> columns, string where, int probeLimit)
+        => $"SELECT {string.Join(", ", columns.Select(RowSelectExpr))} FROM {Identifier.QualifiedName(database, table)}{where} LIMIT {probeLimit}";
+
+    /// <summary>One selected column, cut INSIDE ClickHouse so a huge value never leaves it: NULL stays NULL, anything
+    /// else is its text (<c>toString</c>: arrays, tuples, maps, dates render as ClickHouse prints them) cut to
+    /// <see cref="ApiLimits.MaxCellLength"/> + 1 characters (the extra one tells <see cref="RowCell"/> it was cut).</summary>
+    internal static string RowSelectExpr(string column)
+    {
+        var q = Identifier.Quote(column);
+        return $"if(isNull({q}), NULL, left(toString({q}), {ApiLimits.MaxCellLength + 1}))";
+    }
+
+    /// <summary>A cell as JSON: null for SQL NULL, else display text cut at <see cref="ApiLimits.MaxCellLength"/> characters.</summary>
+    internal static string? RowCell(object? raw)
+    {
+        if (raw is null or DBNull) return null;
+        var text = FormatCell(raw);
+        return text.Length > ApiLimits.MaxCellLength ? string.Concat(text.AsSpan(0, ApiLimits.MaxCellLength), "…") : text;
+    }
+
+    /// <summary>
+    /// The first rows of one table (raw-record preview / "view data"): <c>SELECT cols FROM db.table [WHERE …] LIMIT n+1</c>.
+    /// Database, table, columns and filter columns are catalog-validated and quoted; filter values are bound with the
+    /// worksheet's typed rules; the limit is validated upstream and a probe row flags truncation. Read-only.
+    /// </summary>
+    /// <exception cref="UnknownIdentifierException">Unknown database, table, column or filter column.</exception>
+    public async Task<RowsResult> RowsAsync(ClickHouseConnectionInfo info, RowsRequest req, CancellationToken ct)
+    {
+        var all = await DescribeColumnsAsync(info, req.Db, req.Table, ct); // validates db + table
+        var (columns, colsTruncated) = PickRowColumns(all, req.Columns);
+        var byName = all.ToDictionary(c => c.Name, c => c, StringComparer.Ordinal);
+        var parameters = new List<(string Name, string Type, object Value)>();
+        var where = BuildSingleTableFilters(req.Filters ?? [], byName, parameters);
+        var limit = req.Limit ?? ApiLimits.DefaultRowsLimit;
+        RequestRules.ValidateRowCells(limit, columns.Count, "limit");
+        var probe = RowsProbeLimit(req.Limit);
+        var sql = BuildRowsSql(req.Db, req.Table, columns.Select(c => c.Name).ToList(), where, probe);
+
+        using var httpClient = CreateHttpClient(info);
+        await using var conn = new ClickHouseConnection(BuildConnectionString(info), httpClient);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = sql;
+        foreach (var (name, type, value) in parameters) cmd.AddParameter(name, type, value);
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        var rows = new List<IReadOnlyList<string?>>();
+        while (await reader.ReadAsync(ct))
+        {
+            var row = new string?[columns.Count];
+            for (var i = 0; i < row.Length; i++) row[i] = reader.IsDBNull(i) ? null : RowCell(reader.GetValue(i));
+            rows.Add(row);
+        }
+        var truncated = TrimProbeRow(rows, probe);
+        return new RowsResult(columns.Select(c => new RowColumn(c.Name, c.Type)).ToList(), rows, truncated, limit, colsTruncated);
+    }
+
     /// <summary>
     /// A histogram (P12): bucket a single numeric column into equal-width bins over its live [min,max]
     /// and count rows per bin — <c>SELECT floor((col-lo)/w) AS bin, count() … GROUP BY bin</c>, with

@@ -544,3 +544,10 @@
 .ws-pill__pwrap { display: inline-flex; align-items: center; gap: 2px; }
 .ws-pill__paramsel { height: 22px; font-size: 11px; max-width: 170px; }
 .ws-pill__param[aria-pressed="true"] { color: var(--accent-ink); background: var(--accent-soft); }
+
+/* T01-19 tooltip text editor (in the Tooltip tool panel): template, field chips, live preview. */
+.ws-tipedit { display: grid; gap: var(--s2); }
+.ws-tipedit__text { width: 100%; resize: vertical; font-family: inherit; }
+.ws-tipedit__chips { display: flex; flex-wrap: wrap; gap: var(--s1); }
+.ws-tipedit__chip { font-size: var(--fs-xs); padding: 2px var(--s2); }
+.ws-tipedit__preview { padding: var(--s2) var(--s3); border: 1px solid var(--line-2); border-radius: var(--r-ctl); background: var(--surface-2); color: var(--ink); font-size: var(--fs-xs); overflow-wrap: anywhere; }

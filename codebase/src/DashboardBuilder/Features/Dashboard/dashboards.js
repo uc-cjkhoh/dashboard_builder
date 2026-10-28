@@ -22,10 +22,13 @@ import { CF_MODE_CHOICES, CF_SCALE_CHOICES, CF_OP_CHOICES, CF_TONE_CHOICES, CF_M
 import { templateError, buildActionUrl, MAX_LABEL, MAX_TEMPLATE } from "./action-model.js";
 import { DATE_PART_CHOICES, isGroupingPart, stepPart, labelParts } from "./date-parts.js";
 import { CALC_CHOICES, ALONG_CHOICES, WINDOW_CHOICES, applyTableCalcs, isCalc, calcName } from "./table-calc.js";
+import { tooltipCatalog, tooltipHtml, lookupFrom, checkTooltipText, parseTooltip } from "./tooltip-model.js";
 import { createHistory } from "./history.js";
 import { catalogFromEntities } from "../Calc/calc-resolve.js";
 import { isCalcPill, calcPillId, sameCalcPill, makeCalcPill, refusal, pillSlots, syncCalcPills, clearCalcPills, clearFilterCalc, usesCalc, CALC_AGGS } from "../Calc/calc-pill.js";
 import { openCalcDialog } from "../Calc/calc-dialog.js";
+import { openRowsDialog } from "../Rows/rows-dialog.js";
+import { buildRowsRequest } from "../Rows/rows-model.js";
 import { evaluationInput } from "../Calc/eval-order.js";
 import { explainControl } from "../Calc/explain-popover.js";
 import { paneState, deleteCalcPlan, roleChoice, setRoleChoice } from "../Calc/calc-pane-model.js";
@@ -767,6 +770,10 @@ export function initDashboards() {
     const clear = iconButton("close", "Clear selection");
     clear.addEventListener("click", () => { s.selection = null; legendFocus = null; commit(dash, s); });
     wrap.append(btn("Keep only", "keep"), btn("Exclude", "exclude"));
+    const rowsBtn = makeButton("View data", "ws-select__btn"); // the raw rows behind this mark
+    rowsBtn.prepend(icon("eye", { size: 14 }));
+    rowsBtn.addEventListener("click", () => viewData(dash, s, true));
+    wrap.append(rowsBtn);
     // P39 URL action: open the sheet's link for the selected value (new tab, noopener, https only).
     if (s.urlAction && !templateError(s.urlAction.template)) {
       const go = makeButton(`${s.urlAction.label} ↗`, "ws-select__btn ws-select__link");
@@ -1006,6 +1013,7 @@ export function initDashboards() {
       item("chart-bar", "PNG image", () => exportImage(dash, s, "png")),
       item("chart-bar", "SVG image", () => exportImage(dash, s, "svg")),
       item("table", "CSV data", () => exportCsvRows(dash, s)),
+      item("eye", "View data", () => viewData(dash, s, false)),
       item("print", "Print / PDF…", () => printView(dash, s)),
     );
     wireMenu(btn, menu, { signal: headerAbort?.signal }); // click toggles; Esc/outside/item click close; arrows move
@@ -1236,6 +1244,17 @@ export function initDashboards() {
       if (!out) { toast(kind === "png" ? "Couldn't rasterise the chart — try SVG." : "Nothing to export yet.", "danger"); return; }
       downloadBlob(out.blob, `${exportBaseName(dash)}.${out.ext}`);
     } catch { toast("Image export failed.", "danger"); }
+  }
+
+  // View data: the raw rows of the view's base table behind the current view, or behind the selected mark
+  // (rows-model.js decides what applies; whatever can't is named in the dialog).
+  function viewData(dash, s, ofMark) {
+    const problem = calcProblem(s, calcFieldCtx(), appliedShared());
+    if (problem) { toast(problem, "danger"); return; }
+    const plan = buildPlan({ ...s, selection: null }); // the mark is added back as a plain `=`, whatever Keep / Exclude did
+    if (!plan) { toast("Add fields before viewing data.", "info"); return; }
+    const { request, notes } = buildRowsRequest({ plan, selection: ofMark ? s.selection : null });
+    openRowsDialog({ title: ofMark ? `Data behind ${s.selection.label}` : "Data behind this view", subtitle: `${request.db}.${request.table}`, request, notes, filename: `${exportBaseName(dash)}-data` });
   }
 
   async function exportCsvRows(dash, s) {
@@ -2079,7 +2098,7 @@ export function initDashboards() {
         hint: "Drop dimensions to add mark granularity (no visual channel)" },
       { key: "tooltip", icon: "tooltip", label: "Tooltip", count: (m.tooltip ?? []).length,
         pills: (m.tooltip ?? []).map((f, i) => markPill(f, () => { m.tooltip.splice(i, 1); commit(dash, s); })), onDrop: (f) => addMarkList(dash, "tooltip", f),
-        hint: "Drop fields to list in each mark's tooltip" },
+        hint: "Drop fields to list in each mark's tooltip", editor: tooltipEditor(dash, s) },
       { key: "shape", icon: "shape", label: "Shape", count: m.shape ? 1 : 0,
         pills: one(m.shape, () => { m.shape = null; commit(dash, s); }), onDrop: (f) => addShape(dash, f),
         hint: "Drop a categorical field for per-value point symbols (scatter)",
@@ -2150,6 +2169,67 @@ export function initDashboards() {
     if (tool.editor) panel.append(tool.editor);
     if (tool.note) panel.append(el("span", "ws-shelf__note", tool.note));
     return panel;
+  }
+
+  // --- Tooltip text (T01-19) ---------------------------------------------
+  // The fields the last drawn chart offers ([{ name, sample }]) — the editor's chips and live preview.
+  // Keyed by sheet and cleared at the top of renderChart, so it only ever holds the drawn view's fields.
+  let tooltipCatState = { sheet: null, list: [] };
+  let tooltipRedraw = null; // the open editor's chip/preview redraw (the chart may finish after the panel opened)
+  const setTooltipCat = (sheet, list) => { tooltipCatState = { sheet, list }; tooltipRedraw?.(); };
+  function tooltipEditor(dash, s) {
+    const cat = () => (tooltipCatState.sheet === s ? tooltipCatState.list : []);
+    const box = el("div", "ws-tipedit");
+    const label = el("label", "ws-fmt-field");
+    label.append(el("span", "ws-fmt-label", "Tooltip text"));
+    const ta = el("textarea", "input ws-tipedit__text");
+    ta.rows = 3;
+    ta.maxLength = LIMITS.tooltipText;
+    ta.placeholder = "Sales for <field>: <measure> — empty keeps the automatic tooltip";
+    ta.value = s.tooltipText ?? "";
+    label.append(ta);
+    box.append(label);
+    const chips = el("div", "ws-tipedit__chips");
+    const drawChips = () => {
+    chips.replaceChildren();
+    for (const f of cat()) {
+      const b = el("button", "btn btn--ghost ws-tipedit__chip", f.name);
+      b.type = "button";
+      b.title = `Insert <${f.name}>`;
+      b.addEventListener("click", () => {
+        const a = ta.selectionStart ?? ta.value.length, z = ta.selectionEnd ?? a;
+        ta.value = `${ta.value.slice(0, a)}<${f.name}>${ta.value.slice(z)}`.slice(0, LIMITS.tooltipText);
+        ta.focus(); refresh(); save();
+      });
+      chips.append(b);
+    }
+    if (!cat().length) chips.append(el("span", "ws-shelf__note", "Add fields to the view to insert them."));
+    };
+    box.append(chips);
+    const preview = el("div", "ws-tipedit__preview");
+    preview.setAttribute("aria-label", "Tooltip preview");
+    const note = el("span", "ws-shelf__note");
+    const refresh = () => {
+      const r = checkTooltipText(ta.value);
+      const sample = lookupFrom(Object.fromEntries(cat().map((f) => [f.name, f.sample])));
+      preview.innerHTML = r.ok && r.value ? tooltipHtml(r.value, sample) : ""; // escaped parts only (tooltip-model.js)
+      if (!r.ok || !r.value) preview.textContent = "Automatic tooltip";
+      const unknown = r.ok && r.value ? parseTooltip(r.value).fields.filter((n) => sample(n) === undefined) : [];
+      note.textContent = r.ok ? `${ta.value.length}/${LIMITS.tooltipText} · automatic tooltip kept on Table, Text, KPI, Heatmap, Treemap, discrete-colour splits, Scatter with Shape and the other special chart types${unknown.length ? ` · not in this view: ${unknown.map((n) => `<${n}>`).join(" ")}` : ""}` : r.error;
+    };
+    const save = () => {
+      const r = checkTooltipText(ta.value);
+      if (!r.ok || r.value === (s.tooltipText ?? null)) return;
+      s.tooltipText = r.value; commit(dash, s);
+    };
+    ta.addEventListener("input", refresh);
+    ta.addEventListener("change", save);
+    box.append(preview, note);
+    const redraw = () => { if (!box.isConnected) return; drawChips(); refresh(); };
+    tooltipRedraw = redraw;
+    drawChips();
+    refresh();
+    return box;
   }
 
   // --- Date range & comparison (P35) ---------------------------------------
@@ -2689,6 +2769,7 @@ export function initDashboards() {
   //            rows:[{ keys:[rowVals…, colVals…], values:[…] }] }
   function renderChart(sheet, result, cmp = null) {
     chartEl.replaceChildren();
+    setTooltipCat(sheet, []);
     extraNotice = null;
     // Date-grouped key: its labels are bucket starts, not values a filter could match — no click-to-filter.
     bucketedKey = result.bucket ? result.bucket.key : null;
@@ -2973,6 +3054,13 @@ export function initDashboards() {
     // Tooltip → extra lines listing each chosen field's per-mark value.
     const tips = (m.tooltip ?? []).map((f) => markFieldValues(sheet, rows, mplan, f, fmtVal, fmtCat)).filter(Boolean);
     if (tips.length) spec.tooltipExtra = tips.map((t) => ({ name: t.name, values: t.values }));
+    // T01-19 tooltip text: the template + every group-by / Tooltip field's per-mark values (measures come from the series).
+    const dimVals = planDims(sheet).keyOrder.map((f) => markFieldValues(sheet, rows, mplan, f, fmtVal, fmtCat)).filter(Boolean);
+    const tipFields = [...dimVals, ...tips].map((t) => ({ name: t.name, values: t.values }));
+    // Chips offer only placeholders that resolve: group-by / Tooltip fields and the shelf (series) measures.
+    const shelfNames = (result.measures ?? []).slice(0, mplan.filter((e) => e.role === "shelf").length);
+    setTooltipCat(sheet, tooltipCatalog(tipFields, shelfNames, shelfNames.map((_, i) => (rows[0] ? fmtVal(rows[0].values[i]) : ""))));
+    if (sheet.tooltipText) { spec.tooltipText = sheet.tooltipText; spec.tooltipFields = tipFields; }
     // Angle: pie/donut already map their measure to slice angle; elsewhere a radial angle has no mark.
     if (m.angle && type !== "pie" && type !== "donut") notes.push("Angle drives a Pie/Donut slice — that mapping is already implicit there.");
 

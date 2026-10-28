@@ -73,6 +73,8 @@ export const api = {
   /** Worksheet query (may join related tables): { rowDimensions, columnDimensions, measures, rows,
    *  truncated } — `truncated` is true when more groups exist beyond the plan's limit. */
   query: (plan, { signal } = {}) => request("POST", "/api/query", plan, signal),
+  /** Raw rows of one table (POST /api/rows): { columns:[{name,type}], rows:[[text|null]], truncated, limit, columnsTruncated }. */
+  rows: (req, { signal } = {}) => request("POST", "/api/rows", req, signal),
   /** Export the worksheet query's rows as CSV text (P13). Bounded server-side; returns raw text. */
   async exportCsv(plan) {
     const res = await guardedFetch(BASE + "/api/query/export.csv", {

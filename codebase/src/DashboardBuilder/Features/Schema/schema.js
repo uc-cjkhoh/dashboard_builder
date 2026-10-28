@@ -2,6 +2,7 @@ import { api } from "../Core/api.js";
 import { icon } from "../Core/icons.js";
 import { show, hide, toggle, toast } from "../Core/ui.js";
 import { matchTables } from "./table-filter.js";
+import { openTablePreview } from "../Rows/rows-dialog.js";
 
 // Schema browser (P3): fills the database <select> and renders the selected database's tables
 // as draggable chips. Driven by the `connection:changed` event from connection.js — it does
@@ -118,6 +119,15 @@ export function initSchema() {
       document.dispatchEvent(new CustomEvent("table:add", { detail: { db, table } }));
     });
 
+    // Raw-record preview: the first rows of the table (names, types, sample rows) in a read-only dialog.
+    const peek = document.createElement("button");
+    peek.type = "button";
+    peek.className = "iconbtn table-chip__peek";
+    peek.setAttribute("aria-label", `Preview rows of ${table}`);
+    peek.title = "Preview the first rows";
+    peek.append(icon("eye"));
+    peek.addEventListener("click", () => openTablePreview(db, table));
+
     chip.addEventListener("dragstart", (event) => {
       // Custom MIME so the canvas accepts our chips only, not arbitrary text/files.
       event.dataTransfer.setData("application/x-ch-table", JSON.stringify({ db, table }));
@@ -127,7 +137,7 @@ export function initSchema() {
     chip.addEventListener("dragend", () => chip.classList.remove("table-chip--dragging"));
 
     chip.title = `Drag ${table} onto the canvas`;
-    chip.append(grip, iconEl, name, add);
+    chip.append(grip, iconEl, name, peek, add);
     return chip;
   }
 

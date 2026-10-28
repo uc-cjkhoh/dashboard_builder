@@ -16,6 +16,9 @@ public static class ApiLimits
     public const int MaxInValues = 500, MaxFilterValueLength = 1000;
     public const int MaxRowLimit = 5000, MaxBuckets = 100, MaxDistinct = 1000;
     public const int MaxExportRows = 100_000; // CSV export of a whole worksheet result
+    public const int DefaultRowsLimit = 100, MaxRowsLimit = 1000; // raw rows of one table (POST /api/rows): default / cap
+    public const int MaxRowsCells = 50_000; // rows x columns one row read may return
+    public const int MaxRowsColumns = 200, MaxCellLength = 1000;  // columns one row read returns; characters kept per cell
     public const int MaxOffset = 10_000_000;  // how deep a table may page
     public const int MaxCalcDepth = CalcLimits.MaxDepth, MaxCalcNodes = CalcLimits.MaxNodes; // calculation tree; formula length (500) is client-only
 }
@@ -194,6 +197,25 @@ public static class RequestRules
         if (r.Sort is { } s && !ClickHouseGateway.IsValidSortAlias(s.Column, dims, Math.Max(1, measures)))
             throw Bad("Unknown sort column.", "sort.column");
     }
+    /// <summary>A raw-row read (POST /api/rows): names present, columns and filters bounded, limit 1..1000 (never clamped).</summary>
+    public static void ValidateRows(RowsRequest r)
+    {
+        if (string.IsNullOrWhiteSpace(r.Db)) throw Bad("'db' is required.", "db");
+        if (string.IsNullOrWhiteSpace(r.Table)) throw Bad("'table' is required.", "table");
+        var cols = r.Columns ?? [];
+        if (cols.Length > ApiLimits.MaxRowsColumns) throw Bad($"A row read can return at most {ApiLimits.MaxRowsColumns} columns.", "columns");
+        for (var i = 0; i < cols.Length; i++)
+            if (string.IsNullOrWhiteSpace(cols[i])) throw Bad($"'columns[{i}]' is required.", $"columns[{i}]");
+        ValidateRange(r.Limit, ApiLimits.MaxRowsLimit, "Limit", "limit");
+        if (cols.Length > 0) ValidateRowCells(r.Limit ?? ApiLimits.DefaultRowsLimit, cols.Length, "limit");
+        ValidateStatFilters(r.Filters);
+    }
+    /// <summary>rows x columns must stay within <see cref="ApiLimits.MaxRowsCells"/> — ask for fewer rows or columns.</summary>
+    public static void ValidateRowCells(int rows, int columns, string field)
+    {
+        if ((long)rows * columns > ApiLimits.MaxRowsCells)
+            throw Bad($"{columns} columns allow at most {ApiLimits.MaxRowsCells / Math.Max(1, columns)} rows — ask for fewer rows or columns ({ApiLimits.MaxRowsCells:N0} cells in all).", field);
+    }
     public static void ValidateHistogram(HistogramRequest r) { ValidateRange(r.Buckets, ApiLimits.MaxBuckets, "Bins", "buckets"); ValidateStatFilters(r.Filters); }
     public static void ValidateBoxPlot(BoxPlotRequest r) { ValidateRange(r.Limit, ApiLimits.MaxRowLimit, "Limit", "limit"); ValidateStatFilters(r.Filters); }
     public static void ValidateDistinctLimit(int? limit) => ValidateRange(limit, ApiLimits.MaxDistinct, "Limit", "limit");
@@ -205,7 +227,7 @@ public static class RequestRules
             if (filters![i] is not { } f) throw Bad($"'filters[{i}]' is required.", $"filters[{i}]");
             ValidateFilterShape(f.Op, f.Value, f.Values, $"filters[{i}]");
             if (string.Equals(f.Op, "top", StringComparison.OrdinalIgnoreCase))
-                throw Bad("Top-N filters apply to the worksheet query, not a histogram or box plot.", $"filters[{i}].op");
+                throw Bad("Top-N filters apply to the worksheet query, not a histogram, box plot or row read.", $"filters[{i}].op");
         }
     }
 }

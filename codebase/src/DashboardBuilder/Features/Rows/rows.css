@@ -1,0 +1,25 @@
+/* Raw-row dialog (schema-browser preview, worksheet "View data"). Tokens only; solid surface; the table scrolls inside. */
+.rows-dialog { width: min(960px, calc(100vw - 2 * var(--s5))); max-height: min(80vh, 720px); display: flex; flex-direction: column; }
+.rows-dialog[open] { display: flex; }
+.rows-dialog__head { display: flex; align-items: flex-start; gap: var(--s3); padding: var(--s4) var(--s4) var(--s2); }
+.rows-dialog__titles { flex: 1; min-width: 0; }
+.rows-dialog__title { padding: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rows-dialog__sub { margin: 2px 0 0; font-size: var(--fs-xs); color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rows-dialog__notes { padding: 0 var(--s4); display: grid; gap: var(--s1); }
+.rows-dialog__note { margin: 0; padding: var(--s1) var(--s2); font-size: var(--fs-sm); color: var(--warn-ink); background: var(--warn-bg); border: 1px solid var(--warn-line); border-radius: var(--r-ctl); }
+.rows-dialog__note-icon { display: inline-flex; vertical-align: middle; }
+.rows-dialog__scroll { flex: 1; min-height: 120px; margin: var(--s2) var(--s4) 0; overflow: auto; border: 1px solid var(--line); border-radius: var(--r-ctl); background: var(--surface); }
+.rows-dialog__status { margin: 0; padding: var(--s5); text-align: center; color: var(--ink-3); font-size: var(--fs-sm); }
+.rows-dialog__status--error { color: var(--danger-ink); }
+.rows-dialog__foot { align-items: center; padding-top: var(--s3); }
+.rows-dialog__summary { margin-right: auto; font-size: var(--fs-sm); color: var(--ink-2); }
+.rows-table { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; font-size: var(--fs-sm); }
+.rows-table th, .rows-table td { padding: var(--s1) var(--s3); border-bottom: 1px solid var(--line); text-align: left; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rows-table th { position: sticky; top: 0; z-index: 1; background: var(--surface-3); color: var(--ink); font-weight: 600; vertical-align: bottom; }
+.rows-table__name { display: block; }
+.rows-table__type { display: block; font-size: var(--fs-xs); font-weight: 400; color: var(--ink-3); }
+.rows-table tbody tr:nth-child(even) td { background: var(--surface-2); }
+.rows-table__null { color: var(--ink-3); font-style: italic; }
+/* The preview button shares the chip's row: shown on hover / focus like the drag grip, always reachable by keyboard. */
+.table-chip__peek { opacity: 0; transition: opacity var(--dur-fast) var(--ease); }
+.table-chip:hover .table-chip__peek, .table-chip:focus-within .table-chip__peek { opacity: 1; }

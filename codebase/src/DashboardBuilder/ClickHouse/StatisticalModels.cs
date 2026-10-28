@@ -38,3 +38,20 @@ public sealed record BoxPlotGroup(string? Label, double Min, double Q1, double M
 /// <summary>The box-plot data: one box per group.</summary>
 /// <remarks><see cref="Truncated"/> is true when more groups exist beyond the limit.</remarks>
 public sealed record BoxPlotResult(IReadOnlyList<BoxPlotGroup> Groups, bool Truncated = false);
+
+/// <summary>
+/// A raw-row read of ONE table (POST /api/rows): the first <see cref="Limit"/> rows (default 100, max 1000) of
+/// the optional <see cref="Columns"/> (default: the table's first 200), narrowed by <see cref="Filters"/>.
+/// No ordering, no aggregation. Identifiers are catalog-validated and quoted; filter values are bound.
+/// </summary>
+public sealed record RowsRequest(string Db, string Table, string[]? Columns, StatFilter[]? Filters, int? Limit);
+
+/// <summary>A returned column: its name and raw ClickHouse type.</summary>
+public sealed record RowColumn(string Name, string Type);
+
+/// <summary>Rows as display text (null = SQL NULL, each cell cut at <see cref="ApiLimits.MaxCellLength"/> characters).
+/// <see cref="Truncated"/>: more rows matched than <see cref="Limit"/>; <see cref="ColumnsTruncated"/>: the table has
+/// more columns than were returned.</summary>
+public sealed record RowsResult(
+    IReadOnlyList<RowColumn> Columns, IReadOnlyList<IReadOnlyList<string?>> Rows,
+    bool Truncated, int Limit, bool ColumnsTruncated);
