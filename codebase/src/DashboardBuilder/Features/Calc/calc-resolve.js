@@ -55,7 +55,9 @@ export function makeResolve(catalog, calcNames) {
  * dangling references, cycles and type errors read `Calculation 'X' can't be computed: ...` (E15).
  */
 export function compileCalculation(calc, calcs, catalog) {
-  const names = new Set((calcs ?? []).map((c) => c.name));
+  // The draft is registered only under its own current name: a saved copy of it (same id) is stale.
+  const others = (calcs ?? []).filter((c) => c.id !== calc.id);
+  const names = new Set(others.map((c) => c.name));
   names.add(calc.name);
   let resolverError = false;
   const base = makeResolve(catalog, names);
@@ -79,8 +81,8 @@ export function compileCalculation(calc, calcs, catalog) {
   }
   const byName = new Map([[calc.name, { ast: own.ast }]]);
   const depErrors = new Map();
-  for (const c of calcs ?? []) {
-    if (c.name === calc.name || byName.has(c.name)) continue;
+  for (const c of others) { // duplicate names: the first one wins
+    if (byName.has(c.name)) continue;
     const p = parse(c);
     if (p.error) depErrors.set(c.name, p.error.message);
     else byName.set(c.name, { ast: p.ast });
@@ -89,7 +91,7 @@ export function compileCalculation(calc, calcs, catalog) {
   if (ex.error) {
     const m = /^Unknown calculation \[(.*)\]\.$/.exec(ex.error.message);
     const dep = m && depErrors.get(m[1]);
-    return { error: { message: prefix(dep ? dep.replace(/^Calculation '[^']*' can't be computed: /, "") : ex.error.message) } };
+    return { error: { message: prefix(dep ? dep : ex.error.message) } };
   }
   const info = check(ex.ast, catalog.categoryOf);
   if (info.error) return { error: { message: prefix(info.error.message) } };

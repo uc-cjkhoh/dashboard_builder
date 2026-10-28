@@ -71,5 +71,40 @@ test("cycle and removed table give the E15 sentence", () => {
 test("syntax errors keep their position; non-string formula is an error", () => {
   const e = compileCalculation(calc("x", "X", "1 +"), [], catalog).error;
   assert.equal(e.pos, 3);
-  assert.ok(compileCalculation(calc("x", "X", undefined), [], catalog).error.message);
+  assert.equal(compileCalculation(calc("x", "X", undefined), [], catalog).error.message, "Write a formula.");
+});
+
+test("a renamed draft replaces its stale saved entry", () => {
+  const savedOld = calc("c1", "Old", "[orders.amount]");
+  const draft = calc("c1", "New", "[orders.qty]");
+  const user = calc("u", "U", "[Old]*2");
+  const e = compileCalculation(user, [savedOld, user], catalog);
+  assert.ok(e.ast); // sanity: saved "Old" resolves while it is the only version
+  const stale = compileCalculation(user, [draft, user], catalog); // draft already renamed away from Old
+  assert.equal(stale.error.message, "Write the field as [table.column].");
+  const viaNew = calc("u2", "U2", "[New]*2");
+  const r = compileCalculation(viaNew, [savedOld, draft, viaNew], catalog);
+  assert.equal(r.ast.l.column, "qty");
+  // compiling the draft itself under the new name ignores the stale "Old" entry
+  const self = calc("c1", "New", "[Old]");
+  assert.equal(compileCalculation(self, [savedOld, self], catalog).error.message, "Write the field as [table.column].");
+});
+test("a cycle through the unsaved draft is detected", () => {
+  const a = calc("a", "A", "[orders.amount]");
+  const b = calc("b", "B", "[A]+1");
+  const draftA = calc("a", "A", "[B]+1"); // unsaved edit of A now refers to B
+  const r = compileCalculation(draftA, [a, b], catalog);
+  assert.match(r.error.message, /^Calculation 'A' can't be computed: Calculation '.' refers to itself/);
+});
+test("empty formula and ambiguous two-part reference", () => {
+  assert.ok(compileCalculation(calc("e", "E", ""), [], catalog).error.message);
+  const x = calc("x", "X", "SUM([items.price])");
+  assert.equal(compileCalculation(x, [x], catalog).error.message,
+    "Calculation 'X' can't be computed: items.price is in more than one database — write [db.table.column].");
+});
+test("duplicate names: the first one wins", () => {
+  const d1 = calc("d1", "Dup", "[orders.amount]");
+  const d2 = calc("d2", "Dup", "[orders.qty]");
+  const u = calc("u", "U", "[Dup]");
+  assert.equal(compileCalculation(u, [d1, d2, u], catalog).ast.column, "amount");
 });
