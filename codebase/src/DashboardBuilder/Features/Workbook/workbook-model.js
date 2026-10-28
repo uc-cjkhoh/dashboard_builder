@@ -335,7 +335,7 @@ function unlinkParams(sheet, ids, where, issues) {
 }
 
 // P28 field settings: keys "db.table.column"; alias 1–60 characters, a known aggregation, hidden true.
-const AGG_NAMES = new Set(["sum", "avg", "min", "max", "count", "countDistinct"]);
+const AGG_NAMES = new Set(["sum", "avg", "min", "max", "count", "countDistinct", "countNonNull"]);
 function cleanFieldMeta(raw, issues) {
   if (raw == null) return {};
   if (typeof raw !== "object" || Array.isArray(raw)) { issues.push("The field settings weren't readable — cleared."); return {}; }

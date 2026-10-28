@@ -104,3 +104,11 @@ test("resolveSortTarget tolerates a stale agg suffix on a calc pill", () => {
   assert.equal(resolveSortTarget(targets, "dimension:d.t.c:").alias, "k0");
   assert.equal(resolveSortTarget(targets, "dimension:d.t.x:"), undefined);
 });
+
+test("measureLabel / aggWord: countNonNull reads as non-null", async () => {
+  const { aggWord } = await import("../../src/DashboardBuilder/Features/Calc/calc-plan.js");
+  assert.equal(measureLabel({ agg: "countNonNull", column: "status" }, []), "non-null status");
+  assert.equal(measureLabel({ agg: "countNonNull", column: "status" }, [], "State"), "non-null State");
+  assert.equal(aggWord("countNonNull"), "non-null");
+  assert.equal(aggWord("countDistinct"), "distinct");
+});

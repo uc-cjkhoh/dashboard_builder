@@ -30,7 +30,7 @@ import { evaluationInput } from "../Calc/eval-order.js";
 import { explainControl } from "../Calc/explain-popover.js";
 import { paneState, deleteCalcPlan, roleChoice, setRoleChoice } from "../Calc/calc-pane-model.js";
 import { checkName } from "../Calc/calc-workbook.js";
-import { wireDim, wireMeasure, planTables, calcProblem, measureLabel, topByRef, topByKey, wireTopBy, resolveSortTarget } from "../Calc/calc-plan.js";
+import { wireDim, wireMeasure, planTables, calcProblem, measureLabel, aggWord, topByRef, topByKey, wireTopBy, resolveSortTarget } from "../Calc/calc-plan.js";
 import { REF_CHOICES, TREND_CHOICES, FORECAST_CHOICES, defaultAnalytics, refValue, trendSeries, combine } from "./analytics-model.js";
 import { scalePlan, withOther, bucketNotice, tableProgress, needsNextPage, OTHER_TYPES, BUCKET_TYPES, DATE_BUCKET_CHOICES } from "./scale-model.js";
 
@@ -1584,10 +1584,13 @@ export function initDashboards() {
     const { rowDims, colDims } = planDims(sheet);
     const mplan = planMeasures(sheet);
     const dimName = (f, fallback) => (f && metaOf(f).alias) || fallback;
-    const aggWord = (a) => (a === "countDistinct" ? "distinct" : a);
     const measures = result.measures.map((m, mi) => {
       const e = mplan[mi];
-      return e && metaOf(e.field).alias && e.agg !== "count" ? `${aggWord(e.agg)} ${metaOf(e.field).alias}` : m;
+      if (!e || e.agg === "count" || isCalcPill(e.field)) return m;
+      const alias = metaOf(e.field).alias;
+      // The server names a non-null count "countnonnull <col>"; show the B5 label instead.
+      if (e.agg === "countNonNull") return `${aggWord(e.agg)} ${alias || e.field.column}`;
+      return alias ? `${aggWord(e.agg)} ${alias}` : m;
     });
     return { ...result,
       rowDimensions: result.rowDimensions.map((n, i) => dimName(rowDims[i], n)),

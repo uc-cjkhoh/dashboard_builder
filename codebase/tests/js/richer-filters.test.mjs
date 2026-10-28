@@ -42,3 +42,8 @@ test("histograms and box plots skip top-N filters (counted as not applied)", () 
   assert.equal(r.apply.length, 1);
   assert.equal(r.ignored, 1);
 });
+
+test("countNonNull is offered for numeric, text, temporal and other fields", async () => {
+  const { aggsFor } = await import("../../src/DashboardBuilder/Features/Dashboard/filter-rules.js");
+  for (const c of ["numeric", "text", "temporal", "boolean", "other"]) assert.ok(aggsFor(c).includes("countNonNull"), c);
+});

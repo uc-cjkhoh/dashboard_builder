@@ -2,9 +2,9 @@
 import { filterValue, range, LIMITS } from "../Core/validate.js";
 import { PERIOD_PRESETS } from "../Core/sheet-schema.js";
 export const AGGS = Object.freeze({
-  numeric: ["sum", "avg", "min", "max", "count", "countDistinct"],
-  ordered: ["count", "countDistinct", "min", "max"], // text + temporal: min/max come back as text
-  other: ["count", "countDistinct"],                  // boolean, compound, other
+  numeric: ["sum", "avg", "min", "max", "count", "countDistinct", "countNonNull"],
+  ordered: ["count", "countDistinct", "countNonNull", "min", "max"], // text + temporal: min/max come back as text
+  other: ["count", "countDistinct", "countNonNull"],                  // boolean, compound, other
 });
 export const aggsFor = (category) =>
   category === "numeric" ? AGGS.numeric : category === "text" || category === "temporal" ? AGGS.ordered : AGGS.other;

@@ -51,14 +51,16 @@ export function calcProblem(sheet, ctx) {
   return null;
 }
 
+/** The word an aggregation reads as in a measure's name (matches the server's column naming). */
+export const aggWord = (a) => (a === "countDistinct" ? "distinct" : a === "countNonNull" ? "non-null" : a);
+
 /** Display name of a measure, matching the server's result column. `alias` is a plain field's P28 name. */
 export function measureLabel(f, calcs, alias) {
   if (isCalcPill(f)) return pillName(f, calcs);
   const a = f.agg ?? "sum";
   const n = alias || f.column;
   if (a === "count") return "count";
-  if (a === "countDistinct") return `distinct ${n}`;
-  return `${a} ${n}`;
+  return `${aggWord(a)} ${n}`;
 }
 
 /** The `topBy` a Top-N filter stores for a plan entry: a calc pill keeps its id (`calc`) and label. */

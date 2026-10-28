@@ -398,3 +398,11 @@ test("a calc pill is valid without db/table/column; one pointing at a missing ca
   assert.equal(s.marks.size, null);
   assert.ok(wb.issues.includes('Sheet "X" rows: a calculated field that no longer exists was removed.'));
 });
+
+test("a countNonNull pill and field default round-trip and are not reset", () => {
+  const wb = sheetOf({ rows: [pill({ category: "text", column: "status", agg: "countNonNull" })] });
+  assert.equal(wb.dashboards[0].sheet.rows[0].agg, "countNonNull");
+  assert.deepEqual(wb.issues, []);
+  const f = parseWorkbook(wbText({ fields: { "s.orders.amount": { agg: "countNonNull" } } }));
+  assert.deepEqual(f.fields, { "s.orders.amount": { agg: "countNonNull" } });
+});
