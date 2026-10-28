@@ -158,4 +158,28 @@ public class CalcJsonTests(WebApplicationFactory<Program> factory) : IClassFixtu
         var r = await factory.CreateClient().PostAsync("/api/query", new StringContent(body, Encoding.UTF8, "application/json"));
         Assert.Equal(HttpStatusCode.Conflict, r.StatusCode);
     }
+
+    [Fact]
+    public void A_function_call_node_round_trips()
+    {
+        const string wire = """{"k":"fn","fn":"left","args":[{"k":"field","db":"d","table":"t","column":"c"},{"k":"num","v":3}]}""";
+        var node = JsonSerializer.Deserialize<ExprNode>(wire, Web);
+        Assert.Equal(new FnNode("left", [new FieldNode("d", "t", "c"), new NumNode(3)]), node, new FnComparer());
+        Assert.Equal(wire, JsonSerializer.Serialize(node, Web));
+    }
+
+    [Theory]
+    [InlineData("""{"k":"fn","fn":"lower"}""")]
+    [InlineData("""{"k":"fn","fn":"lower","args":{"k":"num","v":1}}""")]
+    [InlineData("""{"k":"fn","fn":"lower","args":[1]}""")]
+    [InlineData("""{"k":"fn","args":[]}""")]
+    public void A_malformed_function_node_throws_JsonException(string json)
+        => Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<ExprNode>(json, Web));
+
+    // Records compare arrays by reference; compare the wire form instead.
+    private sealed class FnComparer : IEqualityComparer<ExprNode?>
+    {
+        public bool Equals(ExprNode? a, ExprNode? b) => JsonSerializer.Serialize(a, Web) == JsonSerializer.Serialize(b, Web);
+        public int GetHashCode(ExprNode? n) => JsonSerializer.Serialize(n, Web).GetHashCode();
+    }
 }

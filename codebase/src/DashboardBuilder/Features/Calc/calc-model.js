@@ -40,6 +40,7 @@ export function expandCalcs(ast, calcsByName) {
       case "agg": count(); return { ...n, arg: walk(n.arg) };
       case "bin": case "cmp": case "logic": case "ifnull": count(); return { ...n, l: walk(n.l), r: walk(n.r) };
       case "not": case "isnull": count(); return { ...n, arg: walk(n.arg) };
+      case "fn": count(); return { ...n, args: Array.isArray(n.args) ? n.args.map(walk) : n.args };
       case "case": {
         count();
         const out = { ...n, whens: Array.isArray(n.whens) ? n.whens.map((w) => ({ c: walk(w?.c), t: walk(w?.t) })) : n.whens };
