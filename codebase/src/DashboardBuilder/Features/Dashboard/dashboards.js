@@ -28,6 +28,8 @@ import { createHistory } from "./history.js";
 import { catalogFromEntities } from "../Calc/calc-resolve.js";
 import { isCalcPill, calcPillId, sameCalcPill, makeCalcPill, refusal, pillSlots, syncCalcPills, clearCalcPills, clearFilterCalc, usesCalc, CALC_AGGS } from "../Calc/calc-pill.js";
 import { openCalcDialog } from "../Calc/calc-dialog.js";
+import { openRowsDialog } from "../Rows/rows-dialog.js";
+import { buildRowsRequest } from "../Rows/rows-model.js";
 import { evaluationInput } from "../Calc/eval-order.js";
 import { explainControl } from "../Calc/explain-popover.js";
 import { paneState, deleteCalcPlan, roleChoice, setRoleChoice } from "../Calc/calc-pane-model.js";
@@ -735,6 +737,10 @@ export function initDashboards() {
     const clear = iconButton("close", "Clear selection");
     clear.addEventListener("click", () => { s.selection = null; legendFocus = null; commit(dash, s); });
     wrap.append(btn("Keep only", "keep"), btn("Exclude", "exclude"));
+    const rowsBtn = makeButton("View data", "ws-select__btn"); // the raw rows behind this mark
+    rowsBtn.prepend(icon("eye", { size: 14 }));
+    rowsBtn.addEventListener("click", () => viewData(dash, s, true));
+    wrap.append(rowsBtn);
     // P39 URL action: open the sheet's link for the selected value (new tab, noopener, https only).
     if (s.urlAction && !templateError(s.urlAction.template)) {
       const go = makeButton(`${s.urlAction.label} ↗`, "ws-select__btn ws-select__link");
@@ -974,6 +980,7 @@ export function initDashboards() {
       item("chart-bar", "PNG image", () => exportImage(dash, s, "png")),
       item("chart-bar", "SVG image", () => exportImage(dash, s, "svg")),
       item("table", "CSV data", () => exportCsvRows(dash, s)),
+      item("eye", "View data", () => viewData(dash, s, false)),
       item("print", "Print / PDF…", () => printView(dash, s)),
     );
     wireMenu(btn, menu, { signal: headerAbort?.signal }); // click toggles; Esc/outside/item click close; arrows move
@@ -1204,6 +1211,17 @@ export function initDashboards() {
       if (!out) { toast(kind === "png" ? "Couldn't rasterise the chart — try SVG." : "Nothing to export yet.", "danger"); return; }
       downloadBlob(out.blob, `${exportBaseName(dash)}.${out.ext}`);
     } catch { toast("Image export failed.", "danger"); }
+  }
+
+  // View data: the raw rows of the view's base table behind the current view, or behind the selected mark
+  // (rows-model.js decides what applies; whatever can't is named in the dialog).
+  function viewData(dash, s, ofMark) {
+    const problem = calcProblem(s, calcFieldCtx(), appliedShared());
+    if (problem) { toast(problem, "danger"); return; }
+    const plan = buildPlan({ ...s, selection: null }); // the mark is added back as a plain `=`, whatever Keep / Exclude did
+    if (!plan) { toast("Add fields before viewing data.", "info"); return; }
+    const { request, notes } = buildRowsRequest({ plan, selection: ofMark ? s.selection : null });
+    openRowsDialog({ title: ofMark ? `Data behind ${s.selection.label}` : "Data behind this view", subtitle: `${request.db}.${request.table}`, request, notes, filename: `${exportBaseName(dash)}-data` });
   }
 
   async function exportCsvRows(dash, s) {
