@@ -33,6 +33,21 @@ public class CalcJsonTests(WebApplicationFactory<Program> factory) : IClassFixtu
     }
 
     [Fact]
+    public void An_aggregate_may_carry_a_fraction_p_and_it_round_trips()
+    {
+        var node = JsonSerializer.Deserialize<ExprNode>("""{"k":"agg","fn":"percentile","arg":{"k":"num","v":1},"p":0.9}""", Web);
+        Assert.Equal(new AggNode("percentile", new NumNode(1), 0.9), node);
+        Assert.Equal(0.9, JsonDocument.Parse(JsonSerializer.Serialize(node, Web)).RootElement.GetProperty("p").GetDouble());
+        Assert.Null(((AggNode)JsonSerializer.Deserialize<ExprNode>("""{"k":"agg","fn":"sum","arg":{"k":"num","v":1}}""", Web)!).P);
+    }
+
+    [Theory]
+    [InlineData("""{"k":"agg","fn":"percentile","arg":{"k":"num","v":1},"p":"0.9"}""")]
+    [InlineData("""{"k":"agg","fn":"percentile","arg":{"k":"num","v":1},"p":1e999}""")]
+    public void A_malformed_fraction_throws_JsonException(string json)
+        => Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<ExprNode>(json, Web));
+
+    [Fact]
     public void Num_and_unary_nodes_deserialise()
     {
         var node = JsonSerializer.Deserialize<ExprNode>("""{"k":"un","op":"-","arg":{"k":"num","v":2.5}}""", Web);

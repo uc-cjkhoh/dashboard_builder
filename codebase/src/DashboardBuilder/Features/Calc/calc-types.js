@@ -19,6 +19,11 @@ export const FUNCTIONS = Object.freeze({
   max: { accepts: ORDERABLE, result: null },
   count: { accepts: ANYTHING, result: "number" },
   countd: { accepts: ANYTHING, result: "number" },
+  median: { accepts: NUMBER_ONLY, result: "number" },
+  stddev: { accepts: NUMBER_ONLY, result: "number" },
+  variance: { accepts: NUMBER_ONLY, result: "number" },
+  percentile: { accepts: NUMBER_ONLY, result: "number", fraction: true }, // takes a literal 0..1 `p` after its argument
+  attr: { accepts: ANYTHING, result: null },
 });
 
 // Catalog category (ClickHouseType) -> calculation type; any other category can't be used.
@@ -98,6 +103,14 @@ function typeOf(node, path, categoryOf) {
       if (arg.isAggregate) throw new CalcError("An aggregate can't contain another aggregate.", argPath);
       if (!spec.accepts.includes(arg.type)) {
         throw new CalcError(`${node.fn.toUpperCase()} needs ${describe(spec.accepts)} — ${arg.name} is ${arg.type}.`, argPath);
+      }
+      const pPath = child(path, "p");
+      if (spec.fraction) {
+        if (typeof node.p !== "number" || !Number.isFinite(node.p) || node.p < 0 || node.p > 1) {
+          throw new CalcError(`${node.fn.toUpperCase()} needs a fraction between 0 and 1.`, pPath);
+        }
+      } else if (node.p !== undefined && node.p !== null) {
+        throw new CalcError(`${node.fn.toUpperCase()} takes no fraction.`, pPath);
       }
       return { type: spec.result ?? arg.type, isAggregate: true, isConst: false, tables: arg.tables, name: "that value" };
     }

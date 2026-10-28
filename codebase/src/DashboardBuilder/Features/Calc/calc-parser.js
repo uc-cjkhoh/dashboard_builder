@@ -3,7 +3,8 @@
 //   expr      := term (("+" | "-") term)*
 //   term      := factor (("*" | "/") factor)*
 //   factor    := "-" factor | number | "(" expr ")" | aggregate | ref
-//   aggregate := ("SUM" | "AVG" | "MIN" | "MAX" | "COUNT" | "COUNTD") "(" expr ")"
+//   aggregate := ("SUM" | "AVG" | "MIN" | "MAX" | "COUNT" | "COUNTD" | "MEDIAN" | "STDDEV" | "VARIANCE" | "ATTR") "(" expr ")"
+//              | "PERCENTILE" "(" expr "," number ")"      -- the fraction is a literal number (range-checked by check())
 //   ref       := "[" name "]"
 //
 // Hand-written tokenizer + recursive descent. Function names are case-insensitive; references are matched
@@ -38,7 +39,7 @@ function tokenize(text) {
       i = j + 1;
     } else if ("+-*/".includes(ch)) {
       tokens.push({ t: "op", text: ch, raw: ch, pos: i }); i++;
-    } else if (ch === "(" || ch === ")") {
+    } else if (ch === "(" || ch === ")" || ch === ",") {
       tokens.push({ t: ch, text: ch, raw: ch, pos: i }); i++;
     } else if (/[0-9.]/.test(ch)) {
       const raw = match(NUMBER, text, i);
@@ -122,6 +123,16 @@ export function parseFormula(text, resolve) {
       if (!known) throw new ParseError(`Unknown function ${tok.text}.`, tok.pos);
       next();
       const arg = expr("(");
+      if (FUNCTIONS[fn].fraction) {
+        const hint = `Write ${tok.text.toUpperCase()}([field], 0.9) — the fraction goes after a comma.`;
+        if (peek().t !== ",") throw new ParseError(hint, peek().pos);
+        next();
+        const p = peek();
+        if (p.t !== "num") throw new ParseError(hint, p.pos);
+        next();
+        closeParen();
+        return { k: "agg", fn, arg, p: p.v };
+      }
       closeParen();
       return { k: "agg", fn, arg };
     }

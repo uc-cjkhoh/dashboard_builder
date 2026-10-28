@@ -9,7 +9,7 @@ export const REFUSAL = "Calculated fields can't be used here yet.";
 const ENTRIES = new Set(["filter", "pages", "drill", "period", "sharedFilter", "selection", "shape", "angle", "choice"]);
 
 /** Aggregations a row-level calculated measure may use; mirrors the server's CalcCatalog.RowLevelAggregations (never `count`). */
-export const CALC_AGGS = ["sum", "avg", "min", "max", "countDistinct", "countNonNull"];
+export const CALC_AGGS = ["sum", "avg", "min", "max", "median", "stddev", "variance", "attr", "countDistinct", "countNonNull"];
 
 export const isCalcPill = (f) => Boolean(f) && typeof f === "object" && typeof f.calc === "string";
 

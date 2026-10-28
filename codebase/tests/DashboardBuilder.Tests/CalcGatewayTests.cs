@@ -126,7 +126,7 @@ public class CalcGatewayTests
     }
 
     [Fact] public void A_root_error_is_the_calc_itself() =>
-        Assert.Equal("measures[2].calc", FieldOf(() => Compile(new AggNode("median", Amount), "measures[2]")));
+        Assert.Equal("measures[2].calc", FieldOf(() => Compile(new AggNode("mode", Amount), "measures[2]")));
 
     [Fact] public void An_unknown_field_is_a_400_with_its_path() =>
         Assert.Equal("filters[3].topBy.calc.arg", FieldOf(() => Compile(new AggNode("sum", new FieldNode("db", "orders", "nope")), "filters[3].topBy")));
@@ -184,7 +184,7 @@ public class CalcGatewayTests
     [Fact] public void Summing_text_is_a_400() =>
         Assert.Equal("measures[1].calc", FieldOf(() => CalcSql.CalcMeasureSql("sum", Compile(Status), "measures[1]", false, false)));
 
-    [Theory] [InlineData(null)] [InlineData("count")] [InlineData("median")]
+    [Theory] [InlineData(null)] [InlineData("count")] [InlineData("mode")] [InlineData("percentile")]
     public void A_row_level_measure_needs_a_value_aggregation(string? agg) =>
         Assert.Equal("measures[0].calc", FieldOf(() => CalcSql.CalcMeasureSql(agg, Compile(Doubled), "measures[0]", false, false)));
 
@@ -292,12 +292,29 @@ public class CalcGatewayTests
         Assert.True(json.TryGetProperty("error", out var e) && e.GetString()!.Length > 0);
     }
 
+    // Plain measures: the four new aggregations are whitelisted; percentile needs a fraction a plain measure has no field for.
+    [Theory] [InlineData("median")] [InlineData("stddev")] [InlineData("variance")] [InlineData("attr")]
+    public void Plain_measures_accept_the_new_aggregations(string agg) => Assert.Contains(agg, ClickHouseGateway.Aggregations);
+
+    [Fact] public void Plain_measures_have_no_percentile_yet() => Assert.DoesNotContain("percentile", ClickHouseGateway.Aggregations);
+
+    [Theory]
+    [InlineData("median", "quantileExact(0.5)(x)")]
+    [InlineData("attr", "if(uniqExact(x) = 1, min(x), NULL)")]
+    [InlineData("stddev", "if(count(x) < 2, NULL, stddevSamp(x))")]
+    public void A_top_n_rank_by_a_new_aggregation_uses_the_shared_writer(string agg, string expected)
+        => Assert.Equal(expected, ClickHouseGateway.PlainRankSql(agg, "x"));
+
     // The result column a plain measure gets — shown in the chart, the CSV header and the compare result.
     [Theory]
     [InlineData("count", "status", "count")]
     [InlineData("sum", "amount", "sum amount")]
     [InlineData("countdistinct", "region", "distinct region")]
     [InlineData("countnonnull", "status", "non-null status")]
+    [InlineData("median", "amount", "median amount")]
+    [InlineData("stddev", "amount", "stddev amount")]
+    [InlineData("variance", "amount", "variance amount")]
+    [InlineData("attr", "status", "attr status")]
     public void MeasureName_names_a_plain_measure_the_way_the_client_labels_it(string agg, string column, string expected)
         => Assert.Equal(expected, ClickHouseGateway.MeasureName(agg, column));
 }

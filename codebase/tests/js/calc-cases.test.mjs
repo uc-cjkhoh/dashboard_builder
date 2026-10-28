@@ -153,9 +153,9 @@ test("other syntax errors", () => {
   assert.equal(err("(").message, "Expected a value after (");
   assert.equal(err("(1 + 2").message, "Expected )");
   assert.equal(err("SUM").message, "Expected ( after SUM");
-  assert.equal(err("MEDIAN([orders.amount])").message, "Unknown function MEDIAN.");
+  assert.equal(err("MODE([orders.amount])").message, "Unknown function MODE.");
   assert.equal(err("foo").message, "Unexpected foo");
-  assert.equal(err("1,000").message, "Unexpected character ,");
+  assert.equal(err("1,000").message, "Unexpected ,");
   assert.equal(err("SUM()").message, "Expected a value after (");
 });
 test("the 500-character limit is inclusive; the number limit also covers a huge exponent", () => {
@@ -168,10 +168,12 @@ test("the 500-character limit is inclusive; the number limit also covers a huge 
 // ---- Type checker details --------------------------------------------------------------------------------
 
 test("FUNCTIONS is the C# CalcCatalog table", () => {
-  assert.deepEqual(Object.keys(FUNCTIONS), ["sum", "avg", "min", "max", "count", "countd"]);
+  assert.deepEqual(Object.keys(FUNCTIONS), ["sum", "avg", "min", "max", "count", "countd", "median", "stddev", "variance", "percentile", "attr"]);
   assert.deepEqual(FUNCTIONS.sum, { accepts: ["number"], result: "number" });
   assert.deepEqual(FUNCTIONS.min, { accepts: ["number", "date", "text"], result: null });
   assert.deepEqual(FUNCTIONS.countd, { accepts: ["number", "date", "text", "boolean"], result: "number" });
+  assert.deepEqual(FUNCTIONS.percentile, { accepts: ["number"], result: "number", fraction: true });
+  assert.deepEqual(FUNCTIONS.attr, { accepts: ["number", "date", "text", "boolean"], result: null });
 });
 test("a function name that is an Object.prototype key is unknown, not found", () => {
   const e = check({ k: "agg", fn: "constructor", arg: num(1) }, categoryOf).error;

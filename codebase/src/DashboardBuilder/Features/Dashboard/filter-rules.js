@@ -2,8 +2,8 @@
 import { filterValue, range, LIMITS } from "../Core/validate.js";
 import { PERIOD_PRESETS } from "../Core/sheet-schema.js";
 export const AGGS = Object.freeze({
-  numeric: ["sum", "avg", "min", "max", "count", "countDistinct", "countNonNull"],
-  ordered: ["count", "countDistinct", "countNonNull", "min", "max"], // text + temporal: min/max come back as text
+  numeric: ["sum", "avg", "min", "max", "median", "stddev", "variance", "count", "countDistinct", "countNonNull", "attr"],
+  ordered: ["count", "countDistinct", "countNonNull", "min", "max", "attr"], // text + temporal: min/max/attr come back as text
   other: ["count", "countDistinct", "countNonNull"],                  // boolean, compound, other
 });
 export const aggsFor = (category) =>

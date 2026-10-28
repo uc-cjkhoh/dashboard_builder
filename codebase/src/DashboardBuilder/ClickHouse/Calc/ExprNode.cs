@@ -25,8 +25,9 @@ public sealed record UnNode(string Op, ExprNode Arg) : ExprNode;
 /// <summary>A binary operation (arithmetic, comparison or logic).</summary>
 public sealed record BinNode(string Op, ExprNode L, ExprNode R) : ExprNode;
 
-/// <summary>An aggregate function (e.g. <c>sum</c>) over a sub-expression.</summary>
-public sealed record AggNode(string Fn, ExprNode Arg) : ExprNode;
+/// <summary>An aggregate function (e.g. <c>sum</c>) over a sub-expression. <see cref="P"/> is the fraction a
+/// parametric aggregate takes (<c>percentile</c>: 0..1, always bound as a parameter); absent for every other function.</summary>
+public sealed record AggNode(string Fn, ExprNode Arg, double? P = null) : ExprNode;
 
 /// <summary>
 /// Reads and writes <see cref="ExprNode"/> by its <c>k</c> discriminator. Hand-written (rather than
@@ -52,7 +53,7 @@ public sealed class ExprNodeConverter : JsonConverter<ExprNode>
             "num" => new NumNode(Number(e, "v")),
             "un" => new UnNode(Text(e, "op"), Child(e, "arg")),
             "bin" => new BinNode(Text(e, "op"), Child(e, "l"), Child(e, "r")),
-            "agg" => new AggNode(Text(e, "fn"), Child(e, "arg")),
+            "agg" => new AggNode(Text(e, "fn"), Child(e, "arg"), OptionalNumber(e, "p")),
             _ => throw new JsonException("Unknown expression node."),
         };
     }
@@ -80,6 +81,14 @@ public sealed class ExprNodeConverter : JsonConverter<ExprNode>
         return d;
     }
 
+    private static double? OptionalNumber(JsonElement e, string name)
+    {
+        foreach (var p in e.EnumerateObject())
+            if (string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase))
+                return p.Value.ValueKind == JsonValueKind.Null ? null : Number(e, name);
+        return null;
+    }
+
     private static ExprNode Child(JsonElement e, string name) => Build(Member(e, name));
 
     public override void Write(Utf8JsonWriter w, ExprNode value, JsonSerializerOptions options)
@@ -102,6 +111,7 @@ public sealed class ExprNodeConverter : JsonConverter<ExprNode>
                 break;
             case AggNode a:
                 w.WriteString("k", "agg"); w.WriteString("fn", a.Fn); w.WritePropertyName("arg"); Write(w, a.Arg, options);
+                if (a.P is { } p) w.WriteNumber("p", p);
                 break;
             default:
                 throw new JsonException("Unknown expression node.");
