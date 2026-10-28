@@ -147,3 +147,11 @@ test("store: renaming a parameter rewrites [@Old] in formulas (and only those); 
   assert.equal(storeParams[0].name, "Tax");
   setParameters([]); setCalculations([]);
 });
+
+test("a parameter can supply a literal-only argument: LEFT length, DATEADD unit and amount (substituted before check)", () => {
+  const ps = [P("prm1", "N", "number", 3), P("prm2", "Unit", "text", "day"), P("prm3", "Back", "number", -7)];
+  assert.equal(compile("LEFT([orders.status], [@N])", ps).error, undefined);
+  assert.equal(compile("DATEADD([@Unit], [@Back], [orders.placed])", ps).error, undefined);
+  assert.match(compile("LEFT([orders.status], [@N])", [P("prm1", "N", "number", 2.5)]).error.message, /whole number/);
+  assert.match(compile("DATEADD([@Unit], 1, [orders.placed])", [P("prm2", "Unit", "text", "fortnight")]).error.message, /unit must be one of/);
+});

@@ -792,7 +792,7 @@ export function initDashboards() {
         if (bound) panel.append(fmtSelect("at", [["", "A typed value"], ...numParams.map((p) => [p.id, `Parameter: ${p.name}`])], bound, (v) => set({ ref: { kind: "constant", value: a.ref.value ?? 0, ...(v ? { param: v } : {}) } })));
         else {
           panel.append(fmtNumber("at", a.ref.value, "0", (v) => set({ ref: { kind: "constant", value: v ?? 0 } })));
-          if (numParams.length) panel.append(fmtSelect("or follow", [["", "Choose a parameter"], ...numParams.map((p) => [p.id, p.name])], "", (v) => set({ ref: { kind: "constant", value: a.ref.value ?? 0, ...(v ? { param: v } : {}) } })));
+          if (numParams.length) panel.append(fmtSelect("or follow", [["", "none"], ...numParams.map((p) => [p.id, p.name])], "", (v) => set({ ref: { kind: "constant", value: a.ref.value ?? 0, ...(v ? { param: v } : {}) } })));
         }
       }
       panel.append(fmtNumber("Band from", a.band?.from ?? null, "none", (v) => set({ band: v == null ? null : { from: v, to: a.band?.to ?? v } })),
