@@ -76,3 +76,70 @@ test("every entry is a single sentence-style string", () => {
     assert.ok(!e.text.includes("\n"));
   }
 });
+
+// ---- Task 8b: evaluationInput + guarded cap text ----
+import { evaluationInput } from "../../src/DashboardBuilder/Features/Calc/eval-order.js";
+
+const dim = (column, extra = {}) => ({ db: "d", table: "t", column, category: "text", role: "dimension", ...extra });
+const sheetOf = (o = {}) => ({ rows: [], columns: [], color: [], marks: {}, filters: [], format: {}, chartType: "bar", ...o });
+const opts = { sharedFilters: [], parameters: [], calcs: [] };
+
+test("evaluationInput counts filters, drill, period and Top-N and feeds describeEvaluation", () => {
+  const sheet = sheetOf({
+    rows: [dim("country")],
+    filters: [{ op: "=", column: "a" }, { op: "top", column: "b" }],
+    drill: { levels: [{ column: "a" }, { column: "b" }], depth: 1, path: [{ column: "a", value: "x" }] },
+    period: { table: "t", column: "day", preset: "last30" },
+    format: { topN: 10 },
+  });
+  const s = evaluationInput(sheet, { ...opts, sharedFilters: [{ op: "=" }] });
+  assert.equal(s.ownFilters, 2);
+  assert.equal(s.sharedFilters, 1);
+  assert.equal(s.drillDepth, 1);
+  assert.equal(s.hasPeriod, true);
+  assert.equal(s.hasTopFilter, true);
+  assert.equal(s.hasPage, false);
+  assert.equal(s.hasSelection, false);
+  assert.equal(s.displayCap, 10);
+  assert.equal(s.otherBucket, false); // drill level + country = two dimensions
+  assert.deepEqual(s.dimensions.includes("t.country"), true);
+  const t = describeEvaluation(s)[0].text;
+  for (const p of ["2 own", "1 shared", "drill 1 level", "date range", "Top-N filter"]) assert.ok(t.includes(p), t);
+});
+
+test("evaluationInput classifies calc pills and table calcs", () => {
+  const rl = { calc: "c1", db: "", table: "", column: "Margin", category: "numeric", role: "measure", agg: "sum" };
+  const rlDim = { calc: "c2", db: "", table: "", column: "Band", category: "text", role: "dimension" };
+  const ag = { calc: "c3", db: "", table: "", column: "Ratio", category: "numeric", role: "measure" };
+  const sheet = sheetOf({
+    rows: [rlDim], columns: [{ db: "d", table: "t", column: "x", category: "numeric", agg: "sum", tableCalc: { type: "running" } }, rl, rl, ag],
+  });
+  const s = evaluationInput(sheet, { ...opts, calcs: [{ id: "c2", name: "Band" }] });
+  assert.equal(s.rowLevelCalcs, 2);
+  assert.equal(s.aggregateCalcs, 1);
+  assert.deepEqual(s.tableCalcs, ["running total"]);
+  assert.deepEqual(s.dimensions, ["Band"]);
+  assert.equal(s.displayCap, 5000);
+});
+
+test("evaluationInput honours nameOf and a sparse sheet does not throw", () => {
+  const s = evaluationInput(sheetOf({ rows: [dim("country")] }), { ...opts, nameOf: (f) => `N:${f.column}` });
+  assert.deepEqual(s.dimensions, ["N:country"]);
+  const bare = evaluationInput({}, {});
+  assert.equal(bare.ownFilters, 0);
+  assert.deepEqual(bare.dimensions, []);
+  assert.deepEqual(bare.tableCalcs, []);
+  assert.equal(describeEvaluation(bare)[0].text, "No filters.");
+  assert.doesNotThrow(() => describeEvaluation({ ownFilters: 0, sharedFilters: 0, drillDepth: 0, rowLevelCalcs: 0, aggregateCalcs: 0 }));
+});
+
+test("cap text is pluralised and guarded", () => {
+  assert.ok(describeEvaluation({ ...base, displayCap: 1 })[4].text.includes("1 group") && !describeEvaluation({ ...base, displayCap: 1 })[4].text.includes("1 groups"));
+  assert.ok(describeEvaluation({ ...base, displayCap: 5000 })[4].text.includes("5000 groups"));
+  for (const bad of [undefined, NaN, Infinity, null]) assert.ok(describeEvaluation({ ...base, displayCap: bad })[4].text.includes("the display cap"));
+  assert.equal(describeEvaluation(base)[0].text, "No filters.");
+});
+
+test("evaluationInput: a single-dimension bar gets the Other bucket", () => {
+  assert.equal(evaluationInput(sheetOf({ rows: [dim("country")] }), opts).otherBucket, true);
+});

@@ -66,3 +66,16 @@
 .calc-field--error .calc-field__type { color: var(--danger-ink); }
 .calc-field .calc-chip { height: 18px; padding: 0 var(--s1); flex: none; }
 .calc-field .ws-field__more { opacity: 1; }
+
+/* ---- View bar: How this is computed ---- */
+.explain { position: relative; display: inline-flex; }
+.explain__btn { gap: var(--s1); }
+.explain__btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.explain__pop { position: absolute; top: calc(100% + var(--s1)); left: 0; z-index: 30; width: min(380px, 90vw); max-height: 60vh; overflow: auto;
+  padding: var(--s3); background: var(--surface); color: var(--ink); border: 1px solid var(--line-2); border-radius: var(--r); box-shadow: var(--elev-8); }
+.explain__pop:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.explain__title { margin: 0 0 var(--s2); font-size: var(--fs-sm); font-weight: 700; }
+.explain__list { margin: 0; padding-left: var(--s4); display: flex; flex-direction: column; gap: var(--s2); font-size: var(--fs-sm); }
+.explain__list li::marker { color: var(--ink-3); font-weight: 600; }
+.explain__list strong { display: block; color: var(--ink-2); font-size: var(--fs-xs); }
+.explain__list span { color: var(--ink); }
