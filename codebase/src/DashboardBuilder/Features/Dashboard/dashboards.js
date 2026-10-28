@@ -25,6 +25,9 @@ import { CALC_CHOICES, ALONG_CHOICES, WINDOW_CHOICES, applyTableCalcs, isCalc, c
 import { tooltipCatalog, tooltipHtml, lookupFrom, checkTooltipText, parseTooltip } from "./tooltip-model.js";
 import { SWATCHES, memberKey, fieldColorKey, setMemberColor, clearFieldColors, colourOf, colorsByName } from "./colour-model.js";
 import { createHistory } from "./history.js";
+import { LINE_STYLE_CHOICES, linesTakeStyle } from "./line-style-model.js";
+import { HEATMAP_SHAPE_CHOICES } from "./heatmap-model.js";
+import { targetChoices, bulletTargets } from "./bullet-model.js";
 import { planJoinType } from "../Relations/relation-rules.js";
 import { catalogFromEntities } from "../Calc/calc-resolve.js";
 import { isCalcPill, calcPillId, sameCalcPill, makeCalcPill, refusal, pillSlots, syncCalcPills, clearCalcPills, clearFilterCalc, usesCalc, CALC_AGGS } from "../Calc/calc-pill.js";
@@ -1303,6 +1306,13 @@ export function initDashboards() {
         if (!r.ok) { toast(r.error, "danger"); return; }
         set({ target: r.value });
       }));
+    if (s.chartType === "bullet") { // T03-12: a measure on the shelf supplies each category's target
+      const choices = targetChoices(planMeasures(s).filter((e) => e.role === "shelf").map((e) => measureName(e.field)));
+      if (choices.length) panel.append(fmtSelect("Target field", [["null", "None (use Target)"], ...choices], f.targetMeasure ?? "null",
+        (v) => set({ targetMeasure: v === "null" ? null : Number(v) })));
+    }
+    if (linesTakeStyle(s.chartType)) panel.append(fmtSelect("Line style", LINE_STYLE_CHOICES, f.lineStyle ?? "straight", (v) => set({ lineStyle: v }))); // T03-05
+    if (s.chartType === "heatmap") panel.append(fmtSelect("Shape", HEATMAP_SHAPE_CHOICES, f.heatmapShape ?? "square", (v) => set({ heatmapShape: v }))); // T03-10
     if (s.period && s.period.compare !== "none")
       panel.append(fmtCheck("A fall is good", f.downIsGood, (v) => set({ downIsGood: v })));
     if (!STAT_SINGLE_TABLE.has(s.chartType))
@@ -2987,9 +2997,10 @@ export function initDashboards() {
       return;
     }
     if (type === "bullet") {
-      if (target == null) { chartEl.append(hint("Bullet compares each value with a target — set Target in Format.")); return; }
       const cats = categories.some((x) => x) ? categories : [seriesNames[0]]; // no dimension → one bar named after the measure
-      renderSeriesChart(chartEl, { type, categories: cats, values: series[0].data, target, name: seriesNames[0], format });
+      const targets = bulletTargets({ fixed: target, measureIndex: format.targetMeasure, series, count: cats.length }); // T03-12
+      if (!targets) { chartEl.append(hint("Bullet compares each value with a target — set Target in Format, or pick a Target field.")); return; }
+      renderSeriesChart(chartEl, { type, categories: cats, values: series[0].data, targets, name: seriesNames[0], format });
       return;
     }
     if (type === "sankey") {

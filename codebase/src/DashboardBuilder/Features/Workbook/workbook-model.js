@@ -15,7 +15,7 @@ import { cleanParameter, MAX_PARAMS } from "../Core/parameters-model.js";
 import { cleanCalculations } from "../Calc/calc-workbook.js";
 import { CALC_AGGS } from "../Calc/calc-pill.js";
 import {
-  CHART_TYPE_IDS, CATEGORIES, FILTER_OPS, NUMBER_FORMATS, DATE_FORMATS, LEGENDS, TOP_N, MAX_DECIMALS, DATE_BUCKETS,
+  CHART_TYPE_IDS, CATEGORIES, FILTER_OPS, NUMBER_FORMATS, DATE_FORMATS, LEGENDS, TOP_N, MAX_DECIMALS, DATE_BUCKETS, LINE_STYLES, HEATMAP_SHAPES, MAX_TARGET_MEASURE,
   PERIOD_PRESETS, PERIOD_COMPARES, DATE_PARTS, TABLE_CALCS, CALC_ALONG, FIT_MODES, REF_KINDS, TRENDS, FORECASTS, CF_MODES, CF_SCALES, CF_OPS, CF_TONES, CF_MAX_RULES, CF_MAX_MEASURES,
 } from "../Core/sheet-schema.js";
 
@@ -467,6 +467,10 @@ function cleanFormat(f0, where, issues) {
   out.fit = oneOf(FIT_MODES, f.fit, base.fit, w, "fit", issues); // P23
   out.target = f.target == null ? null : typeof f.target === "number" && Number.isFinite(f.target) ? f.target
     : (issues.push(`${w}: target "${f.target}" — cleared.`), null);
+  out.lineStyle = oneOf(LINE_STYLES, f.lineStyle, base.lineStyle, w, "line style", issues); // T03-05
+  out.heatmapShape = oneOf(HEATMAP_SHAPES, f.heatmapShape, base.heatmapShape, w, "heatmap shape", issues); // T03-10
+  out.targetMeasure = f.targetMeasure == null ? null : Number.isInteger(f.targetMeasure) && f.targetMeasure >= 1 && f.targetMeasure <= MAX_TARGET_MEASURE ? f.targetMeasure
+    : (issues.push(`${w}: target measure "${f.targetMeasure}" — cleared.`), null); // T03-12
   for (const k of ["dataLabels", "colorByDimension", "paletteReverse", "downIsGood", "approximate"]) {
     if (f[k] === undefined || typeof f[k] === "boolean") out[k] = f[k] ?? base[k];
     else issues.push(`${w}: ${k} must be on or off — reset.`);

@@ -31,4 +31,7 @@ export const TRENDS = new Set(["none", "linear", "log", "poly2"]);
 export const FORECASTS = new Set([0, 3, 6, 12]);
 export const FIT_MODES = new Set(["standard", "width", "height", "entire"]); // P23 Format → Fit
 export const DATE_BUCKETS = new Set(["auto", "exact", "hour", "day", "week", "month", "quarter", "year"]);
+export const LINE_STYLES = new Set(["straight", "step", "jump"]); // T03-05 Format → Line style
+export const HEATMAP_SHAPES = new Set(["square", "circle"]); // T03-10
+export const MAX_TARGET_MEASURE = 19; // T03-12: shelf index of the bullet target measure
 export const MAX_DECIMALS = 10;

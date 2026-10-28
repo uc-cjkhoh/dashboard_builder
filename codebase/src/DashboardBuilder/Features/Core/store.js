@@ -203,6 +203,7 @@ export const defaultMarks = () => ({ size: null, label: null, detail: [], toolti
 //  dataLabels:   show value labels on marks
 //  colorByDimension: colour a single-measure bar chart's bars by their category
 //  xTitle/yTitle: axis titles (null = none)
+//  lineStyle / heatmapShape / targetMeasure: see the defaults below
 //  target:       null | number — a KPI scorecard's goal (P35); downIsGood: a fall shows as good
 //  conditional:  { [measureKey]: { mode, scale, mid, rules } } — Table / Text cell formatting (P37)
 export const defaultFormat = () => ({
@@ -222,6 +223,9 @@ export const defaultFormat = () => ({
   downIsGood: false,
   conditional: {},
   fit: "standard", // P23: standard | width | height | entire
+  lineStyle: "straight", // T03-05: straight | step | jump (line / area / combo)
+  heatmapShape: "square", // T03-10: square | circle
+  targetMeasure: null, // T03-12: bullet target = this shelf measure (index ≥ 1), else Format → Target
   approximate: false, // P33: estimate distinct counts / read a 10% sample where the table allows
 });
 
