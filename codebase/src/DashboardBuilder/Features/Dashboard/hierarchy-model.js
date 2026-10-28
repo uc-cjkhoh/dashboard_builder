@@ -50,9 +50,6 @@ export function checkHierarchy(draft, hierarchies, selfId = null, opts = {}) {
   return ok({ name: n.value, levels: l.value });
 }
 
-/** The highest numeric id suffix in `list` (0 for none) — the store continues from it so an id is never reused in a session. */
-export const nextHierarchySeq = (list) => list.reduce((m, h) => Math.max(m, Number(String(h?.id).slice(4)) || 0), 0);
-
 /**
  * A saved `hierarchies` value → a clean list; problems go to `issues`. Absent (older workbooks) = [] with no issue.
  * `tables` (optional Set of "db.table") drops a hierarchy whose table isn't in the workbook.

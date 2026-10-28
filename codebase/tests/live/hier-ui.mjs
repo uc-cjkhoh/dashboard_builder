@@ -155,6 +155,15 @@ try {
     must((await sheetDrill()).levels.length === 2, 'levels');
   });
 
+  await check('applying over a sheet with a selection and a drill descent resets selection, depth and path', async () => {
+    await store(`const s = d.sheet; s.selection = { db: 'shop', table: 'orders', column: 'region', values: ['EU'], keys: ['EU'], labels: ['EU'] }; s.drill.depth = 1; s.drill.path = [{ column: 'region', value: 'EU', label: 'EU' }]; st.updateSheet(d.id, s)`);
+    await dropOnDrill('Geo');
+    await waitFor(`/Showing: region/.test(document.querySelector('.ws-drill')?.textContent ?? '')`, 'reset to level 1');
+    const r = await ev(`(async () => { const s = (await import('/features/Core/store.js')).activeWorksheet().sheet; return JSON.stringify({ sel: s.selection, drill: s.drill }); })()`).then(JSON.parse);
+    must(r.sel === null, `selection kept: ${J(r.sel)}`);
+    must(r.drill.depth === 0 && r.drill.path.length === 0 && r.drill.levels.length === 2 && r.drill.levels[0].column === 'region' && r.drill.levels[0].category === 'text', `drill: ${J(r.drill)}`);
+  });
+
   await check('rename and delete leave the sheet drill intact', async () => {
     const before = J(await sheetDrill());
     await ev(`[...document.querySelectorAll('.hier-group .btn')].find((x) => x.textContent === 'Hierarchies…').click()`);

@@ -88,7 +88,7 @@ export const hierarchies = [];
 let hierSeq = 0;
 export function setHierarchies(list) {
   hierarchies.splice(0, hierarchies.length, ...list);
-  for (const h of list) { const n = Number(String(h.id).slice(4)); if (n > hierSeq) hierSeq = n; }
+  for (const h of list) { const n = Number(String(h.id).slice(4)); if (n > hierSeq) hierSeq = n; } // no counter is saved: sheets copy levels, not ids, so a reused id can't bind to anything
   emit("hierarchies:changed");
 }
 export function addHierarchy(h) { hierSeq += 1; const nh = { id: `hier${hierSeq}`, name: h.name, levels: structuredClone(h.levels) }; hierarchies.push(nh); emit("hierarchies:changed"); return nh; }

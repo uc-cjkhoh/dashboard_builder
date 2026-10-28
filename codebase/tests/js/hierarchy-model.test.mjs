@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { checkHierarchyName, checkLevels, checkHierarchy, cleanHierarchies, hierarchyStatus, drillFromHierarchy, CAST_REFUSAL, nextHierarchySeq }
+import { checkHierarchyName, checkLevels, checkHierarchy, cleanHierarchies, hierarchyStatus, drillFromHierarchy, CAST_REFUSAL }
   from "../../src/DashboardBuilder/Features/Dashboard/hierarchy-model.js";
 import { LIMITS } from "../../src/DashboardBuilder/Features/Core/validate.js";
 import { parseWorkbook, serializeWorkbook } from "../../src/DashboardBuilder/Features/Workbook/workbook-model.js";
@@ -125,8 +125,6 @@ test("drillFromHierarchy builds the same structure as hand-dropped levels (depth
   h.levels[0].column = "zz";
   assert.equal(r.drill.levels[0].column, "y");
 });
-
-test("next id sequence continues past the highest", () => assert.equal(nextHierarchySeq([{ id: "hier3" }, { id: "hier12" }]), 12));
 
 test("workbook round trip: absent field -> [] and no issue; present -> kept; empty -> omitted", () => {
   const base = { entities: [{ id: "e1", db: "d", table: "t", x: 0, y: 0, joinKeys: [] }], relationships: [], tabs: [], active: null };

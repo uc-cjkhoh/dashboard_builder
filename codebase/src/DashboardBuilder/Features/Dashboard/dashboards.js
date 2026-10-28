@@ -351,8 +351,10 @@ export function initDashboards() {
     const h = hierarchies.find((x) => x.id === id);
     if (!dash || !h) return;
     const r = drillFromHierarchy(h, await columnsFor(h.levels[0].db, h.levels[0].table), castOf);
+    if (activeWorksheet() !== dash) return; // the tab changed while the columns loaded: never write to another sheet
     if (!r.ok) { toast(r.error, "info"); return; }
     openTool = "drill";
+    dash.sheet.selection = null; // a drill supersedes any mark selection (as drillDown does)
     dash.sheet.drill = r.drill; // the same { levels, depth: 0, path: [] } addDrillLevel builds; a copy, so the hierarchy can change later
     commit(dash, dash.sheet);
   }
