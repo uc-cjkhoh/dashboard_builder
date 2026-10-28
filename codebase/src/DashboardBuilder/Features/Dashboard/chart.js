@@ -3,6 +3,8 @@ import { pickInk } from "./contrast.js";
 import { orderedPalette, rampStops } from "./colour-model.js";
 import { tooltipHtml } from "./tooltip-model.js";
 import { lineStep } from "./line-style-model.js";
+import { syncRange, secondaryKind } from "./axis-sync-model.js";
+import { markBorder, markerSizeOr } from "./mark-style-model.js";
 import { circleSize, circleCells, HEATMAP_GUTTER } from "./heatmap-model.js";
 import { bandsFor } from "./bullet-model.js";
 import { chartFit, markCount, applyFitMode, FIT } from "./chart-fit.js";
@@ -420,9 +422,12 @@ function buildCartesian({ type, categories, series, format = {}, orientation = "
   if (isCombo) {
     // Combo: category on x, dual value axes on y (unchanged).
     xAxis = withName(categoryAxis, xTitle, true);
+    // T03-16: Synchronise axes — one nice range (zero included, the first measure is bars) on both value axes.
+    const shared = format.syncAxes ? syncRange(series.map((s) => s.data)) : null;
+    const range = shared ? { min: shared.min, max: shared.max } : {};
     yAxis = [
-      withName(valueAxisBase(), yTitle || series[0]?.name, false),
-      { ...withName(valueAxisBase({ position: "right", splitLine: { show: false } }), series[1]?.name, false) },
+      withName(valueAxisBase(range), yTitle || series[0]?.name, false),
+      { ...withName(valueAxisBase({ position: "right", splitLine: { show: false }, ...range }), series[1]?.name, false) },
     ];
   } else if (horizontal) {
     // Horizontal: value on x (bottom), category on y (left); inverse so the first category is on top.
@@ -463,6 +468,8 @@ function buildCartesian({ type, categories, series, format = {}, orientation = "
   };
 
   const step = lineStep(format.lineStyle); // T03-05: false | "end" | "middle"
+  const edge = markBorder(format.markBorder, c.muted); // T03-34: the stroke of bars (and the lines' markers)
+  const secondary = secondaryKind(format.secondaryType); // T03-17: how a combo draws its right-axis measures
   base.series = series.map((s, i) => {
     // A comparison series wears its measure's colour, faded and dashed (line) or muted (bar).
     if (s.compare) {
@@ -479,17 +486,18 @@ function buildCartesian({ type, categories, series, format = {}, orientation = "
     }
     const color = colorFor(i, s.name);
     // line/area always draw as a line; in a combo the 1st measure is a bar and the rest are lines.
-    const asLine = type === "line" || type === "area" || (isCombo && i >= 1);
+    const rightBars = isCombo && i >= 1 && secondary === "bar";
+    const asLine = !rightBars && (type === "line" || type === "area" || (isCombo && i >= 1));
     if (asLine) {
       return {
         name: s.name, type: "line", step,
         yAxisIndex: isCombo ? 1 : 0,
         data: s.data,
-        showSymbol: s.data.length <= 60,     // dots only when they won't crowd
-        symbolSize: 8,                        // ≥8px markers (dataviz mark spec)
-        areaStyle: type === "area" ? { opacity: 0.18, color } : undefined,
+        showSymbol: s.data.length <= 60 || format.markerSize != null, // dots only when they won't crowd (unless a size is chosen)
+        symbolSize: markerSizeOr(format.markerSize, 8), // ≥8px markers (dataviz mark spec) unless Format → Marker size
+        areaStyle: type === "area" || (isCombo && secondary === "area") ? { opacity: 0.18, color } : undefined,
         lineStyle: { width: 2, color },
-        itemStyle: { color },
+        itemStyle: { color, ...(format.markBorder && format.markBorder !== "none" ? edge : {}) },
         label: dataLabel,
         emphasis: { focus: "series" },
       };
@@ -499,17 +507,17 @@ function buildCartesian({ type, categories, series, format = {}, orientation = "
     const barRadius = stacked ? [0, 0, 0, 0] : (horizontal ? [0, 4, 4, 0] : [4, 4, 0, 0]);
     // The "Other" bar (everything past the limit) wears the muted ink (≥ 3:1 on the surface, apart from
     // the series hue); its label says what it is.
-    const otherItem = (v) => ({ value: v, itemStyle: { color: c.muted, borderRadius: barRadius } });
+    const otherItem = (v) => ({ value: v, itemStyle: { color: c.muted, borderRadius: barRadius, ...edge } });
     return {
       name: s.name, type: "bar",
-      yAxisIndex: 0,
+      yAxisIndex: rightBars ? 1 : 0,
       stack: stacked ? "total" : undefined,
       // Colour-by-dimension: per-bar colours; otherwise the series colour.
       data: colorByDim
-        ? s.data.map((v, di) => (di === otherIndex ? otherItem(v) : { value: v, itemStyle: { color: memberColor(labels[di], c.cat[di % c.cat.length]), borderRadius: barRadius } }))
+        ? s.data.map((v, di) => (di === otherIndex ? otherItem(v) : { value: v, itemStyle: { color: memberColor(labels[di], c.cat[di % c.cat.length]), borderRadius: barRadius, ...edge } }))
         : s.data.map((v, di) => (di === otherIndex ? otherItem(v) : v)),
       barMaxWidth: 40,
-      itemStyle: { color, borderRadius: barRadius },
+      itemStyle: { color, borderRadius: barRadius, ...edge },
       label: dataLabel,
       emphasis: { focus: "series", itemStyle: colorByDim ? { opacity: 0.85 } : { color, opacity: 0.85 } },
     };
@@ -603,7 +611,7 @@ function buildScatter({ categories, series, format = {}, sizes, sizeName, colorV
     if (colorDim >= 0) arr.push(num(colorValues[i]));
     return { value: arr, name, ...(colorByDim ? { itemStyle: { color: memberColor(name, c.cat[i % c.cat.length]) } } : {}) };
   });
-  const symbolSize = sizeDim >= 0 ? sizeScaler(sizes, (v) => v[sizeDim]) : 14;
+  const symbolSize = sizeDim >= 0 ? sizeScaler(sizes, (v) => v[sizeDim]) : markerSizeOr(format.markerSize, 14); // T01-22: a Size field wins
   const visualMap = colorDim >= 0 ? continuousVisualMap(colorValues, colorDim, c, fmtVal, colorName) : undefined;
 
   return {
@@ -641,7 +649,7 @@ function buildScatter({ categories, series, format = {}, sizes, sizeName, colorV
     },
     series: [{
       type: "scatter", data, symbolSize, symbol: symbol || "circle", // P19 square/circle marks
-      itemStyle: colorByDim || continuous ? {} : { color: c.series, opacity: 0.8 },
+      itemStyle: { ...(colorByDim || continuous ? {} : { color: c.series, opacity: 0.8 }), ...pointEdge(format, c) },
       label: (pointLabels || format.dataLabels)
         ? { show: true, position: "top", color: c.muted, fontFamily: c.font, fontSize: 11,
             formatter: (p) => (pointLabels ? String(pointLabels[p.dataIndex] ?? "") : String(p.name ?? "")) }
@@ -660,7 +668,7 @@ function buildScatterShapes({ groups, xName, yName, hasSize, sizeName, format = 
   const c = tokens();
   const fmtVal = makeValueFormatter(format);
   const allSizes = hasSize ? groups.flatMap((g) => g.points.map((p) => p.value[2])) : null;
-  const symbolSize = hasSize ? sizeScaler(allSizes, (v) => v[2]) : 12;
+  const symbolSize = hasSize ? sizeScaler(allSizes, (v) => v[2]) : markerSizeOr(format.markerSize, 12); // T01-22
   const names = groups.map((g) => g.name);
   const { show, pos, legend } = legendFor(format, c, names, true);
   return {
@@ -692,7 +700,7 @@ function buildScatterShapes({ groups, xName, yName, hasSize, sizeName, format = 
     },
     series: groups.map((g, i) => ({
       name: g.name, type: "scatter", symbol: SHAPE_SYMBOLS[i % SHAPE_SYMBOLS.length], symbolSize,
-      data: g.points, itemStyle: { color: c.cat[i % c.cat.length], opacity: 0.85 },
+      data: g.points, itemStyle: { color: c.cat[i % c.cat.length], opacity: 0.85, ...pointEdge(format, c) },
       emphasis: { focus: "series", itemStyle: { borderColor: c.ink, borderWidth: 1 } },
     })),
   };
@@ -706,6 +714,8 @@ function buildHeatmap({ xCats, yCats, cells, format = {} }) {
   const c = tokens();
   const fmtVal = makeValueFormatter(format);
   const circles = format.heatmapShape === "circle"; // T03-10
+  // T03-34: the cell separator stays the surface-coloured hairline unless a border is chosen.
+  const cellEdge = format.markBorder && format.markBorder !== "none" ? markBorder(format.markBorder, c.muted) : { borderColor: c.surface, borderWidth: 1 };
   const vals = cells.map((d) => d[2]).filter((v) => v != null);
   const min = vals.length ? Math.min(...vals) : 0;
   const max = vals.length ? Math.max(...vals) : 1;
@@ -741,15 +751,15 @@ function buildHeatmap({ xCats, yCats, cells, format = {} }) {
       ? {
         // Empty cells draw nothing; the size is re-read from the live chart on every draw, so it follows the pane.
         type: "scatter", data: circleCells(cells), symbol: "circle",
-        symbolSize: () => circleSize((live.instance?.getWidth() ?? 800) - HEATMAP_GUTTER.x, (live.instance?.getHeight() ?? 450) - HEATMAP_GUTTER.y, xCats.length, yCats.length),
+        symbolSize: () => format.markerSize != null ? markerSizeOr(format.markerSize, 6) : circleSize((live.instance?.getWidth() ?? 800) - HEATMAP_GUTTER.x, (live.instance?.getHeight() ?? 450) - HEATMAP_GUTTER.y, xCats.length, yCats.length),
         label: { show: !!format.dataLabels, color: c.ink, fontFamily: c.font, formatter: (p) => fmtVal(p.value[2]) },
-        itemStyle: { opacity: 1, borderColor: c.surface, borderWidth: 1 },
+        itemStyle: { opacity: 1, ...cellEdge },
         emphasis: { itemStyle: { borderColor: c.ink, borderWidth: 2 } },
       }
       : {
         type: "heatmap", data: cells,
         label: { show: !!format.dataLabels, color: c.ink, fontFamily: c.font, formatter: (p) => fmtVal(p.value[2]) },
-        itemStyle: { borderColor: c.surface, borderWidth: 1 },
+        itemStyle: cellEdge,
         emphasis: { itemStyle: { shadowBlur: 8, shadowColor: "rgba(0,0,0,0.25)" } },
       }],
   };
@@ -868,6 +878,8 @@ const valueAxis = (c, fmtVal, extra = {}) => ({
   type: "value", axisLine: { show: false }, axisTick: { show: false },
   splitLine: { lineStyle: { color: c.grid } }, axisLabel: { color: c.muted, formatter: fmtVal }, ...extra,
 });
+// T03-34: a point mark's stroke — nothing added while the setting is None (keeps the old look).
+const pointEdge = (format, c) => (format.markBorder && format.markBorder !== "none" ? markBorder(format.markBorder, c.muted) : {});
 const catAxis = (c, data, extra = {}) => ({
   type: "category", data, axisLine: { lineStyle: { color: c.axis } }, axisTick: { show: false },
   axisLabel: { color: c.muted, hideOverlap: true }, ...extra,

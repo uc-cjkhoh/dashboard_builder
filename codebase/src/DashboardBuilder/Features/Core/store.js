@@ -246,7 +246,7 @@ export const defaultMarks = () => ({ size: null, label: null, detail: [], toolti
 //  dataLabels:   show value labels on marks
 //  colorByDimension: colour a single-measure bar chart's bars by their category
 //  xTitle/yTitle: axis titles (null = none)
-//  lineStyle / heatmapShape / targetMeasure: see the defaults below
+//  lineStyle / heatmapShape / targetMeasure / syncAxes / secondaryType / markerSize / markBorder: see the defaults below
 //  target:       null | number — a KPI scorecard's goal (P35); downIsGood: a fall shows as good
 //  conditional:  { [measureKey]: { mode, scale, mid, rules } } — Table / Text cell formatting (P37)
 export const defaultFormat = () => ({
@@ -269,6 +269,10 @@ export const defaultFormat = () => ({
   lineStyle: "straight", // T03-05: straight | step | jump (line / area / combo)
   heatmapShape: "square", // T03-10: square | circle
   targetMeasure: null, // T03-12: bullet target = this shelf measure (index ≥ 1), else Format → Target
+  syncAxes: false, // T03-16: a combo's two value axes share one range
+  secondaryType: "line", // T03-17: right-axis marks of a combo: line | bar | area
+  markerSize: null, // T01-22: null (automatic) | whole px 4–40 — scatter / line markers, circle heatmap
+  markBorder: "none", // T03-34: none | thin | thick — bars, scatter points, heatmap cells
   approximate: false, // P33: estimate distinct counts / read a 10% sample where the table allows
 });
 
