@@ -27,7 +27,7 @@ function toolButton(name, label, className) {
 let formSeq = 0;
 /**
  * `host` = { results, onRemove(widget), onSaveText(widget, { heading, body }), crossFor(widgetId) -> { filter } | { selected } | null,
- * onMark(widget, dimField, raw) }. Returns { el, update(widget), run(), syncCross(), destroy(), body, focusEdit() }.
+ * onMark(widget, dimField, raw), onUnselectable() }. Returns { el, update(widget), run(), syncCross(), destroy(), body, focusEdit() }.
  */
 export function createWidget(widget, host) {
   const el = h("article", `board-widget board-widget--${widget.kind}`);
@@ -62,7 +62,7 @@ export function createWidget(widget, host) {
     view = createWorksheetView(body, () => {
       const tab = worksheetById(current.sheetId);
       return { dash: tab, noticeEl: notice, results: host.results, plan: planCtx(), categoryOf, castOf };
-    }, { interactive: "select", cancelLabel: () => labelFor(current), cross: () => host.crossFor(current.id), onSelect: (field, raw) => host.onMark(current, field, raw) });
+    }, { interactive: "select", cancelLabel: () => labelFor(current), cross: () => host.crossFor(current.id), onSelect: (field, raw) => host.onMark(current, field, raw), onUnselectable: () => host.onUnselectable() });
   }
 
   function labelFor(w) {

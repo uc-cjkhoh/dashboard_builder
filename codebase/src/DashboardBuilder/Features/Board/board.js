@@ -5,7 +5,7 @@ import { LIMITS } from "../Core/validate.js";
 import { makeCategoryFormatter } from "../Core/format.js";
 import { defaultFormat } from "../Core/store.js";
 import { sharedResults } from "../Dashboard/dashboards.js";
-import { nextSelection, selectionRefusal, crossFor, chipText, stillValid } from "../Dashboard/dashboard-select.js";
+import { nextSelection, selectionRefusal, crossFor, chipText, stillValid, UNSELECTABLE_NOTE } from "../Dashboard/dashboard-select.js";
 import { placeNew } from "./board-model.js";
 import { layoutBoard, widgetOrder } from "./board-layout.js";
 import { createWidget } from "./board-widget.js";
@@ -144,7 +144,7 @@ export function initBoard() {
     for (const w of dash.widgets) {
       const known = entries.get(w.id);
       if (known) { known.update(w); continue; }
-      const e = createWidget(w, { results, onRemove: remove, onSaveText: saveText, onMark, crossFor: (id) => crossFor(selection, id) });
+      const e = createWidget(w, { results, onRemove: remove, onSaveText: saveText, onMark, onUnselectable: () => status(UNSELECTABLE_NOTE, true), crossFor: (id) => crossFor(selection, id) });
       entries.set(w.id, e);
       grid.append(e.el);
       fresh.push(e);

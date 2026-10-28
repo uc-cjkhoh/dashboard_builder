@@ -10,9 +10,10 @@ const fade = (item) => {
   return obj ? { ...item, itemStyle: { ...item.itemStyle, opacity: DIM_OPACITY } } : { value: item, itemStyle: { opacity: DIM_OPACITY } };
 };
 
-/** `option` with every mark but `selectedIndex` faded; the option itself when there is nothing to dim. */
-export function applySelectionDim(option, type, selectedIndex) {
-  if (!DIM_TYPES.has(type) || !Number.isInteger(selectedIndex) || selectedIndex < 0) return option;
+/** `option` with every mark but the selected ones faded (`selected` = an index or an array of indices); the option itself when there is nothing to dim. */
+export function applySelectionDim(option, type, selected) {
+  const keep = new Set([].concat(selected ?? []).filter((i) => Number.isInteger(i) && i >= 0));
+  if (!DIM_TYPES.has(type) || !keep.size) return option;
   return { ...option, series: (option.series ?? []).map((s) => (MARKS.has(s.type) && !s.compare && Array.isArray(s.data)
-    ? { ...s, data: s.data.map((d, i) => (i === selectedIndex ? d : fade(d))) } : s)) };
+    ? { ...s, data: s.data.map((d, i) => (keep.has(i) ? d : fade(d))) } : s)) };
 }

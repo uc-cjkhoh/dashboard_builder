@@ -35,6 +35,12 @@ test("no selection, a missing one (-1) or a chart type that can't style a datum 
   assert.deepEqual(applySelectionDim(bar, "bar", undefined), bar);
   assert.deepEqual([...DIM_TYPES].sort(), ["bar", "donut", "pie", "stacked"]);
 });
+test("several selected indices all stay at full strength (duplicate primary values), stacked too", () => {
+  const out = applySelectionDim({ series: [{ type: "bar", stack: "s", data: [1, 2, 3, 4] }, { type: "bar", stack: "s", data: [5, 6, 7, 8] }] }, "stacked", [0, 2]);
+  for (const sr of out.series) assert.deepEqual(sr.data.map((d) => (typeof d === "object" ? DIM_OPACITY : 1)), [1, DIM_OPACITY, 1, DIM_OPACITY]);
+  const same = { series: [{ type: "bar", data: [1, 2] }] };
+  assert.deepEqual(applySelectionDim(same, "bar", []), same, "an empty set dims nothing");
+});
 test("the input option is not mutated", () => {
   const opt = { series: [{ type: "bar", data: [1, 2, 3] }] };
   const copy = structuredClone(opt);

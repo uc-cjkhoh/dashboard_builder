@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { nextSelection, selectionRefusal, crossFilterOf, appliesTo, selectedIndexOf, chipText, notAppliedNote, crossFor, crossSignature, stillValid }
+import { nextSelection, selectionRefusal, crossFilterOf, appliesTo, selectedIndicesOf, UNSELECTABLE_NOTE, chipText, notAppliedNote, crossFor, crossSignature, stillValid }
   from "../../src/DashboardBuilder/Features/Dashboard/dashboard-select.js";
 import { keyOf } from "../../src/DashboardBuilder/Features/Dashboard/sheet-plan.js";
 
@@ -43,13 +43,15 @@ test("appliesTo: only when the selected column's table is already in the widget'
   assert.equal(appliesTo([keyOf("other", "customers")], DE), false, "same table name in another database");
   assert.equal(appliesTo([keyOf("shop", "customers")], null), false);
 });
-test("selectedIndexOf finds the selected mark among a chart's raw values (strings compared as strings)", () => {
-  assert.equal(selectedIndexOf(["DE", "FR", null], DE, field), 0);
-  assert.equal(selectedIndexOf([1, 2], { ...DE, value: 2 }, field), 1);
-  assert.equal(selectedIndexOf([null, "US"], DE, field), -1);
-  assert.equal(selectedIndexOf(["DE"], null, field), -1);
-  assert.equal(selectedIndexOf(["DE"], DE, { ...field, column: "city" }), -1, "another column's value is not this mark");
-  assert.equal(selectedIndexOf([null, undefined], { ...DE, value: "null" }, field), -1);
+test("selectedIndicesOf finds every mark of the selected value (strings compared as strings)", () => {
+  assert.deepEqual(selectedIndicesOf(["DE", "FR", null], DE, field), [0]);
+  assert.deepEqual(selectedIndicesOf([1, 2], { ...DE, value: 2 }, field), [1]);
+  assert.deepEqual(selectedIndicesOf(["DE", "FR", "DE", null, "DE"], DE, field), [0, 2, 4], "two row dimensions: several marks share the primary value");
+  assert.deepEqual(selectedIndicesOf([null, "US"], DE, field), []);
+  assert.deepEqual(selectedIndicesOf(["DE"], null, field), []);
+  assert.deepEqual(selectedIndicesOf(["DE"], DE, { ...field, column: "city" }), [], "another column's value is not this mark");
+  assert.deepEqual(selectedIndicesOf([null, undefined], { ...DE, value: "null" }, field), []);
+  assert.match(UNSELECTABLE_NOTE, /NULL.*Other/);
 });
 test("chip and not-applied texts", () => {
   assert.equal(chipText(DE), "Filtering by customers.country = DE");

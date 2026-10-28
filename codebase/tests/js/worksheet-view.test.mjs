@@ -132,7 +132,7 @@ test("the source is never filtered: it is handed the selection to highlight", as
   assert.deepEqual(calls[0].filters, []);
   assert.equal(draws[0].selected.value, "EU");
   assert.equal(draws[0].interactive, "select");
-  assert.deepEqual(Object.keys(draws[0].hooks), ["onSelect"], "a select-only view gets no drill / legend / editor hooks");
+  assert.deepEqual(Object.keys(draws[0].hooks), ["onSelect", "onUnselectable"], "a select-only view gets no drill / legend / editor hooks");
 });
 test("sync re-runs only when the selection changes what the view shows", async () => {
   calls.length = 0;

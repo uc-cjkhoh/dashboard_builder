@@ -17,10 +17,13 @@ import { CLICK_TYPES } from "./result-model.js";
  */
 export function selectHandler(rc, sheet, dimField, type, rawByIndex) {
   if (!rc.select || !dimField || !CLICK_TYPES.has(type) || rc.bucketedKey === 0) return undefined;
+  // A dashboard widget (select-only) sends the raw column with the selected value, so a data type cast on the field would filter
+  // the cast value against the raw column: such a field can't start a cross-filter (the editor's own selection handles casts).
+  if (!rc.interactive && rc.plan?.metaOf?.(dimField)?.cast) return undefined;
   const drilling = rc.interactive && isDrillActive(sheet); // a select-only view selects the current level, even on a hierarchy
   return (params) => {
     const raw = rawByIndex[params.dataIndex];
-    if (raw === undefined || raw === null) return; // can't cleanly filter/drill a null value
+    if (raw === undefined || raw === null) { if (!rc.interactive) rc.hooks.onUnselectable?.(); return; } // can't cleanly filter/drill a null value (nor the "Other" group)
     if (drilling) rc.hooks.onDrill?.(raw);
     else rc.hooks.onSelect?.(dimField, raw);
   };

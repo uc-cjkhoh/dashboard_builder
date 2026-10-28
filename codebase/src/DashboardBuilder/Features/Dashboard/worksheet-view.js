@@ -34,6 +34,7 @@ import { joinNotices, periodNotice, speedNotice, invalidFilterNotice } from "./n
 //     cross() -> { filter: selection } | { selected: selection } | null  the dashboard selection this view obeys (P24c, dashboard-select.js):
 //                      `filter` = a bound `=` added to its query where the selected table is already in it (else a note, never a join);
 //                      `selected` = this is the source: it highlights that mark and is never filtered. sync() re-runs when it changed.
+//     onUnselectable()  a select-only view's click on a NULL member / the "Other" group (nothing is selected; the host says why)
 //     onSelect(dimField, raw)  a mark click selects (the host stores the selection);  onDrill(raw)  a click on a drill hierarchy
 //     onLegend({ sheet, field, name, raw, bucketed })  a legend click;  legendFocus() -> the highlighted legend item or null
 //     onTooltipFields(sheet, list), onMemberColors(sheet, field, members)  the editor panels that learn what the chart offers
@@ -57,7 +58,7 @@ export function createWorksheetView(container, getContext, options = {}) {
   // What the drawing may do with the editor-only state around it (render-handlers.js): nothing when not interactive, and a
   // "select" view hands the host only onSelect.
   const renderOptions = () => ({ plan: getContext().plan, interactive: mode, selected: cross?.selected ?? null,
-    hooks: mode === "select" ? { onSelect: options.onSelect } : {
+    hooks: mode === "select" ? { onSelect: options.onSelect, onUnselectable: options.onUnselectable } : {
       onSelect: options.onSelect, onDrill: options.onDrill, onLegend: options.onLegend, legendFocus: options.legendFocus,
       onTooltipFields: options.onTooltipFields, onMemberColors: options.onMemberColors } });
   // The tables the sheet's query involves (never throws: a sheet that can't be planned reaches nothing).

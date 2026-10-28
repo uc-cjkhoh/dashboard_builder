@@ -141,3 +141,22 @@ test("the source widget fades every mark but the selected one (bar and pie); a s
   renderWorksheet(fakeEl(), sheet(), result(), null, { plan, interactive: "select", selected: { ...selected, column: "channel" } });
   assert.ok(insts[2].lastSet.series[0].data.every((d) => typeof d === "number"), "another column's selection fades nothing");
 });
+
+test('interactive:"select": a field with a data type cast can\'t start a cross-filter; a null / Other mark tells the host instead of selecting', () => {
+  const log = [];
+  const hooks = { onSelect: () => log.push("select"), onUnselectable: () => log.push("unselectable") };
+  renderWorksheet(fakeEl(), sheet(), result(), null, { plan: { ...plan, metaOf: () => ({ cast: "number" }) }, hooks, interactive: "select" });
+  assert.ok(!events(0).includes("click"), "a cast primary dimension has no click handler in a widget");
+  renderWorksheet(fakeEl(), sheet(), result(), null, { plan: { ...plan, metaOf: () => ({ cast: "number" }) }, hooks });
+  assert.ok(events(1).includes("click"), "the editor keeps its own cast handling");
+  renderWorksheet(fakeEl(), sheet(), result([[null, 1], ["US", 2]]), null, { plan, hooks, interactive: "select" });
+  insts[2].handlers.find(([e]) => e === "click")[1]({ dataIndex: 0, componentType: "series" });
+  assert.deepEqual(log, ["unselectable"]);
+});
+test("the source widget keeps every mark of the selected value at full strength (two row dimensions)", () => {
+  const selected = { db: "shop", table: "orders", column: "region", value: "EU" };
+  const two = { rowDimensions: ["region", "channel"], columnDimensions: [], measures: ["v"], truncated: false,
+    rows: [["EU", "web"], ["EU", "app"], ["US", "web"]].map((k, i) => ({ keys: k, values: [i + 1] })) };
+  renderWorksheet(fakeEl(), sheet({ columns: [], rows: [dim("region"), dim("channel"), meas("amount")] }), two, null, { plan, interactive: "select", selected });
+  assert.deepEqual(insts[0].lastSet.series[0].data.map((d) => d.itemStyle?.opacity ?? 1), [1, 1, 0.35]);
+});

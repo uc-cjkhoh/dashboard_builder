@@ -4,7 +4,7 @@ import { SCATTER_TYPES, marksOf, measureName as planMeasureName } from "./sheet-
 import { REF_CHOICES, TREND_CHOICES, refValue, trendSeries } from "./analytics-model.js";
 import { hint } from "./render-dom.js";
 import { selectHandler, legendSpec, memberSpec } from "./render-handlers.js";
-import { selectedIndexOf } from "./dashboard-select.js";
+import { selectedIndicesOf } from "./dashboard-select.js";
 import { joinNotices } from "./notices.js";
 import { ANALYTICS_TYPES, scatterSymbol, primaryDim, chartOrientation, marksChannels, scatterShapeGroups, colorSplitData } from "./result-model.js";
 
@@ -18,14 +18,14 @@ export function renderColorSplit(container, rc, sheet, type, result, format, fmt
   // P15: click a mark -> the primary (first non-colour) dimension value = catTuples[dataIndex][0].
   const rawKeys = catTuples.map((t) => t[0]);
   const onSelect = selectHandler(rc, sheet, primaryDim(sheet), type, rawKeys);
-  const selectedIndex = selectedIndexOf(rawKeys, rc.selected, primaryDim(sheet));
+  const selectedIndices = selectedIndicesOf(rawKeys, rc.selected, primaryDim(sheet));
   const orientation = chartOrientation(sheet);
   // P29: each legend item is a Colour member — clicking it highlights that series and selects the member.
   const byName = new Map(series.map((sr, i) => [sr.name, colorVals[i]]));
   const legend = legendSpec(rc, sheet, sheet.color?.[0], byName);
   const cf = sheet.color?.[0];
   const memberColourSpec = cf && !isCalcPill(cf) ? memberSpec(rc, sheet, cf, series.map((sr, i) => ({ name: sr.name, raw: colorVals[i] }))) : {};
-  drawChart(container, { type, categories, series, format, onSelect, selectedIndex, orientation, ...memberColourSpec, ...legend });
+  drawChart(container, { type, categories, series, format, onSelect, selectedIndices, orientation, ...memberColourSpec, ...legend });
 }
 
 /** P19 Shape (scatter family): one scatter series per Shape member, each a distinct symbol (identity survives greyscale). */
@@ -60,7 +60,7 @@ export function renderSeries(container, rc, sheet, a) {
   // dimension's raw value).
   const rawKeys = rowsOrdered.map((r) => (r.isOther ? null : r.keys[0]));
   const onSelect = selectHandler(rc, sheet, primaryDim(sheet), type, rawKeys);
-  const selectedIndex = selectedIndexOf(rawKeys, rc.selected, primaryDim(sheet));
+  const selectedIndices = selectedIndicesOf(rawKeys, rc.selected, primaryDim(sheet));
   const otherIndex = rowsOrdered.findIndex((r) => r.isOther);
   // P29: on a pie / donut the legend lists the primary dimension's members; elsewhere it names measures (highlight only —
   // a measure isn't a member to keep or exclude).
@@ -96,5 +96,5 @@ export function renderSeries(container, rc, sheet, a) {
   const memberColourSpec = byMember
     ? memberSpec(rc, sheet, primaryDim(sheet), rowsOrdered.map((r, i) => ({ name: categories[i], raw: r.keys[0], other: r.isOther })).filter((m) => !m.other))
     : {};
-  drawChart(container, { type, symbol: SCATTER_TYPES.has(type) ? scatterSymbol(type) : undefined, categories: catsOut, series: seriesOut, format, onSelect, selectedIndex, orientation: chartOrientation(sheet), otherIndex, analytics, ...memberColourSpec, ...legend, ...marks.spec });
+  drawChart(container, { type, symbol: SCATTER_TYPES.has(type) ? scatterSymbol(type) : undefined, categories: catsOut, series: seriesOut, format, onSelect, selectedIndices, orientation: chartOrientation(sheet), otherIndex, analytics, ...memberColourSpec, ...legend, ...marks.spec });
 }

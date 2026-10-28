@@ -27,11 +27,16 @@ export const crossFilterOf = (sel) => selectionFilter(sel, "=");
 /** A target applies the selection only if the selected column's table is already in its query (`involvedKeys` = sheet-plan keys). */
 export const appliesTo = (involvedKeys, sel) => Boolean(sel) && involvedKeys.includes(keyOf(sel.db, sel.table));
 
-/** The index of the selected mark among a chart's raw primary-dimension values, or -1 (selection gone, another column, a null mark). */
-export function selectedIndexOf(rawByIndex, sel, field) {
-  if (!sel || (field && (field.db !== sel.db || field.table !== sel.table || field.column !== sel.column))) return -1;
-  return rawByIndex.findIndex((r) => r !== null && r !== undefined && String(r) === String(sel.value));
+/** Every index whose raw primary-dimension value is the selected one (two row dimensions give several marks per value); [] when none, another column, or no selection. */
+export function selectedIndicesOf(rawByIndex, sel, field) {
+  if (!sel || (field && (field.db !== sel.db || field.table !== sel.table || field.column !== sel.column))) return [];
+  const out = [];
+  rawByIndex.forEach((r, i) => { if (r !== null && r !== undefined && String(r) === String(sel.value)) out.push(i); });
+  return out;
 }
+
+/** Said when the clicked mark is a NULL member or the "Other" group: neither can be a bound `=` filter, so nothing is selected. */
+export const UNSELECTABLE_NOTE = "That mark is the empty (NULL) value or the Other group — it can't be used as a filter.";
 
 export const chipText = (sel) => `Filtering by ${sel.label}`;
 export const notAppliedNote = (sel) => `${sel.table}.${sel.column}: selected on another sheet, not applied here — its table isn't in this view.`;
