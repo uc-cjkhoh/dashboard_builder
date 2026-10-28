@@ -85,6 +85,20 @@ export function text(raw, { label, max, required = false, trim = true }) {
   if (v.length > max) return fail(`${label} must be at most ${max} characters.`);
   return ok(v);
 }
+// T04-07 percentile: the pill stores a fraction 0..1 (the wire `p`, mirrors RequestRules.PercentileMessage); people type a percent 0-100.
+export const DEFAULT_PERCENTILE = 0.9; // what choosing "Percentile…" starts at (the 90th)
+export const PERCENT_MESSAGE = "Percentile must be between 0 and 100 percent.";
+/** A typed percent (integer or decimal, at most six decimals, 0-100) as a 0..1 fraction. Never clamped. */
+export function percent(raw) {
+  const t = String(raw ?? "").trim();
+  if (!/^(\d{1,3}(\.\d{1,6})?|\.\d{1,6})$/.test(t) || Number(t) > 100) return fail(PERCENT_MESSAGE);
+  return ok(Number((Number(t) / 100).toFixed(8)));
+}
+/** Whether a stored / wire percentile fraction is acceptable: a finite number from 0 to 1. */
+export const isFraction = (p) => typeof p === "number" && Number.isFinite(p) && p >= 0 && p <= 1;
+/** A fraction as the percent shown in labels and the input: 0.9 -> "90", 0.995 -> "99.5" (the server's PercentLabel is identical). */
+export const percentLabel = (p) => (p * 100).toFixed(6).replace(/\.?0+$/, "");
+
 export function number(raw) {
   const s = String(raw ?? "").trim();
   const n = PLAIN_NUMBER.test(s) ? Number(s) : NaN;

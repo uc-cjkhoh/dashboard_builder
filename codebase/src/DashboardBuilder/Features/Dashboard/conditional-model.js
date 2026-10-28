@@ -15,7 +15,7 @@ export { CF_MAX_RULES };
 
 /** A measure's settings key: its column and aggregation (stable across shelf reorders). */
 export const measureKey = (entry) =>
-  (entry?.field ? `${entry.field.db}.${entry.field.table}.${entry.field.column}:${entry.agg ?? "sum"}` : "count");
+  (entry?.field ? `${entry.field.db}.${entry.field.table}.${entry.field.column}:${entry.agg ?? "sum"}${entry.agg === "percentile" ? `@${entry.field.p}` : ""}` : "count");
 
 /** A fresh setting for one measure. */
 export const emptyRule = () => ({ mode: "none", scale: "sequential", mid: null, rules: [] });

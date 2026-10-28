@@ -256,13 +256,27 @@ public sealed partial class ClickHouseGateway
 
     /// <summary>The result column of a plain measure (lower-case aggregate name): <c>count</c>, <c>sum amount</c>,
     /// <c>distinct region</c>, <c>non-null status</c> — the labels the client shows, so JSON, CSV and compare agree.</summary>
-    internal static string MeasureName(string agg, string column) => agg switch
+    internal static string MeasureName(string agg, string column, double? fraction = null) => agg switch
     {
         "count" => "count",
+        "percentile" => $"p{PercentLabel(fraction ?? 0)} {column}",
         "countdistinct" => $"distinct {column}",
         "countnonnull" => $"non-null {column}",
         _ => $"{agg} {column}",
     };
+
+    /// <summary>A fraction as the percent in a label: <c>0.9</c> → <c>90</c>, <c>0.995</c> → <c>99.5</c> (at most six decimals,
+    /// no exponent; the client's <c>percentLabel</c> writes the same text).</summary>
+    internal static string PercentLabel(double fraction) => (fraction * 100).ToString("0.######", CultureInfo.InvariantCulture);
+
+    /// <summary>Binds a plain percentile's fraction as a <c>Float64</c> parameter and returns its placeholder; the value is
+    /// re-checked here (finite, 0..1) so no path can reach SQL with a bad one.</summary>
+    internal static string BindFraction(double? p, string name, string field, List<(string Name, string Type, object Value)> parameters)
+    {
+        if (p is not { } v || !double.IsFinite(v) || v < 0 || v > 1) throw new RequestValidationException(RequestRules.PercentileMessage, field);
+        parameters.Add((name, "Float64", v));
+        return $"{{{name}:Float64}}";
+    }
 
     /// <summary>
     /// The one place an aggregate call is written. <paramref name="agg"/> is a lowercase whitelisted name
@@ -293,16 +307,16 @@ public sealed partial class ClickHouseGateway
     // "countdistinct" counts unique values — mapped to ClickHouse uniqExact() in the SELECT builders.
     // "countnonnull" (E11) counts non-NULL values of the column; "count" counts rows.
     internal static readonly HashSet<string> Aggregations =
-        new(StringComparer.OrdinalIgnoreCase) { "count", "sum", "avg", "min", "max", "countdistinct", "countnonnull", "median", "stddev", "variance", "attr" };
+        new(StringComparer.OrdinalIgnoreCase) { "count", "sum", "avg", "min", "max", "countdistinct", "countnonnull", "median", "stddev", "variance", "attr", "percentile" };
 
     /// <summary>A plain Top-N rank aggregate over an already-quoted column (lowercase whitelisted <paramref name="agg"/>,
     /// not <c>count</c>). Exact and unscaled: only the order matters.</summary>
-    internal static string PlainRankSql(string agg, string expr) => agg switch
+    internal static string PlainRankSql(string agg, string expr, string? fraction = null) => agg switch
     {
         "countdistinct" => $"uniqExact({expr})",
         "countnonnull" => $"count({expr})",
         "avg" or "min" or "max" => $"{agg}({expr})",
-        _ => AggregateSql(agg, expr, false, false),
+        _ => AggregateSql(agg, expr, false, false, fraction),
     };
 
     /// <summary>The parameters whose <c>{name:</c> placeholder appears in <paramref name="sql"/> — for a statement
@@ -860,15 +874,17 @@ public sealed partial class ClickHouseGateway
             if (mAgg != "count" && !(await ColumnsOf(m.Db, m.Table)).ContainsKey(m.Column))
                 throw new UnknownIdentifierException("Unknown column.");
             var category = mAgg == "count" ? ClickHouseType.Numeric : TypeCast.EffectiveCategory((await ColumnsOf(m.Db, m.Table)).GetValueOrDefault(m.Column, ClickHouseType.Other), m.Cast);
-            if (mAgg is "sum" or "avg" or "median" or "stddev" or "variance" && category != ClickHouseType.Numeric)
+            if (mAgg is "sum" or "avg" or "median" or "percentile" or "stddev" or "variance" && category != ClickHouseType.Numeric)
                 throw new RequestValidationException($"{char.ToUpperInvariant(mAgg[0])}{mAgg[1..]} needs a numeric column — {m.Column} is {category}.", $"measures[{mIdx}]");
             if (mAgg == "attr" && category is ClickHouseType.Compound or ClickHouseType.Other)
                 throw new RequestValidationException($"Attr can't summarise {m.Column} — it is a compound column.", $"measures[{mIdx}]");
-            measNumeric.Add(mAgg is "count" or "countdistinct" or "countnonnull" or "sum" or "avg" or "median" or "stddev" or "variance" || category == ClickHouseType.Numeric);
+            measNumeric.Add(mAgg is "count" or "countdistinct" or "countnonnull" or "sum" or "avg" or "median" or "percentile" or "stddev" or "variance" || category == ClickHouseType.Numeric);
             // E10: one aggregate writer for plain and calculated measures. P33: sampled sums/counts are scaled back,
             // approximate mode estimates distinct counts (uniq).
-            measExprs.Add(AggregateSql(mAgg, mAgg == "count" ? "" : await CastedAsync(m.Db, m.Table, m.Column, m.Cast, $"measures[{mIdx}]"), sampled, approximate));
-            measNames.Add(MeasureName(mAgg, m.Column));
+            // A percentile's fraction is a bound Float64 parameter (mp{n}), never text.
+            var mFraction = mAgg == "percentile" ? BindFraction(m.P, $"mp{mIdx}", $"measures[{mIdx}].p", parameters) : null;
+            measExprs.Add(AggregateSql(mAgg, mAgg == "count" ? "" : await CastedAsync(m.Db, m.Table, m.Column, m.Cast, $"measures[{mIdx}]"), sampled, approximate, mFraction));
+            measNames.Add(MeasureName(mAgg, m.Column, m.P));
         }
         if (measExprs.Count == 0)
         {
@@ -914,10 +930,10 @@ public sealed partial class ClickHouseGateway
                 byCat = TypeCast.EffectiveCategory(byCat, by.Cast);
                 if (agg == "attr" && byCat is ClickHouseType.Compound or ClickHouseType.Other)
                     throw new RequestValidationException($"Top-N can't rank by attr of {by.Column} — it is a compound column.", $"filters[{i}].topBy");
-                if (agg is "sum" or "avg" or "median" or "stddev" or "variance" && byCat != ClickHouseType.Numeric)
+                if (agg is "sum" or "avg" or "median" or "percentile" or "stddev" or "variance" && byCat != ClickHouseType.Numeric)
                     throw new RequestValidationException($"Top-N can't rank by {agg} of {by.Column} — it isn't numeric.", $"filters[{i}].topBy");
                 var byExpr = await CastedAsync(by.Db, by.Table, by.Column, by.Cast, $"filters[{i}].topBy");
-                rank = PlainRankSql(agg, byExpr);
+                rank = PlainRankSql(agg, byExpr, agg == "percentile" ? BindFraction(by.P, $"tp{i}", $"filters[{i}].topBy.p", parameters) : null);
             }
             conditions.Add(TopCondition(expr, from.ToString(), others, rank, f));
         }

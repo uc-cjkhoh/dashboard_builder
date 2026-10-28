@@ -4,7 +4,7 @@ import { wireMenu } from "../Core/menu.js";
 import { visibleTools } from "./toolbar-rules.js";
 import { roleOf, STAT_SINGLE_TABLE, showMeOptions, placeFor, samePlacement } from "./show-me-rules.js";
 import { toggle, makeButton, toast, fieldError, confirmDialog } from "../Core/ui.js";
-import { LIMITS, number } from "../Core/validate.js";
+import { LIMITS, number, percent, percentLabel, isFraction, PERCENT_MESSAGE, DEFAULT_PERCENTILE } from "../Core/validate.js";
 import { aggsFor, checkAdd, checkFilter, viewCounts, withCategories, opsFor, OP_LABELS } from "./filter-rules.js";
 import { entities, relationships, activeWorksheet, isWorksheetActive, updateSheet, bus, defaultFormat, defaultMarks, sharedFilters, metaOf, nameOf, setFieldMeta, emptySheet, parameters, updateParameter, calculations, worksheets, addCalculation, removeCalculation } from "../Core/store.js";
 import { checkValue, paramTypeFor } from "../Core/parameters-model.js";
@@ -42,7 +42,7 @@ import { explainControl } from "../Calc/explain-popover.js";
 import { paneState, deleteCalcPlan, roleChoice, setRoleChoice } from "../Calc/calc-pane-model.js";
 import { checkName } from "../Calc/calc-workbook.js";
 import { calcParamNames } from "../Calc/calc-params.js";
-import { calcProblem, topByRef, topByKey } from "../Calc/calc-plan.js";
+import { calcProblem, topByRef, topByKey, aggWord } from "../Calc/calc-plan.js";
 import { REF_CHOICES, TREND_CHOICES, FORECAST_CHOICES, defaultAnalytics } from "./analytics-model.js";
 import { castChoices, castLabel, effectiveCategory, syncCastCategories } from "./cast-model.js";
 import { aliasOf, labelOf } from "./member-labels.js";
@@ -521,7 +521,7 @@ export function initDashboards() {
     const effCat = effectiveCategory(col.category, meta.cast); // T02-34: a text column cast to Number aggregates like a number
     if (effCat === "numeric") {
       list.append(el("div", "menu__sep"), el("div", "menu__heading", "Default aggregation"));
-      for (const a of aggsFor(effCat))
+      for (const a of aggsFor(effCat).filter((x) => x !== "percentile")) // a default percentile would need a default fraction: pick it on the pill
         list.append(item(a, () => setFieldMeta(f, { agg: a === "sum" ? null : a }), { role: "menuitemradio", checked: (meta.agg ?? "sum") === a }));
     }
     // T02-34: read the field as another type (the server converts; a value that doesn't fit becomes empty).
@@ -1328,6 +1328,37 @@ export function initDashboards() {
     p.append(x);
     return p;
   }
+  // T04-07: the percent box beside a percentile aggregation. The pill stores a 0..1 fraction (`f.p`); a value that is not 0-100
+  // is shown with its message and never stored, so the view keeps the last good percentile.
+  function percentInput(dash, s, f, label) {
+    const wrap = el("span", "ws-pill__pct");
+    const input = el("input", "input ws-pill__val ws-pill__pctin");
+    input.type = "text"; input.inputMode = "decimal"; input.maxLength = 10; input.autocomplete = "off";
+    input.value = percentLabel(f.p);
+    input.setAttribute("aria-label", `Percentile for ${label}, 0 to 100`);
+    const unit = el("span", "ws-pill__unit", "%");
+    unit.setAttribute("aria-hidden", "true");
+    const err = el("span", "ws-pill__pcterr");
+    err.id = `pcterr-${Math.random().toString(36).slice(2, 8)}`;
+    err.setAttribute("role", "alert");
+    err.hidden = true;
+    const show = (bad) => {
+      input.setAttribute("aria-invalid", String(bad));
+      if (bad) input.setAttribute("aria-describedby", err.id); else input.removeAttribute("aria-describedby");
+      err.hidden = !bad;
+      err.replaceChildren(...(bad ? [icon("warning", { size: 12 }), document.createTextNode(PERCENT_MESSAGE)] : []));
+    };
+    input.addEventListener("input", () => show(!percent(input.value).ok));
+    input.addEventListener("change", () => {
+      const r = percent(input.value);
+      show(!r.ok);
+      if (r.ok && r.value !== f.p) { f.p = r.value; commit(dash, s); }
+    });
+    const box = el("span", "ws-pill__pctbox");
+    box.append(input, unit);
+    wrap.append(box, err);
+    return wrap;
+  }
   // A field pill on the Columns/Rows shelves. Its role (dimension vs measure) follows roleOf() but can
   // be flipped with the convert button — so a numeric field can group as a dimension, or a field can be
   // aggregated as a measure. A measure pill shows an aggregation picker (with countDistinct for unique
@@ -1346,10 +1377,19 @@ export function initDashboards() {
       if (f.agg && !opts.includes(f.agg)) {
         toast(`${f.agg} isn't available for ${label}; switched to ${opts[0]}.`, "info");
         f.agg = opts[0]; // keep the screen in step with the query
+        delete f.p;
       }
+      if (f.agg === "percentile" && !isFraction(f.p)) f.p = DEFAULT_PERCENTILE; // never send a percentile without its fraction
       const agg = select(opts, f.agg ?? opts[0], "ws-pill__agg", `Aggregation for ${calcPill ? label : `${f.table}.${f.column}`}`);
-      agg.addEventListener("change", () => { f.agg = agg.value; commit(dash, s); });
+      const pctOpt = [...agg.options].find((o) => o.value === "percentile");
+      if (pctOpt) pctOpt.textContent = "Percentile…";
+      agg.addEventListener("change", () => {
+        f.agg = agg.value;
+        if (f.agg === "percentile") f.p = isFraction(f.p) ? f.p : DEFAULT_PERCENTILE; else delete f.p;
+        commit(dash, s);
+      });
       controls.append(agg);
+      if (f.agg === "percentile") controls.append(percentInput(dash, s, f, label));
     }
     // Convert button: → the role it will switch to. Title spells out the effect.
     const conv = iconButton(isMeasure ? "#" : "Σ",
@@ -1396,7 +1436,8 @@ export function initDashboards() {
     if (!isCalcPill(f)) controls.append(sw); // E12: a calculated field has no field choices
     const cast = calcPill ? null : castOf(f);
     if (cast) controls.prepend(castBadge(cast, baseCategoryOf(f.db, f.table, f.column) ?? f.category)); // T02-34
-    const p = pill(label, remove, controls);
+    const shown = isMeasure && !calcPill && f.agg === "percentile" ? `${label} · p${percentLabel(f.p)}` : label; // T04-07: the pill names its percentile
+    const p = pill(shown, remove, controls);
     p.classList.add(isMeasure ? "ws-pill--measure" : "ws-pill--dimension");
 
     // Drag-to-reorder (Columns/Rows). A dedicated grip is the only draggable part, so the agg select /
@@ -1606,7 +1647,7 @@ export function initDashboards() {
   function switchField(f, c) {
     Object.assign(f, { db: c.db, table: c.table, column: c.column, category: c.category });
     if (c.category !== "temporal") delete f.datePart; // a date part only means something on a date field
-    if (f.agg && !aggsFor(c.category).includes(f.agg)) f.agg = aggsFor(c.category)[0];
+    if (f.agg && !aggsFor(c.category).includes(f.agg)) { f.agg = aggsFor(c.category)[0]; delete f.p; }
   }
   function choicesPanel(dash, s) {
     const { shelf, index } = choicesFor;
@@ -2415,7 +2456,7 @@ export function initDashboards() {
     const box = el("div", "ws-cf");
     box.append(el("span", "ws-fmt-label ws-cf__title", "Conditional formatting"));
     if (!mplan.length) { box.append(el("span", "ws-shelf__note", "Add a measure to format its cells.")); return box; }
-    const opts = mplan.map((e) => [measureKey(e), `${e.agg} ${e.field.column}`]);
+    const opts = mplan.map((e) => [measureKey(e), `${aggWord(e.agg, e.field.p)} ${e.field.column}`]);
     if (!opts.some(([k]) => k === cfMeasure)) cfMeasure = opts[0][0];
     const all = f.conditional ?? {};
     const cfg = { ...emptyRule(), ...(all[cfMeasure] ?? {}) };

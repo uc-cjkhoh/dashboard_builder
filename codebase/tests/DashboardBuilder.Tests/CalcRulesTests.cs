@@ -110,4 +110,30 @@ public class CalcRulesTests
         var e = Assert.Throws<RequestValidationException>(() => RequestRules.ValidateQuery(Q(measures: [M(RowLevel, agg)])));
         Assert.Equal(agg == "count" ? "Counting rows doesn't use the calculation." : CalcCatalog.RowLevelHint, e.Message);
     }
+
+    // Plain percentile (T04-07): P is required exactly when agg is percentile, finite, 0..1, never clamped.
+    private static MeasureRef Pct(string agg, double? p) => new("db", "t", "amount", agg, null, null, p);
+    private static QueryRequest WithTop(MeasureRef by) => Q(filters: [new QueryFilter("db", "t", "region", "top", "5", null, by)]);
+
+    [Theory] [InlineData(0.0)] [InlineData(0.9)] [InlineData(1.0)]
+    public void A_percentile_measure_with_a_fraction_passes(double p) => RequestRules.ValidateQuery(Q(measures: [Pct("percentile", p)]));
+    [Fact] public void A_percentile_agg_is_case_insensitive() => RequestRules.ValidateQuery(Q(measures: [Pct("Percentile", 0.5)]));
+    [Fact] public void A_missing_fraction_is_rejected_on_the_p_field() => Assert.Equal("measures[0].p", FieldOf(Q(measures: [Pct("percentile", null)])));
+    [Theory] [InlineData(double.NaN)] [InlineData(double.PositiveInfinity)] [InlineData(double.NegativeInfinity)] [InlineData(-0.01)] [InlineData(1.01)]
+    public void A_bad_fraction_is_rejected_not_clamped(double p) => Assert.Equal("measures[1].p", FieldOf(Q(measures: [M(null, "count", "n") with { Db = "db", Table = "t" }, Pct("percentile", p)])));
+    [Theory] [InlineData("sum")] [InlineData("median")] [InlineData("count")]
+    public void A_fraction_on_another_aggregation_is_rejected(string agg) => Assert.Equal("measures[0].p", FieldOf(Q(measures: [Pct(agg, 0.5)])));
+    [Fact] public void A_fraction_on_a_calculation_is_rejected() => Assert.Equal("measures[0].p", FieldOf(Q(measures: [M(RowLevel, "sum") with { P = 0.5 }])));
+    [Fact] public void A_percentile_top_n_needs_its_fraction_too()
+    {
+        RequestRules.ValidateQuery(WithTop(Pct("percentile", 0.9)));
+        Assert.Equal("filters[0].topBy.p", FieldOf(WithTop(Pct("percentile", null))));
+        Assert.Equal("filters[0].topBy.p", FieldOf(WithTop(Pct("percentile", 2))));
+        Assert.Equal("filters[0].topBy.p", FieldOf(WithTop(Pct("sum", 0.5))));
+    }
+    [Fact] public void A_fraction_survives_the_wire_name_p()
+    {
+        var m = System.Text.Json.JsonSerializer.Deserialize<MeasureRef>("""{"db":"d","table":"t","column":"c","agg":"percentile","p":0.9}""", new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+        Assert.Equal(0.9, m!.P);
+    }
 }

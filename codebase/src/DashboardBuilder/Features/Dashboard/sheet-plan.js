@@ -45,7 +45,7 @@ export const toServerFilter = (f, ctx) => serverFilter(f, {
 /** Display name of a measure — matches the server's measure naming (P28 alias; a calculated field is just its name). */
 export const measureName = (f, ctx) => measureLabel(f, ctx.calculations, ctx.metaOf(f).alias);
 /** Stable identity for a pill, so a stored sort target survives re-renders. */
-export const fieldId = (f, kind) => (isCalcPill(f) ? calcPillId(f, kind) : `${kind}:${f.db}.${f.table}.${f.column}:${f.agg ?? ""}`);
+export const fieldId = (f, kind) => (isCalcPill(f) ? calcPillId(f, kind) : `${kind}:${f.db}.${f.table}.${f.column}:${f.agg ?? ""}${f.agg === "percentile" ? `@${f.p}` : ""}`);
 
 /** Colour encoding: a numeric Colour field ramps a CONTINUOUS gradient (P18); a categorical one splits DISCRETE series (P7). */
 export function colorMode(sheet) {

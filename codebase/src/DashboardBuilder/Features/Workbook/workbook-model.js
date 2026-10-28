@@ -5,7 +5,7 @@
 // session is connected to. Format v2 (P24b) holds `worksheets`, `dashboards` and `tabs`; the v1 reader
 // (migrateV1: v1 `dashboards` were worksheets) stays for good — old files and old autosaves must open.
 import { emptySheet, defaultFormat } from "../Core/store.js";
-import { LIMITS, text } from "../Core/validate.js";
+import { LIMITS, text, isFraction } from "../Core/validate.js";
 import { aggsFor } from "../Dashboard/filter-rules.js";
 import { CASTS } from "../Dashboard/cast-model.js";
 import { cleanMemberAliases } from "../Dashboard/member-labels.js";
@@ -278,6 +278,11 @@ function cleanPill(raw, where, issues, needCategory = true) {
   } else if (!isCalc && p.agg !== undefined && p.category !== undefined && !aggsFor(p.category).includes(p.agg)) {
     issues.push(`${where}: ${p.table}.${p.column} can't use "${p.agg}" — reset to ${defAgg(p)}.`); p.agg = defAgg(p);
   }
+  // T04-07: a percentile pill carries its fraction `p` (0..1); any other aggregation carries none.
+  if (p.agg === "percentile" && !isFraction(p.p)) {
+    issues.push(`${where}: ${p.table}.${p.column} had a percentile with no valid 0–100 percent — reset to ${defAgg(p)}.`); p.agg = defAgg(p);
+  }
+  if (p.agg !== "percentile") delete p.p;
   // P27 table calculation: a known type, direction and window (2–30).
   if (p.tableCalc !== undefined) {
     const c = p.tableCalc;
@@ -312,7 +317,7 @@ export function cleanFilters(list, where, issues, max) {
     // P30: a top-N filter must name its ranking measure.
     // A ranking by a calculation names it by id (db / table are empty); its agg, when present, is a row-level one.
     const calcTop = f.topBy && typeof f.topBy.calc === "string" && /^calc\d{1,6}$/.test(f.topBy.calc) && (f.topBy.agg === undefined || CALC_AGGS.includes(f.topBy.agg));
-    const okTop = f.op !== "top" || calcTop || (f.topBy && typeof f.topBy.calc !== "string" && isStr(f.topBy.db) && isStr(f.topBy.table) && isStr(f.topBy.column) && aggsFor("numeric").includes(f.topBy.agg ?? "sum"));
+    const okTop = f.op !== "top" || calcTop || (f.topBy && typeof f.topBy.calc !== "string" && isStr(f.topBy.db) && isStr(f.topBy.table) && isStr(f.topBy.column) && aggsFor("numeric").includes(f.topBy.agg ?? "sum") && (f.topBy.agg !== "percentile" || isFraction(f.topBy.p)));
     const okShape = okTop && FILTER_OPS.has(f.op) && (multi ? Array.isArray(f.values) && f.values.every((v) => typeof v === "string") : true);
     if (!okShape) issues.push(`${where}: skipped a filter on ${f.table}.${f.column} with an unknown operator or value.`);
     return okShape;

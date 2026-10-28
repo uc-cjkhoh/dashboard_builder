@@ -3,6 +3,7 @@
 // refuse (E15) before any query when a calculation can't be computed. ctx = { calcs, catalog, params } (params: the workbook parameters a formula may read).
 import { compileCalculation, calcTables } from "./calc-resolve.js";
 import { isCalcPill, pillName, pillSlots } from "./calc-pill.js";
+import { percentLabel, isFraction } from "../Core/validate.js";
 import { STAT_SINGLE_TABLE } from "../Dashboard/show-me-rules.js";
 
 export const STAT_CALC_HINT = "Histogram and box plot don't use calculated fields yet.";
@@ -27,10 +28,13 @@ export function wireDim(f, ctx) {
     ...(f.category === "temporal" && f.datePart && f.datePart !== "auto" ? { datePart: f.datePart } : {}) };
 }
 
+/** `{ p }` for a percentile, nothing for any other aggregation (a stale fraction never rides along). */
+const pctOf = (agg, p) => (agg === "percentile" && p !== undefined ? { p } : {});
+
 /** The measure ref for a plan entry `{ field, agg }`; an aggregate calculation carries no `agg`. */
 export function wireMeasure(entry, ctx) {
   const f = entry.field;
-  if (!isCalcPill(f)) return { db: f.db, table: f.table, column: f.column, agg: entry.agg };
+  if (!isCalcPill(f)) return { db: f.db, table: f.table, column: f.column, agg: entry.agg, ...pctOf(entry.agg, f.p) };
   const c = compiled(f, ctx);
   const ref = { db: "", table: "", column: pillName(f, ctx.calcs) };
   if (!c || c.error) return { ...ref, agg: entry.agg };
@@ -67,7 +71,8 @@ export function calcProblem(sheet, ctx, shared = []) {
 }
 
 /** The word an aggregation reads as in a measure's name (matches the server's column naming). */
-export const aggWord = (a) => (a === "countDistinct" ? "distinct" : a === "countNonNull" ? "non-null" : a);
+export const aggWord = (a, p) => (a === "countDistinct" ? "distinct" : a === "countNonNull" ? "non-null"
+  : a === "percentile" && isFraction(p) ? `p${percentLabel(p)}` : a);
 
 /** Display name of a measure, matching the server's result column. `alias` is a plain field's P28 name. */
 export function measureLabel(f, calcs, alias) {
@@ -75,13 +80,13 @@ export function measureLabel(f, calcs, alias) {
   const a = f.agg ?? "sum";
   const n = alias || f.column;
   if (a === "count") return "count";
-  return `${aggWord(a)} ${n}`;
+  return `${aggWord(a, f.p)} ${n}`;
 }
 
 /** The `topBy` a Top-N filter stores for a plan entry: a calc pill keeps its id (`calc`) and label. */
 export function topByRef(entry, ctx) {
   const f = entry.field;
-  if (!isCalcPill(f)) return { db: f.db, table: f.table, column: f.column, agg: entry.agg };
+  if (!isCalcPill(f)) return { db: f.db, table: f.table, column: f.column, agg: entry.agg, ...pctOf(entry.agg, f.p) };
   const c = compiled(f, ctx);
   const ref = { db: "", table: "", column: pillName(f, ctx.calcs), calc: f.calc };
   return c && !c.error && c.info.isAggregate ? ref : { ...ref, agg: entry.agg ?? "sum" };
@@ -90,11 +95,11 @@ export function topByRef(entry, ctx) {
 /** Select-option value that identifies a plan entry as a ranking measure. */
 export const topByKey = (entry) => (isCalcPill(entry.field)
   ? `calc:${entry.field.calc}:${entry.agg ?? ""}`
-  : `${entry.field.db}.${entry.field.table}.${entry.field.column}:${entry.agg}`);
+  : `${entry.field.db}.${entry.field.table}.${entry.field.column}:${entry.agg}${entry.agg === "percentile" ? `@${entry.field.p}` : ""}`);
 
 /** A stored `topBy` as the server takes it: a calc id becomes its tree. */
 export function wireTopBy(t, ctx) {
-  if (typeof t.calc !== "string") return { db: t.db, table: t.table, column: t.column, agg: t.agg ?? "sum" };
+  if (typeof t.calc !== "string") return { db: t.db, table: t.table, column: t.column, agg: t.agg ?? "sum", ...pctOf(t.agg, t.p) };
   const c = compiled(t, ctx);
   if (!c || c.error) return null; // never a calc-less ref; calcProblem refuses the view first
   const ref = { db: "", table: "", column: pillName(t, ctx.calcs), calc: c.ast };

@@ -20,8 +20,10 @@ public sealed record JoinRef(ColumnRef Left, ColumnRef Right, string? Type = nul
 /// <summary>A measure column + its aggregation. When <see cref="Calc"/> is set (calculated measure) the
 /// tree replaces Db/Table/Column/Agg, and <see cref="Column"/> is only a display label echoed in the result.
 /// <see cref="Agg"/> is nullable on the wire because an aggregate calculation carries none; a plain measure
-/// without one is rejected by <c>RequestRules</c> ("'measures[i].agg' is required.").</summary>
-public sealed record MeasureRef(string Db, string Table, string Column, string? Agg, ExprNode? Calc = null, string? Cast = null);
+/// without one is rejected by <c>RequestRules</c> ("'measures[i].agg' is required."). <see cref="P"/> is the
+/// percentile fraction (0..1): required exactly when <see cref="Agg"/> is <c>percentile</c>, rejected otherwise;
+/// it reaches SQL only as a bound <c>Float64</c> parameter.</summary>
+public sealed record MeasureRef(string Db, string Table, string Column, string? Agg, ExprNode? Calc = null, string? Cast = null, double? P = null);
 
 /// <summary>
 /// A filter condition on a column (P14). For the scalar operators (<c>= != &lt; &lt;= &gt; &gt;=</c>)

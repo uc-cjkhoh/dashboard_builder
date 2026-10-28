@@ -2,7 +2,7 @@
 import { filterValue, range, LIMITS } from "../Core/validate.js";
 import { PERIOD_PRESETS } from "../Core/sheet-schema.js";
 export const AGGS = Object.freeze({
-  numeric: ["sum", "avg", "min", "max", "median", "stddev", "variance", "count", "countDistinct", "countNonNull", "attr"],
+  numeric: ["sum", "avg", "min", "max", "median", "percentile", "stddev", "variance", "count", "countDistinct", "countNonNull", "attr"],
   ordered: ["count", "countDistinct", "countNonNull", "min", "max", "attr"], // text + temporal: min/max/attr come back as text
   other: ["count", "countDistinct", "countNonNull"],                  // boolean, compound, other
 });
@@ -75,7 +75,7 @@ export function serverFilter(f, { resolve, dateOnly, wireTopBy } = {}) {
     return { ...base, op: "between", value: "", values: dateOnly ? [r.from, r.to] : [`${r.from} 00:00:00`, `${r.to} 23:59:59`] };
   }
   if (f.op === "top") {
-    const topBy = wireTopBy ? wireTopBy(f.topBy) : { db: f.topBy.db, table: f.topBy.table, column: f.topBy.column, agg: f.topBy.agg ?? "sum" };
+    const topBy = wireTopBy ? wireTopBy(f.topBy) : { db: f.topBy.db, table: f.topBy.table, column: f.topBy.column, agg: f.topBy.agg ?? "sum", ...(f.topBy.agg === "percentile" ? { p: f.topBy.p } : {}) };
     if (!topBy) return null; // a ranking that can't be wired (its calculation is gone) is never sent as `topBy: null`
     return { ...base, value: String(f.value).trim(), topBy, bottom: Boolean(f.bottom) };
   }

@@ -65,7 +65,7 @@ export function aliasNames(sheet, result, metaOf) {
     const e = mplan[mi];
     if (!e || e.agg === "count" || isCalcPill(e.field)) return m;
     const alias = metaOf(e.field).alias;
-    return alias ? `${aggWord(e.agg)} ${alias}` : m;
+    return alias ? `${aggWord(e.agg, e.field.p)} ${alias}` : m;
   });
   return { ...result,
     rowDimensions: result.rowDimensions.map((n, i) => dimName(rowDims[i], n)),
