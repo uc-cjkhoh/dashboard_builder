@@ -191,6 +191,110 @@ try {
     must((await rows()) === r1, `rows changed after theme flip: ${r1} -> ${await rows()}`);
   });
 
+  // ---- legends, colour split, shape scatter, point click, sort + paging, percent cells, comparison, export after re-render ----
+  const noMarks = `s.color = []; s.marks = { size: null, label: null, detail: [], tooltip: [], shape: null, path: null, angle: null }; s.selection = null; s.analytics = undefined; s.period = null; s.filters = []; s.drill = null; s.pages = null; s.sort = null;`;
+  const legendToggle = (name) => ev(`(() => { ${instOf}.dispatchAction({ type: 'legendToggleSelect', name: ${J(name)} }); return true; })()`);
+  const chipText = () => ev(`document.querySelector('.ws-select')?.textContent ?? ''`);
+  const selection = () => ev(`(async () => JSON.stringify((await import('/features/Core/store.js')).activeDashboard().sheet.selection))()`).then((x) => (typeof x === 'string' ? JSON.parse(x) : x));
+
+  await check('pie legend: select, a second click clears, then Keep only / Exclude send bound filters', async () => {
+    await setSheet(`${base} ${noMarks} s.chartType = 'pie'`); await settle();
+    await waitFor(`!!${chartHost}`, 'pie');
+    await legendToggle('APAC');
+    await waitFor(`/APAC/.test(document.querySelector('.ws-select')?.textContent ?? '')`, 'chip for APAC');
+    await legendToggle('APAC');
+    await waitFor(`!document.querySelector('.ws-select')`, 'chip cleared by the second legend click');
+    must((await selection()) === null, 'selection stayed after clearing');
+    await legendToggle('US');
+    await waitFor(`/US/.test(document.querySelector('.ws-select')?.textContent ?? '')`, 'chip for US');
+    await click('Keep only'); await settle();
+    must((last().filters ?? []).some((f) => f.column === 'region' && f.op === '=' && f.value === 'US'), `Keep only: ${J(last().filters)}`);
+    await click('Exclude'); await settle();
+    must((last().filters ?? []).some((f) => f.column === 'region' && f.op === '!=' && f.value === 'US'), `Exclude: ${J(last().filters)}`);
+    await click('Clear selection'); await settle();
+  });
+
+  await check('colour-split legend: a click highlights the series and selects the Colour member', async () => {
+    await setSheet(`${base} ${noMarks} s.chartType = 'stacked'; s.color = [f('channel', 'text')]`); await settle();
+    await waitFor(`!!${chartHost}`, 'colour split');
+    await legendToggle('EU');
+    await waitFor(`!!document.querySelector('.ws-select')`, 'chip');
+    const sel = await selection();
+    must(sel && sel.column === 'channel' && sel.value === 'EU', `selection ${J(sel)}`);
+    must(await ev(`${instOf}.getOption().series.length >= 2`), 'series were hidden');
+    await legendToggle('EU');
+    await waitFor(`!document.querySelector('.ws-select')`, 'cleared');
+  });
+
+  await check('shape scatter: draws one series per text Shape member; a legend click selects that member', async () => {
+    await setSheet(`${base} ${noMarks} s.chartType = 'scatter'; s.columns = [f('amount', 'numeric', { agg: 'avg' })]; s.rows = [f('amount', 'numeric', { agg: 'sum' })]; s.marks.shape = f('channel', 'text')`); await settle();
+    await waitFor(`!!${chartHost}`, 'shape scatter drawn (no page error)');
+    must(await ev(`${instOf}.getOption().series.length === 2`), 'expected one series per Shape member');
+    await legendToggle('shop');
+    await waitFor(`!!document.querySelector('.ws-select')`, 'chip');
+    const sel = await selection();
+    must(sel && sel.column === 'channel' && sel.value === 'shop', `selection ${J(sel)}`);
+    await ev(`document.querySelector('.ws-select button[aria-label="Clear selection"], .ws-select__clear')?.click()`);
+    await setSheet(`s.selection = null`);
+  });
+
+  await check('a scatter point click selects the primary dimension member', async () => {
+    await setSheet(`${base} ${noMarks} s.chartType = 'scatter'; s.columns = [f('region', 'text'), f('amount', 'numeric', { agg: 'avg' })]; s.rows = [f('amount', 'numeric', { agg: 'sum' })]`); await settle();
+    await waitFor(`!!${chartHost}`, 'scatter');
+    const p = await ev(`(() => { const i = ${instOf}; const d = i.getOption().series[0].data[1]; const v = d.value ?? d; const [x, y] = i.convertToPixel({ seriesIndex: 0 }, v); const r = ${chartHost}.getBoundingClientRect(); return [r.left + x, r.top + y]; })()`);
+    await b.click(p[0], p[1]);
+    await waitFor(`!!document.querySelector('.ws-select')`, 'selection chip after a point click');
+    must(/EU/.test(await chipText()), `chip: ${await chipText()}`);
+    await setSheet(`s.selection = null`);
+  });
+
+  await check('Table: Sort Descending re-queries, and the paged queries keep the sort', async () => {
+    await setSheet(`${base} ${noMarks} s.chartType = 'table'; s.columns = []; s.rows = [f('region', 'text'), f('amount', 'numeric', { agg: 'sum' })]`); await settle();
+    await waitFor(`document.querySelectorAll('#ws-chart tbody tr').length > 0`, 'table rows');
+    await ev(`document.querySelector('.ws-pick--sort .ws-pick__btn').click()`);
+    await ev(`[...document.querySelectorAll('.ws-pick--sort .menu__item')].find((x) => x.textContent.trim() === 'Descending').click()`);
+    await settle();
+    must(last().sort?.desc === true, `sort: ${J(last().sort)}`);
+    await waitFor(`document.querySelectorAll('#ws-chart tbody tr').length > 0`, 'rows again');
+    const q0 = queries.length;
+    must((await ev(`document.querySelectorAll('#ws-chart tbody tr').length`)) === MOCK_PAGE, `first page rows ${await ev(`document.querySelectorAll('#ws-chart tbody tr').length`)}`);
+    await ev(`(() => { const c = document.getElementById('ws-chart'); c.scrollTop = c.scrollHeight; c.dispatchEvent(new Event('scroll')); return true; })()`);
+    await waitFor(`document.querySelectorAll('#ws-chart tbody tr').length > ${MOCK_PAGE}`, 'second page appended', 10000);
+    await settle();
+    const paged = queries.slice(q0).find((q) => q.offset > 0);
+    must(paged && paged.sort?.desc === true, `paged query lost the sort: ${J(paged?.sort)}`);
+  });
+
+  await check('a percent table calculation writes "%" in the cells', async () => {
+    await setSheet(`${base} ${noMarks} s.chartType = 'table'; s.columns = []; s.rows = [f('region', 'text'), f('amount', 'numeric', { agg: 'sum', tableCalc: { type: 'pctTotal', along: 'auto' } })]`); await settle();
+    await waitFor(`document.querySelectorAll('#ws-chart td.num').length > 0`, 'cells');
+    const cells = await ev(`[...document.querySelectorAll('#ws-chart td.num')].map((x) => x.textContent)`);
+    must(cells.length > 0 && cells.every((t) => /%$/.test(t.trim())), `cells: ${J(cells.slice(0, 4))}`);
+  });
+
+  await check('comparison range: a KPI shows the change vs the previous period, a bar draws a second series', async () => {
+    const period = `s.period = { db: 'shop', table: 'orders', column: 'placed', category: 'temporal', preset: 'last30', from: null, to: null, compare: 'previous', compareFrom: null, compareTo: null }`;
+    await setSheet(`${base} ${noMarks} s.chartType = 'kpi'; s.columns = []; ${period}`); await settle();
+    await waitFor(`!!document.querySelector('#ws-chart .ws-kpi__change')`, 'KPI change line');
+    must(/vs/.test(await ev(`document.querySelector('#ws-chart .ws-kpi__change').textContent`)), 'no "vs" text');
+    await setSheet(`${base} ${noMarks} s.chartType = 'bar'; ${period}`); await settle();
+    await waitFor(`!!${chartHost}`, 'bar');
+    must(await ev(`${instOf}.getOption().series.length === 2 && /\\(/.test(${instOf}.getOption().series[1].name)`), 'no comparison series');
+  });
+
+  await check('Export SVG after a re-render still produces a real SVG of the new chart', async () => {
+    await setSheet(`${base} ${noMarks} s.chartType = 'bar'`); await settle();
+    await setSheet(`s.chartType = 'line'`); await settle();
+    await waitFor(`!!${chartHost}`, 'line');
+    await ev(`window.__out = []`);
+    await click('Export');
+    await ev(`[...document.querySelectorAll('.ws-export .menu__item')].find((x) => x.textContent.trim() === 'SVG image').click()`);
+    await waitFor(`window.__out.length === 1`, 'svg export', 15000);
+    const o = (await ev(`window.__out`))[0];
+    must(o.head === '<svg ' && o.size > 500, `svg: ${J(o)}`);
+    await setSheet(`${base} ${noMarks}`); await settle();
+  });
+
   await check('Refresh runs fresh; Cancel on a slow query aborts it and leaves a note', async () => {
     await setSheet(`s.chartType = 'bar'`); await settle();
     slowMs = 2500;

@@ -10,7 +10,7 @@ globalThis.getComputedStyle = () => ({ getPropertyValue: () => "", left: "0" });
 globalThis.ResizeObserver = class { observe() {} disconnect() {} };
 const insts = [];
 globalThis.window = { echarts: { init: (host) => {
-  const i = { host, handlers: [], lastSet: null, setOption(o) { this.lastSet = o; }, on(evt, fn) { this.handlers.push([evt, fn]); }, dispatchAction() {}, resize() {}, dispose() {}, getWidth: () => 600, getHeight: () => 400 };
+  const i = { host, handlers: [], lastSet: null, setOption(o) { this.lastSet = o; }, on(evt, fn) { this.handlers.push([evt, fn]); }, dispatchAction(a) { this.actions.push(a); }, actions: [], resize() {}, dispose() { this.disposed = true; }, getWidth: () => 600, getHeight: () => 400 };
   insts.push(i); return i; } } };
 
 const { renderWorksheet } = await import("../../src/DashboardBuilder/Features/Dashboard/worksheet-render.js");
@@ -32,16 +32,30 @@ test("an interactive render wires mark clicks and legend clicks to the hooks", (
   insts[0].handlers.find(([e]) => e === "click")[1]({ dataIndex: 1, componentType: "series" });
   assert.deepEqual(picks, [["region", "US"]]);
 });
-test("interactive:false draws the same marks with no click, legend or drill handler, even when hooks are passed", () => {
+test("interactive:false draws the same marks with no click or drill handler, even when hooks are passed", () => {
   const hooks = { onSelect() { throw new Error("selected"); }, onDrill() { throw new Error("drilled"); }, onLegend() { throw new Error("legend"); }, legendFocus: () => "EU" };
   const on = fakeEl(), off = fakeEl();
   renderWorksheet(on, sheet(), result(), null, { plan, hooks });
   renderWorksheet(off, sheet(), result(), null, { plan, hooks, interactive: false });
-  assert.deepEqual(events(1), [], "no handlers registered");
+  assert.deepEqual(events(1), ["legendselectchanged"], "only the highlight-only legend handler; no click handler");
   assert.deepEqual(insts[1].lastSet.series.map((s) => s.data), insts[0].lastSet.series.map((s) => s.data), "same data drawn");
   const pie = fakeEl();
   renderWorksheet(pie, sheet({ chartType: "pie" }), result(), null, { plan, hooks, interactive: false });
-  assert.deepEqual(events(2), [], "a pie legend is not clickable either");
+  assert.ok(!events(2).includes("click"), "a pie has no click handler either");
+});
+test("a static view's legend is highlight-only: no host hook, nothing hidden, a second click clears", async () => {
+  const hooks = { onSelect() { throw new Error("selected"); }, onLegend() { throw new Error("legend hook"); } };
+  const pie = fakeEl();
+  renderWorksheet(pie, sheet({ chartType: "pie" }), result(), null, { plan, hooks, interactive: false });
+  const fire = insts[0].handlers.find(([e]) => e === "legendselectchanged")[1];
+  const before = insts[0].actions.length;
+  fire({ name: "EU" });
+  await new Promise((r) => setTimeout(r, 5));
+  const acts = insts[0].actions.slice(before).map((a) => a.type + (a.name ? ":" + a.name : ""));
+  assert.deepEqual(acts, ["legendAllSelect", "downplay", "highlight:EU"], "every item stays shown; EU is highlighted");
+  fire({ name: "EU" });
+  await new Promise((r) => setTimeout(r, 5));
+  assert.equal(insts[0].actions.at(-1).type, "downplay", "the second click clears the highlight");
 });
 test("a drill hierarchy: an interactive click calls onDrill, not onSelect", () => {
   const log = [];
@@ -85,4 +99,11 @@ test("two renders side by side keep their own marks (a bar and a pie)", () => {
   assert.equal(insts.length, 2);
   assert.ok(insts[0].lastSet.xAxis && !insts[0].lastSet.series.some((s) => s.type === "pie"));
   assert.ok(insts[1].lastSet.series.some((s) => s.type === "pie"));
+});
+test("a render without a plan context still draws (no aliases), and drawing again disposes the container's previous chart", () => {
+  const c = fakeEl();
+  renderWorksheet(c, sheet(), result(), null, {});
+  renderWorksheet(c, sheet(), result(), null, {});
+  assert.equal(insts.length, 2);
+  assert.equal(insts[0].disposed, true);
 });

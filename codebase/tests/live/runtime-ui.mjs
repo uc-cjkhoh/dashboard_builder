@@ -129,6 +129,24 @@ try {
     await b.evaluate(`(() => { __views.views.a.destroy(); return true; })()`);
     must(await b.evaluate(`!window.echarts.getInstanceByDom(document.querySelector('#vw-a .ws-chart-canvas') ?? document.body) && !!window.echarts.getInstanceByDom(document.querySelector('#vw-b .ws-chart-canvas'))`), 'destroying a disposed b');
   });
+  await check('a static view keeps its legend highlight-only: a legend click hides nothing and reaches no host hook', async () => {
+    await b.evaluate(`(async () => {
+      const { createWorksheetView } = await import('/features/Dashboard/worksheet-view.js');
+      const { createResultCache } = await import('/features/Dashboard/query-runner.js');
+      const host = document.getElementById('rt-host'); const d = document.createElement('div'); d.id = 'vw-d'; d.style.cssText = 'position:relative;height:320px'; host.append(d);
+      const log = window.__views, sheet = { ...log.sheets.a, chartType: 'pie' };
+      const entity = { id: 'e1', db: 'shop', table: 'orders', columns: [{ name: 'region', type: 'String', category: 'text' }, { name: 'amount', type: 'Float64', category: 'numeric' }] };
+      const plan = { calculations: [], entities: new Map([['e1', entity]]), relationships: new Map(), sharedFilters: [], parameters: [], metaOf: () => ({}), nameOf: (x) => x.column, columnType: () => '' };
+      log.views.d = createWorksheetView(d, () => ({ dash: { id: 'ws#d', sheet }, noticeEl: null, results: createResultCache(), plan, categoryOf: () => undefined, castOf: () => undefined }),
+        { interactive: false, onSelect: (f, raw) => log.picks.push(['d', raw]), onLegend: (x) => log.legend.push(['d', x.name]) });
+      await log.views.d.run(); return true; })()`);
+    const inst = `window.echarts.getInstanceByDom(document.querySelector('#vw-d .ws-chart-canvas'))`;
+    await b.evaluate(`(() => { ${inst}.dispatchAction({ type: 'legendToggleSelect', name: 'EU' }); return true; })()`);
+    await b.sleep(400);
+    const st = await b.evaluate(`(() => { const o = ${inst}.getOption(); return { n: o.series[0].data.length, hidden: Object.values(o.legend[0].selected ?? {}).filter((v) => v === false).length, picks: __views.picks.length, legend: __views.legend.length }; })()`);
+    must(st.n === 3 && st.hidden === 0, `a series was hidden: ${JSON.stringify(st)}`);
+    must(st.legend === 0 && st.picks === 1, `a host hook ran: ${JSON.stringify(st)}`); // the one earlier pick is the interactive view's
+  });
 } catch (e) {
   console.log(`FAIL (setup): ${e.stack ?? e.message}`); failed++;
 } finally { await b?.close(); }

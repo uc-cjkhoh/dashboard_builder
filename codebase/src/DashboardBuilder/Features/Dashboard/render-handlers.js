@@ -1,5 +1,6 @@
 import { colorsByName, fieldColorKey } from "./colour-model.js";
 import { isDrillActive } from "./sheet-plan.js";
+import { focusSeries } from "./chart.js";
 import { CLICK_TYPES } from "./result-model.js";
 
 // The interaction wiring of a drawn worksheet (P15 click-to-filter, P16 drill, P29 legend, T01-20 member colours), kept
@@ -26,11 +27,16 @@ export function selectHandler(rc, sheet, dimField, type, rawByIndex) {
 
 /**
  * P29 legend interaction for chart.js: { onLegend, focus }. A click highlights that item (a second click clears it);
- * when the legend lists a dimension's members (`field` + `rawByName`) the host may also select the member. {} when the
- * view is not interactive.
+ * when the legend lists a dimension's members (`field` + `rawByName`) the host may also select the member. A static
+ * (non-interactive) view is highlight-only: no host hook, no selection, and no series is ever hidden.
  */
 export function legendSpec(rc, sheet, field, rawByName) {
-  if (!rc.interactive) return {};
+  if (!rc.interactive) {
+    // Static widget: the legend highlights (a second click clears) and never hides a series or reaches a host hook.
+    // Registering a handler is what makes chart.js re-select every item after ECharts' default toggle.
+    let focus = null;
+    return { onLegend: (name) => { focus = focus === name ? null : name; focusSeries(rc.container, focus, sheet.chartType); } };
+  }
   return {
     focus: rc.hooks.legendFocus?.() ?? null,
     onLegend: (name) => rc.hooks.onLegend?.({ sheet, field, name, raw: rawByName.get(name), bucketed: rc.bucketedKey }),

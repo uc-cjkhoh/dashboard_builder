@@ -7,6 +7,7 @@ import { withOther, OTHER_TYPES } from "./scale-model.js";
 import { isGroupingPart, labelParts } from "./date-parts.js";
 import { applyTableCalcs, isCalc } from "./table-calc.js";
 import { alignCompare } from "./period-model.js";
+import { disposeChart } from "./chart.js";
 import { hint } from "./render-dom.js";
 import { crosstabTable } from "./render-table.js";
 import { kpiView } from "./render-kpi.js";
@@ -22,7 +23,7 @@ import { P36_TYPES, sameField, aliasNames, pathOrderedRows } from "./result-mode
 
 /**
  * Render options (all optional) — the editor-only state of the old renderChart as explicit inputs:
- *   plan         the sheet-plan.js context (metaOf, calculations, ...): display names
+ *   plan         the sheet-plan.js context (metaOf, calculations, ...): display names and measure labels; defaults to no aliases
  *   interactive  false = a static widget: no mark selection, drill or legend handlers (default true)
  *   hooks        { onSelect(dimField, raw), onDrill(raw), onLegend({ sheet, field, name, raw, bucketed }), legendFocus(),
  *                  onTooltipFields(sheet, list), onMemberColors(sheet, field, members) } — what the host does with them
@@ -35,13 +36,14 @@ import { P36_TYPES, sameField, aliasNames, pathOrderedRows } from "./result-mode
  * the small-multiples panel cap) — or throws when the result can't be drawn (the view shows its own message).
  */
 export function renderWorksheet(container, sheet, result, cmp, options = {}) {
-  const rc = { plan: options.plan, interactive: options.interactive !== false, hooks: options.hooks ?? {},
+  const rc = { container, plan: options.plan ?? { metaOf: () => ({}) }, interactive: options.interactive !== false, hooks: options.hooks ?? {},
     bucketedKey: null, calcPercent: new Set(), extraNotice: null };
   draw(container, rc, sheet, result, cmp);
   return { extraNotice: rc.extraNotice };
 }
 
 function draw(container, rc, sheet, result, cmp) {
+  disposeChart(container); // a direct caller never leaks a previous instance or its ResizeObserver
   container.replaceChildren();
   rc.hooks.onTooltipFields?.(sheet, []);
   rc.hooks.onMemberColors?.(sheet, null, []);

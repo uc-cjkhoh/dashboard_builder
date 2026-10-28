@@ -10,7 +10,7 @@ import { entities, relationships, activeDashboard, isModelActive, updateSheet, b
 import { checkValue, paramTypeFor } from "../Core/parameters-model.js";
 import { exportChart, hasChartInstance, sizeChart, focusSeries } from "./chart.js";
 import { createWorksheetView, periodNotice } from "./worksheet-view.js";
-import { el, hint, warn, iconSpan } from "./render-dom.js";
+import { el, hint, iconSpan } from "./render-dom.js";
 import { ANALYTICS_TYPES, CLICK_TYPES, sameField, statusText, captionText } from "./result-model.js";
 import { makeCategoryFormatter } from "../Core/format.js";
 import { createResultCache } from "./query-runner.js";
@@ -93,7 +93,7 @@ const periodFilters = (sheet, range) => planPeriodFilters(sheet, range, planCtx(
 
 // --- marks card + query-shape helpers (P18) --------------------------------
 // The canonical query shape lives in planDims()/planMeasures(): buildPlan sends exactly these, and
-// renderChart re-derives the same ordering to know which result column is a series vs. a mark channel.
+// worksheet-render.js re-derives the same ordering to know which result column is a series vs. a mark channel.
 // With no marks set, both reduce to the pre-P18 ordering, so existing charts are byte-identical.
 const shelfMeasureCount = (sheet) => planMeasures(sheet).filter((e) => e.role === "shelf").length;
 const CHART_LIKE = new Set([
@@ -142,7 +142,7 @@ export function initDashboards() {
   const results = createResultCache();
   // The editor's one worksheet view — created before anything (sync() below) can use it.
   // The query-and-render lifecycle is worksheet-view.js (P24a); the editor owns exactly one view, on #ws-chart, and
-  // supplies the drawing of a result (renderChart below) and the editor-only state around it.
+  // supplies the drawing of a result (worksheet-render.js) and the editor-only state around it.
   const sheetView = createWorksheetView(chartEl, () => ({
     dash: activeDashboard(), noticeEl, results, plan: planCtx(), categoryOf, castOf,
   }), {
@@ -2023,7 +2023,7 @@ export function initDashboards() {
 
   // --- Tooltip text (T01-19) ---------------------------------------------
   // The fields the last drawn chart offers ([{ name, sample }]) — the editor's chips and live preview.
-  // Keyed by sheet and cleared at the top of renderChart, so it only ever holds the drawn view's fields.
+  // Keyed by sheet and cleared at the start of each drawing (worksheet-render.js), so it only ever holds the drawn view's fields.
   let tooltipCatState = { sheet: null, list: [] };
   let tooltipRedraw = null; // the open editor's chip/preview redraw (the chart may finish after the panel opened)
   const setTooltipCat = (sheet, list) => { tooltipCatState = { sheet, list }; tooltipRedraw?.(); };
@@ -2084,7 +2084,7 @@ export function initDashboards() {
 
   // --- Member colours (T01-20) ---------------------------------------------
   // The members the last drawn chart colours by a discrete field ({ field, members: [{ name, raw }] }), keyed
-  // by sheet and cleared at the top of renderChart. The editor lists them; a pick stores a validated #rrggbb
+  // by sheet and cleared at the start of each drawing. The editor lists them; a pick stores a validated #rrggbb
   // in sheet.memberColors (Dashboard/colour-model.js) and re-draws.
   let memberState = { sheet: null, field: null, members: [] };
   let memberOpen = false;

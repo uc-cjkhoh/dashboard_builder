@@ -138,3 +138,13 @@ test("small pure helpers: scatterSymbol, cmpValues, sameField", () => {
   assert.ok(cmpValues(2, 10) < 0 && cmpValues("b", "a") > 0);
   assert.ok(sameField(dim("a"), dim("a")) && !sameField(dim("a"), dim("b")) && !sameField(null, dim("a")));
 });
+test("scatterShapeGroups keeps raw Shape members of every kind for the legend: null, numeric, numeric-looking text", () => {
+  const s = sheet({ chartType: "scatter", columns: [meas("amount")], rows: [meas("qty")], marks: { ...sheet().marks, shape: dim("channel") } });
+  const result = res([row([null], 1, 2), row([7], 3, 4), row(["007"], 5, 6), row(["web"], 7, 8)], { measures: ["a", "b"], rowDimensions: ["channel"] });
+  const { groups, byName } = scatterShapeGroups(s, result, [0, 1], -1, fmt);
+  assert.deepEqual(groups.map((g) => g.name), ["—", "7", "007", "web"]);
+  assert.equal(byName.get("—"), null);
+  assert.strictEqual(byName.get("7"), 7);
+  assert.strictEqual(byName.get("007"), "007", "a numeric-looking string stays a string");
+  assert.strictEqual(byName.get("web"), "web");
+});
