@@ -54,6 +54,42 @@ public class CalcJsonTests(WebApplicationFactory<Program> factory) : IClassFixtu
         Assert.Equal(new UnNode("-", new NumNode(2.5)), node);
     }
 
+    private static readonly string[] LogicWire =
+    [
+        """{"k":"str","v":"it's"}""",
+        """{"k":"cmp","op":">","l":{"k":"num","v":1},"r":{"k":"num","v":2}}""",
+        """{"k":"logic","op":"and","l":{"k":"not","arg":{"k":"isnull","arg":{"k":"num","v":1}}},"r":{"k":"ifnull","l":{"k":"num","v":1},"r":{"k":"num","v":2}}}""",
+        """{"k":"case","whens":[{"c":{"k":"num","v":1},"t":{"k":"str","v":"a"}},{"c":{"k":"num","v":2},"t":{"k":"str","v":"b"}}],"else":{"k":"str","v":"c"}}""",
+        """{"k":"case","whens":[{"c":{"k":"num","v":1},"t":{"k":"num","v":2}}]}""",
+    ];
+
+    [Fact]
+    public void The_logic_nodes_round_trip()
+    {
+        foreach (var wire in LogicWire)
+        {
+            var node = JsonSerializer.Deserialize<ExprNode>(wire, Web)!;
+            var back = JsonSerializer.Serialize(node, Web);
+            Assert.Equal(JsonSerializer.Serialize(JsonDocument.Parse(wire).RootElement), back);
+            Assert.Equal(back, JsonSerializer.Serialize(JsonSerializer.Deserialize<ExprNode>(back, Web)!, Web));
+        }
+        var c = Assert.IsType<CaseNode>(JsonSerializer.Deserialize<ExprNode>(LogicWire[3], Web));
+        Assert.Equal(2, c.Whens.Length);
+        Assert.Equal(new StrNode("c"), c.Else);
+        Assert.Null(Assert.IsType<CaseNode>(JsonSerializer.Deserialize<ExprNode>(LogicWire[4], Web)).Else);
+    }
+
+    [Theory]
+    [InlineData("""{"k":"str","v":5}""")]
+    [InlineData("""{"k":"cmp","op":">","l":{"k":"num","v":1}}""")]
+    [InlineData("""{"k":"case","whens":{"c":1}}""")]
+    [InlineData("""{"k":"case","whens":[1]}""")]
+    [InlineData("""{"k":"case","whens":[{"c":{"k":"num","v":1}}]}""")]
+    [InlineData("""{"k":"case","whens":[],"else":{"k":"nope"}}""")]
+    [InlineData("""{"k":"not"}""")]
+    public void A_malformed_logic_node_throws_JsonException(string json)
+        => Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<ExprNode>(json, Web));
+
     [Fact]
     public void An_unknown_kind_throws_JsonException()
         => Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<ExprNode>("""{"k":"nope"}""", Web));

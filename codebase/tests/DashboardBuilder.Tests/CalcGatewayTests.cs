@@ -197,6 +197,13 @@ public class CalcGatewayTests
     [Fact] public void A_row_level_dimension_groups_by_its_expression() =>
         Assert.Equal("(toFloat64(t0.`amount`) * {c0p0:Float64})", CalcSql.CalcDimensionSql(Compile(Doubled, "rowDimensions[0]"), "rowDimensions[0]"));
 
+    [Fact] public void A_boolean_dimension_groups_by_a_true_false_string_and_a_boolean_measure_stays_Bool()
+    {
+        var big = new CmpNode(">", new FieldNode("db", "orders", "amount"), new NumNode(1));
+        Assert.Equal("toString(toBool((toFloat64(t0.`amount`) > {c0p0:Float64})))", CalcSql.CalcDimensionSql(Compile(big, "rowDimensions[0]"), "rowDimensions[0]"));
+        Assert.Equal("toBool((toFloat64(t0.`amount`) > {c0p0:Float64}))", Compile(big).Sql);
+    }
+
     // --- Names ---
 
     [Theory]

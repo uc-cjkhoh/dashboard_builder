@@ -24,6 +24,7 @@ public static class CalcValidator
                 case UnNode u: Walk(u.Arg, depth + 1); break;
                 case BinNode b: Walk(b.L, depth + 1); Walk(b.R, depth + 1); break;
                 case AggNode a: Walk(a.Arg, depth + 1); break;
+                default: foreach (var c in ExprTree.Children(n)) Walk(c, depth + 1); break;
             }
         }
     }
@@ -35,7 +36,7 @@ public static class CalcValidator
         AggNode => true,
         UnNode u => ContainsAggregate(u.Arg),
         BinNode b => ContainsAggregate(b.L) || ContainsAggregate(b.R),
-        _ => false,
+        _ => ExprTree.Children(node).Any(ContainsAggregate),
     };
 
     /// <param name="categoryOf">Returns the <see cref="ClickHouseType"/> category of <c>(db, table, column)</c>,
@@ -61,6 +62,78 @@ public static class CalcValidator
             case NumNode n:
                 if (!double.IsFinite(n.V)) throw new CalcException("That number is out of range.", path);
                 return new Typed(CalcType.Number, false, true, Tables(), "that value");
+
+            case StrNode t:
+                if (t.V.Length > CalcLimits.MaxString) throw new CalcException($"A text value can be at most {CalcLimits.MaxString} characters.", path);
+                return new Typed(CalcType.Text, false, true, Tables(), "that value");
+
+            case CmpNode c:
+            {
+                if (c.Op is not ("=" or "!=" or "<" or "<=" or ">" or ">=")) throw new CalcException($"Unknown operator {c.Op}.", path);
+                var l = Type(c.L, Child(path, "l"), categoryOf);
+                var r = Type(c.R, Child(path, "r"), categoryOf);
+                if (l.Type == CalcType.Boolean) throw new CalcException($"Comparison needs a number, text or date — {l.Name} is boolean.", Child(path, "l"));
+                if (r.Type == CalcType.Boolean) throw new CalcException($"Comparison needs a number, text or date — {r.Name} is boolean.", Child(path, "r"));
+                if (l.Type != r.Type)
+                    throw new CalcException($"Comparison needs two values of the same type — {l.Name} is {l.Type}, {r.Name} is {r.Type}.", path);
+                return Combine(CalcType.Boolean, path, l, r);
+            }
+
+            case LogicNode g:
+            {
+                if (g.Op is not ("and" or "or")) throw new CalcException($"Unknown operator {g.Op}.", path);
+                var l = Type(g.L, Child(path, "l"), categoryOf);
+                var r = Type(g.R, Child(path, "r"), categoryOf);
+                RequireBoolean(l, Child(path, "l"), g.Op.ToUpperInvariant());
+                RequireBoolean(r, Child(path, "r"), g.Op.ToUpperInvariant());
+                return Combine(CalcType.Boolean, path, l, r);
+            }
+
+            case NotNode x:
+            {
+                var arg = Type(x.Arg, Child(path, "arg"), categoryOf);
+                RequireBoolean(arg, Child(path, "arg"), "NOT");
+                return arg with { Type = CalcType.Boolean, Name = "that value" };
+            }
+
+            case IsNullNode z:
+            {
+                var arg = Type(z.Arg, Child(path, "arg"), categoryOf);
+                return arg with { Type = CalcType.Boolean, Name = "that value" };
+            }
+
+            case IfNullNode i:
+            {
+                var l = Type(i.L, Child(path, "l"), categoryOf);
+                var r = Type(i.R, Child(path, "r"), categoryOf);
+                if (l.Type != r.Type) throw new CalcException($"{SameType} — {r.Name} is {r.Type}, not {l.Type}.", Child(path, "r"));
+                return Combine(l.Type, path, l, r);
+            }
+
+            case CaseNode k:
+            {
+                if (k.Whens.Length == 0) throw new CalcException("A CASE needs at least one WHEN.", path);
+                // Typed in source order (w0.c, w0.t, w1.c, …, else); the first THEN fixes the result type.
+                var parts = new List<Typed>();
+                Typed? first = null;
+                for (var n = 0; n < k.Whens.Length; n++)
+                {
+                    var wp = $"w{n}";
+                    var c = Type(k.Whens[n].Cond, Child(path, wp + ".c"), categoryOf);
+                    RequireBoolean(c, Child(path, wp + ".c"), "A condition");
+                    var t = Type(k.Whens[n].Then, Child(path, wp + ".t"), categoryOf);
+                    if (first is null) first = t;
+                    else if (t.Type != first.Value.Type) throw new CalcException($"{SameType} — {t.Name} is {t.Type}, not {first.Value.Type}.", Child(path, wp + ".t"));
+                    parts.Add(c); parts.Add(t);
+                }
+                if (k.Else is not null)
+                {
+                    var e = Type(k.Else, Child(path, "else"), categoryOf);
+                    if (e.Type != first!.Value.Type) throw new CalcException($"{SameType} — {e.Name} is {e.Type}, not {first.Value.Type}.", Child(path, "else"));
+                    parts.Add(e);
+                }
+                return Combine(first!.Value.Type, path, parts.ToArray());
+            }
 
             case FieldNode f:
             {
@@ -121,6 +194,26 @@ public static class CalcValidator
             default:
                 throw new CalcException("Unknown expression node.", path);
         }
+    }
+
+    private const string SameType = "All results must be the same type";
+
+    // The result of an operation over `parts`: an aggregate if any part is one; mixing aggregate and row-level
+    // (constants are neutral) is an error at the operation's path.
+    private static Typed Combine(string type, string path, params Typed[] parts)
+    {
+        var aggregate = parts.Any(p => p.IsAggregate);
+        if (aggregate && parts.Any(p => !p.IsAggregate && !p.Const))
+            throw new CalcException("Can't mix an aggregate with a row-level value in one formula.", path);
+        var tables = Tables();
+        foreach (var p in parts) tables.UnionWith(p.Tables);
+        return new Typed(type, aggregate, parts.All(p => p.Const), tables, "that value");
+    }
+
+    private static void RequireBoolean(Typed t, string path, string what)
+    {
+        if (t.Type != CalcType.Boolean)
+            throw new CalcException($"{what} needs {(what is "AND" or "OR" ? "booleans" : "a boolean")} — {t.Name} is {t.Type}.", path);
     }
 
     private static void RequireNumber(Typed t, string path)

@@ -20,6 +20,7 @@ public static class CalcLimits
     public const int MaxNodes = 200;
     public const int MaxCalcs = 20;
     public const int MaxName = 60;
+    public const int MaxString = 100;
 }
 
 /// <summary>The type of a calculation value.</summary>

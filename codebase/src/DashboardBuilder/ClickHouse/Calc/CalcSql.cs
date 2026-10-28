@@ -43,6 +43,7 @@ internal static class CalcSql
                 case UnNode u: Walk(u.Arg); break;
                 case BinNode b: Walk(b.L); Walk(b.R); break;
                 case AggNode a: Walk(a.Arg); break;
+                default: foreach (var c in ExprTree.Children(n)) Walk(c); break;
             }
         }
     }
@@ -62,7 +63,10 @@ internal static class CalcSql
         CalcInfo info;
         try { info = CalcValidator.Validate(calc, (d, t, c) => refs.TryGetValue((d, t, c), out var r) ? r.Category : null); }
         catch (CalcException e) { throw new RequestValidationException(e.Message, e.Path.Length == 0 ? $"{field}.calc" : $"{field}.calc.{e.Path}"); }
-        return new CompiledCalc(CalcCompiler.Compile(calc, (d, t, c) => refs[(d, t, c)], parameters, prefix, sampled, approximate), info);
+        var sql = CalcCompiler.Compile(calc, (d, t, c) => refs[(d, t, c)], parameters, prefix, sampled, approximate);
+        // A computed true/false is a UInt8 in ClickHouse; as a result column it must read true/false, like a Bool field does.
+        if (info.Type == CalcType.Boolean && calc is not FieldNode) sql = $"toBool({sql})";
+        return new CompiledCalc(sql, info);
     }
 
     /// <summary>
@@ -88,6 +92,7 @@ internal static class CalcSql
     /// <summary>A calculated dimension groups by its row-level expression (E4); an aggregate tree there is a 400.</summary>
     internal static string CalcDimensionSql(CompiledCalc c, string field) => c.Info.IsAggregate
         ? throw new RequestValidationException("A dimension can't contain an aggregate. Put it in a measure instead.", field + ".calc")
+        : c.Info.Type == CalcType.Boolean ? $"toString({c.Sql})" // a calculated true/false group reads "true"/"false"; a plain Bool field keeps its own spelling
         : c.Sql;
 
     /// <summary>The name a calculated dimension or measure has in the result: its label, or "calculation".</summary>
@@ -104,6 +109,6 @@ internal static class CalcSql
         AggNode a => a.Fn == "countd" || HasCountD(a.Arg),
         UnNode u => HasCountD(u.Arg),
         BinNode b => HasCountD(b.L) || HasCountD(b.R),
-        _ => false,
+        _ => ExprTree.Children(n).Any(HasCountD),
     };
 }

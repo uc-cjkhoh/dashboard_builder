@@ -4,7 +4,7 @@
 // the contract — change one side and the other in the same commit.
 
 /** Calculation limits; mirrored in ClickHouse/Calc/CalcLimits (and the workbook ones in Core/validate.js LIMITS). */
-export const CALC_LIMITS = Object.freeze({ formula: 500, depth: 12, nodes: 200, calcs: 20, name: 60 });
+export const CALC_LIMITS = Object.freeze({ formula: 500, depth: 12, nodes: 200, calcs: 20, name: 60, string: 100 });
 
 const NUMBER_ONLY = ["number"];
 const ORDERABLE = ["number", "date", "text"];
@@ -44,7 +44,12 @@ function checkLimits(root) {
     if (++nodes > CALC_LIMITS.nodes) throw new CalcError("That formula is too large.", "");
     if (!isNode(n)) return;
     if (n.k === "un" || n.k === "agg") walk(n.arg, depth + 1);
-    else if (n.k === "bin") { walk(n.l, depth + 1); walk(n.r, depth + 1); }
+    else if (n.k === "bin" || n.k === "cmp" || n.k === "logic" || n.k === "ifnull") { walk(n.l, depth + 1); walk(n.r, depth + 1); }
+    else if (n.k === "not" || n.k === "isnull") walk(n.arg, depth + 1);
+    else if (n.k === "case" && Array.isArray(n.whens)) {
+      for (const w of n.whens) if (isNode(w)) { walk(w.c, depth + 1); walk(w.t, depth + 1); }
+      if (n.else !== undefined) walk(n.else, depth + 1);
+    }
   };
   walk(root, 1);
 }
@@ -57,6 +62,15 @@ const requireNumber = (t, path) => {
   if (t.type !== "number") throw new CalcError(`Arithmetic needs numbers — ${t.name} is ${t.type}.`, path);
 };
 
+const SAME_TYPE = "All results must be the same type";
+// Aggregates and row-level values (constants are neutral) can't share one formula.
+const mixes = (parts) => parts.some((t) => t.isAggregate) && parts.some((t) => !t.isAggregate && !t.isConst);
+const MIX = "Can't mix an aggregate with a row-level value in one formula.";
+const unionTables = (parts) => { const out = new Set(); for (const t of parts) for (const x of t.tables) out.add(x); return out; };
+const requireBoolean = (t, path, what) => {
+  if (t.type !== "boolean") throw new CalcError(`${what} needs ${what === "AND" || what === "OR" ? "booleans" : "a boolean"} — ${t.name} is ${t.type}.`, path);
+};
+
 // const: a number literal (or arithmetic over only literals) — it carries no field and no aggregate.
 function typeOf(node, path, categoryOf) {
   if (!isNode(node)) throw new CalcError("Unknown expression node.", path);
@@ -64,6 +78,77 @@ function typeOf(node, path, categoryOf) {
     case "num":
       if (!Number.isFinite(node.v)) throw new CalcError("That number is out of range.", path);
       return { type: "number", isAggregate: false, isConst: true, tables: new Set(), name: "that value" };
+
+    case "str":
+      if (typeof node.v !== "string") throw new CalcError("Unknown expression node.", path);
+      if (node.v.length > CALC_LIMITS.string) throw new CalcError(`A text value can be at most ${CALC_LIMITS.string} characters.`, path);
+      return { type: "text", isAggregate: false, isConst: true, tables: new Set(), name: "that value" };
+
+    case "cmp": {
+      if (!["=", "!=", "<", "<=", ">", ">="].includes(node.op)) throw new CalcError(`Unknown operator ${node.op}.`, path);
+      const l = typeOf(node.l, child(path, "l"), categoryOf);
+      const r = typeOf(node.r, child(path, "r"), categoryOf);
+      for (const [t, p] of [[l, "l"], [r, "r"]]) {
+        if (t.type === "boolean") throw new CalcError(`Comparison needs a number, text or date — ${t.name} is boolean.`, child(path, p));
+      }
+      if (l.type !== r.type) {
+        throw new CalcError(`Comparison needs two values of the same type — ${l.name} is ${l.type}, ${r.name} is ${r.type}.`, path);
+      }
+      if (mixes([l, r])) throw new CalcError(MIX, path);
+      return { type: "boolean", isAggregate: l.isAggregate || r.isAggregate, isConst: l.isConst && r.isConst, tables: unionTables([l, r]), name: "that value" };
+    }
+
+    case "logic": {
+      if (node.op !== "and" && node.op !== "or") throw new CalcError(`Unknown operator ${node.op}.`, path);
+      const l = typeOf(node.l, child(path, "l"), categoryOf);
+      const r = typeOf(node.r, child(path, "r"), categoryOf);
+      requireBoolean(l, child(path, "l"), node.op.toUpperCase());
+      requireBoolean(r, child(path, "r"), node.op.toUpperCase());
+      if (mixes([l, r])) throw new CalcError(MIX, path);
+      return { type: "boolean", isAggregate: l.isAggregate || r.isAggregate, isConst: l.isConst && r.isConst, tables: unionTables([l, r]), name: "that value" };
+    }
+
+    case "not": {
+      const arg = typeOf(node.arg, child(path, "arg"), categoryOf);
+      requireBoolean(arg, child(path, "arg"), "NOT");
+      return { type: "boolean", isAggregate: arg.isAggregate, isConst: arg.isConst, tables: arg.tables, name: "that value" };
+    }
+
+    case "isnull": {
+      const arg = typeOf(node.arg, child(path, "arg"), categoryOf);
+      return { type: "boolean", isAggregate: arg.isAggregate, isConst: arg.isConst, tables: arg.tables, name: "that value" };
+    }
+
+    case "ifnull": {
+      const l = typeOf(node.l, child(path, "l"), categoryOf);
+      const r = typeOf(node.r, child(path, "r"), categoryOf);
+      if (l.type !== r.type) throw new CalcError(`${SAME_TYPE} — ${r.name} is ${r.type}, not ${l.type}.`, child(path, "r"));
+      if (mixes([l, r])) throw new CalcError(MIX, path);
+      return { type: l.type, isAggregate: l.isAggregate || r.isAggregate, isConst: l.isConst && r.isConst, tables: unionTables([l, r]), name: "that value" };
+    }
+
+    case "case": {
+      if (!Array.isArray(node.whens) || node.whens.length === 0) throw new CalcError("A CASE needs at least one WHEN.", path);
+      // Typed in source order: w0.c, w0.t, w1.c, ..., else. The first THEN fixes the result type.
+      const parts = [];
+      let first = null;
+      node.whens.forEach((w, i) => {
+        const wp = `w${i}`;
+        const c = typeOf(isNode(w) ? w.c : null, child(path, `${wp}.c`), categoryOf);
+        requireBoolean(c, child(path, `${wp}.c`), "A condition");
+        const t = typeOf(isNode(w) ? w.t : null, child(path, `${wp}.t`), categoryOf);
+        if (first === null) first = t;
+        else if (t.type !== first.type) throw new CalcError(`${SAME_TYPE} — ${t.name} is ${t.type}, not ${first.type}.`, child(path, `${wp}.t`));
+        parts.push(c, t);
+      });
+      if (node.else !== undefined) {
+        const e = typeOf(node.else, child(path, "else"), categoryOf);
+        if (e.type !== first.type) throw new CalcError(`${SAME_TYPE} — ${e.name} is ${e.type}, not ${first.type}.`, child(path, "else"));
+        parts.push(e);
+      }
+      if (mixes(parts)) throw new CalcError(MIX, path);
+      return { type: first.type, isAggregate: parts.some((t) => t.isAggregate), isConst: parts.every((t) => t.isConst), tables: unionTables(parts), name: "that value" };
+    }
 
     case "field": {
       const name = `${node.table}.${node.column}`;

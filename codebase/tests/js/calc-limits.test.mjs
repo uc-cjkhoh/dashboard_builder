@@ -18,6 +18,7 @@ test("CalcLimits (C#), CALC_LIMITS (calc-types.js) and LIMITS (validate.js) agre
   assert.equal(CALC_LIMITS.nodes, server("MaxNodes"));
   assert.equal(CALC_LIMITS.calcs, server("MaxCalcs"));
   assert.equal(CALC_LIMITS.name, server("MaxName"));
+  assert.equal(CALC_LIMITS.string, server("MaxString"));
   assert.equal(LIMITS.calcFormula, CALC_LIMITS.formula);
   assert.equal(LIMITS.calculations, CALC_LIMITS.calcs);
   assert.equal(LIMITS.calcName, CALC_LIMITS.name);

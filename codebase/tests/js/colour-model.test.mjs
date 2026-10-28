@@ -110,3 +110,11 @@ test("memberField limit comes from LIMITS", () => {
   const issues = []; const out = cleanMemberColors({ ["f".repeat(LIMITS.memberField + 1)]: { a: "#000000" } }, "S", issues);
   assert.deepEqual(plain(out), {}); assert.equal(issues.length, 1);
 });
+
+test("an old workbook with a plain Bool field keeps its 'True' member colours and filter values (calculated booleans are the only 'true'/'false' keys)", () => {
+  const issues = [];
+  const out = sanitizeSheet({ chartType: "bar", memberColors: { "shop.orders.active": { True: "#aabbcc", False: "#112233" } } }, "S", issues);
+  assert.deepEqual(plain(out.memberColors), { "shop.orders.active": { True: "#aabbcc", False: "#112233" } });
+  const f = sanitizeSheet({ filters: [{ db: "shop", table: "orders", column: "active", op: "in", values: ["True"] }] }, "S", issues);
+  assert.deepEqual(f.filters?.[0]?.values, ["True"]);
+});

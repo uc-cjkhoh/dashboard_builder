@@ -118,3 +118,28 @@ test("the override only applies to a row-level number", () => {
   assert.equal(roleOfCalc({ type: "number", isAggregate: false }, null), "measure");
   assert.equal(roleOfCalc({ type: "number", isAggregate: false }, "bogus"), "measure");
 });
+
+// ---- Logic nodes (cmp / logic / not / case / ifnull / isnull) are expanded like any other ---------------------
+import { parseFormula as parseLogic } from "../../src/DashboardBuilder/Features/Calc/calc-parser.js";
+test("expandCalcs: a calc reference inside CASE / IF / IFNULL / NOT / comparison is replaced, the input is not mutated", () => {
+  const inner = { ast: { k: "num", v: 7 } };
+  const ref = { k: "calc", name: "X" };
+  const ast = { k: "case", whens: [{ c: { k: "not", arg: { k: "cmp", op: ">", l: ref, r: { k: "num", v: 1 } } }, t: { k: "ifnull", l: ref, r: ref } }], else: ref };
+  const before = JSON.stringify(ast);
+  const out = expandCalcs(ast, new Map([["X", inner]]));
+  assert.equal(JSON.stringify(ast), before);
+  assert.ok(!JSON.stringify(out.ast).includes('"calc"'));
+  assert.equal(out.ast.else.v, 7);
+  assert.equal(out.ast.whens[0].t.r.v, 7);
+});
+test("expandCalcs: a CASE expansion over the node cap is 'too large'", () => {
+  const w = { c: { k: "num", v: 1 }, t: { k: "num", v: 1 } };
+  const ast = { k: "case", whens: Array.from({ length: 100 }, () => w) };
+  assert.equal(expandCalcs(ast, new Map()).error.message, "That formula is too large.");
+});
+test("the parser: ZN, IIF and simple CASE desugar to the shared nodes", () => {
+  const none = () => null;
+  assert.deepEqual(parseLogic("ZN(1)", none).ast, { k: "ifnull", l: { k: "num", v: 1 }, r: { k: "num", v: 0 } });
+  assert.deepEqual(parseLogic("iif(1 > 0, 'a', 'b')", none).ast.k, "case");
+  assert.equal(parseLogic("CASE 1 WHEN 2 THEN 3 END", none).ast.whens[0].c.op, "=");
+});
