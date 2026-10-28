@@ -43,6 +43,8 @@ public class TypedFilterTests
         Assert.Equal("2024-01-31", ClickHouseGateway.FormatKey(new DateTime(2024, 1, 31)));
         Assert.Equal("2024-01-31 10:20:30", ClickHouseGateway.FormatKey(new DateTime(2024, 1, 31, 10, 20, 30)));
         Assert.Equal("abc", ClickHouseGateway.FormatKey("abc"));
+        Assert.Equal("true", ClickHouseGateway.FormatKey(true));
+        Assert.Equal("false", ClickHouseGateway.FormatKey(false));
         Assert.Equal("42", ClickHouseGateway.FormatKey(42L));
         Assert.Equal("1.5", ClickHouseGateway.FormatKey(1.5));
         Assert.Null(ClickHouseGateway.FormatKey(null));

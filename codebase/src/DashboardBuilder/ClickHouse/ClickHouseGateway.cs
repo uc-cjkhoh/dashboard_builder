@@ -1118,11 +1118,11 @@ public sealed class ClickHouseGateway
             throw new UnknownIdentifierException("Unknown table.");
     }
 
-    /// <summary>A group-key / distinct-value label: dates render as ISO (so they round-trip as filter values), everything else as before.</summary>
+    /// <summary>A group-key / distinct-value label: dates render as ISO (so they round-trip as filter values), booleans as true/false, everything else as before.</summary>
     internal static string? FormatKey(object? value) => value switch
     {
         null => null,
-        DateTime or DateTimeOffset => FormatCell(value),
+        DateTime or DateTimeOffset or bool => FormatCell(value), // a true/false group reads "true"/"false", like a cell
         _ => value.ToString(),
     };
 
