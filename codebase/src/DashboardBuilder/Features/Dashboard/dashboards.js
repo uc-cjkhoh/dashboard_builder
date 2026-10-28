@@ -32,6 +32,9 @@ import { keyOf, SCATTER_TYPES, COLOR_USES, colorMode, isDrillActive, drillActive
 import { catalogFromEntities } from "../Calc/calc-resolve.js";
 import { isCalcPill, makeCalcPill, refusal, syncCalcPills, clearCalcPills, clearFilterCalc, usesCalc, CALC_AGGS } from "../Calc/calc-pill.js";
 import { openCalcDialog } from "../Calc/calc-dialog.js";
+import { openGroupDialog } from "../Calc/group-dialog.js";
+import { groupCategoryProblem } from "../Calc/group-model.js";
+import { openMemberLabelsDialog } from "./member-labels-dialog.js";
 import { openRowsDialog } from "../Rows/rows-dialog.js";
 import { buildRowsRequest } from "../Rows/rows-model.js";
 import { evaluationInput } from "../Calc/eval-order.js";
@@ -406,7 +409,7 @@ export function initDashboards() {
       b.addEventListener("click", on);
       return b;
     };
-    list.append(item("Edit…", () => openCalcDialog(calc.id)));
+    list.append(item("Edit…", () => (calc.group ? editGroupField(calc) : openCalcDialog(calc.id))));
     list.append(item("Duplicate", () => duplicateCalcField(calc)));
     list.append(el("div", "menu__sep"), item("Delete…", () => deleteCalcField(calc)));
     wireMenu(btn, list);
@@ -419,7 +422,7 @@ export function initDashboards() {
     for (let i = 2; !checkName(name, calculations, null).ok && i < 100; i++) name = `${calc.name} copy ${i}`;
     const ok = checkName(name, calculations, null);
     if (!ok.ok) { toast(ok.error, "info"); return; }
-    const copy = addCalculation({ name: ok.value, formula: calc.formula });
+    const copy = addCalculation({ name: ok.value, formula: calc.formula, ...(calc.group ? { group: structuredClone(calc.group) } : {}) });
     setRoleChoice(copy.id, roleChoice(calc.id));
   }
   // B4: refuse while another calculation uses it; ask first when worksheets use it; else just delete.
@@ -525,10 +528,32 @@ export function initDashboards() {
     list.append(item("Original", () => setCast(null), { role: "menuitemradio", checked: !meta.cast }));
     for (const c of castChoices(col.category))
       list.append(item(castLabel(c), () => setCast(c), { role: "menuitemradio", checked: meta.cast === c }));
+    // T02-29 / T02-30: member labels (display only) and groups (a calculated dimension made from the field's members).
+    if (effCat !== "temporal") list.append(el("div", "menu__sep"), item(meta.memberAliases ? "Edit member labels… (set)" : "Edit member labels…", () => editMemberLabels(f, col)));
+    list.append(item("Group…", () => newGroupField(f, col)));
     list.append(el("div", "menu__sep"), item(meta.hidden ? "Show in the field list" : "Hide from the field list", () => setFieldMeta(f, { hidden: !meta.hidden })));
     wireMenu(btn, list);
     wrap.append(btn, list);
     return wrap;
+  }
+  // T02-29: the field's top members (the distinct-values read, bounded) with one label input each; the map is a field setting.
+  function editMemberLabels(f, col) {
+    openMemberLabelsDialog({
+      name: metaOf(f).alias || col.name, current: metaOf(f).memberAliases,
+      load: () => distinctFor(f.db, f.table, f.column),
+      onSave: (map) => setFieldMeta(f, { memberAliases: map ?? null }),
+    });
+  }
+  // T02-30: a group field over a text column's members — a calculation the pills, query and workbook already know.
+  function newGroupField(f, col) {
+    const problem = groupCategoryProblem(col.category);
+    if (problem) { toast(problem, "info"); return; }
+    if (calculations.length >= LIMITS.calculations) { toast(`A workbook can have at most ${LIMITS.calculations} calculated fields.`, "info"); return; }
+    openGroupDialog({ field: { db: f.db, table: f.table, column: f.column }, fieldName: metaOf(f).alias || col.name, load: () => distinctFor(f.db, f.table, f.column) });
+  }
+  function editGroupField(calc) {
+    const g = calc.group.field;
+    openGroupDialog({ field: g, fieldName: metaOf(g).alias || g.column, calcId: calc.id, load: () => distinctFor(g.db, g.table, g.column) });
   }
   // Inline rename, like a tab: Enter / blur saves (1–60 characters; blank = back to the column name), Esc cancels.
   function renameField(f, col, nameEl) {

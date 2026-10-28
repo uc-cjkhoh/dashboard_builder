@@ -106,3 +106,21 @@
 .calc-fn__sig { display: block; font-weight: 600; }
 .calc-fn__line strong { color: var(--ink-2); font-size: var(--fs-xs); }
 .calc-fn > .btn { justify-self: start; }
+
+/* T02-30 group fields: the "Group…" dialog. */
+.grp-dialog { width: min(560px, calc(100vw - 2 * var(--s5))); }
+.grp-dialog[open] { display: flex; flex-direction: column; max-height: calc(100vh - 2 * var(--s5)); }
+.grp-dialog__body { display: grid; gap: var(--s4); overflow: auto; min-height: 0; align-content: start; }
+.grp-dialog .dialog__foot { flex: none; }
+.grp-dialog .field > label, .grp-dialog .field > .label { display: block; font-size: var(--fs-sm); font-weight: 600; margin-bottom: var(--s1); }
+.grp-dialog .input, .grp-dialog .select { width: 100%; }
+.grp-hint, .grp-note { margin: 0; color: var(--ink-3); font-size: var(--fs-xs); }
+.grp-note:empty { display: none; }
+.grp-status { margin: 0; font-size: var(--fs-sm); color: var(--ink-2); }
+.grp-error { color: var(--danger-ink); font-size: var(--fs-sm); }
+.grp-error:empty { display: none; }
+.grp-groups, .grp-members { display: grid; gap: var(--s2); }
+.grp-group { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s2); align-items: center; }
+.grp-add { margin-top: var(--s2); }
+.grp-member { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s3); align-items: center; }
+.grp-member .grp-member__value { margin: 0; font-weight: 400; font-size: var(--fs-sm); color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }

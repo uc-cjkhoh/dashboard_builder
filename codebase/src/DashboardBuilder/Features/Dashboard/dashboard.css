@@ -563,3 +563,19 @@
 .ws-memcol__swatch { width: 16px; height: 16px; padding: 0; border: 1px solid var(--line-2); border-radius: 3px; color: var(--ink); font-size: 10px; line-height: 1; cursor: pointer; }
 .ws-memcol__swatch[aria-pressed="true"] { outline: 2px solid var(--ink); outline-offset: 1px; }
 .ws-memcol__note { margin: 0; color: var(--ink-3); font-size: var(--fs-xs); }
+
+/* T02-29 member labels: the filter list's secondary raw value and the "Edit member labels…" dialog. */
+.ws-fcard__raw { color: var(--ink-3); font-size: var(--fs-xs); margin-left: var(--s1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-fcard__raw::before { content: "· "; }
+.memlab-dialog { width: min(520px, calc(100vw - 2 * var(--s5))); }
+.memlab-dialog[open] { display: flex; flex-direction: column; max-height: calc(100vh - 2 * var(--s5)); }
+.memlab-dialog__body { display: grid; gap: var(--s3); overflow: auto; min-height: 0; align-content: start; }
+.memlab-dialog .dialog__foot { flex: none; }
+.memlab-hint, .memlab-note { margin: 0; color: var(--ink-3); font-size: var(--fs-xs); }
+.memlab-list { display: grid; gap: var(--s2); }
+.memlab-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: var(--s3); align-items: center; }
+.memlab-value { font-size: var(--fs-sm); color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
+.memlab-input { width: 100%; }
+.memlab-error { color: var(--danger-ink); font-size: var(--fs-sm); }
+.memlab-error:empty { display: none; }
+.memlab-reset { margin-right: auto; }
