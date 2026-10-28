@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using System.Text.RegularExpressions;
+using DashboardBuilder.ClickHouse.Calc;
 namespace DashboardBuilder.ClickHouse;
 /// <summary>Client input that breaks a rule. Always a 400 with this message and the offending field path.</summary>
 public sealed class RequestValidationException(string message, string? field = null) : Exception(message)
@@ -16,6 +17,7 @@ public static class ApiLimits
     public const int MaxRowLimit = 5000, MaxBuckets = 100, MaxDistinct = 1000;
     public const int MaxExportRows = 100_000; // CSV export of a whole worksheet result
     public const int MaxOffset = 10_000_000;  // how deep a table may page
+    public const int MaxCalcDepth = CalcLimits.MaxDepth, MaxCalcNodes = CalcLimits.MaxNodes; // calculation tree; formula length (500) is client-only
 }
 
 /// <summary>Input rules for every API request. Throws <see cref="RequestValidationException"/>; never clamps.</summary>
@@ -95,6 +97,40 @@ public static class RequestRules
     private static void NoNulls<T>(T?[]? items, string field) where T : class
     { for (var i = 0; i < (items?.Length ?? 0); i++) if (items![i] is null) throw Bad($"'{field}[{i}]' is required.", $"{field}[{i}]"); }
 
+    // Calculated fields (E13). Shape, role, label and size only — the tree is checked against the live catalog in the gateway.
+    private static readonly HashSet<string> CalcRowAggs = new(StringComparer.OrdinalIgnoreCase)
+        { "sum", "avg", "min", "max", "countdistinct", "countnonnull" };
+
+    private static void CheckCalcTree(ExprNode calc, string label, string field)
+    {
+        if (label is { } l && l.Length > CalcLimits.MaxName)
+            throw Bad($"A calculation's name must be at most {CalcLimits.MaxName} characters.", field + ".column");
+        try { CalcValidator.CheckLimits(calc); }
+        catch (CalcException e) { throw Bad(e.Message, field + ".calc"); }
+    }
+
+    private static void CheckCalcDimension(ColumnRef d, string field)
+    {
+        if (d.Calc is not { } calc) return;
+        CheckCalcTree(calc, d.Column, field);
+        if (d.DatePart is not null) throw Bad("A calculation can't be grouped by a date part.", field + ".datePart");
+        if (CalcValidator.ContainsAggregate(calc)) throw Bad("A dimension can't contain an aggregate. Put it in a measure instead.", field + ".calc");
+    }
+
+    private static void CheckCalcMeasure(MeasureRef m, string field)
+    {
+        if (m.Calc is not { } calc) return;
+        CheckCalcTree(calc, m.Column, field);
+        if (CalcValidator.ContainsAggregate(calc))
+        {
+            if (m.Agg is not null) throw Bad("A calculation that already aggregates takes no further aggregation.", field + ".calc");
+        }
+        else if (string.Equals(m.Agg, "count", StringComparison.OrdinalIgnoreCase))
+            throw Bad("Counting rows doesn't use the calculation.", field + ".calc");
+        else if (m.Agg is null || !CalcRowAggs.Contains(m.Agg))
+            throw Bad("Choose how to aggregate this calculation: sum, average, min, max, distinct count or non-null count.", field + ".calc");
+    }
+
     /// <summary>P26 per-dimension date parts: "auto" / "exact", truncations, and discrete parts.</summary>
     public static readonly IReadOnlySet<string> DateParts = new HashSet<string>(StringComparer.Ordinal)
         { "auto", "exact", "year", "quarter", "month", "week", "day", "hour", "quarterOfYear", "monthOfYear", "dayOfWeek", "hourOfDay" };
@@ -116,6 +152,9 @@ public static class RequestRules
         if ((r.Joins?.Length ?? 0) > ApiLimits.MaxJoins) throw Bad($"A view can join at most {ApiLimits.MaxJoins} tables.", "joins");
         for (var i = 0; i < (r.Joins?.Length ?? 0); i++)
             if (r.Joins![i].Type is { } jt && jt != "inner" && jt != "left") throw Bad("A join is inner or left.", $"joins[{i}].type");
+        for (var i = 0; i < (r.RowDimensions?.Length ?? 0); i++) CheckCalcDimension(r.RowDimensions![i], $"rowDimensions[{i}]");
+        for (var i = 0; i < (r.ColumnDimensions?.Length ?? 0); i++) CheckCalcDimension(r.ColumnDimensions![i], $"columnDimensions[{i}]");
+        for (var i = 0; i < (r.Measures?.Length ?? 0); i++) CheckCalcMeasure(r.Measures![i], $"measures[{i}]");
         var filters = r.Filters ?? [];
         if (filters.Length > ApiLimits.MaxFilters) throw Bad($"A view can have at most {ApiLimits.MaxFilters} filters.", "filters");
         for (var i = 0; i < filters.Length; i++)
@@ -124,6 +163,7 @@ public static class RequestRules
             ValidateFilterShape(f.Op, f.Value, f.Values, $"filters[{i}]");
             if (string.Equals(f.Op, "top", StringComparison.OrdinalIgnoreCase) && f.TopBy is null)
                 throw Bad("A top-N filter needs a measure to rank by.", $"filters[{i}].topBy");
+            if (f.TopBy is { } by) CheckCalcMeasure(by, $"filters[{i}].topBy");
         }
         ValidateRange(r.Limit, maxLimit, "Limit", "limit");
         if (r.Offset is { } off && (off < 0 || off > ApiLimits.MaxOffset))

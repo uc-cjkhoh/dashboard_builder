@@ -28,6 +28,16 @@ public static class CalcValidator
         }
     }
 
+    /// <summary>True when the tree contains an aggregate function anywhere. Pure (no catalog). Recurses without
+    /// a bound, so call <see cref="CheckLimits"/> first on a tree that came off the wire.</summary>
+    public static bool ContainsAggregate(ExprNode node) => node switch
+    {
+        AggNode => true,
+        UnNode u => ContainsAggregate(u.Arg),
+        BinNode b => ContainsAggregate(b.L) || ContainsAggregate(b.R),
+        _ => false,
+    };
+
     /// <param name="categoryOf">Returns the <see cref="ClickHouseType"/> category of <c>(db, table, column)</c>,
     /// or <c>null</c> when the column does not exist.</param>
     public static CalcInfo Validate(ExprNode node, Func<string, string, string, string?> categoryOf)

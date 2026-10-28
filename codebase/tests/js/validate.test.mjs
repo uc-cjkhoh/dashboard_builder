@@ -51,3 +51,8 @@ test("a range needs From ≤ To", () => {
 });
 test("a drill hierarchy is capped at 6 levels", () => assert.equal(LIMITS.drillLevels, 6));
 test("a worksheet query returns at most 5,000 groups (server MaxRowLimit)", () => assert.equal(LIMITS.rows, 5000));
+test("calculation limits mirror the server (spec E13)", () => {
+  assert.equal(LIMITS.calculations, 20);
+  assert.equal(LIMITS.calcFormula, 500);
+  assert.equal(LIMITS.calcName, 60);
+});

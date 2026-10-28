@@ -16,6 +16,9 @@ export const LIMITS = Object.freeze({
   drillLevels: 6, // keeps user filters (8) + drill path (≤5) + page + selection within the server's 16
   rows: 5000, // groups one chart query returns: Top-N "All" (server MaxRowLimit); the Table pages instead
   exportRows: 100000, // rows in a CSV export (server MaxExportRows)
+  calculations: 20,  // calculated fields per workbook (CalcLimits.MaxCalcs; enforced client-side only)
+  calcFormula: 500,  // characters in a formula (the server never sees formula text)
+  calcName: 60,      // characters in a calculation's name / label (server CalcLimits.MaxName)
 });
 export const HOST_MESSAGES = Object.freeze({
   scheme: "Enter the host name only — no http:// or https://.",
