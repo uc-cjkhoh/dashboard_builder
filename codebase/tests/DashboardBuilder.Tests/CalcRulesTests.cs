@@ -101,4 +101,13 @@ public class CalcRulesTests
         Assert.False(CalcValidator.ContainsAggregate(RowLevel));
         Assert.False(CalcValidator.ContainsAggregate(new NumNode(1)));
     }
+
+    [Fact] public void Row_level_aggregations_are_the_six_value_aggregations() =>
+        Assert.True(new HashSet<string> { "sum", "avg", "min", "max", "countdistinct", "countnonnull" }.SetEquals(CalcCatalog.RowLevelAggregations));
+    [Theory] [InlineData("count")] [InlineData("median")]
+    public void Validate_query_rejects_count_and_unknown_names_with_the_plan_a_message(string agg)
+    {
+        var e = Assert.Throws<RequestValidationException>(() => RequestRules.ValidateQuery(Q(measures: [M(RowLevel, agg)])));
+        Assert.Equal(agg == "count" ? "Counting rows doesn't use the calculation." : "Choose how to aggregate this calculation: sum, average, min, max, distinct count or non-null count.", e.Message);
+    }
 }

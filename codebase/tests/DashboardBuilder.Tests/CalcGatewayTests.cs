@@ -41,7 +41,7 @@ public class CalcGatewayTests
 
     private static CompiledCalc Compile(ExprNode n, string field = "measures[0]", string prefix = "c0",
         List<(string Name, string Type, object Value)>? ps = null, bool sampled = false, bool approximate = false) =>
-        ClickHouseGateway.CompileCalc(n, field, Refs, ps ?? Ps(), prefix, sampled, approximate);
+        CalcSql.CompileCalc(n, field, Refs, ps ?? Ps(), prefix, sampled, approximate);
 
     private static string? FieldOf(Action a) => Assert.Throws<RequestValidationException>(a).Field;
 
@@ -101,9 +101,9 @@ public class CalcGatewayTests
     [Fact]
     public void Every_field_in_a_tree_is_collected_for_qualification() =>
         Assert.Equal([Amount, Qty, Status],
-            ClickHouseGateway.CalcFields(new BinNode("+", Ratio, new UnNode("-", new AggNode("countd", Status)))));
+            CalcSql.CalcFields(new BinNode("+", Ratio, new UnNode("-", new AggNode("countd", Status)))));
 
-    [Fact] public void A_constant_has_no_fields() => Assert.Empty(ClickHouseGateway.CalcFields(new BinNode("+", new NumNode(1), new NumNode(2))));
+    [Fact] public void A_constant_has_no_fields() => Assert.Empty(CalcSql.CalcFields(new BinNode("+", new NumNode(1), new NumNode(2))));
 
     // --- Validate + compile ---
 
@@ -155,7 +155,7 @@ public class CalcGatewayTests
     [Fact]
     public void An_aggregate_measure_is_used_as_is()
     {
-        var (sql, numeric) = ClickHouseGateway.CalcMeasureSql(null, Compile(Ratio), "measures[0]", false, false);
+        var (sql, numeric) = CalcSql.CalcMeasureSql(null, Compile(Ratio), "measures[0]", false, false);
         Assert.Equal("(sum(toFloat64(t0.`amount`)) / nullIf(sum(toFloat64(t0.`qty`)), 0))", sql);
         Assert.True(numeric);
     }
@@ -168,7 +168,7 @@ public class CalcGatewayTests
     [InlineData("countNonNull", false, false, "count((toFloat64(t0.`amount`) * {c0p0:Float64}))")]
     public void A_row_level_measure_is_aggregated_by_its_pill(string agg, bool sampled, bool approximate, string expected)
     {
-        var (sql, numeric) = ClickHouseGateway.CalcMeasureSql(agg, Compile(Doubled), "measures[0]", sampled, approximate);
+        var (sql, numeric) = CalcSql.CalcMeasureSql(agg, Compile(Doubled), "measures[0]", sampled, approximate);
         Assert.Equal(expected, sql);
         Assert.True(numeric);
     }
@@ -179,23 +179,23 @@ public class CalcGatewayTests
     [InlineData("countDistinct", true)]
     [InlineData("countNonNull", true)]
     public void A_text_measure_is_numeric_only_when_counted(string agg, bool numeric) =>
-        Assert.Equal(numeric, ClickHouseGateway.CalcMeasureSql(agg, Compile(Status), "measures[0]", false, false).Numeric);
+        Assert.Equal(numeric, CalcSql.CalcMeasureSql(agg, Compile(Status), "measures[0]", false, false).Numeric);
 
     [Fact] public void Summing_text_is_a_400() =>
-        Assert.Equal("measures[1].calc", FieldOf(() => ClickHouseGateway.CalcMeasureSql("sum", Compile(Status), "measures[1]", false, false)));
+        Assert.Equal("measures[1].calc", FieldOf(() => CalcSql.CalcMeasureSql("sum", Compile(Status), "measures[1]", false, false)));
 
     [Theory] [InlineData(null)] [InlineData("count")] [InlineData("median")]
     public void A_row_level_measure_needs_a_value_aggregation(string? agg) =>
-        Assert.Equal("measures[0].calc", FieldOf(() => ClickHouseGateway.CalcMeasureSql(agg, Compile(Doubled), "measures[0]", false, false)));
+        Assert.Equal("measures[0].calc", FieldOf(() => CalcSql.CalcMeasureSql(agg, Compile(Doubled), "measures[0]", false, false)));
 
     [Fact] public void An_aggregate_takes_no_further_aggregation() =>
-        Assert.Equal("measures[0].calc", FieldOf(() => ClickHouseGateway.CalcMeasureSql("sum", Compile(Ratio), "measures[0]", false, false)));
+        Assert.Equal("measures[0].calc", FieldOf(() => CalcSql.CalcMeasureSql("sum", Compile(Ratio), "measures[0]", false, false)));
 
     [Fact] public void An_aggregate_is_not_a_dimension() =>
-        Assert.Equal("rowDimensions[0].calc", FieldOf(() => ClickHouseGateway.CalcDimensionSql(Compile(Ratio, "rowDimensions[0]"), "rowDimensions[0]")));
+        Assert.Equal("rowDimensions[0].calc", FieldOf(() => CalcSql.CalcDimensionSql(Compile(Ratio, "rowDimensions[0]"), "rowDimensions[0]")));
 
     [Fact] public void A_row_level_dimension_groups_by_its_expression() =>
-        Assert.Equal("(toFloat64(t0.`amount`) * {c0p0:Float64})", ClickHouseGateway.CalcDimensionSql(Compile(Doubled, "rowDimensions[0]"), "rowDimensions[0]"));
+        Assert.Equal("(toFloat64(t0.`amount`) * {c0p0:Float64})", CalcSql.CalcDimensionSql(Compile(Doubled, "rowDimensions[0]"), "rowDimensions[0]"));
 
     // --- Names ---
 
@@ -203,9 +203,9 @@ public class CalcGatewayTests
     [InlineData("Margin", "Margin")]
     [InlineData(null, "calculation")]
     [InlineData("", "calculation")]
-    public void A_calculation_is_named_by_its_label(string? label, string expected) => Assert.Equal(expected, ClickHouseGateway.CalcLabel(label));
+    public void A_calculation_is_named_by_its_label(string? label, string expected) => Assert.Equal(expected, CalcSql.CalcLabel(label));
 
-    [Fact] public void An_over_long_label_is_not_echoed() => Assert.Equal("calculation", ClickHouseGateway.CalcLabel(new string('x', 61)));
+    [Fact] public void An_over_long_label_is_not_echoed() => Assert.Equal("calculation", CalcSql.CalcLabel(new string('x', 61)));
 
     // --- Reuse in the Other / total / auto-grain statements (Review Focus 2) ---
 
@@ -214,7 +214,7 @@ public class CalcGatewayTests
     {
         var ps = new List<(string Name, string Type, object Value)> { ("p0", "String", "x") };
         var dim = Compile(new BinNode("+", Amount, new NumNode(1)), "rowDimensions[0]", "c0", ps);
-        var meas = ClickHouseGateway.CalcMeasureSql("sum", Compile(Doubled, "measures[0]", "c1", ps), "measures[0]", false, false).Sql;
+        var meas = CalcSql.CalcMeasureSql("sum", Compile(Doubled, "measures[0]", "c1", ps), "measures[0]", false, false).Sql;
         const string from = " FROM `db`.`orders` AS t0", where = " WHERE t0.`status` = {p0:String}";
         var ordered = $"SELECT {dim.Sql} AS k0, {meas} AS v0{from}{where} GROUP BY k0 ORDER BY v0 DESC";
         var sql = ClickHouseGateway.OtherSql(dim.Sql, [meas], from, where, ordered, 11, "");
@@ -240,9 +240,9 @@ public class CalcGatewayTests
     [Fact]
     public void Approximate_mode_reports_distinct_estimates_from_calculations_too()
     {
-        Assert.True(ClickHouseGateway.UsesDistinctCount([new MeasureRef("db", "orders", "status", "countDistinct")]));
-        Assert.True(ClickHouseGateway.UsesDistinctCount([new MeasureRef("", "", "n", null!, new AggNode("countd", Status))]));
-        Assert.False(ClickHouseGateway.UsesDistinctCount([new MeasureRef("", "", "r", null!, Ratio)]));
+        Assert.True(CalcSql.UsesDistinctCount([new MeasureRef("db", "orders", "status", "countDistinct")]));
+        Assert.True(CalcSql.UsesDistinctCount([new MeasureRef("", "", "n", null!, new AggNode("countd", Status))]));
+        Assert.False(CalcSql.UsesDistinctCount([new MeasureRef("", "", "r", null!, Ratio)]));
     }
 
     // A calculation field must be on a table already in the query; the check runs before any catalog lookup, so a calculation
@@ -253,7 +253,7 @@ public class CalcGatewayTests
     public async Task A_field_on_a_table_not_in_the_query_is_rejected_before_any_catalog_lookup(string column)
     {
         var lookups = new List<string>();
-        var ex = await Assert.ThrowsAsync<UnknownIdentifierException>(() => ClickHouseGateway.ResolveCalcRefsAsync(
+        var ex = await Assert.ThrowsAsync<UnknownIdentifierException>(() => CalcSql.ResolveCalcRefsAsync(
             [new FieldNode("db", "other", column)],
             (db, table) => table == "orders",
             (db, table) => { lookups.Add($"{db}.{table}"); return Task.FromResult(new Dictionary<string, string> { ["amount"] = ClickHouseType.Numeric }); },
@@ -265,7 +265,7 @@ public class CalcGatewayTests
     [Fact]
     public async Task Fields_on_tables_in_the_query_resolve_and_an_unknown_column_is_left_for_the_validator()
     {
-        var refs = await ClickHouseGateway.ResolveCalcRefsAsync(
+        var refs = await CalcSql.ResolveCalcRefsAsync(
             [new FieldNode("db", "orders", "amount"), new FieldNode("db", "orders", "amount"), new FieldNode("db", "orders", "nope")],
             (db, table) => table == "orders",
             (db, table) => Task.FromResult(new Dictionary<string, string> { ["amount"] = ClickHouseType.Numeric }),
@@ -273,5 +273,22 @@ public class CalcGatewayTests
         var only = Assert.Single(refs);
         Assert.Equal(("db", "orders", "amount"), only.Key);
         Assert.Equal(("t0.`amount`", ClickHouseType.Numeric), only.Value);
+    }
+
+    private static string Chain(int levels)
+    {
+        var node = "{\"k\":\"field\",\"db\":\"d\",\"table\":\"t\",\"column\":\"c\"}";
+        for (var i = 1; i < levels; i++) node = "{\"k\":\"un\",\"op\":\"-\",\"arg\":" + node + "}";
+        return "{\"from\":{\"db\":\"d\",\"table\":\"t\"},\"rowDimensions\":[{\"db\":\"\",\"table\":\"\",\"column\":\"D\",\"calc\":" + node + "}]}";
+    }
+
+    [Theory] [InlineData(30)] [InlineData(60)] [InlineData(5000)]
+    public async Task A_deeply_nested_calc_is_a_400_with_an_error_body_not_a_500(int levels)
+    {
+        await using var factory = new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory<Program>();
+        var r = await factory.CreateClient().PostAsync("/api/query", new System.Net.Http.StringContent(Chain(levels), System.Text.Encoding.UTF8, "application/json"));
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, r.StatusCode);
+        var json = System.Text.Json.JsonDocument.Parse(await r.Content.ReadAsStringAsync()).RootElement;
+        Assert.True(json.TryGetProperty("error", out var e) && e.GetString()!.Length > 0);
     }
 }

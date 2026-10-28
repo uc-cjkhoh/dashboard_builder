@@ -98,9 +98,6 @@ public static class RequestRules
     { for (var i = 0; i < (items?.Length ?? 0); i++) if (items![i] is null) throw Bad($"'{field}[{i}]' is required.", $"{field}[{i}]"); }
 
     // Calculated fields (E13). Shape, role, label and size only — the tree is checked against the live catalog in the gateway.
-    private static readonly HashSet<string> CalcRowAggs = new(StringComparer.OrdinalIgnoreCase)
-        { "sum", "avg", "min", "max", "countdistinct", "countnonnull" };
-
     private static void CheckCalcTree(ExprNode calc, string label, string field)
     {
         if (label is { } l && l.Length > CalcLimits.MaxName)
@@ -132,7 +129,7 @@ public static class RequestRules
         }
         else if (string.Equals(m.Agg, "count", StringComparison.OrdinalIgnoreCase))
             throw Bad("Counting rows doesn't use the calculation.", field + ".calc");
-        else if (m.Agg is null || !CalcRowAggs.Contains(m.Agg))
+        else if (m.Agg is null || !CalcCatalog.RowLevelAggregations.Contains(m.Agg.ToLowerInvariant()))
             throw Bad("Choose how to aggregate this calculation: sum, average, min, max, distinct count or non-null count.", field + ".calc");
     }
 
