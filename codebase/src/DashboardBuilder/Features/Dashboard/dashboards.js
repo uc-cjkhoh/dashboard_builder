@@ -5,17 +5,17 @@ import { visibleTools } from "./toolbar-rules.js";
 import { roleOf, COLOR_SPLIT_TYPES, STAT_SINGLE_TABLE, chartIssue, TEXT_VALUE_HINT, COLOR_SPLIT_HINT, statFieldHint, showMeOptions, placeFor, samePlacement } from "./show-me-rules.js";
 import { toggle, makeButton, toast, fieldError, confirmDialog } from "../Core/ui.js";
 import { LIMITS, number } from "../Core/validate.js";
-import { aggsFor, checkAdd, checkFilter, viewCounts, statFilters, withCategories, TEXT_VALUE_TYPES, opsFor, OP_LABELS, serverFilter } from "./filter-rules.js";
+import { aggsFor, checkAdd, checkFilter, viewCounts, statFilters, withCategories, TEXT_VALUE_TYPES, opsFor, OP_LABELS } from "./filter-rules.js";
 import { entities, relationships, activeDashboard, isModelActive, updateSheet, bus, defaultFormat, defaultMarks, sharedFilters,
   metaOf, nameOf, setFieldMeta, emptySheet, parameters, updateParameter, calculations, dashboards, addCalculation, removeCalculation } from "../Core/store.js";
-import { checkValue, paramTypeFor, withParamValue, effectiveTopN } from "../Core/parameters-model.js";
+import { checkValue, paramTypeFor } from "../Core/parameters-model.js";
 import { renderChart as renderSeriesChart, disposeChart, exportChart, hasChartInstance, animateNextChart, sizeChart, focusSeries } from "./chart.js";
 import { makeValueFormatter, makeCategoryFormatter } from "../Core/format.js";
 import { createLatestGate, createResultCache, requestKey, isAbortError, truncationNotice } from "./query-runner.js";
 import { CHART_TYPES, chartIcon, chartLabel, sortSummary } from "./viewbar-model.js";
 import { enter, MOTION } from "../Core/motion.js";
 import { wireResizer } from "../Core/resizer.js";
-import { PRESET_CHOICES, COMPARE_CHOICES, COMPARE_TYPES, newPeriod, resolveRange, compareRange, rangeFilter, rangeLabel,
+import { PRESET_CHOICES, COMPARE_CHOICES, COMPARE_TYPES, newPeriod, resolveRange, compareRange, rangeLabel,
   compareName, changeOf, toneOf, pctText, alignCompare, targetProgress } from "./period-model.js";
 import { CF_MODE_CHOICES, CF_SCALE_CHOICES, CF_OP_CHOICES, CF_TONE_CHOICES, CF_MAX_RULES, TONE_ICON, measureKey, emptyRule,
   extentOf, scaleColors, barGeometry, matchRule, isActive, midpointOf } from "./conditional-model.js";
@@ -28,9 +28,9 @@ import { createHistory } from "./history.js";
 import { LINE_STYLE_CHOICES, linesTakeStyle } from "./line-style-model.js";
 import { HEATMAP_SHAPE_CHOICES } from "./heatmap-model.js";
 import { targetChoices, bulletTargets, effectiveTargetMeasure } from "./bullet-model.js";
-import { planJoinType } from "../Relations/relation-rules.js";
+import { keyOf, marksOf, SCATTER_TYPES, COLOR_USES, colorMode, isDrillActive, drillActiveDim, planDims, planMeasures, sortTargets as planSortTargets, measureName as planMeasureName, buildPlan as planQuery, periodFilters as planPeriodFilters, calcContext, appliedShared as planAppliedShared, withParams, toServerFilter, isDateOnlyType } from "./sheet-plan.js";
 import { catalogFromEntities } from "../Calc/calc-resolve.js";
-import { isCalcPill, calcPillId, sameCalcPill, makeCalcPill, refusal, pillSlots, syncCalcPills, clearCalcPills, clearFilterCalc, usesCalc, CALC_AGGS } from "../Calc/calc-pill.js";
+import { isCalcPill, sameCalcPill, makeCalcPill, refusal, pillSlots, syncCalcPills, clearCalcPills, clearFilterCalc, usesCalc, CALC_AGGS } from "../Calc/calc-pill.js";
 import { openCalcDialog } from "../Calc/calc-dialog.js";
 import { openRowsDialog } from "../Rows/rows-dialog.js";
 import { buildRowsRequest } from "../Rows/rows-model.js";
@@ -38,11 +38,11 @@ import { evaluationInput } from "../Calc/eval-order.js";
 import { explainControl } from "../Calc/explain-popover.js";
 import { paneState, deleteCalcPlan, roleChoice, setRoleChoice } from "../Calc/calc-pane-model.js";
 import { checkName } from "../Calc/calc-workbook.js";
-import { wireDim, wireMeasure, planTables, calcProblem, statCalcProblem, measureLabel, aggWord, topByRef, topByKey, wireTopBy, resolveSortTarget } from "../Calc/calc-plan.js";
+import { planTables, calcProblem, statCalcProblem, aggWord, topByRef, topByKey } from "../Calc/calc-plan.js";
 import { approxNotice } from "./speed-notice.js";
 import { REF_CHOICES, TREND_CHOICES, FORECAST_CHOICES, defaultAnalytics, refValue, trendSeries, combine } from "./analytics-model.js";
-import { castChoices, castLabel, effectiveCategory, withCasts, syncCastCategories, statCastProblem } from "./cast-model.js";
-import { scalePlan, withOther, bucketNotice, tableProgress, needsNextPage, OTHER_TYPES, BUCKET_TYPES, DATE_BUCKET_CHOICES } from "./scale-model.js";
+import { castChoices, castLabel, effectiveCategory, syncCastCategories, statCastProblem } from "./cast-model.js";
+import { withOther, bucketNotice, tableProgress, needsNextPage, OTHER_TYPES, BUCKET_TYPES, DATE_BUCKET_CHOICES } from "./scale-model.js";
 
 // Tableau-style worksheet: each dashboard is one sheet. Drag fields from the field pane onto the
 // Columns (dimension), Rows (measure) and Filters shelves; the chart renders from a bounded,
@@ -68,45 +68,40 @@ function baseCategoryOf(db, table, column) {
   return undefined;
 }
 // A Date / Date32 column holds days only (no time) — its range filter is sent as plain days.
-function isDateOnlyColumn(db, table, column) {
-  const t = columnsCache.get(keyOf(db, table))?.find((x) => x.name === column)?.type
+function columnType(db, table, column) {
+  return columnsCache.get(keyOf(db, table))?.find((x) => x.name === column)?.type
     ?? [...entities.values()].find((e) => e.db === db && e.table === table)?.columns?.find((x) => x.name === column)?.type ?? "";
-  return /^(Nullable\()?(LowCardinality\()?Date(32)?\)*$/.test(t);
 }
+const isDateOnlyColumn = (db, table, column) => isDateOnlyType(columnType(db, table, column));
 const FILTER_PLACEHOLDER = { numeric: "number", temporal: "YYYY-MM-DD", boolean: "true or false" };
 const OPS = ["=", "!=", ">", ">=", "<", "<=", "in", "notin", "between"];
 // A filter contributes to the query only when checkFilter() says "ok" (empty = no-op, invalid = not applied).
 // Map a client filter to the server QueryFilter shape (value for scalar ops, values for in/between).
 // P30: relative dates resolve to a bound `between` (whole days), top-N carries its ranking measure.
 // Calculated fields: the context the pure plan seam (Calc/calc-plan.js) compiles pills against.
-const calcFieldCtx = () => ({ calcs: calculations, catalog: catalogFromEntities([...entities.values()]) });
-// Shared filters that actually reach the query (a calculated Top-N ranking among them must be computable).
-const appliedShared = () => sharedFilters.filter((f) => checkFilter(f).state === "ok");
-const toFilter = (f) => serverFilter(f, { resolve: (preset) => resolveRange({ preset }), dateOnly: isDateOnlyColumn(f.db, f.table, f.column), wireTopBy: (t) => wireTopBy(t, calcFieldCtx()) });
+// The plan inputs the pure planner reads (sheet-plan.js): live store state plus the field-pane column cache.
+const planCtx = () => ({ calculations, entities, relationships, sharedFilters, parameters, metaOf, nameOf, columnType });
+const calcFieldCtx = () => calcContext(planCtx());
+const appliedShared = () => planAppliedShared(planCtx());
+const toFilter = (f) => toServerFilter(f, planCtx());
 // A field's role can be overridden on its pill (Tableau's convert-to-dimension/measure). Default:
 // numeric → measure (aggregated), everything else → dimension (grouped). A numeric field made a
 // dimension groups by its raw values; any field made a measure is aggregated (count/countDistinct
 // always valid, sum/avg only meaningful for numbers).
 // (roleOf itself lives in show-me-rules.js.)
 
-// Display name of a measure — matches the server's measure naming (see QueryAsync).
-function measureName(f) {
-  return measureLabel(f, calculations, metaOf(f).alias); // P28 display name; a calculated field is just its name
-}
-// Stable identity for a pill, so a stored sort target survives re-renders.
-const fieldId = (f, kind) => (isCalcPill(f) ? calcPillId(f, kind) : `${kind}:${f.db}.${f.table}.${f.column}:${f.agg ?? ""}`);
+const measureName = (f) => planMeasureName(f, planCtx()); // P28 display name; a calculated field is just its name
+const sortTargets = (sheet) => planSortTargets(sheet, planCtx());
+const buildPlan = (sheet, periodRange) => planQuery(sheet, periodRange, planCtx());
+const periodFilters = (sheet, range) => planPeriodFilters(sheet, range, planCtx());
 
 // --- marks card + query-shape helpers (P18) --------------------------------
 // The canonical query shape lives in planDims()/planMeasures(): buildPlan sends exactly these, and
 // renderChart re-derives the same ordering to know which result column is a series vs. a mark channel.
 // With no marks set, both reduce to the pre-P18 ordering, so existing charts are byte-identical.
-const EMPTY_MARKS = { size: null, label: null, detail: [], tooltip: [], shape: null, path: null, angle: null };
-const marksOf = (s) => s.marks ?? EMPTY_MARKS;
 // Scatter-family types (P11 scatter + P19 square/circle marks): point charts that plot two measures
 // and can carry a Shape encoding. They share buildScatter with a symbol override.
-const SCATTER_TYPES = new Set(["scatter", "square", "circle"]);
 const scatterSymbol = (type) => (type === "square" ? "rect" : type === "circle" ? "circle" : "circle");
-const isNumericField = (f) => Boolean(f) && f.category === "numeric";
 const sameField = (a, b) => Boolean(a) && Boolean(b) && (isCalcPill(a) || isCalcPill(b) ? sameCalcPill(a, b) : a.db === b.db && a.table === b.table && a.column === b.column);
 // Ordering comparator for Path (P19): numeric when both look numeric, else a locale string compare.
 function cmpValues(a, b) {
@@ -114,66 +109,7 @@ function cmpValues(a, b) {
   if (Number.isFinite(na) && Number.isFinite(nb)) return na - nb;
   return String(a ?? "").localeCompare(String(b ?? ""));
 }
-// Colour encoding mode: a numeric Colour field ramps a CONTINUOUS gradient (P18); a categorical one
-// splits into DISCRETE series (P7). "none" when the Colour shelf is empty.
-function colorMode(sheet) {
-  const cf = (sheet.color ?? [])[0];
-  if (!cf) return "none";
-  return isNumericField(cf) ? "continuous" : "discrete";
-}
-// Group-by dimensions in SELECT key order: [drill?, rows-dims, cols-dims, Detail-dims, discrete-Color].
-// Discrete Colour MUST stay last (renderColorSplit treats the trailing key as the colour value).
-function planDims(sheet) {
-  const dd = drillActiveDim(sheet);
-  const rowDims = [
-    ...(dd ? [dd] : []),
-    ...sheet.rows.filter((f) => roleOf(f) === "dimension"),
-  ];
-  const m = marksOf(sheet);
-  const detail = m.detail ?? [];
-  // Shape (P19): a dimension → distinct point shapes; it's a group-by only on the scatter family.
-  const shapeDim = m.shape && SCATTER_TYPES.has(sheet.chartType) ? [m.shape] : [];
-  const cf = (sheet.color ?? [])[0];
-  const colorDiscrete = cf && colorMode(sheet) === "discrete" && COLOR_USES.has(sheet.chartType) ? [cf] : [];
-  const colDims = [
-    ...sheet.columns.filter((f) => roleOf(f) === "dimension"),
-    ...detail,
-    ...shapeDim,
-    ...colorDiscrete, // discrete Colour MUST remain the last key (renderColorSplit)
-  ];
-  return { rowDims, colDims, keyOrder: [...rowDims, ...colDims] };
-}
-// Measures in SELECT value order, each tagged with its role: "shelf" (a series), "size", "color"
-// (continuous gradient) or "aux" (a numeric Label/Tooltip field). Shelf measures come first so their
-// aliases (v0,v1,…) and series indices are unchanged from pre-P18. A Table shows only shelf measures.
-function planMeasures(sheet) {
-  const shelf = [
-    ...sheet.columns.filter((f) => roleOf(f) === "measure"),
-    ...sheet.rows.filter((f) => roleOf(f) === "measure"),
-  ].map((f) => ({ field: f, role: "shelf", agg: f.agg ?? "sum" }));
-  if (sheet.chartType === "table") return shelf; // crosstab shows shelf measures only
-  const out = [...shelf];
-  const m = marksOf(sheet);
-  if (isNumericField(m.size)) out.push({ field: m.size, role: "size", agg: m.size.agg ?? "sum" });
-  if (colorMode(sheet) === "continuous") { const cf = sheet.color[0]; out.push({ field: cf, role: "color", agg: cf.agg ?? "sum" }); }
-  // Numeric Label / Tooltip / Path fields ride along as extra measures so their aggregated value is
-  // available per-mark (labels/tooltips read them; Path sorts line vertices by them).
-  for (const f of [m.label, m.path, ...(m.tooltip ?? [])]) if (isNumericField(f)) out.push({ field: f, role: "aux", agg: f.agg ?? "sum" });
-  return out;
-}
 const shelfMeasureCount = (sheet) => planMeasures(sheet).filter((e) => e.role === "shelf").length;
-
-// The orderable output columns, in the same order the query selects them: all group-by dimensions
-// (planDims key order) as k0,k1,…; then the SHELF measures (planMeasures) as v0,v1,…. Marks-only
-// measures (size/colour/aux) aren't offered as sort targets but keep their aliases past the shelf ones.
-function sortTargets(sheet) {
-  const { keyOrder } = planDims(sheet);
-  const shelf = planMeasures(sheet).filter((e) => e.role === "shelf");
-  const out = [];
-  keyOrder.forEach((f, i) => out.push({ alias: `k${i}`, id: fieldId(f, "dimension"), label: nameOf(f) }));
-  shelf.forEach((e, i) => out.push({ alias: `v${i}`, id: fieldId(e.field, "measure"), label: measureName(e.field) }));
-  return out;
-}
 const CHART_LIKE = new Set([
   "bar", "stacked", "line", "area", "pie", "donut", "scatter", "combo", "square", "circle",
   "heatmap", "treemap", "histogram", "boxplot",
@@ -191,7 +127,6 @@ const MAX_PANELS = 24;
 // series per value; a Table takes it as an extra group-by that renders as a free top-header level.
 // Types outside COLOR_USES ignore a Color pill (pie already slices by colour; scatter/combo/KPI
 // don't split) — the Color lane shows a note so it's honest, never a silent no-op.
-const COLOR_USES = new Set(["bar", "stacked", "line", "area", "table"]);
 // Chart types whose marks map 1:1 to a category and so support click-to-filter (P15).
 // P21: chart types that take reference lines / bands / a trend.
 const ANALYTICS_TYPES = new Set(["bar", "line", "area"]);
@@ -210,32 +145,6 @@ function primaryDim(sheet) {
 }
 
 // --- drill hierarchy (P16) --------------------------------------------------
-// A hierarchy is "active" once it has at least two ordered levels; a single level isn't a hierarchy.
-function isDrillActive(sheet) { return (sheet.drill?.levels?.length ?? 0) >= 2; }
-// The level currently shown (a plain dimension pill descriptor); null when no hierarchy is active.
-function drillActiveDim(sheet) {
-  if (!isDrillActive(sheet)) return null;
-  const d = sheet.drill;
-  const lvl = d.levels[Math.min(d.depth, d.levels.length - 1)];
-  return { db: lvl.db, table: lvl.table, column: lvl.column, category: lvl.category, role: "dimension" };
-}
-// Each pinned ancestor becomes a bound-parameter equality filter (same table as the drill → never
-// forces a join). Shape matches QueryFilter (value bound as a typed parameter — D6/D16).
-function drillPathFilters(sheet) {
-  if (!isDrillActive(sheet)) return [];
-  const d = sheet.drill;
-  const t = d.levels[0]; // all levels share one table
-  return (d.path ?? []).map((p) => ({ db: t.db, table: t.table, column: p.column, op: "=", value: String(p.value), values: null }));
-}
-// P20 Pages: the current member as a bound-parameter equality filter, or null (no pages / not loaded /
-// a null member — can't bind `= NULL`). buildPlan applies it only when the pages table is in the query.
-function pagesFilter(sheet) {
-  const p = sheet.pages;
-  if (!p || !Array.isArray(p.members) || !p.members.length) return null;
-  const v = p.members[Math.max(0, Math.min(p.index ?? 0, p.members.length - 1))];
-  if (v == null) return null;
-  return { db: p.db, table: p.table, column: p.column, op: "=", value: String(v), values: null };
-}
 // Chart orientation, Tableau-style: a dimension on **Rows** (and none on Columns) → **horizontal**
 // bars (category down the left, value along the bottom); otherwise **vertical** (the default). Only
 // the cartesian bar/stacked/line/area types honour it (combo keeps its dual y-axis vertical).
@@ -259,8 +168,6 @@ function showMeCounts(sheet, type) {
     numericField: shelf.some((f) => f.category === "numeric"),
   };
 }
-const keyOf = (db, table) => `${db}\u0000${table}`;
-const splitKey = (k) => k.split("\u0000");
 const columnsCache = new Map();
 let headerAbort = null; // aborts the menus wired during the previous header render
 const TYPE_ICONS = { numeric: "type-number", text: "type-text", temporal: "type-date", boolean: "type-bool" };
@@ -1780,7 +1687,7 @@ export function initDashboards() {
 
   // The value editor for a filter, by operator (P14).
   // P32: a filter value can follow a parameter of the field's type (scalar / text-match / top-N count).
-  const pv = (f) => withParamValue(f, parameters);
+  const pv = (f) => withParams(f, planCtx());
   const PARAMABLE = new Set(["=", "!=", ">", ">=", "<", "<=", "contains", "startsWith", "endsWith", "top"]);
   function paramChoices(f) {
     const t = f.op === "top" ? "number" : paramTypeFor(f.category);
@@ -2358,12 +2265,6 @@ export function initDashboards() {
     wrap.append(inp);
     return wrap;
   }
-  // The period's range filter for a plan (its own range, or `range` for the comparison query).
-  function periodFilters(sheet, range) {
-    const p = sheet.period;
-    const r = range ?? resolveRange(p);
-    return p && r ? [rangeFilter(p, r, isDateOnlyColumn(p.db, p.table, p.column))] : [];
-  }
   // The comparison result for the current view, or null (no comparison / not drawn for this chart / failed).
   // undefined = superseded by a newer query.
   async function fetchCompare(dash, s, ticket) {
@@ -2729,127 +2630,6 @@ export function initDashboards() {
       setNotice(joinNotices(filterNote, ignoredNote, truncationNotice({ truncated: result.truncated, chartType: "boxplot", limit: req.limit })));
     }
   }
-
-  function buildPlan(sheet, periodRange) {
-    // Fields split by shelf AND type. Categorical pills are dimensions: Rows-shelf ones become the
-    // crosstab's left stub, Columns-shelf ones the top header. Numeric pills are measures (the cell
-    // values); we send them column-shelf-first then row-shelf-first so the result's measure order
-    // lines up with measureAxis() at render time (the shelf decides where the measure band sits).
-    // P26: a date pill's part rides along (auto = left to the chart-wide Group dates).
-    const cctx = calcFieldCtx(); // calculated fields: pills compile to trees (Calc/calc-plan.js)
-    const toDim = (f) => wireDim(f, cctx);
-    // P16 drill + P18 marks fold into the canonical query shape (planDims/planMeasures): the drill level
-    // and any Detail dims are group-bys; Size / continuous-Colour / numeric Label+Tooltip are measures.
-    const { rowDims, colDims, keyOrder } = planDims(sheet);
-    const rowDimensions = rowDims.map(toDim);
-    const columnDimensions = colDims.map(toDim);
-    const mplan = planMeasures(sheet);
-    const measures = mplan.map((e) => wireMeasure(e, cctx));
-
-    const involved = [];
-    const addKey = (k) => { if (!involved.includes(k)) involved.push(k); };
-    const add = (ref) => {
-      if (!ref) return;
-      if (isCalcPill(ref)) { planTables(ref, cctx).forEach((k) => { const i = k.indexOf("."); addKey(keyOf(k.slice(0, i), k.slice(i + 1))); }); return; } // none for a constant
-      addKey(keyOf(ref.db, ref.table));
-    };
-    keyOrder.forEach(add); mplan.forEach((e) => add(e.field)); sheet.filters.forEach(add);
-    const rangeFilters = periodFilters(sheet, periodRange); // P35 — like a filter, it may bring its table in
-    rangeFilters.forEach(add);
-    if (!involved.length) return null;
-    const base = involved[0];
-    const joins = buildJoins(base, involved.slice(1));
-    if (joins === null) return null;
-    const [db, table] = splitKey(base);
-    // P15: a click selection with an action (keep/exclude) becomes a bound-parameter filter — but only
-    // when its table is already in the query (the selected dimension is on a shelf), so it never forces
-    // an unresolved join. keep → `col = value`, exclude → `col != value`.
-    const sel = sheet.selection;
-    const selFilters = (sel && sel.action && sel.value != null && involved.includes(keyOf(sel.db, sel.table)))
-      ? [{ db: sel.db, table: sel.table, column: sel.column, op: sel.action === "keep" ? "=" : "!=", value: String(sel.value), values: null }]
-      : [];
-    // P40 shared filters: applied when their table is already in the query (never forcing a join).
-    const shared = sharedFilters.map(pv).filter((f) => checkFilter(f).state === "ok" && involved.includes(keyOf(f.db, f.table))).map(toFilter).filter(Boolean);
-    // P20 pages: the current member as a bound `=` filter, only when its table is already in the query.
-    const pf = pagesFilter(sheet);
-    const pageFilters = (pf && involved.includes(keyOf(pf.db, pf.table))) ? [pf] : [];
-    // Resolve the sort selection to a SELECT alias (k{n}/v{n}); default = first field, ascending.
-    const targets = sortTargets(sheet);
-    let sortColumn = targets.length ? targets[0].alias : "v0";
-    if (sheet.sort && sheet.sort.by) {
-      const t = resolveSortTarget(targets, sheet.sort.by); // a calc pill matches whatever agg it had
-      if (t) sortColumn = t.alias;
-    }
-    return withCasts({
-      from: { db, table },
-      joins,
-      rowDimensions,
-      columnDimensions,
-      measures,
-      // ...plus P16 drill (each pinned ancestor as a bound `=` filter) and P20 pages (the current
-      // member as a bound `=` filter, only when its table is already in the query — never forces a join).
-      filters: [...sheet.filters.map(pv).filter((f) => checkFilter(f).state === "ok").map(toFilter).filter(Boolean), ...selFilters, ...shared, ...drillPathFilters(sheet), ...pageFilters, ...rangeFilters],
-      // Top-N (P10) caps a chart's groups (server sorts, then limits; "All" = the 5,000 cap) — plus the
-      // "Other" mark and date grouping; the table pages instead (scale-model.js).
-      ...scalePlan(sheet.chartType, { ...sheet.format, topN: effectiveTopN(sheet.format, parameters, LIMITS.rows) }, rowDimensions.length + columnDimensions.length),
-      ...(sheet.format?.approximate ? { approximate: true } : {}), // P33
-      sort: { column: sortColumn, desc: sheet.sort?.dir === "desc" },
-    }, castOf); // T02-34: each plain column ref carries its field's cast
-  }
-
-  // Join path over the relationship graph: connect every involved table back to the base.
-  function buildJoins(baseKey, targets) {
-    if (!targets.length) return [];
-    const graph = relationshipGraph();
-    const included = new Set([baseKey]);
-    const joins = [];
-    for (const target of targets) {
-      if (included.has(target)) continue;
-      const path = bfs(graph, included, target);
-      if (!path) return null;
-      for (const edge of path) {
-        if (!included.has(edge.to.key)) {
-          joins.push({ left: col(edge.from), right: col(edge.to), ...(edge.type !== "inner" ? { type: edge.type } : {}) }); // P31 / T02-12
-          included.add(edge.to.key);
-        }
-      }
-    }
-    return joins;
-  }
-  function relationshipGraph() {
-    const g = new Map();
-    const link = (a, b, forward) => {
-      if (!g.has(a.key)) g.set(a.key, []);
-      g.get(a.key).push({ from: a, to: b, type: planJoinType(type, forward, fixed) }); // T02-12: FROM is the left side
-    };
-    let type = "inner", fixed = false;
-    for (const rel of relationships.values()) {
-      const fe = entities.get(rel.from.entityId), te = entities.get(rel.to.entityId);
-      if (!fe || !te) continue;
-      const a = { key: keyOf(fe.db, fe.table), db: fe.db, table: fe.table, column: rel.from.column };
-      const b = { key: keyOf(te.db, te.table), db: te.db, table: te.table, column: rel.to.column };
-      if (a.key === b.key) continue;
-      type = rel.joinType; fixed = rel.joinFixed === true;
-      link(a, b, true); link(b, a, false);
-    }
-    return g;
-  }
-  function bfs(graph, included, target) {
-    const queue = [...included].map((k) => ({ key: k, path: [] }));
-    const seen = new Set(included);
-    while (queue.length) {
-      const { key, path } = queue.shift();
-      for (const edge of graph.get(key) ?? []) {
-        if (seen.has(edge.to.key)) continue;
-        const next = [...path, edge];
-        if (edge.to.key === target) return next;
-        seen.add(edge.to.key);
-        queue.push({ key: edge.to.key, path: next });
-      }
-    }
-    return null;
-  }
-  const col = (node) => ({ db: node.db, table: node.table, column: node.column });
 
   // result = { rowDimensions:[name…], columnDimensions:[name…], measures:[name…],
   //            rows:[{ keys:[rowVals…, colVals…], values:[…] }] }
