@@ -108,3 +108,10 @@ test("duplicate names: the first one wins", () => {
   const u = calc("u", "U", "[Dup]");
   assert.equal(compileCalculation(u, [d1, d2, u], catalog).ast.column, "amount");
 });
+
+test("catalog lists its offered fields", () => {
+  const f = catalog.fields;
+  assert.ok(f.some((x) => x.db === "shop" && x.table === "orders" && x.column === "amount" && x.category === "numeric"));
+  assert.ok(!f.some((x) => x.column === "a.b"));
+  assert.equal(f.length, 7);
+});

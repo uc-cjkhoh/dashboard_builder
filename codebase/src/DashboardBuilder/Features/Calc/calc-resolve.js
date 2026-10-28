@@ -8,7 +8,7 @@ import { expandCalcs, roleOfCalc } from "./calc-model.js";
 const USABLE = new Set(["numeric", "text", "temporal", "boolean"]);
 const offered = (s) => typeof s === "string" && s !== "" && !/[.[\]]/.test(s);
 
-/** Index of the store's entities: `{ categoryOf, tablesByName, has }`. Names with `.`, `[` or `]` are not offered. */
+/** Index of the store's entities: `{ categoryOf, tablesByName, fields, has }` (`fields`: every offered column with its category). Names with `.`, `[` or `]` are not offered. */
 export function catalogFromEntities(entities) {
   const cats = new Map(); // "db\0table\0column" -> category
   const tablesByName = new Map();
@@ -23,7 +23,8 @@ export function catalogFromEntities(entities) {
     }
   }
   const categoryOf = (db, table, column) => cats.get(`${db}\0${table}\0${column}`) ?? null;
-  return { categoryOf, tablesByName, has: (db, table, column) => cats.has(`${db}\0${table}\0${column}`) };
+  const fields = [...cats].map(([k, category]) => { const [db, table, column] = k.split("\0"); return { db, table, column, category }; });
+  return { categoryOf, tablesByName, fields, has: (db, table, column) => cats.has(`${db}\0${table}\0${column}`) };
 }
 
 /** The `resolve(parts)` the parser takes (E8, E14). */
