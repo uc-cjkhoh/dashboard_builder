@@ -1,5 +1,5 @@
 import { entities, relationships, bus, emit } from "../Core/store.js";
-import { linkProblem, joinChoices, joinBadge, normalizeJoinType } from "./relation-rules.js";
+import { linkProblem, joinChoices, joinBadge, joinSelection, joinFromSelection, isLegacyLeft } from "./relation-rules.js";
 import { toast, makeButton, openDialog, closeDialog } from "../Core/ui.js";
 
 // Relationships (P5): logical, typed links the user draws between the join keys checked on two
@@ -86,7 +86,7 @@ function onConnectorClick(entityId, column, handle) {
   openCardinalityDialog({
     current: "1:N",
     tables: [entities.get(from.entityId)?.table ?? "first table", entities.get(to.entityId)?.table ?? "second table"],
-    onPick: (cardinality, joinType) => createRelationship(from, to, cardinality, joinType),
+    onPick: (cardinality, sel) => createRelationship(from, to, cardinality, joinFromSelection(sel)),
   });
 }
 
@@ -96,18 +96,18 @@ function clearPending() {
 }
 
 // --- relationship lifecycle ---------------------------------------------------
-function createRelationship(from, to, cardinality, joinType = "inner") {
+function createRelationship(from, to, cardinality, { joinType, joinFixed } = { joinType: "inner", joinFixed: true }) {
   const id = `rel#${++seq}`;
-  relationships.set(id, { id, from, to, cardinality, joinType });
+  relationships.set(id, { id, from, to, cardinality, joinType, joinFixed });
   emit("rel:changed", { id });
   select(id);
   render();
 }
 
 /** Recreate a saved relationship (workbook open). Drawn once both endpoints' key rows exist. */
-export function restoreRelationship(from, to, cardinality, joinType = "inner") {
+export function restoreRelationship(from, to, cardinality, joinType = "inner", joinFixed = false) {
   const id = `rel#${++seq}`;
-  relationships.set(id, { id, from, to, cardinality, joinType });
+  relationships.set(id, { id, from, to, cardinality, joinType, joinFixed });
   emit("rel:changed", { id });
   render();
 }
@@ -197,9 +197,10 @@ function editRelationship(rel) {
   select(rel.id);
   openCardinalityDialog({
     current: rel.cardinality,
-    joinType: normalizeJoinType(rel.joinType),
+    joinType: joinSelection(rel.joinType, rel.joinFixed),
+    legacy: isLegacyLeft(rel.joinType, rel.joinFixed),
     tables: [entities.get(rel.from.entityId)?.table ?? "first table", entities.get(rel.to.entityId)?.table ?? "second table"],
-    onPick: (cardinality, joinType) => { rel.cardinality = cardinality; rel.joinType = joinType; emit("rel:changed", { id: rel.id }); render(); },
+    onPick: (cardinality, sel) => { rel.cardinality = cardinality; Object.assign(rel, joinFromSelection(sel)); emit("rel:changed", { id: rel.id }); render(); },
     onDelete: () => { relationships.delete(rel.id); emit("rel:changed", { id: rel.id }); select(null); render(); },
   });
 }
@@ -210,13 +211,13 @@ function select(id) {
 }
 
 // --- cardinality dialog -------------------------------------------------------
-function openCardinalityDialog({ current = "1:N", joinType = "inner", tables = ["first table", "second table"], onPick, onDelete }) {
+function openCardinalityDialog({ current = "1:N", joinType = "inner", tables = ["first table", "second table"], legacy = false, onPick, onDelete }) {
   const dlg = document.createElement("dialog");
   dlg.className = "dialog dialog--sm";
 
   const head = document.createElement("div");
   head.className = "dialog__head";
-  head.textContent = "Relationship cardinality";
+  head.textContent = "Relationship: join and cardinality";
 
   const body = document.createElement("div");
   body.className = "dialog__body";
@@ -228,7 +229,7 @@ function openCardinalityDialog({ current = "1:N", joinType = "inner", tables = [
   const legend = document.createElement("legend");
   legend.textContent = "Join";
   joinRow.append(legend);
-  for (const { value: v, text } of joinChoices(tables[0], tables[1])) {
+  for (const { value: v, text } of joinChoices(tables[0], tables[1], legacy)) {
     const lab = document.createElement("label");
     lab.className = "form-check";
     const r = document.createElement("input");

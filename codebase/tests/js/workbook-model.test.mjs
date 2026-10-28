@@ -29,7 +29,7 @@ test("a saved workbook round-trips tables, keys, links and dashboards", () => {
   assert.deepEqual(wb.entities[0], { id: "sales.orders#1", db: "sales", table: "orders", x: 10, y: 20, joinKeys: ["customer_id"] });
   assert.deepEqual(wb.relationships[0], {
     from: { entityId: "sales.orders#1", column: "customer_id" },
-    to: { entityId: "sales.customers#2", column: "id" }, cardinality: "N:1", joinType: "inner" });
+    to: { entityId: "sales.customers#2", column: "id" }, cardinality: "N:1", joinType: "inner", joinFixed: false });
   assert.equal(wb.dashboards[0].name, "Revenue");
   assert.equal(wb.dashboards[0].sheet.chartType, "line");
   assert.equal(wb.active, 0);
@@ -488,4 +488,15 @@ test("right and full join types (T02-12/13) round-trip; an old workbook without 
   const raw = JSON.parse(JSON.stringify(serializeWorkbook(sampleState())));
   delete raw.relationships[0].joinType;
   assert.equal(parseWorkbook(JSON.stringify(raw)).relationships[0].joinType, "inner");
+});
+
+test("joinFixed round-trips; an old file without it reads as false, junk as false", () => {
+  const st = sampleState();
+  [...st.relationships.values()][0].joinFixed = true;
+  assert.equal(parseWorkbook(JSON.stringify(serializeWorkbook(st))).relationships[0].joinFixed, true);
+  const raw = JSON.parse(JSON.stringify(serializeWorkbook(sampleState())));
+  delete raw.relationships[0].joinFixed;
+  assert.equal(parseWorkbook(JSON.stringify(raw)).relationships[0].joinFixed, false);
+  raw.relationships[0].joinFixed = "yes";
+  assert.equal(parseWorkbook(JSON.stringify(raw)).relationships[0].joinFixed, false);
 });

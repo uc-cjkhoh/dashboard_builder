@@ -2808,16 +2808,16 @@ export function initDashboards() {
     const g = new Map();
     const link = (a, b, forward) => {
       if (!g.has(a.key)) g.set(a.key, []);
-      g.get(a.key).push({ from: a, to: b, type: planJoinType(type, forward) }); // T02-12: FROM is the left side
+      g.get(a.key).push({ from: a, to: b, type: planJoinType(type, forward, fixed) }); // T02-12: FROM is the left side
     };
-    let type = "inner";
+    let type = "inner", fixed = false;
     for (const rel of relationships.values()) {
       const fe = entities.get(rel.from.entityId), te = entities.get(rel.to.entityId);
       if (!fe || !te) continue;
       const a = { key: keyOf(fe.db, fe.table), db: fe.db, table: fe.table, column: rel.from.column };
       const b = { key: keyOf(te.db, te.table), db: te.db, table: te.table, column: rel.to.column };
       if (a.key === b.key) continue;
-      type = rel.joinType;
+      type = rel.joinType; fixed = rel.joinFixed === true;
       link(a, b, true); link(b, a, false);
     }
     return g;

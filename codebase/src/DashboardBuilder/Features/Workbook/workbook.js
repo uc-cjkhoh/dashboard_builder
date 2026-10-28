@@ -176,6 +176,7 @@ function openWorkbook(wb) {
         { entityId: ids.get(r.to.entityId), column: r.to.column },
         r.cardinality,
         r.joinType,
+        r.joinFixed,
       );
     }
 

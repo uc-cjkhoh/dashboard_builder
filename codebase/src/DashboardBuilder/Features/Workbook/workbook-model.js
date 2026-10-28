@@ -43,6 +43,7 @@ export function serializeWorkbook({ entities, relationships, dashboards, active,
       to: { entityId: r.to.entityId, column: r.to.column },
       cardinality: r.cardinality,
       joinType: normalizeJoinType(r.joinType), // P31 / T02-12
+      joinFixed: r.joinFixed === true,
     })),
     dashboards: dashboards.map((d) => ({ name: d.name, sheet: savedSheet(d.sheet) })),
     active: activeIndex >= 0 ? activeIndex : null,
@@ -123,6 +124,7 @@ export function parseWorkbook(source) {
       to: { entityId: r.to.entityId, column: r.to.column },
       cardinality: r.cardinality,
       joinType: normalizeJoinType(r.joinType), // P31 — anything unknown reads as inner
+      joinFixed: r.joinFixed === true, // old files: false (a left keeps the base side)
     }));
   const droppedRels = relList.length - relationships.length;
   if (droppedRels > 0) issues.push(`Skipped ${droppedRels} relationship(s) that referenced missing tables or had an unknown cardinality.`);
