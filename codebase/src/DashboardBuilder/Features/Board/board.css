@@ -23,11 +23,19 @@
 .board-bar { flex: none; display: flex; align-items: center; flex-wrap: wrap; gap: var(--s3); padding: var(--s3) var(--s5) 0; min-width: 0; }
 .board-bar__title { margin: 0; font-size: var(--fs-lead); font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .board-bar__count { margin: 0; font-size: var(--fs-sm); color: var(--ink-3); white-space: nowrap; }
-.board-bar__status { min-height: 2.6em; flex: 1; min-width: 0; margin: 0; display: flex; align-items: center; gap: var(--s1); font-size: var(--fs-sm); color: var(--ink-2); }
+.board-bar__status { min-height: 2.6em; flex: 1 1 14rem; min-width: 0; margin: 0; display: flex; align-items: center; gap: var(--s1); font-size: var(--fs-sm); color: var(--ink-2); }
 .board-bar__status > span { overflow-wrap: anywhere; line-height: 1.3; }
 .board-bar__status > svg { flex: none; }
 .board-bar__status.is-refused { color: var(--danger-ink); font-weight: 600; }
 .board-bar__iconbtn { width: 28px; height: 28px; }
+/* The dashboard filter chip (P24c): the selection the other widgets are filtered by — same selection tokens as the worksheet's chip. */
+.board-chip { display: inline-flex; align-items: center; gap: var(--s2); min-width: 0; max-width: 100%; padding: var(--s1) var(--s1) var(--s1) var(--s3);
+  font-size: var(--fs-sm); font-weight: 600; color: var(--enc-ink); background: var(--enc-bg); border: 1px solid var(--enc-line); border-radius: var(--r-ctl); }
+.board-chip[hidden] { display: none; }
+.board-chip > svg { flex: none; }
+.board-chip__text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board-chip__clear { width: 24px; height: 24px; flex: none; color: var(--enc-ink); }
+.board-chip__clear:hover { color: var(--accent); background: transparent; }
 .board-bar__tools { margin-left: auto; align-items: center; display: flex; gap: var(--s2); flex: none; }
 .board-bar__btn { height: 28px; font-size: var(--fs-sm); }
 .board-scroll { flex: 1; min-height: 0; overflow: auto; padding: var(--s4) var(--s5) var(--s5); scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
@@ -44,6 +52,13 @@
 .board-widget__head { flex: none; display: flex; align-items: center; gap: var(--s2); padding: var(--s1) var(--s1) var(--s1) var(--s3);
   border-bottom: 1px solid var(--line); background: var(--surface-2); min-width: 0; }
 .board-widget__title { flex: 1; min-width: 0; margin: 0; font-size: var(--fs-sm); font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The source of the dashboard selection: an outline plus a text badge in the header (the faded marks are never the only cue). */
+.board-widget.is-source { border-color: var(--enc-ink); box-shadow: 0 0 0 1px var(--enc-ink), var(--elev-2); }
+.board-widget__source { flex: 0 1 auto; min-width: 0; display: inline-flex; align-items: center; gap: var(--s1); padding: 0 var(--s2); height: 22px;
+  font-size: var(--fs-xs); font-weight: 600; color: var(--enc-ink); background: var(--enc-bg); border: 1px solid var(--enc-line); border-radius: var(--r-ctl); }
+.board-widget__source[hidden] { display: none; }
+.board-widget__source > svg { flex: none; }
+.board-widget__source > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .board-widget__tools { flex: none; display: flex; gap: var(--s1); }
 .board-widget:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .board-widget.is-dragging { opacity: .55; }

@@ -8,9 +8,10 @@ import { hint } from "../Dashboard/render-dom.js";
 import { LIMITS } from "../Core/validate.js";
 import { validateTextEdit, textChanged } from "./text-edit.js";
 
-// One widget on the board: a header (title, Edit, Remove) over a body. A worksheet widget's body is a non-interactive
-// worksheet view (createWorksheetView({ interactive: false })) of its worksheet's sheet, run with its own latest-wins gate
-// and scope = the worksheet id; its error / hint states render inside the body, so a sibling is never affected. A text
+// One widget on the board: a header (title, Edit, Remove) over a body. A worksheet widget's body is a select-only
+// worksheet view (createWorksheetView({ interactive: "select" })) of its worksheet's sheet, run with its own latest-wins gate
+// and scope = the worksheet id; a mark click is the dashboard's selection (host.onMark) and the view obeys the dashboard's
+// current selection (host.crossFor, P24c — dashboard-select.js); its error / hint states render inside the body, so a sibling is never affected. A text
 // widget's body is its heading and body text as plain text (textContent — no markup, no Markdown).
 const h = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
 
@@ -24,7 +25,10 @@ function toolButton(name, label, className) {
 }
 
 let formSeq = 0;
-/** `host` = { results, onRemove(widget), onSaveText(widget, { heading, body }) }. Returns { el, update(widget), run(), destroy(), body, focusEdit() }. */
+/**
+ * `host` = { results, onRemove(widget), onSaveText(widget, { heading, body }), crossFor(widgetId) -> { filter } | { selected } | null,
+ * onMark(widget, dimField, raw) }. Returns { el, update(widget), run(), syncCross(), destroy(), body, focusEdit() }.
+ */
 export function createWidget(widget, host) {
   const el = h("article", `board-widget board-widget--${widget.kind}`);
   el.dataset.widgetId = widget.id;
@@ -36,12 +40,14 @@ export function createWidget(widget, host) {
   const head = h("header", "board-widget__head");
   const title = h("h3", "board-widget__title");
   const tools = h("div", "board-widget__tools");
+  const source = h("span", "board-widget__source"); // the dashboard selection's source: text and an icon, so the dimmed marks are never the only cue
+  source.hidden = true;
   const remove = toolButton("close", "Remove", "iconbtn--danger board-widget__remove");
   remove.addEventListener("click", () => host.onRemove(current));
   const edit = toolButton("edit", "Edit", "board-widget__edit"); // worksheet → its tab; text → inline edit
   edit.addEventListener("click", () => (current.kind === "sheet" ? switchTab(current.sheetId) : startEdit()));
   tools.append(edit, remove);
-  head.append(title, tools);
+  head.append(title, source, tools);
   const grip = h("span", "board-widget__resize"); // bottom-right corner: drag to resize (the keyboard path is Shift + arrows)
   grip.setAttribute("aria-hidden", "true");
   const notice = h("p", "ws-chart-notice board-widget__notice");
@@ -56,7 +62,7 @@ export function createWidget(widget, host) {
     view = createWorksheetView(body, () => {
       const tab = worksheetById(current.sheetId);
       return { dash: tab, noticeEl: notice, results: host.results, plan: planCtx(), categoryOf, castOf };
-    }, { interactive: false, cancelLabel: () => labelFor(current) });
+    }, { interactive: "select", cancelLabel: () => labelFor(current), cross: () => host.crossFor(current.id), onSelect: (field, raw) => host.onMark(current, field, raw) });
   }
 
   function labelFor(w) {
@@ -151,14 +157,29 @@ export function createWidget(widget, host) {
   }
   update(widget);
 
+  /** This widget is the dashboard selection's source: say so in text, then let the view re-run if the selection changed what it shows. */
+  function paintSource() {
+    const sel = host.crossFor(current.id)?.selected ?? null;
+    el.classList.toggle("is-source", Boolean(sel));
+    source.replaceChildren(...(sel ? [icon("filter", { size: 14 }), h("span", null, `Selected: ${sel.label}`)] : []));
+    source.title = sel ? sel.label : "";
+    toggle(source, Boolean(sel));
+  }
+  function syncCross() {
+    if (!view) return Promise.resolve();
+    paintSource();
+    return worksheetById(current.sheetId) ? view.sync() : Promise.resolve();
+  }
+
   return {
     el, body, get widget() { return current; },
     get editing() { return editing !== null; },
     focusEdit() { edit.focus(); },
-    update,
+    update, syncCross,
     /** Run the worksheet's current sheet (a text widget has nothing to run). */
     run() {
       if (!view) return Promise.resolve();
+      paintSource();
       if (!worksheetById(current.sheetId)) { body.replaceChildren(hint("This worksheet was closed.")); toggle(notice, false); return Promise.resolve(); }
       return view.run();
     },

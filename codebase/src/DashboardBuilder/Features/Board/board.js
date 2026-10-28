@@ -2,7 +2,10 @@ import { bus, activeDashboard, worksheets, dashboards, worksheetById, setWidgets
 import { toggle, toast, makeButton } from "../Core/ui.js";
 import { icon } from "../Core/icons.js";
 import { LIMITS } from "../Core/validate.js";
+import { makeCategoryFormatter } from "../Core/format.js";
+import { defaultFormat } from "../Core/store.js";
 import { sharedResults } from "../Dashboard/dashboards.js";
+import { nextSelection, selectionRefusal, crossFor, chipText, stillValid } from "../Dashboard/dashboard-select.js";
 import { placeNew } from "./board-model.js";
 import { layoutBoard, widgetOrder } from "./board-layout.js";
 import { createWidget } from "./board-widget.js";
@@ -14,6 +17,11 @@ import { createBoardHistory, restorable } from "./board-history.js";
 // dashboard renders — leaving it destroys every worksheet view (queries aborted, chart instances and their resize observers
 // released), so coming back re-runs each widget (from the result cache when its sheet is unchanged). Widgets are keyed by id:
 // a layout change reconciles in place, so adding or removing one never redraws the others.
+//
+// The dashboard's one selection (P24c, Dashboard/dashboard-select.js) lives here: a mark click in a worksheet widget selects its
+// value, every other worksheet widget filters to it (where its tables allow), a chip in the bar shows and clears it. It is
+// transient — in memory only, never in the workbook — and ends with the dashboard being shown (tab switch, workbook open,
+// reload), with its source widget or worksheet, and when the source's primary dimension stops being the selected column.
 const PRINT_WIDTH = 1000; // px: the board's width on paper (the page, less margins, at 96 dpi); widgets print stacked, each chart sized to its cell
 
 /** Row height and gap in px from the design tokens (`calc(var(--ctl-h) * 2)`, `var(--s3)`), so the pure layout has no constants. */
@@ -27,11 +35,12 @@ export function initBoard() {
   const $ = (id) => document.getElementById(id);
   const view = $("board-view"), main = $("board-main"), grid = $("board-grid"), empty = $("board-empty");
   if (!view || !main || !grid) return;
-  const title = $("board-title"), count = $("board-count");
+  const title = $("board-title"), count = $("board-count"), chip = $("board-filter");
   const results = sharedResults; // the editor's cache: a widget draws what its worksheet tab just ran
   const entries = new Map(); // widget id → createWidget(...)
   let shownId = null;        // the dashboard whose widgets are on screen
   let printing = false;
+  let selection = null;      // the dashboard selection { db, table, column, value, label, sourceWidgetId }, or null
 
   const history = createBoardHistory(); // undo / redo per dashboard id (in memory: a reload or a workbook open starts clean)
   const known = new Set();              // dashboard ids seen, to forget the history of a closed one
@@ -61,6 +70,56 @@ export function initBoard() {
     for (const e of entries.values()) { e.destroy(); e.el.remove(); }
     entries.clear();
     shownId = null;
+    selection = null; // leaving the dashboard ends its selection
+    paintChip();
+  }
+
+  // --- the dashboard selection (P24c) ---
+  const syncCross = () => { for (const e of entries.values()) e.syncCross(); };
+  function paintChip() {
+    chip.replaceChildren();
+    toggle(chip, Boolean(selection));
+    if (!selection) return;
+    const text = document.createElement("span");
+    text.className = "board-chip__text";
+    text.textContent = chipText(selection); // the value is data: text only
+    text.title = selection.label;
+    const clear = makeButton("", "iconbtn board-chip__clear");
+    clear.append(icon("close", { size: 14 }));
+    clear.title = "Clear the dashboard filter";
+    clear.setAttribute("aria-label", `Clear the dashboard filter ${selection.label}`);
+    clear.addEventListener("click", () => {
+      const source = entries.get(selection.sourceWidgetId)?.el;
+      setSelection(null);
+      status("Dashboard filter cleared.");
+      source?.focus({ preventScroll: true }); // the chip is gone: keyboard focus goes back to where the filter came from
+    });
+    chip.append(icon("filter", { size: 14 }), text, clear);
+  }
+  function setSelection(next) {
+    selection = next;
+    paintChip();
+    syncCross();
+  }
+  /** A mark click in a widget: select it, replace the selection, or (the same mark again) clear it. */
+  function onMark(widget, field, raw) {
+    const refused = selectionRefusal(field);
+    if (refused) { status(refused, true); return; }
+    const sheet = worksheetById(widget.sheetId)?.sheet;
+    const next = nextSelection(selection, field, raw, makeCategoryFormatter(sheet?.format ?? defaultFormat()), widget.id);
+    if (next === selection) return; // a null mark: nothing happens
+    setSelection(next);
+    status(next ? `Filtering the other widgets by ${next.label}.` : "Dashboard filter cleared.");
+  }
+  /** The selection is only meaningful while its source widget and worksheet exist and still select that column; false = it was dropped (nothing re-run yet). */
+  function dropStale(dash) {
+    if (!selection) return false;
+    const src = dash.widgets.find((w) => w.id === selection.sourceWidgetId);
+    const sheet = src ? worksheetById(src.sheetId)?.sheet : null;
+    if (sheet && stillValid(selection, sheet)) return false;
+    selection = null;
+    paintChip();
+    return true;
   }
 
   function layout() {
@@ -85,7 +144,7 @@ export function initBoard() {
     for (const w of dash.widgets) {
       const known = entries.get(w.id);
       if (known) { known.update(w); continue; }
-      const e = createWidget(w, { results, onRemove: remove, onSaveText: saveText });
+      const e = createWidget(w, { results, onRemove: remove, onSaveText: saveText, onMark, crossFor: (id) => crossFor(selection, id) });
       entries.set(w.id, e);
       grid.append(e.el);
       fresh.push(e);
@@ -111,7 +170,9 @@ export function initBoard() {
     title.textContent = dash.name;
     count.textContent = `${dash.widgets.length} of ${LIMITS.widgets} widgets`;
     panel.render(worksheets());
+    const dropped = dropStale(dash); // its source widget was removed / closed: the others show their own data again
     reconcile(dash);
+    if (dropped) syncCross();
     syncUndo(dash);
   }
 
@@ -187,7 +248,11 @@ export function initBoard() {
   const runAll = () => { for (const e of entries.values()) e.run(); };
   for (const type of ["view:changed", "tabs:changed", "dashboard:changed"]) bus.addEventListener(type, sync);
   // A worksheet edit while its dashboard is on screen re-runs that sheet's widgets; otherwise the dashboard re-runs on its next show.
-  bus.addEventListener("worksheet:changed", (ev) => { for (const e of entries.values()) if (e.widget.sheetId === ev.detail?.id) e.run(); });
+  bus.addEventListener("worksheet:changed", (ev) => {
+    const dash = activeDashboard();
+    if (dash) dropStale(dash); // the source's primary dimension may have changed (no widget runs until the loop below)
+    for (const e of entries.values()) { if (e.widget.sheetId === ev.detail?.id) e.run(); else e.syncCross(); }
+  });
   // Colours are read at render time: redraw from the result cache (no query) when light / dark or the workbook theme flips.
   for (const type of ["scheme:changed", "theme:changed"]) bus.addEventListener(type, runAll);
   // After a reload a widget may show a hint before its tables' columns arrive: those (only) run again once they do.
