@@ -14,6 +14,7 @@ import { approxNotice } from "./speed-notice.js";
 import { buildPlan, calcContext, appliedShared, withParams, toServerFilter, isDrillActive, COLOR_USES } from "./sheet-plan.js";
 import { planTables, calcProblem, statCalcProblem } from "../Calc/calc-plan.js";
 import { isCalcPill, pillSlots } from "../Calc/calc-pill.js";
+import { el, hint, warn } from "./render-dom.js";
 
 // The worksheet's query-and-render lifecycle (P24a): plan -> latest-wins fetch (shared result cache) -> draw into one
 // container. One view owns one container, one latest-wins gate and its own table pager and fresh flag, so several
@@ -25,14 +26,7 @@ import { isCalcPill, pillSlots } from "../Calc/calc-pill.js";
 //                     categoryOf(db, table, column), castOf(field), render(sheet, result, cmp), extraNotice() -> string | null,
 //                     statusBar(sheet, result), sharedNote(sheet) -> string | null }
 
-export function el(tag, className, text) {
-  const e = document.createElement(tag);
-  if (className) e.className = className;
-  if (text !== undefined) e.textContent = text;
-  return e;
-}
-export const hint = (text) => el("div", "ws-hint", text);
-export const warn = (text) => el("div", "ws-hint ws-hint--warn", text);
+export { el, hint, warn };
 
 /** Notices join with " · "; null when none. */
 export const joinNotices = (...parts) => parts.filter(Boolean).join(" · ") || null;

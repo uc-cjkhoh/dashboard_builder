@@ -10,10 +10,13 @@ import { entities, relationships, activeDashboard, isModelActive, updateSheet, b
   metaOf, nameOf, setFieldMeta, emptySheet, parameters, updateParameter, calculations, dashboards, addCalculation, removeCalculation } from "../Core/store.js";
 import { checkValue, paramTypeFor } from "../Core/parameters-model.js";
 import { renderChart as renderSeriesChart, exportChart, hasChartInstance, sizeChart, focusSeries } from "./chart.js";
-import { createWorksheetView, el, hint, warn, joinNotices, periodNotice } from "./worksheet-view.js";
+import { createWorksheetView, joinNotices, periodNotice } from "./worksheet-view.js";
+import { el, hint, warn, iconSpan } from "./render-dom.js";
 import { ANALYTICS_TYPES, CLICK_TYPES, P36_TYPES, MAX_PANELS, scatterSymbol, sameField, cmpValues, primaryDim, chartOrientation, aliasNames, pathOrderedRows,
   statusText, captionText, marksChannels, scatterShapeGroups, colorSplitData, heatmapData, treemapTree, sankeyLinks, multiplesData } from "./result-model.js";
-import { tupleKey, uniqueTuples, expandLeaves, runs, levelSpans } from "./grid-model.js";
+import { tupleKey, uniqueTuples } from "./grid-model.js";
+import { crosstabTable } from "./render-table.js";
+import { kpiView } from "./render-kpi.js";
 import { makeValueFormatter, makeCategoryFormatter } from "../Core/format.js";
 import { createResultCache } from "./query-runner.js";
 import { CHART_TYPES, chartIcon, chartLabel, sortSummary } from "./viewbar-model.js";
@@ -2367,7 +2370,7 @@ export function initDashboards() {
       return;
     }
     // Table + P19 Text mark both render as the crosstab text grid (values written into cells).
-    if (type === "table" || type === "text") { chartEl.append(crosstabTable(sheet, result, fmtVal, fmtCat, result.partial)); return; }
+    if (type === "table" || type === "text") { chartEl.append(crosstabTable(sheet, result, fmtVal, fmtCat, result.partial, calcPercent)); return; }
 
     // P18 marks: re-derive the measure roles so size / continuous-colour / aux columns don't turn into
     // spurious series. Shelf measures (only) become series; the rest feed the mark channels below.
@@ -2692,301 +2695,6 @@ export function initDashboards() {
     renderSeriesChart(chartEl, { type: "treemap", tree, format });
   }
 
-  // KPI tiles. With no dimension each measure is a single big number; with a dimension (P11) the
-  // headline is the latest category's value under an inline sparkline of the trend.
-  function kpiView(measures, categories, series, dimCount, fmtVal, card = {}) {
-    const wrap = el("div", "ws-kpi-row");
-    const f = card.format ?? {};
-    measures.forEach((name, i) => {
-      const data = series[i].data;
-      const tile = el("div", "ws-kpi");
-      if (dimCount === 0) {
-        tile.append(el("div", "widget__kpi-num", fmtVal(data[0])));
-        tile.append(el("div", "widget__kpi-sub", name));
-        // P35 scorecard: change vs the comparison range — arrow + signed % + tone (never colour alone).
-        if (card.prev) {
-          const ch = changeOf(data[0], card.prev[i]);
-          const tone = toneOf(ch.dir, f.downIsGood);
-          const line = el("div", `ws-kpi__change ws-kpi__change--${tone}`);
-          line.append(el("span", "ws-kpi__arrow", ch.dir === "up" ? "▲" : ch.dir === "down" ? "▼" : "■"),
-            el("span", null, ` ${pctText(ch.pct)} vs ${card.name}`));
-          line.title = `${card.name}: ${fmtVal(card.prev[i])}`;
-          line.setAttribute("aria-label", `${ch.dir === "flat" ? "No change" : ch.dir === "up" ? "Up" : "Down"} ${pctText(ch.pct)} versus ${card.name} (${fmtVal(card.prev[i])})${tone === "neutral" ? "" : `, ${tone}`}`);
-          tile.append(line);
-        }
-        // Target (first measure): progress bar + "82% of 10,000".
-        const goal = i === 0 ? targetProgress(data[0], f.target) : null;
-        if (goal) {
-          const bar = el("div", `ws-kpi__target${goal.met ? " is-met" : ""}`);
-          const fill = el("span", "ws-kpi__target-fill");
-          fill.style.width = `${Math.min(100, Math.max(0, goal.pct)).toFixed(1)}%`;
-          bar.append(fill);
-          bar.setAttribute("role", "img");
-          bar.setAttribute("aria-label", `${goal.pct.toFixed(0)}% of target ${fmtVal(f.target)}`);
-          tile.append(bar, el("div", "widget__kpi-sub", `${goal.met ? "✓ " : ""}${goal.pct.toFixed(0)}% of ${fmtVal(f.target)}`));
-        }
-      } else {
-        tile.append(el("div", "widget__kpi-num", fmtVal(data[data.length - 1])));
-        tile.append(sparkline(data));
-        const sub = el("div", "widget__kpi-sub", name);
-        const lastCat = categories[categories.length - 1];
-        if (lastCat != null) sub.title = `latest: ${lastCat}`;
-        tile.append(sub);
-      }
-      wrap.append(tile);
-    });
-    return wrap;
-  }
-
-  // A tiny inline SVG sparkline (no ECharts instance — the chart pane holds at most one of those).
-  function sparkline(data) {
-    const NS = "http://www.w3.org/2000/svg";
-    const w = 132, h = 30, pad = 3;
-    const nums = data.map((v) => Number(v) || 0);
-    const min = Math.min(...nums), max = Math.max(...nums), span = max - min || 1, n = nums.length;
-    const x = (i) => (n <= 1 ? w / 2 : pad + (i * (w - 2 * pad)) / (n - 1));
-    const y = (v) => h - pad - ((v - min) / span) * (h - 2 * pad);
-    const svg = document.createElementNS(NS, "svg");
-    svg.setAttribute("class", "ws-spark");
-    svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
-    svg.setAttribute("preserveAspectRatio", "none");
-    svg.setAttribute("aria-hidden", "true");
-    const poly = document.createElementNS(NS, "polyline");
-    poly.setAttribute("class", "ws-spark__line");
-    poly.setAttribute("fill", "none");
-    poly.setAttribute("points", nums.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" "));
-    const dot = document.createElementNS(NS, "circle");
-    dot.setAttribute("class", "ws-spark__dot");
-    dot.setAttribute("cx", x(n - 1).toFixed(1));
-    dot.setAttribute("cy", y(nums[n - 1]).toFixed(1));
-    dot.setAttribute("r", "2.5");
-    svg.append(poly, dot);
-    return svg;
-  }
-
-  // Tableau-style crosstab. Row-shelf dimensions form the left stub; Column-shelf dimensions the top
-  // header; measures are the cell values. The *measure name band* sits on whichever shelf the numeric
-  // pills are on (measures on both shelves → shown across the top, with a note). Built by pivoting the
-  // flat grouped rows: keys are [rowDim…, colDim…]; we take the distinct row/col tuples and index the
-  // cells, then render nested headers (colSpan on top, rowSpan on the left stub).
-  function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false) {
-    const { rowDimensions, columnDimensions, measures, rows } = result;
-    const cf = conditionalFor(sheet, measures, rows); // P37: per measure index, or null
-    const rd = rowDimensions.length, cd = columnDimensions.length;
-    const dimLabel = (v) => (v == null ? "—" : fmtCat(v)); // date-aware header label (P10)
-
-    const colMeasures = sheet.columns.filter((f) => roleOf(f) === "measure");
-    const rowMeasures = sheet.rows.filter((f) => roleOf(f) === "measure");
-    const bothMeasures = colMeasures.length > 0 && rowMeasures.length > 0;
-    const measureOnLeft = !bothMeasures && rowMeasures.length > 0;   // else on top (incl. implicit count)
-
-    const rowTuples = uniqueTuples(rows.map((r) => r.keys.slice(0, rd)));
-    const colTuples = uniqueTuples(rows.map((r) => r.keys.slice(rd, rd + cd)));
-    const cells = new Map();
-    for (const r of rows) cells.set(tupleKey(r.keys.slice(0, rd)) + "|" + tupleKey(r.keys.slice(rd, rd + cd)), r.values);
-    const cellValue = (rt, ct, mi) => cells.get(tupleKey(rt) + "|" + tupleKey(ct))?.[mi];
-
-    const leftLeaves = expandLeaves(rowTuples, measureOnLeft ? measures.length : 0);
-    const topLeaves = expandLeaves(colTuples, measureOnLeft ? 0 : measures.length);
-    const leftLevels = rd + (measureOnLeft ? 1 : 0);
-    const topLevels = cd + (measureOnLeft ? 0 : 1);
-
-    const table = el("table", "data xtab");
-    // P21 totals: a grand-total column (when Columns has dimensions), a grand-total row (when Rows has),
-    // and a subtotal after each first-level Rows group — each combined by the measure's own aggregation.
-    const tot = sheet.analytics?.totals ?? {};
-    const mplanT = planMeasures(sheet);
-    const aggOfMi = (mi) => (isCalc(mplanT[mi]?.field?.tableCalc) ? null : mplanT[mi]?.agg ?? (mplanT.length ? "sum" : "count"));
-    const total = (mi, rts, cts) => {
-      const agg = aggOfMi(mi);
-      if (!agg) return null;
-      const vals = [];
-      for (const rt of rts) for (const ct of cts) vals.push(cellValue(rt, ct, mi));
-      return combine(agg, vals);
-    };
-    const totalCol = Boolean(tot.grand) && cd > 0;
-    const totalMis = measureOnLeft ? [null] : measures.map((_, mi) => mi); // total columns: one per measure (on top) or one
-    const showVal = (mi, v) => (calcPercent.has(mi) ? (v == null ? "—" : `${Number(v).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`) : fmtVal(v));
-
-    // --- header: one row per top level; a merged corner spans the left-stub width and all header rows.
-    const thead = document.createElement("thead");
-    const leftLabel = [...rowDimensions, ...(measureOnLeft ? ["Measure"] : [])].join(" · ");
-    for (let tl = 0; tl < Math.max(1, topLevels); tl++) {
-      const tr = document.createElement("tr");
-      if (tl === 0 && leftLevels > 0) {
-        const corner = el("th", "xt-corner", leftLabel);
-        corner.colSpan = leftLevels;
-        corner.rowSpan = Math.max(1, topLevels);
-        tr.append(corner);
-      }
-      if (topLevels === 0) {
-        tr.append(el("th", "num", ""));                         // single unlabeled value column
-      } else if (tl < cd) {
-        for (const g of runs(topLeaves, (lf) => tupleKey(lf.tuple.slice(0, tl + 1)))) {
-          const th = el("th", "xt-colhdr", dimLabel(g.leaf.tuple[tl]));
-          th.colSpan = g.span;
-          tr.append(th);
-        }
-      } else {
-        for (const lf of topLeaves) tr.append(el("th", "num xt-meas", measures[lf.mi]));
-      }
-      if (totalCol) {
-        if (measureOnLeft) { if (tl === 0) { const th = el("th", "num xt-total", "Total"); th.rowSpan = Math.max(1, topLevels); tr.append(th); } }
-        else if (tl === 0 && topLevels > 1) { const th = el("th", "xt-colhdr xt-total", "Total"); th.colSpan = measures.length; th.rowSpan = topLevels - 1; tr.append(th); }
-        else if (tl === topLevels - 1) for (const mi of totalMis) tr.append(el("th", "num xt-meas xt-total", topLevels > 1 ? measures[mi] : `Total ${measures[mi]}`));
-      }
-      thead.append(tr);
-    }
-    table.append(thead);
-
-    // --- body: one row per left leaf; left-stub cells use rowSpan grouping per dimension level.
-    const tbody = document.createElement("tbody");
-    const dimStarts = [];
-    for (let ll = 0; ll < rd; ll++) dimStarts.push(levelSpans(leftLeaves, ll));
-    leftLeaves.forEach((leftLeaf, ri) => {
-      const tr = document.createElement("tr");
-      for (let ll = 0; ll < rd; ll++) {
-        const span = dimStarts[ll][ri];
-        if (!span) continue;                                    // covered by a rowSpan above
-        const th = el("th", "xt-rowhdr", dimLabel(leftLeaf.tuple[ll]));
-        if (span > 1) th.rowSpan = span;
-        tr.append(th);
-      }
-      if (measureOnLeft) tr.append(el("th", "xt-rowhdr xt-meas", measures[leftLeaf.mi]));
-      for (const topLeaf of topLeaves) {
-        const mi = measureOnLeft ? leftLeaf.mi : topLeaf.mi ?? 0;
-        const v = cellValue(leftLeaf.tuple, topLeaf.tuple, mi);
-        const text = calcPercent.has(mi) ? (v == null ? "—" : `${Number(v).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`) : fmtVal(v);
-        tr.append(cf[mi] ? formattedCell(v, text, cf[mi]) : el("td", "num", text));
-      }
-      if (totalCol) for (const tmi of totalMis) {
-        const mi = tmi ?? leftLeaf.mi;
-        tr.append(el("td", "num xt-total", showVal(mi, total(mi, [leftLeaf.tuple], colTuples))));
-      }
-      tbody.append(tr);
-      // Subtotal after the last row of each first-level group (measures on top, ≥ 2 Rows dimensions).
-      const next = leftLeaves[ri + 1];
-      if (tot.sub && rd >= 2 && !measureOnLeft && (!next || tupleKey([next.tuple[0]]) !== tupleKey([leftLeaf.tuple[0]]))) {
-        const group = rowTuples.filter((t) => tupleKey([t[0]]) === tupleKey([leftLeaf.tuple[0]]));
-        tbody.append(totalRow(`Subtotal · ${dimLabel(leftLeaf.tuple[0])}`, group, null, "xt-subtotal"));
-      }
-    });
-    // Grand-total row(s): one, or one per measure when measures run down the left.
-    if (tot.grand && rd > 0) {
-      if (measureOnLeft) measures.forEach((name, mi) => tbody.append(totalRow("Grand total", rowTuples, mi, "xt-grand", name)));
-      else tbody.append(totalRow("Grand total", rowTuples, null, "xt-grand"));
-    }
-    table.append(tbody);
-    function totalRow(label, rts, onlyMi, cls, measureName) {
-      const tr = el("tr", `xt-total ${cls}`);
-      const th = el("th", "xt-rowhdr xt-total", label);
-      th.colSpan = rd;
-      tr.append(th);
-      if (measureOnLeft) tr.append(el("th", "xt-rowhdr xt-meas xt-total", measureName ?? ""));
-      for (const topLeaf of topLeaves) {
-        const mi = onlyMi ?? topLeaf.mi ?? 0;
-        tr.append(el("td", "num xt-total", showVal(mi, total(mi, rts, [topLeaf.tuple]))));
-      }
-      if (totalCol) for (const tmi of totalMis) { const mi = tmi ?? onlyMi ?? 0; tr.append(el("td", "num xt-total", showVal(mi, total(mi, rts, colTuples)))); }
-      return tr;
-    }
-
-    const legend = conditionalLegend(cf, measures, fmtVal, partial ? rows.length : 0);
-    if (bothMeasures || legend) {
-      const wrap = el("div", "xt-wrap");
-      if (bothMeasures) wrap.append(warn("Measures are on both shelves — showing them across the top. Put all measures on one shelf for a clean crosstab."));
-      if (legend) wrap.append(legend);
-      wrap.append(table);
-      return wrap;
-    }
-    return table;
-  }
-
-  // --- conditional formatting (P37) ----------------------------------------
-  // Per result measure: its setting, value extent over the loaded rows, and token palette — or null.
-  function conditionalFor(sheet, measures, rows) {
-    const all = sheet.format?.conditional ?? {};
-    const mplan = planMeasures(sheet);
-    let palette = null;
-    return measures.map((name, mi) => {
-      const cfg = all[measureKey(mplan[mi])];
-      if (!isActive(cfg)) return null;
-      palette ??= cfPalette();
-      return { cfg, name, ext: extentOf(rows.map((r) => r.values[mi])), palette };
-    });
-  }
-  // Scale colours from the chart tokens: sequential surface → blue; diverging orange ← surface → blue.
-  function cfPalette() {
-    const cs = getComputedStyle(document.documentElement);
-    const t = (n, fb) => cs.getPropertyValue(n).trim() || fb;
-    return { surface: t("--surface", "#ffffff"), high: t("--chart-cat-1", "#2a78d6"), low: t("--chart-cat-6", "#eb6834"),
-      inks: [t("--ink", "#1c1719"), t("--surface", "#ffffff"), "#000000", "#ffffff"] };
-  }
-  // One formatted cell: a rule's tone + icon wins; otherwise a scale tint (with a contrast-picked ink)
-  // or a data bar behind the number.
-  function formattedCell(v, text, { cfg, ext, palette }) {
-    const td = el("td", "num xt-cf");
-    const rule = matchRule(v, cfg.rules);
-    const num = el("span", "xt-cf__num", text);
-    if (rule) {
-      td.classList.add(`xt-rule--${rule.tone}`);
-      const ic = iconSpan("xt-cf__icon", TONE_ICON[rule.tone]);
-      ic.setAttribute("aria-hidden", "true");
-      td.title = `${CF_TONE_CHOICES.find(([k]) => k === rule.tone)[1]}: ${rule.op} ${rule.value}`;
-      td.append(ic);
-    } else if (cfg.mode === "scale") {
-      const c = scaleColors(v, ext, cfg, palette);
-      if (c) { td.style.background = c.bg; td.style.color = c.ink; }
-    }
-    if (!rule && cfg.mode === "bars") {
-      const g = barGeometry(v, ext);
-      if (g && g.width > 0) {
-        const bar = el("span", `xt-bar${g.neg ? " xt-bar--neg" : ""}`);
-        bar.style.left = `${g.left.toFixed(2)}%`;
-        bar.style.width = `${g.width.toFixed(2)}%`;
-        bar.setAttribute("aria-hidden", "true");
-        td.append(bar);
-      }
-    }
-    td.append(num);
-    return td;
-  }
-  // A small key above the table: each scale's low / (mid) / high, each rule with its icon; and, while the
-  // table is still loading pages, that the scales cover only the loaded rows.
-  function conditionalLegend(cf, measures, fmtVal, loadedRows) {
-    const items = [];
-    cf.forEach((c, mi) => {
-      if (!c) return;
-      const name = measures[mi];
-      if (c.cfg.mode === "scale" && c.ext) {
-        const item = el("span", "xt-legend__item");
-        const div = c.cfg.scale === "diverging";
-        const lowEnd = div ? c.palette.low : c.palette.surface;
-        const strip = el("span", "xt-legend__scale");
-        strip.style.background = div
-          ? `linear-gradient(to right, ${lowEnd}, ${c.palette.surface}, ${c.palette.high})`
-          : `linear-gradient(to right, ${c.palette.surface}, ${c.palette.high})`;
-        strip.setAttribute("aria-hidden", "true");
-        item.append(el("span", "xt-legend__name", `${name}:`), el("span", null, fmtVal(c.ext.min)), strip, el("span", null, fmtVal(c.ext.max)));
-        if (div) item.append(el("span", "xt-legend__note", `(centre ${fmtVal(midpointOf(c.ext, c.cfg.mid))})`));
-        item.setAttribute("aria-label", `${name} colour scale from ${fmtVal(c.ext.min)} to ${fmtVal(c.ext.max)}${div ? `, centred on ${fmtVal(midpointOf(c.ext, c.cfg.mid))}` : ""}`);
-        items.push(item);
-      } else if (c.cfg.mode === "bars") {
-        items.push(el("span", "xt-legend__item", `${name}: data bars (from zero)`));
-      }
-      for (const r of c.cfg.rules ?? []) {
-        const item = el("span", `xt-legend__item xt-legend__rule xt-rule--${r.tone}`);
-        item.append(iconSpan("xt-cf__icon", TONE_ICON[r.tone]), el("span", null, `${name} ${CF_OP_CHOICES.find(([k]) => k === r.op)[1]} ${fmtVal(r.value)}`));
-        items.push(item);
-      }
-    });
-    if (!items.length) return null;
-    const box = el("div", "xt-legend");
-    box.append(...items);
-    if (loadedRows) box.append(el("span", "xt-legend__note", `Scales and bars use the ${loadedRows.toLocaleString("en-US")} rows loaded so far.`));
-    return box;
-  }
-
   // The Format card's editor: pick a measure, then its scale / bars and rules.
   function conditionalEditor(dash, s) {
     const f = s.format;
@@ -3117,7 +2825,6 @@ function readPill(e) {
   if (!raw) return null;
   try { return JSON.parse(raw); } catch { return null; }
 }
-function iconSpan(cls, name) { const s = el("span", cls); s.append(icon(name)); return s; }
 
 
 // --- export helpers (P13) ---------------------------------------------------
