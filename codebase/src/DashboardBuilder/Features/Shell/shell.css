@@ -112,3 +112,6 @@
   position: relative; z-index: 3;  /* the Workbook menu must paint above the view below */
 }
 
+/* Light / dark toggle, right-most in the bar: as close to the Workbook ··· as that group's own buttons
+   sit, and its glyph (not its 32px box) meets the right gutter, over the content's right edge. */
+.scheme { flex: none; margin-left: calc(var(--s2) - var(--s3)); margin-right: calc(-1 * var(--s2)); }

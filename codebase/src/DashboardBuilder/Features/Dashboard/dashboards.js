@@ -297,8 +297,8 @@ export function initDashboards() {
     withCategories(dash.sheet.filters, categoryOf);
     if (dash.sheet.filters.filter((f) => !f.category).length < missing) { renderShelves(); runChart(); }
   });
-  // chart.js reads colours from :root at render time — redraw when the OS theme flips (a cache hit, no query).
-  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if (!isModelActive()) runChart(); });
+  // chart.js reads colours from :root at render time — redraw when light/dark flips (Core/scheme.js; a cache hit, no query).
+  bus.addEventListener("scheme:changed", () => { if (!isModelActive()) runChart(); });
   bus.addEventListener("theme:changed", () => { if (!isModelActive()) runChart(); }); // P41: redraw in the new colours
   // P28: a rename / hide / default aggregation redraws the field pane, the pills and the chart's labels.
   bus.addEventListener("fields:changed", () => { if (isModelActive()) return; buildFields(); renderShelves(); runChart(); });

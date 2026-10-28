@@ -9,7 +9,7 @@
    text shows through behind other text (DESIGN.md).
    ========================================================================== */
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
   /* Surfaces & ink */
   --bg: #f6f3f3; --surface: #ffffff; --surface-2: #faf7f7; --surface-3: #f2eded;
   --ink: #1c1719; --ink-2: #423a3d; --ink-3: #6b6165; --line: #ebe4e5; --line-2: #d9cfd1;
@@ -57,30 +57,32 @@
   --dur-exit: 100ms; --dur-fast: 150ms; --dur: 200ms; --dur-slow: 250ms;
   --ease: cubic-bezier(.33, 0, .67, 1); --ease-out: cubic-bezier(.1, .9, .2, 1); --ease-in: cubic-bezier(.5, 0, .75, 0);
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #141113; --surface: #1c181b; --surface-2: #221d21; --surface-3: #2b2529;
-    --ink: #f3eeef; --ink-2: #d8cfd2; --ink-3: #a89ea2; --line: #2e282c; --line-2: #42393e;
-    --glass: rgb(28 24 27 / .70); --glass-line: rgb(255 170 180 / .10); --glass-rim: rgb(255 190 198 / .08);
-    --glass-ctl: rgb(43 37 41 / .85); --glass-ctl-hover: rgb(56 48 53 / .96); --ctl-edge: #7d7377;
-    --accent: #d42a3c; --accent-hover: #b81f30; --accent-pressed: #9c1828; --accent-ink: #ff8f99;
-    --accent-soft: #3a1a20; --accent-line: #6b2a33;
-    --ok-bg: #112a1d; --ok-ink: #75e0a7; --ok-line: #1f5c3c;
-    --warn-bg: #2d2210; --warn-ink: #fdc56b; --warn-line: #6b4a12;
-    --danger-bg: #341a14; --danger-ink: #ffa48c; --danger-line: #7a3322; --danger-solid: #f97350;
-    --dim-bg: #172235; --dim-ink: #8cbcff; --dim-line: #2c4a78;
-    --meas-bg: #10292b; --meas-ink: #6fdde3; --meas-line: #1d5a5e;
-    --enc-bg: #231d3a; --enc-ink: #c3b5ff; --enc-line: #4b3c8a;
-    --chart-cat-1: #4d95ea; --chart-cat-2: #3ba55c; --chart-cat-3: #f08fb6; --chart-cat-4: #f5b83d;
-    --chart-cat-5: #2ec48c; --chart-cat-6: #f2834f; --chart-cat-7: #9d8cf2; --chart-cat-8: #f26b6a;
-    --elev-2: 0 1px 2px rgb(0 0 0 / .45); --elev-8: 0 4px 10px rgb(0 0 0 / .45);
-    --elev-16: 0 10px 24px rgb(0 0 0 / .5); --elev-28: 0 18px 40px rgb(0 0 0 / .6);
-    --scrim: rgb(0 0 0 / .55);
-  }
+/* Dark: keyed off <html data-scheme="dark">, set by Core/scheme-boot.js + Core/scheme.js from the
+   System / Light / Dark toggle (System follows the OS setting). */
+:root[data-scheme="dark"] {
+  color-scheme: dark;
+  --bg: #141113; --surface: #1c181b; --surface-2: #221d21; --surface-3: #2b2529;
+  --ink: #f3eeef; --ink-2: #d8cfd2; --ink-3: #a89ea2; --line: #2e282c; --line-2: #42393e;
+  --glass: rgb(28 24 27 / .70); --glass-line: rgb(255 170 180 / .10); --glass-rim: rgb(255 190 198 / .08);
+  --glass-ctl: rgb(43 37 41 / .85); --glass-ctl-hover: rgb(56 48 53 / .96); --ctl-edge: #7d7377;
+  --accent: #d42a3c; --accent-hover: #b81f30; --accent-pressed: #9c1828; --accent-ink: #ff8f99;
+  --accent-soft: #3a1a20; --accent-line: #6b2a33;
+  --ok-bg: #112a1d; --ok-ink: #75e0a7; --ok-line: #1f5c3c;
+  --warn-bg: #2d2210; --warn-ink: #fdc56b; --warn-line: #6b4a12;
+  --danger-bg: #341a14; --danger-ink: #ffa48c; --danger-line: #7a3322; --danger-solid: #f97350;
+  --dim-bg: #172235; --dim-ink: #8cbcff; --dim-line: #2c4a78;
+  --meas-bg: #10292b; --meas-ink: #6fdde3; --meas-line: #1d5a5e;
+  --enc-bg: #231d3a; --enc-ink: #c3b5ff; --enc-line: #4b3c8a;
+  --chart-cat-1: #4d95ea; --chart-cat-2: #3ba55c; --chart-cat-3: #f08fb6; --chart-cat-4: #f5b83d;
+  --chart-cat-5: #2ec48c; --chart-cat-6: #f2834f; --chart-cat-7: #9d8cf2; --chart-cat-8: #f26b6a;
+  --elev-2: 0 1px 2px rgb(0 0 0 / .45); --elev-8: 0 4px 10px rgb(0 0 0 / .45);
+  --elev-16: 0 10px 24px rgb(0 0 0 / .5); --elev-28: 0 18px 40px rgb(0 0 0 / .6);
+  --scrim: rgb(0 0 0 / .55);
 }
-/* No backdrop-filter, or the user asked for less transparency: glass falls back to an opaque surface. */
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) { :root { --glass: var(--surface-2); --glass-ctl: var(--surface); } }
-@media (prefers-reduced-transparency: reduce) { :root { --glass: var(--surface-2); --glass-ctl: var(--surface); --glass-blur: none; } }
+/* No backdrop-filter, or the user asked for less transparency: glass falls back to an opaque surface.
+   `:root[data-scheme]` matches the dark block's weight, so the fallback wins in both schemes. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) { :root, :root[data-scheme] { --glass: var(--surface-2); --glass-ctl: var(--surface); } }
+@media (prefers-reduced-transparency: reduce) { :root, :root[data-scheme] { --glass: var(--surface-2); --glass-ctl: var(--surface); --glass-blur: none; } }
 
 /* Respect users who prefer less motion — collapse all animation/transition to instant. */
 @media (prefers-reduced-motion: reduce) {

@@ -13,7 +13,20 @@ test("no hex colour outside the :root token blocks", () => {
 });
 test("dark mode redefines the surfaces", () => {
   const core = css.find(([f]) => f.endsWith("core.css"))[1];
-  assert.match(core, /@media \(prefers-color-scheme: dark\)\s*\{\s*:root\s*\{[^}]*--surface:/);
+  assert.match(core, /:root\[data-scheme="dark"\]\s*\{[^}]*--surface:/);
+});
+// The in-app light/dark toggle sets data-scheme (Core/scheme.js); a stylesheet asking the OS directly
+// would ignore the user's choice.
+test("no stylesheet reads prefers-color-scheme (data-scheme is the one switch)", () => {
+  for (const [f, t] of css) assert.doesNotMatch(t, /prefers-color-scheme/, f);
+});
+
+// :root[data-scheme="dark"] outweighs a bare :root, so the opaque-glass fallbacks must match it too.
+test("the opaque-glass fallbacks apply in the dark scheme as well", () => {
+  const core = css.find(([f]) => f.endsWith("core.css"))[1];
+  const fallbacks = [...core.matchAll(/@(?:supports not|media \(prefers-reduced-transparency)[^{]*\{\s*([^{]+)\{[^}]*--glass:/g)];
+  assert.equal(fallbacks.length, 2);
+  for (const [, sel] of fallbacks) assert.match(sel, /:root\[data-scheme\]/);
 });
 
 // Glass only on chrome with nothing but the wash beneath it; anything floating over content is solid,

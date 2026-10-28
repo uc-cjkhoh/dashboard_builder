@@ -7,6 +7,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Dashboard Builder</title>
+    @* Sets <html data-scheme> before first paint (System / Light / Dark — Core/scheme.js), so dark never flashes light. *@
+    <script src="~/features/Core/scheme-boot.js"></script>
     @* Core first (design tokens + shared components), then per-feature stylesheets. *@
     <link rel="stylesheet" href="~/features/Core/core.css" />
     <link rel="stylesheet" href="~/features/Shell/shell.css" />
@@ -57,6 +59,12 @@
                 <h1 class="sr-only">Data model and dashboards</h1>
                 <div class="tabs" id="tabs" role="tablist" aria-label="Data model and dashboards"></div>
                 <partial name="~/Features/Workbook/_Workbook.cshtml" />
+                <!-- Light / dark toggle (Shell/scheme-toggle.js): System / Light / Dark, remembered in this browser. -->
+                <div class="menu scheme">
+                    <button type="button" class="iconbtn" id="scheme-btn" aria-controls="scheme-list"
+                            aria-label="Appearance" title="Appearance"><span data-icon="monitor"></span></button>
+                    <div class="menu__list" id="scheme-list" role="menu" aria-label="Appearance" hidden></div>
+                </div>
             </div>
 
             <partial name="~/Features/Canvas/_Canvas.cshtml" />

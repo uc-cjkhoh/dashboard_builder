@@ -4,9 +4,10 @@
 import { currentTheme, setTheme } from "../Core/store.js";
 import { ACCENTS, PALETTES, DEFAULT_THEME, deriveAccent } from "../Core/theme-model.js";
 import { makeButton, openDialog, closeDialog } from "../Core/ui.js";
+import { isDark } from "../Core/scheme.js";
 
 export function openThemeDialog() {
-  const dark = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  const dark = isDark() ? "dark" : "light";
   const dlg = document.createElement("dialog");
   dlg.className = "dialog theme-dialog";
   dlg.setAttribute("aria-labelledby", "theme-title");
