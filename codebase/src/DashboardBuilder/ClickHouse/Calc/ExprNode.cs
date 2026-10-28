@@ -25,8 +25,9 @@ public sealed record UnNode(string Op, ExprNode Arg) : ExprNode;
 /// <summary>A binary operation (arithmetic, comparison or logic).</summary>
 public sealed record BinNode(string Op, ExprNode L, ExprNode R) : ExprNode;
 
-/// <summary>An aggregate function (e.g. <c>sum</c>) over a sub-expression.</summary>
-public sealed record AggNode(string Fn, ExprNode Arg) : ExprNode;
+/// <summary>An aggregate function (e.g. <c>sum</c>) over a sub-expression. <see cref="P"/> is the fraction a
+/// parametric aggregate takes (<c>percentile</c>: 0..1, always bound as a parameter); absent for every other function.</summary>
+public sealed record AggNode(string Fn, ExprNode Arg, double? P = null) : ExprNode;
 
 /// <summary>A text literal; always bound as a <c>String</c> parameter, never written into SQL.</summary>
 public sealed record StrNode(string V) : ExprNode;
@@ -99,7 +100,7 @@ public sealed class ExprNodeConverter : JsonConverter<ExprNode>
             "num" => new NumNode(Number(e, "v")),
             "un" => new UnNode(Text(e, "op"), Child(e, "arg")),
             "bin" => new BinNode(Text(e, "op"), Child(e, "l"), Child(e, "r")),
-            "agg" => new AggNode(Text(e, "fn"), Child(e, "arg")),
+            "agg" => new AggNode(Text(e, "fn"), Child(e, "arg"), OptionalNumber(e, "p")),
             "str" => new StrNode(Text(e, "v")),
             "cmp" => new CmpNode(Text(e, "op"), Child(e, "l"), Child(e, "r")),
             "logic" => new LogicNode(Text(e, "op"), Child(e, "l"), Child(e, "r")),
@@ -132,6 +133,14 @@ public sealed class ExprNodeConverter : JsonConverter<ExprNode>
         if (v.ValueKind != JsonValueKind.Number || !v.TryGetDouble(out var d) || !double.IsFinite(d))
             throw new JsonException($"Expression node '{name}' must be a finite number.");
         return d;
+    }
+
+    private static double? OptionalNumber(JsonElement e, string name)
+    {
+        foreach (var p in e.EnumerateObject())
+            if (string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase))
+                return p.Value.ValueKind == JsonValueKind.Null ? null : Number(e, name);
+        return null;
     }
 
     private static ExprNode Child(JsonElement e, string name) => Build(Member(e, name));
@@ -173,6 +182,7 @@ public sealed class ExprNodeConverter : JsonConverter<ExprNode>
                 break;
             case AggNode a:
                 w.WriteString("k", "agg"); w.WriteString("fn", a.Fn); w.WritePropertyName("arg"); Write(w, a.Arg, options);
+                if (a.P is { } p) w.WriteNumber("p", p);
                 break;
             case StrNode t:
                 w.WriteString("k", "str"); w.WriteString("v", t.V);

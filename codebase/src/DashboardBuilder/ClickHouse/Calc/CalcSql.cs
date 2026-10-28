@@ -83,10 +83,10 @@ internal static class CalcSql
         }
         var a = agg?.ToLowerInvariant();
         if (a is null || !CalcCatalog.RowLevelAggregations.Contains(a))
-            throw new RequestValidationException("Choose how to aggregate this calculation: sum, average, min, max, distinct count or non-null count.", field + ".calc");
-        if (a is "sum" or "avg" && c.Info.Type != CalcType.Number)
-            throw new RequestValidationException($"{(a == "sum" ? "Sum" : "Avg")} needs a number — this calculation is {c.Info.Type}.", field + ".calc");
-        return (ClickHouseGateway.AggregateSql(a, c.Sql, sampled, approximate), a is "sum" or "avg" or "countdistinct" or "countnonnull" || c.Info.Type == CalcType.Number);
+            throw new RequestValidationException(CalcCatalog.RowLevelHint, field + ".calc");
+        if (a is "sum" or "avg" or "median" or "stddev" or "variance" && c.Info.Type != CalcType.Number)
+            throw new RequestValidationException($"{char.ToUpperInvariant(a[0])}{a[1..]} needs a number — this calculation is {c.Info.Type}.", field + ".calc");
+        return (ClickHouseGateway.AggregateSql(a, c.Sql, sampled, approximate), a is "sum" or "avg" or "countdistinct" or "countnonnull" or "median" or "stddev" or "variance" || c.Info.Type == CalcType.Number);
     }
 
     /// <summary>A calculated dimension groups by its row-level expression (E4); an aggregate tree there is a 400.</summary>

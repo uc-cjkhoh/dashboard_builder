@@ -268,23 +268,32 @@ public sealed class ClickHouseGateway
     /// The one place an aggregate call is written. <paramref name="agg"/> is a lowercase whitelisted name
     /// (<c>sum|avg|min|max|count|countnonnull|countdistinct</c>); <paramref name="expr"/> is already validated
     /// and quoted SQL. <c>count</c> counts all rows (no argument); <c>countnonnull</c> counts non-NULL values.
+    /// <c>median</c>/<c>percentile</c> are exact and interpolate linearly like Excel PERCENTILE.INC (<c>quantileExactInclusive</c>; <paramref name="fraction"/> is the
+    /// already-bound <c>{name:Float64}</c> placeholder, never a literal); <c>stddev</c>/<c>variance</c> are the sample
+    /// statistics, NULL for fewer than two values; <c>attr</c> is the value when the group has exactly one distinct
+    /// non-NULL value, else NULL. None of these four is scaled on a sampled table (they estimate from the sample).
     /// When <paramref name="sampled"/> (P33), counts and sums are scaled back by <c>t0._sample_factor</c>;
     /// <paramref name="approximate"/> estimates distinct counts with <c>uniq</c>.
     /// </summary>
-    internal static string AggregateSql(string agg, string expr, bool sampled, bool approximate) => agg switch
+    internal static string AggregateSql(string agg, string expr, bool sampled, bool approximate, string? fraction = null) => agg switch
     {
         "sum" => sampled ? $"sum({expr} * t0._sample_factor)" : $"sum({expr})",
         "count" => sampled ? "sum(t0._sample_factor)" : "count()",
         "countnonnull" => sampled ? $"sum(if(isNotNull({expr}), t0._sample_factor, 0))" : $"count({expr})",
         "avg" or "min" or "max" => $"{agg}({expr})",
         "countdistinct" => approximate ? $"uniq({expr})" : $"uniqExact({expr})",
+        "median" => $"quantileExactInclusive(0.5)({expr})",
+        "percentile" => fraction is null ? throw new InvalidOperationException("percentile needs a bound fraction.") : $"quantileExactInclusive({fraction})({expr})",
+        "stddev" => $"if(count({expr}) < 2, NULL, stddevSamp({expr}))",
+        "variance" => $"if(count({expr}) < 2, NULL, varSamp({expr}))",
+        "attr" => $"if(uniqExact({expr}) = 1, min({expr}), NULL)",
         _ => throw new InvalidOperationException($"Unknown aggregate '{agg}'."),
     };
 
     // "countdistinct" counts unique values — mapped to ClickHouse uniqExact() in the SELECT builders.
     // "countnonnull" (E11) counts non-NULL values of the column; "count" counts rows.
     internal static readonly HashSet<string> Aggregations =
-        new(StringComparer.OrdinalIgnoreCase) { "count", "sum", "avg", "min", "max", "countdistinct", "countnonnull" };
+        new(StringComparer.OrdinalIgnoreCase) { "count", "sum", "avg", "min", "max", "countdistinct", "countnonnull", "median", "stddev", "variance", "attr" };
 
     /// <summary>A plain Top-N rank aggregate over an already-quoted column (lowercase whitelisted <paramref name="agg"/>,
     /// not <c>count</c>). Exact and unscaled: only the order matters.</summary>
@@ -292,7 +301,8 @@ public sealed class ClickHouseGateway
     {
         "countdistinct" => $"uniqExact({expr})",
         "countnonnull" => $"count({expr})",
-        _ => $"{agg}({expr})",
+        "avg" or "min" or "max" => $"{agg}({expr})",
+        _ => AggregateSql(agg, expr, false, false),
     };
 
     /// <summary>The parameters whose <c>{name:</c> placeholder appears in <paramref name="sql"/> — for a statement
@@ -845,9 +855,11 @@ public sealed class ClickHouseGateway
             if (mAgg != "count" && !(await ColumnsOf(m.Db, m.Table)).ContainsKey(m.Column))
                 throw new UnknownIdentifierException("Unknown column.");
             var category = mAgg == "count" ? ClickHouseType.Numeric : TypeCast.EffectiveCategory((await ColumnsOf(m.Db, m.Table)).GetValueOrDefault(m.Column, ClickHouseType.Other), m.Cast);
-            if (mAgg is "sum" or "avg" && category != ClickHouseType.Numeric)
+            if (mAgg is "sum" or "avg" or "median" or "stddev" or "variance" && category != ClickHouseType.Numeric)
                 throw new RequestValidationException($"{char.ToUpperInvariant(mAgg[0])}{mAgg[1..]} needs a numeric column — {m.Column} is {category}.", $"measures[{mIdx}]");
-            measNumeric.Add(mAgg is "count" or "countdistinct" or "countnonnull" or "sum" or "avg" || category == ClickHouseType.Numeric);
+            if (mAgg == "attr" && category is ClickHouseType.Compound or ClickHouseType.Other)
+                throw new RequestValidationException($"Attr can't summarise {m.Column} — it is a compound column.", $"measures[{mIdx}]");
+            measNumeric.Add(mAgg is "count" or "countdistinct" or "countnonnull" or "sum" or "avg" or "median" or "stddev" or "variance" || category == ClickHouseType.Numeric);
             // E10: one aggregate writer for plain and calculated measures. P33: sampled sums/counts are scaled back,
             // approximate mode estimates distinct counts (uniq).
             measExprs.Add(AggregateSql(mAgg, mAgg == "count" ? "" : await CastedAsync(m.Db, m.Table, m.Column, m.Cast, $"measures[{mIdx}]"), sampled, approximate));
@@ -895,7 +907,9 @@ public sealed class ClickHouseGateway
                 var byCols = await ColumnsOf(by.Db, by.Table);
                 if (!byCols.TryGetValue(by.Column, out var byCat)) throw new UnknownIdentifierException("Unknown column.");
                 byCat = TypeCast.EffectiveCategory(byCat, by.Cast);
-                if (agg is "sum" or "avg" && byCat != ClickHouseType.Numeric)
+                if (agg == "attr" && byCat is ClickHouseType.Compound or ClickHouseType.Other)
+                    throw new RequestValidationException($"Top-N can't rank by attr of {by.Column} — it is a compound column.", $"filters[{i}].topBy");
+                if (agg is "sum" or "avg" or "median" or "stddev" or "variance" && byCat != ClickHouseType.Numeric)
                     throw new RequestValidationException($"Top-N can't rank by {agg} of {by.Column} — it isn't numeric.", $"filters[{i}].topBy");
                 var byExpr = await CastedAsync(by.Db, by.Table, by.Column, by.Cast, $"filters[{i}].topBy");
                 rank = PlainRankSql(agg, byExpr);

@@ -328,7 +328,7 @@ test("field settings (P28) round-trip; bad ones are dropped and counted", () => 
   const meta = new Map([["s.orders.amount", { alias: "Revenue", agg: "avg" }], ["s.orders.secret", { hidden: true }]]);
   const wb = parseWorkbook(JSON.stringify(serializeWorkbook({ ...st, fieldMeta: meta })));
   assert.deepEqual(wb.fields, { "s.orders.amount": { alias: "Revenue", agg: "avg" }, "s.orders.secret": { hidden: true } });
-  const bad = parseWorkbook(wbText({ fields: { "nodots": { alias: "x" }, "s.t.c": { alias: "", agg: "median", hidden: "yes" }, "s.t.ok": { alias: "Fine" } } }));
+  const bad = parseWorkbook(wbText({ fields: { "nodots": { alias: "x" }, "s.t.c": { alias: "", agg: "mode", hidden: "yes" }, "s.t.ok": { alias: "Fine" } } }));
   assert.deepEqual(bad.fields, { "s.t.ok": { alias: "Fine" } });
   assert.ok(bad.issues.some((i) => /4 field setting/.test(i)));
 });

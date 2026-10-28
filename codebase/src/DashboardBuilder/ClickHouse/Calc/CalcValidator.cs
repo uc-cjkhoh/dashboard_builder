@@ -180,6 +180,14 @@ public static class CalcValidator
                 if (arg.IsAggregate) throw new CalcException("An aggregate can't contain another aggregate.", argPath);
                 if (!spec.Accepts.Contains(arg.Type))
                     throw new CalcException($"{a.Fn.ToUpperInvariant()} needs {Describe(spec.Accepts)} — {arg.Name} is {arg.Type}.", argPath);
+                var pPath = Child(path, "p");
+                if (spec.Fraction)
+                {
+                    if (a.P is not { } p || !double.IsFinite(p) || p < 0 || p > 1)
+                        throw new CalcException($"{a.Fn.ToUpperInvariant()} needs a fraction between 0 and 1.", pPath);
+                }
+                else if (a.P is not null)
+                    throw new CalcException($"{a.Fn.ToUpperInvariant()} takes no fraction.", pPath);
                 return new Typed(spec.Result ?? arg.Type, true, false, arg.Tables, "that value");
             }
 

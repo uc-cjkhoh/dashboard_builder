@@ -129,7 +129,7 @@ const topFilter = (calc) => ({ db: "shop", table: "orders", column: "status", ca
   topBy: { db: "", table: "", column: "Net", calc, agg: "sum" } });
 
 test("CALC_AGGS mirrors the server's row-level aggregations and never offers count", () => {
-  assert.deepEqual(CALC_AGGS, ["sum", "avg", "min", "max", "countDistinct", "countNonNull"]);
+  assert.deepEqual(CALC_AGGS, ["sum", "avg", "min", "max", "median", "stddev", "variance", "attr", "countDistinct", "countNonNull"]);
   assert.ok(!CALC_AGGS.includes("count"));
 });
 test("usesCalc counts a Top-N filter ranked by the calculation", () => {

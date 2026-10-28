@@ -7,7 +7,8 @@
 //   sum       := term (("+" | "-") term)*
 //   term      := factor (("*" | "/") factor)*
 //   factor    := "-" factor | number | string | "(" expr ")" | aggregate | logic | ref
-//   aggregate := ("SUM" | "AVG" | "MIN" | "MAX" | "COUNT" | "COUNTD") "(" expr ")"
+//   aggregate := ("SUM" | "AVG" | "MIN" | "MAX" | "COUNT" | "COUNTD" | "MEDIAN" | "STDDEV" | "VARIANCE" | "ATTR") "(" expr ")"
+//              | "PERCENTILE" "(" expr "," number ")"      -- the fraction is a literal number (range-checked by check())
 //   logic     := ("IF" | "IIF") "(" expr "," expr "," expr ")" | "IFNULL" "(" expr "," expr ")"
 //              | "ISNULL" "(" expr ")" | "ZN" "(" expr ")"
 //              | "CASE" [expr] ("WHEN" expr "THEN" expr)+ ["ELSE" expr] "END"
@@ -65,9 +66,7 @@ function tokenize(text) {
       if (value.length > CALC_LIMITS.string) throw new ParseError(`A text value can be at most ${CALC_LIMITS.string} characters.`, i);
       tokens.push({ t: "str", text: value, raw: text.slice(i, j + 1), pos: i });
       i = j + 1;
-    } else if (ch === ",") {
-      tokens.push({ t: ",", text: ch, raw: ch, pos: i }); i++;
-    } else if (ch === "(" || ch === ")") {
+    } else if (ch === "(" || ch === ")" || ch === ",") {
       tokens.push({ t: ch, text: ch, raw: ch, pos: i }); i++;
     } else if (/[0-9.]/.test(ch)) {
       const raw = match(NUMBER, text, i);
@@ -234,6 +233,16 @@ export function parseFormula(text, resolve) {
       if (!known) throw new ParseError(`Unknown function ${tok.text}.`, tok.pos);
       next();
       const arg = expr("(");
+      if (FUNCTIONS[fn].fraction) {
+        const hint = `Write ${tok.text.toUpperCase()}([field], 0.9) — the fraction goes after a comma.`;
+        if (peek().t !== ",") throw new ParseError(hint, peek().pos);
+        next();
+        const p = peek();
+        if (p.t !== "num") throw new ParseError(hint, p.pos);
+        next();
+        closeParen();
+        return { k: "agg", fn, arg, p: p.v };
+      }
       closeParen();
       return { k: "agg", fn, arg };
     }

@@ -43,7 +43,7 @@ public static class CalcCompiler
             IsNullNode z => $"isNull({Walk(z.Arg)})",
             CaseNode { Whens.Length: 1, Else: not null } k => $"if({Walk(k.Whens[0].Cond)}, {Walk(k.Whens[0].Then)}, {Walk(k.Else)})",
             CaseNode k => MultiIf(k),
-            AggNode a => ClickHouseGateway.AggregateSql(AggName(a.Fn), Walk(a.Arg), sampled, approximate),
+            AggNode a => ClickHouseGateway.AggregateSql(AggName(a.Fn), Walk(a.Arg), sampled, approximate, a.P is { } p ? Param(p, "Float64") : null),
             UnNode u => throw new InvalidOperationException($"Unsupported unary operator '{u.Op}'."),
             BinNode b => throw new InvalidOperationException($"Unsupported operator '{b.Op}'."),
             CmpNode or LogicNode => throw new InvalidOperationException("Unsupported operator."),
@@ -76,7 +76,7 @@ public static class CalcCompiler
     // Tree names -> AggregateSql names. COUNT([f]) counts non-null values; COUNTD counts distinct values.
     private static string AggName(string fn) => fn switch
     {
-        "sum" or "avg" or "min" or "max" => fn,
+        "sum" or "avg" or "min" or "max" or "median" or "stddev" or "variance" or "percentile" or "attr" => fn,
         "count" => "countnonnull",
         "countd" => "countdistinct",
         _ => throw new InvalidOperationException($"Unsupported aggregate '{fn}'."),

@@ -33,8 +33,9 @@ public static class CalcType
 }
 
 /// <summary>One aggregate function: the argument types it accepts (in display order) and its result type
-/// (<c>null</c> means the same type as the argument).</summary>
-public sealed record AggSpec(IReadOnlyList<string> Accepts, string? Result);
+/// (<c>null</c> means the same type as the argument).
+/// <c>Fraction</c>: the function takes a literal 0..1 fraction (<see cref="AggNode.P"/>) after its argument.</summary>
+public sealed record AggSpec(IReadOnlyList<string> Accepts, string? Result, bool Fraction = false);
 
 /// <summary>The function table — the only place a function exists. Names are the lowercase wire names.</summary>
 public static class CalcCatalog
@@ -51,12 +52,20 @@ public static class CalcCatalog
         ["max"] = new(Orderable, null),
         ["count"] = new(Anything, CalcType.Number),
         ["countd"] = new(Anything, CalcType.Number),
+        ["median"] = new(NumberOnly, CalcType.Number),
+        ["stddev"] = new(NumberOnly, CalcType.Number),
+        ["variance"] = new(NumberOnly, CalcType.Number),
+        ["percentile"] = new(NumberOnly, CalcType.Number, Fraction: true),
+        ["attr"] = new(Anything, null),
     };
 
     /// <summary>E13: what a row-level calculation in a measure may be aggregated by (<c>count</c> of rows would ignore it).
     /// The single whitelist <see cref="DashboardBuilder.ClickHouse.RequestRules"/> and the gateway both use.</summary>
     public static readonly IReadOnlySet<string> RowLevelAggregations = new HashSet<string>(StringComparer.Ordinal)
-        { "sum", "avg", "min", "max", "countdistinct", "countnonnull" };
+        { "sum", "avg", "min", "max", "countdistinct", "countnonnull", "median", "stddev", "variance", "attr" };
+
+    /// <summary>The rejection text for a row-level calculation with no (or an unknown) aggregation; lists <see cref="RowLevelAggregations"/>.</summary>
+    public const string RowLevelHint = "Choose how to aggregate this calculation: sum, average, min, max, median, standard deviation, variance, ATTR, distinct count or non-null count.";
 
     public static bool IsKnown(string fn) => Aggregates.ContainsKey(fn);
 }

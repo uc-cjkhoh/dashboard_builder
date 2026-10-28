@@ -35,6 +35,7 @@ import { explainControl } from "../Calc/explain-popover.js";
 import { paneState, deleteCalcPlan, roleChoice, setRoleChoice } from "../Calc/calc-pane-model.js";
 import { checkName } from "../Calc/calc-workbook.js";
 import { wireDim, wireMeasure, planTables, calcProblem, statCalcProblem, measureLabel, aggWord, topByRef, topByKey, wireTopBy, resolveSortTarget } from "../Calc/calc-plan.js";
+import { approxNotice } from "./speed-notice.js";
 import { REF_CHOICES, TREND_CHOICES, FORECAST_CHOICES, defaultAnalytics, refValue, trendSeries, combine } from "./analytics-model.js";
 import { castChoices, castLabel, effectiveCategory, withCasts, syncCastCategories, statCastProblem } from "./cast-model.js";
 import { scalePlan, withOther, bucketNotice, tableProgress, needsNextPage, OTHER_TYPES, BUCKET_TYPES, DATE_BUCKET_CHOICES } from "./scale-model.js";
@@ -2563,7 +2564,7 @@ export function initDashboards() {
       setStatusBar(s, result);
       // An "Other" mark already says how much is past the limit, so no truncation line on top of it.
       const shownOther = result.other && OTHER_TYPES.has(s.chartType);
-      setNotice(joinNotices(filterNote, speedNotice(result), sharedNote(s), periodNotice(s, cmp), extraNotice, shownOther ? null : truncationNotice({ truncated: result.truncated, chartType: s.chartType, limit: plan.limit }), bucketNotice(result.bucket)));
+      setNotice(joinNotices(filterNote, speedNotice(result, plan), sharedNote(s), periodNotice(s, cmp), extraNotice, shownOther ? null : truncationNotice({ truncated: result.truncated, chartType: s.chartType, limit: plan.limit }), bucketNotice(result.bucket)));
     } catch (err) {
       console.error(err);
       chartEl.replaceChildren(warn("This view couldn't be drawn — try another chart type or remove a field."));
@@ -2611,9 +2612,9 @@ export function initDashboards() {
   }
 
   // P33: say when a result is approximate or came from the server's cache.
-  function speedNotice(result) {
+  function speedNotice(result, plan) {
     const parts = [];
-    if (result.approx) parts.push(`Approximate${result.approx.distinct ? " — distinct counts estimated" : ""}${result.approx.sample ? `${result.approx.distinct ? ";" : " —"} a ${Math.round(result.approx.sample * 100)}% sample, scaled up` : ""}`);
+    if (result.approx) parts.push(approxNotice(result.approx, plan.measures));
     if (result.cached) parts.push("From the server cache (under a minute old) — Refresh re-runs it");
     return parts.join(" · ") || null;
   }

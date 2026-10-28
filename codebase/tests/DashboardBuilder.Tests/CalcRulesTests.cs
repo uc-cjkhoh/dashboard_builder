@@ -32,7 +32,7 @@ public class CalcRulesTests
     }
 
     [Fact] public void A_ratio_measure_with_no_aggregation_passes() => RequestRules.ValidateQuery(Q(measures: [M(Aggregate, null)]));
-    [Theory] [InlineData("sum")] [InlineData("AVG")] [InlineData("min")] [InlineData("max")] [InlineData("countdistinct")] [InlineData("countnonnull")]
+    [Theory] [InlineData("sum")] [InlineData("AVG")] [InlineData("min")] [InlineData("max")] [InlineData("countdistinct")] [InlineData("countnonnull")] [InlineData("median")] [InlineData("stddev")] [InlineData("variance")] [InlineData("attr")]
     public void A_row_level_measure_with_a_value_aggregation_passes(string agg) => RequestRules.ValidateQuery(Q(measures: [M(RowLevel, agg)]));
     [Fact] public void A_row_level_dimension_passes() => RequestRules.ValidateQuery(Q(rows: [D(RowLevel)], cols: [D(RowLevel)]));
     [Fact] public void A_calculation_label_may_be_absent() => RequestRules.ValidateQuery(Q(rows: [D(RowLevel, label: null)]));
@@ -46,7 +46,7 @@ public class CalcRulesTests
         Assert.Equal("measures[0].calc", e.Field);
         Assert.Equal("Counting rows doesn't use the calculation.", e.Message);
     }
-    [Fact] public void An_unknown_aggregation_on_a_calculation_is_rejected() => Assert.Equal("measures[1].calc", FieldOf(Q(measures: [M(Aggregate, null), M(RowLevel, "median")])));
+    [Fact] public void An_unknown_aggregation_on_a_calculation_is_rejected() => Assert.Equal("measures[1].calc", FieldOf(Q(measures: [M(Aggregate, null), M(RowLevel, "mode")])));
     [Fact] public void An_aggregate_tree_in_a_dimension_is_rejected() => Assert.Equal("rowDimensions[0].calc", FieldOf(Q(rows: [D(Aggregate)])));
     [Fact] public void An_aggregate_tree_in_a_column_dimension_is_rejected() => Assert.Equal("columnDimensions[1].calc", FieldOf(Q(cols: [D(RowLevel), D(Aggregate)])));
     [Fact] public void A_calculated_dimension_has_no_date_part() => Assert.Equal("rowDimensions[0].datePart", FieldOf(Q(rows: [D(RowLevel, "month")])));
@@ -102,12 +102,12 @@ public class CalcRulesTests
         Assert.False(CalcValidator.ContainsAggregate(new NumNode(1)));
     }
 
-    [Fact] public void Row_level_aggregations_are_the_six_value_aggregations() =>
-        Assert.True(new HashSet<string> { "sum", "avg", "min", "max", "countdistinct", "countnonnull" }.SetEquals(CalcCatalog.RowLevelAggregations));
-    [Theory] [InlineData("count")] [InlineData("median")]
+    [Fact] public void Row_level_aggregations_are_the_value_aggregations() =>
+        Assert.True(new HashSet<string> { "sum", "avg", "min", "max", "countdistinct", "countnonnull", "median", "stddev", "variance", "attr" }.SetEquals(CalcCatalog.RowLevelAggregations));
+    [Theory] [InlineData("count")] [InlineData("mode")] [InlineData("percentile")]
     public void Validate_query_rejects_count_and_unknown_names_with_the_plan_a_message(string agg)
     {
         var e = Assert.Throws<RequestValidationException>(() => RequestRules.ValidateQuery(Q(measures: [M(RowLevel, agg)])));
-        Assert.Equal(agg == "count" ? "Counting rows doesn't use the calculation." : "Choose how to aggregate this calculation: sum, average, min, max, distinct count or non-null count.", e.Message);
+        Assert.Equal(agg == "count" ? "Counting rows doesn't use the calculation." : CalcCatalog.RowLevelHint, e.Message);
     }
 }
