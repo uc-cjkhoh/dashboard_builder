@@ -487,7 +487,7 @@ function cleanBookmarks(list, wsCount, issues) {
     const sel = b.sheet.selection;
     if (sel && isStr(sel.db) && isStr(sel.table) && isStr(sel.column) && (typeof sel.value === "string" || typeof sel.value === "number")
       && (sel.action == null || sel.action === "keep" || sel.action === "exclude"))
-      sheet.selection = { db: sel.db, table: sel.table, column: sel.column, value: sel.value, label: String(sel.label ?? ""), action: sel.action ?? null };
+      sheet.selection = { db: sel.db, table: sel.table, column: sel.column, value: sel.value, label: String(sel.label ?? "").slice(0, 300), action: sel.action ?? null };
     const worksheet = Number.isInteger(b.worksheet) && b.worksheet >= 0 && b.worksheet < wsCount ? b.worksheet : null;
     out.push({ name: name.value, worksheet, worksheetName: typeof b.worksheetName === "string" && b.worksheetName.trim() ? b.worksheetName.trim().slice(0, LIMITS.tabName) : name.value,
       sheet, sharedFilters: cleanFilters(b.sharedFilters, `${where} shared filters`, issues, LIMITS.sharedFilters),
@@ -524,7 +524,7 @@ function cleanDrill(d, where, issues) {
   const okDepth = Number.isInteger(d.depth) && d.depth >= 0 && d.depth < levels.length;
   const okPath = okDepth && Array.isArray(d.path) && d.path.length === d.depth && d.path.every((x) => x && isStr(x.column));
   if (levels.length < 2 || !okPath) { issues.push(`${where}: drill cleared.`); return null; }
-  return { levels, depth: d.depth, path: d.path.map((x) => ({ column: x.column, value: x.value ?? null, label: String(x.label ?? "") })) };
+  return { levels, depth: d.depth, path: d.path.map((x) => ({ column: x.column, value: x.value ?? null, label: String(x.label ?? "").slice(0, 300) })) };
 }
 
 function cleanFormat(f0, where, issues) {

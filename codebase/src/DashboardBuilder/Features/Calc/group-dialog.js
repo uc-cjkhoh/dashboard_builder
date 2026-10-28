@@ -78,7 +78,7 @@ export function openGroupDialog({ field, fieldName, calcId = null, load }) {
     status.textContent = `${used} of ${MAX_GROUP_MEMBERS} members grouped · ${s.groups.length} group${s.groups.length === 1 ? "" : "s"}${groupCost(s) > 200 ? " — over the limit" : ""}`;
     const dup = groups.find((g, i) => groups.some((o, j) => j < i && o.name.trim().toLowerCase() === g.name.trim().toLowerCase()));
     const blank = groups.find((g) => !g.name.trim() && [...assign.values()].includes(g.id));
-    const r = dup ? { ok: false, error: `A group named '${dup.name.trim()}' already exists.` } : blank ? { ok: false, error: "Give every group a name." } : checkGroupSpec(s);
+    const r = dup ? { ok: false, error: `A group named '${dup.name.trim()}' already exists.` } : blank ? { ok: false, error: "Give every group a name." } : checkGroupSpec(s, selects.map((x) => x.member));
     const nm = checkName(name.value, calculations, existing?.id);
     nameMsg.textContent = nm.ok ? "" : nm.error;
     if (nm.ok) name.removeAttribute("aria-invalid"); else name.setAttribute("aria-invalid", "true");

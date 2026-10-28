@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { groupTree, groupCost, MAX_GROUP_MEMBERS, checkGroupSpec, cleanGroupSpec, groupCalcName, groupsFromAssignments, assignmentsOf, GROUP_CATEGORY_REFUSAL, groupCategoryProblem }
+import { groupTree, groupCost, MAX_GROUP_MEMBERS, checkGroupSpec, cleanGroupSpec, groupCalcName, groupsFromAssignments, assignmentsOf, GROUP_CATEGORY_REFUSAL, groupCategoryProblem, GROUP_TYPE_REFUSAL }
   from "../../src/DashboardBuilder/Features/Calc/group-model.js";
 import { check, CALC_LIMITS } from "../../src/DashboardBuilder/Features/Calc/calc-types.js";
 import { compileCalculation, catalogFromEntities } from "../../src/DashboardBuilder/Features/Calc/calc-resolve.js";
@@ -74,7 +74,7 @@ test("checkGroupSpec: names, members, uniqueness and the node budget, each with 
   assert.match(bad([g("A")]).error, /at least one member/i);
   assert.match(bad([g("A", "x"), g("B", "x")]).error, /more than one group/i);
   assert.match(bad([g("x".repeat(81), "m")]).error, /at most 80/);
-  assert.match(bad([g("A", "m".repeat(101))]).error, /at most 100/);
+  assert.match(bad([g("A", "m".repeat(101))]).error, /longer than 100/);
   assert.match(bad(Array.from({ length: 51 }, (_, i) => g(`G${i}`, `m${i}`))).error, /At most 50 groups/);
   const tooMany = bad([g("A", ...Array.from({ length: 30 }, (_, i) => `a${i}`)), g("B", ...Array.from({ length: 20 }, (_, i) => `b${i}`))]);
   assert.equal(tooMany.ok, false);
@@ -148,4 +148,23 @@ test("workbook open: a corrupt group on a calculation skips that calculation wit
   assert.ok(wb.issues.some((i) => /Zones/.test(i)));
   assert.equal(LIMITS.groups, 50);
   assert.equal(LIMITS.groupMembers, 500);
+});
+
+test("groupCategoryProblem also takes the ClickHouse type: UUID / IPv4 / IPv6 / enum columns are refused, String-likes are not", () => {
+  for (const t of ["String", "Nullable(String)", "LowCardinality(String)", "FixedString(3)", ""]) assert.equal(groupCategoryProblem("text", t), null, t);
+  for (const t of ["UUID", "Nullable(UUID)", "IPv4", "IPv6", "Enum8('a' = 1)", "Nullable(Enum16('x' = 1))"]) assert.equal(groupCategoryProblem("text", t), GROUP_TYPE_REFUSAL, t);
+  assert.match(GROUP_TYPE_REFUSAL, /not UUID, IP address or enum/);
+  assert.equal(groupCategoryProblem("numeric", "Int32"), GROUP_CATEGORY_REFUSAL);
+});
+test("a group name equal to a member that stays ungrouped is refused; equal to a grouped member is fine", () => {
+  const spec2 = spec([g("EU", "APAC")]);
+  const r = checkGroupSpec(spec2, ["APAC", "EU", "US"]);
+  assert.equal(r.ok, false);
+  assert.match(r.error, /group name 'EU' is also a member/);
+  assert.equal(checkGroupSpec(spec([g("EU", "EU", "APAC")]), ["APAC", "EU", "US"]).ok, true);
+  assert.equal(checkGroupSpec(spec([g("Other", "APAC")]), ["APAC", "EU"]).ok, true);
+  assert.equal(checkGroupSpec(spec2).ok, true, "without the field's member list there is nothing to compare");
+});
+test("a member over 100 characters is named in the error", () => {
+  assert.match(checkGroupSpec(spec([g("A", "m".repeat(120))])).error, /'mmmmmmmmmmmmmmmmmmmm…' is longer than 100/);
 });

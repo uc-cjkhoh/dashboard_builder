@@ -16,8 +16,11 @@ export const groupCost = (spec) => 2 + 4 * (spec?.groups ?? []).reduce((n, g) =>
 export const MAX_GROUP_MEMBERS = Math.floor((CALC_LIMITS.nodes - 2) / 4);
 
 export const GROUP_CATEGORY_REFUSAL = "Groups work on text fields only. Number, date and true/false fields can't be grouped yet.";
-/** Why a column of this (original) category can't be grouped, or null. */
-export const groupCategoryProblem = (category) => (category === "text" ? null : GROUP_CATEGORY_REFUSAL);
+export const GROUP_TYPE_REFUSAL = "Groups work on text columns, not UUID, IP address or enum columns.";
+// ClickHouse has no common type between these and the text branches of the group CASE (pinned by tests/live/group-smoke.mjs).
+const NOT_PLAIN_TEXT = /UUID|IPv4|IPv6|Enum/;
+/** Why a column of this (original) category and ClickHouse `type` can't be grouped, or null. */
+export const groupCategoryProblem = (category, type = "") => (category !== "text" ? GROUP_CATEGORY_REFUSAL : NOT_PLAIN_TEXT.test(String(type)) ? GROUP_TYPE_REFUSAL : null);
 
 const fieldNode = (f) => ({ k: "field", db: f.db, table: f.table, column: f.column });
 const equals = (f, m) => ({ k: "cmp", op: "=", l: fieldNode(f), r: { k: "str", v: m } });
@@ -39,7 +42,7 @@ const total = (groups) => groups.reduce((n, g) => n + g.members.length, 0);
 const sameName = (a, b) => a.toLowerCase() === b.toLowerCase();
 
 /** { ok } or { ok: false, error } — the rules every group spec obeys (the dialog, and a saved workbook through cleanGroupSpec). */
-export function checkGroupSpec(spec) {
+export function checkGroupSpec(spec, knownMembers = []) {
   const f = spec?.field;
   if (!f || typeof f.db !== "string" || typeof f.table !== "string" || typeof f.column !== "string" || !f.db || !f.table || !f.column) return { ok: false, error: "A group field needs a field to group." };
   const groups = spec.groups;
@@ -53,10 +56,15 @@ export function checkGroupSpec(spec) {
     if (!Array.isArray(g.members) || g.members.length === 0) return { ok: false, error: `Group '${g.name.trim()}' needs at least one member.` };
     for (const m of g.members) {
       if (typeof m !== "string") return { ok: false, error: "A group member must be text." };
-      if (m.length > LIMITS.memberKey) return { ok: false, error: `A group member can be at most ${LIMITS.memberKey} characters.` };
+      if (m.length > LIMITS.memberKey) return { ok: false, error: `The member '${m.slice(0, 20)}…' is longer than ${LIMITS.memberKey} characters and can't be grouped.` };
       if (owner.has(m) && owner.get(m) !== g) return { ok: false, error: `'${m}' is in more than one group.` };
       owner.set(m, g);
     }
+  }
+  // A group name equal to a member that stays ungrouped would merge that member's rows into the group's bar.
+  for (const g of groups) {
+    const clash = knownMembers.find((m) => m === g.name.trim() && !owner.has(m));
+    if (clash !== undefined) return { ok: false, error: `The group name '${g.name.trim()}' is also a member of this field outside the group — rename the group, or put that member in it.` };
   }
   const n = total(groups);
   if (n > LIMITS.groupMembers) return { ok: false, error: `At most ${LIMITS.groupMembers} members per group field.` };

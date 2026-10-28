@@ -549,7 +549,7 @@ export function initDashboards() {
   }
   // T02-30: a group field over a text column's members — a calculation the pills, query and workbook already know.
   function newGroupField(f, col) {
-    const problem = groupCategoryProblem(col.category);
+    const problem = groupCategoryProblem(col.category, col.type);
     if (problem) { toast(problem, "info"); return; }
     if (calculations.length >= LIMITS.calculations) { toast(`A workbook can have at most ${LIMITS.calculations} calculated fields.`, "info"); return; }
     openGroupDialog({ field: { db: f.db, table: f.table, column: f.column }, fieldName: metaOf(f).alias || col.name, load: () => distinctFor(f.db, f.table, f.column) });

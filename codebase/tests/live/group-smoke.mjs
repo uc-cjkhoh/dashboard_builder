@@ -88,14 +88,26 @@ async function main() {
   assert.equal(Number(full.json.rows.find((x) => x.keys[0] === 'All').values[0]), 35);
   ok('a 49-member group (the budget) is accepted: APAC 10 + EU 25 = 35');
 
+  // Columns the catalog calls "text" that are not String: probe what the tree does on each.
+  const probe = {};
+  for (const [col, member] of [['u', '00000000-0000-0000-0000-000000000001'], ['ip4', '10.0.0.1'], ['ip6', '::1'], ['e', 'a'], ['ne', 'a'], ['fs', 'ab1'], ['lc', 'x']]) {
+    const spec = { field: { db: DB, table: TABLE, column: col }, groups: [{ name: 'G', members: [member] }] };
+    const q = await app('POST', '/api/query', req(spec));
+    probe[col] = q.status === 200 ? 'ok' : `${q.status} ${(q.json?.error ?? '').slice(0, 120)}`;
+    console.log(`probe ${col}: ${probe[col]}`);
+  }
+  // Pinned: String-like columns group; UUID / IPv4 / IPv6 / Nullable(Enum) have no common type with the text branches and fail, so the client refuses them (groupCategoryProblem).
+  for (const col of ['fs', 'lc', 'e']) assert.equal(probe[col], 'ok', `${col} should group`);
+  for (const col of ['u', 'ip4', 'ip6', 'ne']) assert.notEqual(probe[col], 'ok', `${col} was expected to fail (and be refused client-side)`);
+  ok('FixedString / LowCardinality(String) group; UUID, IPv4, IPv6 and Nullable(Enum8) fail in ClickHouse (refused client-side; every Enum is refused)');
   await app('POST', '/api/connection/disconnect');
 }
 
 let failed = false;
 try {
   await write(`DROP TABLE IF EXISTS ${DB}.${TABLE}`);
-  await write(`CREATE TABLE ${DB}.${TABLE} (region Nullable(String), amount Float64) ENGINE = MergeTree ORDER BY tuple()`);
-  await write(`INSERT INTO ${DB}.${TABLE} VALUES ${ROWS.map(([r, a]) => `(${r === null ? 'NULL' : sqlStr(r)}, ${a})`).join(', ')}`);
+  await write(`CREATE TABLE ${DB}.${TABLE} (region Nullable(String), amount Float64, u UUID, ip4 IPv4, ip6 IPv6, e Enum8('a' = 1, 'b' = 2), fs FixedString(3), lc LowCardinality(String), ne Nullable(Enum8('a' = 1, 'b' = 2))) ENGINE = MergeTree ORDER BY tuple()`);
+  await write(`INSERT INTO ${DB}.${TABLE} VALUES ${ROWS.map(([r, a], i) => `(${r === null ? 'NULL' : sqlStr(r)}, ${a}, '00000000-0000-0000-0000-00000000000${i % 2}', '10.0.0.${i % 2}', '::${i % 2}', ${i % 2 ? "'a'" : "'b'"}, 'ab${i % 2}', ${i % 2 ? "'x'" : "'y'"}, ${i % 2 ? "'a'" : 'NULL'})`).join(', ')}`);
   await main();
 } catch (e) {
   failed = true;

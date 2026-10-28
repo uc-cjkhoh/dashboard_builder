@@ -75,7 +75,7 @@ test("cleanMemberAliases drops bad entries and reports them; absent = undefined"
   assert.equal(i2.length, 1);
   assert.match(i2[0], /5 invalid member label/);
   const many = {};
-  for (let i = 0; i < 250; i++) many[`m${i}`] = "x";
+  for (let i = 0; i < 250; i++) many[`m${i}`] = `label ${i}`;
   const i3 = [];
   assert.equal(Object.keys(cleanMemberAliases(many, "w", i3)).length, 200);
   assert.equal(i3.length, 1);
@@ -127,8 +127,9 @@ test("aliasesFromInputs: the dialog's typed labels -> a map; unchanged-from-raw 
   assert.equal(bad.ok, false);
   assert.match(bad.error, /at most 80/);
   const longKey = aliasesFromInputs([{ raw: "k".repeat(101), label: "x" }]);
-  assert.equal(longKey.ok, true, "a member too long to key is skipped, not an error");
-  assert.equal(longKey.value, undefined);
+  assert.equal(longKey.ok, false, "a typed label for a member too long to key is refused, naming the member");
+  assert.match(longKey.error, /kkkkkkkkkkkkkkkkkkkkkkkk….*longer than 100/);
+  assert.equal(aliasesFromInputs([{ raw: "k".repeat(101), label: "" }]).ok, true, "no label typed: nothing to refuse");
   const proto = aliasesFromInputs([{ raw: "__proto__", label: "P" }]);
   assert.equal(aliasOf(proto.value, "__proto__"), "P");
 });
@@ -164,4 +165,38 @@ test("bad saved member labels are dropped and reported; the rest of the field's 
   const gone = roundTrip(new Map([["d.t.region", { alias: "Area" }]]), (j) => { j.fields["d.t.region"].memberAliases = "x"; });
   assert.equal(gone.fields["d.t.region"].memberAliases, undefined);
   assert.equal(gone.fields["d.t.region"].alias, "Area");
+});
+
+// --- labels are unique within a field: nothing can draw as one mark twice ---
+test("setAlias refuses a label another member already shows, or another member's raw value, naming that member", () => {
+  const m = setAlias(undefined, "EU", "Europe").value;
+  const same = setAlias(m, "UK", "Europe");
+  assert.equal(same.ok, false);
+  assert.match(same.error, /'Europe' is already used by the member 'EU'/);
+  const rawClash = setAlias(m, "UK", "US", ["EU", "US", "UK"]);
+  assert.equal(rawClash.ok, false);
+  assert.match(rawClash.error, /member 'US'/);
+  assert.equal(setAlias(m, "EU", "Europe").ok, true, "re-saving a member's own label is fine");
+  assert.equal(setAlias(m, "UK", "United Kingdom", ["EU", "US", "UK"]).ok, true);
+  assert.equal(setAlias(undefined, "k".repeat(101), "x").ok, false);
+  assert.match(setAlias(undefined, "k".repeat(101), "x").error, /kkkkkkkkkkkkkkkkkkkkkkkk….*100 characters/);
+});
+test("the dialog's rows: two members typed with one label, or a label equal to another member's value, block Save", () => {
+  const dup = aliasesFromInputs([{ raw: "EU", label: "West" }, { raw: "US", label: "West" }]);
+  assert.equal(dup.ok, false);
+  assert.match(dup.error, /already used by the member 'EU'/);
+  const rawClash = aliasesFromInputs([{ raw: "EU", label: "US" }, { raw: "US", label: "" }]);
+  assert.equal(rawClash.ok, false);
+  assert.match(rawClash.error, /'US'/);
+  assert.equal(aliasesFromInputs([{ raw: "EU", label: "Europe" }, { raw: "US", label: "Americas" }]).ok, true);
+});
+test("a workbook with two members sharing a label opens with the first kept, the second dropped and reported (deterministic)", () => {
+  const wb = roundTrip(new Map([["d.t.region", { alias: "Area" }]]), (j) => { j.fields["d.t.region"].memberAliases = { EU: "West", US: "West", UK: "Brit", Brit: "x" }; });
+  const a = wb.fields["d.t.region"].memberAliases;
+  assert.equal(aliasOf(a, "EU"), "West");
+  assert.equal(aliasOf(a, "US"), undefined);
+  assert.equal(aliasOf(a, "Brit"), "x");
+  assert.equal(aliasOf(a, "UK"), undefined, "a label equal to another stored member's value is dropped too");
+  assert.ok(wb.issues.some((i) => /2 member labels dropped because another member already shows as that text/.test(i)), wb.issues.join("|"));
+  assert.equal(new Set(Object.keys(a).map((k) => aliasOf(a, k))).size, Object.keys(a).length, "every kept label is unique");
 });

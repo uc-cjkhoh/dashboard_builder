@@ -89,3 +89,16 @@ test("no memberAliases anywhere: the drawing is exactly the old one", () => {
   renderWorksheet(mk(), sheet(), result(RAW), null, { plan: { metaOf: () => ({}), calculations: [], nameOf: (f) => f.column } });
   assert.deepEqual(insts[0].lastSet.xAxis.data, ["EU", "US", "constructor", "__proto__"]);
 });
+
+test("two members that a file labels alike open as one label only: the drawing has one mark per member, never a merge", async () => {
+  const { cleanMemberAliases } = await import("../../src/DashboardBuilder/Features/Dashboard/member-labels.js");
+  const issues = [];
+  const aliases = cleanMemberAliases({ EU: "West", US: "West" }, "f", issues);
+  assert.equal(issues.length, 1);
+  const p = { ...plan, metaOf: () => ({ memberAliases: aliases }) };
+  renderWorksheet(mk(), sheet(), result([[["EU"], 1], [["US"], 2]]), null, { plan: p });
+  const cats = insts[0].lastSet.xAxis.data;
+  assert.equal(new Set(cats).size, 2, `two different category texts: ${JSON.stringify(cats)}`);
+  const names = new Set(["EU", "US"].map((k) => aliases[k] ?? k));
+  assert.equal(names.size, 2, "the two members still show as two different texts");
+});

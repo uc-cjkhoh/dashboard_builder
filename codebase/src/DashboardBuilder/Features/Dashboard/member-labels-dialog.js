@@ -55,6 +55,7 @@ export function openMemberLabelsDialog({ name, current, load, onSave }) {
       input.id = `memlab-${n}-${i}`; value.htmlFor = input.id;
       input.type = "text"; input.autocomplete = "off"; input.maxLength = LIMITS.memberLabel; input.value = label;
       input.placeholder = raw;
+      if (raw.length > LIMITS.memberKey) { input.disabled = true; input.title = `This value is longer than ${LIMITS.memberKey} characters, so it can't be given a label.`; }
       input.addEventListener("keydown", (e) => {
         if (e.key !== "Enter") return;
         e.preventDefault();
