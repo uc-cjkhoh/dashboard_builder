@@ -108,6 +108,6 @@ public class CalcRulesTests
     public void Validate_query_rejects_count_and_unknown_names_with_the_plan_a_message(string agg)
     {
         var e = Assert.Throws<RequestValidationException>(() => RequestRules.ValidateQuery(Q(measures: [M(RowLevel, agg)])));
-        Assert.Equal(agg == "count" ? "Counting rows doesn't use the calculation." : "Choose how to aggregate this calculation: sum, average, min, max, distinct count or non-null count.", e.Message);
+        Assert.Equal(agg == "count" ? "Counting rows doesn't use the calculation." : CalcCatalog.RowLevelHint, e.Message);
     }
 }

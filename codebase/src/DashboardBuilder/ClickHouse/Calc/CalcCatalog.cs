@@ -63,5 +63,8 @@ public static class CalcCatalog
     public static readonly IReadOnlySet<string> RowLevelAggregations = new HashSet<string>(StringComparer.Ordinal)
         { "sum", "avg", "min", "max", "countdistinct", "countnonnull", "median", "stddev", "variance", "attr" };
 
+    /// <summary>The rejection text for a row-level calculation with no (or an unknown) aggregation; lists <see cref="RowLevelAggregations"/>.</summary>
+    public const string RowLevelHint = "Choose how to aggregate this calculation: sum, average, min, max, median, standard deviation, variance, ATTR, distinct count or non-null count.";
+
     public static bool IsKnown(string fn) => Aggregates.ContainsKey(fn);
 }

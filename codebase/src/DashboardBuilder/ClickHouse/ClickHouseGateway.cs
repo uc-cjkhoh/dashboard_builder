@@ -268,7 +268,7 @@ public sealed class ClickHouseGateway
     /// The one place an aggregate call is written. <paramref name="agg"/> is a lowercase whitelisted name
     /// (<c>sum|avg|min|max|count|countnonnull|countdistinct</c>); <paramref name="expr"/> is already validated
     /// and quoted SQL. <c>count</c> counts all rows (no argument); <c>countnonnull</c> counts non-NULL values.
-    /// <c>median</c>/<c>percentile</c> are exact order statistics (<c>quantileExact</c>; <paramref name="fraction"/> is the
+    /// <c>median</c>/<c>percentile</c> are exact and interpolate linearly like Excel PERCENTILE.INC (<c>quantileExactInclusive</c>; <paramref name="fraction"/> is the
     /// already-bound <c>{name:Float64}</c> placeholder, never a literal); <c>stddev</c>/<c>variance</c> are the sample
     /// statistics, NULL for fewer than two values; <c>attr</c> is the value when the group has exactly one distinct
     /// non-NULL value, else NULL. None of these four is scaled on a sampled table (they estimate from the sample).
@@ -282,8 +282,8 @@ public sealed class ClickHouseGateway
         "countnonnull" => sampled ? $"sum(if(isNotNull({expr}), t0._sample_factor, 0))" : $"count({expr})",
         "avg" or "min" or "max" => $"{agg}({expr})",
         "countdistinct" => approximate ? $"uniq({expr})" : $"uniqExact({expr})",
-        "median" => $"quantileExact(0.5)({expr})",
-        "percentile" => fraction is null ? throw new InvalidOperationException("percentile needs a bound fraction.") : $"quantileExact({fraction})({expr})",
+        "median" => $"quantileExactInclusive(0.5)({expr})",
+        "percentile" => fraction is null ? throw new InvalidOperationException("percentile needs a bound fraction.") : $"quantileExactInclusive({fraction})({expr})",
         "stddev" => $"if(count({expr}) < 2, NULL, stddevSamp({expr}))",
         "variance" => $"if(count({expr}) < 2, NULL, varSamp({expr}))",
         "attr" => $"if(uniqExact({expr}) = 1, min({expr}), NULL)",
@@ -857,7 +857,7 @@ public sealed class ClickHouseGateway
             var category = mAgg == "count" ? ClickHouseType.Numeric : TypeCast.EffectiveCategory((await ColumnsOf(m.Db, m.Table)).GetValueOrDefault(m.Column, ClickHouseType.Other), m.Cast);
             if (mAgg is "sum" or "avg" or "median" or "stddev" or "variance" && category != ClickHouseType.Numeric)
                 throw new RequestValidationException($"{char.ToUpperInvariant(mAgg[0])}{mAgg[1..]} needs a numeric column — {m.Column} is {category}.", $"measures[{mIdx}]");
-            if (mAgg == "attr" && category == ClickHouseType.Other)
+            if (mAgg == "attr" && category is ClickHouseType.Compound or ClickHouseType.Other)
                 throw new RequestValidationException($"Attr can't summarise {m.Column} — it is a compound column.", $"measures[{mIdx}]");
             measNumeric.Add(mAgg is "count" or "countdistinct" or "countnonnull" or "sum" or "avg" or "median" or "stddev" or "variance" || category == ClickHouseType.Numeric);
             // E10: one aggregate writer for plain and calculated measures. P33: sampled sums/counts are scaled back,
@@ -907,6 +907,8 @@ public sealed class ClickHouseGateway
                 var byCols = await ColumnsOf(by.Db, by.Table);
                 if (!byCols.TryGetValue(by.Column, out var byCat)) throw new UnknownIdentifierException("Unknown column.");
                 byCat = TypeCast.EffectiveCategory(byCat, by.Cast);
+                if (agg == "attr" && byCat is ClickHouseType.Compound or ClickHouseType.Other)
+                    throw new RequestValidationException($"Top-N can't rank by attr of {by.Column} — it is a compound column.", $"filters[{i}].topBy");
                 if (agg is "sum" or "avg" or "median" or "stddev" or "variance" && byCat != ClickHouseType.Numeric)
                     throw new RequestValidationException($"Top-N can't rank by {agg} of {by.Column} — it isn't numeric.", $"filters[{i}].topBy");
                 var byExpr = await CastedAsync(by.Db, by.Table, by.Column, by.Cast, $"filters[{i}].topBy");

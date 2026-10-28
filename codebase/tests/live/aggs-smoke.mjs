@@ -47,15 +47,15 @@ let passed = 0;
 const pass = (m) => { passed++; console.log(`ok ${m}`); };
 
 // Fixture (g: group; x Nullable(Float64); s Nullable(String); xs = x as text, 'zz' in C):
-//   A: x = 1,2,3,4,NULL    s = p,p,p,p,NULL   median 3 (n=4 non-null, index floor(4*.5)=2), p25 -> index 1 = 2,
+//   A: x = 1,2,3,4,NULL    s = p,p,p,p,NULL   median 2.5 and p25 1.75 (linear interpolation between order statistics, like Excel PERCENTILE.INC; position (n-1)*p),
 //      sample variance 5/3, stddev sqrt(5/3), attr(s) = 'p' (NULL ignored)
 //   B: x = 10 (single row) s = q               median 10, stddev/variance NULL (one value), attr 'q'
 //   C: x = NULL, NULL      s = u,v             median NULL, stddev NULL, attr NULL (two distinct values)
 //   D: x = 5,5,5           s = NULL x3         median 5, stddev 0, variance 0, attr NULL (no non-NULL value)
 async function setup() {
   await write(`DROP TABLE IF EXISTS ${DB}.${T}`);
-  await write(`CREATE TABLE ${DB}.${T} (g String, x Nullable(Float64), s Nullable(String), xs Nullable(String)) ENGINE = MergeTree ORDER BY g`);
-  await write(`INSERT INTO ${DB}.${T} VALUES ('A',1,'p','1'),('A',2,'p','2'),('A',3,'p','3'),('A',4,'p','4'),('A',NULL,NULL,NULL),('B',10,'q','10'),('C',NULL,'u',NULL),('C',NULL,'v','zz'),('D',5,NULL,'5'),('D',5,NULL,'5'),('D',5,NULL,'5')`);
+  await write(`CREATE TABLE ${DB}.${T} (g String, x Nullable(Float64), s Nullable(String), xs Nullable(String), arr Array(UInt8) DEFAULT [1]) ENGINE = MergeTree ORDER BY g`);
+  await write(`INSERT INTO ${DB}.${T} (g, x, s, xs) VALUES ('A',1,'p','1'),('A',2,'p','2'),('A',3,'p','3'),('A',4,'p','4'),('A',NULL,NULL,NULL),('B',10,'q','10'),('C',NULL,'u',NULL),('C',NULL,'v','zz'),('D',5,NULL,'5'),('D',5,NULL,'5'),('D',5,NULL,'5')`);
 }
 const teardown = () => write(`DROP TABLE IF EXISTS ${DB}.${T}`).catch((e) => console.error(`teardown: ${e.message}`));
 
@@ -68,7 +68,7 @@ async function main() {
     const j = await ok([plain('x', 'median'), plain('x', 'stddev'), plain('x', 'variance'), plain('s', 'attr')], 'a');
     assert.deepEqual(j.measures, ['median x', 'stddev x', 'variance x', 'attr s']);
     const r = rows(j);
-    eqRow(r.A, [3, Math.sqrt(5 / 3), 5 / 3, 'p'], 'A');
+    eqRow(r.A, [2.5, Math.sqrt(5 / 3), 5 / 3, 'p'], 'A');
     eqRow(r.B, [10, null, null, 'q'], 'B (single row: spread is NULL, not 0 or NaN)');
     eqRow(r.C, [null, null, null, null], 'C (all NULL values; two distinct strings)');
     eqRow(r.D, [5, 0, 0, null], 'D (constant; a group of only NULL strings)');
@@ -82,7 +82,7 @@ async function main() {
       calc('attr', agg('attr', f('s'))), calc('rowlevel', { k: 'bin', op: '*', l: f('x'), r: { k: 'num', v: 2 } }, 'median'),
     ], 'b');
     const r = rows(j);
-    eqRow(r.A, [3, 2, 4, 1, 2 * Math.sqrt(5 / 3), 'p', 6], 'A');
+    eqRow(r.A, [2.5, 1.75, 4, 1, 2 * Math.sqrt(5 / 3), 'p', 5], 'A');
     eqRow(r.B, [10, 10, 10, 10, null, 'q', 20], 'B');
     eqRow(r.C, [null, null, null, null, null, null, null], 'C');
     eqRow(r.D, [5, 5, 5, 5, 0, null, 10], 'D');
@@ -92,7 +92,7 @@ async function main() {
   {
     const j = await ok([plain('x', 'median'), calc('p25', agg('percentile', f('x'), 0.25))], 'c', { approximate: true });
     const r = rows(j);
-    eqRow(r.A, [3, 2], 'A approx'); eqRow(r.B, [10, 10], 'B approx');
+    eqRow(r.A, [2.5, 1.75], 'A approx'); eqRow(r.B, [10, 10], 'B approx');
     pass('(c) approximate mode returns the same exact order statistics when no sample is taken');
   }
   // (c2) a text field cast to a number takes the new aggregations (type cast + median/stddev/variance on one measure).
@@ -101,7 +101,7 @@ async function main() {
     const j = await ok([xs('median'), xs('stddev'), xs('variance')], 'c2');
     assert.deepEqual(j.measures, ['median xs', 'stddev xs', 'variance xs']);
     const r = rows(j);
-    eqRow(r.A, [3, Math.sqrt(5 / 3), 5 / 3], 'A cast'); eqRow(r.B, [10, null, null], 'B cast');
+    eqRow(r.A, [2.5, Math.sqrt(5 / 3), 5 / 3], 'A cast'); eqRow(r.B, [10, null, null], 'B cast');
     eqRow(r.C, [null, null, null], 'C cast (unparseable text is NULL)'); eqRow(r.D, [5, 0, 0], 'D cast');
     const bad = await app('/api/query', req([{ ...col('s'), agg: 'median' }]));
     assert.equal(bad.status, 400, 'median of uncast text is refused');
@@ -126,6 +126,15 @@ async function main() {
   await bad([calc('m', agg('median', agg('sum', f('x'))))], 'measures[0].calc.arg', /can't contain another aggregate/, 'aggregate in aggregate');
   pass('(d) refusals: plain percentile, median/stddev of text, p outside 0..1 / missing / on SUM, aggregate in aggregate -> 400 naming the field');
 
+    // (d2) Top-N ranked by attr of a compound column is refused like a measure is.
+  {
+    const r = await app('/api/query', req([plain('x', 'median')], { filters: [{ ...col('g'), op: 'top', value: '2', topBy: plain('arr', 'attr') }] }));
+    assert.equal(r.status, 400, `d2: ${r.status} ${r.text.slice(0, 200)}`);
+    assert.equal(r.json.field, 'filters[0].topBy');
+    const m = await app('/api/query', req([plain('arr', 'attr')]));
+    assert.equal(m.status, 400, 'attr measure of a compound column');
+    pass('(d2) attr of a compound column is a 400 as a measure and as a Top-N rank');
+  }
   // (e) a Top-N filter ranked by a new aggregation: the two groups with the highest median x.
   {
     const r = await app('/api/query', req([plain('x', 'median')], { filters: [{ ...col('g'), op: 'top', value: '2', topBy: plain('x', 'median') }] }));

@@ -143,7 +143,7 @@ public static class RequestRules
         else if (string.Equals(m.Agg, "count", StringComparison.OrdinalIgnoreCase))
             throw Bad("Counting rows doesn't use the calculation.", field + ".calc");
         else if (m.Agg is null || !CalcCatalog.RowLevelAggregations.Contains(m.Agg.ToLowerInvariant()))
-            throw Bad("Choose how to aggregate this calculation: sum, average, min, max, distinct count or non-null count.", field + ".calc");
+            throw Bad(CalcCatalog.RowLevelHint, field + ".calc");
     }
 
     /// <summary>P26 per-dimension date parts: "auto" / "exact", truncations, and discrete parts.</summary>

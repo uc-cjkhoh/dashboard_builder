@@ -134,8 +134,8 @@ public class CalcCompilerTests
     [InlineData("countdistinct", false, true, "uniq(x)")]
     [InlineData("countdistinct", true, false, "uniqExact(x)")]
     [InlineData("countdistinct", true, true, "uniq(x)")]
-    [InlineData("median", false, false, "quantileExact(0.5)(x)")]
-    [InlineData("median", true, true, "quantileExact(0.5)(x)")]
+    [InlineData("median", false, false, "quantileExactInclusive(0.5)(x)")]
+    [InlineData("median", true, true, "quantileExactInclusive(0.5)(x)")]
     [InlineData("stddev", false, false, "if(count(x) < 2, NULL, stddevSamp(x))")]
     [InlineData("stddev", true, true, "if(count(x) < 2, NULL, stddevSamp(x))")]
     [InlineData("variance", false, false, "if(count(x) < 2, NULL, varSamp(x))")]
@@ -147,7 +147,7 @@ public class CalcCompilerTests
     [Fact]
     public void Percentile_binds_its_fraction_and_is_never_scaled()
     {
-        Assert.Equal("quantileExact({c0p1:Float64})(x)", ClickHouseGateway.AggregateSql("percentile", "x", true, true, "{c0p1:Float64}"));
+        Assert.Equal("quantileExactInclusive({c0p1:Float64})(x)", ClickHouseGateway.AggregateSql("percentile", "x", true, true, "{c0p1:Float64}"));
         Assert.Throws<InvalidOperationException>(() => ClickHouseGateway.AggregateSql("percentile", "x", false, false)); // no fraction text
     }
 
@@ -155,12 +155,12 @@ public class CalcCompilerTests
     public void A_percentile_calculation_binds_the_fraction_after_the_argument_literals()
     {
         var (sql, ps) = Compile(new AggNode("percentile", Bin("*", F("amount"), new NumNode(2)), 0.9));
-        Assert.Equal("quantileExact({c0p1:Float64})((toFloat64(t0.`amount`) * {c0p0:Float64}))", sql);
+        Assert.Equal("quantileExactInclusive({c0p1:Float64})((toFloat64(t0.`amount`) * {c0p0:Float64}))", sql);
         Assert.Equal(new[] { ("c0p0", "Float64", (object)2d), ("c0p1", "Float64", (object)0.9d) }, ps);
     }
 
     [Theory]
-    [InlineData("median", "quantileExact(0.5)(toFloat64(t0.`amount`))")]
+    [InlineData("median", "quantileExactInclusive(0.5)(toFloat64(t0.`amount`))")]
     [InlineData("stddev", "if(count(toFloat64(t0.`amount`)) < 2, NULL, stddevSamp(toFloat64(t0.`amount`)))")]
     [InlineData("variance", "if(count(toFloat64(t0.`amount`)) < 2, NULL, varSamp(toFloat64(t0.`amount`)))")]
     public void The_new_aggregates_compile_over_a_widened_number(string fn, string expected)

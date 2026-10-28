@@ -299,7 +299,7 @@ public class CalcGatewayTests
     [Fact] public void Plain_measures_have_no_percentile_yet() => Assert.DoesNotContain("percentile", ClickHouseGateway.Aggregations);
 
     [Theory]
-    [InlineData("median", "quantileExact(0.5)(x)")]
+    [InlineData("median", "quantileExactInclusive(0.5)(x)")]
     [InlineData("attr", "if(uniqExact(x) = 1, min(x), NULL)")]
     [InlineData("stddev", "if(count(x) < 2, NULL, stddevSamp(x))")]
     public void A_top_n_rank_by_a_new_aggregation_uses_the_shared_writer(string agg, string expected)
