@@ -15,7 +15,7 @@ async function ch(sql) {
   const text = await res.text();
   if (!res.ok) throw new Error(`ClickHouse ${res.status}: ${text.trim().slice(0, 400)}`);
 }
-const write = (sql) => { assert.match(sql, /^(CREATE TABLE|INSERT INTO|DROP TABLE IF EXISTS) test_cj\.bk_profile(_empty|_big)?\b/); return ch(sql); };
+const write = (sql) => { assert.match(sql, /^(CREATE TABLE|INSERT INTO|DROP TABLE IF EXISTS) test_cj\.bk_profile(_empty|_big|_u)?\b/); return ch(sql); };
 
 let cookie = '';
 async function app(method, path, body) {
@@ -36,7 +36,7 @@ const ok = (name) => console.log(`ok ${++n} ${name}`);
 const tops = (p) => p.top.map((t) => [t.value, t.count]);
 
 async function main() {
-  for (const t of ['bk_profile', 'bk_profile_empty', 'bk_profile_big']) await write(`DROP TABLE IF EXISTS test_cj.${t}`);
+  for (const t of ['bk_profile', 'bk_profile_empty', 'bk_profile_big', 'bk_profile_u']) await write(`DROP TABLE IF EXISTS test_cj.${t}`);
   await write(`CREATE TABLE test_cj.bk_profile (id UInt32, grp Nullable(String), n Nullable(Int32), d Date, big String, arr Array(UInt8)) ENGINE = MergeTree ORDER BY id`);
   await write(`INSERT INTO test_cj.bk_profile VALUES
     (1,'a',10,'2024-03-01','${'x'.repeat(150)}',[1,2]),
@@ -48,6 +48,9 @@ async function main() {
   await write(`CREATE TABLE test_cj.bk_profile_empty (id UInt32, s String) ENGINE = MergeTree ORDER BY id`);
   await write(`CREATE TABLE test_cj.bk_profile_big (id UInt32, s String) ENGINE = MergeTree ORDER BY id`);
   await write(`INSERT INTO test_cj.bk_profile_big SELECT number, toString(number) FROM numbers(2000)`);
+  // non-ASCII text: the cut is in characters (leftUTF8), never bytes, and the cut flag is exact
+  await write(`CREATE TABLE test_cj.bk_profile_u (id UInt32, s String) ENGINE = MergeTree ORDER BY id`);
+  await write(`INSERT INTO test_cj.bk_profile_u VALUES (1,'${'é'.repeat(100)}'), (2,'${'日本語'.repeat(40)}'), (3,'${'ก'.repeat(101)}'), (4,'${'a'.repeat(100)}X'), (5,'${'a'.repeat(100)}Y')`);
   const conn = await app('POST', '/api/connection', { host: CH_HOST, port: Number(CH_PORT), user: CH_USER, password: CH_PASSWORD, secure: true, allowInvalidCert: true });
   assert.equal(conn.status, 200, `connect: ${conn.status}`);
 
@@ -88,6 +91,15 @@ async function main() {
   p = await profile('bk_profile_big', { column: 's', limit: 50 });
   assert.equal(p.top.length, 50); ok('limit 50 returns 50 top values');
 
+  p = await profile('bk_profile_u', { column: 's' });
+  assert.equal(p.rows, 5); assert.equal(p.distinct, 5);
+  assert.deepEqual(p.top.map((t) => [t.value, t.count, t.cut]), [
+    ['a'.repeat(100), 2, true],                 // 'a'*100+X and +Y differ only after character 100: one group
+    ['é'.repeat(100), 1, false],                // exactly 100 characters (200 bytes): not cut
+    ['ก'.repeat(100), 1, true],                 // 101 Thai characters: cut to 100
+    ['日本語'.repeat(33) + '日', 1, true],         // 120 CJK characters: cut to 100
+  ]); ok('non-ASCII values are cut by characters not bytes (exactly 100 = not cut, 101+ = cut); values differing after character 100 merge');
+
   await profile('bk_profile', { column: 'nope' }, 404); ok('an unknown column is 404');
   await profile('bk_profile', { column: 'grp`; DROP TABLE x; --' }, 404); ok('a hostile column name is 404 and never reaches SQL');
   await profile('nope_table', { column: 'a' }, 404); ok('an unknown table is 404');
@@ -95,4 +107,4 @@ async function main() {
   await profile('bk_profile', { column: '' }, 400); ok('a blank column is 400');
 }
 try { await main(); console.log(`all ${n} ok`); }
-finally { for (const t of ['bk_profile', 'bk_profile_empty', 'bk_profile_big']) await write(`DROP TABLE IF EXISTS test_cj.${t}`).catch(() => {}); }
+finally { for (const t of ['bk_profile', 'bk_profile_empty', 'bk_profile_big', 'bk_profile_u']) await write(`DROP TABLE IF EXISTS test_cj.${t}`).catch(() => {}); }

@@ -1,4 +1,5 @@
 using System.Globalization;
+using ClickHouse.Client;
 using ClickHouse.Client.ADO;
 using ClickHouse.Client.Utility;
 
@@ -24,36 +25,55 @@ public sealed partial class ClickHouseGateway
         await conn.OpenAsync(ct);
 
         long rows, nulls, distinct; string? lo = null, hi = null;
-        await using (var cmd = conn.CreateCommand())
+        (rows, nulls, distinct, lo, hi) = await ReadProfileAsync(conn, info, BuildProfileStatsSql(database, table, col.Name, col.Category), async (r, token) =>
         {
-            cmd.CommandText = BuildProfileStatsSql(database, table, col.Name, col.Category);
-            await using var r = await cmd.ExecuteReaderAsync(ct);
-            if (!await r.ReadAsync(ct)) throw new InvalidOperationException("The profile query returned no row.");
-            rows = Convert.ToInt64(r.GetValue(0), CultureInfo.InvariantCulture);
-            nulls = Convert.ToInt64(r.GetValue(1), CultureInfo.InvariantCulture);
-            distinct = Convert.ToInt64(r.GetValue(2), CultureInfo.InvariantCulture);
-            if (r.FieldCount > 3)
-            {
-                lo = ProfileExtreme(r.IsDBNull(3) ? null : r.GetValue(3)?.ToString(), rows, nulls);
-                hi = ProfileExtreme(r.IsDBNull(4) ? null : r.GetValue(4)?.ToString(), rows, nulls);
-            }
-        }
+            if (!await r.ReadAsync(token)) throw new InvalidOperationException("The profile query returned no row.");
+            var n = Convert.ToInt64(r.GetValue(0), CultureInfo.InvariantCulture);
+            var nl = Convert.ToInt64(r.GetValue(1), CultureInfo.InvariantCulture);
+            var d = Convert.ToInt64(r.GetValue(2), CultureInfo.InvariantCulture);
+            return r.FieldCount > 3
+                ? (n, nl, d, ProfileExtreme(r.IsDBNull(3) ? null : r.GetValue(3)?.ToString(), n, nl), ProfileExtreme(r.IsDBNull(4) ? null : r.GetValue(4)?.ToString(), n, nl))
+                : (n, nl, d, (string?)null, (string?)null);
+        }, ct);
 
-        var values = new List<ProfileValue>();
-        if (rows > 0)
+        var values = rows == 0 ? new List<ProfileValue>() : await ReadProfileAsync(conn, info, BuildProfileTopSql(database, table, col.Name, top), async (r, token) =>
         {
-            await using var cmd = conn.CreateCommand();
-            cmd.CommandText = BuildProfileTopSql(database, table, col.Name, col.Category, top);
-            await using var r = await cmd.ExecuteReaderAsync(ct);
-            while (await r.ReadAsync(ct))
+            var list = new List<ProfileValue>();
+            while (await r.ReadAsync(token))
             {
-                var (text, cut) = CutProfileValue(r.IsDBNull(0) ? null : r.GetValue(0)?.ToString());
-                values.Add(new ProfileValue(text, Convert.ToInt64(r.GetValue(1), CultureInfo.InvariantCulture), cut));
+                list.Add(new ProfileValue(r.IsDBNull(0) ? null : r.GetValue(0)?.ToString(),
+                    Convert.ToInt64(r.GetValue(2), CultureInfo.InvariantCulture), Convert.ToInt64(r.GetValue(1), CultureInfo.InvariantCulture) != 0));
             }
-        }
+            return list;
+        }, ct);
         return new ColumnProfile(col.Name, col.Type, col.Category, rows, nulls, distinct, lo, hi, values,
             rows >= ApiLimits.ProfileSampleRows, ApiLimits.ProfileSampleRows);
     }
+
+    /// <summary>Backstops for a profile statement: <c>max_rows_to_read</c> + <c>break</c> keeps the "first 1,000,000 rows" bound even
+    /// where LIMIT is not pushed down (views, Merge / Distributed tables); the memory settings bound a wide-key GROUP BY.</summary>
+    internal static readonly string ProfileSettings =
+        $" SETTINGS max_rows_to_read = {ApiLimits.ProfileSampleRows}, read_overflow_mode = 'break', " +
+        "max_bytes_before_external_group_by = 268435456, max_memory_usage = 2000000000";
+
+    // Runs one profile statement with the backstop settings; a server that refuses them (settings constraints, read-only
+    // account, unknown setting) gets the plain statement, as join_use_nulls does. The LIMIT-ed subquery still bounds the scan.
+    private static async Task<T> ReadProfileAsync<T>(ClickHouseConnection conn, ClickHouseConnectionInfo info, string sql,
+        Func<System.Data.Common.DbDataReader, CancellationToken, Task<T>> read, CancellationToken ct)
+    {
+        for (var withSettings = info.Guards != QueryGuards.None; ; withSettings = false)
+        {
+            try
+            {
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = withSettings ? sql + ProfileSettings : sql;
+                await using var r = await cmd.ExecuteReaderAsync(ct);
+                return await read(r, ct);
+            }
+            catch (ClickHouseServerException ex) when (withSettings && ex.ErrorCode is 115 or 164 or 452) { }
+        }
+    }
+
 
     // Compound and unclassified types are compared as text, so GROUP BY / ORDER BY / uniq work on any column.
     private static string ProfileSubquery(string database, string table, string column, string category)
@@ -70,17 +90,15 @@ public sealed partial class ClickHouseGateway
         return $"SELECT count() AS n, countIf(isNull(v)) AS nulls, uniq(v) AS d{extremes} FROM {ProfileSubquery(database, table, column, category)}";
     }
 
-    /// <summary>The most frequent values (ties broken by value), cut in SQL one character past the display limit; NULL stays NULL.</summary>
-    internal static string BuildProfileTopSql(string database, string table, string column, string category, int top)
-        => $"SELECT if(isNull(v), NULL, left(toString(v), {ApiLimits.ProfileValueLength + 1})) AS label, count() AS cnt " +
-           $"FROM {ProfileSubquery(database, table, column, category)} GROUP BY v ORDER BY cnt DESC, v ASC LIMIT {top}";
-
-    /// <summary>A value of at most 100 characters, and whether it was cut (never splits a surrogate pair).</summary>
-    internal static (string? Text, bool Cut) CutProfileValue(string? s)
+    /// <summary>The most frequent values, grouped on the label cut to 100 characters (<c>leftUTF8</c> — characters, not bytes) and a
+    /// "was cut" flag (<c>lengthUTF8 &gt; 100</c>), so a huge string never becomes a group key: values differing only after
+    /// character 100 count together. Ties break by label; NULL stays NULL (its own group, last among equals).</summary>
+    internal static string BuildProfileTopSql(string database, string table, string column, int top)
     {
-        if (s is null || s.Length <= ApiLimits.ProfileValueLength) return (s, false);
-        var n = char.IsHighSurrogate(s[ApiLimits.ProfileValueLength - 1]) ? ApiLimits.ProfileValueLength - 1 : ApiLimits.ProfileValueLength;
-        return (s[..n], true);
+        var q = Identifier.Quote(column);
+        return $"SELECT label, cut, count() AS cnt FROM (SELECT if(isNull({q}), NULL, leftUTF8(toString({q}), {ApiLimits.ProfileValueLength})) AS label, " +
+               $"if(isNull({q}), 0, lengthUTF8(toString({q})) > {ApiLimits.ProfileValueLength}) AS cut " +
+               $"FROM {Identifier.QualifiedName(database, table)} LIMIT {ApiLimits.ProfileSampleRows}) GROUP BY label, cut ORDER BY cnt DESC, label ASC, cut ASC LIMIT {top}";
     }
 
     /// <summary>An empty or all-NULL column has no min/max (ClickHouse returns 0 for a non-Nullable one).</summary>

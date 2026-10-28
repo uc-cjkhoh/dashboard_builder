@@ -35,7 +35,7 @@ export const roleOf = (category) => (category === "numeric" ? "measure" : "dimen
 
 /** Everything the dialog shows, from the server's profile. */
 export function summarize(p) {
-  const sampleNote = p.sampled ? `Only the first ${formatCount(p.sampleLimit)} rows were read, so these figures describe those rows, not the whole table.` : null;
+  const sampleNote = p.sampled ? `Only the first ${formatCount(p.sampleLimit)} rows ClickHouse returned were read, in no particular order. This is not a statistical sample: the figures describe those rows, not the whole table.` : null;
   const tiles = [
     { label: "Rows", value: formatCount(p.rows), note: p.sampled ? `first ${formatCount(p.sampleLimit)} rows` : null },
     { label: "Distinct (approx.)", value: formatCount(p.distinct), note: "non-null values, estimated" },
@@ -46,13 +46,14 @@ export function summarize(p) {
   const role = roleOf(p.category);
   const top = p.top.map((t) => {
     const kind = t.value === null ? "null" : t.value === "" ? "empty" : "value";
-    const label = kind === "null" ? "NULL" : kind === "empty" ? "(empty)" : t.cut ? `${t.value}…` : t.value;
+    const label = kind === "null" ? "(NULL)" : kind === "empty" ? "(empty)" : t.cut ? `${t.value}…` : t.value;
     const share = p.rows > 0 ? (t.count / p.rows) * 100 : 0;
     return { label, kind, cut: Boolean(t.cut), count: t.count, countText: formatCount(t.count), shareText: formatShare(t.count, p.rows), bar: t.count > 0 ? Math.max(1, Math.round(share)) : 0 };
   });
   const copyValues = p.top.filter((t) => t.value !== null && t.value !== "" && !t.cut).map((t) => t.value).join("\n");
+  const cutNote = top.some((t) => t.cut) ? `Values are compared by their first ${PROFILE_LIMITS.valueLength} characters, so values that differ only after that count together.` : null;
   return {
-    tiles, role, top, sampleNote, empty: p.rows === 0, copyName: p.column, copyValues,
+    tiles, role, top, sampleNote, cutNote, empty: p.rows === 0, copyName: p.column, copyValues,
     details: [["Name", p.column], ["Type", p.type], ["Kind", p.category], ["Role", role]],
   };
 }

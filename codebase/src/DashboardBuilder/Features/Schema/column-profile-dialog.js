@@ -77,6 +77,10 @@ function sections(s) {
     const p = el("p", "col-profile__note"); const g = el("span", "col-profile__glyph"); g.setAttribute("aria-hidden", "true"); g.append(icon("info", { size: 14 }));
     p.append(g, document.createTextNode(" " + s.sampleNote)); out.push(p);
   }
+  if (s.cutNote) {
+    const p = el("p", "col-profile__note"); const g = el("span", "col-profile__glyph"); g.setAttribute("aria-hidden", "true"); g.append(icon("info", { size: 14 }));
+    p.append(g, document.createTextNode(" " + s.cutNote)); out.push(p);
+  }
   const tiles = el("div", "col-profile__tiles");
   for (const t of s.tiles) {
     const tile = el("div", "col-profile__tile");

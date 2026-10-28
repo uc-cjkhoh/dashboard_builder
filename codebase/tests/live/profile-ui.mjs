@@ -81,7 +81,7 @@ try {
     const rows = await text('.col-profile__row');
     must(rows.length === 5, `${rows.length} rows`);
     must(/^Berlin\s*410,000\s*41%$/.test(rows[0].replace(/\s+/g, ' ').replace(/(\D) (\d)/, '$1$2')) || rows[0].includes('410,000') && rows[0].includes('41%'), rows[0]);
-    must(rows[2].includes('(empty)') && rows[3].includes('NULL'), `${rows[2]} | ${rows[3]}`);
+    must(rows[2].includes('(empty)') && rows[3].includes('(NULL)'), `${rows[2]} | ${rows[3]}`);
     must(rows[4].includes('…') && rows[4].includes('0.0001') === false, rows[4]);
     const w = await ev(`[...document.querySelectorAll('dialog[open] .col-profile__fill')].map((f) => f.style.getPropertyValue('--w'))`);
     must(w[0] === '41%' && w[1] === '21%', J(w));
@@ -110,6 +110,25 @@ try {
     await shot('profile-numeric-light.png');
     await ev(`document.querySelector('dialog[open] .iconbtn').click()`);
     await waitFor(`document.querySelector('dialog') === null`, 'closed by X');
+  });
+  await check('opening and closing the dialog three times leaves no <dialog> behind', async () => {
+    for (let i = 0; i < 3; i++) {
+      await open('amount');
+      await waitFor(`document.querySelector('dialog[open] .col-profile__tiles') !== null`, 'loaded');
+      await ev(`[...document.querySelectorAll('dialog[open] .btn')].find((x) => x.textContent === 'Close').click()`);
+      await waitFor(`document.querySelector('dialog') === null`, 'removed');
+    }
+    must((await ev(`document.querySelectorAll('dialog').length`)) === 0, 'dialogs left');
+  });
+  await check('keyboard: Tab from the join-key checkbox reaches Profile, Enter opens it and does not tick the key', async () => {
+    await ev(`document.querySelector('.col-row[data-column=amount] .col-row__key').focus()`);
+    await b.key('Tab', { vk: 9 });
+    must(await ev(`document.activeElement.classList.contains('col-row__profile') && document.activeElement.closest('.col-row').dataset.column === 'amount'`), 'focus not on the Profile button');
+    for (const type of ['keyDown', 'keyUp']) await b.send('Input.dispatchKeyEvent', { type, key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13, ...(type === 'keyDown' ? { text: '\r' } : {}) });
+    await waitFor(`document.querySelector('dialog[open] .col-profile__tiles') !== null`, 'opened by keyboard');
+    await b.key('Escape', { vk: 27 });
+    await waitFor(`document.querySelector('dialog') === null`, 'closed');
+    must(await ev(`!document.querySelector('.col-row[data-column=amount] .col-row__key').checked`), 'key ticked');
   });
   await check('a failing profile shows the error inside the dialog (icon + text) and the dialog still closes', async () => {
     await open('bad');

@@ -43,18 +43,18 @@ public class ColumnProfileTests : IClassFixture<WebApplicationFactory<Program>>
     }
     [Fact] public void Dates_get_min_max()
         => Assert.Contains("toString(min(v)) AS lo", ClickHouseGateway.BuildProfileStatsSql("d", "t", "ts", ClickHouseType.Temporal));
-    [Fact] public void The_top_sql_ranks_by_count_then_value_cuts_in_sql_and_keeps_null()
+    [Fact] public void The_top_sql_groups_on_the_cut_label_in_characters_not_bytes_and_keeps_null()
     {
-        var sql = ClickHouseGateway.BuildProfileTopSql("d", "t", "a`b", ClickHouseType.Text, 10);
-        Assert.Equal("SELECT if(isNull(v), NULL, left(toString(v), 101)) AS label, count() AS cnt " +
-                     "FROM (SELECT `a\\`b` AS v FROM `d`.`t` LIMIT 1000000) GROUP BY v ORDER BY cnt DESC, v ASC LIMIT 10", sql);
+        var sql = ClickHouseGateway.BuildProfileTopSql("d", "t", "a`b", 10);
+        Assert.Equal("SELECT label, cut, count() AS cnt FROM (SELECT if(isNull(`a\\`b`), NULL, leftUTF8(toString(`a\\`b`), 100)) AS label, " +
+                     "if(isNull(`a\\`b`), 0, lengthUTF8(toString(`a\\`b`)) > 100) AS cut " +
+                     "FROM `d`.`t` LIMIT 1000000) GROUP BY label, cut ORDER BY cnt DESC, label ASC, cut ASC LIMIT 10", sql);
     }
-    [Fact] public void Cut_values_are_marked_and_trimmed_to_100_characters()
+    [Fact] public void The_backstop_settings_bound_the_read_and_the_memory()
     {
-        Assert.Equal(("abc", false), ClickHouseGateway.CutProfileValue("abc"));
-        var (text, cut) = ClickHouseGateway.CutProfileValue(new string('x', 101));
-        Assert.True(cut); Assert.Equal(100, text!.Length);
-        Assert.Equal((null, false), ClickHouseGateway.CutProfileValue(null));
+        Assert.Contains("max_rows_to_read = 1000000", ClickHouseGateway.ProfileSettings);
+        Assert.Contains("read_overflow_mode = 'break'", ClickHouseGateway.ProfileSettings);
+        Assert.Contains("max_memory_usage", ClickHouseGateway.ProfileSettings);
     }
     [Fact] public void Min_and_max_are_hidden_for_an_empty_or_all_null_column()
     {

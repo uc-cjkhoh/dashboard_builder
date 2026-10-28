@@ -43,7 +43,8 @@ test("summarize: tiles, honest wording, no sampling note for a whole table", () 
 });
 test("summarize: a sampled profile says so; min/max tiles only when present", () => {
   const s = summarize(P({ rows: 1000000, nulls: 0, distinct: 5000, sampled: true, category: "numeric", min: "5", max: "20" }));
-  assert.match(s.sampleNote, /first 1,000,000 rows/i);
+  assert.match(s.sampleNote, /first 1,000,000 rows.*no particular order.*not a statistical sample/i);
+  assert.equal(s.cutNote, null);
   assert.deepEqual(s.tiles.map((t) => t.label), ["Rows", "Distinct (approx.)", "Null share", "Min", "Max"]);
   assert.equal(s.tiles[0].note, "first 1,000,000 rows");
   assert.equal(s.role, "measure");
@@ -51,8 +52,9 @@ test("summarize: a sampled profile says so; min/max tiles only when present", ()
 test("summarize: top rows carry labels, counts, shares and bar widths; NULL and empty are named, cut values flagged", () => {
   const s = summarize(P({ top: [...P().top, { value: "x".repeat(100), count: 1, cut: true }] }));
   assert.deepEqual(s.top.map((t) => [t.label, t.kind, t.countText, t.shareText]),
-    [["a", "value", "2", "33%"], ["b", "value", "2", "33%"], ["(empty)", "empty", "1", "17%"], ["NULL", "null", "1", "17%"], ["x".repeat(100) + "…", "value", "1", "17%"]]);
+    [["a", "value", "2", "33%"], ["b", "value", "2", "33%"], ["(empty)", "empty", "1", "17%"], ["(NULL)", "null", "1", "17%"], ["x".repeat(100) + "…", "value", "1", "17%"]]);
   assert.equal(s.top[0].bar, 33); assert.equal(s.top[4].cut, true);
+  assert.match(s.cutNote, /first 100 characters.*differ only after/);
 });
 test("summarize: an empty table has no tiles' shares to divide and no top values", () => {
   const s = summarize(P({ rows: 0, nulls: 0, distinct: 0, top: [] }));
