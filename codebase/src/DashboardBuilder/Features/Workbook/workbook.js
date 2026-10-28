@@ -1,7 +1,7 @@
 import {
   entities, relationships, tabs, bus, currentView, isDashboardActive,
   createWorksheet, createDashboard, updateSheet, setWidgets, nextWidgetId, closeTab, showModel, switchTab, currentTheme, setTheme,
-  nextCalcId, sharedFilters, setSharedFilters, bookmarks, setBookmarks, fieldMeta, setAllFieldMeta, parameters, setParameters, calculations, setCalculations,
+  nextCalcId, sharedFilters, setSharedFilters, bookmarks, setBookmarks, fieldMeta, setAllFieldMeta, parameters, setParameters, hierarchies, setHierarchies, calculations, setCalculations,
 } from "../Core/store.js";
 import { clearRoleChoices } from "../Calc/calc-pane-model.js";
 import { DEFAULT_THEME } from "../Core/theme-model.js";
@@ -26,7 +26,7 @@ const SAVE_DELAY_MS = 500;
 const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
 const CHANGE_EVENTS = [
   "entity:added", "entity:moved", "entity:removed", "joinkey:changed",
-  "rel:changed", "tabs:changed", "worksheet:changed", "dashboard:changed", "theme:changed", "bookmarks:changed", "fields:changed", "parameters:changed", "calculations:changed",
+  "rel:changed", "tabs:changed", "worksheet:changed", "dashboard:changed", "theme:changed", "bookmarks:changed", "fields:changed", "parameters:changed", "hierarchies:changed", "calculations:changed",
 ];
 
 let key = null;        // storage key for the connected server + user; null while disconnected
@@ -105,6 +105,7 @@ async function clearWorkspace() {
     setBookmarks([]);
     setAllFieldMeta({});
     setParameters([]);
+    setHierarchies([]);
     setCalculations([]);
     clearRoleChoices();
   } finally {
@@ -172,6 +173,7 @@ function openWorkbook(wb) {
     for (const t of [...tabs]) closeTab(t.id);
     setSharedFilters(wb.sharedFilters ?? []); // before the tabs, so a worksheet's first query applies them
     setAllFieldMeta(wb.fields ?? {});
+    setHierarchies(wb.hierarchies ?? []);
     setParameters(wb.parameters ?? []); // before the tabs, so a worksheet's first query reads them
     clearRoleChoices();
     setCalculations(wb.calculations ?? [], wb.nextCalcId); // likewise: pills read their calculation by id
@@ -253,7 +255,7 @@ async function importFile(input) {
 
 // --- helpers -----------------------------------------------------------------
 function currentState() {
-  return { entities, relationships, tabs, active: currentView(), theme: currentTheme(), sharedFilters, bookmarks, fieldMeta, parameters, calculations, nextCalcId: nextCalcId() };
+  return { entities, relationships, tabs, active: currentView(), theme: currentTheme(), sharedFilters, bookmarks, fieldMeta, parameters, hierarchies, calculations, nextCalcId: nextCalcId() };
 }
 
 const isEmpty = () => entities.size === 0 && tabs.length === 0;

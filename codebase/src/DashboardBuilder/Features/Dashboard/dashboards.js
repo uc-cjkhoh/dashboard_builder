@@ -6,7 +6,7 @@ import { roleOf, STAT_SINGLE_TABLE, showMeOptions, placeFor, samePlacement } fro
 import { toggle, makeButton, toast, fieldError, confirmDialog } from "../Core/ui.js";
 import { LIMITS, number } from "../Core/validate.js";
 import { aggsFor, checkAdd, checkFilter, viewCounts, withCategories, opsFor, OP_LABELS } from "./filter-rules.js";
-import { entities, relationships, activeWorksheet, isWorksheetActive, updateSheet, bus, defaultFormat, defaultMarks, sharedFilters, metaOf, nameOf, setFieldMeta, emptySheet, parameters, updateParameter, calculations, worksheets, addCalculation, removeCalculation } from "../Core/store.js";
+import { entities, relationships, activeWorksheet, isWorksheetActive, updateSheet, bus, defaultFormat, defaultMarks, sharedFilters, metaOf, nameOf, setFieldMeta, emptySheet, parameters, updateParameter, hierarchies, calculations, worksheets, addCalculation, removeCalculation } from "../Core/store.js";
 import { checkValue, paramTypeFor } from "../Core/parameters-model.js";
 import { exportChart, hasChartInstance, sizeChart, focusSeries } from "./chart.js";
 import { createWorksheetView, periodNotice } from "./worksheet-view.js";
@@ -46,6 +46,9 @@ import { calcProblem, topByRef, topByKey } from "../Calc/calc-plan.js";
 import { REF_CHOICES, TREND_CHOICES, FORECAST_CHOICES, defaultAnalytics } from "./analytics-model.js";
 import { castChoices, castLabel, effectiveCategory, syncCastCategories } from "./cast-model.js";
 import { aliasOf, labelOf } from "./member-labels.js";
+import { hierarchyGroup, HIERARCHY_MIME } from "./hierarchy-group.js";
+import { openHierarchiesDialog } from "./hierarchy-dialog.js";
+import { drillFromHierarchy, hierarchyTableKey } from "./hierarchy-model.js";
 import { BUCKET_TYPES, DATE_BUCKET_CHOICES } from "./scale-model.js";
 
 // Tableau-style worksheet: each worksheet tab is one sheet. Drag fields from the field pane onto the
@@ -274,14 +277,16 @@ export function initDashboards() {
     const seq = ++fieldsSeq;
     const tables = uniqueTables();
     if (!tables.length) {
-      fieldsEl.replaceChildren(calcFieldGroup(), hint("Add tables to the Data Model, then drag their fields onto the shelves."));
+      fieldsEl.replaceChildren(calcFieldGroup(), hierGroup(new Map()), hint("Add tables to the Data Model, then drag their fields onto the shelves."));
       filterFields();
       return;
     }
     const groups = [];
+    const columnsByTable = new Map(); // T03-29: which columns exist, for the Hierarchies group
     let hiddenCount = 0;
     for (const t of tables) {
       const cols = await columnsFor(t.db, t.table);
+      columnsByTable.set(hierarchyTableKey(t.db, t.table), new Set(cols.map((c) => c.name)));
       const group = el("details", "ws-table ws-fieldset");
       group.open = true;
       group.append(el("summary", "ws-table__name", `${t.db}.${t.table}`));
@@ -295,7 +300,7 @@ export function initDashboards() {
       groups.push(group);
     }
     if (seq !== fieldsSeq) return;
-    fieldsEl.replaceChildren(fieldTools(hiddenCount), calcFieldGroup(), ...groups);
+    fieldsEl.replaceChildren(fieldTools(hiddenCount), calcFieldGroup(), hierGroup(columnsByTable), ...groups);
     filterFields();
   }
 
@@ -335,6 +340,23 @@ export function initDashboards() {
       group.hidden = !any && Boolean(q);
     }
   }
+
+  // --- named hierarchies (T03-29): the "Hierarchies" group; applying one copies its levels into sheet.drill -----
+  const hierGroup = (columnsByTable) => hierarchyGroup({
+    hierarchies, columnsByTable, canApply: isWorksheetActive(),
+    onApply: (id) => applyHierarchy(activeWorksheet(), id),
+    onManage: (startNew) => openHierarchiesDialog({ tables: uniqueTables(), columnsFor, castOf, startNew }),
+  });
+  async function applyHierarchy(dash, id) {
+    const h = hierarchies.find((x) => x.id === id);
+    if (!dash || !h) return;
+    const r = drillFromHierarchy(h, await columnsFor(h.levels[0].db, h.levels[0].table), castOf);
+    if (!r.ok) { toast(r.error, "info"); return; }
+    openTool = "drill";
+    dash.sheet.drill = r.drill; // the same { levels, depth: 0, path: [] } addDrillLevel builds; a copy, so the hierarchy can change later
+    commit(dash, dash.sheet);
+  }
+  bus.addEventListener("hierarchies:changed", () => { if (isWorksheetActive()) buildFields(); });
 
   // --- calculated fields (Plan B): the "Calculated fields" group above the tables ----------------------
   function calcFieldGroup() {
@@ -609,6 +631,12 @@ export function initDashboards() {
         item.append(icon(t.icon), document.createTextNode(t.label));
         item.addEventListener("click", () => { openTool = t.key; formatOpen = false; showMeOpen = false; renderShelves(); });
         list.append(item);
+      }
+      const drill = more.find((t) => t.onHierarchy); // T03-29: a hierarchy dropped on More (where an empty Drill lives) sets the drill
+      if (drill) {
+        btn.addEventListener("dragover", (e) => { if (hasHierarchy(e)) { e.preventDefault(); btn.classList.add("is-over"); } });
+        btn.addEventListener("dragleave", () => btn.classList.remove("is-over"));
+        btn.addEventListener("drop", (e) => { btn.classList.remove("is-over"); const id = readHierarchy(e); if (id) { e.preventDefault(); drill.onHierarchy(id); } });
       }
       wrap.append(btn, list); toolbar.append(wrap);
       wireMenu(btn, list, { signal: headerAbort.signal });
@@ -2019,7 +2047,8 @@ export function initDashboards() {
         hint: "Drop a date field to limit the view to a range — and compare it with another period" },
       { key: "drill", icon: "drill", label: "Drill", count: drillLevels.length,
         pills: drillLevels.map((f, i) => drillLevelPill(dash, s, f, i)), onDrop: (f) => addDrillLevel(dash, f),
-        hint: "Drop ≥2 same-table fields to build a drill hierarchy (year → quarter → month)",
+        hint: "Drop ≥2 same-table fields — or a named hierarchy from the field pane — to build a drill hierarchy (year → quarter → month)",
+        onHierarchy: (id) => applyHierarchy(dash, id),
         note: drillLevels.length === 1 ? "Add another same-table field to drill." : null },
       { key: "pages", icon: "pages", label: "Pages", count: s.pages ? 1 : 0,
         pills: s.pages ? [pagesPill(dash, s)] : [], onDrop: (f) => addPages(dash, f),
@@ -2038,10 +2067,12 @@ export function initDashboards() {
     btn.append(icon(tool.icon), el("span", "ws-tool__text", tool.label));
     if (set) btn.append(el("span", "ws-tool__badge", String(tool.count)));
     btn.addEventListener("click", () => { openTool = openTool === tool.key ? null : tool.key; choicesFor = null; calcFor = null; formatOpen = false; showMeOpen = false; renderShelves(); });
-    btn.addEventListener("dragover", (e) => { if (hasField(e)) { e.preventDefault(); btn.classList.add("is-over"); } });
+    btn.addEventListener("dragover", (e) => { if (hasField(e) || (tool.onHierarchy && hasHierarchy(e))) { e.preventDefault(); btn.classList.add("is-over"); } });
     btn.addEventListener("dragleave", () => btn.classList.remove("is-over"));
     btn.addEventListener("drop", (e) => {
       btn.classList.remove("is-over");
+      const hid = tool.onHierarchy ? readHierarchy(e) : null;
+      if (hid) { e.preventDefault(); tool.onHierarchy(hid); return; }
       const f = readField(e);
       if (f) { e.preventDefault(); openTool = tool.key; choicesFor = null; calcFor = null; tool.onDrop(f); } // set open BEFORE onDrop's commit re-renders
     });
@@ -2063,6 +2094,7 @@ export function initDashboards() {
     if (!tool.pills.length) zone.append(el("span", "ws-shelf__hint", tool.hint || "Drag a field here"));
     for (const p of tool.pills) zone.append(p);
     wireFieldDrop(zone, tool.onDrop);
+    if (tool.onHierarchy) wireHierarchyDrop(zone, tool.onHierarchy);
     panel.append(zone);
     if (tool.editor) panel.append(tool.editor);
     if (tool.note) panel.append(el("span", "ws-shelf__note", tool.note));
@@ -2237,6 +2269,11 @@ export function initDashboards() {
     zone.addEventListener("dragover", (e) => { if (hasField(e)) { e.preventDefault(); zone.classList.add("is-over"); } });
     zone.addEventListener("dragleave", () => zone.classList.remove("is-over"));
     zone.addEventListener("drop", (e) => { zone.classList.remove("is-over"); const f = readField(e); if (f) { e.preventDefault(); onDrop(f); } });
+  }
+  function wireHierarchyDrop(zone, onHierarchy) {
+    zone.addEventListener("dragover", (e) => { if (hasHierarchy(e)) { e.preventDefault(); zone.classList.add("is-over"); } });
+    zone.addEventListener("dragleave", () => zone.classList.remove("is-over"));
+    zone.addEventListener("drop", (e) => { zone.classList.remove("is-over"); const id = readHierarchy(e); if (id) { e.preventDefault(); onHierarchy(id); } });
   }
   // A marks-encoding pill: table.column + a remove button, tinted as a marks pill.
   function markPill(f, remove) {
@@ -2528,6 +2565,12 @@ function readField(e) {
   const raw = e.dataTransfer?.getData(FIELD_MIME);
   if (!raw) return null;
   try { return JSON.parse(raw); } catch { return null; }
+}
+function hasHierarchy(e) { return e.dataTransfer && Array.from(e.dataTransfer.types).includes(HIERARCHY_MIME); }
+function readHierarchy(e) {
+  const raw = e.dataTransfer?.getData(HIERARCHY_MIME);
+  if (!raw) return null;
+  try { const id = JSON.parse(raw)?.id; return typeof id === "string" ? id : null; } catch { return null; }
 }
 // A pill-reorder drag carries { shelf, index } under its own MIME, distinct from a new field dragged
 // from the field pane (FIELD_MIME), so a shelf can tell "reorder an existing pill" from "add a field".
