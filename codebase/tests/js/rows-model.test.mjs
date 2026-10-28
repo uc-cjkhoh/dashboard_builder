@@ -83,3 +83,15 @@ test("a cut cell is detected so the dialog can say the CSV is lossy", () => {
   assert.equal(anyCellCut([["a", null], ["b", "x".repeat(1000) + "…"]]), true);
   assert.equal(anyCellCut([["…", "x".repeat(1000)]]), false);
 });
+
+test("T02-34: a filter on a cast field, or a mark on one, is left out and named", async () => {
+  const { buildRowsRequest } = await import("../../src/DashboardBuilder/Features/Rows/rows-model.js");
+  const plan = { from: { db: "d", table: "t" }, filters: [
+    { db: "d", table: "t", column: "qty_s", op: ">", value: "1", cast: "number" },
+    { db: "d", table: "t", column: "region", op: "=", value: "EU" }] };
+  const sel = { db: "d", table: "t", column: "qty_s", value: "5" };
+  const { request, notes } = buildRowsRequest({ plan, selection: sel, castOf: (f) => (f.column === "qty_s" ? "number" : undefined) });
+  assert.deepEqual(request.filters.map((f) => f.column), ["region"]);
+  assert.equal(notes.length, 2);
+  assert.ok(notes.every((n) => /data type cast/.test(n)));
+});

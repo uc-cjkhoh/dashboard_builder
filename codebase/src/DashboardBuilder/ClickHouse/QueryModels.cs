@@ -9,8 +9,9 @@ public sealed record TableRef(string Db, string Table);
 /// <summary>A column on a specific table. On a worksheet dimension, <see cref="DatePart"/> (P26) groups a
 /// date/time column by a calendar part — a whitelisted function, never user text. When <see cref="Calc"/>
 /// is set (calculated dimension) the tree replaces Db/Table/Column, and <see cref="Column"/> is only a
-/// display label (≤ 60 characters, never used in SQL) echoed in the result.</summary>
-public sealed record ColumnRef(string Db, string Table, string Column, string? DatePart = null, ExprNode? Calc = null);
+/// display label (≤ 60 characters, never used in SQL) echoed in the result. T02-34: <see cref="Cast"/> (text, number
+/// or date) reads a plain column as that type — a whitelisted conversion, NULL where a value doesn't fit.</summary>
+public sealed record ColumnRef(string Db, string Table, string Column, string? DatePart = null, ExprNode? Calc = null, string? Cast = null);
 
 /// <summary>A join edge: <c>left.column = right.column</c>. <c>Left</c> must already be in the query.</summary>
 /// <summary>P31: <see cref="Type"/> is "inner" (default) or "left" — a whitelisted keyword, never user text.</summary>
@@ -20,7 +21,7 @@ public sealed record JoinRef(ColumnRef Left, ColumnRef Right, string? Type = nul
 /// tree replaces Db/Table/Column/Agg, and <see cref="Column"/> is only a display label echoed in the result.
 /// <see cref="Agg"/> is nullable on the wire because an aggregate calculation carries none; a plain measure
 /// without one is rejected by <c>RequestRules</c> ("'measures[i].agg' is required.").</summary>
-public sealed record MeasureRef(string Db, string Table, string Column, string? Agg, ExprNode? Calc = null);
+public sealed record MeasureRef(string Db, string Table, string Column, string? Agg, ExprNode? Calc = null, string? Cast = null);
 
 /// <summary>
 /// A filter condition on a column (P14). For the scalar operators (<c>= != &lt; &lt;= &gt; &gt;=</c>)
@@ -31,7 +32,9 @@ public sealed record MeasureRef(string Db, string Table, string Column, string? 
 public sealed record QueryFilter(
     string Db, string Table, string Column, string Op, string? Value, string[]? Values = null,
     // P30 "top": keep the Value (1–1000) members of this column ranked by TopBy (highest, or lowest when Bottom).
-    MeasureRef? TopBy = null, bool? Bottom = null);
+    MeasureRef? TopBy = null, bool? Bottom = null,
+    // T02-34: read the column as text, number or date (whitelisted <see cref="TypeCast"/>) before comparing.
+    string? Cast = null);
 
 /// <summary>
 /// A worksheet query that may span several related tables. <see cref="From"/> is the base table;

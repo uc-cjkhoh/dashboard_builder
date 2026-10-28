@@ -46,7 +46,7 @@ const eqRow = (got, want, label) => { assert.equal(got.length, want.length, labe
 let passed = 0;
 const pass = (m) => { passed++; console.log(`ok ${m}`); };
 
-// Fixture (g: group; x Nullable(Float64); s Nullable(String)):
+// Fixture (g: group; x Nullable(Float64); s Nullable(String); xs = x as text, 'zz' in C):
 //   A: x = 1,2,3,4,NULL    s = p,p,p,p,NULL   median 3 (n=4 non-null, index floor(4*.5)=2), p25 -> index 1 = 2,
 //      sample variance 5/3, stddev sqrt(5/3), attr(s) = 'p' (NULL ignored)
 //   B: x = 10 (single row) s = q               median 10, stddev/variance NULL (one value), attr 'q'
@@ -54,8 +54,8 @@ const pass = (m) => { passed++; console.log(`ok ${m}`); };
 //   D: x = 5,5,5           s = NULL x3         median 5, stddev 0, variance 0, attr NULL (no non-NULL value)
 async function setup() {
   await write(`DROP TABLE IF EXISTS ${DB}.${T}`);
-  await write(`CREATE TABLE ${DB}.${T} (g String, x Nullable(Float64), s Nullable(String)) ENGINE = MergeTree ORDER BY g`);
-  await write(`INSERT INTO ${DB}.${T} VALUES ('A',1,'p'),('A',2,'p'),('A',3,'p'),('A',4,'p'),('A',NULL,NULL),('B',10,'q'),('C',NULL,'u'),('C',NULL,'v'),('D',5,NULL),('D',5,NULL),('D',5,NULL)`);
+  await write(`CREATE TABLE ${DB}.${T} (g String, x Nullable(Float64), s Nullable(String), xs Nullable(String)) ENGINE = MergeTree ORDER BY g`);
+  await write(`INSERT INTO ${DB}.${T} VALUES ('A',1,'p','1'),('A',2,'p','2'),('A',3,'p','3'),('A',4,'p','4'),('A',NULL,NULL,NULL),('B',10,'q','10'),('C',NULL,'u',NULL),('C',NULL,'v','zz'),('D',5,NULL,'5'),('D',5,NULL,'5'),('D',5,NULL,'5')`);
 }
 const teardown = () => write(`DROP TABLE IF EXISTS ${DB}.${T}`).catch((e) => console.error(`teardown: ${e.message}`));
 
@@ -94,6 +94,20 @@ async function main() {
     const r = rows(j);
     eqRow(r.A, [3, 2], 'A approx'); eqRow(r.B, [10, 10], 'B approx');
     pass('(c) approximate mode returns the same exact order statistics when no sample is taken');
+  }
+  // (c2) a text field cast to a number takes the new aggregations (type cast + median/stddev/variance on one measure).
+  {
+    const xs = (a) => ({ ...col('xs'), agg: a, cast: 'number' });
+    const j = await ok([xs('median'), xs('stddev'), xs('variance')], 'c2');
+    assert.deepEqual(j.measures, ['median xs', 'stddev xs', 'variance xs']);
+    const r = rows(j);
+    eqRow(r.A, [3, Math.sqrt(5 / 3), 5 / 3], 'A cast'); eqRow(r.B, [10, null, null], 'B cast');
+    eqRow(r.C, [null, null, null], 'C cast (unparseable text is NULL)'); eqRow(r.D, [5, 0, 0], 'D cast');
+    const bad = await app('/api/query', req([{ ...col('s'), agg: 'median' }]));
+    assert.equal(bad.status, 400, 'median of uncast text is refused');
+    const castText = await app('/api/query', req([{ ...col('x'), agg: 'median', cast: 'text' }]));
+    assert.equal(castText.status, 400, 'median of a number cast to text is refused');
+    pass('(c2) cast xs to number + median/stddev/variance matches the numeric column; median of text / of a text cast is a 400');
   }
   // (d) refusals are 400s with the field named.
   const bad = async (m, field, rx, label) => {
