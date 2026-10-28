@@ -1,6 +1,6 @@
 import {
   dashboards, isModelActive, activeDashboardId, showModel, createDashboard,
-  switchDashboard, renameDashboard, closeDashboard, dashboardHasContent, bus,
+  switchDashboard, renameDashboard, duplicateDashboard, closeDashboard, dashboardHasContent, bus,
 } from "../Core/store.js";
 import { icon } from "../Core/icons.js";
 import { confirmDialog, toast } from "../Core/ui.js";
@@ -66,6 +66,19 @@ export function initTabs() {
     // Already showing: no switch, so no re-render under a double-click.
     label.addEventListener("click", () => { if (activeDashboardId() !== dash.id) switchDashboard(dash.id); });
 
+    const dup = document.createElement("button");
+    dup.type = "button";
+    dup.className = "tab__dup";
+    dup.setAttribute("aria-label", `Duplicate ${dash.name}`);
+    dup.title = "Duplicate worksheet";
+    dup.append(icon("duplicate", { size: 14 }));
+    dup.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const r = duplicateDashboard(dash.id);
+      if (!r.ok) toast(r.error, "danger");
+      else strip.querySelector(".tab.is-active .tab__label")?.focus(); // render() rebuilt the strip
+    });
+
     const close = document.createElement("button");
     close.type = "button";
     close.className = "tab__close";
@@ -78,7 +91,7 @@ export function initTabs() {
       if (event.key === "F2" || (event.key === "Enter" && active)) { event.preventDefault(); beginRename(dash, label); }
     });
 
-    el.append(label, close);
+    el.append(label, dup, close);
     return el;
   }
 

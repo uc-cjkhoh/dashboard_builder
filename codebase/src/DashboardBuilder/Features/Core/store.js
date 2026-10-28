@@ -14,6 +14,8 @@
 // bus events:    entity:moved / entity:removed / joinkey:changed / rel:changed  (model),
 //                view:changed / tabs:changed / dashboard:changed {id}          (views)
 import { renameInFormulas } from "../Calc/calc-workbook.js";
+import { copyName, copySheet, canDuplicate } from "../Tabs/duplicate-model.js";
+import { LIMITS } from "./validate.js";
 
 export const bus = new EventTarget();
 
@@ -228,6 +230,20 @@ export function createDashboard(name) {
   switchDashboard(dash.id);
   emit("tabs:changed");
   return dash;
+}
+
+/** Duplicate a worksheet: a deep copy named "<name> copy", inserted after the source and activated. Returns { ok, dash? | error }. */
+export function duplicateDashboard(id) {
+  const idx = dashboards.findIndex((d) => d.id === id);
+  if (idx < 0) return { ok: false, error: "That worksheet no longer exists." };
+  const limit = canDuplicate(dashboards.length, LIMITS.dashboards);
+  if (!limit.ok) return limit;
+  dashSeq += 1;
+  const dash = { id: `dash#${dashSeq}`, name: copyName(dashboards[idx].name, dashboards.map((d) => d.name), LIMITS.tabName), sheet: copySheet(dashboards[idx].sheet) };
+  dashboards.splice(idx + 1, 0, dash);
+  switchDashboard(dash.id);
+  emit("tabs:changed");
+  return { ok: true, dash };
 }
 
 /** Persist a worksheet's shelves + notify the view. */
