@@ -1,3 +1,5 @@
+using DashboardBuilder.ClickHouse.Calc;
+
 namespace DashboardBuilder.ClickHouse;
 
 /// <summary>A table (db + name).</summary>
@@ -5,15 +7,18 @@ public sealed record TableRef(string Db, string Table);
 
 /// <summary>A column on a specific table.</summary>
 /// <summary>A column on a specific table. On a worksheet dimension, <see cref="DatePart"/> (P26) groups a
-/// date/time column by a calendar part — a whitelisted function, never user text.</summary>
-public sealed record ColumnRef(string Db, string Table, string Column, string? DatePart = null);
+/// date/time column by a calendar part — a whitelisted function, never user text. When <see cref="Calc"/>
+/// is set (calculated dimension) the tree replaces Db/Table/Column, and <see cref="Column"/> is only a
+/// display label (≤ 60 characters, never used in SQL) echoed in the result.</summary>
+public sealed record ColumnRef(string Db, string Table, string Column, string? DatePart = null, ExprNode? Calc = null);
 
 /// <summary>A join edge: <c>left.column = right.column</c>. <c>Left</c> must already be in the query.</summary>
 /// <summary>P31: <see cref="Type"/> is "inner" (default) or "left" — a whitelisted keyword, never user text.</summary>
 public sealed record JoinRef(ColumnRef Left, ColumnRef Right, string? Type = null);
 
-/// <summary>A measure column + its aggregation.</summary>
-public sealed record MeasureRef(string Db, string Table, string Column, string Agg);
+/// <summary>A measure column + its aggregation. When <see cref="Calc"/> is set (calculated measure) the
+/// tree replaces Db/Table/Column/Agg, and <see cref="Column"/> is only a display label echoed in the result.</summary>
+public sealed record MeasureRef(string Db, string Table, string Column, string Agg, ExprNode? Calc = null);
 
 /// <summary>
 /// A filter condition on a column (P14). For the scalar operators (<c>= != &lt; &lt;= &gt; &gt;=</c>)
