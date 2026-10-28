@@ -109,8 +109,17 @@ public static class RequestRules
         catch (CalcException e) { throw Bad(e.Message, field + ".calc"); }
     }
 
+    // T02-34: a cast is a whitelisted word, and a calculation (which has its own type) takes none.
+    private static void CheckCast(string? cast, bool isCalc, string field)
+    {
+        if (cast is null) return;
+        if (!TypeCast.Casts.Contains(cast)) throw Bad(TypeCast.UnknownMessage, field + ".cast");
+        if (isCalc) throw Bad(TypeCast.CalcMessage, field + ".cast");
+    }
+
     private static void CheckCalcDimension(ColumnRef d, string field)
     {
+        CheckCast(d.Cast, d.Calc is not null, field);
         if (d.Calc is not { } calc) return;
         CheckCalcTree(calc, d.Column, field);
         if (d.DatePart is not null) throw Bad("A calculation can't be grouped by a date part.", field + ".datePart");
@@ -119,6 +128,7 @@ public static class RequestRules
 
     private static void CheckCalcMeasure(MeasureRef m, string field)
     {
+        CheckCast(m.Cast, m.Calc is not null, field);
         if (m.Calc is not { } calc)
         {
             // Agg binds as nullable (an aggregate calculation has none), so a plain measure's is required here.
@@ -170,6 +180,7 @@ public static class RequestRules
         {
             if (filters[i] is not { } f) throw Bad($"'filters[{i}]' is required.", $"filters[{i}]");
             ValidateFilterShape(f.Op, f.Value, f.Values, $"filters[{i}]");
+            CheckCast(f.Cast, false, $"filters[{i}]");
             if (string.Equals(f.Op, "top", StringComparison.OrdinalIgnoreCase) && f.TopBy is null)
                 throw Bad("A top-N filter needs a measure to rank by.", $"filters[{i}].topBy");
             if (f.TopBy is { } by) CheckCalcMeasure(by, $"filters[{i}].topBy");
