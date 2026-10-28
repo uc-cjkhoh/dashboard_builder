@@ -1,7 +1,8 @@
 import { renderChart as drawChart } from "./chart.js";
 import { isCalcPill } from "../Calc/calc-pill.js";
 import { SCATTER_TYPES, marksOf, measureName as planMeasureName } from "./sheet-plan.js";
-import { REF_CHOICES, TREND_CHOICES, refValue, trendSeries } from "./analytics-model.js";
+import { REF_CHOICES, TREND_CHOICES, refValue, refConstant, trendSeries } from "./analytics-model.js";
+import { parameters } from "../Core/store.js";
 import { hint } from "./render-dom.js";
 import { selectHandler, legendSpec, memberSpec } from "./render-handlers.js";
 import { selectedIndicesOf } from "./dashboard-select.js";
@@ -76,7 +77,7 @@ export function renderSeries(container, rc, sheet, a) {
   if (A && ANALYTICS_TYPES.has(type) && series.length) {
     const vals = series[0].data;
     const refKind = A.ref?.kind ?? "none";
-    const rv = refKind === "none" ? null : refValue(refKind, vals, A.ref.value);
+    const rv = refKind === "none" ? null : refValue(refKind, vals, refConstant(A.ref, parameters));
     const fc = type === "line" || type === "area" ? A.forecast ?? 0 : 0;
     const t = (A.trend && A.trend !== "none") || fc ? trendSeries(A.trend ?? "none", vals, fc) : null;
     const trendLabel = TREND_CHOICES.find(([v]) => v === (A.trend && A.trend !== "none" ? A.trend : "linear"))[1].toLowerCase();

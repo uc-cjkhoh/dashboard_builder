@@ -1,7 +1,7 @@
 // P32 parameters — pure, DOM-free (unit-tested in tests/js/parameters-model.test.mjs). A workbook holds up to
 // 20 named, typed values: { id, name, type: number | text | date, value, allowed: { kind: any | list | range,
 // list?, min?, max?, step? } }. A filter value or a top-N count can read one; Format → Top N can follow a
-// number parameter. The value reaches ClickHouse only ever as a bound filter value / validated limit.
+// number parameter; a calculated field reads one as [@Name] (Calc/calc-params.js). The value reaches ClickHouse only ever as a bound filter value / validated limit.
 import { number, dateTime, text } from "./validate.js";
 
 export const PARAM_TYPES = ["number", "text", "date"];
@@ -23,6 +23,23 @@ export function checkValue(p, raw) {
     if (a.max != null && v > a.max) return { ok: false, error: `${p.name} must be at most ${a.max}.` };
   }
   return { ok: true, value: v };
+}
+
+/** A parameter name: 1-60 characters, no `[` or `]` (a formula could not name it). { ok, value } or { ok: false, error }. */
+export function checkParamName(raw) {
+  const n = text(raw, { label: "Name", max: 60, required: true });
+  if (!n.ok) return n;
+  if (/[[\]]/.test(n.value)) return { ok: false, error: "Name can't contain '[' or ']'." };
+  return n;
+}
+
+/** A step-size input: empty is no step; otherwise a positive finite number. { ok, value } or { ok: false, error }. */
+export function checkStep(raw) {
+  const s = String(raw ?? "").trim();
+  if (!s) return { ok: true, value: null };
+  const r = number(s);
+  if (!r.ok || !(r.value > 0)) return { ok: false, error: "Step must be a positive number." };
+  return { ok: true, value: r.value };
 }
 
 /** The parameter types a filter on a field of `category` can read. */
@@ -47,7 +64,7 @@ export function effectiveTopN(format, params, cap) {
 
 /** A saved parameter, checked — or null (with an issue). */
 export function cleanParameter(raw, issues) {
-  const name = raw && typeof raw === "object" ? text(raw.name, { label: "Parameter name", max: 60, required: true }) : { ok: false };
+  const name = raw && typeof raw === "object" ? checkParamName(raw.name) : { ok: false };
   if (!name.ok || !/^prm\d{1,6}$/.test(raw.id ?? "") || !PARAM_TYPES.includes(raw.type)) { issues.push("Skipped a parameter with no name, id or type."); return null; }
   const a = raw.allowed && typeof raw.allowed === "object" ? raw.allowed : { kind: "any" };
   let allowed = { kind: "any" };
@@ -56,7 +73,8 @@ export function cleanParameter(raw, issues) {
     if (list.length) allowed = { kind: "list", list };
   } else if (a.kind === "range" && raw.type === "number") {
     const n = (x) => (typeof x === "number" && Number.isFinite(x) ? x : null);
-    allowed = { kind: "range", min: n(a.min), max: n(a.max), step: n(a.step) };
+    const step = n(a.step);
+    allowed = { kind: "range", min: n(a.min), max: n(a.max), step: step !== null && step > 0 ? step : null };
   }
   const p = { id: raw.id, name: name.value, type: raw.type, allowed, value: null };
   const v = checkValue(p, raw.value);

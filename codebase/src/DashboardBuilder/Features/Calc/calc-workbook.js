@@ -11,8 +11,19 @@ export function checkName(name, calcs, selfId) {
   const t = text(name, { label: "Name", max: LIMITS.calcName, required: true });
   if (!t.ok) return t;
   if (/[.[\]]/.test(t.value)) return { ok: false, error: "Name can't contain '.', '[' or ']'." };
+  if (t.value.startsWith("@")) return { ok: false, error: "Name can't start with '@' — that marks a parameter, [@Name]." };
   if (calcs.some((c) => c.id !== selfId && sameName(c.name, t.value))) return { ok: false, error: `A calculation named '${t.value}' already exists.` };
   return { ok: true, value: t.value };
+}
+
+/** Rewrites the `[ref]` tokens of a formula outside text literals: `fn(inner)` returns the new text between the brackets, or undefined to keep it.
+ *  `'…'` spans (`''` is a quote inside) are copied untouched, and a `[…]` is read before a quote, like the tokenizer does. */
+export function mapRefs(formula, fn) {
+  return String(formula).replace(/\[[^[\]]*\]|'(?:[^']|'')*(?:'|$)/g, (tok) => {
+    if (tok[0] !== "[") return tok;
+    const out = fn(tok.slice(1, -1));
+    return out === undefined ? tok : `[${out}]`;
+  });
 }
 
 const refsTo = (formula, name) => {
@@ -23,7 +34,7 @@ const refsTo = (formula, name) => {
 
 /** B3: `[Old]` becomes `[New]` in every calculation's formula; `[table.Old]` is left alone. Returns a new array. */
 export function renameInFormulas(calcs, oldName, newName) {
-  return calcs.map((c) => ({ ...c, formula: String(c.formula).replace(/\[([^[\]]*)\]/g, (all, inner) => (inner.trim() === oldName ? `[${newName}]` : all)) }));
+  return calcs.map((c) => ({ ...c, formula: mapRefs(c.formula, (inner) => (inner.trim() === oldName ? newName : undefined)) }));
 }
 
 /** The names of the calculations whose formula references calculation `id` as `[name]`. */

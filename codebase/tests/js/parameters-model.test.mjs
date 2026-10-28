@@ -39,3 +39,15 @@ test("saved parameters are checked; a bad value is reset and reported", () => {
   assert.equal(cleanParameter({ id: "prm4", name: "R", type: "text", value: "Mars", allowed: { kind: "list", list: ["EU", "US"] } }, issues).value, "EU");
   assert.equal(issues.length, 2);
 });
+
+test("step size: positive finite only; stored and round-tripped for number ranges", async () => {
+  const { checkStep } = await import("../../src/DashboardBuilder/Features/Core/parameters-model.js");
+  assert.deepEqual(checkStep(""), { ok: true, value: null });
+  assert.deepEqual(checkStep(" 0.5 "), { ok: true, value: 0.5 });
+  for (const bad of ["0", "-1", "abc", "Infinity", "1e999"]) assert.equal(checkStep(bad).ok, false, bad);
+  const issues = [];
+  const p = cleanParameter({ id: "prm1", name: "N", type: "number", allowed: { kind: "range", min: 0, max: 10, step: 2 }, value: 4 }, issues);
+  assert.equal(p.allowed.step, 2);
+  const bad = cleanParameter({ id: "prm1", name: "N", type: "number", allowed: { kind: "range", min: 0, max: 10, step: -2 }, value: 4 }, []);
+  assert.equal(bad.allowed.step, null);
+});

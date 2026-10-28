@@ -28,7 +28,7 @@ export const isNumericField = (f) => Boolean(f) && f.category === "numeric";
 export const COLOR_USES = new Set(["bar", "stacked", "line", "area", "table"]);
 
 /** Calculated fields: the context the pure plan seam (Calc/calc-plan.js) compiles pills against. */
-export const calcContext = (ctx) => ({ calcs: ctx.calculations, catalog: catalogFromEntities([...ctx.entities.values()]) });
+export const calcContext = (ctx) => ({ calcs: ctx.calculations, catalog: catalogFromEntities([...ctx.entities.values()]), params: ctx.parameters });
 /** Shared filters that actually reach the query. */
 export const appliedShared = (ctx) => ctx.sharedFilters.filter((f) => checkFilter(f).state === "ok");
 /** A parameter-bound filter takes the parameter's current value. */

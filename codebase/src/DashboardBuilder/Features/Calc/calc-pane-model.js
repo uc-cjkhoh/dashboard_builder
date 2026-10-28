@@ -31,9 +31,9 @@ export const clearRoleChoices = () => choices.clear();
 export const roleChoice = (id) => choices.get(id) ?? null;
 
 /** What the pane group shows: `{ canAdd, items: [{ calc, info, role, chip, error }] }`. */
-export function paneState(calcs, catalog) {
+export function paneState(calcs, catalog, params = []) {
   const items = calcs.map((calc) => {
-    const r = compileCalculation(calc, calcs, catalog);
+    const r = compileCalculation(calc, calcs, catalog, params);
     if (r.error) return { calc, info: null, role: null, chip: null, error: r.error.message };
     return { calc, info: r.info, role: r.role, chip: chipFor(r.info, r.role), error: null };
   });

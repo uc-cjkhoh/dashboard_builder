@@ -16,12 +16,12 @@
 //                "(" expr ("," expr)* ")"        -- argument count and kinds are checked by check(), not here
 //   date      := ("DATEDIFF" | "DATEADD" | "YEAR" | "MONTH" | "DAY" | "QUARTER" | "WEEK" | "WEEKDAY" | "DATE") "(" expr ("," expr)* ")"   -- same shape as text
 //   string    := "'" text "'"        (a quote inside is doubled: 'it''s')
-//   ref       := "[" name "]"
+//   ref       := "[" name "]"  |  "[@" parameter "]"      -- a workbook parameter (Calc/calc-params.js substitutes its value)
 //
 // Hand-written tokenizer + recursive descent. Function names are case-insensitive; references are matched
 // case-sensitively by the caller's `resolve`. Nodes are exactly the wire shapes (field | num | str | un | bin | agg |
 // cmp | logic | not | case | ifnull | isnull | fn), plus the client-only `{ k: "calc", name }` for a reference to another calculation (expanded by
-// calc-model.js before anything is sent).
+// calc-model.js before anything is sent) and `{ k: "param", name }` for a parameter (replaced by a literal by calc-params.js).
 import { CALC_LIMITS, FUNCTIONS, ROW_FUNCTIONS } from "./calc-types.js";
 
 class ParseError extends Error {
@@ -93,7 +93,8 @@ function tokenize(text) {
 /**
  * Parses `text` into an expression tree. `resolve(parts)` receives the dot-split reference
  * (`[orders.amount]` -> ["orders", "amount"], `[Net revenue]` -> ["Net revenue"]) and returns
- * `{ field: { db, table, column } }`, `{ calc: { name } }` or `{ error: string }`; null/undefined means "no match"
+ * `{ field: { db, table, column } }`, `{ calc: { name } }` or `{ error: string }`; a `[@Name]` reference calls `resolve([name], "param")` (the name is not
+ * dot-split) which returns `{ param: { name } }` or `{ error }`; null/undefined means "no match"
  * (the parser then reports a one-part name as a field missing its table).
  * Returns `{ ast }` or `{ error: { message, pos } }` (`pos`: character offset in `text`).
  */
@@ -257,6 +258,14 @@ export function parseFormula(text, resolve) {
       return { k: "agg", fn, arg };
     }
     function reference(tok) {
+      if (tok.text.startsWith("@")) {
+        const name = tok.text.slice(1);
+        if (name.trim() === "") throw new ParseError("Write the parameter as [@Name].", tok.pos);
+        const r = resolve([name], "param");
+        if (r && typeof r.error === "string") throw new ParseError(r.error, tok.pos);
+        if (r && r.param) return { k: "param", name: r.param.name };
+        throw new ParseError(`Unknown parameter ${tok.raw}.`, tok.pos);
+      }
       const parts = tok.text.split(".");
       if (parts.length > 3 || parts.some((p) => p.length === 0)) throw new ParseError("Write the field as [table.column].", tok.pos);
       const r = resolve(parts);

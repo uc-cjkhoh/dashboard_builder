@@ -46,14 +46,14 @@ export function* pillSlots(sheet) {
 }
 
 /** Refreshes each calc pill's category/role/column/agg from its current compile; returns ids it could not compute. */
-export function syncCalcPills(sheet, calcs, catalog) {
+export function syncCalcPills(sheet, calcs, catalog, params = []) {
   const bad = [];
   const seen = new Map();
   for (const f of pillSlots(sheet)) {
     if (!isCalcPill(f)) continue;
     const calc = (calcs ?? []).find((c) => c.id === f.calc);
     if (!calc) { if (!bad.includes(f.calc)) bad.push(f.calc); continue; }
-    if (!seen.has(f.calc)) seen.set(f.calc, compileCalculation(calc, calcs, catalog));
+    if (!seen.has(f.calc)) seen.set(f.calc, compileCalculation(calc, calcs, catalog, params));
     const c = seen.get(f.calc);
     if (c.error) { if (!bad.includes(f.calc)) bad.push(f.calc); continue; }
     const wasNumber = f.category === "numeric";

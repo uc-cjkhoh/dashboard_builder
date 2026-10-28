@@ -235,3 +235,19 @@ test("storage keys: v2 now, v1 for the fallback read", () => {
   assert.equal(storageKey({ connected: false }), null);
   assert.equal(legacyStorageKey({ connected: false }), null);
 });
+
+test("parameters in formulas: formula text and step size round-trip, version unchanged; a reference line keeps / loses its parameter", () => {
+  const param = { id: "prm1", name: "Rate", type: "number", allowed: { kind: "range", min: 0, max: 1, step: 0.05 }, value: 0.2 };
+  const sheet = { analytics: { ref: { kind: "constant", value: 3, param: "prm1" } } };
+  const gone = { analytics: { ref: { kind: "constant", value: 3, param: "prm7" } } };
+  const file = v2({ parameters: [param], calculations: [{ id: "calc1", name: "Taxed", formula: "SUM([orders.amount]) * [@Rate]" }], worksheets: [ws("A", sheet), ws("B", gone)] });
+  const wb = parseWorkbook(file);
+  assert.equal(wb.calculations[0].formula, "SUM([orders.amount]) * [@Rate]");
+  assert.equal(wb.parameters[0].allowed.step, 0.05);
+  assert.equal(wb.worksheets[0].sheet.analytics.ref.param, "prm1");
+  assert.equal(wb.worksheets[1].sheet.analytics.ref.param, undefined);
+  assert.ok(wb.issues.some((i) => /reference line's parameter is missing/.test(i)));
+  const out = serializeWorkbook(toStore(wb));
+  assert.equal(out.version, 2);
+  assert.equal(out.calculations[0].formula, "SUM([orders.amount]) * [@Rate]");
+});

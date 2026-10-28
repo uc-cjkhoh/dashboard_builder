@@ -406,7 +406,7 @@ function cleanAnalytics(a, where, issues) {
   const fin = (v) => typeof v === "number" && Number.isFinite(v);
   const out = { ref: { kind: "none" }, band: null, trend: "none", forecast: 0, totals: { grand: false, sub: false } };
   let bad = false;
-  if (a.ref && REF_KINDS.has(a.ref.kind) && (a.ref.kind !== "constant" || fin(a.ref.value))) out.ref = { kind: a.ref.kind, ...(a.ref.kind === "constant" ? { value: a.ref.value } : {}) };
+  if (a.ref && REF_KINDS.has(a.ref.kind) && (a.ref.kind !== "constant" || fin(a.ref.value))) out.ref = { kind: a.ref.kind, ...(a.ref.kind === "constant" ? { value: a.ref.value, ...(/^prm\d{1,6}$/.test(a.ref.param ?? "") ? { param: a.ref.param } : {}) } : {}) };
   else if (a.ref != null) bad = true;
   if (a.band != null) { if (fin(a.band.from) && fin(a.band.to)) out.band = { from: Math.min(a.band.from, a.band.to), to: Math.max(a.band.from, a.band.to) }; else bad = true; }
   if (a.trend !== undefined) { if (TRENDS.has(a.trend)) out.trend = a.trend; else bad = true; }
@@ -447,6 +447,7 @@ function dropMissingCalcs(sheet, ids, where, issues) {
 }
 function unlinkParams(sheet, ids, where, issues) {
   for (const f of sheet.filters ?? []) if (f.param && !ids.has(f.param)) { delete f.param; issues.push(`${where}: a filter's parameter is missing — unlinked.`); }
+  if (sheet.analytics?.ref?.param && !ids.has(sheet.analytics.ref.param)) { delete sheet.analytics.ref.param; issues.push(`${where}: the reference line's parameter is missing — unlinked.`); }
   if (sheet.format?.topNParam && !ids.has(sheet.format.topNParam)) { delete sheet.format.topNParam; issues.push(`${where}: Top N's parameter is missing — unlinked.`); }
 }
 

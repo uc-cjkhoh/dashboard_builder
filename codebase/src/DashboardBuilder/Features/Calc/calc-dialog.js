@@ -1,6 +1,6 @@
 // Calculated fields — the New / Edit dialog (built to docs/proposals/calculation-dialog-mockup.html).
 // All validation, the role chip and the autocomplete items come from calc-dialog-model.js; this file is DOM only.
-import { calculations, entities, addCalculation, updateCalculation } from "../Core/store.js";
+import { calculations, entities, parameters, addCalculation, updateCalculation } from "../Core/store.js";
 import { icon } from "../Core/icons.js";
 import { LIMITS } from "../Core/validate.js";
 import { makeButton, openDialog, closeDialog, toast } from "../Core/ui.js";
@@ -18,7 +18,7 @@ export function openCalcDialog(calcId = null) {
   if (calcId && !existing) return;
   const n = ++seq;
   const catalog = catalogFromEntities([...entities.values()]);
-  const ctx = { calcs: calculations, catalog, selfId: existing?.id };
+  const ctx = { calcs: calculations, catalog, params: parameters, selfId: existing?.id };
 
   // Kind text for the autocomplete rows ("field · number", "calculation · aggregate").
   const kinds = new Map();
@@ -26,7 +26,7 @@ export function openCalcDialog(calcId = null) {
     const ambiguous = (catalog.tablesByName.get(f.table) ?? []).length > 1;
     kinds.set(ambiguous ? `${f.db}.${f.table}.${f.column}` : `${f.table}.${f.column}`, `field · ${TYPE_WORD[f.category] ?? f.category}`);
   }
-  for (const it of paneState(calculations, catalog).items)
+  for (const it of paneState(calculations, catalog, parameters).items)
     if (it.info) kinds.set(it.calc.name, `calculation · ${it.info.isAggregate ? "aggregate" : "row-level"}`);
 
   const dlg = el("dialog", "dialog calc-dialog");
@@ -56,7 +56,7 @@ export function openCalcDialog(calcId = null) {
   list.setAttribute("aria-label", "Fields, calculations and functions"); list.hidden = true;
   ta.setAttribute("aria-controls", list.id);
   const hint = el("div", "hint"); hint.id = `calc-hint-${n}`;
-  hint.append("Type ", el("code", null, "["), " to pick a field or another calculation, or the start of a function name (", el("code", null, "LO"), ").");
+  hint.append("Type ", el("code", null, "["), " to pick a field or another calculation, ", el("code", null, "[@"), " for a parameter, or the start of a function name (", el("code", null, "LO"), ").");
   const fnBtn = makeButton("Functions", "btn calc-fn__btn"); fnBtn.type = "button";
   fnBtn.prepend(icon("search", { size: 14 }));
   const panel = el("div", "calc-fn"); panel.id = `calc-fn-${n}`; panel.hidden = true;
@@ -160,7 +160,7 @@ export function openCalcDialog(calcId = null) {
     range = s; items = s.items; arrowed = false;
     list.replaceChildren(...items.map((it, k) => {
       const li = el("li"); li.id = `${list.id}-${k}`; li.setAttribute("role", "option");
-      li.append(icon(it.kind === "field" ? "table" : "calc", { size: 14 }), el("span", "name", it.label), el("span", "kind", it.hint ?? kinds.get(it.label) ?? it.kind));
+      li.append(icon(it.kind === "field" ? "table" : it.kind === "param" ? "param" : "calc", { size: 14 }), el("span", "name", it.label), el("span", "kind", it.hint ?? (it.kind === "param" ? `parameter · ${it.type}` : kinds.get(it.label) ?? it.kind)));
       li.addEventListener("mousedown", (e) => { e.preventDefault(); accept(k); }); // keep focus in the textarea
       return li;
     }));
