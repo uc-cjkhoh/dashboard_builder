@@ -1,6 +1,9 @@
 import { entities, relationships, bus, emit } from "../Core/store.js";
 import { linkProblem, joinChoices, joinBadge, joinSelection, joinFromSelection, isLegacyLeft } from "./relation-rules.js";
 import { toast, makeButton, openDialog, closeDialog } from "../Core/ui.js";
+import { api } from "../Core/api.js";
+import { previewRequest } from "./join-preview-model.js";
+import { buildJoinCheck } from "./join-check.js";
 
 // Relationships (P5): logical, typed links the user draws between the join keys checked on two
 // entities (decision D5 — ClickHouse neither creates nor validates them). Creation is
@@ -86,8 +89,19 @@ function onConnectorClick(entityId, column, handle) {
   openCardinalityDialog({
     current: "1:N",
     tables: [entities.get(from.entityId)?.table ?? "first table", entities.get(to.entityId)?.table ?? "second table"],
+    check: joinCheckFor(from, to),
     onPick: (cardinality, sel) => createRelationship(from, to, cardinality, joinFromSelection(sel)),
   });
+}
+
+/** What the dialog's "Check this join" needs: the request to send and the names to word the result with. */
+function joinCheckFor(from, to, declared) {
+  const a = entities.get(from.entityId), b = entities.get(to.entityId);
+  if (!a || !b) return null;
+  return {
+    run: (signal) => api.joinPreview(previewRequest(a, from.column, b, to.column), { signal }),
+    names: { fromTable: a.table, toTable: b.table, fromColumn: from.column, toColumn: to.column, declared },
+  };
 }
 
 function clearPending() {
@@ -200,6 +214,7 @@ function editRelationship(rel) {
     joinType: joinSelection(rel.joinType, rel.joinFixed),
     legacy: isLegacyLeft(rel.joinType, rel.joinFixed),
     tables: [entities.get(rel.from.entityId)?.table ?? "first table", entities.get(rel.to.entityId)?.table ?? "second table"],
+    check: joinCheckFor(rel.from, rel.to, rel.cardinality),
     onPick: (cardinality, sel) => { rel.cardinality = cardinality; Object.assign(rel, joinFromSelection(sel)); emit("rel:changed", { id: rel.id }); render(); },
     onDelete: () => { relationships.delete(rel.id); emit("rel:changed", { id: rel.id }); select(null); render(); },
   });
@@ -211,7 +226,7 @@ function select(id) {
 }
 
 // --- cardinality dialog -------------------------------------------------------
-function openCardinalityDialog({ current = "1:N", joinType = "inner", tables = ["first table", "second table"], legacy = false, onPick, onDelete }) {
+function openCardinalityDialog({ current = "1:N", joinType = "inner", tables = ["first table", "second table"], legacy = false, check = null, onPick, onDelete }) {
   const dlg = document.createElement("dialog");
   dlg.className = "dialog dialog--sm";
 
@@ -239,6 +254,7 @@ function openCardinalityDialog({ current = "1:N", joinType = "inner", tables = [
     joinRow.append(lab);
   }
   body.append(joinRow);
+  if (check) body.append(buildJoinCheck(dlg, check));
   const choices = document.createElement("div");
   choices.className = "card-choices";
   for (const c of CARDINALITIES) {
