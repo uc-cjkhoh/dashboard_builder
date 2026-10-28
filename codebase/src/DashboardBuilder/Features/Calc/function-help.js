@@ -22,6 +22,10 @@ const LOGIC = {
   not: { sig: "NOT a", result: "boolean", insert: "NOT " },
 };
 
+/** DATEADD's answer must lie strictly inside these UTC dates or it is NULL (twin of the bounds in ClickHouse/Calc/CalcCompiler.cs; a test ties them). */
+export const DATEADD_WINDOW = Object.freeze({ after: "1900-01-03", before: "2299-12-29" });
+const NULL_TEXT = "A NULL text gives NULL (shown as a dash).";
+
 // name -> [plain-words sentence, example formula, NULL / edge note]
 const TEXTS = {
   sum: ["Adds up the numbers in each group.", "SUM([orders.amount])", "Empty values are skipped; a group with no value is empty."],
@@ -44,24 +48,24 @@ const TEXTS = {
   and: ["True when both sides are true.", "[orders.amount] > 100 AND [orders.qty] > 1", "Empty AND false is false; empty AND true is empty."],
   or: ["True when either side is true.", "[orders.amount] > 100 OR [orders.qty] > 1", "Empty OR true is true; empty OR false is empty."],
   not: ["Flips true and false.", "NOT ISNULL([orders.amount])", "NOT of an empty value is empty."],
-  lower: ["The text in lower case.", "LOWER([orders.status])", "Empty text gives empty."],
-  upper: ["The text in upper case.", "UPPER([orders.status])", "Empty text gives empty."],
-  trim: ["The text without leading and trailing spaces.", "TRIM([orders.status])", "Strips the space character only, not tabs or line breaks."],
-  len: ["How many characters the text has.", "LEN([orders.status])", "Empty text gives empty, not 0."],
+  lower: ["The text in lower case.", "LOWER([orders.status])", NULL_TEXT],
+  upper: ["The text in upper case.", "UPPER([orders.status])", NULL_TEXT],
+  trim: ["The text without leading and trailing spaces.", "TRIM([orders.status])", "Strips the space character only, not tabs or line breaks. A NULL text gives NULL."],
+  len: ["How many characters the text has.", "LEN([orders.status])", "A NULL text gives NULL, not 0."],
   left: ["The first n characters of the text.", "LEFT([orders.status], 3)", `n is a literal whole number 0 to ${CALC_LIMITS.count}.`],
   right: ["The last n characters of the text.", "RIGHT([orders.status], 3)", `n is a literal whole number 0 to ${CALC_LIMITS.count}.`],
-  replace: ["The text with every occurrence of one piece replaced by another.", "REPLACE([orders.status], 'open', 'new')", "Empty text gives empty."],
+  replace: ["The text with every occurrence of one piece replaced by another.", "REPLACE([orders.status], 'open', 'new')", "The piece to find and its replacement can be fields as well as text. A NULL text gives NULL (shown as a dash)."],
   concat: ["Several texts joined end to end.", "CONCAT([orders.status], ' - ', [orders.region])", `Two to ${CALC_LIMITS.concat} texts. Empty if any one is empty: wrap a part in IFNULL(x, '') to keep the rest.`],
-  contains: ["True when the text includes the piece.", "CONTAINS([orders.status], 'pen')", "Case counts (use LOWER on both sides to ignore it). Empty text gives empty."],
-  startswith: ["True when the text begins with the piece.", "STARTSWITH([orders.status], 'op')", "Case counts. Empty text gives empty."],
-  endswith: ["True when the text ends with the piece.", "ENDSWITH([orders.status], 'en')", "Case counts. Empty text gives empty."],
+  contains: ["True when the text includes the piece.", "CONTAINS([orders.status], 'pen')", "Case counts (use LOWER on both sides to ignore it). An empty needle is always true; a NULL text gives NULL."],
+  startswith: ["True when the text begins with the piece.", "STARTSWITH([orders.status], 'op')", "Case counts. An empty needle is always true; a NULL text gives NULL."],
+  endswith: ["True when the text ends with the piece.", "ENDSWITH([orders.status], 'en')", "Case counts. An empty needle is always true; a NULL text gives NULL."],
   split: ["The k-th piece of the text cut at a separator (1 is the first).", "SPLIT([orders.status], '-', 1)", `The separator is a literal of 1 to ${CALC_LIMITS.separator} characters, k a literal whole number 1 to ${CALC_LIMITS.count}. Empty when there is no k-th piece.`],
-  datediff: ["How many whole units lie between two dates (end minus start).", "DATEDIFF('day', [orders.placed], DATE('2024-12-31'))", "The unit is a text literal: year, quarter, month, week, day, hour, minute or second. Empty if either date is empty."],
-  dateadd: ["A date moved forward (or back, with a negative amount) by a number of units.", "DATEADD('month', 1, [orders.placed])", "A month step past a shorter month lands on its last day. The amount is a literal whole number."],
-  year: ["The year of the date.", "YEAR([orders.placed])", "An empty date gives empty. Text is refused: use DATE() first."],
-  month: ["The month of the date, 1 to 12.", "MONTH([orders.placed])", "An empty date gives empty."],
-  day: ["The day of the month, 1 to 31.", "DAY([orders.placed])", "An empty date gives empty."],
-  quarter: ["The quarter of the year, 1 to 4.", "QUARTER([orders.placed])", "An empty date gives empty."],
+  datediff: ["How many whole units lie between two dates (end minus start).", "DATEDIFF('day', [orders.placed], DATE('2024-12-31'))", "Counts calendar boundaries crossed (31 Jan to 1 Feb is 1 month); weeks start on Monday. The unit is a text literal: year, quarter, month, week, day, hour, minute or second. A NULL date gives NULL."],
+  dateadd: ["A date moved forward (or back, with a negative amount) by a number of units.", "DATEADD('month', 1, [orders.placed])", `A month step past a shorter month lands on its last day. The amount is a literal whole number -${CALC_LIMITS.dateAmount} to ${CALC_LIMITS.dateAmount}; the result is empty (NULL) outside ${DATEADD_WINDOW.after} to ${DATEADD_WINDOW.before}.`],
+  year: ["The year of the date.", "YEAR([orders.placed])", "A NULL date gives NULL. Text is refused: use DATE() first."],
+  month: ["The month of the date, 1 to 12.", "MONTH([orders.placed])", "A NULL date gives NULL."],
+  day: ["The day of the month, 1 to 31.", "DAY([orders.placed])", "A NULL date gives NULL."],
+  quarter: ["The quarter of the year, 1 to 4.", "QUARTER([orders.placed])", "A NULL date gives NULL."],
   week: ["The ISO 8601 week number, 1 to 53.", "WEEK([orders.placed])", "Weeks start on Monday; week 1 holds the year's first Thursday."],
   weekday: ["The day of the week, Monday 1 to Sunday 7.", "WEEKDAY([orders.placed])", "Tableau counts Sunday as 1; here a Sunday is 7."],
   date: ["Reads text as a calendar date.", "DATE('2024-03-05')", "Empty when the text is not a real date (for example 2024-02-30)."],

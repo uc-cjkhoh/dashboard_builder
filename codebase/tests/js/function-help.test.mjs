@@ -1,7 +1,8 @@
 // Calculated fields — function glossary (pure).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { FUNCTION_HELP, CATALOG_NAMES, TEXT_NAMES, GROUPS, searchHelp, groupHelp, functionItems } from "../../src/DashboardBuilder/Features/Calc/function-help.js";
+import { FUNCTION_HELP, CATALOG_NAMES, TEXT_NAMES, GROUPS, DATEADD_WINDOW, searchHelp, groupHelp, functionItems } from "../../src/DashboardBuilder/Features/Calc/function-help.js";
+import { readFileSync } from "node:fs";
 import { evaluateDraft, suggest } from "../../src/DashboardBuilder/Features/Calc/calc-dialog-model.js";
 import { catalogFromEntities } from "../../src/DashboardBuilder/Features/Calc/calc-resolve.js";
 import { FUNCTIONS, ROW_FUNCTIONS } from "../../src/DashboardBuilder/Features/Calc/calc-types.js";
@@ -97,4 +98,26 @@ test("bracket suggestions are unchanged", () => {
   assert.equal(s.from, 5);
   assert.deepEqual(s.items.map((i) => i.label), ["orders.amount", "orders.qty", "orders.status", "orders.region", "orders.placed"]);
   assert.deepEqual(Object.keys(s.items[0]), ["label", "insert", "kind"]);
+});
+
+test("caret inside a word: no function suggestion; before a bracket: no second bracket", () => {
+  assert.deepEqual(suggest("LOWER(", 2, ctx).items, [], "LO|WER(");
+  assert.deepEqual(suggest("LOWER", 2, ctx).items, []);
+  const s = suggest("IF(1 = 1, 2, 3)", 2, ctx);
+  assert.equal(s.items.find((i) => i.label === "IF").insert, "IF", "IF|( must not become IF((");
+  assert.equal(suggest("IF", 2, ctx).items.find((i) => i.label === "IF").insert, "IF(");
+  assert.equal(suggest("LO + 1", 2, ctx).items[0].insert, "LOWER(", "a space after the caret still adds the bracket");
+});
+
+test("DATEADD help states its limits and the date window, tied to the server compiler", () => {
+  const h = FUNCTION_HELP.find((x) => x.name === "DATEADD").note;
+  assert.ok(h.includes("-100000 to 100000") && h.includes(DATEADD_WINDOW.after) && h.includes(DATEADD_WINDOW.before), h);
+  const cs = readFileSync(new URL("../../src/DashboardBuilder/ClickHouse/Calc/CalcCompiler.cs", import.meta.url), "utf8");
+  assert.ok(cs.includes(`${DATEADD_WINDOW.after} 00:00:00`) && cs.includes(`${DATEADD_WINDOW.before} 00:00:00`), "window drifted from CalcCompiler.cs");
+});
+
+test("notes speak of NULL, not 'empty text'", () => {
+  for (const h of FUNCTION_HELP) assert.ok(!/Empty text/.test(h.note), h.name);
+  assert.match(FUNCTION_HELP.find((x) => x.name === "CONTAINS").note, /empty needle is always true/);
+  assert.match(FUNCTION_HELP.find((x) => x.name === "DATEDIFF").note, /boundaries.*Monday/);
 });

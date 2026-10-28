@@ -135,6 +135,7 @@ try {
     await focusAndType('.calc-fn__search', 'iif');
     await ev(`document.querySelector('.calc-fn__item').focus()`);
     await ev(`document.querySelector('.calc-fn > .btn').click()`);
+    must(await ev(`document.querySelector('.calc-fn > .btn').getAttribute('aria-label')`) === 'Insert example for IIF', 'aria-label');
     must((await formula()).includes("IIF([orders.qty] > 1, 'many', 'one')"), `formula: ${await formula()}`);
     await ev(`document.querySelector('.calc-fn__search').focus()`);
     await b.key('Escape', { vk: 27 });

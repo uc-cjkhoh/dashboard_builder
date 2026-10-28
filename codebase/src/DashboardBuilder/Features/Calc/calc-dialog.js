@@ -208,14 +208,15 @@ export function openCalcDialog(calcId = null) {
     ta.focus(); ta.setSelectionRange(a + text.length, a + text.length);
     closeList(); refresh();
   };
-  const show = (h) => {
-    shown = h; insertBtn.hidden = !h;
+  const show = (h, pick = true) => {
+    if (pick) { shown = h; insertBtn.hidden = !h; if (h) insertBtn.setAttribute("aria-label", `Insert example for ${h.name}`); }
     detail.replaceChildren();
     if (!h) { detail.append(el("p", "hint", "Hover or focus a function for details.")); return; }
     const row = (label, value, code) => { const p = el("p", "calc-fn__line"); p.append(el("strong", null, `${label} `), code ? el("code", null, value) : value); detail.append(p); };
     detail.append(el("code", "calc-fn__sig", h.signature), el("p", "calc-fn__sum", h.summary));
     row("Takes", h.arguments); row("Gives", h.result); row("Example", h.example, true); row("Empty values", h.note);
   };
+  fnList.addEventListener("mouseleave", () => show(shown, false)); // back to the function the Insert example button targets
   const renderList = () => {
     const found = searchHelp(search.value);
     fnList.replaceChildren();
@@ -227,7 +228,7 @@ export function openCalcDialog(calcId = null) {
         const li = el("li"), b = el("button", "calc-fn__item"); b.type = "button";
         b.append(el("span", "name", h.name), el("span", "sig", h.signature));
         b.setAttribute("aria-describedby", detail.id);
-        b.addEventListener("mouseenter", () => show(h));
+        b.addEventListener("mouseenter", () => show(h, false)); // hover previews; only keyboard focus picks the Insert example target
         b.addEventListener("focus", () => show(h));
         b.addEventListener("click", () => { show(h); insertText(h.signature); });
         li.append(b); ul.append(li);

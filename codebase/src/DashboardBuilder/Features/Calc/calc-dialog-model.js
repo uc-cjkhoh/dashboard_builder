@@ -59,7 +59,7 @@ export function suggest(formula, caret, ctx) {
   const to = Math.max(0, Math.min(Number.isInteger(caret) ? caret : formula.length, formula.length));
   const before = formula.slice(0, to);
   const open = before.lastIndexOf("[");
-  if (open < 0 || before.indexOf("]", open) >= 0) return functionSuggest(before, to) ?? { ...none, from: to, to };
+  if (open < 0 || before.indexOf("]", open) >= 0) return functionSuggest(formula, before, to) ?? { ...none, from: to, to };
   const from = open + 1;
   const typed = before.slice(from).trim().toLowerCase();
   const items = [];
@@ -77,10 +77,13 @@ export function suggest(formula, caret, ctx) {
 }
 
 // A word being typed outside any [ ] or '…' (the caller already knows there is no open bracket).
-function functionSuggest(before, to) {
+function functionSuggest(formula, before, to) {
+  const next = formula.charAt(to);
+  if (/[A-Za-z0-9_]/.test(next)) return null; // the caret is inside a word: LO|WER
   if ((before.match(/'/g) ?? []).length % 2 === 1) return null;
   const m = /(?<![A-Za-z0-9_.])[A-Za-z_][A-Za-z0-9_]*$/.exec(before);
   if (!m) return null;
   const items = functionItems(m[0], SUGGEST_MAX);
+  if (next === "(") for (const it of items) it.insert = it.insert.replace(/\($/, ""); // a bracket follows already
   return items.length ? { from: m.index, to, items } : null;
 }
