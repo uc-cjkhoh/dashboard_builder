@@ -1182,7 +1182,7 @@ export function initDashboards() {
     const range = s.period ? periodNotice(s, null) : null;
     if (range) lines.push(`Date range: ${s.period.table}.${s.period.column} — ${range}`);
     for (const f of s.filters.filter((x) => checkFilter(x).state === "ok"))
-      lines.push(`Filter: ${f.table}.${f.column} ${f.op} ${f.values ? f.values.join(f.op === "between" ? " – " : ", ") : f.value}`);
+      lines.push(`Filter: ${f.table}.${f.column} ${f.op === "notin" ? OP_LABELS.notin : f.op} ${f.values ? f.values.join(f.op === "between" ? " – " : ", ") : f.value}`);
     if (noticeEl && !noticeEl.hidden && noticeEl.textContent) lines.push(noticeEl.textContent);
     lines.push(`Printed ${new Date().toLocaleString()}`);
     for (const l of lines) printHead.append(el("p", "ws-print-head__line", l));
