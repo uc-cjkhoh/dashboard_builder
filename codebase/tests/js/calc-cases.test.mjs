@@ -155,7 +155,7 @@ test("other syntax errors", () => {
   assert.equal(err("SUM").message, "Expected ( after SUM");
   assert.equal(err("MEDIAN([orders.amount])").message, "Unknown function MEDIAN.");
   assert.equal(err("foo").message, "Unexpected foo");
-  assert.equal(err("1,000").message, "Unexpected character ,");
+  assert.equal(err("1,000").message, "Unexpected ,");
   assert.equal(err("SUM()").message, "Expected a value after (");
 });
 test("the 500-character limit is inclusive; the number limit also covers a huge exponent", () => {

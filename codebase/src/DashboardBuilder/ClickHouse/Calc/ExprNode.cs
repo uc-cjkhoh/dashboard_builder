@@ -6,7 +6,7 @@ namespace DashboardBuilder.ClickHouse.Calc;
 /// <summary>
 /// A calculated-field expression tree as it arrives on the wire. The browser parses the formula and
 /// sends this tree; no formula text ever reaches SQL. The JSON discriminator <c>k</c> is one of
-/// <c>field | num | un | bin | agg</c>; an unknown or missing <c>k</c>, a missing or wrongly typed
+/// <c>field | num | un | bin | agg | str | cmp | logic | not | case | ifnull | isnull</c>; an unknown or missing <c>k</c>, a missing or wrongly typed
 /// member, or a non-finite number fails deserialisation with a <see cref="JsonException"/> (a 400).
 /// Operators and function names are plain strings here — the validator whitelists them.
 /// </summary>
@@ -27,6 +27,53 @@ public sealed record BinNode(string Op, ExprNode L, ExprNode R) : ExprNode;
 
 /// <summary>An aggregate function (e.g. <c>sum</c>) over a sub-expression.</summary>
 public sealed record AggNode(string Fn, ExprNode Arg) : ExprNode;
+
+/// <summary>A text literal; always bound as a <c>String</c> parameter, never written into SQL.</summary>
+public sealed record StrNode(string V) : ExprNode;
+
+/// <summary>A comparison (<c>= != &lt; &lt;= &gt; &gt;=</c>) of two values of the same type; boolean result.</summary>
+public sealed record CmpNode(string Op, ExprNode L, ExprNode R) : ExprNode;
+
+/// <summary>A boolean connective: <c>Op</c> is <c>and</c> or <c>or</c>.</summary>
+public sealed record LogicNode(string Op, ExprNode L, ExprNode R) : ExprNode;
+
+/// <summary>Boolean negation.</summary>
+public sealed record NotNode(ExprNode Arg) : ExprNode;
+
+/// <summary>One <c>WHEN cond THEN result</c> arm (wire: <c>{ c, t }</c>); not a node of its own.</summary>
+public sealed record WhenArm(ExprNode Cond, ExprNode Then);
+
+/// <summary><c>CASE WHEN … THEN … [ELSE …] END</c>; <c>IF</c>/<c>IIF</c> are one arm plus an else. No else gives NULL.</summary>
+public sealed record CaseNode(WhenArm[] Whens, ExprNode? Else) : ExprNode;
+
+/// <summary><c>IFNULL(l, r)</c> — <c>l</c>, or <c>r</c> when <c>l</c> is NULL.</summary>
+public sealed record IfNullNode(ExprNode L, ExprNode R) : ExprNode;
+
+/// <summary><c>ISNULL(arg)</c> — true when the value is NULL.</summary>
+public sealed record IsNullNode(ExprNode Arg) : ExprNode;
+
+/// <summary>The sub-expressions of a node, in source order — the one place a tree walk learns a node's shape.</summary>
+public static class ExprTree
+{
+    public static IEnumerable<ExprNode> Children(ExprNode n)
+    {
+        switch (n)
+        {
+            case UnNode u: yield return u.Arg; break;
+            case AggNode a: yield return a.Arg; break;
+            case NotNode x: yield return x.Arg; break;
+            case IsNullNode x: yield return x.Arg; break;
+            case BinNode b: yield return b.L; yield return b.R; break;
+            case CmpNode b: yield return b.L; yield return b.R; break;
+            case LogicNode b: yield return b.L; yield return b.R; break;
+            case IfNullNode b: yield return b.L; yield return b.R; break;
+            case CaseNode c:
+                foreach (var w in c.Whens) { yield return w.Cond; yield return w.Then; }
+                if (c.Else is not null) yield return c.Else;
+                break;
+        }
+    }
+}
 
 /// <summary>
 /// Reads and writes <see cref="ExprNode"/> by its <c>k</c> discriminator. Hand-written (rather than
@@ -53,6 +100,13 @@ public sealed class ExprNodeConverter : JsonConverter<ExprNode>
             "un" => new UnNode(Text(e, "op"), Child(e, "arg")),
             "bin" => new BinNode(Text(e, "op"), Child(e, "l"), Child(e, "r")),
             "agg" => new AggNode(Text(e, "fn"), Child(e, "arg")),
+            "str" => new StrNode(Text(e, "v")),
+            "cmp" => new CmpNode(Text(e, "op"), Child(e, "l"), Child(e, "r")),
+            "logic" => new LogicNode(Text(e, "op"), Child(e, "l"), Child(e, "r")),
+            "not" => new NotNode(Child(e, "arg")),
+            "case" => new CaseNode(Whens(e), Optional(e, "else")),
+            "ifnull" => new IfNullNode(Child(e, "l"), Child(e, "r")),
+            "isnull" => new IsNullNode(Child(e, "arg")),
             _ => throw new JsonException("Unknown expression node."),
         };
     }
@@ -82,6 +136,23 @@ public sealed class ExprNodeConverter : JsonConverter<ExprNode>
 
     private static ExprNode Child(JsonElement e, string name) => Build(Member(e, name));
 
+    private static ExprNode? Optional(JsonElement e, string name)
+    {
+        foreach (var p in e.EnumerateObject())
+            if (string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase))
+                return p.Value.ValueKind == JsonValueKind.Null ? null : Build(p.Value);
+        return null;
+    }
+
+    private static WhenArm[] Whens(JsonElement e)
+    {
+        var v = Member(e, "whens");
+        if (v.ValueKind != JsonValueKind.Array) throw new JsonException("Expression node 'whens' must be an array.");
+        return v.EnumerateArray().Select(w => w.ValueKind == JsonValueKind.Object
+            ? new WhenArm(Child(w, "c"), Child(w, "t"))
+            : throw new JsonException("A CASE arm must be an object.")).ToArray();
+    }
+
     public override void Write(Utf8JsonWriter w, ExprNode value, JsonSerializerOptions options)
     {
         w.WriteStartObject();
@@ -102,6 +173,38 @@ public sealed class ExprNodeConverter : JsonConverter<ExprNode>
                 break;
             case AggNode a:
                 w.WriteString("k", "agg"); w.WriteString("fn", a.Fn); w.WritePropertyName("arg"); Write(w, a.Arg, options);
+                break;
+            case StrNode t:
+                w.WriteString("k", "str"); w.WriteString("v", t.V);
+                break;
+            case CmpNode c:
+                w.WriteString("k", "cmp"); w.WriteString("op", c.Op);
+                w.WritePropertyName("l"); Write(w, c.L, options); w.WritePropertyName("r"); Write(w, c.R, options);
+                break;
+            case LogicNode g:
+                w.WriteString("k", "logic"); w.WriteString("op", g.Op);
+                w.WritePropertyName("l"); Write(w, g.L, options); w.WritePropertyName("r"); Write(w, g.R, options);
+                break;
+            case NotNode x:
+                w.WriteString("k", "not"); w.WritePropertyName("arg"); Write(w, x.Arg, options);
+                break;
+            case IfNullNode i:
+                w.WriteString("k", "ifnull");
+                w.WritePropertyName("l"); Write(w, i.L, options); w.WritePropertyName("r"); Write(w, i.R, options);
+                break;
+            case IsNullNode z:
+                w.WriteString("k", "isnull"); w.WritePropertyName("arg"); Write(w, z.Arg, options);
+                break;
+            case CaseNode k:
+                w.WriteString("k", "case"); w.WritePropertyName("whens"); w.WriteStartArray();
+                foreach (var arm in k.Whens)
+                {
+                    w.WriteStartObject();
+                    w.WritePropertyName("c"); Write(w, arm.Cond, options); w.WritePropertyName("t"); Write(w, arm.Then, options);
+                    w.WriteEndObject();
+                }
+                w.WriteEndArray();
+                if (k.Else is not null) { w.WritePropertyName("else"); Write(w, k.Else, options); }
                 break;
             default:
                 throw new JsonException("Unknown expression node.");

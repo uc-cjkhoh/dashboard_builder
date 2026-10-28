@@ -1,14 +1,22 @@
 // Calculated fields — the formula parser (pure, DOM-free; tests/js/calc-cases.test.mjs).
 //
-//   expr      := term (("+" | "-") term)*
+//   expr      := and ("OR" and)*
+//   and       := not ("AND" not)*
+//   not       := "NOT" not | compare
+//   compare   := sum (("=" | "!=" | "<>" | "<" | "<=" | ">" | ">=") sum)?      (no chaining)
+//   sum       := term (("+" | "-") term)*
 //   term      := factor (("*" | "/") factor)*
-//   factor    := "-" factor | number | "(" expr ")" | aggregate | ref
+//   factor    := "-" factor | number | string | "(" expr ")" | aggregate | logic | ref
 //   aggregate := ("SUM" | "AVG" | "MIN" | "MAX" | "COUNT" | "COUNTD") "(" expr ")"
+//   logic     := ("IF" | "IIF") "(" expr "," expr "," expr ")" | "IFNULL" "(" expr "," expr ")"
+//              | "ISNULL" "(" expr ")" | "ZN" "(" expr ")"
+//              | "CASE" [expr] ("WHEN" expr "THEN" expr)+ ["ELSE" expr] "END"
+//   string    := "'" text "'"        (a quote inside is doubled: 'it''s')
 //   ref       := "[" name "]"
 //
 // Hand-written tokenizer + recursive descent. Function names are case-insensitive; references are matched
-// case-sensitively by the caller's `resolve`. Nodes are exactly the wire shapes (field | num | un | bin | agg),
-// plus the client-only `{ k: "calc", name }` for a reference to another calculation (expanded by
+// case-sensitively by the caller's `resolve`. Nodes are exactly the wire shapes (field | num | str | un | bin | agg |
+// cmp | logic | not | case | ifnull | isnull), plus the client-only `{ k: "calc", name }` for a reference to another calculation (expanded by
 // calc-model.js before anything is sent).
 import { CALC_LIMITS, FUNCTIONS } from "./calc-types.js";
 
@@ -16,13 +24,15 @@ class ParseError extends Error {
   constructor(message, pos) { super(message); this.pos = pos; }
 }
 
+const CMP_OPS = ["=", "!=", "<", "<=", ">", ">="];
 const NUMBER = /(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?/y;
 const IDENT = /[A-Za-z_][A-Za-z0-9_]*/y;
 const WHITESPACE = /\s/;
 const match = (re, text, at) => { re.lastIndex = at; const m = re.exec(text); return m ? m[0] : null; };
 
-// Tokens: { t: "num" | "ref" | "id" | "op" | "(" | ")" | "end", text, pos, v? }; for "ref", `text` is the
-// name between the brackets.
+// Tokens: { t: "num" | "str" | "ref" | "id" | "op" | "(" | ")" | "," | "end", text, pos, v? }; for "ref", `text` is the
+// name between the brackets; for "str", `text` is the unescaped value. A comparison is an "op" token whose text is
+// one of CMP_OPS (`<>` is normalised to `!=`).
 function tokenize(text) {
   const tokens = [];
   let i = 0;
@@ -38,6 +48,25 @@ function tokenize(text) {
       i = j + 1;
     } else if ("+-*/".includes(ch)) {
       tokens.push({ t: "op", text: ch, raw: ch, pos: i }); i++;
+    } else if ("=!<>".includes(ch)) {
+      const two = text.slice(i, i + 2);
+      const raw = ["!=", "<=", ">=", "<>"].includes(two) ? two : ch;
+      if (raw === "!") throw new ParseError("Unexpected character !", i);
+      tokens.push({ t: "op", text: raw === "<>" ? "!=" : raw, raw, pos: i }); i += raw.length;
+    } else if (ch === "'") {
+      let j = i + 1, value = "";
+      for (;;) {
+        if (j >= text.length) throw new ParseError("Missing ' to close the text", i);
+        if (text[j] === "'") {
+          if (text[j + 1] !== "'") break;
+          value += "'"; j += 2;
+        } else { value += text[j]; j++; }
+      }
+      if (value.length > CALC_LIMITS.string) throw new ParseError(`A text value can be at most ${CALC_LIMITS.string} characters.`, i);
+      tokens.push({ t: "str", text: value, raw: text.slice(i, j + 1), pos: i });
+      i = j + 1;
+    } else if (ch === ",") {
+      tokens.push({ t: ",", text: ch, raw: ch, pos: i }); i++;
     } else if (ch === "(" || ch === ")") {
       tokens.push({ t: ch, text: ch, raw: ch, pos: i }); i++;
     } else if (/[0-9.]/.test(ch)) {
@@ -75,8 +104,42 @@ export function parseFormula(text, resolve) {
     const next = () => tokens[at++];
     const isOp = (tok, ops) => tok.t === "op" && ops.includes(tok.text);
 
+    const isWord = (tok, word) => tok.t === "id" && tok.text.toLowerCase() === word;
+
     // `after` names the token that demands a value first, for "Expected a value after +".
     function expr(after) {
+      let left = andExpr(after);
+      while (isWord(peek(), "or")) {
+        const tok = next();
+        left = { k: "logic", op: "or", l: left, r: andExpr(tok.text.toUpperCase()) };
+      }
+      return left;
+    }
+    function andExpr(after) {
+      let left = notExpr(after);
+      while (isWord(peek(), "and")) {
+        const tok = next();
+        left = { k: "logic", op: "and", l: left, r: notExpr(tok.text.toUpperCase()) };
+      }
+      return left;
+    }
+    function notExpr(after) {
+      if (isWord(peek(), "not")) {
+        const tok = next();
+        return { k: "not", arg: notExpr(tok.text.toUpperCase()) };
+      }
+      return compare(after);
+    }
+    function compare(after) {
+      const left = sum(after);
+      const tok = peek();
+      if (tok.t === "op" && CMP_OPS.includes(tok.text)) {
+        next();
+        return { k: "cmp", op: tok.text, l: left, r: sum(tok.raw) };
+      }
+      return left;
+    }
+    function sum(after) {
       let left = term(after);
       while (isOp(peek(), "+-")) {
         const op = next().text;
@@ -96,6 +159,7 @@ export function parseFormula(text, resolve) {
       const tok = peek();
       if (tok.t === "op" && tok.text === "-") { next(); return { k: "un", op: "-", arg: factor("-") }; }
       if (tok.t === "num") { next(); return { k: "num", v: tok.v }; }
+      if (tok.t === "str") { next(); return { k: "str", v: tok.text }; }
       if (tok.t === "(") {
         next();
         const inner = expr("(");
@@ -111,7 +175,55 @@ export function parseFormula(text, resolve) {
       if (peek().t !== ")") throw new ParseError("Expected )", peek().pos);
       next();
     }
+    function comma() {
+      if (peek().t !== ",") throw new ParseError("Expected ,", peek().pos);
+      next();
+    }
+    // IF / IIF / IFNULL / ISNULL / ZN / CASE; returns undefined for any other name.
+    function logicCall(tok) {
+      const fn = tok.text.toLowerCase();
+      if (fn === "case") { next(); return caseExpr(); }
+      if (!["if", "iif", "ifnull", "isnull", "zn"].includes(fn)) return undefined;
+      next();
+      if (peek().t !== "(") throw new ParseError(`Expected ( after ${tok.text}`, peek().pos);
+      next();
+      const a = expr("(");
+      let node;
+      if (fn === "if" || fn === "iif") {
+        comma(); const t = expr(",");
+        comma(); const e = expr(",");
+        node = { k: "case", whens: [{ c: a, t }], else: e };
+      } else if (fn === "ifnull") {
+        comma(); node = { k: "ifnull", l: a, r: expr(",") };
+      } else if (fn === "zn") {
+        node = { k: "ifnull", l: a, r: { k: "num", v: 0 } };
+      } else {
+        node = { k: "isnull", arg: a };
+      }
+      closeParen();
+      return node;
+    }
+    function caseExpr() {
+      if (isWord(peek(), "end")) throw new ParseError("Expected WHEN after CASE", peek().pos);
+      const subject = isWord(peek(), "when") ? null : expr("CASE");
+      const whens = [];
+      while (isWord(peek(), "when")) {
+        next();
+        const c = expr("WHEN");
+        if (!isWord(peek(), "then")) throw new ParseError("Expected THEN", peek().pos);
+        next();
+        whens.push({ c: subject === null ? c : { k: "cmp", op: "=", l: subject, r: c }, t: expr("THEN") });
+      }
+      if (whens.length === 0) throw new ParseError("Expected WHEN after CASE", peek().pos);
+      let els;
+      if (isWord(peek(), "else")) { next(); els = expr("ELSE"); }
+      if (!isWord(peek(), "end")) throw new ParseError(els === undefined ? "Expected WHEN, ELSE or END" : "Expected END", peek().pos);
+      next();
+      return els === undefined ? { k: "case", whens } : { k: "case", whens, else: els };
+    }
     function call(tok) {
+      const logic = logicCall(tok);
+      if (logic !== undefined) return logic;
       next();
       const fn = tok.text.toLowerCase();
       const known = Object.hasOwn(FUNCTIONS, fn);

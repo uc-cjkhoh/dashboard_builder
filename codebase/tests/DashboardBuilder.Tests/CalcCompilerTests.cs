@@ -117,6 +117,76 @@ public class CalcCompilerTests
         Assert.Throws<InvalidOperationException>(() => Compile(new UnNode("!", F("amount"))));
     }
 
+    // ---- logic: comparisons, connectives, IF / CASE / IFNULL ----
+
+    private static CmpNode Cmp(string op, ExprNode l, ExprNode r) => new(op, l, r);
+    private static readonly CmpNode Big = new(">", F("amount"), new NumNode(100));
+
+    [Fact]
+    public void A_comparison_binds_its_literal()
+    {
+        var (sql, ps) = Compile(Cmp(">=", F("amount"), new NumNode(100)));
+        Assert.Equal("(toFloat64(t0.`amount`) >= {c0p0:Float64})", sql);
+        Assert.Equal(new[] { ("c0p0", "Float64", (object)100d) }, ps);
+    }
+
+    [Fact]
+    public void A_text_literal_is_a_bound_String_never_in_the_SQL()
+    {
+        var (sql, ps) = Compile(Cmp("=", F("status"), new StrNode("o'pen'; DROP TABLE x")));
+        Assert.Equal("(t0.`status` = {c0p0:String})", sql);
+        Assert.DoesNotContain("DROP", sql);
+        Assert.DoesNotContain("pen", sql);
+        Assert.Equal(new[] { ("c0p0", "String", (object)"o'pen'; DROP TABLE x") }, ps);
+    }
+
+    [Fact]
+    public void Connectives_and_negation_are_function_calls()
+    {
+        var (sql, _) = Compile(new LogicNode("or", new LogicNode("and", Big, Cmp("<", F("qty"), new NumNode(5))), new NotNode(Cmp("=", F("status"), new StrNode("x")))));
+        Assert.Equal("or(and((toFloat64(t0.`amount`) > {c0p0:Float64}), (toFloat64(t0.`qty`) < {c0p1:Float64})), not((t0.`status` = {c0p2:String})))", sql);
+    }
+
+    [Fact]
+    public void IF_is_if_and_a_NULL_condition_falls_to_the_else()
+    {
+        var (sql, ps) = Compile(new CaseNode([new WhenArm(Big, new StrNode("big"))], new StrNode("small")));
+        Assert.Equal("if((toFloat64(t0.`amount`) > {c0p0:Float64}), {c0p1:String}, {c0p2:String})", sql);
+        Assert.Equal(new[] { "Float64", "String", "String" }, ps.Select(p => p.Type));
+    }
+
+    [Fact]
+    public void CASE_is_multiIf_and_without_ELSE_ends_in_NULL()
+    {
+        var two = new CaseNode([new WhenArm(Big, new NumNode(1)), new WhenArm(Cmp(">", F("amount"), new NumNode(10)), new NumNode(2))], new NumNode(0));
+        Assert.Equal("multiIf((toFloat64(t0.`amount`) > {c0p0:Float64}), {c0p1:Float64}, (toFloat64(t0.`amount`) > {c0p2:Float64}), {c0p3:Float64}, {c0p4:Float64})", Compile(two).Sql);
+        Assert.Equal("multiIf((toFloat64(t0.`amount`) > {c0p0:Float64}), {c0p1:Float64}, NULL)", Compile(new CaseNode([new WhenArm(Big, new NumNode(1))], null)).Sql);
+    }
+
+    [Fact]
+    public void IFNULL_and_ISNULL()
+    {
+        Assert.Equal("ifNull(toFloat64(t0.`amount`), {c0p0:Float64})", Compile(new IfNullNode(F("amount"), new NumNode(0))).Sql);
+        Assert.Equal("isNull(t0.`status`)", Compile(new IsNullNode(F("status"))).Sql);
+    }
+
+    [Fact]
+    public void Division_inside_a_branch_keeps_nullIf()
+        => Assert.Equal("if((toFloat64(t0.`qty`) > {c0p0:Float64}), (toFloat64(t0.`amount`) / nullIf(toFloat64(t0.`qty`), 0)), {c0p1:Float64})",
+            Compile(new CaseNode([new WhenArm(Cmp(">", F("qty"), new NumNode(0)), Bin("/", F("amount"), F("qty")))], new NumNode(0))).Sql);
+
+    [Fact]
+    public void An_unknown_comparison_or_logic_operator_is_refused_not_emitted()
+    {
+        Assert.Throws<InvalidOperationException>(() => Compile(Cmp("~", F("amount"), F("qty"))));
+        Assert.Throws<InvalidOperationException>(() => Compile(new LogicNode("xor", Big, Big)));
+    }
+
+    [Fact]
+    public void A_sampled_aggregate_over_a_conditional_is_scaled_once()
+        => Assert.Equal("sum(if((t0.`status` = {c0p0:String}), toFloat64(t0.`amount`), {c0p1:Float64}) * t0._sample_factor)",
+            Compile(Agg("sum", new CaseNode([new WhenArm(Cmp("=", F("status"), new StrNode("open")), F("amount"))], new NumNode(0))), sampled: true).Sql);
+
     // ---- ClickHouseGateway.AggregateSql ----
 
     [Theory]

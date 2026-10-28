@@ -43,6 +43,7 @@ internal static class CalcSql
                 case UnNode u: Walk(u.Arg); break;
                 case BinNode b: Walk(b.L); Walk(b.R); break;
                 case AggNode a: Walk(a.Arg); break;
+                default: foreach (var c in ExprTree.Children(n)) Walk(c); break;
             }
         }
     }
@@ -62,7 +63,10 @@ internal static class CalcSql
         CalcInfo info;
         try { info = CalcValidator.Validate(calc, (d, t, c) => refs.TryGetValue((d, t, c), out var r) ? r.Category : null); }
         catch (CalcException e) { throw new RequestValidationException(e.Message, e.Path.Length == 0 ? $"{field}.calc" : $"{field}.calc.{e.Path}"); }
-        return new CompiledCalc(CalcCompiler.Compile(calc, (d, t, c) => refs[(d, t, c)], parameters, prefix, sampled, approximate), info);
+        var sql = CalcCompiler.Compile(calc, (d, t, c) => refs[(d, t, c)], parameters, prefix, sampled, approximate);
+        // A computed true/false is a UInt8 in ClickHouse; as a result column it must read true/false, like a Bool field does.
+        if (info.Type == CalcType.Boolean && calc is not FieldNode) sql = $"toBool({sql})";
+        return new CompiledCalc(sql, info);
     }
 
     /// <summary>
@@ -104,6 +108,6 @@ internal static class CalcSql
         AggNode a => a.Fn == "countd" || HasCountD(a.Arg),
         UnNode u => HasCountD(u.Arg),
         BinNode b => HasCountD(b.L) || HasCountD(b.R),
-        _ => false,
+        _ => ExprTree.Children(n).Any(HasCountD),
     };
 }
