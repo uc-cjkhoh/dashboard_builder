@@ -33,6 +33,7 @@ export const PATHS = Object.freeze({
   format: "M4 6h8M15 6h1M4 14h2M9 14h7M12 4v4M7 12v4",
   export: "M10 3v9M6 8.5l4 4 4-4M4 15v2h12v-2",
   import: "M10 13V4M6 7.5l4-4 4 4M4 15v2h12v-2",
+  eye: "M2.5 10S5 5 10 5s7.5 5 7.5 5-2.5 5-7.5 5-7.5-5-7.5-5zM10 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4z",
   more: "M5 10h.01M10 10h.01M15 10h.01",
   grip: "M7.5 5h.01M12.5 5h.01M7.5 10h.01M12.5 10h.01M7.5 15h.01M12.5 15h.01",
   search: "M9 4a5 5 0 1 0 0 10 5 5 0 0 0 0-10zM16 16l-3.5-3.5",
