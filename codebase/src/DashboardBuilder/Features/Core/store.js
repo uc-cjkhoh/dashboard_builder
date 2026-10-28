@@ -33,7 +33,9 @@ export const fieldMeta = new Map();
 export const fieldKey = (f) => `${f.db}.${f.table}.${f.column}`;
 export const metaOf = (f) => (f ? fieldMeta.get(fieldKey(f)) : undefined) ?? {};
 /** Display name: the alias, else table.column. */
-export const nameOf = (f) => metaOf(f).alias || `${f.table}.${f.column}`;
+export const nameOf = (f) => (typeof f?.calc === "string"
+  ? calculations.find((c) => c.id === f.calc)?.name ?? f.column // a calculated field: the live name
+  : metaOf(f).alias || `${f.table}.${f.column}`);
 export function setFieldMeta(f, patch) {
   const k = fieldKey(f);
   const next = { ...(fieldMeta.get(k) ?? {}), ...patch };
