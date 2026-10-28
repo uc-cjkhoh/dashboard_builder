@@ -61,7 +61,7 @@ public static class CalcCompiler
         }
 
         // A text function: a fixed ClickHouse function over compiled children. Children are compiled once, in source
-        // order, so each literal is bound exactly once; a length or position is a bound UInt32 (validated 0..1000).
+        // order, so each literal is bound exactly once; a length or position is a bound UInt32 (validated 0..1000), a DATEADD amount a bound Int32 and a DATEDIFF unit a bound String.
         string Call(FnNode fn)
         {
             var spec = CalcCatalog.RowFunctions[fn.Fn];
@@ -69,7 +69,14 @@ public static class CalcCompiler
             for (var i = 0; i < fn.Args.Length; i++)
             {
                 var kind = spec.Args[Math.Min(i, spec.Args.Count - 1)];
-                a.Add(kind is FnArg.Length or FnArg.Position ? Param((uint)((NumNode)fn.Args[i]).V, "UInt32") : Walk(fn.Args[i]));
+                a.Add(kind switch
+                {
+                    FnArg.Length or FnArg.Position => Param((uint)((NumNode)fn.Args[i]).V, "UInt32"),
+                    // DATEADD's unit picks a fixed function below (nothing bound); DATEDIFF binds its unit word.
+                    FnArg.Unit => fn.Fn == "dateadd" ? ((StrNode)fn.Args[i]).V.ToLowerInvariant() : Param(((StrNode)fn.Args[i]).V.ToLowerInvariant(), "String"),
+                    FnArg.Amount => Param((int)CalcValidator.AmountLiteral(fn.Args[i])!.Value, "Int32"),
+                    _ => Walk(fn.Args[i]),
+                });
             }
             return fn.Fn switch
             {
@@ -86,9 +93,26 @@ public static class CalcCompiler
                 "endswith" => $"endsWith({a[0]}, {a[1]})",
                 // splitByString has no Nullable form, so a NULL value is answered before it; a position past the end is NULL.
                 "split" => $"if(isNull({a[0]}), NULL, arrayElementOrNull(splitByString({a[1]}, assumeNotNull({a[0]})), {a[2]}))",
+                "datediff" => $"toFloat64(dateDiff({a[0]}, {a[1]}, {a[2]}))",
+                "dateadd" => $"{AddFunction(a[0])}({a[2]}, {a[1]})",
+                "year" => $"toFloat64(toYear({a[0]}))",
+                "month" => $"toFloat64(toMonth({a[0]}))",
+                "day" => $"toFloat64(toDayOfMonth({a[0]}))",
+                "quarter" => $"toFloat64(toQuarter({a[0]}))",
+                "week" => $"toFloat64(toISOWeek({a[0]}))",
+                "weekday" => $"toFloat64(toDayOfWeek({a[0]}))",
+                "date" => TypeCast.ParseDate(a[0]),
                 _ => throw new InvalidOperationException($"Unsupported function '{fn.Fn}'."),
             };
         }
+
+        // DATEADD's fixed ClickHouse function per whitelisted unit (the unit never reaches SQL as text).
+        static string AddFunction(string unit) => unit switch
+        {
+            "year" => "addYears", "quarter" => "addQuarters", "month" => "addMonths", "week" => "addWeeks",
+            "day" => "addDays", "hour" => "addHours", "minute" => "addMinutes", "second" => "addSeconds",
+            _ => throw new InvalidOperationException($"Unsupported unit '{unit}'."),
+        };
 
         string Field(FieldNode f)
         {

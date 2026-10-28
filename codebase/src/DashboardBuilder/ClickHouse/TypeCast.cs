@@ -50,8 +50,21 @@ public static class TypeCast
 
     // Best-effort parsing reads a short run of digits ("10", "1,5") as a day of the CURRENT month — a different answer
     // every month. Text made only of digits, spaces, signs, commas and dots is therefore NULL unless it is YYYYMMDD.
-    private static string DateOrNull(string text) =>
-        $"if(match({text}, '^[0-9 ,.+]+$') AND NOT match({text}, '^ *[0-9]{{8}} *$'), NULL, parseDateTimeBestEffortOrNull({text}))";
+    private static string DateOrNull(string text) => $"if({DigitsOnly(text)}, NULL, parseDateTimeBestEffortOrNull({text}))";
+
+    /// <summary>The guard above as a condition: true for text that best-effort parsing would misread as a day of this month.</summary>
+    private static string DigitsOnly(string text) => $"match({text}, '^[0-9 ,.+]+$') AND NOT match({text}, '^ *[0-9]{{8}} *$')";
+
+    /// <summary>
+    /// The calculation function <c>DATE(text)</c>: <paramref name="text"/> read as a calendar date, NULL when it is not one.
+    /// Same digit guard as the date cast; parsed with the wide-range parser, and a result outside what a <c>Date</c> holds
+    /// (1970-01-02 to 2149-01-01) is NULL rather than the clamped 1970-01-01 / 1900-01-01 ClickHouse would return. A time of day is dropped.
+    /// </summary>
+    internal static string ParseDate(string text)
+    {
+        var p = $"parseDateTime64BestEffortOrNull({text}, 0)";
+        return $"if({DigitsOnly(text)}, NULL, toDate(if({p} > toDateTime64('1970-01-02 00:00:00', 0) AND {p} < toDateTime64('2149-01-01 00:00:00', 0), {p}, NULL)))";
+    }
 
     // 'inf', 'nan' and '1e999' parse as non-finite numbers; they are as unusable as text that doesn't parse, so NULL.
     private static string FiniteOrNull(string parsed) => $"if(isFinite({parsed}), {parsed}, NULL)";

@@ -314,4 +314,61 @@ public class CalcCompilerTests
         Assert.Equal("leftUTF8(replaceAll(t0.`status`, {c0p0:String}, {c0p1:String}), {c0p2:UInt32})", sql);
         Assert.Equal(3, ps.Count);
     }
+
+    private const string Guard = "match({0}, '^[0-9 ,.+]+$') AND NOT match({0}, '^ *[0-9]{{8}} *$')";
+
+    [Fact]
+    public void DATEDIFF_binds_its_unit_and_widens_to_float()
+    {
+        var (sql, ps) = Compile(Fn("datediff", S("Month"), F("placed"), Fn("dateadd", S("day"), new NumNode(1), F("placed"))));
+        Assert.Equal("toFloat64(dateDiff({c0p0:String}, t0.`placed`, addDays(t0.`placed`, {c0p1:Int32})))", sql);
+        Assert.Equal(new[] { ("c0p0", "String", (object)"month"), ("c0p1", "Int32", (object)1) }, ps);
+    }
+
+    [Theory]
+    [InlineData("year", "addYears")]
+    [InlineData("quarter", "addQuarters")]
+    [InlineData("month", "addMonths")]
+    [InlineData("week", "addWeeks")]
+    [InlineData("day", "addDays")]
+    [InlineData("hour", "addHours")]
+    [InlineData("minute", "addMinutes")]
+    [InlineData("second", "addSeconds")]
+    public void DATEADD_picks_a_fixed_function_per_unit_and_binds_only_the_amount(string unit, string function)
+    {
+        var (sql, ps) = Compile(Fn("dateadd", S(unit.ToUpperInvariant()), new UnNode("-", new NumNode(7)), F("placed")));
+        Assert.Equal($"{function}(t0.`placed`, {{c0p0:Int32}})", sql);
+        Assert.Equal(new[] { ("c0p0", "Int32", (object)(-7)) }, ps);
+    }
+
+    [Theory]
+    [InlineData("year", "toFloat64(toYear(t0.`placed`))")]
+    [InlineData("month", "toFloat64(toMonth(t0.`placed`))")]
+    [InlineData("day", "toFloat64(toDayOfMonth(t0.`placed`))")]
+    [InlineData("quarter", "toFloat64(toQuarter(t0.`placed`))")]
+    [InlineData("week", "toFloat64(toISOWeek(t0.`placed`))")]
+    [InlineData("weekday", "toFloat64(toDayOfWeek(t0.`placed`))")]
+    public void Date_parts_are_fixed_functions_widened_to_float(string fn, string expected)
+    {
+        var (sql, ps) = Compile(Fn(fn, F("placed")));
+        Assert.Equal(expected, sql);
+        Assert.Empty(ps);
+    }
+
+    [Fact]
+    public void DATE_guards_digit_only_text_and_out_of_range_results_and_binds_its_literal_once()
+    {
+        var (sql, ps) = Compile(Fn("date", S("2024-03-05")));
+        var p = "parseDateTime64BestEffortOrNull({c0p0:String}, 0)";
+        Assert.Equal($"if({string.Format(Guard, "{c0p0:String}")}, NULL, toDate(if({p} > toDateTime64('1970-01-02 00:00:00', 0) AND {p} < toDateTime64('2149-01-01 00:00:00', 0), {p}, NULL)))", sql);
+        Assert.Equal(new[] { ("c0p0", "String", (object)"2024-03-05") }, ps);
+    }
+
+    [Fact]
+    public void A_date_function_over_a_text_field_has_no_literal_text_in_the_sql()
+    {
+        var (sql, _) = Compile(Fn("datediff", S("day"), Fn("date", F("status")), Fn("dateadd", S("month"), new NumNode(3), F("placed"))));
+        Assert.DoesNotContain("'day'", sql);
+        Assert.DoesNotContain("'month'", sql);
+    }
 }

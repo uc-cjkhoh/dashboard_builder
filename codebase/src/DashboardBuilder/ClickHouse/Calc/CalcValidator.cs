@@ -163,6 +163,18 @@ public static class CalcValidator
                                     : $"{upper}'s position must be a whole number from 1 to {CalcLimits.MaxCount} written in the formula.", ap);
                             break;
                         }
+                        case FnArg.Date:
+                            if (arg.Type != CalcType.Date)
+                                throw new CalcException($"{upper} needs a date — {arg.Name} is {arg.Type}." + (arg.Type == CalcType.Text ? " Use DATE() to turn text into a date." : ""), ap);
+                            break;
+                        case FnArg.Unit:
+                            if (fn.Args[n] is not StrNode { V: var unit } || !CalcCatalog.DateUnits.Contains(unit.ToLowerInvariant()))
+                                throw new CalcException($"{upper}'s unit must be one of {string.Join(", ", CalcCatalog.DateUnits.SkipLast(1).Select(u => $"'{u}'"))} or '{CalcCatalog.DateUnits[^1]}' written in the formula as text.", ap);
+                            break;
+                        case FnArg.Amount:
+                            if (AmountLiteral(fn.Args[n]) is not { } amount || amount != Math.Floor(amount) || Math.Abs(amount) > CalcLimits.MaxDateAmount)
+                                throw new CalcException($"{upper}'s amount must be a whole number from -{CalcLimits.MaxDateAmount} to {CalcLimits.MaxDateAmount} written in the formula.", ap);
+                            break;
                         case FnArg.Separator:
                             if (fn.Args[n] is not StrNode { V.Length: >= 1 and <= CalcLimits.MaxSeparator })
                                 throw new CalcException($"{upper}'s separator must be text written in the formula, 1 to {CalcLimits.MaxSeparator} characters.", ap);
@@ -233,6 +245,14 @@ public static class CalcValidator
                 throw new CalcException("Unknown expression node.", path);
         }
     }
+
+    /// <summary>The value of a <c>DATEADD</c> amount: a number literal or a single negated one; <c>null</c> for anything else.</summary>
+    internal static double? AmountLiteral(ExprNode n) => n switch
+    {
+        NumNode { V: var v } => v,
+        UnNode { Op: "-", Arg: NumNode { V: var v } } => -v,
+        _ => null,
+    };
 
     private const string SameType = "All results must be the same type";
 
