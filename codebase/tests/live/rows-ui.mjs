@@ -159,6 +159,14 @@ try {
     must(await ev(`[...${dlgSel}.querySelectorAll('.dialog__foot button')].find((x) => x.textContent.includes('Export CSV')).disabled === false`), 'enabled');
   });
   await check('Escape closes the dialog', closeDlg);
+  await check('a cut cell adds a note that the CSV is lossy', async () => {
+    rowsReply = { json: { ...ROWS, rows: [['x'.repeat(1000) + '…', 'EU', null]] } };
+    await ev(`document.querySelector('.table-chip[data-table="orders"] .table-chip__peek').click()`);
+    await waitFor(`${dlgSel} !== null && ${dlgSel}.querySelectorAll('tbody tr').length === 1`, 'rows');
+    must((await ev(`${dlgSel}.querySelector('.rows-dialog__notes').textContent`)).includes('cut at 1000 characters'), 'note');
+    must(await ev(`!${dlgSel}.querySelector('.rows-dialog__notes').hidden`), 'visible');
+    rowsReply = null; await closeDlg();
+  });
   await check('a 400 from the server shows the message in the dialog, not an empty table', async () => {
     rowsReply = { status: 400, json: { error: 'Unknown column.' } };
     await ev(`document.querySelector('.table-chip[data-table="customers"] .table-chip__peek').click()`);

@@ -34,8 +34,8 @@ const rows = (extra) => app('/api/rows', { db: DB, table: T, ...extra });
 
 let passed = 0, failed = false;
 try {
-  await write(`CREATE TABLE ${DB}.${T} (id UInt32, name Nullable(String), qty Float64, d Date, blob String) ENGINE = MergeTree ORDER BY id`);
-  await write(`INSERT INTO ${DB}.${T} SELECT number, if(number % 10 = 0, NULL, concat('n', toString(number))), number / 4, toDate('2024-01-01') + number, repeat('x', 1500) FROM numbers(150)`);
+  await write(`CREATE TABLE ${DB}.${T} (id UInt32, name Nullable(String), qty Float64, d Date, blob String, arr Array(UInt8), dt DateTime, tup Tuple(UInt8, String), mp Map(String, UInt8)) ENGINE = MergeTree ORDER BY id`);
+  await write(`INSERT INTO ${DB}.${T} SELECT number, if(number % 10 = 0, NULL, concat('n', toString(number))), number / 4, toDate('2024-01-01') + number, repeat('x', 1500), [number, 2], toDateTime('2024-01-01 10:20:30') + number, (toUInt8(1), 'a'), map('k', toUInt8(1)) FROM numbers(150)`);
   const conn = await app('/api/connection', { host: CH_HOST, port: Number(CH_PORT), user: CH_USER, password: CH_PASSWORD, secure: true, allowInvalidCert: true });
   assert.equal(conn.status, 200, `connect: ${conn.status}`);
   assert.equal(Number((await select(`SELECT count() FROM ${DB}.${T}`))[0][0]), 150);
@@ -43,7 +43,7 @@ try {
   let r = await rows({});
   assert.equal(r.status, 200, r.text.slice(0, 200));
   assert.equal(r.json.rows.length, 100); assert.equal(r.json.truncated, true); assert.equal(r.json.limit, 100);
-  assert.deepEqual(r.json.columns.map((c) => [c.name, c.type]), [['id', 'UInt32'], ['name', 'Nullable(String)'], ['qty', 'Float64'], ['d', 'Date'], ['blob', 'String']]);
+  assert.deepEqual(r.json.columns.map((c) => [c.name, c.type]), [['id', 'UInt32'], ['name', 'Nullable(String)'], ['qty', 'Float64'], ['d', 'Date'], ['blob', 'String'], ['arr', 'Array(UInt8)'], ['dt', 'DateTime'], ['tup', 'Tuple(UInt8, String)'], ['mp', 'Map(String, UInt8)']]);
   console.log('ok default limit 100 of 150, truncated, column names and raw types'); passed++;
 
   r = await rows({ limit: 150 });
@@ -70,6 +70,18 @@ try {
   r = await rows({ columns: ['id'], filters: [{ column: 'name', op: '=', value: "x' OR 1=1 --" }] });
   assert.equal(r.status, 200); assert.deepEqual(r.json.rows, []);
   console.log('ok an injection-shaped value is just a value (0 rows)'); passed++;
+
+  r = await rows({ columns: ['arr', 'dt', 'tup', 'mp'], limit: 2 });
+  assert.deepEqual(r.json.rows[1], ['[1,2]', '2024-01-01 10:20:31', "(1,'a')", "{'k':1}"]);
+  console.log('ok Array, DateTime, Tuple and Map columns render through toString'); passed++;
+
+  r = await rows({ columns: new Array(51).fill('id'), limit: 1000 });
+  assert.equal(r.status, 400); assert.equal(r.json.field, 'limit'); assert.match(r.json.error, /980 rows/);
+  r = await rows({ columns: new Array(50).fill('id'), limit: 150 });
+  assert.equal(r.status, 200); assert.equal(r.json.rows.length, 150);
+  r = await rows({ limit: 1000 }); // 9 default columns x 1000 = 9000 cells: fine
+  assert.equal(r.status, 200);
+  console.log('ok rows x columns over 50,000 is a 400 naming limit; under it is fine'); passed++;
 
   r = await rows({ columns: ['blob'], limit: 1 });
   assert.equal(r.json.rows[0][0].length, 1001); assert.ok(r.json.rows[0][0].endsWith('…'));

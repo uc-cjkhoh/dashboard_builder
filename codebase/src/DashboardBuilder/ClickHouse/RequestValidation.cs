@@ -17,6 +17,7 @@ public static class ApiLimits
     public const int MaxRowLimit = 5000, MaxBuckets = 100, MaxDistinct = 1000;
     public const int MaxExportRows = 100_000; // CSV export of a whole worksheet result
     public const int DefaultRowsLimit = 100, MaxRowsLimit = 1000; // raw rows of one table (POST /api/rows): default / cap
+    public const int MaxRowsCells = 50_000; // rows x columns one row read may return
     public const int MaxRowsColumns = 200, MaxCellLength = 1000;  // columns one row read returns; characters kept per cell
     public const int MaxOffset = 10_000_000;  // how deep a table may page
     public const int MaxCalcDepth = CalcLimits.MaxDepth, MaxCalcNodes = CalcLimits.MaxNodes; // calculation tree; formula length (500) is client-only
@@ -195,7 +196,14 @@ public static class RequestRules
         for (var i = 0; i < cols.Length; i++)
             if (string.IsNullOrWhiteSpace(cols[i])) throw Bad($"'columns[{i}]' is required.", $"columns[{i}]");
         ValidateRange(r.Limit, ApiLimits.MaxRowsLimit, "Limit", "limit");
+        if (cols.Length > 0) ValidateRowCells(r.Limit ?? ApiLimits.DefaultRowsLimit, cols.Length, "limit");
         ValidateStatFilters(r.Filters);
+    }
+    /// <summary>rows x columns must stay within <see cref="ApiLimits.MaxRowsCells"/> — ask for fewer rows or columns.</summary>
+    public static void ValidateRowCells(int rows, int columns, string field)
+    {
+        if ((long)rows * columns > ApiLimits.MaxRowsCells)
+            throw Bad($"{columns} columns allow at most {ApiLimits.MaxRowsCells / Math.Max(1, columns)} rows — ask for fewer rows or columns ({ApiLimits.MaxRowsCells:N0} cells in all).", field);
     }
     public static void ValidateHistogram(HistogramRequest r) { ValidateRange(r.Buckets, ApiLimits.MaxBuckets, "Bins", "buckets"); ValidateStatFilters(r.Filters); }
     public static void ValidateBoxPlot(BoxPlotRequest r) { ValidateRange(r.Limit, ApiLimits.MaxRowLimit, "Limit", "limit"); ValidateStatFilters(r.Filters); }

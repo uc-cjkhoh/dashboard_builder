@@ -7,16 +7,22 @@ export const DEFAULT_LIMIT = 100;   // server ApiLimits.DefaultRowsLimit
 export const PREVIEW_LIMIT = 20;    // a table preview is deliberately small
 
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
-function checkedLimit(limit) {
+function checkedLimit(limit, columnCount = 0) {
   const n = limit ?? DEFAULT_LIMIT;
   if (!Number.isInteger(n) || n < 1 || n > LIMITS.viewRows) throw new Error(`Limit must be between 1 and ${LIMITS.viewRows}.`);
+  if (columnCount * n > LIMITS.viewCells)
+    throw new Error(`${columnCount} columns allow at most ${Math.floor(LIMITS.viewCells / columnCount)} rows — ask for fewer rows or columns (${LIMITS.viewCells.toLocaleString("en-US")} cells in all).`);
   return n;
 }
+/** Does any cell show the server's cut (cells over 1000 characters come back as 1000 + "…")? */
+export const anyCellCut = (rows) => rows.some((r) => r.some((v) => typeof v === "string" && v.length > MAX_CELL && v.endsWith("…")));
+export const CUT_NOTE = "Some cells were cut at 1000 characters; the CSV export has the cut text too.";
+const MAX_CELL = 1000;
 const wire = (f) => ({ column: f.column, op: f.op, value: f.value ?? "", values: f.values ?? null });
 
 /** The first rows of one table, unfiltered. */
-export function tableRowsRequest(db, table, limit = PREVIEW_LIMIT) {
-  return { db, table, limit: checkedLimit(limit) };
+export function tableRowsRequest(db, table, limit = PREVIEW_LIMIT, columns) {
+  return { db, table, ...(columns ? { columns } : {}), limit: checkedLimit(limit, columns?.length ?? 0) };
 }
 
 /**

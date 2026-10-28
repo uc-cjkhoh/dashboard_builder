@@ -15,6 +15,7 @@ export const LIMITS = Object.freeze({
   dimensions: 12, measures: 10, // per view (server MaxDimensions / MaxMeasures)
   drillLevels: 6, // keeps user filters (8) + drill path (≤5) + page + selection within the server's 16
   rows: 5000, // groups one chart query returns: Top-N "All" (server MaxRowLimit); the Table pages instead
+  viewCells: 50000,   // rows x columns one raw-row read returns (server MaxRowsCells)
   viewRows: 1000,     // raw rows one View data / table preview read returns (server MaxRowsLimit; default 100)
   exportRows: 100000, // rows in a CSV export (server MaxExportRows)
   calculations: 20,  // calculated fields per workbook (CalcLimits.MaxCalcs; enforced client-side only)

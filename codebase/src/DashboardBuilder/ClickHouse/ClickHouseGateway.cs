@@ -507,7 +507,16 @@ public sealed class ClickHouseGateway
     /// <summary>The row-read statement. Every name is quoted; <paramref name="where"/> is empty or " WHERE …" with bound
     /// parameters; there is no ORDER BY (the first rows in storage order) and a hard LIMIT.</summary>
     internal static string BuildRowsSql(string database, string table, IReadOnlyList<string> columns, string where, int probeLimit)
-        => $"SELECT {string.Join(", ", columns.Select(Identifier.Quote))} FROM {Identifier.QualifiedName(database, table)}{where} LIMIT {probeLimit}";
+        => $"SELECT {string.Join(", ", columns.Select(RowSelectExpr))} FROM {Identifier.QualifiedName(database, table)}{where} LIMIT {probeLimit}";
+
+    /// <summary>One selected column, cut INSIDE ClickHouse so a huge value never leaves it: NULL stays NULL, anything
+    /// else is its text (<c>toString</c>: arrays, tuples, maps, dates render as ClickHouse prints them) cut to
+    /// <see cref="ApiLimits.MaxCellLength"/> + 1 characters (the extra one tells <see cref="RowCell"/> it was cut).</summary>
+    internal static string RowSelectExpr(string column)
+    {
+        var q = Identifier.Quote(column);
+        return $"if(isNull({q}), NULL, left(toString({q}), {ApiLimits.MaxCellLength + 1}))";
+    }
 
     /// <summary>A cell as JSON: null for SQL NULL, else display text cut at <see cref="ApiLimits.MaxCellLength"/> characters.</summary>
     internal static string? RowCell(object? raw)
@@ -531,6 +540,7 @@ public sealed class ClickHouseGateway
         var parameters = new List<(string Name, string Type, object Value)>();
         var where = BuildSingleTableFilters(req.Filters ?? [], byName, parameters);
         var limit = req.Limit ?? ApiLimits.DefaultRowsLimit;
+        RequestRules.ValidateRowCells(limit, columns.Count, "limit");
         var probe = RowsProbeLimit(req.Limit);
         var sql = BuildRowsSql(req.Db, req.Table, columns.Select(c => c.Name).ToList(), where, probe);
 

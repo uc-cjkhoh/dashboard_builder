@@ -50,7 +50,7 @@ public class RowsTests : IClassFixture<WebApplicationFactory<Program>>
     [Fact] public void The_sql_quotes_every_identifier_and_limits_to_the_probe()
     {
         var sql = ClickHouseGateway.BuildRowsSql("d`b", "t", ["a`; DROP TABLE x; --", "b"], " WHERE `b` = {p0:String}", 101);
-        Assert.Equal("SELECT `a\\`; DROP TABLE x; --`, `b` FROM `d\\`b`.`t` WHERE `b` = {p0:String} LIMIT 101", sql);
+        Assert.Equal("SELECT if(isNull(`a\\`; DROP TABLE x; --`), NULL, left(toString(`a\\`; DROP TABLE x; --`), 1001)), if(isNull(`b`), NULL, left(toString(`b`), 1001)) FROM `d\\`b`.`t` WHERE `b` = {p0:String} LIMIT 101", sql);
         Assert.DoesNotContain("ORDER BY", sql);
     }
     [Fact] public void Filters_bind_values_through_the_existing_typed_rules()
@@ -68,6 +68,20 @@ public class RowsTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.Throws<UnknownIdentifierException>(() => ClickHouseGateway.BuildSingleTableFilters([new StatFilter("zz", "=", "1")], cols, []));
     }
 
+    [Fact] public void The_cell_cut_happens_in_sql_and_keeps_null()
+    {
+        var e = ClickHouseGateway.RowSelectExpr("v");
+        Assert.Equal("if(isNull(`v`), NULL, left(toString(`v`), 1001))", e);
+    }
+    [Fact] public void Rows_times_columns_is_capped()
+    {
+        Assert.Equal(50_000, ApiLimits.MaxRowsCells);
+        Assert.Equal("limit", FieldOf(R(limit: 1000, columns: Enumerable.Range(0, 51).Select(i => "c" + i).ToArray())));
+        Assert.Null(FieldOf(R(limit: 1000, columns: Enumerable.Range(0, 50).Select(i => "c" + i).ToArray())));
+        var ex = Assert.Throws<RequestValidationException>(() => RequestRules.ValidateRowCells(1000, 200, "limit"));
+        Assert.Equal("limit", ex.Field); Assert.Contains("250 rows", ex.Message);
+        RequestRules.ValidateRowCells(250, 200, "limit");
+    }
     [Fact] public void A_cell_is_text_or_null_and_a_long_one_is_cut()
     {
         Assert.Null(ClickHouseGateway.RowCell(null));

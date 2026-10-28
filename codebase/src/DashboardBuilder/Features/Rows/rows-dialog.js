@@ -4,7 +4,7 @@
 import { api } from "../Core/api.js";
 import { icon } from "../Core/icons.js";
 import { makeButton, openDialog, closeDialog, toast } from "../Core/ui.js";
-import { tableRowsRequest, rowsSummary, rowsToCsv, cellText } from "./rows-model.js";
+import { tableRowsRequest, rowsSummary, rowsToCsv, cellText, anyCellCut, CUT_NOTE } from "./rows-model.js";
 
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
 let seq = 0;
@@ -56,6 +56,10 @@ export function openRowsDialog({ title, subtitle = "", request, notes = [], file
     summary.textContent = rowsSummary(res) + (res.columnsTruncated ? ` · first ${res.columns.length} columns` : "");
     if (!res.rows.length) { status.textContent = "No rows."; return; }
     scroll.replaceChildren(buildTable(res));
+    if (anyCellCut(res.rows)) {
+      const p = el("p", "rows-dialog__note"); const g = el("span", "rows-dialog__note-icon"); g.setAttribute("aria-hidden", "true"); g.append(icon("info", { size: 14 }));
+      p.append(g, document.createTextNode(" " + CUT_NOTE)); noteBox.append(p); noteBox.hidden = false;
+    }
     csv.disabled = false;
     csv.addEventListener("click", () => {
       const url = URL.createObjectURL(new Blob([rowsToCsv(res.columns, res.rows)], { type: "text/csv;charset=utf-8" }));

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { LIMITS } from "../../src/DashboardBuilder/Features/Core/validate.js";
-import { buildRowsRequest, tableRowsRequest, rowsToCsv, rowsSummary, cellText, DEFAULT_LIMIT } from "../../src/DashboardBuilder/Features/Rows/rows-model.js";
+import { buildRowsRequest, tableRowsRequest, rowsToCsv, rowsSummary, cellText, anyCellCut, DEFAULT_LIMIT } from "../../src/DashboardBuilder/Features/Rows/rows-model.js";
 
 const plan = (filters = []) => ({ from: { db: "d", table: "orders" }, joins: [], filters, measures: [], limit: 50 });
 const f = (table, column, op, value, values = null) => ({ db: "d", table, column, op, value, values });
@@ -72,4 +72,14 @@ test("cells show NULL distinctly from an empty string", () => {
   assert.deepEqual(cellText(null), { text: "NULL", isNull: true });
   assert.deepEqual(cellText(""), { text: "", isNull: false });
   assert.deepEqual(cellText("a"), { text: "a", isNull: false });
+});
+test("rows x columns is capped at 50,000 and the message says how many rows fit", () => {
+  assert.equal(LIMITS.viewCells, 50000);
+  assert.deepEqual(tableRowsRequest("d", "t", 1000, ["a", "b"]), { db: "d", table: "t", columns: ["a", "b"], limit: 1000 });
+  assert.throws(() => tableRowsRequest("d", "t", 1000, new Array(51).fill("c")), /51 columns allow at most 980 rows/);
+  assert.equal(tableRowsRequest("d", "t", 250, new Array(200).fill("c")).limit, 250);
+});
+test("a cut cell is detected so the dialog can say the CSV is lossy", () => {
+  assert.equal(anyCellCut([["a", null], ["b", "x".repeat(1000) + "…"]]), true);
+  assert.equal(anyCellCut([["…", "x".repeat(1000)]]), false);
 });
