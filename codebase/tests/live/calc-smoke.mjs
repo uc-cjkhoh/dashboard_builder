@@ -358,6 +358,20 @@ async function main() {
     ok(`(j) CSV export: header uses the labels, ${json.rows.length} rows equal the JSON result`);
   }
 
+  // ================= (k) a plain non-null count is named the way the client labels it, in JSON and CSV =================
+  {
+    const req = { ...base(), rowDimensions: [col('region')], measures: [{ ...col('price'), agg: 'countNonNull' }] };
+    const json = await query(req, 'k json');
+    assert.deepEqual(json.measures, ['non-null price']);
+    const res = await fetch(`${APP}/api/query/export.csv`, { method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie }, body: JSON.stringify(req) });
+    const text = await res.text();
+    assert.equal(res.status, 200, `k export: ${res.status} ${text.slice(0, 300)}`);
+    assert.deepEqual(text.trim().split('\r\n')[0].split(','), ['calc_smoke_orders.region', 'non-null price']);
+    const byRegion = Object.fromEntries(json.rows.map((r) => [r.keys[0], Number(r.values[0])]));
+    assert.deepEqual(byRegion, { N: 1, S: 1, E: 1 });
+    ok('(k) plain countNonNull: measure named "non-null price" in JSON and the CSV header; N=1 S=1 E=1');
+  }
+
   await app('POST', '/api/connection/disconnect');
 }
 

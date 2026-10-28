@@ -1601,8 +1601,6 @@ export function initDashboards() {
       const e = mplan[mi];
       if (!e || e.agg === "count" || isCalcPill(e.field)) return m;
       const alias = metaOf(e.field).alias;
-      // The server names a non-null count "countnonnull <col>"; show the B5 label instead.
-      if (e.agg === "countNonNull") return `${aggWord(e.agg)} ${alias || e.field.column}`;
       return alias ? `${aggWord(e.agg)} ${alias}` : m;
     });
     return { ...result,

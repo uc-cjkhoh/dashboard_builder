@@ -291,4 +291,13 @@ public class CalcGatewayTests
         var json = System.Text.Json.JsonDocument.Parse(await r.Content.ReadAsStringAsync()).RootElement;
         Assert.True(json.TryGetProperty("error", out var e) && e.GetString()!.Length > 0);
     }
+
+    // The result column a plain measure gets — shown in the chart, the CSV header and the compare result.
+    [Theory]
+    [InlineData("count", "status", "count")]
+    [InlineData("sum", "amount", "sum amount")]
+    [InlineData("countdistinct", "region", "distinct region")]
+    [InlineData("countnonnull", "status", "non-null status")]
+    public void MeasureName_names_a_plain_measure_the_way_the_client_labels_it(string agg, string column, string expected)
+        => Assert.Equal(expected, ClickHouseGateway.MeasureName(agg, column));
 }

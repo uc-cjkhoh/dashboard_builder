@@ -254,6 +254,16 @@ public sealed class ClickHouseGateway
         return values;
     }
 
+    /// <summary>The result column of a plain measure (lower-case aggregate name): <c>count</c>, <c>sum amount</c>,
+    /// <c>distinct region</c>, <c>non-null status</c> — the labels the client shows, so JSON, CSV and compare agree.</summary>
+    internal static string MeasureName(string agg, string column) => agg switch
+    {
+        "count" => "count",
+        "countdistinct" => $"distinct {column}",
+        "countnonnull" => $"non-null {column}",
+        _ => $"{agg} {column}",
+    };
+
     /// <summary>
     /// The one place an aggregate call is written. <paramref name="agg"/> is a lowercase whitelisted name
     /// (<c>sum|avg|min|max|count|countnonnull|countdistinct</c>); <paramref name="expr"/> is already validated
@@ -754,12 +764,7 @@ public sealed class ClickHouseGateway
             // E10: one aggregate writer for plain and calculated measures. P33: sampled sums/counts are scaled back,
             // approximate mode estimates distinct counts (uniq).
             measExprs.Add(AggregateSql(mAgg, mAgg == "count" ? "" : await QualifyAsync(m.Db, m.Table, m.Column), sampled, approximate));
-            measNames.Add(mAgg switch
-            {
-                "count" => "count",
-                "countdistinct" => $"distinct {m.Column}",
-                _ => $"{mAgg} {m.Column}",
-            });
+            measNames.Add(MeasureName(mAgg, m.Column));
         }
         if (measExprs.Count == 0)
         {
