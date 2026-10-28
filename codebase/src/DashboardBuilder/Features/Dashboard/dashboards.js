@@ -27,7 +27,7 @@ import { SWATCHES, memberKey, fieldColorKey, setMemberColor, clearFieldColors, c
 import { createHistory } from "./history.js";
 import { LINE_STYLE_CHOICES, linesTakeStyle } from "./line-style-model.js";
 import { HEATMAP_SHAPE_CHOICES } from "./heatmap-model.js";
-import { targetChoices, bulletTargets } from "./bullet-model.js";
+import { targetChoices, bulletTargets, effectiveTargetMeasure } from "./bullet-model.js";
 import { planJoinType } from "../Relations/relation-rules.js";
 import { catalogFromEntities } from "../Calc/calc-resolve.js";
 import { isCalcPill, calcPillId, sameCalcPill, makeCalcPill, refusal, pillSlots, syncCalcPills, clearCalcPills, clearFilterCalc, usesCalc, CALC_AGGS } from "../Calc/calc-pill.js";
@@ -1307,7 +1307,9 @@ export function initDashboards() {
         set({ target: r.value });
       }));
     if (s.chartType === "bullet") { // T03-12: a measure on the shelf supplies each category's target
-      const choices = targetChoices(planMeasures(s).filter((e) => e.role === "shelf").map((e) => measureName(e.field)));
+      const names = planMeasures(s).filter((e) => e.role === "shelf").map((e) => measureName(e.field));
+      if (f.targetMeasure != null && effectiveTargetMeasure(f.targetMeasure, names.length) == null) f.targetMeasure = null; // stale: that measure is gone
+      const choices = targetChoices(names);
       if (choices.length) panel.append(fmtSelect("Target field", [["null", "None (use Target)"], ...choices], f.targetMeasure ?? "null",
         (v) => set({ targetMeasure: v === "null" ? null : Number(v) })));
     }

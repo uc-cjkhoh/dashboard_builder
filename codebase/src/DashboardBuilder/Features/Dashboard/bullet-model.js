@@ -14,3 +14,6 @@ export function bulletTargets({ fixed, measureIndex, series, count }) {
 
 /** A band's width per category: the share [from, to] of each target (0 where there is none). */
 export const bandsFor = (targets, from, to) => targets.map((t) => (t == null ? 0 : t * (to - from)));
+
+/** The target-field index that still points at a measure after the first (else null): a stale index is ignored. */
+export const effectiveTargetMeasure = (index, measureCount) => (Number.isInteger(index) && index >= 1 && index < measureCount ? index : null);

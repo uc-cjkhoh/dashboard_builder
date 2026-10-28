@@ -3,7 +3,7 @@ import { pickInk } from "./contrast.js";
 import { orderedPalette, rampStops } from "./colour-model.js";
 import { tooltipHtml } from "./tooltip-model.js";
 import { lineStep } from "./line-style-model.js";
-import { circleSize } from "./heatmap-model.js";
+import { circleSize, circleCells, HEATMAP_GUTTER } from "./heatmap-model.js";
 import { bandsFor } from "./bullet-model.js";
 import { chartFit, markCount, applyFitMode, FIT } from "./chart-fit.js";
 
@@ -92,7 +92,7 @@ export function renderChart(container, spec) {
   // big chart (thousands of marks) draws on canvas instead — SVG slows down with that many nodes.
   onCanvas = markCount(spec) > FIT.canvasMarks;
   instance = window.echarts.init(host, null, { renderer: onCanvas ? "canvas" : "svg" });
-  const option = buildOption(spec.type === "multiples" || spec.type === "heatmap" ? { ...spec, width: paneWidth(), height: paneHeight() } : spec);
+  const option = buildOption(spec.type === "multiples" ? { ...spec, width: paneWidth(), height: paneHeight() } : spec);
   if (spec.type !== "multiples") showEveryCategory(option, fit.rotate, fit); // panels keep their own sparse labels
   if (fit.zoom) addZoom(option, fit);
   if (onCanvas) tuneForSize(option);
@@ -679,7 +679,7 @@ function buildScatterShapes({ groups, xName, yName, hasSize, sizeName, format = 
 // heatmap (P12) — two dimensions on the axes, one measure as colour intensity. Colour IS a channel
 // here, so a continuous visualMap legend accompanies it (identity also comes from the x/y labels).
 // spec: { xCats:string[], yCats:string[], cells:[[xi, yi, value]], format }
-function buildHeatmap({ xCats, yCats, cells, format = {}, width = 800, height = 450 }) {
+function buildHeatmap({ xCats, yCats, cells, format = {} }) {
   const c = tokens();
   const fmtVal = makeValueFormatter(format);
   const circles = format.heatmapShape === "circle"; // T03-10
@@ -716,10 +716,11 @@ function buildHeatmap({ xCats, yCats, cells, format = {}, width = 800, height = 
       // T03-10: circles = scatter marks on the same category grid, sized by the cell, coloured by the
       // value through the same visualMap (dimension 2); the value label sits inside each circle.
       ? {
-        type: "scatter", data: cells, symbol: "circle",
-        symbolSize: circleSize(width - 90, height - 80, xCats.length, yCats.length),
+        // Empty cells draw nothing; the size is re-read from the live chart on every draw, so it follows the pane.
+        type: "scatter", data: circleCells(cells), symbol: "circle",
+        symbolSize: () => circleSize((instance?.getWidth() ?? 800) - HEATMAP_GUTTER.x, (instance?.getHeight() ?? 450) - HEATMAP_GUTTER.y, xCats.length, yCats.length),
         label: { show: !!format.dataLabels, color: c.ink, fontFamily: c.font, formatter: (p) => fmtVal(p.value[2]) },
-        itemStyle: { borderColor: c.surface, borderWidth: 1 },
+        itemStyle: { opacity: 1, borderColor: c.surface, borderWidth: 1 },
         emphasis: { itemStyle: { borderColor: c.ink, borderWidth: 2 } },
       }
       : {

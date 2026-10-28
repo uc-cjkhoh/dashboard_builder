@@ -186,6 +186,15 @@ try {
     must(o.series[0].data.length === 9, `cells: ${o.series[0].data.length}`);
     must(typeof o.series[0].symbolSize === 'number' && o.series[0].symbolSize >= 6 && o.series[0].symbolSize <= 48, `size ${o.series[0].symbolSize}`);
     must(o.visualMap.length === 1 && o.visualMap[0].dimension === 2, 'colour legend (visualMap) kept on the value');
+    must(o.series[0].itemStyle.opacity === 1, 'circles are opaque');
+    const size = () => ev(`(() => { const i = window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas')); return [i.getWidth(), i.getOption().series[0].symbolSize([0, 0, 1])]; })()`);
+    const [w0, s0] = await size();
+    await ev(`(() => { const c = document.getElementById('ws-chart'); c.style.maxWidth = '420px'; c.style.width = '420px'; return true; })()`);
+    await settle(600);
+    const [w1, s1] = await size();
+    must(w1 < w0 && s1 < s0, `circle size follows the pane: width ${w0}->${w1}, size ${s0}->${s1}`);
+    await ev(`(() => { const c = document.getElementById('ws-chart'); c.style.maxWidth = ''; c.style.width = ''; return true; })()`);
+    await settle(400);
     await shot('heatmap-circles-light.png');
     await theme('dark'); await shot('heatmap-circles-dark.png');
     await pick('Shape', 'square'); await chartReady();

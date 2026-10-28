@@ -2,8 +2,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { LINE_STYLE_CHOICES, lineStep, linesTakeStyle } from "../../src/DashboardBuilder/Features/Dashboard/line-style-model.js";
-import { HEATMAP_SHAPE_CHOICES, circleSize } from "../../src/DashboardBuilder/Features/Dashboard/heatmap-model.js";
-import { targetChoices, bulletTargets, bandsFor } from "../../src/DashboardBuilder/Features/Dashboard/bullet-model.js";
+import { HEATMAP_SHAPE_CHOICES, circleSize, circleCells, HEATMAP_GUTTER } from "../../src/DashboardBuilder/Features/Dashboard/heatmap-model.js";
+import { targetChoices, bulletTargets, bandsFor, effectiveTargetMeasure } from "../../src/DashboardBuilder/Features/Dashboard/bullet-model.js";
+import { MAX_TARGET_MEASURE } from "../../src/DashboardBuilder/Features/Core/sheet-schema.js";
 import { defaultFormat, emptySheet } from "../../src/DashboardBuilder/Features/Core/store.js";
 import { parseWorkbook, serializeWorkbook } from "../../src/DashboardBuilder/Features/Workbook/workbook-model.js";
 
@@ -73,4 +74,35 @@ test("workbook: the new settings round-trip; unknown values reset with an issue;
   const old = roundTrip({ target: 5 });
   assert.equal(old.issues.length, 0, JSON.stringify(old.issues));
   assert.equal(old.dashboards[0].sheet.format.lineStyle, "straight");
+});
+
+test("centred step has a plain label; the stored key stays jump", () => {
+  assert.deepEqual(LINE_STYLE_CHOICES.find((c) => c[0] === "jump"), ["jump", "Step (centred)"]);
+});
+
+test("circle size: one cell is capped; gutter constants are named", () => {
+  assert.equal(circleSize(400, 300, 1, 1), 48);
+  assert.deepEqual({ ...HEATMAP_GUTTER }, { x: 90, y: 80 });
+});
+
+test("circle cells drop empty values (null, undefined, NaN, text) and keep zero", () => {
+  const cells = [[0, 0, 5], [1, 0, null], [2, 0, undefined], [0, 1, NaN], [1, 1, "x"], [2, 1, 0], [0, 2, "7"]];
+  assert.deepEqual(circleCells(cells).map((d) => d[2]), [5, 0, "7"]);
+});
+
+test("a stale target field is ignored: out of range, first measure, non-integer", () => {
+  assert.equal(effectiveTargetMeasure(1, 3), 1);
+  assert.equal(effectiveTargetMeasure(2, 2), null);
+  assert.equal(effectiveTargetMeasure(0, 3), null);
+  assert.equal(effectiveTargetMeasure(1.5, 3), null);
+  assert.equal(effectiveTargetMeasure(null, 3), null);
+});
+
+test("workbook: target measure above the cap or fractional is cleared and reported", () => {
+  for (const v of [MAX_TARGET_MEASURE + 1, 1.5, "2"]) {
+    const r = roundTrip({ targetMeasure: v });
+    assert.equal(r.dashboards[0].sheet.format.targetMeasure, null, String(v));
+    assert.ok(r.issues.some((i) => /target measure/.test(i)), String(v));
+  }
+  assert.equal(roundTrip({ targetMeasure: MAX_TARGET_MEASURE }).dashboards[0].sheet.format.targetMeasure, MAX_TARGET_MEASURE);
 });

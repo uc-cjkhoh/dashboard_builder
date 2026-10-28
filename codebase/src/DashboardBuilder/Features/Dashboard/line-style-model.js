@@ -1,9 +1,9 @@
 // Line styles (T03-05) — pure, DOM-free (tests/js/charts1.test.mjs). Format → Line style on a line, area
 // or combo chart: Straight (point to point), Step (each value holds until the next category, then
-// changes) or Jump (the value changes half-way between two categories).
+// changes) or Step (centred) (the value changes half-way between two categories). The stored key stays "jump".
 import { LINE_STYLES } from "../Core/sheet-schema.js";
 
-export const LINE_STYLE_CHOICES = [["straight", "Straight"], ["step", "Step"], ["jump", "Jump"]];
+export const LINE_STYLE_CHOICES = [["straight", "Straight"], ["step", "Step"], ["jump", "Step (centred)"]];
 const STEPS = { step: "end", jump: "middle" }; // ECharts `step` values
 
 /** ECharts' `step` setting for a style: false (straight, unset or unknown) or "end" / "middle". */
