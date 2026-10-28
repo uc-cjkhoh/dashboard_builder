@@ -94,7 +94,7 @@ public static class CalcCompiler
                 // splitByString has no Nullable form, so a NULL value is answered before it; a position past the end is NULL.
                 "split" => $"if(isNull({a[0]}), NULL, arrayElementOrNull(splitByString({a[1]}, assumeNotNull({a[0]})), {a[2]}))",
                 "datediff" => $"toFloat64(dateDiff({a[0]}, {a[1]}, {a[2]}))",
-                "dateadd" => $"{AddFunction(a[0])}({a[2]}, {a[1]})",
+                "dateadd" => DateAdd(AddFunction(a[0]), a[2], a[1]),
                 "year" => $"toFloat64(toYear({a[0]}))",
                 "month" => $"toFloat64(toMonth({a[0]}))",
                 "day" => $"toFloat64(toDayOfMonth({a[0]}))",
@@ -104,6 +104,15 @@ public static class CalcCompiler
                 "date" => TypeCast.ParseDate(a[0]),
                 _ => throw new InvalidOperationException($"Unsupported function '{fn.Fn}'."),
             };
+        }
+
+        // DATEADD is computed on a DateTime64 (1900..2299), not on the column's own type: a plain Date (1970..2149) wraps around
+        // and a DateTime clamps to 1970 when a step leaves its range. A result at the DateTime64 edge is itself clamped, so
+        // the answer must lie strictly inside 1900-01-03..2299-12-29 (UTC) or it is NULL.
+        static string DateAdd(string add, string date, string amount)
+        {
+            var r = $"{add}(toDateTime64({date}, 0), {amount})";
+            return $"if({r} > toDateTime64('1900-01-03 00:00:00', 0, 'UTC') AND {r} < toDateTime64('2299-12-29 00:00:00', 0, 'UTC'), {r}, NULL)";
         }
 
         // DATEADD's fixed ClickHouse function per whitelisted unit (the unit never reaches SQL as text).

@@ -10,7 +10,7 @@ assert.ok(CH_HOST && CH_PORT && CH_USER && CH_PASSWORD !== undefined, 'set CH_HO
 const APP = process.env.APP_URL ?? 'http://localhost:5192';
 const auth = 'Basic ' + Buffer.from(`${CH_USER}:${CH_PASSWORD}`).toString('base64');
 
-const DB = 'test_cj', TBL = 'bk_dates', T = `${DB}.${TBL}`;
+const DB = 'test_cj', TBL = 'bk_dates', T = `${DB}.${TBL}`, TE = 'bk_dates_edge', TEQ = `${DB}.${TE}`;
 
 async function ch(sql, { readonly = true } = {}) {
   const qs = new URLSearchParams({ default_format: 'JSONCompact', output_format_json_quote_64bit_integers: '0' });
@@ -22,7 +22,7 @@ async function ch(sql, { readonly = true } = {}) {
 }
 // The only writes: DDL / inserts on test_cj.bk_dates.
 const write = (sql) => {
-  assert.match(sql, /^(CREATE TABLE|INSERT INTO|DROP TABLE IF EXISTS) test_cj\.bk_dates\b/, `refusing write: ${sql.slice(0, 60)}`);
+  assert.match(sql, /^(CREATE TABLE|INSERT INTO|DROP TABLE IF EXISTS) test_cj\.bk_dates(_edge)?\b/, `refusing write: ${sql.slice(0, 60)}`);
   return ch(sql, { readonly: false });
 };
 
@@ -71,11 +71,15 @@ const ok = (name) => { passed++; console.log(`ok ${name}`); };
 //  8  2024-03-03   2024-03-03 00:00:00     '2024-02-30'          (Sunday; no such day -> NULL)
 //  9  2024-03-31   2024-03-31 23:00:00     '2024-03-05 10:30:00' (month end; time of day dropped)
 async function setup() {
+  await write(`DROP TABLE IF EXISTS ${TEQ}`);
+  await write(`CREATE TABLE ${TEQ} (id UInt32, d Date, d32 Date32, t DateTime('UTC')) ENGINE = MergeTree ORDER BY id`);
+  await write(`INSERT INTO ${TEQ} VALUES (1,'2149-06-01','2299-12-01','2100-01-01 00:00:00'),(2,'1970-01-05','1900-01-05','1970-01-05 00:00:00'),(3,'2000-01-01','2000-01-01','2000-01-01 10:00:00')`);
   await write(`DROP TABLE IF EXISTS ${T}`);
   await write(`CREATE TABLE ${T} (id UInt32, d Nullable(Date), t Nullable(DateTime('UTC')), s Nullable(String)) ENGINE = MergeTree ORDER BY id`);
   await write(`INSERT INTO ${T} VALUES (1,'2024-01-31','2024-01-31 22:30:00','2024-03-05'),(2,'2024-02-29','2024-03-01 01:15:30','2024-02-29'),(3,'2023-12-31','2023-12-31 23:59:59','12345'),(4,'2021-01-01','2021-01-01 00:00:00','hello'),(5,'2020-12-31',NULL,'20240229'),(6,NULL,NULL,NULL),(7,'2024-12-30','2024-12-30 12:00:00','1850-01-01'),(8,'2024-03-03','2024-03-03 00:00:00','2024-02-30'),(9,'2024-03-31','2024-03-31 23:00:00','2024-03-05 10:30:00')`);
 }
 async function teardown() {
+  await write(`DROP TABLE IF EXISTS ${TEQ}`);
   await write(`DROP TABLE IF EXISTS ${T}`);
   const left = await ch(`SELECT name FROM system.tables WHERE database = '${DB}' AND name = '${TBL}'`);
   assert.deepEqual(left, [], 'bk_dates still present');
@@ -156,6 +160,29 @@ async function main() {
     assert.equal(ar.status, 400);
     assert.match(ar.json.error, /DATEDIFF takes 3 arguments\./);
     ok('a text argument, an injection-shaped unit, an amount over 100000 and wrong arity are 400s with a path');
+  }
+
+  { // DATEADD past the range of the column's own type: Date (1970..2149) wraps and DateTime clamps in ClickHouse, so the answer is
+    // worked in a wider type and is NULL outside 1900-01-03..2299-12-29. Rows: (2149-06-01, 2299-12-01, 2100-01-01), (1970-01-05, 1900-01-05, 1970-01-05), 2000-01-01 (a plain Date + 100000 days wraps to a *later* wrong date).
+    const edge = async (col, calc, want, label) => {
+      const r = await query({ from: { db: DB, table: TE }, joins: [], rowDimensions: [{ db: DB, table: TE, column: 'id' }, calcDim('c', calc)], columnDimensions: [], measures: [{ db: DB, table: TE, column: 'id', agg: 'countNonNull' }], filters: [], fresh: true }, label);
+      const got = Object.fromEntries(r.rows.map((x) => [String(x.keys[0]), x.keys[1] === null ? null : String(x.keys[1])]));
+      assert.deepEqual(got, Object.fromEntries(want.map((v, i) => [String(i + 1), v])), `${label}: got ${JSON.stringify(got)}`);
+      ok(`${label}: ${JSON.stringify(want)}`);
+    };
+    const e = (c) => ({ k: 'field', db: DB, table: TE, column: c });
+    const neg = (v) => ({ k: 'un', op: '-', arg: num(v) });
+    await edge('d', fn('dateadd', str('day'), num(100000), e('d')), [NULL, '2243-10-21', '2273-10-16'], "DATEADD('day', 100000, d): past the end is NULL, no wrap");
+    await edge('d32', fn('dateadd', str('day'), num(100000), e('d32')), [NULL, '2173-10-20', '2273-10-16'], "DATEADD('day', 100000, d32)");
+    await edge('t', fn('dateadd', str('day'), num(100000), e('t')), [NULL, '2243-10-21', '2273-10-16 10:00:00'], "DATEADD('day', 100000, t DateTime)");
+    await edge('d', fn('dateadd', str('day'), neg(20000), e('d')), ['2094-08-28', '1915-04-04', '1945-03-30'], "DATEADD('day', -20000, d): before 1970 works, no wrap");
+    await edge('t', fn('dateadd', str('day'), neg(20000), e('t')), ['2045-03-30', '1915-04-04', '1945-03-30 10:00:00'], "DATEADD('day', -20000, t DateTime): before 1970 works, no clamp");
+    await edge('d32', fn('dateadd', str('day'), neg(20000), e('d32')), ['2245-02-27', NULL, '1945-03-30'], "DATEADD('day', -20000, d32): before 1900 is NULL, not a clamped 1900-01-01");
+    await edge('d', fn('dateadd', str('year'), num(200), e('d')), [NULL, '2170-01-05', '2200-01-01'], "DATEADD('year', 200, d): past a Date's own 2149 limit is still a date");
+    await edge('d32', fn('dateadd', str('year'), num(1000), e('d32')), [NULL, NULL, NULL], "DATEADD('year', 1000, d32) is NULL");
+    await edge('t', fn('dateadd', str('year'), num(100000), e('t')), [NULL, NULL, NULL], "DATEADD('year', 100000, t) is NULL, not a clamped 1970");
+    await edge('d', fn('dateadd', str('year'), neg(100000), e('d')), [NULL, NULL, NULL], "DATEADD('year', -100000, d) is NULL");
+    await edge('t', fn('dateadd', str('second'), num(100000), e('t')), ['2100-01-02 03:46:40', '1970-01-06 03:46:40', '2000-01-02 13:46:40'], "DATEADD('second', 100000, t)");
   }
   await app('POST', '/api/connection/disconnect');
 }

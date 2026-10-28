@@ -321,7 +321,8 @@ public class CalcCompilerTests
     public void DATEDIFF_binds_its_unit_and_widens_to_float()
     {
         var (sql, ps) = Compile(Fn("datediff", S("Month"), F("placed"), Fn("dateadd", S("day"), new NumNode(1), F("placed"))));
-        Assert.Equal("toFloat64(dateDiff({c0p0:String}, t0.`placed`, addDays(t0.`placed`, {c0p1:Int32})))", sql);
+        var r = "addDays(toDateTime64(t0.`placed`, 0), {c0p1:Int32})";
+        Assert.Equal($"toFloat64(dateDiff({{c0p0:String}}, t0.`placed`, if({r} > toDateTime64('1900-01-03 00:00:00', 0, 'UTC') AND {r} < toDateTime64('2299-12-29 00:00:00', 0, 'UTC'), {r}, NULL)))", sql);
         Assert.Equal(new[] { ("c0p0", "String", (object)"month"), ("c0p1", "Int32", (object)1) }, ps);
     }
 
@@ -337,7 +338,8 @@ public class CalcCompilerTests
     public void DATEADD_picks_a_fixed_function_per_unit_and_binds_only_the_amount(string unit, string function)
     {
         var (sql, ps) = Compile(Fn("dateadd", S(unit.ToUpperInvariant()), new UnNode("-", new NumNode(7)), F("placed")));
-        Assert.Equal($"{function}(t0.`placed`, {{c0p0:Int32}})", sql);
+        var r = $"{function}(toDateTime64(t0.`placed`, 0), {{c0p0:Int32}})";
+        Assert.Equal($"if({r} > toDateTime64('1900-01-03 00:00:00', 0, 'UTC') AND {r} < toDateTime64('2299-12-29 00:00:00', 0, 'UTC'), {r}, NULL)", sql);
         Assert.Equal(new[] { ("c0p0", "Int32", (object)(-7)) }, ps);
     }
 
