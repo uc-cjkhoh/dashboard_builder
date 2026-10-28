@@ -1,0 +1,55 @@
+{
+  "catalog": {
+    "shop.orders": {
+      "amount": "numeric",
+      "qty": "numeric",
+      "status": "text",
+      "placed": "temporal",
+      "tags": "other"
+    },
+    "shop.customers": {
+      "country": "text"
+    },
+    "shop.items": {
+      "price": "numeric"
+    },
+    "archive.items": {
+      "price": "numeric"
+    }
+  },
+  "cases": [
+    {"name":"ratio of two sums","formula":"SUM([orders.amount]) / SUM([orders.qty])","ast":{"k":"bin","op":"/","l":{"k":"agg","fn":"sum","arg":{"k":"field","db":"shop","table":"orders","column":"amount"}},"r":{"k":"agg","fn":"sum","arg":{"k":"field","db":"shop","table":"orders","column":"qty"}}},"expect":{"type":"number","isAggregate":true,"tables":["shop.orders"]}},
+    {"name":"sum of a row-level product","formula":"SUM([orders.amount] * [orders.qty])","ast":{"k":"agg","fn":"sum","arg":{"k":"bin","op":"*","l":{"k":"field","db":"shop","table":"orders","column":"amount"},"r":{"k":"field","db":"shop","table":"orders","column":"qty"}}},"expect":{"type":"number","isAggregate":true,"tables":["shop.orders"]}},
+    {"name":"row-level arithmetic","formula":"[orders.amount] * 10","ast":{"k":"bin","op":"*","l":{"k":"field","db":"shop","table":"orders","column":"amount"},"r":{"k":"num","v":10}},"expect":{"type":"number","isAggregate":false,"tables":["shop.orders"]}},
+    {"name":"unary minus on a field","formula":"-[orders.amount]","ast":{"k":"un","op":"-","arg":{"k":"field","db":"shop","table":"orders","column":"amount"}},"expect":{"type":"number","isAggregate":false,"tables":["shop.orders"]}},
+    {"name":"aggregate with a constant","formula":"SUM([orders.amount]) * 2","ast":{"k":"bin","op":"*","l":{"k":"agg","fn":"sum","arg":{"k":"field","db":"shop","table":"orders","column":"amount"}},"r":{"k":"num","v":2}},"expect":{"type":"number","isAggregate":true,"tables":["shop.orders"]}},
+    {"name":"constant minus aggregate","formula":"100 - AVG([orders.amount])","ast":{"k":"bin","op":"-","l":{"k":"num","v":100},"r":{"k":"agg","fn":"avg","arg":{"k":"field","db":"shop","table":"orders","column":"amount"}}},"expect":{"type":"number","isAggregate":true,"tables":["shop.orders"]}},
+    {"name":"function names are case-insensitive","formula":"sum([orders.amount])","ast":{"k":"agg","fn":"sum","arg":{"k":"field","db":"shop","table":"orders","column":"amount"}},"expect":{"type":"number","isAggregate":true,"tables":["shop.orders"]}},
+    {"name":"count of a text field","formula":"COUNT([orders.status])","ast":{"k":"agg","fn":"count","arg":{"k":"field","db":"shop","table":"orders","column":"status"}},"expect":{"type":"number","isAggregate":true,"tables":["shop.orders"]}},
+    {"name":"count distinct of a text field","formula":"COUNTD([orders.status])","ast":{"k":"agg","fn":"countd","arg":{"k":"field","db":"shop","table":"orders","column":"status"}},"expect":{"type":"number","isAggregate":true,"tables":["shop.orders"]}},
+    {"name":"min of a date","formula":"MIN([orders.placed])","ast":{"k":"agg","fn":"min","arg":{"k":"field","db":"shop","table":"orders","column":"placed"}},"expect":{"type":"date","isAggregate":true,"tables":["shop.orders"]}},
+    {"name":"max of a text field","formula":"MAX([orders.status])","ast":{"k":"agg","fn":"max","arg":{"k":"field","db":"shop","table":"orders","column":"status"}},"expect":{"type":"text","isAggregate":true,"tables":["shop.orders"]}},
+    {"name":"two tables, sorted","formula":"SUM([orders.amount]) / COUNT([customers.country])","ast":{"k":"bin","op":"/","l":{"k":"agg","fn":"sum","arg":{"k":"field","db":"shop","table":"orders","column":"amount"}},"r":{"k":"agg","fn":"count","arg":{"k":"field","db":"shop","table":"customers","column":"country"}}},"expect":{"type":"number","isAggregate":true,"tables":["shop.customers","shop.orders"]}},
+    {"name":"three-part reference","formula":"[shop.items.price] * 2","ast":{"k":"bin","op":"*","l":{"k":"field","db":"shop","table":"items","column":"price"},"r":{"k":"num","v":2}},"expect":{"type":"number","isAggregate":false,"tables":["shop.items"]}},
+    {"name":"SUM needs a number","formula":"SUM([orders.status])","ast":{"k":"agg","fn":"sum","arg":{"k":"field","db":"shop","table":"orders","column":"status"}},"expect":{"error":"SUM needs a number — orders.status is text.","path":"arg"}},
+    {"name":"AVG needs a number","formula":"AVG([orders.placed])","ast":{"k":"agg","fn":"avg","arg":{"k":"field","db":"shop","table":"orders","column":"placed"}},"expect":{"error":"AVG needs a number — orders.placed is date.","path":"arg"}},
+    {"name":"arithmetic needs numbers","formula":"[orders.status] + 1","ast":{"k":"bin","op":"+","l":{"k":"field","db":"shop","table":"orders","column":"status"},"r":{"k":"num","v":1}},"expect":{"error":"Arithmetic needs numbers — orders.status is text.","path":"l"}},
+    {"name":"arithmetic needs numbers on the right","formula":"1 + [orders.status]","ast":{"k":"bin","op":"+","l":{"k":"num","v":1},"r":{"k":"field","db":"shop","table":"orders","column":"status"}},"expect":{"error":"Arithmetic needs numbers — orders.status is text.","path":"r"}},
+    {"name":"unary minus needs a number","formula":"-[orders.status]","ast":{"k":"un","op":"-","arg":{"k":"field","db":"shop","table":"orders","column":"status"}},"expect":{"error":"Arithmetic needs numbers — orders.status is text.","path":"arg"}},
+    {"name":"aggregate mixed with row-level","formula":"SUM([orders.amount]) / [orders.qty]","ast":{"k":"bin","op":"/","l":{"k":"agg","fn":"sum","arg":{"k":"field","db":"shop","table":"orders","column":"amount"}},"r":{"k":"field","db":"shop","table":"orders","column":"qty"}},"expect":{"error":"Can't mix an aggregate with a row-level value in one formula.","path":""}},
+    {"name":"mix nested inside an aggregate-free branch","formula":"(SUM([orders.amount]) + [orders.qty]) * 2","ast":{"k":"bin","op":"*","l":{"k":"bin","op":"+","l":{"k":"agg","fn":"sum","arg":{"k":"field","db":"shop","table":"orders","column":"amount"}},"r":{"k":"field","db":"shop","table":"orders","column":"qty"}},"r":{"k":"num","v":2}},"expect":{"error":"Can't mix an aggregate with a row-level value in one formula.","path":"l"}},
+    {"name":"nested aggregate","formula":"SUM(AVG([orders.amount]))","ast":{"k":"agg","fn":"sum","arg":{"k":"agg","fn":"avg","arg":{"k":"field","db":"shop","table":"orders","column":"amount"}}},"expect":{"error":"An aggregate can't contain another aggregate.","path":"arg"}},
+    {"name":"unknown column","formula":"[orders.nope]","ast":{"k":"field","db":"shop","table":"orders","column":"nope"},"expect":{"error":"Unknown field orders.nope.","path":""}},
+    {"name":"unsupported column type","formula":"[orders.tags]","ast":{"k":"field","db":"shop","table":"orders","column":"tags"},"expect":{"error":"orders.tags can't be used in a calculation.","path":""}},
+    {"name":"unknown function","ast":{"k":"agg","fn":"median","arg":{"k":"field","db":"shop","table":"orders","column":"amount"}},"expect":{"error":"Unknown function median.","path":""}},
+    {"name":"unknown binary operator","ast":{"k":"bin","op":"%","l":{"k":"field","db":"shop","table":"orders","column":"amount"},"r":{"k":"num","v":2}},"expect":{"error":"Unknown operator %.","path":""}},
+    {"name":"unknown unary operator","ast":{"k":"un","op":"!","arg":{"k":"field","db":"shop","table":"orders","column":"amount"}},"expect":{"error":"Unknown operator !.","path":""}},
+    {"name":"parse error: unclosed call","formula":"SUM([orders.amount]","parseError":"Expected )"},
+    {"name":"parse error: dangling operator","formula":"1 +","parseError":"Expected a value after +"},
+    {"name":"parse error: unclosed bracket","formula":"[orders.amount","parseError":"Missing ] after orders.amount"},
+    {"name":"parse error: field without a table","formula":"[amount]","parseError":"Write the field as [table.column]."},
+    {"name":"parse error: ambiguous table","formula":"[items.price]","parseError":"items.price is in more than one database — write [db.table.column]."},
+    {"name":"parse error: number out of range","formula":"1e999","parseError":"That number is out of range."},
+    {"name":"parse error: formula too long","formula":"1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1","parseError":"A formula can be at most 500 characters."}
+  ]
+}

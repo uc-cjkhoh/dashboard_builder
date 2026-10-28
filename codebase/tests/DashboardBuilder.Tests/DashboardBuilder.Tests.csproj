@@ -16,6 +16,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Content Include="../fixtures/calc-cases.json" Link="fixtures/calc-cases.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="../../src/DashboardBuilder/DashboardBuilder.csproj" />
   </ItemGroup>
 
