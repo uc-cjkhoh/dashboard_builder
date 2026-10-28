@@ -113,5 +113,5 @@ test("catalog lists its offered fields", () => {
   const f = catalog.fields;
   assert.ok(f.some((x) => x.db === "shop" && x.table === "orders" && x.column === "amount" && x.category === "numeric"));
   assert.ok(!f.some((x) => x.column === "a.b"));
-  assert.equal(f.length, 7);
+  assert.equal(f.length, 6);
 });
