@@ -37,6 +37,7 @@ export const PATHS = Object.freeze({
   grip: "M7.5 5h.01M12.5 5h.01M7.5 10h.01M12.5 10h.01M7.5 15h.01M12.5 15h.01",
   search: "M9 4a5 5 0 1 0 0 10 5 5 0 0 0 0-10zM16 16l-3.5-3.5",
   close: "M5 5l10 10M15 5L5 15",
+  duplicate: "M7 7h9v9H7zM13 7V4H4v9h3",
   sidebar: "M3 4h14v12H3zM8 4v12",
   chevron: "M7 8l3 3 3-3",
   check: "M4 10.5l4 4 8-9",

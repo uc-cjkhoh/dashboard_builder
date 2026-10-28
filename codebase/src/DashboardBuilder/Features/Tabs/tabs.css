@@ -35,6 +35,12 @@
   border-radius: var(--r-pill); width: 20px; height: 20px; line-height: 1; display: inline-grid; place-items: center; padding: 0;
   transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
 }
+.tab__dup {
+  border: 0; background: transparent; color: var(--ink-3); cursor: pointer;
+  border-radius: var(--r-pill); width: 20px; height: 20px; line-height: 1; display: inline-grid; place-items: center; padding: 0;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.tab__dup:hover { background: var(--accent-soft); color: var(--accent-ink); }
 .tab__close:hover { background: var(--danger-bg); color: var(--danger-ink); }
 .tab__rename {
   font-size: var(--fs-sm); font-weight: 600; width: 130px;
