@@ -244,4 +244,34 @@ public class CalcGatewayTests
         Assert.True(ClickHouseGateway.UsesDistinctCount([new MeasureRef("", "", "n", null!, new AggNode("countd", Status))]));
         Assert.False(ClickHouseGateway.UsesDistinctCount([new MeasureRef("", "", "r", null!, Ratio)]));
     }
+
+    // A calculation field must be on a table already in the query; the check runs before any catalog lookup, so a calculation
+    // can't make the server describe arbitrary tables, and an existing and an unknown column answer the same way.
+    [Theory]
+    [InlineData("amount")]
+    [InlineData("nope")]
+    public async Task A_field_on_a_table_not_in_the_query_is_rejected_before_any_catalog_lookup(string column)
+    {
+        var lookups = new List<string>();
+        var ex = await Assert.ThrowsAsync<UnknownIdentifierException>(() => ClickHouseGateway.ResolveCalcRefsAsync(
+            [new FieldNode("db", "other", column)],
+            (db, table) => table == "orders",
+            (db, table) => { lookups.Add($"{db}.{table}"); return Task.FromResult(new Dictionary<string, string> { ["amount"] = ClickHouseType.Numeric }); },
+            (db, table, c) => { lookups.Add($"{db}.{table}.{c}"); return Task.FromResult($"t0.`{c}`"); }));
+        Assert.Equal("Field references a table not in the query.", ex.Message);
+        Assert.Empty(lookups);
+    }
+
+    [Fact]
+    public async Task Fields_on_tables_in_the_query_resolve_and_an_unknown_column_is_left_for_the_validator()
+    {
+        var refs = await ClickHouseGateway.ResolveCalcRefsAsync(
+            [new FieldNode("db", "orders", "amount"), new FieldNode("db", "orders", "amount"), new FieldNode("db", "orders", "nope")],
+            (db, table) => table == "orders",
+            (db, table) => Task.FromResult(new Dictionary<string, string> { ["amount"] = ClickHouseType.Numeric }),
+            (db, table, c) => Task.FromResult($"t0.`{c}`"));
+        var only = Assert.Single(refs);
+        Assert.Equal(("db", "orders", "amount"), only.Key);
+        Assert.Equal(("t0.`amount`", ClickHouseType.Numeric), only.Value);
+    }
 }

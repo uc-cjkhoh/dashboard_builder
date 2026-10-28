@@ -164,6 +164,16 @@ async function main() {
     ok('core: aggregate dimension and SUM(text) are 400s with their fields');
   }
 
+  {
+    // A field on a table that exists but isn't part of the query is rejected the same way whether or not the column exists.
+    for (const column of ['tier', 'nope']) {
+      const r = await app('POST', '/api/query', { ...base(), measures: [calcMeas('x', bin('+', f('qty'), f(column, CUSTOMERS)), 'sum')] });
+      assert.equal(r.status, 400, `table not in the query (${column}): ${r.status} ${r.text.slice(0, 200)}`);
+      assert.equal(r.json.error, 'Field references a table not in the query.', `table not in the query (${column}): ${r.text.slice(0, 200)}`);
+    }
+    ok('core: a calc field on a table not in the query is a 400 (existing and unknown column alike)');
+  }
+
   // ================= (a) calc dimension with a literal + OtherBucket (NOT IN, nullIf NULL key) =================
   {
     // 10 / qty: qty 0 -> nullIf -> NULL key for both S rows. Keys: 3.33 (amount 5), 5 (10), 10 (1), NULL (10).

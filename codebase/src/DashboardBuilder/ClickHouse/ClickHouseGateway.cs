@@ -285,6 +285,26 @@ public sealed class ClickHouseGateway
         _ => $"{agg}({expr})",
     };
 
+    /// <summary>Resolves a calculation's field references to their qualified SQL and type category. A field on a table that is
+    /// not in the query is rejected first — before any catalog lookup — so a calculation can't trigger metadata queries on
+    /// arbitrary tables. A column the catalog doesn't know on an in-query table is left out, so the validator names it with its path.</summary>
+    internal static async Task<Dictionary<(string, string, string), (string Sql, string Category)>> ResolveCalcRefsAsync(
+        IEnumerable<FieldNode> fields,
+        Func<string, string, bool> inQuery,
+        Func<string, string, Task<Dictionary<string, string>>> columnsOf,
+        Func<string, string, string, Task<string>> qualify)
+    {
+        var refs = new Dictionary<(string, string, string), (string Sql, string Category)>();
+        foreach (var f in fields)
+        {
+            if (!inQuery(f.Db, f.Table)) throw new UnknownIdentifierException("Field references a table not in the query.");
+            if (refs.ContainsKey((f.Db, f.Table, f.Column))) continue;
+            if (!(await columnsOf(f.Db, f.Table)).TryGetValue(f.Column, out var category)) continue;
+            refs[(f.Db, f.Table, f.Column)] = (await qualify(f.Db, f.Table, f.Column), category);
+        }
+        return refs;
+    }
+
     /// <summary>Every field reference in a calculation tree, in tree order (left to right).</summary>
     internal static List<FieldNode> CalcFields(ExprNode node)
     {
@@ -787,13 +807,7 @@ public sealed class ClickHouseGateway
         {
             // Each field goes through QualifyAsync (catalog check + quote; a table not in the query is the usual error).
             // A column the catalog doesn't know is left out, so the validator names it with its path.
-            var refs = new Dictionary<(string, string, string), (string Sql, string Category)>();
-            foreach (var f in CalcFields(calc))
-            {
-                if (refs.ContainsKey((f.Db, f.Table, f.Column))) continue;
-                if (!(await ColumnsOf(f.Db, f.Table)).TryGetValue(f.Column, out var category)) continue;
-                refs[(f.Db, f.Table, f.Column)] = (await QualifyAsync(f.Db, f.Table, f.Column), category);
-            }
+            var refs = await ResolveCalcRefsAsync(CalcFields(calc), (db, table) => aliases.ContainsKey(Key(db, table)), ColumnsOf, QualifyAsync);
             return CompileCalc(calc, field, refs, parameters, $"c{calcCount++}", sampled, approximate);
         }
         var rowIndex = 0;
