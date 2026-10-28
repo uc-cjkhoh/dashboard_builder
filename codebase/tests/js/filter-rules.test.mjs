@@ -4,8 +4,8 @@ import { aggsFor, checkFilter, statFilters, withCategories } from "../../src/Das
 const F = (o) => ({ db: "s", table: "orders", column: "amount", category: "numeric", op: "=", value: "", values: null, ...o });
 test("aggregations match the column category", () => {
   assert.ok(aggsFor("numeric").includes("sum"));
-  assert.deepEqual(aggsFor("temporal"), ["count", "countDistinct", "min", "max"]);
-  assert.deepEqual(aggsFor("boolean"), ["count", "countDistinct"]);
+  assert.deepEqual(aggsFor("temporal"), ["count", "countDistinct", "countNonNull", "min", "max"]);
+  assert.deepEqual(aggsFor("boolean"), ["count", "countDistinct", "countNonNull"]);
 });
 test("an untouched filter is empty, not an error", () => {
   assert.equal(checkFilter(F({})).state, "empty");

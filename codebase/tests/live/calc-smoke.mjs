@@ -325,6 +325,39 @@ async function main() {
     ok(`(h) Approximate ratio == oracle; approx ${JSON.stringify(r.approx)}`);
   }
 
+  // ================= (i) calculated column dimension =================
+  {
+    const colCalc = calcDim('qty x10', bin('*', f('qty'), num(10)));
+    const r = await query({ ...base(), rowDimensions: [col('region')], columnDimensions: [colCalc], measures: [{ ...col('amount'), agg: 'sum' }] }, 'i');
+    assert.deepEqual(r.columnDimensions, ['qty x10']);
+    const o = await select(`SELECT region, toFloat64(qty) * 10 AS k, sum(toFloat64(amount)) FROM ${T} GROUP BY region, k ORDER BY region, k`);
+    assert.equal(r.rows.length, o.length, `i: rows app=${r.rows.length} oracle=${o.length}`);
+    const got = new Set(r.rows.map((x) => `${x.keys[0]}|${Number(x.keys[1])}|${Number(x.values[0])}`));
+    for (const row of o) assert.ok(got.has(`${row[0]}|${Number(row[1])}|${Number(row[2])}`), `i: missing ${JSON.stringify(row)}`);
+    assert.deepEqual(new Set(r.rows.map((x) => Number(x.keys[1]))), new Set([0, 10, 20, 30]));
+    ok(`(i) calculated column dimension keys {0,10,20,30} == oracle (${r.rows.length} cells)`);
+  }
+
+  // ================= (j) CSV export honours calculations =================
+  {
+    const req = { ...base(), rowDimensions: [col('region')], measures: [calcMeas('amount per qty', RATIO), calcMeas('qty doubled', bin('*', f('qty'), num(2)), 'sum')] };
+    const json = await query(req, 'j json');
+    const res = await fetch(`${APP}/api/query/export.csv`, { method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie }, body: JSON.stringify(req) });
+    const text = await res.text();
+    assert.equal(res.status, 200, `j export: ${res.status} ${text.slice(0, 300)}`);
+    const lines = text.trim().split('\r\n').map((l) => l.split(','));
+    assert.deepEqual(lines[0], ['calc_smoke_orders.region', 'amount per qty', 'qty doubled']);
+    assert.equal(lines.length - 1, json.rows.length);
+    json.rows.forEach((row, i) => {
+      assert.equal(lines[i + 1][0], row.keys[0]);
+      row.values.forEach((v, c) => {
+        const cell = lines[i + 1][c + 1];
+        assert.ok(v === null ? cell === '' : close(Number(cell), v), `j: row ${i} col ${c} csv=${cell} json=${v}`);
+      });
+    });
+    ok(`(j) CSV export: header uses the labels, ${json.rows.length} rows equal the JSON result`);
+  }
+
   await app('POST', '/api/connection/disconnect');
 }
 

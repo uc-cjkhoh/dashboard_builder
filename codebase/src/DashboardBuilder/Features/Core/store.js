@@ -13,6 +13,8 @@
 // dashboards:    [ { id, name, widgets: [ { id, kind, db, table, title } ] } ]
 // bus events:    entity:moved / entity:removed / joinkey:changed / rel:changed  (model),
 //                view:changed / tabs:changed / dashboard:changed {id}          (views)
+import { renameInFormulas } from "../Calc/calc-workbook.js";
+
 export const bus = new EventTarget();
 
 // P41 workbook theme: { accent: preset id | "#rrggbb", palette } (Core/theme-model.js). Applied to the
@@ -31,7 +33,9 @@ export const fieldMeta = new Map();
 export const fieldKey = (f) => `${f.db}.${f.table}.${f.column}`;
 export const metaOf = (f) => (f ? fieldMeta.get(fieldKey(f)) : undefined) ?? {};
 /** Display name: the alias, else table.column. */
-export const nameOf = (f) => metaOf(f).alias || `${f.table}.${f.column}`;
+export const nameOf = (f) => (typeof f?.calc === "string"
+  ? calculations.find((c) => c.id === f.calc)?.name ?? f.column // a calculated field: the live name
+  : metaOf(f).alias || `${f.table}.${f.column}`);
 export function setFieldMeta(f, patch) {
   const k = fieldKey(f);
   const next = { ...(fieldMeta.get(k) ?? {}), ...patch };
@@ -61,6 +65,34 @@ export function updateParameter(id, patch) {
 export function removeParameter(id) {
   const i = parameters.findIndex((x) => x.id === id);
   if (i >= 0) { parameters.splice(i, 1); emit("parameters:changed"); }
+}
+
+// Calculated fields (Plan B): workbook-level { id, name, formula } (Calc/calc-workbook.js). A rename rewrites [Old] in other formulas (B3).
+export const calculations = [];
+let calcSeq = 0;
+/** `nextId` (saved with the workbook) keeps an id from being reused after the highest one was deleted. */
+export function setCalculations(list, nextId) {
+  calculations.splice(0, calculations.length, ...list);
+  for (const c of list) { const n = Number(String(c.id).slice(4)); if (n > calcSeq) calcSeq = n; }
+  if (Number.isInteger(nextId) && nextId - 1 > calcSeq) calcSeq = nextId - 1;
+  emit("calculations:changed");
+}
+/** The number the next new calculation gets (saved so a deleted id is never reused). */
+export const nextCalcId = () => calcSeq + 1;
+export function addCalculation({ name, formula }) { calcSeq += 1; const c = { id: `calc${calcSeq}`, name, formula }; calculations.push(c); emit("calculations:changed"); return c; }
+export function updateCalculation(id, patch) {
+  const c = calculations.find((x) => x.id === id);
+  if (!c) return;
+  const old = c.name;
+  Object.assign(c, patch);
+  if (patch.name !== undefined && patch.name !== old) {
+    renameInFormulas(calculations, old, c.name).forEach((r, i) => { if (calculations[i] !== c) calculations[i].formula = r.formula; });
+  }
+  emit("calculations:changed");
+}
+export function removeCalculation(id) {
+  const i = calculations.findIndex((x) => x.id === id);
+  if (i >= 0) { calculations.splice(i, 1); emit("calculations:changed"); }
 }
 
 // P39 bookmarks: named snapshots of one dashboard's view (its sheet, incl. selection / drill / page /

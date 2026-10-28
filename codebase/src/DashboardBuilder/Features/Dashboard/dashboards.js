@@ -7,7 +7,7 @@ import { toggle, makeButton, toast, fieldError, confirmDialog } from "../Core/ui
 import { LIMITS, number } from "../Core/validate.js";
 import { aggsFor, checkAdd, checkFilter, viewCounts, statFilters, withCategories, TEXT_VALUE_TYPES, opsFor, OP_LABELS, serverFilter } from "./filter-rules.js";
 import { entities, relationships, activeDashboard, isModelActive, updateSheet, bus, defaultFormat, defaultMarks, sharedFilters,
-  metaOf, nameOf, setFieldMeta, emptySheet, parameters, updateParameter } from "../Core/store.js";
+  metaOf, nameOf, setFieldMeta, emptySheet, parameters, updateParameter, calculations, dashboards, addCalculation, removeCalculation } from "../Core/store.js";
 import { checkValue, paramTypeFor, withParamValue, effectiveTopN } from "../Core/parameters-model.js";
 import { renderChart as renderSeriesChart, disposeChart, exportChart, hasChartInstance, animateNextChart, sizeChart, focusSeries } from "./chart.js";
 import { makeValueFormatter, makeCategoryFormatter } from "../Core/format.js";
@@ -23,6 +23,14 @@ import { templateError, buildActionUrl, MAX_LABEL, MAX_TEMPLATE } from "./action
 import { DATE_PART_CHOICES, isGroupingPart, stepPart, labelParts } from "./date-parts.js";
 import { CALC_CHOICES, ALONG_CHOICES, WINDOW_CHOICES, applyTableCalcs, isCalc, calcName } from "./table-calc.js";
 import { createHistory } from "./history.js";
+import { catalogFromEntities } from "../Calc/calc-resolve.js";
+import { isCalcPill, calcPillId, sameCalcPill, makeCalcPill, refusal, pillSlots, syncCalcPills, clearCalcPills, usesCalc, CALC_AGGS } from "../Calc/calc-pill.js";
+import { openCalcDialog } from "../Calc/calc-dialog.js";
+import { evaluationInput } from "../Calc/eval-order.js";
+import { explainControl } from "../Calc/explain-popover.js";
+import { paneState, deleteCalcPlan, roleChoice, setRoleChoice } from "../Calc/calc-pane-model.js";
+import { checkName } from "../Calc/calc-workbook.js";
+import { wireDim, wireMeasure, planTables, calcProblem, statCalcProblem, measureLabel, aggWord, topByRef, topByKey, wireTopBy, resolveSortTarget } from "../Calc/calc-plan.js";
 import { REF_CHOICES, TREND_CHOICES, FORECAST_CHOICES, defaultAnalytics, refValue, trendSeries, combine } from "./analytics-model.js";
 import { scalePlan, withOther, bucketNotice, tableProgress, needsNextPage, OTHER_TYPES, BUCKET_TYPES, DATE_BUCKET_CHOICES } from "./scale-model.js";
 
@@ -54,7 +62,9 @@ const OPS = ["=", "!=", ">", ">=", "<", "<=", "in", "between"];
 // A filter contributes to the query only when checkFilter() says "ok" (empty = no-op, invalid = not applied).
 // Map a client filter to the server QueryFilter shape (value for scalar ops, values for in/between).
 // P30: relative dates resolve to a bound `between` (whole days), top-N carries its ranking measure.
-const toFilter = (f) => serverFilter(f, { resolve: (preset) => resolveRange({ preset }), dateOnly: isDateOnlyColumn(f.db, f.table, f.column) });
+// Calculated fields: the context the pure plan seam (Calc/calc-plan.js) compiles pills against.
+const calcFieldCtx = () => ({ calcs: calculations, catalog: catalogFromEntities([...entities.values()]) });
+const toFilter = (f) => serverFilter(f, { resolve: (preset) => resolveRange({ preset }), dateOnly: isDateOnlyColumn(f.db, f.table, f.column), wireTopBy: (t) => wireTopBy(t, calcFieldCtx()) });
 // A field's role can be overridden on its pill (Tableau's convert-to-dimension/measure). Default:
 // numeric → measure (aggregated), everything else → dimension (grouped). A numeric field made a
 // dimension groups by its raw values; any field made a measure is aggregated (count/countDistinct
@@ -63,14 +73,10 @@ const toFilter = (f) => serverFilter(f, { resolve: (preset) => resolveRange({ pr
 
 // Display name of a measure — matches the server's measure naming (see QueryAsync).
 function measureName(f) {
-  const a = f.agg ?? "sum";
-  const n = metaOf(f).alias || f.column; // P28 display name
-  if (a === "count") return "count";
-  if (a === "countDistinct") return `distinct ${n}`;
-  return `${a} ${n}`;
+  return measureLabel(f, calculations, metaOf(f).alias); // P28 display name; a calculated field is just its name
 }
 // Stable identity for a pill, so a stored sort target survives re-renders.
-const fieldId = (f, kind) => `${kind}:${f.db}.${f.table}.${f.column}:${f.agg ?? ""}`;
+const fieldId = (f, kind) => (isCalcPill(f) ? calcPillId(f, kind) : `${kind}:${f.db}.${f.table}.${f.column}:${f.agg ?? ""}`);
 
 // --- marks card + query-shape helpers (P18) --------------------------------
 // The canonical query shape lives in planDims()/planMeasures(): buildPlan sends exactly these, and
@@ -83,7 +89,7 @@ const marksOf = (s) => s.marks ?? EMPTY_MARKS;
 const SCATTER_TYPES = new Set(["scatter", "square", "circle"]);
 const scatterSymbol = (type) => (type === "square" ? "rect" : type === "circle" ? "circle" : "circle");
 const isNumericField = (f) => Boolean(f) && f.category === "numeric";
-const sameField = (a, b) => Boolean(a) && Boolean(b) && a.db === b.db && a.table === b.table && a.column === b.column;
+const sameField = (a, b) => Boolean(a) && Boolean(b) && (isCalcPill(a) || isCalcPill(b) ? sameCalcPill(a, b) : a.db === b.db && a.table === b.table && a.column === b.column);
 // Ordering comparator for Path (P19): numeric when both look numeric, else a locale string compare.
 function cmpValues(a, b) {
   const na = Number(a), nb = Number(b);
@@ -178,10 +184,11 @@ const CLICK_TYPES = new Set(["bar", "stacked", "line", "area", "combo", "pie", "
 function primaryDim(sheet) {
   const dd = drillActiveDim(sheet);
   if (dd) return dd;
-  return [
+  const first = [
     ...sheet.rows.filter((f) => roleOf(f) === "dimension"),
     ...sheet.columns.filter((f) => roleOf(f) === "dimension"),
   ][0] ?? null;
+  return isCalcPill(first) ? null : first; // E12: a calculated dimension has no column to filter on
 }
 
 // --- drill hierarchy (P16) --------------------------------------------------
@@ -284,6 +291,8 @@ export function initDashboards() {
   bus.addEventListener("dashboard:changed", () => {
     // A change from outside commit() (bookmark, workbook open, undo) becomes the new baseline.
     const d = activeDashboard();
+    // ...and a restored sheet's calculated pills take the live calculation's type / role (undo, bookmark, open).
+    if (d && !isModelActive()) syncCalcPills(d.sheet, calculations, catalogFromEntities([...entities.values()]));
     if (d && !isModelActive()) lastSnap.set(d.id, structuredClone(d.sheet));
     if (!isModelActive()) { renderShelves(); runChart(); }
   });
@@ -302,6 +311,22 @@ export function initDashboards() {
   bus.addEventListener("theme:changed", () => { if (!isModelActive()) runChart(); }); // P41: redraw in the new colours
   // P28: a rename / hide / default aggregation redraws the field pane, the pills and the chart's labels.
   bus.addEventListener("fields:changed", () => { if (isModelActive()) return; buildFields(); renderShelves(); runChart(); });
+  // Calculated fields: a new / edited / renamed / deleted calculation refreshes every sheet's pills (category, role, live name),
+  // the field pane and the chart. An unchanged sheet is just redrawn; a changed one goes through commit().
+  bus.addEventListener("calculations:changed", () => {
+    const catalog = catalogFromEntities([...entities.values()]);
+    const active = activeDashboard();
+    let activeChanged = false;
+    for (const d of dashboards) {
+      const before = JSON.stringify(d.sheet);
+      syncCalcPills(d.sheet, calculations, catalog);
+      if (JSON.stringify(d.sheet) === before) continue;
+      if (d === active && !isModelActive()) activeChanged = true; else commitQuiet(d, d.sheet);
+    }
+    if (isModelActive()) return;
+    buildFields();
+    if (activeChanged) commit(active, active.sheet); else { renderShelves(); runChart(); }
+  });
   // P32: a parameter's new value re-runs the view (its filters / Top N read it at plan time).
   bus.addEventListener("parameters:changed", () => { if (isModelActive()) return; renderShelves(); runChart(); });
   initPresentation();
@@ -348,7 +373,8 @@ export function initDashboards() {
     const seq = ++fieldsSeq;
     const tables = uniqueTables();
     if (!tables.length) {
-      fieldsEl.replaceChildren(hint("Add tables to the Data Model, then drag their fields onto the shelves."));
+      fieldsEl.replaceChildren(calcFieldGroup(), hint("Add tables to the Data Model, then drag their fields onto the shelves."));
+      filterFields();
       return;
     }
     const groups = [];
@@ -367,7 +393,7 @@ export function initDashboards() {
       groups.push(group);
     }
     if (seq !== fieldsSeq) return;
-    fieldsEl.replaceChildren(fieldTools(hiddenCount), ...groups);
+    fieldsEl.replaceChildren(fieldTools(hiddenCount), calcFieldGroup(), ...groups);
     filterFields();
   }
 
@@ -406,6 +432,118 @@ export function initDashboards() {
       }
       group.hidden = !any && Boolean(q);
     }
+  }
+
+  // --- calculated fields (Plan B): the "Calculated fields" group above the tables ----------------------
+  function calcFieldGroup() {
+    const group = el("div", "calc-group");
+    const head = el("div", "calc-group__title", "Calculated fields");
+    head.id = "calc-group-title";
+    const catalog = catalogFromEntities([...entities.values()]);
+    const state = paneState(calculations, catalog);
+    const add = makeButton("", "btn calc-group__new");
+    add.append(icon("plus", { size: 14 }), document.createTextNode("New calculated field"));
+    add.disabled = !state.canAdd;
+    add.title = state.canAdd ? "Write a formula and use it like a field" : `A workbook can have at most ${LIMITS.calculations} calculated fields.`;
+    add.addEventListener("click", () => openCalcDialog(null));
+    const list = el("div", "ws-fieldset calc-group__list");
+    list.setAttribute("role", "list"); list.setAttribute("aria-labelledby", head.id);
+    for (const item of state.items) list.append(calcFieldChip(item));
+    group.append(head, add, list);
+    return group;
+  }
+
+  // The payload a calculated chip drags / adds: a calc pill, with the session's Use-as choice for a row-level number.
+  const calcPayload = (item) => makeCalcPill(item.calc, item.info, roleChoice(item.calc.id) ?? undefined);
+
+  function calcFieldChip(item) {
+    const { calc, info, chip: kind, error } = item;
+    const bad = Boolean(error);
+    const aggregate = Boolean(info?.isAggregate);
+    const chip = el("div", `ws-field calc-field calc-field--${bad ? "error" : aggregate ? "meas" : "dim"}`);
+    chip.setAttribute("role", "listitem");
+    chip.dataset.search = calc.name.toLowerCase();
+    const typeIcon = icon(aggregate ? "analytics" : "detail", { size: 14 });
+    typeIcon.classList.add("calc-field__type");
+    chip.append(typeIcon, el("span", "ws-field__name", calc.name));
+    if (bad) {
+      chip.title = error;
+      const badge = el("span", "calc-chip calc-chip--danger");
+      badge.append(icon("warning", { size: 13 }), document.createTextNode("Error"));
+      chip.append(badge);
+    } else {
+      chip.title = `${calc.name} · ${kind.text}`;
+      const tag = el("span", `calc-chip ${aggregate ? "calc-chip--meas" : "calc-chip--dim"}`, kind.text);
+      chip.append(tag);
+    }
+    chip.append(calcFieldMenu(calc));
+    if (!bad) {
+      chip.draggable = true;
+      const payload = () => calcPayload(item);
+      const shelfKey = payload().role === "measure" ? "rows" : "columns";
+      const add = el("button", "ws-field__add");
+      add.append(icon("plus", { size: 14 }));
+      add.type = "button";
+      add.setAttribute("aria-label", `Add ${calc.name} to ${shelfKey === "rows" ? "Rows" : "Columns"}`);
+      add.title = `Add to ${shelfKey === "rows" ? "Rows" : "Columns"}`;
+      add.addEventListener("click", () => { const dash = activeDashboard(); if (dash) addField(dash, shelfKey, payload()); });
+      chip.append(add);
+      chip.addEventListener("dragstart", (e) => {
+        e.dataTransfer.setData(FIELD_MIME, JSON.stringify(payload()));
+        e.dataTransfer.effectAllowed = "copy";
+      });
+    }
+    return chip;
+  }
+
+  // A calculation's ⋯ menu: Edit…, Duplicate, Delete…
+  function calcFieldMenu(calc) {
+    const wrap = el("div", "menu ws-field__menu");
+    const btn = iconButton("more", `Actions for ${calc.name}`);
+    btn.classList.add("ws-field__more");
+    const list = el("div", "menu__list");
+    list.setAttribute("role", "menu");
+    list.hidden = true;
+    const item = (label, on) => {
+      const b = el("button", "menu__item"); b.type = "button"; b.setAttribute("role", "menuitem");
+      b.append(document.createTextNode(label));
+      b.addEventListener("click", on);
+      return b;
+    };
+    list.append(item("Edit…", () => openCalcDialog(calc.id)));
+    list.append(item("Duplicate", () => duplicateCalcField(calc)));
+    list.append(el("div", "menu__sep"), item("Delete…", () => deleteCalcField(calc)));
+    wireMenu(btn, list);
+    wrap.append(btn, list);
+    return wrap;
+  }
+  function duplicateCalcField(calc) {
+    if (calculations.length >= LIMITS.calculations) { toast(`A workbook can have at most ${LIMITS.calculations} calculated fields.`, "info"); return; }
+    let name = `${calc.name} copy`;
+    for (let i = 2; !checkName(name, calculations, null).ok && i < 100; i++) name = `${calc.name} copy ${i}`;
+    const ok = checkName(name, calculations, null);
+    if (!ok.ok) { toast(ok.error, "info"); return; }
+    const copy = addCalculation({ name: ok.value, formula: calc.formula });
+    setRoleChoice(copy.id, roleChoice(calc.id));
+  }
+  // B4: refuse while another calculation uses it; ask first when worksheets use it; else just delete.
+  async function deleteCalcField(calc) {
+    const plan = deleteCalcPlan(calculations, dashboards.map((d) => d.sheet), calc.id);
+    if (plan.refusedBy) { toast(`Used by calculation '${plan.refusedBy.join("', '")}'.`, "info"); return; }
+    if (plan.usedInSheets) {
+      const n = plan.usedInSheets;
+      const go = await confirmDialog(`“${calc.name}” is used in ${n} worksheet${n === 1 ? "" : "s"}. Deleting it removes it from ${n === 1 ? "that worksheet" : "those worksheets"}.`, { danger: true, confirmText: "Delete" });
+      if (!go) return;
+      // Commit every sheet that lost pills (the calculations:changed sync below sees them already cleared and wouldn't).
+      const active = activeDashboard();
+      for (const d of dashboards) {
+        if (!usesCalc(d.sheet, calc.id)) continue;
+        clearCalcPills(d.sheet, calc.id);
+        if (d === active && !isModelActive()) commit(d, d.sheet); else commitQuiet(d, d.sheet);
+      }
+    }
+    setRoleChoice(calc.id, null);
+    removeCalculation(calc.id);
   }
 
   function fieldChip(t, col, role) {
@@ -547,7 +685,8 @@ export function initDashboards() {
     vbIcons.append(formatToggle(), analyticsToggle(), exportControl(dash, s), refreshButton(dash), sheetActions(dash, s), fullScreenButton());
     vbRight.append(sortControl(dash, s), vbIcons);
     const vbLeft = el("div", "ws-viewbar__group");
-    vbLeft.append(chartTypePicker(dash, s), showMeToggle(), undoButtons(dash));
+    vbLeft.append(chartTypePicker(dash, s), showMeToggle(), undoButtons(dash),
+      explainControl(() => evaluationInput(s, { sharedFilters: sharedFilters.filter((f) => checkFilter(f).state === "ok" && !sharedSkipped(s).includes(f)), parameters, calcs: calculations, isApplied: (f) => checkFilter(f).state === "ok", dimensions: planDims(s).keyOrder.filter(Boolean).map(nameOf) }), { signal: headerAbort.signal }));
     viewbar.append(vbLeft, vbRight);
     const fmtEl = showMeOpen ? showMePanel(dash, s) : formatOpen ? formatPanel(dash, s) : analyticsOpen ? analyticsPanel(dash, s) : null; // P10 format / P21 analytics card
     const swEl = switchers(dash, s); // P40
@@ -609,6 +748,8 @@ export function initDashboards() {
   // with ≥2 levels the chart groups by the current level and a click drills one level finer (see
   // selectHandler → drillDown). Each pinned ancestor rides along as a bound-parameter filter.
   function addDrillLevel(dash, f) {
+    const refused = refusal(f, "drill");
+    if (refused) { toast(refused, "info"); return; }
     const s = dash.sheet;
     const d = s.drill ?? (s.drill = { levels: [], depth: 0, path: [] });
     if (d.levels.length && (d.levels[0].db !== f.db || d.levels[0].table !== f.table)) {
@@ -1058,6 +1199,8 @@ export function initDashboards() {
 
   async function exportCsvRows(dash, s) {
     if (STAT_SINGLE_TABLE.has(s.chartType)) { toast("CSV export isn't available for histogram / box plot yet — export the chart image instead.", "info"); return; }
+    const problem = calcProblem(s, calcFieldCtx());
+    if (problem) { toast(problem, "danger"); return; }
     const view = buildPlan(s);
     if (!view) { toast("Add fields from related tables before exporting.", "info"); return; }
     // The whole result (up to 100,000 rows), not just what the view shows: no Top-N, no paging.
@@ -1228,13 +1371,17 @@ export function initDashboards() {
     const remove = () => { s[shelfKey].splice(i, 1); commit(dash, s); };
     const isMeasure = roleOf(f) === "measure";
     const controls = el("span", "ws-pill__ctl");
-    if (isMeasure) {
-      const opts = aggsFor(f.category);
+    const calcPill = isCalcPill(f);
+    // A calculated measure aggregates itself: only a row-level number (it carries `agg`) picks an aggregation, and only that
+    // one may flip dimension <-> measure (E4); an aggregate or non-number calculation has nothing to choose.
+    const rowLevelNumber = !calcPill || (f.category === "numeric" && (f.role === "dimension" || Boolean(f.agg)));
+    if (isMeasure && (!calcPill || f.agg)) {
+      const opts = calcPill ? CALC_AGGS : aggsFor(f.category); // a calculation never counts rows
       if (f.agg && !opts.includes(f.agg)) {
         toast(`${f.agg} isn't available for ${label}; switched to ${opts[0]}.`, "info");
         f.agg = opts[0]; // keep the screen in step with the query
       }
-      const agg = select(opts, f.agg ?? opts[0], "ws-pill__agg", `Aggregation for ${f.table}.${f.column}`);
+      const agg = select(opts, f.agg ?? opts[0], "ws-pill__agg", `Aggregation for ${calcPill ? label : `${f.table}.${f.column}`}`);
       agg.addEventListener("change", () => { f.agg = agg.value; commit(dash, s); });
       controls.append(agg);
     }
@@ -1243,7 +1390,7 @@ export function initDashboards() {
       isMeasure ? "Use as dimension (group by values)" : "Use as measure (aggregate)");
     conv.classList.add("ws-pill__conv");
     conv.addEventListener("click", () => setRole(dash, s, f, isMeasure ? "dimension" : "measure"));
-    controls.append(conv);
+    if (rowLevelNumber) controls.append(conv);
     // P27: a measure's quick table calculation (opens its editor); the pill names the calculation when set.
     if (isMeasure) {
       const on = isCalc(f.tableCalc);
@@ -1256,7 +1403,7 @@ export function initDashboards() {
       controls.append(fx);
     }
     // P26: a date dimension picks its part here, and +/− step through year → quarter → month → day → hour.
-    if (!isMeasure && f.category === "temporal") {
+    if (!isMeasure && f.category === "temporal" && !calcPill) { // E12: a calculated dimension is never date-grouped
       const dateOnly = isDateOnlyColumn(f.db, f.table, f.column);
       const choices = DATE_PART_CHOICES.filter(([v]) => !(dateOnly && (v === "hour" || v === "hourOfDay")));
       const part = select(choices.map(([v]) => v), f.datePart ?? "auto", "ws-pill__part", `Date part for ${label}`);
@@ -1280,7 +1427,7 @@ export function initDashboards() {
     const open = choicesFor && choicesFor.shelf === shelfKey && choicesFor.index === i;
     sw.setAttribute("aria-pressed", String(Boolean(open)));
     sw.addEventListener("click", () => { choicesFor = open ? null : { shelf: shelfKey, index: i }; if (choicesFor) { openTool = null; calcFor = null; } formatOpen = false; showMeOpen = false; renderShelves(); });
-    controls.append(sw);
+    if (!isCalcPill(f)) controls.append(sw); // E12: a calculated field has no field choices
     const p = pill(label, remove, controls);
     p.classList.add(isMeasure ? "ws-pill--measure" : "ws-pill--dimension");
 
@@ -1380,7 +1527,7 @@ export function initDashboards() {
       f.op = op.value;
       if (f.op === "top" && !f.topBy) { // P30: rank by the first shelf measure until the user picks another
         const e = planMeasures(s).find((m) => m.role === "shelf");
-        if (e) f.topBy = { db: e.field.db, table: e.field.table, column: e.field.column, agg: e.agg };
+        if (e) f.topBy = topByRef(e, calcFieldCtx());
       }
       if (f.op === "in" && !Array.isArray(f.values)) f.values = [];
       if (f.op === "between" && !Array.isArray(f.values)) f.values = ["", ""];
@@ -1413,6 +1560,8 @@ export function initDashboards() {
 
   // --- shared filters & field choices (P40) --------------------------------
   function toggleShared(dash, s, f, list, i) {
+    const refused = refusal(f, "sharedFilter");
+    if (refused) { toast(refused, "info"); return; }
     const toShared = list !== sharedFilters;
     const target = toShared ? sharedFilters : s.filters;
     const cap = toShared ? LIMITS.sharedFilters : LIMITS.filters;
@@ -1441,10 +1590,13 @@ export function initDashboards() {
     const { rowDims, colDims } = planDims(sheet);
     const mplan = planMeasures(sheet);
     const dimName = (f, fallback) => (f && metaOf(f).alias) || fallback;
-    const aggWord = (a) => (a === "countDistinct" ? "distinct" : a);
     const measures = result.measures.map((m, mi) => {
       const e = mplan[mi];
-      return e && metaOf(e.field).alias && e.agg !== "count" ? `${aggWord(e.agg)} ${metaOf(e.field).alias}` : m;
+      if (!e || e.agg === "count" || isCalcPill(e.field)) return m;
+      const alias = metaOf(e.field).alias;
+      // The server names a non-null count "countnonnull <col>"; show the B5 label instead.
+      if (e.agg === "countNonNull") return `${aggWord(e.agg)} ${alias || e.field.column}`;
+      return alias ? `${aggWord(e.agg)} ${alias}` : m;
     });
     return { ...result,
       rowDimensions: result.rowDimensions.map((n, i) => dimName(rowDims[i], n)),
@@ -1485,6 +1637,8 @@ export function initDashboards() {
   function choicesOf(f) { return f.choices?.length ? f.choices : [{ db: f.db, table: f.table, column: f.column, category: f.category }]; }
   function addChoice(dash, s, shelf, index, field) {
     const f = s[shelf][index];
+    const refused = refusal(field, "choice") ?? (isCalcPill(f) ? refusal(f, "choice") : null); // E12: neither a calc dropped here nor a calc slot takes choices
+    if (refused) { toast(refused, "info"); return; }
     const list = choicesOf(f);
     if (list.some((c) => sameRef(c, field))) return;
     if (list.length >= LIMITS.fieldChoices) { toast(`A slot can switch between at most ${LIMITS.fieldChoices} fields.`, "info"); return; }
@@ -1508,7 +1662,7 @@ export function initDashboards() {
   function choicesPanel(dash, s) {
     const { shelf, index } = choicesFor;
     const f = s[shelf]?.[index];
-    if (!f) { choicesFor = null; return null; }
+    if (!f || isCalcPill(f)) { choicesFor = null; return null; }
     const panel = el("div", "ws-toolpanel ws-choices");
     const head = el("div", "ws-toolpanel__head");
     const title = el("span", "ws-toolpanel__title");
@@ -1640,17 +1794,17 @@ export function initDashboards() {
       n.addEventListener("change", () => { f.value = n.value.trim(); commit(dash, s); });
     }
     const measures = planMeasures(s).filter((e) => e.role === "shelf");
-    const opts = measures.map((e) => [`${e.field.db}.${e.field.table}.${e.field.column}:${e.agg}`, measureName({ ...e.field, agg: e.agg })]);
-    const cur = f.topBy ? `${f.topBy.db}.${f.topBy.table}.${f.topBy.column}:${f.topBy.agg ?? "sum"}` : "";
+    const opts = measures.map((e) => [topByKey(e), measureName({ ...e.field, agg: e.agg })]);
+    const cur = f.topBy ? topByKey({ field: typeof f.topBy.calc === "string" ? { calc: f.topBy.calc } : f.topBy, agg: f.topBy.agg ?? (typeof f.topBy.calc === "string" ? undefined : "sum") }) : "";
     const by = el("select", "select select--light ws-pill__topby");
     by.setAttribute("aria-label", `Rank ${f.table}.${f.column} by`);
     if (!opts.length) by.append(new Option("add a measure to rank by", ""));
     for (const [v, t] of opts) { const o = new Option(`by ${t}`, v); if (v === cur) o.selected = true; by.add(o); }
     // Default to the first shelf measure the first time.
-    if (!f.topBy && measures[0]) { const e = measures[0]; f.topBy = { db: e.field.db, table: e.field.table, column: e.field.column, agg: e.agg }; }
+    if (!f.topBy && measures[0]) { f.topBy = topByRef(measures[0], calcFieldCtx()); }
     by.addEventListener("change", () => {
-      const e = measures.find((m) => `${m.field.db}.${m.field.table}.${m.field.column}:${m.agg}` === by.value);
-      if (e) { f.topBy = { db: e.field.db, table: e.field.table, column: e.field.column, agg: e.agg }; commit(dash, s); }
+      const e = measures.find((m) => topByKey(m) === by.value);
+      if (e) { f.topBy = topByRef(e, calcFieldCtx()); commit(dash, s); }
     });
     wrap.append(dir, n, by);
     const bind = paramBinding(dash, s, f);
@@ -1813,15 +1967,20 @@ export function initDashboards() {
   // dimension); the pill's convert button can change it. Not allowed twice on the same shelf.
   function addField(dash, shelfKey, f) {
     const list = dash.sheet[shelfKey];
-    if (list.some((x) => x.db === f.db && x.table === f.table && x.column === f.column)) return;
-    const entry = { db: f.db, table: f.table, column: f.column, category: f.category };
-    entry.role = f.category === "numeric" ? "measure" : "dimension";
+    if (list.some((x) => sameField(x, f))) return;
+    const entry = slotEntry(f);
+    entry.role = isCalcPill(f) ? f.role : f.category === "numeric" ? "measure" : "dimension";
     if (!allowed(dash, shelfKey, f, entry.role)) return;
-    if (entry.role === "measure") entry.agg = defaultAgg(f);
+    if (entry.role === "measure") entry.agg = isCalcPill(f) ? f.agg : defaultAgg(f);
+    if (entry.agg === undefined) delete entry.agg;
     list.push(entry);
     normaliseShelf(dash.sheet, shelfKey); // keep dimensions ahead of measures
     commit(dash, dash.sheet);
   }
+  // The stored shape of a dropped field. A calculated field carries its calc id, role and agg through unchanged.
+  const slotEntry = (f) => (isCalcPill(f)
+    ? { calc: f.calc, db: "", table: "", column: f.column, category: f.category, ...(f.role ? { role: f.role } : {}), ...(f.agg ? { agg: f.agg } : {}) }
+    : { db: f.db, table: f.table, column: f.column, category: f.category });
   // P28: a field's default aggregation (its setting when the column supports it, else sum).
   function defaultAgg(f) {
     const a = metaOf(f).agg;
@@ -1834,6 +1993,8 @@ export function initDashboards() {
     return r.ok;
   }
   function addFilter(dash, f) {
+    const refused = refusal(f, "filter");
+    if (refused) { toast(refused, "info"); return; }
     if (dash.sheet.filters.length >= LIMITS.filters) { toast(`A view can have at most ${LIMITS.filters} filters.`, "info"); return; }
     dash.sheet.filters.push({ db: f.db, table: f.table, column: f.column, category: f.category, op: "=", value: "" });
     commit(dash, dash.sheet);
@@ -1842,8 +2003,8 @@ export function initDashboards() {
   // series); a numeric field is continuous (P18 gradient — see colorMode/planMeasures). Capped at one —
   // a second drop replaces the first, matching Tableau's single Colour slot.
   function addColor(dash, f) {
-    if (!allowed(dash, "color", f, "dimension")) return;
-    dash.sheet.color = [{ db: f.db, table: f.table, column: f.column, category: f.category, role: "dimension" }];
+    if (!allowed(dash, "color", f, isCalcPill(f) ? f.role : "dimension")) return;
+    dash.sheet.color = [isCalcPill(f) ? { ...slotEntry(f), role: f.role } : { ...slotEntry(f), role: "dimension" }];
     commit(dash, dash.sheet);
   }
 
@@ -1949,6 +2110,8 @@ export function initDashboards() {
 
   // --- Date range & comparison (P35) ---------------------------------------
   function setPeriod(dash, f) {
+    const refused = refusal(f, "period");
+    if (refused) { toast(refused, "info"); return; }
     if (f.category !== "temporal") { toast("Date range needs a date or date-time field.", "info"); return; }
     dash.sheet.period = newPeriod(f);
     commit(dash, dash.sheet);
@@ -2034,14 +2197,14 @@ export function initDashboards() {
     if (f.category !== "numeric") { toast("Size needs a numeric field (it scales the mark).", "info"); return; }
     if (!allowed(dash, "size", f)) return;
     const m = dash.sheet.marks ?? (dash.sheet.marks = defaultMarks());
-    m.size = { db: f.db, table: f.table, column: f.column, category: f.category, agg: "sum" };
+    m.size = isCalcPill(f) ? slotEntry(f) : { ...slotEntry(f), agg: "sum" };
     commit(dash, dash.sheet);
   }
   // Label holds one field of any kind (numeric → its aggregate; categorical → its grouped value).
   function addMarkSingle(dash, key, f) {
     if (!allowed(dash, key, f)) return;
     const m = dash.sheet.marks ?? (dash.sheet.marks = defaultMarks());
-    m[key] = { db: f.db, table: f.table, column: f.column, category: f.category, ...(f.category === "numeric" ? { agg: "sum" } : {}) };
+    m[key] = isCalcPill(f) ? slotEntry(f) : { ...slotEntry(f), ...(f.category === "numeric" ? { agg: "sum" } : {}) };
     commit(dash, dash.sheet);
   }
   // Detail / Tooltip hold a list of fields (no duplicates). Detail adds group-by granularity.
@@ -2050,11 +2213,13 @@ export function initDashboards() {
     const list = m[key] ?? (m[key] = []);
     if (list.some((x) => sameField(x, f))) return;
     if (!allowed(dash, key, f)) return;
-    list.push({ db: f.db, table: f.table, column: f.column, category: f.category, ...(f.category === "numeric" ? { agg: "sum" } : {}) });
+    list.push(isCalcPill(f) ? slotEntry(f) : { ...slotEntry(f), ...(f.category === "numeric" ? { agg: "sum" } : {}) });
     commit(dash, dash.sheet);
   }
   // Shape (P19) takes one CATEGORICAL field (distinct point symbols); numeric is nudged away.
   function addShape(dash, f) {
+    const refused = refusal(f, "shape");
+    if (refused) { toast(refused, "info"); return; }
     if (f.category === "numeric") { toast("Shape needs a categorical field (each value gets its own symbol).", "info"); return; }
     if (!allowed(dash, "shape", f)) return;
     const m = dash.sheet.marks ?? (dash.sheet.marks = defaultMarks());
@@ -2063,6 +2228,8 @@ export function initDashboards() {
   }
   // Angle (P19) takes one NUMERIC field (a radial magnitude — pie already maps its measure to angle).
   function addAngle(dash, f) {
+    const refused = refusal(f, "angle");
+    if (refused) { toast(refused, "info"); return; }
     if (f.category !== "numeric") { toast("Angle needs a numeric field (it drives a radial magnitude).", "info"); return; }
     const m = dash.sheet.marks ?? (dash.sheet.marks = defaultMarks());
     m.angle = { db: f.db, table: f.table, column: f.column, category: f.category, agg: "sum" };
@@ -2074,6 +2241,8 @@ export function initDashboards() {
   // bound-parameter `=` filter on the current member (the P14 path); members come from the bounded
   // distinct-values query (shared with the `in` filter). Autoplay is suppressed under reduced-motion.
   function addPages(dash, f) {
+    const refused = refusal(f, "pages");
+    if (refused) { toast(refused, "info"); return; }
     stopPaging();
     dash.sheet.pages = { db: f.db, table: f.table, column: f.column, category: f.category, index: 0 };
     commit(dash, dash.sheet);
@@ -2159,7 +2328,10 @@ export function initDashboards() {
     const filterNote = invalidFilterNotice(s);
     setNotice(filterNote);
     // P12 statistical charts that run their own single-table endpoint (histogram / box plot).
-    if (STAT_SINGLE_TABLE.has(s.chartType)) { await runStatChart(dash, s, ticket, filterNote); return; }
+    if (STAT_SINGLE_TABLE.has(s.chartType)) {
+      const noCalc = statCalcProblem(s); // the single-table endpoints can't take a calculation: say so, send nothing
+      if (noCalc) { chartEl.replaceChildren(hint(noCalc)); return; }
+      await runStatChart(dash, s, ticket, filterNote); return; }
     const colorInPlay = s.color?.length && COLOR_USES.has(s.chartType);
     const drillInPlay = isDrillActive(s); // a hierarchy alone can drive a view (implicit count on the level)
     const m = s.marks ?? {};
@@ -2168,9 +2340,17 @@ export function initDashboards() {
       chartEl.replaceChildren(hint("Drag fields onto Columns and Rows to build a chart — categorical fields group, numeric fields aggregate."));
       return;
     }
+    const problem = calcProblem(s, calcFieldCtx()); // E15: a calculation that can't be computed — say why, send nothing
+    if (problem) { chartEl.replaceChildren(warn(problem)); return; }
     const plan = buildPlan(s);
     if (!plan) {
-      chartEl.replaceChildren(warn("These fields come from tables with no relationship between them — draw one in the Data Model."));
+      // Only field-less calculations (e.g. 1+2) and nothing from a table: there is nothing to relate, so say what to add.
+      const cctx = calcFieldCtx();
+      const tableInvolved = [...pillSlots(s)].some((f) => !isCalcPill(f) || planTables(f, cctx).length)
+        || s.filters.length || s.drill?.levels?.length || s.pages || s.period;
+      chartEl.replaceChildren(tableInvolved
+        ? warn("These fields come from tables with no relationship between them — draw one in the Data Model.")
+        : hint("Add a field from a table — a calculation with no field in it has nothing to group or total."));
       return;
     }
     const key = requestKey("query", plan);
@@ -2344,18 +2524,23 @@ export function initDashboards() {
     // values); we send them column-shelf-first then row-shelf-first so the result's measure order
     // lines up with measureAxis() at render time (the shelf decides where the measure band sits).
     // P26: a date pill's part rides along (auto = left to the chart-wide Group dates).
-    const toDim = (f) => ({ db: f.db, table: f.table, column: f.column,
-      ...(f.category === "temporal" && f.datePart && f.datePart !== "auto" ? { datePart: f.datePart } : {}) });
+    const cctx = calcFieldCtx(); // calculated fields: pills compile to trees (Calc/calc-plan.js)
+    const toDim = (f) => wireDim(f, cctx);
     // P16 drill + P18 marks fold into the canonical query shape (planDims/planMeasures): the drill level
     // and any Detail dims are group-bys; Size / continuous-Colour / numeric Label+Tooltip are measures.
     const { rowDims, colDims, keyOrder } = planDims(sheet);
     const rowDimensions = rowDims.map(toDim);
     const columnDimensions = colDims.map(toDim);
     const mplan = planMeasures(sheet);
-    const measures = mplan.map((e) => ({ db: e.field.db, table: e.field.table, column: e.field.column, agg: e.agg }));
+    const measures = mplan.map((e) => wireMeasure(e, cctx));
 
     const involved = [];
-    const add = (ref) => { if (ref) { const k = keyOf(ref.db, ref.table); if (!involved.includes(k)) involved.push(k); } };
+    const addKey = (k) => { if (!involved.includes(k)) involved.push(k); };
+    const add = (ref) => {
+      if (!ref) return;
+      if (isCalcPill(ref)) { planTables(ref, cctx).forEach((k) => { const i = k.indexOf("."); addKey(keyOf(k.slice(0, i), k.slice(i + 1))); }); return; } // none for a constant
+      addKey(keyOf(ref.db, ref.table));
+    };
     keyOrder.forEach(add); mplan.forEach((e) => add(e.field)); sheet.filters.forEach(add);
     const rangeFilters = periodFilters(sheet, periodRange); // P35 — like a filter, it may bring its table in
     rangeFilters.forEach(add);
@@ -2380,7 +2565,7 @@ export function initDashboards() {
     const targets = sortTargets(sheet);
     let sortColumn = targets.length ? targets[0].alias : "v0";
     if (sheet.sort && sheet.sort.by) {
-      const t = targets.find((x) => x.id === sheet.sort.by);
+      const t = resolveSortTarget(targets, sheet.sort.by); // a calc pill matches whatever agg it had
       if (t) sortColumn = t.alias;
     }
     return {
@@ -2648,7 +2833,7 @@ export function initDashboards() {
         const again = legendFocus === name;
         legendFocus = again ? null : name;
         const raw = rawByName.get(name);
-        if (field && dash && raw !== undefined && raw !== null && bucketedKey === null) {
+        if (field && !isCalcPill(field) && dash && raw !== undefined && raw !== null && bucketedKey === null) { // E12: a calculated field can't be click-filtered; the legend still highlights
           if (again) sheet.selection = null;
           else {
             const fmtCat = makeCategoryFormatter(sheet.format ?? defaultFormat());
@@ -2777,6 +2962,8 @@ export function initDashboards() {
   function toggleSelection(dimField, rawValue) {
     const dash = activeDashboard();
     if (!dash) return;
+    const refused = refusal(dimField, "selection");
+    if (refused) { toast(refused, "info"); return; }
     const s = dash.sheet;
     const cur = s.selection;
     const same = cur && cur.table === dimField.table && cur.column === dimField.column && String(cur.value) === String(rawValue);
