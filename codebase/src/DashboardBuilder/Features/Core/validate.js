@@ -14,6 +14,8 @@ export const LIMITS = Object.freeze({
   entities: 100,       // tables on the canvas a workbook may open
   relationships: 200,  // links a workbook may open
   dimensions: 12, measures: 10, // per view (server MaxDimensions / MaxMeasures)
+  hierarchies: 20,   // T03-29: named hierarchies per workbook (client-side only)
+  hierarchyName: 60, // characters in a hierarchy name
   drillLevels: 6, // keeps user filters (8) + drill path (≤5) + page + selection within the server's 16
   rows: 5000, // groups one chart query returns: Top-N "All" (server MaxRowLimit); the Table pages instead
   viewCells: 50000,   // rows x columns one raw-row read returns (server MaxRowsCells)

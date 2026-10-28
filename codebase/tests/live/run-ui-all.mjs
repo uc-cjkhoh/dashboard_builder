@@ -9,25 +9,20 @@ import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, '..', '..');
-const port = Number(process.env.UI_PORT ?? 5193);
+let port = process.env.UI_PORT ? Number(process.env.UI_PORT) : null;
 const only = process.env.ONLY ? process.env.ONLY.split(',') : null;
 const files = readdirSync(here).filter((f) => f.endsWith('-ui.mjs') && (!only || only.includes(f.replace('-ui.mjs', '')))).sort();
-const fuser = (args) => {
-  const r = spawnSync('fuser', args, { stdio: 'ignore' });
-  if (r.error) { console.error(`run-ui-all: cannot run fuser (${r.error.code ?? r.error.message}) — install psmisc; refusing to continue`); process.exit(2); }
-  return r.status;
-};
-const stop = () => fuser(['-k', `${port}/tcp`]);
-
-// Never kill an unrelated listener: only a previous dev run of THIS app (a DashboardBuilder page) may be on the port.
-if (fuser([`${port}/tcp`]) === 0) {
-  let ours = false;
-  try { ours = /Dashboard Builder|ws-chart|worksheet-view/.test(await (await fetch(`http://localhost:${port}/`)).text()); } catch { /* not HTTP */ }
-  if (!ours) { console.error(`run-ui-all: port ${port} has an unrelated listener; set UI_PORT to a free port`); process.exit(2); }
-  stop();
-}
+import { createServer } from 'node:net';
+// Never touch a listener this script did not start: UI_PORT unset -> a free port is picked; UI_PORT set and busy -> refuse.
+const freePort = () => new Promise((res, rej) => { const srv = createServer(); srv.on('error', rej); srv.listen(0, '127.0.0.1', () => { const p = srv.address().port; srv.close(() => res(p)); }); });
+const busy = (p) => new Promise((res) => { const srv = createServer(); srv.on('error', () => res(true)); srv.listen(p, '127.0.0.1', () => srv.close(() => res(false))); });
+if (port === null) port = await freePort();
+if (process.env.UI_PORT) { if (await busy(port)) { console.error(`run-ui-all: port ${port} busy (another run?)`); process.exit(2); } }
 const app = spawn('dotnet', ['run', '--no-launch-profile', '--urls', `http://localhost:${port}`], {
   cwd: join(root, 'src', 'DashboardBuilder'), stdio: 'ignore', detached: true });
+const killApp = () => { try { process.kill(-app.pid, 'SIGTERM'); } catch { /* gone */ } }; // only the process group this script spawned
+for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { killApp(); process.exit(130); });
+process.on('uncaughtException', (e) => { console.error(e); killApp(); process.exit(1); });
 let up = false;
 for (let i = 0; i < 120 && !up; i++) {
   try { up = (await fetch(`http://localhost:${port}/`)).ok; } catch { await new Promise((r) => setTimeout(r, 500)); }
@@ -43,8 +38,7 @@ try {
     if (fail || r.status !== 0) console.log(out.split('\n').filter((l) => /^FAIL|rror/.test(l)).join('\n'));
   }
 } finally {
-  stop();
-  try { process.kill(-app.pid, 'SIGTERM'); } catch { /* gone */ }
+  killApp();
 }
 let bad = !up;
 for (const r of rows) {

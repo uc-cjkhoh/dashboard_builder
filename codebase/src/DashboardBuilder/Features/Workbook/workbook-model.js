@@ -15,6 +15,7 @@ import { cleanAction } from "../Dashboard/action-model.js";
 import { cleanMemberColors } from "../Dashboard/colour-model.js";
 import { checkTooltipText } from "../Dashboard/tooltip-model.js";
 import { cleanParameter, MAX_PARAMS } from "../Core/parameters-model.js";
+import { cleanHierarchies, hierarchyTableKey } from "../Dashboard/hierarchy-model.js";
 import { cleanCalculations } from "../Calc/calc-workbook.js";
 import { cleanWidgets, savedWidgets } from "../Board/board-model.js";
 import { CALC_AGGS } from "../Calc/calc-pill.js";
@@ -31,7 +32,7 @@ const NOT_A_WORKBOOK = "This file is not a Dashboard Builder workbook.";
 /** Builder state → a plain JSON-safe object. DOM nodes, fetched columns and lazily-loaded page
  *  members are left out (they are re-fetched on open). `tabs` is the store's ordered list (worksheet and dashboard
  *  tabs); `active` is the store's activeView. */
-export function serializeWorkbook({ entities, relationships, tabs, active, theme, sharedFilters = [], bookmarks = [], fieldMeta = new Map(), parameters = [], calculations = [], nextCalcId }) {
+export function serializeWorkbook({ entities, relationships, tabs, active, theme, sharedFilters = [], bookmarks = [], fieldMeta = new Map(), parameters = [], calculations = [], nextCalcId, hierarchies = [] }) {
   const worksheets = [], dashboards = [], order = [];
   const wsIndex = new Map(), dbIndex = new Map(); // tab id → index in the saved list
   for (const t of tabs) {
@@ -64,6 +65,7 @@ export function serializeWorkbook({ entities, relationships, tabs, active, theme
     sharedFilters: structuredClone(sharedFilters),
     fields: Object.fromEntries(fieldMeta), // P28
     parameters: structuredClone(parameters), // P32
+    ...(hierarchies.length ? { hierarchies: structuredClone(hierarchies) } : {}), // T03-29 (optional; absent in older files)
     calculations: calculations.map((c) => ({ id: c.id, name: c.name, formula: c.formula, ...(c.group ? { group: structuredClone(c.group) } : {}) })), // Plan B (no parsed tree); T02-30 a group field saves its definition
     // The next calculation number, so a deleted highest id is never handed out again (absent when there never were any).
     ...(calculations.length || nextCalcId ? { nextCalcId: Math.max(Number.isInteger(nextCalcId) ? nextCalcId : 0, ...calculations.map((c) => Number(String(c.id).slice(4)) + 1)) } : {}),
@@ -221,6 +223,7 @@ export function parseWorkbook(source) {
   for (const b of bookmarks) b.worksheet = b.worksheet === null ? null : wsMap.get(b.worksheet) ?? null; // a worksheet cut by the tab cap reads as closed
   const fields = cleanFieldMeta(raw.fields, issues); // P28
   const parameters = cleanParameters(raw.parameters, issues); // P32
+  const hierarchies = cleanHierarchies(raw.hierarchies, issues, { tables: new Set(entities.map((e) => hierarchyTableKey(e.db, e.table))) }); // T03-29
   // A filter or Top N that points at a parameter the workbook doesn't have falls back to its own value.
   const paramIds = new Set(parameters.map((p) => p.id));
   for (const d of worksheets) unlinkParams(d.sheet, paramIds, `Sheet "${d.name}"`, issues);
@@ -239,7 +242,7 @@ export function parseWorkbook(source) {
     if (Number.isInteger(raw.nextCalcId) && raw.nextCalcId >= 1 && raw.nextCalcId <= 999999) nextCalcId = raw.nextCalcId;
     else issues.push("The saved next calculation number was invalid — ignored.");
   }
-  return { entities, relationships, worksheets, dashboards, tabs, active, theme, sharedFilters, bookmarks, fields, parameters, calculations, nextCalcId, issues: [...new Set(issues)] };
+  return { entities, relationships, worksheets, dashboards, tabs, active, theme, sharedFilters, bookmarks, fields, parameters, hierarchies, calculations, nextCalcId, issues: [...new Set(issues)] };
 }
 
 /** A saved list of tab objects; a non-list is reported, and entries that aren't objects are skipped (and reported). */

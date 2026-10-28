@@ -586,3 +586,22 @@
 .memlab-error { color: var(--danger-ink); font-size: var(--fs-sm); }
 .memlab-error:empty { display: none; }
 .memlab-reset { margin-right: auto; }
+
+/* T03-29 named hierarchies: the field pane group and the dialog. Tokens only. */
+.hier-group { display: flex; flex-direction: column; gap: 3px; margin-bottom: var(--s2); }
+.hier-group__actions { display: flex; flex-direction: column; gap: var(--s1); }
+.hier-group__actions .btn { white-space: nowrap; width: 100%; justify-content: flex-start; padding-inline: var(--s2); }
+.hier-field { border-color: var(--line); background: var(--surface-2); }
+.hier-field::before { display: none; }
+.hier-field__type { flex: none; color: var(--dim-ink); }
+.hier-field--bad { border-color: var(--danger-line); cursor: default; }
+.hier-field--bad .hier-field__type { color: var(--danger-ink); }
+.hier-field .ws-field__add:focus-visible, .hier-group__actions .btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.hier-levelbox { display: grid; gap: var(--s2); }
+.hier-levels { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s1); }
+.hier-level { display: flex; align-items: center; gap: var(--s2); padding: var(--s1) var(--s2); border: 1px solid var(--line); border-radius: var(--r-ctl); background: var(--surface); }
+.hier-level__n { color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.hier-level__name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+.hier-levels__empty { color: var(--ink-2); font-size: var(--fs-sm); }
+.hier-add { display: flex; align-items: end; gap: var(--s2); }
+.hier-add .params-field { flex: 1 1 auto; }
