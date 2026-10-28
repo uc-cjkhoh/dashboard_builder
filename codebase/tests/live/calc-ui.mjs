@@ -2,9 +2,9 @@
 // Chromium, driven over the DevTools protocol (tests/live/cdp.mjs), with every /api/* call answered by a mock —
 // nothing reaches a ClickHouse. Run:  node tests/live/calc-ui.mjs   (start the app first:
 //   cd src/DashboardBuilder && dotnet run --no-launch-profile --urls http://localhost:5180 ; stop it with fuser -k 5180/tcp)
-// Env: APP_URL, SHOTS_DIR (screenshot folder), CDP_PORT, CHROME_BIN.
+// Env: APP_URL, SHOTS_DIR (screenshot folder), CDP_PORT (default: a free port), CHROME_BIN.
 import { launch } from './cdp.mjs';
-import { writeFileSync, mkdirSync, mkdtempSync } from 'node:fs';
+import { writeFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -49,7 +49,8 @@ async function check(name, fn) {
 const must = (cond, msg) => { if (!cond) throw new Error(msg); };
 const J = JSON.stringify;
 
-const b = await launch({ port: Number(process.env.CDP_PORT ?? 9333) });
+const wbDir = mkdtempSync(join(tmpdir(), 'calc-wb-'));
+const b = await launch({ port: process.env.CDP_PORT ? Number(process.env.CDP_PORT) : undefined });
 try {
   await b.mock(answer);
   const ev = (s) => b.evaluate(s);
@@ -103,7 +104,9 @@ try {
   const confirmOpen = `[...document.querySelectorAll('dialog[open]')].find((d) => !d.classList.contains('calc-dialog'))`;
   const chartText = () => ev(`document.getElementById('ws-chart').textContent`);
   const canvasDrawn = () => ev(`!!document.querySelector('#ws-chart canvas, #ws-chart svg')`);
-  const settle = async () => { await b.sleep(400); };
+  const until = async (fn, label, timeout = 8000) => { const t0 = Date.now(); while (!fn()) { if (Date.now() - t0 > timeout) throw new Error(`timed out waiting for: ${label}`); await b.sleep(50); } };
+  // Wait until no new /api/query has arrived for `quiet` ms (polling, not a fixed sleep).
+  const settle = async (quiet = 300) => { let n = -1; for (let i = 0; i < 60 && n !== queries.length; i++) { n = queries.length; await b.sleep(quiet); } };
   const lastQuery = () => queries[queries.length - 1];
   const hasKey = (o, k) => J(o).includes(`"${k}"`);
 
@@ -134,14 +137,21 @@ try {
     await focusAndType('.calc-dialog textarea.formula', 'SUM([orders.nope])');
     const msg2 = await ev(`${dlg}.querySelector('[id^=calc-fmsg]').textContent.trim()`);
     must(msg2.length > 0 && await saveDisabled(), `unknown field not refused (${msg2})`);
+    await ev(`[...${dlg}.querySelectorAll('.dialog__foot button')].find((x) => x.textContent === 'Cancel').click()`);
+    await waitFor(`${dlg} === null`, 'dialog closed');
   });
 
-  // (k) autocomplete (checked here while the dialog is open; a calculation is added first below)
-  await check('a: create "Unit price", save, appears in the field pane', async () => {
+  await check('a: create "Unit price", save, appears in the field pane; chip name and tag are not clipped', async () => {
+    await openNewDialog();
+    await fillDialog('Unit price', 'SUM([orders.amount]) / SUM([orders.qty])');
     await focusAndType('.calc-dialog textarea.formula', 'SUM([orders.amount]) / SUM([orders.qty])');
     must(!(await saveDisabled()), 'Save still disabled for a valid formula');
     await saveDialog();
     await waitFor(`!!__t.chip('Unit price')`, 'chip in the field pane');
+    const clip = await ev(`(() => { const c = __t.chip('Unit price'); const n = c.querySelector('.ws-field__name'), t = c.querySelector('.calc-chip');
+      return { pane: document.getElementById('ws-fields').clientWidth, name: [n.scrollWidth, n.clientWidth], tag: [t.scrollWidth, t.clientWidth], tagText: t.textContent }; })()`);
+    must(clip.name[0] <= clip.name[1], `name clipped at pane width ${clip.pane}: ${J(clip)}`);
+    must(clip.tag[0] <= clip.tag[1] && clip.tag[1] > 0, `kind tag clipped: ${J(clip)}`);
   });
 
   await check('a: drag onto Rows -> /api/query carries a calc tree with no agg; chart drawn', async () => {
@@ -150,7 +160,7 @@ try {
     const before = queries.length;
     await dragChip('Unit price', `__t.zone('rows')`);
     await waitFor(`__t.pills('rows').length === 1`, 'pill on Rows');
-    await waitFor(`true`); await b.sleep(600);
+    await settle();
     must(queries.length > before, 'no query sent after the drop');
     const q = lastQuery();
     const m0 = q.measures?.[0];
@@ -159,8 +169,26 @@ try {
     must(m0.calc.k === 'bin' && m0.calc.op === '/', `unexpected tree root ${J(m0.calc).slice(0, 120)}`);
     must(await canvasDrawn(), 'no chart drawn');
     must(/APAC/.test(await chartText()) && /US/.test(await chartText()), `chart lacks the mocked categories: ${await chartText()}`);
-    const bar = await ev(`document.getElementById('ws-statusbar').textContent`);
-    must(/3/.test(bar) || (await canvasDrawn()), `status bar: ${bar}`);
+  });
+
+
+  // pills: which controls a pill carries (regression test for the calc-pill fix; the plain field is the risk)
+  await check('pills: aggregate calc has no agg select / role toggle (keeps fx); row-level number calc and plain numeric keep them', async () => {
+    await newCalc('Net', '[orders.amount] * 2');
+    await dragChip('Net', `__t.zone('rows')`);
+    await dragChip('amount', `__t.zone('rows')`);
+    await waitFor(`__t.pills('rows').length === 3`, 'three Rows pills');
+    const info = await ev(`(() => { const out = {}; for (const p of document.querySelectorAll('.ws-shelf--rows .ws-pill')) out[p.querySelector('.ws-pill__text').textContent] =
+      { agg: !!p.querySelector('.ws-pill__agg'), conv: !!p.querySelector('.ws-pill__conv'), fx: !!p.querySelector('.ws-pill__calc') }; return out; })()`);
+    const keys = Object.keys(info);
+    const get = (re) => info[keys.find((k) => re.test(k))];
+    const agg = get(/Unit price/), row = get(/Net/), plain = get(/amount/);
+    must(agg && !agg.agg && !agg.conv, `aggregate calc pill: ${J(info)}`);
+    must(agg.fx, `aggregate calc pill lost its table-calculation (fx) button: ${J(info)}`);
+    must(row && row.agg && row.conv, `row-level number calc pill: ${J(info)}`);
+    must(plain && plain.agg && plain.conv, `plain numeric field pill: ${J(info)}`);
+    for (let i = 0; i < 2; i++) { await ev(`document.querySelector('.ws-shelf--rows .ws-pill:last-child button[aria-label="Remove field"]').click()`); await waitFor(`__t.pills('rows').length === ${2 - i}`, 'pill removed'); }
+    await settle();
   });
 
   // (k) autocomplete in a second dialog (a calculation exists now)
@@ -203,7 +231,7 @@ try {
     must((await pills('rows'))[0]?.includes('Avg price'), `pill: ${J(await pills('rows'))}`);
     await dragChip('Double', `__t.zone('rows')`);
     await waitFor(`__t.pills('rows').length === 2`, 'Double pill');
-    await b.sleep(600);
+    await settle();
     const q = lastQuery();
     must(q.measures.length === 2 && q.measures.every((m) => m.calc), `measures: ${J(q.measures).slice(0, 300)}`);
     must(J(q.measures[1].calc).includes('"k":"bin"'), 'Double tree missing');
@@ -257,7 +285,7 @@ try {
     await waitFor(`__t.pills('columns').length === 0`, 'region pill removed');
     await dragChip('Region calc', `__t.zone('columns')`);
     await waitFor(`__t.pills('columns').length === 1`, 'calc dimension on Columns');
-    await b.sleep(700);
+    await settle();
     const q = lastQuery();
     must(q.columnDimensions?.[0]?.calc, `column dimension has no calc: ${J(q.columnDimensions)}`);
     must(await canvasDrawn(), 'no chart');
@@ -275,7 +303,7 @@ try {
     await ev(`document.querySelector('.ws-shelf--columns .ws-pill button[aria-label^="Remove"], .ws-shelf--columns .ws-pill .ws-pill__remove')?.click()`);
     await waitFor(`__t.pills('columns').length === 0`, 'calc dim removed');
     await dragChip('region', `__t.zone('columns')`);
-    await waitFor(`__t.pills('columns').length === 1`, 'region back'); await b.sleep(700);
+    await waitFor(`__t.pills('columns').length === 1`, 'region back'); await settle();
     const pt2 = await ev(`(() => { const host = document.querySelector('#ws-chart > div'); const inst = window.echarts.getInstanceByDom(host);
       const r = host.getBoundingClientRect(); const opt = inst.getOption(); const cat = (opt.xAxis?.[0]?.data ?? opt.yAxis?.[0]?.data ?? [])[0];
       const horiz = opt.yAxis?.[0]?.type === 'category';
@@ -291,15 +319,16 @@ try {
     await ev(`document.querySelector('.tab-add').click()`);
     await waitFor(`document.querySelectorAll('.tab:not(.tab--model)').length === 2 && __t.pills('rows').length === 0`, 'second worksheet');
     await newCalc('One plus two', '1+2');
+    queries.length = 0; // baseline BEFORE the click, so a query sent right after it is caught
     await ev(`(() => { const c = __t.chip('One plus two'); c.querySelector('.ws-field__add').click(); return true; })()`);
-    await b.sleep(300);
-    const before = queries.length;
-    await b.sleep(600);
+    await waitFor(`__t.pills('rows').length + __t.pills('columns').length === 1`, 'pill added');
+    await waitFor(`/Add a field from a table/.test(document.getElementById('ws-chart').textContent)`, 'hint shown');
+    await settle(500);
     const pl = [...await pills('rows'), ...await pills('columns')];
     must(pl.length === 1, `pills: ${J(pl)}`);
     const text = await chartText();
     must(/Add a field from a table/.test(text), `chart pane says: ${J(text)}`);
-    must(queries.length === before, 'a query was sent');
+    must(queries.length === 0, `${queries.length} query(ies) sent: ${String(J(queries[0])).slice(0, 200)}`);
     must(!(await ev(`document.getElementById('ws-chart').querySelector('canvas')`)), 'a chart was drawn');
   });
   // back to the first worksheet
@@ -354,8 +383,7 @@ try {
     const json = await ev(`window.__blobs[0]`);
     const wb = JSON.parse(json);
     must(Array.isArray(wb.calculations) && wb.calculations.some((c) => c.name === 'Unit price'), `export lacks calculations: ${Object.keys(wb)}`);
-    const dir = mkdtempSync(join(tmpdir(), 'calc-wb-'));
-    const file = join(dir, 'workbook.json');
+    const file = join(wbDir, 'workbook.json');
     writeFileSync(file, json);
     await ev(`localStorage.clear()`);
     await b.send('Page.reload');
@@ -372,16 +400,14 @@ try {
     await waitFor(`!document.getElementById('dashboard-view').hidden`, 'worksheet shown');
     await installHelpers();
     await waitFor(`!!__t.chip('Unit price')`, 'field-pane group restored');
-    await b.sleep(300);
+    await waitFor(`__t.pills('rows').length === 1`, 'pill restored on Rows');
     const rows = await pills('rows');
     must(rows.length === 1 && rows[0].includes('Unit price'), `pill not restored: ${J(rows)}`);
+    // an explicit re-query: Refresh on the view bar (skips every cache)
     queries.length = 0;
-    await ev(`document.querySelector('.ws-viewbar button[aria-label*="efresh"], .ws-viewbar [title*="efresh"]')?.click()`);
-    await waitFor(`true`);
-    // the sheet re-queries on load; if not, force one by toggling the chart type
-    await b.sleep(800);
-    if (!queries.length) { await ev(`document.querySelectorAll('.tab:not(.tab--model) .tab__label')[1]?.click()`); await b.sleep(300); await ev(`document.querySelectorAll('.tab:not(.tab--model) .tab__label')[0].click()`); await b.sleep(800); }
-    must(queries.length > 0, 'no query after restore');
+    await ev(`(() => { const r = [...document.querySelectorAll('.ws-viewbar button')].find((x) => /refresh/i.test(x.getAttribute('aria-label') ?? x.title ?? '')); if (!r) throw new Error('no Refresh button on the view bar'); r.click(); return true; })()`);
+    await until(() => queries.length > 0, 'a query after restore');
+    await settle();
     const m0 = lastQuery().measures?.[0];
     must(m0?.calc && !m0.agg, `restored request lacks the calc tree: ${J(m0)}`);
     must(await canvasDrawn(), 'no chart after restore');
@@ -396,7 +422,8 @@ try {
     await waitFor(`document.querySelectorAll('.entity').length === 1`, 'entity removed');
     await ev(`document.querySelectorAll('.tab:not(.tab--model) .tab__label')[0].click()`);
     await waitFor(`!document.getElementById('dashboard-view').hidden`, 'worksheet shown');
-    await b.sleep(1000);
+    await waitFor(`/can't be computed/.test(document.getElementById('ws-chart').textContent)`, 'E15 message');
+    await settle(500);
     const text = await chartText();
     must(/Calculation 'Unit price' can't be computed: /.test(text), `chart pane says: ${J(text)}`);
     must(queries.length === 0, `${queries.length} /api/query request(s) sent after removal: ${String(J(queries[0])).slice(0, 200)}`);
@@ -407,6 +434,7 @@ try {
   console.log(`FAIL harness: ${e.stack}`); failed++;
 } finally {
   await b.close();
+  rmSync(wbDir, { recursive: true, force: true });
 }
 console.log(`\n${passed} ok, ${failed} failed`);
 process.exit(failed ? 1 : 0);

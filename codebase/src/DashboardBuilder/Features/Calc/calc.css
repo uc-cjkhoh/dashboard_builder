@@ -64,8 +64,12 @@
 .calc-field--dim .calc-field__type { color: var(--dim-ink); }
 .calc-field--error { border-color: var(--danger-line); }
 .calc-field--error .calc-field__type { color: var(--danger-ink); }
-.calc-field .calc-chip { height: 18px; padding: 0 var(--s1); flex: 0 100 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.calc-field .ws-field__name { flex: 1 1 auto; min-width: 6ch; } /* the name is what you pick by: the kind tag gives way first */
+.ws-field.calc-field { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; column-gap: var(--s2); row-gap: 2px; height: auto; padding-block: var(--s1); }
+.calc-field .calc-field__type { grid-area: 1 / 1; }
+.calc-field .ws-field__name { grid-area: 1 / 2; min-width: 0; } /* the name gets its own line: ellipsis only for a genuinely long one */
+.calc-field .ws-field__menu { grid-area: 1 / 3; }
+.calc-field .ws-field__add { grid-area: 1 / 4; }
+.calc-field .calc-chip { grid-area: 2 / 2 / 3 / 5; justify-self: start; height: 18px; padding: 0 var(--s1); white-space: nowrap; } /* the kind tag is never clipped */
 .calc-field .ws-field__more { opacity: 1; }
 
 /* ---- View bar: How this is computed ---- */
@@ -74,7 +78,8 @@
 .explain__btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .explain__pop { position: absolute; top: calc(100% + var(--s1)); left: 0; z-index: 30; width: min(380px, 90vw); max-height: 60vh; overflow: auto;
   padding: var(--s3); background: var(--surface); color: var(--ink); border: 1px solid var(--line-2); border-radius: var(--r); box-shadow: var(--elev-8); }
-.explain__pop:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.explain__pop:focus { outline: none; }
+.explain__pop:focus-visible { outline: 1px solid var(--focus); outline-offset: 0; }
 .explain__title { margin: 0 0 var(--s2); font-size: var(--fs-sm); font-weight: 700; }
 .explain__list { margin: 0; padding-left: var(--s4); display: flex; flex-direction: column; gap: var(--s2); font-size: var(--fs-sm); }
 .explain__list li::marker { color: var(--ink-3); font-weight: 600; }

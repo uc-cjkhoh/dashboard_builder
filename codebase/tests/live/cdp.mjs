@@ -1,7 +1,8 @@
 // Minimal Chrome DevTools Protocol driver (no playwright-core on this host): launches headless Chromium,
 // opens one page, answers /api/* through Fetch interception, and offers evaluate / waitFor / screenshot.
 import { spawn } from 'node:child_process';
-import { mkdtempSync, readdirSync, existsSync } from 'node:fs';
+import { mkdtempSync, readdirSync, existsSync, rmSync } from 'node:fs';
+import { createServer } from 'node:net';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -19,12 +20,15 @@ function findChrome() {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-export async function launch({ port = 9333, width = 1400, height = 900 } = {}) {
+const freePort = () => new Promise((res, rej) => { const srv = createServer(); srv.on('error', rej); srv.listen(0, '127.0.0.1', () => { const { port } = srv.address(); srv.close(() => res(port)); }); });
+
+export async function launch({ port, width = 1400, height = 900 } = {}) {
+  port ??= await freePort();
   const profile = mkdtempSync(join(process.env.TMPDIR ?? tmpdir(), 'calc-ui-'));
   const proc = spawn(findChrome(), [
     '--headless=new', '--no-sandbox', '--disable-gpu', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`,
     `--window-size=${width},${height}`, 'about:blank',
-  ], { stdio: 'ignore' });
+  ], { stdio: 'ignore', detached: true }); // own process group, so close() can kill every helper process
   let version = null;
   for (let i = 0; i < 100 && !version; i++) {
     try { version = await (await fetch(`http://127.0.0.1:${port}/json/version`)).json(); } catch { await sleep(100); }
@@ -104,7 +108,8 @@ export async function launch({ port = 9333, width = 1400, height = 900 } = {}) {
         }).catch(() => {});
       });
     },
-    async close() { try { ws.close(); } catch {} proc.kill('SIGKILL'); },
+    async close() { try { ws.close(); } catch {} try { process.kill(-proc.pid, 'SIGKILL'); } catch { /* already gone */ }
+      await sleep(100); rmSync(profile, { recursive: true, force: true }); },
   };
   return api;
 }
