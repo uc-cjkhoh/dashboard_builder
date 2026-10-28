@@ -32,6 +32,7 @@ import { paneState, deleteCalcPlan, roleChoice, setRoleChoice } from "../Calc/ca
 import { checkName } from "../Calc/calc-workbook.js";
 import { wireDim, wireMeasure, planTables, calcProblem, statCalcProblem, measureLabel, aggWord, topByRef, topByKey, wireTopBy, resolveSortTarget } from "../Calc/calc-plan.js";
 import { REF_CHOICES, TREND_CHOICES, FORECAST_CHOICES, defaultAnalytics, refValue, trendSeries, combine } from "./analytics-model.js";
+import { castChoices, castLabel, effectiveCategory, withCasts, syncCastCategories, statCastProblem } from "./cast-model.js";
 import { scalePlan, withOther, bucketNotice, tableProgress, needsNextPage, OTHER_TYPES, BUCKET_TYPES, DATE_BUCKET_CHOICES } from "./scale-model.js";
 
 // Tableau-style worksheet: each dashboard is one sheet. Drag fields from the field pane onto the
@@ -40,7 +41,13 @@ import { scalePlan, withOther, bucketNotice, tableProgress, needsNextPage, OTHER
 // relationships drawn in the Data Model (a join path found by BFS over the relationship graph).
 const FIELD_MIME = "application/x-ch-field";
 // Column category from the Data Model catalog (entity.columns), for filters saved without one.
-function categoryOf(db, table, column) {
+// T02-34: a field's cast (field setting) decides the category its pills, filters and the field pane use.
+const castOf = (f) => metaOf(f).cast;
+const categoryOf = (db, table, column) => {
+  const base = baseCategoryOf(db, table, column);
+  return base ? effectiveCategory(base, castOf({ db, table, column })) : undefined;
+};
+function baseCategoryOf(db, table, column) {
   try {
     // The worksheet's own column cache is warm by render time (buildFields awaited it); the Data Model's
     // entity columns (loaded asynchronously by the canvas) are the fallback.
@@ -312,7 +319,18 @@ export function initDashboards() {
   bus.addEventListener("scheme:changed", () => { if (!isModelActive()) runChart(); });
   bus.addEventListener("theme:changed", () => { if (!isModelActive()) runChart(); }); // P41: redraw in the new colours
   // P28: a rename / hide / default aggregation redraws the field pane, the pills and the chart's labels.
-  bus.addEventListener("fields:changed", () => { if (isModelActive()) return; buildFields(); renderShelves(); runChart(); });
+  // T02-34: a changed data type cast also re-categorises the pills / filters that read the field.
+  bus.addEventListener("fields:changed", () => {
+    const active = activeDashboard();
+    let activeChanged = false;
+    for (const d of dashboards) {
+      if (!syncCastCategories(d.sheet, sharedFilters, castOf, baseCategoryOf)) continue;
+      if (d === active && !isModelActive()) activeChanged = true; else commitQuiet(d, d.sheet);
+    }
+    if (isModelActive()) return;
+    buildFields();
+    if (activeChanged) commit(active, active.sheet); else { renderShelves(); runChart(); }
+  });
   // Calculated fields: a new / edited / renamed / deleted calculation refreshes every sheet's pills (category, role, live name),
   // the field pane and the chart. An unchanged sheet is just redrawn; a changed one goes through commit().
   bus.addEventListener("calculations:changed", () => {
@@ -388,8 +406,9 @@ export function initDashboards() {
       group.append(el("summary", "ws-table__name", `${t.db}.${t.table}`));
       // P28: hidden fields stay out of the pane unless "Show hidden" is on.
       const visible = cols.filter((c) => { const h = metaOf({ ...t, column: c.name }).hidden; if (h) hiddenCount++; return !h || showHiddenFields; });
-      const dims = visible.filter((c) => c.category !== "numeric");
-      const meas = visible.filter((c) => c.category === "numeric");
+      const catOf = (c) => effectiveCategory(c.category, castOf({ ...t, column: c.name }));
+      const dims = visible.filter((c) => catOf(c) !== "numeric");
+      const meas = visible.filter((c) => catOf(c) === "numeric");
       if (dims.length) { group.append(el("div", "ws-field-group", "Dimensions")); for (const c of dims) group.append(fieldChip(t, c, "dimension")); }
       if (meas.length) { group.append(el("div", "ws-field-group", "Measures")); for (const c of meas) group.append(fieldChip(t, c, "measure")); }
       groups.push(group);
@@ -557,15 +576,16 @@ export function initDashboards() {
     const chip = el("div", `ws-field ws-field--${role}`);
     chip.draggable = true;
     chip.title = `${col.name} · ${col.type}`;
-    const payload = { db: t.db, table: t.table, column: col.name, category: col.category };
-    const meta = metaOf(payload);
-    const typeIcon = icon(TYPE_ICONS[col.category] ?? "type-other", { size: 14 });
+    const meta = metaOf({ db: t.db, table: t.table, column: col.name });
+    const payload = { db: t.db, table: t.table, column: col.name, category: effectiveCategory(col.category, meta.cast) };
+    const typeIcon = icon(TYPE_ICONS[payload.category] ?? "type-other", { size: 14 });
     typeIcon.classList.add("ws-field__type");
     const nameEl = el("span", "ws-field__name", meta.alias || col.name);
     if (meta.alias) { nameEl.title = `${meta.alias} — column ${col.name}`; chip.classList.add("is-renamed"); }
     if (meta.hidden) chip.classList.add("is-hidden");
     chip.dataset.search = `${col.name} ${meta.alias ?? ""}`.toLowerCase();
     chip.append(typeIcon, nameEl);
+    if (meta.cast) { chip.classList.add("is-cast"); chip.append(castBadge(meta.cast, col.category, false)); }
     chip.append(fieldMenu(payload, col, nameEl));
 
     // Keyboard/non-drag path (a11y): a focusable plus button adds the field to its natural shelf without
@@ -590,6 +610,15 @@ export function initDashboards() {
     return chip;
   }
 
+  // T02-34: the cast tag — icon + text (never colour alone); its title says what the field was.
+  // On a field chip the leading type icon already shows the new type, so the tag there is text only.
+  function castBadge(cast, from, withIcon = true) {
+    const b = el("span", "ws-cast");
+    if (withIcon) b.append(icon(TYPE_ICONS[effectiveCategory(from, cast)] ?? "type-other", { size: 12 }));
+    b.append(document.createTextNode(`as ${castLabel(cast)}`));
+    b.title = `Read as ${castLabel(cast).toLowerCase()} (stored as ${from === "numeric" ? "number" : from === "temporal" ? "date" : from})`;
+    return b;
+  }
   // P28: a field's ⋯ menu — Rename (inline), Default aggregation (numeric), Hide / Show.
   function fieldMenu(f, col, nameEl) {
     const wrap = el("div", "menu ws-field__menu");
@@ -613,6 +642,11 @@ export function initDashboards() {
       for (const a of aggsFor(col.category))
         list.append(item(a, () => setFieldMeta(f, { agg: a === "sum" ? null : a }), { role: "menuitemradio", checked: (meta.agg ?? "sum") === a }));
     }
+    // T02-34: read the field as another type (the server converts; a value that doesn't fit becomes empty).
+    list.append(el("div", "menu__sep"), el("div", "menu__heading", "Data type"));
+    list.append(item("Original", () => setFieldMeta(f, { cast: null }), { role: "menuitemradio", checked: !meta.cast }));
+    for (const c of castChoices(col.category))
+      list.append(item(castLabel(c), () => setFieldMeta(f, { cast: c }), { role: "menuitemradio", checked: meta.cast === c }));
     list.append(el("div", "menu__sep"), item(meta.hidden ? "Show in the field list" : "Hide from the field list", () => setFieldMeta(f, { hidden: !meta.hidden })));
     wireMenu(btn, list);
     wrap.append(btn, list);
@@ -1435,6 +1469,8 @@ export function initDashboards() {
     sw.setAttribute("aria-pressed", String(Boolean(open)));
     sw.addEventListener("click", () => { choicesFor = open ? null : { shelf: shelfKey, index: i }; if (choicesFor) { openTool = null; calcFor = null; } formatOpen = false; showMeOpen = false; renderShelves(); });
     if (!isCalcPill(f)) controls.append(sw); // E12: a calculated field has no field choices
+    const cast = calcPill ? null : castOf(f);
+    if (cast) controls.prepend(castBadge(cast, baseCategoryOf(f.db, f.table, f.column) ?? f.category)); // T02-34
     const p = pill(label, remove, controls);
     p.classList.add(isMeasure ? "ws-pill--measure" : "ws-pill--dimension");
 
@@ -2339,6 +2375,8 @@ export function initDashboards() {
     if (STAT_SINGLE_TABLE.has(s.chartType)) {
       const noCalc = statCalcProblem(s); // the single-table endpoints can't take a calculation: say so, send nothing
       if (noCalc) { chartEl.replaceChildren(hint(noCalc)); return; }
+      const noCast = statCastProblem(s, castOf); // nor a data type cast
+      if (noCast) { chartEl.replaceChildren(hint(noCast)); return; }
       await runStatChart(dash, s, ticket, filterNote); return; }
     const colorInPlay = s.color?.length && COLOR_USES.has(s.chartType);
     const drillInPlay = isDrillActive(s); // a hierarchy alone can drive a view (implicit count on the level)
@@ -2576,7 +2614,7 @@ export function initDashboards() {
       const t = resolveSortTarget(targets, sheet.sort.by); // a calc pill matches whatever agg it had
       if (t) sortColumn = t.alias;
     }
-    return {
+    return withCasts({
       from: { db, table },
       joins,
       rowDimensions,
@@ -2590,7 +2628,7 @@ export function initDashboards() {
       ...scalePlan(sheet.chartType, { ...sheet.format, topN: effectiveTopN(sheet.format, parameters, LIMITS.rows) }, rowDimensions.length + columnDimensions.length),
       ...(sheet.format?.approximate ? { approximate: true } : {}), // P33
       sort: { column: sortColumn, desc: sheet.sort?.dir === "desc" },
-    };
+    }, castOf); // T02-34: each plain column ref carries its field's cast
   }
 
   // Join path over the relationship graph: connect every involved table back to the base.

@@ -219,6 +219,11 @@
 .ws-more { display: inline-flex; }
 .ws-fieldset > summary { cursor: pointer; }
 .ws-field__type { flex: none; color: var(--ink-3); }
+/* T02-34 cast tag: icon + "as Number" text, on a field chip and on its pills. */
+/* On a chip the tag sits on its own line under the name, so the name is never squeezed out. */
+.ws-field.is-cast { flex-wrap: wrap; }
+.ws-field .ws-cast { order: 9; flex: 0 0 auto; margin-left: 22px; font-size: 10px; }
+.ws-cast { flex: none; display: inline-flex; align-items: center; gap: 2px; padding: 0 var(--s1); font-size: 11px; line-height: 16px; color: var(--ink-2); border: 1px solid var(--line); border-radius: var(--r-ctl); white-space: nowrap; }
 /* The one open tool's editor: a card with its pills over a drop zone. */
 .ws-toolpanel {
   display: flex; flex-direction: column; gap: var(--s2);
