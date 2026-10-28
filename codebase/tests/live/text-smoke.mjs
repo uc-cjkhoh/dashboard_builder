@@ -10,7 +10,7 @@ assert.ok(CH_HOST && CH_PORT && CH_USER && CH_PASSWORD !== undefined, 'set CH_HO
 const APP = process.env.APP_URL ?? 'http://localhost:5190';
 const auth = 'Basic ' + Buffer.from(`${CH_USER}:${CH_PASSWORD}`).toString('base64');
 
-const DB = 'test_cj', TBL = 'bk_text', T = `${DB}.${TBL}`;
+const DB = 'test_cj', TBL = 'bk_text', T = `${DB}.${TBL}`, T2 = `${DB}.bk_text_arg`;
 
 async function ch(sql, { readonly = true } = {}) {
   const qs = new URLSearchParams({ default_format: 'JSONCompact', output_format_json_quote_64bit_integers: '0' });
@@ -22,7 +22,7 @@ async function ch(sql, { readonly = true } = {}) {
 }
 // The only writes: DDL / inserts on test_cj.bk_text.
 const write = (sql) => {
-  assert.match(sql, /^(CREATE TABLE|INSERT INTO|DROP TABLE IF EXISTS) test_cj\.bk_text\b/, `refusing write: ${sql.slice(0, 60)}`);
+  assert.match(sql, /^(CREATE TABLE|INSERT INTO|DROP TABLE IF EXISTS) test_cj\.bk_text(_arg)?\b/, `refusing write: ${sql.slice(0, 60)}`);
   return ch(sql, { readonly: false });
 };
 
@@ -72,10 +72,14 @@ const ok = (name) => { passed++; console.log(`ok ${name}`); };
 //  9  'a--b'                (an empty token between the dashes)
 async function setup() {
   await write(`DROP TABLE IF EXISTS ${T}`);
+  await write(`DROP TABLE IF EXISTS ${T2}`);
+  await write(`CREATE TABLE ${T2} (id UInt32, s Nullable(String), f String, t String) ENGINE = MergeTree ORDER BY id`);
+  await write(`INSERT INTO ${T2} VALUES (1,'banana','an','AN'),(2,'banana','x','y'),(3,NULL,'a','b'),(4,'x\\ty\\n','','z'),(5,'  pad\\t','','')`);
   await write(`CREATE TABLE ${T} (id UInt32, s Nullable(String)) ENGINE = MergeTree ORDER BY id`);
   await write(`INSERT INTO ${T} VALUES (1,'Hello World'),(2,'héllo wörld'),(3,NULL),(4,''),(5,'  padded  '),(6,'a-b-c'),(7,'日本語テキスト'),(8,'ABC'),(9,'a--b')`);
 }
 async function teardown() {
+  await write(`DROP TABLE IF EXISTS ${T2}`);
   await write(`DROP TABLE IF EXISTS ${T}`);
   const left = await ch(`SELECT name FROM system.tables WHERE database = '${DB}' AND name = '${TBL}'`);
   assert.deepEqual(left, [], 'bk_text still present');
@@ -163,6 +167,23 @@ async function main() {
     const unknown = await app('POST', '/api/query', { ...base(), rowDimensions: [calcDim('x', fn('reverse', s))], measures: [countRows] });
     assert.equal(unknown.status, 400);
     ok('a number argument, a negative length, a position over 1000, wrong arity and an unknown function are 400s with a path');
+  }
+  { // non-literal text arguments: fields as REPLACE from/to and as a CONTAINS needle (ClickHouse accepts non-constant needles here)
+    const TB = 'bk_text_arg', fb = (c) => ({ k: 'field', db: DB, table: TB, column: c });
+    const byId2 = async (calc, label) => {
+      const r = await query({ from: { db: DB, table: TB }, joins: [], rowDimensions: [{ db: DB, table: TB, column: 'id' }, calcDim('c', calc)], columnDimensions: [], measures: [{ db: DB, table: TB, column: 'id', agg: 'countNonNull' }], filters: [], fresh: true }, label);
+      return Object.fromEntries(r.rows.map((x) => [String(x.keys[0]), x.keys[1] === null ? null : String(x.keys[1])]));
+    };
+    const want = async (label, calc, vals) => {
+      assert.deepEqual(await byId2(calc, label), Object.fromEntries(vals.map((v, i) => [String(i + 1), v])), label);
+      ok(`${label}: ${JSON.stringify(vals)}`);
+    };
+    // rows: (banana,an,AN) (banana,x,y) (NULL,a,b) ('x<TAB>y<NL>','',z) ('  pad<TAB>','','')
+    await want('REPLACE(s, f field, \'-\')', fn('replace', fb('s'), fb('f'), str('-')), ['b--a', 'banana', null, 'x\ty\n', '  pad\t']);
+    await want('REPLACE(s, f, t) with fields as from and to', fn('replace', fb('s'), fb('f'), fb('t')), ['bANANa', 'banana', null, 'x\ty\n', '  pad\t']);
+    await want('CONTAINS(s, f field needle)', fn('contains', fb('s'), fb('f')), ['true', 'false', null, 'true', 'true']);
+    await want('STARTSWITH(s, f field)', fn('startswith', fb('s'), fb('f')), ['false', 'false', null, 'true', 'true']);
+    await want('TRIM strips ASCII space only, not tab or newline', fn('trim', fb('s')), ['banana', 'banana', null, 'x\ty\n', 'pad\t']);
   }
   await app('POST', '/api/connection/disconnect');
 }

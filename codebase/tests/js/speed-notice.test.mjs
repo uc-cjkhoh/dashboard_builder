@@ -22,3 +22,12 @@ test("an unscaled aggregate inside a text function call is found", () => {
   const calc = { k: "fn", fn: "lower", args: [{ k: "agg", fn: "attr", arg: { k: "field", db: "d", table: "t", column: "c" } }] };
   assert.equal(usesUnscaledAgg([{ calc }]), true);
 });
+
+test("unscaled aggregates in CASE arms and else are found; none means no caveat", () => {
+  const med = { k: "agg", fn: "median", arg: { k: "field", db: "d", table: "t", column: "c" } };
+  const sum = { ...med, fn: "sum" };
+  const cond = { k: "cmp", op: ">", l: { k: "num", v: 1 }, r: { k: "num", v: 0 } };
+  assert.equal(usesUnscaledAgg([{ calc: { k: "case", whens: [{ c: cond, t: med }], else: { k: "num", v: 0 } } }]), true);
+  assert.equal(usesUnscaledAgg([{ calc: { k: "case", whens: [{ c: cond, t: { k: "num", v: 1 } }], else: med } }]), true);
+  assert.equal(usesUnscaledAgg([{ calc: { k: "case", whens: [{ c: cond, t: sum }], else: { k: "num", v: 0 } } }]), false);
+});
