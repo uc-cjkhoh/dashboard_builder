@@ -5,6 +5,7 @@
       "qty": "numeric",
       "status": "text",
       "placed": "temporal",
+      "active": "boolean",
       "tags": "other"
     },
     "shop.customers": {
@@ -44,6 +45,13 @@
     {"name":"unknown function","ast":{"k":"agg","fn":"median","arg":{"k":"field","db":"shop","table":"orders","column":"amount"}},"expect":{"error":"Unknown function median.","path":""}},
     {"name":"unknown binary operator","ast":{"k":"bin","op":"%","l":{"k":"field","db":"shop","table":"orders","column":"amount"},"r":{"k":"num","v":2}},"expect":{"error":"Unknown operator %.","path":""}},
     {"name":"unknown unary operator","ast":{"k":"un","op":"!","arg":{"k":"field","db":"shop","table":"orders","column":"amount"}},"expect":{"error":"Unknown operator !.","path":""}},
+    {"name":"SUM refuses a boolean","formula":"SUM([orders.active])","ast":{"k":"agg","fn":"sum","arg":{"k":"field","db":"shop","table":"orders","column":"active"}},"expect":{"error":"SUM needs a number — orders.active is boolean.","path":"arg"}},
+    {"name":"MIN refuses a boolean (multi-type wording)","formula":"MIN([orders.active])","ast":{"k":"agg","fn":"min","arg":{"k":"field","db":"shop","table":"orders","column":"active"}},"expect":{"error":"MIN needs a number, date or text — orders.active is boolean.","path":"arg"}},
+    {"name":"MAX refuses a boolean (multi-type wording)","formula":"MAX([orders.active])","ast":{"k":"agg","fn":"max","arg":{"k":"field","db":"shop","table":"orders","column":"active"}},"expect":{"error":"MAX needs a number, date or text — orders.active is boolean.","path":"arg"}},
+    {"name":"count of a boolean","formula":"COUNT([orders.active])","ast":{"k":"agg","fn":"count","arg":{"k":"field","db":"shop","table":"orders","column":"active"}},"expect":{"type":"number","isAggregate":true,"tables":["shop.orders"]}},
+    {"name":"operand that is not a field is named that value","formula":"MAX([orders.status]) + 1","ast":{"k":"bin","op":"+","l":{"k":"agg","fn":"max","arg":{"k":"field","db":"shop","table":"orders","column":"status"}},"r":{"k":"num","v":1}},"expect":{"error":"Arithmetic needs numbers — that value is text.","path":"l"}},
+    {"name":"arithmetic refuses a boolean","formula":"[orders.active] + 1","ast":{"k":"bin","op":"+","l":{"k":"field","db":"shop","table":"orders","column":"active"},"r":{"k":"num","v":1}},"expect":{"error":"Arithmetic needs numbers — orders.active is boolean.","path":"l"}},
+    {"name":"both operands are typed before either is checked","formula":"[orders.status] + [orders.nope]","ast":{"k":"bin","op":"+","l":{"k":"field","db":"shop","table":"orders","column":"status"},"r":{"k":"field","db":"shop","table":"orders","column":"nope"}},"expect":{"error":"Unknown field orders.nope.","path":"r"}},
     {"name":"parse error: unclosed call","formula":"SUM([orders.amount]","parseError":"Expected )"},
     {"name":"parse error: dangling operator","formula":"1 +","parseError":"Expected a value after +"},
     {"name":"parse error: unclosed bracket","formula":"[orders.amount","parseError":"Missing ] after orders.amount"},
