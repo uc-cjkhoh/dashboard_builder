@@ -3,6 +3,12 @@
 // refuse (E15) before any query when a calculation can't be computed. ctx = { calcs, catalog }.
 import { compileCalculation, calcTables } from "./calc-resolve.js";
 import { isCalcPill, pillName, pillSlots } from "./calc-pill.js";
+import { STAT_SINGLE_TABLE } from "../Dashboard/show-me-rules.js";
+
+export const STAT_CALC_HINT = "Histogram and box plot don't use calculated fields yet.";
+/** Histogram / box plot run single-table endpoints that know nothing of calculations: the hint, or `null`. */
+export const statCalcProblem = (sheet) => (STAT_SINGLE_TABLE.has(sheet.chartType)
+  && [...(sheet.columns ?? []), ...(sheet.rows ?? [])].some(isCalcPill) ? STAT_CALC_HINT : null);
 
 const find = (f, ctx) => (ctx.calcs ?? []).find((c) => c.id === f.calc);
 /** `{ calc, c }` — the stored calculation and its compile, or `null` when the calculation is gone. */
@@ -48,6 +54,14 @@ export function calcProblem(sheet, ctx) {
     if (!c) return `Calculation '${f.column}' can't be computed: it no longer exists.`;
     if (c.error) return c.error.message;
   }
+  for (const x of sheet.filters ?? []) { // a Top-N ranked by a calculation
+    const t = x?.op === "top" ? x.topBy : null;
+    if (!t || typeof t.calc !== "string" || seen.has(t.calc)) continue;
+    seen.add(t.calc);
+    const c = compiled(t, ctx);
+    if (!c) return `Calculation '${t.column}' can't be computed: it no longer exists.`;
+    if (c.error) return c.error.message;
+  }
   return null;
 }
 
@@ -81,8 +95,9 @@ export const topByKey = (entry) => (isCalcPill(entry.field)
 export function wireTopBy(t, ctx) {
   if (typeof t.calc !== "string") return { db: t.db, table: t.table, column: t.column, agg: t.agg ?? "sum" };
   const c = compiled(t, ctx);
-  const ref = { db: "", table: "", column: pillName(t, ctx.calcs), ...(c && !c.error ? { calc: c.ast } : {}) };
-  return c && !c.error && c.info.isAggregate ? ref : { ...ref, agg: t.agg ?? "sum" };
+  if (!c || c.error) return null; // never a calc-less ref; calcProblem refuses the view first
+  const ref = { db: "", table: "", column: pillName(t, ctx.calcs), calc: c.ast };
+  return c.info.isAggregate ? ref : { ...ref, agg: t.agg ?? "sum" };
 }
 
 /** Finds the sort target for a stored `sort.by`; a calc pill matches whatever agg it had (the agg can change). */

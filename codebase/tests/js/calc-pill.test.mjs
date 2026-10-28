@@ -1,7 +1,7 @@
 // Calculated-field pills — shape, naming, refusals, sync (pure).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { makeCalcPill, isCalcPill, pillName, calcPillId, sameCalcPill, refusal, syncCalcPills, usesCalc, clearCalcPills }
+import { makeCalcPill, isCalcPill, pillName, calcPillId, sameCalcPill, refusal, syncCalcPills, usesCalc, clearCalcPills, CALC_AGGS }
   from "../../src/DashboardBuilder/Features/Calc/calc-pill.js";
 import { catalogFromEntities, compileCalculation, calcTables } from "../../src/DashboardBuilder/Features/Calc/calc-resolve.js";
 import { emptySheet, nameOf, setCalculations } from "../../src/DashboardBuilder/Features/Core/store.js";
@@ -123,4 +123,33 @@ test("clearCalcPills leaves a sort on another target", () => {
   sheet.sort = { by: "measure:shop.orders.amount:sum", dir: "asc" };
   clearCalcPills(sheet, "c1");
   assert.notEqual(sheet.sort, null);
+});
+
+const topFilter = (calc) => ({ db: "shop", table: "orders", column: "status", category: "text", op: "top", value: "5",
+  topBy: { db: "", table: "", column: "Net", calc, agg: "sum" } });
+
+test("CALC_AGGS mirrors the server's row-level aggregations and never offers count", () => {
+  assert.deepEqual(CALC_AGGS, ["sum", "avg", "min", "max", "countDistinct", "countNonNull"]);
+  assert.ok(!CALC_AGGS.includes("count"));
+});
+test("usesCalc counts a Top-N filter ranked by the calculation", () => {
+  const s = { ...emptySheet(), filters: [topFilter("c1")] };
+  assert.equal(usesCalc(s, "c1"), true);
+  assert.equal(usesCalc(s, "c2"), false);
+});
+test("clearCalcPills resets a Top-N ranking by the calculation to null and keeps the filter", () => {
+  const other = { db: "shop", table: "orders", column: "amount", agg: "sum" };
+  const s = { ...emptySheet(), filters: [topFilter("c1"), { ...topFilter("c2"), topBy: { ...topFilter("c2").topBy, calc: "c2" } }, { ...topFilter("x"), topBy: other }] };
+  clearCalcPills(s, "c1");
+  assert.equal(s.filters.length, 3);
+  assert.equal(s.filters[0].topBy, null);
+  assert.equal(s.filters[1].topBy.calc, "c2");
+  assert.deepEqual(s.filters[2].topBy, other);
+});
+test("syncCalcPills drops a datePart from a calculated dimension (E12: never date-grouped)", () => {
+  const d = mk("c1", "When", "[orders.status]");
+  const pill = { calc: "c1", db: "", table: "", column: "When", category: "temporal", role: "dimension", datePart: "month" };
+  const s = { ...emptySheet(), rows: [pill] };
+  syncCalcPills(s, [d], catalog);
+  assert.equal("datePart" in s.rows[0], false);
 });

@@ -1,7 +1,7 @@
 // Calculated fields in the worksheet query plan — the pure seam (wireDim, wireMeasure, planTables, calcProblem, Top-N).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { wireDim, wireMeasure, planTables, calcProblem, measureLabel, topByRef, topByKey, wireTopBy, resolveSortTarget }
+import { wireDim, wireMeasure, planTables, calcProblem, measureLabel, topByRef, topByKey, wireTopBy, resolveSortTarget, statCalcProblem, STAT_CALC_HINT }
   from "../../src/DashboardBuilder/Features/Calc/calc-plan.js";
 import { makeCalcPill } from "../../src/DashboardBuilder/Features/Calc/calc-pill.js";
 import { catalogFromEntities, compileCalculation } from "../../src/DashboardBuilder/Features/Calc/calc-resolve.js";
@@ -111,4 +111,25 @@ test("measureLabel / aggWord: countNonNull reads as non-null", async () => {
   assert.equal(measureLabel({ agg: "countNonNull", column: "status" }, [], "State"), "non-null State");
   assert.equal(aggWord("countNonNull"), "non-null");
   assert.equal(aggWord("countDistinct"), "distinct");
+});
+
+const topBySheet = (topBy) => ({ columns: [], rows: [], color: [], marks: {}, filters: [{ db: "shop", table: "orders", column: "status", category: "text", op: "top", value: "3", topBy }] });
+test("calcProblem also reports a Top-N ranked by a missing or uncomputable calculation", () => {
+  assert.match(calcProblem(topBySheet({ db: "", table: "", column: "Old", calc: "c99" }), ctx), /Old.*no longer exists/);
+  assert.match(calcProblem(topBySheet({ db: "", table: "", column: "Gone", calc: "c6", agg: "sum" }), ctx), /missing|can't be computed/i);
+  assert.equal(calcProblem(topBySheet({ db: "", table: "", column: "Net", calc: "c1", agg: "sum" }), ctx), null);
+  assert.equal(calcProblem(topBySheet({ db: "shop", table: "orders", column: "amount", agg: "sum" }), ctx), null);
+});
+test("wireTopBy never returns a calc-less ref for a calc ranking", () => {
+  assert.equal(wireTopBy({ db: "", table: "", column: "Old", calc: "c99", agg: "sum" }, ctx), null);
+  assert.equal(wireTopBy({ db: "", table: "", column: "Gone", calc: "c6", agg: "sum" }, ctx), null);
+  assert.ok(wireTopBy({ db: "", table: "", column: "Net", calc: "c1", agg: "sum" }, ctx).calc);
+});
+test("statCalcProblem: histogram / box plot refuse calc pills with a hint, other charts do not", () => {
+  const withCalc = { chartType: "histogram", columns: [pillOf("c1")], rows: [] };
+  assert.equal(statCalcProblem(withCalc), STAT_CALC_HINT);
+  assert.equal(STAT_CALC_HINT, "Histogram and box plot don't use calculated fields yet.");
+  assert.equal(statCalcProblem({ chartType: "boxplot", columns: [], rows: [pillOf("c1")] }), STAT_CALC_HINT);
+  assert.equal(statCalcProblem({ chartType: "bar", columns: [pillOf("c1")], rows: [] }), null);
+  assert.equal(statCalcProblem({ chartType: "histogram", columns: [{ db: "a", table: "b", column: "c", category: "numeric" }], rows: [] }), null);
 });

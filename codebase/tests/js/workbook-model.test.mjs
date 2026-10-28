@@ -406,3 +406,66 @@ test("a countNonNull pill and field default round-trip and are not reset", () =>
   const f = parseWorkbook(wbText({ fields: { "s.orders.amount": { agg: "countNonNull" } } }));
   assert.deepEqual(f.fields, { "s.orders.amount": { agg: "countNonNull" } });
 });
+
+const cpill = (o = {}) => ({ calc: "calc1", db: "", table: "", column: "Margin", category: "numeric", role: "measure", agg: "sum", ...o });
+const calcList = [{ id: "calc1", name: "Margin", formula: "1" }];
+const topFilter = (topBy) => ({ db: "s", table: "orders", column: "region", category: "text", op: "top", value: "5", topBy });
+
+test("a Top-N ranked by a calculation survives save and open", () => {
+  const st = sampleState();
+  st.dashboards[0].sheet.filters = [topFilter({ db: "", table: "", column: "Margin", calc: "calc1", agg: "sum" })];
+  const wb = parseWorkbook(JSON.stringify(serializeWorkbook({ ...st, calculations: calcList })));
+  assert.deepEqual(wb.dashboards[0].sheet.filters[0].topBy, { db: "", table: "", column: "Margin", calc: "calc1", agg: "sum" });
+  assert.deepEqual(wb.issues, []);
+});
+test("a Top-N ranked by a missing calculation is dropped and reported", () => {
+  const wb = parseWorkbook(wbText({ calculations: calcList, dashboards: [{ name: "X", sheet: { filters: [
+    topFilter({ db: "", table: "", column: "Old", calc: "calc9", agg: "sum" }), topFilter({ db: "s", table: "orders", column: "amount", agg: "sum" })] } }] }));
+  assert.equal(wb.dashboards[0].sheet.filters.length, 1);
+  assert.equal(wb.dashboards[0].sheet.filters[0].topBy.column, "amount");
+  assert.ok(wb.issues.some((i) => /Sheet "X" filters: .*calculat.* no longer exists/.test(i)));
+});
+test("a calc Top-N with a malformed id is dropped", () => {
+  const wb = parseWorkbook(wbText({ calculations: calcList, dashboards: [{ name: "X", sheet: { filters: [topFilter({ db: "", table: "", column: "M", calc: "nope" })] } }] }));
+  assert.equal(wb.dashboards[0].sheet.filters.length, 0);
+});
+test("a calc pill's agg outside the row-level list is reset to sum", () => {
+  const wb = parseWorkbook(wbText({ calculations: calcList, dashboards: [{ name: "X", sheet: { rows: [cpill({ agg: "count" })] } }] }));
+  assert.equal(wb.dashboards[0].sheet.rows[0].agg, "sum");
+  assert.ok(wb.issues.some((i) => /can't use "count"/.test(i)));
+  const ok = parseWorkbook(wbText({ calculations: calcList, dashboards: [{ name: "X", sheet: { rows: [cpill({ agg: "countDistinct" })] } }] }));
+  assert.equal(ok.dashboards[0].sheet.rows[0].agg, "countDistinct");
+  assert.deepEqual(ok.issues, []);
+});
+test("a calc pill never keeps a date part", () => {
+  const wb = parseWorkbook(wbText({ calculations: calcList, dashboards: [{ name: "X", sheet: { rows: [cpill({ category: "temporal", role: "dimension", agg: undefined, datePart: "month" })] } }] }));
+  assert.equal("datePart" in wb.dashboards[0].sheet.rows[0], false);
+});
+test("calc pills are dropped from filters, drill levels, period, pages and shared filters", () => {
+  const dim = (o) => cpill({ category: "text", role: "dimension", agg: undefined, ...o });
+  const wb = parseWorkbook(wbText({ calculations: calcList, sharedFilters: [{ ...dim(), op: "=", value: "a" }],
+    dashboards: [{ name: "X", sheet: {
+      filters: [{ ...dim(), op: "=", value: "a" }],
+      pages: { ...dim(), index: 0 },
+      period: { ...cpill({ category: "temporal", role: "dimension", agg: undefined }), preset: "last30", compare: "none" },
+      drill: { levels: [dim(), dim({ calc: "calc1" }), pill({ category: "text", column: "x" })], depth: 0, path: [] } } }] }));
+  const s = wb.dashboards[0].sheet;
+  assert.equal(s.filters.length, 0); assert.equal(s.pages, null); assert.equal(s.period, null); assert.equal(s.drill, null);
+  assert.equal(wb.sharedFilters.length, 0);
+  assert.ok(wb.issues.some((i) => /calculated field/.test(i)));
+});
+test("bookmark sheets drop calc pills whose calculation is gone", () => {
+  const bm = { name: "B", dashboard: 0, sheet: { rows: [cpill({ calc: "calc9" }), cpill()] }, sharedFilters: [] };
+  const wb = parseWorkbook(wbText({ calculations: calcList, dashboards: [{ name: "X", sheet: {} }], bookmarks: [bm] }));
+  assert.equal(wb.bookmarks[0].sheet.rows.length, 1);
+  assert.equal(wb.bookmarks[0].sheet.rows[0].calc, "calc1");
+});
+test("nextCalcId round-trips; absent or invalid falls back to undefined", () => {
+  const st = sampleState();
+  const saved = serializeWorkbook({ ...st, calculations: calcList, nextCalcId: 7 });
+  assert.equal(saved.nextCalcId, 7);
+  assert.equal(parseWorkbook(JSON.stringify(saved)).nextCalcId, 7);
+  assert.equal(serializeWorkbook({ ...st, calculations: [{ id: "calc4", name: "Q", formula: "1" }] }).nextCalcId, 5);
+  assert.equal(parseWorkbook(wbText({})).nextCalcId, undefined);
+  assert.equal(parseWorkbook(wbText({ nextCalcId: -3 })).nextCalcId, undefined);
+});

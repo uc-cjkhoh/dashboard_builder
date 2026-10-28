@@ -70,11 +70,15 @@ export function removeParameter(id) {
 // Calculated fields (Plan B): workbook-level { id, name, formula } (Calc/calc-workbook.js). A rename rewrites [Old] in other formulas (B3).
 export const calculations = [];
 let calcSeq = 0;
-export function setCalculations(list) {
+/** `nextId` (saved with the workbook) keeps an id from being reused after the highest one was deleted. */
+export function setCalculations(list, nextId) {
   calculations.splice(0, calculations.length, ...list);
   for (const c of list) { const n = Number(String(c.id).slice(4)); if (n > calcSeq) calcSeq = n; }
+  if (Number.isInteger(nextId) && nextId - 1 > calcSeq) calcSeq = nextId - 1;
   emit("calculations:changed");
 }
+/** The number the next new calculation gets (saved so a deleted id is never reused). */
+export const nextCalcId = () => calcSeq + 1;
 export function addCalculation({ name, formula }) { calcSeq += 1; const c = { id: `calc${calcSeq}`, name, formula }; calculations.push(c); emit("calculations:changed"); return c; }
 export function updateCalculation(id, patch) {
   const c = calculations.find((x) => x.id === id);

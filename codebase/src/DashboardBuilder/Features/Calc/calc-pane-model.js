@@ -22,6 +22,7 @@ export const useAsRole = (v) => (v === "measure" || v === "dimension" ? v : null
 // ({ id, name, formula }); it lives for the session and is applied when a pill is made.
 const choices = new Map();
 export const setRoleChoice = (id, role) => { if (role) choices.set(id, role); else choices.delete(id); };
+export const clearRoleChoices = () => choices.clear();
 export const roleChoice = (id) => choices.get(id) ?? null;
 
 /** What the pane group shows: `{ canAdd, items: [{ calc, info, role, chip, error }] }`. */

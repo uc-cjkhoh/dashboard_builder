@@ -9,6 +9,7 @@ import { cleanTheme, DEFAULT_THEME } from "../Core/theme-model.js";
 import { cleanAction } from "../Dashboard/action-model.js";
 import { cleanParameter, MAX_PARAMS } from "../Core/parameters-model.js";
 import { cleanCalculations } from "../Calc/calc-workbook.js";
+import { CALC_AGGS } from "../Calc/calc-pill.js";
 import {
   CHART_TYPE_IDS, CATEGORIES, FILTER_OPS, NUMBER_FORMATS, DATE_FORMATS, LEGENDS, TOP_N, MAX_DECIMALS, DATE_BUCKETS,
   PERIOD_PRESETS, PERIOD_COMPARES, DATE_PARTS, TABLE_CALCS, CALC_ALONG, FIT_MODES, REF_KINDS, TRENDS, FORECASTS, CF_MODES, CF_SCALES, CF_OPS, CF_TONES, CF_MAX_RULES, CF_MAX_MEASURES,
@@ -21,7 +22,7 @@ const NOT_A_WORKBOOK = "This file is not a Dashboard Builder workbook.";
 
 /** Builder state → a plain JSON-safe object. DOM nodes, fetched columns and lazily-loaded page
  *  members are left out (they are re-fetched on open). */
-export function serializeWorkbook({ entities, relationships, dashboards, active, theme, sharedFilters = [], bookmarks = [], fieldMeta = new Map(), parameters = [], calculations = [] }) {
+export function serializeWorkbook({ entities, relationships, dashboards, active, theme, sharedFilters = [], bookmarks = [], fieldMeta = new Map(), parameters = [], calculations = [], nextCalcId }) {
   const activeIndex = active?.kind === "dashboard" ? dashboards.findIndex((d) => d.id === active.id) : -1;
   return {
     format: WORKBOOK_FORMAT,
@@ -46,6 +47,8 @@ export function serializeWorkbook({ entities, relationships, dashboards, active,
     fields: Object.fromEntries(fieldMeta), // P28
     parameters: structuredClone(parameters), // P32
     calculations: calculations.map((c) => ({ id: c.id, name: c.name, formula: c.formula })), // Plan B (no parsed tree)
+    // The next calculation number, so a deleted highest id is never handed out again (absent when there never were any).
+    ...(calculations.length || nextCalcId ? { nextCalcId: Math.max(Number.isInteger(nextCalcId) ? nextCalcId : 0, ...calculations.map((c) => Number(String(c.id).slice(4)) + 1)) } : {}),
     // P39: each bookmark points at its dashboard by index (null when that dashboard was closed).
     bookmarks: bookmarks.map((b) => {
       const i = dashboards.findIndex((d) => d.id === b.dashId);
@@ -153,7 +156,18 @@ export function parseWorkbook(source) {
   const calculations = cleanCalculations(raw.calculations, issues); // Plan B
   const calcIds = new Set(calculations.map((c) => c.id));
   for (const d of dashboards) dropMissingCalcs(d.sheet, calcIds, `Sheet "${d.name}"`, issues);
-  return { entities, relationships, dashboards, active, theme, sharedFilters, bookmarks, fields, parameters, calculations, issues: [...new Set(issues)] };
+  for (const b of bookmarks) {
+    dropMissingCalcs(b.sheet, calcIds, `Bookmark "${b.name}"`, issues);
+    b.sharedFilters = dropMissingTopCalcs(b.sharedFilters, calcIds, `Bookmark "${b.name}" shared filters`, issues);
+  }
+  const sharedKept = dropMissingTopCalcs(sharedFilters, calcIds, "Shared filters", issues);
+  sharedFilters.splice(0, sharedFilters.length, ...sharedKept);
+  let nextCalcId;
+  if (raw.nextCalcId !== undefined) {
+    if (Number.isInteger(raw.nextCalcId) && raw.nextCalcId >= 1 && raw.nextCalcId <= 999999) nextCalcId = raw.nextCalcId;
+    else issues.push("The saved next calculation number was invalid — ignored.");
+  }
+  return { entities, relationships, dashboards, active, theme, sharedFilters, bookmarks, fields, parameters, calculations, nextCalcId, issues: [...new Set(issues)] };
 }
 
 const isStr = (v) => typeof v === "string" && v.length > 0;
@@ -174,10 +188,13 @@ function cleanPill(raw, where, issues, needCategory = true) {
     issues.push(`${where}: skipped a field with missing details.`); return null;
   }
   const p = { ...raw };
+  if (isCalc) delete p.datePart; // E12: a calculated dimension is never date-grouped
   if (p.role !== undefined && p.role !== "dimension" && p.role !== "measure") {
     issues.push(`${where}: ${p.table}.${p.column} had an unknown role "${p.role}" — cleared.`); delete p.role;
   }
-  if (p.agg !== undefined && p.category !== undefined && !aggsFor(p.category).includes(p.agg)) {
+  if (isCalc && p.agg !== undefined && !CALC_AGGS.includes(p.agg)) {
+    issues.push(`${where}: ${p.column} can't use "${p.agg}" — reset to sum.`); p.agg = "sum";
+  } else if (!isCalc && p.agg !== undefined && p.category !== undefined && !aggsFor(p.category).includes(p.agg)) {
     issues.push(`${where}: ${p.table}.${p.column} can't use "${p.agg}" — reset to ${defAgg(p)}.`); p.agg = defAgg(p);
   }
   // P27 table calculation: a known type, direction and window (2–30).
@@ -206,12 +223,15 @@ function cleanPill(raw, where, issues, needCategory = true) {
 // Filters (a sheet's, or the workbook's shared ones — P40): pills with a known op and text value(s).
 export function cleanFilters(list, where, issues, max) {
   return cleanPills(list, where, issues, max, false).filter((f) => {
+    if (f.calc !== undefined) { issues.push(`${where}: a calculated field can't be used as a filter — removed.`); return false; } // E12
     const multi = f.op === "in" || f.op === "between";
     if (FILTER_OPS.has(f.op) && !multi && f.value !== undefined && f.value !== null && typeof f.value !== "string") {
       issues.push(`${where}: the value of the filter on ${f.table}.${f.column} wasn't text — reset to empty.`); f.value = "";
     }
     // P30: a top-N filter must name its ranking measure.
-    const okTop = f.op !== "top" || (f.topBy && isStr(f.topBy.db) && isStr(f.topBy.table) && isStr(f.topBy.column) && aggsFor("numeric").includes(f.topBy.agg ?? "sum"));
+    // A ranking by a calculation names it by id (db / table are empty); its agg, when present, is a row-level one.
+    const calcTop = f.topBy && typeof f.topBy.calc === "string" && /^calc\d{1,6}$/.test(f.topBy.calc) && (f.topBy.agg === undefined || CALC_AGGS.includes(f.topBy.agg));
+    const okTop = f.op !== "top" || calcTop || (f.topBy && typeof f.topBy.calc !== "string" && isStr(f.topBy.db) && isStr(f.topBy.table) && isStr(f.topBy.column) && aggsFor("numeric").includes(f.topBy.agg ?? "sum"));
     const okShape = okTop && FILTER_OPS.has(f.op) && (multi ? Array.isArray(f.values) && f.values.every((v) => typeof v === "string") : true);
     if (!okShape) issues.push(`${where}: skipped a filter on ${f.table}.${f.column} with an unknown operator or value.`);
     return okShape;
@@ -250,6 +270,7 @@ export function sanitizeSheet(saved, where, issues) {
   sheet.selection = null; // transient click selection — never restored
   sheet.drill = cleanDrill(s.drill, where, issues);
   sheet.pages = s.pages == null ? null
+    : s.pages.calc !== undefined ? (issues.push(`${where}: a calculated field can't be used for pages — removed.`), null)
     : cleanPill(s.pages, `${where} pages`, issues) && Number.isInteger(s.pages.index) && s.pages.index >= 0
       ? { db: s.pages.db, table: s.pages.table, column: s.pages.column, category: s.pages.category, index: s.pages.index }
       : (issues.push(`${where}: pages cleared.`), null);
@@ -321,10 +342,18 @@ function cleanParameters(list, issues) {
   return out;
 }
 // A pill whose calculated field is gone (not in the workbook's list) is removed, on shelves and mark slots.
+const topGone = (f, ids) => f?.op === "top" && typeof f.topBy?.calc === "string" && !ids.has(f.topBy.calc);
+// A Top-N filter ranked by a calculation that isn't in the workbook is removed (shared filters and bookmarks' too).
+function dropMissingTopCalcs(list, ids, where, issues) {
+  if (!Array.isArray(list) || !list.some((f) => topGone(f, ids))) return list;
+  issues.push(`${where}: a calculated field that no longer exists was removed.`);
+  return list.filter((f) => !topGone(f, ids));
+}
 function dropMissingCalcs(sheet, ids, where, issues) {
   const gone = (p) => p && p.calc !== undefined && !ids.has(p.calc);
   const msg = (k) => issues.push(`${where} ${k}: a calculated field that no longer exists was removed.`);
-  for (const k of ["columns", "rows", "color", "filters"]) if (Array.isArray(sheet[k]) && sheet[k].some(gone)) { sheet[k] = sheet[k].filter((p) => !gone(p)); msg(k); }
+  for (const k of ["columns", "rows", "color"]) if (Array.isArray(sheet[k]) && sheet[k].some(gone)) { sheet[k] = sheet[k].filter((p) => !gone(p)); msg(k); }
+  if (Array.isArray(sheet.filters) && sheet.filters.some((p) => gone(p) || topGone(p, ids))) { sheet.filters = sheet.filters.filter((p) => !gone(p) && !topGone(p, ids)); msg("filters"); }
   for (const k of ["size", "label", "shape", "path", "angle"]) if (gone(sheet.marks?.[k])) { sheet.marks[k] = null; msg(k); }
   for (const k of ["detail", "tooltip"]) if (sheet.marks?.[k]?.some?.(gone)) { sheet.marks[k] = sheet.marks[k].filter((p) => !gone(p)); msg(k); }
   if (gone(sheet.pages)) { sheet.pages = null; msg("pages"); }
@@ -381,6 +410,7 @@ function cleanBookmarks(list, dashCount, issues) {
 function cleanPeriod(p, where, issues) {
   if (p == null) return null;
   const day = (v) => (v == null ? null : typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : undefined);
+  if (typeof p === "object" && p.calc !== undefined) { issues.push(`${where}: a calculated field can't be used as the date range — removed.`); return null; }
   const field = typeof p === "object" ? cleanPill(p, `${where} period`, issues) : null;
   const days = ["from", "to", "compareFrom", "compareTo"].map((k) => day(p?.[k]));
   if (!field || p.category !== "temporal" || !PERIOD_PRESETS.has(p.preset) || !PERIOD_COMPARES.has(p.compare) || days.includes(undefined)) {
@@ -396,6 +426,7 @@ function cleanDrill(d, where, issues) {
   if (d == null) return null;
   if (typeof d !== "object") { issues.push(`${where}: drill cleared.`); return null; }
   let levels = Array.isArray(d.levels) ? d.levels.map((p) => cleanPill(p, `${where} drill`, issues)).filter(Boolean) : [];
+  if (levels.some((p) => p.calc !== undefined)) { issues.push(`${where}: a calculated field can't be a drill level — removed.`); levels = levels.filter((p) => p.calc === undefined); }
   if (levels.length > LIMITS.drillLevels) {
     issues.push(`${where}: drill kept the first ${LIMITS.drillLevels} levels.`);
     levels = levels.slice(0, LIMITS.drillLevels);

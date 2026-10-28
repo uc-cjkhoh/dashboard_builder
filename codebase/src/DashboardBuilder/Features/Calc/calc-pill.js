@@ -8,6 +8,9 @@ const CATEGORY = { number: "numeric", text: "text", date: "temporal", boolean: "
 export const REFUSAL = "Calculated fields can't be used here yet.";
 const ENTRIES = new Set(["filter", "pages", "drill", "period", "sharedFilter", "selection", "shape", "angle", "choice"]);
 
+/** Aggregations a row-level calculated measure may use; mirrors the server's CalcCatalog.RowLevelAggregations (never `count`). */
+export const CALC_AGGS = ["sum", "avg", "min", "max", "countDistinct", "countNonNull"];
+
 export const isCalcPill = (f) => Boolean(f) && typeof f === "object" && typeof f.calc === "string";
 
 /** A pill for `calc`; `role` defaults from the compile info. A row-level measure gets `agg: "sum"`. */
@@ -58,7 +61,8 @@ export function syncCalcPills(sheet, calcs, catalog) {
     f.category = CATEGORY[c.info.type] ?? "other";
     f.role = roleOfCalc(c.info, override);
     f.column = calc.name;
-    if (f.role === "measure" && !c.info.isAggregate) f.agg = f.agg ?? "sum";
+    delete f.datePart; // E12: a calculated dimension is never date-grouped
+    if (f.role === "measure" && !c.info.isAggregate) f.agg = CALC_AGGS.includes(f.agg) ? f.agg : "sum";
     else delete f.agg;
   }
   return bad;
@@ -66,8 +70,10 @@ export function syncCalcPills(sheet, calcs, catalog) {
 
 export function usesCalc(sheet, id) {
   for (const f of pillSlots(sheet)) if (isCalcPill(f) && f.calc === id) return true;
-  return sortPointsAt(sheet, id);
+  return sortPointsAt(sheet, id) || (sheet.filters ?? []).some((x) => topByUses(x, id));
 }
+
+const topByUses = (f, id) => f?.op === "top" && f.topBy?.calc === id;
 
 const sortPointsAt = (sheet, id) => typeof sheet.sort?.by === "string" && sheet.sort.by.split(":")[1] === "calc" && sheet.sort.by.split(":")[2] === id;
 
@@ -81,4 +87,6 @@ export function clearCalcPills(sheet, id) {
     for (const k of ["detail", "tooltip"]) if (Array.isArray(m[k])) m[k] = m[k].filter(keep);
   }
   if (sortPointsAt(sheet, id)) sheet.sort = null;
+  // A Top-N ranked by it keeps its filter but loses the ranking; the filter panel re-applies "first shelf measure".
+  for (const x of sheet.filters ?? []) if (topByUses(x, id)) x.topBy = null;
 }

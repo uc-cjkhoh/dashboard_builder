@@ -1,7 +1,7 @@
 // Calculated fields — dialog/pane pure helpers.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { normaliseFormula, deleteCalcPlan, showUseAs, useAsRole, paneState, setRoleChoice, roleChoice } from "../../src/DashboardBuilder/Features/Calc/calc-pane-model.js";
+import { normaliseFormula, deleteCalcPlan, showUseAs, useAsRole, paneState, setRoleChoice, roleChoice, clearRoleChoices } from "../../src/DashboardBuilder/Features/Calc/calc-pane-model.js";
 import { catalogFromEntities } from "../../src/DashboardBuilder/Features/Calc/calc-resolve.js";
 import { LIMITS } from "../../src/DashboardBuilder/Features/Core/validate.js";
 
@@ -50,4 +50,14 @@ test("paneState: button disabled at the limit; error flag per calculation", () =
   assert.match(s.items[1].error, /gone/);
   const many = Array.from({ length: LIMITS.calculations }, (_, i) => ({ id: `calc${i + 1}`, name: `N${i}`, formula: "1" }));
   assert.equal(paneState(many, catalog).canAdd, false);
+});
+
+test("deleteCalcPlan counts a worksheet whose Top-N is ranked by the calculation", () => {
+  const s = { rows: [], columns: [], color: [], marks: {}, filters: [{ op: "top", topBy: { calc: "calc3", column: "Solo" } }] };
+  assert.deepEqual(deleteCalcPlan(calcs, [s], "calc3"), { refusedBy: null, usedInSheets: 1 });
+});
+test("clearRoleChoices forgets every session role choice", () => {
+  setRoleChoice("calc1", "dimension"); setRoleChoice("calc2", "measure");
+  clearRoleChoices();
+  assert.equal(roleChoice("calc1"), null); assert.equal(roleChoice("calc2"), null);
 });

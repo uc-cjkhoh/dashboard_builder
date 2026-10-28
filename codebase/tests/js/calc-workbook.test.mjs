@@ -59,3 +59,19 @@ test("store calculations: add, update (rename applies B3), remove, events", () =
   assert.equal(store.addCalculation({ name: "R", formula: "1" }).id, "calc8");
   store.setCalculations([]);
 });
+
+test("renaming calculation A leaves [AB] alone", () => {
+  const out = renameInFormulas([C("calc1", "A"), C("calc2", "AB", "[A] + [AB]")], "A", "Z");
+  assert.equal(out[1].formula, "[Z] + [AB]");
+});
+test("setCalculations(list, nextId): deleting the highest id and reopening never reuses it", () => {
+  store.setCalculations([{ id: "calc40", name: "Hi", formula: "1" }]);
+  const hi = store.addCalculation({ name: "B", formula: "1" }); // calc41
+  assert.equal(hi.id, "calc41");
+  store.removeCalculation("calc41");
+  const saved = store.nextCalcId();
+  assert.equal(saved, 42);
+  store.setCalculations([C("calc40", "Hi")], saved); // reopen: max id alone would say 41
+  assert.equal(store.addCalculation({ name: "C", formula: "1" }).id, "calc42");
+  store.setCalculations([]);
+});
