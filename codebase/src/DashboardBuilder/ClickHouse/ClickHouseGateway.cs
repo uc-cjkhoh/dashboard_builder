@@ -668,6 +668,17 @@ public sealed class ClickHouseGateway
             return $"{alias}.{Identifier.Quote(column)}";
         }
 
+        // T02-34: a cast column's expression and the category/date-only it then has (the column's own with no cast).
+        async Task<string> CastedAsync(string db, string table, string column, string? cast, string field)
+        {
+            var expr = await QualifyAsync(db, table, column);
+            return TypeCast.Apply(cast, expr, categories[Key(db, table)][column], column, field);
+        }
+        string CategoryOfRef(string db, string table, string column, string? cast) =>
+            TypeCast.EffectiveCategory(categories[Key(db, table)][column], cast);
+        bool DateOnlyOfRef(string db, string table, string column, string? cast) =>
+            TypeCast.DateOnly(cast, ClickHouseType.IsDateOnly(rawTypes[Key(db, table)][column]));
+
         // Base table = t0.
         await ColumnsOf(req.From.Db, req.From.Table);
         aliases[Key(req.From.Db, req.From.Table)] = "t0";
@@ -724,7 +735,7 @@ public sealed class ClickHouseGateway
         foreach (var d in req.RowDimensions ?? [])
         {
             var field = $"rowDimensions[{rowIndex++}]";
-            dimExprs.Add(d.Calc is { } calc ? CalcSql.CalcDimensionSql(await CompileCalcAsync(calc, field), field) : await QualifyAsync(d.Db, d.Table, d.Column));
+            dimExprs.Add(d.Calc is { } calc ? CalcSql.CalcDimensionSql(await CompileCalcAsync(calc, field), field) : await CastedAsync(d.Db, d.Table, d.Column, d.Cast, field));
             rowDimNames.Add(d.Calc is null ? $"{d.Table}.{d.Column}" : CalcSql.CalcLabel(d.Column));
             dimRefs.Add(d);
         }
@@ -732,7 +743,7 @@ public sealed class ClickHouseGateway
         foreach (var d in req.ColumnDimensions ?? [])
         {
             var field = $"columnDimensions[{colIndex++}]";
-            dimExprs.Add(d.Calc is { } calc ? CalcSql.CalcDimensionSql(await CompileCalcAsync(calc, field), field) : await QualifyAsync(d.Db, d.Table, d.Column));
+            dimExprs.Add(d.Calc is { } calc ? CalcSql.CalcDimensionSql(await CompileCalcAsync(calc, field), field) : await CastedAsync(d.Db, d.Table, d.Column, d.Cast, field));
             colDimNames.Add(d.Calc is null ? $"{d.Table}.{d.Column}" : CalcSql.CalcLabel(d.Column));
             dimRefs.Add(d);
         }
@@ -759,13 +770,13 @@ public sealed class ClickHouseGateway
             if (!Aggregations.Contains(mAgg)) throw new UnknownIdentifierException("Unknown aggregation.");
             if (mAgg != "count" && !(await ColumnsOf(m.Db, m.Table)).ContainsKey(m.Column))
                 throw new UnknownIdentifierException("Unknown column.");
-            var category = mAgg == "count" ? ClickHouseType.Numeric : (await ColumnsOf(m.Db, m.Table)).GetValueOrDefault(m.Column, ClickHouseType.Other);
+            var category = mAgg == "count" ? ClickHouseType.Numeric : TypeCast.EffectiveCategory((await ColumnsOf(m.Db, m.Table)).GetValueOrDefault(m.Column, ClickHouseType.Other), m.Cast);
             if (mAgg is "sum" or "avg" && category != ClickHouseType.Numeric)
                 throw new RequestValidationException($"{char.ToUpperInvariant(mAgg[0])}{mAgg[1..]} needs a numeric column — {m.Column} is {category}.", $"measures[{mIdx}]");
             measNumeric.Add(mAgg is "count" or "countdistinct" or "countnonnull" or "sum" or "avg" || category == ClickHouseType.Numeric);
             // E10: one aggregate writer for plain and calculated measures. P33: sampled sums/counts are scaled back,
             // approximate mode estimates distinct counts (uniq).
-            measExprs.Add(AggregateSql(mAgg, mAgg == "count" ? "" : await QualifyAsync(m.Db, m.Table, m.Column), sampled, approximate));
+            measExprs.Add(AggregateSql(mAgg, mAgg == "count" ? "" : await CastedAsync(m.Db, m.Table, m.Column, m.Cast, $"measures[{mIdx}]"), sampled, approximate));
             measNames.Add(MeasureName(mAgg, m.Column));
         }
         if (measExprs.Count == 0)
@@ -782,9 +793,9 @@ public sealed class ClickHouseGateway
         {
             var f = filters[i];
             if (string.Equals(f.Op, "top", StringComparison.OrdinalIgnoreCase)) { tops.Add((f, i)); continue; } // after the others
-            var expr = await QualifyAsync(f.Db, f.Table, f.Column);      // validates + quotes the column
-            conditions.Add(BuildCondition(f.Op, $"p{i}", expr, categories[Key(f.Db, f.Table)][f.Column], f.Column, $"filters[{i}]", f.Value, f.Values, parameters,
-                ClickHouseType.IsDateOnly(rawTypes[Key(f.Db, f.Table)][f.Column])));
+            var expr = await CastedAsync(f.Db, f.Table, f.Column, f.Cast, $"filters[{i}]"); // validates + quotes the column; T02-34 cast
+            conditions.Add(BuildCondition(f.Op, $"p{i}", expr, CategoryOfRef(f.Db, f.Table, f.Column, f.Cast), f.Column, $"filters[{i}]", f.Value, f.Values, parameters,
+                DateOnlyOfRef(f.Db, f.Table, f.Column, f.Cast)));
         }
         // P30 top-N filters: the column's members ranked by an aggregate over the same joins and the other
         // filters — `col IN (SELECT col … GROUP BY col ORDER BY agg DESC LIMIT n)`. Column and measure are
@@ -792,7 +803,7 @@ public sealed class ClickHouseGateway
         var others = conditions.Count > 0 ? " WHERE " + string.Join(" AND ", conditions) : "";
         foreach (var (f, i) in tops)
         {
-            var expr = await QualifyAsync(f.Db, f.Table, f.Column);
+            var expr = await CastedAsync(f.Db, f.Table, f.Column, f.Cast, $"filters[{i}]");
             var by = f.TopBy!;
             string rank;
             if (by.Calc is { } byCalc)
@@ -809,9 +820,10 @@ public sealed class ClickHouseGateway
             {
                 var byCols = await ColumnsOf(by.Db, by.Table);
                 if (!byCols.TryGetValue(by.Column, out var byCat)) throw new UnknownIdentifierException("Unknown column.");
+                byCat = TypeCast.EffectiveCategory(byCat, by.Cast);
                 if (agg is "sum" or "avg" && byCat != ClickHouseType.Numeric)
                     throw new RequestValidationException($"Top-N can't rank by {agg} of {by.Column} — it isn't numeric.", $"filters[{i}].topBy");
-                var byExpr = await QualifyAsync(by.Db, by.Table, by.Column);
+                var byExpr = await CastedAsync(by.Db, by.Table, by.Column, by.Cast, $"filters[{i}].topBy");
                 rank = PlainRankSql(agg, byExpr);
             }
             conditions.Add(TopCondition(expr, from.ToString(), others, rank, f));
@@ -827,18 +839,18 @@ public sealed class ClickHouseGateway
         {
             var d = dimRefs[i];
             if (d.Calc is not null || d.DatePart is null or "auto" or "exact") continue; // E12: a calculation is never date-grouped
-            if (categories[Key(d.Db, d.Table)][d.Column] != ClickHouseType.Temporal)
+            if (CategoryOfRef(d.Db, d.Table, d.Column, d.Cast) != ClickHouseType.Temporal)
                 throw new RequestValidationException($"A date part needs a date column — {d.Column} isn't one.", "datePart");
-            dimExprs[i] = DatePartExpression(d.DatePart, dimExprs[i], ClickHouseType.IsDateOnly(rawTypes[Key(d.Db, d.Table)][d.Column]))!;
+            dimExprs[i] = DatePartExpression(d.DatePart, dimExprs[i], DateOnlyOfRef(d.Db, d.Table, d.Column, d.Cast))!;
         }
 
         DateBucketApplied? bucket = null;
         if (req.DateBucket is { } wanted)
         {
-            var bi = dimRefs.FindIndex(d => d.Calc is null && d.DatePart is null or "auto" && categories[Key(d.Db, d.Table)][d.Column] == ClickHouseType.Temporal);
+            var bi = dimRefs.FindIndex(d => d.Calc is null && d.DatePart is null or "auto" && CategoryOfRef(d.Db, d.Table, d.Column, d.Cast) == ClickHouseType.Temporal);
             if (bi >= 0)
             {
-                var dateOnly = ClickHouseType.IsDateOnly(rawTypes[Key(dimRefs[bi].Db, dimRefs[bi].Table)][dimRefs[bi].Column]);
+                var dateOnly = DateOnlyOfRef(dimRefs[bi].Db, dimRefs[bi].Table, dimRefs[bi].Column, dimRefs[bi].Cast);
                 var grain = wanted == "auto"
                     ? await AutoGrainAsync(info, dimExprs[bi], from.ToString(), where + Settings(anyLeft, info),
                         ParametersUsedBy(dimExprs[bi] + where, parameters), dateOnly, ct)

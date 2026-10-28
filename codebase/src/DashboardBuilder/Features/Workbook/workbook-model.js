@@ -5,6 +5,7 @@
 import { emptySheet, defaultFormat } from "../Core/store.js";
 import { LIMITS, text } from "../Core/validate.js";
 import { aggsFor } from "../Dashboard/filter-rules.js";
+import { CASTS } from "../Dashboard/cast-model.js";
 import { cleanTheme, DEFAULT_THEME } from "../Core/theme-model.js";
 import { cleanAction } from "../Dashboard/action-model.js";
 import { cleanParameter, MAX_PARAMS } from "../Core/parameters-model.js";
@@ -363,7 +364,7 @@ function unlinkParams(sheet, ids, where, issues) {
   if (sheet.format?.topNParam && !ids.has(sheet.format.topNParam)) { delete sheet.format.topNParam; issues.push(`${where}: Top N's parameter is missing — unlinked.`); }
 }
 
-// P28 field settings: keys "db.table.column"; alias 1–60 characters, a known aggregation, hidden true.
+// P28 field settings: keys "db.table.column"; alias 1–60 characters, a known aggregation, hidden true, a known cast (T02-34).
 const AGG_NAMES = new Set(["sum", "avg", "min", "max", "count", "countDistinct", "countNonNull"]);
 function cleanFieldMeta(raw, issues) {
   if (raw == null) return {};
@@ -375,6 +376,7 @@ function cleanFieldMeta(raw, issues) {
     const m = {};
     if (v.alias !== undefined) { const r = text(v.alias, { label: "Field name", max: LIMITS.tabName, required: true }); if (r.ok) m.alias = r.value; else bad++; }
     if (v.agg !== undefined) { if (AGG_NAMES.has(v.agg)) m.agg = v.agg; else bad++; }
+    if (v.cast !== undefined) { if (CASTS.includes(v.cast)) m.cast = v.cast; else bad++; } // T02-34
     if (v.hidden !== undefined) { if (v.hidden === true) m.hidden = true; else if (v.hidden !== false) bad++; }
     if (Object.keys(m).length) out[k] = m;
   }
