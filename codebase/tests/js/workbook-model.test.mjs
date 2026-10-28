@@ -19,27 +19,27 @@ function sampleState() {
   ]);
   const sheet = { ...emptySheet(), chartType: "line",
     pages: { db: "sales", table: "orders", column: "region", category: "text", index: 2, members: ["a", "b", "c"] } };
-  const dashboards = [{ id: "dash#1", name: "Revenue", sheet }];
-  return { entities, relationships, dashboards, active: { kind: "dashboard", id: "dash#1" } };
+  const tabs = [{ id: "ws#1", kind: "worksheet", name: "Revenue", sheet }];
+  return { entities, relationships, tabs, active: { kind: "worksheet", id: "ws#1" } };
 }
 
-test("a saved workbook round-trips tables, keys, links and dashboards", () => {
+test("a saved workbook round-trips tables, keys, links and worksheets", () => {
   const wb = parseWorkbook(JSON.stringify(serializeWorkbook(sampleState())));
   assert.equal(wb.entities.length, 2);
   assert.deepEqual(wb.entities[0], { id: "sales.orders#1", db: "sales", table: "orders", x: 10, y: 20, joinKeys: ["customer_id"] });
   assert.deepEqual(wb.relationships[0], {
     from: { entityId: "sales.orders#1", column: "customer_id" },
     to: { entityId: "sales.customers#2", column: "id" }, cardinality: "N:1", joinType: "inner", joinFixed: false });
-  assert.equal(wb.dashboards[0].name, "Revenue");
-  assert.equal(wb.dashboards[0].sheet.chartType, "line");
-  assert.equal(wb.active, 0);
+  assert.equal(wb.worksheets[0].name, "Revenue");
+  assert.equal(wb.worksheets[0].sheet.chartType, "line");
+  assert.deepEqual(wb.active, { kind: "worksheet", index: 0 });
 });
 
 test("the saved form carries no DOM nodes, fetched columns or loaded page members", () => {
   const json = JSON.stringify(serializeWorkbook(sampleState()));
   assert.doesNotMatch(json, /fake/);
   assert.doesNotMatch(json, /"columns":\[\{/);
-  assert.equal(JSON.parse(json).dashboards[0].sheet.pages.members, undefined);
+  assert.equal(JSON.parse(json).worksheets[0].sheet.pages.members, undefined);
 });
 
 test("the saved form never carries a password", () => {
@@ -73,14 +73,14 @@ test("malformed tables and unknown cardinalities are dropped", () => {
 
 test("a sheet saved by an older build gains today's defaults", () => {
   const raw = serializeWorkbook(sampleState());
-  raw.dashboards[0].sheet = { columns: [], rows: [], chartType: "bar" };
-  const sheet = parseWorkbook(JSON.stringify(raw)).dashboards[0].sheet;
+  raw.worksheets[0].sheet = { columns: [], rows: [], chartType: "bar" };
+  const sheet = parseWorkbook(JSON.stringify(raw)).worksheets[0].sheet;
   assert.deepEqual(sheet.marks, emptySheet().marks);
   assert.deepEqual(sheet.format, emptySheet().format);
   assert.deepEqual(sheet.filters, []);
 });
 
-test("the model view is restored as active when no dashboard was open", () => {
+test("the model view is restored as active when no tab was open", () => {
   const state = { ...sampleState(), active: { kind: "model" } };
   assert.equal(parseWorkbook(JSON.stringify(serializeWorkbook(state))).active, null);
 });
@@ -105,6 +105,7 @@ test("join keys still waiting for their table's columns to load are kept", () =>
   assert.deepEqual(saved.entities[0].joinKeys, ["customer_id"]);
 });
 
+// These cases feed v1 files (`dashboards` = worksheets) on purpose: every one also exercises migrateV1. v2 lives in workbook-v2.test.mjs.
 const wbText = (patch) => JSON.stringify({ format: WORKBOOK_FORMAT, version: 1, entities: [], relationships: [], dashboards: [], ...patch });
 const sheetOf = (sheet) => parseWorkbook(wbText({ dashboards: [{ name: "S", sheet }] }));
 const pill = (o = {}) => ({ db: "s", table: "orders", column: "amount", category: "numeric", ...o });
@@ -112,47 +113,47 @@ const pill = (o = {}) => ({ db: "s", table: "orders", column: "amount", category
 test("a missing or non-numeric version is refused with the right message", () => {
   assert.throws(() => parseWorkbook(wbText({ version: undefined })), /no valid version number/);
   assert.throws(() => parseWorkbook(wbText({ version: "1" })), /no valid version number/);
-  assert.throws(() => parseWorkbook(wbText({ version: 2 })), /newer version/);
+  assert.throws(() => parseWorkbook(wbText({ version: 3 })), /newer version/);
 });
 test("a clean workbook has no issues", () => assert.deepEqual(sheetOf({ chartType: "line" }).issues, []));
 test("an unknown chart type is reset to Bar and reported", () => {
   const wb = sheetOf({ chartType: "radar" });
-  assert.equal(wb.dashboards[0].sheet.chartType, "bar"); assert.match(wb.issues[0], /radar/);
+  assert.equal(wb.worksheets[0].sheet.chartType, "bar"); assert.match(wb.issues[0], /radar/);
 });
 test("out-of-range format values are reset and reported", () => {
   const wb = sheetOf({ format: { decimals: 99, topN: "abc", legend: "middle" } });
-  const f = wb.dashboards[0].sheet.format;
+  const f = wb.worksheets[0].sheet.format;
   assert.equal(f.decimals, null); assert.equal(f.topN, null); assert.equal(f.legend, "auto");
   assert.equal(wb.issues.length, 3);
 });
 test("a null pill is dropped and reported; a wrong aggregation is reset", () => {
   const wb = sheetOf({ rows: [null, pill({ category: "text", agg: "sum" })] });
-  assert.equal(wb.dashboards[0].sheet.rows.length, 1);
-  assert.equal(wb.dashboards[0].sheet.rows[0].agg, "count");
+  assert.equal(wb.worksheets[0].sheet.rows.length, 1);
+  assert.equal(wb.worksheets[0].sheet.rows[0].agg, "count");
   assert.equal(wb.issues.length, 2);
 });
 test("a drill without a depth is cleared and reported", () => {
   const wb = sheetOf({ drill: { levels: [pill(), pill({ column: "x" })], path: [] } });
-  assert.equal(wb.dashboards[0].sheet.drill, null); assert.equal(wb.issues.length, 1);
+  assert.equal(wb.worksheets[0].sheet.drill, null); assert.equal(wb.issues.length, 1);
 });
 test("a drill with more than 6 levels keeps the first 6 and reports it", () => {
   const levels = Array.from({ length: 8 }, (_, i) => pill({ column: `c${i}` }));
   const wb = sheetOf({ drill: { levels, depth: 0, path: [] } });
-  assert.equal(wb.dashboards[0].sheet.drill.levels.length, 6);
+  assert.equal(wb.worksheets[0].sheet.drill.levels.length, 6);
   assert.ok(wb.issues.some((i) => /drill kept the first 6 levels\./.test(i)));
 });
 test("a filter without a category survives with no issue; a bad category is rejected", () => {
   const f = { db: "s", table: "orders", column: "amount", op: "=", value: "5" };
   const wb = sheetOf({ filters: [f, { ...f, category: "weird" }] });
-  assert.equal(wb.dashboards[0].sheet.filters.length, 1);
-  assert.equal(wb.dashboards[0].sheet.filters[0].category, undefined);
+  assert.equal(wb.worksheets[0].sheet.filters.length, 1);
+  assert.equal(wb.worksheets[0].sheet.filters[0].category, undefined);
   assert.equal(wb.issues.length, 1);
   assert.deepEqual(sheetOf({ filters: [f] }).issues, []);
 });
 test("bloated files are capped with an issue", () => {
   const wb = parseWorkbook(wbText({ dashboards: Array.from({ length: 60 }, () => ({ name: "D", sheet: { rows: Array(25).fill(pill()) } })) }));
-  assert.equal(wb.dashboards.length, 50); assert.equal(wb.dashboards[0].sheet.rows.length, 20);
-  assert.ok(wb.issues.some((i) => /first 50 dashboards/.test(i)));
+  assert.equal(wb.worksheets.length, 50); assert.equal(wb.worksheets[0].sheet.rows.length, 20);
+  assert.ok(wb.issues.some((i) => /first 50 tabs/.test(i)));
 });
 test("duplicate entity ids and duplicate tables are skipped and reported", () => {
   const e = { id: "a", db: "s", table: "t", x: 0, y: 0, joinKeys: [] };
@@ -179,24 +180,24 @@ test("every remaining reset is reported, never silent", () => {
   }));
   assert.equal(wb.entities[0].x, 0); assert.equal(wb.entities[0].y, 0);
   assert.deepEqual(wb.entities[0].joinKeys, ["k"]);
-  assert.equal(wb.dashboards.length, 1); assert.equal(wb.dashboards[0].name, "Dashboard");
-  const sh = wb.dashboards[0].sheet;
+  assert.equal(wb.worksheets.length, 1); assert.equal(wb.worksheets[0].name, "Worksheet");
+  const sh = wb.worksheets[0].sheet;
   assert.equal(sh.rows[0].role, undefined);
   assert.equal(sh.format.dataLabels, false); assert.equal(sh.format.colorByDimension, false);
   assert.equal(sh.format.currencySymbol, "$"); assert.equal(sh.format.xTitle, null);
-  for (const re of [/position/, /join key/, /not a dashboard/i, /name/, /role/, /dataLabels/, /colorByDimension/, /currency/, /axis title/i])
+  for (const re of [/position/, /join key/, /not a worksheet/i, /name/, /role/, /dataLabels/, /colorByDimension/, /currency/, /axis title/i])
     assert.ok(wb.issues.some((i) => re.test(i)), String(re));
 });
 test("a non-string filter value keeps the filter, resets the value and reports it", () => {
   const f = { db: "s", table: "orders", column: "amount", op: "=", value: 5 };
   const wb = sheetOf({ filters: [f] });
-  assert.equal(wb.dashboards[0].sheet.filters.length, 1);
-  assert.equal(wb.dashboards[0].sheet.filters[0].value, "");
+  assert.equal(wb.worksheets[0].sheet.filters.length, 1);
+  assert.equal(wb.worksheets[0].sheet.filters[0].value, "");
   assert.equal(wb.issues.length, 1);
 });
-test("a dashboard with no name falls back with the required-field message", () => {
+test("a worksheet with no name falls back with the required-field message", () => {
   const wb = parseWorkbook(wbText({ dashboards: [{ sheet: {} }] }));
-  assert.equal(wb.dashboards[0].name, "Dashboard");
+  assert.equal(wb.worksheets[0].name, "Worksheet");
   assert.ok(wb.issues.some((i) => /Tab name is required/.test(i)));
 });
 
@@ -204,13 +205,13 @@ test("non-list entities, relationships and dashboards are reported, not silently
   const wb = parseWorkbook(wbText({ entities: {}, relationships: "x", dashboards: 5 }));
   assert.ok(wb.issues.some((i) => /tables weren't a list/.test(i)));
   assert.ok(wb.issues.some((i) => /relationships weren't a list/.test(i)));
-  assert.ok(wb.issues.some((i) => /dashboards weren't a list/.test(i)));
+  assert.ok(wb.issues.some((i) => /worksheets weren't a list/.test(i)));
 });
 test("a non-object sheet or marks, and an invalid active index, are reported", () => {
   const wb = parseWorkbook(wbText({ dashboards: [{ name: "A", sheet: "oops" }, { name: "B", sheet: { marks: [] } }], active: 7 }));
   assert.ok(wb.issues.some((i) => /settings weren't an object/.test(i)));
   assert.ok(wb.issues.some((i) => /marks weren't an object/.test(i)));
-  assert.ok(wb.issues.some((i) => /active dashboard was invalid/.test(i)));
+  assert.ok(wb.issues.some((i) => /active tab was invalid/.test(i)));
   assert.equal(wb.active, null);
 });
 test("a valid or absent active index adds no issue", () => {
@@ -223,22 +224,22 @@ test("a date range (P35) and scorecard target round-trip", () => {
     from: "2026-09-01", to: "2026-09-30", compare: "lastYear", compareFrom: null, compareTo: null };
   const r = sheetOf({ chartType: "kpi", period, format: { target: 5000, downIsGood: true } });
   assert.deepEqual(r.issues, []);
-  assert.deepEqual(r.dashboards[0].sheet.period, period);
-  assert.equal(r.dashboards[0].sheet.format.target, 5000);
-  assert.equal(r.dashboards[0].sheet.format.downIsGood, true);
+  assert.deepEqual(r.worksheets[0].sheet.period, period);
+  assert.equal(r.worksheets[0].sheet.format.target, 5000);
+  assert.equal(r.worksheets[0].sheet.format.downIsGood, true);
 });
 test("a bad date range is cleared and reported", () => {
   const base = { db: "sales", table: "orders", column: "created", category: "temporal", preset: "last30", compare: "previous" };
   for (const bad of [{ ...base, preset: "forever" }, { ...base, compare: "tomorrow" }, { ...base, category: "text" },
     { ...base, from: "1st of May" }, { ...base, column: "" }]) {
     const r = sheetOf({ period: bad });
-    assert.equal(r.dashboards[0].sheet.period, null);
+    assert.equal(r.worksheets[0].sheet.period, null);
     assert.ok(r.issues.some((i) => /date range cleared/.test(i)), JSON.stringify(r.issues));
   }
 });
 test("a non-numeric target is cleared and reported", () => {
   const r = sheetOf({ format: { target: "lots" } });
-  assert.equal(r.dashboards[0].sheet.format.target, null);
+  assert.equal(r.worksheets[0].sheet.format.target, null);
   assert.match(r.issues.join(" "), /target/);
 });
 
@@ -246,13 +247,13 @@ test("conditional formatting (P37) round-trips; bad parts are dropped and report
   const good = { "s.orders.amount:sum": { mode: "scale", scale: "diverging", mid: 0, rules: [{ op: ">", value: 100, tone: "good" }] } };
   const ok = sheetOf({ chartType: "table", format: { conditional: good } });
   assert.deepEqual(ok.issues, []);
-  assert.deepEqual(ok.dashboards[0].sheet.format.conditional, good);
+  assert.deepEqual(ok.worksheets[0].sheet.format.conditional, good);
   const bad = sheetOf({ format: { conditional: {
     a: { mode: "rainbow", scale: "sequential", mid: null, rules: [] },
     b: { mode: "bars", scale: "sequential", mid: null, rules: [{ op: ">", value: "lots", tone: "good" }, { op: "<", value: 1, tone: "bad" }] },
   } } });
-  assert.deepEqual(Object.keys(bad.dashboards[0].sheet.format.conditional), ["b"]);
-  assert.equal(bad.dashboards[0].sheet.format.conditional.b.rules.length, 1);
+  assert.deepEqual(Object.keys(bad.worksheets[0].sheet.format.conditional), ["b"]);
+  assert.equal(bad.worksheets[0].sheet.format.conditional.b.rules.length, 1);
   assert.equal(bad.issues.length, 2);
 });
 
@@ -277,22 +278,22 @@ test("field choices (P40) are kept, include the shown field, and drop junk", () 
   const shown = { db: "s", table: "orders", column: "region", category: "text" };
   const alt = { db: "s", table: "orders", column: "country", category: "text" };
   const r = sheetOf({ columns: [{ ...shown, choices: [alt, { db: "", column: "x" }] }] });
-  assert.deepEqual(r.dashboards[0].sheet.columns[0].choices, [shown, alt]);
+  assert.deepEqual(r.worksheets[0].sheet.columns[0].choices, [shown, alt]);
   assert.ok(r.issues.some((i) => /field choices/.test(i)));
   const lone = sheetOf({ columns: [{ ...shown, choices: [shown] }] });
-  assert.equal(lone.dashboards[0].sheet.columns[0].choices, undefined);
+  assert.equal(lone.worksheets[0].sheet.columns[0].choices, undefined);
 });
 
-test("bookmarks (P39) round-trip with their dashboard, selection and shared filters", () => {
+test("bookmarks (P39) round-trip with their worksheet, selection and shared filters", () => {
   const st = sampleState();
-  const sheet = { ...st.dashboards[0].sheet, chartType: "bar",
+  const sheet = { ...st.tabs[0].sheet, chartType: "bar",
     selection: { db: "s", table: "orders", column: "region", value: "EU", label: "orders.region = EU", action: "keep" } };
   const sf = [{ db: "s", table: "orders", column: "region", category: "text", op: "=", value: "EU" }];
-  const bm = { id: "bm#1", name: "EU view", dashId: "dash#1", dashName: "Revenue", sheet, sharedFilters: sf, savedAt: "2026-10-13T00:00:00Z" };
-  const wb = parseWorkbook(JSON.stringify(serializeWorkbook({ ...st, bookmarks: [bm, { ...bm, name: "Closed", dashId: "dash#gone" }] })));
+  const bm = { id: "bm#1", name: "EU view", worksheetId: "ws#1", worksheetName: "Revenue", sheet, sharedFilters: sf, savedAt: "2026-10-13T00:00:00Z" };
+  const wb = parseWorkbook(JSON.stringify(serializeWorkbook({ ...st, bookmarks: [bm, { ...bm, name: "Closed", worksheetId: "ws#gone" }] })));
   assert.equal(wb.bookmarks.length, 2);
-  assert.equal(wb.bookmarks[0].dashboard, 0);
-  assert.equal(wb.bookmarks[1].dashboard, null);
+  assert.equal(wb.bookmarks[0].worksheet, 0);
+  assert.equal(wb.bookmarks[1].worksheet, null);
   assert.equal(wb.bookmarks[0].sheet.selection.action, "keep");
   assert.deepEqual(wb.bookmarks[0].sharedFilters, sf);
   assert.equal(wb.bookmarks[0].sheet.pages.members, undefined);
@@ -306,20 +307,20 @@ test("bad bookmarks are skipped and reported; a bad link action is removed", () 
 
 test("a date part (P26) is kept on a date pill and reset elsewhere", () => {
   const d = { db: "s", table: "orders", column: "created", category: "temporal" };
-  assert.equal(sheetOf({ columns: [{ ...d, datePart: "month" }] }).dashboards[0].sheet.columns[0].datePart, "month");
+  assert.equal(sheetOf({ columns: [{ ...d, datePart: "month" }] }).worksheets[0].sheet.columns[0].datePart, "month");
   const bad = sheetOf({ columns: [{ ...d, datePart: "fortnight" }, { db: "s", table: "orders", column: "region", category: "text", datePart: "year" }] });
-  assert.equal(bad.dashboards[0].sheet.columns[0].datePart, undefined);
-  assert.equal(bad.dashboards[0].sheet.columns[1].datePart, undefined);
+  assert.equal(bad.worksheets[0].sheet.columns[0].datePart, undefined);
+  assert.equal(bad.worksheets[0].sheet.columns[1].datePart, undefined);
   assert.equal(bad.issues.filter((i) => /date part/.test(i)).length, 2);
 });
 
 test("a table calculation (P27) is kept when valid and removed when not", () => {
   const m = { db: "s", table: "orders", column: "amount", category: "numeric" };
-  assert.deepEqual(sheetOf({ rows: [{ ...m, tableCalc: { type: "moving", along: "rows", window: 5 } }] }).dashboards[0].sheet.rows[0].tableCalc,
+  assert.deepEqual(sheetOf({ rows: [{ ...m, tableCalc: { type: "moving", along: "rows", window: 5 } }] }).worksheets[0].sheet.rows[0].tableCalc,
     { type: "moving", along: "rows", window: 5 });
   const bad = sheetOf({ rows: [{ ...m, tableCalc: { type: "median-ish" } }, { ...m, column: "qty", tableCalc: { type: "moving", window: 99 } }] });
-  assert.equal(bad.dashboards[0].sheet.rows[0].tableCalc, undefined);
-  assert.equal(bad.dashboards[0].sheet.rows[1].tableCalc, undefined);
+  assert.equal(bad.worksheets[0].sheet.rows[0].tableCalc, undefined);
+  assert.equal(bad.worksheets[0].sheet.rows[1].tableCalc, undefined);
   assert.equal(bad.issues.filter((i) => /table calculation/.test(i)).length, 2);
 });
 
@@ -334,19 +335,19 @@ test("field settings (P28) round-trip; bad ones are dropped and counted", () => 
 });
 
 test("title, caption, showTitle and fit (P23) are checked", () => {
-  const ok = sheetOf({ title: "Sales", caption: "By region", showTitle: false, format: { fit: "entire" } }).dashboards[0].sheet;
+  const ok = sheetOf({ title: "Sales", caption: "By region", showTitle: false, format: { fit: "entire" } }).worksheets[0].sheet;
   assert.deepEqual([ok.title, ok.caption, ok.showTitle, ok.format.fit], ["Sales", "By region", false, "entire"]);
   const bad = sheetOf({ title: 7, caption: "x".repeat(301), format: { fit: "stretch" } });
-  const s = bad.dashboards[0].sheet;
+  const s = bad.worksheets[0].sheet;
   assert.deepEqual([s.title, s.caption, s.format.fit], [null, null, "standard"]);
   assert.equal(bad.issues.length, 3);
 });
 
 test("analytics settings (P21) are kept when valid and reset part by part", () => {
-  const ok = sheetOf({ analytics: { ref: { kind: "constant", value: 5 }, band: { from: 9, to: 2 }, trend: "poly2", forecast: 6, totals: { grand: true } } }).dashboards[0].sheet.analytics;
+  const ok = sheetOf({ analytics: { ref: { kind: "constant", value: 5 }, band: { from: 9, to: 2 }, trend: "poly2", forecast: 6, totals: { grand: true } } }).worksheets[0].sheet.analytics;
   assert.deepEqual(ok, { ref: { kind: "constant", value: 5 }, band: { from: 2, to: 9 }, trend: "poly2", forecast: 6, totals: { grand: true, sub: false } });
   const bad = sheetOf({ analytics: { ref: { kind: "mode" }, trend: "cubic", forecast: 99 } });
-  assert.deepEqual(bad.dashboards[0].sheet.analytics.trend, "none");
+  assert.deepEqual(bad.worksheets[0].sheet.analytics.trend, "none");
   assert.ok(bad.issues.some((i) => /analytics/.test(i)));
 });
 
@@ -363,14 +364,14 @@ test("a relationship's join type (P31) round-trips; anything but left reads as i
 test("parameters (P32) round-trip; references to a missing parameter are unlinked", () => {
   const st = sampleState();
   const params = [{ id: "prm1", name: "TopN", type: "number", value: 10, allowed: { kind: "any" } }];
-  st.dashboards[0].sheet.format = { ...st.dashboards[0].sheet.format, topNParam: "prm1" };
+  st.tabs[0].sheet.format = { ...st.tabs[0].sheet.format, topNParam: "prm1" };
   const wb = parseWorkbook(JSON.stringify(serializeWorkbook({ ...st, parameters: params })));
   assert.deepEqual(wb.parameters, params);
-  assert.equal(wb.dashboards[0].sheet.format.topNParam, "prm1");
+  assert.equal(wb.worksheets[0].sheet.format.topNParam, "prm1");
   const orphan = parseWorkbook(wbText({ dashboards: [{ name: "S", sheet: { format: { topNParam: "prm7" },
     filters: [{ db: "s", table: "t", column: "c", category: "numeric", op: "=", value: "1", param: "prm8" }] } }] }));
-  assert.equal(orphan.dashboards[0].sheet.format.topNParam, undefined);
-  assert.equal(orphan.dashboards[0].sheet.filters[0].param, undefined);
+  assert.equal(orphan.worksheets[0].sheet.format.topNParam, undefined);
+  assert.equal(orphan.worksheets[0].sheet.filters[0].param, undefined);
   assert.equal(orphan.issues.filter((i) => /parameter is missing/.test(i)).length, 2);
 });
 
@@ -392,7 +393,7 @@ test("a calc pill is valid without db/table/column; one pointing at a missing ca
   const gone = { calc: "calc9", db: "", table: "", column: "Old", category: "numeric" };
   const wb = parseWorkbook(wbText({ calculations: [{ id: "calc1", name: "Margin", formula: "1" }],
     dashboards: [{ name: "X", sheet: { rows: [ok, gone], columns: [bare], marks: { size: gone } } }] }));
-  const s = wb.dashboards[0].sheet;
+  const s = wb.worksheets[0].sheet;
   assert.equal(s.rows.length, 1); assert.equal(s.rows[0].calc, "calc1");
   assert.equal(s.columns.length, 1);
   assert.equal(s.marks.size, null);
@@ -401,7 +402,7 @@ test("a calc pill is valid without db/table/column; one pointing at a missing ca
 
 test("a countNonNull pill and field default round-trip and are not reset", () => {
   const wb = sheetOf({ rows: [pill({ category: "text", column: "status", agg: "countNonNull" })] });
-  assert.equal(wb.dashboards[0].sheet.rows[0].agg, "countNonNull");
+  assert.equal(wb.worksheets[0].sheet.rows[0].agg, "countNonNull");
   assert.deepEqual(wb.issues, []);
   const f = parseWorkbook(wbText({ fields: { "s.orders.amount": { agg: "countNonNull" } } }));
   assert.deepEqual(f.fields, { "s.orders.amount": { agg: "countNonNull" } });
@@ -413,33 +414,33 @@ const topFilter = (topBy) => ({ db: "s", table: "orders", column: "region", cate
 
 test("a Top-N ranked by a calculation survives save and open", () => {
   const st = sampleState();
-  st.dashboards[0].sheet.filters = [topFilter({ db: "", table: "", column: "Margin", calc: "calc1", agg: "sum" })];
+  st.tabs[0].sheet.filters = [topFilter({ db: "", table: "", column: "Margin", calc: "calc1", agg: "sum" })];
   const wb = parseWorkbook(JSON.stringify(serializeWorkbook({ ...st, calculations: calcList })));
-  assert.deepEqual(wb.dashboards[0].sheet.filters[0].topBy, { db: "", table: "", column: "Margin", calc: "calc1", agg: "sum" });
+  assert.deepEqual(wb.worksheets[0].sheet.filters[0].topBy, { db: "", table: "", column: "Margin", calc: "calc1", agg: "sum" });
   assert.deepEqual(wb.issues, []);
 });
 test("a Top-N ranked by a missing calculation is dropped and reported", () => {
   const wb = parseWorkbook(wbText({ calculations: calcList, dashboards: [{ name: "X", sheet: { filters: [
     topFilter({ db: "", table: "", column: "Old", calc: "calc9", agg: "sum" }), topFilter({ db: "s", table: "orders", column: "amount", agg: "sum" })] } }] }));
-  assert.equal(wb.dashboards[0].sheet.filters.length, 1);
-  assert.equal(wb.dashboards[0].sheet.filters[0].topBy.column, "amount");
+  assert.equal(wb.worksheets[0].sheet.filters.length, 1);
+  assert.equal(wb.worksheets[0].sheet.filters[0].topBy.column, "amount");
   assert.ok(wb.issues.some((i) => /Sheet "X" filters: .*calculat.* no longer exists/.test(i)));
 });
 test("a calc Top-N with a malformed id is dropped", () => {
   const wb = parseWorkbook(wbText({ calculations: calcList, dashboards: [{ name: "X", sheet: { filters: [topFilter({ db: "", table: "", column: "M", calc: "nope" })] } }] }));
-  assert.equal(wb.dashboards[0].sheet.filters.length, 0);
+  assert.equal(wb.worksheets[0].sheet.filters.length, 0);
 });
 test("a calc pill's agg outside the row-level list is reset to sum", () => {
   const wb = parseWorkbook(wbText({ calculations: calcList, dashboards: [{ name: "X", sheet: { rows: [cpill({ agg: "count" })] } }] }));
-  assert.equal(wb.dashboards[0].sheet.rows[0].agg, "sum");
+  assert.equal(wb.worksheets[0].sheet.rows[0].agg, "sum");
   assert.ok(wb.issues.some((i) => /can't use "count"/.test(i)));
   const ok = parseWorkbook(wbText({ calculations: calcList, dashboards: [{ name: "X", sheet: { rows: [cpill({ agg: "countDistinct" })] } }] }));
-  assert.equal(ok.dashboards[0].sheet.rows[0].agg, "countDistinct");
+  assert.equal(ok.worksheets[0].sheet.rows[0].agg, "countDistinct");
   assert.deepEqual(ok.issues, []);
 });
 test("a calc pill never keeps a date part", () => {
   const wb = parseWorkbook(wbText({ calculations: calcList, dashboards: [{ name: "X", sheet: { rows: [cpill({ category: "temporal", role: "dimension", agg: undefined, datePart: "month" })] } }] }));
-  assert.equal("datePart" in wb.dashboards[0].sheet.rows[0], false);
+  assert.equal("datePart" in wb.worksheets[0].sheet.rows[0], false);
 });
 test("calc pills are dropped from filters, drill levels, period, pages and shared filters", () => {
   const dim = (o) => cpill({ category: "text", role: "dimension", agg: undefined, ...o });
@@ -449,7 +450,7 @@ test("calc pills are dropped from filters, drill levels, period, pages and share
       pages: { ...dim(), index: 0 },
       period: { ...cpill({ category: "temporal", role: "dimension", agg: undefined }), preset: "last30", compare: "none" },
       drill: { levels: [dim(), dim({ calc: "calc1" }), pill({ category: "text", column: "x" })], depth: 0, path: [] } } }] }));
-  const s = wb.dashboards[0].sheet;
+  const s = wb.worksheets[0].sheet;
   assert.equal(s.filters.length, 0); assert.equal(s.pages, null); assert.equal(s.period, null); assert.equal(s.drill, null);
   assert.equal(wb.sharedFilters.length, 0);
   assert.ok(wb.issues.some((i) => /calculated field/.test(i)));
@@ -473,9 +474,9 @@ test("a not in filter round-trips with its values; a non-text member is rejected
   const f = { db: "s", table: "orders", column: "city", category: "text", op: "notin", value: "", values: ["NY", "LA"] };
   const ok = sheetOf({ filters: [f] });
   assert.deepEqual(ok.issues, []);
-  assert.deepEqual(ok.dashboards[0].sheet.filters[0].values, ["NY", "LA"]);
+  assert.deepEqual(ok.worksheets[0].sheet.filters[0].values, ["NY", "LA"]);
   const bad = sheetOf({ filters: [{ ...f, values: [1] }] });
-  assert.equal(bad.dashboards[0].sheet.filters.length, 0);
+  assert.equal(bad.worksheets[0].sheet.filters.length, 0);
   assert.equal(bad.issues.length, 1);
 });
 

@@ -76,8 +76,8 @@ try {
   await waitFor(`document.querySelectorAll('.table-chip').length === 2`, 'tables listed');
   await ev(`document.dispatchEvent(new CustomEvent('table:add', { detail: { db: 'shop', table: 'orders' } }))`);
   await waitFor(`document.querySelectorAll('.entity').length === 1 && [...document.querySelectorAll('.entity__status')].every((s) => s.hidden)`, 'orders loaded');
-  await ev(`document.querySelector('.tab-add').click()`);
-  await waitFor(`!document.getElementById('dashboard-view').hidden`, 'worksheet open');
+  await ev(`document.querySelector('.tab-add').click(); document.querySelector('[data-new-tab=worksheet]').click()`);
+  await waitFor(`!document.getElementById('worksheet-view').hidden`, 'worksheet open');
   await waitFor(`!!document.querySelector('.calc-group__new')`, 'field pane filled');
   await ev(`document.querySelector('.calc-group__new').click()`);
   await waitFor(`${dlg} !== null`, 'calc dialog open');

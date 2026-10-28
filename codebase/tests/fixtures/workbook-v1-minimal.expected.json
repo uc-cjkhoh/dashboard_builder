@@ -1,0 +1,149 @@
+{
+  "entities": [
+    {
+      "id": "e1",
+      "db": "shop",
+      "table": "orders",
+      "x": 10,
+      "y": 10,
+      "joinKeys": []
+    }
+  ],
+  "relationships": [],
+  "dashboards": [
+    {
+      "name": "Dashboard",
+      "sheet": {
+        "columns": [
+          {
+            "db": "shop",
+            "table": "orders",
+            "column": "region",
+            "category": "text"
+          }
+        ],
+        "rows": [
+          {
+            "db": "shop",
+            "table": "orders",
+            "column": "amount",
+            "category": "numeric",
+            "agg": "sum"
+          }
+        ],
+        "color": [],
+        "filters": [],
+        "chartType": "bar",
+        "sort": null,
+        "selection": null,
+        "drill": null,
+        "marks": {
+          "size": null,
+          "label": null,
+          "detail": [],
+          "tooltip": [],
+          "shape": null,
+          "path": null,
+          "angle": null
+        },
+        "pages": null,
+        "format": {
+          "numberFormat": "auto",
+          "decimals": null,
+          "currencySymbol": "$",
+          "dateFormat": "auto",
+          "topN": null,
+          "dateBucket": "auto",
+          "legend": "auto",
+          "dataLabels": false,
+          "colorByDimension": false,
+          "paletteReverse": false,
+          "xTitle": null,
+          "yTitle": null,
+          "target": null,
+          "downIsGood": false,
+          "conditional": {},
+          "fit": "standard",
+          "lineStyle": "straight",
+          "heatmapShape": "square",
+          "targetMeasure": null,
+          "approximate": false
+        },
+        "period": null,
+        "memberColors": {},
+        "tooltipText": null,
+        "title": null,
+        "caption": null,
+        "showTitle": true,
+        "showFilterCards": true,
+        "analytics": null,
+        "urlAction": null
+      }
+    },
+    {
+      "name": "Dashboard",
+      "sheet": {
+        "columns": [],
+        "rows": [],
+        "color": [],
+        "filters": [],
+        "chartType": "bar",
+        "sort": null,
+        "selection": null,
+        "drill": null,
+        "marks": {
+          "size": null,
+          "label": null,
+          "detail": [],
+          "tooltip": [],
+          "shape": null,
+          "path": null,
+          "angle": null
+        },
+        "pages": null,
+        "format": {
+          "numberFormat": "auto",
+          "decimals": null,
+          "currencySymbol": "$",
+          "dateFormat": "auto",
+          "topN": null,
+          "dateBucket": "auto",
+          "legend": "auto",
+          "dataLabels": false,
+          "colorByDimension": false,
+          "paletteReverse": false,
+          "xTitle": null,
+          "yTitle": null,
+          "target": null,
+          "downIsGood": false,
+          "conditional": {},
+          "fit": "standard",
+          "lineStyle": "straight",
+          "heatmapShape": "square",
+          "targetMeasure": null,
+          "approximate": false
+        },
+        "period": null,
+        "memberColors": {},
+        "tooltipText": null,
+        "title": null,
+        "caption": null,
+        "showTitle": true,
+        "showFilterCards": true,
+        "analytics": null,
+        "urlAction": null
+      }
+    }
+  ],
+  "active": 0,
+  "theme": {
+    "accent": "crimson",
+    "palette": "default"
+  },
+  "sharedFilters": [],
+  "bookmarks": [],
+  "fields": {},
+  "parameters": [],
+  "calculations": [],
+  "issues": []
+}

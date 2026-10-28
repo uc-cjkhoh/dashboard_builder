@@ -1,6 +1,6 @@
 import {
-  entities, relationships, dashboards, bus, activeDashboardId,
-  createDashboard, updateSheet, closeDashboard, showModel, switchDashboard, currentTheme, setTheme,
+  entities, relationships, tabs, bus, currentView, isDashboardActive,
+  createWorksheet, createDashboard, updateSheet, setWidgets, nextWidgetId, closeTab, showModel, switchTab, currentTheme, setTheme,
   nextCalcId, sharedFilters, setSharedFilters, bookmarks, setBookmarks, fieldMeta, setAllFieldMeta, parameters, setParameters, calculations, setCalculations,
 } from "../Core/store.js";
 import { clearRoleChoices } from "../Calc/calc-pane-model.js";
@@ -14,21 +14,23 @@ import { exit } from "../Core/motion.js";
 import { toast, confirmDialog, toggle, listDialog } from "../Core/ui.js";
 import { addEntity, clearModel } from "../Canvas/canvas.js";
 import { restoreRelationship } from "../Relations/relations.js";
-import { serializeWorkbook, parseWorkbook, storageKey } from "./workbook-model.js";
+import { serializeWorkbook, parseWorkbook, storageKey, legacyStorageKey } from "./workbook-model.js";
 
 // Workbook: the whole builder state survives a reload. It auto-saves to this browser's storage —
 // one workbook per connected server + user — and reopens on the next connect when the canvas is
 // empty. Disconnecting clears the screen (the saved copy stays, so reconnecting to the same server
 // brings it back). Export / Import move it as a JSON file. Never stores the connection or a password; there is
-// still no server-side database (decision D21).
+// still no server-side database (decision D21). Autosave writes the v2 key; with none yet, the v1 key (an older
+// build's autosave) is read, migrated and left in place.
 const SAVE_DELAY_MS = 500;
 const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
 const CHANGE_EVENTS = [
   "entity:added", "entity:moved", "entity:removed", "joinkey:changed",
-  "rel:changed", "tabs:changed", "dashboard:changed", "theme:changed", "bookmarks:changed", "fields:changed", "parameters:changed", "calculations:changed",
+  "rel:changed", "tabs:changed", "worksheet:changed", "dashboard:changed", "theme:changed", "bookmarks:changed", "fields:changed", "parameters:changed", "calculations:changed",
 ];
 
 let key = null;        // storage key for the connected server + user; null while disconnected
+let legacyKey = null;  // the v1 key for the same server + user (read-only fallback)
 let restoring = false; // no autosave while a workbook is being rebuilt
 let timer = null;
 let blockedKey = null; // a stored workbook that couldn't be restored — never autosave over it
@@ -45,6 +47,11 @@ export function initWorkbook() {
   if (menuBtn && menuList) wireMenu(menuBtn, menuList);
 
   document.addEventListener("connection:changed", (e) => onConnection(e.detail ?? {}));
+  // A dashboard has no single view to bookmark (bookmarks capture worksheets), so the action is hidden there.
+  const bookmarkAdd = document.getElementById("wb-bookmark-add");
+  const syncBookmarkAction = () => toggle(bookmarkAdd, !isDashboardActive());
+  bus.addEventListener("view:changed", syncBookmarkAction);
+  syncBookmarkAction();
   for (const type of CHANGE_EVENTS) bus.addEventListener(type, scheduleSave);
 
   exportBtn.addEventListener("click", exportFile);
@@ -63,15 +70,16 @@ export function initWorkbook() {
 function onConnection(view) {
   flushSave(); // finish saving under the previous server's key
   key = storageKey(view);
+  legacyKey = legacyStorageKey(view);
   if (!key) { clearWorkspace(); return; }
   if (!isEmpty()) return;
-  const saved = readStorage(key);
+  const saved = readStorage(key) ?? readStorage(legacyKey);
   if (!saved) return;
   let wb;
   try { wb = parseWorkbook(saved); } catch (err) { keepUnreadable(saved, err); return; }
-  if (!wb.entities.length && !wb.dashboards.length) return;
+  if (!wb.entities.length && !wb.tabs.length) return;
   if (!openWorkbook(wb)) { blockedKey = key; return; } // partial state must not overwrite the stored entry
-  const restored = `Restored your last workbook (${count(wb.entities.length, "table")}, ${count(wb.dashboards.length, "dashboard")}).`;
+  const restored = `Restored your last workbook (${count(wb.entities.length, "table")}, ${count(wb.worksheets.length, "worksheet")}${wb.dashboards.length ? `, ${count(wb.dashboards.length, "dashboard")}` : ""}).`;
   if (wb.issues.length) {
     toast(`${restored} ${wb.issues.length} part(s) were reset.`, "info");
     listDialog(`Restored your last workbook with ${wb.issues.length} issue(s)`,
@@ -79,7 +87,7 @@ function onConnection(view) {
   } else toast(restored, "ok");
 }
 
-/** Disconnected: fade the cards and dashboard tabs out, then clear the model and close every dashboard.
+/** Disconnected: fade the cards and tabs out, then clear the model and close every tab.
  *  Nothing is saved meanwhile (key is null), so the stored workbook for that server is untouched. */
 async function clearWorkspace() {
   setStatus("");
@@ -90,7 +98,7 @@ async function clearWorkspace() {
   restoring = true;
   try {
     clearModel();
-    for (const d of [...dashboards]) closeDashboard(d.id);
+    for (const t of [...tabs]) closeTab(t.id);
     showModel();
     setTheme(DEFAULT_THEME); // the saved workbook keeps its theme; it comes back on reconnect
     setSharedFilters([]);
@@ -161,10 +169,10 @@ function openWorkbook(wb) {
   restoring = true;
   try {
     clearModel();
-    for (const d of [...dashboards]) closeDashboard(d.id);
-    setSharedFilters(wb.sharedFilters ?? []); // before the dashboards, so their first query applies them
+    for (const t of [...tabs]) closeTab(t.id);
+    setSharedFilters(wb.sharedFilters ?? []); // before the tabs, so a worksheet's first query applies them
     setAllFieldMeta(wb.fields ?? {});
-    setParameters(wb.parameters ?? []); // before the dashboards, so their first query reads them
+    setParameters(wb.parameters ?? []); // before the tabs, so a worksheet's first query reads them
     clearRoleChoices();
     setCalculations(wb.calculations ?? [], wb.nextCalcId); // likewise: pills read their calculation by id
 
@@ -180,19 +188,28 @@ function openWorkbook(wb) {
       );
     }
 
-    const opened = wb.dashboards.map((d) => {
-      const dash = createDashboard(d.name);
-      updateSheet(dash.id, d.sheet);
-      return dash;
-    });
-    // P39: bookmarks point at their dashboard by index; a missing one is recreated when applied.
-    setBookmarks((wb.bookmarks ?? []).map((b) => ({ ...b, dashId: b.dashboard !== null ? opened[b.dashboard]?.id ?? null : null })));
-    if (wb.active !== null && opened[wb.active]) switchDashboard(opened[wb.active].id);
+    // Tabs in strip order; widgets and bookmarks point at worksheets by saved index, so those are wired once every tab exists.
+    const worksheetIds = [], dashboardIds = [];
+    for (const t of wb.tabs) {
+      if (t.kind === "worksheet") {
+        const w = wb.worksheets[t.index];
+        const tab = createWorksheet(w.name);
+        updateSheet(tab.id, w.sheet);
+        worksheetIds[t.index] = tab.id;
+      } else dashboardIds[t.index] = createDashboard(wb.dashboards[t.index].name).id;
+    }
+    wb.dashboards.forEach((d, i) => setWidgets(dashboardIds[i], d.widgets.map((w) => (w.kind === "sheet"
+      ? { id: nextWidgetId(), kind: "sheet", sheetId: worksheetIds[w.sheet], x: w.x, y: w.y, w: w.w, h: w.h }
+      : { id: nextWidgetId(), kind: "text", heading: w.heading, body: w.body, x: w.x, y: w.y, w: w.w, h: w.h }))));
+    // P39: bookmarks point at their worksheet by index; a missing one is recreated when applied.
+    setBookmarks((wb.bookmarks ?? []).map(({ worksheet, ...b }) => ({ ...b, worksheetId: worksheet !== null ? worksheetIds[worksheet] ?? null : null })));
+    const activeId = wb.active ? (wb.active.kind === "worksheet" ? worksheetIds : dashboardIds)[wb.active.index] : null;
+    if (activeId) switchTab(activeId);
     else showModel();
     setTheme(wb.theme ?? DEFAULT_THEME);
   } catch (err) {
     console.error(err);
-    toast("Part of the workbook couldn't be opened — check the dashboards.", "danger");
+    toast("Part of the workbook couldn't be opened — check the worksheets and dashboards.", "danger");
     ok = false;
   } finally {
     restoring = false;
@@ -222,7 +239,7 @@ async function importFile(input) {
   try { wb = parseWorkbook(await file.text()); } catch (err) { toast(err.message, "danger"); return; }
   if (!isEmpty()) {
     const ok = await confirmDialog(
-      "Replace the current workbook? Its tables, relationships and dashboards will be removed.",
+      "Replace the current workbook? Its tables, relationships, worksheets and dashboards will be removed.",
       { danger: true, confirmText: "Replace" },
     );
     if (!ok) return;
@@ -236,11 +253,10 @@ async function importFile(input) {
 
 // --- helpers -----------------------------------------------------------------
 function currentState() {
-  const id = activeDashboardId();
-  return { entities, relationships, dashboards, active: id ? { kind: "dashboard", id } : { kind: "model" }, theme: currentTheme(), sharedFilters, bookmarks, fieldMeta, parameters, calculations, nextCalcId: nextCalcId() };
+  return { entities, relationships, tabs, active: currentView(), theme: currentTheme(), sharedFilters, bookmarks, fieldMeta, parameters, calculations, nextCalcId: nextCalcId() };
 }
 
-const isEmpty = () => entities.size === 0 && dashboards.length === 0;
+const isEmpty = () => entities.size === 0 && tabs.length === 0;
 const count = (n, noun) => `${n} ${noun}${n === 1 ? "" : "s"}`;
 
 function setStatus(text, iconName) {

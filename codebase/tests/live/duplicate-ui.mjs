@@ -120,8 +120,8 @@ try {
   for (const t of ['orders', 'customers'])
     await ev(`document.dispatchEvent(new CustomEvent('table:add', { detail: { db: 'shop', table: ${J(t)} } }))`);
   await waitFor(`document.querySelectorAll('.entity').length === 2 && [...document.querySelectorAll('.entity__status')].every((s) => s.hidden)`, 'both tables loaded');
-  await ev(`document.querySelector('.tab-add').click()`);
-  await waitFor(`!document.getElementById('dashboard-view').hidden`, 'worksheet open');
+  await ev(`document.querySelector('.tab-add').click(); document.querySelector('[data-new-tab=worksheet]').click()`);
+  await waitFor(`!document.getElementById('worksheet-view').hidden`, 'worksheet open');
   await installHelpers();
   await waitFor(`!!__t.chip('region')`, 'field pane filled');
 
@@ -134,10 +134,10 @@ try {
     await dragChip('amount', `__t.zone('rows')`);
     await waitFor(`__t.pills('columns').length === 1 && __t.pills('rows').length === 1`, 'pills placed');
     const before = [await pills('columns'), await pills('rows')];
-    await ev(`${dupBtn('Dashboard')}.click()`);
+    await ev(`${dupBtn('Worksheet 1')}.click()`);
     await waitFor(`document.querySelectorAll('.tab:not(.tab--model)').length === 2`, 'second tab');
-    must(J(await tabs()) === J(['Dashboard', 'Dashboard copy']), `tabs: ${J(await tabs())}`);
-    must(await activeTab() === 'Dashboard copy', 'copy not active');
+    must(J(await tabs()) === J(['Worksheet 1', 'Worksheet 1 copy']), `tabs: ${J(await tabs())}`);
+    must(await activeTab() === 'Worksheet 1 copy', 'copy not active');
     must(await ev(`document.activeElement === document.querySelector('.tab.is-active .tab__label')`), 'new tab label not focused');
     await waitFor(`__t.pills('columns').length === 1`, 'copy shelves');
     must(J([await pills('columns'), await pills('rows')]) === J(before), 'shelves differ from the source');
@@ -149,17 +149,17 @@ try {
     await dragChip('qty', `__t.zone('rows')`);
     await waitFor(`__t.pills('rows').length === 2`, 'copy edited');
     await ev(`document.querySelectorAll('.tab:not(.tab--model) .tab__label')[0].click()`);
-    await waitFor(`document.querySelector('.tab.is-active .tab__label').textContent === 'Dashboard'`, 'back on source');
+    await waitFor(`document.querySelector('.tab.is-active .tab__label').textContent === 'Worksheet 1'`, 'back on source');
     await waitFor(`__t.pills('rows').length === 1`, 'source shelves');
     must((await pills('rows')).length === 1, 'source changed with the copy');
   });
   await check('duplicate: a copy of a copy is "<name> copy 2"', async () => {
-    await ev(`${dupBtn('Dashboard')}.click()`);
+    await ev(`${dupBtn('Worksheet 1')}.click()`);
     await waitFor(`document.querySelectorAll('.tab:not(.tab--model)').length === 3`, 'third tab');
-    must(J(await tabs()) === J(['Dashboard', 'Dashboard copy 2', 'Dashboard copy']), `tabs: ${J(await tabs())}`);
+    must(J(await tabs()) === J(['Worksheet 1', 'Worksheet 1 copy 2', 'Worksheet 1 copy']), `tabs: ${J(await tabs())}`);
   });
   await check('duplicate: refused with a toast at the 50-worksheet limit', async () => {
-    for (let i = 0; i < 47; i++) await ev(`document.querySelector('.tab-add').click()`);
+    for (let i = 0; i < 47; i++) await ev(`document.querySelector('.tab-add').click(); document.querySelector('[data-new-tab=worksheet]').click()`);
     await waitFor(`document.querySelectorAll('.tab:not(.tab--model)').length === 50`, '50 tabs');
     await ev(`document.querySelector('.tab__dup').click()`);
     await waitFor(`!document.getElementById('toast').hidden`, 'toast');

@@ -79,8 +79,8 @@ try {
   await waitFor(`document.querySelectorAll('.table-chip').length === 1`, 'tables listed');
   await ev(`document.dispatchEvent(new CustomEvent('table:add', { detail: { db: 'shop', table: 'orders' } }))`);
   await waitFor(`document.querySelectorAll('.entity').length === 1 && [...document.querySelectorAll('.entity__status')].every((s) => s.hidden)`, 'table loaded');
-  await ev(`document.querySelector('.tab-add').click()`);
-  await waitFor(`!document.getElementById('dashboard-view').hidden`, 'worksheet open');
+  await ev(`document.querySelector('.tab-add').click(); document.querySelector('[data-new-tab=worksheet]').click()`);
+  await waitFor(`!document.getElementById('worksheet-view').hidden`, 'worksheet open');
   await install();
   await waitFor(`!!__t.chip('qty_s')`, 'field pane filled');
 
@@ -161,7 +161,7 @@ try {
     await waitFor(`window.__blobs.length === 1`, 'export blob');
     const wb = JSON.parse(await ev(`window.__blobs[0]`));
     must(wb.fields?.['shop.orders.qty_s']?.cast === 'number', `fields: ${J(wb.fields)}`);
-    const pill = wb.dashboards[0].sheet.rows[0];
+    const pill = wb.worksheets[0].sheet.rows[0];
     must(pill.category === 'numeric', `pill category ${pill.category}`);
   });
 

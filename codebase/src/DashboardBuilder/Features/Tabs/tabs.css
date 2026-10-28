@@ -1,6 +1,6 @@
-/* Tabs feature — the Data Model tab + dashboard subtab strip. */
+/* Tabs feature — the Data Model tab + the worksheet / dashboard tab strip. */
 
-/* ---- Subtabs (dashboards) ------------------------------------------------ */
+/* ---- Tabs (worksheets + dashboards) -------------------------------------- */
 .tabs { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; flex: 1; min-width: 0; }
 /* Tier-2 glass control: frosted pill + ≥ 3:1 edge on the glass tab bar. */
 .tab {
@@ -24,6 +24,10 @@
   background: var(--accent-soft); border-color: var(--accent); color: var(--ink); font-weight: 600;
   box-shadow: inset 0 -2px 0 var(--accent), var(--elev-2);
 }
+.tab__kind { flex: none; color: var(--ink-3); }
+.tab.is-active .tab__kind, .tab:hover .tab__kind { color: var(--accent-ink); }
+/* A worksheet / dashboard tab starts with its kind icon, so tighten the left padding it was given for the bare label. */
+.tab--worksheet, .tab--dashboard { padding-left: var(--s2); }
 .tab__label {
   border: 0; background: transparent; color: inherit; cursor: pointer;
   font-size: var(--fs-sm); font-weight: inherit; max-width: 160px;
@@ -51,6 +55,9 @@
               background var(--dur) var(--ease), transform var(--dur) var(--ease);
 }
 .tab-add:hover { color: var(--accent-ink); border-style: solid; border-color: var(--accent); background: var(--glass-ctl-hover); box-shadow: var(--elev-2); }
+.tab-menu { display: inline-flex; }
+.tab-menu__list { min-width: 180px; }
+.tab-add[aria-expanded="true"] { color: var(--accent-ink); border-style: solid; border-color: var(--accent); }
 .tab-add:active { transform: scale(.96); box-shadow: none; }
 @media (pointer: coarse) { .tab, .tab-add { min-height: 44px; } .tab-add { min-width: 44px; } }
 /* The model tab has no close button, so give it symmetric padding to align with the rest. */

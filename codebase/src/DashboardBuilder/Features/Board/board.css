@@ -1,0 +1,7 @@
+/* Board feature — the dashboard tab's body (a placeholder panel until the canvas lands). */
+.view--board { background: transparent; display: grid; place-items: center; }
+.board-empty { display: grid; justify-items: center; gap: var(--s2); max-width: 420px; text-align: center; color: var(--ink-2); }
+.board-empty__icon { color: var(--ink-3); }
+.board-empty__icon .icon { width: 40px; height: 40px; }
+.board-empty__title { margin: 0; font-size: var(--fs-lead); font-weight: 600; color: var(--ink); overflow-wrap: anywhere; }
+.board-empty__text { margin: 0; font-size: var(--fs-sm); }

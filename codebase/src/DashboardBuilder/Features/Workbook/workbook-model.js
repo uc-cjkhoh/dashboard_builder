@@ -1,7 +1,9 @@
 // Workbook save/load format — pure, DOM-free (unit-tested under tests/js/).
 // A workbook is the whole builder state: the Data Model (tables + positions + join keys +
-// relationships) and every dashboard's worksheet. It never contains the connection or a password —
-// a workbook is reopened against whatever server the session is connected to.
+// relationships), every worksheet and every dashboard (its widgets on the board grid), in tab-strip order.
+// It never contains the connection or a password — a workbook is reopened against whatever server the
+// session is connected to. Format v2 (P24b) holds `worksheets`, `dashboards` and `tabs`; the v1 reader
+// (migrateV1: v1 `dashboards` were worksheets) stays for good — old files and old autosaves must open.
 import { emptySheet, defaultFormat } from "../Core/store.js";
 import { LIMITS, text } from "../Core/validate.js";
 import { aggsFor } from "../Dashboard/filter-rules.js";
@@ -13,6 +15,7 @@ import { cleanMemberColors } from "../Dashboard/colour-model.js";
 import { checkTooltipText } from "../Dashboard/tooltip-model.js";
 import { cleanParameter, MAX_PARAMS } from "../Core/parameters-model.js";
 import { cleanCalculations } from "../Calc/calc-workbook.js";
+import { cleanWidgets, savedWidgets } from "../Board/board-model.js";
 import { CALC_AGGS } from "../Calc/calc-pill.js";
 import {
   CHART_TYPE_IDS, CATEGORIES, FILTER_OPS, NUMBER_FORMATS, DATE_FORMATS, LEGENDS, TOP_N, MAX_DECIMALS, DATE_BUCKETS, LINE_STYLES, HEATMAP_SHAPES, MAX_TARGET_MEASURE,
@@ -20,14 +23,21 @@ import {
 } from "../Core/sheet-schema.js";
 
 export const WORKBOOK_FORMAT = "dashboard-builder-workbook";
-export const WORKBOOK_VERSION = 1;
+export const WORKBOOK_VERSION = 2;
 const CARDINALITIES = new Set(["1:1", "1:N", "N:1", "N:M"]);
 const NOT_A_WORKBOOK = "This file is not a Dashboard Builder workbook.";
 
 /** Builder state → a plain JSON-safe object. DOM nodes, fetched columns and lazily-loaded page
- *  members are left out (they are re-fetched on open). */
-export function serializeWorkbook({ entities, relationships, dashboards, active, theme, sharedFilters = [], bookmarks = [], fieldMeta = new Map(), parameters = [], calculations = [], nextCalcId }) {
-  const activeIndex = active?.kind === "dashboard" ? dashboards.findIndex((d) => d.id === active.id) : -1;
+ *  members are left out (they are re-fetched on open). `tabs` is the store's ordered list (worksheet and dashboard
+ *  tabs); `active` is the store's activeView. */
+export function serializeWorkbook({ entities, relationships, tabs, active, theme, sharedFilters = [], bookmarks = [], fieldMeta = new Map(), parameters = [], calculations = [], nextCalcId }) {
+  const worksheets = [], dashboards = [], order = [];
+  const wsIndex = new Map(), dbIndex = new Map(); // tab id → index in the saved list
+  for (const t of tabs) {
+    if (t.kind === "dashboard") { dbIndex.set(t.id, dashboards.length); order.push({ kind: "dashboard", index: dashboards.length }); dashboards.push(t); }
+    else { wsIndex.set(t.id, worksheets.length); order.push({ kind: "worksheet", index: worksheets.length }); worksheets.push(t); }
+  }
+  const activeIndex = active?.kind === "worksheet" ? wsIndex.get(active.id) : active?.kind === "dashboard" ? dbIndex.get(active.id) : undefined;
   return {
     format: WORKBOOK_FORMAT,
     version: WORKBOOK_VERSION,
@@ -45,8 +55,10 @@ export function serializeWorkbook({ entities, relationships, dashboards, active,
       joinType: normalizeJoinType(r.joinType), // P31 / T02-12
       joinFixed: r.joinFixed === true,
     })),
-    dashboards: dashboards.map((d) => ({ name: d.name, sheet: savedSheet(d.sheet) })),
-    active: activeIndex >= 0 ? activeIndex : null,
+    worksheets: worksheets.map((d) => ({ name: d.name, sheet: savedSheet(d.sheet) })),
+    dashboards: dashboards.map((d) => ({ name: d.name, widgets: savedWidgets(d.widgets, wsIndex) })),
+    tabs: order, // the strip's order
+    active: activeIndex !== undefined ? { kind: active.kind, index: activeIndex } : null, // null = the Data Model view
     theme: theme ? { accent: theme.accent, palette: theme.palette } : { ...DEFAULT_THEME },
     sharedFilters: structuredClone(sharedFilters),
     fields: Object.fromEntries(fieldMeta), // P28
@@ -54,10 +66,10 @@ export function serializeWorkbook({ entities, relationships, dashboards, active,
     calculations: calculations.map((c) => ({ id: c.id, name: c.name, formula: c.formula })), // Plan B (no parsed tree)
     // The next calculation number, so a deleted highest id is never handed out again (absent when there never were any).
     ...(calculations.length || nextCalcId ? { nextCalcId: Math.max(Number.isInteger(nextCalcId) ? nextCalcId : 0, ...calculations.map((c) => Number(String(c.id).slice(4)) + 1)) } : {}),
-    // P39: each bookmark points at its dashboard by index (null when that dashboard was closed).
+    // P39: each bookmark points at its worksheet by index (null when that worksheet was closed).
     bookmarks: bookmarks.map((b) => {
-      const i = dashboards.findIndex((d) => d.id === b.dashId);
-      return { name: b.name, dashboard: i >= 0 ? i : null, dashName: b.dashName, sheet: savedSheet(b.sheet),
+      const i = wsIndex.get(b.worksheetId);
+      return { name: b.name, worksheet: i !== undefined ? i : null, worksheetName: b.worksheetName, sheet: savedSheet(b.sheet),
         sharedFilters: structuredClone(b.sharedFilters ?? []), savedAt: b.savedAt };
     }),
   };
@@ -69,7 +81,22 @@ function savedSheet(sheet) {
   return copy;
 }
 
-/** JSON text → a validated workbook `{ entities, relationships, dashboards, active, issues }`. Throws an
+/** A v1 file read as v2: every v1 `dashboards[i]` (one worksheet each) becomes `worksheets[i]`, there are no dashboards, the tab
+ *  order is the worksheet order (left unset: the reader derives it), `active` and each bookmark's `dashboard` index carry over as
+ *  worksheet indexes. Pure and tolerant — malformed parts pass through so the v2 reader reports them. */
+export function migrateV1(raw) {
+  const { dashboards, active, bookmarks, ...rest } = raw;
+  return {
+    ...rest, version: 2, worksheets: dashboards, tabs: undefined,
+    active: Number.isInteger(active) ? { kind: "worksheet", index: active } : active,
+    bookmarks: Array.isArray(bookmarks)
+      ? bookmarks.map((b) => (b && typeof b === "object" ? { ...b, worksheet: b.dashboard, worksheetName: b.dashName } : b))
+      : bookmarks,
+  };
+}
+
+/** JSON text → a validated workbook `{ entities, relationships, worksheets, dashboards, tabs, active, … issues }` (`tabs` / `active`
+ *  point into the cleaned `worksheets` / `dashboards` lists). v1 files are migrated first. Throws an
  *  Error with a user-facing message for anything that isn't a workbook this build can open.
  *  Malformed parts are dropped or reset, and each one is reported in `issues` (never silent). */
 export function parseWorkbook(source) {
@@ -80,6 +107,7 @@ export function parseWorkbook(source) {
     throw new Error("This workbook file has no valid version number.");
   if (raw.version > WORKBOOK_VERSION)
     throw new Error("This workbook was saved by a newer version of Dashboard Builder.");
+  if (raw.version === 1) raw = migrateV1(raw);
 
   const issues = [];
 
@@ -129,39 +157,76 @@ export function parseWorkbook(source) {
   const droppedRels = relList.length - relationships.length;
   if (droppedRels > 0) issues.push(`Skipped ${droppedRels} relationship(s) that referenced missing tables or had an unknown cardinality.`);
 
-  if (raw.dashboards !== undefined && !Array.isArray(raw.dashboards)) issues.push("The dashboards weren't a list — none were opened.");
-  const allDash = Array.isArray(raw.dashboards) ? raw.dashboards : [];
-  const list = allDash.filter((d) => d && typeof d === "object");
-  if (list.length < allDash.length) issues.push(`Skipped ${allDash.length - list.length} entry(ies) that were not a dashboard.`);
-  if (list.length > LIMITS.dashboards) {
-    issues.push(`Only the first ${LIMITS.dashboards} dashboards were opened.`);
-    list.length = LIMITS.dashboards;
+  const wsAll = objectList(raw.worksheets, "worksheet", issues);
+  const dbAll = objectList(raw.dashboards, "dashboard", issues);
+
+  // The strip order: the saved `tabs` entries that point at something, then any worksheet / dashboard it left out. Past 50, dropped.
+  const order = [], seenTab = new Set();
+  const inRange = (t) => t && Number.isInteger(t.index) && t.index >= 0 && (t.kind === "worksheet" ? t.index < wsAll.length : t.kind === "dashboard" && t.index < dbAll.length);
+  if (raw.tabs !== undefined && !Array.isArray(raw.tabs)) issues.push("The tab order wasn't a list — the tabs were opened in their saved order.");
+  if (Array.isArray(raw.tabs)) {
+    for (const t of raw.tabs) {
+      if (!inRange(t) || seenTab.has(`${t.kind}:${t.index}`)) { issues.push("Skipped an entry in the tab order that points at nothing."); continue; }
+      seenTab.add(`${t.kind}:${t.index}`); order.push({ kind: t.kind, index: t.index });
+    }
   }
-  const dashboards = list.map((d) => {
+  const unlisted = [...wsAll.map((_, index) => ({ kind: "worksheet", index })), ...dbAll.map((_, index) => ({ kind: "dashboard", index }))]
+    .filter((t) => !seenTab.has(`${t.kind}:${t.index}`));
+  if (Array.isArray(raw.tabs) && unlisted.length) issues.push(`${unlisted.length} tab(s) were missing from the tab order — added at the end.`);
+  order.push(...unlisted);
+  if (order.length > LIMITS.tabs) {
+    issues.push(`Only the first ${LIMITS.tabs} tabs were opened.`);
+    order.length = LIMITS.tabs;
+  }
+
+  const tabName = (d, base) => {
     const r = d.name == null || typeof d.name === "string"
       ? text(d.name, { label: "Tab name", max: LIMITS.tabName, required: true })
-      : { ok: false, error: "The dashboard name must be text." };
-    let name = "Dashboard";
-    if (r.ok) name = r.value;
-    else issues.push(`A dashboard name was reset to "Dashboard": ${r.error}`);
-    return { name, sheet: sanitizeSheet(d.sheet, `Sheet "${name}"`, issues) };
-  });
+      : { ok: false, error: `The ${base.toLowerCase()} name must be text.` };
+    if (r.ok) return r.value;
+    issues.push(`A ${base.toLowerCase()} name was reset to "${base}": ${r.error}`);
+    return base;
+  };
+  const worksheets = [], dashboards = [], tabs = [];
+  const wsMap = new Map(), dbMap = new Map(); // saved index → index in the cleaned list
+  for (const t of order) {
+    if (t.kind === "worksheet") {
+      const d = wsAll[t.index], name = tabName(d, "Worksheet");
+      wsMap.set(t.index, worksheets.length); tabs.push({ kind: "worksheet", index: worksheets.length });
+      worksheets.push({ name, sheet: sanitizeSheet(d.sheet, `Sheet "${name}"`, issues) });
+    } else {
+      dbMap.set(t.index, dashboards.length); tabs.push({ kind: "dashboard", index: dashboards.length });
+      dashboards.push({ name: tabName(dbAll[t.index], "Dashboard"), widgets: dbAll[t.index].widgets });
+    }
+  }
+  // A widget's worksheet is read through the map, so one cut by the 50-tab cap is "missing" like any other dangling index.
+  for (const d of dashboards) {
+    const remapped = Array.isArray(d.widgets)
+      ? d.widgets.map((w) => (w && typeof w === "object" && w.kind === "sheet" ? { ...w, sheet: wsMap.get(w.sheet) } : w))
+      : d.widgets;
+    d.widgets = cleanWidgets(remapped, { worksheetCount: worksheets.length, where: `Dashboard "${d.name}"` }, issues);
+  }
 
-  if (raw.active != null && !(Number.isInteger(raw.active) && raw.active >= 0 && raw.active < dashboards.length))
-    issues.push("The saved active dashboard was invalid — the data model view was opened.");
-  const active = Number.isInteger(raw.active) && raw.active >= 0 && raw.active < dashboards.length ? raw.active : null;
+  let active = null;
+  if (raw.active != null) {
+    const a = raw.active, map = a && typeof a === "object" ? (a.kind === "worksheet" ? wsMap : a.kind === "dashboard" ? dbMap : null) : null;
+    const index = map && Number.isInteger(a.index) ? map.get(a.index) : undefined;
+    if (index !== undefined) active = { kind: a.kind, index };
+    else issues.push("The saved active tab was invalid — the data model view was opened.");
+  }
   const theme = cleanTheme(raw.theme, issues); // P41 — absent (older workbooks) = the default theme
   const sharedFilters = cleanFilters(raw.sharedFilters, "Shared filters", issues, LIMITS.sharedFilters); // P40
-  const bookmarks = cleanBookmarks(raw.bookmarks, dashboards.length, issues); // P39
+  const bookmarks = cleanBookmarks(raw.bookmarks, wsAll.length, issues); // P39
+  for (const b of bookmarks) b.worksheet = b.worksheet === null ? null : wsMap.get(b.worksheet) ?? null; // a worksheet cut by the tab cap reads as closed
   const fields = cleanFieldMeta(raw.fields, issues); // P28
   const parameters = cleanParameters(raw.parameters, issues); // P32
   // A filter or Top N that points at a parameter the workbook doesn't have falls back to its own value.
   const paramIds = new Set(parameters.map((p) => p.id));
-  for (const d of dashboards) unlinkParams(d.sheet, paramIds, `Sheet "${d.name}"`, issues);
+  for (const d of worksheets) unlinkParams(d.sheet, paramIds, `Sheet "${d.name}"`, issues);
   for (const f of sharedFilters) if (f.param && !paramIds.has(f.param)) { delete f.param; issues.push("A shared filter's parameter is missing — unlinked."); }
   const calculations = cleanCalculations(raw.calculations, issues); // Plan B
   const calcIds = new Set(calculations.map((c) => c.id));
-  for (const d of dashboards) dropMissingCalcs(d.sheet, calcIds, `Sheet "${d.name}"`, issues);
+  for (const d of worksheets) dropMissingCalcs(d.sheet, calcIds, `Sheet "${d.name}"`, issues);
   for (const b of bookmarks) {
     dropMissingCalcs(b.sheet, calcIds, `Bookmark "${b.name}"`, issues);
     b.sharedFilters = dropMissingTopCalcs(b.sharedFilters, calcIds, `Bookmark "${b.name}" shared filters`, issues);
@@ -173,7 +238,16 @@ export function parseWorkbook(source) {
     if (Number.isInteger(raw.nextCalcId) && raw.nextCalcId >= 1 && raw.nextCalcId <= 999999) nextCalcId = raw.nextCalcId;
     else issues.push("The saved next calculation number was invalid — ignored.");
   }
-  return { entities, relationships, dashboards, active, theme, sharedFilters, bookmarks, fields, parameters, calculations, nextCalcId, issues: [...new Set(issues)] };
+  return { entities, relationships, worksheets, dashboards, tabs, active, theme, sharedFilters, bookmarks, fields, parameters, calculations, nextCalcId, issues: [...new Set(issues)] };
+}
+
+/** A saved list of tab objects; a non-list is reported, and entries that aren't objects are skipped (and reported). */
+function objectList(v, noun, issues) {
+  if (v === undefined) return [];
+  if (!Array.isArray(v)) { issues.push(`The ${noun}s weren't a list — none were opened.`); return []; }
+  const list = v.filter((d) => d && typeof d === "object");
+  if (list.length < v.length) issues.push(`Skipped ${v.length - list.length} entry(ies) that were not a ${noun}.`);
+  return list;
 }
 
 const isStr = (v) => typeof v === "string" && v.length > 0;
@@ -396,8 +470,8 @@ function cleanFieldMeta(raw, issues) {
 }
 
 // P39 bookmarks: a name, a sheet (validated like any sheet, but its click selection is part of the
-// view, so a well-formed one is kept), shared filters, and a dashboard index (null if out of range).
-function cleanBookmarks(list, dashCount, issues) {
+// view, so a well-formed one is kept), shared filters, and a worksheet index (null if out of range).
+function cleanBookmarks(list, wsCount, issues) {
   if (list == null) return [];
   if (!Array.isArray(list)) { issues.push("The bookmarks weren't a list — none were opened."); return []; }
   if (list.length > LIMITS.bookmarks) issues.push(`Only the first ${LIMITS.bookmarks} bookmarks were opened.`);
@@ -411,8 +485,8 @@ function cleanBookmarks(list, dashCount, issues) {
     if (sel && isStr(sel.db) && isStr(sel.table) && isStr(sel.column) && (typeof sel.value === "string" || typeof sel.value === "number")
       && (sel.action == null || sel.action === "keep" || sel.action === "exclude"))
       sheet.selection = { db: sel.db, table: sel.table, column: sel.column, value: sel.value, label: String(sel.label ?? ""), action: sel.action ?? null };
-    const dashboard = Number.isInteger(b.dashboard) && b.dashboard >= 0 && b.dashboard < dashCount ? b.dashboard : null;
-    out.push({ name: name.value, dashboard, dashName: typeof b.dashName === "string" && b.dashName.trim() ? b.dashName.trim().slice(0, LIMITS.tabName) : name.value,
+    const worksheet = Number.isInteger(b.worksheet) && b.worksheet >= 0 && b.worksheet < wsCount ? b.worksheet : null;
+    out.push({ name: name.value, worksheet, worksheetName: typeof b.worksheetName === "string" && b.worksheetName.trim() ? b.worksheetName.trim().slice(0, LIMITS.tabName) : name.value,
       sheet, sharedFilters: cleanFilters(b.sharedFilters, `${where} shared filters`, issues, LIMITS.sharedFilters),
       savedAt: typeof b.savedAt === "string" ? b.savedAt : null });
   }
@@ -490,7 +564,10 @@ function cleanFormat(f0, where, issues) {
 export const restoreSheet = (saved) => sanitizeSheet(saved, "Sheet", []);
 
 /** The browser-storage key for the session's server + user, or null while disconnected. */
-export function storageKey(view) {
+export function storageKey(view, version = WORKBOOK_VERSION) {
   if (!view?.connected) return null;
-  return `dashboardbuilder.workbook.v${WORKBOOK_VERSION}|${view.host}|${view.port}|${view.user}`;
+  return `dashboardbuilder.workbook.v${version}|${view.host}|${view.port}|${view.user}`;
 }
+
+/** The v1 autosave key: read when no v2 entry exists yet (and never deleted or written). */
+export const legacyStorageKey = (view) => storageKey(view, 1);

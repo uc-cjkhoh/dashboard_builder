@@ -1,9 +1,9 @@
-// P23 undo / redo — pure, DOM-free (unit-tested in tests/js/history.test.mjs). One stack per dashboard of
+// P23 undo / redo — pure, DOM-free (unit-tested in tests/js/history.test.mjs). One stack per worksheet of
 // sheet snapshots: every committed change records the sheet as it was; undo swaps back, redo forward.
 export const HISTORY_LIMIT = 50;
 
 export function createHistory(limit = HISTORY_LIMIT) {
-  const stacks = new Map(); // dashId → { undo: [], redo: [] }
+  const stacks = new Map(); // worksheet id → { undo: [], redo: [] }
   const of = (id) => { if (!stacks.has(id)) stacks.set(id, { undo: [], redo: [] }); return stacks.get(id); };
   const copy = (s) => structuredClone(s);
   return {

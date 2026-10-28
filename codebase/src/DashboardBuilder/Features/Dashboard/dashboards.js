@@ -6,7 +6,7 @@ import { roleOf, STAT_SINGLE_TABLE, showMeOptions, placeFor, samePlacement } fro
 import { toggle, makeButton, toast, fieldError, confirmDialog } from "../Core/ui.js";
 import { LIMITS, number } from "../Core/validate.js";
 import { aggsFor, checkAdd, checkFilter, viewCounts, withCategories, opsFor, OP_LABELS } from "./filter-rules.js";
-import { entities, relationships, activeDashboard, isModelActive, updateSheet, bus, defaultFormat, defaultMarks, sharedFilters, metaOf, nameOf, setFieldMeta, emptySheet, parameters, updateParameter, calculations, dashboards, addCalculation, removeCalculation } from "../Core/store.js";
+import { entities, relationships, activeWorksheet, isWorksheetActive, updateSheet, bus, defaultFormat, defaultMarks, sharedFilters, metaOf, nameOf, setFieldMeta, emptySheet, parameters, updateParameter, calculations, worksheets, addCalculation, removeCalculation } from "../Core/store.js";
 import { checkValue, paramTypeFor } from "../Core/parameters-model.js";
 import { exportChart, hasChartInstance, sizeChart, focusSeries } from "./chart.js";
 import { createWorksheetView, periodNotice } from "./worksheet-view.js";
@@ -125,7 +125,7 @@ let headerAbort = null; // aborts the menus wired during the previous header ren
 const TYPE_ICONS = { numeric: "type-number", text: "type-text", temporal: "type-date", boolean: "type-bool" };
 
 export function initDashboards() {
-  const view = document.getElementById("dashboard-view");
+  const view = document.getElementById("worksheet-view");
   const fieldsEl = document.getElementById("ws-fields");
   const shelvesEl = document.getElementById("ws-shelves");
   const chartEl = document.getElementById("ws-chart");
@@ -137,14 +137,14 @@ export function initDashboards() {
   // Latest-wins queries + recent results per dashboard: a superseded query is aborted (its answer can
   // never overwrite a newer chart), and presentation-only changes re-render from the cached result
   // instead of re-querying ClickHouse. The Refresh button drops the dashboard's cache and re-queries.
-  const history = createHistory(); // P23 undo / redo per dashboard
-  const lastSnap = new Map();       // dashId → the sheet as last committed (the "before" of the next edit)
+  const history = createHistory(); // P23 undo / redo per worksheet
+  const lastSnap = new Map();       // worksheet id → the sheet as last committed (the "before" of the next edit)
   const results = createResultCache();
   // The editor's one worksheet view — created before anything (sync() below) can use it.
   // The query-and-render lifecycle is worksheet-view.js (P24a); the editor owns exactly one view, on #ws-chart, and
   // supplies the drawing of a result (worksheet-render.js) and the editor-only state around it.
   const sheetView = createWorksheetView(chartEl, () => ({
-    dash: activeDashboard(), noticeEl, results, plan: planCtx(), categoryOf, castOf,
+    dash: activeWorksheet(), noticeEl, results, plan: planCtx(), categoryOf, castOf,
   }), {
     interactive: true, onSelect: toggleSelection, onDrill: (raw) => drillDown(raw), onLegend: legendClick, legendFocus: () => legendFocus,
     onTooltipFields: (sheet, list) => setTooltipCat(sheet, list), onMemberColors: (sheet, field, members) => setMemberState(sheet, field, members),
@@ -169,37 +169,37 @@ export function initDashboards() {
   let pageTimer = null;   // P20 Pages autoplay interval id (transient; never persisted)
 
   bus.addEventListener("view:changed", sync);
-  bus.addEventListener("dashboard:changed", () => {
+  bus.addEventListener("worksheet:changed", () => {
     // A change from outside commit() (bookmark, workbook open, undo) becomes the new baseline.
-    const d = activeDashboard();
+    const d = activeWorksheet();
     // ...and a restored sheet's calculated pills take the live calculation's type / role (undo, bookmark, open).
-    if (d && !isModelActive()) syncCalcPills(d.sheet, calculations, catalogFromEntities([...entities.values()]));
-    if (d && !isModelActive()) lastSnap.set(d.id, structuredClone(d.sheet));
-    if (!isModelActive()) { renderShelves(); runChart(); }
+    if (d && isWorksheetActive()) syncCalcPills(d.sheet, calculations, catalogFromEntities([...entities.values()]));
+    if (d && isWorksheetActive()) lastSnap.set(d.id, structuredClone(d.sheet));
+    if (isWorksheetActive()) { renderShelves(); runChart(); }
   });
   initUndoKeys();
   // Safety net: an entity's columns finishing after the first render may be the only source of a
   // restored filter's category — re-render once if any filter is still waiting for one.
   bus.addEventListener("entity:loaded", () => {
-    const dash = activeDashboard();
-    if (!dash || isModelActive() || !dash.sheet.filters.some((f) => !f.category)) return;
+    const dash = activeWorksheet();
+    if (!dash || !isWorksheetActive() || !dash.sheet.filters.some((f) => !f.category)) return;
     const missing = dash.sheet.filters.filter((f) => !f.category).length;
     withCategories(dash.sheet.filters, categoryOf);
     if (dash.sheet.filters.filter((f) => !f.category).length < missing) { renderShelves(); runChart(); }
   });
   // chart.js reads colours from :root at render time — redraw when light/dark flips (Core/scheme.js; a cache hit, no query).
-  bus.addEventListener("scheme:changed", () => { if (!isModelActive()) runChart(); });
-  bus.addEventListener("theme:changed", () => { if (!isModelActive()) runChart(); }); // P41: redraw in the new colours
+  bus.addEventListener("scheme:changed", () => { if (isWorksheetActive()) runChart(); });
+  bus.addEventListener("theme:changed", () => { if (isWorksheetActive()) runChart(); }); // P41: redraw in the new colours
   // P28: a rename / hide / default aggregation redraws the field pane, the pills and the chart's labels.
   // T02-34: a changed data type cast also re-categorises the pills / filters that read the field.
   bus.addEventListener("fields:changed", () => {
-    const active = activeDashboard();
+    const active = activeWorksheet();
     let activeChanged = false;
-    for (const d of dashboards) {
+    for (const d of worksheets()) {
       if (!syncCastCategories(d.sheet, sharedFilters, castOf, baseCategoryOf)) continue;
-      if (d === active && !isModelActive()) activeChanged = true; else commitQuiet(d, d.sheet);
+      if (d === active && isWorksheetActive()) activeChanged = true; else commitQuiet(d, d.sheet);
     }
-    if (isModelActive()) return;
+    if (!isWorksheetActive()) return;
     buildFields();
     if (activeChanged) commit(active, active.sheet); else { renderShelves(); runChart(); }
   });
@@ -207,20 +207,20 @@ export function initDashboards() {
   // the field pane and the chart. An unchanged sheet is just redrawn; a changed one goes through commit().
   bus.addEventListener("calculations:changed", () => {
     const catalog = catalogFromEntities([...entities.values()]);
-    const active = activeDashboard();
+    const active = activeWorksheet();
     let activeChanged = false;
-    for (const d of dashboards) {
+    for (const d of worksheets()) {
       const before = JSON.stringify(d.sheet);
       syncCalcPills(d.sheet, calculations, catalog);
       if (JSON.stringify(d.sheet) === before) continue;
-      if (d === active && !isModelActive()) activeChanged = true; else commitQuiet(d, d.sheet);
+      if (d === active && isWorksheetActive()) activeChanged = true; else commitQuiet(d, d.sheet);
     }
-    if (isModelActive()) return;
+    if (!isWorksheetActive()) return;
     buildFields();
     if (activeChanged) commit(active, active.sheet); else { renderShelves(); runChart(); }
   });
   // P32: a parameter's new value re-runs the view (its filters / Top N read it at plan time).
-  bus.addEventListener("parameters:changed", () => { if (isModelActive()) return; renderShelves(); runChart(); });
+  bus.addEventListener("parameters:changed", () => { if (!isWorksheetActive()) return; renderShelves(); runChart(); });
   initPresentation();
   sync();
 
@@ -228,12 +228,12 @@ export function initDashboards() {
     stopPaging();  // switching view/dashboard halts any running Pages animation
     legendFocus = null; // P29: a highlight belongs to the chart it was made on
     openTool = null; // close any open tool editor when the view changes
-    toggle(view, !isModelActive());
-    if (isModelActive()) { sheetView.cancel(); shownDash = null; return; }
-    const id = activeDashboard()?.id ?? null;
+    toggle(view, isWorksheetActive());
+    if (!isWorksheetActive()) { sheetView.cancel(); shownDash = null; return; }
+    const id = activeWorksheet()?.id ?? null;
     if (shownDash && id !== shownDash) enter(view.querySelector(".worksheet"), { y: 4, duration: MOTION.view });
     shownDash = id;
-    const cur = activeDashboard();
+    const cur = activeWorksheet();
     if (cur && !lastSnap.has(cur.id)) lastSnap.set(cur.id, structuredClone(cur.sheet));
     await buildFields();
     renderShelves();
@@ -379,7 +379,7 @@ export function initDashboards() {
       add.type = "button";
       add.setAttribute("aria-label", `Add ${calc.name} to ${shelfKey === "rows" ? "Rows" : "Columns"}`);
       add.title = `Add to ${shelfKey === "rows" ? "Rows" : "Columns"}`;
-      add.addEventListener("click", () => { const dash = activeDashboard(); if (dash) addField(dash, shelfKey, payload()); });
+      add.addEventListener("click", () => { const dash = activeWorksheet(); if (dash) addField(dash, shelfKey, payload()); });
       chip.append(add);
       chip.addEventListener("dragstart", (e) => {
         e.dataTransfer.setData(FIELD_MIME, JSON.stringify(payload()));
@@ -421,7 +421,7 @@ export function initDashboards() {
   }
   // B4: refuse while another calculation uses it; ask first when worksheets use it; else just delete.
   async function deleteCalcField(calc) {
-    const plan = deleteCalcPlan(calculations, dashboards.map((d) => d.sheet), calc.id, sharedFilters);
+    const plan = deleteCalcPlan(calculations, worksheets().map((d) => d.sheet), calc.id, sharedFilters);
     if (plan.refusedBy) { toast(`Used by calculation '${plan.refusedBy.join("', '")}'.`, "info"); return; }
     if (plan.usedInSheets || plan.usedInShared) {
       const n = plan.usedInSheets, m = plan.usedInShared;
@@ -433,11 +433,11 @@ export function initDashboards() {
       if (!go) return;
       clearFilterCalc(sharedFilters, calc.id); // saved with the workbook by the calculations:changed below
       // Commit every sheet that lost pills (the calculations:changed sync below sees them already cleared and wouldn't).
-      const active = activeDashboard();
-      for (const d of dashboards) {
+      const active = activeWorksheet();
+      for (const d of worksheets()) {
         if (!usesCalc(d.sheet, calc.id)) continue;
         clearCalcPills(d.sheet, calc.id);
-        if (d === active && !isModelActive()) commit(d, d.sheet); else commitQuiet(d, d.sheet);
+        if (d === active && isWorksheetActive()) commit(d, d.sheet); else commitQuiet(d, d.sheet);
       }
     }
     setRoleChoice(calc.id, null);
@@ -470,7 +470,7 @@ export function initDashboards() {
     add.setAttribute("aria-label", `Add ${col.name} to ${shelfLabel}`);
     add.title = `Add to ${shelfLabel}`;
     add.addEventListener("click", () => {
-      const dash = activeDashboard();
+      const dash = activeWorksheet();
       if (dash) addField(dash, shelfKey, payload);
     });
     chip.append(add);
@@ -549,7 +549,7 @@ export function initDashboards() {
 
   // --- shelves -------------------------------------------------------------
   function renderShelves() {
-    const dash = activeDashboard();
+    const dash = activeWorksheet();
     if (!dash) return;
     const s = dash.sheet;
     withCategories(s.filters, categoryOf);
@@ -739,7 +739,7 @@ export function initDashboards() {
 
   // Descend one level, pinning the clicked value of the current level. A no-op at the finest level.
   function drillDown(rawValue) {
-    const dash = activeDashboard();
+    const dash = activeWorksheet();
     if (!dash) return;
     const s = dash.sheet;
     if (!isDrillActive(s)) return;
@@ -917,8 +917,8 @@ export function initDashboards() {
     return wrap;
   }
   function step(which) {
-    const dash = activeDashboard();
-    if (!dash || isModelActive()) return;
+    const dash = activeWorksheet();
+    if (!dash || !isWorksheetActive()) return;
     stopPaging();
     const target = history[which](dash.id, dash.sheet);
     if (!target) return;
@@ -927,7 +927,7 @@ export function initDashboards() {
   }
   function initUndoKeys() {
     document.addEventListener("keydown", (e) => {
-      if (!(e.ctrlKey || e.metaKey) || isModelActive() || view.hidden) return;
+      if (!(e.ctrlKey || e.metaKey) || !isWorksheetActive() || view.hidden) return;
       if (e.target.closest?.("input, textarea, select, [contenteditable='true'], dialog")) return; // the field's own undo
       const k = e.key.toLowerCase();
       if (k === "z" && !e.shiftKey) { e.preventDefault(); step("undo"); }
@@ -1054,7 +1054,7 @@ export function initDashboards() {
     const closeFields = () => { if (ws.classList.contains("is-fields-open")) { ws.classList.remove("is-fields-open"); renderShelves(); } };
     ws.querySelector(".ws-main")?.addEventListener("pointerdown", (e) => { if (!e.target.closest(".ws-fields-toggle")) closeFields(); });
     document.addEventListener("keydown", (e) => { if (e.key === "Escape" && ws.classList.contains("is-fields-open")) closeFields(); });
-    document.addEventListener("fullscreenchange", () => { if (!isModelActive()) renderShelves(); });
+    document.addEventListener("fullscreenchange", () => { if (isWorksheetActive()) renderShelves(); });
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape" && card.classList.contains("is-presenting") && !e.defaultPrevented) {
         card.classList.remove("is-presenting"); renderShelves();
@@ -1066,12 +1066,12 @@ export function initDashboards() {
     });
     // Print: a header naming the dashboard, its filters / range and the notice; the chart drawn at page
     // size (print.css rules in dashboard.css hide everything else). Removed after printing.
-    window.addEventListener("beforeprint", () => { if (!isModelActive()) beginPrint(); });
+    window.addEventListener("beforeprint", () => { if (isWorksheetActive()) beginPrint(); });
     window.addEventListener("afterprint", endPrint);
   }
   let printHead = null;
   function beginPrint() {
-    const dash = activeDashboard();
+    const dash = activeWorksheet();
     if (!dash || printHead) return;
     const s = dash.sheet;
     printHead = el("div", "ws-print-head");
@@ -1390,7 +1390,7 @@ export function initDashboards() {
   function moveField(fromShelf, fromIndex, toShelf, toIndex) {
     if (fromShelf !== "columns" && fromShelf !== "rows") return;
     if (toShelf !== "columns" && toShelf !== "rows") return;
-    const dash = activeDashboard();
+    const dash = activeWorksheet();
     if (!dash) return;
     const s = dash.sheet;
     const src = s[fromShelf];
@@ -2322,7 +2322,7 @@ export function initDashboards() {
   // P29: a legend click highlights that item (a second click clears it); on a legend that lists a dimension's members
   // (`field` + `raw`) it also selects the member, so the selection bar offers Keep only / Exclude (the click-to-filter path).
   function legendClick({ sheet, field, name, raw, bucketed }) {
-    const dash = activeDashboard();
+    const dash = activeWorksheet();
     const again = legendFocus === name;
     legendFocus = again ? null : name;
     if (field && !isCalcPill(field) && dash && raw !== undefined && raw !== null && bucketed === null) { // E12: a calculated field can't be click-filtered; the legend still highlights
@@ -2341,7 +2341,7 @@ export function initDashboards() {
   // Toggle the click selection: a fresh click selects (action reset to a plain highlight); clicking the
   // already-selected value clears it. Keep-only / Exclude are chosen from the selection chip.
   function toggleSelection(dimField, rawValue) {
-    const dash = activeDashboard();
+    const dash = activeWorksheet();
     if (!dash) return;
     const refused = refusal(dimField, "selection");
     if (refused) { toast(refused, "info"); return; }

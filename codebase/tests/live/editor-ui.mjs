@@ -57,7 +57,7 @@ try {
   const last = () => queries[queries.length - 1];
   const btn = (text) => `[...document.querySelectorAll('button')].find((x) => x.textContent.trim() === ${J(text)} || x.getAttribute('aria-label') === ${J(text)})`;
   const click = (text) => ev(`(() => { const e = ${btn(text)}; if (!e) throw new Error('no button ${text}'); e.click(); return true; })()`);
-  const store = (code) => ev(`(async () => { const st = await import('/features/Core/store.js'); const d = st.activeDashboard(); ${code}; return true; })()`);
+  const store = (code) => ev(`(async () => { const st = await import('/features/Core/store.js'); const d = st.activeWorksheet(); ${code}; return true; })()`);
   const chartHost = `document.querySelector('#ws-chart .ws-chart-canvas')`;
   const drawn = () => ev(`!!document.querySelector('#ws-chart svg, #ws-chart canvas')`);
   const instOf = `window.echarts.getInstanceByDom(${chartHost})`;
@@ -77,8 +77,8 @@ try {
   await waitFor(`document.querySelectorAll('.table-chip').length === 1`, 'tables');
   await ev(`document.dispatchEvent(new CustomEvent('table:add', { detail: { db: 'shop', table: 'orders' } }))`);
   await waitFor(`document.querySelectorAll('.entity').length === 1 && [...document.querySelectorAll('.entity__status')].every((s) => s.hidden)`, 'orders loaded');
-  await ev(`document.querySelector('.tab-add').click()`);
-  await waitFor(`!document.getElementById('dashboard-view').hidden`, 'worksheet open');
+  await ev(`document.querySelector('.tab-add').click(); document.querySelector('[data-new-tab=worksheet]').click()`);
+  await waitFor(`!document.getElementById('worksheet-view').hidden`, 'worksheet open');
   await waitFor(`document.querySelectorAll('#ws-fields .ws-field').length >= 4`, 'fields');
   const base = `s.chartType = 'bar'; s.columns = [f('region', 'text')]; s.rows = [f('amount', 'numeric', { agg: 'sum' })]; s.selection = null; s.drill = null; s.pages = null; s.filters = [];`;
   await setSheet(base);
@@ -97,7 +97,7 @@ try {
     await click('Clear selection');
     await waitFor(`!document.querySelector('.ws-select')`, 'chip cleared');
     await settle();
-    must(await ev(`(async () => (await import('/features/Core/store.js')).activeDashboard().sheet.selection === null)()`), 'selection kept in the sheet');
+    must(await ev(`(async () => (await import('/features/Core/store.js')).activeWorksheet().sheet.selection === null)()`), 'selection kept in the sheet');
   });
 
   await check('a pie legend click highlights and selects that member', async () => {
@@ -119,7 +119,7 @@ try {
     await ev(`document.querySelector('.ws-drill__up').click()`);
     await waitFor(`/Showing: region/.test(document.querySelector('.ws-drill')?.textContent ?? '')`, 'back up');
     await settle();
-    must(await ev(`(async () => { const d = (await import('/features/Core/store.js')).activeDashboard().sheet.drill; return d.depth === 0 && d.path.length === 0; })()`), 'drill path stayed after Up');
+    must(await ev(`(async () => { const d = (await import('/features/Core/store.js')).activeWorksheet().sheet.drill; return d.depth === 0 && d.path.length === 0; })()`), 'drill path stayed after Up');
   });
 
   await check('Pages: next / previous step through the members, each a bound = filter', async () => {
@@ -195,7 +195,7 @@ try {
   const noMarks = `s.color = []; s.marks = { size: null, label: null, detail: [], tooltip: [], shape: null, path: null, angle: null }; s.selection = null; s.analytics = undefined; s.period = null; s.filters = []; s.drill = null; s.pages = null; s.sort = null;`;
   const legendToggle = (name) => ev(`(() => { ${instOf}.dispatchAction({ type: 'legendToggleSelect', name: ${J(name)} }); return true; })()`);
   const chipText = () => ev(`document.querySelector('.ws-select')?.textContent ?? ''`);
-  const selection = () => ev(`(async () => JSON.stringify((await import('/features/Core/store.js')).activeDashboard().sheet.selection))()`).then((x) => (typeof x === 'string' ? JSON.parse(x) : x));
+  const selection = () => ev(`(async () => JSON.stringify((await import('/features/Core/store.js')).activeWorksheet().sheet.selection))()`).then((x) => (typeof x === 'string' ? JSON.parse(x) : x));
 
   await check('pie legend: select, a second click clears, then Keep only / Exclude send bound filters', async () => {
     await setSheet(`${base} ${noMarks} s.chartType = 'pie'`); await settle();
@@ -315,12 +315,12 @@ try {
     await click('Refresh');
     await waitFor(`!!document.querySelector('#ws-chart .ws-loading')`, 'loading');
     await ev(`document.querySelector('.tab--model .tab__label').click()`);
-    await waitFor(`document.getElementById('dashboard-view').hidden`, 'model view');
+    await waitFor(`document.getElementById('worksheet-view').hidden`, 'model view');
     await b.sleep(2200); // the slow answer lands while the Data Model is up
     slowMs = 0;
     must(b.consoleErrors.length === 0, `page errors: ${b.consoleErrors}`);
     await ev(`document.querySelector('.tab:not(.tab--model) .tab__label').click()`);
-    await waitFor(`!document.getElementById('dashboard-view').hidden`, 'worksheet back');
+    await waitFor(`!document.getElementById('worksheet-view').hidden`, 'worksheet back');
     await waitFor(`!!${chartHost}`, 'chart drawn on return', 10000);
   });
 } catch (e) {

@@ -22,7 +22,7 @@ const stop = () => fuser(['-k', `${port}/tcp`]);
 // Never kill an unrelated listener: only a previous dev run of THIS app (a DashboardBuilder page) may be on the port.
 if (fuser([`${port}/tcp`]) === 0) {
   let ours = false;
-  try { ours = /Dashboard Builder|ws-chart|dashboard-view/.test(await (await fetch(`http://localhost:${port}/`)).text()); } catch { /* not HTTP */ }
+  try { ours = /Dashboard Builder|ws-chart|worksheet-view/.test(await (await fetch(`http://localhost:${port}/`)).text()); } catch { /* not HTTP */ }
   if (!ours) { console.error(`run-ui-all: port ${port} has an unrelated listener; set UI_PORT to a free port`); process.exit(2); }
   stop();
 }

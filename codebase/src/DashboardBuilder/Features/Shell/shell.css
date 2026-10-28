@@ -93,7 +93,7 @@
 /* Switching tabs: the incoming view fades in and rises 4px (CSS replays on each un-hide; dashboards.js
    replays it when one dashboard replaces another in the same view). */
 .view:not([hidden]) { animation: view-in var(--dur) var(--ease-out); }
-.view--model, .view--dashboard { background: transparent; }
+.view--model, .view--worksheet { background: transparent; }
 .sr-only {
   position: absolute; width: 1px; height: 1px;
   padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;

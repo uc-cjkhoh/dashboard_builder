@@ -56,7 +56,7 @@ export function createWorksheetView(container, getContext, options = {}) {
   };
   const gate = createLatestGate();
   // Table scroll-loading: the pages loaded so far for the table on screen (re-used while its plan stays the same, so a
-  // format tweak keeps what was loaded). { dashId, key, plan, rows, total, loading, ctl, first }.
+  // format tweak keeps what was loaded). { sheetId, key, plan, rows, total, loading, ctl, first }.
   let tablePager = null;
   let freshNext = false; // P33: the next query skips the server's result cache (Refresh)
 
@@ -187,11 +187,11 @@ export function createWorksheetView(container, getContext, options = {}) {
   // loaded rows (a pivot row split across two pages fills in).
   async function runTable(c, s, plan, key, ticket, filterNote) {
     const dash = c.dash;
-    const reuse = tablePager && tablePager.dashId === dash.id && tablePager.key === key ? tablePager : null;
+    const reuse = tablePager && tablePager.sheetId === dash.id && tablePager.key === key ? tablePager : null;
     if (tablePager && !reuse) tablePager.ctl?.abort();
     const first = await fetchCached(c, ticket, key, (signal) => api.query(plan, { signal }));
     if (!first) return;
-    tablePager = reuse ?? { dashId: dash.id, key, plan, rows: first.rows, total: first.total ?? first.rows.length, loading: false, ctl: null, first };
+    tablePager = reuse ?? { sheetId: dash.id, key, plan, rows: first.rows, total: first.total ?? first.rows.length, loading: false, ctl: null, first };
     const draw = () => {
       const top = container.scrollTop;
       try { drawResult(s, { ...tablePager.first, rows: tablePager.rows, partial: tablePager.rows.length < tablePager.total }); statusBar(s, { ...tablePager.first, rows: tablePager.rows }); }

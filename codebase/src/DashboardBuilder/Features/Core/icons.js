@@ -40,6 +40,7 @@ export const PATHS = Object.freeze({
   close: "M5 5l10 10M15 5L5 15",
   duplicate: "M7 7h9v9H7zM13 7V4H4v9h3",
   sidebar: "M3 4h14v12H3zM8 4v12",
+  dashboard: "M3 3.5h6.5v6H3zM11.5 3.5H17v3.5h-5.5zM11.5 9H17v7.5h-5.5zM3 11.5h6.5v5H3z", // a board of tiles (the dashboard tab)
   chevron: "M7 8l3 3 3-3",
   check: "M4 10.5l4 4 8-9",
   warning: "M10 3l8 14H2zM10 8v4M10 14.5h.01",

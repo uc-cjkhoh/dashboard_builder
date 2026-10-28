@@ -58,22 +58,22 @@ test("defaults and old workbooks: lineStyle straight, heatmapShape square, targe
 
 const roundTrip = (format) => {
   const sheet = { ...emptySheet(), chartType: "line", format };
-  const state = { entities: new Map(), relationships: [], dashboards: [{ id: "dash#1", name: "D", sheet }], active: { kind: "dashboard", id: "dash#1" } };
+  const state = { entities: new Map(), relationships: [], tabs: [{ id: "ws#1", kind: "worksheet", name: "D", sheet }], active: { kind: "worksheet", id: "ws#1" } };
   return parseWorkbook(JSON.stringify(serializeWorkbook(state)));
 };
 test("workbook: the new settings round-trip; unknown values reset with an issue; absent ones open unchanged", () => {
   const ok = roundTrip({ lineStyle: "jump", heatmapShape: "circle", targetMeasure: 2 });
-  const f = ok.dashboards[0].sheet.format;
+  const f = ok.worksheets[0].sheet.format;
   assert.equal(f.lineStyle, "jump"); assert.equal(f.heatmapShape, "circle"); assert.equal(f.targetMeasure, 2);
   const bad = roundTrip({ lineStyle: "wavy", heatmapShape: "star", targetMeasure: -1 });
-  const g = bad.dashboards[0].sheet.format;
+  const g = bad.worksheets[0].sheet.format;
   assert.equal(g.lineStyle, "straight"); assert.equal(g.heatmapShape, "square"); assert.equal(g.targetMeasure, null);
   assert.ok(bad.issues.some((i) => /line style/.test(i)));
   assert.ok(bad.issues.some((i) => /heatmap shape/.test(i)));
   assert.ok(bad.issues.some((i) => /target measure/.test(i)));
   const old = roundTrip({ target: 5 });
   assert.equal(old.issues.length, 0, JSON.stringify(old.issues));
-  assert.equal(old.dashboards[0].sheet.format.lineStyle, "straight");
+  assert.equal(old.worksheets[0].sheet.format.lineStyle, "straight");
 });
 
 test("centred step has a plain label; the stored key stays jump", () => {
@@ -101,8 +101,8 @@ test("a stale target field is ignored: out of range, first measure, non-integer"
 test("workbook: target measure above the cap or fractional is cleared and reported", () => {
   for (const v of [MAX_TARGET_MEASURE + 1, 1.5, "2"]) {
     const r = roundTrip({ targetMeasure: v });
-    assert.equal(r.dashboards[0].sheet.format.targetMeasure, null, String(v));
+    assert.equal(r.worksheets[0].sheet.format.targetMeasure, null, String(v));
     assert.ok(r.issues.some((i) => /target measure/.test(i)), String(v));
   }
-  assert.equal(roundTrip({ targetMeasure: MAX_TARGET_MEASURE }).dashboards[0].sheet.format.targetMeasure, MAX_TARGET_MEASURE);
+  assert.equal(roundTrip({ targetMeasure: MAX_TARGET_MEASURE }).worksheets[0].sheet.format.targetMeasure, MAX_TARGET_MEASURE);
 });

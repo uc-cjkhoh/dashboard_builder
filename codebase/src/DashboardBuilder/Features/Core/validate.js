@@ -9,7 +9,8 @@ export const LIMITS = Object.freeze({
   fieldChoices: 8,
   bookmarks: 30,
   fieldSettings: 2000, // P28: renamed / hidden / default-aggregation fields per workbook    // P39: saved views per workbook  // P40: alternative fields one shelf slot can switch between
-  inValues: 500, dashboards: 50, pillsPerShelf: 20,
+  inValues: 500, pillsPerShelf: 20,
+  tabs: 50,            // worksheet + dashboard tabs per workbook (client-side only; enforced at creation and on import)
   entities: 100,       // tables on the canvas a workbook may open
   relationships: 200,  // links a workbook may open
   dimensions: 12, measures: 10, // per view (server MaxDimensions / MaxMeasures)
@@ -25,6 +26,16 @@ export const LIMITS = Object.freeze({
   memberColorFields: 20,  // fields with member colours per sheet
   memberField: 200,       // characters in a coloured field's key (table.column)
   memberKey: 100,         // characters in a coloured member's key
+  // P24b dashboard board (Board/board-model.js; client-side only — the server never sees a dashboard).
+  widgets: 12,         // widgets per dashboard
+  gridCols: 12,        // the snap grid's columns
+  widgetMinW: 2,       // widget width in cells: 2 .. gridCols (both kinds)
+  widgetMinH: 2,       // a worksheet widget's height in cells: 2 .. widgetMaxH
+  widgetMaxH: 24,
+  textMinH: 1,         // a text widget's height: 1 .. widgetMaxH
+  boardRows: 96,       // y + h never exceeds this
+  widgetHeading: 80,   // characters in a text widget's heading
+  widgetBody: 2000,    // characters in a text widget's body
   calcName: 60,      // characters in a calculation's name / label (server CalcLimits.MaxName)
 });
 export const HOST_MESSAGES = Object.freeze({

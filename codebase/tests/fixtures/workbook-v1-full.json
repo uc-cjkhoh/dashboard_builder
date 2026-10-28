@@ -1,0 +1,670 @@
+{
+  "format": "dashboard-builder-workbook",
+  "version": 1,
+  "savedAt": "2026-02-01T00:00:00.000Z",
+  "entities": [
+    {
+      "id": "e1",
+      "db": "shop",
+      "table": "orders",
+      "x": 40,
+      "y": 60,
+      "joinKeys": [
+        "customer_id"
+      ]
+    },
+    {
+      "id": "e2",
+      "db": "shop",
+      "table": "customers",
+      "x": 420,
+      "y": 80,
+      "joinKeys": [
+        "id"
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "from": {
+        "entityId": "e1",
+        "column": "customer_id"
+      },
+      "to": {
+        "entityId": "e2",
+        "column": "id"
+      },
+      "cardinality": "N:1",
+      "joinType": "left",
+      "joinFixed": false
+    }
+  ],
+  "dashboards": [
+    {
+      "name": "Revenue",
+      "sheet": {
+        "columns": [
+          {
+            "db": "shop",
+            "table": "orders",
+            "column": "region",
+            "category": "text"
+          }
+        ],
+        "rows": [
+          {
+            "db": "shop",
+            "table": "orders",
+            "column": "amount",
+            "category": "numeric",
+            "agg": "sum"
+          }
+        ],
+        "color": [],
+        "filters": [
+          {
+            "db": "shop",
+            "table": "orders",
+            "column": "status",
+            "category": "text",
+            "op": "in",
+            "values": [
+              "paid",
+              "shipped"
+            ]
+          }
+        ],
+        "chartType": "bar",
+        "sort": null,
+        "selection": null,
+        "drill": null,
+        "marks": {
+          "size": null,
+          "label": null,
+          "detail": [],
+          "tooltip": [],
+          "shape": null,
+          "path": null,
+          "angle": null
+        },
+        "pages": null,
+        "format": {
+          "numberFormat": "currency",
+          "decimals": null,
+          "currencySymbol": "$",
+          "dateFormat": "auto",
+          "topN": 10,
+          "dateBucket": "auto",
+          "legend": "auto",
+          "dataLabels": false,
+          "colorByDimension": false,
+          "paletteReverse": false,
+          "xTitle": null,
+          "yTitle": null,
+          "target": null,
+          "downIsGood": false,
+          "conditional": {},
+          "fit": "standard",
+          "lineStyle": "straight",
+          "heatmapShape": "square",
+          "targetMeasure": null,
+          "approximate": false
+        },
+        "period": null,
+        "memberColors": {},
+        "tooltipText": null,
+        "title": "Revenue by region",
+        "caption": "Q3 view",
+        "showTitle": true,
+        "showFilterCards": true,
+        "analytics": null,
+        "urlAction": null
+      }
+    },
+    {
+      "name": "Trend",
+      "sheet": {
+        "columns": [
+          {
+            "db": "shop",
+            "table": "orders",
+            "column": "created",
+            "category": "temporal"
+          }
+        ],
+        "rows": [
+          {
+            "db": "shop",
+            "table": "orders",
+            "column": "amount",
+            "category": "numeric",
+            "agg": "sum"
+          },
+          {
+            "db": "shop",
+            "table": "orders",
+            "column": "qty",
+            "category": "numeric",
+            "agg": "avg"
+          }
+        ],
+        "color": [
+          {
+            "db": "shop",
+            "table": "orders",
+            "column": "region",
+            "category": "text"
+          }
+        ],
+        "filters": [],
+        "chartType": "line",
+        "sort": null,
+        "selection": null,
+        "drill": null,
+        "marks": {
+          "size": null,
+          "label": null,
+          "detail": [],
+          "tooltip": [],
+          "shape": null,
+          "path": null,
+          "angle": null
+        },
+        "pages": null,
+        "format": {
+          "numberFormat": "auto",
+          "decimals": null,
+          "currencySymbol": "$",
+          "dateFormat": "auto",
+          "topN": null,
+          "dateBucket": "auto",
+          "legend": "auto",
+          "dataLabels": false,
+          "colorByDimension": false,
+          "paletteReverse": false,
+          "xTitle": null,
+          "yTitle": null,
+          "target": null,
+          "downIsGood": false,
+          "conditional": {},
+          "fit": "standard",
+          "lineStyle": "straight",
+          "heatmapShape": "square",
+          "targetMeasure": null,
+          "approximate": false
+        },
+        "period": {
+          "db": "shop",
+          "table": "orders",
+          "column": "created",
+          "category": "temporal",
+          "preset": "last30",
+          "from": null,
+          "to": null,
+          "compare": "none",
+          "compareFrom": null,
+          "compareTo": null
+        },
+        "memberColors": {},
+        "tooltipText": null,
+        "title": null,
+        "caption": null,
+        "showTitle": true,
+        "showFilterCards": true,
+        "analytics": null,
+        "urlAction": null
+      }
+    },
+    {
+      "name": "Customers",
+      "sheet": {
+        "columns": [],
+        "rows": [
+          {
+            "db": "shop",
+            "table": "customers",
+            "column": "name",
+            "category": "text"
+          },
+          {
+            "db": "shop",
+            "table": "orders",
+            "column": "amount",
+            "category": "numeric",
+            "agg": "count"
+          }
+        ],
+        "color": [],
+        "filters": [],
+        "chartType": "table",
+        "sort": null,
+        "selection": null,
+        "drill": null,
+        "marks": {
+          "size": null,
+          "label": null,
+          "detail": [],
+          "tooltip": [],
+          "shape": null,
+          "path": null,
+          "angle": null
+        },
+        "pages": null,
+        "format": {
+          "numberFormat": "auto",
+          "decimals": null,
+          "currencySymbol": "$",
+          "dateFormat": "auto",
+          "topN": null,
+          "dateBucket": "auto",
+          "legend": "auto",
+          "dataLabels": false,
+          "colorByDimension": false,
+          "paletteReverse": false,
+          "xTitle": null,
+          "yTitle": null,
+          "target": null,
+          "downIsGood": false,
+          "conditional": {},
+          "fit": "standard",
+          "lineStyle": "straight",
+          "heatmapShape": "square",
+          "targetMeasure": null,
+          "approximate": false
+        },
+        "period": null,
+        "memberColors": {},
+        "tooltipText": null,
+        "title": null,
+        "caption": null,
+        "showTitle": true,
+        "showFilterCards": true,
+        "analytics": null,
+        "urlAction": null
+      }
+    },
+    {
+      "name": "Status mix",
+      "sheet": {
+        "columns": [
+          {
+            "db": "shop",
+            "table": "orders",
+            "column": "status",
+            "category": "text"
+          }
+        ],
+        "rows": [
+          {
+            "db": "shop",
+            "table": "orders",
+            "column": "amount",
+            "category": "numeric",
+            "agg": "sum"
+          }
+        ],
+        "color": [],
+        "filters": [],
+        "chartType": "pie",
+        "sort": null,
+        "selection": {
+          "db": "shop",
+          "table": "orders",
+          "column": "status",
+          "value": "paid",
+          "label": "paid",
+          "action": "keep"
+        },
+        "drill": null,
+        "marks": {
+          "size": null,
+          "label": null,
+          "detail": [],
+          "tooltip": [],
+          "shape": null,
+          "path": null,
+          "angle": null
+        },
+        "pages": null,
+        "format": {
+          "numberFormat": "auto",
+          "decimals": null,
+          "currencySymbol": "$",
+          "dateFormat": "auto",
+          "topN": null,
+          "dateBucket": "auto",
+          "legend": "auto",
+          "dataLabels": false,
+          "colorByDimension": false,
+          "paletteReverse": false,
+          "xTitle": null,
+          "yTitle": null,
+          "target": null,
+          "downIsGood": false,
+          "conditional": {},
+          "fit": "standard",
+          "lineStyle": "straight",
+          "heatmapShape": "square",
+          "targetMeasure": null,
+          "approximate": false
+        },
+        "period": null,
+        "memberColors": {},
+        "tooltipText": null,
+        "title": null,
+        "caption": null,
+        "showTitle": true,
+        "showFilterCards": true,
+        "analytics": null,
+        "urlAction": null
+      }
+    }
+  ],
+  "active": 2,
+  "theme": {
+    "accent": "teal",
+    "palette": "default"
+  },
+  "sharedFilters": [
+    {
+      "db": "shop",
+      "table": "orders",
+      "column": "region",
+      "category": "text",
+      "op": "in",
+      "values": [
+        "EMEA"
+      ]
+    }
+  ],
+  "fields": {
+    "shop.orders.amount": {
+      "alias": "Revenue",
+      "agg": "sum"
+    },
+    "shop.orders.id": {
+      "hidden": true
+    }
+  },
+  "parameters": [
+    {
+      "id": "prm1",
+      "name": "Top",
+      "type": "number",
+      "value": 10
+    }
+  ],
+  "calculations": [
+    {
+      "id": "calc1",
+      "name": "Margin",
+      "formula": "[orders.amount] * 0.2"
+    }
+  ],
+  "nextCalcId": 2,
+  "bookmarks": [
+    {
+      "name": "EMEA revenue",
+      "dashboard": 0,
+      "dashName": "Revenue",
+      "sheet": {
+        "columns": [
+          {
+            "db": "shop",
+            "table": "orders",
+            "column": "region",
+            "category": "text"
+          }
+        ],
+        "rows": [
+          {
+            "db": "shop",
+            "table": "orders",
+            "column": "amount",
+            "category": "numeric",
+            "agg": "sum"
+          }
+        ],
+        "color": [],
+        "filters": [
+          {
+            "db": "shop",
+            "table": "orders",
+            "column": "status",
+            "category": "text",
+            "op": "in",
+            "values": [
+              "paid",
+              "shipped"
+            ]
+          }
+        ],
+        "chartType": "bar",
+        "sort": null,
+        "selection": null,
+        "drill": null,
+        "marks": {
+          "size": null,
+          "label": null,
+          "detail": [],
+          "tooltip": [],
+          "shape": null,
+          "path": null,
+          "angle": null
+        },
+        "pages": null,
+        "format": {
+          "numberFormat": "currency",
+          "decimals": null,
+          "currencySymbol": "$",
+          "dateFormat": "auto",
+          "topN": 10,
+          "dateBucket": "auto",
+          "legend": "auto",
+          "dataLabels": false,
+          "colorByDimension": false,
+          "paletteReverse": false,
+          "xTitle": null,
+          "yTitle": null,
+          "target": null,
+          "downIsGood": false,
+          "conditional": {},
+          "fit": "standard",
+          "lineStyle": "straight",
+          "heatmapShape": "square",
+          "targetMeasure": null,
+          "approximate": false
+        },
+        "period": null,
+        "memberColors": {},
+        "tooltipText": null,
+        "title": "Revenue by region",
+        "caption": "Q3 view",
+        "showTitle": true,
+        "showFilterCards": true,
+        "analytics": null,
+        "urlAction": null
+      },
+      "sharedFilters": [],
+      "savedAt": "2026-01-02T03:04:05.000Z"
+    },
+    {
+      "name": "Paid only",
+      "dashboard": 3,
+      "dashName": "Status mix",
+      "sheet": {
+        "columns": [
+          {
+            "db": "shop",
+            "table": "orders",
+            "column": "status",
+            "category": "text"
+          }
+        ],
+        "rows": [
+          {
+            "db": "shop",
+            "table": "orders",
+            "column": "amount",
+            "category": "numeric",
+            "agg": "sum"
+          }
+        ],
+        "color": [],
+        "filters": [],
+        "chartType": "pie",
+        "sort": null,
+        "selection": {
+          "db": "shop",
+          "table": "orders",
+          "column": "status",
+          "value": "paid",
+          "label": "paid",
+          "action": "keep"
+        },
+        "drill": null,
+        "marks": {
+          "size": null,
+          "label": null,
+          "detail": [],
+          "tooltip": [],
+          "shape": null,
+          "path": null,
+          "angle": null
+        },
+        "pages": null,
+        "format": {
+          "numberFormat": "auto",
+          "decimals": null,
+          "currencySymbol": "$",
+          "dateFormat": "auto",
+          "topN": null,
+          "dateBucket": "auto",
+          "legend": "auto",
+          "dataLabels": false,
+          "colorByDimension": false,
+          "paletteReverse": false,
+          "xTitle": null,
+          "yTitle": null,
+          "target": null,
+          "downIsGood": false,
+          "conditional": {},
+          "fit": "standard",
+          "lineStyle": "straight",
+          "heatmapShape": "square",
+          "targetMeasure": null,
+          "approximate": false
+        },
+        "period": null,
+        "memberColors": {},
+        "tooltipText": null,
+        "title": null,
+        "caption": null,
+        "showTitle": true,
+        "showFilterCards": true,
+        "analytics": null,
+        "urlAction": null
+      },
+      "sharedFilters": [],
+      "savedAt": "2026-01-03T03:04:05.000Z"
+    },
+    {
+      "name": "Closed one",
+      "dashboard": null,
+      "dashName": "Gone",
+      "sheet": {
+        "columns": [
+          {
+            "db": "shop",
+            "table": "orders",
+            "column": "created",
+            "category": "temporal"
+          }
+        ],
+        "rows": [
+          {
+            "db": "shop",
+            "table": "orders",
+            "column": "amount",
+            "category": "numeric",
+            "agg": "sum"
+          },
+          {
+            "db": "shop",
+            "table": "orders",
+            "column": "qty",
+            "category": "numeric",
+            "agg": "avg"
+          }
+        ],
+        "color": [
+          {
+            "db": "shop",
+            "table": "orders",
+            "column": "region",
+            "category": "text"
+          }
+        ],
+        "filters": [],
+        "chartType": "line",
+        "sort": null,
+        "selection": null,
+        "drill": null,
+        "marks": {
+          "size": null,
+          "label": null,
+          "detail": [],
+          "tooltip": [],
+          "shape": null,
+          "path": null,
+          "angle": null
+        },
+        "pages": null,
+        "format": {
+          "numberFormat": "auto",
+          "decimals": null,
+          "currencySymbol": "$",
+          "dateFormat": "auto",
+          "topN": null,
+          "dateBucket": "auto",
+          "legend": "auto",
+          "dataLabels": false,
+          "colorByDimension": false,
+          "paletteReverse": false,
+          "xTitle": null,
+          "yTitle": null,
+          "target": null,
+          "downIsGood": false,
+          "conditional": {},
+          "fit": "standard",
+          "lineStyle": "straight",
+          "heatmapShape": "square",
+          "targetMeasure": null,
+          "approximate": false
+        },
+        "period": {
+          "db": "shop",
+          "table": "orders",
+          "column": "created",
+          "category": "temporal",
+          "preset": "last30",
+          "from": null,
+          "to": null,
+          "compare": "none",
+          "compareFrom": null,
+          "compareTo": null
+        },
+        "memberColors": {},
+        "tooltipText": null,
+        "title": null,
+        "caption": null,
+        "showTitle": true,
+        "showFilterCards": true,
+        "analytics": null,
+        "urlAction": null
+      },
+      "sharedFilters": [],
+      "savedAt": "2026-01-04T03:04:05.000Z"
+    }
+  ]
+}

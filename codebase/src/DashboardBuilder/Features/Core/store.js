@@ -1,21 +1,27 @@
 // Shared builder state + event bus (frontend-patterns.md).
 //
-// Two distinct things (corrected in the dashboards rework):
+// Two distinct things:
 //   • The DATA MODEL — the tables dragged onto the canvas as entity views, plus the logical
-//     relationships between them. There is exactly ONE model, shared across all dashboards.
-//   • DASHBOARDS — subtabs, each built FROM the model's tables by adding widgets. Each dashboard
-//     owns its own widgets.
-// The tab strip shows the model ("Data Model") alongside the dashboard subtabs; `activeView`
-// tracks which is on screen. v1 is in-memory only (decision O1).
+//     relationships between them. There is exactly ONE model, shared across all tabs.
+//   • TABS — one ordered list of two kinds, each built FROM the model's tables:
+//       worksheet: { id: "ws#N", kind: "worksheet", name, sheet }          (the editor; one chart / table)
+//       dashboard: { id: "db#N", kind: "dashboard", name, widgets: [ … ] }  (a board of worksheet / text widgets)
+//     A widget is { id: "w#N", kind: "sheet", sheetId, x, y, w, h } or { id, kind: "text", heading, body, x, y, w, h }
+//     (Board/board-model.js owns the geometry rules).
+// The tab strip shows the model ("Data Model") alongside the tabs; `activeView` tracks which is on screen:
+//   { kind: "model" } | { kind: "worksheet", id } | { kind: "dashboard", id }
+// The workbook (Workbook/) saves all of it in the browser; there is no server-side state (decision O1).
 //
 // entities:      id -> { id, db, table, x, y, columns, joinKeys:Set, el }   (the shared model)
 // relationships: id -> { id, from:{entityId,column}, to:{entityId,column}, cardinality }
-// dashboards:    [ { id, name, widgets: [ { id, kind, db, table, title } ] } ]
 // bus events:    entity:moved / entity:removed / joinkey:changed / rel:changed  (model),
-//                view:changed / tabs:changed / dashboard:changed {id}          (views)
+//                view:changed / tabs:changed                                    (the strip + active view),
+//                worksheet:changed {id}  (a worksheet's sheet was replaced),
+//                dashboard:changed {id}  (a dashboard's widgets changed: layout, text, add, remove)
 import { renameInFormulas } from "../Calc/calc-workbook.js";
 import { copyName, copySheet, canDuplicate } from "../Tabs/duplicate-model.js";
 import { LIMITS } from "./validate.js";
+import { removeSheetWidgets, defaultTabName } from "../Board/board-model.js";
 
 export const bus = new EventTarget();
 
@@ -23,8 +29,8 @@ export const bus = new EventTarget();
 // :root tokens by Core/theme.js on "theme:changed"; saved with the workbook.
 let theme = { accent: "crimson", palette: "default" };
 
-// P40 shared filters: filter objects (same shape as sheet.filters) that every dashboard applies where
-// their table is in its view. Workbook-level; edited from any dashboard's Filters tool.
+// P40 shared filters: filter objects (same shape as sheet.filters) that every worksheet applies where
+// their table is in its view. Workbook-level; edited from any worksheet's Filters tool.
 export const sharedFilters = [];
 export function setSharedFilters(list) { sharedFilters.splice(0, sharedFilters.length, ...list); }
 
@@ -97,8 +103,8 @@ export function removeCalculation(id) {
   if (i >= 0) { calculations.splice(i, 1); emit("calculations:changed"); }
 }
 
-// P39 bookmarks: named snapshots of one dashboard's view (its sheet, incl. selection / drill / page /
-// format) plus the shared filters at the time. { id, name, dashId, dashName, sheet, sharedFilters, savedAt }
+// P39 bookmarks: named snapshots of one worksheet's view (its sheet, incl. selection / drill / page /
+// format) plus the shared filters at the time. { id, name, worksheetId, worksheetName, sheet, sharedFilters, savedAt }
 export const bookmarks = [];
 let bookmarkSeq = 0;
 export function addBookmark(b) {
@@ -121,19 +127,30 @@ export function setTheme(next) { theme = { ...next }; emit("theme:changed"); }
 export const entities = new Map();
 export const relationships = new Map();
 
-// Dashboards + which view is active.
-export const dashboards = [];
-let activeView = { kind: "model" };   // { kind: "model" } | { kind: "dashboard", id }
-let dashSeq = 0;
+// The ordered tab list + which view is active.
+export const tabs = [];
+let activeView = { kind: "model" };   // { kind: "model" } | { kind: "worksheet", id } | { kind: "dashboard", id }
+let wsSeq = 0, dbSeq = 0, widgetSeq = 0;
 
 export function emit(type, detail) {
   bus.dispatchEvent(new CustomEvent(type, { detail }));
 }
 
+export const worksheets = () => tabs.filter((t) => t.kind === "worksheet");
+export const dashboards = () => tabs.filter((t) => t.kind === "dashboard");
+export const tabById = (id) => tabs.find((t) => t.id === id) ?? null;
+export const worksheetById = (id) => { const t = tabById(id); return t?.kind === "worksheet" ? t : null; };
+
 export const isModelActive = () => activeView.kind === "model";
+export const isWorksheetActive = () => activeView.kind === "worksheet";
+export const isDashboardActive = () => activeView.kind === "dashboard";
+export const activeViewKind = () => activeView.kind;
+export const activeWorksheetId = () => (activeView.kind === "worksheet" ? activeView.id : null);
+export const activeWorksheet = () => (activeView.kind === "worksheet" ? worksheetById(activeView.id) : null);
 export const activeDashboardId = () => (activeView.kind === "dashboard" ? activeView.id : null);
-export const activeDashboard = () =>
-  activeView.kind === "dashboard" ? dashboards.find((d) => d.id === activeView.id) ?? null : null;
+export const activeDashboard = () => (activeView.kind === "dashboard" ? tabById(activeView.id) : null);
+/** The workbook's saved `active` view, as a copy. */
+export const currentView = () => ({ ...activeView });
 
 export function showModel() {
   if (activeView.kind === "model") return;
@@ -229,67 +246,101 @@ export const defaultFormat = () => ({
   approximate: false, // P33: estimate distinct counts / read a 10% sample where the table allows
 });
 
-export function createDashboard(name) {
-  dashSeq += 1;
-  // All new dashboards share the same default name (the id stays unique). Each is a worksheet.
-  const dash = { id: `dash#${dashSeq}`, name: name || "Dashboard", sheet: emptySheet() };
-  dashboards.push(dash);
-  switchDashboard(dash.id);
+/** The tab limit's message (LIMITS.tabs covers both kinds); null while there is room. */
+export const tabLimitError = () => (tabs.length >= LIMITS.tabs ? `A workbook holds at most ${LIMITS.tabs} tabs — close one first.` : null);
+
+/** A new, blank worksheet tab (activated), named "Worksheet N" unless `name` is given. Null at the tab limit. */
+export function createWorksheet(name) {
+  if (tabLimitError()) return null;
+  wsSeq += 1;
+  const tab = { id: `ws#${wsSeq}`, kind: "worksheet", name: name || defaultTabName("worksheet", tabs.map((t) => t.name)), sheet: emptySheet() };
+  tabs.push(tab);
+  switchTab(tab.id);
   emit("tabs:changed");
-  return dash;
+  return tab;
 }
 
-/** Duplicate a worksheet: a deep copy named "<name> copy", inserted after the source and activated. Returns { ok, dash? | error }. */
-export function duplicateDashboard(id) {
-  const idx = dashboards.findIndex((d) => d.id === id);
-  if (idx < 0) return { ok: false, error: "That worksheet no longer exists." };
-  const limit = canDuplicate(dashboards.length, LIMITS.dashboards);
-  if (!limit.ok) return limit;
-  dashSeq += 1;
-  const dash = { id: `dash#${dashSeq}`, name: copyName(dashboards[idx].name, dashboards.map((d) => d.name), LIMITS.tabName), sheet: copySheet(dashboards[idx].sheet) };
-  dashboards.splice(idx + 1, 0, dash);
-  switchDashboard(dash.id);
+/** A new, empty dashboard tab (activated), named "Dashboard N" unless `name` is given. Null at the tab limit. */
+export function createDashboard(name) {
+  if (tabLimitError()) return null;
+  dbSeq += 1;
+  const tab = { id: `db#${dbSeq}`, kind: "dashboard", name: name || defaultTabName("dashboard", tabs.map((t) => t.name)), widgets: [] };
+  tabs.push(tab);
+  switchTab(tab.id);
   emit("tabs:changed");
-  return { ok: true, dash };
+  return tab;
+}
+
+/** Duplicate a worksheet: a deep copy named "<name> copy", inserted after the source and activated. Returns { ok, tab? | error }. */
+export function duplicateWorksheet(id) {
+  const idx = tabs.findIndex((t) => t.id === id && t.kind === "worksheet");
+  if (idx < 0) return { ok: false, error: "That worksheet no longer exists." };
+  const limit = canDuplicate(tabs.length, LIMITS.tabs);
+  if (!limit.ok) return limit;
+  wsSeq += 1;
+  const tab = { id: `ws#${wsSeq}`, kind: "worksheet", name: copyName(tabs[idx].name, tabs.map((t) => t.name), LIMITS.tabName), sheet: copySheet(tabs[idx].sheet) };
+  tabs.splice(idx + 1, 0, tab);
+  switchTab(tab.id);
+  emit("tabs:changed");
+  return { ok: true, tab };
 }
 
 /** Persist a worksheet's shelves + notify the view. */
-export function updateSheet(dashId, sheet) {
-  const dash = dashboards.find((d) => d.id === dashId);
-  if (!dash) return;
-  dash.sheet = sheet;
-  emit("dashboard:changed", { id: dashId });
+export function updateSheet(worksheetId, sheet) {
+  const tab = worksheetById(worksheetId);
+  if (!tab) return;
+  tab.sheet = sheet;
+  emit("worksheet:changed", { id: worksheetId });
 }
 
-/** A dashboard has content if any shelf holds a field. */
-export function dashboardHasContent(id) {
-  const s = dashboards.find((d) => d.id === id)?.sheet;
+/** The id the next new widget gets ("w#N"); unique across the session. */
+export function nextWidgetId() { widgetSeq += 1; return `w#${widgetSeq}`; }
+
+/** Replace a dashboard's widgets (layout, text edit, add, remove) + notify. The caller validates with Board/board-model.js. */
+export function setWidgets(dashboardId, widgets) {
+  const tab = tabById(dashboardId);
+  if (!tab || tab.kind !== "dashboard") return;
+  tab.widgets = widgets;
+  emit("dashboard:changed", { id: dashboardId });
+}
+
+/** A worksheet has content if any shelf holds a field. */
+export function worksheetHasContent(id) {
+  const s = worksheetById(id)?.sheet;
   const m = s?.marks;
   const hasMarks = Boolean(m && (m.size || m.label || (m.detail?.length ?? 0) > 0 || (m.tooltip?.length ?? 0) > 0 || m.shape || m.path || m.angle));
   return Boolean(s && ((s.columns?.length ?? 0) > 0 || (s.rows?.length ?? 0) > 0 || (s.color?.length ?? 0) > 0 || (s.filters?.length ?? 0) > 0 || ((s.drill?.levels?.length ?? 0) > 0) || hasMarks || s.pages || s.period));
 }
 
-export function switchDashboard(id) {
-  const dash = dashboards.find((d) => d.id === id);
-  if (!dash) return;
-  activeView = { kind: "dashboard", id };
+export function switchTab(id) {
+  const tab = tabById(id);
+  if (!tab) return;
+  activeView = { kind: tab.kind, id };
   emit("view:changed");
   emit("tabs:changed");
 }
 
-export function renameDashboard(id, name) {
-  const dash = dashboards.find((d) => d.id === id);
-  if (dash && name) { dash.name = name; emit("tabs:changed"); }
+export function renameTab(id, name) {
+  const tab = tabById(id);
+  if (tab && name) { tab.name = name; emit("tabs:changed"); }
 }
 
-export function closeDashboard(id) {
-  const idx = dashboards.findIndex((d) => d.id === id);
+/** Close a tab. Closing a worksheet also removes its widgets from every dashboard (each notified); closing a dashboard touches no worksheet. */
+export function closeTab(id) {
+  const idx = tabs.findIndex((t) => t.id === id);
   if (idx < 0) return;
-  const wasActive = activeDashboardId() === id;
-  dashboards.splice(idx, 1);
+  const closing = tabs[idx];
+  const wasActive = activeView.kind !== "model" && activeView.id === id;
+  tabs.splice(idx, 1);
+  if (closing.kind === "worksheet") {
+    for (const d of dashboards()) {
+      const kept = removeSheetWidgets(d.widgets, id);
+      if (kept !== d.widgets) { d.widgets = kept; emit("dashboard:changed", { id: d.id }); }
+    }
+  }
   if (wasActive) {
-    const next = dashboards[Math.min(idx, dashboards.length - 1)];
-    activeView = next ? { kind: "dashboard", id: next.id } : { kind: "model" };
+    const next = tabs[Math.min(idx, tabs.length - 1)];
+    activeView = next ? { kind: next.kind, id: next.id } : { kind: "model" };
     emit("view:changed");
   }
   emit("tabs:changed");

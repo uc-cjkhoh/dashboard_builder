@@ -1,17 +1,17 @@
-// P39 — bookmarks: save the open dashboard's view (its whole sheet — filters, selection, drill, page,
+// P39 — bookmarks: save the open worksheet's view (its whole sheet — filters, selection, drill, page,
 // date range, format — plus the shared filters) under a name, and re-apply it later. Bookmarks save with
-// the workbook. Applying one whose dashboard was closed recreates that dashboard.
+// the workbook. Applying one whose worksheet was closed recreates that worksheet. Dashboards are not bookmarked.
 import {
-  activeDashboard, isModelActive, dashboards, bookmarks, addBookmark, removeBookmark, createDashboard,
-  updateSheet, switchDashboard, sharedFilters, setSharedFilters,
+  activeWorksheet, worksheetById, bookmarks, addBookmark, removeBookmark, createWorksheet, tabLimitError,
+  updateSheet, switchTab, sharedFilters, setSharedFilters,
 } from "../Core/store.js";
 import { LIMITS, text } from "../Core/validate.js";
 import { makeButton, openDialog, closeDialog, toast, fieldError } from "../Core/ui.js";
 
-/** Workbook menu → Save view as bookmark…: name it, then save the open dashboard's view. */
+/** Workbook menu → Save view as bookmark…: name it, then save the open worksheet's view. */
 export function saveBookmarkDialog() {
-  const dash = isModelActive() ? null : activeDashboard();
-  if (!dash) { toast("Open a dashboard first — a bookmark saves a dashboard's view.", "info"); return; }
+  const dash = activeWorksheet();
+  if (!dash) { toast("Open a worksheet first — a bookmark saves a worksheet's view.", "info"); return; }
   if (bookmarks.length >= LIMITS.bookmarks) { toast(`A workbook can keep at most ${LIMITS.bookmarks} bookmarks — delete one first.`, "info"); return; }
   const { dlg, body, foot } = shell("Save view as bookmark", "dialog--sm");
   const field = el("label", "form-field");
@@ -20,7 +20,7 @@ export function saveBookmarkDialog() {
   input.maxLength = LIMITS.tabName;
   input.value = `${dash.name} — ${new Date().toLocaleDateString(undefined, { day: "numeric", month: "short" })}`;
   field.append(input);
-  body.append(field, el("p", "bookmark-note", "Saves this dashboard's filters, date range, selection, drill level, page, chart type and format — and the shared filters."));
+  body.append(field, el("p", "bookmark-note", "Saves this worksheet's filters, date range, selection, drill level, page, chart type and format — and the shared filters."));
   const cancel = makeButton("Cancel", "btn"), save = makeButton("Save", "btn btn--primary");
   foot.append(cancel, save);
   const done = () => closeDialog(dlg);
@@ -29,7 +29,7 @@ export function saveBookmarkDialog() {
   const submit = () => {
     const r = text(input.value, { label: "Bookmark name", max: LIMITS.tabName, required: true });
     if (!r.ok) { fieldError(input, r.error); input.focus(); return; }
-    addBookmark({ name: r.value, dashId: dash.id, dashName: dash.name, sheet: snapshot(dash.sheet),
+    addBookmark({ name: r.value, worksheetId: dash.id, worksheetName: dash.name, sheet: snapshot(dash.sheet),
       sharedFilters: structuredClone(sharedFilters), savedAt: new Date().toISOString() });
     done();
     toast(`Saved bookmark “${r.value}”.`, "ok");
@@ -52,16 +52,16 @@ export function openBookmarksDialog() {
   const render = () => {
     body.replaceChildren();
     if (!bookmarks.length) {
-      body.append(el("p", "bookmark-note", "No bookmarks yet. Open a dashboard and choose Workbook → Save view as bookmark…"));
+      body.append(el("p", "bookmark-note", "No bookmarks yet. Open a worksheet and choose Workbook → Save view as bookmark…"));
       return;
     }
     const list = el("ul", "bookmark-list");
     for (const b of bookmarks) {
       const li = el("li", "bookmark");
       const info = el("div", "bookmark__info");
-      const where = dashboards.find((d) => d.id === b.dashId);
+      const where = worksheetById(b.worksheetId);
       info.append(el("span", "bookmark__name", b.name),
-        el("span", "bookmark__meta", `${where ? where.name : `${b.dashName} (closed — reopens)`}${b.savedAt ? ` · ${new Date(b.savedAt).toLocaleString()}` : ""}`));
+        el("span", "bookmark__meta", `${where ? where.name : `${b.worksheetName} (closed — reopens)`}${b.savedAt ? ` · ${new Date(b.savedAt).toLocaleString()}` : ""}`));
       const apply = makeButton("Apply", "btn btn--primary");
       apply.setAttribute("aria-label", `Apply bookmark ${b.name}`);
       apply.addEventListener("click", () => { applyBookmark(b); done(); });
@@ -79,13 +79,17 @@ export function openBookmarksDialog() {
   body.querySelector("button")?.focus();
 }
 
-/** Re-apply a bookmark: its dashboard (recreated if closed) gets the saved sheet; shared filters too. */
+/** Re-apply a bookmark: its worksheet (recreated if closed) gets the saved sheet; shared filters too. */
 export function applyBookmark(b) {
-  let dash = dashboards.find((d) => d.id === b.dashId);
-  if (!dash) { dash = createDashboard(b.dashName); b.dashId = dash.id; }
+  let dash = worksheetById(b.worksheetId);
+  if (!dash) {
+    dash = createWorksheet(b.worksheetName);
+    if (!dash) { toast(tabLimitError(), "danger"); return; }
+    b.worksheetId = dash.id;
+  }
   setSharedFilters(structuredClone(b.sharedFilters ?? []));
   updateSheet(dash.id, snapshot(b.sheet));
-  switchDashboard(dash.id);
+  switchTab(dash.id);
   toast(`Applied bookmark “${b.name}”.`, "ok");
 }
 

@@ -1,0 +1,47 @@
+{
+  "format": "dashboard-builder-workbook",
+  "version": 1,
+  "savedAt": "2025-06-01T00:00:00.000Z",
+  "entities": [
+    {
+      "id": "e1",
+      "db": "shop",
+      "table": "orders",
+      "x": 10,
+      "y": 10,
+      "joinKeys": []
+    }
+  ],
+  "relationships": [],
+  "dashboards": [
+    {
+      "name": "Dashboard",
+      "sheet": {
+        "columns": [
+          {
+            "db": "shop",
+            "table": "orders",
+            "column": "region",
+            "category": "text"
+          }
+        ],
+        "rows": [
+          {
+            "db": "shop",
+            "table": "orders",
+            "column": "amount",
+            "category": "numeric",
+            "agg": "sum"
+          }
+        ],
+        "filters": [],
+        "chartType": "bar"
+      }
+    },
+    {
+      "name": "Dashboard",
+      "sheet": {}
+    }
+  ],
+  "active": 0
+}

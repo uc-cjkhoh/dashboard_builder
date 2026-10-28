@@ -13,9 +13,9 @@ export function copyName(name, existing, max) {
   }
 }
 
-/** The dashboards limit (mirrors LIMITS.dashboards). */
+/** The tab limit (LIMITS.tabs covers worksheets and dashboards). */
 export function canDuplicate(count, limit) {
-  return count < limit ? { ok: true } : { ok: false, error: `A workbook holds at most ${limit} worksheets.` };
+  return count < limit ? { ok: true } : { ok: false, error: `A workbook holds at most ${limit} tabs.` };
 }
 
 /** Deep copy of a sheet with the transient state reset: no selection, drill back at the top, pages at the first member (members reload). */

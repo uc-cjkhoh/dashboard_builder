@@ -74,8 +74,8 @@ try {
     await ev(`[...document.querySelectorAll('dialog[open] .card-choice')].find((x) => x.textContent === 'N:1').click()`);
     await waitFor(`document.querySelector('.rel-badge text')?.textContent === 'N:1 · right'`, 'badge');
   });
-  await ev(`document.querySelector('.tab-add').click()`);
-  await waitFor(`!document.getElementById('dashboard-view').hidden`, 'worksheet open');
+  await ev(`document.querySelector('.tab-add').click(); document.querySelector('[data-new-tab=worksheet]').click()`);
+  await waitFor(`!document.getElementById('worksheet-view').hidden`, 'worksheet open');
   const chipDrag = (name, zone) => ev(`(() => { const c = [...document.querySelectorAll('#ws-fields .ws-field')].find((c) => c.querySelector('.ws-field__name')?.textContent === ${J(name)});
     const t = document.querySelector('.ws-shelf--${zone} .ws-shelf__zone'); const dt = new DataTransfer();
     c.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt })); t.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
@@ -92,7 +92,7 @@ try {
     console.log('  request joins:', J({ from: q.from.table, joins: q.joins.map((j) => ({ l: j.left.table, r: j.right.table, type: j.type })) }));
   });
   await ev(`document.querySelector('.tab--model .tab__label').click()`);
-  await waitFor(`document.getElementById('dashboard-view').hidden`, 'model tab');
+  await waitFor(`document.getElementById('worksheet-view').hidden`, 'model tab');
   await ev(`document.querySelector('.rel-badge').dispatchEvent(new MouseEvent('click', { bubbles: true }))`);
   await check('editing the link: Full is saved and the request switches to "full"', async () => {
     await waitFor(`document.querySelector('dialog[open] .join-choice') !== null`, 'edit dialog');
@@ -102,7 +102,7 @@ try {
     await waitFor(`document.querySelector('.rel-badge text')?.textContent === 'N:1 · full'`, 'badge full');
     queries.length = 0;
     await ev(`document.querySelectorAll('.tab:not(.tab--model) .tab__label')[0].click()`);
-    await waitFor(`!document.getElementById('dashboard-view').hidden`, 'worksheet');
+    await waitFor(`!document.getElementById('worksheet-view').hidden`, 'worksheet');
     await settle(500);
     const q = queries.findLast((x) => x.joins?.length);
     must(q?.joins[0].type === 'full', `request after edit: ${J(q?.joins)}`);

@@ -19,7 +19,7 @@ test("copyName stays within the tab-name limit by trimming the base", () => {
   const n2 = copyName(long, [long, n], 60);
   assert.ok(n2.length <= 60 && n2.endsWith(" copy 2") && n2 !== n);
 });
-test("canDuplicate refuses at the dashboards limit", () => {
+test("canDuplicate refuses at the tab limit", () => {
   assert.equal(canDuplicate(49, 50).ok, true);
   const r = canDuplicate(50, 50);
   assert.equal(r.ok, false);

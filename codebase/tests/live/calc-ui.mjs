@@ -121,8 +121,8 @@ try {
   for (const t of ['orders', 'customers'])
     await ev(`document.dispatchEvent(new CustomEvent('table:add', { detail: { db: 'shop', table: ${J(t)} } }))`);
   await waitFor(`document.querySelectorAll('.entity').length === 2 && [...document.querySelectorAll('.entity__status')].every((s) => s.hidden)`, 'both tables loaded');
-  await ev(`document.querySelector('.tab-add').click()`);
-  await waitFor(`!document.getElementById('dashboard-view').hidden`, 'worksheet open');
+  await ev(`document.querySelector('.tab-add').click(); document.querySelector('[data-new-tab=worksheet]').click()`);
+  await waitFor(`!document.getElementById('worksheet-view').hidden`, 'worksheet open');
   await installHelpers();
   await waitFor(`!!__t.chip('region')`, 'field pane filled');
 
@@ -342,7 +342,7 @@ try {
 
   // (l) a sheet whose only pill is a field-less calculation
   await check('l: sheet with only a "1+2" calculation -> hint, no query', async () => {
-    await ev(`document.querySelector('.tab-add').click()`);
+    await ev(`document.querySelector('.tab-add').click(); document.querySelector('[data-new-tab=worksheet]').click()`);
     await waitFor(`document.querySelectorAll('.tab:not(.tab--model)').length === 2 && __t.pills('rows').length === 0`, 'second worksheet');
     await newCalc('One plus two', '1+2');
     queries.length = 0; // baseline BEFORE the click, so a query sent right after it is caught
@@ -421,9 +421,9 @@ try {
     const { nodeId } = await b.send('DOM.querySelector', { nodeId: root.nodeId, selector: '#wb-file' });
     await b.send('DOM.setFileInputFiles', { nodeId, files: [file] });
     await waitFor(`document.querySelectorAll('.entity').length === 2`, 'entities restored');
-    await waitFor(`!document.getElementById('dashboard-view').hidden || document.querySelectorAll('.tab:not(.tab--model)').length > 0`, 'dashboards restored');
+    await waitFor(`!document.getElementById('worksheet-view').hidden || document.querySelectorAll('.tab:not(.tab--model)').length > 0`, 'tabs restored');
     await ev(`document.querySelectorAll('.tab:not(.tab--model) .tab__label')[0].click()`);
-    await waitFor(`!document.getElementById('dashboard-view').hidden`, 'worksheet shown');
+    await waitFor(`!document.getElementById('worksheet-view').hidden`, 'worksheet shown');
     await installHelpers();
     await waitFor(`!!__t.chip('Unit price')`, 'field-pane group restored');
     await waitFor(`__t.pills('rows').length === 1`, 'pill restored on Rows');
@@ -442,12 +442,12 @@ try {
   // (h) remove the field's table from the model
   await check("h: table removed from the model -> \"Calculation 'Unit price' can't be computed\", no query sent", async () => {
     await ev(`document.querySelector('.tab--model .tab__label').click()`);
-    await waitFor(`document.getElementById('dashboard-view').hidden && document.querySelector('.entity') !== null`, 'model tab shown');
+    await waitFor(`document.getElementById('worksheet-view').hidden && document.querySelector('.entity') !== null`, 'model tab shown');
     await ev(`document.querySelector('.entity [aria-label="Remove shop.orders"]').click()`);
     queries.length = 0; // no relationship drawn, so removing a table asks nothing
     await waitFor(`document.querySelectorAll('.entity').length === 1`, 'entity removed');
     await ev(`document.querySelectorAll('.tab:not(.tab--model) .tab__label')[0].click()`);
-    await waitFor(`!document.getElementById('dashboard-view').hidden`, 'worksheet shown');
+    await waitFor(`!document.getElementById('worksheet-view').hidden`, 'worksheet shown');
     await waitFor(`/can't be computed/.test(document.getElementById('ws-chart').textContent)`, 'E15 message');
     await settle(500);
     const text = await chartText();

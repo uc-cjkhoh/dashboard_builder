@@ -45,7 +45,7 @@
 .widget__chart { padding: var(--s3); }
 
 /* ---- Worksheet (drag fields onto shelves) -------------------------------- */
-.view--dashboard { padding: 0; overflow: hidden; }
+.view--worksheet { padding: 0; overflow: hidden; }
 .worksheet { --ws-fields-w: 236px; position: relative; display: grid; grid-template-columns: var(--ws-fields-w) 1fr; height: 100%; min-height: 0; }
 /* Field-pane resize handle on the pane's right edge (shared .resizer look, Core/core.css). */
 .ws-fields__resizer { position: absolute; top: 0; bottom: 0; left: calc(var(--ws-fields-w) - 3px); z-index: 3; }
@@ -449,7 +449,7 @@
   @page { size: landscape; margin: 12mm; }
   html, body { height: auto; overflow: visible; background: var(--print-paper); }
   .sidebar, .canvas__bar, .ws-fields, .ws-fields__resizer, .ws-shelves, .ws-chart-head, .toast, #toast-live { display: none !important; }
-  .app, .worksheet, .ws-main, .view--dashboard { display: block; height: auto; overflow: visible; }
+  .app, .worksheet, .ws-main, .view--worksheet { display: block; height: auto; overflow: visible; }
   .ws-chart-card { margin: 0; border: 0; box-shadow: none; break-inside: avoid; }
   .ws-chart-notice { display: none; }
   .ws-print-head { display: block; margin-bottom: 8mm; color: var(--print-ink); }

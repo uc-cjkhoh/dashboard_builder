@@ -123,8 +123,8 @@ try {
   for (const t of ['orders', 'customers'])
     await ev(`document.dispatchEvent(new CustomEvent('table:add', { detail: { db: 'shop', table: ${J(t)} } }))`);
   await waitFor(`document.querySelectorAll('.entity').length === 2 && [...document.querySelectorAll('.entity__status')].every((s) => s.hidden)`, 'both tables loaded');
-  await ev(`document.querySelector('.tab-add').click()`);
-  await waitFor(`!document.getElementById('dashboard-view').hidden`, 'worksheet open');
+  await ev(`document.querySelector('.tab-add').click(); document.querySelector('[data-new-tab=worksheet]').click()`);
+  await waitFor(`!document.getElementById('worksheet-view').hidden`, 'worksheet open');
   await installHelpers();
   await waitFor(`!!__t.chip('region')`, 'field pane filled');
 
@@ -203,7 +203,7 @@ try {
   });
 
   await check('Bullet: a Target field supplies per-category targets; none falls back to the fixed Target', async () => {
-    await ev(`document.querySelector('.tab-add').click()`);
+    await ev(`document.querySelector('.tab-add').click(); document.querySelector('[data-new-tab=worksheet]').click()`);
     await settle(400);
     await waitFor(`!!__t.chip('region')`, 'field pane');
     await dragChip('region', `__t.zone('rows')`);
