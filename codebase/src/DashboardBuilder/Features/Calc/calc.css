@@ -1,0 +1,68 @@
+/* Calculated fields — dialog, autocomplete, role chips and the field-pane group (docs/proposals/calculation-dialog-mockup.html).
+   Tokens only; light/dark come from the :root tokens in Core/core.css. */
+
+/* ---- Dialog ---- */
+.calc-dialog { width: min(520px, calc(100vw - 2 * var(--s5))); }
+.calc-dialog__body { display: grid; gap: var(--s4); }
+.calc-dialog .field > label, .calc-dialog .field > .label { display: block; font-size: var(--fs-sm); font-weight: 600; margin-bottom: var(--s1); }
+.calc-dialog .input { width: 100%; }
+.calc-dialog .hint { color: var(--ink-3); font-size: var(--fs-xs); margin-top: var(--s1); }
+.calc-dialog .hint code { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
+.calc-dialog .row { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; }
+.calc-dialog .field-error .icon { margin-top: 1px; }
+.calc-dialog .calc-pos { margin: 0; }
+.calc-dialog [role="alert"]:empty { display: none; }
+.formula-wrap { position: relative; }
+.formula { display: block; width: 100%; min-height: 76px; padding: var(--s2) var(--s3); border: 1px solid var(--line-2); border-radius: var(--r-ctl);
+  background: var(--surface); color: var(--ink); font: var(--fs-sm)/1.5 ui-monospace, "Cascadia Code", Consolas, monospace; resize: vertical; box-sizing: border-box; }
+.formula:hover { border-color: var(--ink-3); }
+.formula:focus { outline: none; border-color: var(--ink-3); box-shadow: inset 0 -2px 0 var(--accent); }
+.formula:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.formula[aria-invalid="true"] { border-color: var(--danger-solid); box-shadow: inset 0 -2px 0 var(--danger-solid); }
+.caretmark { display: block; margin: 2px 0 0; font: var(--fs-xs)/1.2 ui-monospace, "Cascadia Code", Consolas, monospace; color: var(--danger-ink); white-space: pre; overflow: hidden; }
+
+/* Role chip (always icon + words) */
+.calc-chip { display: inline-flex; align-items: center; gap: var(--s1); height: 22px; padding: 0 var(--s2); border-radius: var(--r-pill);
+  border: 1px solid var(--line); font-size: var(--fs-xs); background: var(--surface-2); color: var(--ink-3); white-space: nowrap; }
+.calc-chip .icon { width: 13px; height: 13px; }
+.calc-chip--meas { background: var(--meas-bg); color: var(--meas-ink); border-color: var(--meas-line); }
+.calc-chip--dim { background: var(--dim-bg); color: var(--dim-ink); border-color: var(--dim-line); }
+.calc-chip--danger { background: var(--danger-bg); color: var(--danger-ink); border-color: var(--danger-line); }
+.calc-chip--muted { background: var(--surface-2); color: var(--ink-3); border-color: var(--line); }
+
+/* Use as: Measure / Dimension */
+.calc-useas { margin: 0; }
+.calc-useas .label { margin: 0 0 var(--s1); }
+.calc-dialog .seg { display: inline-flex; border: 1px solid var(--line-2); border-radius: var(--r-ctl); overflow: hidden; }
+.calc-dialog .seg label { position: relative; display: inline-flex; align-items: center; gap: var(--s1); height: 30px; padding: 0 var(--s3); font-size: var(--fs-sm); cursor: pointer; background: var(--surface); }
+.calc-dialog .seg label + label { border-left: 1px solid var(--line-2); }
+.calc-dialog .seg input { position: absolute; opacity: 0; pointer-events: none; }
+.calc-dialog .seg label:has(input:checked) { background: var(--meas-bg); color: var(--meas-ink); font-weight: 600; }
+.calc-dialog .seg label.is-dim:has(input:checked) { background: var(--dim-bg); color: var(--dim-ink); }
+.calc-dialog .seg label:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: -2px; }
+.calc-dialog .seg label:hover { background: var(--surface-3); }
+
+/* Autocomplete listbox */
+.suggest { list-style: none; margin: var(--s1) 0 0; padding: var(--s1); background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r);
+  box-shadow: var(--elev-8); max-height: 220px; overflow: auto; }
+.suggest li { display: flex; align-items: center; gap: var(--s2); padding: 6px var(--s2); border-radius: var(--r-ctl); font-size: var(--fs-sm); cursor: pointer; }
+.suggest li:hover { background: var(--surface-3); }
+.suggest li[aria-selected="true"] { background: var(--surface-3); box-shadow: inset 2px 0 0 var(--accent); }
+.suggest .name { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
+.suggest .kind { margin-left: auto; color: var(--ink-3); font-size: var(--fs-xs); white-space: nowrap; }
+.suggest .icon { color: var(--ink-3); flex: none; }
+
+/* ---- Field pane: Calculated fields ---- */
+.calc-group { display: flex; flex-direction: column; gap: 3px; margin-bottom: var(--s2); }
+.calc-group__title { font-size: var(--fs-xs); font-weight: 700; color: var(--ink-2); }
+.calc-group__new { width: 100%; justify-content: flex-start; gap: var(--s2); }
+.calc-group__new:focus-visible, .calc-field .ws-field__add:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.calc-field::before { display: none; }
+.calc-field { border-color: var(--line); background: var(--surface-2); }
+.calc-field .calc-field__type { flex: none; }
+.calc-field--meas .calc-field__type { color: var(--meas-ink); }
+.calc-field--dim .calc-field__type { color: var(--dim-ink); }
+.calc-field--error { border-color: var(--danger-line); }
+.calc-field--error .calc-field__type { color: var(--danger-ink); }
+.calc-field .calc-chip { height: 18px; padding: 0 var(--s1); flex: none; }
+.calc-field .ws-field__more { opacity: 1; }
