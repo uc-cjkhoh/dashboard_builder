@@ -70,6 +70,16 @@ public class JoinPreviewTests : IClassFixture<WebApplicationFactory<Program>>
         JoinPreviewRules.CheckKinds(new("d", "Date", "temporal"), new("d", "DateTime", "temporal"), "a.d", "b.d");
     }
 
+    [Theory] [InlineData(43)] [InlineData(53)] [InlineData(70)] [InlineData(386)]
+    public void ClickHouse_type_comparison_errors_become_a_plain_400(int code) => Assert.True(JoinPreviewRules.IsTypeError(code));
+    [Theory] [InlineData(159)] [InlineData(60)] [InlineData(0)]
+    public void Other_server_errors_are_not_mistaken_for_type_errors(int code) => Assert.False(JoinPreviewRules.IsTypeError(code));
+    [Fact] public void Decimal_float_and_integer_keys_are_all_numeric_and_relate()
+    {
+        JoinPreviewRules.CheckKinds(new("a", "Nullable(Decimal(10, 2))", "numeric"), new("b", "Float64", "numeric"), "x.a", "y.b");
+        JoinPreviewRules.CheckKinds(new("a", "Decimal(18, 4)", "numeric"), new("b", "Int32", "numeric"), "x.a", "y.b");
+    }
+
     [Fact] public void The_result_serialises_camelCase_with_the_raw_counts_and_the_sampled_flag()
     {
         var side = new JoinSideStats(10, 1, 3, 2, 6, 4, 3.0);

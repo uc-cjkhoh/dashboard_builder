@@ -29,6 +29,11 @@ export function observedCardinality(result) {
 
 const READING = { "1:1": "one-to-one", "1:N": "one-to-many", "N:1": "many-to-one", "N:M": "many-to-many" };
 
+/** A side repeats "materially" when its keys average at least this many rows each (10% more rows than keys). One stray
+ *  duplicate among thousands of keys is not a fan-out worth an amber warning. */
+export const MATERIAL_AVG = 1.1;
+export const repeatsMaterially = (side) => repeats(side) && side.avgDuplicates >= MATERIAL_AVG;
+
 function times(table, column, side) {
   if (!repeats(side)) return `each ${column} key appears once in ${table}`;
   const avg = Math.round(side.avgDuplicates * 10) / 10;
@@ -37,40 +42,55 @@ function times(table, column, side) {
 
 /**
  * Plain-words reading of a preview. `declared` is the saved cardinality ("1:N") or undefined for a link not yet saved.
- * Returns { observed, summary: string[], verdict, findings: [{ level: "warn" | "info", text }] }.
+ * Returns { observed, summary, verdict, findings: [{ level: "warn" | "info", text }] }.
+ * A sampled result (either side reached the row bound) covers arbitrary, possibly non-overlapping slices of the two
+ * tables: shares are worded "within the sample", the sampling caveat comes first, and conclusions that need the two
+ * slices to overlap (no matches; fan-out across the join) are information, never a warning. A repeat inside one side
+ * is a fact about that table either way, so a declared "one" side that repeats still warns.
  */
 export function describePreview(result, { fromTable, toTable, fromColumn, toColumn, declared }) {
   const { from, to } = result;
+  const sampled = result.sampled === true;
   const observed = observedCardinality(result);
   const findings = [];
   const summary = [];
+  if (sampled)
+    findings.push({ level: "info", text: `Based on the first ${result.sampleLimit.toLocaleString("en-US")} rows of each table, in no particular order. The two samples need not overlap, and a table read twice can differ, so treat this as a rough guide, not a fact about the whole tables.` });
   if (from.rows === 0 || to.rows === 0) {
     findings.push({ level: "info", text: `${from.rows === 0 ? fromTable : toTable} is empty (or has no rows in the examined range), so there is nothing to compare.` });
     return { observed, summary, verdict: "", findings };
   }
 
   const mf = share(from.matchedRows, from.rows), mt = share(to.matchedRows, to.rows);
-  summary.push(`${pct(mf)} of the rows in ${fromTable} have a match in ${toTable}; ${pct(1 - mf)} don't.`);
-  summary.push(`${pct(mt)} of the rows in ${toTable} have a match in ${fromTable}; ${pct(1 - mt)} don't.`);
+  const lead = sampled ? "Within the sample, " : "";
+  const rowsOf = sampled ? "the rows read from" : "the rows in";
+  summary.push(`${lead}${pct(mf)} of ${rowsOf} ${fromTable} have a match in ${toTable}; ${pct(1 - mf)} don't.`);
+  summary.push(`${lead}${pct(mt)} of ${rowsOf} ${toTable} have a match in ${fromTable}; ${pct(1 - mt)} don't.`);
   summary.push(`${times(fromTable, fromColumn, from).replace(/^./, (c) => c.toUpperCase())}; ${times(toTable, toColumn, to)}.`);
-  const verdict = `The data looks ${READING[observed]} (${observed}).`;
+  const verdict = `The data looks ${READING[observed]} (${observed})${sampled ? " within the sample" : ""}.`;
 
   if (from.matchedKeys === 0 || to.matchedKeys === 0)
-    findings.push({ level: "warn", text: `No keys match at all — check that ${fromTable}.${fromColumn} and ${toTable}.${toColumn} are the right columns.` });
+    findings.push(sampled
+      ? { level: "info", text: `No keys match within the sample — can't tell from a sample whether ${fromTable}.${fromColumn} and ${toTable}.${toColumn} match across the whole tables.` }
+      : { level: "warn", text: `No keys match at all — check that ${fromTable}.${fromColumn} and ${toTable}.${toColumn} are the right columns.` });
   for (const [t, c, s] of [[fromTable, fromColumn, from], [toTable, toColumn, to]])
     if (s.nullRows > 0) findings.push({ level: "info", text: `${pct(share(s.nullRows, s.rows))} of ${t} rows have no ${c} (NULL); a NULL key never matches.` });
 
-  const both = repeats(from) && repeats(to);
-  if (both)
-    findings.push({ level: "warn", text: `Keys repeat on both sides (many-to-many): joined rows multiply, so sums and counts from either table can double-count.` });
-  if (declared && /^[1N]:[1NM]$/.test(declared)) {
-    const [a, b] = declared.split(":");
-    // "1" on a side declares that side's keys are unique; the data disagrees when they repeat.
-    for (const [mark, t, s] of [[a, fromTable, from], [b, toTable, to]])
-      if (mark === "1" && repeats(s))
-        findings.push({ level: "warn", text: `${t} is declared as the "one" side, but a key there repeats (up to ${s.maxDuplicates} times) — joined rows will multiply. Declare it many or use a unique key.` });
+  const oneMarks = declared && /^[1N]:[1NM]$/.test(declared) ? declared.split(":") : [];
+  const declaredOne = (i) => oneMarks[i] === "1";
+  if (repeats(from) && repeats(to)) {
+    if (sampled)
+      findings.push({ level: "info", text: "Keys repeat on both sides within the sample, so the join may be many-to-many: joined rows could multiply and sums and counts could double-count." });
+    else if (repeatsMaterially(from) && repeatsMaterially(to))
+      findings.push({ level: "warn", text: `Keys repeat on both sides (many-to-many): joined rows multiply, so sums and counts from either table can double-count.${declaredOne(0) || declaredOne(1) ? ` You declared ${declared}.` : ""}` });
+    else
+      findings.push({ level: "info", text: "A few keys repeat on both sides (the average is close to one row per key), so only a few rows multiply." });
   }
-  if (result.sampled)
-    findings.push({ level: "info", text: `Based on the first ${result.sampleLimit.toLocaleString("en-US")} rows of each table, not all of them.` });
+  // "1" on a side declares that side's keys unique; the data disagrees when they repeat. When both sides repeat the
+  // combined note above already says so, so this adds a warning only for the one-sided case.
+  if (!(repeats(from) && repeats(to)))
+    for (const [i, t, s] of [[0, fromTable, from], [1, toTable, to]])
+      if (declaredOne(i) && repeats(s))
+        findings.push({ level: "warn", text: `${t} is declared as the "one" side, but a key there repeats (up to ${s.maxDuplicates} times) — joined rows will multiply. Declare it many or use a unique key.` });
   return { observed, summary, verdict, findings };
 }

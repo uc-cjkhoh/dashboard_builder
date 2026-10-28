@@ -29,8 +29,8 @@ export function buildJoinCheck(dlg, { run, names }) {
   head.append(btn, hint);
   const out = document.createElement("div");
   out.className = "join-check__out";
+  out.setAttribute("role", "status"); // always in the DOM, so a screen reader hears each change
   out.setAttribute("aria-live", "polite");
-  out.hidden = true;
   root.append(head, out);
 
   let ac = null;
@@ -40,7 +40,6 @@ export function buildJoinCheck(dlg, { run, names }) {
     ac = new AbortController();
     const mine = ac;
     btn.disabled = true;
-    out.hidden = false;
     out.replaceChildren(note("busy", "refresh", "Checking the join…"));
     try {
       const result = await run(mine.signal);

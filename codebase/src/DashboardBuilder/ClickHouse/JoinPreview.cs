@@ -40,6 +40,12 @@ public static class JoinPreviewRules
         if (string.IsNullOrWhiteSpace(e.Column)) throw new RequestValidationException($"'{field}.column' is required.", $"{field}.column");
     }
 
+    /// <summary>ClickHouse codes for "these two key types can't be compared" (ILLEGAL_TYPE_OF_ARGUMENT 43, TYPE_MISMATCH 53, CANNOT_CONVERT_TYPE 70,
+    /// NO_COMMON_TYPE 386): shown as a plain 400, not a 502.</summary>
+    public static bool IsTypeError(int errorCode) => errorCode is 43 or 53 or 70 or 386;
+
+    public const string TypeMismatchMessage = "These two key columns have types ClickHouse can't compare directly, so the join can't be previewed.";
+
     /// <summary>The relationship dialog's rule (relation-rules.js <c>keysCompatible</c>): only number-number, text-text, date-date and
     /// boolean-boolean keys relate; compound and other columns never do. Same wording as the client's toast.</summary>
     public static void CheckKinds(ColumnInfo from, ColumnInfo to, string fromLabel, string toLabel)
@@ -68,6 +74,18 @@ public sealed partial class ClickHouseGateway
         JoinPreviewRules.CheckKinds(a, b, $"{req.From.Table}.{req.From.Column}", $"{req.To.Table}.{req.To.Column}");
         var n = JoinPreviewRules.Bound(req.SampleLimit);
         var text = a.Category == ClickHouseType.Text;
+        try
+        {
+            return await RunPreviewAsync(info, req, a, n, text, ct);
+        }
+        catch (global::ClickHouse.Client.ClickHouseServerException ex) when (JoinPreviewRules.IsTypeError(ex.ErrorCode))
+        {
+            throw new RequestValidationException(JoinPreviewRules.TypeMismatchMessage, "to.column");
+        }
+    }
+
+    private async Task<JoinPreviewResult> RunPreviewAsync(ClickHouseConnectionInfo info, JoinPreviewRequest req, ColumnInfo a, int n, bool text, CancellationToken ct)
+    {
         var fromTask = JoinSideAsync(info, BuildJoinSideSql(req.From.Db, req.From.Table, req.From.Column, req.To.Db, req.To.Table, req.To.Column, n, text), ct);
         var toTask = JoinSideAsync(info, BuildJoinSideSql(req.To.Db, req.To.Table, req.To.Column, req.From.Db, req.From.Table, req.From.Column, n, text), ct);
         var (from, to) = (await fromTask, await toTask);

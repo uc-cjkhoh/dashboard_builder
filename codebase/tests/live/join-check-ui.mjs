@@ -22,6 +22,7 @@ let previewMode = 'manyToOne', gate = null;
 const side = (o) => ({ rows: 1000, nullRows: 0, keys: 1000, matchedKeys: 1000, matchedRows: 1000, maxDuplicates: 1, avgDuplicates: 1, ...o });
 const MODES = {
   manyToOne: { from: side({ keys: 200, matchedKeys: 190, matchedRows: 940, maxDuplicates: 14, avgDuplicates: 5 }), to: side({ rows: 200, keys: 200, matchedKeys: 190, matchedRows: 190 }), sampleLimit: 1000000, sampled: false },
+  fanout: { from: side({ nullRows: 100, keys: 100, matchedRows: 900, maxDuplicates: 9, avgDuplicates: 4.5 }), to: side({ maxDuplicates: 3, avgDuplicates: 2 }), sampleLimit: 1000000, sampled: false },
   manyToMany: { from: side({ nullRows: 100, keys: 100, maxDuplicates: 9, avgDuplicates: 4.5 }), to: side({ maxDuplicates: 3, avgDuplicates: 2 }), sampleLimit: 1000000, sampled: true },
 };
 const queries = [];
@@ -77,7 +78,7 @@ try {
   const text = (sel) => ev(`document.querySelector(${J(sel)})?.textContent ?? ''`);
 
   await check('the result area starts hidden; the button is offered with its bound explained', async () => {
-    must(await ev(`document.querySelector('dialog[open] .join-check__out').hidden`), 'result visible before a check');
+    must(await ev(`document.querySelector('dialog[open] .join-check__out').children.length === 0 && document.querySelector('dialog[open] .join-check__out').getAttribute('role') === 'status'`), 'result shown before a check, or not a status region');
     must(/Check this join/.test(await text('dialog[open] .join-check__btn')), 'no button');
     must(/read-only/i.test(await text('dialog[open] .join-check__hint')), 'no hint');
   });
@@ -103,19 +104,29 @@ try {
     await waitFor(`document.querySelector('.rel-badge text')?.textContent === 'N:1'`, 'badge');
   });
 
-  previewMode = 'manyToMany';
+  previewMode = 'fanout';
   await ev(`document.querySelector('.rel-badge').dispatchEvent(new MouseEvent('click', { bubbles: true }))`);
   await waitFor(`document.querySelector('dialog[open] .join-check') !== null`, 'edit dialog');
-  await check('editing: both sides repeat and the declared N:1 disagrees -> fan-out + declared-side warnings with icons', async () => {
+  await check('editing: both sides repeat and the declared N:1 disagrees -> one combined fan-out warning with an icon', async () => {
     await click('dialog[open] .join-check__btn');
-    await waitFor(`document.querySelectorAll('dialog[open] .join-check__note--warn').length >= 2`, 'warnings');
+    await waitFor(`document.querySelectorAll('dialog[open] .join-check__note--warn').length >= 1`, 'warnings');
     const w = await ev(`[...document.querySelectorAll('dialog[open] .join-check__note--warn')].map((n) => ({ svg: !!n.querySelector('svg'), t: n.textContent }))`);
     must(w.every((x) => x.svg), 'a warning without an icon');
     must(w.some((x) => /many-to-many/.test(x.t) && /double-count/.test(x.t)), J(w));
-    must(w.some((x) => /customers is declared as the "one" side/.test(x.t)), J(w));
-    must((await text('dialog[open] .join-check__out')).includes('first 1,000,000 rows of each table'), 'no sampling note');
+    
+    
     must((await text('dialog[open] .join-check__out')).includes('10% of orders rows have no cust_id'), 'no NULL note');
+    must(await ev(`document.querySelectorAll('dialog[open] .join-check__note--warn').length`) === 1, 'expected ONE combined fan-out warning');
+    must(/You declared N:1/.test(await text('dialog[open] .join-check__note--warn')), 'declaration not named');
     await shot('join-check-warn.png');
+  });
+  await check('a sampled result leads with the sampling note, words shares within the sample, and raises no amber warning', async () => {
+    previewMode = 'manyToMany';
+    await click('dialog[open] .join-check__btn');
+    await waitFor(`document.querySelector('dialog[open] .join-check__out')?.textContent.includes('Within the sample')`, 'sampled reading');
+    must((await ev(`document.querySelector('dialog[open] .join-check__note')?.textContent`)).startsWith('Based on the first 1,000,000 rows of each table, in no particular order'), 'sampling note not first note');
+    must(await ev(`document.querySelectorAll('dialog[open] .join-check__note--warn').length`) === 0, 'amber warning on a sampled result');
+    await shot('join-check-sampled.png');
   });
   await check('a rejected check shows the server message with an error icon and re-enables the button', async () => {
     previewMode = 'error';
@@ -128,7 +139,7 @@ try {
     await ev(`[...document.querySelectorAll('dialog[open] .card-choice')].find((x) => x.textContent === '1:N').click()`);
     await waitFor(`document.querySelector('.rel-badge text')?.textContent === '1:N'`, 'badge 1:N');
   });
-  previewMode = 'manyToMany';
+  previewMode = 'fanout';
   await ev(`document.querySelector('.rel-badge').dispatchEvent(new MouseEvent('click', { bubbles: true }))`);
   await waitFor(`document.querySelector('dialog[open] .join-check') !== null`, 'dialog again');
   await click('dialog[open] .join-check__btn');
