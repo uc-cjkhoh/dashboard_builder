@@ -18,6 +18,7 @@ export const LIMITS = Object.freeze({
   exportRows: 100000, // rows in a CSV export (server MaxExportRows)
   calculations: 20,  // calculated fields per workbook (CalcLimits.MaxCalcs; enforced client-side only)
   calcFormula: 500,  // characters in a formula (the server never sees formula text)
+  tooltipText: 300,  // characters in a sheet's tooltip template (T01-19; client-side only, the server never sees it)
   calcName: 60,      // characters in a calculation's name / label (server CalcLimits.MaxName)
 });
 export const HOST_MESSAGES = Object.freeze({

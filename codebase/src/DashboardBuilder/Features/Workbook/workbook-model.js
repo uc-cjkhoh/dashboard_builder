@@ -7,6 +7,7 @@ import { LIMITS, text } from "../Core/validate.js";
 import { aggsFor } from "../Dashboard/filter-rules.js";
 import { cleanTheme, DEFAULT_THEME } from "../Core/theme-model.js";
 import { cleanAction } from "../Dashboard/action-model.js";
+import { checkTooltipText } from "../Dashboard/tooltip-model.js";
 import { cleanParameter, MAX_PARAMS } from "../Core/parameters-model.js";
 import { cleanCalculations } from "../Calc/calc-workbook.js";
 import { CALC_AGGS } from "../Calc/calc-pill.js";
@@ -282,6 +283,11 @@ export function sanitizeSheet(saved, where, issues) {
     const v = s[k];
     if (v == null) sheet[k] = null;
     else { const r = typeof v === "string" ? text(v, { label: k, max, required: true }) : { ok: false }; sheet[k] = r.ok ? r.value : null; if (!r.ok) issues.push(`${where}: the ${k} was invalid — reset.`); }
+  }
+  { // T01-19 tooltip template: trimmed text ≤ LIMITS.tooltipText, or null for the automatic tooltip
+    const r = checkTooltipText(s.tooltipText);
+    sheet.tooltipText = r.ok ? r.value : null;
+    if (!r.ok) issues.push(`${where}: the tooltip text was invalid — reset.`);
   }
   sheet.showFilterCards = s.showFilterCards !== false; // P30
   sheet.analytics = cleanAnalytics(s.analytics, where, issues); // P21

@@ -170,6 +170,7 @@ export const emptySheet = () => ({
   // P35: a date range on one date field + an optional comparison range (Dashboard/period-model.js).
   // null | { db, table, column, category, preset, from, to, compare, compareFrom, compareTo }
   period: null,
+  tooltipText: null, // T01-19: tooltip template with <Field> placeholders (Dashboard/tooltip-model.js); null = automatic
   title: null, caption: null, showTitle: true, showFilterCards: true, // P30 filter cards above the chart
   analytics: null, // P21: { ref, band, trend, forecast, totals } (Dashboard/analytics-model.js); null = none // P23: null = the tab name / an automatic summary
   urlAction: null, // P39: { label, template } — "Open <label>" on the selection chip (Dashboard/action-model.js)

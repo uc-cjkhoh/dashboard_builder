@@ -1,5 +1,6 @@
 import { makeValueFormatter } from "../Core/format.js";
 import { pickInk } from "./contrast.js";
+import { tooltipHtml } from "./tooltip-model.js";
 import { chartFit, markCount, applyFitMode, FIT } from "./chart-fit.js";
 
 // Charting adapter (P9; formatting P10). Renders worksheet results through the self-hosted ECharts library
@@ -334,7 +335,7 @@ function legendFor(format, c, names, defaultOn) {
 // (the default). `orientation` is decided by the caller from the shelves; combo stays vertical (its
 // dual value axis is on y). Axis *titles* name the physical axes (xTitle = bottom, yTitle = left)
 // regardless of orientation, so the Format controls stay literal.
-function buildCartesian({ type, categories, series, format = {}, orientation = "vertical", pointLabels, tooltipExtra, otherIndex = -1, analytics = null }) {
+function buildCartesian({ type, categories, series, format = {}, orientation = "vertical", pointLabels, tooltipExtra, tooltipText, tooltipFields, otherIndex = -1, analytics = null }) {
   const c = tokens();
   const labels = (categories ?? []).map((l) => l ?? "—");
   // P35 comparison series (compare: true) ride beside their measure: they don't make a chart "multi"
@@ -416,6 +417,7 @@ function buildCartesian({ type, categories, series, format = {}, orientation = "
       textStyle: { color: c.ink, fontFamily: c.font },
       formatter: (p) => {
         const arr = Array.isArray(p) ? p : [p];
+        if (tooltipText) return customTip(tooltipText, tooltipFields, arr[0].dataIndex, Object.fromEntries(arr.map((d) => [String(d.seriesName), fmtVal(d.value)]))); // T01-19
         const head = `<span style="color:${c.muted}">${escapeHtml(String(arr[0].axisValueLabel ?? arr[0].name ?? ""))}</span>`;
         const lines = arr.map((d) =>
           `<br><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${d.color};margin-right:6px"></span>` +
@@ -510,7 +512,7 @@ function addAnalytics(base, a, { c, fmtVal, horizontal }) {
 
 // pie / donut — one dimension (slices) × one measure (size). Colour IS the encoding, so a legend
 // shows by default (dataviz: identity never colour-alone; the legend supplies the labels).
-function buildPie({ type, categories, series, format = {}, pointLabels, tooltipExtra, otherIndex = -1 }) {
+function buildPie({ type, categories, series, format = {}, pointLabels, tooltipExtra, tooltipText, tooltipFields, otherIndex = -1 }) {
   const c = tokens();
   const fmtVal = makeValueFormatter(format);
   const labels = (categories ?? []).map((l) => l ?? "—");
@@ -526,7 +528,9 @@ function buildPie({ type, categories, series, format = {}, pointLabels, tooltipE
       trigger: "item",
       backgroundColor: c.surface, borderColor: c.grid, borderWidth: 1,
       textStyle: { color: c.ink, fontFamily: c.font },
-      formatter: (p) =>
+      formatter: (p) => tooltipText
+        ? customTip(tooltipText, tooltipFields, p.dataIndex, { [String(series[0].name)]: fmtVal(p.value), Percent: `${p.percent}%` }) // T01-19
+        :
         `<span style="color:${c.muted}">${escapeHtml(String(p.name))}</span><br>` +
         `<b>${escapeHtml(String(series[0].name))}:</b> ${fmtVal(p.value)} (${p.percent}%)` +
         extraTooltip(tooltipExtra, p.dataIndex, c),
@@ -548,7 +552,7 @@ function buildPie({ type, categories, series, format = {}, pointLabels, tooltipE
 // scatter — two measures map to the X and Y value axes; dimension keys label the points. P18 marks:
 // `sizes` scales the symbol (bubble), `colorValues` ramps a continuous gradient (visualMap legend),
 // `pointLabels` writes a field on each point, `tooltipExtra` appends field lines to the tooltip.
-function buildScatter({ categories, series, format = {}, sizes, sizeName, colorValues, colorName, pointLabels, tooltipExtra, symbol }) {
+function buildScatter({ categories, series, format = {}, sizes, sizeName, colorValues, colorName, pointLabels, tooltipExtra, tooltipText, tooltipFields, symbol }) {
   const c = tokens();
   const fmtVal = makeValueFormatter(format);
   const labels = (categories ?? []).map((l) => l ?? "—");
@@ -576,7 +580,11 @@ function buildScatter({ categories, series, format = {}, sizes, sizeName, colorV
       trigger: "item",
       backgroundColor: c.surface, borderColor: c.grid, borderWidth: 1,
       textStyle: { color: c.ink, fontFamily: c.font },
-      formatter: (p) =>
+      formatter: (p) => tooltipText
+        ? customTip(tooltipText, tooltipFields, p.dataIndex, { [xName]: fmtVal(p.value[0]), [yName]: fmtVal(p.value[1]),
+          ...(sizeDim >= 0 ? { [sizeName || "size"]: fmtVal(p.value[sizeDim]) } : {}),
+          ...(colorDim >= 0 ? { [colorName || "colour"]: fmtVal(p.value[colorDim]) } : {}) }) // T01-19
+        :
         `<span style="color:${c.muted}">${escapeHtml(String(p.name ?? ""))}</span><br>` +
         `<b>${escapeHtml(xName)}:</b> ${fmtVal(p.value[0])}<br><b>${escapeHtml(yName)}:</b> ${fmtVal(p.value[1])}` +
         (sizeDim >= 0 ? `<br><b>${escapeHtml(sizeName || "size")}:</b> ${fmtVal(p.value[sizeDim])}` : "") +
@@ -1042,6 +1050,12 @@ function continuousVisualMap(values, dimension, c, fmtVal, name) {
     text: name ? [String(name), ""] : undefined,
     textStyle: { color: c.muted, fontFamily: c.font }, formatter: (v) => fmtVal(v),
   };
+}
+// T01-19: the user's tooltip template → safe HTML. `measures` maps a measure name → its formatted value for
+// this mark; group-by / mark fields come from `tooltipFields` ([{ name, values }] by dataIndex).
+function customTip(text, tooltipFields, dataIndex, measures) {
+  const dims = new Map((tooltipFields ?? []).map((f) => [f.name, f.values?.[dataIndex]]));
+  return tooltipHtml(text, (name) => (Object.prototype.hasOwnProperty.call(measures, name) ? measures[name] : dims.get(name)));
 }
 // Extra tooltip lines for the P18 Tooltip encoding: one "<field>: <value>" per chosen field.
 function extraTooltip(tooltipExtra, dataIndex, c) {
