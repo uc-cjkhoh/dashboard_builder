@@ -4,7 +4,7 @@
 //   cd src/DashboardBuilder && dotnet run --no-launch-profile --urls http://localhost:5180 ; stop it with fuser -k 5180/tcp)
 // Env: APP_URL, SHOTS_DIR (screenshot folder), CDP_PORT (default: a free port), CHROME_BIN.
 import { launch } from './cdp.mjs';
-import { writeFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -49,9 +49,8 @@ async function check(name, fn) {
 const must = (cond, msg) => { if (!cond) throw new Error(msg); };
 const J = JSON.stringify;
 
-let wbDir = null, b = null;
+let b = null;
 try {
-  wbDir = mkdtempSync(join(tmpdir(), 'calc-wb-'));
   b = await launch({ port: process.env.CDP_PORT ? Number(process.env.CDP_PORT) : undefined });
   await b.mock(answer);
   const ev = (s) => b.evaluate(s);
@@ -139,6 +138,7 @@ try {
     await waitFor(`document.querySelectorAll('.tab:not(.tab--model)').length === 2`, 'second tab');
     must(J(await tabs()) === J(['Dashboard', 'Dashboard copy']), `tabs: ${J(await tabs())}`);
     must(await activeTab() === 'Dashboard copy', 'copy not active');
+    must(await ev(`document.activeElement === document.querySelector('.tab.is-active .tab__label')`), 'new tab label not focused');
     await waitFor(`__t.pills('columns').length === 1`, 'copy shelves');
     must(J([await pills('columns'), await pills('rows')]) === J(before), 'shelves differ from the source');
     await settle(500);
@@ -172,7 +172,6 @@ try {
   console.log(`FAIL harness: ${e.stack}`); failed++;
 } finally {
   if (b) await b.close();
-  if (wbDir) rmSync(wbDir, { recursive: true, force: true });
 }
 console.log(`\n${passed} ok, ${failed} failed`);
 process.exit(failed ? 1 : 0);

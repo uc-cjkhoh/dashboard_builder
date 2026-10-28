@@ -76,6 +76,7 @@ export function initTabs() {
       event.stopPropagation();
       const r = duplicateDashboard(dash.id);
       if (!r.ok) toast(r.error, "danger");
+      else strip.querySelector(".tab.is-active .tab__label")?.focus(); // render() rebuilt the strip
     });
 
     const close = document.createElement("button");

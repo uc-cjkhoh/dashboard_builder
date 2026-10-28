@@ -56,3 +56,19 @@ test("copySheet leaves null drill/pages alone", () => {
   const c = copySheet({ drill: null, pages: null, selection: null });
   assert.equal(c.drill, null); assert.equal(c.pages, null);
 });
+test("the copy is independent: mutating it leaves the source unchanged", () => {
+  const src = {
+    filters: [{ column: "a", op: "notin", values: ["x", "y"] }],
+    marks: { size: null, detail: [{ column: "d" }], tooltip: [] },
+    format: { numberFormat: "auto", conditional: { m: { rules: [1] } } },
+    drill: null, pages: null, selection: null,
+  };
+  const before = structuredClone(src);
+  const c = copySheet(src);
+  c.filters[0].values.push("z");
+  c.marks.detail.push({ column: "e" });
+  c.marks.size = { column: "s" };
+  c.format.numberFormat = "percent";
+  c.format.conditional.m.rules.push(2);
+  assert.deepEqual(src, before);
+});
