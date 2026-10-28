@@ -9,6 +9,7 @@ import { join } from 'node:path';
 function findChrome() {
   if (process.env.CHROME_BIN) return process.env.CHROME_BIN;
   const root = join(homedir(), '.cache/ms-playwright');
+  if (!existsSync(root)) throw new Error(`no Playwright browser cache at ${root} (install Chromium, or set CHROME_BIN)`);
   for (const dir of readdirSync(root).sort().reverse()) {
     for (const rel of ['chrome-linux64/chrome', 'chrome-headless-shell-linux64/headless_shell', 'chrome-linux/chrome']) {
       const p = join(root, dir, rel);
@@ -25,15 +26,21 @@ const freePort = () => new Promise((res, rej) => { const srv = createServer(); s
 export async function launch({ port, width = 1400, height = 900 } = {}) {
   port ??= await freePort();
   const profile = mkdtempSync(join(process.env.TMPDIR ?? tmpdir(), 'calc-ui-'));
-  const proc = spawn(findChrome(), [
+  let proc = null;
+  const cleanup = () => { try { process.kill(-proc.pid, 'SIGKILL'); } catch { /* already gone */ } rmSync(profile, { recursive: true, force: true }); };
+  try {
+  proc = spawn(findChrome(), [
     '--headless=new', '--no-sandbox', '--disable-gpu', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`,
     `--window-size=${width},${height}`, 'about:blank',
   ], { stdio: 'ignore', detached: true }); // own process group, so close() can kill every helper process
+  let spawnError = null;
+  proc.on('error', (e) => { spawnError = e; });
   let version = null;
   for (let i = 0; i < 100 && !version; i++) {
+    if (spawnError) break;
     try { version = await (await fetch(`http://127.0.0.1:${port}/json/version`)).json(); } catch { await sleep(100); }
   }
-  if (!version) throw new Error('Chromium did not start');
+  if (!version) throw new Error(`Chromium did not start${spawnError ? `: ${spawnError.message}` : ''}`);
   const target = (await (await fetch(`http://127.0.0.1:${port}/json/new?about:blank`, { method: 'PUT' })).json());
   const ws = new WebSocket(target.webSocketDebuggerUrl);
   await new Promise((res, rej) => { ws.onopen = res; ws.onerror = () => rej(new Error('CDP socket failed')); });
@@ -108,8 +115,8 @@ export async function launch({ port, width = 1400, height = 900 } = {}) {
         }).catch(() => {});
       });
     },
-    async close() { try { ws.close(); } catch {} try { process.kill(-proc.pid, 'SIGKILL'); } catch { /* already gone */ }
-      await sleep(100); rmSync(profile, { recursive: true, force: true }); },
+    async close() { try { ws.close(); } catch {} cleanup(); await sleep(100); },
   };
   return api;
+  } catch (e) { cleanup(); throw e; } // a failed start must not leave Chromium or its profile behind
 }

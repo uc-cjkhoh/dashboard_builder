@@ -24,13 +24,13 @@ import { DATE_PART_CHOICES, isGroupingPart, stepPart, labelParts } from "./date-
 import { CALC_CHOICES, ALONG_CHOICES, WINDOW_CHOICES, applyTableCalcs, isCalc, calcName } from "./table-calc.js";
 import { createHistory } from "./history.js";
 import { catalogFromEntities } from "../Calc/calc-resolve.js";
-import { isCalcPill, calcPillId, sameCalcPill, makeCalcPill, refusal, pillSlots, syncCalcPills, clearCalcPills, usesCalc } from "../Calc/calc-pill.js";
+import { isCalcPill, calcPillId, sameCalcPill, makeCalcPill, refusal, pillSlots, syncCalcPills, clearCalcPills, usesCalc, CALC_AGGS } from "../Calc/calc-pill.js";
 import { openCalcDialog } from "../Calc/calc-dialog.js";
 import { evaluationInput } from "../Calc/eval-order.js";
 import { explainControl } from "../Calc/explain-popover.js";
 import { paneState, deleteCalcPlan, roleChoice, setRoleChoice } from "../Calc/calc-pane-model.js";
 import { checkName } from "../Calc/calc-workbook.js";
-import { wireDim, wireMeasure, planTables, calcProblem, measureLabel, aggWord, topByRef, topByKey, wireTopBy, resolveSortTarget } from "../Calc/calc-plan.js";
+import { wireDim, wireMeasure, planTables, calcProblem, statCalcProblem, measureLabel, aggWord, topByRef, topByKey, wireTopBy, resolveSortTarget } from "../Calc/calc-plan.js";
 import { REF_CHOICES, TREND_CHOICES, FORECAST_CHOICES, defaultAnalytics, refValue, trendSeries, combine } from "./analytics-model.js";
 import { scalePlan, withOther, bucketNotice, tableProgress, needsNextPage, OTHER_TYPES, BUCKET_TYPES, DATE_BUCKET_CHOICES } from "./scale-model.js";
 
@@ -291,6 +291,8 @@ export function initDashboards() {
   bus.addEventListener("dashboard:changed", () => {
     // A change from outside commit() (bookmark, workbook open, undo) becomes the new baseline.
     const d = activeDashboard();
+    // ...and a restored sheet's calculated pills take the live calculation's type / role (undo, bookmark, open).
+    if (d && !isModelActive()) syncCalcPills(d.sheet, calculations, catalogFromEntities([...entities.values()]));
     if (d && !isModelActive()) lastSnap.set(d.id, structuredClone(d.sheet));
     if (!isModelActive()) { renderShelves(); runChart(); }
   });
@@ -1374,7 +1376,7 @@ export function initDashboards() {
     // one may flip dimension <-> measure (E4); an aggregate or non-number calculation has nothing to choose.
     const rowLevelNumber = !calcPill || (f.category === "numeric" && (f.role === "dimension" || Boolean(f.agg)));
     if (isMeasure && (!calcPill || f.agg)) {
-      const opts = aggsFor(f.category);
+      const opts = calcPill ? CALC_AGGS : aggsFor(f.category); // a calculation never counts rows
       if (f.agg && !opts.includes(f.agg)) {
         toast(`${f.agg} isn't available for ${label}; switched to ${opts[0]}.`, "info");
         f.agg = opts[0]; // keep the screen in step with the query
@@ -1401,7 +1403,7 @@ export function initDashboards() {
       controls.append(fx);
     }
     // P26: a date dimension picks its part here, and +/− step through year → quarter → month → day → hour.
-    if (!isMeasure && f.category === "temporal") {
+    if (!isMeasure && f.category === "temporal" && !calcPill) { // E12: a calculated dimension is never date-grouped
       const dateOnly = isDateOnlyColumn(f.db, f.table, f.column);
       const choices = DATE_PART_CHOICES.filter(([v]) => !(dateOnly && (v === "hour" || v === "hourOfDay")));
       const part = select(choices.map(([v]) => v), f.datePart ?? "auto", "ws-pill__part", `Date part for ${label}`);
@@ -2326,7 +2328,10 @@ export function initDashboards() {
     const filterNote = invalidFilterNotice(s);
     setNotice(filterNote);
     // P12 statistical charts that run their own single-table endpoint (histogram / box plot).
-    if (STAT_SINGLE_TABLE.has(s.chartType)) { await runStatChart(dash, s, ticket, filterNote); return; }
+    if (STAT_SINGLE_TABLE.has(s.chartType)) {
+      const noCalc = statCalcProblem(s); // the single-table endpoints can't take a calculation: say so, send nothing
+      if (noCalc) { chartEl.replaceChildren(hint(noCalc)); return; }
+      await runStatChart(dash, s, ticket, filterNote); return; }
     const colorInPlay = s.color?.length && COLOR_USES.has(s.chartType);
     const drillInPlay = isDrillActive(s); // a hierarchy alone can drive a view (implicit count on the level)
     const m = s.marks ?? {};

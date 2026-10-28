@@ -1,8 +1,9 @@
 import {
   entities, relationships, dashboards, bus, activeDashboardId,
   createDashboard, updateSheet, closeDashboard, showModel, switchDashboard, currentTheme, setTheme,
-  sharedFilters, setSharedFilters, bookmarks, setBookmarks, fieldMeta, setAllFieldMeta, parameters, setParameters, calculations, setCalculations,
+  nextCalcId, sharedFilters, setSharedFilters, bookmarks, setBookmarks, fieldMeta, setAllFieldMeta, parameters, setParameters, calculations, setCalculations,
 } from "../Core/store.js";
+import { clearRoleChoices } from "../Calc/calc-pane-model.js";
 import { DEFAULT_THEME } from "../Core/theme-model.js";
 import { openThemeDialog } from "./theme-dialog.js";
 import { saveBookmarkDialog, openBookmarksDialog } from "./bookmarks-dialog.js";
@@ -97,6 +98,7 @@ async function clearWorkspace() {
     setAllFieldMeta({});
     setParameters([]);
     setCalculations([]);
+    clearRoleChoices();
   } finally {
     restoring = false;
   }
@@ -163,7 +165,8 @@ function openWorkbook(wb) {
     setSharedFilters(wb.sharedFilters ?? []); // before the dashboards, so their first query applies them
     setAllFieldMeta(wb.fields ?? {});
     setParameters(wb.parameters ?? []); // before the dashboards, so their first query reads them
-    setCalculations(wb.calculations ?? []); // likewise: pills read their calculation by id
+    clearRoleChoices();
+    setCalculations(wb.calculations ?? [], wb.nextCalcId); // likewise: pills read their calculation by id
 
     const ids = new Map(); // saved entity id → new entity id
     for (const e of wb.entities) ids.set(e.id, addEntity(e.db, e.table, e.x, e.y, { joinKeys: e.joinKeys }));
@@ -233,7 +236,7 @@ async function importFile(input) {
 // --- helpers -----------------------------------------------------------------
 function currentState() {
   const id = activeDashboardId();
-  return { entities, relationships, dashboards, active: id ? { kind: "dashboard", id } : { kind: "model" }, theme: currentTheme(), sharedFilters, bookmarks, fieldMeta, parameters, calculations };
+  return { entities, relationships, dashboards, active: id ? { kind: "dashboard", id } : { kind: "model" }, theme: currentTheme(), sharedFilters, bookmarks, fieldMeta, parameters, calculations, nextCalcId: nextCalcId() };
 }
 
 const isEmpty = () => entities.size === 0 && dashboards.length === 0;

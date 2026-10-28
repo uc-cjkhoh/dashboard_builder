@@ -49,9 +49,10 @@ async function check(name, fn) {
 const must = (cond, msg) => { if (!cond) throw new Error(msg); };
 const J = JSON.stringify;
 
-const wbDir = mkdtempSync(join(tmpdir(), 'calc-wb-'));
-const b = await launch({ port: process.env.CDP_PORT ? Number(process.env.CDP_PORT) : undefined });
+let wbDir = null, b = null;
 try {
+  wbDir = mkdtempSync(join(tmpdir(), 'calc-wb-'));
+  b = await launch({ port: process.env.CDP_PORT ? Number(process.env.CDP_PORT) : undefined });
   await b.mock(answer);
   const ev = (s) => b.evaluate(s);
   const waitFor = (s, label) => b.waitFor(s, { label });
@@ -188,6 +189,31 @@ try {
     must(row && row.agg && row.conv, `row-level number calc pill: ${J(info)}`);
     must(plain && plain.agg && plain.conv, `plain numeric field pill: ${J(info)}`);
     for (let i = 0; i < 2; i++) { await ev(`document.querySelector('.ws-shelf--rows .ws-pill:last-child button[aria-label="Remove field"]').click()`); await waitFor(`__t.pills('rows').length === ${2 - i}`, 'pill removed'); }
+    await settle();
+  });
+
+  // final-review fixes: a calc measure never offers "count"; histogram / box plot refuse calc pills without a request
+  await check('n: calc aggregation menu has no count; histogram with a calc pill shows the hint and sends no request', async () => {
+    await dragChip('Net', `__t.zone('rows')`);
+    await waitFor(`__t.pills('rows').length === 2`, 'Net pill on Rows');
+    const opts = await ev(`(() => { const p = [...document.querySelectorAll('.ws-shelf--rows .ws-pill')].find((x) => /Net/.test(x.querySelector('.ws-pill__text').textContent));
+      return [...p.querySelector('.ws-pill__agg').options].map((o) => o.value); })()`);
+    must(!opts.includes('count') && opts.includes('sum') && opts.includes('countNonNull'), `calc aggregation options: ${J(opts)}`);
+    await settle();
+    queries.length = 0;
+    const pickType = async (label) => {
+      await ev(`document.querySelector('.ws-pick--chart .ws-pick__btn').click()`);
+      await ev(`[...document.querySelectorAll('.ws-charttypes .menu__item')].find((x) => x.textContent.trim() === ${J(label)}).click()`);
+    };
+    await pickType('Histogram');
+    await waitFor(`/Histogram and box plot don't use calculated fields yet/.test(document.getElementById('ws-chart').textContent)`, 'histogram hint');
+    await pickType('Box plot');
+    await waitFor(`/Histogram and box plot don't use calculated fields yet/.test(document.getElementById('ws-chart').textContent)`, 'box plot hint');
+    await settle(500);
+    must(queries.length === 0, `${queries.length} /api/query call(s) sent`);
+    await pickType('Bar');
+    await ev(`document.querySelector('.ws-shelf--rows .ws-pill:last-child button[aria-label="Remove field"]').click()`);
+    await waitFor(`__t.pills('rows').length === 1`, 'Net removed');
     await settle();
   });
 
@@ -433,8 +459,8 @@ try {
 } catch (e) {
   console.log(`FAIL harness: ${e.stack}`); failed++;
 } finally {
-  await b.close();
-  rmSync(wbDir, { recursive: true, force: true });
+  if (b) await b.close();
+  if (wbDir) rmSync(wbDir, { recursive: true, force: true });
 }
 console.log(`\n${passed} ok, ${failed} failed`);
 process.exit(failed ? 1 : 0);
