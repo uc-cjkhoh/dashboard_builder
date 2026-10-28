@@ -60,6 +60,10 @@
 @media print {
   .view--board, .board, .board-main, .board-scroll { display: block; height: auto; overflow: visible; }
   .board-panel, .board-bar__tools, .board-widget__tools { display: none !important; }
-  .board-grid { width: 1000px; }
-  .board-widget { box-shadow: none; break-inside: avoid; }
+  .board-grid { width: 1000px; height: auto !important; }
+  /* One column in flow (board.js lays the widgets out stacked at print width): an absolutely positioned widget could split across pages. */
+  .board-widget { position: relative !important; left: auto !important; top: auto !important; margin-bottom: var(--s3); box-shadow: none; break-inside: avoid; }
+  /* dashboard.css fixes every .ws-chart-canvas at 1000 × 560 for the worksheet print; a widget's chart keeps its cell (sized by board.js). */
+  .board-widget .board-widget__body.ws-chart { overflow: hidden; }
+  .board-widget .ws-chart-canvas { position: absolute; inset: var(--s2); width: auto; height: auto; }
 }

@@ -34,6 +34,7 @@ import { joinNotices, periodNotice, speedNotice, invalidFilterNotice } from "./n
 //     onTooltipFields(sheet, list), onMemberColors(sheet, field, members)  the editor panels that learn what the chart offers
 //     statusBar(sheet, result | null)  the host's status line (marks, rows x columns, selection)
 //     notices(sheet) -> string | null  a host line joined into the notice (the editor: shared filters not applied here)
+//     cancelLabel() -> a name for the loading state's Cancel button (aria-label "Cancel loading <name>"); default: none
 //     draw(container, sheet, result, cmp, renderOptions)  the drawing function (default renderWorksheet; a test seam)
 
 export { el, hint, warn };
@@ -77,6 +78,8 @@ export function createWorksheetView(container, getContext, options = {}) {
     const box = el("div", "ws-loading");
     box.append(el("span", null, "Loading…"));
     const cancel = makeButton("Cancel", "btn ws-loading__cancel");
+    const named = options.cancelLabel?.(); // a widget names its worksheet so several Cancel buttons differ
+    if (named) cancel.setAttribute("aria-label", `Cancel loading ${named}`);
     cancel.addEventListener("click", () => {
       gate.cancel();
       container.replaceChildren(hint("Query cancelled — Refresh runs it again."));

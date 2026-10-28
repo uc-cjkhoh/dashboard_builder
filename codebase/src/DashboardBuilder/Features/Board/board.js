@@ -12,13 +12,13 @@ import { createPanel } from "./board-panel.js";
 // dashboard renders — leaving it destroys every worksheet view (queries aborted, chart instances and their resize observers
 // released), so coming back re-runs each widget (from the result cache when its sheet is unchanged). Widgets are keyed by id:
 // a layout change reconciles in place, so adding or removing one never redraws the others.
-const PRINT_WIDTH = 1000; // px: the grid's width on paper (the page, less margins, at 96 dpi)
+const PRINT_WIDTH = 1000; // px: the board's width on paper (the page, less margins, at 96 dpi); widgets print stacked, each chart sized to its cell
 
 /** Row height and gap in px from the design tokens (`calc(var(--ctl-h) * 2)`, `var(--s3)`), so the pure layout has no constants. */
 function readMetrics() {
   const css = getComputedStyle(document.documentElement);
   const px = (name, fallback) => { const v = parseFloat(css.getPropertyValue(name)); return Number.isFinite(v) ? v : fallback; };
-  return { rowH: px("--ctl-h", 32) * 2, gap: px("--s3", 12) };
+  return { rowH: px("--ctl-h", 32) * 2, gap: px("--s3", 12), pad: px("--s2", 8) };
 }
 
 export function initBoard() {
@@ -43,7 +43,9 @@ export function initBoard() {
     const dash = activeDashboard();
     const width = printing ? PRINT_WIDTH : grid.clientWidth;
     if (!dash || !width) return;
-    const { stacked, height, rects } = layoutBoard(dash.widgets, width, readMetrics());
+    const metrics = readMetrics();
+    const { stacked, height, rects } = layoutBoard(dash.widgets, width, { ...metrics, stack: printing }); // paper: one column in flow, so no widget splits across pages
+    if (printing) for (const [id, r] of rects) entries.get(id)?.sizeChart({ width: r.width, height: r.height, chrome: { x: 2 * metrics.pad + 2, y: 2 * metrics.pad + 2 } });
     grid.classList.toggle("is-stacked", stacked);
     grid.style.height = `${height}px`;
     for (const [id, r] of rects) {
@@ -90,6 +92,7 @@ export function initBoard() {
     const { x, y, w, h } = spot;
     const widget = kind === "sheet" ? { id: nextWidgetId(), kind, sheetId, x, y, w, h } : { id: nextWidgetId(), kind, heading: "Text", body: "", x, y, w, h };
     setWidgets(dash.id, [...dash.widgets, widget]); // → dashboard:changed → sync (autosave listens to the same event)
+    toast(`Added “${entries.get(widget.id)?.el.getAttribute("aria-label") ?? "widget"}” to the dashboard.`, "ok"); // polite live region (#toast-live)
     entries.get(widget.id)?.el.scrollIntoView({ block: "nearest" });
   }
 
@@ -125,7 +128,6 @@ export function initBoard() {
   const fullBtn = makeButton("", "btn board-bar__btn");
   const syncFull = () => {
     fullBtn.replaceChildren(icon("expand", { size: 14 }), document.createTextNode(isFull() ? "Exit full screen" : "Full screen"));
-    fullBtn.setAttribute("aria-pressed", String(isFull()));
   };
   fullBtn.addEventListener("click", async () => {
     if (isFull()) { main.classList.remove("is-presenting"); if (document.fullscreenElement) await document.exitFullscreen(); }
@@ -138,7 +140,7 @@ export function initBoard() {
   printBtn.append(icon("print", { size: 14 }), document.createTextNode("Print"));
   printBtn.addEventListener("click", () => window.print());
   window.addEventListener("beforeprint", () => { if (activeDashboard()) { printing = true; layout(); } });
-  window.addEventListener("afterprint", () => { printing = false; layout(); });
+  window.addEventListener("afterprint", () => { printing = false; for (const e of entries.values()) e.sizeChart(null); layout(); });
   syncFull();
   tools.append(fullBtn, printBtn);
 

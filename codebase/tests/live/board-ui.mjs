@@ -12,12 +12,13 @@ import { join } from 'node:path';
 const APP = process.env.APP_URL ?? 'http://localhost:5193';
 const SHOTS = process.env.SHOTS_DIR ?? join(tmpdir(), 'board-ui-shots');
 mkdirSync(SHOTS, { recursive: true });
-const COLUMNS = { orders: [['amount', 'Float64', 'numeric'], ['region', 'String', 'text'], ['channel', 'String', 'text'], ['status', 'String', 'text']] };
-const VALUES = { region: ['APAC', 'EU', 'US'], channel: ['web', 'shop', 'app'], status: ['open', 'paid', 'void'] };
+const COLUMNS = { orders: [['amount', 'Float64', 'numeric'], ['region', 'String', 'text'], ['channel', 'String', 'text'], ['status', 'String', 'text'], ['qty_s', 'String', 'text']] };
+const VALUES = { qty_s: ['1', '2', '3'], region: ['APAC', 'EU', 'US'], channel: ['web', 'shop', 'app'], status: ['open', 'paid', 'void'] };
 const queries = [];
 const dimsOf = (q) => [...(q.rowDimensions ?? []), ...(q.columnDimensions ?? [])].map((d) => d.column).join();
 const countBy = (col) => queries.filter((q) => dimsOf(q) === col).length;
-function answer({ method, path, body }) {
+let slowMs = 0;
+async function answer({ method, path, body }) {
   if (path === '/api/connection' && method === 'GET') return { json: { connected: false } };
   if (path === '/api/connection') return { json: { connected: true, host: 'mock-ch', port: 8443, user: 'default', secure: true, allowInvalidCert: false } };
   if (path === '/api/databases') return { json: ['shop'] };
@@ -25,8 +26,14 @@ function answer({ method, path, body }) {
   if (path === '/api/databases/shop/tables/orders/columns') return { json: COLUMNS.orders.map(([name, type, category]) => ({ name, type, category })) };
   if (path === '/api/query') {
     queries.push(body);
+    if (slowMs) await new Promise((r) => setTimeout(r, slowMs));
     const dims = [...(body.rowDimensions ?? []), ...(body.columnDimensions ?? [])];
     if (dims.some((d) => d.column === 'status')) return { status: 400, json: { error: 'Query rejected: status is not available.' } };
+    if (body.offset !== undefined) { // a table: pages of up to 500 of 1200 rows
+      const rd = body.rowDimensions ?? [], total = 1200, n = Math.max(0, Math.min(body.limit ?? 500, total - body.offset));
+      return { json: { rowDimensions: rd.map((d) => d.column), columnDimensions: [], measures: (body.measures ?? []).map((_, i) => `v${i}`), total,
+        rows: Array.from({ length: n }, (_, r) => ({ keys: rd.map((d) => `${VALUES[d.column]?.[(body.offset + r) % 3] ?? 'x'}-${body.offset + r}`), values: (body.measures ?? []).map(() => body.offset + r) })), truncated: false } };
+    }
     return { json: { rowDimensions: (body.rowDimensions ?? []).map((d) => d.column), columnDimensions: (body.columnDimensions ?? []).map((d) => d.column),
       measures: (body.measures ?? []).map((_, i) => `v${i}`),
       rows: Array.from({ length: dims.length ? 3 : 1 }, (_, r) => ({ keys: dims.map((d) => VALUES[d.column][r]), values: (body.measures ?? []).map((_, i) => 10 * (r + 1) + i) })), truncated: false } };
@@ -231,6 +238,97 @@ try {
     must(J(w.map((x) => x.title)) === J(['Revenue by region', 'Share by channel', 'Text', 'Orders by status']), `titles ${J(w.map((x) => x.title))}`);
     must(await seriesType('Revenue by region') === 'line' && await seriesType('Share by channel') === 'pie', 'chart types after restore');
     must(await ev(`document.querySelector('.board-widget--text .board-widget__title').textContent === 'Text'`), 'text restored');
+  });
+
+
+  const until = async (fn, label) => { for (let i = 0; i < 80; i++) { if (fn()) return; await b.sleep(100); } throw new Error(`timed out: ${label}`); };
+  const lastRegion = (from) => queries.slice(from).filter((q) => dimsOf(q) === 'region').pop();
+
+  await check('a shared filter and a parameter reach the widget query; a worksheet change while the dashboard is visible re-runs it; removing the shared filter changes the next query', async () => {
+    const n0 = queries.length;
+    await store(`const t = st.worksheets()[0]; const p = st.addParameter({ name: 'Chan', type: 'text', value: 'web', allowed: { kind: 'any' } });
+      st.setSharedFilters([{ db: 'shop', table: 'orders', column: 'region', category: 'text', op: '=', value: 'EU' }]);
+      st.updateSheet(t.id, { ...t.sheet, filters: [{ db: 'shop', table: 'orders', column: 'channel', category: 'text', op: '=', param: p.id, value: '' }] }); return true;`);
+    await until(() => lastRegion(n0), 'the widget re-queried');
+    let f = J(lastRegion(n0).filters);
+    must(f.includes('"EU"') && f.includes('"web"'), `shared filter / parameter missing from the query: ${f}`);
+    const n1 = queries.length;
+    await store(`st.setSharedFilters([]); const t = st.worksheets()[0]; st.updateSheet(t.id, { ...t.sheet }); return true;`);
+    await until(() => lastRegion(n1), 'the widget re-queried after removing the shared filter');
+    f = J(lastRegion(n1).filters);
+    must(!f.includes('"EU"') && f.includes('"web"'), `next query: ${f}`);
+    await store(`const t = st.worksheets()[0]; st.updateSheet(t.id, { ...t.sheet, filters: [] }); return true;`);
+  });
+
+  const addNew = async (name, make) => {
+    await store(`const f = (column, category, extra = {}) => ({ db: 'shop', table: 'orders', column, category, ...extra }); ${make}
+      st.switchTab(st.dashboards()[0].id); return true;`);
+    await waitFor(`!document.getElementById('board-view').hidden && !!document.querySelector('.board-panel__item[data-sheet-id]') && [...document.querySelectorAll('.board-panel__name')].some((x) => x.textContent === ${J(name)})`, 'back on the dashboard');
+    await addSheet(name);
+  };
+
+  await check('a calculated field, a data type cast, a tooltip template and a member colour all work inside a widget (query carries the calc tree and the cast; the chart draws)', async () => {
+    const n0 = queries.length;
+    await addNew('Calc sheet', `
+      const calc = st.addCalculation({ name: 'Amount x2', formula: '[orders.amount] * 2' });
+      st.setFieldMeta(f('qty_s', 'text'), { cast: 'number' });
+      const t = st.createWorksheet('Calc sheet');
+      t.sheet = { ...st.emptySheet(), chartType: 'bar', columns: [f('region', 'text')], color: [f('channel', 'text')],
+        rows: [{ calc: calc.id, db: '', table: '', column: 'Amount x2', category: 'numeric', role: 'measure', agg: 'sum' }],
+        filters: [f('qty_s', 'numeric', { op: '>', value: '0' })],
+        tooltipText: 'Total for <orders.region>', memberColors: { 'orders.channel': { web: '#112233' } } };`);
+    await until(() => queries.length > n0, 'the calc widget queried');
+    await waitFor(`!!document.querySelector('.board-widget[aria-label="Calc sheet"] .ws-chart-canvas svg')`, 'calc widget drawn');
+    const q = queries.slice(n0).pop();
+    must(q.measures.some((m) => m.calc), `no calc tree in the measures: ${J(q.measures)}`);
+    must(q.filters.some((f) => f.cast === 'number'), `no cast in the filters: ${J(q.filters)}`);
+    must(await ev(`(() => { const d = document.querySelector('.board-widget[aria-label="Calc sheet"] .ws-chart-canvas'); const o = window.echarts.getInstanceByDom(d).getOption(); return JSON.stringify(o.series).toLowerCase().includes('#112233') && !!o.tooltip?.[0]?.formatter; })()`), `member colour or tooltip template missing: ${await ev(`(() => { const d = document.querySelector('.board-widget[aria-label="Calc sheet"] .ws-chart-canvas'); const o = window.echarts.getInstanceByDom(d).getOption(); return JSON.stringify({ s: o.series, t: typeof o.tooltip?.[0]?.formatter }).slice(0, 700); })()`)}`);
+  });
+
+  await check('a table widget pages by scrolling inside itself', async () => {
+    const n0 = queries.length;
+    await addNew('Table sheet', `const t = st.createWorksheet('Table sheet'); t.sheet = { ...st.emptySheet(), chartType: 'table', columns: [], rows: [f('region', 'text'), f('amount', 'numeric', { agg: 'sum' })] };`);
+    await waitFor(`document.querySelectorAll('.board-widget[aria-label="Table sheet"] tbody tr').length >= 500`, 'first page');
+    must(queries.slice(n0).some((q) => q.offset === 0), 'first page query');
+    await ev(`(() => { const b = document.querySelector('.board-widget[aria-label="Table sheet"] .board-widget__body'); b.scrollTop = b.scrollHeight; b.dispatchEvent(new Event('scroll')); return true; })()`);
+    await until(() => queries.slice(n0).some((q) => q.offset === 500), 'the next page was requested');
+    await waitFor(`document.querySelectorAll('.board-widget[aria-label="Table sheet"] tbody tr').length > 500`, 'more rows drawn');
+    must(await ev(`document.documentElement.scrollHeight <= window.innerHeight`), 'the page scrolled');
+  });
+
+  await check('a loading widget\'s Cancel names its worksheet; Add announced through the polite live region', async () => {
+    slowMs = 1500;
+    await store(`const t = st.worksheets()[1]; st.updateSheet(t.id, { ...t.sheet, filters: [{ db: 'shop', table: 'orders', column: 'region', category: 'text', op: '=', value: 'US' }] }); return true;`);
+    await waitFor(`!!document.querySelector('.board-widget[aria-label="Share by channel"] .ws-loading__cancel')`, 'loading state');
+    must(await ev(`document.querySelector('.board-widget[aria-label="Share by channel"] .ws-loading__cancel').getAttribute('aria-label')`) === 'Cancel loading Share by channel', 'Cancel label');
+    slowMs = 0;
+    await waitFor(`!!document.querySelector('.board-widget[aria-label="Share by channel"] .ws-chart-canvas svg')`, 'drawn after the delay');
+    await hardClick('.board-panel__add-text');
+    await b.sleep(150);
+    must(/^Added “Text” to the dashboard\.$/.test(await ev(`document.getElementById('toast-live').textContent`)), `live region: ${await ev(`document.getElementById('toast-live').textContent`)}`);
+    must(await ev(`document.getElementById('toast-live').getAttribute('aria-live') === 'polite'`), 'not polite');
+  });
+
+  await check('print: widgets stack in flow at the page width and every chart is sized to its own cell (not cropped)', async () => {
+    await b.send('Emulation.setEmulatedMedia', { media: 'print' });
+    await ev(`window.dispatchEvent(new Event('beforeprint'))`);
+    await b.sleep(600);
+    const info = await ev(`[...document.querySelectorAll('.board-widget')].map((w) => { const r = w.getBoundingClientRect(); const c = w.querySelector('.ws-chart-canvas svg, .ws-chart-canvas canvas'); const cr = c?.getBoundingClientRect();
+      return { pos: getComputedStyle(w).position, top: Math.round(r.top), bottom: Math.round(r.bottom), left: Math.round(r.left), right: Math.round(r.right), chart: cr ? [Math.round(cr.left), Math.round(cr.top), Math.round(cr.right), Math.round(cr.bottom)] : null }; })`);
+    must(info.length >= 6, `${info.length} widgets`);
+    must(info.every((w) => w.pos === 'relative'), 'widgets are not in flow in print');
+    must(info.every((w, i) => i === 0 || w.top >= info[i - 1].bottom), `widgets overlap: ${J(info.map((w) => [w.top, w.bottom]))}`);
+    const charted = info.filter((w) => w.chart);
+    must(charted.length >= 3, `${charted.length} charts`);
+    must(charted.every((w) => w.chart[0] >= w.left && w.chart[2] <= w.right + 1 && w.chart[3] <= w.bottom + 1), `a chart is cropped or spills: ${J(charted)}`);
+    must(charted.every((w) => w.chart[2] - w.chart[0] > (w.right - w.left) * 0.8), 'a chart is much narrower than its printed cell');
+    await b.screenshot(join(SHOTS, 'board-canvas-print.png'));
+    const { data } = await b.send('Page.printToPDF', { landscape: true, printBackground: true, preferCSSPageSize: true });
+    (await import('node:fs')).writeFileSync(join(SHOTS, 'board-canvas-print.pdf'), Buffer.from(data, 'base64'));
+    await ev(`window.dispatchEvent(new Event('afterprint'))`);
+    await b.send('Emulation.setEmulatedMedia', { media: '' });
+    await b.sleep(400);
+    must(await ev(`getComputedStyle(document.querySelector('.board-widget')).position === 'absolute'`), 'the screen layout did not come back');
   });
 
   if (b.consoleErrors.length) { console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  ')); failed++; }

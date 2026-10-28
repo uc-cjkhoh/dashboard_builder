@@ -3,12 +3,12 @@
 // tokens (`calc(var(--ctl-h) * 2)`, `var(--s3)`) and passes them in; nothing here knows a pixel constant of its own.
 //
 //   wide panel     column width = (panel − 11 gaps) / 12; a widget is w columns × h rows, gaps included between cells
-//   narrow panel   below STACK_BELOW the grid is unusable (a 2-column widget would be ~80px), so widgets stack full width
+//   narrow panel   below STACK_BELOW the grid is unusable (a 2-column widget would be ~110px), so widgets stack full width
 //                  in reading order (top to bottom, then left to right), each keeping its row count
 import { LIMITS } from "../Core/validate.js";
 
 /** Panel widths under this many pixels stack the widgets (a phone-width board). */
-export const STACK_BELOW = 560;
+export const STACK_BELOW = 720;
 
 export const isStacked = (panelWidth) => panelWidth < STACK_BELOW;
 
@@ -21,12 +21,12 @@ export const widgetOrder = (widgets) => [...widgets].sort((a, b) => a.y - b.y ||
 const span = (n, unit, gap) => n * unit + (n - 1) * gap;
 
 /**
- * Where every widget sits. `metrics` = { rowH, gap } in pixels. Returns { stacked, height, rects: Map(id → { left, top, width, height }) };
+ * Where every widget sits. `metrics` = { rowH, gap, stack? } in pixels; `stack: true` stacks whatever the width (print). Returns { stacked, height, rects: Map(id → { left, top, width, height }) };
  * `height` is the canvas height — the bottom of the lowest widget (at most 96 rows).
  */
-export function layoutBoard(widgets, panelWidth, { rowH, gap }) {
+export function layoutBoard(widgets, panelWidth, { rowH, gap, stack = false }) {
   const width = Math.max(0, panelWidth);
-  const stacked = isStacked(width);
+  const stacked = stack || isStacked(width);
   const rects = new Map();
   let height = 0;
   if (stacked) {

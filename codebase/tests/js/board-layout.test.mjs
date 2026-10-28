@@ -60,3 +60,17 @@ test("an unmeasured panel (width 0) lays out nothing that is negative", () => {
   const r = rects.get("a");
   assert.ok(r.width >= 0 && r.height >= 0 && r.left >= 0 && r.top >= 0);
 });
+
+test("the stacking threshold is 720px of canvas width", () => {
+  assert.equal(STACK_BELOW, 720);
+  assert.equal(layoutBoard([w("a", 0, 0)], 719, M).stacked, true);
+  assert.equal(layoutBoard([w("a", 0, 0)], 720, M).stacked, false);
+});
+
+test("stack: true stacks at any width (print: one column in flow, each widget keeps its row count)", () => {
+  const ws = [w("b", 6, 0, 6, 2), w("a", 0, 0, 6, 4)];
+  const { stacked, rects } = layoutBoard(ws, 1000, { ...M, stack: true });
+  assert.equal(stacked, true);
+  assert.deepEqual(rects.get("a"), { left: 0, top: 0, width: 1000, height: 4 * 64 + 3 * 12 });
+  assert.equal(rects.get("b").top, 4 * 64 + 3 * 12 + 12);
+});

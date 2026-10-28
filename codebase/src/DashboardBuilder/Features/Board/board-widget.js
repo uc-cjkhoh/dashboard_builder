@@ -1,6 +1,7 @@
 import { worksheetById, switchTab } from "../Core/store.js";
 import { icon } from "../Core/icons.js";
 import { toggle } from "../Core/ui.js";
+import { sizeChart } from "../Dashboard/chart.js";
 import { createWorksheetView } from "../Dashboard/worksheet-view.js";
 import { planCtx, categoryOf, castOf } from "../Dashboard/dashboards.js";
 import { hint } from "../Dashboard/render-dom.js";
@@ -49,7 +50,7 @@ export function createWidget(widget, host) {
     view = createWorksheetView(body, () => {
       const tab = worksheetById(current.sheetId);
       return { dash: tab, noticeEl: notice, results: host.results, plan: planCtx(), categoryOf, castOf };
-    }, { interactive: false });
+    }, { interactive: false, cancelLabel: () => labelFor(current) });
   }
 
   function labelFor(w) {
@@ -81,6 +82,8 @@ export function createWidget(widget, host) {
       if (!worksheetById(current.sheetId)) { body.replaceChildren(hint("This worksheet was closed.")); toggle(notice, false); return Promise.resolve(); }
       return view.run();
     },
+    /** Print: draw the chart at a fixed size (the widget's printed cell box, minus header and padding); null restores the pane size. */
+    sizeChart(box) { if (view) sizeChart(body, box ? { width: Math.max(1, box.width - (box.chrome?.x ?? 0)), height: Math.max(1, box.height - head.offsetHeight - (notice.hidden ? 0 : notice.offsetHeight) - (box.chrome?.y ?? 0)) } : null); },
     /** Run again only if the body shows a hint or error (its tables' columns may have arrived since). */
     retryIfBlank() { return body.querySelector(".ws-hint") ? this.run() : Promise.resolve(); },
     destroy() { view?.destroy(); },
