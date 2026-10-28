@@ -62,7 +62,8 @@ function tokenize(text) {
 /**
  * Parses `text` into an expression tree. `resolve(parts)` receives the dot-split reference
  * (`[orders.amount]` -> ["orders", "amount"], `[Net revenue]` -> ["Net revenue"]) and returns
- * `{ field: { db, table, column } }`, `{ calc: { name } }` or `{ error: string }`.
+ * `{ field: { db, table, column } }`, `{ calc: { name } }` or `{ error: string }`; null/undefined means "no match"
+ * (the parser then reports a one-part name as a field missing its table).
  * Returns `{ ast }` or `{ error: { message, pos } }` (`pos`: character offset in `text`).
  */
 export function parseFormula(text, resolve) {
@@ -131,6 +132,8 @@ export function parseFormula(text, resolve) {
       if (r && typeof r.error === "string") throw new ParseError(r.error, tok.pos);
       if (r && r.field) return { k: "field", db: r.field.db, table: r.field.table, column: r.field.column };
       if (r && r.calc) return { k: "calc", name: r.calc.name };
+      // Nothing matched: a lone name that isn't a calculation is most likely a field missing its table.
+      if (parts.length === 1) throw new ParseError("Write the field as [table.column].", tok.pos);
       throw new ParseError(`Unknown reference ${tok.raw}.`, tok.pos);
     }
 

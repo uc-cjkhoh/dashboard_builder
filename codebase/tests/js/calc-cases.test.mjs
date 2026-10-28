@@ -20,10 +20,10 @@ const categoryOf = (db, table, column) => {
 };
 
 /** A resolver like the app's: 3 parts exact, 2 parts by table name (ambiguous across databases is an error),
- *  1 part is a calculation name (or an error when none matches). */
+ *  1 part is a calculation name (or null when none matches). */
 const resolverWith = (calcNames = []) => (parts) => {
   if (parts.length === 1) {
-    return calcNames.includes(parts[0]) ? { calc: { name: parts[0] } } : { error: "Write the field as [table.column]." };
+    return calcNames.includes(parts[0]) ? { calc: { name: parts[0] } } : null; // the parser words the rest
   }
   const [db, table, column] = parts.length === 3 ? parts : [null, parts[0], parts[1]];
   const hits = tables.filter((t) => t.table === table && (db === null || t.db === db));
@@ -33,7 +33,42 @@ const resolverWith = (calcNames = []) => (parts) => {
 };
 const resolve = resolverWith();
 
+let ran = 0; // cases that reached at least one test below; must equal fixture.cases.length
+
+test("fixture shape: every case is well formed and exercised (mirrors C# Every_fixture_case_is_well_formed)", () => {
+  const names = new Set();
+  const strings = (a) => Array.isArray(a) && a.every((x) => typeof x === "string");
+  for (const c of fixture.cases) {
+    assert.ok(typeof c.name === "string" && c.name.trim() !== "", `a fixture case has no name: ${JSON.stringify(c)}`);
+    assert.ok(!names.has(c.name), `duplicate fixture case name: ${c.name}`);
+    names.add(c.name);
+    const hasAst = Object.hasOwn(c, "ast"), hasParseError = Object.hasOwn(c, "parseError");
+    assert.ok(hasAst !== hasParseError, `case '${c.name}' must have exactly one of ast / parseError`);
+    if (hasParseError) {
+      assert.equal(typeof c.parseError, "string", `case '${c.name}': parseError must be a string`);
+      assert.equal(typeof c.formula, "string", `case '${c.name}': a parseError case needs a formula string`);
+      continue;
+    }
+    const e = c.expect;
+    assert.ok(e && typeof e === "object", `case '${c.name}' has no expect object`);
+    if (Object.hasOwn(e, "error")) {
+      assert.equal(typeof e.error, "string", `case '${c.name}': expect.error must be a string`);
+      assert.equal(typeof e.path, "string", `case '${c.name}': expect.error needs a string expect.path`);
+    } else {
+      assert.equal(typeof e.type, "string", `case '${c.name}': expect needs error+path or type+isAggregate+tables`);
+      assert.equal(typeof e.isAggregate, "boolean", `case '${c.name}': expect.isAggregate must be a boolean`);
+      assert.ok(strings(e.tables), `case '${c.name}': expect.tables must be an array of strings`);
+    }
+    if (Object.hasOwn(c, "formula")) assert.equal(typeof c.formula, "string", `case '${c.name}': formula must be a string`);
+  }
+  assert.ok(fixture.cases.length > 0);
+});
+test("fixture shape: every case was run", () => {
+  assert.equal(ran, fixture.cases.length, "a case was skipped by the runner (typo'd key?)");
+});
+
 for (const c of fixture.cases) {
+  if (c.ast !== undefined || c.parseError !== undefined) ran++;
   if (c.formula !== undefined && c.ast !== undefined) {
     test(`parse: ${c.name}`, () => {
       assert.deepEqual(parseFormula(c.formula, resolve), { ast: c.ast });
