@@ -12,14 +12,16 @@
 //   logic     := ("IF" | "IIF") "(" expr "," expr "," expr ")" | "IFNULL" "(" expr "," expr ")"
 //              | "ISNULL" "(" expr ")" | "ZN" "(" expr ")"
 //              | "CASE" [expr] ("WHEN" expr "THEN" expr)+ ["ELSE" expr] "END"
+//   text      := ("LOWER" | "UPPER" | "TRIM" | "LEN" | "LEFT" | "RIGHT" | "REPLACE" | "CONCAT" | "CONTAINS" | "STARTSWITH" | "ENDSWITH" | "SPLIT")
+//                "(" expr ("," expr)* ")"        -- argument count and kinds are checked by check(), not here
 //   string    := "'" text "'"        (a quote inside is doubled: 'it''s')
 //   ref       := "[" name "]"
 //
 // Hand-written tokenizer + recursive descent. Function names are case-insensitive; references are matched
 // case-sensitively by the caller's `resolve`. Nodes are exactly the wire shapes (field | num | str | un | bin | agg |
-// cmp | logic | not | case | ifnull | isnull), plus the client-only `{ k: "calc", name }` for a reference to another calculation (expanded by
+// cmp | logic | not | case | ifnull | isnull | fn), plus the client-only `{ k: "calc", name }` for a reference to another calculation (expanded by
 // calc-model.js before anything is sent).
-import { CALC_LIMITS, FUNCTIONS } from "./calc-types.js";
+import { CALC_LIMITS, FUNCTIONS, ROW_FUNCTIONS } from "./calc-types.js";
 
 class ParseError extends Error {
   constructor(message, pos) { super(message); this.pos = pos; }
@@ -225,13 +227,20 @@ export function parseFormula(text, resolve) {
       if (logic !== undefined) return logic;
       next();
       const fn = tok.text.toLowerCase();
-      const known = Object.hasOwn(FUNCTIONS, fn);
+      const isRow = Object.hasOwn(ROW_FUNCTIONS, fn);
+      const known = isRow || Object.hasOwn(FUNCTIONS, fn);
       if (peek().t !== "(") {
         if (known) throw new ParseError(`Expected ( after ${tok.text}`, peek().pos);
         throw new ParseError(`Unexpected ${tok.text}`, tok.pos);
       }
       if (!known) throw new ParseError(`Unknown function ${tok.text}.`, tok.pos);
       next();
+      if (isRow) {
+        const args = [expr("(")];
+        while (peek().t === ",") { next(); args.push(expr(",")); }
+        closeParen();
+        return { k: "fn", fn, args };
+      }
       const arg = expr("(");
       if (FUNCTIONS[fn].fraction) {
         const hint = `Write ${tok.text.toUpperCase()}([field], 0.9) — the fraction goes after a comma.`;

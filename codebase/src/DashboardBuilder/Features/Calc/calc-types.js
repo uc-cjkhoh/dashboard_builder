@@ -3,8 +3,8 @@
 // messages, the same error paths, the same check order. The shared fixture tests/fixtures/calc-cases.json is
 // the contract — change one side and the other in the same commit.
 
-/** Calculation limits; mirrored in ClickHouse/Calc/CalcLimits (and the workbook ones in Core/validate.js LIMITS). */
-export const CALC_LIMITS = Object.freeze({ formula: 500, depth: 12, nodes: 200, calcs: 20, name: 60, string: 100 });
+/** Calculation limits (`count`: largest LEFT/RIGHT length or SPLIT position; `separator`: longest SPLIT separator; `concat`: most CONCAT arguments); mirrored in ClickHouse/Calc/CalcLimits (and the workbook ones in Core/validate.js LIMITS). */
+export const CALC_LIMITS = Object.freeze({ formula: 500, depth: 12, nodes: 200, calcs: 20, name: 60, string: 100, count: 1000, separator: 20, concat: 10 });
 
 const NUMBER_ONLY = ["number"];
 const ORDERABLE = ["number", "date", "text"];
@@ -24,6 +24,24 @@ export const FUNCTIONS = Object.freeze({
   variance: { accepts: NUMBER_ONLY, result: "number" },
   percentile: { accepts: NUMBER_ONLY, result: "number", fraction: true }, // takes a literal 0..1 `p` after its argument
   attr: { accepts: ANYTHING, result: null },
+});
+
+/** The row-level text functions (wire node `{ k: "fn", fn, args }`). `args` are kinds in order: `text` (any text expression),
+ *  `length` (a whole-number literal 0..count), `position` (a whole-number literal 1..count), `separator` (a non-empty text
+ *  literal, at most `separator` characters). `max` above `args.length` repeats the last kind (CONCAT). Twin of CalcCatalog.RowFunctions. */
+export const ROW_FUNCTIONS = Object.freeze({
+  lower: { args: ["text"], result: "text" },
+  upper: { args: ["text"], result: "text" },
+  trim: { args: ["text"], result: "text" },
+  len: { args: ["text"], result: "number" },
+  left: { args: ["text", "length"], result: "text" },
+  right: { args: ["text", "length"], result: "text" },
+  replace: { args: ["text", "text", "text"], result: "text" },
+  concat: { args: ["text", "text"], result: "text", max: CALC_LIMITS.concat },
+  contains: { args: ["text", "text"], result: "boolean" },
+  startswith: { args: ["text", "text"], result: "boolean" },
+  endswith: { args: ["text", "text"], result: "boolean" },
+  split: { args: ["text", "separator", "position"], result: "text" },
 });
 
 // Catalog category (ClickHouseType) -> calculation type; any other category can't be used.
@@ -46,6 +64,7 @@ function checkLimits(root) {
     if (n.k === "un" || n.k === "agg") walk(n.arg, depth + 1);
     else if (n.k === "bin" || n.k === "cmp" || n.k === "logic" || n.k === "ifnull") { walk(n.l, depth + 1); walk(n.r, depth + 1); }
     else if (n.k === "not" || n.k === "isnull") walk(n.arg, depth + 1);
+    else if (n.k === "fn" && Array.isArray(n.args)) for (const a of n.args) walk(a, depth + 1);
     else if (n.k === "case" && Array.isArray(n.whens)) {
       for (const w of n.whens) if (isNode(w)) { walk(w.c, depth + 1); walk(w.t, depth + 1); }
       if (n.else !== undefined) walk(n.else, depth + 1);
@@ -148,6 +167,38 @@ function typeOf(node, path, categoryOf) {
       }
       if (mixes(parts)) throw new CalcError(MIX, path);
       return { type: first.type, isAggregate: parts.some((t) => t.isAggregate), isConst: parts.every((t) => t.isConst), tables: unionTables(parts), name: "that value" };
+    }
+
+    case "fn": {
+      const spec = typeof node.fn === "string" && Object.hasOwn(ROW_FUNCTIONS, node.fn) ? ROW_FUNCTIONS[node.fn] : null;
+      if (spec === null) throw new CalcError(`Unknown function ${node.fn}.`, path);
+      const upper = node.fn.toUpperCase();
+      const args = Array.isArray(node.args) ? node.args : [];
+      const max = Math.max(spec.max ?? 0, spec.args.length);
+      if (args.length < spec.args.length || args.length > max) {
+        throw new CalcError(`${upper} takes ${max > spec.args.length ? `${spec.args.length} to ${max} arguments` : spec.args.length === 1 ? "1 argument" : `${spec.args.length} arguments`}.`, path);
+      }
+      const parts = args.map((a, i) => {
+        const ap = child(path, `args.${i}`);
+        const kind = spec.args[Math.min(i, spec.args.length - 1)];
+        const t = typeOf(a, ap, categoryOf);
+        if (kind === "text") {
+          if (t.type !== "text") throw new CalcError(`${upper} needs a text — ${t.name} is ${t.type}.`, ap);
+        } else if (kind === "length" || kind === "position") {
+          const min = kind === "length" ? 0 : 1;
+          const v = a.k === "num" ? a.v : NaN;
+          if (!Number.isInteger(v) || v < min || v > CALC_LIMITS.count) {
+            throw new CalcError(kind === "length"
+              ? `${upper}'s length must be a whole number from 0 to ${CALC_LIMITS.count} written in the formula.`
+              : `${upper}'s position must be a whole number from 1 to ${CALC_LIMITS.count} written in the formula.`, ap);
+          }
+        } else if (a.k !== "str" || a.v.length < 1 || a.v.length > CALC_LIMITS.separator) {
+          throw new CalcError(`${upper}'s separator must be text written in the formula, 1 to ${CALC_LIMITS.separator} characters.`, ap);
+        }
+        return t;
+      });
+      if (mixes(parts)) throw new CalcError(MIX, path);
+      return { type: spec.result, isAggregate: parts.some((t) => t.isAggregate), isConst: parts.every((t) => t.isConst), tables: unionTables(parts), name: "that value" };
     }
 
     case "field": {

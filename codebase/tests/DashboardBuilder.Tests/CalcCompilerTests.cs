@@ -243,4 +243,75 @@ public class CalcCompilerTests
     [Fact]
     public void AggregateSql_refuses_an_unknown_aggregate()
         => Assert.Throws<InvalidOperationException>(() => ClickHouseGateway.AggregateSql("mode", "x", false, false));
+
+    // ---- text functions: fixed ClickHouse functions over compiled children; every literal bound ----
+
+    private static FnNode Fn(string fn, params ExprNode[] args) => new(fn, args);
+    private static StrNode S(string v) => new(v);
+
+    [Theory]
+    [InlineData("lower", "lowerUTF8(t0.`status`)")]
+    [InlineData("upper", "upperUTF8(t0.`status`)")]
+    [InlineData("trim", "trimBoth(t0.`status`)")]
+    [InlineData("len", "toFloat64(lengthUTF8(t0.`status`))")]
+    public void One_argument_text_functions_compile_to_utf8_aware_functions(string fn, string expected)
+    {
+        var (sql, ps) = Compile(Fn(fn, F("status")));
+        Assert.Equal(expected, sql);
+        Assert.Empty(ps);
+    }
+
+    [Theory]
+    [InlineData("left", "leftUTF8(t0.`status`, {c0p0:UInt32})")]
+    [InlineData("right", "rightUTF8(t0.`status`, {c0p0:UInt32})")]
+    public void LEFT_and_RIGHT_bind_the_length_as_an_unsigned_integer(string fn, string expected)
+    {
+        var (sql, ps) = Compile(Fn(fn, F("status"), new NumNode(3)));
+        Assert.Equal(expected, sql);
+        Assert.Equal(new[] { ("c0p0", "UInt32", (object)3u) }, ps);
+    }
+
+    [Fact]
+    public void REPLACE_binds_both_strings_and_never_writes_them_into_the_sql()
+    {
+        var (sql, ps) = Compile(Fn("replace", F("status"), S("secret-a"), S("secret-b")));
+        Assert.Equal("replaceAll(t0.`status`, {c0p0:String}, {c0p1:String})", sql);
+        Assert.DoesNotContain("secret", sql);
+        Assert.Equal(new[] { ("c0p0", "String", (object)"secret-a"), ("c0p1", "String", (object)"secret-b") }, ps);
+    }
+
+    [Fact]
+    public void CONCAT_joins_its_arguments_in_order()
+    {
+        var (sql, ps) = Compile(Fn("concat", F("status"), S(" - "), F("status")));
+        Assert.Equal("concat(t0.`status`, {c0p0:String}, t0.`status`)", sql);
+        Assert.Equal(new[] { ("c0p0", "String", (object)" - ") }, ps);
+    }
+
+    [Theory]
+    [InlineData("contains", "(position(t0.`status`, {c0p0:String}) > 0)")]
+    [InlineData("startswith", "startsWith(t0.`status`, {c0p0:String})")]
+    [InlineData("endswith", "endsWith(t0.`status`, {c0p0:String})")]
+    public void The_text_predicates_are_case_sensitive_and_bind_the_needle(string fn, string expected)
+    {
+        var (sql, ps) = Compile(Fn(fn, F("status"), S("ab")));
+        Assert.Equal(expected, sql);
+        Assert.Equal(new[] { ("c0p0", "String", (object)"ab") }, ps);
+    }
+
+    [Fact]
+    public void SPLIT_is_null_for_a_null_value_and_for_a_position_past_the_last_token()
+    {
+        var (sql, ps) = Compile(Fn("split", Fn("lower", F("status")), S("-"), new NumNode(2)));
+        Assert.Equal("if(isNull(lowerUTF8(t0.`status`)), NULL, arrayElementOrNull(splitByString({c0p0:String}, assumeNotNull(lowerUTF8(t0.`status`))), {c0p1:UInt32}))", sql);
+        Assert.Equal(new[] { ("c0p0", "String", (object)"-"), ("c0p1", "UInt32", (object)2u) }, ps);
+    }
+
+    [Fact]
+    public void A_literal_inside_a_nested_text_function_keeps_source_order_numbering()
+    {
+        var (sql, ps) = Compile(Fn("left", Fn("replace", F("status"), S("a"), S("b")), new NumNode(4)));
+        Assert.Equal("leftUTF8(replaceAll(t0.`status`, {c0p0:String}, {c0p1:String}), {c0p2:UInt32})", sql);
+        Assert.Equal(3, ps.Count);
+    }
 }

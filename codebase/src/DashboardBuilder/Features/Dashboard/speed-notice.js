@@ -4,7 +4,7 @@ const UNSCALED_AGGS = new Set(["median", "stddev", "variance", "percentile", "at
 export const UNSCALED_NOTE = "median, percentile, standard deviation, variance and ATTR are computed on the sample, not scaled";
 
 const treeUses = (n) => n !== null && typeof n === "object"
-  && ((n.k === "agg" && UNSCALED_AGGS.has(n.fn)) || treeUses(n.arg) || treeUses(n.l) || treeUses(n.r));
+  && ((n.k === "agg" && UNSCALED_AGGS.has(n.fn)) || treeUses(n.arg) || treeUses(n.l) || treeUses(n.r) || (Array.isArray(n.args) && n.args.some(treeUses)));
 
 /** Whether any measure of a request is a median / percentile / stddev / variance / ATTR (plain or inside a calculation). */
 export const usesUnscaledAgg = (measures) => (measures ?? []).some((m) => UNSCALED_AGGS.has(m?.agg) || treeUses(m?.calc));

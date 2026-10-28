@@ -6,7 +6,7 @@ namespace DashboardBuilder.ClickHouse.Calc;
 /// <summary>
 /// A calculated-field expression tree as it arrives on the wire. The browser parses the formula and
 /// sends this tree; no formula text ever reaches SQL. The JSON discriminator <c>k</c> is one of
-/// <c>field | num | un | bin | agg | str | cmp | logic | not | case | ifnull | isnull</c>; an unknown or missing <c>k</c>, a missing or wrongly typed
+/// <c>field | num | un | bin | agg | str | cmp | logic | not | case | ifnull | isnull | fn</c>; an unknown or missing <c>k</c>, a missing or wrongly typed
 /// member, or a non-finite number fails deserialisation with a <see cref="JsonException"/> (a 400).
 /// Operators and function names are plain strings here — the validator whitelists them.
 /// </summary>
@@ -53,6 +53,10 @@ public sealed record IfNullNode(ExprNode L, ExprNode R) : ExprNode;
 /// <summary><c>ISNULL(arg)</c> — true when the value is NULL.</summary>
 public sealed record IsNullNode(ExprNode Arg) : ExprNode;
 
+/// <summary>A row-level function call (<c>lower</c>, <c>left</c>, <c>split</c> …) over its arguments; the name is whitelisted
+/// by <see cref="CalcCatalog.RowFunctions"/>, which also fixes the argument kinds.</summary>
+public sealed record FnNode(string Fn, ExprNode[] Args) : ExprNode;
+
 /// <summary>The sub-expressions of a node, in source order — the one place a tree walk learns a node's shape.</summary>
 public static class ExprTree
 {
@@ -68,6 +72,7 @@ public static class ExprTree
             case CmpNode b: yield return b.L; yield return b.R; break;
             case LogicNode b: yield return b.L; yield return b.R; break;
             case IfNullNode b: yield return b.L; yield return b.R; break;
+            case FnNode f: foreach (var a in f.Args) yield return a; break;
             case CaseNode c:
                 foreach (var w in c.Whens) { yield return w.Cond; yield return w.Then; }
                 if (c.Else is not null) yield return c.Else;
@@ -108,6 +113,7 @@ public sealed class ExprNodeConverter : JsonConverter<ExprNode>
             "case" => new CaseNode(Whens(e), Optional(e, "else")),
             "ifnull" => new IfNullNode(Child(e, "l"), Child(e, "r")),
             "isnull" => new IsNullNode(Child(e, "arg")),
+            "fn" => new FnNode(Text(e, "fn"), Children(e, "args")),
             _ => throw new JsonException("Unknown expression node."),
         };
     }
@@ -144,6 +150,13 @@ public sealed class ExprNodeConverter : JsonConverter<ExprNode>
     }
 
     private static ExprNode Child(JsonElement e, string name) => Build(Member(e, name));
+
+    private static ExprNode[] Children(JsonElement e, string name)
+    {
+        var v = Member(e, name);
+        if (v.ValueKind != JsonValueKind.Array) throw new JsonException($"Expression node '{name}' must be an array.");
+        return v.EnumerateArray().Select(Build).ToArray();
+    }
 
     private static ExprNode? Optional(JsonElement e, string name)
     {
@@ -204,6 +217,11 @@ public sealed class ExprNodeConverter : JsonConverter<ExprNode>
                 break;
             case IsNullNode z:
                 w.WriteString("k", "isnull"); w.WritePropertyName("arg"); Write(w, z.Arg, options);
+                break;
+            case FnNode f:
+                w.WriteString("k", "fn"); w.WriteString("fn", f.Fn); w.WritePropertyName("args"); w.WriteStartArray();
+                foreach (var a in f.Args) Write(w, a, options);
+                w.WriteEndArray();
                 break;
             case CaseNode k:
                 w.WriteString("k", "case"); w.WritePropertyName("whens"); w.WriteStartArray();

@@ -135,6 +135,44 @@ public static class CalcValidator
                 return Combine(first!.Value.Type, path, parts.ToArray());
             }
 
+            case FnNode fn:
+            {
+                if (!CalcCatalog.RowFunctions.TryGetValue(fn.Fn, out var spec))
+                    throw new CalcException($"Unknown function {fn.Fn}.", path);
+                var upper = fn.Fn.ToUpperInvariant();
+                if (fn.Args.Length < spec.Args.Count || fn.Args.Length > spec.Max)
+                    throw new CalcException($"{upper} takes " + (spec.Max > spec.Args.Count ? $"{spec.Args.Count} to {spec.Max} arguments."
+                        : spec.Args.Count == 1 ? "1 argument." : $"{spec.Args.Count} arguments."), path);
+                var parts = new List<Typed>();
+                for (var n = 0; n < fn.Args.Length; n++)
+                {
+                    var ap = Child(path, $"args.{n}");
+                    var kind = spec.Args[Math.Min(n, spec.Args.Count - 1)];
+                    var arg = Type(fn.Args[n], ap, categoryOf);
+                    switch (kind)
+                    {
+                        case FnArg.Text:
+                            if (arg.Type != CalcType.Text) throw new CalcException($"{upper} needs a text — {arg.Name} is {arg.Type}.", ap);
+                            break;
+                        case FnArg.Length or FnArg.Position:
+                        {
+                            var min = kind == FnArg.Length ? 0 : 1;
+                            if (fn.Args[n] is not NumNode { V: var v } || v != Math.Floor(v) || v < min || v > CalcLimits.MaxCount)
+                                throw new CalcException(kind == FnArg.Length
+                                    ? $"{upper}'s length must be a whole number from 0 to {CalcLimits.MaxCount} written in the formula."
+                                    : $"{upper}'s position must be a whole number from 1 to {CalcLimits.MaxCount} written in the formula.", ap);
+                            break;
+                        }
+                        case FnArg.Separator:
+                            if (fn.Args[n] is not StrNode { V.Length: >= 1 and <= CalcLimits.MaxSeparator })
+                                throw new CalcException($"{upper}'s separator must be text written in the formula, 1 to {CalcLimits.MaxSeparator} characters.", ap);
+                            break;
+                    }
+                    parts.Add(arg);
+                }
+                return Combine(spec.Result, path, parts.ToArray());
+            }
+
             case FieldNode f:
             {
                 var name = $"{f.Table}.{f.Column}";

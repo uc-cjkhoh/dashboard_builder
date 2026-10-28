@@ -115,3 +115,24 @@ test("catalog lists its offered fields", () => {
   assert.ok(!f.some((x) => x.column === "a.b"));
   assert.equal(f.length, 6);
 });
+
+test("text functions: a row-level text calculation is a dimension; a predicate and a LEN follow their type", () => {
+  const c = (formula, calcs = []) => compileCalculation({ id: "x", name: "X", formula }, calcs, catalog);
+  const lower = c("LOWER([orders.status])");
+  assert.equal(lower.role, "dimension");
+  assert.equal(lower.info.type, "text");
+  assert.equal(c("CONTAINS([orders.status], 'a')").role, "dimension"); // boolean
+  assert.equal(c("LEN([orders.status])").role, "measure"); // row-level number
+  assert.equal(c("COUNTD(LOWER([orders.status]))").role, "measure");
+});
+
+test("text functions: a calculation reference inside a call is expanded before sending", () => {
+  const base = { id: "b", name: "Base", formula: "TRIM([orders.status])" };
+  const r = compileCalculation({ id: "x", name: "X", formula: "LEFT([Base], 3)" }, [base], catalog);
+  assert.deepEqual(r.ast, { k: "fn", fn: "left", args: [{ k: "fn", fn: "trim", args: [{ k: "field", db: "shop", table: "orders", column: "status" }] }, { k: "num", v: 3 }] });
+});
+
+test("text functions: a type error names the calculation and the argument", () => {
+  const r = compileCalculation({ id: "x", name: "X", formula: "LOWER([orders.amount])" }, [], catalog);
+  assert.equal(r.error.message, "Calculation 'X' can't be computed: LOWER needs a text — orders.amount is number.");
+});

@@ -17,3 +17,8 @@ test("a sample plus a median / percentile / stddev / variance / ATTR measure app
   assert.ok(usesUnscaledAgg([calc]));
   assert.ok(!usesUnscaledAgg([{ calc: { k: "agg", fn: "sum", arg: { k: "field" } } }]));
 });
+
+test("an unscaled aggregate inside a text function call is found", () => {
+  const calc = { k: "fn", fn: "lower", args: [{ k: "agg", fn: "attr", arg: { k: "field", db: "d", table: "t", column: "c" } }] };
+  assert.equal(usesUnscaledAgg([{ calc }]), true);
+});

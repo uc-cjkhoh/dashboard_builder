@@ -41,6 +41,7 @@ public static class CalcCompiler
             NotNode nt => $"not({Walk(nt.Arg)})",
             IfNullNode i => $"ifNull({Walk(i.L)}, {Walk(i.R)})",
             IsNullNode z => $"isNull({Walk(z.Arg)})",
+            FnNode fn => Call(fn),
             CaseNode { Whens.Length: 1, Else: not null } k => $"if({Walk(k.Whens[0].Cond)}, {Walk(k.Whens[0].Then)}, {Walk(k.Else)})",
             CaseNode k => MultiIf(k),
             AggNode a => ClickHouseGateway.AggregateSql(AggName(a.Fn), Walk(a.Arg), sampled, approximate, a.P is { } p ? Param(p, "Float64") : null),
@@ -57,6 +58,36 @@ public static class CalcCompiler
             foreach (var w in k.Whens) { parts.Add(Walk(w.Cond)); parts.Add(Walk(w.Then)); }
             parts.Add(k.Else is null ? "NULL" : Walk(k.Else));
             return $"multiIf({string.Join(", ", parts)})";
+        }
+
+        // A text function: a fixed ClickHouse function over compiled children. Children are compiled once, in source
+        // order, so each literal is bound exactly once; a length or position is a bound UInt32 (validated 0..1000).
+        string Call(FnNode fn)
+        {
+            var spec = CalcCatalog.RowFunctions[fn.Fn];
+            var a = new List<string>();
+            for (var i = 0; i < fn.Args.Length; i++)
+            {
+                var kind = spec.Args[Math.Min(i, spec.Args.Count - 1)];
+                a.Add(kind is FnArg.Length or FnArg.Position ? Param((uint)((NumNode)fn.Args[i]).V, "UInt32") : Walk(fn.Args[i]));
+            }
+            return fn.Fn switch
+            {
+                "lower" => $"lowerUTF8({a[0]})",
+                "upper" => $"upperUTF8({a[0]})",
+                "trim" => $"trimBoth({a[0]})",
+                "len" => $"toFloat64(lengthUTF8({a[0]}))",
+                "left" => $"leftUTF8({a[0]}, {a[1]})",
+                "right" => $"rightUTF8({a[0]}, {a[1]})",
+                "replace" => $"replaceAll({a[0]}, {a[1]}, {a[2]})",
+                "concat" => $"concat({string.Join(", ", a)})",
+                "contains" => $"(position({a[0]}, {a[1]}) > 0)",
+                "startswith" => $"startsWith({a[0]}, {a[1]})",
+                "endswith" => $"endsWith({a[0]}, {a[1]})",
+                // splitByString has no Nullable form, so a NULL value is answered before it; a position past the end is NULL.
+                "split" => $"if(isNull({a[0]}), NULL, arrayElementOrNull(splitByString({a[1]}, assumeNotNull({a[0]})), {a[2]}))",
+                _ => throw new InvalidOperationException($"Unsupported function '{fn.Fn}'."),
+            };
         }
 
         string Field(FieldNode f)
