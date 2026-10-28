@@ -28,4 +28,9 @@ public sealed class SchemaController : ApiControllerBase
     [HttpGet("databases/{db}/tables/{table}/columns/{column}/distinct")]
     public Task<IResult> Distinct(string db, string table, string column, int? limit, CancellationToken ct)
         => RunAsync(async info => { RequestRules.ValidateDistinctLimit(limit); return Results.Ok(await Gateway.DistinctValuesAsync(info, db, table, column, limit, ct)); }, StatusCodes.Status404NotFound);
+
+    /// <summary>Column profile: rows, NULL share, approximate distinct count, min/max and top values of one column over the table's first rows.</summary>
+    [HttpPost("databases/{db}/tables/{table}/profile")]
+    public Task<IResult> Profile(string db, string table, [FromBody] ProfileRequest request, CancellationToken ct)
+        => RunAsync(async info => { RequestRules.ValidateProfile(request); return Results.Ok(await Gateway.ProfileColumnAsync(info, db, table, request, ct)); }, StatusCodes.Status404NotFound);
 }

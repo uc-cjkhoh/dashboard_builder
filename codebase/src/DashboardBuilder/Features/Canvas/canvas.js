@@ -4,6 +4,7 @@ import { icon } from "../Core/icons.js";
 import { show, hide, toggle, confirmDialog, toast } from "../Core/ui.js";
 import { entities, relationshipsFor, emit, bus, isModelActive, showModel } from "../Core/store.js";
 import { expandSidebar } from "../Shell/sidebar.js";
+import { openColumnProfile } from "../Schema/column-profile-dialog.js";
 
 // Data Model canvas + entity cards. A table dropped from the sidebar (or added via the
 // `table:add` fallback) becomes an entity card: a db.table head over a fixed-height, scrollable
@@ -272,7 +273,16 @@ export function initCanvas() {
       type.textContent = col.type;
       type.title = `${col.type} (${col.category})`;
 
-      row.append(key, keyIcon, name, type);
+      // Column profile + field details (Schema/column-profile-dialog.js). A button inside the label does not toggle the join key.
+      const profile = document.createElement("button");
+      profile.type = "button";
+      profile.className = "iconbtn col-row__profile";
+      profile.setAttribute("aria-label", `Profile ${col.name}`);
+      profile.title = "Profile this field (distinct values, nulls, top values)";
+      profile.append(icon("analytics", { size: 14 }));
+      profile.addEventListener("click", (event) => { event.preventDefault(); openColumnProfile(entity.db, entity.table, col); });
+
+      row.append(key, keyIcon, name, type, profile);
       cols.append(row);
     }
   }

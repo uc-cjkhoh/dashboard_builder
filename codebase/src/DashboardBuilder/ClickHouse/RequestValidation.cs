@@ -19,6 +19,8 @@ public static class ApiLimits
     public const int DefaultRowsLimit = 100, MaxRowsLimit = 1000; // raw rows of one table (POST /api/rows): default / cap
     public const int MaxRowsCells = 50_000; // rows x columns one row read may return
     public const int MaxRowsColumns = 200, MaxCellLength = 1000;  // columns one row read returns; characters kept per cell
+    public const int ProfileSampleRows = 1_000_000;  // a column profile scans the first N rows of the table
+    public const int DefaultProfileTop = 10, MaxProfileTop = 50, ProfileValueLength = 100, MaxColumnName = 1000; // top values; characters kept per value
     public const int MaxOffset = 10_000_000;  // how deep a table may page
     public const int MaxCalcDepth = CalcLimits.MaxDepth, MaxCalcNodes = CalcLimits.MaxNodes; // calculation tree; formula length (500) is client-only
 }
@@ -218,6 +220,13 @@ public static class RequestRules
     {
         if ((long)rows * columns > ApiLimits.MaxRowsCells)
             throw Bad($"{columns} columns allow at most {ApiLimits.MaxRowsCells / Math.Max(1, columns)} rows — ask for fewer rows or columns ({ApiLimits.MaxRowsCells:N0} cells in all).", field);
+    }
+    /// <summary>A column profile: a column name, and 1..50 top values when given (never clamped).</summary>
+    public static void ValidateProfile(ProfileRequest r)
+    {
+        if (string.IsNullOrWhiteSpace(r.Column)) throw Bad("'column' is required.", "column");
+        if (r.Column.Length > ApiLimits.MaxColumnName) throw Bad($"'column' must be at most {ApiLimits.MaxColumnName} characters.", "column");
+        ValidateRange(r.Limit, ApiLimits.MaxProfileTop, "Top values", "limit");
     }
     public static void ValidateHistogram(HistogramRequest r) { ValidateRange(r.Buckets, ApiLimits.MaxBuckets, "Bins", "buckets"); ValidateStatFilters(r.Filters); }
     public static void ValidateBoxPlot(BoxPlotRequest r) { ValidateRange(r.Limit, ApiLimits.MaxRowLimit, "Limit", "limit"); ValidateStatFilters(r.Filters); }
