@@ -6,8 +6,10 @@
             <div class="board-bar">
                 <h2 class="board-bar__title" id="board-title"></h2>
                 <p class="board-bar__count" id="board-count"></p>
+                <p class="board-bar__status" id="board-status" role="status" aria-live="polite"></p>
                 <div class="board-bar__tools" id="board-tools"></div>
             </div>
+            <p class="sr-only" id="board-keyhint">Arrow keys move this widget one cell. Shift plus arrow keys resize it.</p>
             <div class="board-scroll" id="board-scroll">
                 <div class="board-grid" id="board-grid" role="group" aria-label="Dashboard widgets"></div>
                 <div class="board-empty" id="board-empty" role="status" hidden>

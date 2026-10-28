@@ -1,4 +1,4 @@
-import { bus, activeDashboard, worksheets, setWidgets, nextWidgetId } from "../Core/store.js";
+import { bus, activeDashboard, worksheets, dashboards, worksheetById, setWidgets, nextWidgetId, isDashboardActive } from "../Core/store.js";
 import { toggle, toast, makeButton } from "../Core/ui.js";
 import { icon } from "../Core/icons.js";
 import { LIMITS } from "../Core/validate.js";
@@ -7,6 +7,8 @@ import { placeNew } from "./board-model.js";
 import { layoutBoard, widgetOrder } from "./board-layout.js";
 import { createWidget } from "./board-widget.js";
 import { createPanel } from "./board-panel.js";
+import { initInteract } from "./board-interact.js";
+import { createBoardHistory, restorable } from "./board-history.js";
 
 // The dashboard tab's body: a side panel (worksheets to add) and the 12-column canvas of widgets. Only the ACTIVE
 // dashboard renders — leaving it destroys every worksheet view (queries aborted, chart instances and their resize observers
@@ -31,7 +33,29 @@ export function initBoard() {
   let shownId = null;        // the dashboard whose widgets are on screen
   let printing = false;
 
-  const panel = createPanel($("board-panel"), { onAddSheet: (sheetId) => add("sheet", sheetId), onAddText: () => add("text") });
+  const history = createBoardHistory(); // undo / redo per dashboard id (in memory: a reload or a workbook open starts clean)
+  const known = new Set();              // dashboard ids seen, to forget the history of a closed one
+  const statusEl = $("board-status");
+  let statusTimer = 0;
+  /** The last edit's result — "Moved to column 3, row 2", or why a drop snapped back — in a polite live region (and visible). */
+  function status(message, refused = false) {
+    clearTimeout(statusTimer);
+    const span = document.createElement("span"); // a fresh node each time, so an identical message is announced again
+    span.textContent = message;
+    statusEl.replaceChildren(...(refused ? [icon("warning", { size: 14 }), span] : [span]));
+    statusEl.classList.toggle("is-refused", refused);
+    statusTimer = setTimeout(() => statusEl.replaceChildren(), 8000);
+  }
+  /** One committed edit = one undo step. */
+  function commit(next) {
+    const dash = activeDashboard();
+    if (!dash) return;
+    history.record(dash.id, dash.widgets);
+    setWidgets(dash.id, next); // → dashboard:changed → sync (autosave listens to the same event)
+  }
+  const nameOf = (w) => entries.get(w.id)?.el.getAttribute("aria-label") ?? (w.kind === "text" ? "Text" : "widget");
+
+  const panel = createPanel($("board-panel"), { onAddSheet: (sheetId) => add("sheet", sheetId), onAddText: () => add("text"), onDragStart() {}, onDragEnd() {} });
 
   function teardown() {
     for (const e of entries.values()) { e.destroy(); e.el.remove(); }
@@ -61,13 +85,18 @@ export function initBoard() {
     for (const w of dash.widgets) {
       const known = entries.get(w.id);
       if (known) { known.update(w); continue; }
-      const e = createWidget(w, { results, onRemove: remove });
+      const e = createWidget(w, { results, onRemove: remove, onSaveText: saveText });
       entries.set(w.id, e);
       grid.append(e.el);
       fresh.push(e);
     }
     const order = widgetOrder(dash.widgets).map((w) => entries.get(w.id).el); // DOM (tab) order = reading order
-    if (order.some((el, i) => grid.children[i] !== el)) grid.append(...order);
+    const inDom = [...grid.children].filter((n) => n.classList.contains("board-widget"));
+    if (order.some((el, i) => inDom[i] !== el)) { // re-appending a focused widget would drop its focus
+      const focused = document.activeElement;
+      grid.append(...order);
+      if (focused && focused !== document.activeElement && focused.isConnected) focused.focus({ preventScroll: true });
+    }
     toggle(empty, dash.widgets.length === 0);
     layout();
     for (const e of fresh) e.run();
@@ -77,11 +106,13 @@ export function initBoard() {
     const dash = activeDashboard();
     toggle(view, Boolean(dash));
     if (!dash) { teardown(); return; }
-    if (shownId !== dash.id) { teardown(); shownId = dash.id; }
+    if (shownId !== dash.id) { teardown(); shownId = dash.id; statusEl.replaceChildren(); interact?.cancel(); }
+    known.add(dash.id);
     title.textContent = dash.name;
     count.textContent = `${dash.widgets.length} of ${LIMITS.widgets} widgets`;
     panel.render(worksheets());
     reconcile(dash);
+    syncUndo(dash);
   }
 
   function add(kind, sheetId) {
@@ -89,9 +120,14 @@ export function initBoard() {
     if (!dash) return;
     const spot = placeNew(dash.widgets, kind);
     if (!spot.ok) { toast(spot.error, "danger"); return; }
-    const { x, y, w, h } = spot;
+    addWidget(dash, kind, sheetId, spot);
+  }
+
+  /** Add a widget at `cell` ({ x, y, w, h }) — from Add (first free spot) or a drop (the cell under the pointer). */
+  function addWidget(dash, kind, sheetId, cell) {
+    const { x, y, w, h } = cell;
     const widget = kind === "sheet" ? { id: nextWidgetId(), kind, sheetId, x, y, w, h } : { id: nextWidgetId(), kind, heading: "Text", body: "", x, y, w, h };
-    setWidgets(dash.id, [...dash.widgets, widget]); // → dashboard:changed → sync (autosave listens to the same event)
+    commit([...dash.widgets, widget]);
     toast(`Added “${entries.get(widget.id)?.el.getAttribute("aria-label") ?? "widget"}” to the dashboard.`, "ok"); // polite live region (#toast-live)
     entries.get(widget.id)?.el.scrollIntoView({ block: "nearest" });
   }
@@ -102,11 +138,49 @@ export function initBoard() {
     const ordered = widgetOrder(dash.widgets);
     const at = ordered.findIndex((w) => w.id === widget.id);
     const name = entries.get(widget.id)?.el.getAttribute("aria-label") ?? "widget";
-    setWidgets(dash.id, dash.widgets.filter((w) => w.id !== widget.id));
-    toast(`Removed “${name}”.`, "info");
+    commit(dash.widgets.filter((w) => w.id !== widget.id));
+    toast(`Removed “${name}”. Undo brings it back.`, "info");
     const next = widgetOrder(activeDashboard().widgets)[Math.min(at, dash.widgets.length - 1)];
     (next ? entries.get(next.id)?.el.querySelector(".board-widget__remove") : $("board-panel").querySelector(".board-panel__add-text"))?.focus();
   }
+
+  function saveText(widget, value) {
+    const dash = activeDashboard();
+    if (!dash) return;
+    commit(dash.widgets.map((w) => (w.id === widget.id ? { ...w, ...value } : w)));
+    status("Text updated.");
+  }
+
+  // --- undo / redo on the dashboard tab (Dashboard/history.js snapshots of the widget list, keyed by dashboard id) ---
+  const undoBtn = makeButton("", "iconbtn board-bar__iconbtn"), redoBtn = makeButton("", "iconbtn board-bar__iconbtn");
+  for (const [b, name, label] of [[undoBtn, "undo", "Undo (Ctrl+Z)"], [redoBtn, "redo", "Redo (Ctrl+Y)"]]) { b.append(icon(name, { size: 16 })); b.title = label; b.setAttribute("aria-label", label); }
+  function syncUndo(dash) { undoBtn.disabled = !history.canUndo(dash.id); redoBtn.disabled = !history.canRedo(dash.id); }
+  function step(which) {
+    const dash = activeDashboard();
+    if (!dash || !isDashboardActive()) return;
+    const target = history[which](dash.id, dash.widgets);
+    if (!target) { status(which === "undo" ? "Nothing to undo." : "Nothing to redo."); return; }
+    setWidgets(dash.id, restorable(target, (id) => worksheetById(id) !== null)); // a restore is not itself recorded
+    status(which === "undo" ? "Undid the last change." : "Redid the change.");
+  }
+  undoBtn.addEventListener("click", () => step("undo"));
+  redoBtn.addEventListener("click", () => step("redo"));
+  document.addEventListener("keydown", (e) => {
+    if (!(e.ctrlKey || e.metaKey) || !isDashboardActive() || view.hidden) return;
+    if (e.target.closest?.("input, textarea, select, [contenteditable='true'], dialog")) return; // the field's own undo
+    const k = e.key.toLowerCase();
+    if (k === "z" && !e.shiftKey) { e.preventDefault(); step("undo"); }
+    else if ((k === "z" && e.shiftKey) || k === "y") { e.preventDefault(); step("redo"); }
+  });
+  bus.addEventListener("tabs:changed", () => { // a closed dashboard's history goes with it
+    const live = new Set(dashboards().map((d) => d.id));
+    for (const id of [...known]) if (!live.has(id)) { known.delete(id); history.forget(id); }
+  });
+
+  const interact = initInteract({
+    grid, scroll: $("board-scroll"), getDash: activeDashboard, nameOf, metrics: readMetrics, commit, status,
+    addAt(sheetId, cand) { const dash = activeDashboard(); if (dash && worksheetById(sheetId)) addWidget(dash, "sheet", sheetId, cand); },
+  });
 
   const runAll = () => { for (const e of entries.values()) e.run(); };
   for (const type of ["view:changed", "tabs:changed", "dashboard:changed"]) bus.addEventListener(type, sync);
@@ -142,7 +216,7 @@ export function initBoard() {
   window.addEventListener("beforeprint", () => { if (activeDashboard()) { printing = true; layout(); } });
   window.addEventListener("afterprint", () => { printing = false; for (const e of entries.values()) e.sizeChart(null); layout(); });
   syncFull();
-  tools.append(fullBtn, printBtn);
+  tools.append(undoBtn, redoBtn, fullBtn, printBtn);
 
   sync();
 }

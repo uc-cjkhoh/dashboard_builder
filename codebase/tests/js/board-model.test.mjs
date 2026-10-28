@@ -64,10 +64,10 @@ test("firstFreeSpot returns null when nothing fits under the row limit, and the 
 });
 
 test("placeNew: default sizes, first free spot, counts and full-canvas errors", () => {
-  assert.deepEqual(DEFAULT_SIZE, { sheet: { w: 6, h: 4 }, text: { w: 12, h: 1 } });
+  assert.deepEqual(DEFAULT_SIZE, { sheet: { w: 6, h: 4 }, text: { w: 12, h: 2 } });
   assert.deepEqual(placeNew([], "sheet"), { ok: true, x: 0, y: 0, w: 6, h: 4 });
   assert.deepEqual(placeNew([{ x: 0, y: 0, w: 6, h: 4 }], "sheet"), { ok: true, x: 6, y: 0, w: 6, h: 4 });
-  assert.deepEqual(placeNew([{ x: 0, y: 0, w: 6, h: 4 }], "text"), { ok: true, x: 0, y: 4, w: 12, h: 1 });
+  assert.deepEqual(placeNew([{ x: 0, y: 0, w: 6, h: 4 }], "text"), { ok: true, x: 0, y: 4, w: 12, h: 2 });
   const twelve = Array.from({ length: 12 }, (_, i) => ({ x: (i % 2) * 6, y: Math.floor(i / 2) * 4, w: 6, h: 4 }));
   const r = placeNew(twelve, "sheet");
   assert.equal(r.ok, false);

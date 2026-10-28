@@ -47,3 +47,33 @@ export function layoutBoard(widgets, panelWidth, { rowH, gap, stack = false }) {
   }
   return { stacked, height, rects };
 }
+
+// --- Pixels → cells (drag, resize and drop). Points are relative to the grid's top-left; metrics = { rowH, gap }. ---
+const strides = (panelWidth, { rowH, gap }) => ({ sx: columnWidth(Math.max(0, panelWidth), gap) + gap, sy: rowH + gap });
+
+/** The grid cell ({ col 0..11, row 0..95 }) under a point; a point left of / above the grid is cell 0. */
+export function cellAt(point, panelWidth, metrics) {
+  const { sx, sy } = strides(panelWidth, metrics);
+  const at = (v, stride, max) => (stride > 0 ? Math.min(max, Math.max(0, Math.floor(v / stride))) : 0);
+  return { col: at(point.x, sx, LIMITS.gridCols - 1), row: at(point.y, sy, LIMITS.boardRows - 1) };
+}
+
+/** `start` ({ x, y, w, h }) moved by a pointer delta in pixels, snapped to the nearest whole cell. Not clamped: an out-of-grid
+ *  result is for the caller to refuse (checkPlacement), never to move elsewhere. */
+export function snapMove(start, dx, dy, panelWidth, metrics) {
+  const { sx, sy } = strides(panelWidth, metrics);
+  return { ...start, x: start.x + (sx > 0 ? Math.round(dx / sx) : 0), y: start.y + (sy > 0 ? Math.round(dy / sy) : 0) };
+}
+
+/** `start` resized from its bottom-right corner by a pointer delta, snapped to whole cells; never below 1 × 1 (so a ghost can
+ *  be drawn — the size limits are the caller's to enforce). */
+export function snapResize(start, dx, dy, panelWidth, metrics) {
+  const { sx, sy } = strides(panelWidth, metrics);
+  return { ...start, w: Math.max(1, start.w + (sx > 0 ? Math.round(dx / sx) : 0)), h: Math.max(1, start.h + (sy > 0 ? Math.round(dy / sy) : 0)) };
+}
+
+/** The pixel rectangle of a cell rectangle on a wide panel (what a ghost covers). */
+export function cellRect(cand, panelWidth, { rowH, gap }) {
+  const col = columnWidth(Math.max(0, panelWidth), gap);
+  return { left: cand.x * (col + gap), top: cand.y * (rowH + gap), width: span(cand.w, col, gap), height: span(cand.h, rowH, gap) };
+}

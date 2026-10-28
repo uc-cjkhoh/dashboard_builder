@@ -8,7 +8,7 @@
 import { LIMITS } from "../Core/validate.js";
 
 /** Default size in cells for a new widget of each kind. */
-export const DEFAULT_SIZE = Object.freeze({ sheet: { w: 6, h: 4 }, text: { w: 12, h: 1 } });
+export const DEFAULT_SIZE = Object.freeze({ sheet: { w: 6, h: 4 }, text: { w: 12, h: 2 } });
 const KINDS = new Set(["sheet", "text"]);
 const minH = (kind) => (kind === "text" ? LIMITS.textMinH : LIMITS.widgetMinH);
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -48,6 +48,36 @@ export function checkPlacement(widgets, cand) {
   if (!inBounds(cand)) return { ok: false, error: "A widget has to stay inside the dashboard grid." };
   if (widgets.some((o) => o.id !== cand.id && overlaps(cand, o))) return { ok: false, error: "A widget can't overlap another." };
   return { ok: true };
+}
+
+/** The first thing wrong with `cand` (a move / resize / drop result among `widgets`), in the user's words, or null when it may sit there.
+ *  `verb` = "move" | "resize" | "place" (a drop from the side panel); `nameOf(widget)` names the widget it would overlap.
+ *  Same rules as checkPlacement; this one says which and where. Order: whole cells, size limits, grid edge, overlap. */
+export function explainRefusal(widgets, cand, verb, nameOf = () => "another widget") {
+  const lead = `Can't ${verb}:`;
+  const { x, y, w, h } = cand;
+  if (![x, y, w, h].every(Number.isInteger)) return `${lead} widgets snap to whole grid cells.`;
+  if (w < LIMITS.widgetMinW) return `${lead} a widget is at least ${LIMITS.widgetMinW} columns wide.`;
+  if (h < minH(cand.kind)) return `${lead} a ${cand.kind === "text" ? "text" : "worksheet"} widget is at least ${minH(cand.kind)} ${minH(cand.kind) === 1 ? "row" : "rows"} tall.`;
+  if (h > LIMITS.widgetMaxH) return `${lead} a widget is at most ${LIMITS.widgetMaxH} rows tall.`;
+  if (x < 0) return `${lead} the widget is at the left edge of the dashboard.`;
+  if (x + w > LIMITS.gridCols) return `${lead} the widget is at the right edge of the dashboard.`;
+  if (y < 0) return `${lead} the widget is at the top of the dashboard.`;
+  if (y + h > LIMITS.boardRows) return `${lead} the dashboard is at most ${LIMITS.boardRows} rows tall.`;
+  const hit = widgets.find((o) => o.id !== cand.id && overlaps(cand, o));
+  if (hit) return `${lead} it would overlap “${nameOf(hit)}”.`;
+  return null;
+}
+
+/** A widget dropped from the side panel with the pointer on grid cell `cell` ({ col, row }): the default size, its top-left at that
+ *  cell, but slid left just enough to stay inside the 12 columns (the pointer stays within it). Refused — never relocated — when
+ *  the dashboard already has 12 widgets or the spot overlaps / runs past row 96. */
+export function placeAt(widgets, kind, cell, nameOf) {
+  if (widgets.length >= LIMITS.widgets) return { ok: false, error: `Can't place: a dashboard holds at most ${LIMITS.widgets} widgets.` };
+  const { w, h } = DEFAULT_SIZE[kind];
+  const cand = { kind, x: Math.min(cell.col, LIMITS.gridCols - w), y: cell.row, w, h };
+  const error = explainRefusal(widgets, cand, "place", nameOf);
+  return error ? { ok: false, error, cand } : { ok: true, x: cand.x, y: cand.y, w, h, cand };
 }
 
 /** Import validation of one dashboard's saved widgets → saved-form widgets. Every repair or drop is pushed to `issues`.
