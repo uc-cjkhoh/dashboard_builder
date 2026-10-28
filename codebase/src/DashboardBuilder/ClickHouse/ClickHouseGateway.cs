@@ -15,7 +15,7 @@ namespace DashboardBuilder.ClickHouse;
 /// (CLAUDE.md golden rule 1). Covers connection validation, schema introspection, distinct values and
 /// the worksheet's aggregate queries.
 /// </summary>
-public sealed class ClickHouseGateway
+public sealed partial class ClickHouseGateway
 {
     private readonly ILogger<ClickHouseGateway> _logger;
 
