@@ -88,7 +88,7 @@ test("evaluationInput counts filters, drill, period and Top-N and feeds describe
   const sheet = sheetOf({
     rows: [dim("country")],
     filters: [{ op: "=", column: "a" }, { op: "top", column: "b" }],
-    drill: { levels: [{ column: "a" }, { column: "b" }], depth: 1, path: [{ column: "a", value: "x" }] },
+    drill: { levels: [{ db: "d", table: "t", column: "a" }, { db: "d", table: "t", column: "b" }], depth: 1, path: [{ column: "a", value: "x" }] },
     period: { table: "t", column: "day", preset: "last30" },
     format: { topN: 10 },
   });
@@ -102,7 +102,8 @@ test("evaluationInput counts filters, drill, period and Top-N and feeds describe
   assert.equal(s.hasSelection, false);
   assert.equal(s.displayCap, 10);
   assert.equal(s.otherBucket, false); // drill level + country = two dimensions
-  assert.deepEqual(s.dimensions.includes("t.country"), true);
+  assert.equal(s.dimensions.length, 2);
+  assert.deepEqual(s.dimensions, ["t.b", "t.country"]);
   const t = describeEvaluation(s)[0].text;
   for (const p of ["2 own", "1 shared", "drill 1 level", "date range", "Top-N filter"]) assert.ok(t.includes(p), t);
 });
@@ -142,4 +143,19 @@ test("cap text is pluralised and guarded", () => {
 
 test("evaluationInput: a single-dimension bar gets the Other bucket", () => {
   assert.equal(evaluationInput(sheetOf({ rows: [dim("country")] }), opts).otherBucket, true);
+});
+
+test("evaluationInput counts only applied own filters and a valid Top-N", () => {
+  const sheet = sheetOf({ filters: [{ op: "=", ok: true }, { op: "=", ok: false }, { op: "top", ok: false }] });
+  const s = evaluationInput(sheet, { ...opts, isApplied: (f) => f.ok });
+  assert.equal(s.ownFilters, 1);
+  assert.equal(s.hasTopFilter, false);
+  assert.equal(evaluationInput(sheet, opts).ownFilters, 3);
+  assert.equal(evaluationInput(sheetOf({ filters: [{ op: "top", ok: true }] }), { ...opts, isApplied: (f) => f.ok }).hasTopFilter, true);
+});
+
+test("evaluationInput: an explicit dimensions list wins and drives the Other bucket", () => {
+  const s = evaluationInput(sheetOf({ rows: [dim("country")] }), { ...opts, dimensions: ["x", "y"] });
+  assert.deepEqual(s.dimensions, ["x", "y"]);
+  assert.equal(s.otherBucket, false);
 });

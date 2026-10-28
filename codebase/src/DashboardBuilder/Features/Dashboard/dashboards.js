@@ -684,7 +684,7 @@ export function initDashboards() {
     vbRight.append(sortControl(dash, s), vbIcons);
     const vbLeft = el("div", "ws-viewbar__group");
     vbLeft.append(chartTypePicker(dash, s), showMeToggle(), undoButtons(dash),
-      explainControl(() => evaluationInput(s, { sharedFilters: sharedFilters.filter((f) => checkFilter(f).state === "ok" && !sharedSkipped(s).includes(f)), parameters, calcs: calculations }), { signal: headerAbort.signal }));
+      explainControl(() => evaluationInput(s, { sharedFilters: sharedFilters.filter((f) => checkFilter(f).state === "ok" && !sharedSkipped(s).includes(f)), parameters, calcs: calculations, isApplied: (f) => checkFilter(f).state === "ok", dimensions: planDims(s).keyOrder.filter(Boolean).map(nameOf) }), { signal: headerAbort.signal }));
     viewbar.append(vbLeft, vbRight);
     const fmtEl = showMeOpen ? showMePanel(dash, s) : formatOpen ? formatPanel(dash, s) : analyticsOpen ? analyticsPanel(dash, s) : null; // P10 format / P21 analytics card
     const swEl = switchers(dash, s); // P40

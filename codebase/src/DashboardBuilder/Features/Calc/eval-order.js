@@ -64,10 +64,10 @@ const defaultName = (f) => (isCalcPill(f) ? f.column : `${f.table}.${f.column}`)
 /**
  * Summarises a plain sheet object into the `s` that describeEvaluation takes (pure, DOM-free).
  * `{ sharedFilters }` are the shared filters that apply to this sheet; `{ parameters }` feed Top-N;
- * `{ calcs }` is the calculation list (names); `{ nameOf }` names a pill (default `table.column`, calc pills by `column`).
+ * `{ calcs }` is the calculation list (names); `{ isApplied(filter) }` says which own filters the query really sends (default: all); `{ dimensions }` is an explicit group-by name list (default: derived from the shelves); `{ nameOf }` names a pill (default `table.column`, calc pills by `column`).
  * A calc pill is row-level unless it is a measure with no `agg` (makeCalcPill gives row-level measures `agg: "sum"`).
  */
-export function evaluationInput(sheet, { sharedFilters = [], parameters = [], calcs = [], nameOf } = {}) {
+export function evaluationInput(sheet, { sharedFilters = [], parameters = [], calcs = [], nameOf, isApplied = () => true, dimensions } = {}) {
   const sh = sheet ?? {};
   const name = nameOf ?? ((f) => (isCalcPill(f) ? calcs.find((c) => c.id === f.calc)?.name ?? f.column : defaultName(f)));
   const levels = sh.drill?.levels ?? [];
@@ -75,8 +75,9 @@ export function evaluationInput(sheet, { sharedFilters = [], parameters = [], ca
   const drillDim = drillOn ? levels[Math.min(sh.drill.depth ?? 0, levels.length - 1)] : null;
 
   const dims = [];
-  if (drillDim) dims.push(name({ ...drillDim, role: "dimension" }));
-  for (const k of ["rows", "columns", "color"]) {
+  if (dimensions) dims.push(...dimensions);
+  else if (drillDim) dims.push(name({ ...drillDim, role: "dimension" }));
+  for (const k of dimensions ? [] : ["rows", "columns", "color"]) {
     for (const f of sh[k] ?? []) if (roleOf(f) === "dimension") { const n = name(f); if (!dims.includes(n)) dims.push(n); }
   }
 
@@ -93,7 +94,7 @@ export function evaluationInput(sheet, { sharedFilters = [], parameters = [], ca
   }
 
   const topN = effectiveTopN(sh.format, parameters, LIMITS.rows);
-  const filters = sh.filters ?? [];
+  const filters = (sh.filters ?? []).filter((f) => isApplied(f));
   return {
     ownFilters: filters.length,
     sharedFilters: sharedFilters.length,
