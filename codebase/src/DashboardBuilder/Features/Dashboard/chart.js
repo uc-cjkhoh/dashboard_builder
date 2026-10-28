@@ -27,13 +27,15 @@ function stateOf(container) {
   if (!st) states.set(container, st = { instance: null, resizeObserver: null, lastOption: null, onCanvas: false, animateNext: true });
   return st;
 }
-// The container being drawn right now: buildOption runs synchronously inside renderChart, and builders that need
-// the live chart later (a symbolSize callback) capture it at build time.
+// The container being drawn right now: the option is built synchronously inside renderChart, and builders that need
+// the live chart later (a symbolSize callback) capture it at build time. T01-20 / T03-33: the render settings — palette
+// order reversed, and displayed member name -> user colour — live in each container's state (st.paletteReverse,
+// st.memberColors), so two live charts never share or clobber them.
 let drawing = null;
-// T01-20 / T03-33: set per render — palette order reversed, and displayed member name -> user colour.
-let paletteReverse = false;
-let memberColors = new Map();
-const memberColor = (name, fallback) => memberColors.get(name) ?? fallback;
+const reversed = () => Boolean(drawing?.paletteReverse);
+const memberColors = () => drawing?.memberColors ?? NO_MEMBER_COLORS;
+const NO_MEMBER_COLORS = new Map();
+const memberColor = (name, fallback) => memberColors().get(name) ?? fallback;
 
 // Pull themed values from :root so the chart tracks the design tokens (and any future retheme).
 function tokens() {
@@ -51,7 +53,7 @@ function tokens() {
   // CSS tokens with the validated hexes as fallback. A single-series chart uses the brand accent
   // instead (below), keeping the common case on-brand.
   const catFallback = ["#2a78d6", "#008300", "#e87ba4", "#eda100", "#1baf7a", "#eb6834", "#4a3aa7", "#e34948"];
-  const cat = orderedPalette(catFallback.map((hex, i) => t(`--chart-cat-${i + 1}`, hex)), paletteReverse);
+  const cat = orderedPalette(catFallback.map((hex, i) => t(`--chart-cat-${i + 1}`, hex)), reversed());
   return {
     series: t("--chart-series", "#c4142c"),
     cat,
@@ -65,7 +67,7 @@ function tokens() {
     // Brand stops for the sequential heatmap ramp (single-hue soft→saturated, token-driven).
     brand: t("--accent", "#c4142c"),
     brandSoft: t("--accent-soft", "#fdeff1"),
-    ramp: rampStops(t("--accent-soft", "#fdeff1"), t("--accent", "#c4142c"), paletteReverse), // continuous low -> high
+    ramp: rampStops(t("--accent-soft", "#fdeff1"), t("--accent", "#c4142c"), reversed()), // continuous low -> high
   };
 }
 
@@ -81,8 +83,8 @@ function tokens() {
 export function renderChart(container, spec) {
   disposeChart(container);
   const st = stateOf(container);
-  paletteReverse = !!spec.format?.paletteReverse;
-  memberColors = spec.memberColors instanceof Map ? spec.memberColors : new Map();
+  st.paletteReverse = !!spec.format?.paletteReverse;
+  st.memberColors = spec.memberColors instanceof Map ? spec.memberColors : NO_MEMBER_COLORS;
   const host = document.createElement("div");
   host.className = "ws-chart-canvas";
   container.append(host);
@@ -103,10 +105,12 @@ export function renderChart(container, spec) {
   const instance = st.instance = window.echarts.init(host, null, { renderer: onCanvas ? "canvas" : "svg" });
   let option;
   drawing = st; // builders that size marks later (heatmap circles) capture this container's state
-  try { option = buildOption(spec.type === "multiples" ? { ...spec, width: paneWidth(), height: paneHeight() } : spec); } finally { drawing = null; }
-  if (spec.type !== "multiples") showEveryCategory(option, fit.rotate, fit); // panels keep their own sparse labels
-  if (fit.zoom) addZoom(option, fit);
-  if (onCanvas) tuneForSize(option);
+  try {
+    option = buildOption(spec.type === "multiples" ? { ...spec, width: paneWidth(), height: paneHeight() } : spec);
+    if (spec.type !== "multiples") showEveryCategory(option, fit.rotate, fit); // panels keep their own sparse labels
+    if (fit.zoom) addZoom(option, fit);
+    if (onCanvas) tuneForSize(option);
+  } finally { drawing = null; }
   st.lastOption = option;
   instance.setOption({ ...option, ...motionOption(st.animateNext && !onCanvas) });
 
@@ -543,7 +547,7 @@ function buildPie({ type, categories, series, format = {}, pointLabels, tooltipE
   const c = tokens();
   const fmtVal = makeValueFormatter(format);
   const labels = (categories ?? []).map((l) => l ?? "—");
-  const data = labels.map((name, i) => ({ name, value: series[0].data[i], ...(i === otherIndex ? { itemStyle: { color: c.muted } } : memberColors.has(name) ? { itemStyle: { color: memberColors.get(name) } } : {}) }));
+  const data = labels.map((name, i) => ({ name, value: series[0].data[i], ...(i === otherIndex ? { itemStyle: { color: c.muted } } : memberColors().has(name) ? { itemStyle: { color: memberColors().get(name) } } : {}) }));
   const { pos, legend } = legendFor(format, c, labels, true);
   const showLabels = !!format.dataLabels || !!pointLabels; // P18 Label field forces slice labels on
 
