@@ -33,5 +33,7 @@ export const FIT_MODES = new Set(["standard", "width", "height", "entire"]); // 
 export const DATE_BUCKETS = new Set(["auto", "exact", "hour", "day", "week", "month", "quarter", "year"]);
 export const LINE_STYLES = new Set(["straight", "step", "jump"]); // T03-05 Format → Line style
 export const HEATMAP_SHAPES = new Set(["square", "circle"]); // T03-10
+export const SECONDARY_TYPES = new Set(["line", "bar", "area"]); // T03-17 Format → Right-axis marks (combo)
+export const MARK_BORDERS = new Set(["none", "thin", "thick"]); // T03-34
 export const MAX_TARGET_MEASURE = 19; // T03-12: shelf index of the bullet target measure
 export const MAX_DECIMALS = 10;

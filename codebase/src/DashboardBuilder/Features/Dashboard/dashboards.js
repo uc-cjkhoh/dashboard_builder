@@ -27,6 +27,8 @@ import { SWATCHES, memberKey, fieldColorKey, setMemberColor, clearFieldColors, c
 import { createHistory } from "./history.js";
 import { LINE_STYLE_CHOICES, linesTakeStyle } from "./line-style-model.js";
 import { HEATMAP_SHAPE_CHOICES } from "./heatmap-model.js";
+import { SECONDARY_CHOICES } from "./axis-sync-model.js";
+import { MARK_BORDER_CHOICES, markerSizeError } from "./mark-style-model.js";
 import { targetChoices, effectiveTargetMeasure } from "./bullet-model.js";
 import { keyOf, SCATTER_TYPES, COLOR_USES, colorMode, isDrillActive, drillActiveDim, planDims, planMeasures, sortTargets as planSortTargets, measureName as planMeasureName, buildPlan as planQuery, periodFilters as planPeriodFilters, calcContext, appliedShared as planAppliedShared, withParams, toServerFilter, isDateOnlyType } from "./sheet-plan.js";
 import { catalogFromEntities } from "../Calc/calc-resolve.js";
@@ -55,6 +57,9 @@ import { BUCKET_TYPES, DATE_BUCKET_CHOICES } from "./scale-model.js";
 // Columns (dimension), Rows (measure) and Filters shelves; the chart renders from a bounded,
 // identifier-safe query. Fields from *different* tables are joined automatically along the
 // relationships drawn in the Data Model (a join path found by BFS over the relationship graph).
+// Chart types whose marks take Format → Marker size / Mark border (scatter family and line markers; bars and cells).
+const MARKER_TYPES = new Set(["scatter", "square", "circle", "line", "area", "combo", "heatmap"]);
+const BORDER_TYPES = new Set(["bar", "stacked", "combo", "scatter", "square", "circle", "heatmap"]);
 const FIELD_MIME = "application/x-ch-field";
 // Column category from the Data Model catalog (entity.columns), for filters saved without one.
 // T02-34: a field's cast (field setting) decides the category its pills, filters and the field pane use.
@@ -1232,6 +1237,16 @@ export function initDashboards() {
     }
     if (linesTakeStyle(s.chartType)) panel.append(fmtSelect("Line style", LINE_STYLE_CHOICES, f.lineStyle ?? "straight", (v) => set({ lineStyle: v }))); // T03-05
     if (s.chartType === "heatmap") panel.append(fmtSelect("Shape", HEATMAP_SHAPE_CHOICES, f.heatmapShape ?? "square", (v) => set({ heatmapShape: v }))); // T03-10
+    if (s.chartType === "combo") { // T03-16, T03-17
+      panel.append(fmtSelect("Right-axis marks", SECONDARY_CHOICES, f.secondaryType ?? "line", (v) => set({ secondaryType: v })));
+      panel.append(fmtCheck("Synchronise axes", f.syncAxes, (v) => set({ syncAxes: v })));
+    }
+    if (MARKER_TYPES.has(s.chartType) && (s.chartType !== "heatmap" || f.heatmapShape === "circle")) // T01-22: blank = automatic (a heatmap: circles only)
+      panel.append(fmtNumber("Marker size (px)", f.markerSize, "auto", (v) => {
+        if (v != null && markerSizeError(v)) { toast(markerSizeError(v), "danger"); return; }
+        set({ markerSize: v });
+      }));
+    if (BORDER_TYPES.has(s.chartType)) panel.append(fmtSelect("Mark border", MARK_BORDER_CHOICES, f.markBorder ?? "none", (v) => set({ markBorder: v }))); // T03-34
     if (s.period && s.period.compare !== "none")
       panel.append(fmtCheck("A fall is good", f.downIsGood, (v) => set({ downIsGood: v })));
     if (!STAT_SINGLE_TABLE.has(s.chartType))

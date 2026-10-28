@@ -66,6 +66,10 @@
           "fit": "standard",
           "lineStyle": "straight",
           "heatmapShape": "square",
+          "syncAxes": false,
+          "secondaryType": "line",
+          "markerSize": null,
+          "markBorder": "none",
           "targetMeasure": null,
           "approximate": false
         },
@@ -120,6 +124,10 @@
           "fit": "standard",
           "lineStyle": "straight",
           "heatmapShape": "square",
+          "syncAxes": false,
+          "secondaryType": "line",
+          "markerSize": null,
+          "markBorder": "none",
           "targetMeasure": null,
           "approximate": false
         },
