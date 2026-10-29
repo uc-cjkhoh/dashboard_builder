@@ -75,7 +75,7 @@
 /* Keyboard/non-drag path to add a field to a shelf (a11y — mirrors the sidebar table chip's plus icon). */
 .ws-field__add {
   flex: none; border: 0; background: none; cursor: pointer; padding: 0;
-  width: 18px; height: 18px; line-height: 1; border-radius: var(--r);
+  width: 16px; height: 16px; line-height: 1; border-radius: var(--r);
   color: var(--ink-3); opacity: 0; transition: opacity var(--dur) var(--ease), color var(--dur) var(--ease);
 }
 .ws-field:hover .ws-field__add, .ws-field__add:focus-visible { opacity: 1; }
@@ -111,13 +111,13 @@
 
 .ws-pill {
   display: inline-flex; align-items: center; gap: 8px;
-  min-height: 22px; padding: 1px 4px 1px 9px; border-radius: var(--r-pill);
+  min-height: 24px; padding: 0 var(--s1) 0 var(--s2); border-radius: var(--r-pill);
   background: var(--dim-bg); border: 1px solid var(--dim-line);
   color: var(--dim-ink); font-size: var(--fs-body); font-weight: 600; white-space: nowrap;
 }
 /* Drag-to-reorder (Columns/Rows): a grip is the only draggable part so the pill's controls still work.
    The dragged pill dims; a hovered drop-target pill shows an insertion outline. */
-.ws-pill__grip { cursor: grab; color: currentColor; opacity: .5; line-height: 1; padding: 0 1px 0 0; margin-left: -3px; user-select: none; }
+.ws-pill__grip { cursor: grab; color: currentColor; opacity: .5; line-height: 1; padding: 0; margin-left: -3px; user-select: none; }
 .ws-pill__grip:hover { opacity: .9; }
 .ws-pill__grip:active { cursor: grabbing; }
 .ws-pill.is-dragging { opacity: .45; }
@@ -128,7 +128,7 @@
 .ws-pill--measure { background: var(--meas-bg); border-color: var(--meas-line); color: var(--meas-ink); }
 /* Colour-mark pill (P7): violet, distinct from dimension (blue) and measure (teal). */
 .ws-pill--color { background: var(--enc-bg); border-color: var(--enc-line); color: var(--enc-ink); }
-.ws-pill__agg, .ws-pill__op { font-size: var(--fs-body); padding: 1px 4px; border-radius: var(--r); box-shadow: none; }
+.ws-pill__agg, .ws-pill__op { font-size: var(--fs-body); padding: 0 var(--s1); border-radius: var(--r); box-shadow: none; }
 /* T04-07 percentile box: a narrow input, its % unit, and an inline message (icon + text) when the value is not 0-100. */
 .ws-pill__pct { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .ws-pill__pctbox { display: inline-flex; align-items: center; gap: 4px; flex: none; }
@@ -136,20 +136,20 @@
 .ws-pill__unit { font-size: var(--fs-body); }
 .ws-pill__pcterr { display: inline-flex; align-items: center; gap: var(--s1); flex-basis: 100%; color: var(--danger-ink); font-size: var(--fs-body); white-space: normal; }
 .ws-pill__pcterr[hidden] { display: none; }
-.ws-pill__val { width: 78px; padding: 1px var(--s2); font-size: var(--fs-body); }
+.ws-pill__val { width: 78px; padding: 0 var(--s2); font-size: var(--fs-body); }
 .ws-pill__filter { display: inline-flex; gap: 4px; align-items: center; }
 /* P14 filter controls: a compact multi-select for `in`, two bounds for `between`. */
-.ws-pill__in { font-size: var(--fs-body); min-width: 96px; max-width: 150px; padding: 1px; }
+.ws-pill__in { font-size: var(--fs-body); min-width: 96px; max-width: 150px; padding: 0; }
 .ws-pill__range { display: inline-flex; gap: 4px; align-items: center; }
 .ws-pill__range .ws-pill__val { width: 56px; }
 .ws-pill__range-sep { color: var(--ink-3); }
 .ws-pill__ctl { display: inline-flex; gap: 4px; align-items: center; }
 /* Convert-role toggle: a bordered chip so it reads as an action distinct from the remove icon. */
-.ws-pill__conv { border: 1px solid currentColor; border-radius: var(--r); opacity: .65; font-weight: 700; line-height: 1; padding: 1px 4px; }
+.ws-pill__conv { border: 1px solid currentColor; border-radius: var(--r); opacity: .65; font-weight: 700; line-height: 1; padding: 0 var(--s1); }
 .ws-pill__conv:hover { opacity: 1; }
-.ws-pill .iconbtn { color: inherit; width: 18px; height: 18px; padding: 0; }
-.ws-pill .iconbtn.ws-pill__conv { width: auto; min-width: 18px; padding: 0 4px; }
-.ws-pill .select { height: 18px; }
+.ws-pill .iconbtn { color: inherit; width: 16px; height: 16px; padding: 0; }
+.ws-pill .iconbtn.ws-pill__conv { width: auto; min-width: 16px; padding: 0 4px; }
+.ws-pill .select { height: 16px; }
 .ws-pill .iconbtn:hover { color: var(--accent); background: transparent; }
 
 
@@ -271,7 +271,7 @@
 .ws-fmt-field { display: inline-flex; align-items: center; gap: var(--s2); font-size: var(--fs-body); color: var(--ink-3); }
 .ws-fmt-check { cursor: pointer; gap: var(--s1); }
 .ws-fmt-label { font-size: var(--fs-body); color: var(--ink-3); white-space: nowrap; }
-.ws-fmt-select, .ws-fmt-input { height: 28px; font-size: var(--fs-body); }
+.ws-fmt-select, .ws-fmt-input { height: var(--ctl-h); font-size: var(--fs-body); }
 .ws-fmt-select { padding: 0 var(--s1); max-width: 116px; }
 .ws-fmt-input { padding: 0 var(--s2); width: 96px; }
 
@@ -350,7 +350,7 @@
 .ws-kpi-row { display: flex; flex-wrap: wrap; gap: var(--s4); align-items: stretch; justify-content: center; height: 100%; }
 .ws-kpi { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; min-width: 120px; }
 /* KPI sparkline (P11): inline SVG trend under the headline number, brand-accented. */
-.ws-spark { width: 132px; height: 30px; margin: var(--s2) 0 2px; overflow: visible; }
+.ws-spark { width: 132px; height: var(--ctl-h); margin: var(--s2) 0 var(--s1); overflow: visible; }
 .ws-spark__line { stroke: var(--accent); stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
 .ws-spark__dot { fill: var(--accent); }
 .ws-hint { color: var(--ink-3); font-size: var(--fs-body); padding: var(--s4); text-align: center; max-width: 480px; margin: auto; line-height: 1.5; }
@@ -401,7 +401,7 @@
 .xtab td.xt-cf { position: relative; }
 .xt-cf__num { position: relative; }
 .xt-cf__icon { position: relative; display: inline-flex; vertical-align: -3px; margin-right: var(--s1); }
-.xt-cf__icon .icon { width: 14px; height: 14px; }
+.xt-cf__icon .icon { width: 16px; height: 16px; }
 .xt-bar { position: absolute; top: 3px; bottom: 3px; border-radius: var(--r); background: color-mix(in srgb, var(--chart-cat-1) 30%, transparent); }
 .xt-bar--neg { background: color-mix(in srgb, var(--chart-cat-6) 34%, transparent); }
 .xt-rule--good { background: var(--ok-bg); color: var(--ok-ink); }
@@ -410,7 +410,7 @@
 .xt-rule--info { background: var(--surface-3); color: var(--ink); } /* neutral: the accent is the brand red */
 .xt-legend { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s4); font-size: var(--fs-body); color: var(--ink-2); }
 .xt-legend__item { display: inline-flex; align-items: center; gap: var(--s1); }
-.xt-legend__rule { padding: 1px var(--s2); border-radius: var(--r); }
+.xt-legend__rule { padding: 0 var(--s2); border-radius: var(--r); }
 .xt-legend__name { font-weight: 600; }
 .xt-legend__scale { width: 64px; height: 8px; border-radius: var(--r-pill); box-shadow: inset 0 0 0 1px var(--line); }
 .xt-legend__note { color: var(--ink-3); font-style: italic; }
@@ -482,8 +482,8 @@
 .ws-select__link { display: inline-flex; align-items: center; gap: var(--s1); }
 
 /* ---- P26 date part on a date pill: − [part] + ------------------------------- */
-.ws-pill__part { height: 18px; padding: 0 var(--s1); font-size: var(--fs-body); max-width: 120px; }
-.ws-pill__step { width: 18px; height: 18px; min-width: 18px; font-size: var(--fs-body); line-height: 1; }
+.ws-pill__part { height: 16px; padding: 0 var(--s1); font-size: var(--fs-body); max-width: 120px; }
+.ws-pill__step { width: 16px; height: 16px; min-width: 16px; font-size: var(--fs-body); line-height: 1; }
 .ws-pill__step .icon { width: 12px; height: 12px; }
 .ws-pill__step:disabled { opacity: .35; cursor: default; }
 /* P27: the measure pill's table-calculation button, accent-coloured when one is set. */
@@ -511,10 +511,10 @@
 .ws-titleblock__btn { justify-self: start; max-width: 100%; border: 1px solid transparent; border-radius: var(--r); background: none;
   padding: 0 var(--s1); margin-inline: calc(-1 * var(--s1)); color: var(--ink); cursor: text; text-align: left; font: inherit; }
 .ws-titleblock__btn:hover { border-color: var(--line-2); background: var(--surface-2); }
-.ws-titleblock__btn h2 { margin: 0; font-size: var(--fs-lead); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-titleblock__btn h2 { margin: 0; font-size: var(--fs-title); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ws-titleblock__btn p { margin: 0; font-size: var(--fs-body); color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ws-titleblock__btn.is-auto.ws-titleblock__caption p { font-style: italic; }
-.ws-titleblock__input.ws-titleblock__title { font-size: var(--fs-lead); font-weight: 600; height: 30px; width: min(480px, 100%); }
+.ws-titleblock__input.ws-titleblock__title { font-size: var(--fs-title); font-weight: 600; height: 40px; width: min(480px, 100%); }
 .ws-titleblock__input.ws-titleblock__caption { font-size: var(--fs-body); height: 24px; width: min(640px, 100%); }
 .ws-statusbar { flex: none; margin: 0; padding: var(--s1) var(--s4) var(--s2); font-size: var(--fs-body); color: var(--ink-3);
   border-top: 1px solid var(--line); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -522,7 +522,7 @@
 
 /* P33: the loading line carries a Cancel button. */
 .ws-loading { display: flex; align-items: center; gap: var(--s2); }
-.ws-loading__cancel { height: 28px; }
+.ws-loading__cancel { height: var(--ctl-h); }
 
 /* ---- P30 filter cards (above the chart) and the new filter editors ---------- */
 .ws-filtercards { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: flex-start; }
@@ -534,10 +534,10 @@
 .ws-fcard__op { color: var(--ink-3); }
 .ws-fcard__list { display: grid; gap: 4px; max-height: 96px; overflow: auto; font-size: var(--fs-body); }
 .ws-fcard__item { display: flex; align-items: center; gap: var(--s1); cursor: pointer; }
-.ws-fcard__item input { margin: 0; width: 14px; height: 14px; }
+.ws-fcard__item input { margin: 0; width: 16px; height: 16px; }
 .ws-pill__top { display: inline-flex; align-items: center; gap: var(--s1); }
 .ws-pill__topn { width: 48px; }
-.ws-pill__topby, .ws-pill__topdir, .ws-pill__rel { height: 22px; font-size: var(--fs-body); max-width: 160px; }
+.ws-pill__topby, .ws-pill__topdir, .ws-pill__rel { height: 24px; font-size: var(--fs-body); max-width: 160px; }
 /* P21 totals: bold on a tinted row / column, a heavier rule above the grand total. */
 .xtab .xt-total { font-weight: 600; background: var(--surface-2); }
 .xtab tr.xt-grand > * { border-top: 2px solid var(--line-2); }
@@ -547,16 +547,16 @@
 .ws-param { display: inline-flex; align-items: center; gap: var(--s2); font-size: var(--fs-body); }
 .ws-param__name { font-weight: 600; color: var(--ink-2); }
 .ws-param__range { width: 140px; accent-color: var(--accent); }
-.ws-param__num { width: 96px; height: 28px; }
+.ws-param__num { width: 96px; height: var(--ctl-h); }
 .ws-pill__pwrap { display: inline-flex; align-items: center; gap: 4px; }
-.ws-pill__paramsel { height: 22px; font-size: var(--fs-body); max-width: 170px; }
+.ws-pill__paramsel { height: 24px; font-size: var(--fs-body); max-width: 170px; }
 .ws-pill__param[aria-pressed="true"] { color: var(--accent-ink); background: var(--accent-soft); }
 
 /* T01-19 tooltip text editor (in the Tooltip tool panel): template, field chips, live preview. */
 .ws-tipedit { display: grid; gap: var(--s2); }
 .ws-tipedit__text { width: 100%; resize: vertical; font-family: inherit; }
 .ws-tipedit__chips { display: flex; flex-wrap: wrap; gap: var(--s1); }
-.ws-tipedit__chip { font-size: var(--fs-body); padding: 2px var(--s2); }
+.ws-tipedit__chip { font-size: var(--fs-body); padding: var(--s1) var(--s2); }
 .ws-tipedit__preview { padding: var(--s2) var(--s2); border: 1px solid var(--line-2); border-radius: var(--r); background: var(--surface-2); color: var(--ink); font-size: var(--fs-body); overflow-wrap: anywhere; }
 
 /* Member colours (T01-20): a list of members, each with the fixed swatches and Reset. The swatch/dot
@@ -564,7 +564,7 @@
 .ws-memcol { display: grid; gap: var(--s2); }
 .ws-memcol__body { display: grid; gap: var(--s2); max-height: 260px; overflow: auto; }
 .ws-memcol__row { display: grid; grid-template-columns: auto minmax(60px, 120px) 1fr auto; align-items: center; gap: var(--s2); }
-.ws-memcol__dot { width: 14px; height: 14px; border-radius: var(--r-pill); border: 1px solid var(--line-2); background: var(--surface-2); }
+.ws-memcol__dot { width: 16px; height: 16px; border-radius: var(--r-pill); border: 1px solid var(--line-2); background: var(--surface-2); }
 .ws-memcol__name { font-size: var(--fs-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ws-memcol__swatches { display: flex; flex-wrap: wrap; gap: 4px; }
 .ws-memcol__swatch { width: 16px; height: 16px; padding: 0; border: 1px solid var(--line-2); border-radius: var(--r); color: var(--ink); font-size: var(--fs-body); line-height: 1; cursor: pointer; }

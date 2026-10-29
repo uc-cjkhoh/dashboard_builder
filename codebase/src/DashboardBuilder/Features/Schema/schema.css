@@ -43,7 +43,7 @@
   box-shadow: inset 0 1px 0 var(--glass-rim), var(--elev-8); }
 .table-chip:active { transform: scale(.98); box-shadow: inset 0 1px 0 var(--glass-rim); }
 .table-chip--dragging { cursor: grabbing; opacity: .85; border-color: var(--accent); color: var(--ink); box-shadow: var(--elev-16); }
-.table-chip__grip { color: var(--ink-2); opacity: 0; width: 14px; margin-right: calc(-1 * var(--s1)); transition: opacity var(--dur-fast) var(--ease); }
+.table-chip__grip { color: var(--ink-2); opacity: 0; width: 16px; margin-right: calc(-1 * var(--s1)); transition: opacity var(--dur-fast) var(--ease); }
 .table-chip:hover .table-chip__grip, .table-chip:focus-within .table-chip__grip, .table-chip--dragging .table-chip__grip { opacity: 1; }
 .table-chip__icon { color: var(--ink-3); transition: color var(--dur) var(--ease); }
 .table-chip:hover .table-chip__icon, .table-chip--dragging .table-chip__icon { color: var(--accent); }

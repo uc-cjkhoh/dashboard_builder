@@ -187,7 +187,7 @@ button { font: inherit; }
 .menu__item[aria-checked="true"] { font-weight: 600; }
 .menu__item .menu__check { margin-left: auto; color: var(--accent-ink); visibility: hidden; }
 .menu__item[aria-checked="true"] .menu__check { visibility: visible; }
-.menu__heading { padding: var(--s1) var(--s2) 2px; font-size: var(--fs-body); font-weight: 600; color: var(--ink-3); grid-column: 1 / -1; }
+.menu__heading { padding: var(--s1) var(--s2) var(--s1); font-size: var(--fs-body); font-weight: 600; color: var(--ink-3); grid-column: 1 / -1; }
 .menu__sep { height: 1px; margin: var(--s1) 0; background: var(--line); grid-column: 1 / -1; }
 
 /* ---- Resize handle (Core/resizer.js) — a 6px hit strip with a 2px accent line on hover/focus/drag ---- */
@@ -213,7 +213,7 @@ body.is-resizing { cursor: col-resize; user-select: none; }
 .btn--danger:hover { background: var(--danger-bg); }
 
 /* ---- Icon action buttons ------------------------------------------------- */
-.iconbtn { display: inline-grid; place-items: center; width: var(--ctl-h); height: var(--ctl-h); border: 0; border-radius: var(--r);
+.iconbtn { display: inline-grid; place-items: center; padding: 0; width: var(--ctl-h); height: var(--ctl-h); border: 0; border-radius: var(--r);
   background: transparent; color: var(--ink-2); cursor: pointer; transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); }
 .iconbtn:hover { background: var(--surface-3); color: var(--ink); }
 .iconbtn--danger { color: var(--danger-ink); }
@@ -245,7 +245,7 @@ body.is-resizing { cursor: col-resize; user-select: none; }
 .dialog:not(.dialog--sm) { width: min(520px, calc(100vw - 2 * var(--s4))); }
 
 /* ---- Status pill (icon + text + color, never color alone) ---------------- */
-.pill { display: inline-flex; align-items: center; gap: var(--s1); height: 22px; padding: 0 var(--s2);
+.pill { display: inline-flex; align-items: center; gap: var(--s1); height: 24px; padding: 0 var(--s2);
   border: 1px solid transparent; border-radius: var(--r-pill); font-size: var(--fs-body); font-weight: 600;
   transition: background var(--dur) var(--ease), color var(--dur) var(--ease), border-color var(--dur) var(--ease); }
 .pill .pill__glyph { font-weight: 700; }
@@ -268,7 +268,7 @@ body.is-resizing { cursor: col-resize; user-select: none; }
 .dialog--sm { max-width: 340px; }
 .dialog::backdrop { background: var(--scrim); animation: fade-in var(--dur) var(--ease); }
 .dialog__head { padding: var(--s2) var(--s4); border-bottom: 1px solid var(--line); font-weight: 600; }
-.dialog__title { margin: 0; padding: var(--s4) var(--s4) 0; font-size: var(--fs-lead); font-weight: 600; }
+.dialog__title { margin: 0; padding: var(--s4) var(--s4) 0; font-size: var(--fs-title); font-weight: 600; }
 .dialog__list { margin: var(--s2) 0 0; padding: 0 var(--s4) 0 var(--s6); max-height: 50vh; overflow: auto; color: var(--ink-2); font-size: var(--fs-body); }
 .dialog__body { padding: var(--s4); }
 .dialog__foot { display: flex; justify-content: flex-end; gap: var(--s2); border-top: 0; padding: var(--s4); }
@@ -303,10 +303,10 @@ body.is-resizing { cursor: col-resize; user-select: none; }
 .theme-option:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); font-weight: 600; }
 .theme-option input[type="radio"] { margin: 0; accent-color: var(--accent); }
 .theme-swatches { display: inline-flex; gap: 4px; }
-.theme-swatch { width: 14px; height: 14px; border-radius: var(--r); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 20%, transparent); }
+.theme-swatch { width: 16px; height: 16px; border-radius: var(--r); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 20%, transparent); }
 .theme-option__label { flex: 1; }
 .theme-picker { width: 32px; height: 24px; padding: 0; border: 1px solid var(--line-2); border-radius: var(--r); background: none; }
-.theme-hex { width: 96px; height: 28px; font-variant-numeric: tabular-nums; }
+.theme-hex { width: 96px; height: var(--ctl-h); font-variant-numeric: tabular-nums; }
 .theme-error { margin-left: var(--s6); }
 
 /* P39 bookmarks dialog: one row per bookmark — name + where/when, then Apply / Delete. */

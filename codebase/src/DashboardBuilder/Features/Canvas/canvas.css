@@ -68,7 +68,7 @@
 .col-row:hover { background: var(--surface-2); }
 .data tbody tr { transition: background var(--dur) var(--ease); }
 .data tbody tr:hover { background: var(--surface-2); }
-.col-row__key { flex: none; width: 14px; height: 14px; margin: 0; }
+.col-row__key { flex: none; width: 16px; height: 16px; margin: 0; }
 .col-row__name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .col-row--key .col-row__name { color: var(--accent-ink); font-weight: 600; }
 .col-row__type {
@@ -81,7 +81,7 @@
   border: 1px solid var(--line-2);
   border-radius: var(--r);
   box-shadow: var(--elev-2);
-  padding: 1px var(--s1);
+  padding: 0 var(--s1);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 

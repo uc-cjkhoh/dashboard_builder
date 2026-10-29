@@ -61,10 +61,10 @@
 }
 .form-check { display: flex; align-items: flex-start; gap: var(--s2); font-size: var(--fs-body); }
 /* No UA margin: the box sits on the gutter. Nudged so it centres on the first line when a label wraps. */
-.form-check input { flex: none; width: 14px; height: 14px; margin: 4px 0 0; }
+.form-check input { flex: none; width: 16px; height: 16px; margin: 4px 0 0; }
 .form-check--sub input { margin-top: 4px; }
 /* Sub-option under a checkbox (e.g. "trust invalid cert" under Secure) + its inline warning. */
-.form-check--sub { padding-left: calc(14px + var(--s2)); font-size: var(--fs-body); color: var(--ink-3); }  /* = parent's label x */
-.form-warn { margin: calc(-1 * var(--s1)) 0 0 calc(14px + var(--s2)); font-size: var(--fs-body); line-height: 1.35; color: var(--warn-ink); }
+.form-check--sub { padding-left: calc(16px + var(--s2)); font-size: var(--fs-body); color: var(--ink-3); }  /* = parent's label x */
+.form-warn { margin: calc(-1 * var(--s1)) 0 0 calc(16px + var(--s2)); font-size: var(--fs-body); line-height: 1.35; color: var(--warn-ink); }
 .form-field input:disabled, .select:disabled { opacity: .55; cursor: not-allowed; }
 

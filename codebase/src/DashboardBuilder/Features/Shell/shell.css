@@ -34,19 +34,18 @@
 }
 .sidebar__mark {
   flex: none;
-  width: 34px; height: 34px;
+  width: var(--ctl-h); height: var(--ctl-h);
   border-radius: var(--r);
   background: var(--accent);
   color: var(--on-accent);
   display: grid;
   place-items: center;
 }
-.sidebar__mark svg { width: 18px; height: 18px; }
+.sidebar__mark svg { width: 16px; height: 16px; }
 .sidebar__brand-text { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
 .sidebar__brand-name { font-weight: 700; font-size: var(--fs-body); letter-spacing: .01em; }
-.sidebar__brand-sub { font-size: var(--fs-body); color: var(--ink-3); }
 /* One line each, so the toggle never pushes the brand taller than --topbar-h. */
-.sidebar__brand-name, .sidebar__brand-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sidebar__brand-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Ghost button: pulled out by its 8px glyph slack so the glyph's edge, not the box's, meets the gutter. */
 .sidebar__toggle { flex: none; margin-left: auto; margin-right: calc(-1 * var(--s2)); }
 /* Connection + schema; hidden (not removed) while the sidebar is collapsed. */
@@ -96,7 +95,7 @@
 .view--model, .view--worksheet { background: transparent; }
 .sr-only {
   position: absolute; width: 1px; height: 1px;
-  padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  padding: 0; margin: -1px; font-size: var(--fs-body); overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
 }
 
 /* The view strip (Data Model + dashboards) sits at the top of the canvas column. */

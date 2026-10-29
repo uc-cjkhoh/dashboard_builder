@@ -16,7 +16,7 @@
 
 .rel-connector {
   flex: none;
-  width: 14px; height: 14px;
+  width: 16px; height: 16px;
   margin-left: var(--s1);
   border: 1px solid var(--line-2);
   border-radius: var(--r-pill);
