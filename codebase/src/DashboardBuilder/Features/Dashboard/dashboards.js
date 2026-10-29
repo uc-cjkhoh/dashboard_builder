@@ -56,6 +56,7 @@ import { hierarchyGroup, HIERARCHY_MIME } from "./hierarchy-group.js";
 import { openHierarchiesDialog } from "./hierarchy-dialog.js";
 import { drillFromHierarchy, hierarchyTableKey } from "./hierarchy-model.js";
 import { BUCKET_TYPES, DATE_BUCKET_CHOICES } from "./scale-model.js";
+import { toggleDateLabels } from "./date-labels.js";
 
 // Tableau-style worksheet: each worksheet tab is one sheet. Drag fields from the field pane onto the
 // Columns (dimension), Rows (measure) and Filters shelves; the chart renders from a bounded,
@@ -1540,6 +1541,14 @@ export function initDashboards() {
         return b;
       };
       controls.append(step(-1), part, step(1));
+      // Axis labels: Show all (a slot and label per date) or Thin out (the default; fits the pane, labels thin out).
+      const all = f.dateLabels === "all";
+      const lab = iconButton("eye", all ? `Showing all date labels on ${label} — thin them out` : `Thinning date labels on ${label} — show all`);
+      lab.classList.add("ws-pill__step", "ws-pill__labels");
+      if (all) lab.classList.add("is-set");
+      lab.setAttribute("aria-pressed", String(all));
+      lab.addEventListener("click", () => { f.dateLabels = toggleDateLabels(f.dateLabels); commit(dash, s); });
+      controls.append(lab);
     }
     // P40: alternative fields for this slot (opens the Choices editor).
     const n = f.choices?.length ?? 0;

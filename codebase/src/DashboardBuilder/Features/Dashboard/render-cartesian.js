@@ -1,4 +1,5 @@
 import { renderChart as drawChart } from "./chart.js";
+import { dateLabelsOf } from "./date-labels.js";
 import { isCalcPill } from "../Calc/calc-pill.js";
 import { SCATTER_TYPES, marksOf, measureName as planMeasureName } from "./sheet-plan.js";
 import { REF_CHOICES, TREND_CHOICES, refValue, refConstant, trendSeries, pickMeasure, dataValues, bandBounds, bandLabel } from "./analytics-model.js";
@@ -102,5 +103,5 @@ export function renderSeries(container, rc, sheet, a) {
   const memberColourSpec = byMember
     ? memberSpec(rc, sheet, primaryDim(sheet), rowsOrdered.map((r, i) => ({ name: categories[i], raw: r.keys[0], other: r.isOther })).filter((m) => !m.other))
     : {};
-  drawChart(container, { type, symbol: SCATTER_TYPES.has(type) ? scatterSymbol(type) : undefined, categories: catsOut, series: seriesOut, format, onSelect, selectedIndices, orientation: chartOrientation(sheet), otherIndex, analytics, ...memberColourSpec, ...legend, ...marks.spec });
+  drawChart(container, { type, symbol: SCATTER_TYPES.has(type) ? scatterSymbol(type) : undefined, categories: catsOut, series: seriesOut, format, onSelect, selectedIndices, orientation: chartOrientation(sheet), otherIndex, analytics, dateLabels: dateLabelsOf(sheet, primaryDim), ...memberColourSpec, ...legend, ...marks.spec });
 }

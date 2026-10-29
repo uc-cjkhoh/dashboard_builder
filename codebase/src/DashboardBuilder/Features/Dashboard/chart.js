@@ -12,6 +12,7 @@ import { bandsFor } from "./bullet-model.js";
 import { boxData, outlierPoints } from "./box-model.js";
 import { chartFit, markCount, applyFitMode, FIT } from "./chart-fit.js";
 import { applySelectionDim } from "./selection-dim.js";
+import { dateFitMode } from "./date-labels.js";
 
 // Charting adapter (P9; formatting P10). Renders worksheet results through the self-hosted ECharts library
 // (wwwroot/js/vendor/echarts.min.js, loaded as a global before the module graph — no CDN).
@@ -104,7 +105,7 @@ export function renderChart(container, spec) {
   const inset = () => 2 * parseFloat(getComputedStyle(host).left || 0);
   const paneWidth = () => container.clientWidth - inset();
   const paneHeight = () => container.clientHeight - inset();
-  const fitMode = spec.format?.fit ?? "standard"; // P23 Format → Fit
+  const fitMode = dateFitMode(spec.format?.fit ?? "standard", spec.dateLabels, spec.type === "combo" ? "vertical" : spec.orientation); // P23 Format → Fit, date axis per its Show all / Thin out
   let fit = applyFitMode(chartFit(spec, paneWidth(), paneHeight()), fitMode);
   host.style.setProperty("--chart-min-w", `${fit.minWidth}px`);
   host.style.setProperty("--chart-min-h", `${fit.minHeight}px`);
