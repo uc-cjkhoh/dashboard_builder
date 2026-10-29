@@ -1,14 +1,14 @@
-// Browser checks for axis sync, right-axis mark type, marker size and mark borders (T03-16/17, T01-22, T03-34): the real dev app (APP_URL, default http://localhost:5191) in headless
+// Browser checks for the Analytics card: reference line over a chosen measure, and standard-deviation / percentile bands (T07): the real dev app (APP_URL, default http://localhost:5219) in headless
 // Chromium, driven over the DevTools protocol (tests/live/cdp.mjs), with every /api/* call answered by a mock —
 // nothing reaches a ClickHouse. Run:  node tests/live/ref-lines-ui.mjs   (start the app first:
-//   cd src/DashboardBuilder && dotnet run --no-launch-profile --urls http://localhost:5191 ; stop it with fuser -k 5180/tcp)
+//   cd src/DashboardBuilder && dotnet run --no-launch-profile --urls http://localhost:5219 ; stop it with fuser -k 5219/tcp)
 // Env: APP_URL, SHOTS_DIR (screenshot folder), CDP_PORT (default: a free port), CHROME_BIN.
 import { launch } from './cdp.mjs';
-import { writeFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const APP = process.env.APP_URL ?? 'http://localhost:5191';
+const APP = process.env.APP_URL ?? 'http://localhost:5219';
 const SHOTS = process.env.SHOTS_DIR ?? join(tmpdir(), 'ref-lines-ui-shots');
 mkdirSync(SHOTS, { recursive: true });
 
@@ -51,9 +51,8 @@ async function check(name, fn) {
 const must = (cond, msg) => { if (!cond) throw new Error(msg); };
 const J = JSON.stringify;
 
-let wbDir = null, b = null;
+let b = null;
 try {
-  wbDir = mkdtempSync(join(tmpdir(), 'calc-wb-'));
   b = await launch({ port: process.env.CDP_PORT ? Number(process.env.CDP_PORT) : undefined });
   await b.mock(answer);
   const ev = (s) => b.evaluate(s);
@@ -98,11 +97,6 @@ try {
   const saveDialog = async () => {
     await ev(`[...${dlg}.querySelectorAll('.dialog__foot button')].find((x) => x.textContent === 'Save').click()`);
     await waitFor(`${dlg} === null`, 'dialog closed after save');
-  };
-  const newCalc = async (name, formula) => { await openNewDialog(); await fillDialog(name, formula); await saveDialog(); };
-  const calcMenu = async (name, item) => {
-    await ev(`(() => { const c = __t.chip(${J(name)}); c.querySelector('.ws-field__more').click(); return true; })()`);
-    await ev(`(() => { const c = __t.chip(${J(name)}); [...c.querySelectorAll('.menu__item')].find((x) => x.textContent.trim() === ${J(item)}).click(); return true; })()`);
   };
   const confirmOpen = `[...document.querySelectorAll('dialog[open]')].find((d) => !d.classList.contains('calc-dialog'))`;
   const chartText = () => ev(`document.getElementById('ws-chart').textContent`);
@@ -208,7 +202,6 @@ try {
   console.log(`FAIL harness: ${e.stack}`); failed++;
 } finally {
   if (b) await b.close();
-  if (wbDir) rmSync(wbDir, { recursive: true, force: true });
 }
 console.log(`\n${passed} ok, ${failed} failed`);
 process.exit(failed ? 1 : 0);

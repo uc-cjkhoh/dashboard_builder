@@ -356,7 +356,7 @@ test("reference line measure and distribution bands (T07) are kept when valid, r
   assert.deepEqual([ok.ref, ok.band], [{ kind: "average", measure: 2 }, { kind: "stddev", k: 2 }]);
   const pc = sheetOf({ analytics: { band: { kind: "percentile", lo: 25, hi: 75 } } }).worksheets[0].sheet.analytics;
   assert.deepEqual(pc.band, { kind: "percentile", lo: 25, hi: 75 });
-  for (const band of [{ kind: "stddev", k: 9 }, { kind: "percentile", lo: 80, hi: 20 }, { kind: "percentile", lo: 0, hi: 50 }, { kind: "x" }]) {
+  for (const band of [{ kind: "stddev", k: 3 }, { kind: "percentile", lo: 80, hi: 20 }, { kind: "percentile", lo: 5, hi: 95 }, { kind: "x" }]) {
     const r = sheetOf({ analytics: { band } });
     assert.equal(r.worksheets[0].sheet.analytics.band, null);
     assert.ok(r.issues.some((i) => /analytics/.test(i)));

@@ -872,7 +872,7 @@ export function initDashboards() {
       panel.append(fmtSelect("Trend", TREND_CHOICES, a.trend, (v) => set({ trend: v })));
       if (s.chartType === "line" || s.chartType === "area")
         panel.append(fmtSelect("Forecast", FORECAST_CHOICES, a.forecast, (v) => set({ forecast: Number(v) })));
-      panel.append(el("span", "ws-shelf__note", "Lines and bands read the chosen measure over the rows shown; trend and forecast follow the first, in category order. A forecast extends the trend (linear if none is picked)."));
+      panel.append(el("span", "ws-shelf__note", "Lines and bands read the chosen measure over the rows shown (the “Other” remainder is left out); trend and forecast follow the first, in category order. A forecast extends the trend (linear if none is picked)."));
     } else if (isTable) {
       panel.append(fmtCheck("Grand totals", a.totals.grand, (v) => set({ totals: { ...a.totals, grand: v } })),
         fmtCheck("Subtotals", a.totals.sub, (v) => set({ totals: { ...a.totals, sub: v } })),

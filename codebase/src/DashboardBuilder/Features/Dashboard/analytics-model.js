@@ -129,7 +129,7 @@ function percentileOf(sorted, p) { // linear interpolation between closest ranks
 /** The band's { from, to } over a measure's values, or null (no values; fewer than two for a standard deviation). */
 export function bandBounds(band, values) {
   if (!band) return null;
-  if (!band.kind) return { from: band.from, to: band.to };
+  if (!band.kind) return band.from === band.to ? null : { from: band.from, to: band.to }; // a typed range with equal ends (just chosen) draws nothing
   const v = nums(values);
   if (band.kind === "stddev") {
     if (v.length < 2) return null;
@@ -144,3 +144,6 @@ export function bandBounds(band, values) {
   }
   return null;
 }
+
+/** A measure's values without the "Other" remainder rows (an aggregate of cut-off members is not a data point). */
+export const dataValues = (data, rows) => data.filter((_, i) => !rows[i]?.isOther);

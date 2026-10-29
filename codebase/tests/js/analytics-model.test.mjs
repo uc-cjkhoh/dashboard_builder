@@ -45,7 +45,7 @@ test("totals follow the aggregation", () => {
   assert.equal(combine("sum", [null]), null);
 });
 
-import { bandBounds, bandLabel, BAND_CHOICES, pickMeasure } from "../../src/DashboardBuilder/Features/Dashboard/analytics-model.js";
+import { dataValues, bandBounds, bandLabel, BAND_CHOICES, pickMeasure } from "../../src/DashboardBuilder/Features/Dashboard/analytics-model.js";
 test("band bounds: typed range, standard deviation and percentile", () => {
   assert.deepEqual(bandBounds({ from: 1, to: 5 }, []), { from: 1, to: 5 });
   const sd = bandBounds({ kind: "stddev", k: 1 }, [2, 4, 4, 4, 5, 5, 7, 9]); // mean 5, sample sd 2.138...
@@ -57,6 +57,7 @@ test("band bounds: typed range, standard deviation and percentile", () => {
   assert.ok(close(bandBounds({ kind: "percentile", lo: 10, hi: 90 }, [0, 10]).from, 1));
   assert.equal(bandBounds({ kind: "percentile", lo: 25, hi: 75 }, [null, ""]), null);
   assert.equal(bandBounds(null, [1]), null);
+  assert.equal(bandBounds({ from: 0, to: 0 }, [1]), null); // a freshly chosen typed range draws nothing
 });
 test("band labels name the rule, never colour alone", () => {
   assert.equal(bandLabel({ from: 1, to: 2 }), "Band");
@@ -69,4 +70,10 @@ test("the measure a reference line reads falls back to the first", () => {
   assert.equal(pickMeasure(5, 3), 0);
   assert.equal(pickMeasure(undefined, 3), 0);
   assert.equal(pickMeasure(-1, 3), 0);
+});
+test('the "Other" remainder is not a data point for lines and bands', () => {
+  const vals = dataValues([10, 20, 30, 900], [{}, {}, {}, { isOther: true }]);
+  assert.deepEqual(vals, [10, 20, 30]);
+  assert.equal(refValue("average", vals), 20);
+  assert.ok(close(bandBounds({ kind: "stddev", k: 1 }, vals).to, 30));
 });

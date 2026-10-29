@@ -1,7 +1,7 @@
 import { renderChart as drawChart } from "./chart.js";
 import { isCalcPill } from "../Calc/calc-pill.js";
 import { SCATTER_TYPES, marksOf, measureName as planMeasureName } from "./sheet-plan.js";
-import { REF_CHOICES, TREND_CHOICES, refValue, refConstant, trendSeries, pickMeasure, bandBounds, bandLabel } from "./analytics-model.js";
+import { REF_CHOICES, TREND_CHOICES, refValue, refConstant, trendSeries, pickMeasure, dataValues, bandBounds, bandLabel } from "./analytics-model.js";
 import { parameters } from "../Core/store.js";
 import { hint } from "./render-dom.js";
 import { selectHandler, legendSpec, memberSpec } from "./render-handlers.js";
@@ -76,8 +76,8 @@ export function renderSeries(container, rc, sheet, a) {
   const A = sheet.analytics;
   if (A && ANALYTICS_TYPES.has(type) && series.length) {
     const vals = series[0].data; // the trend and forecast follow the first measure
-    const mi = pickMeasure(A.ref?.measure, series.length), mvals = series[mi].data;
-    const mname = series.length > 1 ? ` (${series[mi].name})` : "";
+    const mi = pickMeasure(A.ref?.measure, series.length), mvals = dataValues(series[mi].data, rowsOrdered); // the "Other" remainder aggregates cut-off members: not a data point
+    const mname = mi > 0 ? ` (${series[mi].name})` : ""; // named only when a measure other than the default was chosen
     const refKind = A.ref?.kind ?? "none";
     const rv = refKind === "none" ? null : refValue(refKind, mvals, refConstant(A.ref, parameters));
     const fc = type === "line" || type === "area" ? A.forecast ?? 0 : 0;
@@ -86,14 +86,15 @@ export function renderSeries(container, rc, sheet, a) {
     const bb = bandBounds(A.band, mvals);
     analytics = {
       ref: rv == null ? null : { name: (refKind === "constant" ? "Reference" : REF_CHOICES.find(([v]) => v === refKind)[1]) + (refKind === "constant" ? "" : mname), value: rv },
-      band: bb ? { ...bb, name: bandLabel(A.band) + (A.band.kind ? mname : "") } : null,
+      band: bb ? { ...bb, name: bandLabel(A.band) + (A.band.kind ? ` (shown rows)${mname}` : "") } : null,
       trend: t ? { name: `Trend (${trendLabel}${fc ? ` + ${fc} forecast` : ""}) R² ${t.r2.toFixed(2)}`, short: `Trend · R² ${t.r2.toFixed(2)}`, data: t.data } : null,
     };
     if (t && t.extra) {
       catsOut = [...categories, ...Array.from({ length: t.extra }, (_, i) => `Forecast +${i + 1}`)];
       seriesOut = seriesOut.map((sr) => ({ ...sr, data: [...sr.data, ...new Array(t.extra).fill(null)] }));
     }
-    if ((t || rv != null) && (result.truncated || result.partial)) rc.extraNotice = joinNotices(rc.extraNotice, "Analytics use only the rows shown — more exist.");
+    if (A.band && !bb) rc.extraNotice = joinNotices(rc.extraNotice, A.band.kind ? "The band needs more values than the rows shown (at least 2 for a standard deviation)." : "The band's ends are equal — type two different numbers.");
+    if ((t || rv != null || bb) && (result.truncated || result.partial)) rc.extraNotice = joinNotices(rc.extraNotice, "Analytics use only the rows shown — more exist.");
   }
   // T01-20: members coloured by a field — pie / donut slices and a single-measure bar coloured by category.
   const byMember = (type === "pie" || type === "donut" || (type === "bar" && format.colorByDimension && series.length === 1 && !compareSeries.length)) && primaryDim(sheet) && !isCalcPill(primaryDim(sheet));
