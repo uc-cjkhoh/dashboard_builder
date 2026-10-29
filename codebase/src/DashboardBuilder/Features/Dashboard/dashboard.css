@@ -370,6 +370,15 @@
 /* Measure-name band (top or left) reads as secondary to the dimension headers. */
 .xt-meas { font-weight: 600; color: var(--accent-ink); background: var(--surface-2); }
 .xtab thead .xt-meas { text-align: right; }
+/* T01-23 table look: alignment of value cells, row height (4 / 8 / 16 px steps) and shading (token surfaces). */
+.xtab.xt-a-left td, .xtab.xt-a-left thead th.num { text-align: left; }
+.xtab.xt-a-center td, .xtab.xt-a-center thead th.num { text-align: center; }
+.xtab.xt-a-right td, .xtab.xt-a-right thead th.num { text-align: right; }
+.xtab.xt-d-compact th, .xtab.xt-d-compact td { padding-block: 0; }
+.xtab.xt-d-roomy th, .xtab.xt-d-roomy td { padding: var(--s2) var(--s4); }
+/* Shading uses --surface-3 (visible beside the white / dark surface). Banding skips cells that carry a rule or scale (.xt-cf), whose own tint wins; the header keeps each cell's own ink. */
+.xtab.xt-s-banded tbody tr:nth-child(even) td:not(.xt-cf) { background: var(--surface-3); }
+.xtab.xt-s-header thead th { background: var(--surface-3); }
 .mono { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
 
 

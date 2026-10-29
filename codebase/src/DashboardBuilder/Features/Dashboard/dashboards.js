@@ -31,6 +31,7 @@ import { LINE_STYLE_CHOICES, linesTakeStyle } from "./line-style-model.js";
 import { HEATMAP_SHAPE_CHOICES } from "./heatmap-model.js";
 import { SECONDARY_CHOICES } from "./axis-sync-model.js";
 import { RAMP_CHOICES, colourRangeError } from "./colour-scale-model.js";
+import { TABLE_ALIGN_CHOICES, TABLE_DENSITY_CHOICES, TABLE_SHADE_CHOICES } from "./table-style-model.js";
 import { MARK_BORDER_CHOICES, MARKER_SHAPE_CHOICES, markerSizeError } from "./mark-style-model.js";
 import { targetChoices, effectiveTargetMeasure } from "./bullet-model.js";
 import { keyOf, SCATTER_TYPES, COLOR_USES, colorMode, isDrillActive, drillActiveDim, planDims, planMeasures, sortTargets as planSortTargets, measureName as planMeasureName, buildPlan as planQuery, periodFilters as planPeriodFilters, calcContext, appliedShared as planAppliedShared, withParams, toServerFilter, isDateOnlyType } from "./sheet-plan.js";
@@ -1262,7 +1263,12 @@ export function initDashboards() {
       panel.append(fmtCheck("A fall is good", f.downIsGood, (v) => set({ downIsGood: v })));
     if (!STAT_SINGLE_TABLE.has(s.chartType))
       panel.append(fmtCheck("Approximate (faster)", f.approximate, (v) => set({ approximate: v }))); // P33
-    if (s.chartType === "table" || s.chartType === "text") panel.append(conditionalEditor(dash, s));
+    if (s.chartType === "table" || s.chartType === "text") { // T01-23
+      panel.append(fmtSelect("Align", TABLE_ALIGN_CHOICES, f.tableAlign ?? "auto", (v) => set({ tableAlign: v })),
+        fmtSelect("Row height", TABLE_DENSITY_CHOICES, f.tableDensity ?? "standard", (v) => set({ tableDensity: v })),
+        fmtSelect("Shading", TABLE_SHADE_CHOICES, f.tableShade ?? "none", (v) => set({ tableShade: v })),
+        conditionalEditor(dash, s));
+    }
     if (CLICK_TYPES.has(s.chartType)) panel.append(linkActionEditor(dash, s));
     // Chart-only controls.
     if (isChart) {
