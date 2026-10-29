@@ -275,7 +275,8 @@ try {
   await check('table calculation editor: percentile rank, and compute-using picks dimensions that persist', async () => {
     await setSheet(`${base} ${noMarks} s.chartType = 'table'; s.columns = []; s.rows = [f('region', 'text'), f('channel', 'text'), f('amount', 'numeric', { agg: 'sum' })]`); await settle();
     await waitFor(`document.querySelectorAll('#ws-chart td.num').length > 0`, 'cells');
-    await ev(`document.querySelector('button[aria-label^="Add a table calculation"]').click()`);
+    await ev(`[...document.querySelectorAll('.ws-shelf--rows .ws-pill')].at(-1).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 300, clientY: 200 }))`);
+    await ev(`[...document.querySelectorAll('.ctx-menu [role^=menuitem]')].find((x) => x.textContent.trim() === 'Table calculation…').click()`);
     await waitFor(`!!document.querySelector('.ws-calc')`, 'calc panel');
     const pick = (label, value) => ev(`(() => { const sel = [...document.querySelectorAll('.ws-calc .ws-fmt-field')].find((x) => x.textContent.startsWith(${J(label)})).querySelector('select'); sel.value = ${J(value)}; sel.dispatchEvent(new Event('change')); return true; })()`);
     await pick('Calculation', 'pctRank'); await settle();
@@ -293,7 +294,8 @@ try {
     await b.screenshot(join(SHOTS, 'calc-dims-dark.png'));
     await b.setScheme('light');
     await setSheet(`${base} ${noMarks} s.chartType = 'table'; s.columns = [f('region', 'text')]; s.rows = [f('region', 'text'), f('amount', 'numeric', { agg: 'sum', tableCalc: { type: 'running', along: 'custom', using: [0] } })]`); await settle();
-    await ev(`document.querySelector('button[aria-label^="Table calculation"]').click()`);
+    await ev(`[...document.querySelectorAll('.ws-shelf--rows .ws-pill')].at(-1).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 300, clientY: 200 }))`);
+    await ev(`[...document.querySelectorAll('.ctx-menu [role^=menuitem]')].find((x) => x.textContent.trim() === 'Table calculation…').click()`);
     await waitFor(`document.querySelectorAll('.ws-calc__dim span').length === 2`, 'duplicate panel');
     must(await ev(`[...document.querySelectorAll('.ws-calc__dim span')].map((x) => x.textContent).join() === 'region (Rows),region (Columns)'`), 'duplicate labels');
     await ev(`document.querySelector('button[aria-label="Close editor"]').click()`);

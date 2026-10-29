@@ -143,7 +143,7 @@ try {
     await waitFor(`!!document.querySelector('.ws-toolpanel__zone')`, 'drill panel (left open by the first drop)');
     await store(`d.sheet.drill = null; st.updateSheet(d.id, d.sheet)`);
     await waitFor(`!document.querySelector('.ws-drill')`, 'drill cleared');
-    await ev(`[...document.querySelectorAll('.ws-more .menu__item')].find((x) => x.textContent === 'Drill').click()`);
+    await ev(`(() => { if (!document.querySelector('.ws-toolpanel__zone')) [...document.querySelectorAll('.ws-tool')].find((x) => /^Drill/.test(x.getAttribute('aria-label') ?? '')).click(); return true; })()`);
     await waitFor(`!!document.querySelector('.ws-toolpanel__zone')`, 'panel open');
     await ev(`(() => { const chip = ${hierChip('Geo')}; const z = document.querySelector('.ws-toolpanel__zone'); const dt = new DataTransfer();
       chip.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt }));

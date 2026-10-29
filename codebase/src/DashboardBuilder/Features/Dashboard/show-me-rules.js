@@ -1,5 +1,4 @@
-// P22 Show Me rules — which chart types the sheet's fields can draw, which one to recommend, and how to
-// lay Columns / Rows out for a picked type. Also the single home of the chart-type field rules that the
+// P22 Show Me rules — which chart types the sheet's fields can draw and which one to recommend. Also the single home of the chart-type field rules that the
 // chart hint uses. Pure, DOM-free (unit-tested under tests/js/show-me-rules.test.mjs).
 import { TEXT_VALUE_TYPES } from "./filter-rules.js";
 
@@ -97,34 +96,4 @@ export function showMeOptions(types, countsFor) {
   const hit = options.find((o) => o.id === best && o.issue === null);
   if (hit) hit.recommended = true;
   return options;
-}
-
-// --- Placement: where Columns / Rows pills go for a picked type. D = dimensions in group-by key order
-// (Rows, then Columns), M = measures in series order (Columns, then Rows) — planDims / planMeasures order.
-const HORIZONTAL_TYPES = new Set(["bar", "stacked"]);
-const TIME_TYPES = new Set(["line", "area", "combo"]);
-const XY_TYPES = new Set(["scatter", "square", "circle"]);
-const TWO_DIM_TYPES = new Set(["heatmap", "sankey", "multiples"]);
-const TEXT_TYPES = new Set(["table", "text"]);
-const isDim = (f) => roleOf(f) === "dimension";
-
-export function placeFor(type, columns, rows) {
-  const dims = [...rows.filter(isDim), ...columns.filter(isDim)];
-  const meas = [...columns.filter((f) => !isDim(f)), ...rows.filter((f) => !isDim(f))];
-  if (TEXT_TYPES.has(type)) return { columns: meas, rows: dims };
-  if (XY_TYPES.has(type)) return { columns: [...dims, ...meas.slice(0, 1)], rows: meas.slice(1) };
-  if (TWO_DIM_TYPES.has(type)) return { columns: [...dims.slice(1), ...meas], rows: dims.slice(0, 1) };
-  if (TIME_TYPES.has(type)) {
-    const temporal = dims.filter((f) => f.category === "temporal");
-    return { columns: [...temporal, ...dims.filter((f) => f.category !== "temporal")], rows: meas };
-  }
-  const horizontal = rows.some(isDim) && !columns.some(isDim); // chartOrientation's rule
-  if (HORIZONTAL_TYPES.has(type) && horizontal) return { columns: meas, rows: dims };
-  return { columns: dims, rows: meas };
-}
-
-/** True when two `{ columns, rows }` hold the same pill objects in the same order. */
-export function samePlacement(a, b) {
-  const same = (x, y) => x.length === y.length && x.every((f, i) => f === y[i]);
-  return same(a.columns, b.columns) && same(a.rows, b.rows);
 }

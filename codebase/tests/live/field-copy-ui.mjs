@@ -70,9 +70,9 @@ try {
   await ev(`(() => { const s = document.getElementById('db-select'); s.value = 'shop'; s.dispatchEvent(new Event('change')); return true; })()`);
   await waitFor(`document.querySelectorAll('.table-chip').length === 1`, 'tables listed');
   await ev(`document.dispatchEvent(new CustomEvent('table:add', { detail: { db: 'shop', table: 'orders' } }))`);
-  const menu = (name) => ev(`(() => { __t.chip(${J(name)}).querySelector('.ws-field__more').click(); return true; })()`);
-  const items = (name) => ev(`[...__t.chip(${J(name)}).querySelectorAll('.menu__item')].map((x) => x.textContent.trim())`);
-  const click = (name, label) => ev(`(() => { [...__t.chip(${J(name)}).querySelectorAll('.menu__item')].find((x) => x.textContent.trim() === ${J(label)}).click(); return true; })()`);
+  const menu = (name) => ev(`(() => { __t.chip(${J(name)}).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 40 })); return true; })()`);
+  const items = (name) => ev(`[...document.querySelectorAll('.ctx-menu .menu__item')].map((x) => x.textContent.trim())`);
+  const click = (name, label) => ev(`(() => { [...document.querySelectorAll('.ctx-menu .menu__item')].find((x) => x.textContent.trim() === ${J(label)}).click(); return true; })()`);
   const shot = async (n) => writeFileSync(join(SHOTS, n), Buffer.from((await b.send('Page.captureScreenshot', { format: 'png' })).data, 'base64'));
   await ev(`document.dispatchEvent(new CustomEvent('table:add', { detail: { db: 'shop', table: 'orders' } }))`);
   await waitFor(`document.querySelectorAll('.entity').length === 1 && [...document.querySelectorAll('.entity__status')].every((s) => s.hidden)`, 'table loaded');

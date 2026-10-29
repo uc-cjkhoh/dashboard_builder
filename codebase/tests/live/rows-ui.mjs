@@ -100,8 +100,8 @@ try {
   };
   const newCalc = async (name, formula) => { await openNewDialog(); await fillDialog(name, formula); await saveDialog(); };
   const calcMenu = async (name, item) => {
-    await ev(`(() => { const c = __t.chip(${J(name)}); c.querySelector('.ws-field__more').click(); return true; })()`);
-    await ev(`(() => { const c = __t.chip(${J(name)}); [...c.querySelectorAll('.menu__item')].find((x) => x.textContent.trim() === ${J(item)}).click(); return true; })()`);
+    await ev(`(() => { const c = __t.chip(${J(name)}); c.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 40 })); return true; })()`);
+    await ev(`(() => { const c = __t.chip(${J(name)}); [...document.querySelectorAll('.ctx-menu .menu__item')].find((x) => x.textContent.trim() === ${J(item)}).click(); return true; })()`);
   };
   const confirmOpen = `[...document.querySelectorAll('dialog[open]')].find((d) => !d.classList.contains('calc-dialog'))`;
   const chartText = () => ev(`document.getElementById('ws-chart').textContent`);
@@ -194,8 +194,9 @@ try {
     await dragChip('region', `__t.zone('rows')`);
     await dragChip('amount', `__t.zone('columns')`);
     await ev(`(() => { __t.drag(__t.chip('region'), ${filterTool}); return true; })()`);
-    await waitFor(`${opSelect} !== null`, 'filter pill editor');
-    await ev(`(() => { const s = ${opSelect}; s.value = 'notin'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+    await waitFor(`!!document.querySelector('[data-ctx^="filter:"]')`, 'filter pill');
+    await ev(`document.querySelector('[data-ctx^="filter:"]').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 300, clientY: 200 }))`);
+    await ev(`[...document.querySelectorAll('.ctx-menu [role=menuitemradio]')].find((o) => o.textContent.trim() === 'not in').click()`);
     await waitFor(`document.querySelector('select.ws-pill__in') !== null && document.querySelector('select.ws-pill__in').options.length === 3`, 'members');
     await ev(`(() => { const s = document.querySelector('select.ws-pill__in'); s.options[0].selected = true; s.options[2].selected = true; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
     await waitFor(`document.querySelector('#ws-chart canvas, #ws-chart svg') !== null`, 'chart');

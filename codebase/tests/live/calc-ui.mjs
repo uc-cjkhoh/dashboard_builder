@@ -99,8 +99,8 @@ try {
   };
   const newCalc = async (name, formula) => { await openNewDialog(); await fillDialog(name, formula); await saveDialog(); };
   const calcMenu = async (name, item) => {
-    await ev(`(() => { const c = __t.chip(${J(name)}); c.querySelector('.ws-field__more').click(); return true; })()`);
-    await ev(`(() => { const c = __t.chip(${J(name)}); [...c.querySelectorAll('.menu__item')].find((x) => x.textContent.trim() === ${J(item)}).click(); return true; })()`);
+    await ev(`(() => { const c = __t.chip(${J(name)}); c.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 40 })); return true; })()`);
+    await ev(`(() => { const c = __t.chip(${J(name)}); [...document.querySelectorAll('.ctx-menu .menu__item')].find((x) => x.textContent.trim() === ${J(item)}).click(); return true; })()`);
   };
   const confirmOpen = `[...document.querySelectorAll('dialog[open]')].find((d) => !d.classList.contains('calc-dialog'))`;
   const chartText = () => ev(`document.getElementById('ws-chart').textContent`);
@@ -179,8 +179,14 @@ try {
     await dragChip('Net', `__t.zone('rows')`);
     await dragChip('amount', `__t.zone('rows')`);
     await waitFor(`__t.pills('rows').length === 3`, 'three Rows pills');
-    const info = await ev(`(() => { const out = {}; for (const p of document.querySelectorAll('.ws-shelf--rows .ws-pill')) out[p.querySelector('.ws-pill__text').textContent] =
-      { agg: !!p.querySelector('.ws-pill__agg'), conv: !!p.querySelector('.ws-pill__conv'), fx: !!p.querySelector('.ws-pill__calc') }; return out; })()`);
+    const info = {};
+    for (let i = 0; i < 3; i++) {
+      await ev(`(() => { const p = document.querySelectorAll('.ws-shelf--rows .ws-pill')[${i}]; p.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 300, clientY: 200 })); return true; })()`);
+      const name = await ev(`document.querySelectorAll('.ws-shelf--rows .ws-pill')[${i}].querySelector('.ws-pill__text').textContent`);
+      const items = await ev(`[...document.querySelectorAll('.ctx-menu [role^=menuitem]')].map((x) => [x.getAttribute('role'), x.textContent.trim()])`);
+      info[name] = { agg: items.some(([r]) => r === 'menuitemradio'), conv: items.some(([, t]) => /^Use as /.test(t)), fx: items.some(([, t]) => t === 'Table calculation…') };
+      await ev(`document.querySelector('.ctx-menu').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
+    }
     const keys = Object.keys(info);
     const get = (re) => info[keys.find((k) => re.test(k))];
     const agg = get(/Unit price/), row = get(/Net/), plain = get(/amount/);
@@ -196,8 +202,9 @@ try {
   await check('n: calc aggregation menu has no count; histogram with a calc pill shows the hint and sends no request', async () => {
     await dragChip('Net', `__t.zone('rows')`);
     await waitFor(`__t.pills('rows').length === 2`, 'Net pill on Rows');
-    const opts = await ev(`(() => { const p = [...document.querySelectorAll('.ws-shelf--rows .ws-pill')].find((x) => /Net/.test(x.querySelector('.ws-pill__text').textContent));
-      return [...p.querySelector('.ws-pill__agg').options].map((o) => o.value); })()`);
+    await ev(`(() => { const p = [...document.querySelectorAll('.ws-shelf--rows .ws-pill')].find((x) => /Net/.test(x.querySelector('.ws-pill__text').textContent)); p.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 300, clientY: 200 })); return true; })()`);
+    const opts = await ev(`[...document.querySelectorAll('.ctx-menu [role=menuitemradio]')].map((o) => o.textContent.trim().replace('Percentile…', 'percentile'))`);
+    await ev(`document.querySelector('.ctx-menu').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
     must(!opts.includes('count') && opts.includes('sum') && opts.includes('countNonNull'), `calc aggregation options: ${J(opts)}`);
     await settle();
     queries.length = 0;

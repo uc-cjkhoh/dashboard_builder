@@ -1,8 +1,9 @@
 import { api } from "../Core/api.js";
 import { icon, PATHS } from "../Core/icons.js";
-import { wireMenu } from "../Core/menu.js";
+import { wireMenu, wireContextMenu } from "../Core/menu.js";
+import { fieldPillOptions, filterPillOptions, filterSummary, markGrid } from "./pill-options.js";
 import { visibleTools } from "./toolbar-rules.js";
-import { roleOf, STAT_SINGLE_TABLE, showMeOptions, placeFor, samePlacement } from "./show-me-rules.js";
+import { roleOf, STAT_SINGLE_TABLE, showMeOptions } from "./show-me-rules.js";
 import { toggle, makeButton, toast, fieldError, confirmDialog, copyText } from "../Core/ui.js";
 import { LIMITS, number, percent, percentLabel, isFraction, PERCENT_MESSAGE, DEFAULT_PERCENTILE } from "../Core/validate.js";
 import { aggsFor, checkAdd, checkFilter, viewCounts, withCategories, opsFor, OP_LABELS } from "./filter-rules.js";
@@ -53,6 +54,8 @@ import { REF_CHOICES, TREND_CHOICES, FORECAST_CHOICES, BAND_CHOICES, bandChoice,
 import { castChoices, castLabel, effectiveCategory, syncCastCategories } from "./cast-model.js";
 import { aliasOf, labelOf } from "./member-labels.js";
 import { hierarchyGroup, HIERARCHY_MIME } from "./hierarchy-group.js";
+import { fieldGroup } from "./field-group.js";
+import { fieldsPaneView, readCollapsed, FIELDS_COLLAPSED_KEY } from "./fields-pane-model.js";
 import { openHierarchiesDialog } from "./hierarchy-dialog.js";
 import { drillFromHierarchy, hierarchyTableKey } from "./hierarchy-model.js";
 import { BUCKET_TYPES, DATE_BUCKET_CHOICES } from "./scale-model.js";
@@ -91,7 +94,7 @@ function columnType(db, table, column) {
     ?? [...entities.values()].find((e) => e.db === db && e.table === table)?.columns?.find((x) => x.name === column)?.type ?? "";
 }
 const isDateOnlyColumn = (db, table, column) => isDateOnlyType(columnType(db, table, column));
-const FILTER_PLACEHOLDER = { numeric: "number", temporal: "YYYY-MM-DD", boolean: "true or false" };
+const FILTER_PLACEHOLDER = { numeric: "Number", temporal: "YYYY-MM-DD", boolean: "True or false" };
 const OPS = ["=", "!=", ">", ">=", "<", "<=", "in", "notin", "between"];
 // The plan inputs the pure planner reads (sheet-plan.js): live store state plus the field-pane column cache.
 /** Recent query results per worksheet id — shared by the editor and the dashboard widgets, so a widget draws what the editor just ran. */
@@ -148,6 +151,11 @@ const TYPE_ICONS = { numeric: "type-number", text: "type-text", temporal: "type-
 export function initDashboards() {
   const view = document.getElementById("worksheet-view");
   const fieldsEl = document.getElementById("ws-fields");
+  // The Marks slots (Color, Size, Label … Filters, Drill, Pages): a grid of three columns that lives in the field pane after Hierarchies.
+  // One node for the worksheet's life — every pane rebuild re-inserts it, every header render refills its grid.
+  const marksEl = fieldGroup("ws-shelf ws-shelf--marks", "marks", "Marks");
+  const marksGrid = el("div", "ws-marks__grid");
+  marksEl.append(marksGrid);
   const shelvesEl = document.getElementById("ws-shelves");
   const chartEl = document.getElementById("ws-chart");
   const noticeEl = document.getElementById("ws-chart-notice");
@@ -188,7 +196,6 @@ export function initDashboards() {
   let formatOpen = false; // whether the Format panel (P10) is expanded — ephemeral UI state
   let analyticsDrop = null; // set while the Analytics card is open: adds the dropped item (its id) to the sheet
   let analyticsOpen = false; // P21: whether the Analytics card is open
-  let showMeOpen = false; // P22: whether the Show Me card is open
   let shownPanel = null;  // the tool/format panel on screen last render, so only a newly opened one animates in
   let shownPills = new Set(); // pill keys on screen last render, so only a newly added pill animates in
   let shownFor = null;        // the worksheet those were rendered for (switching worksheets animates nothing)
@@ -288,6 +295,31 @@ export function initDashboards() {
     });
   }
 
+  // Hide / show the field pane (same pattern as the sidebar rail): the worksheet area takes the room, the choice is remembered in this browser.
+  const worksheetEl = view.querySelector(".worksheet");
+  const fieldsResizer = document.getElementById("ws-fields-resizer");
+  let fieldsCollapsed = readCollapsed(localStorageOrNull());
+  function applyFieldsCollapsed() {
+    const hide = fieldsCollapsed && !matchMedia("(max-width: 640px)").matches; // the phone's field overlay has its own Fields button
+    worksheetEl.classList.toggle("is-fields-collapsed", hide);
+    toggle(fieldsEl, !hide); toggle(fieldsResizer, !hide);
+  }
+  applyFieldsCollapsed();
+  function fieldsPaneButton() {
+    const btn = iconButton("sidebar", "");
+    btn.classList.add("ws-viewbar__btn", "ws-fields-collapse");
+    btn.setAttribute("aria-controls", "ws-fields");
+    const paint = () => { const v = fieldsPaneView(fieldsCollapsed); btn.setAttribute("aria-expanded", String(v.expanded)); btn.setAttribute("aria-label", v.label); btn.title = v.label; };
+    paint();
+    btn.addEventListener("click", () => {
+      fieldsCollapsed = !fieldsCollapsed;
+      applyFieldsCollapsed(); paint();
+      try { localStorage.setItem(FIELDS_COLLAPSED_KEY, fieldsCollapsed ? "1" : "0"); } catch { /* not remembered — fine */ }
+      window.dispatchEvent(new Event("resize")); // the chart re-measures its pane
+    });
+    return btn;
+  }
+
   // --- field pane ----------------------------------------------------------
   // Latest call wins: overlapping calls (e.g. while a workbook restores) each wait for columns, so the
   // pane is replaced once, by the newest build, instead of cleared then appended to twice.
@@ -296,7 +328,7 @@ export function initDashboards() {
     const seq = ++fieldsSeq;
     const tables = uniqueTables();
     if (!tables.length) {
-      fieldsEl.replaceChildren(calcFieldGroup(), hierGroup(new Map()), hint("Add tables to the Data Model, then drag their fields onto the shelves."));
+      fieldsEl.replaceChildren(calcFieldGroup(), hierGroup(new Map()), marksEl, hint("Add tables to the Data Model, then drag their fields onto the shelves."));
       filterFields();
       return;
     }
@@ -306,9 +338,7 @@ export function initDashboards() {
     for (const t of tables) {
       const cols = await columnsFor(t.db, t.table);
       columnsByTable.set(hierarchyTableKey(t.db, t.table), new Set(cols.map((c) => c.name)));
-      const group = el("details", "ws-table ws-fieldset");
-      group.open = true;
-      group.append(el("summary", "ws-table__name", `${t.db}.${t.table}`));
+      const group = fieldGroup("ws-table ws-fieldset", `table:${t.db}.${t.table}`, `${t.db}.${t.table}`);
       // P28: hidden fields stay out of the pane unless "Show hidden" is on.
       const visible = cols.filter((c) => { const h = metaOf({ ...t, column: c.name }).hidden; if (h) hiddenCount++; return !h || showHiddenFields; });
       const catOf = (c) => effectiveCategory(c.category, castOf({ ...t, column: c.name }));
@@ -319,7 +349,7 @@ export function initDashboards() {
       groups.push(group);
     }
     if (seq !== fieldsSeq) return;
-    fieldsEl.replaceChildren(fieldTools(hiddenCount), calcFieldGroup(), hierGroup(columnsByTable), ...groups);
+    fieldsEl.replaceChildren(fieldTools(hiddenCount), calcFieldGroup(), hierGroup(columnsByTable), marksEl, ...groups);
     filterFields();
   }
 
@@ -381,9 +411,8 @@ export function initDashboards() {
 
   // --- calculated fields (Plan B): the "Calculated fields" group above the tables ----------------------
   function calcFieldGroup() {
-    const group = el("div", "calc-group");
-    const head = el("div", "calc-group__title", "Calculated fields");
-    head.id = "calc-group-title";
+    const group = fieldGroup("calc-group", "calculated", "Calculated fields", "calc-group-title");
+    const head = group.querySelector("summary");
     const catalog = catalogFromEntities([...entities.values()]);
     const state = paneState(calculations, catalog, parameters);
     const add = makeButton("", "btn calc-group__new");
@@ -394,7 +423,7 @@ export function initDashboards() {
     const list = el("div", "ws-fieldset calc-group__list");
     list.setAttribute("role", "list"); list.setAttribute("aria-labelledby", head.id);
     for (const item of state.items) list.append(calcFieldChip(item));
-    group.append(head, add, list);
+    group.append(add, list);
     return group;
   }
 
@@ -421,7 +450,7 @@ export function initDashboards() {
       const tag = el("span", `calc-chip ${aggregate ? "calc-chip--meas" : "calc-chip--dim"}`, kind.text);
       chip.append(tag);
     }
-    chip.append(calcFieldMenu(calc));
+    chipOptions(chip, `calc:${calc.id}`, calc.name, () => calcFieldEntries(calc));
     if (!bad) {
       chip.draggable = true;
       const payload = () => calcPayload(item);
@@ -441,27 +470,20 @@ export function initDashboards() {
     return chip;
   }
 
-  // A calculation's ⋯ menu: Edit…, Duplicate, Copy name / Copy formula, Delete…
-  function calcFieldMenu(calc) {
-    const wrap = el("div", "menu ws-field__menu");
-    const btn = iconButton("more", `Actions for ${calc.name}`);
-    btn.classList.add("ws-field__more");
-    const list = el("div", "menu__list");
-    list.setAttribute("role", "menu");
-    list.hidden = true;
-    const item = (label, on) => {
-      const b = el("button", "menu__item"); b.type = "button"; b.setAttribute("role", "menuitem");
-      b.append(document.createTextNode(label));
-      b.addEventListener("click", on);
-      return b;
-    };
-    list.append(item("Edit…", () => (calc.group ? editGroupField(calc) : openCalcDialog(calc.id))));
-    list.append(item("Duplicate", () => duplicateCalcField(calc)));
-    for (const c of fieldCopies(calc)) list.append(item(c.label, () => copyText(c.text, c.what)));
-    list.append(el("div", "menu__sep"), item("Delete…", () => deleteCalcField(calc)));
-    wireMenu(btn, list);
-    wrap.append(btn, list);
-    return wrap;
+  // A calculation's context popup (right-click / ContextMenu key / Enter): Edit…, Duplicate, Copy name / Copy formula, Delete…
+  function calcFieldEntries(calc) {
+    const item = (label, onSelect) => ({ type: "item", label, onSelect });
+    return [
+      item("Edit…", () => (calc.group ? editGroupField(calc) : openCalcDialog(calc.id))),
+      item("Duplicate", () => duplicateCalcField(calc)),
+      ...fieldCopies(calc).map((c) => item(c.label, () => copyText(c.text, c.what))),
+      { type: "sep" }, item("Delete…", () => deleteCalcField(calc)),
+    ];
+  }
+  // A field chip's context popup; `id` finds the chip again after the pane is rebuilt.
+  function chipOptions(chip, id, name, entries) {
+    chip.tabIndex = 0; chip.dataset.ctx = id;
+    wireContextMenu(chip, entries, { label: `Options for ${name}`, returnFocus: () => fieldsEl.querySelector(`[data-ctx="${id}"]`) });
   }
   function duplicateCalcField(calc) {
     if (calculations.length >= LIMITS.calculations) { toast(`A workbook can have at most ${LIMITS.calculations} calculated fields.`, "info"); return; }
@@ -511,7 +533,7 @@ export function initDashboards() {
     chip.dataset.search = `${col.name} ${meta.alias ?? ""}`.toLowerCase();
     chip.append(typeIcon, nameEl);
     if (meta.cast) { chip.classList.add("is-cast"); chip.append(castBadge(meta.cast, col.category, false)); }
-    chip.append(fieldMenu(payload, col, nameEl));
+    chipOptions(chip, `field:${t.db}.${t.table}.${col.name}`, col.name, () => fieldEntries(payload, col, nameEl));
 
     // Keyboard/non-drag path (a11y): a focusable plus button adds the field to its natural shelf without
     // dragging — measures to Rows, dimensions to Columns (mirrors the sidebar table chip's plus button).
@@ -544,45 +566,33 @@ export function initDashboards() {
     b.title = `Read as ${castLabel(cast).toLowerCase()} (stored as ${from === "numeric" ? "number" : from === "temporal" ? "date" : from})`;
     return b;
   }
-  // P28: a field's ⋯ menu — Rename (inline), Default aggregation (numeric), Hide / Show.
-  function fieldMenu(f, col, nameEl) {
-    const wrap = el("div", "menu ws-field__menu");
-    const btn = iconButton("more", `Options for ${col.name}`);
-    btn.classList.add("ws-field__more");
-    const list = el("div", "menu__list");
-    list.setAttribute("role", "menu");
-    list.hidden = true;
-    const item = (label, on, extra = {}) => {
-      const b = el("button", "menu__item"); b.type = "button"; b.setAttribute("role", extra.role ?? "menuitem");
-      if (extra.checked !== undefined) { b.setAttribute("aria-checked", String(extra.checked)); b.append(icon("check", { size: 14 })); }
-      b.append(document.createTextNode(label));
-      b.addEventListener("click", on);
-      return b;
-    };
+  // P28: a field's context popup — Rename (inline), Default aggregation (numeric), Hide / Show.
+  function fieldEntries(f, col, nameEl) {
+    const out = [];
+    const item = (label, onSelect, extra = {}) => out.push({ type: extra.role === "menuitemradio" ? "radio" : "item", label, onSelect, checked: extra.checked });
     const meta = metaOf(f);
-    list.append(item("Rename…", () => renameField(f, col, nameEl)));
-    for (const c of fieldCopies({ column: col.name, alias: meta.alias })) list.append(item(c.label, () => copyText(c.text, c.what)));
-    if (meta.alias) list.append(item("Use the column name", () => setFieldMeta(f, { alias: null })));
+    item("Rename…", () => renameField(f, col, nameEl));
+    for (const c of fieldCopies({ column: col.name, alias: meta.alias })) item(c.label, () => copyText(c.text, c.what));
+    if (meta.alias) item("Use the column name", () => setFieldMeta(f, { alias: null }));
     const effCat = effectiveCategory(col.category, meta.cast); // T02-34: a text column cast to Number aggregates like a number
     if (effCat === "numeric") {
-      list.append(el("div", "menu__sep"), el("div", "menu__heading", "Default aggregation"));
+      out.push({ type: "sep" }, { type: "heading", label: "Default aggregation" });
       for (const a of aggsFor(effCat).filter((x) => x !== "percentile")) // a default percentile would need a default fraction: pick it on the pill
-        list.append(item(a, () => setFieldMeta(f, { agg: a === "sum" ? null : a }), { role: "menuitemradio", checked: (meta.agg ?? "sum") === a }));
+        item(a, () => setFieldMeta(f, { agg: a === "sum" ? null : a }), { role: "menuitemradio", checked: (meta.agg ?? "sum") === a });
     }
     // T02-34: read the field as another type (the server converts; a value that doesn't fit becomes empty).
-    list.append(el("div", "menu__sep"), el("div", "menu__heading", "Data type"));
+    out.push({ type: "sep" }, { type: "heading", label: "Data type" });
     // A stored default aggregation the new type doesn't offer is cleared with the cast.
     const setCast = (c) => setFieldMeta(f, { cast: c, ...(meta.agg && !aggsFor(effectiveCategory(col.category, c)).includes(meta.agg) ? { agg: null } : {}) });
-    list.append(item("Original", () => setCast(null), { role: "menuitemradio", checked: !meta.cast }));
+    item("Original", () => setCast(null), { role: "menuitemradio", checked: !meta.cast });
     for (const c of castChoices(col.category))
-      list.append(item(castLabel(c), () => setCast(c), { role: "menuitemradio", checked: meta.cast === c }));
+      item(castLabel(c), () => setCast(c), { role: "menuitemradio", checked: meta.cast === c });
     // T02-29 / T02-30: member labels (display only) and groups (a calculated dimension made from the field's members).
-    if (effCat !== "temporal") list.append(el("div", "menu__sep"), item(meta.memberAliases ? "Edit member labels… (set)" : "Edit member labels…", () => editMemberLabels(f, col)));
-    list.append(item("Group…", () => newGroupField(f, col)));
-    list.append(el("div", "menu__sep"), item(meta.hidden ? "Show in the field list" : "Hide from the field list", () => setFieldMeta(f, { hidden: !meta.hidden })));
-    wireMenu(btn, list);
-    wrap.append(btn, list);
-    return wrap;
+    if (effCat !== "temporal") { out.push({ type: "sep" }); item(meta.memberAliases ? "Edit member labels… (set)" : "Edit member labels…", () => editMemberLabels(f, col)); }
+    item("Group…", () => newGroupField(f, col));
+    out.push({ type: "sep" });
+    item(meta.hidden ? "Show in the field list" : "Hide from the field list", () => setFieldMeta(f, { hidden: !meta.hidden }));
+    return out;
   }
   // T02-29: the field's top members (the distinct-values read, bounded) with one label input each; the map is a field setting.
   function editMemberLabels(f, col) {
@@ -642,33 +652,19 @@ export function initDashboards() {
     const rows = shelf("Rows", "rows", s.rows.map((f, i) => fieldPill(dash, s, "rows", f, i)), (f) => addField(dash, "rows", f));
 
     const tools = buildTools(dash, s);
-    const { visible, more } = visibleTools(s.chartType, tools);
-    const toolbar = el("div", "ws-toolbar");
-    for (const t of visible) toolbar.append(toolButton(dash, s, t));
-    if (more.length) {
-      const wrap = el("div", "menu ws-more");
-      const btn = el("button", "ws-tool"); btn.type = "button";
-      btn.append(icon("more"), el("span", "ws-tool__text", "More"));
-      const list = el("div", "menu__list menu__list--start"); list.setAttribute("role", "menu"); list.hidden = true;
-      for (const t of more) {
-        const item = el("button", "menu__item"); item.type = "button"; item.setAttribute("role", "menuitem");
-        item.append(icon(t.icon), document.createTextNode(t.label));
-        item.addEventListener("click", () => { openTool = t.key; formatOpen = false; showMeOpen = false; renderShelves(); });
-        list.append(item);
+    const { visible } = visibleTools(s.chartType, tools); // tools this chart type doesn't use stay reachable, just quieter
+    marksGrid.replaceChildren(...markGrid(tools).map((cells) => {
+      const row = el("div", "ws-marks__row");
+      for (const t of cells) {
+        if (!t) { const gap = el("span", "ws-marks__gap"); gap.setAttribute("aria-hidden", "true"); row.append(gap); continue; }
+        const slot = toolButton(dash, s, t);
+        if (!visible.includes(t)) slot.classList.add("is-quiet");
+        row.append(slot);
       }
-      const drill = more.find((t) => t.onHierarchy); // T03-29: a hierarchy dropped on More (where an empty Drill lives) sets the drill
-      if (drill) {
-        btn.addEventListener("dragover", (e) => { if (hasHierarchy(e)) { e.preventDefault(); btn.classList.add("is-over"); } });
-        btn.addEventListener("dragleave", () => btn.classList.remove("is-over"));
-        btn.addEventListener("drop", (e) => { btn.classList.remove("is-over"); const id = readHierarchy(e); if (id) { e.preventDefault(); drill.onHierarchy(id); } });
-      }
-      wrap.append(btn, list); toolbar.append(wrap);
-      wireMenu(btn, list, { signal: headerAbort.signal });
-    }
-    const marks = el("div", "ws-shelf ws-shelf--marks");
-    marks.append(el("span", "ws-shelf__label", "Marks"), toolbar);
+      return row;
+    }));
 
-    const children = [fieldsToggle(), columns, rows, marks];
+    const children = [fieldsToggle(), columns, rows];
     const active = tools.find((t) => t.key === openTool);
     const toolEl = calcFor ? calcPanel(dash, s) : choicesFor ? choicesPanel(dash, s) : active ? toolPanel(dash, s, active) : null;
     if (toolEl) children.push(toolEl);                        // the one open tool editor
@@ -684,10 +680,10 @@ export function initDashboards() {
     vbIcons.append(formatToggle(), analyticsToggle(), exportControl(dash, s), refreshButton(dash), sheetActions(dash, s), fullScreenButton());
     vbRight.append(sortControl(dash, s), vbIcons);
     const vbLeft = el("div", "ws-viewbar__group");
-    vbLeft.append(chartTypePicker(dash, s), showMeToggle(), undoButtons(dash),
+    vbLeft.append(fieldsPaneButton(), chartTypePicker(dash, s), undoButtons(dash),
       explainControl(() => evaluationInput(s, { sharedFilters: sharedFilters.filter((f) => checkFilter(f).state === "ok" && !sharedSkipped(s).includes(f)), parameters, calcs: calculations, isApplied: (f) => checkFilter(f).state === "ok", dimensions: planDims(s).keyOrder.filter(Boolean).map(nameOf) }), { signal: headerAbort.signal }));
     viewbar.append(vbLeft, vbRight);
-    const fmtEl = showMeOpen ? showMePanel(dash, s) : formatOpen ? formatPanel(dash, s) : analyticsOpen ? analyticsPanel(dash, s) : null; // P10 format / P21 analytics card
+    const fmtEl = formatOpen ? formatPanel(dash, s) : analyticsOpen ? analyticsPanel(dash, s) : null; // P10 format / P21 analytics card
     const swEl = switchers(dash, s); // P40
     const titleEl = s.showTitle === false ? null : titleBlock(dash, s); // P23
     const cardsEl = filterCards(dash, s); // P30
@@ -695,7 +691,7 @@ export function initDashboards() {
     headEl.replaceChildren(viewbar, ...(swEl ? [swEl] : []), ...(fmtEl ? [fmtEl] : []), ...(titleEl ? [titleEl] : []), ...(paramsEl ? [paramsEl] : []), ...(cardsEl ? [cardsEl] : []));
 
     // Motion only for what is new since the last render (every edit re-renders the header).
-    const panelKey = toolEl ? `tool:${openTool}` : fmtEl ? (showMeOpen ? "showme" : "format") : null;
+    const panelKey = toolEl ? `tool:${openTool}` : fmtEl ? "format" : null;
     if (panelKey && panelKey !== shownPanel) enter(toolEl ?? fmtEl);
     shownPanel = panelKey;
     const pillKeys = new Set();
@@ -848,12 +844,12 @@ export function initDashboards() {
 
   // P21: the Analytics card toggle (like Format) and the card itself.
   function analyticsToggle() {
-    const btn = iconButton("analytics", "Analytics");
+    const btn = iconButton("insights", "Analytics");
     btn.className = `iconbtn ws-viewbar__btn${analyticsOpen ? " is-active" : ""}`;
     btn.setAttribute("aria-pressed", String(analyticsOpen));
     btn.setAttribute("aria-expanded", String(analyticsOpen));
     btn.title = "Analytics — reference lines, trend, forecast, totals";
-    btn.addEventListener("click", () => { analyticsOpen = !analyticsOpen; if (analyticsOpen) { openTool = null; formatOpen = false; showMeOpen = false; } renderShelves(); });
+    btn.addEventListener("click", () => { analyticsOpen = !analyticsOpen; if (analyticsOpen) { openTool = null; formatOpen = false; } renderShelves(); });
     return btn;
   }
   function analyticsPanel(dash, s) {
@@ -924,65 +920,9 @@ export function initDashboards() {
     btn.setAttribute("aria-pressed", String(formatOpen));
     btn.title = "Format";
     btn.setAttribute("aria-expanded", String(formatOpen));
-    btn.addEventListener("click", () => { formatOpen = !formatOpen; if (formatOpen) { openTool = null; analyticsOpen = false; showMeOpen = false; } renderShelves(); });
+    btn.addEventListener("click", () => { formatOpen = !formatOpen; if (formatOpen) { openTool = null; analyticsOpen = false; } renderShelves(); });
     return btn;
   }
-  // P22 Show Me: every chart type, greyed with the reason when the sheet's fields can't draw it, the best
-  // one outlined; a click sets the type and lays Columns / Rows out for it (one commit = one undo step).
-  function showMeToggle() {
-    const btn = iconButton("show-me", "Show Me");
-    btn.className = `iconbtn ws-viewbar__btn ws-showme-toggle${showMeOpen ? " is-active" : ""}`;
-    btn.append(el("span", null, "Show Me"));
-    btn.setAttribute("aria-pressed", String(showMeOpen));
-    btn.setAttribute("aria-expanded", String(showMeOpen));
-    btn.title = "Show Me — chart types that fit these fields";
-    btn.addEventListener("click", () => {
-      showMeOpen = !showMeOpen; if (showMeOpen) { openTool = null; formatOpen = false; analyticsOpen = false; }
-      renderShelves();
-      headEl.querySelector(".ws-showme-toggle")?.focus(); // the re-render replaced this button
-    });
-    return btn;
-  }
-  function showMePanel(dash, s) {
-    const panel = el("div", "ws-format ws-showme");
-    panel.append(el("span", "ws-shelf__label", "Show Me"));
-    const status = el("p", "ws-shelf__note ws-showme__status");
-    status.setAttribute("aria-live", "polite");
-    const empty = !s.columns.length && !s.rows.length; // a drill level alone isn't "fields to suggest for"
-    if (empty) status.textContent = "Add fields to Columns or Rows to see suggestions.";
-    const grid = el("div", "ws-showme__grid");
-    for (const o of showMeOptions(CHART_TYPES.map(([id]) => id), (type) => showMeCounts(s, type))) {
-      const tile = el("button", "ws-showme__tile"); tile.type = "button"; tile.dataset.type = o.id;
-      tile.append(icon(chartIcon(o.id)), el("span", "ws-showme__label", chartLabel(o.id)));
-      const current = o.id === s.chartType;
-      tile.setAttribute("aria-pressed", String(current));
-      if (current) { const tick = icon("check", { size: 14 }); tick.classList.add("ws-showme__check"); tile.append(tick); }
-      if (o.recommended && !empty) { tile.classList.add("is-recommended"); tile.append(el("span", "ws-showme__badge", "Recommended")); }
-      if (o.issue) {
-        tile.setAttribute("aria-disabled", "true"); tile.title = o.issue;
-        const why = el("span", null, o.issue); why.id = `ws-showme-why-${o.id}`; why.hidden = true;
-        tile.setAttribute("aria-describedby", why.id); tile.append(why);
-        tile.addEventListener("click", () => { status.textContent = `${chartLabel(o.id)}: ${o.issue}`; });
-      } else {
-        tile.addEventListener("click", () => {
-          const placed = placeFor(o.id, s.columns, s.rows);
-          if (current && samePlacement(placed, s)) return; // already laid out — no empty undo step
-          s.chartType = o.id; s.columns = placed.columns; s.rows = placed.rows;
-          commit(dash, s); // re-renders the header synchronously
-          headEl.querySelector(`.ws-showme__tile[data-type="${o.id}"]`)?.focus();
-        });
-      }
-      grid.append(tile);
-    }
-    panel.append(grid, status);
-    panel.addEventListener("keydown", (e) => {
-      if (e.key !== "Escape") return;
-      e.stopPropagation(); showMeOpen = false; renderShelves();
-      headEl.querySelector(".ws-showme-toggle")?.focus();
-    });
-    return panel;
-  }
-
   // --- export (P13) --------------------------------------------------------
   // A small menu offering the chart image (PNG/SVG from the live ECharts instance) and the rows behind
   // it as CSV (the bounded, identifier-safe /api/query/export.csv). Image export needs a chart instance
@@ -1062,24 +1002,22 @@ export function initDashboards() {
     const menu = el("div", "menu__list");
     menu.setAttribute("role", "menu");
     menu.hidden = true;
-    const item = (label, on, extra = {}) => {
-      const b = el("button", "menu__item"); b.type = "button"; b.setAttribute("role", extra.role ?? "menuitem");
-      if (extra.checked !== undefined) { b.setAttribute("aria-checked", String(extra.checked)); b.append(icon("check", { size: 14 })); }
-      else if (extra.icon) b.append(icon(extra.icon));
-      b.append(document.createTextNode(label));
+    const item = (label, on, glyph) => {
+      const b = el("button", "menu__item"); b.type = "button"; b.setAttribute("role", "menuitem");
+      b.append(icon(glyph), document.createTextNode(label));
       b.addEventListener("click", on);
       return b;
     };
     const fit = s.format?.fit ?? "standard";
     menu.append(
-      item("Swap Rows and Columns", () => swapShelves(dash, s), { icon: "swap" }),
-      item("Clear sheet…", () => clearSheet(dash, s), { icon: "close" }),
+      item("Swap Rows and Columns", () => swapShelves(dash, s), "swap"),
+      item("Clear sheet…", () => clearSheet(dash, s), "close"),
       el("div", "menu__sep"), el("div", "menu__heading", "Fit"),
-      ...[["standard", "Standard (scroll)"], ["width", "Fit width"], ["height", "Fit height"], ["entire", "Entire view"]].map(([v, t]) =>
-        item(t, () => { s.format = { ...(s.format ?? defaultFormat()), fit: v }; commit(dash, s); }, { role: "menuitemradio", checked: fit === v })),
+      ...[["standard", "Standard"], ["width", "Fit width"], ["height", "Fit height"], ["entire", "Entire view"]].map(([v, t]) =>
+        tickItem(t, fit === v, "menuitemradio", () => { s.format = { ...(s.format ?? defaultFormat()), fit: v }; commit(dash, s); })),
       el("div", "menu__sep"),
-      item("Show title and caption", () => { s.showTitle = s.showTitle === false; commit(dash, s); }, { role: "menuitemcheckbox", checked: s.showTitle !== false }),
-      item("Show filter cards", () => { s.showFilterCards = s.showFilterCards === false; commit(dash, s); }, { role: "menuitemcheckbox", checked: s.showFilterCards !== false }),
+      tickItem("Show title and caption", s.showTitle !== false, "menuitemcheckbox", () => { s.showTitle = s.showTitle === false; commit(dash, s); }),
+      tickItem("Show filter cards", s.showFilterCards !== false, "menuitemcheckbox", () => { s.showFilterCards = s.showFilterCards === false; commit(dash, s); }),
     );
     wireMenu(btn, menu, { signal: headerAbort?.signal });
     wrap.append(btn, menu);
@@ -1115,7 +1053,7 @@ export function initDashboards() {
       b.setAttribute("aria-label", `${label}: ${value || auto || "none"} — edit`);
       b.addEventListener("click", () => {
         const input = el("input", `input ws-titleblock__input ${cls}`);
-        input.value = value ?? ""; input.placeholder = auto || label; input.maxLength = max;
+        input.value = value ?? ""; input.placeholder = auto || label[0].toUpperCase() + label.slice(1); input.maxLength = max;
         input.setAttribute("aria-label", label);
         b.replaceWith(input); input.focus(); input.select();
         let done = false;
@@ -1395,6 +1333,16 @@ export function initDashboards() {
   // Shared bits of the view-bar pickers.
   function caret() { const c = icon("chevron", { size: 14 }); c.classList.add("ws-pick__caret"); return c; }
   function menuSeparator() { const d = el("div", "menu__sep"); d.setAttribute("role", "separator"); return d; }
+  // A menu row whose only state cue is a tick at the end: radio-style (Fit) or a toggle (Show title). No icon, no extra text.
+  function tickItem(label, checked, role, on) {
+    const b = el("button", "menu__item"); b.type = "button";
+    b.setAttribute("role", role); b.setAttribute("aria-checked", String(checked));
+    b.append(el("span", "menu__label", label));
+    const tick = icon("check", { size: 14 }); tick.classList.add("menu__check");
+    b.append(tick);
+    b.addEventListener("click", on);
+    return b;
+  }
   function radioItem(glyph, label, checked, on) {
     const b = el("button", "menu__item"); b.type = "button";
     b.setAttribute("role", "menuitemradio"); b.setAttribute("aria-checked", String(checked));
@@ -1433,6 +1381,17 @@ export function initDashboards() {
     });
     wrap.append(zone);
     return wrap;
+  }
+
+  // The context popup of a pill (right-click, the ContextMenu key, Shift+F10, Enter): focusable, found again after a re-render.
+  function optionsOn(p, ctxId, label, entries) {
+    p.tabIndex = 0; p.dataset.ctx = ctxId;
+    p.title = "Right-click for options";
+    wireContextMenu(p, entries, { label: `Options for ${label}`, returnFocus: () => shelvesEl.querySelector(`[data-ctx="${ctxId}"]`) });
+  }
+  // Give pill-options entries their actions: `run(id)` on select; `keep(id)` = act, then rebuild instead of closing; `custom[id]()` = a custom row's element.
+  function bindEntries(list, run, { keep = () => false, custom = {} } = {}) {
+    return list.map((e) => (e.type === "custom" ? { ...e, el: custom[e.id]() } : e.id ? { ...e, onSelect: () => run(e.id), keepOpen: keep(e.id) } : e));
   }
 
   function pill(text, onRemove, extra) {
@@ -1484,86 +1443,55 @@ export function initDashboards() {
     const label = nameOf(f); // P28: the display name
     const remove = () => { s[shelfKey].splice(i, 1); commit(dash, s); };
     const isMeasure = roleOf(f) === "measure";
-    const controls = el("span", "ws-pill__ctl");
+    const controls = el("span", "ws-pill__ctl"); // only the cast badge stays inline; every option lives in the context popup
     const calcPill = isCalcPill(f);
     // A calculated measure aggregates itself: only a row-level number (it carries `agg`) picks an aggregation, and only that
     // one may flip dimension <-> measure (E4); an aggregate or non-number calculation has nothing to choose.
     const rowLevelNumber = !calcPill || (f.category === "numeric" && (f.role === "dimension" || Boolean(f.agg)));
+    let aggOpts = null;
     if (isMeasure && (!calcPill || f.agg)) {
-      const opts = calcPill ? CALC_AGGS : aggsFor(f.category); // a calculation never counts rows
-      if (f.agg && !opts.includes(f.agg)) {
-        toast(`${f.agg} isn't available for ${label}; switched to ${opts[0]}.`, "info");
-        f.agg = opts[0]; // keep the screen in step with the query
+      aggOpts = calcPill ? CALC_AGGS : aggsFor(f.category); // a calculation never counts rows
+      if (f.agg && !aggOpts.includes(f.agg)) {
+        toast(`${f.agg} isn't available for ${label}; switched to ${aggOpts[0]}.`, "info");
+        f.agg = aggOpts[0]; // keep the screen in step with the query
         delete f.p;
       }
       if (f.agg === "percentile" && !isFraction(f.p)) f.p = DEFAULT_PERCENTILE; // never send a percentile without its fraction
-      const agg = select(opts, f.agg ?? opts[0], "ws-pill__agg", `Aggregation for ${calcPill ? label : `${f.table}.${f.column}`}`);
-      const pctOpt = [...agg.options].find((o) => o.value === "percentile");
-      if (pctOpt) pctOpt.textContent = "Percentile…";
-      agg.addEventListener("change", () => {
-        f.agg = agg.value;
+    }
+    const temporal = !isMeasure && f.category === "temporal" && !calcPill; // E12: a calculated dimension is never date-grouped
+    const dateOnly = temporal && isDateOnlyColumn(f.db, f.table, f.column);
+    const partChoices = DATE_PART_CHOICES.filter(([v]) => !(dateOnly && (v === "hour" || v === "hourOfDay")));
+    const ctxId = `${shelfKey}:${i}`;
+    const entries = () => bindEntries(fieldPillOptions({
+      measure: isMeasure, aggs: aggOpts, agg: f.agg, roleFlip: rowLevelNumber, tableCalc: isCalc(f.tableCalc),
+      temporal, parts: partChoices, part: f.datePart, finer: temporal ? stepPart(f.datePart ?? "auto", 1, dateOnly) : null,
+      coarser: temporal ? stepPart(f.datePart ?? "auto", -1, dateOnly) : null, dateLabelsAll: f.dateLabels === "all",
+      choicesOk: !calcPill, // E12: a calculated field has no field choices
+    }), (id) => {
+      if (id.startsWith("agg:")) {
+        f.agg = id.slice(4);
         if (f.agg === "percentile") f.p = isFraction(f.p) ? f.p : DEFAULT_PERCENTILE; else delete f.p;
         commit(dash, s);
-      });
-      controls.append(agg);
-      if (f.agg === "percentile") controls.append(percentInput(dash, s, f, label));
-    }
-    // Convert button: → the role it will switch to. Title spells out the effect.
-    const conv = iconButton(isMeasure ? "#" : "Σ",
-      isMeasure ? "Use as dimension (group by values)" : "Use as measure (aggregate)");
-    conv.classList.add("ws-pill__conv");
-    conv.addEventListener("click", () => setRole(dash, s, f, isMeasure ? "dimension" : "measure"));
-    if (rowLevelNumber) controls.append(conv);
-    // P27: a measure's quick table calculation (opens its editor); the pill names the calculation when set.
-    if (isMeasure) {
-      const on = isCalc(f.tableCalc);
-      const open = calcFor && calcFor.shelf === shelfKey && calcFor.index === i;
-      const fx = iconButton("calc", on ? `Table calculation: ${calcName(f.tableCalc)} — change` : `Add a table calculation to ${label}`);
-      fx.classList.add("ws-pill__calc");
-      if (on) fx.classList.add("is-set");
-      fx.setAttribute("aria-pressed", String(Boolean(open)));
-      fx.addEventListener("click", () => { calcFor = open ? null : { shelf: shelfKey, index: i }; if (calcFor) { openTool = null; choicesFor = null; } formatOpen = false; showMeOpen = false; renderShelves(); });
-      controls.append(fx);
-    }
-    // P26: a date dimension picks its part here, and +/− step through year → quarter → month → day → hour.
-    if (!isMeasure && f.category === "temporal" && !calcPill) { // E12: a calculated dimension is never date-grouped
-      const dateOnly = isDateOnlyColumn(f.db, f.table, f.column);
-      const choices = DATE_PART_CHOICES.filter(([v]) => !(dateOnly && (v === "hour" || v === "hourOfDay")));
-      const part = select(choices.map(([v]) => v), f.datePart ?? "auto", "ws-pill__part", `Date part for ${label}`);
-      [...part.options].forEach((o) => { o.textContent = choices.find(([v]) => v === o.value)[1]; });
-      part.addEventListener("change", () => { f.datePart = part.value; commit(dash, s); });
-      const step = (dir) => {
-        const next = stepPart(f.datePart ?? "auto", dir, dateOnly);
-        const b = iconButton(dir > 0 ? "plus" : "−", dir > 0 ? `Finer: ${next ?? "none"}` : `Coarser: ${next ?? "none"}`);
-        b.classList.add("ws-pill__step");
-        b.disabled = !next;
-        b.addEventListener("click", () => { if (next) { f.datePart = next; commit(dash, s); } });
-        return b;
-      };
-      controls.append(step(-1), part, step(1));
-      // Axis labels: Show all (a slot and label per date) or Thin out (the default; fits the pane, labels thin out).
-      const all = f.dateLabels === "all";
-      const lab = iconButton("eye", all ? `Showing all date labels on ${label} — thin them out` : `Thinning date labels on ${label} — show all`);
-      lab.classList.add("ws-pill__step", "ws-pill__labels");
-      if (all) lab.classList.add("is-set");
-      lab.setAttribute("aria-pressed", String(all));
-      lab.addEventListener("click", () => { f.dateLabels = toggleDateLabels(f.dateLabels); commit(dash, s); });
-      controls.append(lab);
-    }
-    // P40: alternative fields for this slot (opens the Choices editor).
-    const n = f.choices?.length ?? 0;
-    const sw = iconButton("swap", n >= 2 ? `Field choices for ${label} (${n})` : `Add field choices for ${label}`);
-    sw.classList.add("ws-pill__swap");
-    if (n >= 2) sw.classList.add("is-set");
-    const open = choicesFor && choicesFor.shelf === shelfKey && choicesFor.index === i;
-    sw.setAttribute("aria-pressed", String(Boolean(open)));
-    sw.addEventListener("click", () => { choicesFor = open ? null : { shelf: shelfKey, index: i }; if (choicesFor) { openTool = null; calcFor = null; } formatOpen = false; showMeOpen = false; renderShelves(); });
-    if (!isCalcPill(f)) controls.append(sw); // E12: a calculated field has no field choices
+      } else if (id.startsWith("part:")) { f.datePart = id.slice(5); commit(dash, s); }
+      else if (id === "role") setRole(dash, s, f, isMeasure ? "dimension" : "measure");
+      else if (id === "finer" || id === "coarser") {
+        const next = stepPart(f.datePart ?? "auto", id === "finer" ? 1 : -1, dateOnly);
+        if (next) { f.datePart = next; commit(dash, s); }
+      } else if (id === "labels") { f.dateLabels = toggleDateLabels(f.dateLabels); commit(dash, s); } // Show all (a slot and label per date) or Thin out
+      else if (id === "tablecalc") { // P27: a measure's quick table calculation (opens its editor)
+        const open = calcFor && calcFor.shelf === shelfKey && calcFor.index === i;
+        calcFor = open ? null : { shelf: shelfKey, index: i }; if (calcFor) { openTool = null; choicesFor = null; } formatOpen = false; renderShelves();
+      } else if (id === "choices") { // P40: alternative fields for this slot (opens the Choices editor)
+        const open = choicesFor && choicesFor.shelf === shelfKey && choicesFor.index === i;
+        choicesFor = open ? null : { shelf: shelfKey, index: i }; if (choicesFor) { openTool = null; calcFor = null; } formatOpen = false; renderShelves();
+      }
+    }, { keep: (id) => id === "agg:percentile" || id === "labels", custom: { percent: () => percentInput(dash, s, f, label) } });
     const cast = calcPill ? null : castOf(f);
     if (cast) controls.prepend(castBadge(cast, baseCategoryOf(f.db, f.table, f.column) ?? f.category)); // T02-34
     const shown = isMeasure && !calcPill && f.agg === "percentile" ? `${label} · p${percentLabel(f.p)}` : label; // T04-07: the pill names its percentile
-    const p = pill(shown, remove, controls);
+    const p = pill(shown, remove, controls.childElementCount ? controls : null);
     p.classList.add(isMeasure ? "ws-pill--measure" : "ws-pill--dimension");
+    optionsOn(p, ctxId, label, entries);
 
     // Drag-to-reorder (Columns/Rows). A dedicated grip is the only draggable part, so the agg select /
     // convert / remove controls keep working. Dropping onto this pill inserts the dragged pill before
@@ -1655,21 +1583,35 @@ export function initDashboards() {
   function filterPill(dash, s, f, i, list) {
     const shared = list === sharedFilters;
     const ops = opsFor(f.category);
-    const op = select(ops.includes(f.op) ? ops : [...ops, f.op], f.op, "ws-pill__op", `Filter operator for ${f.table}.${f.column}`);
-    for (const o of op.options) if (OP_LABELS[o.value]) o.textContent = OP_LABELS[o.value];
-    op.addEventListener("change", () => {
-      f.op = op.value;
-      if (f.op === "top" && !f.topBy) { // P30: rank by the first shelf measure until the user picks another
-        const e = planMeasures(s).find((m) => m.role === "shelf");
-        if (e) f.topBy = topByRef(e, calcFieldCtx());
-      }
-      if ((f.op === "in" || f.op === "notin") && !Array.isArray(f.values)) f.values = [];
-      if (f.op === "between" && !Array.isArray(f.values)) f.values = ["", ""];
-      commit(dash, s); // re-render so the matching value control appears
-    });
-    const cfg = el("span", "ws-pill__filter");
-    cfg.append(op, filterValueControl(dash, s, f));
+    const opList = (ops.includes(f.op) ? ops : [...ops, f.op]).map((v) => [v, OP_LABELS[v] ?? v]);
     const chk = checkFilter(pv(f));
+    const ctxId = `${shared ? "shared" : "filter"}:${i}`;
+    const entries = () => bindEntries(filterPillOptions({ ops: opList, op: f.op, shared }), (id) => {
+      if (id.startsWith("op:")) {
+        f.op = id.slice(3);
+        if (f.op === "top" && !f.topBy) { // P30: rank by the first shelf measure until the user picks another
+          const e = planMeasures(s).find((m) => m.role === "shelf");
+          if (e) f.topBy = topByRef(e, calcFieldCtx());
+        }
+        if ((f.op === "in" || f.op === "notin") && !Array.isArray(f.values)) f.values = [];
+        if (f.op === "between" && !Array.isArray(f.values)) f.values = ["", ""];
+        commit(dash, s); // re-render so the matching value control appears
+      } else if (id === "share") toggleShared(dash, s, f, list, i); // P40: share with every dashboard (moves it to the workbook's shared list), or take it back
+    }, { keep: (id) => id.startsWith("op:"), custom: { value: () => filterValueEditor(dash, s, f, chk) } });
+    const opText = f.op === "top" ? (f.bottom ? "bottom" : "top") : OP_LABELS[f.op] ?? f.op;
+    const text = `${nameOf(f)} ${opText} ${filterSummary(f)}`.trim();
+    const p = pill(text, () => { list.splice(i, 1); commit(dash, s); });
+    p.classList.toggle("ws-pill--invalid", chk.state === "invalid");
+    if (chk.state === "invalid") { p.prepend(icon("warning", { size: 14 })); p.title = chk.error; }
+    if (shared) { p.classList.add("ws-pill--shared"); p.prepend(el("span", "ws-pill__badge", "All dashboards")); }
+    optionsOn(p, ctxId, nameOf(f), entries);
+    if (chk.state === "invalid") p.title = `${chk.error} — right-click for options`;
+    return p;
+  }
+  // The value editor in a filter's context popup; a refused value is marked on the input that failed.
+  function filterValueEditor(dash, s, f, chk) {
+    const cfg = el("span", "ws-pill__filter");
+    cfg.append(filterValueControl(dash, s, f));
     if (chk.state === "invalid") {
       const inputs = [...cfg.querySelectorAll("input")];
       // For a range, mark the bound that actually failed (a half range blames the empty one).
@@ -1679,17 +1621,7 @@ export function initDashboards() {
         : inputs[0];
       if (bad) fieldError(bad, chk.error);
     }
-    // P40: share with every dashboard (moves it to the workbook's shared list), or take it back.
-    const share = iconButton("link", shared ? `Stop sharing the filter on ${f.table}.${f.column} (keep it on this dashboard)` : `Share the filter on ${f.table}.${f.column} with every dashboard`);
-    share.classList.add("ws-pill__share");
-    share.setAttribute("aria-pressed", String(shared));
-    share.addEventListener("click", () => toggleShared(dash, s, f, list, i));
-    cfg.append(share);
-    const p = pill(nameOf(f), () => { list.splice(i, 1); commit(dash, s); }, cfg);
-    p.classList.toggle("ws-pill--invalid", chk.state === "invalid");
-    if (chk.state === "invalid") p.prepend(icon("warning", { size: 14 }));
-    if (shared) { p.classList.add("ws-pill--shared"); p.prepend(el("span", "ws-pill__badge", "All dashboards")); }
-    return p;
+    return cfg;
   }
 
   // --- shared filters & field choices (P40) --------------------------------
@@ -1883,8 +1815,8 @@ export function initDashboards() {
     if (f.op === "top") return topControl(dash, s, f);
     if (f.op === "between") {
       const wrap = el("span", "ws-pill__range");
-      const lo = el("input", "input ws-pill__val"); lo.placeholder = "from"; lo.value = f.values?.[0] ?? "";
-      const hi = el("input", "input ws-pill__val"); hi.placeholder = "to"; hi.value = f.values?.[1] ?? "";
+      const lo = el("input", "input ws-pill__val"); lo.placeholder = "From"; lo.value = f.values?.[0] ?? "";
+      const hi = el("input", "input ws-pill__val"); hi.placeholder = "To"; hi.value = f.values?.[1] ?? "";
       lo.maxLength = hi.maxLength = LIMITS.filterValue;
       if (f.category === "numeric") lo.inputMode = hi.inputMode = "decimal";
       lo.setAttribute("aria-label", `From value for ${f.table}.${f.column}`);
@@ -1896,7 +1828,7 @@ export function initDashboards() {
     }
     const val = el("input", "input ws-pill__val");
     val.value = f.value ?? ""; val.maxLength = LIMITS.filterValue;
-    val.placeholder = FILTER_PLACEHOLDER[f.category] ?? "value";
+    val.placeholder = FILTER_PLACEHOLDER[f.category] ?? "Value";
     if (f.category === "numeric") val.inputMode = "decimal";
     val.setAttribute("aria-label", `Value for ${f.table}.${f.column}`);
     val.addEventListener("change", () => { f.value = val.value; commit(dash, s); });
@@ -2085,7 +2017,9 @@ export function initDashboards() {
     }
     return distinctCache.get(k);
   }
-  // Chart-type picker: the current type's icon + name; its menu is a two-column grid of every type.
+  // Chart-type picker (one control; Show Me folded in): the current type's icon + name; its menu is a two-column grid of every
+  // type. A type the sheet's fields can't draw is dimmed with the reason as its tooltip, the best fit carries the Show Me icon, and
+  // picking one sets the type (one commit = one undo step); Columns / Rows stay where they are.
   function chartTypePicker(dash, s) {
     const wrap = el("div", "menu ws-pick ws-pick--chart");
     const btn = el("button", "ws-pick__btn"); btn.type = "button";
@@ -2094,13 +2028,24 @@ export function initDashboards() {
     btn.append(icon(chartIcon(s.chartType)), el("span", "ws-pick__text", chartLabel(s.chartType)), caret());
     const list = el("div", "menu__list menu__list--start ws-charttypes");
     list.setAttribute("role", "menu"); list.setAttribute("aria-label", "Chart type"); list.hidden = true;
-    for (const [v, lbl] of CHART_TYPES)
-      list.append(radioItem(chartIcon(v), lbl, v === s.chartType, () => {
+    const empty = !s.columns.length && !s.rows.length; // a drill level alone isn't "fields to suggest for"
+    const options = showMeOptions(CHART_TYPES.map(([id]) => id), (type) => showMeCounts(s, type));
+    for (const [v, lbl] of CHART_TYPES) {
+      const o = options.find((x) => x.id === v);
+      const item = radioItem(chartIcon(v), lbl, v === s.chartType, () => {
         if (s.chartType === v) return;
         s.chartType = v;
         commit(dash, s);
         focusPicker("ws-pick--chart");
-      }));
+      });
+      item.dataset.type = v;
+      if (o?.issue) { item.classList.add("is-unfit"); item.title = o.issue; }
+      else if (o?.recommended && !empty) {
+        const star = icon("show-me", { size: 14 }); star.classList.add("ws-charttypes__best");
+        item.title = "Best fit for these fields"; item.insertBefore(star, item.querySelector(".menu__check"));
+      }
+      list.append(item);
+    }
     wrap.append(btn, list);
     wireMenu(btn, list, { signal: headerAbort.signal });
     return wrap;
@@ -2220,7 +2165,7 @@ export function initDashboards() {
     btn.title = tool.hint || tool.label;
     btn.append(icon(tool.icon), el("span", "ws-tool__text", tool.label));
     if (set) btn.append(el("span", "ws-tool__badge", String(tool.count)));
-    btn.addEventListener("click", () => { openTool = openTool === tool.key ? null : tool.key; choicesFor = null; calcFor = null; formatOpen = false; showMeOpen = false; renderShelves(); });
+    btn.addEventListener("click", () => { openTool = openTool === tool.key ? null : tool.key; choicesFor = null; calcFor = null; formatOpen = false; renderShelves(); });
     btn.addEventListener("dragover", (e) => { if (hasField(e) || (tool.onHierarchy && hasHierarchy(e))) { e.preventDefault(); btn.classList.add("is-over"); } });
     btn.addEventListener("dragleave", () => btn.classList.remove("is-over"));
     btn.addEventListener("drop", (e) => {
@@ -2664,7 +2609,7 @@ export function initDashboards() {
       commit(dash, s);
     });
     const tplIn = tplF.querySelector("input");
-    tplIn.maxLength = MAX_TEMPLATE; tplIn.placeholder = "https://example.com/item/{value}"; tplIn.classList.add("ws-link__tpl");
+    tplIn.maxLength = MAX_TEMPLATE; tplIn.placeholder = "URL, e.g. https://example.com/item/{value}"; tplIn.classList.add("ws-link__tpl");
     tplIn.inputMode = "url"; tplIn.spellcheck = false;
     row.append(labelF, tplF);
     box.append(row, el("span", "ws-shelf__note", "Click a mark, then use the link on the selection bar. {value} becomes the clicked value; only https:// links open, in a new tab."));
@@ -2678,7 +2623,7 @@ export function initDashboards() {
     const inp = el("input", "input ws-fmt-input ws-cf__num");
     inp.type = "text"; inp.inputMode = "decimal";
     inp.value = value == null ? "" : String(value);
-    inp.placeholder = placeholder;
+    inp.placeholder = placeholder.charAt(0).toUpperCase() + placeholder.slice(1);
     if (!labelText) inp.setAttribute("aria-label", "Threshold");
     inp.addEventListener("change", () => {
       const raw = inp.value.trim();
@@ -2755,6 +2700,7 @@ function exportBaseName(dash) {
   return raw.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "worksheet";
 }
 
+function localStorageOrNull() { try { return localStorage; } catch { return null; } }
 function select(options, selected, className, label) {
   const sel = el("select", `select select--light ${className ?? ""}`.trim());
   if (label) sel.setAttribute("aria-label", label); // accessible name (a11y — no visible <label>)
@@ -2790,7 +2736,7 @@ function fmtText(labelText, value, onChange) {
   const inp = el("input", "input ws-fmt-input");
   inp.type = "text";
   inp.value = value ?? "";
-  inp.placeholder = "auto"; inp.maxLength = LIMITS.axisTitle;
+  inp.placeholder = "Auto"; inp.maxLength = LIMITS.axisTitle;
   inp.addEventListener("change", () => onChange(inp.value.trim() || null));
   wrap.append(inp);
   return wrap;

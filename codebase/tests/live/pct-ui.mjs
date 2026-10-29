@@ -99,8 +99,8 @@ try {
   };
   const newCalc = async (name, formula) => { await openNewDialog(); await fillDialog(name, formula); await saveDialog(); };
   const calcMenu = async (name, item) => {
-    await ev(`(() => { const c = __t.chip(${J(name)}); c.querySelector('.ws-field__more').click(); return true; })()`);
-    await ev(`(() => { const c = __t.chip(${J(name)}); [...c.querySelectorAll('.menu__item')].find((x) => x.textContent.trim() === ${J(item)}).click(); return true; })()`);
+    await ev(`(() => { const c = __t.chip(${J(name)}); c.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 40 })); return true; })()`);
+    await ev(`(() => { const c = __t.chip(${J(name)}); [...document.querySelectorAll('.ctx-menu .menu__item')].find((x) => x.textContent.trim() === ${J(item)}).click(); return true; })()`);
   };
   const confirmOpen = `[...document.querySelectorAll('dialog[open]')].find((d) => !d.classList.contains('calc-dialog'))`;
   const chartText = () => ev(`document.getElementById('ws-chart').textContent`);
@@ -127,9 +127,9 @@ try {
   await waitFor(`!!__t.chip('region')`, 'field pane filled');
 
 
-  const pillAggs = () => ev(`(() => { const p = document.querySelector('.ws-shelf--rows .ws-pill'); return [...p.querySelector('.ws-pill__agg').options].map((o) => [o.value, o.textContent]); })()`);
-  const setAgg = (v) => ev(`(() => { const s = document.querySelector('.ws-shelf--rows .ws-pill .ws-pill__agg'); s.value = ${J(v)}; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
-  const pctInput = `document.querySelector('.ws-shelf--rows .ws-pill .ws-pill__pctin')`;
+  const pillAggs = async () => { await ev(`document.querySelector('.ws-shelf--rows .ws-pill').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 300, clientY: 200 }))`); const r = await ev(`[...document.querySelectorAll('.ctx-menu [role=menuitemradio]')].map((o) => [o.textContent.trim() === 'Percentile…' ? 'percentile' : o.textContent.trim(), o.textContent.trim()])`); await ev(`document.querySelector('.ctx-menu')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`); return r; };
+  const setAgg = async (v) => { await ev(`document.querySelector('.ws-shelf--rows .ws-pill').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 300, clientY: 200 }))`); await ev(`[...document.querySelectorAll('.ctx-menu [role=menuitemradio]')].find((o) => o.textContent.trim() === ${J(v === 'percentile' ? 'Percentile…' : v)}).click()`); };
+  const pctInput = `document.querySelector('.ctx-menu .ws-pill__pctin')`;
   const typePct = async (text) => {
     await ev(`(() => { const e = ${pctInput}; e.focus(); e.select(); return true; })()`);
     await b.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Delete', code: 'Delete', windowsVirtualKeyCode: 46 });
@@ -147,7 +147,7 @@ try {
     const pct = opts.find(([v]) => v === 'percentile');
     must(pct && pct[1] === 'Percentile…', `menu: ${J(opts)}`);
     must(opts.filter(([v, t]) => v !== 'percentile' && t !== v).length === 0, `renamed options: ${J(opts)}`);
-    must(!(await ev(`!!document.querySelector('.ws-shelf--rows .ws-pill .ws-pill__pctin')`)), 'percent box shown before choosing it');
+    must(!(await ev(`!!document.querySelector('.ctx-menu .ws-pill__pctin')`)), 'percent box shown before choosing it');
   });
   await check('choosing Percentile… shows a labelled percent box at 90, and the request carries agg percentile with p 0.9', async () => {
     await settle();
@@ -172,9 +172,9 @@ try {
     for (const bad of ['150', 'abc', '', '-5']) {
       await typePct(bad);
       must(await ev(`${pctInput}.getAttribute('aria-invalid')`) === 'true', `not flagged: ${bad}`);
-      const msg = await ev(`(() => { const e = document.querySelector('.ws-shelf--rows .ws-pill__pcterr'); return e.hidden ? '' : e.textContent; })()`);
+      const msg = await ev(`(() => { const e = document.querySelector('.ctx-menu .ws-pill__pcterr'); return e.hidden ? '' : e.textContent; })()`);
       must(/between 0 and 100/.test(msg), `message for ${J(bad)}: ${msg}`);
-      must(await ev(`!!document.querySelector('.ws-shelf--rows .ws-pill__pcterr svg')`), 'message has no icon');
+      must(await ev(`!!document.querySelector('.ctx-menu .ws-pill__pcterr svg')`), 'message has no icon');
       await commitPct();
     }
     await settle();
@@ -183,7 +183,7 @@ try {
   });
   await check('a valid value clears the message', async () => {
     await typePct('25'); await commitPct(); await settle();
-    must(await ev(`document.querySelector('.ws-shelf--rows .ws-pill__pcterr') === null || document.querySelector('.ws-shelf--rows .ws-pill__pcterr').hidden`), 'message still shown');
+    must(await ev(`document.querySelector('.ctx-menu .ws-pill__pcterr') === null || document.querySelector('.ctx-menu .ws-pill__pcterr').hidden`), 'message still shown');
     must(lastQuery().measures[0].p === 0.25, `p: ${J(lastQuery().measures[0])}`);
   });
   await check('leaving percentile drops p from the pill and the request', async () => {
@@ -193,8 +193,8 @@ try {
     must(!(await ev(`!!${pctInput}`)), 'percent box still shown');
   });
   await check('percentile is not in the field default-aggregation menu', async () => {
-    await ev(`(() => { const c = __t.chip('amount'); c.querySelector('.ws-field__more').click(); return true; })()`);
-    const items = await ev(`(() => { const c = __t.chip('amount'); return [...c.querySelectorAll('.menu__item')].map((x) => x.textContent.trim()); })()`);
+    await ev(`(() => { const c = __t.chip('amount'); c.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 40 })); return true; })()`);
+    const items = await ev(`(() => { const c = __t.chip('amount'); return [...document.querySelectorAll('.ctx-menu .menu__item')].map((x) => x.textContent.trim()); })()`);
     must(items.includes('median') && !items.includes('percentile'), `default menu: ${J(items)}`);
     await b.key('Escape', { code: 'Escape', vk: 27 });
   });

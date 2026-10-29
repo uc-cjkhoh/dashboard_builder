@@ -187,6 +187,9 @@ button { font: inherit; }
 .menu__item[aria-checked="true"] { font-weight: 600; }
 .menu__item .menu__check { margin-left: auto; color: var(--accent-ink); visibility: hidden; }
 .menu__item[aria-checked="true"] .menu__check { visibility: visible; }
+/* Context popup (Core/menu.js openContextMenu): at the pointer, over everything, solid. */
+.ctx-menu { position: fixed; right: auto; z-index: 90; transform-origin: top left; max-height: calc(100vh - 16px); overflow: auto; }
+.ctx-menu__custom { padding: var(--s1) var(--s2); display: flex; flex-wrap: wrap; gap: var(--s1); align-items: center; }
 .menu__heading { padding: var(--s1) var(--s2) var(--s1); font-size: var(--fs-body); font-weight: 600; color: var(--ink-3); grid-column: 1 / -1; }
 .menu__sep { height: 1px; margin: var(--s1) 0; background: var(--line); grid-column: 1 / -1; }
 
@@ -293,7 +296,7 @@ body.is-resizing { cursor: col-resize; user-select: none; }
   animation: toast-in var(--dur-slow) var(--ease-out); }
 .toast--ok { border-left: 3px solid var(--ok-ink); } .toast--info { border-left: 3px solid var(--ink-3); }
 .toast--danger { border-left: 3px solid var(--danger-solid); }
-.toast__close { margin-left: auto; border: 0; background: transparent; color: var(--ink-3); width: 24px; height: 24px; border-radius: var(--r); cursor: pointer; }
+.toast__close { margin-left: auto; padding: 0; border: 0; background: transparent; color: var(--ink-3); width: 24px; height: 24px; border-radius: var(--r); cursor: pointer; }
 .toast__close:hover { background: var(--surface-3); color: var(--ink); }
 
 /* P41 theme dialog (Workbook → Theme…): labelled swatch options — never colour alone. */
@@ -329,3 +332,6 @@ body.is-resizing { cursor: col-resize; user-select: none; }
 .params-field { display: grid; gap: 4px; min-width: 120px; }
 .params-field__label { font-size: var(--fs-body); font-weight: 600; color: var(--ink-2); }
 .params-actions { display: flex; gap: var(--s2); }
+
+/* Native checkbox / radio default to a 3px margin: off the 4 / 8 / 16 / 24 scale, so none. */
+input[type="checkbox"], input[type="radio"] { margin: 0; }

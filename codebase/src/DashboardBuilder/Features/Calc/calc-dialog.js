@@ -39,7 +39,7 @@ export function openCalcDialog(calcId = null) {
   const nameField = el("div", "field");
   const nameLabel = el("label", null, "Name"); nameLabel.htmlFor = `calc-name-${n}`;
   const name = el("input", "input"); name.id = nameLabel.htmlFor; name.type = "text"; name.autocomplete = "off";
-  name.placeholder = "e.g. Unit price"; name.maxLength = LIMITS.calcName; name.value = existing?.name ?? "";
+  name.placeholder = "Unit price"; name.maxLength = LIMITS.calcName; name.value = existing?.name ?? "";
   const nameMsg = el("div"); nameMsg.id = `calc-nmsg-${n}`; nameMsg.setAttribute("role", "alert");
   name.setAttribute("aria-describedby", nameMsg.id);
   nameField.append(nameLabel, name, nameMsg);

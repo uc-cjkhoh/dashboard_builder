@@ -100,8 +100,8 @@ try {
   };
   const newCalc = async (name, formula) => { await openNewDialog(); await fillDialog(name, formula); await saveDialog(); };
   const calcMenu = async (name, item) => {
-    await ev(`(() => { const c = __t.chip(${J(name)}); c.querySelector('.ws-field__more').click(); return true; })()`);
-    await ev(`(() => { const c = __t.chip(${J(name)}); [...c.querySelectorAll('.menu__item')].find((x) => x.textContent.trim() === ${J(item)}).click(); return true; })()`);
+    await ev(`(() => { const c = __t.chip(${J(name)}); c.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 40 })); return true; })()`);
+    await ev(`(() => { const c = __t.chip(${J(name)}); [...document.querySelectorAll('.ctx-menu .menu__item')].find((x) => x.textContent.trim() === ${J(item)}).click(); return true; })()`);
   };
   const confirmOpen = `[...document.querySelectorAll('dialog[open]')].find((d) => !d.classList.contains('calc-dialog'))`;
   const chartText = () => ev(`document.getElementById('ws-chart').textContent`);
@@ -135,10 +135,11 @@ try {
     await dragChip('region', `__t.zone('rows')`);
     await dragChip('amount', `__t.zone('columns')`);
     await ev(`(() => { __t.drag(__t.chip('region'), ${filterTool}); return true; })()`);
-    await waitFor(`${opSelect} !== null`, 'filter pill editor');
-    const ops = await ev(`[...${opSelect}.options].map((o) => o.textContent)`);
+    await waitFor(`!!document.querySelector('[data-ctx^="filter:"]')`, 'filter pill');
+    await ev(`document.querySelector('[data-ctx^="filter:"]').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 300, clientY: 200 }))`);
+    const ops = await ev(`[...document.querySelectorAll('.ctx-menu [role=menuitemradio]')].map((o) => o.textContent.trim())`);
     must(ops.includes('not in') && ops.includes('in'), `operators: ${J(ops)}`);
-    await ev(`(() => { const s = ${opSelect}; s.value = 'notin'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+    await ev(`[...document.querySelectorAll('.ctx-menu [role=menuitemradio]')].find((o) => o.textContent.trim() === 'not in').click()`);
     await waitFor(`document.querySelector('select.ws-pill__in') !== null`, 'multi-select shown for not in');
     await waitFor(`document.querySelector('select.ws-pill__in').options.length === 3 && document.querySelector('select.ws-pill__in').options[0].value === 'APAC'`, 'members listed');
     queries.length = 0;
@@ -153,7 +154,7 @@ try {
     await waitFor(`document.querySelector('select.ws-pill__in') !== null`, 'control');
     const sel = await ev(`[...document.querySelector('select.ws-pill__in').selectedOptions].map((o) => o.value)`);
     must(J(sel) === J(['APAC', 'US']), `selected: ${J(sel)}`);
-    must(await ev(`${opSelect}.selectedOptions[0].textContent`) === 'not in', 'operator label');
+    must(await ev(`document.querySelector('.ctx-menu [role=menuitemradio][aria-checked=true]').textContent.trim()`) === 'not in', 'operator label');
   });
 
   await check('not in: an empty selection sends no filter (no-op, not an error)', async () => {

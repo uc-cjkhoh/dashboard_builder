@@ -7,6 +7,7 @@ export const PATHS = Object.freeze({
   link: "M8.5 11.5l3-3M7 9.5L5.5 11a2.5 2.5 0 0 0 3.5 3.5l1.5-1.5M13 10.5l1.5-1.5A2.5 2.5 0 0 0 11 5.5L9.5 7",
   filter: "M3 4h14l-5.5 6.5V16l-3-1.5v-4z",
   param: "M7 4C5 4 5 6 5 8s-1 2-2 2c1 0 2 0 2 2s0 4 2 4M13 4c2 0 2 2 2 4s1 2 2 2c-1 0-2 0-2 2s0 4-2 4",
+  insights: "M3.5 16.5h13M6 16v-3M10 16V9.5M14 16v-5M4 8l4-3.5 3 2L16 3.5",
   analytics: "M3 16.5h14M4.5 13l3.5-4 3 2.5 4.5-6M4 9.5h12",
   "ref-line": "M3 10h3M8.5 10h3M14 10h3M3 6v8M17 6v8",
   band: "M3 6h14M3 14h14M5 9h10v2H5z",

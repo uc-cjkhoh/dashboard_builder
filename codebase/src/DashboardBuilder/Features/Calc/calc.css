@@ -55,9 +55,7 @@
 .suggest .icon { color: var(--ink-3); flex: none; }
 
 /* ---- Field pane: Calculated fields ---- */
-.calc-group { display: flex; flex-direction: column; gap: 4px; margin-bottom: var(--s2); }
-.calc-group__title { font-size: var(--fs-body); font-weight: 700; color: var(--ink-2); }
-.calc-group__new { width: 100%; justify-content: flex-start; gap: var(--s2); padding-inline: var(--s2); white-space: nowrap; }
+.calc-group__new { width: 100%; justify-content: flex-start; gap: var(--s1); font-weight: 500; padding-inline: var(--s2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .calc-group__new:focus-visible, .calc-field .ws-field__add:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .calc-field::before { display: none; }
 .calc-field { border-color: var(--line); background: var(--surface-2); }
@@ -66,13 +64,11 @@
 .calc-field--dim .calc-field__type { color: var(--dim-ink); }
 .calc-field--error { border-color: var(--danger-line); }
 .calc-field--error .calc-field__type { color: var(--danger-ink); }
-.ws-field.calc-field { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; column-gap: var(--s2); row-gap: 4px; height: auto; padding-block: var(--s1); }
+.ws-field.calc-field { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; column-gap: var(--s2); row-gap: 4px; height: auto; padding-block: var(--s1); }
 .calc-field .calc-field__type { grid-area: 1 / 1; }
 .calc-field .ws-field__name { grid-area: 1 / 2; min-width: 0; } /* the name gets its own line: ellipsis only for a genuinely long one */
-.calc-field .ws-field__menu { grid-area: 1 / 3; }
-.calc-field .ws-field__add { grid-area: 1 / 4; }
-.calc-field .calc-chip { grid-area: 2 / 2 / 3 / 5; justify-self: start; height: 16px; padding: 0 var(--s1); white-space: nowrap; } /* the kind tag is never clipped */
-.calc-field .ws-field__more { opacity: 1; }
+.calc-field .ws-field__add { grid-area: 1 / 3; }
+.calc-field .calc-chip { grid-area: 2 / 2 / 3 / 4; justify-self: start; height: 16px; padding: 0 var(--s1); white-space: nowrap; } /* the kind tag is never clipped */
 
 /* ---- View bar: How this is computed ---- */
 .explain { position: relative; display: inline-flex; }

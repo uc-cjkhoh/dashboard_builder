@@ -64,8 +64,8 @@ try {
     }; return true; })()`);
   const drag = (name, kind) => ev(`(() => { const c = __t.chip(${J(name)}); if (!c) throw new Error('no chip ${name}'); __t.drag(c, __t.zone(${J(kind)})); return true; })()`);
   const castTo = async (name, item) => {
-    await ev(`(() => { __t.chip(${J(name)}).querySelector('.ws-field__more').click(); return true; })()`);
-    await ev(`(() => { const x = [...__t.chip(${J(name)}).querySelectorAll('.menu__item')].find((i) => i.textContent.trim() === ${J(item)}); if (!x) throw new Error('no menu item ${item}'); x.click(); return true; })()`);
+    await ev(`(() => { __t.chip(${J(name)}).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 40 })); return true; })()`);
+    await ev(`(() => { const x = [...document.querySelectorAll('.ctx-menu .menu__item')].find((i) => i.textContent.trim() === ${J(item)}); if (!x) throw new Error('no menu item ${item}'); x.click(); return true; })()`);
   };
   const settle = async (quiet = 300) => { let n = -1; for (let i = 0; i < 60 && n !== queries.length; i++) { n = queries.length; await b.sleep(quiet); } };
   const lastQuery = () => queries[queries.length - 1];
@@ -85,14 +85,14 @@ try {
   await waitFor(`!!__t.chip('qty_s')`, 'field pane filled');
 
   await check('a text field offers Original / Number / Date; a number field only Original / Text', async () => {
-    await ev(`__t.chip('qty_s').querySelector('.ws-field__more').click()`);
-    const items = await ev(`[...__t.chip('qty_s').querySelectorAll('.menu__item')].map((x) => x.textContent.trim())`);
+    await ev(`__t.chip('qty_s').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 40 }))`);
+    const items = await ev(`[...document.querySelectorAll('.ctx-menu .menu__item')].map((x) => x.textContent.trim())`);
     must(J(items.slice(items.indexOf('Original'), items.indexOf('Original') + 3)) === J(['Original', 'Number', 'Date']), `qty_s menu: ${J(items)}`);
-    await ev(`document.body.click()`);
-    await ev(`__t.chip('amount').querySelector('.ws-field__more').click()`);
-    const a = await ev(`[...__t.chip('amount').querySelectorAll('.menu__item')].map((x) => x.textContent.trim())`);
+    await ev(`document.querySelector('.ctx-menu')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
+    await ev(`__t.chip('amount').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 40 }))`);
+    const a = await ev(`[...document.querySelectorAll('.ctx-menu .menu__item')].map((x) => x.textContent.trim())`);
     must(a.includes('Text') && !a.includes('Date') && !a.includes('Number'), `amount menu: ${J(a)}`);
-    await ev(`document.body.click()`);
+    await ev(`document.querySelector('.ctx-menu')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
   });
 
   await check('cast qty_s to Number: tag "as Number", moves to Measures, query measure carries cast', async () => {
@@ -107,9 +107,9 @@ try {
     must(clip.paneScroll <= clip.pane + 1, `field pane scrolls sideways: ${J(clip)}`);
     must(await ev(`!!__t.chip('qty_s').querySelector('.ws-field__type')`), 'the type icon stays beside the name (icon + text, never colour alone)');
     must((await group('qty_s')) === 'Measures', `group is ${await group('qty_s')}`);
-    await ev(`__t.chip('qty_s').querySelector('.ws-field__more').click()`);
-    must(await ev(`/Default aggregation/.test(__t.chip('qty_s').querySelector('.menu__list').textContent)`), 'a text field cast to Number offers a default aggregation');
-    await ev(`document.body.click()`);
+    await ev(`__t.chip('qty_s').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 40 }))`);
+    must(await ev(`/Default aggregation/.test(document.querySelector('.ctx-menu').textContent)`), 'a text field cast to Number offers a default aggregation');
+    await ev(`document.querySelector('.ctx-menu').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
     await drag('region', 'columns');
     await drag('qty_s', 'rows');
     await waitFor(`document.querySelectorAll('.ws-shelf--rows .ws-pill').length === 1`, 'pill on Rows');
@@ -123,12 +123,17 @@ try {
   await check('cast when_s to Date: a date dimension with a date part picker and a cast on the wire', async () => {
     await castTo('when_s', 'Date');
     await drag('when_s', 'columns');
-    await waitFor(`!!document.querySelector('.ws-shelf--columns .ws-pill__part')`, 'date part picker on the cast pill');
+    await waitFor(`document.querySelectorAll('.ws-shelf--columns .ws-pill').length >= 1`, 'date pill');
+    const partMenu = () => ev(`[...document.querySelectorAll('.ws-shelf--columns .ws-pill')].at(-1).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 300, clientY: 200 }))`);
+    await partMenu();
+    must(await ev(`[...document.querySelectorAll('.ctx-menu [role=menuitemradio]')].some((x) => x.textContent.trim() === 'Month')`), 'date parts on the cast pill');
+    await ev(`document.querySelector('.ctx-menu').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
     await settle();
     const q = lastQuery();
     const d = [...(q.rowDimensions ?? []), ...(q.columnDimensions ?? [])].find((x) => x.column === 'when_s');
     must(d?.cast === 'date', `dimension: ${J(d)}`);
-    await ev(`(() => { const s = document.querySelector('.ws-shelf--columns .ws-pill__part'); s.value = 'month'; s.dispatchEvent(new Event('change')); return true; })()`);
+    await partMenu();
+    await ev(`[...document.querySelectorAll('.ctx-menu [role=menuitemradio]')].find((x) => x.textContent.trim() === 'Month').click()`);
     await settle();
     const d2 = lastQuery().columnDimensions.find((x) => x.column === 'when_s');
     must(d2?.cast === 'date' && d2.datePart === 'month', `dimension after part: ${J(d2)}`);

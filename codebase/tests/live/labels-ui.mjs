@@ -73,8 +73,8 @@ try {
     await b.click(p[0], p[1]);
   };
   const fieldMenu = async (name, item) => {
-    await ev(`(() => { const c = [...document.querySelectorAll('#ws-fields .ws-field')].find((x) => x.querySelector('.ws-field__name')?.textContent === ${J(name)}); c.querySelector('.ws-field__more').click(); return true; })()`);
-    await ev(`(() => { const c = [...document.querySelectorAll('#ws-fields .ws-field')].find((x) => x.querySelector('.ws-field__name')?.textContent === ${J(name)}); [...c.querySelectorAll('.menu__item')].find((x) => x.textContent.trim().startsWith(${J(item)})).click(); return true; })()`);
+    await ev(`(() => { const c = [...document.querySelectorAll('#ws-fields .ws-field')].find((x) => x.querySelector('.ws-field__name')?.textContent === ${J(name)}); c.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 40 })); return true; })()`);
+    await ev(`(() => { const c = [...document.querySelectorAll('#ws-fields .ws-field')].find((x) => x.querySelector('.ws-field__name')?.textContent === ${J(name)}); [...document.querySelectorAll('.ctx-menu .menu__item')].find((x) => x.textContent.trim().startsWith(${J(item)})).click(); return true; })()`);
   };
   const dlgBtn = (sel, text) => `[...document.querySelector(${J(sel)}).querySelectorAll('.dialog__foot button')].find((x) => x.textContent === ${J(text)})`;
   const typeInto = async (selector, text) => {
@@ -232,7 +232,7 @@ try {
   });
 
   await check('a remainder label: ungrouped members are labelled "Other", NULL is not; request tree has the extra WHEN', async () => {
-    await ev(`(() => { const c = [...document.querySelectorAll('#ws-fields .calc-field')].find((x) => x.querySelector('.ws-field__name')?.textContent === 'region (groups)'); c.querySelector('.ws-field__more').click(); [...c.querySelectorAll('.menu__item')].find((x) => x.textContent.trim() === 'Edit…').click(); return true; })()`);
+    await ev(`(() => { const c = [...document.querySelectorAll('#ws-fields .calc-field')].find((x) => x.querySelector('.ws-field__name')?.textContent === 'region (groups)'); c.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 40 })); [...document.querySelectorAll('.ctx-menu .menu__item')].find((x) => x.textContent.trim() === 'Edit…').click(); return true; })()`);
     await waitFor(`!!document.querySelector('dialog.grp-dialog[open]') && document.querySelectorAll('.grp-member').length === 4`, 'edit dialog');
     must(await ev(`document.querySelector('.grp-other input[type=text]').disabled`), 'label input off until ticked');
     await ev(`document.querySelector('.grp-other input[type=checkbox]').click()`);
@@ -251,7 +251,7 @@ try {
   });
 
   await check('editing a group field reopens the dialog with the groups filled in', async () => {
-    await ev(`(() => { const c = [...document.querySelectorAll('#ws-fields .calc-field')].find((x) => x.querySelector('.ws-field__name')?.textContent === 'region (groups)'); c.querySelector('.ws-field__more').click(); [...c.querySelectorAll('.menu__item')].find((x) => x.textContent.trim() === 'Edit…').click(); return true; })()`);
+    await ev(`(() => { const c = [...document.querySelectorAll('#ws-fields .calc-field')].find((x) => x.querySelector('.ws-field__name')?.textContent === 'region (groups)'); c.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 40 })); [...document.querySelectorAll('.ctx-menu .menu__item')].find((x) => x.textContent.trim() === 'Edit…').click(); return true; })()`);
     await waitFor(`!!document.querySelector('dialog.grp-dialog[open]') && document.querySelectorAll('.grp-member').length === 4`, 'edit dialog');
     must(await ev(`document.querySelector('.grp-group__name').value === 'Asia & Europe'`), 'group name restored');
     must(await ev(`[...document.querySelectorAll('.grp-member__select')].map((s) => s.selectedOptions[0].textContent).join('|') === 'Asia & Europe|Asia & Europe|(not grouped)|(not grouped)'`), 'assignments restored');
@@ -281,7 +281,9 @@ try {
     await fieldMenu('amount', 'Group');
     await waitFor(`/text fields only/.test(document.getElementById('toast')?.textContent ?? '')`, 'refusal toast');
     must(!(await ev(`!!document.querySelector('dialog.grp-dialog')`)), 'no dialog for a numeric field');
-    must(!(await ev(`[...document.querySelectorAll('#ws-fields .ws-field')].find((c) => c.querySelector('.ws-field__name')?.textContent === 'placed')?.querySelector('.menu__item') ? [...[...document.querySelectorAll('#ws-fields .ws-field')].find((c) => c.querySelector('.ws-field__name')?.textContent === 'placed').querySelectorAll('.menu__item')].some((x) => /member labels/.test(x.textContent)) : false`)), 'a date field offers no member labels');
+    await ev(`(() => { const c = [...document.querySelectorAll('#ws-fields .ws-field')].find((c) => c.querySelector('.ws-field__name')?.textContent === 'placed'); c.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 40 })); return true; })()`);
+    must(!(await ev(`[...document.querySelectorAll('.ctx-menu .menu__item')].some((x) => /member labels/.test(x.textContent))`)), 'a date field offers no member labels');
+    await ev(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); document.querySelector('.ctx-menu')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); true`);
   });
 
   // ---- dark ----

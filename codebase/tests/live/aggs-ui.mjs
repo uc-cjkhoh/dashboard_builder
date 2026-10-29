@@ -99,8 +99,8 @@ try {
   };
   const newCalc = async (name, formula) => { await openNewDialog(); await fillDialog(name, formula); await saveDialog(); };
   const calcMenu = async (name, item) => {
-    await ev(`(() => { const c = __t.chip(${J(name)}); c.querySelector('.ws-field__more').click(); return true; })()`);
-    await ev(`(() => { const c = __t.chip(${J(name)}); [...c.querySelectorAll('.menu__item')].find((x) => x.textContent.trim() === ${J(item)}).click(); return true; })()`);
+    await ev(`(() => { const c = __t.chip(${J(name)}); c.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 40 })); return true; })()`);
+    await ev(`(() => { const c = __t.chip(${J(name)}); [...document.querySelectorAll('.ctx-menu .menu__item')].find((x) => x.textContent.trim() === ${J(item)}).click(); return true; })()`);
   };
   const confirmOpen = `[...document.querySelectorAll('dialog[open]')].find((d) => !d.classList.contains('calc-dialog'))`;
   const chartText = () => ev(`document.getElementById('ws-chart').textContent`);
@@ -127,8 +127,8 @@ try {
   await waitFor(`!!__t.chip('region')`, 'field pane filled');
 
 
-  const pillAggs = () => ev(`(() => { const p = document.querySelector('.ws-shelf--rows .ws-pill'); return [...p.querySelector('.ws-pill__agg').options].map((o) => o.value); })()`);
-  const setAgg = (v) => ev(`(() => { const s = document.querySelector('.ws-shelf--rows .ws-pill .ws-pill__agg'); s.value = ${J(v)}; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+  const pillAggs = async () => { await ev(`document.querySelector('.ws-shelf--rows .ws-pill').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 300, clientY: 200 }))`); const r = await ev(`[...document.querySelectorAll('.ctx-menu [role=menuitemradio]')].map((o) => o.textContent.trim().replace('Percentile…', 'percentile'))`); await ev(`document.querySelector('.ctx-menu')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`); return r; };
+  const setAgg = async (v) => { await ev(`document.querySelector('.ws-shelf--rows .ws-pill').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 300, clientY: 200 }))`); await ev(`[...document.querySelectorAll('.ctx-menu [role=menuitemradio]')].find((o) => o.textContent.trim() === ${J(v === 'percentile' ? 'Percentile…' : v)}).click()`); };
   const fmsg = () => ev(`${dlg}.querySelector('[id^=calc-fmsg]').textContent.trim()`);
 
   await check('pill menu: a numeric measure offers median, stddev, variance, attr and percentile', async () => {
