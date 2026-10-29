@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { remember, forget, sanitize, sourceKey, MAX_RECENT } from "../../src/DashboardBuilder/Features/Connection/recent-sources.js";
+import { remember, forget, sanitize, sourceKey, formValues, MAX_RECENT } from "../../src/DashboardBuilder/Features/Connection/recent-sources.js";
 
 const view = (o = {}) => ({ connected: true, host: "ch1", port: 8443, user: "ann", secure: true, allowInvalidCertificate: false, ...o });
 
@@ -37,4 +37,19 @@ test("sanitize drops junk, extra fields and out-of-range ports from stored data"
 test("allowInvalidCert is only kept under TLS", () => {
   assert.equal(remember([], view({ secure: false, allowInvalidCertificate: true }))[0].allowInvalidCert, false);
   assert.equal(remember([], view({ allowInvalidCertificate: true }))[0].allowInvalidCert, true);
+});
+
+test("formValues refills the form with the host exactly as it was entered", () => {
+  const l = remember([], view({ host: "My-CH.Example.com", port: 9440, user: "ann", secure: false }));
+  assert.deepEqual(formValues(l[0]), { host: "My-CH.Example.com", port: "9440", user: "ann", secure: false, allowInvalidCert: false });
+});
+test("formValues never returns a blank host for a stored source", () => {
+  for (const host of ["10.168.49.13", "[::1]", "ch1"]) assert.equal(formValues(remember([], view({ host }))[0]).host, host);
+});
+test("a whitespace-only host is not remembered", () => {
+  assert.deepEqual(remember([], view({ host: "   " })), []);
+});
+test("sanitize keeps the stored host verbatim", () => {
+  const raw = [{ host: "ch.Example.COM", port: 8443, user: "ann", secure: true, allowInvalidCert: false }];
+  assert.equal(sanitize(raw)[0].host, "ch.Example.COM");
 });

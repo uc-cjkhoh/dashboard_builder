@@ -8,7 +8,6 @@ import { DEFAULT_THEME } from "../Core/theme-model.js";
 import { openThemeDialog } from "./theme-dialog.js";
 import { saveBookmarkDialog, openBookmarksDialog } from "./bookmarks-dialog.js";
 import { openParametersDialog } from "./parameters-dialog.js";
-import { icon } from "../Core/icons.js";
 import { wireMenu } from "../Core/menu.js";
 import { exit } from "../Core/motion.js";
 import { toast, confirmDialog, toggle, listDialog } from "../Core/ui.js";
@@ -34,13 +33,12 @@ let legacyKey = null;  // the v1 key for the same server + user (read-only fallb
 let restoring = false; // no autosave while a workbook is being rebuilt
 let timer = null;
 let blockedKey = null; // a stored workbook that couldn't be restored — never autosave over it
-let statusEl = null;
+let warned = ""; // the last not-saved warning shown (a toast once per cause, not on every autosave)
 
 export function initWorkbook() {
   const exportBtn = document.getElementById("wb-export");
   const importBtn = document.getElementById("wb-import");
   const fileInput = document.getElementById("wb-file");
-  statusEl = document.getElementById("wb-status");
   if (!exportBtn || !importBtn || !fileInput) return;
 
   const menuBtn = document.getElementById("wb-menu-btn"), menuList = document.getElementById("wb-menu-list");
@@ -90,7 +88,7 @@ function onConnection(view) {
 /** Disconnected: fade the cards and tabs out, then clear the model and close every tab.
  *  Nothing is saved meanwhile (key is null), so the stored workbook for that server is untouched. */
 async function clearWorkspace() {
-  setStatus("");
+  warned = "";
   if (isEmpty()) return;
   const leaving = [...[...entities.values()].map((e) => e.el), ...document.querySelectorAll(".tab:not(.tab--model)")];
   await Promise.all(leaving.filter(Boolean).map((el) => exit(el, { y: 0, scale: .98 })));
@@ -130,7 +128,7 @@ function keepUnreadable(saved, err) {
     : `Couldn't restore your saved workbook: ${reason}. No backup copy could be kept, so the stored workbook was left untouched.`, "danger");
   if (!kept) {
     blockedKey = key; // no backup exists, so the unreadable entry is the only copy — never overwrite it
-    setStatus("Not saved — your previous workbook couldn't be read and has been left untouched. Use Export to keep a copy.", "warning");
+    warnNotSaved("Not saved — your previous workbook couldn't be read and has been left untouched. Use Export to keep a copy.");
   }
 }
 
@@ -148,14 +146,14 @@ function save() {
   timer = null;
   if (!key || restoring) return;
   if (key === blockedKey) {
-    setStatus("Not saved — your previous workbook couldn't be read and has been left untouched. Use Export to keep a copy.", "warning");
+    warnNotSaved("Not saved — your previous workbook couldn't be read and has been left untouched. Use Export to keep a copy.");
     return;
   }
   try {
     localStorage.setItem(key, JSON.stringify(serializeWorkbook(currentState())));
-    setStatus("Saved");
+    warned = "";
   } catch {
-    setStatus("Not saved — browser storage is unavailable. Use Export to keep a copy.", "warning");
+    warnNotSaved("Not saved — browser storage is unavailable. Use Export to keep a copy.");
   }
 }
 
@@ -262,9 +260,8 @@ function currentState() {
 const isEmpty = () => entities.size === 0 && tabs.length === 0;
 const count = (n, noun) => `${n} ${noun}${n === 1 ? "" : "s"}`;
 
-function setStatus(text, iconName) {
-  if (!statusEl) return;
-  statusEl.classList.toggle("workbook__status--warn", iconName === "warning");
-  statusEl.replaceChildren(...(text && iconName ? [icon(iconName, { size: 14 }), " "] : []), text);
-  toggle(statusEl, Boolean(text));
+function warnNotSaved(text) {
+  if (warned === text) return;
+  warned = text;
+  toast(text, "danger");
 }

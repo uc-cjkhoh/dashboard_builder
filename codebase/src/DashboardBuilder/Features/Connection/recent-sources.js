@@ -8,7 +8,7 @@ const pick = (o) => ({
   allowInvalidCert: o.secure !== false && Boolean(o.allowInvalidCert ?? o.allowInvalidCertificate),
 });
 const valid = (o) => o && typeof o === "object"
-  && typeof o.host === "string" && o.host !== "" && o.host.length <= 253
+  && typeof o.host === "string" && o.host.trim() !== "" && o.host.length <= 253
   && typeof o.user === "string" && o.user !== "" && o.user.length <= 64
   && Number.isInteger(Number(o.port)) && Number(o.port) >= 1 && Number(o.port) <= 65535;
 
@@ -25,3 +25,6 @@ export function remember(list, view) {
 }
 
 export const forget = (list, key) => sanitize(list).filter((e) => sourceKey(e) !== key);
+
+/** The form fields a source refills — the host exactly as it was entered, never derived. */
+export const formValues = (e) => ({ host: e.host, port: String(e.port), user: e.user, secure: e.secure, allowInvalidCert: e.allowInvalidCert });

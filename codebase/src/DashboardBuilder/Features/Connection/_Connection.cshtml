@@ -3,20 +3,16 @@
 <section class="sidebar__section" aria-labelledby="conn-title">
     <div class="sidebar__title-row">
         <h2 class="sidebar__title" id="conn-title">Connection</h2>
-        <span class="pill pill--muted" id="conn-status" role="status" aria-live="polite">
-            <span class="pill__glyph" aria-hidden="true" data-icon="dot"></span> Idle
-        </span>
     </div>
 
     <!-- Compact connected summary — replaces the form once connected. -->
     <div class="conn-summary" id="conn-summary" hidden>
         <span class="conn-summary__dot" aria-hidden="true"></span>
-        <div class="conn-summary__text">
-            <span class="conn-summary__host" id="conn-host-label">—</span>
-            <span class="conn-summary__meta" id="conn-meta">—</span>
-        </div>
+        <span class="conn-summary__host" id="conn-host-label"></span>
+        <span class="conn-summary__warn" id="conn-warn" hidden data-icon="warning" role="img"
+              aria-label="Certificate not verified" title="Certificate not verified"></span>
         <button type="button" class="iconbtn conn-summary__btn" id="conn-change"
-                aria-label="Change connection" title="Change connection"><span data-icon="edit"></span></button>
+                aria-label="Change connection" title="Change connection" aria-controls="conn-form" aria-expanded="false"><span data-icon="edit"></span></button>
         <button type="button" class="iconbtn iconbtn--danger conn-summary__btn" id="conn-disconnect"
                 aria-label="Disconnect" title="Disconnect"><span data-icon="power"></span></button>
     </div>

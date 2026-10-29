@@ -1,26 +1,25 @@
 import { icon } from "../Core/icons.js";
 import { api } from "../Core/api.js";
-import { show, hide, toggle, toast, setPill, fieldError, clearFieldError, checkField } from "../Core/ui.js";
+import { show, hide, toggle, toast, fieldError, clearFieldError, checkField } from "../Core/ui.js";
 import { host, port, text, LIMITS } from "../Core/validate.js";
-import { advancedShouldOpen } from "./connection-rules.js";
-import { remember, forget, sanitize, sourceKey } from "./recent-sources.js";
+import { advancedShouldOpen, summaryTitle, summaryWarns, formFromView } from "./connection-rules.js";
+import { remember, forget, sanitize, sourceKey, formValues } from "./recent-sources.js";
 
 // Recent sources live in this browser only (localStorage) and hold no secrets — see recent-sources.js.
 const RECENT_KEY = "dashboardbuilder.recent-sources";
 const loadRecent = () => { try { return sanitize(JSON.parse(localStorage.getItem(RECENT_KEY))); } catch { return []; } };
 const saveRecent = (list) => { try { localStorage.setItem(RECENT_KEY, JSON.stringify(list)); } catch { /* not remembered — fine */ } };
 
-// The sidebar connection flow (P2, refined). Drives the indicator pill and gates the schema
-// browser + canvas. Once connected the form is replaced by a compact summary showing the
-// ClickHouse host, with icon actions to change the connection (re-open the form) or disconnect.
+// The sidebar connection flow (P2, refined). Gates the schema browser + canvas. Failures show as a
+// field error or a toast. Once connected the form is collapsed into a compact summary showing the
+// ClickHouse host (user, transport and port in its tooltip), with icon actions to change the connection (re-open the form) or disconnect.
 export function initConnection() {
   const form = document.getElementById("conn-form");
   if (!form) return;
 
-  const pill = document.getElementById("conn-status");
   const summary = document.getElementById("conn-summary");
   const hostLabel = document.getElementById("conn-host-label");
-  const metaLabel = document.getElementById("conn-meta");
+  const warnIcon = document.getElementById("conn-warn");
   const connectBtn = document.getElementById("conn-connect");
   const cancelBtn = document.getElementById("conn-cancel");
   const changeBtn = document.getElementById("conn-change");
@@ -53,11 +52,11 @@ export function initConnection() {
       const h = document.createElement("span");
       h.className = "conn-summary__host"; h.textContent = e.host;
       const m = document.createElement("span");
-      m.className = "conn-summary__meta"; m.textContent = `${e.user} · :${e.port}`;
+      m.className = "conn-recent__meta"; m.textContent = `${e.user} · :${e.port}`;
+      pick.title = `${e.host} · ${e.user} · :${e.port}`;
       pick.append(h, m);
       pick.addEventListener("click", () => {
-        hostEl.value = e.host; portEl.value = String(e.port); userEl.value = e.user;
-        secureEl.checked = e.secure; allowCertEl.checked = e.allowInvalidCert;
+        fillForm(formValues(e));
         for (const i of [hostEl, portEl, userEl, passEl]) clearFieldError(i);
         syncCertControls(); syncAdvanced();
         passEl.value = ""; passEl.focus();
@@ -73,6 +72,11 @@ export function initConnection() {
       return li;
     }));
     toggle(recentEl, recent.length > 0 && !form.hidden);
+  }
+
+  function fillForm(v) {
+    hostEl.value = v.host; portEl.value = v.port; userEl.value = v.user;
+    secureEl.checked = v.secure; allowCertEl.checked = v.allowInvalidCert;
   }
 
   let current = null; // last connected view, for Cancel-back-to-summary
@@ -100,6 +104,7 @@ export function initConnection() {
     show(form);
     renderRecent();
     toggle(cancelBtn, cancellable);
+    changeBtn?.setAttribute("aria-expanded", "true");
     hostEl.focus();
   }
 
@@ -108,26 +113,18 @@ export function initConnection() {
     current = connected ? view : null;
 
     if (connected) {
-      setPill(pill, "connected", "Connected");
       hostLabel.textContent = view.host;
-      hostLabel.title = view.host;
-      // Flag a bypassed-certificate connection so the risk stays visible after connecting.
-      const transport = view.secure
-        ? (view.allowInvalidCertificate ? "TLS, cert unverified" : "TLS")
-        : "plain";
-      metaLabel.textContent = `${view.user} · ${transport} · :${view.port}`;
-      metaLabel.title = view.allowInvalidCertificate
-        ? "This connection does not validate the server's TLS certificate." : "";
-      // Keep the form controls in step for a later "change connection".
-      secureEl.checked = Boolean(view.secure);
-      allowCertEl.checked = Boolean(view.allowInvalidCertificate);
+      hostLabel.title = summaryTitle(view);
+      toggle(warnIcon, summaryWarns(view));
+      // The form keeps what was entered (host included) for a later "change connection".
+      fillForm(formFromView(view));
       syncCertControls();
+      changeBtn?.setAttribute("aria-expanded", "false");
       hide(form);
       renderRecent();
       show(summary);
       hide(cancelBtn);
     } else {
-      setPill(pill, "idle", "Idle");
       syncAdvanced();
       show(form);
       renderRecent();
@@ -158,25 +155,25 @@ export function initConnection() {
     // allowInvalidCert only matters under TLS; the server also gates it on `secure`.
     const payload = { ...values, secure: secureEl.checked, allowInvalidCert: secureEl.checked && allowCertEl.checked };
 
-    setPill(pill, "connecting");
+    connectBtn.setAttribute("aria-busy", "true");
     connectBtn.disabled = true;
     try {
       const view = await api.connect(payload);
-      recent = remember(recent, view);
+      recent = remember(recent, { ...view, host: payload.host }); // the host as entered
       saveRecent(recent);
       applyState(view);
       toast(`Connected to ${view.host}.`, "ok");
     } catch (err) {
-      setPill(pill, "failed", "Failed");
       if (err.field && fields[err.field]) fieldError(fields[err.field], err.message);
       else toast(err.message, "danger");
     } finally {
       connectBtn.disabled = false;
+      connectBtn.removeAttribute("aria-busy");
     }
   });
 
   // edit icon: change connection — reveal the form (still connected until a new connect succeeds).
-  changeBtn?.addEventListener("click", () => showForm({ cancellable: true }));
+  changeBtn?.addEventListener("click", () => { if (form.hidden) showForm({ cancellable: true }); else if (current) applyState(current); });
 
   // Cancel out of "change" mode, back to the active connection's summary.
   cancelBtn?.addEventListener("click", () => { if (current) applyState(current); });
