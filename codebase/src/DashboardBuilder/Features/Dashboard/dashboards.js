@@ -428,7 +428,7 @@ export function initDashboards() {
     return chip;
   }
 
-  // A calculation's ⋯ menu: Edit…, Duplicate, Delete…
+  // A calculation's ⋯ menu: Edit…, Duplicate, Copy name / Copy formula, Delete…
   function calcFieldMenu(calc) {
     const wrap = el("div", "menu ws-field__menu");
     const btn = iconButton("more", `Actions for ${calc.name}`);
