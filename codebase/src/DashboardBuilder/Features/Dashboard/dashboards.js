@@ -3,13 +3,14 @@ import { icon, PATHS } from "../Core/icons.js";
 import { wireMenu } from "../Core/menu.js";
 import { visibleTools } from "./toolbar-rules.js";
 import { roleOf, STAT_SINGLE_TABLE, showMeOptions, placeFor, samePlacement } from "./show-me-rules.js";
-import { toggle, makeButton, toast, fieldError, confirmDialog } from "../Core/ui.js";
+import { toggle, makeButton, toast, fieldError, confirmDialog, copyText } from "../Core/ui.js";
 import { LIMITS, number, percent, percentLabel, isFraction, PERCENT_MESSAGE, DEFAULT_PERCENTILE } from "../Core/validate.js";
 import { aggsFor, checkAdd, checkFilter, viewCounts, withCategories, opsFor, OP_LABELS } from "./filter-rules.js";
 import { entities, relationships, activeWorksheet, isWorksheetActive, updateSheet, bus, defaultFormat, defaultMarks, sharedFilters, metaOf, nameOf, setFieldMeta, emptySheet, parameters, updateParameter, hierarchies, calculations, worksheets, addCalculation, removeCalculation } from "../Core/store.js";
 import { checkValue, paramTypeFor } from "../Core/parameters-model.js";
 import { exportChart, hasChartInstance, sizeChart, focusSeries } from "./chart.js";
 import { createWorksheetView, periodNotice } from "./worksheet-view.js";
+import { fieldCopies } from "./field-copy-model.js";
 import { el, hint, iconSpan } from "./render-dom.js";
 import { updatedText, calcDefinitionLines } from "./data-notes.js";
 import { ANALYTICS_TYPES, CLICK_TYPES, sameField, statusText, captionText } from "./result-model.js";
@@ -428,7 +429,7 @@ export function initDashboards() {
     return chip;
   }
 
-  // A calculation's ⋯ menu: Edit…, Duplicate, Delete…
+  // A calculation's ⋯ menu: Edit…, Duplicate, Copy name / Copy formula, Delete…
   function calcFieldMenu(calc) {
     const wrap = el("div", "menu ws-field__menu");
     const btn = iconButton("more", `Actions for ${calc.name}`);
@@ -444,6 +445,7 @@ export function initDashboards() {
     };
     list.append(item("Edit…", () => (calc.group ? editGroupField(calc) : openCalcDialog(calc.id))));
     list.append(item("Duplicate", () => duplicateCalcField(calc)));
+    for (const c of fieldCopies(calc)) list.append(item(c.label, () => copyText(c.text, c.what)));
     list.append(el("div", "menu__sep"), item("Delete…", () => deleteCalcField(calc)));
     wireMenu(btn, list);
     wrap.append(btn, list);
@@ -547,6 +549,7 @@ export function initDashboards() {
     };
     const meta = metaOf(f);
     list.append(item("Rename…", () => renameField(f, col, nameEl)));
+    for (const c of fieldCopies({ column: col.name, alias: meta.alias })) list.append(item(c.label, () => copyText(c.text, c.what)));
     if (meta.alias) list.append(item("Use the column name", () => setFieldMeta(f, { alias: null })));
     const effCat = effectiveCategory(col.category, meta.cast); // T02-34: a text column cast to Number aggregates like a number
     if (effCat === "numeric") {

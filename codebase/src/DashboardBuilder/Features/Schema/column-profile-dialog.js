@@ -3,16 +3,11 @@
 // canvas card. Escape, Close and the X close it; closing cancels a request still in flight. Text is always set with textContent.
 import { api } from "../Core/api.js";
 import { icon } from "../Core/icons.js";
-import { makeButton, openDialog, closeDialog, toast } from "../Core/ui.js";
+import { makeButton, openDialog, closeDialog, toast, copyText } from "../Core/ui.js";
 import { profileRequest, summarize } from "./column-profile-model.js";
 
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
 let seq = 0;
-
-async function copy(text, what) {
-  try { await navigator.clipboard.writeText(text); toast(`Copied ${what}.`, "info"); }
-  catch { toast("Couldn't copy — your browser blocked clipboard access.", "danger"); }
-}
 
 /** Profile one column of one table. `column` is `{ name, type, category }` as the catalog described it. */
 export function openColumnProfile(db, table, column) {
@@ -43,7 +38,7 @@ export function openColumnProfile(db, table, column) {
   const finish = () => { ctl.abort(); closeDialog(dlg); };
   x.addEventListener("click", finish); close.addEventListener("click", finish);
   dlg.addEventListener("cancel", (e) => { e.preventDefault(); finish(); });
-  copyName.addEventListener("click", () => copy(column.name, "the field name"));
+  copyName.addEventListener("click", () => copyText(column.name, "the field name"));
   openDialog(dlg);
   close.focus();
 
@@ -52,7 +47,7 @@ export function openColumnProfile(db, table, column) {
   api.profile(db, table, req, { signal: ctl.signal }).then((p) => {
     const s = summarize(p);
     copyValues.disabled = s.copyValues === "";
-    copyValues.addEventListener("click", () => copy(s.copyValues, "the values"));
+    copyValues.addEventListener("click", () => copyText(s.copyValues, "the values"));
     body.replaceChildren(...sections(s));
   }).catch((err) => {
     if (err?.name === "AbortError") return;

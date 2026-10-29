@@ -8,6 +8,12 @@ export const show = (el) => { if (el) el.hidden = false; };
 export const hide = (el) => { if (el) el.hidden = true; };
 export const toggle = (el, visible) => { if (el) el.hidden = !visible; };
 
+/** Copy `text` to the clipboard and toast "Copied <what>." (or a danger toast when the browser blocks it). */
+export async function copyText(text, what) {
+  try { await navigator.clipboard.writeText(text); toast(`Copied ${what}.`, "info"); }
+  catch { toast("Couldn't copy — your browser blocked clipboard access.", "danger"); }
+}
+
 let toastTimer;
 let toastText; // the visible message span (NOT a live region)
 
