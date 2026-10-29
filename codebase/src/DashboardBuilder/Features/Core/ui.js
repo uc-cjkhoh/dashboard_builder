@@ -14,6 +14,11 @@ let toastText; // the visible message span (NOT a live region)
 /** Transient message. `kind` is one of "ok" | "danger" | "info". Danger toasts stay until dismissed.
  *  Announcement goes through ONE persistent, always-rendered visually-hidden live region (#toast-live) that sits
  *  outside the `hidden` #toast container (a display:none live region is not announced). */
+export async function copyText(text, what) {
+  try { await navigator.clipboard.writeText(text); toast(`Copied ${what}.`, "info"); }
+  catch { toast("Couldn't copy — your browser blocked clipboard access.", "danger"); }
+}
+
 export function toast(message, kind = "info") {
   const el = document.getElementById("toast");
   if (!el) return;
