@@ -277,6 +277,9 @@ export const defaultFormat = () => ({
   markerSize: null, // T01-22: null (automatic) | whole px 4–40 — scatter / line markers, circle heatmap
   markBorder: "none", // T03-34: none | thin | thick — bars, scatter points, heatmap cells, pie, treemap, funnel
   markerShape: "circle", // circle | square | diamond | triangle — line / area / combo markers
+  tableAlign: "auto", // T01-23: auto | left | center | right — a table's value cells
+  tableDensity: "standard", // T01-23: standard | compact | roomy — a table's row height
+  tableShade: "none", // T01-23: none | banded | header | both — a table's shading
   approximate: false, // P33: estimate distinct counts / read a 10% sample where the table allows
 });
 

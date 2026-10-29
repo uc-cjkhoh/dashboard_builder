@@ -5,6 +5,7 @@ import { combine } from "./analytics-model.js";
 import { CF_OP_CHOICES, CF_TONE_CHOICES, TONE_ICON, measureKey, extentOf, scaleColors, barGeometry, matchRule, isActive, midpointOf } from "./conditional-model.js";
 import { tupleKey, uniqueTuples, expandLeaves, runs, levelSpans } from "./grid-model.js";
 import { el, warn, iconSpan } from "./render-dom.js";
+import { tableStyleClasses } from "./table-style-model.js";
 import { PALETTES } from "../Core/theme-model.js";
 
 // The crosstab / text table and its conditional formatting (P37), drawn from a result. Pure DOM output: nothing here
@@ -38,7 +39,7 @@ export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, ca
   const leftLevels = rd + (measureOnLeft ? 1 : 0);
   const topLevels = cd + (measureOnLeft ? 0 : 1);
 
-  const table = el("table", "data xtab");
+  const table = el("table", ["data xtab", ...tableStyleClasses(sheet.format)].join(" "));
   // P21 totals: a grand-total column (when Columns has dimensions), a grand-total row (when Rows has),
   // and a subtotal after each first-level Rows group — each combined by the measure's own aggregation.
   const tot = sheet.analytics?.totals ?? {};

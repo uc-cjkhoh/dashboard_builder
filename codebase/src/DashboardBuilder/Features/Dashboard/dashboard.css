@@ -370,6 +370,14 @@
 /* Measure-name band (top or left) reads as secondary to the dimension headers. */
 .xt-meas { font-weight: 600; color: var(--accent-ink); background: var(--surface-2); }
 .xtab thead .xt-meas { text-align: right; }
+/* T01-23 table look: alignment of value cells, row height (4 / 8 / 16 px steps) and shading (token surfaces). */
+.xtab.xt-a-left td, .xtab.xt-a-left thead .xt-meas { text-align: left; }
+.xtab.xt-a-center td, .xtab.xt-a-center thead .xt-meas { text-align: center; }
+.xtab.xt-a-right td, .xtab.xt-a-right thead .xt-meas { text-align: right; }
+.xtab.xt-d-compact th, .xtab.xt-d-compact td { padding-block: 0; }
+.xtab.xt-d-roomy th, .xtab.xt-d-roomy td { padding: var(--s2) var(--s4); }
+.xtab.xt-s-banded tbody tr:nth-child(even) td { background: var(--surface-2); }
+.xtab.xt-s-header thead th { background: var(--surface-2); color: var(--ink); }
 .mono { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
 
 

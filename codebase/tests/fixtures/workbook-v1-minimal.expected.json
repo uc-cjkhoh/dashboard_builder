@@ -75,7 +75,10 @@
           "colorMin": null,
           "colorMax": null,
           "targetMeasure": null,
-          "approximate": false
+          "approximate": false,
+          "tableAlign": "auto",
+          "tableDensity": "standard",
+          "tableShade": "none"
         },
         "period": null,
         "memberColors": {},
@@ -137,7 +140,10 @@
           "colorMin": null,
           "colorMax": null,
           "targetMeasure": null,
-          "approximate": false
+          "approximate": false,
+          "tableAlign": "auto",
+          "tableDensity": "standard",
+          "tableShade": "none"
         },
         "period": null,
         "memberColors": {},
