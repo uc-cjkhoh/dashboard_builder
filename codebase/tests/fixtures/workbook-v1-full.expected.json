@@ -109,6 +109,9 @@
           "markerSize": null,
           "markBorder": "none",
           "markerShape": "circle",
+          "colorRamp": "brand",
+          "colorMin": null,
+          "colorMax": null,
           "targetMeasure": null,
           "approximate": false
         },
@@ -197,6 +200,9 @@
           "markerSize": null,
           "markBorder": "none",
           "markerShape": "circle",
+          "colorRamp": "brand",
+          "colorMin": null,
+          "colorMax": null,
           "targetMeasure": null,
           "approximate": false
         },
@@ -281,6 +287,9 @@
           "markerSize": null,
           "markBorder": "none",
           "markerShape": "circle",
+          "colorRamp": "brand",
+          "colorMin": null,
+          "colorMax": null,
           "targetMeasure": null,
           "approximate": false
         },
@@ -355,6 +364,9 @@
           "markerSize": null,
           "markBorder": "none",
           "markerShape": "circle",
+          "colorRamp": "brand",
+          "colorMin": null,
+          "colorMax": null,
           "targetMeasure": null,
           "approximate": false
         },
@@ -462,6 +474,9 @@
           "markerSize": null,
           "markBorder": "none",
           "markerShape": "circle",
+          "colorRamp": "brand",
+          "colorMin": null,
+          "colorMax": null,
           "targetMeasure": null,
           "approximate": false
         },
@@ -547,6 +562,9 @@
           "markerSize": null,
           "markBorder": "none",
           "markerShape": "circle",
+          "colorRamp": "brand",
+          "colorMin": null,
+          "colorMax": null,
           "targetMeasure": null,
           "approximate": false
         },
@@ -639,6 +657,9 @@
           "markerSize": null,
           "markBorder": "none",
           "markerShape": "circle",
+          "colorRamp": "brand",
+          "colorMin": null,
+          "colorMax": null,
           "targetMeasure": null,
           "approximate": false
         },

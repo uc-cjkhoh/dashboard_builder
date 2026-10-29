@@ -30,6 +30,7 @@ import { createHistory } from "./history.js";
 import { LINE_STYLE_CHOICES, linesTakeStyle } from "./line-style-model.js";
 import { HEATMAP_SHAPE_CHOICES } from "./heatmap-model.js";
 import { SECONDARY_CHOICES } from "./axis-sync-model.js";
+import { RAMP_CHOICES, colourRangeError } from "./colour-scale-model.js";
 import { MARK_BORDER_CHOICES, MARKER_SHAPE_CHOICES, markerSizeError } from "./mark-style-model.js";
 import { targetChoices, effectiveTargetMeasure } from "./bullet-model.js";
 import { keyOf, SCATTER_TYPES, COLOR_USES, colorMode, isDrillActive, drillActiveDim, planDims, planMeasures, sortTargets as planSortTargets, measureName as planMeasureName, buildPlan as planQuery, periodFilters as planPeriodFilters, calcContext, appliedShared as planAppliedShared, withParams, toServerFilter, isDateOnlyType } from "./sheet-plan.js";
@@ -1282,6 +1283,15 @@ export function initDashboards() {
       if (canColourByCat)
         panel.append(fmtCheck("Colour by category", f.colorByDimension, (v) => set({ colorByDimension: v })));
       panel.append(fmtCheck("Reverse palette", f.paletteReverse, (v) => set({ paletteReverse: v })), memberColourEditor(dash, s)); // T03-33, T01-20
+      if (s.chartType === "heatmap" || (s.chartType === "scatter" && colorMode(s) === "continuous")) { // T03-19: the continuous colour scale
+        const range = (key, other, label) => fmtNumber(label, f[key], "auto", (v) => {
+          const err = colourRangeError(...(key === "colorMin" ? [v, f[other]] : [f[other], v]));
+          if (err) { toast(err, "danger"); set({ [key]: f[key] }); return; } // redraw puts the kept value back
+          set({ [key]: v });
+        });
+        panel.append(fmtSelect("Colour ramp", RAMP_CHOICES, f.colorRamp ?? "brand", (v) => set({ colorRamp: v })),
+          range("colorMin", "colorMax", "Colour from"), range("colorMax", "colorMin", "Colour to"));
+      }
       if (hasAxes)
         panel.append(
           fmtText("X title", f.xTitle, (v) => set({ xTitle: v })),
