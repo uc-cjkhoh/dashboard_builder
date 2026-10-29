@@ -272,6 +272,23 @@ try {
     must(cells.length > 0 && cells.every((t) => /%$/.test(t.trim())), `cells: ${J(cells.slice(0, 4))}`);
   });
 
+  await check('table calculation editor: percentile rank, and compute-using picks dimensions that persist', async () => {
+    await setSheet(`${base} ${noMarks} s.chartType = 'table'; s.columns = []; s.rows = [f('region', 'text'), f('channel', 'text'), f('amount', 'numeric', { agg: 'sum' })]`); await settle();
+    await waitFor(`document.querySelectorAll('#ws-chart td.num').length > 0`, 'cells');
+    await ev(`document.querySelector('button[aria-label^="Add a table calculation"]').click()`);
+    await waitFor(`!!document.querySelector('.ws-calc')`, 'calc panel');
+    const pick = (label, value) => ev(`(() => { const sel = [...document.querySelectorAll('.ws-calc .ws-fmt-field')].find((x) => x.textContent.startsWith(${J(label)})).querySelector('select'); sel.value = ${J(value)}; sel.dispatchEvent(new Event('change')); return true; })()`);
+    await pick('Calculation', 'pctRank'); await settle();
+    await waitFor(`/%$/.test(document.querySelector('#ws-chart td.num').textContent.trim())`, 'percentile cells');
+    await pick('Along', 'custom');
+    await waitFor(`document.querySelectorAll('.ws-calc__dim input').length === 2`, 'one checkbox per dimension');
+    await ev(`document.querySelectorAll('.ws-calc__dim input')[0].click()`);
+    await waitFor(`document.querySelectorAll('.ws-calc__dim input')[0].checked === false`, 'region unchecked');
+    const tc = await ev(`(async () => { const st = await import('/features/Core/store.js'); return JSON.stringify(st.activeWorksheet().sheet.rows[2].tableCalc); })()`);
+    must(tc === J({ type: 'pctRank', along: 'custom', using: [1] }), `stored: ${tc}`);
+    await ev(`document.querySelector('button[aria-label="Close editor"]').click()`);
+  });
+
   await check('comparison range: a KPI shows the change vs the previous period, a bar draws a second series', async () => {
     const period = `s.period = { db: 'shop', table: 'orders', column: 'placed', category: 'temporal', preset: 'last30', from: null, to: null, compare: 'previous', compareFrom: null, compareTo: null }`;
     await setSheet(`${base} ${noMarks} s.chartType = 'kpi'; s.columns = []; ${period}`); await settle();

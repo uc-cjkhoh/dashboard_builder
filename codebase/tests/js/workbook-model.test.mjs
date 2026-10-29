@@ -501,3 +501,16 @@ test("joinFixed round-trips; an old file without it reads as false, junk as fals
   raw.relationships[0].joinFixed = "yes";
   assert.equal(parseWorkbook(JSON.stringify(raw)).relationships[0].joinFixed, false);
 });
+
+test("a table calculation's chosen dimensions (custom) are kept when valid and removed when not", () => {
+  const m = { db: "s", table: "orders", column: "amount", category: "numeric" };
+  const keep = sheetOf({ rows: [{ ...m, tableCalc: { type: "running", along: "custom", using: [0, 2] } }] }).worksheets[0].sheet.rows[0].tableCalc;
+  assert.deepEqual(keep, { type: "running", along: "custom", using: [0, 2] });
+  assert.deepEqual(sheetOf({ rows: [{ ...m, tableCalc: { type: "pctRank", along: "auto" } }] }).worksheets[0].sheet.rows[0].tableCalc, { type: "pctRank", along: "auto" });
+  for (const using of [[-1], [1.5], ["a"], [0, 0], Array.from({ length: 17 }, (_, i) => i), "0"]) {
+    const bad = sheetOf({ rows: [{ ...m, tableCalc: { type: "running", along: "custom", using } }] });
+    assert.equal(bad.worksheets[0].sheet.rows[0].tableCalc, undefined, JSON.stringify(using));
+  }
+  // using only means something with custom
+  assert.deepEqual(sheetOf({ rows: [{ ...m, tableCalc: { type: "running", along: "rows", using: [0] } }] }).worksheets[0].sheet.rows[0].tableCalc, { type: "running", along: "rows" });
+});

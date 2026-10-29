@@ -6,12 +6,12 @@ import { TABLE_CALCS } from "../Core/sheet-schema.js";
 
 export const CALC_CHOICES = [
   ["none", "None"], ["running", "Running total"], ["pctTotal", "% of total"], ["diff", "Difference"],
-  ["pctDiff", "% difference"], ["rank", "Rank"], ["moving", "Moving average"],
+  ["pctDiff", "% difference"], ["rank", "Rank"], ["pctRank", "Percentile rank"], ["moving", "Moving average"],
 ];
-export const ALONG_CHOICES = [["auto", "Auto"], ["columns", "Across (Columns)"], ["rows", "Down (Rows)"]];
+export const ALONG_CHOICES = [["auto", "Auto"], ["columns", "Across (Columns)"], ["rows", "Down (Rows)"], ["custom", "Specific dimensions"]];
 export const WINDOW_CHOICES = [2, 3, 5, 7, 12, 30];
 /** Calculations whose results are percentages. */
-export const PERCENT_CALCS = new Set(["pctTotal", "pctDiff"]);
+export const PERCENT_CALCS = new Set(["pctTotal", "pctDiff", "pctRank"]);
 
 /** A short name for a calculation, used in the measure's label. */
 export const calcName = (c) => (c?.type === "moving" ? `moving avg (${c.window ?? 3})` : CALC_CHOICES.find(([v]) => v === c?.type)?.[1].toLowerCase() ?? "");
@@ -24,7 +24,7 @@ export const isCalc = (c) => Boolean(c && c.type !== "none" && TABLE_CALCS.has(c
  * else Rows.
  */
 export function resolveAlong(along, rowDimCount, colDimCount) {
-  if (along === "rows" || along === "columns") return along;
+  if (along === "rows" || along === "columns" || along === "custom") return along;
   return colDimCount > 0 ? "columns" : "rows";
 }
 
@@ -33,9 +33,13 @@ export function resolveAlong(along, rowDimCount, colDimCount) {
  * each row's keys belong to Rows / Columns. Rows with `isOther` take part in totals but get no rank.
  */
 export function computeCalc(rows, mi, calc, rowDims, colDims) {
-  const along = resolveAlong(calc.along, rowDims, colDims);
-  // Partition by the OTHER shelf's dimensions: along Columns → restart per Rows tuple, and vice versa.
-  const partKey = (r) => JSON.stringify(along === "columns" ? r.keys.slice(0, rowDims) : r.keys.slice(rowDims, rowDims + colDims));
+  let along = resolveAlong(calc.along, rowDims, colDims);
+  // "custom": the chosen dimensions (indexes into rows' keys) run together, the rest restart. No valid choice = auto.
+  const using = along === "custom" ? [...new Set(calc.using ?? [])].filter((d) => Number.isInteger(d) && d >= 0 && d < rowDims + colDims) : [];
+  if (along === "custom" && !using.length) along = resolveAlong("auto", rowDims, colDims);
+  // Partition by the OTHER dimensions: along Columns → restart per Rows tuple, and vice versa.
+  const partKey = (r) => JSON.stringify(along === "custom" ? r.keys.filter((_, d) => d < rowDims + colDims && !using.includes(d))
+    : along === "columns" ? r.keys.slice(0, rowDims) : r.keys.slice(rowDims, rowDims + colDims));
   const groups = new Map();
   rows.forEach((r, i) => { const k = partKey(r); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(i); });
   const num = (v) => (v == null || v === "" ? null : Number.isFinite(Number(v)) ? Number(v) : null);
@@ -58,6 +62,13 @@ export function computeCalc(rows, mi, calc, rowDims, colDims) {
         // Competition ranking (1, 2, 2, 4), highest first; Other and blanks get none.
         const ranked = idx.map((i, j) => ({ i, v: rows[i].isOther ? null : vals[j] })).filter((x) => x.v != null).sort((a, b) => b.v - a.v);
         ranked.forEach((x, k) => { out[x.i] = k > 0 && x.v === ranked[k - 1].v ? out[ranked[k - 1].i] : k + 1; });
+        break;
+      }
+      case "pctRank": {
+        // From the competition rank: (n − rank) / (n − 1) × 100 — highest = 100, lowest = 0, ties share; a lone value = 100.
+        const live = idx.map((i, j) => ({ i, v: rows[i].isOther ? null : vals[j] })).filter((x) => x.v != null);
+        const n = live.length;
+        live.forEach((x) => { const rank = 1 + live.filter((y) => y.v > x.v).length; out[x.i] = n < 2 ? 100 : ((n - rank) / (n - 1)) * 100; });
         break;
       }
       case "moving": {
