@@ -23,17 +23,13 @@ export function sizeError(size) {
   return null;
 }
 
-/** Import: saved `size` → { width, height } or null (Automatic). Not an object / not numbers → Automatic; out of range → clamped. Each repair is pushed to `issues`. */
+/** Import: saved `size` → { width, height } or null (Automatic). Anything `sizeError` refuses (not an object, not whole pixels, out of range) is
+ *  rejected, never clamped: the dashboard opens Automatic and the reason is pushed to `issues`. */
 export function cleanSize(raw, where, issues) {
   if (raw == null) return null;
-  if (typeof raw !== "object" || !Number.isFinite(raw.width) || !Number.isFinite(raw.height)) {
-    issues.push(`${where}: the saved size wasn't a width and height — the dashboard is automatic.`);
-    return null;
-  }
-  const fit = (v, lo, hi) => Math.min(hi, Math.max(lo, Math.round(v)));
-  const size = { width: fit(raw.width, SIZE_LIMITS.minW, SIZE_LIMITS.maxW), height: fit(raw.height, SIZE_LIMITS.minH, SIZE_LIMITS.maxH) };
-  if (size.width !== raw.width || size.height !== raw.height) issues.push(`${where}: the size was adjusted to fit the limits.`);
-  return size;
+  const error = sizeError(raw);
+  if (error) { issues.push(`${where}: the saved size was ignored (${error.replace(/\.$/, "")}) — the dashboard is automatic.`); return null; }
+  return { width: raw.width, height: raw.height };
 }
 
 /** The saved fragment: `{ size }` for a fixed dashboard, `{}` for Automatic. */

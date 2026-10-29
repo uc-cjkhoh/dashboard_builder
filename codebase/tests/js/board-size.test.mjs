@@ -18,7 +18,7 @@ test("every preset is valid; the first entry of a select is Automatic (null)", (
   assert.equal(sizeKey({ width: 1280, height: 720 }), "1280x720");
 });
 
-test("cleanSize: absent is automatic; a bad shape is dropped with an issue; numbers are clamped with an issue", () => {
+test("cleanSize: absent is automatic; a bad shape is dropped with an issue; out-of-range is rejected, never clamped", () => {
   const issues = [];
   assert.equal(cleanSize(undefined, "D", issues), null);
   assert.equal(cleanSize(null, "D", issues), null);
@@ -26,8 +26,10 @@ test("cleanSize: absent is automatic; a bad shape is dropped with an issue; numb
   assert.deepEqual(cleanSize({ width: 1280, height: 720 }, "D", issues), { width: 1280, height: 720 });
   assert.equal(cleanSize("big", "D", issues), null);
   assert.equal(cleanSize({ width: "x", height: 720 }, "D", issues), null);
-  assert.deepEqual(cleanSize({ width: 99999, height: 10 }, "D", issues), { width: 3840, height: 240 });
-  assert.equal(issues.length, 3);
+  assert.equal(cleanSize({ width: 99999, height: 10 }, "D", issues), null);
+  assert.equal(cleanSize({ width: 1280.5, height: 720 }, "D", issues), null);
+  assert.deepEqual(cleanSize({ width: 1000, height: 700 }, "D", issues), { width: 1000, height: 700 });
+  assert.equal(issues.length, 4);
 });
 
 test("savedSize writes nothing for automatic", () => {
@@ -67,4 +69,9 @@ test("serializeWorkbook writes size only for a fixed dashboard", () => {
   assert.deepEqual(out.dashboards[0].size, { width: 800, height: 600 });
   assert.equal("size" in out.dashboards[1], false);
   assert.equal("size" in out.dashboards[2], false);
+});
+
+test("fixedRowH is floored: 96 rows in a short box do not collapse", async () => {
+  const { fixedRowH } = await import("../../src/DashboardBuilder/Features/Board/board-layout.js");
+  assert.ok(fixedRowH([{ y: 0, h: 96 }], { width: 800, height: 240 }, 8, 64) >= 16);
 });
