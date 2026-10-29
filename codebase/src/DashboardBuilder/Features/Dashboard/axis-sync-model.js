@@ -15,6 +15,9 @@ export const dualAxisAllowed = (type) => type === "line" || type === "area";
 export const dualAxisOn = (type, format, measureCount) =>
   type === "combo" || (dualAxisAllowed(type) && format?.dualAxis === true && measureCount >= 2);
 
+/** Which value axis a series draws on: 0 left, 1 right. Dual-axis line / area: every measure after the first; a combo passes `alwaysRight` (its series carry their own mark choice). */
+export const seriesAxis = (dual, i, alwaysRight = false) => (dual && (alwaysRight || i >= 1) ? 1 : 0);
+
 /** The right axis' title: the names of the measures drawn on it (every measure after the first). */
 export const rightAxisTitle = (names) => names.slice(1).join(", ");
 

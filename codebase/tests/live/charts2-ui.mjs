@@ -196,6 +196,8 @@ try {
 
   await check('Dual axis: a line / area chart draws its 2nd measure on a titled right axis; synchronise shares one range; off restores one axis', async () => {
     await setType('Line'); await openFormat(); await chartReady();
+    must(await ev(`[...document.querySelectorAll('.ws-fmt-field')].find((l) => l.querySelector('.ws-fmt-label').textContent === 'Dual axis').querySelector('input').disabled`), 'a dimension on Rows (horizontal): Dual axis is disabled');
+    await dragChip('region', `__t.zone('columns')`); await settle(400); await chartReady(); await openFormat();
     must(await hasField('Dual axis') && !(await hasField('Synchronise axes')) && !(await hasField('Right-axis marks')), 'line: Dual axis only');
     let o = await opt();
     must([].concat(o.yAxis).length === 1, 'one axis by default');
@@ -216,6 +218,26 @@ try {
     await shot('dual-area-light.png');
     await setType('Line'); await openFormat(); await check1('Dual axis'); await settle(400); await chartReady();
     must([].concat((await opt()).yAxis).length === 1, 'off -> one axis');
+  });
+
+  await check('Dual axis: a reference line over the right-axis measure is drawn on the right axis', async () => {
+    await setType('Line'); await chartReady(); await openFormat();
+    await check1('Dual axis'); await settle(400); await chartReady();
+    await ev(`document.querySelector('.ws-viewbar__btn[aria-label="Analytics"]').click()`);
+    await waitFor(`!!document.querySelector('.ws-analytics')`, 'analytics panel');
+    const aPick = async (label, value) => {
+      await ev(`(() => { const s = [...document.querySelectorAll('.ws-analytics .ws-fmt-field')].find((l) => l.querySelector('.ws-fmt-label').textContent === ${J(label)}).querySelector('select'); s.value = ${J(value)}; s.dispatchEvent(new Event('change')); return true; })()`);
+      await settle(400); await chartReady();
+    };
+    await aPick('Reference line', 'average'); await aPick('of', '1');
+    const o = await opt();
+    must(o.series[0].markLine == null && o.series[1].markLine && o.series[1].yAxisIndex === 1, `reference line on series 1: ${J(o.series.map((s) => [s.yAxisIndex, !!s.markLine]))}`);
+    await shot('dual-refline-light.png');
+    await aPick('Reference line', 'none');
+    await ev(`document.querySelector('.ws-viewbar__btn[aria-label="Analytics"]').click()`);
+    await openFormat(); await check1('Dual axis'); await settle(300);
+    await ev(`__t.zone('rows').querySelector('button[aria-label="Remove field"]').click()`); await settle(400); // region stays on Columns, as the later checks expect one dimension
+    await chartReady();
   });
 
   await check('Mark border: bars and heatmap cells take thin / thick strokes in the muted theme ink; None keeps the old look', async () => {

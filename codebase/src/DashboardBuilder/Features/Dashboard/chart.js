@@ -5,7 +5,7 @@ import { orderedPalette } from "./colour-model.js";
 import { rampColours, rangeOf } from "./colour-scale-model.js";
 import { tooltipHtml } from "./tooltip-model.js";
 import { lineStep } from "./line-style-model.js";
-import { syncRange, secondaryKind, dualAxisOn, rightAxisTitle } from "./axis-sync-model.js";
+import { syncRange, secondaryKind, dualAxisOn, rightAxisTitle, seriesAxis } from "./axis-sync-model.js";
 import { markBorder, markerSizeOr, markerSymbol, edgeOr } from "./mark-style-model.js";
 import { circleSize, circleCells, HEATMAP_GUTTER } from "./heatmap-model.js";
 import { bandsFor } from "./bullet-model.js";
@@ -376,7 +376,7 @@ function legendFor(format, c, names, defaultOn) {
 // (the default). `orientation` is decided by the caller from the shelves; combo stays vertical (its
 // dual value axis is on y). Axis *titles* name the physical axes (xTitle = bottom, yTitle = left)
 // regardless of orientation, so the Format controls stay literal.
-function buildCartesian({ type, categories, series, format = {}, orientation = "vertical", pointLabels, tooltipExtra, tooltipText, tooltipFields, otherIndex = -1, analytics = null }) {
+export function buildCartesian({ type, categories, series, format = {}, orientation = "vertical", pointLabels, tooltipExtra, tooltipText, tooltipFields, otherIndex = -1, analytics = null }) {
   const c = tokens();
   const labels = (categories ?? []).map((l) => l ?? "—");
   // P35 comparison series (compare: true) ride beside their measure: they don't make a chart "multi"
@@ -385,8 +385,8 @@ function buildCartesian({ type, categories, series, format = {}, orientation = "
   const hasCompare = mainCount < series.length;
   const multi = mainCount > 1;
   const isCombo = type === "combo";
-  const dual = dualAxisOn(type, format, mainCount); // combo, or line / area with Format → Dual axis
-  const horizontal = orientation === "horizontal" && !dual;
+  const dual = dualAxisOn(type, format, mainCount) && (isCombo || orientation !== "horizontal"); // combo, or a vertical line / area with Format → Dual axis
+  const horizontal = orientation === "horizontal" && !isCombo && !dual;
   const fmtVal = makeValueFormatter(format); // P10 — measure value format (tooltip, axis, labels)
 
   const colorFor = (i, name) => (multi ? memberColor(name, c.cat[i % c.cat.length]) : c.series);
@@ -434,7 +434,7 @@ function buildCartesian({ type, categories, series, format = {}, orientation = "
     const range = shared ? { min: shared.min, max: shared.max } : {};
     yAxis = [
       withName(valueAxisBase(range), yTitle || series[0]?.name, false),
-      { ...withName(valueAxisBase({ position: "right", splitLine: { show: false }, ...range }), rightAxisTitle(series.filter((s) => !s.compare).map((s) => s.name)) || series[1]?.name, false) },
+      { ...withName(valueAxisBase({ position: "right", splitLine: { show: false }, ...range }), rightAxisTitle(series.filter((s) => !s.compare).map((s) => s.name)) || series[1]?.name, false), nameTruncate: { maxWidth: 160, ellipsis: "…" } }, // long lists of measure names end in an ellipsis (the legend has them in full)
     ];
   } else if (horizontal) {
     // Horizontal: value on x (bottom), category on y (left); inverse so the first category is on top.
@@ -483,7 +483,7 @@ function buildCartesian({ type, categories, series, format = {}, orientation = "
       const color = colorFor(i - mainCount);
       const asLine = type === "line" || type === "area";
       return asLine
-        ? { name: s.name, type: "line", step, yAxisIndex: dual && i - mainCount >= 1 ? 1 : 0, data: s.data, showSymbol: false, z: 1,
+        ? { name: s.name, type: "line", step, yAxisIndex: seriesAxis(dual, i - mainCount), data: s.data, showSymbol: false, z: 1,
             lineStyle: { width: 2, type: "dashed", color, opacity: 0.7 }, itemStyle: { color, opacity: 0.7 }, emphasis: { focus: "series" } }
         : { name: s.name, type: "bar", data: s.data, barMaxWidth: 40,
             // Hatched as well as faded, so it reads as "the other period" without relying on colour.
@@ -498,7 +498,7 @@ function buildCartesian({ type, categories, series, format = {}, orientation = "
     if (asLine) {
       return {
         name: s.name, type: "line", step,
-        yAxisIndex: dual && (isCombo ? true : i >= 1) ? 1 : 0,
+        yAxisIndex: seriesAxis(dual, i, isCombo),
         data: s.data,
         showSymbol: s.data.length <= 60 || format.markerSize != null, // dots only when they won't crowd (unless a size is chosen)
         symbol: markerSymbol(format.markerShape), symbolSize: markerSizeOr(format.markerSize, 8), // ≥8px markers (dataviz mark spec) unless Format → Marker size
@@ -536,7 +536,7 @@ function buildCartesian({ type, categories, series, format = {}, orientation = "
 // P21 analytics overlays on a cartesian chart: a dashed reference line (labelled with its value), a
 // shaded band (labelled), and a dotted trend line named at its end — each carries words, never colour alone.
 function addAnalytics(base, a, { c, fmtVal, horizontal }) {
-  const s0 = base.series[0];
+  const s0 = base.series[a.measure ?? 0]; // the reference line and band sit on their own measure's axis (the trend follows the first)
   if (!s0) return;
   const axis = horizontal ? "xAxis" : "yAxis";
   if (a.ref) {
