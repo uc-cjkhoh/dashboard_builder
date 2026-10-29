@@ -43,7 +43,8 @@ public class UnionTests : IClassFixture<WebApplicationFactory<Program>>
         var a = C(("id", "UInt64", "numeric"), ("name", "String", "text"), ("only_a", "String", "text"), ("when", "Date", "date"));
         var b = C(("name", "Nullable(String)", "text"), ("id", "Int32", "numeric"), ("when", "String", "text"));
         var cols = ClickHouseGateway.PickUnionColumns([a, b], null);
-        Assert.Equal(["id", "name"], cols.Select(c => c.Name));
+        Assert.False(cols.Truncated);
+        Assert.Equal(["id", "name"], cols.Columns.Select(c => c.Name));
     }
     [Fact] public void No_shared_column_is_a_400()
     {
@@ -54,19 +55,27 @@ public class UnionTests : IClassFixture<WebApplicationFactory<Program>>
     {
         var a = C(("id", "UInt64", "numeric"), ("t", "String", "text"));
         var b = C(("id", "UInt64", "numeric"), ("t", "Date", "date"));
-        Assert.Equal(["id"], ClickHouseGateway.PickUnionColumns([a, b], ["id"]).Select(c => c.Name));
+        Assert.Equal(["id"], ClickHouseGateway.PickUnionColumns([a, b], ["id"]).Columns.Select(c => c.Name));
         var ex = Assert.Throws<RequestValidationException>(() => ClickHouseGateway.PickUnionColumns([a, b], ["t"]));
         Assert.Equal("columns[0]", ex.Field);
         Assert.Throws<UnknownIdentifierException>(() => ClickHouseGateway.PickUnionColumns([a, b], ["nope"]));
     }
+    [Fact] public void A_wide_shared_set_is_cut_and_says_so()
+    {
+        var wide = Enumerable.Range(0, ApiLimits.MaxRowsColumns + 3).Select(i => new ColumnInfo("c" + i, "String", "text")).ToList();
+        var (cols, truncated) = ClickHouseGateway.PickUnionColumns([wide, wide], null);
+        Assert.Equal(ApiLimits.MaxRowsColumns, cols.Count); Assert.True(truncated);
+    }
+    [Theory] [InlineData(100, 2, 50)] [InlineData(20, 3, 7)] [InlineData(1, 5, 1)] [InlineData(1000, 5, 200)]
+    public void Each_table_gets_an_even_share_rounded_up(int limit, int tables, int share) => Assert.Equal(share, ClickHouseGateway.UnionShare(limit, tables));
     [Fact] public void The_sql_quotes_every_identifier_binds_the_source_and_bounds_every_branch()
     {
-        var sql = ClickHouseGateway.BuildUnionSql("d`b", ["a`x", "b"], ["c`; DROP TABLE x; --"], 101);
+        var sql = ClickHouseGateway.BuildUnionSql("d`b", ["a`x", "b"], ["c`; DROP TABLE x; --"], 11);
         Assert.Equal(
             "SELECT * FROM (" +
-            "(SELECT {s0:String} AS `__src`, if(isNull(`c\\`; DROP TABLE x; --`), NULL, left(toString(`c\\`; DROP TABLE x; --`), 1001)) AS `c0` FROM `d\\`b`.`a\\`x` LIMIT 101) UNION ALL " +
-            "(SELECT {s1:String} AS `__src`, if(isNull(`c\\`; DROP TABLE x; --`), NULL, left(toString(`c\\`; DROP TABLE x; --`), 1001)) AS `c0` FROM `d\\`b`.`b` LIMIT 101)" +
-            ") LIMIT 101", sql);
+            "(SELECT {s0:String} AS `__src`, if(isNull(`c\\`; DROP TABLE x; --`), NULL, left(toString(`c\\`; DROP TABLE x; --`), 1001)) AS `c0` FROM `d\\`b`.`a\\`x` LIMIT 11) UNION ALL " +
+            "(SELECT {s1:String} AS `__src`, if(isNull(`c\\`; DROP TABLE x; --`), NULL, left(toString(`c\\`; DROP TABLE x; --`), 1001)) AS `c0` FROM `d\\`b`.`b` LIMIT 11)" +
+            ")", sql);
         Assert.DoesNotContain("ORDER BY", sql);
     }
 

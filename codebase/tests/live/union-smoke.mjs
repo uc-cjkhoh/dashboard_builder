@@ -48,6 +48,10 @@ try {
   assert.ok(r.json.rows.some((row) => row[0] === 'bk_union_a' && row[2] === null), 'a NULL stays NULL');
   console.log('ok 130 rows from both tables, source first, shared columns only'); passed++;
 
+  r = await union({ limit: 20 });
+  assert.equal(r.json.rows.length, 20); assert.equal(r.json.truncated, true);
+  const small = {}; for (const row of r.json.rows) small[row[0]] = (small[row[0]] ?? 0) + 1;
+  assert.deepEqual(small, { bk_union_a: 10, bk_union_b: 10 }, 'both tables appear at a small limit');
   r = await union({ limit: 100 });
   assert.equal(r.json.rows.length, 100); assert.equal(r.json.truncated, true);
   r = await union({});

@@ -1,6 +1,7 @@
 // The union dialog (DOM only; rules in union-model.js): tick 2-5 tables of the selected database, then see the first
 // rows of them stacked (UNION ALL over their shared columns) in the raw-row dialog. Read-only.
 import { api } from "../Core/api.js";
+import { LIMITS } from "../Core/validate.js";
 import { makeButton, openDialog, closeDialog, toast } from "../Core/ui.js";
 import { unionRequest, unionPickState } from "./union-model.js";
 import { openRowsDialog } from "./rows-dialog.js";
@@ -33,7 +34,7 @@ export function openUnionDialog(db, tables) {
   const refresh = () => {
     const st = unionPickState(picked());
     go.disabled = !st.ok; hint.textContent = st.hint;
-    for (const b of boxes) b.disabled = !b.checked && picked().length >= 5;
+    for (const b of boxes) b.disabled = !b.checked && picked().length >= LIMITS.unionTables;
   };
   for (const b of boxes) b.addEventListener("change", refresh);
   refresh();
