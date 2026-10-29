@@ -1,7 +1,14 @@
+import { icon } from "../Core/icons.js";
 import { api } from "../Core/api.js";
-import { show, hide, toggle, toast, setPill, fieldError, checkField } from "../Core/ui.js";
+import { show, hide, toggle, toast, setPill, fieldError, clearFieldError, checkField } from "../Core/ui.js";
 import { host, port, text, LIMITS } from "../Core/validate.js";
 import { advancedShouldOpen } from "./connection-rules.js";
+import { remember, forget, sanitize, sourceKey } from "./recent-sources.js";
+
+// Recent sources live in this browser only (localStorage) and hold no secrets — see recent-sources.js.
+const RECENT_KEY = "dashboardbuilder.recent-sources";
+const loadRecent = () => { try { return sanitize(JSON.parse(localStorage.getItem(RECENT_KEY))); } catch { return []; } };
+const saveRecent = (list) => { try { localStorage.setItem(RECENT_KEY, JSON.stringify(list)); } catch { /* not remembered — fine */ } };
 
 // The sidebar connection flow (P2, refined). Drives the indicator pill and gates the schema
 // browser + canvas. Once connected the form is replaced by a compact summary showing the
@@ -31,6 +38,43 @@ export function initConnection() {
   const allowCertWarn = document.getElementById("conn-allowcert-warn");
   const advancedEl = document.getElementById("conn-advanced");
 
+  const recentEl = document.getElementById("conn-recent");
+  let recent = loadRecent();
+
+  function renderRecent() {
+    if (!recentEl) return;
+    recentEl.replaceChildren(...recent.map((e) => {
+      const li = document.createElement("li");
+      li.className = "conn-recent__item";
+      const pick = document.createElement("button");
+      pick.type = "button";
+      pick.className = "conn-recent__pick";
+      pick.dataset.key = sourceKey(e);
+      const h = document.createElement("span");
+      h.className = "conn-summary__host"; h.textContent = e.host;
+      const m = document.createElement("span");
+      m.className = "conn-summary__meta"; m.textContent = `${e.user} · :${e.port}`;
+      pick.append(h, m);
+      pick.addEventListener("click", () => {
+        hostEl.value = e.host; portEl.value = String(e.port); userEl.value = e.user;
+        secureEl.checked = e.secure; allowCertEl.checked = e.allowInvalidCert;
+        for (const i of [hostEl, portEl, userEl, passEl]) clearFieldError(i);
+        syncCertControls(); syncAdvanced();
+        passEl.value = ""; passEl.focus();
+      });
+      const rm = document.createElement("button");
+      rm.type = "button";
+      rm.className = "iconbtn conn-summary__btn";
+      rm.setAttribute("aria-label", `Remove ${e.host} from recent`);
+      rm.title = "Remove from recent";
+      rm.append(icon("close"));
+      rm.addEventListener("click", () => { recent = forget(recent, sourceKey(e)); saveRecent(recent); renderRecent(); });
+      li.append(pick, rm);
+      return li;
+    }));
+    toggle(recentEl, recent.length > 0 && !form.hidden);
+  }
+
   let current = null; // last connected view, for Cancel-back-to-summary
 
   // Certificate validation is on by default (P8 hardening). The "trust invalid cert" opt-in only
@@ -54,6 +98,7 @@ export function initConnection() {
     syncAdvanced();
     hide(summary);
     show(form);
+    renderRecent();
     toggle(cancelBtn, cancellable);
     hostEl.focus();
   }
@@ -78,12 +123,14 @@ export function initConnection() {
       allowCertEl.checked = Boolean(view.allowInvalidCertificate);
       syncCertControls();
       hide(form);
+      renderRecent();
       show(summary);
       hide(cancelBtn);
     } else {
       setPill(pill, "idle", "Idle");
       syncAdvanced();
       show(form);
+      renderRecent();
       hide(summary);
       hide(cancelBtn);
     }
@@ -115,6 +162,8 @@ export function initConnection() {
     connectBtn.disabled = true;
     try {
       const view = await api.connect(payload);
+      recent = remember(recent, view);
+      saveRecent(recent);
       applyState(view);
       toast(`Connected to ${view.host}.`, "ok");
     } catch (err) {
