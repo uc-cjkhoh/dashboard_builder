@@ -122,5 +122,6 @@
 .grp-groups, .grp-members { display: grid; gap: var(--s2); }
 .grp-group { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s2); align-items: center; }
 .grp-add { margin-top: var(--s2); }
+.grp-other { display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: var(--s2); align-items: center; }
 .grp-member { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s2); align-items: center; }
 .grp-member .grp-member__value { margin: 0; font-weight: 400; font-size: var(--fs-body); color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }

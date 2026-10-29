@@ -231,6 +231,25 @@ try {
     await b.screenshot(join(SHOTS, 'group-chart-light.png'));
   });
 
+  await check('a remainder label: ungrouped members are labelled "Other", NULL is not; request tree has the extra WHEN', async () => {
+    await ev(`(() => { const c = [...document.querySelectorAll('#ws-fields .calc-field')].find((x) => x.querySelector('.ws-field__name')?.textContent === 'region (groups)'); c.querySelector('.ws-field__more').click(); [...c.querySelectorAll('.menu__item')].find((x) => x.textContent.trim() === 'Edit…').click(); return true; })()`);
+    await waitFor(`!!document.querySelector('dialog.grp-dialog[open]') && document.querySelectorAll('.grp-member').length === 4`, 'edit dialog');
+    must(await ev(`document.querySelector('.grp-other input[type=text]').disabled`), 'label input off until ticked');
+    await ev(`document.querySelector('.grp-other input[type=checkbox]').click()`);
+    must(await ev(`document.querySelector('.grp-other input[type=text]').value === 'Other'`), 'default label');
+    await typeInto('.grp-other input[type=text]', '');
+    must(await ev(`document.querySelector('dialog.grp-dialog .dialog__foot button.btn--primary').disabled`), 'blank label disables Save');
+    must(/label/.test(await stripText('.grp-error:not(:empty)')), 'blank label message');
+    await typeInto('.grp-other input[type=text]', 'Other');
+    await b.sleep(300);
+    await b.screenshot(join(SHOTS, 'group-other-light.png'));
+    await ev(`${dlgBtn('dialog.grp-dialog', 'Save')}.click()`);
+    await waitFor(`!document.querySelector('dialog.grp-dialog')`, 'closed');
+    await settle();
+    const dim = last().columnDimensions[0];
+    must(dim.calc.whens.length === 2 && dim.calc.whens[1].t.v === 'Other' && dim.calc.whens[1].c.k === 'not', `whens: ${J(dim.calc.whens).slice(0, 400)}`);
+  });
+
   await check('editing a group field reopens the dialog with the groups filled in', async () => {
     await ev(`(() => { const c = [...document.querySelectorAll('#ws-fields .calc-field')].find((x) => x.querySelector('.ws-field__name')?.textContent === 'region (groups)'); c.querySelector('.ws-field__more').click(); [...c.querySelectorAll('.menu__item')].find((x) => x.textContent.trim() === 'Edit…').click(); return true; })()`);
     await waitFor(`!!document.querySelector('dialog.grp-dialog[open]') && document.querySelectorAll('.grp-member').length === 4`, 'edit dialog');
@@ -249,6 +268,11 @@ try {
     must(/49 members/.test(await stripText('.grp-error:not(:empty)')), `message: ${await stripText('.grp-dialog__body .grp-error:not(:empty)')}`);
     await assign(49);
     must(!(await ev(`document.querySelector('dialog.grp-dialog .dialog__foot button.btn--primary').disabled`)), 'Save disabled at exactly 49');
+    await ev(`(() => { const c = document.querySelector('.grp-other input[type=checkbox]'); c.click(); return true; })()`);
+    must(await ev(`document.querySelector('dialog.grp-dialog .dialog__foot button.btn--primary').disabled`), 'with a remainder label, 49 members are over the budget');
+    must(/48 members/.test(await stripText('.grp-error:not(:empty)')), `message: ${await stripText('.grp-error:not(:empty)')}`);
+    await assign(48);
+    must(!(await ev(`document.querySelector('dialog.grp-dialog .dialog__foot button.btn--primary').disabled`)), 'Save enabled at 48 with the label');
     await ev(`${dlgBtn('dialog.grp-dialog', 'Cancel')}.click()`);
     await waitFor(`!document.querySelector('dialog.grp-dialog')`, 'closed');
   });
