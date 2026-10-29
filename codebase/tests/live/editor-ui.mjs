@@ -286,6 +286,16 @@ try {
     await waitFor(`document.querySelectorAll('.ws-calc__dim input')[0].checked === false`, 'region unchecked');
     const tc = await ev(`(async () => { const st = await import('/features/Core/store.js'); return JSON.stringify(st.activeWorksheet().sheet.rows[2].tableCalc); })()`);
     must(tc === J({ type: 'pctRank', along: 'custom', using: [1] }), `stored: ${tc}`);
+    must(await ev(`[...document.querySelectorAll('.ws-calc__dim span')].map((x) => x.textContent).join() === 'region,channel'`), 'plain labels without duplicates');
+    await b.setScheme('light'); await b.sleep(300);
+    await b.screenshot(join(SHOTS, 'calc-dims-light.png'));
+    await b.setScheme('dark'); await b.sleep(300);
+    await b.screenshot(join(SHOTS, 'calc-dims-dark.png'));
+    await b.setScheme('light');
+    await setSheet(`${base} ${noMarks} s.chartType = 'table'; s.columns = [f('region', 'text')]; s.rows = [f('region', 'text'), f('amount', 'numeric', { agg: 'sum', tableCalc: { type: 'running', along: 'custom', using: [0] } })]`); await settle();
+    await ev(`document.querySelector('button[aria-label^="Table calculation"]').click()`);
+    await waitFor(`document.querySelectorAll('.ws-calc__dim span').length === 2`, 'duplicate panel');
+    must(await ev(`[...document.querySelectorAll('.ws-calc__dim span')].map((x) => x.textContent).join() === 'region (Rows),region (Columns)'`), 'duplicate labels');
     await ev(`document.querySelector('button[aria-label="Close editor"]').click()`);
   });
 

@@ -68,7 +68,9 @@ export function computeCalc(rows, mi, calc, rowDims, colDims) {
         // From the competition rank: (n − rank) / (n − 1) × 100 — highest = 100, lowest = 0, ties share; a lone value = 100.
         const live = idx.map((i, j) => ({ i, v: rows[i].isOther ? null : vals[j] })).filter((x) => x.v != null);
         const n = live.length;
-        live.forEach((x) => { const rank = 1 + live.filter((y) => y.v > x.v).length; out[x.i] = n < 2 ? 100 : ((n - rank) / (n - 1)) * 100; });
+        const desc = live.map((x) => x.v).sort((p, q) => q - p);
+        const first = new Map(); desc.forEach((v, k) => { if (!first.has(v)) first.set(v, k + 1); }); // competition rank of each value
+        live.forEach((x) => { out[x.i] = n < 2 ? 100 : ((n - first.get(x.v)) / (n - 1)) * 100; });
         break;
       }
       case "moving": {

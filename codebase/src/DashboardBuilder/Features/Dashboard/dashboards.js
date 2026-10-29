@@ -1654,7 +1654,8 @@ export function initDashboards() {
     const f = s[shelf]?.[index];
     if (!f || roleOf(f) !== "measure") { calcFor = null; return null; }
     const c = { type: "none", along: "auto", ...(f.tableCalc ?? {}) };
-    const dims = [...(s.rows ?? []), ...(s.columns ?? [])].filter((d) => roleOf(d) !== "measure"); // result key order: Rows, then Columns
+    const dims = [...(s.rows ?? []).map((d) => [d, "Rows"]), ...(s.columns ?? []).map((d) => [d, "Columns"])].filter(([d]) => roleOf(d) !== "measure"); // result key order: Rows, then Columns
+    const dimLabel = ([d, where]) => (dims.filter(([o]) => o.column === d.column).length > 1 ? `${d.column} (${[d.datePart && d.datePart !== "auto" ? d.datePart : "", where].filter(Boolean).join(", ")})` : d.column);
     const set = (patch) => {
       const next = { ...c, ...patch };
       if (next.type === "none") delete f.tableCalc;
@@ -1674,14 +1675,14 @@ export function initDashboards() {
     if (c.type !== "none") row.append(fmtSelect("Along", ALONG_CHOICES, c.along, (v) => set({ along: v })));
     if (c.type === "moving") row.append(fmtSelect("Window", WINDOW_CHOICES.map((n) => [n, `${n} values`]), c.window ?? 3, (v) => set({ window: Number(v) })));
     panel.append(head, row);
-    if (c.type !== "none" && c.along === "custom") {
+    if (c.type !== "none" && c.along === "custom" && dims.length) {
       const using = new Set(c.using?.length ? c.using : dims.map((_, d) => d));
       const list = el("div", "ws-cf__row ws-calc__dims");
       dims.forEach((d, i) => {
         const lab = el("label", "ws-fmt-field ws-calc__dim");
         const cb = el("input"); cb.type = "checkbox"; cb.checked = using.has(i);
         cb.addEventListener("change", () => { const next = new Set(using); if (cb.checked) next.add(i); else next.delete(i); set({ using: [...next].sort((a, b) => a - b) }); });
-        lab.append(cb, el("span", "ws-fmt-label", d.column));
+        lab.append(cb, el("span", "ws-fmt-label", dimLabel(d)));
         list.append(lab);
       });
       panel.append(list);
