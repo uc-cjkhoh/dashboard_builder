@@ -106,7 +106,7 @@ try {
     must(J(await labels()) === J(['Worksheet 1', 'Dashboard 1']), `tabs: ${J(await labels())}`);
     must(await ev(`document.getElementById('worksheet-view').hidden`), 'worksheet view visible on a dashboard');
     must(await ev(`document.getElementById('board-title').textContent`) === 'Dashboard 1', 'board title');
-    must(/This dashboard is empty/.test(await ev(`document.getElementById('board-empty').textContent`)) && await ev(`!document.getElementById('board-empty').hidden`), 'empty-board message');
+    must(/Empty dashboard/.test(await ev(`document.getElementById('board-empty').textContent`)) && await ev(`!document.getElementById('board-empty').hidden`), 'empty-board message');
     must(await ev(`!!document.querySelector('.tab--dashboard .tab__kind')`), 'no dashboard icon');
     must(await ev(`document.querySelector('.tab--dashboard .tab__label').getAttribute('aria-label') === 'Dashboard 1 (dashboard)'`), 'accessible name');
     must(await ev(`!document.querySelector('.tab--dashboard .tab__dup') && !!document.querySelector('.tab--worksheet .tab__dup')`), 'duplicate button on the wrong kind');
