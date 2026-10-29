@@ -1,10 +1,10 @@
 // Browser checks for the continuous colour scale ramp and range scale (T03-19): the real dev app (APP_URL, default http://localhost:5218) in headless
 // Chromium, driven over the DevTools protocol (tests/live/cdp.mjs), with every /api/* call answered by a mock —
 // nothing reaches a ClickHouse. Run:  node tests/live/colour-scale-ui.mjs   (start the app first:
-//   cd src/DashboardBuilder && dotnet run --no-launch-profile --urls http://localhost:5218 ; stop it with fuser -k 5180/tcp)
+//   cd src/DashboardBuilder && dotnet run --no-launch-profile --urls http://localhost:5218 ; stop it with fuser -k 5218/tcp)
 // Env: APP_URL, SHOTS_DIR (screenshot folder), CDP_PORT (default: a free port), CHROME_BIN.
 import { launch } from './cdp.mjs';
-import { writeFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -50,9 +50,8 @@ async function check(name, fn) {
 const must = (cond, msg) => { if (!cond) throw new Error(msg); };
 const J = JSON.stringify;
 
-let wbDir = null, b = null;
+let b = null;
 try {
-  wbDir = mkdtempSync(join(tmpdir(), 'calc-wb-'));
   b = await launch({ port: process.env.CDP_PORT ? Number(process.env.CDP_PORT) : undefined });
   await b.mock(answer);
   const ev = (s) => b.evaluate(s);
@@ -132,10 +131,7 @@ try {
   const shot = async (name) => { try { writeFileSync(join(SHOTS, name), Buffer.from((await b.send('Page.captureScreenshot', { format: 'png' })).data, 'base64')); } catch { /* optional */ } };
 
   const fmtTool = `document.querySelector('.ws-viewbar__btn[aria-label="Format"]')`;
-  const fills = () => ev(`[...document.querySelectorAll('.ws-chart-canvas svg path')].map((p) => (p.getAttribute('fill') || '').toLowerCase()).filter((f) => /^#[0-9a-f]{6}$/.test(f))`);
-  const lum = (h) => { const n = parseInt(h.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255]; };
 
-  const ENDS = `(() => { const f = [...document.querySelectorAll('.ws-chart-canvas svg path')].map((p) => (p.getAttribute('fill') || '').toLowerCase()).filter((x) => /^#[0-9a-f]{6}$/.test(x)); return f; })()`;
   const fillsNow = async () => (await vm()).inRange.color;
   const vm = async () => (await ev(`window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas')).getOption()`)).visualMap?.[0];
   const fmtField = (label) => `[...document.querySelectorAll('.ws-fmt-field')].find((l) => l.textContent.includes(${J(label)}))`;
@@ -169,9 +165,15 @@ try {
     await setSelect('Colour ramp', 'brand'); await settle(400);
     must(J(await fillsNow()) === J(a), 'back to brand');
   });
-  await check('a pinned range greys points outside it; an inverted range is refused', async () => {
+  await check('a pinned range saturates points beyond it; an inverted range is refused', async () => {
     await setNum('Colour from', '25'); await settle(400);
     const v = await vm(); must(v.min === 25 && v.max > 25, 'range ' + J([v.min, v.max]));
+    must(/beyond range/.test(v.text[0]), 'legend note while pinned: ' + J(v.text));
+    const fills = await ev(`(() => { const i = window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas')); const d = i.getModel().getSeriesByIndex(0).getData(); return Array.from({ length: d.count() }, (_, k) => [d.getRawDataItem(k).value[2], d.getItemVisual(k, 'style').fill]); })()`);
+    must(fills[0][1] === fills[1][1] && fills[1][1] !== fills[2][1], 'values below the pin share the low-end colour: ' + J(fills));
+    await setNum('Colour from', ''); await settle(300);
+    must(!/beyond/.test((await vm()).text?.[0] ?? ''), 'no note once the pin is cleared');
+    await setNum('Colour from', '25'); await settle(300);
     await setNum('Colour to', '20'); await settle(300);
     must((await toastText()).includes('less than'), 'toast: ' + await toastText());
     must(await ev(`${fmtField('Colour to')}.querySelector('input').value`) === '', 'refused value not kept');
@@ -184,7 +186,6 @@ try {
   console.log(`FAIL harness: ${e.stack}`); failed++;
 } finally {
   if (b) await b.close();
-  if (wbDir) rmSync(wbDir, { recursive: true, force: true });
 }
 console.log(`\n${passed} ok, ${failed} failed`);
 process.exit(failed ? 1 : 0);

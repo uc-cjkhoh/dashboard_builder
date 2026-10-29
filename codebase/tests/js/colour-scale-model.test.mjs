@@ -4,7 +4,7 @@ import { RAMP_CHOICES, rampColours, colourRangeError, rangeOf, mixHex } from "..
 import { sanitizeSheet } from "../../src/DashboardBuilder/Features/Workbook/workbook-model.js";
 import { emptySheet, defaultFormat } from "../../src/DashboardBuilder/Features/Core/store.js";
 
-const tk = { accent: "#aa0000", accentSoft: "#ffcccc", surface: "#ffffff", cat: ["#2a78d6", "#146f14", "#e87ba4", "#c99424", "#1eac79", "#de6e41", "#4a3aa7", "#df4d4c"] };
+const tk = { accent: "#aa0000", accentSoft: "#ffcccc", surface: "#ffffff", cat: ["#2a78d6", "#146f14", "#e87ba4", "#c99424", "#146f14", "#de6e41", "#4a3aa7", "#df4d4c"] };
 
 test("mixHex blends two hexes; non-hex input yields the second colour", () => {
   assert.equal(mixHex("#000000", "#ffffff", 0.5), "#808080");
@@ -17,7 +17,7 @@ test("rampColours: brand uses the accent pair; hues blend surface toward the cat
   const blue = rampColours("blue", tk, false);
   assert.equal(blue[1], "#2a78d6");
   assert.notEqual(blue[0], blue[1]);
-  assert.equal(rampColours("green", tk, false)[1], "#1eac79");
+  assert.equal(rampColours("green", tk, false)[1], "#146f14");
   assert.deepEqual(rampColours("nope", tk, false), ["#ffcccc", "#aa0000"]);
 });
 test("RAMP_CHOICES lists brand first", () => { assert.equal(RAMP_CHOICES[0][0], "brand"); assert.ok(RAMP_CHOICES.length >= 4); });

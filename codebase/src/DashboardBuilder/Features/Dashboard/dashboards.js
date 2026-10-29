@@ -1283,7 +1283,7 @@ export function initDashboards() {
       if (canColourByCat)
         panel.append(fmtCheck("Colour by category", f.colorByDimension, (v) => set({ colorByDimension: v })));
       panel.append(fmtCheck("Reverse palette", f.paletteReverse, (v) => set({ paletteReverse: v })), memberColourEditor(dash, s)); // T03-33, T01-20
-      if (s.chartType === "heatmap" || s.chartType === "scatter") { // T03-19: the continuous colour scale
+      if (s.chartType === "heatmap" || (s.chartType === "scatter" && colorMode(s) === "continuous")) { // T03-19: the continuous colour scale
         const range = (key, other, label) => fmtNumber(label, f[key], "auto", (v) => {
           const err = colourRangeError(...(key === "colorMin" ? [v, f[other]] : [f[other], v]));
           if (err) { toast(err, "danger"); set({ [key]: f[key] }); return; } // redraw puts the kept value back

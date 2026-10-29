@@ -723,7 +723,7 @@ function buildHeatmap({ xCats, yCats, cells, format = {} }) {
   // T03-34: the cell separator stays the surface-coloured hairline unless a border is chosen.
   const cellEdge = format.markBorder && format.markBorder !== "none" ? markBorder(format.markBorder, c.muted) : { borderColor: c.surface, borderWidth: 1 };
   const vals = cells.map((d) => d[2]).filter((v) => v != null);
-  const { min, max } = colourScaleRange(vals);
+  const { min, max } = colourScaleRange(vals, true);
   return {
     textStyle: { fontFamily: c.font, color: c.label },
     tooltip: {
@@ -747,7 +747,8 @@ function buildHeatmap({ xCats, yCats, cells, format = {} }) {
     },
     visualMap: {
       min, max, calculable: true, dimension: 2, orient: "horizontal", left: "center", bottom: 6,
-      inRange: { color: c.ramp }, outOfRange: { color: c.axis },   // single-hue sequential (soft → saturated), tokens; beyond a pinned end: neutral grey
+      inRange: { color: c.ramp }, // single-hue sequential (soft → saturated), tokens; a pinned end saturates
+      text: outOfRangeNote() ? [outOfRangeNote(), ""] : undefined,
       textStyle: { color: c.muted, fontFamily: c.font }, formatter: (v) => fmtVal(v),
     },
     series: [circles
@@ -1109,15 +1110,22 @@ function sizeScaler(values, accessor) {
   return (val) => { const v = accessor ? accessor(val) : (Number(val) || 0); return 8 + ((v - min) / span) * (36 - 8); };
 }
 // The scale's ends: the data span unless Format pinned one (T03-19).
-const colourScaleRange = (nums) => rangeOf(nums, drawing?.colorMin, drawing?.colorMax);
+// Unpinned, a heatmap keeps its plain data span (`plain`); a scatter always gets a non-empty one.
+const colourPinned = () => drawing?.colorMin != null || drawing?.colorMax != null;
+const colourScaleRange = (nums, plain = false) => {
+  if (plain && !colourPinned()) { const v = nums.filter((x) => Number.isFinite(x)); return { min: v.length ? Math.min(...v) : 0, max: v.length ? Math.max(...v) : 1 }; }
+  return rangeOf(nums, drawing?.colorMin, drawing?.colorMax);
+};
+// A pinned end saturates: values beyond it take that end's colour (the visualMap clamps), so a pin never reads as "missing".
+const outOfRangeNote = () => (colourPinned() ? "beyond range: end colour" : "");
 // A continuous visualMap (the gradient legend) over `values`, coloured on the single-hue token ramp.
 function continuousVisualMap(values, dimension, c, fmtVal, name) {
   const { min, max } = colourScaleRange((values ?? []).map((v) => Number(v)));
   return {
     type: "continuous", min, max, dimension, calculable: true,
     orient: "horizontal", left: "center", bottom: 0,
-    inRange: { color: c.ramp }, outOfRange: { color: c.axis }, // beyond a pinned end: the neutral axis grey
-    text: name ? [String(name), ""] : undefined,
+    inRange: { color: c.ramp }, 
+    text: name || colourPinned() ? [[name ? String(name) : "", outOfRangeNote()].filter(Boolean).join(" · "), ""] : undefined,
     textStyle: { color: c.muted, fontFamily: c.font }, formatter: (v) => fmtVal(v),
   };
 }

@@ -5,7 +5,7 @@ import { rampStops } from "./colour-model.js";
 
 /** [value, label] — the hue slots Format offers; each reads a design token at draw time. */
 export const RAMP_CHOICES = Object.freeze([["brand", "Brand"], ["blue", "Blue"], ["green", "Green"], ["amber", "Amber"], ["violet", "Violet"]]);
-const SLOT = { blue: 0, green: 4, amber: 3, violet: 6 }; // index into the eight categorical tokens
+const SLOT = { blue: 0, green: 1, amber: 3, violet: 6 }; // index into the eight categorical tokens
 
 const HEX = /^#[0-9a-f]{6}$/i;
 const toRgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
