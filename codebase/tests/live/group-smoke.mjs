@@ -77,6 +77,19 @@ async function main() {
   assert.equal(Number(still[0][0]), 1, 'the table is still there: member text was never executed');
   ok('the member that looks like SQL was matched as data (the table survives)');
 
+  // Remainder label: ungrouped non-NULL members ('constructor' 4 + '' 2 = 6 over 2 rows) fold into 'Rest'; the NULL row (3) stays NULL.
+  const withOther = await app('POST', '/api/query', req({ ...SPEC, other: 'Rest' }));
+  assert.equal(withOther.status, 200, `remainder: ${withOther.status} ${withOther.text.slice(0, 300)}`);
+  const gotO = new Map(withOther.json.rows.map((x) => [x.keys[0], x.values.map(Number)]));
+  const expO = new Map([['Asia & Europe', [36, 4]], ['Americas', [7, 1]], ['Odd', [14, 2]], ['Rest', [6, 2]], [null, [3, 1]]]);
+  assert.equal(gotO.size, expO.size, `remainder groups: ${JSON.stringify([...gotO])}`);
+  for (const [k, v] of expO) assert.deepEqual(gotO.get(k), v, `remainder ${JSON.stringify(k)}: ${JSON.stringify(gotO.get(k))}`);
+  ok('the remainder label folds ungrouped non-NULL members into Rest (6/2, hand-computed); NULL stays NULL (3/1)');
+  const mk = (n) => ({ field: FIELD, other: 'Rest', groups: [{ name: 'All', members: Array.from({ length: n }, (_, i) => `m${i}`) }] });
+  assert.equal((await app('POST', '/api/query', req(mk(48)))).status, 200, '48 members + label fit');
+  assert.equal((await app('POST', '/api/query', req(mk(49)))).status, 400, '49 members + label exceed the node limit');
+  ok('with a remainder label the server accepts 48 members and refuses 49, matching maxMembersFor');
+
   const big = { field: FIELD, groups: [{ name: 'All', members: Array.from({ length: 50 }, (_, i) => `m${i}`) }] };
   const refused = await app('POST', '/api/query', req(big));
   assert.equal(refused.status, 400, `an over-budget tree must be refused by the server too: ${refused.status}`);
