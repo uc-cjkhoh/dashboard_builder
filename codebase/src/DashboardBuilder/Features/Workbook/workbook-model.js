@@ -585,7 +585,7 @@ function cleanFormat(f0, where, issues) {
   if (colourRangeError(out.colorMin, out.colorMax)) { issues.push(`${w}: the colour range minimum was not less than the maximum — cleared.`); out.colorMin = out.colorMax = null; }
   out.targetMeasure = f.targetMeasure == null ? null : Number.isInteger(f.targetMeasure) && f.targetMeasure >= 1 && f.targetMeasure <= MAX_TARGET_MEASURE ? f.targetMeasure
     : (issues.push(`${w}: target measure "${f.targetMeasure}" — cleared.`), null); // T03-12
-  for (const k of ["dataLabels", "colorByDimension", "syncAxes", "paletteReverse", "downIsGood", "approximate"]) {
+  for (const k of ["dataLabels", "colorByDimension", "syncAxes", "dualAxis", "paletteReverse", "downIsGood", "approximate"]) {
     if (f[k] === undefined || typeof f[k] === "boolean") out[k] = f[k] ?? base[k];
     else issues.push(`${w}: ${k} must be on or off — reset.`);
   }

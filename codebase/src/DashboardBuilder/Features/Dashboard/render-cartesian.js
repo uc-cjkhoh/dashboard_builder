@@ -85,6 +85,7 @@ export function renderSeries(container, rc, sheet, a) {
     const trendLabel = TREND_CHOICES.find(([v]) => v === (A.trend && A.trend !== "none" ? A.trend : "linear"))[1].toLowerCase();
     const bb = bandBounds(A.band, mvals);
     analytics = {
+      measure: mi,
       ref: rv == null ? null : { name: (refKind === "constant" ? "Reference" : REF_CHOICES.find(([v]) => v === refKind)[1]) + (refKind === "constant" ? "" : mname), value: rv },
       band: bb ? { ...bb, name: bandLabel(A.band) + (A.band.kind ? ` (shown rows)${mname}` : "") } : null,
       trend: t ? { name: `Trend (${trendLabel}${fc ? ` + ${fc} forecast` : ""}) R² ${t.r2.toFixed(2)}`, short: `Trend · R² ${t.r2.toFixed(2)}`, data: t.data } : null,

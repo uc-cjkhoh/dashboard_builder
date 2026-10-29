@@ -1,7 +1,8 @@
 // Axis synchronisation, secondary mark type (T03-16/17), marker size and mark borders (T01-22, T03-34) — pure models.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { syncRange, SECONDARY_CHOICES, secondaryKind } from "../../src/DashboardBuilder/Features/Dashboard/axis-sync-model.js";
+import { syncRange, SECONDARY_CHOICES, secondaryKind, dualAxisOn, rightAxisTitle, dualAxisAllowed, seriesAxis } from "../../src/DashboardBuilder/Features/Dashboard/axis-sync-model.js";
+import { buildCartesian } from "../../src/DashboardBuilder/Features/Dashboard/chart.js";
 import { MARK_BORDER_CHOICES, markBorder, MARKER_SIZE, markerSizeError, markerSizeOr, MARKER_SHAPE_CHOICES, markerSymbol, edgeOr } from "../../src/DashboardBuilder/Features/Dashboard/mark-style-model.js";
 import { defaultFormat, emptySheet } from "../../src/DashboardBuilder/Features/Core/store.js";
 import { parseWorkbook, serializeWorkbook } from "../../src/DashboardBuilder/Features/Workbook/workbook-model.js";
@@ -107,3 +108,67 @@ test("workbook: marker shape round-trips; an unknown one resets to circle with a
   assert.equal(roundTrip({}).worksheets[0].sheet.format.markerShape, "circle");
 });
 const J = JSON.stringify;
+
+test("dual axis on line / area: needs the toggle and two measures; combo is always dual; other types never", () => {
+  assert.equal(dualAxisAllowed("line"), true); assert.equal(dualAxisAllowed("area"), true);
+  assert.equal(dualAxisAllowed("bar"), false); assert.equal(dualAxisAllowed("scatter"), false);
+  assert.equal(dualAxisOn("line", { dualAxis: true }, 2), true);
+  assert.equal(dualAxisOn("area", { dualAxis: true }, 3), true);
+  assert.equal(dualAxisOn("line", { dualAxis: true }, 1), false);
+  assert.equal(dualAxisOn("line", { dualAxis: false }, 2), false);
+  assert.equal(dualAxisOn("line", {}, 2), false);
+  assert.equal(dualAxisOn("bar", { dualAxis: true }, 2), false);
+  assert.equal(dualAxisOn("combo", {}, 2), true);
+});
+test("rightAxisTitle names every right-axis measure", () => {
+  assert.equal(rightAxisTitle(["Sales", "Profit", "Qty"]), "Profit, Qty");
+  assert.equal(rightAxisTitle(["Sales"]), "");
+});
+test("dualAxis: default off; round-trips; invalid resets with an issue; old workbooks open clean", () => {
+  assert.equal(defaultFormat().dualAxis, false);
+  const f = roundTrip({ dualAxis: true }).worksheets[0].sheet.format;
+  assert.equal(f.dualAxis, true);
+  const bad = roundTrip({ dualAxis: "yes" });
+  assert.equal(bad.worksheets[0].sheet.format.dualAxis, false);
+  assert.ok(bad.issues.length >= 1);
+  const old = roundTrip({ target: 5 });
+  assert.equal(old.issues.length, 0); assert.equal(old.worksheets[0].sheet.format.dualAxis, false);
+});
+
+test("seriesAxis: dual line / area puts every measure after the first on the right; off or a single axis stays left", () => {
+  assert.deepEqual([0, 1, 2].map((i) => seriesAxis(true, i)), [0, 1, 1]);
+  assert.deepEqual([0, 1].map((i) => seriesAxis(false, i)), [0, 0]);
+  assert.equal(seriesAxis(true, 0, true), 1);
+});
+
+// buildCartesian reads :root tokens; give it a bare document.
+globalThis.document ??= { documentElement: {} };
+globalThis.getComputedStyle ??= () => ({ getPropertyValue: () => "" });
+const S = (name, compare = false) => ({ name, data: [1, 2, 3], compare });
+const build = (type, format, series, extra = {}) => buildCartesian({ type, categories: ["a", "b", "c"], series, format, ...extra });
+
+test("buildCartesian: dual line maps series to axes (compare series follow their measure) and titles the right axis", () => {
+  const o = build("line", { dualAxis: true }, [S("Sales"), S("Profit"), S("Qty"), S("Sales (prev)", true), S("Profit (prev)", true), S("Qty (prev)", true)]);
+  assert.equal(o.yAxis.length, 2);
+  assert.deepEqual(o.series.map((s) => s.yAxisIndex), [0, 1, 1, 0, 1, 1]);
+  assert.equal(o.yAxis[1].name, "Profit, Qty");
+  assert.ok(o.yAxis[1].nameTruncate.maxWidth > 0);
+});
+test("buildCartesian: dual off, one measure, a horizontal chart, or another type keep one axis", () => {
+  assert.equal(build("line", {}, [S("A"), S("B")]).yAxis.length ?? 1, 1);
+  assert.equal([].concat(build("line", { dualAxis: true }, [S("A")]).yAxis).length, 1);
+  assert.equal([].concat(build("line", { dualAxis: true }, [S("A"), S("B")], { orientation: "horizontal" }).yAxis).length, 1);
+  assert.equal([].concat(build("bar", { dualAxis: true }, [S("A"), S("B")]).yAxis).length, 1);
+  const combo = build("combo", {}, [S("A"), S("B")]);
+  assert.deepEqual(combo.series.map((s) => s.yAxisIndex), [0, 1]);
+});
+test("buildCartesian: a reference line and band sit on their own measure's series (its axis); trend stays on the first", () => {
+  const analytics = { measure: 1, ref: { name: "Average (Profit)", value: 2 }, band: { from: 1, to: 3, name: "Band" }, trend: { name: "Trend", short: "T", data: [1, 2, 3] } };
+  const o = build("line", { dualAxis: true }, [S("Sales"), S("Profit")], { analytics });
+  assert.ok(!o.series[0].markLine && !o.series[0].markArea);
+  assert.ok(o.series[1].markLine && o.series[1].markArea);
+  assert.equal(o.series[1].yAxisIndex, 1);
+  assert.equal(o.series[2].name, "Trend"); assert.equal(o.series[2].yAxisIndex, undefined);
+  const dflt = build("line", { dualAxis: true }, [S("Sales"), S("Profit")], { analytics: { ref: { name: "R", value: 2 } } });
+  assert.ok(dflt.series[0].markLine);
+});
