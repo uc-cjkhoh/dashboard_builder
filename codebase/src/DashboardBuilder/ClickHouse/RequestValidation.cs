@@ -14,6 +14,7 @@ public static class ApiLimits
     public const int MaxHostLength = 253, MaxUserLength = 64, MaxPasswordLength = 256;
     public const int MaxDimensions = 12, MaxMeasures = 10, MaxJoins = 10, MaxFilters = 20; // user filters (client cap 8) + shared filters (4) + drill path (5) + page + selection + date range
     public const int MaxInValues = 500, MaxFilterValueLength = 1000;
+    public const int MaxBoxOutliers = 500; // outlier points one box plot returns (T07-08)
     public const int MaxRowLimit = 5000, MaxBuckets = 100, MaxDistinct = 1000;
     public const int MaxExportRows = 100_000; // CSV export of a whole worksheet result
     public const int DefaultRowsLimit = 100, MaxRowsLimit = 1000; // raw rows of one table (POST /api/rows): default / cap

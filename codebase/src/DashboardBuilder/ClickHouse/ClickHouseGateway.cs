@@ -677,9 +677,12 @@ public sealed partial class ClickHouseGateway
            .Append(Identifier.QualifiedName(database, table));
 
         var parameters = new List<(string Name, string Type, object Value)>();
-        sql.Append(BuildSingleTableFilters(req.Filters ?? [], byName, parameters));
+        var where = BuildSingleTableFilters(req.Filters ?? [], byName, parameters);
+        sql.Append(where);
         if (hasDim) sql.Append(" GROUP BY label ORDER BY label ASC");
         var limit = ProbeLimit(req.Limit);
+        var qualified = Identifier.QualifiedName(database, table);
+        var qdim = hasDim ? Identifier.Quote(req.Dimension!) : null;
         sql.Append(" LIMIT ").Append(limit);
 
         using var httpClient = CreateHttpClient(info);
@@ -689,18 +692,91 @@ public sealed partial class ClickHouseGateway
         cmd.CommandText = sql.ToString();
         foreach (var (name, type, value) in parameters) cmd.AddParameter(name, type, value);
 
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        var b = hasDim ? 1 : 0; // column offset for the stats when a label column is present
-        var doub = (int i) => reader.IsDBNull(i) ? double.NaN : Convert.ToDouble(reader.GetValue(i), CultureInfo.InvariantCulture);
-        var groups = new List<BoxPlotGroup?>(); // null = a no-row group (nan stats); dropped after the truncation probe
-        while (await reader.ReadAsync(ct))
+        var stats = new List<(string? Label, double Lo, double Q1, double Med, double Q3, double Hi)?>(); // null = a no-row group
+        await using (var reader = await cmd.ExecuteReaderAsync(ct))
         {
-            var label = hasDim ? (reader.IsDBNull(0) ? null : FormatKey(reader.GetValue(0))) : null;
-            double lo = doub(b), q1 = doub(b + 1), med = doub(b + 2), q3 = doub(b + 3), hi = doub(b + 4);
-            groups.Add(new[] { lo, q1, med, q3, hi }.All(double.IsFinite) ? new BoxPlotGroup(label, lo, q1, med, q3, hi) : null);
+            var b = hasDim ? 1 : 0; // column offset for the stats when a label column is present
+            var doub = (int i) => reader.IsDBNull(i) ? double.NaN : Convert.ToDouble(reader.GetValue(i), CultureInfo.InvariantCulture);
+            while (await reader.ReadAsync(ct))
+            {
+                var label = hasDim ? (reader.IsDBNull(0) ? null : FormatKey(reader.GetValue(0))) : null;
+                double lo = doub(b), q1 = doub(b + 1), med = doub(b + 2), q3 = doub(b + 3), hi = doub(b + 4);
+                stats.Add(new[] { lo, q1, med, q3, hi }.All(double.IsFinite) ? (label, lo, q1, med, q3, hi) : null);
+            }
         }
-        var truncated = TrimProbeRow(groups, limit);
-        return new BoxPlotResult(groups.OfType<BoxPlotGroup>().ToList(), truncated);
+        var truncated = TrimProbeRow(stats, limit);
+        var kept = stats.OfType<(string? Label, double Lo, double Q1, double Med, double Q3, double Hi)>().ToList();
+
+        // Tukey whiskers + outlier points: two more bounded SELECTs over the same filtered rows.
+        var whiskers = new Dictionary<string, (double Lo, double Hi)>(StringComparer.Ordinal);
+        await using (var wcmd = conn.CreateCommand())
+        {
+            wcmd.CommandText = BuildBoxWhiskerSql(qm, qualified, qdim, where, limit);
+            foreach (var (name, type, value) in parameters) wcmd.AddParameter(name, type, value);
+            await using var wr = await wcmd.ExecuteReaderAsync(ct);
+            var b = hasDim ? 1 : 0;
+            while (await wr.ReadAsync(ct))
+            {
+                if (wr.IsDBNull(b) || wr.IsDBNull(b + 1)) continue;
+                var label = hasDim && !wr.IsDBNull(0) ? FormatKey(wr.GetValue(0)) : null;
+                whiskers[label ?? ""] = (Convert.ToDouble(wr.GetValue(b), CultureInfo.InvariantCulture), Convert.ToDouble(wr.GetValue(b + 1), CultureInfo.InvariantCulture));
+            }
+        }
+        var outliers = new List<BoxPlotOutlier>();
+        var outlierProbe = ApiLimits.MaxBoxOutliers + 1;
+        await using (var ocmd = conn.CreateCommand())
+        {
+            ocmd.CommandText = BuildBoxOutlierSql(qm, qualified, qdim, where, limit, outlierProbe);
+            foreach (var (name, type, value) in parameters) ocmd.AddParameter(name, type, value);
+            await using var or = await ocmd.ExecuteReaderAsync(ct);
+            var b = hasDim ? 1 : 0;
+            while (await or.ReadAsync(ct))
+            {
+                if (or.IsDBNull(b)) continue;
+                var label = hasDim && !or.IsDBNull(0) ? FormatKey(or.GetValue(0)) : null;
+                outliers.Add(new BoxPlotOutlier(label, Convert.ToDouble(or.GetValue(b), CultureInfo.InvariantCulture)));
+            }
+        }
+        var outliersTruncated = TrimProbeRow(outliers, outlierProbe);
+        var shownLabels = kept.Select(k => k.Label ?? "").ToHashSet(StringComparer.Ordinal);
+        outliers.RemoveAll(o => !shownLabels.Contains(o.Label ?? ""));
+
+        var groups = kept.Select(k =>
+        {
+            var w = whiskers.TryGetValue(k.Label ?? "", out var ww) ? ww : (k.Lo, k.Hi);
+            return new BoxPlotGroup(k.Label, k.Lo, k.Q1, k.Med, k.Q3, k.Hi, w.Item1, w.Item2);
+        }).ToList();
+        return new BoxPlotResult(groups, truncated, outliers, outliersTruncated);
+    }
+
+    private const string BoxLowFence = "s.q1 - 1.5 * (s.q3 - s.q1)", BoxHighFence = "s.q3 + 1.5 * (s.q3 - s.q1)";
+
+    /// <summary>The d (values) joined to s (per-group Q1/Q3, at most <paramref name="groupLimit"/> groups) FROM clause
+    /// of the Tukey-fence queries. <paramref name="qdim"/> null = one ungrouped box (scalar fence, CROSS JOIN).</summary>
+    private static string BoxFenceFrom(string qm, string qualified, string? qdim, string where, int groupLimit)
+        => qdim is null
+            ? $" FROM (SELECT {qm} AS v FROM {qualified}{where}) AS d CROSS JOIN " +
+              $"(SELECT quantile(0.25)({qm}) AS q1, quantile(0.75)({qm}) AS q3 FROM {qualified}{where}) AS s"
+            : $" FROM (SELECT {qdim} AS label, {qm} AS v FROM {qualified}{where}) AS d INNER JOIN " +
+              $"(SELECT {qdim} AS label, quantile(0.25)({qm}) AS q1, quantile(0.75)({qm}) AS q3 FROM {qualified}{where} " +
+              $"GROUP BY label ORDER BY label ASC LIMIT {groupLimit}) AS s ON d.label = s.label";
+
+    /// <summary>Per group, the extreme values inside the Tukey fences (the whisker ends). Pure + testable; every
+    /// identifier arrives quoted, <paramref name="where"/> carries bound parameters only.</summary>
+    internal static string BuildBoxWhiskerSql(string qm, string qualified, string? qdim, string where, int groupLimit)
+    {
+        var inside = $"d.v >= {BoxLowFence} AND d.v <= {BoxHighFence}";
+        var head = qdim is null ? "SELECT " : "SELECT d.label AS label, ";
+        return head + $"minIf(d.v, {inside}) AS wlo, maxIf(d.v, {inside}) AS whi" + BoxFenceFrom(qm, qualified, qdim, where, groupLimit)
+            + (qdim is null ? "" : $" GROUP BY d.label ORDER BY d.label ASC LIMIT {groupLimit}");
+    }
+
+    /// <summary>The values beyond the Tukey fences, at most <paramref name="outlierLimit"/> rows.</summary>
+    internal static string BuildBoxOutlierSql(string qm, string qualified, string? qdim, string where, int groupLimit, int outlierLimit)
+    {
+        var head = qdim is null ? "SELECT d.v AS v" : "SELECT d.label AS label, d.v AS v";
+        return head + BoxFenceFrom(qm, qualified, qdim, where, groupLimit)
+            + $" WHERE d.v < {BoxLowFence} OR d.v > {BoxHighFence} ORDER BY " + (qdim is null ? "d.v" : "d.label ASC, d.v") + $" ASC LIMIT {outlierLimit}";
     }
 
     /// <summary>

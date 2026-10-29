@@ -8,6 +8,7 @@ import { syncRange, secondaryKind } from "./axis-sync-model.js";
 import { markBorder, markerSizeOr } from "./mark-style-model.js";
 import { circleSize, circleCells, HEATMAP_GUTTER } from "./heatmap-model.js";
 import { bandsFor } from "./bullet-model.js";
+import { boxData, outlierPoints } from "./box-model.js";
 import { chartFit, markCount, applyFitMode, FIT } from "./chart-fit.js";
 import { applySelectionDim } from "./selection-dim.js";
 
@@ -833,11 +834,12 @@ function buildHistogram({ bins, format = {} }) {
 
 // boxplot (P12) — five-number summary per group from the server.
 // spec: { boxes:[{ label, min, q1, median, q3, max }], format }
-function buildBoxplot({ boxes, format = {} }) {
+function buildBoxplot({ boxes, outliers = [], format = {} }) {
   const c = tokens();
   const fmtVal = makeValueFormatter(format);
   const labels = boxes.map((b) => (b.label == null ? "—" : String(b.label)));
-  const data = boxes.map((b) => [b.min, b.q1, b.median, b.q3, b.max]);
+  const data = boxData(boxes);
+  const points = outlierPoints(boxes, outliers);
   return {
     textStyle: { fontFamily: c.font, color: c.label },
     grid: { left: 6, right: 18, top: 18, bottom: 6 + (format.xTitle ? 24 : 0), containLabel: true },
@@ -848,6 +850,7 @@ function buildBoxplot({ boxes, format = {} }) {
       formatter: (p) => {
         // Read the five-number summary from the source row by index — robust to ECharts' internal
         // value layout for boxplot series.
+        if (p.seriesType === "scatter") return `<span style="color:${c.muted}">${escapeHtml(labels[p.value[0]] ?? "")}</span><br>outlier <b>${fmtVal(p.value[1])}</b>`;
         const b = boxes[p.dataIndex] ?? {};
         return `<span style="color:${c.muted}">${escapeHtml(labels[p.dataIndex] ?? "")}</span><br>` +
           `max ${fmtVal(b.max)}<br>Q3 ${fmtVal(b.q3)}<br>median <b>${fmtVal(b.median)}</b><br>Q1 ${fmtVal(b.q1)}<br>min ${fmtVal(b.min)}`;
@@ -870,7 +873,12 @@ function buildBoxplot({ boxes, format = {} }) {
       type: "boxplot", data,
       itemStyle: { color: c.brandSoft, borderColor: c.series },
       emphasis: { itemStyle: { borderColor: c.ink } },
-    }],
+    }, ...(points.length ? [{
+      // Outliers: hollow rings, so they read apart from the box without relying on colour.
+      type: "scatter", data: points, symbol: "circle", symbolSize: 8,
+      itemStyle: { color: c.surface, borderColor: c.series, borderWidth: 1.5 },
+      emphasis: { itemStyle: { borderColor: c.ink } },
+    }] : [])],
   };
 }
 

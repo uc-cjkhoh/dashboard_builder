@@ -1,0 +1,78 @@
+// Live smoke for box-plot outliers (T07-08): the dev app (APP_URL, default http://localhost:5210) against a real
+// ClickHouse. Fixture table test_cj.bk_box is created and dropped over HTTPS; the app stays read-only.
+// Env: CH_HOST, CH_PORT, CH_USER, CH_PASSWORD (never printed); NODE_EXTRA_CA_CERTS for the self-signed cert.
+import assert from 'node:assert/strict';
+
+const { CH_HOST, CH_PORT, CH_USER, CH_PASSWORD } = process.env;
+assert.ok(CH_HOST && CH_PORT && CH_USER && CH_PASSWORD !== undefined, 'set CH_HOST, CH_PORT, CH_USER, CH_PASSWORD');
+const APP = process.env.APP_URL ?? 'http://localhost:5210';
+const auth = 'Basic ' + Buffer.from(`${CH_USER}:${CH_PASSWORD}`).toString('base64');
+const DB = 'test_cj', T = 'bk_box';
+
+async function ch(sql) {
+  const res = await fetch(`https://${CH_HOST}:${CH_PORT}/?default_format=JSONCompact`, { method: 'POST', headers: { Authorization: auth }, body: sql });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`ClickHouse ${res.status}: ${text.trim().slice(0, 300)}`);
+}
+const write = (sql) => { assert.match(sql, /^(CREATE TABLE|INSERT INTO|DROP TABLE IF EXISTS) test_cj\.bk_box\b/); return ch(sql); };
+
+let cookie = '';
+async function app(path, body) {
+  const res = await fetch(`${APP}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(cookie ? { Cookie: cookie } : {}) }, body: JSON.stringify(body ?? {}) });
+  const set = res.headers.getSetCookie?.() ?? [];
+  if (set.length) cookie = set.map((c) => c.split(';')[0]).join('; ');
+  const text = await res.text();
+  let json = null; try { json = JSON.parse(text); } catch { /* not JSON */ }
+  return { status: res.status, json, text };
+}
+let passed = 0;
+const pass = (m) => { passed++; console.log(`ok ${m}`); };
+
+// Fixture: A = 1..10 and 100 (q1 3.5, q3 8.5, fences -4 / 16: 100 is the one outlier, whiskers 1 / 10);
+//          B = 5,5,5 (no outliers); C = -50, 1..9 (q1 ~2.25, q3 ~7.75 -> -50 is a low outlier)
+async function setup() {
+  await write(`DROP TABLE IF EXISTS ${DB}.${T}`);
+  await write(`CREATE TABLE ${DB}.${T} (g String, x Float64) ENGINE = MergeTree ORDER BY g`);
+  const rows = [...[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 100].map((v) => ['A', v]), ...[5, 5, 5].map((v) => ['B', v]), ...[-50, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((v) => ['C', v])];
+  await write(`INSERT INTO ${DB}.${T} (g, x) VALUES ${rows.map(([g, x]) => `('${g}',${x})`).join(',')}`);
+}
+const teardown = () => write(`DROP TABLE IF EXISTS ${DB}.${T}`).catch((e) => console.error(`teardown: ${e.message}`));
+const box = (extra = {}) => app(`/api/databases/${DB}/tables/${T}/boxplot`, { dimension: 'g', measure: 'x', filters: [], limit: 50, ...extra });
+
+async function main() {
+  const conn = await app('/api/connection', { host: CH_HOST, port: Number(CH_PORT), user: CH_USER, password: CH_PASSWORD, secure: true, allowInvalidCert: true });
+  assert.equal(conn.status, 200, `connect: ${conn.status}`);
+  {
+    const r = await box(); assert.equal(r.status, 200, r.text.slice(0, 300));
+    const g = Object.fromEntries(r.json.groups.map((x) => [x.label, x]));
+    assert.equal(g.A.lowerWhisker, 1); assert.equal(g.A.upperWhisker, 10); assert.equal(g.A.max, 100);
+    assert.equal(g.B.lowerWhisker, 5); assert.equal(g.B.upperWhisker, 5);
+    assert.equal(g.C.lowerWhisker, 1);
+    const o = r.json.outliers.map((x) => `${x.label}:${x.value}`);
+    assert.deepEqual(o, ['A:100', 'C:-50']);
+    assert.equal(r.json.outliersTruncated, false);
+    pass('(a) grouped: whiskers stop at the fences; outliers are A:100 and C:-50');
+  }
+  {
+    const r = await box({ dimension: null }); assert.equal(r.status, 200, r.text.slice(0, 300));
+    assert.equal(r.json.groups.length, 1);
+    assert.ok(r.json.outliers.some((x) => x.value === 100) && r.json.outliers.every((x) => x.label === null));
+    pass('(b) ungrouped box: scalar fences, outliers carry no label');
+  }
+  {
+    const r = await box({ filters: [{ column: 'g', op: '=', value: 'B' }] }); assert.equal(r.status, 200, r.text.slice(0, 300));
+    assert.equal(r.json.outliers.length, 0); assert.equal(r.json.groups.length, 1);
+    pass('(c) a bound filter narrows both the box and its outliers');
+  }
+  {
+    const r = await box({ limit: 1 }); assert.equal(r.status, 200);
+    assert.equal(r.json.truncated, true); assert.ok(r.json.outliers.every((x) => x.label === 'A'));
+    pass('(d) the group limit also bounds the outlier groups');
+  }
+  {
+    const r = await box({ measure: 'x; DROP TABLE t' }); assert.equal(r.status, 400);
+    pass('(e) a hostile measure identifier is a 400');
+  }
+}
+try { await setup(); await main(); } catch (e) { console.error(`FAIL: ${e.stack ?? e.message}`); process.exitCode = 1; } finally { await teardown(); }
+console.log(`${passed} passed${process.exitCode ? ', FAILED' : ''}`);
