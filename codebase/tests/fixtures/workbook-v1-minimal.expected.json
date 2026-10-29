@@ -70,6 +70,7 @@
           "secondaryType": "line",
           "markerSize": null,
           "markBorder": "none",
+          "markerShape": "circle",
           "targetMeasure": null,
           "approximate": false
         },
@@ -128,6 +129,7 @@
           "secondaryType": "line",
           "markerSize": null,
           "markBorder": "none",
+          "markerShape": "circle",
           "targetMeasure": null,
           "approximate": false
         },

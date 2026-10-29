@@ -272,7 +272,8 @@ export const defaultFormat = () => ({
   syncAxes: false, // T03-16: a combo's two value axes share one range
   secondaryType: "line", // T03-17: right-axis marks of a combo: line | bar | area
   markerSize: null, // T01-22: null (automatic) | whole px 4–40 — scatter / line markers, circle heatmap
-  markBorder: "none", // T03-34: none | thin | thick — bars, scatter points, heatmap cells
+  markBorder: "none", // T03-34: none | thin | thick — bars, scatter points, heatmap cells, pie, treemap, funnel
+  markerShape: "circle", // circle | square | diamond | triangle — line / area / combo markers
   approximate: false, // P33: estimate distinct counts / read a 10% sample where the table allows
 });
 

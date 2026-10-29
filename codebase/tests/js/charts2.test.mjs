@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { syncRange, SECONDARY_CHOICES, secondaryKind } from "../../src/DashboardBuilder/Features/Dashboard/axis-sync-model.js";
-import { MARK_BORDER_CHOICES, markBorder, MARKER_SIZE, markerSizeError, markerSizeOr } from "../../src/DashboardBuilder/Features/Dashboard/mark-style-model.js";
+import { MARK_BORDER_CHOICES, markBorder, MARKER_SIZE, markerSizeError, markerSizeOr, MARKER_SHAPE_CHOICES, markerSymbol, edgeOr } from "../../src/DashboardBuilder/Features/Dashboard/mark-style-model.js";
 import { defaultFormat, emptySheet } from "../../src/DashboardBuilder/Features/Core/store.js";
 import { parseWorkbook, serializeWorkbook } from "../../src/DashboardBuilder/Features/Workbook/workbook-model.js";
 
@@ -81,3 +81,29 @@ test("workbook: valid settings round-trip; invalid ones reset with an issue; abs
   assert.equal(old.issues.length, 0, JSON.stringify(old.issues));
   assert.equal(old.worksheets[0].sheet.format.markBorder, "none");
 });
+
+test("marker shape (line charts): four shapes, circle by default, unknown falls back to circle", () => {
+  assert.deepEqual(MARKER_SHAPE_CHOICES.map((c) => c[0]), ["circle", "square", "diamond", "triangle"]);
+  assert.equal(markerSymbol("square"), "rect");
+  assert.equal(markerSymbol("diamond"), "diamond");
+  assert.equal(markerSymbol("triangle"), "triangle");
+  for (const v of ["circle", "bogus", undefined, null]) assert.equal(markerSymbol(v), "circle");
+  assert.equal(defaultFormat().markerShape, "circle");
+});
+
+test("edgeOr: a chosen border wins over the chart's own default edge; none keeps the default", () => {
+  const dflt = { borderColor: "#fff", borderWidth: 2 };
+  assert.deepEqual(edgeOr("none", "#abc", dflt), dflt);
+  assert.deepEqual(edgeOr(undefined, "#abc", dflt), dflt);
+  assert.deepEqual(edgeOr("thin", "#abc", dflt), { borderColor: "#abc", borderWidth: 1 });
+  assert.deepEqual(edgeOr("thick", "#abc", dflt), { borderColor: "#abc", borderWidth: 3 });
+});
+
+test("workbook: marker shape round-trips; an unknown one resets to circle with an issue", () => {
+  assert.equal(roundTrip({ markerShape: "diamond" }).worksheets[0].sheet.format.markerShape, "diamond");
+  const bad = roundTrip({ markerShape: "star" });
+  assert.equal(bad.worksheets[0].sheet.format.markerShape, "circle");
+  assert.ok(bad.issues.some((i) => /marker shape/.test(i)), J(bad.issues));
+  assert.equal(roundTrip({}).worksheets[0].sheet.format.markerShape, "circle");
+});
+const J = JSON.stringify;
