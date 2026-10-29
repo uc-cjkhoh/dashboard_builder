@@ -62,3 +62,10 @@ public sealed record RowColumn(string Name, string Type);
 public sealed record RowsResult(
     IReadOnlyList<RowColumn> Columns, IReadOnlyList<IReadOnlyList<string?>> Rows,
     bool Truncated, int Limit, bool ColumnsTruncated);
+
+/// <summary>
+/// A bounded UNION ALL of 2..5 tables of one database (POST /api/union): the first <see cref="Limit"/> rows (default
+/// 100, max 1000) of the stacked tables, over <see cref="Columns"/> (default: every column all tables share by name
+/// and kind). The result's first column is the source table. No ordering. Identifiers are catalog-validated and quoted.
+/// </summary>
+public sealed record UnionRequest(string Db, string[] Tables, string[]? Columns, int? Limit);

@@ -23,3 +23,10 @@
 /* The preview button shares the chip's row: shown on hover / focus like the drag grip, always reachable by keyboard. */
 .table-chip__peek { opacity: 0; transition: opacity var(--dur-fast) var(--ease); }
 .table-chip:hover .table-chip__peek, .table-chip:focus-within .table-chip__peek { opacity: 1; }
+
+/* Union dialog: a list of ticked tables, then the shared rows dialog shows the stacked rows. */
+.union-dialog { width: min(480px, calc(100vw - 2 * var(--s4))); }
+.union-dialog__body { display: grid; gap: var(--s2); }
+.union-dialog__list { display: grid; gap: var(--s2); max-height: 40vh; overflow: auto; }
+.union-dialog__item { display: flex; align-items: center; gap: var(--s2); font-size: var(--fs-body); }
+.union-dialog__hint { margin: 0; min-height: 1lh; color: var(--ink-2); font-size: var(--fs-body); }

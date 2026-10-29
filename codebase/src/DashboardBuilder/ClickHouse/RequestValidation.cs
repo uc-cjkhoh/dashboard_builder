@@ -18,6 +18,7 @@ public static class ApiLimits
     public const int MaxRowLimit = 5000, MaxBuckets = 100, MaxDistinct = 1000;
     public const int MaxExportRows = 100_000; // CSV export of a whole worksheet result
     public const int DefaultRowsLimit = 100, MaxRowsLimit = 1000; // raw rows of one table (POST /api/rows): default / cap
+    public const int MaxUnionTables = 5;  // tables one union stacks (POST /api/union)
     public const int MaxRowsCells = 50_000; // rows x columns one row read may return
     public const int MaxRowsColumns = 200, MaxCellLength = 1000;  // columns one row read returns; characters kept per cell
     public const int ProfileSampleRows = 1_000_000;  // a column profile scans the first N rows of the table
@@ -225,6 +226,21 @@ public static class RequestRules
         ValidateRange(r.Limit, ApiLimits.MaxRowsLimit, "Limit", "limit");
         if (cols.Length > 0) ValidateRowCells(r.Limit ?? ApiLimits.DefaultRowsLimit, cols.Length, "limit");
         ValidateStatFilters(r.Filters);
+    }
+    /// <summary>A union (POST /api/union): a database, 2..5 named tables, bounded columns, limit 1..1000 (never clamped).</summary>
+    public static void ValidateUnion(UnionRequest r)
+    {
+        if (string.IsNullOrWhiteSpace(r.Db)) throw Bad("'db' is required.", "db");
+        var tables = r.Tables ?? [];
+        if (tables.Length < 2 || tables.Length > ApiLimits.MaxUnionTables) throw Bad($"A union needs between 2 and {ApiLimits.MaxUnionTables} tables.", "tables");
+        for (var i = 0; i < tables.Length; i++)
+            if (string.IsNullOrWhiteSpace(tables[i])) throw Bad($"'tables[{i}]' is required.", $"tables[{i}]");
+        var cols = r.Columns ?? [];
+        if (cols.Length > ApiLimits.MaxRowsColumns) throw Bad($"A union can return at most {ApiLimits.MaxRowsColumns} columns.", "columns");
+        for (var i = 0; i < cols.Length; i++)
+            if (string.IsNullOrWhiteSpace(cols[i])) throw Bad($"'columns[{i}]' is required.", $"columns[{i}]");
+        ValidateRange(r.Limit, ApiLimits.MaxRowsLimit, "Limit", "limit");
+        if (cols.Length > 0) ValidateRowCells(r.Limit ?? ApiLimits.DefaultRowsLimit, cols.Length + 1, "limit");
     }
     /// <summary>rows x columns must stay within <see cref="ApiLimits.MaxRowsCells"/> — ask for fewer rows or columns.</summary>
     public static void ValidateRowCells(int rows, int columns, string field)
