@@ -69,7 +69,7 @@
 }
 .ws-field::before { content: ""; flex: none; width: 8px; height: 8px; }
 .ws-field--dimension::before { background: var(--ink-3); border-radius: var(--r); }
-.ws-field--measure::before { background: var(--up); border-radius: 999px; }
+.ws-field--measure::before { background: var(--up); border-radius: var(--r-pill); }
 .ws-field:hover { background: var(--surface-2); border-color: var(--line-2); }
 .ws-field__name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Keyboard/non-drag path to add a field to a shelf (a11y — mirrors the sidebar table chip's plus icon). */
@@ -564,7 +564,7 @@
 .ws-memcol { display: grid; gap: var(--s2); }
 .ws-memcol__body { display: grid; gap: var(--s2); max-height: 260px; overflow: auto; }
 .ws-memcol__row { display: grid; grid-template-columns: auto minmax(60px, 120px) 1fr auto; align-items: center; gap: var(--s2); }
-.ws-memcol__dot { width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--line-2); background: var(--surface-2); }
+.ws-memcol__dot { width: 14px; height: 14px; border-radius: var(--r-pill); border: 1px solid var(--line-2); background: var(--surface-2); }
 .ws-memcol__name { font-size: var(--fs-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ws-memcol__swatches { display: flex; flex-wrap: wrap; gap: 4px; }
 .ws-memcol__swatch { width: 16px; height: 16px; padding: 0; border: 1px solid var(--line-2); border-radius: var(--r); color: var(--ink); font-size: var(--fs-body); line-height: 1; cursor: pointer; }

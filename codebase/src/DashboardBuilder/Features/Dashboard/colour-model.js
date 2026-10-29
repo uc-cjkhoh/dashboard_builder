@@ -4,16 +4,13 @@
 // (a validated #rrggbb), unlike the app's own CSS, which uses tokens only. `format.paletteReverse` reverses the
 // categorical order and the continuous ramp.
 import { LIMITS } from "../Core/validate.js";
+import { PALETTES } from "../Core/theme-model.js";
 
 
 const HEX = /^#[0-9a-f]{6}$/i;
 const NULL_KEY = "\u0000null";
 /** Fixed swatches the picker offers — the three workbook palettes' light colours, de-duplicated. */
-export const SWATCHES = Object.freeze([
-  "#2a78d6", "#008300", "#e87ba4", "#eda100", "#1baf7a", "#eb6834", "#4a3aa7", "#e34948",
-  "#0072b2", "#e69f00", "#009e73", "#cc79a7", "#56b4e9", "#d55e00", "#f0e442", "#000000",
-  "#4e79a7", "#f28e2b", "#59a14f", "#b07aa1", "#76b7b2", "#edc948", "#9c755f", "#bab0ac",
-]);
+export const SWATCHES = Object.freeze([...new Set(Object.values(PALETTES).flatMap((p) => p.light))]);
 
 /** The storage key of a member value (null/undefined is its own key). */
 export const memberKey = (raw) => (raw == null ? NULL_KEY : String(raw));

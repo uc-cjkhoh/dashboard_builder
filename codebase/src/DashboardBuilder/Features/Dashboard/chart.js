@@ -1,4 +1,5 @@
 import { makeValueFormatter } from "../Core/format.js";
+import { ACCENTS, PALETTES } from "../Core/theme-model.js";
 import { pickInk } from "./contrast.js";
 import { orderedPalette, rampStops } from "./colour-model.js";
 import { tooltipHtml } from "./tooltip-model.js";
@@ -55,10 +56,10 @@ function tokens() {
   // skill's validated 8-hue order (fixed order, never cycled; see references/palette.md) — read from
   // CSS tokens with the validated hexes as fallback. A single-series chart uses the brand accent
   // instead (below), keeping the common case on-brand.
-  const catFallback = ["#2a78d6", "#008300", "#e87ba4", "#eda100", "#1baf7a", "#eb6834", "#4a3aa7", "#e34948"];
+  const catFallback = PALETTES.default.light;
   const cat = orderedPalette(catFallback.map((hex, i) => t(`--chart-cat-${i + 1}`, hex)), reversed());
   return {
-    series: t("--chart-series", "#c4142c"),
+    series: t("--chart-series", ACCENTS.crimson.light.accent),
     cat,
     axis: t("--chart-axis", "#d9cfd1"),
     grid: t("--chart-grid", "#ebe4e5"),
@@ -67,10 +68,11 @@ function tokens() {
     surface: t("--surface", "#ffffff"),
     ink: t("--ink", "#1c1719"),
     font: t("--font", "system-ui, sans-serif"),
+    radius: parseFloat(t("--r", "8")) || 8, // the one corner radius (golden rule 11)
     // Brand stops for the sequential heatmap ramp (single-hue soft→saturated, token-driven).
-    brand: t("--accent", "#c4142c"),
-    brandSoft: t("--accent-soft", "#fdeff1"),
-    ramp: rampStops(t("--accent-soft", "#fdeff1"), t("--accent", "#c4142c"), reversed()), // continuous low -> high
+    brand: t("--accent", ACCENTS.crimson.light.accent),
+    brandSoft: t("--accent-soft", ACCENTS.crimson.light.soft),
+    ramp: rampStops(t("--accent-soft", ACCENTS.crimson.light.soft), t("--accent", ACCENTS.crimson.light.accent), reversed()), // continuous low -> high
   };
 }
 
@@ -458,7 +460,7 @@ function buildCartesian({ type, categories, series, format = {}, orientation = "
         if (tooltipText) return customTip(tooltipText, tooltipFields, arr[0].dataIndex, Object.fromEntries(arr.map((d) => [String(d.seriesName), fmtVal(d.value)]))); // T01-19
         const head = `<span style="color:${c.muted}">${escapeHtml(String(arr[0].axisValueLabel ?? arr[0].name ?? ""))}</span>`;
         const lines = arr.map((d) =>
-          `<br><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${d.color};margin-right:6px"></span>` +
+          `<br><span style="display:inline-block;width:8px;height:8px;border-radius:${c.radius}px;background:${d.color};margin-right:6px"></span>` +
           `<b>${escapeHtml(String(d.seriesName))}:</b> ${fmtVal(d.value)}`).join("");
         return head + lines + extraTooltip(tooltipExtra, arr[0].dataIndex, c); // P18 custom tooltip fields
       },
@@ -480,7 +482,7 @@ function buildCartesian({ type, categories, series, format = {}, orientation = "
             lineStyle: { width: 2, type: "dashed", color, opacity: 0.7 }, itemStyle: { color, opacity: 0.7 }, emphasis: { focus: "series" } }
         : { name: s.name, type: "bar", data: s.data, barMaxWidth: 40,
             // Hatched as well as faded, so it reads as "the other period" without relying on colour.
-            itemStyle: { color: c.muted, opacity: 0.55, borderRadius: horizontal ? [0, 4, 4, 0] : [4, 4, 0, 0],
+            itemStyle: { color: c.muted, opacity: 0.55, borderRadius: horizontal ? [0, c.radius, c.radius, 0] : [c.radius, c.radius, 0, 0],
               decal: { symbol: "rect", symbolSize: 1, dashArrayX: [1, 0], dashArrayY: [2, 4], rotation: Math.PI / 4, color: c.surface } },
             emphasis: { itemStyle: { opacity: 0.8 } } };
     }
@@ -504,7 +506,7 @@ function buildCartesian({ type, categories, series, format = {}, orientation = "
     }
     const stacked = type === "stacked";
     // Round the "growing" end of the bar: top for vertical, right for horizontal; none when stacked.
-    const barRadius = stacked ? [0, 0, 0, 0] : (horizontal ? [0, 4, 4, 0] : [4, 4, 0, 0]);
+    const barRadius = stacked ? [0, 0, 0, 0] : (horizontal ? [0, c.radius, c.radius, 0] : [c.radius, c.radius, 0, 0]);
     // The "Other" bar (everything past the limit) wears the muted ink (≥ 3:1 on the surface, apart from
     // the series hue); its label says what it is.
     const otherItem = (v) => ({ value: v, itemStyle: { color: c.muted, borderRadius: barRadius, ...edge } });

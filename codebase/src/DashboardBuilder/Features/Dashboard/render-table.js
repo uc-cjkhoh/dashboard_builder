@@ -5,6 +5,7 @@ import { combine } from "./analytics-model.js";
 import { CF_OP_CHOICES, CF_TONE_CHOICES, TONE_ICON, measureKey, extentOf, scaleColors, barGeometry, matchRule, isActive, midpointOf } from "./conditional-model.js";
 import { tupleKey, uniqueTuples, expandLeaves, runs, levelSpans } from "./grid-model.js";
 import { el, warn, iconSpan } from "./render-dom.js";
+import { PALETTES } from "../Core/theme-model.js";
 
 // The crosstab / text table and its conditional formatting (P37), drawn from a result. Pure DOM output: nothing here
 // reads the editor, so any worksheet view can draw a table. `calcPercent` = result measure indexes whose values are
@@ -165,7 +166,7 @@ function conditionalFor(sheet, measures, rows) {
 function cfPalette() {
   const cs = getComputedStyle(document.documentElement);
   const t = (n, fb) => cs.getPropertyValue(n).trim() || fb;
-  return { surface: t("--surface", "#ffffff"), high: t("--chart-cat-1", "#2a78d6"), low: t("--chart-cat-6", "#eb6834"),
+  return { surface: t("--surface", "#ffffff"), high: t("--chart-cat-1", PALETTES.default.light[0]), low: t("--chart-cat-6", PALETTES.default.light[5]),
     inks: [t("--ink", "#1c1719"), t("--surface", "#ffffff"), "#000000", "#ffffff"] };
 }
 // One formatted cell: a rule's tone + icon wins; otherwise a scale tint (with a contrast-picked ink)

@@ -72,3 +72,13 @@ test("token colours keep HSL saturation at or near 70% (<= 72% after 8-bit round
       for (const [h] of line.matchAll(/#[0-9a-f]{6}\b/gi)) assert.ok(hex(h) <= 0.72, `${h} in: ${line.trim().slice(0, 50)}`);
     }
 });
+
+// A JS fallback colour must come from theme-model.js (the capped values), never a second hex copy
+// that drifts from the tokens; chart corner radii read --r.
+test("chart and colour modules carry no hard-coded accent or categorical hexes", () => {
+  for (const f of ["Dashboard/chart.js", "Dashboard/colour-model.js", "Dashboard/render-table.js"]) {
+    const t = readFileSync(new URL(f, root), "utf8");
+    assert.doesNotMatch(t, /#(c4142c|fdeff1|2a78d6|008300|e87ba4|eda100|1baf7a|eb6834|4a3aa7|e34948)\b/i, f);
+  }
+  assert.doesNotMatch(readFileSync(new URL("Dashboard/chart.js", root), "utf8"), /borderRadius:\s*\[[^\]]*\b[1-9]\b/);
+});

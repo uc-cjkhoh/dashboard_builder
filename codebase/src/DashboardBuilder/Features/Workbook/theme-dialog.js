@@ -40,7 +40,7 @@ export function openThemeDialog() {
     picker.value = custom ? t.accent : ACCENTS[t.accent][dark].accent;
     picker.setAttribute("aria-label", "Custom accent colour");
     const hex = el("input", "input theme-hex"); hex.type = "text"; hex.value = custom ? t.accent : "";
-    hex.placeholder = "#1d5fc4"; hex.maxLength = 7; hex.setAttribute("aria-label", "Custom accent as #rrggbb");
+    hex.placeholder = "#2260bf"; hex.maxLength = 7; hex.setAttribute("aria-label", "Custom accent as #rrggbb");
     const err = el("span", "field-error theme-error"); err.hidden = true; err.setAttribute("role", "alert");
     const tryCustom = (value) => {
       const v = value.trim().toLowerCase();
