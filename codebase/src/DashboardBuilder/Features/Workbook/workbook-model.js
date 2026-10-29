@@ -413,15 +413,27 @@ function cleanConditional(c, w, issues) {
 
 // P21 analytics: known reference kind (a constant needs a number), a band of two numbers, a known trend,
 // forecast 0 / 3 / 6 / 12, totals booleans. Anything else → that part reset, reported.
+/** `{ measure }` for a valid non-default shown-measure index (integer 1..19), `{}` for none / 0; calls `reject` for anything else. */
+function refMeasure(m, reject) {
+  if (m === undefined || m === 0) return {};
+  if (Number.isInteger(m) && m > 0 && m < 20) return { measure: m };
+  reject();
+  return {};
+}
 function cleanAnalytics(a, where, issues) {
   if (a == null) return null;
   if (typeof a !== "object") { issues.push(`${where}: analytics cleared.`); return null; }
   const fin = (v) => typeof v === "number" && Number.isFinite(v);
   const out = { ref: { kind: "none" }, band: null, trend: "none", forecast: 0, totals: { grand: false, sub: false } };
   let bad = false;
-  if (a.ref && REF_KINDS.has(a.ref.kind) && (a.ref.kind !== "constant" || fin(a.ref.value))) out.ref = { kind: a.ref.kind, ...(a.ref.kind === "constant" ? { value: a.ref.value, ...(/^prm\d{1,6}$/.test(a.ref.param ?? "") ? { param: a.ref.param } : {}) } : {}) };
+  if (a.ref && REF_KINDS.has(a.ref.kind) && (a.ref.kind !== "constant" || fin(a.ref.value))) out.ref = { kind: a.ref.kind, ...refMeasure(a.ref.measure, () => { bad = true; }), ...(a.ref.kind === "constant" ? { value: a.ref.value, ...(/^prm\d{1,6}$/.test(a.ref.param ?? "") ? { param: a.ref.param } : {}) } : {}) };
   else if (a.ref != null) bad = true;
-  if (a.band != null) { if (fin(a.band.from) && fin(a.band.to)) out.band = { from: Math.min(a.band.from, a.band.to), to: Math.max(a.band.from, a.band.to) }; else bad = true; }
+  if (a.band != null && a.band.kind !== undefined) { // only the presets BAND_CHOICES offers
+    const b = a.band;
+    if (b.kind === "stddev" && (b.k === 1 || b.k === 2)) out.band = { kind: "stddev", k: b.k };
+    else if (b.kind === "percentile" && ((b.lo === 25 && b.hi === 75) || (b.lo === 10 && b.hi === 90))) out.band = { kind: "percentile", lo: b.lo, hi: b.hi };
+    else bad = true;
+  } else if (a.band != null) { if (fin(a.band.from) && fin(a.band.to)) out.band = { from: Math.min(a.band.from, a.band.to), to: Math.max(a.band.from, a.band.to) }; else bad = true; }
   if (a.trend !== undefined) { if (TRENDS.has(a.trend)) out.trend = a.trend; else bad = true; }
   if (a.forecast !== undefined) { if (FORECASTS.has(a.forecast)) out.forecast = a.forecast; else bad = true; }
   if (a.totals != null) { out.totals = { grand: a.totals.grand === true, sub: a.totals.sub === true }; }

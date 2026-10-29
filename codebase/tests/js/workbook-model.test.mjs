@@ -351,6 +351,21 @@ test("analytics settings (P21) are kept when valid and reset part by part", () =
   assert.ok(bad.issues.some((i) => /analytics/.test(i)));
 });
 
+test("reference line measure and distribution bands (T07) are kept when valid, reset when not", () => {
+  const ok = sheetOf({ analytics: { ref: { kind: "average", measure: 2 }, band: { kind: "stddev", k: 2 } } }).worksheets[0].sheet.analytics;
+  assert.deepEqual([ok.ref, ok.band], [{ kind: "average", measure: 2 }, { kind: "stddev", k: 2 }]);
+  const pc = sheetOf({ analytics: { band: { kind: "percentile", lo: 25, hi: 75 } } }).worksheets[0].sheet.analytics;
+  assert.deepEqual(pc.band, { kind: "percentile", lo: 25, hi: 75 });
+  for (const band of [{ kind: "stddev", k: 3 }, { kind: "percentile", lo: 80, hi: 20 }, { kind: "percentile", lo: 5, hi: 95 }, { kind: "x" }]) {
+    const r = sheetOf({ analytics: { band } });
+    assert.equal(r.worksheets[0].sheet.analytics.band, null);
+    assert.ok(r.issues.some((i) => /analytics/.test(i)));
+  }
+  const m = sheetOf({ analytics: { ref: { kind: "median", measure: 99 } } });
+  assert.deepEqual(m.worksheets[0].sheet.analytics.ref, { kind: "median" });
+  assert.ok(m.issues.some((i) => /analytics/.test(i)));
+});
+
 test("a relationship's join type (P31) round-trips; anything but left reads as inner", () => {
   const st = sampleState();
   [...st.relationships.values()][0].joinType = "left";

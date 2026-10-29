@@ -49,7 +49,7 @@ import { paneState, deleteCalcPlan, roleChoice, setRoleChoice } from "../Calc/ca
 import { checkName } from "../Calc/calc-workbook.js";
 import { calcParamNames } from "../Calc/calc-params.js";
 import { calcProblem, topByRef, topByKey, aggWord } from "../Calc/calc-plan.js";
-import { REF_CHOICES, TREND_CHOICES, FORECAST_CHOICES, defaultAnalytics } from "./analytics-model.js";
+import { REF_CHOICES, TREND_CHOICES, FORECAST_CHOICES, BAND_CHOICES, bandChoice, bandFromChoice, defaultAnalytics } from "./analytics-model.js";
 import { castChoices, castLabel, effectiveCategory, syncCastCategories } from "./cast-model.js";
 import { aliasOf, labelOf } from "./member-labels.js";
 import { hierarchyGroup, HIERARCHY_MIME } from "./hierarchy-group.js";
@@ -852,22 +852,28 @@ export function initDashboards() {
     panel.append(el("span", "ws-shelf__label", "Analytics"));
     const isTable = s.chartType === "table" || s.chartType === "text";
     if (ANALYTICS_TYPES.has(s.chartType)) {
-      panel.append(fmtSelect("Reference line", REF_CHOICES, a.ref.kind, (v) => set({ ref: { kind: v, ...(v === "constant" ? { value: a.ref.value ?? 0 } : {}) } })));
+      panel.append(fmtSelect("Reference line", REF_CHOICES, a.ref.kind, (v) => set({ ref: { kind: v, ...(v === "constant" ? { value: a.ref.value ?? 0 } : {}), ...(a.ref.measure ? { measure: a.ref.measure } : {}) } })));
+      const shown = planMeasures(s).filter((e) => e.role === "shelf").map((e) => measureName(e.field));
+      if (a.ref.kind !== "none" && a.ref.kind !== "constant" && shown.length > 1)
+        panel.append(fmtSelect("of", shown.map((n, i) => [i, n]), a.ref.measure ?? 0, (v) => set({ ref: { ...a.ref, measure: Number(v) } })));
       if (a.ref.kind === "constant") {
         const numParams = parameters.filter((p) => p.type === "number");
         const bound = numParams.some((p) => p.id === a.ref.param) ? a.ref.param : "";
-        if (bound) panel.append(fmtSelect("at", [["", "A typed value"], ...numParams.map((p) => [p.id, `Parameter: ${p.name}`])], bound, (v) => set({ ref: { kind: "constant", value: a.ref.value ?? 0, ...(v ? { param: v } : {}) } })));
+        if (bound) panel.append(fmtSelect("at", [["", "A typed value"], ...numParams.map((p) => [p.id, `Parameter: ${p.name}`])], bound, (v) => set({ ref: { ...(a.ref.measure ? { measure: a.ref.measure } : {}), kind: "constant", value: a.ref.value ?? 0, ...(v ? { param: v } : {}) } })));
         else {
-          panel.append(fmtNumber("at", a.ref.value, "0", (v) => set({ ref: { kind: "constant", value: v ?? 0 } })));
-          if (numParams.length) panel.append(fmtSelect("or follow", [["", "none"], ...numParams.map((p) => [p.id, p.name])], "", (v) => set({ ref: { kind: "constant", value: a.ref.value ?? 0, ...(v ? { param: v } : {}) } })));
+          panel.append(fmtNumber("at", a.ref.value, "0", (v) => set({ ref: { ...(a.ref.measure ? { measure: a.ref.measure } : {}), kind: "constant", value: v ?? 0 } })));
+          if (numParams.length) panel.append(fmtSelect("or follow", [["", "none"], ...numParams.map((p) => [p.id, p.name])], "", (v) => set({ ref: { ...(a.ref.measure ? { measure: a.ref.measure } : {}), kind: "constant", value: a.ref.value ?? 0, ...(v ? { param: v } : {}) } })));
         }
       }
-      panel.append(fmtNumber("Band from", a.band?.from ?? null, "none", (v) => set({ band: v == null ? null : { from: v, to: a.band?.to ?? v } })),
-        fmtNumber("to", a.band?.to ?? null, "none", (v) => set({ band: v == null ? null : { from: a.band?.from ?? v, to: v } })),
-        fmtSelect("Trend", TREND_CHOICES, a.trend, (v) => set({ trend: v })));
+      panel.append(fmtSelect("Band", BAND_CHOICES, bandChoice(a.band), (v) => set({ band: bandFromChoice(v, a.band) })));
+      if (a.band && !a.band.kind) panel.append(fmtNumber("from", a.band.from, "0", (v) => set({ band: { from: v ?? 0, to: a.band.to } })),
+        fmtNumber("to", a.band.to, "0", (v) => set({ band: { from: a.band.from, to: v ?? 0 } })));
+      else if (a.band && shown.length > 1 && !(a.ref.kind !== "none" && a.ref.kind !== "constant"))
+        panel.append(fmtSelect("of", shown.map((n, i) => [i, n]), a.ref.measure ?? 0, (v) => set({ ref: { ...a.ref, measure: Number(v) } })));
+      panel.append(fmtSelect("Trend", TREND_CHOICES, a.trend, (v) => set({ trend: v })));
       if (s.chartType === "line" || s.chartType === "area")
         panel.append(fmtSelect("Forecast", FORECAST_CHOICES, a.forecast, (v) => set({ forecast: Number(v) })));
-      panel.append(el("span", "ws-shelf__note", "On the first measure, over the rows shown, in category order. A forecast extends the trend (linear if none is picked)."));
+      panel.append(el("span", "ws-shelf__note", "Lines and bands read the chosen measure over the rows shown (the “Other” remainder is left out); trend and forecast follow the first, in category order. A forecast extends the trend (linear if none is picked)."));
     } else if (isTable) {
       panel.append(fmtCheck("Grand totals", a.totals.grand, (v) => set({ totals: { ...a.totals, grand: v } })),
         fmtCheck("Subtotals", a.totals.sub, (v) => set({ totals: { ...a.totals, sub: v } })),

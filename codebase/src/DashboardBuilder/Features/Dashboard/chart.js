@@ -546,7 +546,7 @@ function addAnalytics(base, a, { c, fmtVal, horizontal }) {
   }
   if (a.band) {
     s0.markArea = { silent: true, animation: false, itemStyle: { color: c.grid, opacity: 0.7 },
-      label: { show: true, formatter: `Band ${fmtVal(a.band.from)}–${fmtVal(a.band.to)}`, color: c.muted, fontFamily: c.font, position: "insideTopLeft" },
+      label: { show: true, formatter: `${a.band.name ?? "Band"} ${fmtVal(a.band.from)}–${fmtVal(a.band.to)}`, color: c.muted, fontFamily: c.font, position: "insideTopLeft" },
       data: [[{ [axis]: a.band.from }, { [axis]: a.band.to }]] };
   }
   if (a.trend) {
