@@ -32,9 +32,11 @@ const pass = (m) => { passed++; console.log(`ok ${m}`); };
 //          B = 5,5,5 (no outliers); C = -50, 1..9 (q1 ~2.25, q3 ~7.75 -> -50 is a low outlier)
 async function setup() {
   await write(`DROP TABLE IF EXISTS ${DB}.${T}`);
-  await write(`CREATE TABLE ${DB}.${T} (g String, x Float64) ENGINE = MergeTree ORDER BY g`);
-  const rows = [...[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 100].map((v) => ['A', v]), ...[5, 5, 5].map((v) => ['B', v]), ...[-50, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((v) => ['C', v])];
-  await write(`INSERT INTO ${DB}.${T} (g, x) VALUES ${rows.map(([g, x]) => `('${g}',${x})`).join(',')}`);
+  await write(`CREATE TABLE ${DB}.${T} (g String, x Float64, v Float64, label String, n Nullable(String)) ENGINE = MergeTree ORDER BY g`);
+  // v / label are decoys named like the SQL aliases (v = 0 on every row except the A outlier, label = the group);
+  // n is a Nullable dimension: NULL holds A's 4..10 and 100 (100 is the outlier, whisker 10); every other row is 'e'.
+  const rows = [...[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 100].map((x) => ['A', x]), ...[5, 5, 5].map((x) => ['B', x]), ...[-50, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((x) => ['C', x])];
+  await write(`INSERT INTO ${DB}.${T} (g, x, v, label, n) VALUES ${rows.map(([g, x]) => `('${g}',${x},${x === 100 ? 7 : 0},'${g}',${g === 'A' && x > 3 ? 'NULL' : "'e'"})`).join(',')}`);
 }
 const teardown = () => write(`DROP TABLE IF EXISTS ${DB}.${T}`).catch((e) => console.error(`teardown: ${e.message}`));
 const box = (extra = {}) => app(`/api/databases/${DB}/tables/${T}/boxplot`, { dimension: 'g', measure: 'x', filters: [], limit: 50, ...extra });
@@ -68,6 +70,23 @@ async function main() {
     const r = await box({ limit: 1 }); assert.equal(r.status, 200);
     assert.equal(r.json.truncated, true); assert.ok(r.json.outliers.every((x) => x.label === 'A'));
     pass('(d) the group limit also bounds the outlier groups');
+  }
+  {
+    const r = await box({ filters: [{ column: 'v', op: '=', value: '0' }] }); assert.equal(r.status, 200, r.text.slice(0, 300));
+    const g = Object.fromEntries(r.json.groups.map((x) => [x.label, x]));
+    assert.equal(g.A.max, 10, 'the filter on the user column v removed the 100 row'); assert.equal(g.A.upperWhisker, 10);
+    assert.ok(!r.json.outliers.some((x) => x.label === 'A'), 'A has no outlier once v = 0 filters row 100 out');
+    const r2 = await box({ filters: [{ column: 'label', op: '=', value: 'A' }] }); assert.equal(r2.status, 200);
+    assert.deepEqual(r2.json.groups.map((x) => x.label), ['A']); assert.deepEqual(r2.json.outliers.map((x) => x.value), [100]);
+    pass('(f) filters on user columns named v and label hit the same rows in the stats, whisker and outlier queries');
+  }
+  {
+    const r = await box({ dimension: 'n' }); assert.equal(r.status, 200, r.text.slice(0, 300));
+    const g = Object.fromEntries(r.json.groups.map((x) => [String(x.label), x]));
+    assert.ok('null' in g && 'e' in g, `groups ${Object.keys(g)}`);
+    assert.equal(g.null.max, 100); assert.equal(g.null.upperWhisker, 10, 'NULL group whisker stops at the fence');
+    assert.deepEqual(r.json.outliers.filter((x) => x.label === null).map((x) => x.value).sort((a, b) => a - b), [100]);
+    pass('(g) a NULL dimension group gets whiskers and outliers (join on text form + is-NULL)');
   }
   {
     const r = await box({ measure: 'x; DROP TABLE t' }); assert.equal(r.status, 400);

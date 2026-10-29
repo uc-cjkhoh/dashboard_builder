@@ -670,19 +670,19 @@ public sealed partial class ClickHouseGateway
         if (hasDim && !byName.ContainsKey(req.Dimension!)) throw new UnknownIdentifierException("Unknown column.");
 
         var qm = Identifier.Quote(req.Measure);
+        var qualified = Identifier.QualifiedName(database, table);
+        var qdim = hasDim ? Identifier.Quote(req.Dimension!) : null;
         var sql = new StringBuilder("SELECT ");
-        if (hasDim) sql.Append($"{Identifier.Quote(req.Dimension!)} AS label, ");
+        if (hasDim) sql.Append($"{qdim} AS __bx_label, ");
         sql.Append($"min({qm}) AS lo, quantile(0.25)({qm}) AS q1, quantile(0.5)({qm}) AS med, ")
            .Append($"quantile(0.75)({qm}) AS q3, max({qm}) AS hi FROM ")
-           .Append(Identifier.QualifiedName(database, table));
+           .Append(qualified);
 
         var parameters = new List<(string Name, string Type, object Value)>();
         var where = BuildSingleTableFilters(req.Filters ?? [], byName, parameters);
         sql.Append(where);
-        if (hasDim) sql.Append(" GROUP BY label ORDER BY label ASC");
+        if (hasDim) sql.Append(" GROUP BY __bx_label ORDER BY __bx_label ASC");
         var limit = ProbeLimit(req.Limit);
-        var qualified = Identifier.QualifiedName(database, table);
-        var qdim = hasDim ? Identifier.Quote(req.Dimension!) : null;
         sql.Append(" LIMIT ").Append(limit);
 
         using var httpClient = CreateHttpClient(info);
@@ -708,7 +708,7 @@ public sealed partial class ClickHouseGateway
         var kept = stats.OfType<(string? Label, double Lo, double Q1, double Med, double Q3, double Hi)>().ToList();
 
         // Tukey whiskers + outlier points: two more bounded SELECTs over the same filtered rows.
-        var whiskers = new Dictionary<string, (double Lo, double Hi)>(StringComparer.Ordinal);
+        var whiskers = new Dictionary<string, (double Lo, double Hi)>(StringComparer.Ordinal); // keyed by BoxKey: NULL and "" never collide
         await using (var wcmd = conn.CreateCommand())
         {
             wcmd.CommandText = BuildBoxWhiskerSql(qm, qualified, qdim, where, limit);
@@ -719,7 +719,7 @@ public sealed partial class ClickHouseGateway
             {
                 if (wr.IsDBNull(b) || wr.IsDBNull(b + 1)) continue;
                 var label = hasDim && !wr.IsDBNull(0) ? FormatKey(wr.GetValue(0)) : null;
-                whiskers[label ?? ""] = (Convert.ToDouble(wr.GetValue(b), CultureInfo.InvariantCulture), Convert.ToDouble(wr.GetValue(b + 1), CultureInfo.InvariantCulture));
+                whiskers[BoxKey(label)] = (Convert.ToDouble(wr.GetValue(b), CultureInfo.InvariantCulture), Convert.ToDouble(wr.GetValue(b + 1), CultureInfo.InvariantCulture));
             }
         }
         var outliers = new List<BoxPlotOutlier>();
@@ -737,46 +737,52 @@ public sealed partial class ClickHouseGateway
                 outliers.Add(new BoxPlotOutlier(label, Convert.ToDouble(or.GetValue(b), CultureInfo.InvariantCulture)));
             }
         }
+        // Drop the hidden probe group's points first, so they can neither use the cap nor set the flag.
+        var shownKeys = kept.Select(k => BoxKey(k.Label)).ToHashSet(StringComparer.Ordinal);
+        outliers.RemoveAll(o => !shownKeys.Contains(BoxKey(o.Label)));
         var outliersTruncated = TrimProbeRow(outliers, outlierProbe);
-        var shownLabels = kept.Select(k => k.Label ?? "").ToHashSet(StringComparer.Ordinal);
-        outliers.RemoveAll(o => !shownLabels.Contains(o.Label ?? ""));
 
         var groups = kept.Select(k =>
         {
-            var w = whiskers.TryGetValue(k.Label ?? "", out var ww) ? ww : (k.Lo, k.Hi);
+            var w = whiskers.TryGetValue(BoxKey(k.Label), out var ww) ? ww : (k.Lo, k.Hi);
             return new BoxPlotGroup(k.Label, k.Lo, k.Q1, k.Med, k.Q3, k.Hi, w.Item1, w.Item2);
         }).ToList();
         return new BoxPlotResult(groups, truncated, outliers, outliersTruncated);
     }
 
-    private const string BoxLowFence = "s.q1 - 1.5 * (s.q3 - s.q1)", BoxHighFence = "s.q3 + 1.5 * (s.q3 - s.q1)";
+    private const string BoxLowFence = "s.__bx_q1 - 1.5 * (s.__bx_q3 - s.__bx_q1)", BoxHighFence = "s.__bx_q3 + 1.5 * (s.__bx_q3 - s.__bx_q1)";
+
+    /// <summary>A null-safe dictionary key for a group label (NULL is not the empty string).</summary>
+    private static string BoxKey(string? label) => label is null ? "N" : "S" + label;
 
     /// <summary>The d (values) joined to s (per-group Q1/Q3, at most <paramref name="groupLimit"/> groups) FROM clause
-    /// of the Tukey-fence queries. <paramref name="qdim"/> null = one ungrouped box (scalar fence, CROSS JOIN).</summary>
+    /// of the Tukey-fence queries. <paramref name="qdim"/> null = one ungrouped box (scalar fence, CROSS JOIN).
+    /// Every alias is <c>__bx_*</c> so a user column in <paramref name="where"/> (e.g. one named v or label) can
+    /// never resolve to an alias. Groups join on (text form, is-NULL) because ClickHouse never matches NULL keys.</summary>
     private static string BoxFenceFrom(string qm, string qualified, string? qdim, string where, int groupLimit)
         => qdim is null
-            ? $" FROM (SELECT {qm} AS v FROM {qualified}{where}) AS d CROSS JOIN " +
-              $"(SELECT quantile(0.25)({qm}) AS q1, quantile(0.75)({qm}) AS q3 FROM {qualified}{where}) AS s"
-            : $" FROM (SELECT {qdim} AS label, {qm} AS v FROM {qualified}{where}) AS d INNER JOIN " +
-              $"(SELECT {qdim} AS label, quantile(0.25)({qm}) AS q1, quantile(0.75)({qm}) AS q3 FROM {qualified}{where} " +
-              $"GROUP BY label ORDER BY label ASC LIMIT {groupLimit}) AS s ON d.label = s.label";
+            ? $" FROM (SELECT {qm} AS __bx_v FROM {qualified}{where}) AS d CROSS JOIN " +
+              $"(SELECT quantile(0.25)({qm}) AS __bx_q1, quantile(0.75)({qm}) AS __bx_q3 FROM {qualified}{where}) AS s"
+            : $" FROM (SELECT {qdim} AS __bx_label, ifNull(toString(__bx_label), '') AS __bx_k, isNull(__bx_label) AS __bx_n, {qm} AS __bx_v FROM {qualified}{where}) AS d INNER JOIN " +
+              $"(SELECT {qdim} AS __bx_label, ifNull(toString(__bx_label), '') AS __bx_k, isNull(__bx_label) AS __bx_n, quantile(0.25)({qm}) AS __bx_q1, quantile(0.75)({qm}) AS __bx_q3 FROM {qualified}{where} " +
+              $"GROUP BY __bx_label ORDER BY __bx_label ASC LIMIT {groupLimit}) AS s ON d.__bx_k = s.__bx_k AND d.__bx_n = s.__bx_n";
 
     /// <summary>Per group, the extreme values inside the Tukey fences (the whisker ends). Pure + testable; every
     /// identifier arrives quoted, <paramref name="where"/> carries bound parameters only.</summary>
     internal static string BuildBoxWhiskerSql(string qm, string qualified, string? qdim, string where, int groupLimit)
     {
-        var inside = $"d.v >= {BoxLowFence} AND d.v <= {BoxHighFence}";
-        var head = qdim is null ? "SELECT " : "SELECT d.label AS label, ";
-        return head + $"minIf(d.v, {inside}) AS wlo, maxIf(d.v, {inside}) AS whi" + BoxFenceFrom(qm, qualified, qdim, where, groupLimit)
-            + (qdim is null ? "" : $" GROUP BY d.label ORDER BY d.label ASC LIMIT {groupLimit}");
+        var inside = $"d.__bx_v >= {BoxLowFence} AND d.__bx_v <= {BoxHighFence}";
+        var head = qdim is null ? "SELECT " : "SELECT d.__bx_label AS __bx_label, ";
+        return head + $"minIf(d.__bx_v, {inside}) AS wlo, maxIf(d.__bx_v, {inside}) AS whi" + BoxFenceFrom(qm, qualified, qdim, where, groupLimit)
+            + (qdim is null ? "" : $" GROUP BY d.__bx_label ORDER BY d.__bx_label ASC LIMIT {groupLimit}");
     }
 
     /// <summary>The values beyond the Tukey fences, at most <paramref name="outlierLimit"/> rows.</summary>
     internal static string BuildBoxOutlierSql(string qm, string qualified, string? qdim, string where, int groupLimit, int outlierLimit)
     {
-        var head = qdim is null ? "SELECT d.v AS v" : "SELECT d.label AS label, d.v AS v";
+        var head = qdim is null ? "SELECT d.__bx_v AS v" : "SELECT d.__bx_label AS label, d.__bx_v AS v";
         return head + BoxFenceFrom(qm, qualified, qdim, where, groupLimit)
-            + $" WHERE d.v < {BoxLowFence} OR d.v > {BoxHighFence} ORDER BY " + (qdim is null ? "d.v" : "d.label ASC, d.v") + $" ASC LIMIT {outlierLimit}";
+            + $" WHERE d.__bx_v < {BoxLowFence} OR d.__bx_v > {BoxHighFence} ORDER BY " + (qdim is null ? "d.__bx_v" : "d.__bx_label ASC, d.__bx_v") + $" ASC LIMIT {outlierLimit}";
     }
 
     /// <summary>

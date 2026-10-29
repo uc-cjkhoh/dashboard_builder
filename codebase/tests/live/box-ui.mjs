@@ -156,11 +156,10 @@ try {
     await dragChip('amount', `__t.zone('columns')`);
     await settle(400);
     await setType('Box plot'); await chartReady();
-    await until(() => true, 'noop');
     const o = await opt();
     const box = o.series.find((s) => s.type === 'boxplot'), pts = o.series.find((s) => s.type === 'scatter');
     must(box, 'no boxplot series');
-    must(J(box.data[0].value ?? box.data[0]).includes('4') && !J(box.data[0]).includes('95'), `whisker ${J(box.data[0])}`);
+    must(J(box.data[0].value ?? box.data[0]) === '[4,10,15,20,32]', `whisker ${J(box.data[0])}`);
     must(pts && pts.data.length === 3, `outlier points ${pts && pts.data.length}`);
     must(J(pts.data[0].value ?? pts.data[0]) === '[0,1]', `first point ${J(pts.data[0])}`);
     must(/first 500 outliers/.test(await ev(`document.body.textContent`)), 'truncation notice missing');
