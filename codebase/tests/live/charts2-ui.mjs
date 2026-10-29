@@ -263,10 +263,47 @@ try {
     await pick('Mark border', 'none'); await setNum('Marker size (px)', '');
   });
 
-  await check('Controls are scoped: Pie has none of the new options', async () => {
-    await setType('Pie'); await openFormat();
-    must(!(await hasField('Marker size (px)')) && !(await hasField('Mark border')) && !(await hasField('Synchronise axes')), 'pie shows chart-specific controls');
+  await check('Marker shape: line charts offer four shapes; the symbol follows; bars do not offer it', async () => {
+    await setType('Line'); await openFormat(); await chartReady();
+    must(await hasField('Marker shape'), 'line has Marker shape');
+    let o = await opt();
+    must(o.series[0].symbol === 'circle', `default ${o.series[0].symbol}`);
+    for (const [v, sym] of [['square', 'rect'], ['diamond', 'diamond'], ['triangle', 'triangle']]) {
+      await pick('Marker shape', v); await chartReady();
+      o = await opt();
+      must(o.series[0].symbol === sym, `${v}: ${o.series[0].symbol}`);
+    }
+    await shot('line-diamond-light.png');
+    await pick('Marker shape', 'circle');
+    await setType('Bar'); await openFormat();
+    must(!(await hasField('Marker shape')), 'bar has no Marker shape');
   });
+
+  await check('Mark border on pie, treemap and funnel: none keeps the surface gap; thin / thick use the muted ink', async () => {
+    // Part-to-whole charts take one measure and one dimension: keep amount and region only.
+    for (const f of ['channel', 'discount']) {
+      await ev(`[...document.querySelectorAll('.ws-shelf--columns .ws-pill')].find((p) => p.textContent.includes(${J(f)})).querySelector('button[aria-label="Remove field"]').click()`); await settle(300);
+    }
+    for (const [label, pathOf, dflt] of [['Pie', 'series[0].itemStyle', 2], ['Treemap', 'series[0].itemStyle', 2], ['Funnel', 'series[0].itemStyle', 1]]) {
+      await setType(label); await openFormat();
+      try { await chartReady(); } catch (e) { throw new Error(`${label}: ${e.message}; chart text: ${await chartText()}`); }
+      must(await hasField('Mark border') && !(await hasField('Marker size (px)')), `${label}: border but no marker size`);
+      let o = await opt();
+      must(o.series[0].itemStyle.borderWidth === dflt, `${label} none: ${J(o.series[0].itemStyle)}`);
+      const surface = o.series[0].itemStyle.borderColor;
+      await pick('Mark border', 'thin'); await chartReady();
+      o = await opt();
+      must(o.series[0].itemStyle.borderWidth === 1 && o.series[0].itemStyle.borderColor !== surface, `${label} thin: ${J(o.series[0].itemStyle)}`);
+      await pick('Mark border', 'thick'); await chartReady();
+      o = await opt();
+      must(o.series[0].itemStyle.borderWidth === 3, `${label} thick`);
+      await shot(`${label.toLowerCase()}-thick-light.png`);
+      await theme('dark'); await settle(400); await chartReady();
+      await shot(`${label.toLowerCase()}-thick-dark.png`); await theme('light'); await settle(400);
+      await pick('Mark border', 'none');
+    }
+  });
+
   if (b.consoleErrors.length) { console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  ')); failed++; }
 } catch (e) {
   console.log(`FAIL harness: ${e.stack}`); failed++;

@@ -5,7 +5,7 @@ import { orderedPalette, rampStops } from "./colour-model.js";
 import { tooltipHtml } from "./tooltip-model.js";
 import { lineStep } from "./line-style-model.js";
 import { syncRange, secondaryKind } from "./axis-sync-model.js";
-import { markBorder, markerSizeOr } from "./mark-style-model.js";
+import { markBorder, markerSizeOr, markerSymbol, edgeOr } from "./mark-style-model.js";
 import { circleSize, circleCells, HEATMAP_GUTTER } from "./heatmap-model.js";
 import { bandsFor } from "./bullet-model.js";
 import { boxData, outlierPoints } from "./box-model.js";
@@ -497,7 +497,7 @@ function buildCartesian({ type, categories, series, format = {}, orientation = "
         yAxisIndex: isCombo ? 1 : 0,
         data: s.data,
         showSymbol: s.data.length <= 60 || format.markerSize != null, // dots only when they won't crowd (unless a size is chosen)
-        symbolSize: markerSizeOr(format.markerSize, 8), // ≥8px markers (dataviz mark spec) unless Format → Marker size
+        symbol: markerSymbol(format.markerShape), symbolSize: markerSizeOr(format.markerSize, 8), // ≥8px markers (dataviz mark spec) unless Format → Marker size
         areaStyle: type === "area" || (isCombo && secondary === "area") ? { opacity: 0.18, color } : undefined,
         lineStyle: { width: 2, color },
         itemStyle: { color, ...(format.markBorder && format.markBorder !== "none" ? edge : {}) },
@@ -588,7 +588,7 @@ function buildPie({ type, categories, series, format = {}, pointLabels, tooltipE
       label: { show: showLabels, color: c.label, fontFamily: c.font,
         formatter: (p) => (pointLabels ? String(pointLabels[p.dataIndex] ?? "") : `${p.name}: ${fmtVal(p.value)}`) },
       labelLine: { show: showLabels },
-      itemStyle: { borderColor: c.surface, borderWidth: 2 },
+      itemStyle: edgeOr(format.markBorder, c.muted, { borderColor: c.surface, borderWidth: 2 }),
       emphasis: { itemStyle: { shadowBlur: 10, shadowColor: "rgba(0,0,0,0.2)" } },
     }],
   };
@@ -789,7 +789,7 @@ function buildTreemap({ tree, format = {} }) {
       type: "treemap", data, roam: false, nodeClick: false,
       breadcrumb: { show: false },
       label: { show: true, fontFamily: c.font, formatter: (p) => p.name },
-      itemStyle: { borderColor: c.surface, borderWidth: 2, gapWidth: 2 },
+      itemStyle: { ...edgeOr(format.markBorder, c.muted, { borderColor: c.surface, borderWidth: 2 }), gapWidth: 2 },
       levels: [{ color: c.cat, colorMappingBy: "index" }],
     }],
   };
@@ -966,7 +966,7 @@ function buildFunnel({ categories, series, format = {} }) {
     tooltip: { trigger: "item", ...tipBox(c), formatter: (p) => `<span style="color:${c.muted}">${escapeHtml(String(p.name))}</span><br><b>${fmtVal(p.value)}</b> (${((p.value / top) * 100).toFixed(1)}% of the first)` },
     series: [{
       type: "funnel", sort: "descending", gap: 2, left: "10%", right: "10%", top: legend ? 36 : 12, bottom: 12, minSize: "8%",
-      data, itemStyle: { borderColor: c.surface, borderWidth: 1 },
+      data, itemStyle: edgeOr(format.markBorder, c.muted, { borderColor: c.surface, borderWidth: 1 }),
       label: { show: true, position: "inside", fontFamily: c.font, lineHeight: 16,
         formatter: (p) => `${p.name}\n${fmtVal(p.value)} · ${((p.value / top) * 100).toFixed(0)}%` },
     }],

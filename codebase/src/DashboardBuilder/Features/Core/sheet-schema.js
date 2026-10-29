@@ -35,5 +35,6 @@ export const LINE_STYLES = new Set(["straight", "step", "jump"]); // T03-05 Form
 export const HEATMAP_SHAPES = new Set(["square", "circle"]); // T03-10
 export const SECONDARY_TYPES = new Set(["line", "bar", "area"]); // T03-17 Format → Right-axis marks (combo)
 export const MARK_BORDERS = new Set(["none", "thin", "thick"]); // T03-34
+export const MARKER_SHAPES = new Set(["circle", "square", "diamond", "triangle"]); // Format → Marker shape (line charts)
 export const MAX_TARGET_MEASURE = 19; // T03-12: shelf index of the bullet target measure
 export const MAX_DECIMALS = 10;
