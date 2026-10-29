@@ -150,6 +150,16 @@ try {
     await waitFor(`!!document.querySelector('.board-widget--spacer')`, 'restored by undo');
   });
 
+  await check('the workbook-wide picture budget (2 MB) refuses another image, in words', async () => {
+    await store(`const d = st.createDashboard('Big'); const src = 'data:image/png;base64,' + 'A'.repeat(700000);
+      st.setWidgets(d.id, [0, 1, 2].map((i) => ({ id: st.nextWidgetId(), kind: 'image', alt: 'big', src, x: i * 4, y: 0, w: 4, h: 2 }))); st.switchTab(d.id); return true;`);
+    await waitFor(`document.querySelectorAll('.board-widget--image').length === 3`, 'big dashboard shown');
+    await pick(FILES.logo);
+    await waitFor(`[...document.querySelectorAll('.toast')].some((t) => /at most 2 MB in all/.test(t.textContent))`, 'budget refusal');
+    must(document_count_ok(await ev(`document.querySelectorAll('.board-widget--image').length`)), 'an image was added past the budget');
+  });
+  function document_count_ok(n) { return n === 3; }
+
   if (b.consoleErrors.length) { console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  ')); failed++; }
 } catch (e) {
   console.log(`FAIL harness: ${e.stack}`); failed++;

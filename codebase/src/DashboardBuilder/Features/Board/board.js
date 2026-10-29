@@ -8,7 +8,7 @@ import { labelOf } from "../Dashboard/member-labels.js";
 import { sharedResults } from "../Dashboard/dashboards.js";
 import { nextSelection, selectionRefusal, crossFor, chipText, stillValid, UNSELECTABLE_NOTE } from "../Dashboard/dashboard-select.js";
 import { placeNew } from "./board-model.js";
-import { validateImageFile, isImageSrc } from "./image-model.js";
+import { validateImageFile, isImageSrc, imageChars, budgetError } from "./image-model.js";
 import { layoutBoard, widgetOrder, fixedRowH } from "./board-layout.js";
 import { SIZE_PRESETS, sizeKey, sizeLabel } from "./board-size.js";
 import { createWidget } from "./board-widget.js";
@@ -65,7 +65,7 @@ export function initBoard() {
     history.record(dash.id, dash.widgets);
     setWidgets(dash.id, next); // → dashboard:changed → sync (autosave listens to the same event)
   }
-  const nameOf = (w) => entries.get(w.id)?.el.getAttribute("aria-label") ?? (w.kind === "text" ? "Text" : "widget");
+  const nameOf = (w) => entries.get(w.id)?.el.getAttribute("aria-label") ?? (w.kind === "text" ? "Text" : w.kind === "image" ? "Image" : w.kind === "spacer" ? "Spacer" : "widget");
 
   const panel = createPanel($("board-panel"), { onAddSheet: (sheetId) => add("sheet", sheetId), onAddText: () => add("text"), onAddImage: (file) => addImage(file), onAddSpacer: () => add("spacer"), onDragStart() {}, onDragEnd() {} });
 
@@ -223,6 +223,8 @@ export function initBoard() {
       if (!isImageSrc(src)) { toast("That image couldn't be used. Choose a PNG, JPEG, GIF or WebP file.", "danger"); return; }
       const spot = placeNew(dash.widgets, "image");
       if (!spot.ok) { toast(spot.error, "danger"); return; }
+      const over = budgetError(imageChars(dashboards()), src.length);
+      if (over) { toast(over, "danger"); return; }
       addWidget(dash, "image", null, spot, { alt: checked.alt, src });
     };
     reader.readAsDataURL(file);

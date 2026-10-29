@@ -206,11 +206,12 @@ export function parseWorkbook(source) {
     }
   }
   // A widget's worksheet is read through the map, so one cut by the 50-tab cap is "missing" like any other dangling index.
+  const budget = { left: LIMITS.imagesTotal }; // the workbook-wide picture budget, shared by every dashboard
   for (const d of dashboards) {
     const remapped = Array.isArray(d.widgets)
       ? d.widgets.map((w) => (w && typeof w === "object" && w.kind === "sheet" ? { ...w, sheet: wsMap.get(w.sheet) } : w))
       : d.widgets;
-    d.widgets = cleanWidgets(remapped, { worksheetCount: worksheets.length, where: `Dashboard "${d.name}"` }, issues);
+    d.widgets = cleanWidgets(remapped, { worksheetCount: worksheets.length, where: `Dashboard "${d.name}"`, budget }, issues);
     d.size = cleanSize(d.size, `Dashboard "${d.name}"`, issues);
   }
 

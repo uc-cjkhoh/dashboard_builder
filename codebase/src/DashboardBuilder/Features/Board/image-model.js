@@ -20,3 +20,10 @@ export const isImageSrc = (src) => typeof src === "string" && src.length <= MAX_
 
 /** The file name without its last extension, trimmed, at most LIMITS.imageAlt characters. */
 export const altFromName = (name) => String(name ?? "").replace(/\.[^.]*$/, "").trim().slice(0, LIMITS.imageAlt);
+
+/** Characters of picture data across `dashboards` (each { widgets }). */
+export const imageChars = (dashboards) => dashboards.reduce((n, d) => n + d.widgets.reduce((m, w) => m + (w.kind === "image" ? String(w.src ?? "").length : 0), 0), 0);
+
+/** Would `add` more characters take the workbook past LIMITS.imagesTotal (with `used` already stored)? The refusal in words, or null. */
+export const budgetError = (used, add) => (used + add > LIMITS.imagesTotal
+  ? `The pictures in a workbook can take at most ${LIMITS.imagesTotal / 1048576} MB in all — remove an image first.` : null);

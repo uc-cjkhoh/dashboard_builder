@@ -46,6 +46,7 @@ export const LIMITS = Object.freeze({
   widgetBody: 2000,    // characters in a text widget's body
   imageBytes: 262144,  // an image widget's file, bytes (256 KB; stored in the workbook as a data URL)
   images: 4,           // image widgets per dashboard
+  imagesTotal: 2097152, // characters of picture data (data URLs) across the whole workbook (2 MB)
   imageAlt: 120,       // characters in an image widget's alt text
   calcName: 60,      // characters in a calculation's name / label (server CalcLimits.MaxName)
 });

@@ -271,3 +271,14 @@ test("savedWidgets round-trips image and spacer widgets", () => {
   const live = [{ id: "w#1", ...iw(0, 0) }, { id: "w#2", ...pw(6, 0) }];
   assert.deepEqual(savedWidgets(live, new Map()), [iw(0, 0), pw(6, 0)]);
 });
+
+test("cleanWidgets honours a shared workbook-wide picture budget across dashboards and reports what it drops", () => {
+  const src = "data:image/png;base64," + "A".repeat(300000); // under the per-file limit; 4 + 4 of these exceed 2 MB
+  const four = () => [0, 3, 6, 9].map((x) => iw(x, 0, 3, 2, "p", src));
+  const budget = { left: LIMITS.imagesTotal };
+  const issues = [];
+  assert.equal(cleanWidgets(four(), { worksheetCount: 0, where: "D1", budget }, issues).length, 4);
+  assert.deepEqual(issues, []);
+  assert.equal(cleanWidgets(four(), { worksheetCount: 0, where: "D2", budget }, issues).length, 2);
+  assert.match(issues.join(" "), /D2: removed an image widget.*2 MB/);
+});

@@ -152,8 +152,9 @@ function save() {
   try {
     localStorage.setItem(key, JSON.stringify(serializeWorkbook(currentState())));
     warned = "";
-  } catch {
-    warnNotSaved("Not saved — browser storage is unavailable. Use Export to keep a copy.");
+  } catch (e) {
+    const full = e?.name === "QuotaExceededError" || e?.code === 22;
+    warnNotSaved(full ? "Not saved — browser storage is full (pictures take the most room). Use Export to keep a copy." : "Not saved — browser storage is unavailable. Use Export to keep a copy.");
   }
 }
 

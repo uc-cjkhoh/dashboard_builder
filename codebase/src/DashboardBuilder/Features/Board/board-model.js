@@ -8,7 +8,7 @@
 //   { kind: "sheet", sheet: <worksheet index>, x, y, w, h } | { kind: "text", heading, body, x, y, w, h } | the image and spacer as above
 // Limits live in Core/validate.js LIMITS. The board canvas (drag, resize, side panel) is UI on top of this module.
 import { LIMITS } from "../Core/validate.js";
-import { isImageSrc } from "./image-model.js";
+import { isImageSrc, budgetError } from "./image-model.js";
 
 /** Default size in cells for a new widget of each kind. */
 export const DEFAULT_SIZE = Object.freeze({ sheet: { w: 6, h: 4 }, text: { w: 12, h: 2 }, image: { w: 6, h: 4 }, spacer: { w: 2, h: 1 } });
@@ -88,7 +88,7 @@ export function placeAt(widgets, kind, cell, nameOf) {
 /** Import validation of one dashboard's saved widgets → saved-form widgets. Every repair or drop is pushed to `issues`.
  *  Dropped: not an object, unknown kind, a worksheet index outside 0..worksheetCount-1, no room after an overlap, past 12.
  *  Clamped: size and position into the grid; text truncated; an overlapping widget moves to the first free spot. */
-export function cleanWidgets(raw, { worksheetCount, where }, issues) {
+export function cleanWidgets(raw, { worksheetCount, where, budget = { left: LIMITS.imagesTotal } }, issues) {
   if (raw == null) return [];
   if (!Array.isArray(raw)) { issues.push(`${where}: the widgets weren't a list — none were opened.`); return []; }
   const out = [];
@@ -101,7 +101,9 @@ export function cleanWidgets(raw, { worksheetCount, where }, issues) {
     }
     if (w.kind === "image" && !isImageSrc(w.src)) { issues.push(`${where}: removed an image widget whose picture wasn't a PNG, JPEG, GIF or WebP data URL.`); continue; }
     if (w.kind === "image" && out.filter((o) => o.kind === "image").length >= LIMITS.images) { pastImages++; continue; }
+    if (w.kind === "image" && budgetError(LIMITS.imagesTotal - budget.left, w.src.length)) { issues.push(`${where}: removed an image widget — the pictures in a workbook can take at most ${LIMITS.imagesTotal / 1048576} MB in all.`); continue; }
     if (out.length >= LIMITS.widgets) { past++; continue; }
+    if (w.kind === "image") budget.left -= w.src.length;
     const def = DEFAULT_SIZE[w.kind];
     let adjusted = false;
     const num = (v, fallback) => {

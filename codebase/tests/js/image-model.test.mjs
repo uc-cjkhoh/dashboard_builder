@@ -1,12 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { validateImageFile, isImageSrc, altFromName, IMAGE_TYPES } from "../../src/DashboardBuilder/Features/Board/image-model.js";
+import { validateImageFile, isImageSrc, altFromName, IMAGE_TYPES, imageChars, budgetError } from "../../src/DashboardBuilder/Features/Board/image-model.js";
 import { LIMITS } from "../../src/DashboardBuilder/Features/Core/validate.js";
 
 test("image limits", () => {
   assert.equal(LIMITS.imageBytes, 262144);
   assert.equal(LIMITS.images, 4);
   assert.equal(LIMITS.imageAlt, 120);
+  assert.equal(LIMITS.imagesTotal, 2097152);
 });
 
 test("a PNG, JPEG, GIF or WebP up to the size limit is accepted and named by its file", () => {
@@ -37,4 +38,16 @@ test("altFromName drops the extension, trims and caps the length", () => {
   assert.equal(altFromName("photo.final.JPG"), "photo.final");
   assert.equal(altFromName("  .png"), "");
   assert.equal(altFromName("a".repeat(300) + ".png").length, LIMITS.imageAlt);
+});
+
+test("imageChars sums the picture sizes across every dashboard's widgets", () => {
+  const d = (...n) => ({ widgets: n.map((k) => ({ kind: "image", src: "x".repeat(k) })).concat([{ kind: "spacer" }]) });
+  assert.equal(imageChars([d(10, 20), d(5)]), 35);
+  assert.equal(imageChars([]), 0);
+});
+
+test("budgetError refuses a picture that would take the workbook past 2 MB of pictures, in words", () => {
+  assert.equal(budgetError(0, 1000), null);
+  assert.equal(budgetError(LIMITS.imagesTotal - 1000, 1000), null);
+  assert.match(budgetError(LIMITS.imagesTotal - 999, 1000), /pictures in a workbook can take at most 2 MB/i);
 });

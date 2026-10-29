@@ -5,8 +5,8 @@
 //     relationships between them. There is exactly ONE model, shared across all tabs.
 //   • TABS — one ordered list of two kinds, each built FROM the model's tables:
 //       worksheet: { id: "ws#N", kind: "worksheet", name, sheet }          (the editor; one chart / table)
-//       dashboard: { id: "db#N", kind: "dashboard", name, widgets: [ … ], size }  (a board of worksheet / text widgets; size = null (automatic) or { width, height } px)
-//     A widget is { id: "w#N", kind: "sheet", sheetId, x, y, w, h } , { id, kind: "text", heading, body, x, y, w, h }, { id, kind: "image", alt, src (a raster data URL), x, y, w, h } or { id, kind: "spacer", x, y, w, h }
+//       dashboard: { id: "db#N", kind: "dashboard", name, widgets: [ … ], size }  (a board of worksheet / text / image / spacer widgets; size = null (automatic) or { width, height } px)
+//     A widget is { id: "w#N", kind: "sheet", sheetId, x, y, w, h }, { id, kind: "text", heading, body, x, y, w, h }, { id, kind: "image", alt, src (a raster data URL), x, y, w, h } or { id, kind: "spacer", x, y, w, h }
 //     (Board/board-model.js owns the geometry rules).
 // The tab strip shows the model ("Data Model") alongside the tabs; `activeView` tracks which is on screen:
 //   { kind: "model" } | { kind: "worksheet", id } | { kind: "dashboard", id }
