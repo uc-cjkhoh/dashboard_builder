@@ -37,3 +37,9 @@ test("calcDefinitionLines: Name = formula, long formulas cut", () => {
   assert.equal(line.length, "L = ".length + 200 + 1);
   assert.ok(line.endsWith("…"));
 });
+
+test("usedCalculations: an applied shared Top-N filter counts too", () => {
+  const sheet = { rows: [], columns: [], filters: [], marks: {} };
+  assert.deepEqual(usedCalculations(sheet, calcs, [{ op: "top", topBy: { calc: "c1" } }]).map((c) => c.id), ["c1"]);
+  assert.deepEqual(calcDefinitionLines(sheet, calcs, [{ op: "top", topBy: { calc: "c1" } }]), ["Net = [orders.amount] * 2"]);
+});

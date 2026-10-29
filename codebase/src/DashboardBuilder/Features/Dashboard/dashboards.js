@@ -1095,8 +1095,8 @@ export function initDashboards() {
   function setStatusBar(s, result) {
     const bar = document.getElementById("ws-statusbar");
     if (!bar) return;
+    lastQueriedAt = result?.queriedAt ?? null; // a query that is starting, failed or was cancelled has no update time
     if (!result) { bar.replaceChildren(); toggle(bar, false); return; }
-    lastQueriedAt = result.queriedAt ?? null;
     bar.textContent = [statusText(s, result), updatedText(lastQueriedAt)].filter(Boolean).join(" · ");
     toggle(bar, true);
   }
@@ -1160,7 +1160,7 @@ export function initDashboards() {
     for (const f of s.filters.filter((x) => checkFilter(x).state === "ok"))
       lines.push(`Filter: ${f.table}.${f.column} ${f.op === "notin" ? OP_LABELS.notin : f.op} ${f.values ? f.values.join(f.op === "between" ? " – " : ", ") : f.value}`);
     if (noticeEl && !noticeEl.hidden && noticeEl.textContent) lines.push(noticeEl.textContent);
-    lines.push(...calcDefinitionLines(s, calculations).map((l) => `Calculation: ${l}`));
+    lines.push(...calcDefinitionLines(s, calculations, appliedShared()).map((l) => `Calculation: ${l}`));
     const updated = updatedText(lastQueriedAt);
     if (updated) lines.push(updated);
     lines.push(`Printed ${new Date().toLocaleString()}`);

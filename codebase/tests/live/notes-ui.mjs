@@ -4,7 +4,7 @@
 //   cd src/DashboardBuilder && dotnet run --no-launch-profile --urls http://localhost:5180 ; stop it with fuser -k 5180/tcp)
 // Env: APP_URL, SHOTS_DIR (screenshot folder), CDP_PORT (default: a free port), CHROME_BIN.
 import { launch } from './cdp.mjs';
-import { writeFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -20,6 +20,7 @@ const COLUMNS = {
 const REGIONS = ['APAC', 'EU', 'US'];
 const queries = [];     // every /api/query body, in order
 let tables = ['orders', 'customers'];
+let failQueries = false;
 function answer({ method, path, body }) {
   if (path === '/api/connection' && method === 'GET') return { json: { connected: false } };
   if (path === '/api/connection') return { json: { connected: true, host: 'mock-ch', port: 8443, user: 'default', secure: true, allowInvalidCert: false } };
@@ -30,6 +31,7 @@ function answer({ method, path, body }) {
   if (/\/columns\/\w+\/distinct/.test(path)) return { json: REGIONS };
   if (path === '/api/query') {
     queries.push(body);
+    if (failQueries) return { status: 500, json: { error: 'mock failure' } };
     const dims = [...(body.rowDimensions ?? []), ...(body.columnDimensions ?? [])];
     const n = dims.length ? REGIONS.length : 1;
     return { json: {
@@ -50,9 +52,8 @@ async function check(name, fn) {
 const must = (cond, msg) => { if (!cond) throw new Error(msg); };
 const J = JSON.stringify;
 
-let wbDir = null, b = null;
+let b = null;
 try {
-  wbDir = mkdtempSync(join(tmpdir(), 'calc-wb-'));
   b = await launch({ port: process.env.CDP_PORT ? Number(process.env.CDP_PORT) : undefined });
   await b.mock(answer);
   const ev = (s) => b.evaluate(s);
@@ -142,7 +143,7 @@ try {
   await check('print header lists the calculation a view uses, and the update time; unused calculations stay out', async () => {
     await newCalc('Net', '[orders.amount] * 2');
     await newCalc('Spare', '[orders.qty] + 1');
-    await ev(`(() => { const old = __t.pills('columns'); __t.drag(__t.chip('Net'), __t.zone('columns')); return true; })()`);
+    await ev(`(() => { __t.drag(__t.chip('Net'), __t.zone('columns')); return true; })()`);
     await settle(400);
     await b.send('Emulation.setEmulatedMedia', { media: 'print' });
     await ev(`window.dispatchEvent(new Event('beforeprint'))`);
@@ -155,9 +156,41 @@ try {
     must(lines.some((l) => /^Updated \d\d:\d\d:\d\d$/.test(l)), `no update line: ${J(lines)}`);
   });
 
-  await check('dark theme renders the status bar', async () => {
-    await ev(`document.documentElement.setAttribute('data-theme', 'dark')`);
-    await shot('notes-dark.png');
+  const printLines = async () => {
+    await b.send('Emulation.setEmulatedMedia', { media: 'print' });
+    await ev(`window.dispatchEvent(new Event('beforeprint'))`);
+    const lines = await ev(`[...document.querySelectorAll('.ws-print-head__line')].map((p) => p.textContent)`);
+    await ev(`window.dispatchEvent(new Event('afterprint'))`);
+    await b.send('Emulation.setEmulatedMedia', { media: '' });
+    return lines;
+  };
+  const stamp = () => ev(`document.getElementById('ws-statusbar').textContent.match(/Updated (\\d\\d:\\d\\d:\\d\\d)$/)?.[1] ?? null`);
+
+  await check('a view re-run from the cache keeps its original update time', async () => {
+    await waitFor(`/Updated/.test(document.getElementById('ws-statusbar').textContent)`, 'status bar');
+    const first = await stamp();
+    must(first, 'no time');
+    await b.sleep(1300);
+    await ev(`__t.drag(__t.chip('qty'), __t.zone('columns'))`);
+    await settle(400);
+    const second = await stamp();
+    must(second && second !== first, `a new query should stamp a new time: ${first} -> ${second}`);
+    queries.length = 0;
+    await ev(`__t.btn('Undo (Ctrl+Z)').click()`); // back to the first view: served from the cache
+    await settle(400);
+    must(queries.length === 0, `undo re-queried: ${queries.length}`);
+    must(await stamp() === first, `cached view time: ${await stamp()} vs ${first}`);
+  });
+
+  await check('a failed query leaves no update line in the print header', async () => {
+    failQueries = true;
+    await ev(`__t.drag(__t.chip('discount'), __t.zone('columns'))`);
+    await settle(400);
+    await waitFor(`document.getElementById('ws-statusbar').hidden`, 'status bar cleared');
+    const lines = await printLines();
+    failQueries = false;
+    must(!lines.some((l) => /^Updated /.test(l)), `stale line: ${J(lines)}`);
+    await shot('notes-failed.png');
   });
 
   if (b.consoleErrors.length) console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  '));
@@ -165,7 +198,6 @@ try {
   console.log(`FAIL harness: ${e.stack}`); failed++;
 } finally {
   if (b) await b.close();
-  if (wbDir) rmSync(wbDir, { recursive: true, force: true });
 }
 console.log(`\n${passed} ok, ${failed} failed`);
 process.exit(failed ? 1 : 0);
