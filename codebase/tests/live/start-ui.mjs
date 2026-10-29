@@ -16,6 +16,7 @@ const answer = ({ method, path, body }) => {
 };
 let failed = 0, passed = 0;
 const check = async (n, f) => { try { await f(); console.log('ok ' + n); passed++; } catch (e) { console.log(`FAIL ${n}: ${e.message}`); failed++; } };
+const J = JSON.stringify;
 const must = (c, m) => { if (!c) throw new Error(m); };
 let b;
 try {
@@ -49,8 +50,22 @@ try {
   await check('remove forgets the entry', async () => {
     await ev(`document.getElementById('conn-disconnect').click()`);
     await b.waitFor(`!document.getElementById('conn-recent').hidden`, { label: 'recent visible' });
-    await b.screenshot(join(SHOTS, 'recent.png'));
-    await ev(`document.querySelector('.conn-recent__item .iconbtn').click()`);
+    await ev(`localStorage.setItem('dashboardbuilder.recent-sources', JSON.stringify([
+      { host: 'ch-prod-analytics-eu-west-1.internal.example-corporation.com', port: 8443, user: 'reporting_readonly', secure: true, allowInvalidCert: false },
+      { host: '10.168.49.13', port: 8443, user: 'cj_khoh', secure: true, allowInvalidCert: true },
+      { host: 'localhost', port: 8123, user: 'default', secure: false, allowInvalidCert: false }]))`);
+    await b.goto(APP);
+    await b.waitFor(`document.querySelectorAll('.conn-recent__item').length === 3`, { label: '3 recent' });
+    for (const scheme of ['light', 'dark']) {
+      await b.setScheme(scheme);
+      await ev(`document.documentElement.dataset.scheme = ${J(scheme)}`);
+      await new Promise((r) => setTimeout(r, 900));
+      await b.screenshot(join(SHOTS, `recent-${scheme}.png`));
+    }
+    await check('long host is ellipsised, not overflowing', async () => {
+      must(await ev(`(() => { const h = document.querySelector('.conn-recent__pick .conn-summary__host'); const li = document.querySelector('.conn-recent__item'); return h.scrollWidth > h.clientWidth && li.scrollWidth <= li.clientWidth; })()`), 'no ellipsis / overflow');
+    });
+    for (let i = 0; i < 3; i++) await ev(`document.querySelector('.conn-recent__item .iconbtn').click()`);
     must(await ev(`document.getElementById('conn-recent').hidden`), 'still visible');
     must(await ev(`localStorage.getItem('dashboardbuilder.recent-sources')`) === '[]', 'storage not emptied');
   });

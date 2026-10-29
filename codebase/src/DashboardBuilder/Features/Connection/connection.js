@@ -1,6 +1,6 @@
 import { icon } from "../Core/icons.js";
 import { api } from "../Core/api.js";
-import { show, hide, toggle, toast, setPill, fieldError, checkField } from "../Core/ui.js";
+import { show, hide, toggle, toast, setPill, fieldError, clearFieldError, checkField } from "../Core/ui.js";
 import { host, port, text, LIMITS } from "../Core/validate.js";
 import { advancedShouldOpen } from "./connection-rules.js";
 import { remember, forget, sanitize, sourceKey } from "./recent-sources.js";
@@ -58,7 +58,7 @@ export function initConnection() {
       pick.addEventListener("click", () => {
         hostEl.value = e.host; portEl.value = String(e.port); userEl.value = e.user;
         secureEl.checked = e.secure; allowCertEl.checked = e.allowInvalidCert;
-        for (const i of [hostEl, portEl, userEl]) i.removeAttribute("aria-invalid");
+        for (const i of [hostEl, portEl, userEl, passEl]) clearFieldError(i);
         syncCertControls(); syncAdvanced();
         passEl.value = ""; passEl.focus();
       });
