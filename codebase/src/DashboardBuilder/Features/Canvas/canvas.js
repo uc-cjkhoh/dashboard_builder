@@ -92,7 +92,7 @@ export function initCanvas() {
   // First grid slot (left→right, top→bottom, fitted to the visible width) that no card overlaps, so a
   // card added with the + button never hides another card's title. Dropped cards keep the drop point.
   function freeSlot() {
-    const pad = 20, gap = 24, w = 300, h = 300;  // pad = the view gutter (.view --s5), so cards line up with the tab strip
+    const pad = 16, gap = 24, w = 300, h = 300;  // pad = the view gutter (.view --s4), so cards line up with the tab strip
     const boxes = [...entities.values()].map(({ el }) => ({ x: el.offsetLeft, y: el.offsetTop, w: el.offsetWidth, h: el.offsetHeight }));
     const perRow = Math.max(1, Math.floor((canvas.clientWidth - 2 * pad + gap) / (w + gap)));
     for (let i = 0; i < 400; i++) {

@@ -9,7 +9,7 @@ export const FIT = {
   gutter: 96,      // value-axis labels, padding, legend slack
   labelMax: 160,   // a turned bottom label is truncated to this length (tooltips show the full name)
   sideMax: 200,    // a left-axis label is truncated to this width
-  charPx: 7,       // rough glyph width of an axis label at --fs-xs
+  charPx: 7,       // rough glyph width of an axis label at --fs-body
   maxSlots: 1000,  // past this many categories the axis zooms (a slider window) instead of scrolling
   canvasMarks: 1500, // past this many marks the chart draws on canvas (SVG slows down with many nodes)
 };

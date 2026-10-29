@@ -25,11 +25,11 @@ import { createBoardHistory, restorable } from "./board-history.js";
 // reload), with its source widget or worksheet, and when the source's primary dimension stops being the selected column.
 const PRINT_WIDTH = 1000; // px: the board's width on paper (the page, less margins, at 96 dpi); widgets print stacked, each chart sized to its cell
 
-/** Row height and gap in px from the design tokens (`calc(var(--ctl-h) * 2)`, `var(--s3)`), so the pure layout has no constants. */
+/** Row height and gap in px from the design tokens (`calc(var(--ctl-h) * 2)`, `var(--s2)`), so the pure layout has no constants. */
 function readMetrics() {
   const css = getComputedStyle(document.documentElement);
   const px = (name, fallback) => { const v = parseFloat(css.getPropertyValue(name)); return Number.isFinite(v) ? v : fallback; };
-  return { rowH: px("--ctl-h", 32) * 2, gap: px("--s3", 12), pad: px("--s2", 8) };
+  return { rowH: px("--ctl-h", 32) * 2, gap: px("--s2", 8), pad: px("--s2", 8) };
 }
 
 export function initBoard() {

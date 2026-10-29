@@ -10,7 +10,7 @@
 .rel-link--selected .rel-link__line,
 .rel-link--selected .rel-end { stroke: var(--accent); stroke-width: 2.5; }
 .rel-badge rect { fill: var(--surface); stroke: var(--line-2); }
-.rel-badge text { fill: var(--ink-2); font-size: 11px; font-weight: 600; }
+.rel-badge text { fill: var(--ink-2); font-size: var(--fs-body); font-weight: 600; }
 .rel-link--selected .rel-badge rect { stroke: var(--accent); }
 .rel-link--selected .rel-badge text { fill: var(--accent-ink); }
 
@@ -31,17 +31,17 @@
 
 
 /* P31: the join choice above the cardinality buttons. */
-.join-choice { border: 0; margin: 0 0 var(--s3); padding: 0; display: grid; gap: var(--s1); font-size: var(--fs-sm); }
+.join-choice { border: 0; margin: 0 0 var(--s2); padding: 0; display: grid; gap: var(--s1); font-size: var(--fs-body); }
 .join-choice legend { font-weight: 600; margin-bottom: var(--s1); padding: 0; }
 
 /* Join safety preview ("Check this join") in the relationship dialog. */
-.join-check { display: grid; gap: var(--s2); margin: 0 0 var(--s3); padding: var(--s3); border: 1px solid var(--line); border-radius: var(--r-ctl); background: var(--surface-2); font-size: var(--fs-sm); }
-.join-check__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); }
-.join-check__hint { color: var(--ink-3); font-size: var(--fs-xs); }
+.join-check { display: grid; gap: var(--s2); margin: 0 0 var(--s2); padding: var(--s2); border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); font-size: var(--fs-body); }
+.join-check__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s2); }
+.join-check__hint { color: var(--ink-3); font-size: var(--fs-body); }
 .join-check__out { display: grid; gap: var(--s2); max-height: 45vh; overflow-y: auto; }
 .join-check__summary { margin: 0; padding-left: var(--s4); display: grid; gap: var(--s1); }
 .join-check__verdict { margin: 0; font-weight: 600; }
-.join-check__note { margin: 0; display: flex; gap: var(--s2); align-items: flex-start; padding: var(--s2) var(--s3); border: 1px solid var(--line); border-radius: var(--r-ctl); }
+.join-check__note { margin: 0; display: flex; gap: var(--s2); align-items: flex-start; padding: var(--s2) var(--s2); border: 1px solid var(--line); border-radius: var(--r); }
 .join-check__glyph { flex: none; display: inline-flex; margin-top: 1px; }
 .join-check__note--warn { background: var(--warn-bg); color: var(--warn-ink); border-color: var(--warn-line); }
 .join-check__note--error { background: var(--danger-bg); color: var(--danger-ink); border-color: var(--danger-line); }

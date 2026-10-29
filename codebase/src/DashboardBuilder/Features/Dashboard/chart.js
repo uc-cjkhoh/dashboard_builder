@@ -395,7 +395,7 @@ function buildCartesian({ type, categories, series, format = {}, orientation = "
   // shows the measure value. `pointLabels` is indexed by category (dataIndex).
   const labelPos = horizontal ? "right" : "top";
   const dataLabel = (pointLabels || format.dataLabels)
-    ? { show: true, position: labelPos, color: c.label, fontFamily: c.font, fontSize: 11,
+    ? { show: true, position: labelPos, color: c.label, fontFamily: c.font, fontSize: 14,
         formatter: (p) => (pointLabels ? String(pointLabels[p.dataIndex] ?? "") : fmtVal(p.value)) }
     : { show: false };
 
@@ -546,7 +546,7 @@ function addAnalytics(base, a, { c, fmtVal, horizontal }) {
   if (a.trend) {
     base.series.push({ name: a.trend.name, type: "line", data: a.trend.data, showSymbol: false, z: 4, animation: false,
       lineStyle: { width: 2, type: "dotted", color: c.muted }, itemStyle: { color: c.muted },
-      endLabel: { show: true, formatter: a.trend.short ?? a.trend.name, color: c.muted, fontFamily: c.font, fontSize: 11 },
+      endLabel: { show: true, formatter: a.trend.short ?? a.trend.name, color: c.muted, fontFamily: c.font, fontSize: 14 },
       tooltip: { valueFormatter: fmtVal } });
     base.grid.right = (Number(base.grid.right) || 0) + 84; // room for the short end label
   }
@@ -651,7 +651,7 @@ function buildScatter({ categories, series, format = {}, sizes, sizeName, colorV
       type: "scatter", data, symbolSize, symbol: symbol || "circle", // P19 square/circle marks
       itemStyle: { ...(colorByDim || continuous ? {} : { color: c.series, opacity: 0.8 }), ...pointEdge(format, c) },
       label: (pointLabels || format.dataLabels)
-        ? { show: true, position: "top", color: c.muted, fontFamily: c.font, fontSize: 11,
+        ? { show: true, position: "top", color: c.muted, fontFamily: c.font, fontSize: 14,
             formatter: (p) => (pointLabels ? String(pointLabels[p.dataIndex] ?? "") : String(p.name ?? "")) }
         : { show: false },
       emphasis: { focus: "self", itemStyle: { borderColor: c.ink, borderWidth: 1 } },
@@ -823,7 +823,7 @@ function buildHistogram({ bins, format = {} }) {
     series: [{
       type: "bar", data: bins.map((b) => b.count), barCategoryGap: "0%",
       itemStyle: { color: c.series, borderColor: c.surface, borderWidth: 1 },
-      label: { show: !!format.dataLabels, position: "top", color: c.label, fontFamily: c.font, fontSize: 11, formatter: (p) => fmtVal(p.value) },
+      label: { show: !!format.dataLabels, position: "top", color: c.label, fontFamily: c.font, fontSize: 14, formatter: (p) => fmtVal(p.value) },
       emphasis: { itemStyle: { opacity: 0.85 } },
     }],
   };
@@ -931,7 +931,7 @@ function buildWaterfall({ categories, series, format = {} }) {
             type: "group", children: [
               { type: "rect", shape: { x: a[0] - w / 2, y: top, width: w, height: h, r: 2 }, style: { fill: colour[st.kind] } },
               { type: "text", style: { text: st.kind === "total" ? fmtVal(st.value) : signed(st.value), x: a[0], y: top - 4,
-                  align: "center", verticalAlign: "bottom", fill: c.label, font: `11px ${c.font}` } },
+                  align: "center", verticalAlign: "bottom", fill: c.label, font: `14px ${c.font}` } },
             ],
           };
         } },
@@ -987,10 +987,10 @@ function buildGauge({ value, name, target, format = {} }) {
       axisLine: { lineStyle: { width: 16, color: [[1, c.grid]] } },
       pointer: { show: false }, axisTick: { show: false }, splitLine: { show: false },
       axisLabel: { distance: 22, color: c.muted, fontFamily: c.font, formatter: (x) => (x === 0 || x === max ? fmtVal(x) : "") },
-      title: { offsetCenter: [0, "34%"], color: c.label, fontFamily: c.font, fontSize: 13 },
-      detail: { offsetCenter: [0, "4%"], valueAnimation: true, color: c.ink, fontFamily: c.font, fontSize: 28, fontWeight: 600,
+      title: { offsetCenter: [0, "34%"], color: c.label, fontFamily: c.font, fontSize: 14 },
+      detail: { offsetCenter: [0, "4%"], valueAnimation: true, color: c.ink, fontFamily: c.font, fontSize: 24, fontWeight: 600,
         formatter: () => (target != null ? `${fmtVal(v)}\n{t|${((v / max) * 100).toFixed(0)}% of ${fmtVal(target)}}` : fmtVal(v)),
-        rich: { t: { fontSize: 12, color: c.muted, fontWeight: 400, padding: [6, 0, 0, 0] } } },
+        rich: { t: { fontSize: 14, color: c.muted, fontWeight: 400, padding: [6, 0, 0, 0] } } },
       data: [{ value: Math.min(v, max), name }],
     }],
   };
@@ -1067,10 +1067,10 @@ function buildMultiples({ panels, xCats, seriesNames, format = {}, width = 800, 
   const titles = [], grids = [], xAxes = [], yAxes = [], series = [];
   panels.forEach((p, i) => {
     const col = i % cols, row = Math.floor(i / cols);
-    titles.push({ text: p.name, left: `${col * cw + 1}%`, top: `${row * rh}%`, textStyle: { color: c.label, fontFamily: c.font, fontSize: 12, fontWeight: 600 } });
+    titles.push({ text: p.name, left: `${col * cw + 1}%`, top: `${row * rh}%`, textStyle: { color: c.label, fontFamily: c.font, fontSize: 14, fontWeight: 600 } });
     grids.push({ left: `${col * cw + 3}%`, width: `${cw - 5}%`, top: `${row * rh + 5}%`, height: `${rh - 12}%`, containLabel: true });
-    xAxes.push({ ...catAxis(c, xCats), gridIndex: i, axisLabel: { color: c.muted, hideOverlap: true, fontSize: 10 } });
-    yAxes.push({ ...valueAxis(c, fmtVal), gridIndex: i, min: yMin, max: yMax, splitNumber: 2, axisLabel: { color: c.muted, formatter: fmtVal, fontSize: 10, show: col === 0 } });
+    xAxes.push({ ...catAxis(c, xCats), gridIndex: i, axisLabel: { color: c.muted, hideOverlap: true, fontSize: 14 } });
+    yAxes.push({ ...valueAxis(c, fmtVal), gridIndex: i, min: yMin, max: yMax, splitNumber: 2, axisLabel: { color: c.muted, formatter: fmtVal, fontSize: 14, show: col === 0 } });
     p.series.forEach((data, si) => series.push({
       type: "line", name: seriesNames[si], xAxisIndex: i, yAxisIndex: i, data, showSymbol: data.length <= 30, symbolSize: 5,
       lineStyle: { width: 1.5, color: seriesNames.length > 1 ? c.cat[si % c.cat.length] : c.series },

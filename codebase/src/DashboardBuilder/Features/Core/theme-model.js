@@ -11,14 +11,14 @@ export const ON_ACCENT = "#ffffff";
 // accent, hover, pressed, ink (accent-coloured text), soft (tinted background), line (tinted border)
 const A = (accent, hover, pressed, ink, soft, line) => ({ accent, hover, pressed, ink, soft, line });
 export const ACCENTS = Object.freeze({
-  crimson: { label: "Crimson", light: A("#c4142c", "#a8102a", "#8c0d22", "#b01229", "#fdeff1", "#f3c3ca"),
-    dark: A("#d42a3c", "#b81f30", "#9c1828", "#ff8f99", "#3a1a20", "#6b2a33") },
-  blue: { label: "Blue", light: A("#1d5fc4", "#1a54ad", "#164894", "#1a56b3", "#edf3fd", "#c3d6f5"),
-    dark: A("#2a66cc", "#245ab5", "#1f4e9c", "#8ab8ff", "#172238", "#2a4470") },
-  teal: { label: "Teal", light: A("#0b6f6a", "#095f5b", "#074f4c", "#0a6a65", "#e8f6f5", "#b5e0dd"),
+  crimson: { label: "Crimson", light: A("#b82035", "#9c1c32", "#821729", "#a51d31", "#fcf0f2", "#f3c3ca"),
+    dark: A("#d42a3c", "#b72031", "#991b2a", "#eea0a7", "#3a1a20", "#6b2a33") },
+  blue: { label: "Blue", light: A("#2260bf", "#1e55a9", "#1a4991", "#1f57ae", "#eef3fc", "#c4d6f4"),
+    dark: A("#2a66cc", "#245ab5", "#1f4e9c", "#9cbced", "#172238", "#2a4470") },
+  teal: { label: "Teal", light: A("#126863", "#105855", "#0d4947", "#11635e", "#e8f6f5", "#b5e0dd"),
     dark: A("#28807c", "#23716d", "#1e615e", "#5fd4cc", "#12282a", "#1f4d4b") },
-  violet: { label: "Violet", light: A("#6d3fd1", "#5f35b8", "#522d9f", "#6236c4", "#f3eefd", "#d8c9f6"),
-    dark: A("#815cdb", "#7251c1", "#6246a6", "#b9a0ff", "#241c38", "#45366e") },
+  violet: { label: "Violet", light: A("#6d3fd1", "#5f35b8", "#522d9f", "#6236c4", "#f3effc", "#d8c9f6"),
+    dark: A("#815cdb", "#7251c1", "#6246a6", "#c0aef1", "#241c38", "#45366e") },
   graphite: { label: "Graphite", light: A("#3d4451", "#333944", "#292e37", "#3d4451", "#eff1f4", "#cdd2d9"),
     dark: A("#6d7582", "#606772", "#535963", "#c4cbd6", "#23262c", "#41464f") },
 });
@@ -26,14 +26,14 @@ export const ACCENTS = Object.freeze({
 // Eight categorical chart colours per scheme, in a fixed order (never cycled within one chart).
 export const PALETTES = Object.freeze({
   default: { label: "Default",
-    light: ["#2a78d6", "#008300", "#e87ba4", "#eda100", "#1baf7a", "#eb6834", "#4a3aa7", "#e34948"],
-    dark: ["#4d95ea", "#3ba55c", "#f08fb6", "#f5b83d", "#2ec48c", "#f2834f", "#9d8cf2", "#f26b6a"] },
+    light: ["#2a78d6", "#146f14", "#e87ba4", "#c99424", "#1eac79", "#de6e41", "#4a3aa7", "#df4d4c"],
+    dark: ["#5696e1", "#3ba55c", "#ec93b7", "#e0b152", "#2ec48c", "#e3895e", "#a192ec", "#e77675"] },
   okabe: { label: "Colour-blind safe",
     light: ["#0072b2", "#e69f00", "#009e73", "#cc79a7", "#56b4e9", "#d55e00", "#f0e442", "#000000"],
     dark: ["#56b4e9", "#e69f00", "#009e73", "#cc79a7", "#0072b2", "#d55e00", "#f0e442", "#bbbbbb"] },
   muted: { label: "Muted",
-    light: ["#4e79a7", "#f28e2b", "#59a14f", "#b07aa1", "#76b7b2", "#edc948", "#9c755f", "#bab0ac"],
-    dark: ["#6b93c0", "#f5a04f", "#73b86a", "#c495b6", "#8ccbc6", "#f1d36d", "#b9927c", "#cfc7c3"] },
+    light: ["#4e79a7", "#dd8e40", "#59a14f", "#b07aa1", "#76b7b2", "#e1c254", "#9c755f", "#bab0ac"],
+    dark: ["#6b93c0", "#e3a061", "#73b86a", "#c495b6", "#8ccbc6", "#e7ce77", "#b9927c", "#cfc7c3"] },
 });
 
 export const DEFAULT_THEME = Object.freeze({ accent: "crimson", palette: "default" });

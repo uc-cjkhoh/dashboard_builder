@@ -28,7 +28,7 @@ test("a custom accent is derived to pass, or refused with the reason", () => {
   assert.match(deriveAccent("blue").error, /#rrggbb/);
 });
 test("the default theme is crimson + default palette; core.css values match", () => {
-  assert.equal(accentSet(DEFAULT_THEME, false).accent, "#c4142c");
+  assert.equal(accentSet(DEFAULT_THEME, false).accent, "#b82035");
   assert.equal(PALETTES.default.light[0], "#2a78d6");
   assert.ok(isDefaultTheme(DEFAULT_THEME));
   assert.ok(!isDefaultTheme({ accent: "blue", palette: "default" }));

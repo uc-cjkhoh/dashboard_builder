@@ -22,27 +22,27 @@
   transition: box-shadow var(--dur) var(--ease), transform var(--dur) var(--ease);
 }
 .widget:hover { box-shadow: var(--elev-16); }
-.widget__head { display: flex; align-items: center; gap: var(--s2); padding: var(--s2) var(--s3); background: var(--surface); border-bottom: 1px solid var(--line); }
-.widget__title { flex: 1; font-size: var(--fs-sm); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.widget__head { display: flex; align-items: center; gap: var(--s2); padding: var(--s2) var(--s2); background: var(--surface); border-bottom: 1px solid var(--line); }
+.widget__title { flex: 1; font-size: var(--fs-body); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .widget__body { flex: 1; padding: var(--s4); min-height: 0; }
-.widget__body--loading { color: var(--ink-3); font-size: var(--fs-sm); }
-.widget__body--error { color: var(--danger-ink); font-size: var(--fs-xs); display: flex; flex-direction: column; gap: var(--s2); align-items: flex-start; }
+.widget__body--loading { color: var(--ink-3); font-size: var(--fs-body); }
+.widget__body--error { color: var(--danger-ink); font-size: var(--fs-body); display: flex; flex-direction: column; gap: var(--s2); align-items: flex-start; }
 .widget__kpi { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
-.widget__kpi-num { font-size: var(--fs-kpi); font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
-.widget__kpi-sub { font-size: var(--fs-xs); color: var(--ink-3); text-transform: uppercase; letter-spacing: .06em; margin-top: var(--s1); }
+.widget__kpi-num { font-size: var(--fs-display); font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+.widget__kpi-sub { font-size: var(--fs-body); color: var(--ink-3); text-transform: uppercase; letter-spacing: .06em; margin-top: var(--s1); }
 .widget__grid { padding: 0; overflow: auto; max-height: 260px; }
 
 /* Chart builder filter rows */
 .filter-rows { display: flex; flex-direction: column; gap: var(--s2); margin: var(--s2) 0; }
 .filter-row { display: grid; grid-template-columns: 1fr auto 1fr auto; gap: var(--s2); align-items: center; }
-.btn--sm { padding: var(--s1) var(--s2); font-size: var(--fs-xs); align-self: flex-start; }
+.btn--sm { padding: var(--s1) var(--s2); font-size: var(--fs-body); align-self: flex-start; }
 
 /* ---- Charts ---------------------------------------------------------------
    Bar/line render via the self-hosted charting library (js/chart.js → ECharts),
    themed from the --chart-* tokens in :root. Table renders as a plain .data table
    and the KPI as a stat tile — neither is a charting-library concern. */
 .widget { min-height: 200px; }
-.widget__chart { padding: var(--s3); }
+.widget__chart { padding: var(--s2); }
 
 /* ---- Worksheet (drag fields onto shelves) -------------------------------- */
 .view--worksheet { padding: 0; overflow: hidden; }
@@ -54,28 +54,28 @@
 .ws-fields {
   border-right: 1px solid var(--line);
   background: color-mix(in srgb, var(--surface), var(--ink) 2%);
-  overflow: auto; padding: var(--s3) var(--s5);
-  display: flex; flex-direction: column; gap: var(--s3);
+  overflow: auto; padding: var(--s2) var(--s4);
+  display: flex; flex-direction: column; gap: var(--s2);
 }
-.ws-table { display: flex; flex-direction: column; gap: 3px; }
-.ws-table__name { font-size: var(--fs-xs); font-weight: 700; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ws-field-group { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); margin-top: var(--s1); }
+.ws-table { display: flex; flex-direction: column; gap: 4px; }
+.ws-table__name { font-size: var(--fs-body); font-weight: 700; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-field-group { font-size: var(--fs-body); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); margin-top: var(--s1); }
 .ws-field {
   display: flex; align-items: center; gap: var(--s2);
-  padding: var(--s1) var(--s2); border-radius: var(--r-ctl);
-  font-size: var(--fs-sm); color: var(--ink); cursor: grab;
+  padding: var(--s1) var(--s2); border-radius: var(--r);
+  font-size: var(--fs-body); color: var(--ink); cursor: grab;
   border: 1px solid transparent; background: var(--surface);
   transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease), transform var(--dur) var(--ease);
 }
 .ws-field::before { content: ""; flex: none; width: 8px; height: 8px; }
-.ws-field--dimension::before { background: var(--ink-3); border-radius: 2px; }
+.ws-field--dimension::before { background: var(--ink-3); border-radius: var(--r); }
 .ws-field--measure::before { background: var(--up); border-radius: 999px; }
 .ws-field:hover { background: var(--surface-2); border-color: var(--line-2); }
 .ws-field__name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Keyboard/non-drag path to add a field to a shelf (a11y — mirrors the sidebar table chip's plus icon). */
 .ws-field__add {
   flex: none; border: 0; background: none; cursor: pointer; padding: 0;
-  width: 18px; height: 18px; line-height: 1; border-radius: var(--r-ctl);
+  width: 18px; height: 18px; line-height: 1; border-radius: var(--r);
   color: var(--ink-3); opacity: 0; transition: opacity var(--dur) var(--ease), color var(--dur) var(--ease);
 }
 .ws-field:hover .ws-field__add, .ws-field__add:focus-visible { opacity: 1; }
@@ -88,7 +88,7 @@
    popovers (More, Export) are solid. */
 .ws-shelves { background: var(--glass); border-bottom: 1px solid var(--glass-line); box-shadow: inset 0 1px 0 var(--glass-rim);
   -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
-  padding: var(--s3) var(--s5); display: grid; gap: var(--s2);
+  padding: var(--s2) var(--s4); display: grid; gap: var(--s2);
   position: relative; z-index: 2; /* its backdrop-filter is a stacking context: lift the popovers above .ws-chart */ }
 
 
@@ -96,24 +96,24 @@
    full-width row of [aligned label | drop zone]. */
 .ws-shelf-stack { display: flex; flex-direction: column; gap: var(--s2); }
 .ws-shelf { display: grid; grid-template-columns: 72px 1fr; align-items: center; gap: var(--s2); min-width: 0; }
-.ws-shelf__label { font-size: var(--fs-xs); font-weight: 700; color: var(--ink-3); text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; }
+.ws-shelf__label { font-size: var(--fs-body); font-weight: 700; color: var(--ink-3); text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; }
 .ws-shelf__zone {
   display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap;
   min-width: 0; min-height: var(--ctl-h); padding: 4px var(--s2);
-  border: 1px dashed var(--line-2); border-radius: var(--r-ctl); background: var(--surface-2);
+  border: 1px dashed var(--line-2); border-radius: var(--r); background: var(--surface-2);
   transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
 }
 .ws-shelf__zone.is-over { border-color: var(--accent); border-style: solid; background: var(--accent-soft); }
-.ws-shelf__hint { font-size: var(--fs-xs); color: var(--ink-3); }
+.ws-shelf__hint { font-size: var(--fs-body); color: var(--ink-3); }
 /* Lane note (e.g. the Color lane when the chart type can't use it) — muted, italic, so it reads as
    guidance beside the pill rather than a droppable hint. */
-.ws-shelf__note { font-size: var(--fs-xs); color: var(--ink-3); font-style: italic; }
+.ws-shelf__note { font-size: var(--fs-body); color: var(--ink-3); font-style: italic; }
 
 .ws-pill {
-  display: inline-flex; align-items: center; gap: 6px;
-  min-height: 22px; padding: 1px 2px 1px 9px; border-radius: var(--r-pill);
+  display: inline-flex; align-items: center; gap: 8px;
+  min-height: 22px; padding: 1px 4px 1px 9px; border-radius: var(--r-pill);
   background: var(--dim-bg); border: 1px solid var(--dim-line);
-  color: var(--dim-ink); font-size: var(--fs-xs); font-weight: 600; white-space: nowrap;
+  color: var(--dim-ink); font-size: var(--fs-body); font-weight: 600; white-space: nowrap;
 }
 /* Drag-to-reorder (Columns/Rows): a grip is the only draggable part so the pill's controls still work.
    The dragged pill dims; a hovered drop-target pill shows an insertion outline. */
@@ -128,24 +128,24 @@
 .ws-pill--measure { background: var(--meas-bg); border-color: var(--meas-line); color: var(--meas-ink); }
 /* Colour-mark pill (P7): violet, distinct from dimension (blue) and measure (teal). */
 .ws-pill--color { background: var(--enc-bg); border-color: var(--enc-line); color: var(--enc-ink); }
-.ws-pill__agg, .ws-pill__op { font-size: 11px; padding: 1px 4px; border-radius: 4px; box-shadow: none; }
+.ws-pill__agg, .ws-pill__op { font-size: var(--fs-body); padding: 1px 4px; border-radius: var(--r); box-shadow: none; }
 /* T04-07 percentile box: a narrow input, its % unit, and an inline message (icon + text) when the value is not 0-100. */
-.ws-pill__pct { display: inline-flex; align-items: center; gap: 2px; flex-wrap: wrap; }
-.ws-pill__pctbox { display: inline-flex; align-items: center; gap: 2px; flex: none; }
+.ws-pill__pct { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.ws-pill__pctbox { display: inline-flex; align-items: center; gap: 4px; flex: none; }
 .ws-pill__val.ws-pill__pctin { width: 44px; text-align: right; }
-.ws-pill__unit { font-size: 11px; }
-.ws-pill__pcterr { display: inline-flex; align-items: center; gap: var(--s1); flex-basis: 100%; color: var(--danger-ink); font-size: var(--fs-xs); white-space: normal; }
+.ws-pill__unit { font-size: var(--fs-body); }
+.ws-pill__pcterr { display: inline-flex; align-items: center; gap: var(--s1); flex-basis: 100%; color: var(--danger-ink); font-size: var(--fs-body); white-space: normal; }
 .ws-pill__pcterr[hidden] { display: none; }
-.ws-pill__val { width: 78px; padding: 1px var(--s2); font-size: 11px; }
+.ws-pill__val { width: 78px; padding: 1px var(--s2); font-size: var(--fs-body); }
 .ws-pill__filter { display: inline-flex; gap: 4px; align-items: center; }
 /* P14 filter controls: a compact multi-select for `in`, two bounds for `between`. */
-.ws-pill__in { font-size: 11px; min-width: 96px; max-width: 150px; padding: 1px; }
-.ws-pill__range { display: inline-flex; gap: 3px; align-items: center; }
+.ws-pill__in { font-size: var(--fs-body); min-width: 96px; max-width: 150px; padding: 1px; }
+.ws-pill__range { display: inline-flex; gap: 4px; align-items: center; }
 .ws-pill__range .ws-pill__val { width: 56px; }
 .ws-pill__range-sep { color: var(--ink-3); }
 .ws-pill__ctl { display: inline-flex; gap: 4px; align-items: center; }
 /* Convert-role toggle: a bordered chip so it reads as an action distinct from the remove icon. */
-.ws-pill__conv { border: 1px solid currentColor; border-radius: 4px; opacity: .65; font-weight: 700; line-height: 1; padding: 1px 4px; }
+.ws-pill__conv { border: 1px solid currentColor; border-radius: var(--r); opacity: .65; font-weight: 700; line-height: 1; padding: 1px 4px; }
 .ws-pill__conv:hover { opacity: 1; }
 .ws-pill .iconbtn { color: inherit; width: 18px; height: 18px; padding: 0; }
 .ws-pill .iconbtn.ws-pill__conv { width: auto; min-width: 18px; padding: 0 4px; }
@@ -159,14 +159,14 @@
    Keep only / Exclude / clear actions. */
 .ws-select {
   display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap;
-  padding: var(--s2) var(--s3); font-size: var(--fs-xs);
-  background: var(--enc-bg); border: 1px solid var(--enc-line); border-radius: var(--r-ctl); color: var(--enc-ink);
+  padding: var(--s2) var(--s2); font-size: var(--fs-body);
+  background: var(--enc-bg); border: 1px solid var(--enc-line); border-radius: var(--r); color: var(--enc-ink);
 }
 .ws-select__icon { font-weight: 700; }
 .ws-select__label { font-weight: 600; }
 .ws-select__btn {
-  height: calc(var(--ctl-h) - 4px); padding: 0 var(--s2); font-size: var(--fs-xs); font-weight: 600;
-  color: var(--enc-ink); background: var(--surface); border: 1px solid var(--enc-line); border-radius: var(--r-ctl); cursor: pointer;
+  height: calc(var(--ctl-h) - 4px); padding: 0 var(--s2); font-size: var(--fs-body); font-weight: 600;
+  color: var(--enc-ink); background: var(--surface); border: 1px solid var(--enc-line); border-radius: var(--r); cursor: pointer;
 }
 .ws-select__btn:hover { background: var(--surface-2); }
 .ws-select__btn.is-active { background: var(--enc-ink); color: var(--on-ink); border-color: var(--enc-ink); }
@@ -179,15 +179,15 @@
 .ws-pill--drill { background: var(--warn-bg); border-color: var(--warn-line); color: var(--warn-ink); }
 .ws-drill {
   display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap;
-  padding: var(--s2) var(--s3); font-size: var(--fs-xs);
-  background: var(--warn-bg); border: 1px solid var(--warn-line); border-radius: var(--r-ctl); color: var(--warn-ink);
+  padding: var(--s2) var(--s2); font-size: var(--fs-body);
+  background: var(--warn-bg); border: 1px solid var(--warn-line); border-radius: var(--r); color: var(--warn-ink);
 }
 .ws-drill__icon { font-weight: 700; }
 .ws-drill__crumbs { display: flex; align-items: center; gap: var(--s1); flex-wrap: wrap; }
 .ws-drill__sep { color: var(--warn-ink); opacity: .6; }
 .ws-drill__crumb {
-  height: calc(var(--ctl-h) - 6px); padding: 0 var(--s2); font-size: var(--fs-xs); font-weight: 600;
-  color: var(--warn-ink); background: var(--surface); border: 1px solid var(--warn-line); border-radius: var(--r-ctl); cursor: pointer;
+  height: calc(var(--ctl-h) - 6px); padding: 0 var(--s2); font-size: var(--fs-body); font-weight: 600;
+  color: var(--warn-ink); background: var(--surface); border: 1px solid var(--warn-line); border-radius: var(--r); cursor: pointer;
 }
 .ws-drill__crumb:hover { background: var(--surface-2); }
 .ws-drill__crumb.is-current { background: var(--warn-ink); color: var(--on-ink); border-color: var(--warn-ink); cursor: default; }
@@ -203,8 +203,8 @@
    the open tool reads as selected (accent fill + edge + underline + weight). */
 .ws-tool {
   display: inline-flex; align-items: center; gap: var(--s1); height: var(--ctl-h); padding: 0 var(--s2);
-  border: 1px solid transparent; border-radius: var(--r-ctl); background: transparent; color: var(--ink-2);
-  font-size: var(--fs-sm); cursor: pointer;
+  border: 1px solid transparent; border-radius: var(--r); background: transparent; color: var(--ink-2);
+  font-size: var(--fs-body); cursor: pointer;
   transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease),
               box-shadow var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
 }
@@ -221,7 +221,7 @@
 .ws-tool__badge {
   min-width: 16px; height: 16px; padding: 0 4px; border-radius: var(--r-pill);
   display: inline-flex; align-items: center; justify-content: center;
-  font-size: 11px; font-weight: 700; color: var(--on-accent); background: var(--accent);
+  font-size: var(--fs-body); font-weight: 700; color: var(--on-accent); background: var(--accent);
 }
 .ws-more { display: inline-flex; }
 .ws-fieldset > summary { cursor: pointer; }
@@ -229,20 +229,20 @@
 /* T02-34 cast tag: icon + "as Number" text, on a field chip and on its pills. */
 /* On a chip the tag sits on its own line under the name, so the name is never squeezed out. */
 .ws-field.is-cast { flex-wrap: wrap; }
-.ws-field .ws-cast { order: 9; flex: 0 0 auto; margin-left: 22px; font-size: 10px; }
-.ws-cast { flex: none; display: inline-flex; align-items: center; gap: 2px; padding: 0 var(--s1); font-size: 11px; line-height: 16px; color: var(--ink-2); border: 1px solid var(--line); border-radius: var(--r-ctl); white-space: nowrap; }
+.ws-field .ws-cast { order: 9; flex: 0 0 auto; margin-left: 24px; font-size: var(--fs-body); }
+.ws-cast { flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 0 var(--s1); font-size: var(--fs-body); line-height: 16px; color: var(--ink-2); border: 1px solid var(--line); border-radius: var(--r); white-space: nowrap; }
 /* The one open tool's editor: a card with its pills over a drop zone. */
 .ws-toolpanel {
   display: flex; flex-direction: column; gap: var(--s2);
-  padding: var(--s3); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-ctl);
+  padding: var(--s2); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r);
 }
 .ws-toolpanel__head { display: flex; align-items: center; justify-content: space-between; }
 .ws-toolpanel__head > .iconbtn:last-child { margin-right: calc(-1 * var(--s2)); }  /* ✕ glyph flush with the zone's edge */
-.ws-toolpanel__title { font-size: var(--fs-xs); font-weight: 700; color: var(--ink-2); }
+.ws-toolpanel__title { font-size: var(--fs-body); font-weight: 700; color: var(--ink-2); }
 .ws-toolpanel__zone {
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2);
   min-height: var(--ctl-h); padding: 4px var(--s2);
-  border: 1px dashed var(--line-2); border-radius: var(--r-ctl); background: var(--surface);
+  border: 1px dashed var(--line-2); border-radius: var(--r); background: var(--surface);
   transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
 }
 .ws-toolpanel__zone.is-over { border-color: var(--accent); border-style: solid; background: var(--accent-soft); }
@@ -251,14 +251,14 @@
 /* Pages control (P20): a thin bar under the shelves to step/animate through a dimension's members. */
 .ws-pages {
   display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap;
-  padding: var(--s2) var(--s3); font-size: var(--fs-xs);
-  background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-ctl); color: var(--ink);
+  padding: var(--s2) var(--s2); font-size: var(--fs-body);
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r); color: var(--ink);
 }
 .ws-pages__icon { font-weight: 700; color: var(--ink-3); }
 .ws-pages__member { font-weight: 600; font-variant-numeric: tabular-nums; }
 .ws-pages__btn {
-  height: calc(var(--ctl-h) - 4px); padding: 0 var(--s2); font-size: var(--fs-xs); font-weight: 600;
-  color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-ctl); cursor: pointer;
+  height: calc(var(--ctl-h) - 4px); padding: 0 var(--s2); font-size: var(--fs-body); font-weight: 600;
+  color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); cursor: pointer;
 }
 .ws-pages__btn:hover { background: var(--surface-2); }
 .ws-pages__btn.is-active { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
@@ -266,28 +266,28 @@
 /* Format panel (P10): opens as a card directly under the view bar (P17). */
 .ws-format {
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s4);
-  padding: var(--s3); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-ctl);
+  padding: var(--s2); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r);
 }
-.ws-fmt-field { display: inline-flex; align-items: center; gap: var(--s2); font-size: var(--fs-xs); color: var(--ink-3); }
+.ws-fmt-field { display: inline-flex; align-items: center; gap: var(--s2); font-size: var(--fs-body); color: var(--ink-3); }
 .ws-fmt-check { cursor: pointer; gap: var(--s1); }
-.ws-fmt-label { font-size: var(--fs-xs); color: var(--ink-3); white-space: nowrap; }
-.ws-fmt-select, .ws-fmt-input { height: 28px; font-size: 11px; }
+.ws-fmt-label { font-size: var(--fs-body); color: var(--ink-3); white-space: nowrap; }
+.ws-fmt-select, .ws-fmt-input { height: 28px; font-size: var(--fs-body); }
 .ws-fmt-select { padding: 0 var(--s1); max-width: 116px; }
 .ws-fmt-input { padding: 0 var(--s2); width: 96px; }
 
 /* The chart card: view-control head, optional result notice, then the chart pane (scrolls on its own).
    Not overflow-clipped, so the head's menus can extend past the card. */
 .ws-chart-card { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--surface);
-  border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--elev-2); margin: var(--s4) var(--s5); }
-.ws-chart { position: relative; flex: 1; min-height: 0; overflow: auto; padding: var(--s5); border-radius: 0 0 var(--r) var(--r); }
+  border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--elev-2); margin: var(--s4) var(--s4); }
+.ws-chart { position: relative; flex: 1; min-height: 0; overflow: auto; padding: var(--s4); border-radius: 0 0 var(--r) var(--r); }
 /* A result fresh from ClickHouse fades in (ECharts animates its own canvas). */
 .ws-chart.is-fresh > :not(.ws-chart-canvas) { animation: fade-in var(--dur) var(--ease-out); }
 
 /* View bar (chart card head): chart type on the left; sort · format · export · refresh on the right.
    Quiet ghost controls — the current value is the label, no field captions. */
-.ws-chart-head { position: relative; z-index: 2; flex: none; padding: var(--s3) var(--s5) 0; display: grid; gap: var(--s2); }
-.ws-viewbar { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; }
-.ws-viewbar__group { display: flex; align-items: center; gap: var(--s3); min-width: 0; }
+.ws-chart-head { position: relative; z-index: 2; flex: none; padding: var(--s2) var(--s4) 0; display: grid; gap: var(--s2); }
+.ws-viewbar { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
+.ws-viewbar__group { display: flex; align-items: center; gap: var(--s2); min-width: 0; }
 .ws-viewbar__group--right { margin-left: auto; }
 .ws-viewbar__icons { display: flex; align-items: center; gap: var(--s1); }
 .ws-viewbar__btn.is-active { background: var(--accent-soft); color: var(--accent-ink); box-shadow: inset 0 -2px 0 var(--accent); }
@@ -300,8 +300,8 @@
 .ws-pick { display: inline-flex; min-width: 0; }
 .ws-pick__btn {
   display: inline-flex; align-items: center; gap: var(--s2); height: var(--ctl-h); min-width: 0; padding: 0 var(--s2);
-  border: 1px solid transparent; border-radius: var(--r-ctl); background: transparent; color: var(--ink);
-  font: inherit; font-size: var(--fs-sm); font-weight: 600; cursor: pointer;
+  border: 1px solid transparent; border-radius: var(--r); background: transparent; color: var(--ink);
+  font: inherit; font-size: var(--fs-body); font-weight: 600; cursor: pointer;
   transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
 }
 .ws-pick__btn .icon { flex: none; color: var(--ink-2); }
@@ -316,7 +316,7 @@
 .ws-charttypes { grid-template-columns: repeat(2, minmax(176px, 1fr)); }
 /* P22 Show Me: a grid of every chart type. Greyed = the fields can't draw it (reason in title + status);
    recommended = accent outline + "Recommended" text; current = soft fill + check icon (never colour alone). */
-.ws-showme-toggle { display: inline-flex; align-items: center; gap: var(--s1); width: auto; padding-inline: var(--s2); font-size: var(--fs-xs); }
+.ws-showme-toggle { display: inline-flex; align-items: center; gap: var(--s1); width: auto; padding-inline: var(--s2); font-size: var(--fs-body); }
 .ws-showme { flex: none; flex-direction: column; flex-wrap: nowrap; align-items: stretch; }
 /* Rows keep their natural height; past ~3 rows the grid scrolls inside the card so the chart keeps its room. */
 .ws-showme__grid {
@@ -325,8 +325,8 @@
 }
 .ws-showme__tile {
   position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--s1);
-  min-height: calc(var(--ctl-h) * 2); padding: var(--s2); font-size: var(--fs-xs); color: var(--ink);
-  background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r-ctl); cursor: pointer;
+  min-height: calc(var(--ctl-h) * 2); padding: var(--s2); font-size: var(--fs-body); color: var(--ink);
+  background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r); cursor: pointer;
 }
 .ws-showme__tile:hover:not([aria-disabled="true"]) { border-color: var(--accent); }
 .ws-showme__tile[aria-pressed="true"] { background: var(--accent-soft); }
@@ -340,26 +340,26 @@
    info icon + text carry the meaning, never colour alone. */
 .ws-chart-notice {
   flex: none; display: flex; align-items: center; gap: var(--s1);
-  margin: 0; padding: var(--s2) var(--s5) 0; font-size: var(--fs-xs); color: var(--ink-3);
+  margin: 0; padding: var(--s2) var(--s4) 0; font-size: var(--fs-body); color: var(--ink-3);
   animation: fade-in var(--dur) var(--ease-out);
 }
 .ws-chart-notice .icon { flex: none; }
 /* The library needs a definitely-sized host; fill the chart pane inside its padding. --chart-min-w /
    --chart-min-h (chart.js, chartFit) keep a slot per category; past that, the pane scrolls. */
 .ws-chart-canvas { position: absolute; inset: var(--s4); min-width: var(--chart-min-w, 0px); min-height: max(240px, var(--chart-min-h, 0px)); }
-.ws-kpi-row { display: flex; flex-wrap: wrap; gap: var(--s5); align-items: stretch; justify-content: center; height: 100%; }
+.ws-kpi-row { display: flex; flex-wrap: wrap; gap: var(--s4); align-items: stretch; justify-content: center; height: 100%; }
 .ws-kpi { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; min-width: 120px; }
 /* KPI sparkline (P11): inline SVG trend under the headline number, brand-accented. */
 .ws-spark { width: 132px; height: 30px; margin: var(--s2) 0 2px; overflow: visible; }
 .ws-spark__line { stroke: var(--accent); stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
 .ws-spark__dot { fill: var(--accent); }
-.ws-hint { color: var(--ink-3); font-size: var(--fs-sm); padding: var(--s5); text-align: center; max-width: 480px; margin: auto; line-height: 1.5; }
+.ws-hint { color: var(--ink-3); font-size: var(--fs-body); padding: var(--s4); text-align: center; max-width: 480px; margin: auto; line-height: 1.5; }
 .ws-hint--warn { color: var(--danger-ink); }
-.ws-loading { color: var(--ink-3); padding: var(--s5); animation: fade-in var(--dur) var(--ease) 150ms both; } /* only shows if the wait is noticeable */
+.ws-loading { color: var(--ink-3); padding: var(--s4); animation: fade-in var(--dur) var(--ease) 150ms both; } /* only shows if the wait is noticeable */
 
 /* Crosstab (pivot) — Rows shelf = left stub, Columns shelf = top header, measures = cells.
    Natural width so wide pivots scroll horizontally inside .ws-chart. */
-.xt-wrap { display: flex; flex-direction: column; gap: var(--s3); }
+.xt-wrap { display: flex; flex-direction: column; gap: var(--s2); }
 .xtab { width: auto; min-width: 100%; }
 .xtab th, .xtab td { border: 1px solid var(--line); max-width: 220px; }
 /* Multi-row header can't all stick at top:0 without overlapping — opt out of the flat-table sticky. */
@@ -375,8 +375,8 @@
 
 /* P34: honest worksheet notices — invalid filter pill + "first 200 values" cap note */
 .ws-pill--invalid { border-style: dashed; border-color: var(--danger-line); background: var(--danger-bg); color: var(--danger-ink); }
-.ws-pill__in-wrap { display: inline-flex; flex-direction: column; gap: 2px; }
-.ws-note { margin: 2px 0 0; font-size: var(--fs-xs); color: var(--ink-3); }
+.ws-pill__in-wrap { display: inline-flex; flex-direction: column; gap: 4px; }
+.ws-note { margin: 4px 0 0; font-size: var(--fs-body); color: var(--ink-3); }
 
 /* P35 Date range editor (in the Date range tool panel): the range, comparison and resolved days. */
 .ws-period { display: grid; gap: var(--s2); }
@@ -385,7 +385,7 @@
 .ws-shelf__note--warn { color: var(--danger-ink); }
 
 /* P35 scorecard: change vs the comparison (arrow + signed % + tone — never colour alone) and target bar. */
-.ws-kpi__change { display: inline-flex; align-items: center; gap: 2px; margin-top: var(--s1); font-size: var(--fs-sm); font-weight: 600; }
+.ws-kpi__change { display: inline-flex; align-items: center; gap: 4px; margin-top: var(--s1); font-size: var(--fs-body); font-weight: 600; }
 .ws-kpi__change--good { color: var(--up); }
 .ws-kpi__change--bad { color: var(--down); }
 .ws-kpi__change--neutral { color: var(--ink-3); }
@@ -402,15 +402,15 @@
 .xt-cf__num { position: relative; }
 .xt-cf__icon { position: relative; display: inline-flex; vertical-align: -3px; margin-right: var(--s1); }
 .xt-cf__icon .icon { width: 14px; height: 14px; }
-.xt-bar { position: absolute; top: 3px; bottom: 3px; border-radius: 2px; background: color-mix(in srgb, var(--chart-cat-1) 30%, transparent); }
+.xt-bar { position: absolute; top: 3px; bottom: 3px; border-radius: var(--r); background: color-mix(in srgb, var(--chart-cat-1) 30%, transparent); }
 .xt-bar--neg { background: color-mix(in srgb, var(--chart-cat-6) 34%, transparent); }
 .xt-rule--good { background: var(--ok-bg); color: var(--ok-ink); }
 .xt-rule--bad { background: var(--danger-bg); color: var(--danger-ink); }
 .xt-rule--warn { background: var(--warn-bg); color: var(--warn-ink); }
 .xt-rule--info { background: var(--surface-3); color: var(--ink); } /* neutral: the accent is the brand red */
-.xt-legend { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s4); font-size: var(--fs-xs); color: var(--ink-2); }
+.xt-legend { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s4); font-size: var(--fs-body); color: var(--ink-2); }
 .xt-legend__item { display: inline-flex; align-items: center; gap: var(--s1); }
-.xt-legend__rule { padding: 1px var(--s2); border-radius: var(--r-ctl); }
+.xt-legend__rule { padding: 1px var(--s2); border-radius: var(--r); }
 .xt-legend__name { font-weight: 600; }
 .xt-legend__scale { width: 64px; height: 8px; border-radius: var(--r-pill); box-shadow: inset 0 0 0 1px var(--line); }
 .xt-legend__note { color: var(--ink-3); font-style: italic; }
@@ -424,7 +424,7 @@
 /* Full screen: the chart card alone, edge to edge (Fullscreen API, or the .is-presenting fallback). */
 .ws-chart-card:fullscreen, .ws-chart-card.is-presenting { margin: 0; border-radius: 0; border: 0; background: var(--surface); }
 .ws-chart-card.is-presenting { position: fixed; inset: 0; z-index: 50; }
-.ws-chart-card:fullscreen .ws-chart, .ws-chart-card.is-presenting .ws-chart { padding: var(--s7); }
+.ws-chart-card:fullscreen .ws-chart, .ws-chart-card.is-presenting .ws-chart { padding: var(--s6); }
 
 /* The field-pane toggle exists only for the phone layout. */
 .ws-fields-toggle { display: none; justify-self: start; gap: var(--s1); }
@@ -440,10 +440,10 @@
   .worksheet.is-fields-open .ws-fields { display: flex; }
   .ws-fields-toggle { display: inline-flex; }
   .ws-main { overflow: auto; }
-  .ws-shelves { padding: var(--s2) var(--s3); }
+  .ws-shelves { padding: var(--s2) var(--s2); }
   .ws-shelf { grid-template-columns: 68px 1fr; }
-  .ws-chart-card { flex: none; min-height: 380px; margin: var(--s3); }
-  .ws-chart-head { padding-inline: var(--s3); }
+  .ws-chart-card { flex: none; min-height: 380px; margin: var(--s2); }
+  .ws-chart-head { padding-inline: var(--s2); }
   /* The view bar wraps: chart type on its own line, then sort + the icon group sharing the next. */
   .ws-viewbar__group--right { margin-left: 0; width: 100%; justify-content: space-between; flex-wrap: wrap; gap: var(--s2); }
   .ws-viewbar__icons > :last-child { margin-right: 0; }
@@ -469,8 +469,8 @@
 }
 
 /* ---- P40 shared filters & field choices ----------------------------------- */
-.ws-pill__badge { flex: none; padding: 0 var(--s1); border-radius: var(--r-ctl); background: var(--surface-3); color: var(--ink-2);
-  font-size: 10px; font-weight: 700; letter-spacing: .02em; line-height: 16px; }
+.ws-pill__badge { flex: none; padding: 0 var(--s1); border-radius: var(--r); background: var(--surface-3); color: var(--ink-2);
+  font-size: var(--fs-body); font-weight: 700; letter-spacing: .02em; line-height: 16px; }
 .ws-pill--shared { box-shadow: inset 0 0 0 1px var(--line-2); }
 .ws-pill__share[aria-pressed="true"], .ws-pill__swap.is-set { color: var(--accent-ink); }
 .ws-pill__swap[aria-pressed="true"] { background: var(--accent-soft); }
@@ -482,8 +482,8 @@
 .ws-select__link { display: inline-flex; align-items: center; gap: var(--s1); }
 
 /* ---- P26 date part on a date pill: − [part] + ------------------------------- */
-.ws-pill__part { height: 18px; padding: 0 var(--s1); font-size: 11px; max-width: 120px; }
-.ws-pill__step { width: 18px; height: 18px; min-width: 18px; font-size: 13px; line-height: 1; }
+.ws-pill__part { height: 18px; padding: 0 var(--s1); font-size: var(--fs-body); max-width: 120px; }
+.ws-pill__step { width: 18px; height: 18px; min-width: 18px; font-size: var(--fs-body); line-height: 1; }
 .ws-pill__step .icon { width: 12px; height: 12px; }
 .ws-pill__step:disabled { opacity: .35; cursor: default; }
 /* P27: the measure pill's table-calculation button, accent-coloured when one is set. */
@@ -491,73 +491,73 @@
 .ws-pill__calc[aria-pressed="true"] { background: var(--accent-soft); }
 
 /* ---- P28 field pane: search, hidden toggle, ⋯ menu, rename ------------------- */
-.ws-fieldtools { display: grid; gap: var(--s2); position: sticky; top: calc(-1 * var(--s3)); z-index: 2; padding-block: var(--s1);
+.ws-fieldtools { display: grid; gap: var(--s2); position: sticky; top: calc(-1 * var(--s2)); z-index: 2; padding-block: var(--s1);
   background: color-mix(in srgb, var(--surface), var(--ink) 2%); }
 .ws-fieldtools__search { width: 100%; height: var(--ctl-h); }
-.ws-fieldtools__hidden { justify-self: start; height: 26px; font-size: var(--fs-xs); }
+.ws-fieldtools__hidden { justify-self: start; height: 26px; font-size: var(--fs-body); }
 .ws-field__menu { flex: none; }
 .ws-field__more { width: 20px; height: 20px; opacity: 0; transition: opacity var(--dur) var(--ease); }
 .ws-field:hover .ws-field__more, .ws-field__more:focus-visible, .ws-field__more[aria-expanded="true"] { opacity: 1; }
 .ws-field__menu .menu__list { right: 0; left: auto; min-width: 200px; }
 .ws-field.is-renamed .ws-field__name { font-style: italic; }
 .ws-field.is-hidden { opacity: .55; }
-.ws-field__rename { flex: 1; min-width: 0; height: 24px; font-size: var(--fs-sm); padding: 0 var(--s1); }
+.ws-field__rename { flex: 1; min-width: 0; height: 24px; font-size: var(--fs-body); padding: 0 var(--s1); }
 @media (pointer: coarse) { .ws-field__more { opacity: 1; } }
 
 /* ---- P23 worksheet chrome: undo/redo, title + caption, status bar ------------ */
-.ws-undo { display: inline-flex; gap: 2px; }
+.ws-undo { display: inline-flex; gap: 4px; }
 .ws-undo .iconbtn:disabled { opacity: .35; cursor: default; }
-.ws-titleblock { display: grid; gap: 2px; }
-.ws-titleblock__btn { justify-self: start; max-width: 100%; border: 1px solid transparent; border-radius: var(--r-ctl); background: none;
+.ws-titleblock { display: grid; gap: 4px; }
+.ws-titleblock__btn { justify-self: start; max-width: 100%; border: 1px solid transparent; border-radius: var(--r); background: none;
   padding: 0 var(--s1); margin-inline: calc(-1 * var(--s1)); color: var(--ink); cursor: text; text-align: left; font: inherit; }
 .ws-titleblock__btn:hover { border-color: var(--line-2); background: var(--surface-2); }
 .ws-titleblock__btn h2 { margin: 0; font-size: var(--fs-lead); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ws-titleblock__btn p { margin: 0; font-size: var(--fs-xs); color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-titleblock__btn p { margin: 0; font-size: var(--fs-body); color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ws-titleblock__btn.is-auto.ws-titleblock__caption p { font-style: italic; }
 .ws-titleblock__input.ws-titleblock__title { font-size: var(--fs-lead); font-weight: 600; height: 30px; width: min(480px, 100%); }
-.ws-titleblock__input.ws-titleblock__caption { font-size: var(--fs-xs); height: 24px; width: min(640px, 100%); }
-.ws-statusbar { flex: none; margin: 0; padding: var(--s1) var(--s5) var(--s2); font-size: var(--fs-xs); color: var(--ink-3);
+.ws-titleblock__input.ws-titleblock__caption { font-size: var(--fs-body); height: 24px; width: min(640px, 100%); }
+.ws-statusbar { flex: none; margin: 0; padding: var(--s1) var(--s4) var(--s2); font-size: var(--fs-body); color: var(--ink-3);
   border-top: 1px solid var(--line); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media print { .ws-statusbar, .ws-titleblock { display: none !important; } }
 
 /* P33: the loading line carries a Cancel button. */
-.ws-loading { display: flex; align-items: center; gap: var(--s3); }
+.ws-loading { display: flex; align-items: center; gap: var(--s2); }
 .ws-loading__cancel { height: 28px; }
 
 /* ---- P30 filter cards (above the chart) and the new filter editors ---------- */
 .ws-filtercards { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: flex-start; }
-.ws-fcard { display: grid; gap: 2px; min-width: 150px; max-width: 280px; padding: var(--s1) var(--s2); border: 1px solid var(--line); border-radius: var(--r-ctl); background: var(--surface-2); }
+.ws-fcard { display: grid; gap: 4px; min-width: 150px; max-width: 280px; padding: var(--s1) var(--s2); border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); }
 .ws-fcard.is-invalid { border-style: dashed; border-color: var(--danger-line); }
 .ws-fcard__head { display: flex; align-items: center; gap: var(--s1); }
-.ws-fcard__name { flex: 1; min-width: 0; font-size: var(--fs-xs); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ws-fcard__body { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1); font-size: var(--fs-xs); }
+.ws-fcard__name { flex: 1; min-width: 0; font-size: var(--fs-body); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-fcard__body { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1); font-size: var(--fs-body); }
 .ws-fcard__op { color: var(--ink-3); }
-.ws-fcard__list { display: grid; gap: 2px; max-height: 96px; overflow: auto; font-size: var(--fs-xs); }
+.ws-fcard__list { display: grid; gap: 4px; max-height: 96px; overflow: auto; font-size: var(--fs-body); }
 .ws-fcard__item { display: flex; align-items: center; gap: var(--s1); cursor: pointer; }
 .ws-fcard__item input { margin: 0; width: 14px; height: 14px; }
 .ws-pill__top { display: inline-flex; align-items: center; gap: var(--s1); }
 .ws-pill__topn { width: 48px; }
-.ws-pill__topby, .ws-pill__topdir, .ws-pill__rel { height: 22px; font-size: 11px; max-width: 160px; }
+.ws-pill__topby, .ws-pill__topdir, .ws-pill__rel { height: 22px; font-size: var(--fs-body); max-width: 160px; }
 /* P21 totals: bold on a tinted row / column, a heavier rule above the grand total. */
 .xtab .xt-total { font-weight: 600; background: var(--surface-2); }
 .xtab tr.xt-grand > * { border-top: 2px solid var(--line-2); }
 
 /* ---- P32 parameters: controls on the card, bound filter values ---------------- */
 .ws-params { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s4); align-items: center; }
-.ws-param { display: inline-flex; align-items: center; gap: var(--s2); font-size: var(--fs-xs); }
+.ws-param { display: inline-flex; align-items: center; gap: var(--s2); font-size: var(--fs-body); }
 .ws-param__name { font-weight: 600; color: var(--ink-2); }
 .ws-param__range { width: 140px; accent-color: var(--accent); }
 .ws-param__num { width: 96px; height: 28px; }
-.ws-pill__pwrap { display: inline-flex; align-items: center; gap: 2px; }
-.ws-pill__paramsel { height: 22px; font-size: 11px; max-width: 170px; }
+.ws-pill__pwrap { display: inline-flex; align-items: center; gap: 4px; }
+.ws-pill__paramsel { height: 22px; font-size: var(--fs-body); max-width: 170px; }
 .ws-pill__param[aria-pressed="true"] { color: var(--accent-ink); background: var(--accent-soft); }
 
 /* T01-19 tooltip text editor (in the Tooltip tool panel): template, field chips, live preview. */
 .ws-tipedit { display: grid; gap: var(--s2); }
 .ws-tipedit__text { width: 100%; resize: vertical; font-family: inherit; }
 .ws-tipedit__chips { display: flex; flex-wrap: wrap; gap: var(--s1); }
-.ws-tipedit__chip { font-size: var(--fs-xs); padding: 2px var(--s2); }
-.ws-tipedit__preview { padding: var(--s2) var(--s3); border: 1px solid var(--line-2); border-radius: var(--r-ctl); background: var(--surface-2); color: var(--ink); font-size: var(--fs-xs); overflow-wrap: anywhere; }
+.ws-tipedit__chip { font-size: var(--fs-body); padding: 2px var(--s2); }
+.ws-tipedit__preview { padding: var(--s2) var(--s2); border: 1px solid var(--line-2); border-radius: var(--r); background: var(--surface-2); color: var(--ink); font-size: var(--fs-body); overflow-wrap: anywhere; }
 
 /* Member colours (T01-20): a list of members, each with the fixed swatches and Reset. The swatch/dot
    fill is the user's chosen data colour (workbook data), set inline; chrome uses tokens. */
@@ -565,30 +565,30 @@
 .ws-memcol__body { display: grid; gap: var(--s2); max-height: 260px; overflow: auto; }
 .ws-memcol__row { display: grid; grid-template-columns: auto minmax(60px, 120px) 1fr auto; align-items: center; gap: var(--s2); }
 .ws-memcol__dot { width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--line-2); background: var(--surface-2); }
-.ws-memcol__name { font-size: var(--fs-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ws-memcol__swatches { display: flex; flex-wrap: wrap; gap: 3px; }
-.ws-memcol__swatch { width: 16px; height: 16px; padding: 0; border: 1px solid var(--line-2); border-radius: 3px; color: var(--ink); font-size: 10px; line-height: 1; cursor: pointer; }
+.ws-memcol__name { font-size: var(--fs-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-memcol__swatches { display: flex; flex-wrap: wrap; gap: 4px; }
+.ws-memcol__swatch { width: 16px; height: 16px; padding: 0; border: 1px solid var(--line-2); border-radius: var(--r); color: var(--ink); font-size: var(--fs-body); line-height: 1; cursor: pointer; }
 .ws-memcol__swatch[aria-pressed="true"] { outline: 2px solid var(--ink); outline-offset: 1px; }
-.ws-memcol__note { margin: 0; color: var(--ink-3); font-size: var(--fs-xs); }
+.ws-memcol__note { margin: 0; color: var(--ink-3); font-size: var(--fs-body); }
 
 /* T02-29 member labels: the filter list's secondary raw value and the "Edit member labels…" dialog. */
-.ws-fcard__raw { color: var(--ink-3); font-size: var(--fs-xs); margin-left: var(--s1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-fcard__raw { color: var(--ink-3); font-size: var(--fs-body); margin-left: var(--s1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ws-fcard__raw::before { content: "· "; }
-.memlab-dialog { width: min(520px, calc(100vw - 2 * var(--s5))); }
-.memlab-dialog[open] { display: flex; flex-direction: column; max-height: calc(100vh - 2 * var(--s5)); }
-.memlab-dialog__body { display: grid; gap: var(--s3); overflow: auto; min-height: 0; align-content: start; }
+.memlab-dialog { width: min(520px, calc(100vw - 2 * var(--s4))); }
+.memlab-dialog[open] { display: flex; flex-direction: column; max-height: calc(100vh - 2 * var(--s4)); }
+.memlab-dialog__body { display: grid; gap: var(--s2); overflow: auto; min-height: 0; align-content: start; }
 .memlab-dialog .dialog__foot { flex: none; }
-.memlab-hint, .memlab-note { margin: 0; color: var(--ink-3); font-size: var(--fs-xs); }
+.memlab-hint, .memlab-note { margin: 0; color: var(--ink-3); font-size: var(--fs-body); }
 .memlab-list { display: grid; gap: var(--s2); }
-.memlab-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: var(--s3); align-items: center; }
-.memlab-value { font-size: var(--fs-sm); color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
+.memlab-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: var(--s2); align-items: center; }
+.memlab-value { font-size: var(--fs-body); color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
 .memlab-input { width: 100%; }
-.memlab-error { color: var(--danger-ink); font-size: var(--fs-sm); }
+.memlab-error { color: var(--danger-ink); font-size: var(--fs-body); }
 .memlab-error:empty { display: none; }
 .memlab-reset { margin-right: auto; }
 
 /* T03-29 named hierarchies: the field pane group and the dialog. Tokens only. */
-.hier-group { display: flex; flex-direction: column; gap: 3px; margin-bottom: var(--s2); }
+.hier-group { display: flex; flex-direction: column; gap: 4px; margin-bottom: var(--s2); }
 .hier-group__actions { display: flex; flex-direction: column; gap: var(--s1); }
 .hier-group__actions .btn { white-space: nowrap; width: 100%; justify-content: flex-start; padding-inline: var(--s2); }
 .hier-field { border-color: var(--line); background: var(--surface-2); }
@@ -599,9 +599,9 @@
 .hier-field .ws-field__add:focus-visible, .hier-group__actions .btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .hier-levelbox { display: grid; gap: var(--s2); }
 .hier-levels { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s1); }
-.hier-level { display: flex; align-items: center; gap: var(--s2); padding: var(--s1) var(--s2); border: 1px solid var(--line); border-radius: var(--r-ctl); background: var(--surface); }
+.hier-level { display: flex; align-items: center; gap: var(--s2); padding: var(--s1) var(--s2); border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); }
 .hier-level__n { color: var(--ink-3); font-variant-numeric: tabular-nums; }
 .hier-level__name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
-.hier-levels__empty { color: var(--ink-2); font-size: var(--fs-sm); }
+.hier-levels__empty { color: var(--ink-2); font-size: var(--fs-body); }
 .hier-add { display: flex; align-items: end; gap: var(--s2); }
 .hier-add .params-field { flex: 1 1 auto; }

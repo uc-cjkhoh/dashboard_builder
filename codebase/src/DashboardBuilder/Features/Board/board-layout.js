@@ -1,6 +1,6 @@
 // Dashboard board geometry — pure, DOM-free (tests/js/board-layout.test.mjs). Turns widget cells ({ x, y, w, h } on the
 // 12-column grid) into pixel rectangles for a given panel width. board.js reads the row height and gap from the design
-// tokens (`calc(var(--ctl-h) * 2)`, `var(--s3)`) and passes them in; nothing here knows a pixel constant of its own.
+// tokens (`calc(var(--ctl-h) * 2)`, `var(--s2)`) and passes them in; nothing here knows a pixel constant of its own.
 //
 //   wide panel     column width = (panel − 11 gaps) / 12; a widget is w columns × h rows, gaps included between cells
 //   narrow panel   below STACK_BELOW the grid is unusable (a 2-column widget would be ~110px), so widgets stack full width

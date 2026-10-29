@@ -45,3 +45,30 @@ test("the multi-layer body background keeps its colour layer valid (wash and bas
   const core = css.find(([f]) => f.endsWith("core.css"))[1];
   assert.match(core, /body \{[^}]*background-color: var\(--bg\);[^}]*background-image: var\(--wash\)/);
 });
+
+// Design rules (CLAUDE.md): one radius, a 4/8/16/24 space scale, 14/16 body and 24/32 title sizes,
+// saturation capped near 70%.
+const coreCss = css.find(([f]) => f.endsWith("core.css"))[1];
+test("space, type and radius tokens are the short fixed scales", () => {
+  assert.match(coreCss, /--s1: 4px; --s2: 8px; --s4: 16px; --s6: 24px;/);
+  assert.match(coreCss, /--fs-body: 14px; --fs-lead: 16px; --fs-title: 24px; --fs-display: 32px;/);
+  assert.match(coreCss, /--r: 8px; --r-pill: 999px;/);
+  const all = css.map(([, t]) => t).join("\n");
+  assert.doesNotMatch(all, /var\(--(s3|s5|s7|fs-xs|fs-sm|fs-kpi|r-ctl|r-lg)\)/);
+});
+test("no ad-hoc screen font sizes or radii outside the tokens", () => {
+  for (const [f, t] of css) {
+    const screen = t.split("@media print")[0];
+    assert.doesNotMatch(screen, /font-size:\s*\d+(\.\d+)?px/, f);
+    assert.doesNotMatch(screen, /border-radius:\s*(?!999px)[1-9]\d*px/, f);
+  }
+});
+test("token colours keep HSL saturation at or near 70% (<= 72% after 8-bit rounding)", () => {
+  const hex = (h) => { const n = parseInt(h.slice(1), 16), r = (n >> 16) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn; return d && l < 0.9 ? d / (1 - Math.abs(2 * l - 1)) : 0; }; // near-white tints are exempt (8-bit rounding)
+  for (const [, block] of coreCss.matchAll(/:root[^{]*\{([^}]*)\}/g))
+    for (const line of block.split("\n")) {
+      if (/--print|--chart-axis/.test(line)) continue;
+      for (const [h] of line.matchAll(/#[0-9a-f]{6}\b/gi)) assert.ok(hex(h) <= 0.72, `${h} in: ${line.trim().slice(0, 50)}`);
+    }
+});

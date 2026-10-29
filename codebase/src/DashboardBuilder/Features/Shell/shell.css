@@ -26,10 +26,10 @@
 .sidebar__brand {
   display: flex;
   align-items: center;
-  gap: var(--s3);
+  gap: var(--s2);
   flex: none;
   min-height: var(--topbar-h);  /* lines up with .canvas__bar */
-  padding: var(--s2) var(--s5);  /* same 20px gutter as .sidebar__section: mark + toggle align with the content below */
+  padding: var(--s2) var(--s4);  /* same 20px gutter as .sidebar__section: mark + toggle align with the content below */
   border-bottom: 1px solid var(--glass-line);
 }
 .sidebar__mark {
@@ -44,7 +44,7 @@
 .sidebar__mark svg { width: 18px; height: 18px; }
 .sidebar__brand-text { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
 .sidebar__brand-name { font-weight: 700; font-size: var(--fs-body); letter-spacing: .01em; }
-.sidebar__brand-sub { font-size: var(--fs-xs); color: var(--ink-3); }
+.sidebar__brand-sub { font-size: var(--fs-body); color: var(--ink-3); }
 /* One line each, so the toggle never pushes the brand taller than --topbar-h. */
 .sidebar__brand-name, .sidebar__brand-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Ghost button: pulled out by its 8px glyph slack so the glyph's edge, not the box's, meets the gutter. */
@@ -59,21 +59,21 @@
 .is-sidebar-collapsed .sidebar__brand-text { display: none; }
 .is-sidebar-collapsed .sidebar__toggle { margin-inline: 0; }
 
-.sidebar__section { padding: var(--s4) var(--s5); border-bottom: 1px solid var(--glass-line); }
+.sidebar__section { padding: var(--s4) var(--s4); border-bottom: 1px solid var(--glass-line); }
 .sidebar__section--grow { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .sidebar__title {
-  font-size: var(--fs-sm);
+  font-size: var(--fs-body);
   font-weight: 600;
   text-transform: none;
   letter-spacing: 0;
   color: var(--ink-2);
-  margin-bottom: var(--s3);
+  margin-bottom: var(--s2);
 }
 .sidebar__title-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: var(--s3);
+  margin-bottom: var(--s2);
 }
 .sidebar__title-row .sidebar__title { margin-bottom: 0; }
 
@@ -89,7 +89,7 @@
   background: transparent;    /* the body wash shows through */
 }
 /* Each view fills the area below the bar and scrolls on its own. */
-.view { position: relative; flex: 1; min-height: 0; overflow: auto; padding: var(--s5); }
+.view { position: relative; flex: 1; min-height: 0; overflow: auto; padding: var(--s4); }
 /* Switching tabs: the incoming view fades in and rises 4px (CSS replays on each un-hide; dashboards.js
    replays it when one dashboard replaces another in the same view). */
 .view:not([hidden]) { animation: view-in var(--dur) var(--ease-out); }
@@ -104,9 +104,9 @@
   flex: none;
   display: flex;
   align-items: center;
-  gap: var(--s3);
+  gap: var(--s2);
   min-height: var(--topbar-h);  /* lines up with .sidebar__brand; grows if the tabs wrap */
-  padding: var(--s2) var(--s5);  /* same 20px gutter as .view: tabs + menu align with the content below */
+  padding: var(--s2) var(--s4);  /* same 20px gutter as .view: tabs + menu align with the content below */
   border-width: 0 0 1px;
   border-radius: 0;
   position: relative; z-index: 3;  /* the Workbook menu must paint above the view below */
@@ -114,4 +114,4 @@
 
 /* Light / dark toggle, right-most in the bar: as close to the Workbook ··· as that group's own buttons
    sit, and its glyph (not its 32px box) meets the right gutter, over the content's right edge. */
-.scheme { flex: none; margin-left: calc(var(--s2) - var(--s3)); margin-right: calc(-1 * var(--s2)); }
+.scheme { flex: none; margin-left: calc(var(--s2) - var(--s2)); margin-right: calc(-1 * var(--s2)); }

@@ -5,7 +5,7 @@
   display: flex;
   align-items: center;
   gap: var(--s2);
-  padding: var(--s2) var(--s3);
+  padding: var(--s2) var(--s2);
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r);
@@ -19,8 +19,8 @@
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok-ink) 25%, transparent);
 }
 .conn-summary__text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.conn-summary__host { font-size: var(--fs-sm); font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.conn-summary__meta { font-size: var(--fs-xs); color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conn-summary__host { font-size: var(--fs-body); font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conn-summary__meta { font-size: var(--fs-body); color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .conn-summary__btn { color: var(--ink-3); }
 .conn-summary__btn:hover { color: var(--ink); }
 .conn-summary__btn.iconbtn--danger:hover { color: var(--danger-ink); }
@@ -29,25 +29,25 @@
 .conn-form__actions .btn { flex: 1; }
 
 /* ---- Connection form ----------------------------------------------------- */
-.conn-form { display: grid; gap: var(--s3); animation: fade-in var(--dur) var(--ease); }
+.conn-form { display: grid; gap: var(--s2); animation: fade-in var(--dur) var(--ease); }
 .conn-advanced { display: grid; gap: var(--s2); }
-.conn-advanced > summary { cursor: pointer; color: var(--ink-2); font-size: var(--fs-sm); }
+.conn-advanced > summary { cursor: pointer; color: var(--ink-2); font-size: var(--fs-body); }
 .conn-advanced[open] > summary { margin-bottom: var(--s2); }
 .form-field { display: flex; flex-direction: column; gap: var(--s1); }
-.form-row { display: flex; gap: var(--s3); }
+.form-row { display: flex; gap: var(--s2); }
 .form-row .form-field { flex: 1; }
-.form-field label { font-size: var(--fs-xs); color: var(--ink-3); }
+.form-field label { font-size: var(--fs-body); color: var(--ink-3); }
 .form-field input[type="text"],
 .form-field input[type="number"],
 .form-field input[type="password"],
 .select {
   width: 100%;
-  padding: var(--s2) var(--s3);
-  font-size: var(--fs-sm);
+  padding: var(--s2) var(--s2);
+  font-size: var(--fs-body);
   color: var(--ink);
   background: var(--surface);
   border: 1px solid var(--line-2);
-  border-radius: var(--r-ctl);
+  border-radius: var(--r);
 }
 /* .select has a fixed control height (core.css); vertical padding on top of it clips descenders. */
 .select { padding-block: 0; }
@@ -59,12 +59,12 @@
   border-color: var(--ink-3);
   box-shadow: inset 0 -2px 0 var(--accent);
 }
-.form-check { display: flex; align-items: flex-start; gap: var(--s2); font-size: var(--fs-sm); }
+.form-check { display: flex; align-items: flex-start; gap: var(--s2); font-size: var(--fs-body); }
 /* No UA margin: the box sits on the gutter. Nudged so it centres on the first line when a label wraps. */
-.form-check input { flex: none; width: 14px; height: 14px; margin: 3px 0 0; }
-.form-check--sub input { margin-top: 2px; }
+.form-check input { flex: none; width: 14px; height: 14px; margin: 4px 0 0; }
+.form-check--sub input { margin-top: 4px; }
 /* Sub-option under a checkbox (e.g. "trust invalid cert" under Secure) + its inline warning. */
-.form-check--sub { padding-left: calc(14px + var(--s2)); font-size: var(--fs-xs); color: var(--ink-3); }  /* = parent's label x */
-.form-warn { margin: calc(-1 * var(--s1)) 0 0 calc(14px + var(--s2)); font-size: var(--fs-xs); line-height: 1.35; color: var(--warn-ink); }
+.form-check--sub { padding-left: calc(14px + var(--s2)); font-size: var(--fs-body); color: var(--ink-3); }  /* = parent's label x */
+.form-warn { margin: calc(-1 * var(--s1)) 0 0 calc(14px + var(--s2)); font-size: var(--fs-body); line-height: 1.35; color: var(--warn-ink); }
 .form-field input:disabled, .select:disabled { opacity: .55; cursor: not-allowed; }
 
