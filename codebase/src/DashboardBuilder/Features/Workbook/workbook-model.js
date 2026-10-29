@@ -15,6 +15,7 @@ import { cleanAction } from "../Dashboard/action-model.js";
 import { cleanMemberColors } from "../Dashboard/colour-model.js";
 import { checkTooltipText } from "../Dashboard/tooltip-model.js";
 import { markerSizeError } from "../Dashboard/mark-style-model.js";
+import { RAMP_CHOICES, colourRangeError } from "../Dashboard/colour-scale-model.js";
 import { cleanParameter, MAX_PARAMS } from "../Core/parameters-model.js";
 import { cleanHierarchies, hierarchyTableKey } from "../Dashboard/hierarchy-model.js";
 import { cleanCalculations } from "../Calc/calc-workbook.js";
@@ -563,6 +564,10 @@ function cleanFormat(f0, where, issues) {
   out.markBorder = oneOf(MARK_BORDERS, f.markBorder, base.markBorder, w, "mark border", issues); // T03-34
   out.markerSize = f.markerSize == null ? null : markerSizeError(f.markerSize) === null ? f.markerSize
     : (issues.push(`${w}: marker size "${f.markerSize}" — reset to Auto.`), null); // T01-22
+  out.colorRamp = RAMP_CHOICES.some(([v]) => v === f.colorRamp) ? f.colorRamp : f.colorRamp === undefined ? base.colorRamp
+    : (issues.push(`${w}: colour ramp "${f.colorRamp}" — reset to Brand.`), base.colorRamp); // T03-19
+  for (const k of ["colorMin", "colorMax"]) out[k] = f[k] == null ? null : Number.isFinite(f[k]) ? f[k] : (issues.push(`${w}: ${k} "${f[k]}" — cleared.`), null);
+  if (colourRangeError(out.colorMin, out.colorMax)) { issues.push(`${w}: the colour range minimum was not less than the maximum — cleared.`); out.colorMin = out.colorMax = null; }
   out.targetMeasure = f.targetMeasure == null ? null : Number.isInteger(f.targetMeasure) && f.targetMeasure >= 1 && f.targetMeasure <= MAX_TARGET_MEASURE ? f.targetMeasure
     : (issues.push(`${w}: target measure "${f.targetMeasure}" — cleared.`), null); // T03-12
   for (const k of ["dataLabels", "colorByDimension", "syncAxes", "paletteReverse", "downIsGood", "approximate"]) {

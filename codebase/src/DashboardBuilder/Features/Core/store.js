@@ -260,6 +260,9 @@ export const defaultFormat = () => ({
   dataLabels: false,
   colorByDimension: false,
   paletteReverse: false, // T03-33: reverse the categorical order and the continuous ramp
+  colorRamp: "brand", // T03-19: brand | blue | green | amber | violet — scatter / heatmap continuous colour
+  colorMin: null, // T03-19: pinned low end of the continuous colour scale (null = the data's)
+  colorMax: null, // T03-19: pinned high end
   xTitle: null,
   yTitle: null,
   target: null,

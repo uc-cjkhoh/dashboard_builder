@@ -1,7 +1,8 @@
 import { makeValueFormatter } from "../Core/format.js";
 import { ACCENTS, PALETTES } from "../Core/theme-model.js";
 import { pickInk } from "./contrast.js";
-import { orderedPalette, rampStops } from "./colour-model.js";
+import { orderedPalette } from "./colour-model.js";
+import { rampColours, rangeOf } from "./colour-scale-model.js";
 import { tooltipHtml } from "./tooltip-model.js";
 import { lineStep } from "./line-style-model.js";
 import { syncRange, secondaryKind } from "./axis-sync-model.js";
@@ -73,7 +74,8 @@ function tokens() {
     // Brand stops for the sequential heatmap ramp (single-hue soft→saturated, token-driven).
     brand: t("--accent", ACCENTS.crimson.light.accent),
     brandSoft: t("--accent-soft", ACCENTS.crimson.light.soft),
-    ramp: rampStops(t("--accent-soft", ACCENTS.crimson.light.soft), t("--accent", ACCENTS.crimson.light.accent), reversed()), // continuous low -> high
+    // continuous low -> high: the chosen hue (T03-19) from the accent pair or a categorical token
+    ramp: rampColours(drawing?.colorRamp, { accent: t("--accent", ACCENTS.crimson.light.accent), accentSoft: t("--accent-soft", ACCENTS.crimson.light.soft), surface: t("--surface", "#ffffff"), cat: catFallback.map((hex, i) => t(`--chart-cat-${i + 1}`, hex)) }, reversed()),
   };
 }
 
@@ -91,6 +93,7 @@ export function renderChart(container, spec) {
   disposeChart(container);
   const st = stateOf(container);
   st.paletteReverse = !!spec.format?.paletteReverse;
+  st.colorRamp = spec.format?.colorRamp; st.colorMin = spec.format?.colorMin ?? null; st.colorMax = spec.format?.colorMax ?? null; // T03-19
   st.memberColors = spec.memberColors instanceof Map ? spec.memberColors : NO_MEMBER_COLORS;
   const host = document.createElement("div");
   host.className = "ws-chart-canvas";
@@ -720,8 +723,7 @@ function buildHeatmap({ xCats, yCats, cells, format = {} }) {
   // T03-34: the cell separator stays the surface-coloured hairline unless a border is chosen.
   const cellEdge = format.markBorder && format.markBorder !== "none" ? markBorder(format.markBorder, c.muted) : { borderColor: c.surface, borderWidth: 1 };
   const vals = cells.map((d) => d[2]).filter((v) => v != null);
-  const min = vals.length ? Math.min(...vals) : 0;
-  const max = vals.length ? Math.max(...vals) : 1;
+  const { min, max } = colourScaleRange(vals);
   return {
     textStyle: { fontFamily: c.font, color: c.label },
     tooltip: {
@@ -745,7 +747,7 @@ function buildHeatmap({ xCats, yCats, cells, format = {} }) {
     },
     visualMap: {
       min, max, calculable: true, dimension: 2, orient: "horizontal", left: "center", bottom: 6,
-      inRange: { color: c.ramp },   // single-hue sequential (soft → saturated), tokens
+      inRange: { color: c.ramp }, outOfRange: { color: c.axis },   // single-hue sequential (soft → saturated), tokens; beyond a pinned end: neutral grey
       textStyle: { color: c.muted, fontFamily: c.font }, formatter: (v) => fmtVal(v),
     },
     series: [circles
@@ -1106,16 +1108,15 @@ function sizeScaler(values, accessor) {
   const min = Math.min(...nums, 0), max = Math.max(...nums, 1), span = (max - min) || 1;
   return (val) => { const v = accessor ? accessor(val) : (Number(val) || 0); return 8 + ((v - min) / span) * (36 - 8); };
 }
+// The scale's ends: the data span unless Format pinned one (T03-19).
+const colourScaleRange = (nums) => rangeOf(nums, drawing?.colorMin, drawing?.colorMax);
 // A continuous visualMap (the gradient legend) over `values`, coloured on the single-hue token ramp.
 function continuousVisualMap(values, dimension, c, fmtVal, name) {
-  const nums = (values ?? []).map((v) => Number(v)).filter((v) => Number.isFinite(v));
-  const min = nums.length ? Math.min(...nums) : 0;
-  let max = nums.length ? Math.max(...nums) : 1;
-  if (max === min) max = min + 1;
+  const { min, max } = colourScaleRange((values ?? []).map((v) => Number(v)));
   return {
     type: "continuous", min, max, dimension, calculable: true,
     orient: "horizontal", left: "center", bottom: 0,
-    inRange: { color: c.ramp },
+    inRange: { color: c.ramp }, outOfRange: { color: c.axis }, // beyond a pinned end: the neutral axis grey
     text: name ? [String(name), ""] : undefined,
     textStyle: { color: c.muted, fontFamily: c.font }, formatter: (v) => fmtVal(v),
   };
