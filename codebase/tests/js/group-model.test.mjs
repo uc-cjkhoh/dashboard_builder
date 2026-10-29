@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { groupTree, groupCost, MAX_GROUP_MEMBERS, checkGroupSpec, cleanGroupSpec, groupCalcName, groupsFromAssignments, assignmentsOf, GROUP_CATEGORY_REFUSAL, groupCategoryProblem, GROUP_TYPE_REFUSAL }
+import { groupTree, groupCost, MAX_GROUP_MEMBERS, checkGroupSpec, cleanGroupSpec, groupCalcName, groupsFromAssignments, assignmentsOf, GROUP_CATEGORY_REFUSAL, groupCategoryProblem, GROUP_TYPE_REFUSAL, maxMembersFor }
   from "../../src/DashboardBuilder/Features/Calc/group-model.js";
 import { check, CALC_LIMITS } from "../../src/DashboardBuilder/Features/Calc/calc-types.js";
 import { compileCalculation, catalogFromEntities } from "../../src/DashboardBuilder/Features/Calc/calc-resolve.js";
@@ -14,10 +14,10 @@ const g = (name, ...members) => ({ name, members });
 const categoryOf = (db, table, column) => (db === "d" && table === "t" && column === "region" ? "text" : null);
 const count = (n) => (n === null || typeof n !== "object" ? 1
   : n.k === "case" ? 1 + n.whens.reduce((a, w) => a + count(w.c) + count(w.t), 0) + (n.else ? count(n.else) : 0)
-  : n.k === "logic" || n.k === "cmp" ? 1 + count(n.l) + count(n.r) : 1);
+  : n.k === "logic" || n.k === "cmp" ? 1 + count(n.l) + count(n.r) : n.k === "not" || n.k === "isnull" ? 1 + count(n.arg) : 1);
 const depthOf = (n) => (n === null || typeof n !== "object" ? 1
   : n.k === "case" ? 1 + Math.max(...n.whens.flatMap((w) => [depthOf(w.c), depthOf(w.t)]), n.else ? depthOf(n.else) : 0)
-  : n.k === "logic" || n.k === "cmp" ? 1 + Math.max(depthOf(n.l), depthOf(n.r)) : 1);
+  : n.k === "logic" || n.k === "cmp" ? 1 + Math.max(depthOf(n.l), depthOf(n.r)) : n.k === "not" || n.k === "isnull" ? 1 + depthOf(n.arg) : 1);
 
 test("one WHEN per group; each condition an OR of equalities to bound string literals; ELSE the raw field", () => {
   const t = groupTree(spec([g("Nordics", "SE", "NO"), g("Benelux", "NL")]));
@@ -167,4 +167,43 @@ test("a group name equal to a member that stays ungrouped is refused; equal to a
 });
 test("a member over 100 characters is named in the error", () => {
   assert.match(checkGroupSpec(spec([g("A", "m".repeat(120))])).error, /'mmmmmmmmmmmmmmmmmmmm…' is longer than 100/);
+});
+
+// Remainder label: ungrouped, non-NULL members -> one label (spec.other).
+test("other: a last WHEN NOT isnull(field) -> the label, so NULL stays NULL; cost +4, fits the engine", () => {
+  const s = { ...spec([g("A", "a1"), g("B", "b1")]), other: "Other" };
+  const t = groupTree(s);
+  assert.equal(t.whens.length, 3);
+  assert.deepEqual(t.whens[2], { c: { k: "not", arg: { k: "isnull", arg: { k: "field", db: "d", table: "t", column: "region" } } }, t: { k: "str", v: "Other" } });
+  assert.equal(check(t, categoryOf).error, undefined);
+  assert.equal(count(t), groupCost(s));
+  assert.equal(groupCost(s), groupCost(spec(s.groups)) + 4);
+});
+test("other: absent or blank means ungrouped members keep their value (no extra WHEN)", () => {
+  assert.equal(groupTree(spec([g("A", "a1")])).whens.length, 1);
+  assert.equal(groupTree({ ...spec([g("A", "a1")]), other: "  " }).whens.length, 1);
+});
+test("other: the member budget drops to 48, and exactly that fits the node limit", () => {
+  assert.equal(maxMembersFor({}), 49);
+  assert.equal(maxMembersFor({ other: "Other" }), 48);
+  const mk = (n, other) => ({ ...spec([g("All", ...Array.from({ length: n }, (_, i) => `m${i}`))]), other });
+  assert.equal(checkGroupSpec(mk(48, "Other")).ok, true);
+  assert.equal(count(groupTree(mk(48, "Other"))) <= CALC_LIMITS.nodes, true);
+  assert.equal(checkGroupSpec(mk(49, "Other")).ok, false);
+  assert.equal(checkGroupSpec(mk(49)).ok, true);
+  assert.ok(depthOf(groupTree(mk(48, "Other"))) <= CALC_LIMITS.depth);
+});
+test("other: label rules - at most groupName characters, not equal to a group name", () => {
+  assert.equal(checkGroupSpec({ ...spec([g("A", "a")]), other: "x".repeat(LIMITS.groupName) }).ok, true);
+  assert.equal(checkGroupSpec({ ...spec([g("A", "a")]), other: "x".repeat(LIMITS.groupName + 1) }).ok, false);
+  assert.match(checkGroupSpec({ ...spec([g("Other", "a")]), other: "other" }).error, /already a group/);
+  assert.equal(checkGroupSpec({ ...spec([g("A", "a")]), other: 5 }).ok, false);
+});
+test("other: survives a workbook clean; a bad one skips the calculation", () => {
+  const issues = [];
+  const ok = cleanGroupSpec({ ...spec([g("A", "a")]), other: " Rest " }, "x", issues);
+  assert.equal(ok.other, "Rest");
+  assert.equal(cleanGroupSpec({ ...spec([g("A", "a")]), other: "" }, "x", issues).other, undefined);
+  assert.equal(cleanGroupSpec({ ...spec([g("A", "a")]), other: 3 }, "x", issues), null);
+  assert.equal(issues.length, 1);
 });
