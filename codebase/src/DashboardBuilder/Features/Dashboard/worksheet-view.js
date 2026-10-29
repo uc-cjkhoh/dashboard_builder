@@ -110,6 +110,7 @@ export function createWorksheetView(container, getContext, options = {}) {
     try {
       const result = await run(ticket.signal);
       if (!ticket.isCurrent()) return null;
+      result.queriedAt = Date.now(); // kept in the cache with the result: the status bar and print header say when the data was read
       c.results.set(c.dash.id, key, result);
       markFresh(true);
       return result;

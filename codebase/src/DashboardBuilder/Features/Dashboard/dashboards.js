@@ -11,6 +11,7 @@ import { checkValue, paramTypeFor } from "../Core/parameters-model.js";
 import { exportChart, hasChartInstance, sizeChart, focusSeries } from "./chart.js";
 import { createWorksheetView, periodNotice } from "./worksheet-view.js";
 import { el, hint, iconSpan } from "./render-dom.js";
+import { updatedText, calcDefinitionLines } from "./data-notes.js";
 import { ANALYTICS_TYPES, CLICK_TYPES, sameField, statusText, captionText } from "./result-model.js";
 import { makeCategoryFormatter } from "../Core/format.js";
 import { createResultCache } from "./query-runner.js";
@@ -1090,11 +1091,13 @@ export function initDashboards() {
     return box;
   }
   // The status bar under the chart: marks, rows × columns, the selection.
+  let lastQueriedAt = null;
   function setStatusBar(s, result) {
     const bar = document.getElementById("ws-statusbar");
     if (!bar) return;
+    lastQueriedAt = result?.queriedAt ?? null; // a query that is starting, failed or was cancelled has no update time
     if (!result) { bar.replaceChildren(); toggle(bar, false); return; }
-    bar.textContent = statusText(s, result);
+    bar.textContent = [statusText(s, result), updatedText(lastQueriedAt)].filter(Boolean).join(" · ");
     toggle(bar, true);
   }
 
@@ -1157,6 +1160,9 @@ export function initDashboards() {
     for (const f of s.filters.filter((x) => checkFilter(x).state === "ok"))
       lines.push(`Filter: ${f.table}.${f.column} ${f.op === "notin" ? OP_LABELS.notin : f.op} ${f.values ? f.values.join(f.op === "between" ? " – " : ", ") : f.value}`);
     if (noticeEl && !noticeEl.hidden && noticeEl.textContent) lines.push(noticeEl.textContent);
+    lines.push(...calcDefinitionLines(s, calculations, appliedShared()).map((l) => `Calculation: ${l}`));
+    const updated = updatedText(lastQueriedAt);
+    if (updated) lines.push(updated);
     lines.push(`Printed ${new Date().toLocaleString()}`);
     for (const l of lines) printHead.append(el("p", "ws-print-head__line", l));
     card.prepend(printHead);
