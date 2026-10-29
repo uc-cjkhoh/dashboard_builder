@@ -5,6 +5,7 @@ import { show, hide, toggle, confirmDialog, toast } from "../Core/ui.js";
 import { entities, relationshipsFor, emit, bus, isModelActive, showModel } from "../Core/store.js";
 import { expandSidebar } from "../Shell/sidebar.js";
 import { openColumnProfile } from "../Schema/column-profile-dialog.js";
+import { entityWidth } from "./card-width.js";
 
 // Data Model canvas + entity cards. A table dropped from the sidebar (or added via the
 // `table:add` fallback) becomes an entity card: a db.table head over a fixed-height, scrollable
@@ -212,6 +213,8 @@ export function initCanvas() {
     tablePart.textContent = entity.table;
     title.append(dbPart, tablePart);
     title.title = `${entity.db}.${entity.table}`;
+    // Fit the card to its name between the card's min/max tokens; beyond max the title ellipsises (title = full name).
+    fitWidth(card, title);
 
     const remove = document.createElement("button");
     remove.type = "button";
@@ -235,6 +238,19 @@ export function initCanvas() {
 
     card.append(head, status, body);
     return card;
+  }
+
+  // Width follows the `db.table` text: measured in the title's own font, held between --entity-min and --entity-max.
+  function fitWidth(card, title) {
+    const probe = title.cloneNode(true);
+    probe.style.cssText = "position:absolute;visibility:hidden;flex:none;overflow:visible;padding:0;white-space:nowrap";
+    canvas.append(probe);
+    const px = probe.getBoundingClientRect().width;
+    probe.remove();
+    const cs = getComputedStyle(canvas);
+    const limit = (name, fallback) => parseFloat(cs.getPropertyValue(name)) || fallback;
+    const { width } = entityWidth(px, { min: limit("--entity-min", 300), max: limit("--entity-max", 480) });
+    card.style.width = `${width}px`;
   }
 
   function renderColumns(entity) {
