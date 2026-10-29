@@ -43,6 +43,9 @@ export const LIMITS = Object.freeze({
   boardRows: 96,       // y + h never exceeds this
   widgetHeading: 80,   // characters in a text widget's heading
   widgetBody: 2000,    // characters in a text widget's body
+  imageBytes: 262144,  // an image widget's file, bytes (256 KB; stored in the workbook as a data URL)
+  images: 4,           // image widgets per dashboard
+  imageAlt: 120,       // characters in an image widget's alt text
   calcName: 60,      // characters in a calculation's name / label (server CalcLimits.MaxName)
 });
 export const HOST_MESSAGES = Object.freeze({

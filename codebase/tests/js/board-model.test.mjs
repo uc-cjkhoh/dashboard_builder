@@ -64,7 +64,7 @@ test("firstFreeSpot returns null when nothing fits under the row limit, and the 
 });
 
 test("placeNew: default sizes, first free spot, counts and full-canvas errors", () => {
-  assert.deepEqual(DEFAULT_SIZE, { sheet: { w: 6, h: 4 }, text: { w: 12, h: 2 } });
+  assert.deepEqual(DEFAULT_SIZE, { sheet: { w: 6, h: 4 }, text: { w: 12, h: 2 }, image: { w: 6, h: 4 }, spacer: { w: 2, h: 1 } });
   assert.deepEqual(placeNew([], "sheet"), { ok: true, x: 0, y: 0, w: 6, h: 4 });
   assert.deepEqual(placeNew([{ x: 0, y: 0, w: 6, h: 4 }], "sheet"), { ok: true, x: 6, y: 0, w: 6, h: 4 });
   assert.deepEqual(placeNew([{ x: 0, y: 0, w: 6, h: 4 }], "text"), { ok: true, x: 0, y: 4, w: 12, h: 2 });
@@ -211,4 +211,63 @@ test("non-integer cells are refused as 'snap to whole grid cells' by checkPlacem
     assert.deepEqual(checkPlacement([], c), { ok: false, error: "Widgets snap to whole grid cells." });
     assert.equal(explainRefusal([], c, "move"), "Can't move: widgets snap to whole grid cells.");
   }
+});
+
+// --- image and spacer widgets (T08-15, T08-16) ---
+const PNG = "data:image/png;base64,iVBORw0KGgo=";
+const iw = (x, y, w = 6, h = 4, alt = "Logo", src = PNG) => ({ kind: "image", alt, src, x, y, w, h });
+const pw = (x, y, w = 2, h = 1) => ({ kind: "spacer", x, y, w, h });
+
+test("default sizes: image 6 x 4, spacer 2 x 1", () => {
+  assert.deepEqual(DEFAULT_SIZE.image, { w: 6, h: 4 });
+  assert.deepEqual(DEFAULT_SIZE.spacer, { w: 2, h: 1 });
+});
+
+test("placeNew: a fifth image is refused, a spacer is placed", () => {
+  const four = [0, 1, 2, 3].map((i) => ({ id: `w${i}`, ...iw(0, i * 4, 2, 2) }));
+  const r = placeNew(four, "image");
+  assert.equal(r.ok, false);
+  assert.match(r.error, /at most 4 images/);
+  assert.equal(placeNew(four, "spacer").ok, true);
+});
+
+test("a spacer may be one row tall; an image needs two", () => {
+  assert.equal(checkPlacement([], { kind: "spacer", x: 0, y: 0, w: 2, h: 1 }).ok, true);
+  assert.equal(checkPlacement([], { kind: "image", x: 0, y: 0, w: 2, h: 1 }).ok, false);
+  assert.match(explainRefusal([], { kind: "image", x: 0, y: 0, w: 2, h: 1 }, "resize"), /image widget is at least 2 rows/);
+  assert.match(explainRefusal([], { kind: "spacer", x: 0, y: 0, w: 1, h: 1 }, "resize"), /at least 2 columns/);
+});
+
+test("cleanWidgets keeps valid image and spacer widgets", () => {
+  const { out, issues } = clean([iw(0, 0), pw(6, 0)]);
+  assert.deepEqual(out, [iw(0, 0), pw(6, 0)]);
+  assert.deepEqual(issues, []);
+});
+
+test("cleanWidgets drops an image whose source is not a raster data URL (https, svg, script) and reports it", () => {
+  for (const src of ["https://example.com/a.png", "data:image/svg+xml;base64,AAAA", "javascript:alert(1)", 5, null]) {
+    const { out, issues } = clean([iw(0, 0, 6, 4, "x", src)]);
+    assert.deepEqual(out, []);
+    assert.match(issues[0], /image/);
+  }
+});
+
+test("cleanWidgets truncates alt text and caps images at 4", () => {
+  const { out, issues } = clean([iw(0, 0, 2, 2, "a".repeat(200))]);
+  assert.equal(out[0].alt.length, LIMITS.imageAlt);
+  assert.match(issues[0], /alt text was cut/);
+  const five = [0, 1, 2, 3, 4].map((i) => iw(0, i * 2, 2, 2));
+  const r = clean(five);
+  assert.equal(r.out.length, 4);
+  assert.match(r.issues.join(" "), /only the first 4 images/);
+});
+
+test("a spacer carries nothing but its rectangle; stray fields are dropped", () => {
+  const { out } = clean([{ ...pw(0, 0), src: PNG, body: "x" }]);
+  assert.deepEqual(out, [pw(0, 0)]);
+});
+
+test("savedWidgets round-trips image and spacer widgets", () => {
+  const live = [{ id: "w#1", ...iw(0, 0) }, { id: "w#2", ...pw(6, 0) }];
+  assert.deepEqual(savedWidgets(live, new Map()), [iw(0, 0), pw(6, 0)]);
 });

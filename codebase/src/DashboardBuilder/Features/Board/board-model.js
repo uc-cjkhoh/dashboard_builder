@@ -2,15 +2,19 @@
 // `widgets` on a 12-column snap grid, in whole cells, never overlapping:
 //   { id, kind: "sheet", sheetId, x, y, w, h }   a worksheet's view (sheetId = a worksheet tab id)
 //   { id, kind: "text", heading, body, x, y, w, h }
+//   { id, kind: "image", alt, src, x, y, w, h }   src = a base64 raster data URL (Board/image-model.js)
+//   { id, kind: "spacer", x, y, w, h }            a blank cell block
 // The saved form (workbook v2) has no ids and points at worksheets by index:
-//   { kind: "sheet", sheet: <worksheet index>, x, y, w, h } | { kind: "text", heading, body, x, y, w, h }
+//   { kind: "sheet", sheet: <worksheet index>, x, y, w, h } | { kind: "text", heading, body, x, y, w, h } | the image and spacer as above
 // Limits live in Core/validate.js LIMITS. The board canvas (drag, resize, side panel) is UI on top of this module.
 import { LIMITS } from "../Core/validate.js";
+import { isImageSrc } from "./image-model.js";
 
 /** Default size in cells for a new widget of each kind. */
-export const DEFAULT_SIZE = Object.freeze({ sheet: { w: 6, h: 4 }, text: { w: 12, h: 2 } });
-const KINDS = new Set(["sheet", "text"]);
-const minH = (kind) => (kind === "text" ? LIMITS.textMinH : LIMITS.widgetMinH);
+export const DEFAULT_SIZE = Object.freeze({ sheet: { w: 6, h: 4 }, text: { w: 12, h: 2 }, image: { w: 6, h: 4 }, spacer: { w: 2, h: 1 } });
+const KINDS = new Set(["sheet", "text", "image", "spacer"]);
+const minH = (kind) => (kind === "text" || kind === "spacer" ? LIMITS.textMinH : LIMITS.widgetMinH);
+const KIND_WORD = { text: "text", image: "image", spacer: "spacer" };
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
 /** True when two widgets share at least one cell (touching edges do not overlap). */
@@ -34,6 +38,7 @@ export function firstFreeSpot(widgets, w, h) {
 /** Where a new widget of `kind` goes: `{ ok: true, x, y, w, h }`, or `{ ok: false, error }` (full board / no room). */
 export function placeNew(widgets, kind) {
   if (widgets.length >= LIMITS.widgets) return { ok: false, error: `A dashboard holds at most ${LIMITS.widgets} widgets.` };
+  if (kind === "image" && widgets.filter((w) => w.kind === "image").length >= LIMITS.images) return { ok: false, error: `A dashboard holds at most ${LIMITS.images} images.` };
   const { w, h } = DEFAULT_SIZE[kind];
   const spot = firstFreeSpot(widgets, w, h);
   return spot ? { ok: true, ...spot, w, h } : { ok: false, error: "The dashboard is full — remove a widget or make one smaller." };
@@ -58,7 +63,7 @@ export function explainRefusal(widgets, cand, verb, nameOf = () => "another widg
   const { x, y, w, h } = cand;
   if (![x, y, w, h].every(Number.isInteger)) return `${lead} widgets snap to whole grid cells.`;
   if (w < LIMITS.widgetMinW) return `${lead} a widget is at least ${LIMITS.widgetMinW} columns wide.`;
-  if (h < minH(cand.kind)) return `${lead} a ${cand.kind === "text" ? "text" : "worksheet"} widget is at least ${minH(cand.kind)} ${minH(cand.kind) === 1 ? "row" : "rows"} tall.`;
+  if (h < minH(cand.kind)) return `${lead} a ${KIND_WORD[cand.kind] ?? "worksheet"} widget is at least ${minH(cand.kind)} ${minH(cand.kind) === 1 ? "row" : "rows"} tall.`;
   if (h > LIMITS.widgetMaxH) return `${lead} a widget is at most ${LIMITS.widgetMaxH} rows tall.`;
   if (x < 0) return `${lead} the widget is at the left edge of the dashboard.`;
   if (x + w > LIMITS.gridCols) return `${lead} the widget is at the right edge of the dashboard.`;
@@ -87,13 +92,15 @@ export function cleanWidgets(raw, { worksheetCount, where }, issues) {
   if (raw == null) return [];
   if (!Array.isArray(raw)) { issues.push(`${where}: the widgets weren't a list — none were opened.`); return []; }
   const out = [];
-  let past = 0;
+  let past = 0, pastImages = 0;
   for (const w of raw) {
     if (!w || typeof w !== "object") { issues.push(`${where}: skipped a widget that wasn't a widget.`); continue; }
     if (!KINDS.has(w.kind)) { issues.push(`${where}: skipped a widget of an unknown kind.`); continue; }
     if (w.kind === "sheet" && !(Number.isInteger(w.sheet) && w.sheet >= 0 && w.sheet < worksheetCount)) {
       issues.push(`${where}: removed a widget whose worksheet is missing.`); continue;
     }
+    if (w.kind === "image" && !isImageSrc(w.src)) { issues.push(`${where}: removed an image widget whose picture wasn't a PNG, JPEG, GIF or WebP data URL.`); continue; }
+    if (w.kind === "image" && out.filter((o) => o.kind === "image").length >= LIMITS.images) { pastImages++; continue; }
     if (out.length >= LIMITS.widgets) { past++; continue; }
     const def = DEFAULT_SIZE[w.kind];
     let adjusted = false;
@@ -118,16 +125,19 @@ export function cleanWidgets(raw, { worksheetCount, where }, issues) {
       issues.push(`${where}: a widget overlapped another and was moved to the first free spot.`);
     }
     if (w.kind === "sheet") out.push({ kind: "sheet", sheet: w.sheet, ...fit });
+    else if (w.kind === "image") out.push({ kind: "image", alt: cleanText(w.alt, LIMITS.imageAlt, "alt text", where, issues, "an image widget's"), src: w.src, ...fit });
+    else if (w.kind === "spacer") out.push({ kind: "spacer", ...fit });
     else out.push({ kind: "text", heading: cleanText(w.heading, LIMITS.widgetHeading, "heading", where, issues), body: cleanText(w.body, LIMITS.widgetBody, "body", where, issues), ...fit });
   }
+  if (pastImages) issues.push(`${where}: only the first ${LIMITS.images} images were opened.`);
   if (past) issues.push(`${where}: only the first ${LIMITS.widgets} widgets were opened.`);
   return out;
 }
 
-function cleanText(v, max, label, where, issues) {
+function cleanText(v, max, label, where, issues, owner = "a text widget's") {
   if (v == null) return "";
-  if (typeof v !== "string") { issues.push(`${where}: a text widget's ${label} wasn't text — cleared.`); return ""; }
-  if (v.length > max) { issues.push(`${where}: a text widget's ${label} was cut to ${max} characters.`); return v.slice(0, max); }
+  if (typeof v !== "string") { issues.push(`${where}: ${owner} ${label} wasn't text — cleared.`); return ""; }
+  if (v.length > max) { issues.push(`${where}: ${owner} ${label} was cut to ${max} characters.`); return v.slice(0, max); }
   return v;
 }
 
@@ -137,6 +147,8 @@ export function savedWidgets(widgets, indexOf) {
   for (const w of widgets) {
     const { x, y, w: cw, h } = w;
     if (w.kind === "text") out.push({ kind: "text", heading: w.heading ?? "", body: w.body ?? "", x, y, w: cw, h });
+    else if (w.kind === "image") out.push({ kind: "image", alt: w.alt ?? "", src: w.src, x, y, w: cw, h });
+    else if (w.kind === "spacer") out.push({ kind: "spacer", x, y, w: cw, h });
     else if (indexOf.has(w.sheetId)) out.push({ kind: "sheet", sheet: indexOf.get(w.sheetId), x, y, w: cw, h });
   }
   return out;
