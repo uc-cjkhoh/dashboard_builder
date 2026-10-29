@@ -272,6 +272,7 @@ export const defaultFormat = () => ({
   lineStyle: "straight", // T03-05: straight | step | jump (line / area / combo)
   heatmapShape: "square", // T03-10: square | circle
   targetMeasure: null, // T03-12: bullet target = this shelf measure (index ≥ 1), else Format → Target
+  dualAxis: false, // T03-16: a line / area chart draws its 2nd+ measures on a right axis
   syncAxes: false, // T03-16: a combo's two value axes share one range
   secondaryType: "line", // T03-17: right-axis marks of a combo: line | bar | area
   markerSize: null, // T01-22: null (automatic) | whole px 4–40 — scatter / line markers, circle heatmap

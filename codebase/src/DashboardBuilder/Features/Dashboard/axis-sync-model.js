@@ -8,6 +8,16 @@ export const SECONDARY_CHOICES = [["line", "Line"], ["bar", "Bars"], ["area", "A
 /** The mark kind for the right-axis measures: line (unset or unknown), bar or area. */
 export const secondaryKind = (t) => (SECONDARY_TYPES.has(t) ? t : "line");
 
+/** Line and area charts can put every measure after the first on a right axis (Format → Dual axis). */
+export const dualAxisAllowed = (type) => type === "line" || type === "area";
+
+/** Whether the chart draws a right value axis: a combo always; a line / area with Dual axis on and two measures. */
+export const dualAxisOn = (type, format, measureCount) =>
+  type === "combo" || (dualAxisAllowed(type) && format?.dualAxis === true && measureCount >= 2);
+
+/** The right axis' title: the names of the measures drawn on it (every measure after the first). */
+export const rightAxisTitle = (names) => names.slice(1).join(", ");
+
 const niceStep = (rough) => {
   const p = 10 ** Math.floor(Math.log10(rough));
   const f = rough / p;

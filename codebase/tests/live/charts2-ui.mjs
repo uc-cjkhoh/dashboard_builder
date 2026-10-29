@@ -194,6 +194,30 @@ try {
     await pick('Right-axis marks', 'line'); await chartReady();
   });
 
+  await check('Dual axis: a line / area chart draws its 2nd measure on a titled right axis; synchronise shares one range; off restores one axis', async () => {
+    await setType('Line'); await openFormat(); await chartReady();
+    must(await hasField('Dual axis') && !(await hasField('Synchronise axes')) && !(await hasField('Right-axis marks')), 'line: Dual axis only');
+    let o = await opt();
+    must([].concat(o.yAxis).length === 1, 'one axis by default');
+    await check1('Dual axis'); await settle(400); await chartReady();
+    o = await opt();
+    must(o.yAxis.length === 2 && o.yAxis[1].position === 'right' && o.yAxis[1].name, `right axis named ${J(o.yAxis[1])}`);
+    must(o.series[1].yAxisIndex === 1 && o.series[0].yAxisIndex === 0 && o.series[1].type === 'line', 'series on their axes');
+    must(await hasField('Synchronise axes') && !(await hasField('Right-axis marks')), 'sync shown, no mark choice');
+    await shot('dual-line-light.png');
+    await theme('dark'); await shot('dual-line-dark.png'); await theme('light');
+    await check1('Synchronise axes'); await settle(400); await chartReady();
+    const a = await axes();
+    must(a[0].min != null && a[0].min === a[1].min && a[0].max === a[1].max, `synced ${J(a.map((x) => [x.min, x.max]))}`);
+    await check1('Synchronise axes'); await settle(400);
+    await setType('Area'); await chartReady();
+    o = await opt();
+    must(o.yAxis.length === 2 && o.series[1].yAxisIndex === 1 && o.series[1].areaStyle, 'area keeps the right axis');
+    await shot('dual-area-light.png');
+    await setType('Line'); await openFormat(); await check1('Dual axis'); await settle(400); await chartReady();
+    must([].concat((await opt()).yAxis).length === 1, 'off -> one axis');
+  });
+
   await check('Mark border: bars and heatmap cells take thin / thick strokes in the muted theme ink; None keeps the old look', async () => {
     await setType('Bar'); await openFormat(); await chartReady();
     must(await hasField('Mark border') && !(await hasField('Marker size (px)')), 'bar has border but no marker size');

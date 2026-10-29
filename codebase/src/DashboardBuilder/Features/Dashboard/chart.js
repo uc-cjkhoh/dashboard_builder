@@ -5,7 +5,7 @@ import { orderedPalette } from "./colour-model.js";
 import { rampColours, rangeOf } from "./colour-scale-model.js";
 import { tooltipHtml } from "./tooltip-model.js";
 import { lineStep } from "./line-style-model.js";
-import { syncRange, secondaryKind } from "./axis-sync-model.js";
+import { syncRange, secondaryKind, dualAxisOn, rightAxisTitle } from "./axis-sync-model.js";
 import { markBorder, markerSizeOr, markerSymbol, edgeOr } from "./mark-style-model.js";
 import { circleSize, circleCells, HEATMAP_GUTTER } from "./heatmap-model.js";
 import { bandsFor } from "./bullet-model.js";
@@ -385,7 +385,8 @@ function buildCartesian({ type, categories, series, format = {}, orientation = "
   const hasCompare = mainCount < series.length;
   const multi = mainCount > 1;
   const isCombo = type === "combo";
-  const horizontal = orientation === "horizontal" && !isCombo;
+  const dual = dualAxisOn(type, format, mainCount); // combo, or line / area with Format → Dual axis
+  const horizontal = orientation === "horizontal" && !dual;
   const fmtVal = makeValueFormatter(format); // P10 — measure value format (tooltip, axis, labels)
 
   const colorFor = (i, name) => (multi ? memberColor(name, c.cat[i % c.cat.length]) : c.series);
@@ -393,7 +394,7 @@ function buildCartesian({ type, categories, series, format = {}, orientation = "
   // category axis already labels each bar, so colour restates identity (never colour-alone).
   const colorByDim = type === "bar" && !multi && !!format.colorByDimension;
 
-  const { show: showLegend, pos, legend } = legendFor(format, c, series.map((s) => s.name), multi || isCombo || hasCompare);
+  const { show: showLegend, pos, legend } = legendFor(format, c, series.map((s) => s.name), multi || dual || hasCompare);
   const xTitle = format.xTitle || null;
   const yTitle = format.yTitle || null;
 
@@ -425,15 +426,15 @@ function buildCartesian({ type, categories, series, format = {}, orientation = "
   });
 
   let xAxis, yAxis;
-  if (isCombo) {
-    // Combo: category on x, dual value axes on y (unchanged).
+  if (dual) {
+    // Combo / dual-axis line or area: category on x, left and right value axes on y.
     xAxis = withName(categoryAxis, xTitle, true);
     // T03-16: Synchronise axes — one nice range (zero included, the first measure is bars) on both value axes.
-    const shared = format.syncAxes ? syncRange(series.map((s) => s.data)) : null;
+    const shared = format.syncAxes ? syncRange(series.map((s) => s.data), { zeroBaseline: type !== "line" }) : null;
     const range = shared ? { min: shared.min, max: shared.max } : {};
     yAxis = [
       withName(valueAxisBase(range), yTitle || series[0]?.name, false),
-      { ...withName(valueAxisBase({ position: "right", splitLine: { show: false }, ...range }), series[1]?.name, false) },
+      { ...withName(valueAxisBase({ position: "right", splitLine: { show: false }, ...range }), rightAxisTitle(series.filter((s) => !s.compare).map((s) => s.name)) || series[1]?.name, false) },
     ];
   } else if (horizontal) {
     // Horizontal: value on x (bottom), category on y (left); inverse so the first category is on top.
@@ -449,8 +450,8 @@ function buildCartesian({ type, categories, series, format = {}, orientation = "
     legend,
     grid: {
       left: 6 + (showLegend && pos === "left" ? 96 : 0),
-      right: 18 + (showLegend && pos === "right" ? 96 : 0) + (isCombo ? 36 : 0),
-      top: 18 + (showLegend && pos === "top" ? 18 : 0) + (yTitle || isCombo ? 18 : 0),
+      right: 18 + (showLegend && pos === "right" ? 96 : 0) + (dual ? 36 : 0),
+      top: 18 + (showLegend && pos === "top" ? 18 : 0) + (yTitle || dual ? 18 : 0),
       bottom: 6 + (showLegend && pos === "bottom" ? 22 : 0) + (xTitle ? 24 : 0),
       containLabel: true,
     },
@@ -482,7 +483,7 @@ function buildCartesian({ type, categories, series, format = {}, orientation = "
       const color = colorFor(i - mainCount);
       const asLine = type === "line" || type === "area";
       return asLine
-        ? { name: s.name, type: "line", step, data: s.data, showSymbol: false, z: 1,
+        ? { name: s.name, type: "line", step, yAxisIndex: dual && i - mainCount >= 1 ? 1 : 0, data: s.data, showSymbol: false, z: 1,
             lineStyle: { width: 2, type: "dashed", color, opacity: 0.7 }, itemStyle: { color, opacity: 0.7 }, emphasis: { focus: "series" } }
         : { name: s.name, type: "bar", data: s.data, barMaxWidth: 40,
             // Hatched as well as faded, so it reads as "the other period" without relying on colour.
@@ -497,7 +498,7 @@ function buildCartesian({ type, categories, series, format = {}, orientation = "
     if (asLine) {
       return {
         name: s.name, type: "line", step,
-        yAxisIndex: isCombo ? 1 : 0,
+        yAxisIndex: dual && (isCombo ? true : i >= 1) ? 1 : 0,
         data: s.data,
         showSymbol: s.data.length <= 60 || format.markerSize != null, // dots only when they won't crowd (unless a size is chosen)
         symbol: markerSymbol(format.markerShape), symbolSize: markerSizeOr(format.markerSize, 8), // ≥8px markers (dataviz mark spec) unless Format → Marker size

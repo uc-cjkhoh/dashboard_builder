@@ -1,7 +1,7 @@
 // Axis synchronisation, secondary mark type (T03-16/17), marker size and mark borders (T01-22, T03-34) — pure models.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { syncRange, SECONDARY_CHOICES, secondaryKind } from "../../src/DashboardBuilder/Features/Dashboard/axis-sync-model.js";
+import { syncRange, SECONDARY_CHOICES, secondaryKind, dualAxisOn, rightAxisTitle, dualAxisAllowed } from "../../src/DashboardBuilder/Features/Dashboard/axis-sync-model.js";
 import { MARK_BORDER_CHOICES, markBorder, MARKER_SIZE, markerSizeError, markerSizeOr, MARKER_SHAPE_CHOICES, markerSymbol, edgeOr } from "../../src/DashboardBuilder/Features/Dashboard/mark-style-model.js";
 import { defaultFormat, emptySheet } from "../../src/DashboardBuilder/Features/Core/store.js";
 import { parseWorkbook, serializeWorkbook } from "../../src/DashboardBuilder/Features/Workbook/workbook-model.js";
@@ -107,3 +107,29 @@ test("workbook: marker shape round-trips; an unknown one resets to circle with a
   assert.equal(roundTrip({}).worksheets[0].sheet.format.markerShape, "circle");
 });
 const J = JSON.stringify;
+
+test("dual axis on line / area: needs the toggle and two measures; combo is always dual; other types never", () => {
+  assert.equal(dualAxisAllowed("line"), true); assert.equal(dualAxisAllowed("area"), true);
+  assert.equal(dualAxisAllowed("bar"), false); assert.equal(dualAxisAllowed("scatter"), false);
+  assert.equal(dualAxisOn("line", { dualAxis: true }, 2), true);
+  assert.equal(dualAxisOn("area", { dualAxis: true }, 3), true);
+  assert.equal(dualAxisOn("line", { dualAxis: true }, 1), false);
+  assert.equal(dualAxisOn("line", { dualAxis: false }, 2), false);
+  assert.equal(dualAxisOn("line", {}, 2), false);
+  assert.equal(dualAxisOn("bar", { dualAxis: true }, 2), false);
+  assert.equal(dualAxisOn("combo", {}, 2), true);
+});
+test("rightAxisTitle names every right-axis measure", () => {
+  assert.equal(rightAxisTitle(["Sales", "Profit", "Qty"]), "Profit, Qty");
+  assert.equal(rightAxisTitle(["Sales"]), "");
+});
+test("dualAxis: default off; round-trips; invalid resets with an issue; old workbooks open clean", () => {
+  assert.equal(defaultFormat().dualAxis, false);
+  const f = roundTrip({ dualAxis: true }).worksheets[0].sheet.format;
+  assert.equal(f.dualAxis, true);
+  const bad = roundTrip({ dualAxis: "yes" });
+  assert.equal(bad.worksheets[0].sheet.format.dualAxis, false);
+  assert.ok(bad.issues.length >= 1);
+  const old = roundTrip({ target: 5 });
+  assert.equal(old.issues.length, 0); assert.equal(old.worksheets[0].sheet.format.dualAxis, false);
+});

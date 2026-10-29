@@ -29,7 +29,7 @@ import { SWATCHES, memberKey, fieldColorKey, setMemberColor, clearFieldColors, c
 import { createHistory } from "./history.js";
 import { LINE_STYLE_CHOICES, linesTakeStyle } from "./line-style-model.js";
 import { HEATMAP_SHAPE_CHOICES } from "./heatmap-model.js";
-import { SECONDARY_CHOICES } from "./axis-sync-model.js";
+import { SECONDARY_CHOICES, dualAxisAllowed, dualAxisOn } from "./axis-sync-model.js";
 import { RAMP_CHOICES, colourRangeError } from "./colour-scale-model.js";
 import { TABLE_ALIGN_CHOICES, TABLE_DENSITY_CHOICES, TABLE_SHADE_CHOICES } from "./table-style-model.js";
 import { MARK_BORDER_CHOICES, MARKER_SHAPE_CHOICES, markerSizeError } from "./mark-style-model.js";
@@ -1254,8 +1254,9 @@ export function initDashboards() {
     }
     if (linesTakeStyle(s.chartType)) panel.append(fmtSelect("Line style", LINE_STYLE_CHOICES, f.lineStyle ?? "straight", (v) => set({ lineStyle: v }))); // T03-05
     if (s.chartType === "heatmap") panel.append(fmtSelect("Shape", HEATMAP_SHAPE_CHOICES, f.heatmapShape ?? "square", (v) => set({ heatmapShape: v }))); // T03-10
-    if (s.chartType === "combo") { // T03-16, T03-17
-      panel.append(fmtSelect("Right-axis marks", SECONDARY_CHOICES, f.secondaryType ?? "line", (v) => set({ secondaryType: v })));
+    if (dualAxisAllowed(s.chartType)) panel.append(fmtCheck("Dual axis", f.dualAxis, (v) => set({ dualAxis: v }))); // T03-16
+    if (s.chartType === "combo" || dualAxisOn(s.chartType, f, planMeasures(s).length)) { // T03-16, T03-17
+      if (s.chartType === "combo") panel.append(fmtSelect("Right-axis marks", SECONDARY_CHOICES, f.secondaryType ?? "line", (v) => set({ secondaryType: v })));
       panel.append(fmtCheck("Synchronise axes", f.syncAxes, (v) => set({ syncAxes: v })));
     }
     if (MARKER_TYPES.has(s.chartType) && (s.chartType !== "heatmap" || f.heatmapShape === "circle")) // T01-22: blank = automatic (a heatmap: circles only)
