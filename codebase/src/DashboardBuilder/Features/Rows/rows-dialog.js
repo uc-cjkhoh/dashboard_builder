@@ -14,8 +14,8 @@ export function openTablePreview(db, table) {
   openRowsDialog({ title: `${table} — first rows`, subtitle: `${db}.${table}`, request: tableRowsRequest(db, table), filename: `${table}-rows` });
 }
 
-/** Show the rows of `request` (a /api/rows body). `notes` are sentences about what could not be applied. */
-export function openRowsDialog({ title, subtitle = "", request, notes = [], filename = "rows" }) {
+/** Show the rows of `request` (a /api/rows body, or whatever `load` takes). `notes` are sentences about what could not be applied. */
+export function openRowsDialog({ title, subtitle = "", request, notes = [], filename = "rows", load = api.rows }) {
   const id = `rows-dialog-${++seq}`;
   const dlg = el("dialog", "dialog rows-dialog");
   dlg.setAttribute("aria-labelledby", `${id}-title`);
@@ -52,7 +52,7 @@ export function openRowsDialog({ title, subtitle = "", request, notes = [], file
   openDialog(dlg);
   close.focus();
 
-  api.rows(request, { signal: ctl.signal }).then((res) => {
+  load(request, { signal: ctl.signal }).then((res) => {
     summary.textContent = rowsSummary(res) + (res.columnsTruncated ? ` · first ${res.columns.length} columns` : "");
     if (!res.rows.length) { status.textContent = "No rows."; return; }
     scroll.replaceChildren(buildTable(res));

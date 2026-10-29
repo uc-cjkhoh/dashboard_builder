@@ -587,6 +587,84 @@ public sealed partial class ClickHouseGateway
         return new RowsResult(columns.Select(c => new RowColumn(c.Name, c.Type)).ToList(), rows, truncated, limit, colsTruncated);
     }
 
+    /// <summary>The columns a union returns: the requested ones, else those every table has by name. Each must exist in
+    /// every table with the same kind (text / number / date …) so the stacked values are comparable. Order follows the
+    /// request, else the first table. The column types shown are the first table's.</summary>
+    internal static (IReadOnlyList<ColumnInfo> Columns, bool Truncated) PickUnionColumns(IReadOnlyList<IReadOnlyList<ColumnInfo>> tables, string[]? requested)
+    {
+        var maps = tables.Select(t => t.ToDictionary(c => c.Name, c => c, StringComparer.Ordinal)).ToList();
+        bool Shared(string name) => maps.All(m => m.TryGetValue(name, out var c) && c.Category == maps[0][name].Category);
+        if (requested is { Length: > 0 })
+        {
+            var picked = new List<ColumnInfo>();
+            for (var i = 0; i < requested.Length; i++)
+            {
+                if (maps.Any(m => !m.ContainsKey(requested[i]))) throw new UnknownIdentifierException("Unknown column.");
+                if (!Shared(requested[i])) throw new RequestValidationException($"'{requested[i]}' has a different kind of values in the tables, so they can't be stacked.", $"columns[{i}]");
+                picked.Add(maps[0][requested[i]]);
+            }
+            return (picked, false);
+        }
+        var all = tables[0].Where(c => Shared(c.Name)).ToList();
+        var shared = all.Take(ApiLimits.MaxRowsColumns).ToList();
+        if (shared.Count == 0) throw new RequestValidationException("These tables share no column with the same name and kind of values.", "tables");
+        return (shared, all.Count > ApiLimits.MaxRowsColumns);
+    }
+
+    /// <summary>Each table's share of a union's rows: the limit split evenly, rounded up, so every table shows.</summary>
+    internal static int UnionShare(int limit, int tables) => (limit + tables - 1) / tables;
+
+    /// <summary>The union statement: each branch quoted, its source table bound as <c>{s#:String}</c>, its cells cut in
+    /// SQL, and cut to its own probe limit (its share + 1) so no branch reads more than it must and none starves another.
+    /// No ORDER BY.</summary>
+    internal static string BuildUnionSql(string database, IReadOnlyList<string> tables, IReadOnlyList<string> columns, int branchProbe)
+    {
+        var cells = string.Join(", ", columns.Select((c, i) => $"{RowSelectExpr(c)} AS `c{i}`"));
+        var branches = tables.Select((t, i) => $"(SELECT {{s{i}:String}} AS `__src`, {cells} FROM {Identifier.QualifiedName(database, t)} LIMIT {branchProbe})");
+        return $"SELECT * FROM ({string.Join(" UNION ALL ", branches)})";
+    }
+
+    /// <summary>
+    /// The first rows of 2..5 tables stacked (<c>UNION ALL</c>) over their shared columns, the source table first.
+    /// Database, tables and columns are catalog-validated and quoted; the table names shown are bound. Read-only.
+    /// </summary>
+    /// <exception cref="UnknownIdentifierException">Unknown database, table or column.</exception>
+    public async Task<RowsResult> UnionAsync(ClickHouseConnectionInfo info, UnionRequest req, CancellationToken ct)
+    {
+        var described = new List<IReadOnlyList<ColumnInfo>>();
+        foreach (var t in req.Tables) described.Add(await DescribeColumnsAsync(info, req.Db, t, ct)); // validates db + table
+        var (columns, colsTruncated) = PickUnionColumns(described, req.Columns);
+        var limit = req.Limit ?? ApiLimits.DefaultRowsLimit;
+        RequestRules.ValidateRowCells(limit, columns.Count + 1, "limit");
+        var share = UnionShare(limit, req.Tables.Length);
+        var sql = BuildUnionSql(req.Db, req.Tables, columns.Select(c => c.Name).ToList(), share + 1);
+
+        using var httpClient = CreateHttpClient(info);
+        await using var conn = new ClickHouseConnection(BuildConnectionString(info), httpClient);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = sql;
+        for (var i = 0; i < req.Tables.Length; i++) cmd.AddParameter($"s{i}", "String", req.Tables[i]);
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        var rows = new List<IReadOnlyList<string?>>();
+        var perSource = new Dictionary<string, int>(StringComparer.Ordinal);
+        var truncated = false;
+        while (await reader.ReadAsync(ct))
+        {
+            var row = new string?[columns.Count + 1];
+            for (var i = 0; i < row.Length; i++) row[i] = reader.IsDBNull(i) ? null : RowCell(reader.GetValue(i));
+            var n = perSource.GetValueOrDefault(row[0]!) + 1;
+            perSource[row[0]!] = n;
+            if (n > share) { truncated = true; continue; } // a table's probe row: more exist
+            rows.Add(row);
+        }
+        if (rows.Count > limit) { rows.RemoveRange(limit, rows.Count - limit); truncated = true; }
+        var shown = new List<RowColumn> { new("Source table", "String") };
+        shown.AddRange(columns.Select(c => new RowColumn(c.Name, c.Type)));
+        return new RowsResult(shown, rows, truncated, limit, colsTruncated);
+    }
+
     /// <summary>
     /// A histogram (P12): bucket a single numeric column into equal-width bins over its live [min,max]
     /// and count rows per bin — <c>SELECT floor((col-lo)/w) AS bin, count() … GROUP BY bin</c>, with

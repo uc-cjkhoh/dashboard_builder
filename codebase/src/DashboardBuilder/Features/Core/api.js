@@ -78,6 +78,8 @@ export const api = {
   query: (plan, { signal } = {}) => request("POST", "/api/query", plan, signal),
   /** Raw rows of one table (POST /api/rows): { columns:[{name,type}], rows:[[text|null]], truncated, limit, columnsTruncated }. */
   rows: (req, { signal } = {}) => request("POST", "/api/rows", req, signal),
+  /** The first rows of 2-5 tables stacked (POST /api/union): same shape as rows; the first column is the source table. */
+  union: (req, { signal } = {}) => request("POST", "/api/union", req, signal),
   /** Join safety preview (POST /api/relationships/preview): bounded match / duplicate counts for a key pair → { from, to, sampleLimit, sampled }. */
   joinPreview: (req, { signal } = {}) => request("POST", "/api/relationships/preview", req, signal),
   /** Export the worksheet query's rows as CSV text (P13). Bounded server-side; returns raw text. */
