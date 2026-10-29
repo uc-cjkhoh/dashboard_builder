@@ -1,7 +1,7 @@
 import { renderChart as drawChart } from "./chart.js";
 import { isCalcPill } from "../Calc/calc-pill.js";
 import { SCATTER_TYPES, marksOf, measureName as planMeasureName } from "./sheet-plan.js";
-import { REF_CHOICES, TREND_CHOICES, refValue, refConstant, trendSeries } from "./analytics-model.js";
+import { REF_CHOICES, TREND_CHOICES, refValue, refConstant, trendSeries, pickMeasure, bandBounds, bandLabel } from "./analytics-model.js";
 import { parameters } from "../Core/store.js";
 import { hint } from "./render-dom.js";
 import { selectHandler, legendSpec, memberSpec } from "./render-handlers.js";
@@ -75,15 +75,18 @@ export function renderSeries(container, rc, sheet, a) {
   let catsOut = categories, seriesOut = [...series, ...compareSeries], analytics = null;
   const A = sheet.analytics;
   if (A && ANALYTICS_TYPES.has(type) && series.length) {
-    const vals = series[0].data;
+    const vals = series[0].data; // the trend and forecast follow the first measure
+    const mi = pickMeasure(A.ref?.measure, series.length), mvals = series[mi].data;
+    const mname = series.length > 1 ? ` (${series[mi].name})` : "";
     const refKind = A.ref?.kind ?? "none";
-    const rv = refKind === "none" ? null : refValue(refKind, vals, refConstant(A.ref, parameters));
+    const rv = refKind === "none" ? null : refValue(refKind, mvals, refConstant(A.ref, parameters));
     const fc = type === "line" || type === "area" ? A.forecast ?? 0 : 0;
     const t = (A.trend && A.trend !== "none") || fc ? trendSeries(A.trend ?? "none", vals, fc) : null;
     const trendLabel = TREND_CHOICES.find(([v]) => v === (A.trend && A.trend !== "none" ? A.trend : "linear"))[1].toLowerCase();
+    const bb = bandBounds(A.band, mvals);
     analytics = {
-      ref: rv == null ? null : { name: refKind === "constant" ? "Reference" : REF_CHOICES.find(([v]) => v === refKind)[1], value: rv },
-      band: A.band ? { from: A.band.from, to: A.band.to } : null,
+      ref: rv == null ? null : { name: (refKind === "constant" ? "Reference" : REF_CHOICES.find(([v]) => v === refKind)[1]) + (refKind === "constant" ? "" : mname), value: rv },
+      band: bb ? { ...bb, name: bandLabel(A.band) + (A.band.kind ? mname : "") } : null,
       trend: t ? { name: `Trend (${trendLabel}${fc ? ` + ${fc} forecast` : ""}) R² ${t.r2.toFixed(2)}`, short: `Trend · R² ${t.r2.toFixed(2)}`, data: t.data } : null,
     };
     if (t && t.extra) {

@@ -6,6 +6,9 @@
 export const REF_CHOICES = [["none", "None"], ["average", "Average"], ["median", "Median"], ["min", "Minimum"], ["max", "Maximum"], ["constant", "Constant"]];
 export const TREND_CHOICES = [["none", "None"], ["linear", "Linear"], ["log", "Logarithmic"], ["poly2", "Polynomial (2nd order)"]];
 export const FORECAST_CHOICES = [[0, "None"], [3, "3 steps"], [6, "6 steps"], [12, "12 steps"]];
+// A band is typed numbers ({ from, to }), mean ± k standard deviations ({ kind: "stddev", k }) or a percentile range ({ kind: "percentile", lo, hi });
+// the reference line and the band read the measure `ref.measure` (a shown-measure index, default 0) over the rows shown.
+export const BAND_CHOICES = [["none", "None"], ["range", "Typed range"], ["stddev1", "Mean ± 1σ"], ["stddev2", "Mean ± 2σ"], ["p25-75", "P25–P75"], ["p10-90", "P10–P90"]];
 export const defaultAnalytics = () => ({ ref: { kind: "none" }, band: null, trend: "none", forecast: 0, totals: { grand: false, sub: false } });
 
 const nums = (values) => values.map((v) => (v == null || v === "" ? NaN : Number(v))).filter(Number.isFinite);
@@ -92,4 +95,52 @@ export function combine(agg, values) {
     case "max": return Math.max(...v);
     default: return null;
   }
+}
+
+/** The shown measure a reference line / band reads: `index` when it is one of `count` measures, else the first. */
+export const pickMeasure = (index, count) => (Number.isInteger(index) && index >= 0 && index < count ? index : 0);
+
+/** The choice key of a band (BAND_CHOICES). */
+export function bandChoice(band) {
+  if (!band) return "none";
+  if (band.kind === "stddev") return `stddev${band.k}`;
+  if (band.kind === "percentile") return `p${band.lo}-${band.hi}`;
+  return "range";
+}
+/** A band for a choice key (`prev` keeps a typed range's numbers). */
+export function bandFromChoice(key, prev) {
+  if (key === "none") return null;
+  if (key === "range") return prev && prev.kind == null ? prev : { from: 0, to: 0 };
+  if (key.startsWith("stddev")) return { kind: "stddev", k: Number(key.slice(6)) };
+  const [lo, hi] = key.slice(1).split("-").map(Number);
+  return { kind: "percentile", lo, hi };
+}
+/** The band's name on the chart. */
+export function bandLabel(band) {
+  if (band?.kind === "stddev") return `Mean ± ${band.k}σ`;
+  if (band?.kind === "percentile") return `P${band.lo}–P${band.hi}`;
+  return "Band";
+}
+
+function percentileOf(sorted, p) { // linear interpolation between closest ranks
+  const pos = (sorted.length - 1) * p / 100, lo = Math.floor(pos), hi = Math.ceil(pos);
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo);
+}
+/** The band's { from, to } over a measure's values, or null (no values; fewer than two for a standard deviation). */
+export function bandBounds(band, values) {
+  if (!band) return null;
+  if (!band.kind) return { from: band.from, to: band.to };
+  const v = nums(values);
+  if (band.kind === "stddev") {
+    if (v.length < 2) return null;
+    const mean = v.reduce((a, b) => a + b, 0) / v.length;
+    const sd = Math.sqrt(v.reduce((s, x) => s + (x - mean) ** 2, 0) / (v.length - 1));
+    return { from: mean - band.k * sd, to: mean + band.k * sd };
+  }
+  if (band.kind === "percentile") {
+    if (!v.length) return null;
+    const s = [...v].sort((a, b) => a - b);
+    return { from: percentileOf(s, band.lo), to: percentileOf(s, band.hi) };
+  }
+  return null;
 }

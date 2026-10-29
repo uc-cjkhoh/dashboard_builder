@@ -44,3 +44,29 @@ test("totals follow the aggregation", () => {
   assert.equal(combine("countDistinct", [4, 6]), null);
   assert.equal(combine("sum", [null]), null);
 });
+
+import { bandBounds, bandLabel, BAND_CHOICES, pickMeasure } from "../../src/DashboardBuilder/Features/Dashboard/analytics-model.js";
+test("band bounds: typed range, standard deviation and percentile", () => {
+  assert.deepEqual(bandBounds({ from: 1, to: 5 }, []), { from: 1, to: 5 });
+  const sd = bandBounds({ kind: "stddev", k: 1 }, [2, 4, 4, 4, 5, 5, 7, 9]); // mean 5, sample sd 2.138...
+  assert.ok(close(sd.from, 5 - Math.sqrt(32 / 7)) && close(sd.to, 5 + Math.sqrt(32 / 7)));
+  assert.ok(close(bandBounds({ kind: "stddev", k: 2 }, [1, 3]).to, 2 + 2 * Math.SQRT2));
+  assert.equal(bandBounds({ kind: "stddev", k: 1 }, [5]), null);
+  const pc = bandBounds({ kind: "percentile", lo: 25, hi: 75 }, [1, 2, 3, 4, 5]);
+  assert.deepEqual(pc, { from: 2, to: 4 });
+  assert.ok(close(bandBounds({ kind: "percentile", lo: 10, hi: 90 }, [0, 10]).from, 1));
+  assert.equal(bandBounds({ kind: "percentile", lo: 25, hi: 75 }, [null, ""]), null);
+  assert.equal(bandBounds(null, [1]), null);
+});
+test("band labels name the rule, never colour alone", () => {
+  assert.equal(bandLabel({ from: 1, to: 2 }), "Band");
+  assert.equal(bandLabel({ kind: "stddev", k: 2 }), "Mean ± 2σ");
+  assert.equal(bandLabel({ kind: "percentile", lo: 25, hi: 75 }), "P25–P75");
+  assert.ok(BAND_CHOICES.length >= 4);
+});
+test("the measure a reference line reads falls back to the first", () => {
+  assert.equal(pickMeasure(1, 3), 1);
+  assert.equal(pickMeasure(5, 3), 0);
+  assert.equal(pickMeasure(undefined, 3), 0);
+  assert.equal(pickMeasure(-1, 3), 0);
+});

@@ -419,9 +419,14 @@ function cleanAnalytics(a, where, issues) {
   const fin = (v) => typeof v === "number" && Number.isFinite(v);
   const out = { ref: { kind: "none" }, band: null, trend: "none", forecast: 0, totals: { grand: false, sub: false } };
   let bad = false;
-  if (a.ref && REF_KINDS.has(a.ref.kind) && (a.ref.kind !== "constant" || fin(a.ref.value))) out.ref = { kind: a.ref.kind, ...(a.ref.kind === "constant" ? { value: a.ref.value, ...(/^prm\d{1,6}$/.test(a.ref.param ?? "") ? { param: a.ref.param } : {}) } : {}) };
+  if (a.ref && REF_KINDS.has(a.ref.kind) && (a.ref.kind !== "constant" || fin(a.ref.value))) out.ref = { kind: a.ref.kind, ...(a.ref.measure !== undefined ? (Number.isInteger(a.ref.measure) && a.ref.measure >= 0 && a.ref.measure < 20 ? (a.ref.measure ? { measure: a.ref.measure } : {}) : (bad = true, {})) : {}), ...(a.ref.kind === "constant" ? { value: a.ref.value, ...(/^prm\d{1,6}$/.test(a.ref.param ?? "") ? { param: a.ref.param } : {}) } : {}) };
   else if (a.ref != null) bad = true;
-  if (a.band != null) { if (fin(a.band.from) && fin(a.band.to)) out.band = { from: Math.min(a.band.from, a.band.to), to: Math.max(a.band.from, a.band.to) }; else bad = true; }
+  if (a.band != null && a.band.kind !== undefined) {
+    const b = a.band;
+    if (b.kind === "stddev" && [1, 2, 3].includes(b.k)) out.band = { kind: "stddev", k: b.k };
+    else if (b.kind === "percentile" && Number.isInteger(b.lo) && Number.isInteger(b.hi) && b.lo >= 1 && b.hi <= 99 && b.lo < b.hi) out.band = { kind: "percentile", lo: b.lo, hi: b.hi };
+    else bad = true;
+  } else if (a.band != null) { if (fin(a.band.from) && fin(a.band.to)) out.band = { from: Math.min(a.band.from, a.band.to), to: Math.max(a.band.from, a.band.to) }; else bad = true; }
   if (a.trend !== undefined) { if (TRENDS.has(a.trend)) out.trend = a.trend; else bad = true; }
   if (a.forecast !== undefined) { if (FORECASTS.has(a.forecast)) out.forecast = a.forecast; else bad = true; }
   if (a.totals != null) { out.totals = { grand: a.totals.grand === true, sub: a.totals.sub === true }; }
