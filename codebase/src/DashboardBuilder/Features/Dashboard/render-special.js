@@ -58,7 +58,7 @@ export function renderHistogram(container, bins, format) {
 }
 
 /** P12 box plot: `boxes` = the boxplot endpoint's groups. */
-export function renderBoxplot(container, boxes, format) {
+export function renderBoxplot(container, boxes, format, outliers = []) {
   container.replaceChildren();
-  drawChart(container, { type: "boxplot", boxes, format });
+  drawChart(container, { type: "boxplot", boxes, outliers, format });
 }

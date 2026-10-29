@@ -6,6 +6,7 @@ import { defaultFormat } from "../Core/store.js";
 import { disposeChart, animateNextChart } from "./chart.js";
 import { renderWorksheet } from "./worksheet-render.js";
 import { renderHistogram, renderBoxplot } from "./render-special.js";
+import { outlierNotice } from "./box-model.js";
 import { createLatestGate, isAbortError, requestKey, truncationNotice } from "./query-runner.js";
 import { STAT_SINGLE_TABLE, statFieldHint } from "./show-me-rules.js";
 import { statFilters, withCategories } from "./filter-rules.js";
@@ -274,8 +275,8 @@ export function createWorksheetView(container, getContext, options = {}) {
       const result = await fetchCached(c, ticket, requestKey("boxplot", { db, table, req }), (signal) => api.boxplot(db, table, req, { signal }));
       if (!result) return;
       if (!result.groups?.length) { container.replaceChildren(hint("No data for this field.")); setNotice(c.noticeEl, joinNotices(filterNote, ignoredNote)); return; }
-      renderBoxplot(container, result.groups, format);
-      setNotice(c.noticeEl, joinNotices(filterNote, ignoredNote, truncationNotice({ truncated: result.truncated, chartType: "boxplot", limit: req.limit })));
+      renderBoxplot(container, result.groups, format, result.outliers);
+      setNotice(c.noticeEl, joinNotices(filterNote, ignoredNote, truncationNotice({ truncated: result.truncated, chartType: "boxplot", limit: req.limit }), outlierNotice(result.outliersTruncated)));
     }
   }
 

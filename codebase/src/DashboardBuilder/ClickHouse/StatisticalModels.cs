@@ -33,11 +33,18 @@ public sealed record BoxPlotRequest(
     int? Limit);
 
 /// <summary>One box: the (optional) group label and its five-number summary.</summary>
-public sealed record BoxPlotGroup(string? Label, double Min, double Q1, double Median, double Q3, double Max);
+/// <remarks><see cref="LowerWhisker"/>/<see cref="UpperWhisker"/> are the extreme values inside the Tukey fences
+/// (Q1 - 1.5 IQR, Q3 + 1.5 IQR); <see cref="Min"/>/<see cref="Max"/> stay the true extremes.</remarks>
+public sealed record BoxPlotGroup(string? Label, double Min, double Q1, double Median, double Q3, double Max, double LowerWhisker, double UpperWhisker);
+
+/// <summary>One outlier point: a value beyond its group's Tukey fences.</summary>
+public sealed record BoxPlotOutlier(string? Label, double Value);
 
 /// <summary>The box-plot data: one box per group.</summary>
-/// <remarks><see cref="Truncated"/> is true when more groups exist beyond the limit.</remarks>
-public sealed record BoxPlotResult(IReadOnlyList<BoxPlotGroup> Groups, bool Truncated = false);
+/// <remarks><see cref="Truncated"/> is true when more groups exist beyond the limit; <see cref="OutliersTruncated"/>
+/// when more than <c>ApiLimits.MaxBoxOutliers</c> outlier points exist.</remarks>
+public sealed record BoxPlotResult(IReadOnlyList<BoxPlotGroup> Groups, bool Truncated = false,
+    IReadOnlyList<BoxPlotOutlier>? Outliers = null, bool OutliersTruncated = false);
 
 /// <summary>
 /// A raw-row read of ONE table (POST /api/rows): the first <see cref="Limit"/> rows (default 100, max 1000) of
