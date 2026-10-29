@@ -24,8 +24,8 @@ export const CF_MAX_MEASURES = 20;
 export const DATE_PARTS = new Set(["auto", "exact", "year", "quarter", "month", "week", "day", "hour",
   "quarterOfYear", "monthOfYear", "dayOfWeek", "hourOfDay"]);
 // P27 quick table calculations on a measure pill (Dashboard/table-calc.js).
-export const TABLE_CALCS = new Set(["none", "running", "pctTotal", "diff", "pctDiff", "rank", "moving"]);
-export const CALC_ALONG = new Set(["auto", "columns", "rows"]);
+export const TABLE_CALCS = new Set(["none", "running", "pctTotal", "diff", "pctDiff", "rank", "pctRank", "moving"]);
+export const CALC_ALONG = new Set(["auto", "columns", "rows", "custom"]);
 export const REF_KINDS = new Set(["none", "average", "median", "min", "max", "constant"]); // P21
 export const TRENDS = new Set(["none", "linear", "log", "poly2"]);
 export const FORECASTS = new Set([0, 3, 6, 12]);

@@ -48,3 +48,33 @@ test("a percent suffix formats without scaling", () => {
   assert.equal(makeValueFormatter({ suffix: "%", numberFormat: "percent" })(23.456), "23.46%");
   assert.equal(makeValueFormatter({ suffix: "%" })(null), "—");
 });
+
+test("percentile rank: highest is 100, lowest 0, ties share, Other gets none", () => {
+  const near = (got, want) => assert.ok(got.length === want.length && got.every((g, i) => Math.abs(g - want[i]) < 1e-9), JSON.stringify(got));
+  near(run("pctRank", [10, 30, 20, 5]), [100 / 3, 100, 200 / 3, 0]);
+  near(run("pctRank", [10, 30, 30, 5]), [100 / 3, 100, 100, 0]);
+  assert.deepEqual(run("pctRank", [7]), [100]);
+  const rows = [...one([10, 20]), { keys: ["Other"], values: [99], isOther: true }];
+  assert.deepEqual(computeCalc(rows, 0, { type: "pctRank", along: "auto" }, 0, 1), [0, 100, null]);
+  assert.ok(isCalc({ type: "pctRank" }));
+  assert.equal(calcName({ type: "pctRank" }), "percentile rank");
+  const r = { rowDimensions: [], columnDimensions: ["c"], measures: ["m"], rows: one([1, 2]) };
+  assert.ok(applyTableCalcs(r, [{ type: "pctRank", along: "auto" }], 0, 1).percent.has(0));
+});
+
+// keys [a, b, c]: rowDims 2 (a, b), colDims 1 (c); values 1..8 in order
+const cube = () => {
+  const out = []; let v = 1;
+  for (const a of ["A", "B"]) for (const b of ["x", "y"]) for (const c of ["p", "q"]) out.push({ keys: [a, b, c], values: [v++] });
+  return out;
+};
+test("compute using chosen dimensions: those run together, the rest restart", () => {
+  const using = (u) => computeCalc(cube(), 0, { type: "running", along: "custom", using: u }, 2, 1);
+  assert.deepEqual(using([2]), [1, 3, 3, 7, 5, 11, 7, 15]);
+  assert.deepEqual(using([1, 2]), [1, 3, 6, 10, 5, 11, 18, 26]);
+  assert.deepEqual(using([0]), [1, 2, 3, 4, 6, 8, 10, 12]);
+  assert.deepEqual(using([0, 1, 2]), [1, 3, 6, 10, 15, 21, 28, 36]);
+  assert.deepEqual(using([]), computeCalc(cube(), 0, { type: "running", along: "auto" }, 2, 1));
+  assert.deepEqual(using([9]), computeCalc(cube(), 0, { type: "running", along: "auto" }, 2, 1));
+});
+test("resolveAlong keeps custom", () => { assert.equal(resolveAlong("custom", 1, 1), "custom"); });
