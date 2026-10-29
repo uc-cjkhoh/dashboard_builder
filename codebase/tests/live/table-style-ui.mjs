@@ -184,6 +184,24 @@ try {
     await shot('table-styled-dark.png');
     await ev(`import('/features/Core/scheme.js').then((m) => m.setSchemePref('light'))`);
   });
+  await check('banding leaves a conditional rule\'s tone on an even row', async () => {
+    await ev(`(async () => {
+      const st = await import('/features/Core/store.js'), cm = await import('/features/Dashboard/conditional-model.js'), sp = await import('/features/Dashboard/sheet-plan.js');
+      const tab = st.activeWorksheet(); const sheet = tab.sheet;
+      const key = cm.measureKey(sp.planMeasures(sheet)[0]);
+      sheet.format = { ...sheet.format, conditional: { [key]: { mode: 'none', scale: 'sequential', mid: null, rules: [{ op: '>=', value: 20, tone: 'bad' }] } } };
+      st.updateSheet(tab.id, sheet); return true; })()`);
+    await settle(500);
+    await waitFor(`${tbl}.querySelector('td.xt-rule--bad') !== null`, 'rule tone drawn');
+    const ruled = await ev(`(() => { const t = ${tbl}; const row = t.querySelector('tbody tr:nth-child(2)'); const td = row.querySelector('td.xt-rule--bad'); const plain = row.querySelectorAll('td')[1];
+      const probe = document.createElement('i'); probe.style.background = 'var(--danger-bg)'; document.body.append(probe); const want = getComputedStyle(probe).backgroundColor; probe.remove();
+      return { got: getComputedStyle(td).backgroundColor, want, other: getComputedStyle(plain).backgroundColor }; })()`);
+    must(ruled.got === ruled.want, 'even-row rule keeps its tone: ' + J(ruled));
+    await shot('table-rule-banded-light.png');
+    await ev(`import('/features/Core/scheme.js').then((m) => m.setSchemePref('dark'))`); await settle(600);
+    await shot('table-rule-banded-dark.png');
+    await ev(`import('/features/Core/scheme.js').then((m) => m.setSchemePref('light'))`);
+  });
   await check('the choices survive switching away and back (sheet format)', async () => {
     const f = await ev(`(() => { const t = ${tbl}; return t.className; })()`);
     must(/xt-a-center/.test(f) && /xt-d-roomy/.test(f) && /xt-s-banded/.test(f) && /xt-s-header/.test(f), f);

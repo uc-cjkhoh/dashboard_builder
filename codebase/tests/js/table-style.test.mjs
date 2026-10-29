@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { TABLE_ALIGN_CHOICES, TABLE_DENSITY_CHOICES, TABLE_SHADE_CHOICES, tableStyleClasses } from "../../src/DashboardBuilder/Features/Dashboard/table-style-model.js";
 import { defaultFormat, emptySheet } from "../../src/DashboardBuilder/Features/Core/store.js";
-import { parseWorkbook, serializeWorkbook, restoreSheet } from "../../src/DashboardBuilder/Features/Workbook/workbook-model.js";
+import { restoreSheet, sanitizeSheet } from "../../src/DashboardBuilder/Features/Workbook/workbook-model.js";
 
 test("defaults add no classes, so a table looks as before", () => {
   assert.deepEqual(tableStyleClasses(defaultFormat()), []);
@@ -37,4 +37,10 @@ test("workbook round-trips the choices; invalid ones reset with a note; old shee
   bad.format.tableAlign = "diagonal"; bad.format.tableShade = 3;
   const b = restoreSheet(bad);
   assert.equal(b.format.tableAlign, "auto"); assert.equal(b.format.tableShade, "none");
+  const issues = [];
+  const bad2 = JSON.parse(JSON.stringify(emptySheet()));
+  bad2.format.tableDensity = "huge";
+  assert.equal(sanitizeSheet(bad2, "Sheet 1", issues).format.tableDensity, "standard");
+  assert.equal(issues.length, 1);
+  assert.match(issues[0], /Sheet 1 format: unknown row height "huge"/);
 });
