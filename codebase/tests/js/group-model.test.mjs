@@ -207,3 +207,9 @@ test("other: survives a workbook clean; a bad one skips the calculation", () => 
   assert.equal(cleanGroupSpec({ ...spec([g("A", "a")]), other: 3 }, "x", issues), null);
   assert.equal(issues.length, 1);
 });
+test("other: a label equal to an ungrouped member is refused; a grouped member of that name is fine", () => {
+  const sp = { ...spec([g("A", "a")]), other: "Rest" };
+  assert.match(checkGroupSpec(sp, ["a", "Rest"]).error, /outside the groups/);
+  assert.equal(checkGroupSpec(sp, ["a", "b"]).ok, true);
+  assert.equal(checkGroupSpec({ ...spec([g("A", "Rest")]), other: "Rest" }, ["Rest"]).ok, true);
+});

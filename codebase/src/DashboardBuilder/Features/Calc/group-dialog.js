@@ -89,11 +89,12 @@ export function openGroupDialog({ field, fieldName, calcId = null, load }) {
     const dup = groups.find((g, i) => groups.some((o, j) => j < i && o.name.trim().toLowerCase() === g.name.trim().toLowerCase()));
     const blank = groups.find((g) => !g.name.trim() && [...assign.values()].includes(g.id));
     const r = dup ? { ok: false, error: `A group named '${dup.name.trim()}' already exists.` } : blank ? { ok: false, error: "Give every group a name." } : checkGroupSpec(s, selects.map((x) => x.member));
+    const noLabel = otherOn && !otherText.trim();
     const nm = checkName(name.value, calculations, existing?.id);
     nameMsg.textContent = nm.ok ? "" : nm.error;
     if (nm.ok) name.removeAttribute("aria-invalid"); else name.setAttribute("aria-invalid", "true");
-    msg.textContent = !r.ok && (used > 0 || dup || blank || otherOn) ? r.error : "";
-    save.disabled = !(r.ok && nm.ok);
+    msg.textContent = noLabel ? "Give the ungrouped members a label." : !r.ok && (used > 0 || dup || blank || otherOn) ? r.error : "";
+    save.disabled = !(r.ok && nm.ok) || noLabel;
   };
   const fillSelects = () => {
     for (const { member, select } of selects) {

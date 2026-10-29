@@ -237,6 +237,10 @@ try {
     must(await ev(`document.querySelector('.grp-other input[type=text]').disabled`), 'label input off until ticked');
     await ev(`document.querySelector('.grp-other input[type=checkbox]').click()`);
     must(await ev(`document.querySelector('.grp-other input[type=text]').value === 'Other'`), 'default label');
+    await typeInto('.grp-other input[type=text]', '');
+    must(await ev(`document.querySelector('dialog.grp-dialog .dialog__foot button.btn--primary').disabled`), 'blank label disables Save');
+    must(/label/.test(await stripText('.grp-error:not(:empty)')), 'blank label message');
+    await typeInto('.grp-other input[type=text]', 'Other');
     await b.sleep(300);
     await b.screenshot(join(SHOTS, 'group-other-light.png'));
     await ev(`${dlgBtn('dialog.grp-dialog', 'Save')}.click()`);

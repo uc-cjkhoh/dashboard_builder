@@ -77,6 +77,7 @@ export function checkGroupSpec(spec, knownMembers = []) {
   const other = otherLabel(spec);
   if (other.length > LIMITS.groupName) return { ok: false, error: `The label for ungrouped members must be at most ${LIMITS.groupName} characters.` };
   if (other && groups.some((g) => sameName(g.name.trim(), other))) return { ok: false, error: `'${other}' is already a group name — give the ungrouped members another label.` };
+  if (other && knownMembers.some((m) => m === other && !owner.has(m))) return { ok: false, error: `The label '${other}' is also a member of this field outside the groups — give the ungrouped members another label, or put that member in a group.` };
   const n = total(groups);
   if (n > LIMITS.groupMembers) return { ok: false, error: `At most ${LIMITS.groupMembers} members per group field.` };
   if (n > maxMembersFor(spec)) return { ok: false, error: `This group field has ${n} members. The calculation engine takes at most ${maxMembersFor(spec)} members across all groups (its ${CALC_LIMITS.nodes}-node limit) — put the largest group's members back, or make a second group field.` };
