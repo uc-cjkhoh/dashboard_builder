@@ -19,6 +19,7 @@ import { cleanParameter, MAX_PARAMS } from "../Core/parameters-model.js";
 import { cleanHierarchies, hierarchyTableKey } from "../Dashboard/hierarchy-model.js";
 import { cleanCalculations } from "../Calc/calc-workbook.js";
 import { cleanWidgets, savedWidgets } from "../Board/board-model.js";
+import { cleanSize, savedSize } from "../Board/board-size.js";
 import { CALC_AGGS } from "../Calc/calc-pill.js";
 import {
   CHART_TYPE_IDS, CATEGORIES, FILTER_OPS, NUMBER_FORMATS, DATE_FORMATS, LEGENDS, TOP_N, MAX_DECIMALS, DATE_BUCKETS, LINE_STYLES, HEATMAP_SHAPES, SECONDARY_TYPES, MARK_BORDERS, MARKER_SHAPES, MAX_TARGET_MEASURE,
@@ -59,7 +60,7 @@ export function serializeWorkbook({ entities, relationships, tabs, active, theme
       joinFixed: r.joinFixed === true,
     })),
     worksheets: worksheets.map((d) => ({ name: d.name, sheet: savedSheet(d.sheet) })),
-    dashboards: dashboards.map((d) => ({ name: d.name, widgets: savedWidgets(d.widgets, wsIndex) })),
+    dashboards: dashboards.map((d) => ({ name: d.name, widgets: savedWidgets(d.widgets, wsIndex), ...savedSize(d.size) })), // size: optional (absent = automatic)
     tabs: order, // the strip's order
     active: activeIndex !== undefined ? { kind: active.kind, index: activeIndex } : null, // null = the Data Model view
     theme: theme ? { accent: theme.accent, palette: theme.palette } : { ...DEFAULT_THEME },
@@ -200,7 +201,7 @@ export function parseWorkbook(source) {
       worksheets.push({ name, sheet: sanitizeSheet(d.sheet, `Sheet "${name}"`, issues) });
     } else {
       dbMap.set(t.index, dashboards.length); tabs.push({ kind: "dashboard", index: dashboards.length });
-      dashboards.push({ name: tabName(dbAll[t.index], "Dashboard"), widgets: dbAll[t.index].widgets });
+      dashboards.push({ name: tabName(dbAll[t.index], "Dashboard"), widgets: dbAll[t.index].widgets, size: dbAll[t.index].size });
     }
   }
   // A widget's worksheet is read through the map, so one cut by the 50-tab cap is "missing" like any other dangling index.
@@ -209,6 +210,7 @@ export function parseWorkbook(source) {
       ? d.widgets.map((w) => (w && typeof w === "object" && w.kind === "sheet" ? { ...w, sheet: wsMap.get(w.sheet) } : w))
       : d.widgets;
     d.widgets = cleanWidgets(remapped, { worksheetCount: worksheets.length, where: `Dashboard "${d.name}"` }, issues);
+    d.size = cleanSize(d.size, `Dashboard "${d.name}"`, issues);
   }
 
   let active = null;

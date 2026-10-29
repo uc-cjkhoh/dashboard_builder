@@ -18,16 +18,31 @@ export const columnWidth = (panelWidth, gap, cols = LIMITS.gridCols) => Math.max
 /** Reading order: by row, then column (what a stacked board shows). */
 export const widgetOrder = (widgets) => [...widgets].sort((a, b) => a.y - b.y || a.x - b.x);
 
+const MIN_FIXED_ROW = 16; // px
+
+/** A fixed board's row height: the rows in use (down to the lowest widget) share the box height. */
+export function fixedRowH(widgets, fixed, gap, fallback) {
+  const rows = widgets.reduce((m, wd) => Math.max(m, wd.y + wd.h), 0);
+  return rows > 0 ? Math.max(MIN_FIXED_ROW, (fixed.height - gap * (rows - 1)) / rows) : fallback; // floored: a tall stack in a short box overflows rather than collapsing
+}
+
 const span = (n, unit, gap) => n * unit + (n - 1) * gap;
 
 /**
- * Where every widget sits. `metrics` = { rowH, gap, stack? } in pixels; `stack: true` stacks whatever the width (print). Returns { stacked, height, rects: Map(id → { left, top, width, height }) };
+ * Where every widget sits. `metrics` = { rowH, gap, stack?, fixed? } in pixels; `stack: true` stacks whatever the width (print); `fixed` = { width, height }
+ * lays the board out as exactly that box (never stacked): columns span the width, rows stretch so the lowest widget ends at the height. Returns { stacked, height, rects: Map(id → { left, top, width, height }) };
  * `height` is the canvas height — the bottom of the lowest widget (at most 96 rows).
  */
-export function layoutBoard(widgets, panelWidth, { rowH, gap, stack = false }) {
+export function layoutBoard(widgets, panelWidth, { rowH, gap, stack = false, fixed = null }) {
+  const rects = new Map();
+  if (fixed) {
+    const row = fixedRowH(widgets, fixed, gap, rowH);
+    const col = columnWidth(fixed.width, gap);
+    for (const wd of widgets) rects.set(wd.id, { left: wd.x * (col + gap), top: wd.y * (row + gap), width: span(wd.w, col, gap), height: span(wd.h, row, gap) });
+    return { stacked: false, height: fixed.height, rects };
+  }
   const width = Math.max(0, panelWidth);
   const stacked = stack || isStacked(width);
-  const rects = new Map();
   let height = 0;
   if (stacked) {
     let top = 0;

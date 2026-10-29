@@ -1,4 +1,4 @@
-import { bus, activeDashboard, worksheets, dashboards, worksheetById, setWidgets, nextWidgetId, isDashboardActive } from "../Core/store.js";
+import { bus, activeDashboard, worksheets, dashboards, worksheetById, setWidgets, setDashboardSize, nextWidgetId, isDashboardActive } from "../Core/store.js";
 import { toggle, toast, makeButton } from "../Core/ui.js";
 import { icon } from "../Core/icons.js";
 import { LIMITS } from "../Core/validate.js";
@@ -8,7 +8,8 @@ import { labelOf } from "../Dashboard/member-labels.js";
 import { sharedResults } from "../Dashboard/dashboards.js";
 import { nextSelection, selectionRefusal, crossFor, chipText, stillValid, UNSELECTABLE_NOTE } from "../Dashboard/dashboard-select.js";
 import { placeNew } from "./board-model.js";
-import { layoutBoard, widgetOrder } from "./board-layout.js";
+import { layoutBoard, widgetOrder, fixedRowH } from "./board-layout.js";
+import { SIZE_PRESETS, sizeKey, sizeLabel } from "./board-size.js";
 import { createWidget } from "./board-widget.js";
 import { createPanel } from "./board-panel.js";
 import { initInteract } from "./board-interact.js";
@@ -126,10 +127,16 @@ export function initBoard() {
 
   function layout() {
     const dash = activeDashboard();
-    const width = printing ? PRINT_WIDTH : grid.clientWidth;
-    if (!dash || !width) return;
+    if (!dash) return;
     const metrics = readMetrics();
-    const { stacked, height, rects } = layoutBoard(dash.widgets, width, { ...metrics, stack: printing }); // paper: one column in flow, so no widget splits across pages
+    // A fixed dashboard is its box on screen; on paper the same box, scaled down proportionally to fit the page width (never up).
+    const k = dash.size && printing ? Math.min(1, PRINT_WIDTH / dash.size.width) : 1;
+    const fixed = dash.size ? { width: dash.size.width * k, height: dash.size.height * k } : null;
+    const width = fixed ? fixed.width : printing ? PRINT_WIDTH : grid.clientWidth;
+    if (!width) return;
+    grid.classList.toggle("is-fixed", Boolean(fixed));
+    grid.style.width = fixed ? `${fixed.width}px` : "";
+    const { stacked, height, rects } = layoutBoard(dash.widgets, width, { ...metrics, stack: printing && !fixed, fixed }); // paper: one column in flow, so no widget splits across pages
     if (printing) for (const [id, r] of rects) entries.get(id)?.sizeChart({ width: r.width, height: r.height, chrome: { x: 2 * metrics.pad + 2, y: 2 * metrics.pad + 2 } });
     grid.classList.toggle("is-stacked", stacked);
     grid.style.height = `${height}px`;
@@ -172,6 +179,7 @@ export function initBoard() {
     title.textContent = dash.name;
     count.textContent = `${dash.widgets.length} of ${LIMITS.widgets} widgets`;
     panel.render(worksheets());
+    paintSize(dash);
     const dropped = dropStale(dash); // its source widget was removed / closed: the others show their own data again
     reconcile(dash);
     if (dropped) syncCross();
@@ -240,8 +248,13 @@ export function initBoard() {
     for (const id of [...known]) if (!live.has(id)) { known.delete(id); history.forget(id); }
   });
 
+  /** Pointer snapping uses the rows as drawn: a fixed dashboard stretches them to its height. */
+  function dragMetrics() {
+    const m = readMetrics(), dash = activeDashboard();
+    return dash?.size ? { ...m, rowH: fixedRowH(dash.widgets, dash.size, m.gap, m.rowH) } : m;
+  }
   const interact = initInteract({
-    grid, scroll: $("board-scroll"), getDash: activeDashboard, nameOf, metrics: readMetrics, commit, status,
+    grid, scroll: $("board-scroll"), getDash: activeDashboard, nameOf, metrics: dragMetrics, commit, status,
     addAt(sheetId, cand) { const dash = activeDashboard(); if (dash && worksheetById(sheetId)) addWidget(dash, "sheet", sheetId, cand); },
   });
 
@@ -287,7 +300,24 @@ export function initBoard() {
   window.addEventListener("beforeprint", () => { if (activeDashboard()) { printing = true; layout(); } });
   window.addEventListener("afterprint", () => { printing = false; for (const e of entries.values()) e.sizeChart(null); layout(); });
   syncFull();
-  tools.append(undoBtn, redoBtn, fullBtn, printBtn);
+  // Size: Automatic fills the panel; a preset fixes the board to that box (a loaded size that is no preset gets its own option).
+  const sizeSel = document.createElement("select");
+  sizeSel.className = "select board-bar__size";
+  sizeSel.setAttribute("aria-label", "Dashboard size");
+  sizeSel.addEventListener("change", () => {
+    const dash = activeDashboard();
+    if (!dash) return;
+    const pick = sizeSel.value === "auto" ? null : SIZE_PRESETS.concat(dash.size ?? []).find((p) => sizeKey(p) === sizeSel.value) ?? null;
+    setDashboardSize(dash.id, pick);
+    status(pick ? `Fixed size ${sizeLabel(pick)}.` : "Automatic size.");
+  });
+  function paintSize(dash) {
+    const sizes = [null, ...SIZE_PRESETS];
+    if (dash.size && !SIZE_PRESETS.some((p) => sizeKey(p) === sizeKey(dash.size))) sizes.push(dash.size);
+    sizeSel.replaceChildren(...sizes.map((p) => { const o = document.createElement("option"); o.value = sizeKey(p); o.textContent = sizeLabel(p); return o; }));
+    sizeSel.value = sizeKey(dash.size);
+  }
+  tools.append(sizeSel, undoBtn, redoBtn, fullBtn, printBtn);
 
   sync();
 }
