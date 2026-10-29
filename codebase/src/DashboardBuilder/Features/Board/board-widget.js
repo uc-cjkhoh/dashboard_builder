@@ -53,7 +53,7 @@ export function createWidget(widget, host) {
   const notice = h("p", "ws-chart-notice board-widget__notice");
   notice.setAttribute("role", "status");
   notice.hidden = true;
-  const body = h("div", widget.kind === "sheet" ? "board-widget__body ws-chart" : "board-widget__body board-text");
+  const body = h("div", widget.kind === "sheet" ? "board-widget__body ws-chart" : `board-widget__body board-${widget.kind}`);
   el.append(head, ...(widget.kind === "sheet" ? [notice] : []), body, grip);
   let current = widget;
 
@@ -67,6 +67,8 @@ export function createWidget(widget, host) {
 
   function labelFor(w) {
     if (w.kind === "text") return w.heading || "Text";
+    if (w.kind === "image") return w.alt || "Image";
+    if (w.kind === "spacer") return "Spacer";
     return worksheetById(w.sheetId)?.name ?? "Closed worksheet";
   }
   // --- inline text edit: heading + body become labelled inputs; Save / Enter commits, Cancel / Esc discards ---
@@ -141,14 +143,22 @@ export function createWidget(widget, host) {
     body.replaceChildren(); // the heading is the widget's title (header); the body is the text under it
     if (w.body) body.append(h("p", "board-text__body", w.body));
   }
+  function paintImage(w) {
+    let img = body.firstElementChild;
+    if (!img) { img = h("img", "board-image__img"); img.draggable = false; body.append(img); }
+    if (img.getAttribute("src") !== w.src) img.src = w.src; // a validated raster data URL (image-model.js isImageSrc)
+    img.alt = w.alt ?? "";
+  }
   function update(w) {
     current = w;
     const name = labelFor(w);
     title.textContent = name;
     title.title = name;
     remove.setAttribute("aria-label", `Remove “${name}” from the dashboard`);
+    edit.hidden = w.kind === "image" || w.kind === "spacer"; // nothing to edit: an image is replaced by removing it, a spacer is blank
     edit.setAttribute("aria-label", w.kind === "text" ? `Edit the text “${name}”` : `Edit the worksheet “${name}”`);
     el.setAttribute("aria-label", name);
+    if (w.kind === "image") { paintImage(w); return; }
     if (w.kind !== "text") return;
     if (editing && !textChanged({ heading: editing.heading, body: editing.body }, { heading: w.heading ?? "", body: w.body ?? "" })) return; // keep the open form
     editing = null; // the text changed under the form (undo / redo): show the new text

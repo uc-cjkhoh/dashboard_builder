@@ -8,6 +8,7 @@ import { labelOf } from "../Dashboard/member-labels.js";
 import { sharedResults } from "../Dashboard/dashboards.js";
 import { nextSelection, selectionRefusal, crossFor, chipText, stillValid, UNSELECTABLE_NOTE } from "../Dashboard/dashboard-select.js";
 import { placeNew } from "./board-model.js";
+import { validateImageFile, isImageSrc } from "./image-model.js";
 import { layoutBoard, widgetOrder, fixedRowH } from "./board-layout.js";
 import { SIZE_PRESETS, sizeKey, sizeLabel } from "./board-size.js";
 import { createWidget } from "./board-widget.js";
@@ -66,7 +67,7 @@ export function initBoard() {
   }
   const nameOf = (w) => entries.get(w.id)?.el.getAttribute("aria-label") ?? (w.kind === "text" ? "Text" : "widget");
 
-  const panel = createPanel($("board-panel"), { onAddSheet: (sheetId) => add("sheet", sheetId), onAddText: () => add("text"), onDragStart() {}, onDragEnd() {} });
+  const panel = createPanel($("board-panel"), { onAddSheet: (sheetId) => add("sheet", sheetId), onAddText: () => add("text"), onAddImage: (file) => addImage(file), onAddSpacer: () => add("spacer"), onDragStart() {}, onDragEnd() {} });
 
   function teardown() {
     for (const e of entries.values()) { e.destroy(); e.el.remove(); }
@@ -195,12 +196,36 @@ export function initBoard() {
   }
 
   /** Add a widget at `cell` ({ x, y, w, h }) — from Add (first free spot) or a drop (the cell under the pointer). */
-  function addWidget(dash, kind, sheetId, cell) {
+  function addWidget(dash, kind, sheetId, cell, extra = {}) {
     const { x, y, w, h } = cell;
-    const widget = kind === "sheet" ? { id: nextWidgetId(), kind, sheetId, x, y, w, h } : { id: nextWidgetId(), kind, heading: "Text", body: "", x, y, w, h };
+    const widget = kind === "sheet" ? { id: nextWidgetId(), kind, sheetId, x, y, w, h }
+      : kind === "text" ? { id: nextWidgetId(), kind, heading: "Text", body: "", x, y, w, h }
+      : { id: nextWidgetId(), kind, ...extra, x, y, w, h }; // image { alt, src } | spacer
     commit([...dash.widgets, widget]);
     toast(`Added “${entries.get(widget.id)?.el.getAttribute("aria-label") ?? "widget"}” to the dashboard.`, "ok"); // polite live region (#toast-live)
     entries.get(widget.id)?.el.scrollIntoView({ block: "nearest" });
+  }
+
+  /** Add image: check the file, read it as a data URL (it is saved in the workbook), then place it at the first free spot. */
+  function addImage(file) {
+    const dash0 = activeDashboard();
+    if (!dash0) return;
+    const pre = placeNew(dash0.widgets, "image");
+    if (!pre.ok) { toast(pre.error, "danger"); return; }
+    const checked = validateImageFile(file);
+    if (!checked.ok) { toast(checked.error, "danger"); return; }
+    const reader = new FileReader();
+    reader.onerror = () => toast("That image couldn't be read.", "danger");
+    reader.onload = () => {
+      const src = String(reader.result);
+      const dash = activeDashboard();
+      if (!dash) return;
+      if (!isImageSrc(src)) { toast("That image couldn't be used. Choose a PNG, JPEG, GIF or WebP file.", "danger"); return; }
+      const spot = placeNew(dash.widgets, "image");
+      if (!spot.ok) { toast(spot.error, "danger"); return; }
+      addWidget(dash, "image", null, spot, { alt: checked.alt, src });
+    };
+    reader.readAsDataURL(file);
   }
 
   function remove(widget) {
