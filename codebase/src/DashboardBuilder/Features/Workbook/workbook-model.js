@@ -24,7 +24,7 @@ import { cleanSize, savedSize } from "../Board/board-size.js";
 import { CALC_AGGS } from "../Calc/calc-pill.js";
 import {
   CHART_TYPE_IDS, CATEGORIES, FILTER_OPS, NUMBER_FORMATS, DATE_FORMATS, LEGENDS, TOP_N, MAX_DECIMALS, DATE_BUCKETS, LINE_STYLES, HEATMAP_SHAPES, SECONDARY_TYPES, MARK_BORDERS, MARKER_SHAPES, MAX_TARGET_MEASURE, TABLE_ALIGNS, TABLE_DENSITIES, TABLE_SHADES,
-  PERIOD_PRESETS, PERIOD_COMPARES, DATE_PARTS, TABLE_CALCS, CALC_ALONG, FIT_MODES, REF_KINDS, TRENDS, FORECASTS, CF_MODES, CF_SCALES, CF_OPS, CF_TONES, CF_MAX_RULES, CF_MAX_MEASURES,
+  PERIOD_PRESETS, PERIOD_COMPARES, DATE_PARTS, DATE_LABELS, TABLE_CALCS, CALC_ALONG, FIT_MODES, REF_KINDS, TRENDS, FORECASTS, CF_MODES, CF_SCALES, CF_OPS, CF_TONES, CF_MAX_RULES, CF_MAX_MEASURES,
 } from "../Core/sheet-schema.js";
 
 export const WORKBOOK_FORMAT = "dashboard-builder-workbook";
@@ -276,7 +276,7 @@ function cleanPill(raw, where, issues, needCategory = true) {
     issues.push(`${where}: skipped a field with missing details.`); return null;
   }
   const p = { ...raw };
-  if (isCalc) delete p.datePart; // E12: a calculated dimension is never date-grouped
+  if (isCalc) { delete p.datePart; delete p.dateLabels; } // E12: a calculated dimension is never date-grouped
   if (p.role !== undefined && p.role !== "dimension" && p.role !== "measure") {
     issues.push(`${where}: ${p.table}.${p.column} had an unknown role "${p.role}" — cleared.`); delete p.role;
   }
@@ -302,6 +302,10 @@ function cleanPill(raw, where, issues, needCategory = true) {
   // P26 date part: a known part on a date field only.
   if (p.datePart !== undefined && (!DATE_PARTS.has(p.datePart) || p.category !== "temporal")) {
     issues.push(`${where}: ${p.table}.${p.column} had an unusable date part "${p.datePart}" — reset to Auto.`); delete p.datePart;
+  }
+  // Date labels: show all / thin out the axis labels, on a date field only.
+  if (p.dateLabels !== undefined && (!DATE_LABELS.has(p.dateLabels) || p.category !== "temporal")) {
+    issues.push(`${where}: ${p.table}.${p.column} had unusable date labels "${p.dateLabels}" — reset to thin out.`); delete p.dateLabels;
   }
   // P40 field choices: a list of whole fields (db / table / column / category), ≤ 8, the shown one included.
   if (p.choices !== undefined) {

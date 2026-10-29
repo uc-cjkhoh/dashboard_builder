@@ -4,6 +4,7 @@ import { toast, makeButton, openDialog, closeDialog } from "../Core/ui.js";
 import { api } from "../Core/api.js";
 import { previewRequest } from "./join-preview-model.js";
 import { buildJoinCheck } from "./join-check.js";
+import { COLUMN_MIME, encodeColumnDrag, parseColumnDrag, dropDecision } from "./link-drag.js";
 
 // Relationships (P5): logical, typed links the user draws between the join keys checked on two
 // entities (decision D5 — ClickHouse neither creates nor validates them). Creation is
@@ -27,10 +28,11 @@ export function initRelations() {
 
   bus.addEventListener("joinkey:changed", (e) => onJoinKeyChanged(e.detail));
   bus.addEventListener("entity:moved", () => render());
-  bus.addEventListener("entity:loaded", () => render()); // a restored link waits for its key rows
+  bus.addEventListener("entity:loaded", (e) => { markDraggable(e.detail.entityId); render(); }); // a restored link waits for its key rows
   bus.addEventListener("entity:removed", (e) => onEntityRemoved(e.detail.entityId));
   bus.addEventListener("view:changed", () => { clearPending(); selectedId = null; render(); });
   canvas.addEventListener("scroll", render);
+  initColumnDrag();
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") { clearPending(); select(null); }
   });
@@ -55,6 +57,78 @@ function onJoinKeyChanged({ entityId, column, checked }) {
     if (pending && pending.entityId === entityId && pending.column === column) clearPending();
     render();
   }
+}
+
+// --- drag a column row onto another card's row to relate them -------------------
+// Pointer-free HTML5 DnD with its own MIME type. The click-to-click connectors above stay the keyboard path.
+let dragFrom = null; // { entityId, column } while a row is dragged
+
+function markDraggable(entityId) {
+  for (const row of entities.get(entityId)?.el.querySelectorAll(".col-row") ?? []) row.draggable = true;
+}
+
+function endOf(entityId, column) {
+  const e = entities.get(entityId);
+  const c = e?.columns?.find((x) => x.name === column);
+  return e && c ? { entityId, column, category: c.category, table: e.table } : null;
+}
+
+function rowEnd(row) {
+  const card = row?.closest(".entity");
+  return card && row.dataset.column ? endOf(card.dataset.entityId, row.dataset.column) : null;
+}
+
+function clearDropMarks() {
+  for (const el of canvas.querySelectorAll(".col-row--drop-ok, .col-row--drop-no, .col-row--drag-source")) el.classList.remove("col-row--drop-ok", "col-row--drop-no", "col-row--drag-source");
+}
+
+function initColumnDrag() {
+  canvas.addEventListener("dragstart", (e) => {
+    const row = e.target instanceof Element ? e.target.closest(".col-row") : null;
+    if (!row || !e.dataTransfer) return;
+    const card = row.closest(".entity");
+    dragFrom = { entityId: card.dataset.entityId, column: row.dataset.column };
+    e.dataTransfer.setData(COLUMN_MIME, encodeColumnDrag(dragFrom.entityId, dragFrom.column));
+    e.dataTransfer.effectAllowed = "link";
+    row.classList.add("col-row--drag-source");
+  });
+  canvas.addEventListener("dragover", (e) => {
+    if (!dragFrom || !e.dataTransfer || !Array.from(e.dataTransfer.types).includes(COLUMN_MIME)) return;
+    const row = e.target instanceof Element ? e.target.closest(".col-row") : null;
+    for (const el of canvas.querySelectorAll(".col-row--drop-ok, .col-row--drop-no")) if (el !== row) el.classList.remove("col-row--drop-ok", "col-row--drop-no");
+    if (!row) return; // not over a row: no drop here
+    const { ok } = dropDecision({ relationships: relationships.values(), from: endOf(dragFrom.entityId, dragFrom.column), to: rowEnd(row) });
+    row.classList.toggle("col-row--drop-ok", ok);
+    row.classList.toggle("col-row--drop-no", !ok);
+    if (ok) { e.preventDefault(); e.dataTransfer.dropEffect = "link"; } else e.dataTransfer.dropEffect = "none";
+  });
+  canvas.addEventListener("drop", (e) => {
+    const from = e.dataTransfer && Array.from(e.dataTransfer.types).includes(COLUMN_MIME) ? parseColumnDrag(e.dataTransfer.getData(COLUMN_MIME)) : null;
+    const row = e.target instanceof Element ? e.target.closest(".col-row") : null;
+    dragFrom = null; clearDropMarks();
+    if (!from || !row) return;
+    e.preventDefault();
+    const a = endOf(from.entityId, from.column), b = rowEnd(row);
+    if (!a || !b) return;
+    const { ok, problem } = dropDecision({ relationships: relationships.values(), from: a, to: b });
+    if (!ok) { if (problem) toast(problem, "danger"); return; }
+    openCardinalityDialog({
+      current: "1:N",
+      tables: [a.table, b.table],
+      check: joinCheckFor(from, { entityId: b.entityId, column: b.column }),
+      onPick: (cardinality, sel) => {
+        // Both rows become join keys (the checkbox's own change handler keeps card, handle and model in step).
+        for (const end of [a, b]) tickKey(end.entityId, end.column);
+        createRelationship(from, { entityId: b.entityId, column: b.column }, cardinality, joinFromSelection(sel));
+      },
+    });
+  });
+  canvas.addEventListener("dragend", () => { dragFrom = null; clearDropMarks(); });
+}
+
+function tickKey(entityId, column) {
+  const key = entities.get(entityId)?.el.querySelector(`.col-row[data-column="${cssEscape(column)}"] .col-row__key`);
+  if (key && !key.checked) { key.checked = true; key.dispatchEvent(new Event("change")); }
 }
 
 function makeConnector(entityId, column) {

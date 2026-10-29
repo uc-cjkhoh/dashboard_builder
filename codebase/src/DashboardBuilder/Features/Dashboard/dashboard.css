@@ -505,6 +505,7 @@
 .ws-pill__step:disabled { opacity: .35; cursor: default; }
 /* P27: the measure pill's table-calculation button, accent-coloured when one is set. */
 .ws-pill__calc.is-set { color: var(--accent-ink); }
+.ws-pill__labels.is-set { color: var(--accent-ink); box-shadow: inset 0 0 0 1px currentColor; border-radius: var(--r); }
 .ws-pill__calc[aria-pressed="true"] { background: var(--accent-soft); }
 
 /* ---- P28 field pane: search, hidden toggle, ⋯ menu, rename ------------------- */

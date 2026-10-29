@@ -16,9 +16,11 @@
 .canvas--dragover { outline: 2px dashed var(--accent); outline-offset: -8px; }
 
 /* ---- Entity card (a dropped table) --------------------------------------- */
+/* A card's width follows its db.table name (canvas.js) between these two bounds. */
+.view--model { --entity-min: 300px; --entity-max: 480px; }
 .entity {
   position: absolute;
-  width: 300px;
+  width: var(--entity-min);
   display: flex;
   flex-direction: column;
   background: var(--surface);

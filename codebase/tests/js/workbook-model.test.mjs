@@ -529,3 +529,15 @@ test("a table calculation's chosen dimensions (custom) are kept when valid and r
   // using only means something with custom
   assert.deepEqual(sheetOf({ rows: [{ ...m, tableCalc: { type: "running", along: "rows", using: [0] } }] }).worksheets[0].sheet.rows[0].tableCalc, { type: "running", along: "rows" });
 });
+
+test("date labels (show all / thin out) are kept on a date pill, back-compat when absent, reset elsewhere", () => {
+  const d = { db: "s", table: "orders", column: "created", category: "temporal" };
+  const col = (extra) => sheetOf({ columns: [{ ...d, ...extra }] }).worksheets[0].sheet.columns[0];
+  assert.equal(col({ dateLabels: "all" }).dateLabels, "all");
+  assert.equal(col({ dateLabels: "thin" }).dateLabels, "thin");
+  assert.equal("dateLabels" in col({}), false); // an older workbook has none
+  const bad = sheetOf({ columns: [{ ...d, dateLabels: "some" }, { db: "s", table: "orders", column: "region", category: "text", dateLabels: "all" }] });
+  assert.equal(bad.worksheets[0].sheet.columns[0].dateLabels, undefined);
+  assert.equal(bad.worksheets[0].sheet.columns[1].dateLabels, undefined);
+  assert.equal(bad.issues.filter((i) => /date labels/.test(i)).length, 2);
+});
