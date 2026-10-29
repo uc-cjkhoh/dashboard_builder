@@ -147,3 +147,44 @@ export function bandBounds(band, values) {
 
 /** A measure's values without the "Other" remainder rows (an aggregate of cut-off members is not a data point). */
 export const dataValues = (data, rows) => data.filter((_, i) => !rows[i]?.isOther);
+
+// The Analytics pane's items: each can be dragged onto the chart or added with its button (T07-01).
+export const ANALYTICS_ITEMS = [
+  { id: "ref", label: "Reference line", icon: "analytics" },
+  { id: "band", label: "Band", icon: "analytics" },
+  { id: "trend", label: "Trend line", icon: "analytics" },
+  { id: "forecast", label: "Forecast", icon: "analytics" },
+];
+/** The items that apply to a chart type: forecast needs a continuous axis (line / area). */
+export const itemsFor = (chartType) => (["bar", "line", "area"].includes(chartType) ? ANALYTICS_ITEMS.filter((i) => i.id !== "forecast" || chartType !== "bar") : []);
+/** Whether the item is on in these analytics. */
+export function itemActive(a, id) {
+  switch (id) {
+    case "ref": return !!a.ref && a.ref.kind !== "none";
+    case "band": return !!a.band;
+    case "trend": return a.trend !== "none";
+    case "forecast": return a.forecast > 0;
+    default: return false;
+  }
+}
+/** A copy with the item switched on at its default; an item already on is left as it is. */
+export function addItem(a, id) {
+  if (itemActive(a, id)) return a;
+  switch (id) {
+    case "ref": return { ...a, ref: { ...a.ref, kind: "average" } };
+    case "band": return { ...a, band: bandFromChoice("stddev1") };
+    case "trend": return { ...a, trend: "linear" };
+    case "forecast": return { ...a, forecast: 3 };
+    default: return a;
+  }
+}
+/** A copy with the item switched off. */
+export function removeItem(a, id) {
+  switch (id) {
+    case "ref": return { ...a, ref: { ...(a.ref?.measure ? { measure: a.ref.measure } : {}), kind: "none" } };
+    case "band": return { ...a, band: null };
+    case "trend": return { ...a, trend: "none" };
+    case "forecast": return { ...a, forecast: 0 };
+    default: return a;
+  }
+}

@@ -77,3 +77,37 @@ test('the "Other" remainder is not a data point for lines and bands', () => {
   assert.equal(refValue("average", vals), 20);
   assert.ok(close(bandBounds({ kind: "stddev", k: 1 }, vals).to, 30));
 });
+
+// Analytics pane items (T07-01): the draggable / clickable items and what each adds to sheet.analytics.
+import { defaultAnalytics, ANALYTICS_ITEMS, itemsFor, itemActive, addItem, removeItem } from "../../src/DashboardBuilder/Features/Dashboard/analytics-model.js";
+import { test as itest } from "node:test";
+import iassert from "node:assert/strict";
+
+itest("items: reference line, band, trend, forecast; forecast only on line and area", () => {
+  iassert.deepEqual(ANALYTICS_ITEMS.map((i) => i.id), ["ref", "band", "trend", "forecast"]);
+  iassert.deepEqual(itemsFor("bar").map((i) => i.id), ["ref", "band", "trend"]);
+  iassert.deepEqual(itemsFor("line").map((i) => i.id), ["ref", "band", "trend", "forecast"]);
+  iassert.deepEqual(itemsFor("area").map((i) => i.id), ["ref", "band", "trend", "forecast"]);
+  iassert.deepEqual(itemsFor("table"), []);
+});
+itest("addItem sets a default, keeps the other parts, and does not mutate", () => {
+  const a = { ...defaultAnalytics(), ref: { kind: "none", measure: 1 }, totals: { grand: true, sub: false } };
+  const r = addItem(a, "ref");
+  iassert.deepEqual(r.ref, { kind: "average", measure: 1 });
+  iassert.equal(a.ref.kind, "none");
+  iassert.deepEqual(addItem(a, "band").band, { kind: "stddev", k: 1 });
+  iassert.equal(addItem(a, "trend").trend, "linear");
+  iassert.equal(addItem(a, "forecast").forecast, 3);
+  iassert.deepEqual(addItem(a, "trend").totals, { grand: true, sub: false });
+});
+itest("addItem leaves an item that is already set as it is", () => {
+  const a = { ...defaultAnalytics(), ref: { kind: "median" }, trend: "log", band: { from: 1, to: 2 }, forecast: 6 };
+  for (const id of ["ref", "band", "trend", "forecast"]) iassert.deepEqual(addItem(a, id), a);
+});
+itest("itemActive and removeItem", () => {
+  const a = { ...defaultAnalytics(), ref: { kind: "max", measure: 2 }, trend: "poly2", forecast: 12, band: { kind: "stddev", k: 2 } };
+  for (const id of ["ref", "band", "trend", "forecast"]) { iassert.equal(itemActive(a, id), true); iassert.equal(itemActive(removeItem(a, id), id), false); }
+  iassert.deepEqual(removeItem(a, "ref").ref, { kind: "none", measure: 2 });
+  iassert.equal(itemActive(defaultAnalytics(), "ref"), false);
+  iassert.equal(itemActive({ ...defaultAnalytics(), ref: { kind: "constant", value: 0 } }, "ref"), true);
+});

@@ -49,7 +49,7 @@ import { paneState, deleteCalcPlan, roleChoice, setRoleChoice } from "../Calc/ca
 import { checkName } from "../Calc/calc-workbook.js";
 import { calcParamNames } from "../Calc/calc-params.js";
 import { calcProblem, topByRef, topByKey, aggWord } from "../Calc/calc-plan.js";
-import { REF_CHOICES, TREND_CHOICES, FORECAST_CHOICES, BAND_CHOICES, bandChoice, bandFromChoice, defaultAnalytics } from "./analytics-model.js";
+import { REF_CHOICES, TREND_CHOICES, FORECAST_CHOICES, BAND_CHOICES, bandChoice, bandFromChoice, defaultAnalytics, itemsFor, itemActive, addItem, removeItem } from "./analytics-model.js";
 import { castChoices, castLabel, effectiveCategory, syncCastCategories } from "./cast-model.js";
 import { aliasOf, labelOf } from "./member-labels.js";
 import { hierarchyGroup, HIERARCHY_MIME } from "./hierarchy-group.js";
@@ -65,6 +65,7 @@ import { BUCKET_TYPES, DATE_BUCKET_CHOICES } from "./scale-model.js";
 const MARKER_TYPES = new Set(["scatter", "square", "circle", "line", "area", "combo", "heatmap"]);
 const BORDER_TYPES = new Set(["bar", "stacked", "combo", "scatter", "square", "circle", "heatmap", "pie", "donut", "treemap", "funnel"]);
 const FIELD_MIME = "application/x-ch-field";
+const ANALYTICS_MIME = "application/x-ch-analytics"; // T07-01: an Analytics pane item dragged onto the chart
 // Column category from the Data Model catalog (entity.columns), for filters saved without one.
 // T02-34: a field's cast (field setting) decides the category its pills, filters and the field pane use.
 export const castOf = (f) => metaOf(f).cast;
@@ -152,6 +153,11 @@ export function initDashboards() {
   const headEl = document.getElementById("ws-chart-head");
   if (!view) return;
   initFieldResizer();
+  // T07-01: an Analytics pane item dropped on the chart view adds it (the item's button does the same from the keyboard).
+  const hasItem = (e) => analyticsDrop && e.dataTransfer && Array.from(e.dataTransfer.types).includes(ANALYTICS_MIME);
+  chartEl.addEventListener("dragover", (e) => { if (hasItem(e)) { e.preventDefault(); chartEl.classList.add("is-over"); } });
+  chartEl.addEventListener("dragleave", () => chartEl.classList.remove("is-over"));
+  chartEl.addEventListener("drop", (e) => { chartEl.classList.remove("is-over"); if (hasItem(e)) { e.preventDefault(); analyticsDrop(e.dataTransfer.getData(ANALYTICS_MIME)); } });
 
   // Latest-wins queries + recent results per worksheet: a superseded query is aborted (its answer can
   // never overwrite a newer chart), and presentation-only changes re-render from the cached result
@@ -177,6 +183,7 @@ export function initDashboards() {
   let cfMeasure = null;   // which measure the Format card's conditional-formatting editor shows (P37)
 
   let formatOpen = false; // whether the Format panel (P10) is expanded — ephemeral UI state
+  let analyticsDrop = null; // set while the Analytics card is open: adds the dropped item (its id) to the sheet
   let analyticsOpen = false; // P21: whether the Analytics card is open
   let showMeOpen = false; // P22: whether the Show Me card is open
   let shownPanel = null;  // the tool/format panel on screen last render, so only a newly opened one animates in
@@ -615,6 +622,7 @@ export function initDashboards() {
 
   // --- shelves -------------------------------------------------------------
   function renderShelves() {
+    analyticsDrop = null;
     const dash = activeWorksheet();
     if (!dash) return;
     const s = dash.sheet;
@@ -850,6 +858,24 @@ export function initDashboards() {
     const set = (patch) => { s.analytics = { ...a, ...patch }; commit(dash, s); };
     const panel = el("div", "ws-format ws-analytics");
     panel.append(el("span", "ws-shelf__label", "Analytics"));
+    const items = itemsFor(s.chartType);
+    if (items.length) {
+      const toggle = (id) => { s.analytics = itemActive(a, id) ? removeItem(a, id) : addItem(a, id); commit(dash, s); };
+      analyticsDrop = (id) => { if (items.some((i) => i.id === id)) { s.analytics = addItem(a, id); commit(dash, s); } };
+      const row = el("div", "ws-ana-items");
+      for (const it of items) {
+        const on = itemActive(a, it.id);
+        const b = makeButton(it.label, `ws-ana-item${on ? " is-active" : ""}`);
+        b.prepend(icon(it.icon, { size: 14 }));
+        b.draggable = true;
+        b.setAttribute("aria-pressed", String(on));
+        b.dataset.item = it.id;
+        b.addEventListener("click", () => toggle(it.id));
+        b.addEventListener("dragstart", (e) => { e.dataTransfer.setData(ANALYTICS_MIME, it.id); e.dataTransfer.effectAllowed = "copy"; });
+        row.append(b);
+      }
+      panel.append(row);
+    }
     const isTable = s.chartType === "table" || s.chartType === "text";
     if (ANALYTICS_TYPES.has(s.chartType)) {
       panel.append(fmtSelect("Reference line", REF_CHOICES, a.ref.kind, (v) => set({ ref: { kind: v, ...(v === "constant" ? { value: a.ref.value ?? 0 } : {}), ...(a.ref.measure ? { measure: a.ref.measure } : {}) } })));
