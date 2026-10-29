@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { refValue, trendFit, trendSeries, combine } from "../../src/DashboardBuilder/Features/Dashboard/analytics-model.js";
+import { refValue, trendFit, trendSeries, combine, defaultAnalytics, ANALYTICS_ITEMS, itemsFor, itemActive, addItem, removeItem } from "../../src/DashboardBuilder/Features/Dashboard/analytics-model.js";
 
 const close = (a, b, eps = 1e-9) => Math.abs(a - b) < eps;
 
@@ -79,35 +79,44 @@ test('the "Other" remainder is not a data point for lines and bands', () => {
 });
 
 // Analytics pane items (T07-01): the draggable / clickable items and what each adds to sheet.analytics.
-import { defaultAnalytics, ANALYTICS_ITEMS, itemsFor, itemActive, addItem, removeItem } from "../../src/DashboardBuilder/Features/Dashboard/analytics-model.js";
-import { test as itest } from "node:test";
-import iassert from "node:assert/strict";
 
-itest("items: reference line, band, trend, forecast; forecast only on line and area", () => {
-  iassert.deepEqual(ANALYTICS_ITEMS.map((i) => i.id), ["ref", "band", "trend", "forecast"]);
-  iassert.deepEqual(itemsFor("bar").map((i) => i.id), ["ref", "band", "trend"]);
-  iassert.deepEqual(itemsFor("line").map((i) => i.id), ["ref", "band", "trend", "forecast"]);
-  iassert.deepEqual(itemsFor("area").map((i) => i.id), ["ref", "band", "trend", "forecast"]);
-  iassert.deepEqual(itemsFor("table"), []);
+test("items: reference line, band, trend, forecast; forecast only on line and area", () => {
+  assert.deepEqual(ANALYTICS_ITEMS.map((i) => i.id), ["ref", "band", "trend", "forecast"]);
+  assert.deepEqual(itemsFor("bar").map((i) => i.id), ["ref", "band", "trend"]);
+  assert.deepEqual(itemsFor("line").map((i) => i.id), ["ref", "band", "trend", "forecast"]);
+  assert.deepEqual(itemsFor("area").map((i) => i.id), ["ref", "band", "trend", "forecast"]);
+  assert.deepEqual(itemsFor("table"), []);
 });
-itest("addItem sets a default, keeps the other parts, and does not mutate", () => {
+test("addItem sets a default, keeps the other parts, and does not mutate", () => {
   const a = { ...defaultAnalytics(), ref: { kind: "none", measure: 1 }, totals: { grand: true, sub: false } };
   const r = addItem(a, "ref");
-  iassert.deepEqual(r.ref, { kind: "average", measure: 1 });
-  iassert.equal(a.ref.kind, "none");
-  iassert.deepEqual(addItem(a, "band").band, { kind: "stddev", k: 1 });
-  iassert.equal(addItem(a, "trend").trend, "linear");
-  iassert.equal(addItem(a, "forecast").forecast, 3);
-  iassert.deepEqual(addItem(a, "trend").totals, { grand: true, sub: false });
+  assert.deepEqual(r.ref, { kind: "average", measure: 1 });
+  assert.equal(a.ref.kind, "none");
+  assert.deepEqual(addItem(a, "band").band, { kind: "stddev", k: 1 });
+  assert.equal(addItem(a, "trend").trend, "linear");
+  assert.equal(addItem(a, "forecast").forecast, 3);
+  assert.deepEqual(addItem(a, "trend").totals, { grand: true, sub: false });
 });
-itest("addItem leaves an item that is already set as it is", () => {
+test("addItem leaves an item that is already set as it is", () => {
   const a = { ...defaultAnalytics(), ref: { kind: "median" }, trend: "log", band: { from: 1, to: 2 }, forecast: 6 };
-  for (const id of ["ref", "band", "trend", "forecast"]) iassert.deepEqual(addItem(a, id), a);
+  for (const id of ["ref", "band", "trend", "forecast"]) assert.deepEqual(addItem(a, id), a);
 });
-itest("itemActive and removeItem", () => {
+test("itemActive and removeItem", () => {
   const a = { ...defaultAnalytics(), ref: { kind: "max", measure: 2 }, trend: "poly2", forecast: 12, band: { kind: "stddev", k: 2 } };
-  for (const id of ["ref", "band", "trend", "forecast"]) { iassert.equal(itemActive(a, id), true); iassert.equal(itemActive(removeItem(a, id), id), false); }
-  iassert.deepEqual(removeItem(a, "ref").ref, { kind: "none", measure: 2 });
-  iassert.equal(itemActive(defaultAnalytics(), "ref"), false);
-  iassert.equal(itemActive({ ...defaultAnalytics(), ref: { kind: "constant", value: 0 } }, "ref"), true);
+  for (const id of ["ref", "band", "trend", "forecast"]) { assert.equal(itemActive(a, id), true); assert.equal(itemActive(removeItem(a, id), id), false); }
+  assert.deepEqual(removeItem(a, "ref").ref, { kind: "none", measure: 2 });
+  assert.equal(itemActive(defaultAnalytics(), "ref"), false);
+  assert.equal(itemActive({ ...defaultAnalytics(), ref: { kind: "constant", value: 0 } }, "ref"), true);
+});
+test("items have distinct icons that exist", async () => {
+  const { PATHS } = await import("../../src/DashboardBuilder/Features/Core/icons.js");
+  assert.equal(new Set(ANALYTICS_ITEMS.map((i) => i.icon)).size, ANALYTICS_ITEMS.length);
+  for (const i of ANALYTICS_ITEMS) assert.ok(PATHS[i.icon], i.icon);
+});
+test("addItem ref drops a stale constant value and parameter, keeps the measure", () => {
+  const a = { ...defaultAnalytics(), ref: { kind: "none", value: 5, param: "p1", measure: 1 } };
+  assert.deepEqual(addItem(a, "ref").ref, { kind: "average", measure: 1 });
+});
+test("addItem works on analytics without a saved key", () => {
+  assert.equal(addItem({ ...defaultAnalytics(), ...({}) }, "trend").trend, "linear");
 });

@@ -150,10 +150,10 @@ export const dataValues = (data, rows) => data.filter((_, i) => !rows[i]?.isOthe
 
 // The Analytics pane's items: each can be dragged onto the chart or added with its button (T07-01).
 export const ANALYTICS_ITEMS = [
-  { id: "ref", label: "Reference line", icon: "analytics" },
-  { id: "band", label: "Band", icon: "analytics" },
-  { id: "trend", label: "Trend line", icon: "analytics" },
-  { id: "forecast", label: "Forecast", icon: "analytics" },
+  { id: "ref", label: "Reference line", icon: "ref-line" },
+  { id: "band", label: "Band", icon: "band" },
+  { id: "trend", label: "Trend line", icon: "trend" },
+  { id: "forecast", label: "Forecast", icon: "forecast" },
 ];
 /** The items that apply to a chart type: forecast needs a continuous axis (line / area). */
 export const itemsFor = (chartType) => (["bar", "line", "area"].includes(chartType) ? ANALYTICS_ITEMS.filter((i) => i.id !== "forecast" || chartType !== "bar") : []);
@@ -171,7 +171,7 @@ export function itemActive(a, id) {
 export function addItem(a, id) {
   if (itemActive(a, id)) return a;
   switch (id) {
-    case "ref": return { ...a, ref: { ...a.ref, kind: "average" } };
+    case "ref": return { ...a, ref: { kind: "average", ...(a.ref?.measure ? { measure: a.ref.measure } : {}) } }; // a stale value / param is dropped
     case "band": return { ...a, band: bandFromChoice("stddev1") };
     case "trend": return { ...a, trend: "linear" };
     case "forecast": return { ...a, forecast: 3 };

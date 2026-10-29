@@ -57,9 +57,6 @@ try {
   await b.mock(answer);
   const ev = (s) => b.evaluate(s);
   const waitFor = (s, label) => b.waitFor(s, { label });
-  const toastText = () => ev(`(document.getElementById('toast').hidden ? '' : document.getElementById('toast').textContent)`);
-
-  // page helpers: HTML5 drag-and-drop with a real DataTransfer, text lookup, dialog typing
   const installHelpers = () => ev(`(() => {
     window.__t = {
       chip: (name) => [...document.querySelectorAll('#ws-fields .ws-field')].find((c) => c.querySelector('.ws-field__name')?.textContent === name),
@@ -84,30 +81,7 @@ try {
     await b.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Delete', code: 'Delete', windowsVirtualKeyCode: 46 });
     await b.type(text);
   };
-  const openNewDialog = async () => {
-    await ev(`document.querySelector('.calc-group__new').click()`);
-    await waitFor(`${dlg} !== null`, 'calc dialog open');
-  };
-  const fillDialog = async (name, formula) => {
-    await focusAndType('.calc-dialog input.input', name);
-    await focusAndType('.calc-dialog textarea.formula', formula);
-    await ev(`document.querySelector('.calc-dialog textarea.formula').blur()`);
-  };
-  const saveDisabled = () => ev(`[...${dlg}.querySelectorAll('.dialog__foot button')].find((x) => x.textContent === 'Save').disabled`);
-  const saveDialog = async () => {
-    await ev(`[...${dlg}.querySelectorAll('.dialog__foot button')].find((x) => x.textContent === 'Save').click()`);
-    await waitFor(`${dlg} === null`, 'dialog closed after save');
-  };
-  const confirmOpen = `[...document.querySelectorAll('dialog[open]')].find((d) => !d.classList.contains('calc-dialog'))`;
-  const chartText = () => ev(`document.getElementById('ws-chart').textContent`);
-  const canvasDrawn = () => ev(`!!document.querySelector('#ws-chart canvas, #ws-chart svg')`);
-  const until = async (fn, label, timeout = 8000) => { const t0 = Date.now(); while (!fn()) { if (Date.now() - t0 > timeout) throw new Error(`timed out waiting for: ${label}`); await b.sleep(50); } };
-  // Wait until no new /api/query has arrived for `quiet` ms (polling, not a fixed sleep).
   const settle = async (quiet = 300) => { let n = -1; for (let i = 0; i < 60 && n !== queries.length; i++) { n = queries.length; await b.sleep(quiet); } };
-  const lastQuery = () => queries[queries.length - 1];
-  const hasKey = (o, k) => J(o).includes(`"${k}"`);
-
-  // ---- setup: connect, add the two tables, open a worksheet -----------------------------------------------------
   await b.goto(APP + '/');
   await waitFor(`!!document.getElementById('conn-connect')`, 'app loaded');
   await ev(`(() => { document.getElementById('conn-host').value = 'mock-ch'; document.getElementById('conn-password').value = 'x'; document.getElementById('conn-connect').click(); return true; })()`);
@@ -122,8 +96,6 @@ try {
   await installHelpers();
   await waitFor(`!!__t.chip('region')`, 'field pane filled');
 
-  const filterTool = `document.querySelector('.ws-tool[aria-label^="Filters"]')`;
-  const opSelect = `document.querySelector('select[aria-label^="Filter operator for"]')`;
   const shot = async (name) => { try { writeFileSync(join(SHOTS, name), Buffer.from((await b.send('Page.captureScreenshot', { format: 'png' })).data, 'base64')); } catch { /* optional */ } };
 
   const fmtTool = `document.querySelector('.ws-viewbar__btn[aria-label="Format"]')`;
@@ -133,86 +105,109 @@ try {
     await settle(400);
   };
   const opt = () => ev(`window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas')).getOption()`);
-  const openFormat = async () => {
-    if (!(await ev(`!!document.querySelector('.ws-format')`))) await ev(`${fmtTool}.click()`);
-    await waitFor(`!!document.querySelector('.ws-format')`, 'format panel');
-  };
   const pick = async (label, value) => {
     await ev(`(() => { const s = [...document.querySelectorAll('.ws-fmt-field')].find((l) => l.querySelector('.ws-fmt-label').textContent === ${J(label)}).querySelector('select'); s.value = ${J(value)}; s.dispatchEvent(new Event('change')); return true; })()`);
     await settle(400);
   };
-  const hasField = (label) => ev(`[...document.querySelectorAll('.ws-fmt-field')].some((l) => l.querySelector('.ws-fmt-label').textContent === ${J(label)})`);
   const theme = async (t) => { await ev(`import('/features/Core/scheme.js').then((m) => m.setSchemePref(${J(t)}))`); await settle(600); };
   const chartReady = () => waitFor(`!!document.querySelector('.ws-chart-canvas') && !!window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas'))`, 'chart drawn');
 
-  const setNum = async (label, v) => {
-    await ev(`(() => { const i = [...document.querySelectorAll('.ws-fmt-field')].find((l) => l.querySelector('.ws-fmt-label').textContent === ${J(label)}).querySelector('input'); i.value = ${J(v)}; i.dispatchEvent(new Event('change')); return true; })()`);
-    await settle(400);
-  };
-  const tick = (id) => ev(`document.getElementById('toast') && !document.getElementById('toast').hidden ? document.getElementById('toast').textContent : ''`);
-  const check1 = (id) => ev(`(() => { const l = [...document.querySelectorAll('.ws-fmt-field')].find((l) => l.querySelector('.ws-fmt-label').textContent === ${J(id)}); const c = l.querySelector('input'); c.checked = !c.checked; c.dispatchEvent(new Event('change')); return true; })()`);
   globalThis.__failShot = async (n) => shot('fail-' + n.slice(0, 12).replace(/\W/g, '_') + '.png');
-  const axes = async () => { const o = await opt(); return [].concat(o.yAxis); };
-
   const anaTool = `document.querySelector('.ws-viewbar__btn[aria-label="Analytics"]')`;
   const openAna = async () => { if (!(await ev(`!!document.querySelector('.ws-analytics')`))) await ev(`${anaTool}.click()`); await waitFor(`!!document.querySelector('.ws-analytics')`, 'analytics panel'); };
   const aPick = async (label, value) => {
     await ev(`(() => { const s = [...document.querySelectorAll('.ws-analytics .ws-fmt-field')].find((l) => l.querySelector('.ws-fmt-label').textContent === ${J(label)}).querySelector('select'); s.value = ${J(value)}; s.dispatchEvent(new Event('change')); return true; })()`);
     await settle(400); await chartReady();
   };
-  const aHas = (label) => ev(`[...document.querySelectorAll('.ws-analytics .ws-fmt-field')].some((l) => l.querySelector('.ws-fmt-label').textContent === ${J(label)})`);
   const mark = async (k) => (await opt()).series[0][k];
 
   const item = (id) => `document.querySelector('.ws-ana-item[data-item="${id}"]')`;
   const dropItem = (id) => ev(`(() => { const dt = new DataTransfer(); const it = ${item(id)};
     it.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt }));
     const c = document.getElementById('ws-chart');
+    c.dispatchEvent(new DragEvent('dragenter', { bubbles: true, cancelable: true, dataTransfer: dt }));
     c.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
     c.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
+    it.dispatchEvent(new DragEvent('dragend', { bubbles: true, dataTransfer: dt }));
     return true; })()`);
+  const sheetAna = () => ev(`import('/features/Core/store.js').then((m) => { const t = m.tabs.find((x) => x.kind === 'worksheet'); return JSON.stringify(t.sheet.analytics); })`).then((x) => (x ? JSON.parse(x) : x));
+  const ids = () => ev(`[...document.querySelectorAll('.ws-ana-item')].map((x) => x.dataset.item)`);
   const selVal = (label) => ev(`[...document.querySelectorAll('.ws-analytics .ws-fmt-field')].find((l) => l.querySelector('.ws-fmt-label').textContent === ${J(label)}).querySelector('select').value`);
   const pressed = (id) => ev(`${item(id)}.getAttribute('aria-pressed')`);
+  const focused = () => ev(`document.activeElement?.dataset?.item ?? null`);
+  const hasCheck = (id) => ev(`!!${item(id)}.querySelector('svg:last-child') && ${item(id)}.querySelectorAll('svg').length === 2`);
+  const undo = async () => { await ev(`document.querySelector('[aria-label="Undo (Ctrl+Z)"]').click()`); await settle(400); await chartReady(); };
+  const redo = async () => { await ev(`document.querySelector('[aria-label="Redo (Ctrl+Shift+Z)"]').click()`); await settle(400); await chartReady(); };
+  const canUndo = () => ev(`!document.querySelector('[aria-label="Undo (Ctrl+Z)"]').disabled`);
 
-  await check('items listed for a bar chart (no forecast), all four for a line', async () => {
+  await check('items per chart type; distinct icons', async () => {
     await dragChip('region', `__t.zone('rows')`);
     await dragChip('amount', `__t.zone('columns')`);
     await settle(400);
     await setType('Bar'); await chartReady(); await openAna();
-    must(J(await ev(`[...document.querySelectorAll('.ws-ana-item')].map((x) => x.dataset.item)`)) === J(['ref', 'band', 'trend']), 'bar items');
+    must(J(await ids()) === J(['ref', 'band', 'trend']), 'bar items');
+    must(await ev(`new Set([...document.querySelectorAll('.ws-ana-item svg path')].map((p) => p.getAttribute('d'))).size === 3`), 'icons not distinct');
+    must(await sheetAna() === null, 'an old sheet has no analytics key');
     await setType('Line'); await chartReady(); await openAna();
-    must(J(await ev(`[...document.querySelectorAll('.ws-ana-item')].map((x) => x.dataset.item)`)) === J(['ref', 'band', 'trend', 'forecast']), 'line items');
+    must(J(await ids()) === J(['ref', 'band', 'trend', 'forecast']), 'line items');
     await setType('Bar'); await chartReady(); await openAna();
   });
 
-  await check('dropping an item on the chart adds it, and the selects show it', async () => {
+  await check('drop on an old sheet adds, shows a check, a repeat drop adds no undo step, undo / redo', async () => {
     await dropItem('ref'); await settle(400); await chartReady();
-    must(await selVal('Reference line') === 'average', 'ref not average');
-    must((await mark('markLine')) != null, 'no reference line drawn');
-    must(await pressed('ref') === 'true', 'ref chip not pressed');
+    must(await selVal('Reference line') === 'average' && (await mark('markLine')) != null, 'ref not added');
+    must(await pressed('ref') === 'true' && await hasCheck('ref') && !(await hasCheck('band')), 'on-state cue');
+    await dropItem('ref'); await settle(300);
+    await undo(); // one undo must remove the ref (no spurious step from the repeat drop)
+    await openAna();
+    must(await selVal('Reference line') === 'none', 'one undo should remove the reference line');
+    await redo(); await openAna();
+    must(await selVal('Reference line') === 'average', 'redo lost the reference line');
     await dropItem('trend'); await settle(400); await chartReady();
-    must(await selVal('Trend') === 'linear', 'trend not linear');
     await shot('items-light.png');
     await theme('dark'); await settle(400); await chartReady();
     await shot('items-dark.png'); await theme('light'); await settle(400);
   });
 
-  await check('the item button adds and removes from the keyboard, and the select edits stay in step', async () => {
+  await check('pressing keeps focus on the item; press then undo / redo; press again switches off', async () => {
     await openAna();
     await ev(`${item('band')}.focus(); ${item('band')}.click()`); await settle(400); await chartReady();
+    must(await focused() === 'band', `focus after press: ${await focused()}`);
     must(await selVal('Band') === 'stddev1', 'band not added');
+    await undo(); await openAna();
+    must(await selVal('Band') === 'none', 'undo of a press');
+    await redo(); await openAna();
+    must(await selVal('Band') === 'stddev1', 'redo of a press');
     await ev(`${item('band')}.click()`); await settle(400); await chartReady();
     must(await selVal('Band') === 'none' && await pressed('band') === 'false', 'band not removed');
     await aPick('Trend', 'log'); await openAna();
     must(await pressed('trend') === 'true', 'chip should follow the select');
   });
 
-  await check('a drop is ignored when the card is closed', async () => {
+  await check('forecast by drop and by press on a line chart', async () => {
+    await setType('Line'); await chartReady(); await openAna();
+    await dropItem('forecast'); await settle(400); await chartReady();
+    must(await selVal('Forecast') === '3', 'forecast drop');
+    await ev(`${item('forecast')}.click()`); await settle(400); await chartReady();
+    must(await selVal('Forecast') === '0' && await focused() === 'forecast', 'forecast off');
+    await ev(`${item('forecast')}.click()`); await settle(400); await chartReady();
+    must(await selVal('Forecast') === '3', 'forecast press');
+    await setType('Bar'); await chartReady(); await openAna();
+  });
+
+  await check('field chips still drop onto shelves while the card is open', async () => {
+    await openAna();
+    await dragChip('channel', `__t.zone('rows')`); await settle(400);
+    must((await pills('rows')).some((t) => /channel/.test(t)), `rows: ${J(await pills('rows'))}`);
+  });
+
+  await check('a drop is ignored when the card is closed: analytics unchanged, no query', async () => {
     await ev(`${anaTool}.click()`); await settle(200);
-    const before = queries.length;
-    await ev(`(() => { const dt = new DataTransfer(); dt.setData('application/x-ch-analytics', 'ref');
+    const before = J(await sheetAna()), n = queries.length;
+    await ev(`(() => { const dt = new DataTransfer(); dt.setData('application/x-ch-analytics', 'band');
       const c = document.getElementById('ws-chart'); c.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt })); return true; })()`);
     await settle(300);
-    must(queries.length === before, 'a query ran');
+    must(queries.length === n && J(await sheetAna()) === before, 'state changed');
   });
 
   if (b.consoleErrors.length) { console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  ')); failed++; }

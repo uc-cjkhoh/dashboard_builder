@@ -278,7 +278,7 @@
 /* Analytics pane items: chips to drag onto the chart or press. */
 .ws-ana-items { display: flex; flex-wrap: wrap; gap: var(--s2); flex-basis: 100%; }
 .ws-ana-item { display: inline-flex; align-items: center; gap: var(--s1); height: var(--ctl-h); padding: 0 var(--s2); font-size: var(--fs-body); color: var(--ink);
-  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); cursor: grab; }
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); cursor: pointer; }
 .ws-ana-item:hover { background: var(--surface-2); }
 .ws-ana-item.is-active { background: var(--accent-soft); color: var(--accent-ink); border-color: var(--accent); }
 .ws-chart.is-over { outline: 1px dashed var(--accent); outline-offset: -4px; background: var(--accent-soft); }

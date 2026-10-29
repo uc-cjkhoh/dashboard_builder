@@ -155,9 +155,11 @@ export function initDashboards() {
   initFieldResizer();
   // T07-01: an Analytics pane item dropped on the chart view adds it (the item's button does the same from the keyboard).
   const hasItem = (e) => analyticsDrop && e.dataTransfer && Array.from(e.dataTransfer.types).includes(ANALYTICS_MIME);
-  chartEl.addEventListener("dragover", (e) => { if (hasItem(e)) { e.preventDefault(); chartEl.classList.add("is-over"); } });
-  chartEl.addEventListener("dragleave", () => chartEl.classList.remove("is-over"));
-  chartEl.addEventListener("drop", (e) => { chartEl.classList.remove("is-over"); if (hasItem(e)) { e.preventDefault(); analyticsDrop(e.dataTransfer.getData(ANALYTICS_MIME)); } });
+  let overDepth = 0; // dragenter / dragleave pairs on the chart's children, so the highlight neither flickers nor sticks
+  chartEl.addEventListener("dragenter", (e) => { if (hasItem(e)) { overDepth++; chartEl.classList.add("is-over"); } });
+  chartEl.addEventListener("dragover", (e) => { if (hasItem(e)) e.preventDefault(); });
+  chartEl.addEventListener("dragleave", (e) => { if (hasItem(e) && --overDepth <= 0) { overDepth = 0; chartEl.classList.remove("is-over"); } });
+  chartEl.addEventListener("drop", (e) => { chartEl.classList.remove("is-over"); overDepth = 0; if (hasItem(e)) { e.preventDefault(); analyticsDrop(e.dataTransfer.getData(ANALYTICS_MIME)); } });
 
   // Latest-wins queries + recent results per worksheet: a superseded query is aborted (its answer can
   // never overwrite a newer chart), and presentation-only changes re-render from the cached result
@@ -860,18 +862,23 @@ export function initDashboards() {
     panel.append(el("span", "ws-shelf__label", "Analytics"));
     const items = itemsFor(s.chartType);
     if (items.length) {
-      const toggle = (id) => { s.analytics = itemActive(a, id) ? removeItem(a, id) : addItem(a, id); commit(dash, s); };
-      analyticsDrop = (id) => { if (items.some((i) => i.id === id)) { s.analytics = addItem(a, id); commit(dash, s); } };
+      const toggle = (id) => {
+        s.analytics = itemActive(a, id) ? removeItem(a, id) : addItem(a, id); commit(dash, s);
+        headEl.querySelector(`.ws-ana-item[data-item="${id}"]`)?.focus(); // the re-render replaced this button
+      };
+      analyticsDrop = (id) => { if (items.some((i) => i.id === id) && !itemActive(a, id)) { s.analytics = addItem(a, id); commit(dash, s); } }; // already on: no edit, no undo step
       const row = el("div", "ws-ana-items");
       for (const it of items) {
         const on = itemActive(a, it.id);
         const b = makeButton(it.label, `ws-ana-item${on ? " is-active" : ""}`);
         b.prepend(icon(it.icon, { size: 14 }));
+        if (on) b.append(icon("check", { size: 14 })); // on is shown by the check, not by colour alone
         b.draggable = true;
         b.setAttribute("aria-pressed", String(on));
         b.dataset.item = it.id;
         b.addEventListener("click", () => toggle(it.id));
         b.addEventListener("dragstart", (e) => { e.dataTransfer.setData(ANALYTICS_MIME, it.id); e.dataTransfer.effectAllowed = "copy"; });
+        b.addEventListener("dragend", () => { chartEl.classList.remove("is-over"); overDepth = 0; });
         row.append(b);
       }
       panel.append(row);
