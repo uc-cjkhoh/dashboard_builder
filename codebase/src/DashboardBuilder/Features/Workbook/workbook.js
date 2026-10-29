@@ -1,6 +1,6 @@
 import {
   entities, relationships, tabs, bus, currentView, isDashboardActive,
-  createWorksheet, createDashboard, updateSheet, setWidgets, nextWidgetId, closeTab, showModel, switchTab, currentTheme, setTheme,
+  createWorksheet, createDashboard, updateSheet, setWidgets, setDashboardSize, nextWidgetId, closeTab, showModel, switchTab, currentTheme, setTheme,
   nextCalcId, sharedFilters, setSharedFilters, bookmarks, setBookmarks, fieldMeta, setAllFieldMeta, parameters, setParameters, hierarchies, setHierarchies, calculations, setCalculations,
 } from "../Core/store.js";
 import { clearRoleChoices } from "../Calc/calc-pane-model.js";
@@ -203,6 +203,7 @@ function openWorkbook(wb) {
     wb.dashboards.forEach((d, i) => setWidgets(dashboardIds[i], d.widgets.map((w) => (w.kind === "sheet"
       ? { id: nextWidgetId(), kind: "sheet", sheetId: worksheetIds[w.sheet], x: w.x, y: w.y, w: w.w, h: w.h }
       : { id: nextWidgetId(), kind: "text", heading: w.heading, body: w.body, x: w.x, y: w.y, w: w.w, h: w.h }))));
+    wb.dashboards.forEach((d, i) => { if (d.size) setDashboardSize(dashboardIds[i], d.size); });
     // P39: bookmarks point at their worksheet by index; a missing one is recreated when applied.
     setBookmarks((wb.bookmarks ?? []).map(({ worksheet, ...b }) => ({ ...b, worksheetId: worksheet !== null ? worksheetIds[worksheet] ?? null : null })));
     const activeId = wb.active ? (wb.active.kind === "worksheet" ? worksheetIds : dashboardIds)[wb.active.index] : null;
