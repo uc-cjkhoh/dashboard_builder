@@ -40,6 +40,19 @@ export function linkIssue({ relationships, from, to, fromCategory, toCategory, f
 
 export function linkProblem(args) { return linkIssue(args)?.message ?? null; }
 
+/** The cards held out of worksheets: table cards in no relationship while the model has two or more of them. `entities` / `relationships` are the store's Maps. */
+export function heldOutCards(entities, relationships) {
+  const cards = [...(entities?.values?.() ?? [])].map((e) => ({ id: e.id, source: Boolean(e.source), db: e.db, table: e.table }));
+  const lone = new Set(unlinkedCards(cards, relationships?.values?.() ?? []));
+  return cards.filter((c) => lone.has(c.id));
+}
+
+/** The sentence that refuses a view reading a held-out table, or null. `keys` are "db\0table" (sheet-plan keyOf). */
+export function heldOutProblem(keys, entities, relationships) {
+  const hit = heldOutCards(entities, relationships).find((c) => keys.includes(`${c.db}\u0000${c.table}`));
+  return hit ? `${hit.table} isn't related to another table yet. Relate it in the Data Model to use its fields.` : null;
+}
+
 /** Up to `limit` column names of `columns` ([{ name, category }]) that could be joined to a `category` key and are not in a relationship yet. */
 export function matchingColumns(columns, category, usedNames = [], limit = 5) {
   const used = new Set(usedNames);

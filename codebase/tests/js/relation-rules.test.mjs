@@ -124,3 +124,19 @@ test("matching columns are the same kind, not already used, at most five", () =>
   assert.deepEqual(matchingColumns(cols, "numeric", [], 2), ["a", "c"]);
   assert.deepEqual(matchingColumns(cols, "boolean"), []);
 });
+
+import { heldOutCards, heldOutProblem } from "../../src/DashboardBuilder/Features/Relations/relation-rules.js";
+const ent = (id, table, source) => [id, { id, db: "s", table, ...(source ? { source: {} } : {}) }];
+test("held-out cards: those in no relationship once the model has two relatable cards", () => {
+  const rels = new Map([["r1", { from: { entityId: "a", column: "k" }, to: { entityId: "b", column: "k" } }]]);
+  assert.deepEqual(heldOutCards(new Map([ent("a", "orders"), ent("b", "customers"), ent("c", "payments")]), rels).map((c) => c.table), ["payments"]);
+  assert.deepEqual(heldOutCards(new Map([ent("a", "orders")]), new Map()), []);
+  assert.deepEqual(heldOutCards(new Map([ent("a", "orders"), ent("u", "u1", true)]), new Map()), []);
+});
+test("a view reading a held-out table is refused, naming it", () => {
+  const ents = new Map([ent("a", "orders"), ent("b", "customers"), ent("c", "payments")]);
+  const rels = new Map([["r1", { from: { entityId: "a", column: "k" }, to: { entityId: "b", column: "k" } }]]);
+  assert.match(heldOutProblem(["s\u0000payments"], ents, rels), /^payments isn't related to another table yet/);
+  assert.equal(heldOutProblem(["s\u0000orders", "s\u0000customers"], ents, rels), null);
+  assert.equal(heldOutProblem(["s\u0000payments"], new Map([ent("c", "payments")]), new Map()), null);
+});

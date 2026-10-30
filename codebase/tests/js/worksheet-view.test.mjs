@@ -24,7 +24,7 @@ const { createWorksheetView } = await import("../../src/DashboardBuilder/Feature
 const { createResultCache } = await import("../../src/DashboardBuilder/Features/Dashboard/query-runner.js");
 
 const ent = (id, table) => ({ id, db: "shop", table, columns: [{ name: "id", type: "UInt32", category: "numeric" }, { name: "region", type: "String", category: "text" }] });
-const planCtx = { calculations: [], entities: new Map([["e1", ent("e1", "orders")], ["e2", ent("e2", "people")]]), relationships: new Map(),
+const planCtx = { calculations: [], entities: new Map([["e1", ent("e1", "orders")], ["e2", ent("e2", "people")]]), relationships: new Map([["r1", { id: "r1", from: { entityId: "e1", column: "id" }, to: { entityId: "e2", column: "id" }, cardinality: "1:1" }]]), // tables with no relationship are held out of views
   sharedFilters: [], parameters: [], metaOf: () => ({}), nameOf: (f) => f.column, columnType: () => "" };
 const sheetOn = (table) => ({ columns: [{ db: "shop", table, column: "region", category: "text" }], rows: [{ db: "shop", table, column: "id", category: "numeric", agg: "sum" }],
   color: [], filters: [], chartType: "bar", sort: null, selection: null, drill: null, pages: null, format: {}, period: null,
@@ -171,4 +171,15 @@ test("two selections in quick succession: only the second one's result is drawn"
   await Promise.all([first, second]);
   assert.equal(drawn.length, 1);
   assert.equal(calls.at(-1).filters[0].value, "US");
+});
+
+test("a view reading a table with no relationship says so and sends nothing", async () => {
+  const before = calls.length;
+  const lonely = { ...planCtx, entities: new Map([...planCtx.entities, ["e3", ent("e3", "payments")]]) };
+  const container = fakeEl();
+  const view = createWorksheetView(container, () => ({ dash: { id: "w9", sheet: sheetOn("payments") }, noticeEl: fakeEl(), results: createResultCache(), plan: lonely,
+    categoryOf: () => undefined, castOf: () => undefined }), { draw: () => ({ extraNotice: null }) });
+  await view.run();
+  assert.equal(calls.length, before, "no query sent");
+  assert.ok(JSON.stringify(container.children).includes("payments isn't related to another table yet"));
 });

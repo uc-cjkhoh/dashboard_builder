@@ -12,6 +12,7 @@ import { STAT_SINGLE_TABLE, statFieldHint } from "./show-me-rules.js";
 import { statFilters, withCategories } from "./filter-rules.js";
 import { statCastProblem } from "./cast-model.js";
 import { sourceProblem, sourceOfTable } from "../Core/source-model.js";
+import { heldOutProblem } from "../Relations/relation-rules.js";
 import { resolveRange, compareRange, compareName, COMPARE_TYPES } from "./period-model.js";
 import { tableProgress, needsNextPage, OTHER_TYPES, bucketNotice } from "./scale-model.js";
 import { buildPlan, involvedTables, calcContext, appliedShared, withParams, toServerFilter, isDrillActive, COLOR_USES } from "./sheet-plan.js";
@@ -158,6 +159,8 @@ export function createWorksheetView(container, getContext, options = {}) {
     withCategories(s.filters, c.categoryOf);
     const filterNote = joinNotices(invalidFilterNotice(s), crossNote);
     setNotice(c.noticeEl, filterNote);
+    const heldOut = heldOutProblem(involvedOf(c, s), c.plan.entities, c.plan.relationships); // a table with no relationship stays out of every view
+    if (heldOut) { container.replaceChildren(warn(heldOut)); return; }
     // P12 statistical charts that run their own single-table endpoint (histogram / box plot).
     if (STAT_SINGLE_TABLE.has(s.chartType)) {
       const noCalc = statCalcProblem(s); // the single-table endpoints can't take a calculation: say so, send nothing
