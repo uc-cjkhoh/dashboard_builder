@@ -98,6 +98,14 @@ try {
   await connect();
   for (const t of ['orders', 'returns']) await ev(`document.dispatchEvent(new CustomEvent('table:add', { detail: { db: 'shop', table: ${J(t)} } }))`);
   await loaded(2);
+  // Two table cards with no relationship are held out of worksheets, so relate them first (drag one column onto the other).
+  await ev(`(() => { const row = (t) => [...document.querySelectorAll('.entity')].find((x) => x.querySelector('.entity__table').textContent === t).querySelector('.col-row[data-column=region]');
+    const a = row('orders'), z = row('returns'); const dt = new DataTransfer();
+    a.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt })); z.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
+    z.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt })); a.dispatchEvent(new DragEvent('dragend', { bubbles: true, dataTransfer: dt })); return true; })()`);
+  await waitFor(`document.querySelector('dialog[open] .join-choice') !== null`, 'relationship dialog');
+  await ev(`[...document.querySelectorAll('dialog[open] .card-choice')].find((x) => x.textContent === '1:1').click()`);
+  await waitFor(`document.querySelector('dialog[open]') === null`, 'dialog closed');
 
   await check('the Union dialog adds a union entity to the model, read from /api/source/columns', async () => {
     await ev(`document.getElementById('union-open').click()`);
@@ -107,14 +115,14 @@ try {
     must(await ev(`${dialogBtn('Add to model')}.disabled`) === false, 'Add to model stays disabled with two tables');
     await ev(`${dialogBtn('Add to model')}.click()`);
     await loaded(3);
-    must(J(await cards()) === J(['shop.orders', 'shop.returns', 'shop.Union: orders + returns']), `cards: ${J(await cards())}`);
+    must(J(await cards()) === J(['orders', 'returns', 'Union: orders + returns']), `cards: ${J(await cards())}`);
     must(J(sourceReqs[0]) === J({ kind: 'union', db: 'shop', name: 'Union: orders + returns', tables: ['orders', 'returns'] }), `source request: ${J(sourceReqs[0])}`);
   });
 
   await check('the union card lists its shared columns with no join keys, a note says how they match', async () => {
     const card = `[...document.querySelectorAll('.entity--source')][0]`;
     must(J(await ev(`[...${card}.querySelectorAll('.col-row__name')].map((n) => n.textContent)`)) === J(['Source table', 'region', 'amount']), 'column names');
-    must(await ev(`${card}.querySelectorAll('.col-row__key, .col-row__profile').length`) === 0, 'a source card has join keys or profile buttons');
+    must(await ev(`${card}.querySelectorAll('.col-row__profile').length`) === 0, 'a source card has profile buttons');
     must((await ev(`${card}.querySelector('.entity__note').textContent`)) === 'Columns shared by name and kind.', 'note text');
     await shot('union-card-light.png');
   });
@@ -145,7 +153,7 @@ try {
       to.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
       return true; })()`);
     await waitFor(`!document.getElementById('toast').hidden && /can't be related/.test(document.getElementById('toast').textContent)`, 'refusal toast');
-    must(await ev(`document.querySelectorAll('.rel-svg path, .rel-svg line').length`) === 0, 'a link was drawn');
+    must(await ev(`document.querySelectorAll('.rel-link__line').length`) === 1, 'a link was drawn to the source (only orders-returns should exist)');
   });
 
   // ---- a worksheet over the union ---------------------------------------------------------------------------------
@@ -232,7 +240,7 @@ try {
     await b.goto(APP + '/');
     await connect();
     await loaded(4);
-    must(J(await cards()) === J(['shop.orders', 'shop.returns', 'shop.Union: orders + returns', 'shop.Unpivot: orders']), `restored cards: ${J(await cards())}`);
+    must(J(await cards()) === J(['orders', 'returns', 'Union: orders + returns', 'Unpivot: orders']), `restored cards: ${J(await cards())}`);
     must(sourceReqs.length >= 2 && sourceReqs.every((r) => r.name.startsWith('Union') || r.name.startsWith('Unpivot')), `source columns were fetched ${sourceReqs.length} times`);
     await waitFor(`!document.getElementById('worksheet-view').hidden`, 'worksheet restored');
     await settle(500);

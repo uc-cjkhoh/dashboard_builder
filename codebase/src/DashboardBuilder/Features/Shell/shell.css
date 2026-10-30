@@ -83,6 +83,7 @@
 
 /* ---- Canvas (workspace) -------------------------------------------------- */
 .canvas {
+  position: relative;           /* the Data Model's how-to pill is placed against it */
   min-height: 0;
   display: flex;
   flex-direction: column;

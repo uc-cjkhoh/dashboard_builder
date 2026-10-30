@@ -12,9 +12,9 @@
 //   { kind: "model" } | { kind: "worksheet", id } | { kind: "dashboard", id }
 // The workbook (Workbook/) saves all of it in the browser; there is no server-side state (decision O1).
 //
-// entities:      id -> { id, db, table, x, y, columns, joinKeys:Set, el }   (the shared model)
+// entities:      id -> { id, db, table, x, y, columns, el }   (the shared model)
 // relationships: id -> { id, from:{entityId,column}, to:{entityId,column}, cardinality }
-// bus events:    entity:moved / entity:removed / joinkey:changed / rel:changed  (model),
+// bus events:    entity:moved / entity:removed / rel:changed  (model),
 //                view:changed / tabs:changed                                    (the strip + active view),
 //                worksheet:changed {id}  (a worksheet's sheet was replaced),
 //                dashboard:changed {id}  (a dashboard's widgets changed: layout, text, add, remove)

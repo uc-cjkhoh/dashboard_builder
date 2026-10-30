@@ -70,8 +70,6 @@
 .entity__head > .entity__title { margin-left: calc(-1 * var(--s2)); }
 .entity__db { margin-left: var(--s2); color: var(--ink-3); font-weight: 400; }
 .entity__table { font-weight: 600; }
-/* A union / unpivot card shares the table card's lanes: its rows start where a table row's name does (the checkbox lane stays empty), so title, names and note share one x. */
-.entity--source .col-row { padding-left: calc(var(--s2) + 16px + var(--s2)); cursor: default; }  /* nothing to tick on a source row */
 .entity__note { margin: 0; padding: var(--s1) var(--s2) var(--s1) calc(var(--s2) + 16px + var(--s2)); font-size: var(--fs-body); color: var(--ink-2); border-bottom: 1px solid var(--line); }
 .entity__title { flex: 1; font-size: var(--fs-body); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .entity__status { padding: var(--s2); display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
@@ -80,11 +78,10 @@
 
 /* Scrollable column list, up to 240px tall; a short table is only as tall as its columns (no data preview in the entity view). */
 .entity__cols { max-height: 240px; overflow: auto; padding: var(--s1) 0; }
-.col-row { display: flex; align-items: center; gap: var(--s2); padding: var(--s1) var(--s2); font-size: var(--fs-body); cursor: pointer; transition: background var(--dur) var(--ease); }
+.col-row { display: flex; align-items: center; gap: var(--s2); padding: var(--s1) var(--s2) var(--s1) calc(var(--s2) + 16px + var(--s2)); font-size: var(--fs-body); transition: background var(--dur) var(--ease); }  /* the left lane (8 + 16 + 8) lines the names up under the head's title; table rows are drag handles (relations.css) */
 .col-row:hover { background: var(--surface-2); }
 .data tbody tr { transition: background var(--dur) var(--ease); }
 .data tbody tr:hover { background: var(--surface-2); }
-.col-row__key { flex: none; width: 16px; height: 16px; margin: 0; }
 /* The hover-only profile button sits before the type badge, so the badges end flush with the card head's ✕ glyph. */
 .col-row__type { order: 1; }
 .col-row__name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
