@@ -58,6 +58,10 @@
 .entity__head > .entity__title { padding-left: calc(var(--s4) - 2px); }  /* the 14px key glyph is 2px narrower than its 16px box */
 .entity__db { color: var(--ink-3); font-weight: 400; }
 .entity__table { font-weight: 600; }
+/* A union / unpivot card has no key checkbox or key glyph: column names and the note start where the title does (after the chevron box). */
+.entity--source .entity__head > .entity__title { padding-left: 0; }
+.entity--source .col-row { padding-left: calc(var(--s2) + 32px); }
+.entity__note { margin: 0; padding: var(--s1) var(--s2) var(--s1) calc(var(--s2) + 32px); font-size: var(--fs-body); color: var(--ink-2); border-bottom: 1px solid var(--line); }
 .col-row__keyicon { flex: none; color: var(--accent-ink); }
 .entity__title { flex: 1; font-size: var(--fs-body); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .entity__status { padding: var(--s2); display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }

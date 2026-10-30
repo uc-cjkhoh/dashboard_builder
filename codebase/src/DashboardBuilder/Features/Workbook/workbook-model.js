@@ -20,6 +20,7 @@ import { markerSizeError } from "../Dashboard/mark-style-model.js";
 import { RAMP_CHOICES, colourRangeError } from "../Dashboard/colour-scale-model.js";
 import { cleanParameter, MAX_PARAMS } from "../Core/parameters-model.js";
 import { cleanHierarchies, hierarchyTableKey } from "../Dashboard/hierarchy-model.js";
+import { cleanSource, wireSource } from "../Core/source-model.js";
 import { cleanCalculations } from "../Calc/calc-workbook.js";
 import { cleanWidgets, savedWidgets } from "../Board/board-model.js";
 import { cleanSize, savedSize } from "../Board/board-size.js";
@@ -54,6 +55,7 @@ export function serializeWorkbook({ entities, relationships, tabs, active, theme
       // Keys a just-opened workbook is still waiting to tick (columns loading, or a table that
       // failed to load) are kept, so saving early never loses them.
       joinKeys: [...new Set([...e.joinKeys, ...(e.pendingKeys ?? [])])],
+      ...(e.source ? { source: wireSource(e.source) } : {}), // a union / unpivot entity (its `table` is the source's name)
     })),
     relationships: [...relationships.values()].map((r) => ({
       from: { entityId: r.from.entityId, column: r.from.column },
@@ -141,7 +143,12 @@ export function parseWorkbook(source) {
     const keys = Array.isArray(e.joinKeys) ? e.joinKeys : [];
     if (e.joinKeys !== undefined && !Array.isArray(e.joinKeys)) issues.push(`${e.db}.${e.table}: its join keys weren't a list — cleared.`);
     if (keys.some((k) => !isStr(k))) issues.push(`${e.db}.${e.table}: dropped a join key that wasn't a column name.`);
-    entities.push({ id: e.id, db: e.db, table: e.table, x: coord(e.x), y: coord(e.y), joinKeys: keys.filter(isStr) });
+    const entity = { id: e.id, db: e.db, table: e.table, x: coord(e.x), y: coord(e.y), joinKeys: keys.filter(isStr) };
+    if (e.source !== undefined) { // a saved union / unpivot: re-checked against the same rules; a bad one is dropped (the entity then reads as a table)
+      const source = cleanSource(e.source, e.db, e.table);
+      if (source) { entity.source = source; entity.joinKeys = []; } else { issues.push(`${e.db}.${e.table}: its union or unpivot definition wasn't valid — skipped.`); continue; }
+    }
+    entities.push(entity);
   }
   if (skipped) issues.push(`Skipped ${skipped} table(s) with missing details.`);
   const ids = new Set(entities.map((e) => e.id));

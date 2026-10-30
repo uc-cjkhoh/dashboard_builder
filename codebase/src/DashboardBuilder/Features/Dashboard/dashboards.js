@@ -39,6 +39,7 @@ import { RAMP_CHOICES, colourRangeError } from "./colour-scale-model.js";
 import { TABLE_ALIGN_CHOICES, TABLE_DENSITY_CHOICES, TABLE_SHADE_CHOICES } from "./table-style-model.js";
 import { MARK_BORDER_CHOICES, MARKER_SHAPE_CHOICES, markerSizeError } from "./mark-style-model.js";
 import { targetChoices, effectiveTargetMeasure } from "./bullet-model.js";
+import { sourceOfTable, wireSource, distinctPlan, distinctMembers } from "../Core/source-model.js";
 import { keyOf, SCATTER_TYPES, COLOR_USES, colorMode, isDrillActive, drillActiveDim, planDims, planMeasures, sortTargets as planSortTargets, measureName as planMeasureName, buildPlan as planQuery, periodFilters as planPeriodFilters, calcContext, appliedShared as planAppliedShared, withParams, toServerFilter, isDateOnlyType } from "./sheet-plan.js";
 import { catalogFromEntities } from "../Calc/calc-resolve.js";
 import { isCalcPill, makeCalcPill, refusal, syncCalcPills, pillSlots, clearCalcPills, clearFilterCalc, usesCalc, CALC_AGGS } from "../Calc/calc-pill.js";
@@ -1202,6 +1203,7 @@ export function initDashboards() {
     if (problem) { toast(problem, "danger"); return; }
     const plan = buildPlan({ ...s, selection: null }); // the mark is added back as a plain `=`, whatever Keep / Exclude did
     if (!plan) { toast("Add fields before viewing data.", "info"); return; }
+    if (plan.source) { toast("View data reads one table's rows — it isn't available for a union or unpivot yet.", "info"); return; }
     const { request, notes } = buildRowsRequest({ plan, selection: ofMark ? s.selection : null, castOf });
     openRowsDialog({ title: ofMark ? `Data behind ${s.selection.label}` : "Data behind this view", subtitle: `${request.db}.${request.table}`, request, notes, filename: `${exportBaseName(dash)}-data` });
   }
@@ -2029,7 +2031,10 @@ export function initDashboards() {
   async function distinctFor(db, table, column) {
     const k = `${db}.${table}.${column}`;
     if (!distinctCache.has(k)) {
-      try { distinctCache.set(k, await api.distinct(db, table, column, DISTINCT_FETCH)); }
+      try {
+        const source = sourceOfTable(entities, db, table); // a union / unpivot has no catalog table to ask: its members come from a one-dimension query
+        distinctCache.set(k, source ? distinctMembers(await api.query(distinctPlan(source, column, DISTINCT_FETCH))) : await api.distinct(db, table, column, DISTINCT_FETCH));
+      }
       catch (e) { distinctCache.delete(k); throw e; }
     }
     return distinctCache.get(k);
@@ -2680,7 +2685,10 @@ export function initDashboards() {
   async function columnsFor(db, table) {
     const k = keyOf(db, table);
     if (!columnsCache.has(k)) {
-      try { columnsCache.set(k, await api.columns(db, table)); }
+      try {
+        const source = sourceOfTable(entities, db, table); // a union / unpivot: its columns come from the source, not the catalog
+        columnsCache.set(k, source ? (await api.sourceColumns(wireSource(source))).columns : await api.columns(db, table));
+      }
       catch { columnsCache.set(k, []); }
     }
     return columnsCache.get(k);

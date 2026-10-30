@@ -2,6 +2,8 @@
 // into rows and the ones to keep, then see the first rows in the raw-row dialog (Field, Value). Read-only; a preview only.
 import { api } from "../Core/api.js";
 import { LIMITS } from "../Core/validate.js";
+import { entities } from "../Core/store.js";
+import { unpivotSource, takenNames } from "../Core/source-model.js";
 import { makeButton, openDialog, closeDialog, toast } from "../Core/ui.js";
 import { unpivotRequest, unpivotPickState } from "./unpivot-model.js";
 import { openRowsDialog } from "./rows-dialog.js";
@@ -36,9 +38,10 @@ export function openUnpivotDialog(db, tables) {
   body.append(tableField, lists, hint);
   const foot = el("div", "dialog__foot");
   const cancel = makeButton("Cancel", "btn");
-  const go = makeButton("Show rows", "btn btn--primary");
-  go.disabled = true;
-  foot.append(cancel, go);
+  const go = makeButton("Show rows", "btn");
+  const add = makeButton("Add to model", "btn btn--primary");
+  go.disabled = add.disabled = true;
+  foot.append(cancel, go, add);
   dlg.append(title, body, foot);
   document.body.append(dlg);
 
@@ -47,14 +50,14 @@ export function openUnpivotDialog(db, tables) {
   const refresh = () => {
     const rowsPicked = ticked("asRow"), keepPicked = ticked("asKeep");
     const st = unpivotPickState(cols, rowsPicked, keepPicked);
-    go.disabled = !st.ok; hint.textContent = st.hint;
+    go.disabled = add.disabled = !st.ok; hint.textContent = st.hint;
     for (const b of boxes) {
       b.asRow.disabled = b.asKeep.checked || (!b.asRow.checked && rowsPicked.length >= LIMITS.unpivotColumns);
       b.asKeep.disabled = b.asRow.checked || (!b.asKeep.checked && keepPicked.length >= LIMITS.unpivotKeep);
     }
   };
   const load = () => {
-    go.disabled = true; hint.textContent = "Loading the columns…";
+    go.disabled = add.disabled = true; hint.textContent = "Loading the columns…";
     rowsSide.list.replaceChildren(); keepSide.list.replaceChildren(); boxes = [];
     api.columns(db, select.value).then((res) => {
       cols = res;
@@ -78,6 +81,12 @@ export function openUnpivotDialog(db, tables) {
     try { request = unpivotRequest(db, select.value, ticked("asRow"), ticked("asKeep")); } catch (err) { toast(err.message, "danger"); return; }
     closeDialog(dlg);
     openRowsDialog({ title: "Unpivot — first rows", subtitle: `${db}.${request.table}`, request, filename: "unpivot", load: api.unpivot });
+  });
+  add.addEventListener("click", () => { // the unpivot becomes a table on the Data Model (canvas.js adds it) that worksheets can read
+    let source;
+    try { source = unpivotSource(db, select.value, ticked("asRow"), ticked("asKeep"), takenNames(entities, db, tables)); } catch (err) { toast(err.message, "danger"); return; }
+    closeDialog(dlg);
+    document.dispatchEvent(new CustomEvent("source:add", { detail: { source } }));
   });
   openDialog(dlg);
   select.focus();

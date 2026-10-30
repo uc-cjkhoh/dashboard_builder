@@ -64,13 +64,14 @@ function onJoinKeyChanged({ entityId, column, checked }) {
 let dragFrom = null; // { entityId, column } while a row is dragged
 
 function markDraggable(entityId) {
+  if (entities.get(entityId)?.source) return; // a union / unpivot takes no relationship
   for (const row of entities.get(entityId)?.el.querySelectorAll(".col-row") ?? []) row.draggable = true;
 }
 
 function endOf(entityId, column) {
   const e = entities.get(entityId);
   const c = e?.columns?.find((x) => x.name === column);
-  return e && c ? { entityId, column, category: c.category, table: e.table } : null;
+  return e && c && !e.source ? { entityId, column, category: c.category, table: e.table } : null;
 }
 
 function rowEnd(row) {
@@ -108,6 +109,7 @@ function initColumnDrag() {
     dragFrom = null; clearDropMarks();
     if (!from || !row) return;
     e.preventDefault();
+    if (entities.get(row.closest(".entity")?.dataset.entityId)?.source) { toast("A union or unpivot can't be related to a table yet.", "danger"); return; }
     const a = endOf(from.entityId, from.column), b = rowEnd(row);
     if (!a || !b) return;
     const { ok, problem } = dropDecision({ relationships: relationships.values(), from: a, to: b });

@@ -541,3 +541,29 @@ test("date labels (show all / thin out) are kept on a date pill, back-compat whe
   assert.equal(bad.worksheets[0].sheet.columns[1].dateLabels, undefined);
   assert.equal(bad.issues.filter((i) => /date labels/.test(i)).length, 2);
 });
+
+test("a union entity is saved with its source and opened with it, keeping its name as the table", () => {
+  const state = sampleState();
+  const source = { kind: "union", db: "sales", name: "Union: orders + customers", tables: ["orders", "customers"], extra: "dropped" };
+  state.entities.set("u#3", { id: "u#3", db: "sales", table: source.name, x: 5, y: 6, columns: [], joinKeys: new Set(), el: null, source });
+  const saved = JSON.parse(JSON.stringify(serializeWorkbook(state)));
+  assert.deepEqual(saved.entities[2].source, { kind: "union", db: "sales", name: source.name, tables: ["orders", "customers"] });
+  assert.equal("source" in saved.entities[0], false);
+  const wb = parseWorkbook(JSON.stringify(saved));
+  assert.deepEqual(wb.issues, []);
+  assert.deepEqual(wb.entities[2], { id: "u#3", db: "sales", table: source.name, x: 5, y: 6, joinKeys: [], source: { kind: "union", db: "sales", name: source.name, tables: ["orders", "customers"] } });
+});
+test("an unpivot entity round-trips its columns and kept columns", () => {
+  const state = sampleState();
+  const source = { kind: "unpivot", db: "sales", name: "Unpivot: orders", table: "orders", columns: ["q1", "q2"], keep: ["region"] };
+  state.entities.set("u#3", { id: "u#3", db: "sales", table: source.name, x: 0, y: 0, columns: [], joinKeys: new Set(), el: null, source });
+  const wb = parseWorkbook(JSON.stringify(serializeWorkbook(state)));
+  assert.deepEqual(wb.entities[2].source, source);
+});
+test("a hand-edited source that breaks the rules is skipped and reported, not opened", () => {
+  const state = sampleState();
+  state.entities.set("u#3", { id: "u#3", db: "sales", table: "N", x: 0, y: 0, columns: [], joinKeys: new Set(), el: null, source: { kind: "union", db: "sales", name: "N", tables: ["orders"] } });
+  const wb = parseWorkbook(JSON.stringify(serializeWorkbook(state)));
+  assert.equal(wb.entities.length, 2);
+  assert.ok(wb.issues.some((i) => /union or unpivot definition/.test(i)));
+});

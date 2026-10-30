@@ -116,3 +116,32 @@ test("buildPlan: every filter slot in use plus a cross filter is exactly the ser
   const p = buildPlan(s, undefined, ctx, { crossFilter: country });
   assert.equal(p.filters.length, 20, JSON.stringify(p.filters.map((x) => x.column)));
 });
+
+// --- a union / unpivot as the data source -----------------------------------------------------------------------------
+const UNION = { kind: "union", db: "shop", name: "Union: orders + returns", tables: ["orders", "returns"] };
+const srcCtx = () => mkCtx({ entities: new Map([["e1", ent("e1", "orders")], ["u1", { ...ent("u1", UNION.name), source: UNION }]]) });
+test("buildPlan: a sheet over a union names it as its source and reads only it, with no joins", () => {
+  const s = sheet({ columns: [dim(UNION.name, "region")], rows: [meas(UNION.name, "id")] });
+  const p = buildPlan(s, undefined, srcCtx());
+  assert.deepEqual(p.from, { db: "shop", table: UNION.name });
+  assert.deepEqual(p.source, { kind: "union", db: "shop", name: UNION.name, tables: ["orders", "returns"] });
+  assert.deepEqual(p.joins, []);
+  assert.equal(p.rowDimensions.length + p.columnDimensions.length, 1);
+  assert.deepEqual(p.measures[0], { db: "shop", table: UNION.name, column: "id", agg: "sum" });
+});
+test("buildPlan: a catalog table's plan carries no source", () => {
+  const p = buildPlan(sheet({ columns: [dim("orders", "region")] }), undefined, srcCtx());
+  assert.equal("source" in p, false);
+});
+test("buildPlan: a union mixed with another table plans nothing, even with a relationship drawn", () => {
+  const s = sheet({ columns: [dim(UNION.name, "region")], rows: [meas("orders", "id")] });
+  assert.equal(buildPlan(s, undefined, srcCtx()), null);
+  const rel = { from: { entityId: "e1", column: "id" }, to: { entityId: "u1", column: "id" }, joinType: "inner" };
+  assert.equal(buildPlan(s, undefined, { ...srcCtx(), relationships: new Map([["r1", rel]]) }), null);
+});
+test("buildPlan: a filter on the union's own field stays in the plan and rides with the source", () => {
+  const f = { db: "shop", table: UNION.name, column: "region", op: "=", value: "north", values: null, category: "text" };
+  const p = buildPlan(sheet({ columns: [dim(UNION.name, "region")], filters: [f] }), undefined, srcCtx());
+  assert.equal(p.filters.length, 1);
+  assert.equal(p.source.name, UNION.name);
+});
