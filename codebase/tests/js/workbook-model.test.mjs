@@ -163,7 +163,7 @@ test("duplicate entity ids and duplicate tables are skipped and reported", () =>
 
 test("tables and relationships are capped with an issue", () => {
   const ents = Array.from({ length: 120 }, (_, i) => ({ id: `e${i}`, db: "s", table: `t${i}`, x: 0, y: 0, joinKeys: [] }));
-  const rels = Array.from({ length: 250 }, () => ({ from: { entityId: "e0", column: "a" }, to: { entityId: "e1", column: "b" }, cardinality: "1:1" }));
+  const rels = Array.from({ length: 250 }, (_, i) => ({ from: { entityId: "e0", column: `a${i}` }, to: { entityId: "e1", column: `b${i}` }, cardinality: "1:1" })); // distinct columns: a column is in only one relationship
   const wb = parseWorkbook(wbText({ entities: ents, relationships: rels }));
   assert.equal(wb.entities.length, 100); assert.equal(wb.relationships.length, 200);
   assert.ok(wb.issues.includes("Only the first 100 tables were opened."));
@@ -585,4 +585,13 @@ test("a relationship with a source entity at an end is dropped with an issue", (
   assert.equal(wb.relationships.length, 1);
   assert.equal(wb.relationships[0].to.entityId, "sales.customers#2");
   assert.ok(wb.issues.some((i) => /relationship.*union or unpivot/i.test(i)));
+});
+
+test("a column in two relationships keeps only the first, and says so", () => {
+  const raw = serializeWorkbook(sampleState());
+  raw.relationships.push({ from: { entityId: "sales.orders#1", column: "customer_id" }, to: { entityId: "sales.customers#2", column: "region" }, cardinality: "N:1" });
+  raw.relationships.push({ from: { entityId: "sales.orders#1", column: "region" }, to: { entityId: "sales.customers#2", column: "region" }, cardinality: "N:1" });
+  const wb = parseWorkbook(JSON.stringify(raw));
+  assert.equal(wb.relationships.length, 2); // customer_id↔id kept, the reuse of customer_id dropped, region↔region kept
+  assert.ok(wb.issues.some((i) => /reused a column/.test(i)));
 });

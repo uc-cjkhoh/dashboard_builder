@@ -1,5 +1,5 @@
 import { entities, relationships, bus, emit } from "../Core/store.js";
-import { linkProblem, joinChoices, joinBadge, joinSelection, joinFromSelection, isLegacyLeft } from "./relation-rules.js";
+import { linkProblem, unlinkedCards, joinChoices, joinBadge, joinSelection, joinFromSelection, isLegacyLeft } from "./relation-rules.js";
 import { toast, makeButton, openDialog, closeDialog } from "../Core/ui.js";
 import { api } from "../Core/api.js";
 import { previewRequest } from "./join-preview-model.js";
@@ -241,11 +241,44 @@ function render() {
     const edge = Math.round(sa === sb ? (sa > 0 ? Math.max(p1.x, p2.x) : Math.min(p1.x, p2.x)) : Math.min(p1.x, p2.x));
     const n = used.get(edge) ?? 0;
     used.set(edge, n + 1);
-    const { line, label } = drawLink(rel, p1, sa, p2, sb, fromKind, toKind, (n % 3) - 1, placed);
+    const { line, label } = drawLink(rel, p1, sa, p2, sb, fromKind, toKind, [0, 1, -1][n % 3], placed);
     svg.append(line);
     labels.append(label);
   }
+  syncKeyStrips();
+  markUnlinked();
   markLinkedRows();
+}
+
+// A column in a relationship is pinned to its card's key strip, above the scrolling list: the link's end is then always on a visible row.
+// Rows keep their place in the list order (data-index) when they leave the strip.
+function syncKeyStrips() {
+  const linked = new Set();
+  for (const r of relationships.values()) for (const end of [r.from, r.to]) linked.add(`${end.entityId}\u0000${end.column}`);
+  for (const entity of entities.values()) {
+    const strip = entity.el.querySelector(".entity__keys"), list = entity.el.querySelector(".entity__cols");
+    if (!strip || !list) continue;
+    for (const row of [...entity.el.querySelectorAll(".col-row")]) {
+      const pinned = linked.has(`${entity.id}\u0000${row.dataset.column}`);
+      if (pinned && row.parentElement !== strip) strip.append(row);
+      else if (!pinned && row.parentElement === strip) {
+        const next = [...list.children].find((r) => Number(r.dataset.index) > Number(row.dataset.index));
+        list.insertBefore(row, next ?? null);
+      }
+    }
+    entity.el.classList.toggle("entity--has-keys", strip.children.length > 0);
+  }
+}
+
+// Every table card belongs to a relationship; one that doesn't says so (text + dashed outline, never colour alone).
+function markUnlinked() {
+  const lone = new Set(unlinkedCards([...entities.values()].map((e) => ({ id: e.id, source: Boolean(e.source) })), relationships.values()));
+  for (const entity of entities.values()) {
+    const flag = lone.has(entity.id);
+    entity.el.classList.toggle("entity--unlinked", flag);
+    const need = entity.el.querySelector(".entity__need");
+    if (need) need.hidden = !flag;
+  }
 }
 
 function drawLink(rel, p1, s1, p2, s2, fromKind, toKind, lane, placed) {

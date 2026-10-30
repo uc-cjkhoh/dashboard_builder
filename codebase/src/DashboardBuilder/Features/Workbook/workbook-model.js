@@ -173,7 +173,18 @@ export function parseWorkbook(source) {
       joinType: normalizeJoinType(r.joinType), // P31 — anything unknown reads as inner
       joinFixed: r.joinFixed === true, // old files: false (a left keeps the base side)
     }));
-  const droppedRels = relList.length - relationships.length;
+  // A column is in at most one relationship: the first one that uses it is kept.
+  const used = new Set();
+  const colKey = (end) => `${end.entityId}\u0000${end.column}`;
+  const kept = relationships.filter((r) => {
+    if (used.has(colKey(r.from)) || used.has(colKey(r.to))) return false;
+    used.add(colKey(r.from)); used.add(colKey(r.to));
+    return true;
+  });
+  const reused = relationships.length - kept.length;
+  if (reused > 0) issues.push(`Skipped ${reused} relationship(s) that reused a column already in another relationship — a column can be in only one.`);
+  relationships.length = 0; relationships.push(...kept);
+  const droppedRels = relList.length - relationships.length - reused;
   if (droppedRels > 0) issues.push(`Skipped ${droppedRels} relationship(s) that referenced missing tables or had an unknown cardinality.`);
 
   const wsAll = objectList(raw.worksheets, "worksheet", issues);

@@ -66,15 +66,13 @@
    not the boxes, align — chevron over the row checkboxes, ✕ flush with the type badges. */
 .entity__head > .iconbtn:first-child { margin-left: calc(-1 * var(--s2)); }
 .entity__head > .iconbtn:last-child { margin-right: calc(-1 * (var(--s2) + var(--s1))); }  /* the ✕ strokes sit 4px inside their box, so its ink ends where the type badges end */
-/* Title text starts where the column names do: the chevron box is 32px, the checkbox + key icon below take 16 + 8 + 16 + 8. */
-.entity__head > .entity__title { padding-left: calc(var(--s4) - 2px); }  /* the 14px key glyph is 2px narrower than its 16px box */
-.entity__db { color: var(--ink-3); font-weight: 400; }
+/* Title text starts where the column names do: the chevron box is 32px, the checkbox lane below is 8 + 16 + 8 = 32. */
+.entity__head > .entity__title { margin-left: calc(-1 * var(--s2)); }
+.entity__db { margin-left: var(--s2); color: var(--ink-3); font-weight: 400; }
 .entity__table { font-weight: 600; }
-/* A union / unpivot card has no key checkbox or key glyph: column names and the note start where the title does (after the chevron box). */
-.entity--source .entity__head > .entity__title { padding-left: 0; }
-.entity--source .col-row { padding-left: calc(var(--s2) + 32px); }
-.entity__note { margin: 0; padding: var(--s1) var(--s2) var(--s1) calc(var(--s2) + 32px); font-size: var(--fs-body); color: var(--ink-2); border-bottom: 1px solid var(--line); }
-.col-row__keyicon { flex: none; color: var(--accent-ink); }
+/* A union / unpivot card shares the table card's lanes: its rows start where a table row's name does (the checkbox lane stays empty), so title, names and note share one x. */
+.entity--source .col-row { padding-left: calc(var(--s2) + 16px + var(--s2)); cursor: default; }  /* nothing to tick on a source row */
+.entity__note { margin: 0; padding: var(--s1) var(--s2) var(--s1) calc(var(--s2) + 16px + var(--s2)); font-size: var(--fs-body); color: var(--ink-2); border-bottom: 1px solid var(--line); }
 .entity__title { flex: 1; font-size: var(--fs-body); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .entity__status { padding: var(--s2); display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
 .entity__error { flex-basis: 100%; margin: 0; color: var(--danger-ink); font-size: var(--fs-body); }

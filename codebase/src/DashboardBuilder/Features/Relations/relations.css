@@ -59,3 +59,13 @@
 .col-row--linked .col-row__name { color: var(--accent-ink); font-weight: 600; }
 .col-row--drop-ok { background: var(--accent-soft); outline: 2px solid var(--accent); outline-offset: -2px; }
 .col-row--drop-no { outline: 2px dashed var(--ink-3); outline-offset: -2px; cursor: not-allowed; }
+
+/* ---- Pinned join keys + unlinked cards ------------------------------------- */
+/* A column in a relationship lives in a strip above the scrolling list, so its link always ends on a visible row. */
+.entity__keys { flex: none; background: var(--accent-soft); border-bottom: 1px solid var(--accent-line); }
+.entity__keys:empty { display: none; }
+.entity__keys .col-row:hover { background: var(--accent-line); }
+.entity__keys .col-row--linked { background: var(--accent-line); }
+/* A card in no relationship, while the model has other cards to relate it to: dashed outline and words. */
+.entity--unlinked { border-style: dashed; border-color: var(--warn-line); }
+.entity__need { flex: none; font-size: var(--fs-body); font-weight: 400; color: var(--warn-ink); white-space: nowrap; }
