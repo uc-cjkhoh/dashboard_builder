@@ -88,3 +88,13 @@
 .col-row__profile { opacity: 0; flex: none; transition: opacity var(--dur-fast) var(--ease); }
 .col-row:hover .col-row__profile, .col-row:focus-within .col-row__profile { opacity: 1; }
 @media (pointer: coarse) { .col-row__profile { opacity: 1; } }
+
+/* Bento tiles: the database picker and the table search are one pattern — a 40px row in a borderless tile, the icon centred on the row
+   icons' lane (12px in), the text starting where a table name does (36px in), regular weight. The tile is the frame, not the control. */
+.db-pick { margin: 0; }
+.bento--list .table-search { margin: 0; }
+.bento--list .table-search .input, .db-pick .select { height: 40px; border: 0; border-radius: 0; background-color: transparent; font-weight: 400; box-shadow: none; }
+.bento--list .table-search .icon, .db-pick .icon { left: calc(var(--s1) + var(--s2)); }
+.bento--list .table-search .input, .db-pick .select { padding-left: calc(var(--s1) + var(--s2) + 16px + var(--s2)); }
+.db-pick .select { width: 100%; }
+.sidebar__section--db .select { color: var(--ink); }
