@@ -665,6 +665,67 @@ public sealed partial class ClickHouseGateway
         return new RowsResult(shown, rows, truncated, limit, colsTruncated);
     }
 
+    /// <summary>The unpivoted columns must exist and share one kind (text / number / date …) so the Value column is
+    /// comparable; the kept columns must exist. Throws the 400 / unknown-identifier errors the endpoint answers with.</summary>
+    internal static void CheckUnpivot(IReadOnlyList<ColumnInfo> described, string[] columns, string[] keep)
+    {
+        var byName = described.ToDictionary(c => c.Name, c => c, StringComparer.Ordinal);
+        foreach (var k in keep) if (!byName.ContainsKey(k)) throw new UnknownIdentifierException("Unknown column.");
+        foreach (var c in columns) if (!byName.ContainsKey(c)) throw new UnknownIdentifierException("Unknown column.");
+        var kind = byName[columns[0]].Category;
+        for (var i = 1; i < columns.Length; i++)
+            if (byName[columns[i]].Category != kind) throw new RequestValidationException($"'{columns[i]}' has a different kind of values from '{columns[0]}', so they can't share one Value column.", $"columns[{i}]");
+    }
+
+    /// <summary>The unpivot statement: kept and unpivoted cells cut in SQL, each field name bound as <c>{n#:String}</c>,
+    /// the result cut to <paramref name="probe"/> rows. ClickHouse applies a SELECT's LIMIT after its <c>arrayJoin</c>, so the one inner
+    /// LIMIT bounds the unpivoted rows (verified live), not the source rows. No ORDER BY.</summary>
+    internal static string BuildUnpivotSql(string database, string table, IReadOnlyList<string> keep, IReadOnlyList<string> columns, int probe)
+    {
+        var keepCells = keep.Select((c, i) => $"{RowSelectExpr(c)} AS `k{i}`");
+        var pairs = string.Join(", ", columns.Select((c, i) => $"({{n{i}:String}}, {RowSelectExpr(c)})"));
+        var inner = string.Join(", ", keepCells.Append($"arrayJoin([{pairs}]) AS `__p`"));
+        var outer = string.Join(", ", keep.Select((_, i) => $"`k{i}`").Concat(["tupleElement(`__p`, 1) AS `__n`", "tupleElement(`__p`, 2) AS `__v`"]));
+        return $"SELECT {outer} FROM (SELECT {inner} FROM {Identifier.QualifiedName(database, table)} LIMIT {probe})";
+    }
+
+    /// <summary>
+    /// The first rows of one table unpivoted: each source row becomes one row per chosen column (its name, its value), beside the
+    /// kept columns. Database, table and columns are catalog-validated and quoted; the field names shown are bound. Read-only.
+    /// </summary>
+    /// <exception cref="UnknownIdentifierException">Unknown database, table or column.</exception>
+    public async Task<RowsResult> UnpivotAsync(ClickHouseConnectionInfo info, UnpivotRequest req, CancellationToken ct)
+    {
+        var described = await DescribeColumnsAsync(info, req.Db, req.Table, ct); // validates db + table
+        var keep = req.Keep ?? [];
+        CheckUnpivot(described, req.Columns, keep);
+        var limit = req.Limit ?? ApiLimits.DefaultRowsLimit;
+        var probe = limit + 1;
+        var sql = BuildUnpivotSql(req.Db, req.Table, keep, req.Columns, probe);
+
+        using var httpClient = CreateHttpClient(info);
+        await using var conn = new ClickHouseConnection(BuildConnectionString(info), httpClient);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = sql;
+        for (var i = 0; i < req.Columns.Length; i++) cmd.AddParameter($"n{i}", "String", req.Columns[i]);
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        var rows = new List<IReadOnlyList<string?>>();
+        while (await reader.ReadAsync(ct))
+        {
+            var row = new string?[keep.Length + 2];
+            for (var i = 0; i < row.Length; i++) row[i] = reader.IsDBNull(i) ? null : RowCell(reader.GetValue(i));
+            rows.Add(row);
+        }
+        var truncated = TrimProbeRow(rows, probe);
+        var byName = described.ToDictionary(c => c.Name, c => c, StringComparer.Ordinal);
+        var shown = keep.Select(k => new RowColumn(k, byName[k].Type)).ToList();
+        shown.Add(new RowColumn("Field", "String"));
+        shown.Add(new RowColumn("Value", byName[req.Columns[0]].Type));
+        return new RowsResult(shown, rows, truncated, limit, false);
+    }
+
     /// <summary>
     /// A histogram (P12): bucket a single numeric column into equal-width bins over its live [min,max]
     /// and count rows per bin — <c>SELECT floor((col-lo)/w) AS bin, count() … GROUP BY bin</c>, with

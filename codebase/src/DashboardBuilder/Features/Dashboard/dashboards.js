@@ -40,6 +40,7 @@ import { catalogFromEntities } from "../Calc/calc-resolve.js";
 import { isCalcPill, makeCalcPill, refusal, syncCalcPills, pillSlots, clearCalcPills, clearFilterCalc, usesCalc, CALC_AGGS } from "../Calc/calc-pill.js";
 import { openCalcDialog } from "../Calc/calc-dialog.js";
 import { openGroupDialog } from "../Calc/group-dialog.js";
+import { openSplitDialog } from "../Calc/split-dialog.js";
 import { groupCategoryProblem } from "../Calc/group-model.js";
 import { openMemberLabelsDialog } from "./member-labels-dialog.js";
 import { openRowsDialog } from "../Rows/rows-dialog.js";
@@ -590,6 +591,7 @@ export function initDashboards() {
     // T02-29 / T02-30: member labels (display only) and groups (a calculated dimension made from the field's members).
     if (effCat !== "temporal") { out.push({ type: "sep" }); item(meta.memberAliases ? "Edit member labels… (set)" : "Edit member labels…", () => editMemberLabels(f, col)); }
     item("Group…", () => newGroupField(f, col));
+    if (col.category === "text") item("Split…", () => newSplitFields(f, col)); // T02-31: SPLIT calculated fields
     out.push({ type: "sep" });
     item(meta.hidden ? "Show in the field list" : "Hide from the field list", () => setFieldMeta(f, { hidden: !meta.hidden }));
     return out;
@@ -608,6 +610,11 @@ export function initDashboards() {
     if (problem) { toast(problem, "info"); return; }
     if (calculations.length >= LIMITS.calculations) { toast(`A workbook can have at most ${LIMITS.calculations} calculated fields.`, "info"); return; }
     openGroupDialog({ field: { db: f.db, table: f.table, column: f.column }, fieldName: metaOf(f).alias || col.name, load: () => distinctFor(f.db, f.table, f.column) });
+  }
+  // T02-31: split a text column at a separator into calculated fields, one per piece.
+  function newSplitFields(f, col) {
+    if (calculations.length + 2 > LIMITS.calculations) { toast(`A workbook can have at most ${LIMITS.calculations} calculated fields.`, "info"); return; }
+    openSplitDialog({ field: { db: f.db, table: f.table, column: f.column }, fieldName: metaOf(f).alias || col.name });
   }
   function editGroupField(calc) {
     const g = calc.group.field;

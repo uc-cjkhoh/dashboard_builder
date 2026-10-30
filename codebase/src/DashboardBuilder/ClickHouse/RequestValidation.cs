@@ -18,6 +18,7 @@ public static class ApiLimits
     public const int MaxRowLimit = 5000, MaxBuckets = 100, MaxDistinct = 1000;
     public const int MaxExportRows = 100_000; // CSV export of a whole worksheet result
     public const int DefaultRowsLimit = 100, MaxRowsLimit = 1000; // raw rows of one table (POST /api/rows): default / cap
+    public const int MaxUnpivotColumns = 50, MaxUnpivotKeep = 5;  // wide columns one unpivot turns into rows / columns it keeps (POST /api/unpivot)
     public const int MaxUnionTables = 5;  // tables one union stacks (POST /api/union)
     public const int MaxRowsCells = 50_000; // rows x columns one row read may return
     public const int MaxRowsColumns = 200, MaxCellLength = 1000;  // columns one row read returns; characters kept per cell
@@ -241,6 +242,29 @@ public static class RequestRules
             if (string.IsNullOrWhiteSpace(cols[i])) throw Bad($"'columns[{i}]' is required.", $"columns[{i}]");
         ValidateRange(r.Limit, ApiLimits.MaxRowsLimit, "Limit", "limit");
         if (cols.Length > 0) ValidateRowCells(r.Limit ?? ApiLimits.DefaultRowsLimit, cols.Length + 1, "limit");
+    }
+    /// <summary>An unpivot (POST /api/unpivot): a database and table, 2..50 distinct columns to unpivot, up to 5 distinct others to keep, limit 1..1000 (never clamped).</summary>
+    public static void ValidateUnpivot(UnpivotRequest r)
+    {
+        if (string.IsNullOrWhiteSpace(r.Db)) throw Bad("'db' is required.", "db");
+        if (string.IsNullOrWhiteSpace(r.Table)) throw Bad("'table' is required.", "table");
+        var cols = r.Columns ?? [];
+        if (cols.Length < 2 || cols.Length > ApiLimits.MaxUnpivotColumns) throw Bad($"An unpivot needs between 2 and {ApiLimits.MaxUnpivotColumns} columns.", "columns");
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        for (var i = 0; i < cols.Length; i++)
+        {
+            if (string.IsNullOrWhiteSpace(cols[i])) throw Bad($"'columns[{i}]' is required.", $"columns[{i}]");
+            if (!seen.Add(cols[i])) throw Bad($"'{cols[i]}' is listed twice.", $"columns[{i}]");
+        }
+        var keep = r.Keep ?? [];
+        if (keep.Length > ApiLimits.MaxUnpivotKeep) throw Bad($"An unpivot can keep at most {ApiLimits.MaxUnpivotKeep} columns.", "keep");
+        for (var i = 0; i < keep.Length; i++)
+        {
+            if (string.IsNullOrWhiteSpace(keep[i])) throw Bad($"'keep[{i}]' is required.", $"keep[{i}]");
+            if (!seen.Add(keep[i])) throw Bad($"'{keep[i]}' is already used.", $"keep[{i}]");
+        }
+        ValidateRange(r.Limit, ApiLimits.MaxRowsLimit, "Limit", "limit");
+        ValidateRowCells(r.Limit ?? ApiLimits.DefaultRowsLimit, keep.Length + 2, "limit");
     }
     /// <summary>rows x columns must stay within <see cref="ApiLimits.MaxRowsCells"/> — ask for fewer rows or columns.</summary>
     public static void ValidateRowCells(int rows, int columns, string field)

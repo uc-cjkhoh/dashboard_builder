@@ -69,3 +69,10 @@ public sealed record RowsResult(
 /// and kind). The result's first column is the source table. No ordering. Identifiers are catalog-validated and quoted.
 /// </summary>
 public sealed record UnionRequest(string Db, string[] Tables, string[]? Columns, int? Limit);
+
+/// <summary>
+/// A bounded unpivot preview of one table (POST /api/unpivot): each source row becomes one row per <see cref="Columns"/>
+/// entry (2..50 same-kind wide columns) holding the column's name and value, beside up to 5 <see cref="Keep"/> columns.
+/// The first <see cref="Limit"/> rows (default 100, max 1000), no ordering. Identifiers are catalog-validated and quoted.
+/// </summary>
+public sealed record UnpivotRequest(string Db, string Table, string[] Columns, string[]? Keep, int? Limit);

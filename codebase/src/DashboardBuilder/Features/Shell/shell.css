@@ -75,6 +75,7 @@
   margin-bottom: var(--s2);
 }
 .sidebar__title-row .sidebar__title { margin-bottom: 0; }
+.sidebar__title-actions { display: flex; gap: var(--s2); }
 
 /* Resize handle on the sidebar's right edge (drag → up to 30% of the viewport); look in core.css .resizer. */
 .sidebar__resizer { position: absolute; top: 0; right: -3px; bottom: 0; z-index: 3; }
