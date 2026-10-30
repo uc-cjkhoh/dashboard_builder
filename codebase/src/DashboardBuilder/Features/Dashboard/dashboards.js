@@ -372,7 +372,8 @@ export function initDashboards() {
       groups.push(group);
     }
     if (seq !== fieldsSeq) return;
-    fieldsEl.replaceChildren(fieldTools(hiddenCount), calcFieldGroup(), hierGroup(columnsByTable), marksEl, ...groups);
+    // The fields are the focus (one tile per table); the tools that shape them — marks, calculated fields, hierarchies — follow, quieter.
+    fieldsEl.replaceChildren(fieldTools(hiddenCount), ...groups, marksEl, calcFieldGroup(), hierGroup(columnsByTable));
     filterFields();
   }
 
