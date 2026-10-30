@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { collapseKey, rollUp, expandNodes, leafValue, canToggle, toggleKey, collapsedOf, cleanCollapsed, MAX_COLLAPSED } from "../../src/DashboardBuilder/Features/Dashboard/collapse-model.js";
+import { collapseKey, rollUp, expandNodes, leafValue, canToggle, collapsedOf, cleanCollapsed, MAX_COLLAPSED } from "../../src/DashboardBuilder/Features/Dashboard/collapse-model.js";
 
 const names = ["region", "country", "city"];
 const tuples = [["EU", "FR", "Paris"], ["EU", "FR", "Nice"], ["EU", "DE", "Berlin"], ["US", "US", "NYC"]];
@@ -65,14 +65,6 @@ test("expandNodes repeats a node per measure, or once", () => {
   assert.equal(expandNodes([], 0).length, 1); // no tuples: one empty leaf
 });
 
-test("toggleKey adds then removes, without mutating", () => {
-  const a = ["x"];
-  const b = toggleKey(a, "y");
-  assert.deepEqual(b, ["x", "y"]);
-  assert.deepEqual(a, ["x"]);
-  assert.deepEqual(toggleKey(b, "x"), ["y"]);
-});
-
 test("collapsedOf reads one axis of a sheet, tolerating no state", () => {
   assert.equal(collapsedOf({}, "rows").size, 0);
   assert.equal(collapsedOf({ collapsed: { rows: ["a"], cols: [] } }, "rows").has("a"), true);
@@ -131,4 +123,83 @@ test("a new sheet starts fully expanded, and a bad saved value is dropped with a
   const wb = parseWorkbook(JSON.stringify(serializeWorkbook(wbOf({ rows: [1, {}], cols: "x" }))));
   assert.equal(wb.worksheets[0].sheet.collapsed, undefined);
   assert.ok(wb.issues.some((i) => /collapsed/.test(i)), JSON.stringify(wb.issues));
+});
+
+// ---- review fixes ---------------------------------------------------------------------------------------------------
+import { applyToggle, headerKeys, shownValues } from "../../src/DashboardBuilder/Features/Dashboard/collapse-model.js";
+import { createHistory } from "../../src/DashboardBuilder/Features/Dashboard/history.js";
+import { extentOf } from "../../src/DashboardBuilder/Features/Dashboard/conditional-model.js";
+
+test("headerKeys: every prefix with a level below it, none for the last level", () => {
+  const k = headerKeys(tuples, names);
+  assert.ok(k.has(collapseKey(names, ["EU"], 0)) && k.has(collapseKey(names, ["EU", "FR"], 1)));
+  assert.ok(!k.has(collapseKey(names, ["EU", "FR", "Paris"], 2)));
+  assert.equal(k.size, 2 + 3); // EU, US; EU/FR, EU/DE, US/US
+});
+
+test("applyToggle: flips a key; empty both axes -> null; the other axis is untouched", () => {
+  const valid = new Set(["a", "b"]);
+  let r = applyToggle(null, "rows", "a", valid);
+  assert.deepEqual(r.collapsed, { rows: ["a"], cols: [] });
+  r = applyToggle(r.collapsed, "cols", "b", valid);
+  assert.deepEqual(r.collapsed, { rows: ["a"], cols: ["b"] });
+  r = applyToggle(r.collapsed, "rows", "a", valid);
+  assert.deepEqual(r.collapsed, { rows: [], cols: ["b"] });
+  assert.equal(applyToggle(r.collapsed, "cols", "b", valid).collapsed, null);
+});
+
+test("applyToggle: stale keys are pruned first, so they never use up the cap", () => {
+  const stale = Array.from({ length: MAX_COLLAPSED }, (_, i) => "old" + i);
+  const r = applyToggle({ rows: stale, cols: [] }, "rows", "new", new Set(["new"]));
+  assert.equal(r.blocked, false);
+  assert.deepEqual(r.collapsed.rows, ["new"]);
+});
+
+test("applyToggle: at the cap with real keys, collapsing is blocked and nothing changes; expanding still works", () => {
+  const keys = Array.from({ length: MAX_COLLAPSED }, (_, i) => "k" + i);
+  const valid = new Set([...keys, "extra"]);
+  const state = { rows: keys, cols: [] };
+  const r = applyToggle(state, "rows", "extra", valid);
+  assert.equal(r.blocked, true);
+  assert.equal(r.collapsed, state);
+  const e = applyToggle(state, "rows", "k0", valid);
+  assert.equal(e.blocked, false);
+  assert.equal(e.collapsed.rows.length, MAX_COLLAPSED - 1);
+});
+
+test("leafValue: when the rows are partial (paging / cut at the limit) a collapsed value is null, an expanded cell is not", () => {
+  assert.equal(leafValue("sum", cell, eu, none, 0, false), null);
+  assert.equal(leafValue("sum", cell, one(["EU", "FR"]), none, 0, false), 10);
+  assert.equal(leafValue("sum", cell, eu, none, 0, true), 15);
+});
+
+test("shownValues: conditional-format extents are measured on the displayed (combined) values", () => {
+  const left = [eu, one(["US", "US"])].map((n) => ({ ...n, mi: null }));
+  const topLeaves = [{ ...none, mi: 0 }];
+  const leafAt = (l, t, mi) => leafValue("sum", cell, l, t, mi);
+  const shown = shownValues(left, topLeaves, false, 1, leafAt);
+  assert.deepEqual(shown, [[15, 7]]);
+  assert.deepEqual(extentOf(shown[0]), extentOf([15, 7]));
+  assert.notDeepEqual(extentOf(shown[0]), extentOf([10, 5, 7])); // the raw grouped rows would give max 10, not 15
+});
+
+test("measures on the left: shownValues reads each leaf's own measure", () => {
+  const left = [{ ...one(["EU", "FR"]), mi: 0 }, { ...one(["EU", "FR"]), mi: 1 }];
+  const shown = shownValues(left, [{ ...none, mi: null }], true, 2, (l, t, mi) => mi * 100);
+  assert.deepEqual(shown, [[0], [100]]);
+});
+
+test("undo restores the collapsed state (the history snapshots the whole sheet)", () => {
+  const h = createHistory();
+  const before = { ...emptySheet() };
+  const after = { ...before, collapsed: { rows: ["a"], cols: [] } };
+  h.record("ws#1", before);              // commit() records the sheet as it was
+  assert.equal(h.undo("ws#1", after).collapsed, undefined);
+  assert.deepEqual(h.redo("ws#1", before).collapsed, { rows: ["a"], cols: [] });
+  // collapse, collapse again, undo once: only the second is undone
+  const one1 = applyToggle(null, "rows", "a", new Set(["a", "b"])).collapsed;
+  const two = applyToggle(one1, "rows", "b", new Set(["a", "b"])).collapsed;
+  const h2 = createHistory();
+  h2.record("w", { collapsed: null }); h2.record("w", { collapsed: one1 });
+  assert.deepEqual(h2.undo("w", { collapsed: two }).collapsed, one1);
 });

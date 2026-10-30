@@ -47,9 +47,6 @@ export function expandNodes(nodes, measureCount) {
   return out;
 }
 
-/** `list` with `key` added, or removed when present (a new array). */
-export const toggleKey = (list, key) => (list.includes(key) ? list.filter((k) => k !== key) : [...list, key]);
-
 /** The collapsed keys of one axis ("rows" | "cols") as a Set. */
 export const collapsedOf = (sheet, axis) => new Set(sheet?.collapsed?.[axis] ?? []);
 
@@ -76,12 +73,44 @@ export function cleanCollapsed(c, where, issues) {
  * the value is the header's cells combined by the measure's own aggregation (`combine`: sums and counts add, min / max
  * take min / max); an average, distinct count, median, percentile or table calculation can't be rebuilt from its parts,
  * so `agg` null / non-additive gives null ("—") — never a client-side re-aggregation.
- * `cell(rowTuple, colTuple, mi)` reads one grouped result cell.
+ * `cell(rowTuple, colTuple, mi)` reads one grouped result cell. `complete` false (rows still paging, or the result was cut
+ * at its group limit) means a combined value would be a partial sum shown as whole: it is null too.
  */
-export function leafValue(agg, cell, left, top, mi) {
+export function leafValue(agg, cell, left, top, mi, complete = true) {
   if (left.level === null && top.level === null) return cell(left.tuple, top.tuple, mi);
-  if (!agg) return null;
+  if (!agg || !complete) return null;
   const vals = [];
   for (const rt of left.members) for (const ct of top.members) vals.push(cell(rt, ct, mi));
   return combine(agg, vals);
+}
+
+/** Every header key that exists in `tuples` (distinct paths of `names`): one per path prefix with a level below it. */
+export function headerKeys(tuples, names) {
+  const out = new Set();
+  for (const t of tuples) for (let l = 0; l < t.length - 1; l++) out.add(collapseKey(names, t, l));
+  return out;
+}
+
+/**
+ * Flip `key` on one axis of `collapsed`. Keys that match no current header (`valid`) are pruned first, so a stale key never
+ * uses up the cap. At the cap, an expanded header can't be collapsed: { blocked: true } and nothing changes.
+ * Returns { collapsed, blocked } — `collapsed` null when nothing is collapsed on either axis.
+ */
+export function applyToggle(collapsed, axis, key, valid) {
+  const next = { rows: [...(collapsed?.rows ?? [])], cols: [...(collapsed?.cols ?? [])] };
+  next[axis] = next[axis].filter((k) => valid.has(k));
+  if (next[axis].includes(key)) next[axis] = next[axis].filter((k) => k !== key);
+  else if (next[axis].length >= MAX_COLLAPSED) return { collapsed, blocked: true };
+  else next[axis].push(key);
+  return { collapsed: next.rows.length || next.cols.length ? next : null, blocked: false };
+}
+
+/** The values each measure shows, per measure index: what a conditional-format scale or bar must be measured on. */
+export function shownValues(leftLeaves, topLeaves, measureOnLeft, measureCount, leafAt) {
+  const out = Array.from({ length: measureCount }, () => []);
+  for (const l of leftLeaves) for (const t of topLeaves) {
+    const mi = measureOnLeft ? l.mi : t.mi ?? 0;
+    if (mi < measureCount) out[mi].push(leafAt(l, t, mi));
+  }
+  return out;
 }

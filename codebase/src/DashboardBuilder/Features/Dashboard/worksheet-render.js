@@ -29,7 +29,7 @@ import { keyAliasMaps, withMemberLabels } from "./member-labels.js";
  *                highlights; false = a static widget: no mark selection, drill or legend handlers
  *   selected     the dashboard selection the source widget highlights ({ db, table, column, value }) — bar / stacked / pie / donut fade the rest
  *   hooks        { onSelect(dimField, raw), onDrill(raw), onLegend({ sheet, field, name, raw, bucketed }), legendFocus(),
- *                  onTooltipFields(sheet, list), onMemberColors(sheet, field, members), onCollapse(axis, key) } — what the host does with them
+ *                  onTooltipFields(sheet, list), onMemberColors(sheet, field, members), onCollapse(axis, key, validKeys) } — what the host does with them
  */
 
 /**

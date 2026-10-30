@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { primaryDim, chartOrientation, aliasNames, pathOrderedRows, statusText, captionText, markFieldValues, marksChannels, scatterShapeGroups,
   colorSplitData, heatmapData, treemapTree, sankeyLinks, multiplesData, scatterSymbol, MAX_PANELS, cmpValues, sameField }
   from "../../src/DashboardBuilder/Features/Dashboard/result-model.js";
-import { tupleKey, uniqueTuples, expandLeaves, runs, levelSpans } from "../../src/DashboardBuilder/Features/Dashboard/grid-model.js";
+import { tupleKey, uniqueTuples, runs, levelSpans } from "../../src/DashboardBuilder/Features/Dashboard/grid-model.js";
 import { SCATTER_TYPES, planMeasures } from "../../src/DashboardBuilder/Features/Dashboard/sheet-plan.js";
 
 // The pure shaping of a result for drawing (P24a): no DOM, so every rule is checkable here.
@@ -15,12 +15,10 @@ const fmt = (v) => String(v);
 const res = (rows, over = {}) => ({ rowDimensions: ["region"], columnDimensions: [], measures: ["sum(amount)"], rows, ...over });
 const row = (keys, ...values) => ({ keys, values });
 
-test("grid helpers: tuple keys, unique tuples, leaves, runs and row spans", () => {
+test("grid helpers: tuple keys, unique tuples, runs and row spans", () => {
   assert.equal(tupleKey([null, "a"]), tupleKey(["", "a"]));
   assert.deepEqual(uniqueTuples([["a"], ["b"], ["a"]]), [["a"], ["b"]]);
-  assert.deepEqual(expandLeaves([], 0), [{ tuple: [], mi: null }]);
-  assert.deepEqual(expandLeaves([["a"]], 2).map((l) => l.mi), [0, 1]);
-  const leaves = expandLeaves([["a", "x"], ["a", "y"], ["b", "x"]], 0);
+  const leaves = [["a", "x"], ["a", "y"], ["b", "x"]].map((tuple) => ({ tuple, mi: null }));
   assert.deepEqual(runs(leaves, (l) => l.tuple[0]).map((g) => g.span), [2, 1]);
   assert.deepEqual(levelSpans(leaves, 0), [2, 0, 1]);
 });

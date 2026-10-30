@@ -153,8 +153,8 @@ try {
     await settle(400);
     await waitFor(`${tbl} !== null && ${tbl}.querySelectorAll('.xt-toggle').length > 0`, 'toggles drawn');
     const r = await toggles('rows'), c = await toggles('cols');
-    must(r.length === 2 && r.every((x) => x.open === 'true') && r[0].label === 'Collapse EU', `row toggles: ${J(r)}`);
-    must(c.length === 2 && c[0].label === 'Collapse Retail', `column toggles: ${J(c)}`);
+    must(r.length === 2 && r.every((x) => x.open === 'true') && r[0].label === 'Collapse EU (rows)', `row toggles: ${J(r)}`);
+    must(c.length === 2 && c[0].label === 'Collapse Retail (columns)', `column toggles: ${J(c)}`);
     must((await bodyRows()).length === 4, 'four rows');
     await shot('expand-collapse-expanded-light.png');
   });
@@ -162,7 +162,7 @@ try {
   let q0;
   await check('collapsing a row header shows one row; sums add, an average shows "—"; no new query', async () => {
     q0 = queries.length;
-    await clickToggle('Collapse EU');
+    await clickToggle('Collapse EU (rows)');
     await waitFor(`[...${tbl}.tBodies[0].rows].length === 3`, 'EU collapsed');
     const rows = await bodyRows();
     must(rows[0][0] === 'EU', `first row: ${J(rows[0])}`);
@@ -172,20 +172,20 @@ try {
     must(queries.length === q0, 'collapsing must not query again');
     must(J(await collapsedState()).includes('EU'), `state: ${J(await collapsedState())}`);
     const t = await toggles('rows');
-    must(t[0].label === 'Expand EU' && t[0].open === 'false', J(t));
+    must(t[0].label === 'Expand EU (rows)' && t[0].open === 'false', J(t));
     await b.sleep(300);
-    must(await ev(`document.activeElement?.getAttribute('aria-label') === 'Expand EU'`), 'focus returns to the toggle: ' + await ev(`document.activeElement?.tagName + '.' + document.activeElement?.className`));
+    must(await ev(`document.activeElement?.getAttribute('aria-label') === 'Expand EU (rows)'`), 'focus returns to the toggle: ' + await ev(`document.activeElement?.tagName + '.' + document.activeElement?.className`));
     await shot('expand-collapse-rows-light.png');
   });
 
   await check('the collapsed row\'s value is the sum of its children (110 + 210 = 320), the amount cell of Retail / Gold', async () => {
-    await clickToggle('Expand EU');
+    await clickToggle('Expand EU (rows)');
     await waitFor(`[...${tbl}.tBodies[0].rows].length === 4`, 'EU expanded');
     const open = await bodyRows();
     const num = (t) => Number(t.replace(/[^0-9.-]/g, ''));
     // EU / FR row: [EU, FR, amount, qty, ...]; EU / DE row: [DE, amount, qty, ...] (EU is rowSpan-merged)
     must(num(open[0][2]) === 110 && num(open[1][1]) === 210, `children: ${open[0][2]} and ${open[1][1]}`);
-    await clickToggle('Collapse EU');
+    await clickToggle('Collapse EU (rows)');
     await waitFor(`[...${tbl}.tBodies[0].rows].length === 3`, 'EU collapsed again');
     const shut = await bodyRows();
     must(shut[0][0] === 'EU' && num(shut[0][1]) === 320, `collapsed row: ${J(shut[0])}`);
@@ -194,8 +194,8 @@ try {
 
   await check('collapsing a column header drops its sub-columns and hides nothing else', async () => {
     const before = (await headRows()).length;
-    await clickToggle('Collapse Retail');
-    await waitFor(`${tbl}.querySelectorAll('.xt-toggle[aria-label="Expand Retail"]').length === 1`, 'Retail collapsed');
+    await clickToggle('Collapse Retail (columns)');
+    await waitFor(`${tbl}.querySelectorAll('.xt-toggle[aria-label="Expand Retail (columns)"]').length === 1`, 'Retail collapsed');
     const hdr = await headRows();
     must(hdr.length === before, `header rows: ${before} -> ${hdr.length}`);
     must(!hdr.some((r) => r.includes('Basic')), `Basic hidden: ${J(hdr)}`);
@@ -205,7 +205,7 @@ try {
   });
 
   await check('toggles are keyboard operable: focusable buttons, Enter and Space flip them', async () => {
-    await ev(`(() => { [...${tbl}.querySelectorAll('.xt-toggle')].find((e) => e.getAttribute('aria-label') === 'Expand EU').focus(); return true; })()`);
+    await ev(`(() => { [...${tbl}.querySelectorAll('.xt-toggle')].find((e) => e.getAttribute('aria-label') === 'Expand EU (rows)').focus(); return true; })()`);
     for (const key of ['Enter', ' ']) {
       const before = await ev(`document.activeElement.getAttribute('aria-expanded')`);
       await b.send('Input.dispatchKeyEvent', { type: 'keyDown', key, code: key === ' ' ? 'Space' : 'Enter', text: key === ' ' ? ' ' : '\r', windowsVirtualKeyCode: key === ' ' ? 32 : 13 });
@@ -226,8 +226,22 @@ try {
     await waitFor(`${tbl}.querySelectorAll('.xt-toggle[aria-expanded="false"]').length >= 1`, 'restored');
   });
 
+  await check('undo restores the collapsed state, redo re-applies it', async () => {
+    const before = J(await collapsedState());
+    await clickToggle('Collapse US (rows)');
+    await waitFor(`${tbl}.querySelectorAll('.xt-toggle[aria-label="Expand US (rows)"]').length === 1`, 'US collapsed');
+    must(J(await collapsedState()) !== before, 'state changed');
+    await ev(`[...document.querySelectorAll('button')].find((x) => x.getAttribute('aria-label') === 'Undo (Ctrl+Z)').click()`);
+    await waitFor(`${tbl}.querySelectorAll('.xt-toggle[aria-label="Collapse US (rows)"]').length === 1`, 'undone');
+    must(J(await collapsedState()) === before, `after undo: ${J(await collapsedState())} vs ${before}`);
+    await ev(`[...document.querySelectorAll('button')].find((x) => x.getAttribute('aria-label') === 'Redo (Ctrl+Shift+Z)').click()`);
+    await waitFor(`${tbl}.querySelectorAll('.xt-toggle[aria-label="Expand US (rows)"]').length === 1`, 'redone');
+    await clickToggle('Expand US (rows)');
+    await waitFor(`${tbl}.querySelectorAll('.xt-toggle[aria-label="Collapse US (rows)"]').length === 1`, 'US expanded');
+  });
+
   await check('geometry: toggle and header text are >= 4px apart, no overflow, rows and header cells do not touch', async () => {
-    await clickToggle('Collapse US');
+    await clickToggle('Collapse US (rows)');
     await settle(300);
     const r = await ev(`(() => {
       const out = { gaps: [], overflow: [], drift: [] };

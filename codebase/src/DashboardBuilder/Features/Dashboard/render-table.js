@@ -4,7 +4,7 @@ import { isCalc } from "./table-calc.js";
 import { combine } from "./analytics-model.js";
 import { CF_OP_CHOICES, CF_TONE_CHOICES, TONE_ICON, measureKey, extentOf, scaleColors, barGeometry, matchRule, isActive, midpointOf } from "./conditional-model.js";
 import { tupleKey, uniqueTuples, runs, levelSpans } from "./grid-model.js";
-import { collapseKey, canToggle, rollUp, expandNodes, collapsedOf, leafValue } from "./collapse-model.js";
+import { collapseKey, canToggle, rollUp, expandNodes, collapsedOf, leafValue, headerKeys, shownValues } from "./collapse-model.js";
 import { icon } from "../Core/icons.js";
 import { el, warn, iconSpan } from "./render-dom.js";
 import { tableStyleClasses } from "./table-style-model.js";
@@ -24,7 +24,6 @@ import { PALETTES } from "../Core/theme-model.js";
 let refocus = null; // the toggle to focus after the redraw a click causes: { axis, key }
 export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, calcPercent = new Set(), collapse = null) {
   const { rowDimensions, columnDimensions, measures, rows } = result;
-  const cf = conditionalFor(sheet, measures, rows); // P37: per measure index, or null
   const rd = rowDimensions.length, cd = columnDimensions.length;
   const dimLabel = (v, i) => (v == null ? "—" : fmtCat(v, i)); // date-aware header label (P10)
 
@@ -58,7 +57,12 @@ export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, ca
     return combine(agg, vals);
   };
   // A leaf pair standing for a collapsed header is combined (never re-aggregated): see collapse-model.js leafValue.
-  const leafAt = (l, t, mi) => leafValue(aggOfMi(mi), cellValue, l, t, mi);
+  // Rows still paging, or cut at the group limit: a combined value would be a partial sum shown as whole, so it reads "—".
+  const complete = !partial && !result.truncated;
+  const leafAt = (l, t, mi) => leafValue(aggOfMi(mi), cellValue, l, t, mi, complete);
+  const rowKeys = headerKeys(rowTuples, rowDimensions), colKeys = headerKeys(colTuples, columnDimensions);
+  // P37: per measure index, or null — scales and bars are measured on the values shown (a collapsed cell is a sum).
+  const cf = conditionalFor(sheet, measures, shownValues(leftLeaves, topLeaves, measureOnLeft, measures.length, leafAt));
   const toggleOf = (axis, names, tuple, level, label) => {
     if (!collapse || !canToggle(level, names.length)) return null;
     const key = collapseKey(names, tuple, level);
@@ -66,9 +70,9 @@ export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, ca
     const b = el("button", "xt-toggle");
     b.type = "button";
     b.setAttribute("aria-expanded", String(!closed));
-    b.setAttribute("aria-label", `${closed ? "Expand" : "Collapse"} ${label}`);
+    b.setAttribute("aria-label", `${closed ? "Expand" : "Collapse"} ${label} (${axis === "rows" ? "rows" : "columns"})`);
     b.append(icon(closed ? "plus" : "minus", { size: 16 }));
-    b.addEventListener("click", () => { refocus = { axis, key }; collapse.onToggle(axis, key); });
+    b.addEventListener("click", () => { refocus = { axis, key }; collapse.onToggle(axis, key, axis === "rows" ? rowKeys : colKeys); });
     if (refocus && refocus.axis === axis && refocus.key === key) { refocus = null; requestAnimationFrame(() => { if (b.isConnected) b.focus(); }); }
     return b;
   };
@@ -145,7 +149,7 @@ export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, ca
     }
     if (totalCol) for (const tmi of totalMis) {
       const mi = tmi ?? leftLeaf.mi;
-      tr.append(el("td", "num xt-total", showVal(mi, total(mi, leftLeaf.members, colTuples))));
+      tr.append(el("td", "num xt-total", showVal(mi, leftLeaf.level !== null && !complete ? null : total(mi, leftLeaf.members, colTuples))));
     }
     tbody.append(tr);
     // Subtotal after the last row of each first-level group (measures on top, ≥ 2 Rows dimensions).
@@ -169,7 +173,7 @@ export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, ca
     if (measureOnLeft) tr.append(el("th", "xt-rowhdr xt-meas xt-total", measureName ?? ""));
     for (const topLeaf of topLeaves) {
       const mi = onlyMi ?? topLeaf.mi ?? 0;
-      tr.append(el("td", "num xt-total", showVal(mi, total(mi, rts, topLeaf.members))));
+      tr.append(el("td", "num xt-total", showVal(mi, topLeaf.level !== null && !complete ? null : total(mi, rts, topLeaf.members))));
     }
     if (totalCol) for (const tmi of totalMis) { const mi = tmi ?? onlyMi ?? 0; tr.append(el("td", "num xt-total", showVal(mi, total(mi, rts, colTuples)))); }
     return tr;
@@ -188,7 +192,7 @@ export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, ca
 
 // --- conditional formatting (P37) ----------------------------------------
 // Per result measure: its setting, value extent over the loaded rows, and token palette — or null.
-function conditionalFor(sheet, measures, rows) {
+function conditionalFor(sheet, measures, shown) {
   const all = sheet.format?.conditional ?? {};
   const mplan = planMeasures(sheet);
   let palette = null;
@@ -196,7 +200,7 @@ function conditionalFor(sheet, measures, rows) {
     const cfg = all[measureKey(mplan[mi])];
     if (!isActive(cfg)) return null;
     palette ??= cfPalette();
-    return { cfg, name, ext: extentOf(rows.map((r) => r.values[mi])), palette };
+    return { cfg, name, ext: extentOf(shown[mi]), palette };
   });
 }
 // Scale colours from the chart tokens: sequential surface → blue; diverging orange ← surface → blue.

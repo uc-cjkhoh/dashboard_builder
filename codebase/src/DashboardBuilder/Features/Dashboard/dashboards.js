@@ -31,7 +31,7 @@ import { openTooltipDialog } from "./tooltip-dialog.js";
 import { checkTooltipStyle, styleAfterTextEdit } from "./tooltip-style.js";
 import { SWATCHES, memberKey, fieldColorKey, setMemberColor, clearFieldColors, colourOf } from "./colour-model.js";
 import { createHistory } from "./history.js";
-import { toggleKey, MAX_COLLAPSED } from "./collapse-model.js";
+import { applyToggle, MAX_COLLAPSED } from "./collapse-model.js";
 import { LINE_STYLE_CHOICES, linesTakeStyle } from "./line-style-model.js";
 import { HEATMAP_SHAPE_CHOICES } from "./heatmap-model.js";
 import { SECONDARY_CHOICES, dualAxisAllowed, dualAxisOn } from "./axis-sync-model.js";
@@ -191,18 +191,18 @@ export function initDashboards() {
   }), {
     interactive: true, onSelect: toggleSelection, onDrill: (raw) => drillDown(raw), onLegend: legendClick, legendFocus: () => legendFocus,
     onTooltipFields: (sheet, list) => setTooltipCat(sheet, list), onMemberColors: (sheet, field, members) => setMemberState(sheet, field, members),
-    onCollapse: (axis, key) => collapseHeader(axis, key),
+    onCollapse: (axis, key, valid) => collapseHeader(axis, key, valid),
     statusBar: setStatusBar, notices: sharedNote,
   });
   const runChart = () => sheetView.run();
   // T03-29: a crosstab header's +/- — flips its key on sheet.collapsed (presentation only: the redraw reads the cached result).
-  function collapseHeader(axis, key) {
+  function collapseHeader(axis, key, valid) {
     const dash = activeWorksheet();
     if (!dash) return;
     const s = dash.sheet;
-    const next = { rows: [...(s.collapsed?.rows ?? [])], cols: [...(s.collapsed?.cols ?? [])] };
-    next[axis] = toggleKey(next[axis], key).slice(0, MAX_COLLAPSED);
-    s.collapsed = next.rows.length || next.cols.length ? next : null;
+    const r = applyToggle(s.collapsed, axis, key, valid);
+    if (r.blocked) { toast(`At most ${MAX_COLLAPSED} headers can be collapsed — expand one first.`, "danger"); return; }
+    s.collapsed = r.collapsed;
     commit(dash, s);
   }
 
