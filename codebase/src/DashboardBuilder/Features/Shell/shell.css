@@ -60,19 +60,22 @@
 
 /* The sidebar body follows the tab (Shell/sidebar.js sets `.app[data-view]`):
    - model (Data Source): connection, database and tables — the body as built below;
-   - sheet (worksheet): only the Calculated fields and Hierarchies tools; the connection, database and tables are hidden;
-   - board (dashboard): nothing — the body and its resizer are hidden and the sidebar shrinks to a rail holding the brand mark.
+   - sheet (worksheet): a `--topbar-h` rail holding the brand mark and, below it, the tool icons in one column; the connection, database and tables are hidden;
+   - board (dashboard): the same rail with the brand mark only — the body is hidden.
    The user's own collapsed choice is untouched and returns with the Data Source tab. */
 .sidebar__tools { display: none; gap: var(--s2); }
 .app[data-view="sheet"] .sidebar__tools { display: flex; }
 .app[data-view="sheet"] .sidebar__section--conn, .app[data-view="sheet"] #schema-section, .app[data-view="sheet"] #tables-section { display: none; }
-.app[data-view="board"] { grid-template-columns: var(--topbar-h) 1fr; }
-.app[data-view="board"] .sidebar__body, .app[data-view="board"] .sidebar__resizer,
-.app[data-view="board"] .sidebar__brand-text, .app[data-view="board"] .sidebar__toggle { display: none; }
-.app[data-view="board"] .sidebar__brand { justify-content: center; padding-inline: 0; }
-.app[data-view="board"] .sidebar__mark { display: grid; }
+.app[data-view="board"], .app[data-view="sheet"] { grid-template-columns: var(--topbar-h) 1fr; }
+.app[data-view="board"] .sidebar__body, .app[data-view="sheet"] .sidebar__resizer, .app[data-view="board"] .sidebar__resizer,
+.app[data-view="board"] .sidebar__brand-text, .app[data-view="sheet"] .sidebar__brand-text,
+.app[data-view="board"] .sidebar__toggle, .app[data-view="sheet"] .sidebar__toggle { display: none; }
+.app[data-view="board"] .sidebar__brand, .app[data-view="sheet"] .sidebar__brand { justify-content: center; padding-inline: 0; }
+.app[data-view="board"] .sidebar__mark, .app[data-view="sheet"] .sidebar__mark { display: grid; }
+/* On a worksheet the rail also carries the tool icons in one column (1 × N), so the sidebar stays as narrow as the board's. */
+.app[data-view="sheet"] .sidebar__body { padding: var(--s2) 0; align-items: center; }
 /* The worksheet tools are two icon-only tiles (calculated fields, hierarchies); each opens its dialog. */
-.sidebar__tools { flex-direction: row; }
+.sidebar__tools { flex-direction: column; }
 .sidebar__tool { width: 40px; height: 40px; background: var(--surface); border: 1px solid var(--line-2); box-shadow: var(--elev-2); color: var(--ink-2); }
 .sidebar__tool:hover { background: var(--surface); border-color: var(--ink-3); color: var(--ink); box-shadow: var(--elev-8); }
 .sidebar__tool:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
