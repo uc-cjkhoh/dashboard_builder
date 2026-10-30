@@ -91,7 +91,7 @@ export function placeAt(widgets, kind, cell, nameOf) {
 /** Import validation of one dashboard's saved widgets → saved-form widgets. Every repair or drop is pushed to `issues`.
  *  Dropped: not an object, unknown kind, a worksheet index outside 0..worksheetCount-1, no room after an overlap, past 12.
  *  Clamped: size and position into the grid; text truncated; an overlapping widget moves to the first free spot. */
-export function cleanWidgets(raw, { worksheetCount, dashboardCount = 0, where, budget = { left: LIMITS.imagesTotal } }, issues) {
+export function cleanWidgets(raw, { worksheetCount, dashboardCount = 0, ownDashboard = -1, where, budget = { left: LIMITS.imagesTotal } }, issues) {
   if (raw == null) return [];
   if (!Array.isArray(raw)) { issues.push(`${where}: the widgets weren't a list — none were opened.`); return []; }
   const out = [];
@@ -134,7 +134,7 @@ export function cleanWidgets(raw, { worksheetCount, dashboardCount = 0, where, b
     else if (w.kind === "spacer") out.push({ kind: "spacer", ...fit });
     else if (w.kind === "nav") {
       const t = w.target, count = t?.kind === "worksheet" ? worksheetCount : t?.kind === "dashboard" ? dashboardCount : 0;
-      const live = t && typeof t === "object" && Number.isInteger(t.index) && t.index >= 0 && t.index < count;
+      const live = t && typeof t === "object" && Number.isInteger(t.index) && t.index >= 0 && t.index < count && !(t.kind === "dashboard" && t.index === ownDashboard);
       if (w.target != null && !live) issues.push(`${where}: a navigation button's tab is missing — the button was left unlinked.`);
       const label = cleanText(w.label, LIMITS.navLabel, "label", where, issues, "a navigation button's");
       if (!label.trim() && w.label != null && typeof w.label === "string") issues.push(`${where}: a navigation button had no label — it was named “${NAV_LABEL}”.`);

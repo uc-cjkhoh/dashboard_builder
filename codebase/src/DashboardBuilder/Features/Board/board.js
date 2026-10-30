@@ -7,7 +7,7 @@ import { defaultFormat, metaOf } from "../Core/store.js";
 import { labelOf } from "../Dashboard/member-labels.js";
 import { sharedResults } from "../Dashboard/dashboards.js";
 import { nextSelection, selectionRefusal, crossFor, chipText, stillValid, UNSELECTABLE_NOTE } from "../Dashboard/dashboard-select.js";
-import { placeNew } from "./board-model.js";
+import { placeNew, NAV_LABEL } from "./board-model.js";
 import { validateImageFile, isImageSrc, imageChars, budgetError } from "./image-model.js";
 import { layoutBoard, widgetOrder, fixedRowH } from "./board-layout.js";
 import { SIZE_PRESETS, sizeKey, sizeLabel } from "./board-size.js";
@@ -200,7 +200,7 @@ export function initBoard() {
     const { x, y, w, h } = cell;
     const widget = kind === "sheet" ? { id: nextWidgetId(), kind, sheetId, x, y, w, h }
       : kind === "text" ? { id: nextWidgetId(), kind, heading: "Text", body: "", x, y, w, h }
-      : kind === "nav" ? { id: nextWidgetId(), kind, label: "Go to", tip: "", target: null, x, y, w, h }
+      : kind === "nav" ? { id: nextWidgetId(), kind, label: NAV_LABEL, tip: "", target: null, x, y, w, h }
       : { id: nextWidgetId(), kind, ...extra, x, y, w, h }; // image { alt, src } | spacer
     commit([...dash.widgets, widget]);
     toast(`Added “${entries.get(widget.id)?.el.getAttribute("aria-label") ?? "widget"}” to the dashboard.`, "ok"); // polite live region (#toast-live)

@@ -207,14 +207,14 @@ export function parseWorkbook(source) {
   }
   // A widget's worksheet is read through the map, so one cut by the 50-tab cap is "missing" like any other dangling index.
   const budget = { left: LIMITS.imagesTotal }; // the workbook-wide picture budget, shared by every dashboard
-  for (const d of dashboards) {
+  dashboards.forEach((d, ownIndex) => {
     const remapped = Array.isArray(d.widgets)
       ? d.widgets.map((w) => (w && typeof w === "object" && w.kind === "sheet" ? { ...w, sheet: wsMap.get(w.sheet) }
         : w && typeof w === "object" && w.kind === "nav" && w.target && typeof w.target === "object" ? { ...w, target: { kind: w.target.kind, index: (w.target.kind === "worksheet" ? wsMap : w.target.kind === "dashboard" ? dbMap : new Map()).get(w.target.index) } } : w))
       : d.widgets;
-    d.widgets = cleanWidgets(remapped, { worksheetCount: worksheets.length, dashboardCount: dashboards.length, where: `Dashboard "${d.name}"`, budget }, issues);
+    d.widgets = cleanWidgets(remapped, { worksheetCount: worksheets.length, dashboardCount: dashboards.length, ownDashboard: ownIndex, where: `Dashboard "${d.name}"`, budget }, issues);
     d.size = cleanSize(d.size, `Dashboard "${d.name}"`, issues);
-  }
+  });
 
   let active = null;
   if (raw.active != null) {

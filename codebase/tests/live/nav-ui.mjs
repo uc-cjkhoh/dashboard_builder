@@ -42,7 +42,7 @@ try {
   const click = (sel) => ev(`document.querySelector(${J(sel)}).click()`);
   const active = () => store(`const v = st.currentView(); return { ...v, name: st.tabById(v.id)?.name };`);
   const setVal = (sel, v) => ev(`(() => { const e = document.querySelector(${J(sel)}); e.value = ${J(v)}; e.dispatchEvent(new Event('input', { bubbles: true })); e.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
-  const btn = () => ev(`(() => { const x = document.querySelector('.board-widget--nav .board-nav__btn'); return x ? { text: x.textContent, title: x.title, disabled: x.disabled, aria: x.getAttribute('aria-label') } : null; })()`);
+  const btn = () => ev(`(() => { const x = document.querySelector('.board-widget--nav .board-nav__btn'); return x ? { text: x.textContent, title: x.title, disabled: x.getAttribute('aria-disabled') === 'true', nativeDisabled: x.disabled, aria: x.getAttribute('aria-label') } : null; })()`);
 
   await b.goto(APP + '/');
   await connect();
@@ -55,7 +55,7 @@ try {
     const w = await store(`return st.dashboards().find((d) => d.name === 'Overview').widgets[0];`);
     must(w.kind === 'nav' && w.w === 4 && w.h === 2 && w.target === null, J(w));
     const x = await btn();
-    must(x.text === 'Go to' && x.disabled && /not linked/.test(x.aria), J(x));
+    must(x.text === 'Go to' && x.disabled && !x.nativeDisabled && /not linked/.test(x.aria) && /Use Edit to choose one/.test(x.title), J(x));
   });
 
   await check('Edit: an empty label is refused in words, Escape discards', async () => {
@@ -127,8 +127,10 @@ try {
 
   await check('closing the target unlinks the button (disabled, in words)', async () => {
     await store(`st.closeTab(st.dashboards().find((d) => d.name === 'Details').id); return true;`);
-    await waitFor(`document.querySelector('.board-nav__btn').disabled`, 'unlinked');
+    await waitFor(`document.querySelector('.board-nav__btn').getAttribute('aria-disabled') === 'true'`, 'unlinked');
     must(/not linked/.test((await btn()).aria), J(await btn()));
+    const focusable = await ev(`(() => { const x = document.querySelector('.board-nav__btn'); x.focus(); return document.activeElement === x; })()`);
+    must(focusable, 'the unlinked button cannot take keyboard focus');
   });
 
   if (b.consoleErrors.length) { console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  ')); failed++; }

@@ -1,4 +1,4 @@
-import { worksheetById, switchTab, tabById } from "../Core/store.js";
+import { worksheetById, switchTab, tabById, tabs } from "../Core/store.js";
 import { icon } from "../Core/icons.js";
 import { toggle } from "../Core/ui.js";
 import { sizeChart } from "../Dashboard/chart.js";
@@ -9,7 +9,7 @@ import { LIMITS } from "../Core/validate.js";
 import { validateTextEdit, textChanged } from "./text-edit.js";
 import { buildNavForm } from "./nav-edit.js";
 import { navChanged } from "./nav-model.js";
-import { tabs } from "../Core/store.js";
+import { NAV_LABEL } from "./board-model.js";
 
 // One widget on the board: a header (title, Edit, Remove) over a body. A worksheet widget's body is a select-only
 // worksheet view (createWorksheetView({ interactive: "select" })) of its worksheet's sheet, run with its own latest-wins gate
@@ -72,7 +72,7 @@ export function createWidget(widget, host) {
     if (w.kind === "text") return w.heading || "Text";
     if (w.kind === "image") return w.alt || "Image";
     if (w.kind === "spacer") return "Spacer";
-    if (w.kind === "nav") return w.label || "Go to";
+    if (w.kind === "nav") return w.label || NAV_LABEL;
     return worksheetById(w.sheetId)?.name ?? "Closed worksheet";
   }
   // --- inline text edit: heading + body become labelled inputs; Save / Enter commits, Cancel / Esc discards ---
@@ -164,10 +164,10 @@ export function createWidget(widget, host) {
       body.replaceChildren(btn);
     }
     const dest = w.target ? tabById(w.target) : null;
-    btn.replaceChildren(...(dest ? [icon("arrow-right", { size: 16 })] : []), h("span", null, w.label || "Go to"));
-    btn.title = w.tip ?? ""; // the tooltip
-    btn.disabled = !dest;
-    btn.setAttribute("aria-label", `${w.label || "Go to"}${dest ? `, goes to ${dest.name}` : ", not linked to a tab"}`);
+    btn.replaceChildren(...(dest ? [icon("arrow-right", { size: 16 })] : []), h("span", null, w.label || NAV_LABEL));
+    btn.title = dest ? w.tip ?? "" : "Not linked to a tab. Use Edit to choose one."; // the tooltip
+    btn.setAttribute("aria-disabled", dest ? "false" : "true"); // not `disabled`: an unlinked button stays reachable by keyboard
+    btn.setAttribute("aria-label", `${w.label || NAV_LABEL}${dest ? `, goes to ${dest.name}` : ", not linked to a tab"}`);
   }
   function paintText(w) {
     body.replaceChildren(); // the heading is the widget's title (header); the body is the text under it

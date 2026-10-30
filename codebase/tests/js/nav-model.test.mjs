@@ -71,3 +71,11 @@ test("savedWidgets writes a nav target by tab index and kind", () => {
   assert.deepEqual(out.map((w) => w.target), [{ kind: "worksheet", index: 2 }, { kind: "dashboard", index: 1 }, null]);
   assert.deepEqual(Object.keys(out[0]).sort(), ["h", "kind", "label", "target", "tip", "w", "x", "y"]);
 });
+
+test("cleanWidgets: a button that points at its own dashboard is dangling", () => {
+  const issues = [];
+  const out = cleanWidgets([nw(0, 0, { target: { kind: "dashboard", index: 1 } }), nw(4, 0, { target: { kind: "dashboard", index: 0 } })], { worksheetCount: 0, dashboardCount: 2, ownDashboard: 1, where: "D" }, issues);
+  assert.equal(out[0].target, null);
+  assert.deepEqual(out[1].target, { kind: "dashboard", index: 0 });
+  assert.equal(issues.length, 1);
+});
