@@ -48,3 +48,9 @@
 .split-dialog__names { margin: 0; padding-left: var(--s4); color: var(--ink-2); font-size: var(--fs-body); }
 .unpivot-dialog .field > label, .split-dialog .field > label { display: block; font-size: var(--fs-body); font-weight: 600; margin-bottom: var(--s1); }
 .unpivot-dialog .select, .split-dialog .input { width: 100%; }
+.clean-dialog .select, .clean-dialog .input { width: 100%; }
+.clean-dialog .field > label { display: block; font-size: var(--fs-body); font-weight: 600; margin-bottom: var(--s1); }
+.clean-dialog__pairs { height: auto; resize: vertical; font-family: inherit; }
+.clean-dialog__keep { display: flex; align-items: center; gap: var(--s2); font-size: var(--fs-body); }
+.clean-dialog__formula { display: block; color: var(--ink-2); font-size: var(--fs-body); overflow-wrap: anywhere; }
+.clean-dialog__formula:empty { display: none; }

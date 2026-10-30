@@ -41,6 +41,8 @@ import { isCalcPill, makeCalcPill, refusal, syncCalcPills, pillSlots, clearCalcP
 import { openCalcDialog } from "../Calc/calc-dialog.js";
 import { openGroupDialog } from "../Calc/group-dialog.js";
 import { openSplitDialog } from "../Calc/split-dialog.js";
+import { openCleanDialog } from "../Calc/clean-dialog.js";
+import { cleanOps } from "../Calc/clean-model.js";
 import { groupCategoryProblem } from "../Calc/group-model.js";
 import { openMemberLabelsDialog } from "./member-labels-dialog.js";
 import { openRowsDialog } from "../Rows/rows-dialog.js";
@@ -592,6 +594,7 @@ export function initDashboards() {
     if (effCat !== "temporal") { out.push({ type: "sep" }); item(meta.memberAliases ? "Edit member labels… (set)" : "Edit member labels…", () => editMemberLabels(f, col)); }
     item("Group…", () => newGroupField(f, col));
     if (col.category === "text") item("Split…", () => newSplitFields(f, col)); // T02-31: SPLIT calculated fields
+    if (cleanOps(col.category).length) item("Clean…", () => newCleanField(f, col)); // query-time cleaning: TRIM / IFNULL / CASE / DATE calculated field
     out.push({ type: "sep" });
     item(meta.hidden ? "Show in the field list" : "Hide from the field list", () => setFieldMeta(f, { hidden: !meta.hidden }));
     return out;
@@ -615,6 +618,10 @@ export function initDashboards() {
   function newSplitFields(f, col) {
     if (calculations.length + 2 > LIMITS.calculations) { toast(`A workbook can have at most ${LIMITS.calculations} calculated fields.`, "info"); return; }
     openSplitDialog({ field: { db: f.db, table: f.table, column: f.column }, fieldName: metaOf(f).alias || col.name });
+  }
+  function newCleanField(f, col) {
+    if (calculations.length + 1 > LIMITS.calculations) { toast(`A workbook can have at most ${LIMITS.calculations} calculated fields.`, "info"); return; }
+    openCleanDialog({ field: { db: f.db, table: f.table, column: f.column }, fieldName: metaOf(f).alias || col.name, category: col.category });
   }
   function editGroupField(calc) {
     const g = calc.group.field;
