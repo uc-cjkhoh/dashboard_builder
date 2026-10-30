@@ -6,6 +6,7 @@ import { entities, relationshipsFor, emit, bus, isModelActive, showModel } from 
 import { expandSidebar } from "../Shell/sidebar.js";
 import { openColumnProfile } from "../Schema/column-profile-dialog.js";
 import { entityWidth } from "./card-width.js";
+import { snapTop } from "./align-snap.js";
 import { sourceNote, lossyNote, wireSource, MAX_SOURCE_COLUMNS } from "../Core/source-model.js";
 
 // Data Model canvas + entity cards. A table dropped from the sidebar (or added via the
@@ -384,6 +385,26 @@ export function initCanvas() {
   const snap = (v) => Math.max(0, Math.round(v / 8) * 8);
 
   // Move a card by dragging its head (pointer events; the icon buttons are excluded).
+  // The tops that would put one of this card's links on a straight line: its pinned key row level with the partner's key row.
+  // Rows are measured where they sit, so the pinned strip, its order and a different head height are all accounted for.
+  function straightenTops(entity) {
+    const centre = (card, column) => {
+      const row = card.el.querySelector(`.col-row[data-column="${CSS.escape(column)}"]`);
+      return row ? row.getBoundingClientRect().top - card.el.getBoundingClientRect().top + row.getBoundingClientRect().height / 2 : null;
+    };
+    const tops = [];
+    if (entity.el.classList.contains("entity--collapsed")) return tops;
+    for (const rel of relationshipsFor(entity.id)) {
+      const mine = rel.from.entityId === entity.id ? rel.from : rel.to;
+      const theirs = mine === rel.from ? rel.to : rel.from;
+      const other = entities.get(theirs.entityId);
+      if (!other || other.el.classList.contains("entity--collapsed")) continue;
+      const a = centre(entity, mine.column), b = centre(other, theirs.column);
+      if (a !== null && b !== null) tops.push(other.y + b - a);
+    }
+    return tops;
+  }
+
   function enableDragMove(entity, head) {
     head.addEventListener("pointerdown", (event) => {
       if (event.button !== 0 || event.target.closest(".iconbtn")) return;
@@ -397,7 +418,7 @@ export function initCanvas() {
 
       const move = (ev) => {
         entity.x = snap(originX + (ev.clientX - startX));
-        entity.y = snap(originY + (ev.clientY - startY));
+        entity.y = ev.altKey ? snap(originY + (ev.clientY - startY)) : snapTop(snap(originY + (ev.clientY - startY)), straightenTops(entity)); // Alt: no magnet
         entity.el.style.left = `${entity.x}px`;
         entity.el.style.top = `${entity.y}px`;
         emit("entity:moved", { entityId: entity.id }); // relationship links re-route
