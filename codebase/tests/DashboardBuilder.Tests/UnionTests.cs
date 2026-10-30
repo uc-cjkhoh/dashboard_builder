@@ -73,10 +73,16 @@ public class UnionTests : IClassFixture<WebApplicationFactory<Program>>
         var sql = ClickHouseGateway.BuildUnionSql("d`b", ["a`x", "b"], ["c`; DROP TABLE x; --"], 11);
         Assert.Equal(
             "SELECT * FROM (" +
-            "(SELECT {s0:String} AS `__src`, if(isNull(`c\\`; DROP TABLE x; --`), NULL, left(toString(`c\\`; DROP TABLE x; --`), 1001)) AS `c0` FROM `d\\`b`.`a\\`x` LIMIT 11) UNION ALL " +
-            "(SELECT {s1:String} AS `__src`, if(isNull(`c\\`; DROP TABLE x; --`), NULL, left(toString(`c\\`; DROP TABLE x; --`), 1001)) AS `c0` FROM `d\\`b`.`b` LIMIT 11)" +
+            "(SELECT {s0:String} AS `__usrc`, if(isNull(`c\\`; DROP TABLE x; --`), NULL, left(toString(`c\\`; DROP TABLE x; --`), 1001)) AS `__uc0` FROM `d\\`b`.`a\\`x` LIMIT 11) UNION ALL " +
+            "(SELECT {s1:String} AS `__usrc`, if(isNull(`c\\`; DROP TABLE x; --`), NULL, left(toString(`c\\`; DROP TABLE x; --`), 1001)) AS `__uc0` FROM `d\\`b`.`b` LIMIT 11)" +
             ")", sql);
         Assert.DoesNotContain("ORDER BY", sql);
+    }
+    [Fact] public void Helper_aliases_never_shadow_a_source_column_named_like_them()
+    {
+        var sql = ClickHouseGateway.BuildUnionSql("d", ["a", "b"], ["x", "c0"], 5, ["x", "c0", "__usrc", "__uc0", "__uc1"]);
+        Assert.Contains("AS `__u_c0`", sql); Assert.Contains("AS `__u_c1`", sql); Assert.Contains("AS `__u_src`", sql);
+        Assert.DoesNotContain("AS `c0`", sql);
     }
 
     [Fact] public async Task Union_without_a_connection_returns_409()

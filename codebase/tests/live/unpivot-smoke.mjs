@@ -30,8 +30,8 @@ const unpivot = (extra) => app('/api/unpivot', { db: DB, table: 'bk_unpivot_a', 
 
 let passed = 0, failed = false;
 try {
-  await write(`CREATE TABLE ${DB}.bk_unpivot_a (id UInt32, region String, q1 Nullable(Int32), q2 Int32, q3 Int32, note String) ENGINE = MergeTree ORDER BY id`);
-  await write(`INSERT INTO ${DB}.bk_unpivot_a SELECT number, 'EU', if(number = 0, NULL, toInt32(number)), toInt32(number * 10), toInt32(number * 100), 'n' FROM numbers(50)`);
+  await write(`CREATE TABLE ${DB}.bk_unpivot_a (id UInt32, region String, q1 Nullable(Int32), q2 Int32, q3 Int32, note String, k0 String, __p String, Field String) ENGINE = MergeTree ORDER BY id`);
+  await write(`INSERT INTO ${DB}.bk_unpivot_a SELECT number, 'EU', if(number = 0, NULL, toInt32(number)), toInt32(number * 10), toInt32(number * 100), 'n', concat('key', toString(number)), 'pp', 'ff' FROM numbers(50)`);
   const conn = await app('/api/connection', { host: CH_HOST, port: Number(CH_PORT), user: CH_USER, password: CH_PASSWORD, secure: true, allowInvalidCert: true });
   assert.equal(conn.status, 200, `connect: ${conn.status}`);
 
@@ -54,6 +54,21 @@ try {
   r = await unpivot({ keep: [] });
   assert.deepEqual(r.json.columns.map((c) => c.name), ['Field', 'Value']);
   console.log('ok bounded by the limit (truncated), default 100, no kept column'); passed++;
+
+  // Source columns named like helper aliases (k0, __p) and like the result's Field column.
+  r = await unpivot({ columns: ['q1', 'q2'], keep: ['k0', '__p', 'Field'], limit: 6 });
+  assert.equal(r.status, 200, r.text.slice(0, 300));
+  assert.deepEqual(r.json.columns.map((c) => c.name), ['k0', '__p', 'Field', 'Field_', 'Value']);
+  assert.ok(r.json.columns.every((c, i) => i < 3 || c.type === 'String'));
+  assert.deepEqual(r.json.rows.slice(0, 2).map((x) => x.slice(0, 3)), [['key0', 'pp', 'ff'], ['key0', 'pp', 'ff']], 'kept columns are the source columns, not helper aliases');
+  assert.deepEqual(r.json.rows.slice(0, 2).map((x) => x[3]).sort(), ['q1', 'q2']);
+  console.log('ok source columns named k0 / __p / Field do not collide'); passed++;
+
+  r = await unpivot({ db: 'no_such_db_x' });
+  assert.ok(r.status === 400 || r.status === 404, `unknown db ${r.status}`);
+  r = await unpivot({ table: 'no_such_table_x' });
+  assert.ok(r.status === 400 || r.status === 404, `unknown table ${r.status}`);
+  console.log('ok unknown db / table refused'); passed++;
 
   r = await unpivot({ columns: ['q1', 'note'] });
   assert.equal(r.status, 400); assert.equal(r.json.field, 'columns[1]');

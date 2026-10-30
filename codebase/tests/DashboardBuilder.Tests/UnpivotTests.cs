@@ -62,9 +62,19 @@ public class UnpivotTests : IClassFixture<WebApplicationFactory<Program>>
         var cell2 = "if(isNull(`q2`), NULL, left(toString(`q2`), 1001))";
         var keep = "if(isNull(`k\\`1`), NULL, left(toString(`k\\`1`), 1001))";
         Assert.Equal(
-            $"SELECT `k0`, tupleElement(`__p`, 1) AS `__n`, tupleElement(`__p`, 2) AS `__v` FROM (" +
-            $"SELECT {keep} AS `k0`, arrayJoin([({{n0:String}}, {cell}), ({{n1:String}}, {cell2})]) AS `__p` FROM `d\\`b`.`t\\`x` LIMIT 5)", sql);
+            $"SELECT `__uk0`, tupleElement(`__up`, 1) AS `__un`, tupleElement(`__up`, 2) AS `__uv` FROM (" +
+            $"SELECT {keep} AS `__uk0`, arrayJoin([({{n0:String}}, {cell}), ({{n1:String}}, {cell2})]) AS `__up` FROM `d\\`b`.`t\\`x` LIMIT 5)", sql);
         Assert.DoesNotContain("ORDER BY", sql);
+    }
+
+    [Fact] public void Helper_aliases_never_shadow_a_source_column_named_like_them()
+    {
+        var names = new[] { "k0", "k1", "__p", "c0", "__uk0", "__up", "q1", "q2" };
+        var sql = ClickHouseGateway.BuildUnpivotSql("d", "t", ["k0", "k1"], ["q1", "q2"], 5, names);
+        Assert.Contains("AS `__u_k0`", sql); Assert.Contains("AS `__u_k1`", sql); Assert.Contains("AS `__u_p`", sql);
+        Assert.DoesNotContain("AS `k0`", sql); Assert.DoesNotContain("AS `__p`", sql);
+        Assert.Equal("__u", ClickHouseGateway.FreeAliasPrefix("__u", ["a", "k0"]));
+        Assert.Equal("__u_", ClickHouseGateway.FreeAliasPrefix("__u", ["__ux"]));
     }
 
     [Fact] public async Task Unpivot_without_a_connection_returns_409()

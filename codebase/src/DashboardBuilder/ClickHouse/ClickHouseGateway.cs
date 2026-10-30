@@ -614,13 +614,25 @@ public sealed partial class ClickHouseGateway
     /// <summary>Each table's share of a union's rows: the limit split evenly, rounded up, so every table shows.</summary>
     internal static int UnionShare(int limit, int tables) => (limit + tables - 1) / tables;
 
+    /// <summary>A prefix for the helper aliases of a statement that no real column name starts with. ClickHouse resolves a
+    /// select alias ahead of a column of the same name, so an alias like <c>k0</c> would silently replace a source column
+    /// <c>k0</c> in a later expression; a prefix that is no column's prefix cannot collide (grown with <c>_</c> until free).</summary>
+    internal static string FreeAliasPrefix(string seed, IEnumerable<string> columnNames)
+    {
+        var names = columnNames.ToList();
+        var prefix = seed;
+        while (names.Any(n => n.StartsWith(prefix, StringComparison.Ordinal))) prefix += "_";
+        return prefix;
+    }
+
     /// <summary>The union statement: each branch quoted, its source table bound as <c>{s#:String}</c>, its cells cut in
     /// SQL, and cut to its own probe limit (its share + 1) so no branch reads more than it must and none starves another.
     /// No ORDER BY.</summary>
-    internal static string BuildUnionSql(string database, IReadOnlyList<string> tables, IReadOnlyList<string> columns, int branchProbe)
+    internal static string BuildUnionSql(string database, IReadOnlyList<string> tables, IReadOnlyList<string> columns, int branchProbe, IEnumerable<string>? tableColumns = null)
     {
-        var cells = string.Join(", ", columns.Select((c, i) => $"{RowSelectExpr(c)} AS `c{i}`"));
-        var branches = tables.Select((t, i) => $"(SELECT {{s{i}:String}} AS `__src`, {cells} FROM {Identifier.QualifiedName(database, t)} LIMIT {branchProbe})");
+        var p = FreeAliasPrefix("__u", tableColumns ?? columns);
+        var cells = string.Join(", ", columns.Select((c, i) => $"{RowSelectExpr(c)} AS `{p}c{i}`"));
+        var branches = tables.Select((t, i) => $"(SELECT {{s{i}:String}} AS `{p}src`, {cells} FROM {Identifier.QualifiedName(database, t)} LIMIT {branchProbe})");
         return $"SELECT * FROM ({string.Join(" UNION ALL ", branches)})";
     }
 
@@ -637,7 +649,7 @@ public sealed partial class ClickHouseGateway
         var limit = req.Limit ?? ApiLimits.DefaultRowsLimit;
         RequestRules.ValidateRowCells(limit, columns.Count + 1, "limit");
         var share = UnionShare(limit, req.Tables.Length);
-        var sql = BuildUnionSql(req.Db, req.Tables, columns.Select(c => c.Name).ToList(), share + 1);
+        var sql = BuildUnionSql(req.Db, req.Tables, columns.Select(c => c.Name).ToList(), share + 1, described.SelectMany(t => t.Select(c => c.Name)));
 
         using var httpClient = CreateHttpClient(info);
         await using var conn = new ClickHouseConnection(BuildConnectionString(info), httpClient);
@@ -680,12 +692,13 @@ public sealed partial class ClickHouseGateway
     /// <summary>The unpivot statement: kept and unpivoted cells cut in SQL, each field name bound as <c>{n#:String}</c>,
     /// the result cut to <paramref name="probe"/> rows. ClickHouse applies a SELECT's LIMIT after its <c>arrayJoin</c>, so the one inner
     /// LIMIT bounds the unpivoted rows (verified live), not the source rows. No ORDER BY.</summary>
-    internal static string BuildUnpivotSql(string database, string table, IReadOnlyList<string> keep, IReadOnlyList<string> columns, int probe)
+    internal static string BuildUnpivotSql(string database, string table, IReadOnlyList<string> keep, IReadOnlyList<string> columns, int probe, IEnumerable<string>? tableColumns = null)
     {
-        var keepCells = keep.Select((c, i) => $"{RowSelectExpr(c)} AS `k{i}`");
+        var p = FreeAliasPrefix("__u", tableColumns ?? keep.Concat(columns));
+        var keepCells = keep.Select((c, i) => $"{RowSelectExpr(c)} AS `{p}k{i}`");
         var pairs = string.Join(", ", columns.Select((c, i) => $"({{n{i}:String}}, {RowSelectExpr(c)})"));
-        var inner = string.Join(", ", keepCells.Append($"arrayJoin([{pairs}]) AS `__p`"));
-        var outer = string.Join(", ", keep.Select((_, i) => $"`k{i}`").Concat(["tupleElement(`__p`, 1) AS `__n`", "tupleElement(`__p`, 2) AS `__v`"]));
+        var inner = string.Join(", ", keepCells.Append($"arrayJoin([{pairs}]) AS `{p}p`"));
+        var outer = string.Join(", ", keep.Select((_, i) => $"`{p}k{i}`").Concat([$"tupleElement(`{p}p`, 1) AS `{p}n`", $"tupleElement(`{p}p`, 2) AS `{p}v`"]));
         return $"SELECT {outer} FROM (SELECT {inner} FROM {Identifier.QualifiedName(database, table)} LIMIT {probe})";
     }
 
@@ -701,7 +714,7 @@ public sealed partial class ClickHouseGateway
         CheckUnpivot(described, req.Columns, keep);
         var limit = req.Limit ?? ApiLimits.DefaultRowsLimit;
         var probe = limit + 1;
-        var sql = BuildUnpivotSql(req.Db, req.Table, keep, req.Columns, probe);
+        var sql = BuildUnpivotSql(req.Db, req.Table, keep, req.Columns, probe, described.Select(c => c.Name));
 
         using var httpClient = CreateHttpClient(info);
         await using var conn = new ClickHouseConnection(BuildConnectionString(info), httpClient);
@@ -721,8 +734,11 @@ public sealed partial class ClickHouseGateway
         var truncated = TrimProbeRow(rows, probe);
         var byName = described.ToDictionary(c => c.Name, c => c, StringComparer.Ordinal);
         var shown = keep.Select(k => new RowColumn(k, byName[k].Type)).ToList();
-        shown.Add(new RowColumn("Field", "String"));
-        shown.Add(new RowColumn("Value", byName[req.Columns[0]].Type));
+        // Value is the cell text whatever the source kind; a kept column already named Field / Value gets a trailing "_" on ours.
+        var field = "Field"; while (keep.Contains(field)) field += "_";
+        var value = "Value"; while (keep.Contains(value)) value += "_";
+        shown.Add(new RowColumn(field, "String"));
+        shown.Add(new RowColumn(value, "String"));
         return new RowsResult(shown, rows, truncated, limit, false);
     }
 
