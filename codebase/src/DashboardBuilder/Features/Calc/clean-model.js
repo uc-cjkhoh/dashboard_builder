@@ -5,7 +5,7 @@ import { LIMITS } from "../Core/validate.js";
 import { CALC_LIMITS } from "./calc-types.js";
 import { checkName } from "./calc-workbook.js";
 
-export const CLEAN_MAX_RECODE = 20;
+export const CLEAN_MAX_RECODE = LIMITS.cleanRecode;
 const NAME_BASE = 40; // leaves room in the 60-character name limit for " (recoded 99)"
 const SUFFIX = { trim: "trimmed", nullTo: "filled", recode: "recoded", date: "date" };
 const unwritable = (s) => /[.[\]]/.test(s);

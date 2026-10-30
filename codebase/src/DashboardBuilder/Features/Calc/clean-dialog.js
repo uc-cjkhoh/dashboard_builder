@@ -4,7 +4,7 @@ import { calculations, addCalculation } from "../Core/store.js";
 import { makeButton, openDialog, closeDialog, toast } from "../Core/ui.js";
 import { cleanPlan, cleanOps, parseRecode, CLEAN_MAX_RECODE } from "./clean-model.js";
 
-const LABEL = { trim: "Trim spaces", nullTo: "Replace empty values", recode: "Recode values", date: "Read as a date" };
+const LABEL = { trim: "Trim spaces", nullTo: "Replace missing (NULL) values", recode: "Recode values", date: "Read as a date" };
 let seq = 0;
 const el = (tag, cls, t) => { const e = document.createElement(tag); if (cls) e.className = cls; if (t !== undefined) e.textContent = t; return e; };
 
@@ -15,7 +15,7 @@ export function openCleanDialog({ field, fieldName, category }) {
   const title = el("h3", "dialog__title", `Clean · ${fieldName}`); title.id = `clean-title-${n}`;
   dlg.setAttribute("aria-labelledby", title.id);
   const body = el("div", "dialog__body split-dialog__body");
-  const mk = (label, input) => { const f = el("div", "field"); const l = el("label", null, label); input.id = `clean-${n}-${label}`; l.htmlFor = input.id; f.append(l, input); return f; };
+  const mk = (label, slug, input) => { const f = el("div", "field"); const l = el("label", null, label); input.id = `clean-${n}-${slug}`; l.htmlFor = input.id; f.append(l, input); return f; };
   const op = el("select", "select");
   for (const o of cleanOps(category)) { const opt = el("option", null, LABEL[o]); opt.value = o; op.append(opt); }
   const value = el("input", "input"); value.type = "text"; value.autocomplete = "off"; value.maxLength = 100;
@@ -23,10 +23,10 @@ export function openCleanDialog({ field, fieldName, category }) {
   const pairs = el("textarea", "input clean-dialog__pairs"); pairs.rows = 5; pairs.spellcheck = false; pairs.placeholder = "NY = New York\nCA = California";
   const keep = el("input"); keep.type = "checkbox"; keep.checked = true;
   const keepRow = el("label", "clean-dialog__keep"); keepRow.append(keep, el("span", null, "Keep values not listed"));
-  const fValue = mk("Use this value", value), fPairs = mk(`Old = new, one per line (up to ${CLEAN_MAX_RECODE})`, pairs);
+  const fValue = mk("Use this value", "value", value), fPairs = mk(`Old = new, one per line (up to ${CLEAN_MAX_RECODE})`, "pairs", pairs);
   const preview = el("code", "clean-dialog__formula");
   const msg = el("div", "grp-error"); msg.setAttribute("role", "alert");
-  body.append(mk("Operation", op), fValue, fPairs, keepRow, preview, msg);
+  body.append(mk("Operation", "op", op), fValue, fPairs, keepRow, preview, msg);
   const foot = el("div", "dialog__foot");
   const cancel = makeButton("Cancel", "btn"), create = makeButton("Create field", "btn btn--primary");
   foot.append(cancel, create);
@@ -49,6 +49,7 @@ export function openCleanDialog({ field, fieldName, category }) {
     preview.textContent = p.ok ? `${p.calcs[0].name} = ${p.calcs[0].formula}` : "";
   };
   for (const c of [op, value, pairs, keep]) c.addEventListener(c === op || c === keep ? "change" : "input", refresh);
+  value.addEventListener("keydown", (e) => { if (e.key === "Enter" && !create.disabled) { e.preventDefault(); create.click(); } });
   refresh();
   cancel.addEventListener("click", () => closeDialog(dlg));
   dlg.addEventListener("cancel", (e) => { e.preventDefault(); closeDialog(dlg); });

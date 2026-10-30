@@ -25,6 +25,7 @@ export const LIMITS = Object.freeze({
   viewRows: 1000,     // raw rows one View data / table preview read returns (server MaxRowsLimit; default 100)
   exportRows: 100000, // rows in a CSV export (server MaxExportRows)
   calculations: 20,  // calculated fields per workbook (CalcLimits.MaxCalcs; enforced client-side only)
+  cleanRecode: 20,   // values one Clean… recode lists (client-side only)
   calcFormula: 500,  // characters in a formula (the server never sees formula text)
   tooltipText: 300,  // characters in a sheet's tooltip template (T01-19; client-side only, the server never sees it)
   memberColors: 100,      // coloured members per field (T01-20; client-side only)

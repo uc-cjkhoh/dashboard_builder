@@ -103,14 +103,16 @@ try {
     const c = JSON.parse(await calcs()).at(-1);
     must(c[0] === 'tags (recoded)' && c[1] === "CASE [shop.sales.tags] WHEN 'NY' THEN 'New York' WHEN 'CA' THEN 'California' ELSE [shop.sales.tags] END", J(c));
   });
-  await check('number field: only Replace empty, with a number', async () => {
+  await check('number field: only Replace missing, with a number', async () => {
     await menu('q1'); await ev(`[...document.querySelectorAll('.ctx-menu .menu__item')].find((x) => x.textContent.trim() === 'Clean…').click()`);
     await waitFor(`${sd} !== null`, 'dialog');
     must(await ev(`${sel('select')}.options.length`) === 1, 'one operation');
     await set('input[type=text]', 'abc');
     must(await ev(`${create}.disabled`) === true, 'rejects text');
     await set('input[type=text]', '0');
-    await ev(`${create}.click()`); await waitFor(`${sd} === null`, 'closed');
+    must(await ev(`[...${sd}.querySelectorAll('[id]')].filter((e) => /\\s/.test(e.id)).length`) === 0, 'ids have no spaces');
+    await ev(`${sel('input[type=text]')}.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))`);
+    await waitFor(`${sd} === null`, 'Enter creates');
     must(JSON.parse(await calcs()).at(-1)[1] === 'IFNULL([shop.sales.q1], 0)', 'formula');
   });
   await check('dark scheme renders the dialog', async () => {
