@@ -216,6 +216,7 @@ try {
     must(await ev(`document.activeElement.dataset.line`) === '1', 'focus follows the moved line');
     await ev(`[...document.querySelectorAll('.tipdlg .dialog__foot button')].find((x) => x.textContent === 'Apply').click()`);
     await waitFor(`${tdlg} === null`, 'modal closed');
+    await waitFor(`document.activeElement === document.querySelector('.ws-tipedit__modal')`, 'focus returns to Edit tooltip after Apply');
     must(await ev(`document.querySelector('.ws-tipedit__text').value`) === 'Total <orders.region>\n<orders.region>', 'panel text updated');
     const html = await showTip();
     must(html.includes('font-size:24px') && html.includes('font-weight:700') && html.includes('var(--accent-ink)'), `tooltip style: ${html}`);
@@ -234,6 +235,7 @@ try {
     await setLine(0, 'discarded');
     await key('Escape');
     await waitFor(`${tdlg} === null`, 'closed by Escape');
+    await waitFor(`document.activeElement === document.querySelector('.ws-tipedit__modal')`, 'focus returns to Edit tooltip after Escape');
     must(await ev(`document.querySelector('.ws-tipedit__text').value`) === '<orders.region>', 'Escape discarded');
     await ev(`document.querySelector('.ws-tipedit__modal').click()`);
     await waitFor(`${tdlg} !== null`, 'reopened');
@@ -255,6 +257,28 @@ try {
     must(await ev(`[...document.querySelectorAll('.tipdlg .dialog__foot button')].find((x) => x.textContent === 'Apply').disabled`), 'Apply not blocked');
     await key('Escape');
     await waitFor(`${tdlg} === null`, 'closed');
+  });
+
+  await check('more than 12 lines from the textarea block Apply with a reason; the textarea clears styles when the line count changes', async () => {
+    await tipText(Array.from({ length: 13 }, (_, i) => 'L' + i).join('\n'));
+    await ev(`document.querySelector('.ws-tipedit__modal').click()`);
+    await waitFor(`${tdlg} !== null`, 'modal');
+    must(await ev(`[...document.querySelectorAll('.tipdlg .dialog__foot button')].find((x) => x.textContent === 'Apply').disabled`), 'Apply not blocked at 13 lines');
+    must(/at most 12 lines/.test(await ev(`document.querySelector('.tipdlg__error').textContent`)), 'no reason shown');
+    await ev(`document.querySelectorAll('.tipdlg__line')[12].querySelector('button[aria-label^="Remove"]').click()`);
+    must(!(await ev(`[...document.querySelectorAll('.tipdlg .dialog__foot button')].find((x) => x.textContent === 'Apply').disabled`)), 'Apply still blocked at 12');
+    await ev(`(() => { const r = document.querySelectorAll('.tipdlg__line')[0]; const c = r.querySelector('.tipdlg__colour'); c.value = 'ok'; c.dispatchEvent(new Event('change')); return true; })()`);
+    await ev(`document.documentElement.setAttribute('data-scheme', 'dark')`);
+    await b.sleep(600);
+    await shot('tooltip-modal-dark.png');
+    const dark = await ev(`(() => { const d = document.querySelector('.tipdlg'); return getComputedStyle(d).backgroundColor !== 'rgb(255, 255, 255)' && getComputedStyle(document.querySelector('.tipdlg__preview')).backgroundColor !== 'rgb(255, 255, 255)'; })()`);
+    must(dark, 'modal keeps light colours in dark theme');
+    await ev(`document.documentElement.removeAttribute('data-scheme')`);
+    await ev(`[...document.querySelectorAll('.tipdlg .dialog__foot button')].find((x) => x.textContent === 'Apply').click()`);
+    await waitFor(`${tdlg} === null`, 'closed');
+    await tipText('only one line');
+    const html = await showTip();
+    must(!html.includes('var(--ok-ink)'), `style should be cleared when the line count changed: ${html}`);
   });
 
   await check('dark theme renders the editor', async () => {

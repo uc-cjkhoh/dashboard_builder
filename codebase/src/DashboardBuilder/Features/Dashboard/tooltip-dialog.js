@@ -11,8 +11,8 @@ let seq = 0;
 const el = (tag, cls, t) => { const e = document.createElement(tag); if (cls) e.className = cls; if (t !== undefined) e.textContent = t; return e; };
 
 /** `text` / `style`: the sheet's current tooltipText / tooltipStyle; `fields`: [{ name, sample }] the drawn chart offers;
- *  `onApply({ text, style })` receives the validated result ({ text: "", style: null } = the automatic tooltip). */
-export function openTooltipDialog({ text, style, fields, onApply }) {
+ *  `onClose()` runs after the dialog closes (focus return); `onApply({ text, style })` receives the validated result ({ text: "", style: null } = the automatic tooltip). */
+export function openTooltipDialog({ text, style, fields, onApply, onClose }) {
   const n = ++seq;
   let lines = toLines(text, style);
   let active = 0; // the line a field chip inserts into
@@ -33,7 +33,7 @@ export function openTooltipDialog({ text, style, fields, onApply }) {
   const tools = el("div", "tipdlg__tools"); tools.append(add, count);
   left.append(chips, list, tools, err);
   const previewHead = el("div", "tipdlg__head", "Preview");
-  const preview = el("div", "tipdlg__preview"); preview.setAttribute("aria-label", "Tooltip preview"); preview.setAttribute("aria-live", "polite");
+  const preview = el("div", "tipdlg__preview"); preview.setAttribute("aria-label", "Tooltip preview");
   right.append(previewHead, preview);
   body.append(left, right);
   const foot = el("div", "dialog__foot");
@@ -57,8 +57,10 @@ export function openTooltipDialog({ text, style, fields, onApply }) {
     else preview.innerHTML = tooltipHtml(t, sample, st); // escaped parts + whitelisted style only (tooltip-model.js)
     const unknown = t ? parseTooltip(t).fields.filter((f) => sample(f) === undefined) : [];
     count.textContent = `${totalLen()}/${LIMITS.tooltipText}${unknown.length ? ` · not in this view: ${unknown.map((f) => `<${f}>`).join(" ")}` : ""}`;
-    err.textContent = totalLen() > LIMITS.tooltipText ? `Tooltip text must be at most ${LIMITS.tooltipText} characters.` : "";
-    apply.disabled = totalLen() > LIMITS.tooltipText;
+    const bad = totalLen() > LIMITS.tooltipText ? `Tooltip text must be at most ${LIMITS.tooltipText} characters.`
+      : lines.length > LIMITS.tooltipLines ? `A styled tooltip has at most ${LIMITS.tooltipLines} lines — remove ${lines.length - LIMITS.tooltipLines} to apply.` : "";
+    err.textContent = bad;
+    apply.disabled = !!bad;
   };
   const patch = (i, p) => { lines = lines.map((l, k) => (k === i ? { ...l, ...p } : l)); };
 
@@ -94,8 +96,8 @@ export function openTooltipDialog({ text, style, fields, onApply }) {
     colour.addEventListener("change", () => { patch(i, { color: colour.value || undefined }); refresh(); });
     const mv = (label, glyph, d) => {
       const b = el("button", "btn btn--ghost tipdlg__mv", glyph); b.type = "button"; b.title = label; b.setAttribute("aria-label", `${label} (line ${i + 1})`);
-      b.disabled = i + d < 0 || i + d >= lines.length;
-      b.addEventListener("click", () => { lines = moveLine(lines, i, d); active = i + d; draw(`.tipdlg__line:nth-child(${i + d + 1}) .tipdlg__mv[title="${label}"]`); });
+      b.disabled = i + d < 0 || i + d >= lines.length; b.dataset.move = String(d);
+      b.addEventListener("click", () => { lines = moveLine(lines, i, d); active = i + d; draw(`.tipdlg__line:nth-child(${i + d + 1}) [data-move="${d}"]`); });
       return b;
     };
     const del = el("button", "btn btn--ghost tipdlg__mv"); del.type = "button"; del.title = "Remove line"; del.setAttribute("aria-label", `Remove line ${i + 1}`);
@@ -120,11 +122,11 @@ export function openTooltipDialog({ text, style, fields, onApply }) {
   if (!(fields ?? []).length) chips.append(el("span", "tipdlg__note", "Add fields to the view to insert them."));
 
   add.addEventListener("click", () => { lines = addLine(lines); active = lines.length - 1; draw(`[data-line="${active}"]`); });
-  const finish = () => closeDialog(dlg);
+  const finish = () => { closeDialog(dlg); setTimeout(() => onClose?.(), 0); };
   cancel.addEventListener("click", finish);
   dlg.addEventListener("cancel", (e) => { e.preventDefault(); finish(); }); // Esc discards
   reset.addEventListener("click", () => { lines = [{ text: "" }]; active = 0; draw(`[data-line="0"]`); });
-  apply.addEventListener("click", () => { if (totalLen() > LIMITS.tooltipText) return; onApply(fromLines(lines)); finish(); });
+  apply.addEventListener("click", () => { if (apply.disabled) return; onApply(fromLines(lines)); finish(); });
   document.body.append(dlg);
   openDialog(dlg);
   draw(`[data-line="0"]`);

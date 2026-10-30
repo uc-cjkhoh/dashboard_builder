@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { tooltipHtml, lookupFrom } from "../../src/DashboardBuilder/Features/Dashboard/tooltip-model.js";
-import { TIP_SIZES, TIP_COLOURS, checkTooltipStyle, toLines, fromLines, moveLine, addLine, removeLine, insertField }
+import { TIP_SIZES, TIP_COLOURS, checkTooltipStyle, toLines, fromLines, moveLine, styleAfterTextEdit, addLine, removeLine, insertField }
   from "../../src/DashboardBuilder/Features/Dashboard/tooltip-style.js";
 import { LIMITS } from "../../src/DashboardBuilder/Features/Core/validate.js";
 import { sanitizeSheet } from "../../src/DashboardBuilder/Features/Workbook/workbook-model.js";
@@ -72,4 +72,17 @@ test("workbook round-trips tooltipStyle; bad style is dropped with an issue; old
   const bad = [];
   assert.equal(sanitizeSheet({ tooltipStyle: [{ color: "#fff" }] }, "S", bad).tooltipStyle, undefined);
   assert.equal(bad.length, 1);
+});
+test("fromLines drops leading / trailing blank lines with their styles so style stays aligned", () => {
+  assert.deepEqual(fromLines([{ text: "" }, { text: "A", bold: true }]), { text: "A", style: [{ bold: true }] });
+  assert.deepEqual(fromLines([{ text: "  ", size: 24 }, { text: "A" }, { text: "B", italic: true }, { text: "", bold: true }]),
+    { text: "A\nB", style: [{}, { italic: true }] });
+  assert.deepEqual(fromLines([{ text: "", bold: true }]), { text: "", style: null });
+});
+test("styleAfterTextEdit keeps the style by index only when the line count is unchanged", () => {
+  const st = [{ bold: true }];
+  assert.equal(styleAfterTextEdit("a\nb", "c\nd", st), st);
+  assert.equal(styleAfterTextEdit("a\nb", "c", st), null);
+  assert.equal(styleAfterTextEdit("a", "a\nb", st), null);
+  assert.equal(styleAfterTextEdit("a", "b", null), null);
 });

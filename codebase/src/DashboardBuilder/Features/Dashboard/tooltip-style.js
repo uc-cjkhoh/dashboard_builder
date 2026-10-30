@@ -45,11 +45,24 @@ export function lineStyleCss(s) {
 export function toLines(text, style) {
   return String(text ?? "").split("\n").map((t, i) => ({ text: t, ...(style?.[i] ?? {}) }));
 }
-/** → { text, style } for the sheet (blank everywhere → text "", style null). */
+/** → { text, style } for the sheet: leading / trailing blank lines are dropped together with their styles, so the style
+ *  stays aligned with the (already trimmed) text; nothing but blanks → { text: "", style: null }. */
 export function fromLines(lines) {
-  const text = lines.map((l) => l.text).join("\n");
-  const style = checkTooltipStyle(lines.map(({ text: _t, ...s }) => s));
-  return { text: text.trim() ? text : "", style: text.trim() && style.ok ? style.value : null };
+  const blank = (l) => !l.text.trim();
+  let a = 0, z = lines.length;
+  while (a < z && blank(lines[a])) a++;
+  while (z > a && blank(lines[z - 1])) z--;
+  const kept = lines.slice(a, z);
+  if (!kept.length) return { text: "", style: null };
+  const style = checkTooltipStyle(kept.map(({ text: _t, ...s }) => s));
+  return { text: kept.map((l) => l.text).join("\n"), style: style.ok ? style.value : null };
+}
+/** A style after the template text was edited outside the modal: kept only when the line count is unchanged (it re-aligns
+ *  by index), otherwise cleared (null). */
+export function styleAfterTextEdit(oldText, newText, style) {
+  if (!style) return null;
+  const n = (t) => String(t ?? "").split("\n").length;
+  return n(oldText) === n(newText) ? style : null;
 }
 export function moveLine(lines, i, d) {
   const j = i + d;

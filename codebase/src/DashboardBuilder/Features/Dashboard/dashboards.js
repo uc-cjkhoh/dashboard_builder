@@ -28,7 +28,7 @@ import { DATE_PART_CHOICES, stepPart } from "./date-parts.js";
 import { CALC_CHOICES, ALONG_CHOICES, WINDOW_CHOICES, isCalc, calcName } from "./table-calc.js";
 import { tooltipHtml, lookupFrom, checkTooltipText, parseTooltip } from "./tooltip-model.js";
 import { openTooltipDialog } from "./tooltip-dialog.js";
-import { checkTooltipStyle } from "./tooltip-style.js";
+import { checkTooltipStyle, styleAfterTextEdit } from "./tooltip-style.js";
 import { SWATCHES, memberKey, fieldColorKey, setMemberColor, clearFieldColors, colourOf } from "./colour-model.js";
 import { createHistory } from "./history.js";
 import { LINE_STYLE_CHOICES, linesTakeStyle } from "./line-style-model.js";
@@ -2254,7 +2254,11 @@ export function initDashboards() {
     const save = () => {
       const r = checkTooltipText(ta.value);
       if (!r.ok || r.value === (s.tooltipText ?? null)) return;
-      s.tooltipText = r.value; if (!r.value) delete s.tooltipStyle; commit(dash, s);
+      const st = r.value ? styleAfterTextEdit(s.tooltipText, r.value, s.tooltipStyle) : null; // the line count changed -> the style is cleared
+      const cleared = s.tooltipStyle && !st;
+      s.tooltipText = r.value; if (st) s.tooltipStyle = st; else delete s.tooltipStyle;
+      if (cleared) note.textContent = "Line styles cleared — the number of lines changed."; else refresh();
+      commit(dash, s);
     };
     ta.addEventListener("input", refresh);
     ta.addEventListener("change", save);
@@ -2262,6 +2266,7 @@ export function initDashboards() {
     modal.type = "button";
     modal.addEventListener("click", () => openTooltipDialog({
       text: s.tooltipText ?? "", style: s.tooltipStyle ?? null, fields: cat(),
+      onClose: () => document.querySelector(".ws-tipedit__modal")?.focus(),
       onApply: ({ text, style }) => { // one commit = one undo step
         const t = checkTooltipText(text), st = checkTooltipStyle(style);
         if (!t.ok || !st.ok) return;
