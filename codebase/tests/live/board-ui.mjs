@@ -199,7 +199,7 @@ try {
   await b.sleep(500); // a late scheme / theme redraw from the previous checks must not count as a resize query
   await check('resize re-fits the charts without a query; a phone width stacks the widgets full width in reading order with no sideways scroll', async () => {
     const n = queries.length;
-    await hardClick('#sidebar-toggle'); // the shell keeps its sidebar at any width: collapse it, as a phone user would
+    // (off the Data Source tab the sidebar is already a brand-only rail)
     await b.send('Emulation.setDeviceMetricsOverride', { width: 420, height: 800, deviceScaleFactor: 1, mobile: false });
     await b.sleep(500);
     const info = await ev(`(() => { const g = document.getElementById('board-grid'); const sc = document.getElementById('board-scroll');
@@ -217,7 +217,6 @@ try {
     await b.sleep(500);
     must(await ev(`!document.getElementById('board-grid').classList.contains('is-stacked')`), 'still stacked at 1400px');
     must(queries.length === n, 'widening queried');
-    await hardClick('#sidebar-toggle');
   });
 
   await check('Full screen applies to the whole canvas and exits again', async () => {

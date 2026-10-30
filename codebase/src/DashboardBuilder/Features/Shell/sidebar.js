@@ -4,12 +4,14 @@
 // toggle collapses the sidebar to a narrow rail (`.app.is-sidebar-collapsed`) and back; the chosen width is kept while collapsed, and the collapsed state is remembered in this browser.
 import { toggle } from "../Core/ui.js";
 import { wireResizer } from "../Core/resizer.js";
+import { bus, isModelActive } from "../Core/store.js";
 
 const MIN = 240;
 const STORAGE_KEY = "dashboardbuilder.sidebar.collapsed";
 
 export function initSidebar() {
   initCollapse();
+  initViewFlag();
   const handle = document.getElementById("sidebar-resizer");
   const sidebar = document.querySelector(".sidebar");
   if (!handle || !sidebar) return;
@@ -57,4 +59,13 @@ function initCollapse() {
     try { localStorage.setItem(STORAGE_KEY, collapsed ? "1" : "0"); } catch { /* not remembered — fine */ }
   };
   btn.addEventListener("click", () => applyCollapsed(!isCollapsed()));
+}
+
+// The sidebar body belongs to the Data Source tab: `.app[data-view="model"]` shows it, every other tab gets a brand-only rail (shell.css).
+function initViewFlag() {
+  const app = document.querySelector(".app");
+  if (!app) return;
+  const sync = () => { app.dataset.view = isModelActive() ? "model" : "sheet"; };
+  bus.addEventListener("view:changed", sync);
+  sync();
 }
