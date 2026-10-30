@@ -13,6 +13,7 @@ import { boxData, outlierPoints } from "./box-model.js";
 import { chartFit, markCount, applyFitMode, FIT } from "./chart-fit.js";
 import { applySelectionDim } from "./selection-dim.js";
 import { dateFitMode } from "./date-labels.js";
+import { axisLabelPlan, shortDateLabels } from "./date-axis.js";
 
 // Charting adapter (P9; formatting P10). Renders worksheet results through the self-hosted ECharts library
 // (wwwroot/js/vendor/echarts.min.js, loaded as a global before the module graph — no CDN).
@@ -120,6 +121,7 @@ export function renderChart(container, spec) {
     option = buildOption(spec.type === "multiples" ? { ...spec, width: paneWidth(), height: paneHeight() } : spec);
     option = applySelectionDim(option, spec.type, spec.selectedIndices); // P24c: the dashboard's source widget fades the unselected marks
     if (spec.type !== "multiples") showEveryCategory(option, fit.rotate, fit); // panels keep their own sparse labels
+    if (!fit.zoom) setDateAxisLabels(option, spec, paneWidth(), paneHeight());
     if (fit.zoom) addZoom(option, fit);
     if (onCanvas) tuneForSize(option);
   } finally { drawing = null; }
@@ -144,6 +146,10 @@ export function renderChart(container, spec) {
     if (next.rotate !== fit.rotate) {
       fit = next;
       instance.setOption({ xAxis: [].concat(option.xAxis).map(() => ({ axisLabel: { rotate: fit.rotate } })) });
+    }
+    if (!fit.zoom) { // a date axis re-picks its labels for the new size
+      const d = dateAxisLabels(option, spec, paneWidth(), paneHeight());
+      if (d) instance.setOption({ [d.key]: [{ axisLabel: d.axisLabel }] });
     }
   });
   st.resizeObserver.observe(host);
@@ -199,6 +205,42 @@ function showEveryCategory(option, rotate, fit = {}) {
   const each = (axes, bottom) => (Array.isArray(axes) ? axes.map((a) => fix(a, bottom)) : fix(axes, bottom));
   if (option.xAxis) option.xAxis = each(option.xAxis, true);
   if (option.yAxis) option.yAxis = each(option.yAxis, false);
+}
+
+// A date axis's labels (see date-axis.js): shortened to what varies, and in "Thin out" mode only as many as fit
+// — first and last always, none touching. Returns { key: "xAxis" | "yAxis", axisLabel } or null (no date axis).
+let measureCtx = null;
+function dateAxisLabels(option, spec, width, height) {
+  if (spec.dateLabels === undefined || spec.type === "multiples") return null;
+  const bottom = !(spec.orientation === "horizontal" && spec.type !== "combo");
+  const key = bottom ? "xAxis" : "yAxis";
+  const axis = [].concat(option[key] ?? [])[0];
+  if (!axis || axis.type !== "category" || !axis.data?.length) return null;
+  const labels = axis.data.map(String);
+  measureCtx ??= document.createElement("canvas").getContext("2d");
+  measureCtx.font = `12px ${tokens().font}`;
+  const cap = bottom ? FIT.labelMax : FIT.sideMax;
+  const measure = (t) => Math.min(measureCtx.measureText(t).width, cap);
+  const g = option.grid ?? {};
+  const length = bottom
+    ? width - (Number(g.left) || 0) - (Number(g.right) || 0) - 56
+    : height - (Number(g.top) || 0) - (Number(g.bottom) || 0) - 32;
+  if (spec.dateLabels === "all") { // every label stays; they just say less
+    const byLabel = new Map(labels.map((l, i) => [l, shortDateLabels(labels).texts[i]]));
+    return { key, axisLabel: { formatter: (v) => byLabel.get(String(v)) ?? String(v) } };
+  }
+  const plan = axisLabelPlan({ labels, length: Math.max(length, 40), side: bottom ? "bottom" : "left", measure });
+  const shown = new Set(plan.indices);
+  const box = Math.ceil(Math.max(...plan.indices.map((i) => measure(plan.texts[i])))) + 2; // a label's box is as wide as its text, not the truncation cap, so neighbours are not judged overlapping
+  return { key, axisLabel: { interval: (i) => shown.has(i), hideOverlap: false, showMinLabel: true, showMaxLabel: true, width: plan.rotate ? cap : box, formatter: (v, i) => plan.texts[labels.indexOf(String(v))] ?? String(v),
+    ...(bottom ? { rotate: plan.rotate, alignMinLabel: plan.rotate ? null : "left", alignMaxLabel: plan.rotate ? null : "right" } : {}) } };
+}
+function setDateAxisLabels(option, spec, width, height) {
+  const d = dateAxisLabels(option, spec, width, height);
+  if (!d) return;
+  const axes = [].concat(option[d.key]);
+  axes[0] = { ...axes[0], axisLabel: { ...axes[0].axisLabel, ...d.axisLabel } };
+  option[d.key] = Array.isArray(option[d.key]) ? axes : axes[0];
 }
 
 /** P29: highlight one series (or a pie slice) and dim the rest; null clears. */
