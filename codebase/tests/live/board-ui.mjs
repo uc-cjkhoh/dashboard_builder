@@ -107,7 +107,7 @@ try {
     must(queries.every((q) => q.measures.length === 1 && q.measures[0].column === 'amount' && q.measures[0].agg === 'sum'), 'measures');
     // 6 × 4 each: side by side, same top, no overlap, inside the grid
     must(a.rect[1] === c.rect[1] && c.rect[0] > a.rect[0] + a.rect[2], `not side by side: ${J(a.rect)} ${J(c.rect)}`);
-    must(a.rect[3] === 4 * 64 + 3 * 12, `height ${a.rect[3]}`);
+    must(a.rect[3] === 4 * 64 + 3 * 8, `height ${a.rect[3]}`);
     must(J(await store(`return st.dashboards()[0].widgets.map((w) => [w.x, w.y, w.w, w.h]);`)) === J([[0, 0, 6, 4], [6, 0, 6, 4]]), 'cells');
   });
 

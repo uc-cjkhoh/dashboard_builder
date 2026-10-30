@@ -68,7 +68,7 @@ try {
   const saved = async () => JSON.parse(await ev(`localStorage.getItem(${J(KEY)})`)).dashboards[0].widgets.map((w) => [w.x, w.y, w.w, w.h]);
   const status = () => ev(`document.getElementById('board-status').textContent`);
   const ghost = () => ev(`(() => { const g = document.querySelector('.board-ghost'); if (!g || g.hidden) return null; const r = g.getBoundingClientRect(); return { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height), refused: g.classList.contains('is-refused'), label: g.textContent }; })()`);
-  const metrics = () => ev(`(() => { const g = document.getElementById('board-grid').getBoundingClientRect(); return { left: g.left, top: g.top, sx: (g.width + 12) / 12, sy: 76 }; })()`);
+  const metrics = () => ev(`(() => { const g = document.getElementById('board-grid').getBoundingClientRect(); return { left: g.left, top: g.top, sx: (g.width + 8) / 12, sy: 72 }; })()`);
   const mouse = (type, x, y, extra = {}) => b.send('Input.dispatchMouseEvent', { type, x, y, button: 'left', buttons: type === 'mouseReleased' ? 0 : 1, clickCount: 1, ...extra });
   let ID = {}; // A, B, T → widget ids (the DOM order follows the layout, so tests address widgets by id)
   const wsel = (k) => `.board-widget[data-widget-id="${ID[k]}"]`;
