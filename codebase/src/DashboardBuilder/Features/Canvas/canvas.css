@@ -55,30 +55,33 @@
   display: flex;
   align-items: center;
   gap: var(--s2);
-  padding: var(--s2) var(--s2);
+  padding: var(--s2) var(--s4);
   background: var(--surface-2);
   border-bottom: 1px solid var(--line);
   cursor: grab;
   user-select: none;
 }
 .entity--dragging .entity__head { cursor: grabbing; }
-/* Ghost icon buttons are 32px boxes around a 16px glyph: pull them out by the 8px slack so the glyphs,
-   not the boxes, align — chevron over the row checkboxes, ✕ flush with the type badges. */
-.entity__head > .iconbtn:first-child { margin-left: calc(-1 * var(--s2)); }
-.entity__head > .iconbtn:last-child { margin-right: calc(-1 * (var(--s2) + var(--s1))); }  /* the ✕ strokes sit 4px inside their box, so its ink ends where the type badges end */
-/* Title text starts where the column names do: the chevron box is 32px, the checkbox lane below is 8 + 16 + 8 = 32. */
-.entity__head > .entity__title { margin-left: calc(-1 * var(--s2)); }
+/* One 16px gutter (--s4) on both sides of the whole card: the title, the column names and the note start on it; the ✕'s ink, the type text and the
+   head's right edge end on it. The head's buttons are 32px boxes around a 16px glyph whose strokes sit 4px inside it, so the ✕ is pulled out by
+   that 12px of slack and the chevron sits just left of it. */
+.entity__head > .entity__toggle { margin-right: calc(-1 * var(--s1)); }
+.entity__head > .iconbtn:last-child { margin-right: calc(-1 * (var(--s2) + var(--s1))); }
 .entity__db { margin-left: var(--s2); color: var(--ink-3); font-weight: 400; }
 .entity__table { font-weight: 600; }
-.entity__note { margin: 0; padding: var(--s1) var(--s2) var(--s1) calc(var(--s2) + 16px + var(--s2)); font-size: var(--fs-body); color: var(--ink-2); border-bottom: 1px solid var(--line); }
+.entity__note { margin: 0; padding: var(--s1) var(--s4); font-size: var(--fs-body); color: var(--ink-2); border-bottom: 1px solid var(--line); }
 .entity__title { flex: 1; font-size: var(--fs-body); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.entity__status { padding: var(--s2); display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
+.entity__status { padding: var(--s2) var(--s4); display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
 .entity__error { flex-basis: 100%; margin: 0; color: var(--danger-ink); font-size: var(--fs-body); }
 .entity__body { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 
 /* Scrollable column list, up to 240px tall; a short table is only as tall as its columns (no data preview in the entity view). */
 .entity__cols { max-height: 240px; overflow: auto; padding: var(--s1) 0; }
-.col-row { display: flex; align-items: center; gap: var(--s2); padding: var(--s1) var(--s2) var(--s1) calc(var(--s2) + 16px + var(--s2)); font-size: var(--fs-body); transition: background var(--dur) var(--ease); }  /* the left lane (8 + 16 + 8) lines the names up under the head's title; table rows are drag handles (relations.css) */
+/* The 10px scrollbar (core.css) is always reserved and sits in the right gutter, so the rows give up that much padding: their type text ends on
+   the same 16px line as the pinned rows' and the head's ✕, whether or not the list overflows. */
+.entity__cols { scrollbar-gutter: stable; }
+.entity__cols .col-row { padding-right: calc(var(--s4) - 10px); }
+.col-row { display: flex; align-items: center; gap: var(--s2); padding: var(--s1) var(--s4); font-size: var(--fs-body); transition: background var(--dur) var(--ease); }  /* 16px both sides, like the head; table rows are drag handles (relations.css) */
 .col-row:hover { background: var(--surface-2); }
 .data tbody tr { transition: background var(--dur) var(--ease); }
 .data tbody tr:hover { background: var(--surface-2); }
