@@ -140,8 +140,9 @@ public static class CalcValidator
                 if (!CalcCatalog.RowFunctions.TryGetValue(fn.Fn, out var spec))
                     throw new CalcException($"Unknown function {fn.Fn}.", path);
                 var upper = fn.Fn.ToUpperInvariant();
+                var label = fn.Fn == "text" ? "TEXT (or STR)" : upper;
                 if (fn.Args.Length < spec.Args.Count || fn.Args.Length > spec.Max)
-                    throw new CalcException($"{upper} takes " + (spec.Max > spec.Args.Count ? $"{spec.Args.Count} to {spec.Max} arguments."
+                    throw new CalcException($"{label} takes " + (spec.Max > spec.Args.Count ? $"{spec.Args.Count} to {spec.Max} arguments."
                         : spec.Args.Count == 1 ? "1 argument." : $"{spec.Args.Count} arguments."), path);
                 var parts = new List<Typed>();
                 for (var n = 0; n < fn.Args.Length; n++)
@@ -155,7 +156,7 @@ public static class CalcValidator
                             if (arg.Type != CalcType.Text) throw new CalcException($"{upper} needs a text — {arg.Name} is {arg.Type}.", ap);
                             break;
                         case FnArg.Value:
-                            if (arg.Type == CalcType.Boolean) throw new CalcException($"{upper} needs a number, date or text — {arg.Name} is {arg.Type}.", ap);
+                            if (arg.Type == CalcType.Boolean) throw new CalcException($"{label} needs a number, date or text — {arg.Name} is {arg.Type}.", ap);
                             break;
                         case FnArg.Length or FnArg.Position:
                         {

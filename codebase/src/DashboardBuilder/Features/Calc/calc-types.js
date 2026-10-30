@@ -187,10 +187,11 @@ function typeOf(node, path, categoryOf) {
       const spec = typeof node.fn === "string" && Object.hasOwn(ROW_FUNCTIONS, node.fn) ? ROW_FUNCTIONS[node.fn] : null;
       if (spec === null) throw new CalcError(`Unknown function ${node.fn}.`, path);
       const upper = node.fn.toUpperCase();
+      const label = node.fn === "text" ? "TEXT (or STR)" : upper;
       const args = Array.isArray(node.args) ? node.args : [];
       const max = Math.max(spec.max ?? 0, spec.args.length);
       if (args.length < spec.args.length || args.length > max) {
-        throw new CalcError(`${upper} takes ${max > spec.args.length ? `${spec.args.length} to ${max} arguments` : spec.args.length === 1 ? "1 argument" : `${spec.args.length} arguments`}.`, path);
+        throw new CalcError(`${label} takes ${max > spec.args.length ? `${spec.args.length} to ${max} arguments` : spec.args.length === 1 ? "1 argument" : `${spec.args.length} arguments`}.`, path);
       }
       const parts = args.map((a, i) => {
         const ap = child(path, `args.${i}`);
@@ -199,7 +200,7 @@ function typeOf(node, path, categoryOf) {
         if (kind === "text") {
           if (t.type !== "text") throw new CalcError(`${upper} needs a text — ${t.name} is ${t.type}.`, ap);
         } else if (kind === "value") {
-          if (t.type === "boolean") throw new CalcError(`${upper} needs a number, date or text — ${t.name} is ${t.type}.`, ap);
+          if (t.type === "boolean") throw new CalcError(`${label} needs a number, date or text — ${t.name} is ${t.type}.`, ap);
         } else if (kind === "length" || kind === "position") {
           const min = kind === "length" ? 0 : 1;
           const v = a.k === "num" ? a.v : NaN;

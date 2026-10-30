@@ -181,6 +181,13 @@ public class CalcGatewayTests
     public void A_text_measure_is_numeric_only_when_counted(string agg, bool numeric) =>
         Assert.Equal(numeric, CalcSql.CalcMeasureSql(agg, Compile(Status), "measures[0]", false, false).Numeric);
 
+    [Fact] public void The_wire_has_no_str_function_it_is_a_client_alias_of_text()
+    {
+        var ex = Assert.Throws<RequestValidationException>(() => Compile(new FnNode("str", [Status]), "rowDimensions[0]"));
+        Assert.Equal("rowDimensions[0].calc", ex.Field);
+        Assert.Equal("Unknown function str.", ex.Message);
+    }
+
     [Fact] public void Summing_text_is_a_400() =>
         Assert.Equal("measures[1].calc", FieldOf(() => CalcSql.CalcMeasureSql("sum", Compile(Status), "measures[1]", false, false)));
 
