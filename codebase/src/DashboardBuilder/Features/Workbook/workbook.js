@@ -202,6 +202,7 @@ function openWorkbook(wb) {
     wb.dashboards.forEach((d, i) => setWidgets(dashboardIds[i], d.widgets.map((w) => (w.kind === "sheet"
       ? { id: nextWidgetId(), kind: "sheet", sheetId: worksheetIds[w.sheet], x: w.x, y: w.y, w: w.w, h: w.h }
       : w.kind === "image" ? { id: nextWidgetId(), kind: "image", alt: w.alt, src: w.src, x: w.x, y: w.y, w: w.w, h: w.h }
+      : w.kind === "nav" ? { id: nextWidgetId(), kind: "nav", label: w.label, tip: w.tip, target: w.target ? (w.target.kind === "worksheet" ? worksheetIds : dashboardIds)[w.target.index] ?? null : null, x: w.x, y: w.y, w: w.w, h: w.h }
       : w.kind === "spacer" ? { id: nextWidgetId(), kind: "spacer", x: w.x, y: w.y, w: w.w, h: w.h }
       : { id: nextWidgetId(), kind: "text", heading: w.heading, body: w.body, x: w.x, y: w.y, w: w.w, h: w.h }))));
     wb.dashboards.forEach((d, i) => { if (d.size) setDashboardSize(dashboardIds[i], d.size); });

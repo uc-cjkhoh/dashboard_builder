@@ -1,4 +1,4 @@
-import { worksheetById, switchTab } from "../Core/store.js";
+import { worksheetById, switchTab, tabById, tabs } from "../Core/store.js";
 import { icon } from "../Core/icons.js";
 import { toggle } from "../Core/ui.js";
 import { sizeChart } from "../Dashboard/chart.js";
@@ -7,6 +7,9 @@ import { planCtx, categoryOf, castOf } from "../Dashboard/dashboards.js";
 import { hint } from "../Dashboard/render-dom.js";
 import { LIMITS } from "../Core/validate.js";
 import { validateTextEdit, textChanged } from "./text-edit.js";
+import { buildNavForm } from "./nav-edit.js";
+import { navChanged } from "./nav-model.js";
+import { NAV_LABEL } from "./board-model.js";
 
 // One widget on the board: a header (title, Edit, Remove) over a body. A worksheet widget's body is a select-only
 // worksheet view (createWorksheetView({ interactive: "select" })) of its worksheet's sheet, run with its own latest-wins gate
@@ -45,7 +48,7 @@ export function createWidget(widget, host) {
   const remove = toolButton("close", "Remove", "iconbtn--danger board-widget__remove");
   remove.addEventListener("click", () => host.onRemove(current));
   const edit = toolButton("edit", "Edit", "board-widget__edit"); // worksheet → its tab; text → inline edit
-  edit.addEventListener("click", () => (current.kind === "sheet" ? switchTab(current.sheetId) : startEdit()));
+  edit.addEventListener("click", () => (current.kind === "sheet" ? switchTab(current.sheetId) : current.kind === "nav" ? startNavEdit() : startEdit()));
   tools.append(edit, remove);
   head.append(title, source, tools);
   const grip = h("span", "board-widget__resize"); // bottom-right corner: drag to resize (the keyboard path is Shift + arrows)
@@ -69,6 +72,7 @@ export function createWidget(widget, host) {
     if (w.kind === "text") return w.heading || "Text";
     if (w.kind === "image") return w.alt || "Image";
     if (w.kind === "spacer") return "Spacer";
+    if (w.kind === "nav") return w.label || NAV_LABEL;
     return worksheetById(w.sheetId)?.name ?? "Closed worksheet";
   }
   // --- inline text edit: heading + body become labelled inputs; Save / Enter commits, Cancel / Esc discards ---
@@ -139,6 +143,32 @@ export function createWidget(widget, host) {
     hd.control.focus();
     hd.control.select();
   }
+  function startNavEdit() {
+    if (editing || current.kind !== "nav") return;
+    editing = { nav: true };
+    el.classList.add("is-editing");
+    const finishNav = () => { editing = null; el.classList.remove("is-editing"); paintNav(current); edit.focus(); };
+    const f = buildNavForm(current, tabs, host.ownId(), {
+      onSave(value) { const changed = navChanged(current, value); finishNav(); if (changed) host.onSaveNav(current, value); },
+      onCancel: finishNav,
+    });
+    body.replaceChildren(f.form);
+    f.focus();
+  }
+  function paintNav(w) {
+    let btn = body.firstElementChild;
+    if (!btn || !btn.classList.contains("board-nav__btn")) {
+      btn = h("button", "btn btn--primary board-nav__btn");
+      btn.type = "button";
+      btn.addEventListener("click", () => { if (current.target && tabById(current.target)) switchTab(current.target); });
+      body.replaceChildren(btn);
+    }
+    const dest = w.target ? tabById(w.target) : null;
+    btn.replaceChildren(...(dest ? [icon("arrow-right", { size: 16 })] : []), h("span", null, w.label || NAV_LABEL));
+    btn.title = dest ? w.tip ?? "" : "Not linked to a tab. Use Edit to choose one."; // the tooltip
+    btn.setAttribute("aria-disabled", dest ? "false" : "true"); // not `disabled`: an unlinked button stays reachable by keyboard
+    btn.setAttribute("aria-label", `${w.label || NAV_LABEL}${dest ? `, goes to ${dest.name}` : ", not linked to a tab"}`);
+  }
   function paintText(w) {
     body.replaceChildren(); // the heading is the widget's title (header); the body is the text under it
     if (w.body) body.append(h("p", "board-text__body", w.body));
@@ -152,13 +182,18 @@ export function createWidget(widget, host) {
   function update(w) {
     current = w;
     const name = labelFor(w);
-    title.textContent = name;
-    title.title = name;
+    title.textContent = w.kind === "nav" ? "" : name; // the button's own label is the name; the header does not repeat it
+    title.title = w.kind === "nav" ? "" : name;
     remove.setAttribute("aria-label", `Remove “${name}” from the dashboard`);
     edit.hidden = w.kind === "image" || w.kind === "spacer"; // nothing to edit: an image is replaced by removing it, a spacer is blank
     edit.setAttribute("aria-label", w.kind === "text" ? `Edit the text “${name}”` : `Edit the worksheet “${name}”`);
     el.setAttribute("aria-label", name);
     if (w.kind === "image") { paintImage(w); return; }
+    if (w.kind === "nav") {
+      edit.setAttribute("aria-label", `Edit the button “${name}”`);
+      if (!editing) paintNav(w);
+      return;
+    }
     if (w.kind !== "text") return;
     if (editing && !textChanged({ heading: editing.heading, body: editing.body }, { heading: w.heading ?? "", body: w.body ?? "" })) return; // keep the open form
     editing = null; // the text changed under the form (undo / redo): show the new text

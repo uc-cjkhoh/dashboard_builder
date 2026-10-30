@@ -50,6 +50,8 @@ export const LIMITS = Object.freeze({
   images: 4,           // image widgets per dashboard
   imagesTotal: 2097152, // characters of picture data (data URLs) across the whole workbook (2 MB)
   imageAlt: 120,       // characters in an image widget's alt text
+  navLabel: 40,        // characters in a navigation button's label
+  navTip: 200,         // characters in a navigation button's tooltip
   calcName: 60,      // characters in a calculation's name / label (server CalcLimits.MaxName)
 });
 export const HOST_MESSAGES = Object.freeze({

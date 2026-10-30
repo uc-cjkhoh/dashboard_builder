@@ -16,7 +16,7 @@ function addButton(label, text, onClick, cls = "btn board-panel__add") {
   return b;
 }
 
-/** `handlers` = { onAddSheet(sheetId), onAddText(), onAddImage(file), onAddSpacer(), onDragStart(sheetId), onDragEnd() }. Returns { render(worksheets) }. */
+/** `handlers` = { onAddSheet(sheetId), onAddText(), onAddImage(file), onAddSpacer(), onAddNav(), onDragStart(sheetId), onDragEnd() }. Returns { render(worksheets) }. */
 export function createPanel(root, handlers) {
   let shown = null;
   return {
@@ -56,6 +56,7 @@ export function createPanel(root, handlers) {
       picker.setAttribute("aria-label", "Choose an image file");
       picker.addEventListener("change", () => { const f = picker.files?.[0]; picker.value = ""; if (f) handlers.onAddImage(f); });
       root.append(h("h3", "board-panel__title", "Image"), addButton("Add an image to the dashboard", "Add image", () => picker.click(), "btn board-panel__add board-panel__add-image"), picker);
+      root.append(h("h3", "board-panel__title", "Button"), addButton("Add a navigation button to the dashboard", "Add button", () => handlers.onAddNav(), "btn board-panel__add board-panel__add-nav"));
       root.append(h("h3", "board-panel__title", "Spacer"), addButton("Add a blank spacer to the dashboard", "Add spacer", () => handlers.onAddSpacer(), "btn board-panel__add board-panel__add-spacer"));
     },
   };

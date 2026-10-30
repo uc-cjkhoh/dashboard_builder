@@ -7,7 +7,7 @@ import { defaultFormat, metaOf } from "../Core/store.js";
 import { labelOf } from "../Dashboard/member-labels.js";
 import { sharedResults } from "../Dashboard/dashboards.js";
 import { nextSelection, selectionRefusal, crossFor, chipText, stillValid, UNSELECTABLE_NOTE } from "../Dashboard/dashboard-select.js";
-import { placeNew } from "./board-model.js";
+import { placeNew, NAV_LABEL } from "./board-model.js";
 import { validateImageFile, isImageSrc, imageChars, budgetError } from "./image-model.js";
 import { layoutBoard, widgetOrder, fixedRowH } from "./board-layout.js";
 import { SIZE_PRESETS, sizeKey, sizeLabel } from "./board-size.js";
@@ -65,9 +65,9 @@ export function initBoard() {
     history.record(dash.id, dash.widgets);
     setWidgets(dash.id, next); // → dashboard:changed → sync (autosave listens to the same event)
   }
-  const nameOf = (w) => entries.get(w.id)?.el.getAttribute("aria-label") ?? (w.kind === "text" ? "Text" : w.kind === "image" ? "Image" : w.kind === "spacer" ? "Spacer" : "widget");
+  const nameOf = (w) => entries.get(w.id)?.el.getAttribute("aria-label") ?? (w.kind === "text" ? "Text" : w.kind === "image" ? "Image" : w.kind === "spacer" ? "Spacer" : w.kind === "nav" ? "Button" : "widget");
 
-  const panel = createPanel($("board-panel"), { onAddSheet: (sheetId) => add("sheet", sheetId), onAddText: () => add("text"), onAddImage: (file) => addImage(file), onAddSpacer: () => add("spacer"), onDragStart() {}, onDragEnd() {} });
+  const panel = createPanel($("board-panel"), { onAddSheet: (sheetId) => add("sheet", sheetId), onAddText: () => add("text"), onAddImage: (file) => addImage(file), onAddSpacer: () => add("spacer"), onAddNav: () => add("nav"), onDragStart() {}, onDragEnd() {} });
 
   function teardown() {
     for (const e of entries.values()) { e.destroy(); e.el.remove(); }
@@ -154,7 +154,7 @@ export function initBoard() {
     for (const w of dash.widgets) {
       const known = entries.get(w.id);
       if (known) { known.update(w); continue; }
-      const e = createWidget(w, { results, onRemove: remove, onSaveText: saveText, onMark, onUnselectable: () => status(UNSELECTABLE_NOTE, true), crossFor: (id) => crossFor(selection, id) });
+      const e = createWidget(w, { results, onRemove: remove, onSaveText: saveText, onSaveNav: saveNav, ownId: () => activeDashboard()?.id, onMark, onUnselectable: () => status(UNSELECTABLE_NOTE, true), crossFor: (id) => crossFor(selection, id) });
       entries.set(w.id, e);
       grid.append(e.el);
       fresh.push(e);
@@ -200,6 +200,7 @@ export function initBoard() {
     const { x, y, w, h } = cell;
     const widget = kind === "sheet" ? { id: nextWidgetId(), kind, sheetId, x, y, w, h }
       : kind === "text" ? { id: nextWidgetId(), kind, heading: "Text", body: "", x, y, w, h }
+      : kind === "nav" ? { id: nextWidgetId(), kind, label: NAV_LABEL, tip: "", target: null, x, y, w, h }
       : { id: nextWidgetId(), kind, ...extra, x, y, w, h }; // image { alt, src } | spacer
     commit([...dash.widgets, widget]);
     toast(`Added “${entries.get(widget.id)?.el.getAttribute("aria-label") ?? "widget"}” to the dashboard.`, "ok"); // polite live region (#toast-live)
@@ -247,6 +248,13 @@ export function initBoard() {
     if (!dash) return;
     commit(dash.widgets.map((w) => (w.id === widget.id ? { ...w, ...value } : w)));
     status("Text updated.");
+  }
+
+  function saveNav(widget, value) {
+    const dash = activeDashboard();
+    if (!dash) return;
+    commit(dash.widgets.map((w) => (w.id === widget.id ? { ...w, ...value } : w)));
+    status("Button updated.");
   }
 
   // --- undo / redo on the dashboard tab (Dashboard/history.js snapshots of the widget list, keyed by dashboard id) ---
