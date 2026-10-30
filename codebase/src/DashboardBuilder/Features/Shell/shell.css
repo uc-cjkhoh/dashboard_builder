@@ -58,6 +58,14 @@
 .is-sidebar-collapsed .sidebar__brand-text { display: none; }
 .is-sidebar-collapsed .sidebar__toggle { margin-inline: 0; }
 
+/* Off the Data Source (any worksheet or dashboard tab): the body (connection, database, tables) and its resizer are hidden and the sidebar shrinks to a rail
+   holding only the brand mark, so the worksheet gets the room. The user's own collapsed choice is untouched and returns with the Data Source tab. */
+.app:not([data-view="model"]) { grid-template-columns: var(--topbar-h) 1fr; }
+.app:not([data-view="model"]) .sidebar__body, .app:not([data-view="model"]) .sidebar__resizer,
+.app:not([data-view="model"]) .sidebar__brand-text, .app:not([data-view="model"]) .sidebar__toggle { display: none; }
+.app:not([data-view="model"]) .sidebar__brand { justify-content: center; padding-inline: 0; }
+.app:not([data-view="model"]) .sidebar__mark { display: grid; }
+
 /* Bento: the sidebar body is a grid of solid tiles on the glass, 8px apart, 16px from the rail's edges. Tiles: connection, database,
    the table list (takes the remaining height), and the Union / Unpivot pair side by side. One radius, one stroke, one soft lift. */
 .sidebar__body { padding: var(--s4); gap: var(--s2); }
