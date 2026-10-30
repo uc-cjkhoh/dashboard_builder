@@ -2,23 +2,25 @@
 
 /* ---- Relationships: SVG overlay, links, connector handles ----------------- */
 .rel-svg { position: absolute; top: 0; left: 0; pointer-events: none; overflow: visible; }
-.rel-link { pointer-events: auto; cursor: pointer; filter: drop-shadow(0 1px 2px rgba(16, 16, 20, .18)); transition: filter var(--dur) var(--ease); }
-.rel-link:hover { filter: drop-shadow(0 2px 5px rgba(16, 16, 20, .28)); }
-.rel-link__hit { stroke: transparent; stroke-width: 14; fill: none; }
-.rel-link__line { stroke: var(--ink-3); stroke-width: 2; fill: none; transition: stroke var(--dur) var(--ease); }
-.rel-end { stroke: var(--ink-3); stroke-width: 2; fill: none; }
-.rel-link--selected .rel-link__line,
-.rel-link--selected .rel-end { stroke: var(--accent); stroke-width: 2.5; }
-.rel-badge rect { fill: var(--surface); stroke: var(--line-2); }
+.rel-svg--labels { z-index: 1; }
+.rel-link { pointer-events: auto; cursor: pointer; }
+.rel-link--label { pointer-events: auto; }
+.rel-link__hit { stroke: transparent; stroke-width: 16; fill: none; }
+/* Elbow lines with rounded corners; the end shapes (tick = one, crow's foot = many) carry cardinality without colour. */
+.rel-link__line, .rel-end { stroke: var(--ink-3); stroke-width: 2; fill: none; stroke-linecap: round; stroke-linejoin: round; transition: stroke var(--dur) var(--ease); }
+.rel-link--hover .rel-link__line, .rel-link--hover .rel-end,
+.rel-link--selected .rel-link__line, .rel-link--selected .rel-end { stroke: var(--accent); }
+.rel-link--selected .rel-link__line, .rel-link--selected .rel-end { stroke-width: 2.5; }
+.rel-badge rect { fill: var(--surface); stroke: var(--line-2); transition: stroke var(--dur) var(--ease); }
 .rel-badge text { fill: var(--ink-2); font-size: var(--fs-body); font-weight: 600; }
-.rel-link--selected .rel-badge rect { stroke: var(--accent); }
+.rel-link--hover .rel-badge rect, .rel-link--selected .rel-badge rect { stroke: var(--accent); }
 .rel-link--selected .rel-badge text { fill: var(--accent-ink); }
 
 .rel-connector {
   flex: none;
   width: 16px; height: 16px;
   margin-left: var(--s1);
-  border: 1px solid var(--line-2);
+  border: 2px solid var(--ink-3);
   border-radius: var(--r-pill);
   background: var(--surface);
   cursor: crosshair;
@@ -52,5 +54,8 @@
    target, a dashed muted one on a refused target (shape, not colour alone), and the source row dims. */
 .col-row[draggable="true"] { cursor: grab; }
 .col-row--drag-source { opacity: .6; }
+/* The two rows a hovered or selected link joins. */
+.col-row--linked { background: var(--accent-soft); }
+.col-row--linked .col-row__name { color: var(--accent-ink); font-weight: 600; }
 .col-row--drop-ok { background: var(--accent-soft); outline: 2px solid var(--accent); outline-offset: -2px; }
 .col-row--drop-no { outline: 2px dashed var(--ink-3); outline-offset: -2px; cursor: not-allowed; }

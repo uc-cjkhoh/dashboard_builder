@@ -4,6 +4,7 @@ import { toast, makeButton, openDialog, closeDialog } from "../Core/ui.js";
 import { api } from "../Core/api.js";
 import { previewRequest } from "./join-preview-model.js";
 import { buildJoinCheck } from "./join-check.js";
+import { linkSides, linkRoute, roundedPath } from "./link-route.js";
 import { COLUMN_MIME, encodeColumnDrag, parseColumnDrag, dropDecision } from "./link-drag.js";
 
 // Relationships (P5): logical, typed links the user draws between the join keys checked on two
@@ -17,14 +18,17 @@ const CARDINALITIES = ["1:1", "1:N", "N:1", "N:M"];
 let seq = 0;
 let pending = null;   // { entityId, column, handle } — the first-picked endpoint
 let selectedId = null;
-let canvas, svg;
+let hoverId = null;   // the link under the pointer
+let canvas, svg, labels;  // svg: the lines, under the cards; labels: the cardinality badges, over them
 
 export function initRelations() {
   canvas = document.getElementById("model-view");
   if (!canvas) return;
 
   svg = svgEl("svg", { class: "rel-svg" });
-  canvas.insertBefore(svg, canvas.firstChild); // behind the entity cards
+  canvas.insertBefore(svg, canvas.firstChild); // behind the entity cards: a link to a far card slips under the ones between
+  labels = svgEl("svg", { class: "rel-svg rel-svg--labels" });
+  canvas.append(labels); // over the cards, so a badge wider than the gutter is never clipped
 
   bus.addEventListener("joinkey:changed", (e) => onJoinKeyChanged(e.detail));
   bus.addEventListener("entity:moved", () => render());
@@ -214,41 +218,67 @@ function onEntityRemoved(entityId) {
 function render() {
   if (!svg) return;
   svg.replaceChildren();
+  labels.replaceChildren();
   const crect = canvas.getBoundingClientRect();
-  svg.setAttribute("width", String(canvas.scrollWidth));
-  svg.setAttribute("height", String(canvas.scrollHeight));
+  for (const layer of [svg, labels]) {
+    layer.setAttribute("width", String(canvas.scrollWidth));
+    layer.setAttribute("height", String(canvas.scrollHeight));
+  }
 
+  const placed = []; // badge boxes already laid out; a badge that would cover one steps down
+  const used = new Map(); // links already run through each gutter, so they take different lanes there
   for (const rel of relationships.values()) {
     const a = entities.get(rel.from.entityId);
     const b = entities.get(rel.to.entityId);
     if (!a || !b) continue;
 
-    const ca = cardCenterX(a, crect);
-    const cb = cardCenterX(b, crect);
-    const p1 = anchor(a, rel.from.column, cb, crect);
-    const p2 = anchor(b, rel.to.column, ca, crect);
+    const [sa, sb] = linkSides(cardSpan(a, crect), cardSpan(b, crect));
+    const p1 = anchor(a, rel.from.column, sa, crect);
+    const p2 = anchor(b, rel.to.column, sb, crect);
     if (!p1 || !p2) continue;
 
     const [fromKind, toKind] = markerKinds(rel.cardinality);
-    svg.append(drawLink(rel, p1, p2, fromKind, toKind));
+    const edge = Math.round(sa === sb ? (sa > 0 ? Math.max(p1.x, p2.x) : Math.min(p1.x, p2.x)) : Math.min(p1.x, p2.x));
+    const n = used.get(edge) ?? 0;
+    used.set(edge, n + 1);
+    const { line, label } = drawLink(rel, p1, sa, p2, sb, fromKind, toKind, (n % 3) - 1, placed);
+    svg.append(line);
+    labels.append(label);
   }
+  markLinkedRows();
 }
 
-function drawLink(rel, p1, p2, fromKind, toKind) {
-  const g = svgEl("g", { class: `rel-link${rel.id === selectedId ? " rel-link--selected" : ""}` });
+function drawLink(rel, p1, s1, p2, s2, fromKind, toKind, lane, placed) {
+  const cls = `rel-link${rel.id === selectedId ? " rel-link--selected" : ""}`;
+  const line = svgEl("g", { class: cls, "data-rel": rel.id });
+  const { points, label: spot } = linkRoute(p1, s1, p2, s2, lane);
+  const d = roundedPath(points);
+  line.append(svgEl("path", { class: "rel-link__hit", d }), svgEl("path", { class: "rel-link__line", d }),
+    endMarker(p1, { x: s1, y: 0 }, fromKind), endMarker(p2, { x: s2, y: 0 }, toKind));
+  const label = svgEl("g", { class: `${cls} rel-link--label`, "data-rel": rel.id });
+  const text = joinBadge(rel.cardinality, rel.joinType), w = badgeWidth(text);
+  while (placed.some((b) => Math.abs(b.x - spot.x) < (b.w + w) / 2 && Math.abs(b.y - spot.y) < BADGE_H)) spot.y += BADGE_H + 2;
+  placed.push({ x: spot.x, y: spot.y, w });
+  label.append(badge(text, w, spot));
 
-  const hit = svgEl("path", { class: "rel-link__hit", d: `M${p1.x},${p1.y} L${p2.x},${p2.y}` });
-  const line = svgEl("path", { class: "rel-link__line", d: `M${p1.x},${p1.y} L${p2.x},${p2.y}` });
+  for (const g of [line, label]) { // the line and its badge sit in two layers but act as one link
+    g.addEventListener("click", (e) => { e.stopPropagation(); editRelationship(rel); });
+    g.addEventListener("pointerenter", () => { hoverId = rel.id; markLinkedRows(); });
+    g.addEventListener("pointerleave", () => { hoverId = null; markLinkedRows(); });
+  }
+  return { line, label };
+}
 
-  const ux = unit(p1, p2);
-  const vx = unit(p2, p1);
-  g.append(hit, line,
-    endMarker(p1, ux, fromKind),
-    endMarker(p2, vx, toKind),
-    badge(rel, midpoint(p1, p2)));
-
-  g.addEventListener("click", (e) => { e.stopPropagation(); editRelationship(rel); });
-  return g;
+// The two key rows a hovered or selected link joins read as one pair: both take the accent wash.
+function markLinkedRows() {
+  for (const el of canvas.querySelectorAll(".col-row--linked, .rel-link--hover")) el.classList.remove("col-row--linked", "rel-link--hover");
+  if (hoverId) for (const el of canvas.querySelectorAll(`.rel-link[data-rel="${hoverId}"]`)) el.classList.add("rel-link--hover");
+  for (const id of new Set([selectedId, hoverId])) {
+    const rel = id && relationships.get(id);
+    if (!rel) continue;
+    for (const end of [rel.from, rel.to])
+      entities.get(end.entityId)?.el.querySelector(`.col-row[data-column="${cssEscape(end.column)}"]`)?.classList.add("col-row--linked");
+  }
 }
 
 function endMarker(p, u, kind) {
@@ -270,14 +300,15 @@ function endMarker(p, u, kind) {
   return g;
 }
 
-function badge(rel, mid) {
+const BADGE_H = 24;
+// P31: an outer join says so on the badge ("1:N · left", "· right", "· full") — words, not a colour.
+const badgeWidth = (text) => (text.length <= 3 ? 34 : text.length > 10 ? 70 : 64);
+
+function badge(text, w, mid) {
   const g = svgEl("g", { class: "rel-badge" });
-  // P31: an outer join says so on the badge ("1:N · left", "· right", "· full") — words, not a colour.
-  const label = joinBadge(rel.cardinality, rel.joinType);
-  const w = label === rel.cardinality ? 34 : label.length > 10 ? 70 : 64, h = 18;
   g.append(
-    svgEl("rect", { x: mid.x - w / 2, y: mid.y - h / 2, width: w, height: h, rx: 5 }),
-    svgEl("text", { x: mid.x, y: mid.y, "text-anchor": "middle", "dominant-baseline": "central" }, label),
+    svgEl("rect", { x: mid.x - w / 2, y: mid.y - BADGE_H / 2, width: w, height: BADGE_H, rx: 8 }),
+    svgEl("text", { x: mid.x, y: mid.y, "text-anchor": "middle", "dominant-baseline": "central" }, text),
   );
   return g;
 }
@@ -364,35 +395,27 @@ function markerKinds(cardinality) {
   return [a === "1" ? "one" : "many", b === "1" ? "one" : "many"];
 }
 
-function cardCenterX(entity, crect) {
+function cardSpan(entity, crect) {
   const r = entity.el.getBoundingClientRect();
-  return (r.left + r.right) / 2 - crect.left + canvas.scrollLeft;
+  return { left: r.left - crect.left + canvas.scrollLeft, right: r.right - crect.left + canvas.scrollLeft };
 }
 
-// Anchor a link on the card edge facing the other card, at the key row's vertical centre.
-function anchor(entity, column, otherCenterX, crect) {
+// Anchor a link on the card edge `side` (+1 right, -1 left), at the key row's vertical centre.
+function anchor(entity, column, side, crect) {
   const r = entity.el.getBoundingClientRect();
-  const left = r.left - crect.left + canvas.scrollLeft;
-  const right = r.right - crect.left + canvas.scrollLeft;
   const top = r.top - crect.top + canvas.scrollTop;
   const bottom = r.bottom - crect.top + canvas.scrollTop;
 
-  let y = top + 18;
+  let y = top + 24;
   const row = entity.el.querySelector(`.col-row[data-column="${cssEscape(column)}"]`);
   if (row) {
     const rr = row.getBoundingClientRect();
     y = clamp(rr.top + rr.height / 2 - crect.top + canvas.scrollTop, top + 8, bottom - 8);
   }
-  const useRight = otherCenterX >= (left + right) / 2;
-  return { x: useRight ? right : left, y };
+  const { left, right } = cardSpan(entity, crect);
+  return { x: side > 0 ? right : left, y };
 }
 
-function unit(a, b) {
-  const dx = b.x - a.x, dy = b.y - a.y;
-  const len = Math.hypot(dx, dy) || 1;
-  return { x: dx / len, y: dy / len };
-}
-const midpoint = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
 function endpointMatches(ep, entityId, column) {

@@ -103,7 +103,7 @@ export function initCanvas() {
   // First grid slot (left→right, top→bottom, fitted to the visible width) that no card overlaps, so a
   // card added with the + button never hides another card's title. Dropped cards keep the drop point.
   function freeSlot() {
-    const pad = 16, gap = 24, w = 300, h = 300;  // pad = the view gutter (.view --s4), so cards line up with the tab strip
+    const pad = 16, gap = 48, w = 312, h = 312;  // pad = the view gutter (.view --s4), so cards line up with the tab strip; gap = room for a link's elbow and badge between cards
     const boxes = [...entities.values()].map(({ el }) => ({ x: el.offsetLeft, y: el.offsetTop, w: el.offsetWidth, h: el.offsetHeight }));
     const perRow = Math.max(1, Math.floor((canvas.clientWidth - 2 * pad + gap) / (w + gap)));
     for (let i = 0; i < 400; i++) {
@@ -369,6 +369,9 @@ export function initCanvas() {
     btn.setAttribute("aria-label", collapsed ? "Expand columns" : "Collapse columns");
   }
 
+  // Cards sit on the dot grid's 8px steps, never at a negative offset.
+  const snap = (v) => Math.max(0, Math.round(v / 8) * 8);
+
   // Move a card by dragging its head (pointer events; the icon buttons are excluded).
   function enableDragMove(entity, head) {
     head.addEventListener("pointerdown", (event) => {
@@ -382,8 +385,8 @@ export function initCanvas() {
       head.setPointerCapture(event.pointerId);
 
       const move = (ev) => {
-        entity.x = Math.max(0, originX + (ev.clientX - startX));
-        entity.y = Math.max(0, originY + (ev.clientY - startY));
+        entity.x = snap(originX + (ev.clientX - startX));
+        entity.y = snap(originY + (ev.clientY - startY));
         entity.el.style.left = `${entity.x}px`;
         entity.el.style.top = `${entity.y}px`;
         emit("entity:moved", { entityId: entity.id }); // relationship links re-route
