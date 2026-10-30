@@ -14,6 +14,7 @@ import { normalizeJoinType } from "../Relations/relation-rules.js";
 import { cleanAction } from "../Dashboard/action-model.js";
 import { cleanMemberColors } from "../Dashboard/colour-model.js";
 import { checkTooltipText } from "../Dashboard/tooltip-model.js";
+import { checkTooltipStyle } from "../Dashboard/tooltip-style.js";
 import { markerSizeError } from "../Dashboard/mark-style-model.js";
 import { RAMP_CHOICES, colourRangeError } from "../Dashboard/colour-scale-model.js";
 import { cleanParameter, MAX_PARAMS } from "../Core/parameters-model.js";
@@ -387,6 +388,11 @@ export function sanitizeSheet(saved, where, issues) {
     const r = checkTooltipText(s.tooltipText);
     sheet.tooltipText = r.ok ? r.value : null;
     if (!r.ok) issues.push(`${where}: the tooltip text was invalid — reset.`);
+  }
+  { // tooltip modal line styles: dropped (with an issue) when invalid, and meaningless without a template
+    const r = checkTooltipStyle(s.tooltipStyle);
+    sheet.tooltipStyle = r.ok && sheet.tooltipText ? r.value : null;
+    if (!r.ok) issues.push(`${where}: the tooltip style was invalid — reset.`);
   }
   sheet.memberColors = cleanMemberColors(s.memberColors, where, issues); // T01-20
   sheet.showFilterCards = s.showFilterCards !== false; // P30

@@ -217,6 +217,7 @@ export const emptySheet = () => ({
   // null | { db, table, column, category, preset, from, to, compare, compareFrom, compareTo }
   period: null,
   memberColors: {}, // T01-20: { [table.column]: { [member]: "#rrggbb" } } (Dashboard/colour-model.js)
+  tooltipStyle: null, // tooltip modal: per-line { size, bold, italic, color } aligned to tooltipText's lines (Dashboard/tooltip-style.js); null = default
   tooltipText: null, // T01-19: tooltip template with <Field> placeholders (Dashboard/tooltip-model.js); null = automatic
   title: null, caption: null, showTitle: true, showFilterCards: true, // P30 filter cards above the chart
   analytics: null, // P21: { ref, band, trend, forecast, totals } (Dashboard/analytics-model.js); null = none // P23: null = the tab name / an automatic summary

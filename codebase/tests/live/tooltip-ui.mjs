@@ -185,6 +185,78 @@ try {
     must(await ev(`document.querySelector('.ws-tipedit__text').maxLength`) === 300, 'maxlength 300');
   });
 
+  const tdlg = `document.querySelector('dialog.tipdlg[open]')`;
+  const key = (k, mods = 0) => b.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: k, code: k, windowsVirtualKeyCode: { ArrowUp: 38, ArrowDown: 40, Escape: 27 }[k], modifiers: mods })
+    .then(() => b.send('Input.dispatchKeyEvent', { type: 'keyUp', key: k, code: k, windowsVirtualKeyCode: { ArrowUp: 38, ArrowDown: 40, Escape: 27 }[k], modifiers: mods }));
+  const setLine = (i, v) => ev(`(() => { const t = document.querySelector('.tipdlg__text[data-line="${i}"]'); t.value = ${J(v)}; t.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
+  const lineTexts = () => ev(`[...document.querySelectorAll('.tipdlg__text')].map((t) => t.value)`);
+
+  await check('Edit tooltip... opens a side-by-side modal: editor left, live preview right, first line focused', async () => {
+    await tipText('<orders.region>');
+    await ev(`document.querySelector('.ws-tipedit__modal').click()`);
+    await waitFor(`${tdlg} !== null`, 'tooltip modal');
+    must(await ev(`document.activeElement.classList.contains('tipdlg__text')`), 'first line not focused');
+    const r = await ev(`(() => { const a = document.querySelector('.tipdlg__edit').getBoundingClientRect(), p = document.querySelector('.tipdlg__side').getBoundingClientRect(); return { left: a.left < p.left, sameRow: Math.abs(a.top - p.top) < 8 }; })()`);
+    must(r.left && r.sameRow, `not side by side: ${J(r)}`);
+    must(await ev(`document.querySelector('.tipdlg__preview b')?.textContent`) === 'APAC', 'preview uses the chart sample');
+    await shot('tooltip-modal-light.png');
+  });
+
+  await check('style a line (size, bold, italic, colour), add and reorder lines; the preview follows; Apply is one undo step', async () => {
+    await ev(`document.querySelector('.tipdlg__add').click()`);
+    await setLine(1, 'Total <orders.region>');
+    await ev(`(() => { const r = document.querySelectorAll('.tipdlg__line')[0]; const sz = r.querySelector('.tipdlg__size'); sz.value = '24'; sz.dispatchEvent(new Event('change')); r.querySelector('.tipdlg__tog').click(); const c = r.querySelector('.tipdlg__colour'); c.value = 'accent'; c.dispatchEvent(new Event('change')); return true; })()`);
+    let css = await ev(`document.querySelector('.tipdlg__preview span')?.getAttribute('style')`);
+    must(css === 'font-size:24px;font-weight:700;color:var(--accent-ink)', `preview style: ${css}`);
+    // Alt+ArrowDown on line 0 moves it below line 1, with its style
+    await ev(`document.querySelector('.tipdlg__text[data-line="0"]').focus()`);
+    await key('ArrowDown', 1);
+    must((await lineTexts()).join('|') === 'Total <orders.region>|<orders.region>', `order: ${J(await lineTexts())}`);
+    must(await ev(`document.querySelectorAll('.tipdlg__line')[1].querySelector('.tipdlg__size').value`) === '24', 'style moved with its line');
+    must(await ev(`document.activeElement.dataset.line`) === '1', 'focus follows the moved line');
+    await ev(`[...document.querySelectorAll('.tipdlg .dialog__foot button')].find((x) => x.textContent === 'Apply').click()`);
+    await waitFor(`${tdlg} === null`, 'modal closed');
+    must(await ev(`document.querySelector('.ws-tipedit__text').value`) === 'Total <orders.region>\n<orders.region>', 'panel text updated');
+    const html = await showTip();
+    must(html.includes('font-size:24px') && html.includes('font-weight:700') && html.includes('var(--accent-ink)'), `tooltip style: ${html}`);
+    must(html.includes('<b>EU</b>'), 'values still rendered');
+    await shot('tooltip-styled.png');
+    await ev(`document.querySelector('button[aria-label^="Undo"]').click()`);
+    await settle(300);
+    must(await ev(`document.querySelector('.ws-tipedit__text')?.value`) === '<orders.region>', 'undo restores the text');
+    const html2 = await showTip();
+    must(!html2.includes('font-size:24px'), `undo restores the style: ${html2}`);
+  });
+
+  await check('Escape discards the draft and returns focus; Reset ("Automatic") applies an empty tooltip', async () => {
+    await ev(`document.querySelector('.ws-tipedit__modal').click()`);
+    await waitFor(`${tdlg} !== null`, 'tooltip modal');
+    await setLine(0, 'discarded');
+    await key('Escape');
+    await waitFor(`${tdlg} === null`, 'closed by Escape');
+    must(await ev(`document.querySelector('.ws-tipedit__text').value`) === '<orders.region>', 'Escape discarded');
+    await ev(`document.querySelector('.ws-tipedit__modal').click()`);
+    await waitFor(`${tdlg} !== null`, 'reopened');
+    await ev(`document.querySelector('.tipdlg__reset').click()`);
+    must(await ev(`document.querySelector('.tipdlg__preview').textContent`) === 'Automatic tooltip', 'reset previews automatic');
+    await ev(`[...document.querySelectorAll('.tipdlg .dialog__foot button')].find((x) => x.textContent === 'Apply').click()`);
+    await waitFor(`${tdlg} === null`, 'closed');
+    must(await ev(`document.querySelector('.ws-tipedit__text').value`) === '', 'template cleared');
+  });
+
+  await check('field chips insert at the selected line; text over the limit blocks Apply; HTML stays escaped in the preview', async () => {
+    await ev(`document.querySelector('.ws-tipedit__modal').click()`);
+    await waitFor(`${tdlg} !== null`, 'modal');
+    await setLine(0, '<img src=x onerror=1> ');
+    must(await ev(`document.querySelector('.tipdlg__preview img') === null`), 'raw img in preview');
+    await ev(`document.querySelector('.tipdlg__chip').click()`);
+    must((await lineTexts())[0].endsWith('<orders.region>'), `chip: ${J(await lineTexts())}`);
+    await setLine(0, 'x'.repeat(301));
+    must(await ev(`[...document.querySelectorAll('.tipdlg .dialog__foot button')].find((x) => x.textContent === 'Apply').disabled`), 'Apply not blocked');
+    await key('Escape');
+    await waitFor(`${tdlg} === null`, 'closed');
+  });
+
   await check('dark theme renders the editor', async () => {
     await tipText('<orders.region>: <orders.amount>');
     await ev(`document.documentElement.setAttribute('data-theme', 'dark')`);

@@ -608,3 +608,27 @@
 .hier-levels__empty { color: var(--ink-2); font-size: var(--fs-body); }
 .hier-add { display: flex; align-items: end; gap: var(--s2); }
 .hier-add .params-field { flex: 1 1 auto; }
+
+/* Tooltip modal: lines editor left, live preview right (side by side; stacked on a narrow screen). Tokens only. */
+.dialog.tipdlg:not(.dialog--sm) { width: min(960px, calc(100vw - 2 * var(--s4))); }
+.tipdlg[open] { display: flex; flex-direction: column; max-height: calc(100vh - 2 * var(--s4)); }
+.tipdlg__body { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: var(--s4); overflow: auto; min-height: 0; align-items: start; }
+.tipdlg .dialog__foot { flex: none; }
+.tipdlg__edit { display: grid; gap: var(--s2); min-width: 0; }
+.tipdlg__chips { display: flex; flex-wrap: wrap; gap: var(--s1); }
+.tipdlg__chip { font-size: var(--fs-body); padding: var(--s1) var(--s2); }
+.tipdlg__lines { display: grid; gap: var(--s2); }
+.tipdlg__line { display: grid; grid-template-columns: minmax(120px, 1fr) auto auto auto auto auto auto auto; gap: var(--s1); align-items: center; padding: var(--s1); border: 1px solid transparent; border-radius: var(--r); }
+.tipdlg__line--on { border-color: var(--line-2); background: var(--surface-2); }
+.tipdlg__text { min-width: 0; width: 100%; }
+.tipdlg__tog[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent-ink); }
+.tipdlg__tog, .tipdlg__mv { padding: var(--s1) var(--s2); min-width: var(--ctl-h); }
+.tipdlg__tools { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); }
+.tipdlg__count, .tipdlg__note { color: var(--ink-3); font-size: var(--fs-body); overflow-wrap: anywhere; }
+.tipdlg__error { color: var(--danger-ink); font-size: var(--fs-body); }
+.tipdlg__error:empty { display: none; }
+.tipdlg__side { display: grid; gap: var(--s2); position: sticky; top: 0; min-width: 0; }
+.tipdlg__head { font-weight: 600; }
+.tipdlg__preview { padding: var(--s2) var(--s4); border: 1px solid var(--line-2); border-radius: var(--r); background: var(--surface); box-shadow: var(--elev-8); color: var(--ink); font-size: var(--fs-body); overflow-wrap: anywhere; min-height: var(--s6); }
+.tipdlg__reset { margin-right: auto; }
+@media (max-width: 760px) { .tipdlg__body { grid-template-columns: minmax(0, 1fr); } .tipdlg__line { grid-template-columns: minmax(0, 1fr) auto auto auto; } .tipdlg__side { position: static; } }
