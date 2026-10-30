@@ -58,13 +58,22 @@
 .is-sidebar-collapsed .sidebar__brand-text { display: none; }
 .is-sidebar-collapsed .sidebar__toggle { margin-inline: 0; }
 
-/* Off the Data Source (any worksheet or dashboard tab): the body (connection, database, tables) and its resizer are hidden and the sidebar shrinks to a rail
-   holding only the brand mark, so the worksheet gets the room. The user's own collapsed choice is untouched and returns with the Data Source tab. */
-.app:not([data-view="model"]) { grid-template-columns: var(--topbar-h) 1fr; }
-.app:not([data-view="model"]) .sidebar__body, .app:not([data-view="model"]) .sidebar__resizer,
-.app:not([data-view="model"]) .sidebar__brand-text, .app:not([data-view="model"]) .sidebar__toggle { display: none; }
-.app:not([data-view="model"]) .sidebar__brand { justify-content: center; padding-inline: 0; }
-.app:not([data-view="model"]) .sidebar__mark { display: grid; }
+/* The sidebar body follows the tab (Shell/sidebar.js sets `.app[data-view]`):
+   - model (Data Source): connection, database and tables — the body as built below;
+   - sheet (worksheet): only the Calculated fields and Hierarchies tools; the connection, database and tables are hidden;
+   - board (dashboard): nothing — the body and its resizer are hidden and the sidebar shrinks to a rail holding the brand mark.
+   The user's own collapsed choice is untouched and returns with the Data Source tab. */
+.sidebar__tools { display: none; flex-direction: column; gap: var(--s2); }
+.app[data-view="sheet"] .sidebar__tools { display: flex; }
+.app[data-view="sheet"] .sidebar__section--conn, .app[data-view="sheet"] #schema-section, .app[data-view="sheet"] #tables-section { display: none; }
+.app[data-view="board"] { grid-template-columns: var(--topbar-h) 1fr; }
+.app[data-view="board"] .sidebar__body, .app[data-view="board"] .sidebar__resizer,
+.app[data-view="board"] .sidebar__brand-text, .app[data-view="board"] .sidebar__toggle { display: none; }
+.app[data-view="board"] .sidebar__brand { justify-content: center; padding-inline: 0; }
+.app[data-view="board"] .sidebar__mark { display: grid; }
+/* Each tool is a bento tile like the rest of the body. */
+.sidebar__tools .ws-group { margin: 0; padding: var(--s1); background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r); box-shadow: var(--elev-2); }
+.sidebar__tools .ws-group__head { margin-left: 0; padding: var(--s1) var(--s2); height: var(--ctl-h); font-weight: 600; color: var(--ink); }
 
 /* Bento: the sidebar body is a grid of solid tiles on the glass, 8px apart, 16px from the rail's edges. Tiles: connection, database,
    the table list (takes the remaining height), and the Union / Unpivot pair side by side. One radius, one stroke, one soft lift. */

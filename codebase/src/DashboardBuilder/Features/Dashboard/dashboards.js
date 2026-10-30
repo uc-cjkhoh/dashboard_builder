@@ -160,6 +160,7 @@ const TYPE_ICONS = { numeric: "type-number", text: "type-text", temporal: "type-
 export function initDashboards() {
   const view = document.getElementById("worksheet-view");
   const fieldsEl = document.getElementById("ws-fields");
+  const toolsEl = document.getElementById("ws-tools"); // Calculated fields + Hierarchies live in the sidebar body while a worksheet is open (shell.css)
   // The Marks slots (Color, Size, Label … Filters, Drill, Pages): a grid of three columns that lives in the field pane after Hierarchies.
   // One node for the worksheet's life — every pane rebuild re-inserts it, every header render refills its grid.
   const marksEl = fieldGroup("ws-shelf ws-shelf--marks", "marks", "Marks");
@@ -349,7 +350,8 @@ export function initDashboards() {
     const tables = uniqueTables();
     if (!tables.length) {
       const waiting = entities.size > 0; // tables exist, but none is in a relationship yet
-      fieldsEl.replaceChildren(calcFieldGroup(), hierGroup(new Map()), marksEl, hint(waiting
+      toolsEl?.replaceChildren(calcFieldGroup(), hierGroup(new Map()));
+      fieldsEl.replaceChildren(marksEl, hint(waiting
         ? "Relate your tables in the Data Source first. A table with no relationship can't be used here."
         : "Add tables to the Data Source, then drag their fields onto the shelves."));
       filterFields();
@@ -372,8 +374,9 @@ export function initDashboards() {
       groups.push(group);
     }
     if (seq !== fieldsSeq) return;
-    // The fields are the focus (one tile per table); the tools that shape them — marks, calculated fields, hierarchies — follow, quieter.
-    fieldsEl.replaceChildren(fieldTools(hiddenCount), ...groups, marksEl, calcFieldGroup(), hierGroup(columnsByTable));
+    // The pane: Marks first, then the search and one tile per table. Calculated fields and Hierarchies go to the sidebar.
+    toolsEl?.replaceChildren(calcFieldGroup(), hierGroup(columnsByTable));
+    fieldsEl.replaceChildren(marksEl, fieldTools(hiddenCount), ...groups);
     filterFields();
   }
 
@@ -398,7 +401,7 @@ export function initDashboards() {
   }
   function filterFields() {
     const q = fieldQuery.trim().toLowerCase();
-    for (const group of fieldsEl.querySelectorAll(".ws-fieldset")) {
+    for (const group of [...fieldsEl.querySelectorAll(".ws-fieldset"), ...(toolsEl?.querySelectorAll(".ws-fieldset") ?? [])]) {
       let any = false;
       for (const chip of group.querySelectorAll(".ws-field")) {
         const hit = !q || chip.dataset.search.includes(q);
