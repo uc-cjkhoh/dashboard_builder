@@ -14,7 +14,7 @@
 .board-panel__hint { margin: 0; font-size: var(--fs-body); color: var(--ink-3); line-height: 1.4; }
 .board-panel__item[draggable="true"] { cursor: grab; }
 .board-panel__add { height: var(--ctl-h); padding: 0 var(--s2); font-size: var(--fs-body); flex: none; }
-.board-panel__add-text, .board-panel__add-image, .board-panel__add-spacer { align-self: flex-start; }
+.board-panel__add-text, .board-panel__add-nav, .board-panel__add-image, .board-panel__add-spacer { align-self: flex-start; }
 
 /* Main column: bar + scrolling canvas */
 .board-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: transparent; }
@@ -89,6 +89,9 @@
 .board-widget__body .ws-chart-canvas { inset: var(--s2); min-height: 0; }
 .board-widget .ws-hint { padding: var(--s2); }
 .board-text { padding: var(--s2) var(--s2); }
+.board-nav { display: flex; align-items: center; justify-content: center; padding: var(--s2); }
+.board-nav__btn { max-width: 100%; min-width: 0; display: inline-flex; align-items: center; gap: var(--s1); }
+.board-nav__btn > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .board-image { display: flex; align-items: center; justify-content: center; padding: var(--s2); overflow: hidden; }
 .board-image__img { display: block; max-width: 100%; max-height: 100%; object-fit: contain; }
 .board-spacer { background: repeating-linear-gradient(135deg, transparent 0 7px, var(--line) 7px 8px); } /* hatched on screen so a blank cell block is findable; invisible on paper */
