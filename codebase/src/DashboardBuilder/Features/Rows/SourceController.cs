@@ -18,7 +18,7 @@ public sealed class SourceController : ApiControllerBase
         => RunAsync(async info =>
         {
             RequestRules.ValidateSource(source);
-            var (columns, truncated) = await Gateway.SourceColumnsAsync(info, source, ct);
-            return Results.Ok(new { columns, truncated });
+            var (columns, truncated, lossy) = await Gateway.SourceColumnsAsync(info, source, ct);
+            return Results.Ok(new { columns, truncated, lossy });
         });
 }

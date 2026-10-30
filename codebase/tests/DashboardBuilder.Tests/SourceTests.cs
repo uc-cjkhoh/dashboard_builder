@@ -104,9 +104,49 @@ public class SourceTests : IClassFixture<WebApplicationFactory<Program>>
         var a = C(("n", "UInt64", "numeric"), ("s", "Enum8('x'=1)", "text"), ("d", "Date", "temporal"), ("same", "Int32", "numeric"));
         var b = C(("n", "Int64", "numeric"), ("s", "String", "text"), ("d", "DateTime", "temporal"), ("same", "Int32", "numeric"));
         var built = SourceSql.Build(Un(), [a, b]);
-        Assert.Contains("toFloat64(`n`) AS `n`, toString(`s`) AS `s`, toDateTime64(`d`, 3) AS `d`, `same` FROM `d`.`a`", built.Sql);
-        Assert.Equal(["String", "Float64", "String", "DateTime64(3)", "Int32"], built.Columns.Select(c => c.Type));
+        Assert.Contains("toInt128(`n`) AS `n`, toString(`s`) AS `s`, toDateTime64(`d`, 3) AS `d`, `same` FROM `d`.`a`", built.Sql);
+        Assert.Equal(["String", "Int128", "String", "DateTime64(3)", "Int32"], built.Columns.Select(c => c.Type));
         Assert.Equal(["text", "numeric", "text", "temporal", "numeric"], built.Columns.Select(c => c.Category));
+        Assert.Empty(built.Lossy);
+    }
+    [Fact] public void Nullable_and_LowCardinality_wrappers_are_not_a_difference_no_cast_and_Nullable_is_declared()
+    {
+        var a = C(("n", "Int64", "numeric"), ("s", "LowCardinality(String)", "text"), ("flag", "Bool", "boolean"));
+        var b = C(("n", "Nullable(Int64)", "numeric"), ("s", "String", "text"), ("flag", "Nullable(Bool)", "boolean"));
+        var built = SourceSql.Build(Un(), [a, b]);
+        Assert.DoesNotContain("toInt", built.Sql); Assert.DoesNotContain("toString", built.Sql); Assert.DoesNotContain("toBool", built.Sql);
+        Assert.Equal(["String", "Nullable(Int64)", "String", "Nullable(Bool)"], built.Columns.Select(c => c.Type));
+        Assert.Empty(built.Lossy);
+    }
+    [Fact] public void Large_integers_are_never_cast_through_Float64()
+    {
+        var u = C(("n", "UInt64", "numeric")); var i = C(("n", "Int64", "numeric")); var i32 = C(("n", "Int32", "numeric")); var i64 = C(("n", "Int64", "numeric"));
+        Assert.Equal("Int128", SourceSql.Build(Un(), [u, i]).Columns[1].Type);
+        Assert.Equal("Int64", SourceSql.Build(Un(), [i32, i64]).Columns[1].Type);
+        Assert.Equal("UInt64", SourceSql.Build(Un(), [C(("n", "UInt16", "numeric")), u]).Columns[1].Type);
+        Assert.Equal("Nullable(Int128)", SourceSql.Build(Un(), [u, C(("n", "Nullable(Int64)", "numeric"))]).Columns[1].Type);
+        Assert.Equal("Int256", SourceSql.Build(Un(), [C(("n", "UInt128", "numeric")), i]).Columns[1].Type);
+        Assert.Empty(SourceSql.Build(Un(), [u, i]).Lossy);
+    }
+    [Fact] public void Only_a_truly_lossy_numeric_mix_falls_back_to_Float64_and_says_so()
+    {
+        var built = SourceSql.Build(Un(), [C(("n", "UInt64", "numeric"), ("m", "Float32", "numeric"), ("p", "Decimal(38, 4)", "numeric")),
+            C(("n", "Float64", "numeric"), ("m", "Float64", "numeric"), ("p", "Decimal(10, 2)", "numeric"))]);
+        Assert.Equal(["Float64", "Float64", "Float64"], built.Columns.Skip(1).Select(c => c.Type));
+        Assert.Equal(["n", "p"], built.Lossy);   // Float32 -> Float64 is exact
+        Assert.Contains("toFloat64(`n`)", built.Sql);
+    }
+    [Fact] public void Unpivot_values_follow_the_same_precision_rules()
+    {
+        var t = C(("a", "UInt64", "numeric"), ("b", "Int64", "numeric"));
+        var built = SourceSql.Build(Up(["a", "b"]), [t]);
+        Assert.Equal("Int128", built.Columns[^1].Type);
+        Assert.Contains("({uf0:String}, toInt128(`a`)), ({uf1:String}, toInt128(`b`))", built.Sql);
+        Assert.Empty(built.Lossy);
+        var lossy = SourceSql.Build(Up(["a", "b"]), [C(("a", "UInt64", "numeric"), ("b", "Float64", "numeric"))]);
+        Assert.Equal(["Value"], lossy.Lossy);
+        var nul = SourceSql.Build(Up(["a", "b"]), [C(("a", "Nullable(Int32)", "numeric"), ("b", "Int32", "numeric"))]);
+        Assert.Equal("Nullable(Int32)", nul.Columns[^1].Type); Assert.DoesNotContain("toInt", nul.Sql);
     }
     [Fact] public void A_compound_column_with_differing_types_cannot_be_stacked()
     {
@@ -153,6 +193,7 @@ public class SourceTests : IClassFixture<WebApplicationFactory<Program>>
     {
         var t = C(("a", "UInt64", "numeric"), ("b", "Float32", "numeric"));
         var built = SourceSql.Build(Up(["a", "b"]), [t]);
+        Assert.Equal(["Value"], built.Lossy);
         Assert.Contains("({uf0:String}, toFloat64(`a`)), ({uf1:String}, toFloat64(`b`))", built.Sql);
         Assert.Equal("Float64", built.Columns[^1].Type);
     }

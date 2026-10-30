@@ -17,7 +17,7 @@ public sealed record QuerySource(string Kind, string Db, string Name, string[]? 
 
 /// <summary>A source ready to read: the derived-table SELECT, the columns it exposes, and the values it binds.</summary>
 public sealed record SourceBuild(string Sql, IReadOnlyList<ColumnInfo> Columns, bool ColumnsTruncated,
-    IReadOnlyList<(string Name, string Type, object Value)> Parameters);
+    IReadOnlyList<(string Name, string Type, object Value)> Parameters, IReadOnlyList<string> Lossy);
 
 /// <summary>
 /// Builds the bounded derived table behind a union / unpivot source. Pure (the caller describes the real tables first), so the
@@ -32,18 +32,46 @@ public static class SourceSql
     /// <summary>The real tables a source reads, in order (the order <see cref="Build"/> expects them described).</summary>
     public static IReadOnlyList<string> TablesOf(QuerySource s) => s.Kind == Union ? s.Tables ?? [] : [s.Table ?? ""];
 
-    /// <summary>Several columns of one name must share a ClickHouse type to be stacked as they are; when they differ the value is read as
-    /// one type per kind (numbers as Float64, text as String, dates as DateTime64(3)). A kind with no such type is refused.</summary>
-    internal static (string Type, Func<string, string>? Cast) Unify(IReadOnlyList<ColumnInfo> columns, string label, string field)
+    private static readonly System.Text.RegularExpressions.Regex IntType = new(@"^(U?)Int(8|16|32|64|128|256)$", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    /// <summary>The widest type that holds every one of <paramref name="bases"/> (integers: the next signed width when signed and unsigned mix;
+    /// floats: Float64). Float64 with <c>lossy</c> when no exact type exists (a Decimal in the mix, a 64-bit integer beside a float, UInt256 beside a signed).</summary>
+    internal static (string Type, bool Lossy) NumericTarget(IReadOnlyList<string> bases)
     {
-        if (columns.All(c => c.Type == columns[0].Type)) return (columns[0].Type, null);
-        return columns[0].Category switch
+        var ints = bases.Select(b => IntType.Match(b)).ToList();
+        if (ints.All(m => m.Success))
         {
-            ClickHouseType.Numeric => ("Float64", x => $"toFloat64({x})"),
-            ClickHouseType.Text => ("String", x => $"toString({x})"),
-            ClickHouseType.Temporal => ("DateTime64(3)", x => $"toDateTime64({x}, 3)"),
-            _ => throw new RequestValidationException($"'{label}' has different types, so its values can't be combined.", field),
-        };
+            var signed = ints.Where(m => m.Groups[1].Value == "").Select(m => int.Parse(m.Groups[2].Value)).ToList();
+            var unsigned = ints.Where(m => m.Groups[1].Value == "U").Select(m => int.Parse(m.Groups[2].Value)).ToList();
+            if (unsigned.Count == 0) return ($"Int{signed.Max()}", false);
+            if (signed.Count == 0) return ($"UInt{unsigned.Max()}", false);
+            var need = Math.Max(signed.Max(), unsigned.Max() * 2);
+            return need <= 256 ? ($"Int{new[] { 8, 16, 32, 64, 128, 256 }.First(w => w >= need)}", false) : ("Float64", true);
+        }
+        var onlyFloatsAndInts = bases.All(b => b is "Float32" or "Float64" || IntType.IsMatch(b));
+        var wideInt = ints.Any(m => m.Success && int.Parse(m.Groups[2].Value) >= 64);
+        return ("Float64", !onlyFloatsAndInts || wideInt);
+    }
+
+    /// <summary>Several columns of one name are stacked as they are when they differ only by Nullable / LowCardinality (Nullable is then
+    /// declared on the result). Otherwise they are read as one type per kind: integers the widest exact integer type, other numbers Float64
+    /// (<c>Lossy</c> when large values may round), text String, dates DateTime64(3). A kind with no such type is refused.</summary>
+    internal static (string Type, Func<string, string>? Cast, bool Lossy) Unify(IReadOnlyList<ColumnInfo> columns, string label, string field)
+    {
+        if (columns.All(c => c.Type == columns[0].Type)) return (columns[0].Type, null, false);
+        var bases = columns.Select(c => ClickHouseType.BaseType(c.Type)).ToList();
+        var nullable = columns.Any(c => ClickHouseType.IsNullable(c.Type));
+        string Wrap(string t) => nullable ? $"Nullable({t})" : t;
+        if (bases.Distinct().Count() == 1) return (Wrap(bases[0]), null, false);
+        switch (columns[0].Category)
+        {
+            case ClickHouseType.Numeric:
+                var (type, lossy) = NumericTarget(bases.Distinct().ToList());
+                return (Wrap(type), x => $"to{type}({x})", lossy);
+            case ClickHouseType.Text: return (Wrap("String"), x => $"toString({x})", false);
+            case ClickHouseType.Temporal: return (Wrap("DateTime64(3)"), x => $"toDateTime64({x}, 3)", false);
+            default: throw new RequestValidationException($"'{label}' has different types, so its values can't be combined.", field);
+        }
     }
 
     /// <summary>The union's derived table: each table's shared columns (cast alike where their types differ) after a bound source label.</summary>
@@ -64,7 +92,7 @@ public static class SourceSql
         }
         var columns = new List<ColumnInfo> { new(label, "String", ClickHouseType.Text) };
         columns.AddRange(picked.Select((c, i) => new ColumnInfo(c.Name, unified[i].Type, c.Category)));
-        return new SourceBuild(string.Join(" UNION ALL ", branches), columns, truncated, parameters);
+        return new SourceBuild(string.Join(" UNION ALL ", branches), columns, truncated, parameters, picked.Where((_, i) => unified[i].Lossy).Select(c => c.Name).ToList());
     }
 
     /// <summary>The unpivot's derived table: the kept columns beside one (Field, Value) pair per unpivoted column, read once via arrayJoin.</summary>
@@ -74,7 +102,7 @@ public static class SourceSql
         var cols = s.Columns ?? [];
         ClickHouseGateway.CheckUnpivot(described, cols, keep);
         var byName = described.ToDictionary(c => c.Name, c => c, StringComparer.Ordinal);
-        var (valueType, cast) = Unify(cols.Select(c => byName[c]).ToList(), cols[0], "source.columns");
+        var (valueType, cast, lossy) = Unify(cols.Select(c => byName[c]).ToList(), cols[0], "source.columns");
         var used = keep.Concat(cols).ToList();
         var field = "Field"; while (used.Contains(field)) field += "_";
         var value = "Value"; while (used.Contains(value)) value += "_";
@@ -89,7 +117,7 @@ public static class SourceSql
         var columns = keep.Select(k => byName[k]).ToList();
         columns.Add(new ColumnInfo(field, "String", ClickHouseType.Text));
         columns.Add(new ColumnInfo(value, valueType, byName[cols[0]].Category));
-        return new SourceBuild(sql, columns, false, parameters);
+        return new SourceBuild(sql, columns, false, parameters, lossy ? [value] : []);
     }
 
     /// <summary>The derived table for a source; <paramref name="described"/> holds each of <see cref="TablesOf"/>'s columns, in order.</summary>

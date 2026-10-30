@@ -680,12 +680,12 @@ public sealed partial class ClickHouseGateway
     /// <summary>The columns a union / unpivot source exposes (worksheet fields), and whether a wide union was cut to
     /// <see cref="ApiLimits.MaxRowsColumns"/>. Tables and columns are catalog-validated; nothing is read from them. Read-only.</summary>
     /// <exception cref="UnknownIdentifierException">Unknown database, table or column.</exception>
-    public async Task<(IReadOnlyList<ColumnInfo> Columns, bool Truncated)> SourceColumnsAsync(ClickHouseConnectionInfo info, QuerySource src, CancellationToken ct)
+    public async Task<(IReadOnlyList<ColumnInfo> Columns, bool Truncated, IReadOnlyList<string> Lossy)> SourceColumnsAsync(ClickHouseConnectionInfo info, QuerySource src, CancellationToken ct)
     {
         var described = new List<IReadOnlyList<ColumnInfo>>();
         foreach (var t in SourceSql.TablesOf(src)) described.Add(await DescribeColumnsAsync(info, src.Db, t, ct));
         var built = SourceSql.Build(src, described);
-        return (built.Columns, built.ColumnsTruncated);
+        return (built.Columns, built.ColumnsTruncated, built.Lossy);
     }
 
     /// <summary>The unpivoted columns must exist and share one kind (text / number / date …) so the Value column is
