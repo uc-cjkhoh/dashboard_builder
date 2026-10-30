@@ -40,6 +40,13 @@ export function linkIssue({ relationships, from, to, fromCategory, toCategory, f
 
 export function linkProblem(args) { return linkIssue(args)?.message ?? null; }
 
+/** The order a card's pinned key rows take so its links never cross: by where the partner card sits (top edge, top to bottom),
+ *  then by when the relationship was made. Both cards of a pair see the same order, so their links run in parallel.
+ *  `rows` is [{ column, partnerTop, seq }]; returns the column names. */
+export function pinOrder(rows) {
+  return [...rows].sort((a, b) => a.partnerTop - b.partnerTop || a.seq - b.seq).map((r) => r.column);
+}
+
 /** The cards held out of worksheets: table cards in no relationship while the model has two or more of them. `entities` / `relationships` are the store's Maps. */
 export function heldOutCards(entities, relationships) {
   const cards = [...(entities?.values?.() ?? [])].map((e) => ({ id: e.id, source: Boolean(e.source), db: e.db, table: e.table }));

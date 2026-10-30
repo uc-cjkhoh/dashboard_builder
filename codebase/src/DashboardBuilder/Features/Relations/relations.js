@@ -1,5 +1,5 @@
 import { entities, relationships, bus, emit } from "../Core/store.js";
-import { linkIssue, matchingColumns, keysCompatible, kindLabel, unlinkedCards, joinChoices, joinBadge, joinSelection, joinFromSelection, isLegacyLeft } from "./relation-rules.js";
+import { linkIssue, pinOrder, matchingColumns, keysCompatible, kindLabel, unlinkedCards, joinChoices, joinBadge, joinSelection, joinFromSelection, isLegacyLeft } from "./relation-rules.js";
 import { toast, makeButton, openDialog, closeDialog } from "../Core/ui.js";
 import { api } from "../Core/api.js";
 import { previewRequest } from "./join-preview-model.js";
@@ -277,7 +277,25 @@ function syncKeyStrips() {
       }
     }
     entity.el.classList.toggle("entity--has-keys", strip.children.length > 0);
+    orderStrip(entity, strip);
   }
+}
+
+// Pinned rows follow their partner, not the column order: sorted by the partner card's position, then by relationship, so the links
+// between two cards run in parallel instead of crossing (a card with partners above and below lists the upper partner's keys first).
+function orderStrip(entity, strip) {
+  if (strip.children.length < 2) return;
+  const info = new Map(); // column -> { partnerTop, seq }
+  let seq = 0;
+  for (const r of relationships.values()) {
+    seq++;
+    for (const [mine, theirs] of [[r.from, r.to], [r.to, r.from]])
+      if (mine.entityId === entity.id) info.set(mine.column, { partnerTop: entities.get(theirs.entityId)?.el.offsetTop ?? 0, seq });
+  }
+  const rows = [...strip.children];
+  const want = pinOrder(rows.map((row) => ({ column: row.dataset.column, ...(info.get(row.dataset.column) ?? { partnerTop: 0, seq: 0 }) })));
+  if (want.every((c, i) => c === rows[i].dataset.column)) return; // already in order: leave the DOM alone
+  for (const c of want) strip.append(rows.find((row) => row.dataset.column === c));
 }
 
 // Every table card belongs to a relationship; one that doesn't says so (text + dashed outline, never colour alone).
