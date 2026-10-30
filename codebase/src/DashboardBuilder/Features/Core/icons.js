@@ -56,6 +56,7 @@ export const PATHS = Object.freeze({
   edit: "M4 16l1-4 8-8 3 3-8 8zM11.5 5.5l3 3",
   power: "M10 3v6M6.2 5.4a5.2 5.2 0 1 0 7.6 0",
   plus: "M10 4v12M4 10h12",
+  minus: "M4 10h12",
   dot: "M10 6.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z",
   // Light / dark toggle (Shell/scheme-toggle.js).
   sun: "M10 6.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zM10 2.5V4M10 16v1.5M2.5 10H4M16 10h1.5M4.7 4.7l1.1 1.1M14.2 14.2l1.1 1.1M4.7 15.3l1.1-1.1M14.2 5.8l1.1-1.1",

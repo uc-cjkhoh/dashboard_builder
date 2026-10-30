@@ -29,7 +29,7 @@ import { keyAliasMaps, withMemberLabels } from "./member-labels.js";
  *                highlights; false = a static widget: no mark selection, drill or legend handlers
  *   selected     the dashboard selection the source widget highlights ({ db, table, column, value }) — bar / stacked / pie / donut fade the rest
  *   hooks        { onSelect(dimField, raw), onDrill(raw), onLegend({ sheet, field, name, raw, bucketed }), legendFocus(),
- *                  onTooltipFields(sheet, list), onMemberColors(sheet, field, members) } — what the host does with them
+ *                  onTooltipFields(sheet, list), onMemberColors(sheet, field, members), onCollapse(axis, key) } — what the host does with them
  */
 
 /**
@@ -84,7 +84,7 @@ function draw(container, rc, sheet, result, cmp) {
     return;
   }
   // Table + P19 Text mark both render as the crosstab text grid (values written into cells).
-  if (type === "table" || type === "text") { container.append(crosstabTable(sheet, result, fmtVal, fmtCat, result.partial, rc.calcPercent)); return; }
+  if (type === "table" || type === "text") { container.append(crosstabTable(sheet, result, fmtVal, fmtCat, result.partial, rc.calcPercent, rc.interactive && rc.hooks.onCollapse ? { onToggle: rc.hooks.onCollapse } : null)); return; }
 
   // P18 marks: re-derive the measure roles so size / continuous-colour / aux columns don't turn into spurious series.
   // Shelf measures (only) become series; the rest feed the mark channels.

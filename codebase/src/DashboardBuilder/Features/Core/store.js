@@ -220,6 +220,7 @@ export const emptySheet = () => ({
   // tooltipStyle (tooltip modal): per-line { size, bold, italic, color } aligned to tooltipText's lines (Dashboard/tooltip-style.js); the key exists only once a line is styled
   tooltipText: null, // T01-19: tooltip template with <Field> placeholders (Dashboard/tooltip-model.js); null = automatic
   title: null, caption: null, showTitle: true, showFilterCards: true, // P30 filter cards above the chart
+  // collapsed (T03-29): crosstab headers shown collapsed { rows: [key…], cols: [key…] } (Dashboard/collapse-model.js); the key exists only once a header is collapsed
   analytics: null, // P21: { ref, band, trend, forecast, totals } (Dashboard/analytics-model.js); null = none // P23: null = the tab name / an automatic summary
   urlAction: null, // P39: { label, template } — "Open <label>" on the selection chip (Dashboard/action-model.js)
 });

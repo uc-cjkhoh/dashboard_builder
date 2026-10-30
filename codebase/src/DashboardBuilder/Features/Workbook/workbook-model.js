@@ -13,6 +13,7 @@ import { cleanTheme, DEFAULT_THEME } from "../Core/theme-model.js";
 import { normalizeJoinType } from "../Relations/relation-rules.js";
 import { cleanAction } from "../Dashboard/action-model.js";
 import { cleanMemberColors } from "../Dashboard/colour-model.js";
+import { cleanCollapsed } from "../Dashboard/collapse-model.js";
 import { checkTooltipText } from "../Dashboard/tooltip-model.js";
 import { checkTooltipStyle } from "../Dashboard/tooltip-style.js";
 import { markerSizeError } from "../Dashboard/mark-style-model.js";
@@ -397,6 +398,7 @@ export function sanitizeSheet(saved, where, issues) {
   sheet.memberColors = cleanMemberColors(s.memberColors, where, issues); // T01-20
   sheet.showFilterCards = s.showFilterCards !== false; // P30
   sheet.analytics = cleanAnalytics(s.analytics, where, issues); // P21
+  { const c = cleanCollapsed(s.collapsed, where, issues); if (c) sheet.collapsed = c; } // T03-29
   sheet.showTitle = s.showTitle === undefined ? true : s.showTitle === true || (s.showTitle !== false && (issues.push(`${where}: showTitle must be on or off — reset.`), true));
   return sheet;
 }
