@@ -53,7 +53,7 @@
 /* Ghost icon buttons are 32px boxes around a 16px glyph: pull them out by the 8px slack so the glyphs,
    not the boxes, align — chevron over the row checkboxes, ✕ flush with the type badges. */
 .entity__head > .iconbtn:first-child { margin-left: calc(-1 * var(--s2)); }
-.entity__head > .iconbtn:last-child { margin-right: calc(-1 * var(--s2) - 2px); }  /* the ✕ strokes sit 2px inside their box */
+.entity__head > .iconbtn:last-child { margin-right: calc(-1 * (var(--s2) + var(--s1))); }  /* the ✕ strokes sit 4px inside their box, so its ink ends where the type badges end */
 /* Title text starts where the column names do: the chevron box is 32px, the checkbox + key icon below take 16 + 8 + 16 + 8. */
 .entity__head > .entity__title { padding-left: calc(var(--s4) - 2px); }  /* the 14px key glyph is 2px narrower than its 16px box */
 .entity__db { color: var(--ink-3); font-weight: 400; }
