@@ -61,6 +61,8 @@
 }
 /* One group look for Calculated fields, Hierarchies and every table: chevron + bold name, 4px between rows, 8px between groups. */
 .ws-group { display: flex; flex-direction: column; gap: var(--s1); margin-bottom: var(--s2); }
+/* <details> slots its content in one anonymous box, so the flex gap only separates the summary from it: space the rest here. */
+.ws-group > :not(summary) + * { margin-top: var(--s1); }
 .ws-group__head { display: flex; align-items: center; gap: var(--s1); margin-left: calc(-1 * var(--s1)); cursor: pointer; list-style: none;
   font-size: var(--fs-body); font-weight: 700; color: var(--ink-2); }
 .ws-group__head::-webkit-details-marker { display: none; }
@@ -104,7 +106,7 @@
 /* Tier 2 — the primary shelves (Columns/Rows) are direct children of .ws-shelves; each shelf is a
    full-width row of [aligned label | drop zone]. */
 .ws-shelf-stack { display: flex; flex-direction: column; gap: var(--s2); }
-.ws-shelf { display: grid; grid-template-columns: 72px 1fr; align-items: center; gap: var(--s2); min-width: 0; }
+.ws-shelf { display: grid; grid-template-columns: 88px 1fr; align-items: center; gap: var(--s2); min-width: 0; }
 .ws-shelf__label { font-size: var(--fs-body); font-weight: 700; color: var(--ink-3); text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; }
 .ws-shelf__zone {
   display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap;
@@ -211,6 +213,7 @@
 .ws-marks__row .ws-tool { position: relative; flex-direction: column; justify-content: center; gap: var(--s1); height: auto; min-width: 0;
   padding: var(--s2) var(--s1); border-color: var(--line); background: var(--surface); }
 .ws-marks__row .ws-tool__text { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-marks__row .ws-tool.is-active { font-weight: 400; } /* bold would clip "Filters" in a 60px tile; the accent edge marks it */
 .ws-marks__row .ws-tool.is-quiet:not(.is-set):not(.is-active) { color: var(--ink-3); }
 .ws-marks__row .ws-tool__badge { position: absolute; top: var(--s1); right: var(--s1); }
 /* Ghost on glass: no fill at rest (the icon + label identify it); a frosted pill on hover; sinks on press;
@@ -455,10 +458,11 @@
   .ws-fields-toggle { display: inline-flex; }
   .ws-main { overflow: auto; }
   .ws-shelves { padding: var(--s2) var(--s2); }
-  .ws-shelf { grid-template-columns: 68px 1fr; }
+  .ws-shelf { grid-template-columns: 84px 1fr; }
   .ws-chart-card { flex: none; min-height: 380px; }
   .ws-chart-head { padding-inline: var(--s2); }
   /* The view bar wraps: chart type on its own line, then sort + the icon group sharing the next. */
+  .ws-viewbar__group { flex-wrap: wrap; }  /* the left group wraps instead of running past the card */
   .ws-viewbar__group--right { margin-left: 0; width: 100%; justify-content: space-between; flex-wrap: wrap; gap: var(--s2); }
   .ws-viewbar__icons > :last-child { margin-right: 0; }
   .ws-pick__text { max-width: 140px; }

@@ -173,7 +173,7 @@ button { font: inherit; }
 .menu { position: relative; }
 /* Solid, never glass: the list floats over content, and blurred text behind it would read through. */
 .menu__list { position: absolute; right: 0; top: calc(100% + var(--s1)); z-index: 50; min-width: 200px; padding: var(--s1);
-  background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r); box-shadow: var(--elev-16); display: grid; }
+  background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r); box-shadow: var(--elev-16); display: grid; gap: var(--s1); }  /* items never touch: 4px between rows (and columns) */
 .menu__item { display: flex; align-items: center; gap: var(--s2); height: var(--ctl-h); padding: 0 var(--s2); border: 0;
   border-radius: var(--r); background: transparent; color: var(--ink); text-align: left; cursor: pointer; font-size: var(--fs-body); }
 .menu__item:hover, .menu__item:focus-visible { background: var(--surface-3); }
@@ -191,7 +191,7 @@ button { font: inherit; }
 .ctx-menu { position: fixed; right: auto; z-index: 90; transform-origin: top left; max-height: calc(100vh - 16px); overflow: auto; }
 .ctx-menu__custom { padding: var(--s1) var(--s2); display: flex; flex-wrap: wrap; gap: var(--s1); align-items: center; }
 .menu__heading { padding: var(--s1) var(--s2) var(--s1); font-size: var(--fs-body); font-weight: 600; color: var(--ink-3); grid-column: 1 / -1; }
-.menu__sep { height: 1px; margin: var(--s1) 0; background: var(--line); grid-column: 1 / -1; }
+.menu__sep { height: 1px; margin: 0; background: var(--line); grid-column: 1 / -1; }
 
 /* ---- Resize handle (Core/resizer.js) — a 6px hit strip with a 2px accent line on hover/focus/drag ---- */
 .resizer { width: 6px; cursor: col-resize; touch-action: none; }
@@ -232,10 +232,13 @@ body.is-resizing { cursor: col-resize; user-select: none; }
 /* ---- Inputs -------------------------------------------------------------- */
 .input, .select { height: var(--ctl-h); padding: 0 var(--s2); border: 1px solid var(--line-2); border-radius: var(--r);
   background: var(--surface); color: var(--ink); font: inherit; font-size: var(--fs-body); min-width: 0; transition: border-color var(--dur-fast) var(--ease); }
-/* The sidebar select matches the inputs (height, edge, radius, padding, focus) and swaps the UA arrow for a token-coloured chevron. */
-.sidebar .select { appearance: none; -webkit-appearance: none; width: 100%; padding-right: calc(var(--s2) + var(--s4) + var(--s1));
+/* Every single-choice select swaps the UA arrow (flush to the border) for a token-coloured chevron on the 16px gutter; the sidebar's is full width. */
+select.select:not([multiple]), select.input:not([multiple]) { appearance: none; -webkit-appearance: none; padding-right: calc(var(--s2) + var(--s4) + var(--s1));
   background-image: linear-gradient(45deg, transparent 50%, var(--ink-3) 50%), linear-gradient(135deg, var(--ink-3) 50%, transparent 50%);
   background-position: calc(100% - 14px) 50%, calc(100% - 10px) 50%; background-size: 4px 4px; background-repeat: no-repeat; text-overflow: ellipsis; }
+.sidebar .select { width: 100%; }
+/* Pill selects are 16px tall inside a pill: they keep the compact native look. */
+.ws-pill select.select { appearance: auto; -webkit-appearance: auto; background-image: none; padding-right: var(--s2); }
 .select option { background: var(--surface); color: var(--ink); } /* the open list follows the theme, like the closed control */
 .sidebar .select:disabled { opacity: .55; cursor: not-allowed; }
 .input:hover, .select:hover { border-color: var(--ink-3); }
@@ -246,7 +249,7 @@ body.is-resizing { cursor: col-resize; user-select: none; }
 .form-field input[type][aria-invalid="true"] { border-color: var(--danger-solid); color: var(--danger-ink); }
 
 /* Light-world form bits (dialogs / dashboard) */
-.select--light { color: var(--ink); background: var(--surface); border-color: var(--line-2); box-shadow: none; }
+.select--light { color: var(--ink); background-color: var(--surface); border-color: var(--line-2); box-shadow: none; }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s2); }
 .form-grid .form-field label { color: var(--ink-2); font-size: var(--fs-body); font-weight: 600; }
 .form-field--wide { grid-column: 1 / -1; }

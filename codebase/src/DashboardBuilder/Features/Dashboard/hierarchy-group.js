@@ -18,7 +18,7 @@ export function hierarchyGroup({ hierarchies, columnsByTable, canApply, onApply,
   make.disabled = hierarchies.length >= LIMITS.hierarchies;
   make.title = make.disabled ? `A workbook can have at most ${LIMITS.hierarchies} hierarchies.` : "Name an ordered list of same-table fields to drill through";
   make.addEventListener("click", () => onManage(true));
-  const manage = makeButton("Hierarchies…", "btn");
+  const manage = makeButton("Hierarchies…", "btn calc-group__new");
   manage.title = "Rename, re-order or delete hierarchies";
   manage.addEventListener("click", () => onManage(false));
   row.append(make, manage);
