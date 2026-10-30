@@ -13,10 +13,10 @@ test("malformed payloads are ignored", () => {
   for (const raw of [null, "", "x", "{}", '{"entityId":1,"column":"a"}', '{"entityId":"e","column":""}', "[1]"]) assert.equal(parseColumnDrag(raw), null);
 });
 test("a compatible pair on different cards is ok", () => {
-  assert.deepEqual(dropDecision({ relationships: [], from, to }), { ok: true, problem: null });
+  assert.deepEqual(dropDecision({ relationships: [], from, to }), { ok: true, problem: null, kind: null });
 });
 test("no target means not ok and no message", () => {
-  assert.deepEqual(dropDecision({ relationships: [], from, to: null }), { ok: false, problem: null });
+  assert.deepEqual(dropDecision({ relationships: [], from, to: null }), { ok: false, problem: null, kind: null });
 });
 test("same card, duplicate and kind mismatch are refused with the existing wording", () => {
   assert.match(dropDecision({ relationships: [], from, to: { ...to, entityId: "e1" } }).problem, /different table/);

@@ -23,15 +23,27 @@ export function unlinkedCards(cards, relationships) {
   return relatable.filter((c) => !linked.has(c.id)).map((c) => c.id);
 }
 
-export function linkProblem({ relationships, from, to, fromCategory, toCategory, fromLabel, toLabel }) {
+/** The word a column's category goes by on screen: number, text, date, boolean (anything else keeps its own name). */
+export const kindLabel = (category) => KIND[category] ?? category ?? "unknown";
+
+/** Why a link can't be made, or null. `kind` is "type" when the two columns hold different kinds of value (or a kind keys can't use), else "other". */
+export function linkIssue({ relationships, from, to, fromCategory, toCategory, fromLabel, toLabel }) {
   const rels = [...relationships]; // may be an iterator: read it more than once
-  if (from.entityId === to.entityId) return "Pick a key on a different table.";
-  if (findDuplicate(rels, from, to)) return `${fromLabel} and ${toLabel} are already related.`;
+  if (from.entityId === to.entityId) return { kind: "other", message: "Pick a key on a different table." };
+  if (findDuplicate(rels, from, to)) return { kind: "other", message: `${fromLabel} and ${toLabel} are already related.` };
   for (const [end, label] of [[from, fromLabel], [to, toLabel]])
-    if (relationshipOf(rels, end)) return `${label} is already in a relationship. A column can be in only one.`;
+    if (relationshipOf(rels, end)) return { kind: "other", message: `${label} is already in a relationship. A column can be in only one.` };
   if (!keysCompatible(fromCategory, toCategory))
-    return `Can't relate ${fromLabel} (${fromCategory}) to ${toLabel} (${toCategory}) — join keys must hold the same kind of value.`;
+    return { kind: "type", message: `Can't relate ${fromLabel} (${fromCategory}) to ${toLabel} (${toCategory}) — join keys must hold the same kind of value.` };
   return null;
+}
+
+export function linkProblem(args) { return linkIssue(args)?.message ?? null; }
+
+/** Up to `limit` column names of `columns` ([{ name, category }]) that could be joined to a `category` key and are not in a relationship yet. */
+export function matchingColumns(columns, category, usedNames = [], limit = 5) {
+  const used = new Set(usedNames);
+  return columns.filter((c) => keysCompatible(category, c.category) && !used.has(c.name)).slice(0, limit).map((c) => c.name);
 }
 
 // T02-12 / T02-13 join types. A relationship runs FROM → TO: FROM is the left side, TO the right.

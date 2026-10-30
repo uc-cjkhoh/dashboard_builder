@@ -106,3 +106,21 @@ test("a card in no relationship is flagged once there are two relatable cards", 
   assert.deepEqual(unlinkedCards([{ id: "e1" }, { id: "e2" }, { id: "u", source: true }], [rel]), []);
   assert.deepEqual(unlinkedCards([{ id: "e1" }, { id: "u", source: true }], []), []);
 });
+
+import { linkIssue, matchingColumns, kindLabel } from "../../src/DashboardBuilder/Features/Relations/relation-rules.js";
+test("a type mismatch is reported as a type issue; other refusals are not", () => {
+  assert.equal(linkIssue({ ...base, toCategory: "text" }).kind, "type");
+  assert.equal(linkIssue({ ...base, toCategory: "compound", fromCategory: "compound" }).kind, "type");
+  assert.equal(linkIssue({ ...base, to: { entityId: "e1", column: "x" } }).kind, "other");
+  assert.equal(linkIssue(base), null);
+});
+test("kinds read as number, text, date, boolean", () => {
+  assert.deepEqual(["numeric", "text", "temporal", "boolean", "compound"].map(kindLabel), ["number", "text", "date", "boolean", "compound"]);
+});
+test("matching columns are the same kind, not already used, at most five", () => {
+  const cols = [{ name: "a", category: "numeric" }, { name: "b", category: "text" }, { name: "c", category: "numeric" }, { name: "d", category: "numeric" }];
+  assert.deepEqual(matchingColumns(cols, "numeric"), ["a", "c", "d"]);
+  assert.deepEqual(matchingColumns(cols, "numeric", ["c"]), ["a", "d"]);
+  assert.deepEqual(matchingColumns(cols, "numeric", [], 2), ["a", "c"]);
+  assert.deepEqual(matchingColumns(cols, "boolean"), []);
+});

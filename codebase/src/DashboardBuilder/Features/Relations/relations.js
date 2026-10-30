@@ -1,10 +1,11 @@
 import { entities, relationships, bus, emit } from "../Core/store.js";
-import { linkProblem, unlinkedCards, joinChoices, joinBadge, joinSelection, joinFromSelection, isLegacyLeft } from "./relation-rules.js";
+import { linkIssue, matchingColumns, keysCompatible, kindLabel, unlinkedCards, joinChoices, joinBadge, joinSelection, joinFromSelection, isLegacyLeft } from "./relation-rules.js";
 import { toast, makeButton, openDialog, closeDialog } from "../Core/ui.js";
 import { api } from "../Core/api.js";
 import { previewRequest } from "./join-preview-model.js";
 import { buildJoinCheck } from "./join-check.js";
 import { linkSides, linkRoute, roundedPath } from "./link-route.js";
+import { openTypeWarning } from "./type-warning.js";
 import { COLUMN_MIME, encodeColumnDrag, parseColumnDrag, dropDecision } from "./link-drag.js";
 
 // Relationships (P5): logical, typed links the user draws between the join keys checked on two
@@ -75,7 +76,7 @@ function markDraggable(entityId) {
 function endOf(entityId, column) {
   const e = entities.get(entityId);
   const c = e?.columns?.find((x) => x.name === column);
-  return e && c && !e.source ? { entityId, column, category: c.category, table: e.table } : null;
+  return e && c && !e.source ? { entityId, column, category: c.category, type: c.type, table: e.table } : null;
 }
 
 function rowEnd(row) {
@@ -116,8 +117,8 @@ function initColumnDrag() {
     if (entities.get(row.closest(".entity")?.dataset.entityId)?.source) { toast("A union or unpivot can't be related to a table yet.", "danger"); return; }
     const a = endOf(from.entityId, from.column), b = rowEnd(row);
     if (!a || !b) return;
-    const { ok, problem } = dropDecision({ relationships: relationships.values(), from: a, to: b });
-    if (!ok) { if (problem) toast(problem, "danger"); return; }
+    const { ok, problem, kind } = dropDecision({ relationships: relationships.values(), from: a, to: b });
+    if (!ok) { refuse(problem, kind, a, b); return; }
     openCardinalityDialog({
       current: "1:N",
       tables: [a.table, b.table],
@@ -130,6 +131,15 @@ function initColumnDrag() {
     });
   });
   canvas.addEventListener("dragend", () => { dragFrom = null; clearDropMarks(); });
+}
+
+/** A refused link: a type mismatch gets a modal (both columns, their types, columns that would fit); anything else a toast. */
+function refuse(problem, kind, a, b) {
+  if (kind !== "type") { if (problem) toast(problem, "danger"); return; }
+  const used = [...relationships.values()].flatMap((r) => [r.from, r.to]).filter((e) => e.entityId === b.entityId).map((e) => e.column);
+  const names = matchingColumns(entities.get(b.entityId)?.columns ?? [], a.category, used);
+  const joinable = keysCompatible(a.category, a.category); // a compound / other column has no kind to match
+  openTypeWarning({ from: a, to: b, suggestions: joinable ? { table: b.table, kind: kindLabel(a.category), names } : null });
 }
 
 function tickKey(entityId, column) {
@@ -158,11 +168,11 @@ function onConnectorClick(entityId, column, handle) {
     toast("Pick a join key on another entity to relate.", "info");
     return;
   }
-  const end = (id, col) => { const e = entities.get(id); return { cat: e?.columns?.find((c) => c.name === col)?.category, label: `${e?.table}.${col}` }; };
-  const p = end(pending.entityId, pending.column), q = end(entityId, column);
-  const problem = linkProblem({ relationships: relationships.values(), from: { entityId: pending.entityId, column: pending.column },
-    to: { entityId, column }, fromCategory: p.cat, toCategory: q.cat, fromLabel: p.label, toLabel: q.label });
-  if (problem) { clearPending(); toast(problem, "danger"); return; }
+  const a = endOf(pending.entityId, pending.column), b = endOf(entityId, column);
+  const issue = a && b && linkIssue({ relationships: relationships.values(), from: { entityId: a.entityId, column: a.column },
+    to: { entityId: b.entityId, column: b.column }, fromCategory: a.category, toCategory: b.category,
+    fromLabel: `${a.table}.${a.column}`, toLabel: `${b.table}.${b.column}` });
+  if (issue) { clearPending(); refuse(issue.message, issue.kind, a, b); return; }
   const from = { entityId: pending.entityId, column: pending.column };
   const to = { entityId, column };
   clearPending();
