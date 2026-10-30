@@ -88,3 +88,9 @@
 .col-row__profile { opacity: 0; flex: none; transition: opacity var(--dur-fast) var(--ease); }
 .col-row:hover .col-row__profile, .col-row:focus-within .col-row__profile { opacity: 1; }
 @media (pointer: coarse) { .col-row__profile { opacity: 1; } }
+
+/* Bento tiles: the search box and the database picker lose their own borders — the tile is the frame. */
+.bento--list .table-search .input { height: 40px; border: 0; border-radius: 0; background: transparent; }
+.bento--list .table-search .icon { left: calc(var(--s1) + var(--s2)); }
+.sidebar__section--db .select { width: 100%; border: 0; background-color: transparent; font-weight: 600; }
+.bento--list .table-search .input { padding-left: calc(var(--s1) + var(--s2) + 16px + var(--s2)); }  /* text starts where a row's name does */
