@@ -76,8 +76,9 @@
 .app[data-view="sheet"] .sidebar__body { padding: var(--s2) 0; align-items: center; }
 /* The worksheet tools are two icon-only tiles (calculated fields, hierarchies); each opens its dialog. */
 .sidebar__tools { flex-direction: column; }
-.sidebar__tool { width: 40px; height: 40px; background: var(--surface); border: 1px solid var(--line-2); box-shadow: var(--elev-2); color: var(--ink-2); }
-.sidebar__tool:hover { background: var(--surface); border-color: var(--ink-3); color: var(--ink); box-shadow: var(--elev-8); }
+/* Clickable on glass = more solid than the glass: a ≥ 3:1 edge (--ctl-edge) and full-ink icon, so the tile reads in light and dark. */
+.glass .sidebar__tool { width: 40px; height: 40px; background: var(--glass-ctl); border: 1px solid var(--ctl-edge); box-shadow: inset 0 1px 0 var(--glass-rim), var(--elev-2); color: var(--ink); }
+.glass .sidebar__tool:not(:disabled):hover { background: var(--glass-ctl-hover); border-color: var(--ink-3); color: var(--accent-ink); box-shadow: inset 0 1px 0 var(--glass-rim), var(--elev-8); }
 .sidebar__tool:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 /* Bento: the sidebar body is a grid of solid tiles on the glass, 8px apart, 16px from the rail's edges. Tiles: connection, database,
