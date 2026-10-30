@@ -83,6 +83,7 @@ public static class CalcCompiler
                 "lower" => $"lowerUTF8({a[0]})",
                 "upper" => $"upperUTF8({a[0]})",
                 "trim" => $"trimBoth({a[0]})",
+                "text" => $"toString({a[0]})",
                 "len" => $"toFloat64(lengthUTF8({a[0]}))",
                 "left" => $"leftUTF8({a[0]}, {a[1]})",
                 "right" => $"rightUTF8({a[0]}, {a[1]})",

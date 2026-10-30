@@ -372,6 +372,33 @@ async function main() {
     ok('(k) plain countNonNull: measure named "non-null price" in JSON and the CSV header; N=1 S=1 E=1');
   }
 
+  // ================= (l) TEXT() / STR(): numbers, dates and text become text, compared with toString on ClickHouse =================
+  {
+    const txt = (arg) => ({ k: 'fn', fn: 'text', args: [arg] });
+    const run = async (label, expr) => (await query({ ...base(), rowDimensions: [calcDim(label, expr)], measures: [{ ...col('qty'), agg: 'sum' }] }, label)).rows;
+    const oracle = (sqlExpr) => select(`SELECT ${sqlExpr} AS k, sum(qty) FROM ${T} GROUP BY k ORDER BY k`);
+    const cases = [
+      ['TEXT(placed)', txt(f('placed')), 'toString(placed)'],
+      ['TEXT(qty)', txt(f('qty')), 'toString(toFloat64(qty))'],
+      ['TEXT(amount)', txt(f('amount')), 'toString(toFloat64(amount))'],
+      ['TEXT(price)', txt(f('price')), 'toString(price)'],
+      ['TEXT(region)', txt(f('region')), 'toString(region)'],
+      ['TEXT(DATEADD)', txt({ k: 'fn', fn: 'dateadd', args: [{ k: 'str', v: 'day' }, num(1), f('placed')] }), `toString(toDateTime64(addDays(toDateTime64(placed, 0), 1), 0))`],
+    ];
+    for (const [label, expr, sql] of cases) {
+      const rows = await run(label, expr);
+      const want = await oracle(sql);
+      assert.equal(rows.length, want.length, `${label}: rows`);
+      want.forEach((w, i) => {
+        assert.equal(rows[i].keys[0], w[0] === null ? null : String(w[0]), `${label}: key ${i}`);
+        assert.ok(close(rows[i].values[0], w[1]), `${label}: value ${i}`);
+      });
+    }
+    const dates = (await run('TEXT(placed)', txt(f('placed')))).map((r) => r.keys[0]);
+    assert.deepEqual(dates, ['2026-01-05', '2026-01-20', '2026-02-10', '2026-02-15', '2026-03-01']);
+    ok(`(l) TEXT(): date, integer, decimal, nullable float, text and DATEADD results match toString on ClickHouse; dates read YYYY-MM-DD`);
+  }
+
   await app('POST', '/api/connection/disconnect');
 }
 

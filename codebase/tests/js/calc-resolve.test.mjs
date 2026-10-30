@@ -126,6 +126,14 @@ test("text functions: a row-level text calculation is a dimension; a predicate a
   assert.equal(c("COUNTD(LOWER([orders.status]))").role, "measure");
 });
 
+test("TEXT: a dimension, nested TEXT and a comparison on it compile; STR is the same node", () => {
+  const c = (formula) => compileCalculation({ id: "x", name: "X", formula }, [], catalog);
+  assert.equal(c("TEXT([orders.status])").role, "dimension");
+  assert.equal(c("TEXT(TEXT([orders.amount]))").info.type, "text");
+  assert.equal(c("TEXT([orders.amount]) = '10'").info.type, "boolean");
+  assert.deepEqual(c("STR([orders.amount])").ast, c("TEXT([orders.amount])").ast);
+});
+
 test("text functions: a calculation reference inside a call is expanded before sending", () => {
   const base = { id: "b", name: "Base", formula: "TRIM([orders.status])" };
   const r = compileCalculation({ id: "x", name: "X", formula: "LEFT([Base], 3)" }, [base], catalog);

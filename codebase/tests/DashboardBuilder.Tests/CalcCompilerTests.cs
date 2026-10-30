@@ -261,6 +261,25 @@ public class CalcCompilerTests
         Assert.Empty(ps);
     }
 
+    [Fact]
+    public void TEXT_compiles_to_toString_over_the_compiled_child_with_nothing_bound_for_a_field()
+    {
+        var (sql, ps) = Compile(Fn("text", F("placed")));
+        Assert.Equal("toString(t0.`placed`)", sql);
+        Assert.Empty(ps);
+    }
+
+    [Fact]
+    public void TEXT_of_a_number_literal_binds_the_number_and_of_a_calculated_date_formats_the_date()
+    {
+        var (sql, ps) = Compile(Fn("text", new NumNode(12.5)));
+        Assert.Equal("toString({c0p0:Float64})", sql);
+        Assert.Single(ps);
+        var (sql2, _) = Compile(Fn("text", Fn("date", S("2024-03-05"))));
+        Assert.StartsWith("toString(", sql2);
+        Assert.DoesNotContain("2024-03-05", sql2);
+    }
+
     [Theory]
     [InlineData("left", "leftUTF8(t0.`status`, {c0p0:UInt32})")]
     [InlineData("right", "rightUTF8(t0.`status`, {c0p0:UInt32})")]

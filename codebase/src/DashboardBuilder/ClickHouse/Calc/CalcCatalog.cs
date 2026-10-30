@@ -49,8 +49,9 @@ public sealed record AggSpec(IReadOnlyList<string> Accepts, string? Result, bool
 /// literal 0..<see cref="CalcLimits.MaxCount"/>. <c>Position</c>: a whole number literal 1..<see cref="CalcLimits.MaxCount"/>.
 /// <c>Separator</c>: a non-empty text literal of at most <see cref="CalcLimits.MaxSeparator"/> characters.
 /// <c>Date</c>: any date expression. <c>Unit</c>: a text literal naming one of <see cref="CalcCatalog.DateUnits"/> (any case).
-/// <c>Amount</c>: a whole-number literal, either sign, at most <see cref="CalcLimits.MaxDateAmount"/>.</summary>
-public enum FnArg { Text, Length, Position, Separator, Date, Unit, Amount }
+/// <c>Amount</c>: a whole-number literal, either sign, at most <see cref="CalcLimits.MaxDateAmount"/>.
+/// <c>Value</c>: a number, date or text expression (not a condition).</summary>
+public enum FnArg { Text, Length, Position, Separator, Date, Unit, Amount, Value }
 
 /// <summary>One row-level function: its arguments in order and its result type. <c>MaxArgs</c> above <c>Args.Count</c> lets
 /// the last argument kind repeat (<c>CONCAT</c>).</summary>
@@ -93,6 +94,7 @@ public static class CalcCatalog
         ["lower"] = Fn(CalcType.Text, FnArg.Text),
         ["upper"] = Fn(CalcType.Text, FnArg.Text),
         ["trim"] = Fn(CalcType.Text, FnArg.Text),
+        ["text"] = Fn(CalcType.Text, FnArg.Value),
         ["len"] = Fn(CalcType.Number, FnArg.Text),
         ["left"] = Fn(CalcType.Text, FnArg.Text, FnArg.Length),
         ["right"] = Fn(CalcType.Text, FnArg.Text, FnArg.Length),
