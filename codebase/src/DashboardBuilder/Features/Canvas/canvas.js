@@ -6,6 +6,7 @@ import { entities, relationshipsFor, emit, bus, isModelActive, showModel } from 
 import { expandSidebar } from "../Shell/sidebar.js";
 import { openColumnProfile } from "../Schema/column-profile-dialog.js";
 import { entityWidth } from "./card-width.js";
+import { sourceNote, lossyNote, wireSource, MAX_SOURCE_COLUMNS } from "../Core/source-model.js";
 
 // Data Model canvas + entity cards. A table dropped from the sidebar (or added via the
 // `table:add` fallback) becomes an entity card: a db.table head over a fixed-height, scrollable
@@ -19,7 +20,8 @@ let createEntityImpl = null;
 let clearModelImpl = null;
 
 /** Add a table to the Data Model at (x, y). `joinKeys` are ticked once its columns load (workbook
- *  open). Returns the new entity id, or null before the canvas is initialised. */
+ *  open). `source` makes it a union / unpivot entity (Core/source-model.js; its `table` is the source's name; no join keys).
+ *  Returns the new entity id, or null before the canvas is initialised. */
 export function addEntity(db, table, x, y, opts) { return createEntityImpl?.(db, table, x, y, opts) ?? null; }
 
 /** Remove every entity (and so every relationship) without asking — used when opening a workbook. */
@@ -74,6 +76,14 @@ export function initCanvas() {
     addTableFromUser(payload?.db, payload?.table, Math.max(0, x), Math.max(0, y));
   });
 
+  // A union / unpivot built in the sidebar dialogs: a new entity on the Data Model, like a table added with its + button.
+  document.addEventListener("source:add", (event) => {
+    const { source } = event.detail;
+    showModel();
+    const { x, y } = freeSlot();
+    createEntity(source.db, source.name, x, y, { source });
+  });
+
   // Non-drag fallback (accessibility): schema.js dispatches this from a chip's plus button.
   // A table always goes to the shared Data Model; switch there if a dashboard is showing.
   document.addEventListener("table:add", (event) => {
@@ -118,8 +128,9 @@ export function initCanvas() {
     createEntity(db, table, x, y);
   }
 
-  function createEntity(db, table, x, y, { joinKeys = [] } = {}) {
+  function createEntity(db, table, x, y, { joinKeys = [], source = null } = {}) {
     const entity = { id: `${db}.${table}#${++seq}`, db, table, x, y, columns: [], joinKeys: new Set(), el: null };
+    if (source) entity.source = source;
     entity.pendingKeys = joinKeys; // ticked after the columns load (workbook open)
     entity.el = renderCard(entity);
     entities.set(entity.id, entity);
@@ -159,7 +170,14 @@ export function initCanvas() {
     setStatus(entity, "loading");
     hide(bodyEl);
     try {
-      entity.columns = await api.columns(entity.db, entity.table);
+      if (entity.source) {
+        const res = await api.sourceColumns(wireSource(entity.source));
+        entity.columns = res.columns;
+        const lossy = lossyNote(res.lossy); // same-named columns of differing types were read as Float64
+        entity.el.querySelector(".entity__note-lossy")?.remove();
+        if (lossy) { const p = document.createElement("p"); p.className = "entity__note entity__note-lossy"; p.textContent = lossy; p.title = res.lossy.join(", "); entity.el.querySelector(".entity__note")?.after(p); }
+        if (res.truncated) toast(`${entity.table}: only the first ${MAX_SOURCE_COLUMNS} shared columns are listed.`, "info");
+      } else entity.columns = await api.columns(entity.db, entity.table);
       renderColumns(entity);
       applyPendingKeys(entity);
       hide(statusEl);
@@ -189,6 +207,7 @@ export function initCanvas() {
     card.className = "entity";
     card.tabIndex = -1; // focusable by script (a duplicate drop focuses the existing card)
     card.dataset.entityId = entity.id;
+    if (entity.source) { card.classList.add("entity--source"); card.dataset.source = entity.source.kind; }
     card.style.left = `${entity.x}px`;
     card.style.top = `${entity.y}px`;
 
@@ -236,6 +255,12 @@ export function initCanvas() {
     cols.className = "entity__cols";
     body.append(cols);
 
+    if (entity.source) { // how the columns are matched, in one line (the same rule as the preview)
+      const note = document.createElement("p");
+      note.className = "entity__note";
+      note.textContent = sourceNote(entity.source);
+      body.prepend(note);
+    }
     card.append(head, status, body);
     return card;
   }
@@ -261,6 +286,7 @@ export function initCanvas() {
       row.className = "col-row";
       row.dataset.column = col.name;
 
+      const isSource = Boolean(entity.source);
       const key = document.createElement("input");
       key.type = "checkbox";
       key.className = "col-row__key";
@@ -298,7 +324,8 @@ export function initCanvas() {
       profile.append(icon("analytics", { size: 14 }));
       profile.addEventListener("click", (event) => { event.preventDefault(); openColumnProfile(entity.db, entity.table, col); });
 
-      row.append(key, keyIcon, name, type, profile);
+      if (isSource) row.append(name, type); // no join keys and no profile: a source takes no relationship and reads no table
+      else row.append(key, keyIcon, name, type, profile);
       cols.append(row);
     }
   }

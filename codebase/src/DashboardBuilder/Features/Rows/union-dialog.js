@@ -2,6 +2,8 @@
 // rows of them stacked (UNION ALL over their shared columns) in the raw-row dialog. Read-only.
 import { api } from "../Core/api.js";
 import { LIMITS } from "../Core/validate.js";
+import { entities } from "../Core/store.js";
+import { unionSource, takenNames } from "../Core/source-model.js";
 import { makeButton, openDialog, closeDialog, toast } from "../Core/ui.js";
 import { unionRequest, unionPickState } from "./union-model.js";
 import { openRowsDialog } from "./rows-dialog.js";
@@ -25,15 +27,16 @@ export function openUnionDialog(db, tables) {
   body.append(list, hint);
   const foot = el("div", "dialog__foot");
   const cancel = makeButton("Cancel", "btn");
-  const go = makeButton("Show rows", "btn btn--primary");
-  foot.append(cancel, go);
+  const go = makeButton("Show rows", "btn");
+  const add = makeButton("Add to model", "btn btn--primary");
+  foot.append(cancel, go, add);
   dlg.append(title, body, foot);
   document.body.append(dlg);
 
   const picked = () => boxes.filter((b) => b.checked).map((b) => b.value);
   const refresh = () => {
     const st = unionPickState(picked());
-    go.disabled = !st.ok; hint.textContent = st.hint;
+    go.disabled = add.disabled = !st.ok; hint.textContent = st.hint;
     for (const b of boxes) b.disabled = !b.checked && picked().length >= LIMITS.unionTables;
   };
   for (const b of boxes) b.addEventListener("change", refresh);
@@ -45,6 +48,12 @@ export function openUnionDialog(db, tables) {
     try { request = unionRequest(db, picked()); } catch (err) { toast(err.message, "danger"); return; }
     closeDialog(dlg);
     openRowsDialog({ title: "Union — first rows", subtitle: `${db}: ${request.tables.join(" + ")}`, request, filename: "union", load: api.union });
+  });
+  add.addEventListener("click", () => { // the union becomes a table on the Data Model (canvas.js adds it) that worksheets can read
+    let source;
+    try { source = unionSource(db, picked(), takenNames(entities, db, tables)); } catch (err) { toast(err.message, "danger"); return; }
+    closeDialog(dlg);
+    document.dispatchEvent(new CustomEvent("source:add", { detail: { source } }));
   });
   openDialog(dlg);
   boxes[0].focus();

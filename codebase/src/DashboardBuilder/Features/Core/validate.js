@@ -20,6 +20,7 @@ export const LIMITS = Object.freeze({
   rows: 5000, // groups one chart query returns: Top-N "All" (server MaxRowLimit); the Table pages instead
   viewCells: 50000,   // rows x columns one raw-row read returns (server MaxRowsCells)
   unionTables: 5,     // tables one union stacks (server MaxUnionTables)
+  sourceName: 200,    // characters in a union / unpivot source's name (server MaxSourceName)
   unpivotColumns: 50, // wide columns one unpivot turns into rows (server MaxUnpivotColumns)
   unpivotKeep: 5,     // columns an unpivot keeps beside Field / Value (server MaxUnpivotKeep)
   viewRows: 1000,     // raw rows one View data / table preview read returns (server MaxRowsLimit; default 100)

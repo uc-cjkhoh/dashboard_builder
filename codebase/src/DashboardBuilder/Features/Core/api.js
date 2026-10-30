@@ -82,6 +82,8 @@ export const api = {
   union: (req, { signal } = {}) => request("POST", "/api/union", req, signal),
   /** The first rows of one table with wide columns turned into rows (POST /api/unpivot): same shape as rows; the last two columns are Field and Value. */
   unpivot: (req, { signal } = {}) => request("POST", "/api/unpivot", req, signal),
+  /** The columns a union / unpivot source exposes (POST /api/source/columns): { columns:[{name,type,category}], truncated }. */
+  sourceColumns: (source, { signal } = {}) => request("POST", "/api/source/columns", source, signal),
   /** Join safety preview (POST /api/relationships/preview): bounded match / duplicate counts for a key pair → { from, to, sampleLimit, sampled }. */
   joinPreview: (req, { signal } = {}) => request("POST", "/api/relationships/preview", req, signal),
   /** Export the worksheet query's rows as CSV text (P13). Bounded server-side; returns raw text. */

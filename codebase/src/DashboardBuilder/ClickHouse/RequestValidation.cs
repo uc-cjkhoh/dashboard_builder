@@ -19,6 +19,7 @@ public static class ApiLimits
     public const int MaxExportRows = 100_000; // CSV export of a whole worksheet result
     public const int DefaultRowsLimit = 100, MaxRowsLimit = 1000; // raw rows of one table (POST /api/rows): default / cap
     public const int MaxUnpivotColumns = 50, MaxUnpivotKeep = 5;  // wide columns one unpivot turns into rows / columns it keeps (POST /api/unpivot)
+    public const int MaxSourceName = 200;  // characters in a union / unpivot source's name (the table name its fields carry)
     public const int MaxUnionTables = 5;  // tables one union stacks (POST /api/union)
     public const int MaxRowsCells = 50_000; // rows x columns one row read may return
     public const int MaxRowsColumns = 200, MaxCellLength = 1000;  // columns one row read returns; characters kept per cell
@@ -174,6 +175,12 @@ public static class RequestRules
     public static void ValidateQuery(QueryRequest r, int maxLimit)
     {
         if (r.From is null) throw Bad("'from' is required.", "from");
+        if (r.Source is { } src)
+        {
+            ValidateSource(src);
+            if (r.From.Db != src.Db || r.From.Table != src.Name) throw Bad("A union or unpivot is read as its own table — 'from' must name it.", "from");
+            if ((r.Joins?.Length ?? 0) > 0) throw Bad("A union or unpivot can't be joined to other tables yet — build the view from it alone.", "joins");
+        }
         NoNulls(r.Joins, "joins"); NoNulls(r.RowDimensions, "rowDimensions"); NoNulls(r.ColumnDimensions, "columnDimensions"); NoNulls(r.Measures, "measures");
         var dims = (r.RowDimensions?.Length ?? 0) + (r.ColumnDimensions?.Length ?? 0);
         if (dims > ApiLimits.MaxDimensions) throw Bad($"A view can group by at most {ApiLimits.MaxDimensions} fields.", "rowDimensions");
@@ -227,6 +234,52 @@ public static class RequestRules
         ValidateRange(r.Limit, ApiLimits.MaxRowsLimit, "Limit", "limit");
         if (cols.Length > 0) ValidateRowCells(r.Limit ?? ApiLimits.DefaultRowsLimit, cols.Length, "limit");
         ValidateStatFilters(r.Filters);
+    }
+    /// <summary>A union / unpivot used as a query source (QueryRequest.Source, POST /api/source/columns): a whitelisted kind, named tables and
+    /// columns within the preview's limits (2..5 tables; 2..50 unpivoted, up to 5 kept), a bounded name. Never clamped. Field paths start "source.".</summary>
+    public static void ValidateSource(QuerySource s)
+    {
+        if (s.Kind is not (SourceSql.Union or SourceSql.Unpivot)) throw Bad("A source is a union or an unpivot.", "source.kind");
+        if (string.IsNullOrWhiteSpace(s.Db)) throw Bad("'source.db' is required.", "source.db");
+        if (string.IsNullOrWhiteSpace(s.Name)) throw Bad("'source.name' is required.", "source.name");
+        if (s.Name.Length > ApiLimits.MaxSourceName) throw Bad($"A source's name must be at most {ApiLimits.MaxSourceName} characters.", "source.name");
+        var cols = s.Columns ?? [];
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        if (s.Kind == SourceSql.Union)
+        {
+            var tables = s.Tables ?? [];
+            if (tables.Length < 2 || tables.Length > ApiLimits.MaxUnionTables) throw Bad($"A union needs between 2 and {ApiLimits.MaxUnionTables} tables.", "source.tables");
+            for (var i = 0; i < tables.Length; i++)
+            {
+                if (string.IsNullOrWhiteSpace(tables[i])) throw Bad($"'source.tables[{i}]' is required.", $"source.tables[{i}]");
+                if (!seen.Add(tables[i])) throw Bad($"'{tables[i]}' is listed twice.", $"source.tables[{i}]");
+            }
+            if (s.Table is not null) throw Bad("A union takes 'tables', not 'table'.", "source.table");
+            if (s.Keep is not null) throw Bad("A union keeps no columns of its own — leave 'keep' out.", "source.keep");
+            if (cols.Length > ApiLimits.MaxRowsColumns) throw Bad($"A union can return at most {ApiLimits.MaxRowsColumns} columns.", "source.columns");
+            seen.Clear();
+            for (var i = 0; i < cols.Length; i++)
+            {
+                if (string.IsNullOrWhiteSpace(cols[i])) throw Bad($"'source.columns[{i}]' is required.", $"source.columns[{i}]");
+                if (!seen.Add(cols[i])) throw Bad($"'{cols[i]}' is listed twice.", $"source.columns[{i}]");
+            }
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(s.Table)) throw Bad("'source.table' is required.", "source.table");
+        if (s.Tables is not null) throw Bad("An unpivot takes 'table', not 'tables'.", "source.tables");
+        if (cols.Length < 2 || cols.Length > ApiLimits.MaxUnpivotColumns) throw Bad($"An unpivot needs between 2 and {ApiLimits.MaxUnpivotColumns} columns.", "source.columns");
+        for (var i = 0; i < cols.Length; i++)
+        {
+            if (string.IsNullOrWhiteSpace(cols[i])) throw Bad($"'source.columns[{i}]' is required.", $"source.columns[{i}]");
+            if (!seen.Add(cols[i])) throw Bad($"'{cols[i]}' is listed twice.", $"source.columns[{i}]");
+        }
+        var keep = s.Keep ?? [];
+        if (keep.Length > ApiLimits.MaxUnpivotKeep) throw Bad($"An unpivot can keep at most {ApiLimits.MaxUnpivotKeep} columns.", "source.keep");
+        for (var i = 0; i < keep.Length; i++)
+        {
+            if (string.IsNullOrWhiteSpace(keep[i])) throw Bad($"'source.keep[{i}]' is required.", $"source.keep[{i}]");
+            if (!seen.Add(keep[i])) throw Bad($"'{keep[i]}' is already used.", $"source.keep[{i}]");
+        }
     }
     /// <summary>A union (POST /api/union): a database, 2..5 named tables, bounded columns, limit 1..1000 (never clamped).</summary>
     public static void ValidateUnion(UnionRequest r)

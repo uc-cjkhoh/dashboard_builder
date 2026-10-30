@@ -8,6 +8,7 @@ import { scalePlan } from "./scale-model.js";
 import { planJoinType } from "../Relations/relation-rules.js";
 import { catalogFromEntities } from "../Calc/calc-resolve.js";
 import { isCalcPill, calcPillId } from "../Calc/calc-pill.js";
+import { sourceOfTable, sourceProblem, wireSource } from "../Core/source-model.js";
 import { wireDim, wireMeasure, planTables, measureLabel, wireTopBy, resolveSortTarget } from "../Calc/calc-plan.js";
 
 // The worksheet query plan (P24a) — pure and DOM-free (tests/js/sheet-plan.test.mjs). Everything the plan reads
@@ -186,6 +187,7 @@ export function buildPlan(sheet, periodRange, ctx, { crossFilter = null } = {}) 
   const involved = involvedKeys(sheet, rangeFilters, cctx, keyOrder, mplan);
   if (!involved.length) return null;
   const base = involved[0];
+  if (sourceProblem(involved, ctx.entities)) return null; // a union / unpivot is read alone (worksheet-view says why)
   const joins = buildJoins(base, involved.slice(1), ctx);
   if (joins === null) return null;
   const [db, table] = splitKey(base);
@@ -211,8 +213,10 @@ export function buildPlan(sheet, periodRange, ctx, { crossFilter = null } = {}) 
     const t = resolveSortTarget(targets, sheet.sort.by); // a calc pill matches whatever agg it had
     if (t) sortColumn = t.alias;
   }
+  const source = sourceOfTable(ctx.entities, db, table); // a union / unpivot the query reads instead of a catalog table
   return withCasts({
     from: { db, table },
+    ...(source ? { source: wireSource(source) } : {}),
     joins,
     rowDimensions,
     columnDimensions,

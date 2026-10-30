@@ -178,7 +178,7 @@ function openWorkbook(wb) {
     setCalculations(wb.calculations ?? [], wb.nextCalcId); // likewise: pills read their calculation by id
 
     const ids = new Map(); // saved entity id → new entity id
-    for (const e of wb.entities) ids.set(e.id, addEntity(e.db, e.table, e.x, e.y, { joinKeys: e.joinKeys }));
+    for (const e of wb.entities) ids.set(e.id, addEntity(e.db, e.table, e.x, e.y, { joinKeys: e.joinKeys, source: e.source }));
     for (const r of wb.relationships) {
       restoreRelationship(
         { entityId: ids.get(r.from.entityId), column: r.from.column },

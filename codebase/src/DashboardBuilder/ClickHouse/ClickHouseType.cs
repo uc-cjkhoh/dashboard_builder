@@ -38,6 +38,21 @@ public static class ClickHouseType
     /// <summary>True for <c>Date</c>/<c>Date32</c> (after unwrapping Nullable/LowCardinality) — columns that hold no time of day.</summary>
     public static bool IsDateOnly(string? type) => BaseName(Unwrap(type ?? string.Empty)) is "Date" or "Date32";
 
+    /// <summary>The type without its outer <c>Nullable(...)</c> / <c>LowCardinality(...)</c> wrappers.</summary>
+    public static string BaseType(string? type) => Unwrap(type ?? string.Empty);
+
+    /// <summary>True when the type is wrapped in <c>Nullable(...)</c> (under any <c>LowCardinality</c>).</summary>
+    public static bool IsNullable(string? type)
+    {
+        var t = (type ?? string.Empty).Trim();
+        while (TryUnwrap(t, "Nullable", out var inner) || TryUnwrap(t, "LowCardinality", out inner))
+        {
+            if (t.StartsWith("Nullable(", StringComparison.Ordinal)) return true;
+            t = inner;
+        }
+        return false;
+    }
+
     // Strip outer Nullable(...) / LowCardinality(...) wrappers, possibly nested.
     private static string Unwrap(string type)
     {

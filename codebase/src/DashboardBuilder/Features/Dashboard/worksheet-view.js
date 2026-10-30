@@ -11,6 +11,7 @@ import { createLatestGate, isAbortError, requestKey, truncationNotice } from "./
 import { STAT_SINGLE_TABLE, statFieldHint } from "./show-me-rules.js";
 import { statFilters, withCategories } from "./filter-rules.js";
 import { statCastProblem } from "./cast-model.js";
+import { sourceProblem, sourceOfTable } from "../Core/source-model.js";
 import { resolveRange, compareRange, compareName, COMPARE_TYPES } from "./period-model.js";
 import { tableProgress, needsNextPage, OTHER_TYPES, bucketNotice } from "./scale-model.js";
 import { buildPlan, involvedTables, calcContext, appliedShared, withParams, toServerFilter, isDrillActive, COLOR_USES } from "./sheet-plan.js";
@@ -63,6 +64,7 @@ export function createWorksheetView(container, getContext, options = {}) {
       onSelect: options.onSelect, onDrill: options.onDrill, onLegend: options.onLegend, legendFocus: options.legendFocus,
       onTooltipFields: options.onTooltipFields, onMemberColors: options.onMemberColors, onCollapse: options.onCollapse } });
   // The tables the sheet's query involves (never throws: a sheet that can't be planned reaches nothing).
+  const statSourceProblem = (s, entities) => ([...s.columns, ...s.rows].some((f) => sourceOfTable(entities, f.db, f.table)) ? "Histogram and box plot read one table — they can't read a union or unpivot yet." : null);
   const involvedOf = (c, s) => { try { return involvedTables(s, undefined, c.plan); } catch { return []; } };
   let extraNotice = null; // the line the last drawing wants in the notice (small-multiples cap, calculations on partial rows)
   const drawResult = (s, result, cmp) => {
@@ -160,6 +162,8 @@ export function createWorksheetView(container, getContext, options = {}) {
     if (STAT_SINGLE_TABLE.has(s.chartType)) {
       const noCalc = statCalcProblem(s); // the single-table endpoints can't take a calculation: say so, send nothing
       if (noCalc) { container.replaceChildren(hint(noCalc)); return; }
+      const noSource = statSourceProblem(s, c.plan.entities); // nor a union / unpivot
+      if (noSource) { container.replaceChildren(hint(noSource)); return; }
       const noCast = statCastProblem(s, c.castOf); // nor a data type cast
       if (noCast) { container.replaceChildren(hint(noCast)); return; }
       await runStat(c, s, ticket, joinNotices(filterNote, cross?.filter && !crossNote ? statNote(cross.filter) : null)); return; }
@@ -174,6 +178,8 @@ export function createWorksheetView(container, getContext, options = {}) {
     const cctx = calcContext(c.plan);
     const problem = calcProblem(s, cctx, appliedShared(c.plan)); // E15: a calculation that can't be computed — say why, send nothing
     if (problem) { container.replaceChildren(warn(problem)); return; }
+    const mixed = sourceProblem(involvedOf(c, s), c.plan.entities); // a union / unpivot is read alone: say so, send nothing
+    if (mixed) { container.replaceChildren(warn(mixed)); return; }
     const plan = buildPlan(s, undefined, c.plan, { crossFilter: cross?.filter ?? null });
     if (!plan) {
       // Only field-less calculations (e.g. 1+2) and nothing from a table: there is nothing to relate, so say what to add.
