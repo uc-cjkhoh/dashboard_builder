@@ -677,6 +677,17 @@ public sealed partial class ClickHouseGateway
         return new RowsResult(shown, rows, truncated, limit, colsTruncated);
     }
 
+    /// <summary>The columns a union / unpivot source exposes (worksheet fields), and whether a wide union was cut to
+    /// <see cref="ApiLimits.MaxRowsColumns"/>. Tables and columns are catalog-validated; nothing is read from them. Read-only.</summary>
+    /// <exception cref="UnknownIdentifierException">Unknown database, table or column.</exception>
+    public async Task<(IReadOnlyList<ColumnInfo> Columns, bool Truncated)> SourceColumnsAsync(ClickHouseConnectionInfo info, QuerySource src, CancellationToken ct)
+    {
+        var described = new List<IReadOnlyList<ColumnInfo>>();
+        foreach (var t in SourceSql.TablesOf(src)) described.Add(await DescribeColumnsAsync(info, src.Db, t, ct));
+        var built = SourceSql.Build(src, described);
+        return (built.Columns, built.ColumnsTruncated);
+    }
+
     /// <summary>The unpivoted columns must exist and share one kind (text / number / date …) so the Value column is
     /// comparable; the kept columns must exist. Throws the 400 / unknown-identifier errors the endpoint answers with.</summary>
     internal static void CheckUnpivot(IReadOnlyList<ColumnInfo> described, string[] columns, string[] keep)
@@ -1014,11 +1025,28 @@ public sealed partial class ClickHouseGateway
         bool DateOnlyOfRef(string db, string table, string column, string? cast) =>
             TypeCast.DateOnly(cast, ClickHouseType.IsDateOnly(rawTypes[Key(db, table)][column]));
 
+        // Every bound value of the request — filter values, calculation literals and a source's table labels / field names — goes in
+        // this one list, which every statement below (page, total, Other) is sent with; each calculation is compiled ONCE with its own prefix c{n}.
+        var parameters = new List<(string Name, string Type, object Value)>();
+
+        // A union / unpivot source stands in for the base table: its derived table is read as t0 and its columns are known up front
+        // (no catalog table of that name is described), so every field reference below resolves against them. No joins, no sample.
+        SourceBuild? source = null;
+        if (req.Source is { } src)
+        {
+            var described = new List<IReadOnlyList<ColumnInfo>>();
+            foreach (var t in SourceSql.TablesOf(src)) described.Add(await DescribeColumnsAsync(info, src.Db, t, ct)); // validates db + tables
+            source = SourceSql.Build(src, described);
+            categories[Key(src.Db, src.Name)] = source.Columns.ToDictionary(c => c.Name, c => c.Category, StringComparer.Ordinal);
+            rawTypes[Key(src.Db, src.Name)] = source.Columns.ToDictionary(c => c.Name, c => c.Type, StringComparer.Ordinal);
+            parameters.AddRange(source.Parameters);
+        }
+
         // Base table = t0.
         await ColumnsOf(req.From.Db, req.From.Table);
         aliases[Key(req.From.Db, req.From.Table)] = "t0";
         var from = new StringBuilder(" FROM ")
-            .Append(Identifier.QualifiedName(req.From.Db, req.From.Table)).Append(" AS t0");
+            .Append(source is null ? Identifier.QualifiedName(req.From.Db, req.From.Table) : $"({source.Sql})").Append(" AS t0");
         // P33: in approximate mode a base table with a sampling key is read as a 10% sample; counts and sums
         // are scaled back by its _sample_factor below.
         // T02-12/13: a right or full join can produce rows with no base-table row, which a base sample + its scale factor
@@ -1027,7 +1055,7 @@ public sealed partial class ClickHouseGateway
         var anyBeyondInner = joinTypes.Any(IsOuter);
         if (NullsUnavailable(joinTypes, info))
             throw new RequestValidationException("Right and full joins need the server to accept the join_use_nulls setting — this connection's profile refuses settings.", "joins");
-        var sampled = sample && CanSample(joinTypes) && await HasSamplingKeyAsync(info, req.From.Db, req.From.Table, ct);
+        var sampled = source is null && sample && CanSample(joinTypes) && await HasSamplingKeyAsync(info, req.From.Db, req.From.Table, ct);
         if (sampled) from.Append(" SAMPLE ").Append(SampleFraction.ToString(CultureInfo.InvariantCulture));
 
         var next = 1;
@@ -1059,9 +1087,6 @@ public sealed partial class ClickHouseGateway
         var rowDimNames = new List<string>();
         var colDimNames = new List<string>();
         var dimRefs = new List<ColumnRef>();
-        // Every bound value of the request — filter values and calculation literals — goes in this one list, which every
-        // statement below (page, total, Other) is sent with; each calculation is compiled ONCE with its own prefix c{n}.
-        var parameters = new List<(string Name, string Type, object Value)>();
         var approximate = req.Approximate == true;
         var calcCount = 0;
         async Task<CompiledCalc> CompileCalcAsync(ExprNode calc, string field)
@@ -1199,7 +1224,7 @@ public sealed partial class ClickHouseGateway
                 var dateOnly = DateOnlyOfRef(dimRefs[bi].Db, dimRefs[bi].Table, dimRefs[bi].Column, dimRefs[bi].Cast);
                 var grain = wanted == "auto"
                     ? await AutoGrainAsync(info, dimExprs[bi], from.ToString(), where + Settings(anyLeft, info),
-                        ParametersUsedBy(dimExprs[bi] + where, parameters), dateOnly, ct)
+                        ParametersUsedBy(dimExprs[bi] + from + where, parameters), dateOnly, ct)
                     : wanted;
                 if (grain == "hour" && dateOnly) grain = "day";
                 if (grain is not null)

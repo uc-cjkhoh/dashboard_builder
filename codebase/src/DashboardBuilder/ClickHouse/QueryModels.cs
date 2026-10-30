@@ -73,7 +73,10 @@ public sealed record QueryRequest(
     // P33: skip the server's result cache (Refresh) — the fresh result replaces the cached one.
     bool? Fresh = null,
     // P33: approximate mode — distinct counts estimated (uniq), and a 10% sample on a table with a sampling key.
-    bool? Approximate = null);
+    bool? Approximate = null,
+    // A union / unpivot the query reads instead of a catalog table (<see cref="SourceSql"/>): From, and every field
+    // reference, name it as (Source.Db, Source.Name). It takes no joins.
+    QuerySource? Source = null);
 
 /// <summary>Ordering spec: which select alias (<c>k{n}</c>/<c>v{n}</c>) to sort by, and direction.</summary>
 public sealed record SortRef(string Column, bool Desc);
