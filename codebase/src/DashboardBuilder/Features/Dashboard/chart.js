@@ -217,22 +217,24 @@ function dateAxisLabels(option, spec, width, height) {
   const axis = [].concat(option[key] ?? [])[0];
   if (!axis || axis.type !== "category" || !axis.data?.length) return null;
   const labels = axis.data.map(String);
-  measureCtx ??= document.createElement("canvas").getContext("2d");
-  measureCtx.font = `12px ${tokens().font}`;
+  measureCtx ??= document.createElement("canvas").getContext("2d"); // null where canvas is unavailable
+  if (measureCtx) measureCtx.font = `12px ${tokens().font}`;
   const cap = bottom ? FIT.labelMax : FIT.sideMax;
-  const measure = (t) => Math.min(measureCtx.measureText(t).width, cap);
+  const measure = (t) => Math.min(measureCtx ? measureCtx.measureText(t).width : t.length * FIT.charPx, cap);
   const g = option.grid ?? {};
   const length = bottom
     ? width - (Number(g.left) || 0) - (Number(g.right) || 0) - 56
     : height - (Number(g.top) || 0) - (Number(g.bottom) || 0) - 32;
   if (spec.dateLabels === "all") { // every label stays; they just say less
-    const byLabel = new Map(labels.map((l, i) => [l, shortDateLabels(labels).texts[i]]));
+    const { texts } = shortDateLabels(labels);
+    const byLabel = new Map(labels.map((l, i) => [l, texts[i]]));
     return { key, axisLabel: { formatter: (v) => byLabel.get(String(v)) ?? String(v) } };
   }
   const plan = axisLabelPlan({ labels, length: Math.max(length, 40), side: bottom ? "bottom" : "left", measure });
   const shown = new Set(plan.indices);
+  const byLabel = new Map(labels.map((l, i) => [l, plan.texts[i]]));
   const box = Math.ceil(Math.max(...plan.indices.map((i) => measure(plan.texts[i])))) + 2; // a label's box is as wide as its text, not the truncation cap, so neighbours are not judged overlapping
-  return { key, axisLabel: { interval: (i) => shown.has(i), hideOverlap: false, showMinLabel: true, showMaxLabel: true, width: plan.rotate ? cap : box, formatter: (v, i) => plan.texts[labels.indexOf(String(v))] ?? String(v),
+  return { key, axisLabel: { interval: (i) => shown.has(i), hideOverlap: false, showMinLabel: true, showMaxLabel: true, width: plan.rotate ? cap : box, formatter: (v) => byLabel.get(String(v)) ?? String(v),
     ...(bottom ? { rotate: plan.rotate, alignMinLabel: plan.rotate ? null : "left", alignMaxLabel: plan.rotate ? null : "right" } : {}) } };
 }
 function setDateAxisLabels(option, spec, width, height) {

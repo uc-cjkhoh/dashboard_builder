@@ -2,6 +2,8 @@
 // chart pane is smaller, the chart keeps this size and the pane scrolls (it never drops categories or
 // skips their labels). Pure: unit-tested in tests/js/chart-fit.test.mjs.
 
+import { shortDateLabels } from "./date-axis.js";
+
 export const FIT = {
   slot: 28,        // px per category along a horizontal (bottom) axis
   rowSlot: 24,     // px per category along a vertical (left) axis
@@ -95,7 +97,8 @@ function categoryAxes(spec) {
   if (t === "heatmap") return { bottom: { labels: spec.xCats ?? [], bars: 1 }, left: { labels: spec.yCats ?? [], bars: 1 } };
   if (t === "histogram") return { bottom: { labels: (spec.bins ?? []).map(() => "00.0K–00.0K"), bars: 1 } };
   if (t === "boxplot") return { bottom: { labels: (spec.boxes ?? []).map((b) => String(b.label ?? "—")), bars: 1 } };
-  const labels = (spec.categories ?? []).map((l) => String(l ?? "—"));
+  let labels = (spec.categories ?? []).map((l) => String(l ?? "—"));
+  if (spec.dateLabels !== undefined) labels = shortDateLabels(labels).texts; // a date axis draws its shortened labels
   const grouped = t === "bar" || t === "combo" ? (t === "combo" ? 1 : (spec.series?.length ?? 1)) : 1;
   const horizontal = spec.orientation === "horizontal" && t !== "combo";
   return horizontal ? { left: { labels, bars: grouped } } : { bottom: { labels, bars: grouped } };

@@ -81,6 +81,13 @@ try {
       must(typeof r2 === 'number' && r2 >= 2, `width ${w}: ${JSON.stringify(r2)}`);
     }
   });
+  await check('no canvas 2d context: falls back to an estimated width instead of throwing', async () => {
+    await b.goto(APP + '/');
+    await b.waitFor(`!!window.echarts`, { label: 'echarts' });
+    await b.evaluate(`(async () => { HTMLCanvasElement.prototype.getContext = () => null; window.__chart = await import('/features/Dashboard/chart.js'); return true; })()`);
+    const r = await draw({ w: 420, h: 300, n: 60, stepMin: 60 });
+    must(r.n >= 2 && r.overlaps.length === 0, `labels ${r.n}, overlaps ${r.overlaps.length}`);
+  });
 } finally { await b.close?.(); }
 console.log(failed ? `${failed} FAILED` : 'all passed');
 process.exit(failed ? 1 : 0);

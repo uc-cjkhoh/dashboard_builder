@@ -42,3 +42,11 @@ test("heatmap sizes both axes", () => {
   assert.equal(f.minWidth, 40 * FIT.slot + FIT.gutter);
   assert.equal(f.minHeight, 30 * FIT.rowSlot + FIT.gutter);
 });
+
+test("a date axis is sized from its shortened labels (no needless upright turn)", async () => {
+  const { chartFit } = await import("../../src/DashboardBuilder/Features/Dashboard/chart-fit.js");
+  const cats = Array.from({ length: 10 }, (_, i) => `2026-10-${String(i + 1).padStart(2, "0")} 00:00:00`);
+  const base = { type: "bar", categories: cats, series: [{ name: "v", data: cats.map(() => 1) }] };
+  assert.equal(chartFit(base, 1200).rotate, 90);
+  assert.equal(chartFit({ ...base, dateLabels: "all" }, 1200).rotate, 0);
+});
