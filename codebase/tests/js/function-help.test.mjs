@@ -36,6 +36,7 @@ test("signature arity matches the type tables", () => {
   assert.equal(sig("PERCENTILE"), "PERCENTILE(number, p)");
   assert.equal(sig("CONCAT"), "CONCAT(text, text, …)");
   assert.equal(sig("SUM"), "SUM(value)");
+  assert.equal(sig("TEXT"), "TEXT(value)");
   for (const [n, r] of Object.entries(ROW_FUNCTIONS)) {
     const inner = sig(n.toUpperCase()).replace(/^[^(]*\(/, "").replace(/\)$/, "").split(", ").filter((x) => x !== "…");
     assert.equal(inner.length, r.args.length, n);
@@ -120,4 +121,15 @@ test("notes speak of NULL, not 'empty text'", () => {
   for (const h of FUNCTION_HELP) assert.ok(!/Empty text/.test(h.note), h.name);
   assert.match(FUNCTION_HELP.find((x) => x.name === "CONTAINS").note, /empty needle is always true/);
   assert.match(FUNCTION_HELP.find((x) => x.name === "DATEDIFF").note, /boundaries.*Monday/);
+});
+
+test("TEXT is a text function and STR is named in its note", () => {
+  const t = FUNCTION_HELP.find((h) => h.name === "TEXT");
+  assert.equal(t.group, "Text");
+  assert.equal(t.result, "text");
+  assert.match(t.note, /STR/);
+});
+
+test("typing TEX offers TEXT with its signature", () => {
+  assert.deepEqual(functionItems("tex", 5), [{ label: "TEXT", insert: "TEXT(", kind: "function", hint: "TEXT(value)" }]);
 });

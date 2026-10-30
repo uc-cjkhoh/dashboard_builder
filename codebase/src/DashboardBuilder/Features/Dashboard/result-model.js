@@ -173,7 +173,7 @@ export function marksChannels(sheet, result, mplan, sizeIdx, colorMeasureIdx, fm
   // Chips offer only placeholders that resolve: group-by / Tooltip fields and the shelf (series) measures.
   const shelfNames = (result.measures ?? []).slice(0, mplan.filter((e) => e.role === "shelf").length);
   const tooltipCat = tooltipCatalog(tipFields, shelfNames, shelfNames.map((_, i) => (rows[0] ? fmtVal(rows[0].values[i]) : "")));
-  if (sheet.tooltipText) { spec.tooltipText = sheet.tooltipText; spec.tooltipFields = tipFields; }
+  if (sheet.tooltipText) { spec.tooltipText = sheet.tooltipText; spec.tooltipFields = tipFields; if (sheet.tooltipStyle) spec.tooltipStyle = sheet.tooltipStyle; }
   // Angle: pie/donut already map their measure to slice angle; elsewhere a radial angle has no mark.
   if (m.angle && type !== "pie" && type !== "donut") notes.push("Angle drives a Pie/Donut slice — that mapping is already implicit there.");
 

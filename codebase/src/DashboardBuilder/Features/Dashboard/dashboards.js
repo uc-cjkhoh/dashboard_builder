@@ -27,6 +27,8 @@ import { templateError, buildActionUrl, MAX_LABEL, MAX_TEMPLATE } from "./action
 import { DATE_PART_CHOICES, stepPart } from "./date-parts.js";
 import { CALC_CHOICES, ALONG_CHOICES, WINDOW_CHOICES, isCalc, calcName } from "./table-calc.js";
 import { tooltipHtml, lookupFrom, checkTooltipText, parseTooltip } from "./tooltip-model.js";
+import { openTooltipDialog } from "./tooltip-dialog.js";
+import { checkTooltipStyle, styleAfterTextEdit } from "./tooltip-style.js";
 import { SWATCHES, memberKey, fieldColorKey, setMemberColor, clearFieldColors, colourOf } from "./colour-model.js";
 import { createHistory } from "./history.js";
 import { LINE_STYLE_CHOICES, linesTakeStyle } from "./line-style-model.js";
@@ -2244,7 +2246,7 @@ export function initDashboards() {
     const refresh = () => {
       const r = checkTooltipText(ta.value);
       const sample = lookupFrom(Object.fromEntries(cat().map((f) => [f.name, f.sample])));
-      preview.innerHTML = r.ok && r.value ? tooltipHtml(r.value, sample) : ""; // escaped parts only (tooltip-model.js)
+      preview.innerHTML = r.ok && r.value ? tooltipHtml(r.value, sample, s.tooltipStyle) : ""; // escaped parts only (tooltip-model.js)
       if (!r.ok || !r.value) preview.textContent = "Automatic tooltip";
       const unknown = r.ok && r.value ? parseTooltip(r.value).fields.filter((n) => sample(n) === undefined) : [];
       note.textContent = r.ok ? `${ta.value.length}/${LIMITS.tooltipText} · automatic tooltip kept on Table, Text, KPI, Heatmap, Treemap, discrete-colour splits, Scatter with Shape and the other special chart types${unknown.length ? ` · not in this view: ${unknown.map((n) => `<${n}>`).join(" ")}` : ""}` : r.error;
@@ -2252,11 +2254,27 @@ export function initDashboards() {
     const save = () => {
       const r = checkTooltipText(ta.value);
       if (!r.ok || r.value === (s.tooltipText ?? null)) return;
-      s.tooltipText = r.value; commit(dash, s);
+      const st = r.value ? styleAfterTextEdit(s.tooltipText, r.value, s.tooltipStyle) : null; // the line count changed -> the style is cleared
+      const cleared = s.tooltipStyle && !st;
+      s.tooltipText = r.value; if (st) s.tooltipStyle = st; else delete s.tooltipStyle;
+      if (cleared) note.textContent = "Line styles cleared — the number of lines changed."; else refresh();
+      commit(dash, s);
     };
     ta.addEventListener("input", refresh);
     ta.addEventListener("change", save);
-    box.append(preview, note);
+    const modal = el("button", "btn btn--ghost ws-tipedit__modal", "Edit tooltip…");
+    modal.type = "button";
+    modal.addEventListener("click", () => openTooltipDialog({
+      text: s.tooltipText ?? "", style: s.tooltipStyle ?? null, fields: cat(),
+      onClose: () => document.querySelector(".ws-tipedit__modal")?.focus(),
+      onApply: ({ text, style }) => { // one commit = one undo step
+        const t = checkTooltipText(text), st = checkTooltipStyle(style);
+        if (!t.ok || !st.ok) return;
+        const nextStyle = t.value ? st.value : null;
+        if (t.value === (s.tooltipText ?? null) && JSON.stringify(nextStyle) === JSON.stringify(s.tooltipStyle ?? null)) return;
+        s.tooltipText = t.value; if (nextStyle) s.tooltipStyle = nextStyle; else delete s.tooltipStyle; ta.value = t.value ?? ""; refresh(); commit(dash, s);
+      } }));
+    box.append(modal, preview, note);
     const redraw = () => { if (!box.isConnected) return; drawChips(); refresh(); };
     tooltipRedraw = redraw;
     drawChips();

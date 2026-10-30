@@ -3,6 +3,7 @@
 // The chart tooltip is HTML, so every part (literal text AND substituted values) is escaped here; nothing
 // the user typed ever reaches the tooltip as markup.
 import { LIMITS } from "../Core/validate.js";
+import { lineStyleCss } from "./tooltip-style.js";
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
 
@@ -43,15 +44,20 @@ export function checkTooltipText(raw) {
 export const lookupFrom = (obj) => (name) => (Object.prototype.hasOwnProperty.call(obj, name) ? obj[name] : undefined);
 
 /** Render a template to safe HTML. `lookup(name)` returns the formatted value or undefined; an unknown
- *  field shows as its literal (escaped) <name>. Newlines become <br>. */
-export function tooltipHtml(text, lookup) {
-  return parseTooltip(text).parts
-    .map((p) => {
-      if ("text" in p) return esc(p.text).replace(/\r?\n/g, "<br>");
+ *  field shows as its literal (escaped) <name>. Newlines become <br>. `style` (optional, tooltip-style.js) styles
+ *  each line; the chart tooltip and the editor's preview both render through here. */
+export function tooltipHtml(text, lookup, style = null) {
+  const lines = [""];
+  for (const p of parseTooltip(text).parts) {
+    if ("text" in p) {
+      const chunks = p.text.split(/\r?\n/);
+      chunks.forEach((c, i) => { if (i) lines.push(""); lines[lines.length - 1] += esc(c); });
+    } else {
       const v = lookup(p.field);
-      return v === undefined || v === null ? esc(`<${p.field}>`) : `<b>${esc(v)}</b>`;
-    })
-    .join("");
+      lines[lines.length - 1] += v === undefined || v === null ? esc(`<${p.field}>`) : `<b>${esc(v)}</b>`;
+    }
+  }
+  return lines.map((h, i) => { const css = lineStyleCss(style?.[i]); return css ? `<span style="${css}">${h}</span>` : h; }).join("<br>");
 }
 
 /** The fields an editor can offer, with a sample (first mark) value: group-by / mark fields
