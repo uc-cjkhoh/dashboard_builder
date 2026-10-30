@@ -1,4 +1,4 @@
-// Pure rules for a union / unpivot used as a data source (no DOM). A source is an entity on the Data Model whose
+// Pure rules for a union / unpivot used as a data source (no DOM). A source is an entity on the Data Source whose
 // `source` says how to read it: { kind: "union", db, name, tables, columns? } or { kind: "unpivot", db, name, table, columns, keep }.
 // The entity's `table` is the source's `name`, so every field reference (db, table, column) works unchanged; the plan adds the
 // definition as `source` and the server reads it as a bounded derived table (ClickHouse/SourceSql.cs). Limits mirror the server

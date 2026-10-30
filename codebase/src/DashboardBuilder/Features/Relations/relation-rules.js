@@ -57,7 +57,7 @@ export function heldOutCards(entities, relationships) {
 /** The sentence that refuses a view reading a held-out table, or null. `keys` are "db\0table" (sheet-plan keyOf). */
 export function heldOutProblem(keys, entities, relationships) {
   const hit = heldOutCards(entities, relationships).find((c) => keys.includes(`${c.db}\u0000${c.table}`));
-  return hit ? `${hit.table} isn't related to another table yet. Relate it in the Data Model to use its fields.` : null;
+  return hit ? `${hit.table} isn't related to another table yet. Relate it in the Data Source to use its fields.` : null;
 }
 
 /** Up to `limit` column names of `columns` ([{ name, category }]) that could be joined to a `category` key and are not in a relationship yet. */

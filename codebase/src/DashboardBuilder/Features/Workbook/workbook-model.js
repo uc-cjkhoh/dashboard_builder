@@ -1,5 +1,5 @@
 // Workbook save/load format — pure, DOM-free (unit-tested under tests/js/).
-// A workbook is the whole builder state: the Data Model (tables + positions + join keys +
+// A workbook is the whole builder state: the Data Source (tables + positions + join keys +
 // relationships), every worksheet and every dashboard (its widgets on the board grid), in tab-strip order.
 // It never contains the connection or a password — a workbook is reopened against whatever server the
 // session is connected to. Format v2 (P24b) holds `worksheets`, `dashboards` and `tabs`; the v1 reader
@@ -66,7 +66,7 @@ export function serializeWorkbook({ entities, relationships, tabs, active, theme
     worksheets: worksheets.map((d) => ({ name: d.name, sheet: savedSheet(d.sheet) })),
     dashboards: dashboards.map((d) => ({ name: d.name, widgets: savedWidgets(d.widgets, wsIndex, dbIndex), ...savedSize(d.size) })), // size: optional (absent = automatic)
     tabs: order, // the strip's order
-    active: activeIndex !== undefined ? { kind: active.kind, index: activeIndex } : null, // null = the Data Model view
+    active: activeIndex !== undefined ? { kind: active.kind, index: activeIndex } : null, // null = the Data Source view
     theme: theme ? { accent: theme.accent, palette: theme.palette } : { ...DEFAULT_THEME },
     sharedFilters: structuredClone(sharedFilters),
     fields: Object.fromEntries(fieldMeta), // P28
@@ -244,7 +244,7 @@ export function parseWorkbook(source) {
     const a = raw.active, map = a && typeof a === "object" ? (a.kind === "worksheet" ? wsMap : a.kind === "dashboard" ? dbMap : null) : null;
     const index = map && Number.isInteger(a.index) ? map.get(a.index) : undefined;
     if (index !== undefined) active = { kind: a.kind, index };
-    else issues.push("The saved active tab was invalid — the data model view was opened.");
+    else issues.push("The saved active tab was invalid — the data source view was opened.");
   }
   const theme = cleanTheme(raw.theme, issues); // P41 — absent (older workbooks) = the default theme
   const sharedFilters = cleanFilters(raw.sharedFilters, "Shared filters", issues, LIMITS.sharedFilters); // P40

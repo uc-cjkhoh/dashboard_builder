@@ -31,7 +31,7 @@ try {
   });
   await b.goto(APP + '/');
   await b.waitFor(`!!document.getElementById('conn-connect')`, { label: 'app loaded' });
-  await check('the default Data Model view loads with zero page errors (no uncaught exception, rejection or console.error)', async () => {
+  await check('the default Data Source view loads with zero page errors (no uncaught exception, rejection or console.error)', async () => {
     await b.sleep(800); // sync() and the first render are async — give any rejection time to surface
     must(b.consoleErrors.length === 0, `page errors: ${b.consoleErrors.map((e) => String(e).split('\n')[0]).join(' | ')}`);
   });

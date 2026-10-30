@@ -8,7 +8,7 @@ import { wireMenu } from "../Core/menu.js";
 import { confirmDialog, toast } from "../Core/ui.js";
 import { text, LIMITS } from "../Core/validate.js";
 
-// The view strip: a pinned "Data Model" tab (the shared entity canvas) followed by one ordered list of worksheet and
+// The view strip: a pinned "Data Source" tab (the shared entity canvas) followed by one ordered list of worksheet and
 // dashboard tabs (each with its kind's icon) and a [+] menu — New worksheet / New dashboard. Clicking switches the active
 // view; tabs rename on double-click and close with a confirm when they hold content (a worksheet used by dashboards names
 // them). The model tab is never closable.
@@ -54,7 +54,7 @@ export function initTabs() {
     const label = document.createElement("button");
     label.type = "button";
     label.className = "tab__label";
-    label.textContent = "Data Model";
+    label.textContent = "Data Source";
     label.title = "The shared tables + relationships every worksheet is built from";
     label.addEventListener("click", () => showModel());
 

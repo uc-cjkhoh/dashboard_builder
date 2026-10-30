@@ -69,7 +69,7 @@
 .type-warning__why, .type-warning__hint { margin: 0; color: var(--ink-2); }
 .type-warning__hint { color: var(--ink); }
 
-/* The how-to line at the Data Model's foot: a solid pill (it floats over content), gone once every card is related. */
+/* The how-to line at the Data Source's foot: a solid pill (it floats over content), gone once every card is related. */
 .rel-guide { position: absolute; left: 50%; bottom: var(--s4); translate: -50% 0; z-index: 2; margin: 0; padding: var(--s2) var(--s4);
   background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r); box-shadow: var(--elev-8);
   color: var(--ink-2); font-size: var(--fs-body); white-space: nowrap; max-width: calc(100% - 2 * var(--s4)); overflow: hidden; text-overflow: ellipsis; }

@@ -82,7 +82,7 @@ export function openUnpivotDialog(db, tables) {
     closeDialog(dlg);
     openRowsDialog({ title: "Unpivot — first rows", subtitle: `${db}.${request.table}`, request, filename: "unpivot", load: api.unpivot });
   });
-  add.addEventListener("click", () => { // the unpivot becomes a table on the Data Model (canvas.js adds it) that worksheets can read
+  add.addEventListener("click", () => { // the unpivot becomes a table on the Data Source (canvas.js adds it) that worksheets can read
     let source;
     try { source = unpivotSource(db, select.value, ticked("asRow"), ticked("asKeep"), takenNames(entities, db, tables)); } catch (err) { toast(err.message, "danger"); return; }
     closeDialog(dlg);

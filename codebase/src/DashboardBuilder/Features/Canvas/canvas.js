@@ -9,7 +9,7 @@ import { entityWidth } from "./card-width.js";
 import { snapTop } from "./align-snap.js";
 import { sourceNote, lossyNote, wireSource, MAX_SOURCE_COLUMNS } from "../Core/source-model.js";
 
-// Data Model canvas + entity cards. A table dropped from the sidebar (or added via the
+// Data Source canvas + entity cards. A table dropped from the sidebar (or added via the
 // `table:add` fallback) becomes an entity card: a db.table head over a fixed-height, scrollable
 // list of column rows (name + type badge). Cards are a uniform height, moved
 // by dragging the head and removed via the head's trash icon. No row preview here — data lives in
@@ -20,7 +20,7 @@ const TABLE_MIME = "application/x-ch-table";
 let createEntityImpl = null;
 let clearModelImpl = null;
 
-/** Add a table to the Data Model at (x, y). `source` makes it a union / unpivot entity (Core/source-model.js; its `table` is the source's name; it takes no relationship).
+/** Add a table to the Data Source at (x, y). `source` makes it a union / unpivot entity (Core/source-model.js; its `table` is the source's name; it takes no relationship).
  *  Returns the new entity id, or null before the canvas is initialised. */
 export function addEntity(db, table, x, y, opts) { return createEntityImpl?.(db, table, x, y, opts) ?? null; }
 
@@ -76,7 +76,7 @@ export function initCanvas() {
     addTableFromUser(payload?.db, payload?.table, Math.max(0, x), Math.max(0, y));
   });
 
-  // A union / unpivot built in the sidebar dialogs: a new entity on the Data Model, like a table added with its + button.
+  // A union / unpivot built in the sidebar dialogs: a new entity on the Data Source, like a table added with its + button.
   document.addEventListener("source:add", (event) => {
     const { source } = event.detail;
     showModel();
@@ -85,7 +85,7 @@ export function initCanvas() {
   });
 
   // Non-drag fallback (accessibility): schema.js dispatches this from a chip's plus button.
-  // A table always goes to the shared Data Model; switch there if a dashboard is showing.
+  // A table always goes to the shared Data Source; switch there if a dashboard is showing.
   document.addEventListener("table:add", (event) => {
     const { db, table } = event.detail;
     showModel();

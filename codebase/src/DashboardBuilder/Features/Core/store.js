@@ -8,7 +8,7 @@
 //       dashboard: { id: "db#N", kind: "dashboard", name, widgets: [ … ], size }  (a board of worksheet / text / image / spacer / nav widgets; size = null (automatic) or { width, height } px)
 //     A widget is { id: "w#N", kind: "sheet", sheetId, x, y, w, h }, { id, kind: "text", heading, body, x, y, w, h }, { id, kind: "image", alt, src (a raster data URL), x, y, w, h }, { id, kind: "spacer", x, y, w, h } or { id, kind: "nav", label, tip, target (a tab id | null), x, y, w, h }
 //     (Board/board-model.js owns the geometry rules).
-// The tab strip shows the model ("Data Model") alongside the tabs; `activeView` tracks which is on screen:
+// The tab strip shows the model ("Data Source") alongside the tabs; `activeView` tracks which is on screen:
 //   { kind: "model" } | { kind: "worksheet", id } | { kind: "dashboard", id }
 // The workbook (Workbook/) saves all of it in the browser; there is no server-side state (decision O1).
 //
@@ -153,7 +153,7 @@ export function setBookmarks(list) {
 export const currentTheme = () => theme;
 export function setTheme(next) { theme = { ...next }; emit("theme:changed"); }
 
-// The shared data model.
+// The shared data source.
 export const entities = new Map();
 export const relationships = new Map();
 
