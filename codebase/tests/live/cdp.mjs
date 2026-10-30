@@ -27,7 +27,17 @@ export async function launch({ port, width = 1400, height = 900 } = {}) {
   port ??= await freePort();
   const profile = mkdtempSync(join(process.env.TMPDIR ?? tmpdir(), 'calc-ui-'));
   let proc = null;
-  const cleanup = () => { try { process.kill(-proc.pid, 'SIGKILL'); } catch { /* already gone */ } rmSync(profile, { recursive: true, force: true }); };
+  const onSignal = (sig) => () => { cleanup(); process.exit(128 + (sig === 'SIGINT' ? 2 : 15)); };
+  const handlers = { SIGINT: onSignal('SIGINT'), SIGTERM: onSignal('SIGTERM') };
+  const cleanup = () => {
+    for (const [sig, fn] of Object.entries(handlers)) process.off(sig, fn);
+    process.off('exit', cleanup);
+    try { process.kill(-proc.pid, 'SIGKILL'); } catch { /* already gone */ }
+    rmSync(profile, { recursive: true, force: true });
+  };
+  // a killed or interrupted script never reaches its `finally`; without these the profile outlives it
+  for (const [sig, fn] of Object.entries(handlers)) process.on(sig, fn);
+  process.on('exit', cleanup);
   try {
   proc = spawn(findChrome(), [
     '--headless=new', '--no-sandbox', '--disable-gpu', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`,
