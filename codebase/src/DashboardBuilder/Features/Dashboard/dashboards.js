@@ -62,7 +62,8 @@ import { calcProblem, topByRef, topByKey, aggWord } from "../Calc/calc-plan.js";
 import { REF_CHOICES, TREND_CHOICES, FORECAST_CHOICES, BAND_CHOICES, bandChoice, bandFromChoice, defaultAnalytics, itemsFor, itemActive, addItem, removeItem } from "./analytics-model.js";
 import { castChoices, castLabel, effectiveCategory, syncCastCategories } from "./cast-model.js";
 import { aliasOf, labelOf } from "./member-labels.js";
-import { hierarchyGroup, HIERARCHY_MIME } from "./hierarchy-group.js";
+import { HIERARCHY_MIME } from "./hierarchy-group.js";
+import { openCalcManager } from "./calc-manager.js";
 import { fieldGroup } from "./field-group.js";
 import { fieldsPaneView, readCollapsed, FIELDS_COLLAPSED_KEY } from "./fields-pane-model.js";
 import { openHierarchiesDialog } from "./hierarchy-dialog.js";
@@ -350,7 +351,6 @@ export function initDashboards() {
     const tables = uniqueTables();
     if (!tables.length) {
       const waiting = entities.size > 0; // tables exist, but none is in a relationship yet
-      toolsEl?.replaceChildren(calcFieldGroup(), hierGroup(new Map()));
       fieldsEl.replaceChildren(marksEl, hint(waiting
         ? "Relate your tables in the Data Source first. A table with no relationship can't be used here."
         : "Add tables to the Data Source, then drag their fields onto the shelves."));
@@ -374,8 +374,7 @@ export function initDashboards() {
       groups.push(group);
     }
     if (seq !== fieldsSeq) return;
-    // The pane: Marks first, then the search and one tile per table. Calculated fields and Hierarchies go to the sidebar.
-    toolsEl?.replaceChildren(calcFieldGroup(), hierGroup(columnsByTable));
+    // The pane: Marks first, then the search and one tile per table. Calculated fields and Hierarchies are two icons in the sidebar (below).
     fieldsEl.replaceChildren(marksEl, fieldTools(hiddenCount), ...groups);
     filterFields();
   }
@@ -418,11 +417,23 @@ export function initDashboards() {
   }
 
   // --- named hierarchies (T03-29): the "Hierarchies" group; applying one copies its levels into sheet.drill -----
-  const hierGroup = (columnsByTable) => hierarchyGroup({
-    hierarchies, columnsByTable, canApply: isWorksheetActive(),
-    onApply: (id) => applyHierarchy(activeWorksheet(), id),
-    onManage: (startNew) => openHierarchiesDialog({ tables: uniqueTables(), columnsFor, castOf, startNew }),
+  // The sidebar's two tool icons (worksheet tabs): each opens a dialog to add, edit or use the workbook's calculated fields / hierarchies.
+  const openHierarchies = (startNew) => openHierarchiesDialog({ tables: uniqueTables(), columnsFor, castOf, startNew, canApply: isWorksheetActive(), onApply: (id) => applyHierarchy(activeWorksheet(), id) });
+  const manageCalcs = () => openCalcManager({
+    state: () => paneState(calculations, catalogFromEntities([...entities.values()]), parameters),
+    chip: calcFieldChip, onNew: () => openCalcDialog(null), limit: LIMITS.calculations,
+    onEdit: ({ calc }) => (calc.group ? editGroupField(calc) : openCalcDialog(calc.id)),
   });
+  if (toolsEl) {
+    const tool = (glyph, label, onClick) => {
+      const b = makeButton("", "iconbtn sidebar__tool");
+      b.append(icon(glyph, { size: 20 }));
+      b.setAttribute("aria-label", label); b.title = label;
+      b.addEventListener("click", onClick);
+      return b;
+    };
+    toolsEl.replaceChildren(tool("calc", "Calculated fields", manageCalcs), tool("drill", "Hierarchies", () => openHierarchies(false)));
+  }
   async function applyHierarchy(dash, id) {
     const h = hierarchies.find((x) => x.id === id);
     if (!dash || !h) return;
@@ -436,24 +447,7 @@ export function initDashboards() {
   }
   bus.addEventListener("hierarchies:changed", () => { if (isWorksheetActive()) buildFields(); });
 
-  // --- calculated fields (Plan B): the "Calculated fields" group above the tables ----------------------
-  function calcFieldGroup() {
-    const group = fieldGroup("calc-group", "calculated", "Calculated fields", "calc-group-title");
-    const head = group.querySelector("summary");
-    const catalog = catalogFromEntities([...entities.values()]);
-    const state = paneState(calculations, catalog, parameters);
-    const add = makeButton("", "btn calc-group__new");
-    add.append(icon("plus", { size: 14 }), document.createTextNode("New calculated field"));
-    add.disabled = !state.canAdd;
-    add.title = state.canAdd ? "Write a formula and use it like a field" : `A workbook can have at most ${LIMITS.calculations} calculated fields.`;
-    add.addEventListener("click", () => openCalcDialog(null));
-    const list = el("div", "ws-fieldset calc-group__list");
-    list.setAttribute("role", "list"); list.setAttribute("aria-labelledby", head.id);
-    for (const item of state.items) list.append(calcFieldChip(item));
-    group.append(add, list);
-    return group;
-  }
-
+  // --- calculated fields (Plan B): chips are listed in the Calculated fields dialog (manageCalcs above) ----------------------
   // The payload a calculated chip drags / adds: a calc pill, with the session's Use-as choice for a row-level number.
   const calcPayload = (item) => makeCalcPill(item.calc, item.info, roleChoice(item.calc.id) ?? undefined);
 

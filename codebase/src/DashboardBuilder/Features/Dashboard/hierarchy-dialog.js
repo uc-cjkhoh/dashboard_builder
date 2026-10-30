@@ -6,7 +6,7 @@ import { LIMITS } from "../Core/validate.js";
 import { checkHierarchy } from "./hierarchy-model.js";
 import { makeButton, openDialog, closeDialog, toast, confirmDialog } from "../Core/ui.js";
 
-/** ctx: { tables: [{ db, table }], columnsFor(db, table) → Promise<[{ name }]>, castOf(f), startNew?: boolean } */
+/** ctx: { tables: [{ db, table }], columnsFor(db, table) → Promise<[{ name }]>, castOf(f), startNew?: boolean, canApply?: boolean, onApply?(id) } */
 export function openHierarchiesDialog(ctx) {
   const dlg = el("dialog", "dialog params-dialog hier-dialog");
   const head = el("div", "dialog__head");
@@ -24,13 +24,16 @@ export function openHierarchiesDialog(ctx) {
   const render = () => {
     body.replaceChildren();
     if (!hierarchies.length && editing !== "new")
-      body.append(el("p", "bookmark-note", "No hierarchies yet. A hierarchy is a named, ordered list of fields from one table (year → quarter → month). Drop it on a worksheet's Drill tool to set its drill levels in one step; a worksheet keeps its own copy of the levels."));
+      body.append(el("p", "bookmark-note", "No hierarchies yet. A hierarchy is a named, ordered list of fields from one table (year → quarter → month). Press Use to set a worksheet's drill levels in one step; the worksheet keeps its own copy of the levels."));
     const list = el("ul", "bookmark-list");
     for (const h of hierarchies) {
       if (editing === h.id) { list.append(editor(h)); continue; }
       const li = el("li", "bookmark");
       const info = el("div", "bookmark__info");
       info.append(el("span", "bookmark__name", h.name), el("span", "bookmark__meta", `${h.levels[0].table} · ${h.levels.map((l) => l.column).join(" › ")}`));
+      const use = makeButton("Use", "btn"); use.setAttribute("aria-label", `Use ${h.name} as this worksheet's Drill levels`);
+      use.title = ctx.canApply ? "Set this worksheet's Drill levels" : "Open a worksheet to use it"; use.disabled = !ctx.canApply || !ctx.onApply;
+      use.addEventListener("click", () => { ctx.onApply(h.id); finish(); });
       const edit = makeButton("Edit", "btn"); edit.setAttribute("aria-label", `Edit hierarchy ${h.name}`);
       edit.addEventListener("click", () => { editing = h.id; render(); });
       const del = makeButton("Delete", "btn"); del.setAttribute("aria-label", `Delete hierarchy ${h.name}`);
@@ -38,7 +41,7 @@ export function openHierarchiesDialog(ctx) {
         if (!(await confirmDialog(`Delete the hierarchy “${h.name}”? Worksheets that already use it keep their drill levels.`, { danger: true, confirmText: "Delete" }))) return;
         removeHierarchy(h.id); render();
       });
-      li.append(info, edit, del);
+      li.append(info, use, edit, del);
       list.append(li);
     }
     if (editing === "new") list.append(editor(null));

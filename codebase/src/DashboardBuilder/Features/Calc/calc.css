@@ -121,3 +121,9 @@
 .grp-other { display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: var(--s2); align-items: center; }
 .grp-member { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s2); align-items: center; }
 .grp-member .grp-member__value { margin: 0; font-weight: 400; font-size: var(--fs-body); color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
+
+/* ---- Calculated fields dialog (opened from the sidebar icon): a field chip and its Edit button per row ---- */
+.calc-manager { width: min(520px, calc(100vw - 2 * var(--s4))); }
+.calc-manager__list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s1); max-height: 50vh; overflow: auto; }
+.calc-manager__row { display: flex; align-items: center; gap: var(--s2); }
+.calc-manager__row > .ws-field { flex: 1; min-width: 0; }
