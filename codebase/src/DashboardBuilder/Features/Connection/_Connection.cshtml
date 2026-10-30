@@ -1,9 +1,7 @@
 @* Connection panel (sidebar top). Wired end-to-end in Connection/connection.js. Port/secure
    default to the TLS pair (8443, decision D10). *@
-<section class="sidebar__section" aria-labelledby="conn-title">
-    <div class="sidebar__title-row">
-        <h2 class="sidebar__title" id="conn-title">Connection</h2>
-    </div>
+<section class="sidebar__section sidebar__section--conn" aria-labelledby="conn-title">
+    <h2 class="sr-only" id="conn-title">Connection</h2>
 
     <!-- Compact connected summary — replaces the form once connected. -->
     <div class="conn-summary" id="conn-summary" hidden>
