@@ -645,3 +645,28 @@
 .tipdlg__preview { padding: var(--s2) var(--s4); border: 1px solid var(--line-2); border-radius: var(--r); background: var(--surface); box-shadow: var(--elev-8); color: var(--ink); font-size: var(--fs-body); overflow-wrap: anywhere; min-height: var(--s6); }
 .tipdlg__reset { margin-right: auto; }
 @media (max-width: 760px) { .tipdlg__body { grid-template-columns: minmax(0, 1fr); } .tipdlg__line { grid-template-columns: minmax(0, 1fr) auto auto auto; } .tipdlg__side { position: static; } }
+
+
+/* ---- Field pane: the fields are the focus ------------------------------------------------------------------------------
+   One solid tile per table on a quiet pane; its fields are flat rows (type icon tinted by role, name, add on hover). The tools that shape the
+   fields — Marks, Calculated fields, Hierarchies — follow below, without tiles or outlines, so nothing competes with the tables. */
+.ws-fields { background: var(--surface-2); gap: var(--s2); padding: var(--s2) var(--s4) var(--s4); }
+.ws-fieldtools { background: var(--surface-2); }
+.ws-fields .ws-group { margin-bottom: 0; }
+.ws-table { background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r); box-shadow: var(--elev-2); padding: var(--s1); }
+.ws-table > .ws-group__head { margin-left: 0; padding: var(--s1) var(--s2); height: var(--ctl-h); font-weight: 600; color: var(--ink); }
+.ws-table > .ws-group__head .icon { order: 2; margin-left: auto; }
+.ws-table > .ws-group__head .ws-group__name { order: 1; }
+.ws-table .ws-field-group { margin: var(--s1) 0 0; padding: 0 var(--s2); text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--ink-3); }
+.ws-field { height: var(--ctl-h); padding: 0 var(--s2); background: none; border-color: transparent; }
+.ws-field::before { display: none; }  /* the tinted type icon carries the role */
+.ws-field--dimension .ws-field__type { color: var(--dim-ink); }
+.ws-field--measure .ws-field__type { color: var(--meas-ink); }
+.ws-field:hover { background: color-mix(in srgb, var(--ink) 7%, transparent); border-color: transparent; }
+.ws-field.is-cast { height: auto; min-height: var(--ctl-h); }
+/* The tools: plain headers, ghost buttons, soft tiles for the marks. */
+.ws-fields .calc-group > .ws-group__head, .ws-fields .hier-group > .ws-group__head, .ws-fields .ws-shelf--marks > .ws-group__head { font-weight: 600; color: var(--ink-2); }
+.ws-fields .calc-group .btn, .ws-fields .hier-group .btn { justify-content: flex-start; border-color: transparent; background: none; color: var(--ink-2); box-shadow: none; }
+.ws-fields .calc-group .btn:hover:not(:disabled), .ws-fields .hier-group .btn:hover:not(:disabled) { background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--ink); }
+.ws-marks__row .ws-tool { border-color: transparent; background: var(--surface-3); }
+.ws-marks__row .ws-tool.is-set, .ws-marks__row .ws-tool.is-active { background: var(--accent-soft); }
