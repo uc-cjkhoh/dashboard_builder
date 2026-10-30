@@ -1,0 +1,17 @@
+/* Flat buttons — loaded last. No button has a border: its fill (or, where it has none, the hover wash, the underline or the shadow) carries the edge.
+   The `!important` is deliberate: dozens of feature stylesheets give their own buttons a border and state colour, and "any button" means all of them. */
+:root { --btn-fill: color-mix(in srgb, var(--ink) 8%, var(--surface)); --btn-fill-hover: color-mix(in srgb, var(--ink) 14%, var(--surface)); }
+button, .btn, .iconbtn, .tab, .tab-add, .ws-tool, .card-choice, [role="button"], [role="tab"] { border: 0 !important; }
+
+.btn:not(.btn--primary):not(.btn--danger) { background: var(--btn-fill); }
+.btn:not(.btn--primary):not(.btn--danger):hover:not(:disabled) { background: var(--btn-fill-hover); }
+.btn--danger { background: var(--danger-bg); }
+.btn--danger:hover:not(:disabled) { background: color-mix(in srgb, var(--danger-ink) 16%, var(--danger-bg)); }
+
+/* Glass tiers: the frosted fill is the control now (the border used to be). */
+.tab, .tab-add { background: var(--glass-ctl); }
+.tab:hover, .tab-add:hover { background: var(--glass-ctl-hover); }
+.glass .sidebar__tool { background: color-mix(in srgb, var(--ink) 9%, var(--glass-ctl)); }
+.glass .sidebar__tool:not(:disabled):hover { background: color-mix(in srgb, var(--ink) 15%, var(--glass-ctl)); }
+.card-choice { background: var(--btn-fill); }
+.card-choice.is-active { background: var(--accent-soft); }
