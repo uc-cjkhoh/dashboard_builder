@@ -63,7 +63,7 @@
    - sheet (worksheet): only the Calculated fields and Hierarchies tools; the connection, database and tables are hidden;
    - board (dashboard): nothing — the body and its resizer are hidden and the sidebar shrinks to a rail holding the brand mark.
    The user's own collapsed choice is untouched and returns with the Data Source tab. */
-.sidebar__tools { display: none; flex-direction: column; gap: var(--s2); }
+.sidebar__tools { display: none; gap: var(--s2); }
 .app[data-view="sheet"] .sidebar__tools { display: flex; }
 .app[data-view="sheet"] .sidebar__section--conn, .app[data-view="sheet"] #schema-section, .app[data-view="sheet"] #tables-section { display: none; }
 .app[data-view="board"] { grid-template-columns: var(--topbar-h) 1fr; }
@@ -71,9 +71,11 @@
 .app[data-view="board"] .sidebar__brand-text, .app[data-view="board"] .sidebar__toggle { display: none; }
 .app[data-view="board"] .sidebar__brand { justify-content: center; padding-inline: 0; }
 .app[data-view="board"] .sidebar__mark { display: grid; }
-/* Each tool is a bento tile like the rest of the body. */
-.sidebar__tools .ws-group { margin: 0; padding: var(--s1); background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r); box-shadow: var(--elev-2); }
-.sidebar__tools .ws-group__head { margin-left: 0; padding: var(--s1) var(--s2); height: var(--ctl-h); font-weight: 600; color: var(--ink); }
+/* The worksheet tools are two icon-only tiles (calculated fields, hierarchies); each opens its dialog. */
+.sidebar__tools { flex-direction: row; }
+.sidebar__tool { width: 40px; height: 40px; background: var(--surface); border: 1px solid var(--line-2); box-shadow: var(--elev-2); color: var(--ink-2); }
+.sidebar__tool:hover { background: var(--surface); border-color: var(--ink-3); color: var(--ink); box-shadow: var(--elev-8); }
+.sidebar__tool:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 /* Bento: the sidebar body is a grid of solid tiles on the glass, 8px apart, 16px from the rail's edges. Tiles: connection, database,
    the table list (takes the remaining height), and the Union / Unpivot pair side by side. One radius, one stroke, one soft lift. */
