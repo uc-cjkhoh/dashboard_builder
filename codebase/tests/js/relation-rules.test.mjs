@@ -140,3 +140,10 @@ test("a view reading a held-out table is refused, naming it", () => {
   assert.equal(heldOutProblem(["s\u0000orders", "s\u0000customers"], ents, rels), null);
   assert.equal(heldOutProblem(["s\u0000payments"], new Map([ent("c", "payments")]), new Map()), null);
 });
+
+import { pinOrder } from "../../src/DashboardBuilder/Features/Relations/relation-rules.js";
+test("pinned keys follow their partner's position, then the order the relationships were made", () => {
+  assert.deepEqual(pinOrder([{ column: "b", partnerTop: 0, seq: 2 }, { column: "a", partnerTop: 0, seq: 1 }]), ["a", "b"]); // not alphabetical by column
+  assert.deepEqual(pinOrder([{ column: "a", partnerTop: 300, seq: 1 }, { column: "z", partnerTop: 20, seq: 2 }]), ["z", "a"]); // the upper partner first
+  assert.deepEqual(pinOrder([{ column: "x", partnerTop: 0, seq: 3 }, { column: "y", partnerTop: 0, seq: 1 }, { column: "w", partnerTop: 0, seq: 2 }]), ["y", "w", "x"]);
+});
