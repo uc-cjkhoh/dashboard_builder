@@ -374,6 +374,15 @@
 .xt-corner { background: var(--surface-2); color: var(--ink-3); font-weight: 700; vertical-align: bottom; }
 .xt-colhdr { text-align: center; background: var(--surface); color: var(--ink-2); }
 .xt-rowhdr { text-align: left; vertical-align: top; background: var(--surface-2); color: var(--ink-2); font-weight: 600; }
+/* T03-29 expand / collapse: a +/- before a header that has a next level. 24px ghost button (a disclosure glyph, smaller than
+   --ctl-h so a compact row stays compact); its glyph overhangs the cell padding so the glyph, not the box, meets the text edge —
+   the -6px / -2px margins are that optical nudge (a documented exception to the 4 / 8 / 16 / 24 scale). */
+.xt-hdr { display: inline-flex; align-items: center; gap: var(--s1); }
+.xt-colhdr .xt-hdr { justify-content: center; }
+.xt-toggle { display: inline-grid; place-items: center; flex: none; width: var(--s6); height: var(--s6); margin: -2px 0 -2px -6px; padding: 0; border: 0;
+  border-radius: var(--r); background: transparent; color: var(--ink-2); cursor: pointer; transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); }
+.xt-toggle:hover { background: var(--surface-3); color: var(--ink); }
+.xt-toggle[aria-expanded="false"] { color: var(--accent-ink); }
 /* Measure-name band (top or left) reads as secondary to the dimension headers. */
 .xt-meas { font-weight: 600; color: var(--accent-ink); background: var(--surface-2); }
 .xtab thead .xt-meas { text-align: right; }

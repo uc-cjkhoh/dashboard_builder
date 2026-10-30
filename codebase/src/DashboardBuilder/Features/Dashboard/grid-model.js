@@ -10,17 +10,6 @@ export function uniqueTuples(list) {
   for (const t of list) { const k = tupleKey(t); if (!seen.has(k)) { seen.add(k); out.push(t); } }
   return out;
 }
-// Expand tuples into header/stub leaves. measureCount 0 → one leaf per tuple (mi:null); >0 → one leaf
-// per (tuple × measure). No tuples (no dims on that axis) → a single empty tuple so a value still shows.
-export function expandLeaves(tuples, measureCount) {
-  const src = tuples.length ? tuples : [[]];
-  const out = [];
-  for (const t of src) {
-    if (measureCount === 0) out.push({ tuple: t, mi: null });
-    else for (let mi = 0; mi < measureCount; mi++) out.push({ tuple: t, mi });
-  }
-  return out;
-}
 // Run-length groups of consecutive leaves sharing keyFn — for colSpan on the top header.
 export function runs(leaves, keyFn) {
   const out = [];

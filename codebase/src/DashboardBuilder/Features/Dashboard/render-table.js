@@ -3,7 +3,9 @@ import { planMeasures } from "./sheet-plan.js";
 import { isCalc } from "./table-calc.js";
 import { combine } from "./analytics-model.js";
 import { CF_OP_CHOICES, CF_TONE_CHOICES, TONE_ICON, measureKey, extentOf, scaleColors, barGeometry, matchRule, isActive, midpointOf } from "./conditional-model.js";
-import { tupleKey, uniqueTuples, expandLeaves, runs, levelSpans } from "./grid-model.js";
+import { tupleKey, uniqueTuples, runs, levelSpans } from "./grid-model.js";
+import { collapseKey, canToggle, rollUp, expandNodes, collapsedOf, leafValue, headerKeys, shownValues } from "./collapse-model.js";
+import { icon } from "../Core/icons.js";
 import { el, warn, iconSpan } from "./render-dom.js";
 import { tableStyleClasses } from "./table-style-model.js";
 import { PALETTES } from "../Core/theme-model.js";
@@ -17,9 +19,11 @@ import { PALETTES } from "../Core/theme-model.js";
 // pills are on (measures on both shelves → shown across the top, with a note). Built by pivoting the
 // flat grouped rows: keys are [rowDim…, colDim…]; we take the distinct row/col tuples and index the
 // cells, then render nested headers (colSpan on top, rowSpan on the left stub).
-export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, calcPercent = new Set()) {
+// T03-29: a header with a next level below it gets a +/- button (`collapse.onToggle(axis, key)`) when the host passes one; the
+// collapsed state (sheet.collapsed) shows either way. A collapsed header stands for its whole subtree as one row / column.
+let refocus = null; // the toggle to focus after the redraw a click causes: { axis, key }
+export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, calcPercent = new Set(), collapse = null) {
   const { rowDimensions, columnDimensions, measures, rows } = result;
-  const cf = conditionalFor(sheet, measures, rows); // P37: per measure index, or null
   const rd = rowDimensions.length, cd = columnDimensions.length;
   const dimLabel = (v, i) => (v == null ? "—" : fmtCat(v, i)); // date-aware header label (P10)
 
@@ -34,8 +38,8 @@ export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, ca
   for (const r of rows) cells.set(tupleKey(r.keys.slice(0, rd)) + "|" + tupleKey(r.keys.slice(rd, rd + cd)), r.values);
   const cellValue = (rt, ct, mi) => cells.get(tupleKey(rt) + "|" + tupleKey(ct))?.[mi];
 
-  const leftLeaves = expandLeaves(rowTuples, measureOnLeft ? measures.length : 0);
-  const topLeaves = expandLeaves(colTuples, measureOnLeft ? 0 : measures.length);
+  const leftLeaves = expandNodes(rollUp(rowTuples, rowDimensions, collapsedOf(sheet, "rows")), measureOnLeft ? measures.length : 0);
+  const topLeaves = expandNodes(rollUp(colTuples, columnDimensions, collapsedOf(sheet, "cols")), measureOnLeft ? 0 : measures.length);
   const leftLevels = rd + (measureOnLeft ? 1 : 0);
   const topLevels = cd + (measureOnLeft ? 0 : 1);
 
@@ -51,6 +55,35 @@ export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, ca
     const vals = [];
     for (const rt of rts) for (const ct of cts) vals.push(cellValue(rt, ct, mi));
     return combine(agg, vals);
+  };
+  // A leaf pair standing for a collapsed header is combined (never re-aggregated): see collapse-model.js leafValue.
+  // Rows still paging, or cut at the group limit: a combined value would be a partial sum shown as whole, so it reads "—".
+  const complete = !partial && !result.truncated;
+  const leafAt = (l, t, mi) => leafValue(aggOfMi(mi), cellValue, l, t, mi, complete);
+  const rowKeys = headerKeys(rowTuples, rowDimensions), colKeys = headerKeys(colTuples, columnDimensions);
+  // P37: per measure index, or null — scales and bars are measured on the values shown (a collapsed cell is a sum).
+  const cf = conditionalFor(sheet, measures, shownValues(leftLeaves, topLeaves, measureOnLeft, measures.length, leafAt));
+  const toggleOf = (axis, names, tuple, level, label) => {
+    if (!collapse || !canToggle(level, names.length)) return null;
+    const key = collapseKey(names, tuple, level);
+    const closed = collapsedOf(sheet, axis).has(key);
+    const b = el("button", "xt-toggle");
+    b.type = "button";
+    b.setAttribute("aria-expanded", String(!closed));
+    b.setAttribute("aria-label", `${closed ? "Expand" : "Collapse"} ${label} (${axis === "rows" ? "rows" : "columns"})`);
+    b.append(icon(closed ? "plus" : "minus", { size: 16 }));
+    b.addEventListener("click", () => { refocus = { axis, key }; collapse.onToggle(axis, key, axis === "rows" ? rowKeys : colKeys); });
+    if (refocus && refocus.axis === axis && refocus.key === key) { refocus = null; requestAnimationFrame(() => { if (b.isConnected) b.focus(); }); }
+    return b;
+  };
+  // A dimension header: the label, with its toggle before it when it has one.
+  const headerCell = (cls, text, toggle) => {
+    const th = el("th", cls);
+    if (!toggle) { th.textContent = text; return th; }
+    const box = el("span", "xt-hdr");
+    box.append(toggle, el("span", "xt-hdr__text", text));
+    th.append(box);
+    return th;
   };
   const totalCol = Boolean(tot.grand) && cd > 0;
   const totalMis = measureOnLeft ? [null] : measures.map((_, mi) => mi); // total columns: one per measure (on top) or one
@@ -70,9 +103,13 @@ export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, ca
     if (topLevels === 0) {
       tr.append(el("th", "num", ""));                         // single unlabeled value column
     } else if (tl < cd) {
-      for (const g of runs(topLeaves, (lf) => tupleKey(lf.tuple.slice(0, tl + 1)))) {
-        const th = el("th", "xt-colhdr", dimLabel(g.leaf.tuple[tl], rd + tl));
+      // A leaf collapsed above this level is covered by its header's rowSpan; at its own level that header spans the rest.
+      const shown = topLeaves.filter((lf) => lf.level === null || lf.level >= tl);
+      for (const g of runs(shown, (lf) => tupleKey(lf.tuple.slice(0, tl + 1)))) {
+        const label = dimLabel(g.leaf.tuple[tl], rd + tl);
+        const th = headerCell("xt-colhdr", label, toggleOf("cols", columnDimensions, g.leaf.tuple, tl, label));
         th.colSpan = g.span;
+        if (g.leaf.level === tl) th.rowSpan = cd - tl;
         tr.append(th);
       }
     } else {
@@ -94,27 +131,30 @@ export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, ca
   leftLeaves.forEach((leftLeaf, ri) => {
     const tr = document.createElement("tr");
     for (let ll = 0; ll < rd; ll++) {
+      if (leftLeaf.level !== null && ll > leftLeaf.level) continue; // covered by the collapsed header's colSpan
       const span = dimStarts[ll][ri];
       if (!span) continue;                                    // covered by a rowSpan above
-      const th = el("th", "xt-rowhdr", dimLabel(leftLeaf.tuple[ll], ll));
+      const label = dimLabel(leftLeaf.tuple[ll], ll);
+      const th = headerCell("xt-rowhdr", label, toggleOf("rows", rowDimensions, leftLeaf.tuple, ll, label));
       if (span > 1) th.rowSpan = span;
+      if (leftLeaf.level === ll) th.colSpan = rd - ll;
       tr.append(th);
     }
     if (measureOnLeft) tr.append(el("th", "xt-rowhdr xt-meas", measures[leftLeaf.mi]));
     for (const topLeaf of topLeaves) {
       const mi = measureOnLeft ? leftLeaf.mi : topLeaf.mi ?? 0;
-      const v = cellValue(leftLeaf.tuple, topLeaf.tuple, mi);
+      const v = leafAt(leftLeaf, topLeaf, mi);
       const text = calcPercent.has(mi) ? (v == null ? "—" : `${Number(v).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`) : fmtVal(v);
       tr.append(cf[mi] ? formattedCell(v, text, cf[mi]) : el("td", "num", text));
     }
     if (totalCol) for (const tmi of totalMis) {
       const mi = tmi ?? leftLeaf.mi;
-      tr.append(el("td", "num xt-total", showVal(mi, total(mi, [leftLeaf.tuple], colTuples))));
+      tr.append(el("td", "num xt-total", showVal(mi, leftLeaf.level !== null && !complete ? null : total(mi, leftLeaf.members, colTuples))));
     }
     tbody.append(tr);
     // Subtotal after the last row of each first-level group (measures on top, ≥ 2 Rows dimensions).
     const next = leftLeaves[ri + 1];
-    if (tot.sub && rd >= 2 && !measureOnLeft && (!next || tupleKey([next.tuple[0]]) !== tupleKey([leftLeaf.tuple[0]]))) {
+    if (tot.sub && rd >= 2 && !measureOnLeft && leftLeaf.level !== 0 && (!next || tupleKey([next.tuple[0]]) !== tupleKey([leftLeaf.tuple[0]]))) {
       const group = rowTuples.filter((t) => tupleKey([t[0]]) === tupleKey([leftLeaf.tuple[0]]));
       tbody.append(totalRow(`Subtotal · ${dimLabel(leftLeaf.tuple[0], 0)}`, group, null, "xt-subtotal"));
     }
@@ -133,7 +173,7 @@ export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, ca
     if (measureOnLeft) tr.append(el("th", "xt-rowhdr xt-meas xt-total", measureName ?? ""));
     for (const topLeaf of topLeaves) {
       const mi = onlyMi ?? topLeaf.mi ?? 0;
-      tr.append(el("td", "num xt-total", showVal(mi, total(mi, rts, [topLeaf.tuple]))));
+      tr.append(el("td", "num xt-total", showVal(mi, topLeaf.level !== null && !complete ? null : total(mi, rts, topLeaf.members))));
     }
     if (totalCol) for (const tmi of totalMis) { const mi = tmi ?? onlyMi ?? 0; tr.append(el("td", "num xt-total", showVal(mi, total(mi, rts, colTuples)))); }
     return tr;
@@ -152,7 +192,7 @@ export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, ca
 
 // --- conditional formatting (P37) ----------------------------------------
 // Per result measure: its setting, value extent over the loaded rows, and token palette — or null.
-function conditionalFor(sheet, measures, rows) {
+function conditionalFor(sheet, measures, shown) {
   const all = sheet.format?.conditional ?? {};
   const mplan = planMeasures(sheet);
   let palette = null;
@@ -160,7 +200,7 @@ function conditionalFor(sheet, measures, rows) {
     const cfg = all[measureKey(mplan[mi])];
     if (!isActive(cfg)) return null;
     palette ??= cfPalette();
-    return { cfg, name, ext: extentOf(rows.map((r) => r.values[mi])), palette };
+    return { cfg, name, ext: extentOf(shown[mi]), palette };
   });
 }
 // Scale colours from the chart tokens: sequential surface → blue; diverging orange ← surface → blue.

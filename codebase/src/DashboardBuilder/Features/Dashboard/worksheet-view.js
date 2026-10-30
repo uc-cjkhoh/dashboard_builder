@@ -61,7 +61,7 @@ export function createWorksheetView(container, getContext, options = {}) {
   const renderOptions = () => ({ plan: getContext().plan, interactive: mode, selected: cross?.selected ?? null,
     hooks: mode === "select" ? { onSelect: options.onSelect, onUnselectable: options.onUnselectable } : {
       onSelect: options.onSelect, onDrill: options.onDrill, onLegend: options.onLegend, legendFocus: options.legendFocus,
-      onTooltipFields: options.onTooltipFields, onMemberColors: options.onMemberColors } });
+      onTooltipFields: options.onTooltipFields, onMemberColors: options.onMemberColors, onCollapse: options.onCollapse } });
   // The tables the sheet's query involves (never throws: a sheet that can't be planned reaches nothing).
   const involvedOf = (c, s) => { try { return involvedTables(s, undefined, c.plan); } catch { return []; } };
   let extraNotice = null; // the line the last drawing wants in the notice (small-multiples cap, calculations on partial rows)
