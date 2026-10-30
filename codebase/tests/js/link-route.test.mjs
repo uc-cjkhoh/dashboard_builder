@@ -16,14 +16,14 @@ test("cards too close or overlapping both use the right edge", () => {
   assert.deepEqual(linkSides({ left: 0, right: 300 }, { left: 100, right: 400 }), [1, 1]);
 });
 
-test("facing sides turn STUB out of the left card, at the gutter's middle when it is narrow", () => {
+test("facing sides turn in the middle of the gutter, equally far from both cards", () => {
   const far = linkRoute({ x: 300, y: 40 }, 1, { x: 400, y: 120 }, -1);
-  assert.deepEqual(far.points, [{ x: 300, y: 40 }, { x: 324, y: 40 }, { x: 324, y: 120 }, { x: 400, y: 120 }]);
-  assert.deepEqual(far.label, { x: 324, y: 80 });
+  assert.deepEqual(far.points, [{ x: 300, y: 40 }, { x: 350, y: 40 }, { x: 350, y: 120 }, { x: 400, y: 120 }]);
+  assert.deepEqual(far.label, { x: 350, y: 80 });
   const near = linkRoute({ x: 300, y: 40 }, 1, { x: 348, y: 120 }, -1);
   assert.equal(near.points[1].x, 324);
   assert.equal(linkRoute({ x: 300, y: 40 }, 1, { x: 332, y: 120 }, -1).points[1].x, 316);
-  assert.equal(linkRoute({ x: 400, y: 40 }, -1, { x: 300, y: 120 }, 1).points[1].x, 324); // the same turn whichever end is the first
+  assert.equal(linkRoute({ x: 400, y: 40 }, -1, { x: 300, y: 120 }, 1).points[1].x, 350); // the same turn whichever end is the first
 });
 
 test("lanes shift the turn by 8px and stay a crow's foot clear of both cards", () => {
@@ -50,5 +50,5 @@ test("roundedPath rounds each turn and clamps the radius to half a short run", (
 
 test("a straight run (equal y) stays a straight line", () => {
   const { points } = linkRoute({ x: 300, y: 50 }, 1, { x: 400, y: 50 }, -1);
-  assert.equal(roundedPath(points), "M300,50 L324,50 L324,50 L400,50"); // zero-length turns add no curve
+  assert.equal(roundedPath(points), "M300,50 L350,50 L350,50 L400,50"); // zero-length turns add no curve
 });
