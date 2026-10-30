@@ -103,7 +103,7 @@ export function initCanvas() {
   // First grid slot (left→right, top→bottom, fitted to the visible width) that no card overlaps, so a
   // card added with the + button never hides another card's title. Dropped cards keep the drop point.
   function freeSlot() {
-    const pad = 16, gap = 48, w = 312, h = 312;  // pad = the view gutter (.view --s4), so cards line up with the tab strip; gap = room for a link's elbow and badge between cards
+    const pad = 16, gap = 96, w = 312, h = 312;  // pad = the view gutter (.view --s4), so cards line up with the tab strip; gap = room for a link's elbow and badge between cards
     const boxes = [...entities.values()].map(({ el }) => ({ x: el.offsetLeft, y: el.offsetTop, w: el.offsetWidth, h: el.offsetHeight }));
     const perRow = Math.max(1, Math.floor((canvas.clientWidth - 2 * pad + gap) / (w + gap)));
     for (let i = 0; i < 400; i++) {
@@ -224,14 +224,18 @@ export function initCanvas() {
 
     const title = document.createElement("span");
     title.className = "entity__title";
-    const dbPart = document.createElement("span");
-    dbPart.className = "entity__db";
-    dbPart.textContent = `${entity.db}.`;
     const tablePart = document.createElement("span");
     tablePart.className = "entity__table";
     tablePart.textContent = entity.table;
-    title.append(dbPart, tablePart);
+    title.append(tablePart);
     title.title = `${entity.db}.${entity.table}`;
+    // The database only earns space in the title when another card has the same table name.
+    if ([...entities.values()].some((e) => e !== entity && e.table === entity.table && e.db !== entity.db)) {
+      const dbPart = document.createElement("span");
+      dbPart.className = "entity__db";
+      dbPart.textContent = entity.db;
+      title.append(dbPart);
+    }
     // Fit the card to its name between the card's min/max tokens; beyond max the title ellipsises (title = full name).
     fitWidth(card, title);
 
@@ -242,7 +246,13 @@ export function initCanvas() {
     remove.append(icon("close"));
     remove.addEventListener("click", () => removeEntity(entity));
 
-    head.append(collapse, title, remove);
+    // Shown by relations.js while the card is in no relationship (the model has other cards to relate it to).
+    const need = document.createElement("span");
+    need.className = "entity__need";
+    need.textContent = "Needs a partner";
+    need.hidden = true;
+
+    head.append(collapse, title, need, remove);
     enableDragMove(entity, head);
 
     const status = document.createElement("div");
@@ -251,9 +261,12 @@ export function initCanvas() {
     const body = document.createElement("div");
     body.className = "entity__body";
     body.hidden = true;
+    // Joined keys are pinned here (Relations/relations.js), above the scrolling column list, so a link always ends on a visible row.
+    const keys = document.createElement("div");
+    keys.className = "entity__keys";
     const cols = document.createElement("div");
     cols.className = "entity__cols";
-    body.append(cols);
+    body.append(keys, cols);
 
     if (entity.source) { // how the columns are matched, in one line (the same rule as the preview)
       const note = document.createElement("p");
@@ -281,10 +294,12 @@ export function initCanvas() {
   function renderColumns(entity) {
     const cols = entity.el.querySelector(".entity__cols");
     cols.replaceChildren();
-    for (const col of entity.columns) {
+    entity.el.querySelector(".entity__keys")?.replaceChildren();
+    for (const [index, col] of entity.columns.entries()) {
       const row = document.createElement("label");
       row.className = "col-row";
       row.dataset.column = col.name;
+      row.dataset.index = String(index);
 
       const isSource = Boolean(entity.source);
       const key = document.createElement("input");
@@ -295,14 +310,9 @@ export function initCanvas() {
         if (key.checked) entity.joinKeys.add(col.name);
         else entity.joinKeys.delete(col.name);
         row.classList.toggle("col-row--key", key.checked);
-        keyIcon.hidden = !key.checked;
         // relations.js adds/removes the connector handle and prunes dropped links.
         emit("joinkey:changed", { entityId: entity.id, column: col.name, checked: key.checked });
       });
-
-      const keyIcon = icon("key", { size: 14 }); // shown while this column is a join key
-      keyIcon.classList.add("col-row__keyicon");
-      keyIcon.hidden = !key.checked;
 
       const name = document.createElement("span");
       name.className = "col-row__name";
@@ -325,7 +335,7 @@ export function initCanvas() {
       profile.addEventListener("click", (event) => { event.preventDefault(); openColumnProfile(entity.db, entity.table, col); });
 
       if (isSource) row.append(name, type); // no join keys and no profile: a source takes no relationship and reads no table
-      else row.append(key, keyIcon, name, type, profile);
+      else row.append(key, name, type, profile);
       cols.append(row);
     }
   }

@@ -83,3 +83,26 @@ test("badge prints the normalised type", () => {
   assert.equal(joinBadge("1:N", "bogus"), "1:N");
   assert.equal(joinBadge("1:N", undefined), "1:N");
 });
+
+import { relationshipOf, unlinkedCards } from "../../src/DashboardBuilder/Features/Relations/relation-rules.js";
+test("a column already in a relationship can't take a second one, on either end", () => {
+  const rel = { from: a, to: b, cardinality: "1:N" };
+  const other = { entityId: "e3", column: "ref" };
+  assert.equal(relationshipOf([rel], a), rel);
+  assert.equal(relationshipOf([rel], b), rel);
+  assert.equal(relationshipOf([rel], other), null);
+  assert.match(linkProblem({ ...base, relationships: [rel], to: other, toLabel: "payments.ref" }), /orders\.customer_id is already in a relationship/);
+  assert.match(linkProblem({ ...base, relationships: [rel], from: other, fromLabel: "payments.ref", to: b }), /customers\.id is already in a relationship/);
+});
+test("linkProblem reads an iterator more than once", () => {
+  const rel = { from: a, to: { entityId: "e9", column: "x" }, cardinality: "1:N" };
+  assert.match(linkProblem({ ...base, relationships: new Set([rel]).values() }), /already in a relationship/);
+});
+test("a card in no relationship is flagged once there are two relatable cards", () => {
+  const rel = { from: { entityId: "e1", column: "k" }, to: { entityId: "e2", column: "k" } };
+  assert.deepEqual(unlinkedCards([{ id: "e1" }], []), []);
+  assert.deepEqual(unlinkedCards([{ id: "e1" }, { id: "e2" }], []), ["e1", "e2"]);
+  assert.deepEqual(unlinkedCards([{ id: "e1" }, { id: "e2" }, { id: "e3" }], [rel]), ["e3"]);
+  assert.deepEqual(unlinkedCards([{ id: "e1" }, { id: "e2" }, { id: "u", source: true }], [rel]), []);
+  assert.deepEqual(unlinkedCards([{ id: "e1" }, { id: "u", source: true }], []), []);
+});

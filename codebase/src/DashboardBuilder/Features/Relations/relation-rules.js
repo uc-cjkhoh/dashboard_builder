@@ -7,9 +7,28 @@ export function findDuplicate(relationships, from, to) {
     if ((sameEnd(r.from, from) && sameEnd(r.to, to)) || (sameEnd(r.from, to) && sameEnd(r.to, from))) return r;
   return null;
 }
+/** The relationship a column is already in (a column holds at most one), or null. */
+export function relationshipOf(relationships, end) {
+  for (const r of relationships) if (sameEnd(r.from, end) || sameEnd(r.to, end)) return r;
+  return null;
+}
+
+/** Ids of the cards that take part in no relationship. With fewer than two relatable cards nothing can be related, so none are flagged.
+ *  `cards` is `[{ id, source }]`; a union / unpivot (`source`) takes no relationship and is left out. */
+export function unlinkedCards(cards, relationships) {
+  const relatable = cards.filter((c) => !c.source);
+  if (relatable.length < 2) return [];
+  const linked = new Set();
+  for (const r of relationships) { linked.add(r.from.entityId); linked.add(r.to.entityId); }
+  return relatable.filter((c) => !linked.has(c.id)).map((c) => c.id);
+}
+
 export function linkProblem({ relationships, from, to, fromCategory, toCategory, fromLabel, toLabel }) {
+  const rels = [...relationships]; // may be an iterator: read it more than once
   if (from.entityId === to.entityId) return "Pick a key on a different table.";
-  if (findDuplicate(relationships, from, to)) return `${fromLabel} and ${toLabel} are already related.`;
+  if (findDuplicate(rels, from, to)) return `${fromLabel} and ${toLabel} are already related.`;
+  for (const [end, label] of [[from, fromLabel], [to, toLabel]])
+    if (relationshipOf(rels, end)) return `${label} is already in a relationship. A column can be in only one.`;
   if (!keysCompatible(fromCategory, toCategory))
     return `Can't relate ${fromLabel} (${fromCategory}) to ${toLabel} (${toCategory}) — join keys must hold the same kind of value.`;
   return null;
