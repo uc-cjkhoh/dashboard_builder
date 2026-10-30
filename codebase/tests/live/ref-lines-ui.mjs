@@ -161,7 +161,8 @@ try {
     await settle(400); await chartReady();
   };
   const aHas = (label) => ev(`[...document.querySelectorAll('.ws-analytics .ws-fmt-field')].some((l) => l.querySelector('.ws-fmt-label').textContent === ${J(label)})`);
-  const mark = async (k) => (await opt()).series[0][k];
+  // the line/band sits on the series of the chosen measure (dual-axis change 310acbc), so read series[i]
+  const mark = async (k, i = 0) => { const sr = (await opt()).series; must(sr[i] && sr[i][k], `no ${k} on series ${i}; carried by series ${J(sr.map((x, j) => x[k] ? j : null).filter((j) => j !== null))}`); return sr[i][k]; };
 
   await check('reference line reads the chosen measure; the label names it', async () => {
     await dragChip('region', `__t.zone('rows')`);
@@ -174,7 +175,8 @@ try {
     must(ml.data[0].yAxis === 20 || ml.data[0].xAxis === 20, `first measure average: ${J(ml.data)}`);
     must(await aHas('of'), 'no measure chooser with two measures');
     await aPick('of', '1');
-    ml = await mark('markLine');
+    must(!(await opt()).series[0].markLine, 'line stayed on the first measure');
+    ml = await mark('markLine', 1);
     must(ml.data[0].yAxis === 35 || ml.data[0].xAxis === 35, `second measure average: ${J(ml.data)}`);
     must(/Average \(.+\): 35/.test(ml.label.formatter), `label: ${ml.label.formatter}`);
     await shot('refline-measure-light.png');
@@ -182,12 +184,12 @@ try {
 
   await check('distribution bands: mean ± 1σ and percentile range, each labelled with its rule', async () => {
     await aPick('Band', 'stddev1');
-    let ma = await mark('markArea');
+    let ma = await mark('markArea', 1);
     const [from, to] = [ma.data[0][0].yAxis ?? ma.data[0][0].xAxis, ma.data[0][1].yAxis ?? ma.data[0][1].xAxis];
     must(Math.abs(from - 20) < 1e-9 && Math.abs(to - 50) < 1e-9, `σ band ${from}..${to}`); // values 20,35,50: mean 35, sd 15
     must(/^Mean ± 1σ/.test(ma.label.formatter), `label ${ma.label.formatter}`);
     await aPick('Band', 'p25-75');
-    ma = await mark('markArea');
+    ma = await mark('markArea', 1);
     const f2 = ma.data[0][0].yAxis ?? ma.data[0][0].xAxis, t2 = ma.data[0][1].yAxis ?? ma.data[0][1].xAxis;
     must(f2 === 27.5 && t2 === 42.5 && /^P25–P75/.test(ma.label.formatter), `percentile band ${f2}..${t2} ${ma.label.formatter}`);
     await shot('band-light.png');
