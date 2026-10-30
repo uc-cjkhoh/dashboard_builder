@@ -36,14 +36,14 @@
   display: flex;
   flex-direction: column;
   background: var(--surface);
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-2);   /* a visible edge against the wash */
   border-radius: var(--r);
-  box-shadow: var(--elev-2);
+  box-shadow: var(--elev-card);
   overflow: hidden;
   animation: rise-in var(--dur-slow) var(--ease-out);
   transition: box-shadow var(--dur) var(--ease), border-color var(--dur) var(--ease);
 }
-.entity:hover { border-color: var(--line-2); box-shadow: var(--elev-8); }
+.entity:hover { border-color: var(--ink-3); box-shadow: var(--elev-card-hover); }
 .entity.is-flash { outline: 2px solid var(--accent); outline-offset: 2px; }
 .entity--dragging { box-shadow: var(--elev-16); animation: none; cursor: grabbing; }
 .entity__toggle { transition: transform var(--dur) var(--ease); }
@@ -60,6 +60,7 @@
   border-bottom: 1px solid var(--line);
   cursor: grab;
   user-select: none;
+  box-shadow: inset 0 1px 0 var(--card-rim);
 }
 .entity--dragging .entity__head { cursor: grabbing; }
 /* One 16px gutter (--s4) on both sides of the whole card: the title, the column names and the note start on it; the ✕'s ink, the type text and the

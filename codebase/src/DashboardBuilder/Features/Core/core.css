@@ -51,6 +51,10 @@
   --elev-8: 0 4px 10px rgb(40 12 18 / .08), 0 0 1px rgb(40 12 18 / .10);
   --elev-16: 0 10px 24px rgb(40 12 18 / .12), 0 0 1px rgb(40 12 18 / .12);
   --elev-28: 0 18px 40px rgb(40 12 18 / .18), 0 0 1px rgb(40 12 18 / .14);
+  /* Data Source cards: a tight contact shadow plus a wide soft one, so the card reads as lifted off the wash; the rim is a 1px highlight on its head. */
+  --elev-card: 0 1px 2px rgb(40 12 18 / .10), 0 8px 20px -6px rgb(40 12 18 / .16);
+  --elev-card-hover: 0 2px 4px rgb(40 12 18 / .10), 0 14px 28px -8px rgb(40 12 18 / .22);
+  --card-rim: rgb(255 255 255 / .9);
   --scrim: rgb(28 23 25 / .38);
   /* Motion (Fluent-style): ~150–250ms; entrances decelerate (--ease-out), exits accelerate (--ease-in)
      and are quicker (--dur-exit). Only opacity/transform animate. Core/motion.js mirrors these. */
@@ -77,6 +81,9 @@
   --chart-cat-5: #2ec48c; --chart-cat-6: #e3895e; --chart-cat-7: #a192ec; --chart-cat-8: #e77675;
   --elev-2: 0 1px 2px rgb(0 0 0 / .45); --elev-8: 0 4px 10px rgb(0 0 0 / .45);
   --elev-16: 0 10px 24px rgb(0 0 0 / .5); --elev-28: 0 18px 40px rgb(0 0 0 / .6);
+  --elev-card: 0 1px 2px rgb(0 0 0 / .55), 0 10px 24px -6px rgb(0 0 0 / .6);
+  --elev-card-hover: 0 2px 4px rgb(0 0 0 / .55), 0 16px 32px -8px rgb(0 0 0 / .7);
+  --card-rim: rgb(255 255 255 / .07);
   --scrim: rgb(0 0 0 / .55);
 }
 /* No backdrop-filter, or the user asked for less transparency: glass falls back to an opaque surface.
