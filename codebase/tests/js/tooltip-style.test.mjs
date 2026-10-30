@@ -67,9 +67,9 @@ test("workbook round-trips tooltipStyle; bad style is dropped with an issue; old
   const issues = [];
   assert.deepEqual(sanitizeSheet({ tooltipText: "a\nb", tooltipStyle: [{ bold: true }] }, "S", issues).tooltipStyle, [{ bold: true }]);
   assert.deepEqual(issues, []);
-  assert.equal(sanitizeSheet({ tooltipText: "a" }, "S", issues).tooltipStyle, null);
+  assert.equal(sanitizeSheet({ tooltipText: "a" }, "S", issues).tooltipStyle, undefined);
   assert.deepEqual(issues, []);
   const bad = [];
-  assert.equal(sanitizeSheet({ tooltipStyle: [{ color: "#fff" }] }, "S", bad).tooltipStyle, null);
+  assert.equal(sanitizeSheet({ tooltipStyle: [{ color: "#fff" }] }, "S", bad).tooltipStyle, undefined);
   assert.equal(bad.length, 1);
 });

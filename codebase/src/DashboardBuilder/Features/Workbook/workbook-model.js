@@ -391,7 +391,7 @@ export function sanitizeSheet(saved, where, issues) {
   }
   { // tooltip modal line styles: dropped (with an issue) when invalid, and meaningless without a template
     const r = checkTooltipStyle(s.tooltipStyle);
-    sheet.tooltipStyle = r.ok && sheet.tooltipText ? r.value : null;
+    if (r.ok && sheet.tooltipText && r.value) sheet.tooltipStyle = r.value;
     if (!r.ok) issues.push(`${where}: the tooltip style was invalid — reset.`);
   }
   sheet.memberColors = cleanMemberColors(s.memberColors, where, issues); // T01-20

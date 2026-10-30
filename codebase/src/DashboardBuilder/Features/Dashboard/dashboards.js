@@ -2254,7 +2254,7 @@ export function initDashboards() {
     const save = () => {
       const r = checkTooltipText(ta.value);
       if (!r.ok || r.value === (s.tooltipText ?? null)) return;
-      s.tooltipText = r.value; if (!r.value) s.tooltipStyle = null; commit(dash, s);
+      s.tooltipText = r.value; if (!r.value) delete s.tooltipStyle; commit(dash, s);
     };
     ta.addEventListener("input", refresh);
     ta.addEventListener("change", save);
@@ -2267,7 +2267,7 @@ export function initDashboards() {
         if (!t.ok || !st.ok) return;
         const nextStyle = t.value ? st.value : null;
         if (t.value === (s.tooltipText ?? null) && JSON.stringify(nextStyle) === JSON.stringify(s.tooltipStyle ?? null)) return;
-        s.tooltipText = t.value; s.tooltipStyle = nextStyle; ta.value = t.value ?? ""; refresh(); commit(dash, s);
+        s.tooltipText = t.value; if (nextStyle) s.tooltipStyle = nextStyle; else delete s.tooltipStyle; ta.value = t.value ?? ""; refresh(); commit(dash, s);
       } }));
     box.append(modal, preview, note);
     const redraw = () => { if (!box.isConnected) return; drawChips(); refresh(); };
