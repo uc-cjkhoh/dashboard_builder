@@ -49,7 +49,7 @@ export function openUnionDialog(db, tables) {
     closeDialog(dlg);
     openRowsDialog({ title: "Union — first rows", subtitle: `${db}: ${request.tables.join(" + ")}`, request, filename: "union", load: api.union });
   });
-  add.addEventListener("click", () => { // the union becomes a table on the Data Model (canvas.js adds it) that worksheets can read
+  add.addEventListener("click", () => { // the union becomes a table on the Data Source (canvas.js adds it) that worksheets can read
     let source;
     try { source = unionSource(db, picked(), takenNames(entities, db, tables)); } catch (err) { toast(err.message, "danger"); return; }
     closeDialog(dlg);

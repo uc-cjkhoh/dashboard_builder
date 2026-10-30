@@ -73,13 +73,13 @@ import { toggleDateLabels } from "./date-labels.js";
 // Tableau-style worksheet: each worksheet tab is one sheet. Drag fields from the field pane onto the
 // Columns (dimension), Rows (measure) and Filters shelves; the chart renders from a bounded,
 // identifier-safe query. Fields from *different* tables are joined automatically along the
-// relationships drawn in the Data Model (a join path found by BFS over the relationship graph).
+// relationships drawn in the Data Source (a join path found by BFS over the relationship graph).
 // Chart types whose marks take Format → Marker size / Mark border (scatter family and line markers; bars and cells).
 const MARKER_TYPES = new Set(["scatter", "square", "circle", "line", "area", "combo", "heatmap"]);
 const BORDER_TYPES = new Set(["bar", "stacked", "combo", "scatter", "square", "circle", "heatmap", "pie", "donut", "treemap", "funnel"]);
 const FIELD_MIME = "application/x-ch-field";
 const ANALYTICS_MIME = "application/x-ch-analytics"; // T07-01: an Analytics pane item dragged onto the chart
-// Column category from the Data Model catalog (entity.columns), for filters saved without one.
+// Column category from the Data Source catalog (entity.columns), for filters saved without one.
 // T02-34: a field's cast (field setting) decides the category its pills, filters and the field pane use.
 export const castOf = (f) => metaOf(f).cast;
 export const categoryOf = (db, table, column) => {
@@ -88,7 +88,7 @@ export const categoryOf = (db, table, column) => {
 };
 function baseCategoryOf(db, table, column) {
   try {
-    // The worksheet's own column cache is warm by render time (buildFields awaited it); the Data Model's
+    // The worksheet's own column cache is warm by render time (buildFields awaited it); the Data Source's
     // entity columns (loaded asynchronously by the canvas) are the fallback.
     const cached = columnsCache.get(keyOf(db, table))?.find((x) => x.name === column);
     if (cached?.category) return cached.category;
@@ -97,7 +97,7 @@ function baseCategoryOf(db, table, column) {
   } catch { /* total: an odd catalog just means "unknown" */ }
   return undefined;
 }
-// A column's type from the field pane's cache, else the Data Model's catalog ("" when unknown).
+// A column's type from the field pane's cache, else the Data Source's catalog ("" when unknown).
 function columnType(db, table, column) {
   return columnsCache.get(keyOf(db, table))?.find((x) => x.name === column)?.type
     ?? [...entities.values()].find((e) => e.db === db && e.table === table)?.columns?.find((x) => x.name === column)?.type ?? "";
@@ -350,8 +350,8 @@ export function initDashboards() {
     if (!tables.length) {
       const waiting = entities.size > 0; // tables exist, but none is in a relationship yet
       fieldsEl.replaceChildren(calcFieldGroup(), hierGroup(new Map()), marksEl, hint(waiting
-        ? "Relate your tables in the Data Model first. A table with no relationship can't be used here."
-        : "Add tables to the Data Model, then drag their fields onto the shelves."));
+        ? "Relate your tables in the Data Source first. A table with no relationship can't be used here."
+        : "Add tables to the Data Source, then drag their fields onto the shelves."));
       filterFields();
       return;
     }

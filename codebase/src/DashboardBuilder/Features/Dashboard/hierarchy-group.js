@@ -39,7 +39,7 @@ function chip(h, status, canApply, onApply) {
   c.append(t, el("span", "ws-field__name", h.name));
   if (!status.ok) {
     c.classList.add("hier-field--bad");
-    c.title = `${h.name} · ${path} — ${status.tableMissing ? "its table isn't in the Data Model" : `missing: ${status.missing.join(", ")}`}`;
+    c.title = `${h.name} · ${path} — ${status.tableMissing ? "its table isn't in the Data Source" : `missing: ${status.missing.join(", ")}`}`;
     const badge = el("span", "calc-chip calc-chip--danger");
     badge.append(icon("warning", { size: 13 }), document.createTextNode(status.tableMissing ? "No table" : "Missing field"));
     c.append(badge);

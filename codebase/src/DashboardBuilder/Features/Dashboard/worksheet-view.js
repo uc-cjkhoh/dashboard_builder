@@ -189,7 +189,7 @@ export function createWorksheetView(container, getContext, options = {}) {
       const tableInvolved = [...pillSlots(s)].some((f) => !isCalcPill(f) || planTables(f, cctx).length)
         || s.filters.length || s.drill?.levels?.length || s.pages || s.period;
       container.replaceChildren(tableInvolved
-        ? warn("These fields come from tables with no relationship between them — draw one in the Data Model.")
+        ? warn("These fields come from tables with no relationship between them — draw one in the Data Source.")
         : hint("Add a field from a table — a calculation with no field in it has nothing to group or total."));
       return;
     }

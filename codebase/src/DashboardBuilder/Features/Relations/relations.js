@@ -32,7 +32,7 @@ export function initRelations() {
   guide.className = "rel-guide";
   guide.hidden = true;
   guide.textContent = "Drag a column onto a column in another table to relate them.";
-  canvas.parentElement.append(guide); // over the Data Model, centred at its foot
+  canvas.parentElement.append(guide); // over the Data Source, centred at its foot
 
   bus.addEventListener("entity:moved", () => render());
   bus.addEventListener("entity:loaded", (e) => { markDraggable(e.detail.entityId); render(); }); // a restored link waits for its key rows
@@ -231,7 +231,7 @@ function orderStrip(entity, strip) {
   for (const c of want) strip.append(rows.find((row) => row.dataset.column === c));
 }
 
-// The one-line how-to: shown on the Data Model while some table card has no relationship, gone once every card has one.
+// The one-line how-to: shown on the Data Source while some table card has no relationship, gone once every card has one.
 function updateGuide() {
   if (!guide) return;
   guide.hidden = !isModelActive() || ![...entities.values()].some((e) => e.el.classList.contains("entity--unlinked"));

@@ -1,4 +1,4 @@
-/* Tabs feature — the Data Model tab + the worksheet / dashboard tab strip. */
+/* Tabs feature — the Data Source tab + the worksheet / dashboard tab strip. */
 
 /* ---- Tabs (worksheets + dashboards) -------------------------------------- */
 .tabs { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; flex: 1; min-width: 0; }

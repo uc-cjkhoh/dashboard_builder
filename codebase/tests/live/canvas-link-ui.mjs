@@ -1,4 +1,4 @@
-// Browser checks for the Data Model canvas: card width follows the table name, a relationship made by dragging a
+// Browser checks for the Data Source canvas: card width follows the table name, a relationship made by dragging a
 // column row onto another card's row, and the date pill's Show all / Thin out labels. Real dev app (APP_URL, default
 // http://localhost:5182) in headless Chromium over the DevTools protocol (tests/live/cdp.mjs); every /api/* call is mocked.
 // Run: node tests/live/canvas-link-ui.mjs  (start the app: cd src/DashboardBuilder && dotnet run --no-launch-profile --urls http://localhost:5182; stop it by port)

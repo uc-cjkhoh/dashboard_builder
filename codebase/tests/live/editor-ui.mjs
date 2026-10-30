@@ -1,6 +1,6 @@
 // Browser checks for the worksheet editor's chart interactions (P24a refactor safety net): click selection Keep / Exclude,
 // legend click, drill down / up, Pages stepping, SVG / PNG export, print sizing, undo / redo, the Table pager with a theme
-// flip, Refresh and Cancel on a slow query, and leaving for the Data Model mid-query. The real dev app (APP_URL, default
+// flip, Refresh and Cancel on a slow query, and leaving for the Data Source mid-query. The real dev app (APP_URL, default
 // http://localhost:5193) in headless Chromium; every /api/* call is mocked. Any page error fails the run (cdp.mjs).
 import { launch } from './cdp.mjs';
 import { mkdirSync } from 'node:fs';
@@ -339,13 +339,13 @@ try {
     await waitFor(`!!${chartHost}`, 'chart drawn after refresh');
   });
 
-  await check('leaving for the Data Model mid-query neither errors nor draws; coming back draws', async () => {
+  await check('leaving for the Data Source mid-query neither errors nor draws; coming back draws', async () => {
     slowMs = 1500;
     await click('Refresh');
     await waitFor(`!!document.querySelector('#ws-chart .ws-loading')`, 'loading');
     await ev(`document.querySelector('.tab--model .tab__label').click()`);
     await waitFor(`document.getElementById('worksheet-view').hidden`, 'model view');
-    await b.sleep(2200); // the slow answer lands while the Data Model is up
+    await b.sleep(2200); // the slow answer lands while the Data Source is up
     slowMs = 0;
     must(b.consoleErrors.length === 0, `page errors: ${b.consoleErrors}`);
     await ev(`document.querySelector('.tab:not(.tab--model) .tab__label').click()`);
