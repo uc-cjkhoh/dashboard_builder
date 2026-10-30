@@ -238,7 +238,7 @@ export function initCanvas() {
     need.title = "Held out of worksheets until this table is related to another one";
     need.hidden = true;
 
-    head.append(collapse, title, need, remove);
+    head.append(title, need, collapse, remove); // the caret sits by the ✕ so the title starts on the card's left gutter, like the column names
     enableDragMove(entity, head);
 
     const status = document.createElement("div");
