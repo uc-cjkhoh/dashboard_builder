@@ -142,11 +142,12 @@ export function initBoard() {
     const preview = printing ? null : previewWidth(device, panelInner());
     const k = dash.size && printing ? Math.min(1, PRINT_WIDTH / dash.size.width) : 1;
     const fixed = dash.size && preview === null ? { width: dash.size.width * k, height: dash.size.height * k } : null; // a device preview replaces the fixed size while it is on
-    const width = fixed ? fixed.width : printing ? PRINT_WIDTH : preview ?? grid.clientWidth;
-    if (!width) return;
+    // Set the box (or clear it) BEFORE reading clientWidth: leaving Phone / Tablet must measure the panel, not the stale preview box.
     grid.classList.toggle("is-fixed", Boolean(fixed));
     grid.classList.toggle("is-preview", preview !== null);
     grid.style.width = fixed ? `${fixed.width}px` : preview !== null ? `${preview}px` : "";
+    const width = fixed ? fixed.width : printing ? PRINT_WIDTH : preview ?? grid.clientWidth;
+    if (!width) return;
     const { stacked, height, rects } = layoutBoard(dash.widgets, width, { ...metrics, stack: printing && !fixed, fixed }); // paper: one column in flow, so no widget splits across pages
     if (printing) for (const [id, r] of rects) entries.get(id)?.sizeChart({ width: r.width, height: r.height, chrome: { x: 2 * metrics.pad + 2, y: 2 * metrics.pad + 2 } });
     grid.classList.toggle("is-stacked", stacked);
@@ -322,8 +323,14 @@ export function initBoard() {
   bus.addEventListener("entity:loaded", () => { clearTimeout(columnsTimer); columnsTimer = setTimeout(() => { for (const e of entries.values()) e.retryIfBlank(); }, 100); });
 
   // The canvas width follows its panel: re-lay out on resize (charts re-fit through their own observers — no query).
-  let lastWidth = 0;
-  const widthObserver = new ResizeObserver(() => { const w = grid.clientWidth + panelInner() * 10000; if (w !== lastWidth) { lastWidth = w; layout(); } });
+  let lastWidth = 0, lastPanel = 0;
+  const widthObserver = new ResizeObserver(() => {
+    const w = grid.clientWidth, p = panelInner();
+    if (w === lastWidth && p === lastPanel) return;
+    lastWidth = w; lastPanel = p;
+    paintDevice(); // a device the panel can no longer hold is disabled
+    layout();
+  });
   widthObserver.observe(grid);
   widthObserver.observe(grid.parentElement); // a preview box is narrower than its panel: the panel resizing re-fits it
 
@@ -373,18 +380,29 @@ export function initBoard() {
     const b = makeButton("", "btn board-bar__btn board-device__btn");
     b.dataset.device = d.key;
     b.append(icon(d.key === "desktop" ? "monitor" : d.key, { size: 14 }), document.createTextNode(d.label));
-    b.title = d.width ? `Preview at ${d.width} px wide` : "Preview at the full panel width";
     b.addEventListener("click", () => {
       device = d.key;
       paintDevice();
       layout();
-      status(d.width ? `Previewing ${d.label.toLowerCase()} width, ${previewWidth(d.key, panelInner())} px.` : "Desktop width.");
+      if (d.width && activeDashboard()?.size) status(`${SIZE_NOTE.replace("Size", "The fixed size")}.`);
+      else status(d.width ? `Previewing ${d.label.toLowerCase()} width, ${previewWidth(d.key, panelInner())} px.` : "Desktop width.");
     });
     return b;
   });
+  const SIZE_NOTE = "Size is replaced by the device preview; choose Desktop to change it";
   function paintDevice() {
-    for (const b of deviceBtns) b.setAttribute("aria-pressed", String(b.dataset.device === deviceOf(device).key));
+    const room = panelInner();
+    deviceBtns.forEach((b, i) => {
+      const d = DEVICES[i], on = d.key === deviceOf(device).key;
+      b.setAttribute("aria-pressed", String(on));
+      b.querySelector(".board-device__check")?.remove();
+      if (on) { const c = icon("check", { size: 14 }); c.classList.add("board-device__check"); b.append(c); } // a mark beside the colour and weight
+      const tooSmall = d.width != null && room > 0 && room < d.width && !on;
+      b.disabled = tooSmall;
+      b.title = tooSmall ? `The panel is narrower than ${d.width} px — widen the window to preview ${d.label.toLowerCase()}` : d.width ? `Preview at ${d.width} px wide` : "Preview at the full panel width";
+    });
     sizeSel.disabled = device !== "desktop"; // the preview replaces a fixed size while it is on
+    sizeSel.title = device !== "desktop" ? SIZE_NOTE : "";
   }
   deviceGroup.append(...deviceBtns);
   paintDevice();

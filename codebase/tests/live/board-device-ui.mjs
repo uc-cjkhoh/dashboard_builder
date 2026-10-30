@@ -101,6 +101,47 @@ try {
     must(await gridW() === panel, `width ${await gridW()} vs ${panel}`);
     must(await ev(`!document.querySelector('.board-bar__size').disabled`), 'size select still disabled');
   });
+  await check('a fixed-size dashboard: the preview drops the box, Desktop brings it back; the disabled select says why', async () => {
+    const pickSize = (v) => ev(`(() => { const s = document.querySelector('.board-bar__size'); s.value = ${J(v)}; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+    await pickSize('800x600');
+    await waitFor(`document.getElementById('board-grid').classList.contains('is-fixed')`, 'fixed');
+    must(await gridW() === 800, `fixed width ${await gridW()}`);
+    must(await ev(`document.querySelector('.board-bar__size').title`) === '', 'title set on Desktop');
+    await press('tablet');
+    await waitFor(`document.getElementById('board-grid').getBoundingClientRect().width === 768`, 'tablet box');
+    must(await ev(`!document.getElementById('board-grid').classList.contains('is-fixed')`), 'is-fixed kept in preview');
+    const h = await ev(`Math.round(document.getElementById('board-grid').getBoundingClientRect().height)`);
+    must(h !== 600, `height not recomputed: ${h}`);
+    must(await ev(`document.querySelector('.board-bar__size').disabled`), 'select enabled');
+    must(/replaced by the device preview; choose Desktop/.test(await ev(`document.querySelector('.board-bar__size').title`)), 'no reason on the select');
+    must(/choose Desktop/.test(await ev(`document.getElementById('board-status').textContent`)), 'no reason in the status line');
+    await press('desktop');
+    await waitFor(`document.getElementById('board-grid').getBoundingClientRect().width === 800 && document.getElementById('board-grid').classList.contains('is-fixed')`, 'fixed back');
+    must(await ev(`document.querySelector('.board-bar__size').title`) === '' && await ev(`!document.querySelector('.board-bar__size').disabled`), 'select not restored');
+    must(await ev(`document.querySelector('.board-bar__size').value`) === '800x600', 'value lost');
+    await pickSize('auto');
+    await waitFor(`!document.getElementById('board-grid').classList.contains('is-fixed')`, 'automatic');
+  });
+  await check('the pressed button carries a check mark besides colour', async () => {
+    await press('tablet');
+    must(await ev(`document.querySelectorAll('.board-device__check').length === 1 && !!document.querySelector('[data-device=tablet] .board-device__check')`), 'check mark missing / duplicated');
+    await press('desktop');
+  });
+  await check('Phone to Desktop re-measures the panel (no stale preview width)', async () => {
+    await press('phone'); await waitFor(`document.getElementById('board-grid').getBoundingClientRect().width === 390`, 'phone');
+    await press('desktop');
+    must(await ev(`document.getElementById('board-grid').style.width === ''`), 'width style kept');
+    const a = await rect(1);
+    must(a.l > 100, `second widget not back in the grid: ${J(a)}`);
+  });
+  await check('a panel narrower than the device disables its button and says why', async () => {
+    await b.send('Emulation.setDeviceMetricsOverride', { width: 1000, height: 900, deviceScaleFactor: 1, mobile: false });
+    await waitFor(`document.querySelector('[data-device=tablet]').disabled`, 'tablet disabled');
+    must(/narrower than 768/.test(await ev(`document.querySelector('[data-device=tablet]').title`)), 'no reason');
+    must(await ev(`!document.querySelector('[data-device=phone]').disabled`), 'phone disabled');
+    await b.send('Emulation.setDeviceMetricsOverride', { width: 1400, height: 900, deviceScaleFactor: 1, mobile: false });
+    await waitFor(`!document.querySelector('[data-device=tablet]').disabled`, 'tablet enabled again');
+  });
   await check('screenshot: dark, phone', async () => {
     await press('phone'); await b.setScheme('dark'); await b.sleep(400);
     await shot('device-phone-dark.png');
