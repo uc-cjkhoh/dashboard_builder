@@ -24,7 +24,7 @@ import { serializeWorkbook, parseWorkbook, storageKey, legacyStorageKey } from "
 const SAVE_DELAY_MS = 500;
 const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
 const CHANGE_EVENTS = [
-  "entity:added", "entity:moved", "entity:removed", "joinkey:changed",
+  "entity:added", "entity:moved", "entity:removed",
   "rel:changed", "tabs:changed", "worksheet:changed", "dashboard:changed", "theme:changed", "bookmarks:changed", "fields:changed", "parameters:changed", "hierarchies:changed", "calculations:changed",
 ];
 
@@ -178,7 +178,7 @@ function openWorkbook(wb) {
     setCalculations(wb.calculations ?? [], wb.nextCalcId); // likewise: pills read their calculation by id
 
     const ids = new Map(); // saved entity id → new entity id
-    for (const e of wb.entities) ids.set(e.id, addEntity(e.db, e.table, e.x, e.y, { joinKeys: e.joinKeys, source: e.source }));
+    for (const e of wb.entities) ids.set(e.id, addEntity(e.db, e.table, e.x, e.y, { source: e.source }));
     for (const r of wb.relationships) {
       restoreRelationship(
         { entityId: ids.get(r.from.entityId), column: r.from.column },

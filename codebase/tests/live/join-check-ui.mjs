@@ -69,10 +69,11 @@ try {
   for (const t of ['orders', 'customers'])
     await ev(`document.dispatchEvent(new CustomEvent('table:add', { detail: { db: 'shop', table: ${J(t)} } }))`);
   await waitFor(`document.querySelectorAll('.entity').length === 2 && [...document.querySelectorAll('.entity__status')].every((s) => s.hidden)`, 'both tables loaded');
-  const tick = (tbl, col) => ev(`(() => { const e = [...document.querySelectorAll('.entity')].find((x) => x.textContent.includes(${J(tbl)})); e.querySelector('.col-row[data-column=${J(col)}] .col-row__key').click(); return true; })()`);
-  const connector = (tbl, col) => ev(`(() => { const e = [...document.querySelectorAll('.entity')].find((x) => x.textContent.includes(${J(tbl)})); e.querySelector('.col-row[data-column=${J(col)}] .rel-connector').click(); return true; })()`);
-  await tick('orders', 'cust_id'); await tick('customers', 'id');
-  await connector('orders', 'cust_id'); await connector('customers', 'id');
+  const dragRow = (fromT, fromC, toT, toC) => ev(`(() => { const row = (t, c) => [...document.querySelectorAll('.entity')].find((x) => x.textContent.includes(t)).querySelector('.col-row[data-column=' + JSON.stringify(c) + ']');
+    const a = row(${J(fromT)}, ${J(fromC)}), z = row(${J(toT)}, ${J(toC)}); const dt = new DataTransfer();
+    a.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt })); z.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
+    z.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt })); a.dispatchEvent(new DragEvent('dragend', { bubbles: true, dataTransfer: dt })); return true; })()`);
+  await dragRow('orders', 'cust_id', 'customers', 'id'); // relationships are made by dragging one column onto another
   await waitFor(`document.querySelector('dialog[open] .join-check') !== null`, 'dialog with the check');
   const click = (sel) => ev(`document.querySelector(${J(sel)}).click()`);
   const text = (sel) => ev(`document.querySelector(${J(sel)})?.textContent ?? ''`);

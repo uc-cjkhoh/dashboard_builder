@@ -52,9 +52,8 @@ export function serializeWorkbook({ entities, relationships, tabs, active, theme
     savedAt: new Date().toISOString(),
     entities: [...entities.values()].map((e) => ({
       id: e.id, db: e.db, table: e.table, x: Math.round(e.x), y: Math.round(e.y),
-      // Keys a just-opened workbook is still waiting to tick (columns loading, or a table that
-      // failed to load) are kept, so saving early never loses them.
-      joinKeys: [...new Set([...e.joinKeys, ...(e.pendingKeys ?? [])])],
+      // Join keys are the columns the relationships use (kept in the file so older builds still open it).
+      joinKeys: [...new Set([...relationships.values()].flatMap((r) => [r.from, r.to]).filter((end) => end.entityId === e.id).map((end) => end.column))],
       ...(e.source ? { source: wireSource(e.source) } : {}), // a union / unpivot entity (its `table` is the source's name)
     })),
     relationships: [...relationships.values()].map((r) => ({

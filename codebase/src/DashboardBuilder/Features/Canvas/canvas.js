@@ -11,7 +11,7 @@ import { sourceNote, lossyNote, wireSource, MAX_SOURCE_COLUMNS } from "../Core/s
 
 // Data Model canvas + entity cards. A table dropped from the sidebar (or added via the
 // `table:add` fallback) becomes an entity card: a db.table head over a fixed-height, scrollable
-// list of column rows (name + type badge + join-key checkbox). Cards are a uniform height, moved
+// list of column rows (name + type badge). Cards are a uniform height, moved
 // by dragging the head and removed via the head's trash icon. No row preview here — data lives in
 // dashboard widgets. Entities are the shared model (store.js).
 const TABLE_MIME = "application/x-ch-table";
@@ -20,8 +20,7 @@ const TABLE_MIME = "application/x-ch-table";
 let createEntityImpl = null;
 let clearModelImpl = null;
 
-/** Add a table to the Data Model at (x, y). `joinKeys` are ticked once its columns load (workbook
- *  open). `source` makes it a union / unpivot entity (Core/source-model.js; its `table` is the source's name; no join keys).
+/** Add a table to the Data Model at (x, y). `source` makes it a union / unpivot entity (Core/source-model.js; its `table` is the source's name; it takes no relationship).
  *  Returns the new entity id, or null before the canvas is initialised. */
 export function addEntity(db, table, x, y, opts) { return createEntityImpl?.(db, table, x, y, opts) ?? null; }
 
@@ -129,10 +128,9 @@ export function initCanvas() {
     createEntity(db, table, x, y);
   }
 
-  function createEntity(db, table, x, y, { joinKeys = [], source = null } = {}) {
-    const entity = { id: `${db}.${table}#${++seq}`, db, table, x, y, columns: [], joinKeys: new Set(), el: null };
+  function createEntity(db, table, x, y, { source = null } = {}) {
+    const entity = { id: `${db}.${table}#${++seq}`, db, table, x, y, columns: [], el: null };
     if (source) entity.source = source;
-    entity.pendingKeys = joinKeys; // ticked after the columns load (workbook open)
     entity.el = renderCard(entity);
     entities.set(entity.id, entity);
     canvas.append(entity.el);
@@ -180,25 +178,11 @@ export function initCanvas() {
         if (res.truncated) toast(`${entity.table}: only the first ${MAX_SOURCE_COLUMNS} shared columns are listed.`, "info");
       } else entity.columns = await api.columns(entity.db, entity.table);
       renderColumns(entity);
-      applyPendingKeys(entity);
       hide(statusEl);
       show(bodyEl);
       emit("entity:loaded", { entityId: entity.id }); // relations.js draws links that wait on these rows
     } catch (err) {
       setStatus(entity, "failed", err.message);
-    }
-  }
-
-  // Tick the join keys a workbook saved for this table. Going through the checkbox's own change
-  // handler keeps entity.joinKeys, the row highlight and the connector handle in step.
-  function applyPendingKeys(entity) {
-    const keys = entity.pendingKeys;
-    entity.pendingKeys = null;
-    if (!keys?.length) return;
-    for (const key of entity.el.querySelectorAll(".col-row__key")) {
-      if (key.checked || !keys.includes(key.closest(".col-row").dataset.column)) continue;
-      key.checked = true;
-      key.dispatchEvent(new Event("change"));
     }
   }
 
@@ -298,24 +282,12 @@ export function initCanvas() {
     cols.replaceChildren();
     entity.el.querySelector(".entity__keys")?.replaceChildren();
     for (const [index, col] of entity.columns.entries()) {
-      const row = document.createElement("label");
+      const row = document.createElement("div");
       row.className = "col-row";
       row.dataset.column = col.name;
       row.dataset.index = String(index);
 
       const isSource = Boolean(entity.source);
-      const key = document.createElement("input");
-      key.type = "checkbox";
-      key.className = "col-row__key";
-      key.setAttribute("aria-label", `Use ${col.name} as a join key`);
-      key.addEventListener("change", () => {
-        if (key.checked) entity.joinKeys.add(col.name);
-        else entity.joinKeys.delete(col.name);
-        row.classList.toggle("col-row--key", key.checked);
-        // relations.js adds/removes the connector handle and prunes dropped links.
-        emit("joinkey:changed", { entityId: entity.id, column: col.name, checked: key.checked });
-      });
-
       const name = document.createElement("span");
       name.className = "col-row__name";
       name.textContent = col.name;
@@ -327,7 +299,7 @@ export function initCanvas() {
       type.textContent = col.type;
       type.title = `${col.type} (${col.category})`;
 
-      // Column profile + field details (Schema/column-profile-dialog.js). A button inside the label does not toggle the join key.
+      // Column profile + field details (Schema/column-profile-dialog.js). 
       const profile = document.createElement("button");
       profile.type = "button";
       profile.className = "iconbtn col-row__profile";
@@ -336,8 +308,8 @@ export function initCanvas() {
       profile.append(icon("analytics", { size: 14 }));
       profile.addEventListener("click", (event) => { event.preventDefault(); openColumnProfile(entity.db, entity.table, col); });
 
-      if (isSource) row.append(name, type); // no join keys and no profile: a source takes no relationship and reads no table
-      else row.append(key, name, type, profile);
+      if (isSource) row.append(name, type); // no profile: a source takes no relationship and reads no table
+      else row.append(name, type, profile);
       cols.append(row);
     }
   }

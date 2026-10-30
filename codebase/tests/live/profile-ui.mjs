@@ -59,12 +59,11 @@ try {
   const open = (col) => ev(`(() => { document.querySelector('.col-row[data-column=${J(col)}] .col-row__profile').click(); return true; })()`);
   const text = (sel) => ev(`[...document.querySelectorAll('dialog[open] ${sel}')].map((e) => e.textContent.trim())`);
 
-  await check('every field row has a labelled Profile button that does not tick the join key', async () => {
+  await check('every field row has a labelled Profile button', async () => {
     const labels = await ev(`[...document.querySelectorAll('.col-row__profile')].map((x) => x.getAttribute('aria-label'))`);
     must(J(labels) === J(['Profile city', 'Profile amount', 'Profile bad']), J(labels));
     await open('city');
     await waitFor(`document.querySelector('dialog[open] .col-profile__tiles') !== null`, 'profile loaded');
-    must(await ev(`!document.querySelector('.col-row[data-column=city] .col-row__key').checked`), 'join key was ticked');
   });
   await check('request is {column, limit: 10}', async () => { must(J(requests.at(-1)) === J({ column: 'city', limit: 10 }), J(requests.at(-1))); });
   await check('title, properties and tiles show the profile in words', async () => {
@@ -120,15 +119,13 @@ try {
     }
     must((await ev(`document.querySelectorAll('dialog').length`)) === 0, 'dialogs left');
   });
-  await check('keyboard: Tab from the join-key checkbox reaches Profile, Enter opens it and does not tick the key', async () => {
-    await ev(`document.querySelector('.col-row[data-column=amount] .col-row__key').focus()`);
-    await b.key('Tab', { vk: 9 });
+  await check('keyboard: the Profile button takes focus and Enter opens it', async () => {
+    await ev(`document.querySelector('.col-row[data-column=amount] .col-row__profile').focus()`);
     must(await ev(`document.activeElement.classList.contains('col-row__profile') && document.activeElement.closest('.col-row').dataset.column === 'amount'`), 'focus not on the Profile button');
     for (const type of ['keyDown', 'keyUp']) await b.send('Input.dispatchKeyEvent', { type, key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13, ...(type === 'keyDown' ? { text: '\r' } : {}) });
     await waitFor(`document.querySelector('dialog[open] .col-profile__tiles') !== null`, 'opened by keyboard');
     await b.key('Escape', { vk: 27 });
     await waitFor(`document.querySelector('dialog') === null`, 'closed');
-    must(await ev(`!document.querySelector('.col-row[data-column=amount] .col-row__key').checked`), 'key ticked');
   });
   await check('a failing profile shows the error inside the dialog (icon + text) and the dialog still closes', async () => {
     await open('bad');

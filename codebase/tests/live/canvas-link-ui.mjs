@@ -48,10 +48,10 @@ try {
   await waitFor(`document.querySelectorAll('.entity').length === 3 && [...document.querySelectorAll('.entity__status')].every((s) => s.hidden)`, 'tables loaded');
   const card = (t) => `[...document.querySelectorAll('.entity')].find((x) => x.querySelector('.entity__table').textContent === ${J(t)})`;
 
-  await check('card width follows the name: short = min (300), long = max with an ellipsis and the full name in the title', async () => {
+  await check('card width follows the name: short = min (312), long = max with an ellipsis and the full name in the title', async () => {
     const w = await ev(`${card('orders')}.getBoundingClientRect().width + ',' + ${card(LONG)}.getBoundingClientRect().width`);
     const [a, c] = w.split(',').map(Number);
-    must(a === 300, `short card width ${a}`);
+    must(a === 312, `short card width ${a}`); // --entity-min is the 312px slot
     must(c === 480, `long card width ${c}`);
     must(await ev(`(() => { const t = ${card(LONG)}.querySelector('.entity__title'); return t.scrollWidth > t.clientWidth && t.title === 'shop.${LONG}'; })()`), 'long name is not ellipsised with a full-name title');
     await shot('cards-width.png');
@@ -73,18 +73,18 @@ try {
     const cls = await dragRow('orders', 'cust_id', 'customers', 'id');
     must(/col-row--drop-ok/.test(cls), `target class: ${cls}`);
   });
-  await check('dropping opens the relationship dialog; picking N:1 draws the link and ticks both keys', async () => {
+  await check('dropping opens the relationship dialog; picking N:1 draws the link and pins both columns', async () => {
     await waitFor(`document.querySelector('dialog[open] .join-choice') !== null`, 'dialog open');
     await ev(`[...document.querySelectorAll('dialog[open] .card-choice')].find((x) => x.textContent === 'N:1').click()`);
     await waitFor(`document.querySelector('.rel-badge text')?.textContent === 'N:1'`, 'badge');
-    must(await ev(`${card('orders')}.querySelector('.col-row[data-column=cust_id] .col-row__key').checked && ${card('customers')}.querySelector('.col-row[data-column=id] .col-row__key').checked`), 'keys not ticked');
+    must(await ev(`document.querySelectorAll('.entity__keys .col-row').length === 2`), 'both joined rows should be pinned');
   });
   await check('link anchors sit on the measured card edges and key rows', async () => {
     const r = await ev(`(() => { const c = document.getElementById('model-view'), cr = c.getBoundingClientRect(); const e = (t) => [...document.querySelectorAll('.entity')].find((x) => x.querySelector('.entity__table').textContent === t);
       const edges = ['orders', 'customers'].flatMap((t) => { const q = e(t).getBoundingClientRect(); return [q.left - cr.left + c.scrollLeft, q.right - cr.left + c.scrollLeft]; });
       const d = document.querySelector('.rel-link__line').getAttribute('d').match(/-?[\\d.]+/g).map(Number);
       return { xs: [d[0], d[2]], edges }; })()`);
-    must(r.xs.every((x) => r.edges.some((e) => Math.abs(e - x) < 1.5)), `anchors ${J(r.xs)} vs edges ${J(r.edges)}`);
+    must(r.edges.some((e) => Math.abs(e - r.xs[0]) < 1.5), `anchor ${J(r.xs[0])} vs edges ${J(r.edges)}`); // the end sits on a card edge; the turn (xs[1]) is in the middle of the gutter
     await shot('drag-link.png');
   });
   await check('a duplicate drop is refused with a toast and no dialog', async () => {
@@ -95,10 +95,11 @@ try {
   await check('a mismatched kind is refused and shows the refused (dashed) target', async () => {
     const cls = await dragRow('orders', 'amount', 'customers', 'name');
     must(/col-row--drop-no/.test(cls), `target class: ${cls}`);
-    must(await ev(`document.querySelectorAll('.rel-link').length === 1`), 'extra link created');
+    must(await ev(`document.querySelectorAll('.rel-link__line').length === 1`), 'extra link created');
   });
-  await check('the click-to-click connectors still work', async () => {
-    must(await ev(`document.querySelectorAll('.rel-connector').length === 2`), 'connectors missing');
+  await check('there are no connector buttons or join-key checkboxes; the pinned rows are the joined columns', async () => {
+    must(await ev(`document.querySelectorAll('.rel-connector, .col-row__key').length === 0`), 'connector or checkbox still rendered');
+    must(await ev(`document.querySelectorAll('.entity__keys .col-row').length === 2`), 'joined rows not pinned');
   });
 
   // Date labels on the date pill.

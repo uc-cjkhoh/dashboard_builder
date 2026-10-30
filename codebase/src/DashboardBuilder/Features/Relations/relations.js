@@ -1,4 +1,4 @@
-import { entities, relationships, bus, emit } from "../Core/store.js";
+import { entities, relationships, bus, emit, isModelActive } from "../Core/store.js";
 import { linkIssue, pinOrder, matchingColumns, keysCompatible, kindLabel, unlinkedCards, joinChoices, joinBadge, joinSelection, joinFromSelection, isLegacyLeft } from "./relation-rules.js";
 import { toast, makeButton, openDialog, closeDialog } from "../Core/ui.js";
 import { api } from "../Core/api.js";
@@ -8,19 +8,17 @@ import { linkSides, linkRoute, roundedPath } from "./link-route.js";
 import { openTypeWarning } from "./type-warning.js";
 import { COLUMN_MIME, encodeColumnDrag, parseColumnDrag, dropDecision } from "./link-drag.js";
 
-// Relationships (P5): logical, typed links the user draws between the join keys checked on two
-// entities (decision D5 — ClickHouse neither creates nor validates them). Creation is
-// click-to-click on the connector handles (accessible; no drag geometry needed): click A's key
-// handle, then B's, pick a cardinality. Links render as an SVG overlay with shape-coded
+// Relationships (P5): logical, typed links the user draws between a column of one entity and a column of
+// another (decision D5 — ClickHouse neither creates nor validates them). Creation is drag-and-drop only:
+// drag a column row onto a row of another card, pick a cardinality. Links render as an SVG overlay with shape-coded
 // endpoints (readable without colour) and a cardinality badge; clicking one edits/deletes it.
 const SVG_NS = "http://www.w3.org/2000/svg";
 const CARDINALITIES = ["1:1", "1:N", "N:1", "N:M"];
 
 let seq = 0;
-let pending = null;   // { entityId, column, handle } — the first-picked endpoint
 let selectedId = null;
 let hoverId = null;   // the link under the pointer
-let canvas, svg, labels;  // svg: the lines, under the cards; labels: the cardinality badges, over them
+let canvas, svg, labels, guide;  // svg: the lines, under the cards; labels: the cardinality badges, over them
 
 export function initRelations() {
   canvas = document.getElementById("model-view");
@@ -30,42 +28,25 @@ export function initRelations() {
   canvas.insertBefore(svg, canvas.firstChild); // behind the entity cards: a link to a far card slips under the ones between
   labels = svgEl("svg", { class: "rel-svg rel-svg--labels" });
   canvas.append(labels); // over the cards, so a badge wider than the gutter is never clipped
+  guide = document.createElement("p");
+  guide.className = "rel-guide";
+  guide.hidden = true;
+  guide.textContent = "Drag a column onto a column in another table to relate them.";
+  canvas.parentElement.append(guide); // over the Data Model, centred at its foot
 
-  bus.addEventListener("joinkey:changed", (e) => onJoinKeyChanged(e.detail));
   bus.addEventListener("entity:moved", () => render());
   bus.addEventListener("entity:loaded", (e) => { markDraggable(e.detail.entityId); render(); }); // a restored link waits for its key rows
   bus.addEventListener("entity:removed", (e) => onEntityRemoved(e.detail.entityId));
-  bus.addEventListener("view:changed", () => { clearPending(); selectedId = null; render(); });
+  bus.addEventListener("view:changed", () => { selectedId = null; render(); });
   canvas.addEventListener("scroll", render);
   initColumnDrag();
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") { clearPending(); select(null); }
+    if (e.key === "Escape") select(null);
   });
 }
 
-// --- connector handles on checked join-key rows -------------------------------
-function onJoinKeyChanged({ entityId, column, checked }) {
-  const entity = entities.get(entityId);
-  if (!entity) return;
-  const row = entity.el.querySelector(`.col-row[data-column="${cssEscape(column)}"]`);
-  if (!row) return;
-
-  if (checked) {
-    if (!row.querySelector(".rel-connector")) row.append(makeConnector(entityId, column));
-  } else {
-    row.querySelector(".rel-connector")?.remove();
-    // A key that is no longer a join key can't anchor a link — drop any that used it.
-    for (const rel of relationships.values()) {
-      if (endpointMatches(rel.from, entityId, column) || endpointMatches(rel.to, entityId, column))
-        relationships.delete(rel.id);
-    }
-    if (pending && pending.entityId === entityId && pending.column === column) clearPending();
-    render();
-  }
-}
-
 // --- drag a column row onto another card's row to relate them -------------------
-// Pointer-free HTML5 DnD with its own MIME type. The click-to-click connectors above stay the keyboard path.
+// HTML5 DnD with its own MIME type — the only way to create a relationship.
 let dragFrom = null; // { entityId, column } while a row is dragged
 
 function markDraggable(entityId) {
@@ -124,8 +105,6 @@ function initColumnDrag() {
       tables: [a.table, b.table],
       check: joinCheckFor(from, { entityId: b.entityId, column: b.column }),
       onPick: (cardinality, sel) => {
-        // Both rows become join keys (the checkbox's own change handler keeps card, handle and model in step).
-        for (const end of [a, b]) tickKey(end.entityId, end.column);
         createRelationship(from, { entityId: b.entityId, column: b.column }, cardinality, joinFromSelection(sel));
       },
     });
@@ -142,48 +121,6 @@ function refuse(problem, kind, a, b) {
   openTypeWarning({ from: a, to: b, suggestions: joinable ? { table: b.table, kind: kindLabel(a.category), names } : null });
 }
 
-function tickKey(entityId, column) {
-  const key = entities.get(entityId)?.el.querySelector(`.col-row[data-column="${cssEscape(column)}"] .col-row__key`);
-  if (key && !key.checked) { key.checked = true; key.dispatchEvent(new Event("change")); }
-}
-
-function makeConnector(entityId, column) {
-  const handle = document.createElement("button");
-  handle.type = "button";
-  handle.className = "rel-connector";
-  handle.setAttribute("aria-label", `Relate join key ${column}`);
-  handle.title = "Click, then click another entity's join key to relate";
-  handle.addEventListener("click", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    onConnectorClick(entityId, column, handle);
-  });
-  return handle;
-}
-
-function onConnectorClick(entityId, column, handle) {
-  if (!pending) {
-    pending = { entityId, column, handle };
-    handle.classList.add("is-linking");
-    toast("Pick a join key on another entity to relate.", "info");
-    return;
-  }
-  const a = endOf(pending.entityId, pending.column), b = endOf(entityId, column);
-  const issue = a && b && linkIssue({ relationships: relationships.values(), from: { entityId: a.entityId, column: a.column },
-    to: { entityId: b.entityId, column: b.column }, fromCategory: a.category, toCategory: b.category,
-    fromLabel: `${a.table}.${a.column}`, toLabel: `${b.table}.${b.column}` });
-  if (issue) { clearPending(); refuse(issue.message, issue.kind, a, b); return; }
-  const from = { entityId: pending.entityId, column: pending.column };
-  const to = { entityId, column };
-  clearPending();
-  openCardinalityDialog({
-    current: "1:N",
-    tables: [entities.get(from.entityId)?.table ?? "first table", entities.get(to.entityId)?.table ?? "second table"],
-    check: joinCheckFor(from, to),
-    onPick: (cardinality, sel) => createRelationship(from, to, cardinality, joinFromSelection(sel)),
-  });
-}
-
 /** What the dialog's "Check this join" needs: the request to send and the names to word the result with. */
 function joinCheckFor(from, to, declared) {
   const a = entities.get(from.entityId), b = entities.get(to.entityId);
@@ -192,11 +129,6 @@ function joinCheckFor(from, to, declared) {
     run: (signal) => api.joinPreview(previewRequest(a, from.column, b, to.column), { signal }),
     names: { fromTable: a.table, toTable: b.table, fromColumn: from.column, toColumn: to.column, declared },
   };
-}
-
-function clearPending() {
-  pending?.handle.classList.remove("is-linking");
-  pending = null;
 }
 
 // --- relationship lifecycle ---------------------------------------------------
@@ -217,7 +149,6 @@ export function restoreRelationship(from, to, cardinality, joinType = "inner", j
 }
 
 function onEntityRemoved(entityId) {
-  if (pending?.entityId === entityId) clearPending(); // a half-made link to a removed card is void
   for (const rel of relationships.values()) {
     if (rel.from.entityId === entityId || rel.to.entityId === entityId) relationships.delete(rel.id);
   }
@@ -257,6 +188,7 @@ function render() {
   }
   syncKeyStrips();
   markUnlinked();
+  updateGuide();
   markLinkedRows();
 }
 
@@ -270,6 +202,7 @@ function syncKeyStrips() {
     if (!strip || !list) continue;
     for (const row of [...entity.el.querySelectorAll(".col-row")]) {
       const pinned = linked.has(`${entity.id}\u0000${row.dataset.column}`);
+      row.classList.toggle("col-row--key", pinned); // a joined column reads as one (accent name)
       if (pinned && row.parentElement !== strip) strip.append(row);
       else if (!pinned && row.parentElement === strip) {
         const next = [...list.children].find((r) => Number(r.dataset.index) > Number(row.dataset.index));
@@ -296,6 +229,12 @@ function orderStrip(entity, strip) {
   const want = pinOrder(rows.map((row) => ({ column: row.dataset.column, ...(info.get(row.dataset.column) ?? { partnerTop: 0, seq: 0 }) })));
   if (want.every((c, i) => c === rows[i].dataset.column)) return; // already in order: leave the DOM alone
   for (const c of want) strip.append(rows.find((row) => row.dataset.column === c));
+}
+
+// The one-line how-to: shown on the Data Model while some table card has no relationship, gone once every card has one.
+function updateGuide() {
+  if (!guide) return;
+  guide.hidden = !isModelActive() || ![...entities.values()].some((e) => e.el.classList.contains("entity--unlinked"));
 }
 
 // Every table card belongs to a relationship; one that doesn't says so (text + dashed outline, never colour alone).
