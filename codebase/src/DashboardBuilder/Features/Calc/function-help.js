@@ -7,7 +7,7 @@ import { FUNCTIONS, ROW_FUNCTIONS, CALC_LIMITS } from "./calc-types.js";
 export const GROUPS = Object.freeze(["Aggregate", "Logic", "Text", "Date"]);
 
 const AGGREGATES = ["sum", "avg", "min", "max", "count", "countd", "median", "stddev", "variance", "percentile", "attr"];
-const TEXT = ["lower", "upper", "trim", "len", "left", "right", "replace", "concat", "contains", "startswith", "endswith", "split"];
+const TEXT = ["text", "lower", "upper", "trim", "len", "left", "right", "replace", "concat", "contains", "startswith", "endswith", "split"];
 const DATE = ["datediff", "dateadd", "year", "month", "day", "quarter", "week", "weekday", "date"];
 /** Logic keywords the parser handles itself: name -> { args: display text, result, insert }. */
 const LOGIC = {
@@ -48,6 +48,7 @@ const TEXTS = {
   and: ["True when both sides are true.", "[orders.amount] > 100 AND [orders.qty] > 1", "Empty AND false is false; empty AND true is empty."],
   or: ["True when either side is true.", "[orders.amount] > 100 OR [orders.qty] > 1", "Empty OR true is true; empty OR false is empty."],
   not: ["Flips true and false.", "NOT ISNULL([orders.amount])", "NOT of an empty value is empty."],
+  text: ["A number, date or text as text.", "TEXT([orders.amount])", "STR is the same function. Dates read 2024-03-05, or 2024-03-05 14:30:00 when they carry a time; numbers have no thousands separators and whole numbers no decimals. A NULL gives NULL. Conditions are refused."],
   lower: ["The text in lower case.", "LOWER([orders.status])", NULL_TEXT],
   upper: ["The text in upper case.", "UPPER([orders.status])", NULL_TEXT],
   trim: ["The text without leading and trailing spaces.", "TRIM([orders.status])", "Strips the space character only, not tabs or line breaks. A NULL text gives NULL."],
@@ -71,7 +72,7 @@ const TEXTS = {
   date: ["Reads text as a calendar date.", "DATE('2024-03-05')", "Empty when the text is not a real date (for example 2024-02-30)."],
 };
 
-const WORD = { text: "text", length: "length", position: "position", separator: "separator", unit: "unit", amount: "amount", date: "date" };
+const WORD = { value: "value", text: "text", length: "length", position: "position", separator: "separator", unit: "unit", amount: "amount", date: "date" };
 const NAMES = new Map(); // lower-case name -> group
 for (const n of AGGREGATES) NAMES.set(n, "Aggregate");
 for (const n of Object.keys(LOGIC)) NAMES.set(n, "Logic");

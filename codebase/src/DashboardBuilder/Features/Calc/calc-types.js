@@ -32,11 +32,12 @@ export const DATE_UNITS = Object.freeze(["year", "quarter", "month", "week", "da
 /** The row-level text and date functions (wire node `{ k: "fn", fn, args }`). `args` are kinds in order: `text` (any text expression),
  *  `length` (a whole-number literal 0..count), `position` (a whole-number literal 1..count), `separator` (a non-empty text
  *  literal, at most `separator` characters); the date kinds: `date` (a date expression), `unit` (a DATE_UNITS text literal),
- *  `amount` (a whole-number literal, either sign, at most `dateAmount`). `max` above `args.length` repeats the last kind (CONCAT). Twin of CalcCatalog.RowFunctions. */
+ *  `amount` (a whole-number literal, either sign, at most `dateAmount`); `value` (a number, date or text expression). `max` above `args.length` repeats the last kind (CONCAT). Twin of CalcCatalog.RowFunctions. */
 export const ROW_FUNCTIONS = Object.freeze({
   lower: { args: ["text"], result: "text" },
   upper: { args: ["text"], result: "text" },
   trim: { args: ["text"], result: "text" },
+  text: { args: ["value"], result: "text" },
   len: { args: ["text"], result: "number" },
   left: { args: ["text", "length"], result: "text" },
   right: { args: ["text", "length"], result: "text" },
@@ -197,6 +198,8 @@ function typeOf(node, path, categoryOf) {
         const t = typeOf(a, ap, categoryOf);
         if (kind === "text") {
           if (t.type !== "text") throw new CalcError(`${upper} needs a text — ${t.name} is ${t.type}.`, ap);
+        } else if (kind === "value") {
+          if (t.type === "boolean") throw new CalcError(`${upper} needs a number, date or text — ${t.name} is ${t.type}.`, ap);
         } else if (kind === "length" || kind === "position") {
           const min = kind === "length" ? 0 : 1;
           const v = a.k === "num" ? a.v : NaN;

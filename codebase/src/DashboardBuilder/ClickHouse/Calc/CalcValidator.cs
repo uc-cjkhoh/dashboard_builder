@@ -154,6 +154,9 @@ public static class CalcValidator
                         case FnArg.Text:
                             if (arg.Type != CalcType.Text) throw new CalcException($"{upper} needs a text — {arg.Name} is {arg.Type}.", ap);
                             break;
+                        case FnArg.Value:
+                            if (arg.Type == CalcType.Boolean) throw new CalcException($"{upper} needs a number, date or text — {arg.Name} is {arg.Type}.", ap);
+                            break;
                         case FnArg.Length or FnArg.Position:
                         {
                             var min = kind == FnArg.Length ? 0 : 1;
