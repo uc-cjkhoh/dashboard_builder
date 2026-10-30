@@ -61,7 +61,7 @@ export function serializeWorkbook({ entities, relationships, tabs, active, theme
       joinFixed: r.joinFixed === true,
     })),
     worksheets: worksheets.map((d) => ({ name: d.name, sheet: savedSheet(d.sheet) })),
-    dashboards: dashboards.map((d) => ({ name: d.name, widgets: savedWidgets(d.widgets, wsIndex), ...savedSize(d.size) })), // size: optional (absent = automatic)
+    dashboards: dashboards.map((d) => ({ name: d.name, widgets: savedWidgets(d.widgets, wsIndex, dbIndex), ...savedSize(d.size) })), // size: optional (absent = automatic)
     tabs: order, // the strip's order
     active: activeIndex !== undefined ? { kind: active.kind, index: activeIndex } : null, // null = the Data Model view
     theme: theme ? { accent: theme.accent, palette: theme.palette } : { ...DEFAULT_THEME },
@@ -209,9 +209,10 @@ export function parseWorkbook(source) {
   const budget = { left: LIMITS.imagesTotal }; // the workbook-wide picture budget, shared by every dashboard
   for (const d of dashboards) {
     const remapped = Array.isArray(d.widgets)
-      ? d.widgets.map((w) => (w && typeof w === "object" && w.kind === "sheet" ? { ...w, sheet: wsMap.get(w.sheet) } : w))
+      ? d.widgets.map((w) => (w && typeof w === "object" && w.kind === "sheet" ? { ...w, sheet: wsMap.get(w.sheet) }
+        : w && typeof w === "object" && w.kind === "nav" && w.target && typeof w.target === "object" ? { ...w, target: { kind: w.target.kind, index: (w.target.kind === "worksheet" ? wsMap : w.target.kind === "dashboard" ? dbMap : new Map()).get(w.target.index) } } : w))
       : d.widgets;
-    d.widgets = cleanWidgets(remapped, { worksheetCount: worksheets.length, where: `Dashboard "${d.name}"`, budget }, issues);
+    d.widgets = cleanWidgets(remapped, { worksheetCount: worksheets.length, dashboardCount: dashboards.length, where: `Dashboard "${d.name}"`, budget }, issues);
     d.size = cleanSize(d.size, `Dashboard "${d.name}"`, issues);
   }
 

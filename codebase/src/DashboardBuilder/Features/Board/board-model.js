@@ -4,17 +4,20 @@
 //   { id, kind: "text", heading, body, x, y, w, h }
 //   { id, kind: "image", alt, src, x, y, w, h }   src = a base64 raster data URL (Board/image-model.js)
 //   { id, kind: "spacer", x, y, w, h }            a blank cell block
+//   { id, kind: "nav", label, tip, target, x, y, w, h }   a button that goes to a tab (target = a tab id or null; Board/nav-model.js)
 // The saved form (workbook v2) has no ids and points at worksheets by index:
 //   { kind: "sheet", sheet: <worksheet index>, x, y, w, h } | { kind: "text", heading, body, x, y, w, h } | the image and spacer as above
+//   | { kind: "nav", label, tip, target: { kind: "worksheet" | "dashboard", index } | null, x, y, w, h }
 // Limits live in Core/validate.js LIMITS. The board canvas (drag, resize, side panel) is UI on top of this module.
 import { LIMITS } from "../Core/validate.js";
 import { isImageSrc, budgetError } from "./image-model.js";
 
 /** Default size in cells for a new widget of each kind. */
-export const DEFAULT_SIZE = Object.freeze({ sheet: { w: 6, h: 4 }, text: { w: 12, h: 2 }, image: { w: 6, h: 4 }, spacer: { w: 2, h: 1 } });
-const KINDS = new Set(["sheet", "text", "image", "spacer"]);
-const minH = (kind) => (kind === "text" || kind === "spacer" ? LIMITS.textMinH : LIMITS.widgetMinH);
-const KIND_WORD = { text: "text", image: "image", spacer: "spacer" };
+export const DEFAULT_SIZE = Object.freeze({ sheet: { w: 6, h: 4 }, text: { w: 12, h: 2 }, image: { w: 6, h: 4 }, spacer: { w: 2, h: 1 }, nav: { w: 4, h: 2 } });
+const KINDS = new Set(["sheet", "text", "image", "spacer", "nav"]);
+const minH = (kind) => (kind === "text" || kind === "spacer" || kind === "nav" ? LIMITS.textMinH : LIMITS.widgetMinH);
+export const NAV_LABEL = "Go to";
+const KIND_WORD = { text: "text", image: "image", spacer: "spacer", nav: "button" };
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
 /** True when two widgets share at least one cell (touching edges do not overlap). */
@@ -88,7 +91,7 @@ export function placeAt(widgets, kind, cell, nameOf) {
 /** Import validation of one dashboard's saved widgets → saved-form widgets. Every repair or drop is pushed to `issues`.
  *  Dropped: not an object, unknown kind, a worksheet index outside 0..worksheetCount-1, no room after an overlap, past 12.
  *  Clamped: size and position into the grid; text truncated; an overlapping widget moves to the first free spot. */
-export function cleanWidgets(raw, { worksheetCount, where, budget = { left: LIMITS.imagesTotal } }, issues) {
+export function cleanWidgets(raw, { worksheetCount, dashboardCount = 0, where, budget = { left: LIMITS.imagesTotal } }, issues) {
   if (raw == null) return [];
   if (!Array.isArray(raw)) { issues.push(`${where}: the widgets weren't a list — none were opened.`); return []; }
   const out = [];
@@ -129,6 +132,14 @@ export function cleanWidgets(raw, { worksheetCount, where, budget = { left: LIMI
     if (w.kind === "sheet") out.push({ kind: "sheet", sheet: w.sheet, ...fit });
     else if (w.kind === "image") out.push({ kind: "image", alt: cleanText(w.alt, LIMITS.imageAlt, "alt text", where, issues, "an image widget's"), src: w.src, ...fit });
     else if (w.kind === "spacer") out.push({ kind: "spacer", ...fit });
+    else if (w.kind === "nav") {
+      const t = w.target, count = t?.kind === "worksheet" ? worksheetCount : t?.kind === "dashboard" ? dashboardCount : 0;
+      const live = t && typeof t === "object" && Number.isInteger(t.index) && t.index >= 0 && t.index < count;
+      if (w.target != null && !live) issues.push(`${where}: a navigation button's tab is missing — the button was left unlinked.`);
+      const label = cleanText(w.label, LIMITS.navLabel, "label", where, issues, "a navigation button's");
+      if (!label.trim() && w.label != null && typeof w.label === "string") issues.push(`${where}: a navigation button had no label — it was named “${NAV_LABEL}”.`);
+      out.push({ kind: "nav", label: label.trim() || NAV_LABEL, tip: cleanText(w.tip, LIMITS.navTip, "tooltip", where, issues, "a navigation button's"), target: live ? { kind: t.kind, index: t.index } : null, ...fit });
+    }
     else out.push({ kind: "text", heading: cleanText(w.heading, LIMITS.widgetHeading, "heading", where, issues), body: cleanText(w.body, LIMITS.widgetBody, "body", where, issues), ...fit });
   }
   if (pastImages) issues.push(`${where}: only the first ${LIMITS.images} images were opened.`);
@@ -144,14 +155,17 @@ function cleanText(v, max, label, where, issues, owner = "a text widget's") {
 }
 
 /** Store widgets → the saved form. `indexOf` maps a worksheet tab id to its index in the saved `worksheets`; a widget of an unknown worksheet is dropped. */
-export function savedWidgets(widgets, indexOf) {
+export function savedWidgets(widgets, indexOf, dbIndexOf = new Map()) {
   const out = [];
   for (const w of widgets) {
     const { x, y, w: cw, h } = w;
     if (w.kind === "text") out.push({ kind: "text", heading: w.heading ?? "", body: w.body ?? "", x, y, w: cw, h });
     else if (w.kind === "image") out.push({ kind: "image", alt: w.alt ?? "", src: w.src, x, y, w: cw, h });
     else if (w.kind === "spacer") out.push({ kind: "spacer", x, y, w: cw, h });
-    else if (indexOf.has(w.sheetId)) out.push({ kind: "sheet", sheet: indexOf.get(w.sheetId), x, y, w: cw, h });
+    else if (w.kind === "nav") {
+      const target = indexOf.has(w.target) ? { kind: "worksheet", index: indexOf.get(w.target) } : dbIndexOf.has(w.target) ? { kind: "dashboard", index: dbIndexOf.get(w.target) } : null;
+      out.push({ kind: "nav", label: w.label ?? NAV_LABEL, tip: w.tip ?? "", target, x, y, w: cw, h });
+    } else if (indexOf.has(w.sheetId)) out.push({ kind: "sheet", sheet: indexOf.get(w.sheetId), x, y, w: cw, h });
   }
   return out;
 }

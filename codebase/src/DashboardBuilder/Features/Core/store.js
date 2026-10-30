@@ -5,8 +5,8 @@
 //     relationships between them. There is exactly ONE model, shared across all tabs.
 //   • TABS — one ordered list of two kinds, each built FROM the model's tables:
 //       worksheet: { id: "ws#N", kind: "worksheet", name, sheet }          (the editor; one chart / table)
-//       dashboard: { id: "db#N", kind: "dashboard", name, widgets: [ … ], size }  (a board of worksheet / text / image / spacer widgets; size = null (automatic) or { width, height } px)
-//     A widget is { id: "w#N", kind: "sheet", sheetId, x, y, w, h }, { id, kind: "text", heading, body, x, y, w, h }, { id, kind: "image", alt, src (a raster data URL), x, y, w, h } or { id, kind: "spacer", x, y, w, h }
+//       dashboard: { id: "db#N", kind: "dashboard", name, widgets: [ … ], size }  (a board of worksheet / text / image / spacer / nav widgets; size = null (automatic) or { width, height } px)
+//     A widget is { id: "w#N", kind: "sheet", sheetId, x, y, w, h }, { id, kind: "text", heading, body, x, y, w, h }, { id, kind: "image", alt, src (a raster data URL), x, y, w, h }, { id, kind: "spacer", x, y, w, h } or { id, kind: "nav", label, tip, target (a tab id | null), x, y, w, h }
 //     (Board/board-model.js owns the geometry rules).
 // The tab strip shows the model ("Data Model") alongside the tabs; `activeView` tracks which is on screen:
 //   { kind: "model" } | { kind: "worksheet", id } | { kind: "dashboard", id }
@@ -22,6 +22,7 @@ import { renameInFormulas } from "../Calc/calc-workbook.js";
 import { renameParamInFormulas } from "../Calc/calc-params.js";
 import { copyName, copySheet, canDuplicate } from "../Tabs/duplicate-model.js";
 import { LIMITS } from "./validate.js";
+import { clearNavTarget } from "../Board/nav-model.js";
 import { removeSheetWidgets, defaultTabName } from "../Board/board-model.js";
 
 export const bus = new EventTarget();
@@ -378,11 +379,9 @@ export function closeTab(id) {
   const closing = tabs[idx];
   const wasActive = activeView.kind !== "model" && activeView.id === id;
   tabs.splice(idx, 1);
-  if (closing.kind === "worksheet") {
-    for (const d of dashboards()) {
-      const kept = removeSheetWidgets(d.widgets, id);
-      if (kept !== d.widgets) { d.widgets = kept; emit("dashboard:changed", { id: d.id }); }
-    }
+  for (const d of dashboards()) { // a closed worksheet leaves its widgets; a button that went to the closed tab is unlinked
+    const kept = clearNavTarget(closing.kind === "worksheet" ? removeSheetWidgets(d.widgets, id) : d.widgets, id);
+    if (kept !== d.widgets) { d.widgets = kept; emit("dashboard:changed", { id: d.id }); }
   }
   if (wasActive) {
     const next = tabs[Math.min(idx, tabs.length - 1)];
