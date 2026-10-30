@@ -1,6 +1,7 @@
 import { api } from "../Core/api.js";
 import { icon, PATHS } from "../Core/icons.js";
 import { wireMenu, wireContextMenu } from "../Core/menu.js";
+import { sameRef, choicesOf, switchField, removeChoice as removeChoiceFrom } from "./field-choices.js";
 import { fieldPillOptions, filterPillOptions, filterSummary, markGrid } from "./pill-options.js";
 import { visibleTools } from "./toolbar-rules.js";
 import { roleOf, STAT_SINGLE_TABLE, showMeOptions } from "./show-me-rules.js";
@@ -1710,8 +1711,6 @@ export function initDashboards() {
   }
 
   // Field choices: a shelf pill may carry alternative fields; the switcher on the chart card picks one.
-  const sameRef = (a, b) => a.db === b.db && a.table === b.table && a.column === b.column;
-  function choicesOf(f) { return f.choices?.length ? f.choices : [{ db: f.db, table: f.table, column: f.column, category: f.category }]; }
   function addChoice(dash, s, shelf, index, field) {
     const f = s[shelf][index];
     const refused = refusal(field, "choice") ?? (isCalcPill(f) ? refusal(f, "choice") : null); // E12: neither a calc dropped here nor a calc slot takes choices
@@ -1723,18 +1722,7 @@ export function initDashboards() {
     commit(dash, s);
   }
   function removeChoice(dash, s, shelf, index, c) {
-    const f = s[shelf][index];
-    const rest = choicesOf(f).filter((x) => !sameRef(x, c));
-    if (sameRef(f, c)) switchField(f, rest[0]); // removing the shown one shows the next
-    if (rest.length >= 2) f.choices = rest; else delete f.choices;
-    commit(dash, s);
-  }
-  // Put a choice in the slot: the field changes, the slot's role stays; a measure keeps its aggregation
-  // when the new field supports it, else takes the first it does.
-  function switchField(f, c) {
-    Object.assign(f, { db: c.db, table: c.table, column: c.column, category: c.category });
-    if (c.category !== "temporal") delete f.datePart; // a date part only means something on a date field
-    if (f.agg && !aggsFor(c.category).includes(f.agg)) { f.agg = aggsFor(c.category)[0]; delete f.p; }
+    if (removeChoiceFrom(s[shelf][index], c)) commit(dash, s);
   }
   function choicesPanel(dash, s) {
     const { shelf, index } = choicesFor;
@@ -1750,6 +1738,7 @@ export function initDashboards() {
     const zone = el("div", "ws-toolpanel__zone");
     for (const c of choicesOf(f)) {
       const p = pill(`${c.table}.${c.column}`, () => removeChoice(dash, s, shelf, index, c));
+      if (!f.choices?.length) p.querySelector("button")?.remove(); // the slot's only field: nothing to remove
       p.classList.add("ws-pill--mark");
       if (sameRef(c, f)) p.prepend(el("span", "ws-pill__badge", "Showing"));
       zone.append(p);
