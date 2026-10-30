@@ -40,6 +40,7 @@ import { TABLE_ALIGN_CHOICES, TABLE_DENSITY_CHOICES, TABLE_SHADE_CHOICES } from 
 import { MARK_BORDER_CHOICES, MARKER_SHAPE_CHOICES, markerSizeError } from "./mark-style-model.js";
 import { targetChoices, effectiveTargetMeasure } from "./bullet-model.js";
 import { sourceOfTable, wireSource, distinctPlan, distinctMembers } from "../Core/source-model.js";
+import { heldOutCards } from "../Relations/relation-rules.js";
 import { keyOf, SCATTER_TYPES, COLOR_USES, colorMode, isDrillActive, drillActiveDim, planDims, planMeasures, sortTargets as planSortTargets, measureName as planMeasureName, buildPlan as planQuery, periodFilters as planPeriodFilters, calcContext, appliedShared as planAppliedShared, withParams, toServerFilter, isDateOnlyType } from "./sheet-plan.js";
 import { catalogFromEntities } from "../Calc/calc-resolve.js";
 import { isCalcPill, makeCalcPill, refusal, syncCalcPills, pillSlots, clearCalcPills, clearFilterCalc, usesCalc, CALC_AGGS } from "../Calc/calc-pill.js";
@@ -347,7 +348,10 @@ export function initDashboards() {
     const seq = ++fieldsSeq;
     const tables = uniqueTables();
     if (!tables.length) {
-      fieldsEl.replaceChildren(calcFieldGroup(), hierGroup(new Map()), marksEl, hint("Add tables to the Data Model, then drag their fields onto the shelves."));
+      const waiting = entities.size > 0; // tables exist, but none is in a relationship yet
+      fieldsEl.replaceChildren(calcFieldGroup(), hierGroup(new Map()), marksEl, hint(waiting
+        ? "Relate your tables in the Data Model first. A table with no relationship can't be used here."
+        : "Add tables to the Data Model, then drag their fields onto the shelves."));
       filterFields();
       return;
     }
@@ -2676,7 +2680,9 @@ export function initDashboards() {
 
   function uniqueTables() {
     const seen = new Set(), out = [];
+    const held = new Set(heldOutCards(entities, relationships).map((c) => c.id)); // a table with no relationship can't feed a worksheet
     for (const e of entities.values()) {
+      if (held.has(e.id)) continue;
       const k = keyOf(e.db, e.table);
       if (!seen.has(k)) { seen.add(k); out.push({ db: e.db, table: e.table }); }
     }

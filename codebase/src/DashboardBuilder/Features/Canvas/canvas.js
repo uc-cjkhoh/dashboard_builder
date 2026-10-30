@@ -250,6 +250,7 @@ export function initCanvas() {
     const need = document.createElement("span");
     need.className = "entity__need";
     need.textContent = "Needs a partner";
+    need.title = "Held out of worksheets until this table is related to another one";
     need.hidden = true;
 
     head.append(collapse, title, need, remove);
