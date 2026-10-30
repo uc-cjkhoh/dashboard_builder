@@ -10,6 +10,8 @@ export const MAX_SOURCE_COLUMNS = 200; // server ApiLimits.MaxRowsColumns: share
 
 export const MIXED_MESSAGE = "A union or unpivot can't be combined with another table yet — use only its own fields in this view.";
 export const UNION_NOTE = "Columns shared by name and kind.";
+/** The second note line of a card whose same-named columns were read as Float64 (`lossy`: the columns the server flagged), else null. */
+export const lossyNote = (lossy) => (lossy?.length ? "Types differ: read as Float64, large values may round." : null);
 export const unpivotNote = (n) => `Field and Value from ${n} columns.`;
 
 const isStr = (v) => typeof v === "string" && v.trim() !== "";
@@ -51,6 +53,7 @@ export function wireSource(s) {
 /** A saved source checked against the same rules (a workbook file may be edited by hand): the clean source, or null. */
 export function cleanSource(raw, db, name) {
   if (!raw || typeof raw !== "object" || !SOURCE_KINDS.has(raw.kind) || raw.db !== db || raw.name !== name) return null;
+  if (!isStr(name) || name.length > LIMITS.sourceName) return null; // the server refuses a longer name on every query
   const list = (v, min, max) => Array.isArray(v) && v.length >= min && v.length <= max && v.every(isStr) && distinct(v);
   if (raw.kind === "union") {
     if (!list(raw.tables, 2, LIMITS.unionTables)) return null;

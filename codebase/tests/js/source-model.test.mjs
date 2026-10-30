@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { LIMITS } from "../../src/DashboardBuilder/Features/Core/validate.js";
 import {
   unionSource, unpivotSource, uniqueName, wireSource, cleanSource, sourceOfTable, sourceProblem, sourceNote,
-  distinctPlan, distinctMembers, takenNames, MIXED_MESSAGE, UNION_NOTE,
+  distinctPlan, distinctMembers, takenNames, lossyNote, MIXED_MESSAGE, UNION_NOTE,
 } from "../../src/DashboardBuilder/Features/Core/source-model.js";
 
 test("the name limit mirrors the server", () => assert.equal(LIMITS.sourceName, 200));
@@ -92,4 +92,16 @@ test("a new source avoids the database's tables and the entities on the canvas, 
   const entities = new Map([["1", { db: "d", table: "Union: a + b" }], ["2", { db: "x", table: "other" }]]);
   assert.deepEqual(takenNames(entities, "d", ["a", "b"]), ["a", "b", "Union: a + b"]);
   assert.equal(unionSource("d", ["a", "b"], takenNames(entities, "d", ["a", "b"])).name, "Union: a + b 2");
+});
+test("a saved source whose name is longer than the server allows is dropped", () => {
+  const name = "n".repeat(LIMITS.sourceName);
+  const ok = { kind: "union", db: "d", name, tables: ["a", "b"] };
+  assert.deepEqual(cleanSource(ok, "d", name), ok);
+  const long = name + "x";
+  assert.equal(cleanSource({ ...ok, name: long }, "d", long), null);
+});
+test("a card whose columns were read as one wider type says so in one line", () => {
+  assert.equal(lossyNote([]), null);
+  assert.equal(lossyNote(undefined), null);
+  assert.equal(lossyNote(["n"]), "Types differ: read as Float64, large values may round.");
 });

@@ -6,7 +6,7 @@ import { entities, relationshipsFor, emit, bus, isModelActive, showModel } from 
 import { expandSidebar } from "../Shell/sidebar.js";
 import { openColumnProfile } from "../Schema/column-profile-dialog.js";
 import { entityWidth } from "./card-width.js";
-import { sourceNote, wireSource, MAX_SOURCE_COLUMNS } from "../Core/source-model.js";
+import { sourceNote, lossyNote, wireSource, MAX_SOURCE_COLUMNS } from "../Core/source-model.js";
 
 // Data Model canvas + entity cards. A table dropped from the sidebar (or added via the
 // `table:add` fallback) becomes an entity card: a db.table head over a fixed-height, scrollable
@@ -173,6 +173,9 @@ export function initCanvas() {
       if (entity.source) {
         const res = await api.sourceColumns(wireSource(entity.source));
         entity.columns = res.columns;
+        const lossy = lossyNote(res.lossy); // same-named columns of differing types were read as Float64
+        entity.el.querySelector(".entity__note-lossy")?.remove();
+        if (lossy) { const p = document.createElement("p"); p.className = "entity__note entity__note-lossy"; p.textContent = lossy; p.title = res.lossy.join(", "); entity.el.querySelector(".entity__note")?.after(p); }
         if (res.truncated) toast(`${entity.table}: only the first ${MAX_SOURCE_COLUMNS} shared columns are listed.`, "info");
       } else entity.columns = await api.columns(entity.db, entity.table);
       renderColumns(entity);

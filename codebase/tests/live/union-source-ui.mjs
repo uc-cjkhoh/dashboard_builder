@@ -31,7 +31,7 @@ function answer({ method, path, body }) {
     const cols = body.kind === 'union'
       ? [['Source table', 'String', 'text'], ['region', 'String', 'text'], ['amount', 'Float64', 'numeric']]
       : [['region', 'String', 'text'], ['Field', 'String', 'text'], ['Value', 'Int32', 'numeric']];
-    return { json: { columns: cols.map(([name, type, category]) => ({ name, type, category })), truncated: false } };
+    return { json: { columns: cols.map(([name, type, category]) => ({ name, type, category })), truncated: false, lossy: body.name.includes('lossy') ? ['amount'] : [] } };
   }
   if (path === '/api/query') {
     queries.push(body);
@@ -280,6 +280,16 @@ try {
     must(Math.abs(r.note - r.name) <= 1, `note text ${r.note} vs column names ${r.name}`);
     must(r.minCardGap >= 4, `cards touch: ${r.minCardGap}`);
     must(r.noteToRow >= 0, `note overlaps the first row: ${r.noteToRow}`);
+  });
+
+  await check('a union whose columns were read as Float64 shows a second one-line note', async () => {
+    await ev(`document.dispatchEvent(new CustomEvent('source:add', { detail: { source: { kind: 'union', db: 'shop', name: 'Union: lossy', tables: ['orders', 'returns'] } } }))`);
+    await loaded(5);
+    const notes = await ev(`[...document.querySelectorAll('.entity--source')].pop().querySelectorAll('.entity__note')`.replace(/$/, '.length') );
+    must(notes === 2, `notes: ${notes}`);
+    must((await ev(`document.querySelector('.entity__note-lossy').textContent`)) === 'Types differ: read as Float64, large values may round.', 'lossy text');
+    must(await ev(`document.querySelectorAll('.entity__note-lossy').length`) === 1, 'only the lossy card has it');
+    await shot('union-lossy-note-light.png');
   });
 
   if (b.consoleErrors.length) console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  '));

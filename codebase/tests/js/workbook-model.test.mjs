@@ -567,3 +567,22 @@ test("a hand-edited source that breaks the rules is skipped and reported, not op
   assert.equal(wb.entities.length, 2);
   assert.ok(wb.issues.some((i) => /union or unpivot definition/.test(i)));
 });
+test("a source entity with the same db.table as a real one is skipped with an issue", () => {
+  const state = sampleState();
+  const src = { kind: "union", db: "sales", name: "orders", tables: ["a", "b"] };
+  state.entities.set("u#3", { id: "u#3", db: "sales", table: "orders", x: 0, y: 0, columns: [], joinKeys: new Set(), el: null, source: src });
+  const wb = parseWorkbook(JSON.stringify(serializeWorkbook(state)));
+  assert.equal(wb.entities.length, 2);
+  assert.ok(wb.entities.every((e) => !e.source));
+  assert.ok(wb.issues.some((i) => /second copy of sales\.orders/.test(i)));
+});
+test("a relationship with a source entity at an end is dropped with an issue", () => {
+  const state = sampleState();
+  const src = { kind: "union", db: "sales", name: "U", tables: ["orders", "customers"] };
+  state.entities.set("u#3", { id: "u#3", db: "sales", table: "U", x: 0, y: 0, columns: [], joinKeys: new Set(), el: null, source: src });
+  state.relationships.set("rel#2", { id: "rel#2", from: { entityId: "sales.orders#1", column: "id" }, to: { entityId: "u#3", column: "id" }, cardinality: "N:1" });
+  const wb = parseWorkbook(JSON.stringify(serializeWorkbook(state)));
+  assert.equal(wb.relationships.length, 1);
+  assert.equal(wb.relationships[0].to.entityId, "sales.customers#2");
+  assert.ok(wb.issues.some((i) => /relationship.*union or unpivot/i.test(i)));
+});

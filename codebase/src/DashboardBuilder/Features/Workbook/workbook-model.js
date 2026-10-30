@@ -144,7 +144,7 @@ export function parseWorkbook(source) {
     if (e.joinKeys !== undefined && !Array.isArray(e.joinKeys)) issues.push(`${e.db}.${e.table}: its join keys weren't a list — cleared.`);
     if (keys.some((k) => !isStr(k))) issues.push(`${e.db}.${e.table}: dropped a join key that wasn't a column name.`);
     const entity = { id: e.id, db: e.db, table: e.table, x: coord(e.x), y: coord(e.y), joinKeys: keys.filter(isStr) };
-    if (e.source !== undefined) { // a saved union / unpivot: re-checked against the same rules; a bad one is dropped (the entity then reads as a table)
+    if (e.source !== undefined) { // a saved union / unpivot: re-checked against the same rules; a bad one skips the whole entity
       const source = cleanSource(e.source, e.db, e.table);
       if (source) { entity.source = source; entity.joinKeys = []; } else { issues.push(`${e.db}.${e.table}: its union or unpivot definition wasn't valid — skipped.`); continue; }
     }
@@ -152,6 +152,7 @@ export function parseWorkbook(source) {
   }
   if (skipped) issues.push(`Skipped ${skipped} table(s) with missing details.`);
   const ids = new Set(entities.map((e) => e.id));
+  const sourceIds = new Set(entities.filter((e) => e.source).map((e) => e.id));
   const endpoint = (p) => p && ids.has(p.entityId) && isStr(p.column);
 
   if (raw.relationships !== undefined && !Array.isArray(raw.relationships)) issues.push("The relationships weren't a list — none were opened.");
@@ -160,8 +161,11 @@ export function parseWorkbook(source) {
     issues.push(`Only the first ${LIMITS.relationships} relationships were opened.`);
     relList.length = LIMITS.relationships;
   }
+  const toSource = (r) => r && (sourceIds.has(r.from?.entityId) || sourceIds.has(r.to?.entityId));
+  const droppedForSource = relList.filter((r) => toSource(r) && endpoint(r.from) && endpoint(r.to) && CARDINALITIES.has(r.cardinality)).length;
+  if (droppedForSource) issues.push(`Dropped ${droppedForSource} relationship(s) that ended at a union or unpivot — a union or unpivot takes no relationship yet.`);
   const relationships = relList
-    .filter((r) => r && endpoint(r.from) && endpoint(r.to) && CARDINALITIES.has(r.cardinality))
+    .filter((r) => r && !toSource(r) && endpoint(r.from) && endpoint(r.to) && CARDINALITIES.has(r.cardinality))
     .map((r) => ({
       from: { entityId: r.from.entityId, column: r.from.column },
       to: { entityId: r.to.entityId, column: r.to.column },
