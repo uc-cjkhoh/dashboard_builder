@@ -43,6 +43,11 @@
 .board-grid { position: relative; width: 100%; }
 /* A fixed size: exactly the chosen box (board.js sets its width and height); the panel scrolls when the window is smaller. */
 .board-grid.is-fixed { flex: none; }
+/* Device preview: the board is a centred box of the device's width (board.js sets it); the box is outlined so its edges read against the panel. */
+.board-grid.is-preview { margin: 0 auto; outline: 1px solid var(--line-2); outline-offset: var(--s2); }
+.board-device { display: inline-flex; gap: var(--s1); }
+.board-device__btn[aria-pressed="true"] { background: var(--meas-bg); color: var(--meas-ink); border-color: var(--meas-ink); font-weight: 600; }
+.board-device__btn { display: inline-flex; align-items: center; gap: var(--s1); }
 .board-empty { display: grid; justify-items: center; gap: var(--s2); padding: var(--s6) var(--s4); text-align: center; color: var(--ink-2); }
 .board-empty[hidden] { display: none; }
 .board-empty__icon { color: var(--ink-3); }
