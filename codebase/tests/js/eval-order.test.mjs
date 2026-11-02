@@ -159,3 +159,9 @@ test("evaluationInput: an explicit dimensions list wins and drives the Other buc
   assert.deepEqual(s.dimensions, ["x", "y"]);
   assert.equal(s.otherBucket, false);
 });
+
+test("evaluationInput counts a filter on a calculation as a row-level calculation", () => {
+  const f = { calc: "c1", db: "", table: "", column: "Net", category: "numeric", op: ">", value: "1" };
+  assert.equal(evaluationInput(sheetOf({ filters: [f] }), opts).rowLevelCalcs, 1);
+  assert.equal(evaluationInput(sheetOf({ filters: [f] }), { ...opts, isApplied: () => false }).rowLevelCalcs, 0);
+});

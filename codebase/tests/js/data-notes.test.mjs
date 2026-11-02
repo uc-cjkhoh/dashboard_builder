@@ -43,3 +43,8 @@ test("usedCalculations: an applied shared Top-N filter counts too", () => {
   assert.deepEqual(usedCalculations(sheet, calcs, [{ op: "top", topBy: { calc: "c1" } }]).map((c) => c.id), ["c1"]);
   assert.deepEqual(calcDefinitionLines(sheet, calcs, [{ op: "top", topBy: { calc: "c1" } }]), ["Net = [orders.amount] * 2"]);
 });
+
+test("usedCalculations includes a calculation a sheet filters on", () => {
+  const sheet = { rows: [], columns: [], color: [], marks: {}, filters: [{ calc: calcs[0].id, db: "", table: "", column: calcs[0].name, category: "numeric", op: ">", value: "1" }] };
+  assert.deepEqual(usedCalculations(sheet, calcs).map((c) => c.id), [calcs[0].id]);
+});

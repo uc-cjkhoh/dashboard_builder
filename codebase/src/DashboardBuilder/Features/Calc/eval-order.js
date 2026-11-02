@@ -87,6 +87,7 @@ export function evaluationInput(sheet, { sharedFilters = [], parameters = [], ca
     (roleOf(f) === "measure" && !f.agg ? aggregate : rowLevel).add(f.calc);
   }
 
+  for (const f of sh.filters ?? []) if (isCalcPill(f) && isApplied(f)) rowLevel.add(f.calc); // a filter on a calculation is a row-level one
   const tableCalcs = [];
   for (const f of [...(sh.rows ?? []), ...(sh.columns ?? [])]) {
     const t = f?.tableCalc;
