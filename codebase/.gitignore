@@ -14,3 +14,16 @@ publish/
 
 # ASP.NET Data Protection key ring (secret)
 keys/
+
+# Test and tooling output
+TestResults/
+node_modules/
+*.log
+*.tmp
+*.diff
+*.orig
+*.rej
+
+# Screenshots from browser checks (tests/live/ writes them outside the repo)
+/screenshots/
+/shots/

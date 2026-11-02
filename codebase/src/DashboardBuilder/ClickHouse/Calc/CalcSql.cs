@@ -70,7 +70,7 @@ internal static class CalcSql
     }
 
     /// <summary>
-    /// A calculated measure's SQL and whether its values are numbers (E4/E13): an aggregate tree is used as is (no
+    /// A calculated measure's SQL and whether its values are numbers: an aggregate tree is used as is (no
     /// <paramref name="agg"/>); a row-level tree is aggregated by the pill through <see cref="ClickHouseGateway.AggregateSql"/>.
     /// Re-checks the role rules <see cref="RequestRules"/> applies, plus the type (no sum/avg of text).
     /// </summary>
@@ -89,7 +89,7 @@ internal static class CalcSql
         return (ClickHouseGateway.AggregateSql(a, c.Sql, sampled, approximate), a is "sum" or "avg" or "countdistinct" or "countnonnull" or "median" or "stddev" or "variance" || c.Info.Type == CalcType.Number);
     }
 
-    /// <summary>A calculated dimension groups by its row-level expression (E4); an aggregate tree there is a 400.</summary>
+    /// <summary>A calculated dimension groups by its row-level expression; an aggregate tree there is a 400.</summary>
     internal static string CalcDimensionSql(CompiledCalc c, string field) => c.Info.IsAggregate
         ? throw new RequestValidationException("A dimension can't contain an aggregate. Put it in a measure instead.", field + ".calc")
         : c.Info.Type == CalcType.Boolean ? $"toString({c.Sql})" // a calculated true/false group reads "true"/"false"; a plain Bool field keeps its own spelling
@@ -99,7 +99,7 @@ internal static class CalcSql
     internal static string CalcLabel(string? label) =>
         string.IsNullOrEmpty(label) || label.Length > CalcLimits.MaxName ? "calculation" : label;
 
-    /// <summary>P33: whether any measure counts distinct values (estimated in approximate mode) — a plain or
+    /// <summary>Whether any measure counts distinct values (estimated in approximate mode) — a plain or
     /// row-level <c>countDistinct</c>, or a <c>COUNTD</c> inside a calculation.</summary>
     internal static bool UsesDistinctCount(IEnumerable<MeasureRef> measures) => measures.Any(m =>
         string.Equals(m.Agg, "countDistinct", StringComparison.OrdinalIgnoreCase) || (m.Calc is { } c && HasCountD(c)));

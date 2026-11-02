@@ -1,4 +1,4 @@
-// Percentile as a plain measure (T04-07): the fraction rules, the label, the wire shape, the notice, the workbook round trip.
+// Percentile as a plain measure: the fraction rules, the label, the wire shape, the notice, the workbook round trip.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { percent, isFraction, percentLabel, PERCENT_MESSAGE } from "../../src/DashboardBuilder/Features/Core/validate.js";

@@ -61,7 +61,7 @@ export function chartFit(spec, width = 0, height = 0) {
   return out;
 }
 
-/** P23 Fit (Format → Fit): "standard" keeps a slot per category (the pane scrolls); "width" / "height" /
+/** Fit (Format → Fit): "standard" keeps a slot per category (the pane scrolls); "width" / "height" /
  * "entire" fit that direction (or both) to the pane instead — categories share the room and labels may
  * thin out. Returns the adjusted fit plus which axes were fitted. */
 export function applyFitMode(fit, mode) {

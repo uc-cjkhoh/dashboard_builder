@@ -329,7 +329,6 @@ export function initCanvas() {
       statusEl.append(pill);
       return;
     }
-    // failed
     pill.className = "pill pill--danger";
     pill.append(icon("error", { size: 14 }), " Failed to load");
     const retry = document.createElement("button");

@@ -3,7 +3,6 @@ using ClickHouse.Client.Utility;
 
 namespace DashboardBuilder.ClickHouse;
 
-/// <summary>One end of a relationship's key join: a column of a table.</summary>
 public sealed record JoinKeyRef(string Db, string Table, string Column);
 
 /// <summary><c>POST /api/relationships/preview</c>. <see cref="SampleLimit"/> bounds the rows read from EACH table (default and cap 1,000,000).</summary>

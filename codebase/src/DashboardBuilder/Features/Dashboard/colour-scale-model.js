@@ -1,4 +1,4 @@
-// Continuous colour scale: ramp choice and value range (T03-19) — pure, DOM-free (tests/js/colour-scale-model.test.mjs).
+// Continuous colour scale: ramp choice and value range — pure, DOM-free (tests/js/colour-scale-model.test.mjs).
 // `format.colorRamp` picks the hue of the single-hue ramp drawn for scatter and heatmap colour; `format.colorMin` /
 // `format.colorMax` pin the ends of the scale (null = the data's own end).
 import { rampStops } from "./colour-model.js";

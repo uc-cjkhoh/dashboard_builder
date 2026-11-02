@@ -83,14 +83,6 @@ export function listDialog(title, items) {
   });
 }
 
-// Status is icon + text + color, never color alone (accessibility — DESIGN.md).
-const PILL = {
-  idle:       { cls: "pill--muted",  glyph: "dot", label: "Idle" },
-  connecting: { cls: "pill--warn",   glyph: "refresh", label: "Connecting…" },
-  connected:  { cls: "pill--ok",     glyph: "check", label: "Connected" },
-  failed:     { cls: "pill--danger", glyph: "error", label: "Failed" },
-};
-
 // --- Dialogs (native <dialog>; falls back to the `open` attribute where showModal is
 // unavailable, e.g. headless jsdom). Confirms replace window.confirm (DESIGN.md). ---
 export function makeButton(text, className) {
@@ -135,19 +127,4 @@ export function confirmDialog(message, { danger = false, confirmText = "Confirm"
     dlg.addEventListener("cancel", (e) => { e.preventDefault(); finish(false); });
     openDialog(dlg);
   });
-}
-
-/** Set a status pill's state + text. Text is set as a text node (never HTML). */
-export function setPill(el, state, text) {
-  if (!el) return;
-  const p = PILL[state] ?? PILL.idle;
-  el.className = `pill ${p.cls}`;
-  el.replaceChildren();
-
-  const glyph = document.createElement("span");
-  glyph.className = "pill__glyph";
-  glyph.setAttribute("aria-hidden", "true");
-  glyph.append(icon(p.glyph, { size: 14 }));
-
-  el.append(glyph, document.createTextNode(" " + (text ?? p.label)));
 }

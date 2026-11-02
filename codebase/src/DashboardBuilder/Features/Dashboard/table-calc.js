@@ -1,4 +1,4 @@
-// P27 quick table calculations — pure, DOM-free (unit-tested in tests/js/table-calc.test.mjs). A measure
+// Quick table calculations — pure, DOM-free (unit-tested in tests/js/table-calc.test.mjs). A measure
 // pill may carry `tableCalc: { type, along, window? }`, computed in the browser over the rows the query
 // returned (no new query shape). Rows are keyed [rowDim…, colDim…]; a calculation runs in result order
 // (the user's sort) along one shelf's dimensions, restarting for each combination of the other shelf's.

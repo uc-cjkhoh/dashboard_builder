@@ -1,4 +1,4 @@
-// Field choices (P40): a shelf slot may carry alternative fields; pure helpers over the slot object.
+// Field choices: a shelf slot may carry alternative fields; pure helpers over the slot object.
 import { aggsFor } from "./filter-rules.js";
 
 export const sameRef = (a, b) => a.db === b.db && a.table === b.table && a.column === b.column;

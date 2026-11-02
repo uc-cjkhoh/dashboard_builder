@@ -115,7 +115,7 @@ public static class CalcCatalog
         ["date"] = Fn(CalcType.Date, FnArg.Text),
     };
 
-    /// <summary>E13: what a row-level calculation in a measure may be aggregated by (<c>count</c> of rows would ignore it).
+    /// <summary>What a row-level calculation in a measure may be aggregated by (<c>count</c> of rows would ignore it).
     /// The single whitelist <see cref="DashboardBuilder.ClickHouse.RequestRules"/> and the gateway both use.</summary>
     public static readonly IReadOnlySet<string> RowLevelAggregations = new HashSet<string>(StringComparer.Ordinal)
         { "sum", "avg", "min", "max", "countdistinct", "countnonnull", "median", "stddev", "variance", "attr" };

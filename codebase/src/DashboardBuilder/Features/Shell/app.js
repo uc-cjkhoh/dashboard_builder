@@ -1,6 +1,5 @@
-// Entry point for the browser app. Modules are wired in their build-plan phases:
-// connection (P2, below), schema browser (P3), canvas/drag-drop (P4), relationships (P5),
-// subtabs (P6).
+// Entry point for the browser app. Wires the modules together: connection (below), schema browser,
+// canvas/drag-drop, relationships, subtabs.
 import { initSidebar } from "./sidebar.js";
 import { initConnection } from "../Connection/connection.js";
 import { initSchema } from "../Schema/schema.js";
@@ -35,7 +34,7 @@ for (const el of document.querySelectorAll("[data-icon]")) el.replaceChildren(ic
 // check fires an event.
 initScheme();  // light / dark (data-scheme) before anything reads it
 initSchemeToggle();
-initTheme();   // P41 — the workbook theme's tokens (default until a workbook opens)
+initTheme();   // the workbook theme's tokens (default until a workbook opens)
 initSidebar();
 initSchema();
 initCanvas();

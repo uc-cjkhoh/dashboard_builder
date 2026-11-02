@@ -56,18 +56,17 @@ export const api = {
 
   /** List databases on the current connection. */
   databases: () => request("GET", "/api/databases"),
-  /** List tables in a database. */
   tables: (db) => request("GET", `/api/databases/${encodeURIComponent(db)}/tables`),
   /** Column names + types (with display category) for a table. */
   columns: (db, table) =>
     request("GET", `/api/databases/${encodeURIComponent(db)}/tables/${encodeURIComponent(table)}/columns`),
-  /** Distinct values of a column for a filter dropdown (P14): bounded string list. */
+  /** Distinct values of a column for a filter dropdown: bounded string list. */
   distinct: (db, table, column, limit = 200) =>
     request("GET", `/api/databases/${encodeURIComponent(db)}/tables/${encodeURIComponent(table)}/columns/${encodeURIComponent(column)}/distinct?limit=${encodeURIComponent(limit)}`),
-  /** Histogram (P12): equal-width bins over a numeric column → { bins: [{x0, x1, count}] }. */
+  /** Histogram: equal-width bins over a numeric column → { bins: [{x0, x1, count}] }. */
   histogram: (db, table, plan, { signal } = {}) =>
     request("POST", `/api/databases/${encodeURIComponent(db)}/tables/${encodeURIComponent(table)}/histogram`, plan, signal),
-  /** Box plot (P12): five-number summary per group → { groups: [{label, min, q1, median, q3, max}] }. */
+  /** Box plot: five-number summary per group → { groups: [{label, min, q1, median, q3, max}] }. */
   boxplot: (db, table, plan, { signal } = {}) =>
     request("POST", `/api/databases/${encodeURIComponent(db)}/tables/${encodeURIComponent(table)}/boxplot`, plan, signal),
   /** Column profile: rows, NULLs, approximate distinct, min/max and top values of one column over the table's first rows. */
@@ -86,7 +85,7 @@ export const api = {
   sourceColumns: (source, { signal } = {}) => request("POST", "/api/source/columns", source, signal),
   /** Join safety preview (POST /api/relationships/preview): bounded match / duplicate counts for a key pair → { from, to, sampleLimit, sampled }. */
   joinPreview: (req, { signal } = {}) => request("POST", "/api/relationships/preview", req, signal),
-  /** Export the worksheet query's rows as CSV text (P13). Bounded server-side; returns raw text. */
+  /** Export the worksheet query's rows as CSV text. Bounded server-side; returns raw text. */
   async exportCsv(plan) {
     const res = await guardedFetch(BASE + "/api/query/export.csv", {
       method: "POST",

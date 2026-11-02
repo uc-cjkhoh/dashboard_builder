@@ -1,4 +1,4 @@
-// P35 period comparison — pure, DOM-free (unit-tested in tests/js/period-model.test.mjs).
+// Period comparison — pure, DOM-free (unit-tested in tests/js/period-model.test.mjs).
 // A worksheet's `period` limits the view to a date range on one date/time field and, optionally, runs the
 // same query over a comparison range (previous period, same period last year, or custom). Ranges are
 // whole days, inclusive, in the browser's calendar; they reach the server as one bound `between` filter.

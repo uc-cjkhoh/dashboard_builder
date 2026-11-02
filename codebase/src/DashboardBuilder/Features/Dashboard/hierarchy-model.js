@@ -1,4 +1,4 @@
-// T03-29 named hierarchies — pure, DOM-free (tests/js/hierarchy-model.test.mjs). A workbook holds up to 20
+// Named hierarchies — pure, DOM-free (tests/js/hierarchy-model.test.mjs). A workbook holds up to 20
 // reusable hierarchies: { id: "hier<N>", name, levels: [{ db, table, column }, …] } — 2..LIMITS.drillLevels
 // levels, all from ONE table (the same rule as a sheet's drill). Applying one to a sheet COPIES its levels into
 // `sheet.drill = { levels, depth: 0, path: [] }` (the structure addDrillLevel builds), so the sheet keeps
@@ -82,14 +82,6 @@ export function cleanHierarchies(raw, issues, { tables = null } = {}) {
   }
   if (raw.length > LIMITS.hierarchies) issues.push(`Only the first ${LIMITS.hierarchies} hierarchies were opened.`);
   return out;
-}
-
-/** Whether a hierarchy's table and columns still exist: `columnsByTable` is a Map of "db.table" → Set of column names. */
-export function hierarchyStatus(h, columnsByTable) {
-  const set = columnsByTable.get(hierarchyTableKey(h.levels[0].db, h.levels[0].table));
-  if (!set) return { ok: false, missing: h.levels.map((l) => l.column), tableMissing: true };
-  const missing = h.levels.filter((l) => !set.has(l.column)).map((l) => l.column);
-  return missing.length ? { ok: false, missing, tableMissing: false } : { ok: true, missing: [] };
 }
 
 /**

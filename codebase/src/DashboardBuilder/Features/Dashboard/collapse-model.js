@@ -1,7 +1,7 @@
 import { tupleKey } from "./grid-model.js";
 import { combine } from "./analytics-model.js";
 
-// Expand / collapse crosstab headers (T03-29). Pure: no DOM, no state. A collapsed header hides the levels below it and
+// Expand / collapse crosstab headers. Pure: no DOM, no state. A collapsed header hides the levels below it and
 // stands for all of them as one row (or column). State is a list of keys per axis on `sheet.collapsed`
 // ({ rows: [key…], cols: [key…] }), saved with the workbook. A key names the dimensions down to the header's level plus
 // the member path, so a re-ordered shelf never applies a key to other members.

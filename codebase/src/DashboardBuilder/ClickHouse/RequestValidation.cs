@@ -14,7 +14,7 @@ public static class ApiLimits
     public const int MaxHostLength = 253, MaxUserLength = 64, MaxPasswordLength = 256;
     public const int MaxDimensions = 12, MaxMeasures = 10, MaxJoins = 10, MaxFilters = 20; // user filters (client cap 8) + shared filters (4) + drill path (5) + page + selection + date range
     public const int MaxInValues = 500, MaxFilterValueLength = 1000;
-    public const int MaxBoxOutliers = 500; // outlier points one box plot returns (T07-08)
+    public const int MaxBoxOutliers = 500; // outlier points one box plot returns
     public const int MaxRowLimit = 5000, MaxBuckets = 100, MaxDistinct = 1000;
     public const int MaxExportRows = 100_000; // CSV export of a whole worksheet result
     public const int DefaultRowsLimit = 100, MaxRowsLimit = 1000; // raw rows of one table (POST /api/rows): default / cap
@@ -39,7 +39,7 @@ public static class RequestRules
     private static readonly Regex HostName = new(
         @"^[A-Za-z0-9_]([A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?(\.[A-Za-z0-9_]([A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?)*\.?$", RegexOptions.CultureInvariant);
     private static readonly HashSet<string> Ops = new(StringComparer.OrdinalIgnoreCase)
-        { "=", "!=", ">", ">=", "<", "<=", "in", "notin", "between", "contains", "startsWith", "endsWith", "top" }; // P30: text match + top-N
+        { "=", "!=", ">", ">=", "<", "<=", "in", "notin", "between", "contains", "startsWith", "endsWith", "top" }; // text match + top-N
     private static RequestValidationException Bad(string message, string field) => new(message, field);
 
     /// <summary>Null when the host is valid, else the user-facing reason (same text as validate.js).</summary>
@@ -106,7 +106,7 @@ public static class RequestRules
     private static void NoNulls<T>(T?[]? items, string field) where T : class
     { for (var i = 0; i < (items?.Length ?? 0); i++) if (items![i] is null) throw Bad($"'{field}[{i}]' is required.", $"{field}[{i}]"); }
 
-    // Calculated fields (E13). Shape, role, label and size only — the tree is checked against the live catalog in the gateway.
+    // Calculated fields. Shape, role, label and size only — the tree is checked against the live catalog in the gateway.
     private static void CheckCalcTree(ExprNode calc, string label, string field)
     {
         if (label is { } l && l.Length > CalcLimits.MaxName)
@@ -115,7 +115,7 @@ public static class RequestRules
         catch (CalcException e) { throw Bad(e.Message, field + ".calc"); }
     }
 
-    // T02-34: a cast is a whitelisted word, and a calculation (which has its own type) takes none.
+    // A cast is a whitelisted word, and a calculation (which has its own type) takes none.
     private static void CheckCast(string? cast, bool isCalc, string field)
     {
         if (cast is null) return;
@@ -162,7 +162,7 @@ public static class RequestRules
             throw Bad(CalcCatalog.RowLevelHint, field + ".calc");
     }
 
-    /// <summary>P26 per-dimension date parts: "auto" / "exact", truncations, and discrete parts.</summary>
+    /// <summary>Per-dimension date parts: "auto" / "exact", truncations, and discrete parts.</summary>
     public static readonly IReadOnlySet<string> DateParts = new HashSet<string>(StringComparer.Ordinal)
         { "auto", "exact", "year", "quarter", "month", "week", "day", "hour", "quarterOfYear", "monthOfYear", "dayOfWeek", "hourOfDay" };
 

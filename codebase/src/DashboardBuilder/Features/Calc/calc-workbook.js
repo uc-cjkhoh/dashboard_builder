@@ -5,7 +5,7 @@ import { cleanGroupSpec } from "./group-model.js";
 
 const sameName = (a, b) => a.toLowerCase() === b.toLowerCase();
 
-/** B2: a calculation name is 1–LIMITS.calcName characters, no `.`, `[` or `]`, unique case-insensitively
+/** A calculation name is 1–LIMITS.calcName characters, no `.`, `[` or `]`, unique case-insensitively
  *  (ignoring the calculation `selfId` being edited). { ok, value } or { ok: false, error }. */
 export function checkName(name, calcs, selfId) {
   const t = text(name, { label: "Name", max: LIMITS.calcName, required: true });
@@ -32,7 +32,7 @@ const refsTo = (formula, name) => {
   return false;
 };
 
-/** B3: `[Old]` becomes `[New]` in every calculation's formula; `[table.Old]` is left alone. Returns a new array. */
+/** `[Old]` becomes `[New]` in every calculation's formula; `[table.Old]` is left alone. Returns a new array. */
 export function renameInFormulas(calcs, oldName, newName) {
   return calcs.map((c) => ({ ...c, formula: mapRefs(c.formula, (inner) => (inner.trim() === oldName ? newName : undefined)) }));
 }
@@ -49,7 +49,7 @@ export function cleanCalculation(raw, issues) {
   if (!raw || typeof raw !== "object" || !/^calc\d{1,6}$/.test(raw.id ?? "")) { issues.push("Skipped a calculation with no id."); return null; }
   const name = checkName(raw.name, [], null);
   if (!name.ok) { issues.push(`Skipped a calculation ${raw.id}: ${name.error}`); return null; }
-  if (raw.group !== undefined) { // T02-30: a group field — its definition, not formula text
+  if (raw.group !== undefined) { // a group field — its definition, not formula text
     const group = cleanGroupSpec(raw.group, `"${name.value}"`, issues);
     return group ? { id: raw.id, name: name.value, formula: "", group } : null;
   }

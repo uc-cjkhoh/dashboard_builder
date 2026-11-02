@@ -1,7 +1,7 @@
 import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 
-// chart.js keeps one ECharts instance per container (P24a). A tiny fake DOM + fake echarts is enough to prove it.
+// chart.js keeps one ECharts instance per container. A tiny fake DOM + fake echarts is enough to prove it.
 const made = [];
 const fakeEl = () => ({ className: "", children: [], style: { setProperty() {} }, clientWidth: 600, clientHeight: 400,
   append(c) { this.children.push(c); } });
@@ -46,8 +46,8 @@ test("sizeChart and animateNextChart address one container", () => {
   animateNextChart(a, false); // no throw; state is per container
 });
 
-// T01-20 / T03-33: the palette order and the member colours belong to the container being drawn (they used to be
-// module-level variables overwritten by every render).
+// The palette order and the member colours belong to the container being drawn (not module-level
+// variables overwritten by every render).
 const sliceColour = (inst, name) => inst.lastSet.series[0].data.find((d) => d.name === name).itemStyle?.color;
 test("member colours are per container and never leak into the next chart", () => {
   const pie = (colours) => ({ type: "pie", categories: ["a", "b"], series: [{ name: "v", data: [1, 2] }], memberColors: colours && new Map(colours), format: {} });

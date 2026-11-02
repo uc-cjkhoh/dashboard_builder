@@ -35,7 +35,6 @@ export function openCalcDialog(calcId = null) {
   dlg.setAttribute("aria-labelledby", title.id);
   const body = el("div", "dialog__body calc-dialog__body");
 
-  // Name
   const nameField = el("div", "field");
   const nameLabel = el("label", null, "Name"); nameLabel.htmlFor = `calc-name-${n}`;
   const name = el("input", "input"); name.id = nameLabel.htmlFor; name.type = "text"; name.autocomplete = "off";
@@ -246,7 +245,6 @@ export function openCalcDialog(calcId = null) {
   insertBtn.addEventListener("click", () => { if (shown) insertText(shown.example); });
   panel.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); togglePanel(false); } }); // close the panel, not the dialog
 
-  // --- finish ---------------------------------------------------------------
   const finish = () => closeDialog(dlg);
   cancel.addEventListener("click", finish);
   dlg.addEventListener("cancel", (e) => { e.preventDefault(); finish(); }); // Esc discards

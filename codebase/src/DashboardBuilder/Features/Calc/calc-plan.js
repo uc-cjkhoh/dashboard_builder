@@ -1,6 +1,6 @@
 // Calculated fields in the worksheet query plan (pure, DOM-free; tests/js/calc-plan.test.mjs).
 // `buildPlan` (Dashboard/sheet-plan.js) calls these to turn pills into wire refs, list the tables a pill reads, and
-// refuse (E15) before any query when a calculation can't be computed. ctx = { calcs, catalog, params } (params: the workbook parameters a formula may read).
+// refuse before any query when a calculation can't be computed. ctx = { calcs, catalog, params } (params: the workbook parameters a formula may read).
 import { compileCalculation, calcTables } from "./calc-resolve.js";
 import { isCalcPill, pillName, pillSlots } from "./calc-pill.js";
 import { percentLabel, isFraction } from "../Core/validate.js";
@@ -18,7 +18,7 @@ function compiled(f, ctx) {
   return calc ? compileCalculation(calc, ctx.calcs, ctx.catalog, ctx.params) : null;
 }
 
-/** The group-by ref for a pill (E12: a calculated dimension is never date-grouped). */
+/** The group-by ref for a pill (a calculated dimension is never date-grouped). */
 export function wireDim(f, ctx) {
   if (isCalcPill(f)) {
     const c = compiled(f, ctx);
@@ -48,7 +48,7 @@ export function planTables(f, ctx) {
   return c && !c.error ? calcTables(c.info).sort() : [];
 }
 
-/** First E15 message among the sheet's calculated-field pills, or `null`. `shared` are the applied shared
+/** First message among the sheet's calculated-field pills, or `null`. `shared` are the applied shared
  *  filters: a shared Top-N ranked by a calculation that is gone must stop the view, not send `topBy: null`. */
 export function calcProblem(sheet, ctx, shared = []) {
   const seen = new Set();
@@ -74,7 +74,7 @@ export function calcProblem(sheet, ctx, shared = []) {
 export const aggWord = (a, p) => (a === "countDistinct" ? "distinct" : a === "countNonNull" ? "non-null"
   : a === "percentile" && isFraction(p) ? `p${percentLabel(p)}` : a);
 
-/** Display name of a measure, matching the server's result column. `alias` is a plain field's P28 name. */
+/** Display name of a measure, matching the server's result column. `alias` is a plain field's name. */
 export function measureLabel(f, calcs, alias) {
   if (isCalcPill(f)) return pillName(f, calcs);
   const a = f.agg ?? "sum";

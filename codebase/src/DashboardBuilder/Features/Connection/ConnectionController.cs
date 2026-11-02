@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace DashboardBuilder.Features.Connection;
 
 /// <summary>
-/// The session connection endpoints (P1). All read-only against ClickHouse: connecting only
+/// The session connection endpoints. All read-only against ClickHouse: connecting only
 /// validates with <c>SELECT 1</c>. The password is accepted in the request body, stored in the
 /// session, and never echoed back (CLAUDE.md golden rule 4).
 /// </summary>
@@ -36,7 +36,7 @@ public sealed class ConnectionController : ApiControllerBase
             User: req.User!.Trim(),
             Password: req.Password ?? string.Empty,
             Secure: secure,
-            // Safe by default (P8 hardening / decision D11): a TLS connection validates the
+            // Safe by default (decision D11): a TLS connection validates the
             // server certificate against the host's trust store. Internal ClickHouse servers
             // often present a self-signed cert; the user can opt in per-connection with
             // allowInvalidCert:true — an explicit, informed choice, never the silent default.

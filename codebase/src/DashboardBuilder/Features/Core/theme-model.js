@@ -1,4 +1,4 @@
-// P41 workbook themes — pure, DOM-free (unit-tested in tests/js/theme-model.test.mjs). A theme is
+// Workbook themes — pure, DOM-free (unit-tested in tests/js/theme-model.test.mjs). A theme is
 // { accent: <preset id> | "#rrggbb", palette: <palette id> }, saved in the workbook. It overrides the
 // accent and chart-category tokens of Core/core.css in light and dark; everything else (surfaces, ink,
 // status colours) stays. Every accent here keeps white button text ≥ 4.5:1 on the accent, accent text

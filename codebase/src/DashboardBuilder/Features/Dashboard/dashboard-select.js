@@ -2,7 +2,7 @@ import { keyOf, selectionFilter } from "./sheet-plan.js";
 import { primaryDim } from "./result-model.js";
 import { refusal } from "../Calc/calc-pill.js";
 
-// The dashboard's one selection (P24c) — pure and DOM-free (tests/js/dashboard-select.test.mjs). A click on a mark in one
+// The dashboard's one selection — pure and DOM-free (tests/js/dashboard-select.test.mjs). A click on a mark in one
 // worksheet widget selects that mark's value on the widget's primary dimension; every OTHER worksheet widget then filters
 // to it. It is transient: held in the board's memory, never in the workbook. The filter it becomes is the worksheet's own
 // click-selection filter (sheet-plan.js selectionFilter): a bound `=`, applied only where its table is already in the query.

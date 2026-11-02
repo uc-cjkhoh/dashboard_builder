@@ -213,7 +213,7 @@ test("non-integer cells are refused as 'snap to whole grid cells' by checkPlacem
   }
 });
 
-// --- image and spacer widgets (T08-15, T08-16) ---
+// --- image and spacer widgets ---
 const PNG = "data:image/png;base64,iVBORw0KGgo=";
 const iw = (x, y, w = 6, h = 4, alt = "Logo", src = PNG) => ({ kind: "image", alt, src, x, y, w, h });
 const pw = (x, y, w = 2, h = 1) => ({ kind: "spacer", x, y, w, h });

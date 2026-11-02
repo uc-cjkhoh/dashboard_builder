@@ -14,7 +14,7 @@ import { NAV_LABEL } from "./board-model.js";
 // One widget on the board: a header (title, Edit, Remove) over a body. A worksheet widget's body is a select-only
 // worksheet view (createWorksheetView({ interactive: "select" })) of its worksheet's sheet, run with its own latest-wins gate
 // and scope = the worksheet id; a mark click is the dashboard's selection (host.onMark) and the view obeys the dashboard's
-// current selection (host.crossFor, P24c — dashboard-select.js); its error / hint states render inside the body, so a sibling is never affected. A text
+// current selection (host.crossFor — dashboard-select.js); its error / hint states render inside the body, so a sibling is never affected. A text
 // widget's body is its heading and body text as plain text (textContent — no markup, no Markdown).
 const h = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
 

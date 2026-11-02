@@ -1,4 +1,4 @@
-// Axis synchronisation, secondary mark type (T03-16/17), marker size and mark borders (T01-22, T03-34) — pure models.
+// Axis synchronisation, secondary mark type, marker size and mark borders — pure models.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { syncRange, SECONDARY_CHOICES, secondaryKind, dualAxisOn, rightAxisTitle, dualAxisAllowed, seriesAxis } from "../../src/DashboardBuilder/Features/Dashboard/axis-sync-model.js";

@@ -1,4 +1,4 @@
-// P21 analytics pane — pure, DOM-free (unit-tested in tests/js/analytics-model.test.mjs). Everything is
+// Analytics pane — pure, DOM-free (unit-tested in tests/js/analytics-model.test.mjs). Everything is
 // computed in the browser over the rows the query returned: reference lines / bands, a trend line (with
 // R²) and a short forecast that extends it, and crosstab totals that respect each measure's aggregation.
 // sheet.analytics = { ref: { kind, value? }, band: { from, to } | null, trend: none|linear|log|poly2,
@@ -148,7 +148,7 @@ export function bandBounds(band, values) {
 /** A measure's values without the "Other" remainder rows (an aggregate of cut-off members is not a data point). */
 export const dataValues = (data, rows) => data.filter((_, i) => !rows[i]?.isOther);
 
-// The Analytics pane's items: each can be dragged onto the chart or added with its button (T07-01).
+// The Analytics pane's items: each can be dragged onto the chart or added with its button.
 export const ANALYTICS_ITEMS = [
   { id: "ref", label: "Reference line", icon: "ref-line" },
   { id: "band", label: "Band", icon: "band" },

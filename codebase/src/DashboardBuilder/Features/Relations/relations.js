@@ -8,7 +8,7 @@ import { linkSides, linkRoute, roundedPath } from "./link-route.js";
 import { openTypeWarning } from "./type-warning.js";
 import { COLUMN_MIME, encodeColumnDrag, parseColumnDrag, dropDecision } from "./link-drag.js";
 
-// Relationships (P5): logical, typed links the user draws between a column of one entity and a column of
+// Relationships: logical, typed links the user draws between a column of one entity and a column of
 // another (decision D5 — ClickHouse neither creates nor validates them). Creation is drag-and-drop only:
 // drag a column row onto a row of another card, pick a cardinality. Links render as an SVG overlay with shape-coded
 // endpoints (readable without colour) and a cardinality badge; clicking one edits/deletes it.
@@ -301,7 +301,7 @@ function endMarker(p, u, kind) {
 }
 
 const BADGE_H = 24;
-// P31: an outer join says so on the badge ("1:N · left", "· right", "· full") — words, not a colour.
+// An outer join says so on the badge ("1:N · left", "· right", "· full") — words, not a colour.
 const badgeWidth = (text) => (text.length <= 3 ? 34 : text.length > 10 ? 70 : 64);
 
 function badge(text, w, mid) {
@@ -332,7 +332,6 @@ function select(id) {
   render();
 }
 
-// --- cardinality dialog -------------------------------------------------------
 function openCardinalityDialog({ current = "1:N", joinType = "inner", tables = ["first table", "second table"], legacy = false, check = null, onPick, onDelete }) {
   const dlg = document.createElement("dialog");
   dlg.className = "dialog dialog--sm";
@@ -343,7 +342,7 @@ function openCardinalityDialog({ current = "1:N", joinType = "inner", tables = [
 
   const body = document.createElement("div");
   body.className = "dialog__body";
-  // P31 / T02-12: how the two tables join — only matching rows, or keep every row of the first table (left),
+  // How the two tables join — only matching rows, or keep every row of the first table (left),
   // the second (right) or both (full). The link runs first → second. Pick it first; picking a cardinality saves both.
   let join = joinType;
   const joinRow = document.createElement("fieldset");

@@ -1,4 +1,4 @@
-// P32 — Workbook menu → Parameters…: add, edit and delete the workbook's parameters (name, type, allowed
+// Workbook menu → Parameters…: add, edit and delete the workbook's parameters (name, type, allowed
 // values, current value). Each value is checked by Core/parameters-model.js before it is kept.
 import { parameters, calculations, addParameter, updateParameter, removeParameter } from "../Core/store.js";
 import { PARAM_TYPES, MAX_PARAMS, MAX_LIST, checkValue, checkStep, checkParamName } from "../Core/parameters-model.js";

@@ -109,7 +109,7 @@ test("leafValue: a collapsed column combines across both axes", () => {
   assert.equal(leafValue("sum", c2, one(["EU", "FR"]), top, 0), 3);
 });
 
-// Saved with the workbook, restored on load (T03-29).
+// Saved with the workbook, restored on load.
 import { serializeWorkbook, parseWorkbook } from "../../src/DashboardBuilder/Features/Workbook/workbook-model.js";
 import { emptySheet } from "../../src/DashboardBuilder/Features/Core/store.js";
 const wbOf = (collapsed) => ({ entities: new Map(), relationships: new Map(), tabs: [{ id: "ws#1", kind: "worksheet", name: "S", sheet: { ...emptySheet(), collapsed } }], active: { kind: "worksheet", id: "ws#1" } });

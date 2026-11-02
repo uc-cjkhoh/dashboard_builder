@@ -4,7 +4,7 @@ using Xunit;
 namespace DashboardBuilder.Tests;
 
 /// <summary>
-/// P8 hardening (decision D11): TLS certificate validation is on by default. A connection only
+/// Hardening (decision D11): TLS certificate validation is on by default. A connection only
 /// bypasses validation when it is <em>both</em> secure and the user explicitly opted in — never
 /// silently, and never on a plain (non-TLS) connection.
 /// </summary>

@@ -22,7 +22,7 @@ public sealed partial class ClickHouseGateway
     private readonly IMemoryCache? _cache;
     public ClickHouseGateway(ILogger<ClickHouseGateway> logger, IMemoryCache? cache = null) { _logger = logger; _cache = cache; }
 
-    /// <summary>P33: how long a worksheet result is reused for the same server + user + request.</summary>
+    /// <summary>How long a worksheet result is reused for the same server + user + request.</summary>
     internal static readonly TimeSpan CacheTtl = TimeSpan.FromSeconds(60);
     internal const double SampleFraction = 0.1;
 
@@ -93,8 +93,8 @@ public sealed partial class ClickHouseGateway
         };
 
     /// <summary>
-    /// Whether this connection bypasses TLS certificate validation. Safe by default (P8
-    /// hardening / decision D11): only true when the connection is <em>both</em> secure and the
+    /// Whether this connection bypasses TLS certificate validation. Safe by default
+    /// (decision D11): only true when the connection is <em>both</em> secure and the
     /// user explicitly opted in to trusting an invalid/self-signed certificate. A plain (non-TLS)
     /// connection can never bypass validation, since there is no certificate to validate.
     /// </summary>
@@ -225,7 +225,7 @@ public sealed partial class ClickHouseGateway
     }
 
     /// <summary>
-    /// Distinct values of one column, for a filter dropdown (P14): <c>SELECT DISTINCT col FROM db.table
+    /// Distinct values of one column, for a filter dropdown: <c>SELECT DISTINCT col FROM db.table
     /// ORDER BY col LIMIT n</c>. The column is catalog-validated and quoted; the row count is clamped
     /// (<see cref="ClampDistinct"/>) so a high-cardinality column can't flood the client. Read-only.
     /// </summary>
@@ -286,7 +286,7 @@ public sealed partial class ClickHouseGateway
     /// already-bound <c>{name:Float64}</c> placeholder, never a literal); <c>stddev</c>/<c>variance</c> are the sample
     /// statistics, NULL for fewer than two values; <c>attr</c> is the value when the group has exactly one distinct
     /// non-NULL value, else NULL. None of these four is scaled on a sampled table (they estimate from the sample).
-    /// When <paramref name="sampled"/> (P33), counts and sums are scaled back by <c>t0._sample_factor</c>;
+    /// When <paramref name="sampled"/>, counts and sums are scaled back by <c>t0._sample_factor</c>;
     /// <paramref name="approximate"/> estimates distinct counts with <c>uniq</c>.
     /// </summary>
     internal static string AggregateSql(string agg, string expr, bool sampled, bool approximate, string? fraction = null) => agg switch
@@ -305,7 +305,7 @@ public sealed partial class ClickHouseGateway
     };
 
     // "countdistinct" counts unique values — mapped to ClickHouse uniqExact() in the SELECT builders.
-    // "countnonnull" (E11) counts non-NULL values of the column; "count" counts rows.
+    // "countnonnull" counts non-NULL values of the column; "count" counts rows.
     internal static readonly HashSet<string> Aggregations =
         new(StringComparer.OrdinalIgnoreCase) { "count", "sum", "avg", "min", "max", "countdistinct", "countnonnull", "median", "stddev", "variance", "attr", "percentile" };
 
@@ -325,7 +325,7 @@ public sealed partial class ClickHouseGateway
         string sql, List<(string Name, string Type, object Value)> parameters) =>
         parameters.Where(p => sql.Contains("{" + p.Name + ":", StringComparison.Ordinal)).ToList();
 
-    /// <summary>P30 top-N condition: <paramref name="expr"/>'s members ranked by <paramref name="rank"/> under the other filters.</summary>
+    /// <summary>Top-N condition: <paramref name="expr"/>'s members ranked by <paramref name="rank"/> under the other filters.</summary>
     private static string TopCondition(string expr, string from, string others, string rank, QueryFilter f)
     {
         var n = int.Parse(f.Value!, CultureInfo.InvariantCulture);
@@ -359,10 +359,10 @@ public sealed partial class ClickHouseGateway
     };
 
     /// <summary>How many histogram bins to allow — clamped so a bucketing query can never explode
-    /// into an unbounded number of groups (P12). Default 20 when unset.</summary>
+    /// into an unbounded number of groups. Default 20 when unset.</summary>
     internal static int ClampBuckets(int? buckets) => Math.Clamp(buckets ?? 20, 1, ApiLimits.MaxBuckets);
 
-    /// <summary>How many distinct values a filter dropdown may pull (P14) — bounded so it can never
+    /// <summary>How many distinct values a filter dropdown may pull — bounded so it can never
     /// stream a high-cardinality column into the browser. Default 200 when unset.</summary>
     internal static int ClampDistinct(int? limit) => Math.Clamp(limit ?? 200, 1, ApiLimits.MaxDistinct);
 
@@ -375,7 +375,7 @@ public sealed partial class ClickHouseGateway
     internal const int AutoBucketTarget = 400;
 
     /// <summary>The whitelisted truncation for a calendar grain over an already-quoted expression.</summary>
-    /// <summary>P26: the whitelisted expression for a dimension's date part, or null for auto / exact.
+    /// <summary>The whitelisted expression for a dimension's date part, or null for auto / exact.
     /// Truncations reuse <see cref="BucketExpression"/>; discrete parts return a number.</summary>
     internal static string? DatePartExpression(string? part, string expr, bool dateOnly) => part switch
     {
@@ -425,7 +425,7 @@ public sealed partial class ClickHouseGateway
 
     /// <summary>
     /// Build one filter condition for an already-qualified, quoted <paramref name="expr"/>, appending
-    /// bound parameters (P14). Pure + testable. Handles the scalar operators plus <c>in</c> (binds an
+    /// bound parameters. Pure + testable. Handles the scalar operators plus <c>in</c> (binds an
     /// <c>Array(String|Float64)</c>) and <c>between</c> (binds two bounds). Values are always bound as
     /// parameters — never interpolated. Values are coerced to the column's category; a value that
     /// doesn't fit, an empty <c>in</c>, or a half/inverted <c>between</c> throws <see cref="RequestValidationException"/>.
@@ -437,7 +437,7 @@ public sealed partial class ClickHouseGateway
     {
         switch ((op ?? string.Empty).ToLowerInvariant())
         {
-            // P30 text match: case-insensitive, the text bound as a String — no LIKE pattern to escape.
+            // Text match: case-insensitive, the text bound as a String — no LIKE pattern to escape.
             case "contains" or "startswith" or "endswith":
             {
                 if (category != ClickHouseType.Text)
@@ -754,7 +754,7 @@ public sealed partial class ClickHouseGateway
     }
 
     /// <summary>
-    /// A histogram (P12): bucket a single numeric column into equal-width bins over its live [min,max]
+    /// A histogram: bucket a single numeric column into equal-width bins over its live [min,max]
     /// and count rows per bin — <c>SELECT floor((col-lo)/w) AS bin, count() … GROUP BY bin</c>, with
     /// <c>lo</c>/<c>hi</c>/width computed from scalar subqueries so it is a single bounded statement.
     /// The column is catalog-validated, quoted, and must be numeric; the bucket count is clamped;
@@ -817,7 +817,7 @@ public sealed partial class ClickHouseGateway
     }
 
     /// <summary>
-    /// A box plot (P12): the five-number summary (min, Q1, median, Q3, max) of a numeric measure,
+    /// A box plot: the five-number summary (min, Q1, median, Q3, max) of a numeric measure,
     /// optionally grouped by a dimension — <c>SELECT dim, min(m), quantile(0.25)(m), … GROUP BY dim</c>.
     /// The measure must be numeric; identifiers are validated + quoted; the group count is bounded.
     /// </summary>
@@ -965,7 +965,7 @@ public sealed partial class ClickHouseGateway
     /// <exception cref="UnknownIdentifierException">An identifier/agg/op is unknown or references a table not in the query.</exception>
     public async Task<QueryResult> QueryAsync(ClickHouseConnectionInfo info, QueryRequest req, CancellationToken ct, int maxLimit = ApiLimits.MaxRowLimit)
     {
-        // P33 result cache: the same request on the same server + user within a minute is answered from
+        // Result cache: the same request on the same server + user within a minute is answered from
         // memory (logged); Fresh (Refresh) skips the lookup and replaces the entry.
         var key = _cache is null ? null : CacheKey(info, req, maxLimit);
         if (key is not null && req.Fresh != true && _cache!.TryGetValue(key, out QueryResult? hit) && hit is not null)
@@ -1014,7 +1014,7 @@ public sealed partial class ClickHouseGateway
             return $"{alias}.{Identifier.Quote(column)}";
         }
 
-        // T02-34: a cast column's expression and the category/date-only it then has (the column's own with no cast).
+        // A cast column's expression and the category/date-only it then has (the column's own with no cast).
         async Task<string> CastedAsync(string db, string table, string column, string? cast, string field)
         {
             var expr = await QualifyAsync(db, table, column);
@@ -1047,9 +1047,9 @@ public sealed partial class ClickHouseGateway
         aliases[Key(req.From.Db, req.From.Table)] = "t0";
         var from = new StringBuilder(" FROM ")
             .Append(source is null ? Identifier.QualifiedName(req.From.Db, req.From.Table) : $"({source.Sql})").Append(" AS t0");
-        // P33: in approximate mode a base table with a sampling key is read as a 10% sample; counts and sums
+        // In approximate mode a base table with a sampling key is read as a 10% sample; counts and sums
         // are scaled back by its _sample_factor below.
-        // T02-12/13: a right or full join can produce rows with no base-table row, which a base sample + its scale factor
+        // A right or full join can produce rows with no base-table row, which a base sample + its scale factor
         // can't represent — those views are read exactly (the result's approx note then reports no sample).
         var joinTypes = (req.Joins ?? []).Select(j => j.Type).ToList();
         var anyBeyondInner = joinTypes.Any(IsOuter);
@@ -1059,7 +1059,7 @@ public sealed partial class ClickHouseGateway
         if (sampled) from.Append(" SAMPLE ").Append(SampleFraction.ToString(CultureInfo.InvariantCulture));
 
         var next = 1;
-        var anyLeft = anyBeyondInner; // P31/T02-12: any outer join asks the server for NULLs (join_use_nulls)
+        var anyLeft = anyBeyondInner; // any outer join asks the server for NULLs (join_use_nulls)
         foreach (var j in req.Joins ?? [])
         {
             if (!aliases.ContainsKey(Key(j.Left.Db, j.Left.Table)))
@@ -1124,7 +1124,7 @@ public sealed partial class ClickHouseGateway
             var mIdx = measIndex++;
             if (m.Calc is { } mCalc)
             {
-                // E4: an aggregate tree as is; a row-level tree aggregated by the pill. No "count" default here.
+                // An aggregate tree as is; a row-level tree aggregated by the pill. No "count" default here.
                 var (calcSql, calcNumeric) = CalcSql.CalcMeasureSql(m.Agg, await CompileCalcAsync(mCalc, $"measures[{mIdx}]"), $"measures[{mIdx}]", sampled, approximate);
                 measExprs.Add(calcSql);
                 measNames.Add(CalcSql.CalcLabel(m.Column));
@@ -1141,7 +1141,7 @@ public sealed partial class ClickHouseGateway
             if (mAgg == "attr" && category is ClickHouseType.Compound or ClickHouseType.Other)
                 throw new RequestValidationException($"Attr can't summarise {m.Column} — it is a compound column.", $"measures[{mIdx}]");
             measNumeric.Add(mAgg is "count" or "countdistinct" or "countnonnull" or "sum" or "avg" or "median" or "percentile" or "stddev" or "variance" || category == ClickHouseType.Numeric);
-            // E10: one aggregate writer for plain and calculated measures. P33: sampled sums/counts are scaled back,
+            // One aggregate writer for plain and calculated measures; sampled sums/counts are scaled back,
             // approximate mode estimates distinct counts (uniq).
             // A percentile's fraction is a bound Float64 parameter (mp{n}), never text.
             var mFraction = mAgg == "percentile" ? BindFraction(m.P, $"mp{mIdx}", $"measures[{mIdx}].p", parameters) : null;
@@ -1162,11 +1162,11 @@ public sealed partial class ClickHouseGateway
         {
             var f = filters[i];
             if (string.Equals(f.Op, "top", StringComparison.OrdinalIgnoreCase)) { tops.Add((f, i)); continue; } // after the others
-            var expr = await CastedAsync(f.Db, f.Table, f.Column, f.Cast, $"filters[{i}]"); // validates + quotes the column; T02-34 cast
+            var expr = await CastedAsync(f.Db, f.Table, f.Column, f.Cast, $"filters[{i}]"); // validates + quotes the column; cast
             conditions.Add(BuildCondition(f.Op, $"p{i}", expr, CategoryOfRef(f.Db, f.Table, f.Column, f.Cast), f.Column, $"filters[{i}]", f.Value, f.Values, parameters,
                 DateOnlyOfRef(f.Db, f.Table, f.Column, f.Cast)));
         }
-        // P30 top-N filters: the column's members ranked by an aggregate over the same joins and the other
+        // Top-N filters: the column's members ranked by an aggregate over the same joins and the other
         // filters — `col IN (SELECT col … GROUP BY col ORDER BY agg DESC LIMIT n)`. Column and measure are
         // catalog-validated, the aggregation whitelisted, n a validated integer.
         var others = conditions.Count > 0 ? " WHERE " + string.Join(" AND ", conditions) : "";
@@ -1204,12 +1204,12 @@ public sealed partial class ClickHouseGateway
         // Date grouping: the first date/time dimension is truncated to a calendar grain (whitelisted
         // function over the already-quoted column), so a long time axis returns months, not millions
         // of timestamps. "auto" asks ClickHouse for the range first.
-        // P26: a dimension's own date part comes first (whitelisted function); only a date dimension left on
+        // A dimension's own date part comes first (whitelisted function); only a date dimension left on
         // "auto" (or unset) takes part in the chart-wide grouping below.
         for (var i = 0; i < dimRefs.Count; i++)
         {
             var d = dimRefs[i];
-            if (d.Calc is not null || d.DatePart is null or "auto" or "exact") continue; // E12: a calculation is never date-grouped
+            if (d.Calc is not null || d.DatePart is null or "auto" or "exact") continue; // a calculation is never date-grouped
             if (CategoryOfRef(d.Db, d.Table, d.Column, d.Cast) != ClickHouseType.Temporal)
                 throw new RequestValidationException($"A date part needs a date column — {d.Column} isn't one.", "datePart");
             dimExprs[i] = DatePartExpression(d.DatePart, dimExprs[i], DateOnlyOfRef(d.Db, d.Table, d.Column, d.Cast))!;
@@ -1347,12 +1347,12 @@ public sealed partial class ClickHouseGateway
     internal static bool NullsUnavailable(IEnumerable<string?> types, ClickHouseConnectionInfo info) =>
         info.Guards == QueryGuards.None && types.Any(t => t is "right" or "full");
 
-    /// <summary>P31: a left join's unmatched side reads as NULL (ClickHouse's default is the type's zero / ""),
+    /// <summary>A left join's unmatched side reads as NULL (ClickHouse's default is the type's zero / ""),
     /// unless the server refuses settings (then the defaults show).</summary>
     internal static string Settings(bool anyLeft, ClickHouseConnectionInfo info) =>
         anyLeft && info.Guards != QueryGuards.None ? " SETTINGS join_use_nulls = 1" : "";
 
-    /// <summary>P33: whether a table declares a sampling key (only then can it be read with SAMPLE).</summary>
+    /// <summary>Whether a table declares a sampling key (only then can it be read with SAMPLE).</summary>
     private async Task<bool> HasSamplingKeyAsync(ClickHouseConnectionInfo info, string db, string table, CancellationToken ct)
     {
         await using var conn = await OpenAsync(info, ct);

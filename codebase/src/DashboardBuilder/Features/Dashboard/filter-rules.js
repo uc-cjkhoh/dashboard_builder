@@ -12,7 +12,7 @@ export const aggsFor = (category) =>
 export const TEXT_VALUE_TYPES = new Set(["table", "text", "kpi"]);
 const blank = (v) => v == null || !String(v).trim();
 
-// P30 richer filters. Text match (bound, case-insensitive), relative date (a period preset, resolved to a
+// Richer filters. Text match (bound, case-insensitive), relative date (a period preset, resolved to a
 // `between` in the browser) and top-N by a measure (a bound subquery on the server).
 export const TEXT_OPS = new Set(["contains", "startsWith", "endsWith"]);
 export const OP_LABELS = { contains: "contains", startsWith: "starts with", endsWith: "ends with", notin: "not in", relative: "in the", top: "top" };

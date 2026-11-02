@@ -1,4 +1,4 @@
-// P41 — applies the workbook theme (Core/store.js currentTheme) to the :root tokens. The default theme
+// Applies the workbook theme (Core/store.js currentTheme) to the :root tokens. The default theme
 // sets nothing (Core/core.css is the source); any other theme sets the accent + chart-category custom
 // properties for the painted colour scheme (Core/scheme.js), and re-applies when the scheme flips.
 import { bus, currentTheme } from "./store.js";

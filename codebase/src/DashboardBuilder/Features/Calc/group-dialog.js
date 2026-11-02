@@ -1,4 +1,4 @@
-// The "Group…" dialog (T02-30): name the groups of a text field and put its members into them. It saves a group calculation
+// The "Group…" dialog: name the groups of a text field and put its members into them. It saves a group calculation
 // (calc-workbook / group-model.js: { id, name, formula: "", group }) — the same store, pills and query path as any calculated
 // field. DOM only; every rule is in group-model.js. Members and names are shown with textContent / input values only.
 import { calculations, addCalculation, updateCalculation } from "../Core/store.js";

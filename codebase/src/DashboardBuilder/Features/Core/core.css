@@ -32,7 +32,7 @@
   --enc-bg: #f4f1fd; --enc-ink: #5b2fc9; --enc-line: #d9d2f7;
   --up: var(--ok-ink); --down: var(--danger-ink);
   /* Charts */
-  --print-paper: #ffffff; --print-ink: #000000; /* P41 print: always black on white, whatever the scheme */
+  --print-paper: #ffffff; --print-ink: #000000; /* print: always black on white, whatever the scheme */
   --chart-series: var(--accent); --chart-axis: var(--line-2); --chart-grid: var(--line);
   --chart-label: var(--ink-2); --chart-muted: var(--ink-3);
   --chart-cat-1: #2a78d6; --chart-cat-2: #146f14; --chart-cat-3: #e87ba4; --chart-cat-4: #c99424;
@@ -156,7 +156,7 @@ button { font: inherit; }
 .glass :is(.input, .select, input[type="text"], input[type="number"], input[type="password"], input[type="search"]),
 .ws-shelves :is(.input, .select, select) { border-color: var(--ctl-edge); }
 
-/* Neutral focus ring: a red ring would read as an error now that the accent is red. */
+/* Neutral focus ring: a red ring would read as an error, and the accent is red. */
 :where(button, input, select, textarea, a, [tabindex]):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 /* Thin, themed scrollbars — muted ink thumb on the glass sidebar, line-coloured in the content, accent on hover */
@@ -166,11 +166,11 @@ button { font: inherit; }
 .table-list::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--ink-3) 45%, transparent); border-radius: var(--r-pill); border: 3px solid transparent; background-clip: padding-box; }
 .table-list::-webkit-scrollbar-thumb:hover { background: var(--accent); background-clip: padding-box; }
 
-.view, .entity__cols, .widget__grid, .dash-grid { scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
-.view::-webkit-scrollbar, .entity__cols::-webkit-scrollbar, .widget__grid::-webkit-scrollbar, .dash-grid::-webkit-scrollbar { width: 10px; height: 10px; }
-.view::-webkit-scrollbar-track, .entity__cols::-webkit-scrollbar-track, .widget__grid::-webkit-scrollbar-track, .dash-grid::-webkit-scrollbar-track { background: transparent; }
-.view::-webkit-scrollbar-thumb, .entity__cols::-webkit-scrollbar-thumb, .widget__grid::-webkit-scrollbar-thumb, .dash-grid::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: var(--r-pill); border: 3px solid transparent; background-clip: padding-box; }
-.view::-webkit-scrollbar-thumb:hover, .entity__cols::-webkit-scrollbar-thumb:hover, .widget__grid::-webkit-scrollbar-thumb:hover, .dash-grid::-webkit-scrollbar-thumb:hover { background: var(--accent); background-clip: padding-box; }
+.view, .entity__cols { scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
+.view::-webkit-scrollbar, .entity__cols::-webkit-scrollbar { width: 10px; height: 10px; }
+.view::-webkit-scrollbar-track, .entity__cols::-webkit-scrollbar-track { background: transparent; }
+.view::-webkit-scrollbar-thumb, .entity__cols::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: var(--r-pill); border: 3px solid transparent; background-clip: padding-box; }
+.view::-webkit-scrollbar-thumb:hover, .entity__cols::-webkit-scrollbar-thumb:hover { background: var(--accent); background-clip: padding-box; }
 
 /* ---- Menu (button + popover list; Core/menu.js) -------------------------- */
 .menu { position: relative; }
@@ -226,11 +226,10 @@ body.is-resizing { cursor: col-resize; user-select: none; }
 .iconbtn--danger:hover { background: var(--danger-bg); color: var(--danger-ink); }
 /* Inline-SVG icon inside an icon button (e.g. the Disconnect power glyph) — inherits the button's
    colour via stroke=currentColor; block display avoids the inline baseline gap. */
-.iconbtn__svg { display: block; }
 .icon { flex: none; display: block; }
 .icon--up { transform: rotate(180deg); }
-.toast__close, .field-error__icon, .table-chip__icon, .table-chip__grip, .pill__glyph, .ws-tool__icon, .ws-select__icon, .ws-drill__icon { display: inline-grid; place-items: center; }
-.ws-toolpanel__title, .ws-toolbtn, .ws-drill__up, .ws-field__add, .workbook__btn { display: inline-flex; align-items: center; gap: var(--s1); }
+.toast__close, .field-error__icon, .table-chip__icon, .table-chip__grip, .pill__glyph, .ws-select__icon, .ws-drill__icon { display: inline-grid; place-items: center; }
+.ws-toolpanel__title, .ws-drill__up, .ws-field__add { display: inline-flex; align-items: center; gap: var(--s1); }
 
 /* ---- Inputs -------------------------------------------------------------- */
 .input, .select { height: var(--ctl-h); padding: 0 var(--s2); border: 1px solid var(--line-2); border-radius: var(--r);
@@ -253,10 +252,6 @@ select.select:not([multiple]), select.input:not([multiple]) { appearance: none; 
 
 /* Light-world form bits (dialogs / dashboard) */
 .select--light { color: var(--ink); background-color: var(--surface); border-color: var(--line-2); box-shadow: none; }
-.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s2); }
-.form-grid .form-field label { color: var(--ink-2); font-size: var(--fs-body); font-weight: 600; }
-.form-field--wide { grid-column: 1 / -1; }
-.card-choices--2 { grid-template-columns: repeat(2, 1fr); }
 .dialog:not(.dialog--sm) { width: min(520px, calc(100vw - 2 * var(--s4))); }
 
 /* ---- Status pill (icon + text + color, never color alone) ---------------- */
@@ -265,10 +260,8 @@ select.select:not([multiple]), select.input:not([multiple]) { appearance: none; 
   transition: background var(--dur) var(--ease), color var(--dur) var(--ease), border-color var(--dur) var(--ease); }
 .pill .pill__glyph { font-weight: 700; }
 .pill--warn .pill__glyph { display: inline-block; animation: spin 1s linear infinite; }
-.pill--ok     { background: var(--ok-bg);     color: var(--ok-ink);     border-color: var(--ok-line); }
 .pill--warn   { background: var(--warn-bg); color: var(--warn-ink); border-color: var(--warn-line); }
 .pill--danger { background: var(--danger-bg); color: var(--danger-ink); border-color: var(--danger-line); }
-.pill--muted  { background: var(--surface-2); color: var(--ink-3); border-color: var(--line); }
 
 /* Icon buttons in the light content world (entity / widget heads) */
 .entity .iconbtn, .widget .iconbtn { color: var(--ink-3); }
@@ -306,7 +299,7 @@ select.select:not([multiple]), select.input:not([multiple]) { appearance: none; 
 .toast__close { margin-left: auto; padding: 0; border: 0; background: transparent; color: var(--ink-3); width: 24px; height: 24px; border-radius: var(--r); cursor: pointer; }
 .toast__close:hover { background: var(--surface-3); color: var(--ink); }
 
-/* P41 theme dialog (Workbook → Theme…): labelled swatch options — never colour alone. */
+/* Theme dialog (Workbook → Theme…): labelled swatch options — never colour alone. */
 .theme-dialog { width: min(520px, calc(100vw - 32px)); }
 .theme-dialog__body { display: grid; gap: var(--s4); }
 .theme-group { border: 0; margin: 0; padding: 0; display: grid; gap: var(--s2); }
@@ -324,7 +317,7 @@ select.select:not([multiple]), select.input:not([multiple]) { appearance: none; 
 .theme-hex { width: 96px; height: var(--ctl-h); font-variant-numeric: tabular-nums; }
 .theme-error { margin-left: var(--s6); }
 
-/* P39 bookmarks dialog: one row per bookmark — name + where/when, then Apply / Delete. */
+/* Bookmarks dialog: one row per bookmark — name + where/when, then Apply / Delete. */
 .bookmark-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s2); max-height: 50vh; overflow: auto; min-width: min(460px, calc(100vw - 64px)); }
 .bookmark { display: flex; align-items: center; gap: var(--s2); padding: var(--s2) var(--s2); border: 1px solid var(--line); border-radius: var(--r); }
 .bookmark__info { flex: 1; min-width: 0; display: grid; }
@@ -332,7 +325,7 @@ select.select:not([multiple]), select.input:not([multiple]) { appearance: none; 
 .bookmark__meta { font-size: var(--fs-body); color: var(--ink-3); }
 .bookmark-note { margin: var(--s2) 0 0; font-size: var(--fs-body); color: var(--ink-3); max-width: 420px; }
 
-/* P32 parameters dialog: the edit form wraps its fields. */
+/* Parameters dialog: the edit form wraps its fields. */
 .params-dialog { width: min(640px, calc(100vw - 32px)); }
 .params-edit { display: grid; gap: var(--s2); align-items: stretch; }
 .params-form { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s2); }

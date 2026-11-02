@@ -15,11 +15,11 @@ import { applySelectionDim } from "./selection-dim.js";
 import { dateFitMode } from "./date-labels.js";
 import { axisLabelPlan, shortDateLabels } from "./date-axis.js";
 
-// Charting adapter (P9; formatting P10). Renders worksheet results through the self-hosted ECharts library
+// Charting adapter. Renders worksheet results through the self-hosted ECharts library
 // (wwwroot/js/vendor/echarts.min.js, loaded as a global before the module graph — no CDN).
 // The rest of the app stays vanilla-JS: this is a thin mapper from our { categories, series }
 // result to an ECharts option, themed entirely from the CSS design tokens so charts match the
-// RED/BLACK/WHITE system. One live instance per container (P24a: state in a WeakMap keyed by the container element); rendering into a
+// RED/BLACK/WHITE system. One live instance per container (state in a WeakMap keyed by the container element); rendering into a
 // container disposes only that container's previous chart.
 //
 // Series: one per measure (multiple Rows/Columns measures → multiple series); the category axis
@@ -36,7 +36,7 @@ function stateOf(container) {
   return st;
 }
 // The container being drawn right now: the option is built synchronously inside renderChart, and builders that need
-// the live chart later (a symbolSize callback) capture it at build time. T01-20 / T03-33: the render settings — palette
+// the live chart later (a symbolSize callback) capture it at build time. The render settings — palette
 // order reversed, and displayed member name -> user colour — live in each container's state (st.paletteReverse,
 // st.memberColors), so two live charts never share or clobber them.
 let drawing = null;
@@ -76,26 +76,26 @@ function tokens() {
     // Brand stops for the sequential heatmap ramp (single-hue soft→saturated, token-driven).
     brand: t("--accent", ACCENTS.crimson.light.accent),
     brandSoft: t("--accent-soft", ACCENTS.crimson.light.soft),
-    // continuous low -> high: the chosen hue (T03-19) from the accent pair or a categorical token
+    // continuous low -> high: the chosen hue from the accent pair or a categorical token
     ramp: rampColours(drawing?.colorRamp, { accent: t("--accent", ACCENTS.crimson.light.accent), accentSoft: t("--accent-soft", ACCENTS.crimson.light.soft), surface: t("--surface", "#ffffff"), cat: catFallback.map((hex, i) => t(`--chart-cat-${i + 1}`, hex)) }, reversed()),
   };
 }
 
 /**
- * Render a chart into `container`. Types (P11): cartesian `bar` (grouped when ≥2 measures),
+ * Render a chart into `container`. Types: cartesian `bar` (grouped when ≥2 measures),
  * `stacked`, `line`, `area`, `combo` (dual-axis: 1st measure bars, rest line on a 2nd axis);
  * circular `pie` / `donut` (1 dimension × 1 measure); and `scatter` (two measures → X, Y).
  * One series per measure; the category axis carries the concatenated dimension keys.
  * @param container the #ws-chart element (a positioned host is created inside it)
  * @param spec { type, categories: string[], series: [{ name, data: number[] }],
- *              format?: sheet format config (P10 — value/date format, axis titles, legend, labels, colour-by),
+ *              format?: sheet format config (value/date format, axis titles, legend, labels, colour-by),
  *              selectedIndices?: the category indices of the dashboard-selected mark(s) (bar / stacked / pie / donut fade the rest) }
  */
 export function renderChart(container, spec) {
   disposeChart(container);
   const st = stateOf(container);
   st.paletteReverse = !!spec.format?.paletteReverse;
-  st.colorRamp = spec.format?.colorRamp; st.colorMin = spec.format?.colorMin ?? null; st.colorMax = spec.format?.colorMax ?? null; // T03-19
+  st.colorRamp = spec.format?.colorRamp; st.colorMin = spec.format?.colorMin ?? null; st.colorMax = spec.format?.colorMax ?? null;
   st.memberColors = spec.memberColors instanceof Map ? spec.memberColors : NO_MEMBER_COLORS;
   const host = document.createElement("div");
   host.className = "ws-chart-canvas";
@@ -106,7 +106,7 @@ export function renderChart(container, spec) {
   const inset = () => 2 * parseFloat(getComputedStyle(host).left || 0);
   const paneWidth = () => container.clientWidth - inset();
   const paneHeight = () => container.clientHeight - inset();
-  const fitMode = dateFitMode(spec.format?.fit ?? "standard", spec.dateLabels, spec.type === "combo" ? "vertical" : spec.orientation); // P23 Format → Fit, date axis per its Show all / Thin out
+  const fitMode = dateFitMode(spec.format?.fit ?? "standard", spec.dateLabels, spec.type === "combo" ? "vertical" : spec.orientation); // Format → Fit, date axis per its Show all / Thin out
   let fit = applyFitMode(chartFit(spec, paneWidth(), paneHeight()), fitMode);
   host.style.setProperty("--chart-min-w", `${fit.minWidth}px`);
   host.style.setProperty("--chart-min-h", `${fit.minHeight}px`);
@@ -119,7 +119,7 @@ export function renderChart(container, spec) {
   drawing = st; // builders that size marks later (heatmap circles) capture this container's state
   try {
     option = buildOption(spec.type === "multiples" ? { ...spec, width: paneWidth(), height: paneHeight() } : spec);
-    option = applySelectionDim(option, spec.type, spec.selectedIndices); // P24c: the dashboard's source widget fades the unselected marks
+    option = applySelectionDim(option, spec.type, spec.selectedIndices); // the dashboard's source widget fades the unselected marks
     if (spec.type !== "multiples") showEveryCategory(option, fit.rotate, fit); // panels keep their own sparse labels
     if (!fit.zoom) setDateAxisLabels(option, spec, paneWidth(), paneHeight());
     if (fit.zoom) addZoom(option, fit);
@@ -128,9 +128,9 @@ export function renderChart(container, spec) {
   st.lastOption = option;
   instance.setOption({ ...option, ...motionOption(st.animateNext && !onCanvas) });
 
-  // P15 click-to-filter: forward mark clicks to the caller, which maps dataIndex → a dimension value.
+  // Click-to-filter: forward mark clicks to the caller, which maps dataIndex → a dimension value.
   if (typeof spec.onSelect === "function") instance.on("click", (p) => { if (p.componentType !== "legend") spec.onSelect(p); });
-  // P29: a legend click highlights (and can select) instead of hiding the series — ECharts toggles the
+  // A legend click highlights (and can select) instead of hiding the series — ECharts toggles the
   // item, so every item is shown again straight away and the click goes to the worksheet.
   if (typeof spec.onLegend === "function") instance.on("legendselectchanged", (p) => {
     instance.dispatchAction({ type: "legendAllSelect" });
@@ -197,7 +197,7 @@ function tuneForSize(option) {
 function showEveryCategory(option, rotate, fit = {}) {
   const fix = (axis, bottom) => {
     if (!axis || axis.type !== "category") return axis;
-    // A fitted axis (P23) shares the pane: labels thin out instead of forcing a slot each.
+    // A fitted axis shares the pane: labels thin out instead of forcing a slot each.
     if (bottom ? fit.fittedX : fit.fittedY) return { ...axis, axisLabel: { ...axis.axisLabel, hideOverlap: true, width: bottom ? FIT.labelMax : FIT.sideMax, overflow: "truncate" } };
     return { ...axis, axisLabel: { ...axis.axisLabel, interval: 0, hideOverlap: false,
       width: bottom ? FIT.labelMax : FIT.sideMax, overflow: "truncate", ...(bottom ? { rotate } : {}) } };
@@ -245,7 +245,7 @@ function setDateAxisLabels(option, spec, width, height) {
   option[d.key] = Array.isArray(option[d.key]) ? axes : axes[0];
 }
 
-/** P29: highlight one series (or a pie slice) and dim the rest; null clears. */
+/** Highlight one series (or a pie slice) and dim the rest; null clears. */
 export function focusSeries(container, name, type) {
   const instance = stateOf(container).instance;
   if (!instance) return;
@@ -277,7 +277,7 @@ function motionOption(on) {
 }
 
 /**
- * Export the current chart as an image (P13). We use the SVG renderer, so the SVG is already in the
+ * Export the current chart as an image. We use the SVG renderer, so the SVG is already in the
  * DOM — we serialise that element (robust across ECharts builds; `renderToSVGString` only exists on
  * SSR instances). PNG is rasterised from the SVG through a canvas. Returns { blob, ext } or null.
  * @param kind "svg" | "png"
@@ -378,17 +378,16 @@ export function disposeChart(container) {
   st.lastOption = null; st.onCanvas = false;
 }
 
-// Dispatch by chart-type family (P11): circular (pie/donut), scatter (two value axes), or the
+// Dispatch by chart-type family: circular (pie/donut), scatter (two value axes), or the
 // shared cartesian builder (bar/stacked/line/area/combo).
 function buildOption(spec) {
   if (spec.type === "pie" || spec.type === "donut") return buildPie(spec);
-  if (spec.type === "scatterShapes") return buildScatterShapes(spec); // P19 shape-split scatter
-  if (spec.type === "scatter" || spec.type === "square" || spec.type === "circle") return buildScatter(spec); // P19 point marks
+  if (spec.type === "scatterShapes") return buildScatterShapes(spec); // shape-split scatter
+  if (spec.type === "scatter" || spec.type === "square" || spec.type === "circle") return buildScatter(spec); // point marks
   if (spec.type === "heatmap") return buildHeatmap(spec);
   if (spec.type === "treemap") return buildTreemap(spec);
   if (spec.type === "histogram") return buildHistogram(spec);
   if (spec.type === "boxplot") return buildBoxplot(spec);
-  // P36 types.
   if (spec.type === "waterfall") return buildWaterfall(spec);
   if (spec.type === "funnel") return buildFunnel(spec);
   if (spec.type === "gauge") return buildGauge(spec);
@@ -424,7 +423,7 @@ function legendFor(format, c, names, defaultOn) {
 export function buildCartesian({ type, categories, series, format = {}, orientation = "vertical", pointLabels, tooltipExtra, tooltipText, tooltipFields, tooltipStyle, otherIndex = -1, analytics = null }) {
   const c = tokens();
   const labels = (categories ?? []).map((l) => l ?? "—");
-  // P35 comparison series (compare: true) ride beside their measure: they don't make a chart "multi"
+  // Comparison series (compare: true) ride beside their measure: they don't make a chart "multi"
   // (the main series keeps the brand colour), but they do bring the legend so the dashed line is named.
   const mainCount = series.filter((s) => !s.compare).length;
   const hasCompare = mainCount < series.length;
@@ -432,10 +431,10 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
   const isCombo = type === "combo";
   const dual = dualAxisOn(type, format, mainCount) && (isCombo || orientation !== "horizontal"); // combo, or a vertical line / area with Format → Dual axis
   const horizontal = orientation === "horizontal" && !isCombo && !dual;
-  const fmtVal = makeValueFormatter(format); // P10 — measure value format (tooltip, axis, labels)
+  const fmtVal = makeValueFormatter(format); // measure value format (tooltip, axis, labels)
 
   const colorFor = (i, name) => (multi ? memberColor(name, c.cat[i % c.cat.length]) : c.series);
-  // Colour-by-dimension (P10): a single-measure bar chart colours each bar by its category. The
+  // Colour-by-dimension: a single-measure bar chart colours each bar by its category. The
   // category axis already labels each bar, so colour restates identity (never colour-alone).
   const colorByDim = type === "bar" && !multi && !!format.colorByDimension;
 
@@ -443,7 +442,7 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
   const xTitle = format.xTitle || null;
   const yTitle = format.yTitle || null;
 
-  // P18 Label: when a Label field is mapped, marks show its per-row value; otherwise the P10 toggle
+  // Label: when a Label field is mapped, marks show its per-row value; otherwise the toggle
   // shows the measure value. `pointLabels` is indexed by category (dataIndex).
   const labelPos = horizontal ? "right" : "top";
   const dataLabel = (pointLabels || format.dataLabels)
@@ -474,7 +473,7 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
   if (dual) {
     // Combo / dual-axis line or area: category on x, left and right value axes on y.
     xAxis = withName(categoryAxis, xTitle, true);
-    // T03-16: Synchronise axes — one nice range (zero included, the first measure is bars) on both value axes.
+    // Synchronise axes — one nice range (zero included, the first measure is bars) on both value axes.
     const shared = format.syncAxes ? syncRange(series.map((s) => s.data), { zeroBaseline: type !== "line" }) : null;
     const range = shared ? { min: shared.min, max: shared.max } : {};
     yAxis = [
@@ -507,21 +506,21 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
       textStyle: { color: c.ink, fontFamily: c.font },
       formatter: (p) => {
         const arr = Array.isArray(p) ? p : [p];
-        if (tooltipText) return customTip(tooltipText, tooltipFields, tooltipStyle, arr[0].dataIndex, Object.fromEntries(arr.map((d) => [String(d.seriesName), fmtVal(d.value)]))); // T01-19
+        if (tooltipText) return customTip(tooltipText, tooltipFields, tooltipStyle, arr[0].dataIndex, Object.fromEntries(arr.map((d) => [String(d.seriesName), fmtVal(d.value)])));
         const head = `<span style="color:${c.muted}">${escapeHtml(String(arr[0].axisValueLabel ?? arr[0].name ?? ""))}</span>`;
         const lines = arr.map((d) =>
           `<br><span style="display:inline-block;width:8px;height:8px;border-radius:${c.radius}px;background:${d.color};margin-right:6px"></span>` +
           `<b>${escapeHtml(String(d.seriesName))}:</b> ${fmtVal(d.value)}`).join("");
-        return head + lines + extraTooltip(tooltipExtra, arr[0].dataIndex, c); // P18 custom tooltip fields
+        return head + lines + extraTooltip(tooltipExtra, arr[0].dataIndex, c); // custom tooltip fields
       },
     },
     xAxis,
     yAxis,
   };
 
-  const step = lineStep(format.lineStyle); // T03-05: false | "end" | "middle"
-  const edge = markBorder(format.markBorder, c.muted); // T03-34: the stroke of bars (and the lines' markers)
-  const secondary = secondaryKind(format.secondaryType); // T03-17: how a combo draws its right-axis measures
+  const step = lineStep(format.lineStyle); // false | "end" | "middle"
+  const edge = markBorder(format.markBorder, c.muted); // the stroke of bars (and the lines' markers)
+  const secondary = secondaryKind(format.secondaryType); // how a combo draws its right-axis measures
   base.series = series.map((s, i) => {
     // A comparison series wears its measure's colour, faded and dashed (line) or muted (bar).
     if (s.compare) {
@@ -578,7 +577,7 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
   return base;
 }
 
-// P21 analytics overlays on a cartesian chart: a dashed reference line (labelled with its value), a
+// Analytics overlays on a cartesian chart: a dashed reference line (labelled with its value), a
 // shaded band (labelled), and a dotted trend line named at its end — each carries words, never colour alone.
 function addAnalytics(base, a, { c, fmtVal, horizontal }) {
   const s0 = base.series[a.measure ?? 0]; // the reference line and band sit on their own measure's axis (the trend follows the first)
@@ -612,7 +611,7 @@ function buildPie({ type, categories, series, format = {}, pointLabels, tooltipE
   const labels = (categories ?? []).map((l) => l ?? "—");
   const data = labels.map((name, i) => ({ name, value: series[0].data[i], ...(i === otherIndex ? { itemStyle: { color: c.muted } } : memberColors().has(name) ? { itemStyle: { color: memberColors().get(name) } } : {}) }));
   const { pos, legend } = legendFor(format, c, labels, true);
-  const showLabels = !!format.dataLabels || !!pointLabels; // P18 Label field forces slice labels on
+  const showLabels = !!format.dataLabels || !!pointLabels; // Label field forces slice labels on
 
   return {
     color: c.cat,
@@ -623,7 +622,7 @@ function buildPie({ type, categories, series, format = {}, pointLabels, tooltipE
       backgroundColor: c.surface, borderColor: c.grid, borderWidth: 1,
       textStyle: { color: c.ink, fontFamily: c.font },
       formatter: (p) => tooltipText
-        ? customTip(tooltipText, tooltipFields, tooltipStyle, p.dataIndex, { [String(series[0].name)]: fmtVal(p.value), Percent: `${p.percent}%` }) // T01-19
+        ? customTip(tooltipText, tooltipFields, tooltipStyle, p.dataIndex, { [String(series[0].name)]: fmtVal(p.value), Percent: `${p.percent}%` })
         :
         `<span style="color:${c.muted}">${escapeHtml(String(p.name))}</span><br>` +
         `<b>${escapeHtml(String(series[0].name))}:</b> ${fmtVal(p.value)} (${p.percent}%)` +
@@ -643,7 +642,7 @@ function buildPie({ type, categories, series, format = {}, pointLabels, tooltipE
   };
 }
 
-// scatter — two measures map to the X and Y value axes; dimension keys label the points. P18 marks:
+// scatter — two measures map to the X and Y value axes; dimension keys label the points. marks:
 // `sizes` scales the symbol (bubble), `colorValues` ramps a continuous gradient (visualMap legend),
 // `pointLabels` writes a field on each point, `tooltipExtra` appends field lines to the tooltip.
 function buildScatter({ categories, series, format = {}, sizes, sizeName, colorValues, colorName, pointLabels, tooltipExtra, tooltipText, tooltipFields, tooltipStyle, symbol }) {
@@ -663,7 +662,7 @@ function buildScatter({ categories, series, format = {}, sizes, sizeName, colorV
     if (colorDim >= 0) arr.push(num(colorValues[i]));
     return { value: arr, name, ...(colorByDim ? { itemStyle: { color: memberColor(name, c.cat[i % c.cat.length]) } } : {}) };
   });
-  const symbolSize = sizeDim >= 0 ? sizeScaler(sizes, (v) => v[sizeDim]) : markerSizeOr(format.markerSize, 14); // T01-22: a Size field wins
+  const symbolSize = sizeDim >= 0 ? sizeScaler(sizes, (v) => v[sizeDim]) : markerSizeOr(format.markerSize, 14); // a Size field wins
   const visualMap = colorDim >= 0 ? continuousVisualMap(colorValues, colorDim, c, fmtVal, colorName) : undefined;
 
   return {
@@ -677,7 +676,7 @@ function buildScatter({ categories, series, format = {}, sizes, sizeName, colorV
       formatter: (p) => tooltipText
         ? customTip(tooltipText, tooltipFields, tooltipStyle, p.dataIndex, { [xName]: fmtVal(p.value[0]), [yName]: fmtVal(p.value[1]),
           ...(sizeDim >= 0 ? { [sizeName || "size"]: fmtVal(p.value[sizeDim]) } : {}),
-          ...(colorDim >= 0 ? { [colorName || "colour"]: fmtVal(p.value[colorDim]) } : {}) }) // T01-19
+          ...(colorDim >= 0 ? { [colorName || "colour"]: fmtVal(p.value[colorDim]) } : {}) })
         :
         `<span style="color:${c.muted}">${escapeHtml(String(p.name ?? ""))}</span><br>` +
         `<b>${escapeHtml(xName)}:</b> ${fmtVal(p.value[0])}<br><b>${escapeHtml(yName)}:</b> ${fmtVal(p.value[1])}` +
@@ -700,7 +699,7 @@ function buildScatter({ categories, series, format = {}, sizes, sizeName, colorV
       axisLabel: { color: c.muted, formatter: fmtVal },
     },
     series: [{
-      type: "scatter", data, symbolSize, symbol: symbol || "circle", // P19 square/circle marks
+      type: "scatter", data, symbolSize, symbol: symbol || "circle", // square/circle marks
       itemStyle: { ...(colorByDim || continuous ? {} : { color: c.series, opacity: 0.8 }), ...pointEdge(format, c) },
       label: (pointLabels || format.dataLabels)
         ? { show: true, position: "top", color: c.muted, fontFamily: c.font, fontSize: 14,
@@ -711,7 +710,7 @@ function buildScatter({ categories, series, format = {}, sizes, sizeName, colorV
   };
 }
 
-// scatterShapes (P19) — one scatter series per Shape-dimension value, each a distinct symbol so
+// scatterShapes — one scatter series per Shape-dimension value, each a distinct symbol so
 // identity survives greyscale (shape is a non-colour channel). X/Y are the two shelf measures; an
 // optional Size dim scales the symbol. spec: { groups:[{name, points:[{value:[x,y,size?], name}]}],
 // xName, yName, hasSize, sizeName, format }.
@@ -720,7 +719,7 @@ function buildScatterShapes({ groups, xName, yName, hasSize, sizeName, format = 
   const c = tokens();
   const fmtVal = makeValueFormatter(format);
   const allSizes = hasSize ? groups.flatMap((g) => g.points.map((p) => p.value[2])) : null;
-  const symbolSize = hasSize ? sizeScaler(allSizes, (v) => v[2]) : markerSizeOr(format.markerSize, 12); // T01-22
+  const symbolSize = hasSize ? sizeScaler(allSizes, (v) => v[2]) : markerSizeOr(format.markerSize, 12);
   const names = groups.map((g) => g.name);
   const { show, pos, legend } = legendFor(format, c, names, true);
   return {
@@ -758,15 +757,15 @@ function buildScatterShapes({ groups, xName, yName, hasSize, sizeName, format = 
   };
 }
 
-// heatmap (P12) — two dimensions on the axes, one measure as colour intensity. Colour IS a channel
+// heatmap — two dimensions on the axes, one measure as colour intensity. Colour IS a channel
 // here, so a continuous visualMap legend accompanies it (identity also comes from the x/y labels).
 // spec: { xCats:string[], yCats:string[], cells:[[xi, yi, value]], format }
 function buildHeatmap({ xCats, yCats, cells, format = {} }) {
   const live = drawing ?? { instance: null }; // this container's state, read when ECharts sizes the circles
   const c = tokens();
   const fmtVal = makeValueFormatter(format);
-  const circles = format.heatmapShape === "circle"; // T03-10
-  // T03-34: the cell separator stays the surface-coloured hairline unless a border is chosen.
+  const circles = format.heatmapShape === "circle";
+  // The cell separator stays the surface-coloured hairline unless a border is chosen.
   const cellEdge = format.markBorder && format.markBorder !== "none" ? markBorder(format.markBorder, c.muted) : { borderColor: c.surface, borderWidth: 1 };
   const vals = cells.map((d) => d[2]).filter((v) => v != null);
   const { min, max } = colourScaleRange(vals, true);
@@ -798,7 +797,7 @@ function buildHeatmap({ xCats, yCats, cells, format = {} }) {
       textStyle: { color: c.muted, fontFamily: c.font }, formatter: (v) => fmtVal(v),
     },
     series: [circles
-      // T03-10: circles = scatter marks on the same category grid, sized by the cell, coloured by the
+      // Circles = scatter marks on the same category grid, sized by the cell, coloured by the
       // value through the same visualMap (dimension 2); the value label sits inside each circle.
       ? {
         // Empty cells draw nothing; the size is re-read from the live chart on every draw, so it follows the pane.
@@ -817,7 +816,7 @@ function buildHeatmap({ xCats, yCats, cells, format = {} }) {
   };
 }
 
-// treemap (P12) — nested rectangles sized by a measure; one or two dimensions form the hierarchy.
+// treemap — nested rectangles sized by a measure; one or two dimensions form the hierarchy.
 // spec: { tree:[{ name, value, children? }], format }
 function buildTreemap({ tree, format = {} }) {
   const c = tokens();
@@ -844,7 +843,7 @@ function buildTreemap({ tree, format = {} }) {
   };
 }
 
-// histogram (P12) — equal-width numeric bins from the server; a gapless bar of counts.
+// histogram — equal-width numeric bins from the server; a gapless bar of counts.
 // spec: { bins:[{x0, x1, count}], format }
 function buildHistogram({ bins, format = {} }) {
   const c = tokens();
@@ -881,7 +880,7 @@ function buildHistogram({ bins, format = {} }) {
   };
 }
 
-// boxplot (P12) — five-number summary per group from the server.
+// boxplot — five-number summary per group from the server.
 // spec: { boxes:[{ label, min, q1, median, q3, max }], format }
 function buildBoxplot({ boxes, outliers = [], format = {} }) {
   const c = tokens();
@@ -931,13 +930,13 @@ function buildBoxplot({ boxes, outliers = [], format = {} }) {
   };
 }
 
-// --- P36 chart types ----------------------------------------------------------
+// --- chart types ----------------------------------------------------------
 const tipBox = (c) => ({ backgroundColor: c.surface, borderColor: c.grid, borderWidth: 1, textStyle: { color: c.ink, fontFamily: c.font } });
 const valueAxis = (c, fmtVal, extra = {}) => ({
   type: "value", axisLine: { show: false }, axisTick: { show: false },
   splitLine: { lineStyle: { color: c.grid } }, axisLabel: { color: c.muted, formatter: fmtVal }, ...extra,
 });
-// T03-34: a point mark's stroke — nothing added while the setting is None (keeps the old look).
+// A point mark's stroke — nothing added while the setting is None (keeps the old look).
 const pointEdge = (format, c) => (format.markBorder && format.markBorder !== "none" ? markBorder(format.markBorder, c.muted) : {});
 const catAxis = (c, data, extra = {}) => ({
   type: "category", data, axisLine: { lineStyle: { color: c.axis } }, axisTick: { show: false },
@@ -1062,7 +1061,7 @@ function buildBullet({ categories, values, target, targets, name, format = {} })
   const fmtVal = makeValueFormatter(format);
   const cats = categories ?? [];
   const vals = (values ?? []).map((v) => Number(v) || 0);
-  const ts = targets ?? cats.map(() => Number(target)); // T03-12: one target per category, or the fixed one
+  const ts = targets ?? cats.map(() => Number(target)); // one target per category, or the fixed one
   const max = niceMax(Math.max(...ts.map((t) => (t ?? 0) * 1.1), ...vals, 1e-9));
   const bands = [["Below 50% of target", 0, 0.5, 0.12], ["50–75%", 0.5, 0.75, 0.22], ["75–100%", 0.75, 1, 0.32]];
   const pctText = (i) => (ts[i] ? ` (${((vals[i] / ts[i]) * 100).toFixed(0)}%)` : "");
@@ -1147,7 +1146,7 @@ function escapeHtml(s) {
   return s.replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
 }
 
-// --- P18 marks helpers ------------------------------------------------------
+// --- marks helpers ------------------------------------------------------
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 // A symbol-size function mapping a datum's magnitude onto an 8–36px range (bubble scatter).
 function sizeScaler(values, accessor) {
@@ -1155,7 +1154,7 @@ function sizeScaler(values, accessor) {
   const min = Math.min(...nums, 0), max = Math.max(...nums, 1), span = (max - min) || 1;
   return (val) => { const v = accessor ? accessor(val) : (Number(val) || 0); return 8 + ((v - min) / span) * (36 - 8); };
 }
-// The scale's ends: the data span unless Format pinned one (T03-19).
+// The scale's ends: the data span unless Format pinned one.
 // Unpinned, a heatmap keeps its plain data span (`plain`); a scatter always gets a non-empty one.
 const colourPinned = () => drawing?.colorMin != null || drawing?.colorMax != null;
 const colourScaleRange = (nums, plain = false) => {
@@ -1175,13 +1174,13 @@ function continuousVisualMap(values, dimension, c, fmtVal, name) {
     textStyle: { color: c.muted, fontFamily: c.font }, formatter: (v) => fmtVal(v),
   };
 }
-// T01-19: the user's tooltip template → safe HTML. `measures` maps a measure name → its formatted value for
+// The user's tooltip template → safe HTML. `measures` maps a measure name → its formatted value for
 // this mark; group-by / mark fields come from `tooltipFields` ([{ name, values }] by dataIndex).
 function customTip(text, tooltipFields, style, dataIndex, measures) {
   const dims = new Map((tooltipFields ?? []).map((f) => [f.name, f.values?.[dataIndex]]));
   return tooltipHtml(text, (name) => (Object.prototype.hasOwnProperty.call(measures, name) ? measures[name] : dims.get(name)), style);
 }
-// Extra tooltip lines for the P18 Tooltip encoding: one "<field>: <value>" per chosen field.
+// Extra tooltip lines for the Tooltip encoding: one "<field>: <value>" per chosen field.
 function extraTooltip(tooltipExtra, dataIndex, c) {
   if (!Array.isArray(tooltipExtra) || !tooltipExtra.length) return "";
   return tooltipExtra

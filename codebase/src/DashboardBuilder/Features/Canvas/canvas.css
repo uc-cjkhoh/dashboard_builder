@@ -100,8 +100,6 @@
 }
 
 /* ---- Preview data grid (scrolls internally) ------------------------------ */
-.entity__grid { overflow: auto; min-height: 0; }
-.entity__grid .empty { padding: var(--s2); color: var(--ink-3); font-size: var(--fs-body); }
 .data { border-collapse: collapse; width: 100%; font-size: var(--fs-body); }
 .data th, .data td {
   padding: var(--s1) var(--s2);

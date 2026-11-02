@@ -21,7 +21,7 @@ import { createBoardHistory, restorable } from "./board-history.js";
 // released), so coming back re-runs each widget (from the result cache when its sheet is unchanged). Widgets are keyed by id:
 // a layout change reconciles in place, so adding or removing one never redraws the others.
 //
-// The dashboard's one selection (P24c, Dashboard/dashboard-select.js) lives here: a mark click in a worksheet widget selects its
+// The dashboard's one selection (Dashboard/dashboard-select.js) lives here: a mark click in a worksheet widget selects its
 // value, every other worksheet widget filters to it (where its tables allow), a chip in the bar shows and clears it. It is
 // transient — in memory only, never in the workbook — and ends with the dashboard being shown (tab switch, workbook open,
 // reload), with its source widget or worksheet, and when the source's primary dimension stops being the selected column.
@@ -77,7 +77,7 @@ export function initBoard() {
     paintChip();
   }
 
-  // --- the dashboard selection (P24c) ---
+  // --- the dashboard selection ---
   const syncCross = () => { for (const e of entries.values()) e.syncCross(); };
   function paintChip() {
     chip.replaceChildren();
@@ -110,7 +110,7 @@ export function initBoard() {
     if (refused) { status(refused, true); return; }
     const sheet = worksheetById(widget.sheetId)?.sheet;
     const fmt = makeCategoryFormatter(sheet?.format ?? defaultFormat());
-    const next = nextSelection(selection, field, raw, (v) => labelOf(metaOf(field), v, fmt), widget.id); // T02-29: the chip names the member by its label; the value stays raw
+    const next = nextSelection(selection, field, raw, (v) => labelOf(metaOf(field), v, fmt), widget.id); // the chip names the member by its label; the value stays raw
     if (next === selection) return; // a null mark: nothing happens
     setSelection(next);
     status(next ? `Filtering the other widgets by ${next.label}.` : "Dashboard filter cleared.");

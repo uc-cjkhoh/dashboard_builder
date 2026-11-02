@@ -1,4 +1,4 @@
-// Dimming for the dashboard's source widget (P24c) — pure: a render-only restyle of an ECharts option, so the selected mark
+// Dimming for the dashboard's source widget — pure: a render-only restyle of an ECharts option, so the selected mark
 // stays at full strength and the rest fade. Only the types whose data points ECharts can style one by one (bar and stacked
 // columns, pie and donut slices); the other types are marked by the dashboard chip and the widget's header alone.
 export const DIM_OPACITY = 0.35;

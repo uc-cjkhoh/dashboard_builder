@@ -3,22 +3,22 @@ import { bulletTargets } from "./bullet-model.js";
 import { hint } from "./render-dom.js";
 import { heatmapData, treemapTree, sankeyLinks, multiplesData, keyLabel } from "./result-model.js";
 
-// The chart families that pivot the ordinary query result into their own shape: heatmap, treemap, the P36 types
+// The chart families that pivot the ordinary query result into their own shape: heatmap, treemap, the types
 // (waterfall / funnel / gauge / bullet / Sankey / small multiples) and the single-table distribution charts
 // (histogram / box plot). Each draws into `container` (one chart per container, chart.js); none reads the editor.
 
-/** P12 heatmap: two dimensions -> axes, the first measure -> colour. */
+/** Heatmap: two dimensions -> axes, the first measure -> colour. */
 export function renderHeatmap(container, result, format, fmtCat) {
   drawChart(container, { type: "heatmap", ...heatmapData(result, fmtCat), format });
 }
 
-/** P12 treemap: one or two dimensions form the hierarchy; the first measure sizes the rectangles. */
+/** Treemap: one or two dimensions form the hierarchy; the first measure sizes the rectangles. */
 export function renderTreemap(container, result, format, fmtCat) {
   drawChart(container, { type: "treemap", tree: treemapTree(result, fmtCat), format });
 }
 
 /**
- * P36: waterfall / funnel / gauge / bullet / Sankey / small multiples, from the rows already fetched. A line the view
+ * Waterfall / funnel / gauge / bullet / Sankey / small multiples, from the rows already fetched. A line the view
  * should show in its notice (the small-multiples panel cap) is set on `rc.extraNotice`.
  */
 export function renderP36(container, rc, type, rows, categories, series, seriesNames, format, fmtCat) {
@@ -30,7 +30,7 @@ export function renderP36(container, rc, type, rows, categories, series, seriesN
   }
   if (type === "bullet") {
     const cats = categories.some((x) => x) ? categories : [seriesNames[0]]; // no dimension -> one bar named after the measure
-    const targets = bulletTargets({ fixed: target, measureIndex: format.targetMeasure, series, count: cats.length }); // T03-12
+    const targets = bulletTargets({ fixed: target, measureIndex: format.targetMeasure, series, count: cats.length });
     if (!targets) { container.append(hint("Bullet compares each value with a target — set Target in Format, or pick a Target field.")); return; }
     drawChart(container, { type, categories: cats, values: series[0].data, targets, name: seriesNames[0], format });
     return;
@@ -51,13 +51,13 @@ export function renderP36(container, rc, type, rows, categories, series, seriesN
   drawChart(container, { type, categories, series: [series[0]], format });
 }
 
-/** P12 histogram of one numeric column: `bins` as the histogram endpoint returns them. */
+/** Histogram of one numeric column: `bins` as the histogram endpoint returns them. */
 export function renderHistogram(container, bins, format) {
   container.replaceChildren();
   drawChart(container, { type: "histogram", bins, format });
 }
 
-/** P12 box plot: `boxes` = the boxplot endpoint's groups. */
+/** Box plot: `boxes` = the boxplot endpoint's groups. */
 export function renderBoxplot(container, boxes, format, outliers = []) {
   container.replaceChildren();
   drawChart(container, { type: "boxplot", boxes, outliers, format });

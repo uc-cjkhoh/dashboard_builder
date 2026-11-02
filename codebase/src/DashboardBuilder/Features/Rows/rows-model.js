@@ -40,7 +40,7 @@ export function buildRowsRequest({ plan, selection = null, limit, castOf = () =>
   let joined = 0, top = 0, casted = 0;
   for (const f of plan.filters ?? []) {
     if (f.op === "top") top++;
-    else if (f.cast) casted++; // T02-34: /api/rows compares the stored column, so a cast field's filter would match wrong rows
+    else if (f.cast) casted++; // /api/rows compares the stored column, so a cast field's filter would match wrong rows
     else if (!here(f)) joined++;
     else filters.push(wire(f));
   }

@@ -4,7 +4,7 @@ using System.Text;
 namespace DashboardBuilder.ClickHouse;
 
 /// <summary>
-/// CSV serialisation for the bounded export (P13). Pure + testable. Read-only: it only ever formats
+/// CSV serialisation for the bounded export. Pure + testable. Read-only: it only ever formats
 /// rows a read query already returned — it never builds SQL. Every field is RFC-4180 quoted, and a
 /// leading formula character is neutralised so a spreadsheet can't execute an exported cell.
 /// </summary>

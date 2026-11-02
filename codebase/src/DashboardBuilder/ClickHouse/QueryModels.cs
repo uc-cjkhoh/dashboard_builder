@@ -2,19 +2,18 @@ using DashboardBuilder.ClickHouse.Calc;
 
 namespace DashboardBuilder.ClickHouse;
 
-/// <summary>A table (db + name).</summary>
 public sealed record TableRef(string Db, string Table);
 
 /// <summary>A column on a specific table.</summary>
-/// <summary>A column on a specific table. On a worksheet dimension, <see cref="DatePart"/> (P26) groups a
+/// <summary>A column on a specific table. On a worksheet dimension, <see cref="DatePart"/> groups a
 /// date/time column by a calendar part — a whitelisted function, never user text. When <see cref="Calc"/>
 /// is set (calculated dimension) the tree replaces Db/Table/Column, and <see cref="Column"/> is only a
-/// display label (≤ 60 characters, never used in SQL) echoed in the result. T02-34: <see cref="Cast"/> (text, number
+/// display label (≤ 60 characters, never used in SQL) echoed in the result. <see cref="Cast"/> (text, number
 /// or date) reads a plain column as that type — a whitelisted conversion, NULL where a value doesn't fit.</summary>
 public sealed record ColumnRef(string Db, string Table, string Column, string? DatePart = null, ExprNode? Calc = null, string? Cast = null);
 
 /// <summary>A join edge: <c>left.column = right.column</c>. <c>Left</c> must already be in the query.</summary>
-/// <summary>P31: <see cref="Type"/> is "inner" (default), "left", "right" or "full" — a whitelisted keyword, never user text.</summary>
+/// <summary><see cref="Type"/> is "inner" (default), "left", "right" or "full" — a whitelisted keyword, never user text.</summary>
 public sealed record JoinRef(ColumnRef Left, ColumnRef Right, string? Type = null);
 
 /// <summary>A measure column + its aggregation. When <see cref="Calc"/> is set (calculated measure) the
@@ -26,16 +25,16 @@ public sealed record JoinRef(ColumnRef Left, ColumnRef Right, string? Type = nul
 public sealed record MeasureRef(string Db, string Table, string Column, string? Agg, ExprNode? Calc = null, string? Cast = null, double? P = null);
 
 /// <summary>
-/// A filter condition on a column (P14). For the scalar operators (<c>= != &lt; &lt;= &gt; &gt;=</c>)
+/// A filter condition on a column. For the scalar operators (<c>= != &lt; &lt;= &gt; &gt;=</c>)
 /// the single <see cref="Value"/> is bound. For <c>in</c> (multi-select) and <c>between</c> (range)
 /// the <see cref="Values"/> list is bound instead — as an <c>Array(...)</c> for <c>in</c>, or as two
 /// bounds for <c>between</c>. Values are always bound as parameters, never interpolated.
 /// </summary>
 public sealed record QueryFilter(
     string Db, string Table, string Column, string Op, string? Value, string[]? Values = null,
-    // P30 "top": keep the Value (1–1000) members of this column ranked by TopBy (highest, or lowest when Bottom).
+    // "top": keep the Value (1–1000) members of this column ranked by TopBy (highest, or lowest when Bottom).
     MeasureRef? TopBy = null, bool? Bottom = null,
-    // T02-34: read the column as text, number or date (whitelisted <see cref="TypeCast"/>) before comparing.
+    // Read the column as text, number or date (whitelisted <see cref="TypeCast"/>) before comparing.
     string? Cast = null);
 
 /// <summary>
@@ -70,9 +69,9 @@ public sealed record QueryRequest(
     // Group the first date/time dimension by a calendar grain: hour, day, week, month, quarter, year,
     // or "auto" (exact when it has ≤ 500 distinct values, else the finest grain with ≤ 500 buckets).
     string? DateBucket = null,
-    // P33: skip the server's result cache (Refresh) — the fresh result replaces the cached one.
+    // Skip the server's result cache (Refresh) — the fresh result replaces the cached one.
     bool? Fresh = null,
-    // P33: approximate mode — distinct counts estimated (uniq), and a 10% sample on a table with a sampling key.
+    // Approximate mode — distinct counts estimated (uniq), and a 10% sample on a table with a sampling key.
     bool? Approximate = null,
     // A union / unpivot the query reads instead of a catalog table (<see cref="SourceSql"/>): From, and every field
     // reference, name it as (Source.Db, Source.Name). It takes no joins.
@@ -105,12 +104,12 @@ public sealed record QueryResult(
     OtherGroup? Other = null,
     // The calendar grain applied to a date/time dimension, when DateBucket grouped one.
     DateBucketApplied? Bucket = null,
-    // P33: served from the server's short-lived result cache.
+    // Served from the server's short-lived result cache.
     bool Cached = false,
-    // P33: what approximate mode did (null = exact).
+    // What approximate mode did (null = exact).
     ApproxApplied? Approx = null);
 
-/// <summary>P33 approximate mode: distinct counts estimated, and the sample fraction when one was read.</summary>
+/// <summary>Approximate mode: distinct counts estimated, and the sample fraction when one was read.</summary>
 public sealed record ApproxApplied(bool Distinct, double? Sample);
 
 /// <summary>The groups past the limit: how many, and each measure aggregated over all of them.</summary>

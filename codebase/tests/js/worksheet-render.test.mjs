@@ -1,7 +1,7 @@
 import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 
-// worksheet-render.js draws a result with no editor (P24a): interactive:false leaves the marks without any selection,
+// worksheet-render.js draws a result with no editor: interactive:false leaves the marks without any selection,
 // drill or legend handler; hooks are the only way the host learns anything; two renders never share state.
 const fakeEl = () => ({ className: "", children: [], style: { setProperty() {} }, clientWidth: 600, clientHeight: 400, classList: { add() {}, remove() {}, toggle() {} },
   append(...c) { this.children.push(...c); }, replaceChildren(...c) { this.children = c; }, setAttribute() {}, addEventListener() {}, textContent: "" });
@@ -108,7 +108,7 @@ test("a render without a plan context still draws (no aliases), and drawing agai
   assert.equal(insts[0].disposed, true);
 });
 
-// --- P24c: interactive "select" — a dashboard widget's marks select, nothing else is interactive ---
+// --- interactive "select" — a dashboard widget's marks select, nothing else is interactive ---
 test('interactive:"select": a mark click calls onSelect only — even on a drill hierarchy — and the legend is highlight-only', () => {
   const log = [];
   const hooks = { onSelect: (f, raw) => log.push([f.column, raw]), onDrill: () => log.push("drilled"), onLegend: () => log.push("legend hook") };

@@ -1,4 +1,4 @@
-// P39 — bookmarks: save the open worksheet's view (its whole sheet — filters, selection, drill, page,
+// Bookmarks: save the open worksheet's view (its whole sheet — filters, selection, drill, page,
 // date range, format — plus the shared filters) under a name, and re-apply it later. Bookmarks save with
 // the workbook. Applying one whose worksheet was closed recreates that worksheet. Dashboards are not bookmarked.
 import {

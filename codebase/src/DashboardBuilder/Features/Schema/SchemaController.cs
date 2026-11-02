@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace DashboardBuilder.Features.Schema;
 
 /// <summary>
-/// Read-only schema browsing (P3): list databases and the tables in a database, describe columns,
+/// Read-only schema browsing: list databases and the tables in a database, describe columns,
 /// and list distinct values — all scoped to the session's connection. No identifier
 /// reaches SQL without catalog-validation + quoting (handled in <see cref="ClickHouseGateway"/>).
 /// </summary>

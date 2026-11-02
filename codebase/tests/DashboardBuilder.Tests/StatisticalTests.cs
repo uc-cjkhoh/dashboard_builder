@@ -7,7 +7,7 @@ using Xunit;
 namespace DashboardBuilder.Tests;
 
 /// <summary>
-/// P12 statistical charts. The pure helpers (bucket clamp, single-table filter builder) are unit
+/// Statistical charts. The pure helpers (bucket clamp, single-table filter builder) are unit
 /// tested here — the safety-critical bits that don't need a live server; the histogram/box-plot
 /// endpoints are exercised for their without-connection 409 (the happy path runs live).
 /// </summary>

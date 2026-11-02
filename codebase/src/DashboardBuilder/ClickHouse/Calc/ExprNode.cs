@@ -19,7 +19,6 @@ public sealed record FieldNode(string Db, string Table, string Column) : ExprNod
 /// <summary>A numeric literal; always bound as a parameter.</summary>
 public sealed record NumNode(double V) : ExprNode;
 
-/// <summary>A unary operation (e.g. negation).</summary>
 public sealed record UnNode(string Op, ExprNode Arg) : ExprNode;
 
 /// <summary>A binary operation (arithmetic, comparison or logic).</summary>
@@ -38,7 +37,6 @@ public sealed record CmpNode(string Op, ExprNode L, ExprNode R) : ExprNode;
 /// <summary>A boolean connective: <c>Op</c> is <c>and</c> or <c>or</c>.</summary>
 public sealed record LogicNode(string Op, ExprNode L, ExprNode R) : ExprNode;
 
-/// <summary>Boolean negation.</summary>
 public sealed record NotNode(ExprNode Arg) : ExprNode;
 
 /// <summary>One <c>WHEN cond THEN result</c> arm (wire: <c>{ c, t }</c>); not a node of its own.</summary>

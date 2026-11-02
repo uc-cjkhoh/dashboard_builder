@@ -4,11 +4,11 @@ using Xunit;
 
 namespace DashboardBuilder.Tests;
 
-/// <summary>Task 7 seams of the gateway: plain measures share <see cref="ClickHouseGateway.AggregateSql"/> (E10); calculated
+/// <summary>Task 7 seams of the gateway: plain measures share <see cref="ClickHouseGateway.AggregateSql"/>; calculated
 /// dimensions, measures and Top-N ranks are validated against the catalog, compiled once and reused with their parameters.</summary>
 public class CalcGatewayTests
 {
-    // Characterisation: the literal measure SQL QueryCoreAsync built inline before it called AggregateSql.
+    // Characterisation: the literal measure SQL that AggregateSql must keep producing.
     [Theory]
     [InlineData("count", "", false, false, "count()")]
     [InlineData("count", "", true, false, "sum(t0._sample_factor)")]
@@ -45,7 +45,7 @@ public class CalcGatewayTests
 
     private static string? FieldOf(Action a) => Assert.Throws<RequestValidationException>(a).Field;
 
-    // --- countNonNull (E11) ---
+    // --- countNonNull ---
 
     [Fact] public void CountNonNull_is_a_whitelisted_aggregation() => Assert.Contains("countnonnull", ClickHouseGateway.Aggregations);
     [Fact] public void CountNonNull_is_matched_case_insensitively() => Assert.Contains("countNonNull", ClickHouseGateway.Aggregations);
@@ -150,7 +150,7 @@ public class CalcGatewayTests
         Assert.Equal(["c0p0", "c1p0"], ps.Select(p => p.Name));
     }
 
-    // --- Measures (E4, E13) ---
+    // --- Measures ---
 
     [Fact]
     public void An_aggregate_measure_is_used_as_is()
@@ -332,7 +332,7 @@ public class CalcGatewayTests
     public void MeasureName_names_a_plain_measure_the_way_the_client_labels_it(string agg, string column, string expected)
         => Assert.Equal(expected, ClickHouseGateway.MeasureName(agg, column));
 
-    // Plain percentile (T04-07): a stable label, the shared writer with a bound fraction, never an interpolated value.
+    // Plain percentile: a stable label, the shared writer with a bound fraction, never an interpolated value.
     [Theory]
     [InlineData(0.9, "p90 amount")]
     [InlineData(0.5, "p50 amount")]

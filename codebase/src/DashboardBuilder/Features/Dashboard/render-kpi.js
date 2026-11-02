@@ -1,9 +1,9 @@
 import { changeOf, toneOf, pctText, targetProgress } from "./period-model.js";
 import { el } from "./render-dom.js";
 
-// KPI tiles and the inline sparkline (P11 / P35), drawn from a result; no editor state.
+// KPI tiles and the inline sparkline, drawn from a result; no editor state.
 
-// KPI tiles. With no dimension each measure is a single big number; with a dimension (P11) the
+// KPI tiles. With no dimension each measure is a single big number; with a dimension the
 // headline is the latest category's value under an inline sparkline of the trend.
 export function kpiView(measures, categories, series, dimCount, fmtVal, card = {}) {
   const wrap = el("div", "ws-kpi-row");
@@ -14,7 +14,7 @@ export function kpiView(measures, categories, series, dimCount, fmtVal, card = {
     if (dimCount === 0) {
       tile.append(el("div", "widget__kpi-num", fmtVal(data[0])));
       tile.append(el("div", "widget__kpi-sub", name));
-      // P35 scorecard: change vs the comparison range — arrow + signed % + tone (never colour alone).
+      // Scorecard: change vs the comparison range — arrow + signed % + tone (never colour alone).
       if (card.prev) {
         const ch = changeOf(data[0], card.prev[i]);
         const tone = toneOf(ch.dir, f.downIsGood);

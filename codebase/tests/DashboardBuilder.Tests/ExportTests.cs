@@ -7,7 +7,7 @@ using Xunit;
 namespace DashboardBuilder.Tests;
 
 /// <summary>
-/// P13 export. The CSV serialiser is unit tested (RFC-4180 quoting + formula-injection guard); the
+/// Export. The CSV serialiser is unit tested (RFC-4180 quoting + formula-injection guard); the
 /// export endpoint's without-connection 409 confirms the gate (the happy path runs live).
 /// </summary>
 public class ExportTests : IClassFixture<WebApplicationFactory<Program>>

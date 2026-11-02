@@ -5,7 +5,7 @@ using Xunit;
 
 namespace DashboardBuilder.Tests;
 
-/// <summary>T02-34 type cast: the server whitelist, the SQL it writes, and the 400 shapes.</summary>
+/// <summary>Type cast: the server whitelist, the SQL it writes, and the 400 shapes.</summary>
 public class TypeCastTests
 {
     private const string X = "t0.`c`";

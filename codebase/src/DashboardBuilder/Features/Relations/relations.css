@@ -18,7 +18,7 @@
 
 
 
-/* P31: the join choice above the cardinality buttons. */
+/* The join choice above the cardinality buttons. */
 .join-choice { border: 0; margin: 0 0 var(--s2); padding: 0; display: grid; gap: var(--s1); font-size: var(--fs-body); }
 .join-choice legend { font-weight: 600; margin-bottom: var(--s1); padding: 0; }
 

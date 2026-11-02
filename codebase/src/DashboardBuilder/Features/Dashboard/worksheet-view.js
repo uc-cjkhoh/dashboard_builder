@@ -22,7 +22,7 @@ import { isCalcPill, pillSlots } from "../Calc/calc-pill.js";
 import { el, hint, warn } from "./render-dom.js";
 import { joinNotices, periodNotice, speedNotice, invalidFilterNotice } from "./notices.js";
 
-// The worksheet's query-and-render lifecycle (P24a): plan -> latest-wins fetch (shared result cache) -> draw into one
+// The worksheet's query-and-render lifecycle: plan -> latest-wins fetch (shared result cache) -> draw into one
 // container. One view owns one container, one latest-wins gate and its own table pager and fresh flag, so several
 // views never abort or overwrite each other; the chart itself is keyed by the container (chart.js). The drawing of a
 // result is worksheet-render.js, so a view needs no editor to show a worksheet.
@@ -34,7 +34,7 @@ import { joinNotices, periodNotice, speedNotice, invalidFilterNotice } from "./n
 //     interactive      true (default) = the editor: mark selection, drill, legend, status bar;  "select" = a dashboard widget that
 //                      selects but never drills (only onSelect is called; the legend highlights, no status bar, no editor panels);
 //                      false = a static, non-selectable widget: no mark selection, drill or legend handlers, no status bar
-//     cross() -> { filter: selection } | { selected: selection } | null  the dashboard selection this view obeys (P24c, dashboard-select.js):
+//     cross() -> { filter: selection } | { selected: selection } | null  the dashboard selection this view obeys (dashboard-select.js):
 //                      `filter` = a bound `=` added to its query where the selected table is already in it (else a note, never a join);
 //                      `selected` = this is the source: it highlights that mark and is never filtered. sync() re-runs when it changed.
 //     onUnselectable()  a select-only view's click on a NULL member / the "Other" group (nothing is selected; the host says why)
@@ -76,7 +76,7 @@ export function createWorksheetView(container, getContext, options = {}) {
   // Table scroll-loading: the pages loaded so far for the table on screen (re-used while its plan stays the same, so a
   // format tweak keeps what was loaded). { sheetId, key, plan, rows, total, loading, ctl, first }.
   let tablePager = null;
-  let freshNext = false; // P33: the next query skips the server's result cache (Refresh)
+  let freshNext = false; // the next query skips the server's result cache (Refresh)
 
   const setNotice = (noticeEl, text) => {
     if (!noticeEl) return;
@@ -89,7 +89,7 @@ export function createWorksheetView(container, getContext, options = {}) {
     animateNextChart(container, fresh);
     container.classList.toggle("is-fresh", fresh);
   }
-  // P33: "Loading…" with a Cancel button — it aborts the request (and the server stops the ClickHouse query when the
+  // "Loading…" with a Cancel button — it aborts the request (and the server stops the ClickHouse query when the
   // browser goes away), leaving a note to run it again.
   function loadingView(noticeEl) {
     const box = el("div", "ws-loading");
@@ -161,7 +161,7 @@ export function createWorksheetView(container, getContext, options = {}) {
     setNotice(c.noticeEl, filterNote);
     const heldOut = heldOutProblem(involvedOf(c, s), c.plan.entities, c.plan.relationships); // a table with no relationship stays out of every view
     if (heldOut) { container.replaceChildren(warn(heldOut)); return; }
-    // P12 statistical charts that run their own single-table endpoint (histogram / box plot).
+    // Statistical charts that run their own single-table endpoint (histogram / box plot).
     if (STAT_SINGLE_TABLE.has(s.chartType)) {
       const noCalc = statCalcProblem(s); // the single-table endpoints can't take a calculation: say so, send nothing
       if (noCalc) { container.replaceChildren(hint(noCalc)); return; }
@@ -173,13 +173,13 @@ export function createWorksheetView(container, getContext, options = {}) {
     const colorInPlay = s.color?.length && COLOR_USES.has(s.chartType);
     const drillInPlay = isDrillActive(s); // a hierarchy alone can drive a view (implicit count on the level)
     const m = s.marks ?? {};
-    const marksInPlay = Boolean(m.detail?.length || m.size || m.label || m.tooltip?.length || m.shape || m.path || m.angle || s.color?.length); // P18/P19
+    const marksInPlay = Boolean(m.detail?.length || m.size || m.label || m.tooltip?.length || m.shape || m.path || m.angle || s.color?.length);
     if (!s.columns.length && !s.rows.length && !colorInPlay && !drillInPlay && !marksInPlay) {
       container.replaceChildren(hint("Drag fields onto Columns and Rows to build a chart — categorical fields group, numeric fields aggregate."));
       return;
     }
     const cctx = calcContext(c.plan);
-    const problem = calcProblem(s, cctx, appliedShared(c.plan)); // E15: a calculation that can't be computed — say why, send nothing
+    const problem = calcProblem(s, cctx, appliedShared(c.plan)); // a calculation that can't be computed — say why, send nothing
     if (problem) { container.replaceChildren(warn(problem)); return; }
     const mixed = sourceProblem(involvedOf(c, s), c.plan.entities); // a union / unpivot is read alone: say so, send nothing
     if (mixed) { container.replaceChildren(warn(mixed)); return; }
@@ -253,7 +253,7 @@ export function createWorksheetView(container, getContext, options = {}) {
     more();
   }
 
-  // P12 histogram / box plot: single-table distribution charts. Histogram buckets one numeric column; a box plot
+  // Histogram / box plot: single-table distribution charts. Histogram buckets one numeric column; a box plot
   // summarises one numeric measure, optionally grouped by one same-table dimension. They use their own endpoints (a
   // bucketing / quantile query shape), so they read fields directly rather than through buildPlan. All fields must live
   // on ONE table (the endpoints don't join).
@@ -291,7 +291,7 @@ export function createWorksheetView(container, getContext, options = {}) {
 
   return {
     run,
-    /** Run again only if the dashboard selection changed what this view shows (P24c) — a widget it can't reach, or the same selection, stays put. */
+    /** Run again only if the dashboard selection changed what this view shows — a widget it can't reach, or the same selection, stays put. */
     sync() {
       const c = getContext();
       if (!c.dash) return Promise.resolve();

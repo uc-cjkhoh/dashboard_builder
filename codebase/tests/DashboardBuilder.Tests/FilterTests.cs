@@ -6,7 +6,7 @@ using Xunit;
 namespace DashboardBuilder.Tests;
 
 /// <summary>
-/// P14 dashboard filters. The filter-condition builder (scalar ops + <c>in</c> + <c>between</c>) and
+/// Dashboard filters. The filter-condition builder (scalar ops + <c>in</c> + <c>between</c>) and
 /// the distinct-values clamp are unit tested here; the distinct endpoint's without-connection 409
 /// confirms the gate (the happy path runs live).
 /// </summary>

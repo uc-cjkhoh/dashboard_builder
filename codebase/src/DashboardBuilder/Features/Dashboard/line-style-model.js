@@ -1,4 +1,4 @@
-// Line styles (T03-05) — pure, DOM-free (tests/js/charts1.test.mjs). Format → Line style on a line, area
+// Line styles — pure, DOM-free (tests/js/charts1.test.mjs). Format → Line style on a line, area
 // or combo chart: Straight (point to point), Step (each value holds until the next category, then
 // changes) or Step (centred) (the value changes half-way between two categories). The stored key stays "jump".
 import { LINE_STYLES } from "../Core/sheet-schema.js";

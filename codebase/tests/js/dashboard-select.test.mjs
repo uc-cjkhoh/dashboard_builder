@@ -4,7 +4,7 @@ import { nextSelection, selectionRefusal, crossFilterOf, appliesTo, selectedIndi
   from "../../src/DashboardBuilder/Features/Dashboard/dashboard-select.js";
 import { keyOf } from "../../src/DashboardBuilder/Features/Dashboard/sheet-plan.js";
 
-// The dashboard's one transient selection (P24c): derived from a mark click, never saved. Pure — no DOM, no store.
+// The dashboard's one transient selection: derived from a mark click, never saved. Pure — no DOM, no store.
 const field = { db: "shop", table: "customers", column: "country", category: "text" };
 const DE = nextSelection(null, field, "DE", String, "w#1");
 

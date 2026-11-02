@@ -103,7 +103,7 @@
 .calc-fn__line strong { color: var(--ink-2); font-size: var(--fs-body); }
 .calc-fn > .btn { justify-self: start; }
 
-/* T02-30 group fields: the "Group…" dialog. */
+/* Group fields: the "Group…" dialog. */
 .grp-dialog { width: min(560px, calc(100vw - 2 * var(--s4))); }
 .grp-dialog[open] { display: flex; flex-direction: column; max-height: calc(100vh - 2 * var(--s4)); }
 .grp-dialog__body { display: grid; gap: var(--s4); overflow: auto; min-height: 0; align-content: start; }
