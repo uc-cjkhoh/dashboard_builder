@@ -13,6 +13,7 @@ export const LIMITS = Object.freeze({
   tabs: 50,            // worksheet + dashboard tabs per workbook (client-side only; enforced at creation and on import)
   entities: 100,       // tables on the canvas a workbook may open
   relationships: 200,  // links a workbook may open
+  joinExtraPairs: 3,   // extra column pairs beside a relationship's first (server ApiLimits.MaxJoinPairs 4 in all)
   dimensions: 12, measures: 10, // per view (server MaxDimensions / MaxMeasures)
   hierarchies: 20,   // named hierarchies per workbook (client-side only)
   hierarchyName: 60, // characters in a hierarchy name

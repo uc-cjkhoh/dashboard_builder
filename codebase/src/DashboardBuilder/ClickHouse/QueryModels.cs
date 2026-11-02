@@ -13,8 +13,12 @@ public sealed record TableRef(string Db, string Table);
 public sealed record ColumnRef(string Db, string Table, string Column, string? DatePart = null, ExprNode? Calc = null, string? Cast = null);
 
 /// <summary>A join edge: <c>left.column = right.column</c>. <c>Left</c> must already be in the query.</summary>
-/// <summary><see cref="Type"/> is "inner" (default), "left", "right" or "full" — a whitelisted keyword, never user text.</summary>
-public sealed record JoinRef(ColumnRef Left, ColumnRef Right, string? Type = null);
+/// <summary><see cref="Type"/> is "inner" (default), "left", "right" or "full" — a whitelisted keyword, never user text.
+/// <see cref="Pairs"/> are extra column pairs on the same two tables (a compound key): the ON clause ANDs them with Left = Right.</summary>
+public sealed record JoinRef(ColumnRef Left, ColumnRef Right, string? Type = null, JoinColumnPair[]? Pairs = null);
+
+/// <summary>One extra key pair of a compound join: a column of the left table and a column of the right table (names, validated against the catalog).</summary>
+public sealed record JoinColumnPair(string Left, string Right);
 
 /// <summary>A measure column + its aggregation. When <see cref="Calc"/> is set (calculated measure) the
 /// tree replaces Db/Table/Column/Agg, and <see cref="Column"/> is only a display label echoed in the result.

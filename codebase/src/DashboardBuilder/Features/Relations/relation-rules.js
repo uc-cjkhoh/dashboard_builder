@@ -7,9 +7,11 @@ export function findDuplicate(relationships, from, to) {
     if ((sameEnd(r.from, from) && sameEnd(r.to, to)) || (sameEnd(r.from, to) && sameEnd(r.to, from))) return r;
   return null;
 }
+/** Every column end a relationship uses: its first pair, then the extra pairs of a compound key (`pairs: [{ from, to }]`, column names on the same two tables). */
+export const relEnds = (r) => [r.from, r.to, ...(r.pairs ?? []).flatMap((p) => [{ entityId: r.from.entityId, column: p.from }, { entityId: r.to.entityId, column: p.to }])];
 /** The relationship a column is already in (a column holds at most one), or null. */
 export function relationshipOf(relationships, end) {
-  for (const r of relationships) if (sameEnd(r.from, end) || sameEnd(r.to, end)) return r;
+  for (const r of relationships) if (relEnds(r).some((e) => sameEnd(e, end))) return r;
   return null;
 }
 
@@ -99,7 +101,9 @@ export function planJoinType(type, forward, fixed = false) {
   return t === "left" ? "right" : "left";
 }
 
-export const joinBadge = (cardinality, type) => {
+/** The badge text; `extra` is the number of extra key pairs (a compound key says how many keys it joins on). */
+export const joinBadge = (cardinality, type, extra = 0) => {
   const t = normalizeJoinType(type);
-  return t === "inner" ? cardinality : `${cardinality} · ${t}`;
+  const base = t === "inner" ? cardinality : `${cardinality} · ${t}`;
+  return extra > 0 ? `${base} · ${extra + 1} keys` : base;
 };

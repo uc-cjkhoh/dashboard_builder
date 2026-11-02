@@ -44,7 +44,7 @@ export function buildJoinCheck(dlg, { run, names }) {
     try {
       const result = await run(mine.signal);
       if (mine.signal.aborted) return;
-      const d = describePreview(result, names);
+      const d = describePreview(result, typeof names === "function" ? names() : names);
       const frag = document.createDocumentFragment();
       const list = document.createElement("ul");
       list.className = "join-check__summary";

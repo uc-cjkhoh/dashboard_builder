@@ -3,10 +3,11 @@
 // { rows, nullRows, keys, matchedKeys, matchedRows, maxDuplicates, avgDuplicates } over the rows examined.
 // A relationship is the user's declaration (golden rule 5): nothing here blocks anything, it only warns.
 
-/** The request body for one key pair; each entity is { db, table }. */
-export const previewRequest = (fromEntity, fromColumn, toEntity, toColumn) => ({
+/** The request body for one key (a pair, plus extra `pairs` [{ from, to }] for a compound one); each entity is { db, table }. */
+export const previewRequest = (fromEntity, fromColumn, toEntity, toColumn, pairs = []) => ({
   from: { db: fromEntity.db, table: fromEntity.table, column: fromColumn },
   to: { db: toEntity.db, table: toEntity.table, column: toColumn },
+  ...(pairs.length ? { pairs: pairs.map((p) => ({ left: p.from, right: p.to })) } : {}), // a compound key's extra pairs
 });
 
 /** A share as whole-number text; never a false "0%" or "100%" for a share that isn't quite. */

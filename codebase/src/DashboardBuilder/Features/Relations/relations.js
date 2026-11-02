@@ -1,9 +1,11 @@
 import { entities, relationships, bus, emit, isModelActive } from "../Core/store.js";
-import { linkIssue, pinOrder, matchingColumns, keysCompatible, kindLabel, unlinkedCards, joinChoices, joinBadge, joinSelection, joinFromSelection, isLegacyLeft } from "./relation-rules.js";
+import { relEnds, linkIssue, pinOrder, matchingColumns, keysCompatible, kindLabel, unlinkedCards, joinChoices, joinBadge, joinSelection, joinFromSelection, isLegacyLeft } from "./relation-rules.js";
 import { toast, makeButton, openDialog, closeDialog } from "../Core/ui.js";
 import { api } from "../Core/api.js";
 import { previewRequest } from "./join-preview-model.js";
 import { buildJoinCheck } from "./join-check.js";
+import { buildKeyPairs } from "./key-pairs-ui.js";
+import { compoundName } from "./key-pairs.js";
 import { linkSides, linkRoute, roundedPath } from "./link-route.js";
 import { openTypeWarning } from "./type-warning.js";
 import { COLUMN_MIME, encodeColumnDrag, parseColumnDrag, dropDecision } from "./link-drag.js";
@@ -122,9 +124,9 @@ function proposeLink(a, b, focusEnd = null) {
   openCardinalityDialog({
     current: "1:N",
     tables: [a.table, b.table],
-    check: joinCheckFor(from, { entityId: b.entityId, column: b.column }),
-    onPick: (cardinality, sel) => {
-      createRelationship(from, { entityId: b.entityId, column: b.column }, cardinality, joinFromSelection(sel));
+    keys: keyPairsFor(from, { entityId: b.entityId, column: b.column }, [], null),
+    onPick: (cardinality, sel, pairs) => {
+      createRelationship(from, { entityId: b.entityId, column: b.column }, cardinality, { ...joinFromSelection(sel), pairs });
       if (focusEnd) rowOf(focusEnd)?.focus(); // the link moves both rows into the key strips; keep the keyboard where it was
     },
   });
@@ -217,35 +219,43 @@ function initColumnKeys() {
 /** A refused link: a type mismatch gets a modal (both columns, their types, columns that would fit); anything else a toast. */
 function refuse(problem, kind, a, b) {
   if (kind !== "type") { if (problem) toast(problem, "danger"); return; }
-  const used = [...relationships.values()].flatMap((r) => [r.from, r.to]).filter((e) => e.entityId === b.entityId).map((e) => e.column);
+  const used = [...relationships.values()].flatMap(relEnds).filter((e) => e.entityId === b.entityId).map((e) => e.column);
   const names = matchingColumns(entities.get(b.entityId)?.columns ?? [], a.category, used);
   const joinable = keysCompatible(a.category, a.category); // a compound / other column has no kind to match
   openTypeWarning({ from: a, to: b, suggestions: joinable ? { table: b.table, kind: kindLabel(a.category), names } : null });
 }
 
-/** What the dialog's "Check this join" needs: the request to send and the names to word the result with. */
-function joinCheckFor(from, to, declared) {
+/** What the dialog needs for a compound key: the "Also match on" section's inputs and the "Check this join" request (which reads the pairs as they stand). */
+function keyPairsFor(from, to, pairs, rel) {
   const a = entities.get(from.entityId), b = entities.get(to.entityId);
   if (!a || !b) return null;
+  const others = [...relationships.values()].filter((r) => r !== rel).flatMap(relEnds);
+  const usedOn = (e) => others.filter((x) => x.entityId === e.id).map((x) => x.column);
+  let current = pairs.map((p) => ({ ...p }));
   return {
-    run: (signal) => api.joinPreview(previewRequest(a, from.column, b, to.column), { signal }),
-    names: { fromTable: a.table, toTable: b.table, fromColumn: from.column, toColumn: to.column, declared },
+    section: { fromTable: a.table, toTable: b.table, fromCols: a.columns ?? [], toCols: b.columns ?? [], first: { from: from.column, to: to.column },
+      pairs: current, used: { from: usedOn(a), to: usedOn(b) }, onChange: (next) => { current = next; } },
+    pairs: () => current,
+    check: {
+      run: (signal) => api.joinPreview(previewRequest(a, from.column, b, to.column, current), { signal }),
+      names: () => ({ fromTable: a.table, toTable: b.table, fromColumn: compoundName(from.column, current, "from"), toColumn: compoundName(to.column, current, "to"), declared: rel?.cardinality }),
+    },
   };
 }
 
 // --- relationship lifecycle ---------------------------------------------------
-function createRelationship(from, to, cardinality, { joinType, joinFixed } = { joinType: "inner", joinFixed: true }) {
+function createRelationship(from, to, cardinality, { joinType, joinFixed, pairs } = { joinType: "inner", joinFixed: true }) {
   const id = `rel#${++seq}`;
-  relationships.set(id, { id, from, to, cardinality, joinType, joinFixed });
+  relationships.set(id, { id, from, to, cardinality, joinType, joinFixed, ...(pairs?.length ? { pairs } : {}) });
   emit("rel:changed", { id });
   select(id);
   render();
 }
 
 /** Recreate a saved relationship (workbook open). Drawn once both endpoints' key rows exist. */
-export function restoreRelationship(from, to, cardinality, joinType = "inner", joinFixed = false) {
+export function restoreRelationship(from, to, cardinality, joinType = "inner", joinFixed = false, pairs = []) {
   const id = `rel#${++seq}`;
-  relationships.set(id, { id, from, to, cardinality, joinType, joinFixed });
+  relationships.set(id, { id, from, to, cardinality, joinType, joinFixed, ...(pairs.length ? { pairs } : {}) });
   emit("rel:changed", { id });
   render();
 }
@@ -298,7 +308,7 @@ function render() {
 // Rows keep their place in the list order (data-index) when they leave the strip.
 function syncKeyStrips() {
   const linked = new Set();
-  for (const r of relationships.values()) for (const end of [r.from, r.to]) linked.add(`${end.entityId}\u0000${end.column}`);
+  for (const r of relationships.values()) for (const end of relEnds(r)) linked.add(`${end.entityId}\u0000${end.column}`);
   const active = document.activeElement instanceof Element && document.activeElement.classList.contains("col-row") ? document.activeElement : null;
   for (const entity of entities.values()) {
     const strip = entity.el.querySelector(".entity__keys"), list = entity.el.querySelector(".entity__cols");
@@ -326,7 +336,8 @@ function orderStrip(entity, strip) {
   let seq = 0;
   for (const r of relationships.values()) {
     seq++;
-    for (const [mine, theirs] of [[r.from, r.to], [r.to, r.from]])
+    const extra = (r.pairs ?? []).flatMap((p) => [[{ entityId: r.from.entityId, column: p.from }, r.to], [{ entityId: r.to.entityId, column: p.to }, r.from]]);
+    for (const [mine, theirs] of [[r.from, r.to], [r.to, r.from], ...extra])
       if (mine.entityId === entity.id) info.set(mine.column, { partnerTop: entities.get(theirs.entityId)?.el.offsetTop ?? 0, seq });
   }
   const rows = [...strip.children];
@@ -360,7 +371,7 @@ function drawLink(rel, p1, s1, p2, s2, fromKind, toKind, lane, placed) {
   line.append(svgEl("path", { class: "rel-link__hit", d }), svgEl("path", { class: "rel-link__line", d }),
     endMarker(p1, { x: s1, y: 0 }, fromKind), endMarker(p2, { x: s2, y: 0 }, toKind));
   const label = svgEl("g", { class: `${cls} rel-link--label`, "data-rel": rel.id });
-  const text = joinBadge(rel.cardinality, rel.joinType), w = badgeWidth(text);
+  const text = joinBadge(rel.cardinality, rel.joinType, rel.pairs?.length ?? 0), w = badgeWidth(text);
   while (placed.some((b) => Math.abs(b.x - spot.x) < (b.w + w) / 2 && Math.abs(b.y - spot.y) < BADGE_H)) spot.y += BADGE_H + 2;
   placed.push({ x: spot.x, y: spot.y, w });
   label.append(badge(text, w, spot));
@@ -380,7 +391,7 @@ function markLinkedRows() {
   for (const id of new Set([selectedId, hoverId])) {
     const rel = id && relationships.get(id);
     if (!rel) continue;
-    for (const end of [rel.from, rel.to])
+    for (const end of relEnds(rel))
       entities.get(end.entityId)?.el.querySelector(`.col-row[data-column="${cssEscape(end.column)}"]`)?.classList.add("col-row--linked");
   }
 }
@@ -406,7 +417,7 @@ function endMarker(p, u, kind) {
 
 const BADGE_H = 24;
 // An outer join says so on the badge ("1:N · left", "· right", "· full") — words, not a colour.
-const badgeWidth = (text) => (text.length <= 3 ? 34 : text.length > 10 ? 70 : 64);
+const badgeWidth = (text) => (text.length <= 3 ? 34 : text.length > 16 ? 140 : text.length > 12 ? 112 : text.length > 10 ? 100 : 64);
 
 function badge(text, w, mid) {
   const g = svgEl("g", { class: "rel-badge" });
@@ -425,8 +436,8 @@ function editRelationship(rel) {
     joinType: joinSelection(rel.joinType, rel.joinFixed),
     legacy: isLegacyLeft(rel.joinType, rel.joinFixed),
     tables: [entities.get(rel.from.entityId)?.table ?? "first table", entities.get(rel.to.entityId)?.table ?? "second table"],
-    check: joinCheckFor(rel.from, rel.to, rel.cardinality),
-    onPick: (cardinality, sel) => { rel.cardinality = cardinality; Object.assign(rel, joinFromSelection(sel)); emit("rel:changed", { id: rel.id }); render(); },
+    keys: keyPairsFor(rel.from, rel.to, rel.pairs ?? [], rel),
+    onPick: (cardinality, sel, pairs) => { rel.cardinality = cardinality; Object.assign(rel, joinFromSelection(sel)); if (pairs?.length) rel.pairs = pairs; else delete rel.pairs; emit("rel:changed", { id: rel.id }); render(); },
     onDelete: () => { relationships.delete(rel.id); emit("rel:changed", { id: rel.id }); select(null); render(); },
   });
 }
@@ -436,7 +447,7 @@ function select(id) {
   render();
 }
 
-function openCardinalityDialog({ current = "1:N", joinType = "inner", tables = ["first table", "second table"], legacy = false, check = null, onPick, onDelete }) {
+function openCardinalityDialog({ current = "1:N", joinType = "inner", tables = ["first table", "second table"], legacy = false, keys = null, onPick, onDelete }) {
   const dlg = document.createElement("dialog");
   dlg.className = "dialog dialog--sm";
 
@@ -464,12 +475,15 @@ function openCardinalityDialog({ current = "1:N", joinType = "inner", tables = [
     joinRow.append(lab);
   }
   body.append(joinRow);
-  if (check) body.append(buildJoinCheck(dlg, check));
+  if (keys) {
+    body.append(buildKeyPairs(keys.section));
+    body.append(buildJoinCheck(dlg, keys.check));
+  }
   const choices = document.createElement("div");
   choices.className = "card-choices";
   for (const c of CARDINALITIES) {
     const b = makeButton(c, `card-choice${c === current ? " is-active" : ""}`);
-    b.addEventListener("click", () => { closeDialog(dlg); onPick(c, join); });
+    b.addEventListener("click", () => { closeDialog(dlg); onPick(c, join, keys?.pairs() ?? []); });
     choices.append(b);
   }
   body.append(choices);

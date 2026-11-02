@@ -1065,6 +1065,13 @@ public sealed partial class ClickHouseGateway
             if (!aliases.ContainsKey(Key(j.Left.Db, j.Left.Table)))
                 throw new UnknownIdentifierException("Join references a table not yet in the query.");
             var leftExpr = await QualifyAsync(j.Left.Db, j.Left.Table, j.Left.Column);
+            var extraLeft = new List<(string Left, string Right)>();
+            foreach (var pair in j.Pairs ?? [])
+            {
+                extraLeft.Add((await QualifyAsync(j.Left.Db, j.Left.Table, pair.Left), pair.Right));
+                await ColumnsOf(j.Right.Db, j.Right.Table);
+                if (!categories[Key(j.Right.Db, j.Right.Table)].ContainsKey(pair.Right)) throw new UnknownIdentifierException("Unknown column.");
+            }
 
             var rightKey = Key(j.Right.Db, j.Right.Table);
             await ColumnsOf(j.Right.Db, j.Right.Table);
@@ -1076,8 +1083,7 @@ public sealed partial class ClickHouseGateway
                 aliases[rightKey] = rightAlias;
                 from.Append(JoinKeyword(j.Type)).Append(Identifier.QualifiedName(j.Right.Db, j.Right.Table))
                     .Append(" AS ").Append(rightAlias)
-                    .Append(" ON ").Append(leftExpr).Append(" = ")
-                    .Append(rightAlias).Append('.').Append(Identifier.Quote(j.Right.Column));
+                    .Append(JoinOn(leftExpr, rightAlias, j.Right.Column, extraLeft));
             }
         }
 
@@ -1332,6 +1338,15 @@ public sealed partial class ClickHouseGateway
         try { await conn.OpenAsync(ct); }
         catch { await conn.DisposeAsync(); http.Dispose(); throw; }
         return new OpenConnection(conn, http);
+    }
+
+    /// <summary>The ON clause of a join: <c>left = right</c>, ANDed with every extra pair (compound key). Left expressions arrive
+    /// qualified and quoted by <c>QualifyAsync</c>; right columns are catalog-validated here and quoted by <see cref="Identifier"/>.</summary>
+    internal static string JoinOn(string leftExpr, string rightAlias, string rightColumn, IEnumerable<(string Left, string Right)> extra)
+    {
+        var on = new StringBuilder(" ON ").Append(leftExpr).Append(" = ").Append(rightAlias).Append('.').Append(Identifier.Quote(rightColumn));
+        foreach (var (l, r) in extra) on.Append(" AND ").Append(l).Append(" = ").Append(rightAlias).Append('.').Append(Identifier.Quote(r));
+        return on.ToString();
     }
 
     /// <summary>The whitelisted JOIN keyword for a validated join type (null/inner/left/right/full) — never user text.</summary>

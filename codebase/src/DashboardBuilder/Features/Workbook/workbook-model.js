@@ -10,7 +10,7 @@ import { aggsFor } from "../Dashboard/filter-rules.js";
 import { CASTS } from "../Dashboard/cast-model.js";
 import { cleanMemberAliases } from "../Dashboard/member-labels.js";
 import { cleanTheme, DEFAULT_THEME } from "../Core/theme-model.js";
-import { normalizeJoinType } from "../Relations/relation-rules.js";
+import { normalizeJoinType, relEnds } from "../Relations/relation-rules.js";
 import { cleanAction } from "../Dashboard/action-model.js";
 import { cleanMemberColors } from "../Dashboard/colour-model.js";
 import { cleanCollapsed } from "../Dashboard/collapse-model.js";
@@ -53,7 +53,7 @@ export function serializeWorkbook({ entities, relationships, tabs, active, theme
     entities: [...entities.values()].map((e) => ({
       id: e.id, db: e.db, table: e.table, x: Math.round(e.x), y: Math.round(e.y),
       // Join keys are the columns the relationships use (kept in the file so older builds still open it).
-      joinKeys: [...new Set([...relationships.values()].flatMap((r) => [r.from, r.to]).filter((end) => end.entityId === e.id).map((end) => end.column))],
+      joinKeys: [...new Set([...relationships.values()].flatMap(relEnds).filter((end) => end.entityId === e.id).map((end) => end.column))],
       ...(e.source ? { source: wireSource(e.source) } : {}), // a union / unpivot entity (its `table` is the source's name)
     })),
     relationships: [...relationships.values()].map((r) => ({
@@ -62,6 +62,7 @@ export function serializeWorkbook({ entities, relationships, tabs, active, theme
       cardinality: r.cardinality,
       joinType: normalizeJoinType(r.joinType),
       joinFixed: r.joinFixed === true,
+      ...(r.pairs?.length ? { pairs: r.pairs.map((p) => ({ from: p.from, to: p.to })) } : {}), // a compound key's extra pairs (optional; absent in older files)
     })),
     worksheets: worksheets.map((d) => ({ name: d.name, sheet: savedSheet(d.sheet) })),
     dashboards: dashboards.map((d) => ({ name: d.name, widgets: savedWidgets(d.widgets, wsIndex, dbIndex), ...savedSize(d.size) })), // size: optional (absent = automatic)
@@ -171,6 +172,7 @@ export function parseWorkbook(source) {
       cardinality: r.cardinality,
       joinType: normalizeJoinType(r.joinType), // anything unknown reads as inner
       joinFixed: r.joinFixed === true, // old files: false (a left keeps the base side)
+      pairs: r.pairs, // raw; checked below once the columns in use are known
     }));
   // A column is in at most one relationship: the first one that uses it is kept.
   const used = new Set();
@@ -180,6 +182,22 @@ export function parseWorkbook(source) {
     used.add(colKey(r.from)); used.add(colKey(r.to));
     return true;
   });
+  // A compound key's extra pairs: names only, at most LIMITS.joinExtraPairs, none reusing a column of any relationship (or of an earlier pair).
+  let badPairs = 0;
+  for (const r of kept) {
+    const rawPairs = r.pairs; delete r.pairs;
+    if (!Array.isArray(rawPairs)) { if (rawPairs !== undefined) badPairs++; continue; }
+    const good = [];
+    for (const p of rawPairs) {
+      const ok = p && isStr(p.from) && isStr(p.to) && p.from && p.to && good.length < LIMITS.joinExtraPairs
+        && !used.has(colKey({ entityId: r.from.entityId, column: p.from })) && !used.has(colKey({ entityId: r.to.entityId, column: p.to }));
+      if (!ok) { badPairs++; continue; }
+      used.add(colKey({ entityId: r.from.entityId, column: p.from })); used.add(colKey({ entityId: r.to.entityId, column: p.to }));
+      good.push({ from: p.from, to: p.to });
+    }
+    if (good.length) r.pairs = good;
+  }
+  if (badPairs) issues.push(`Skipped ${badPairs} extra key pair(s) that were malformed, past the limit of ${LIMITS.joinExtraPairs}, or reused a column already in a relationship.`);
   const reused = relationships.length - kept.length;
   if (reused > 0) issues.push(`Skipped ${reused} relationship(s) that reused a column already in another relationship — a column can be in only one.`);
   relationships.length = 0; relationships.push(...kept);

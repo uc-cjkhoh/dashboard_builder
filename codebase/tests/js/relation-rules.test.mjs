@@ -147,3 +147,20 @@ test("pinned keys follow their partner's position, then the order the relationsh
   assert.deepEqual(pinOrder([{ column: "a", partnerTop: 300, seq: 1 }, { column: "z", partnerTop: 20, seq: 2 }]), ["z", "a"]); // the upper partner first
   assert.deepEqual(pinOrder([{ column: "x", partnerTop: 0, seq: 3 }, { column: "y", partnerTop: 0, seq: 1 }, { column: "w", partnerTop: 0, seq: 2 }]), ["y", "w", "x"]);
 });
+
+// --- compound keys: extra pairs on a relationship count as columns in it
+import { relEnds } from "../../src/DashboardBuilder/Features/Relations/relation-rules.js";
+test("a relationship's extra pairs put their columns in it too", () => {
+  const rel = { from: a, to: b, cardinality: "1:N", pairs: [{ from: "region", to: "area" }] };
+  assert.equal(relEnds(rel).length, 4);
+  assert.equal(relationshipOf([rel], { entityId: "e1", column: "region" }), rel);
+  assert.equal(relationshipOf([rel], { entityId: "e2", column: "area" }), rel);
+  assert.equal(relationshipOf([rel], { entityId: "e1", column: "area" }), null); // the pair is per side
+  assert.match(linkProblem({ ...base, relationships: [rel], from: { entityId: "e1", column: "region" }, to: { entityId: "e2", column: "x" } }), /already in a relationship/);
+  assert.equal(relEnds({ from: a, to: b }).length, 2);
+});
+test("the badge counts the keys of a compound link", () => {
+  assert.equal(joinBadge("1:N", "inner"), "1:N");
+  assert.equal(joinBadge("1:N", "inner", 2), "1:N · 3 keys");
+  assert.equal(joinBadge("1:N", "left", 1), "1:N · left · 2 keys");
+});

@@ -56,3 +56,5 @@ test("calculation limits mirror the server (spec E13)", () => {
   assert.equal(LIMITS.calcFormula, 500);
   assert.equal(LIMITS.calcName, 60);
 });
+
+test("a relationship holds at most 3 extra key pairs (server ApiLimits.MaxJoinPairs 4 in all)", () => assert.equal(LIMITS.joinExtraPairs, 3));
