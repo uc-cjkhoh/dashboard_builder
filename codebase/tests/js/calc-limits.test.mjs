@@ -53,7 +53,7 @@ test("ROW_FUNCTIONS (calc-types.js) is the C# CalcCatalog.RowFunctions table", a
     want[m[1]] = { args: list, result: (m[2] ?? m[5]).toLowerCase(), ...(m[4] ? { max: CALC_LIMITS.concat } : {}) };
   }
   assert.deepEqual(JSON.parse(JSON.stringify(ROW_FUNCTIONS)), want);
-  assert.equal(Object.keys(want).length, 22);
+  assert.equal(Object.keys(want).length, 29);
 });
 
 test("DATE_UNITS (calc-types.js) is the C# CalcCatalog.DateUnits list", async () => {
