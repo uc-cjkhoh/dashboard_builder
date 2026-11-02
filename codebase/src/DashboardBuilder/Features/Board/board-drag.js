@@ -7,7 +7,7 @@
 // A press that never travels DRAG_THRESHOLD px is a click, not a drag. While dragging, each move yields the target cells
 // (`cand`), their pixel rectangle (`rect`) and whether the drop would be accepted (`error` null) — one verdict for the ghost
 // and for the drop. A refused drop is a `revert` with the reason; the widget is never put anywhere else.
-import { cellAt, cellRect, isStacked, snapMove, snapResize } from "./board-layout.js";
+import { cellAt, cellRect, snapMove, snapResize } from "./board-layout.js";
 import { explainRefusal, placeAt } from "./board-model.js";
 
 export const DRAG_THRESHOLD = 4; // px of pointer travel before a press becomes a drag
@@ -19,9 +19,8 @@ export function ghostFor(widgets, cand, verb, ctx) {
   return { cand, rect: cellRect(cand, ctx.panelWidth, ctx.metrics), error: explainRefusal(widgets, cand, verb, ctx.nameOf) };
 }
 
-/** A worksheet / text widget being dragged in from the side panel, pointer at `point`. Stacked (narrow) canvases have no cells. */
+/** A worksheet / text widget being dragged in from the side panel, pointer at `point`. */
 export function dropPlan(widgets, kind, point, ctx) {
-  if (isStacked(ctx.panelWidth)) return { cand: null, rect: null, error: "Can't place: the canvas is too narrow to drop on — use Add." };
   const spot = placeAt(widgets, kind, cellAt(point, ctx.panelWidth, ctx.metrics), ctx.nameOf);
   if (!spot.ok) return { cand: spot.cand ?? null, rect: spot.cand ? cellRect(spot.cand, ctx.panelWidth, ctx.metrics) : null, error: spot.error };
   return { cand: spot.cand, rect: cellRect(spot.cand, ctx.panelWidth, ctx.metrics), error: null };
@@ -33,9 +32,9 @@ export function createDrag() {
     get active() { return Boolean(s?.dragging); },
     get pressed() { return s !== null; },
     get mode() { return s?.mode ?? null; },
-    /** Begin on a pointer press: `mode` "move" (header) or "resize" (corner); `point` is grid-relative. A stacked canvas has no drag. */
-    start(mode, widget, point, panelWidth) {
-      if (s || isStacked(panelWidth)) return false;
+    /** Begin on a pointer press: `mode` "move" (header) or "resize" (corner); `point` is grid-relative. */
+    start(mode, widget, point) {
+      if (s) return false;
       s = { mode, widget: { ...widget }, origin: point, dragging: false };
       return true;
     },

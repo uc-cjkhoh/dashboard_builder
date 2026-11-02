@@ -323,9 +323,8 @@ export function initDashboards() {
   const fieldsResizer = document.getElementById("ws-fields-resizer");
   let fieldsCollapsed = readCollapsed(localStorageOrNull());
   function applyFieldsCollapsed() {
-    const hide = fieldsCollapsed && !matchMedia("(max-width: 640px)").matches; // the phone's field overlay has its own Fields button
-    worksheetEl.classList.toggle("is-fields-collapsed", hide);
-    toggle(fieldsEl, !hide); toggle(fieldsResizer, !hide);
+    worksheetEl.classList.toggle("is-fields-collapsed", fieldsCollapsed);
+    toggle(fieldsEl, !fieldsCollapsed); toggle(fieldsResizer, !fieldsCollapsed);
   }
   applyFieldsCollapsed();
   function fieldsPaneButton() {
@@ -702,7 +701,7 @@ export function initDashboards() {
       return row;
     }));
 
-    const children = [fieldsToggle(), columns, rows];
+    const children = [columns, rows];
     const active = tools.find((t) => t.key === openTool);
     const toolEl = calcFor ? calcPanel(dash, s) : choicesFor ? choicesPanel(dash, s) : active ? toolPanel(dash, s, active) : null;
     if (toolEl) children.push(toolEl);                        // the one open tool editor
@@ -991,19 +990,6 @@ export function initDashboards() {
     return wrap;
   }
 
-  // Phone layout (P41): the field pane is an overlay opened from the data header (CSS shows this button
-  // only on narrow screens; on wide ones the pane is always beside the shelves).
-  function fieldsToggle() {
-    const ws = view.querySelector(".worksheet");
-    const open = ws.classList.contains("is-fields-open");
-    const btn = makeButton(open ? "Hide fields" : "Fields", `btn ws-fields-toggle${open ? " is-active" : ""}`);
-    btn.prepend(icon("table", { size: 16 }));
-    btn.setAttribute("aria-expanded", String(open));
-    btn.setAttribute("aria-controls", "ws-fields");
-    btn.addEventListener("click", () => { ws.classList.toggle("is-fields-open"); renderShelves(); });
-    return btn;
-  }
-
   // --- worksheet chrome (P23): undo / redo, sheet actions, title / caption, status bar ---
   function undoButtons(dash) {
     const wrap = el("div", "ws-undo");
@@ -1147,11 +1133,6 @@ export function initDashboards() {
     renderShelves();
   }
   function initPresentation() {
-    // Phone field pane: a tap outside it, or Esc, closes it.
-    const ws = view.querySelector(".worksheet");
-    const closeFields = () => { if (ws.classList.contains("is-fields-open")) { ws.classList.remove("is-fields-open"); renderShelves(); } };
-    ws.querySelector(".ws-main")?.addEventListener("pointerdown", (e) => { if (!e.target.closest(".ws-fields-toggle")) closeFields(); });
-    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && ws.classList.contains("is-fields-open")) closeFields(); });
     document.addEventListener("fullscreenchange", () => { if (isWorksheetActive()) renderShelves(); });
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape" && card.classList.contains("is-presenting") && !e.defaultPrevented) {

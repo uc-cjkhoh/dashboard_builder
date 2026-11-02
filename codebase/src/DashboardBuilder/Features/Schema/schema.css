@@ -42,7 +42,6 @@
 .table-chip .table-chip__peek { right: var(--ctl-h); }
 .table-chip:hover .iconbtn, .table-chip:focus-within .iconbtn { opacity: 1; }
 .table-chip:hover .table-chip__name, .table-chip:focus-within .table-chip__name { padding-right: calc(2 * var(--ctl-h) - var(--s2)); }
-@media (pointer: coarse) { .table-chip { height: 44px; } .table-chip .iconbtn { opacity: 1; } .table-chip__grip { opacity: 1; } .table-chip__icon { opacity: 0; } }
 .table-chip__name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .table-list .empty { color: var(--ink-3); font-size: var(--fs-body); padding: var(--s2); }
 
@@ -87,7 +86,6 @@
 /* The field-row action on a canvas card: shown on hover / focus like the table chip's preview button, always reachable by keyboard. */
 .col-row__profile { opacity: 0; flex: none; transition: opacity var(--dur-fast) var(--ease); }
 .col-row:hover .col-row__profile, .col-row:focus-within .col-row__profile { opacity: 1; }
-@media (pointer: coarse) { .col-row__profile { opacity: 1; } }
 
 /* Bento tiles: the database picker and the table search are one pattern — a 40px row in a borderless tile, the icon centred on the row
    icons' lane (12px in), the text starting where a table name does (36px in), regular weight. The tile is the frame, not the control. */

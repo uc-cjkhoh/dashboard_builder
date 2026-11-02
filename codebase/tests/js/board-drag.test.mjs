@@ -44,7 +44,7 @@ test("cellRect is the pixel box of the cells (the ghost)", () => {
 
 test("a press that stays under the threshold is a click: no ghost, end = none", () => {
   const d = createDrag();
-  assert.equal(d.start("move", sh("a", 0, 0), { x: 10, y: 10 }, W), true);
+  assert.equal(d.start("move", sh("a", 0, 0), { x: 10, y: 10 }), true);
   assert.equal(d.move({ x: 10 + DRAG_THRESHOLD - 1, y: 10 }, ctx([sh("a", 0, 0)])), null);
   assert.equal(d.active, false);
   assert.deepEqual(d.end({ x: 12, y: 10 }, ctx([sh("a", 0, 0)])), { type: "none" });
@@ -54,7 +54,7 @@ test("a press that stays under the threshold is a click: no ghost, end = none", 
 test("a move drag shows a ghost of the snapped target and commits on a free target", () => {
   const widgets = [sh("a", 0, 0), sh("b", 6, 0)];
   const d = createDrag();
-  d.start("move", widgets[0], { x: 50, y: 20 }, W);
+  d.start("move", widgets[0], { x: 50, y: 20 });
   const g = d.move({ x: 50 + SX * 2, y: 20 + SY * 5 }, ctx(widgets)); // 2 cols right collides with b? a is 6 wide at x=2 -> overlaps b
   assert.equal(d.active, true);
   assert.deepEqual(g.cand, { ...widgets[0], x: 2, y: 5 });
@@ -66,7 +66,7 @@ test("a move drag shows a ghost of the snapped target and commits on a free targ
 test("dragging onto another widget: the ghost says why and the drop reverts with that message (never relocated)", () => {
   const widgets = [sh("a", 0, 0), sh("b", 6, 0)];
   const d = createDrag();
-  d.start("move", widgets[0], { x: 0, y: 0 }, W);
+  d.start("move", widgets[0], { x: 0, y: 0 });
   const g = d.move({ x: SX * 3, y: 0 }, ctx(widgets));
   assert.equal(g.error, "Can't move: it would overlap “W-b”.");
   const r = d.end({ x: SX * 3, y: 0 }, ctx(widgets));
@@ -79,10 +79,10 @@ test("dropping off the grid reverts: left, right, top, bottom", () => {
   const widgets = [sh("a", 1, 1)];
   for (const [dx, dy, want] of [[-SX * 3, 0, /left edge/], [SX * 9, 0, /right edge/], [0, -SY * 3, /top of the dashboard/], [0, SY * 99, /at most 96 rows/]]) {
     const d = createDrag();
-    d.start("move", widgets[0], { x: 0, y: 0 }, W);
+    d.start("move", widgets[0], { x: 0, y: 0 });
     const r = d.end({ x: dx, y: dy }, ctx(widgets)) ;
     assert.equal(r.type, "none"); // end without a move() never entered dragging
-    d.start("move", widgets[0], { x: 0, y: 0 }, W);
+    d.start("move", widgets[0], { x: 0, y: 0 });
     d.move({ x: dx, y: dy }, ctx(widgets));
     const r2 = d.end({ x: dx, y: dy }, ctx(widgets));
     assert.equal(r2.type, "revert");
@@ -93,35 +93,35 @@ test("dropping off the grid reverts: left, right, top, bottom", () => {
 test("dragging back to the start (or to an unchanged cell) is none", () => {
   const widgets = [sh("a", 2, 2)];
   const d = createDrag();
-  d.start("move", widgets[0], { x: 0, y: 0 }, W);
+  d.start("move", widgets[0], { x: 0, y: 0 });
   d.move({ x: 60, y: 60 }, ctx(widgets));
   assert.deepEqual(d.end({ x: 10, y: 10 }, ctx(widgets)), { type: "none" });
 });
 
 test("resize: ghost and commit; below the minimum, over the grid and over a neighbour are refused", () => {
   const widgets = [sh("a", 0, 0, 4, 4), sh("b", 6, 0, 6, 4)];
-  const run = (dx, dy) => { const d = createDrag(); d.start("resize", widgets[0], { x: 0, y: 0 }, W); d.move({ x: dx, y: dy }, ctx(widgets)); return d.end({ x: dx, y: dy }, ctx(widgets)); };
+  const run = (dx, dy) => { const d = createDrag(); d.start("resize", widgets[0], { x: 0, y: 0 }); d.move({ x: dx, y: dy }, ctx(widgets)); return d.end({ x: dx, y: dy }, ctx(widgets)); };
   assert.deepEqual(run(SX, SY), { type: "commit", cand: { ...widgets[0], w: 5, h: 5 }, mode: "resize" });
   assert.match(run(SX * 3, 0).error, /overlap “W-b”/);
   assert.match(run(-SX * 3, 0).error, /at least 2 columns/);
   assert.match(run(0, -SY * 3).error, /at least 2 rows/);
   assert.match(run(0, SY * 30).error, /at most 24 rows/);
   const wide = [sh("a", 8, 0, 4, 4)];
-  const d = createDrag(); d.start("resize", wide[0], { x: 0, y: 0 }, W); d.move({ x: SX * 2, y: 0 }, ctx(wide));
+  const d = createDrag(); d.start("resize", wide[0], { x: 0, y: 0 }); d.move({ x: SX * 2, y: 0 }, ctx(wide));
   assert.match(d.end({ x: SX * 2, y: 0 }, ctx(wide)).error, /right edge/);
 });
 
 test("a text widget may shrink to 1 row; a worksheet widget may not", () => {
   const t = { id: "t", kind: "text", heading: "h", body: "", x: 0, y: 0, w: 12, h: 2 };
-  const d = createDrag(); d.start("resize", t, { x: 0, y: 0 }, W); d.move({ x: 0, y: -SY }, ctx([t]));
+  const d = createDrag(); d.start("resize", t, { x: 0, y: 0 }); d.move({ x: 0, y: -SY }, ctx([t]));
   assert.equal(d.end({ x: 0, y: -SY }, ctx([t])).type, "commit");
 });
 
 test("cancel (pointercancel, blur) leaves nothing active and reports whether a ghost was showing", () => {
   const d = createDrag();
-  d.start("move", sh("a", 0, 0), { x: 0, y: 0 }, W);
+  d.start("move", sh("a", 0, 0), { x: 0, y: 0 });
   assert.equal(d.cancel(), false);
-  d.start("move", sh("a", 0, 0), { x: 0, y: 0 }, W);
+  d.start("move", sh("a", 0, 0), { x: 0, y: 0 });
   d.move({ x: 200, y: 0 }, ctx([sh("a", 0, 0)]));
   assert.equal(d.cancel(), true);
   assert.equal(d.active, false);
@@ -129,11 +129,10 @@ test("cancel (pointercancel, blur) leaves nothing active and reports whether a g
   assert.deepEqual(d.end({ x: 200, y: 0 }, ctx([sh("a", 0, 0)])), { type: "none" });
 });
 
-test("no drag on a stacked (narrow) canvas; a second start while one is running is ignored", () => {
+test("a second start while one is running is ignored", () => {
   const d = createDrag();
-  assert.equal(d.start("move", sh("a", 0, 0), { x: 0, y: 0 }, 600), false);
-  assert.equal(d.start("move", sh("a", 0, 0), { x: 0, y: 0 }, W), true);
-  assert.equal(d.start("resize", sh("a", 0, 0), { x: 0, y: 0 }, W), false);
+  assert.equal(d.start("move", sh("a", 0, 0), { x: 0, y: 0 }), true);
+  assert.equal(d.start("resize", sh("a", 0, 0), { x: 0, y: 0 }), false);
 });
 
 test("dropPlan (panel drag): the default size at the cell under the pointer, slid left to fit, refused when taken or off the bottom", () => {
@@ -154,10 +153,7 @@ test("dropPlan (panel drag): the default size at the cell under the pointer, sli
   assert.deepEqual([p.cand.x, p.cand.w, p.cand.h, p.error], [0, 12, 2, null]);
 });
 
-test("dropPlan: 12 widgets refuses; a stacked canvas refuses with a pointer to Add", () => {
+test("dropPlan: 12 widgets refuses", () => {
   const twelve = Array.from({ length: 12 }, (_, i) => sh(`w${i}`, (i % 2) * 6, Math.floor(i / 2) * 4));
   assert.match(dropPlan(twelve, "sheet", { x: 10, y: 5000 }, ctx(twelve)).error, /at most 12 widgets/);
-  const p = dropPlan([], "sheet", { x: 10, y: 10 }, { ...ctx([]), panelWidth: 500 });
-  assert.match(p.error, /use Add/);
-  assert.equal(p.rect, null);
 });

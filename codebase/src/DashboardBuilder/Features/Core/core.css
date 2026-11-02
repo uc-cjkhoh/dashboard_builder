@@ -155,10 +155,6 @@ button { font: inherit; }
 /* Inputs on glass get the ≥ 3:1 control edge too (on solid surfaces --line-2 is enough beside a label). */
 .glass :is(.input, .select, input[type="text"], input[type="number"], input[type="password"], input[type="search"]),
 .ws-shelves :is(.input, .select, select) { border-color: var(--ctl-edge); }
-/* Touch: glass controls grow to a 44px target. */
-@media (pointer: coarse) {
-  .glass .iconbtn, .ws-shelves .iconbtn { min-width: 44px; min-height: 44px; }
-}
 
 /* Neutral focus ring: a red ring would read as an error now that the accent is red. */
 :where(button, input, select, textarea, a, [tabindex]):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
@@ -201,7 +197,7 @@ button { font: inherit; }
 .menu__sep { height: 1px; margin: 0; background: var(--line); grid-column: 1 / -1; }
 
 /* ---- Resize handle (Core/resizer.js) — a 6px hit strip with a 2px accent line on hover/focus/drag ---- */
-.resizer { width: 6px; cursor: col-resize; touch-action: none; }
+.resizer { width: 6px; cursor: col-resize; }
 .resizer::after {
   content: ""; position: absolute; top: 0; bottom: 0; left: 2px; width: 2px;
   background: transparent; transition: background var(--dur) var(--ease);

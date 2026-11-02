@@ -50,9 +50,7 @@ function initCollapse() {
 
   let stored = false;
   try { stored = localStorage.getItem(STORAGE_KEY) === "1"; } catch { /* storage blocked — start expanded */ }
-  // P41 phone layout: a narrow screen starts on the rail (the sidebar then opens as an overlay); this
-  // isn't remembered, so a wide screen keeps the user's own choice.
-  apply(stored || matchMedia("(max-width: 640px)").matches);
+  apply(stored);
 
   applyCollapsed = (collapsed) => {
     apply(collapsed);

@@ -1,9 +1,8 @@
 // Browser check for the dashboard board (P24b stage 2): a dashboard tab renders worksheet widgets (non-interactive worksheet
 // views, one query each with its own sheet's plan) and text widgets on a 12-column grid inside a scrolling panel; the side
 // panel adds them; a failing widget shows its error inside itself; Remove / Edit; switching tabs disposes the views (no
-// leaked chart instances); a worksheet edit re-runs only its widgets; a theme flip redraws from cache; a phone width stacks
-// the widgets; a reload restores the dashboard from autosave. Real dev app (APP_URL, default http://localhost:5193) in
-// headless Chromium, every /api/* call mocked; any page error fails the run. Screenshots (light + dark + phone) go to SHOTS_DIR.
+// leaked chart instances); a worksheet edit re-runs only its widgets; a theme flip redraws from cache; a reload restores the dashboard from autosave. Real dev app (APP_URL, default http://localhost:5193) in
+// headless Chromium, every /api/* call mocked; any page error fails the run. Screenshots (light + dark) go to SHOTS_DIR.
 import { launch } from './cdp.mjs';
 import { mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -197,25 +196,20 @@ try {
   await check('dark screenshot', async () => { await b.setScheme('dark'); await ev(`document.documentElement.setAttribute('data-theme', 'dark')`); await b.sleep(500); await shot('board-canvas-dark.png'); await ev(`document.documentElement.removeAttribute('data-theme')`); await b.setScheme('light'); });
 
   await b.sleep(500); // a late scheme / theme redraw from the previous checks must not count as a resize query
-  await check('resize re-fits the charts without a query; a phone width stacks the widgets full width in reading order with no sideways scroll', async () => {
+  await check('resize re-fits the charts without a query and keeps the 12-column grid with no sideways scroll', async () => {
     const n = queries.length;
-    // (off the Data Source tab the sidebar is already a brand-only rail)
-    await b.send('Emulation.setDeviceMetricsOverride', { width: 420, height: 800, deviceScaleFactor: 1, mobile: false });
+    await b.send('Emulation.setDeviceMetricsOverride', { width: 1100, height: 800, deviceScaleFactor: 1, mobile: false });
     await b.sleep(500);
     const info = await ev(`(() => { const g = document.getElementById('board-grid'); const sc = document.getElementById('board-scroll');
-      return { stacked: g.classList.contains('is-stacked'), gw: g.clientWidth, widths: [...document.querySelectorAll('.board-widget')].map((w) => Math.round(w.getBoundingClientRect().width)),
-        tops: [...document.querySelectorAll('.board-widget')].map((w) => Math.round(w.getBoundingClientRect().top)), side: sc.scrollWidth - sc.clientWidth,
-        page: document.documentElement.scrollHeight - window.innerHeight, svgW: Math.round(document.querySelector('.board-widget .ws-chart-canvas svg').getBoundingClientRect().width) }; })()`);
-    must(info.stacked, 'not stacked at 420px');
-    must(info.widths.every((w) => w === info.gw), `widths ${J(info.widths)} vs ${info.gw}`);
-    must(info.tops.every((t, i) => i === 0 || t > info.tops[i - 1]), `not in a column: ${J(info.tops)}`);
-    must(info.side <= 0 && info.page <= 0, `sideways ${info.side}, page ${info.page}`);
+      const ws = [...document.querySelectorAll('.board-widget')].map((w) => w.getBoundingClientRect());
+      return { gw: g.clientWidth, narrower: ws.some((r) => r.width < g.clientWidth - 2), side: sc.scrollWidth - sc.clientWidth,
+        svgW: Math.round(document.querySelector('.board-widget .ws-chart-canvas svg').getBoundingClientRect().width) }; })()`);
+    must(info.narrower, 'widgets are not laid out on the grid at 1100px');
+    must(info.side <= 0, `sideways ${info.side}`);
     must(info.svgW <= info.gw && info.svgW > 100, `chart width ${info.svgW} in ${info.gw}`);
-    await shot('board-canvas-phone.png');
     must(queries.length === n, `resize queried ${queries.length - n} times: ${J(queries.slice(n).map(dimsOf))}`);
     await b.send('Emulation.setDeviceMetricsOverride', { width: 1400, height: 900, deviceScaleFactor: 1, mobile: false });
     await b.sleep(500);
-    must(await ev(`!document.getElementById('board-grid').classList.contains('is-stacked')`), 'still stacked at 1400px');
     must(queries.length === n, 'widening queried');
   });
 

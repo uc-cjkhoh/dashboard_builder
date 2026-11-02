@@ -62,8 +62,6 @@ export const PATHS = Object.freeze({
   sun: "M10 6.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zM10 2.5V4M10 16v1.5M2.5 10H4M16 10h1.5M4.7 4.7l1.1 1.1M14.2 14.2l1.1 1.1M4.7 15.3l1.1-1.1M14.2 5.8l1.1-1.1",
   moon: "M16 12.5A6.5 6.5 0 0 1 7.5 4a6.5 6.5 0 1 0 8.5 8.5z",
   monitor: "M3 4h14v9.5H3zM7.5 16.5h5M10 13.5v3",
-  tablet: "M4.5 3h11v14h-11zM9 14.5h2",
-  phone: "M6.5 2.5h7v15h-7zM9 14.5h2",
   "type-number": "M7.5 4L6 16M14 4l-1.5 12M4 8h13M3.5 12h13",
   "type-text": "M5 5h10M10 5v11",
   "type-date": "M4 5h12v11H4zM4 8.5h12M7 3v3M13 3v3",
