@@ -2156,7 +2156,7 @@ export function initDashboards() {
         hint: "Drop a date field to limit the view to a range — and compare it with another period" },
       { key: "drill", icon: "drill", label: "Drill", count: drillLevels.length,
         pills: drillLevels.map((f, i) => drillLevelPill(dash, s, f, i)), onDrop: (f) => addDrillLevel(dash, f),
-        hint: "Drop ≥2 same-table fields — or a named hierarchy from the field pane — to build a drill hierarchy (year → quarter → month)",
+        hint: "Drop ≥2 same-table fields to build a drill hierarchy (year → quarter → month), or use one from the Hierarchies dialog",
         note: drillLevels.length === 1 ? "Add another same-table field to drill." : null },
       { key: "pages", icon: "pages", label: "Pages", count: s.pages ? 1 : 0,
         pills: s.pages ? [pagesPill(dash, s)] : [], onDrop: (f) => addPages(dash, f),
