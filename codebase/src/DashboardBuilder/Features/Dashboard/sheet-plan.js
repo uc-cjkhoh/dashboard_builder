@@ -242,7 +242,7 @@ function buildJoins(baseKey, targets, ctx) {
     if (!path) return null;
     for (const edge of path) {
       if (!included.has(edge.to.key)) {
-        joins.push({ left: col(edge.from), right: col(edge.to), ...(edge.type !== "inner" ? { type: edge.type } : {}) });
+        joins.push({ left: col(edge.from), right: col(edge.to), ...(edge.type !== "inner" ? { type: edge.type } : {}), ...(edge.pairs.length ? { pairs: edge.pairs } : {}) });
         included.add(edge.to.key);
       }
     }
@@ -251,10 +251,11 @@ function buildJoins(baseKey, targets, ctx) {
 }
 function relationshipGraph(ctx) {
   const g = new Map();
-  let type = "inner", fixed = false;
+  let type = "inner", fixed = false, pairs = [];
   const link = (a, b, forward) => {
     if (!g.has(a.key)) g.set(a.key, []);
-    g.get(a.key).push({ from: a, to: b, type: planJoinType(type, forward, fixed) }); // FROM is the left side
+    // FROM is the left side; a compound key's extra pairs are {left, right} on the edge's own sides
+    g.get(a.key).push({ from: a, to: b, type: planJoinType(type, forward, fixed), pairs: pairs.map((p) => (forward ? { left: p.from, right: p.to } : { left: p.to, right: p.from })) });
   };
   for (const rel of ctx.relationships.values()) {
     const fe = ctx.entities.get(rel.from.entityId), te = ctx.entities.get(rel.to.entityId);
@@ -262,7 +263,7 @@ function relationshipGraph(ctx) {
     const a = { key: keyOf(fe.db, fe.table), db: fe.db, table: fe.table, column: rel.from.column };
     const b = { key: keyOf(te.db, te.table), db: te.db, table: te.table, column: rel.to.column };
     if (a.key === b.key) continue;
-    type = rel.joinType; fixed = rel.joinFixed === true;
+    type = rel.joinType; fixed = rel.joinFixed === true; pairs = rel.pairs ?? [];
     link(a, b, true); link(b, a, false);
   }
   return g;

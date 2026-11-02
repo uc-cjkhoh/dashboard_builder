@@ -186,6 +186,7 @@ function openWorkbook(wb) {
         r.cardinality,
         r.joinType,
         r.joinFixed,
+        r.pairs ?? [],
       );
     }
 

@@ -130,3 +130,10 @@ test("a full (not sampled) result still warns on no matches", () => {
   const d = describePreview(result({ matchedKeys: 0, matchedRows: 0 }, { matchedKeys: 0, matchedRows: 0 }), { ...names });
   assert.ok(d.findings.some((f) => f.level === "warn" && /No keys match at all/.test(f.text)));
 });
+
+test("previewRequest carries the extra pairs only when there are some", () => {
+  const a = { db: "d", table: "a" }, b = { db: "d", table: "b" };
+  assert.equal("pairs" in previewRequest(a, "k", b, "k"), false);
+  assert.equal("pairs" in previewRequest(a, "k", b, "k", []), false);
+  assert.deepEqual(previewRequest(a, "k", b, "k", [{ from: "x", to: "y" }]).pairs, [{ left: "x", right: "y" }]);
+});

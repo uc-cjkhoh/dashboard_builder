@@ -12,7 +12,7 @@ public static class ApiLimits
 {
     public const int MaxBodyBytes = 256 * 1024;
     public const int MaxHostLength = 253, MaxUserLength = 64, MaxPasswordLength = 256;
-    public const int MaxDimensions = 12, MaxMeasures = 10, MaxJoins = 10, MaxFilters = 20; // user filters (client cap 8) + shared filters (4) + drill path (5) + page + selection + date range
+    public const int MaxDimensions = 12, MaxMeasures = 10, MaxJoins = 10, MaxJoinPairs = 4 /* key pairs of one join, the first included */, MaxFilters = 20; // user filters (client cap 8) + shared filters (4) + drill path (5) + page + selection + date range
     public const int MaxInValues = 500, MaxFilterValueLength = 1000;
     public const int MaxBoxOutliers = 500; // outlier points one box plot returns
     public const int MaxRowLimit = 5000, MaxBuckets = 100, MaxDistinct = 1000;
@@ -190,6 +190,7 @@ public static class RequestRules
         for (var i = 0; i < (r.Joins?.Length ?? 0); i++)
         {
             if (r.Joins![i].Type is { } jt && jt is not ("inner" or "left" or "right" or "full")) throw Bad("A join is inner, left, right or full.", $"joins[{i}].type");
+            JoinPairRules.Check(r.Joins[i].Pairs, $"joins[{i}].pairs");
             if (r.Joins[i].Left?.Calc is not null) throw Bad("Calculations can't be used as a join key.", $"joins[{i}].left.calc");
             if (r.Joins[i].Right?.Calc is not null) throw Bad("Calculations can't be used as a join key.", $"joins[{i}].right.calc");
         }
@@ -392,4 +393,21 @@ public static class FilterValues
         ClickHouseType.Temporal => string.CompareOrdinal((string)a, (string)b),
         _ => 0,
     };
+}
+
+/// <summary>Limits on a compound join key (extra pairs beyond the first). Rejects, never clamps.</summary>
+public static class JoinPairRules
+{
+    public static void Check(JoinColumnPair[]? pairs, string field)
+    {
+        if (pairs is null) return;
+        if (pairs.Length > ApiLimits.MaxJoinPairs - 1)
+            throw new RequestValidationException($"A join matches on at most {ApiLimits.MaxJoinPairs} column pairs.", field);
+        for (var i = 0; i < pairs.Length; i++)
+        {
+            if (pairs[i] is null) throw new RequestValidationException("A key pair can't be null.", field);
+            if (string.IsNullOrWhiteSpace(pairs[i].Left)) throw new RequestValidationException("A key pair needs a left column.", $"{field}[{i}].left");
+            if (string.IsNullOrWhiteSpace(pairs[i].Right)) throw new RequestValidationException("A key pair needs a right column.", $"{field}[{i}].right");
+        }
+    }
 }

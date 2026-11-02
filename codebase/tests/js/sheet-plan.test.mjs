@@ -145,3 +145,13 @@ test("buildPlan: a filter on the union's own field stays in the plan and rides w
   assert.equal(p.filters.length, 1);
   assert.equal(p.source.name, UNION.name);
 });
+
+test("buildPlan: a compound relationship sends its extra pairs, swapped when crossed to to from", () => {
+  const rel = { from: { entityId: "e1", column: "id" }, to: { entityId: "e2", column: "id" }, joinType: "inner", pairs: [{ from: "region", to: "placed" }] };
+  const fwd = buildPlan(sheet({ columns: [dim("orders", "region")], rows: [meas("customers", "id")] }), undefined, mkCtx({ relationships: new Map([["r1", rel]]) }));
+  assert.deepEqual(fwd.joins[0].pairs, [{ left: "region", right: "placed" }]);
+  const back = buildPlan(sheet({ columns: [dim("customers", "region")], rows: [meas("orders", "id")] }), undefined, mkCtx({ relationships: new Map([["r1", rel]]) }));
+  assert.deepEqual(back.joins[0].pairs, [{ left: "placed", right: "region" }]);
+  const plain = buildPlan(sheet({ columns: [dim("orders", "region")], rows: [meas("customers", "id")] }), undefined, mkCtx({ relationships: new Map([["r1", { ...rel, pairs: undefined }]]) }));
+  assert.equal("pairs" in plain.joins[0], false);
+});

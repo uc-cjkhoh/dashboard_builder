@@ -595,3 +595,33 @@ test("a column in two relationships keeps only the first, and says so", () => {
   assert.equal(wb.relationships.length, 2); // customer_id↔id kept, the reuse of customer_id dropped, region↔region kept
   assert.ok(wb.issues.some((i) => /reused a column/.test(i)));
 });
+
+// --- compound keys
+const compound = () => {
+  const s = sampleState();
+  s.relationships.get("rel#1").pairs = [{ from: "region", to: "area" }];
+  return s;
+};
+test("extra key pairs round-trip; an ordinary relationship saves no `pairs`", () => {
+  assert.equal("pairs" in serializeWorkbook(sampleState()).relationships[0], false);
+  const saved = serializeWorkbook(compound());
+  assert.deepEqual(saved.relationships[0].pairs, [{ from: "region", to: "area" }]);
+  assert.deepEqual(saved.entities[0].joinKeys.sort(), ["customer_id", "region"]);
+  assert.deepEqual(parseWorkbook(JSON.stringify(saved)).relationships[0].pairs, [{ from: "region", to: "area" }]);
+});
+test("a v2 workbook with no `pairs` still opens, and bad pairs are dropped with an issue", () => {
+  const raw = serializeWorkbook(compound());
+  const okWb = parseWorkbook(JSON.stringify(raw));
+  assert.equal(parseWorkbook(JSON.stringify(serializeWorkbook(sampleState()))).relationships[0].pairs, undefined);
+  assert.equal(okWb.relationships.length, 1);
+  raw.relationships[0].pairs = [{ from: "region", to: "area" }, { from: "region", to: "z" }, { from: 1, to: "q" }, { from: "customer_id", to: "w" }, { from: "a", to: "b" }, { from: "c", to: "d" }, { from: "e", to: "f" }];
+  const wb = parseWorkbook(JSON.stringify(raw));
+  assert.deepEqual(wb.relationships[0].pairs, [{ from: "region", to: "area" }, { from: "a", to: "b" }, { from: "c", to: "d" }]);
+  assert.ok(wb.issues.some((i) => /key pair/.test(i)));
+});
+test("a pair reusing a column of another relationship is dropped", () => {
+  const raw = serializeWorkbook(compound());
+  raw.relationships.push({ from: { entityId: "sales.orders#1", column: "x" }, to: { entityId: "sales.customers#2", column: "y" }, cardinality: "1:1", pairs: [{ from: "region", to: "q" }] });
+  const wb = parseWorkbook(JSON.stringify(raw));
+  assert.equal(wb.relationships[1].pairs, undefined);
+});

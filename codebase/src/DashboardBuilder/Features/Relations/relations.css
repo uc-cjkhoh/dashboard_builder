@@ -84,3 +84,13 @@
 .rel-keyhint { bottom: calc(var(--s4) + var(--s6) + var(--s6)); white-space: normal; text-align: center; max-width: min(640px, calc(100% - 2 * var(--s4))); }
 .rel-guide[hidden] ~ .rel-keyhint { bottom: var(--s4); }
 .rel-keyhint:empty { position: absolute; width: 1px; height: 1px; padding: 0; border: 0; overflow: hidden; clip-path: inset(50%); box-shadow: none; }
+
+/* Compound key: "Also match on" in the relationship dialog. */
+.key-pairs { border: 0; margin: 0 0 var(--s2); padding: 0; display: grid; gap: var(--s2); font-size: var(--fs-body); }
+.key-pairs legend { font-weight: 600; margin-bottom: var(--s1); padding: 0; }
+.key-pairs__list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s1); }
+.key-pairs__item { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); padding: var(--s1) var(--s2); border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); }
+.key-pairs__suggest { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.key-pairs__add { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
+.key-pairs__select { min-width: 0; max-width: 100%; }
+.key-pairs__problem { margin: 0; color: var(--ink-2); }
