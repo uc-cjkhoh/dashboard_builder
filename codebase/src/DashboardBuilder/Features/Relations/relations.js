@@ -7,6 +7,7 @@ import { buildJoinCheck } from "./join-check.js";
 import { linkSides, linkRoute, roundedPath } from "./link-route.js";
 import { openTypeWarning } from "./type-warning.js";
 import { COLUMN_MIME, encodeColumnDrag, parseColumnDrag, dropDecision } from "./link-drag.js";
+import { linkKeyAction, stepIndex, linkHint, rowLabel } from "./link-keys.js";
 
 // Relationships: logical, typed links the user draws between a column of one entity and a column of
 // another (decision D5 — ClickHouse neither creates nor validates them). Creation is drag-and-drop only:
@@ -18,7 +19,7 @@ const CARDINALITIES = ["1:1", "1:N", "N:1", "N:M"];
 let seq = 0;
 let selectedId = null;
 let hoverId = null;   // the link under the pointer
-let canvas, svg, labels, guide;  // svg: the lines, under the cards; labels: the cardinality badges, over them
+let canvas, svg, labels, guide, keyHint;  // svg: the lines, under the cards; labels: the cardinality badges, over them
 
 export function initRelations() {
   canvas = document.getElementById("model-view");
@@ -33,6 +34,11 @@ export function initRelations() {
   guide.hidden = true;
   guide.textContent = "Drag a column onto a column in another table to relate them.";
   canvas.parentElement.append(guide); // over the Data Source, centred at its foot
+  keyHint = document.createElement("p");
+  keyHint.className = "rel-guide rel-keyhint";
+  keyHint.setAttribute("role", "status");
+  keyHint.hidden = true;
+  canvas.parentElement.append(keyHint); // the keyboard pick's instruction line, same spot as the guide
 
   bus.addEventListener("entity:moved", () => render());
   bus.addEventListener("entity:loaded", (e) => { markDraggable(e.detail.entityId); render(); }); // a restored link waits for its key rows
@@ -40,6 +46,7 @@ export function initRelations() {
   bus.addEventListener("view:changed", () => { selectedId = null; render(); });
   canvas.addEventListener("scroll", render);
   initColumnDrag();
+  initColumnKeys();
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") select(null);
   });
@@ -51,7 +58,8 @@ let dragFrom = null; // { entityId, column } while a row is dragged
 
 function markDraggable(entityId) {
   if (entities.get(entityId)?.source) return; // a union / unpivot takes no relationship
-  for (const row of entities.get(entityId)?.el.querySelectorAll(".col-row") ?? []) row.draggable = true;
+  for (const row of entities.get(entityId)?.el.querySelectorAll(".col-row") ?? []) { row.draggable = true; row.tabIndex = 0; }
+  labelRows();
 }
 
 function endOf(entityId, column) {
@@ -96,20 +104,82 @@ function initColumnDrag() {
     if (!from || !row) return;
     e.preventDefault();
     if (entities.get(row.closest(".entity")?.dataset.entityId)?.source) { toast("A union or unpivot can't be related to a table yet.", "danger"); return; }
-    const a = endOf(from.entityId, from.column), b = rowEnd(row);
-    if (!a || !b) return;
-    const { ok, problem, kind } = dropDecision({ relationships: relationships.values(), from: a, to: b });
-    if (!ok) { refuse(problem, kind, a, b); return; }
-    openCardinalityDialog({
-      current: "1:N",
-      tables: [a.table, b.table],
-      check: joinCheckFor(from, { entityId: b.entityId, column: b.column }),
-      onPick: (cardinality, sel) => {
-        createRelationship(from, { entityId: b.entityId, column: b.column }, cardinality, joinFromSelection(sel));
-      },
-    });
+    proposeLink(endOf(from.entityId, from.column), rowEnd(row));
   });
   canvas.addEventListener("dragend", () => { dragFrom = null; clearDropMarks(); });
+}
+
+/** The one path to a new relationship, for a drop and for the keyboard: check the pair, then ask for the cardinality. */
+function proposeLink(a, b) {
+  if (!a || !b) return;
+  const { ok, problem, kind } = dropDecision({ relationships: relationships.values(), from: a, to: b });
+  if (!ok) { refuse(problem, kind, a, b); return; }
+  const from = { entityId: a.entityId, column: a.column };
+  openCardinalityDialog({
+    current: "1:N",
+    tables: [a.table, b.table],
+    check: joinCheckFor(from, { entityId: b.entityId, column: b.column }),
+    onPick: (cardinality, sel) => {
+      createRelationship(from, { entityId: b.entityId, column: b.column }, cardinality, joinFromSelection(sel));
+    },
+  });
+}
+
+// --- the keyboard way: Enter on a row picks it, Enter on a row of another table relates them -----------------
+let keyFrom = null; // { entityId, column } of the row picked with the keyboard
+
+function rowOf(end) { return entities.get(end.entityId)?.el.querySelector(`.col-row[data-column="${cssEscape(end.column)}"]`); }
+
+function labelRows() {
+  for (const entity of entities.values()) {
+    if (entity.source) continue;
+    for (const row of entity.el.querySelectorAll(".col-row")) {
+      const end = endOf(entity.id, row.dataset.column);
+      if (!end) continue;
+      row.setAttribute("role", "button");
+      row.setAttribute("aria-label", rowLabel(end, end.type, keyFrom ? endOf(keyFrom.entityId, keyFrom.column) : null));
+      row.setAttribute("aria-pressed", keyFrom && keyFrom.entityId === end.entityId && keyFrom.column === end.column ? "true" : "false");
+    }
+  }
+}
+
+function updateKeyHint(focusRow) {
+  const source = keyFrom ? endOf(keyFrom.entityId, keyFrom.column) : null;
+  for (const el of canvas.querySelectorAll(".col-row--key-source")) el.classList.remove("col-row--key-source");
+  if (!source) { keyHint.hidden = true; keyHint.textContent = ""; labelRows(); return; }
+  rowOf(source)?.classList.add("col-row--key-source");
+  const target = rowEnd(focusRow);
+  const decision = target ? dropDecision({ relationships: relationships.values(), from: source, to: target }) : null;
+  keyHint.textContent = linkHint(source, target, decision);
+  keyHint.hidden = false;
+  labelRows();
+}
+
+function cancelKeyPick() { keyFrom = null; updateKeyHint(null); }
+
+function initColumnKeys() {
+  canvas.addEventListener("keydown", (e) => {
+    const row = e.target instanceof Element && e.target.classList.contains("col-row") ? e.target : null;
+    if (!row || e.altKey || e.ctrlKey || e.metaKey) return;
+    const action = linkKeyAction(e.key, Boolean(keyFrom));
+    if (!action) return;
+    const here = rowEnd(row);
+    if (!here) return;
+    e.preventDefault();
+    if (action === "pick") { keyFrom = { entityId: here.entityId, column: here.column }; updateKeyHint(row); }
+    else if (action === "cancel") cancelKeyPick();
+    else if (action === "target") {
+      const source = endOf(keyFrom.entityId, keyFrom.column);
+      if (source && source.entityId === here.entityId && source.column === here.column) { cancelKeyPick(); return; } // Enter on the source again un-picks it
+      cancelKeyPick();
+      proposeLink(source, here);
+    } else {
+      const rows = [...row.closest(".entity").querySelectorAll(".col-row")];
+      const next = rows[stepIndex(rows.indexOf(row), rows.length, action === "next" ? 1 : -1)];
+      next?.focus();
+    }
+  });
+  canvas.addEventListener("focusin", (e) => { if (keyFrom && e.target instanceof Element && e.target.classList.contains("col-row")) updateKeyHint(e.target); });
 }
 
 /** A refused link: a type mismatch gets a modal (both columns, their types, columns that would fit); anything else a toast. */

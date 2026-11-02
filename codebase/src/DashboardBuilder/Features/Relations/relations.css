@@ -73,3 +73,11 @@
 .rel-guide { position: absolute; left: 50%; bottom: var(--s4); translate: -50% 0; z-index: 2; margin: 0; padding: var(--s2) var(--s4);
   background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r); box-shadow: var(--elev-8);
   color: var(--ink-2); font-size: var(--fs-body); white-space: nowrap; max-width: calc(100% - 2 * var(--s4)); overflow: hidden; text-overflow: ellipsis; }
+
+/* Relating from the keyboard: rows are focusable (inset focus ring, the card list clips an outer one); the picked source gets a
+   solid accent outline plus the word "From" (not colour alone); the instruction line sits above the how-to pill. */
+.col-row[tabindex]:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.col-row--key-source { background: var(--accent-soft); outline: 2px solid var(--accent); outline-offset: -2px; }
+.col-row--key-source:focus-visible { outline-offset: -2px; }
+.col-row--key-source::after { content: "From"; order: 2; font-size: var(--fs-body); font-weight: 600; color: var(--accent-ink); }
+.rel-keyhint { bottom: calc(2 * var(--s6) + var(--s2)); }
