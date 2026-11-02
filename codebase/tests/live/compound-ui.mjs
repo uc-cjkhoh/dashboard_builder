@@ -96,7 +96,10 @@ try {
     await press('orders', 'Region', 'Enter');
     await press('customers', 'name', 'Enter');
     await b.sleep(300);
+    // refused with no cardinality dialog: the refusal is a toast naming the column
     must(await ev(`document.querySelector('dialog[open]') === null`), 'dialog opened for a column already in a link');
+    must(/already in a relationship/.test(await ev(`document.getElementById('toast').textContent`)), 'no refusal toast for a used column');
+    must(await ev(`document.querySelectorAll('.rel-link__line').length === 1`), 'a second link was drawn');
   });
   await check('editing the link shows its pair; removing it leaves a plain badge', async () => {
     await ev(`document.querySelector('.rel-link--label').dispatchEvent(new MouseEvent('click', { bubbles: true }))`);

@@ -53,4 +53,15 @@ public class CompoundJoinTests
         Assert.Contains("(SELECT if(isNull(`j1`) OR isNull(`j2`), NULL, concat(toString(`j1`), char(31), toString(`j2`))) AS k FROM `d`.`b` LIMIT 50)", sql);
         Assert.DoesNotContain("ORDER BY", sql);
     }
+
+    [Fact] public void Compound_parts_are_brought_to_a_common_type_per_kind_before_they_are_stringified()
+    {
+        var sql = ClickHouseGateway.BuildJoinSideSql("d", "a", "n1", "d", "b", "m1", 9, false, [("d2", "e2"), ("t3", "u3")],
+            [ClickHouseType.Numeric, ClickHouseType.Temporal, ClickHouseType.Text]);
+        Assert.Contains("concat(toString(toFloat64(`n1`)), char(31), toString(toDateTime64(`d2`, 3)), char(31), toString(`t3`))", sql);
+        Assert.Contains("concat(toString(toFloat64(`m1`)), char(31), toString(toDateTime64(`e2`, 3)), char(31), toString(`u3`))", sql);
+    }
+    [Fact] public void A_single_key_is_unchanged_by_kinds()
+        => Assert.Equal(ClickHouseGateway.BuildJoinSideSql("d", "a", "k", "d", "b", "k", 5, false),
+            ClickHouseGateway.BuildJoinSideSql("d", "a", "k", "d", "b", "k", 5, false, null, [ClickHouseType.Numeric]));
 }

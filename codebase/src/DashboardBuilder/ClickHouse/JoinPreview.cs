@@ -73,18 +73,20 @@ public sealed partial class ClickHouseGateway
         var b = await FindKeyAsync(info, req.To, ct);
         JoinPreviewRules.CheckKinds(a, b, $"{req.From.Table}.{req.From.Column}", $"{req.To.Table}.{req.To.Column}");
         var extra = new List<(string From, string To)>();
+        var kinds = new List<string> { a.Category };
         foreach (var pair in req.Pairs ?? [])
         {
             var pa = await FindKeyAsync(info, req.From with { Column = pair.Left }, ct);
             var pb = await FindKeyAsync(info, req.To with { Column = pair.Right }, ct);
             JoinPreviewRules.CheckKinds(pa, pb, $"{req.From.Table}.{pair.Left}", $"{req.To.Table}.{pair.Right}");
             extra.Add((pair.Left, pair.Right));
+            kinds.Add(pa.Category);
         }
         var n = JoinPreviewRules.Bound(req.SampleLimit);
         var text = a.Category == ClickHouseType.Text;
         try
         {
-            return await RunPreviewAsync(info, req, n, text, extra, ct);
+            return await RunPreviewAsync(info, req, n, text, extra, kinds, ct);
         }
         catch (global::ClickHouse.Client.ClickHouseServerException ex) when (JoinPreviewRules.IsTypeError(ex.ErrorCode))
         {
@@ -92,10 +94,10 @@ public sealed partial class ClickHouseGateway
         }
     }
 
-    private async Task<JoinPreviewResult> RunPreviewAsync(ClickHouseConnectionInfo info, JoinPreviewRequest req, int n, bool text, List<(string From, string To)> extra, CancellationToken ct)
+    private async Task<JoinPreviewResult> RunPreviewAsync(ClickHouseConnectionInfo info, JoinPreviewRequest req, int n, bool text, List<(string From, string To)> extra, List<string> kinds, CancellationToken ct)
     {
-        var fromTask = JoinSideAsync(info, BuildJoinSideSql(req.From.Db, req.From.Table, req.From.Column, req.To.Db, req.To.Table, req.To.Column, n, text, extra), ct);
-        var toTask = JoinSideAsync(info, BuildJoinSideSql(req.To.Db, req.To.Table, req.To.Column, req.From.Db, req.From.Table, req.From.Column, n, text, extra.Select(p => (p.To, p.From)).ToList()), ct);
+        var fromTask = JoinSideAsync(info, BuildJoinSideSql(req.From.Db, req.From.Table, req.From.Column, req.To.Db, req.To.Table, req.To.Column, n, text, extra, kinds), ct);
+        var toTask = JoinSideAsync(info, BuildJoinSideSql(req.To.Db, req.To.Table, req.To.Column, req.From.Db, req.From.Table, req.From.Column, n, text, extra.Select(p => (p.To, p.From)).ToList(), kinds), ct);
         var (from, to) = (await fromTask, await toTask);
         return new JoinPreviewResult(from, to, n, from.Rows >= n || to.Rows >= n);
     }
@@ -113,22 +115,30 @@ public sealed partial class ClickHouseGateway
     /// rows have a key present in the other table's first <paramref name="n"/> rows (NULLs never match). Names are quoted by
     /// <see cref="Identifier"/>; text keys compare as strings so UUID/Enum/FixedString mixes still match.
     /// </summary>
-    internal static string BuildJoinSideSql(string db, string table, string column, string otherDb, string otherTable, string otherColumn, int n, bool textKeys, IReadOnlyList<(string Column, string OtherColumn)>? extra = null)
+    internal static string BuildJoinSideSql(string db, string table, string column, string otherDb, string otherTable, string otherColumn, int n, bool textKeys, IReadOnlyList<(string Column, string OtherColumn)>? extra = null, IReadOnlyList<string>? kinds = null)
     {
         if (n < 1 || n > JoinPreviewRules.MaxSampleRows) throw new ArgumentOutOfRangeException(nameof(n));
         // A compound key is one string of its parts (char(31) between them), NULL when any part is NULL — a tuple can't be Nullable.
-        static string Expr(string c, IEnumerable<string> more, bool text)
+        // Each part is first brought to a common type per kind (numbers as Float64, dates as DateTime64) so "1.00" and "1", or a Date and a
+        // DateTime at midnight, still match as the real join's type coercion does.
+        static string Part(string c, string? kind) => kind switch
+        {
+            ClickHouseType.Numeric => $"toString(toFloat64({Identifier.Quote(c)}))",
+            ClickHouseType.Temporal => $"toString(toDateTime64({Identifier.Quote(c)}, 3))",
+            _ => $"toString({Identifier.Quote(c)})",
+        };
+        static string Expr(string c, IEnumerable<string> more, bool text, IReadOnlyList<string>? kinds)
         {
             var all = more.ToList();
             if (all.Count == 0) return text ? $"toString({Identifier.Quote(c)})" : Identifier.Quote(c);
             all.Insert(0, c);
             var anyNull = string.Join(" OR ", all.Select(x => $"isNull({Identifier.Quote(x)})"));
-            return $"if({anyNull}, NULL, concat({string.Join(", char(31), ", all.Select(x => $"toString({Identifier.Quote(x)})"))}))";
+            return $"if({anyNull}, NULL, concat({string.Join(", char(31), ", all.Select((x, i) => Part(x, kinds is not null && i < kinds.Count ? kinds[i] : null)))}))";
         }
         static string Keys(string d, string t, string expr, int n)
             => $"SELECT {expr} AS k FROM {Identifier.QualifiedName(d, t)} LIMIT {n.ToString(CultureInfo.InvariantCulture)}";
-        var mine = Expr(column, (extra ?? []).Select(e => e.Column), textKeys);
-        var theirs = Expr(otherColumn, (extra ?? []).Select(e => e.OtherColumn), textKeys);
+        var mine = Expr(column, (extra ?? []).Select(e => e.Column), textKeys, kinds);
+        var theirs = Expr(otherColumn, (extra ?? []).Select(e => e.OtherColumn), textKeys, kinds);
         var other = $"(SELECT k FROM ({Keys(otherDb, otherTable, theirs, n)}) WHERE isNotNull(k))";
         return "SELECT sum(cnt), sumIf(cnt, isNull(k)), countIf(isNotNull(k)), maxIf(cnt, isNotNull(k)), " +
                $"sumIf(cnt, isNotNull(k) AND k IN {other}), countIf(isNotNull(k) AND k IN {other}) " +
