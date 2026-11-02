@@ -1512,6 +1512,7 @@ export function initDashboards() {
         if (f.agg === "percentile") f.p = isFraction(f.p) ? f.p : DEFAULT_PERCENTILE; else delete f.p;
         commit(dash, s);
       } else if (id.startsWith("part:")) { f.datePart = id.slice(5); commit(dash, s); }
+      // Continuous = measure, Discrete = dimension; picking the radio already selected changes nothing.
       else if (id === "dc:continuous" || id === "dc:discrete") { if ((id === "dc:continuous") !== isMeasure) setRole(dash, s, f, isMeasure ? "dimension" : "measure"); }
       else if (id === "role") setRole(dash, s, f, isMeasure ? "dimension" : "measure");
       else if (id === "finer" || id === "coarser") {

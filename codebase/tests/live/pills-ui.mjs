@@ -1,10 +1,10 @@
 // Browser checks for pills: the real dev app (APP_URL, default http://localhost:5180) in headless
 // Chromium, driven over the DevTools protocol (tests/live/cdp.mjs), with every /api/* call answered by a mock —
-// nothing reaches a ClickHouse. Run:  node tests/live/calc-ui.mjs   (start the app first:
+// nothing reaches a ClickHouse. Run:  node tests/live/pills-ui.mjs   (start the app first:
 //   cd src/DashboardBuilder && dotnet run --no-launch-profile --urls http://localhost:5180 ; stop it with fuser -k 5180/tcp)
 // Env: APP_URL, SHOTS_DIR (screenshot folder), CDP_PORT (default: a free port), CHROME_BIN.
 import { launch } from './cdp.mjs';
-import { writeFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -49,16 +49,15 @@ async function check(name, fn) {
 const must = (cond, msg) => { if (!cond) throw new Error(msg); };
 const J = JSON.stringify;
 
-let wbDir = null, b = null;
+let b = null;
 try {
-  wbDir = mkdtempSync(join(tmpdir(), 'calc-wb-'));
   b = await launch({ port: process.env.CDP_PORT ? Number(process.env.CDP_PORT) : undefined });
   await b.mock(answer);
   const ev = (s) => b.evaluate(s);
   const waitFor = (s, label) => b.waitFor(s, { label });
   const toastText = () => ev(`(document.getElementById('toast').hidden ? '' : document.getElementById('toast').textContent)`);
 
-  // page helpers: HTML5 drag-and-drop with a real DataTransfer, text lookup, dialog typing
+  // page helpers: HTML5 drag-and-drop with a real DataTransfer, field-chip lookup, pill text
   const installHelpers = () => ev(`(() => {
     window.__t = {
       chip: (name) => [...document.querySelectorAll('#ws-fields .ws-field')].find((c) => c.querySelector('.ws-field__name')?.textContent === name),
@@ -71,45 +70,9 @@ try {
       },
       zone: (kind) => document.querySelector('.ws-shelf--' + kind + ' .ws-shelf__zone'),
       pills: (kind) => [...document.querySelectorAll('.ws-shelf--' + kind + ' .ws-pill')].map((p) => p.querySelector('.ws-pill__text')?.textContent),
-      btn: (text, root = document) => [...root.querySelectorAll('button')].find((x) => x.textContent.trim() === text || x.getAttribute('aria-label') === text),
     };
     return true; })()`);
-  const dragChip = (name, target) => ev(`(() => { const c = __t.chip(${J(name)}); if (!c) throw new Error('no field chip ${name}'); __t.drag(c, ${target}); return true; })()`);
   const pills = (kind) => ev(`__t.pills(${J(kind)})`);
-  const dlg = `document.querySelector('dialog.calc-dialog[open]')`;
-  const focusAndType = async (sel, text) => {
-    await ev(`(() => { const e = document.querySelector(${J(sel)}); e.focus(); e.select?.(); return true; })()`);
-    await b.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Delete', code: 'Delete', windowsVirtualKeyCode: 46 });
-    await b.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Delete', code: 'Delete', windowsVirtualKeyCode: 46 });
-    await b.type(text);
-  };
-  const openNewDialog = async () => {
-    await ev(`document.querySelector('.calc-group__new').click()`);
-    await waitFor(`${dlg} !== null`, 'calc dialog open');
-  };
-  const fillDialog = async (name, formula) => {
-    await focusAndType('.calc-dialog input.input', name);
-    await focusAndType('.calc-dialog textarea.formula', formula);
-    await ev(`document.querySelector('.calc-dialog textarea.formula').blur()`);
-  };
-  const saveDisabled = () => ev(`[...${dlg}.querySelectorAll('.dialog__foot button')].find((x) => x.textContent === 'Save').disabled`);
-  const saveDialog = async () => {
-    await ev(`[...${dlg}.querySelectorAll('.dialog__foot button')].find((x) => x.textContent === 'Save').click()`);
-    await waitFor(`${dlg} === null`, 'dialog closed after save');
-  };
-  const newCalc = async (name, formula) => { await openNewDialog(); await fillDialog(name, formula); await saveDialog(); };
-  const calcMenu = async (name, item) => {
-    await ev(`(() => { const c = __t.chip(${J(name)}); c.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 40 })); return true; })()`);
-    await ev(`(() => { const c = __t.chip(${J(name)}); [...document.querySelectorAll('.ctx-menu .menu__item')].find((x) => x.textContent.trim() === ${J(item)}).click(); return true; })()`);
-  };
-  const confirmOpen = `[...document.querySelectorAll('dialog[open]')].find((d) => !d.classList.contains('calc-dialog'))`;
-  const chartText = () => ev(`document.getElementById('ws-chart').textContent`);
-  const canvasDrawn = () => ev(`!!document.querySelector('#ws-chart canvas, #ws-chart svg')`);
-  const until = async (fn, label, timeout = 8000) => { const t0 = Date.now(); while (!fn()) { if (Date.now() - t0 > timeout) throw new Error(`timed out waiting for: ${label}`); await b.sleep(50); } };
-  // Wait until no new /api/query has arrived for `quiet` ms (polling, not a fixed sleep).
-  const settle = async (quiet = 300) => { let n = -1; for (let i = 0; i < 60 && n !== queries.length; i++) { n = queries.length; await b.sleep(quiet); } };
-  const lastQuery = () => queries[queries.length - 1];
-  const hasKey = (o, k) => J(o).includes(`"${k}"`);
 
   // ---- setup: connect, add the two tables, open a worksheet -----------------------------------------------------
   await b.goto(APP + '/');
@@ -147,10 +110,37 @@ try {
     await b.sleep(300);
     must(await ev(`!!document.querySelector('.ws-shelf--rows .ws-pill--measure')`), 'amount not a measure again');
   });
-  await ev(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))`);
-  await b.sleep(100);
-  await b.screenshot(join(SHOTS, 'pills.png'));
+  const undo = async () => { await ev(`document.querySelector('[aria-label="Undo (Ctrl+Z)"]').click()`); await b.sleep(400); };
+  await check('undo of a Discrete toggle restores the measure', async () => {
+    must(await menu('rows', 'Discrete') === 'clicked', 'no Discrete item');
+    await b.sleep(300);
+    must(await ev(`!!document.querySelector('.ws-shelf--rows .ws-pill--dimension')`), 'not a dimension');
+    await undo();
+    must(await ev(`!!document.querySelector('.ws-shelf--rows .ws-pill--measure')`), 'undo did not restore the measure');
+  });
+  await check('plus button: click, click, dblclick leaves one pill', async () => {
+    await ev(`document.querySelector('.ws-shelf--rows .ws-pill__remove, .ws-shelf--rows .ws-pill button')?.click?.()`);
+    await b.sleep(200);
+    const n0 = (await pills('rows')).length;
+    await ev(`(() => { const c = __t.chip('qty'); const a = c.querySelector('.ws-field__add'); a.click(); a.click(); a.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })); return true; })()`);
+    await b.sleep(300);
+    const r = await pills('rows');
+    must(r.filter((t) => t === 'orders.qty').length === 1, 'qty pills: ' + J(r) + ' (was ' + n0 + ')');
+  });
+  await check('drag placement still works after the dblclick listener', async () => {
+    await ev(`__t.drag(__t.chip('discount'), __t.zone('rows'))`);
+    await b.sleep(300);
+    must((await pills('rows')).includes('orders.discount'), 'drag did not place discount: ' + J(await pills('rows')));
+  });
+  // the Continuous / Discrete popup open, light and dark
+  await ev(`document.querySelector('.ws-shelf--rows .ws-pill').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 300, clientY: 200 }))`);
+  await b.sleep(300);
+  for (const scheme of ['light', 'dark']) {
+    await ev(`import('/features/Core/scheme.js').then((m) => m.setSchemePref(${J(scheme)}))`);
+    await b.sleep(300);
+    await b.screenshot(join(SHOTS, `pills-popup-${scheme}.png`));
+  }
 } catch (e) { console.log('FAIL harness: ' + e.message); failed++; }
-finally { if (b) await b.close(); if (wbDir) rmSync(wbDir, { recursive: true, force: true }); }
+finally { if (b) await b.close(); }
 console.log(`${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
