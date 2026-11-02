@@ -1,5 +1,5 @@
 // Browser checks for named hierarchies (T03-29): create one in the Hierarchies dialog (ordered level picker, keyboard-operable
-// reorder), see it in the field pane, drop it on the Drill tool (and the plus button) -> the sheet's drill is the same
+// reorder), see its row in the dialog, press Use -> the sheet's drill is the same
 // structure a hand-built drill has and a bar click drills a level; rename / delete leave the sheet's drill intact; the workbook
 // round-trips it. The real dev app (APP_URL, default http://localhost:5193) in headless Chromium; every /api/* call is mocked.
 // Any page error fails the run (cdp.mjs).  Env: APP_URL, SHOTS_DIR, CDP_PORT, CHROME_BIN.
@@ -184,12 +184,16 @@ try {
     await waitFor(`/Showing: channel/.test(document.querySelector('.ws-drill')?.textContent ?? '')`, 'applied');
     const d = await sheetDrill();
     must(d.levels[0].column === 'channel' && d.depth === 0 && d.path.length === 0, `Use did not reset: ${J(d)}`);
+    await ev(`document.querySelector('#toast .toast__close')?.click()`); // an earlier toast must not satisfy the wait below
+    await waitFor(`document.getElementById('toast').hidden`, 'earlier toast dismissed');
     await useHier('Broken');
-    await waitFor(`!document.getElementById('toast').hidden && document.getElementById('toast').textContent.trim() !== ''`, 'a refusal message');
+    await waitFor(`!document.getElementById('toast').hidden`, 'a refusal message');
+    const msg = await ev(`document.querySelector('#toast .toast__text').textContent`);
+    must(msg === "“Broken” can't be used: column nope is no longer in orders.", `refusal text: ${msg}`);
     must((await sheetDrill()).levels[0].column === 'channel', 'a broken hierarchy replaced the drill');
   });
 
-  await check('workbook round trip: exported file carries hierarchies; reopening restores the chips', async () => {
+  await check('workbook round trip: exported file carries hierarchies; reopening restores them in the Hierarchies dialog', async () => {
     await ev(`(() => { window.__blobs = []; const orig = URL.createObjectURL; URL.createObjectURL = (x) => { x.text().then((t) => window.__blobs.push(t)); return orig.call(URL, x); }; return true; })()`);
     await ev(`document.getElementById('wb-menu-btn').click()`);
     await ev(`document.getElementById('wb-export').click()`);

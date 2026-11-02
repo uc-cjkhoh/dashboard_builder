@@ -72,7 +72,7 @@ try {
       return JSON.stringify({ sh: s.height, ih: i.height, sr: s.borderRadius, ir: i.borderRadius, sb: s.borderTopWidth, ib: i.borderTopWidth, sp: s.paddingLeft, ip: i.paddingLeft, sf: s.fontSize, iff: i.fontSize, ap: s.appearance, bi: s.backgroundImage.includes('gradient') }); })()`);
     const o = JSON.parse(r);
     must(o.sh === o.ih && o.sr === o.ir && o.sb === o.ib && o.sp === o.ip && o.sf === o.iff, 'mismatch ' + r);
-    must((o.ap === 'none' && o.bi) || o.ap === 'base-select', 'no custom chevron ' + r); // fallback: a drawn gradient chevron; customizable select: the ::picker-icon
+    must((o.ap === 'none' && o.bi) || (o.ap === 'base-select' && !o.bi), 'no custom chevron ' + r); // fallback: a drawn gradient chevron; customizable select: the ::picker-icon
     for (const scheme of ['light', 'dark']) {
       await b.setScheme(scheme);
       await ev(`document.documentElement.dataset.scheme = ${JSON.stringify(scheme)}`);

@@ -120,6 +120,7 @@ try {
   await check('default is Thin out: a planned label interval (date-axis.js) picks which labels show, toggle not pressed', async () => {
     try { await waitFor(`!!window.echarts?.getInstanceByDom(document.querySelector('.ws-chart-canvas'))`, 'chart drawn'); } catch (e) { await shot('date-nochart.png'); throw e; }
     const a = await axis();
+    // the thinning itself (which labels show, first and last kept) is covered by tests/js date-axis unit tests; here only that the plan is wired
     must(a.planned === true, `axis ${J(a)}`); // Thin out = an interval function from the measured plan; Show all = interval 0
     await openDate(); must(await ev(`${labelsItem}.textContent.trim() === 'Show all date labels' && ${labelsItem}.getAttribute('aria-checked') === 'false'`), 'ticked by default');
     await ev(`document.querySelector('.ctx-menu').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
