@@ -95,6 +95,18 @@ internal static class CalcSql
         : c.Info.Type == CalcType.Boolean ? $"toString({c.Sql})" // a calculated true/false group reads "true"/"false"; a plain Bool field keeps its own spelling
         : c.Sql;
 
+    /// <summary>A calculated filter's row-level SQL and the category its values are coerced to (D82). The condition goes in WHERE, so an
+    /// aggregate tree has no row to test: a 400 naming the calculation.</summary>
+    internal static (string Sql, string Category) CalcFilterSql(CompiledCalc c, string field) => c.Info.IsAggregate
+        ? throw new RequestValidationException("A filter can't contain an aggregate — it is applied to each row before the view is grouped.", field + ".calc")
+        : (c.Sql, c.Info.Type switch
+        {
+            CalcType.Number => ClickHouseType.Numeric,
+            CalcType.Date => ClickHouseType.Temporal,
+            CalcType.Boolean => ClickHouseType.Boolean,
+            _ => ClickHouseType.Text,
+        });
+
     /// <summary>The name a calculated dimension or measure has in the result: its label, or "calculation".</summary>
     internal static string CalcLabel(string? label) =>
         string.IsNullOrEmpty(label) || label.Length > CalcLimits.MaxName ? "calculation" : label;

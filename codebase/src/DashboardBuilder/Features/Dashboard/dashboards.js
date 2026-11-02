@@ -45,7 +45,7 @@ import { sourceOfTable, wireSource, distinctPlan, distinctMembers } from "../Cor
 import { heldOutCards } from "../Relations/relation-rules.js";
 import { keyOf, SCATTER_TYPES, COLOR_USES, colorMode, isDrillActive, drillActiveDim, planDims, planMeasures, sortTargets as planSortTargets, measureName as planMeasureName, buildPlan as planQuery, periodFilters as planPeriodFilters, calcContext, appliedShared as planAppliedShared, withParams, toServerFilter, isDateOnlyType } from "./sheet-plan.js";
 import { catalogFromEntities } from "../Calc/calc-resolve.js";
-import { isCalcPill, makeCalcPill, refusal, syncCalcPills, pillSlots, clearCalcPills, clearFilterCalc, usesCalc, CALC_AGGS } from "../Calc/calc-pill.js";
+import { newCalcFilter, isCalcPill, makeCalcPill, refusal, syncCalcPills, pillSlots, clearCalcPills, clearFilterCalc, usesCalc, CALC_AGGS } from "../Calc/calc-pill.js";
 import { openCalcDialog } from "../Calc/calc-dialog.js";
 import { openGroupDialog } from "../Calc/group-dialog.js";
 import { openSplitDialog } from "../Calc/split-dialog.js";
@@ -60,7 +60,7 @@ import { explainControl } from "../Calc/explain-popover.js";
 import { paneState, deleteCalcPlan, roleChoice, setRoleChoice } from "../Calc/calc-pane-model.js";
 import { checkName } from "../Calc/calc-workbook.js";
 import { calcParamNames } from "../Calc/calc-params.js";
-import { calcProblem, topByRef, topByKey, aggWord } from "../Calc/calc-plan.js";
+import { calcProblem, filterCalcProblem, topByRef, topByKey, aggWord } from "../Calc/calc-plan.js";
 import { REF_CHOICES, TREND_CHOICES, FORECAST_CHOICES, BAND_CHOICES, bandChoice, bandFromChoice, defaultAnalytics, itemsFor, itemActive, addItem, removeItem } from "./analytics-model.js";
 import { castChoices, castLabel, effectiveCategory, syncCastCategories } from "./cast-model.js";
 import { aliasOf, labelOf } from "./member-labels.js";
@@ -1157,7 +1157,7 @@ export function initDashboards() {
     const range = s.period ? periodNotice(s, null) : null;
     if (range) lines.push(`Date range: ${s.period.table}.${s.period.column} — ${range}`);
     for (const f of s.filters.filter((x) => checkFilter(x).state === "ok"))
-      lines.push(`Filter: ${f.table}.${f.column} ${f.op === "notin" ? OP_LABELS.notin : f.op} ${f.values ? f.values.join(f.op === "between" ? " – " : ", ") : f.value}`);
+      lines.push(`Filter: ${nameOf(f)} ${f.op === "notin" ? OP_LABELS.notin : f.op} ${f.values ? f.values.join(f.op === "between" ? " – " : ", ") : f.value}`);
     if (noticeEl && !noticeEl.hidden && noticeEl.textContent) lines.push(noticeEl.textContent);
     lines.push(...calcDefinitionLines(s, calculations, appliedShared()).map((l) => `Calculation: ${l}`));
     const updated = updatedText(lastQueriedAt);
@@ -1601,11 +1601,11 @@ export function initDashboards() {
   // scalar ops, a distinct-values multi-select for `in`, and two bounds for `between`.
   function filterPill(dash, s, f, i, list) {
     const shared = list === sharedFilters;
-    const ops = opsFor(f.category);
+    const ops = opsFor(f.category, { calc: isCalcPill(f) });
     const opList = (ops.includes(f.op) ? ops : [...ops, f.op]).map((v) => [v, OP_LABELS[v] ?? v]);
     const chk = checkFilter(pv(f));
     const ctxId = `${shared ? "shared" : "filter"}:${i}`;
-    const entries = () => bindEntries(filterPillOptions({ ops: opList, op: f.op, shared }), (id) => {
+    const entries = () => bindEntries(filterPillOptions({ ops: opList, op: f.op, shared, canShare: !isCalcPill(f) }), (id) => {
       if (id.startsWith("op:")) {
         f.op = id.slice(3);
         if (f.op === "top" && !f.topBy) { // rank by the first shelf measure until the user picks another
@@ -1793,7 +1793,7 @@ export function initDashboards() {
   function filterValueControl(dash, s, f) {
     if (f.param && f.op !== "top") {
       const sel = el("select", "select select--light ws-pill__paramsel");
-      sel.setAttribute("aria-label", `Parameter for ${f.table}.${f.column}`);
+      sel.setAttribute("aria-label", `Parameter for ${nameOf(f)}`);
       for (const p of paramChoices(f)) sel.add(new Option(`= ${p.name} (${p.value})`, p.id, false, p.id === f.param));
       sel.addEventListener("change", () => { f.param = sel.value; commit(dash, s); });
       const wrap = el("span", "ws-pill__pwrap");
@@ -1803,7 +1803,7 @@ export function initDashboards() {
     if (f.op === "in" || f.op === "notin") {
       const sel = el("select", "select select--light ws-pill__in");
       sel.multiple = true; sel.size = 4;
-      sel.setAttribute("aria-label", `Values for ${f.table}.${f.column}`);
+      sel.setAttribute("aria-label", `Values for ${nameOf(f)}`);
       const wrap = el("span", "ws-pill__in-wrap");
       wrap.append(sel);
       populateDistinct(sel, f);                // async, cached; preselects f.values
@@ -1813,7 +1813,7 @@ export function initDashboards() {
     // Relative date — a period preset; top-N — n, the ranking measure, top or bottom.
     if (f.op === "relative") {
       const choices = PRESET_CHOICES.filter(([v]) => v !== "custom");
-      const sel = select(choices.map(([v]) => v), f.value || "", "ws-pill__rel", `Date range for ${f.table}.${f.column}`);
+      const sel = select(choices.map(([v]) => v), f.value || "", "ws-pill__rel", `Date range for ${nameOf(f)}`);
       if (!f.value) { sel.prepend(new Option("Pick…", "")); sel.value = ""; }
       for (const o of sel.options) { const c = choices.find(([v]) => v === o.value); if (c) o.textContent = c[1].toLowerCase(); }
       sel.addEventListener("change", () => { f.value = sel.value; commit(dash, s); });
@@ -1826,8 +1826,8 @@ export function initDashboards() {
       const hi = el("input", "input ws-pill__val"); hi.placeholder = "To"; hi.value = f.values?.[1] ?? "";
       lo.maxLength = hi.maxLength = LIMITS.filterValue;
       if (f.category === "numeric") lo.inputMode = hi.inputMode = "decimal";
-      lo.setAttribute("aria-label", `From value for ${f.table}.${f.column}`);
-      hi.setAttribute("aria-label", `To value for ${f.table}.${f.column}`);
+      lo.setAttribute("aria-label", `From value for ${nameOf(f)}`);
+      hi.setAttribute("aria-label", `To value for ${nameOf(f)}`);
       const sync = () => { f.values = [lo.value, hi.value]; commit(dash, s); };
       lo.addEventListener("change", sync); hi.addEventListener("change", sync);
       wrap.append(lo, el("span", "ws-pill__range-sep", "–"), hi);
@@ -1837,7 +1837,7 @@ export function initDashboards() {
     val.value = f.value ?? ""; val.maxLength = LIMITS.filterValue;
     val.placeholder = FILTER_PLACEHOLDER[f.category] ?? "Value";
     if (f.category === "numeric") val.inputMode = "decimal";
-    val.setAttribute("aria-label", `Value for ${f.table}.${f.column}`);
+    val.setAttribute("aria-label", `Value for ${nameOf(f)}`);
     val.addEventListener("change", () => { f.value = val.value; commit(dash, s); });
     const bind = paramBinding(dash, s, f);
     if (!bind) return val;
@@ -1849,25 +1849,25 @@ export function initDashboards() {
   // Top-N editor: [top|bottom] [n] by [measure on the shelves].
   function topControl(dash, s, f) {
     const wrap = el("span", "ws-pill__top");
-    const dir = select(["top", "bottom"], f.bottom ? "bottom" : "top", "ws-pill__topdir", `Top or bottom for ${f.table}.${f.column}`);
+    const dir = select(["top", "bottom"], f.bottom ? "bottom" : "top", "ws-pill__topdir", `Top or bottom for ${nameOf(f)}`);
     dir.addEventListener("change", () => { f.bottom = dir.value === "bottom"; commit(dash, s); });
     let n;
     if (f.param) {
       n = el("select", "select select--light ws-pill__paramsel");
-      n.setAttribute("aria-label", `Parameter for how many ${f.table}.${f.column}`);
+      n.setAttribute("aria-label", `Parameter for how many ${nameOf(f)}`);
       for (const p of paramChoices(f)) n.add(new Option(`${p.name} (${p.value})`, p.id, false, p.id === f.param));
       n.addEventListener("change", () => { f.param = n.value; commit(dash, s); });
     } else {
       n = el("input", "input ws-pill__val ws-pill__topn");
       n.value = f.value ?? ""; n.inputMode = "numeric"; n.placeholder = "10"; n.maxLength = 4;
-      n.setAttribute("aria-label", `How many for ${f.table}.${f.column}`);
+      n.setAttribute("aria-label", `How many for ${nameOf(f)}`);
       n.addEventListener("change", () => { f.value = n.value.trim(); commit(dash, s); });
     }
     const measures = planMeasures(s).filter((e) => e.role === "shelf");
     const opts = measures.map((e) => [topByKey(e), measureName({ ...e.field, agg: e.agg })]);
     const cur = f.topBy ? topByKey({ field: typeof f.topBy.calc === "string" ? { calc: f.topBy.calc } : f.topBy, agg: f.topBy.agg ?? (typeof f.topBy.calc === "string" ? undefined : "sum") }) : "";
     const by = el("select", "select select--light ws-pill__topby");
-    by.setAttribute("aria-label", `Rank ${f.table}.${f.column} by`);
+    by.setAttribute("aria-label", `Rank ${nameOf(f)} by`);
     if (!opts.length) by.append(new Option("add a measure to rank by", ""));
     for (const [v, t] of opts) { const o = new Option(`by ${t}`, v); if (v === cur) o.selected = true; by.add(o); }
     // Default to the first shelf measure the first time.
@@ -1966,7 +1966,7 @@ export function initDashboards() {
   function checklist(dash, s, f) {
     const box = el("div", "ws-fcard__list");
     box.append(el("span", "ws-note", "Loading…"));
-    distinctFor(f.db, f.table, f.column).then((vals) => {
+    distinctOf(f).then((vals) => {
       box.replaceChildren();
       const chosen = new Set(f.values ?? []);
       const aliases = metaOf(f).memberAliases;
@@ -1997,7 +1997,7 @@ export function initDashboards() {
     sel.append(new Option("Loading…", ""));
     let note = null; // "first 200" cap note, placed beside the select once it is in the DOM
     try {
-      const vals = await distinctFor(f.db, f.table, f.column);
+      const vals = await distinctOf(f);
       sel.replaceChildren();
       const chosen = new Set(f.values ?? []);
       for (const v of vals.slice(0, DISTINCT_SHOWN)) {
@@ -2016,6 +2016,19 @@ export function initDashboards() {
   }
   const DISTINCT_SHOWN = 200, DISTINCT_FETCH = DISTINCT_SHOWN + 1; // ask for one extra to know whether more exist
   const distinctCache = new Map();
+  // A filter's members: a plain column's distinct values, or a calculated field's — its groups from a one-dimension query, in the
+  // same bounded shape (the calculation is compiled by the server; nothing is evaluated here).
+  async function distinctOf(f) {
+    if (!isCalcPill(f)) return distinctFor(f.db, f.table, f.column);
+    const plan = buildPlan({ ...emptySheet(), chartType: "table", rows: [{ calc: f.calc, db: "", table: "", column: f.column, category: f.category, role: "dimension" }] }, null);
+    if (!plan) throw new Error("not plannable");
+    const k = `calc:${JSON.stringify([plan.from, plan.joins, plan.rowDimensions])}`;
+    if (!distinctCache.has(k)) {
+      try { distinctCache.set(k, distinctMembers(await api.query({ from: plan.from, ...(plan.source ? { source: plan.source } : {}), joins: plan.joins, rowDimensions: plan.rowDimensions, columnDimensions: [], measures: [], filters: [], limit: DISTINCT_FETCH, sort: { column: "k0", desc: false } }))); }
+      catch (e) { distinctCache.delete(k); throw e; }
+    }
+    return distinctCache.get(k);
+  }
   async function distinctFor(db, table, column) {
     const k = `${db}.${table}.${column}`;
     if (!distinctCache.has(k)) {
@@ -2094,7 +2107,11 @@ export function initDashboards() {
     const refused = refusal(f, "filter");
     if (refused) { toast(refused, "info"); return; }
     if (dash.sheet.filters.length >= LIMITS.filters) { toast(`A view can have at most ${LIMITS.filters} filters.`, "info"); return; }
-    dash.sheet.filters.push({ db: f.db, table: f.table, column: f.column, category: f.category, op: "=", value: "" });
+    if (isCalcPill(f)) { // row-level only (D82): an aggregate calculation is named and refused
+      const problem = filterCalcProblem(f, calcFieldCtx());
+      if (problem) { toast(problem, "info"); return; }
+      dash.sheet.filters.push(newCalcFilter(f));
+    } else dash.sheet.filters.push({ db: f.db, table: f.table, column: f.column, category: f.category, op: "=", value: "" });
     commit(dash, dash.sheet);
   }
   // Drop a field onto Color. A categorical field is discrete (group-by → coloured

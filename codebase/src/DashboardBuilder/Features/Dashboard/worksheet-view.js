@@ -273,7 +273,7 @@ export function createWorksheetView(container, getContext, options = {}) {
     // reported in the notice.
     const { apply: filters, ignored } = statFilters(s.filters.map((f) => withParams(f, c.plan)), db, table, (f) => toServerFilter(f, c.plan));
     const kind = s.chartType === "histogram" ? "histogram" : "box plot";
-    const ignoredNote = ignored > 0 ? `${ignored} filter${ignored === 1 ? "" : "s"} on other tables ${ignored === 1 ? "doesn't" : "don't"} apply to a ${kind}.` : null;
+    const ignoredNote = ignored > 0 ? `${ignored} filter${ignored === 1 ? "" : "s"} on other tables or calculated fields ${ignored === 1 ? "doesn't" : "don't"} apply to a ${kind}.` : null;
     const format = s.format ?? defaultFormat();
 
     if (s.chartType === "histogram") {

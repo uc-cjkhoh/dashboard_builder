@@ -29,10 +29,10 @@ export function fieldPillOptions({ measure, aggs, agg, roleFlip, numeric, tableC
 }
 
 /** A filter pill: operator, shared across dashboards, and the value editor (a custom row). */
-export function filterPillOptions({ ops, op, shared }) {
+export function filterPillOptions({ ops, op, shared, canShare = true }) {
   return [...ops.map(([v, label]) => ({ id: `op:${v}`, type: "radio", label, checked: v === op })),
-    sep, { id: "share", type: "check", label: "Apply on every dashboard", checked: Boolean(shared) },
-    sep, { id: "value", type: "custom" }].filter((e, i, a) => !(e.type === "sep" && a[i + 1]?.type === "sep"));
+    sep, ...(canShare ? [{ id: "share", type: "check", label: "Apply on every dashboard", checked: Boolean(shared) }, sep] : []),
+    { id: "value", type: "custom" }].filter((e, i, a) => !(e.type === "sep" && a[i + 1]?.type === "sep"));
 }
 
 /** The Marks slots as rows of `cols` (the last row padded with null). */

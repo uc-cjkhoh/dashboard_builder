@@ -25,6 +25,7 @@ export function usedCalculations(sheet, calcs, sharedFilters = []) {
   };
   for (const f of pillSlots(sheet)) if (isCalcPill(f)) add(byId.get(f.calc));
   for (const f of [...(sheet.filters ?? []), ...sharedFilters]) if (f?.op === "top" && f.topBy?.calc) add(byId.get(f.topBy.calc));
+  for (const f of sheet.filters ?? []) if (isCalcPill(f)) add(byId.get(f.calc)); // a filter ON a calculation
   return (calcs ?? []).filter((c) => used.has(c.id));
 }
 

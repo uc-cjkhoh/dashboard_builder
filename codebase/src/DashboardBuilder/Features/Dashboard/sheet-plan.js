@@ -9,7 +9,7 @@ import { planJoinType } from "../Relations/relation-rules.js";
 import { catalogFromEntities } from "../Calc/calc-resolve.js";
 import { isCalcPill, calcPillId } from "../Calc/calc-pill.js";
 import { sourceOfTable, sourceProblem, wireSource } from "../Core/source-model.js";
-import { wireDim, wireMeasure, planTables, measureLabel, wireTopBy, resolveSortTarget } from "../Calc/calc-plan.js";
+import { wireDim, wireMeasure, planTables, measureLabel, wireTopBy, wireCalcFilter, resolveSortTarget } from "../Calc/calc-plan.js";
 
 // The worksheet query plan — pure and DOM-free (tests/js/sheet-plan.test.mjs). Everything the plan reads
 // beyond the sheet arrives in an explicit context, so one worksheet or several can be planned side by side:
@@ -41,7 +41,7 @@ const dateOnly = (ctx, db, table, column) => isDateOnlyType(ctx.columnType(db, t
 
 /** A client filter as the server QueryFilter (relative dates -> a bound `between`, top-N with its ranking measure). */
 export const toServerFilter = (f, ctx) => serverFilter(f, {
-  resolve: (preset) => resolveRange({ preset }), dateOnly: dateOnly(ctx, f.db, f.table, f.column), wireTopBy: (t) => wireTopBy(t, calcContext(ctx)) });
+  resolve: (preset) => resolveRange({ preset }), dateOnly: dateOnly(ctx, f.db, f.table, f.column), wireTopBy: (t) => wireTopBy(t, calcContext(ctx)), wireCalc: (c) => wireCalcFilter(c, calcContext(ctx)) });
 
 /** Display name of a measure — matches the server's measure naming (alias; a calculated field is just its name). */
 export const measureName = (f, ctx) => measureLabel(f, ctx.calculations, ctx.metaOf(f).alias);

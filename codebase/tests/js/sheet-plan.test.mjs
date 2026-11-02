@@ -155,3 +155,15 @@ test("buildPlan: a compound relationship sends its extra pairs, swapped when cro
   const plain = buildPlan(sheet({ columns: [dim("orders", "region")], rows: [meas("customers", "id")] }), undefined, mkCtx({ relationships: new Map([["r1", { ...rel, pairs: undefined }]]) }));
   assert.equal("pairs" in plain.joins[0], false);
 });
+
+test("buildPlan: a calculated filter is wired as its tree, brings its tables in and is skipped when invalid", () => {
+  const calcs = [{ id: "c1", name: "Net", formula: "[orders.id] * 2" }, { id: "c2", name: "Tot", formula: "SUM([orders.id])" }];
+  const f = (id, o = {}) => ({ calc: id, db: "", table: "", column: calcs.find((c) => c.id === id).name, category: "numeric", op: ">", value: "5", ...o });
+  const s = sheet({ columns: [dim("orders", "region")], rows: [meas("orders", "id")], filters: [f("c1"), f("c1", { value: "" })] });
+  const p = buildPlan(s, undefined, mkCtx({ calculations: calcs }));
+  assert.equal(p.filters.length, 1);
+  assert.equal(p.filters[0].calc.k, "bin"); assert.equal(p.filters[0].column, "Net"); assert.equal(p.filters[0].value, "5"); assert.equal(p.filters[0].table, "");
+  // a calculated filter alone is enough to name the base table
+  const alone = sheet({ rows: [meas("orders", "id")], filters: [f("c1")] });
+  assert.deepEqual(buildPlan(alone, undefined, mkCtx({ calculations: calcs })).from, { db: "shop", table: "orders" });
+});
