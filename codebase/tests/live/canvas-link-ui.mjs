@@ -113,14 +113,14 @@ try {
   await chipDrag('created', 'columns'); await chipDrag('amount', 'rows');
   await ev(`document.querySelector('.ws-pick--chart .ws-pick__btn').click()`);
   await ev(`[...document.querySelectorAll('.ws-charttypes [role=menuitemradio]')].find((i) => i.textContent.trim() === 'Bar').click()`);
-  const axis = () => ev(`(() => { const i = window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas')); const o = i.getOption(); const a = [].concat(o.xAxis)[0].type === 'category' ? [].concat(o.xAxis)[0] : [].concat(o.yAxis)[0]; return { interval: a.axisLabel.interval, hide: a.axisLabel.hideOverlap }; })()`);
+  const axis = () => ev(`(() => { const i = window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas')); const o = i.getOption(); const a = [].concat(o.xAxis)[0].type === 'category' ? [].concat(o.xAxis)[0] : [].concat(o.yAxis)[0]; return { interval: a.axisLabel.interval, planned: typeof a.axisLabel.interval === 'function', hide: a.axisLabel.hideOverlap }; })()`);
   const openDate = () => ev(`document.querySelector('.ws-shelf--columns .ws-pill').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 300, clientY: 200 }))`);
   const labelsItem = `document.querySelector('.ctx-menu [role=menuitemcheckbox]')`;
   await waitFor(`!!document.querySelector('.ws-shelf--columns .ws-pill')`, 'date pill shown');
-  await check('default is Thin out: labels may thin (hideOverlap), toggle not pressed', async () => {
+  await check('default is Thin out: a planned label interval (date-axis.js) picks which labels show, toggle not pressed', async () => {
     try { await waitFor(`!!window.echarts?.getInstanceByDom(document.querySelector('.ws-chart-canvas'))`, 'chart drawn'); } catch (e) { await shot('date-nochart.png'); throw e; }
     const a = await axis();
-    must(a.hide === true, `axis ${J(a)}`);
+    must(a.planned === true, `axis ${J(a)}`); // Thin out = an interval function from the measured plan; Show all = interval 0
     await openDate(); must(await ev(`${labelsItem}.textContent.trim() === 'Show all date labels' && ${labelsItem}.getAttribute('aria-checked') === 'false'`), 'ticked by default');
     await ev(`document.querySelector('.ctx-menu').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
     await shot('date-thin.png');

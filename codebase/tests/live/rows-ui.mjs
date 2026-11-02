@@ -215,6 +215,10 @@ try {
   await check('View data of a selected mark: adds a bound = on the mark, even when the action is Exclude', async () => {
     const pt = await ev(`(() => { const host = document.querySelector('#ws-chart'); const el = [...host.querySelectorAll('*')].find((n) => window.echarts.getInstanceByDom(n)); const inst = window.echarts.getInstanceByDom(el);
       const r = inst.getDom().getBoundingClientRect(); const [px, py] = inst.convertToPixel({ seriesIndex: 0 }, [5, 'EU']); return { x: r.left + px, y: r.top + py }; })()`);
+    // the filter operator popup and the export menu stay open after a pick; a real click on a mark would only dismiss them, so close them first
+    await ev(`document.querySelector('.ctx-menu')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
+    await b.key('Escape', { vk: 27 });
+    await waitFor(`!document.querySelector('.ctx-menu') && document.querySelector('.ws-export .menu__list').hidden`, 'menus closed');
     await b.click(pt.x, pt.y);
     await waitFor(`document.querySelector('.ws-select') !== null`, 'selection chip');
     const label = await ev(`document.querySelector('.ws-select__label').textContent`);

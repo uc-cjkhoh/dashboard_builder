@@ -150,15 +150,15 @@ try {
     await shot('chart-menu-light.png');
     await ev(`document.querySelector('.ws-pick--chart .ws-pick__btn').click()`);
   });
-  await check('field groups share one design: Calculated fields, Hierarchies and the table are chevron details', async () => {
-    must(await ev(`['.calc-group', '.hier-group', '.ws-table'].every((s) => { const g = document.querySelector('#ws-fields ' + s); return g && g.tagName === 'DETAILS' && g.querySelector(':scope > summary.ws-group__head .icon'); })`), 'details + chevron');
-    must(await ev(`(() => { const a = ['.calc-group', '.hier-group', '.ws-table'].map((s) => getComputedStyle(document.querySelector('#ws-fields ' + s + ' > summary'))); return a.every((c) => c.fontWeight === a[0].fontWeight && c.fontSize === a[0].fontSize); })()`), 'same header style');
+  await check('the table tiles are chevron details with one header style (Calculated fields and Hierarchies are sidebar dialogs, not pane groups)', async () => {
+    must(await ev(`!document.querySelector('#ws-fields .calc-group, #ws-fields .hier-group') && document.querySelectorAll('#ws-fields .ws-table').length > 0 && [...document.querySelectorAll('#ws-fields .ws-table')].every((g) => g.tagName === 'DETAILS' && g.querySelector(':scope > summary.ws-group__head .icon'))`), 'details + chevron');
+    must(await ev(`(() => { const a = [...document.querySelectorAll('#ws-fields .ws-table > summary')].map((e) => getComputedStyle(e)); return a.every((c) => c.fontWeight === a[0].fontWeight && c.fontSize === a[0].fontSize); })()`), 'same header style');
     await ev(`document.querySelector('#ws-fields .ws-table > summary').click()`);
     must(await ev(`!document.querySelector('#ws-fields .ws-table').open`), 'collapses');
     await ev(`document.querySelector('#ws-fields .ws-table > summary').click()`);
   });
-  await check('Marks: a grid of three columns in the field pane after Hierarchies; a field dropped on a slot lands in it', async () => {
-    must(await ev(`(() => { const m = document.querySelector('#ws-fields .ws-shelf--marks'); const h = document.querySelector('#ws-fields .hier-group'); return !!m && !!(h.compareDocumentPosition(m) & Node.DOCUMENT_POSITION_FOLLOWING); })()`), 'after Hierarchies');
+  await check('Marks: a grid of three columns at the top of the field pane, before the tables; a field dropped on a slot lands in it', async () => {
+    must(await ev(`(() => { const m = document.querySelector('#ws-fields .ws-shelf--marks'); const t = document.querySelector('#ws-fields .ws-table'); return !!m && !!t && !!(m.compareDocumentPosition(t) & Node.DOCUMENT_POSITION_FOLLOWING); })()`), 'before the tables');
     must(await ev(`!document.querySelector('#ws-shelves .ws-shelf--marks')`), 'still in the header');
     must(await ev(`[...document.querySelectorAll('.ws-marks__row')].every((r) => getComputedStyle(r).gridTemplateColumns.split(' ').length === 3) && document.querySelectorAll('.ws-marks__row .ws-tool').length >= 8`), '3-col rows');
     await ev(`(() => { const c = __t.chip('channel'); const t = document.querySelector('.ws-tool[aria-label^="Color"]'); __t.drag(c, t); return true; })()`);
