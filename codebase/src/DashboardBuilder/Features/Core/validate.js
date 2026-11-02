@@ -30,6 +30,7 @@ export const LIMITS = Object.freeze({
   cleanRecode: 20,   // values one Clean… recode lists (client-side only)
   calcFormula: 500,  // characters in a formula (the server never sees formula text)
   tooltipText: 300,  // characters in a sheet's tooltip template (client-side only, the server never sees it)
+  tooltipFormats: 24, // fields with their own tooltip number / date format (client-side only)
   tooltipLines: 12,  // lines a styled tooltip template covers (tooltip modal; client-side only)
   memberColors: 100,      // coloured members per field (client-side only)
   memberColorFields: 20,  // fields with member colours per sheet

@@ -43,7 +43,7 @@ test("a field name that is itself HTML is escaped as a key lookup only", () => {
 });
 test("tooltipCatalog lists dims then measures with the first mark's sample", () => {
   const cat = tooltipCatalog([{ name: "t.c", values: ["A", "B"] }], ["sum(x)"], ["10"]);
-  assert.deepEqual(cat, [{ name: "t.c", sample: "A" }, { name: "sum(x)", sample: "10" }]);
+  assert.deepEqual(cat, [{ name: "t.c", sample: "A", kind: "dim" }, { name: "sum(x)", sample: "10", kind: "measure" }]);
 });
 test("workbook round-trips tooltipText; bad or over-long text is dropped with an issue", () => {
   const issues = [];

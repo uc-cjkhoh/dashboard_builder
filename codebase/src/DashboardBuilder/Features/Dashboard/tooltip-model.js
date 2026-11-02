@@ -60,12 +60,12 @@ export function tooltipHtml(text, lookup, style = null) {
   return lines.map((h, i) => { const css = lineStyleCss(style?.[i]); return css ? `<span style="${css}">${h}</span>` : h; }).join("<br>");
 }
 
-/** The fields an editor can offer, with a sample (first mark) value: group-by / mark fields
+/** The fields an editor can offer, with a sample (first mark) value (measures also their raw value, for per-field formats): group-by / mark fields
  *  ({ name, values }) first, then the measures (`measureNames` with the first row's `measureSamples`). */
-export function tooltipCatalog(dimFields, measureNames, measureSamples) {
+export function tooltipCatalog(dimFields, measureNames, measureSamples, measureRaw = []) {
   const seen = new Set();
   const out = [];
-  for (const f of dimFields ?? []) if (!seen.has(f.name)) { seen.add(f.name); out.push({ name: f.name, sample: String(f.values?.[0] ?? "") }); }
-  (measureNames ?? []).forEach((n, i) => { if (!seen.has(n)) { seen.add(n); out.push({ name: n, sample: String(measureSamples?.[i] ?? "") }); } });
+  for (const f of dimFields ?? []) if (!seen.has(f.name)) { seen.add(f.name); out.push({ name: f.name, sample: String(f.values?.[0] ?? ""), kind: "dim" }); }
+  (measureNames ?? []).forEach((n, i) => { if (!seen.has(n)) { seen.add(n); out.push({ name: n, sample: String(measureSamples?.[i] ?? ""), kind: "measure", ...(measureRaw[i] !== undefined ? { raw: measureRaw[i] } : {}) }); } });
   return out;
 }

@@ -36,7 +36,7 @@ function answer({ method, path, body }) {
     return { json: {
       rowDimensions: (body.rowDimensions ?? []).map((d) => d.column), columnDimensions: (body.columnDimensions ?? []).map((d) => d.column),
       measures: (body.measures ?? []).map((_, i) => `v${i}`),
-      rows: Array.from({ length: n }, (_, r) => ({ keys: dims.map(() => REGIONS[r]), values: (body.measures ?? []).map((_, i) => 10 * (r + 1) + i) })),
+      rows: Array.from({ length: n }, (_, r) => ({ keys: dims.map((d) => (d.column === 'placed' ? ['2024-03-15', '2024-04-15', '2024-05-15'][r] : REGIONS[r])), values: (body.measures ?? []).map((_, i) => 10 * (r + 1) + i) })),
       truncated: false } };
   }
   return null;
@@ -281,6 +281,60 @@ try {
     await tipText('only one line');
     const html = await showTip();
     must(!html.includes('var(--ok-ink)'), `style should be cleared when the line count changed: ${html}`);
+  });
+
+  const applyBtn = `[...document.querySelectorAll('.tipdlg .dialog__foot button')].find((x) => x.textContent === 'Apply')`;
+  const fsel = (label, v) => ev(`(() => { const s = document.querySelector('.tipdlg select[aria-label=${J(label)}]'); if (!s) throw new Error('no select ${label}'); s.value = ${J(v)}; s.dispatchEvent(new Event('change')); return true; })()`);
+  let measureName = '';
+  await check('the modal offers a per-field number format for a measure; preview and chart tooltip apply it; Apply is one undo step', async () => {
+    await tipText('<orders.region>: <v0>'); // the mock names the measure v0
+    await ev(`document.querySelector('.ws-tipedit__modal').click()`);
+    await waitFor(`${tdlg} !== null`, 'modal');
+    const sels = await ev(`[...document.querySelectorAll('.tipdlg__formats select')].map((s) => s.getAttribute('aria-label'))`);
+    measureName = (sels.find((l) => l.startsWith('Number format for ')) ?? '').slice('Number format for '.length);
+    must(measureName && sels.includes(`Decimals for ${measureName}`), `format controls: ${J(sels)}`);
+    must(!sels.some((l) => l.startsWith('Date format')), 'a text group-by gets no date format');
+    const before = await ev(`document.querySelector('.tipdlg__preview').textContent`);
+    await fsel(`Number format for ${measureName}`, 'percent');
+    await fsel(`Decimals for ${measureName}`, '1');
+    const after = await ev(`document.querySelector('.tipdlg__preview').textContent`);
+    must(after !== before && after.includes('%') && after.includes('.0%'), `preview: ${before} -> ${after}`);
+    await shot('tooltip-formats-light.png');
+    await ev(`${applyBtn}.click()`);
+    await waitFor(`${tdlg} === null`, 'closed');
+    const html = await showTip();
+    must(html.includes('<b>EU</b>') && html.includes('2,000.0%'), `chart tooltip: ${html}`);
+    await ev(`document.querySelector('button[aria-label^="Undo"]').click()`);
+    await settle(300);
+    const h2 = await showTip();
+    must(!h2.includes('%'), `undo restores the view format: ${h2}`);
+    await ev(`document.querySelector('button[aria-label^="Redo"]').click()`);
+    await settle(300);
+  });
+
+  await check('a date group-by gets a date format; dark theme; formats are dropped when the field leaves the template', async () => {
+    await ev(`(() => { const c = __t.chip('placed'); __t.drag(c, __t.zone('rows')); return true; })()`);
+    await settle(500);
+    await ev(`document.querySelector('.ws-tipedit__modal').click()`);
+    await waitFor(`${tdlg} !== null`, 'modal');
+    await ev(`document.querySelector('.tipdlg__chips button[title*="placed"]').click()`);
+    const sels = await ev(`[...document.querySelectorAll('.tipdlg__formats select')].map((s) => s.getAttribute('aria-label'))`);
+    must(sels.some((l) => l.startsWith('Date format for ')), `date control: ${J(sels)}`);
+    await fsel(sels.find((l) => l.startsWith('Date format for ')), 'year');
+    must(/\b2024\b/.test(await ev(`document.querySelector('.tipdlg__preview').textContent`)) && !(await ev(`document.querySelector('.tipdlg__preview').textContent`)).includes('2024-'), 'preview shows the year only');
+    await ev(`document.documentElement.setAttribute('data-scheme', 'dark')`);
+    await b.sleep(500);
+    await shot('tooltip-formats-dark.png');
+    await ev(`document.documentElement.removeAttribute('data-scheme')`);
+    await ev(`${applyBtn}.click()`);
+    await waitFor(`${tdlg} === null`, 'closed');
+    await tipText('only <orders.region>');
+    await ev(`document.querySelector('.ws-tipedit__modal').click()`);
+    await waitFor(`${tdlg} !== null`, 'modal');
+    must(await ev(`document.querySelector('.tipdlg__formats').hidden`), 'no field to format -> the section is hidden');
+    await ev(`document.querySelector('.tipdlg__reset').click()`);
+    await key('Escape');
+    await waitFor(`${tdlg} === null`, 'closed');
   });
 
   await check('dark theme renders the editor', async () => {

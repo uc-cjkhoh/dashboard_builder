@@ -224,6 +224,7 @@ export const emptySheet = () => ({
   period: null,
   memberColors: {}, // { [table.column]: { [member]: "#rrggbb" } } (Dashboard/colour-model.js)
   // tooltipStyle (tooltip modal): per-line { size, bold, italic, color } aligned to tooltipText's lines (Dashboard/tooltip-style.js); the key exists only once a line is styled
+  // tooltipFormats: { [field name]: { number?, decimals?, date? } } per-field tooltip formats (Dashboard/tooltip-formats.js); the key exists only once a field is formatted
   tooltipText: null, // tooltip template with <Field> placeholders (Dashboard/tooltip-model.js); null = automatic
   title: null, caption: null, showTitle: true, showFilterCards: true, // title / caption: null = the tab name / an automatic summary; filter cards above the chart
   // collapsed: crosstab headers shown collapsed { rows: [key…], cols: [key…] } (Dashboard/collapse-model.js); the key exists only once a header is collapsed
