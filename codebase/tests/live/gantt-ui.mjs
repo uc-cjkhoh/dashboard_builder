@@ -37,7 +37,7 @@ function answer({ method, path, body }) {
     return { json: {
       rowDimensions: (body.rowDimensions ?? []).map((d) => d.column), columnDimensions: (body.columnDimensions ?? []).map((d) => d.column),
       measures: (body.measures ?? []).map((_, i) => `v${i}`),
-      rows: combos.map((keys, r) => ({ keys, values: (body.measures ?? []).map((m, i) => (m.column === 'placed' ? `2026-02-0${r + 1}` : i === 0 ? 10 * (r + 1) : 3 * (r + 1))) })),
+      rows: combos.map((keys, r) => ({ keys, values: (body.measures ?? []).map((m, i) => (m.column === 'placed' ? `2026-02-0${r + 1}` : i === 0 ? 10 * (r + 1) : (m.agg === 'avg' ? 1234567.5 : 3) * (r + 1))) })),
       truncated: false } };
   }
   return null;
@@ -175,6 +175,12 @@ try {
     must(o.legend[0].data.length === 1, 'legend names the length measure');
     const txt = await ev(`document.querySelector('.ws-chart-canvas').textContent`);
     must(/3 days/.test(txt) && /6 days/.test(txt), `length written at each bar: ${txt.slice(0, 120)}`);
+    // the one-item legend is not a toggle: clicking it keeps the bars
+    const r = await ev(`(() => { const r = document.querySelector('.ws-chart-canvas').getBoundingClientRect(); return [r.x + r.width / 2, r.y + 14]; })()`);
+    for (const type of ['mousePressed', 'mouseReleased']) await b.send('Input.dispatchMouseEvent', { type, x: r[0] - 8, y: r[1], button: 'left', clickCount: 1 });
+    await settle(300);
+    must((await opt()).legend[0].selectedMode === false, 'legend selectedMode false');
+    must(await ev(`/3 days/.test(document.querySelector('.ws-chart-canvas').textContent)`), 'bars still drawn after a legend click');
     await shot('gantt-date-light.png');
     await theme('dark'); await setType('Bar'); await setType('Gantt'); await chartReady(); await shot('gantt-date-dark.png'); await theme('light'); await setType('Bar'); await setType('Gantt'); await chartReady();
     must(!(await ev(`document.getElementById('ws-chart').textContent`)).includes('Gantt draws'), 'no hint');
@@ -194,8 +200,17 @@ try {
     const o = await opt();
     const s = o.series.find((x) => x.type === 'custom');
     must(o.xAxis[0].type === 'value' && J(s.data.map((d) => [d[1], d[2]])) === J([[10, 13], [20, 26], [30, 39]]), `numeric bars ${J(s.data)}`);
+    // a long length label keeps its room: the grid's right margin grows
     await shot('gantt-numeric-light.png');
     await theme('dark'); await setType('Bar'); await setType('Gantt'); await chartReady(); await shot('gantt-numeric-dark.png'); await theme('light');
+  });
+  await check('Gantt: a long length label (1,234,567.5) is not clipped: the right margin grows to fit it', async () => {
+    await setAgg('.ws-shelf--columns .ws-pill:nth-child(2)', 'avg'); await chartReady();
+    const o = await opt();
+    must(o.grid[0].right > 56, `right margin ${o.grid[0].right}`);
+    const w = await ev(`(() => { const i = window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas')); return i.getWidth(); })()`);
+    must(w > o.grid[0].right, 'chart wider than the margin');
+    await shot('gantt-long-label-light.png');
   });
   if (b.consoleErrors.length) console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  '));
 } catch (e) {

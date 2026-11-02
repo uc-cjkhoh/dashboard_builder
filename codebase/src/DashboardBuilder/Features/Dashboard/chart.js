@@ -9,7 +9,7 @@ import { syncRange, secondaryKind, dualAxisOn, rightAxisTitle, seriesAxis } from
 import { markBorder, markerSizeOr, markerSymbol, edgeOr } from "./mark-style-model.js";
 import { circleSize, circleCells, HEATMAP_GUTTER } from "./heatmap-model.js";
 import { bandsFor } from "./bullet-model.js";
-import { ganttTime } from "./gantt-model.js";
+import { ganttTime, ganttAxisTime, ganttLabelMargin } from "./gantt-model.js";
 import { boxData, outlierPoints } from "./box-model.js";
 import { chartFit, markCount, applyFitMode, FIT } from "./chart-fit.js";
 import { applySelectionDim } from "./selection-dim.js";
@@ -1094,15 +1094,16 @@ function buildGantt({ categories, gantt, name, format = {} }) {
   const at = (v) => (isDate ? ganttTime(v, hasTime) : fmtVal(v));
   const len = (b) => (isDate ? `${fmtVal(b.duration)} ${b.duration === 1 ? "day" : "days"}` : fmtVal(b.duration));
   const label = name || "Length";
+  const axisTime = ganttAxisTime(bars, hasTime);
   return {
     color: [c.cat[0]],
     textStyle: { fontFamily: c.font, color: c.label },
-    legend: { top: 0, left: "center", data: [label], textStyle: { color: c.label, fontFamily: c.font }, icon: "roundRect" },
-    grid: { left: 6, right: 56, top: 36, bottom: 6, containLabel: true },
+    legend: { top: 0, left: "center", data: [label], selectedMode: false, textStyle: { color: c.label, fontFamily: c.font }, icon: "roundRect" },
+    grid: { left: 6, right: ganttLabelMargin(bars.map(len)), top: 36, bottom: 6, containLabel: true },
     tooltip: { trigger: "item", ...tipBox(c),
       formatter: (p) => { const b = bars[p.dataIndex]; return b ? `<span style="color:${c.muted}">${escapeHtml(String(b.name ?? ""))}</span><br>${at(b.start)} → ${at(b.end)}<br><b>${escapeHtml(label)}:</b> ${len(b)}` : ""; } },
     xAxis: valueAxis(c, isDate ? undefined : fmtVal, isDate
-      ? { type: "time", axisLabel: { color: c.muted, formatter: (v) => ganttTime(v, false), hideOverlap: true } } : { scale: true }),
+      ? { type: "time", axisLabel: { color: c.muted, formatter: (v) => ganttTime(v, axisTime), hideOverlap: true } } : { scale: true }),
     yAxis: catAxis(c, categories ?? [], { inverse: true }),
     series: [
       { type: "custom", name: label, data: bars.map((b) => [b.i, b.start, b.end]), encode: { x: [1, 2], y: 0 },

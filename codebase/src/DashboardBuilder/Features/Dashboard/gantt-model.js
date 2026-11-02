@@ -14,6 +14,15 @@ function parseDate(v) {
   return Number.isFinite(ms) ? { ms, time: Boolean(h || mi || s) } : null;
 }
 
+/** `start` plus `days` calendar days (the whole part moves the local date, so a DST change keeps the clock time). */
+function addDays(start, days) {
+  const whole = Math.trunc(days);
+  const t = new Date(start);
+  t.setDate(t.getDate() + whole);
+  const ms = t.getTime() + (days - whole) * DAY;
+  return Number.isFinite(new Date(ms).getTime()) ? ms : NaN;
+}
+
 /**
  * @returns {{ bars: {i, name, start, end, duration}[], isDate: boolean, hasTime: boolean, skipped: number }}
  * `i` is the row's slot on the category axis (the original index, so skipped rows leave no gap).
@@ -31,7 +40,9 @@ export function ganttBars(categories, starts, durations) {
     else if (raw != null && raw !== "" && Number.isFinite(Number(raw))) start = Number(raw);
     if (start == null || !Number.isFinite(d) || d < 0) return;
     if (isDate && dates[i].time) hasTime = true;
-    bars.push({ i, name, start, end: start + (isDate ? d * DAY : d), duration: d });
+    const end = isDate ? addDays(start, d) : start + d;
+    if (!Number.isFinite(end)) return; // a length too large to place
+    bars.push({ i, name, start, end, duration: d });
   });
   return { bars, isDate, hasTime, skipped: categories.length - bars.length };
 }
@@ -47,3 +58,13 @@ export function ganttTime(ms, withTime) {
 /** The notice for skipped rows, or null. */
 export const ganttNotice = (skipped) => (skipped
   ? `${skipped} ${skipped === 1 ? "row has" : "rows have"} no valid start or a negative length and ${skipped === 1 ? "is" : "are"} not drawn.` : null);
+
+/** Whether the date axis labels carry the time: the bars have a time and together span under three days. */
+export function ganttAxisTime(bars, hasTime) {
+  if (!hasTime || !bars.length) return false;
+  const span = Math.max(...bars.map((b) => b.end)) - Math.min(...bars.map((b) => b.start));
+  return span < 3 * DAY;
+}
+
+/** The grid's right margin in px: room for the widest length label (about 8 px a character), at least 56, at most 240. */
+export const ganttLabelMargin = (labels) => Math.min(240, Math.max(56, Math.max(0, ...labels.map((l) => String(l).length)) * 8 + 12));
