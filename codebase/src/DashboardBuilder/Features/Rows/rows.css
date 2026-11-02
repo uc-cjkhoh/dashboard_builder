@@ -40,7 +40,6 @@
 .unpivot-dialog__list { display: grid; gap: var(--s2); max-height: 30vh; overflow: auto; align-content: start; }
 .unpivot-dialog__head { font-size: var(--fs-body); font-weight: 600; margin-bottom: var(--s1); }
 .unpivot-dialog__type { color: var(--ink-3); }
-@media (max-width: 480px) { .unpivot-dialog__cols { grid-template-columns: 1fr; } }
 
 /* Split dialog (Calc): a separator and a piece count. */
 .split-dialog { width: min(420px, calc(100vw - 2 * var(--s4))); }

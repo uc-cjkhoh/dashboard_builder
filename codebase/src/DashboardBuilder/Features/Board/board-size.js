@@ -1,5 +1,4 @@
-// Dashboard size — pure, DOM-free (tests/js/board-size.test.mjs). A dashboard is Automatic (null: the board fills its panel and
-// stacks at phone width) or fixed ({ width, height } in whole pixels: the board is exactly that box, scrolling inside the panel
+// Dashboard size — pure, DOM-free (tests/js/board-size.test.mjs). A dashboard is Automatic (null: the board fills its panel) or fixed ({ width, height } in whole pixels: the board is exactly that box, scrolling inside the panel
 // when the window is smaller). Saved in workbook v2 as an optional `size` on the dashboard; absent = Automatic.
 export const SIZE_LIMITS = Object.freeze({ minW: 320, maxW: 3840, minH: 240, maxH: 2400 });
 

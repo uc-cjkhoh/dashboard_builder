@@ -2,7 +2,7 @@
 // events (snap to cells, a ghost while dragging, an overlapping or out-of-grid drop snaps back with a status message and changes
 // nothing); keyboard arrows / Shift+arrows with the live status; inline text edit (labels, limits, Save / Cancel / Esc); undo and
 // redo of every edit type, by button and Ctrl+Z / Ctrl+Y (not while typing); dragging a worksheet from the side panel onto the
-// canvas; pointercancel / blur mid-drag leave no ghost; no drag on a stacked canvas. Real dev app (APP_URL), every /api/* mocked;
+// canvas; pointercancel / blur mid-drag leave no ghost. Real dev app (APP_URL), every /api/* mocked;
 // any page error fails the run. History is in memory only: a reload keeps the layout (autosave) but not the undo steps.
 // Screenshots (light + dark: ghost mid-drag, a refused ghost, focus ring) go to SHOTS_DIR.
 import { launch } from './cdp.mjs';
@@ -334,20 +334,6 @@ try {
     const p = await headPoint('A');
     await drag(p, 0, 0); // a click
     must((await ghost()) === null, 'ghost after a click');
-  });
-
-  await check('on a stacked (phone-width) canvas there is no drag and no corner grip; keyboard still works', async () => {
-    await b.send('Emulation.setDeviceMetricsOverride', { width: 600, height: 800, deviceScaleFactor: 1, mobile: false });
-    await b.sleep(400);
-    const before = await cells();
-    const p = await headPoint('A');
-    await drag(p, 0, 120, { release: false });
-    must((await ghost()) === null, 'ghost on a stacked canvas');
-    await mouse('mouseReleased', p.x, p.y + 120);
-    must(J(await cells()) === J(before), 'moved on a stacked canvas');
-    must(await ev(`getComputedStyle(document.querySelector('.board-widget__resize')).display === 'none'`), 'grip shown');
-    await b.send('Emulation.setDeviceMetricsOverride', { width: 1400, height: 900, deviceScaleFactor: 1, mobile: false });
-    await b.sleep(400);
   });
 
   await check('undo / redo walks every edit back and forward in order (buttons), one step each', async () => {

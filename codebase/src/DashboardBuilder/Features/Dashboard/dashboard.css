@@ -231,7 +231,6 @@
 .ws-tool.is-active { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); font-weight: 600;
   box-shadow: inset 0 -2px 0 var(--accent); }
 .ws-tool:disabled { opacity: .5; cursor: not-allowed; }
-@media (pointer: coarse) { .ws-tool, .ws-pick__btn { min-height: 44px; } }
 .ws-tool.is-set { color: var(--accent-ink); }
 .ws-tool__text { line-height: 1; }
 .ws-tool.is-over { outline: 1px dashed var(--accent); background: var(--accent-soft); }
@@ -445,37 +444,11 @@
 .ws-cf__num { width: 96px; }
 .ws-cf__add { justify-self: start; }
 
-/* ---- P41 presentation: full screen, print, phone ------------------------- */
+/* ---- P41 presentation: full screen, print ------------------------- */
 /* Full screen: the chart card alone, edge to edge (Fullscreen API, or the .is-presenting fallback). */
 .ws-chart-card:fullscreen, .ws-chart-card.is-presenting { border: 0; background: var(--surface); }
 .ws-chart-card.is-presenting { position: fixed; inset: 0; z-index: 50; }
 .ws-chart-card:fullscreen .ws-chart, .ws-chart-card.is-presenting .ws-chart { padding: var(--s6); }
-
-/* The field-pane toggle exists only for the phone layout. */
-.ws-fields-toggle { display: none; justify-self: start; gap: var(--s1); }
-.ws-fields-toggle.is-active { background: var(--accent-soft); border-color: var(--accent); }
-
-/* Phone (≤ 640px): one column — data header, then the chart card at a usable height; the main column
-   scrolls inside itself (the page still never does). The field pane opens over it from "Fields". */
-@media (max-width: 640px) {
-  .worksheet { grid-template-columns: 1fr; }
-  .ws-fields-collapse { display: none; }
-  .ws-fields__resizer { display: none; }
-  .ws-fields { display: none; position: absolute; inset: 0 auto 0 0; width: min(300px, 86%); z-index: 6;
-    box-shadow: var(--elev-28); }
-  .worksheet.is-fields-open .ws-fields { display: flex; }
-  .ws-fields-toggle { display: inline-flex; }
-  .ws-main { overflow: auto; }
-  .ws-shelves { padding: var(--s2) var(--s2); }
-  .ws-shelf { grid-template-columns: 84px 1fr; }
-  .ws-chart-card { flex: none; min-height: 380px; }
-  .ws-chart-head { padding-inline: var(--s2); }
-  /* The view bar wraps: chart type on its own line, then sort + the icon group sharing the next. */
-  .ws-viewbar__group { flex-wrap: wrap; }  /* the left group wraps instead of running past the card */
-  .ws-viewbar__group--right { margin-left: 0; width: 100%; justify-content: space-between; flex-wrap: wrap; gap: var(--s2); }
-  .ws-viewbar__icons > :last-child { margin-right: 0; }
-  .ws-pick__text { max-width: 140px; }
-}
 
 /* Print / PDF: the active chart card only, with its print header (dashboards.js beginPrint). */
 .ws-print-head { display: none; }
@@ -622,7 +595,7 @@
 .hier-add { display: flex; align-items: end; gap: var(--s2); }
 .hier-add .params-field { flex: 1 1 auto; }
 
-/* Tooltip modal: lines editor left, live preview right (side by side; stacked on a narrow screen). Tokens only. */
+/* Tooltip modal: lines editor left, live preview right (side by side). Tokens only. */
 .dialog.tipdlg:not(.dialog--sm) { width: min(960px, calc(100vw - 2 * var(--s4))); }
 .tipdlg[open] { display: flex; flex-direction: column; max-height: calc(100vh - 2 * var(--s4)); }
 .tipdlg__body { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: var(--s4); overflow: auto; min-height: 0; align-items: start; }
@@ -644,7 +617,6 @@
 .tipdlg__head { font-weight: 600; }
 .tipdlg__preview { padding: var(--s2) var(--s4); border: 1px solid var(--line-2); border-radius: var(--r); background: var(--surface); box-shadow: var(--elev-8); color: var(--ink); font-size: var(--fs-body); overflow-wrap: anywhere; min-height: var(--s6); }
 .tipdlg__reset { margin-right: auto; }
-@media (max-width: 760px) { .tipdlg__body { grid-template-columns: minmax(0, 1fr); } .tipdlg__line { grid-template-columns: minmax(0, 1fr) auto auto auto; } .tipdlg__side { position: static; } }
 
 
 /* ---- Field pane: the fields are the focus ------------------------------------------------------------------------------

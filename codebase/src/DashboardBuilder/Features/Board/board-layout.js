@@ -3,19 +3,14 @@
 // tokens (`calc(var(--ctl-h) * 2)`, `var(--s2)`) and passes them in; nothing here knows a pixel constant of its own.
 //
 //   wide panel     column width = (panel − 11 gaps) / 12; a widget is w columns × h rows, gaps included between cells
-//   narrow panel   below STACK_BELOW the grid is unusable (a 2-column widget would be ~110px), so widgets stack full width
-//                  in reading order (top to bottom, then left to right), each keeping its row count
+//   print          `stack: true` stacks the widgets full width in reading order (top to bottom, then left to right), each
+//                  keeping its row count, so none splits across pages
 import { LIMITS } from "../Core/validate.js";
-
-/** Panel widths under this many pixels stack the widgets (a phone-width board). */
-export const STACK_BELOW = 720;
-
-export const isStacked = (panelWidth) => panelWidth < STACK_BELOW;
 
 /** One column's width in pixels (never negative). */
 export const columnWidth = (panelWidth, gap, cols = LIMITS.gridCols) => Math.max(0, (panelWidth - gap * (cols - 1)) / cols);
 
-/** Reading order: by row, then column (what a stacked board shows). */
+/** Reading order: by row, then column (what a printed, stacked board shows). */
 export const widgetOrder = (widgets) => [...widgets].sort((a, b) => a.y - b.y || a.x - b.x);
 
 const MIN_FIXED_ROW = 16; // px
@@ -29,7 +24,7 @@ export function fixedRowH(widgets, fixed, gap, fallback) {
 const span = (n, unit, gap) => n * unit + (n - 1) * gap;
 
 /**
- * Where every widget sits. `metrics` = { rowH, gap, stack?, fixed? } in pixels; `stack: true` stacks whatever the width (print); `fixed` = { width, height }
+ * Where every widget sits. `metrics` = { rowH, gap, stack?, fixed? } in pixels; `stack: true` stacks the widgets in one column (print); `fixed` = { width, height }
  * lays the board out as exactly that box (never stacked): columns span the width, rows stretch so the lowest widget ends at the height. Returns { stacked, height, rects: Map(id → { left, top, width, height }) };
  * `height` is the canvas height — the bottom of the lowest widget (at most 96 rows).
  */
@@ -42,7 +37,7 @@ export function layoutBoard(widgets, panelWidth, { rowH, gap, stack = false, fix
     return { stacked: false, height: fixed.height, rects };
   }
   const width = Math.max(0, panelWidth);
-  const stacked = stack || isStacked(width);
+  const stacked = stack;
   let height = 0;
   if (stacked) {
     let top = 0;

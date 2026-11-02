@@ -43,11 +43,6 @@
 .board-grid { position: relative; width: 100%; }
 /* A fixed size: exactly the chosen box (board.js sets its width and height); the panel scrolls when the window is smaller. */
 .board-grid.is-fixed { flex: none; }
-/* Device preview: the board is a centred box of the device's width (board.js sets it); the box is outlined so its edges read against the panel. */
-.board-grid.is-preview { margin: 0 auto; outline: 1px solid var(--line-2); outline-offset: var(--s2); }
-.board-device { display: inline-flex; gap: var(--s1); }
-.board-device__btn[aria-pressed="true"] { background: var(--meas-bg); color: var(--meas-ink); border: 2px solid var(--meas-ink); font-weight: 600; }
-.board-device__btn { display: inline-flex; align-items: center; gap: var(--s1); }
 .board-empty { display: grid; justify-items: center; gap: var(--s2); padding: var(--s6) var(--s4); text-align: center; color: var(--ink-2); }
 .board-empty[hidden] { display: none; }
 .board-empty__icon { color: var(--ink-3); }
@@ -70,12 +65,10 @@
 .board-widget__tools { flex: none; display: flex; gap: var(--s1); }
 .board-widget:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .board-widget.is-dragging { opacity: .55; }
-.board-widget__head { cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+.board-widget__head { cursor: grab; user-select: none; -webkit-user-select: none; }
 .board-grid.is-dragging, .board-grid.is-dragging * { cursor: grabbing; user-select: none; -webkit-user-select: none; }
-.board-grid.is-stacked .board-widget__head { cursor: default; touch-action: auto; }
-.board-grid.is-stacked .board-widget__resize { display: none; }
 /* Bottom-right corner grip (pointer resize); the keyboard path is Shift + arrows. A 20px target with a corner mark. */
-.board-widget__resize { position: absolute; right: 0; bottom: 0; width: 20px; height: 20px; cursor: nwse-resize; touch-action: none; z-index: 1;
+.board-widget__resize { position: absolute; right: 0; bottom: 0; width: 20px; height: 20px; cursor: nwse-resize; z-index: 1;
   background: linear-gradient(135deg, transparent 0 55%, var(--ink-3) 55% 62%, transparent 62% 72%, var(--ink-3) 72% 79%, transparent 79%); opacity: .7; }
 .board-widget__resize:hover { opacity: 1; }
 /* The ghost: the cells a drag would land on. Dashed neutral when accepted; the danger tokens + a text label when it would be refused. */
@@ -117,14 +110,6 @@
 .board-text-edit__error { color: var(--danger-ink); font-weight: 600; }
 .board-text-edit__actions { display: flex; gap: var(--s2); }
 .board-text-edit__actions .btn { height: var(--ctl-h); font-size: var(--fs-body); }
-
-/* Phone width: the panel moves above the canvas (a compact, scrolling strip of worksheets); widgets stack (board-layout.js). */
-@media (max-width: 760px) {
-  .board { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
-  .board-panel { border-right: 0; border-bottom: 1px solid var(--line); max-height: 9rem; padding: var(--s2) var(--s2); }
-  .board-bar { padding: var(--s2) var(--s2) 0; flex-wrap: wrap; }
-  .board-scroll { padding: var(--s2); }
-}
 
 /* Print: the canvas only, at page width. */
 @media print {

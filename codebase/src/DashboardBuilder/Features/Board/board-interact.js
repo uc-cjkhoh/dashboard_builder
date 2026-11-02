@@ -45,7 +45,7 @@ export function initInteract(ctx) {
     if (!grip && (!head || e.target.closest("button, input, textarea, select, a"))) return;
     const wEl = e.target.closest(".board-widget");
     const widget = ctx.getDash()?.widgets.find((w) => w.id === wEl?.dataset.widgetId);
-    if (!widget || !drag.start(grip ? "resize" : "move", widget, point(e), grid.clientWidth)) return;
+    if (!widget || !drag.start(grip ? "resize" : "move", widget, point(e))) return;
     const handle = grip ?? head;
     dragEl = wEl;
     try { handle.setPointerCapture(e.pointerId); } catch { /* a synthetic pointer id: the window listeners below still work */ }
