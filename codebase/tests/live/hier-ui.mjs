@@ -56,22 +56,17 @@ try {
   const levelNames = () => ev(`[...${hdlg}.querySelectorAll('.hier-level__name')].map((x) => x.textContent)`);
   const formError = () => ev(`(() => { const e = ${hdlg}.querySelector('.field-error'); return e && !e.hidden ? e.textContent : ''; })()`);
   const addLevel = async (col) => { await setVal('.hier-add select', col, 'change'); await clickIn(hdlg, 'Add level'); };
-  const hierChip = (name) => `[...document.querySelectorAll('#ws-fields .hier-field')].find((c) => c.querySelector('.ws-field__name').textContent === ${J(name)})`;
+  // Hierarchies live in a dialog opened from the sidebar's Hierarchies tool: a row per hierarchy with Use / Edit / Delete.
+  const openHier = async () => { await ev(`document.querySelector('button[aria-label="Hierarchies"]').click()`); await waitFor(`${hdlg} !== null`, 'hierarchies dialog'); };
+  const closeHier = async () => { await clickIn(hdlg, 'Done'); await waitFor(`${hdlg} === null`, 'dialog closed'); };
+  const hierNames = () => ev(`[...${hdlg}.querySelectorAll('.bookmark__name')].map((x) => x.textContent)`);
+  const useHier = async (name) => { await openHier(); await ev(`${hdlg}.querySelector(${J(`button[aria-label^="Use ${name} as"]`)}).click()`); await waitFor(`${hdlg} === null`, 'dialog closed by Use'); };
   const chartHost = `document.querySelector('#ws-chart .ws-chart-canvas')`;
   const instOf = `window.echarts.getInstanceByDom(${chartHost})`;
   const clickBar = async (cat) => {
     const p = await ev(`(() => { const i = ${instOf}; const horiz = i.getOption().yAxis[0].type === 'category'; const [x, y] = i.convertToPixel({ xAxisIndex: 0, yAxisIndex: 0 }, horiz ? [5, ${J(cat)}] : [${J(cat)}, 5]); const r = ${chartHost}.getBoundingClientRect(); return [r.left + x, r.top + y]; })()`);
     await b.click(p[0], p[1]);
   };
-  const dropOnDrill = (name) => ev(`(() => {
-    const chip = ${hierChip(name)}; if (!chip) throw new Error('no hierarchy chip ${name}');
-    const tool = [...document.querySelectorAll('.ws-tool')].find((t) => /^Drill/.test(t.getAttribute('aria-label') ?? '')) ?? [...document.querySelectorAll('.ws-more .ws-tool')][0]; // empty Drill lives under More
-    const dt = new DataTransfer();
-    chip.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt }));
-    tool.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
-    tool.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
-    chip.dispatchEvent(new DragEvent('dragend', { bubbles: true, dataTransfer: dt }));
-    return true; })()`);
 
   // ---- setup ----
   await b.goto(APP + '/');
@@ -88,13 +83,16 @@ try {
   await store(`const s = d.sheet; const f = (c, category, extra = {}) => ({ db: 'shop', table: 'orders', column: c, category, ...extra }); s.chartType = 'bar'; s.columns = []; s.rows = [f('amount', 'numeric', { agg: 'sum' })]; s.drill = null; st.updateSheet(d.id, s)`);
   await settle();
 
-  await check('the pane has a Hierarchies group with New hierarchy and Hierarchies… and no chips yet', async () => {
-    must(await ev(`!!document.getElementById('hier-group-title') && document.querySelectorAll('.hier-field').length === 0`), 'group missing or not empty');
+  await check('the Hierarchies tool opens a dialog with no rows yet; the field pane has no Hierarchies group', async () => {
+    must(await ev(`!document.querySelector('#ws-fields .hier-group') && !document.querySelector('#ws-fields .hier-field')`), 'pane still has a Hierarchies group');
+    await openHier();
+    must((await hierNames()).length === 0, 'rows before any hierarchy exists');
+    await closeHier();
   });
 
-  await check('create: needs 2 levels; reorder with Up / Down buttons; saves; chip appears in the pane', async () => {
-    await ev(`document.querySelector('.hier-group .calc-group__new').click()`);
-    await waitFor(`${hdlg} !== null`, 'dialog open');
+  await check('create: needs 2 levels; reorder with Up / Down buttons; saves; the row appears in the dialog', async () => {
+    await openHier();
+    await clickIn(hdlg, '+ New hierarchy');
     await setVal('input.input', 'Geo');
     await addLevel('channel');
     await clickIn(hdlg, 'Save');
@@ -106,27 +104,24 @@ try {
     must(await ev(`document.activeElement.getAttribute('aria-label')`) === 'Move level 1 (region) up' || await ev(`document.activeElement.disabled === false`), 'focus lost after reorder');
     await clickIn(hdlg, 'Save');
     await waitFor(`!${hdlg}.querySelector('.params-edit')`, 'saved');
-    await clickIn(hdlg, 'Done');
-    await waitFor(`${hdlg} === null`, 'dialog closed');
-    await waitFor(`!!${hierChip('Geo')}`, 'chip in the pane');
-    must(/2 levels/.test(await ev(`${hierChip('Geo')}.textContent`)), 'level count missing');
+    must(J(await hierNames()) === J(['Geo']), `rows: ${J(await hierNames())}`);
+    must(/region › channel/.test(await ev(`${hdlg}.querySelector('.bookmark__meta').textContent`)), 'level order missing from the row');
+    await closeHier();
   });
 
   await check('name must be unique case-insensitively', async () => {
-    await ev(`[...document.querySelectorAll('.hier-group .btn')].find((x) => x.textContent === 'Hierarchies…').click()`);
-    await waitFor(`${hdlg} !== null`, 'dialog');
+    await openHier();
     await clickIn(hdlg, '+ New hierarchy');
     await setVal('input.input', 'GEO');
     await addLevel('region'); await addLevel('channel');
     await clickIn(hdlg, 'Save');
     must(/Another hierarchy has that name/.test(await formError()), `dup name: ${await formError()}`);
-    await clickIn(hdlg, 'Cancel'); await clickIn(hdlg, 'Done');
-    await waitFor(`${hdlg} === null`, 'closed');
+    await clickIn(hdlg, 'Cancel'); await closeHier();
   });
 
-  await check('drop on Drill: the sheet gets the same drill a hand-built one has; the chart groups by level 1; a click drills to level 2', async () => {
+  await check('Use on Drill: the sheet gets the same drill a hand-built one has; the chart groups by level 1; a click drills to level 2', async () => {
     queries.length = 0;
-    await dropOnDrill('Geo');
+    await useHier('Geo');
     await waitFor(`/Showing: region/.test(document.querySelector('.ws-drill')?.textContent ?? '')`, 'drill chip');
     const d = await sheetDrill();
     must(J(d) === J({ levels: [{ db: 'shop', table: 'orders', column: 'region', category: 'text' }, { db: 'shop', table: 'orders', column: 'channel', category: 'text' }], depth: 0, path: [] }), `drill: ${J(d)}`);
@@ -139,25 +134,26 @@ try {
     must((last().filters ?? []).some((f) => f.column === 'region' && f.op === '=' && f.value === 'EU'), `no ancestor filter: ${J(last().filters)}`);
   });
 
-  await check('a second drop lands on the visible Drill tool button and on the open panel zone', async () => {
-    await waitFor(`!!document.querySelector('.ws-toolpanel__zone')`, 'drill panel (left open by the first drop)');
+  await check('Use works with the Drill panel open and with it closed', async () => {
+    await waitFor(`!!document.querySelector('.ws-toolpanel__zone')`, 'drill panel (left open by the first Use)');
     await store(`d.sheet.drill = null; st.updateSheet(d.id, d.sheet)`);
     await waitFor(`!document.querySelector('.ws-drill')`, 'drill cleared');
     await ev(`(() => { if (!document.querySelector('.ws-toolpanel__zone')) [...document.querySelectorAll('.ws-tool')].find((x) => /^Drill/.test(x.getAttribute('aria-label') ?? '')).click(); return true; })()`);
     await waitFor(`!!document.querySelector('.ws-toolpanel__zone')`, 'panel open');
-    await ev(`(() => { const chip = ${hierChip('Geo')}; const z = document.querySelector('.ws-toolpanel__zone'); const dt = new DataTransfer();
-      chip.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt }));
-      z.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
-      z.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt })); return true; })()`);
-    await waitFor(`/Showing: region/.test(document.querySelector('.ws-drill')?.textContent ?? '')`, 'zone drop applied');
-    await dropOnDrill('Geo'); // now on the visible Drill button
-    await waitFor(`/Showing: region/.test(document.querySelector('.ws-drill')?.textContent ?? '')`, 'button drop applied');
+    await useHier('Geo');
+    await waitFor(`/Showing: region/.test(document.querySelector('.ws-drill')?.textContent ?? '')`, 'applied with the panel open');
+    await store(`d.sheet.drill = null; st.updateSheet(d.id, d.sheet)`);
+    await waitFor(`!document.querySelector('.ws-drill')`, 'drill cleared again');
+    await ev(`(() => { if (document.querySelector('.ws-toolpanel__zone')) [...document.querySelectorAll('.ws-tool')].find((x) => /^Drill/.test(x.getAttribute('aria-label') ?? '')).click(); return true; })()`);
+    await waitFor(`!document.querySelector('.ws-toolpanel__zone')`, 'panel closed');
+    await useHier('Geo');
+    await waitFor(`/Showing: region/.test(document.querySelector('.ws-drill')?.textContent ?? '')`, 'applied with the panel closed');
     must((await sheetDrill()).levels.length === 2, 'levels');
   });
 
   await check('applying over a sheet with a selection and a drill descent resets selection, depth and path', async () => {
     await store(`const s = d.sheet; s.selection = { db: 'shop', table: 'orders', column: 'region', values: ['EU'], keys: ['EU'], labels: ['EU'] }; s.drill.depth = 1; s.drill.path = [{ column: 'region', value: 'EU', label: 'EU' }]; st.updateSheet(d.id, s)`);
-    await dropOnDrill('Geo');
+    await useHier('Geo');
     await waitFor(`/Showing: region/.test(document.querySelector('.ws-drill')?.textContent ?? '')`, 'reset to level 1');
     const r = await ev(`(async () => { const s = (await import('/features/Core/store.js')).activeWorksheet().sheet; return JSON.stringify({ sel: s.selection, drill: s.drill }); })()`).then(JSON.parse);
     must(r.sel === null, `selection kept: ${J(r.sel)}`);
@@ -166,32 +162,31 @@ try {
 
   await check('rename and delete leave the sheet drill intact', async () => {
     const before = J(await sheetDrill());
-    await ev(`[...document.querySelectorAll('.hier-group .btn')].find((x) => x.textContent === 'Hierarchies…').click()`);
-    await waitFor(`${hdlg} !== null`, 'dialog');
+    await openHier();
     await clickIn(hdlg, 'Edit hierarchy Geo');
     await setVal('input.input', 'Places');
     await clickIn(hdlg, 'Save');
     await waitFor(`!${hdlg}.querySelector('.params-edit')`, 'renamed');
-    await waitFor(`!!${hierChip('Places')} && !${hierChip('Geo')}`, 'pane shows the new name');
+    must(J(await hierNames()) === J(['Places']), `rows after rename: ${J(await hierNames())}`);
     must(J(await sheetDrill()) === before, 'rename changed the sheet drill');
     await clickIn(hdlg, 'Delete hierarchy Places');
     await waitFor(`[...document.querySelectorAll('dialog[open]')].some((d) => !d.classList.contains('hier-dialog'))`, 'confirm');
     await ev(`[...document.querySelectorAll('dialog[open] button')].find((x) => x.textContent === 'Delete' && !x.getAttribute('aria-label')).click()`);
-    await waitFor(`!${hierChip('Places')}`, 'chip removed');
+    await waitFor(`(${hdlg}?.querySelectorAll('.bookmark__name').length ?? 0) === 0`, 'row removed');
     must(J(await sheetDrill()) === before, 'delete changed the sheet drill');
     must(await ev(`!!document.querySelector('.ws-drill')`), 'drill chip gone');
-    await clickIn(hdlg, 'Done');
-    await waitFor(`${hdlg} === null`, 'closed');
+    await closeHier();
   });
 
-  await check('the plus button applies a hierarchy too (replacing the drill); a missing column marks the chip and refuses', async () => {
+  await check('Use replaces the drill; a hierarchy with a missing column refuses with a message and leaves the drill', async () => {
     await ev(`(async () => { const st = await import('/features/Core/store.js'); st.addHierarchy({ name: 'Chan', levels: [{ db: 'shop', table: 'orders', column: 'channel' }, { db: 'shop', table: 'orders', column: 'region' }] }); st.addHierarchy({ name: 'Broken', levels: [{ db: 'shop', table: 'orders', column: 'nope' }, { db: 'shop', table: 'orders', column: 'region' }] }); return true; })()`);
-    await waitFor(`!!${hierChip('Chan')} && !!${hierChip('Broken')}`, 'chips');
-    must(/Missing field/.test(await ev(`${hierChip('Broken')}.textContent`)) && await ev(`${hierChip('Broken')}.draggable === false`), 'broken chip not marked / still draggable');
-    await ev(`${hierChip('Chan')}.querySelector('.ws-field__add').click()`);
+    await useHier('Chan');
     await waitFor(`/Showing: channel/.test(document.querySelector('.ws-drill')?.textContent ?? '')`, 'applied');
     const d = await sheetDrill();
-    must(d.levels[0].column === 'channel' && d.depth === 0 && d.path.length === 0, `plus did not reset: ${J(d)}`);
+    must(d.levels[0].column === 'channel' && d.depth === 0 && d.path.length === 0, `Use did not reset: ${J(d)}`);
+    await useHier('Broken');
+    await waitFor(`!document.getElementById('toast').hidden && document.getElementById('toast').textContent.trim() !== ''`, 'a refusal message');
+    must((await sheetDrill()).levels[0].column === 'channel', 'a broken hierarchy replaced the drill');
   });
 
   await check('workbook round trip: exported file carries hierarchies; reopening restores the chips', async () => {
@@ -217,7 +212,9 @@ try {
     await waitFor(`document.querySelectorAll('.tab:not(.tab--model)').length > 0`, 'tabs restored');
     await ev(`document.querySelectorAll('.tab:not(.tab--model) .tab__label')[0].click()`);
     await waitFor(`!document.getElementById('worksheet-view').hidden`, 'worksheet shown');
-    await waitFor(`!!${hierChip('Chan')} && !!${hierChip('Broken')}`, 'chips restored');
+    await openHier();
+    must(J(await hierNames()) === J(['Chan', 'Broken']), `rows restored: ${J(await hierNames())}`);
+    await closeHier();
     must((await sheetDrill()).levels[0].column === 'channel', 'sheet drill not restored');
   });
 
@@ -228,13 +225,13 @@ try {
     await b.sleep(250);
     await check(`screenshots ${scheme}`, async () => {
       const p1 = join(SHOTS, `hier-pane-${scheme}.png`); await b.screenshot(p1); shots.push(p1);
-      await ev(`[...document.querySelectorAll('.hier-group .btn')].find((x) => x.textContent === 'Hierarchies…').click()`);
-      await waitFor(`${hdlg} !== null`, 'dialog');
+      await openHier();
+      await b.sleep(150);
+      const p3 = join(SHOTS, `hier-list-${scheme}.png`); await b.screenshot(p3); shots.push(p3);
       await clickIn(hdlg, 'Edit hierarchy Chan');
       await b.sleep(150);
       const p2 = join(SHOTS, `hier-dialog-${scheme}.png`); await b.screenshot(p2); shots.push(p2);
-      await clickIn(hdlg, 'Cancel'); await clickIn(hdlg, 'Done');
-      await waitFor(`${hdlg} === null`, 'closed');
+      await clickIn(hdlg, 'Cancel'); await closeHier();
     });
   }
   console.log('screenshots:\n  ' + shots.join('\n  '));
