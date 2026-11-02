@@ -2,7 +2,7 @@
 // A workbook is the whole builder state: the Data Source (tables + positions + join keys +
 // relationships), every worksheet and every dashboard (its widgets on the board grid), in tab-strip order.
 // It never contains the connection or a password — a workbook is reopened against whatever server the
-// session is connected to. Format v2 holds `worksheets`, `dashboards` and `tabs`; the v1 reader
+// session is connected to. Format v2 holds `worksheets`, `dashboards`, optional `stories` and `tabs`; the v1 reader
 // (migrateV1: v1 `dashboards` were worksheets) stays for good — old files and old autosaves must open.
 import { emptySheet, defaultFormat } from "../Core/store.js";
 import { LIMITS, text, isFraction } from "../Core/validate.js";
@@ -24,6 +24,7 @@ import { cleanSource, wireSource } from "../Core/source-model.js";
 import { cleanCalculations } from "../Calc/calc-workbook.js";
 import { cleanWidgets, savedWidgets } from "../Board/board-model.js";
 import { cleanSize, savedSize } from "../Board/board-size.js";
+import { cleanSteps, savedSteps } from "../Story/story-model.js";
 import { CALC_AGGS } from "../Calc/calc-pill.js";
 import {
   CHART_TYPE_IDS, CATEGORIES, FILTER_OPS, NUMBER_FORMATS, DATE_FORMATS, LEGENDS, TOP_N, MAX_DECIMALS, DATE_BUCKETS, LINE_STYLES, HEATMAP_SHAPES, SECONDARY_TYPES, MARK_BORDERS, MARKER_SHAPES, MAX_TARGET_MEASURE, TABLE_ALIGNS, TABLE_DENSITIES, TABLE_SHADES,
@@ -39,13 +40,14 @@ const NOT_A_WORKBOOK = "This file is not a Dashboard Builder workbook.";
  *  members are left out (they are re-fetched on open). `tabs` is the store's ordered list (worksheet and dashboard
  *  tabs); `active` is the store's activeView. */
 export function serializeWorkbook({ entities, relationships, tabs, active, theme, sharedFilters = [], bookmarks = [], fieldMeta = new Map(), parameters = [], calculations = [], nextCalcId, hierarchies = [] }) {
-  const worksheets = [], dashboards = [], order = [];
-  const wsIndex = new Map(), dbIndex = new Map(); // tab id → index in the saved list
+  const worksheets = [], dashboards = [], storyTabs = [], order = [];
+  const wsIndex = new Map(), dbIndex = new Map(), stIndex = new Map(); // tab id → index in the saved list
   for (const t of tabs) {
-    if (t.kind === "dashboard") { dbIndex.set(t.id, dashboards.length); order.push({ kind: "dashboard", index: dashboards.length }); dashboards.push(t); }
+    if (t.kind === "story") { stIndex.set(t.id, storyTabs.length); order.push({ kind: "story", index: storyTabs.length }); storyTabs.push(t); }
+    else if (t.kind === "dashboard") { dbIndex.set(t.id, dashboards.length); order.push({ kind: "dashboard", index: dashboards.length }); dashboards.push(t); }
     else { wsIndex.set(t.id, worksheets.length); order.push({ kind: "worksheet", index: worksheets.length }); worksheets.push(t); }
   }
-  const activeIndex = active?.kind === "worksheet" ? wsIndex.get(active.id) : active?.kind === "dashboard" ? dbIndex.get(active.id) : undefined;
+  const activeIndex = active?.kind === "worksheet" ? wsIndex.get(active.id) : active?.kind === "dashboard" ? dbIndex.get(active.id) : active?.kind === "story" ? stIndex.get(active.id) : undefined;
   return {
     format: WORKBOOK_FORMAT,
     version: WORKBOOK_VERSION,
@@ -66,6 +68,7 @@ export function serializeWorkbook({ entities, relationships, tabs, active, theme
     })),
     worksheets: worksheets.map((d) => ({ name: d.name, sheet: savedSheet(d.sheet) })),
     dashboards: dashboards.map((d) => ({ name: d.name, widgets: savedWidgets(d.widgets, wsIndex, dbIndex), ...savedSize(d.size) })), // size: optional (absent = automatic)
+    ...(storyTabs.length ? { stories: storyTabs.map((s) => ({ name: s.name, steps: savedSteps(s.steps, wsIndex, dbIndex) })) } : {}), // (optional; absent in older files)
     tabs: order, // the strip's order
     active: activeIndex !== undefined ? { kind: active.kind, index: activeIndex } : null, // null = the Data Source view
     theme: theme ? { accent: theme.accent, palette: theme.palette } : { ...DEFAULT_THEME },
@@ -206,10 +209,11 @@ export function parseWorkbook(source) {
 
   const wsAll = objectList(raw.worksheets, "worksheet", issues);
   const dbAll = objectList(raw.dashboards, "dashboard", issues);
+  const stAll = raw.stories === undefined ? [] : objectList(raw.stories, "story", issues);
 
   // The strip order: the saved `tabs` entries that point at something, then any worksheet / dashboard it left out. Past 50, dropped.
   const order = [], seenTab = new Set();
-  const inRange = (t) => t && Number.isInteger(t.index) && t.index >= 0 && (t.kind === "worksheet" ? t.index < wsAll.length : t.kind === "dashboard" && t.index < dbAll.length);
+  const inRange = (t) => t && Number.isInteger(t.index) && t.index >= 0 && (t.kind === "worksheet" ? t.index < wsAll.length : t.kind === "dashboard" ? t.index < dbAll.length : t.kind === "story" && t.index < stAll.length);
   if (raw.tabs !== undefined && !Array.isArray(raw.tabs)) issues.push("The tab order wasn't a list — the tabs were opened in their saved order.");
   if (Array.isArray(raw.tabs)) {
     for (const t of raw.tabs) {
@@ -217,7 +221,7 @@ export function parseWorkbook(source) {
       seenTab.add(`${t.kind}:${t.index}`); order.push({ kind: t.kind, index: t.index });
     }
   }
-  const unlisted = [...wsAll.map((_, index) => ({ kind: "worksheet", index })), ...dbAll.map((_, index) => ({ kind: "dashboard", index }))]
+  const unlisted = [...wsAll.map((_, index) => ({ kind: "worksheet", index })), ...dbAll.map((_, index) => ({ kind: "dashboard", index })), ...stAll.map((_, index) => ({ kind: "story", index }))]
     .filter((t) => !seenTab.has(`${t.kind}:${t.index}`));
   if (Array.isArray(raw.tabs) && unlisted.length) issues.push(`${unlisted.length} tab(s) were missing from the tab order — added at the end.`);
   order.push(...unlisted);
@@ -234,13 +238,16 @@ export function parseWorkbook(source) {
     issues.push(`A ${base.toLowerCase()} name was reset to "${base}": ${r.error}`);
     return base;
   };
-  const worksheets = [], dashboards = [], tabs = [];
-  const wsMap = new Map(), dbMap = new Map(); // saved index → index in the cleaned list
+  const worksheets = [], dashboards = [], stories = [], tabs = [];
+  const wsMap = new Map(), dbMap = new Map(), stMap = new Map(); // saved index → index in the cleaned list
   for (const t of order) {
     if (t.kind === "worksheet") {
       const d = wsAll[t.index], name = tabName(d, "Worksheet");
       wsMap.set(t.index, worksheets.length); tabs.push({ kind: "worksheet", index: worksheets.length });
       worksheets.push({ name, sheet: sanitizeSheet(d.sheet, `Sheet "${name}"`, issues) });
+    } else if (t.kind === "story") {
+      stMap.set(t.index, stories.length); tabs.push({ kind: "story", index: stories.length });
+      stories.push({ name: tabName(stAll[t.index], "Story"), steps: stAll[t.index].steps });
     } else {
       dbMap.set(t.index, dashboards.length); tabs.push({ kind: "dashboard", index: dashboards.length });
       dashboards.push({ name: tabName(dbAll[t.index], "Dashboard"), widgets: dbAll[t.index].widgets, size: dbAll[t.index].size });
@@ -257,9 +264,17 @@ export function parseWorkbook(source) {
     d.size = cleanSize(d.size, `Dashboard "${d.name}"`, issues);
   });
 
+  // A step's tab is read through the maps, so one cut by the 50-tab cap is "missing" like any other dangling index.
+  for (const s of stories) {
+    const remapped = Array.isArray(s.steps)
+      ? s.steps.map((x) => (x && typeof x === "object" && x.target && typeof x.target === "object" ? { ...x, target: { kind: x.target.kind, index: (x.target.kind === "worksheet" ? wsMap : x.target.kind === "dashboard" ? dbMap : new Map()).get(x.target.index) } } : x))
+      : s.steps;
+    s.steps = cleanSteps(remapped, { worksheetCount: worksheets.length, dashboardCount: dashboards.length, where: `Story "${s.name}"` }, issues);
+  }
+
   let active = null;
   if (raw.active != null) {
-    const a = raw.active, map = a && typeof a === "object" ? (a.kind === "worksheet" ? wsMap : a.kind === "dashboard" ? dbMap : null) : null;
+    const a = raw.active, map = a && typeof a === "object" ? (a.kind === "worksheet" ? wsMap : a.kind === "dashboard" ? dbMap : a.kind === "story" ? stMap : null) : null;
     const index = map && Number.isInteger(a.index) ? map.get(a.index) : undefined;
     if (index !== undefined) active = { kind: a.kind, index };
     else issues.push("The saved active tab was invalid — the data source view was opened.");
@@ -289,7 +304,7 @@ export function parseWorkbook(source) {
     if (Number.isInteger(raw.nextCalcId) && raw.nextCalcId >= 1 && raw.nextCalcId <= 999999) nextCalcId = raw.nextCalcId;
     else issues.push("The saved next calculation number was invalid — ignored.");
   }
-  return { entities, relationships, worksheets, dashboards, tabs, active, theme, sharedFilters, bookmarks, fields, parameters, hierarchies, calculations, nextCalcId, issues: [...new Set(issues)] };
+  return { entities, relationships, worksheets, dashboards, stories, tabs, active, theme, sharedFilters, bookmarks, fields, parameters, hierarchies, calculations, nextCalcId, issues: [...new Set(issues)] };
 }
 
 /** A saved list of tab objects; a non-list is reported, and entries that aren't objects are skipped (and reported). */

@@ -56,6 +56,8 @@ export const LIMITS = Object.freeze({
   imageAlt: 120,       // characters in an image widget's alt text
   navLabel: 40,        // characters in a navigation button's label
   navTip: 200,         // characters in a navigation button's tooltip
+  storySteps: 20,      // steps in one story (client-side only; rejected past it, never cut)
+  stepCaption: 300,    // characters in a story step's caption
   calcName: 60,      // characters in a calculation's name / label (server CalcLimits.MaxName)
 });
 export const HOST_MESSAGES = Object.freeze({

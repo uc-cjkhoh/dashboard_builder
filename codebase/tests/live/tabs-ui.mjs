@@ -79,7 +79,7 @@ try {
     must(await ev(`document.querySelector('.tab-menu__list').hidden`), 'menu open at start');
     await ev(`${add}.click()`);
     await waitFor(`!document.querySelector('.tab-menu__list').hidden`, 'menu opened');
-    must(J(await ev(`[...document.querySelectorAll('.tab-menu__list [role=menuitem]')].map((x) => x.textContent.trim())`)) === J(['New worksheet', 'New dashboard']), 'menu items');
+    must(J(await ev(`[...document.querySelectorAll('.tab-menu__list [role=menuitem]')].map((x) => x.textContent.trim())`)) === J(['New worksheet', 'New dashboard', 'New story']), 'menu items');
     must(await ev(`document.activeElement === document.querySelector('[data-new-tab=worksheet]')`), 'first item not focused');
     await b.key('ArrowDown', { vk: 40 });
     must(await ev(`document.activeElement === document.querySelector('[data-new-tab=dashboard]')`), 'ArrowDown did not move focus');

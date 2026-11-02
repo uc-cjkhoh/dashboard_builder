@@ -1,6 +1,6 @@
 import {
   entities, relationships, tabs, bus, currentView, isDashboardActive,
-  createWorksheet, createDashboard, updateSheet, setWidgets, setDashboardSize, nextWidgetId, closeTab, showModel, switchTab, currentTheme, setTheme,
+  createWorksheet, createDashboard, createStory, setSteps, isStoryActive, updateSheet, setWidgets, setDashboardSize, nextWidgetId, closeTab, showModel, switchTab, currentTheme, setTheme,
   nextCalcId, sharedFilters, setSharedFilters, bookmarks, setBookmarks, fieldMeta, setAllFieldMeta, parameters, setParameters, hierarchies, setHierarchies, calculations, setCalculations,
 } from "../Core/store.js";
 import { clearRoleChoices } from "../Calc/calc-pane-model.js";
@@ -25,7 +25,7 @@ const SAVE_DELAY_MS = 500;
 const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
 const CHANGE_EVENTS = [
   "entity:added", "entity:moved", "entity:removed",
-  "rel:changed", "tabs:changed", "worksheet:changed", "dashboard:changed", "theme:changed", "bookmarks:changed", "fields:changed", "parameters:changed", "hierarchies:changed", "calculations:changed",
+  "rel:changed", "tabs:changed", "worksheet:changed", "dashboard:changed", "story:changed", "theme:changed", "bookmarks:changed", "fields:changed", "parameters:changed", "hierarchies:changed", "calculations:changed",
 ];
 
 let key = null;        // storage key for the connected server + user; null while disconnected
@@ -45,9 +45,9 @@ export function initWorkbook() {
   if (menuBtn && menuList) wireMenu(menuBtn, menuList);
 
   document.addEventListener("connection:changed", (e) => onConnection(e.detail ?? {}));
-  // A dashboard has no single view to bookmark (bookmarks capture worksheets), so the action is hidden there.
+  // A dashboard or story has no single view to bookmark (bookmarks capture worksheets), so the action is hidden there.
   const bookmarkAdd = document.getElementById("wb-bookmark-add");
-  const syncBookmarkAction = () => toggle(bookmarkAdd, !isDashboardActive());
+  const syncBookmarkAction = () => toggle(bookmarkAdd, !isDashboardActive() && !isStoryActive());
   bus.addEventListener("view:changed", syncBookmarkAction);
   syncBookmarkAction();
   for (const type of CHANGE_EVENTS) bus.addEventListener(type, scheduleSave);
@@ -77,7 +77,7 @@ function onConnection(view) {
   try { wb = parseWorkbook(saved); } catch (err) { keepUnreadable(saved, err); return; }
   if (!wb.entities.length && !wb.tabs.length) return;
   if (!openWorkbook(wb)) { blockedKey = key; return; } // partial state must not overwrite the stored entry
-  const restored = `Restored your last workbook (${count(wb.entities.length, "table")}, ${count(wb.worksheets.length, "worksheet")}${wb.dashboards.length ? `, ${count(wb.dashboards.length, "dashboard")}` : ""}).`;
+  const restored = `Restored your last workbook (${count(wb.entities.length, "table")}, ${count(wb.worksheets.length, "worksheet")}${wb.dashboards.length ? `, ${count(wb.dashboards.length, "dashboard")}` : ""}${wb.stories.length ? `, ${count(wb.stories.length, "story")}` : ""}).`;
   if (wb.issues.length) {
     toast(`${restored} ${wb.issues.length} part(s) were reset.`, "info");
     listDialog(`Restored your last workbook with ${wb.issues.length} issue(s)`,
@@ -191,15 +191,17 @@ function openWorkbook(wb) {
     }
 
     // Tabs in strip order; widgets and bookmarks point at worksheets by saved index, so those are wired once every tab exists.
-    const worksheetIds = [], dashboardIds = [];
+    const worksheetIds = [], dashboardIds = [], storyIds = [];
     for (const t of wb.tabs) {
       if (t.kind === "worksheet") {
         const w = wb.worksheets[t.index];
         const tab = createWorksheet(w.name);
         updateSheet(tab.id, w.sheet);
         worksheetIds[t.index] = tab.id;
-      } else dashboardIds[t.index] = createDashboard(wb.dashboards[t.index].name).id;
+      } else if (t.kind === "story") storyIds[t.index] = createStory(wb.stories[t.index].name).id;
+      else dashboardIds[t.index] = createDashboard(wb.dashboards[t.index].name).id;
     }
+    wb.stories.forEach((s, i) => setSteps(storyIds[i], s.steps.map((x) => ({ caption: x.caption, target: (x.target.kind === "worksheet" ? worksheetIds : dashboardIds)[x.target.index] }))));
     wb.dashboards.forEach((d, i) => setWidgets(dashboardIds[i], d.widgets.map((w) => (w.kind === "sheet"
       ? { id: nextWidgetId(), kind: "sheet", sheetId: worksheetIds[w.sheet], x: w.x, y: w.y, w: w.w, h: w.h }
       : w.kind === "image" ? { id: nextWidgetId(), kind: "image", alt: w.alt, src: w.src, x: w.x, y: w.y, w: w.w, h: w.h }
@@ -209,7 +211,7 @@ function openWorkbook(wb) {
     wb.dashboards.forEach((d, i) => { if (d.size) setDashboardSize(dashboardIds[i], d.size); });
     // Bookmarks point at their worksheet by index; a missing one is recreated when applied.
     setBookmarks((wb.bookmarks ?? []).map(({ worksheet, ...b }) => ({ ...b, worksheetId: worksheet !== null ? worksheetIds[worksheet] ?? null : null })));
-    const activeId = wb.active ? (wb.active.kind === "worksheet" ? worksheetIds : dashboardIds)[wb.active.index] : null;
+    const activeId = wb.active ? (wb.active.kind === "worksheet" ? worksheetIds : wb.active.kind === "story" ? storyIds : dashboardIds)[wb.active.index] : null;
     if (activeId) switchTab(activeId);
     else showModel();
     setTheme(wb.theme ?? DEFAULT_THEME);
@@ -245,7 +247,7 @@ async function importFile(input) {
   try { wb = parseWorkbook(await file.text()); } catch (err) { toast(err.message, "danger"); return; }
   if (!isEmpty()) {
     const ok = await confirmDialog(
-      "Replace the current workbook? Its tables, relationships, worksheets and dashboards will be removed.",
+      "Replace the current workbook? Its tables, relationships, worksheets, dashboards and stories will be removed.",
       { danger: true, confirmText: "Replace" },
     );
     if (!ok) return;

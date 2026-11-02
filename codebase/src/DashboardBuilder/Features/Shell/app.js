@@ -8,6 +8,7 @@ import { initRelations } from "../Relations/relations.js";
 import { initTabs } from "../Tabs/tabs.js";
 import { initDashboards } from "../Dashboard/dashboards.js";
 import { initBoard } from "../Board/board.js";
+import { initStory } from "../Story/story.js";
 import { initWorkbook } from "../Workbook/workbook.js";
 import { initTheme } from "../Core/theme.js";
 import { initScheme } from "../Core/scheme.js";
@@ -44,5 +45,6 @@ initRelations();
 initTabs();
 initDashboards();
 initBoard();
+initStory();
 initWorkbook(); // restores the saved workbook on the connection:changed event below
 initConnection();

@@ -1,5 +1,5 @@
 import {
-  tabs, isModelActive, currentView, showModel, createWorksheet, createDashboard, tabLimitError,
+  tabs, isModelActive, currentView, showModel, createWorksheet, createDashboard, createStory, tabLimitError,
   switchTab, renameTab, duplicateWorksheet, closeTab, worksheetHasContent, bus,
 } from "../Core/store.js";
 import { dashboardsUsing } from "../Board/board-model.js";
@@ -9,12 +9,13 @@ import { confirmDialog, toast } from "../Core/ui.js";
 import { text, LIMITS } from "../Core/validate.js";
 
 // The view strip: a pinned "Data Source" tab (the shared entity canvas) followed by one ordered list of worksheet and
-// dashboard tabs (each with its kind's icon) and a [+] menu — New worksheet / New dashboard. Clicking switches the active
+// dashboard / story tabs (each with its kind's icon) and a [+] menu — New worksheet / New dashboard / New story. Clicking switches the active
 // view; tabs rename on double-click and close with a confirm when they hold content (a worksheet used by dashboards names
 // them). The model tab is never closable.
 const KINDS = {
   worksheet: { icon: "chart-bar", noun: "worksheet", title: "New worksheet" },
   dashboard: { icon: "dashboard", noun: "dashboard", title: "New dashboard" },
+  story: { icon: "story", noun: "story", title: "New story" },
 };
 
 export function initTabs() {
@@ -117,15 +118,15 @@ export function initTabs() {
     return el;
   }
 
-  /** [+]: a menu — New worksheet / New dashboard (keyboard: Enter/Space opens, arrows move, Esc closes). */
+  /** [+]: a menu — New worksheet / New dashboard / New story (keyboard: Enter/Space opens, arrows move, Esc closes). */
   function addMenu(signal) {
     const wrap = document.createElement("div");
     wrap.className = "menu tab-menu";
     const add = document.createElement("button");
     add.type = "button";
     add.className = "tab-add";
-    add.setAttribute("aria-label", "Add a worksheet or dashboard");
-    add.title = "Add a worksheet or dashboard";
+    add.setAttribute("aria-label", "Add a worksheet, dashboard or story");
+    add.title = "Add a worksheet, dashboard or story";
     add.append(icon("plus"));
     const list = document.createElement("div");
     list.className = "menu__list menu__list--start tab-menu__list";
@@ -140,7 +141,7 @@ export function initTabs() {
       item.dataset.newTab = kind;
       item.append(icon(k.icon), k.title);
       item.addEventListener("click", () => {
-        const tab = kind === "dashboard" ? createDashboard() : createWorksheet();
+        const tab = kind === "dashboard" ? createDashboard() : kind === "story" ? createStory() : createWorksheet();
         if (!tab) { toast(tabLimitError(), "danger"); strip.querySelector(".tab-add")?.focus(); return; } // the menu closed: keep focus on [+]
         strip.querySelector(".tab.is-active .tab__label")?.focus(); // render() rebuilt the strip
       });
@@ -162,6 +163,11 @@ export function initTabs() {
         if (!ok) return;
       } else if (worksheetHasContent(tab.id)) {
         const ok = await confirmDialog(`Close the worksheet “${tab.name}”?`, { danger: true, confirmText: "Close" });
+        if (!ok) return;
+      }
+    } else if (tab.kind === "story") {
+      if (tab.steps.length) {
+        const ok = await confirmDialog(`Close the story “${tab.name}”? The worksheets and dashboards it shows are not affected.`, { danger: true, confirmText: "Close" });
         if (!ok) return;
       }
     } else if (tab.widgets.length) {
