@@ -305,10 +305,10 @@ try {
   await settle();
 
   // (e) refusals
-  await check("e: calculated field dropped on Filters -> refusal toast, nothing added", async () => {
+  await check("e: an aggregate calculation dropped on Filters -> refusal toast, nothing added (a row-level one is a filter: calc-filter-ui.mjs)", async () => {
     await ev(`(() => { const t = document.querySelector('.ws-tool[aria-label^="Filters"]'); __t.drag(__t.chip('Unit price'), t); return true; })()`);
     await b.sleep(300);
-    must(await toastText() === "Calculated fields can't be used here yet.", `toast: ${J(await toastText())}`);
+    must(/^Calculation 'Unit price' can't be a filter/.test(await toastText()), `toast: ${J(await toastText())}`);
     const label = await ev(`document.querySelector('.ws-tool[aria-label^="Filters"]').getAttribute('aria-label')`);
     must(label === 'Filters (empty)', `Filters now: ${label}`);
   });

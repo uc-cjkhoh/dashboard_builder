@@ -95,3 +95,10 @@ test("T02-34: a filter on a cast field, or a mark on one, is left out and named"
   assert.equal(notes.length, 2);
   assert.ok(notes.every((n) => /data type cast/.test(n)));
 });
+
+test("buildRowsRequest names a calculated-field filter it can't apply to a single-table read", () => {
+  const plan = { from: { db: "s", table: "o" }, filters: [{ db: "", table: "", column: "Net", op: ">", value: "1", values: null, calc: { k: "num", v: 1 } }] };
+  const { request, notes } = buildRowsRequest({ plan, limit: 10 });
+  assert.deepEqual(request.filters, []);
+  assert.deepEqual(notes, ["1 filter on a calculated field isn't applied to rows."]);
+});

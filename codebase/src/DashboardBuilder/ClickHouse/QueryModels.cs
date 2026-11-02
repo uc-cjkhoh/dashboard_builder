@@ -39,7 +39,9 @@ public sealed record QueryFilter(
     // "top": keep the Value (1–1000) members of this column ranked by TopBy (highest, or lowest when Bottom).
     MeasureRef? TopBy = null, bool? Bottom = null,
     // Read the column as text, number or date (whitelisted <see cref="TypeCast"/>) before comparing.
-    string? Cast = null);
+    string? Cast = null,
+    // A calculated field as the filtered expression (row-level only; Db / Table are empty, Column is its label). Never a top-N.
+    ExprNode? Calc = null);
 
 /// <summary>
 /// A worksheet query that may span several related tables. <see cref="From"/> is the base table;
