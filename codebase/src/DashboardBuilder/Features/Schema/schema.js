@@ -6,7 +6,7 @@ import { openTablePreview } from "../Rows/rows-dialog.js";
 import { openUnionDialog } from "../Rows/union-dialog.js";
 import { openUnpivotDialog } from "../Rows/unpivot-dialog.js";
 
-// Schema browser (P3): fills the database <select> and renders the selected database's tables
+// Schema browser: fills the database <select> and renders the selected database's tables
 // as draggable chips. Driven by the `connection:changed` event from connection.js — it does
 // not touch the connection form. The table list scrolls internally inside its sidebar section.
 export function initSchema() {
@@ -112,7 +112,7 @@ export function initSchema() {
     name.title = table;
 
     // Non-drag fallback (accessibility): add the table to the canvas without dragging.
-    // canvas.js (P4) listens for `table:add`.
+    // canvas.js listens for `table:add`.
     const add = document.createElement("button");
     add.type = "button";
     add.className = "iconbtn";

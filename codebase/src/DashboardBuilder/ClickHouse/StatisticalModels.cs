@@ -1,7 +1,7 @@
 namespace DashboardBuilder.ClickHouse;
 
 /// <summary>
-/// A histogram plan (— new bucketing query shape): bucket a single numeric <see cref="Column"/>
+/// A histogram plan: bucket a single numeric <see cref="Column"/>
 /// into <see cref="Buckets"/> equal-width bins over its [min,max] range and count rows per bin.
 /// Single-table (a distribution is one column); every identifier is catalog-validated and quoted,
 /// the bucket count is clamped, and filter values are bound as typed parameters.
@@ -21,7 +21,7 @@ public sealed record HistogramBin(double X0, double X1, long Count);
 public sealed record HistogramResult(IReadOnlyList<HistogramBin> Bins);
 
 /// <summary>
-/// A box-plot plan (— new quantile query shape): the five-number summary
+/// A box-plot plan: the five-number summary
 /// (min, Q1, median, Q3, max) of a numeric <see cref="Measure"/>, optionally grouped by a
 /// <see cref="Dimension"/>. Single-table; identifiers validated + quoted; row count bounded;
 /// filter values bound.

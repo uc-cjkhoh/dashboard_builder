@@ -8,7 +8,7 @@ import { linkSides, linkRoute, roundedPath } from "./link-route.js";
 import { openTypeWarning } from "./type-warning.js";
 import { COLUMN_MIME, encodeColumnDrag, parseColumnDrag, dropDecision } from "./link-drag.js";
 
-// Relationships (P5): logical, typed links the user draws between a column of one entity and a column of
+// Relationships: logical, typed links the user draws between a column of one entity and a column of
 // another (decision D5 — ClickHouse neither creates nor validates them). Creation is drag-and-drop only:
 // drag a column row onto a row of another card, pick a cardinality. Links render as an SVG overlay with shape-coded
 // endpoints (readable without colour) and a cardinality badge; clicking one edits/deletes it.
@@ -332,7 +332,6 @@ function select(id) {
   render();
 }
 
-// --- cardinality dialog -------------------------------------------------------
 function openCardinalityDialog({ current = "1:N", joinType = "inner", tables = ["first table", "second table"], legacy = false, check = null, onPick, onDelete }) {
   const dlg = document.createElement("dialog");
   dlg.className = "dialog dialog--sm";

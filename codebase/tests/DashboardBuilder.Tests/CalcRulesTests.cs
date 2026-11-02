@@ -4,7 +4,7 @@ using Xunit;
 
 namespace DashboardBuilder.Tests;
 
-/// <summary>E13 request rules for calculated fields: role (measure vs dimension), label and limits.
+/// <summary>Request rules for calculated fields: role (measure vs dimension), label and limits.
 /// The tree itself is validated against the catalog in the gateway; here only shape, role and limits.</summary>
 public class CalcRulesTests
 {
@@ -84,7 +84,7 @@ public class CalcRulesTests
     }
 
     // MeasureRef.Agg is nullable on the wire (an aggregate calculation has none), so a plain measure's missing
-    // aggregation is this rule's 400 — the same message and field model binding used to give.
+    // aggregation is this rule's 400 — the same message and field model binding gives for a missing value.
     [Fact] public void A_plain_measure_still_needs_an_aggregation()
     {
         var e = Assert.Throws<RequestValidationException>(() => RequestRules.ValidateQuery(Q(measures: [new MeasureRef("db", "t", "amount", null)])));
@@ -111,7 +111,7 @@ public class CalcRulesTests
         Assert.Equal(agg == "count" ? "Counting rows doesn't use the calculation." : CalcCatalog.RowLevelHint, e.Message);
     }
 
-    // Plain percentile (T04-07): P is required exactly when agg is percentile, finite, 0..1, never clamped.
+    // Plain percentile: P is required exactly when agg is percentile, finite, 0..1, never clamped.
     private static MeasureRef Pct(string agg, double? p) => new("db", "t", "amount", agg, null, null, p);
     private static QueryRequest WithTop(MeasureRef by) => Q(filters: [new QueryFilter("db", "t", "region", "top", "5", null, by)]);
 

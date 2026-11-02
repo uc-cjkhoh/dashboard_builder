@@ -4,7 +4,7 @@ import { CHART_NEEDS, chartIssue, issueFor, roleOf, TEXT_VALUE_HINT, COLOR_SPLIT
   from "../../src/DashboardBuilder/Features/Dashboard/show-me-rules.js";
 import { CHART_TYPES } from "../../src/DashboardBuilder/Features/Dashboard/viewbar-model.js";
 
-// Verbatim copy of the pre-P22 dashboards.js chartIssue() — the regression oracle.
+// Verbatim copy of the original dashboards.js chartIssue() — the regression oracle.
 function legacyChartIssue(type, dimCount, measureCount) {
   switch (type) {
     case "pie":

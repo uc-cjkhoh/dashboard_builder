@@ -203,7 +203,7 @@ export function scatterShapeGroups(sheet, result, seriesIdx, sizeIdx, fmtCat) {
 }
 
 /**
- * P7 colour split: pivot the trailing group-by key into one series per colour value; the remaining keys form the
+ * Colour split: pivot the trailing group-by key into one series per colour value; the remaining keys form the
  * category axis. Missing (category x colour) cells are null so series stay aligned. One measure only.
  * Returns { categories, series: [{ name, data }], catTuples, colorVals }.
  */

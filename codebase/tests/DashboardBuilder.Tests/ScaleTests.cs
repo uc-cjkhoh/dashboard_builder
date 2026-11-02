@@ -59,7 +59,7 @@ public class ScaleTests
         => Assert.Equal(grain, ClickHouseGateway.PickGrain(1_000_000, Start, Start.AddDays(days), dateOnly));
 }
 
-/// <summary>P26 per-dimension date parts: a whitelist mapped to fixed functions; hostile names never reach SQL.</summary>
+/// <summary>Per-dimension date parts: a whitelist mapped to fixed functions; hostile names never reach SQL.</summary>
 public class DatePartTests
 {
     [Theory]
@@ -90,7 +90,7 @@ public class DatePartTests
     }
 }
 
-/// <summary>P33 server result cache key.</summary>
+/// <summary>Server result cache key.</summary>
 public class ResultCacheTests
 {
     private static ClickHouseConnectionInfo Info(string user = "u", string pw = "s3cret!", string host = "h") => new(host, 8443, user, pw, true, false);
@@ -111,7 +111,7 @@ public class ResultCacheTests
     [Fact] public void A_different_password_for_the_same_user_shares_the_entry() => Assert.Equal(ClickHouseGateway.CacheKey(Info(pw: "a"), Q(), 5000), ClickHouseGateway.CacheKey(Info(pw: "b"), Q(), 5000));
 }
 
-/// <summary>P30 richer filters: text match is bound and case-insensitive; top-N is validated.</summary>
+/// <summary>Richer filters: text match is bound and case-insensitive; top-N is validated.</summary>
 public class RicherFilterTests
 {
     private static string Cond(string op, string value, string category = ClickHouseType.Text, List<(string, string, object)>? ps = null)
@@ -141,7 +141,7 @@ public class RicherFilterTests
     [Fact] public void Histograms_refuse_top_n() => Assert.Throws<RequestValidationException>(() => RequestRules.ValidateHistogram(new HistogramRequest("c", null, [new StatFilter("c", "top", "5")])));
 }
 
-/// <summary>P31 join type per relationship.</summary>
+/// <summary>Join type per relationship.</summary>
 public class JoinTypeTests
 {
     private static QueryRequest Q(string? type) => new(new TableRef("db", "a"),

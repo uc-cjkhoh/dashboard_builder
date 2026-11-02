@@ -6,7 +6,7 @@ using Xunit;
 namespace DashboardBuilder.Tests;
 
 /// <summary>
-/// Schema endpoints (P3) gate on a live session connection. Without one (the case that needs
+/// Schema endpoints gate on a live session connection. Without one (the case that needs
 /// no ClickHouse) they must return 409, not 500 — the happy path is exercised live against a
 /// real server.
 /// </summary>

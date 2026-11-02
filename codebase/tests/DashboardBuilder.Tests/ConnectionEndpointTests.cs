@@ -8,7 +8,7 @@ namespace DashboardBuilder.Tests;
 /// <summary>
 /// End-to-end tests for the connection endpoints against the real app pipeline
 /// (session, DI, routing) via WebApplicationFactory — no live ClickHouse required.
-/// They lock in the P1 safety guarantees: a failed connect returns a clean error with
+/// They lock in the safety guarantees: a failed connect returns a clean error with
 /// <strong>no secret leaked</strong>, and a fresh session starts disconnected.
 /// </summary>
 public class ConnectionEndpointTests : IClassFixture<WebApplicationFactory<Program>>

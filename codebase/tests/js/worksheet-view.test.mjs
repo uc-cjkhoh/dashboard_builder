@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-// Two worksheet views side by side (P24a): own container, own latest-wins gate, shared result cache.
+// Two worksheet views side by side: own container, own latest-wins gate, shared result cache.
 // A fake DOM and a fake fetch are all the view needs.
 const fakeEl = (tag = "div") => ({ tag, className: "", children: [], hidden: false, textContent: "", onscroll: null, scrollTop: 0,
   classList: { toggle() {}, add() {}, remove() {} }, style: { setProperty() {} }, clientWidth: 600, clientHeight: 400,
@@ -100,7 +100,7 @@ test("destroy aborts the in-flight request, disposes the chart and clears onscro
   assert.equal(drawn.length, 0, "nothing drawn after destroy");
 });
 
-// --- P24c: a view obeys the dashboard selection (options.cross) ---
+// --- a view obeys the dashboard selection (options.cross) ---
 const sel = (table, column, value, sourceWidgetId = "w#src") => ({ db: "shop", table, column, value, label: `${table}.${column} = ${value}`, sourceWidgetId });
 const crossHost = (id, table, results, drawn, crossRef, noticeEl = fakeEl(), draws = []) => {
   const container = fakeEl();

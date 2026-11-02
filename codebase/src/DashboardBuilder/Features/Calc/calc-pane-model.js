@@ -8,7 +8,7 @@ import { chipFor } from "./calc-dialog-model.js";
 /** A textarea can hold CRLF; the formula model rejects CR, so the dialog normalises first. */
 export const normaliseFormula = (s) => String(s ?? "").replace(/\r\n?/g, "\n");
 
-/** B4: `{ refusedBy: [names] | null, usedInSheets: n, usedInShared: n }` for deleting calculation `id`;
+/** `{ refusedBy: [names] | null, usedInSheets: n, usedInShared: n }` for deleting calculation `id`;
  *  `shared` are the workbook's shared filters (a shared Top-N can be ranked by a calculation too). */
 export function deleteCalcPlan(calcs, sheets, id, shared = []) {
   const by = usedBy(calcs, id);

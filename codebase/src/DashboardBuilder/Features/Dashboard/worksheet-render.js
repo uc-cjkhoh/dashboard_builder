@@ -94,7 +94,7 @@ function draw(container, rc, sheet, result, cmp) {
   const colorMeasureIdx = mplan.findIndex((e) => e.role === "color");
   const shelfCount = seriesIdx.length;
 
-  // Discrete Colour (P7): a categorical Colour dimension pivots the trailing group-by key into one series per distinct
+  // Discrete Colour: a categorical Colour dimension pivots the trailing group-by key into one series per distinct
   // value (bar -> grouped, stacked -> stacked, line/area -> one per value).
   if (colorMode(sheet) === "discrete" && COLOR_SPLIT_TYPES.has(type)) {
     if (shelfCount !== 1) { container.append(hint(COLOR_SPLIT_HINT)); return; }
@@ -113,7 +113,7 @@ function draw(container, rc, sheet, result, cmp) {
   const usePath = type === "line" || type === "area";
   const rowsOrdered = usePath ? (pathOrderedRows(sheet, result, mplan) ?? rows) : rows;
 
-  // Flatten both dimension axes onto the category axis; one series per SHELF measure (P7 layout).
+  // Flatten both dimension axes onto the category axis; one series per SHELF measure.
   const dimCount = rowDimensions.length + columnDimensions.length;
   const categories = rowsOrdered.map((r) => r.keys.map((k, i) => (k == null ? "—" : fmtCat(k, i))).join(" / "));
   const series = seriesIdx.map((mi) => ({ name: measures[mi], data: rowsOrdered.map((r) => r.values[mi]) }));

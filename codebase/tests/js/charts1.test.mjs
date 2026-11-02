@@ -1,4 +1,4 @@
-// Line styles (T03-05), circle heatmap (T03-10) and bullet target from a field (T03-12) — pure models.
+// Line styles, circle heatmap and bullet target from a field — pure models.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { LINE_STYLE_CHOICES, lineStep, linesTakeStyle } from "../../src/DashboardBuilder/Features/Dashboard/line-style-model.js";

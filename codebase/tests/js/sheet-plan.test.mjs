@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { buildPlan, planDims, planMeasures, sortTargets, fieldId, measureName, periodFilters, isDateOnlyType, colorMode, pagesFilter, drillPathFilters, involvedTables, selectionFilter, keyOf }
   from "../../src/DashboardBuilder/Features/Dashboard/sheet-plan.js";
 
-// The plan reads only its explicit context (P24a): two contexts side by side never touch each other.
+// The plan reads only its explicit context: two contexts side by side never touch each other.
 const ent = (id, table) => ({ id, db: "shop", table, columns: [{ name: "id", type: "UInt32", category: "numeric" }, { name: "region", type: "String", category: "text" }, { name: "placed", type: "Date", category: "temporal" }] });
 const mkCtx = (over = {}) => ({
   calculations: [], entities: new Map([["e1", ent("e1", "orders")], ["e2", ent("e2", "customers")]]), relationships: new Map(),
@@ -73,7 +73,7 @@ test("drill path and pages filters are bound equalities", () => {
   assert.equal(pagesFilter(s).value, "US");
 });
 
-// --- P24c: the dashboard's cross-widget selection as a plan option ---
+// --- the dashboard's cross-widget selection as a plan option ---
 const rel = { from: { entityId: "e1", column: "id" }, to: { entityId: "e2", column: "id" }, joinType: "inner" };
 const crossCtx = () => mkCtx({ relationships: new Map([["r1", rel]]) });
 const country = { db: "shop", table: "customers", column: "country", value: "DE", label: "customers.country = DE", sourceWidgetId: "w#1" };

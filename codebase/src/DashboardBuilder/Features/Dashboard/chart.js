@@ -15,7 +15,7 @@ import { applySelectionDim } from "./selection-dim.js";
 import { dateFitMode } from "./date-labels.js";
 import { axisLabelPlan, shortDateLabels } from "./date-axis.js";
 
-// Charting adapter (P9; formatting). Renders worksheet results through the self-hosted ECharts library
+// Charting adapter. Renders worksheet results through the self-hosted ECharts library
 // (wwwroot/js/vendor/echarts.min.js, loaded as a global before the module graph — no CDN).
 // The rest of the app stays vanilla-JS: this is a thin mapper from our { categories, series }
 // result to an ECharts option, themed entirely from the CSS design tokens so charts match the
@@ -36,7 +36,7 @@ function stateOf(container) {
   return st;
 }
 // The container being drawn right now: the option is built synchronously inside renderChart, and builders that need
-// the live chart later (a symbolSize callback) capture it at build time. /: the render settings — palette
+// the live chart later (a symbolSize callback) capture it at build time. The render settings — palette
 // order reversed, and displayed member name -> user colour — live in each container's state (st.paletteReverse,
 // st.memberColors), so two live charts never share or clobber them.
 let drawing = null;
@@ -88,7 +88,7 @@ function tokens() {
  * One series per measure; the category axis carries the concatenated dimension keys.
  * @param container the #ws-chart element (a positioned host is created inside it)
  * @param spec { type, categories: string[], series: [{ name, data: number[] }],
- *              format?: sheet format config (— value/date format, axis titles, legend, labels, colour-by),
+ *              format?: sheet format config (value/date format, axis titles, legend, labels, colour-by),
  *              selectedIndices?: the category indices of the dashboard-selected mark(s) (bar / stacked / pie / donut fade the rest) }
  */
 export function renderChart(container, spec) {
@@ -388,7 +388,6 @@ function buildOption(spec) {
   if (spec.type === "treemap") return buildTreemap(spec);
   if (spec.type === "histogram") return buildHistogram(spec);
   if (spec.type === "boxplot") return buildBoxplot(spec);
-  // Types.
   if (spec.type === "waterfall") return buildWaterfall(spec);
   if (spec.type === "funnel") return buildFunnel(spec);
   if (spec.type === "gauge") return buildGauge(spec);

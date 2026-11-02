@@ -8,7 +8,7 @@ namespace DashboardBuilder.Tests;
 
 /// <summary>
 /// Database-level guards (roadmap item 4): every query carries ClickHouse's own read-only and
-/// time-limit settings, so the read-only invariant no longer rests on our SQL builders alone, a
+/// time-limit settings, so the read-only invariant does not rest on our SQL builders alone, a
 /// runaway query is stopped server-side, and a client disconnect cancels the query. When the server
 /// refuses a setting, the connection steps down instead of failing: a settings constraint (code 452,
 /// usually on max_execution_time) drops only the time limit; an account the server already locks

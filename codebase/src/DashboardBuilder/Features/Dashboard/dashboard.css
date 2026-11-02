@@ -24,8 +24,6 @@
 .widget__kpi-num { font-size: var(--fs-display); font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
 .widget__kpi-sub { font-size: var(--fs-body); color: var(--ink-3); text-transform: uppercase; letter-spacing: .06em; margin-top: var(--s1); }
 
-/* Chart builder filter rows */
-
 /* ---- Charts ---------------------------------------------------------------
    Bar/line render via the self-hosted charting library (js/chart.js → ECharts),
    themed from the --chart-* tokens in :root. Table renders as a plain .data table
@@ -120,11 +118,11 @@
 .ws-pill__grip:active { cursor: grabbing; }
 .ws-pill.is-dragging { opacity: .45; }
 .ws-pill.is-drop-target { box-shadow: -3px 0 0 0 var(--accent); }
-/* Pill colour tracks the field's role, not the shelf (both shelves mix roles now): a categorical
+/* Pill colour tracks the field's role, not the shelf (both shelves mix roles): a categorical
    dimension is blue, a numeric measure is teal — never the red accent, so no pill reads as an error. */
 .ws-pill--dimension { background: var(--dim-bg); border-color: var(--dim-line); color: var(--dim-ink); }
 .ws-pill--measure { background: var(--meas-bg); border-color: var(--meas-line); color: var(--meas-ink); }
-/* Colour-mark pill (P7): violet, distinct from dimension (blue) and measure (teal). */
+/* Colour-mark pill: violet, distinct from dimension (blue) and measure (teal). */
 .ws-pill--color { background: var(--enc-bg); border-color: var(--enc-line); color: var(--enc-ink); }
 /* Percentile box: a narrow input, its % unit, and an inline message (icon + text) when the value is not 0-100. */
 .ws-pill__pct { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
@@ -463,9 +461,6 @@
 /* Link action: the template field is wide; the selection bar's link button carries the link icon. */
 .ws-link__tpl { width: min(360px, 60vw); }
 .ws-select__link { display: inline-flex; align-items: center; gap: var(--s1); }
-
-/* ---- date part on a date pill: − [part] + ------------------------------- */
-/* The measure pill's table-calculation button, accent-coloured when one is set. */
 
 /* ---- field pane: search, hidden toggle, ⋯ menu, rename ------------------- */
 .ws-fieldtools { display: grid; gap: var(--s2); position: sticky; top: calc(-1 * var(--s2)); z-index: 2; padding-block: var(--s1);

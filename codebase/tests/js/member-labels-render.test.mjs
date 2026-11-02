@@ -1,7 +1,7 @@
 import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 
-// T02-29: member labels reach every display surface of a drawn worksheet and never the raw value behind a click.
+// Member labels reach every display surface of a drawn worksheet and never the raw value behind a click.
 const mk = () => {
   const e = { className: "", children: [], style: { setProperty() {} }, clientWidth: 600, clientHeight: 400, classList: { add() {}, remove() {}, toggle() {} },
     append(...c) { this.children.push(...c); }, replaceChildren(...c) { this.children = c; }, setAttribute() {}, addEventListener() {}, colSpan: 1, rowSpan: 1, _t: "",

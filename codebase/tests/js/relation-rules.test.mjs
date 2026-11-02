@@ -20,7 +20,7 @@ test("compound and other keys never relate", () => {
   assert.equal(keysCompatible("temporal", "temporal"), true);
 });
 
-// T02-12 / T02-13: right and full joins.
+// Right and full joins.
 import { JOIN_TYPES, normalizeJoinType, joinChoices, planJoinType, joinBadge, joinSelection, joinFromSelection, isLegacyLeft } from "../../src/DashboardBuilder/Features/Relations/relation-rules.js";
 
 test("join types are inner, left, right, full; anything else reads as inner", () => {

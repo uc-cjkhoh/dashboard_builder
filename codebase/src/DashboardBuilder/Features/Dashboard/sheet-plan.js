@@ -25,7 +25,7 @@ export const marksOf = (s) => s.marks ?? EMPTY_MARKS;
 // Scatter-family types (scatter + square/circle marks): point charts that plot two measures.
 export const SCATTER_TYPES = new Set(["scatter", "square", "circle"]);
 export const isNumericField = (f) => Boolean(f) && f.category === "numeric";
-// Chart types that consume a Color dimension (P7 marks); the rest ignore a Color pill (the lane says so).
+// Chart types that consume a Color dimension; the rest ignore a Color pill (the lane says so).
 export const COLOR_USES = new Set(["bar", "stacked", "line", "area", "table"]);
 
 /** Calculated fields: the context the pure plan seam (Calc/calc-plan.js) compiles pills against. */
@@ -48,7 +48,7 @@ export const measureName = (f, ctx) => measureLabel(f, ctx.calculations, ctx.met
 /** Stable identity for a pill, so a stored sort target survives re-renders. */
 export const fieldId = (f, kind) => (isCalcPill(f) ? calcPillId(f, kind) : `${kind}:${f.db}.${f.table}.${f.column}:${f.agg ?? ""}${f.agg === "percentile" ? `@${f.p}` : ""}`);
 
-/** Colour encoding: a numeric Colour field ramps a CONTINUOUS gradient; a categorical one splits DISCRETE series (P7). */
+/** Colour encoding: a numeric Colour field ramps a CONTINUOUS gradient; a categorical one splits DISCRETE series. */
 export function colorMode(sheet) {
   const cf = (sheet.color ?? [])[0];
   if (!cf) return "none";
@@ -127,7 +127,7 @@ export function planDims(sheet) {
 /**
  * Measures in SELECT value order, each tagged with its role: "shelf" (a series), "size", "color" (continuous
  * gradient) or "aux" (a numeric Label/Tooltip/Path field). Shelf measures come first so their aliases (v0,v1,…)
- * and series indices are unchanged from before Marks. A Table shows only shelf measures.
+ * and series indices are unchanged when no marks are set. A Table shows only shelf measures.
  */
 export function planMeasures(sheet) {
   const shelf = [

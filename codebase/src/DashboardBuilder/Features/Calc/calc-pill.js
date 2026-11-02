@@ -1,4 +1,4 @@
-// Calculated-field pills (pure, DOM-free; tests/js/calc-pill.test.mjs). Pill shape (plan decision B1):
+// Calculated-field pills (pure, DOM-free; tests/js/calc-pill.test.mjs). Pill shape:
 //   { calc: id, db: "", table: "", column: <name at last save>, category, role, agg? }
 // The live name always comes from the calculation list by id; `column` is only a fallback.
 import { roleOfCalc } from "./calc-model.js";
@@ -32,7 +32,7 @@ export const calcPillId = (f, kind) => `${kind}:calc:${f.calc}:${f.agg ?? ""}`;
 
 export const sameCalcPill = (a, b) => isCalcPill(a) && isCalcPill(b) && a.calc === b.calc;
 
-/** The toast text when a calc pill is dropped on an entry point refuses; null otherwise. */
+/** The toast text when a calc pill is dropped on an entry point that takes no calculations; null otherwise. */
 export function refusal(f, entry) {
   return isCalcPill(f) && ENTRIES.has(entry) ? REFUSAL : null;
 }

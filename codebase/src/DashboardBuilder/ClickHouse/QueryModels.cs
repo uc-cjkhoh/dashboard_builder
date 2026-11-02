@@ -2,7 +2,6 @@ using DashboardBuilder.ClickHouse.Calc;
 
 namespace DashboardBuilder.ClickHouse;
 
-/// <summary>A table (db + name).</summary>
 public sealed record TableRef(string Db, string Table);
 
 /// <summary>A column on a specific table.</summary>

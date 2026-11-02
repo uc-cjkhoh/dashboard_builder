@@ -4,7 +4,7 @@ import { aliasOf, setAlias, clearAliases, cleanMemberAliases, keyAliasMaps, with
   from "../../src/DashboardBuilder/Features/Dashboard/member-labels.js";
 import { LIMITS } from "../../src/DashboardBuilder/Features/Core/validate.js";
 
-// T02-29 member aliases: a per-field raw value -> display label map. Display only; every lookup is by own key.
+// Member aliases: a per-field raw value -> display label map. Display only; every lookup is by own key.
 const plain = (x) => JSON.parse(JSON.stringify(x));
 
 test("limits: 200 entries per field, label 80, key 100", () => {

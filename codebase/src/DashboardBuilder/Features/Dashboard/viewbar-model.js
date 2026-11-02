@@ -9,7 +9,6 @@ export const CHART_TYPES = Object.freeze([
   ["square", "Square"], ["circle", "Circle"],
   // Statistical types.
   ["heatmap", "Heatmap"], ["treemap", "Treemap"], ["histogram", "Histogram"], ["boxplot", "Box plot"],
-  // Types.
   ["waterfall", "Waterfall"], ["funnel", "Funnel"], ["gauge", "Gauge"], ["bullet", "Bullet"],
   ["sankey", "Sankey (flow)"], ["multiples", "Small multiples"],
   ["kpi", "KPI"], ["text", "Text"], ["table", "Table"],

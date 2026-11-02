@@ -14,7 +14,7 @@ import { ANALYTICS_TYPES, scatterSymbol, primaryDim, chartOrientation, marksChan
 // split. Each draws into `container` through chart.js and wires interaction only through the render context `rc`
 // (render-handlers.js), so a non-interactive view draws the same marks without handlers.
 
-/** P7 colour split: one series per colour value (the trailing group-by key); the primary dimension is the first non-colour key. */
+/** Colour split: one series per colour value (the trailing group-by key); the primary dimension is the first non-colour key. */
 export function renderColorSplit(container, rc, sheet, type, result, format, fmtCat) {
   const { categories, series, catTuples, colorVals } = colorSplitData(result, fmtCat);
   // Click a mark -> the primary (first non-colour) dimension value = catTuples[dataIndex][0].

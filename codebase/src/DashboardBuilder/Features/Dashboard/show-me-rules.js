@@ -4,7 +4,7 @@ import { TEXT_VALUE_TYPES } from "./filter-rules.js";
 
 // A pill's role: an explicit role wins; otherwise numeric fields are measures, everything else dimensions.
 export const roleOf = (f) => f.role ?? (f.category === "numeric" ? "measure" : "dimension");
-// Discrete Colour pivots into one series per value on these types (P7) — they need exactly one measure.
+// Discrete Colour pivots into one series per value on these types — they need exactly one measure.
 export const COLOR_SPLIT_TYPES = new Set(["bar", "stacked", "line", "area"]);
 // Statistical charts with their own single-table endpoint (they bypass buildPlan).
 export const STAT_SINGLE_TABLE = new Set(["histogram", "boxplot"]);

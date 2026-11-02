@@ -5,7 +5,7 @@ import { cleanGroupSpec } from "./group-model.js";
 
 const sameName = (a, b) => a.toLowerCase() === b.toLowerCase();
 
-/** B2: a calculation name is 1–LIMITS.calcName characters, no `.`, `[` or `]`, unique case-insensitively
+/** A calculation name is 1–LIMITS.calcName characters, no `.`, `[` or `]`, unique case-insensitively
  *  (ignoring the calculation `selfId` being edited). { ok, value } or { ok: false, error }. */
 export function checkName(name, calcs, selfId) {
   const t = text(name, { label: "Name", max: LIMITS.calcName, required: true });
@@ -32,7 +32,7 @@ const refsTo = (formula, name) => {
   return false;
 };
 
-/** B3: `[Old]` becomes `[New]` in every calculation's formula; `[table.Old]` is left alone. Returns a new array. */
+/** `[Old]` becomes `[New]` in every calculation's formula; `[table.Old]` is left alone. Returns a new array. */
 export function renameInFormulas(calcs, oldName, newName) {
   return calcs.map((c) => ({ ...c, formula: mapRefs(c.formula, (inner) => (inner.trim() === oldName ? newName : undefined)) }));
 }

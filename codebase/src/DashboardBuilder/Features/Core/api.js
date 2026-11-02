@@ -56,7 +56,6 @@ export const api = {
 
   /** List databases on the current connection. */
   databases: () => request("GET", "/api/databases"),
-  /** List tables in a database. */
   tables: (db) => request("GET", `/api/databases/${encodeURIComponent(db)}/tables`),
   /** Column names + types (with display category) for a table. */
   columns: (db, table) =>

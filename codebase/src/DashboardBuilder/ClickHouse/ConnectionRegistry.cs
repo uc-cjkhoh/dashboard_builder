@@ -34,6 +34,5 @@ public sealed class ConnectionRegistry
     public void Save(ClickHouseConnectionInfo info) =>
         Session.Set(SessionKey, JsonSerializer.SerializeToUtf8Bytes(info));
 
-    /// <summary>Drop the session's connection.</summary>
     public void Clear() => Session.Remove(SessionKey);
 }

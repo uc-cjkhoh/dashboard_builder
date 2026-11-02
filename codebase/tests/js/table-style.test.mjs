@@ -1,4 +1,4 @@
-// Table alignment, density and shading (T01-23) — pure model, store default, workbook round-trip, crosstab classes.
+// Table alignment, density and shading — pure model, store default, workbook round-trip, crosstab classes.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { TABLE_ALIGN_CHOICES, TABLE_DENSITY_CHOICES, TABLE_SHADE_CHOICES, tableStyleClasses } from "../../src/DashboardBuilder/Features/Dashboard/table-style-model.js";

@@ -6,7 +6,7 @@ import { LIMITS } from "../../src/DashboardBuilder/Features/Core/validate.js";
 import { parseWorkbook, serializeWorkbook } from "../../src/DashboardBuilder/Features/Workbook/workbook-model.js";
 import { refusal, REFUSAL } from "../../src/DashboardBuilder/Features/Calc/calc-pill.js";
 
-// T03-29 named hierarchies: workbook-level ordered same-table level lists a sheet's Drill can be set from.
+// Named hierarchies: workbook-level ordered same-table level lists a sheet's Drill can be set from.
 const L = (column, table = "t", db = "d") => ({ db, table, column });
 const H = (name, ...cols) => ({ id: "hier1", name, levels: cols.map((c) => L(c)) });
 

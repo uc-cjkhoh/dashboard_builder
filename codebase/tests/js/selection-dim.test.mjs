@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { applySelectionDim, DIM_OPACITY, DIM_TYPES } from "../../src/DashboardBuilder/Features/Dashboard/selection-dim.js";
 
-// Dimming the unselected marks of the dashboard's source widget (P24c): a render-only restyle of an ECharts option.
+// Dimming the unselected marks of the dashboard's source widget: a render-only restyle of an ECharts option.
 test("a bar chart: every mark but the selected one is faded; the selected one is untouched", () => {
   const out = applySelectionDim({ series: [{ type: "bar", data: [1, 2, 3] }] }, "bar", 1);
   assert.deepEqual(out.series[0].data, [{ value: 1, itemStyle: { opacity: DIM_OPACITY } }, 2, { value: 3, itemStyle: { opacity: DIM_OPACITY } }]);

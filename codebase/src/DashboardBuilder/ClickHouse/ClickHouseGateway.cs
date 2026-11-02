@@ -93,8 +93,8 @@ public sealed partial class ClickHouseGateway
         };
 
     /// <summary>
-    /// Whether this connection bypasses TLS certificate validation. Safe by default (P8
-    /// hardening / decision D11): only true when the connection is <em>both</em> secure and the
+    /// Whether this connection bypasses TLS certificate validation. Safe by default
+    /// (decision D11): only true when the connection is <em>both</em> secure and the
     /// user explicitly opted in to trusting an invalid/self-signed certificate. A plain (non-TLS)
     /// connection can never bypass validation, since there is no certificate to validate.
     /// </summary>
@@ -1049,7 +1049,7 @@ public sealed partial class ClickHouseGateway
             .Append(source is null ? Identifier.QualifiedName(req.From.Db, req.From.Table) : $"({source.Sql})").Append(" AS t0");
         // In approximate mode a base table with a sampling key is read as a 10% sample; counts and sums
         // are scaled back by its _sample_factor below.
-        // 12/13: a right or full join can produce rows with no base-table row, which a base sample + its scale factor
+        // A right or full join can produce rows with no base-table row, which a base sample + its scale factor
         // can't represent — those views are read exactly (the result's approx note then reports no sample).
         var joinTypes = (req.Joins ?? []).Select(j => j.Type).ToList();
         var anyBeyondInner = joinTypes.Any(IsOuter);
@@ -1141,7 +1141,7 @@ public sealed partial class ClickHouseGateway
             if (mAgg == "attr" && category is ClickHouseType.Compound or ClickHouseType.Other)
                 throw new RequestValidationException($"Attr can't summarise {m.Column} — it is a compound column.", $"measures[{mIdx}]");
             measNumeric.Add(mAgg is "count" or "countdistinct" or "countnonnull" or "sum" or "avg" or "median" or "percentile" or "stddev" or "variance" || category == ClickHouseType.Numeric);
-            // One aggregate writer for plain and calculated measures. sampled sums/counts are scaled back,
+            // One aggregate writer for plain and calculated measures; sampled sums/counts are scaled back,
             // approximate mode estimates distinct counts (uniq).
             // A percentile's fraction is a bound Float64 parameter (mp{n}), never text.
             var mFraction = mAgg == "percentile" ? BindFraction(m.P, $"mp{mIdx}", $"measures[{mIdx}].p", parameters) : null;

@@ -78,7 +78,7 @@ test('the "Other" remainder is not a data point for lines and bands', () => {
   assert.ok(close(bandBounds({ kind: "stddev", k: 1 }, vals).to, 30));
 });
 
-// Analytics pane items (T07-01): the draggable / clickable items and what each adds to sheet.analytics.
+// Analytics pane items: the draggable / clickable items and what each adds to sheet.analytics.
 
 test("items: reference line, band, trend, forecast; forecast only on line and area", () => {
   assert.deepEqual(ANALYTICS_ITEMS.map((i) => i.id), ["ref", "band", "trend", "forecast"]);

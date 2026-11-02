@@ -10,7 +10,7 @@ const RECENT_KEY = "dashboardbuilder.recent-sources";
 const loadRecent = () => { try { return sanitize(JSON.parse(localStorage.getItem(RECENT_KEY))); } catch { return []; } };
 const saveRecent = (list) => { try { localStorage.setItem(RECENT_KEY, JSON.stringify(list)); } catch { /* not remembered — fine */ } };
 
-// The sidebar connection flow (P2, refined). Gates the schema browser + canvas. Failures show as a
+// The sidebar connection flow. Gates the schema browser + canvas. Failures show as a
 // field error or a toast. Once connected the form is collapsed into a compact summary showing the
 // ClickHouse host (user, transport and port in its tooltip), with icon actions to change the connection (re-open the form) or disconnect.
 export function initConnection() {
@@ -81,7 +81,7 @@ export function initConnection() {
 
   let current = null; // last connected view, for Cancel-back-to-summary
 
-  // Certificate validation is on by default (P8 hardening). The "trust invalid cert" opt-in only
+  // Certificate validation is on by default. The "trust invalid cert" opt-in only
   // applies to a TLS connection, so hide it when Secure is off; warn while it's checked.
   function syncCertControls() {
     const secure = secureEl.checked;
@@ -178,7 +178,6 @@ export function initConnection() {
   // Cancel out of "change" mode, back to the active connection's summary.
   cancelBtn?.addEventListener("click", () => { if (current) applyState(current); });
 
-  // power icon: disconnect.
   disconnectBtn?.addEventListener("click", async () => {
     try {
       const view = await api.disconnect();

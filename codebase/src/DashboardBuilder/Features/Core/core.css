@@ -156,7 +156,7 @@ button { font: inherit; }
 .glass :is(.input, .select, input[type="text"], input[type="number"], input[type="password"], input[type="search"]),
 .ws-shelves :is(.input, .select, select) { border-color: var(--ctl-edge); }
 
-/* Neutral focus ring: a red ring would read as an error now that the accent is red. */
+/* Neutral focus ring: a red ring would read as an error, and the accent is red. */
 :where(button, input, select, textarea, a, [tabindex]):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 /* Thin, themed scrollbars — muted ink thumb on the glass sidebar, line-coloured in the content, accent on hover */

@@ -105,7 +105,7 @@ export function removeHierarchy(id) {
   if (i >= 0) { hierarchies.splice(i, 1); emit("hierarchies:changed"); }
 }
 
-// Calculated fields (Plan B): workbook-level { id, name, formula } (Calc/calc-workbook.js). A rename rewrites [Old] in other formulas (B3).
+// Calculated fields: workbook-level { id, name, formula } (Calc/calc-workbook.js). A rename rewrites [Old] in other formulas.
 export const calculations = [];
 let calcSeq = 0;
 /** `nextId` (saved with the workbook) keeps an id from being reused after the highest one was deleted. */
@@ -190,7 +190,7 @@ export function showModel() {
 // a categorical field is a dimension (group-by), a numeric field is a measure (aggregated), and the
 // shelf it sits on only controls chart layout — so both shelves accept both kinds. Each pill is
 // { db, table, column, category, agg? } where `agg` is present only for numeric (measure) fields.
-// `color` (P7 marks) holds at most one dimension: a Tableau-style Color encoding that splits the
+// `color` holds at most one dimension: a Tableau-style Color encoding that splits the
 // chart into one coloured series per distinct value — an extra group-by the client pivots into
 // series (bar/stacked/line/area) or renders as a free extra crosstab header level (table).
 // `sort` is { by: <field id>, dir: 'asc'|'desc' } or null (default: ascending by the first field).
@@ -205,7 +205,7 @@ export function showModel() {
 // `levels` are the ordered drill columns (year → quarter → month), all from the same table; `depth` is
 // the 0-based level currently shown; `path` pins each ancestor's chosen value (length === depth) as a
 // bound-parameter filter, so drilling stays on the read-only, bound-param query path (D6/D16).
-// `marks` (Marks card) holds the per-mark encodings beyond the P7 Color shelf — see defaultMarks().
+// `marks` (Marks card) holds the per-mark encodings beyond the Color shelf — see defaultMarks().
 // `pages` (Pages shelf) steps/animates the view through one dimension's members, one at a time:
 //   { db, table, column, category, index, members? }  — `index` is the current member; `members` is the
 // bounded distinct-values list once loaded. Each page filters the view to `members[index]` via a
@@ -219,14 +219,14 @@ export const emptySheet = () => ({
   memberColors: {}, // { [table.column]: { [member]: "#rrggbb" } } (Dashboard/colour-model.js)
   // tooltipStyle (tooltip modal): per-line { size, bold, italic, color } aligned to tooltipText's lines (Dashboard/tooltip-style.js); the key exists only once a line is styled
   tooltipText: null, // tooltip template with <Field> placeholders (Dashboard/tooltip-model.js); null = automatic
-  title: null, caption: null, showTitle: true, showFilterCards: true, // filter cards above the chart
+  title: null, caption: null, showTitle: true, showFilterCards: true, // title / caption: null = the tab name / an automatic summary; filter cards above the chart
   // collapsed: crosstab headers shown collapsed { rows: [key…], cols: [key…] } (Dashboard/collapse-model.js); the key exists only once a header is collapsed
-  analytics: null, // { ref, band, trend, forecast, totals } (Dashboard/analytics-model.js); null = none // null = the tab name / an automatic summary
+  analytics: null, // { ref, band, trend, forecast, totals } (Dashboard/analytics-model.js); null = none
   urlAction: null, // { label, template } — "Open <label>" on the selection chip (Dashboard/action-model.js)
 });
 
 // Marks card: a cluster of encoding targets that map a field onto a mark property. All stay on
-// the existing bounded aggregate/join query — Size/Detail add a measure/group-by exactly like the P7
+// the existing bounded aggregate/join query — Size/Detail add a measure/group-by exactly like the
 // Color shelf; Label/Tooltip read a field already (or newly, if numeric) in the query.
 //   size:    one numeric field → mark size (bubble scatter). { db, table, column, category, agg }
 //   label:   one field → text drawn on each mark (a dimension already grouped, or a numeric measure)

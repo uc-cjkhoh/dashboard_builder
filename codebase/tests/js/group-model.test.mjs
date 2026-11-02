@@ -7,7 +7,7 @@ import { compileCalculation, catalogFromEntities } from "../../src/DashboardBuil
 import { parseWorkbook, serializeWorkbook } from "../../src/DashboardBuilder/Features/Workbook/workbook-model.js";
 import { LIMITS } from "../../src/DashboardBuilder/Features/Core/validate.js";
 
-// T02-30 groups: members -> named groups, compiled to the calculation engine's tree (CASE, one WHEN per group, OR of bound equals).
+// Groups: members -> named groups, compiled to the calculation engine's tree (CASE, one WHEN per group, OR of bound equals).
 const FIELD = { db: "d", table: "t", column: "region" };
 const spec = (groups, field = FIELD) => ({ field, groups });
 const g = (name, ...members) => ({ name, members });

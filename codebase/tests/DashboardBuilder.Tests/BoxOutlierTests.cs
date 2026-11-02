@@ -3,7 +3,7 @@ using Xunit;
 
 namespace DashboardBuilder.Tests;
 
-/// <summary>Box-plot outliers (T07-08): the Tukey-fence SQL is bounded, identifier-quoted and value-bound.</summary>
+/// <summary>Box-plot outliers: the Tukey-fence SQL is bounded, identifier-quoted and value-bound.</summary>
 public class BoxOutlierTests
 {
     [Fact]

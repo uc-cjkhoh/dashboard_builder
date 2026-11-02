@@ -6,7 +6,7 @@ import { primaryDim, chartOrientation, aliasNames, pathOrderedRows, statusText, 
 import { tupleKey, uniqueTuples, runs, levelSpans } from "../../src/DashboardBuilder/Features/Dashboard/grid-model.js";
 import { SCATTER_TYPES, planMeasures } from "../../src/DashboardBuilder/Features/Dashboard/sheet-plan.js";
 
-// The pure shaping of a result for drawing (P24a): no DOM, so every rule is checkable here.
+// The pure shaping of a result for drawing: no DOM, so every rule is checkable here.
 const dim = (column) => ({ db: "shop", table: "orders", column, category: "text" });
 const meas = (column, agg = "sum") => ({ db: "shop", table: "orders", column, category: "numeric", agg });
 const sheet = (over = {}) => ({ columns: [], rows: [], color: [], filters: [], chartType: "bar", sort: null, selection: null, drill: null,

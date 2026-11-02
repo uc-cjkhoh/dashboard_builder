@@ -413,7 +413,7 @@ export function initDashboards() {
     }
   }
 
-  // --- named hierarchies: the "Hierarchies" group; applying one copies its levels into sheet.drill -----
+  // --- named hierarchies: applying one copies its levels into sheet.drill -----
   // The sidebar's two tool icons (worksheet tabs): each opens a dialog to add, edit or use the workbook's calculated fields / hierarchies.
   const openHierarchies = (startNew) => openHierarchiesDialog({ tables: uniqueTables(), columnsFor, castOf, startNew, canApply: isWorksheetActive(), onApply: (id) => applyHierarchy(activeWorksheet(), id) });
   const manageCalcs = () => openCalcManager({
@@ -512,7 +512,7 @@ export function initDashboards() {
     const copy = addCalculation({ name: ok.value, formula: calc.formula, ...(calc.group ? { group: structuredClone(calc.group) } : {}) });
     setRoleChoice(copy.id, roleChoice(calc.id));
   }
-  // B4: refuse while another calculation uses it; ask first when worksheets use it; else just delete.
+  // Refuse while another calculation uses it; ask first when worksheets use it; else just delete.
   async function deleteCalcField(calc) {
     const plan = deleteCalcPlan(calculations, worksheets().map((d) => d.sheet), calc.id, sharedFilters);
     if (plan.refusedBy) { toast(`Used by calculation '${plan.refusedBy.join("', '")}'.`, "info"); return; }
@@ -667,7 +667,6 @@ export function initDashboards() {
     input.addEventListener("dragstart", (e) => e.preventDefault());
   }
 
-  // --- shelves -------------------------------------------------------------
   function renderShelves() {
     analyticsDrop = null;
     const dash = activeWorksheet();
@@ -1585,7 +1584,7 @@ export function initDashboards() {
     normaliseShelf(s, "rows");
     commit(dash, s);
   }
-  // A Color pill (P7 marks): a plain dimension — no aggregation, no role toggle. It splits the chart
+  // A Color pill: a plain dimension — no aggregation, no role toggle. It splits the chart
   // into one coloured series per distinct value. The shelf holds at most one (Tableau's discrete
   // Color); dropping another replaces it (see addColor).
   function colorPill(dash, s, f, i) {
@@ -2097,7 +2096,7 @@ export function initDashboards() {
     dash.sheet.filters.push({ db: f.db, table: f.table, column: f.column, category: f.category, op: "=", value: "" });
     commit(dash, dash.sheet);
   }
-  // Drop a field onto Color (P7/marks). A categorical field is discrete (group-by → coloured
+  // Drop a field onto Color. A categorical field is discrete (group-by → coloured
   // series); a numeric field is continuous (gradient — see colorMode/planMeasures). Capped at one —
   // a second drop replaces the first, matching Tableau's single Colour slot.
   function addColor(dash, f) {
@@ -2509,7 +2508,7 @@ export function initDashboards() {
     }
     return wrap;
   }
-  // Every edit goes through commit() → worksheet:changed → renderShelves + runChart. each commit also
+  // Every edit goes through commit() → worksheet:changed → renderShelves + runChart. Each commit also
   // records the previous committed sheet for undo (edits mutate the sheet in place, so the "before" is
   // the snapshot taken at the last commit). commitQuiet skips the history (Pages autoplay).
   const commit = (dash, sheet) => {
