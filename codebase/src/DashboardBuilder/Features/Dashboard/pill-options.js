@@ -11,11 +11,12 @@ function tidy(list) {
 const sep = { type: "sep" };
 
 /** A Columns / Rows field pill. `aggs` null = nothing to aggregate with; `roleFlip` = may switch dimension <-> measure. */
-export function fieldPillOptions({ measure, aggs, agg, roleFlip, tableCalc, temporal, parts = [], part, finer, coarser, dateLabelsAll, choicesOk }) {
+export function fieldPillOptions({ measure, aggs, agg, roleFlip, numeric, tableCalc, temporal, parts = [], part, finer, coarser, dateLabelsAll, choicesOk }) {
   const r = [];
   if (measure && aggs) for (const a of aggs) r.push({ id: `agg:${a}`, type: "radio", label: a === "percentile" ? "Percentile…" : a, checked: (agg ?? aggs[0]) === a });
   if (measure && aggs && agg === "percentile") r.push({ id: "percent", type: "custom" });
-  if (roleFlip) r.push(sep, { id: "role", type: "item", label: measure ? "Use as dimension" : "Use as measure" });
+  if (roleFlip && numeric) r.push(sep, { id: "dc:continuous", type: "radio", label: "Continuous", checked: Boolean(measure) }, { id: "dc:discrete", type: "radio", label: "Discrete", checked: !measure });
+  else if (roleFlip) r.push(sep, { id: "role", type: "item", label: measure ? "Use as dimension" : "Use as measure" });
   if (measure) r.push(sep, { id: "tablecalc", type: "check", label: "Table calculation…", checked: Boolean(tableCalc) });
   if (temporal && !measure) {
     r.push(sep);

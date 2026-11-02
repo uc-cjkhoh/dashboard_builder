@@ -2,6 +2,7 @@ import { api } from "../Core/api.js";
 import { icon, PATHS } from "../Core/icons.js";
 import { wireMenu, wireContextMenu } from "../Core/menu.js";
 import { sameRef, choicesOf, switchField, removeChoice as removeChoiceFrom } from "./field-choices.js";
+import { defaultShelf } from "./placement-model.js";
 import { fieldPillOptions, filterPillOptions, filterSummary, markGrid } from "./pill-options.js";
 import { visibleTools } from "./toolbar-rules.js";
 import { roleOf, STAT_SINGLE_TABLE, showMeOptions } from "./show-me-rules.js";
@@ -558,8 +559,7 @@ export function initDashboards() {
 
     // Keyboard/non-drag path (a11y): a focusable plus button adds the field to its natural shelf without
     // dragging — measures to Rows, dimensions to Columns (mirrors the sidebar table chip's plus button).
-    const shelfKey = role === "measure" ? "rows" : "columns";
-    const shelfLabel = role === "measure" ? "Rows" : "Columns";
+    const { shelf: shelfKey, label: shelfLabel } = defaultShelf(role);
     const add = el("button", "ws-field__add");
     add.append(icon("plus", { size: 14 }));
     add.type = "button";
@@ -570,6 +570,12 @@ export function initDashboards() {
       if (dash) addField(dash, shelfKey, payload);
     });
     chip.append(add);
+    // T01-15: double-click places the field on its default shelf (the plus button is the keyboard path).
+    chip.addEventListener("dblclick", (e) => {
+      if (e.target.closest("input, [contenteditable]")) return;
+      const dash = activeWorksheet();
+      if (dash) addField(dash, shelfKey, payload);
+    });
 
     chip.addEventListener("dragstart", (e) => {
       e.dataTransfer.setData(FIELD_MIME, JSON.stringify(payload));
@@ -1496,7 +1502,7 @@ export function initDashboards() {
     const partChoices = DATE_PART_CHOICES.filter(([v]) => !(dateOnly && (v === "hour" || v === "hourOfDay")));
     const ctxId = `${shelfKey}:${i}`;
     const entries = () => bindEntries(fieldPillOptions({
-      measure: isMeasure, aggs: aggOpts, agg: f.agg, roleFlip: rowLevelNumber, tableCalc: isCalc(f.tableCalc),
+      measure: isMeasure, aggs: aggOpts, agg: f.agg, roleFlip: rowLevelNumber, numeric: f.category === "numeric", tableCalc: isCalc(f.tableCalc),
       temporal, parts: partChoices, part: f.datePart, finer: temporal ? stepPart(f.datePart ?? "auto", 1, dateOnly) : null,
       coarser: temporal ? stepPart(f.datePart ?? "auto", -1, dateOnly) : null, dateLabelsAll: f.dateLabels === "all",
       choicesOk: !calcPill, // E12: a calculated field has no field choices
@@ -1506,6 +1512,7 @@ export function initDashboards() {
         if (f.agg === "percentile") f.p = isFraction(f.p) ? f.p : DEFAULT_PERCENTILE; else delete f.p;
         commit(dash, s);
       } else if (id.startsWith("part:")) { f.datePart = id.slice(5); commit(dash, s); }
+      else if (id === "dc:continuous" || id === "dc:discrete") { if ((id === "dc:continuous") !== isMeasure) setRole(dash, s, f, isMeasure ? "dimension" : "measure"); }
       else if (id === "role") setRole(dash, s, f, isMeasure ? "dimension" : "measure");
       else if (id === "finer" || id === "coarser") {
         const next = stepPart(f.datePart ?? "auto", id === "finer" ? 1 : -1, dateOnly);
