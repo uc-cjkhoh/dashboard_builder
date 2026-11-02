@@ -3,6 +3,7 @@
 //   (start the app: cd src/DashboardBuilder && dotnet run --no-launch-profile --urls http://localhost:5231 ; stop: fuser -k 5231/tcp)
 // Env: APP_URL, SHOTS_DIR, CDP_PORT, CHROME_BIN.
 import { launch } from './cdp.mjs';
+import { relateTables } from './model.mjs';
 import { writeFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -122,6 +123,7 @@ try {
   for (const t of ['orders', 'customers'])
     await ev(`document.dispatchEvent(new CustomEvent('table:add', { detail: { db: 'shop', table: ${J(t)} } }))`);
   await waitFor(`document.querySelectorAll('.entity').length === 2 && [...document.querySelectorAll('.entity__status')].every((s) => s.hidden)`, 'both tables loaded');
+  await relateTables(ev, waitFor, ['orders', 'region', 'customers', 'country']); // an unrelated table is held out of the field pane
   await ev(`document.querySelector('.tab-add').click(); document.querySelector('[data-new-tab=worksheet]').click()`);
   await waitFor(`!document.getElementById('worksheet-view').hidden`, 'worksheet open');
   await installHelpers();
