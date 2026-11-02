@@ -84,7 +84,8 @@ public static class CalcCompiler
                 {
                     FnArg.Length or FnArg.Position => Param((uint)((NumNode)fn.Args[i]).V, "UInt32"),
                     // DATEADD's unit picks a fixed function below (nothing bound); DATEDIFF binds its unit word.
-                    FnArg.Unit => fn.Fn == "dateadd" ? ((StrNode)fn.Args[i]).V.ToLowerInvariant() : Param(((StrNode)fn.Args[i]).V.ToLowerInvariant(), "String"),
+                    FnArg.Unit => fn.Fn is "dateadd" or "datetrunc" ? ((StrNode)fn.Args[i]).V.ToLowerInvariant() : Param(((StrNode)fn.Args[i]).V.ToLowerInvariant(), "String"),
+                    FnArg.Part => ((StrNode)fn.Args[i]).V.ToLowerInvariant(), // picks a fixed dateName part below; nothing bound
                     FnArg.Amount => Param((int)CalcValidator.AmountLiteral(fn.Args[i])!.Value, "Int32"),
                     _ => Walk(fn.Args[i]),
                 });
@@ -121,6 +122,10 @@ public static class CalcCompiler
                 "week" => $"toFloat64(toISOWeek({a[0]}))",
                 "weekday" => $"toFloat64(toDayOfWeek({a[0]}))",
                 "date" => TypeCast.ParseDate(a[0]),
+                "isoyear" => $"toFloat64(toISOYear({a[0]}))",
+                "datename" => $"dateName('{a[0]}', toDateTime64({a[1]}, 0))",
+                "datetrunc" => DateTrunc(a[0], a[1]),
+                "makedate" => MakeDate(a[0], a[1], a[2]),
                 _ => throw new InvalidOperationException($"Unsupported function '{fn.Fn}'."),
             };
         }
@@ -132,6 +137,23 @@ public static class CalcCompiler
         {
             var r = $"{add}(toDateTime64({date}, 0), {amount})";
             return $"if({r} > toDateTime64('1900-01-03 00:00:00', 0, 'UTC') AND {r} < toDateTime64('2299-12-29 00:00:00', 0, 'UTC'), {r}, NULL)";
+        }
+
+        // DATETRUNC on a DateTime64 (1900..2299): the date-sized units come back as Date32 (never the 1970-based Date), so every
+        // unit is widened to DateTime64 and the result is one type. The unit is whitelisted and written as a fixed word.
+        static string DateTrunc(string unit, string date)
+        {
+            var t = $"dateTrunc('{unit}', toDateTime64({date}, 0))";
+            return unit is "year" or "quarter" or "month" or "week" ? $"toDateTime64({t}, 0)" : t;
+        }
+
+        // makeDate32 rolls an impossible day over (Feb 30 -> Mar 1) and answers 1970-01-01 for a bad month, so MAKEDATE is NULL unless
+        // all three are whole numbers, the year lies in 1901..2298 (inside the DATEADD window), month 1..12, day 1..31 and the built
+        // date's day is the day asked for (a rolled-over date never matches). A NULL part makes the condition NULL, so the answer is NULL.
+        static string MakeDate(string y, string m, string d)
+        {
+            var x = $"makeDate32(toInt32({y}), toInt32({m}), toInt32({d}))";
+            return $"if({y} = floor({y}) AND {m} = floor({m}) AND {d} = floor({d}) AND {y} >= 1901 AND {y} <= 2298 AND {m} >= 1 AND {m} <= 12 AND {d} >= 1 AND {d} <= 31 AND toDayOfMonth({x}) = {d}, toDateTime64({x}, 0), NULL)";
         }
 
         // DATEADD's fixed ClickHouse function per whitelisted unit (the unit never reaches SQL as text).

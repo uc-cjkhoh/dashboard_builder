@@ -8,7 +8,7 @@ export const GROUPS = Object.freeze(["Aggregate", "Logic", "Text", "Date"]);
 
 const AGGREGATES = ["sum", "avg", "min", "max", "count", "countd", "median", "stddev", "variance", "percentile", "attr"];
 const TEXT = ["text", "lower", "upper", "trim", "ltrim", "rtrim", "len", "left", "right", "mid", "find", "replace", "concat", "contains", "startswith", "endswith", "icontains", "istartswith", "iendswith", "split"];
-const DATE = ["datediff", "dateadd", "year", "month", "day", "quarter", "week", "weekday", "date"];
+const DATE = ["datediff", "dateadd", "year", "month", "day", "quarter", "week", "weekday", "date", "isoyear", "datename", "datetrunc", "makedate"];
 /** Logic keywords the parser handles itself: name -> { args: display text, result, insert }. */
 const LOGIC = {
   if: { sig: "IF(condition, then, else)", result: "same type as then / else" },
@@ -26,6 +26,9 @@ const LOGIC = {
   false: { sig: "FALSE", result: "boolean", insert: "FALSE" },
   null: { sig: "NULL", result: "same type as the results beside it", insert: "NULL" },
 };
+
+/** MAKEDATE answers NULL outside these years (inclusive); twin of the bounds in ClickHouse/Calc/CalcCompiler.cs; a test ties them. */
+export const MAKEDATE_YEARS = Object.freeze({ from: 1901, to: 2298 });
 
 /** DATEADD's answer must lie strictly inside these UTC dates or it is NULL (twin of the bounds in ClickHouse/Calc/CalcCompiler.cs; a test ties them). */
 export const DATEADD_WINDOW = Object.freeze({ after: "1900-01-03", before: "2299-12-29" });
@@ -86,10 +89,14 @@ const TEXTS = {
   quarter: ["The quarter of the year, 1 to 4.", "QUARTER([orders.placed])", "A NULL date gives NULL."],
   week: ["The ISO 8601 week number, 1 to 53.", "WEEK([orders.placed])", "Weeks start on Monday; week 1 holds the year's first Thursday."],
   weekday: ["The day of the week, Monday 1 to Sunday 7.", "WEEKDAY([orders.placed])", "Tableau counts Sunday as 1; here a Sunday is 7."],
+  isoyear: ["The ISO 8601 year of the date.", "ISOYEAR([orders.placed])", "The year that owns the date's ISO week, so 30 Dec 2024 is in 2025. A NULL date gives NULL."],
+  datename: ["The English name of the date's weekday or month.", "DATENAME('weekday', [orders.placed])", "The part is a text literal, 'weekday' (Monday to Sunday) or 'month' (January to December). Always English. A NULL date gives NULL."],
+  datetrunc: ["A date cut back to the start of its unit.", "DATETRUNC('month', [orders.placed])", "The unit is a text literal: year, quarter, month, week, day, hour, minute or second. Weeks start on Monday. The result is a date with a time of 00:00:00 for the larger units. A NULL date gives NULL."],
+  makedate: ["A date built from a year, month and day.", "MAKEDATE(2024, 2, 29)", `Empty (NULL) unless all three are whole numbers, the year is ${MAKEDATE_YEARS.from} to ${MAKEDATE_YEARS.to}, and the day exists in that month (29 Feb only in a leap year). A NULL part gives NULL.`],
   date: ["Reads text as a calendar date.", "DATE('2024-03-05')", "Empty when the text is not a real date (for example 2024-02-30)."],
 };
 
-const WORD = { value: "value", text: "text", length: "length", position: "position", separator: "separator", unit: "unit", amount: "amount", date: "date" };
+const WORD = { value: "value", text: "text", length: "length", position: "position", separator: "separator", unit: "unit", amount: "amount", date: "date", part: "part", number: "number" };
 const NAMES = new Map(); // lower-case name -> group
 for (const n of AGGREGATES) NAMES.set(n, "Aggregate");
 for (const n of Object.keys(LOGIC)) NAMES.set(n, "Logic");

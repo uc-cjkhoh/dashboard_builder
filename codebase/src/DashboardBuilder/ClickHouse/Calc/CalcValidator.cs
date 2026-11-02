@@ -208,6 +208,13 @@ public static class CalcValidator
                             if (fn.Args[n] is not StrNode { V: var unit } || !CalcCatalog.DateUnits.Contains(unit.ToLowerInvariant()))
                                 throw new CalcException($"{upper}'s unit must be one of {string.Join(", ", CalcCatalog.DateUnits.SkipLast(1).Select(u => $"'{u}'"))} or '{CalcCatalog.DateUnits[^1]}' written in the formula as text.", ap);
                             break;
+                        case FnArg.Part:
+                            if (fn.Args[n] is not StrNode { V: var part } || !CalcCatalog.DateNameParts.Contains(part.ToLowerInvariant()))
+                                throw new CalcException($"{upper}'s part must be {string.Join(" or ", CalcCatalog.DateNameParts.Select(u => $"'{u}'"))} written in the formula as text.", ap);
+                            break;
+                        case FnArg.Number:
+                            if (arg.Type != CalcType.Number) throw new CalcException($"{upper} needs a number — {arg.Name} is {arg.Type}.", ap);
+                            break;
                         case FnArg.Amount:
                             if (AmountLiteral(fn.Args[n]) is not { } amount || amount != Math.Floor(amount) || Math.Abs(amount) > CalcLimits.MaxDateAmount)
                                 throw new CalcException($"{upper}'s amount must be a whole number from -{CalcLimits.MaxDateAmount} to {CalcLimits.MaxDateAmount} written in the formula.", ap);

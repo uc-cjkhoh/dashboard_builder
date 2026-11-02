@@ -435,6 +435,51 @@ public class CalcCompilerTests
     }
 
     [Fact]
+    public void ISOYEAR_is_a_fixed_function_widened_to_float()
+    {
+        var (sql, ps) = Compile(Fn("isoyear", F("placed")));
+        Assert.Equal("toFloat64(toISOYear(t0.`placed`))", sql);
+        Assert.Empty(ps);
+    }
+
+    [Theory]
+    [InlineData("weekday", "dateName('weekday', toDateTime64(t0.`placed`, 0))")]
+    [InlineData("Month", "dateName('month', toDateTime64(t0.`placed`, 0))")]
+    public void DATENAME_picks_a_fixed_part_and_binds_nothing(string part, string expected)
+    {
+        var (sql, ps) = Compile(Fn("datename", S(part), F("placed")));
+        Assert.Equal(expected, sql);
+        Assert.Empty(ps);
+    }
+
+    [Theory]
+    [InlineData("year")]
+    [InlineData("quarter")]
+    [InlineData("month")]
+    [InlineData("week")]
+    [InlineData("day")]
+    [InlineData("hour")]
+    [InlineData("minute")]
+    [InlineData("second")]
+    public void DATETRUNC_picks_a_fixed_unit_on_a_DateTime64_and_binds_nothing(string unit)
+    {
+        var (sql, ps) = Compile(Fn("datetrunc", S(unit.ToUpperInvariant()), F("placed")));
+        var t = $"dateTrunc('{unit}', toDateTime64(t0.`placed`, 0))";
+        Assert.Equal(unit is "year" or "quarter" or "month" or "week" ? $"toDateTime64({t}, 0)" : t, sql);
+        Assert.Empty(ps);
+    }
+
+    [Fact]
+    public void MAKEDATE_guards_whole_numbers_range_and_the_day_round_trip_and_binds_each_literal_once()
+    {
+        var (sql, ps) = Compile(Fn("makedate", new NumNode(2024), new NumNode(2), new NumNode(30)));
+        var (y, m, d) = ("{c0p0:Float64}", "{c0p1:Float64}", "{c0p2:Float64}");
+        var x = $"makeDate32(toInt32({y}), toInt32({m}), toInt32({d}))";
+        Assert.Equal($"if({y} = floor({y}) AND {m} = floor({m}) AND {d} = floor({d}) AND {y} >= 1901 AND {y} <= 2298 AND {m} >= 1 AND {m} <= 12 AND {d} >= 1 AND {d} <= 31 AND toDayOfMonth({x}) = {d}, toDateTime64({x}, 0), NULL)", sql);
+        Assert.Equal(new[] { ("c0p0", "Float64", (object)2024.0), ("c0p1", "Float64", (object)2.0), ("c0p2", "Float64", (object)30.0) }, ps);
+    }
+
+    [Fact]
     public void DATE_guards_digit_only_text_and_out_of_range_results_and_binds_its_literal_once()
     {
         var (sql, ps) = Compile(Fn("date", S("2024-03-05")));
