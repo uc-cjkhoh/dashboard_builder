@@ -27,16 +27,16 @@ import { removeSheetWidgets, defaultTabName } from "../Board/board-model.js";
 
 export const bus = new EventTarget();
 
-// P41 workbook theme: { accent: preset id | "#rrggbb", palette } (Core/theme-model.js). Applied to the
+// Workbook theme: { accent: preset id | "#rrggbb", palette } (Core/theme-model.js). Applied to the
 // :root tokens by Core/theme.js on "theme:changed"; saved with the workbook.
 let theme = { accent: "crimson", palette: "default" };
 
-// P40 shared filters: filter objects (same shape as sheet.filters) that every worksheet applies where
+// Shared filters: filter objects (same shape as sheet.filters) that every worksheet applies where
 // their table is in its view. Workbook-level; edited from any worksheet's Filters tool.
 export const sharedFilters = [];
 export function setSharedFilters(list) { sharedFilters.splice(0, sharedFilters.length, ...list); }
 
-// P28 field settings, per workbook: "db.table.column" → { alias?, agg?, hidden? }. The alias is display
+// Field settings, per workbook: "db.table.column" → { alias?, agg?, hidden? }. The alias is display
 // only (the SQL keeps the real, catalog-validated column); `agg` is the default aggregation when the field
 // becomes a measure; `hidden` leaves it out of the field pane.
 export const fieldMeta = new Map();
@@ -59,7 +59,7 @@ export function setAllFieldMeta(obj) {
   emit("fields:changed");
 }
 
-// P32 parameters: workbook-level named, typed values (Core/parameters-model.js).
+// Parameters: workbook-level named, typed values (Core/parameters-model.js).
 export const parameters = [];
 let paramSeq = 0;
 export function setParameters(list) {
@@ -83,7 +83,7 @@ export function removeParameter(id) {
   if (i >= 0) { parameters.splice(i, 1); emit("parameters:changed"); }
 }
 
-// T03-29 named hierarchies: workbook-level { id, name, levels: [{ db, table, column }] } (Dashboard/hierarchy-model.js).
+// Named hierarchies: workbook-level { id, name, levels: [{ db, table, column }] } (Dashboard/hierarchy-model.js).
 // Applying one to a sheet copies its levels into sheet.drill, so renaming or deleting one never touches a sheet.
 export const hierarchies = [];
 let hierSeq = 0;
@@ -133,7 +133,7 @@ export function removeCalculation(id) {
   if (i >= 0) { calculations.splice(i, 1); emit("calculations:changed"); }
 }
 
-// P39 bookmarks: named snapshots of one worksheet's view (its sheet, incl. selection / drill / page /
+// Bookmarks: named snapshots of one worksheet's view (its sheet, incl. selection / drill / page /
 // format) plus the shared filters at the time. { id, name, worksheetId, worksheetName, sheet, sharedFilters, savedAt }
 export const bookmarks = [];
 let bookmarkSeq = 0;
@@ -194,52 +194,52 @@ export function showModel() {
 // chart into one coloured series per distinct value — an extra group-by the client pivots into
 // series (bar/stacked/line/area) or renders as a free extra crosstab header level (table).
 // `sort` is { by: <field id>, dir: 'asc'|'desc' } or null (default: ascending by the first field).
-// `format` (P10) is per-chart presentation, applied without touching the query — see defaultFormat().
-// `selection` (P15 click-to-filter) is the transient mark selection: click a chart mark to select its
+// `format` is per-chart presentation, applied without touching the query — see defaultFormat().
+// `selection` (click-to-filter) is the transient mark selection: click a chart mark to select its
 // primary-dimension value. `{ db, table, column, value, label, action }` where `action` is null (just a
 // visible selection), "keep" (filter the sheet to that value) or "exclude" (filter it out) — applied as
-// a bound-parameter filter. This is the machinery cross-widget filtering (P24) will reuse.
-// `drill` (P16 hierarchical drill-down) declares an ordered hierarchy over columns of ONE table and
+// a bound-parameter filter. This is the machinery cross-widget filtering will reuse.
+// `drill` (hierarchical drill-down) declares an ordered hierarchy over columns of ONE table and
 // tracks the current descent. `null`, or:
 //   { levels: [{db, table, column, category}], depth, path: [{column, value, label}] }
 // `levels` are the ordered drill columns (year → quarter → month), all from the same table; `depth` is
 // the 0-based level currently shown; `path` pins each ancestor's chosen value (length === depth) as a
 // bound-parameter filter, so drilling stays on the read-only, bound-param query path (D6/D16).
-// `marks` (P18 Marks card) holds the per-mark encodings beyond the P7 Color shelf — see defaultMarks().
-// `pages` (P20 Pages shelf) steps/animates the view through one dimension's members, one at a time:
+// `marks` (Marks card) holds the per-mark encodings beyond the P7 Color shelf — see defaultMarks().
+// `pages` (Pages shelf) steps/animates the view through one dimension's members, one at a time:
 //   { db, table, column, category, index, members? }  — `index` is the current member; `members` is the
 // bounded distinct-values list once loaded. Each page filters the view to `members[index]` via a
-// bound-parameter `=` filter (the P14 path), so paging stays read-only and injection-safe (D6).
+// bound-parameter `=` filter (the path), so paging stays read-only and injection-safe (D6).
 export const emptySheet = () => ({
   columns: [], rows: [], color: [], filters: [], chartType: "bar", sort: null,
   selection: null, drill: null, marks: defaultMarks(), pages: null, format: defaultFormat(),
-  // P35: a date range on one date field + an optional comparison range (Dashboard/period-model.js).
+  // A date range on one date field + an optional comparison range (Dashboard/period-model.js).
   // null | { db, table, column, category, preset, from, to, compare, compareFrom, compareTo }
   period: null,
-  memberColors: {}, // T01-20: { [table.column]: { [member]: "#rrggbb" } } (Dashboard/colour-model.js)
+  memberColors: {}, // { [table.column]: { [member]: "#rrggbb" } } (Dashboard/colour-model.js)
   // tooltipStyle (tooltip modal): per-line { size, bold, italic, color } aligned to tooltipText's lines (Dashboard/tooltip-style.js); the key exists only once a line is styled
-  tooltipText: null, // T01-19: tooltip template with <Field> placeholders (Dashboard/tooltip-model.js); null = automatic
-  title: null, caption: null, showTitle: true, showFilterCards: true, // P30 filter cards above the chart
-  // collapsed (T03-29): crosstab headers shown collapsed { rows: [key…], cols: [key…] } (Dashboard/collapse-model.js); the key exists only once a header is collapsed
-  analytics: null, // P21: { ref, band, trend, forecast, totals } (Dashboard/analytics-model.js); null = none // P23: null = the tab name / an automatic summary
-  urlAction: null, // P39: { label, template } — "Open <label>" on the selection chip (Dashboard/action-model.js)
+  tooltipText: null, // tooltip template with <Field> placeholders (Dashboard/tooltip-model.js); null = automatic
+  title: null, caption: null, showTitle: true, showFilterCards: true, // filter cards above the chart
+  // collapsed: crosstab headers shown collapsed { rows: [key…], cols: [key…] } (Dashboard/collapse-model.js); the key exists only once a header is collapsed
+  analytics: null, // { ref, band, trend, forecast, totals } (Dashboard/analytics-model.js); null = none // null = the tab name / an automatic summary
+  urlAction: null, // { label, template } — "Open <label>" on the selection chip (Dashboard/action-model.js)
 });
 
-// Marks card (P18): a cluster of encoding targets that map a field onto a mark property. All stay on
+// Marks card: a cluster of encoding targets that map a field onto a mark property. All stay on
 // the existing bounded aggregate/join query — Size/Detail add a measure/group-by exactly like the P7
 // Color shelf; Label/Tooltip read a field already (or newly, if numeric) in the query.
 //   size:    one numeric field → mark size (bubble scatter). { db, table, column, category, agg }
 //   label:   one field → text drawn on each mark (a dimension already grouped, or a numeric measure)
 //   detail:  dimensions that add group-by granularity with NO visual channel (more marks, same encodings)
 //   tooltip: extra fields listed in a custom mark tooltip
-//   shape:   (P19) one dimension → distinct point shapes on a scatter, with a shape legend
-//   path:    (P19) one field → orders the vertices of a line/area mark (connected order, not category order)
-//   angle:   (P19) a measure driving a radial mark's angle — pie already maps its measure to angle
-// The Colour shelf (sheet.color) gains a CONTINUOUS mode in P18: a numeric field there → a sequential
+//   shape: one dimension → distinct point shapes on a scatter, with a shape legend
+//   path: one field → orders the vertices of a line/area mark (connected order, not category order)
+//   angle: a measure driving a radial mark's angle — pie already maps its measure to angle
+// The Colour shelf (sheet.color) gains a CONTINUOUS mode: a numeric field there → a sequential
 // token-derived gradient (visualMap) instead of discrete series (see colorMode() in dashboards.js).
 export const defaultMarks = () => ({ size: null, label: null, detail: [], tooltip: [], shape: null, path: null, angle: null });
 
-// Per-worksheet formatting (P10). Presentation only; defaults leave prior behaviour unchanged.
+// Per-worksheet formatting. Presentation only; defaults leave prior behaviour unchanged.
 //  numberFormat: "auto" | "compact" | "currency" | "percent"  — how measure values read
 //  decimals:     null (auto) | 0..3                            — fixed fraction digits
 //  dateFormat:   "auto" | "date" | "month" | "year" | "datetime" — reformat date-like dimension labels
@@ -250,8 +250,8 @@ export const defaultMarks = () => ({ size: null, label: null, detail: [], toolti
 //  colorByDimension: colour a single-measure bar chart's bars by their category
 //  xTitle/yTitle: axis titles (null = none)
 //  lineStyle / heatmapShape / targetMeasure / syncAxes / secondaryType / markerSize / markBorder: see the defaults below
-//  target:       null | number — a KPI scorecard's goal (P35); downIsGood: a fall shows as good
-//  conditional:  { [measureKey]: { mode, scale, mid, rules } } — Table / Text cell formatting (P37)
+//  target:       null | number — a KPI scorecard's goal; downIsGood: a fall shows as good
+//  conditional:  { [measureKey]: { mode, scale, mid, rules } } — Table / Text cell formatting
 export const defaultFormat = () => ({
   numberFormat: "auto",
   decimals: null,
@@ -262,29 +262,29 @@ export const defaultFormat = () => ({
   legend: "auto",
   dataLabels: false,
   colorByDimension: false,
-  paletteReverse: false, // T03-33: reverse the categorical order and the continuous ramp
-  colorRamp: "brand", // T03-19: brand | blue | green | amber | violet — scatter / heatmap continuous colour
-  colorMin: null, // T03-19: pinned low end of the continuous colour scale (null = the data's)
-  colorMax: null, // T03-19: pinned high end
+  paletteReverse: false, // reverse the categorical order and the continuous ramp
+  colorRamp: "brand", // brand | blue | green | amber | violet — scatter / heatmap continuous colour
+  colorMin: null, // pinned low end of the continuous colour scale (null = the data's)
+  colorMax: null, // pinned high end
   xTitle: null,
   yTitle: null,
   target: null,
   downIsGood: false,
   conditional: {},
-  fit: "standard", // P23: standard | width | height | entire
-  lineStyle: "straight", // T03-05: straight | step | jump (line / area / combo)
-  heatmapShape: "square", // T03-10: square | circle
-  targetMeasure: null, // T03-12: bullet target = this shelf measure (index ≥ 1), else Format → Target
-  dualAxis: false, // T03-16: a line / area chart draws its 2nd+ measures on a right axis
-  syncAxes: false, // T03-16: a combo's two value axes share one range
-  secondaryType: "line", // T03-17: right-axis marks of a combo: line | bar | area
-  markerSize: null, // T01-22: null (automatic) | whole px 4–40 — scatter / line markers, circle heatmap
-  markBorder: "none", // T03-34: none | thin | thick — bars, scatter points, heatmap cells, pie, treemap, funnel
+  fit: "standard", // standard | width | height | entire
+  lineStyle: "straight", // straight | step | jump (line / area / combo)
+  heatmapShape: "square", // square | circle
+  targetMeasure: null, // bullet target = this shelf measure (index ≥ 1), else Format → Target
+  dualAxis: false, // a line / area chart draws its 2nd+ measures on a right axis
+  syncAxes: false, // a combo's two value axes share one range
+  secondaryType: "line", // right-axis marks of a combo: line | bar | area
+  markerSize: null, // null (automatic) | whole px 4–40 — scatter / line markers, circle heatmap
+  markBorder: "none", // none | thin | thick — bars, scatter points, heatmap cells, pie, treemap, funnel
   markerShape: "circle", // circle | square | diamond | triangle — line / area / combo markers
-  tableAlign: "auto", // T01-23: auto | left | center | right — a table's value cells
-  tableDensity: "standard", // T01-23: standard | compact | roomy — a table's row height
-  tableShade: "none", // T01-23: none | banded | header | both — a table's shading
-  approximate: false, // P33: estimate distinct counts / read a 10% sample where the table allows
+  tableAlign: "auto", // auto | left | center | right — a table's value cells
+  tableDensity: "standard", // standard | compact | roomy — a table's row height
+  tableShade: "none", // none | banded | header | both — a table's shading
+  approximate: false, // estimate distinct counts / read a 10% sample where the table allows
 });
 
 /** The tab limit's message (LIMITS.tabs covers both kinds); null while there is room. */

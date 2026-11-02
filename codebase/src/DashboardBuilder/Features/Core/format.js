@@ -1,4 +1,4 @@
-// Value + category formatting for the worksheet (P10). Pure functions, no DOM — shared by the
+// Value + category formatting for the worksheet. Pure functions, no DOM — shared by the
 // chart adapter (chart.js) and the crosstab/KPI renderers (dashboards.js) so a sheet's number/date
 // format reads the same everywhere. Config shape: store.js defaultFormat().
 

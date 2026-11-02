@@ -66,7 +66,7 @@ builder.Services.Configure<GzipCompressionProviderOptions>(o => o.Level = Compre
 
 // Session-scoped connection store + the read-only ClickHouse gateway.
 builder.Services.AddScoped<ConnectionRegistry>();
-// P33: worksheet results are reused for a minute per server + user + request (bounded: ~256 units).
+// Worksheet results are reused for a minute per server + user + request (bounded: ~256 units).
 builder.Services.AddMemoryCache(o => o.SizeLimit = 256);
 builder.Services.AddScoped<ClickHouseGateway>();
 

@@ -17,12 +17,12 @@ import { ANALYTICS_TYPES, scatterSymbol, primaryDim, chartOrientation, marksChan
 /** P7 colour split: one series per colour value (the trailing group-by key); the primary dimension is the first non-colour key. */
 export function renderColorSplit(container, rc, sheet, type, result, format, fmtCat) {
   const { categories, series, catTuples, colorVals } = colorSplitData(result, fmtCat);
-  // P15: click a mark -> the primary (first non-colour) dimension value = catTuples[dataIndex][0].
+  // Click a mark -> the primary (first non-colour) dimension value = catTuples[dataIndex][0].
   const rawKeys = catTuples.map((t) => t[0]);
   const onSelect = selectHandler(rc, sheet, primaryDim(sheet), type, rawKeys);
   const selectedIndices = selectedIndicesOf(rawKeys, rc.selected, primaryDim(sheet));
   const orientation = chartOrientation(sheet);
-  // P29: each legend item is a Colour member — clicking it highlights that series and selects the member.
+  // Each legend item is a Colour member — clicking it highlights that series and selects the member.
   const byName = new Map(series.map((sr, i) => [sr.name, colorVals[i]]));
   const legend = legendSpec(rc, sheet, sheet.color?.[0], byName);
   const cf = sheet.color?.[0];
@@ -30,13 +30,13 @@ export function renderColorSplit(container, rc, sheet, type, result, format, fmt
   drawChart(container, { type, categories, series, format, onSelect, selectedIndices, orientation, ...memberColourSpec, ...legend });
 }
 
-/** P19 Shape (scatter family): one scatter series per Shape member, each a distinct symbol (identity survives greyscale). */
+/** Shape (scatter family): one scatter series per Shape member, each a distinct symbol (identity survives greyscale). */
 export function renderScatterShapes(container, rc, sheet, result, seriesIdx, sizeIdx, format, fmtCat) {
   if (seriesIdx.length < 2) { container.append(hint("A shape scatter plots two measures (X and Y) — add a second measure.")); return; }
   const xIdx = seriesIdx[0], yIdx = seriesIdx[1];
   const { groups, byName } = scatterShapeGroups(sheet, result, seriesIdx, sizeIdx, fmtCat);
   drawChart(container, {
-    ...legendSpec(rc, sheet, marksOf(sheet).shape, byName), // P29: legend items are Shape members
+    ...legendSpec(rc, sheet, marksOf(sheet).shape, byName), // legend items are Shape members
     type: "scatterShapes", groups, format,
     xName: format.xTitle || result.measures[xIdx] || "x",
     yName: format.yTitle || result.measures[yIdx] || "y",
@@ -46,25 +46,25 @@ export function renderScatterShapes(container, rc, sheet, result, seriesIdx, siz
 
 /**
  * The general series chart. `a` = { result, rowsOrdered, categories, series, seriesIdx, sizeIdx, colorMeasureIdx, mplan,
- * format, fmtVal, fmtCat, aligned (the comparison range's rows lined up, or null), cmp }. P21 analytics, P18 mark channels,
- * the P35 comparison series and T01-20 member colours all feed one chart.js spec.
+ * format, fmtVal, fmtCat, aligned (the comparison range's rows lined up, or null), cmp }. analytics, mark channels,
+ * the comparison series and member colours all feed one chart.js spec.
  */
 export function renderSeries(container, rc, sheet, a) {
   const { result, rowsOrdered, categories, series, seriesIdx, sizeIdx, colorMeasureIdx, mplan, format, fmtVal, fmtCat, aligned, cmp } = a;
   const type = sheet.chartType;
   const measures = result.measures;
-  // P18 mark channels: Size (bubble), continuous Colour (gradient), field-driven Label + custom Tooltip. All read
+  // Mark channels: Size (bubble), continuous Colour (gradient), field-driven Label + custom Tooltip. All read
   // columns already in `result`; missing / unsupported mappings degrade to a note.
   const marks = marksChannels(sheet, result, mplan, sizeIdx, colorMeasureIdx, fmtVal, fmtCat, rowsOrdered, SCATTER_TYPES, (f) => planMeasureName(f, rc.plan));
   rc.hooks.onTooltipFields?.(sheet, marks.tooltipCat);
   if (marks.note) container.append(hint(marks.note)); // a Marks hint sits above the chart, never blocks it
-  // P15 click-to-filter: marks map 1:1 to result rows here, so a click's dataIndex -> rowsOrdered[i].keys[0] (the primary
+  // Click-to-filter: marks map 1:1 to result rows here, so a click's dataIndex -> rowsOrdered[i].keys[0] (the primary
   // dimension's raw value).
   const rawKeys = rowsOrdered.map((r) => (r.isOther ? null : r.keys[0]));
   const onSelect = selectHandler(rc, sheet, primaryDim(sheet), type, rawKeys);
   const selectedIndices = selectedIndicesOf(rawKeys, rc.selected, primaryDim(sheet));
   const otherIndex = rowsOrdered.findIndex((r) => r.isOther);
-  // P29: on a pie / donut the legend lists the primary dimension's members; elsewhere it names measures (highlight only —
+  // On a pie / donut the legend lists the primary dimension's members; elsewhere it names measures (highlight only —
   // a measure isn't a member to keep or exclude).
   const legend = (type === "pie" || type === "donut")
     ? legendSpec(rc, sheet, primaryDim(sheet), new Map(rowsOrdered.map((r, i) => [categories[i], r.isOther ? undefined : r.keys[0]])))
@@ -72,7 +72,7 @@ export function renderSeries(container, rc, sheet, a) {
   const compareSeries = aligned && (type === "bar" || type === "line" || type === "area")
     ? seriesIdx.map((mi) => ({ name: `${measures[mi]} (${cmp.name})`, data: aligned.map((r) => (r ? r.values[mi] : null)), compare: true }))
     : [];
-  // P21 analytics on the first measure: reference line, band, trend (+ forecast categories appended).
+  // Analytics on the first measure: reference line, band, trend (+ forecast categories appended).
   let catsOut = categories, seriesOut = [...series, ...compareSeries], analytics = null;
   const A = sheet.analytics;
   if (A && ANALYTICS_TYPES.has(type) && series.length) {
@@ -98,7 +98,7 @@ export function renderSeries(container, rc, sheet, a) {
     if (A.band && !bb) rc.extraNotice = joinNotices(rc.extraNotice, A.band.kind ? "The band needs more values than the rows shown (at least 2 for a standard deviation)." : "The band's ends are equal — type two different numbers.");
     if ((t || rv != null || bb) && (result.truncated || result.partial)) rc.extraNotice = joinNotices(rc.extraNotice, "Analytics use only the rows shown — more exist.");
   }
-  // T01-20: members coloured by a field — pie / donut slices and a single-measure bar coloured by category.
+  // Members coloured by a field — pie / donut slices and a single-measure bar coloured by category.
   const byMember = (type === "pie" || type === "donut" || (type === "bar" && format.colorByDimension && series.length === 1 && !compareSeries.length)) && primaryDim(sheet) && !isCalcPill(primaryDim(sheet));
   const memberColourSpec = byMember
     ? memberSpec(rc, sheet, primaryDim(sheet), rowsOrdered.map((r, i) => ({ name: categories[i], raw: r.keys[0], other: r.isOther })).filter((m) => !m.other))

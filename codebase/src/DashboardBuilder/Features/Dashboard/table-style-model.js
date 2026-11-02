@@ -1,4 +1,4 @@
-// Table look (T01-23) — pure, DOM-free (tests/js/table-style.test.mjs). Format → Align, Row height and Shading on a
+// Table look — pure, DOM-free (tests/js/table-style.test.mjs). Format → Align, Row height and Shading on a
 // table / text worksheet. Every choice is a CSS class on the table; the values come from the design tokens in
 // dashboard.css (spacing 4 / 8 / 16, --surface-2), so nothing here is a free size or colour.
 import { TABLE_ALIGNS, TABLE_DENSITIES, TABLE_SHADES } from "../Core/sheet-schema.js";

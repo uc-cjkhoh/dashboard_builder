@@ -1,4 +1,4 @@
-// Split a text field into pieces (T02-31) — pure, DOM-free (tests/js/split-model.test.mjs). A split is not a new kind of field:
+// Split a text field into pieces — pure, DOM-free (tests/js/split-model.test.mjs). A split is not a new kind of field:
 // it plans one ordinary calculated field per piece, `SPLIT([db.table.column], 'sep', k)`, so the engine, pills, query and
 // workbook already know it. The separator and position are literals in the formula (the engine's SPLIT rules, D54).
 import { LIMITS } from "../Core/validate.js";

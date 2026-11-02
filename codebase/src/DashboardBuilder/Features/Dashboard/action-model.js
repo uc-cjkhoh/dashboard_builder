@@ -1,4 +1,4 @@
-// P39 URL actions — pure, DOM-free (unit-tested in tests/js/action-model.test.mjs). A worksheet may carry
+// URL actions — pure, DOM-free (unit-tested in tests/js/action-model.test.mjs). A worksheet may carry
 // one link action { label, template }: the template is an https:// address with {value} where the
 // clicked mark's value goes (URL-encoded). It opens only from the selection chip, in a new tab with
 // noopener — never automatically, never to anything but https.

@@ -1,4 +1,4 @@
-// P22 Show Me rules — which chart types the sheet's fields can draw and which one to recommend. Also the single home of the chart-type field rules that the
+// Show Me rules — which chart types the sheet's fields can draw and which one to recommend. Also the single home of the chart-type field rules that the
 // chart hint uses. Pure, DOM-free (unit-tested under tests/js/show-me-rules.test.mjs).
 import { TEXT_VALUE_TYPES } from "./filter-rules.js";
 
@@ -6,7 +6,7 @@ import { TEXT_VALUE_TYPES } from "./filter-rules.js";
 export const roleOf = (f) => f.role ?? (f.category === "numeric" ? "measure" : "dimension");
 // Discrete Colour pivots into one series per value on these types (P7) — they need exactly one measure.
 export const COLOR_SPLIT_TYPES = new Set(["bar", "stacked", "line", "area"]);
-// P12 statistical charts with their own single-table endpoint (they bypass buildPlan).
+// Statistical charts with their own single-table endpoint (they bypass buildPlan).
 export const STAT_SINGLE_TABLE = new Set(["histogram", "boxplot"]);
 
 export const TEXT_VALUE_HINT = "Min/Max of a text or date field shows as Table, Text or KPI — switch the chart type, or use Count.";
@@ -24,7 +24,7 @@ const PIE = Object.freeze([
 const POINTS = Object.freeze([need("measures", 2, ANY, "A point chart plots two measures (X and Y) — add a second measure.")]);
 export const CHART_NEEDS = Object.freeze({
   pie: PIE, donut: PIE,
-  scatter: POINTS, square: POINTS, circle: POINTS, // P19 point marks share the scatter mapping
+  scatter: POINTS, square: POINTS, circle: POINTS, // point marks share the scatter mapping
   combo: Object.freeze([
     need("measures", 2, ANY, "Combo (dual-axis) needs two measures — add a second measure."),
     need("dims", 1, ANY, "Combo needs a dimension for the category axis — add a dimension.")]),

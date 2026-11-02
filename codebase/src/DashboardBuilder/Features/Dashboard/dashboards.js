@@ -79,9 +79,9 @@ import { toggleDateLabels } from "./date-labels.js";
 const MARKER_TYPES = new Set(["scatter", "square", "circle", "line", "area", "combo", "heatmap"]);
 const BORDER_TYPES = new Set(["bar", "stacked", "combo", "scatter", "square", "circle", "heatmap", "pie", "donut", "treemap", "funnel"]);
 const FIELD_MIME = "application/x-ch-field";
-const ANALYTICS_MIME = "application/x-ch-analytics"; // T07-01: an Analytics pane item dragged onto the chart
+const ANALYTICS_MIME = "application/x-ch-analytics"; // an Analytics pane item dragged onto the chart
 // Column category from the Data Source catalog (entity.columns), for filters saved without one.
-// T02-34: a field's cast (field setting) decides the category its pills, filters and the field pane use.
+// A field's cast (field setting) decides the category its pills, filters and the field pane use.
 export const castOf = (f) => metaOf(f).cast;
 export const categoryOf = (db, table, column) => {
   const base = baseCategoryOf(db, table, column);
@@ -112,7 +112,7 @@ export const sharedResults = createResultCache();
 export const planCtx = () => ({ calculations, entities, relationships, sharedFilters, parameters, metaOf, nameOf, columnType });
 const calcFieldCtx = () => calcContext(planCtx());
 const appliedShared = () => planAppliedShared(planCtx());
-// A client filter as the server QueryFilter (only filters checkFilter() calls "ok" are sent; P30 relative dates, top-N).
+// A client filter as the server QueryFilter (only filters checkFilter() calls "ok" are sent; relative dates, top-N).
 const toFilter = (f) => toServerFilter(f, planCtx());
 // A field's role can be overridden on its pill (Tableau's convert-to-dimension/measure). Default:
 // numeric → measure (aggregated), everything else → dimension (grouped). A numeric field made a
@@ -120,26 +120,26 @@ const toFilter = (f) => toServerFilter(f, planCtx());
 // always valid, sum/avg only meaningful for numbers).
 // (roleOf itself lives in show-me-rules.js.)
 
-const measureName = (f) => planMeasureName(f, planCtx()); // P28 display name; a calculated field is just its name
+const measureName = (f) => planMeasureName(f, planCtx()); // display name; a calculated field is just its name
 const sortTargets = (sheet) => planSortTargets(sheet, planCtx());
 const buildPlan = (sheet, periodRange) => planQuery(sheet, periodRange, planCtx());
 const periodFilters = (sheet, range) => planPeriodFilters(sheet, range, planCtx());
 
-// --- marks card + query-shape helpers (P18) --------------------------------
+// --- marks card + query-shape helpers --------------------------------
 // The canonical query shape lives in planDims()/planMeasures(): buildPlan sends exactly these, and
 // worksheet-render.js re-derives the same ordering to know which result column is a series vs. a mark channel.
-// With no marks set, both reduce to the pre-P18 ordering, so existing charts are byte-identical.
+// With no marks set, both reduce to the unmarked ordering, so existing charts are byte-identical.
 const shelfMeasureCount = (sheet) => planMeasures(sheet).filter((e) => e.role === "shelf").length;
 const CHART_LIKE = new Set([
   "bar", "stacked", "line", "area", "pie", "donut", "scatter", "combo", "square", "circle",
   "heatmap", "treemap", "histogram", "boxplot",
-  "waterfall", "funnel", "gauge", "bullet", "sankey", "multiples", // P36
+  "waterfall", "funnel", "gauge", "bullet", "sankey", "multiples",
 ]);
 // Charts without x / y axes: no axis-title controls in Format.
 const NO_AXES = new Set(["pie", "donut", "funnel", "gauge", "sankey"]);
-// Charts that read Format → Target (P35 scorecard; P36 gauge maximum / bullet target).
+// Charts that read Format → Target (scorecard; gauge maximum / bullet target).
 const TARGET_TYPES = new Set(["kpi", "gauge", "bullet"]);
-// P22 Show Me: the field counts one candidate chart type sees — the same dims the chart hint counts
+// Show Me: the field counts one candidate chart type sees — the same dims the chart hint counts
 // (planDims with that type: drill, shelf, Detail, Shape, discrete Colour) and the shelf measures.
 function showMeCounts(sheet, type) {
   const shelf = [...sheet.columns, ...sheet.rows];
@@ -173,7 +173,7 @@ export function initDashboards() {
   const headEl = document.getElementById("ws-chart-head");
   if (!view) return;
   initFieldResizer();
-  // T07-01: an Analytics pane item dropped on the chart view adds it (the item's button does the same from the keyboard).
+  // An Analytics pane item dropped on the chart view adds it (the item's button does the same from the keyboard).
   const hasItem = (e) => analyticsDrop && e.dataTransfer && Array.from(e.dataTransfer.types).includes(ANALYTICS_MIME);
   let overDepth = 0; // dragenter / dragleave pairs on the chart's children, so the highlight neither flickers nor sticks
   chartEl.addEventListener("dragenter", (e) => { if (hasItem(e)) { overDepth++; chartEl.classList.add("is-over"); } });
@@ -184,11 +184,11 @@ export function initDashboards() {
   // Latest-wins queries + recent results per worksheet: a superseded query is aborted (its answer can
   // never overwrite a newer chart), and presentation-only changes re-render from the cached result
   // instead of re-querying ClickHouse. The Refresh button drops the worksheet's cache and re-queries.
-  const history = createHistory(); // P23 undo / redo per worksheet
+  const history = createHistory(); // undo / redo per worksheet
   const lastSnap = new Map();       // worksheet id → the sheet as last committed (the "before" of the next edit)
   const results = sharedResults;
   // The editor's one worksheet view — created before anything (sync() below) can use it.
-  // The query-and-render lifecycle is worksheet-view.js (P24a); the editor owns exactly one view, on #ws-chart, and
+  // The query-and-render lifecycle is worksheet-view.js; the editor owns exactly one view, on #ws-chart, and
   // supplies the drawing of a result (worksheet-render.js) and the editor-only state around it.
   const sheetView = createWorksheetView(chartEl, () => ({
     dash: activeWorksheet(), noticeEl, results, plan: planCtx(), categoryOf, castOf,
@@ -199,7 +199,7 @@ export function initDashboards() {
     statusBar: setStatusBar, notices: sharedNote,
   });
   const runChart = () => sheetView.run();
-  // T03-29: a crosstab header's +/- — flips its key on sheet.collapsed (presentation only: the redraw reads the cached result).
+  // A crosstab header's +/- — flips its key on sheet.collapsed (presentation only: the redraw reads the cached result).
   function collapseHeader(axis, key, valid) {
     const dash = activeWorksheet();
     if (!dash) return;
@@ -210,21 +210,21 @@ export function initDashboards() {
     commit(dash, s);
   }
 
-  let legendFocus = null; // P29: the legend item the user clicked (highlighted), or null
-  let calcFor = null;     // P27: the measure slot whose table-calculation editor is open — { shelf, index } or null
-  let choicesFor = null;  // P40: the shelf slot whose field-choices editor is open — { shelf, index } or null
-  let cfMeasure = null;   // which measure the Format card's conditional-formatting editor shows (P37)
+  let legendFocus = null; // the legend item the user clicked (highlighted), or null
+  let calcFor = null;     // the measure slot whose table-calculation editor is open — { shelf, index } or null
+  let choicesFor = null;  // the shelf slot whose field-choices editor is open — { shelf, index } or null
+  let cfMeasure = null;   // which measure the Format card's conditional-formatting editor shows
 
-  let formatOpen = false; // whether the Format panel (P10) is expanded — ephemeral UI state
+  let formatOpen = false; // whether the Format panel is expanded — ephemeral UI state
   let analyticsDrop = null; // set while the Analytics card is open: adds the dropped item (its id) to the sheet
-  let analyticsOpen = false; // P21: whether the Analytics card is open
+  let analyticsOpen = false; // whether the Analytics card is open
   let shownPanel = null;  // the tool/format panel on screen last render, so only a newly opened one animates in
   let shownPills = new Set(); // pill keys on screen last render, so only a newly added pill animates in
   let shownFor = null;        // the worksheet those were rendered for (switching worksheets animates nothing)
   let shownDash = null;       // the worksheet on screen, so switching between two replays the view entrance
   let freshResult = false; // the last result came from ClickHouse (not the cache): animate the chart in
   let openTool = null;    // which toolbar tool's editor panel is open (Color/Size/…/Filters/Drill/Pages), or null
-  let pageTimer = null;   // P20 Pages autoplay interval id (transient; never persisted)
+  let pageTimer = null;   // Pages autoplay interval id (transient; never persisted)
 
   bus.addEventListener("view:changed", sync);
   bus.addEventListener("worksheet:changed", () => {
@@ -247,9 +247,9 @@ export function initDashboards() {
   });
   // chart.js reads colours from :root at render time — redraw when light/dark flips (Core/scheme.js; a cache hit, no query).
   bus.addEventListener("scheme:changed", () => { if (isWorksheetActive()) runChart(); });
-  bus.addEventListener("theme:changed", () => { if (isWorksheetActive()) runChart(); }); // P41: redraw in the new colours
-  // P28: a rename / hide / default aggregation redraws the field pane, the pills and the chart's labels.
-  // T02-34: a changed data type cast also re-categorises the pills / filters that read the field.
+  bus.addEventListener("theme:changed", () => { if (isWorksheetActive()) runChart(); }); // redraw in the new colours
+  // A rename / hide / default aggregation redraws the field pane, the pills and the chart's labels.
+  // A changed data type cast also re-categorises the pills / filters that read the field.
   bus.addEventListener("fields:changed", () => {
     const active = activeWorksheet();
     let activeChanged = false;
@@ -278,7 +278,7 @@ export function initDashboards() {
     if (activeChanged) commit(active, active.sheet); else { renderShelves(); runChart(); }
   };
   bus.addEventListener("calculations:changed", refreshCalcs);
-  // P32: a parameter's new value re-runs the view (its filters / Top N / calculated fields / reference line read it at plan time);
+  // A parameter's new value re-runs the view (its filters / Top N / calculated fields / reference line read it at plan time);
   // the same refresh re-types calculated pills (a parameter's type, or its deletion, changes what a formula compiles to).
   bus.addEventListener("parameters:changed", refreshCalcs);
   initPresentation();
@@ -286,7 +286,7 @@ export function initDashboards() {
 
   async function sync() {
     stopPaging();  // switching view/worksheet halts any running Pages animation
-    legendFocus = null; // P29: a highlight belongs to the chart it was made on
+    legendFocus = null; // a highlight belongs to the chart it was made on
     openTool = null; // close any open tool editor when the view changes
     toggle(view, isWorksheetActive());
     if (!isWorksheetActive()) { sheetView.cancel(); shownDash = null; return; }
@@ -361,7 +361,7 @@ export function initDashboards() {
     for (const t of tables) {
       const cols = await columnsFor(t.db, t.table);
       const group = fieldGroup("ws-table ws-fieldset", `table:${t.db}.${t.table}`, `${t.db}.${t.table}`);
-      // P28: hidden fields stay out of the pane unless "Show hidden" is on.
+      // Hidden fields stay out of the pane unless "Show hidden" is on.
       const visible = cols.filter((c) => { const h = metaOf({ ...t, column: c.name }).hidden; if (h) hiddenCount++; return !h || showHiddenFields; });
       const catOf = (c) => effectiveCategory(c.category, castOf({ ...t, column: c.name }));
       const dims = visible.filter((c) => catOf(c) !== "numeric");
@@ -376,7 +376,7 @@ export function initDashboards() {
     filterFields();
   }
 
-  // P28: the field pane's search box + "Show hidden" toggle. Search matches the column name or its
+  // The field pane's search box + "Show hidden" toggle. Search matches the column name or its
   // display name; non-matching fields and empty groups get `hidden`.
   let fieldQuery = "";
   let showHiddenFields = false;
@@ -413,7 +413,7 @@ export function initDashboards() {
     }
   }
 
-  // --- named hierarchies (T03-29): the "Hierarchies" group; applying one copies its levels into sheet.drill -----
+  // --- named hierarchies: the "Hierarchies" group; applying one copies its levels into sheet.drill -----
   // The sidebar's two tool icons (worksheet tabs): each opens a dialog to add, edit or use the workbook's calculated fields / hierarchies.
   const openHierarchies = (startNew) => openHierarchiesDialog({ tables: uniqueTables(), columnsFor, castOf, startNew, canApply: isWorksheetActive(), onApply: (id) => applyHierarchy(activeWorksheet(), id) });
   const manageCalcs = () => openCalcManager({
@@ -566,7 +566,7 @@ export function initDashboards() {
       if (dash) addField(dash, shelfKey, payload);
     });
     chip.append(add);
-    // T01-15: double-click places the field on its default shelf (the plus button is the keyboard path).
+    // Double-click places the field on its default shelf (the plus button is the keyboard path).
     chip.addEventListener("dblclick", (e) => {
       if (e.target.closest("input, [contenteditable]")) return;
       const dash = activeWorksheet();
@@ -580,7 +580,7 @@ export function initDashboards() {
     return chip;
   }
 
-  // T02-34: the cast tag — icon + text (never colour alone); its title says what the field was.
+  // The cast tag — icon + text (never colour alone); its title says what the field was.
   // On a field chip the leading type icon already shows the new type, so the tag there is text only.
   function castBadge(cast, from, withIcon = true) {
     const b = el("span", "ws-cast");
@@ -589,7 +589,7 @@ export function initDashboards() {
     b.title = `Read as ${castLabel(cast).toLowerCase()} (stored as ${from === "numeric" ? "number" : from === "temporal" ? "date" : from})`;
     return b;
   }
-  // P28: a field's context popup — Rename (inline), Default aggregation (numeric), Hide / Show.
+  // A field's context popup — Rename (inline), Default aggregation (numeric), Hide / Show.
   function fieldEntries(f, col, nameEl) {
     const out = [];
     const item = (label, onSelect, extra = {}) => out.push({ type: extra.role === "menuitemradio" ? "radio" : "item", label, onSelect, checked: extra.checked });
@@ -597,29 +597,29 @@ export function initDashboards() {
     item("Rename…", () => renameField(f, col, nameEl));
     for (const c of fieldCopies({ column: col.name, alias: meta.alias })) item(c.label, () => copyText(c.text, c.what));
     if (meta.alias) item("Use the column name", () => setFieldMeta(f, { alias: null }));
-    const effCat = effectiveCategory(col.category, meta.cast); // T02-34: a text column cast to Number aggregates like a number
+    const effCat = effectiveCategory(col.category, meta.cast); // a text column cast to Number aggregates like a number
     if (effCat === "numeric") {
       out.push({ type: "sep" }, { type: "heading", label: "Default aggregation" });
       for (const a of aggsFor(effCat).filter((x) => x !== "percentile")) // a default percentile would need a default fraction: pick it on the pill
         item(a, () => setFieldMeta(f, { agg: a === "sum" ? null : a }), { role: "menuitemradio", checked: (meta.agg ?? "sum") === a });
     }
-    // T02-34: read the field as another type (the server converts; a value that doesn't fit becomes empty).
+    // Read the field as another type (the server converts; a value that doesn't fit becomes empty).
     out.push({ type: "sep" }, { type: "heading", label: "Data type" });
     // A stored default aggregation the new type doesn't offer is cleared with the cast.
     const setCast = (c) => setFieldMeta(f, { cast: c, ...(meta.agg && !aggsFor(effectiveCategory(col.category, c)).includes(meta.agg) ? { agg: null } : {}) });
     item("Original", () => setCast(null), { role: "menuitemradio", checked: !meta.cast });
     for (const c of castChoices(col.category))
       item(castLabel(c), () => setCast(c), { role: "menuitemradio", checked: meta.cast === c });
-    // T02-29 / T02-30: member labels (display only) and groups (a calculated dimension made from the field's members).
+    // Member labels (display only) and groups (a calculated dimension made from the field's members).
     if (effCat !== "temporal") { out.push({ type: "sep" }); item(meta.memberAliases ? "Edit member labels… (set)" : "Edit member labels…", () => editMemberLabels(f, col)); }
     item("Group…", () => newGroupField(f, col));
-    if (col.category === "text") item("Split…", () => newSplitFields(f, col)); // T02-31: SPLIT calculated fields
+    if (col.category === "text") item("Split…", () => newSplitFields(f, col)); // SPLIT calculated fields
     if (cleanOps(col.category).length) item("Clean…", () => newCleanField(f, col)); // query-time cleaning: TRIM / IFNULL / CASE / DATE calculated field
     out.push({ type: "sep" });
     item(meta.hidden ? "Show in the field list" : "Hide from the field list", () => setFieldMeta(f, { hidden: !meta.hidden }));
     return out;
   }
-  // T02-29: the field's top members (the distinct-values read, bounded) with one label input each; the map is a field setting.
+  // The field's top members (the distinct-values read, bounded) with one label input each; the map is a field setting.
   function editMemberLabels(f, col) {
     openMemberLabelsDialog({
       name: metaOf(f).alias || col.name, current: metaOf(f).memberAliases,
@@ -627,14 +627,14 @@ export function initDashboards() {
       onSave: (map) => setFieldMeta(f, { memberAliases: map ?? null }),
     });
   }
-  // T02-30: a group field over a text column's members — a calculation the pills, query and workbook already know.
+  // A group field over a text column's members — a calculation the pills, query and workbook already know.
   function newGroupField(f, col) {
     const problem = groupCategoryProblem(col.category, col.type);
     if (problem) { toast(problem, "info"); return; }
     if (calculations.length >= LIMITS.calculations) { toast(`A workbook can have at most ${LIMITS.calculations} calculated fields.`, "info"); return; }
     openGroupDialog({ field: { db: f.db, table: f.table, column: f.column }, fieldName: metaOf(f).alias || col.name, load: () => distinctFor(f.db, f.table, f.column) });
   }
-  // T02-31: split a text column at a separator into calculated fields, one per piece.
+  // Split a text column at a separator into calculated fields, one per piece.
   function newSplitFields(f, col) {
     if (calculations.length + 2 > LIMITS.calculations) { toast(`A workbook can have at most ${LIMITS.calculations} calculated fields.`, "info"); return; }
     openSplitDialog({ field: { db: f.db, table: f.table, column: f.column }, fieldName: metaOf(f).alias || col.name });
@@ -703,9 +703,9 @@ export function initDashboards() {
     const toolEl = calcFor ? calcPanel(dash, s) : choicesFor ? choicesPanel(dash, s) : active ? toolPanel(dash, s, active) : null;
     if (toolEl) children.push(toolEl);                        // the one open tool editor
     // Active-interaction chips (thin status bars for live drill / pages / click-selection state).
-    if (isDrillActive(s)) children.push(drillChip(dash, s));  // P16 breadcrumb + drill-up
-    if (s.pages) children.push(pagesControl(dash, s));        // P20 page/animate control
-    if (s.selection) children.push(selectionChip(dash, s));   // P15 click-to-filter selection
+    if (isDrillActive(s)) children.push(drillChip(dash, s));  // breadcrumb + drill-up
+    if (s.pages) children.push(pagesControl(dash, s));        // page/animate control
+    if (s.selection) children.push(selectionChip(dash, s));   // click-to-filter selection
     shelvesEl.replaceChildren(...children);
 
     const viewbar = el("div", "ws-viewbar");
@@ -717,11 +717,11 @@ export function initDashboards() {
     vbLeft.append(fieldsPaneButton(), chartTypePicker(dash, s), undoButtons(dash),
       explainControl(() => evaluationInput(s, { sharedFilters: sharedFilters.filter((f) => checkFilter(f).state === "ok" && !sharedSkipped(s).includes(f)), parameters, calcs: calculations, isApplied: (f) => checkFilter(f).state === "ok", dimensions: planDims(s).keyOrder.filter(Boolean).map(nameOf) }), { signal: headerAbort.signal }));
     viewbar.append(vbLeft, vbRight);
-    const fmtEl = formatOpen ? formatPanel(dash, s) : analyticsOpen ? analyticsPanel(dash, s) : null; // P10 format / P21 analytics card
-    const swEl = switchers(dash, s); // P40
-    const titleEl = s.showTitle === false ? null : titleBlock(dash, s); // P23
-    const cardsEl = filterCards(dash, s); // P30
-    const paramsEl = paramControls(s); // P32
+    const fmtEl = formatOpen ? formatPanel(dash, s) : analyticsOpen ? analyticsPanel(dash, s) : null; // format / analytics card
+    const swEl = switchers(dash, s);
+    const titleEl = s.showTitle === false ? null : titleBlock(dash, s);
+    const cardsEl = filterCards(dash, s);
+    const paramsEl = paramControls(s);
     headEl.replaceChildren(viewbar, ...(swEl ? [swEl] : []), ...(fmtEl ? [fmtEl] : []), ...(titleEl ? [titleEl] : []), ...(paramsEl ? [paramsEl] : []), ...(cardsEl ? [cardsEl] : []));
 
     // Motion only for what is new since the last render (every edit re-renders the header).
@@ -738,7 +738,7 @@ export function initDashboards() {
     shownFor = dash.id;
   }
 
-  // --- click-to-filter selection chip (P15) --------------------------------
+  // --- click-to-filter selection chip --------------------------------
   // Shows the mark the user clicked and lets them apply it as a filter: Keep only (col = value),
   // Exclude (col != value), or clear. Toggling an already-active action returns to a plain highlight.
   function selectionChip(dash, s) {
@@ -759,7 +759,7 @@ export function initDashboards() {
     rowsBtn.prepend(icon("eye", { size: 14 }));
     rowsBtn.addEventListener("click", () => viewData(dash, s, true));
     wrap.append(rowsBtn);
-    // P39 URL action: open the sheet's link for the selected value (new tab, noopener, https only).
+    // URL action: open the sheet's link for the selected value (new tab, noopener, https only).
     if (s.urlAction && !templateError(s.urlAction.template)) {
       const go = makeButton(`${s.urlAction.label} ↗`, "ws-select__btn ws-select__link");
       go.prepend(icon("link", { size: 14 }));
@@ -776,7 +776,7 @@ export function initDashboards() {
     return wrap;
   }
 
-  // --- drill-down hierarchy (P16) ------------------------------------------
+  // --- drill-down hierarchy ------------------------------------------
   // Drop dimension fields (from one table) onto the Drill-down lane to declare an ordered hierarchy;
   // with ≥2 levels the chart groups by the current level and a click drills one level finer (see
   // selectHandler → drillDown). Each pinned ancestor rides along as a bound-parameter filter.
@@ -861,11 +861,11 @@ export function initDashboards() {
     const fmtCat = makeCategoryFormatter(s.format ?? defaultFormat());
     d.path = [...(d.path ?? []).slice(0, d.depth), { column: d.levels[d.depth].column, value: rawValue, label: labelOf(metaOf(d.levels[d.depth]), rawValue, fmtCat) }];
     d.depth += 1;
-    s.selection = null; // a drill supersedes any P15 mark selection
+    s.selection = null; // a drill supersedes any mark selection
     commit(dash, s);
   }
 
-  // --- format panel (P10) --------------------------------------------------
+  // --- format panel --------------------------------------------------
   // A collapsible row of presentation controls that never touch the query (except Top-N, which
   // caps the LIMIT). All state lives on sheet.format so it persists for the session (O1).
   // Re-run the query against ClickHouse, bypassing the result cache (data may have changed).
@@ -876,7 +876,7 @@ export function initDashboards() {
     return btn;
   }
 
-  // P21: the Analytics card toggle (like Format) and the card itself.
+  // The Analytics card toggle (like Format) and the card itself.
   function analyticsToggle() {
     const btn = iconButton("insights", "Analytics");
     btn.className = `iconbtn ws-viewbar__btn${analyticsOpen ? " is-active" : ""}`;
@@ -957,7 +957,7 @@ export function initDashboards() {
     btn.addEventListener("click", () => { formatOpen = !formatOpen; if (formatOpen) { openTool = null; analyticsOpen = false; } renderShelves(); });
     return btn;
   }
-  // --- export (P13) --------------------------------------------------------
+  // --- export --------------------------------------------------------
   // A small menu offering the chart image (PNG/SVG from the live ECharts instance) and the rows behind
   // it as CSV (the bounded, identifier-safe /api/query/export.csv). Image export needs a chart instance
   // (Table/KPI render as native DOM, so it isn't offered there).
@@ -987,7 +987,7 @@ export function initDashboards() {
     return wrap;
   }
 
-  // --- worksheet chrome (P23): undo / redo, sheet actions, title / caption, status bar ---
+  // --- worksheet chrome: undo / redo, sheet actions, title / caption, status bar ---
   function undoButtons(dash) {
     const wrap = el("div", "ws-undo");
     const u = iconButton("undo", "Undo (Ctrl+Z)"), r = iconButton("redo", "Redo (Ctrl+Shift+Z)");
@@ -1105,7 +1105,7 @@ export function initDashboards() {
     toggle(bar, true);
   }
 
-  // --- presentation (P41): full screen + print ------------------------------
+  // --- presentation: full screen + print ------------------------------
   const card = chartEl.closest(".ws-chart-card");
   const isFull = () => document.fullscreenElement === card || card.classList.contains("is-presenting");
   // Full screen shows the chart card alone (view bar kept — Esc or the button leaves). Uses the browser's
@@ -1226,7 +1226,7 @@ export function initDashboards() {
       fmtSelect("Dates", [["auto", "Auto"], ["date", "Date"], ["month", "Month"], ["year", "Year"], ["datetime", "Date+time"]],
         f.dateFormat, (v) => set({ dateFormat: v })),
     );
-    // P35 scorecard: a KPI's target, and which way a change counts as good when a comparison runs.
+    // Scorecard: a KPI's target, and which way a change counts as good when a comparison runs.
     if (TARGET_TYPES.has(s.chartType))
       panel.append(fmtText("Target", f.target == null ? "" : String(f.target), (v) => {
         if (v == null) { set({ target: null }); return; }
@@ -1234,37 +1234,37 @@ export function initDashboards() {
         if (!r.ok) { toast(r.error, "danger"); return; }
         set({ target: r.value });
       }));
-    if (s.chartType === "bullet") { // T03-12: a measure on the shelf supplies each category's target
+    if (s.chartType === "bullet") { // a measure on the shelf supplies each category's target
       const names = planMeasures(s).filter((e) => e.role === "shelf").map((e) => measureName(e.field));
       if (f.targetMeasure != null && effectiveTargetMeasure(f.targetMeasure, names.length) == null) f.targetMeasure = null; // stale: that measure is gone
       const choices = targetChoices(names);
       if (choices.length) panel.append(fmtSelect("Target field", [["null", "None (use Target)"], ...choices], f.targetMeasure ?? "null",
         (v) => set({ targetMeasure: v === "null" ? null : Number(v) })));
     }
-    if (linesTakeStyle(s.chartType)) panel.append(fmtSelect("Line style", LINE_STYLE_CHOICES, f.lineStyle ?? "straight", (v) => set({ lineStyle: v }))); // T03-05
-    if (s.chartType === "heatmap") panel.append(fmtSelect("Shape", HEATMAP_SHAPE_CHOICES, f.heatmapShape ?? "square", (v) => set({ heatmapShape: v }))); // T03-10
+    if (linesTakeStyle(s.chartType)) panel.append(fmtSelect("Line style", LINE_STYLE_CHOICES, f.lineStyle ?? "straight", (v) => set({ lineStyle: v })));
+    if (s.chartType === "heatmap") panel.append(fmtSelect("Shape", HEATMAP_SHAPE_CHOICES, f.heatmapShape ?? "square", (v) => set({ heatmapShape: v })));
     const vertical = chartOrientation(s) !== "horizontal"; // a dimension on Rows draws horizontal bars-style: a right axis needs the category along the bottom
     if (dualAxisAllowed(s.chartType)) {
-      const dualBox = fmtCheck("Dual axis", f.dualAxis, (v) => set({ dualAxis: v })); // T03-16
+      const dualBox = fmtCheck("Dual axis", f.dualAxis, (v) => set({ dualAxis: v }));
       if (!vertical) { dualBox.querySelector("input").disabled = true; dualBox.title = "Dual axis needs the dimension on Columns."; }
       panel.append(dualBox);
     }
-    if (s.chartType === "combo" || (vertical && dualAxisOn(s.chartType, f, planMeasures(s).length))) { // T03-16, T03-17
+    if (s.chartType === "combo" || (vertical && dualAxisOn(s.chartType, f, planMeasures(s).length))) {
       if (s.chartType === "combo") panel.append(fmtSelect("Right-axis marks", SECONDARY_CHOICES, f.secondaryType ?? "line", (v) => set({ secondaryType: v })));
       panel.append(fmtCheck("Synchronise axes", f.syncAxes, (v) => set({ syncAxes: v })));
     }
-    if (MARKER_TYPES.has(s.chartType) && (s.chartType !== "heatmap" || f.heatmapShape === "circle")) // T01-22: blank = automatic (a heatmap: circles only)
+    if (MARKER_TYPES.has(s.chartType) && (s.chartType !== "heatmap" || f.heatmapShape === "circle")) // blank = automatic (a heatmap: circles only)
       panel.append(fmtNumber("Marker size (px)", f.markerSize, "auto", (v) => {
         if (v != null && markerSizeError(v)) { toast(markerSizeError(v), "danger"); return; }
         set({ markerSize: v });
       }));
     if (linesTakeStyle(s.chartType)) panel.append(fmtSelect("Marker shape", MARKER_SHAPE_CHOICES, f.markerShape ?? "circle", (v) => set({ markerShape: v })));
-    if (BORDER_TYPES.has(s.chartType)) panel.append(fmtSelect("Mark border", MARK_BORDER_CHOICES, f.markBorder ?? "none", (v) => set({ markBorder: v }))); // T03-34
+    if (BORDER_TYPES.has(s.chartType)) panel.append(fmtSelect("Mark border", MARK_BORDER_CHOICES, f.markBorder ?? "none", (v) => set({ markBorder: v })));
     if (s.period && s.period.compare !== "none")
       panel.append(fmtCheck("A fall is good", f.downIsGood, (v) => set({ downIsGood: v })));
     if (!STAT_SINGLE_TABLE.has(s.chartType))
-      panel.append(fmtCheck("Approximate (faster)", f.approximate, (v) => set({ approximate: v }))); // P33
-    if (s.chartType === "table" || s.chartType === "text") { // T01-23
+      panel.append(fmtCheck("Approximate (faster)", f.approximate, (v) => set({ approximate: v })));
+    if (s.chartType === "table" || s.chartType === "text") {
       panel.append(fmtSelect("Align", TABLE_ALIGN_CHOICES, f.tableAlign ?? "auto", (v) => set({ tableAlign: v })),
         fmtSelect("Row height", TABLE_DENSITY_CHOICES, f.tableDensity ?? "standard", (v) => set({ tableDensity: v })),
         fmtSelect("Shading", TABLE_SHADE_CHOICES, f.tableShade ?? "none", (v) => set({ tableShade: v })),
@@ -1278,7 +1278,7 @@ export function initDashboards() {
           ? fmtSelect("Bins", [["5", "5"], ["10", "10"], ["20", "20"], ["50", "50"], ["100", "100"]],
             f.topN ?? 20, (v) => set({ topN: Number(v) }))
           : fmtSelect("Top N", [["null", "All"], ["5", "5"], ["10", "10"], ["20", "20"], ["50", "50"], ["100", "100"],
-              ...parameters.filter((p) => p.type === "number").map((p) => [`param:${p.id}`, `= ${p.name}`])], // P32
+              ...parameters.filter((p) => p.type === "number").map((p) => [`param:${p.id}`, `= ${p.name}`])],
             f.topNParam ? `param:${f.topNParam}` : f.topN ?? "null",
             (v) => (v.startsWith("param:") ? set({ topNParam: v.slice(6) }) : set({ topN: v === "null" ? null : Number(v), topNParam: undefined }))),
         ...(BUCKET_TYPES.has(s.chartType)
@@ -1289,8 +1289,8 @@ export function initDashboards() {
       );
       if (canColourByCat)
         panel.append(fmtCheck("Colour by category", f.colorByDimension, (v) => set({ colorByDimension: v })));
-      panel.append(fmtCheck("Reverse palette", f.paletteReverse, (v) => set({ paletteReverse: v })), memberColourEditor(dash, s)); // T03-33, T01-20
-      if (s.chartType === "heatmap" || (s.chartType === "scatter" && colorMode(s) === "continuous")) { // T03-19: the continuous colour scale
+      panel.append(fmtCheck("Reverse palette", f.paletteReverse, (v) => set({ paletteReverse: v })), memberColourEditor(dash, s));
+      if (s.chartType === "heatmap" || (s.chartType === "scatter" && colorMode(s) === "continuous")) { // the continuous colour scale
         const range = (key, other, label) => fmtNumber(label, f[key], "auto", (v) => {
           const err = colourRangeError(...(key === "colorMin" ? [v, f[other]] : [f[other], v]));
           if (err) { toast(err, "danger"); set({ [key]: f[key] }); return; } // redraw puts the kept value back
@@ -1421,7 +1421,7 @@ export function initDashboards() {
     p.append(x);
     return p;
   }
-  // T04-07: the percent box beside a percentile aggregation. The pill stores a 0..1 fraction (`f.p`); a value that is not 0-100
+  // The percent box beside a percentile aggregation. The pill stores a 0..1 fraction (`f.p`); a value that is not 0-100
   // is shown with its message and never stored, so the view keeps the last good percentile.
   function percentInput(dash, s, f, label) {
     const wrap = el("span", "ws-pill__pct");
@@ -1457,13 +1457,13 @@ export function initDashboards() {
   // aggregated as a measure. A measure pill shows an aggregation picker (with countDistinct for unique
   // counts); a dimension pill just groups.
   function fieldPill(dash, s, shelfKey, f, i) {
-    const label = nameOf(f); // P28: the display name
+    const label = nameOf(f); // the display name
     const remove = () => { s[shelfKey].splice(i, 1); commit(dash, s); };
     const isMeasure = roleOf(f) === "measure";
     const controls = el("span", "ws-pill__ctl"); // only the cast badge stays inline; every option lives in the context popup
     const calcPill = isCalcPill(f);
     // A calculated measure aggregates itself: only a row-level number (it carries `agg`) picks an aggregation, and only that
-    // one may flip dimension <-> measure (E4); an aggregate or non-number calculation has nothing to choose.
+    // one may flip dimension <-> measure; an aggregate or non-number calculation has nothing to choose.
     const rowLevelNumber = !calcPill || (f.category === "numeric" && (f.role === "dimension" || Boolean(f.agg)));
     let aggOpts = null;
     if (isMeasure && (!calcPill || f.agg)) {
@@ -1475,7 +1475,7 @@ export function initDashboards() {
       }
       if (f.agg === "percentile" && !isFraction(f.p)) f.p = DEFAULT_PERCENTILE; // never send a percentile without its fraction
     }
-    const temporal = !isMeasure && f.category === "temporal" && !calcPill; // E12: a calculated dimension is never date-grouped
+    const temporal = !isMeasure && f.category === "temporal" && !calcPill; // a calculated dimension is never date-grouped
     const dateOnly = temporal && isDateOnlyColumn(f.db, f.table, f.column);
     const partChoices = DATE_PART_CHOICES.filter(([v]) => !(dateOnly && (v === "hour" || v === "hourOfDay")));
     const ctxId = `${shelfKey}:${i}`;
@@ -1483,7 +1483,7 @@ export function initDashboards() {
       measure: isMeasure, aggs: aggOpts, agg: f.agg, roleFlip: rowLevelNumber, numeric: f.category === "numeric", tableCalc: isCalc(f.tableCalc),
       temporal, parts: partChoices, part: f.datePart, finer: temporal ? stepPart(f.datePart ?? "auto", 1, dateOnly) : null,
       coarser: temporal ? stepPart(f.datePart ?? "auto", -1, dateOnly) : null, dateLabelsAll: f.dateLabels === "all",
-      choicesOk: !calcPill, // E12: a calculated field has no field choices
+      choicesOk: !calcPill, // a calculated field has no field choices
     }), (id) => {
       if (id.startsWith("agg:")) {
         f.agg = id.slice(4);
@@ -1497,17 +1497,17 @@ export function initDashboards() {
         const next = stepPart(f.datePart ?? "auto", id === "finer" ? 1 : -1, dateOnly);
         if (next) { f.datePart = next; commit(dash, s); }
       } else if (id === "labels") { f.dateLabels = toggleDateLabels(f.dateLabels); commit(dash, s); } // Show all (a slot and label per date) or Thin out
-      else if (id === "tablecalc") { // P27: a measure's quick table calculation (opens its editor)
+      else if (id === "tablecalc") { // a measure's quick table calculation (opens its editor)
         const open = calcFor && calcFor.shelf === shelfKey && calcFor.index === i;
         calcFor = open ? null : { shelf: shelfKey, index: i }; if (calcFor) { openTool = null; choicesFor = null; } formatOpen = false; renderShelves();
-      } else if (id === "choices") { // P40: alternative fields for this slot (opens the Choices editor)
+      } else if (id === "choices") { // alternative fields for this slot (opens the Choices editor)
         const open = choicesFor && choicesFor.shelf === shelfKey && choicesFor.index === i;
         choicesFor = open ? null : { shelf: shelfKey, index: i }; if (choicesFor) { openTool = null; calcFor = null; } formatOpen = false; renderShelves();
       }
     }, { keep: (id) => id === "agg:percentile" || id === "labels", custom: { percent: () => percentInput(dash, s, f, label) } });
     const cast = calcPill ? null : castOf(f);
-    if (cast) controls.prepend(castBadge(cast, baseCategoryOf(f.db, f.table, f.column) ?? f.category)); // T02-34
-    const shown = isMeasure && !calcPill && f.agg === "percentile" ? `${label} · p${percentLabel(f.p)}` : label; // T04-07: the pill names its percentile
+    if (cast) controls.prepend(castBadge(cast, baseCategoryOf(f.db, f.table, f.column) ?? f.category));
+    const shown = isMeasure && !calcPill && f.agg === "percentile" ? `${label} · p${percentLabel(f.p)}` : label; // the pill names its percentile
     const p = pill(shown, remove, controls.childElementCount ? controls : null);
     p.classList.add(isMeasure ? "ws-pill--measure" : "ws-pill--dimension");
     optionsOn(p, ctxId, label, entries);
@@ -1590,14 +1590,14 @@ export function initDashboards() {
   // Color); dropping another replaces it (see addColor).
   function colorPill(dash, s, f, i) {
     const remove = () => { s.color.splice(i, 1); commit(dash, s); };
-    // A numeric Colour field reads as a continuous gradient (P18); tag the pill so the label says so.
+    // A numeric Colour field reads as a continuous gradient; tag the pill so the label says so.
     const continuous = f.category === "numeric";
     const p = pill(`${f.table}.${f.column}${continuous ? " (gradient)" : ""}`, remove);
     p.classList.add("ws-pill--color");
     if (continuous) p.title = "Continuous colour — a sequential gradient (Bar/Scatter)";
     return p;
   }
-  // Filter pill (P14). The operator select drives which value control shows: a single input for the
+  // Filter pill. The operator select drives which value control shows: a single input for the
   // scalar ops, a distinct-values multi-select for `in`, and two bounds for `between`.
   function filterPill(dash, s, f, i, list) {
     const shared = list === sharedFilters;
@@ -1608,14 +1608,14 @@ export function initDashboards() {
     const entries = () => bindEntries(filterPillOptions({ ops: opList, op: f.op, shared }), (id) => {
       if (id.startsWith("op:")) {
         f.op = id.slice(3);
-        if (f.op === "top" && !f.topBy) { // P30: rank by the first shelf measure until the user picks another
+        if (f.op === "top" && !f.topBy) { // rank by the first shelf measure until the user picks another
           const e = planMeasures(s).find((m) => m.role === "shelf");
           if (e) f.topBy = topByRef(e, calcFieldCtx());
         }
         if ((f.op === "in" || f.op === "notin") && !Array.isArray(f.values)) f.values = [];
         if (f.op === "between" && !Array.isArray(f.values)) f.values = ["", ""];
         commit(dash, s); // re-render so the matching value control appears
-      } else if (id === "share") toggleShared(dash, s, f, list, i); // P40: share with every dashboard (moves it to the workbook's shared list), or take it back
+      } else if (id === "share") toggleShared(dash, s, f, list, i); // share with every dashboard (moves it to the workbook's shared list), or take it back
     }, { keep: (id) => id.startsWith("op:"), custom: { value: () => filterValueEditor(dash, s, f, chk) } });
     const opText = f.op === "top" ? (f.bottom ? "bottom" : "top") : OP_LABELS[f.op] ?? f.op;
     const text = `${nameOf(f)} ${opText} ${filterSummary(f)}`.trim();
@@ -1643,7 +1643,7 @@ export function initDashboards() {
     return cfg;
   }
 
-  // --- shared filters & field choices (P40) --------------------------------
+  // --- shared filters & field choices --------------------------------
   function toggleShared(dash, s, f, list, i) {
     const refused = refusal(f, "sharedFilter");
     if (refused) { toast(refused, "info"); return; }
@@ -1670,7 +1670,7 @@ export function initDashboards() {
     return skipped.length ? `${skipped.map((f) => `${f.table}.${f.column}`).join(", ")}: shared, but not applied here — its table isn't in this view.` : null;
   }
 
-  // P27: the table-calculation editor for one measure slot.
+  // The table-calculation editor for one measure slot.
   function calcPanel(dash, s) {
     const { shelf, index } = calcFor;
     const f = s[shelf]?.[index];
@@ -1717,7 +1717,7 @@ export function initDashboards() {
   // Field choices: a shelf pill may carry alternative fields; the switcher on the chart card picks one.
   function addChoice(dash, s, shelf, index, field) {
     const f = s[shelf][index];
-    const refused = refusal(field, "choice") ?? (isCalcPill(f) ? refusal(f, "choice") : null); // E12: neither a calc dropped here nor a calc slot takes choices
+    const refused = refusal(field, "choice") ?? (isCalcPill(f) ? refusal(f, "choice") : null); // neither a calc dropped here nor a calc slot takes choices
     if (refused) { toast(refused, "info"); return; }
     const list = choicesOf(f);
     if (list.some((c) => sameRef(c, field))) return;
@@ -1769,8 +1769,8 @@ export function initDashboards() {
     return row;
   }
 
-  // The value editor for a filter, by operator (P14).
-  // P32: a filter value can follow a parameter of the field's type (scalar / text-match / top-N count).
+  // The value editor for a filter, by operator.
+  // A filter value can follow a parameter of the field's type (scalar / text-match / top-N count).
   const pv = (f) => withParams(f, planCtx());
   const PARAMABLE = new Set(["=", "!=", ">", ">=", "<", "<=", "contains", "startsWith", "endsWith", "top"]);
   function paramChoices(f) {
@@ -1810,7 +1810,7 @@ export function initDashboards() {
       sel.addEventListener("change", () => { f.values = [...sel.selectedOptions].map((o) => o.value); commit(dash, s); });
       return wrap;
     }
-    // P30: relative date — a period preset; top-N — n, the ranking measure, top or bottom.
+    // Relative date — a period preset; top-N — n, the ranking measure, top or bottom.
     if (f.op === "relative") {
       const choices = PRESET_CHOICES.filter(([v]) => v !== "custom");
       const sel = select(choices.map(([v]) => v), f.value || "", "ws-pill__rel", `Date range for ${f.table}.${f.column}`);
@@ -1846,7 +1846,7 @@ export function initDashboards() {
     return wrap;
   }
 
-  // P30 top-N editor: [top|bottom] [n] by [measure on the shelves].
+  // Top-N editor: [top|bottom] [n] by [measure on the shelves].
   function topControl(dash, s, f) {
     const wrap = el("span", "ws-pill__top");
     const dir = select(["top", "bottom"], f.bottom ? "bottom" : "top", "ws-pill__topdir", `Top or bottom for ${f.table}.${f.column}`);
@@ -1882,7 +1882,7 @@ export function initDashboards() {
     return wrap;
   }
 
-  // P32 parameter controls: one per parameter this sheet uses (its filters, shared filters, Top N) — a
+  // Parameter controls: one per parameter this sheet uses (its filters, shared filters, Top N) — a
   // select for a list, a slider + box for a number range, else a typed input. Every value is checked.
   function paramControls(s) {
     const used = new Set([...s.filters, ...sharedFilters].map((f) => f.param).filter(Boolean));
@@ -1931,7 +1931,7 @@ export function initDashboards() {
     return row;
   }
 
-  // P30 filter cards: each of the sheet's filters (and the shared ones that apply here) as a card above
+  // Filter cards: each of the sheet's filters (and the shared ones that apply here) as a card above
   // the chart — a checkbox list for `in`, the filter's own editor otherwise. Same objects as the Filters
   // tool, so the two always agree.
   function filterCards(dash, s) {
@@ -1980,7 +1980,7 @@ export function initDashboards() {
           f.values = [...set];
           commit(dash, s);
         });
-        const lab = aliasOf(aliases, v); // T02-29: show the label; the raw value stays the filter value (and the tooltip / secondary text)
+        const lab = aliasOf(aliases, v); // show the label; the raw value stays the filter value (and the tooltip / secondary text)
         row.append(cb, el("span", null, v == null ? "—" : lab ?? String(v)));
         if (lab !== undefined) { row.title = String(v); row.append(el("span", "ws-fcard__raw", String(v))); }
         box.append(row);
@@ -2001,7 +2001,7 @@ export function initDashboards() {
       sel.replaceChildren();
       const chosen = new Set(f.values ?? []);
       for (const v of vals.slice(0, DISTINCT_SHOWN)) {
-        const lab = aliasOf(metaOf(f).memberAliases, v); // T02-29: the option shows the label, its value (and title) stay raw
+        const lab = aliasOf(metaOf(f).memberAliases, v); // the option shows the label, its value (and title) stay raw
         const opt = new Option(v == null ? "—" : lab ?? String(v), v == null ? "" : String(v));
         if (lab !== undefined) opt.title = String(v);
         if (chosen.has(opt.value)) opt.selected = true;
@@ -2079,7 +2079,7 @@ export function initDashboards() {
   const slotEntry = (f) => (isCalcPill(f)
     ? { calc: f.calc, db: "", table: "", column: f.column, category: f.category, ...(f.role ? { role: f.role } : {}), ...(f.agg ? { agg: f.agg } : {}) }
     : { db: f.db, table: f.table, column: f.column, category: f.category });
-  // P28: a field's default aggregation (its setting when the column supports it, else sum).
+  // A field's default aggregation (its setting when the column supports it, else sum).
   function defaultAgg(f) {
     const a = metaOf(f).agg;
     return a && aggsFor(f.category).includes(a) ? a : "sum";
@@ -2097,8 +2097,8 @@ export function initDashboards() {
     dash.sheet.filters.push({ db: f.db, table: f.table, column: f.column, category: f.category, op: "=", value: "" });
     commit(dash, dash.sheet);
   }
-  // Drop a field onto Color (P7/P18 marks). A categorical field is discrete (group-by → coloured
-  // series); a numeric field is continuous (P18 gradient — see colorMode/planMeasures). Capped at one —
+  // Drop a field onto Color (P7/marks). A categorical field is discrete (group-by → coloured
+  // series); a numeric field is continuous (gradient — see colorMode/planMeasures). Capped at one —
   // a second drop replaces the first, matching Tableau's single Colour slot.
   function addColor(dash, f) {
     if (!allowed(dash, "color", f, isCalcPill(f) ? f.role : "dimension")) return;
@@ -2206,7 +2206,7 @@ export function initDashboards() {
     return panel;
   }
 
-  // --- Tooltip text (T01-19) ---------------------------------------------
+  // --- Tooltip text ---------------------------------------------
   // The fields the last drawn chart offers ([{ name, sample }]) — the editor's chips and live preview.
   // Keyed by sheet and cleared at the start of each drawing (worksheet-render.js), so it only ever holds the drawn view's fields.
   let tooltipCatState = { sheet: null, list: [] };
@@ -2283,7 +2283,7 @@ export function initDashboards() {
     return box;
   }
 
-  // --- Member colours (T01-20) ---------------------------------------------
+  // --- Member colours ---------------------------------------------
   // The members the last drawn chart colours by a discrete field ({ field, members: [{ name, raw }] }), keyed
   // by sheet and cleared at the start of each drawing. The editor lists them; a pick stores a validated #rrggbb
   // in sheet.memberColors (Dashboard/colour-model.js) and re-draws.
@@ -2345,7 +2345,7 @@ export function initDashboards() {
     return box;
   }
 
-  // --- Date range & comparison (P35) ---------------------------------------
+  // --- Date range & comparison ---------------------------------------
   function setPeriod(dash, f) {
     const refused = refusal(f, "period");
     if (refused) { toast(refused, "info"); return; }
@@ -2421,7 +2421,7 @@ export function initDashboards() {
     list.push(isCalcPill(f) ? slotEntry(f) : { ...slotEntry(f), ...(f.category === "numeric" ? { agg: "sum" } : {}) });
     commit(dash, dash.sheet);
   }
-  // Shape (P19) takes one CATEGORICAL field (distinct point symbols); numeric is nudged away.
+  // Shape takes one CATEGORICAL field (distinct point symbols); numeric is nudged away.
   function addShape(dash, f) {
     const refused = refusal(f, "shape");
     if (refused) { toast(refused, "info"); return; }
@@ -2431,7 +2431,7 @@ export function initDashboards() {
     m.shape = { db: f.db, table: f.table, column: f.column, category: f.category };
     commit(dash, dash.sheet);
   }
-  // Angle (P19) takes one NUMERIC field (a radial magnitude — pie already maps its measure to angle).
+  // Angle takes one NUMERIC field (a radial magnitude — pie already maps its measure to angle).
   function addAngle(dash, f) {
     const refused = refusal(f, "angle");
     if (refused) { toast(refused, "info"); return; }
@@ -2441,9 +2441,9 @@ export function initDashboards() {
     commit(dash, dash.sheet);
   }
 
-  // --- Pages shelf (P20) ---------------------------------------------------
+  // --- Pages shelf ---------------------------------------------------
   // One dimension whose members the view steps/animates through, one at a time. Each page is a
-  // bound-parameter `=` filter on the current member (the P14 path); members come from the bounded
+  // bound-parameter `=` filter on the current member (the path); members come from the bounded
   // distinct-values query (shared with the `in` filter). Autoplay is suppressed under reduced-motion.
   function addPages(dash, f) {
     const refused = refusal(f, "pages");
@@ -2509,7 +2509,7 @@ export function initDashboards() {
     }
     return wrap;
   }
-  // Every edit goes through commit() → worksheet:changed → renderShelves + runChart. P23: each commit also
+  // Every edit goes through commit() → worksheet:changed → renderShelves + runChart. each commit also
   // records the previous committed sheet for undo (edits mutate the sheet in place, so the "before" is
   // the snapshot taken at the last commit). commitQuiet skips the history (Pages autoplay).
   const commit = (dash, sheet) => {
@@ -2520,13 +2520,13 @@ export function initDashboards() {
   };
   const commitQuiet = (dash, sheet) => { lastSnap.set(dash.id, structuredClone(sheet)); updateSheet(dash.id, sheet); };
 
-  // P29: a legend click highlights that item (a second click clears it); on a legend that lists a dimension's members
+  // A legend click highlights that item (a second click clears it); on a legend that lists a dimension's members
   // (`field` + `raw`) it also selects the member, so the selection bar offers Keep only / Exclude (the click-to-filter path).
   function legendClick({ sheet, field, name, raw, bucketed }) {
     const dash = activeWorksheet();
     const again = legendFocus === name;
     legendFocus = again ? null : name;
-    if (field && !isCalcPill(field) && dash && raw !== undefined && raw !== null && bucketed === null) { // E12: a calculated field can't be click-filtered; the legend still highlights
+    if (field && !isCalcPill(field) && dash && raw !== undefined && raw !== null && bucketed === null) { // a calculated field can't be click-filtered; the legend still highlights
       if (again) sheet.selection = null;
       else {
         const fmtCat = makeCategoryFormatter(sheet.format ?? defaultFormat());
@@ -2606,7 +2606,7 @@ export function initDashboards() {
     }
     return box;
   }
-  // P39: the sheet's link action — a label and an https:// template with {value}. Blank template = none.
+  // The sheet's link action — a label and an https:// template with {value}. Blank template = none.
   function linkActionEditor(dash, s) {
     const a = s.urlAction ?? { label: "", template: "" };
     const box = el("div", "ws-cf ws-link");
@@ -2698,7 +2698,7 @@ function readPill(e) {
 }
 
 
-// --- export helpers (P13) ---------------------------------------------------
+// --- export helpers ---------------------------------------------------
 // Trigger a browser download of a Blob, cleaning up the object URL afterwards.
 function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
@@ -2724,7 +2724,7 @@ function select(options, selected, className, label) {
   return sel;
 }
 
-// --- format-panel controls (P10). Each wraps its control in a <label> so the visible text is the
+// --- format-panel controls. Each wraps its control in a <label> so the visible text is the
 // control's accessible name. `options` is [value, text] pairs; `current` matches by string value. ---
 function fmtSelect(labelText, options, current, onPick) {
   const wrap = el("label", "ws-fmt-field");

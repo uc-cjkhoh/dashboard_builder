@@ -1,4 +1,4 @@
-// Tooltip text template (T01-19) — pure, DOM-free (unit-tested under tests/js/).
+// Tooltip text template — pure, DOM-free (unit-tested under tests/js/).
 // A sheet's `tooltipText` is user text with <Field> placeholders: "Sales for <customers.name>: <sum(amount)>".
 // The chart tooltip is HTML, so every part (literal text AND substituted values) is escaped here; nothing
 // the user typed ever reaches the tooltip as markup.

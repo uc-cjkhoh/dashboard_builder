@@ -1,4 +1,4 @@
-// P41 — the Theme dialog (Workbook menu → Theme…): an accent (five checked presets or a custom colour)
+// The Theme dialog (Workbook menu → Theme…): an accent (five checked presets or a custom colour)
 // and a chart palette. Choices apply live and save with the workbook; a custom colour that can't carry
 // white button text is refused with the reason. Swatches are labelled — never colour alone.
 import { currentTheme, setTheme } from "../Core/store.js";

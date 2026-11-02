@@ -32,7 +32,7 @@
   --enc-bg: #f4f1fd; --enc-ink: #5b2fc9; --enc-line: #d9d2f7;
   --up: var(--ok-ink); --down: var(--danger-ink);
   /* Charts */
-  --print-paper: #ffffff; --print-ink: #000000; /* P41 print: always black on white, whatever the scheme */
+  --print-paper: #ffffff; --print-ink: #000000; /* print: always black on white, whatever the scheme */
   --chart-series: var(--accent); --chart-axis: var(--line-2); --chart-grid: var(--line);
   --chart-label: var(--ink-2); --chart-muted: var(--ink-3);
   --chart-cat-1: #2a78d6; --chart-cat-2: #146f14; --chart-cat-3: #e87ba4; --chart-cat-4: #c99424;
@@ -299,7 +299,7 @@ select.select:not([multiple]), select.input:not([multiple]) { appearance: none; 
 .toast__close { margin-left: auto; padding: 0; border: 0; background: transparent; color: var(--ink-3); width: 24px; height: 24px; border-radius: var(--r); cursor: pointer; }
 .toast__close:hover { background: var(--surface-3); color: var(--ink); }
 
-/* P41 theme dialog (Workbook → Theme…): labelled swatch options — never colour alone. */
+/* Theme dialog (Workbook → Theme…): labelled swatch options — never colour alone. */
 .theme-dialog { width: min(520px, calc(100vw - 32px)); }
 .theme-dialog__body { display: grid; gap: var(--s4); }
 .theme-group { border: 0; margin: 0; padding: 0; display: grid; gap: var(--s2); }
@@ -317,7 +317,7 @@ select.select:not([multiple]), select.input:not([multiple]) { appearance: none; 
 .theme-hex { width: 96px; height: var(--ctl-h); font-variant-numeric: tabular-nums; }
 .theme-error { margin-left: var(--s6); }
 
-/* P39 bookmarks dialog: one row per bookmark — name + where/when, then Apply / Delete. */
+/* Bookmarks dialog: one row per bookmark — name + where/when, then Apply / Delete. */
 .bookmark-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s2); max-height: 50vh; overflow: auto; min-width: min(460px, calc(100vw - 64px)); }
 .bookmark { display: flex; align-items: center; gap: var(--s2); padding: var(--s2) var(--s2); border: 1px solid var(--line); border-radius: var(--r); }
 .bookmark__info { flex: 1; min-width: 0; display: grid; }
@@ -325,7 +325,7 @@ select.select:not([multiple]), select.input:not([multiple]) { appearance: none; 
 .bookmark__meta { font-size: var(--fs-body); color: var(--ink-3); }
 .bookmark-note { margin: var(--s2) 0 0; font-size: var(--fs-body); color: var(--ink-3); max-width: 420px; }
 
-/* P32 parameters dialog: the edit form wraps its fields. */
+/* Parameters dialog: the edit form wraps its fields. */
 .params-dialog { width: min(640px, calc(100vw - 32px)); }
 .params-edit { display: grid; gap: var(--s2); align-items: stretch; }
 .params-form { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s2); }

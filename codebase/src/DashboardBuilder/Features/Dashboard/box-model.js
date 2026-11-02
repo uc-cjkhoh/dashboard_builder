@@ -1,4 +1,4 @@
-// Box plot data (T07-08) — pure: the boxplot series rows (whiskers stop at the Tukey fences) and the outlier points.
+// Box plot data — pure: the boxplot series rows (whiskers stop at the Tukey fences) and the outlier points.
 
 /** `[low whisker, Q1, median, Q3, high whisker]` per box; the true min/max when the server sent no whiskers. */
 export function boxData(boxes) {

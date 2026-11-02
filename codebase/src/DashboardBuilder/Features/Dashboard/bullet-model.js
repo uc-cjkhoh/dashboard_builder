@@ -1,4 +1,4 @@
-// Bullet target from a field (T03-12) — pure, DOM-free (tests/js/charts1.test.mjs). Format → Target field
+// Bullet target from a field — pure, DOM-free (tests/js/charts1.test.mjs). Format → Target field
 // names one of the view's other measures; each category's target is that measure's value there. With no
 // field (or one that's gone) the fixed Format → Target number applies to every category.
 

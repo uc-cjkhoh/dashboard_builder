@@ -15,7 +15,7 @@ export function periodNotice(s, cmp) {
   return `${rangeLabel(range)}${cmp ? ` vs ${rangeLabel(cmp.range)}` : ""}`;
 }
 
-/** P33: say when a result is approximate or came from the server's cache. */
+/** Say when a result is approximate or came from the server's cache. */
 export function speedNotice(result, plan) {
   const parts = [];
   if (result.approx) parts.push(approxNotice(result.approx, plan.measures));

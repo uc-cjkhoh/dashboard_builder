@@ -1,4 +1,4 @@
-// Marker size and mark borders (T01-22, T03-34) — pure, DOM-free (tests/js/charts2.test.mjs).
+// Marker size and mark borders — pure, DOM-free (tests/js/charts2.test.mjs).
 import { MARK_BORDERS, MARKER_SHAPES } from "../Core/sheet-schema.js";
 
 export const MARK_BORDER_CHOICES = [["none", "None"], ["thin", "Thin"], ["thick", "Thick"]];

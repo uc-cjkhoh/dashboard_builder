@@ -10,22 +10,22 @@ import { el, warn, iconSpan } from "./render-dom.js";
 import { tableStyleClasses } from "./table-style-model.js";
 import { PALETTES } from "../Core/theme-model.js";
 
-// The crosstab / text table and its conditional formatting (P37), drawn from a result. Pure DOM output: nothing here
+// The crosstab / text table and its conditional formatting, drawn from a result. Pure DOM output: nothing here
 // reads the editor, so any worksheet view can draw a table. `calcPercent` = result measure indexes whose values are
-// percentages (P27 table calculations), written with a "%".
+// percentages (table calculations), written with a "%".
 
 // Tableau-style crosstab. Row-shelf dimensions form the left stub; Column-shelf dimensions the top
 // header; measures are the cell values. The *measure name band* sits on whichever shelf the numeric
 // pills are on (measures on both shelves → shown across the top, with a note). Built by pivoting the
 // flat grouped rows: keys are [rowDim…, colDim…]; we take the distinct row/col tuples and index the
 // cells, then render nested headers (colSpan on top, rowSpan on the left stub).
-// T03-29: a header with a next level below it gets a +/- button (`collapse.onToggle(axis, key)`) when the host passes one; the
+// A header with a next level below it gets a +/- button (`collapse.onToggle(axis, key)`) when the host passes one; the
 // collapsed state (sheet.collapsed) shows either way. A collapsed header stands for its whole subtree as one row / column.
 let refocus = null; // the toggle to focus after the redraw a click causes: { axis, key }
 export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, calcPercent = new Set(), collapse = null) {
   const { rowDimensions, columnDimensions, measures, rows } = result;
   const rd = rowDimensions.length, cd = columnDimensions.length;
-  const dimLabel = (v, i) => (v == null ? "—" : fmtCat(v, i)); // date-aware header label (P10)
+  const dimLabel = (v, i) => (v == null ? "—" : fmtCat(v, i)); // date-aware header label
 
   const colMeasures = sheet.columns.filter((f) => roleOf(f) === "measure");
   const rowMeasures = sheet.rows.filter((f) => roleOf(f) === "measure");
@@ -44,7 +44,7 @@ export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, ca
   const topLevels = cd + (measureOnLeft ? 0 : 1);
 
   const table = el("table", ["data xtab", ...tableStyleClasses(sheet.format)].join(" "));
-  // P21 totals: a grand-total column (when Columns has dimensions), a grand-total row (when Rows has),
+  // Totals: a grand-total column (when Columns has dimensions), a grand-total row (when Rows has),
   // and a subtotal after each first-level Rows group — each combined by the measure's own aggregation.
   const tot = sheet.analytics?.totals ?? {};
   const mplanT = planMeasures(sheet);
@@ -61,7 +61,7 @@ export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, ca
   const complete = !partial && !result.truncated;
   const leafAt = (l, t, mi) => leafValue(aggOfMi(mi), cellValue, l, t, mi, complete);
   const rowKeys = headerKeys(rowTuples, rowDimensions), colKeys = headerKeys(colTuples, columnDimensions);
-  // P37: per measure index, or null — scales and bars are measured on the values shown (a collapsed cell is a sum).
+  // Per measure index, or null — scales and bars are measured on the values shown (a collapsed cell is a sum).
   const cf = conditionalFor(sheet, measures, shownValues(leftLeaves, topLeaves, measureOnLeft, measures.length, leafAt));
   const toggleOf = (axis, names, tuple, level, label) => {
     if (!collapse || !canToggle(level, names.length)) return null;
@@ -190,7 +190,7 @@ export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, ca
   return table;
 }
 
-// --- conditional formatting (P37) ----------------------------------------
+// --- conditional formatting ----------------------------------------
 // Per result measure: its setting, value extent over the loaded rows, and token palette — or null.
 function conditionalFor(sheet, measures, shown) {
   const all = sheet.format?.conditional ?? {};

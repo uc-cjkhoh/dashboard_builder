@@ -1,4 +1,4 @@
-// The "Edit member labels…" dialog (T02-29): a field's top members, one label input each. DOM only — the rules (limits, own-key
+// The "Edit member labels…" dialog: a field's top members, one label input each. DOM only — the rules (limits, own-key
 // maps, blank = no label) are in member-labels.js. Everything typed or fetched is shown with textContent / input values.
 import { makeButton, openDialog, closeDialog } from "../Core/ui.js";
 import { LIMITS } from "../Core/validate.js";

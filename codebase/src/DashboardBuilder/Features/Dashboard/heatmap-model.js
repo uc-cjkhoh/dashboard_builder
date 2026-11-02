@@ -1,4 +1,4 @@
-// Heatmap shape (T03-10) — pure, DOM-free (tests/js/charts1.test.mjs). Squares fill the grid cell;
+// Heatmap shape — pure, DOM-free (tests/js/charts1.test.mjs). Squares fill the grid cell;
 // circles are scatter marks over the same category grid, sized by the cell.
 export const HEATMAP_SHAPE_CHOICES = [["square", "Squares"], ["circle", "Circles"]];
 

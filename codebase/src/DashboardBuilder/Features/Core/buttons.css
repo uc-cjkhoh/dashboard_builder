@@ -8,7 +8,7 @@ button, .btn, .iconbtn, .tab, .tab-add, .ws-tool, .card-choice, [role="button"],
 .btn--danger { background: var(--danger-bg); }
 .btn--danger:hover:not(:disabled) { background: color-mix(in srgb, var(--danger-ink) 16%, var(--danger-bg)); }
 
-/* Glass tiers: the frosted fill is the control now (the border used to be). */
+/* Glass tiers: the frosted fill is the control, not the border. */
 .tab, .tab-add { background: var(--glass-ctl); }
 .tab:hover, .tab-add:hover { background: var(--glass-ctl-hover); }
 .glass .sidebar__tool { background: color-mix(in srgb, var(--ink) 9%, var(--glass-ctl)); }

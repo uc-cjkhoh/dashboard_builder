@@ -301,7 +301,7 @@ function endMarker(p, u, kind) {
 }
 
 const BADGE_H = 24;
-// P31: an outer join says so on the badge ("1:N · left", "· right", "· full") — words, not a colour.
+// An outer join says so on the badge ("1:N · left", "· right", "· full") — words, not a colour.
 const badgeWidth = (text) => (text.length <= 3 ? 34 : text.length > 10 ? 70 : 64);
 
 function badge(text, w, mid) {
@@ -343,7 +343,7 @@ function openCardinalityDialog({ current = "1:N", joinType = "inner", tables = [
 
   const body = document.createElement("div");
   body.className = "dialog__body";
-  // P31 / T02-12: how the two tables join — only matching rows, or keep every row of the first table (left),
+  // How the two tables join — only matching rows, or keep every row of the first table (left),
   // the second (right) or both (full). The link runs first → second. Pick it first; picking a cardinality saves both.
   let join = joinType;
   const joinRow = document.createElement("fieldset");

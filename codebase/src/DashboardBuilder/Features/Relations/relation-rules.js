@@ -66,7 +66,7 @@ export function matchingColumns(columns, category, usedNames = [], limit = 5) {
   return columns.filter((c) => keysCompatible(category, c.category) && !used.has(c.name)).slice(0, limit).map((c) => c.name);
 }
 
-// T02-12 / T02-13 join types. A relationship runs FROM → TO: FROM is the left side, TO the right.
+// Join types. A relationship runs FROM → TO: FROM is the left side, TO the right.
 // "left" keeps every row of FROM's table, "right" every row of TO's table, "full" both; "inner" only matches.
 export const JOIN_TYPES = ["inner", "left", "right", "full"];
 export const normalizeJoinType = (t) => (JOIN_TYPES.includes(t) ? t : "inner");

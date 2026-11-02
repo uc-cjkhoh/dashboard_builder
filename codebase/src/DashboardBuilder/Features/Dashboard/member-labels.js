@@ -1,4 +1,4 @@
-// Member aliases (T02-29) — pure, DOM-free (tests/js/member-labels.test.mjs). A field setting `memberAliases`
+// Member aliases — pure, DOM-free (tests/js/member-labels.test.mjs). A field setting `memberAliases`
 // ({ [rawValue]: label }, in the workbook's field settings) gives each member of a field a display label. It is DISPLAY
 // only: the query, grouping, sorting, filters and selections all keep the raw value; a label replaces the text drawn for a
 // member on category axes, legends, tooltips, crosstab headers, filter lists and selection chips.

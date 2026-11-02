@@ -1,4 +1,4 @@
-// P37 conditional formatting for the Table / Text crosstab — pure, DOM-free (unit-tested in
+// Conditional formatting for the Table / Text crosstab — pure, DOM-free (unit-tested in
 // tests/js/conditional-model.test.mjs). Per measure: a colour scale (sequential, or diverging around a
 // midpoint) or data bars, plus up to five rules (value op threshold → a tone with an icon). Colours come
 // from the design tokens at render time; the text ink is picked per cell for ≥ 4.5:1 contrast.

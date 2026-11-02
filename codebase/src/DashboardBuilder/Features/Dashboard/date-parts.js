@@ -1,4 +1,4 @@
-// P26 date hierarchy — pure, DOM-free (unit-tested in tests/js/date-parts.test.mjs). A date pill on
+// Date hierarchy — pure, DOM-free (unit-tested in tests/js/date-parts.test.mjs). A date pill on
 // Columns / Rows may carry `datePart`: auto (the chart-wide Group dates), exact, a truncation
 // (year → quarter → month → day → hour, plus week) or a discrete part (quarter / month of year, day of
 // week, hour of day). The server maps each to one whitelisted ClickHouse function.

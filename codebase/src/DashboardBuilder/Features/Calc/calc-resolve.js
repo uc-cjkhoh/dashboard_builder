@@ -29,7 +29,7 @@ export function catalogFromEntities(entities) {
   return { categoryOf, tablesByName, fields, has: (db, table, column) => cats.has(`${db}\0${table}\0${column}`) };
 }
 
-/** The `resolve(parts)` the parser takes (E8, E14). */
+/** The `resolve(parts)` the parser takes. */
 export function makeResolve(catalog, calcNames, params = []) {
   const paramNames = new Set((params ?? []).map((p) => p.name));
   return (parts, kind) => {
@@ -57,7 +57,7 @@ export function makeResolve(catalog, calcNames, params = []) {
 /**
  * Compiles one calculation against all `calcs` (`{ id, name, formula }`), the catalog and the workbook `params`. Returns
  * `{ ast, info, role }` or `{ error: { message, pos? } }`. Syntax errors keep their position; unknown fields,
- * dangling references, cycles and type errors read `Calculation 'X' can't be computed: ...` (E15).
+ * dangling references, cycles and type errors read `Calculation 'X' can't be computed: ...`.
  */
 export function compileCalculation(calc, calcs, catalog, params = []) {
   // The draft is registered only under its own current name: a saved copy of it (same id) is stale.
@@ -74,7 +74,7 @@ export function compileCalculation(calc, calcs, catalog, params = []) {
   const prefix = (message) => `Calculation '${calc.name}' can't be computed: ${message}`;
   const parse = (c) => {
     resolverError = false;
-    if (c.group) return { ast: groupTree(c.group) }; // T02-30: a group field is a tree, never formula text
+    if (c.group) return { ast: groupTree(c.group) }; // a group field is a tree, never formula text
     if (typeof c.formula !== "string") return { error: { message: "Write a formula." } };
     const p = parseFormula(c.formula, resolve);
     return p.error && resolverError ? { error: { message: p.error.message, pos: p.error.pos, resolver: true } } : p;

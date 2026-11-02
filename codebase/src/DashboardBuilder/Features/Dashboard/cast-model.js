@@ -1,4 +1,4 @@
-// T02-34 type cast — pure, DOM-free (tests/js/cast-model.test.mjs). A field setting (`cast`: text | number |
+// Type cast — pure, DOM-free (tests/js/cast-model.test.mjs). A field setting (`cast`: text | number |
 // date, stored in the workbook's field settings) makes the server read that column as another type, so the
 // field groups, aggregates and filters as its target category. The pairings and the target categories mirror
 // the server's TypeCast.cs; a pairing the server refuses is simply not offered.

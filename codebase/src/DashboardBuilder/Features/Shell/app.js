@@ -35,7 +35,7 @@ for (const el of document.querySelectorAll("[data-icon]")) el.replaceChildren(ic
 // check fires an event.
 initScheme();  // light / dark (data-scheme) before anything reads it
 initSchemeToggle();
-initTheme();   // P41 — the workbook theme's tokens (default until a workbook opens)
+initTheme();   // the workbook theme's tokens (default until a workbook opens)
 initSidebar();
 initSchema();
 initCanvas();

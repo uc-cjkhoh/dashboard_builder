@@ -1,4 +1,4 @@
-// T03-29 named hierarchies — pure, DOM-free (tests/js/hierarchy-model.test.mjs). A workbook holds up to 20
+// Named hierarchies — pure, DOM-free (tests/js/hierarchy-model.test.mjs). A workbook holds up to 20
 // reusable hierarchies: { id: "hier<N>", name, levels: [{ db, table, column }, …] } — 2..LIMITS.drillLevels
 // levels, all from ONE table (the same rule as a sheet's drill). Applying one to a sheet COPIES its levels into
 // `sheet.drill = { levels, depth: 0, path: [] }` (the structure addDrillLevel builds), so the sheet keeps

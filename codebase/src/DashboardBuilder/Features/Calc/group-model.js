@@ -1,4 +1,4 @@
-// Groups (T02-30) — pure, DOM-free (tests/js/group-model.test.mjs). A group field puts the members of ONE text field into
+// Groups — pure, DOM-free (tests/js/group-model.test.mjs). A group field puts the members of ONE text field into
 // named groups: { field: { db, table, column }, groups: [{ name, members: [raw…] }] }. It is stored on a calculation
 // ({ id, name, formula: "", group }) and compiled HERE straight into the calculation engine's expression tree, so the
 // grouping happens in ClickHouse and the server needs no new code:

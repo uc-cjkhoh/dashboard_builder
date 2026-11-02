@@ -1,4 +1,4 @@
-// P23 undo / redo — pure, DOM-free (unit-tested in tests/js/history.test.mjs). One stack per worksheet of
+// Undo / redo — pure, DOM-free (unit-tested in tests/js/history.test.mjs). One stack per worksheet of
 // sheet snapshots: every committed change records the sheet as it was; undo swaps back, redo forward.
 export const HISTORY_LIMIT = 50;
 

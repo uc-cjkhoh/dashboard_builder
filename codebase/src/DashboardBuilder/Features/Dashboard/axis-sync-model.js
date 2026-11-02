@@ -1,4 +1,4 @@
-// Dual axis (T03-16, T03-17) — pure, DOM-free (tests/js/charts2.test.mjs). Format → Synchronise axes gives a combo's
+// Dual axis — pure, DOM-free (tests/js/charts2.test.mjs). Format → Synchronise axes gives a combo's
 // two value axes one shared, nice-rounded range so the bars and the right-axis marks are comparable. Format → Right-axis
 // marks picks how the secondary measures are drawn.
 import { SECONDARY_TYPES } from "../Core/sheet-schema.js";

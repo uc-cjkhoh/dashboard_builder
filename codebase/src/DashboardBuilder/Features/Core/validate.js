@@ -5,16 +5,16 @@ export const LIMITS = Object.freeze({
   host: 253, user: 64, password: 256, tabName: 60, axisTitle: 80, filterValue: 1000,
   // The user's OWN filters. The server allows 16 per query (these + drill path + page + selection).
   filters: 8,
-  sharedFilters: 4, // P40: filters shared by every dashboard (server MaxFilters 20 = 8 + 4 + drill 5 + page + selection + date range)
+  sharedFilters: 4, // filters shared by every dashboard (server MaxFilters 20 = 8 + 4 + drill 5 + page + selection + date range)
   fieldChoices: 8,
   bookmarks: 30,
-  fieldSettings: 2000, // P28: renamed / hidden / default-aggregation fields per workbook    // P39: saved views per workbook  // P40: alternative fields one shelf slot can switch between
+  fieldSettings: 2000, // renamed / hidden / default-aggregation fields per workbook    // saved views per workbook  // alternative fields one shelf slot can switch between
   inValues: 500, pillsPerShelf: 20,
   tabs: 50,            // worksheet + dashboard tabs per workbook (client-side only; enforced at creation and on import)
   entities: 100,       // tables on the canvas a workbook may open
   relationships: 200,  // links a workbook may open
   dimensions: 12, measures: 10, // per view (server MaxDimensions / MaxMeasures)
-  hierarchies: 20,   // T03-29: named hierarchies per workbook (client-side only)
+  hierarchies: 20,   // named hierarchies per workbook (client-side only)
   hierarchyName: 60, // characters in a hierarchy name
   drillLevels: 6, // keeps user filters (8) + drill path (≤5) + page + selection within the server's 16
   rows: 5000, // groups one chart query returns: Top-N "All" (server MaxRowLimit); the Table pages instead
@@ -28,18 +28,18 @@ export const LIMITS = Object.freeze({
   calculations: 20,  // calculated fields per workbook (CalcLimits.MaxCalcs; enforced client-side only)
   cleanRecode: 20,   // values one Clean… recode lists (client-side only)
   calcFormula: 500,  // characters in a formula (the server never sees formula text)
-  tooltipText: 300,  // characters in a sheet's tooltip template (T01-19; client-side only, the server never sees it)
+  tooltipText: 300,  // characters in a sheet's tooltip template (client-side only, the server never sees it)
   tooltipLines: 12,  // lines a styled tooltip template covers (tooltip modal; client-side only)
-  memberColors: 100,      // coloured members per field (T01-20; client-side only)
+  memberColors: 100,      // coloured members per field (client-side only)
   memberColorFields: 20,  // fields with member colours per sheet
   memberField: 200,       // characters in a coloured field's key (table.column)
   memberKey: 100,         // characters in a coloured member's key
-  memberAliases: 200,     // T02-29: member labels per field (client-side only)
+  memberAliases: 200,     // member labels per field (client-side only)
   memberLabel: 80,        // characters in one member label
-  groups: 50,             // T02-30: named groups in one group field
+  groups: 50,             // named groups in one group field
   groupMembers: 500,      // members across the groups of one group field (the node budget, Calc/group-model.js, binds first)
   groupName: 80,          // characters in a group name
-  // P24b dashboard board (Board/board-model.js; client-side only — the server never sees a dashboard).
+  // Dashboard board (Board/board-model.js; client-side only — the server never sees a dashboard).
   widgets: 12,         // widgets per dashboard
   gridCols: 12,        // the snap grid's columns
   widgetMinW: 2,       // widget width in cells: 2 .. gridCols (both kinds)
@@ -99,7 +99,7 @@ export function text(raw, { label, max, required = false, trim = true }) {
   if (v.length > max) return fail(`${label} must be at most ${max} characters.`);
   return ok(v);
 }
-// T04-07 percentile: the pill stores a fraction 0..1 (the wire `p`, mirrors RequestRules.PercentileMessage); people type a percent 0-100.
+// Percentile: the pill stores a fraction 0..1 (the wire `p`, mirrors RequestRules.PercentileMessage); people type a percent 0-100.
 export const DEFAULT_PERCENTILE = 0.9; // what choosing "Percentile…" starts at (the 90th)
 export const PERCENT_MESSAGE = "Percentile must be between 0 and 100 percent.";
 /** A typed percent (integer or decimal, at most six decimals, 0-100) as a 0..1 fraction. Never clamped. */

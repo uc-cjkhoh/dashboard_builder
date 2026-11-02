@@ -1,4 +1,4 @@
-// Per-member colours and palette order (T01-20, T03-24, T03-33) — pure, DOM-free (tests/js/colour-model.test.mjs).
+// Per-member colours and palette order — pure, DOM-free (tests/js/colour-model.test.mjs).
 // A sheet's `memberColors` is { [fieldKey]: { [memberKey]: "#rrggbb" } }: the colour a user gave one member of a
 // discrete colour field (a Colour-shelf member, a pie slice, a bar coloured by category). It is workbook DATA
 // (a validated #rrggbb), unlike the app's own CSS, which uses tokens only. `format.paletteReverse` reverses the

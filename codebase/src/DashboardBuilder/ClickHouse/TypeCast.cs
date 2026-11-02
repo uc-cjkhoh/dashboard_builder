@@ -1,7 +1,7 @@
 namespace DashboardBuilder.ClickHouse;
 
 /// <summary>
-/// T02-34 display type cast: a column read as text, number or date. The target is a whitelisted word
+/// Display type cast: a column read as text, number or date. The target is a whitelisted word
 /// (never user text); the SQL is a fixed ClickHouse conversion wrapped around an already catalog-validated,
 /// quoted column expression. Every conversion is an <c>OrNull</c> variant, so a value that doesn't fit
 /// becomes NULL rather than failing the query. Mirrored client-side in Dashboard/cast-model.js.

@@ -1,15 +1,15 @@
 // Worksheet view-bar model — pure, DOM-free (unit-tested under tests/js/): the chart types the picker
 // offers (with their icons), and what the Sort button summarises.
 
-// Chart types (P11/P12/P19). Validity per type is enforced in dashboards.js chartIssue().
+// Chart types. Validity per type is enforced in dashboards.js chartIssue().
 export const CHART_TYPES = Object.freeze([
   ["bar", "Bar"], ["stacked", "Stacked bar"], ["line", "Line"], ["area", "Area"],
   ["pie", "Pie"], ["donut", "Donut"], ["scatter", "Scatter"], ["combo", "Combo (dual-axis)"],
-  // P19 point-mark types (square/circle share the scatter path with a symbol override).
+  // Point-mark types (square/circle share the scatter path with a symbol override).
   ["square", "Square"], ["circle", "Circle"],
-  // P12 statistical types.
+  // Statistical types.
   ["heatmap", "Heatmap"], ["treemap", "Treemap"], ["histogram", "Histogram"], ["boxplot", "Box plot"],
-  // P36 types.
+  // Types.
   ["waterfall", "Waterfall"], ["funnel", "Funnel"], ["gauge", "Gauge"], ["bullet", "Bullet"],
   ["sankey", "Sankey (flow)"], ["multiples", "Small multiples"],
   ["kpi", "KPI"], ["text", "Text"], ["table", "Table"],

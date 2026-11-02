@@ -19,7 +19,7 @@ export function deleteCalcPlan(calcs, sheets, id, shared = []) {
   };
 }
 
-/** E4: the "Use as" control is only for a row-level number. */
+/** The "Use as" control is only for a row-level number. */
 export const showUseAs = (info) => Boolean(info) && !info.isAggregate && info.type === "number";
 export const useAsRole = (v) => (v === "measure" || v === "dimension" ? v : null);
 

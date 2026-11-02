@@ -1,4 +1,4 @@
-// T03-29 — "Hierarchies…" dialog: list, create, rename/re-level and delete the workbook's named hierarchies.
+// "Hierarchies…" dialog: list, create, rename/re-level and delete the workbook's named hierarchies.
 // Name + an ordered level picker over one table's columns; Up / Down buttons reorder (keyboard-operable).
 // All text is set with textContent; the checks live in hierarchy-model.js.
 import { hierarchies, addHierarchy, updateHierarchy, removeHierarchy } from "../Core/store.js";

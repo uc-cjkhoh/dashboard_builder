@@ -1,6 +1,6 @@
 // Calculated fields — the calculation model helpers (pure, DOM-free; tests/js/calc-model.test.mjs).
 // A calculation may refer to another by name (parsed as `{ k: "calc", name }`); the client expands every
-// reference into one tree before anything is sent (design E9), so the server only ever sees plain trees.
+// reference into one tree before anything is sent (design), so the server only ever sees plain trees.
 import { CALC_LIMITS } from "./calc-types.js";
 
 const TOO_LARGE = "That formula is too large.";

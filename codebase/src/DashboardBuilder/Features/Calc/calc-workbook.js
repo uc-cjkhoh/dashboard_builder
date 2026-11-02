@@ -49,7 +49,7 @@ export function cleanCalculation(raw, issues) {
   if (!raw || typeof raw !== "object" || !/^calc\d{1,6}$/.test(raw.id ?? "")) { issues.push("Skipped a calculation with no id."); return null; }
   const name = checkName(raw.name, [], null);
   if (!name.ok) { issues.push(`Skipped a calculation ${raw.id}: ${name.error}`); return null; }
-  if (raw.group !== undefined) { // T02-30: a group field — its definition, not formula text
+  if (raw.group !== undefined) { // a group field — its definition, not formula text
     const group = cleanGroupSpec(raw.group, `"${name.value}"`, issues);
     return group ? { id: raw.id, name: name.value, formula: "", group } : null;
   }

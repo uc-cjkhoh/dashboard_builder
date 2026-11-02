@@ -1,4 +1,4 @@
-// P32 parameters — pure, DOM-free (unit-tested in tests/js/parameters-model.test.mjs). A workbook holds up to
+// Parameters — pure, DOM-free (unit-tested in tests/js/parameters-model.test.mjs). A workbook holds up to
 // 20 named, typed values: { id, name, type: number | text | date, value, allowed: { kind: any | list | range,
 // list?, min?, max?, step? } }. A filter value or a top-N count can read one; Format → Top N can follow a
 // number parameter; a calculated field reads one as [@Name] (Calc/calc-params.js). The value reaches ClickHouse only ever as a bound filter value / validated limit.

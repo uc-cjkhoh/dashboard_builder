@@ -32,7 +32,7 @@ export const calcPillId = (f, kind) => `${kind}:calc:${f.calc}:${f.agg ?? ""}`;
 
 export const sameCalcPill = (a, b) => isCalcPill(a) && isCalcPill(b) && a.calc === b.calc;
 
-/** The toast text when a calc pill is dropped on an entry point E12 refuses; null otherwise. */
+/** The toast text when a calc pill is dropped on an entry point refuses; null otherwise. */
 export function refusal(f, entry) {
   return isCalcPill(f) && ENTRIES.has(entry) ? REFUSAL : null;
 }
@@ -61,7 +61,7 @@ export function syncCalcPills(sheet, calcs, catalog, params = []) {
     f.category = CATEGORY[c.info.type] ?? "other";
     f.role = roleOfCalc(c.info, override);
     f.column = calc.name;
-    delete f.datePart; // E12: a calculated dimension is never date-grouped
+    delete f.datePart; // a calculated dimension is never date-grouped
     if (f.role === "measure" && !c.info.isAggregate) f.agg = CALC_AGGS.includes(f.agg) ? f.agg : "sum";
     else delete f.agg;
   }

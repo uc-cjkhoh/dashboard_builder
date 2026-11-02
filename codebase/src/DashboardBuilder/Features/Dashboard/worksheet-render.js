@@ -16,10 +16,10 @@ import { renderColorSplit, renderScatterShapes, renderSeries } from "./render-ca
 import { P36_TYPES, sameField, aliasNames, pathOrderedRows } from "./result-model.js";
 import { keyAliasMaps, withMemberLabels } from "./member-labels.js";
 
-// Drawing a worksheet's result into a container (P24a): the one entry point every view uses, the editor's included.
+// Drawing a worksheet's result into a container: the one entry point every view uses, the editor's included.
 // It prepares the result (Other mark, date-part labels, display names, table calculations), then dispatches to the family
 // that draws it — table / text (render-table.js), KPI (render-kpi.js), colour split, scatter shapes and the series charts
-// (render-cartesian.js), heatmap / treemap / P36 (render-special.js). It touches only `container`, the arguments and the
+// (render-cartesian.js), heatmap / treemap / (render-special.js). It touches only `container`, the arguments and the
 // render options; nothing here reads the editor, so a view can draw a worksheet on its own.
 
 /**
@@ -55,14 +55,14 @@ function draw(container, rc, sheet, result, cmp) {
   rc.bucketedKey = result.bucket ? result.bucket.key : null;
   // "Other": the server's aggregate of every group past the limit, drawn as one last mark.
   if (result.other && OTHER_TYPES.has(sheet.chartType)) result = { ...result, rows: withOther(result.rows, result.other) };
-  // P26: date-part keys read as "Mar 2024" / "Q1" / "Mon"; like a date-grouped axis, they aren't click-filterable.
+  // Date-part keys read as "Mar 2024" / "Q1" / "Mon"; like a date-grouped axis, they aren't click-filterable.
   const parts = planDims(sheet).keyOrder.map((f) => f?.datePart ?? null);
   result = labelParts(result, parts);
   if (cmp) cmp = { ...cmp, result: labelParts(cmp.result, parts) };
   if (isGroupingPart(parts[0])) rc.bucketedKey = 0;
-  // P28: display names on axes, legends and headers (the query used the real columns).
+  // Display names on axes, legends and headers (the query used the real columns).
   result = aliasNames(sheet, result, rc.plan.metaOf);
-  // P27: quick table calculations replace their measure's values (over the rows on hand).
+  // Quick table calculations replace their measure's values (over the rows on hand).
   const calcs = planMeasures(sheet).map((e) => (e.role === "shelf" ? e.field.tableCalc ?? null : null));
   const applied = applyTableCalcs(result, calcs, result.rowDimensions.length, result.columnDimensions.length);
   result = applied.result;
@@ -72,10 +72,10 @@ function draw(container, rc, sheet, result, cmp) {
     rc.extraNotice = "Table calculations use only the rows shown — more exist.";
   const { rowDimensions, columnDimensions, measures, rows } = result;
   if (!rows.length) { container.append(hint("No data for these fields.")); return; }
-  // P10 formatters: measure values + date-like dimension labels, from the sheet's format config.
+  // Formatters: measure values + date-like dimension labels, from the sheet's format config.
   let format = sheet.format ?? defaultFormat(); // let: a percent table calculation adds a "%" suffix
   const fmtVal = makeValueFormatter(format);
-  // T02-29: a member label replaces the text drawn for a member (key position i = planDims order); clicks, grouping and sorting keep the raw value.
+  // A member label replaces the text drawn for a member (key position i = planDims order); clicks, grouping and sorting keep the raw value.
   const fmtCat = withMemberLabels(makeCategoryFormatter(format), keyAliasMaps(planDims(sheet).keyOrder, rc.plan.metaOf));
   const type = sheet.chartType;
   // Min/Max of a text or date field comes back as text — only Table, Text and KPI can show that.
@@ -83,10 +83,10 @@ function draw(container, rc, sheet, result, cmp) {
     container.replaceChildren(hint(TEXT_VALUE_HINT));
     return;
   }
-  // Table + P19 Text mark both render as the crosstab text grid (values written into cells).
+  // Table + Text mark both render as the crosstab text grid (values written into cells).
   if (type === "table" || type === "text") { container.append(crosstabTable(sheet, result, fmtVal, fmtCat, result.partial, rc.calcPercent, rc.interactive && rc.hooks.onCollapse ? { onToggle: rc.hooks.onCollapse } : null)); return; }
 
-  // P18 marks: re-derive the measure roles so size / continuous-colour / aux columns don't turn into spurious series.
+  // Marks: re-derive the measure roles so size / continuous-colour / aux columns don't turn into spurious series.
   // Shelf measures (only) become series; the rest feed the mark channels.
   const mplan = planMeasures(sheet);
   const seriesIdx = mplan.map((e, i) => (e.role === "shelf" ? i : -1)).filter((i) => i >= 0);
@@ -102,14 +102,14 @@ function draw(container, rc, sheet, result, cmp) {
     return;
   }
 
-  // P11: an unsupported field mapping shows a hint, never an error.
+  // An unsupported field mapping shows a hint, never an error.
   const issue = chartIssue(type, rowDimensions.length + columnDimensions.length, shelfCount);
   if (issue) { container.append(hint(issue)); return; }
 
-  // P19 Shape: on the scatter family, split points by a Shape dimension into one symbol per value.
+  // Shape: on the scatter family, split points by a Shape dimension into one symbol per value.
   if (SCATTER_TYPES.has(type) && marksOf(sheet).shape) { renderScatterShapes(container, rc, sheet, result, seriesIdx, sizeIdx, format, fmtCat); return; }
 
-  // P19 Path: a line/area orders its vertices by the Path field's value (not the category order).
+  // Path: a line/area orders its vertices by the Path field's value (not the category order).
   const usePath = type === "line" || type === "area";
   const rowsOrdered = usePath ? (pathOrderedRows(sheet, result, mplan) ?? rows) : rows;
 
@@ -118,14 +118,14 @@ function draw(container, rc, sheet, result, cmp) {
   const categories = rowsOrdered.map((r) => r.keys.map((k, i) => (k == null ? "—" : fmtCat(k, i))).join(" / "));
   const series = seriesIdx.map((mi) => ({ name: measures[mi], data: rowsOrdered.map((r) => r.values[mi]) }));
   const seriesNames = seriesIdx.map((mi) => measures[mi]);
-  // P27: a chart whose measures are all percentage calculations reads its values with "%".
+  // A chart whose measures are all percentage calculations reads its values with "%".
   if (seriesIdx.length && seriesIdx.every((mi) => rc.calcPercent.has(mi))) format = { ...format, suffix: "%" };
-  // P35: the comparison range's values, lined up with these rows — by position when the first key is the range's own date
+  // The comparison range's values, lined up with these rows — by position when the first key is the range's own date
   // field (day 1 with day 1), else by the same group keys.
   const byPosition = Boolean(sheet.period) && sameField(planDims(sheet).keyOrder[0] ?? {}, sheet.period);
   const aligned = cmp ? alignCompare(rowsOrdered, cmp.result.rows, byPosition) : null;
 
-  // P12 heatmap / treemap reuse this multi-dimension result but pivot it differently.
+  // Heatmap / treemap reuse this multi-dimension result but pivot it differently.
   if (type === "heatmap") { renderHeatmap(container, result, format, fmtCat); return; }
   if (type === "treemap") { renderTreemap(container, result, format, fmtCat); return; }
   if (P36_TYPES.has(type)) { renderP36(container, rc, type, rowsOrdered, categories, series, seriesNames, format, fmtCat); return; }

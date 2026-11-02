@@ -3,16 +3,16 @@ import { isDrillActive } from "./sheet-plan.js";
 import { focusSeries } from "./chart.js";
 import { CLICK_TYPES } from "./result-model.js";
 
-// The interaction wiring of a drawn worksheet (P15 click-to-filter, P16 drill, P29 legend, T01-20 member colours), kept
+// The interaction wiring of a drawn worksheet (click-to-filter, drill, legend, member colours), kept
 // apart from the drawing. Every function reads the render context `rc` (worksheet-render.js): when `rc.interactive` is
 // false none of the editor handlers exist, so a widget draws marks that cannot be drilled or legend-clicked; `rc.select`
-// (interactive true or "select") additionally lets a mark click select (P24c: a dashboard widget selects, never drills). The
+// (interactive true or "select") additionally lets a mark click select (a dashboard widget selects, never drills). The
 // behaviour itself is the host's: rc.hooks = { onSelect(dimField, raw), onDrill(raw), onLegend({ sheet, field, name, raw,
 // bucketed }), legendFocus(), onTooltipFields(sheet, list), onMemberColors(sheet, field, members) }.
 
 /**
- * The ECharts click handler that turns a mark click into a selection on the primary dimension (P15) — or, on a drill
- * hierarchy, a step down (P16). undefined when the view is not interactive or the chart type / field mapping can't
+ * The ECharts click handler that turns a mark click into a selection on the primary dimension — or, on a drill
+ * hierarchy, a step down. undefined when the view is not interactive or the chart type / field mapping can't
  * support click-to-filter (a date-grouped first key has no value a filter could match).
  */
 export function selectHandler(rc, sheet, dimField, type, rawByIndex) {
@@ -30,7 +30,7 @@ export function selectHandler(rc, sheet, dimField, type, rawByIndex) {
 }
 
 /**
- * P29 legend interaction for chart.js: { onLegend, focus }. A click highlights that item (a second click clears it);
+ * Legend interaction for chart.js: { onLegend, focus }. A click highlights that item (a second click clears it);
  * when the legend lists a dimension's members (`field` + `rawByName`) the host may also select the member. A static
  * (non-interactive) view is highlight-only: no host hook, no selection, and no series is ever hidden.
  */

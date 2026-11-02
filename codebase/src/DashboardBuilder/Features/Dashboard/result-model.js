@@ -6,23 +6,23 @@ import { tooltipCatalog } from "./tooltip-model.js";
 import { checkFilter } from "./filter-rules.js";
 import { tupleKey, uniqueTuples } from "./grid-model.js";
 
-// Pure shaping of a query result for drawing (P24a): which result column is a series or a mark channel, the pivots
+// Pure shaping of a query result for drawing: which result column is a series or a mark channel, the pivots
 // behind the colour split, heatmap, treemap, Sankey and small multiples, display names, and the status / caption text.
 // No DOM and no state, so a view can draw a worksheet on its own and every rule is unit-tested
 // (tests/js/result-model.test.mjs). The render modules (render-*.js) turn these shapes into marks.
 
-// P21: chart types that take reference lines / bands / a trend.
+// Chart types that take reference lines / bands / a trend.
 export const ANALYTICS_TYPES = new Set(["bar", "line", "area"]);
-// Chart types whose marks map 1:1 to a category and so support click-to-filter (P15).
+// Chart types whose marks map 1:1 to a category and so support click-to-filter.
 export const CLICK_TYPES = new Set(["bar", "stacked", "line", "area", "combo", "pie", "donut", "scatter"]);
-// P36 types drawn from the ordinary /api/query result.
+// Types drawn from the ordinary /api/query result.
 export const P36_TYPES = new Set(["waterfall", "funnel", "gauge", "bullet", "sankey", "multiples"]);
 // Small multiples draw at most this many panels.
 export const MAX_PANELS = 24;
 
 export const scatterSymbol = (type) => (type === "square" ? "rect" : "circle");
 export const sameField = (a, b) => Boolean(a) && Boolean(b) && (isCalcPill(a) || isCalcPill(b) ? sameCalcPill(a, b) : a.db === b.db && a.table === b.table && a.column === b.column);
-/** Ordering comparator for Path (P19): numeric when both look numeric, else a locale string compare. */
+/** Ordering comparator for Path: numeric when both look numeric, else a locale string compare. */
 export function cmpValues(a, b) {
   const na = Number(a), nb = Number(b);
   if (Number.isFinite(na) && Number.isFinite(nb)) return na - nb;
@@ -56,7 +56,7 @@ export function chartOrientation(sheet) {
   return rowDims > 0 && colDims === 0 ? "horizontal" : "vertical";
 }
 
-/** P28: rename a result's dimension and measure labels by the fields' display names (`metaOf(field).alias`). */
+/** Rename a result's dimension and measure labels by the fields' display names (`metaOf(field).alias`). */
 export function aliasNames(sheet, result, metaOf) {
   const { rowDims, colDims } = planDims(sheet);
   const mplan = planMeasures(sheet);
@@ -73,7 +73,7 @@ export function aliasNames(sheet, result, metaOf) {
     measures };
 }
 
-/** P19 Path: rows ordered by the Path field's value (a group-by key or a numeric measure); null when unset / not in the query. */
+/** Path: rows ordered by the Path field's value (a group-by key or a numeric measure); null when unset / not in the query. */
 export function pathOrderedRows(sheet, result, mplan) {
   const pf = marksOf(sheet).path;
   if (!pf) return null;
@@ -126,7 +126,7 @@ export function markFieldValues(sheet, rows, mplan, field, fmtVal, fmtCat, measu
 }
 
 /**
- * The P18 mark-channel spec fed to chart.js: { spec: { sizes?, sizeName?, colorValues?, colorName?, pointLabels?,
+ * The mark-channel spec fed to chart.js: { spec: { sizes?, sizeName?, colorValues?, colorName?, pointLabels?,
  * tooltipExtra?, tooltipText?, tooltipFields? }, note?, tooltipCat }. Only channels valid for the current type / mapping
  * are populated; anything unmet becomes a friendly `note` (a hint, never an error). `tooltipCat` is the field list the
  * Tooltip editor offers. `measureName(field)` is the display name of a measure field.
@@ -167,7 +167,7 @@ export function marksChannels(sheet, result, mplan, sizeIdx, colorMeasureIdx, fm
   // Tooltip -> extra lines listing each chosen field's per-mark value.
   const tips = (m.tooltip ?? []).map(values).filter(Boolean);
   if (tips.length) spec.tooltipExtra = tips.map((t) => ({ name: t.name, values: t.values }));
-  // T01-19 tooltip text: the template + every group-by / Tooltip field's per-mark values (measures come from the series).
+  // Tooltip text: the template + every group-by / Tooltip field's per-mark values (measures come from the series).
   const dimVals = planDims(sheet).keyOrder.map(values).filter(Boolean);
   const tipFields = [...dimVals, ...tips].map((t) => ({ name: t.name, values: t.values }));
   // Chips offer only placeholders that resolve: group-by / Tooltip fields and the shelf (series) measures.
@@ -181,7 +181,7 @@ export function marksChannels(sheet, result, mplan, sizeIdx, colorMeasureIdx, fm
 }
 
 /**
- * P19 Shape (scatter family): group rows by the Shape dimension's value -> one scatter series per value.
+ * Shape (scatter family): group rows by the Shape dimension's value -> one scatter series per value.
  * Returns { groups: [{ name, points: [{ value: [x, y, size?], name }] }], byName: Map(name -> raw shape value) }.
  */
 export function scatterShapeGroups(sheet, result, seriesIdx, sizeIdx, fmtCat) {
@@ -229,7 +229,7 @@ export function colorSplitData(result, fmtCat) {
   return { categories, series, catTuples, colorVals };
 }
 
-/** P12 heatmap: two dimensions -> axes (dim 0 the Y axis, dim 1 the X axis), the first measure -> colour. */
+/** Heatmap: two dimensions -> axes (dim 0 the Y axis, dim 1 the X axis), the first measure -> colour. */
 export function heatmapData(result, fmtCat) {
   const rows = result.rows;
   const yVals = [], xVals = [], ySeen = new Set(), xSeen = new Set();
@@ -245,7 +245,7 @@ export function heatmapData(result, fmtCat) {
   return { xCats, yCats, cells };
 }
 
-/** P12 treemap: one dimension -> flat leaves; two -> dimension 0 groups, dimension 1 nests under it (values summed). */
+/** Treemap: one dimension -> flat leaves; two -> dimension 0 groups, dimension 1 nests under it (values summed). */
 export function treemapTree(result, fmtCat) {
   const dimCount = result.rowDimensions.length + result.columnDimensions.length;
   const rows = result.rows;
@@ -261,7 +261,7 @@ export function treemapTree(result, fmtCat) {
   return [...parents.values()];
 }
 
-/** P36 Sankey: bipartite links, side-prefixed so a member on both sides stays two nodes; non-positive flows skipped. */
+/** Sankey: bipartite links, side-prefixed so a member on both sides stays two nodes; non-positive flows skipped. */
 export function sankeyLinks(rows, label) {
   const links = [];
   for (const r of rows) {
@@ -272,7 +272,7 @@ export function sankeyLinks(rows, label) {
 }
 
 /**
- * P36 small multiples: x categories = the second key in first-seen order; one panel per first-key member (result
+ * Small multiples: x categories = the second key in first-seen order; one panel per first-key member (result
  * order, capped at MAX_PANELS), each holding one array per measure. `series[si].data` is aligned with `rows`.
  * Returns { panels, xCats, distinct, notice } (notice = the panel-cap line, or null).
  */
