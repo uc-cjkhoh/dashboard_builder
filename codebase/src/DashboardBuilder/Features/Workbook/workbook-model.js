@@ -365,7 +365,7 @@ function cleanPill(raw, where, issues, needCategory = true) {
 export function cleanFilters(list, where, issues, max, { calc = true } = {}) {
   return cleanPills(list, where, issues, max, false).filter((f) => {
     // A sheet's filter may be on a calculated field (never a Top-N); a shared one may not (it must apply to every dashboard's own tables).
-    if (f.calc !== undefined && (!calc || f.op === "top")) { issues.push(`${where}: a calculated field can't be used ${calc ? "in a Top-N filter" : "as a shared filter"} — removed.`); return false; }
+    if (f.calc !== undefined && (!calc || (f.op === "top" || f.op === "relative"))) { issues.push(`${where}: a calculated field can't be used ${calc ? "in a Top-N or relative-date filter" : "as a shared filter"} — removed.`); return false; }
     const multi = f.op === "in" || f.op === "notin" || f.op === "between";
     if (FILTER_OPS.has(f.op) && !multi && f.value !== undefined && f.value !== null && typeof f.value !== "string") {
       issues.push(`${where}: the value of the filter on ${f.table}.${f.column} wasn't text — reset to empty.`); f.value = "";

@@ -3,6 +3,7 @@
 // The live name always comes from the calculation list by id; `column` is only a fallback.
 import { roleOfCalc } from "./calc-model.js";
 import { compileCalculation } from "./calc-resolve.js";
+import { opsFor } from "../Dashboard/filter-rules.js";
 
 const CATEGORY = { number: "numeric", text: "text", date: "temporal", boolean: "boolean" };
 export const REFUSAL = "Calculated fields can't be used here yet.";
@@ -72,7 +73,7 @@ export function syncCalcPills(sheet, calcs, catalog, params = []) {
   return bad;
 }
 
-/** Refreshes each calculated filter's category and name from the live calculation (its operator and values stay; an unusable value then reads invalid). */
+/** Refreshes each calculated filter's category and name from the live calculation (its operator and values stay unless the new type has no such operator, which resets to `=`). */
 function syncCalcFilters(sheet, calcs, catalog, params, seen, bad) {
   for (const f of sheet.filters ?? []) {
     if (!isCalcPill(f)) continue;
@@ -83,6 +84,7 @@ function syncCalcFilters(sheet, calcs, catalog, params, seen, bad) {
     if (c.error) { if (!bad.includes(f.calc)) bad.push(f.calc); continue; }
     f.category = CATEGORY[c.info.type] ?? "other";
     f.column = calc.name;
+    if (!opsFor(f.category, { calc: true }).includes(f.op)) { f.op = "="; f.value = ""; delete f.values; } // the type changed: an operator it no longer has resets
   }
 }
 

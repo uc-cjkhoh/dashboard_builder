@@ -196,3 +196,19 @@ test("syncCalcPills refreshes a calculated filter's category and name, leaving i
   assert.equal(s.filters[0].category, "text"); assert.equal(s.filters[0].column, "Renamed"); assert.equal(s.filters[0].op, "in");
   assert.deepEqual(syncCalcPills(s, [], catalog), ["c2"]);
 });
+
+test("syncCalcFilters resets an operator the calculation's new type no longer has", () => {
+  const lbl = mk("c2", "L", "[orders.status]");
+  const s = { ...emptySheet(), filters: [
+    { calc: "c2", db: "", table: "", column: "L", category: "numeric", op: ">", value: "5" },
+    { calc: "c2", db: "", table: "", column: "L", category: "text", op: "contains", value: "a" },
+    { calc: "c2", db: "", table: "", column: "L", category: "text", op: "top", value: "3" }] };
+  syncCalcPills(s, [lbl], catalog);
+  assert.deepEqual([s.filters[0].op, s.filters[0].value], [">", "5"]); // > is still valid for text
+  assert.equal(s.filters[1].op, "contains");
+  assert.deepEqual([s.filters[2].op, s.filters[2].value], ["=", ""]);
+  const num = mk("c3", "N", "[orders.amount]");
+  const t = { ...emptySheet(), filters: [{ calc: "c3", db: "", table: "", column: "N", category: "text", op: "contains", value: "a" }] };
+  syncCalcPills(t, [num], catalog);
+  assert.equal(t.filters[0].category, "numeric"); assert.equal(t.filters[0].op, "=");
+});

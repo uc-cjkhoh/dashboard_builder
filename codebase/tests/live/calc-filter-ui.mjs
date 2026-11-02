@@ -1,7 +1,7 @@
 // Browser checks for a calculated field as a FILTER (D82): the real dev app (APP_URL, default http://localhost:5228) in headless
 // Chromium, driven over the DevTools protocol (tests/live/cdp.mjs), with every /api/* call answered by a mock —
-// nothing reaches a ClickHouse. Run:  node tests/live/notin-ui.mjs   (start the app first:
-//   cd src/DashboardBuilder && dotnet run --no-launch-profile --urls http://localhost:5228 ; stop it with fuser -k 5180/tcp)
+// nothing reaches a ClickHouse. Run:  node tests/live/calc-filter-ui.mjs   (start the app first:
+//   cd src/DashboardBuilder && dotnet run --no-launch-profile --urls http://localhost:5228 ; stop it with fuser -k 5228/tcp)
 // Env: APP_URL, SHOTS_DIR (screenshot folder), CDP_PORT (default: a free port), CHROME_BIN.
 import { launch } from './cdp.mjs';
 import { NEW_CALC, PAGE_CHIP, relateTables } from './model.mjs';

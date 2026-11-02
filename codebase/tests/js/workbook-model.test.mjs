@@ -632,3 +632,10 @@ test("a pair reusing a column of another relationship is dropped", () => {
   const wb = parseWorkbook(JSON.stringify(raw));
   assert.equal(wb.relationships[1].pairs, undefined);
 });
+
+test("a calculated filter with a relative-date operator is removed with a message", () => {
+  const f = { ...cpill({ category: "temporal", role: undefined, agg: undefined }), op: "relative", value: "last30" };
+  const wb = parseWorkbook(wbText({ calculations: calcList, dashboards: [{ name: "X", sheet: { filters: [f] } }] }));
+  assert.equal(wb.worksheets[0].sheet.filters.length, 0);
+  assert.ok(wb.issues.some((i) => /relative-date/.test(i)));
+});

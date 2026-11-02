@@ -96,4 +96,19 @@ public class CalcFilterTests
         var f = System.Text.Json.JsonSerializer.Deserialize<QueryFilter>(wire, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
         Assert.Equal(Doubled, f!.Calc);
     }
+
+    [Fact]
+    public void A_hostile_field_name_is_quoted_or_refused_and_a_hostile_label_or_value_never_reaches_the_sql()
+    {
+        const string evil = "a`; DROP TABLE x; --'";
+        Assert.Equal("`a\\`; DROP TABLE x; --'`", Identifier.Quote(evil));
+        // a field the catalog doesn't know is a 400 with a path (the ref map holds only catalog columns)
+        Assert.StartsWith("filters[0].calc", FieldOf(() => CalcSql.CompileCalc(new FieldNode("db", "orders", evil), "filters[0]", Refs, [], "c0", false, false)));
+        // the label is only a result name; the compared value is bound, never interpolated
+        var ps = new List<(string Name, string Type, object Value)>();
+        var c = CalcSql.CompileCalc(Status, "filters[0]", Refs, ps, "c0", false, false);
+        var cond = ClickHouseGateway.BuildCondition("=", "p0", CalcSql.CalcFilterSql(c, "filters[0]").Sql, ClickHouseType.Text, evil, "filters[0]", evil, null, ps);
+        Assert.DoesNotContain("DROP", cond);
+        Assert.Contains(ps, p => p.Name == "p0" && (string)p.Value == evil);
+    }
 }
