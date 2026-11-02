@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { checkHierarchyName, checkLevels, checkHierarchy, cleanHierarchies, hierarchyStatus, drillFromHierarchy, CAST_REFUSAL }
+import { checkHierarchyName, checkLevels, checkHierarchy, cleanHierarchies, drillFromHierarchy, CAST_REFUSAL }
   from "../../src/DashboardBuilder/Features/Dashboard/hierarchy-model.js";
 import { LIMITS } from "../../src/DashboardBuilder/Features/Core/validate.js";
 import { parseWorkbook, serializeWorkbook } from "../../src/DashboardBuilder/Features/Workbook/workbook-model.js";
@@ -104,14 +104,6 @@ test("clean: hostile keys and non-string parts never leak", () => {
   assert.deepEqual(Object.keys(out[0]), ["id", "name", "levels"]);
   assert.deepEqual(Object.keys(out[0].levels[0]), ["db", "table", "column"]);
   assert.equal(out[1].levels.length, 2); // the numeric db level is dropped
-});
-
-test("status: missing table / missing columns / ok", () => {
-  const h = H("T", "a", "b");
-  const cols = new Map([["d.t", new Set(["a", "b", "c"])]]);
-  assert.deepEqual(hierarchyStatus(h, cols), { ok: true, missing: [] });
-  assert.deepEqual(hierarchyStatus(h, new Map([["d.t", new Set(["a"])]])), { ok: false, missing: ["b"], tableMissing: false });
-  assert.deepEqual(hierarchyStatus(h, new Map()), { ok: false, missing: ["a", "b"], tableMissing: true });
 });
 
 test("drillFromHierarchy builds the same structure as hand-dropped levels (depth 0, empty path, category)", () => {

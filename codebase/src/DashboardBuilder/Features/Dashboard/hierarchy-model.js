@@ -84,14 +84,6 @@ export function cleanHierarchies(raw, issues, { tables = null } = {}) {
   return out;
 }
 
-/** Whether a hierarchy's table and columns still exist: `columnsByTable` is a Map of "db.table" → Set of column names. */
-export function hierarchyStatus(h, columnsByTable) {
-  const set = columnsByTable.get(hierarchyTableKey(h.levels[0].db, h.levels[0].table));
-  if (!set) return { ok: false, missing: h.levels.map((l) => l.column), tableMissing: true };
-  const missing = h.levels.filter((l) => !set.has(l.column)).map((l) => l.column);
-  return missing.length ? { ok: false, missing, tableMissing: false } : { ok: true, missing: [] };
-}
-
 /**
  * The sheet's drill for a hierarchy: { ok, drill: { levels, depth: 0, path: [] } } or { ok: false, error }.
  * `columns` is the table's column list ([{ name, category }]); a column that is gone, or has been cast since,

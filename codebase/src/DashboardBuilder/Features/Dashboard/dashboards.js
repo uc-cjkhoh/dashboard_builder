@@ -63,12 +63,11 @@ import { calcProblem, topByRef, topByKey, aggWord } from "../Calc/calc-plan.js";
 import { REF_CHOICES, TREND_CHOICES, FORECAST_CHOICES, BAND_CHOICES, bandChoice, bandFromChoice, defaultAnalytics, itemsFor, itemActive, addItem, removeItem } from "./analytics-model.js";
 import { castChoices, castLabel, effectiveCategory, syncCastCategories } from "./cast-model.js";
 import { aliasOf, labelOf } from "./member-labels.js";
-import { HIERARCHY_MIME } from "./hierarchy-group.js";
 import { openCalcManager } from "./calc-manager.js";
 import { fieldGroup } from "./field-group.js";
 import { fieldsPaneView, readCollapsed, FIELDS_COLLAPSED_KEY } from "./fields-pane-model.js";
 import { openHierarchiesDialog } from "./hierarchy-dialog.js";
-import { drillFromHierarchy, hierarchyTableKey } from "./hierarchy-model.js";
+import { drillFromHierarchy } from "./hierarchy-model.js";
 import { BUCKET_TYPES, DATE_BUCKET_CHOICES } from "./scale-model.js";
 import { toggleDateLabels } from "./date-labels.js";
 
@@ -358,11 +357,9 @@ export function initDashboards() {
       return;
     }
     const groups = [];
-    const columnsByTable = new Map(); // T03-29: which columns exist, for the Hierarchies group
     let hiddenCount = 0;
     for (const t of tables) {
       const cols = await columnsFor(t.db, t.table);
-      columnsByTable.set(hierarchyTableKey(t.db, t.table), new Set(cols.map((c) => c.name)));
       const group = fieldGroup("ws-table ws-fieldset", `table:${t.db}.${t.table}`, `${t.db}.${t.table}`);
       // P28: hidden fields stay out of the pane unless "Show hidden" is on.
       const visible = cols.filter((c) => { const h = metaOf({ ...t, column: c.name }).hidden; if (h) hiddenCount++; return !h || showHiddenFields; });
@@ -2160,7 +2157,6 @@ export function initDashboards() {
       { key: "drill", icon: "drill", label: "Drill", count: drillLevels.length,
         pills: drillLevels.map((f, i) => drillLevelPill(dash, s, f, i)), onDrop: (f) => addDrillLevel(dash, f),
         hint: "Drop ≥2 same-table fields — or a named hierarchy from the field pane — to build a drill hierarchy (year → quarter → month)",
-        onHierarchy: (id) => applyHierarchy(dash, id),
         note: drillLevels.length === 1 ? "Add another same-table field to drill." : null },
       { key: "pages", icon: "pages", label: "Pages", count: s.pages ? 1 : 0,
         pills: s.pages ? [pagesPill(dash, s)] : [], onDrop: (f) => addPages(dash, f),
@@ -2179,12 +2175,10 @@ export function initDashboards() {
     btn.append(icon(tool.icon), el("span", "ws-tool__text", tool.label));
     if (set) btn.append(el("span", "ws-tool__badge", String(tool.count)));
     btn.addEventListener("click", () => { openTool = openTool === tool.key ? null : tool.key; choicesFor = null; calcFor = null; formatOpen = false; renderShelves(); });
-    btn.addEventListener("dragover", (e) => { if (hasField(e) || (tool.onHierarchy && hasHierarchy(e))) { e.preventDefault(); btn.classList.add("is-over"); } });
+    btn.addEventListener("dragover", (e) => { if (hasField(e)) { e.preventDefault(); btn.classList.add("is-over"); } });
     btn.addEventListener("dragleave", () => btn.classList.remove("is-over"));
     btn.addEventListener("drop", (e) => {
       btn.classList.remove("is-over");
-      const hid = tool.onHierarchy ? readHierarchy(e) : null;
-      if (hid) { e.preventDefault(); tool.onHierarchy(hid); return; }
       const f = readField(e);
       if (f) { e.preventDefault(); openTool = tool.key; choicesFor = null; calcFor = null; tool.onDrop(f); } // set open BEFORE onDrop's commit re-renders
     });
@@ -2206,7 +2200,6 @@ export function initDashboards() {
     if (!tool.pills.length) zone.append(el("span", "ws-shelf__hint", tool.hint || "Drag a field here"));
     for (const p of tool.pills) zone.append(p);
     wireFieldDrop(zone, tool.onDrop);
-    if (tool.onHierarchy) wireHierarchyDrop(zone, tool.onHierarchy);
     panel.append(zone);
     if (tool.editor) panel.append(tool.editor);
     if (tool.note) panel.append(el("span", "ws-shelf__note", tool.note));
@@ -2397,11 +2390,6 @@ export function initDashboards() {
     zone.addEventListener("dragover", (e) => { if (hasField(e)) { e.preventDefault(); zone.classList.add("is-over"); } });
     zone.addEventListener("dragleave", () => zone.classList.remove("is-over"));
     zone.addEventListener("drop", (e) => { zone.classList.remove("is-over"); const f = readField(e); if (f) { e.preventDefault(); onDrop(f); } });
-  }
-  function wireHierarchyDrop(zone, onHierarchy) {
-    zone.addEventListener("dragover", (e) => { if (hasHierarchy(e)) { e.preventDefault(); zone.classList.add("is-over"); } });
-    zone.addEventListener("dragleave", () => zone.classList.remove("is-over"));
-    zone.addEventListener("drop", (e) => { zone.classList.remove("is-over"); const id = readHierarchy(e); if (id) { e.preventDefault(); onHierarchy(id); } });
   }
   // A marks-encoding pill: table.column + a remove button, tinted as a marks pill.
   function markPill(f, remove) {
@@ -2698,12 +2686,6 @@ function readField(e) {
   const raw = e.dataTransfer?.getData(FIELD_MIME);
   if (!raw) return null;
   try { return JSON.parse(raw); } catch { return null; }
-}
-function hasHierarchy(e) { return e.dataTransfer && Array.from(e.dataTransfer.types).includes(HIERARCHY_MIME); }
-function readHierarchy(e) {
-  const raw = e.dataTransfer?.getData(HIERARCHY_MIME);
-  if (!raw) return null;
-  try { const id = JSON.parse(raw)?.id; return typeof id === "string" ? id : null; } catch { return null; }
 }
 // A pill-reorder drag carries { shelf, index } under its own MIME, distinct from a new field dragged
 // from the field pane (FIELD_MIME), so a shelf can tell "reorder an existing pill" from "add a field".

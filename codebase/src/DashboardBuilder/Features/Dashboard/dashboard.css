@@ -2,13 +2,6 @@
    charts, crosstab, KPI, format panel. */
 
 /* ---- Dashboard view + widgets -------------------------------------------- */
-.dash-toolbar { display: flex; justify-content: flex-end; margin-bottom: var(--s4); }
-.dash-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: var(--s4);
-  align-content: start;
-}
 .widget {
   display: flex;
   flex-direction: column;
@@ -30,19 +23,14 @@
 .widget__kpi { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
 .widget__kpi-num { font-size: var(--fs-display); font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
 .widget__kpi-sub { font-size: var(--fs-body); color: var(--ink-3); text-transform: uppercase; letter-spacing: .06em; margin-top: var(--s1); }
-.widget__grid { padding: 0; overflow: auto; max-height: 260px; }
 
 /* Chart builder filter rows */
-.filter-rows { display: flex; flex-direction: column; gap: var(--s2); margin: var(--s2) 0; }
-.filter-row { display: grid; grid-template-columns: 1fr auto 1fr auto; gap: var(--s2); align-items: center; }
-.btn--sm { padding: var(--s1) var(--s2); font-size: var(--fs-body); align-self: flex-start; }
 
 /* ---- Charts ---------------------------------------------------------------
    Bar/line render via the self-hosted charting library (js/chart.js → ECharts),
    themed from the --chart-* tokens in :root. Table renders as a plain .data table
    and the KPI as a stat tile — neither is a charting-library concern. */
 .widget { min-height: 200px; }
-.widget__chart { padding: var(--s2); }
 
 /* ---- Worksheet (drag fields onto shelves) -------------------------------- */
 .view--worksheet { padding: 0; overflow: hidden; }
@@ -105,7 +93,6 @@
 
 /* Tier 2 — the primary shelves (Columns/Rows) are direct children of .ws-shelves; each shelf is a
    full-width row of [aligned label | drop zone]. */
-.ws-shelf-stack { display: flex; flex-direction: column; gap: var(--s2); }
 .ws-shelf { display: grid; grid-template-columns: 88px 1fr; align-items: center; gap: var(--s2); min-width: 0; }
 .ws-shelf__label { font-size: var(--fs-body); font-weight: 700; color: var(--ink-3); text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; }
 .ws-shelf__zone {
@@ -139,7 +126,6 @@
 .ws-pill--measure { background: var(--meas-bg); border-color: var(--meas-line); color: var(--meas-ink); }
 /* Colour-mark pill (P7): violet, distinct from dimension (blue) and measure (teal). */
 .ws-pill--color { background: var(--enc-bg); border-color: var(--enc-line); color: var(--enc-ink); }
-.ws-pill__agg, .ws-pill__op { font-size: var(--fs-body); padding: 0 var(--s1); border-radius: var(--r); box-shadow: none; }
 /* T04-07 percentile box: a narrow input, its % unit, and an inline message (icon + text) when the value is not 0-100. */
 .ws-pill__pct { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .ws-pill__pctbox { display: inline-flex; align-items: center; gap: 4px; flex: none; }
@@ -394,7 +380,6 @@
 /* Shading uses --surface-3 (visible beside the white / dark surface). Banding skips cells that carry a rule or scale (.xt-cf), whose own tint wins; the header keeps each cell's own ink. */
 .xtab.xt-s-banded tbody tr:nth-child(even) td:not(.xt-cf) { background: var(--surface-3); }
 .xtab.xt-s-header thead th { background: var(--surface-3); }
-.mono { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
 
 
 /* P34: honest worksheet notices — invalid filter pill + "first 200 values" cap note */
@@ -472,8 +457,6 @@
 .ws-pill__badge { flex: none; padding: 0 var(--s1); border-radius: var(--r); background: var(--surface-3); color: var(--ink-2);
   font-size: var(--fs-body); font-weight: 700; letter-spacing: .02em; line-height: 16px; }
 .ws-pill--shared { box-shadow: inset 0 0 0 1px var(--line-2); }
-.ws-pill__share[aria-pressed="true"], .ws-pill__swap.is-set { color: var(--accent-ink); }
-.ws-pill__swap[aria-pressed="true"] { background: var(--accent-soft); }
 /* The chart card's "show" switchers (one per slot with choices), under the view bar. */
 .ws-switchers { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s4); }
 .ws-switchers .ws-fmt-select { max-width: 260px; }
@@ -482,7 +465,6 @@
 .ws-select__link { display: inline-flex; align-items: center; gap: var(--s1); }
 
 /* ---- P26 date part on a date pill: − [part] + ------------------------------- */
-.ws-pill__part { height: 16px; padding: 0 var(--s1); font-size: var(--fs-body); max-width: 120px; }
 /* P27: the measure pill's table-calculation button, accent-coloured when one is set. */
 
 /* ---- P28 field pane: search, hidden toggle, ⋯ menu, rename ------------------- */
@@ -578,14 +560,6 @@
 .memlab-reset { margin-right: auto; }
 
 /* T03-29 named hierarchies: the field pane group and the dialog. Tokens only. */
-.hier-group__actions { display: flex; flex-direction: column; gap: var(--s1); }
-.hier-group__actions .btn { white-space: nowrap; width: 100%; justify-content: flex-start; padding-inline: var(--s2); }
-.hier-field { border-color: var(--line); background: var(--surface-2); }
-.hier-field::before { display: none; }
-.hier-field__type { flex: none; color: var(--dim-ink); }
-.hier-field--bad { border-color: var(--danger-line); cursor: default; }
-.hier-field--bad .hier-field__type { color: var(--danger-ink); }
-.hier-field .ws-field__add:focus-visible, .hier-group__actions .btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .hier-levelbox { display: grid; gap: var(--s2); }
 .hier-levels { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s1); }
 .hier-level { display: flex; align-items: center; gap: var(--s2); padding: var(--s1) var(--s2); border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); }

@@ -30,8 +30,6 @@ public sealed class ConnectionRegistry
             ? JsonSerializer.Deserialize<ClickHouseConnectionInfo>(bytes)
             : null;
 
-    public bool IsConnected => Current is not null;
-
     /// <summary>Store (or replace) the session's connection.</summary>
     public void Save(ClickHouseConnectionInfo info) =>
         Session.Set(SessionKey, JsonSerializer.SerializeToUtf8Bytes(info));
