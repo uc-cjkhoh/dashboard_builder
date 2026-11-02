@@ -318,6 +318,43 @@ public class CalcCompilerTests
         Assert.Equal(new[] { ("c0p0", "String", (object)"ab") }, ps);
     }
 
+    [Theory]
+    [InlineData("ltrim", "trimLeft(t0.`status`)")]
+    [InlineData("rtrim", "trimRight(t0.`status`)")]
+    public void LTRIM_and_RTRIM_strip_one_side(string fn, string expected)
+    {
+        var (sql, ps) = Compile(Fn(fn, F("status")));
+        Assert.Equal(expected, sql);
+        Assert.Empty(ps);
+    }
+
+    [Fact]
+    public void FIND_counts_characters_and_binds_the_needle()
+    {
+        var (sql, ps) = Compile(Fn("find", F("status"), S("ab")));
+        Assert.Equal("toFloat64(positionUTF8(t0.`status`, {c0p0:String}))", sql);
+        Assert.Equal(new[] { ("c0p0", "String", (object)"ab") }, ps);
+    }
+
+    [Fact]
+    public void MID_binds_start_and_length_as_unsigned_integers()
+    {
+        var (sql, ps) = Compile(Fn("mid", F("status"), new NumNode(2), new NumNode(3)));
+        Assert.Equal("substringUTF8(t0.`status`, {c0p0:UInt32}, {c0p1:UInt32})", sql);
+        Assert.Equal(new[] { ("c0p0", "UInt32", (object)2u), ("c0p1", "UInt32", (object)3u) }, ps);
+    }
+
+    [Theory]
+    [InlineData("icontains", "(positionCaseInsensitiveUTF8(t0.`status`, {c0p0:String}) > 0)")]
+    [InlineData("istartswith", "startsWith(lowerUTF8(t0.`status`), lowerUTF8({c0p0:String}))")]
+    [InlineData("iendswith", "endsWith(lowerUTF8(t0.`status`), lowerUTF8({c0p0:String}))")]
+    public void The_case_insensitive_predicates_bind_the_needle(string fn, string expected)
+    {
+        var (sql, ps) = Compile(Fn(fn, F("status"), S("ab")));
+        Assert.Equal(expected, sql);
+        Assert.Equal(new[] { ("c0p0", "String", (object)"ab") }, ps);
+    }
+
     [Fact]
     public void SPLIT_is_null_for_a_null_value_and_for_a_position_past_the_last_token()
     {

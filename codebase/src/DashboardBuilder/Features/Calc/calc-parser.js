@@ -12,7 +12,7 @@
 //   logic     := ("IF" | "IIF") "(" expr "," expr "," expr ")" | "IFNULL" "(" expr "," expr ")"
 //              | "ISNULL" "(" expr ")" | "ZN" "(" expr ")"
 //              | "CASE" [expr] ("WHEN" expr "THEN" expr)+ ["ELSE" expr] "END"
-//   text      := ("TEXT" | "STR" | "LOWER" | "UPPER" | "TRIM" | "LEN" | "LEFT" | "RIGHT" | "REPLACE" | "CONCAT" | "CONTAINS" | "STARTSWITH" | "ENDSWITH" | "SPLIT")
+//   text      := ("TEXT" | "STR" | "LOWER" | "UPPER" | "TRIM" | "LTRIM" | "RTRIM" | "LEN" | "LEFT" | "RIGHT" | "MID" | "FIND" | "REPLACE" | "CONCAT" | "CONTAINS" | "STARTSWITH" | "ENDSWITH" | "ICONTAINS" | "ISTARTSWITH" | "IENDSWITH" | "SPLIT")
 //                "(" expr ("," expr)* ")"        -- argument count and kinds are checked by check(), not here
 //   date      := ("DATEDIFF" | "DATEADD" | "YEAR" | "MONTH" | "DAY" | "QUARTER" | "WEEK" | "WEEKDAY" | "DATE") "(" expr ("," expr)* ")"   -- same shape as text
 //   string    := "'" text "'"        (a quote inside is doubled: 'it''s')

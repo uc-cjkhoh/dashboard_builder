@@ -7,7 +7,7 @@ import { FUNCTIONS, ROW_FUNCTIONS, CALC_LIMITS } from "./calc-types.js";
 export const GROUPS = Object.freeze(["Aggregate", "Logic", "Text", "Date"]);
 
 const AGGREGATES = ["sum", "avg", "min", "max", "count", "countd", "median", "stddev", "variance", "percentile", "attr"];
-const TEXT = ["text", "lower", "upper", "trim", "len", "left", "right", "replace", "concat", "contains", "startswith", "endswith", "split"];
+const TEXT = ["text", "lower", "upper", "trim", "ltrim", "rtrim", "len", "left", "right", "mid", "find", "replace", "concat", "contains", "startswith", "endswith", "icontains", "istartswith", "iendswith", "split"];
 const DATE = ["datediff", "dateadd", "year", "month", "day", "quarter", "week", "weekday", "date"];
 /** Logic keywords the parser handles itself: name -> { args: display text, result, insert }. */
 const LOGIC = {
@@ -52,14 +52,21 @@ const TEXTS = {
   lower: ["The text in lower case.", "LOWER([orders.status])", NULL_TEXT],
   upper: ["The text in upper case.", "UPPER([orders.status])", NULL_TEXT],
   trim: ["The text without leading and trailing spaces.", "TRIM([orders.status])", "Strips the space character only, not tabs or line breaks. A NULL text gives NULL."],
+  ltrim: ["The text without leading spaces.", "LTRIM([orders.status])", "Strips the space character only, not tabs or line breaks. A NULL text gives NULL."],
+  rtrim: ["The text without trailing spaces.", "RTRIM([orders.status])", "Strips the space character only, not tabs or line breaks. A NULL text gives NULL."],
   len: ["How many characters the text has.", "LEN([orders.status])", "A NULL text gives NULL, not 0."],
   left: ["The first n characters of the text.", "LEFT([orders.status], 3)", `n is a literal whole number 0 to ${CALC_LIMITS.count}.`],
   right: ["The last n characters of the text.", "RIGHT([orders.status], 3)", `n is a literal whole number 0 to ${CALC_LIMITS.count}.`],
+  mid: ["The characters from a start position, up to a length.", "MID([orders.status], 2, 3)", `Start is a literal whole number 1 to ${CALC_LIMITS.count} (1 is the first character), length a literal whole number 0 to ${CALC_LIMITS.count}. Shorter when the text ends first.`],
+  find: ["Where the piece first appears in the text (1 is the first character).", "FIND([orders.status], 'pen')", "0 when the piece is absent; case counts. An empty piece gives 1; a NULL text gives NULL."],
   replace: ["The text with every occurrence of one piece replaced by another.", "REPLACE([orders.status], 'open', 'new')", "The piece to find and its replacement can be fields as well as text. A NULL text gives NULL (shown as a dash)."],
   concat: ["Several texts joined end to end.", "CONCAT([orders.status], ' - ', [orders.region])", `Two to ${CALC_LIMITS.concat} texts. Empty if any one is empty: wrap a part in IFNULL(x, '') to keep the rest.`],
-  contains: ["True when the text includes the piece.", "CONTAINS([orders.status], 'pen')", "Case counts (use LOWER on both sides to ignore it). An empty needle is always true; a NULL text gives NULL."],
+  contains: ["True when the text includes the piece.", "CONTAINS([orders.status], 'pen')", "Case counts (ICONTAINS ignores it). An empty needle is always true; a NULL text gives NULL."],
   startswith: ["True when the text begins with the piece.", "STARTSWITH([orders.status], 'op')", "Case counts. An empty needle is always true; a NULL text gives NULL."],
   endswith: ["True when the text ends with the piece.", "ENDSWITH([orders.status], 'en')", "Case counts. An empty needle is always true; a NULL text gives NULL."],
+  icontains: ["True when the text includes the piece, ignoring case.", "ICONTAINS([orders.status], 'PEN')", "Same as CONTAINS without regard to upper or lower case. An empty needle is always true; a NULL text gives NULL."],
+  istartswith: ["True when the text begins with the piece, ignoring case.", "ISTARTSWITH([orders.status], 'OP')", "Same as STARTSWITH without regard to case. An empty needle is always true; a NULL text gives NULL."],
+  iendswith: ["True when the text ends with the piece, ignoring case.", "IENDSWITH([orders.status], 'EN')", "Same as ENDSWITH without regard to case. An empty needle is always true; a NULL text gives NULL."],
   split: ["The k-th piece of the text cut at a separator (1 is the first).", "SPLIT([orders.status], '-', 1)", `The separator is a literal of 1 to ${CALC_LIMITS.separator} characters, k a literal whole number 1 to ${CALC_LIMITS.count}. Empty when there is no k-th piece.`],
   datediff: ["How many whole units lie between two dates (end minus start).", "DATEDIFF('day', [orders.placed], DATE('2024-12-31'))", "Counts calendar boundaries crossed (31 Jan to 1 Feb is 1 month); weeks start on Monday. The unit is a text literal: year, quarter, month, week, day, hour, minute or second. A NULL date gives NULL."],
   dateadd: ["A date moved forward (or back, with a negative amount) by a number of units.", "DATEADD('month', 1, [orders.placed])", `A month step past a shorter month lands on its last day. The amount is a literal whole number -${CALC_LIMITS.dateAmount} to ${CALC_LIMITS.dateAmount}; the result is empty (NULL) outside ${DATEADD_WINDOW.after} to ${DATEADD_WINDOW.before}.`],
