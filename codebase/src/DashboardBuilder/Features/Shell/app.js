@@ -12,6 +12,7 @@ import { initWorkbook } from "../Workbook/workbook.js";
 import { initTheme } from "../Core/theme.js";
 import { initScheme } from "../Core/scheme.js";
 import { initSchemeToggle } from "./scheme-toggle.js";
+import { initPerfPanel } from "./perf-panel.js";
 import { toast } from "../Core/ui.js";
 import { icon } from "../Core/icons.js";
 
@@ -34,6 +35,7 @@ for (const el of document.querySelectorAll("[data-icon]")) el.replaceChildren(ic
 // check fires an event.
 initScheme();  // light / dark (data-scheme) before anything reads it
 initSchemeToggle();
+initPerfPanel();
 initTheme();   // the workbook theme's tokens (default until a workbook opens)
 initSidebar();
 initSchema();
