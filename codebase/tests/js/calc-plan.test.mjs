@@ -1,7 +1,7 @@
 // Calculated fields in the worksheet query plan — the pure seam (wireDim, wireMeasure, planTables, calcProblem, Top-N).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { wireDim, wireMeasure, planTables, calcProblem, measureLabel, topByRef, topByKey, wireTopBy, resolveSortTarget, statCalcProblem, STAT_CALC_HINT }
+import { wireCalcFilter, filterCalcProblem, wireDim, wireMeasure, planTables, calcProblem, measureLabel, topByRef, topByKey, wireTopBy, resolveSortTarget, statCalcProblem, STAT_CALC_HINT }
   from "../../src/DashboardBuilder/Features/Calc/calc-plan.js";
 import { makeCalcPill } from "../../src/DashboardBuilder/Features/Calc/calc-pill.js";
 import { catalogFromEntities, compileCalculation } from "../../src/DashboardBuilder/Features/Calc/calc-resolve.js";
@@ -142,4 +142,31 @@ test("calcProblem also reports a shared Top-N ranked by a calculation that is go
   assert.equal(calcProblem(empty, ctx, [top("c6", "Gone")]), "Calculation 'Gone' can't be computed: orders.missing isn't in the model.");
   assert.match(calcProblem(empty, ctx, [top("zz", "Old")]), /^Calculation 'Old' can't be computed: it no longer exists\./);
   assert.equal(calcProblem(empty, ctx), null); // the shared list is optional
+});
+
+const cf = (id, o = {}) => ({ calc: id, db: "", table: "", column: calcs.find((x) => x.id === id)?.name ?? "Old", category: "numeric", op: ">", value: "1", ...o });
+
+test("filterCalcProblem: a row-level calculation is fine; an aggregate, a broken or a missing one is named", () => {
+  assert.equal(filterCalcProblem(cf("c1"), ctx), null);
+  assert.equal(filterCalcProblem(cf("c2"), ctx), null);
+  assert.match(filterCalcProblem(cf("c3"), ctx), /can't be a filter.*aggregate/s);
+  assert.match(filterCalcProblem(cf("c6"), ctx), /^Calculation 'Gone' can't be computed/);
+  assert.match(filterCalcProblem(cf("c9", { column: "Old" }), ctx), /^Calculation 'Old' can't be computed: it no longer exists/);
+});
+
+test("calcProblem stops the view for an aggregate calculation used as a filter", () => {
+  const s = { rows: [], columns: [], marks: {}, filters: [cf("c1"), cf("c3")] };
+  assert.match(calcProblem(s, ctx), /Ratio.*can't be a filter/s);
+  assert.equal(calcProblem({ ...s, filters: [cf("c1")] }, ctx), null);
+});
+
+test("planTables lists the tables a calculated filter reads", () => {
+  assert.deepEqual(planTables(cf("c4"), ctx), ["shop.customers", "shop.orders"]);
+});
+
+test("serverFilter wires a calculated filter as its tree, label and bound value", () => {
+  const w = serverFilter(cf("c1", { op: "between", values: ["1", "9"], value: "" }), { wireCalc: (f) => wireCalcFilter(f, ctx) });
+  assert.equal(w.db, ""); assert.equal(w.table, ""); assert.equal(w.column, "Net"); assert.equal(w.calc.k, "bin");
+  assert.deepEqual(w.values, ["1", "9"]); assert.equal(w.op, "between");
+  assert.equal(serverFilter(cf("c9"), { wireCalc: (f) => wireCalcFilter(f, ctx) }), null);
 });

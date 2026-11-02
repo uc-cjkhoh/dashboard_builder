@@ -94,3 +94,20 @@ test("not in goes to the server as-is, and to stat charts", () => {
   assert.deepEqual(serverFilter(f), { db: "s", table: "orders", column: "amount", op: "notin", value: "", values: ["1", "2"] });
   assert.deepEqual(statFilters([f], "s", "orders").apply, [{ column: "amount", op: "notin", value: "", values: ["1", "2"] }]);
 });
+
+test("opsFor a calculated field offers no top-N (and no relative date)", () => {
+  assert.ok(opsFor("text").includes("top"));
+  assert.ok(!opsFor("text", { calc: true }).includes("top"));
+  assert.ok(opsFor("text", { calc: true }).includes("contains"));
+  assert.ok(!opsFor("temporal", { calc: true }).includes("relative"));
+  assert.ok(!opsFor("temporal", { calc: true }).includes("top"));
+  assert.deepEqual(opsFor("numeric", { calc: true }), opsFor("numeric"));
+});
+
+test("a calculated filter is checked like any other (value type, in-list bound)", () => {
+  const f = (o) => ({ calc: "c1", db: "", table: "", column: "Net", category: "numeric", op: ">", value: "", ...o });
+  assert.equal(checkFilter(f({})).state, "empty");
+  assert.equal(checkFilter(f({ value: "5" })).state, "ok");
+  assert.equal(checkFilter(f({ value: "abc" })).state, "invalid");
+  assert.equal(checkFilter(f({ op: "in", values: Array.from({ length: 501 }, (_, i) => String(i)) })).state, "invalid");
+});

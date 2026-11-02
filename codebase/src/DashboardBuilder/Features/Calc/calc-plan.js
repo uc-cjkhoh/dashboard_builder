@@ -59,6 +59,12 @@ export function calcProblem(sheet, ctx, shared = []) {
     if (!c) return `Calculation '${f.column}' can't be computed: it no longer exists.`;
     if (c.error) return c.error.message;
   }
+  for (const x of sheet.filters ?? []) { // a filter ON a calculation
+    if (!isCalcPill(x) || seen.has(`f:${x.calc}`)) continue;
+    seen.add(`f:${x.calc}`);
+    const problem = filterCalcProblem(x, ctx);
+    if (problem) return problem;
+  }
   for (const x of [...(sheet.filters ?? []), ...shared]) { // a Top-N ranked by a calculation
     const t = x?.op === "top" ? x.topBy : null;
     if (!t || typeof t.calc !== "string" || seen.has(t.calc)) continue;
@@ -68,6 +74,20 @@ export function calcProblem(sheet, ctx, shared = []) {
     if (c.error) return c.error.message;
   }
   return null;
+}
+
+/** Why calculated filter `f` can't be applied, or `null`. A filter is applied to each row before grouping (D82), so a calculation that aggregates has no row to test. */
+export function filterCalcProblem(f, ctx) {
+  const c = compiled(f, ctx);
+  if (!c) return `Calculation '${f.column}' can't be computed: it no longer exists.`;
+  if (c.error) return c.error.message;
+  return c.info.isAggregate ? `Calculation '${pillName(f, ctx.calcs)}' can't be a filter: a filter is applied to each row before grouping, and this calculation aggregates.` : null;
+}
+
+/** A calculated filter's wire ref (`{ db: "", table: "", column: label, calc: tree }`), or `null` when it can't be wired. */
+export function wireCalcFilter(f, ctx) {
+  const c = compiled(f, ctx);
+  return c && !c.error && !c.info.isAggregate ? { db: "", table: "", column: pillName(f, ctx.calcs), calc: c.ast } : null;
 }
 
 /** The word an aggregation reads as in a measure's name (matches the server's column naming). */

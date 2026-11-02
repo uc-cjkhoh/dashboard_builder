@@ -1,7 +1,7 @@
 // Calculated-field pills — shape, naming, refusals, sync (pure).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { makeCalcPill, isCalcPill, pillName, calcPillId, sameCalcPill, refusal, syncCalcPills, usesCalc, clearCalcPills, filtersUseCalc, clearFilterCalc, CALC_AGGS }
+import { newCalcFilter, makeCalcPill, isCalcPill, pillName, calcPillId, sameCalcPill, refusal, syncCalcPills, usesCalc, clearCalcPills, filtersUseCalc, clearFilterCalc, CALC_AGGS }
   from "../../src/DashboardBuilder/Features/Calc/calc-pill.js";
 import { catalogFromEntities, compileCalculation, calcTables } from "../../src/DashboardBuilder/Features/Calc/calc-resolve.js";
 import { emptySheet, nameOf, setCalculations } from "../../src/DashboardBuilder/Features/Core/store.js";
@@ -39,7 +39,7 @@ test("isCalcPill, calcPillId, sameCalcPill", () => {
 
 test("refusal: exact message for every entry, null for plain", () => {
   const p = { calc: "c1" };
-  for (const e of ["filter", "pages", "drill", "period", "sharedFilter", "selection", "shape", "angle", "choice"]) {
+  for (const e of ["pages", "drill", "period", "sharedFilter", "selection", "shape", "angle", "choice"]) {
     assert.equal(refusal(p, e), "Calculated fields can't be used here yet.");
     assert.equal(refusal({ db: "a", table: "b", column: "c" }, e), null);
   }
@@ -165,4 +165,34 @@ test("filtersUseCalc / clearFilterCalc: a (shared) Top-N ranked by a calculation
   assert.equal(shared[1].topBy.calc, "c2");
   assert.equal(shared[2].topBy.column, "amount");
   assert.equal(filtersUseCalc(shared, "c1"), false);
+});
+
+test("a calculated field dropped on Filters is allowed; only sharing refuses", () => {
+  assert.equal(refusal({ calc: "c1" }, "filter"), null);
+  assert.equal(refusal({ calc: "c1" }, "sharedFilter"), "Calculated fields can't be used here yet.");
+});
+
+test("newCalcFilter: a calc-id filter with the pill's category and an empty value", () => {
+  const net = mk("c1", "Net", "[orders.amount] * 2");
+  const f = newCalcFilter(makeCalcPill(net, compile(net).info));
+  assert.deepEqual(f, { calc: "c1", db: "", table: "", column: "Net", category: "numeric", op: "=", value: "" });
+});
+
+test("usesCalc and clearCalcPills know a filter on the calculation", () => {
+  const net = { calc: "c1", db: "", table: "", column: "Net", category: "numeric", op: "=", value: "1" };
+  const other = { calc: "c2", db: "", table: "", column: "X", category: "numeric", op: "=", value: "1" };
+  const s = { ...emptySheet(), filters: [net, other] };
+  assert.equal(usesCalc(s, "c1"), true);
+  assert.equal(filtersUseCalc(s.filters, "c1"), true);
+  clearCalcPills(s, "c1");
+  assert.deepEqual(s.filters, [other]);
+  assert.equal(usesCalc(s, "c1"), false);
+});
+
+test("syncCalcPills refreshes a calculated filter's category and name, leaving its operator", () => {
+  const lbl = mk("c2", "Renamed", "[orders.status]");
+  const s = { ...emptySheet(), filters: [{ calc: "c2", db: "", table: "", column: "Old", category: "numeric", op: "in", values: ["a"] }] };
+  assert.deepEqual(syncCalcPills(s, [lbl], catalog), []);
+  assert.equal(s.filters[0].category, "text"); assert.equal(s.filters[0].column, "Renamed"); assert.equal(s.filters[0].op, "in");
+  assert.deepEqual(syncCalcPills(s, [], catalog), ["c2"]);
 });

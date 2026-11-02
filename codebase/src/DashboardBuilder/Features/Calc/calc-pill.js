@@ -6,7 +6,7 @@ import { compileCalculation } from "./calc-resolve.js";
 
 const CATEGORY = { number: "numeric", text: "text", date: "temporal", boolean: "boolean" };
 export const REFUSAL = "Calculated fields can't be used here yet.";
-const ENTRIES = new Set(["filter", "pages", "drill", "hierarchy", "period", "sharedFilter", "selection", "shape", "angle", "choice"]);
+const ENTRIES = new Set(["pages", "drill", "hierarchy", "period", "sharedFilter", "selection", "shape", "angle", "choice"]);
 
 /** Aggregations a row-level calculated measure may use; mirrors the server's CalcCatalog.RowLevelAggregations (never `count`). */
 export const CALC_AGGS = ["sum", "avg", "min", "max", "median", "stddev", "variance", "attr", "countDistinct", "countNonNull"];
@@ -20,6 +20,9 @@ export function makeCalcPill(calc, info, role) {
   if (r === "measure" && !info.isAggregate) pill.agg = "sum";
   return pill;
 }
+
+/** A filter on calculation pill `pill` (row-level, D82): the calc id, the pill's category, and an empty `=` value. */
+export const newCalcFilter = (pill) => ({ calc: pill.calc, db: "", table: "", column: pill.column, category: pill.category, op: "=", value: "" });
 
 /** Live name (follows renames), falling back to the saved column. */
 export function pillName(f, calcs) {
@@ -65,7 +68,22 @@ export function syncCalcPills(sheet, calcs, catalog, params = []) {
     if (f.role === "measure" && !c.info.isAggregate) f.agg = CALC_AGGS.includes(f.agg) ? f.agg : "sum";
     else delete f.agg;
   }
+  syncCalcFilters(sheet, calcs, catalog, params, seen, bad);
   return bad;
+}
+
+/** Refreshes each calculated filter's category and name from the live calculation (its operator and values stay; an unusable value then reads invalid). */
+function syncCalcFilters(sheet, calcs, catalog, params, seen, bad) {
+  for (const f of sheet.filters ?? []) {
+    if (!isCalcPill(f)) continue;
+    const calc = (calcs ?? []).find((c) => c.id === f.calc);
+    if (!calc) { if (!bad.includes(f.calc)) bad.push(f.calc); continue; }
+    if (!seen.has(f.calc)) seen.set(f.calc, compileCalculation(calc, calcs, catalog, params));
+    const c = seen.get(f.calc);
+    if (c.error) { if (!bad.includes(f.calc)) bad.push(f.calc); continue; }
+    f.category = CATEGORY[c.info.type] ?? "other";
+    f.column = calc.name;
+  }
 }
 
 export function usesCalc(sheet, id) {
@@ -75,8 +93,8 @@ export function usesCalc(sheet, id) {
 
 const topByUses = (f, id) => f?.op === "top" && f.topBy?.calc === id;
 
-/** Whether a (sheet or shared) filter list holds a Top-N ranked by calculation `id`. */
-export const filtersUseCalc = (filters, id) => (filters ?? []).some((x) => topByUses(x, id));
+/** Whether a (sheet or shared) filter list holds a filter ON calculation `id` or a Top-N ranked by it. */
+export const filtersUseCalc = (filters, id) => (filters ?? []).some((x) => x?.calc === id || topByUses(x, id));
 
 /** A Top-N ranked by it keeps its filter but loses the ranking; the filter panel re-applies "first shelf measure". */
 export function clearFilterCalc(filters, id) {
@@ -96,4 +114,5 @@ export function clearCalcPills(sheet, id) {
   }
   if (sortPointsAt(sheet, id)) sheet.sort = null;
   clearFilterCalc(sheet.filters, id);
+  if (Array.isArray(sheet.filters)) { const kept = sheet.filters.filter((x) => x?.calc !== id); sheet.filters.splice(0, sheet.filters.length, ...kept); } // a filter ON it goes (the list object stays)
 }

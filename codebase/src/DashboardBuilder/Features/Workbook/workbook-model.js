@@ -265,7 +265,7 @@ export function parseWorkbook(source) {
     else issues.push("The saved active tab was invalid — the data source view was opened.");
   }
   const theme = cleanTheme(raw.theme, issues); // absent (older workbooks) = the default theme
-  const sharedFilters = cleanFilters(raw.sharedFilters, "Shared filters", issues, LIMITS.sharedFilters);
+  const sharedFilters = cleanFilters(raw.sharedFilters, "Shared filters", issues, LIMITS.sharedFilters, { calc: false });
   const bookmarks = cleanBookmarks(raw.bookmarks, wsAll.length, issues);
   for (const b of bookmarks) b.worksheet = b.worksheet === null ? null : wsMap.get(b.worksheet) ?? null; // a worksheet cut by the tab cap reads as closed
   const fields = cleanFieldMeta(raw.fields, issues);
@@ -362,9 +362,10 @@ function cleanPill(raw, where, issues, needCategory = true) {
   return p;
 }
 // Filters (a sheet's, or the workbook's shared ones): pills with a known op and text value(s).
-export function cleanFilters(list, where, issues, max) {
+export function cleanFilters(list, where, issues, max, { calc = true } = {}) {
   return cleanPills(list, where, issues, max, false).filter((f) => {
-    if (f.calc !== undefined) { issues.push(`${where}: a calculated field can't be used as a filter — removed.`); return false; }
+    // A sheet's filter may be on a calculated field (never a Top-N); a shared one may not (it must apply to every dashboard's own tables).
+    if (f.calc !== undefined && (!calc || f.op === "top")) { issues.push(`${where}: a calculated field can't be used ${calc ? "in a Top-N filter" : "as a shared filter"} — removed.`); return false; }
     const multi = f.op === "in" || f.op === "notin" || f.op === "between";
     if (FILTER_OPS.has(f.op) && !multi && f.value !== undefined && f.value !== null && typeof f.value !== "string") {
       issues.push(`${where}: the value of the filter on ${f.table}.${f.column} wasn't text — reset to empty.`); f.value = "";
@@ -568,7 +569,7 @@ function cleanBookmarks(list, wsCount, issues) {
       sheet.selection = { db: sel.db, table: sel.table, column: sel.column, value: sel.value, label: String(sel.label ?? "").slice(0, 300), action: sel.action ?? null };
     const worksheet = Number.isInteger(b.worksheet) && b.worksheet >= 0 && b.worksheet < wsCount ? b.worksheet : null;
     out.push({ name: name.value, worksheet, worksheetName: typeof b.worksheetName === "string" && b.worksheetName.trim() ? b.worksheetName.trim().slice(0, LIMITS.tabName) : name.value,
-      sheet, sharedFilters: cleanFilters(b.sharedFilters, `${where} shared filters`, issues, LIMITS.sharedFilters),
+      sheet, sharedFilters: cleanFilters(b.sharedFilters, `${where} shared filters`, issues, LIMITS.sharedFilters, { calc: false }),
       savedAt: typeof b.savedAt === "string" ? b.savedAt : null });
   }
   return out;

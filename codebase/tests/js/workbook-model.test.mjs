@@ -457,18 +457,25 @@ test("a calc pill never keeps a date part", () => {
   const wb = parseWorkbook(wbText({ calculations: calcList, dashboards: [{ name: "X", sheet: { rows: [cpill({ category: "temporal", role: "dimension", agg: undefined, datePart: "month" })] } }] }));
   assert.equal("datePart" in wb.worksheets[0].sheet.rows[0], false);
 });
-test("calc pills are dropped from filters, drill levels, period, pages and shared filters", () => {
+test("calc pills are dropped from drill levels, period, pages and shared filters; a sheet filter keeps its calculation", () => {
   const dim = (o) => cpill({ category: "text", role: "dimension", agg: undefined, ...o });
   const wb = parseWorkbook(wbText({ calculations: calcList, sharedFilters: [{ ...dim(), op: "=", value: "a" }],
     dashboards: [{ name: "X", sheet: {
-      filters: [{ ...dim(), op: "=", value: "a" }],
+      filters: [{ ...dim(), op: "=", value: "a" }, { ...dim(), op: "top", value: "5", topBy: { db: "s", table: "o", column: "a", agg: "sum" } }],
       pages: { ...dim(), index: 0 },
       period: { ...cpill({ category: "temporal", role: "dimension", agg: undefined }), preset: "last30", compare: "none" },
-      drill: { levels: [dim(), dim({ calc: "calc1" }), pill({ category: "text", column: "x" })], depth: 0, path: [] } } }] }));
+      drill: { levels: [dim(), dim({ calc: "calc1" }), pill({ category: "text", column: "x" })], depth: 0, path: [] } }, }] }));
   const s = wb.worksheets[0].sheet;
-  assert.equal(s.filters.length, 0); assert.equal(s.pages, null); assert.equal(s.period, null); assert.equal(s.drill, null);
+  assert.equal(s.filters.length, 1); assert.equal(s.filters[0].calc, "calc1"); assert.equal(s.filters[0].op, "=");
+  assert.equal(s.pages, null); assert.equal(s.period, null); assert.equal(s.drill, null);
   assert.equal(wb.sharedFilters.length, 0);
   assert.ok(wb.issues.some((i) => /calculated field/.test(i)));
+});
+test("a calculated filter whose calculation is gone is removed on open; an in-list keeps its values", () => {
+  const f = (o) => ({ ...cpill({ category: "text", role: undefined, agg: undefined }), op: "in", value: "", values: ["a", "b"], ...o });
+  const wb = parseWorkbook(wbText({ calculations: calcList, dashboards: [{ name: "X", sheet: { filters: [f({}), f({ calc: "calc9" })] } }] }));
+  assert.equal(wb.worksheets[0].sheet.filters.length, 1);
+  assert.deepEqual(wb.worksheets[0].sheet.filters[0].values, ["a", "b"]);
 });
 test("bookmark sheets drop calc pills whose calculation is gone", () => {
   const bm = { name: "B", dashboard: 0, sheet: { rows: [cpill({ calc: "calc9" }), cpill()] }, sharedFilters: [] };

@@ -17,12 +17,12 @@ const blank = (v) => v == null || !String(v).trim();
 export const TEXT_OPS = new Set(["contains", "startsWith", "endsWith"]);
 export const OP_LABELS = { contains: "contains", startsWith: "starts with", endsWith: "ends with", notin: "not in", relative: "in the", top: "top" };
 /** The operators that make sense for a field's category. */
-export function opsFor(category) {
+export function opsFor(category, { calc = false } = {}) {
   const base = ["=", "!=", ">", ">=", "<", "<=", "in", "notin", "between"];
-  if (category === "text") return [...base, "contains", "startsWith", "endsWith", "top"];
-  if (category === "temporal") return [...base, "relative", "top"];
+  if (category === "text") return [...base, "contains", "startsWith", "endsWith", ...(calc ? [] : ["top"])];
+  if (category === "temporal") return calc ? base : [...base, "relative", "top"]; // a calculation ranks nothing and has no known date width
   if (category === "numeric") return base;
-  return [...base, "top"];
+  return calc ? base : [...base, "top"];
 }
 const isWhole = (v, lo, hi) => /^\d+$/.test(String(v ?? "").trim()) && Number(v) >= lo && Number(v) <= hi;
 
@@ -67,7 +67,11 @@ export function checkFilter(f) {
  * (`resolve(preset)` → { from, to }; a Date column takes days, a DateTime the first / last second), top-N
  * carries its ranking measure (`wireTopBy` turns a calculated one into its tree); everything else as is.
  */
-export function serverFilter(f, { resolve, dateOnly, wireTopBy } = {}) {
+export function serverFilter(f, { resolve, dateOnly, wireTopBy, wireCalc } = {}) {
+  if (typeof f.calc === "string") { // a calculated field: its tree rides along; never a top-N or relative date
+    const ref = wireCalc ? wireCalc(f) : null;
+    return ref ? { ...ref, op: f.op, value: f.value ?? "", values: f.values ?? null } : null;
+  }
   const base = { db: f.db, table: f.table, column: f.column, op: f.op, value: f.value ?? "", values: f.values ?? null };
   if (f.op === "relative") {
     const r = resolve ? resolve(f.value) : null;
