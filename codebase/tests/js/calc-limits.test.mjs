@@ -23,6 +23,7 @@ test("CalcLimits (C#), CALC_LIMITS (calc-types.js) and LIMITS (validate.js) agre
   assert.equal(CALC_LIMITS.separator, server("MaxSeparator"));
   assert.equal(CALC_LIMITS.concat, server("MaxConcat"));
   assert.equal(CALC_LIMITS.dateAmount, server("MaxDateAmount"));
+  assert.equal(CALC_LIMITS.inList, server("MaxInList"));
   assert.equal(LIMITS.calcFormula, CALC_LIMITS.formula);
   assert.equal(LIMITS.calculations, CALC_LIMITS.calcs);
   assert.equal(LIMITS.calcName, CALC_LIMITS.name);

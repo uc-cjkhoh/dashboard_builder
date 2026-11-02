@@ -1,4 +1,4 @@
-// Browser checks for calculated-field logic functions (IF / IIF / CASE / IFNULL, comparisons, text literals): the real dev app (APP_URL, default http://localhost:5188) in headless
+// Browser checks for calculated-field logic functions (IF / IIF / CASE / IFNULL, the keyword IF ... THEN ... END form, TRUE / FALSE / NULL, IN, BETWEEN, comparisons, text literals): the real dev app (APP_URL, default http://localhost:5188) in headless
 // Chromium, driven over the DevTools protocol (tests/live/cdp.mjs), with every /api/* call answered by a mock —
 // nothing reaches a ClickHouse. Run:  node tests/live/logic-ui.mjs   (start the app first:
 //   cd src/DashboardBuilder && dotnet run --no-launch-profile --urls http://localhost:5188 ; stop it with fuser -k 5180/tcp)
@@ -128,6 +128,7 @@ try {
   await installHelpers();
   await waitFor(`!!__t.chip('region')`, 'field pane filled');
 
+  const removeRowsPill = (text) => ev(`(() => { const p = [...document.querySelectorAll('.ws-shelf--rows .ws-pill')].find((x) => x.querySelector('.ws-pill__text')?.textContent.includes(${J(text)})); p.querySelector('button[aria-label="Remove field"]').click(); return true; })()`);
   const msgOf = () => ev(`${dlg}.querySelector('[id^=calc-fmsg]').textContent.trim()`);
   const chipOf = () => ev(`(${dlg}.querySelector('.calc-chip, .calc-dialog__chip, [class*=chip]')?.textContent ?? '').trim()`);
   const cancel = async () => {
@@ -196,6 +197,72 @@ try {
     await settle();
     const z = lastQuery().measures?.[0];
     must(z?.calc?.k === 'bin' && z.calc.l.k === 'ifnull' && z.calc.l.r.v === 0 && z.agg, `ZN measure: ${J(z)?.slice(0, 240)}`);
+  });
+
+  // (the ZN measure from the check above is still on Rows, so a new pill makes 2)
+  await check('the keyword IF form saves, sends a case tree, and its errors read plainly', async () => {
+    await openNewDialog();
+    await fillDialog('Bad kw', 'IF [orders.amount] > 100 THEN 1');
+    must(/Expected ELSEIF, ELSE or END/.test(await msgOf()), `message: ${await msgOf()}`);
+    must(await saveDisabled(), 'Save enabled');
+    await focusAndType('.calc-dialog textarea.formula', "IF [orders.amount] > 100 THEN 'big' ELSEIF [orders.amount] > 10 THEN 2 END");
+    must(/same type/.test(await msgOf()), `mismatch: ${await msgOf()}`);
+    await cancel();
+    await newCalc('Tier', "IF [orders.amount] > 100 THEN 'big' ELSEIF [orders.amount] > 10 THEN 'mid' ELSE 'small' END");
+    await waitFor(`!!__t.chip('Tier')`, 'Tier chip');
+    await dragChip('Tier', `__t.zone('rows')`);
+    await waitFor(`__t.pills('rows').length === 2`, 'Tier pill');
+    await settle();
+    const d = lastQuery().rowDimensions?.[0];
+    must(d?.calc?.k === 'case' && d.calc.whens.length === 2 && d.calc.else.v === 'small', `tree: ${J(d)?.slice(0, 240)}`);
+    await removeRowsPill("Tier");
+    await waitFor(`__t.pills('rows').length === 1`, 'pill removed');
+  });
+
+  await check('IN sends a list node of literals; wrong-typed, field and date values are refused', async () => {
+    await openNewDialog();
+    await fillDialog('Bad in', "[orders.region] IN ('EU', 1)");
+    must(/IN needs values of the same type — that value is number, not text\./.test(await msgOf()), `type: ${await msgOf()}`);
+    await focusAndType('.calc-dialog textarea.formula', '[orders.qty] IN (1, [orders.amount])');
+    must(/IN's values must be numbers or text written in the formula\./.test(await msgOf()), `field: ${await msgOf()}`);
+    await focusAndType('.calc-dialog textarea.formula', "[orders.placed] IN ('2024-01-01')");
+    must(/IN needs a number or text — orders\.placed is date\./.test(await msgOf()), `date: ${await msgOf()}`);
+    await focusAndType('.calc-dialog textarea.formula', '[orders.qty] IN ()');
+    must(/Expected a value after \(/.test(await msgOf()), `empty: ${await msgOf()}`);
+    must(await saveDisabled(), 'Save enabled');
+    await cancel();
+    await newCalc('Core region', "[orders.region] NOT IN ('APAC')");
+    await waitFor(`!!__t.chip('Core region')`, 'Core region chip');
+    await dragChip('Core region', `__t.zone('rows')`);
+    await waitFor(`__t.pills('rows').length === 2`, 'pill');
+    await settle();
+    const c = lastQuery().rowDimensions?.[0]?.calc;
+    must(c?.k === 'not' && c.arg.k === 'in' && c.arg.list.length === 1 && c.arg.list[0].v === 'APAC', `tree: ${J(c)?.slice(0, 240)}`);
+    await removeRowsPill("Core region");
+    await waitFor(`__t.pills('rows').length === 1`, 'pill removed');
+  });
+
+  await check('BETWEEN, TRUE and NULL: they save, and the NULL traps read plainly', async () => {
+    await newCalc('Mid band', '[orders.amount] BETWEEN 10 AND 100');
+    await newCalc('Flag', 'IF [orders.amount] > 100 THEN TRUE ELSE FALSE END');
+    await newCalc('Maybe', "IF [orders.amount] > 100 THEN 'big' ELSE NULL END");
+    await waitFor(`!!__t.chip('Mid band') && !!__t.chip('Flag') && !!__t.chip('Maybe')`, 'chips');
+    await dragChip('Mid band', `__t.zone('rows')`);
+    await waitFor(`__t.pills('rows').length === 2`, 'pill');
+    await settle();
+    const c = lastQuery().rowDimensions?.[0]?.calc;
+    must(c?.k === 'logic' && c.op === 'and' && c.l.op === '>=' && c.r.op === '<=', `between tree: ${J(c)?.slice(0, 240)}`);
+    await removeRowsPill("Mid band");
+    await waitFor(`__t.pills('rows').length === 1`, 'pill removed');
+    await openNewDialog();
+    await fillDialog('Bad null', '[orders.amount] = NULL');
+    must(/Comparison with NULL never matches — use ISNULL\(value\) instead\./.test(await msgOf()), `cmp null: ${await msgOf()}`);
+    await focusAndType('.calc-dialog textarea.formula', 'NULL');
+    must(/NULL needs another value to take its type from/.test(await msgOf()), `bare null: ${await msgOf()}`);
+    await focusAndType('.calc-dialog textarea.formula', '[orders.amount] + NULL');
+    must(/Arithmetic needs numbers — NULL is null\./.test(await msgOf()), `null sum: ${await msgOf()}`);
+    must(await saveDisabled(), 'Save enabled');
+    await cancel();
   });
 
   for (const scheme of ['light', 'dark']) {

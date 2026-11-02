@@ -3,15 +3,18 @@
 //   expr      := and ("OR" and)*
 //   and       := not ("AND" not)*
 //   not       := "NOT" not | compare
-//   compare   := sum (("=" | "!=" | "<>" | "<" | "<=" | ">" | ">=") sum)?      (no chaining)
+//   compare   := sum (("=" | "!=" | "<>" | "<" | "<=" | ">" | ">=") sum
+//                     | ["NOT"] "IN" "(" expr ("," expr)* ")"       -- node { k: "in", arg, list }; check() demands literal values
+//                     | ["NOT"] "BETWEEN" sum "AND" sum)?           -- sugar for x >= a AND x <= b (NOT wraps it)      (no chaining)
 //   sum       := term (("+" | "-") term)*
 //   term      := factor (("*" | "/") factor)*
-//   factor    := "-" factor | number | string | "(" expr ")" | aggregate | logic | ref
+//   factor    := "-" factor | number | string | "TRUE" | "FALSE" | "NULL" | "(" expr ")" | aggregate | logic | ref
 //   aggregate := ("SUM" | "AVG" | "MIN" | "MAX" | "COUNT" | "COUNTD" | "MEDIAN" | "STDDEV" | "VARIANCE" | "ATTR") "(" expr ")"
 //              | "PERCENTILE" "(" expr "," number ")"      -- the fraction is a literal number (range-checked by check())
 //   logic     := ("IF" | "IIF") "(" expr "," expr "," expr ")" | "IFNULL" "(" expr "," expr ")"
 //              | "ISNULL" "(" expr ")" | "ZN" "(" expr ")"
 //              | "CASE" [expr] ("WHEN" expr "THEN" expr)+ ["ELSE" expr] "END"
+//              | "IF" expr "THEN" expr ("ELSEIF" expr "THEN" expr)* ["ELSE" expr] "END"      -- the same node as CASE WHEN
 //   text      := ("TEXT" | "STR" | "LOWER" | "UPPER" | "TRIM" | "LTRIM" | "RTRIM" | "LEN" | "LEFT" | "RIGHT" | "MID" | "FIND" | "REPLACE" | "CONCAT" | "CONTAINS" | "STARTSWITH" | "ENDSWITH" | "ICONTAINS" | "ISTARTSWITH" | "IENDSWITH" | "SPLIT")
 //                "(" expr ("," expr)* ")"        -- argument count and kinds are checked by check(), not here
 //   date      := ("DATEDIFF" | "DATEADD" | "YEAR" | "MONTH" | "DAY" | "QUARTER" | "WEEK" | "WEEKDAY" | "DATE") "(" expr ("," expr)* ")"   -- same shape as text
@@ -19,8 +22,8 @@
 //   ref       := "[" name "]"  |  "[@" parameter "]"      -- a workbook parameter (Calc/calc-params.js substitutes its value)
 //
 // Hand-written tokenizer + recursive descent. Function names are case-insensitive; references are matched
-// case-sensitively by the caller's `resolve`. Nodes are exactly the wire shapes (field | num | str | un | bin | agg |
-// cmp | logic | not | case | ifnull | isnull | fn), plus the client-only `{ k: "calc", name }` for a reference to another calculation (expanded by
+// case-sensitively by the caller's `resolve`. Nodes are exactly the wire shapes (field | num | str | bool | null | un | bin | agg |
+// cmp | logic | not | in | case | ifnull | isnull | fn), plus the client-only `{ k: "calc", name }` for a reference to another calculation (expanded by
 // calc-model.js before anything is sent) and `{ k: "param", name }` for a parameter (replaced by a literal by calc-params.js).
 import { CALC_LIMITS, FUNCTIONS, ROW_FUNCTIONS } from "./calc-types.js";
 
@@ -140,7 +143,32 @@ export function parseFormula(text, resolve) {
         next();
         return { k: "cmp", op: tok.text, l: left, r: sum(tok.raw) };
       }
+      if (isWord(tok, "in")) { next(); return inList(left); }
+      if (isWord(tok, "between")) { next(); return between(left); }
+      if (isWord(tok, "not")) {
+        const following = tokens[at + 1];
+        if (!isWord(following, "in") && !isWord(following, "between")) throw new ParseError("Expected IN or BETWEEN after NOT", tok.pos);
+        next(); next();
+        return { k: "not", arg: isWord(following, "in") ? inList(left) : between(left) };
+      }
       return left;
+    }
+    // x IN (a, b, …): the values stay a list node (a chain of ORs would nest as deep as the list is long).
+    function inList(arg) {
+      if (peek().t !== "(") throw new ParseError("Expected ( after IN", peek().pos);
+      next();
+      const list = [expr("(")];
+      while (peek().t === ",") { next(); list.push(expr(",")); }
+      closeParen();
+      return { k: "in", arg, list };
+    }
+    // x BETWEEN a AND b: both ends included; the tree is the two comparisons joined by AND (x appears in both).
+    function between(arg) {
+      const lo = sum("BETWEEN");
+      if (!isWord(peek(), "and")) throw new ParseError("Expected AND", peek().pos);
+      next();
+      const hi = sum("AND");
+      return { k: "logic", op: "and", l: { k: "cmp", op: ">=", l: arg, r: lo }, r: { k: "cmp", op: "<=", l: structuredClone(arg), r: hi } };
     }
     function sum(after) {
       let left = term(after);
@@ -170,7 +198,14 @@ export function parseFormula(text, resolve) {
         return inner;
       }
       if (tok.t === "ref") { next(); return reference(tok); }
-      if (tok.t === "id") return call(tok);
+      if (tok.t === "id") {
+        const word = tok.text.toLowerCase();
+        if ((word === "true" || word === "false" || word === "null") && tokens[at + 1].t !== "(") {
+          next();
+          return word === "null" ? { k: "null" } : { k: "bool", v: word === "true" };
+        }
+        return call(tok);
+      }
       if (after !== undefined) throw new ParseError(`Expected a value after ${after}`, tok.pos);
       throw new ParseError(tok.t === "end" ? "Expected a value." : `Unexpected ${tok.raw}`, tok.pos);
     }
@@ -188,8 +223,47 @@ export function parseFormula(text, resolve) {
       if (fn === "case") { next(); return caseExpr(); }
       if (!["if", "iif", "ifnull", "isnull", "zn"].includes(fn)) return undefined;
       next();
+      if (fn === "if") return ifForm();
       if (peek().t !== "(") throw new ParseError(`Expected ( after ${tok.text}`, peek().pos);
       next();
+      return parenForm(fn);
+    }
+    // IF is the function IF(c, a, b) or the keyword form IF c THEN a … END. `IF (x) THEN …` starts like the function, so
+    // the function is tried first and, if it fails, the keyword form; the error that got further is the one reported.
+    function ifForm() {
+      if (peek().t !== "(") return ifKeyword();
+      const start = at;
+      try {
+        next();
+        return parenForm("if");
+      } catch (e) {
+        if (!(e instanceof ParseError)) throw e;
+        at = start;
+        try { return ifKeyword(); } catch (e2) {
+          if (!(e2 instanceof ParseError)) throw e2;
+          throw e2.pos > e.pos ? e2 : e;
+        }
+      }
+    }
+    function ifKeyword() {
+      const whens = [];
+      let c = expr("IF");
+      for (;;) {
+        if (!isWord(peek(), "then")) throw new ParseError("Expected THEN", peek().pos);
+        next();
+        whens.push({ c, t: expr("THEN") });
+        if (!isWord(peek(), "elseif")) break;
+        next();
+        c = expr("ELSEIF");
+      }
+      let els;
+      if (isWord(peek(), "else")) { next(); els = expr("ELSE"); }
+      if (!isWord(peek(), "end")) throw new ParseError(els === undefined ? "Expected ELSEIF, ELSE or END" : "Expected END", peek().pos);
+      next();
+      return els === undefined ? { k: "case", whens } : { k: "case", whens, else: els };
+    }
+    // The arguments of IF / IIF / IFNULL / ISNULL / ZN after their "(".
+    function parenForm(fn) {
       const a = expr("(");
       let node;
       if (fn === "if" || fn === "iif") {

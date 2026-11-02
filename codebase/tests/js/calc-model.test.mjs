@@ -143,3 +143,11 @@ test("the parser: ZN, IIF and simple CASE desugar to the shared nodes", () => {
   assert.deepEqual(parseLogic("iif(1 > 0, 'a', 'b')", none).ast.k, "case");
   assert.equal(parseLogic("CASE 1 WHEN 2 THEN 3 END", none).ast.whens[0].c.op, "=");
 });
+
+test("expands a reference inside an IN node (arg and list) and leaves the input untouched", () => {
+  const A = field("orders", "qty");
+  const tree = { k: "in", arg: calc("A"), list: [num(1), num(2)] };
+  const r = expandCalcs(tree, calcs({ A }));
+  assert.deepEqual(r, { ast: { k: "in", arg: A, list: [num(1), num(2)] } });
+  assert.equal(tree.arg.k, "calc");
+});

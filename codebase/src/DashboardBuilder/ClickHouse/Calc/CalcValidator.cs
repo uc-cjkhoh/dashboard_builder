@@ -45,6 +45,7 @@ public static class CalcValidator
     {
         CheckLimits(node);
         var t = Type(node, "", categoryOf);
+        if (t.Type == CalcType.Null) throw new CalcException(NullType, "");
         return new CalcInfo(t.Type, t.IsAggregate, t.Tables);
     }
 
@@ -67,11 +68,37 @@ public static class CalcValidator
                 if (t.V.Length > CalcLimits.MaxString) throw new CalcException($"A text value can be at most {CalcLimits.MaxString} characters.", path);
                 return new Typed(CalcType.Text, false, true, Tables(), "that value");
 
+            case BoolNode:
+                return new Typed(CalcType.Boolean, false, true, Tables(), "that value");
+
+            case NullNode:
+                return new Typed(CalcType.Null, false, true, Tables(), "NULL");
+
+            case InNode i:
+            {
+                var arg = Type(i.Arg, Child(path, "arg"), categoryOf);
+                if (arg.Type is not (CalcType.Number or CalcType.Text))
+                    throw new CalcException($"IN needs a number or text — {arg.Name} is {arg.Type}.", Child(path, "arg"));
+                if (i.List.Length < 1 || i.List.Length > CalcLimits.MaxInList)
+                    throw new CalcException($"IN takes 1 to {CalcLimits.MaxInList} values.", Child(path, "list"));
+                for (var n = 0; n < i.List.Length; n++)
+                {
+                    var ip = Child(path, $"list.{n}");
+                    if (i.List[n] is not (NumNode or StrNode or UnNode { Op: "-", Arg: NumNode }))
+                        throw new CalcException("IN's values must be numbers or text written in the formula.", ip);
+                    var t = Type(i.List[n], ip, categoryOf);
+                    if (t.Type != arg.Type) throw new CalcException($"IN needs values of the same type — {t.Name} is {t.Type}, not {arg.Type}.", ip);
+                }
+                return new Typed(CalcType.Boolean, arg.IsAggregate, arg.Const, arg.Tables, "that value");
+            }
+
             case CmpNode c:
             {
                 if (c.Op is not ("=" or "!=" or "<" or "<=" or ">" or ">=")) throw new CalcException($"Unknown operator {c.Op}.", path);
                 var l = Type(c.L, Child(path, "l"), categoryOf);
                 var r = Type(c.R, Child(path, "r"), categoryOf);
+                if (l.Type == CalcType.Null || r.Type == CalcType.Null)
+                    throw new CalcException("Comparison with NULL never matches — use ISNULL(value) instead.", path);
                 if (l.Type == CalcType.Boolean) throw new CalcException($"Comparison needs a number, text or date — {l.Name} is boolean.", Child(path, "l"));
                 if (r.Type == CalcType.Boolean) throw new CalcException($"Comparison needs a number, text or date — {r.Name} is boolean.", Child(path, "r"));
                 if (l.Type != r.Type)
@@ -106,8 +133,10 @@ public static class CalcValidator
             {
                 var l = Type(i.L, Child(path, "l"), categoryOf);
                 var r = Type(i.R, Child(path, "r"), categoryOf);
-                if (l.Type != r.Type) throw new CalcException($"{SameType} — {r.Name} is {r.Type}, not {l.Type}.", Child(path, "r"));
-                return Combine(l.Type, path, l, r);
+                if (l.Type == CalcType.Null && r.Type == CalcType.Null) throw new CalcException(NullType, path);
+                if (l.Type != CalcType.Null && r.Type != CalcType.Null && l.Type != r.Type)
+                    throw new CalcException($"{SameType} — {r.Name} is {r.Type}, not {l.Type}.", Child(path, "r"));
+                return Combine(l.Type == CalcType.Null ? r.Type : l.Type, path, l, r);
             }
 
             case CaseNode k:
@@ -122,16 +151,20 @@ public static class CalcValidator
                     var c = Type(k.Whens[n].Cond, Child(path, wp + ".c"), categoryOf);
                     RequireBoolean(c, Child(path, wp + ".c"), "A condition");
                     var t = Type(k.Whens[n].Then, Child(path, wp + ".t"), categoryOf);
-                    if (first is null) first = t;
+                    if (t.Type == CalcType.Null) { /* takes the type of the other results */ }
+                    else if (first is null) first = t;
                     else if (t.Type != first.Value.Type) throw new CalcException($"{SameType} — {t.Name} is {t.Type}, not {first.Value.Type}.", Child(path, wp + ".t"));
                     parts.Add(c); parts.Add(t);
                 }
                 if (k.Else is not null)
                 {
                     var e = Type(k.Else, Child(path, "else"), categoryOf);
-                    if (e.Type != first!.Value.Type) throw new CalcException($"{SameType} — {e.Name} is {e.Type}, not {first.Value.Type}.", Child(path, "else"));
+                    if (e.Type == CalcType.Null) { /* takes the type of the results */ }
+                    else if (first is null) first = e;
+                    else if (e.Type != first.Value.Type) throw new CalcException($"{SameType} — {e.Name} is {e.Type}, not {first.Value.Type}.", Child(path, "else"));
                     parts.Add(e);
                 }
+                if (first is null) throw new CalcException(NullType, path);
                 return Combine(first!.Value.Type, path, parts.ToArray());
             }
 
@@ -156,7 +189,7 @@ public static class CalcValidator
                             if (arg.Type != CalcType.Text) throw new CalcException($"{upper} needs a text — {arg.Name} is {arg.Type}.", ap);
                             break;
                         case FnArg.Value:
-                            if (arg.Type == CalcType.Boolean) throw new CalcException($"{label} needs a number, date or text — {arg.Name} is {arg.Type}.", ap);
+                            if (arg.Type is CalcType.Boolean or CalcType.Null) throw new CalcException($"{label} needs a number, date or text — {arg.Name} is {arg.Type}.", ap);
                             break;
                         case FnArg.Length or FnArg.Position:
                         {
@@ -259,6 +292,7 @@ public static class CalcValidator
     };
 
     private const string SameType = "All results must be the same type";
+    private const string NullType = "NULL needs another value to take its type from — use it as an IF, CASE or IFNULL result.";
 
     // The result of an operation over `parts`: an aggregate if any part is one; mixing aggregate and row-level
     // (constants are neutral) is an error at the operation's path.

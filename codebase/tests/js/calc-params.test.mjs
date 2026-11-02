@@ -194,3 +194,11 @@ test("names: a parameter can't hold [ ]; a calculation can't start with @ (dialo
   assert.equal(checkName("@x", [], null).ok, false);
   assert.equal(checkName("x@", [], null).ok, true);
 });
+
+test("compile: a number or text parameter is a bound IN value; a date parameter is not", () => {
+  const n = compile("[orders.amount] IN ([@Rate], [@Off])");
+  assert.equal(n.error, undefined);
+  assert.deepEqual(n.ast.list, [{ k: "num", v: 0.2 }, { k: "un", op: "-", arg: { k: "num", v: 3 } }]);
+  assert.equal(compile("[orders.status] IN ([@Region])").info.type, "boolean");
+  assert.match(compile("[orders.status] IN ([@Since])").error.message, /IN's values must be numbers or text/);
+});

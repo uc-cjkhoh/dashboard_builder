@@ -20,6 +20,11 @@ const LOGIC = {
   and: { sig: "a AND b", result: "boolean", insert: "AND " },
   or: { sig: "a OR b", result: "boolean", insert: "OR " },
   not: { sig: "NOT a", result: "boolean", insert: "NOT " },
+  in: { sig: "value IN (a, b, …)", result: "boolean", insert: "IN (" },
+  between: { sig: "value BETWEEN low AND high", result: "boolean", insert: "BETWEEN " },
+  true: { sig: "TRUE", result: "boolean", insert: "TRUE" },
+  false: { sig: "FALSE", result: "boolean", insert: "FALSE" },
+  null: { sig: "NULL", result: "same type as the results beside it", insert: "NULL" },
 };
 
 /** DATEADD's answer must lie strictly inside these UTC dates or it is NULL (twin of the bounds in ClickHouse/Calc/CalcCompiler.cs; a test ties them). */
@@ -39,10 +44,15 @@ const TEXTS = {
   variance: ["The sample variance of the numbers in each group.", "VARIANCE([orders.amount])", "Needs at least two values, otherwise it is empty."],
   percentile: ["The value below which a fraction p of the numbers fall (0 is the minimum, 0.5 the median, 1 the maximum).", "PERCENTILE([orders.amount], 0.9)", "p is a literal number from 0 to 1, not a field. Empty values are skipped."],
   attr: ["The value itself when every row of the group has the same one.", "ATTR([orders.status])", "Empty when the group has more than one distinct value; empty values are ignored."],
-  if: ["The second argument when the condition is true, otherwise the third.", "IF([orders.amount] > 100, 'big', 'small')", "A condition that is empty counts as not true, so the else is used. Both results must be the same type."],
+  if: ["The second argument when the condition is true, otherwise the third.", "IF([orders.amount] > 100, 'big', 'small')", "A condition that is empty counts as not true, so the else is used. All results must be the same type. Also written IF c THEN a ELSEIF d THEN b ELSE e END."],
   iif: ["Same as IF: the second argument when the condition is true, otherwise the third.", "IIF([orders.qty] > 1, 'many', 'one')", "A condition that is empty counts as not true."],
   case: ["The result of the first WHEN that matches, or of ELSE.", "CASE [orders.status] WHEN 'open' THEN 1 ELSE 0 END", "With no ELSE and no match the result is empty. All results must be the same type."],
   ifnull: ["The value, or the fallback when the value is empty.", "IFNULL([orders.amount], 0)", "Both arguments must be the same type. Division by zero is empty, so IFNULL(a / b, 0) repairs it."],
+  in: ["True when the value is one of the listed values.", "[orders.status] IN ('open', 'new')", `The values are numbers or text written in the formula (a [@Parameter] works), 1 to ${CALC_LIMITS.inList}, all the same type as the value. NOT IN flips it. An empty value gives empty.`],
+  between: ["True when the value lies from the low end to the high end, both included.", "[orders.amount] BETWEEN 10 AND 100", "Numbers, dates or text; both ends the same type as the value. NOT BETWEEN flips it. An empty value gives empty."],
+  true: ["The boolean value true.", "IF [orders.amount] > 100 THEN TRUE ELSE FALSE END", "Combine it with AND, OR and IF; a field is compared by writing the field itself, not = TRUE."],
+  false: ["The boolean value false.", "IF [orders.amount] > 100 THEN TRUE ELSE FALSE END", "Combine it with AND, OR and IF."],
+  null: ["An empty value, as an IF, CASE or IFNULL result.", "IF [orders.amount] > 0 THEN [orders.amount] ELSE NULL END", "It takes the type of the other results. It is refused elsewhere, and = NULL never matches: test with ISNULL(value)."],
   isnull: ["True when the value is empty.", "ISNULL([orders.amount])", "Never empty itself: it is true or false."],
   zn: ["The number, or 0 when it is empty (short for IFNULL(number, 0)).", "ZN([orders.amount])", "Only numbers."],
   and: ["True when both sides are true.", "[orders.amount] > 100 AND [orders.qty] > 1", "Empty AND false is false; empty AND true is empty."],
