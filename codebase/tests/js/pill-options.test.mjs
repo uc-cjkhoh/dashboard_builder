@@ -11,6 +11,14 @@ test("a measure pill: aggregation radios, role, table calculation, field choices
   assert.equal(r.find((e) => e.id === "agg:avg").checked, true);
   assert.equal(r.find((e) => e.id === "role").label, "Use as dimension");
 });
+test("a numeric pill offers a Continuous / Discrete choice in place of the role item", () => {
+  const m = fieldPillOptions({ measure: true, aggs: ["sum"], roleFlip: true, numeric: true });
+  assert.deepEqual(ids(m), ["agg:sum", "dc:continuous", "dc:discrete", "tablecalc"]);
+  assert.equal(m.find((e) => e.id === "dc:continuous").checked, true);
+  const d = fieldPillOptions({ measure: false, roleFlip: true, numeric: true });
+  assert.deepEqual(ids(d), ["dc:continuous", "dc:discrete"]);
+  assert.equal(d.find((e) => e.id === "dc:discrete").checked, true);
+});
 test("a calculated aggregate has nothing to flip or aggregate; a set table calculation shows ticked", () => {
   const r = fieldPillOptions({ measure: true, aggs: null, roleFlip: false, tableCalc: true, choicesOk: false });
   assert.deepEqual(ids(r), ["tablecalc"]);
