@@ -1,4 +1,4 @@
-// Dashboard/field-group.js — the one collapsible group of the worksheet's field pane: Calculated fields, Hierarchies and every
+// Dashboard/field-group.js — the one collapsible group of the worksheet's field pane: Marks and every
 // table share this header (chevron + bold name) and spacing. Which groups are collapsed survives the pane's rebuilds.
 import { icon } from "../Core/icons.js";
 

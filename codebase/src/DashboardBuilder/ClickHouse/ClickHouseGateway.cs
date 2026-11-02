@@ -953,7 +953,7 @@ public sealed partial class ClickHouseGateway
 
     /// <summary>
     /// Run a worksheet query that may join several related tables (the Tableau-style shelves). The
-    /// FROM chains the base table + each join edge (INNER JOIN on the relationship's keys, aliased
+    /// FROM chains the base table + each join edge (join on the relationship's keys, aliased
     /// t0, t1, …). Dimensions arrive split by shelf — <see cref="QueryRequest.RowDimensions"/> then
     /// <see cref="QueryRequest.ColumnDimensions"/> — and are grouped in that order, so each row's keys
     /// are <c>[rowDim…, colDim…]</c> (selected k0, k1, …); measures are aggregated as v0, v1, …. When
