@@ -228,22 +228,20 @@ export function parseFormula(text, resolve) {
       next();
       return parenForm(fn);
     }
-    // IF is the function IF(c, a, b) or the keyword form IF c THEN a … END. `IF (x) THEN …` starts like the function, so
-    // the function is tried first and, if it fails, the keyword form; the error that got further is the one reported.
+    // IF is the function IF(c, a, b) or the keyword form IF c THEN a … END. `IF (x) THEN …` starts like the function, so the
+    // form is decided without backtracking (a retry would re-parse nested IFs twice per level): the function has a comma
+    // at depth 1 of its parentheses; anything else is the keyword form. An unclosed "(" is left to the function's error.
     function ifForm() {
       if (peek().t !== "(") return ifKeyword();
-      const start = at;
-      try {
-        next();
-        return parenForm("if");
-      } catch (e) {
-        if (!(e instanceof ParseError)) throw e;
-        at = start;
-        try { return ifKeyword(); } catch (e2) {
-          if (!(e2 instanceof ParseError)) throw e2;
-          throw e2.pos > e.pos ? e2 : e;
-        }
+      let depth = 0, comma1 = false, closed = false;
+      for (let i = at; i < tokens.length && !closed; i++) {
+        const t = tokens[i].t;
+        if (t === "(") depth++;
+        else if (t === ")") { depth--; closed = depth === 0; }
+        else if (t === "," && depth === 1) comma1 = true;
       }
+      if (comma1 || !closed) { next(); return parenForm("if"); }
+      return ifKeyword();
     }
     function ifKeyword() {
       const whens = [];

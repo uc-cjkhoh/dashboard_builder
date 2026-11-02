@@ -210,3 +210,27 @@ test("tables are sorted by code unit, not by locale", () => {
   const ast = { k: "bin", op: "+", l: f("t", "a", "b"), r: f("t", "a", "B") };
   assert.deepEqual(check(ast, cat).tables, ["B.t", "b.t"]);
 });
+
+test("nested keyword IF with a parenthesised condition parses in linear time (no retry blow-up)", () => {
+  const n = 20;
+  // nested in the condition: IF (IF (IF (TRUE) THEN TRUE END) THEN TRUE END) THEN TRUE END
+  const text = "IF (".repeat(n) + "TRUE" + ") THEN TRUE END".repeat(n);
+  const t0 = Date.now();
+  const r = parseFormula(text, resolve);
+  assert.ok(Date.now() - t0 < 1000, `took ${Date.now() - t0} ms`);
+  assert.equal(r.ast?.k, "case", JSON.stringify(r.error));
+});
+test("deeply nested function-form IF parses fast", () => {
+  const n = 25;
+  const text = "IF(TRUE, ".repeat(n) + "1" + ", 0)".repeat(n);
+  const t0 = Date.now();
+  const r = parseFormula(text, resolve);
+  assert.ok(Date.now() - t0 < 1000, `took ${Date.now() - t0} ms`);
+  assert.equal(r.ast?.k, "case", JSON.stringify(r.error));
+});
+test("IF ( decides its form by a comma at depth 1, not by retrying", () => {
+  assert.equal(parseFormula("IF ([orders.qty] > 1) THEN 1 END", resolve).ast.k, "case");
+  assert.equal(parseFormula("IF (MID('abc', 1, 2) = 'ab') THEN 1 END", resolve).ast.k, "case");
+  assert.equal(parseFormula("IF([orders.qty] > 1, 1, 0)", resolve).ast.k, "case");
+  assert.equal(parseFormula("IF ([orders.qty] > 1", resolve).error.message, "Expected ,");
+});

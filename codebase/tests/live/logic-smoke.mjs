@@ -183,6 +183,11 @@ async function main() {
     expectMap(n, { true: 2, false: 4, null: 2 }, 'NOT IN');
     ok('IN (10, 20): true 4 / false 2 / NULL 2; label IN (x, y): true 4 / false 2 / NULL 2; NOT IN flips it, NULL stays NULL');
   }
+  { // a negated number is a list value
+    const r = await query({ ...base(), rowDimensions: [calcDim('i', inList(score, [{ k: 'un', op: '-', arg: num(3) }, num(5)]))], measures: [countRows] }, 'in negative');
+    expectMap(r, { true: 1, false: 5, null: 2 }, 'IN (-3, 5)');
+    ok('score IN (-3, 5): true 1 / false 5 / NULL 2');
+  }
   { // quote-bearing and injection-shaped values are bound data
     const r = await query({ ...base(), rowDimensions: [calcDim('i', inList(f('label'), [str("it's"), str("x'); DROP TABLE bk_logic; --")]))], measures: [countRows] }, 'in inject');
     expectMap(r, { true: 1, false: 5, null: 2 }, 'IN quote');
