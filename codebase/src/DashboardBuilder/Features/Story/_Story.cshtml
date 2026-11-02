@@ -1,0 +1,26 @@
+@* Story tab body. Driven by Story/story.js: a step strip, the caption, the step's worksheet (or a link to its dashboard) and Previous / Next. *@
+<section class="view view--story" id="story-view" aria-label="Story" hidden>
+    <div class="story">
+        <div class="story-bar">
+            <h2 class="story-bar__title" id="story-title"></h2>
+            <p class="story-bar__count" id="story-count"></p>
+            <p class="story-bar__status" id="story-status" role="status" aria-live="polite"></p>
+            <div class="story-bar__tools" id="story-tools"></div>
+        </div>
+        <form class="story-add" id="story-add" aria-label="Add a step"></form>
+        <div class="story-strip" id="story-strip" role="tablist" aria-label="Story steps"></div>
+        <section class="story-step" id="story-step" role="tabpanel" aria-labelledby="story-step-title" hidden>
+            <header class="story-step__head">
+                <h3 class="story-step__title" id="story-step-title"></h3>
+                <div class="story-step__tools" id="story-step-tools"></div>
+            </header>
+            <div class="story-step__caption" id="story-caption"></div>
+            <div class="story-stage" id="story-stage"></div>
+        </section>
+        <nav class="story-nav" id="story-nav" aria-label="Step controls"></nav>
+        <div class="story-empty" id="story-empty" role="status" hidden>
+            <span class="story-empty__icon" data-icon="story"></span>
+            <p class="story-empty__text">No steps yet. Choose a worksheet or dashboard above and add the first step.</p>
+        </div>
+    </div>
+</section>

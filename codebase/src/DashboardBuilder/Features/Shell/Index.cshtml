@@ -18,6 +18,7 @@
     <link rel="stylesheet" href="~/features/Tabs/tabs.css" />
     <link rel="stylesheet" href="~/features/Dashboard/dashboard.css" />
     <link rel="stylesheet" href="~/features/Board/board.css" />
+    <link rel="stylesheet" href="~/features/Story/story.css" />
     <link rel="stylesheet" href="~/features/Workbook/workbook.css" />
     <link rel="stylesheet" href="~/features/Calc/calc.css" />
     <link rel="stylesheet" href="~/features/Rows/rows.css" />
@@ -60,8 +61,8 @@
         <!-- Workspace: entity cards, relationships, subtabs -->
         <main class="canvas" id="canvas">
             <div class="canvas__bar glass">
-                <h1 class="sr-only">Data source, worksheets and dashboards</h1>
-                <div class="tabs" id="tabs" role="tablist" aria-label="Data source, worksheets and dashboards"></div>
+                <h1 class="sr-only">Data source, worksheets, dashboards and stories</h1>
+                <div class="tabs" id="tabs" role="tablist" aria-label="Data source, worksheets, dashboards and stories"></div>
                 <partial name="~/Features/Workbook/_Workbook.cshtml" />
                 <!-- Recent query and render timings (Shell/perf-panel.js); kept in this tab only. -->
                 <button type="button" class="iconbtn" id="perf-btn" aria-haspopup="dialog"
@@ -77,6 +78,7 @@
             <partial name="~/Features/Canvas/_Canvas.cshtml" />
             <partial name="~/Features/Dashboard/_Dashboard.cshtml" />
             <partial name="~/Features/Board/_Board.cshtml" />
+            <partial name="~/Features/Story/_Story.cshtml" />
         </main>
     </div>
 

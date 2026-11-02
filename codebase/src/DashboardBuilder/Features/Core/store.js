@@ -8,8 +8,9 @@
 //       dashboard: { id: "db#N", kind: "dashboard", name, widgets: [ … ], size }  (a board of worksheet / text / image / spacer / nav widgets; size = null (automatic) or { width, height } px)
 //     A widget is { id: "w#N", kind: "sheet", sheetId, x, y, w, h }, { id, kind: "text", heading, body, x, y, w, h }, { id, kind: "image", alt, src (a raster data URL), x, y, w, h }, { id, kind: "spacer", x, y, w, h } or { id, kind: "nav", label, tip, target (a tab id | null), x, y, w, h }
 //     (Board/board-model.js owns the geometry rules).
+//       story: { id: "st#N", kind: "story", name, steps: [{ caption, target: <a worksheet or dashboard tab id> }] }  (Story/story-model.js)
 // The tab strip shows the model ("Data Source") alongside the tabs; `activeView` tracks which is on screen:
-//   { kind: "model" } | { kind: "worksheet", id } | { kind: "dashboard", id }
+//   { kind: "model" } | { kind: "worksheet", id } | { kind: "dashboard", id } | { kind: "story", id }
 // The workbook (Workbook/) saves all of it in the browser; there is no server-side state (decision O1).
 //
 // entities:      id -> { id, db, table, x, y, columns, el }   (the shared model)
@@ -17,13 +18,15 @@
 // bus events:    entity:moved / entity:removed / rel:changed  (model),
 //                view:changed / tabs:changed                                    (the strip + active view),
 //                worksheet:changed {id}  (a worksheet's sheet was replaced),
-//                dashboard:changed {id}  (a dashboard's widgets changed: layout, text, add, remove)
+//                dashboard:changed {id}  (a dashboard's widgets changed: layout, text, add, remove),
+//                story:changed {id}  (a story's steps changed)
 import { renameInFormulas } from "../Calc/calc-workbook.js";
 import { renameParamInFormulas } from "../Calc/calc-params.js";
 import { copyName, copySheet, canDuplicate } from "../Tabs/duplicate-model.js";
 import { LIMITS } from "./validate.js";
 import { clearNavTarget } from "../Board/nav-model.js";
 import { removeSheetWidgets, defaultTabName } from "../Board/board-model.js";
+import { dropTarget } from "../Story/story-model.js";
 
 export const bus = new EventTarget();
 
@@ -159,8 +162,8 @@ export const relationships = new Map();
 
 // The ordered tab list + which view is active.
 export const tabs = [];
-let activeView = { kind: "model" };   // { kind: "model" } | { kind: "worksheet", id } | { kind: "dashboard", id }
-let wsSeq = 0, dbSeq = 0, widgetSeq = 0;
+let activeView = { kind: "model" };   // { kind: "model" } | { kind: "worksheet", id } | { kind: "dashboard", id } | { kind: "story", id }
+let wsSeq = 0, dbSeq = 0, stSeq = 0, widgetSeq = 0;
 
 export function emit(type, detail) {
   bus.dispatchEvent(new CustomEvent(type, { detail }));
@@ -168,14 +171,17 @@ export function emit(type, detail) {
 
 export const worksheets = () => tabs.filter((t) => t.kind === "worksheet");
 export const dashboards = () => tabs.filter((t) => t.kind === "dashboard");
+export const stories = () => tabs.filter((t) => t.kind === "story");
 export const tabById = (id) => tabs.find((t) => t.id === id) ?? null;
 export const worksheetById = (id) => { const t = tabById(id); return t?.kind === "worksheet" ? t : null; };
 
 export const isModelActive = () => activeView.kind === "model";
 export const isWorksheetActive = () => activeView.kind === "worksheet";
 export const isDashboardActive = () => activeView.kind === "dashboard";
+export const isStoryActive = () => activeView.kind === "story";
 export const activeWorksheet = () => (activeView.kind === "worksheet" ? worksheetById(activeView.id) : null);
 export const activeDashboard = () => (activeView.kind === "dashboard" ? tabById(activeView.id) : null);
+export const activeStory = () => (activeView.kind === "story" ? tabById(activeView.id) : null);
 /** The workbook's saved `active` view, as a copy. */
 export const currentView = () => ({ ...activeView });
 
@@ -312,6 +318,25 @@ export function createDashboard(name) {
   return tab;
 }
 
+/** A new, empty story tab (activated), named "Story N" unless `name` is given. Null at the tab limit. */
+export function createStory(name) {
+  if (tabLimitError()) return null;
+  stSeq += 1;
+  const tab = { id: `st#${stSeq}`, kind: "story", name: name || defaultTabName("story", tabs.map((t) => t.name)), steps: [] };
+  tabs.push(tab);
+  switchTab(tab.id);
+  emit("tabs:changed");
+  return tab;
+}
+
+/** Replace a story's steps (add, remove, reorder, caption) + notify. The caller validates with Story/story-model.js. */
+export function setSteps(storyId, steps) {
+  const tab = tabById(storyId);
+  if (!tab || tab.kind !== "story") return;
+  tab.steps = steps;
+  emit("story:changed", { id: storyId });
+}
+
 /** Duplicate a worksheet: a deep copy named "<name> copy", inserted after the source and activated. Returns { ok, tab? | error }. */
 export function duplicateWorksheet(id) {
   const idx = tabs.findIndex((t) => t.id === id && t.kind === "worksheet");
@@ -374,7 +399,7 @@ export function renameTab(id, name) {
   if (tab && name) { tab.name = name; emit("tabs:changed"); }
 }
 
-/** Close a tab. Closing a worksheet also removes its widgets from every dashboard (each notified); closing a dashboard touches no worksheet. */
+/** Close a tab. Closing a worksheet also removes its widgets from every dashboard and its steps from every story (each notified); closing a dashboard or story touches no worksheet. */
 export function closeTab(id) {
   const idx = tabs.findIndex((t) => t.id === id);
   if (idx < 0) return;
@@ -384,6 +409,10 @@ export function closeTab(id) {
   for (const d of dashboards()) { // a closed worksheet leaves its widgets; a button that went to the closed tab is unlinked
     const kept = clearNavTarget(closing.kind === "worksheet" ? removeSheetWidgets(d.widgets, id) : d.widgets, id);
     if (kept !== d.widgets) { d.widgets = kept; emit("dashboard:changed", { id: d.id }); }
+  }
+  for (const s of stories()) { // a closed worksheet or dashboard leaves its steps
+    const kept = dropTarget(s.steps, id);
+    if (kept !== s.steps) { s.steps = kept; emit("story:changed", { id: s.id }); }
   }
   if (wasActive) {
     const next = tabs[Math.min(idx, tabs.length - 1)];

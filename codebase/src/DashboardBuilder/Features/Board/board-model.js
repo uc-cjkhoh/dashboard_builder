@@ -181,8 +181,8 @@ export function removeSheetWidgets(widgets, sheetId) {
 export const dashboardsUsing = (tabs, sheetId) =>
   tabs.filter((t) => t.kind === "dashboard" && t.widgets.some((w) => w.kind === "sheet" && w.sheetId === sheetId));
 
-const NAME_BASE = { worksheet: "Worksheet", dashboard: "Dashboard" };
-/** "Worksheet N" / "Dashboard N": the first number not already used by a tab name. */
+const NAME_BASE = { worksheet: "Worksheet", dashboard: "Dashboard", story: "Story" };
+/** "Worksheet N" / "Dashboard N" / "Story N": the first number not already used by a tab name. */
 export function defaultTabName(kind, names) {
   const taken = new Set(names);
   for (let n = 1; ; n++) {
