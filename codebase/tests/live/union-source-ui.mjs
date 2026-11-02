@@ -4,6 +4,7 @@
 //   (start the app: cd src/DashboardBuilder && dotnet run --no-launch-profile --urls http://localhost:5221 ; stop: fuser -k 5221/tcp)
 // Env: APP_URL, SHOTS_DIR (screenshots), CDP_PORT, CHROME_BIN. The browser is always closed in the finally block.
 import { launch } from './cdp.mjs';
+import { PAGE_CHIP } from './model.mjs';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -63,7 +64,7 @@ try {
 
   const installHelpers = () => ev(`(() => {
     window.__t = {
-      chip: (name) => [...document.querySelectorAll('#ws-fields .ws-field')].find((c) => c.querySelector('.ws-field__name')?.textContent === name),
+      chip: ${PAGE_CHIP},
       drag(chip, target) {
         const dt = new DataTransfer();
         chip.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt }));

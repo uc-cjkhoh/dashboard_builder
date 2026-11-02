@@ -3,6 +3,7 @@
 //   (start the app: cd src/DashboardBuilder && dotnet run --no-launch-profile --urls http://localhost:5226 ; stop: fuser -k 5226/tcp)
 // Env: APP_URL, SHOTS_DIR, CDP_PORT, CHROME_BIN.
 import { launch } from './cdp.mjs';
+import { CALC_NAMES } from './model.mjs';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -87,7 +88,7 @@ try {
     await ev(`${create}.click()`); await waitFor(`${sd} === null`, 'closed');
     const c = await calcs();
     must(c === J([['tags (trimmed)', 'TRIM([shop.sales.tags])'], ['tags (filled)', "IFNULL([shop.sales.tags], 'n/a')"], ['tags (date)', 'DATE([shop.sales.tags])']]), c);
-    await waitFor(`[...document.querySelectorAll('.calc-group__list .ws-field__name')].length === 3`, 'fields appear');
+    await waitFor(`${CALC_NAMES}.length === 3`, 'fields appear');
   });
   await check('recode validates as you type and makes a CASE field', async () => {
     await menu('tags'); await ev(`[...document.querySelectorAll('.ctx-menu .menu__item')].find((x) => x.textContent.trim() === 'Clean…').click()`);

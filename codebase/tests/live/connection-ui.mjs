@@ -65,14 +65,14 @@ try {
     await ev(`document.getElementById('conn-host').value = ''; document.querySelector('.conn-recent__pick').click()`);
     must(await ev(`document.getElementById('conn-host').value`) === 'Ch.Example.com', 'host not shown');
   });
-  await check('database select matches the inputs', async () => {
+  await check('database select matches the table search tile', async () => {
     await ev(`document.getElementById('conn-password').value = 'ok'; document.getElementById('conn-form').requestSubmit()`);
     await b.waitFor(`!document.getElementById('schema-section').hidden`, { label: 'schema' });
-    const r = await ev(`(() => { const cs = (e) => getComputedStyle(e); const s = cs(document.getElementById('db-select')); document.getElementById('conn-change').click(); const i = cs(document.getElementById('conn-host'));
+    const r = await ev(`(() => { const cs = (e) => getComputedStyle(e); const s = cs(document.getElementById('db-select')); document.getElementById('conn-change').click(); const i = cs(document.getElementById('table-search')); /* the sibling tile row the picker shares its pattern with */
       return JSON.stringify({ sh: s.height, ih: i.height, sr: s.borderRadius, ir: i.borderRadius, sb: s.borderTopWidth, ib: i.borderTopWidth, sp: s.paddingLeft, ip: i.paddingLeft, sf: s.fontSize, iff: i.fontSize, ap: s.appearance, bi: s.backgroundImage.includes('gradient') }); })()`);
     const o = JSON.parse(r);
     must(o.sh === o.ih && o.sr === o.ir && o.sb === o.ib && o.sp === o.ip && o.sf === o.iff, 'mismatch ' + r);
-    must(o.ap === 'none' && o.bi, 'no custom chevron ' + r);
+    must((o.ap === 'none' && o.bi) || (o.ap === 'base-select' && !o.bi), 'no custom chevron ' + r); // fallback: a drawn gradient chevron; customizable select: the ::picker-icon
     for (const scheme of ['light', 'dark']) {
       await b.setScheme(scheme);
       await ev(`document.documentElement.dataset.scheme = ${JSON.stringify(scheme)}`);

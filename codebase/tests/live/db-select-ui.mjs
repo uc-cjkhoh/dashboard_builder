@@ -37,17 +37,19 @@ try {
     const d = await styles('#db-select');
     const conn = await styles('#table-search');
     console.log(scheme, JSON.stringify(d));
-    check(`${scheme}: height is --ctl-h (32px)`, d.height === '32px', d.height);
-    check(`${scheme}: radius 8px, 1px border`, d.borderRadius === '8px' && d.borderTopWidth === '1px', `${d.borderRadius} ${d.borderTopWidth}`);
+    check(`${scheme}: height is the sidebar tile row (40px)`, d.height === '40px', d.height);
+    check(`${scheme}: borderless square row (the tile is the frame)`, d.borderRadius === '0px' && d.borderTopWidth === '0px', `${d.borderRadius} ${d.borderTopWidth}`);
     check(`${scheme}: font size 14 or 16`, ['14px', '16px'].includes(d.fontSize), d.fontSize);
-    for (const p of ['height', 'borderTopColor', 'borderRadius', 'fontSize', 'fontFamily', 'backgroundColor', 'color'])
+    for (const p of ['height', 'borderTopWidth', 'borderRadius', 'fontSize', 'fontFamily', 'backgroundColor', 'color'])
       check(`${scheme}: db-select ${p} matches table-search input`, d[p] === conn[p], `${d[p]} vs ${conn[p]}`);
     // the open list uses the same surface/ink as the closed control (native popups otherwise ignore the theme)
-    const o = await ev(`(() => { const c = getComputedStyle(document.querySelector('#db-select option')); return JSON.stringify([c.backgroundColor, c.color]); })()`);
-    check(`${scheme}: option list uses control surface and ink`, o === JSON.stringify([d.backgroundColor, d.color]), `${o} vs ${d.backgroundColor} ${d.color}`);
+    // rows are the control's surface; their ink is --ink-2 (the table rows' ink), the ticked one --ink
+    const o = await ev(`(() => { const c = getComputedStyle(document.querySelector('#db-select option')); const p = document.createElement('i'); p.style.color = 'var(--ink-2)'; document.body.append(p); const ink2 = getComputedStyle(p).color; p.remove(); return JSON.stringify([c.backgroundColor, c.color, ink2]); })()`);
+    const [obg, oink, ink2] = JSON.parse(o);
+    check(`${scheme}: option list uses control surface and the table rows' ink`, obg === d.backgroundColor && oink === ink2, `${o} vs ${d.backgroundColor}`);
     // focus ring
     await ev(`document.getElementById('db-select').focus()`);
-    const ring = (id) => ev(`(() => { const e = document.getElementById(${JSON.stringify(id)}); e.focus(); const c = getComputedStyle(e); return JSON.stringify([c.boxShadow, c.outlineStyle, c.borderTopColor]); })()`);
+    const ring = (id) => ev(`(() => { const e = document.getElementById(${JSON.stringify(id)}); e.focus(); const c = getComputedStyle(e); return JSON.stringify([c.boxShadow, c.outlineStyle]); })()`); // no border on either: the ring is the shadow / outline
     const fs = await ring('db-select'), fi = await ring('table-search');
     check(`${scheme}: focus ring matches table-search input`, fs === fi, `${fs} vs ${fi}`);
     await ev(`document.getElementById('db-select').focus()`);

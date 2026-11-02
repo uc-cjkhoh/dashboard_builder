@@ -1,6 +1,7 @@
 // Browser check for member labels on a dashboard (T02-29): the cross-widget selection chip names the clicked member by its label while
 // the filter every other widget gets stays the RAW value; widgets draw the labels. Same harness and mock as crossfilter-ui.mjs.
 import { launch } from './cdp.mjs';
+import { relateTables } from './model.mjs';
 import { mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -92,6 +93,7 @@ try {
   await waitFor(`document.querySelectorAll('.table-chip').length === 2`, 'tables listed');
   for (const t of ['orders', 'stock']) await ev(`document.dispatchEvent(new CustomEvent('table:add', { detail: { db: 'shop', table: ${J(t)} } }))`);
   await waitFor(`document.querySelectorAll('.entity').length === 2 && [...document.querySelectorAll('.entity__status')].every((s) => s.hidden)`, 'tables loaded');
+  await relateTables(ev, waitFor, ['orders', 'region', 'stock', 'sku']); // an unrelated table is held out of worksheets
   await store(`
     const f = (table, column, category, extra = {}) => ({ db: 'shop', table, column, category, ...extra });
     const mk = (name, chartType, table, dim, meas) => { const t = st.createWorksheet(name); t.sheet = { ...st.emptySheet(), chartType, columns: [f(table, dim, 'text')], rows: [f(table, meas, 'numeric', { agg: 'sum' })] }; return t; };

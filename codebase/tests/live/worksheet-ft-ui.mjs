@@ -5,6 +5,7 @@
 //   cd src/DashboardBuilder && dotnet run --no-launch-profile --urls http://localhost:5191 ; stop it with fuser -k 5180/tcp)
 // Env: APP_URL, SHOTS_DIR (screenshot folder), CDP_PORT (default: a free port), CHROME_BIN.
 import { launch } from './cdp.mjs';
+import { NEW_CALC, PAGE_CHIP, relateTables } from './model.mjs';
 import { writeFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -64,7 +65,7 @@ try {
   // page helpers: HTML5 drag-and-drop with a real DataTransfer, text lookup, dialog typing
   const installHelpers = () => ev(`(() => {
     window.__t = {
-      chip: (name) => [...document.querySelectorAll('#ws-fields .ws-field')].find((c) => c.querySelector('.ws-field__name')?.textContent === name),
+      chip: ${PAGE_CHIP},
       drag(chip, target) {
         const dt = new DataTransfer();
         chip.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt }));
@@ -87,7 +88,7 @@ try {
     await b.type(text);
   };
   const openNewDialog = async () => {
-    await ev(`document.querySelector('.calc-group__new').click()`);
+    await ev(NEW_CALC);
     await waitFor(`${dlg} !== null`, 'calc dialog open');
   };
   const fillDialog = async (name, formula) => {
@@ -105,7 +106,7 @@ try {
     await ev(`(() => { const c = __t.chip(${J(name)}); c.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 40 })); return true; })()`);
     await ev(`(() => { const c = __t.chip(${J(name)}); [...document.querySelectorAll('.ctx-menu .menu__item')].find((x) => x.textContent.trim() === ${J(item)}).click(); return true; })()`);
   };
-  const confirmOpen = `[...document.querySelectorAll('dialog[open]')].find((d) => !d.classList.contains('calc-dialog'))`;
+  const confirmOpen = `[...document.querySelectorAll('dialog[open]')].find((d) => !d.classList.contains('calc-dialog') && !d.classList.contains('calc-manager'))`;
   const chartText = () => ev(`document.getElementById('ws-chart').textContent`);
   const canvasDrawn = () => ev(`!!document.querySelector('#ws-chart canvas, #ws-chart svg')`);
   const until = async (fn, label, timeout = 8000) => { const t0 = Date.now(); while (!fn()) { if (Date.now() - t0 > timeout) throw new Error(`timed out waiting for: ${label}`); await b.sleep(50); } };
@@ -124,6 +125,7 @@ try {
   for (const t of ['orders', 'customers'])
     await ev(`document.dispatchEvent(new CustomEvent('table:add', { detail: { db: 'shop', table: ${J(t)} } }))`);
   await waitFor(`document.querySelectorAll('.entity').length === 2 && [...document.querySelectorAll('.entity__status')].every((s) => s.hidden)`, 'both tables loaded');
+  await relateTables(ev, waitFor, ['orders', 'region', 'customers', 'country']); // an unrelated table is held out of the field pane
   await ev(`document.querySelector('.tab-add').click(); document.querySelector('[data-new-tab=worksheet]').click()`);
   await waitFor(`!document.getElementById('worksheet-view').hidden`, 'worksheet open');
   await installHelpers();
@@ -148,15 +150,15 @@ try {
     await shot('chart-menu-light.png');
     await ev(`document.querySelector('.ws-pick--chart .ws-pick__btn').click()`);
   });
-  await check('field groups share one design: Calculated fields, Hierarchies and the table are chevron details', async () => {
-    must(await ev(`['.calc-group', '.hier-group', '.ws-table'].every((s) => { const g = document.querySelector('#ws-fields ' + s); return g && g.tagName === 'DETAILS' && g.querySelector(':scope > summary.ws-group__head .icon'); })`), 'details + chevron');
-    must(await ev(`(() => { const a = ['.calc-group', '.hier-group', '.ws-table'].map((s) => getComputedStyle(document.querySelector('#ws-fields ' + s + ' > summary'))); return a.every((c) => c.fontWeight === a[0].fontWeight && c.fontSize === a[0].fontSize); })()`), 'same header style');
+  await check('the table tiles are chevron details with one header style (Calculated fields and Hierarchies are sidebar dialogs, not pane groups)', async () => {
+    must(await ev(`!document.querySelector('#ws-fields .calc-group, #ws-fields .hier-group') && document.querySelectorAll('#ws-fields .ws-table').length > 0 && [...document.querySelectorAll('#ws-fields .ws-table')].every((g) => g.tagName === 'DETAILS' && g.querySelector(':scope > summary.ws-group__head .icon'))`), 'details + chevron');
+    must(await ev(`(() => { const a = [...document.querySelectorAll('#ws-fields .ws-table > summary')].map((e) => getComputedStyle(e)); return a.every((c) => c.fontWeight === a[0].fontWeight && c.fontSize === a[0].fontSize); })()`), 'same header style');
     await ev(`document.querySelector('#ws-fields .ws-table > summary').click()`);
     must(await ev(`!document.querySelector('#ws-fields .ws-table').open`), 'collapses');
     await ev(`document.querySelector('#ws-fields .ws-table > summary').click()`);
   });
-  await check('Marks: a grid of three columns in the field pane after Hierarchies; a field dropped on a slot lands in it', async () => {
-    must(await ev(`(() => { const m = document.querySelector('#ws-fields .ws-shelf--marks'); const h = document.querySelector('#ws-fields .hier-group'); return !!m && !!(h.compareDocumentPosition(m) & Node.DOCUMENT_POSITION_FOLLOWING); })()`), 'after Hierarchies');
+  await check('Marks: a grid of three columns at the top of the field pane, before the tables; a field dropped on a slot lands in it', async () => {
+    must(await ev(`(() => { const m = document.querySelector('#ws-fields .ws-shelf--marks'); const t = document.querySelector('#ws-fields .ws-table'); return !!m && !!t && !!(m.compareDocumentPosition(t) & Node.DOCUMENT_POSITION_FOLLOWING); })()`), 'before the tables');
     must(await ev(`!document.querySelector('#ws-shelves .ws-shelf--marks')`), 'still in the header');
     must(await ev(`[...document.querySelectorAll('.ws-marks__row')].every((r) => getComputedStyle(r).gridTemplateColumns.split(' ').length === 3) && document.querySelectorAll('.ws-marks__row .ws-tool').length >= 8`), '3-col rows');
     await ev(`(() => { const c = __t.chip('channel'); const t = document.querySelector('.ws-tool[aria-label^="Color"]'); __t.drag(c, t); return true; })()`);
@@ -178,7 +180,7 @@ try {
     must(await ev(`!document.querySelector('.ws-shelf--rows .ws-pill select, .ws-shelf--rows .ws-pill__ctl .iconbtn')`), 'inline controls remain');
     await ctx('.ws-shelf--rows .ws-pill');
     const items = await ctxItems();
-    for (const w of ['sum', 'avg', 'median', 'Percentile…', 'Use as dimension', 'Table calculation…', 'Field choices…']) must(items.includes(w), `missing ${w} in ${J(items)}`);
+    for (const w of ['sum', 'avg', 'median', 'Percentile…', 'Continuous', 'Discrete', 'Table calculation…', 'Field choices…']) must(items.includes(w), `missing ${w} in ${J(items)}`);
     await shot('ctx-light.png');
     await theme('dark'); await shot('ctx-dark.png'); await theme('light');
     await ctxClick('avg'); await settle(300);

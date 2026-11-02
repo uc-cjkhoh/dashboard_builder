@@ -4,6 +4,7 @@
 //   cd src/DashboardBuilder && dotnet run --no-launch-profile --urls http://localhost:5183 ; stop it with fuser -k 5183/tcp)
 // Env: APP_URL, SHOTS_DIR (screenshot folder), CDP_PORT (default: a free port), CHROME_BIN.
 import { launch } from './cdp.mjs';
+import { NEW_CALC, PAGE_CHIP, relateTables } from './model.mjs';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -62,7 +63,7 @@ try {
   // page helpers: HTML5 drag-and-drop with a real DataTransfer, text lookup, dialog typing
   const installHelpers = () => ev(`(() => {
     window.__t = {
-      chip: (name) => [...document.querySelectorAll('#ws-fields .ws-field')].find((c) => c.querySelector('.ws-field__name')?.textContent === name),
+      chip: ${PAGE_CHIP},
       drag(chip, target) {
         const dt = new DataTransfer();
         chip.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt }));
@@ -85,7 +86,7 @@ try {
     await b.type(text);
   };
   const openNewDialog = async () => {
-    await ev(`document.querySelector('.calc-group__new').click()`);
+    await ev(NEW_CALC);
     await waitFor(`${dlg} !== null`, 'calc dialog open');
   };
   const fillDialog = async (name, formula) => {
@@ -103,7 +104,7 @@ try {
     await ev(`(() => { const c = __t.chip(${J(name)}); c.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 40 })); return true; })()`);
     await ev(`(() => { const c = __t.chip(${J(name)}); [...document.querySelectorAll('.ctx-menu .menu__item')].find((x) => x.textContent.trim() === ${J(item)}).click(); return true; })()`);
   };
-  const confirmOpen = `[...document.querySelectorAll('dialog[open]')].find((d) => !d.classList.contains('calc-dialog'))`;
+  const confirmOpen = `[...document.querySelectorAll('dialog[open]')].find((d) => !d.classList.contains('calc-dialog') && !d.classList.contains('calc-manager'))`;
   const chartText = () => ev(`document.getElementById('ws-chart').textContent`);
   const canvasDrawn = () => ev(`!!document.querySelector('#ws-chart canvas, #ws-chart svg')`);
   const until = async (fn, label, timeout = 8000) => { const t0 = Date.now(); while (!fn()) { if (Date.now() - t0 > timeout) throw new Error(`timed out waiting for: ${label}`); await b.sleep(50); } };
@@ -122,6 +123,7 @@ try {
   for (const t of ['orders', 'customers'])
     await ev(`document.dispatchEvent(new CustomEvent('table:add', { detail: { db: 'shop', table: ${J(t)} } }))`);
   await waitFor(`document.querySelectorAll('.entity').length === 2 && [...document.querySelectorAll('.entity__status')].every((s) => s.hidden)`, 'both tables loaded');
+  await relateTables(ev, waitFor, ['orders', 'region', 'customers', 'country']); // an unrelated table is held out of the field pane
   await ev(`document.querySelector('.tab-add').click(); document.querySelector('[data-new-tab=worksheet]').click()`);
   await waitFor(`!document.getElementById('worksheet-view').hidden`, 'worksheet open');
   await installHelpers();
@@ -180,6 +182,7 @@ try {
   for (const t of ['orders', 'customers'])
     await ev(`document.dispatchEvent(new CustomEvent('table:add', { detail: { db: 'shop', table: ${J(t)} } }))`);
   await waitFor(`document.querySelectorAll('.entity').length === 2 && [...document.querySelectorAll('.entity__status')].every((s) => s.hidden)`, 'both tables loaded');
+  await relateTables(ev, waitFor, ['orders', 'region', 'customers', 'country']); // an unrelated table is held out of the field pane
   await ev(`document.querySelector('.tab-add').click(); document.querySelector('[data-new-tab=worksheet]').click()`);
   await waitFor(`!document.getElementById('worksheet-view').hidden`, 'worksheet open');
   await installHelpers();
@@ -212,6 +215,10 @@ try {
   await check('View data of a selected mark: adds a bound = on the mark, even when the action is Exclude', async () => {
     const pt = await ev(`(() => { const host = document.querySelector('#ws-chart'); const el = [...host.querySelectorAll('*')].find((n) => window.echarts.getInstanceByDom(n)); const inst = window.echarts.getInstanceByDom(el);
       const r = inst.getDom().getBoundingClientRect(); const [px, py] = inst.convertToPixel({ seriesIndex: 0 }, [5, 'EU']); return { x: r.left + px, y: r.top + py }; })()`);
+    // the filter operator popup and the export menu stay open after a pick; a real click on a mark would only dismiss them, so close them first
+    await ev(`document.querySelector('.ctx-menu')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
+    await b.key('Escape', { vk: 27 });
+    await waitFor(`!document.querySelector('.ctx-menu') && document.querySelector('.ws-export .menu__list').hidden`, 'menus closed');
     await b.click(pt.x, pt.y);
     await waitFor(`document.querySelector('.ws-select') !== null`, 'selection chip');
     const label = await ev(`document.querySelector('.ws-select__label').textContent`);

@@ -3,6 +3,7 @@
 //   (start the app: cd src/DashboardBuilder && dotnet run --no-launch-profile --urls http://localhost:5224 ; stop: fuser -k 5224/tcp)
 // Env: APP_URL, SHOTS_DIR, CDP_PORT, CHROME_BIN.
 import { launch } from './cdp.mjs';
+import { CALC_NAMES } from './model.mjs';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -113,7 +114,7 @@ try {
     await waitFor(`${sd} === null`, 'closed');
     const calcs = await ev(`(async () => { const st = await import('/features/Core/store.js'); return JSON.stringify(st.calculations.map((c) => [c.name, c.formula])); })()`);
     must(calcs === J([['tags 1', 'SPLIT([shop.sales.tags], \',\', 1)'], ['tags 2', 'SPLIT([shop.sales.tags], \',\', 2)'], ['tags 3', 'SPLIT([shop.sales.tags], \',\', 3)']]), calcs);
-    await waitFor(`[...document.querySelectorAll('.calc-group__list .ws-field__name')].length === 3`, 'fields appear in Calculated fields');
+    await waitFor(`${CALC_NAMES}.length === 3`, 'fields appear in Calculated fields');
   });
   await check('dark scheme renders the dialogs', async () => {
     await b.setScheme('dark');
