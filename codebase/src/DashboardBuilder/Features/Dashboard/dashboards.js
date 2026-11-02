@@ -1604,7 +1604,7 @@ export function initDashboards() {
     const opList = (ops.includes(f.op) ? ops : [...ops, f.op]).map((v) => [v, OP_LABELS[v] ?? v]);
     const chk = checkFilter(pv(f));
     const ctxId = `${shared ? "shared" : "filter"}:${i}`;
-    const entries = () => bindEntries(filterPillOptions({ ops: opList, op: f.op, shared }), (id) => {
+    const entries = () => bindEntries(filterPillOptions({ ops: opList, op: f.op, shared, canShare: !isCalcPill(f) }), (id) => {
       if (id.startsWith("op:")) {
         f.op = id.slice(3);
         if (f.op === "top" && !f.topBy) { // rank by the first shelf measure until the user picks another

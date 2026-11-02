@@ -67,3 +67,9 @@ test("filterSummary reads the operand compactly", () => {
   assert.equal(filterSummary({ op: "=", param: "p1", value: "x" }), "parameter");
   assert.equal(filterSummary({ op: "relative", value: "last30" }), "last30");
 });
+
+test("filterPillOptions: a calculated filter can't be shared, so the option is left out", () => {
+  const ids = (o) => filterPillOptions({ ops: [["=", "is"]], op: "=", ...o }).map((e) => e.id ?? e.type);
+  assert.ok(ids({}).includes("share"));
+  assert.deepEqual(ids({ canShare: false }), ["op:=", "sep", "value"]);
+});
