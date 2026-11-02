@@ -63,6 +63,9 @@
                 <h1 class="sr-only">Data source, worksheets and dashboards</h1>
                 <div class="tabs" id="tabs" role="tablist" aria-label="Data source, worksheets and dashboards"></div>
                 <partial name="~/Features/Workbook/_Workbook.cshtml" />
+                <!-- Recent query and render timings (Shell/perf-panel.js); kept in this tab only. -->
+                <button type="button" class="iconbtn" id="perf-btn" aria-haspopup="dialog"
+                        aria-label="Performance timings" title="Performance timings"><span data-icon="chart-gauge"></span></button>
                 <!-- Light / dark toggle (Shell/scheme-toggle.js): System / Light / Dark, remembered in this browser. -->
                 <div class="menu scheme">
                     <button type="button" class="iconbtn" id="scheme-btn" aria-controls="scheme-list"

@@ -140,3 +140,15 @@
 /* Light / dark toggle, right-most in the bar: as close to the Workbook ··· as that group's own buttons
    sit, and its glyph (not its 32px box) meets the right gutter, over the content's right edge. */
 .scheme { flex: none; margin-left: calc(var(--s2) - var(--s2)); margin-right: calc(-1 * var(--s2)); }
+
+/* Performance timings dialog (Shell/perf-panel.js). */
+.perf-dialog { width: min(560px, calc(100vw - 2 * var(--s4))); }
+.perf-dialog[open] { display: flex; flex-direction: column; max-height: calc(100vh - 2 * var(--s4)); }
+.perf-dialog__body { overflow: auto; min-height: 0; padding: var(--s2) var(--s4) 0; }
+.perf-dialog .dialog__foot { flex: none; }
+.perf-table { width: 100%; border-collapse: collapse; font-size: var(--fs-body); font-variant-numeric: tabular-nums; }
+.perf-table th, .perf-table td { padding: var(--s1) var(--s2); text-align: right; border-bottom: 1px solid var(--line); }
+.perf-table th:first-child, .perf-table td:first-child, .perf-table th:nth-child(2), .perf-table td:nth-child(2) { text-align: left; }
+.perf-table th { color: var(--ink-2); font-weight: 600; position: sticky; top: 0; background: var(--surface); }
+.perf-summary { margin: 0; padding: var(--s2) var(--s4) 0; color: var(--ink-2); font-size: var(--fs-body); }
+.perf-empty { margin: 0; padding: var(--s2) 0; color: var(--ink-2); }

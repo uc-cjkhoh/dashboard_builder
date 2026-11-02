@@ -7,6 +7,7 @@ import { disposeChart, animateNextChart } from "./chart.js";
 import { renderWorksheet } from "./worksheet-render.js";
 import { renderHistogram, renderBoxplot } from "./render-special.js";
 import { outlierNotice } from "./box-model.js";
+import { perfLog, queryKindOf, rowCountOf } from "../Core/perf-log.js";
 import { createLatestGate, isAbortError, requestKey, truncationNotice } from "./query-runner.js";
 import { STAT_SINGLE_TABLE, statFieldHint } from "./show-me-rules.js";
 import { statFilters, withCategories } from "./filter-rules.js";
@@ -68,9 +69,12 @@ export function createWorksheetView(container, getContext, options = {}) {
   const statSourceProblem = (s, entities) => ([...s.columns, ...s.rows].some((f) => sourceOfTable(entities, f.db, f.table)) ? "Histogram and box plot read one table — they can't read a union or unpivot yet." : null);
   const involvedOf = (c, s) => { try { return involvedTables(s, undefined, c.plan); } catch { return []; } };
   let extraNotice = null; // the line the last drawing wants in the notice (small-multiples cap, calculations on partial rows)
+  let renderTimed = false; // set by fetchCached: the next draw is the one to time (not a table scroll-page redraw)
   const drawResult = (s, result, cmp) => {
     extraNotice = null;
+    const t0 = performance.now();
     extraNotice = draw(container, s, result, cmp ?? null, renderOptions())?.extraNotice ?? null;
+    if (renderTimed) { renderTimed = false; perfLog.attachRender(performance.now() - t0); } // only the draw that follows a fetch; timing only — Core/perf-log.js
   };
   const gate = createLatestGate();
   // Table scroll-loading: the pages loaded so far for the table on screen (re-used while its plan stays the same, so a
@@ -109,11 +113,14 @@ export function createWorksheetView(container, getContext, options = {}) {
   // the request was superseded (silently) or failed (the error is shown in the container).
   async function fetchCached(c, ticket, key, run) {
     const cached = c.results.get(c.dash.id, key);
-    if (cached) { markFresh(false); return cached; }
+    if (cached) { renderTimed = true; perfLog.record({ kind: queryKindOf(key), ms: 0, rows: rowCountOf(cached), cached: true }); markFresh(false); return cached; }
     container.replaceChildren(loadingView(c.noticeEl));
+    const t0 = performance.now();
     try {
       const result = await run(ticket.signal);
       if (!ticket.isCurrent()) return null;
+      renderTimed = true;
+      perfLog.record({ kind: queryKindOf(key), ms: performance.now() - t0, rows: rowCountOf(result), cached: false });
       result.queriedAt = Date.now(); // kept in the cache with the result: the status bar and print header say when the data was read
       c.results.set(c.dash.id, key, result);
       markFresh(true);
