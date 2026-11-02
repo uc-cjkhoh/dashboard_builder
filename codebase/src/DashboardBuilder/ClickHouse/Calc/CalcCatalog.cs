@@ -54,8 +54,9 @@ public sealed record AggSpec(IReadOnlyList<string> Accepts, string? Result, bool
 /// <c>Separator</c>: a non-empty text literal of at most <see cref="CalcLimits.MaxSeparator"/> characters.
 /// <c>Date</c>: any date expression. <c>Unit</c>: a text literal naming one of <see cref="CalcCatalog.DateUnits"/> (any case).
 /// <c>Amount</c>: a whole-number literal, either sign, at most <see cref="CalcLimits.MaxDateAmount"/>.
-/// <c>Value</c>: a number, date or text expression (not a condition).</summary>
-public enum FnArg { Text, Length, Position, Separator, Date, Unit, Amount, Value }
+/// <c>Value</c>: a number, date or text expression (not a condition).
+/// <c>Part</c>: a <see cref="CalcCatalog.DateNameParts"/> text literal. <c>Number</c>: any number expression.</summary>
+public enum FnArg { Text, Length, Position, Separator, Date, Unit, Amount, Value, Part, Number }
 
 /// <summary>One row-level function: its arguments in order and its result type. <c>MaxArgs</c> above <c>Args.Count</c> lets
 /// the last argument kind repeat (<c>CONCAT</c>).</summary>
@@ -88,6 +89,9 @@ public static class CalcCatalog
 
     /// <summary>The units <c>DATEDIFF</c> and <c>DATEADD</c> take, in display order. The only unit words that ever reach SQL.</summary>
     public static readonly IReadOnlyList<string> DateUnits = ["year", "quarter", "month", "week", "day", "hour", "minute", "second"];
+
+    /// <summary>The parts <c>DATENAME</c> takes. The names are always English (ClickHouse's <c>dateName</c> is locale-free).</summary>
+    public static readonly IReadOnlyList<string> DateNameParts = ["weekday", "month"];
 
     private static FnSpec Fn(string result, params FnArg[] args) => new(args, result);
 
@@ -124,6 +128,10 @@ public static class CalcCatalog
         ["week"] = Fn(CalcType.Number, FnArg.Date),
         ["weekday"] = Fn(CalcType.Number, FnArg.Date),
         ["date"] = Fn(CalcType.Date, FnArg.Text),
+        ["isoyear"] = Fn(CalcType.Number, FnArg.Date),
+        ["datename"] = Fn(CalcType.Text, FnArg.Part, FnArg.Date),
+        ["datetrunc"] = Fn(CalcType.Date, FnArg.Unit, FnArg.Date),
+        ["makedate"] = Fn(CalcType.Date, FnArg.Number, FnArg.Number, FnArg.Number),
     };
 
     /// <summary>What a row-level calculation in a measure may be aggregated by (<c>count</c> of rows would ignore it).

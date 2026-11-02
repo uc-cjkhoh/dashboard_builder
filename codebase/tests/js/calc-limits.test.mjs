@@ -47,14 +47,26 @@ test("the plain aggregations and the calculation functions agree with the server
 test("ROW_FUNCTIONS (calc-types.js) is the C# CalcCatalog.RowFunctions table", async () => {
   const { ROW_FUNCTIONS } = await import("../../src/DashboardBuilder/Features/Calc/calc-types.js");
   const body = csharp.match(/RowFunctions =[^{]*\{([\s\S]*?)\n    \};/)[1];
-  const kind = { Text: "text", Length: "length", Position: "position", Separator: "separator", Date: "date", Unit: "unit", Amount: "amount", Value: "value" };
+  const kind = { Text: "text", Length: "length", Position: "position", Separator: "separator", Date: "date", Unit: "unit", Amount: "amount", Value: "value", Part: "part", Number: "number" };
   const want = {};
   for (const m of body.matchAll(/\["([a-z]+)"\] = (?:Fn\(CalcType\.(\w+), ([^)]*)\)|new FnSpec\(\[([^\]]*)\], CalcType\.(\w+), CalcLimits\.MaxConcat\))/g)) {
     const list = (m[3] ?? m[4]).split(",").map((x) => kind[x.trim().replace("FnArg.", "")]);
     want[m[1]] = { args: list, result: (m[2] ?? m[5]).toLowerCase(), ...(m[4] ? { max: CALC_LIMITS.concat } : {}) };
   }
   assert.deepEqual(JSON.parse(JSON.stringify(ROW_FUNCTIONS)), want);
-  assert.equal(Object.keys(want).length, 29);
+  assert.equal(Object.keys(want).length, 33);
+});
+
+test("DATE_NAME_PARTS (calc-types.js) is the C# CalcCatalog.DateNameParts list", async () => {
+  const { DATE_NAME_PARTS } = await import("../../src/DashboardBuilder/Features/Calc/calc-types.js");
+  const body = csharp.match(/DateNameParts =[^[]*\[([^\]]*)\]/)[1];
+  assert.deepEqual([...DATE_NAME_PARTS], [...body.matchAll(/"([a-z]+)"/g)].map((m) => m[1]));
+});
+
+test("MAKEDATE_YEARS (function-help.js) is the year guard in CalcCompiler.cs", async () => {
+  const { MAKEDATE_YEARS } = await import("../../src/DashboardBuilder/Features/Calc/function-help.js");
+  const compiler = readFileSync(new URL("../../src/DashboardBuilder/ClickHouse/Calc/CalcCompiler.cs", import.meta.url), "utf8");
+  assert.ok(compiler.includes(`>= ${MAKEDATE_YEARS.from} AND`) && compiler.includes(`<= ${MAKEDATE_YEARS.to} AND`), "year window drifted from CalcCompiler.cs");
 });
 
 test("DATE_UNITS (calc-types.js) is the C# CalcCatalog.DateUnits list", async () => {
