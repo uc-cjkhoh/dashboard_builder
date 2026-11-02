@@ -133,7 +133,7 @@ const shelfMeasureCount = (sheet) => planMeasures(sheet).filter((e) => e.role ==
 const CHART_LIKE = new Set([
   "bar", "stacked", "line", "area", "pie", "donut", "scatter", "combo", "square", "circle",
   "heatmap", "treemap", "histogram", "boxplot",
-  "waterfall", "funnel", "gauge", "bullet", "sankey", "multiples",
+  "waterfall", "funnel", "gauge", "bullet", "sankey", "multiples", "gantt",
 ]);
 // Charts without x / y axes: no axis-title controls in Format.
 const NO_AXES = new Set(["pie", "donut", "funnel", "gauge", "sankey"]);

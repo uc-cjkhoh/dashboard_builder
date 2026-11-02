@@ -83,6 +83,7 @@ export function markCount(spec) {
   if (t === "sankey") return spec.links?.length ?? 0;
   if (t === "gauge") return 1;
   if (t === "bullet") return (spec.categories?.length ?? 0) * 5;
+  if (t === "gantt") return spec.categories?.length ?? 0;
   if (t === "multiples") return (spec.panels ?? []).reduce((n, p) => n + p.series.reduce((m, s) => m + s.length, 0), 0);
   return (spec?.categories?.length ?? 0) * Math.max(1, spec?.series?.length ?? 1);
 }
@@ -94,6 +95,7 @@ function categoryAxes(spec) {
     || t === "circle" || t === "scatterShapes" || t === "funnel" || t === "gauge" || t === "sankey" || t === "multiples") return null;
   if (t === "waterfall") return { bottom: { labels: [...(spec.categories ?? []), "Total"].map((l) => String(l ?? "—")), bars: 1 } };
   if (t === "bullet") return { left: { labels: (spec.categories ?? []).map((l) => String(l ?? "—")), bars: 2 } };
+  if (t === "gantt") return { left: { labels: (spec.categories ?? []).map((l) => String(l ?? "—")), bars: 1 } };
   if (t === "heatmap") return { bottom: { labels: spec.xCats ?? [], bars: 1 }, left: { labels: spec.yCats ?? [], bars: 1 } };
   if (t === "histogram") return { bottom: { labels: (spec.bins ?? []).map(() => "00.0K–00.0K"), bars: 1 } };
   if (t === "boxplot") return { bottom: { labels: (spec.boxes ?? []).map((b) => String(b.label ?? "—")), bars: 1 } };

@@ -11,7 +11,7 @@ export const TABLE_PAGE = 500;
 export const OTHER_TYPES = new Set(["bar", "pie", "donut", "treemap"]);
 /** Chart types whose date/time axis is grouped by Format → Group dates. */
 export const BUCKET_TYPES = new Set(["bar", "stacked", "line", "area", "combo", "heatmap", "pie", "donut", "treemap", "kpi",
-  "waterfall", "funnel", "bullet", "multiples"]);
+  "waterfall", "funnel", "bullet", "multiples", "gantt"]);
 /** Format → Group dates choices, in menu order. */
 export const DATE_BUCKET_CHOICES = [["auto", "Auto"], ["exact", "Exact"], ["hour", "Hour"], ["day", "Day"],
   ["week", "Week"], ["month", "Month"], ["quarter", "Quarter"], ["year", "Year"]];

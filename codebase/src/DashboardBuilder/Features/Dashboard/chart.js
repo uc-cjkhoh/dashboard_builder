@@ -9,6 +9,7 @@ import { syncRange, secondaryKind, dualAxisOn, rightAxisTitle, seriesAxis } from
 import { markBorder, markerSizeOr, markerSymbol, edgeOr } from "./mark-style-model.js";
 import { circleSize, circleCells, HEATMAP_GUTTER } from "./heatmap-model.js";
 import { bandsFor } from "./bullet-model.js";
+import { ganttTime, ganttAxisTime, ganttLabelMargin } from "./gantt-model.js";
 import { boxData, outlierPoints } from "./box-model.js";
 import { chartFit, markCount, applyFitMode, FIT } from "./chart-fit.js";
 import { applySelectionDim } from "./selection-dim.js";
@@ -392,6 +393,7 @@ function buildOption(spec) {
   if (spec.type === "funnel") return buildFunnel(spec);
   if (spec.type === "gauge") return buildGauge(spec);
   if (spec.type === "bullet") return buildBullet(spec);
+  if (spec.type === "gantt") return buildGantt(spec);
   if (spec.type === "sankey") return buildSankey(spec);
   if (spec.type === "multiples") return buildMultiples(spec);
   return buildCartesian(spec);
@@ -1079,6 +1081,41 @@ function buildBullet({ categories, values, target, targets, name, format = {} })
       { type: "bar", name, data: vals, barWidth: "24%", barGap: "-70%", z: 3, itemStyle: { color: c.ink } },
       { type: "scatter", name: "Target", data: cats.map((_, i) => (ts[i] == null ? null : [ts[i], i])), symbol: "rect", symbolSize: [3, 26], z: 4,
         itemStyle: { color: c.series } },
+    ],
+  };
+}
+
+// gantt — one horizontal bar per row from its start to start + length (days for a date start), first row on
+// top; the length is written at the bar's end and named in the tooltip, so the bar's colour carries nothing.
+function buildGantt({ categories, gantt, name, format = {} }) {
+  const c = tokens();
+  const fmtVal = makeValueFormatter(format);
+  const { bars, isDate, hasTime } = gantt;
+  const at = (v) => (isDate ? ganttTime(v, hasTime) : fmtVal(v));
+  const len = (b) => (isDate ? `${fmtVal(b.duration)} ${b.duration === 1 ? "day" : "days"}` : fmtVal(b.duration));
+  const label = name || "Length";
+  const axisTime = ganttAxisTime(bars, hasTime);
+  return {
+    color: [c.cat[0]],
+    textStyle: { fontFamily: c.font, color: c.label },
+    legend: { top: 0, left: "center", data: [label], selectedMode: false, textStyle: { color: c.label, fontFamily: c.font }, icon: "roundRect" },
+    grid: { left: 6, right: ganttLabelMargin(bars.map(len)), top: 36, bottom: 6, containLabel: true },
+    tooltip: { trigger: "item", ...tipBox(c),
+      formatter: (p) => { const b = bars[p.dataIndex]; return b ? `<span style="color:${c.muted}">${escapeHtml(String(b.name ?? ""))}</span><br>${at(b.start)} → ${at(b.end)}<br><b>${escapeHtml(label)}:</b> ${len(b)}` : ""; } },
+    xAxis: valueAxis(c, isDate ? undefined : fmtVal, isDate
+      ? { type: "time", axisLabel: { color: c.muted, formatter: (v) => ganttTime(v, axisTime), hideOverlap: true } } : { scale: true }),
+    yAxis: catAxis(c, categories ?? [], { inverse: true }),
+    series: [
+      { type: "custom", name: label, data: bars.map((b) => [b.i, b.start, b.end]), encode: { x: [1, 2], y: 0 },
+        renderItem: (params, api) => {
+          const b = bars[params.dataIndex];
+          const a = api.coord([api.value(1), api.value(0)]), e = api.coord([api.value(2), api.value(0)]);
+          const h = Math.min(28, api.size([0, 1])[1] * 0.6);
+          return { type: "group", children: [
+            { type: "rect", shape: { x: a[0], y: a[1] - h / 2, width: Math.max(2, e[0] - a[0]), height: h, r: 2 }, style: { fill: c.cat[0] } },
+            { type: "text", style: { text: len(b), x: Math.max(e[0], a[0] + 2) + 4, y: a[1], align: "left", verticalAlign: "middle", fill: c.label, font: `14px ${c.font}` } },
+          ] };
+        } },
     ],
   };
 }

@@ -8,8 +8,8 @@ export const AGGS = Object.freeze({
 });
 export const aggsFor = (category) =>
   category === "numeric" ? AGGS.numeric : category === "text" || category === "temporal" ? AGGS.ordered : AGGS.other;
-// Chart types that can show a text measure value (min/max of a text or date field).
-export const TEXT_VALUE_TYPES = new Set(["table", "text", "kpi"]);
+// Chart types that can show a text measure value (min/max of a text or date field); a Gantt reads a date start.
+export const TEXT_VALUE_TYPES = new Set(["table", "text", "kpi", "gantt"]);
 const blank = (v) => v == null || !String(v).trim();
 
 // Richer filters. Text match (bound, case-insensitive), relative date (a period preset, resolved to a
