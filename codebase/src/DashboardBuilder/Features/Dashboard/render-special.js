@@ -1,5 +1,6 @@
 import { renderChart as drawChart } from "./chart.js";
 import { bulletTargets } from "./bullet-model.js";
+import { ganttBars, ganttNotice } from "./gantt-model.js";
 import { hint } from "./render-dom.js";
 import { heatmapData, treemapTree, sankeyLinks, multiplesData, keyLabel } from "./result-model.js";
 
@@ -33,6 +34,13 @@ export function renderP36(container, rc, type, rows, categories, series, seriesN
     const targets = bulletTargets({ fixed: target, measureIndex: format.targetMeasure, series, count: cats.length });
     if (!targets) { container.append(hint("Bullet compares each value with a target — set Target in Format, or pick a Target field.")); return; }
     drawChart(container, { type, categories: cats, values: series[0].data, targets, name: seriesNames[0], format });
+    return;
+  }
+  if (type === "gantt") {
+    const g = ganttBars(categories, series[0].data, series[1].data);
+    rc.extraNotice = ganttNotice(g.skipped);
+    if (!g.bars.length) { container.append(hint("No row has a valid start and a length of 0 or more to draw as a bar.")); return; }
+    drawChart(container, { type, categories, gantt: g, name: seriesNames[1], format });
     return;
   }
   if (type === "sankey") {

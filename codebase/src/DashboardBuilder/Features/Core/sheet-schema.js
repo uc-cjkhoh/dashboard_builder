@@ -2,7 +2,7 @@
 // Keep CHART_TYPE_IDS in step with CHART_TYPES in Dashboard/dashboards.js.
 export const CHART_TYPE_IDS = new Set(["bar", "stacked", "line", "area", "pie", "donut", "scatter", "combo",
   "square", "circle", "heatmap", "treemap", "histogram", "boxplot", "kpi", "text", "table",
-  "waterfall", "funnel", "gauge", "bullet", "sankey", "multiples"]);
+  "waterfall", "funnel", "gauge", "bullet", "sankey", "multiples", "gantt"]);
 export const CATEGORIES = new Set(["numeric", "text", "temporal", "boolean", "compound", "other"]);
 export const FILTER_OPS = new Set(["=", "!=", ">", ">=", "<", "<=", "in", "notin", "between",
   "contains", "startsWith", "endsWith", "relative", "top"]);

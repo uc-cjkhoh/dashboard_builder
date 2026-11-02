@@ -86,6 +86,7 @@ export const PATHS = Object.freeze({
   "chart-waterfall": "M3 16.5h14M4 10h3v6H4zM8.5 6h3v4h-3zM13 6h3v6h-3z",
   "chart-funnel": "M3 4h14l-3.5 4h-7zM7 9.5h6l-1.8 3.5H8.8zM9 14.5h2v2H9z",
   "chart-gauge": "M3.5 14.5a6.5 6.5 0 0 1 13 0M10 14.5l3-4M3.5 14.5h2M14.5 14.5h2",
+  "chart-gantt": "M3 5h6v3H3zM7 10h7v3H7zM11 15h6v3h-6z",
   "chart-bullet": "M3 6h14v8H3zM3 10h8M13.5 7v6",
   "chart-sankey": "M3 4h2.5v5H3zM14.5 3.5H17v5h-2.5zM14.5 11.5H17v5h-2.5zM5.5 6c4.5 0 4.5-.5 9-.5M5.5 8c4.5 0 4.5 6 9 6",
   "chart-multiples": "M3 3h6v6H3zM11 3h6v6h-6zM3 11h6v6H3zM11 11h6v6h-6zM4.5 7.5l1.5-2 1.5 1M12.5 7.5l1.5-1 1.5-1",

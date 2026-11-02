@@ -49,6 +49,9 @@ export const CHART_NEEDS = Object.freeze({
   bullet: Object.freeze([
     need("measures", 1, 2, "Bullet compares one measure with a target — use one measure, plus an optional second measure as its target."),
     need("dims", 0, 1, "Bullet takes at most one dimension (one bar per member).")]),
+  gantt: Object.freeze([
+    need("measures", 2, 2, "Gantt draws each row as a bar — use exactly two measures: the start (a number or a date) and the length."),
+    need("dims", 1, 1, "Gantt needs exactly one dimension for its rows (one bar per member).")]),
   sankey: Object.freeze([
     need("dims", 2, 2, "Sankey draws flows between two dimensions — put one on Columns and one on Rows."),
     need("measures", 1, 1, "Sankey sizes each flow by one measure — use exactly one measure.")]),
