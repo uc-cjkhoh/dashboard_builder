@@ -204,7 +204,13 @@ public static class RequestRules
         {
             if (filters[i] is not { } f) throw Bad($"'filters[{i}]' is required.", $"filters[{i}]");
             ValidateFilterShape(f.Op, f.Value, f.Values, $"filters[{i}]");
-            CheckCast(f.Cast, false, $"filters[{i}]");
+            CheckCast(f.Cast, f.Calc is not null, $"filters[{i}]");
+            if (f.Calc is { } fc)
+            {
+                CheckCalcTree(fc, f.Column, $"filters[{i}]");
+                if (string.Equals(f.Op, "top", StringComparison.OrdinalIgnoreCase)) throw Bad("A top-N filter ranks a plain field's members — it can't use a calculated field.", $"filters[{i}].calc");
+                if (CalcValidator.ContainsAggregate(fc)) throw Bad("A filter can't contain an aggregate — it is applied to each row before the view is grouped.", $"filters[{i}].calc");
+            }
             if (rightOrFull && string.Equals(f.Op, "top", StringComparison.OrdinalIgnoreCase))
                 throw Bad("A top-N filter can't be combined with a right or full join — unmatched rows have no key to rank.", $"filters[{i}]");
             if (string.Equals(f.Op, "top", StringComparison.OrdinalIgnoreCase) && f.TopBy is null)

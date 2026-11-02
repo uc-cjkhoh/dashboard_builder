@@ -1168,6 +1168,13 @@ public sealed partial class ClickHouseGateway
         {
             var f = filters[i];
             if (string.Equals(f.Op, "top", StringComparison.OrdinalIgnoreCase)) { tops.Add((f, i)); continue; } // after the others
+            if (f.Calc is { } fCalc)
+            {
+                // Row-level calculation → WHERE, with its own literals (prefix c{n}) and the compared values bound as p{i}.
+                var (calcExpr, calcCategory) = CalcSql.CalcFilterSql(await CompileCalcAsync(fCalc, $"filters[{i}]"), $"filters[{i}]");
+                conditions.Add(BuildCondition(f.Op, $"p{i}", calcExpr, calcCategory, CalcSql.CalcLabel(f.Column), $"filters[{i}]", f.Value, f.Values, parameters));
+                continue;
+            }
             var expr = await CastedAsync(f.Db, f.Table, f.Column, f.Cast, $"filters[{i}]"); // validates + quotes the column; cast
             conditions.Add(BuildCondition(f.Op, $"p{i}", expr, CategoryOfRef(f.Db, f.Table, f.Column, f.Cast), f.Column, $"filters[{i}]", f.Value, f.Values, parameters,
                 DateOnlyOfRef(f.Db, f.Table, f.Column, f.Cast)));
