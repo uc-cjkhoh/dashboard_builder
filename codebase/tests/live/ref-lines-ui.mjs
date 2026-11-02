@@ -4,7 +4,7 @@
 //   cd src/DashboardBuilder && dotnet run --no-launch-profile --urls http://localhost:5219 ; stop it with fuser -k 5219/tcp)
 // Env: APP_URL, SHOTS_DIR (screenshot folder), CDP_PORT (default: a free port), CHROME_BIN.
 import { launch } from './cdp.mjs';
-import { CHIP_SCOPE, NEW_CALC, relateTables } from './model.mjs';
+import { NEW_CALC, PAGE_CHIP, relateTables } from './model.mjs';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -63,7 +63,7 @@ try {
   // page helpers: HTML5 drag-and-drop with a real DataTransfer, text lookup, dialog typing
   const installHelpers = () => ev(`(() => {
     window.__t = {
-      chip: (name) => [...document.querySelectorAll(${J(CHIP_SCOPE)})].find((c) => c.querySelector('.ws-field__name')?.textContent === name),
+      chip: ${PAGE_CHIP},
       drag(chip, target) {
         const dt = new DataTransfer();
         chip.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt }));
@@ -99,7 +99,7 @@ try {
     await ev(`[...${dlg}.querySelectorAll('.dialog__foot button')].find((x) => x.textContent === 'Save').click()`);
     await waitFor(`${dlg} === null`, 'dialog closed after save');
   };
-  const confirmOpen = `[...document.querySelectorAll('dialog[open]')].find((d) => !d.classList.contains('calc-dialog'))`;
+  const confirmOpen = `[...document.querySelectorAll('dialog[open]')].find((d) => !d.classList.contains('calc-dialog') && !d.classList.contains('calc-manager'))`;
   const chartText = () => ev(`document.getElementById('ws-chart').textContent`);
   const canvasDrawn = () => ev(`!!document.querySelector('#ws-chart canvas, #ws-chart svg')`);
   const until = async (fn, label, timeout = 8000) => { const t0 = Date.now(); while (!fn()) { if (Date.now() - t0 > timeout) throw new Error(`timed out waiting for: ${label}`); await b.sleep(50); } };

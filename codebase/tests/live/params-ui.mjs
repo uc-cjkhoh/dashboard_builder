@@ -4,7 +4,7 @@
 //   cd src/DashboardBuilder && dotnet run --no-launch-profile --urls http://localhost:5180 ; stop it with fuser -k 5180/tcp)
 // Env: APP_URL, SHOTS_DIR (screenshot folder), CDP_PORT (default: a free port), CHROME_BIN.
 import { launch } from './cdp.mjs';
-import { CHIP_SCOPE, NEW_CALC, relateTables } from './model.mjs';
+import { CALC_LIST_TEXT, NEW_CALC, PAGE_CHIP, relateTables } from './model.mjs';
 import { writeFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -62,7 +62,7 @@ try {
   // page helpers: HTML5 drag-and-drop with a real DataTransfer, text lookup, dialog typing
   const installHelpers = () => ev(`(() => {
     window.__t = {
-      chip: (name) => [...document.querySelectorAll(${J(CHIP_SCOPE)})].find((c) => c.querySelector('.ws-field__name')?.textContent === name),
+      chip: ${PAGE_CHIP},
       drag(chip, target) {
         const dt = new DataTransfer();
         chip.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt }));
@@ -130,7 +130,7 @@ try {
 
 
   // ---- helpers for the parameters dialog ------------------------------------------------------------------------
-  const pdlg = `document.querySelector('dialog.params-dialog[open]')`;
+  const pdlg = `document.querySelector('dialog.params-dialog:not(.calc-manager):not(.hier-dialog)[open]')`;
   const openParams = async () => { await ev(`document.getElementById('wb-parameters').click()`); await waitFor(`${pdlg} !== null`, 'parameters dialog'); };
   const clickIn = (root, text) => ev(`[...${root}.querySelectorAll('button')].find((x) => x.textContent.trim() === ${J(text)} || x.getAttribute('aria-label') === ${J(text)}).click()`);
   const setField = (label, value, tag = 'input') => ev(`(() => { const f = [...${pdlg}.querySelectorAll('.params-field')].find((l) => l.textContent.startsWith(${J(label)})); const i = f.querySelector(${J(tag)}); i.value = ${J(value)}; i.dispatchEvent(new Event(${J(tag === 'select' ? 'change' : 'input')}, { bubbles: true })); return true; })()`);
@@ -227,7 +227,7 @@ try {
     await setField('Name', 'Tax');
     await clickIn(pdlg, 'Save'); await clickIn(pdlg, 'Done');
     await settle();
-    const f = await ev(`document.querySelector('.calc-group')?.textContent ?? ''`);
+    const f = await ev(CALC_LIST_TEXT);
     must(!/can't be computed/.test(await chartText()), `chart: ${await chartText()}`);
     must(J(lastQuery().measures[0].calc.r) === J({ k: 'num', v: 0.35 }), 'literal lost after rename');
     void f;
@@ -268,7 +268,7 @@ try {
     must(/Calculation 'Taxed' can't be computed: Parameter \[@Tax\] was deleted/.test(await chartText()), `chart says: ${await chartText()}`);
     await settle(500);
     must(queries.length === 0, `${queries.length} query(ies) sent for an uncomputable calculation`);
-    const pane = await ev(`document.querySelector('.calc-group')?.textContent ?? ''`);
+    const pane = await ev(CALC_LIST_TEXT);
     must(/Tax/.test(pane), 'pane lost the calculation');
   });
 

@@ -4,7 +4,7 @@
 //   cd src/DashboardBuilder && dotnet run --no-launch-profile --urls http://localhost:5180 ; stop it with fuser -k 5180/tcp)
 // Env: APP_URL, SHOTS_DIR (screenshot folder), CDP_PORT (default: a free port), CHROME_BIN.
 import { launch } from './cdp.mjs';
-import { CHIP_SCOPE, NEW_CALC, relateTables } from './model.mjs';
+import { NEW_CALC, PAGE_CHIP, relateTables } from './model.mjs';
 import { writeFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -62,7 +62,7 @@ try {
   // page helpers: HTML5 drag-and-drop with a real DataTransfer, text lookup, dialog typing
   const installHelpers = () => ev(`(() => {
     window.__t = {
-      chip: (name) => [...document.querySelectorAll(${J(CHIP_SCOPE)})].find((c) => c.querySelector('.ws-field__name')?.textContent === name),
+      chip: ${PAGE_CHIP},
       drag(chip, target) {
         const dt = new DataTransfer();
         chip.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt }));
@@ -103,7 +103,7 @@ try {
     await ev(`(() => { const c = __t.chip(${J(name)}); c.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 40 })); return true; })()`);
     await ev(`(() => { const c = __t.chip(${J(name)}); [...document.querySelectorAll('.ctx-menu .menu__item')].find((x) => x.textContent.trim() === ${J(item)}).click(); return true; })()`);
   };
-  const confirmOpen = `[...document.querySelectorAll('dialog[open]')].find((d) => !d.classList.contains('calc-dialog'))`;
+  const confirmOpen = `[...document.querySelectorAll('dialog[open]')].find((d) => !d.classList.contains('calc-dialog') && !d.classList.contains('calc-manager'))`;
   const chartText = () => ev(`document.getElementById('ws-chart').textContent`);
   const canvasDrawn = () => ev(`!!document.querySelector('#ws-chart canvas, #ws-chart svg')`);
   const until = async (fn, label, timeout = 8000) => { const t0 = Date.now(); while (!fn()) { if (Date.now() - t0 > timeout) throw new Error(`timed out waiting for: ${label}`); await b.sleep(50); } };
@@ -186,7 +186,7 @@ try {
       await ev(`(() => { const p = document.querySelectorAll('.ws-shelf--rows .ws-pill')[${i}]; p.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 300, clientY: 200 })); return true; })()`);
       const name = await ev(`document.querySelectorAll('.ws-shelf--rows .ws-pill')[${i}].querySelector('.ws-pill__text').textContent`);
       const items = await ev(`[...document.querySelectorAll('.ctx-menu [role^=menuitem]')].map((x) => [x.getAttribute('role'), x.textContent.trim()])`);
-      info[name] = { agg: items.some(([r]) => r === 'menuitemradio'), conv: items.some(([, t]) => /^Use as /.test(t)), fx: items.some(([, t]) => t === 'Table calculation…') };
+      info[name] = { agg: items.some(([r]) => r === 'menuitemradio'), conv: items.some(([, t]) => /^(Use as |Continuous$|Discrete$)/.test(t)), fx: items.some(([, t]) => t === 'Table calculation…') };
       await ev(`document.querySelector('.ctx-menu').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
     }
     const keys = Object.keys(info);
@@ -453,7 +453,10 @@ try {
     await ev(`document.querySelector('.tab--model .tab__label').click()`);
     await waitFor(`document.getElementById('worksheet-view').hidden && document.querySelector('.entity') !== null`, 'model tab shown');
     await ev(`document.querySelector('.entity [aria-label="Remove shop.orders"]').click()`);
-    queries.length = 0; // no relationship drawn, so removing a table asks nothing
+    // the two tables are related (the field pane needs that), so removing one asks first
+    await waitFor(`!!${confirmOpen}`, 'remove confirm');
+    await ev(`[...(${confirmOpen}).querySelectorAll('button')].find((x) => x.textContent === 'Remove').click()`);
+    queries.length = 0;
     await waitFor(`document.querySelectorAll('.entity').length === 1`, 'entity removed');
     await ev(`document.querySelectorAll('.tab:not(.tab--model) .tab__label')[0].click()`);
     await waitFor(`!document.getElementById('worksheet-view').hidden`, 'worksheet shown');

@@ -14,10 +14,29 @@ export async function relateTables(ev, waitFor, [fromTable, fromColumn, toTable,
   await waitFor(`document.querySelector('.rel-badge') !== null && document.querySelector('dialog[open] .card-choice') === null`, 'relationship drawn');
 }
 
-/** Browser expression: open the sidebar's Calculated fields manager (if it is not open) and press its "New calculated field" button.
- *  Calculated chips live in that dialog, not in the field pane, so checks look for them in `CHIP_SCOPE` below. */
-export const NEW_CALC = `(() => { if (!document.querySelector('dialog.calc-manager[open]')) document.querySelector('button[aria-label="Calculated fields"]').click();
-  [...document.querySelectorAll('dialog.calc-manager[open] .dialog__foot button')].find((x) => /New calculated field/.test(x.textContent)).click(); return true; })()`;
+/** Calculated chips live in the sidebar's Calculated fields manager dialog, not in the field pane. A modal dialog left open would block
+ *  real mouse and key input (and Esc would close it), so the checks open it only while they need it:
+ *  NEW_CALC opens it and presses "New calculated field"; the manager closes again once the calculation dialog on top of it closes.
+ *  PAGE_CHIP (the page-side `__t.chip`) finds a chip in the pane, or opens the manager to find a calculated one and closes it
+ *  right after the calling script step. */
+export const NEW_CALC = `(() => { const man = () => document.querySelector('dialog.calc-manager[open]');
+  if (!man()) document.querySelector('button[aria-label="Calculated fields"]').click();
+  // a closed dialog is removed from the page and its close event never reaches the document, so watch for the removal
+  const mo = new MutationObserver((recs) => { if (!recs.some((r) => [...r.removedNodes].some((n) => n.matches?.('dialog') && !n.classList.contains('calc-manager')))) return;
+    mo.disconnect(); [...(man()?.querySelectorAll('.dialog__foot button') ?? [])].find((x) => x.textContent === 'Done')?.click(); });
+  [...man().querySelectorAll('.dialog__foot button')].find((x) => /New calculated field/.test(x.textContent)).click(); mo.observe(document.body, { childList: true }); return true; })()`;
 
-/** CSS selector for every field chip a check can reach: the field pane plus the open Calculated fields manager. */
-export const CHIP_SCOPE = '#ws-fields .ws-field, dialog.calc-manager[open] .ws-field';
+export const PAGE_CHIP = `(name) => {
+  const find = () => [...document.querySelectorAll('#ws-fields .ws-field, dialog.calc-manager[open] .ws-field')].find((c) => c.querySelector('.ws-field__name')?.textContent === name);
+  const hit = find(); if (hit) return hit;
+  if (document.querySelector('dialog.calc-manager[open]') || !document.querySelector('button[aria-label="Calculated fields"]')) return undefined;
+  document.querySelector('button[aria-label="Calculated fields"]').click();
+  const c = find();
+  queueMicrotask(() => [...(document.querySelector('dialog.calc-manager[open]')?.querySelectorAll('.dialog__foot button') ?? [])].find((x) => x.textContent === 'Done')?.click());
+  return c;
+}`;
+
+/** Browser expression: the text of the Calculated fields manager (every calculation's row), opened and closed again if it was shut. */
+export const CALC_LIST_TEXT = `(() => { let d = document.querySelector('dialog.calc-manager[open]'); const opened = !d;
+  if (opened) { document.querySelector('button[aria-label="Calculated fields"]').click(); d = document.querySelector('dialog.calc-manager[open]'); }
+  const t = d.textContent; if (opened) [...d.querySelectorAll('.dialog__foot button')].find((x) => x.textContent === 'Done').click(); return t; })()`;
