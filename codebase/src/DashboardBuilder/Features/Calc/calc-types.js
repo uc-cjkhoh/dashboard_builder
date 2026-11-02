@@ -3,8 +3,8 @@
 // messages, the same error paths, the same check order. The shared fixture tests/fixtures/calc-cases.json is
 // the contract — change one side and the other in the same commit.
 
-/** Calculation limits (`count`: largest LEFT/RIGHT length or SPLIT position; `separator`: longest SPLIT separator; `concat`: most CONCAT arguments; `dateAmount`: largest DATEADD amount, either sign); mirrored in ClickHouse/Calc/CalcLimits (and the workbook ones in Core/validate.js LIMITS). */
-export const CALC_LIMITS = Object.freeze({ formula: 500, depth: 12, nodes: 200, calcs: 20, name: 60, string: 100, count: 1000, separator: 20, concat: 10, dateAmount: 100000 });
+/** Calculation limits (`count`: largest LEFT/RIGHT length or SPLIT position; `separator`: longest SPLIT separator; `concat`: most CONCAT arguments; `dateAmount`: largest DATEADD amount, either sign; `inList`: most values in an IN list); mirrored in ClickHouse/Calc/CalcLimits (and the workbook ones in Core/validate.js LIMITS). */
+export const CALC_LIMITS = Object.freeze({ formula: 500, depth: 12, nodes: 200, calcs: 20, name: 60, string: 100, count: 1000, separator: 20, concat: 10, dateAmount: 100000, inList: 50 });
 
 const NUMBER_ONLY = ["number"];
 const ORDERABLE = ["number", "date", "text"];
@@ -85,6 +85,7 @@ function checkLimits(root) {
     if (n.k === "un" || n.k === "agg") walk(n.arg, depth + 1);
     else if (n.k === "bin" || n.k === "cmp" || n.k === "logic" || n.k === "ifnull") { walk(n.l, depth + 1); walk(n.r, depth + 1); }
     else if (n.k === "not" || n.k === "isnull") walk(n.arg, depth + 1);
+    else if (n.k === "in") { walk(n.arg, depth + 1); if (Array.isArray(n.list)) for (const v of n.list) walk(v, depth + 1); }
     else if (n.k === "fn" && Array.isArray(n.args)) for (const a of n.args) walk(a, depth + 1);
     else if (n.k === "case" && Array.isArray(n.whens)) {
       for (const w of n.whens) if (isNode(w)) { walk(w.c, depth + 1); walk(w.t, depth + 1); }
@@ -103,6 +104,9 @@ const requireNumber = (t, path) => {
 };
 
 const SAME_TYPE = "All results must be the same type";
+// NULL has no type of its own: it takes the type of the results (or the IFNULL value) beside it, and is refused anywhere else.
+// Internally its type is "null"; it never leaves typeOf() as an answer (check() rejects it at the root).
+const NULL_TYPE = "NULL needs another value to take its type from — use it as an IF, CASE or IFNULL result.";
 // Aggregates and row-level values (constants are neutral) can't share one formula.
 const mixes = (parts) => parts.some((t) => t.isAggregate) && parts.some((t) => !t.isAggregate && !t.isConst);
 const MIX = "Can't mix an aggregate with a row-level value in one formula.";
@@ -124,10 +128,33 @@ function typeOf(node, path, categoryOf) {
       if (node.v.length > CALC_LIMITS.string) throw new CalcError(`A text value can be at most ${CALC_LIMITS.string} characters.`, path);
       return { type: "text", isAggregate: false, isConst: true, tables: new Set(), name: "that value" };
 
+    case "bool":
+      if (typeof node.v !== "boolean") throw new CalcError("Unknown expression node.", path);
+      return { type: "boolean", isAggregate: false, isConst: true, tables: new Set(), name: "that value" };
+
+    case "null":
+      return { type: "null", isAggregate: false, isConst: true, tables: new Set(), name: "NULL" };
+
+    case "in": {
+      const arg = typeOf(node.arg, child(path, "arg"), categoryOf);
+      if (arg.type !== "number" && arg.type !== "text") throw new CalcError(`IN needs a number or text — ${arg.name} is ${arg.type}.`, child(path, "arg"));
+      const list = Array.isArray(node.list) ? node.list : [];
+      if (list.length < 1 || list.length > CALC_LIMITS.inList) throw new CalcError(`IN takes 1 to ${CALC_LIMITS.inList} values.`, child(path, "list"));
+      list.forEach((item, i) => {
+        const ip = child(path, `list.${i}`);
+        const literal = isNode(item) && (item.k === "num" || item.k === "str" || (item.k === "un" && item.op === "-" && isNode(item.arg) && item.arg.k === "num"));
+        if (!literal) throw new CalcError("IN's values must be numbers or text written in the formula.", ip);
+        const t = typeOf(item, ip, categoryOf);
+        if (t.type !== arg.type) throw new CalcError(`IN needs values of the same type — ${t.name} is ${t.type}, not ${arg.type}.`, ip);
+      });
+      return { type: "boolean", isAggregate: arg.isAggregate, isConst: arg.isConst, tables: arg.tables, name: "that value" };
+    }
+
     case "cmp": {
       if (!["=", "!=", "<", "<=", ">", ">="].includes(node.op)) throw new CalcError(`Unknown operator ${node.op}.`, path);
       const l = typeOf(node.l, child(path, "l"), categoryOf);
       const r = typeOf(node.r, child(path, "r"), categoryOf);
+      if (l.type === "null" || r.type === "null") throw new CalcError("Comparison with NULL never matches — use ISNULL(value) instead.", path);
       for (const [t, p] of [[l, "l"], [r, "r"]]) {
         if (t.type === "boolean") throw new CalcError(`Comparison needs a number, text or date — ${t.name} is boolean.`, child(path, p));
       }
@@ -162,14 +189,15 @@ function typeOf(node, path, categoryOf) {
     case "ifnull": {
       const l = typeOf(node.l, child(path, "l"), categoryOf);
       const r = typeOf(node.r, child(path, "r"), categoryOf);
-      if (l.type !== r.type) throw new CalcError(`${SAME_TYPE} — ${r.name} is ${r.type}, not ${l.type}.`, child(path, "r"));
+      if (l.type === "null" && r.type === "null") throw new CalcError(NULL_TYPE, path);
+      if (l.type !== "null" && r.type !== "null" && l.type !== r.type) throw new CalcError(`${SAME_TYPE} — ${r.name} is ${r.type}, not ${l.type}.`, child(path, "r"));
       if (mixes([l, r])) throw new CalcError(MIX, path);
-      return { type: l.type, isAggregate: l.isAggregate || r.isAggregate, isConst: l.isConst && r.isConst, tables: unionTables([l, r]), name: "that value" };
+      return { type: l.type === "null" ? r.type : l.type, isAggregate: l.isAggregate || r.isAggregate, isConst: l.isConst && r.isConst, tables: unionTables([l, r]), name: "that value" };
     }
 
     case "case": {
       if (!Array.isArray(node.whens) || node.whens.length === 0) throw new CalcError("A CASE needs at least one WHEN.", path);
-      // Typed in source order: w0.c, w0.t, w1.c, ..., else. The first THEN fixes the result type.
+      // Typed in source order: w0.c, w0.t, w1.c, ..., else. The first non-NULL result fixes the result type.
       const parts = [];
       let first = null;
       node.whens.forEach((w, i) => {
@@ -177,15 +205,19 @@ function typeOf(node, path, categoryOf) {
         const c = typeOf(isNode(w) ? w.c : null, child(path, `${wp}.c`), categoryOf);
         requireBoolean(c, child(path, `${wp}.c`), "A condition");
         const t = typeOf(isNode(w) ? w.t : null, child(path, `${wp}.t`), categoryOf);
-        if (first === null) first = t;
+        if (t.type === "null") { /* takes the type of the other results */ }
+        else if (first === null) first = t;
         else if (t.type !== first.type) throw new CalcError(`${SAME_TYPE} — ${t.name} is ${t.type}, not ${first.type}.`, child(path, `${wp}.t`));
         parts.push(c, t);
       });
       if (node.else !== undefined) {
         const e = typeOf(node.else, child(path, "else"), categoryOf);
-        if (e.type !== first.type) throw new CalcError(`${SAME_TYPE} — ${e.name} is ${e.type}, not ${first.type}.`, child(path, "else"));
+        if (e.type === "null") { /* takes the type of the results */ }
+        else if (first === null) first = e;
+        else if (e.type !== first.type) throw new CalcError(`${SAME_TYPE} — ${e.name} is ${e.type}, not ${first.type}.`, child(path, "else"));
         parts.push(e);
       }
+      if (first === null) throw new CalcError(NULL_TYPE, path);
       if (mixes(parts)) throw new CalcError(MIX, path);
       return { type: first.type, isAggregate: parts.some((t) => t.isAggregate), isConst: parts.every((t) => t.isConst), tables: unionTables(parts), name: "that value" };
     }
@@ -207,7 +239,7 @@ function typeOf(node, path, categoryOf) {
         if (kind === "text") {
           if (t.type !== "text") throw new CalcError(`${upper} needs a text — ${t.name} is ${t.type}.`, ap);
         } else if (kind === "value") {
-          if (t.type === "boolean") throw new CalcError(`${label} needs a number, date or text — ${t.name} is ${t.type}.`, ap);
+          if (t.type === "boolean" || t.type === "null") throw new CalcError(`${label} needs a number, date or text — ${t.name} is ${t.type}.`, ap);
         } else if (kind === "length" || kind === "position") {
           const min = kind === "length" ? 0 : 1;
           const v = a.k === "num" ? a.v : NaN;
@@ -301,6 +333,7 @@ export function check(ast, categoryOf) {
   try {
     checkLimits(ast);
     const t = typeOf(ast, "", categoryOf);
+    if (t.type === "null") throw new CalcError(NULL_TYPE, "");
     return { type: t.type, isAggregate: t.isAggregate, tables: [...t.tables].sort() };
   } catch (e) {
     if (e instanceof CalcError) return { error: { message: e.message, path: e.path } };

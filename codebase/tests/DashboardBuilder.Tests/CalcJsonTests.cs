@@ -33,6 +33,25 @@ public class CalcJsonTests(WebApplicationFactory<Program> factory) : IClassFixtu
     }
 
     [Fact]
+    public void Bool_null_and_in_nodes_round_trip()
+    {
+        const string wire = """{"k":"in","arg":{"k":"field","db":"d","table":"t","column":"c"},"list":[{"k":"num","v":1},{"k":"bool","v":true},{"k":"null"}]}""";
+        var node = JsonSerializer.Deserialize<ExprNode>(wire, Web);
+        var parsed = Assert.IsType<InNode>(node);
+        Assert.Equal(new FieldNode("d", "t", "c"), parsed.Arg);
+        Assert.Equal(new ExprNode[] { new NumNode(1), new BoolNode(true), new NullNode() }, parsed.List);
+        Assert.Equal(JsonDocument.Parse(wire).RootElement.ToString(), JsonDocument.Parse(JsonSerializer.Serialize(node, Web)).RootElement.ToString());
+    }
+
+    [Theory]
+    [InlineData("""{"k":"bool","v":"yes"}""")]
+    [InlineData("""{"k":"bool"}""")]
+    [InlineData("""{"k":"in","arg":{"k":"null"},"list":{"k":"num","v":1}}""")]
+    [InlineData("""{"k":"in","arg":{"k":"null"}}""")]
+    public void A_malformed_bool_or_in_node_is_a_JsonException(string wire) =>
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<ExprNode>(wire, Web));
+
+    [Fact]
     public void An_aggregate_may_carry_a_fraction_p_and_it_round_trips()
     {
         var node = JsonSerializer.Deserialize<ExprNode>("""{"k":"agg","fn":"percentile","arg":{"k":"num","v":1},"p":0.9}""", Web);

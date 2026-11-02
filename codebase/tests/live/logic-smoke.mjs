@@ -1,4 +1,4 @@
-// Live smoke for calculated-field logic functions (IF/IIF/CASE/IFNULL/ISNULL/ZN, comparisons, text literals): the dev app (APP_URL, default http://localhost:5188) against a real
+// Live smoke for calculated-field logic functions (IF/IIF/CASE/IFNULL/ISNULL/ZN, TRUE/FALSE/NULL, IN, BETWEEN, comparisons, text literals): the dev app (APP_URL, default http://localhost:5188) against a real
 // ClickHouse. Creates its fixture tables in test_cj (bk_logic) straight over HTTPS — never through the
 // app, which stays read-only — and drops them in `finally`. Every expectation beyond the pinned core values
 // comes from an independent oracle: a hand computation (see the table comment below).
@@ -54,6 +54,7 @@ const kase = (whens, els) => (els === undefined ? { k: 'case', whens } : { k: 'c
 const iff = (c, t, e) => kase([when(c, t)], e);
 const ifnull = (l, r) => ({ k: 'ifnull', l, r });
 const isnull = (arg) => ({ k: 'isnull', arg });
+const inList = (arg, list) => ({ k: 'in', arg, list });
 const agg = (fn, arg) => ({ k: 'agg', fn, arg });
 const bin = (op, l, r) => ({ k: 'bin', op, l, r });
 const calcDim = (label, calc) => ({ db: DB, table: TBL, column: label, calc });
@@ -172,6 +173,70 @@ async function main() {
     const n = await query({ ...base(), rowDimensions: [calcDim('n', { k: 'not', arg: c })], measures: [countRows] }, 'not');
     expectMap(n, { true: 5, false: 2, null: 1 }, 'NOT');
     ok('three-valued AND / NOT: true 2 / false 5 / NULL 1 and its negation 5 / 2 / 1');
+  }
+  { // IN over numbers and text: a NULL value is NULL (not false)
+    const r = await query({ ...base(), rowDimensions: [calcDim('i', inList(score, [num(10), num(20)]))], measures: [countRows] }, 'in num');
+    expectMap(r, { true: 4, false: 2, null: 2 }, 'IN numbers');
+    const t = await query({ ...base(), rowDimensions: [calcDim('i', inList(f('label'), [str('x'), str('y')]))], measures: [countRows] }, 'in text');
+    expectMap(t, { true: 4, false: 2, null: 2 }, 'IN text');
+    const n = await query({ ...base(), rowDimensions: [calcDim('i', { k: 'not', arg: inList(f('label'), [str('x'), str('y')]) })], measures: [countRows] }, 'not in');
+    expectMap(n, { true: 2, false: 4, null: 2 }, 'NOT IN');
+    ok('IN (10, 20): true 4 / false 2 / NULL 2; label IN (x, y): true 4 / false 2 / NULL 2; NOT IN flips it, NULL stays NULL');
+  }
+  { // a negated number is a list value
+    const r = await query({ ...base(), rowDimensions: [calcDim('i', inList(score, [{ k: 'un', op: '-', arg: num(3) }, num(5)]))], measures: [countRows] }, 'in negative');
+    expectMap(r, { true: 1, false: 5, null: 2 }, 'IN (-3, 5)');
+    ok('score IN (-3, 5): true 1 / false 5 / NULL 2');
+  }
+  { // quote-bearing and injection-shaped values are bound data
+    const r = await query({ ...base(), rowDimensions: [calcDim('i', inList(f('label'), [str("it's"), str("x'); DROP TABLE bk_logic; --")]))], measures: [countRows] }, 'in inject');
+    expectMap(r, { true: 1, false: 5, null: 2 }, 'IN quote');
+    assert.equal(Number((await ch(`SELECT count() FROM ${T}`))[0][0]), 8);
+    ok("IN ('it''s', an injection-shaped text): true 1 / false 5 / NULL 2 and the table is intact");
+  }
+  { // BETWEEN is x >= a AND x <= b (ends included)
+    const c = { k: 'logic', op: 'and', l: cmp('>=', score, num(5)), r: cmp('<=', score, num(10)) };
+    const r = await query({ ...base(), rowDimensions: [calcDim('b', c)], measures: [countRows] }, 'between');
+    expectMap(r, { true: 2, false: 4, null: 2 }, 'BETWEEN');
+    ok('score BETWEEN 5 AND 10 (ends included): true 2 / false 4 / NULL 2');
+  }
+  { // an aggregate IN
+    const r = await query({ ...base(), rowDimensions: [{ db: DB, table: TBL, column: 'grp' }], measures: [calcMeas('hit', inList(agg('sum', score), [num(30), num(25)]))] }, 'agg in');
+    const m = keyed(r);
+    assert.deepEqual([m.A[0], m.B[0], m.C[0]].map(String), ['true', 'true', 'false']);
+    ok('SUM(score) IN (30, 25) by group = true / true / false (21)');
+  }
+  { // TRUE / FALSE / NULL literals
+    const flag = await query({ ...base(), rowDimensions: [calcDim('t', iff(f('flag'), { k: 'bool', v: true }, { k: 'bool', v: false }))], measures: [countRows] }, 'bool lit');
+    expectMap(flag, { true: 4, false: 4 }, 'IF(flag, TRUE, FALSE)');
+    const tn = await query({ ...base(), rowDimensions: [calcDim('t', iff(cmp('>', score, num(15)), { k: 'bool', v: true }, { k: 'null' }))], measures: [countRows] }, 'true/null');
+    expectMap(tn, { true: 3, null: 5 }, 'IF(.., TRUE, NULL)');
+    const tx = await query({ ...base(), rowDimensions: [calcDim('t', iff(cmp('>', score, num(15)), str('high'), { k: 'null' }))], measures: [countRows] }, 'text null');
+    expectMap(tx, { high: 3, null: 5 }, "IF(.., 'high', NULL)");
+    const nu = await query({ ...base(), rowDimensions: [calcDim('t', iff(cmp('>', score, num(15)), { k: 'null' }, num(1)))], measures: [countRows] }, 'null first');
+    expectMap(nu, { 1: 5, null: 3 }, 'IF(.., NULL, 1)');
+    const ifn = await query({ ...base(), rowDimensions: [calcDim('t', ifnull({ k: 'null' }, f('label')))], measures: [countRows] }, 'ifnull null');
+    expectMap(ifn, { x: 3, y: 1, z: 1, null: 2, "it's": 1 }, 'IFNULL(NULL, label)');
+    ok('IF(flag, TRUE, FALSE) true 4 / false 4; a boolean, text, number and IFNULL NULL branch all run with the other branch\'s type and NULL groups as expected');
+  }
+  { // limits and shape: 400 with the node path
+    const list = (n) => Array.from({ length: n }, (_, i) => num(i));
+    const many = await app('POST', '/api/query', { ...base(), rowDimensions: [calcDim('x', inList(score, list(51)))], measures: [countRows] });
+    assert.equal(many.status, 400);
+    assert.match(many.json.error, /IN takes 1 to 50 values\./);
+    assert.equal(many.json.field, 'rowDimensions[0].calc.list');
+    await query({ ...base(), rowDimensions: [calcDim('x', inList(score, list(50)))], measures: [countRows] }, '50 values');
+    const fieldVal = await app('POST', '/api/query', { ...base(), rowDimensions: [calcDim('x', inList(score, [num(1), f('id')]))], measures: [countRows] });
+    assert.equal(fieldVal.status, 400);
+    assert.match(fieldVal.json.error, /IN's values must be numbers or text written in the formula\./);
+    assert.equal(fieldVal.json.field, 'rowDimensions[0].calc.list.1');
+    const bare = await app('POST', '/api/query', { ...base(), rowDimensions: [calcDim('x', { k: 'null' })], measures: [countRows] });
+    assert.equal(bare.status, 400);
+    assert.match(bare.json.error, /NULL needs another value to take its type from/);
+    const eq = await app('POST', '/api/query', { ...base(), rowDimensions: [calcDim('x', cmp('=', score, { k: 'null' }))], measures: [countRows] });
+    assert.equal(eq.status, 400);
+    assert.match(eq.json.error, /Comparison with NULL never matches/);
+    ok('51 IN values, a field in the list, a bare NULL and = NULL are 400s with a path; 50 values runs');
   }
   { // type error and limit come back as a 400 with the node path
     const bad = await app('POST', '/api/query', { ...base(), rowDimensions: [calcDim('x', iff(score, num(1), num(0)))], measures: [countRows] });

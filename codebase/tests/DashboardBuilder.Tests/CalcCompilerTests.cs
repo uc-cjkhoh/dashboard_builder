@@ -164,6 +164,27 @@ public class CalcCompilerTests
     }
 
     [Fact]
+    public void Boolean_and_NULL_literals_are_fixed_keywords_not_user_text()
+    {
+        var (sql, ps) = Compile(new CaseNode([new WhenArm(new BoolNode(true), new NullNode())], new StrNode("x")));
+        Assert.Equal("if(true, NULL, {c0p0:String})", sql);
+        Assert.Single(ps);
+        Assert.Equal("false", Compile(new BoolNode(false)).Sql);
+    }
+
+    [Fact]
+    public void IN_binds_every_value_and_keeps_source_order()
+    {
+        var (sql, ps) = Compile(new InNode(F("qty"), [new NumNode(1), new NumNode(2)]));
+        Assert.Equal("(toFloat64(t0.`qty`) IN ({c0p0:Float64}, {c0p1:Float64}))", sql);
+        Assert.Equal(new[] { ("c0p0", "Float64", (object)1d), ("c0p1", "Float64", (object)2d) }, ps);
+        var (tsql, tps) = Compile(new InNode(F("status"), [new StrNode("a' OR 1=1 --")]));
+        Assert.Equal("(t0.`status` IN ({c0p0:String}))", tsql);
+        Assert.DoesNotContain("OR 1=1", tsql);
+        Assert.Equal("a' OR 1=1 --", tps[0].Value);
+    }
+
+    [Fact]
     public void IFNULL_and_ISNULL()
     {
         Assert.Equal("ifNull(toFloat64(t0.`amount`), {c0p0:Float64})", Compile(new IfNullNode(F("amount"), new NumNode(0))).Sql);

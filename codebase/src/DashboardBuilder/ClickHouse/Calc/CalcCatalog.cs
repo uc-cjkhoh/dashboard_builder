@@ -29,11 +29,15 @@ public static class CalcLimits
     public const int MaxConcat = 10;
     /// <summary>The largest whole number (either sign) a <c>DATEADD</c> amount may be.</summary>
     public const int MaxDateAmount = 100000;
+    /// <summary>The most values an <c>IN</c> list takes.</summary>
+    public const int MaxInList = 50;
 }
 
 /// <summary>The type of a calculation value.</summary>
 public static class CalcType
 {
+    /// <summary>The internal type of a <c>NULL</c> literal: it takes the type of the results beside it and is never a formula's answer.</summary>
+    internal const string Null = "null";
     public const string Number = "number";
     public const string Text = "text";
     public const string Date = "date";
