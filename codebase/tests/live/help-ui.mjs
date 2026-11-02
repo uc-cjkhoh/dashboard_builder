@@ -4,6 +4,7 @@
 //   cd src/DashboardBuilder && dotnet run --no-launch-profile --urls http://localhost:5180 ; stop it with fuser -k 5180/tcp)
 // Env: APP_URL, SHOTS_DIR (screenshot folder), CDP_PORT (default: a free port), CHROME_BIN.
 import { launch } from './cdp.mjs';
+import { NEW_CALC } from './model.mjs';
 import { writeFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -79,7 +80,7 @@ try {
   await ev(`document.querySelector('.tab-add').click(); document.querySelector('[data-new-tab=worksheet]').click()`);
   await waitFor(`!document.getElementById('worksheet-view').hidden`, 'worksheet open');
   await waitFor(`!!document.querySelector('.calc-group__new')`, 'field pane filled');
-  await ev(`document.querySelector('.calc-group__new').click()`);
+  await ev(NEW_CALC);
   await waitFor(`${dlg} !== null`, 'calc dialog open');
 
   await check('typing LO offers LOWER with its signature; choosing inserts LOWER(', async () => {

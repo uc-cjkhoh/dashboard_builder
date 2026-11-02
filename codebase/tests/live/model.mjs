@@ -13,3 +13,11 @@ export async function relateTables(ev, waitFor, [fromTable, fromColumn, toTable,
   await ev(`[...document.querySelectorAll('dialog[open] .card-choice')].find((x) => x.textContent === ${J(cardinality)}).click()`);
   await waitFor(`document.querySelector('.rel-badge') !== null && document.querySelector('dialog[open] .card-choice') === null`, 'relationship drawn');
 }
+
+/** Browser expression: open the sidebar's Calculated fields manager (if it is not open) and press its "New calculated field" button.
+ *  Calculated chips live in that dialog, not in the field pane, so checks look for them in `CHIP_SCOPE` below. */
+export const NEW_CALC = `(() => { if (!document.querySelector('dialog.calc-manager[open]')) document.querySelector('button[aria-label="Calculated fields"]').click();
+  [...document.querySelectorAll('dialog.calc-manager[open] .dialog__foot button')].find((x) => /New calculated field/.test(x.textContent)).click(); return true; })()`;
+
+/** CSS selector for every field chip a check can reach: the field pane plus the open Calculated fields manager. */
+export const CHIP_SCOPE = '#ws-fields .ws-field, dialog.calc-manager[open] .ws-field';
