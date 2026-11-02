@@ -79,7 +79,7 @@ try {
   await waitFor(`document.querySelectorAll('.entity').length === 1 && [...document.querySelectorAll('.entity__status')].every((s) => s.hidden)`, 'orders loaded');
   await ev(`document.querySelector('.tab-add').click(); document.querySelector('[data-new-tab=worksheet]').click()`);
   await waitFor(`!document.getElementById('worksheet-view').hidden`, 'worksheet open');
-  await waitFor(`!!document.querySelector('.calc-group__new')`, 'field pane filled');
+  await waitFor(`!!document.querySelector('button[aria-label="Calculated fields"]')`, 'field pane filled');
   await ev(NEW_CALC);
   await waitFor(`${dlg} !== null`, 'calc dialog open');
 

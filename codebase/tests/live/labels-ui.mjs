@@ -4,6 +4,7 @@
 // Run:  node tests/live/labels-ui.mjs   (start the app first: cd src/DashboardBuilder && dotnet run --no-launch-profile --urls http://localhost:5203)
 // Env: APP_URL, SHOTS_DIR (screenshot folder), CDP_PORT, CHROME_BIN.
 import { launch } from './cdp.mjs';
+import { CALC_NAMES, PAGE_CHIP } from './model.mjs';
 import { mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -213,7 +214,7 @@ try {
     await b.screenshot(join(SHOTS, 'group-dialog-light.png'));
     await ev(`${dlgBtn('dialog.grp-dialog', 'Save')}.click()`);
     await waitFor(`!document.querySelector('dialog.grp-dialog')`, 'dialog closed');
-    await waitFor(`[...document.querySelectorAll('#ws-fields .ws-field')].some((c) => c.querySelector('.ws-field__name')?.textContent === 'region (groups)')`, 'group field in the pane');
+    await waitFor(`${CALC_NAMES}.includes('region (groups)')`, 'group field in the pane');
   });
 
   await check('using the group field: the request carries the CASE tree with bound string literals; the chart shows the group names', async () => {
@@ -232,7 +233,7 @@ try {
   });
 
   await check('a remainder label: ungrouped members are labelled "Other", NULL is not; request tree has the extra WHEN', async () => {
-    await ev(`(() => { const c = [...document.querySelectorAll('#ws-fields .calc-field')].find((x) => x.querySelector('.ws-field__name')?.textContent === 'region (groups)'); c.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 40 })); [...document.querySelectorAll('.ctx-menu .menu__item')].find((x) => x.textContent.trim() === 'Edit…').click(); return true; })()`);
+    await ev(`(() => { const c = (${PAGE_CHIP})('region (groups)'); c.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 40 })); [...document.querySelectorAll('.ctx-menu .menu__item')].find((x) => x.textContent.trim() === 'Edit…').click(); return true; })()`);
     await waitFor(`!!document.querySelector('dialog.grp-dialog[open]') && document.querySelectorAll('.grp-member').length === 4`, 'edit dialog');
     must(await ev(`document.querySelector('.grp-other input[type=text]').disabled`), 'label input off until ticked');
     await ev(`document.querySelector('.grp-other input[type=checkbox]').click()`);
@@ -251,7 +252,7 @@ try {
   });
 
   await check('editing a group field reopens the dialog with the groups filled in', async () => {
-    await ev(`(() => { const c = [...document.querySelectorAll('#ws-fields .calc-field')].find((x) => x.querySelector('.ws-field__name')?.textContent === 'region (groups)'); c.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 40 })); [...document.querySelectorAll('.ctx-menu .menu__item')].find((x) => x.textContent.trim() === 'Edit…').click(); return true; })()`);
+    await ev(`(() => { const c = (${PAGE_CHIP})('region (groups)'); c.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 40 })); [...document.querySelectorAll('.ctx-menu .menu__item')].find((x) => x.textContent.trim() === 'Edit…').click(); return true; })()`);
     await waitFor(`!!document.querySelector('dialog.grp-dialog[open]') && document.querySelectorAll('.grp-member').length === 4`, 'edit dialog');
     must(await ev(`document.querySelector('.grp-group__name').value === 'Asia & Europe'`), 'group name restored');
     must(await ev(`[...document.querySelectorAll('.grp-member__select')].map((s) => s.selectedOptions[0].textContent).join('|') === 'Asia & Europe|Asia & Europe|(not grouped)|(not grouped)'`), 'assignments restored');

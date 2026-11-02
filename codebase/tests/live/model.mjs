@@ -40,3 +40,8 @@ export const PAGE_CHIP = `(name) => {
 export const CALC_LIST_TEXT = `(() => { let d = document.querySelector('dialog.calc-manager[open]'); const opened = !d;
   if (opened) { document.querySelector('button[aria-label="Calculated fields"]').click(); d = document.querySelector('dialog.calc-manager[open]'); }
   const t = d.textContent; if (opened) [...d.querySelectorAll('.dialog__foot button')].find((x) => x.textContent === 'Done').click(); return t; })()`;
+
+/** Browser expression: the names of every calculated field, read from the Calculated fields manager (opened and closed again if it was shut). */
+export const CALC_NAMES = `(() => { let d = document.querySelector('dialog.calc-manager[open]'); const opened = !d;
+  if (opened) { document.querySelector('button[aria-label="Calculated fields"]').click(); d = document.querySelector('dialog.calc-manager[open]'); }
+  const n = [...d.querySelectorAll('.calc-manager__row .ws-field__name')].map((x) => x.textContent); if (opened) [...d.querySelectorAll('.dialog__foot button')].find((x) => x.textContent === 'Done').click(); return n; })()`;

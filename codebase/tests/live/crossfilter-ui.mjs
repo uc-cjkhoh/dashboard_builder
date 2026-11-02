@@ -5,6 +5,7 @@
 // keeps its own latest-wins. Real dev app (APP_URL, default http://localhost:5193) in headless Chromium, every /api/* call
 // mocked; any page error fails the run. Screenshots (light + dark) go to SHOTS_DIR.
 import { launch } from './cdp.mjs';
+import { relateTables } from './model.mjs';
 import { mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -96,6 +97,7 @@ try {
   await waitFor(`document.querySelectorAll('.table-chip').length === 2`, 'tables listed');
   for (const t of ['orders', 'stock']) await ev(`document.dispatchEvent(new CustomEvent('table:add', { detail: { db: 'shop', table: ${J(t)} } }))`);
   await waitFor(`document.querySelectorAll('.entity').length === 2 && [...document.querySelectorAll('.entity__status')].every((s) => s.hidden)`, 'tables loaded');
+  await relateTables(ev, waitFor, ['orders', 'region', 'stock', 'sku']); // an unrelated table is held out of worksheets
   await store(`
     const f = (table, column, category, extra = {}) => ({ db: 'shop', table, column, category, ...extra });
     const mk = (name, chartType, table, dim, meas) => { const t = st.createWorksheet(name); t.sheet = { ...st.emptySheet(), chartType, columns: [f(table, dim, 'text')], rows: [f(table, meas, 'numeric', { agg: 'sum' })] }; return t; };
