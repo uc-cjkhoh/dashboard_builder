@@ -29,10 +29,13 @@ export const FUNCTIONS = Object.freeze({
 /** The units DATEDIFF and DATEADD take, written as a text literal (any case). Twin of CalcCatalog.DateUnits. */
 export const DATE_UNITS = Object.freeze(["year", "quarter", "month", "week", "day", "hour", "minute", "second"]);
 
+/** The parts DATENAME takes, written as a text literal (any case): the name is always English. Twin of CalcCatalog.DateNameParts. */
+export const DATE_NAME_PARTS = Object.freeze(["weekday", "month"]);
+
 /** The row-level text and date functions (wire node `{ k: "fn", fn, args }`). `args` are kinds in order: `text` (any text expression),
  *  `length` (a whole-number literal 0..count), `position` (a whole-number literal 1..count), `separator` (a non-empty text
  *  literal, at most `separator` characters); the date kinds: `date` (a date expression), `unit` (a DATE_UNITS text literal),
- *  `amount` (a whole-number literal, either sign, at most `dateAmount`); `value` (a number, date or text expression). `max` above `args.length` repeats the last kind (CONCAT). Twin of CalcCatalog.RowFunctions. */
+ *  `amount` (a whole-number literal, either sign, at most `dateAmount`); `part` (a DATE_NAME_PARTS text literal); `number` (any number expression); `value` (a number, date or text expression). `max` above `args.length` repeats the last kind (CONCAT). Twin of CalcCatalog.RowFunctions. */
 export const ROW_FUNCTIONS = Object.freeze({
   lower: { args: ["text"], result: "text" },
   upper: { args: ["text"], result: "text" },
@@ -63,6 +66,10 @@ export const ROW_FUNCTIONS = Object.freeze({
   week: { args: ["date"], result: "number" },
   weekday: { args: ["date"], result: "number" },
   date: { args: ["text"], result: "date" },
+  isoyear: { args: ["date"], result: "number" },
+  datename: { args: ["part", "date"], result: "text" },
+  datetrunc: { args: ["unit", "date"], result: "date" },
+  makedate: { args: ["number", "number", "number"], result: "date" },
 });
 
 // Catalog category (ClickHouseType) -> calculation type; any other category can't be used.
@@ -254,6 +261,12 @@ function typeOf(node, path, categoryOf) {
           if (a.k !== "str" || !DATE_UNITS.includes(a.v.toLowerCase())) {
             throw new CalcError(`${upper}'s unit must be one of ${DATE_UNITS.slice(0, -1).map((u) => `'${u}'`).join(", ")} or '${DATE_UNITS[DATE_UNITS.length - 1]}' written in the formula as text.`, ap);
           }
+        } else if (kind === "part") {
+          if (a.k !== "str" || !DATE_NAME_PARTS.includes(a.v.toLowerCase())) {
+            throw new CalcError(`${upper}'s part must be ${DATE_NAME_PARTS.map((u) => `'${u}'`).join(" or ")} written in the formula as text.`, ap);
+          }
+        } else if (kind === "number") {
+          if (t.type !== "number") throw new CalcError(`${upper} needs a number — ${t.name} is ${t.type}.`, ap);
         } else if (kind === "amount") {
           const lit = a.k === "un" && a.op === "-" && isNode(a.arg) && a.arg.k === "num" ? -a.arg.v : a.k === "num" ? a.v : NaN;
           if (!Number.isInteger(lit) || Math.abs(lit) > CALC_LIMITS.dateAmount) {
