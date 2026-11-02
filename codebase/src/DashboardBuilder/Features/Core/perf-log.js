@@ -24,7 +24,7 @@ export function rowCountOf(result) {
 export function createPerfLog({ capacity = DEFAULT_CAPACITY, now = Date.now } = {}) {
   let list = [];
   const subs = new Set();
-  const notify = () => { for (const fn of subs) fn(); };
+  const notify = () => { for (const fn of subs) { try { fn(); } catch { /* a listener must never break recording */ } } };
   const push = (entry) => { list.push(entry); if (list.length > capacity) list = list.slice(list.length - capacity); };
   return {
     /** Record one entry. Only the whitelisted fields are kept; everything else is ignored. */

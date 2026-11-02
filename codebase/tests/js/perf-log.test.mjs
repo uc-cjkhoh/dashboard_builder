@@ -25,7 +25,7 @@ test("unknown kinds and bad numbers are normalised", () => {
   assert.equal(e.renderMs, null);
 });
 
-test("attachRender adds render ms to the latest entry of that kind", () => {
+test("attachRender adds render ms to the newest entry, then falls back to a render-only entry", () => {
   const log = createPerfLog();
   log.record({ kind: "query", ms: 5 });
   log.attachRender(33.6);
@@ -64,7 +64,7 @@ test("queryKindOf reads the request-key prefix; rowCountOf handles result shapes
   assert.equal(rowCountOf(null), null);
 });
 
-test("formatPerfText gives a header, a summary and one line per entry", () => {
+test("formatPerfText gives a header and one line per entry; an empty log says so", () => {
   const log = createPerfLog({ now: () => Date.UTC(2026, 0, 2, 3, 4, 5) });
   log.record({ kind: "query", ms: 120, rows: 9, cached: false });
   log.record({ kind: "query", ms: 0, rows: 9, cached: true });
@@ -76,4 +76,14 @@ test("formatPerfText gives a header, a summary and one line per entry", () => {
   assert.match(lines[1], /\tquery\t120\t9\tmiss\t$/);
   assert.match(lines[2], /\tquery\t0\t9\thit\t15$/);
   assert.equal(formatPerfText([]), "No timings recorded.");
+});
+
+test("a throwing subscriber never breaks recording or other subscribers", () => {
+  const log = createPerfLog();
+  let ok = 0;
+  log.subscribe(() => { throw new Error("boom"); });
+  log.subscribe(() => ok++);
+  assert.doesNotThrow(() => log.record({ kind: "query", ms: 1 }));
+  assert.doesNotThrow(() => log.clear());
+  assert.equal(ok, 2);
 });

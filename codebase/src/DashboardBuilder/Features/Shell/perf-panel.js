@@ -15,6 +15,7 @@ function summaryOf(entries) {
 }
 
 function fill(body, summary) {
+  const top = body.scrollTop;
   const entries = perfLog.entries().reverse();
   summary.textContent = summaryOf(entries);
   if (!entries.length) {
@@ -34,6 +35,7 @@ function fill(body, summary) {
   }
   table.append(thead, tbody);
   body.replaceChildren(table);
+  body.scrollTop = top;
 }
 
 export function initPerfPanel() {
