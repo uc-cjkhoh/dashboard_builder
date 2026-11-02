@@ -102,11 +102,19 @@ try {
   await check('Previous / Next move one step, disable at the ends, and the stage follows (queries run for the worksheet shown)', async () => {
     const nextBtn = `document.querySelector('#story-nav .btn--primary')`, prevBtn = `document.querySelector('#story-nav .btn:not(.btn--primary)')`;
     must(await ev(`${nextBtn}.disabled && !${prevBtn}.disabled`), 'Next not disabled on the last step');
-    await ev(`${prevBtn}.click()`);
+    const active = `(document.activeElement.textContent.trim() + '|' + document.activeElement.disabled)`;
+    await ev(`${prevBtn}.focus(); ${prevBtn}.click()`);
     must(await selected() === 1 && /Share by channel/.test(await stepTitle()), 'Previous');
+    must(await ev(active) === 'Previous|false', `focus after Previous: ${await ev(active)}`);
     await waitFor(`!!document.querySelector('#story-stage .ws-chart-canvas')`, 'pie stage');
-    await ev(`${prevBtn}.click()`);
+    await ev(`${prevBtn}.focus(); ${prevBtn}.click()`);
     must(await selected() === 0 && await ev(`${prevBtn}.disabled`), 'first step: Previous enabled');
+    must(await ev(active) === 'Next|false', `focus after reaching the first step: ${await ev(active)}`);
+    await ev(`${nextBtn}.focus(); ${nextBtn}.click()`);
+    must(await selected() === 1 && await ev(active) === 'Next|false', `focus after Next: ${await ev(active)}`);
+    await ev(`${nextBtn}.focus(); ${nextBtn}.click()`);
+    must(await selected() === 2 && await ev(active) === 'Previous|false', `focus after reaching the last step: ${await ev(active)}`);
+    await ev(`${prevBtn}.click(); ${prevBtn}.click()`);
     must(await captionText() === 'Revenue is led by APAC.', 'caption of step 1');
     must(await ev(`${prevBtn}.getAttribute('aria-label') === 'Previous step' && ${nextBtn}.getAttribute('aria-label') === 'Next step'`), 'labels');
     must(await ev(`document.querySelector('#story-nav .story-nav__pos').textContent === '1 / 3'`), 'position text');
@@ -115,8 +123,9 @@ try {
 
   await check('the step strip is a tablist: click selects; arrows, Home and End move; focus is roving', async () => {
     must(await ev(`document.getElementById('story-strip').getAttribute('role') === 'tablist'`), 'role');
-    await click('#story-strip .story-chip:nth-child(3)');
+    await ev(`document.querySelector('#story-strip .story-chip:nth-child(3)').focus(); document.querySelector('#story-strip .story-chip:nth-child(3)').click()`);
     must(await selected() === 2, 'click');
+    must(await ev(`document.activeElement.classList.contains('story-chip') && document.activeElement.getAttribute('aria-selected') === 'true'`), 'focus lost after a chip click');
     await ev(`document.querySelector('#story-strip [aria-selected=true]').focus()`);
     await b.key('ArrowLeft', { vk: 37 });
     must(await selected() === 1 && await ev(`document.activeElement.getAttribute('aria-selected') === 'true'`), 'ArrowLeft / focus follows');
@@ -138,8 +147,14 @@ try {
     must(J(await chips()) === J(['Step 1 of 3: Web carries the channel mix.', 'Step 2 of 3: Revenue is led by APAC.', 'Step 3 of 3: Overview']), J(await chips()));
     must(await selected() === 1, 'moved step not current');
     must(await ev(`document.activeElement.getAttribute('aria-label') === 'Move step 2 later'`), `focus ${await ev('document.activeElement.getAttribute("aria-label")')}`);
-    await click('[aria-label="Move step 2 earlier"]');
+    await ev(`document.querySelector('[aria-label="Move step 2 earlier"]').focus(); document.querySelector('[aria-label="Move step 2 earlier"]').click()`);
     must((await chips())[0].includes('Revenue'), 'moved back');
+    must(await ev(`document.activeElement.getAttribute('aria-label') === 'Move step 1 later' && !document.activeElement.disabled`), `focus after Move earlier to position 1: ${await ev('document.activeElement.getAttribute("aria-label") + "|" + document.activeElement.disabled')}`);
+    await ev(`document.querySelector('[aria-label="Move step 1 later"]').click(); document.querySelector('[aria-label="Move step 2 later"]').focus(); document.querySelector('[aria-label="Move step 2 later"]').click()`);
+    must(await selected() === 2, 'moved to last');
+    must(await ev(`document.activeElement.getAttribute('aria-label') === 'Move step 3 earlier' && !document.activeElement.disabled`), `focus after Move later to last: ${await ev('document.activeElement.getAttribute("aria-label") + "|" + document.activeElement.disabled')}`);
+    await ev(`document.querySelector('[aria-label="Move step 3 earlier"]').click(); document.querySelector('[aria-label="Move step 2 earlier"]').click()`);
+    must((await chips())[0].includes('Revenue'), 'order restored');
     must(await store(`return J(st.activeStory().steps.map((s) => s.caption));`.replace('J(', 'JSON.stringify(')) === J(['Revenue is led by APAC.', 'Web carries the channel mix.', '']), 'store order');
   });
 
@@ -151,6 +166,9 @@ try {
     await ev(`(() => { const t = document.querySelector('#story-caption textarea'); t.maxLength = 1000; t.value = 'x'.repeat(301); t.dispatchEvent(new Event('input')); document.querySelector('#story-caption form').requestSubmit(); return true; })()`);
     must(/300/.test(await ev(`document.querySelector('.story-edit__error').textContent`)) && await ev(`document.querySelector('#story-caption textarea').getAttribute('aria-invalid') === 'true'`), 'no limit error');
     must(await store(`return st.activeStory().steps[0].caption === 'Revenue is led by APAC.';`), 'an over-long caption was stored or cut');
+    await ev(`(() => { const t = document.querySelector('#story-caption textarea'); t.value = 'half typed'; t.dispatchEvent(new Event('input')); return true; })()`);
+    await store(`st.renameTab(st.tabs.find((t) => t.kind === 'worksheet').id, 'Revenue by region'); st.emit('tabs:changed'); return true;`);
+    must(await ev(`document.querySelector('#story-caption textarea')?.value`) === 'half typed', 'a redraw dropped the typed caption');
     await b.key('Escape', { vk: 27 });
     await waitFor(`!document.querySelector('#story-caption textarea')`, 'Esc closes');
     must(await captionText() === 'Revenue is led by APAC.', 'caption changed by Cancel');
@@ -205,6 +223,18 @@ try {
     await waitFor(`!document.getElementById('story-view').hidden`, 'story shown again');
   });
 
+  await check('closing a worksheet used only by a story names the story in the confirm', async () => {
+    await store(`const w = st.createWorksheet('Only here'); const s = st.stories()[0]; st.setSteps(s.id, [...s.steps, { caption: 'x', target: w.id }]); window.__only = w.id; return true;`);
+    await ev(`document.querySelector('.tab__close[aria-label="Close Only here"]').click()`);
+    await waitFor(`!!document.querySelector('dialog[open]')`, 'confirm dialog');
+    const msg = await ev(`document.querySelector('dialog[open] .dialog__body').textContent`);
+    must(/Its steps will be removed from the story: Story 1/.test(msg), `confirm text: ${msg}`);
+    await ev(`[...document.querySelectorAll('dialog[open] button')].find((x) => x.textContent.trim() === 'Close').click()`);
+    await waitFor(`!document.querySelector('dialog[open]')`, 'confirmed');
+    await store(`st.switchTab(st.stories()[0].id); return true;`);
+    await waitFor(`document.querySelectorAll('#story-strip .story-chip').length === 2`, 'step removed with the worksheet');
+  });
+
   await check('fixed shell: the page never scrolls, the story panel fits the viewport (the stage scrolls inside)', async () => {
     const m = await ev(`({ doc: document.documentElement.scrollHeight - document.documentElement.clientHeight, body: document.body.scrollHeight - innerHeight,
       view: document.getElementById('story-nav').getBoundingClientRect().bottom <= innerHeight && document.getElementById('story-view').scrollHeight <= document.getElementById('story-view').clientHeight + 1 })`);
@@ -228,11 +258,15 @@ try {
 
   await check('print: only the current step (caption + chart) remains; controls are hidden', async () => {
     await b.send('Emulation.setEmulatedMedia', { media: 'print' });
-    await b.sleep(300);
+    await ev(`window.dispatchEvent(new Event('beforeprint'))`);
+    await b.sleep(500);
     const p = await ev(`(() => { const vis = (sel) => { const e = document.querySelector(sel); return !!e && getComputedStyle(e).display !== 'none' && e.getClientRects().length > 0; };
       return { caption: vis('#story-caption'), stage: vis('#story-stage'), strip: vis('#story-strip'), nav: vis('#story-nav'), add: vis('#story-add'), side: vis('.sidebar'), tools: vis('#story-step-tools') }; })()`);
+    const canvas = await ev(`(() => { const c = document.querySelector('#story-stage .ws-chart-canvas'); const r = c.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; })()`);
     await shot('story-print.png');
+    await ev(`window.dispatchEvent(new Event('afterprint'))`);
     await b.send('Emulation.setEmulatedMedia', { media: 'screen' });
+    must(canvas.w === 1000 && canvas.h === 560, `print chart box ${J(canvas)}`);
     must(p.caption && p.stage && !p.strip && !p.nav && !p.add && !p.side && !p.tools, `print visibility: ${J(p)}`);
   });
 

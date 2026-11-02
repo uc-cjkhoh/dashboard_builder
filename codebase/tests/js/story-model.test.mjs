@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   validateCaption, addStep, removeStep, moveStep, setCaption, goTo, dropTarget, offeredTargets, stepName,
-  savedSteps, cleanSteps, targetKind,
+  savedSteps, cleanSteps, targetKind, storiesUsing, refocusTarget,
 } from "../../src/DashboardBuilder/Features/Story/story-model.js";
 import { LIMITS } from "../../src/DashboardBuilder/Features/Core/validate.js";
 
@@ -121,4 +121,30 @@ test("cleanSteps: absent is empty; a non-list is reported; past the limit the re
   const many = Array.from({ length: 25 }, () => ({ caption: "c", target: { kind: "worksheet", index: 0 } }));
   assert.equal(cleanSteps(many, ctx, issues).length, 20);
   assert.match(issues[0], /first 20 steps/);
+});
+
+test("caption length is measured after trimming, on the UI path and on import", () => {
+  const padded = `${"x".repeat(295)}${" ".repeat(10)}`;
+  assert.equal(validateCaption(padded).ok, true);
+  assert.equal(validateCaption(padded).value.length, 295);
+  const issues = [];
+  const out = cleanSteps([{ caption: padded, target: { kind: "worksheet", index: 0 } }], { worksheetCount: 1, dashboardCount: 0, where: "S" }, issues);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].caption.length, 295);
+  assert.deepEqual(issues, []);
+  const long = cleanSteps([{ caption: `${"x".repeat(301)} `, target: { kind: "worksheet", index: 0 } }], { worksheetCount: 1, dashboardCount: 0, where: "S" }, []);
+  assert.equal(long.length, 0);
+});
+
+test("storiesUsing names the stories that show a tab", () => {
+  const tabs = [{ id: "ws#1", kind: "worksheet" }, { id: "st#1", kind: "story", name: "A", steps: [{ caption: "", target: "ws#1" }] }, { id: "st#2", kind: "story", name: "B", steps: [] }];
+  assert.deepEqual(storiesUsing(tabs, "ws#1").map((s) => s.name), ["A"]);
+  assert.deepEqual(storiesUsing(tabs, "zzz"), []);
+});
+
+test("refocusTarget keeps the same role, falling back to the enabled opposite", () => {
+  assert.equal(refocusTarget("earlier", { earlier: true, later: false }), "later");
+  assert.equal(refocusTarget("later", { earlier: false, later: true }), "earlier");
+  assert.equal(refocusTarget("later", { earlier: false, later: false }), "later");
+  assert.equal(refocusTarget("earlier", { earlier: false, later: false }), "earlier");
 });

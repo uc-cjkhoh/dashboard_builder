@@ -3,6 +3,7 @@ import {
   switchTab, renameTab, duplicateWorksheet, closeTab, worksheetHasContent, bus,
 } from "../Core/store.js";
 import { dashboardsUsing } from "../Board/board-model.js";
+import { storiesUsing } from "../Story/story-model.js";
 import { icon } from "../Core/icons.js";
 import { wireMenu } from "../Core/menu.js";
 import { confirmDialog, toast } from "../Core/ui.js";
@@ -153,26 +154,22 @@ export function initTabs() {
   }
 
   async function requestClose(tab) {
+    const inStories = tab.kind === "story" ? [] : storiesUsing(tabs, tab.id); // a closed worksheet or dashboard leaves the steps that showed it
+    const stepNote = inStories.length ? ` Its steps will be removed from ${inStories.length === 1 ? "the story" : "the stories"}: ${inStories.map((s) => s.name).join(", ")}.` : "";
+    const ask = async (message) => confirmDialog(message, { danger: true, confirmText: "Close" });
     if (tab.kind === "worksheet") {
       const users = dashboardsUsing(tabs, tab.id);
       if (users.length) {
-        const ok = await confirmDialog(
-          `Close the worksheet “${tab.name}”? Used on: ${users.map((d) => d.name).join(", ")}. It will be removed from ${users.length === 1 ? "that dashboard" : "those dashboards"}.`,
-          { danger: true, confirmText: "Close" },
-        );
-        if (!ok) return;
+        if (!(await ask(`Close the worksheet “${tab.name}”? Used on: ${users.map((d) => d.name).join(", ")}. It will be removed from ${users.length === 1 ? "that dashboard" : "those dashboards"}.${stepNote}`))) return;
+      } else if (inStories.length) {
+        if (!(await ask(`Close the worksheet “${tab.name}”?${stepNote}`))) return;
       } else if (worksheetHasContent(tab.id)) {
-        const ok = await confirmDialog(`Close the worksheet “${tab.name}”?`, { danger: true, confirmText: "Close" });
-        if (!ok) return;
+        if (!(await ask(`Close the worksheet “${tab.name}”?`))) return;
       }
     } else if (tab.kind === "story") {
-      if (tab.steps.length) {
-        const ok = await confirmDialog(`Close the story “${tab.name}”? The worksheets and dashboards it shows are not affected.`, { danger: true, confirmText: "Close" });
-        if (!ok) return;
-      }
-    } else if (tab.widgets.length) {
-      const ok = await confirmDialog(`Close the dashboard “${tab.name}”? The worksheets on it are not affected.`, { danger: true, confirmText: "Close" });
-      if (!ok) return;
+      if (tab.steps.length && !(await ask(`Close the story “${tab.name}”? The worksheets and dashboards it shows are not affected.`))) return;
+    } else if (tab.widgets.length || inStories.length) {
+      if (!(await ask(`Close the dashboard “${tab.name}”?${tab.widgets.length ? " The worksheets on it are not affected." : ""}${stepNote}`))) return;
     }
     closeTab(tab.id);
   }

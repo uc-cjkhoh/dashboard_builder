@@ -5,7 +5,8 @@ import { LIMITS } from "../Core/validate.js";
 import { createWorksheetView } from "../Dashboard/worksheet-view.js";
 import { planCtx, categoryOf, castOf, sharedResults } from "../Dashboard/dashboards.js";
 import { hint } from "../Dashboard/render-dom.js";
-import { addStep, removeStep, moveStep, setCaption, goTo, offeredTargets, targetKind, stepName } from "./story-model.js";
+import { sizeChart } from "../Dashboard/chart.js";
+import { addStep, removeStep, moveStep, setCaption, goTo, offeredTargets, targetKind, stepName, refocusTarget } from "./story-model.js";
 
 // The story tab's body. A story is an ordered list of steps; each step is a caption over a worksheet (drawn here, static: no
 // selection or drill) or a link to a dashboard tab. The step on screen is transient UI state (per story, in memory); the steps
@@ -119,7 +120,7 @@ export function initStory() {
       b.setAttribute("aria-label", `Step ${n + 1} of ${story.steps.length}: ${s.caption || stepName(tabs, s)}`);
       b.title = s.caption || stepName(tabs, s);
       b.append(h("span", "story-chip__n", String(n + 1)), h("span", "story-chip__text", s.caption || stepName(tabs, s)), icon(kind === "dashboard" ? "dashboard" : "chart-bar", { size: 14 }));
-      b.addEventListener("click", () => go(story, n));
+      b.addEventListener("click", () => go(story, n, "chip"));
       strip.append(b);
     });
   }
@@ -133,12 +134,15 @@ export function initStory() {
     strip.querySelector('[aria-selected="true"]')?.focus();
   });
 
-  function go(story, n) {
+  /** Show step `n`. `focus` = "chip" (a strip click) | "prev" | "next" (a nav button): keyboard focus ends on a live control, never on a destroyed or now-disabled one. */
+  function go(story, n, focus) {
     if (n === current(story) && !editing) return;
     editing = false;
     at.set(story.id, n);
     sync();
     status(`Step ${n + 1} of ${story.steps.length}.`);
+    if (focus === "chip") strip.querySelector('[aria-selected="true"]')?.focus();
+    else if (focus) { const want = focus === "prev" ? prevBtn : nextBtn, other = focus === "prev" ? nextBtn : prevBtn; (want.disabled ? other : want).focus(); }
   }
 
   // --- caption + step tools ---
@@ -146,15 +150,17 @@ export function initStory() {
     const step = story.steps[i];
     toggle(panel, Boolean(step));
     stepTools.replaceChildren();
-    if (!step) { stepTitle.textContent = ""; caption.replaceChildren(); destroyStage(); return; }
+    if (!step) { editing = false; stepTitle.textContent = ""; caption.replaceChildren(); destroyStage(); return; }
     panel.setAttribute("aria-labelledby", `story-tab-${i}`);
     stepTitle.textContent = `Step ${i + 1} of ${story.steps.length} · ${stepName(tabs, step)}`;
-    if (editing) paintEditor(story, i); else {
+    if (editing) { if (!caption.querySelector("form")) paintEditor(story, i); } // an open editor keeps what was typed through other redraws
+    else {
       caption.className = `story-step__caption${step.caption ? "" : " is-empty"}`;
       caption.replaceChildren(document.createTextNode(step.caption || "No caption."));
     }
-    const tool = (name, label, onClick, disabled = false) => {
+    const tool = (name, label, onClick, disabled = false, role = name) => {
       const b = makeButton("", "iconbtn story-step__btn");
+      b.dataset.tool = role;
       b.append(icon(name, { size: 16 }));
       b.title = label;
       b.setAttribute("aria-label", label);
@@ -165,12 +171,12 @@ export function initStory() {
     const edit = tool("edit", `Edit the caption of step ${i + 1}`, () => { editing = true; paintStep(story, i); caption.querySelector("textarea")?.focus(); });
     const earlier = tool("arrow-left", `Move step ${i + 1} earlier`, () => {
       const r = moveStep(story.steps, i, -1);
-      commit(story, r.steps, r.index); status(`Step moved to position ${r.index + 1}.`); focusTool(`Move step ${r.index + 1} earlier`);
-    }, i === 0);
+      commit(story, r.steps, r.index); status(`Step moved to position ${r.index + 1}.`); focusMoved("earlier");
+    }, i === 0, "earlier");
     const later = tool("arrow-right", `Move step ${i + 1} later`, () => {
       const r = moveStep(story.steps, i, 1);
-      commit(story, r.steps, r.index); status(`Step moved to position ${r.index + 1}.`); focusTool(`Move step ${r.index + 1} later`);
-    }, i === story.steps.length - 1);
+      commit(story, r.steps, r.index); status(`Step moved to position ${r.index + 1}.`); focusMoved("later");
+    }, i === story.steps.length - 1, "later");
     const remove = tool("close", `Remove step ${i + 1}`, () => {
       const steps = removeStep(story.steps, i);
       commit(story, steps, Math.min(i, steps.length - 1)); status(`Removed step ${i + 1}.`);
@@ -184,7 +190,12 @@ export function initStory() {
     stepTools.append(edit, earlier, later, remove, open);
     drawStage(story, step);
   }
-  const focusTool = (label) => panel.querySelector(`[aria-label="${label}"]`)?.focus();
+  /** After a move the tools were redrawn: focus the same role, or the enabled opposite when that end was reached. */
+  function focusMoved(role) {
+    const q = (r) => panel.querySelector(`[data-tool="${r}"]`);
+    const target = refocusTarget(role, { earlier: Boolean(q("earlier")?.disabled), later: Boolean(q("later")?.disabled) });
+    q(target)?.focus();
+  }
 
   function paintEditor(story, i) {
     const id = `se${++seq}`;
@@ -233,20 +244,20 @@ export function initStory() {
   }
 
   // --- Previous / Next ---
+  // The nav buttons are built once and updated in place, so keyboard focus is never lost to a redraw.
+  const prevBtn = makeButton("", "btn story-btn"), nextBtn = makeButton("", "btn btn--primary story-btn"), posEl = h("span", "story-nav__pos");
+  prevBtn.append(icon("arrow-left", { size: 14 }), document.createTextNode("Previous"));
+  nextBtn.append(document.createTextNode("Next"), icon("arrow-right", { size: 14 }));
+  prevBtn.setAttribute("aria-label", "Previous step");
+  nextBtn.setAttribute("aria-label", "Next step");
+  nav.append(prevBtn, posEl, nextBtn);
+  prevBtn.addEventListener("click", () => { const s = activeStory(); if (s) go(s, goTo(current(s), s.steps.length, "prev"), "prev"); });
+  nextBtn.addEventListener("click", () => { const s = activeStory(); if (s) go(s, goTo(current(s), s.steps.length, "next"), "next"); });
   function paintNav(story, i) {
-    nav.replaceChildren();
     toggle(nav, story.steps.length > 0);
-    const prev = makeButton("", "btn story-btn"), next = makeButton("", "btn btn--primary story-btn");
-    prev.append(icon("arrow-left", { size: 14 }), document.createTextNode("Previous"));
-    next.append(document.createTextNode("Next"), icon("arrow-right", { size: 14 }));
-    prev.setAttribute("aria-label", "Previous step");
-    next.setAttribute("aria-label", "Next step");
-    prev.disabled = i === 0;
-    next.disabled = i === story.steps.length - 1;
-    prev.addEventListener("click", () => go(story, goTo(i, story.steps.length, "prev")));
-    next.addEventListener("click", () => go(story, goTo(i, story.steps.length, "next")));
-    const pos = h("span", "story-nav__pos", `${i + 1} / ${story.steps.length}`);
-    nav.append(prev, pos, next);
+    prevBtn.disabled = i === 0;
+    nextBtn.disabled = i === story.steps.length - 1;
+    posEl.textContent = `${i + 1} / ${story.steps.length}`;
   }
 
   function sync() {
@@ -268,6 +279,9 @@ export function initStory() {
   for (const type of ["view:changed", "tabs:changed", "story:changed"]) bus.addEventListener(type, sync);
   // A worksheet edit re-runs the stage when it shows that worksheet; colours are read at render time, so a light / dark or theme flip redraws it.
   bus.addEventListener("worksheet:changed", (ev) => { const s = activeStory(); if (s && stageView && stageKey?.endsWith(`|${ev.detail?.id}`)) stageView.run(); });
+  // After a reload the stage may show a hint before its tables' columns arrive: it runs again once they do (as dashboard widgets do).
+  let columnsTimer = 0;
+  bus.addEventListener("entity:loaded", () => { clearTimeout(columnsTimer); columnsTimer = setTimeout(() => { if (activeStory() && stage.querySelector(".ws-hint")) { stageView?.run(); } }, 100); });
   for (const type of ["scheme:changed", "theme:changed", "parameters:changed"]) bus.addEventListener(type, () => { if (activeStory() && stageView) stageView.run(); });
 
   const printBtn = makeButton("", "btn story-btn");
@@ -275,5 +289,8 @@ export function initStory() {
   printBtn.setAttribute("aria-label", "Print this step");
   printBtn.addEventListener("click", () => { if (!activeStory()?.steps.length) { toast("Add a step first — print shows the current step.", "info"); return; } window.print(); });
   tools.append(printBtn);
+  // Print: the chart is drawn at page size (as the worksheet's own print does), then restored.
+  window.addEventListener("beforeprint", () => { const b = stage.querySelector(".story-stage__body"); if (activeStory() && b) sizeChart(b, { width: 1000, height: 560 }); });
+  window.addEventListener("afterprint", () => { const b = stage.querySelector(".story-stage__body"); if (b) sizeChart(b, null); });
   sync();
 }

@@ -84,7 +84,7 @@ export function cleanSteps(raw, { worksheetCount, dashboardCount, where }, issue
   for (const s of raw) {
     if (!s || typeof s !== "object") { issues.push(`${where}: skipped a step that wasn't a step.`); continue; }
     if (typeof s.caption !== "string") { issues.push(`${where}: skipped a step whose caption wasn't text.`); continue; }
-    if (s.caption.length > LIMITS.stepCaption) { issues.push(`${where}: skipped a step whose caption was over ${LIMITS.stepCaption} characters.`); continue; }
+    if (s.caption.trim().length > LIMITS.stepCaption) { issues.push(`${where}: skipped a step whose caption was over ${LIMITS.stepCaption} characters.`); continue; }
     const t = s.target, count = t?.kind === "worksheet" ? worksheetCount : t?.kind === "dashboard" ? dashboardCount : 0;
     if (!(t && typeof t === "object" && Number.isInteger(t.index) && t.index >= 0 && t.index < count)) { issues.push(`${where}: removed a step whose worksheet or dashboard is missing.`); continue; }
     if (out.length >= LIMITS.storySteps) { past++; continue; }
@@ -92,4 +92,13 @@ export function cleanSteps(raw, { worksheetCount, dashboardCount, where }, issue
   }
   if (past) issues.push(`${where}: only the first ${LIMITS.storySteps} steps were opened.`);
   return out;
+}
+
+/** The story tabs that show tab `tabId`. */
+export const storiesUsing = (tabs, tabId) => tabs.filter((t) => t.kind === "story" && t.steps.some((s) => s.target === tabId));
+
+/** After a move, which tool gets focus: the same role ("earlier" | "later"), or the enabled opposite when that one is now disabled. `disabled` = { earlier, later }. */
+export function refocusTarget(role, disabled) {
+  const other = role === "earlier" ? "later" : "earlier";
+  return disabled[role] && !disabled[other] ? other : role;
 }
