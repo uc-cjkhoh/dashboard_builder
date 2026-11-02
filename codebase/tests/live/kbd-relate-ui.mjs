@@ -48,32 +48,61 @@ try {
   await waitFor(`document.querySelectorAll('.entity').length === 2 && [...document.querySelectorAll('.entity__status')].every((s) => s.hidden)`, 'tables loaded');
   const row = (t, c) => `[...document.querySelectorAll('.entity')].find((x) => x.querySelector('.entity__table').textContent === ${J(t)}).querySelector('.col-row[data-column=' + ${J(JSON.stringify(c))} + ']')`;
   const press = (t, c, key) => ev(`(() => { const r = ${row(t, c)}; r.focus(); r.dispatchEvent(new KeyboardEvent('keydown', { key: ${J(key)}, bubbles: true, cancelable: true })); return true; })()`);
-  const hint = () => ev(`(() => { const h = document.querySelector('.rel-keyhint'); return h.hidden ? null : h.textContent; })()`);
+  const hint = () => ev(`document.querySelector('.rel-keyhint').textContent`);
 
-  await check('rows are focusable buttons with an accessible name', async () => {
-    must(await ev(`(() => { const r = ${row('orders', 'cust_id')}; return r.tabIndex === 0 && r.getAttribute('role') === 'button' && /^cust_id, Int32, in orders/.test(r.getAttribute('aria-label')); })()`), 'row not focusable / unlabelled');
+  const card = (t) => `[...document.querySelectorAll('.entity')].find((x) => x.querySelector('.entity__table').textContent === ${J(t)})`;
+  const stops = (t) => ev(`[...${card(t)}.querySelectorAll('.col-row')].filter((r) => r.tabIndex === 0).length`);
+  await check('roving tabindex: one tab stop per card; rows are named groups (not buttons) and Profile stays a reachable button', async () => {
+    must((await stops('orders')) === 1 && (await stops('customers')) === 1, 'not exactly one tab stop per card');
+    must(await ev(`(() => { const r = ${row('orders', 'cust_id')}; return r.getAttribute('role') === 'group' && /^cust_id, Int32, in orders$/.test(r.getAttribute('aria-label')) && !!document.getElementById(r.getAttribute('aria-describedby')) && r.querySelector('button.col-row__profile').tabIndex === 0; })()`), 'row not a labelled group / profile not reachable');
+    must(await ev(`(() => { const h = document.querySelector('.rel-keyhint'); return h.getAttribute('role') === 'status' && !h.hidden && h.textContent === ''; })()`), 'status node not always rendered and empty');
   });
-  await check('arrow keys move focus between rows of a card', async () => {
+  await check('arrows, Home, End move within a card; the tab stop follows focus', async () => {
     await press('orders', 'cust_id', 'ArrowDown');
     must(await ev(`document.activeElement === ${row('orders', 'amount')}`), 'focus did not move to amount');
+    await press('orders', 'amount', 'End');
+    must(await ev(`document.activeElement === ${row('orders', 'note')}`), 'End');
+    await press('orders', 'note', 'Home');
+    must(await ev(`document.activeElement === ${row('orders', 'cust_id')}`), 'Home');
+    await press('orders', 'note', 'End');
+    must((await stops('orders')) === 1 && await ev(`${row('orders', 'note')}.tabIndex === 0`), 'tab stop did not follow focus');
+    await press('orders', 'note', 'Home');
+  });
+  await check('] and [ jump between cards, landing on each card\'s tab stop', async () => {
+    await press('orders', 'cust_id', ']');
+    must(await ev(`${card('customers')}.contains(document.activeElement)`), '] did not reach customers');
+    await ev(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: '[', bubbles: true, cancelable: true }))`);
+    must(await ev(`document.activeElement === ${row('orders', 'cust_id')}`), '[ did not return to orders (tab stop is cust_id)');
   });
   await check('Enter picks a source: marked (outline + word From), pressed, instruction shown', async () => {
     await press('orders', 'cust_id', 'Enter');
-    must(await ev(`(() => { const r = ${row('orders', 'cust_id')}; return r.classList.contains('col-row--key-source') && r.getAttribute('aria-pressed') === 'true' && getComputedStyle(r, '::after').content === '"From"'; })()`), 'source not marked');
-    must(/Relating orders\.cust_id/.test(await hint()), `hint: ${await hint()}`);
+    must(await ev(`(() => { const r = ${row('orders', 'cust_id')}; return r.classList.contains('col-row--key-source') && getComputedStyle(r, '::after').content === '"From"'; })()`), 'source not marked');
+    must(/Relating orders\.cust_id.*\[ and \]/.test(await hint()), `hint: ${await hint()}`);
+    must(await ev(`${row('orders', 'cust_id')}.getAttribute('aria-current') === 'true'`), 'aria-current missing');
     await shot('kbd-pick.png');
   });
   await check('focusing a refused column explains why (same card), a fitting one says Enter relates', async () => {
     await ev(`${row('orders', 'amount')}.focus()`);
-    must(/Can't relate to orders\.amount: /.test(await hint()), `hint: ${await hint()}`);
+    must(/^Can't relate to orders\.amount: /.test(await hint()), `hint: ${await hint()}`);
     await ev(`${row('customers', 'id')}.focus()`);
     must(/Press Enter to relate it to customers\.id/.test(await hint()), `hint: ${await hint()}`);
     await shot('kbd-target.png');
-    await ev(`document.documentElement.dataset.theme = 'dark'`); await shot('kbd-target-dark.png'); await ev(`delete document.documentElement.dataset.theme`);
+    await ev(`document.documentElement.dataset.scheme = 'dark'`); await b.sleep(600); await shot('kbd-target-dark.png'); await ev(`delete document.documentElement.dataset.scheme`);
   });
   await check('Escape cancels the pick', async () => {
     await press('customers', 'id', 'Escape');
-    must((await hint()) === null && await ev(`document.querySelector('.col-row--key-source') === null`), 'pick not cancelled');
+    must((await hint()) === '' && await ev(`document.querySelector('.col-row--key-source') === null`), 'pick not cancelled');
+  });
+  await check('moving focus out of the rows (toolbar) drops a pending pick; Esc then does nothing harmful', async () => {
+    await press('orders', 'cust_id', 'Enter');
+    must((await hint()) !== '', 'pick not made');
+    await ev(`document.getElementById('db-select').focus()`);
+    must((await hint()) === '' && await ev(`document.querySelector('.col-row--key-source') === null`), 'pick survived focus loss');
+  });
+  await check('Esc pressed on the page (not on a row) cancels a pick', async () => {
+    await press('orders', 'cust_id', 'Enter');
+    await ev(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
+    must((await hint()) === '', 'document-level Esc did not cancel');
   });
   await check('a refused pair (kind mismatch) opens the type warning, not the cardinality dialog', async () => {
     await press('orders', 'amount', 'Enter');
@@ -90,7 +119,9 @@ try {
     await ev(`[...document.querySelectorAll('dialog[open] .card-choice')].find((x) => x.textContent === 'N:1').click()`);
     await waitFor(`document.querySelector('.rel-badge text')?.textContent === 'N:1'`, 'badge');
     must(await ev(`document.querySelectorAll('.entity__keys .col-row').length === 2`), 'both joined rows should be pinned');
-    must((await hint()) === null, 'hint left visible');
+    must((await hint()) === '', 'hint left set');
+    must(await ev(`document.activeElement === ${row('customers', 'id')} && document.activeElement.closest('.entity__keys') !== null`), 'focus not on the linked row after linking');
+    must((await stops('customers')) === 1, 'tab stop count after linking');
     await shot('kbd-linked.png');
   });
   await check('relating the same pair again from the keyboard is refused with no dialog', async () => {

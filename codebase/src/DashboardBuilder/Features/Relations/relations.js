@@ -7,7 +7,7 @@ import { buildJoinCheck } from "./join-check.js";
 import { linkSides, linkRoute, roundedPath } from "./link-route.js";
 import { openTypeWarning } from "./type-warning.js";
 import { COLUMN_MIME, encodeColumnDrag, parseColumnDrag, dropDecision } from "./link-drag.js";
-import { linkKeyAction, stepIndex, linkHint, rowLabel } from "./link-keys.js";
+import { linkKeyAction, stepIndex, cardIndex, linkHint, rowLabel } from "./link-keys.js";
 
 // Relationships: logical, typed links the user draws between a column of one entity and a column of
 // another (decision D5 — ClickHouse neither creates nor validates them). Creation is drag-and-drop only:
@@ -36,19 +36,23 @@ export function initRelations() {
   canvas.parentElement.append(guide); // over the Data Source, centred at its foot
   keyHint = document.createElement("p");
   keyHint.className = "rel-guide rel-keyhint";
-  keyHint.setAttribute("role", "status");
-  keyHint.hidden = true;
+  keyHint.setAttribute("role", "status"); // always rendered so a screen reader announces text put into it; empty = visually hidden
   canvas.parentElement.append(keyHint); // the keyboard pick's instruction line, same spot as the guide
+  const help = document.createElement("p");
+  help.id = "rel-key-help";
+  help.className = "sr-only";
+  help.textContent = "Press Enter to pick this column, then Enter on a column in another table to relate them. Up and Down arrows, Home and End move within the table; [ and ] switch table.";
+  canvas.parentElement.append(help);
 
   bus.addEventListener("entity:moved", () => render());
   bus.addEventListener("entity:loaded", (e) => { markDraggable(e.detail.entityId); render(); }); // a restored link waits for its key rows
-  bus.addEventListener("entity:removed", (e) => onEntityRemoved(e.detail.entityId));
-  bus.addEventListener("view:changed", () => { selectedId = null; render(); });
+  bus.addEventListener("entity:removed", (e) => { cancelKeyPick(); onEntityRemoved(e.detail.entityId); });
+  bus.addEventListener("view:changed", () => { cancelKeyPick(); selectedId = null; render(); });
   canvas.addEventListener("scroll", render);
   initColumnDrag();
   initColumnKeys();
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") select(null);
+    if (e.key === "Escape") { cancelKeyPick(); select(null); }
   });
 }
 
@@ -58,8 +62,8 @@ let dragFrom = null; // { entityId, column } while a row is dragged
 
 function markDraggable(entityId) {
   if (entities.get(entityId)?.source) return; // a union / unpivot takes no relationship
-  for (const row of entities.get(entityId)?.el.querySelectorAll(".col-row") ?? []) { row.draggable = true; row.tabIndex = 0; }
-  labelRows();
+  for (const row of entities.get(entityId)?.el.querySelectorAll(".col-row") ?? []) { row.draggable = true; row.tabIndex = -1; row.setAttribute("role", "group"); row.setAttribute("aria-describedby", "rel-key-help"); refreshRow(row); }
+  ensureRove(entityId);
 }
 
 function endOf(entityId, column) {
@@ -110,7 +114,7 @@ function initColumnDrag() {
 }
 
 /** The one path to a new relationship, for a drop and for the keyboard: check the pair, then ask for the cardinality. */
-function proposeLink(a, b) {
+function proposeLink(a, b, focusEnd = null) {
   if (!a || !b) return;
   const { ok, problem, kind } = dropDecision({ relationships: relationships.values(), from: a, to: b });
   if (!ok) { refuse(problem, kind, a, b); return; }
@@ -121,65 +125,93 @@ function proposeLink(a, b) {
     check: joinCheckFor(from, { entityId: b.entityId, column: b.column }),
     onPick: (cardinality, sel) => {
       createRelationship(from, { entityId: b.entityId, column: b.column }, cardinality, joinFromSelection(sel));
+      if (focusEnd) rowOf(focusEnd)?.focus(); // the link moves both rows into the key strips; keep the keyboard where it was
     },
   });
 }
 
 // --- the keyboard way: Enter on a row picks it, Enter on a row of another table relates them -----------------
 let keyFrom = null; // { entityId, column } of the row picked with the keyboard
+let refocusing = false; // a row being moved between a card's strip and list blurs and refocuses; that is not leaving
 
 function rowOf(end) { return entities.get(end.entityId)?.el.querySelector(`.col-row[data-column="${cssEscape(end.column)}"]`); }
+const sourceEnd = () => (keyFrom ? endOf(keyFrom.entityId, keyFrom.column) : null);
 
-function labelRows() {
-  for (const entity of entities.values()) {
-    if (entity.source) continue;
-    for (const row of entity.el.querySelectorAll(".col-row")) {
-      const end = endOf(entity.id, row.dataset.column);
-      if (!end) continue;
-      row.setAttribute("role", "button");
-      row.setAttribute("aria-label", rowLabel(end, end.type, keyFrom ? endOf(keyFrom.entityId, keyFrom.column) : null));
-      row.setAttribute("aria-pressed", keyFrom && keyFrom.entityId === end.entityId && keyFrom.column === end.column ? "true" : "false");
-    }
-  }
+/** Name, and `aria-current` on the picked source. Only the rows whose state changed are refreshed. */
+function refreshRow(row) {
+  const end = rowEnd(row);
+  if (!end) return;
+  row.setAttribute("aria-label", rowLabel(end, end.type, sourceEnd()));
+  if (keyFrom && keyFrom.entityId === end.entityId && keyFrom.column === end.column) row.setAttribute("aria-current", "true");
+  else row.removeAttribute("aria-current");
+}
+
+// Roving tabindex: one row per card is the tab stop (the one last focused, else the first); Tab then reaches the next card.
+function ensureRove(entityId) {
+  const rows = [...(entities.get(entityId)?.el.querySelectorAll(".col-row") ?? [])];
+  if (rows.length && !rows.some((r) => r.tabIndex === 0)) rows[0].tabIndex = 0;
+}
+function rove(row) {
+  for (const r of row.closest(".entity").querySelectorAll(".col-row")) r.tabIndex = r === row ? 0 : -1;
 }
 
 function updateKeyHint(focusRow) {
-  const source = keyFrom ? endOf(keyFrom.entityId, keyFrom.column) : null;
-  for (const el of canvas.querySelectorAll(".col-row--key-source")) el.classList.remove("col-row--key-source");
-  if (!source) { keyHint.hidden = true; keyHint.textContent = ""; labelRows(); return; }
-  rowOf(source)?.classList.add("col-row--key-source");
+  const source = sourceEnd();
+  for (const el of canvas.querySelectorAll(".col-row--key-source")) { el.classList.remove("col-row--key-source"); refreshRow(el); }
+  if (!source) { keyHint.textContent = ""; return; }
+  const srcRow = rowOf(source);
+  if (srcRow) { srcRow.classList.add("col-row--key-source"); refreshRow(srcRow); }
   const target = rowEnd(focusRow);
   const decision = target ? dropDecision({ relationships: relationships.values(), from: source, to: target }) : null;
   keyHint.textContent = linkHint(source, target, decision);
-  keyHint.hidden = false;
-  labelRows();
 }
 
-function cancelKeyPick() { keyFrom = null; updateKeyHint(null); }
+function cancelKeyPick() {
+  if (!keyFrom) return;
+  keyFrom = null;
+  updateKeyHint(null);
+}
+
+function focusCard(row, dir) {
+  const cards = [...entities.values()].filter((e) => !e.source).sort((p, q) => p.el.offsetLeft - q.el.offsetLeft || p.el.offsetTop - q.el.offsetTop);
+  const at = cards.findIndex((c) => c.el === row.closest(".entity"));
+  const next = cards[cardIndex(at, cards.length, dir)];
+  const rows = [...(next?.el.querySelectorAll(".col-row") ?? [])];
+  (rows.find((r) => r.tabIndex === 0) ?? rows[0])?.focus();
+}
 
 function initColumnKeys() {
   canvas.addEventListener("keydown", (e) => {
     const row = e.target instanceof Element && e.target.classList.contains("col-row") ? e.target : null;
     if (!row || e.altKey || e.ctrlKey || e.metaKey) return;
     const action = linkKeyAction(e.key, Boolean(keyFrom));
-    if (!action) return;
+    if (!action || action === "cancel") return; // Esc is handled for the whole document
     const here = rowEnd(row);
     if (!here) return;
     e.preventDefault();
     if (action === "pick") { keyFrom = { entityId: here.entityId, column: here.column }; updateKeyHint(row); }
-    else if (action === "cancel") cancelKeyPick();
     else if (action === "target") {
-      const source = endOf(keyFrom.entityId, keyFrom.column);
-      if (source && source.entityId === here.entityId && source.column === here.column) { cancelKeyPick(); return; } // Enter on the source again un-picks it
+      const source = sourceEnd();
+      const same = source && source.entityId === here.entityId && source.column === here.column;
       cancelKeyPick();
-      proposeLink(source, here);
-    } else {
+      if (!same) proposeLink(source, here, here); // Enter on the source again un-picks it
+    } else if (action === "nextCard" || action === "prevCard") focusCard(row, action === "nextCard" ? 1 : -1);
+    else {
       const rows = [...row.closest(".entity").querySelectorAll(".col-row")];
-      const next = rows[stepIndex(rows.indexOf(row), rows.length, action === "next" ? 1 : -1)];
-      next?.focus();
+      const at = rows.indexOf(row);
+      const to = action === "first" ? 0 : action === "last" ? rows.length - 1 : stepIndex(at, rows.length, action === "next" ? 1 : -1);
+      rows[to]?.focus();
     }
   });
-  canvas.addEventListener("focusin", (e) => { if (keyFrom && e.target instanceof Element && e.target.classList.contains("col-row")) updateKeyHint(e.target); });
+  canvas.addEventListener("focusin", (e) => {
+    if (!(e.target instanceof Element) || !e.target.classList.contains("col-row")) return;
+    rove(e.target);
+    if (keyFrom) updateKeyHint(e.target);
+  });
+  canvas.addEventListener("focusout", (e) => { // focus left the column rows: the pick is dropped
+    if (!keyFrom || refocusing) return;
+    if (!(e.relatedTarget instanceof Element && e.relatedTarget.closest(".col-row"))) cancelKeyPick();
+  });
 }
 
 /** A refused link: a type mismatch gets a modal (both columns, their types, columns that would fit); anything else a toast. */
@@ -267,6 +299,7 @@ function render() {
 function syncKeyStrips() {
   const linked = new Set();
   for (const r of relationships.values()) for (const end of [r.from, r.to]) linked.add(`${end.entityId}\u0000${end.column}`);
+  const active = document.activeElement instanceof Element && document.activeElement.classList.contains("col-row") ? document.activeElement : null;
   for (const entity of entities.values()) {
     const strip = entity.el.querySelector(".entity__keys"), list = entity.el.querySelector(".entity__cols");
     if (!strip || !list) continue;
@@ -282,6 +315,7 @@ function syncKeyStrips() {
     entity.el.classList.toggle("entity--has-keys", strip.children.length > 0);
     orderStrip(entity, strip);
   }
+  if (active?.isConnected && document.activeElement !== active) { refocusing = true; active.focus(); refocusing = false; } // moving a row blurs it
 }
 
 // Pinned rows follow their partner, not the column order: sorted by the partner card's position, then by relationship, so the links
