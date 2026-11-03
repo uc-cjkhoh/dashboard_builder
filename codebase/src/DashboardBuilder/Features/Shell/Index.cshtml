@@ -73,6 +73,12 @@
                             aria-label="Appearance" title="Appearance"><span data-icon="monitor"></span></button>
                     <div class="menu__list" id="scheme-list" role="menu" aria-label="Appearance" hidden></div>
                 </div>
+                <div class="menu settings">
+                    <button type="button" class="iconbtn" id="settings-btn" aria-controls="settings-list" aria-label="Settings" title="Settings"><span data-icon="settings"></span></button>
+                    <div class="menu__list" id="settings-list" role="menu" hidden>
+                        <button type="button" class="menu__item" role="menuitem" id="wb-theme"><span data-icon="color"></span>Theme…</button>
+                    </div>
+                </div>
             </div>
 
             <partial name="~/Features/Canvas/_Canvas.cshtml" />

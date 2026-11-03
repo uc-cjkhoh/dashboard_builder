@@ -13,6 +13,7 @@ import { entities, relationships, activeWorksheet, isWorksheetActive, updateShee
 import { checkValue, paramTypeFor } from "../Core/parameters-model.js";
 import { exportChart, hasChartInstance, sizeChart, focusSeries } from "./chart.js";
 import { createWorksheetView, periodNotice } from "./worksheet-view.js";
+import { CACHE_NOTE } from "./notices.js";
 import { fieldCopies } from "./field-copy-model.js";
 import { el, hint, iconSpan } from "./render-dom.js";
 import { updatedText, calcDefinitionLines } from "./data-notes.js";
@@ -47,7 +48,6 @@ import { catalogFromEntities } from "../Calc/calc-resolve.js";
 import { newCalcFilter, isCalcPill, makeCalcPill, refusal, syncCalcPills, pillSlots, clearCalcPills, clearFilterCalc, usesCalc, CALC_AGGS } from "../Calc/calc-pill.js";
 import { openCalcDialog } from "../Calc/calc-dialog.js";
 import { openParametersDialog } from "../Workbook/parameters-dialog.js";
-import { saveBookmarkDialog } from "../Workbook/bookmarks-dialog.js";
 import { openGroupDialog } from "../Calc/group-dialog.js";
 import { openSplitDialog } from "../Calc/split-dialog.js";
 import { openCleanDialog } from "../Calc/clean-dialog.js";
@@ -230,9 +230,9 @@ export function initDashboards() {
 
   bus.addEventListener("view:changed", sync);
   bus.addEventListener("worksheet:changed", () => {
-    // A change from outside commit() (bookmark, workbook open, undo) becomes the new baseline.
+    // A change from outside commit() (workbook open, undo) becomes the new baseline.
     const d = activeWorksheet();
-    // ...and a restored sheet's calculated pills take the live calculation's type / role (undo, bookmark, open).
+    // ...and a restored sheet's calculated pills take the live calculation's type / role (undo, open).
     if (d && isWorksheetActive()) syncCalcPills(d.sheet, calculations, catalogFromEntities([...entities.values()]), parameters);
     if (d && isWorksheetActive()) lastSnap.set(d.id, structuredClone(d.sheet));
     if (isWorksheetActive()) { renderShelves(); runChart(); }
@@ -431,7 +431,7 @@ export function initDashboards() {
       b.addEventListener("click", onClick);
       return b;
     };
-    toolsEl.replaceChildren(tool("calc", "Calculated fields", manageCalcs), tool("param", "Parameters", openParametersDialog), tool("drill", "Hierarchies", () => openHierarchies(false)));
+    toolsEl.replaceChildren(tool("calc", "Calculated fields", manageCalcs), tool("param", "Parameters", openParametersDialog), tool("hierarchy", "Hierarchies", () => openHierarchies(false)));
   }
   async function applyHierarchy(dash, id) {
     const h = hierarchies.find((x) => x.id === id);
@@ -712,11 +712,11 @@ export function initDashboards() {
     const viewbar = el("div", "ws-viewbar");
     const vbRight = el("div", "ws-viewbar__group ws-viewbar__group--right");
     const vbIcons = el("div", "ws-viewbar__icons");
-    vbIcons.append(formatToggle(), analyticsToggle(), exportControl(dash, s), refreshButton(dash), bookmarkButton(), importButton(), sheetActions(dash, s), fullScreenButton());
+    vbIcons.append(formatToggle(), analyticsToggle(), refreshButton(dash), fullScreenButton(), exportControl(dash, s), importButton(), sheetActions(dash, s));
     vbRight.append(sortControl(dash, s), vbIcons);
     const vbLeft = el("div", "ws-viewbar__group");
     vbLeft.append(fieldsPaneButton(), chartTypePicker(dash, s), undoButtons(dash),
-      explainControl(() => evaluationInput(s, { sharedFilters: sharedFilters.filter((f) => checkFilter(f).state === "ok" && !sharedSkipped(s).includes(f)), parameters, calcs: calculations, isApplied: (f) => checkFilter(f).state === "ok", dimensions: planDims(s).keyOrder.filter(Boolean).map(nameOf) }), { signal: headerAbort.signal }));
+      explainControl(() => evaluationInput(s, { sharedFilters: sharedFilters.filter((f) => checkFilter(f).state === "ok" && !sharedSkipped(s).includes(f)), parameters, calcs: calculations, isApplied: (f) => checkFilter(f).state === "ok", dimensions: planDims(s).keyOrder.filter(Boolean).map(nameOf) }), { signal: headerAbort.signal, getNote: () => (lastCached ? CACHE_NOTE : null) }));
     viewbar.append(vbLeft, vbRight);
     const fmtEl = formatOpen ? formatPanel(dash, s) : analyticsOpen ? analyticsPanel(dash, s) : null; // format / analytics card
     const swEl = switchers(dash, s);
@@ -877,13 +877,7 @@ export function initDashboards() {
     return btn;
   }
 
-  // Save view as bookmark (this worksheet) and Import workbook (a JSON file; Workbook/workbook.js owns the picker).
-  function bookmarkButton() {
-    const btn = iconButton("bookmark", "Save view as bookmark");
-    btn.title = "Save view as bookmark…";
-    btn.addEventListener("click", saveBookmarkDialog);
-    return btn;
-  }
+  // Import workbook (a JSON file; Workbook/workbook.js owns the picker).
   function importButton() {
     const btn = iconButton("import", "Import workbook");
     btn.title = "Import workbook…";
@@ -1112,9 +1106,11 @@ export function initDashboards() {
   }
   // The status bar under the chart: marks, rows × columns, the selection.
   let lastQueriedAt = null;
+  let lastCached = false; // the drawn result came from the server cache → noted in "How this is computed"
   function setStatusBar(s, result) {
     const bar = document.getElementById("ws-statusbar");
     if (!bar) return;
+    lastCached = Boolean(result?.cached);
     lastQueriedAt = result?.queriedAt ?? null; // a query that is starting, failed or was cancelled has no update time
     if (!result) { bar.replaceChildren(); toggle(bar, false); return; }
     bar.textContent = [statusText(s, result), updatedText(lastQueriedAt)].filter(Boolean).join(" · ");

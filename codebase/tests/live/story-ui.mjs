@@ -71,14 +71,14 @@ try {
     const a = mk('Revenue by region', 'bar', 'region'), c = mk('Share by channel', 'pie', 'channel'), d = st.createDashboard('Overview').id;
     return { a, c, d };`);
 
-  await check('[+] offers New story; the story tab has its icon, accessible name, empty state, and hides the bookmark action', async () => {
+  await check('[+] offers New story; the story tab has its icon, accessible name, empty state, and hides the view bar', async () => {
     await ev(`document.querySelector('.tab-add').click(); document.querySelector('[data-new-tab=story]').click()`);
     await waitFor(`!document.getElementById('story-view').hidden`, 'story view');
     must(await ev(`document.querySelector('.tab--story .tab__label').getAttribute('aria-label') === 'Story 1 (story)'`), 'accessible name');
     must(await ev(`!!document.querySelector('.tab--story .tab__kind')`), 'no kind icon');
     must(await ev(`document.getElementById('worksheet-view').hidden && document.getElementById('board-view').hidden`), 'other views visible');
     must(await ev(`!document.getElementById('story-empty').hidden && document.getElementById('story-strip').hidden && document.getElementById('story-nav').hidden`), 'empty state');
-    must(await ev(`document.getElementById('worksheet-view').hidden`), 'worksheet view bar (bookmark/import) shown on a story');
+    must(await ev(`document.getElementById('worksheet-view').hidden`), 'worksheet view bar (import/export) shown on a story');
     must(await ev(`document.getElementById('story-title').textContent`) === 'Story 1', 'title');
     must(await ev(`[...document.querySelectorAll('.story-add__select option')].map((o) => o.textContent).join('|')`) === 'Worksheet: Revenue by region|Worksheet: Share by channel|Dashboard: Overview', 'offered tabs');
   });

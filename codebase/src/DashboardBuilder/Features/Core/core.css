@@ -193,9 +193,9 @@ button { font: inherit; }
 /* ---- Menu (button + popover list; Core/menu.js) -------------------------- */
 .menu { position: relative; }
 /* Solid, never glass: the list floats over content, and blurred text behind it would read through. */
-.menu__list { position: absolute; right: 0; top: calc(100% + var(--s1)); z-index: 50; min-width: 200px; padding: var(--s1);
+.menu__list { position: absolute; right: 0; top: calc(100% + var(--s1)); z-index: 50; min-width: 200px; width: max-content; max-width: calc(100vw - 2 * var(--s4)); padding: var(--s1);
   background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r); box-shadow: var(--elev-16); display: grid; gap: var(--s1); }  /* items never touch: 4px between rows (and columns) */
-.menu__item { display: flex; align-items: center; gap: var(--s2); height: var(--ctl-h); padding: 0 var(--s2); border: 0;
+.menu__item { white-space: nowrap; display: flex; align-items: center; gap: var(--s2); height: var(--ctl-h); padding: 0 var(--s2); border: 0;
   border-radius: var(--r); background: transparent; color: var(--ink); text-align: left; cursor: pointer; font-size: var(--fs-body); }
 .menu__item:hover, .menu__item:focus-visible { background: var(--surface-3); }
 .menu__item:focus-visible { outline-offset: -2px; }
@@ -335,7 +335,7 @@ select.select:not([multiple]), select.input:not([multiple]) { appearance: none; 
 .theme-hex { width: 96px; height: var(--ctl-h); font-variant-numeric: tabular-nums; }
 .theme-error { margin-left: var(--s6); }
 
-/* Bookmarks dialog: one row per bookmark — name + where/when, then Apply / Delete. */
+/* List-row dialogs (Parameters, Hierarchies): one row per item — name + detail, then actions. (Class names are historical.) */
 .bookmark-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s2); max-height: 50vh; overflow: auto; min-width: min(460px, calc(100vw - 64px)); }
 .bookmark { display: flex; align-items: center; gap: var(--s2); padding: var(--s2) var(--s2); border: 1px solid var(--line); border-radius: var(--r); }
 .bookmark__info { flex: 1; min-width: 0; display: grid; }

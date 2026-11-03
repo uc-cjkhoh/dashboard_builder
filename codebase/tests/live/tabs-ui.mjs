@@ -96,11 +96,11 @@ try {
     must(await ev(`!!document.querySelector('.tab--worksheet .tab__kind')`), 'no kind icon');
     must(await ev(`document.querySelector('.tab--worksheet .tab__label').getAttribute('aria-label') === 'Worksheet 1 (worksheet)'`), 'accessible name lacks the kind');
     must(await ev(`document.getElementById('board-view').hidden`), 'board view visible on a worksheet');
-    must(await ev(`!!document.querySelector('.ws-viewbar__icons [aria-label="Save view as bookmark"]')`), 'bookmark button missing from the worksheet view bar');
+    must(await ev(`!!document.querySelector('.ws-viewbar__icons .ws-actions [aria-label="Sheet actions"]')`), 'sheet-actions button missing from the worksheet view bar');
     must(await ev(`document.activeElement === document.querySelector('.tab.is-active .tab__label')`), 'new tab label not focused');
   });
 
-  await check('New dashboard: "Dashboard 1", empty board body, no duplicate button, bookmark action hidden', async () => {
+  await check('New dashboard: "Dashboard 1", empty board body, no duplicate button, sheet-actions hidden', async () => {
     await addTab('dashboard');
     await waitFor(`!document.getElementById('board-view').hidden`, 'board view');
     must(J(await labels()) === J(['Worksheet 1', 'Dashboard 1']), `tabs: ${J(await labels())}`);
@@ -110,9 +110,9 @@ try {
     must(await ev(`!!document.querySelector('.tab--dashboard .tab__kind')`), 'no dashboard icon');
     must(await ev(`document.querySelector('.tab--dashboard .tab__label').getAttribute('aria-label') === 'Dashboard 1 (dashboard)'`), 'accessible name');
     must(await ev(`!document.querySelector('.tab--dashboard .tab__dup') && !!document.querySelector('.tab--worksheet .tab__dup')`), 'duplicate button on the wrong kind');
-    must(await ev(`!document.querySelector('.ws-viewbar__icons [aria-label="Save view as bookmark"]') || document.getElementById('worksheet-view').hidden`), 'bookmark button shown on a dashboard');
+    must(await ev(`!document.querySelector('.ws-viewbar__icons .ws-actions [aria-label="Sheet actions"]') || document.getElementById('worksheet-view').hidden`), 'sheet-actions button shown on a dashboard');
     await ev(`document.querySelector('.tab--worksheet .tab__label').click()`);
-    await waitFor(`!document.getElementById('worksheet-view').hidden && !!document.querySelector('.ws-viewbar__icons [aria-label="Save view as bookmark"]')`, 'back on the worksheet');
+    await waitFor(`!document.getElementById('worksheet-view').hidden && !!document.querySelector('.ws-viewbar__icons .ws-actions [aria-label="Sheet actions"]')`, 'back on the worksheet');
   });
 
   await check('default names count per kind; rename works on both kinds', async () => {
@@ -217,7 +217,6 @@ try {
     must((await toasts()).includes('Restored your last workbook (2 tables, 4 worksheets).'), `toasts: ${J(await toasts())}`); // no "N part(s) were reset"
     must(await ev(`!document.querySelector('dialog[open]')`), 'an issues dialog opened');
     must(await store(`return JSON.stringify(st.worksheets().map((w) => w.sheet.title)) === JSON.stringify(['Revenue by region', null, null, null]);`), 'sheet content differs');
-    must(await store(`return st.bookmarks.map((x) => x.worksheetId === null ? null : st.worksheetById(x.worksheetId).name).join('|') === 'Revenue|Status mix|';`), 'bookmark links differ');
     await waitFor(`localStorage.getItem('dashboardbuilder.workbook.v2|mock-ch|8443|default') !== null`, 'v2 autosave written');
     must(await ev(`localStorage.getItem('dashboardbuilder.workbook.v1|mock-ch|8443|default') === ${J(v1)}`), 'the v1 key was changed or removed');
   });

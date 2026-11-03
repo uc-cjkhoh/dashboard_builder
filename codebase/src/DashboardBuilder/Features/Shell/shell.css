@@ -137,9 +137,10 @@
   position: relative; z-index: 3;  /* the Workbook menu must paint above the view below */
 }
 
-/* Light / dark toggle, right-most in the bar: as close to the Workbook ··· as that group's own buttons
+/* Light / dark toggle, then Settings right-most in the bar: as close to the Workbook ··· as that group's own buttons
    sit, and its glyph (not its 32px box) meets the right gutter, over the content's right edge. */
-.scheme { flex: none; margin-left: calc(var(--s2) - var(--s2)); margin-right: calc(-1 * var(--s2)); }
+.scheme, .settings { flex: none; }
+.canvas__bar > :last-child { margin-right: calc(-1 * var(--s2)); }
 
 /* Performance timings dialog (Shell/perf-panel.js). */
 .perf-dialog { width: min(560px, calc(100vw - 2 * var(--s4))); }
