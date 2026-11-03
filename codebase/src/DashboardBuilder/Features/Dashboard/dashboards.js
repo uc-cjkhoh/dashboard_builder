@@ -557,6 +557,7 @@ export function initDashboards() {
     if (meta.alias) { nameEl.title = `${meta.alias} — column ${col.name}`; chip.classList.add("is-renamed"); }
     if (meta.hidden) chip.classList.add("is-hidden");
     chip.dataset.search = `${col.name} ${meta.alias ?? ""}`.toLowerCase();
+    chip.dataset.field = JSON.stringify(payload); // the "Add field" picker in a Marks editor lists the pane's fields from this
     chip.append(typeIcon, nameEl);
     if (meta.cast) { chip.classList.add("is-cast"); chip.append(castBadge(meta.cast, col.category, false)); }
     chipOptions(chip, `field:${t.db}.${t.table}.${col.name}`, col.name, () => fieldEntries(payload, col, nameEl));
@@ -728,7 +729,7 @@ export function initDashboards() {
     const fmtEl = formatOpen ? formatPanel(dash, s) : analyticsOpen ? analyticsPanel(dash, s) : null; // format / analytics card
     const swEl = switchers(dash, s);
     const titleEl = s.showTitle === false ? null : titleBlock(dash, s);
-    const cardsEl = filterCards(dash, s);
+    const cardsEl = filtersInFly(s) ? null : filterCards(dash, s); // while the Filters flyout is open it holds the cards itself
     const paramsEl = paramControls(s);
     headEl.replaceChildren(viewbar, ...(swEl ? [swEl] : []), ...(fmtEl ? [fmtEl] : []), ...(titleEl ? [titleEl] : []), ...(paramsEl ? [paramsEl] : []), ...(cardsEl ? [cardsEl] : []));
 
@@ -2153,7 +2154,7 @@ export function initDashboards() {
     const colorFields = s.color ?? (s.color = []);
     const drillLevels = s.drill?.levels ?? [];
     const one = (field, clear) => (field ? [markPill(field, clear)] : []); // single-field pill list
-    return [
+    const tools = [
       { key: "color", icon: "color", label: "Color", count: colorFields.length,
         pills: colorFields.map((f, i) => colorPill(dash, s, f, i)), onDrop: (f) => addColor(dash, f),
         hint: "Drop a field — categorical = colour series, numeric = gradient",
@@ -2186,7 +2187,7 @@ export function initDashboards() {
           ...sharedFilters.map((f, i) => filterPill(dash, s, f, i, sharedFilters))],
         onDrop: (f) => addFilter(dash, f),
         hint: "Drop a field to filter the view by it — share a filter (link button) to apply it on every dashboard",
-        note: sharedNote(s) },
+        note: sharedNote(s), editor: filtersInFly(s) ? filterCards(dash, s) : null },
       { key: "period", icon: "calendar", label: "Dates", count: s.period ? 1 : 0,
         pills: s.period ? [markPill(s.period, () => { s.period = null; commit(dash, s); })] : [],
         onDrop: (f) => setPeriod(dash, f), editor: s.period ? periodEditor(dash, s) : null,
@@ -2199,6 +2200,10 @@ export function initDashboards() {
         pills: s.pages ? [pagesPill(dash, s)] : [], onDrop: (f) => addPages(dash, f),
         hint: "Drop a dimension to step/animate the view through its members" },
     ];
+    // For the editor flyout: whether a slot takes several fields, and which fields its Add field list offers.
+    const multi = new Set(["color", "detail", "tooltip", "filters", "drill"]);
+    const accepts = { size: (f) => f.category === "numeric", period: (f) => f.category === "temporal" };
+    return tools.map((t) => ({ ...t, multi: multi.has(t.key), accepts: accepts[t.key] ?? null }));
   }
 
   // A toolbar button: icon + short text, a count badge when it holds field(s), and drop-target + click.
@@ -2225,6 +2230,8 @@ export function initDashboards() {
     return btn;
   }
 
+  // The Filters flyout shows the filter cards (values, bounds, checklists) under its pills, so they stay editable while it is open.
+  const filtersInFly = (s) => openTool === "filters" && !calcFor && !choicesFor && s.showFilterCards !== false;
   // The editor panel for the open tool: its title, the field pills it holds over a drop zone, then its own editor / note.
   function toolPanel(dash, s, tool) {
     const panel = el("div", "ws-toolpanel");
@@ -2244,10 +2251,57 @@ export function initDashboards() {
     if (!tool.pills.length) zone.append(el("span", "ws-shelf__hint", tool.hint || "Drag a field here"));
     for (const p of tool.pills) zone.append(p);
     wireFieldDrop(zone, tool.onDrop);
-    panel.append(zone);
+    panel.append(zone, fieldPicker(tool));
     if (tool.editor) panel.append(tool.editor);
     if (tool.note) panel.append(el("span", "ws-shelf__note", tool.note));
     return panel;
+  }
+  // "Add field": the click and keyboard path to what a drag does. Lists the field pane's fields (grouped by table, searchable) that this slot accepts;
+  // choosing one goes through the slot's own drop handler, so every rule and message is the same as for a drag.
+  function fieldPicker(tool) {
+    const wrap = el("div", "ws-picker");
+    const btn = el("button", "ws-picker__btn");
+    btn.type = "button";
+    btn.append(icon("plus", { size: 14 }), el("span", null, !tool.multi && tool.count > 0 ? "Replace field" : "Add field"));
+    btn.setAttribute("aria-expanded", "false");
+    const box = el("div", "ws-picker__box");
+    box.hidden = true;
+    const search = el("input", "input ws-picker__search");
+    search.type = "search"; search.placeholder = "Search fields"; search.setAttribute("aria-label", "Search fields");
+    const list = el("div", "ws-picker__list");
+    box.append(search, list);
+    const build = () => {
+      list.replaceChildren();
+      let group = null, n = 0;
+      for (const chip of fieldsEl.querySelectorAll(".ws-field[data-field]:not(.is-hidden)")) {
+        const f = JSON.parse(chip.dataset.field);
+        if (tool.accepts && !tool.accepts(f)) continue;
+        const table = chip.closest(".ws-table")?.querySelector(".ws-group__name")?.textContent ?? "";
+        if (table !== group) { group = table; list.append(el("div", "ws-picker__group", table)); }
+        const item = el("button", "ws-picker__item");
+        item.type = "button";
+        item.dataset.search = chip.dataset.search;
+        const t = icon(TYPE_ICONS[f.category] ?? "type-other", { size: 14 }); t.classList.add("ws-field__type");
+        item.append(t, el("span", "ws-picker__name", chip.querySelector(".ws-field__name")?.textContent ?? f.column));
+        item.addEventListener("click", () => { focusFly = true; openTool = tool.key; tool.onDrop(f); });
+        list.append(item); n++;
+      }
+      if (!n) list.append(el("div", "ws-picker__empty", tool.accepts ? "No field here fits this slot." : "No fields yet — relate tables in the Data Source."));
+    };
+    const setOpen = (open) => {
+      btn.setAttribute("aria-expanded", String(open));
+      box.hidden = !open;
+      if (open) { build(); search.value = ""; search.focus(); }
+    };
+    btn.addEventListener("click", () => setOpen(box.hidden));
+    search.addEventListener("input", () => {
+      const q = search.value.trim().toLowerCase();
+      for (const it of list.querySelectorAll(".ws-picker__item")) it.hidden = Boolean(q) && !it.dataset.search.includes(q);
+      for (const g of list.querySelectorAll(".ws-picker__group")) { let n = g.nextElementSibling, any = false; while (n && !n.classList.contains("ws-picker__group")) { if (!n.hidden) any = true; n = n.nextElementSibling; } g.hidden = !any; }
+    });
+    box.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); setOpen(false); btn.focus(); } });
+    wrap.append(btn, box);
+    return wrap;
   }
   // Show (or clear) the flyout and put it level with its slot.
   function mountFly(panel) {
@@ -2297,15 +2351,15 @@ export function initDashboards() {
   function tooltipEditor(dash, s) {
     const cat = () => (tooltipCatState.sheet === s ? tooltipCatState.list : []);
     const box = el("div", "ws-tipedit");
-    const label = el("label", "ws-fmt-field");
-    label.append(el("span", "ws-fmt-label", "Tooltip text"));
+    const head = el("div", "ws-tipedit__head"); // the label, with the full editor one click away at its right
+    head.append(el("span", "ws-fmt-label", "Tooltip text"));
     const ta = el("textarea", "input ws-tipedit__text");
+    ta.setAttribute("aria-label", "Tooltip text");
     ta.rows = 3;
     ta.maxLength = LIMITS.tooltipText;
     ta.placeholder = "Sales for <field>: <measure> — empty keeps the automatic tooltip";
     ta.value = s.tooltipText ?? "";
-    label.append(ta);
-    box.append(label);
+    box.append(head, ta);
     const chips = el("div", "ws-tipedit__chips");
     const drawChips = () => {
     chips.replaceChildren();
@@ -2345,7 +2399,7 @@ export function initDashboards() {
     };
     ta.addEventListener("input", refresh);
     ta.addEventListener("change", save);
-    const modal = el("button", "btn btn--ghost ws-tipedit__modal", "Edit tooltip…");
+    const modal = el("button", "ws-tipedit__modal", "Edit tooltip…");
     modal.type = "button";
     modal.addEventListener("click", () => openTooltipDialog({
       text: s.tooltipText ?? "", style: s.tooltipStyle ?? null, fields: cat(),
@@ -2357,7 +2411,8 @@ export function initDashboards() {
         if (t.value === (s.tooltipText ?? null) && JSON.stringify(nextStyle) === JSON.stringify(s.tooltipStyle ?? null)) return;
         s.tooltipText = t.value; if (nextStyle) s.tooltipStyle = nextStyle; else delete s.tooltipStyle; ta.value = t.value ?? ""; refresh(); commit(dash, s);
       } }));
-    box.append(modal, preview, note);
+    head.append(modal);
+    box.append(el("span", "ws-fmt-label", "Preview"), preview, note);
     const redraw = () => { if (!box.isConnected) return; drawChips(); refresh(); };
     tooltipRedraw = redraw;
     drawChips();
