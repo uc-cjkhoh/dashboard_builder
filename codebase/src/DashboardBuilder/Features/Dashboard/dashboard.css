@@ -72,7 +72,7 @@
 /* Keyboard/non-drag path to add a field to a shelf (a11y — mirrors the sidebar table chip's plus icon). */
 .ws-field__add {
   flex: none; border: 0; background: none; cursor: pointer; padding: 0;
-  width: 16px; height: 16px; line-height: 1; border-radius: var(--r);
+  width: 24px; height: 24px; line-height: 1; border-radius: var(--r); display: inline-grid; place-items: center;
   color: var(--ink-3); opacity: 0; transition: opacity var(--dur) var(--ease), color var(--dur) var(--ease);
 }
 .ws-field:hover .ws-field__add, .ws-field__add:focus-visible { opacity: 1; }
@@ -141,6 +141,8 @@
 .ws-pill__ctl { display: inline-flex; gap: 4px; align-items: center; }
 /* Convert-role toggle: a bordered chip so it reads as an action distinct from the remove icon. */
 .ws-pill .iconbtn { color: inherit; width: 16px; height: 16px; padding: 0; }
+.ws-pill .iconbtn { position: relative; }
+.ws-pill .iconbtn::after { content: ""; position: absolute; inset: calc(-1 * var(--s1)); } /* 24px hit area around the 16px glyph */
 .ws-pill .select { height: 16px; }
 .ws-pill .iconbtn:hover { color: var(--accent); background: transparent; }
 
@@ -396,7 +398,7 @@
 .ws-kpi__change--good { color: var(--up); }
 .ws-kpi__change--bad { color: var(--down); }
 .ws-kpi__change--neutral { color: var(--ink-3); }
-.ws-kpi__arrow { font-size: 0.8em; }
+.ws-kpi__arrow { font-size: var(--fs-body); }
 .ws-kpi__target { width: 132px; height: 6px; margin-top: var(--s2); border-radius: var(--r-pill); background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line); overflow: hidden; }
 .ws-kpi__target-fill { display: block; height: 100%; background: var(--accent); border-radius: inherit; }
 .ws-kpi__target.is-met .ws-kpi__target-fill { background: var(--up); }
@@ -475,7 +477,7 @@
 .ws-undo { display: inline-flex; gap: 4px; }
 .ws-undo .iconbtn:disabled { opacity: .35; cursor: default; }
 .ws-titleblock { display: grid; gap: 4px; }
-.ws-titleblock__btn { justify-self: start; max-width: 100%; border: 1px solid transparent; border-radius: var(--r); background: none;
+.ws-titleblock__btn { min-height: 24px; justify-self: start; max-width: 100%; border: 1px solid transparent; border-radius: var(--r); background: none;
   padding: 0 var(--s1); margin-inline: calc(-1 * var(--s1)); color: var(--ink); cursor: text; text-align: left; font: inherit; }
 .ws-titleblock__btn:hover { border-color: var(--line-2); background: var(--surface-2); }
 .ws-titleblock__btn h2 { margin: 0; font-size: var(--fs-title); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -2166,7 +2166,7 @@ export function initDashboards() {
         onDrop: (f) => addFilter(dash, f),
         hint: "Drop a field to filter the view by it — share a filter (link button) to apply it on every dashboard",
         note: sharedNote(s) },
-      { key: "period", icon: "calendar", label: "Date range", count: s.period ? 1 : 0,
+      { key: "period", icon: "calendar", label: "Dates", count: s.period ? 1 : 0,
         pills: s.period ? [markPill(s.period, () => { s.period = null; commit(dash, s); })] : [],
         onDrop: (f) => setPeriod(dash, f), editor: s.period ? periodEditor(dash, s) : null,
         hint: "Drop a date field to limit the view to a range — and compare it with another period" },
