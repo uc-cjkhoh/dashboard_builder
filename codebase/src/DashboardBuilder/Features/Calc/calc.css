@@ -94,7 +94,7 @@
 .calc-fn__items { list-style: none; margin: 0; padding: 0; }
 .calc-fn__item { display: flex; align-items: baseline; gap: var(--s2); width: 100%; padding: 4px var(--s2); border: 0; border-radius: var(--r); background: none; color: var(--ink);
   font-family: inherit; font-size: var(--fs-body); line-height: 1.4; text-align: left; cursor: pointer; }
-.calc-fn__item:hover, .calc-fn__item:focus-visible { background: var(--surface-3); box-shadow: inset 2px 0 0 var(--accent); }
+.calc-fn__item:hover, .calc-fn__item:focus-visible { background: var(--surface-3); }
 .calc-fn__item .name { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-weight: 600; flex: none; min-width: 9ch; }
 .calc-fn__item .sig { color: var(--ink-3); font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: var(--fs-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .calc-fn__detail { font-size: var(--fs-body); min-height: 3.5em; }

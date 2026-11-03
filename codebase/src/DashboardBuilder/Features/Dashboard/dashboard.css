@@ -214,8 +214,7 @@
 .ws-tool:not(:disabled):hover { background: var(--glass-ctl-hover); border-color: var(--ctl-edge); color: var(--ink);
   box-shadow: inset 0 1px 0 var(--glass-rim), var(--elev-2); }
 .ws-tool:not(:disabled):active { transform: scale(.97); box-shadow: none; }
-.ws-tool.is-active { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); font-weight: 600;
-  box-shadow: inset 0 -2px 0 var(--accent); }
+.ws-tool.is-active { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); font-weight: 600; }
 .ws-tool:disabled { opacity: .5; cursor: not-allowed; }
 .ws-tool.is-set { color: var(--accent-ink); }
 .ws-tool__text { line-height: 1; }
@@ -331,7 +330,7 @@
 .ws-viewbar__group { display: flex; align-items: center; gap: var(--s2); min-width: 0; }
 .ws-viewbar__group--right { margin-left: auto; }
 .ws-viewbar__icons { display: flex; align-items: center; gap: var(--s1); }
-.ws-viewbar__btn.is-active { background: var(--accent-soft); color: var(--accent-ink); box-shadow: inset 0 -2px 0 var(--accent); }
+.ws-viewbar__btn.is-active { background: var(--accent-soft); color: var(--accent-ink); }
 /* Ghost controls at the row's ends overhang by their 8px glyph slack, so the glyphs meet the card's inset. */
 .ws-viewbar__group > :first-child { margin-left: calc(-1 * var(--s2)); }
 .ws-viewbar__icons > :last-child { margin-right: calc(-1 * var(--s2)); }
