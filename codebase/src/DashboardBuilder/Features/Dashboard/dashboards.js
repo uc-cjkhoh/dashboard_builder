@@ -729,7 +729,8 @@ export function initDashboards() {
     const fmtEl = formatOpen ? formatPanel(dash, s) : analyticsOpen ? analyticsPanel(dash, s) : null; // format / analytics card
     const swEl = switchers(dash, s);
     const titleEl = s.showTitle === false ? null : titleBlock(dash, s);
-    const cardsEl = filtersInFly(s) ? null : filterCards(dash, s); // while the Filters flyout is open it holds the cards itself
+    const cardsEl = filterCards(dash, s);
+    if (cardsEl && filtersInFly(s)) { cardsEl.classList.add("is-behind-fly"); cardsEl.inert = true; cardsEl.setAttribute("aria-hidden", "true"); } // the open Filters flyout holds the live cards; these keep the header's height so the chart never shifts
     const paramsEl = paramControls(s);
     headEl.replaceChildren(viewbar, ...(swEl ? [swEl] : []), ...(fmtEl ? [fmtEl] : []), ...(titleEl ? [titleEl] : []), ...(paramsEl ? [paramsEl] : []), ...(cardsEl ? [cardsEl] : []));
 

@@ -253,6 +253,7 @@
 .ws-tipedit__head { display: flex; align-items: center; justify-content: space-between; min-height: var(--ctl-h); margin-top: calc(-1 * var(--s1)); }
 .ws-tipedit__head .ws-tipedit__modal { margin-right: calc(-1 * var(--s2)); height: var(--ctl-h); padding: 0 var(--s2); background: transparent; color: var(--ink-2); font-weight: 400; }
 .ws-tipedit__head .ws-tipedit__modal:hover { background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--ink); }
+.ws-filtercards.is-behind-fly { visibility: hidden; }
 .ws-toolfly .ws-filtercards { flex-direction: column; flex-wrap: nowrap; align-items: stretch; }
 .ws-toolfly .ws-fcard { max-width: none; width: 100%; background: var(--surface-2); }
 .ws-picker__box { display: grid; gap: var(--s1); }
