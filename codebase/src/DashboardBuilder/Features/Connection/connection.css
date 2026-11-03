@@ -50,9 +50,6 @@
 .form-field input {
   transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
 }
-.form-field input:focus {
-  border-color: var(--ink-2);
-}
 .form-check { display: flex; align-items: flex-start; gap: var(--s2); font-size: var(--fs-body); }
 /* No UA margin: the box sits on the gutter. Nudged so it centres on the first line when a label wraps. */
 .form-check input { flex: none; width: 16px; height: 16px; margin: 4px 0 0; }

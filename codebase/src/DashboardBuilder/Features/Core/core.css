@@ -174,8 +174,7 @@ button { font: inherit; }
 .glass :is(.input, .select, input[type="text"], input[type="number"], input[type="password"], input[type="search"]),
 .ws-shelves :is(.input, .select, select) { border-color: var(--ctl-edge); }
 
-/* Neutral focus ring: a red ring would read as an error, and the accent is red. */
-:where(button, input, select, textarea, a, [tabindex]):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* Keyboard focus: no ring or border highlight anywhere — a neutral wash instead (Core/buttons.css). */
 
 /* Thin, themed scrollbars — muted ink thumb on the glass sidebar, line-coloured in the content, accent on hover */
 .table-list { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--ink-3) 45%, transparent) transparent; }
@@ -262,7 +261,6 @@ select.select:not([multiple]), select.input:not([multiple]) { appearance: none; 
 .select option { background: var(--surface); color: var(--ink); } /* the open list follows the theme, like the closed control */
 .sidebar .select:disabled { opacity: .55; cursor: not-allowed; }
 .input:hover, .select:hover { border-color: var(--ink-3); }
-.input:focus, .select:focus { border-color: var(--ink-2); }
 .input[aria-invalid="true"], .select[aria-invalid="true"] { border-color: var(--danger-solid); }
 .field-error { display: flex; gap: var(--s1); margin-top: var(--s1); color: var(--danger-ink); font-size: var(--fs-body); }
 /* Higher specificity so the connection inputs' own border rule doesn't win. */

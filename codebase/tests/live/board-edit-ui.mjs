@@ -183,7 +183,7 @@ try {
   await check('keyboard: arrows move one cell, Shift+arrows resize; each a committed step with a live status; focus stays on the widget', async () => {
     await keyPress('Shift', 16); // keyboard modality, so :focus-visible shows on a programmatic focus
     await focusWidget('A');
-    must(await ev(`getComputedStyle(document.querySelector(${J(wsel('A'))})).outlineStyle === 'solid'`), 'no focus ring on a focused widget');
+    must(await ev(`getComputedStyle(document.querySelector(${J(wsel('A'))})).backgroundImage.startsWith('linear-gradient')`), 'no focus wash on a focused widget');
     await shot('board-focus-ring-light.png');
     await arrow('ArrowRight');
     await waitFor(`document.getElementById('board-status').textContent === 'Moved to column 2, row 8'`, 'moved status');
@@ -448,8 +448,8 @@ try {
     await ev(`document.querySelector(${J(wsel('B'))}).focus()`);
     await keyPress('Tab', 9); await keyPress('Tab', 9, 8); // move and come back so :focus-visible shows on a keyboard path
     await shot('board-edit-dark.png');
-    const ring = await ev(`getComputedStyle(document.activeElement).outlineStyle`);
-    must(ring === 'solid', `no focus ring on the focused widget: ${ring}`);
+    const ring = await ev(`getComputedStyle(document.activeElement).backgroundImage`);
+    must(ring.startsWith('linear-gradient'), `no focus wash on the focused widget: ${ring}`);
     await b.setScheme('light'); await b.sleep(300);
     await shot('board-edit-light.png');
   });

@@ -17,7 +17,7 @@ button, .btn, .iconbtn, .tab, .tab-add, .ws-tool, .card-choice, [role="button"],
 .card-choice.is-active { background: var(--accent-soft); }
 
 /* ---- Polish: one state ladder for every button ------------------------------------------------------------
-   rest → hover (deeper fill) → pressed (deeper still, and it sinks 1px) → focus (neutral ring, below) → disabled (faded, not-allowed).
+   rest → hover (deeper fill) → pressed (deeper still, and it sinks 1px) → focus (a neutral wash, below) → disabled (faded, not-allowed).
    Weight carries the hierarchy: the primary action is 600, everything else 500. Text buttons get 16px of side padding so a label
    never touches its edge; one with a leading icon keeps 8px on that side so the glyph sits optically level with the text above it. */
 .btn, .iconbtn, .tab, .tab-add, .menu__item, .card-choice {
@@ -44,3 +44,11 @@ button:disabled, .btn:disabled, .iconbtn:disabled { cursor: not-allowed; }
    (Panels, menus, dialogs and cards keep their elevation. `!important` for the same reason as the border rule at the top.) */
 button, .btn, .iconbtn, .tab, .tab-add, .ws-tool, .card-choice, .menu__item, [role="button"], [role="tab"],
 input, select, textarea, .input, .select, .formula { box-shadow: none !important; }
+
+/* No :focus-visible outline or border highlight anywhere. Keyboard focus shows as a neutral wash laid over the element's own fill
+   (an overlay, so it works on any fill and in every theme), so a focused control is never invisible. */
+:focus-visible { outline: none !important; }
+:is(button, a, summary, select, [role="button"], [role="tab"], [role^="menuitem"], [tabindex]:not([tabindex="-1"])):focus-visible {
+  background-image: linear-gradient(color-mix(in srgb, var(--ink) 12%, transparent), color-mix(in srgb, var(--ink) 12%, transparent)); }
+:is(input:not([type="checkbox"]):not([type="radio"]), textarea, .formula):focus-visible {
+  background-image: linear-gradient(color-mix(in srgb, var(--ink) 6%, transparent), color-mix(in srgb, var(--ink) 6%, transparent)); }
