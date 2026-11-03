@@ -1,17 +1,17 @@
 @* Workbook actions, right of the tab strip. Driven by Workbook/workbook.js: auto-save to this
-   browser + Export/Import as a JSON file from the "more" menu. The file never contains the connection or a password. *@
+   browser + Export (worksheet view bar → Export → Workbook (JSON)); Theme under Settings. Import and Save view as bookmark
+   live in the worksheet view bar (Dashboard/dashboards.js). The file never contains the connection or a password. *@
 <div class="workbook" role="group" aria-label="Workbook">
     <div class="menu">
         <button type="button" class="iconbtn" id="wb-menu-btn" aria-controls="wb-menu-list" aria-label="Workbook" title="Workbook"><span data-icon="more"></span></button>
         <div class="menu__list" id="wb-menu-list" role="menu" hidden>
-            <button type="button" class="menu__item" role="menuitem" id="wb-import"><span data-icon="import"></span>Import workbook…</button>
-            <button type="button" class="menu__item" role="menuitem" id="wb-export"><span data-icon="export"></span>Export workbook</button>
-            <div class="menu__sep" role="separator"></div>
-            <button type="button" class="menu__item" role="menuitem" id="wb-theme"><span data-icon="color"></span>Theme…</button>
-            <button type="button" class="menu__item" role="menuitem" id="wb-parameters"><span data-icon="param"></span>Parameters…</button>
-            <div class="menu__sep" role="separator"></div>
-            <button type="button" class="menu__item" role="menuitem" id="wb-bookmark-add"><span data-icon="bookmark"></span>Save view as bookmark…</button>
             <button type="button" class="menu__item" role="menuitem" id="wb-bookmarks"><span data-icon="bookmarks"></span>Bookmarks…</button>
+        </div>
+    </div>
+    <div class="menu">
+        <button type="button" class="iconbtn" id="settings-btn" aria-controls="settings-list" aria-label="Settings" title="Settings"><span data-icon="settings"></span></button>
+        <div class="menu__list" id="settings-list" role="menu" hidden>
+            <button type="button" class="menu__item" role="menuitem" id="wb-theme"><span data-icon="color"></span>Theme…</button>
         </div>
     </div>
     <input type="file" id="wb-file" accept="application/json,.json" hidden />

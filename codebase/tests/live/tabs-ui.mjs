@@ -96,7 +96,7 @@ try {
     must(await ev(`!!document.querySelector('.tab--worksheet .tab__kind')`), 'no kind icon');
     must(await ev(`document.querySelector('.tab--worksheet .tab__label').getAttribute('aria-label') === 'Worksheet 1 (worksheet)'`), 'accessible name lacks the kind');
     must(await ev(`document.getElementById('board-view').hidden`), 'board view visible on a worksheet');
-    must(await ev(`!document.getElementById('wb-bookmark-add').hidden`), 'bookmark action hidden on a worksheet');
+    must(await ev(`!!document.querySelector('.ws-viewbar__icons [aria-label="Save view as bookmark"]')`), 'bookmark button missing from the worksheet view bar');
     must(await ev(`document.activeElement === document.querySelector('.tab.is-active .tab__label')`), 'new tab label not focused');
   });
 
@@ -110,9 +110,9 @@ try {
     must(await ev(`!!document.querySelector('.tab--dashboard .tab__kind')`), 'no dashboard icon');
     must(await ev(`document.querySelector('.tab--dashboard .tab__label').getAttribute('aria-label') === 'Dashboard 1 (dashboard)'`), 'accessible name');
     must(await ev(`!document.querySelector('.tab--dashboard .tab__dup') && !!document.querySelector('.tab--worksheet .tab__dup')`), 'duplicate button on the wrong kind');
-    must(await ev(`document.getElementById('wb-bookmark-add').hidden`), 'bookmark action shown on a dashboard');
+    must(await ev(`!document.querySelector('.ws-viewbar__icons [aria-label="Save view as bookmark"]') || document.getElementById('worksheet-view').hidden`), 'bookmark button shown on a dashboard');
     await ev(`document.querySelector('.tab--worksheet .tab__label').click()`);
-    await waitFor(`!document.getElementById('worksheet-view').hidden && !document.getElementById('wb-bookmark-add').hidden`, 'back on the worksheet');
+    await waitFor(`!document.getElementById('worksheet-view').hidden && !!document.querySelector('.ws-viewbar__icons [aria-label="Save view as bookmark"]')`, 'back on the worksheet');
   });
 
   await check('default names count per kind; rename works on both kinds', async () => {
@@ -164,8 +164,8 @@ try {
     await addTab('worksheet'); await addTab('dashboard'); await addTab('worksheet');
     await store(`const [w1, w2] = st.worksheets(), db = st.dashboards()[0]; st.setWidgets(db.id, [{ id: st.nextWidgetId(), kind: 'sheet', sheetId: w2.id, x: 6, y: 0, w: 6, h: 4 }]); st.switchTab(db.id); return true;`);
     await ev(`(() => { window.__blobs = []; const orig = URL.createObjectURL; URL.createObjectURL = (x) => { x.text().then((t) => window.__blobs.push(t)); return orig.call(URL, x); }; return true; })()`);
-    await ev(`document.getElementById('wb-menu-btn').click()`);
-    await ev(`document.getElementById('wb-export').click()`);
+    await ev(`document.querySelector('.ws-export > .iconbtn').click()`);
+    await ev(`[...document.querySelectorAll('.ws-export .menu__item')].find((b) => b.textContent.trim() === 'Workbook (JSON)').click()`);
     await waitFor(`window.__blobs.length === 1`, 'export blob');
     const wb = JSON.parse(await ev(`window.__blobs[0]`));
     must(wb.version === 2, `version ${wb.version}`);

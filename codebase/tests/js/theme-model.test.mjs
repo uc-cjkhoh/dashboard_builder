@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ACCENTS, PALETTES, SURFACE, ON_ACCENT, DEFAULT_THEME, deriveAccent, accentSet, themeVars, cleanTheme, isDefaultTheme }
+import { ACCENTS, PALETTES, SURFACE, ON_ACCENT, DEFAULT_THEME, deriveAccent, accentSet, themeVars, cleanTheme, isDefaultTheme, ONE_DARK_THEME, surfaceOf }
   from "../../src/DashboardBuilder/Features/Core/theme-model.js";
 import { contrastRatio as cr } from "../../src/DashboardBuilder/Features/Dashboard/contrast.js";
 
@@ -52,4 +52,18 @@ test("saved themes are checked", () => {
   assert.deepEqual(cleanTheme({ accent: "#ffffff", palette: "default" }, issues), DEFAULT_THEME);
   assert.deepEqual(cleanTheme({ accent: "blue", palette: "neon" }, issues), DEFAULT_THEME);
   assert.equal(issues.length, 2);
+});
+
+test("the One Dark Pro look: one choice sets surface, accent and chart colours; older themes read as the default look", () => {
+  assert.deepEqual({ ...ONE_DARK_THEME }, { accent: "onedark", palette: "onedark", surface: "onedark" });
+  assert.deepEqual(cleanTheme(ONE_DARK_THEME), { ...ONE_DARK_THEME });
+  assert.equal(isDefaultTheme(ONE_DARK_THEME), false);
+  assert.equal(isDefaultTheme({ accent: "crimson", palette: "default", surface: "onedark" }), false);
+  assert.equal(surfaceOf({ accent: "crimson", palette: "default" }), "default"); // saved before the look existed
+  const issues = [];
+  assert.deepEqual(cleanTheme({ accent: "crimson", palette: "default" }, issues), { accent: "crimson", palette: "default" });
+  assert.deepEqual(issues, []);
+  assert.deepEqual(cleanTheme({ accent: "crimson", palette: "default", surface: "nope" }, issues), { ...DEFAULT_THEME });
+  assert.equal(issues.length, 1);
+  assert.equal(themeVars(ONE_DARK_THEME, true)["--accent"], "#456fc8");
 });

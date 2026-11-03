@@ -46,6 +46,8 @@ import { keyOf, SCATTER_TYPES, COLOR_USES, colorMode, isDrillActive, drillActive
 import { catalogFromEntities } from "../Calc/calc-resolve.js";
 import { newCalcFilter, isCalcPill, makeCalcPill, refusal, syncCalcPills, pillSlots, clearCalcPills, clearFilterCalc, usesCalc, CALC_AGGS } from "../Calc/calc-pill.js";
 import { openCalcDialog } from "../Calc/calc-dialog.js";
+import { openParametersDialog } from "../Workbook/parameters-dialog.js";
+import { saveBookmarkDialog } from "../Workbook/bookmarks-dialog.js";
 import { openGroupDialog } from "../Calc/group-dialog.js";
 import { openSplitDialog } from "../Calc/split-dialog.js";
 import { openCleanDialog } from "../Calc/clean-dialog.js";
@@ -418,7 +420,7 @@ export function initDashboards() {
   const openHierarchies = (startNew) => openHierarchiesDialog({ tables: uniqueTables(), columnsFor, castOf, startNew, canApply: isWorksheetActive(), onApply: (id) => applyHierarchy(activeWorksheet(), id) });
   const manageCalcs = () => openCalcManager({
     state: () => paneState(calculations, catalogFromEntities([...entities.values()]), parameters),
-    chip: calcFieldChip, onNew: () => openCalcDialog(null), limit: LIMITS.calculations,
+    chip: calcFieldChip, onNew: () => openCalcDialog(null), onParameters: openParametersDialog, limit: LIMITS.calculations,
     onEdit: ({ calc }) => (calc.group ? editGroupField(calc) : openCalcDialog(calc.id)),
   });
   if (toolsEl) {
@@ -710,7 +712,7 @@ export function initDashboards() {
     const viewbar = el("div", "ws-viewbar");
     const vbRight = el("div", "ws-viewbar__group ws-viewbar__group--right");
     const vbIcons = el("div", "ws-viewbar__icons");
-    vbIcons.append(formatToggle(), analyticsToggle(), exportControl(dash, s), refreshButton(dash), sheetActions(dash, s), fullScreenButton());
+    vbIcons.append(formatToggle(), analyticsToggle(), exportControl(dash, s), refreshButton(dash), bookmarkButton(), importButton(), sheetActions(dash, s), fullScreenButton());
     vbRight.append(sortControl(dash, s), vbIcons);
     const vbLeft = el("div", "ws-viewbar__group");
     vbLeft.append(fieldsPaneButton(), chartTypePicker(dash, s), undoButtons(dash),
@@ -875,6 +877,20 @@ export function initDashboards() {
     return btn;
   }
 
+  // Save view as bookmark (this worksheet) and Import workbook (a JSON file; Workbook/workbook.js owns the picker).
+  function bookmarkButton() {
+    const btn = iconButton("bookmark", "Save view as bookmark");
+    btn.title = "Save view as bookmark…";
+    btn.addEventListener("click", saveBookmarkDialog);
+    return btn;
+  }
+  function importButton() {
+    const btn = iconButton("import", "Import workbook");
+    btn.title = "Import workbook…";
+    btn.addEventListener("click", () => bus.dispatchEvent(new Event("workbook:import")));
+    return btn;
+  }
+
   // The Analytics card toggle (like Format) and the card itself.
   function analyticsToggle() {
     const btn = iconButton("insights", "Analytics");
@@ -980,6 +996,7 @@ export function initDashboards() {
       item("table", "CSV data", () => exportCsvRows(dash, s)),
       item("eye", "View data", () => viewData(dash, s, false)),
       item("print", "Print / PDF…", () => printView(dash, s)),
+      item("export", "Workbook (JSON)", () => bus.dispatchEvent(new Event("workbook:export"))), // the whole workbook as a file (Workbook/workbook.js)
     );
     wireMenu(btn, menu, { signal: headerAbort?.signal }); // click toggles; Esc/outside/item click close; arrows move
     wrap.append(btn, menu);

@@ -5,7 +5,7 @@ import { bus } from "../Core/store.js";
 import { icon } from "../Core/icons.js";
 import { makeButton, openDialog, closeDialog } from "../Core/ui.js";
 
-/** ctx: { state() → { items, canAdd }, chip(item) → element, onNew(), onEdit(item), limit } */
+/** ctx: { state() → { items, canAdd }, chip(item) → element, onNew(), onEdit(item), onParameters(), limit } */
 export function openCalcManager(ctx) {
   const dlg = el("dialog", "dialog params-dialog calc-manager");
   const head = el("div", "dialog__head");
@@ -16,8 +16,10 @@ export function openCalcManager(ctx) {
   const foot = el("div", "dialog__foot");
   const add = makeButton("", "btn");
   add.append(icon("plus", { size: 14 }), document.createTextNode("New calculated field"));
+  const params = makeButton("", "btn");
+  params.append(icon("param", { size: 14 }), document.createTextNode("Parameters…"));
   const done = makeButton("Done", "btn btn--primary");
-  foot.append(add, done);
+  foot.append(add, params, done);
   dlg.append(head, body, foot);
 
   const render = () => {
@@ -42,6 +44,7 @@ export function openCalcManager(ctx) {
 
   const finish = () => { bus.removeEventListener("calculations:changed", render); closeDialog(dlg); };
   add.addEventListener("click", () => ctx.onNew());
+  params.addEventListener("click", () => ctx.onParameters());
   done.addEventListener("click", finish);
   dlg.addEventListener("cancel", (e) => { e.preventDefault(); finish(); });
   bus.addEventListener("calculations:changed", render);
