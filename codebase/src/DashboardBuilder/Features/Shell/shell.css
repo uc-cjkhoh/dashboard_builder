@@ -76,10 +76,10 @@
 .app[data-view="sheet"] .sidebar__body { padding: var(--s2) 0; align-items: center; }
 /* The worksheet tools are two icon-only tiles (calculated fields, hierarchies); each opens its dialog. */
 .sidebar__tools { flex-direction: column; }
-/* Performance timings: a tool tile at the bottom of the body — left-aligned over the Data Source tiles, centred in the rail. On a dashboard the body
-   shows only this tile (the connection, tables and worksheet tools are hidden). */
-.sidebar__perf { flex: none; margin-top: auto; align-self: flex-start; }
-.app[data-view="sheet"] .sidebar__perf, .app[data-view="board"] .sidebar__perf { align-self: center; }
+/* Performance timings: a tool tile at the bottom of the rail on a worksheet or dashboard — not on the Data Source tab, which has no queries to time.
+   On a dashboard the body shows only this tile (the connection, tables and worksheet tools are hidden). */
+.sidebar__perf { flex: none; margin-top: auto; align-self: center; }
+.app[data-view="model"] .sidebar__perf { display: none; }
 .app[data-view="board"] .sidebar__body { padding: var(--s2) 0; align-items: center; }
 .app[data-view="board"] .sidebar__section--conn, .app[data-view="board"] #schema-section, .app[data-view="board"] #tables-section { display: none; }
 /* Clickable on glass = more solid than the glass: a ≥ 3:1 edge (--ctl-edge) and full-ink icon, so the tile reads in light and dark. */

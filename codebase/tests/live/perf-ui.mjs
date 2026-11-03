@@ -76,14 +76,10 @@ try {
     must(Math.abs((g.tRight - 8) - (g.barRight - g.pad)) <= 1, `glyph not on the gutter: ${J(g)}`);
   });
 
-  await check('empty before any worksheet: dialog opens with the empty message and closes on Escape, focus returns', async () => {
-    await ev(`document.getElementById('perf-btn').click()`);
-    await waitFor(`${dlg} !== null`, 'dialog open');
-    must((await ev(`document.querySelector('.perf-empty')?.textContent ?? ''`)).includes('No timings yet'), 'no empty message');
-    await b.key('Escape', { vk: 27 });
-    await waitFor(`${dlg} === null`, 'dialog closed');
-    must(await ev(`document.activeElement.id`) === 'perf-btn', 'focus not returned to the button');
+  await check('the perf button is not shown on the Data Source tab', async () => {
+    must(await ev(`getComputedStyle(document.getElementById('perf-btn')).display === 'none' && document.querySelector('.app').dataset.view === 'model'`), 'perf tile visible on Data Source');
   });
+
 
   await ev(`document.querySelector('.tab-add').click(); document.querySelector('[data-new-tab=worksheet]').click()`);
   await waitFor(`!document.getElementById('worksheet-view').hidden`, 'worksheet open');
@@ -91,6 +87,15 @@ try {
     chip.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt })); target.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
     target.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt })); chip.dispatchEvent(new DragEvent('dragend', { bubbles: true, dataTransfer: dt })); } }; true`);
   await waitFor(`!!__t.chip('region')`, 'field pane filled');
+
+  await check('empty before any query: dialog opens with the empty message and closes on Escape, focus returns', async () => {
+    await ev(`document.getElementById('perf-btn').click()`);
+    await waitFor(`${dlg} !== null`, 'dialog open');
+    must((await ev(`document.querySelector('.perf-empty')?.textContent ?? ''`)).includes('No timings yet'), 'no empty message');
+    await b.key('Escape', { vk: 27 });
+    await waitFor(`${dlg} === null`, 'dialog closed');
+    must(await ev(`document.activeElement.id`) === 'perf-btn', 'focus not returned to the button');
+  });
   await ev(`__t.drag(__t.chip('region'), document.querySelector('.ws-shelf--rows .ws-shelf__zone'))`);
   await ev(`__t.drag(__t.chip('amount'), document.querySelector('.ws-shelf--columns .ws-shelf__zone'))`);
   const t0 = Date.now();
