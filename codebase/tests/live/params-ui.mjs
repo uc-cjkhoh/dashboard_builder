@@ -131,7 +131,7 @@ try {
 
   // ---- helpers for the parameters dialog ------------------------------------------------------------------------
   const pdlg = `document.querySelector('dialog.params-dialog:not(.calc-manager):not(.hier-dialog)[open]')`;
-  const openParams = async () => { await ev(`document.querySelector('#ws-tools [aria-label="Calculated fields"]').click()`); await waitFor(`document.querySelector('dialog.calc-manager[open]') !== null`, 'calculated fields dialog'); await ev(`[...document.querySelectorAll('dialog.calc-manager button')].find((x) => x.textContent.trim() === 'Parameters…').click()`); await waitFor(`${pdlg} !== null`, 'parameters dialog'); };
+  const openParams = async () => { await ev(`document.querySelector('#ws-tools [aria-label="Parameters"]').click()`); await waitFor(`${pdlg} !== null`, 'parameters dialog'); };
   const clickIn = (root, text) => ev(`[...${root}.querySelectorAll('button')].find((x) => x.textContent.trim() === ${J(text)} || x.getAttribute('aria-label') === ${J(text)}).click()`);
   const setField = (label, value, tag = 'input') => ev(`(() => { const f = [...${pdlg}.querySelectorAll('.params-field')].find((l) => l.textContent.startsWith(${J(label)})); const i = f.querySelector(${J(tag)}); i.value = ${J(value)}; i.dispatchEvent(new Event(${J(tag === 'select' ? 'change' : 'input')}, { bubbles: true })); return true; })()`);
   const fieldHidden = (label) => ev(`(() => { const f = [...${pdlg}.querySelectorAll('.params-field')].find((l) => l.textContent.startsWith(${J(label)})); return f ? f.hidden : null; })()`);

@@ -163,7 +163,7 @@ const TYPE_ICONS = { numeric: "type-number", text: "type-text", temporal: "type-
 export function initDashboards() {
   const view = document.getElementById("worksheet-view");
   const fieldsEl = document.getElementById("ws-fields");
-  const toolsEl = document.getElementById("ws-tools"); // Calculated fields + Hierarchies live in the sidebar body while a worksheet is open (shell.css)
+  const toolsEl = document.getElementById("ws-tools"); // Calculated fields, Parameters + Hierarchies live in the sidebar body while a worksheet is open (shell.css)
   // The Marks slots (Color, Size, Label … Filters, Drill, Pages): a grid of three columns that lives in the field pane after Hierarchies.
   // One node for the worksheet's life — every pane rebuild re-inserts it, every header render refills its grid.
   const marksEl = fieldGroup("ws-shelf ws-shelf--marks", "marks", "Marks");
@@ -373,7 +373,7 @@ export function initDashboards() {
       groups.push(group);
     }
     if (seq !== fieldsSeq) return;
-    // The pane: Marks first, then the search and one tile per table. Calculated fields and Hierarchies are two icons in the sidebar (below).
+    // The pane: Marks first, then the search and one tile per table. Calculated fields, Parameters and Hierarchies are three icons in the sidebar (below).
     fieldsEl.replaceChildren(marksEl, fieldTools(hiddenCount), ...groups);
     filterFields();
   }
@@ -416,11 +416,11 @@ export function initDashboards() {
   }
 
   // --- named hierarchies: applying one copies its levels into sheet.drill -----
-  // The sidebar's two tool icons (worksheet tabs): each opens a dialog to add, edit or use the workbook's calculated fields / hierarchies.
+  // The sidebar's three tool icons (worksheet tabs): each opens a dialog to add, edit or use the workbook's calculated fields / parameters / hierarchies.
   const openHierarchies = (startNew) => openHierarchiesDialog({ tables: uniqueTables(), columnsFor, castOf, startNew, canApply: isWorksheetActive(), onApply: (id) => applyHierarchy(activeWorksheet(), id) });
   const manageCalcs = () => openCalcManager({
     state: () => paneState(calculations, catalogFromEntities([...entities.values()]), parameters),
-    chip: calcFieldChip, onNew: () => openCalcDialog(null), onParameters: openParametersDialog, limit: LIMITS.calculations,
+    chip: calcFieldChip, onNew: () => openCalcDialog(null), limit: LIMITS.calculations,
     onEdit: ({ calc }) => (calc.group ? editGroupField(calc) : openCalcDialog(calc.id)),
   });
   if (toolsEl) {
@@ -431,7 +431,7 @@ export function initDashboards() {
       b.addEventListener("click", onClick);
       return b;
     };
-    toolsEl.replaceChildren(tool("calc", "Calculated fields", manageCalcs), tool("drill", "Hierarchies", () => openHierarchies(false)));
+    toolsEl.replaceChildren(tool("calc", "Calculated fields", manageCalcs), tool("param", "Parameters", openParametersDialog), tool("drill", "Hierarchies", () => openHierarchies(false)));
   }
   async function applyHierarchy(dash, id) {
     const h = hierarchies.find((x) => x.id === id);
