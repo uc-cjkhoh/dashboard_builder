@@ -51,9 +51,7 @@
   transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
 }
 .form-field input:focus {
-  outline: none;
   border-color: var(--ink-2);
-  box-shadow: inset 0 -2px 0 var(--ink-2);
 }
 .form-check { display: flex; align-items: flex-start; gap: var(--s2); font-size: var(--fs-body); }
 /* No UA margin: the box sits on the gutter. Nudged so it centres on the first line when a label wraps. */

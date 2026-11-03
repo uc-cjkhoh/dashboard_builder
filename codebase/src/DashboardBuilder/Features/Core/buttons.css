@@ -33,9 +33,14 @@ button, .btn, .iconbtn, .tab, .tab-add, .ws-tool, .card-choice, [role="button"],
 .iconbtn--danger:not(:disabled):active { background: color-mix(in srgb, var(--danger-ink) 20%, var(--danger-bg)); }
 .menu__item:not(:disabled):active { background: color-mix(in srgb, var(--ink) 12%, transparent); }
 .tab:not(:disabled):active, .tab-add:not(:disabled):active { background: var(--glass-ctl-hover); }
-/* Ghost: no fill at rest — a 1px edge drawn as a shadow (buttons have no border) — and the same fill as a button on hover. */
-.btn.btn--ghost:not(.btn--primary):not(.btn--danger) { background: transparent; box-shadow: inset 0 0 0 1px var(--line-2); }
+/* Ghost: no fill at rest — a 1px outline for the edge (buttons have no border and no shadow) — and the same fill as a button on hover. */
+.btn.btn--ghost:not(.btn--primary):not(.btn--danger) { background: transparent; outline: 1px solid var(--line-2); outline-offset: -1px; }
 .btn.btn--ghost:not(.btn--primary):not(.btn--danger):hover:not(:disabled) { background: var(--btn-fill); }
 .btn.btn--ghost:not(.btn--primary):not(.btn--danger):active:not(:disabled) { background: var(--btn-fill-hover); }
 button:disabled, .btn:disabled, .iconbtn:disabled { cursor: not-allowed; }
 @media (prefers-reduced-motion: reduce) { .btn, .iconbtn, .tab, .tab-add, .menu__item, .card-choice { transition: none; } .btn:active, .iconbtn:active, .tab:active, .tab-add:active, .card-choice:active { transform: none !important; } }
+
+/* No box-shadow on a button or a field, of any colour or state: depth and edges come from fill and outline, never a shadow.
+   (Panels, menus, dialogs and cards keep their elevation. `!important` for the same reason as the border rule at the top.) */
+button, .btn, .iconbtn, .tab, .tab-add, .ws-tool, .card-choice, .menu__item, [role="button"], [role="tab"],
+input, select, textarea, .input, .select, .formula { box-shadow: none !important; }
