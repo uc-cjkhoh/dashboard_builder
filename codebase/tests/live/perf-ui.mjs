@@ -69,9 +69,9 @@ try {
   await ev(`document.dispatchEvent(new CustomEvent('table:add', { detail: { db: 'shop', table: 'orders' } }))`);
   await waitFor(`document.querySelectorAll('.entity').length === 1 && [...document.querySelectorAll('.entity__status')].every((s) => s.hidden)`, 'orders loaded');
 
-  await check('top bar: perf, appearance and settings buttons do not overlap; the right-most (Settings) glyph meets the gutter', async () => {
-    const g = await ev(`(() => { const r = (id) => document.getElementById(id).getBoundingClientRect(); const bar = document.querySelector('.canvas__bar').getBoundingClientRect(); const p = r('perf-btn'), s = r('scheme-btn'), t = r('settings-btn'); const pad = parseFloat(getComputedStyle(document.querySelector('.canvas__bar')).paddingRight); return { pRight: p.right, sLeft: s.left, sRight: s.right, tRight: t.right, tLeft: t.left, barRight: bar.right, pad }; })()`);
-    must(g.pRight <= g.sLeft + 0.5 && g.sRight <= g.tLeft + 0.5, `overlap: ${J(g)}`);
+  await check('top bar: appearance and settings do not overlap, the Settings glyph meets the gutter; the perf button is a sidebar tool in the sidebar body', async () => {
+    const g = await ev(`(() => { const r = (id) => document.getElementById(id).getBoundingClientRect(); const bar = document.querySelector('.canvas__bar').getBoundingClientRect(); const s = r('scheme-btn'), t = r('settings-btn'); const perfIn = !!document.querySelector('#sidebar-body > #perf-btn.sidebar__tool') && !document.querySelector('.canvas__bar #perf-btn'); const pad = parseFloat(getComputedStyle(document.querySelector('.canvas__bar')).paddingRight); return { perfIn, sLeft: s.left, sRight: s.right, tRight: t.right, tLeft: t.left, barRight: bar.right, pad }; })()`);
+    must(g.perfIn, 'perf button not in the sidebar body'); must(g.sRight <= g.tLeft + 0.5, `overlap: ${J(g)}`);
     // the glyph (16px in a 32px box: 8px slack) sits on the bar's inner right edge: box overhangs by 8px
     must(Math.abs((g.tRight - 8) - (g.barRight - g.pad)) <= 1, `glyph not on the gutter: ${J(g)}`);
   });
