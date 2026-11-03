@@ -69,11 +69,11 @@ try {
   await ev(`document.dispatchEvent(new CustomEvent('table:add', { detail: { db: 'shop', table: 'orders' } }))`);
   await waitFor(`document.querySelectorAll('.entity').length === 1 && [...document.querySelectorAll('.entity__status')].every((s) => s.hidden)`, 'orders loaded');
 
-  await check('top bar: perf and appearance buttons do not overlap; the right-most glyph meets the gutter', async () => {
-    const g = await ev(`(() => { const r = (id) => document.getElementById(id).getBoundingClientRect(); const bar = document.querySelector('.canvas__bar').getBoundingClientRect(); const p = r('perf-btn'), s = r('scheme-btn'); const pad = parseFloat(getComputedStyle(document.querySelector('.canvas__bar')).paddingRight); return { pRight: p.right, sLeft: s.left, sRight: s.right, barRight: bar.right, pad }; })()`);
-    must(g.pRight <= g.sLeft + 0.5, `overlap: ${J(g)}`);
+  await check('top bar: perf, appearance and settings buttons do not overlap; the right-most (Settings) glyph meets the gutter', async () => {
+    const g = await ev(`(() => { const r = (id) => document.getElementById(id).getBoundingClientRect(); const bar = document.querySelector('.canvas__bar').getBoundingClientRect(); const p = r('perf-btn'), s = r('scheme-btn'), t = r('settings-btn'); const pad = parseFloat(getComputedStyle(document.querySelector('.canvas__bar')).paddingRight); return { pRight: p.right, sLeft: s.left, sRight: s.right, tRight: t.right, tLeft: t.left, barRight: bar.right, pad }; })()`);
+    must(g.pRight <= g.sLeft + 0.5 && g.sRight <= g.tLeft + 0.5, `overlap: ${J(g)}`);
     // the glyph (16px in a 32px box: 8px slack) sits on the bar's inner right edge: box overhangs by 8px
-    must(Math.abs((g.sRight - 8) - (g.barRight - g.pad)) <= 1, `glyph not on the gutter: ${J(g)}`);
+    must(Math.abs((g.tRight - 8) - (g.barRight - g.pad)) <= 1, `glyph not on the gutter: ${J(g)}`);
   });
 
   await check('empty before any worksheet: dialog opens with the empty message and closes on Escape, focus returns', async () => {
