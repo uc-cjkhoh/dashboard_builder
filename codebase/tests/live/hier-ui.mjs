@@ -135,7 +135,9 @@ try {
   });
 
   await check('Use works with the Drill panel open and with it closed', async () => {
-    await waitFor(`!!document.querySelector('.ws-toolpanel__zone')`, 'drill panel (left open by the first Use)');
+    // (pressing the chart in the previous check put the flyout away, so open the Drill panel here)
+    await ev(`(() => { if (!document.querySelector('.ws-toolpanel__zone')) [...document.querySelectorAll('.ws-tool')].find((x) => /^Drill/.test(x.getAttribute('aria-label') ?? '')).click(); return true; })()`);
+    await waitFor(`!!document.querySelector('.ws-toolpanel__zone')`, 'drill panel open');
     await store(`d.sheet.drill = null; st.updateSheet(d.id, d.sheet)`);
     await waitFor(`!document.querySelector('.ws-drill')`, 'drill cleared');
     await ev(`(() => { if (!document.querySelector('.ws-toolpanel__zone')) [...document.querySelectorAll('.ws-tool')].find((x) => /^Drill/.test(x.getAttribute('aria-label') ?? '')).click(); return true; })()`);

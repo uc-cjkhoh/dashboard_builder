@@ -170,6 +170,12 @@ export function initDashboards() {
   const marksGrid = el("div", "ws-marks__grid");
   marksEl.append(marksGrid);
   const shelvesEl = document.getElementById("ws-shelves");
+  // The open mark tool's editor is a flyout: it opens beside the field pane, level with its slot, so a field is one short drag away and the
+  // chart stays in view. It floats over the worksheet (never pushes the chart down); Esc or ✕ closes it.
+  const toolFly = el("div", "ws-toolfly");
+  toolFly.hidden = true;
+  view?.querySelector(".worksheet")?.append(toolFly);
+  let focusFly = false; // set by a tile click: the opened panel takes keyboard focus once, never on a later re-render
   const chartEl = document.getElementById("ws-chart");
   const noticeEl = document.getElementById("ws-chart-notice");
   const headEl = document.getElementById("ws-chart-head");
@@ -701,8 +707,9 @@ export function initDashboards() {
 
     const children = [columns, rows];
     const active = tools.find((t) => t.key === openTool);
-    const toolEl = calcFor ? calcPanel(dash, s) : choicesFor ? choicesPanel(dash, s) : active ? toolPanel(dash, s, active) : null;
-    if (toolEl) children.push(toolEl);                        // the one open tool editor
+    const toolEl = calcFor ? calcPanel(dash, s) : choicesFor ? choicesPanel(dash, s) : null; // inline editors under the shelves
+    const flyEl = !toolEl && active ? toolPanel(dash, s, active) : null;                    // the open mark tool's flyout
+    if (toolEl) children.push(toolEl);
     // Active-interaction chips (thin status bars for live drill / pages / click-selection state).
     if (isDrillActive(s)) children.push(drillChip(dash, s));  // breadcrumb + drill-up
     if (s.pages) children.push(pagesControl(dash, s));        // page/animate control
@@ -726,8 +733,9 @@ export function initDashboards() {
     headEl.replaceChildren(viewbar, ...(swEl ? [swEl] : []), ...(fmtEl ? [fmtEl] : []), ...(titleEl ? [titleEl] : []), ...(paramsEl ? [paramsEl] : []), ...(cardsEl ? [cardsEl] : []));
 
     // Motion only for what is new since the last render (every edit re-renders the header).
-    const panelKey = toolEl ? `tool:${openTool}` : fmtEl ? "format" : null;
-    if (panelKey && panelKey !== shownPanel) enter(toolEl ?? fmtEl);
+    mountFly(flyEl);
+    const panelKey = toolEl || flyEl ? `tool:${openTool}` : fmtEl ? "format" : null;
+    if (panelKey && panelKey !== shownPanel) enter(flyEl ?? toolEl ?? fmtEl, flyEl ? { y: 0, scale: .98 } : undefined);
     shownPanel = panelKey;
     const pillKeys = new Set();
     for (const p of shelvesEl.querySelectorAll(".ws-pill[data-key]")) {
@@ -2199,11 +2207,14 @@ export function initDashboards() {
     const btn = el("button", `ws-tool${openTool === tool.key ? " is-active" : ""}${set ? " is-set" : ""}`);
     btn.type = "button";
     btn.setAttribute("aria-pressed", String(openTool === tool.key));
+    btn.setAttribute("aria-expanded", String(openTool === tool.key));
+    btn.setAttribute("aria-controls", "ws-toolfly");
+    btn.dataset.tool = tool.key;
     btn.setAttribute("aria-label", `${tool.label}${set ? ` (${tool.count} field${tool.count > 1 ? "s" : ""})` : " (empty)"}`);
     btn.title = tool.hint || tool.label;
     btn.append(icon(tool.icon), el("span", "ws-tool__text", tool.label));
     if (set) btn.append(el("span", "ws-tool__badge", String(tool.count)));
-    btn.addEventListener("click", () => { openTool = openTool === tool.key ? null : tool.key; choicesFor = null; calcFor = null; formatOpen = false; renderShelves(); });
+    btn.addEventListener("click", () => { openTool = openTool === tool.key ? null : tool.key; focusFly = openTool !== null; choicesFor = null; calcFor = null; formatOpen = false; renderShelves(); });
     btn.addEventListener("dragover", (e) => { if (hasField(e)) { e.preventDefault(); btn.classList.add("is-over"); } });
     btn.addEventListener("dragleave", () => btn.classList.remove("is-over"));
     btn.addEventListener("drop", (e) => {
@@ -2214,15 +2225,19 @@ export function initDashboards() {
     return btn;
   }
 
-  // The editor panel for the open tool: a card with its current field pills over a drop zone (+ note).
+  // The editor panel for the open tool: its title, the field pills it holds over a drop zone, then its own editor / note.
   function toolPanel(dash, s, tool) {
     const panel = el("div", "ws-toolpanel");
+    panel.tabIndex = -1;
+    panel.setAttribute("role", "group");
     const head = el("div", "ws-toolpanel__head");
     const title = el("span", "ws-toolpanel__title");
+    title.id = `ws-toolpanel-${tool.key}`;
+    panel.setAttribute("aria-labelledby", title.id);
     title.append(icon(tool.icon), ` ${tool.label}`);
     head.append(title);
     const close = iconButton("close", "Close editor");
-    close.addEventListener("click", () => { openTool = null; renderShelves(); });
+    close.addEventListener("click", () => closeFly());
     head.append(close);
     panel.append(head);
     const zone = el("div", "ws-toolpanel__zone");
@@ -2234,6 +2249,44 @@ export function initDashboards() {
     if (tool.note) panel.append(el("span", "ws-shelf__note", tool.note));
     return panel;
   }
+  // Show (or clear) the flyout and put it level with its slot.
+  function mountFly(panel) {
+    if (!panel) { toolFly.hidden = true; toolFly.replaceChildren(); return; }
+    toolFly.id = "ws-toolfly";
+    toolFly.replaceChildren(panel);
+    toolFly.hidden = false;
+    placeFly();
+    if (focusFly) { focusFly = false; panel.focus({ preventScroll: true }); }
+  }
+  // Right of the field pane, level with the open slot but below the shelves, kept inside the worksheet. Reads layout, so it also runs on scroll / resize.
+  function placeFly() {
+    if (toolFly.hidden) return;
+    const host = worksheetEl.getBoundingClientRect();
+    const tile = marksGrid.querySelector(".ws-tool.is-active");
+    const paneShown = !fieldsEl.hidden && tile?.offsetParent;
+    const left = (paneShown ? fieldsEl.getBoundingClientRect().right : host.left) - host.left + 8;
+    const wanted = paneShown ? tile.getBoundingClientRect().top - host.top : 8;
+    const belowShelves = shelvesEl.getBoundingClientRect().bottom - host.top + 8; // Columns and Rows stay uncovered: they are drop targets too
+    const top = Math.max(8, Math.min(Math.max(wanted, belowShelves), host.height - toolFly.offsetHeight - 8));
+    toolFly.style.left = `${left}px`;
+    toolFly.style.top = `${top}px`;
+  }
+  function closeFly({ refocus = true } = {}) {
+    const key = openTool;
+    openTool = null; focusFly = false;
+    renderShelves();
+    if (refocus) marksGrid.querySelector(`.ws-tool[data-tool="${key}"]`)?.focus({ preventScroll: true });
+  }
+  // It floats over the chart's corner, so pressing the chart itself puts it away (the press still reaches the chart). The field pane,
+  // shelves and the panel are left alone: that is where fields are dragged from and to.
+  document.addEventListener("pointerdown", (e) => { if (!toolFly.hidden && chartEl.contains(e.target)) closeFly({ refocus: false }); });
+  toolFly.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !e.defaultPrevented && !e.target.closest?.("select, input, textarea")) { e.preventDefault(); e.stopPropagation(); closeFly(); }
+  });
+  fieldsEl.addEventListener("scroll", placeFly, { passive: true });
+  window.addEventListener("resize", placeFly);
+  new ResizeObserver(placeFly).observe(toolFly);
+  new ResizeObserver(placeFly).observe(fieldsEl);
 
   // --- Tooltip text ---------------------------------------------
   // The fields the last drawn chart offers ([{ name, sample }]) — the editor's chips and live preview.

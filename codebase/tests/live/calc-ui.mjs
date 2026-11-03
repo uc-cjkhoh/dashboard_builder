@@ -328,7 +328,7 @@ try {
     const pt = await ev(`(() => { const host = document.querySelector('#ws-chart > div'); const inst = window.echarts.getInstanceByDom(host);
       const r = host.getBoundingClientRect(); const opt = inst.getOption(); const cat = (opt.xAxis?.[0]?.data ?? opt.yAxis?.[0]?.data ?? [])[0];
       const horiz = opt.yAxis?.[0]?.type === 'category';
-      const p = inst.convertToPixel({ seriesIndex: 0 }, horiz ? [10, cat] : [cat, 10]);
+      const p = inst.convertToPixel({ seriesIndex: 0 }, horiz ? [5, cat] : [cat, 5]);
       return p ? { x: r.left + p[0], y: r.top + p[1] } : null; })()`);
     must(pt, 'could not locate a mark');
     await b.click(pt.x, pt.y);
@@ -342,7 +342,7 @@ try {
     const pt2 = await ev(`(() => { const host = document.querySelector('#ws-chart > div'); const inst = window.echarts.getInstanceByDom(host);
       const r = host.getBoundingClientRect(); const opt = inst.getOption(); const cat = (opt.xAxis?.[0]?.data ?? opt.yAxis?.[0]?.data ?? [])[0];
       const horiz = opt.yAxis?.[0]?.type === 'category';
-      const p = inst.convertToPixel({ seriesIndex: 0 }, horiz ? [10, cat] : [cat, 10]);
+      const p = inst.convertToPixel({ seriesIndex: 0 }, horiz ? [5, cat] : [cat, 5]);
       return { x: r.left + p[0], y: r.top + p[1] }; })()`);
     await b.click(pt2.x, pt2.y); await b.sleep(500);
     must(await ev(`!!document.querySelector('.ws-select')`), 'control failed: a click on a plain dimension made no selection (test cannot see marks)');
