@@ -1,8 +1,8 @@
-// The Theme dialog (Workbook menu → Theme…): an accent (five checked presets or a custom colour)
+// The Theme dialog (Settings menu → Theme…): a look (dark-mode surfaces), an accent (five checked presets or a custom colour)
 // and a chart palette. Choices apply live and save with the workbook; a custom colour that can't carry
 // white button text is refused with the reason. Swatches are labelled — never colour alone.
 import { currentTheme, setTheme } from "../Core/store.js";
-import { ACCENTS, PALETTES, DEFAULT_THEME, deriveAccent } from "../Core/theme-model.js";
+import { ACCENTS, PALETTES, SURFACES, DEFAULT_THEME, ONE_DARK_THEME, surfaceOf, deriveAccent } from "../Core/theme-model.js";
 import { makeButton, openDialog, closeDialog } from "../Core/ui.js";
 import { isDark } from "../Core/scheme.js";
 
@@ -24,8 +24,20 @@ export function openThemeDialog() {
   const render = () => {
     const t = currentTheme();
     const custom = !ACCENTS[t.accent];
-    body.replaceChildren(accentGroup(t, custom), paletteGroup(t));
+    body.replaceChildren(lookGroup(t), accentGroup(t, custom), paletteGroup(t));
   };
+
+  // The look: the dark-mode surfaces. One Dark Pro also picks its own accent and chart colours (both stay changeable below).
+  function lookGroup(t) {
+    const fs = el("fieldset", "theme-group");
+    fs.append(el("legend", "theme-group__title", "Look — dark-mode backgrounds and text"));
+    const list = el("div", "theme-options");
+    const swatches = { default: ["#1c181b", "#2b2529", "#d42a3c"], onedark: ["#21252b", "#2c313a", "#456fc8"] };
+    for (const [id, s] of Object.entries(SURFACES)) list.append(option("look", id, s.label, surfaceOf(t) === id, swatches[id],
+      () => setTheme(id === "onedark" ? { ...ONE_DARK_THEME } : { ...currentTheme(), surface: id })));
+    fs.append(list);
+    return fs;
+  }
 
   function accentGroup(t, custom) {
     const fs = el("fieldset", "theme-group");

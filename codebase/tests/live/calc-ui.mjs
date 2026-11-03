@@ -412,8 +412,8 @@ try {
   // (g) export, reload with the exported file, restore
   await check('g: export -> reload -> import restores pill, request tree, field-pane group', async () => {
     await ev(`(() => { window.__blobs = []; const orig = URL.createObjectURL; URL.createObjectURL = (x) => { x.text().then((t) => window.__blobs.push(t)); return orig.call(URL, x); }; return true; })()`);
-    await ev(`document.getElementById('wb-menu-btn').click()`);
-    await ev(`document.getElementById('wb-export').click()`);
+    await ev(`document.querySelector('.ws-export > .iconbtn').click()`);
+    await ev(`[...document.querySelectorAll('.ws-export .menu__item')].find((b) => b.textContent.trim() === 'Workbook (JSON)').click()`);
     await waitFor(`window.__blobs.length === 1`, 'export blob');
     const json = await ev(`window.__blobs[0]`);
     const wb = JSON.parse(json);

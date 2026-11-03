@@ -5,7 +5,7 @@
 // ≥ 4.5:1 on the surface and the accent ≥ 3:1 against the surface, in both schemes.
 import { contrastRatio } from "../Dashboard/contrast.js";
 
-export const SURFACE = { light: "#ffffff", dark: "#1c181b" };
+export const SURFACE = { light: "#ffffff", dark: "#21252b" };
 export const ON_ACCENT = "#ffffff";
 
 // accent, hover, pressed, ink (accent-coloured text), soft (tinted background), line (tinted border)
@@ -14,11 +14,13 @@ export const ACCENTS = Object.freeze({
   crimson: { label: "Crimson", light: A("#b82035", "#9c1c32", "#821729", "#a51d31", "#fcf0f2", "#f3c3ca"),
     dark: A("#d42a3c", "#b72031", "#991b2a", "#eea0a7", "#3a1a20", "#6b2a33") },
   blue: { label: "Blue", light: A("#2260bf", "#1e55a9", "#1a4991", "#1f57ae", "#eef3fc", "#c4d6f4"),
-    dark: A("#2a66cc", "#245ab5", "#1f4e9c", "#9cbced", "#172238", "#2a4470") },
+    dark: A("#4672c8", "#3d64b3", "#33559a", "#9cbced", "#172238", "#2a4470") },
   teal: { label: "Teal", light: A("#126863", "#105855", "#0d4947", "#11635e", "#e8f6f5", "#b5e0dd"),
     dark: A("#28807c", "#23716d", "#1e615e", "#5fd4cc", "#12282a", "#1f4d4b") },
   violet: { label: "Violet", light: A("#6d3fd1", "#5f35b8", "#522d9f", "#6236c4", "#f3effc", "#d8c9f6"),
     dark: A("#815cdb", "#7251c1", "#6246a6", "#c0aef1", "#241c38", "#45366e") },
+  onedark: { label: "One Dark", light: A("#2260bf", "#1e55a9", "#1a4991", "#1f57ae", "#eef3fc", "#c4d6f4"),
+    dark: A("#456fc8", "#3d64b3", "#33559a", "#6aa8e0", "#262f45", "#3d5a94") },
   graphite: { label: "Graphite", light: A("#3d4451", "#333944", "#292e37", "#3d4451", "#eff1f4", "#cdd2d9"),
     dark: A("#6d7582", "#606772", "#535963", "#c4cbd6", "#23262c", "#41464f") },
 });
@@ -31,12 +33,20 @@ export const PALETTES = Object.freeze({
   okabe: { label: "Colour-blind safe",
     light: ["#0072b2", "#e69f00", "#009e73", "#cc79a7", "#56b4e9", "#d55e00", "#f0e442", "#000000"],
     dark: ["#56b4e9", "#e69f00", "#009e73", "#cc79a7", "#0072b2", "#d55e00", "#f0e442", "#bbbbbb"] },
+  onedark: { label: "One Dark Pro",
+    light: ["#2a78d6", "#146f14", "#e87ba4", "#c99424", "#1eac79", "#de6e41", "#4a3aa7", "#df4d4c"],
+    dark: ["#6aa8e0", "#98c379", "#c678dd", "#e5c07b", "#56b6c2", "#d19a66", "#abb2bf", "#e06c75"] },
   muted: { label: "Muted",
     light: ["#4e79a7", "#dd8e40", "#59a14f", "#b07aa1", "#76b7b2", "#e1c254", "#9c755f", "#bab0ac"],
     dark: ["#6b93c0", "#e3a061", "#73b86a", "#c495b6", "#8ccbc6", "#e7ce77", "#b9927c", "#cfc7c3"] },
 });
 
-export const DEFAULT_THEME = Object.freeze({ accent: "crimson", palette: "default" });
+// Surface looks: the dark-mode backgrounds, text and status colours. "onedark" sets <html data-look="onedark"> (Core/theme.js,
+// core.css); light mode is unchanged by it.
+export const SURFACES = Object.freeze({ default: { label: "Default" }, onedark: { label: "One Dark Pro" } });
+/** The One Dark Pro look as one choice: its surface, accent and chart colours together. */
+export const ONE_DARK_THEME = Object.freeze({ accent: "onedark", palette: "onedark", surface: "onedark" });
+export const DEFAULT_THEME = Object.freeze({ accent: "crimson", palette: "default" }); // no surface key = the default look (files stay as they were)
 const HEX = /^#[0-9a-f]{6}$/i;
 
 const mix = (a, b, t) => {
@@ -93,14 +103,19 @@ export function themeVars(theme, dark) {
 }
 
 /** Whether a theme is the default (nothing to set). */
-export const isDefaultTheme = (t) => !t || (t.accent === DEFAULT_THEME.accent && t.palette === DEFAULT_THEME.palette);
+export const isDefaultTheme = (t) => !t || (t.accent === DEFAULT_THEME.accent && t.palette === DEFAULT_THEME.palette && surfaceOf(t) === "default");
+
+/** The surface look of a theme (older saved themes have none = default). */
+export const surfaceOf = (t) => (SURFACES[t?.surface] ? t.surface : "default");
 
 /** A saved theme, checked: known preset or a valid custom colour, known palette — else default + an issue. */
 export function cleanTheme(raw, issues = []) {
   if (raw == null) return { ...DEFAULT_THEME };
   const okAccent = raw && (ACCENTS[raw.accent] || (HEX.test(raw.accent ?? "") && !deriveAccent(raw.accent).error));
   const okPalette = raw && PALETTES[raw.palette];
-  if (!okAccent || !okPalette) issues.push("The theme couldn't be used — reset to the default.");
-  return okAccent && okPalette ? { accent: ACCENTS[raw.accent] ? raw.accent : raw.accent.toLowerCase(), palette: raw.palette }
+  const okSurface = raw && (raw.surface === undefined || SURFACES[raw.surface]); // absent in themes saved before the look existed
+  if (!okAccent || !okPalette || !okSurface) issues.push("The theme couldn't be used — reset to the default.");
+  return okAccent && okPalette && okSurface
+    ? { accent: ACCENTS[raw.accent] ? raw.accent : raw.accent.toLowerCase(), palette: raw.palette, ...(surfaceOf(raw) === "default" ? {} : { surface: surfaceOf(raw) }) }
     : { ...DEFAULT_THEME };
 }

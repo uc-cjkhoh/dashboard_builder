@@ -78,7 +78,7 @@ try {
     must(await ev(`!!document.querySelector('.tab--story .tab__kind')`), 'no kind icon');
     must(await ev(`document.getElementById('worksheet-view').hidden && document.getElementById('board-view').hidden`), 'other views visible');
     must(await ev(`!document.getElementById('story-empty').hidden && document.getElementById('story-strip').hidden && document.getElementById('story-nav').hidden`), 'empty state');
-    must(await ev(`document.getElementById('wb-bookmark-add').hidden`), 'bookmark action shown on a story');
+    must(await ev(`document.getElementById('worksheet-view').hidden`), 'worksheet view bar (bookmark/import) shown on a story');
     must(await ev(`document.getElementById('story-title').textContent`) === 'Story 1', 'title');
     must(await ev(`[...document.querySelectorAll('.story-add__select option')].map((o) => o.textContent).join('|')`) === 'Worksheet: Revenue by region|Worksheet: Share by channel|Dashboard: Overview', 'offered tabs');
   });

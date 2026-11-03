@@ -71,7 +71,7 @@ export function serializeWorkbook({ entities, relationships, tabs, active, theme
     ...(storyTabs.length ? { stories: storyTabs.map((s) => ({ name: s.name, steps: savedSteps(s.steps, wsIndex, dbIndex) })) } : {}), // (optional; absent in older files)
     tabs: order, // the strip's order
     active: activeIndex !== undefined ? { kind: active.kind, index: activeIndex } : null, // null = the Data Source view
-    theme: theme ? { accent: theme.accent, palette: theme.palette } : { ...DEFAULT_THEME },
+    theme: theme ? { accent: theme.accent, palette: theme.palette, ...(theme.surface && theme.surface !== "default" ? { surface: theme.surface } : {}) } : { ...DEFAULT_THEME },
     sharedFilters: structuredClone(sharedFilters),
     fields: Object.fromEntries(fieldMeta),
     parameters: structuredClone(parameters),

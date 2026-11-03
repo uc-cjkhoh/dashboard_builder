@@ -1,16 +1,15 @@
 import {
-  entities, relationships, tabs, bus, currentView, isDashboardActive,
-  createWorksheet, createDashboard, createStory, setSteps, isStoryActive, updateSheet, setWidgets, setDashboardSize, nextWidgetId, closeTab, showModel, switchTab, currentTheme, setTheme,
+  entities, relationships, tabs, bus, currentView,
+  createWorksheet, createDashboard, createStory, setSteps, updateSheet, setWidgets, setDashboardSize, nextWidgetId, closeTab, showModel, switchTab, currentTheme, setTheme,
   nextCalcId, sharedFilters, setSharedFilters, bookmarks, setBookmarks, fieldMeta, setAllFieldMeta, parameters, setParameters, hierarchies, setHierarchies, calculations, setCalculations,
 } from "../Core/store.js";
 import { clearRoleChoices } from "../Calc/calc-pane-model.js";
 import { DEFAULT_THEME } from "../Core/theme-model.js";
 import { openThemeDialog } from "./theme-dialog.js";
-import { saveBookmarkDialog, openBookmarksDialog } from "./bookmarks-dialog.js";
-import { openParametersDialog } from "./parameters-dialog.js";
+import { openBookmarksDialog } from "./bookmarks-dialog.js";
 import { wireMenu } from "../Core/menu.js";
 import { exit } from "../Core/motion.js";
-import { toast, confirmDialog, toggle, listDialog } from "../Core/ui.js";
+import { toast, confirmDialog, listDialog } from "../Core/ui.js";
 import { addEntity, clearModel } from "../Canvas/canvas.js";
 import { restoreRelationship } from "../Relations/relations.js";
 import { serializeWorkbook, parseWorkbook, storageKey, legacyStorageKey } from "./workbook-model.js";
@@ -36,28 +35,22 @@ let blockedKey = null; // a stored workbook that couldn't be restored — never 
 let warned = ""; // the last not-saved warning shown (a toast once per cause, not on every autosave)
 
 export function initWorkbook() {
-  const exportBtn = document.getElementById("wb-export");
-  const importBtn = document.getElementById("wb-import");
   const fileInput = document.getElementById("wb-file");
-  if (!exportBtn || !importBtn || !fileInput) return;
+  if (!fileInput) return;
 
   const menuBtn = document.getElementById("wb-menu-btn"), menuList = document.getElementById("wb-menu-list");
   if (menuBtn && menuList) wireMenu(menuBtn, menuList);
+  const settingsBtn = document.getElementById("settings-btn"), settingsList = document.getElementById("settings-list");
+  if (settingsBtn && settingsList) wireMenu(settingsBtn, settingsList);
 
   document.addEventListener("connection:changed", (e) => onConnection(e.detail ?? {}));
-  // A dashboard or story has no single view to bookmark (bookmarks capture worksheets), so the action is hidden there.
-  const bookmarkAdd = document.getElementById("wb-bookmark-add");
-  const syncBookmarkAction = () => toggle(bookmarkAdd, !isDashboardActive() && !isStoryActive());
-  bus.addEventListener("view:changed", syncBookmarkAction);
-  syncBookmarkAction();
   for (const type of CHANGE_EVENTS) bus.addEventListener(type, scheduleSave);
 
-  exportBtn.addEventListener("click", exportFile);
+  bus.addEventListener("workbook:export", exportFile);
   document.getElementById("wb-theme")?.addEventListener("click", openThemeDialog);
-  document.getElementById("wb-bookmark-add")?.addEventListener("click", saveBookmarkDialog);
   document.getElementById("wb-bookmarks")?.addEventListener("click", openBookmarksDialog);
-  document.getElementById("wb-parameters")?.addEventListener("click", openParametersDialog);
-  importBtn.addEventListener("click", () => {
+  // The worksheet view bar's Import button asks for a file here (it has no handle on the picker).
+  bus.addEventListener("workbook:import", () => {
     if (!key) { toast("Connect to ClickHouse first — a workbook opens against the connected server.", "info"); return; }
     fileInput.click();
   });
