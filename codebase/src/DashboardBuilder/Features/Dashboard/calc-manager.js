@@ -1,5 +1,5 @@
-// The "Calculated fields" dialog, opened from the sidebar's calculator icon on a worksheet tab: every calculation as a row (the field chip, so its
-// type, "add to shelf" plus and context menu all work) with an Edit button, and New calculated field in the footer. It redraws while open
+// The "Calculated fields" dialog, opened from the sidebar's calculator icon on a worksheet tab: every calculation as one row — the field chip, so its
+// type, "add to shelf" plus and context menu all work, with Edit built into it — and New calculated field in the footer. It redraws while open
 // whenever the calculations change, so an edit, duplicate or delete made from the row is seen at once. All text is set with textContent.
 import { bus } from "../Core/store.js";
 import { icon } from "../Core/icons.js";
@@ -27,11 +27,18 @@ export function openCalcManager(ctx) {
     else {
       const list = el("ul", "calc-manager__list");
       for (const item of items) {
+        // One element per row: the field chip itself, with Edit built into it (a pencil at its end; pressing the name does the same).
         const li = el("li", "calc-manager__row");
-        const edit = makeButton("Edit", "btn");
+        const chip = ctx.chip(item);
+        const edit = el("button", "iconbtn calc-manager__edit");
+        edit.type = "button";
+        edit.append(icon("edit", { size: 14 }));
         edit.setAttribute("aria-label", `Edit ${item.calc.name}`);
+        edit.title = "Edit";
         edit.addEventListener("click", () => ctx.onEdit(item));
-        li.append(ctx.chip(item), edit);
+        chip.querySelector(".ws-field__name")?.addEventListener("click", () => ctx.onEdit(item));
+        chip.append(edit);
+        li.append(chip);
         list.append(li);
       }
       body.append(list);
