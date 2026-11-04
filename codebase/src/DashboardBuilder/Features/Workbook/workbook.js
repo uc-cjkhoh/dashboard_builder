@@ -9,6 +9,7 @@ import { openThemeDialog } from "./theme-dialog.js";
 import { wireMenu } from "../Core/menu.js";
 import { exit } from "../Core/motion.js";
 import { toast, confirmDialog, listDialog } from "../Core/ui.js";
+import { dateIn } from "../Core/timezone.js";
 import { addEntity, clearModel } from "../Canvas/canvas.js";
 import { restoreRelationship } from "../Relations/relations.js";
 import { serializeWorkbook, parseWorkbook, storageKey, legacyStorageKey } from "./workbook-model.js";
@@ -219,7 +220,7 @@ function exportFile() {
   const url = URL.createObjectURL(new Blob([json], { type: "application/json" }));
   const a = document.createElement("a");
   a.href = url;
-  a.download = `workbook-${new Date().toISOString().slice(0, 10)}.json`;
+  a.download = `workbook-${dateIn(Date.now())}.json`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }

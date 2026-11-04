@@ -14,6 +14,7 @@ import { checkValue, paramTypeFor } from "../Core/parameters-model.js";
 import { exportChart, hasChartInstance, sizeChart, focusSeries } from "./chart.js";
 import { createWorksheetView, periodNotice } from "./worksheet-view.js";
 import { CACHE_NOTE } from "./notices.js";
+import { dateTimeIn, offsetLabel } from "../Core/timezone.js";
 import { fieldCopies } from "./field-copy-model.js";
 import { el, hint, iconSpan } from "./render-dom.js";
 import { updatedText, calcDefinitionLines } from "./data-notes.js";
@@ -254,6 +255,11 @@ export function initDashboards() {
     if (dash.sheet.filters.filter((f) => !f.category).length < missing) { renderShelves(); runChart(); }
   });
   // chart.js reads colours from :root at render time — redraw when light/dark flips (Core/scheme.js; a cache hit, no query).
+  // An automatic title is the tab's name: when the tab is renamed, the title follows at once (a custom title is left alone).
+  bus.addEventListener("tabs:changed", () => {
+    const d = activeWorksheet(), auto = document.querySelector(".ws-titleblock__btn.ws-titleblock__title.is-auto");
+    if (d && auto && auto.textContent !== d.name) renderShelves();
+  });
   bus.addEventListener("scheme:changed", () => { if (isWorksheetActive()) runChart(); });
   bus.addEventListener("theme:changed", () => { if (isWorksheetActive()) runChart(); }); // redraw in the new colours
   // A rename / hide / default aggregation redraws the field pane, the pills and the chart's labels.
@@ -1184,7 +1190,7 @@ export function initDashboards() {
     lines.push(...calcDefinitionLines(s, calculations, appliedShared()).map((l) => `Calculation: ${l}`));
     const updated = updatedText(lastQueriedAt);
     if (updated) lines.push(updated);
-    lines.push(`Printed ${new Date().toLocaleString()}`);
+    lines.push(`Printed ${dateTimeIn(Date.now())} (${offsetLabel()})`);
     for (const l of lines) printHead.append(el("p", "ws-print-head__line", l));
     card.prepend(printHead);
     sizeChart(chartEl, { width: 1000, height: 560 });

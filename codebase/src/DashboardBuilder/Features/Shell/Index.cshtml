@@ -1,3 +1,5 @@
+@using DashboardBuilder.Features.Shell
+@inject Microsoft.Extensions.Configuration.IConfiguration Config
 @{
     Layout = null;
 }
@@ -5,6 +7,8 @@
 <html lang="en">
 <head>
     <meta charset="utf-8" />
+    @* The zone the UI shows clock times in: Display:TimeZone, else the host machine's, else Malaysia (UTC+8) — Core/timezone.js reads it. *@
+    <meta name="app-timezone" content="@AppTimeZone.Resolve(Config["Display:TimeZone"], TimeZoneInfo.Local.Id)" />
     <title>Dashboard Builder</title>
     @* Sets <html data-scheme> before first paint (System / Light / Dark — Core/scheme.js), so dark never flashes light. *@
     <script src="~/features/Core/scheme-boot.js"></script>
@@ -90,6 +94,11 @@
 
     <div class="sr-only" id="toast-live" role="status" aria-live="polite"></div>
     <div class="toast" id="toast" hidden></div>
+    <!-- What the app is waiting on (Shell/activity-bar.js): shown while an API request is in flight. -->
+    <div class="activity" id="activity" role="status" aria-live="polite" hidden>
+        <span class="activity__glyph" id="activity-glyph" aria-hidden="true"></span>
+        <span class="activity__text" id="activity-text"></span>
+    </div>
 
     <!-- Self-hosted charting library (no CDN). Classic script runs before the deferred module
          graph, so `window.echarts` is ready when Dashboard/chart.js first renders. -->

@@ -305,7 +305,7 @@ export function initCanvas() {
       profile.className = "iconbtn col-row__profile";
       profile.setAttribute("aria-label", `Profile ${col.name}`);
       profile.title = "Profile this field (distinct values, nulls, top values)";
-      profile.append(icon("analytics", { size: 14 }));
+      profile.append(icon("profile", { size: 14 }));
       profile.addEventListener("click", (event) => { event.preventDefault(); openColumnProfile(entity.db, entity.table, col); });
 
       if (isSource) row.append(name, type); // no profile: a source takes no relationship and reads no table

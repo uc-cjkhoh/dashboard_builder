@@ -49,12 +49,17 @@ export function initConnection() {
       pick.type = "button";
       pick.className = "conn-recent__pick";
       pick.dataset.key = sourceKey(e);
+      const ic = icon("database", { size: 16 });
+      ic.classList.add("conn-recent__icon");
+      const text = document.createElement("span");
+      text.className = "conn-recent__text";
       const h = document.createElement("span");
       h.className = "conn-summary__host"; h.textContent = e.host;
       const m = document.createElement("span");
-      m.className = "conn-recent__meta"; m.textContent = `${e.user} · :${e.port}`;
+      m.className = "conn-recent__meta"; m.textContent = `${e.user} · ${e.port}`;
+      text.append(h, m);
       pick.title = `${e.host} · ${e.user} · :${e.port}`;
-      pick.append(h, m);
+      pick.append(ic, text);
       pick.addEventListener("click", () => {
         fillForm(formValues(e));
         for (const i of [hostEl, portEl, userEl, passEl]) clearFieldError(i);
@@ -63,7 +68,7 @@ export function initConnection() {
       });
       const rm = document.createElement("button");
       rm.type = "button";
-      rm.className = "iconbtn conn-summary__btn";
+      rm.className = "iconbtn conn-summary__btn conn-recent__remove";
       rm.setAttribute("aria-label", `Remove ${e.host} from recent`);
       rm.title = "Remove from recent";
       rm.append(icon("close"));
@@ -81,8 +86,8 @@ export function initConnection() {
 
   let current = null; // last connected view, for Cancel-back-to-summary
 
-  // Certificate validation is on by default. The "trust invalid cert" opt-in only
-  // applies to a TLS connection, so hide it when Secure is off; warn while it's checked.
+  // "Trust invalid / self-signed certificate" is checked by default. It only applies to a TLS
+  // connection, so hide it when Secure is off; warn while it's checked.
   function syncCertControls() {
     const secure = secureEl.checked;
     toggle(allowCertRow, secure);

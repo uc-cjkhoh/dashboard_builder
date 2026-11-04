@@ -63,7 +63,7 @@ try {
     const labels = await ev(`[...document.querySelectorAll('.col-row__profile')].map((x) => x.getAttribute('aria-label'))`);
     must(J(labels) === J(['Profile city', 'Profile amount', 'Profile bad']), J(labels));
     await open('city');
-    await waitFor(`document.querySelector('dialog[open] .col-profile__tiles') !== null`, 'profile loaded');
+    await waitFor(`document.querySelector('dialog[open] .col-profile__cell--top') !== null`, 'profile loaded');
   });
   await check('request is {column, limit: 10}', async () => { must(J(requests.at(-1)) === J({ column: 'city', limit: 10 }), J(requests.at(-1))); });
   await check('title, properties and tiles show the profile in words', async () => {
@@ -101,7 +101,7 @@ try {
   });
   await check('a numeric field is a measure and shows Min and Max tiles, no sample note', async () => {
     await open('amount');
-    await waitFor(`document.querySelector('dialog[open] .col-profile__tiles') !== null`, 'amount loaded');
+    await waitFor(`document.querySelector('dialog[open] .col-profile__cell--top') !== null`, 'amount loaded');
     must(J(await text('.col-profile__props dd')) === J(['amount', 'Float64', 'numeric', 'measure']), 'props');
     const labels = await text('.col-profile__tile-label');
     must(J(labels) === J(['Rows', 'Distinct (approx.)', 'Null share', 'Min', 'Max']), J(labels));
@@ -113,7 +113,7 @@ try {
   await check('opening and closing the dialog three times leaves no <dialog> behind', async () => {
     for (let i = 0; i < 3; i++) {
       await open('amount');
-      await waitFor(`document.querySelector('dialog[open] .col-profile__tiles') !== null`, 'loaded');
+      await waitFor(`document.querySelector('dialog[open] .col-profile__cell--top') !== null`, 'loaded');
       await ev(`[...document.querySelectorAll('dialog[open] .btn')].find((x) => x.textContent === 'Close').click()`);
       await waitFor(`document.querySelector('dialog') === null`, 'removed');
     }
@@ -123,7 +123,7 @@ try {
     await ev(`document.querySelector('.col-row[data-column=amount] .col-row__profile').focus()`);
     must(await ev(`document.activeElement.classList.contains('col-row__profile') && document.activeElement.closest('.col-row').dataset.column === 'amount'`), 'focus not on the Profile button');
     for (const type of ['keyDown', 'keyUp']) await b.send('Input.dispatchKeyEvent', { type, key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13, ...(type === 'keyDown' ? { text: '\r' } : {}) });
-    await waitFor(`document.querySelector('dialog[open] .col-profile__tiles') !== null`, 'opened by keyboard');
+    await waitFor(`document.querySelector('dialog[open] .col-profile__cell--top') !== null`, 'opened by keyboard');
     await b.key('Escape', { vk: 27 });
     await waitFor(`document.querySelector('dialog') === null`, 'closed');
   });

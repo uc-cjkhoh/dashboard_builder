@@ -9,6 +9,7 @@ export const PATHS = Object.freeze({
   param: "M7 4C5 4 5 6 5 8s-1 2-2 2c1 0 2 0 2 2s0 4 2 4M13 4c2 0 2 2 2 4s1 2 2 2c-1 0-2 0-2 2s0 4-2 4",
   insights: "M3.5 16.5h13M6 16v-3M10 16V9.5M14 16v-5M4 8l4-3.5 3 2L16 3.5",
   analytics: "M3 16.5h14M4.5 13l3.5-4 3 2.5 4.5-6M4 9.5h12",
+  profile: "M4.5 16V11M8.5 16V4.5M12.5 16V8M16.5 16V12.5",
   "ref-line": "M3 10h3M8.5 10h3M14 10h3M3 6v8M17 6v8",
   band: "M3 6h14M3 14h14M5 9h10v2H5z",
   trend: "M3 15l4-4 3 2 7-8M13 5h4v4",

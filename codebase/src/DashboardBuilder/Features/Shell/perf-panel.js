@@ -1,7 +1,8 @@
 // The performance dialog: the recent query and render timings (Core/perf-log.js), newest first, with
-// Copy as text and Clear. Opened from the top-bar gauge button; a native <dialog>, so Esc closes it
+// Copy as text and Clear. Opened from the sidebar's gauge tile; a native <dialog>, so Esc closes it
 // and focus is trapped while it is open. Nothing here leaves the browser.
-import { perfLog, formatPerfText } from "../Core/perf-log.js";
+import { perfLog, formatPerfText, clock } from "../Core/perf-log.js";
+import { offsetLabel } from "../Core/timezone.js";
 import { makeButton, openDialog, closeDialog, copyText } from "../Core/ui.js";
 
 const cell = (tag, text) => { const c = document.createElement(tag); c.textContent = text; return c; };
@@ -24,12 +25,12 @@ function fill(body, summary) {
   }
   const table = document.createElement("table"); table.className = "perf-table";
   const head = document.createElement("tr");
-  head.append(...["Time (UTC)", "Kind", "Query ms", "Rows", "Cache", "Render ms"].map((t) => cell("th", t)));
+  head.append(...[`Time (${offsetLabel()})`, "Kind", "Query ms", "Rows", "Cache", "Render ms"].map((t) => cell("th", t)));
   const thead = document.createElement("thead"); thead.append(head);
   const tbody = document.createElement("tbody");
   for (const e of entries) {
     const tr = document.createElement("tr");
-    tr.append(cell("td", new Date(e.at).toISOString().slice(11, 19)), cell("td", e.kind), cell("td", e.kind === "render" ? "" : String(e.ms)),
+    tr.append(cell("td", clock(e.at)), cell("td", e.kind), cell("td", e.kind === "render" ? "" : String(e.ms)),
       cell("td", e.rows ?? ""), cell("td", e.kind === "render" ? "" : e.cached ? "Hit" : "Miss"), cell("td", e.renderMs ?? ""));
     tbody.append(tr);
   }

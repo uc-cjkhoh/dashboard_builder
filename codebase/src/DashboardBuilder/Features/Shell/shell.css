@@ -159,3 +159,12 @@
 .perf-table th { color: var(--ink-2); font-weight: 600; position: sticky; top: 0; background: var(--surface); }
 .perf-summary { margin: 0; padding: var(--s2) var(--s4) 0; color: var(--ink-2); font-size: var(--fs-body); }
 .perf-empty { margin: 0; padding: var(--s2) 0; color: var(--ink-2); }
+
+/* ---- Activity chip: what the app is waiting on. Solid (it floats over content), bottom-right so the centred toast keeps its place. ---- */
+.activity { position: fixed; right: var(--s4); bottom: var(--s4); z-index: 99; display: flex; align-items: center; gap: var(--s2);
+  max-width: min(480px, calc(100vw - 2 * var(--s4))); padding: var(--s2) var(--s4); background: var(--surface); border: 1px solid var(--line-2);
+  border-radius: var(--r); box-shadow: var(--elev-16); color: var(--ink-2); font-size: var(--fs-body);
+  animation: rise-in var(--dur) var(--ease-out); }
+.activity[hidden] { display: none; }
+.activity__glyph { display: inline-flex; flex: none; animation: spin 1s linear infinite; }
+.activity__text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }

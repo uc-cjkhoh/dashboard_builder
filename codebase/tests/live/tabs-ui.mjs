@@ -234,6 +234,13 @@ try {
     must(await ev(`!document.querySelector('dialog[open]')`), 'an issues dialog opened');
   });
 
+  await check('an automatic worksheet title follows the tab name when the tab is renamed (both texts match)', async () => {
+    await addTab('worksheet');
+    await waitFor(`!document.getElementById('worksheet-view').hidden && !!document.querySelector('.ws-titleblock__title.is-auto')`, 'worksheet with an automatic title');
+    await store(`st.renameTab(st.activeWorksheet().id, 'Sales Q4'); return true;`);
+    await waitFor(`document.querySelector('.ws-titleblock__title.is-auto')?.textContent === 'Sales Q4'`, 'title follows the tab');
+    must((await activeLabel()) === 'Sales Q4', `tab label: ${await activeLabel()}`);
+  });
   await check('the 50-tab limit: a toast at creation, nothing added', async () => {
     await store(`while (st.tabs.length < 50) st.createDashboard(); return true;`);
     await ev(`document.querySelector('.tab-add').click(); document.querySelector('[data-new-tab=dashboard]').click()`);
@@ -241,6 +248,11 @@ try {
     await ev(`document.querySelector('.tab-add').click(); document.querySelector('[data-new-tab=worksheet]').click()`);
     must(await store(`return st.tabs.length === 50;`), 'a 51st tab was added');
     must(await ev(`document.activeElement === document.querySelector('.tab-add')`), 'focus not returned to [+] after the refusal');
+  });
+
+  await check('the page carries the app time zone (default Malaysia, UTC+8 here)', async () => {
+    const tz = await ev(`document.querySelector('meta[name=app-timezone]')?.content`);
+    must(typeof tz === 'string' && tz.length > 2, `tz: ${tz}`);
   });
 
   if (b.consoleErrors.length) { console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  ')); failed++; }

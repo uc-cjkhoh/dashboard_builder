@@ -2,6 +2,7 @@
 // query and render timings. It stores only the query kind, durations, a row count and whether the
 // result came from the browser cache — never a request body, a SQL text, a value or a credential.
 // Nothing is sent anywhere: the log lives in this tab and goes with it.
+import { clockIn } from "./timezone.js";
 
 export const KINDS = Object.freeze(["query", "histogram", "boxplot", "render", "other"]);
 const DEFAULT_CAPACITY = 200;
@@ -48,8 +49,8 @@ export function createPerfLog({ capacity = DEFAULT_CAPACITY, now = Date.now } = 
 /** The shared log for this page. */
 export const perfLog = createPerfLog();
 
-const pad = (n) => String(n).padStart(2, "0");
-const clock = (t) => { const d = new Date(t); return `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`; };
+/** hh:mm:ss in the app time zone (Core/timezone.js). */
+export const clock = (t, tz) => clockIn(t, tz);
 
 /** The entries as tab-separated text (header + one line each), for copying out. */
 export function formatPerfText(entries) {
