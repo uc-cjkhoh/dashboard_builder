@@ -132,3 +132,19 @@
   .board-widget .board-widget__body.ws-chart { overflow: hidden; }
   .board-widget .ws-chart-canvas { position: absolute; inset: var(--s2); width: auto; height: auto; }
 }
+
+/* Data notes: the saved text under the bar, and its inline editor. */
+.board-notes { flex: none; padding: var(--s2) var(--s4) 0; }
+.board-notes__text { margin: 0; font-size: var(--fs-body); color: var(--ink-2); line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 7.5em; overflow: auto; }
+.board-notes__form { display: flex; flex-direction: column; gap: var(--s1); }
+.board-notes__label { font-size: var(--fs-body); font-weight: 600; color: var(--ink-2); }
+.board-notes__input { width: 100%; box-sizing: border-box; font: inherit; font-size: var(--fs-body); color: var(--ink); background: var(--surface);
+  border: 1px solid var(--line-2); border-radius: var(--r); padding: var(--s1) var(--s2); resize: vertical; max-height: 40vh; }
+.board-notes__input[aria-invalid="true"] { border-color: var(--danger-solid); }
+.board-notes__meta { margin: 0; display: flex; justify-content: space-between; gap: var(--s2); font-size: var(--fs-body); color: var(--ink-3); }
+.board-notes__error { color: var(--danger-ink); font-weight: 600; }
+.board-notes__actions { display: flex; gap: var(--s2); }
+@media print {
+  .board-notes, .board-bar__title, .board-bar__count { display: none !important; } /* the print header carries the title and the notes */
+  .board-print-note { white-space: pre-wrap; margin-top: 2mm; }
+}

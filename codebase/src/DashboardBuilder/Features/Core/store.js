@@ -304,7 +304,7 @@ export function createWorksheet(name) {
 export function createDashboard(name) {
   if (tabLimitError()) return null;
   dbSeq += 1;
-  const tab = { id: `db#${dbSeq}`, kind: "dashboard", name: name || defaultTabName("dashboard", tabs.map((t) => t.name)), widgets: [], size: null };
+  const tab = { id: `db#${dbSeq}`, kind: "dashboard", name: name || defaultTabName("dashboard", tabs.map((t) => t.name)), widgets: [], size: null, notes: "" };
   tabs.push(tab);
   switchTab(tab.id);
   emit("tabs:changed");
@@ -376,6 +376,14 @@ export function setDashboardRange(dashboardId, range) {
   const tab = tabById(dashboardId);
   if (!tab || tab.kind !== "dashboard") return;
   tab.range = range ? { ...range } : null;
+  emit("dashboard:changed", { id: dashboardId });
+}
+
+/** A dashboard's data note ("" = none); the caller has checked it with `validateNotes` (Board/board-notes.js). */
+export function setDashboardNotes(dashboardId, notes) {
+  const tab = tabById(dashboardId);
+  if (!tab || tab.kind !== "dashboard") return;
+  tab.notes = notes;
   emit("dashboard:changed", { id: dashboardId });
 }
 

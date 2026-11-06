@@ -1,4 +1,4 @@
-import { bus, activeDashboard, worksheets, dashboards, worksheetById, setWidgets, setDashboardSize, setDashboardRange, nextWidgetId, isDashboardActive } from "../Core/store.js";
+import { bus, activeDashboard, worksheets, dashboards, worksheetById, setWidgets, setDashboardSize, setDashboardRange, setDashboardNotes, nextWidgetId, isDashboardActive } from "../Core/store.js";
 import { toggle, toast, makeButton } from "../Core/ui.js";
 import { icon } from "../Core/icons.js";
 import { LIMITS } from "../Core/validate.js";
@@ -12,6 +12,9 @@ import { validateImageFile, isImageSrc, imageChars, budgetError } from "./image-
 import { layoutBoard, widgetOrder, fixedRowH } from "./board-layout.js";
 import { SIZE_PRESETS, sizeKey, sizeLabel, rangeProblem, rangedWidth, rangedHeight, rangeLabel, RANGE_KEYS } from "./board-size.js";
 import { createWidget } from "./board-widget.js";
+import { createNotes } from "./notes-edit.js";
+import { printLines } from "./board-notes.js";
+import { dateTimeIn, offsetLabel } from "../Core/timezone.js";
 import { createPanel } from "./board-panel.js";
 import { initInteract } from "./board-interact.js";
 import { createBoardHistory, restorable } from "./board-history.js";
@@ -187,12 +190,13 @@ export function initBoard() {
     const dash = activeDashboard();
     toggle(view, Boolean(dash));
     if (!dash) { teardown(); return; }
-    if (shownId !== dash.id) { teardown(); shownId = dash.id; statusEl.replaceChildren(); interact?.cancel(); }
+    if (shownId !== dash.id) { teardown(); shownId = dash.id; statusEl.replaceChildren(); notes.close(); interact?.cancel(); }
     known.add(dash.id);
     title.textContent = dash.name;
     count.textContent = `${dash.widgets.length} of ${LIMITS.widgets} widgets`;
     panel.render(worksheets());
     paintSize(dash);
+    notes.paint(dash.notes ?? "");
     const dropped = dropStale(dash); // its source widget was removed / closed: the others show their own data again
     reconcile(dash);
     if (dropped) syncCross();
@@ -348,11 +352,28 @@ export function initBoard() {
   });
   document.addEventListener("fullscreenchange", syncFull);
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && main.classList.contains("is-presenting")) { main.classList.remove("is-presenting"); syncFull(); } });
+  const notes = createNotes({ host: $("board-notes"), onSave: (t) => { const d = activeDashboard(); if (d) setDashboardNotes(d.id, t); }, onDone: (m) => { status(m); notesBtn.focus(); } });
+  const notesBtn = makeButton("", "btn board-bar__btn");
+  notesBtn.append(icon("edit", { size: 14 }), document.createTextNode("Notes"));
+  notesBtn.addEventListener("click", () => { const d = activeDashboard(); if (d) notes.open(d.notes ?? ""); });
+  let printHead = null; // the printed header: title, worksheets, filter, print time, notes (built on beforeprint, removed after)
+  function beginPrint() {
+    const dash = activeDashboard();
+    if (!dash || printHead) return;
+    const el = (tag, cls, txt) => { const n = document.createElement(tag); n.className = cls; n.textContent = txt; return n; };
+    printHead = el("div", "ws-print-head", "");
+    printHead.append(el("h1", "ws-print-head__title", dash.name));
+    const names = dash.widgets.filter((w) => w.kind === "sheet").map((w) => worksheetById(w.sheetId)?.name).filter(Boolean);
+    const lines = printLines({ sheets: [...new Set(names)], filter: selection?.label ?? null, printedAt: `Printed ${dateTimeIn(Date.now())} (${offsetLabel()})`, notes: dash.notes ?? "" });
+    for (const l of lines) printHead.append(el("p", `ws-print-head__line${l === dash.notes ? " board-print-note" : ""}`, l));
+    main.insertBefore(printHead, main.querySelector(".board-bar").nextSibling);
+  }
+  function endPrint() { printHead?.remove(); printHead = null; }
   const printBtn = makeButton("", "btn board-bar__btn");
   printBtn.append(icon("print", { size: 14 }), document.createTextNode("Print"));
   printBtn.addEventListener("click", () => window.print());
-  window.addEventListener("beforeprint", () => { if (activeDashboard()) { printing = true; layout(); } });
-  window.addEventListener("afterprint", () => { printing = false; for (const e of entries.values()) e.sizeChart(null); layout(); });
+  window.addEventListener("beforeprint", () => { if (activeDashboard()) { printing = true; beginPrint(); layout(); } });
+  window.addEventListener("afterprint", () => { printing = false; endPrint(); for (const e of entries.values()) e.sizeChart(null); layout(); });
   syncFull();
   // Size: Automatic fills the panel; a preset fixes the board to that box (a loaded size that is no preset gets its own option).
   const sizeSel = document.createElement("select");
@@ -417,7 +438,7 @@ export function initBoard() {
     rangeBox.hidden = !on;
     for (const k of RANGE_KEYS) { rangeInputs[k].value = dash.range?.[k] ?? ""; rangeInputs[k].setAttribute("aria-invalid", "false"); }
   }
-  tools.append(sizeSel, rangeBox, undoBtn, redoBtn, fullBtn, printBtn);
+  tools.append(sizeSel, rangeBox, notesBtn, undoBtn, redoBtn, fullBtn, printBtn);
 
   sync();
 }
