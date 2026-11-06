@@ -39,6 +39,8 @@
   --chart-cat-5: #2f9ea8; --chart-cat-6: #3f7fd0; --chart-cat-7: #4aa66a; --chart-cat-8: #6a6d72;
   /* Diverging pair (warm below the centre, cool above): theme-stable orange / blue, lighter orange vs darker blue so it reads by lightness too. */
   --chart-div-low: #d98a4a; --chart-div-high: #2b62b8;
+  /* Hues for the chosen diverging pairs (Format -> Diverging colours): independent of the categorical palette, never red; each reads against the surface centre. */
+  --chart-div-amber: #b8803a; --chart-div-violet: #6b52c9; --chart-div-green: #3f8f5a;
   /* Background wash — a faint ambient tint of the signal colour (lime in Signal; the accent in other themes) that the glass chrome blurs; it should be felt, not seen */
   --halo: var(--signal);
   --wash-1: 16%; --wash-2: 9%; --wash-3: 3%;
@@ -87,6 +89,7 @@
   --chart-cat-1: #c3df5a; --chart-cat-2: #e0827c; --chart-cat-3: #deb062; --chart-cat-4: #9b86e6;
   --chart-cat-5: #5cc0c8; --chart-cat-6: #7aa3dc; --chart-cat-7: #6fc486; --chart-cat-8: #8e9094;
   --chart-div-low: #e2b48c; --chart-div-high: #5a8ad6;
+  --chart-div-amber: #e0b060; --chart-div-violet: #9b86e6; --chart-div-green: #6fc486;
   --elev-2: 0 1px 2px rgb(0 0 0 / .45); --elev-8: 0 4px 10px rgb(0 0 0 / .45);
   --elev-16: 0 10px 24px rgb(0 0 0 / .5); --elev-28: 0 18px 40px rgb(0 0 0 / .6);
   --elev-card: 0 1px 2px rgb(0 0 0 / .55), 0 10px 24px -6px rgb(0 0 0 / .6);
@@ -112,6 +115,7 @@
   --chart-cat-1: #6aa8e0; --chart-cat-2: #98c379; --chart-cat-3: #c678dd; --chart-cat-4: #e5c07b;
   --chart-cat-5: #56b6c2; --chart-cat-6: #d19a66; --chart-cat-7: #abb2bf; --chart-cat-8: #e06c75;
   --chart-div-low: #e0b084; --chart-div-high: #5c9ddb;
+  --chart-div-amber: #e5c07b; --chart-div-violet: #c678dd; --chart-div-green: #98c379;
 }
 /* No backdrop-filter, or the user asked for less transparency: glass falls back to an opaque surface.
    `:root[data-scheme]` (and `[data-look]`, for the One Dark Pro look) matches the dark blocks' weight, so the fallback wins in every scheme. */

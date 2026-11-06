@@ -20,7 +20,7 @@ import { checkTooltipText } from "../Dashboard/tooltip-model.js";
 import { checkTooltipStyle } from "../Dashboard/tooltip-style.js";
 import { checkTooltipFormats } from "../Dashboard/tooltip-formats.js";
 import { markerSizeError } from "../Dashboard/mark-style-model.js";
-import { RAMP_CHOICES, SCALE_CHOICES, colourCentreError, colourRangeError, colourStepsError } from "../Dashboard/colour-scale-model.js";
+import { RAMP_CHOICES, SCALE_CHOICES, DIV_PAIR_CHOICES, colourCentreError, colourRangeError, colourStepsError } from "../Dashboard/colour-scale-model.js";
 import { cleanParameter, MAX_PARAMS } from "../Core/parameters-model.js";
 import { cleanHierarchies, hierarchyTableKey } from "../Dashboard/hierarchy-model.js";
 import { cleanSource, wireSource } from "../Core/source-model.js";
@@ -648,6 +648,8 @@ function cleanFormat(f0, where, issues) {
   if (colourRangeError(out.colorMin, out.colorMax)) { issues.push(`${w}: the colour range minimum was not less than the maximum — cleared.`); out.colorMin = out.colorMax = null; }
   out.colorScale = SCALE_CHOICES.some(([v]) => v === f.colorScale) ? f.colorScale : f.colorScale === undefined ? base.colorScale
     : (issues.push(`${w}: colour scale "${f.colorScale}" — reset to Low → high.`), base.colorScale);
+  out.colorPair = DIV_PAIR_CHOICES.some(([v]) => v === f.colorPair) ? f.colorPair : f.colorPair === undefined ? base.colorPair
+    : (issues.push(`${w}: diverging colours "${f.colorPair}" — reset to Orange / Blue.`), base.colorPair);
   out.colorSteps = f.colorSteps == null ? base.colorSteps : typeof f.colorSteps === "number" && !colourStepsError(f.colorSteps) ? f.colorSteps
     : (issues.push(`${w}: colour steps "${f.colorSteps}" — reset to Continuous.`), base.colorSteps);
   out.colorCentre = f.colorCentre == null ? null : typeof f.colorCentre === "number" && !colourCentreError(f.colorCentre) ? f.colorCentre : (issues.push(`${w}: colour centre "${f.colorCentre}" — cleared.`), null);

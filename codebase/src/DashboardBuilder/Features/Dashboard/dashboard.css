@@ -306,6 +306,8 @@
 .ws-fmt-label { font-size: var(--fs-body); color: var(--ink-3); white-space: nowrap; }
 .ws-fmt-select, .ws-fmt-input { height: var(--ctl-h); font-size: var(--fs-body); }
 .ws-fmt-select { padding: 0 var(--s1); max-width: 116px; }
+.ws-fmt-field--line { flex-basis: 100%; }
+.ws-fmt-field--line .ws-fmt-select { max-width: 160px; }
 .ws-fmt-input { padding: 0 var(--s2); width: 96px; }
 
 /* Analytics pane items: chips to drag onto the chart or press. */

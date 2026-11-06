@@ -40,7 +40,7 @@ import { applyToggle, applyAll, allMessage, MAX_COLLAPSED } from "./collapse-mod
 import { LINE_STYLE_CHOICES, linesTakeStyle } from "./line-style-model.js";
 import { HEATMAP_SHAPE_CHOICES } from "./heatmap-model.js";
 import { SECONDARY_CHOICES, dualAxisAllowed, dualAxisOn } from "./axis-sync-model.js";
-import { RAMP_CHOICES, SCALE_CHOICES, colourCentreError, colourRangeError, STEP_CHOICES } from "./colour-scale-model.js";
+import { RAMP_CHOICES, SCALE_CHOICES, DIV_PAIR_CHOICES, colourCentreError, colourRangeError, STEP_CHOICES } from "./colour-scale-model.js";
 import { FONT_CHOICES } from "./font-model.js";
 import { TABLE_ALIGN_CHOICES, TABLE_DENSITY_CHOICES, TABLE_SHADE_CHOICES } from "./table-style-model.js";
 import { MARK_BORDER_CHOICES, MARKER_SHAPE_CHOICES, markerSizeError } from "./mark-style-model.js";
@@ -1388,6 +1388,10 @@ export function initDashboards() {
           })]
             : [fmtSelect("Colour ramp", RAMP_CHOICES, f.colorRamp ?? "brand", (v) => set({ colorRamp: v })),
               range("colorMin", "colorMax", "Colour from"), range("colorMax", "colorMin", "Colour to")]));
+        if (diverging) { // the pair sits on its own line, wide enough for "Green / Violet"
+          const pair = fmtSelect("Diverging colours", DIV_PAIR_CHOICES, f.colorPair ?? "default", (v) => set({ colorPair: v }));
+          pair.classList.add("ws-fmt-field--line"); panel.append(pair);
+        }
       }
       if (hasAxes)
         panel.append(
