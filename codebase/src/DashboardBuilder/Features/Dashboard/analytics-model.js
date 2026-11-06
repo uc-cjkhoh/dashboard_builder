@@ -8,7 +8,7 @@ export const TREND_CHOICES = [["none", "None"], ["linear", "Linear"], ["log", "L
 export const FORECAST_CHOICES = [[0, "None"], [3, "3 steps"], [6, "6 steps"], [12, "12 steps"]];
 // A band is typed numbers ({ from, to }), mean ± k standard deviations ({ kind: "stddev", k }) or a percentile range ({ kind: "percentile", lo, hi, custom? } - custom: typed 0 < lo < hi < 100);
 // the reference line and the band read the measure `ref.measure` (a shown-measure index, default 0) over the rows shown.
-export const BAND_CHOICES = [["none", "None"], ["range", "Typed range"], ["stddev1", "Mean ± 1σ"], ["stddev2", "Mean ± 2σ"], ["p25-75", "P25–P75"], ["p10-90", "P10–P90"], ["pcustom", "Custom percentiles"]];
+export const BAND_CHOICES = [["none", "None"], ["range", "Typed range"], ["stddev1", "Mean ± 1σ"], ["stddev2", "Mean ± 2σ"], ["p25-75", "P25–P75"], ["p10-90", "P10–P90"], ["pcustom", "Percentiles"]];
 const PRESET_PCT = new Set(["25-75", "10-90"]);
 /** Why a custom percentile range is refused, or null: both numbers with 0 < lo < hi < 100 (rejected, never clamped). */
 export function percentileError(lo, hi) {

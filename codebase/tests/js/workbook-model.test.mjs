@@ -653,3 +653,10 @@ test("a custom percentile band survives a save/restore", () => {
   const c = sheetOf({ analytics: { band: { kind: "percentile", lo: 10, hi: 90, custom: true } } });
   assert.deepEqual(c.worksheets[0].sheet.analytics.band, { kind: "percentile", lo: 10, hi: 90, custom: true });
 });
+test("a custom percentile band with equal, NaN or string ends is reset on restore", () => {
+  for (const [lo, hi] of [[50, 50], [NaN, 90], ["5", 95], [5, "95"], [5, null]]) {
+    const r = sheetOf({ analytics: { band: { kind: "percentile", lo, hi, custom: true } } });
+    assert.equal(r.worksheets[0].sheet.analytics.band, null, `${lo}-${hi}`);
+    assert.ok(r.issues.some((i) => /analytics/.test(i)));
+  }
+});

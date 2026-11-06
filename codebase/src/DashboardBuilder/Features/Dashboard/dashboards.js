@@ -979,11 +979,9 @@ export function initDashboards() {
       }
       panel.append(fmtSelect("Band", BAND_CHOICES, bandChoice(a.band), (v) => set({ band: bandFromChoice(v, a.band) })));
       if (a.band?.kind === "percentile" && bandChoice(a.band) === "pcustom") { // typed percentiles: an invalid pair is refused with a message, never clamped
-        const setPct = (patch) => { const nb = { ...a.band, ...patch }, err = percentileError(nb.lo, nb.hi); if (err) toast(err, "danger"); else set({ band: nb }); };
+        const setPct = (patch) => { const nb = { ...a.band, ...patch }, err = percentileError(nb.lo, nb.hi); if (err) { toast(err, "danger"); return false; } set({ band: nb }); };
         panel.append(fmtNumber("low percentile", a.band.lo, "5", (v) => setPct({ lo: v })));
         panel.append(fmtNumber("high percentile", a.band.hi, "95", (v) => setPct({ hi: v })));
-        if (shown.length > 1 && !(a.ref.kind !== "none" && a.ref.kind !== "constant"))
-          panel.append(fmtSelect("of", shown.map((n, i) => [i, n]), a.ref.measure ?? 0, (v) => set({ ref: { ...a.ref, measure: Number(v) } })));
       }
       else if (a.band && !a.band.kind) {
         const numParams = parameters.filter((p) => p.type === "number");
@@ -999,7 +997,7 @@ export function initDashboards() {
           }
         }
       }
-      else if (a.band && shown.length > 1 && !(a.ref.kind !== "none" && a.ref.kind !== "constant"))
+      if (a.band && a.band.kind && shown.length > 1 && !(a.ref.kind !== "none" && a.ref.kind !== "constant")) // the band reads the chosen measure (typed ranges read none)
         panel.append(fmtSelect("of", shown.map((n, i) => [i, n]), a.ref.measure ?? 0, (v) => set({ ref: { ...a.ref, measure: Number(v) } })));
       panel.append(fmtSelect("Trend", TREND_CHOICES, a.trend, (v) => set({ trend: v })));
       if (s.chartType === "line" || s.chartType === "area")
@@ -2899,10 +2897,10 @@ export function initDashboards() {
     if (!labelText) inp.setAttribute("aria-label", "Threshold");
     inp.addEventListener("change", () => {
       const raw = inp.value.trim();
-      if (!raw) { onChange(null); return; }
+      if (!raw) { if (onChange(null) === false) inp.value = value == null ? "" : String(value); return; }
       const r = number(raw);
       if (!r.ok) { toast(r.error, "danger"); inp.value = value == null ? "" : String(value); return; }
-      onChange(r.value);
+      if (onChange(r.value) === false) inp.value = value == null ? "" : String(value); // a refused value goes back to the stored one
     });
     wrap.append(inp);
     return wrap;
@@ -2990,6 +2988,7 @@ function fmtSelect(labelText, options, current, onPick) {
     if (String(val) === String(current)) opt.selected = true;
     sel.add(opt);
   }
+  sel.title = sel.selectedOptions[0]?.text ?? ""; // the full choice on hover when the closed select clips it
   sel.addEventListener("change", () => onPick(sel.value));
   wrap.append(sel);
   return wrap;
