@@ -11,7 +11,7 @@ const { CH_HOST, CH_PORT, CH_USER, CH_PASSWORD } = process.env;
 assert.ok(CH_HOST && CH_PORT && CH_USER && CH_PASSWORD !== undefined, 'set CH_HOST, CH_PORT, CH_USER, CH_PASSWORD');
 const APP = process.env.APP_URL ?? 'http://localhost:5203';
 const auth = 'Basic ' + Buffer.from(`${CH_USER}:${CH_PASSWORD}`).toString('base64');
-const DB = 'test_cj', TABLE = 'bk_groups';
+const DB = 'test_cj', TABLE = 'bk_groups', NUMT = 'bk_groups_num';
 
 async function ch(sql, { readonly = true } = {}) {
   const qs = new URLSearchParams({ default_format: 'JSONCompact', output_format_json_quote_64bit_integers: '0' });
@@ -22,7 +22,7 @@ async function ch(sql, { readonly = true } = {}) {
   return text.trim() ? JSON.parse(text).data : [];
 }
 const select = (sql) => { assert.match(sql, /^\s*SELECT\b/i); return ch(sql); };
-const write = (sql) => { assert.match(sql, /^(CREATE TABLE|INSERT INTO|DROP TABLE IF EXISTS) test_cj\.bk_groups\b/, `refusing write: ${sql.slice(0, 60)}`); return ch(sql, { readonly: false }); };
+const write = (sql) => { assert.match(sql, /^(CREATE TABLE|INSERT INTO|DROP TABLE IF EXISTS) test_cj\.bk_groups(_num)?\b/, `refusing write: ${sql.slice(0, 60)}`); return ch(sql, { readonly: false }); };
 
 let cookie = '';
 async function app(method, path, body) {
@@ -113,6 +113,51 @@ async function main() {
   for (const col of ['fs', 'lc', 'e']) assert.equal(probe[col], 'ok', `${col} should group`);
   for (const col of ['u', 'ip4', 'ip6', 'ne']) assert.notEqual(probe[col], 'ok', `${col} was expected to fail (and be refused client-side)`);
   ok('FixedString / LowCardinality(String) group; UUID, IPv4, IPv6 and Nullable(Enum8) fail in ClickHouse (refused client-side; every Enum is refused)');
+
+  // ---- number and true/false fields (listed by exact value) ----
+  // Rows (n Int32, nn Nullable(Int64), d Decimal(10,2), b Bool, nb Nullable(Bool), v): hand-computed below.
+  const nreq = (spec) => ({ from: { db: DB, table: NUMT }, joins: [], fresh: true, filters: [],
+    rowDimensions: [{ db: '', table: '', column: 'g', calc: groupTree(spec) }], columnDimensions: [],
+    measures: [{ db: DB, table: NUMT, column: 'v', agg: 'sum' }, { db: DB, table: NUMT, column: 'v', agg: 'count' }] });
+  const rowsOf = async (spec) => { const q = await app('POST', '/api/query', nreq(spec)); assert.equal(q.status, 200, `${q.status} ${q.text.slice(0, 300)}`); return new Map(q.json.rows.map((x) => [x.keys[0], x.values.map(Number)])); };
+  const N = (column) => ({ db: DB, table: NUMT, column });
+  // n: 1,1,2,3,-4  (v 1,2,4,8,16)   Small = {1,2}: 1+2+4 = 7 over 3; Big = {-4}: 16 over 1; ungrouped 3 keeps its own value (8 over 1)
+  let m = await rowsOf({ field: N('n'), kind: 'number', groups: [{ name: 'Small', members: ['1', '2'] }, { name: 'Neg', members: ['-4'] }] });
+  assert.deepEqual([...m].sort(), [['3', [8, 1]], ['Neg', [16, 1]], ['Small', [7, 3]]]);
+  ok('an Int32 field groups by exact values: Small {1,2} 7/3, Neg {-4} 16/1, ungrouped 3 keeps "3" 8/1');
+  m = await rowsOf({ field: N('n'), kind: 'number', other: 'Rest', groups: [{ name: 'Small', members: ['1', '2'] }] });
+  assert.deepEqual([...m].sort(), [['Rest', [24, 2]], ['Small', [7, 3]]]);
+  ok('the remainder label folds ungrouped numbers: Rest 24/2');
+  // nn (Nullable Int64): 10, NULL, 10, 20, NULL  (v 1,2,4,8,16): Ten {10} = 1+4 = 5 over 2; 20 keeps "20" 8/1; NULL 18/2 stays NULL
+  m = await rowsOf({ field: N('nn'), kind: 'number', groups: [{ name: 'Ten', members: ['10'] }] });
+  assert.deepEqual([...m].sort((a, b) => (String(a[0]) < String(b[0]) ? -1 : 1)), [['20', [8, 1]], ['Ten', [5, 2]], [null, [18, 2]]]);
+  ok('a Nullable Int64 field groups; NULL stays NULL (18/2)');
+  // d Decimal(10,2): the member list shows 1.50 but ClickHouse's toString gives 1.5, so a listed decimal never matches: Decimal fields are refused client-side (groupKind).
+  const dist = await app('GET', `/api/databases/${DB}/tables/${NUMT}/columns/d/distinct`);
+  const listed = (Array.isArray(dist.json) ? dist.json : []).map(String);
+  const chText = (await select(`SELECT DISTINCT toString(d) FROM ${DB}.${NUMT} ORDER BY 1`)).map((r) => r[0]);
+  assert.ok(listed.includes('1.50') && chText.includes('1.5') && !chText.includes('1.50'), `decimal text: listed ${JSON.stringify(listed)} vs toString ${JSON.stringify(chText)}`);
+  ok('Decimal(10,2): the member list shows "1.50" but toString gives "1.5" — why decimal fields are refused');
+  // b Bool: true,true,false,true,false (v 1,2,4,8,16): Yes {true} = 11 over 3; the false rows keep "false" 20/2
+  m = await rowsOf({ field: N('b'), kind: 'boolean', groups: [{ name: 'Yes', members: ['true'] }] });
+  assert.deepEqual([...m].sort(), [['Yes', [11, 3]], ['false', [20, 2]]]);
+  ok('a Bool field groups: Yes {true} 11/3, ungrouped false keeps "false" 20/2');
+  m = await rowsOf({ field: N('b'), kind: 'boolean', groups: [{ name: 'On', members: ['true'] }, { name: 'Off', members: ['false'] }] });
+  assert.deepEqual([...m].sort(), [['Off', [20, 2]], ['On', [11, 3]]]);
+  ok('both true and false grouped: On 11/3, Off 20/2');
+  // nb Nullable(Bool): true, NULL, false, NULL, true (v 1,2,4,8,16): Yes 17/2; NULL stays NULL 10/2; false keeps "false" 4/1
+  m = await rowsOf({ field: N('nb'), kind: 'boolean', groups: [{ name: 'Yes', members: ['true'] }] });
+  assert.deepEqual([...m].sort((a, b) => (String(a[0]) < String(b[0]) ? -1 : 1)), [['Yes', [17, 2]], ['false', [4, 1]], [null, [10, 2]]]);
+  m = await rowsOf({ field: N('nb'), kind: 'boolean', other: 'Else', groups: [{ name: 'Yes', members: ['true'] }] });
+  assert.deepEqual([...m].sort((a, b) => (String(a[0]) < String(b[0]) ? -1 : 1)), [['Else', [4, 1]], ['Yes', [17, 2]], [null, [10, 2]]]);
+  ok('a Nullable(Bool) field: NULL stays NULL (10/2) with and without a remainder label');
+  // Budget: 39 numbers fit (the server and maxMembersFor agree), 40 are refused.
+  const bigN = (k) => ({ field: N('n'), kind: 'number', groups: [{ name: 'All', members: Array.from({ length: k }, (_, i) => String(i + 1)) }] });
+  assert.equal((await app('POST', '/api/query', nreq(bigN(39)))).status, 200, '39 numbers fit');
+  assert.equal((await app('POST', '/api/query', nreq(bigN(40)))).status, 400, '40 numbers exceed the node limit');
+  ok('the server accepts 39 number members and refuses 40, matching maxMembersFor');
+  // A float: the dialog refuses it (its text form is not exact); pin that ClickHouse text and the member form can differ.
+  console.log('float probe (informational): toString(1.5)=', (await select(`SELECT toString(toFloat64(1.5)), toString(toFloat64(1e20))`))[0].join(' | '));
   await app('POST', '/api/connection/disconnect');
 }
 
@@ -121,11 +166,15 @@ try {
   await write(`DROP TABLE IF EXISTS ${DB}.${TABLE}`);
   await write(`CREATE TABLE ${DB}.${TABLE} (region Nullable(String), amount Float64, u UUID, ip4 IPv4, ip6 IPv6, e Enum8('a' = 1, 'b' = 2), fs FixedString(3), lc LowCardinality(String), ne Nullable(Enum8('a' = 1, 'b' = 2))) ENGINE = MergeTree ORDER BY tuple()`);
   await write(`INSERT INTO ${DB}.${TABLE} VALUES ${ROWS.map(([r, a], i) => `(${r === null ? 'NULL' : sqlStr(r)}, ${a}, '00000000-0000-0000-0000-00000000000${i % 2}', '10.0.0.${i % 2}', '::${i % 2}', ${i % 2 ? "'a'" : "'b'"}, 'ab${i % 2}', ${i % 2 ? "'x'" : "'y'"}, ${i % 2 ? "'a'" : 'NULL'})`).join(', ')}`);
+  await write(`DROP TABLE IF EXISTS ${DB}.${NUMT}`);
+  await write(`CREATE TABLE ${DB}.${NUMT} (n Int32, nn Nullable(Int64), d Decimal(10, 2), b Bool, nb Nullable(Bool), f Float64, v UInt32) ENGINE = MergeTree ORDER BY tuple()`);
+  await write(`INSERT INTO ${DB}.${NUMT} VALUES (1, 10, 1.50, true, true, 1.5, 1), (1, NULL, 1.50, true, NULL, 1.5, 2), (2, 10, 2.00, false, false, 2.5, 4), (3, 20, 3.25, true, NULL, 1e20, 8), (-4, NULL, 0.10, false, true, 0.1, 16)`);
   await main();
 } catch (e) {
   failed = true;
   console.error(`FAIL: ${e.message}`);
 } finally {
+  await write(`DROP TABLE IF EXISTS ${DB}.${NUMT}`);
   await write(`DROP TABLE IF EXISTS ${DB}.${TABLE}`);
   const left = await select(`SELECT name FROM system.tables WHERE database = '${DB}' AND name = '${TABLE}'`);
   console.log(left.length ? 'FAIL teardown: table still present' : 'ok teardown: test_cj.bk_groups dropped');

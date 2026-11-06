@@ -15,10 +15,11 @@ export const SHOWN = 200; // members listed (the distinct-values endpoint is ask
  * `field` = { db, table, column } the grouped column; `fieldName` its display name; `calcId` the group calculation being edited (or null);
  * `load()` resolves the column's distinct members (bounded; NULL is skipped — it can't be grouped and stays empty).
  */
-export function openGroupDialog({ field, fieldName, calcId = null, load }) {
+export function openGroupDialog({ field, fieldName, calcId = null, kind: kindIn, load }) {
   const existing = calcId ? calculations.find((c) => c.id === calcId) : null;
   if (calcId && !existing?.group) return;
   const n = ++seq;
+  const kind = existing?.group.kind ?? kindIn; // undefined for a text field, else "number" / "boolean"
   const groups = []; // [{ id, name }] in order
   let nextId = 1;
   const assign = new Map(); // member -> group id
@@ -35,7 +36,7 @@ export function openGroupDialog({ field, fieldName, calcId = null, load }) {
   title.id = `grp-title-${n}`;
   dlg.setAttribute("aria-labelledby", title.id);
   const body = el("div", "dialog__body grp-dialog__body");
-  const hint = el("p", "grp-hint", "Members you put in a group are shown, counted and charted under the group's name. A member in no group keeps its own value, or the label below. The empty (NULL) value stays empty. Grouping is done by the database, so every member is matched exactly.");
+  const hint = el("p", "grp-hint", "Members you put in a group are shown, counted and charted under the group's name. A member in no group keeps its own value, or the label below. The empty (NULL) value stays empty. Grouping is done by the database, so every member is matched exactly." + (kind ? " The group field is text: its values are the numbers or true / false as written." : ""));
 
   const nameField = el("div", "field");
   const nameLabel = el("label", null, "Name of the group field"); nameLabel.htmlFor = `grp-name-${n}`;
@@ -79,6 +80,7 @@ export function openGroupDialog({ field, fieldName, calcId = null, load }) {
     const pairs = [...assign].map(([m, id]) => [m, id]);
     const named = groupsFromAssignments(pairs, groups.map((g) => g.id)).map((g) => ({ name: groups.find((x) => x.id === g.name).name.trim(), members: g.members }));
     const out = { field: { db: field.db, table: field.table, column: field.column }, groups: named };
+    if (kind) out.kind = kind;
     if (otherOn && otherText.trim()) out.other = otherText;
     return out;
   };
