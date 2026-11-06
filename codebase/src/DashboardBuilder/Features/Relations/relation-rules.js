@@ -77,11 +77,11 @@ export const normalizeJoinType = (t) => (JOIN_TYPES.includes(t) ? t : "inner");
  *  (saved before sides were fixed) also gets its own choice, so it is never mislabelled "keep the FROM table". */
 export function joinChoices(fromTable, toTable, legacy = false) {
   return [
-    { value: "inner", text: "Inner — only rows that match" },
-    ...(legacy ? [{ value: "legacy", text: "Keep rows of the base table (older link)" }] : []),
-    { value: "left", text: `Keep all rows of ${fromTable}` },
-    { value: "right", text: `Keep all rows of ${toTable}` },
-    { value: "full", text: "Keep all rows of both" },
+    { value: "inner", text: "Inner join", hint: "Only rows that match" },
+    ...(legacy ? [{ value: "legacy", text: "Left join (older link)", hint: "All rows of the base table" }] : []),
+    { value: "left", text: "Left join", hint: `All rows of ${fromTable}` },
+    { value: "right", text: "Right join", hint: `All rows of ${toTable}` },
+    { value: "full", text: "Full outer join", hint: "All rows of both" },
   ];
 }
 

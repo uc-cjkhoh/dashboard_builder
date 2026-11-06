@@ -101,7 +101,7 @@ try {
     await shot('join-check-ok.png');
   });
   await check('saving still works after a check (N:1)', async () => {
-    await ev(`[...document.querySelectorAll('dialog[open] .card-choice')].find((x) => x.textContent === 'N:1').click()`);
+    await ev(`[...document.querySelectorAll('dialog[open] .card-choice')].find((x) => x.textContent === 'N:1').click(); document.querySelector('dialog[open]').querySelector('.rel-dialog__foot .btn--primary').click()`);
     await waitFor(`document.querySelector('.rel-badge text')?.textContent === 'N:1'`, 'badge');
   });
 
@@ -137,7 +137,7 @@ try {
     must(!(await ev(`document.querySelector('dialog[open] .join-check__btn').disabled`)), 'button stuck');
   });
   await check('the dialog still saves after a failed check (never blocked)', async () => {
-    await ev(`[...document.querySelectorAll('dialog[open] .card-choice')].find((x) => x.textContent === '1:N').click()`);
+    await ev(`[...document.querySelectorAll('dialog[open] .card-choice')].find((x) => x.textContent === '1:N').click(); document.querySelector('dialog[open]').querySelector('.rel-dialog__foot .btn--primary').click()`);
     await waitFor(`document.querySelector('.rel-badge text')?.textContent === '1:N'`, 'badge 1:N');
   });
   previewMode = 'fanout';

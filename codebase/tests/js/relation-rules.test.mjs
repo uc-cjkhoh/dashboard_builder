@@ -32,10 +32,11 @@ test("join types are inner, left, right, full; anything else reads as inner", ()
 test("dialog choices name the tables in plain words", () => {
   const c = joinChoices("orders", "customers");
   assert.deepEqual(c.map((x) => x.value), ["inner", "left", "right", "full"]);
-  assert.equal(c[1].text, "Keep all rows of orders");
-  assert.equal(c[2].text, "Keep all rows of customers");
-  assert.equal(c[3].text, "Keep all rows of both");
-  assert.match(c[0].text, /only rows that match/i);
+  assert.deepEqual(c.map((x) => x.text), ["Inner join", "Left join", "Right join", "Full outer join"]);
+  assert.equal(c[1].hint, "All rows of orders");
+  assert.equal(c[2].hint, "All rows of customers");
+  assert.equal(c[3].hint, "All rows of both");
+  assert.match(c[0].hint, /only rows that match/i);
 });
 
 test("the FROM side is the left side: planning in reverse swaps left and right", () => {
@@ -72,7 +73,7 @@ test("legacy left gets its own dialog choice; re-saving fixes the sides", () => 
   assert.equal(joinSelection("full", false), "full");
   const c = joinChoices("orders", "customers", true);
   assert.deepEqual(c.map((x) => x.value), ["inner", "legacy", "left", "right", "full"]);
-  assert.equal(c[1].text, "Keep rows of the base table (older link)");
+  assert.equal(c[1].text, "Left join (older link)");
   assert.deepEqual(joinChoices("a", "b").map((x) => x.value), ["inner", "left", "right", "full"]);
   assert.deepEqual(joinFromSelection("legacy"), { joinType: "left", joinFixed: false });
   assert.deepEqual(joinFromSelection("left"), { joinType: "left", joinFixed: true });

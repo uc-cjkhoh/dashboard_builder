@@ -18,9 +18,73 @@
 
 
 
+/* Relationship dialog: the column profile's frame (head with title, subtitle and X; body on the colour wash; foot) with two flat
+   panels instead of bento cells. The body scrolls, the head and foot stay put. */
+.dialog.dialog--rel { width: min(990px, calc(100vw - 2 * var(--s4))); max-width: none; max-height: min(88vh, 800px); }
+.dialog--rel[open] { display: flex; flex-direction: column; }
+.rel-dialog__head { flex: none; display: flex; align-items: flex-start; gap: var(--s2); padding: var(--s4) calc(var(--s6) - 12px) var(--s4) var(--s6); border-bottom: 1px solid var(--line); } /* right 12px: the X glyph sits 12px inside its 32px button, so it lands on the 24px gutter */
+.rel-dialog__titles { flex: 1; min-width: 0; }
+.rel-dialog__title { padding: 0; line-height: 32px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rel-dialog__sub { margin: 0; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rel-dialog { flex: 1; min-height: 0; overflow: auto; padding: var(--s6); background-color: var(--bg); background-image: var(--wash);
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s4); align-content: start; }
+/* Two panels of exactly equal width; the divider is an inset shadow (no width) and each side keeps a 16px gutter to it. */
+.rel-dialog:not(.rel-dialog--single) { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0; }
+.rel-dialog:not(.rel-dialog--single) .rel-dialog__left { padding-right: var(--s4); }
+.rel-dialog__left, .rel-dialog__right { min-width: 0; }
+/* Left: no boxes. Sections sit straight on the wash, split by one hairline and 24px of air; the chosen state is what draws the eye. */
+.rel-dialog__left { display: flex; flex-direction: column; gap: var(--s4); }
+.rel-sec { min-width: 0; animation: rise-in var(--dur) var(--ease-out) backwards; animation-delay: calc(var(--i, 0) * 40ms); }
+.rel-sec + .rel-sec { padding-top: var(--s4); border-top: 1px solid var(--line); }
+.rel-sec .join-choice, .rel-sec .key-pairs { margin: 0; }
+.rel-sec .join-aggregate__dir { margin: var(--s1) 0 0; }
+.rel-sec .form-check { padding: 0; }
+.rel-sec--pairs .key-pairs__select { flex: 1 1 0; }
+/* Cardinality: one segmented control. The chosen segment is solid ink, the rest sit quiet on a track. */
+.rel-sec--card .card-choices { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; padding: var(--s1); background: var(--surface-3); border-radius: var(--r); }
+.rel-sec--card .card-choice { padding: var(--s1) var(--s2); border: 0; border-radius: var(--r); background: transparent; color: var(--ink-2); }
+.rel-sec--card .card-choice:hover { background: var(--surface); color: var(--ink); }
+.rel-sec--card .card-choice.is-active:hover { background: var(--ink); color: var(--on-ink); }
+.rel-sec--card .card-choice.is-active { background: var(--ink); color: var(--on-ink); }
+.rel-sec--card .card-choice:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* Right: the check result is the one panel that can outgrow the left. It takes the left's height (contain: size stops its own content
+   from stretching the row) and scrolls inside when the text is longer. */
+.rel-dialog__right { position: relative; contain: size; overflow-y: auto; padding-left: var(--s4); box-shadow: inset 1px 0 0 var(--line); }
+.rel-dialog__right .join-check { margin: 0; }
+.rel-dialog__right .join-check__out { max-height: none; overflow: visible; }
+.rel-dialog--single { grid-template-columns: minmax(0, 1fr); }
+.rel-dialog__h { margin: 0 0 var(--s2); font-size: var(--fs-body); font-weight: 600; color: var(--ink-2); }
+.rel-dialog__foot { flex: none; padding-inline: var(--s6); border-top: 1px solid var(--line); }
+.rel-dialog__foot .btn--danger { margin-right: auto; } /* Delete sits apart from the dismissing button */
+@media (max-width: 640px) {
+  .rel-dialog { grid-template-columns: minmax(0, 1fr); }
+  .rel-dialog:not(.rel-dialog--single) { grid-template-columns: minmax(0, 1fr); }
+  .rel-dialog { gap: var(--s4); }
+  .rel-dialog:not(.rel-dialog--single) .rel-dialog__left { padding-right: 0; }
+  .rel-dialog__right { contain: none; overflow: visible; padding: var(--s4) 0 0; box-shadow: inset 0 1px 0 var(--line); }
+}
+
 /* The join choice above the cardinality buttons. */
-.join-choice { border: 0; margin: 0 0 var(--s2); padding: 0; display: grid; gap: var(--s1); font-size: var(--fs-body); }
-.join-choice legend { font-weight: 600; margin-bottom: var(--s1); padding: 0; }
+.join-choice { border: 0; margin: 0 0 var(--s4); padding: 0; display: grid; gap: var(--s1); font-size: var(--fs-body); }
+.join-choice legend { font-weight: 600; color: var(--ink-2); margin-bottom: var(--s1); padding: 0; }
+
+/* Join type: one choice of four, a 2 x 2 of round radios (a switch would suggest several can be on). No borders: the chosen option takes a
+   tint and a filled dot, and the dot keeps it from relying on colour alone. */
+.join-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s1); margin: 0 calc(-1 * var(--s2)); }
+.join-option { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: var(--s2); padding: var(--s2); border-radius: var(--r); cursor: pointer;
+  transition: background var(--dur-fast) var(--ease); }
+.join-option:hover { background: var(--surface-3); }
+.join-option:has(input:checked) { background: var(--accent-soft); }
+.join-option:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: -2px; }
+.join-option input { appearance: none; -webkit-appearance: none; flex: none; position: relative; width: 16px; height: 16px; margin: 4px 0 0; border: 2px solid var(--ink-3); border-radius: var(--r-pill); background: transparent; cursor: pointer; }
+.join-option input::after { content: ""; position: absolute; inset: 2px; border-radius: var(--r-pill); background: var(--accent-ink); scale: 0; transition: scale var(--dur-fast) var(--ease-out); }
+.join-option input:checked { border-color: var(--accent-ink); }
+.join-option input:checked::after { scale: 1; }
+.join-option__text { display: grid; min-width: 0; }
+.join-option__name { font-weight: 600; color: var(--ink); }
+.join-option__hint { color: var(--ink-3); overflow-wrap: anywhere; }
+.join-option:has(input:checked) .join-option__hint { color: var(--ink-2); }
+@media (max-width: 420px) { .join-options { grid-template-columns: minmax(0, 1fr); } }
 
 .join-aggregate__dir { margin: var(--s1) 0 0 var(--s4); }
 
@@ -105,8 +169,8 @@
 .rel-keyhint:empty { position: absolute; width: 1px; height: 1px; padding: 0; border: 0; overflow: hidden; clip-path: inset(50%); box-shadow: none; }
 
 /* Compound key: "Also match on" in the relationship dialog. */
-.key-pairs { border: 0; margin: 0 0 var(--s2); padding: 0; display: grid; gap: var(--s2); font-size: var(--fs-body); }
-.key-pairs legend { font-weight: 600; margin-bottom: var(--s1); padding: 0; }
+.key-pairs { border: 0; margin: 0 0 var(--s4); padding: 0; display: grid; gap: var(--s2); font-size: var(--fs-body); }
+.key-pairs legend { font-weight: 600; color: var(--ink-2); margin-bottom: var(--s1); padding: 0; }
 .key-pairs__list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s1); }
 .key-pairs__item { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); padding: var(--s1) var(--s2); border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); }
 .key-pairs__suggest { display: flex; flex-wrap: wrap; gap: var(--s2); }

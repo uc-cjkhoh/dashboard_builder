@@ -2,6 +2,7 @@ import { entities, relationships, bus, emit, isModelActive } from "../Core/store
 import { relEnds, linkIssue, pinOrder, matchingColumns, keysCompatible, kindLabel, unlinkedCards, joinChoices, joinBadge, joinSelection, joinFromSelection, isLegacyLeft, applyAggregate, aggregateChoice } from "./relation-rules.js";
 import { toast, makeButton, openDialog, closeDialog } from "../Core/ui.js";
 import { api } from "../Core/api.js";
+import { icon } from "../Core/icons.js";
 import { previewRequest } from "./join-preview-model.js";
 import { buildJoinCheck } from "./join-check.js";
 import { buildKeyPairs } from "./key-pairs-ui.js";
@@ -498,16 +499,47 @@ function select(id) {
   render();
 }
 
+// One section of the left panel; `i` staggers the entrance.
+function section(kind, i, ...children) {
+  const c = document.createElement("div");
+  c.className = `rel-sec rel-sec--${kind}`;
+  c.style.setProperty("--i", i);
+  c.append(...children);
+  return c;
+}
+
 function openCardinalityDialog({ current = "1:N", joinType = "inner", tables = ["first table", "second table"], legacy = false, keys = null, agg = { aggregate: false, direction: "both" }, onPick, onDelete }) {
   const dlg = document.createElement("dialog");
-  dlg.className = "dialog dialog--sm";
+  dlg.className = "dialog dialog--sm dialog--rel";
 
+  // Same head as the column profile: title and the two tables, with a close button.
+  dlg.setAttribute("aria-labelledby", "rel-dialog-title");
   const head = document.createElement("div");
-  head.className = "dialog__head";
-  head.textContent = "Relationship: join and cardinality";
+  head.className = "rel-dialog__head";
+  const titles = document.createElement("div");
+  titles.className = "rel-dialog__titles";
+  const title = document.createElement("h2");
+  title.className = "dialog__title rel-dialog__title";
+  title.id = "rel-dialog-title";
+  title.textContent = "Relationship";
+  const sub = document.createElement("p");
+  sub.className = "rel-dialog__sub";
+  sub.textContent = `${tables[0]} → ${tables[1]}`;
+  sub.title = sub.textContent;
+  titles.append(title, sub);
+  const x = makeButton("", "iconbtn");
+  x.append(icon("close"));
+  x.setAttribute("aria-label", "Close");
+  x.addEventListener("click", () => closeDialog(dlg));
+  head.append(titles, x);
 
+  // Landscape: settings and the cardinality buttons on the left, "Check this join" on the right.
   const body = document.createElement("div");
-  body.className = "dialog__body";
+  body.className = "rel-dialog";
+  const left = document.createElement("div");
+  left.className = "rel-dialog__left";
+  const right = document.createElement("div");
+  right.className = "rel-dialog__right";
   // How the two tables join — only matching rows, or keep every row of the first table (left),
   // the second (right) or both (full). The link runs first → second. Pick it first; picking a cardinality saves both.
   let join = joinType;
@@ -516,33 +548,63 @@ function openCardinalityDialog({ current = "1:N", joinType = "inner", tables = [
   const legend = document.createElement("legend");
   legend.textContent = "Join";
   joinRow.append(legend);
-  for (const { value: v, text } of joinChoices(tables[0], tables[1], legacy)) {
+  // One choice of four: round radios on selectable tiles (a toggle would read as "pick several").
+  const options = document.createElement("div");
+  options.className = "join-options";
+  for (const { value: v, text, hint } of joinChoices(tables[0], tables[1], legacy)) {
     const lab = document.createElement("label");
-    lab.className = "form-check";
+    lab.className = "join-option";
     const r = document.createElement("input");
     r.type = "radio"; r.name = "join-type"; r.value = v; r.checked = v === join;
     r.addEventListener("change", () => { if (r.checked) join = v; });
-    lab.append(r, document.createTextNode(` ${text}`));
-    joinRow.append(lab);
+    const words = document.createElement("span");
+    words.className = "join-option__text";
+    const name = document.createElement("span");
+    name.className = "join-option__name";
+    name.textContent = text;
+    const note = document.createElement("span");
+    note.className = "join-option__hint";
+    note.textContent = hint;
+    words.append(name, note);
+    lab.append(r, words);
+    options.append(lab);
   }
-  body.append(joinRow);
+  joinRow.append(options);
+  left.append(section("join", 0, joinRow));
   let aggregate = agg.aggregate, direction = agg.direction;
-  body.append(buildAggregateChoice(agg, (v) => { aggregate = v.aggregate; direction = v.direction; }));
+  left.append(section("totals", 1, buildAggregateChoice(agg, (v) => { aggregate = v.aggregate; direction = v.direction; })));
   if (keys) {
-    body.append(buildKeyPairs(keys.section));
-    body.append(buildJoinCheck(dlg, keys.check));
+    left.append(section("pairs", 2, buildKeyPairs(keys.section)));
+    right.append(buildJoinCheck(dlg, keys.check));
   }
   const choices = document.createElement("div");
   choices.className = "card-choices";
+  choices.setAttribute("role", "group");
+  choices.setAttribute("aria-labelledby", "rel-card-label");
+  const choicesLabel = document.createElement("h3");
+  choicesLabel.className = "rel-dialog__h";
+  choicesLabel.id = "rel-card-label";
+  choicesLabel.textContent = "Cardinality";
+  // Picking a cardinality only selects it; Confirm saves.
+  let cardinality = current;
+  const cardButtons = [];
   for (const c of CARDINALITIES) {
-    const b = makeButton(c, `card-choice${c === current ? " is-active" : ""}`);
-    b.addEventListener("click", () => { closeDialog(dlg); onPick(c, join, keys?.pairs() ?? [], { aggregate, direction }); });
+    const b = makeButton(c, `card-choice${c === cardinality ? " is-active" : ""}`);
+    b.setAttribute("aria-pressed", String(c === cardinality));
+    b.addEventListener("click", () => {
+      cardinality = c;
+      for (const o of cardButtons) { const on = o === b; o.classList.toggle("is-active", on); o.setAttribute("aria-pressed", String(on)); }
+    });
+    cardButtons.push(b);
     choices.append(b);
   }
-  body.append(choices);
+  left.append(section("card", 3, choicesLabel, choices));
+  body.append(left);
+  if (keys) body.append(right);
+  else body.classList.add("rel-dialog--single");
 
   const foot = document.createElement("div");
-  foot.className = "dialog__foot";
+  foot.className = "dialog__foot rel-dialog__foot";
   if (onDelete) {
     const del = makeButton("Delete", "btn btn--danger");
     del.addEventListener("click", () => { closeDialog(dlg); onDelete(); });
@@ -550,7 +612,9 @@ function openCardinalityDialog({ current = "1:N", joinType = "inner", tables = [
   }
   const cancel = makeButton("Cancel", "btn");
   cancel.addEventListener("click", () => closeDialog(dlg));
-  foot.append(cancel);
+  const confirm = makeButton("Confirm", "btn btn--primary");
+  confirm.addEventListener("click", () => { closeDialog(dlg); onPick(cardinality, join, keys?.pairs() ?? [], { aggregate, direction }); });
+  foot.append(cancel, confirm);
 
   dlg.append(head, body, foot);
   dlg.addEventListener("cancel", (e) => { e.preventDefault(); closeDialog(dlg); });

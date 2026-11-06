@@ -86,7 +86,7 @@ try {
     must((await texts('.key-pairs__item span')).join('|') === 'Region = region', 'remove');
   });
   await check('N:1 saves the link: the badge counts the keys and every key column is pinned', async () => {
-    await ev(`[...${dlg}.querySelectorAll('.card-choice')].find((x) => x.textContent === 'N:1').click()`);
+    await ev(`[...${dlg}.querySelectorAll('.card-choice')].find((x) => x.textContent === 'N:1').click(); ${dlg}.querySelector('.rel-dialog__foot .btn--primary').click()`);
     await waitFor(`document.querySelector('.rel-badge text')?.textContent === 'N:1 · 2 keys'`, 'badge');
     must(await ev(`document.querySelectorAll('.entity__keys .col-row').length === 4`), 'cust_id, Region, id, region should be pinned');
     await shot('compound-linked.png');
@@ -106,7 +106,7 @@ try {
     await waitFor(`document.querySelector('dialog[open] .key-pairs') !== null`, 'edit dialog');
     must((await texts('.key-pairs__item span'))[0] === 'Region = region', 'saved pair not shown');
     await ev(`[...${dlg}.querySelectorAll('button')].find((y) => y.getAttribute('aria-label') === 'Remove Region = region').click()`);
-    await ev(`[...${dlg}.querySelectorAll('.card-choice')].find((x) => x.textContent === 'N:1').click()`);
+    await ev(`[...${dlg}.querySelectorAll('.card-choice')].find((x) => x.textContent === 'N:1').click(); ${dlg}.querySelector('.rel-dialog__foot .btn--primary').click()`);
     await waitFor(`document.querySelector('.rel-badge text')?.textContent === 'N:1'`, 'plain badge');
     must(await ev(`document.querySelectorAll('.entity__keys .col-row').length === 2`), 'only the first pair stays pinned');
   });
