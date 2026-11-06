@@ -228,7 +228,7 @@ export function initDashboards() {
     if (!dash) return;
     const s = dash.sheet;
     const r = applyAll(s.collapsed, mode, rowKeys, colKeys);
-    if (r.blocked) { toast(`At most ${MAX_COLLAPSED} headers can be collapsed — collapse fewer levels first.`, "danger"); return; }
+    if (r.blocked) { toast(`Collapse all would close more than ${MAX_COLLAPSED} headers on one axis — collapse them one at a time, or filter first.`, "danger"); return; }
     if (r.changed === 0) { toast(allMessage(mode, 0)); return; }
     s.collapsed = r.collapsed;
     commit(dash, s);
