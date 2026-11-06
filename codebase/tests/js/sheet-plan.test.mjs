@@ -167,3 +167,13 @@ test("buildPlan: a calculated filter is wired as its tree, brings its tables in 
   const alone = sheet({ rows: [meas("orders", "id")], filters: [f("c1")] });
   assert.deepEqual(buildPlan(alone, undefined, mkCtx({ calculations: calcs })).from, { db: "shop", table: "orders" });
 });
+
+test("buildPlan: a relationship that aggregates first marks its join, with a single-way filter direction only when asked", () => {
+  const rel = { from: { entityId: "e1", column: "id" }, to: { entityId: "e2", column: "id" }, joinType: "inner" };
+  const run = (extra) => buildPlan(sheet({ columns: [dim("orders", "region")], rows: [meas("customers", "id")] }), undefined, mkCtx({ relationships: new Map([["r1", { ...rel, ...extra }]]) })).joins[0];
+  assert.equal("aggregate" in run({}), false);
+  assert.equal(run({ aggregateFirst: true }).aggregate, true);
+  assert.equal("filterDirection" in run({ aggregateFirst: true }), false);
+  assert.equal(run({ aggregateFirst: true, filterDirection: "single" }).filterDirection, "single");
+  assert.equal("aggregate" in run({ filterDirection: "single" }), false); // a direction means nothing unless aggregating
+});

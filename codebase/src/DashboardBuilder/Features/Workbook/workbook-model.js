@@ -12,7 +12,7 @@ import { aggsFor } from "../Dashboard/filter-rules.js";
 import { CASTS } from "../Dashboard/cast-model.js";
 import { cleanMemberAliases } from "../Dashboard/member-labels.js";
 import { cleanTheme, DEFAULT_THEME } from "../Core/theme-model.js";
-import { normalizeJoinType, relEnds } from "../Relations/relation-rules.js";
+import { normalizeJoinType, relEnds, applyAggregate } from "../Relations/relation-rules.js";
 import { cleanAction, cleanParamAction } from "../Dashboard/action-model.js";
 import { cleanMemberColors } from "../Dashboard/colour-model.js";
 import { cleanCollapsed } from "../Dashboard/collapse-model.js";
@@ -69,6 +69,7 @@ export function serializeWorkbook({ entities, relationships, tabs, active, theme
       joinType: normalizeJoinType(r.joinType),
       joinFixed: r.joinFixed === true,
       ...(r.pairs?.length ? { pairs: r.pairs.map((p) => ({ from: p.from, to: p.to })) } : {}), // a compound key's extra pairs (optional; absent in older files)
+      ...(r.aggregateFirst === true ? { aggregateFirst: true, ...(r.filterDirection === "single" ? { filterDirection: "single" } : {}) } : {}), // aggregate each table to the key before joining (optional)
     })),
     worksheets: worksheets.map((d) => ({ name: d.name, sheet: savedSheet(d.sheet) })),
     dashboards: dashboards.map((d) => ({ name: d.name, widgets: savedWidgets(d.widgets, wsIndex, dbIndex), ...savedSize(d.size), ...savedRange(d.range), ...savedNotes(d.notes) })), // size: optional (absent = automatic)
@@ -171,6 +172,7 @@ export function parseWorkbook(source) {
       joinType: normalizeJoinType(r.joinType), // anything unknown reads as inner
       joinFixed: r.joinFixed === true, // old files: false (a left keeps the base side)
       pairs: r.pairs, // raw; checked below once the columns in use are known
+      ...applyAggregate({}, { aggregate: r.aggregateFirst === true, direction: r.filterDirection }), // a non-boolean flag or unknown direction reads as the plain join
     }));
   // A column is in at most one relationship: the first one that uses it is kept.
   const used = new Set();

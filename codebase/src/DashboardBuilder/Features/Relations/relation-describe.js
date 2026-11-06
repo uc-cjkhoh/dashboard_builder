@@ -24,7 +24,10 @@ export function describeRelationship(rel, fromTable, toTable) {
     (MATCH[rel.cardinality] ?? MATCH["N:M"])(fromTable, toTable),
     keepSentence(rel.joinType, fromTable, toTable, rel.joinFixed),
   ];
-  if (rel.cardinality === "1:N" || rel.cardinality === "N:M") sentences.push(`Totals from ${fromTable} repeat for each matching ${toTable} row.`);
+  if (rel.aggregateFirst === true) {
+    sentences.push(`Each table is totalled by the key before they join, so a total isn't repeated for each matching row.`);
+    sentences.push(rel.filterDirection === "single" ? "A filter changes only its own table." : "A filter on either table also limits the other.");
+  } else if (rel.cardinality === "1:N" || rel.cardinality === "N:M") sentences.push(`Totals from ${fromTable} repeat for each matching ${toTable} row.`);
   return {
     title: `${fromTable} → ${toTable}`,
     keys: `${fromTable}.${join("from")} = ${toTable}.${join("to")}`,
