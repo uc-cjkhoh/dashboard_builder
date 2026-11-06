@@ -176,6 +176,7 @@ function openWorkbook(wb) {
         r.joinType,
         r.joinFixed,
         r.pairs ?? [],
+        { aggregate: r.aggregateFirst === true, direction: r.filterDirection },
       );
     }
 

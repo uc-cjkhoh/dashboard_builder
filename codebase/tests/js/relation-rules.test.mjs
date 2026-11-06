@@ -164,3 +164,24 @@ test("the badge counts the keys of a compound link", () => {
   assert.equal(joinBadge("1:N", "inner", 2), "1:N · 3 keys");
   assert.equal(joinBadge("1:N", "left", 1), "1:N · left · 2 keys");
 });
+
+// Aggregate before joining (P43).
+import { normalizeFilterDirection, applyAggregate, aggregateChoice } from "../../src/DashboardBuilder/Features/Relations/relation-rules.js";
+test("a filter direction is both unless it says single", () => {
+  assert.equal(normalizeFilterDirection("single"), "single");
+  for (const v of ["both", "up", undefined, null, 3]) assert.equal(normalizeFilterDirection(v), "both");
+});
+test("applyAggregate stores only what differs from the plain join", () => {
+  const r = {};
+  applyAggregate(r, { aggregate: true, direction: "both" });
+  assert.deepEqual(r, { aggregateFirst: true });
+  applyAggregate(r, { aggregate: true, direction: "single" });
+  assert.deepEqual(r, { aggregateFirst: true, filterDirection: "single" });
+  applyAggregate(r, { aggregate: false, direction: "single" }); // direction means nothing without aggregating
+  assert.deepEqual(r, {});
+});
+test("aggregateChoice reads a saved relationship back into the dialog's two controls", () => {
+  assert.deepEqual(aggregateChoice({}), { aggregate: false, direction: "both" });
+  assert.deepEqual(aggregateChoice({ aggregateFirst: true, filterDirection: "single" }), { aggregate: true, direction: "single" });
+  assert.deepEqual(aggregateChoice({ aggregateFirst: "yes" }), { aggregate: false, direction: "both" });
+});
