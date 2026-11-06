@@ -52,4 +52,6 @@ test("suggestTarget: exact name beats a normalised one; same kind only; used col
   assert.equal(suggestTarget(c("region", "text"), [c("region")]), null);
   assert.equal(suggestTarget(c("id"), customers, ["id"]), null);
   assert.equal(suggestTarget(c("nothing"), customers), null);
+  assert.equal(suggestTarget(c("cust_id"), [c("Cust_Id"), c("custid")]), "Cust_Id", "ties: first in column order");
+  assert.equal(suggestTarget(c("region", "text"), [c("region", "text"), c("Region", "text")], ["region"]), "Region", "a used exact name falls to a free normalised one");
 });
