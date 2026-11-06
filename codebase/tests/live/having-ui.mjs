@@ -106,7 +106,7 @@ try {
   await check('the measure pill menu has the filter editor, with named, keyboard-reachable controls', async () => {
     await openMenu();
     await waitFor(`!!document.querySelector('.ctx-menu .ws-pill__havingop')`, 'having editor in the menu');
-    const info = await ev(`(() => { const m = document.querySelector('.ctx-menu'); const op = m.querySelector('.ws-pill__havingop'), i = m.querySelector('.ws-pill__having input');
+    const info = await ev(`(() => { const m = document.querySelector('.ctx-menu'); const op = m.querySelector('.ws-pill__havingop'), i = m.querySelector('.ws-pill__having input.ws-pill__val');
       return { opLabel: op.getAttribute('aria-label'), inLabel: i.getAttribute('aria-label'), lead: m.querySelector('.ws-pill__havinglead').textContent, ops: [...op.options].map((o) => o.value),
         tab: op.tabIndex >= 0 && i.tabIndex >= 0, clearHidden: m.querySelector('.ws-pill__having .btn').hidden }; })()`);
     must(/Measure filter condition for/.test(info.opLabel) && /Number for/.test(info.inLabel), J(info));
@@ -121,8 +121,8 @@ try {
     await setControl('.ctx-menu .ws-pill__havingop', '>=');
     await settle(200);
     await openMenu().catch(() => {});
-    await waitFor(`!!document.querySelector('.ctx-menu .ws-pill__having input')`, 'menu again');
-    await setControl('.ctx-menu .ws-pill__having input', '20');
+    await waitFor(`!!document.querySelector('.ctx-menu .ws-pill__having input.ws-pill__val')`, 'menu again');
+    await setControl('.ctx-menu .ws-pill__having input.ws-pill__val', '20');
     await settle();
     const h = lastQuery().having;
     must(J(h) === J([{ measure: 0, op: '>=', value: '20' }]), `having: ${J(h)}`);
@@ -137,8 +137,8 @@ try {
 
   await check('a number that is not one is not applied: nothing sent for it, the pill and notice say so', async () => {
     await openMenu();
-    await waitFor(`!!document.querySelector('.ctx-menu .ws-pill__having input')`, 'menu');
-    await setControl('.ctx-menu .ws-pill__having input', 'abc');
+    await waitFor(`!!document.querySelector('.ctx-menu .ws-pill__having input.ws-pill__val')`, 'menu');
+    await setControl('.ctx-menu .ws-pill__having input.ws-pill__val', 'abc');
     await settle();
     // (a result for an unchanged plan comes from the client's cache, so read the chart: the mock drops groups below the filter)
     must(/APAC/.test(await ev(`document.getElementById('ws-chart').textContent`)), 'the invalid filter was still applied (APAC missing)');
@@ -146,7 +146,7 @@ try {
     must(/not applied/.test(n), `notice: ${n}`);
     must(await ev(`!!document.querySelector('.ws-shelf--rows .ws-pill__having-badge.is-invalid svg')`), 'no warning badge');
     await openMenu();
-    await waitFor(`!!document.querySelector('.ctx-menu .ws-pill__having input[aria-invalid=true]')`, 'invalid input marked');
+    await waitFor(`!!document.querySelector('.ctx-menu .ws-pill__having input.ws-pill__val[aria-invalid=true]')`, 'invalid input marked');
     await closeMenu();
   });
 
@@ -156,12 +156,12 @@ try {
     await setControl('.ctx-menu .ws-pill__havingop', 'between');
     await settle(200);
     await openMenu();
-    await waitFor(`document.querySelectorAll('.ctx-menu .ws-pill__having input').length === 2`, 'two inputs');
-    await setControl('.ctx-menu .ws-pill__having input:nth-of-type(1)', '10');
+    await waitFor(`document.querySelectorAll('.ctx-menu .ws-pill__having input.ws-pill__val').length === 2`, 'two inputs');
+    await setControl('.ctx-menu .ws-pill__having input.ws-pill__val:nth-of-type(1)', '10');
     await settle(200);
     await openMenu();
-    await waitFor(`document.querySelectorAll('.ctx-menu .ws-pill__having input').length === 2`, 'two inputs again');
-    await ev(`(() => { const i = document.querySelectorAll('.ctx-menu .ws-pill__having input')[1]; i.value = '30'; i.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+    await waitFor(`document.querySelectorAll('.ctx-menu .ws-pill__having input.ws-pill__val').length === 2`, 'two inputs again');
+    await ev(`(() => { const i = document.querySelectorAll('.ctx-menu .ws-pill__having input.ws-pill__val')[1]; i.value = '30'; i.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
     await settle();
     must(J(lastQuery().having) === J([{ measure: 0, op: 'between', values: ['10', '30'] }]), `having: ${J(lastQuery().having)}`);
     must(/is between 10 and 30/.test(await notice()), await notice());
@@ -179,10 +179,37 @@ try {
     await setControl('.ctx-menu .ws-pill__havingop', '>');
     await settle(200);
     await openMenu();
-    await waitFor(`!!document.querySelector('.ctx-menu .ws-pill__having input')`, 'menu');
-    await setControl('.ctx-menu .ws-pill__having input', '5');
+    await waitFor(`!!document.querySelector('.ctx-menu .ws-pill__having input.ws-pill__val')`, 'menu');
+    await setControl('.ctx-menu .ws-pill__having input.ws-pill__val', '5');
     await settle();
     must(lastQuery().otherBucket === undefined && lastQuery().having?.length === 1, J(lastQuery()).slice(0, 300));
+  });
+
+  await check('between draws a two-thumb range slider over the measure span; moving a thumb fills the inputs and applies', async () => {
+    await openMenu();
+    await waitFor(`!!document.querySelector('.ctx-menu .ws-pill__havingop')`, 'menu');
+    await setControl('.ctx-menu .ws-pill__havingop', 'between');
+    await settle(200);
+    await openMenu();
+    await waitFor(`document.querySelectorAll('.ctx-menu .ws-pill__slider-input').length === 2`, 'two sliders');
+    const info = await ev(`(() => { const [a, c] = document.querySelectorAll('.ctx-menu .ws-pill__slider-input');
+      return { min: a.min, max: a.max, lo: a.value, hi: c.value, la: a.getAttribute('aria-label'), lb: c.getAttribute('aria-label') }; })()`);
+    must(Number(info.min) === 10 && Number(info.max) === 30 && Number(info.lo) === 10 && Number(info.hi) === 30, J(info));
+    must(/From slider for/.test(info.la) && /To slider for/.test(info.lb), J(info));
+    const before = queries.length;
+    await setControl('.ctx-menu .ws-pill__slider-input:nth-of-type(1)', '15');
+    await setControl('.ctx-menu .ws-pill__slider-input:nth-of-type(2)', '25');
+    await b.sleep(200);
+    must(queries.length === before, 'a query fired before the slider debounce');
+    await b.sleep(900);
+    await settle();
+    must(J(lastQuery().having) === J([{ measure: 0, op: 'between', values: ['15', '25'] }]), `having: ${J(lastQuery().having)}`);
+    await openMenu();
+    await waitFor(`document.querySelectorAll('.ctx-menu .ws-pill__slider-input').length === 2`, 'sliders after apply');
+    const after = await ev(`(() => { const [a, c] = document.querySelectorAll('.ctx-menu .ws-pill__slider-input'); const i = document.querySelectorAll('.ctx-menu .ws-pill__having input.ws-pill__val');
+      return { min: a.min, max: a.max, lo: a.value, hi: c.value, from: i[0].value, to: i[1].value }; })()`);
+    must(Number(after.min) === 10 && Number(after.max) === 30 && after.from === '15' && after.to === '25' && Number(after.lo) === 15, J(after));
+    await closeMenu();
   });
 
   // screenshots, light + dark (the app reads <html data-scheme>)

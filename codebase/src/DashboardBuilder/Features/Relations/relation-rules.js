@@ -107,3 +107,19 @@ export const joinBadge = (cardinality, type, extra = 0) => {
   const base = t === "inner" ? cardinality : `${cardinality} · ${t}`;
   return extra > 0 ? `${base} · ${extra + 1} keys` : base;
 };
+
+// Aggregate before joining (P43). A relationship may ask the view to total each table by the join key before the two meet, so a measure
+// is not repeated when the other side repeats the key. `filterDirection` is "both" (a filter on either table also limits the other; the default,
+// never stored) or "single" (a filter changes only its own table). Saved as `aggregateFirst` / `filterDirection` on the relationship.
+export const FILTER_DIRECTIONS = ["both", "single"];
+export const normalizeFilterDirection = (d) => (d === "single" ? "single" : "both");
+/** Put the dialog's two choices on a relationship: only what differs from the plain join is stored. */
+export function applyAggregate(rel, { aggregate, direction }) {
+  delete rel.aggregateFirst; delete rel.filterDirection;
+  if (aggregate !== true) return rel;
+  rel.aggregateFirst = true;
+  if (normalizeFilterDirection(direction) === "single") rel.filterDirection = "single";
+  return rel;
+}
+/** A saved relationship's two dialog controls. */
+export const aggregateChoice = (rel) => ({ aggregate: rel?.aggregateFirst === true, direction: rel?.aggregateFirst === true ? normalizeFilterDirection(rel.filterDirection) : "both" });

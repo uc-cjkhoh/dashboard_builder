@@ -14,7 +14,7 @@ import { checkValue, paramTypeFor } from "../Core/parameters-model.js";
 import { exportChart, hasChartInstance, sizeChart, focusSeries } from "./chart.js";
 import { createWorksheetView, periodNotice } from "./worksheet-view.js";
 import { CACHE_NOTE } from "./notices.js";
-import { HAVING_OPS, checkHaving, havingBadge, havingSentence } from "./having-model.js";
+import { HAVING_OPS, checkHaving, havingBadge, havingSentence, sliderBounds, sliderStep, sliderValues, sliderKey } from "./having-model.js";
 import { dateTimeIn, offsetLabel } from "../Core/timezone.js";
 import { fieldCopies } from "./field-copy-model.js";
 import { el, hint, iconSpan } from "./render-dom.js";
@@ -1175,11 +1175,14 @@ export function initDashboards() {
   }
   // The status bar under the chart: marks, rows × columns, the selection.
   let lastQueriedAt = null;
+  let lastRowsOf = null;
+  const sliderSpans = new Map(); // `${sheetId}:${measure index}` -> the widest span seen, so narrowing a range never shrinks its track
   let lastCached = false; // the drawn result came from the server cache → noted in "How this is computed"
   function setStatusBar(s, result) {
     const bar = document.getElementById("ws-statusbar");
     if (!bar) return;
     lastCached = Boolean(result?.cached);
+    lastRowsOf = result?.rows ? { sheetId: s?.id, rows: result.rows } : null; // the measure filter's range slider reads its span from here
     lastQueriedAt = result?.queriedAt ?? null; // a query that is starting, failed or was cancelled has no update time
     if (!result) { bar.replaceChildren(); toggle(bar, false); return; }
     bar.textContent = [statusText(s, result), updatedText(lastQueriedAt)].filter(Boolean).join(" · ");
@@ -1546,6 +1549,35 @@ export function initDashboards() {
     wrap.append(box, err);
     return wrap;
   }
+  const spanKey = (s, f) => sliderKey(s.id, measureName({ ...f, agg: f.agg ?? "sum" }), planDims(s).keyOrder.map((d) => nameOf(d)));
+  // The range slider under a "between" measure filter: two thumbs over the measure's span in the drawn result (widest span seen
+  // kept per measure). Moving a thumb fills the From / To inputs; releasing it applies. No numbers to draw it over -> no slider.
+  function havingSlider(s, f, label, inputs, apply) {
+    const key = spanKey(s, f), index = planMeasures(s).filter((e) => e.role === "shelf").findIndex((e) => e.field === f);
+    const rows = lastRowsOf && lastRowsOf.sheetId === s.id ? lastRowsOf.rows : [];
+    const bounds = index >= 0 ? sliderBounds(rows, index, sliderSpans.get(key), f.having) : null;
+    if (!bounds || bounds.max === bounds.min) return null;
+    sliderSpans.set(key, bounds);
+    const step = sliderStep(bounds), decimals = Math.max(0, -Math.floor(Math.log10(step)));
+    const fmt = (v) => String(Number(Number(v).toFixed(decimals)));
+    const [lo, hi] = sliderValues(bounds, f.having);
+    const box = el("span", "ws-pill__slider");
+    const mk = (value, aria) => {
+      const r = el("input", "ws-pill__slider-input"); r.type = "range";
+      r.min = bounds.min; r.max = bounds.max; r.step = step; r.value = value;
+      r.setAttribute("aria-label", `${aria} for ${label}`);
+      return r;
+    };
+    let timer = null;
+    const a = mk(lo, "From slider"), b = mk(hi, "To slider");
+    const sync = (moved) => {
+      if (Number(a.value) > Number(b.value)) (moved === a ? b : a).value = moved.value; // thumbs never cross
+      inputs[0].value = fmt(a.value); inputs[1].value = fmt(b.value);
+    };
+    for (const r of [a, b]) { r.addEventListener("input", () => sync(r)); r.addEventListener("change", () => { sync(r); clearTimeout(timer); timer = setTimeout(() => apply("between"), 500); }); } // a burst of arrow keys is one query
+    box.append(a, b);
+    return box;
+  }
   // The measure filter in a measure pill's popup: a condition on the aggregated value of each group (SQL HAVING), in words —
   // "sum Sales | is at least | 1000". A number that isn't one is kept as typed and marked on its input; the plan leaves it out
   // and the notice says it was not applied.
@@ -1576,9 +1608,14 @@ export function initDashboards() {
     op.addEventListener("change", () => write(op.value));
     for (const i of inputs) i.addEventListener("change", () => write(op.value));
     const clear = makeButton("Clear", "btn btn--quiet");
-    clear.addEventListener("click", () => { delete f.having; commit(dash, s); });
+    clear.addEventListener("click", () => { delete f.having; sliderSpans.delete(spanKey(s, f)); commit(dash, s); });
     clear.hidden = !f.having;
-    wrap.append(lead, op, row, clear);
+    wrap.append(lead, op);
+    if (cur.op === "between") {
+      const slider = havingSlider(s, f, label, inputs, (opv) => write(opv));
+      if (slider) wrap.append(slider);
+    }
+    wrap.append(row, clear);
     if (chk.state === "invalid") fieldError(inputs[chk.error?.startsWith("From must") || chk.error?.includes("To") ? 1 : 0] ?? inputs[0], chk.error);
     return wrap;
   }

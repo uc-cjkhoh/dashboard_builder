@@ -1094,10 +1094,12 @@ public sealed partial class ClickHouseGateway
         var anyBeyondInner = joinTypes.Any(IsOuter);
         if (NullsUnavailable(joinTypes, info))
             throw new RequestValidationException("Right and full joins need the server to accept the join_use_nulls setting — this connection's profile refuses settings.", "joins");
-        var sampled = source is null && sample && CanSample(joinTypes) && await HasSamplingKeyAsync(info, req.From.Db, req.From.Table, ct);
+        var sampled = source is null && sample && req.Joins?.Any(j => j.Aggregate == true) != true && CanSample(joinTypes) && await HasSamplingKeyAsync(info, req.From.Db, req.From.Table, ct);
         if (sampled) from.Append(" SAMPLE ").Append(SampleFraction.ToString(CultureInfo.InvariantCulture));
 
         var next = 1;
+        AggregateJoin? aggJ = null; // aggregate-before-join: the two tables become grouped subqueries (see AggregateJoin)
+        string aggJoin = "", aggOn = "";
         var anyLeft = anyBeyondInner; // any outer join asks the server for NULLs (join_use_nulls)
         foreach (var j in req.Joins ?? [])
         {
@@ -1120,10 +1122,24 @@ public sealed partial class ClickHouseGateway
             {
                 rightAlias = $"t{next++}";
                 aliases[rightKey] = rightAlias;
-                from.Append(JoinKeyword(j.Type)).Append(Identifier.QualifiedName(j.Right.Db, j.Right.Table))
-                    .Append(" AS ").Append(rightAlias)
-                    .Append(JoinOn(leftExpr, rightAlias, j.Right.Column, extraLeft));
+                if (j.Aggregate == true)
+                {
+                    if (source is not null) throw new RequestValidationException("A union or unpivot can't be joined.", "joins");
+                    aggJ = new AggregateJoin(j.FilterDirection != "single");
+                    aggJ.AddSide("t0", Identifier.QualifiedName(req.From.Db, req.From.Table));
+                    aggJ.AddSide(rightAlias, Identifier.QualifiedName(j.Right.Db, j.Right.Table));
+                    aggJ.Keys([(Identifier.Quote(j.Left.Column), Identifier.Quote(j.Right.Column)),
+                        .. (j.Pairs ?? []).Select(p => (Identifier.Quote(p.Left), Identifier.Quote(p.Right)))]);
+                    aggJoin = JoinKeyword(j.Type);
+                    aggOn = JoinOn(leftExpr, rightAlias, j.Right.Column, extraLeft);
+                }
+                else
+                    from.Append(JoinKeyword(j.Type)).Append(Identifier.QualifiedName(j.Right.Db, j.Right.Table))
+                        .Append(" AS ").Append(rightAlias)
+                        .Append(JoinOn(leftExpr, rightAlias, j.Right.Column, extraLeft));
             }
+            else if (j.Aggregate == true)
+                throw new RequestValidationException("Aggregating before the join needs two different tables.", "joins");
         }
 
         // Dimensions → group-by columns, selected k0, k1, …, ordered row dimensions first (left stub
@@ -1173,6 +1189,11 @@ public sealed partial class ClickHouseGateway
             dimRefs.Add(d);
         }
 
+        // Aggregate-before-join: each table's subquery reads the join key and every field the view groups by raw (the dimension expressions above sit on those columns).
+        if (aggJ is not null)
+            foreach (var d in dimRefs) aggJ.Need(aliases[Key(d.Db, d.Table)], Identifier.Quote(d.Column));
+        string AliasOf(string db, string table) => aliases.GetValueOrDefault(Key(db, table), "t0");
+
         // Measures → aggregated columns, selected as v0, v1, … (in request order). No measures →
         // an implicit count() so every view (bar/line/KPI) has a value to plot.
         var measExprs = new List<string>();
@@ -1205,17 +1226,24 @@ public sealed partial class ClickHouseGateway
             // approximate mode estimates distinct counts (uniq).
             // A percentile's fraction is a bound Float64 parameter (mp{n}), never text.
             var mFraction = mAgg == "percentile" ? BindFraction(m.P, $"mp{mIdx}", $"measures[{mIdx}].p", parameters) : null;
-            measExprs.Add(AggregateSql(mAgg, mAgg == "count" ? "" : await CastedAsync(m.Db, m.Table, m.Column, m.Cast, $"measures[{mIdx}]"), sampled, approximate, mFraction));
+            var mExpr = mAgg == "count" ? "" : await CastedAsync(m.Db, m.Table, m.Column, m.Cast, $"measures[{mIdx}]");
+            measExprs.Add(aggJ is null ? AggregateSql(mAgg, mExpr, sampled, approximate, mFraction) : aggJ.Measure(mAgg, AliasOf(m.Db, m.Table), mExpr, $"measures[{mIdx}]"));
             measNames.Add(MeasureName(mAgg, m.Column, m.P));
         }
         if (measExprs.Count == 0)
         {
-            measExprs.Add(AggregateSql("count", "", sampled, approximate));
+            measExprs.Add(aggJ is null ? AggregateSql("count", "", sampled, approximate) : aggJ.Measure("count", "t0", "", "measures"));
             measNames.Add("count");
             measNumeric.Add(true);
         }
 
         var conditions = new List<string>();
+        // With aggregate-before-join a filter is applied inside its own table's subquery (and, filtering both ways, limits the other table's keys).
+        void AddCondition(QueryFilter f, string condition)
+        {
+            if (aggJ is null) conditions.Add(condition);
+            else aggJ.Where(AliasOf(f.Db, f.Table), condition);
+        }
         var filters = req.Filters ?? [];
         var tops = new List<(QueryFilter F, int Index)>();
         for (var i = 0; i < filters.Length; i++)
@@ -1226,11 +1254,11 @@ public sealed partial class ClickHouseGateway
             {
                 // Row-level calculation → WHERE, with its own literals (prefix c{n}) and the compared values bound as p{i}.
                 var (calcExpr, calcCategory) = CalcSql.CalcFilterSql(await CompileCalcAsync(fCalc, $"filters[{i}]"), $"filters[{i}]");
-                conditions.Add(BuildCondition(f.Op, $"p{i}", calcExpr, calcCategory, CalcSql.CalcLabel(f.Column), $"filters[{i}]", f.Value, f.Values, parameters));
+                AddCondition(f, BuildCondition(f.Op, $"p{i}", calcExpr, calcCategory, CalcSql.CalcLabel(f.Column), $"filters[{i}]", f.Value, f.Values, parameters));
                 continue;
             }
             var expr = await CastedAsync(f.Db, f.Table, f.Column, f.Cast, $"filters[{i}]"); // validates + quotes the column; cast
-            conditions.Add(BuildCondition(f.Op, $"p{i}", expr, CategoryOfRef(f.Db, f.Table, f.Column, f.Cast), f.Column, $"filters[{i}]", f.Value, f.Values, parameters,
+            AddCondition(f, BuildCondition(f.Op, $"p{i}", expr, CategoryOfRef(f.Db, f.Table, f.Column, f.Cast), f.Column, $"filters[{i}]", f.Value, f.Values, parameters,
                 DateOnlyOfRef(f.Db, f.Table, f.Column, f.Cast)));
         }
         // Top-N filters: the column's members ranked by an aggregate over the same joins and the other
@@ -1267,6 +1295,7 @@ public sealed partial class ClickHouseGateway
             conditions.Add(TopCondition(expr, from.ToString(), others, rank, f));
         }
         var where = conditions.Count > 0 ? " WHERE " + string.Join(" AND ", conditions) : "";
+        if (aggJ is not null) from.Clear().Append(aggJ.FromSql(aggJoin, aggOn));
 
         // Date grouping: the first date/time dimension is truncated to a calendar grain (whitelisted
         // function over the already-quoted column), so a long time axis returns months, not millions

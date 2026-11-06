@@ -169,6 +169,32 @@ public static class RequestRules
     public static readonly IReadOnlySet<string> DateBuckets = new HashSet<string>(StringComparer.Ordinal)
         { "auto", "hour", "day", "week", "month", "quarter", "year" };
 
+    /// <summary>Aggregating each table to the key before the join (<see cref="AggregateJoin"/>) is built for a plain two-table view: no calculations, no top-N, and only
+    /// aggregates that recombine (sum, count, min, max, average).</summary>
+    private static void CheckAggregateFirst(QueryRequest r)
+    {
+        if (r.Joins!.Length != 1)
+            throw Bad("Aggregating before the join works on a view of exactly two tables — this one joins more. Turn it off on the relationship, or use fields of two tables only.", "joins");
+        for (var i = 0; i < (r.Measures?.Length ?? 0); i++)
+        {
+            var m = r.Measures![i];
+            if (m.Calc is not null) throw Bad("A calculated measure can't be combined before the join — turn off aggregating before the join on the relationship.", $"measures[{i}]");
+            if (m.Agg is { Length: 0 }) throw Bad("A measure needs an aggregation.", $"measures[{i}]");
+            var agg = (m.Agg ?? "count").ToLowerInvariant();
+            if (!AggregateJoin.Combinable.Contains(agg))
+                throw Bad($"{char.ToUpperInvariant(agg[0])}{agg[1..]} can't be combined before the join — use Sum, Count, Min, Max or Average, or turn off aggregating before the join.", $"measures[{i}]");
+        }
+        foreach (var (d, field) in (r.RowDimensions ?? []).Select((d, i) => (d, $"rowDimensions[{i}]")).Concat((r.ColumnDimensions ?? []).Select((d, i) => (d, $"columnDimensions[{i}]"))))
+            if (d.Calc is not null) throw Bad("A calculated field can't group a view that aggregates before the join — turn it off on the relationship.", field);
+        for (var i = 0; i < (r.Filters?.Length ?? 0); i++)
+        {
+            var f = r.Filters![i];
+            if (f is null) continue;
+            if (f.Calc is not null) throw Bad("A calculated field can't filter a view that aggregates before the join — turn it off on the relationship.", $"filters[{i}]");
+            if (string.Equals(f.Op, "top", StringComparison.OrdinalIgnoreCase)) throw Bad("A top-N filter can't be combined with aggregating before the join — turn it off on the relationship.", $"filters[{i}]");
+        }
+    }
+
     public static void ValidateQuery(QueryRequest r) => ValidateQuery(r, ApiLimits.MaxRowLimit);
 
     /// <summary>A worksheet query; <paramref name="maxLimit"/> is higher for CSV export.</summary>
@@ -191,12 +217,14 @@ public static class RequestRules
         {
             if (r.Joins![i].Type is { } jt && jt is not ("inner" or "left" or "right" or "full")) throw Bad("A join is inner, left, right or full.", $"joins[{i}].type");
             JoinPairRules.Check(r.Joins[i].Pairs, $"joins[{i}].pairs");
+            if (r.Joins[i].FilterDirection is { } fd && fd is not ("both" or "single")) throw Bad("A filter direction is both or single.", $"joins[{i}].filterDirection");
             if (r.Joins[i].Left?.Calc is not null) throw Bad("Calculations can't be used as a join key.", $"joins[{i}].left.calc");
             if (r.Joins[i].Right?.Calc is not null) throw Bad("Calculations can't be used as a join key.", $"joins[{i}].right.calc");
         }
         for (var i = 0; i < (r.RowDimensions?.Length ?? 0); i++) CheckCalcDimension(r.RowDimensions![i], $"rowDimensions[{i}]");
         for (var i = 0; i < (r.ColumnDimensions?.Length ?? 0); i++) CheckCalcDimension(r.ColumnDimensions![i], $"columnDimensions[{i}]");
         for (var i = 0; i < (r.Measures?.Length ?? 0); i++) CheckCalcMeasure(r.Measures![i], $"measures[{i}]");
+        if ((r.Joins ?? []).Any(j => j.Aggregate == true)) CheckAggregateFirst(r);
         var filters = r.Filters ?? [];
         var rightOrFull = (r.Joins ?? []).Any(j => j.Type is "right" or "full");
         if (filters.Length > ApiLimits.MaxFilters) throw Bad($"A view can have at most {ApiLimits.MaxFilters} filters.", "filters");
