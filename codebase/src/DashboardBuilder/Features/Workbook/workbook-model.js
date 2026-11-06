@@ -4,6 +4,7 @@
 // It never contains the connection or a password — a workbook is reopened against whatever server the
 // session is connected to. Format v2 holds `worksheets`, `dashboards`, optional `stories` and `tabs`; the v1 reader
 // (migrateV1: v1 `dashboards` were worksheets) stays for good — old files and old autosaves must open.
+import { cleanHaving } from "../Dashboard/having-model.js";
 import { emptySheet, defaultFormat } from "../Core/store.js";
 import { LIMITS, text, isFraction } from "../Core/validate.js";
 import { aggsFor } from "../Dashboard/filter-rules.js";
@@ -338,6 +339,11 @@ function cleanPill(raw, where, issues, needCategory = true) {
     issues.push(`${where}: ${p.table}.${p.column} had a percentile with no valid 0–100 percent — reset to ${defAgg(p)}.`); p.agg = defAgg(p);
   }
   if (p.agg !== "percentile") delete p.p;
+  // A filter on the aggregated measure: a valid comparison with a plain number, else dropped and reported.
+  if (p.having !== undefined) {
+    const h = cleanHaving(p.having);
+    if (h) p.having = h; else { issues.push(`${where}: the measure filter on ${p.table}.${p.column} was invalid — removed.`); delete p.having; }
+  }
   // Table calculation: a known type, direction and window (2–30).
   if (p.tableCalc !== undefined) {
     const c = p.tableCalc;

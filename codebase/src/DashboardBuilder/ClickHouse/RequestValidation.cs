@@ -12,7 +12,7 @@ public static class ApiLimits
 {
     public const int MaxBodyBytes = 256 * 1024;
     public const int MaxHostLength = 253, MaxUserLength = 64, MaxPasswordLength = 256;
-    public const int MaxDimensions = 12, MaxMeasures = 10, MaxJoins = 10, MaxJoinPairs = 4 /* key pairs of one join, the first included */, MaxFilters = 20; // user filters (client cap 8) + shared filters (4) + drill path (5) + page + selection + date range
+    public const int MaxDimensions = 12, MaxMeasures = 10, MaxJoins = 10, MaxJoinPairs = 4 /* key pairs of one join, the first included */, MaxFilters = 20, MaxHaving = 10 /* conditions on aggregated measures, at most one per measure slot */; // user filters (client cap 8) + shared filters (4) + drill path (5) + page + selection + date range
     public const int MaxInValues = 500, MaxFilterValueLength = 1000;
     public const int MaxBoxOutliers = 500; // outlier points one box plot returns
     public const int MaxRowLimit = 5000, MaxBuckets = 100, MaxDistinct = 1000;
@@ -217,6 +217,8 @@ public static class RequestRules
                 throw Bad("A top-N filter needs a measure to rank by.", $"filters[{i}].topBy");
             if (f.TopBy is { } by) CheckCalcMeasure(by, $"filters[{i}].topBy");
         }
+        ValidateHaving(r.Having, Math.Max(1, measures));
+        if (r.Having is { Length: > 0 } && r.OtherBucket == true) throw Bad("An Other bucket can't be combined with a filter on a measure.", "otherBucket");
         ValidateRange(r.Limit, maxLimit, "Limit", "limit");
         if (r.Offset is { } off && (off < 0 || off > ApiLimits.MaxOffset))
             throw Bad($"Offset must be between 0 and {ApiLimits.MaxOffset}.", "offset");
@@ -228,6 +230,34 @@ public static class RequestRules
             throw Bad("Date grouping must be auto, hour, day, week, month, quarter or year.", "dateBucket");
         if (r.Sort is { } s && !ClickHouseGateway.IsValidSortAlias(s.Column, dims, Math.Max(1, measures)))
             throw Bad("Unknown sort column.", "sort.column");
+    }
+    /// <summary>Operators a filter on an aggregated measure (HAVING) may use — a subset of the row filter's, numbers only.</summary>
+    public static readonly IReadOnlySet<string> HavingOps = new HashSet<string>(StringComparer.Ordinal) { "=", "!=", ">", ">=", "<", "<=", "between" };
+
+    /// <summary>The measure-filter rules (mirrored by Core/validate.js and Dashboard/having-model.js): at most <see cref="ApiLimits.MaxHaving"/>,
+    /// each on a measure of the view, a whitelisted operator, and plain finite numbers (a range has From &lt;= To). Rejected, never clamped.</summary>
+    public static void ValidateHaving(HavingFilter[]? having, int measureSlots)
+    {
+        if (having is null) return;
+        if (having.Length > ApiLimits.MaxHaving) throw Bad($"A view can filter on at most {ApiLimits.MaxHaving} measures.", "having");
+        for (var i = 0; i < having.Length; i++)
+        {
+            if (having[i] is not { } h) throw Bad($"'having[{i}]' is required.", $"having[{i}]");
+            var field = $"having[{i}]";
+            if (h.Measure < 0 || h.Measure >= measureSlots) throw Bad("A measure filter must name one of the view's measures.", field + ".measure");
+            if (h.Op is null || !HavingOps.Contains(h.Op)) throw Bad("A measure filter is =, !=, >, >=, <, <= or between.", field + ".op");
+            if (h.Op == "between")
+            {
+                if (h.Values is not { Length: 2 } || h.Values.Any(string.IsNullOrWhiteSpace)) throw Bad("A range filter needs both From and To.", field + ".values");
+                var (lo, hi) = (FilterValues.Coerce(ClickHouseType.Numeric, "measure", h.Values[0], field + ".values"), FilterValues.Coerce(ClickHouseType.Numeric, "measure", h.Values[1], field + ".values"));
+                if ((double)lo.Value > (double)hi.Value) throw Bad("From must be less than or equal to To for column measure.", field + ".values");
+            }
+            else
+            {
+                if (string.IsNullOrWhiteSpace(h.Value)) throw Bad("A filter value is required.", field + ".value");
+                FilterValues.Coerce(ClickHouseType.Numeric, "measure", h.Value, field + ".value");
+            }
+        }
     }
     /// <summary>A raw-row read (POST /api/rows): names present, columns and filters bounded, limit 1..1000 (never clamped).</summary>
     public static void ValidateRows(RowsRequest r)

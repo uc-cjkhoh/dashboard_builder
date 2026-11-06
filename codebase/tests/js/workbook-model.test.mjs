@@ -303,6 +303,17 @@ test("a table calculation (P27) is kept when valid and removed when not", () => 
   assert.equal(bad.issues.filter((i) => /table calculation/.test(i)).length, 2);
 });
 
+test("a filter on a measure is kept when valid and removed when not", () => {
+  const m = { db: "s", table: "orders", column: "amount", category: "numeric", agg: "sum" };
+  const ok = sheetOf({ rows: [{ ...m, having: { op: ">=", value: "1000", junk: 1 } }, { ...m, column: "q", having: { op: "between", values: ["1", "5"] } }] }).worksheets[0].sheet.rows;
+  assert.deepEqual(ok[0].having, { op: ">=", value: "1000" });
+  assert.deepEqual(ok[1].having, { op: "between", values: ["1", "5"] });
+  const bad = sheetOf({ rows: [{ ...m, having: { op: ">", value: "abc" } }, { ...m, column: "q", having: { op: "like", value: "1" } }] });
+  assert.equal(bad.worksheets[0].sheet.rows[0].having, undefined);
+  assert.equal(bad.worksheets[0].sheet.rows[1].having, undefined);
+  assert.equal(bad.issues.filter((i) => /measure filter/.test(i)).length, 2);
+});
+
 test("field settings (P28) round-trip; bad ones are dropped and counted", () => {
   const st = sampleState();
   const meta = new Map([["s.orders.amount", { alias: "Revenue", agg: "avg" }], ["s.orders.secret", { hidden: true }]]);

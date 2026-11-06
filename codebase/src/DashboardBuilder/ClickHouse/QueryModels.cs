@@ -81,7 +81,16 @@ public sealed record QueryRequest(
     bool? Approximate = null,
     // A union / unpivot the query reads instead of a catalog table (<see cref="SourceSql"/>): From, and every field
     // reference, name it as (Source.Db, Source.Name). It takes no joins.
-    QuerySource? Source = null);
+    QuerySource? Source = null,
+    // A filter on aggregated measures (SQL HAVING): keeps the groups whose measure value passes. Each entry names a
+    // measure by its position in Measures; see <see cref="HavingFilter"/>.
+    HavingFilter[]? Having = null);
+
+/// <summary>A condition on one aggregated measure of the same request, applied to each group after grouping (HAVING).
+/// <see cref="Measure"/> is the index into <see cref="QueryRequest.Measures"/> (0 for the implicit count when there are none);
+/// <see cref="Op"/> is one of <c>= != &gt; &gt;= &lt; &lt;= between</c> (whitelisted, never text); the numbers are bound as Float64
+/// parameters — a single <see cref="Value"/>, or <see cref="Values"/> [from, to] for <c>between</c>. Never an identifier, never SQL.</summary>
+public sealed record HavingFilter(int Measure, string Op, string? Value, string[]? Values = null);
 
 /// <summary>Ordering spec: which select alias (<c>k{n}</c>/<c>v{n}</c>) to sort by, and direction.</summary>
 public sealed record SortRef(string Column, bool Desc);

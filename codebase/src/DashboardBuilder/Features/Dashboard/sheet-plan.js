@@ -5,6 +5,7 @@ import { LIMITS } from "../Core/validate.js";
 import { resolveRange, rangeFilter } from "./period-model.js";
 import { withCasts } from "./cast-model.js";
 import { scalePlan } from "./scale-model.js";
+import { havingPlan } from "./having-model.js";
 import { planJoinType } from "../Relations/relation-rules.js";
 import { catalogFromEntities } from "../Calc/calc-resolve.js";
 import { isCalcPill, calcPillId } from "../Calc/calc-pill.js";
@@ -214,6 +215,9 @@ export function buildPlan(sheet, periodRange, ctx, { crossFilter = null } = {}) 
     if (t) sortColumn = t.alias;
   }
   const source = sourceOfTable(ctx.entities, db, table); // a union / unpivot the query reads instead of a catalog table
+  const having = havingPlan(mplan); // a filter on an aggregated measure: HAVING, after grouping and before Top-N's cap
+  const scale = scalePlan(sheet.chartType, { ...sheet.format, topN: effectiveTopN(sheet.format, ctx.parameters, LIMITS.rows) }, rowDimensions.length + columnDimensions.length);
+  if (having.length) delete scale.otherBucket; // the "Other" total is of the groups past the cap; with a measure filter it can't be (D84)
   return withCasts({
     from: { db, table },
     ...(source ? { source: wireSource(source) } : {}),
@@ -224,7 +228,8 @@ export function buildPlan(sheet, periodRange, ctx, { crossFilter = null } = {}) 
     filters: [...sheet.filters.map(pv).filter((f) => checkFilter(f).state === "ok").map(toFilter).filter(Boolean), ...selFilters, ...shared, ...drillPathFilters(sheet), ...pageFilters, ...rangeFilters],
     // Top-N caps a chart's groups (server sorts, then limits; "All" = the 5,000 cap) — plus the "Other" mark and
     // date grouping; the table pages instead (scale-model.js).
-    ...scalePlan(sheet.chartType, { ...sheet.format, topN: effectiveTopN(sheet.format, ctx.parameters, LIMITS.rows) }, rowDimensions.length + columnDimensions.length),
+    ...scale,
+    ...(having.length ? { having } : {}),
     ...(sheet.format?.approximate ? { approximate: true } : {}),
     sort: { column: sortColumn, desc: sheet.sort?.dir === "desc" },
   }, (f) => ctx.metaOf(f).cast); // each plain column ref carries its field's cast

@@ -17,7 +17,7 @@ export function fieldPillOptions({ measure, aggs, agg, roleFlip, numeric, tableC
   if (measure && aggs && agg === "percentile") r.push({ id: "percent", type: "custom" });
   if (roleFlip && numeric) r.push(sep, { id: "dc:continuous", type: "radio", label: "Continuous", checked: Boolean(measure) }, { id: "dc:discrete", type: "radio", label: "Discrete", checked: !measure });
   else if (roleFlip) r.push(sep, { id: "role", type: "item", label: measure ? "Use as dimension" : "Use as measure" });
-  if (measure) r.push(sep, { id: "tablecalc", type: "check", label: "Table calculation…", checked: Boolean(tableCalc) });
+  if (measure) r.push(sep, { id: "having", type: "custom" }, sep, { id: "tablecalc", type: "check", label: "Table calculation…", checked: Boolean(tableCalc) });
   if (temporal && !measure) {
     r.push(sep);
     for (const [v, label] of parts) r.push({ id: `part:${v}`, type: "radio", label, checked: (part ?? "auto") === v });

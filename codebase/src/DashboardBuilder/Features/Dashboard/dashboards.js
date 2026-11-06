@@ -14,6 +14,7 @@ import { checkValue, paramTypeFor } from "../Core/parameters-model.js";
 import { exportChart, hasChartInstance, sizeChart, focusSeries } from "./chart.js";
 import { createWorksheetView, periodNotice } from "./worksheet-view.js";
 import { CACHE_NOTE } from "./notices.js";
+import { HAVING_OPS, checkHaving, havingBadge, havingSentence } from "./having-model.js";
 import { dateTimeIn, offsetLabel } from "../Core/timezone.js";
 import { fieldCopies } from "./field-copy-model.js";
 import { el, hint, iconSpan } from "./render-dom.js";
@@ -1519,6 +1520,42 @@ export function initDashboards() {
     wrap.append(box, err);
     return wrap;
   }
+  // The measure filter in a measure pill's popup: a condition on the aggregated value of each group (SQL HAVING), in words —
+  // "sum Sales | is at least | 1000". A number that isn't one is kept as typed and marked on its input; the plan leaves it out
+  // and the notice says it was not applied.
+  function havingEditor(dash, s, f, label) {
+    const wrap = el("span", "ws-pill__having");
+    const cur = f.having ?? { op: ">", value: "" };
+    const chk = checkHaving(f.having);
+    const lead = el("span", "ws-pill__havinglead", `Keep groups where ${label}`);
+    const op = el("select", "select select--light ws-pill__havingop");
+    op.setAttribute("aria-label", `Measure filter condition for ${label}`);
+    for (const [v, words] of HAVING_OPS) op.add(new Option(words, v, false, v === cur.op));
+    const row = el("span", "ws-pill__range");
+    const inputs = [];
+    const mk = (placeholder, aria, value) => {
+      const i = el("input", "input ws-pill__val");
+      i.type = "text"; i.inputMode = "decimal"; i.maxLength = 40; i.autocomplete = "off"; i.placeholder = placeholder; i.value = value ?? "";
+      i.setAttribute("aria-label", `${aria} for ${label}`);
+      inputs.push(i); return i;
+    };
+    if (cur.op === "between") row.append(mk("From", "From value", cur.values?.[0]), el("span", "ws-pill__range-sep", "and"), mk("To", "To value", cur.values?.[1]));
+    else row.append(mk("Number", "Number", cur.value));
+    const write = (opv) => {
+      const next = opv === "between" ? { op: opv, values: [inputs[0]?.value ?? "", inputs[1]?.value ?? ""] } : { op: opv, value: inputs[0]?.value ?? "" };
+      if (opv === "between" && cur.op !== "between") next.values = [inputs[0]?.value ?? "", ""];
+      if (!next.value && !next.values?.some((v) => String(v).trim())) delete f.having; else f.having = next;
+      commit(dash, s);
+    };
+    op.addEventListener("change", () => write(op.value));
+    for (const i of inputs) i.addEventListener("change", () => write(op.value));
+    const clear = makeButton("Clear", "btn btn--quiet");
+    clear.addEventListener("click", () => { delete f.having; commit(dash, s); });
+    clear.hidden = !f.having;
+    wrap.append(lead, op, row, clear);
+    if (chk.state === "invalid") fieldError(inputs[chk.error?.startsWith("From must") || chk.error?.includes("To") ? 1 : 0] ?? inputs[0], chk.error);
+    return wrap;
+  }
   // A field pill on the Columns/Rows shelves. Its role (dimension vs measure) follows roleOf() but can
   // be flipped with the convert button — so a numeric field can group as a dimension, or a field can be
   // aggregated as a measure. A measure pill shows an aggregation picker (with countDistinct for unique
@@ -1571,8 +1608,15 @@ export function initDashboards() {
         const open = choicesFor && choicesFor.shelf === shelfKey && choicesFor.index === i;
         choicesFor = open ? null : { shelf: shelfKey, index: i }; if (choicesFor) { openTool = null; calcFor = null; } formatOpen = false; renderShelves();
       }
-    }, { keep: (id) => id === "agg:percentile" || id === "labels", custom: { percent: () => percentInput(dash, s, f, label) } });
+    }, { keep: (id) => id === "agg:percentile" || id === "labels", custom: { percent: () => percentInput(dash, s, f, label), having: () => havingEditor(dash, s, f, measureName({ ...f, agg: f.agg ?? "sum" })) } });
     const cast = calcPill ? null : castOf(f);
+    if (isMeasure && havingBadge(f.having)) { // the pill says it filters, in text and an icon (never colour alone)
+      const bad = checkHaving(f.having).state === "invalid";
+      const b = el("span", `ws-pill__badge ws-pill__having-badge${bad ? " is-invalid" : ""}`);
+      b.append(icon(bad ? "warning" : "filter", { size: 12 }), document.createTextNode(havingBadge(f.having)));
+      b.title = bad ? checkHaving(f.having).error : `Keeps groups where ${havingSentence(measureName({ ...f, agg: f.agg ?? "sum" }), f.having)}`;
+      controls.append(b);
+    }
     if (cast) controls.prepend(castBadge(cast, baseCategoryOf(f.db, f.table, f.column) ?? f.category));
     const shown = isMeasure && !calcPill && f.agg === "percentile" ? `${label} · p${percentLabel(f.p)}` : label; // the pill names its percentile
     const p = pill(shown, remove, controls.childElementCount ? controls : null);

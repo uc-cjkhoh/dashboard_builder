@@ -16,6 +16,8 @@ import { sourceProblem, sourceOfTable } from "../Core/source-model.js";
 import { heldOutProblem } from "../Relations/relation-rules.js";
 import { resolveRange, compareRange, compareName, COMPARE_TYPES } from "./period-model.js";
 import { tableProgress, needsNextPage, OTHER_TYPES, bucketNotice } from "./scale-model.js";
+import { havingNotice } from "./having-model.js";
+import { planDims, planMeasures, measureName } from "./sheet-plan.js";
 import { buildPlan, involvedTables, calcContext, appliedShared, withParams, toServerFilter, isDrillActive, COLOR_USES } from "./sheet-plan.js";
 import { appliesTo, notAppliedNote, statNote, crossSignature } from "./dashboard-select.js";
 import { planTables, calcProblem, statCalcProblem } from "../Calc/calc-plan.js";
@@ -164,7 +166,9 @@ export function createWorksheetView(container, getContext, options = {}) {
     crossSig = crossSignature(cross, involvedOf(c, s));
     const crossNote = cross?.filter && !appliesTo(involvedOf(c, s), cross.filter) ? notAppliedNote(cross.filter) : null; // C3: its table isn't here — say so, never join
     withCategories(s.filters, c.categoryOf);
-    const filterNote = joinNotices(invalidFilterNotice(s), crossNote);
+    const statChart = STAT_SINGLE_TABLE.has(s.chartType);
+    const havingNote = statChart ? ((s.columns ?? []).concat(s.rows ?? []).some((f) => f.having) ? "Measure filters don't apply to this chart." : null) : havingNotice(planMeasures(s).filter((e) => e.role === "shelf").map((e) => ({ label: measureName(e.field, c.plan), having: e.field.having })), planDims(s).keyOrder.map((f) => c.plan.nameOf(f)));
+    const filterNote = joinNotices(invalidFilterNotice(s), crossNote, havingNote);
     setNotice(c.noticeEl, filterNote);
     const heldOut = heldOutProblem(involvedOf(c, s), c.plan.entities, c.plan.relationships); // a table with no relationship stays out of every view
     if (heldOut) { container.replaceChildren(warn(heldOut)); return; }
