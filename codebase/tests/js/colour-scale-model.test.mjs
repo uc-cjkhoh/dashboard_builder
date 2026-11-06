@@ -109,15 +109,20 @@ test("STEP_CHOICES: Continuous (0) then 3 to 9 steps", () => {
   assert.deepEqual(STEP_CHOICES.map(([v]) => v), [0, 3, 4, 5, 6, 7, 8, 9]);
   assert.equal(STEP_CHOICES[0][1], "Continuous");
 });
-test("colourStepsError: 0 or a whole number 2 to 9; anything else refused", () => {
-  for (const ok of [0, 2, 5, 9, null, undefined]) assert.equal(colourStepsError(ok), null);
-  for (const bad of [1, 10, 3.5, "4", NaN, -1]) assert.match(colourStepsError(bad), /steps/i);
+test("colourStepsError: 0 or a whole number 3 to 9; anything else refused", () => {
+  for (const ok of [0, 3, 5, 9, null, undefined]) assert.equal(colourStepsError(ok), null);
+  for (const bad of [1, 2, 10, 3.5, "4", NaN, -1]) assert.match(colourStepsError(bad), /steps/i);
 });
 test("stepColours: n colours sampled evenly, ends equal the ramp ends; a 3-stop ramp hits its centre", () => {
-  assert.deepEqual(stepColours(["#000000", "#ffffff"], 2), ["#000000", "#ffffff"]);
   assert.deepEqual(stepColours(["#000000", "#ffffff"], 3), ["#000000", "#808080", "#ffffff"]);
   const d = stepColours(["#ff0000", "#ffffff", "#0000ff"], 5);
   assert.equal(d.length, 5); assert.equal(d[0], "#ff0000"); assert.equal(d[2], "#ffffff"); assert.equal(d[4], "#0000ff");
+});
+test("stepPieces: flat data (min == max) still yields n distinct ordered steps", () => {
+  const p = stepPieces(5, 5, 4, ["#000000", "#ffffff"], (v) => String(v));
+  assert.equal(new Set(p.map((x) => x.label)).size, 4);
+  assert.ok(p.every((x) => !/^(\S+) to \1$/.test(x.label)));
+  assert.equal(p[0].label, "5 to 5.25");
 });
 test("stepBounds: n + 1 even boundaries from min to max", () => {
   assert.deepEqual(stepBounds(0, 100, 4), [0, 25, 50, 75, 100]);
@@ -136,6 +141,10 @@ test("sheet round trip: colorSteps defaults to 0; unknown is reported and reset,
   const s = emptySheet();
   assert.equal(sanitizeSheet({ ...s, format: { ...s.format, colorSteps: 5 } }, "S", []).format.colorSteps, 5);
   const issues = [];
-  assert.equal(sanitizeSheet({ ...s, format: { ...s.format, colorSteps: 12 } }, "S", issues).format.colorSteps, 0);
+  assert.equal(sanitizeSheet({ ...s, format: { ...s.format, colorSteps: 2 } }, "S", issues).format.colorSteps, 0);
   assert.ok(issues.some((i) => /steps/i.test(i)));
+});
+test("stepPieces: a value on a boundary belongs to the step above (gte on the upper, lt on the lower)", () => {
+  const p = stepPieces(0, 90, 3, ["#000000", "#ffffff"], String);
+  assert.equal(p[0].lt, 30); assert.equal(p[1].gte, 30);
 });

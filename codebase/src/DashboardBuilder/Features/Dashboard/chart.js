@@ -3,7 +3,7 @@ import { ACCENTS, PALETTES } from "../Core/theme-model.js";
 import { fontToken } from "./font-model.js";
 import { pickInk } from "./contrast.js";
 import { orderedPalette } from "./colour-model.js";
-import { DIV_FALLBACK, divergingColours, divergingRange, rampColours, rangeOf, stepPieces } from "./colour-scale-model.js";
+import { DIV_FALLBACK, divergingColours, divergingRange, rampColours, rangeOf, stepPieces, mixHex } from "./colour-scale-model.js";
 import { tooltipHtml } from "./tooltip-model.js";
 import { tipLookup } from "./tooltip-formats.js";
 import { lineStep } from "./line-style-model.js";
@@ -774,7 +774,8 @@ function buildHeatmap({ xCats, yCats, cells, format = {} }) {
   const fmtVal = makeValueFormatter(format);
   const circles = format.heatmapShape === "circle";
   // The cell separator stays the surface-coloured hairline unless a border is chosen.
-  const cellEdge = format.markBorder && format.markBorder !== "none" ? markBorder(format.markBorder, c.muted) : { borderColor: c.surface, borderWidth: 1 };
+  const cellEdge = format.markBorder && format.markBorder !== "none" ? markBorder(format.markBorder, c.muted)
+    : { borderColor: drawing?.colorSteps ? c.axis : c.surface, borderWidth: 1 }; // stepped: a visible hairline so a pale step is not a gap
   const vals = cells.map((d) => d[2]).filter((v) => v != null);
   const { min, max } = colourScaleRange(vals, true);
   const legendNote = [centreNote(min, max, fmtVal), outOfRangeNote()].filter(Boolean).join(" · ");
@@ -1217,6 +1218,9 @@ function continuousVisualMap(values, dimension, c, fmtVal, name) {
 }
 // The colour legend + its note as chart options: a gradient bar, or (Format → Steps) a piecewise legend whose
 // swatches are labelled with their boundaries in words. A piecewise legend has no text slot, so its note is a title.
+// A Diverging ramp's centre is the surface, which vanishes against the page; stepped, it is the surface nudged toward
+// the ink so the neutral step reads as a swatch and a cell in both themes (a continuous gradient keeps the surface).
+const stepRamp = (c) => (c.ramp.length === 3 ? [c.ramp[0], mixHex(c.surface, c.ink, 0.15), c.ramp[2]] : c.ramp);
 function colourLegend({ min, max, dimension, c, fmtVal, note, bottom }) {
   const textStyle = { color: c.muted, fontFamily: c.font };
   const n = drawing?.colorSteps ?? 0;
@@ -1226,8 +1230,8 @@ function colourLegend({ min, max, dimension, c, fmtVal, note, bottom }) {
   }
   return {
     visualMap: { type: "piecewise", dimension, orient: "horizontal", left: "center", bottom, itemWidth: 16, itemHeight: 12, itemGap: 8,
-      pieces: stepPieces(min, max, n, c.ramp, fmtVal), textStyle },
-    ...(note ? { title: { text: note, left: "center", bottom: bottom + 24, textStyle: { ...textStyle, fontSize: 12, fontWeight: "normal" } } } : {}),
+      pieces: stepPieces(min, max, n, stepRamp(c), fmtVal), textStyle },
+    ...(note ? { title: { text: note, left: "center", bottom: bottom + 24, textStyle: { ...textStyle, fontSize: 14, fontWeight: "normal" } } } : {}),
   };
 }
 // The user's tooltip template → safe HTML. `measures` maps a measure name → its formatted value for

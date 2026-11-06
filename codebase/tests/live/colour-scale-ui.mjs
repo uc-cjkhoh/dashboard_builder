@@ -12,6 +12,7 @@ import { join } from 'node:path';
 const APP = process.env.APP_URL ?? 'http://localhost:5218';
 const SHOTS = process.env.SHOTS_DIR ?? join(tmpdir(), 'colour-scale-ui-shots');
 mkdirSync(SHOTS, { recursive: true });
+const SCHEME = process.env.SCHEME === 'dark' ? 'dark' : 'light'; // SCHEME=dark loads the page in the dark scheme (set before load)
 
 // ---- the mocked server ------------------------------------------------------------------------------------
 const COLUMNS = {
@@ -113,6 +114,7 @@ try {
   const hasKey = (o, k) => J(o).includes(`"${k}"`);
 
   // ---- setup: connect, add the two tables, open a worksheet -----------------------------------------------------
+  if (SCHEME === 'dark') await b.send('Page.addScriptToEvaluateOnNewDocument', { source: "new MutationObserver((_, o) => { if (document.documentElement) { document.documentElement.setAttribute('data-scheme', 'dark'); o.disconnect(); } }).observe(document, { childList: true })" }); // read at load
   await b.goto(APP + '/');
   await waitFor(`!!document.getElementById('conn-connect')`, 'app loaded');
   await ev(`(() => { document.getElementById('conn-host').value = 'mock-ch'; document.getElementById('conn-password').value = 'x'; document.getElementById('conn-connect').click(); return true; })()`);
@@ -210,6 +212,31 @@ try {
     must((await vm()).inRange.color.length === 2, 'back to the sequential ramp');
     must(await ev(`!!(${fmtField('Colour from')})`), 'pins return with the sequential scale');
   });
+  // Steps shots: the scheme comes from SCHEME (set before the page loads); earlier checks may have toggled it, so re-assert and redraw.
+  const settleScheme = async () => {
+    await ev(`document.documentElement.${SCHEME === 'dark' ? "setAttribute('data-scheme', 'dark')" : "removeAttribute('data-scheme')"}`);
+    const cur = await ev(`${fmtField('Steps')}.querySelector('select').value`);
+    await setSelect('Steps', '0'); await settle(200); await setSelect('Steps', cur); await settle(400);
+    await ev(`document.getElementById('toast').hidden = true`);
+  };
+  const title = async () => (await ev(`window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas')).getOption()`)).title?.[0]?.text ?? '';
+  await check('Steps (scatter): discrete legend in words, note title, pins, Continuous restores the gradient', async () => {
+    await setSelect('Steps', '4'); await settle(500);
+    let v = await vm();
+    must(v.type === 'piecewise' && v.pieces.length === 4 && v.pieces.every((p) => / to /.test(p.label)), 'four pieces: ' + J(v.pieces?.map((p) => p.label)));
+    must(new Set(v.pieces.map((p) => p.color)).size === 4, 'four colours');
+    await setNum('Colour from', '25'); await settle(400);
+    must(/beyond range/.test(await title()), 'pinned note: ' + await title());
+    v = await vm(); must(v.pieces[0].lt != null && v.pieces[0].gte == null && v.pieces[3].gte != null && v.pieces[3].lt == null, 'open outer steps');
+    await setNum('Colour from', ''); await settle(300);
+    must(!/beyond|centre/.test(await title()), 'no pin or centre note: ' + await title());
+    await setSelect('Colour scale', 'diverging'); await settle(400);
+    must(/centre/.test(await title()), 'diverging note: ' + await title());
+    await settleScheme(); await ev(`${fmtTool}.click()`); await settle(400); await shot(`steps-scatter-diverging-${SCHEME}.png`); await ev(`${fmtTool}.click()`); await settle(300); // panel closed so the legend is in view
+    await setSelect('Colour scale', 'sequential'); await settle(300); await settleScheme(); await ev(`${fmtTool}.click()`); await settle(400); await shot(`steps-scatter-sequential-${SCHEME}.png`); await ev(`${fmtTool}.click()`); await settle(300);
+    await setSelect('Steps', '0'); await settle(400);
+    must((await vm()).type === 'continuous', 'Continuous restores the gradient');
+  });
   await check('Diverging heatmap: legend names the centre; light and dark shots', async () => {
     await ev(`document.querySelector('.ws-pick--chart .ws-pick__btn').click()`);
     await ev(`[...document.querySelectorAll('.ws-charttypes .menu__item')].find((x) => x.textContent.trim() === 'Heatmap').click()`);
@@ -224,26 +251,16 @@ try {
     await shot('diverging-heatmap-dark.png');
     await ev(`document.documentElement.removeAttribute('data-scheme')`);
   });
-  await check('Steps: a heatmap legend of discrete steps named in words, on both scales, light and dark', async () => {
+  await check('Steps (heatmap): discrete legend on both scales; the neutral step is a visible swatch', async () => {
+    await setSelect('Colour scale', 'sequential'); await settle(300);
     await setSelect('Steps', '5'); await settle(500);
     let v = await vm();
-    must(v && v.type === 'piecewise' && v.pieces.length === 5, 'five pieces: ' + J(v?.pieces?.length));
-    must(v.pieces.every((p) => / to /.test(p.label)) && new Set(v.pieces.map((p) => p.color)).size === 5, 'boundaries in words, five colours: ' + J(v.pieces.map((p) => p.label)));
-    must(/centre/.test((await ev(`window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas')).getOption()`)).title?.[0]?.text ?? ''), 'centre named in the note');
-    await ev(`document.getElementById('toast').hidden = true`);
-    await shot('steps-diverging-light.png');
-    await ev(`document.documentElement.setAttribute('data-scheme', 'dark')`); await settle(400);
-    await setSelect('Steps', '5'); await settle(500); // redraw so the chart re-reads the dark tokens
-    await shot('steps-diverging-dark.png');
-    await ev(`document.documentElement.removeAttribute('data-scheme')`); await settle(300);
-    await setSelect('Colour scale', 'sequential'); await settle(400);
-    v = await vm();
-    must(v.type === 'piecewise' && v.pieces.length === 5, 'sequential steps too');
-    await shot('steps-sequential-light.png');
-    await ev(`document.documentElement.setAttribute('data-scheme', 'dark')`); await settle(400);
-    await setSelect('Steps', '5'); await settle(500); // redraw so the chart re-reads the dark tokens
-    await shot('steps-sequential-dark.png');
-    await ev(`document.documentElement.removeAttribute('data-scheme')`);
+    must(v && v.type === 'piecewise' && v.pieces.length === 5, 'five pieces');
+    must(v.pieces.every((p) => / to /.test(p.label)) && new Set(v.pieces.map((p) => p.color)).size === 5, 'boundaries in words: ' + J(v.pieces.map((p) => p.label)));
+    await settleScheme(); await shot(`steps-heatmap-sequential-${SCHEME}.png`);
+    await setSelect('Colour scale', 'diverging'); await settle(400);
+    must(/centre/.test(await title()), 'centre named');
+    await settleScheme(); await shot(`steps-heatmap-diverging-${SCHEME}.png`);
     await setSelect('Steps', '0'); await settle(400);
     must((await vm()).type === 'continuous', 'Continuous restores the gradient');
   });
