@@ -81,7 +81,7 @@ function tokens() {
     brand: t("--accent", ACCENTS.signal.light.accent),
     brandSoft: t("--accent-soft", ACCENTS.signal.light.soft),
     // continuous low -> high: the chosen hue from the accent pair or a categorical token
-    ramp: drawing?.colorScale === "diverging" ? divergingColours(rampTk, reversed()) : rampColours(drawing?.colorRamp, rampTk, reversed()),
+    ramp: drawing?.colorScale === "diverging" ? divergingColours(rampTk, reversed(), drawing?.colorPair) : rampColours(drawing?.colorRamp, rampTk, reversed()),
   };
 }
 
@@ -101,7 +101,7 @@ export function renderChart(container, spec) {
   st.paletteReverse = !!spec.format?.paletteReverse;
   st.font = spec.format?.font;
   st.colorSteps = spec.format?.colorSteps ?? 0;
-  st.colorScale = spec.format?.colorScale; st.colorCentre = spec.format?.colorCentre ?? null;
+  st.colorScale = spec.format?.colorScale; st.colorPair = spec.format?.colorPair; st.colorCentre = spec.format?.colorCentre ?? null;
   st.colorRamp = spec.format?.colorRamp; st.colorMin = spec.format?.colorMin ?? null; st.colorMax = spec.format?.colorMax ?? null;
   st.memberColors = spec.memberColors instanceof Map ? spec.memberColors : NO_MEMBER_COLORS;
   const host = document.createElement("div");

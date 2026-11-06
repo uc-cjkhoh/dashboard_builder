@@ -237,6 +237,21 @@ try {
     await setSelect('Steps', '0'); await settle(400);
     must((await vm()).type === 'continuous', 'Continuous restores the gradient');
   });
+  await check('Diverging colours: a chosen pair recolours the ends, reverse swaps, Orange / Blue restores', async () => {
+    await setSelect('Colour scale', 'diverging'); await settle(400);
+    must(await ev(`!!(${fmtField('Diverging colours')})`), 'pair control while diverging');
+    const a = (await fillsNow()).slice();
+    await setSelect('Diverging colours', 'green-violet'); await settle(400);
+    const g = (await fillsNow()).slice();
+    must(g.length === 3 && g[0] !== a[0] && g[2] !== a[2] && g[1] === a[1], 'ends changed, centre kept: ' + J([a, g]));
+    await ev(`document.getElementById('toast').hidden = true`); await shot('diverging-pair-light.png');
+    await ev(`document.documentElement.setAttribute('data-scheme', 'dark')`); await settle(400);
+    await shot('diverging-pair-dark.png'); await ev(`document.documentElement.removeAttribute('data-scheme')`); await settle(300);
+    await setSelect('Diverging colours', 'default'); await settle(400);
+    must(J(await fillsNow()) === J(a), 'back to Orange / Blue');
+    await setSelect('Colour scale', 'sequential'); await settle(300);
+    must(!(await ev(`!!(${fmtField('Diverging colours')})`)), 'no pair control on the sequential scale');
+  });
   await check('Diverging heatmap: legend names the centre; light and dark shots', async () => {
     await ev(`document.querySelector('.ws-pick--chart .ws-pick__btn').click()`);
     await ev(`[...document.querySelectorAll('.ws-charttypes .menu__item')].find((x) => x.textContent.trim() === 'Heatmap').click()`);
