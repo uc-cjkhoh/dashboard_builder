@@ -222,6 +222,12 @@ try {
     await aPick('Trend', 'power');
     n = await trendName();
     must(/power\): y = .*\(x\+1\)\^/.test(n), `power name: ${n}`);
+    const room = await ev(`(() => { const o = window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas')).getOption();
+      const t = o.series.find((x) => /^Trend/.test(x.name)); const txt = t.endLabel.formatter;
+      const c = document.createElement('canvas').getContext('2d'); c.font = '14px ' + (getComputedStyle(document.body).fontFamily);
+      return { right: Number(Array.isArray(o.grid) ? o.grid[0].right : o.grid.right), width: c.measureText(txt).width, txt }; })()`);
+    must(room.right >= room.width, `end label "${room.txt}" (${Math.round(room.width)}px) overlaps the plot: right margin ${room.right}px`);
+    must(!/y =/.test(room.txt), 'formula belongs in the tooltip / legend name, not the end label');
     await shot('trend-power-light.png');
     await theme('dark'); await chartReady(); await shot('trend-power-dark.png'); await theme('light');
     zeroFirst = true; const q = queries.length;

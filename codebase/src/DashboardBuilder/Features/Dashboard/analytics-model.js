@@ -49,7 +49,7 @@ export function refValue(kind, values, constant) {
  * Returns { predict(x), r2, n, coef } or null when there are too few points or the model cannot be fitted.
  * log fits y = a + b·ln(x + 1); poly2 fits y = a + b·x + c·x²; exp fits y = a·e^(b·x) and power y = a·(x + 1)^b
  * by a straight-line fit of ln y (so every y must be above zero: see trendProblem). R² is always measured on the
- * original values, not on ln y.
+ * original values, not on ln y (the same scale as the chart).
  */
 export function trendFit(type, values) {
   const pts = values.map((y, x) => [x, y == null || y === "" ? NaN : Number(y)]).filter(([, y]) => Number.isFinite(y));
@@ -83,7 +83,8 @@ export function trendProblem(type, values) {
   return ys.some((y) => y <= 0) ? `The ${type === "exp" ? "exponential" : "power"} trend needs every value to be greater than zero.` : null;
 }
 
-const num = (v) => String(Number(v.toPrecision(3)));
+const num = (v) => String(Number(v.toPrecision(3))).replace("-", "\u2212");
+const pw = (v) => (v < 0 ? `(${num(v)})` : num(v)); // a negative exponent is wrapped: (x+1)^(−0.5)
 /** The fitted formula in words, e.g. "y = 3 + 2·x"; x is the category's position (the first is 0). */
 export function trendFormula(type, fit) {
   const [a, b, c] = fit.coef;
@@ -91,7 +92,7 @@ export function trendFormula(type, fit) {
   switch (type) {
     case "log": return `y = ${num(a)}${add(b, "ln(x+1)")}`;
     case "exp": return `y = ${num(a)}·e^(${num(b)}·x)`;
-    case "power": return `y = ${num(a)}·(x+1)^${num(b)}`;
+    case "power": return `y = ${num(a)}·(x+1)^${pw(b)}`;
     case "poly2": return `y = ${num(a)}${add(b, "x")}${add(c, "x²")}`;
     default: return `y = ${num(a)}${add(b, "x")}`;
   }
@@ -117,7 +118,9 @@ export function trendSeries(type, values, forecast = 0) {
   if (!fit) return null;
   fit.type = type === "none" ? "linear" : type;
   const total = values.length + forecast;
-  return { data: Array.from({ length: total }, (_, x) => fit.predict(x)), extra: forecast, r2: fit.r2, n: fit.n, formula: trendFormula(fit.type, fit) };
+  const data = Array.from({ length: total }, (_, x) => fit.predict(x));
+  if (!data.every(Number.isFinite)) return null;
+  return { data, extra: forecast, r2: fit.r2, n: fit.n, formula: trendFormula(fit.type, fit) };
 }
 
 /**

@@ -605,9 +605,9 @@ function addAnalytics(base, a, { c, fmtVal, horizontal }) {
   if (a.trend) {
     base.series.push({ name: a.trend.name, type: "line", data: a.trend.data, showSymbol: false, z: 4, animation: false,
       lineStyle: { width: 2, type: "dotted", color: c.muted }, itemStyle: { color: c.muted },
-      endLabel: { show: true, formatter: a.trend.short ?? a.trend.name, color: c.muted, fontFamily: c.font, fontSize: 14 },
+      endLabel: { show: true, formatter: a.trend.short ?? a.trend.name, color: c.muted, backgroundColor: c.surface, padding: [2, 4], fontFamily: c.font, fontSize: 14 },
       tooltip: { valueFormatter: fmtVal } });
-    base.grid.right = (Number(base.grid.right) || 0) + 84; // room for the short end label
+    base.grid.right = (Number(base.grid.right) || 0) + Math.max(84, Math.ceil((a.trend.short ?? a.trend.name).length * 8) + 8); // room for the short end label (14px text, ~8px a character)
   }
 }
 

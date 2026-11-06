@@ -173,3 +173,33 @@ test("the formula is written out with its coefficients", () => {
 test("trend choices list exponential and power", () => {
   assert.deepEqual(TREND_CHOICES.map(([v]) => v), ["none", "linear", "log", "exp", "power", "poly2"]);
 });
+
+test("R² of an exponential fit is measured on the original values (hand-computed, y = [1, 3, 2, 8])", () => {
+  // fit by hand: least squares of ln y on x, then R² on the original y
+  const ys = [1, 3, 2, 8], ln = ys.map(Math.log), xs = [0, 1, 2, 3];
+  const mx = 1.5, my = ln.reduce((a, c) => a + c, 0) / 4;
+  const b = xs.reduce((s, x, i) => s + (x - mx) * (ln[i] - my), 0) / xs.reduce((s, x) => s + (x - mx) ** 2, 0);
+  const a = Math.exp(my - b * mx);
+  const ssRes = ys.reduce((s, y, i) => s + (y - a * Math.exp(b * xs[i])) ** 2, 0), mean = 3.5;
+  const ssTot = ys.reduce((s, y) => s + (y - mean) ** 2, 0);
+  const fit = trendFit("exp", ys);
+  assert.ok(close(fit.r2, 1 - ssRes / ssTot, 1e-9));
+  assert.ok(Math.abs(fit.r2 - 0.9) < 0.2 && fit.r2 < 1); // not the ln-space R²
+  assert.ok(close(fit.coef[1], b, 1e-9) && close(fit.coef[0], a, 1e-9));
+});
+test("formulas use one minus sign and wrap a negative exponent", () => {
+  assert.equal(trendFormula("linear", trendFit("linear", [9, 7, 5, 3])), "y = 9 \u2212 2·x");
+  assert.equal(trendFormula("power", trendFit("power", [4, 4 * 2 ** -0.5, 4 * 3 ** -0.5])), "y = 4·(x+1)^(\u22120.5)");
+  assert.equal(trendFormula("exp", trendFit("exp", [8, 4, 2])), "y = 8·e^(\u22120.693·x)");
+});
+test("a blank in the middle is skipped but keeps its position; constant y gives R² 1; two points fit a line", () => {
+  assert.ok(close(trendFit("linear", [1, null, 5, 7]).predict(1), 3)); // x = 0, 2, 3 -> y = 1 + 2x
+  assert.equal(trendFit("linear", [1, null, 5, 7]).n, 3);
+  assert.equal(trendFit("linear", [4, 4, 4]).r2, 1);
+  const two = trendFit("linear", [1, 3]);
+  assert.ok(close(two.predict(2), 5) && two.r2 === 1 && two.n === 2);
+});
+test("a series with a non-finite prediction is dropped", () => {
+  assert.equal(trendSeries("exp", [1, 2, 3], 3000)?.data.every(Number.isFinite) ?? true, true);
+  assert.equal(trendSeries("exp", [1e-300, 1e-200, 1e-100], 3000), null);
+});

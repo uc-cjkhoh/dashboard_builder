@@ -84,14 +84,14 @@ export function renderSeries(container, rc, sheet, a) {
     const fc = type === "line" || type === "area" ? A.forecast ?? 0 : 0;
     const t = (A.trend && A.trend !== "none") || fc ? trendSeries(A.trend ?? "none", vals, fc) : null;
     const trendLabel = TREND_CHOICES.find(([v]) => v === (A.trend && A.trend !== "none" ? A.trend : "linear"))[1].toLowerCase();
-    const tp = A.trend && A.trend !== "none" && !t ? trendProblem(A.trend, vals) ?? "The trend needs at least 2 values (3 for a polynomial)." : null;
+    const tp = A.trend && A.trend !== "none" && !t ? (trendProblem(A.trend, vals) ?? "The trend needs at least 2 values (3 for a polynomial).") + (fc ? " The forecast is not drawn." : "") : null;
     if (tp) rc.extraNotice = joinNotices(rc.extraNotice, tp);
     const bb = bandBounds(A.band, mvals, parameters);
     analytics = {
       measure: mi,
       ref: rv == null ? null : { name: (refKind === "constant" ? "Reference" : REF_CHOICES.find(([v]) => v === refKind)[1]) + (refKind === "constant" ? "" : mname), value: rv },
       band: bb ? { ...bb, name: bandLabel(A.band) + (A.band.kind ? ` (shown rows)${mname}` : "") } : null,
-      trend: t ? { name: `Trend (${trendLabel}${fc ? ` + ${fc} forecast` : ""}): ${t.formula}, R² ${t.r2.toFixed(2)}, n = ${t.n}`, short: `Trend · ${t.formula} · R² ${t.r2.toFixed(2)} · n = ${t.n}`, data: t.data } : null,
+      trend: t ? { name: `Trend (${trendLabel}${fc ? ` + ${fc} forecast` : ""}): ${t.formula}, R² ${t.r2.toFixed(2)}, n = ${t.n}`, short: `Trend · R² ${t.r2.toFixed(2)} · n = ${t.n}`, data: t.data } : null,
     };
     if (t && t.extra) {
       catsOut = [...categories, ...Array.from({ length: t.extra }, (_, i) => `Forecast +${i + 1}`)];
