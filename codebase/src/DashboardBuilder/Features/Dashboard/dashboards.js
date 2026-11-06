@@ -55,7 +55,7 @@ import { openGroupDialog } from "../Calc/group-dialog.js";
 import { openSplitDialog } from "../Calc/split-dialog.js";
 import { openCleanDialog } from "../Calc/clean-dialog.js";
 import { cleanOps } from "../Calc/clean-model.js";
-import { groupCategoryProblem } from "../Calc/group-model.js";
+import { groupCategoryProblem, groupKind } from "../Calc/group-model.js";
 import { openMemberLabelsDialog } from "./member-labels-dialog.js";
 import { openRowsDialog } from "../Rows/rows-dialog.js";
 import { buildRowsRequest } from "../Rows/rows-model.js";
@@ -652,7 +652,10 @@ export function initDashboards() {
     const problem = groupCategoryProblem(col.category, col.type);
     if (problem) { toast(problem, "info"); return; }
     if (calculations.length >= LIMITS.calculations) { toast(`A workbook can have at most ${LIMITS.calculations} calculated fields.`, "info"); return; }
-    openGroupDialog({ field: { db: f.db, table: f.table, column: f.column }, fieldName: metaOf(f).alias || col.name, load: () => distinctFor(f.db, f.table, f.column) });
+    const kind = groupKind(col.category, col.type);
+    // A number or true/false field is grouped by listing its exact values; a true/false field has only these two.
+    openGroupDialog({ field: { db: f.db, table: f.table, column: f.column }, fieldName: metaOf(f).alias || col.name, kind: kind === "text" ? undefined : kind,
+      load: kind === "boolean" ? async () => ["false", "true"] : () => distinctFor(f.db, f.table, f.column) });
   }
   // Split a text column at a separator into calculated fields, one per piece.
   function newSplitFields(f, col) {
@@ -665,7 +668,7 @@ export function initDashboards() {
   }
   function editGroupField(calc) {
     const g = calc.group.field;
-    openGroupDialog({ field: g, fieldName: metaOf(g).alias || g.column, calcId: calc.id, load: () => distinctFor(g.db, g.table, g.column) });
+    openGroupDialog({ field: g, fieldName: metaOf(g).alias || g.column, calcId: calc.id, load: calc.group.kind === "boolean" ? async () => ["false", "true"] : () => distinctFor(g.db, g.table, g.column) });
   }
   // Inline rename, like a tab: Enter / blur saves (1–60 characters; blank = back to the column name), Esc cancels.
   function renameField(f, col, nameEl) {

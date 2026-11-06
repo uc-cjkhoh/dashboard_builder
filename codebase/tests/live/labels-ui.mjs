@@ -14,7 +14,7 @@ const SHOTS = process.env.SHOTS_DIR ?? join(tmpdir(), 'labels-ui-shots');
 mkdirSync(SHOTS, { recursive: true });
 
 // ---- the mocked server ------------------------------------------------------------------------------------
-const COLUMNS = { orders: [['amount', 'Float64', 'numeric'], ['region', 'String', 'text'], ['sku', 'String', 'text'], ['placed', 'DateTime', 'temporal']] };
+const COLUMNS = { orders: [['amount', 'Float64', 'numeric'], ['region', 'String', 'text'], ['sku', 'String', 'text'], ['placed', 'DateTime', 'temporal'], ['qty', 'Int32', 'numeric'], ['active', 'Bool', 'boolean']] };
 const REGIONS = ['APAC', 'EU', 'US', 'constructor']; // "constructor": a member that is also an Object.prototype name
 const SKUS = Array.from({ length: 60 }, (_, i) => `sku-${String(i).padStart(2, '0')}`);
 const queries = [];
@@ -36,6 +36,8 @@ function answer({ method, path, body }) {
   if (path === '/api/databases/shop/tables') return { json: ['orders'] };
   if (path === '/api/databases/shop/tables/orders/columns') return { json: COLUMNS.orders.map(([name, type, category]) => ({ name, type, category })) };
   if (/\/columns\/region\/distinct/.test(path)) return { json: [...REGIONS, null] };
+  if (/\/columns\/qty\/distinct/.test(path)) return { json: ['1', '2', '3', '10'] };
+  if (/\/columns\/active\/distinct/.test(path)) return { json: ['False', 'True'] }; // the server's .NET text; a true/false group must not use it
   if (/\/columns\/sku\/distinct/.test(path)) return { json: SKUS };
   if (path === '/api/query') {
     queries.push(body);
@@ -280,11 +282,40 @@ try {
 
   await check('a numeric / date field refuses Group… with a message', async () => {
     await fieldMenu('amount', 'Group');
-    await waitFor(`/text fields only/.test(document.getElementById('toast')?.textContent ?? '')`, 'refusal toast');
+    await waitFor(`/whole-number/.test(document.getElementById('toast')?.textContent ?? '')`, 'refusal toast');
     must(!(await ev(`!!document.querySelector('dialog.grp-dialog')`)), 'no dialog for a numeric field');
     await ev(`(() => { const c = [...document.querySelectorAll('#ws-fields .ws-field')].find((c) => c.querySelector('.ws-field__name')?.textContent === 'placed'); c.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 40 })); return true; })()`);
     must(!(await ev(`[...document.querySelectorAll('.ctx-menu .menu__item')].some((x) => /member labels/.test(x.textContent))`)), 'a date field offers no member labels');
     await ev(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); document.querySelector('.ctx-menu')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); true`);
+  });
+
+  await check('a whole-number field groups by exact values: members as listed, saved with kind "number", the tree reads TEXT(qty)', async () => {
+    await fieldMenu('qty', 'Group');
+    await waitFor(`!!document.querySelector('dialog.grp-dialog[open]') && document.querySelectorAll('.grp-member').length === 4`, 'qty dialog with 4 members');
+    must(await ev(`[...document.querySelectorAll('.grp-member')].map((m) => m.textContent.trim().split(/\\s+/)[0]).join('|').startsWith('1')`), 'members listed');
+    must(/2 of 39 members grouped|0 of 39 members grouped/.test(await stripText('.grp-status')), `status: ${await stripText('.grp-status')}`);
+    await typeInto('.grp-group__name', 'Low');
+    await ev(`(() => { const sels = document.querySelectorAll('.grp-member__select'); for (const i of [0, 1]) { sels[i].value = sels[i].options[1].value; sels[i].dispatchEvent(new Event('change', { bubbles: true })); } return true; })()`);
+    must(/2 of 39 members grouped/.test(await stripText('.grp-status')), `status: ${await stripText('.grp-status')}`);
+    await b.sleep(400);
+    await b.screenshot(join(SHOTS, 'group-number-light.png'));
+    await ev(`${dlgBtn('dialog.grp-dialog', 'Save')}.click()`);
+    await waitFor(`${CALC_NAMES}.includes('qty (groups)')`, 'qty group field in the pane');
+    const saved = await ev(`(async () => { const st = await import('/features/Core/store.js'); const c = st.calculations.find((x) => x.name === 'qty (groups)'); return JSON.stringify(c.group); })()`);
+    must(saved === J({ field: { db: 'shop', table: 'orders', column: 'qty' }, groups: [{ name: 'Low', members: ['1', '2'] }], kind: 'number' }), `saved: ${saved}`);
+  });
+
+  await check('a true/false field offers exactly "false" and "true" (not the server text), and saves kind "boolean"', async () => {
+    await fieldMenu('active', 'Group');
+    await waitFor(`!!document.querySelector('dialog.grp-dialog[open]') && document.querySelectorAll('.grp-member').length === 2`, 'active dialog with 2 members');
+    must(/0 of 2 members grouped/.test(await stripText('.grp-status')), `status: ${await stripText('.grp-status')}`);
+    must(await ev(`[...document.querySelectorAll('.grp-member')].map((m) => m.textContent.trim()).join('|').includes('true') && !/True/.test(document.querySelector('.grp-members').textContent)`), 'members false/true');
+    await typeInto('.grp-group__name', 'On');
+    await ev(`(() => { const sels = document.querySelectorAll('.grp-member__select'); const i = [...document.querySelectorAll('.grp-member')].findIndex((m) => /true/.test(m.textContent)); sels[i].value = sels[i].options[1].value; sels[i].dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+    await ev(`${dlgBtn('dialog.grp-dialog', 'Save')}.click()`);
+    await waitFor(`${CALC_NAMES}.includes('active (groups)')`, 'active group field');
+    const saved = await ev(`(async () => { const st = await import('/features/Core/store.js'); return JSON.stringify(st.calculations.find((x) => x.name === 'active (groups)').group); })()`);
+    must(saved === J({ field: { db: 'shop', table: 'orders', column: 'active' }, groups: [{ name: 'On', members: ['true'] }], kind: 'boolean' }), `saved: ${saved}`);
   });
 
   // ---- dark ----
@@ -301,6 +332,11 @@ try {
     await waitFor(`document.querySelectorAll('.grp-member').length === 4`, 'group dialog');
     await b.sleep(500);
     await b.screenshot(join(SHOTS, 'group-dialog-dark.png'));
+    await ev(`${dlgBtn('dialog.grp-dialog', 'Cancel')}.click()`);
+    await fieldMenu('qty', 'Group');
+    await waitFor(`document.querySelectorAll('.grp-member').length === 4`, 'number group dialog');
+    await b.sleep(500);
+    await b.screenshot(join(SHOTS, 'group-number-dark.png'));
     await ev(`${dlgBtn('dialog.grp-dialog', 'Cancel')}.click()`);
   });
 

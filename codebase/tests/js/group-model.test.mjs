@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { groupTree, groupCost, MAX_GROUP_MEMBERS, checkGroupSpec, cleanGroupSpec, groupCalcName, groupsFromAssignments, assignmentsOf, GROUP_CATEGORY_REFUSAL, groupCategoryProblem, GROUP_TYPE_REFUSAL, maxMembersFor }
+import { groupTree, groupCost, MAX_GROUP_MEMBERS, checkGroupSpec, cleanGroupSpec, groupCalcName, groupsFromAssignments, assignmentsOf, GROUP_CATEGORY_REFUSAL, groupCategoryProblem, GROUP_TYPE_REFUSAL, maxMembersFor, groupKind }
   from "../../src/DashboardBuilder/Features/Calc/group-model.js";
 import { check, CALC_LIMITS } from "../../src/DashboardBuilder/Features/Calc/calc-types.js";
 import { compileCalculation, catalogFromEntities } from "../../src/DashboardBuilder/Features/Calc/calc-resolve.js";
@@ -14,10 +14,10 @@ const g = (name, ...members) => ({ name, members });
 const categoryOf = (db, table, column) => (db === "d" && table === "t" && column === "region" ? "text" : null);
 const count = (n) => (n === null || typeof n !== "object" ? 1
   : n.k === "case" ? 1 + n.whens.reduce((a, w) => a + count(w.c) + count(w.t), 0) + (n.else ? count(n.else) : 0)
-  : n.k === "logic" || n.k === "cmp" ? 1 + count(n.l) + count(n.r) : n.k === "not" || n.k === "isnull" ? 1 + count(n.arg) : 1);
+  : n.k === "logic" || n.k === "cmp" ? 1 + count(n.l) + count(n.r) : n.k === "not" || n.k === "isnull" ? 1 + count(n.arg) : n.k === "fn" ? 1 + n.args.reduce((a, x) => a + count(x), 0) : 1);
 const depthOf = (n) => (n === null || typeof n !== "object" ? 1
   : n.k === "case" ? 1 + Math.max(...n.whens.flatMap((w) => [depthOf(w.c), depthOf(w.t)]), n.else ? depthOf(n.else) : 0)
-  : n.k === "logic" || n.k === "cmp" ? 1 + Math.max(depthOf(n.l), depthOf(n.r)) : n.k === "not" || n.k === "isnull" ? 1 + depthOf(n.arg) : 1);
+  : n.k === "logic" || n.k === "cmp" ? 1 + Math.max(depthOf(n.l), depthOf(n.r)) : n.k === "not" || n.k === "isnull" ? 1 + depthOf(n.arg) : n.k === "fn" ? 1 + Math.max(...n.args.map(depthOf)) : 1);
 
 test("one WHEN per group; each condition an OR of equalities to bound string literals; ELSE the raw field", () => {
   const t = groupTree(spec([g("Nordics", "SE", "NO"), g("Benelux", "NL")]));
@@ -84,7 +84,7 @@ test("checkGroupSpec: names, members, uniqueness and the node budget, each with 
 });
 test("only a text field can be grouped; the others get a plain message", () => {
   assert.equal(groupCategoryProblem("text"), null);
-  for (const c of ["numeric", "temporal", "boolean", "other"]) assert.equal(groupCategoryProblem(c), GROUP_CATEGORY_REFUSAL);
+  for (const c of ["temporal", "other"]) assert.equal(groupCategoryProblem(c), GROUP_CATEGORY_REFUSAL);
   assert.match(GROUP_CATEGORY_REFUSAL, /text/i);
 });
 test("a group calculation compiles through the ordinary calculation seam (ast, text, row-level, dimension)", () => {
@@ -154,7 +154,6 @@ test("groupCategoryProblem also takes the ClickHouse type: UUID / IPv4 / IPv6 / 
   for (const t of ["String", "Nullable(String)", "LowCardinality(String)", "FixedString(3)", ""]) assert.equal(groupCategoryProblem("text", t), null, t);
   for (const t of ["UUID", "Nullable(UUID)", "IPv4", "IPv6", "Enum8('a' = 1)", "Nullable(Enum16('x' = 1))"]) assert.equal(groupCategoryProblem("text", t), GROUP_TYPE_REFUSAL, t);
   assert.match(GROUP_TYPE_REFUSAL, /not UUID, IP address or enum/);
-  assert.equal(groupCategoryProblem("numeric", "Int32"), GROUP_CATEGORY_REFUSAL);
 });
 test("a group name equal to a member that stays ungrouped is refused; equal to a grouped member is fine", () => {
   const spec2 = spec([g("EU", "APAC")]);
@@ -212,4 +211,78 @@ test("other: a label equal to an ungrouped member is refused; a grouped member o
   assert.match(checkGroupSpec(sp, ["a", "Rest"]).error, /outside the groups/);
   assert.equal(checkGroupSpec(sp, ["a", "b"]).ok, true);
   assert.equal(checkGroupSpec({ ...spec([g("A", "Rest")]), other: "Rest" }, ["Rest"]).ok, true);
+});
+
+// Number and true/false fields: the same CASE, but every use of the field is TEXT(field), so members stay exact text.
+const NUM = { db: "d", table: "t", column: "qty" };
+const numSpec = (groups, kind = "number", extra = {}) => ({ field: NUM, kind, groups, ...extra });
+const catOfNum = (db, table, column) => (db === "d" && table === "t" && column === "qty" ? "numeric" : column === "ok" ? "boolean" : null);
+const textOf = (f) => ({ k: "fn", fn: "text", args: [f] });
+test("groupKind: text is plain, whole numbers and true/false are listed by value, floats, decimals and the rest are not", () => {
+  assert.equal(groupKind("text", "String"), "text");
+  for (const t of ["Int32", "UInt64", "Nullable(Int8)", "Int256"]) assert.equal(groupKind("numeric", t), "number", t);
+  for (const t of ["Bool", "Boolean", "Nullable(Bool)"]) assert.equal(groupKind("boolean", t), "boolean", t);
+  for (const t of ["Float32", "Float64", "Nullable(Float64)", "Decimal(10, 2)", "Nullable(Decimal(9, 3))"]) assert.equal(groupKind("numeric", t), null, t);
+  assert.equal(groupKind("temporal", "Date"), null);
+  assert.match(groupCategoryProblem("numeric", "Float64"), /whole-number/i);
+  assert.equal(groupCategoryProblem("numeric", "Int32"), null);
+  assert.equal(groupCategoryProblem("boolean", "Bool"), null);
+  assert.equal(groupCategoryProblem("temporal", "Date"), GROUP_CATEGORY_REFUSAL);
+  assert.match(GROUP_CATEGORY_REFUSAL, /date/i);
+});
+test("a number group wraps every use of the field in TEXT(); members are str literals; ELSE is TEXT(field)", () => {
+  const t = groupTree(numSpec([g("Small", "1", "2"), g("Big", "100")]));
+  assert.deepEqual(t.whens[1].c, { k: "cmp", op: "=", l: textOf({ k: "field", ...NUM }), r: { k: "str", v: "100" } });
+  assert.deepEqual(t.else, textOf({ k: "field", ...NUM }));
+  const withOther = groupTree(numSpec([g("A", "1")], "number", { other: "Rest" }));
+  assert.deepEqual(withOther.whens[1].c, { k: "not", arg: { k: "isnull", arg: { k: "field", ...NUM } } });
+});
+test("a number or boolean group tree type-checks as text; the cost and the member cap count the TEXT() nodes", () => {
+  const OK = { db: "d", table: "t", column: "ok" };
+  for (const [kind, groups] of [["number", [g("A", "1", "2"), g("B", "3")]], ["boolean", [g("Yes", "true")]], ["boolean", [g("Yes", "true"), g("No", "false")]]]) {
+    for (const other of [undefined, "Rest"]) {
+      const s = { ...numSpec(groups, kind, other ? { other } : {}), ...(kind === "boolean" ? { field: OK } : {}) };
+      const t = groupTree(s);
+      const info = check(t, catOfNum);
+      assert.equal(info.error, undefined);
+      assert.equal(info.type, "text");
+      assert.equal(count(t), groupCost(s));
+    }
+  }
+  assert.equal(maxMembersFor(numSpec([])), 39);
+  assert.equal(maxMembersFor(numSpec([], "number", { other: "Rest" })), 38);
+  const edge = numSpec([{ name: "All", members: Array.from({ length: 39 }, (_, i) => String(i)) }]);
+  assert.equal(groupCost(edge) <= CALC_LIMITS.nodes, true);
+  assert.equal(checkGroupSpec(edge).ok, true);
+  assert.equal(depthOf(groupTree(edge)) <= CALC_LIMITS.depth, true);
+  const over = numSpec([{ name: "All", members: Array.from({ length: 40 }, (_, i) => String(i)) }]);
+  assert.equal(checkGroupSpec(over).ok, false);
+  assert.match(checkGroupSpec(over).error, /39 members/);
+});
+test("a true/false group tests the column itself (TEXT() refuses booleans): true = field, false = NOT field, ELSE reads it back, NULL stays NULL", () => {
+  const OK = { db: "d", table: "t", column: "ok" };
+  const f = { k: "field", ...OK };
+  const t = groupTree({ field: OK, kind: "boolean", groups: [g("Yes", "true"), g("No", "false")] });
+  assert.deepEqual(t.whens[0], { c: f, t: { k: "str", v: "Yes" } });
+  assert.deepEqual(t.whens[1], { c: { k: "not", arg: f }, t: { k: "str", v: "No" } });
+  assert.equal(t.else.k, "case");
+  assert.equal(maxMembersFor({ field: OK, kind: "boolean", groups: [] }), 2);
+});
+test("number and boolean members must read as that kind; the kind itself is checked", () => {
+  assert.equal(checkGroupSpec(numSpec([g("A", "1", "-2", "350")])).ok, true);
+  assert.equal(checkGroupSpec(numSpec([g("A", "abc")])).ok, false);
+  assert.equal(checkGroupSpec(numSpec([g("A", "1.5")])).ok, false);
+  assert.equal(checkGroupSpec(numSpec([g("A", "1e5")])).ok, false);
+  assert.equal(checkGroupSpec(numSpec([g("Yes", "true")], "boolean")).ok, true);
+  assert.equal(checkGroupSpec(numSpec([g("Yes", "True")], "boolean")).ok, false);
+  assert.equal(checkGroupSpec(numSpec([g("A", "1")], "date")).ok, false);
+});
+test("a saved number group keeps its kind through cleanGroupSpec; an unknown kind is skipped", () => {
+  const issues = [];
+  const out = cleanGroupSpec({ field: NUM, kind: "number", groups: [g("A", "1")] }, '"x"', issues);
+  assert.equal(out.kind, "number");
+  assert.equal(cleanGroupSpec({ field: NUM, kind: "number", groups: [g("A", "x")] }, '"x"', issues), null);
+  assert.equal(cleanGroupSpec({ field: NUM, kind: "bogus", groups: [g("A", "1")] }, '"x"', issues), null);
+  assert.equal(issues.length, 2);
+  assert.equal(cleanGroupSpec({ field: FIELD, groups: [g("A", "x")] }, '"x"', issues).kind, undefined);
 });
