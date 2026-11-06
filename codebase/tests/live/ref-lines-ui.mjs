@@ -195,6 +195,29 @@ try {
     const f2 = ma.data[0][0].yAxis ?? ma.data[0][0].xAxis, t2 = ma.data[0][1].yAxis ?? ma.data[0][1].xAxis;
     must(f2 === 27.5 && t2 === 42.5 && /^P25–P75/.test(ma.label.formatter), `percentile band ${f2}..${t2} ${ma.label.formatter}`);
     await shot('band-light.png');
+    await aPick('Band', 'pcustom');
+    must(await aHas('low percentile') && await aHas('high percentile'), 'custom percentile inputs missing');
+    ma = await mark('markArea', 1);
+    const bnd = (m) => [m.data[0][0].yAxis ?? m.data[0][0].xAxis, m.data[0][1].yAxis ?? m.data[0][1].xAxis];
+    let [cf, ct] = bnd(ma);
+    must(Math.abs(cf - 21.5) < 1e-9 && Math.abs(ct - 48.5) < 1e-9 && /^P5–P95/.test(ma.label.formatter), `custom P5-P95 ${cf}..${ct} ${ma.label.formatter}`);
+    await setNum('low percentile', '10'); await setNum('high percentile', '90'); await chartReady();
+    ma = await mark('markArea', 1); [cf, ct] = bnd(ma);
+    must(Math.abs(cf - 23) < 1e-9 && Math.abs(ct - 47) < 1e-9 && /^P10–P90/.test(ma.label.formatter), `custom P10-P90 ${cf}..${ct}`);
+    await setNum('high percentile', '100'); // refused with a message, not clamped: the band is unchanged
+    must(/percentile/i.test(await tick()), 'no refusal message for 100');
+    const fieldVal = (l) => ev(`[...document.querySelectorAll('.ws-fmt-field')].find((x) => x.querySelector('.ws-fmt-label').textContent === ${J(l)}).querySelector('input').value`);
+    must(await fieldVal('high percentile') === '90', `refused 100 stayed in the box: ${await fieldVal('high percentile')}`);
+    await setNum('low percentile', ''); // empty is refused too and restored
+    must(await fieldVal('low percentile') === '10', `refused empty stayed: ${await fieldVal('low percentile')}`);
+    ma = await mark('markArea', 1); [cf, ct] = bnd(ma);
+    must(Math.abs(ct - 47) < 1e-9, `rejected value changed the band: ${ct}`);
+    await setNum('high percentile', '95'); await chartReady();
+    const clip = await ev(`(() => { const s = [...document.querySelectorAll('.ws-analytics .ws-fmt-field')].find((l) => l.querySelector('.ws-fmt-label').textContent === 'Band').querySelector('select'); return { t: s.selectedOptions[0].text, title: s.title, fits: s.scrollWidth <= s.clientWidth }; })()`);
+    must(clip.t === 'Percentiles' && clip.title === 'Percentiles' && clip.fits, `band select clipped: ${J(clip)}`);
+    await shot('band-custom-light.png');
+    await theme('dark'); await settle(400); await chartReady();
+    await shot('band-custom-dark.png'); await theme('light'); await settle(400);
     await theme('dark'); await settle(400); await chartReady();
     await shot('band-dark.png'); await theme('light'); await settle(400);
     await aPick('Band', 'range');
