@@ -100,3 +100,7 @@ export function sliderValues(b, h) {
   }
   return [b.min, b.max];
 }
+
+/** The key a remembered slider span lives under: the sheet, the measure as named (field and aggregation) and the grain it is
+ *  aggregated over — change any and the span is a different one, so a stale track is never reused. */
+export const sliderKey = (sheetId, measureLabel, grain) => JSON.stringify([sheetId, measureLabel, grain]);

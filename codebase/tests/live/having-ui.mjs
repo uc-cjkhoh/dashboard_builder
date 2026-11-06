@@ -196,11 +196,12 @@ try {
       return { min: a.min, max: a.max, lo: a.value, hi: c.value, la: a.getAttribute('aria-label'), lb: c.getAttribute('aria-label') }; })()`);
     must(Number(info.min) === 10 && Number(info.max) === 30 && Number(info.lo) === 10 && Number(info.hi) === 30, J(info));
     must(/From slider for/.test(info.la) && /To slider for/.test(info.lb), J(info));
+    const before = queries.length;
     await setControl('.ctx-menu .ws-pill__slider-input:nth-of-type(1)', '15');
-    await settle(200);
-    await openMenu();
-    await waitFor(`document.querySelectorAll('.ctx-menu .ws-pill__slider-input').length === 2`, 'two sliders again');
     await setControl('.ctx-menu .ws-pill__slider-input:nth-of-type(2)', '25');
+    await b.sleep(200);
+    must(queries.length === before, 'a query fired before the slider debounce');
+    await b.sleep(900);
     await settle();
     must(J(lastQuery().having) === J([{ measure: 0, op: 'between', values: ['15', '25'] }]), `having: ${J(lastQuery().having)}`);
     await openMenu();

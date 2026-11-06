@@ -14,7 +14,7 @@ import { checkValue, paramTypeFor } from "../Core/parameters-model.js";
 import { exportChart, hasChartInstance, sizeChart, focusSeries } from "./chart.js";
 import { createWorksheetView, periodNotice } from "./worksheet-view.js";
 import { CACHE_NOTE } from "./notices.js";
-import { HAVING_OPS, checkHaving, havingBadge, havingSentence, sliderBounds, sliderStep, sliderValues } from "./having-model.js";
+import { HAVING_OPS, checkHaving, havingBadge, havingSentence, sliderBounds, sliderStep, sliderValues, sliderKey } from "./having-model.js";
 import { dateTimeIn, offsetLabel } from "../Core/timezone.js";
 import { fieldCopies } from "./field-copy-model.js";
 import { el, hint, iconSpan } from "./render-dom.js";
@@ -1549,11 +1549,11 @@ export function initDashboards() {
     wrap.append(box, err);
     return wrap;
   }
-  const spanKey = (s, f) => `${s.id}:${planMeasures(s).filter((e) => e.role === "shelf").findIndex((e) => e.field === f)}`;
+  const spanKey = (s, f) => sliderKey(s.id, measureName({ ...f, agg: f.agg ?? "sum" }), planDims(s).keyOrder.map((d) => nameOf(d)));
   // The range slider under a "between" measure filter: two thumbs over the measure's span in the drawn result (widest span seen
   // kept per measure). Moving a thumb fills the From / To inputs; releasing it applies. No numbers to draw it over -> no slider.
   function havingSlider(s, f, label, inputs, apply) {
-    const key = spanKey(s, f), index = Number(key.split(":").pop());
+    const key = spanKey(s, f), index = planMeasures(s).filter((e) => e.role === "shelf").findIndex((e) => e.field === f);
     const rows = lastRowsOf && lastRowsOf.sheetId === s.id ? lastRowsOf.rows : [];
     const bounds = index >= 0 ? sliderBounds(rows, index, sliderSpans.get(key), f.having) : null;
     if (!bounds || bounds.max === bounds.min) return null;
@@ -1568,12 +1568,13 @@ export function initDashboards() {
       r.setAttribute("aria-label", `${aria} for ${label}`);
       return r;
     };
+    let timer = null;
     const a = mk(lo, "From slider"), b = mk(hi, "To slider");
     const sync = (moved) => {
       if (Number(a.value) > Number(b.value)) (moved === a ? b : a).value = moved.value; // thumbs never cross
       inputs[0].value = fmt(a.value); inputs[1].value = fmt(b.value);
     };
-    for (const r of [a, b]) { r.addEventListener("input", () => sync(r)); r.addEventListener("change", () => { sync(r); apply("between"); }); }
+    for (const r of [a, b]) { r.addEventListener("input", () => sync(r)); r.addEventListener("change", () => { sync(r); clearTimeout(timer); timer = setTimeout(() => apply("between"), 500); }); } // a burst of arrow keys is one query
     box.append(a, b);
     return box;
   }

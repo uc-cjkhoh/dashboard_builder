@@ -99,7 +99,7 @@ test("buildPlan leaves an invalid measure filter out (the notice says it was not
   assert.equal("having" in p, false);
 });
 
-import { sliderBounds, sliderStep, sliderValues } from "../../src/DashboardBuilder/Features/Dashboard/having-model.js";
+import { sliderBounds, sliderStep, sliderValues, sliderKey } from "../../src/DashboardBuilder/Features/Dashboard/having-model.js";
 
 test("sliderBounds: the range of one measure column, widened by what was seen before and by the filter itself", () => {
   const rows = [{ values: [10, 5] }, { values: [30, null] }, { values: [20, 7] }];
@@ -125,4 +125,18 @@ test("sliderValues: the two thumbs from a stored filter, whole range when none, 
   assert.deepEqual(sliderValues(b, { op: "between", values: ["10", "30"] }), [10, 30]);
   assert.deepEqual(sliderValues(b, { op: "between", values: ["-5", "300"] }), [0, 100]);
   assert.deepEqual(sliderValues(b, { op: "between", values: ["abc", ""] }), [0, 100]);
+});
+
+test("sliderKey: a different aggregation, measure or grain is a different remembered span", () => {
+  const k = sliderKey("s1", "sum amount", ["region"]);
+  assert.equal(k, sliderKey("s1", "sum amount", ["region"]));
+  assert.notEqual(k, sliderKey("s1", "avg amount", ["region"]));
+  assert.notEqual(k, sliderKey("s1", "sum amount", ["region", "year"]));
+  assert.notEqual(k, sliderKey("s2", "sum amount", ["region"]));
+});
+
+test("sliderBounds: a stale remembered span from another aggregation only matters under its own key; a stored filter outside the span widens it", () => {
+  const rows = [{ values: [1] }, { values: [2] }];
+  assert.deepEqual(sliderBounds(rows, 0, null, null), { min: 1, max: 2 }); // fresh key: no stale huge span
+  assert.deepEqual(sliderBounds(rows, 0, null, { op: "between", values: ["0", "50"] }), { min: 0, max: 50 });
 });
