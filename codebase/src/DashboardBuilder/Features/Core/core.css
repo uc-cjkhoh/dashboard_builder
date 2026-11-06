@@ -47,6 +47,8 @@
           radial-gradient(760px 560px at 42% 46%, color-mix(in srgb, var(--halo) var(--wash-3), transparent), transparent 72%);
   /* Type, space, shape, depth, motion */
   --font: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-serif: Charter, "Bitstream Charter", "Sitka Text", Cambria, Georgia, serif;
+  --font-mono: ui-monospace, "Cascadia Code", Consolas, monospace;
   --fs-body: 14px; --fs-lead: 16px; --fs-title: 24px; --fs-display: 32px;
   --s1: 4px; --s2: 8px; --s4: 16px; --s6: 24px;
   --r: 8px; --r-pill: 999px; --ctl-h: 32px; --sidebar-w: 264px;

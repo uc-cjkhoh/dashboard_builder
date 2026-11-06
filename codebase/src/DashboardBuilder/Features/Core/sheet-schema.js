@@ -39,6 +39,7 @@ export const MARK_BORDERS = new Set(["none", "thin", "thick"]);
 export const MARKER_SHAPES = new Set(["circle", "square", "diamond", "triangle"]); // Format → Marker shape (line charts)
 export const TABLE_ALIGNS = new Set(["auto", "left", "center", "right"]); // Format → Align (table values)
 export const TABLE_DENSITIES = new Set(["standard", "compact", "roomy"]); // Format → Row height
+export const FONTS = new Set(["default", "serif", "mono"]); // Format → Font (worksheet text family)
 export const TABLE_SHADES = new Set(["none", "banded", "header", "both"]); // Format → Shading
 export const MAX_TARGET_MEASURE = 19; // shelf index of the bullet target measure
 export const MAX_DECIMALS = 10;

@@ -1,5 +1,6 @@
 import { makeValueFormatter } from "../Core/format.js";
 import { ACCENTS, PALETTES } from "../Core/theme-model.js";
+import { fontToken } from "./font-model.js";
 import { pickInk } from "./contrast.js";
 import { orderedPalette } from "./colour-model.js";
 import { DIV_FALLBACK, divergingColours, divergingRange, rampColours, rangeOf } from "./colour-scale-model.js";
@@ -74,7 +75,7 @@ function tokens() {
     muted: t("--chart-muted", "#6b6165"),
     surface: t("--surface", "#ffffff"),
     ink: t("--ink", "#1c1719"),
-    font: t("--font", "system-ui, sans-serif"),
+    font: t(fontToken(drawing?.font) ?? "--font", "system-ui, sans-serif"),
     radius: parseFloat(t("--r", "8")) || 8, // the one corner radius (golden rule 11)
     // Brand stops for the sequential heatmap ramp (single-hue soft→saturated, token-driven).
     brand: t("--accent", ACCENTS.signal.light.accent),
@@ -98,6 +99,7 @@ export function renderChart(container, spec) {
   disposeChart(container);
   const st = stateOf(container);
   st.paletteReverse = !!spec.format?.paletteReverse;
+  st.font = spec.format?.font;
   st.colorScale = spec.format?.colorScale; st.colorCentre = spec.format?.colorCentre ?? null;
   st.colorRamp = spec.format?.colorRamp; st.colorMin = spec.format?.colorMin ?? null; st.colorMax = spec.format?.colorMax ?? null;
   st.memberColors = spec.memberColors instanceof Map ? spec.memberColors : NO_MEMBER_COLORS;

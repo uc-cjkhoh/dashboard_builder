@@ -79,6 +79,7 @@
           "colorCentre": null,
           "targetMeasure": null,
           "approximate": false,
+          "font": "default",
           "tableAlign": "auto",
           "tableDensity": "standard",
           "tableShade": "none"
@@ -148,6 +149,7 @@
           "colorCentre": null,
           "targetMeasure": null,
           "approximate": false,
+          "font": "default",
           "tableAlign": "auto",
           "tableDensity": "standard",
           "tableShade": "none"

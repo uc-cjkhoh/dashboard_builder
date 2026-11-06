@@ -279,6 +279,7 @@ export const defaultFormat = () => ({
   markerSize: null, // null (automatic) | whole px 4–40 — scatter / line markers, circle heatmap
   markBorder: "none", // none | thin | thick — bars, scatter points, heatmap cells, pie, treemap, funnel
   markerShape: "circle", // circle | square | diamond | triangle — line / area / combo markers
+  font: "default", // default | serif | mono — the family of the worksheet's chart and table text
   tableAlign: "auto", // auto | left | center | right — a table's value cells
   tableDensity: "standard", // standard | compact | roomy — a table's row height
   tableShade: "none", // none | banded | header | both — a table's shading
