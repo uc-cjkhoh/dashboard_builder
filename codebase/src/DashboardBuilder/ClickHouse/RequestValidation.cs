@@ -12,7 +12,7 @@ public static class ApiLimits
 {
     public const int MaxBodyBytes = 256 * 1024;
     public const int MaxHostLength = 253, MaxUserLength = 64, MaxPasswordLength = 256;
-    public const int MaxDimensions = 12, MaxMeasures = 10, MaxJoins = 10, MaxJoinPairs = 4 /* key pairs of one join, the first included */, MaxFilters = 20, MaxHaving = 10 /* conditions on aggregated measures, at most one per measure slot */; // user filters (client cap 8) + shared filters (4) + drill path (5) + page + selection + date range
+    public const int MaxDimensions = 12, MaxMeasures = 10, MaxJoins = 10, MaxJoinPairs = 4 /* key pairs of one join, the first included */, MaxFilters = 20, MaxHaving = 10 /* conditions on aggregated measures, ANDed; the client sends at most one per measure */; // user filters (client cap 8) + shared filters (4) + drill path (5) + page + selection + date range
     public const int MaxInValues = 500, MaxFilterValueLength = 1000;
     public const int MaxBoxOutliers = 500; // outlier points one box plot returns
     public const int MaxRowLimit = 5000, MaxBuckets = 100, MaxDistinct = 1000;
