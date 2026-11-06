@@ -970,8 +970,20 @@ export function initDashboards() {
         }
       }
       panel.append(fmtSelect("Band", BAND_CHOICES, bandChoice(a.band), (v) => set({ band: bandFromChoice(v, a.band) })));
-      if (a.band && !a.band.kind) panel.append(fmtNumber("from", a.band.from, "0", (v) => set({ band: { from: v ?? 0, to: a.band.to } })),
-        fmtNumber("to", a.band.to, "0", (v) => set({ band: { from: a.band.from, to: v ?? 0 } })));
+      if (a.band && !a.band.kind) {
+        const numParams = parameters.filter((p) => p.type === "number");
+        const setEnd = (end, patch) => set({ band: { ...a.band, ...patch } });
+        const nowOf = (id) => { const v = Number(numParams.find((p) => p.id === id)?.value); return Number.isFinite(v) ? v : undefined; }; // unbinding keeps the number the end showed
+        for (const [end, label] of [["from", "from"], ["to", "to"]]) { // each end: a typed number, or follows a number parameter
+          const pk = `${end}Param`, bound = numParams.some((p) => p.id === a.band[pk]) ? a.band[pk] : "";
+          const unbind = { [pk]: undefined };
+          if (bound) panel.append(fmtSelect(label, [["", "A typed value"], ...numParams.map((p) => [p.id, `Parameter: ${p.name}`])], bound, (v) => setEnd(end, v ? { [pk]: v } : { ...unbind, [end]: nowOf(bound) ?? a.band[end] })));
+          else {
+            panel.append(fmtNumber(label, a.band[end], "0", (v) => setEnd(end, { [end]: v ?? 0 })));
+            if (numParams.length) panel.append(fmtSelect(`${label} follows`, [["", "none"], ...numParams.map((p) => [p.id, p.name])], "", (v) => setEnd(end, v ? { [pk]: v } : unbind)));
+          }
+        }
+      }
       else if (a.band && shown.length > 1 && !(a.ref.kind !== "none" && a.ref.kind !== "constant"))
         panel.append(fmtSelect("of", shown.map((n, i) => [i, n]), a.ref.measure ?? 0, (v) => set({ ref: { ...a.ref, measure: Number(v) } })));
       panel.append(fmtSelect("Trend", TREND_CHOICES, a.trend, (v) => set({ trend: v })));
@@ -1938,6 +1950,7 @@ export function initDashboards() {
     const used = new Set([...s.filters, ...sharedFilters].map((f) => f.param).filter(Boolean));
     if (s.format?.topNParam) used.add(s.format.topNParam);
     if (s.analytics?.ref?.param) used.add(s.analytics.ref.param);
+    for (const k of ["fromParam", "toParam"]) if (s.analytics?.band?.[k]) used.add(s.analytics.band[k]);
     const calcNames = new Set();
     for (const f of pillSlots(s)) if (isCalcPill(f)) calcParamNames(calculations, f.calc).forEach((n) => calcNames.add(n));
     for (const p of parameters) if (calcNames.has(p.name)) used.add(p.id); // a calculated field reads it as [@Name]

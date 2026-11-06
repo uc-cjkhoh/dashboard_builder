@@ -82,3 +82,32 @@ export function cleanParameter(raw, issues) {
   if (!v.ok) issues.push(`Parameter "${name.value}": its value was invalid — reset.`);
   return p;
 }
+
+/** What reads the parameter `id`: a list of plain phrases ("Sheet 1: a filter on region"), for the delete confirmation. `sheets` = [{ name, sheet }]. */
+export function paramRefs(sheets, shared, id) {
+  const out = [];
+  for (const { name, sheet } of sheets) {
+    const w = `${name}: `;
+    for (const f of sheet?.filters ?? []) if (f.param === id) out.push(`${w}a filter on ${f.column ?? "a field"}`);
+    if (sheet?.format?.topNParam === id) out.push(`${w}Top N`);
+    if (sheet?.analytics?.ref?.param === id) out.push(`${w}the reference line`);
+    for (const k of ["fromParam", "toParam"]) if (sheet?.analytics?.band?.[k] === id) out.push(`${w}the band's ${k === "fromParam" ? "from" : "to"} end`);
+    if (sheet?.paramAction?.param === id) out.push(`${w}the parameter action`);
+  }
+  for (const f of shared ?? []) if (f.param === id) out.push(`a shared filter on ${f.column ?? "a field"}`);
+  return out;
+}
+
+/** Clear every reference a worksheet holds to the parameter `id` (a filter, Top N, reference line, band end, parameter action); true when anything changed.
+ *  Ids are reused after a save and reopen, so a stale one would bind to an unrelated new parameter. Mutates `sheet`. */
+export function dropParamRefs(sheet, id) {
+  let changed = false;
+  const drop = (o, k) => { if (o && o[k] === id) { delete o[k]; changed = true; } };
+  for (const f of sheet?.filters ?? []) drop(f, "param");
+  drop(sheet?.format, "topNParam");
+  drop(sheet?.analytics?.ref, "param");
+  drop(sheet?.analytics?.band, "fromParam");
+  drop(sheet?.analytics?.band, "toParam");
+  if (sheet?.paramAction?.param === id) { sheet.paramAction = null; changed = true; }
+  return changed;
+}

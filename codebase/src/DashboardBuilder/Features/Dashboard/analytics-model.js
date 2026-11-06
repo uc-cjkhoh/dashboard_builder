@@ -1,7 +1,7 @@
 // Analytics pane — pure, DOM-free (unit-tested in tests/js/analytics-model.test.mjs). Everything is
 // computed in the browser over the rows the query returned: reference lines / bands, a trend line (with
 // R²) and a short forecast that extends it, and crosstab totals that respect each measure's aggregation.
-// sheet.analytics = { ref: { kind, value? }, band: { from, to } | null, trend: none|linear|log|poly2,
+// sheet.analytics = { ref: { kind, value? }, band: { from, to, fromParam?, toParam? } | null, trend: none|linear|log|poly2,
 //                     forecast: 0|3|6|12, totals: { grand, sub } }; a constant ref may carry `param` (a number parameter's id): refConstant().
 export const REF_CHOICES = [["none", "None"], ["average", "Average"], ["median", "Median"], ["min", "Minimum"], ["max", "Maximum"], ["constant", "Constant"]];
 export const TREND_CHOICES = [["none", "None"], ["linear", "Linear"], ["log", "Logarithmic"], ["poly2", "Polynomial (2nd order)"]];
@@ -127,9 +127,12 @@ function percentileOf(sorted, p) { // linear interpolation between closest ranks
   return sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo);
 }
 /** The band's { from, to } over a measure's values, or null (no values; fewer than two for a standard deviation). */
-export function bandBounds(band, values) {
+export function bandBounds(band, values, params) {
   if (!band) return null;
-  if (!band.kind) return band.from === band.to ? null : { from: band.from, to: band.to }; // a typed range with equal ends (just chosen) draws nothing
+  if (!band.kind) { // a typed range: each end may follow a number parameter (fromParam / toParam), else its typed number
+    const a = refConstant({ param: band.fromParam, value: band.from }, params), b = refConstant({ param: band.toParam, value: band.to }, params);
+    return a === b ? null : { from: Math.min(a, b), to: Math.max(a, b) }; // equal ends (just chosen) draw nothing
+  }
   const v = nums(values);
   if (band.kind === "stddev") {
     if (v.length < 2) return null;

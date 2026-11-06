@@ -51,3 +51,29 @@ test("step size: positive finite only; stored and round-tripped for number range
   const bad = cleanParameter({ id: "prm1", name: "N", type: "number", allowed: { kind: "range", min: 0, max: 10, step: -2 }, value: 4 }, []);
   assert.equal(bad.allowed.step, null);
 });
+
+import { dropParamRefs } from "../../src/DashboardBuilder/Features/Core/parameters-model.js";
+test("dropParamRefs clears every reference to a deleted parameter and leaves others", () => {
+  const sheet = { paramAction: { param: "prm1" }, filters: [{ column: "a", param: "prm1" }, { column: "b", param: "prm2" }],
+    format: { topNParam: "prm1" }, analytics: { ref: { kind: "constant", value: 1, param: "prm1" }, band: { from: 0, to: 1, fromParam: "prm1", toParam: "prm2" } } };
+  assert.equal(dropParamRefs(sheet, "prm1"), true);
+  assert.equal(sheet.paramAction, null);
+  assert.equal(sheet.filters[0].param, undefined);
+  assert.equal(sheet.filters[1].param, "prm2");
+  assert.equal(sheet.format.topNParam, undefined);
+  assert.equal(sheet.analytics.ref.param, undefined);
+  assert.equal(sheet.analytics.band.fromParam, undefined);
+  assert.equal(sheet.analytics.band.toParam, "prm2");
+  assert.equal(dropParamRefs({ paramAction: { param: "prm2" } }, "prm1"), false);
+  assert.equal(dropParamRefs({}, "prm1"), false);
+});
+
+import { paramRefs } from "../../src/DashboardBuilder/Features/Core/parameters-model.js";
+test("paramRefs lists every reader of a parameter", () => {
+  const sheets = [{ name: "S1", sheet: { paramAction: { param: "prm1" }, filters: [{ column: "region", param: "prm1" }, { column: "b", param: "prm2" }], format: { topNParam: "prm1" },
+    analytics: { ref: { kind: "constant", param: "prm1" }, band: { fromParam: "prm1", toParam: "prm2" } } } }, { name: "S2", sheet: {} }];
+  const r = paramRefs(sheets, [{ column: "c", param: "prm1" }], "prm1");
+  assert.equal(r.length, 6);
+  assert.ok(r.includes("S1: a filter on region") && r.includes("S1: Top N") && r.includes("a shared filter on c"));
+  assert.deepEqual(paramRefs(sheets, [], "prm9"), []);
+});

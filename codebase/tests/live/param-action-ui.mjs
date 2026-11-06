@@ -131,6 +131,62 @@ try {
     await pickParamAction('Pick');
     must(J(await ev(`(async () => (await import('/features/Core/store.js')).activeWorksheet().sheet.paramAction)()`)) === '{"param":"prm1"}', 'not stored');
   });
+  const field = (label) => `[...document.querySelectorAll('.ws-analytics .ws-fmt-field')].find((l) => l.querySelector('.ws-fmt-label').textContent === ${J(label)})`;
+  const pickField = (label, value) => ev(`(() => { const s = ${field(label)}.querySelector('select'); s.value = ${J(value)}; s.dispatchEvent(new Event('change')); return true; })()`);
+  const area = () => ev(`(() => { const a = ${instOf}.getOption().series[0].markArea?.data?.[0]; return a ? JSON.stringify([a[0].yAxis ?? a[0].xAxis, a[1].yAxis ?? a[1].xAxis]) : ''; })()`);
+  await check('a typed band end follows a number parameter, chosen in the Analytics card, and re-draws when its value changes', async () => {
+    await setSheet(`s.analytics = { ref: { kind: 'none' }, band: { from: 0, to: 1000 }, trend: 'none', forecast: 0, totals: { grand: false, sub: false } }`);
+    await ev(`document.querySelector('.ws-viewbar__btn[aria-label="Analytics"]').click()`);
+    await waitFor(`!!document.querySelector('.ws-analytics')`, 'analytics card'); await settle();
+    await pickField('from follows', 'prm2');
+    await waitFor(`!!${field('from')} && ${field('from')}.querySelector('select')`, 'from is bound');
+    await waitFor(`${instOf}.getOption().series[0].markArea?.data?.length`, 'band drawn');
+    must(J(JSON.parse(await area())) === '[5,1000]', `band: ${await area()}`);
+    await store(`st.updateParameter('prm2', { value: 7 })`);
+    await waitFor(`(() => { const a = ${instOf}.getOption().series[0].markArea.data[0]; return (a[0].yAxis ?? a[0].xAxis) === 7; })()`, 'band follows');
+    await pickField('from', ''); // back to a typed value: keeps the 7 it showed
+    await waitFor(`!!${field('from')}?.querySelector('input')`, 'typed input back');
+    must(await ev(`${field('from')}.querySelector('input').value`) === '7', 'unbinding jumped');
+    must(J(JSON.parse(await area())) === '[7,1000]', `band after unbind: ${await area()}`);
+    await pickField('to follows', 'prm2');
+    await waitFor(`!!${field('to')}?.querySelector('select')`, 'to is bound');
+  });
+  const dlgSel = `document.querySelector('dialog.params-dialog[open]')`;
+  const confirmSel = `document.querySelector('dialog.dialog--sm[open]')`;
+  const clickDlg = (root, label) => ev(`[...${root}.querySelectorAll('button')].find((x) => x.textContent.trim() === ${J(label)} || x.getAttribute('aria-label') === ${J(label)}).click()`);
+  await check('deleting a parameter asks first, lists what it unlinks, then clears it all, removes the chip button and re-queries', async () => {
+    if (!(await ev(`!!document.querySelector('.ws-select')`))) await clickBar('US');
+    await waitFor(`/Set Pick/.test(document.querySelector('.ws-select')?.textContent ?? '')`, 'Set Pick back');
+    await store(`const s = d.sheet; s.filters = [{ db: 'shop', table: 'orders', column: 'region', category: 'text', op: '=', value: 'EU', param: 'prm1' }]; st.updateSheet(d.id, s); st.setSharedFilters([{ db: 'shop', table: 'orders', column: 'channel', category: 'text', op: '=', value: 'web', param: 'prm1' }])`);
+    await settle();
+    await ev(`document.querySelector('#ws-tools [aria-label="Parameters"]').click()`);
+    await waitFor(`${dlgSel} !== null`, 'parameters dialog');
+    await clickDlg(dlgSel, 'Delete parameter Pick');
+    await waitFor(`${confirmSel} !== null`, 'confirm');
+    const msg = await ev(`${confirmSel}.textContent`);
+    must(/a filter on region/.test(msg) && /a shared filter on channel/.test(msg) && /parameter action/.test(msg), `confirm: ${msg}`);
+    await clickDlg(confirmSel, 'Cancel');
+    await b.sleep(200);
+    must((await ev(`(async () => (await import('/features/Core/store.js')).parameters.length)()`)) === 2, 'cancel still deleted');
+    must(await ev(`!!document.querySelector('.ws-select')?.textContent.includes('Set Pick')`), 'cancel removed the button');
+    const before = queries.length;
+    await clickDlg(dlgSel, 'Delete parameter Pick');
+    await waitFor(`${confirmSel} !== null`, 'confirm 2');
+    await clickDlg(confirmSel, 'Delete');
+    await waitFor(`!/Set /.test(document.querySelector('.ws-select')?.textContent ?? '')`, 'chip button gone');
+    must(J(await ev(`(async () => (await import('/features/Core/store.js')).activeWorksheet().sheet.paramAction)()`)) === 'null', 'paramAction kept');
+    const left = await ev(`(async () => { const st = await import('/features/Core/store.js'); return JSON.stringify([st.activeWorksheet().sheet.filters[0].param ?? null, st.sharedFilters[0].param ?? null]); })()`);
+    must(left === '[null,null]', `params kept: ${left}`);
+    await settle();
+    must(queries.length > before, 'no re-query after the filter was unlinked');
+    must(J(last().filters?.map((f) => f.value)?.sort()) !== undefined, 'query has filters');
+    await clickDlg(dlgSel, 'Done');
+    // a new parameter takes a reused id and must not inherit the action
+    await store(`st.removeParameter('prm2'); st.addParameter({ name: 'Fresh', type: 'text', value: 'x', allowed: { kind: 'any' } })`);
+    await clickBar('EU');
+    await waitFor(`!!document.querySelector('.ws-select')`, 'chip'); await b.sleep(200);
+    must(!/Set /.test(await chipText()), `chip: ${await chipText()}`);
+  });
 
 } finally { await b?.close(); }
 console.log(`${passed} passed, ${failed} failed`);

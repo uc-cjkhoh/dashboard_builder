@@ -120,3 +120,13 @@ test("addItem ref drops a stale constant value and parameter, keeps the measure"
 test("addItem works on analytics without a saved key", () => {
   assert.equal(addItem({ ...defaultAnalytics(), ...({}) }, "trend").trend, "linear");
 });
+
+test("a typed band's ends follow number parameters (fromParam / toParam), falling back to the typed number", () => {
+  const params = [{ id: "prm1", type: "number", value: 5 }, { id: "prm2", type: "number", value: 20 }, { id: "prm3", type: "text", value: "x" }];
+  assert.deepEqual(bandBounds({ from: 0, to: 10, fromParam: "prm1", toParam: "prm2" }, [], params), { from: 5, to: 20 });
+  assert.deepEqual(bandBounds({ from: 0, to: 10, fromParam: "prm1" }, [], params), { from: 5, to: 10 });
+  assert.deepEqual(bandBounds({ from: 1, to: 10, fromParam: "prm9", toParam: "prm3" }, [], params), { from: 1, to: 10 }, "a missing or non-number parameter falls back");
+  assert.deepEqual(bandBounds({ from: 0, to: 0, fromParam: "prm2", toParam: "prm1" }, [], params), { from: 5, to: 20 }, "ends swap when the parameters cross");
+  assert.equal(bandBounds({ from: 0, to: 0, fromParam: "prm1", toParam: "prm1" }, [], params), null, "equal ends draw nothing");
+  assert.deepEqual(bandBounds({ from: 2, to: 4 }, []), { from: 2, to: 4 });
+});
