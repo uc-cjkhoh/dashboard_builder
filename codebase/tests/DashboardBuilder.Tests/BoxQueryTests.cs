@@ -32,6 +32,12 @@ public class BoxQueryTests
     }
     [Fact] public void The_group_limit_is_rejected_beyond_the_cap_never_clamped() =>
         Assert.Equal("limit", FieldOf(() => RequestRules.ValidateBoxQuery(Q(limit: ApiLimits.MaxRowLimit + 1))));
+    [Fact] public void An_aggregate_before_joining_relationship_is_refused()
+    {
+        var join = new JoinRef(new ColumnRef("db", "orders", "cid"), new ColumnRef("db", "customers", "id"), Aggregate: true);
+        var r = Q(cols: [Group]) with { Joins = [join] };
+        Assert.Equal("joins", FieldOf(() => RequestRules.ValidateBoxQuery(r)));
+    }
     [Fact] public void A_calculated_value_is_checked_like_a_calculated_dimension()
     {
         var calc = new ColumnRef("", "", "Doubled", Calc: new BinNode("*", new FieldNode("db", "orders", "amount"), new NumNode(2)));

@@ -407,6 +407,7 @@ public static class RequestRules
         if ((r.ColumnDimensions?.Length ?? 0) > 1) throw Bad("A box plot groups by at most one field.", "columnDimensions");
         if ((r.Measures?.Length ?? 0) > 0) throw Bad("A box plot takes its value as a field, not a measure.", "measures");
         if ((r.Having?.Length ?? 0) > 0) throw Bad("Measure filters don't apply to a box plot.", "having");
+        if ((r.Joins ?? []).Any(j => j.Aggregate == true)) throw Bad("A box plot reads every row, so it can't total each table before joining — turn that option off for this relationship.", "joins");
     }
 
     public static void ValidateBoxPlot(BoxPlotRequest r) { ValidateRange(r.Limit, ApiLimits.MaxRowLimit, "Limit", "limit"); ValidateStatFilters(r.Filters); }
