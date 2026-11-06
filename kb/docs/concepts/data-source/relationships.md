@@ -138,19 +138,24 @@ for the same reasons.
 ## Editing & cleanup
 
 - Clicking a link opens the edit/delete dialog: change the cardinality or join type, or remove it.
+- **Dialog layout.** The relationship dialog is landscape (`dialog.dialog--sm.dialog--rel`, up to 990 px wide — about 1.618 × its 610 px height, the golden ratio — with two panels of exactly equal width, the divider an inset shadow so it adds no width; one column under 640 px).
+  It shares the column profile's frame (`.col-profile`) without its cells: a head with the title **Relationship**, the two tables as a subtitle (`orders → customers`) and an X; a body on the colour wash that scrolls on its own while head and foot stay put; a 24 px side gutter shared by head, body and foot (the X sits on it); a foot with **Delete** (left, edit only), **Cancel** and the primary **Confirm**. Nothing inside the body closes the dialog: the cardinality buttons only select (`aria-pressed`), and **Confirm** saves cardinality, join, totals and key pairs together. Group headings (**Join**, **Totals**, **Also match on**, **Cardinality**) use one voice (600, `--ink-2`) with 24 px between groups.
+  The left panel (`.rel-dialog__left`) has no cards: four `.rel-sec` sections sit straight on the wash, split by one hairline and 24 px of space — **Join** (2 × 2 borderless radios, each a join name with a one-line hint; the chosen one takes the accent tint and a filled dot), **Totals** (a switch row), **Also match on** (two selects and Add pair on one line) and **Cardinality** (one segmented control; the chosen segment is solid ink). DOM order is reading order, so Cardinality (chosen, then saved by Confirm) comes last.
+  The right panel (`.rel-dialog__right`) holds **Check this join** and its result. It never makes the dialog taller than the left panel: `contain: size` lets the left panel set the row height, and the right panel scrolls inside when its text is longer (one column under 640 px, where it flows normally).
+  A dialog with no key data has no right panel. Built in `openCardinalityDialog()` (`relations.js`); styles in `relations.css`.
 - Links re-route live on `entity:moved`.
 - Removing an entity prunes its links, and `rel:changed` fires.
 
 ## Join type (P31, T02-12, T02-13)
 
-The dialog's **Join** choice is worded with the two tables. The link runs from the first-clicked key to the second, so the first table is the **left** side.
+The dialog's **Join** choice uses the SQL join names, each with a one-line hint that names the tables. It is one choice of four, so it is drawn as selectable tiles with a round radio (2 × 2, one column under 420 px), not switches: a switch reads as "pick several". The chosen tile has the accent border, tint and a filled dot. The link runs from the first-clicked key to the second, so the first table is the **left** side.
 
-| Choice | Join type |
+| Choice (hint) | Join type |
 |---|---|
-| **Inner — only rows that match** | inner |
-| **Keep all rows of {first table}** | `left` |
-| **Keep all rows of {second table}** | `right` |
-| **Keep all rows of both** | `full` |
+| **Inner join** (Only rows that match) | inner |
+| **Left join** (All rows of {first table}) | `left` |
+| **Right join** (All rows of {second table}) | `right` |
+| **Full outer join** (All rows of both) | `full` |
 
 - Unmatched rows have NULL for the other side's fields (they read "—").
 - The badge says it in words ("1:N · left", "· right", "· full").
@@ -161,9 +166,9 @@ The dialog's **Join** choice is worded with the two tables. The link runs from t
 - A link saved with the current dialog is *fixed* (`joinFixed`): it keeps the table it names, whichever table the view starts from.
   The plan walks outward from the base, and a fixed link crossed second-to-first swaps `left`/`right` (`planJoinType`).
 - **Older links** (saved by an earlier build: `joinFixed` absent, type `left`) keep the old rule: `LEFT JOIN`, keeping the base-side table in either direction.
-  The edit dialog shows such a link as "Keep rows of the base table (older link)".
+  The edit dialog shows such a link as "Left join (older link)" (hint: All rows of the base table).
 - Saving the dialog with any choice (including re-saving that one) is what fixes it.
-  Picking "Keep all rows of {table}" converts it; picking the older-link choice leaves it legacy.
+  Picking **Left join** or **Right join** converts it; picking the older-link choice leaves it legacy.
 - Right and full are always fixed.
 
 **Behaviours chosen** (see [clickhouse-integration.md](../../reference/clickhouse-integration.md#worksheet-query-queryasync)):

@@ -102,7 +102,7 @@ previews rows, and profiles columns.
   cells are glass on it (`--glass` tint, 1px `--glass-line`, `--glass-rim` top highlight, `--glass-blur`) — no drop shadows. The blur only ever sees the
   body's own wash, never text, so the "solid when floating over content" rule holds; under reduced transparency the glass tokens fall back to solid surfaces.
   **Two depth tiers:** Size and Most frequent values (the answer) are solid `--surface` lifted by `--elev-card`; Field and Range (support) stay flat glass.
-  Each frequent-value band is a flat `--surface-2` strip; the leader (the most frequent real value, not NULL or empty) has a bold label and a stronger tint. Body padding 16px, 8px between cells; warning cells are solid with a 1px warn border. Related figures share a cell (4-column grid), in this order:
+  Each frequent-value band is a flat `--surface-2` strip; the leader (the most frequent real value, not NULL or empty) has a bold label and a stronger tint. Head, body and foot share a 24px side gutter (the X glyph sits on it); body padding 24px, 8px between cells; warning cells are solid with a 1px warn border. Related figures share a cell (4-column grid), in this order:
   one **notes** cell holding every warning line, first, so the caveat comes before the figures it qualifies; **Field** (name / type / kind / role, 2 columns) beside **Size**
   (Rows, Distinct, Null share as ruled rows: label and note left, value right, 2 columns); **Range** (Min and Max side by side, full width, only when present); then
   **Most frequent values** (full width).
