@@ -6,9 +6,17 @@
 export const REF_CHOICES = [["none", "None"], ["average", "Average"], ["median", "Median"], ["min", "Minimum"], ["max", "Maximum"], ["constant", "Constant"]];
 export const TREND_CHOICES = [["none", "None"], ["linear", "Linear"], ["log", "Logarithmic"], ["poly2", "Polynomial (2nd order)"]];
 export const FORECAST_CHOICES = [[0, "None"], [3, "3 steps"], [6, "6 steps"], [12, "12 steps"]];
-// A band is typed numbers ({ from, to }), mean ± k standard deviations ({ kind: "stddev", k }) or a percentile range ({ kind: "percentile", lo, hi });
+// A band is typed numbers ({ from, to }), mean ± k standard deviations ({ kind: "stddev", k }) or a percentile range ({ kind: "percentile", lo, hi, custom? } - custom: typed 0 < lo < hi < 100);
 // the reference line and the band read the measure `ref.measure` (a shown-measure index, default 0) over the rows shown.
-export const BAND_CHOICES = [["none", "None"], ["range", "Typed range"], ["stddev1", "Mean ± 1σ"], ["stddev2", "Mean ± 2σ"], ["p25-75", "P25–P75"], ["p10-90", "P10–P90"]];
+export const BAND_CHOICES = [["none", "None"], ["range", "Typed range"], ["stddev1", "Mean ± 1σ"], ["stddev2", "Mean ± 2σ"], ["p25-75", "P25–P75"], ["p10-90", "P10–P90"], ["pcustom", "Custom percentiles"]];
+const PRESET_PCT = new Set(["25-75", "10-90"]);
+/** Why a custom percentile range is refused, or null: both numbers with 0 < lo < hi < 100 (rejected, never clamped). */
+export function percentileError(lo, hi) {
+  const ok = (v) => typeof v === "number" && Number.isFinite(v);
+  if (!ok(lo) || !ok(hi)) return "Percentiles must be numbers.";
+  if (lo <= 0 || hi >= 100 || lo >= hi) return "Percentiles must satisfy 0 < low < high < 100.";
+  return null;
+}
 export const defaultAnalytics = () => ({ ref: { kind: "none" }, band: null, trend: "none", forecast: 0, totals: { grand: false, sub: false } });
 
 const nums = (values) => values.map((v) => (v == null || v === "" ? NaN : Number(v))).filter(Number.isFinite);
@@ -104,7 +112,7 @@ export const pickMeasure = (index, count) => (Number.isInteger(index) && index >
 export function bandChoice(band) {
   if (!band) return "none";
   if (band.kind === "stddev") return `stddev${band.k}`;
-  if (band.kind === "percentile") return `p${band.lo}-${band.hi}`;
+  if (band.kind === "percentile") return band.custom || !PRESET_PCT.has(`${band.lo}-${band.hi}`) ? "pcustom" : `p${band.lo}-${band.hi}`;
   return "range";
 }
 /** A band for a choice key (`prev` keeps a typed range's numbers). */
@@ -112,6 +120,7 @@ export function bandFromChoice(key, prev) {
   if (key === "none") return null;
   if (key === "range") return prev && prev.kind == null ? prev : { from: 0, to: 0 };
   if (key.startsWith("stddev")) return { kind: "stddev", k: Number(key.slice(6)) };
+  if (key === "pcustom") return prev?.custom ? prev : { kind: "percentile", lo: 5, hi: 95, custom: true }; // typed ends stay custom even when they equal a preset; a preset starts at P5–P95
   const [lo, hi] = key.slice(1).split("-").map(Number);
   return { kind: "percentile", lo, hi };
 }

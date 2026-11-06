@@ -349,7 +349,7 @@ test("reference line measure and distribution bands (T07) are kept when valid, r
   assert.deepEqual([ok.ref, ok.band], [{ kind: "average", measure: 2 }, { kind: "stddev", k: 2 }]);
   const pc = sheetOf({ analytics: { band: { kind: "percentile", lo: 25, hi: 75 } } }).worksheets[0].sheet.analytics;
   assert.deepEqual(pc.band, { kind: "percentile", lo: 25, hi: 75 });
-  for (const band of [{ kind: "stddev", k: 3 }, { kind: "percentile", lo: 80, hi: 20 }, { kind: "percentile", lo: 5, hi: 95 }, { kind: "x" }]) {
+  for (const band of [{ kind: "stddev", k: 3 }, { kind: "percentile", lo: 80, hi: 20 }, { kind: "percentile", lo: 0, hi: 95 }, { kind: "percentile", lo: 5, hi: 100 }, { kind: "x" }]) {
     const r = sheetOf({ analytics: { band } });
     assert.equal(r.worksheets[0].sheet.analytics.band, null);
     assert.ok(r.issues.some((i) => /analytics/.test(i)));
@@ -646,4 +646,10 @@ test("a saved parameter action or band parameter that points at a missing parame
   assert.equal(gone.worksheets[0].sheet.analytics.band.fromParam, undefined);
   assert.equal(gone.worksheets[0].sheet.analytics.band.toParam, "prm2");
   assert.ok(gone.issues.some((i) => /parameter action/.test(i)));
+});
+test("a custom percentile band survives a save/restore", () => {
+  const r = sheetOf({ analytics: { band: { kind: "percentile", lo: 5, hi: 95 } } });
+  assert.deepEqual(r.worksheets[0].sheet.analytics.band, { kind: "percentile", lo: 5, hi: 95, custom: true });
+  const c = sheetOf({ analytics: { band: { kind: "percentile", lo: 10, hi: 90, custom: true } } });
+  assert.deepEqual(c.worksheets[0].sheet.analytics.band, { kind: "percentile", lo: 10, hi: 90, custom: true });
 });

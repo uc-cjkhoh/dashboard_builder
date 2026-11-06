@@ -130,3 +130,21 @@ test("a typed band's ends follow number parameters (fromParam / toParam), fallin
   assert.equal(bandBounds({ from: 0, to: 0, fromParam: "prm1", toParam: "prm1" }, [], params), null, "equal ends draw nothing");
   assert.deepEqual(bandBounds({ from: 2, to: 4 }, []), { from: 2, to: 4 });
 });
+
+import { percentileError, bandChoice, bandFromChoice } from "../../src/DashboardBuilder/Features/Dashboard/analytics-model.js";
+test("custom percentile band: 0 < lo < hi < 100, rejected not clamped", () => {
+  assert.equal(percentileError(5, 95), null);
+  assert.equal(percentileError(0.5, 99.5), null);
+  for (const [lo, hi] of [[0, 50], [50, 100], [80, 20], [30, 30], [-1, 50], [10, 101], [NaN, 50], [null, 50], ["5", 95]]) assert.match(percentileError(lo, hi), /percentile/i, `${lo}-${hi}`);
+});
+test("custom percentile band choice, bounds and label", () => {
+  assert.ok(BAND_CHOICES.some(([k]) => k === "pcustom"));
+  assert.equal(bandChoice({ kind: "percentile", lo: 25, hi: 75 }), "p25-75");
+  assert.equal(bandChoice({ kind: "percentile", lo: 5, hi: 95 }), "pcustom");
+  assert.equal(bandChoice({ kind: "percentile", lo: 10, hi: 90, custom: true }), "pcustom", "typed ends equal to a preset stay custom");
+  assert.deepEqual(bandFromChoice("pcustom", { kind: "percentile", lo: 5, hi: 95, custom: true }), { kind: "percentile", lo: 5, hi: 95, custom: true });
+  assert.deepEqual(bandFromChoice("pcustom", { kind: "percentile", lo: 25, hi: 75 }), { kind: "percentile", lo: 5, hi: 95, custom: true });
+  assert.deepEqual(bandFromChoice("pcustom", null), { kind: "percentile", lo: 5, hi: 95, custom: true });
+  assert.deepEqual(bandBounds({ kind: "percentile", lo: 0.5, hi: 99.5 }, [0, 100]), { from: 0.5, to: 99.5 });
+  assert.equal(bandLabel({ kind: "percentile", lo: 2.5, hi: 97.5 }), "P2.5–P97.5");
+});

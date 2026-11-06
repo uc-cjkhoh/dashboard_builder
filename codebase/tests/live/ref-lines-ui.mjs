@@ -195,6 +195,23 @@ try {
     const f2 = ma.data[0][0].yAxis ?? ma.data[0][0].xAxis, t2 = ma.data[0][1].yAxis ?? ma.data[0][1].xAxis;
     must(f2 === 27.5 && t2 === 42.5 && /^P25–P75/.test(ma.label.formatter), `percentile band ${f2}..${t2} ${ma.label.formatter}`);
     await shot('band-light.png');
+    await aPick('Band', 'pcustom');
+    must(await aHas('low percentile') && await aHas('high percentile'), 'custom percentile inputs missing');
+    ma = await mark('markArea', 1);
+    const bnd = (m) => [m.data[0][0].yAxis ?? m.data[0][0].xAxis, m.data[0][1].yAxis ?? m.data[0][1].xAxis];
+    let [cf, ct] = bnd(ma);
+    must(Math.abs(cf - 21.5) < 1e-9 && Math.abs(ct - 48.5) < 1e-9 && /^P5–P95/.test(ma.label.formatter), `custom P5-P95 ${cf}..${ct} ${ma.label.formatter}`);
+    await setNum('low percentile', '10'); await setNum('high percentile', '90'); await chartReady();
+    ma = await mark('markArea', 1); [cf, ct] = bnd(ma);
+    must(Math.abs(cf - 23) < 1e-9 && Math.abs(ct - 47) < 1e-9 && /^P10–P90/.test(ma.label.formatter), `custom P10-P90 ${cf}..${ct}`);
+    await setNum('high percentile', '100'); // refused with a message, not clamped: the band is unchanged
+    must(/percentile/i.test(await tick()), 'no refusal message for 100');
+    ma = await mark('markArea', 1); [cf, ct] = bnd(ma);
+    must(Math.abs(ct - 47) < 1e-9, `rejected value changed the band: ${ct}`);
+    await setNum('high percentile', '95'); await chartReady();
+    await shot('band-custom-light.png');
+    await theme('dark'); await settle(400); await chartReady();
+    await shot('band-custom-dark.png'); await theme('light'); await settle(400);
     await theme('dark'); await settle(400); await chartReady();
     await shot('band-dark.png'); await theme('light'); await settle(400);
     await aPick('Band', 'range');

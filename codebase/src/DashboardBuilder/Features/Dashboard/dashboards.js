@@ -66,7 +66,7 @@ import { paneState, deleteCalcPlan, roleChoice, setRoleChoice } from "../Calc/ca
 import { checkName } from "../Calc/calc-workbook.js";
 import { calcParamNames } from "../Calc/calc-params.js";
 import { calcProblem, filterCalcProblem, topByRef, topByKey, aggWord } from "../Calc/calc-plan.js";
-import { REF_CHOICES, TREND_CHOICES, FORECAST_CHOICES, BAND_CHOICES, bandChoice, bandFromChoice, defaultAnalytics, itemsFor, itemActive, addItem, removeItem } from "./analytics-model.js";
+import { REF_CHOICES, TREND_CHOICES, FORECAST_CHOICES, BAND_CHOICES, bandChoice, bandFromChoice, percentileError, defaultAnalytics, itemsFor, itemActive, addItem, removeItem } from "./analytics-model.js";
 import { castChoices, castLabel, effectiveCategory, syncCastCategories } from "./cast-model.js";
 import { aliasOf, labelOf } from "./member-labels.js";
 import { openCalcManager } from "./calc-manager.js";
@@ -978,7 +978,14 @@ export function initDashboards() {
         }
       }
       panel.append(fmtSelect("Band", BAND_CHOICES, bandChoice(a.band), (v) => set({ band: bandFromChoice(v, a.band) })));
-      if (a.band && !a.band.kind) {
+      if (a.band?.kind === "percentile" && bandChoice(a.band) === "pcustom") { // typed percentiles: an invalid pair is refused with a message, never clamped
+        const setPct = (patch) => { const nb = { ...a.band, ...patch }, err = percentileError(nb.lo, nb.hi); if (err) toast(err, "danger"); else set({ band: nb }); };
+        panel.append(fmtNumber("low percentile", a.band.lo, "5", (v) => setPct({ lo: v })));
+        panel.append(fmtNumber("high percentile", a.band.hi, "95", (v) => setPct({ hi: v })));
+        if (shown.length > 1 && !(a.ref.kind !== "none" && a.ref.kind !== "constant"))
+          panel.append(fmtSelect("of", shown.map((n, i) => [i, n]), a.ref.measure ?? 0, (v) => set({ ref: { ...a.ref, measure: Number(v) } })));
+      }
+      else if (a.band && !a.band.kind) {
         const numParams = parameters.filter((p) => p.type === "number");
         const setEnd = (end, patch) => set({ band: { ...a.band, ...patch } });
         const nowOf = (id) => { const v = Number(numParams.find((p) => p.id === id)?.value); return Number.isFinite(v) ? v : undefined; }; // unbinding keeps the number the end showed

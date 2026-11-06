@@ -4,6 +4,7 @@
 // It never contains the connection or a password — a workbook is reopened against whatever server the
 // session is connected to. Format v2 holds `worksheets`, `dashboards`, optional `stories` and `tabs`; the v1 reader
 // (migrateV1: v1 `dashboards` were worksheets) stays for good — old files and old autosaves must open.
+import { percentileError } from "../Dashboard/analytics-model.js";
 import { cleanHaving, checkHaving } from "../Dashboard/having-model.js";
 import { emptySheet, defaultFormat } from "../Core/store.js";
 import { LIMITS, text, isFraction } from "../Core/validate.js";
@@ -504,7 +505,7 @@ function cleanAnalytics(a, where, issues) {
   if (a.band != null && a.band.kind !== undefined) { // only the presets BAND_CHOICES offers
     const b = a.band;
     if (b.kind === "stddev" && (b.k === 1 || b.k === 2)) out.band = { kind: "stddev", k: b.k };
-    else if (b.kind === "percentile" && ((b.lo === 25 && b.hi === 75) || (b.lo === 10 && b.hi === 90))) out.band = { kind: "percentile", lo: b.lo, hi: b.hi };
+    else if (b.kind === "percentile" && !percentileError(b.lo, b.hi)) out.band = { kind: "percentile", lo: b.lo, hi: b.hi, ...(b.custom === true || !((b.lo === 25 && b.hi === 75) || (b.lo === 10 && b.hi === 90)) ? { custom: true } : {}) };
     else bad = true;
   } else if (a.band != null) {
     const pid = (v) => (/^prm\d{1,6}$/.test(v ?? "") ? v : undefined);
