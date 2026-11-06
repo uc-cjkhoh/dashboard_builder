@@ -11,8 +11,8 @@ const SHOTS = process.env.SHOTS_DIR ?? join(tmpdir(), 'kbd-relate-shots');
 mkdirSync(SHOTS, { recursive: true });
 const LONG = 'order_line_items_with_a_deliberately_extremely_long_table_name_for_the_width_check';
 const COLUMNS = {
-  orders: [['cust_id', 'Int32', 'numeric'], ['amount', 'Float64', 'numeric'], ['created', 'DateTime', 'temporal'], ['note', 'String', 'text']],
-  customers: [['id', 'Int32', 'numeric'], ['name', 'String', 'text']],
+  orders: [['cust_id', 'Int32', 'numeric'], ['amount', 'Float64', 'numeric'], ['created', 'DateTime', 'temporal'], ['note', 'String', 'text'], ['region', 'String', 'text']],
+  customers: [['id', 'Int32', 'numeric'], ['name', 'String', 'text'], ['Region', 'String', 'text']],
   [LONG]: [['id', 'Int32', 'numeric']],
 };
 function answer({ method, path, body }) {
@@ -61,12 +61,12 @@ try {
     await press('orders', 'cust_id', 'ArrowDown');
     must(await ev(`document.activeElement === ${row('orders', 'amount')}`), 'focus did not move to amount');
     await press('orders', 'amount', 'End');
-    must(await ev(`document.activeElement === ${row('orders', 'note')}`), 'End');
-    await press('orders', 'note', 'Home');
+    must(await ev(`document.activeElement === ${row('orders', 'region')}`), 'End');
+    await press('orders', 'region', 'Home');
     must(await ev(`document.activeElement === ${row('orders', 'cust_id')}`), 'Home');
-    await press('orders', 'note', 'End');
-    must((await stops('orders')) === 1 && await ev(`${row('orders', 'note')}.tabIndex === 0`), 'tab stop did not follow focus');
-    await press('orders', 'note', 'Home');
+    await press('orders', 'region', 'End');
+    must((await stops('orders')) === 1 && await ev(`${row('orders', 'region')}.tabIndex === 0`), 'tab stop did not follow focus');
+    await press('orders', 'region', 'Home');
   });
   await check('] and [ jump between cards, landing on each card\'s tab stop', async () => {
     await press('orders', 'cust_id', ']');
@@ -130,6 +130,26 @@ try {
     await b.sleep(300);
     must(await ev(`document.querySelector('dialog[open]') === null`), 'dialog opened for a duplicate');
     await press('orders', 'cust_id', 'Escape');
+  });
+  const sug = () => ev(`[...document.querySelectorAll('.col-row--suggest')].map((r) => r.closest('.entity').querySelector('.entity__table').textContent + '.' + r.dataset.column)`);
+  await check('picking a column flags the best-matching column of the other table (word Match + dotted outline + label); Escape clears it', async () => {
+    await press('orders', 'region', 'Enter');
+    must(J(await sug()) === J(['customers.Region']), 'suggestion: ' + J(await sug()));
+    must(await ev(`(() => { const r = ${row('customers', 'Region')}; return /suggested match$/.test(r.getAttribute('aria-label')) && getComputedStyle(r, '::after').content === '"Match"'; })()`), 'label / word missing');
+    await shot('kbd-suggest.png');
+    await ev(`document.documentElement.dataset.scheme = 'dark'`); await b.sleep(300); await shot('kbd-suggest-dark.png');
+    await ev(`document.documentElement.dataset.scheme = 'light'`);
+    await press('orders', 'region', 'Escape');
+    must((await sug()).length === 0, 'suggestion not cleared');
+  });
+  await check('a column with no same-name partner flags nothing; Enter on the suggested row still relates via the usual dialog', async () => {
+    await press('orders', 'note', 'Enter');
+    must((await sug()).length === 0, 'unexpected suggestion');
+    await press('orders', 'note', 'Escape');
+    await press('orders', 'region', 'Enter');
+    await press('customers', 'Region', 'Enter');
+    await waitFor(`document.querySelector('dialog[open]') !== null`, 'cardinality dialog');
+    await ev(`document.querySelector('dialog[open]').close()`);
   });
   if (b.consoleErrors.length) console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  '));
 } catch (e) { console.log(`FAIL harness: ${e.stack}`); failed++; } finally { if (b) await b.close(); }

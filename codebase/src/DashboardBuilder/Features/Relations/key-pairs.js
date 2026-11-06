@@ -50,3 +50,14 @@ export const pairText = (p) => `${p.from} = ${p.to}`;
 
 /** The key's column list in words for one side ("id + region"); `side` is "from" or "to". */
 export const compoundName = (first, pairs = [], side = "from") => [first, ...pairs.map((p) => p[side])].join(" + ");
+
+/**
+ * While relating from `source` ({ name, category }): the one column of another table (`cols`, `[{ name, category }]`) that most likely
+ * means the same thing — the same name (exactly, else ignoring case and `_` `-` spaces) and a joinable kind, not already in a
+ * relationship (`used`: names). An exact name wins; null when nothing matches. It only highlights; the user still chooses.
+ */
+export function suggestTarget(source, cols, used = []) {
+  const taken = new Set(used);
+  const ok = (c) => !taken.has(c.name) && keysCompatible(source.category, c.category);
+  return (cols.find((c) => ok(c) && c.name === source.name) ?? cols.find((c) => ok(c) && norm(c.name) === norm(source.name)))?.name ?? null;
+}

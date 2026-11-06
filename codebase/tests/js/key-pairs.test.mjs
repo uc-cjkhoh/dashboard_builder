@@ -44,3 +44,12 @@ test("pairText and compoundName word the key", () => {
   assert.equal(compoundName("id", [{ from: "x", to: "y" }, { from: "z", to: "w" }], "from"), "id + x + z");
   assert.equal(compoundName("id", [{ from: "x", to: "y" }], "to"), "id + y");
 });
+
+import { suggestTarget } from "../../src/DashboardBuilder/Features/Relations/key-pairs.js";
+test("suggestTarget: exact name beats a normalised one; same kind only; used columns skipped", () => {
+  assert.equal(suggestTarget(c("region", "text"), [c("Region", "text"), c("region", "text")]), "region");
+  assert.equal(suggestTarget(c("customer_id"), customers), "CustomerId");
+  assert.equal(suggestTarget(c("region", "text"), [c("region")]), null);
+  assert.equal(suggestTarget(c("id"), customers, ["id"]), null);
+  assert.equal(suggestTarget(c("nothing"), customers), null);
+});

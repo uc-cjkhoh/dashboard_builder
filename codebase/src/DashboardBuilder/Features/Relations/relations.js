@@ -5,7 +5,7 @@ import { api } from "../Core/api.js";
 import { previewRequest } from "./join-preview-model.js";
 import { buildJoinCheck } from "./join-check.js";
 import { buildKeyPairs } from "./key-pairs-ui.js";
-import { compoundName } from "./key-pairs.js";
+import { compoundName, suggestTarget } from "./key-pairs.js";
 import { linkSides, linkRoute, roundedPath } from "./link-route.js";
 import { openTypeWarning } from "./type-warning.js";
 import { COLUMN_MIME, encodeColumnDrag, parseColumnDrag, dropDecision } from "./link-drag.js";
@@ -87,6 +87,20 @@ function rowEnd(row) {
 
 function clearDropMarks() {
   for (const el of canvas.querySelectorAll(".col-row--drop-ok, .col-row--drop-no, .col-row--drag-source")) el.classList.remove("col-row--drop-ok", "col-row--drop-no", "col-row--drag-source");
+  markSuggestions(null);
+}
+
+/** While relating from `source` (a drag or a keyboard pick), flag each other table's best-matching free column (same name, same kind). Only a hint; any column can still be chosen. */
+function markSuggestions(source) {
+  for (const el of canvas.querySelectorAll(".col-row--suggest")) { el.classList.remove("col-row--suggest"); refreshRow(el); }
+  if (!source) return;
+  const used = [...relationships.values()].flatMap(relEnds);
+  for (const [id, e] of entities) {
+    if (e.source || id === source.entityId) continue;
+    const name = suggestTarget({ name: source.column, category: source.category }, e.columns ?? [], used.filter((u) => u.entityId === id).map((u) => u.column));
+    const row = name ? rowOf({ entityId: id, column: name }) : null;
+    if (row) { row.classList.add("col-row--suggest"); refreshRow(row); }
+  }
 }
 
 function initColumnDrag() {
@@ -98,6 +112,7 @@ function initColumnDrag() {
     e.dataTransfer.setData(COLUMN_MIME, encodeColumnDrag(dragFrom.entityId, dragFrom.column));
     e.dataTransfer.effectAllowed = "link";
     row.classList.add("col-row--drag-source");
+    markSuggestions(endOf(dragFrom.entityId, dragFrom.column));
   });
   canvas.addEventListener("dragover", (e) => {
     if (!dragFrom || !e.dataTransfer || !Array.from(e.dataTransfer.types).includes(COLUMN_MIME)) return;
@@ -149,7 +164,7 @@ const sourceEnd = () => (keyFrom ? endOf(keyFrom.entityId, keyFrom.column) : nul
 function refreshRow(row) {
   const end = rowEnd(row);
   if (!end) return;
-  row.setAttribute("aria-label", rowLabel(end, end.type, sourceEnd()));
+  row.setAttribute("aria-label", rowLabel(end, end.type, sourceEnd()) + (row.classList.contains("col-row--suggest") ? ", suggested match" : ""));
   if (keyFrom && keyFrom.entityId === end.entityId && keyFrom.column === end.column) row.setAttribute("aria-current", "true");
   else row.removeAttribute("aria-current");
 }
@@ -166,6 +181,7 @@ function rove(row) {
 function updateKeyHint(focusRow) {
   const source = sourceEnd();
   for (const el of canvas.querySelectorAll(".col-row--key-source")) { el.classList.remove("col-row--key-source"); refreshRow(el); }
+  markSuggestions(source);
   if (!source) { keyHint.textContent = ""; return; }
   const srcRow = rowOf(source);
   if (srcRow) { srcRow.classList.add("col-row--key-source"); refreshRow(srcRow); }
