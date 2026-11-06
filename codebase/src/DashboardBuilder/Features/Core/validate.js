@@ -14,6 +14,7 @@ export const LIMITS = Object.freeze({
   relationships: 200,  // links a workbook may open
   joinExtraPairs: 3,   // extra column pairs beside a relationship's first (server ApiLimits.MaxJoinPairs 4 in all)
   dimensions: 12, measures: 10, // per view (server MaxDimensions / MaxMeasures)
+  having: 10,        // filters on an aggregated measure per view (server MaxHaving)
   hierarchies: 20,   // named hierarchies per workbook (client-side only)
   hierarchyName: 60, // characters in a hierarchy name
   drillLevels: 6, // keeps user filters (8) + drill path (≤5) + page + selection within the server's 16

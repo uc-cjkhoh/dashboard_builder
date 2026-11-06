@@ -7,13 +7,13 @@ const PARTS = [["auto", "Auto"], ["year", "Year"], ["month", "Month"]];
 
 test("a measure pill: aggregation radios, role, table calculation, field choices", () => {
   const r = fieldPillOptions({ measure: true, aggs: ["sum", "avg", "percentile"], agg: "avg", roleFlip: true, tableCalc: false, choices: 0, choicesOk: true });
-  assert.deepEqual(ids(r), ["agg:sum", "agg:avg", "agg:percentile", "role", "tablecalc", "choices"]);
+  assert.deepEqual(ids(r), ["agg:sum", "agg:avg", "agg:percentile", "role", "having", "tablecalc", "choices"]);
   assert.equal(r.find((e) => e.id === "agg:avg").checked, true);
   assert.equal(r.find((e) => e.id === "role").label, "Use as dimension");
 });
 test("a numeric pill offers a Continuous / Discrete choice in place of the role item", () => {
   const m = fieldPillOptions({ measure: true, aggs: ["sum"], roleFlip: true, numeric: true });
-  assert.deepEqual(ids(m), ["agg:sum", "dc:continuous", "dc:discrete", "tablecalc"]);
+  assert.deepEqual(ids(m), ["agg:sum", "dc:continuous", "dc:discrete", "having", "tablecalc"]);
   assert.equal(m.find((e) => e.id === "dc:continuous").checked, true);
   const d = fieldPillOptions({ measure: false, roleFlip: true, numeric: true });
   assert.deepEqual(ids(d), ["dc:continuous", "dc:discrete"]);
@@ -21,8 +21,8 @@ test("a numeric pill offers a Continuous / Discrete choice in place of the role 
 });
 test("a calculated aggregate has nothing to flip or aggregate; a set table calculation shows ticked", () => {
   const r = fieldPillOptions({ measure: true, aggs: null, roleFlip: false, tableCalc: true, choicesOk: false });
-  assert.deepEqual(ids(r), ["tablecalc"]);
-  assert.equal(r[0].checked, true);
+  assert.deepEqual(ids(r), ["having", "tablecalc"]);
+  assert.equal(r.find((e) => e.id === "tablecalc").checked, true);
 });
 test("a date dimension: parts, finer / coarser, label policy", () => {
   const r = fieldPillOptions({ measure: false, temporal: true, parts: PARTS, part: "year", finer: "month", coarser: null, dateLabelsAll: true, roleFlip: true, choicesOk: true });
@@ -54,7 +54,7 @@ test("markGrid chunks tools into rows of three and pads the last row", () => {
 });
 test("a percentile aggregation adds its percent box right after the aggregations", () => {
   const r = fieldPillOptions({ measure: true, aggs: ["sum", "percentile"], agg: "percentile", roleFlip: true, choicesOk: false });
-  assert.deepEqual(ids(r), ["agg:sum", "agg:percentile", "percent", "role", "tablecalc"]);
+  assert.deepEqual(ids(r), ["agg:sum", "agg:percentile", "percent", "role", "having", "tablecalc"]);
   assert.equal(r.find((e) => e.id === "percent").type, "custom");
 });
 test("filterSummary reads the operand compactly", () => {

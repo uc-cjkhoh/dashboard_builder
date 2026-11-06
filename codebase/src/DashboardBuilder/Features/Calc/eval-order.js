@@ -7,12 +7,13 @@ import { LIMITS } from "../Core/validate.js";
 import { scalePlan } from "../Dashboard/scale-model.js";
 import { roleOf } from "../Dashboard/show-me-rules.js";
 import { calcName } from "../Dashboard/table-calc.js";
+import { checkHaving } from "../Dashboard/having-model.js";
 
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 /**
  * `s = { ownFilters, sharedFilters, drillDepth, hasPage, hasSelection, hasPeriod, hasTopFilter, rowLevelCalcs,
- *        aggregateCalcs, dimensions, displayCap, otherBucket, tableCalcs }`
+ *        aggregateCalcs, measureFilters, dimensions, displayCap, otherBucket, tableCalcs }`
  * Returns six `{ n, title, text }` entries.
  */
 export function describeEvaluation(input) {
@@ -39,9 +40,10 @@ export function describeEvaluation(input) {
     ? `Rows are grouped by ${s.dimensions.join(", ")}.`
     : "There are no dimensions, so all rows form a single group.";
 
-  const stage4 = s.aggregateCalcs > 0
+  const stage4 = (s.aggregateCalcs > 0
     ? `Each group is aggregated, including ${plural(s.aggregateCalcs, "aggregate calculation")}.`
-    : "Each group is aggregated.";
+    : "Each group is aggregated.")
+    + (s.measureFilters > 0 ? ` Then ${plural(s.measureFilters, "measure filter")} drop${s.measureFilters === 1 ? "s" : ""} the groups whose total fails ${s.measureFilters === 1 ? "it" : "them"}, before the cap.` : "");
 
   const stage5 = `Results are capped at ${Number.isFinite(s.displayCap) ? plural(s.displayCap, "group") : "the display cap"}${s.otherBucket ? ", and the groups past the cap are combined into an Other bucket" : ""}.`;
 
@@ -106,9 +108,10 @@ export function evaluationInput(sheet, { sharedFilters = [], parameters = [], ca
     hasTopFilter: filters.some((f) => f.op === "top"),
     rowLevelCalcs: rowLevel.size,
     aggregateCalcs: aggregate.size,
+    measureFilters: [...(sh.columns ?? []), ...(sh.rows ?? [])].filter((f) => checkHaving(f.having).state === "ok").length,
     dimensions: dims,
     displayCap: topN ?? LIMITS.rows,
-    otherBucket: Boolean(scalePlan(sh.chartType, { topN }, dims.length).otherBucket),
+    otherBucket: Boolean(scalePlan(sh.chartType, { topN }, dims.length).otherBucket) && ![...(sh.columns ?? []), ...(sh.rows ?? [])].some((f) => checkHaving(f.having).state === "ok"), // a measure filter and the Other total don't combine (D84)
     tableCalcs,
   };
 }

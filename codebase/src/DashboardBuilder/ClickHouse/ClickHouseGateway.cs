@@ -332,6 +332,17 @@ public sealed partial class ClickHouseGateway
         return $"{expr} IN (SELECT {expr}{from}{others} GROUP BY {expr} ORDER BY {rank} {(f.Bottom == true ? "ASC" : "DESC")} LIMIT {n})";
     }
 
+    /// <summary>The HAVING clause (with its leading space; empty for none): each condition compares one SELECT measure alias
+    /// (<c>v{n}</c>, built here from a validated index — never client text) with Float64 values bound as <c>h{i}</c> / <c>h{i}a</c> / <c>h{i}b</c>.
+    /// Operators come from <see cref="BuildCondition"/>'s whitelist narrowed by <see cref="RequestRules.HavingOps"/>.</summary>
+    internal static string BuildHaving(IReadOnlyList<HavingFilter>? having, int measureSlots, List<(string Name, string Type, object Value)> parameters)
+    {
+        if (having is not { Count: > 0 }) return "";
+        RequestRules.ValidateHaving(having.ToArray(), measureSlots);
+        var parts = having.Select((h, i) => BuildCondition(h.Op, $"h{i}", $"v{h.Measure}", ClickHouseType.Numeric, "measure", $"having[{i}]", h.Value, h.Values, parameters));
+        return " HAVING " + string.Join(" AND ", parts.Select(p => $"({p})"));
+    }
+
     /// <summary>The "Other" statement: group count + each measure (the same SQL as the main query, so the same
     /// parameters) over everything past the shown groups. <paramref name="limit"/> is the probe limit. The group
     /// count adds one for a NULL group (uniqExact skips NULL — e.g. a calculation's <c>nullIf</c> division key).</summary>
@@ -1254,7 +1265,7 @@ public sealed partial class ClickHouseGateway
         var groupBy = dimExprs.Count > 0
             ? " GROUP BY " + string.Join(", ", Enumerable.Range(0, dimExprs.Count).Select(i => $"k{i}"))
             : "";
-        var grouped = "SELECT " + string.Join(", ", selects) + from + where + groupBy;
+        var grouped = "SELECT " + string.Join(", ", selects) + from + where + groupBy + BuildHaving(req.Having, measExprs.Count, parameters);
 
         // ORDER BY: the requested sort column (a generated k{n}/v{n} alias, validated against the
         // dimension/measure counts) in the chosen direction, defaulting to ascending by the first
@@ -1280,7 +1291,7 @@ public sealed partial class ClickHouseGateway
 
         // The group count runs alongside the page (its own connection), only when asked.
         var totalTask = req.WithTotal == true
-            ? (dimExprs.Count == 0 ? Task.FromResult<long?>(1) : CountGroupsAsync(info, grouped, parameters, ct, Settings(anyLeft, info)))
+            ? (dimExprs.Count == 0 && req.Having is not { Length: > 0 } ? Task.FromResult<long?>(1) : CountGroupsAsync(info, grouped, parameters, ct, Settings(anyLeft, info)))
             : Task.FromResult<long?>(null);
 
         var rows = new List<QueryResultRow>();

@@ -649,3 +649,10 @@
 .ws-fields .ws-shelf--marks > .ws-group__head { font-weight: 600; color: var(--ink-2); }
 .ws-marks__row .ws-tool { border-color: transparent; background: var(--surface-3); }
 .ws-marks__row .ws-tool.is-set, .ws-marks__row .ws-tool.is-active { background: var(--accent-soft); }
+
+/* ---- filter on an aggregated measure (the measure pill's popup + badge) ---- */
+.ws-pill__having { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--s2); max-width: 360px; }
+.ws-pill__havinglead { flex-basis: 100%; font-size: var(--fs-body); white-space: normal; }
+.ws-pill__havingop { max-width: 160px; }
+.ws-pill__having-badge { display: inline-flex; align-items: center; gap: var(--s1); }
+.ws-pill__having-badge.is-invalid { color: var(--danger-ink); }
