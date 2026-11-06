@@ -16,6 +16,7 @@ import { cleanMemberColors } from "../Dashboard/colour-model.js";
 import { cleanCollapsed } from "../Dashboard/collapse-model.js";
 import { checkTooltipText } from "../Dashboard/tooltip-model.js";
 import { checkTooltipStyle } from "../Dashboard/tooltip-style.js";
+import { checkTooltipFormats } from "../Dashboard/tooltip-formats.js";
 import { markerSizeError } from "../Dashboard/mark-style-model.js";
 import { RAMP_CHOICES, colourRangeError } from "../Dashboard/colour-scale-model.js";
 import { cleanParameter, MAX_PARAMS } from "../Core/parameters-model.js";
@@ -434,6 +435,11 @@ export function sanitizeSheet(saved, where, issues) {
     const r = checkTooltipStyle(s.tooltipStyle);
     if (r.ok && sheet.tooltipText && r.value) sheet.tooltipStyle = r.value;
     if (!r.ok) issues.push(`${where}: the tooltip style was invalid — reset.`);
+  }
+  { // per-field tooltip number / date formats: dropped (with an issue) when invalid, and meaningless without a template
+    const r = checkTooltipFormats(s.tooltipFormats);
+    if (r.ok && sheet.tooltipText && r.value) sheet.tooltipFormats = r.value;
+    if (!r.ok) issues.push(`${where}: the tooltip field formats were invalid — reset.`);
   }
   sheet.memberColors = cleanMemberColors(s.memberColors, where, issues);
   sheet.showFilterCards = s.showFilterCards !== false;

@@ -620,6 +620,10 @@
 .tipdlg__head { font-weight: 600; }
 .tipdlg__preview { padding: var(--s2) var(--s4); border: 1px solid var(--line-2); border-radius: var(--r); background: var(--surface); box-shadow: var(--elev-8); color: var(--ink); font-size: var(--fs-body); overflow-wrap: anywhere; min-height: var(--s6); }
 .tipdlg__reset { margin-right: auto; }
+.tipdlg__formats { display: grid; gap: var(--s2); }
+.tipdlg__formats[hidden] { display: none; }
+.tipdlg__fmt { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
+.tipdlg__fname { min-width: 120px; flex: 1 1 120px; overflow-wrap: anywhere; font-weight: 600; }
 
 
 /* ---- Field pane: the fields are the focus ------------------------------------------------------------------------------

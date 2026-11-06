@@ -29,9 +29,10 @@ import { CF_MODE_CHOICES, CF_SCALE_CHOICES, CF_OP_CHOICES, CF_TONE_CHOICES, CF_M
 import { templateError, buildActionUrl, MAX_LABEL, MAX_TEMPLATE } from "./action-model.js";
 import { DATE_PART_CHOICES, stepPart } from "./date-parts.js";
 import { CALC_CHOICES, ALONG_CHOICES, WINDOW_CHOICES, isCalc, calcName } from "./table-calc.js";
-import { tooltipHtml, lookupFrom, checkTooltipText, parseTooltip } from "./tooltip-model.js";
+import { tooltipHtml, checkTooltipText, parseTooltip } from "./tooltip-model.js";
 import { openTooltipDialog } from "./tooltip-dialog.js";
 import { checkTooltipStyle, styleAfterTextEdit } from "./tooltip-style.js";
+import { checkTooltipFormats, sampleLookup, pruneFormats } from "./tooltip-formats.js";
 import { SWATCHES, memberKey, fieldColorKey, setMemberColor, clearFieldColors, colourOf } from "./colour-model.js";
 import { createHistory } from "./history.js";
 import { applyToggle, MAX_COLLAPSED } from "./collapse-model.js";
@@ -2389,7 +2390,7 @@ export function initDashboards() {
     const note = el("span", "ws-shelf__note");
     const refresh = () => {
       const r = checkTooltipText(ta.value);
-      const sample = lookupFrom(Object.fromEntries(cat().map((f) => [f.name, f.sample])));
+      const sample = sampleLookup(cat(), s.tooltipFormats, s.format);
       preview.innerHTML = r.ok && r.value ? tooltipHtml(r.value, sample, s.tooltipStyle) : ""; // escaped parts only (tooltip-model.js)
       if (!r.ok || !r.value) preview.textContent = "Automatic tooltip";
       const unknown = r.ok && r.value ? parseTooltip(r.value).fields.filter((n) => sample(n) === undefined) : [];
@@ -2401,6 +2402,8 @@ export function initDashboards() {
       const st = r.value ? styleAfterTextEdit(s.tooltipText, r.value, s.tooltipStyle) : null; // the line count changed -> the style is cleared
       const cleared = s.tooltipStyle && !st;
       s.tooltipText = r.value; if (st) s.tooltipStyle = st; else delete s.tooltipStyle;
+      const kept = r.value ? pruneFormats(s.tooltipFormats, parseTooltip(r.value).fields) : null;
+      if (kept) s.tooltipFormats = kept; else delete s.tooltipFormats;
       if (cleared) note.textContent = "Line styles cleared — the number of lines changed."; else refresh();
       commit(dash, s);
     };
@@ -2409,14 +2412,15 @@ export function initDashboards() {
     const modal = el("button", "ws-tipedit__modal", "Edit tooltip…");
     modal.type = "button";
     modal.addEventListener("click", () => openTooltipDialog({
-      text: s.tooltipText ?? "", style: s.tooltipStyle ?? null, fields: cat(),
+      text: s.tooltipText ?? "", style: s.tooltipStyle ?? null, formats: s.tooltipFormats ?? null, format: s.format, fields: cat(),
       onClose: () => document.querySelector(".ws-tipedit__modal")?.focus(),
-      onApply: ({ text, style }) => { // one commit = one undo step
-        const t = checkTooltipText(text), st = checkTooltipStyle(style);
-        if (!t.ok || !st.ok) return;
-        const nextStyle = t.value ? st.value : null;
-        if (t.value === (s.tooltipText ?? null) && JSON.stringify(nextStyle) === JSON.stringify(s.tooltipStyle ?? null)) return;
-        s.tooltipText = t.value; if (nextStyle) s.tooltipStyle = nextStyle; else delete s.tooltipStyle; ta.value = t.value ?? ""; refresh(); commit(dash, s);
+      onApply: ({ text, style, formats }) => { // one commit = one undo step
+        const t = checkTooltipText(text), st = checkTooltipStyle(style), fm = checkTooltipFormats(formats);
+        if (!t.ok || !st.ok || !fm.ok) return;
+        const nextStyle = t.value ? st.value : null, nextFormats = t.value ? fm.value : null;
+        if (t.value === (s.tooltipText ?? null) && JSON.stringify(nextStyle) === JSON.stringify(s.tooltipStyle ?? null) && JSON.stringify(nextFormats) === JSON.stringify(s.tooltipFormats ?? null)) return;
+        s.tooltipText = t.value; if (nextStyle) s.tooltipStyle = nextStyle; else delete s.tooltipStyle;
+        if (nextFormats) s.tooltipFormats = nextFormats; else delete s.tooltipFormats; ta.value = t.value ?? ""; refresh(); commit(dash, s);
       } }));
     head.append(modal);
     box.append(el("span", "ws-fmt-label", "Preview"), preview, note);
