@@ -26,7 +26,7 @@ import { enter, MOTION } from "../Core/motion.js";
 import { wireResizer } from "../Core/resizer.js";
 import { PRESET_CHOICES, COMPARE_CHOICES, COMPARE_TYPES, newPeriod, resolveRange, compareRange, rangeLabel } from "./period-model.js";
 import { CF_MODE_CHOICES, CF_SCALE_CHOICES, CF_OP_CHOICES, CF_TONE_CHOICES, CF_MAX_RULES, measureKey, emptyRule, isActive } from "./conditional-model.js";
-import { templateError, buildActionUrl, MAX_LABEL, MAX_TEMPLATE } from "./action-model.js";
+import { templateError, buildActionUrl, applyParamAction, MAX_LABEL, MAX_TEMPLATE } from "./action-model.js";
 import { DATE_PART_CHOICES, stepPart } from "./date-parts.js";
 import { CALC_CHOICES, ALONG_CHOICES, WINDOW_CHOICES, isCalc, calcName } from "./table-calc.js";
 import { tooltipHtml, checkTooltipText, parseTooltip } from "./tooltip-model.js";
@@ -790,6 +790,20 @@ export function initDashboards() {
       });
       wrap.append(go);
     }
+    // Parameter action: write the selected value into the sheet's parameter (checked like any edit).
+    const pa = s.paramAction && parameters.find((p) => p.id === s.paramAction.param);
+    if (pa) {
+      const set = makeButton(`Set ${pa.name}`, "ws-select__btn ws-select__param");
+      set.prepend(icon("param", { size: 14 }));
+      set.title = `Set the parameter ${pa.name} to ${sel.value}`;
+      set.addEventListener("click", () => {
+        const r = applyParamAction(s.paramAction, parameters, sel.value);
+        if (!r.ok) { toast(r.error, "danger"); return; }
+        updateParameter(r.id, { value: r.value });
+        toast(`${r.name} set to ${r.value}.`, "info");
+      });
+      wrap.append(set);
+    }
     wrap.append(clear);
     return wrap;
   }
@@ -1299,7 +1313,7 @@ export function initDashboards() {
         fmtSelect("Shading", TABLE_SHADE_CHOICES, f.tableShade ?? "none", (v) => set({ tableShade: v })),
         conditionalEditor(dash, s));
     }
-    if (CLICK_TYPES.has(s.chartType)) panel.append(linkActionEditor(dash, s));
+    if (CLICK_TYPES.has(s.chartType)) { panel.append(linkActionEditor(dash, s)); panel.append(paramActionEditor(dash, s)); }
     // Chart-only controls.
     if (isChart) {
       panel.append(
@@ -2778,6 +2792,20 @@ export function initDashboards() {
     tplIn.inputMode = "url"; tplIn.spellcheck = false;
     row.append(labelF, tplF);
     box.append(row, el("span", "ws-shelf__note", "Click a mark, then use the link on the selection bar. {value} becomes the clicked value; only https:// links open, in a new tab."));
+    return box;
+  }
+
+  // The sheet's parameter action — which parameter a click on a mark can set. "None" removes it.
+  function paramActionEditor(dash, s) {
+    const box = el("div", "ws-cf ws-link");
+    box.append(el("span", "ws-fmt-label ws-cf__title", "Parameter action"));
+    const row = el("div", "ws-cf__row");
+    const choice = s.paramAction && parameters.some((p) => p.id === s.paramAction.param) ? s.paramAction.param : "";
+    row.append(fmtSelect("Set", [["", "None"], ...parameters.map((p) => [p.id, p.name])], choice, (v) => {
+      s.paramAction = v ? { param: v } : null; commit(dash, s);
+    }));
+    box.append(row);
+    if (!parameters.length) box.append(el("span", "ws-shelf__note", "Add a parameter from Workbook → Parameters… first."));
     return box;
   }
 

@@ -212,6 +212,7 @@ export const emptySheet = () => ({
   title: null, caption: null, showTitle: true, showFilterCards: true, // title / caption: null = the tab name / an automatic summary; filter cards above the chart
   // collapsed: crosstab headers shown collapsed { rows: [key…], cols: [key…] } (Dashboard/collapse-model.js); the key exists only once a header is collapsed
   analytics: null, // { ref, band, trend, forecast, totals } (Dashboard/analytics-model.js); null = none
+  paramAction: null, // { param: id } — "Set <parameter>" on the selection chip (Dashboard/action-model.js)
   urlAction: null, // { label, template } — "Open <label>" on the selection chip (Dashboard/action-model.js)
 });
 

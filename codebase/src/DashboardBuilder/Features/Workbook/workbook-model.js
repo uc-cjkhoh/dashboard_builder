@@ -11,7 +11,7 @@ import { CASTS } from "../Dashboard/cast-model.js";
 import { cleanMemberAliases } from "../Dashboard/member-labels.js";
 import { cleanTheme, DEFAULT_THEME } from "../Core/theme-model.js";
 import { normalizeJoinType, relEnds } from "../Relations/relation-rules.js";
-import { cleanAction } from "../Dashboard/action-model.js";
+import { cleanAction, cleanParamAction } from "../Dashboard/action-model.js";
 import { cleanMemberColors } from "../Dashboard/colour-model.js";
 import { cleanCollapsed } from "../Dashboard/collapse-model.js";
 import { checkTooltipText } from "../Dashboard/tooltip-model.js";
@@ -420,6 +420,7 @@ export function sanitizeSheet(saved, where, issues) {
   sheet.format = cleanFormat(s.format, where, issues);
   sheet.period = cleanPeriod(s.period, where, issues);
   sheet.urlAction = cleanAction(s.urlAction, where, issues);
+  sheet.paramAction = cleanParamAction(s.paramAction, where, issues);
   // Title / caption: text (≤ 80 / ≤ 300) or null for the automatic one; showTitle a boolean.
   for (const [k, max] of [["title", 80], ["caption", 300]]) {
     const v = s[k];

@@ -2,6 +2,7 @@
 // one link action { label, template }: the template is an https:// address with {value} where the
 // clicked mark's value goes (URL-encoded). It opens only from the selection chip, in a new tab with
 // noopener — never automatically, never to anything but https.
+import { checkValue } from "../Core/parameters-model.js";
 export const MAX_TEMPLATE = 500;
 export const MAX_LABEL = 40;
 
@@ -43,4 +44,27 @@ export function cleanAction(raw, where, issues) {
     return null;
   }
   return { label: label || "Open link", template: raw.template.trim() };
+}
+
+// Parameter action: a worksheet may also carry one { param: <parameter id> } — a click on a mark offers
+// "Set <parameter>" on the selection chip, which writes the mark's value into that parameter (checked
+// against its type and allowed values, like any edit). Never automatic.
+
+/** A saved parameter action, checked: { param } or null (+ an issue). */
+export function cleanParamAction(raw, where, issues) {
+  if (raw == null) return null;
+  if (typeof raw !== "object" || typeof raw.param !== "string" || !/^prm\d{1,6}$/.test(raw.param)) {
+    issues.push(`${where}: the parameter action was invalid — removed.`);
+    return null;
+  }
+  return { param: raw.param };
+}
+
+/** The new value for the action's parameter: { ok, id, name, value } or { ok: false, error }. */
+export function applyParamAction(action, params, raw) {
+  const p = params.find((x) => x.id === action?.param);
+  if (!p) return { ok: false, error: "That parameter no longer exists." };
+  if (raw === null || raw === undefined || raw === "") return { ok: false, error: "This mark has no value to set." };
+  const r = checkValue(p, raw);
+  return r.ok ? { ok: true, id: p.id, name: p.name, value: r.value } : { ok: false, error: r.error };
 }

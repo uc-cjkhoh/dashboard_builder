@@ -127,6 +127,7 @@
         "showTitle": true,
         "showFilterCards": true,
         "analytics": null,
+        "paramAction": null,
         "urlAction": null
       }
     },
@@ -233,6 +234,7 @@
         "showTitle": true,
         "showFilterCards": true,
         "analytics": null,
+        "paramAction": null,
         "urlAction": null
       }
     },
@@ -313,6 +315,7 @@
         "showTitle": true,
         "showFilterCards": true,
         "analytics": null,
+        "paramAction": null,
         "urlAction": null
       }
     },
@@ -394,6 +397,7 @@
         "showTitle": true,
         "showFilterCards": true,
         "analytics": null,
+        "paramAction": null,
         "urlAction": null
       }
     }
@@ -508,6 +512,7 @@
         "showTitle": true,
         "showFilterCards": true,
         "analytics": null,
+        "paramAction": null,
         "urlAction": null
       },
       "sharedFilters": [],
@@ -600,6 +605,7 @@
         "showTitle": true,
         "showFilterCards": true,
         "analytics": null,
+        "paramAction": null,
         "urlAction": null
       },
       "sharedFilters": [],
@@ -710,6 +716,7 @@
         "showTitle": true,
         "showFilterCards": true,
         "analytics": null,
+        "paramAction": null,
         "urlAction": null
       },
       "sharedFilters": [],
