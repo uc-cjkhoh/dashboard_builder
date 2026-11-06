@@ -45,7 +45,7 @@ export function createNotes({ host, onSave, onDone }) {
     err.className = "board-notes__error";
     err.setAttribute("role", "alert");
     meta.append(counter, err);
-    const sync = () => { counter.textContent = `${input.value.length} / ${LIMITS.dashboardNotes}`; };
+    const sync = () => { counter.textContent = `${input.value.trim().length} / ${LIMITS.dashboardNotes}`; };
     input.addEventListener("input", () => { sync(); err.textContent = ""; input.removeAttribute("aria-invalid"); });
     sync();
     const actions = document.createElement("div");
