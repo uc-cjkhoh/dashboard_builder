@@ -398,6 +398,10 @@
 .xt-colhdr .xt-hdr { justify-content: center; }
 .xt-toggle { display: inline-grid; place-items: center; flex: none; width: var(--s6); height: var(--s6); margin: -2px 0 -2px -6px; padding: 0; border: 0;
   border-radius: var(--r); background: transparent; color: var(--ink-2); cursor: pointer; transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); }
+.xt-all { display: inline-flex; gap: var(--s1); margin-left: var(--s2); vertical-align: middle; }
+.xt-all__btn { display: inline-grid; place-items: center; width: var(--s6); height: var(--s6); margin: -2px 0; padding: 0; border: 0;
+  border-radius: var(--r); background: transparent; color: var(--ink-2); cursor: pointer; transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); }
+.xt-all__btn:hover { background: var(--surface-3); color: var(--ink); }
 .xt-toggle:hover { background: var(--surface-3); color: var(--ink); }
 .xt-toggle[aria-expanded="false"] { color: var(--accent-ink); }
 /* Measure-name band (top or left) reads as secondary to the dimension headers. */

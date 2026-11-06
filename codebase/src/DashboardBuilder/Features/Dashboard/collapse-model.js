@@ -105,6 +105,31 @@ export function applyToggle(collapsed, axis, key, valid) {
   return { collapsed: next.rows.length || next.cols.length ? next : null, blocked: false };
 }
 
+/**
+ * Collapse or expand every header at once. `rowKeys` / `colKeys` are the headers that exist now (`headerKeys`); stale keys are
+ * pruned. "collapse" closes them all (blocked, nothing changed, when that would pass the cap); "expand" opens them all.
+ * Returns { collapsed, changed, blocked } — `changed` counts the headers that flipped, so 0 means no edit (and no undo step).
+ */
+export function applyAll(collapsed, mode, rowKeys, colKeys) {
+  const live = { rows: rowKeys, cols: colKeys };
+  const prev = { rows: (collapsed?.rows ?? []).filter((k) => rowKeys.has(k)), cols: (collapsed?.cols ?? []).filter((k) => colKeys.has(k)) };
+  const next = { rows: [], cols: [] };
+  let changed = 0;
+  for (const axis of ["rows", "cols"]) {
+    if (mode === "collapse") { next[axis] = [...live[axis]]; changed += next[axis].length - prev[axis].length; }
+    else changed += prev[axis].length;
+  }
+  if (mode === "collapse" && (next.rows.length > MAX_COLLAPSED || next.cols.length > MAX_COLLAPSED)) return { collapsed, changed: 0, blocked: true };
+  if (changed === 0) return { collapsed, changed: 0, blocked: false };
+  return { collapsed: next.rows.length || next.cols.length ? next : null, changed, blocked: false };
+}
+
+/** The status line for Expand all / Collapse all: what changed, or why nothing did. */
+export function allMessage(mode, n) {
+  if (n === 0) return `Every header is already ${mode === "collapse" ? "collapsed" : "expanded"}`;
+  return `${mode === "collapse" ? "Collapsed" : "Expanded"} ${n} header${n === 1 ? "" : "s"}`;
+}
+
 /** The values each measure shows, per measure index: what a conditional-format scale or bar must be measured on. */
 export function shownValues(leftLeaves, topLeaves, measureOnLeft, measureCount, leafAt) {
   const out = Array.from({ length: measureCount }, () => []);

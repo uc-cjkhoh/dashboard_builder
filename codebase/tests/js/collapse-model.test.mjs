@@ -203,3 +203,48 @@ test("undo restores the collapsed state (the history snapshots the whole sheet)"
   h2.record("w", { collapsed: null }); h2.record("w", { collapsed: one1 });
   assert.deepEqual(h2.undo("w", { collapsed: two }).collapsed, one1);
 });
+
+test("applyAll collapse: every header on both axes, counted; nothing to do is not a change", async () => {
+  const { applyAll } = await import("../../src/DashboardBuilder/Features/Dashboard/collapse-model.js");
+  const rows = new Set(["r1", "r2"]), cols = new Set(["c1"]);
+  const r = applyAll(null, "collapse", rows, cols);
+  assert.deepEqual(r.collapsed, { rows: ["r1", "r2"], cols: ["c1"] });
+  assert.equal(r.changed, 3);
+  const again = applyAll(r.collapsed, "collapse", rows, cols);
+  assert.equal(again.changed, 0);
+  assert.deepEqual(again.collapsed, r.collapsed);
+});
+
+test("applyAll collapse keeps the ones already closed and counts only new ones", async () => {
+  const { applyAll } = await import("../../src/DashboardBuilder/Features/Dashboard/collapse-model.js");
+  const r = applyAll({ rows: ["r1"], cols: [] }, "collapse", new Set(["r1", "r2"]), new Set());
+  assert.equal(r.changed, 1);
+  assert.deepEqual(r.collapsed, { rows: ["r1", "r2"], cols: [] });
+});
+
+test("applyAll expand: clears valid keys, drops stale ones silently, null when empty", async () => {
+  const { applyAll } = await import("../../src/DashboardBuilder/Features/Dashboard/collapse-model.js");
+  const r = applyAll({ rows: ["r1", "stale"], cols: ["c1"] }, "expand", new Set(["r1"]), new Set(["c1"]));
+  assert.equal(r.changed, 2);
+  assert.equal(r.collapsed, null);
+  assert.equal(applyAll(null, "expand", new Set(["r1"]), new Set()).changed, 0);
+});
+
+test("applyAll collapse over the cap is blocked and changes nothing", async () => {
+  const { applyAll } = await import("../../src/DashboardBuilder/Features/Dashboard/collapse-model.js");
+  const big = new Set(Array.from({ length: MAX_COLLAPSED + 1 }, (_, i) => `k${i}`));
+  const prev = { rows: ["k0"], cols: [] };
+  const r = applyAll(prev, "collapse", big, new Set());
+  assert.equal(r.blocked, true);
+  assert.equal(r.changed, 0);
+  assert.equal(r.collapsed, prev);
+});
+
+test("allMessage names what changed", async () => {
+  const { allMessage } = await import("../../src/DashboardBuilder/Features/Dashboard/collapse-model.js");
+  assert.equal(allMessage("collapse", 6), "Collapsed 6 headers");
+  assert.equal(allMessage("collapse", 1), "Collapsed 1 header");
+  assert.equal(allMessage("expand", 2), "Expanded 2 headers");
+  assert.equal(allMessage("collapse", 0), "Every header is already collapsed");
+  assert.equal(allMessage("expand", 0), "Every header is already expanded");
+});

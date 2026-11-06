@@ -22,6 +22,7 @@ import { DIV_FALLBACK } from "./colour-scale-model.js";
 // cells, then render nested headers (colSpan on top, rowSpan on the left stub).
 // A header with a next level below it gets a +/- button (`collapse.onToggle(axis, key)`) when the host passes one; the
 // collapsed state (sheet.collapsed) shows either way. A collapsed header stands for its whole subtree as one row / column.
+let refocusAll = null; // the Expand all / Collapse all button to focus after its redraw: "expand" | "collapse"
 let refocus = null; // the toggle to focus after the redraw a click causes: { axis, key }
 export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, calcPercent = new Set(), collapse = null) {
   const { rowDimensions, columnDimensions, measures, rows } = result;
@@ -77,6 +78,20 @@ export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, ca
     if (refocus && refocus.axis === axis && refocus.key === key) { refocus = null; requestAnimationFrame(() => { if (b.isConnected) b.focus(); }); }
     return b;
   };
+  // Expand all / Collapse all, in the corner: two icon buttons (title + aria-label carry the words); focus returns to the pressed one.
+  const allControls = () => {
+    const box = el("span", "xt-all");
+    for (const [mode, name, glyph] of [["expand", "Expand all headers", "plus"], ["collapse", "Collapse all headers", "minus"]]) {
+      const b = el("button", "xt-all__btn");
+      b.type = "button";
+      b.title = name; b.setAttribute("aria-label", name); b.dataset.mode = mode;
+      b.append(icon(glyph, { size: 16 }));
+      b.addEventListener("click", () => { refocusAll = mode; collapse.onToggleAll(mode, rowKeys, colKeys); });
+      if (refocusAll === mode) { refocusAll = null; requestAnimationFrame(() => { if (b.isConnected) b.focus(); }); }
+      box.append(b);
+    }
+    return box;
+  };
   // A dimension header: the label, with its toggle before it when it has one.
   const headerCell = (cls, text, toggle) => {
     const th = el("th", cls);
@@ -99,6 +114,7 @@ export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, ca
       const corner = el("th", "xt-corner", leftLabel);
       corner.colSpan = leftLevels;
       corner.rowSpan = Math.max(1, topLevels);
+      if (collapse?.onToggleAll && (rowKeys.size || colKeys.size)) corner.append(allControls());
       tr.append(corner);
     }
     if (topLevels === 0) {
