@@ -363,6 +363,14 @@ export function setDashboardSize(dashboardId, size) {
   emit("dashboard:changed", { id: dashboardId });
 }
 
+/** An Automatic dashboard's size range ({ minWidth?, maxWidth?, minHeight?, maxHeight? } or null); the caller has checked it with `rangeError`. */
+export function setDashboardRange(dashboardId, range) {
+  const tab = tabById(dashboardId);
+  if (!tab || tab.kind !== "dashboard") return;
+  tab.range = range ? { ...range } : null;
+  emit("dashboard:changed", { id: dashboardId });
+}
+
 /** A worksheet has content if any shelf holds a field. */
 export function worksheetHasContent(id) {
   const s = worksheetById(id)?.sheet;

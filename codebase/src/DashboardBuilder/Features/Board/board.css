@@ -39,10 +39,15 @@
 .board-bar__tools { margin-left: auto; align-items: center; display: flex; gap: var(--s2); flex: none; }
 .board-bar__btn { height: var(--ctl-h); font-size: var(--fs-body); }
 .board-bar__size { font-size: var(--fs-body); }
+.board-bar__range { display: inline-flex; gap: var(--s1); }
+.board-bar__range[hidden] { display: none; }
+.board-bar__rangein { width: 128px; font-size: var(--fs-body); }
 .board-scroll { flex: 1; min-height: 0; overflow: auto; padding: var(--s4) var(--s4) var(--s4); scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
 .board-grid { position: relative; width: 100%; }
 /* A fixed size: exactly the chosen box (board.js sets its width and height); the panel scrolls when the window is smaller. */
 .board-grid.is-fixed { flex: none; }
+/* A size range: the board is the panel width clamped into the range, centred when narrower, and scrolls inside past its maximum height. */
+.board-grid.is-ranged { flex: none; margin-inline: auto; overflow-y: auto; }
 .board-empty { display: grid; justify-items: center; gap: var(--s2); padding: var(--s6) var(--s4); text-align: center; color: var(--ink-2); }
 .board-empty[hidden] { display: none; }
 .board-empty__icon { color: var(--ink-3); }

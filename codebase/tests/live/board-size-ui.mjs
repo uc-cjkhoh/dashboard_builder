@@ -124,6 +124,46 @@ try {
     await waitFor(`(() => { const v = JSON.parse(localStorage.getItem(${J(KEY)})); return !('size' in v.dashboards[0]); })()`, 'size dropped from the save');
   });
 
+  const setRange = (k, v) => ev(`(() => { const i = [...document.querySelectorAll('.board-bar__rangein')].find((x) => x.getAttribute('aria-label').startsWith(${J(k)})); i.value = ${J(v)}; i.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+  await check('Range: the board is the panel width clamped to the maximum, centred; the inputs show; it autosaves', async () => {
+    await pick('range');
+    await waitFor(`document.getElementById('board-grid').classList.contains('is-ranged')`, 'ranged class');
+    must(await ev(`!document.querySelector('.board-bar__range').hidden`), 'inputs hidden');
+    await setRange('Max width', '700'); await setRange('Min width', '500');
+    await waitFor(`document.getElementById('board-grid').getBoundingClientRect().width === 700`, 'width 700');
+    const g = await box('#board-grid'), p = await box('#board-scroll');
+    must(g.l > p.l + 16, `centred: ${J(g)} in ${J(p)}`);
+    await waitFor(`(() => { const r = JSON.parse(localStorage.getItem(${J(KEY)})).dashboards[0].range; return r && r.maxWidth === 700 && r.minWidth === 500; })()`, 'range saved');
+    await shot('board-size-range-light.png');
+  });
+  await check('Range: a minimum above the panel scrolls it; height is clamped and scrolls inside past the maximum', async () => {
+    await setRange('Max width', ''); await setRange('Min width', '3000');
+    await waitFor(`document.getElementById('board-grid').getBoundingClientRect().width === 3000`, 'width 3000');
+    await setRange('Min width', ''); await setRange('Min height', '900'); await setRange('Max height', '1000');
+    await waitFor(`document.getElementById('board-grid').getBoundingClientRect().height === 900`, 'min height 900');
+    await store(`const d = st.activeDashboard(); st.setWidgets(d.id, d.widgets.map((w) => ({ ...w, h: 8 })));`); // content taller than the maximum below
+    await setRange('Min height', ''); await setRange('Max height', '300');
+    await waitFor(`document.getElementById('board-grid').getBoundingClientRect().height === 300`, 'max height 300');
+    must(await ev(`(() => { const g = document.getElementById('board-grid'); return g.scrollHeight > g.clientHeight; })()`), 'board does not scroll inside');
+  });
+  await check('Range: an invalid set is refused in place and not saved', async () => {
+    await setRange('Min height', '500'); // above the 300 maximum
+    must(await ev(`document.querySelector('.board-bar__rangein').getAttribute('aria-invalid') === 'true'`), 'not marked invalid');
+    must(await ev(`document.getElementById('board-grid').getBoundingClientRect().height === 300`), 'layout changed');
+    await setRange('Max height', '');
+  });
+  await check('Range: survives a reload; a fixed size wins and drops it', async () => {
+    await b.sleep(700);
+    await b.send('Page.reload');
+    await connect();
+    await waitFor(`document.querySelectorAll('.board-widget').length === 2`, 'widgets restored');
+    must(await ev(`document.querySelector('.board-bar__size').value`) === 'range', 'select not Range');
+    await pick('800x600');
+    await waitFor(`!document.getElementById('board-grid').classList.contains('is-ranged') && document.getElementById('board-grid').getBoundingClientRect().width === 800`, 'fixed wins');
+    must(await ev(`document.querySelector('.board-bar__range').hidden`), 'inputs still shown');
+    await pick('auto');
+  });
+
   await check('screenshot: dark, fixed', async () => {
     await pick('1280x720'); await b.setScheme('dark'); await b.sleep(400);
     await shot('board-size-fixed-dark.png');

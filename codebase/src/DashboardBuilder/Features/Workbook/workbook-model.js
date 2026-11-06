@@ -24,7 +24,7 @@ import { cleanHierarchies, hierarchyTableKey } from "../Dashboard/hierarchy-mode
 import { cleanSource, wireSource } from "../Core/source-model.js";
 import { cleanCalculations } from "../Calc/calc-workbook.js";
 import { cleanWidgets, savedWidgets } from "../Board/board-model.js";
-import { cleanSize, savedSize } from "../Board/board-size.js";
+import { cleanSize, savedSize, cleanRange, savedRange } from "../Board/board-size.js";
 import { cleanSteps, savedSteps } from "../Story/story-model.js";
 import { CALC_AGGS } from "../Calc/calc-pill.js";
 import {
@@ -68,7 +68,7 @@ export function serializeWorkbook({ entities, relationships, tabs, active, theme
       ...(r.pairs?.length ? { pairs: r.pairs.map((p) => ({ from: p.from, to: p.to })) } : {}), // a compound key's extra pairs (optional; absent in older files)
     })),
     worksheets: worksheets.map((d) => ({ name: d.name, sheet: savedSheet(d.sheet) })),
-    dashboards: dashboards.map((d) => ({ name: d.name, widgets: savedWidgets(d.widgets, wsIndex, dbIndex), ...savedSize(d.size) })), // size: optional (absent = automatic)
+    dashboards: dashboards.map((d) => ({ name: d.name, widgets: savedWidgets(d.widgets, wsIndex, dbIndex), ...savedSize(d.size), ...savedRange(d.range) })), // size: optional (absent = automatic)
     ...(storyTabs.length ? { stories: storyTabs.map((s) => ({ name: s.name, steps: savedSteps(s.steps, wsIndex, dbIndex) })) } : {}), // (optional; absent in older files)
     tabs: order, // the strip's order
     active: activeIndex !== undefined ? { kind: active.kind, index: activeIndex } : null, // null = the Data Source view
@@ -242,7 +242,7 @@ export function parseWorkbook(source) {
       stories.push({ name: tabName(stAll[t.index], "Story"), steps: stAll[t.index].steps });
     } else {
       dbMap.set(t.index, dashboards.length); tabs.push({ kind: "dashboard", index: dashboards.length });
-      dashboards.push({ name: tabName(dbAll[t.index], "Dashboard"), widgets: dbAll[t.index].widgets, size: dbAll[t.index].size });
+      dashboards.push({ name: tabName(dbAll[t.index], "Dashboard"), widgets: dbAll[t.index].widgets, size: dbAll[t.index].size, range: dbAll[t.index].range });
     }
   }
   // A widget's worksheet is read through the map, so one cut by the 50-tab cap is "missing" like any other dangling index.
@@ -254,6 +254,7 @@ export function parseWorkbook(source) {
       : d.widgets;
     d.widgets = cleanWidgets(remapped, { worksheetCount: worksheets.length, dashboardCount: dashboards.length, ownDashboard: ownIndex, where: `Dashboard "${d.name}"`, budget }, issues);
     d.size = cleanSize(d.size, `Dashboard "${d.name}"`, issues);
+    d.range = cleanRange(d.range, `Dashboard "${d.name}"`, issues);
   });
 
   // A step's tab is read through the maps, so one cut by the 50-tab cap is "missing" like any other dangling index.

@@ -1,4 +1,4 @@
-import { bus, activeDashboard, worksheets, dashboards, worksheetById, setWidgets, setDashboardSize, nextWidgetId, isDashboardActive } from "../Core/store.js";
+import { bus, activeDashboard, worksheets, dashboards, worksheetById, setWidgets, setDashboardSize, setDashboardRange, nextWidgetId, isDashboardActive } from "../Core/store.js";
 import { toggle, toast, makeButton } from "../Core/ui.js";
 import { icon } from "../Core/icons.js";
 import { LIMITS } from "../Core/validate.js";
@@ -10,7 +10,7 @@ import { nextSelection, selectionRefusal, crossFor, chipText, stillValid, UNSELE
 import { placeNew, NAV_LABEL } from "./board-model.js";
 import { validateImageFile, isImageSrc, imageChars, budgetError } from "./image-model.js";
 import { layoutBoard, widgetOrder, fixedRowH } from "./board-layout.js";
-import { SIZE_PRESETS, sizeKey, sizeLabel } from "./board-size.js";
+import { SIZE_PRESETS, sizeKey, sizeLabel, rangeError, rangedWidth, rangedHeight, rangeLabel, RANGE_KEYS } from "./board-size.js";
 import { createWidget } from "./board-widget.js";
 import { createPanel } from "./board-panel.js";
 import { initInteract } from "./board-interact.js";
@@ -141,12 +141,15 @@ export function initBoard() {
     const fixed = dash.size ? { width: dash.size.width * k, height: dash.size.height * k } : null;
     // Set the box (or clear it) BEFORE reading clientWidth: leaving a fixed size must measure the panel, not the stale box.
     grid.classList.toggle("is-fixed", Boolean(fixed));
+    const range = !fixed && !printing ? dash.range ?? null : null; // an Automatic dashboard may be bounded; a fixed size wins
+    grid.classList.toggle("is-ranged", Boolean(range));
     grid.style.width = fixed ? `${fixed.width}px` : "";
-    const width = fixed ? fixed.width : printing ? PRINT_WIDTH : grid.clientWidth;
+    let width = fixed ? fixed.width : printing ? PRINT_WIDTH : grid.clientWidth;
+    if (range && width) { width = rangedWidth(range, width); grid.style.width = `${width}px`; }
     if (!width) return;
     const { height, rects } = layoutBoard(dash.widgets, width, { ...metrics, stack: printing && !fixed, fixed }); // paper: one column in flow, so no widget splits across pages
     if (printing) for (const [id, r] of rects) entries.get(id)?.sizeChart({ width: r.width, height: r.height, chrome: { x: 2 * metrics.pad + 2, y: 2 * metrics.pad + 2 } });
-    grid.style.height = `${height}px`;
+    grid.style.height = `${range ? rangedHeight(range, height) : height}px`;
     for (const [id, r] of rects) {
       const s = entries.get(id)?.el.style;
       if (s) { s.left = `${r.left}px`; s.top = `${r.top}px`; s.width = `${r.width}px`; s.height = `${r.height}px`; }
@@ -355,17 +358,55 @@ export function initBoard() {
   sizeSel.addEventListener("change", () => {
     const dash = activeDashboard();
     if (!dash) return;
-    const pick = sizeSel.value === "auto" ? null : SIZE_PRESETS.concat(dash.size ?? []).find((p) => sizeKey(p) === sizeSel.value) ?? null;
+    const value = sizeSel.value; // read first: each store change below repaints the select
+    if (value === "range") {
+      setDashboardSize(dash.id, null);
+      setDashboardRange(dash.id, dash.range ?? { minWidth: 800, maxWidth: 1280 });
+      status(`Size range ${rangeLabel(activeDashboard().range)}.`);
+      return;
+    }
+    setDashboardRange(dash.id, null);
+    const pick = value === "auto" ? null : SIZE_PRESETS.concat(dash.size ?? []).find((p) => sizeKey(p) === value) ?? null;
     setDashboardSize(dash.id, pick);
     status(pick ? `Fixed size ${sizeLabel(pick)}.` : "Automatic size.");
   });
   function paintSize(dash) {
     const sizes = [null, ...SIZE_PRESETS];
+    const ro = document.createElement("option"); ro.value = "range"; ro.textContent = "Range…";
     if (dash.size && !SIZE_PRESETS.some((p) => sizeKey(p) === sizeKey(dash.size))) sizes.push(dash.size);
-    sizeSel.replaceChildren(...sizes.map((p) => { const o = document.createElement("option"); o.value = sizeKey(p); o.textContent = sizeLabel(p); return o; }));
-    sizeSel.value = sizeKey(dash.size);
+    sizeSel.replaceChildren(...sizes.map((p) => { const o = document.createElement("option"); o.value = sizeKey(p); o.textContent = sizeLabel(p); return o; }), ro);
+    sizeSel.value = dash.range && !dash.size ? "range" : sizeKey(dash.size);
+    paintRange(dash);
   }
-  tools.append(sizeSel, undoBtn, redoBtn, fullBtn, printBtn);
+  // Range: four optional pixel limits (empty = no limit); an invalid set is refused in place, never clamped.
+  const rangeBox = document.createElement("span");
+  rangeBox.className = "board-bar__range";
+  rangeBox.hidden = true;
+  const rangeInputs = {};
+  const RANGE_LABELS = { minWidth: "Min width", maxWidth: "Max width", minHeight: "Min height", maxHeight: "Max height" };
+  for (const k of RANGE_KEYS) {
+    const inp = document.createElement("input");
+    inp.type = "number"; inp.className = "input board-bar__rangein"; inp.placeholder = RANGE_LABELS[k]; inp.setAttribute("aria-label", `${RANGE_LABELS[k]} in pixels`);
+    inp.addEventListener("change", () => {
+      const dash = activeDashboard();
+      if (!dash?.range) return;
+      const next = {};
+      for (const key of RANGE_KEYS) { const t = rangeInputs[key].value.trim(); if (t !== "") next[key] = Number(t); }
+      const err = rangeError(next);
+      for (const key of RANGE_KEYS) rangeInputs[key].setAttribute("aria-invalid", err ? "true" : "false");
+      if (err) { status(err, true); return; }
+      setDashboardRange(dash.id, next);
+      status(`Size range ${rangeLabel(next)}.`);
+    });
+    rangeInputs[k] = inp;
+    rangeBox.append(inp);
+  }
+  function paintRange(dash) {
+    const on = Boolean(dash.range && !dash.size);
+    rangeBox.hidden = !on;
+    for (const k of RANGE_KEYS) { rangeInputs[k].value = dash.range?.[k] ?? ""; rangeInputs[k].setAttribute("aria-invalid", "false"); }
+  }
+  tools.append(sizeSel, rangeBox, undoBtn, redoBtn, fullBtn, printBtn);
 
   sync();
 }

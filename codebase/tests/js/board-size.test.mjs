@@ -75,3 +75,55 @@ test("fixedRowH is floored: 96 rows in a short box do not collapse", async () =>
   const { fixedRowH } = await import("../../src/DashboardBuilder/Features/Board/board-layout.js");
   assert.ok(fixedRowH([{ y: 0, h: 96 }], { width: 800, height: 240 }, 8, 64) >= 16);
 });
+
+import { rangeError, cleanRange, savedRange, rangedWidth, rangedHeight, rangeLabel } from "../../src/DashboardBuilder/Features/Board/board-size.js";
+
+test("rangeError: whole pixels in limits, min <= max, at least one limit, known keys", () => {
+  assert.equal(rangeError({ minWidth: 800, maxWidth: 1280 }), null);
+  assert.equal(rangeError({ maxHeight: 900 }), null);
+  assert.ok(rangeError({}));
+  assert.ok(rangeError(null));
+  assert.match(rangeError({ minWidth: 100 }), /width/);
+  assert.match(rangeError({ maxHeight: 9999 }), /height/);
+  assert.match(rangeError({ minWidth: 900.5 }), /whole/);
+  assert.match(rangeError({ minWidth: 1280, maxWidth: 800 }), /minimum width/);
+  assert.match(rangeError({ minHeight: 900, maxHeight: 400 }), /minimum height/);
+  assert.match(rangeError({ foo: 1 }), /Unknown/);
+});
+
+test("cleanRange rejects (never clamps) and keeps only known limits", () => {
+  const issues = [];
+  assert.equal(cleanRange(undefined, "D", issues), null);
+  assert.deepEqual(cleanRange({ minWidth: 800, maxWidth: 1280, minHeight: null }, "D", issues), { minWidth: 800, maxWidth: 1280 });
+  assert.deepEqual(issues, []);
+  assert.equal(cleanRange({ minWidth: 10 }, "D", issues), null);
+  assert.equal(issues.length, 1);
+  assert.deepEqual(savedRange(null), {});
+  assert.deepEqual(savedRange({ maxWidth: 1200 }), { range: { maxWidth: 1200 } });
+});
+
+test("rangedWidth / rangedHeight clamp into the range", () => {
+  const r = { minWidth: 800, maxWidth: 1280, minHeight: 400, maxHeight: 900 };
+  assert.equal(rangedWidth(r, 600), 800);
+  assert.equal(rangedWidth(r, 1000), 1000);
+  assert.equal(rangedWidth(r, 2000), 1280);
+  assert.equal(rangedWidth(null, 2000), 2000);
+  assert.equal(rangedHeight(r, 100), 400);
+  assert.equal(rangedHeight(r, 2000), 900);
+  assert.equal(rangedHeight({ maxHeight: 900 }, 300), 300);
+  assert.equal(rangeLabel(r), "800–1280 × 400–900");
+  assert.equal(rangeLabel({ minWidth: 800 }), "800+ × any");
+});
+
+test("workbook round trip keeps a range; a bad saved range is ignored with an issue", () => {
+  const wb = parseWorkbook(wbText({ name: "D", widgets: [], range: { minWidth: 800, maxWidth: 1280 } }));
+  assert.deepEqual(wb.dashboards[0].range, { minWidth: 800, maxWidth: 1280 });
+  const old = parseWorkbook(wbText({ name: "D", widgets: [] }));
+  assert.equal(old.dashboards[0].range, null);
+  const bad = parseWorkbook(wbText({ name: "D", widgets: [], range: { minWidth: 5 } }));
+  assert.equal(bad.dashboards[0].range, null);
+  assert.ok(bad.issues.some((i) => /range/.test(i)));
+  const out = serializeWorkbook({ entities: [], relationships: [], active: null, tabs: [{ kind: "dashboard", name: "A", widgets: [], range: { maxHeight: 900 } }, { kind: "dashboard", name: "B", widgets: [] }] });
+  assert.deepEqual(out.dashboards[0].range, { maxHeight: 900 });
+  assert.equal("range" in out.dashboards[1], false);
+});
