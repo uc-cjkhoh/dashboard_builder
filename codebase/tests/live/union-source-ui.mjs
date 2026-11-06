@@ -128,6 +128,22 @@ try {
     await shot('union-card-light.png');
   });
 
+  await check('Compare columns on the union card lists what the union leaves out, in light and dark', async () => {
+    const card = `[...document.querySelectorAll('.entity--source')][0]`;
+    must(await ev(`${card}.querySelector('.entity__diff-out').hidden`) === true, 'list shown before the click');
+    await ev(`${card}.querySelector('.entity__diff-btn').click()`);
+    await waitFor(`${card}.querySelector('.entity__diff-sum') !== null`, 'comparison loaded');
+    const text = await ev(`${card}.querySelector('.entity__diff-out').textContent`);
+    must(/2 columns are left out: 2 not in every table, 0 of unlike kinds/.test(text), `summary: ${text}`);
+    must(/q1: only in orders \(not in returns\)/.test(text) && /q2: only in orders/.test(text), `list: ${text}`);
+    await shot('union-diff-light.png');
+    await ev(`document.documentElement.dataset.scheme = 'dark'`);
+    await shot('union-diff-dark.png');
+    await ev(`document.documentElement.dataset.scheme = 'light'`);
+    await ev(`${card}.querySelector('.entity__diff-btn').click()`);
+    must(await ev(`${card}.querySelector('.entity__diff-out').hidden`) === true, 'second click did not hide');
+  });
+
   await check('an unpivot is added the same way: kept column, then Field and Value', async () => {
     await ev(`document.getElementById('unpivot-open').click()`);
     await waitFor(`!!document.querySelector('dialog.unpivot-dialog[open]') && document.querySelectorAll('.unpivot-dialog__list input').length > 0`, 'unpivot dialog loaded');

@@ -105,3 +105,26 @@ test("a card whose columns were read as one wider type says so in one line", () 
   assert.equal(lossyNote(undefined), null);
   assert.equal(lossyNote(["n"]), "Types differ: read as Float64, large values may round.");
 });
+
+import { unionMismatch, mismatchSummary } from "../../src/DashboardBuilder/Features/Core/source-model.js";
+const col = (name, type, category) => ({ name, type, category });
+test("unionMismatch: lists columns the union leaves out, with the tables that have them", () => {
+  const m = unionMismatch([
+    { table: "a", columns: [col("id", "Int32", "numeric"), col("x", "String", "text"), col("only_a", "Int32", "numeric")] },
+    { table: "b", columns: [col("id", "Int64", "numeric"), col("x", "Int32", "numeric"), col("only_b", "String", "text")] },
+  ]);
+  assert.deepEqual(m.missing, [{ column: "only_a", in: ["a"], notIn: ["b"] }, { column: "only_b", in: ["b"], notIn: ["a"] }]);
+  assert.deepEqual(m.kind, [{ column: "x", kinds: { a: "text", b: "numeric" } }]);
+  assert.deepEqual(m.shared, ["id"]);
+});
+test("unionMismatch: identical columns give an empty report and a clean summary", () => {
+  const t = [col("a", "Int32", "numeric")];
+  const m = unionMismatch([{ table: "p", columns: t }, { table: "q", columns: t }]);
+  assert.deepEqual([m.missing, m.kind, m.shared], [[], [], ["a"]]);
+  assert.equal(mismatchSummary(m), "Every column is in all tables.");
+});
+test("mismatchSummary counts left-out columns", () => {
+  const m = { missing: [{}, {}], kind: [{}], shared: [] };
+  assert.equal(mismatchSummary(m), "3 columns are left out: 2 not in every table, 1 of unlike kinds.");
+  assert.equal(mismatchSummary({ missing: [{}], kind: [], shared: [] }), "1 column is left out: 1 not in every table, 0 of unlike kinds.");
+});

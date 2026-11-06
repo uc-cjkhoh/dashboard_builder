@@ -71,6 +71,11 @@
 .entity__db { margin-left: var(--s2); color: var(--ink-3); font-weight: 400; }
 .entity__table { font-weight: 600; }
 .entity__note { margin: 0; padding: var(--s1) var(--s4); font-size: var(--fs-body); color: var(--ink-2); border-bottom: 1px solid var(--line); }
+.entity__diff { padding: var(--s1) var(--s4); border-bottom: 1px solid var(--line); font-size: var(--fs-body); }
+.entity__diff-btn { width: 100%; }
+.entity__diff-out { margin-top: var(--s1); color: var(--ink-2); }
+.entity__diff-sum { margin: 0; }
+.entity__diff-list { margin: var(--s1) 0 0; padding-left: var(--s4); max-height: 120px; overflow: auto; }
 .entity__title { flex: 1; font-size: var(--fs-body); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .entity__status { padding: var(--s2) var(--s4); display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
 .entity__error { flex-basis: 100%; margin: 0; color: var(--danger-ink); font-size: var(--fs-body); }

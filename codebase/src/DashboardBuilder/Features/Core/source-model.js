@@ -90,3 +90,26 @@ export const distinctMembers = (result) => (result?.rows ?? []).map((r) => r.key
 
 /** Names a new source must avoid in `db`: the database's tables (a real one of that name could be dragged on later) and the entities already on the canvas. */
 export const takenNames = (entities, db, tables) => [...tables, ...[...entities.values()].filter((e) => e.db === db).map((e) => e.table)];
+
+/** What a union leaves out, from each table's columns ({ table, columns: [{name, type, category}] }, in order): the same rule the server
+ *  applies (a column is kept when every table has it under one kind). `missing`: columns some tables lack; `kind`: columns every table
+ *  has but of unlike kinds; `shared`: the names kept. Read-only; it only reads the catalog columns the card already can fetch. */
+export function unionMismatch(tables) {
+  const names = [...new Set(tables.flatMap((t) => t.columns.map((c) => c.name)))];
+  const missing = [], kind = [], shared = [];
+  for (const name of names) {
+    const found = tables.map((t) => ({ table: t.table, col: t.columns.find((c) => c.name === name) }));
+    const have = found.filter((f) => f.col);
+    if (have.length < tables.length) missing.push({ column: name, in: have.map((f) => f.table), notIn: found.filter((f) => !f.col).map((f) => f.table) });
+    else if (new Set(have.map((f) => f.col.category)).size > 1) kind.push({ column: name, kinds: Object.fromEntries(have.map((f) => [f.table, f.col.category])) });
+    else shared.push(name);
+  }
+  return { missing, kind, shared };
+}
+
+/** One sentence over a unionMismatch result. */
+export function mismatchSummary(m) {
+  const n = m.missing.length + m.kind.length;
+  if (!n) return "Every column is in all tables.";
+  return `${n} column${n === 1 ? " is" : "s are"} left out: ${m.missing.length} not in every table, ${m.kind.length} of unlike kinds.`;
+}

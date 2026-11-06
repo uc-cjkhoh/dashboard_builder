@@ -7,6 +7,7 @@ import { expandSidebar } from "../Shell/sidebar.js";
 import { openColumnProfile } from "../Schema/column-profile-dialog.js";
 import { entityWidth } from "./card-width.js";
 import { snapTop } from "./align-snap.js";
+import { unionDiffControl } from "./union-diff.js";
 import { sourceNote, lossyNote, wireSource, MAX_SOURCE_COLUMNS } from "../Core/source-model.js";
 
 // Data Source canvas + entity cards. A table dropped from the sidebar (or added via the
@@ -259,6 +260,7 @@ export function initCanvas() {
       note.className = "entity__note";
       note.textContent = sourceNote(entity.source);
       body.prepend(note);
+      if (entity.source.kind === "union") note.after(unionDiffControl(entity.source));
     }
     card.append(head, status, body);
     return card;
