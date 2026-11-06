@@ -661,3 +661,28 @@ test("a custom percentile band with equal, NaN or string ends is reset on restor
     assert.ok(r.issues.some((i) => /analytics/.test(i)));
   }
 });
+
+// --- aggregate before joining
+test("aggregateFirst and a single-way filter direction round-trip; a plain relationship saves neither", () => {
+  assert.equal("aggregateFirst" in serializeWorkbook(sampleState()).relationships[0], false);
+  const s = sampleState();
+  Object.assign(s.relationships.get("rel#1"), { aggregateFirst: true, filterDirection: "single" });
+  const saved = serializeWorkbook(s);
+  assert.equal(saved.relationships[0].aggregateFirst, true);
+  assert.equal(saved.relationships[0].filterDirection, "single");
+  const back = parseWorkbook(JSON.stringify(saved)).relationships[0];
+  assert.equal(back.aggregateFirst, true);
+  assert.equal(back.filterDirection, "single");
+});
+test("an old file, a non-boolean flag and an unknown direction all read as the plain join", () => {
+  const raw = serializeWorkbook(sampleState());
+  assert.equal(parseWorkbook(JSON.stringify(raw)).relationships[0].aggregateFirst, undefined);
+  Object.assign(raw.relationships[0], { aggregateFirst: "yes", filterDirection: "up" });
+  const r = parseWorkbook(JSON.stringify(raw)).relationships[0];
+  assert.equal(r.aggregateFirst, undefined);
+  assert.equal(r.filterDirection, undefined);
+  Object.assign(raw.relationships[0], { aggregateFirst: true, filterDirection: "up" });
+  const t = parseWorkbook(JSON.stringify(raw)).relationships[0];
+  assert.equal(t.aggregateFirst, true);
+  assert.equal(t.filterDirection, undefined); // both is the default, never stored
+});

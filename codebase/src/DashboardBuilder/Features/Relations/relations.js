@@ -1,5 +1,5 @@
 import { entities, relationships, bus, emit, isModelActive } from "../Core/store.js";
-import { relEnds, linkIssue, pinOrder, matchingColumns, keysCompatible, kindLabel, unlinkedCards, joinChoices, joinBadge, joinSelection, joinFromSelection, isLegacyLeft } from "./relation-rules.js";
+import { relEnds, linkIssue, pinOrder, matchingColumns, keysCompatible, kindLabel, unlinkedCards, joinChoices, joinBadge, joinSelection, joinFromSelection, isLegacyLeft, applyAggregate, aggregateChoice } from "./relation-rules.js";
 import { toast, makeButton, openDialog, closeDialog } from "../Core/ui.js";
 import { api } from "../Core/api.js";
 import { previewRequest } from "./join-preview-model.js";
@@ -146,8 +146,8 @@ function proposeLink(a, b, focusEnd = null) {
     current: "1:N",
     tables: [a.table, b.table],
     keys: keyPairsFor(from, { entityId: b.entityId, column: b.column }, [], null),
-    onPick: (cardinality, sel, pairs) => {
-      createRelationship(from, { entityId: b.entityId, column: b.column }, cardinality, { ...joinFromSelection(sel), pairs });
+    onPick: (cardinality, sel, pairs, agg) => {
+      createRelationship(from, { entityId: b.entityId, column: b.column }, cardinality, { ...joinFromSelection(sel), pairs, agg });
       if (focusEnd) rowOf(focusEnd)?.focus(); // the link moves both rows into the key strips; keep the keyboard where it was
     },
   });
@@ -266,18 +266,18 @@ function keyPairsFor(from, to, pairs, rel) {
 }
 
 // --- relationship lifecycle ---------------------------------------------------
-function createRelationship(from, to, cardinality, { joinType, joinFixed, pairs } = { joinType: "inner", joinFixed: true }) {
+function createRelationship(from, to, cardinality, { joinType, joinFixed, pairs, agg } = { joinType: "inner", joinFixed: true }) {
   const id = `rel#${++seq}`;
-  relationships.set(id, { id, from, to, cardinality, joinType, joinFixed, ...(pairs?.length ? { pairs } : {}) });
+  relationships.set(id, applyAggregate({ id, from, to, cardinality, joinType, joinFixed, ...(pairs?.length ? { pairs } : {}) }, agg ?? {}));
   emit("rel:changed", { id });
   select(id);
   render();
 }
 
 /** Recreate a saved relationship (workbook open). Drawn once both endpoints' key rows exist. */
-export function restoreRelationship(from, to, cardinality, joinType = "inner", joinFixed = false, pairs = []) {
+export function restoreRelationship(from, to, cardinality, joinType = "inner", joinFixed = false, pairs = [], agg = {}) {
   const id = `rel#${++seq}`;
-  relationships.set(id, { id, from, to, cardinality, joinType, joinFixed, ...(pairs.length ? { pairs } : {}) });
+  relationships.set(id, applyAggregate({ id, from, to, cardinality, joinType, joinFixed, ...(pairs.length ? { pairs } : {}) }, agg));
   emit("rel:changed", { id });
   render();
 }
@@ -487,7 +487,8 @@ function editRelationship(rel) {
     legacy: isLegacyLeft(rel.joinType, rel.joinFixed),
     tables: [entities.get(rel.from.entityId)?.table ?? "first table", entities.get(rel.to.entityId)?.table ?? "second table"],
     keys: keyPairsFor(rel.from, rel.to, rel.pairs ?? [], rel),
-    onPick: (cardinality, sel, pairs) => { rel.cardinality = cardinality; Object.assign(rel, joinFromSelection(sel)); if (pairs?.length) rel.pairs = pairs; else delete rel.pairs; emit("rel:changed", { id: rel.id }); render(); },
+    agg: aggregateChoice(rel),
+    onPick: (cardinality, sel, pairs, agg) => { rel.cardinality = cardinality; Object.assign(rel, joinFromSelection(sel)); applyAggregate(rel, agg); if (pairs?.length) rel.pairs = pairs; else delete rel.pairs; emit("rel:changed", { id: rel.id }); render(); },
     onDelete: () => { relationships.delete(rel.id); emit("rel:changed", { id: rel.id }); select(null); render(); },
   });
 }
@@ -497,7 +498,7 @@ function select(id) {
   render();
 }
 
-function openCardinalityDialog({ current = "1:N", joinType = "inner", tables = ["first table", "second table"], legacy = false, keys = null, onPick, onDelete }) {
+function openCardinalityDialog({ current = "1:N", joinType = "inner", tables = ["first table", "second table"], legacy = false, keys = null, agg = { aggregate: false, direction: "both" }, onPick, onDelete }) {
   const dlg = document.createElement("dialog");
   dlg.className = "dialog dialog--sm";
 
@@ -525,6 +526,8 @@ function openCardinalityDialog({ current = "1:N", joinType = "inner", tables = [
     joinRow.append(lab);
   }
   body.append(joinRow);
+  let aggregate = agg.aggregate, direction = agg.direction;
+  body.append(buildAggregateChoice(agg, (v) => { aggregate = v.aggregate; direction = v.direction; }));
   if (keys) {
     body.append(buildKeyPairs(keys.section));
     body.append(buildJoinCheck(dlg, keys.check));
@@ -533,7 +536,7 @@ function openCardinalityDialog({ current = "1:N", joinType = "inner", tables = [
   choices.className = "card-choices";
   for (const c of CARDINALITIES) {
     const b = makeButton(c, `card-choice${c === current ? " is-active" : ""}`);
-    b.addEventListener("click", () => { closeDialog(dlg); onPick(c, join, keys?.pairs() ?? []); });
+    b.addEventListener("click", () => { closeDialog(dlg); onPick(c, join, keys?.pairs() ?? [], { aggregate, direction }); });
     choices.append(b);
   }
   body.append(choices);
@@ -553,6 +556,38 @@ function openCardinalityDialog({ current = "1:N", joinType = "inner", tables = [
   dlg.addEventListener("cancel", (e) => { e.preventDefault(); closeDialog(dlg); });
   document.body.append(dlg);
   openDialog(dlg);
+}
+
+// "Total each table by the key before joining" + which way a filter works (only shown once the box is ticked). Reports every change.
+function buildAggregateChoice(start, onChange) {
+  const box = document.createElement("fieldset");
+  box.className = "join-choice join-aggregate";
+  const legend = document.createElement("legend");
+  legend.textContent = "Totals";
+  const state = { ...start };
+  const lab = document.createElement("label");
+  lab.className = "form-check";
+  const check = document.createElement("input");
+  check.type = "checkbox"; check.checked = state.aggregate;
+  lab.append(check, document.createTextNode(" Total each table by the key before joining, so a total isn't repeated"));
+  const dir = document.createElement("fieldset");
+  dir.className = "join-choice join-aggregate__dir";
+  dir.hidden = !state.aggregate;
+  const dl = document.createElement("legend");
+  dl.textContent = "Filters";
+  dir.append(dl);
+  for (const [value, text] of [["both", "A filter on either table also limits the other"], ["single", "A filter changes only its own table"]]) {
+    const l = document.createElement("label");
+    l.className = "form-check";
+    const r = document.createElement("input");
+    r.type = "radio"; r.name = "filter-direction"; r.value = value; r.checked = state.direction === value;
+    r.addEventListener("change", () => { if (r.checked) { state.direction = value; onChange(state); } });
+    l.append(r, document.createTextNode(` ${text}`));
+    dir.append(l);
+  }
+  check.addEventListener("change", () => { state.aggregate = check.checked; dir.hidden = !check.checked; onChange(state); });
+  box.append(legend, lab, dir);
+  return box;
 }
 
 // --- geometry helpers ---------------------------------------------------------

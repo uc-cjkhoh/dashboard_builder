@@ -29,3 +29,12 @@ test("a one-to-many link warns that the one side repeats", () => {
   assert.equal(describeRelationship(rel({ cardinality: "1:N" }), "a", "b").sentences.length, 3);
   assert.equal(describeRelationship(rel({ cardinality: "N:1" }), "a", "b").sentences.length, 2);
 });
+test("a link that aggregates before joining says totals are not repeated, and which way filters go", () => {
+  const plain = describeRelationship(rel({ cardinality: "N:M" }), "a", "b").sentences;
+  const agg = describeRelationship(rel({ cardinality: "N:M", aggregateFirst: true }), "a", "b").sentences;
+  assert.ok(agg.some((s) => /totalled by the key before they join/.test(s)));
+  assert.ok(agg.some((s) => /filter on either table also limits the other/.test(s)));
+  assert.ok(!agg.some((s) => /repeat for each matching/.test(s))); // the fan-out warning goes
+  assert.ok(plain.some((s) => /repeat for each matching/.test(s)));
+  assert.ok(describeRelationship(rel({ aggregateFirst: true, filterDirection: "single" }), "a", "b").sentences.some((s) => /filter changes only its own table/.test(s)));
+});
