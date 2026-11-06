@@ -35,9 +35,11 @@ export function openParametersDialog() {
       const del = makeButton("Delete", "btn"); del.setAttribute("aria-label", `Delete parameter ${p.name}`);
       del.addEventListener("click", async () => {
         const users = calcsUsingParam(calculations, p.name); // a calculated field that reads it would stop computing
-        if (users.length && !(await confirmDialog(`“${p.name}” is read by ${users.length === 1 ? "calculation" : "calculations"} ${users.map((u) => `'${u}'`).join(", ")}. Deleting it leaves ${users.length === 1 ? "it" : "them"} unable to compute until you edit the formula or add a parameter with that name.`, { danger: true, confirmText: "Delete" }))) return;
         const refs = paramRefs(worksheets().map((t) => ({ name: t.name, sheet: t.sheet })), sharedFilters, p.id); // these fall back to their own typed value
-        if (refs.length && !(await confirmDialog(`“${p.name}” is used by ${refs.join("; ")}. Deleting it unlinks them (each keeps its own typed value, so results may change). Deleting a parameter can't be undone.`, { danger: true, confirmText: "Delete" }))) return;
+        const notes = [];
+        if (users.length) notes.push(`“${p.name}” is read by ${users.length === 1 ? "calculation" : "calculations"} ${users.map((u) => `'${u}'`).join(", ")}. Deleting it leaves ${users.length === 1 ? "it" : "them"} unable to compute until you edit the formula or add a parameter with that name.`);
+        if (refs.length) notes.push(`“${p.name}” is used by ${refs.join("; ")}. Deleting it unlinks them (each keeps its own typed value, so results may change). Deleting a parameter can't be undone.`);
+        if (notes.length && !(await confirmDialog(notes.join(" "), { danger: true, confirmText: "Delete" }))) return;
         removeParameter(p.id); render();
       });
       li.append(info, edit, del);
