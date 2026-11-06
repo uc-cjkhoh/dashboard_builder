@@ -57,7 +57,7 @@ internal sealed class AggregateJoin(bool filterBoth)
             case "countnonnull": return $"sum({P($"count({expr})")})";
             case "avg": return $"sum({P($"sum({expr})")}) / nullIf(sum({P($"count({expr})")}), 0)";
             default:
-                throw new RequestValidationException($"{char.ToUpperInvariant(agg[0])}{agg[1..]} can't be combined before the join — use Sum, Count, Min, Max or Average, or turn off aggregating before the join.", field);
+                throw new RequestValidationException($"{(agg.Length == 0 ? "That aggregation" : char.ToUpperInvariant(agg[0]) + agg[1..])} can't be combined before the join — use Sum, Count, Min, Max or Average, or turn off aggregating before the join.", field);
         }
     }
 

@@ -131,8 +131,50 @@ public class AggregateJoinTests
         using var stub = await Run(req);
         var sql = stub.Statements.Single(x => x.Sql.StartsWith("SELECT t0.`region` AS k0")).Sql;
         Assert.Contains("sum(t0.`__m0`) AS v0, sum(t1.`__m0`) AS v1 FROM (SELECT t0.`id` AS `id`, t0.`region` AS `region`, sum(t0.`amount`) AS `__m0` FROM `db`.`orders` AS t0 WHERE t0.`id` IN (SELECT t1.`order_id` FROM `db`.`items` AS t1 WHERE t1.`qty` > {p0:Float64}) GROUP BY t0.`id`, t0.`region`) AS t0 INNER JOIN (SELECT t1.`order_id` AS `order_id`, count() AS `__m0` FROM `db`.`items` AS t1 WHERE t1.`qty` > {p0:Float64} GROUP BY t1.`order_id`) AS t1 ON t0.`id` = t1.`order_id` GROUP BY k0", sql);
-        Assert.DoesNotContain("1000", sql);
+        Assert.EndsWith(" LIMIT 51", sql.Trim());
+        Assert.DoesNotContain("> 2", sql); // the value is bound, never written into the statement
     }
+
+    private static async Task<string> Main(QueryRequest req)
+    {
+        using var stub = await Run(req);
+        return stub.Statements.Single(x => x.Sql.StartsWith("SELECT t")).Sql;
+    }
+    private static JoinRef JT(string? type, bool? agg = true, string? dir = null) =>
+        new(new ColumnRef("db", "orders", "id"), new ColumnRef("db", "items", "order_id"), type, null, agg, dir);
+
+    [Fact] public async Task Single_direction_filters_stay_inside_their_own_table_only()
+    {
+        var sql = await Main(Q([J(true, "single")], null, [new QueryFilter("db", "items", "qty", ">", "2")]));
+        Assert.Contains("FROM `db`.`items` AS t1 WHERE t1.`qty` > {p0:Float64} GROUP BY", sql);
+        Assert.DoesNotContain(" IN (SELECT", sql);
+    }
+    [Fact] public async Task An_average_sends_a_sum_and_a_count_and_divides_the_sums()
+    {
+        var sql = await Main(Q([J()], [new MeasureRef("db", "orders", "amount", "avg")]));
+        Assert.Contains("sum(t0.`__m0`) / nullIf(sum(t0.`__m1`), 0) AS v0", sql);
+        Assert.Contains("sum(t0.`amount`) AS `__m0`, count(t0.`amount`) AS `__m1`", sql);
+    }
+    [Fact] public async Task A_dimension_on_the_second_table_is_a_group_column_of_its_subquery()
+    {
+        var sql = await Main(Q([J()], null, null, [new ColumnRef("db", "items", "qty")]));
+        Assert.StartsWith("SELECT t1.`qty` AS k0", sql);
+        Assert.Contains("(SELECT t1.`order_id` AS `order_id`, t1.`qty` AS `qty` FROM `db`.`items` AS t1 GROUP BY", sql);
+        Assert.Contains("GROUP BY t1.`order_id`, t1.`qty`) AS t1", sql);
+    }
+    [Fact] public async Task A_left_join_keeps_its_keyword_between_the_subqueries()
+    {
+        var sql = await Main(Q([JT("left")]));
+        Assert.Contains(") AS t0 LEFT JOIN (SELECT t1.`order_id`", sql);
+        Assert.Contains("join_use_nulls = 1", sql);
+    }
+    [Fact] public void A_flagged_join_on_a_union_source_is_refused()
+    {
+        var q = Q([J()]) with { Source = new QuerySource("union", "db", "orders", ["a", "b"]) };
+        Assert.Equal("joins", FieldOf(q));
+    }
+    [Fact] public void An_empty_aggregation_is_refused_not_a_crash()
+        => Assert.Equal("measures[0]", FieldOf(Q([J()], [new MeasureRef("db", "orders", "amount", "")])));
 
     [Fact] public async Task An_unflagged_join_is_the_plain_join()
     {

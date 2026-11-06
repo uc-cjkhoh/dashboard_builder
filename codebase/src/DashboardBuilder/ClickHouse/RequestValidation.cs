@@ -179,6 +179,7 @@ public static class RequestRules
         {
             var m = r.Measures![i];
             if (m.Calc is not null) throw Bad("A calculated measure can't be combined before the join — turn off aggregating before the join on the relationship.", $"measures[{i}]");
+            if (m.Agg is { Length: 0 }) throw Bad("A measure needs an aggregation.", $"measures[{i}]");
             var agg = (m.Agg ?? "count").ToLowerInvariant();
             if (!AggregateJoin.Combinable.Contains(agg))
                 throw Bad($"{char.ToUpperInvariant(agg[0])}{agg[1..]} can't be combined before the join — use Sum, Count, Min, Max or Average, or turn off aggregating before the join.", $"measures[{i}]");
