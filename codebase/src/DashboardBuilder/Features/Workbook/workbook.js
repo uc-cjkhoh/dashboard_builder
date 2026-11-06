@@ -1,6 +1,6 @@
 import {
   entities, relationships, tabs, bus, currentView,
-  createWorksheet, createDashboard, createStory, setSteps, updateSheet, setWidgets, setDashboardSize, nextWidgetId, closeTab, showModel, switchTab, currentTheme, setTheme,
+  createWorksheet, createDashboard, createStory, setSteps, updateSheet, setWidgets, setDashboardSize, setDashboardRange, nextWidgetId, closeTab, showModel, switchTab, currentTheme, setTheme,
   nextCalcId, sharedFilters, setSharedFilters, fieldMeta, setAllFieldMeta, parameters, setParameters, hierarchies, setHierarchies, calculations, setCalculations,
 } from "../Core/store.js";
 import { clearRoleChoices } from "../Calc/calc-pane-model.js";
@@ -197,7 +197,7 @@ function openWorkbook(wb) {
       : w.kind === "nav" ? { id: nextWidgetId(), kind: "nav", label: w.label, tip: w.tip, target: w.target ? (w.target.kind === "worksheet" ? worksheetIds : dashboardIds)[w.target.index] ?? null : null, x: w.x, y: w.y, w: w.w, h: w.h }
       : w.kind === "spacer" ? { id: nextWidgetId(), kind: "spacer", x: w.x, y: w.y, w: w.w, h: w.h }
       : { id: nextWidgetId(), kind: "text", heading: w.heading, body: w.body, x: w.x, y: w.y, w: w.w, h: w.h }))));
-    wb.dashboards.forEach((d, i) => { if (d.size) setDashboardSize(dashboardIds[i], d.size); });
+    wb.dashboards.forEach((d, i) => { if (d.size) setDashboardSize(dashboardIds[i], d.size); if (d.range) setDashboardRange(dashboardIds[i], d.range); });
     const activeId = wb.active ? (wb.active.kind === "worksheet" ? worksheetIds : wb.active.kind === "story" ? storyIds : dashboardIds)[wb.active.index] : null;
     if (activeId) switchTab(activeId);
     else showModel();

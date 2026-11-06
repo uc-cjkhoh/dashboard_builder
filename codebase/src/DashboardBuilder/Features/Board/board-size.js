@@ -33,3 +33,66 @@ export function cleanSize(raw, where, issues) {
 
 /** The saved fragment: `{ size }` for a fixed dashboard, `{}` for Automatic. */
 export const savedSize = (size) => (size ? { size: { width: size.width, height: size.height } } : {});
+
+// Range size — an Automatic dashboard may bound its board: `range` { minWidth?, maxWidth?, minHeight?, maxHeight? } (each optional, whole pixels inside
+// SIZE_LIMITS, min <= max). The board is the panel's width clamped to the range; its height is the content height clamped (scrolling inside past the maximum).
+// A fixed size wins over a range. Saved as an optional `range` on the dashboard.
+export const RANGE_KEYS = Object.freeze(["minWidth", "maxWidth", "minHeight", "maxHeight"]);
+const RANGE_LIMIT = { minWidth: ["minW", "maxW", "width"], maxWidth: ["minW", "maxW", "width"], minHeight: ["minH", "maxH", "height"], maxHeight: ["minH", "maxH", "height"] };
+
+/** The first thing wrong with a range: { error, keys } (keys = the limits at fault), or null. */
+export function rangeProblem(range) {
+  if (!range || typeof range !== "object" || Array.isArray(range)) return { error: "A size range is an object.", keys: [] };
+  for (const k of Object.keys(range)) if (!RANGE_KEYS.includes(k)) return { error: `Unknown range field "${k}".`, keys: [] };
+  let any = false;
+  for (const k of RANGE_KEYS) {
+    const v = range[k];
+    if (v == null) continue;
+    any = true;
+    const [lo, hi, what] = RANGE_LIMIT[k];
+    if (!Number.isInteger(v)) return { error: "The range is whole pixels.", keys: [k] };
+    if (v < SIZE_LIMITS[lo] || v > SIZE_LIMITS[hi]) return { error: `The ${what} is ${SIZE_LIMITS[lo]}–${SIZE_LIMITS[hi]} pixels.`, keys: [k] };
+  }
+  if (!any) return { error: "Set at least one limit.", keys: [] };
+  if (range.minWidth != null && range.maxWidth != null && range.minWidth > range.maxWidth) return { error: "The minimum width is above the maximum width.", keys: ["minWidth", "maxWidth"] };
+  if (range.minHeight != null && range.maxHeight != null && range.minHeight > range.maxHeight) return { error: "The minimum height is above the maximum height.", keys: ["minHeight", "maxHeight"] };
+  return null;
+}
+/** The first thing wrong with a range, in the user's words, or null. */
+export const rangeError = (range) => rangeProblem(range)?.error ?? null;
+
+/** Only the set limits of a range (a copy). */
+function pickLimits(range) { const o = {}; for (const k of RANGE_KEYS) if (range[k] != null) o[k] = range[k]; return o; }
+
+/** Import: saved `range` → a clean { …limits } or null. Anything `rangeError` refuses is rejected, never clamped, with an issue. */
+export function cleanRange(raw, where, issues) {
+  if (raw == null) return null;
+  const error = rangeError(raw);
+  if (error) { issues.push(`${where}: the saved size range was ignored (${error.replace(/\.$/, "")}).`); return null; }
+  return pickLimits(raw);
+}
+
+/** The saved fragment: `{ range }` or `{}`. */
+export const savedRange = (range) => (range ? { range: pickLimits(range) } : {});
+
+/** The board's width for a panel width: clamped into the range. */
+export function rangedWidth(range, panel) {
+  let w = panel;
+  if (range?.maxWidth != null) w = Math.min(w, range.maxWidth);
+  if (range?.minWidth != null) w = Math.max(w, range.minWidth);
+  return w;
+}
+/** The board's height for its content height: at least the minimum, at most the maximum. */
+export function rangedHeight(range, content) {
+  let h = content;
+  if (range?.maxHeight != null) h = Math.min(h, range.maxHeight);
+  if (range?.minHeight != null) h = Math.max(h, range.minHeight);
+  return h;
+}
+
+/** A short label for a range, e.g. "800–1280 × 400+". */
+export function rangeLabel(range) {
+  if (!range) return "";
+  const part = (lo, hi) => (lo != null && hi != null ? `${lo}–${hi}` : lo != null ? `${lo}+` : hi != null ? `up to ${hi}` : "any");
+  return `${part(range.minWidth, range.maxWidth)} × ${part(range.minHeight, range.maxHeight)}`;
+}
