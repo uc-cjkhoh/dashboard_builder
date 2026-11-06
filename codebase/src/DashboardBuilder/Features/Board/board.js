@@ -10,7 +10,7 @@ import { nextSelection, selectionRefusal, crossFor, chipText, stillValid, UNSELE
 import { placeNew, NAV_LABEL } from "./board-model.js";
 import { validateImageFile, isImageSrc, imageChars, budgetError } from "./image-model.js";
 import { layoutBoard, widgetOrder, fixedRowH } from "./board-layout.js";
-import { SIZE_PRESETS, sizeKey, sizeLabel, rangeError, rangedWidth, rangedHeight, rangeLabel, RANGE_KEYS } from "./board-size.js";
+import { SIZE_PRESETS, sizeKey, sizeLabel, rangeProblem, rangedWidth, rangedHeight, rangeLabel, RANGE_KEYS } from "./board-size.js";
 import { createWidget } from "./board-widget.js";
 import { createPanel } from "./board-panel.js";
 import { initInteract } from "./board-interact.js";
@@ -145,7 +145,10 @@ export function initBoard() {
     grid.classList.toggle("is-ranged", Boolean(range));
     grid.style.width = fixed ? `${fixed.width}px` : "";
     let width = fixed ? fixed.width : printing ? PRINT_WIDTH : grid.clientWidth;
-    if (range && width) { width = rangedWidth(range, width); grid.style.width = `${width}px`; }
+    if (range) { // the box is the panel clamped into the range; widgets fill what is left after the (stable) scrollbar gutter
+      const outer = rangedWidth(range, panelInner());
+      if (outer > 0) { grid.style.width = `${outer}px`; width = grid.clientWidth; }
+    }
     if (!width) return;
     const { height, rects } = layoutBoard(dash.widgets, width, { ...metrics, stack: printing && !fixed, fixed }); // paper: one column in flow, so no widget splits across pages
     if (printing) for (const [id, r] of rects) entries.get(id)?.sizeChart({ width: r.width, height: r.height, chrome: { x: 2 * metrics.pad + 2, y: 2 * metrics.pad + 2 } });
@@ -384,22 +387,30 @@ export function initBoard() {
   rangeBox.hidden = true;
   const rangeInputs = {};
   const RANGE_LABELS = { minWidth: "Min width", maxWidth: "Max width", minHeight: "Min height", maxHeight: "Max height" };
-  for (const k of RANGE_KEYS) {
-    const inp = document.createElement("input");
-    inp.type = "number"; inp.className = "input board-bar__rangein"; inp.placeholder = RANGE_LABELS[k]; inp.setAttribute("aria-label", `${RANGE_LABELS[k]} in pixels`);
-    inp.addEventListener("change", () => {
-      const dash = activeDashboard();
-      if (!dash?.range) return;
-      const next = {};
-      for (const key of RANGE_KEYS) { const t = rangeInputs[key].value.trim(); if (t !== "") next[key] = Number(t); }
-      const err = rangeError(next);
-      for (const key of RANGE_KEYS) rangeInputs[key].setAttribute("aria-invalid", err ? "true" : "false");
-      if (err) { status(err, true); return; }
-      setDashboardRange(dash.id, next);
-      status(`Size range ${rangeLabel(next)}.`);
-    });
-    rangeInputs[k] = inp;
-    rangeBox.append(inp);
+  const onRangeChange = () => {
+    const dash = activeDashboard();
+    if (!dash?.range) return;
+    const next = {};
+    for (const key of RANGE_KEYS) { const t = rangeInputs[key].value.trim(); if (t !== "") next[key] = Number(t); }
+    const problem = rangeProblem(next);
+    for (const key of RANGE_KEYS) rangeInputs[key].setAttribute("aria-invalid", problem?.keys.includes(key) ? "true" : "false");
+    if (problem) { status(problem.error, true); return; }
+    setDashboardRange(dash.id, next);
+    status(`Size range ${rangeLabel(next)}.`);
+  };
+  for (const [what, keys] of [["Width", ["minWidth", "maxWidth"]], ["Height", ["minHeight", "maxHeight"]]]) {
+    const grp = document.createElement("span");
+    grp.className = "board-bar__rangegrp"; grp.setAttribute("role", "group"); grp.setAttribute("aria-label", `${what} limits`);
+    const title = document.createElement("span"); title.className = "board-bar__rangetitle"; title.textContent = what; grp.append(title);
+    for (const k of keys) {
+      const lab = document.createElement("label"); lab.className = "board-bar__rangelab";
+      lab.append(document.createTextNode(k.startsWith("min") ? "Min" : "Max"));
+      const inp = document.createElement("input");
+      inp.type = "number"; inp.className = "input board-bar__rangein"; inp.setAttribute("aria-label", `${RANGE_LABELS[k]} in pixels`);
+      inp.addEventListener("change", onRangeChange);
+      rangeInputs[k] = inp; lab.append(inp); grp.append(lab);
+    }
+    rangeBox.append(grp);
   }
   function paintRange(dash) {
     const on = Boolean(dash.range && !dash.size);

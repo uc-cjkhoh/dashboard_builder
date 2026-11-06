@@ -40,40 +40,42 @@ export const savedSize = (size) => (size ? { size: { width: size.width, height: 
 export const RANGE_KEYS = Object.freeze(["minWidth", "maxWidth", "minHeight", "maxHeight"]);
 const RANGE_LIMIT = { minWidth: ["minW", "maxW", "width"], maxWidth: ["minW", "maxW", "width"], minHeight: ["minH", "maxH", "height"], maxHeight: ["minH", "maxH", "height"] };
 
-/** The first thing wrong with a range, in the user's words, or null. */
-export function rangeError(range) {
-  if (!range || typeof range !== "object" || Array.isArray(range)) return "A size range is an object.";
+/** The first thing wrong with a range: { error, keys } (keys = the limits at fault), or null. */
+export function rangeProblem(range) {
+  if (!range || typeof range !== "object" || Array.isArray(range)) return { error: "A size range is an object.", keys: [] };
+  for (const k of Object.keys(range)) if (!RANGE_KEYS.includes(k)) return { error: `Unknown range field "${k}".`, keys: [] };
   let any = false;
-  for (const k of Object.keys(range)) if (!RANGE_KEYS.includes(k)) return `Unknown range field "${k}".`;
   for (const k of RANGE_KEYS) {
     const v = range[k];
     if (v == null) continue;
     any = true;
     const [lo, hi, what] = RANGE_LIMIT[k];
-    if (!Number.isInteger(v)) return "The range is whole pixels.";
-    if (v < SIZE_LIMITS[lo] || v > SIZE_LIMITS[hi]) return `The ${what} is ${SIZE_LIMITS[lo]}–${SIZE_LIMITS[hi]} pixels.`;
+    if (!Number.isInteger(v)) return { error: "The range is whole pixels.", keys: [k] };
+    if (v < SIZE_LIMITS[lo] || v > SIZE_LIMITS[hi]) return { error: `The ${what} is ${SIZE_LIMITS[lo]}–${SIZE_LIMITS[hi]} pixels.`, keys: [k] };
   }
-  if (!any) return "Set at least one limit.";
-  if (range.minWidth != null && range.maxWidth != null && range.minWidth > range.maxWidth) return "The minimum width is above the maximum width.";
-  if (range.minHeight != null && range.maxHeight != null && range.minHeight > range.maxHeight) return "The minimum height is above the maximum height.";
+  if (!any) return { error: "Set at least one limit.", keys: [] };
+  if (range.minWidth != null && range.maxWidth != null && range.minWidth > range.maxWidth) return { error: "The minimum width is above the maximum width.", keys: ["minWidth", "maxWidth"] };
+  if (range.minHeight != null && range.maxHeight != null && range.minHeight > range.maxHeight) return { error: "The minimum height is above the maximum height.", keys: ["minHeight", "maxHeight"] };
   return null;
 }
+/** The first thing wrong with a range, in the user's words, or null. */
+export const rangeError = (range) => rangeProblem(range)?.error ?? null;
+
+/** Only the set limits of a range (a copy). */
+function pickLimits(range) { const o = {}; for (const k of RANGE_KEYS) if (range[k] != null) o[k] = range[k]; return o; }
 
 /** Import: saved `range` → a clean { …limits } or null. Anything `rangeError` refuses is rejected, never clamped, with an issue. */
 export function cleanRange(raw, where, issues) {
   if (raw == null) return null;
   const error = rangeError(raw);
   if (error) { issues.push(`${where}: the saved size range was ignored (${error.replace(/\.$/, "")}).`); return null; }
-  const out = {};
-  for (const k of RANGE_KEYS) if (raw[k] != null) out[k] = raw[k];
-  return out;
+  return pickLimits(raw);
 }
 
 /** The saved fragment: `{ range }` or `{}`. */
-export const savedRange = (range) => (range ? { range: cleanRangeCopy(range) } : {});
-function cleanRangeCopy(range) { const o = {}; for (const k of RANGE_KEYS) if (range[k] != null) o[k] = range[k]; return o; }
+export const savedRange = (range) => (range ? { range: pickLimits(range) } : {});
 
-/** The board's width for a panel width: clamped into the range (min wins when the range is contradictory — rangeError forbids that). */
+/** The board's width for a panel width: clamped into the range. */
 export function rangedWidth(range, panel) {
   let w = panel;
   if (range?.maxWidth != null) w = Math.min(w, range.maxWidth);

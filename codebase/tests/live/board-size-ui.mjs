@@ -145,12 +145,61 @@ try {
     await setRange('Min height', ''); await setRange('Max height', '300');
     await waitFor(`document.getElementById('board-grid').getBoundingClientRect().height === 300`, 'max height 300');
     must(await ev(`(() => { const g = document.getElementById('board-grid'); return g.scrollHeight > g.clientHeight; })()`), 'board does not scroll inside');
+    must(await ev(`(() => { const g = document.getElementById('board-grid'); return g.scrollWidth <= g.clientWidth; })()`), 'no horizontal overflow inside the ranged board (scrollbar gutter)');
+    const gw = await ev(`(() => { const g = document.getElementById('board-grid'); const r = g.getBoundingClientRect(); return [...document.querySelectorAll('.board-widget')].every((e) => e.getBoundingClientRect().right <= r.left + g.clientWidth + 1); })()`);
+    must(gw, 'a widget is clipped at the right edge');
   });
   await check('Range: an invalid set is refused in place and not saved', async () => {
     await setRange('Min height', '500'); // above the 300 maximum
-    must(await ev(`document.querySelector('.board-bar__rangein').getAttribute('aria-invalid') === 'true'`), 'not marked invalid');
+    const inv = await ev(`[...document.querySelectorAll('.board-bar__rangein')].map((i) => i.getAttribute('aria-invalid'))`);
+    must(J(inv) === J(['false', 'false', 'true', 'true']), 'only the two height inputs are invalid: ' + J(inv));
+    must(await ev(`/minimum height/.test(document.querySelector('.board-bar__status')?.textContent ?? document.body.textContent)`), 'the status line does not say which limit');
+    await setRange('Min height', '250'); // valid again: the marks clear
+    const ok = await ev(`[...document.querySelectorAll('.board-bar__rangein')].map((i) => i.getAttribute('aria-invalid'))`);
+    must(ok.every((v) => v === 'false'), 'aria-invalid not reset after a valid edit: ' + J(ok));
+    must(await ev(`document.getElementById('board-grid').getBoundingClientRect().height === 300`), 'layout wrong after valid edit');
+    await setRange('Min height', '500');
     must(await ev(`document.getElementById('board-grid').getBoundingClientRect().height === 300`), 'layout changed');
     await setRange('Max height', '');
+  });
+  await check('Range: visible labels name every limit (Width / Height, Min / Max)', async () => {
+    const t = await ev(`[...document.querySelectorAll('.board-bar__rangegrp')].map((g) => g.textContent.replace(/\\s+/g, ' ').trim())`);
+    must(J(t) === J(['WidthMinMax', 'HeightMinMax']), 'labels: ' + J(t));
+  });
+  await check('Range: drag and resize still land on the right cell in a scrolled ranged board', async () => {
+    await setRange('Min height', ''); await setRange('Max height', '300'); await setRange('Max width', '1000'); await setRange('Min width', '');
+    await waitFor(`document.getElementById('board-grid').getBoundingClientRect().height === 300`, 'height 300');
+    await ev(`(() => { const g = document.getElementById('board-grid'); g.scrollTop = g.scrollHeight; return true; })()`);
+    await b.sleep(200);
+    const top = await ev(`document.getElementById('board-grid').scrollTop`);
+    must(top > 100, 'grid did not scroll: ' + top);
+    const hOf = () => store(`return st.activeDashboard().widgets[0].h;`);
+    const h0 = await hOf();
+    const g = await ev(`(() => { const w = document.querySelector('.board-widget'); const r = w.querySelector('.board-widget__resize').getBoundingClientRect(); const gr = document.getElementById('board-grid').getBoundingClientRect(); const h = w.getBoundingClientRect().height; return { x: Math.round(r.left + r.width - 4), y: Math.round(r.top + r.height - 4), h, gt: gr.top, gb: gr.bottom }; })()`);
+    must(g.y > g.gt && g.y < g.gb, 'grip not visible after scroll: ' + J(g));
+    const step = (g.h + 8) / h0, dy = -Math.round(2 * step);
+    const mouse = (type, x, y) => b.send('Input.dispatchMouseEvent', { type, x, y, button: 'left', buttons: type === 'mouseReleased' ? 0 : 1, clickCount: 1 });
+    await mouse('mouseMoved', g.x, g.y); await mouse('mousePressed', g.x, g.y);
+    for (let i = 1; i <= 6; i++) await mouse('mouseMoved', g.x, g.y + (dy * i) / 6);
+    await mouse('mouseReleased', g.x, g.y + dy);
+    await waitFor(`true`, 'settle'); await b.sleep(300);
+    const h1 = await hOf();
+    must(Math.abs((h0 - h1) - 2) <= 1 && h1 < h0, `resize by 2 rows from ${h0} gave ${h1} (scroll offset ignored?)`);
+  });
+  await check('Range: dropping a worksheet from the side panel onto a scrolled ranged board lands at the cell under the pointer', async () => {
+    await store(`const d = st.activeDashboard(); st.setWidgets(d.id, d.widgets.map((w, i) => ({ ...w, h: i === 0 ? 8 : 2 })));`);
+    await ev(`(() => { const g = document.getElementById('board-grid'); g.scrollTop = 250; return true; })()`);
+    await b.sleep(200);
+    const m = await ev(`(() => { const g = document.getElementById('board-grid'), gr = g.getBoundingClientRect(), ws = [...document.querySelectorAll('.board-widget')].map((e) => e.getBoundingClientRect());
+      const step = (ws[0].height + 8) / 8; return { left: ws[1].left, top: gr.top, st: g.scrollTop, step }; })()`);
+    must(m.st > 100, 'did not scroll: ' + J(m));
+    const p = { x: Math.round(m.left + 10), y: Math.round(m.top - m.st + 5 * m.step + 10) }; // content row 5, column 6
+    const fire = (type, sel, pt, dt) => `document.querySelector(${J(sel)}).dispatchEvent(new DragEvent(${J(type)}, { bubbles: true, cancelable: true, dataTransfer: ${dt}, clientX: ${pt?.x ?? 0}, clientY: ${pt?.y ?? 0} }))`;
+    await ev(`(() => { window.__dt = new DataTransfer(); ${fire('dragstart', '.board-panel__item[data-sheet-id]', null, 'window.__dt')}; ${fire('drop', '#board-scroll', p, 'window.__dt')}; return true; })()`);
+    await waitFor(`document.querySelectorAll('.board-widget').length === 3`, 'dropped widget added');
+    const [x, y] = await store(`const w = st.activeDashboard().widgets.at(-1); return [w.x, w.y];`);
+    must(x === 6 && y === 5, `landed at col ${x}, row ${y}; wanted 6, 5 (scroll offset ignored?)`);
+    await store(`const d = st.activeDashboard(); st.setWidgets(d.id, d.widgets.slice(0, 2));`);
   });
   await check('Range: survives a reload; a fixed size wins and drops it', async () => {
     await b.sleep(700);
@@ -164,6 +213,11 @@ try {
     await pick('auto');
   });
 
+  await check('screenshot: dark, range', async () => {
+    await pick('range'); await b.setScheme('dark'); await b.sleep(400);
+    await shot('board-size-range-dark.png');
+    await b.setScheme('light');
+  });
   await check('screenshot: dark, fixed', async () => {
     await pick('1280x720'); await b.setScheme('dark'); await b.sleep(400);
     await shot('board-size-fixed-dark.png');

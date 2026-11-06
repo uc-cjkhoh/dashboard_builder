@@ -23,7 +23,7 @@ export function initInteract(ctx) {
   let dragEl = null; // the widget being dragged
   let abort = null, dragId = null; // ends the running gesture without committing
 
-  const point = (e) => { const r = grid.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+  const point = (e) => { const r = grid.getBoundingClientRect(); return { x: e.clientX - r.left + grid.scrollLeft, y: e.clientY - r.top + grid.scrollTop }; }; // a ranged board scrolls inside itself
   const cctx = () => { const dash = ctx.getDash(); return { widgets: dash?.widgets ?? [], panelWidth: grid.clientWidth, metrics: ctx.metrics(), nameOf: ctx.nameOf }; };
 
   function showGhost(g) {

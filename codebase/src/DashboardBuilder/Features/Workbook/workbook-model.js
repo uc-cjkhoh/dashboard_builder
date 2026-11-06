@@ -255,6 +255,7 @@ export function parseWorkbook(source) {
     d.widgets = cleanWidgets(remapped, { worksheetCount: worksheets.length, dashboardCount: dashboards.length, ownDashboard: ownIndex, where: `Dashboard "${d.name}"`, budget }, issues);
     d.size = cleanSize(d.size, `Dashboard "${d.name}"`, issues);
     d.range = cleanRange(d.range, `Dashboard "${d.name}"`, issues);
+    if (d.size && d.range) { issues.push(`Dashboard "${d.name}": the saved size range was ignored (a fixed size wins).`); d.range = null; }
   });
 
   // A step's tab is read through the maps, so one cut by the 50-tab cap is "missing" like any other dangling index.

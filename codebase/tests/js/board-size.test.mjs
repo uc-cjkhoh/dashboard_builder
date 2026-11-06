@@ -127,3 +127,17 @@ test("workbook round trip keeps a range; a bad saved range is ignored with an is
   assert.deepEqual(out.dashboards[0].range, { maxHeight: 900 });
   assert.equal("range" in out.dashboards[1], false);
 });
+
+import { rangeProblem } from "../../src/DashboardBuilder/Features/Board/board-size.js";
+test("rangeProblem names the limits at fault", () => {
+  assert.deepEqual(rangeProblem({ minHeight: 900, maxHeight: 400 }).keys, ["minHeight", "maxHeight"]);
+  assert.deepEqual(rangeProblem({ minWidth: 100 }).keys, ["minWidth"]);
+  assert.equal(rangeProblem({ maxWidth: 900 }), null);
+});
+
+test("import: a dashboard with both size and range keeps the size and drops the range with an issue", () => {
+  const wb = parseWorkbook(wbText({ name: "D", widgets: [], size: { width: 800, height: 600 }, range: { maxWidth: 1000 } }));
+  assert.deepEqual(wb.dashboards[0].size, { width: 800, height: 600 });
+  assert.equal(wb.dashboards[0].range, null);
+  assert.ok(wb.issues.some((i) => /fixed size wins/.test(i)));
+});
