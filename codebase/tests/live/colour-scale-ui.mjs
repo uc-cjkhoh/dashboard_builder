@@ -224,6 +224,29 @@ try {
     await shot('diverging-heatmap-dark.png');
     await ev(`document.documentElement.removeAttribute('data-scheme')`);
   });
+  await check('Steps: a heatmap legend of discrete steps named in words, on both scales, light and dark', async () => {
+    await setSelect('Steps', '5'); await settle(500);
+    let v = await vm();
+    must(v && v.type === 'piecewise' && v.pieces.length === 5, 'five pieces: ' + J(v?.pieces?.length));
+    must(v.pieces.every((p) => / to /.test(p.label)) && new Set(v.pieces.map((p) => p.color)).size === 5, 'boundaries in words, five colours: ' + J(v.pieces.map((p) => p.label)));
+    must(/centre/.test((await ev(`window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas')).getOption()`)).title?.[0]?.text ?? ''), 'centre named in the note');
+    await ev(`document.getElementById('toast').hidden = true`);
+    await shot('steps-diverging-light.png');
+    await ev(`document.documentElement.setAttribute('data-scheme', 'dark')`); await settle(400);
+    await setSelect('Steps', '5'); await settle(500); // redraw so the chart re-reads the dark tokens
+    await shot('steps-diverging-dark.png');
+    await ev(`document.documentElement.removeAttribute('data-scheme')`); await settle(300);
+    await setSelect('Colour scale', 'sequential'); await settle(400);
+    v = await vm();
+    must(v.type === 'piecewise' && v.pieces.length === 5, 'sequential steps too');
+    await shot('steps-sequential-light.png');
+    await ev(`document.documentElement.setAttribute('data-scheme', 'dark')`); await settle(400);
+    await setSelect('Steps', '5'); await settle(500); // redraw so the chart re-reads the dark tokens
+    await shot('steps-sequential-dark.png');
+    await ev(`document.documentElement.removeAttribute('data-scheme')`);
+    await setSelect('Steps', '0'); await settle(400);
+    must((await vm()).type === 'continuous', 'Continuous restores the gradient');
+  });
   if (b.consoleErrors.length) console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  '));
 } catch (e) {
   console.log(`FAIL harness: ${e.stack}`); failed++;

@@ -264,6 +264,7 @@ export const defaultFormat = () => ({
   colorMax: null, // pinned high end
   colorScale: "sequential", // sequential | diverging — scatter / heatmap continuous colour
   colorCentre: null, // the diverging scale's centre value (null = 0 when the data straddles it, else the middle)
+  colorSteps: 0, // 0 = continuous gradient; 2–9 = that many discrete colour steps (scatter / heatmap)
   xTitle: null,
   yTitle: null,
   target: null,

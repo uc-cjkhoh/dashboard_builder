@@ -66,3 +66,39 @@ export function divergingRange(lo, hi, centre) {
   const half = Math.max(c - lo, hi - c, 0) || 1;
   return { min: c - half, max: c + half, centre: c };
 }
+
+/** [value, label] — `format.colorSteps`: 0 = a smooth gradient, else that many discrete colour steps. */
+export const STEP_CHOICES = Object.freeze([[0, "Continuous"], ...[3, 4, 5, 6, 7, 8, 9].map((n) => [n, `${n} steps`])]);
+
+/** Why a step count is refused, or null (blank / 0 = continuous; otherwise a whole number 2 to 9). */
+export function colourStepsError(n) {
+  if (n == null || n === 0) return null;
+  return Number.isInteger(n) && n >= 2 && n <= 9 ? null : "Colour steps must be a whole number from 2 to 9.";
+}
+
+/** `n` colours sampled evenly along the ramp (2 or 3 stops); the first and last equal the ramp's ends. */
+export function stepColours(ramp, n) {
+  const segs = ramp.length - 1;
+  return Array.from({ length: n }, (_, i) => {
+    const at = n === 1 ? 0 : (i / (n - 1)) * segs;
+    const k = Math.min(Math.floor(at), segs - 1);
+    return at - k === 0 ? ramp[k] : mixHex(ramp[k], ramp[k + 1], at - k);
+  });
+}
+
+/** The n + 1 boundaries splitting min..max into `n` equal steps. */
+export const stepBounds = (min, max, n) => Array.from({ length: n + 1 }, (_, i) => min + ((max - min) * i) / n);
+
+/**
+ * ECharts piecewise pieces for `n` steps over min..max. The outer steps are open-ended, so a value beyond the range
+ * (a pinned end) takes the end step's colour. Each label names its boundaries in words ("20 to 40").
+ */
+export function stepPieces(min, max, n, ramp, fmt) {
+  const b = stepBounds(min, max, n), cols = stepColours(ramp, n);
+  return cols.map((color, i) => {
+    const piece = { color, label: `${fmt(b[i])} to ${fmt(b[i + 1])}` };
+    if (i > 0) piece.gte = b[i];
+    if (i < n - 1) piece.lt = b[i + 1];
+    return piece;
+  });
+}
