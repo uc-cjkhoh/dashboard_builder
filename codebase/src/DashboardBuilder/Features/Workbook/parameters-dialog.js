@@ -1,7 +1,7 @@
 // Workbook menu → Parameters…: add, edit and delete the workbook's parameters (name, type, allowed
 // values, current value). Each value is checked by Core/parameters-model.js before it is kept.
-import { parameters, calculations, addParameter, updateParameter, removeParameter } from "../Core/store.js";
-import { PARAM_TYPES, MAX_PARAMS, MAX_LIST, checkValue, checkStep, checkParamName } from "../Core/parameters-model.js";
+import { parameters, calculations, worksheets, sharedFilters, addParameter, updateParameter, removeParameter } from "../Core/store.js";
+import { PARAM_TYPES, MAX_PARAMS, MAX_LIST, checkValue, checkStep, checkParamName, paramRefs } from "../Core/parameters-model.js";
 import { text } from "../Core/validate.js";
 import { calcsUsingParam } from "../Calc/calc-params.js";
 import { makeButton, openDialog, closeDialog, toast, confirmDialog } from "../Core/ui.js";
@@ -36,6 +36,8 @@ export function openParametersDialog() {
       del.addEventListener("click", async () => {
         const users = calcsUsingParam(calculations, p.name); // a calculated field that reads it would stop computing
         if (users.length && !(await confirmDialog(`“${p.name}” is read by ${users.length === 1 ? "calculation" : "calculations"} ${users.map((u) => `'${u}'`).join(", ")}. Deleting it leaves ${users.length === 1 ? "it" : "them"} unable to compute until you edit the formula or add a parameter with that name.`, { danger: true, confirmText: "Delete" }))) return;
+        const refs = paramRefs(worksheets().map((t) => ({ name: t.name, sheet: t.sheet })), sharedFilters, p.id); // these fall back to their own typed value
+        if (refs.length && !(await confirmDialog(`“${p.name}” is used by ${refs.join("; ")}. Deleting it unlinks them (each keeps its own typed value, so results may change). Deleting a parameter can't be undone.`, { danger: true, confirmText: "Delete" }))) return;
         removeParameter(p.id); render();
       });
       li.append(info, edit, del);

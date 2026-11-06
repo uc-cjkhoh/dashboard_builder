@@ -973,10 +973,11 @@ export function initDashboards() {
       if (a.band && !a.band.kind) {
         const numParams = parameters.filter((p) => p.type === "number");
         const setEnd = (end, patch) => set({ band: { ...a.band, ...patch } });
+        const nowOf = (id) => { const v = Number(numParams.find((p) => p.id === id)?.value); return Number.isFinite(v) ? v : undefined; }; // unbinding keeps the number the end showed
         for (const [end, label] of [["from", "from"], ["to", "to"]]) { // each end: a typed number, or follows a number parameter
           const pk = `${end}Param`, bound = numParams.some((p) => p.id === a.band[pk]) ? a.band[pk] : "";
           const unbind = { [pk]: undefined };
-          if (bound) panel.append(fmtSelect(label, [["", "A typed value"], ...numParams.map((p) => [p.id, `Parameter: ${p.name}`])], bound, (v) => setEnd(end, v ? { [pk]: v } : unbind)));
+          if (bound) panel.append(fmtSelect(label, [["", "A typed value"], ...numParams.map((p) => [p.id, `Parameter: ${p.name}`])], bound, (v) => setEnd(end, v ? { [pk]: v } : { ...unbind, [end]: nowOf(bound) ?? a.band[end] })));
           else {
             panel.append(fmtNumber(label, a.band[end], "0", (v) => setEnd(end, { [end]: v ?? 0 })));
             if (numParams.length) panel.append(fmtSelect(`${label} follows`, [["", "none"], ...numParams.map((p) => [p.id, p.name])], "", (v) => setEnd(end, v ? { [pk]: v } : unbind)));

@@ -86,7 +86,8 @@ export function removeParameter(id) {
   const i = parameters.findIndex((x) => x.id === id);
   if (i < 0) return;
   parameters.splice(i, 1);
-  for (const t of worksheets()) dropParamRefs(t.sheet, id); // before the event, so the views redraw without it
+  for (const t of worksheets()) dropParamRefs(t.sheet, id);
+  for (const f of sharedFilters) if (f.param === id) delete f.param; // before the event, so the views redraw without it
   emit("parameters:changed");
 }
 

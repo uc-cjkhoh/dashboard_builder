@@ -67,3 +67,13 @@ test("dropParamRefs clears every reference to a deleted parameter and leaves oth
   assert.equal(dropParamRefs({ paramAction: { param: "prm2" } }, "prm1"), false);
   assert.equal(dropParamRefs({}, "prm1"), false);
 });
+
+import { paramRefs } from "../../src/DashboardBuilder/Features/Core/parameters-model.js";
+test("paramRefs lists every reader of a parameter", () => {
+  const sheets = [{ name: "S1", sheet: { paramAction: { param: "prm1" }, filters: [{ column: "region", param: "prm1" }, { column: "b", param: "prm2" }], format: { topNParam: "prm1" },
+    analytics: { ref: { kind: "constant", param: "prm1" }, band: { fromParam: "prm1", toParam: "prm2" } } } }, { name: "S2", sheet: {} }];
+  const r = paramRefs(sheets, [{ column: "c", param: "prm1" }], "prm1");
+  assert.equal(r.length, 6);
+  assert.ok(r.includes("S1: a filter on region") && r.includes("S1: Top N") && r.includes("a shared filter on c"));
+  assert.deepEqual(paramRefs(sheets, [], "prm9"), []);
+});
