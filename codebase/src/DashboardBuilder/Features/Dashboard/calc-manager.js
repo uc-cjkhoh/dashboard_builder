@@ -27,7 +27,7 @@ export function openCalcManager(ctx) {
     else {
       const list = el("ul", "calc-manager__list");
       for (const item of items) {
-        // One element per row: the field chip itself, with Edit built into it (a pencil at its end; pressing the name does the same).
+        // One element per row: the field chip itself, with Edit built into it (a pencil at its end; double-clicking the row places it on its shelf).
         const li = el("li", "calc-manager__row");
         const chip = ctx.chip(item);
         const edit = el("button", "iconbtn calc-manager__edit");
@@ -36,7 +36,6 @@ export function openCalcManager(ctx) {
         edit.setAttribute("aria-label", `Edit ${item.calc.name}`);
         edit.title = "Edit";
         edit.addEventListener("click", () => ctx.onEdit(item));
-        chip.querySelector(".ws-field__name")?.addEventListener("click", () => ctx.onEdit(item));
         chip.append(edit);
         li.append(chip);
         list.append(li);

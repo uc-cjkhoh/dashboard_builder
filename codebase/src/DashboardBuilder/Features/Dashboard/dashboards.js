@@ -2,7 +2,7 @@ import { api } from "../Core/api.js";
 import { icon, PATHS } from "../Core/icons.js";
 import { wireMenu, wireContextMenu } from "../Core/menu.js";
 import { sameRef, choicesOf, switchField, removeChoice as removeChoiceFrom } from "./field-choices.js";
-import { defaultShelf } from "./placement-model.js";
+import { defaultShelf, placesOnDblClick } from "./placement-model.js";
 import { fieldPillOptions, filterPillOptions, filterSummary, markGrid } from "./pill-options.js";
 import { visibleTools } from "./toolbar-rules.js";
 import { roleOf, STAT_SINGLE_TABLE, showMeOptions } from "./show-me-rules.js";
@@ -488,14 +488,17 @@ export function initDashboards() {
     if (!bad) {
       chip.draggable = true;
       const payload = () => calcPayload(item);
-      const shelfKey = payload().role === "measure" ? "rows" : "columns";
+      const { shelf: shelfKey, label: shelfLabel } = defaultShelf(payload().role);
       const add = el("button", "ws-field__add");
       add.append(icon("plus", { size: 14 }));
       add.type = "button";
-      add.setAttribute("aria-label", `Add ${calc.name} to ${shelfKey === "rows" ? "Rows" : "Columns"}`);
-      add.title = `Add to ${shelfKey === "rows" ? "Rows" : "Columns"}`;
-      add.addEventListener("click", () => { const dash = activeWorksheet(); if (dash) addField(dash, shelfKey, payload()); });
+      add.setAttribute("aria-label", `Add ${calc.name} to ${shelfLabel}`);
+      add.title = `Add to ${shelfLabel}`;
+      const place = () => { const dash = activeWorksheet(); if (dash) addField(dash, shelfKey, payload()); };
+      add.addEventListener("click", place);
       chip.append(add);
+      // Double-click places it on its default shelf, as in the field pane (the plus button is the keyboard path).
+      chip.addEventListener("dblclick", (e) => { if (placesOnDblClick(e.target)) place(); });
       chip.addEventListener("dragstart", (e) => {
         e.dataTransfer.setData(FIELD_MIME, JSON.stringify(payload()));
         e.dataTransfer.effectAllowed = "copy";
@@ -585,7 +588,7 @@ export function initDashboards() {
     chip.append(add);
     // Double-click places the field on its default shelf (the plus button is the keyboard path).
     chip.addEventListener("dblclick", (e) => {
-      if (e.target.closest("input, [contenteditable]")) return;
+      if (!placesOnDblClick(e.target)) return;
       const dash = activeWorksheet();
       if (dash) addField(dash, shelfKey, payload);
     });
