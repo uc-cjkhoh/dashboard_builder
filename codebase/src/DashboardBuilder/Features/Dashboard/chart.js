@@ -2,7 +2,7 @@ import { makeValueFormatter } from "../Core/format.js";
 import { ACCENTS, PALETTES } from "../Core/theme-model.js";
 import { pickInk } from "./contrast.js";
 import { orderedPalette } from "./colour-model.js";
-import { divergingColours, divergingRange, rampColours, rangeOf } from "./colour-scale-model.js";
+import { DIV_FALLBACK, divergingColours, divergingRange, rampColours, rangeOf } from "./colour-scale-model.js";
 import { tooltipHtml } from "./tooltip-model.js";
 import { tipLookup } from "./tooltip-formats.js";
 import { lineStep } from "./line-style-model.js";
@@ -64,7 +64,7 @@ function tokens() {
   // instead (below), keeping the common case on-brand.
   const catFallback = PALETTES.default.light;
   const cat = orderedPalette(catFallback.map((hex, i) => t(`--chart-cat-${i + 1}`, hex)), reversed());
-  const rampTk = { accent: t("--accent", ACCENTS.signal.light.accent), accentSoft: t("--accent-soft", ACCENTS.signal.light.soft), surface: t("--surface", "#ffffff"), cat: catFallback.map((hex, i) => t(`--chart-cat-${i + 1}`, hex)) };
+  const rampTk = { divLow: t("--chart-div-low", DIV_FALLBACK.low), divHigh: t("--chart-div-high", DIV_FALLBACK.high), accent: t("--accent", ACCENTS.signal.light.accent), accentSoft: t("--accent-soft", ACCENTS.signal.light.soft), surface: t("--surface", "#ffffff"), cat: catFallback.map((hex, i) => t(`--chart-cat-${i + 1}`, hex)) };
   return {
     series: t("--chart-series", ACCENTS.signal.light.accent),
     cat,
@@ -774,6 +774,7 @@ function buildHeatmap({ xCats, yCats, cells, format = {} }) {
   const cellEdge = format.markBorder && format.markBorder !== "none" ? markBorder(format.markBorder, c.muted) : { borderColor: c.surface, borderWidth: 1 };
   const vals = cells.map((d) => d[2]).filter((v) => v != null);
   const { min, max } = colourScaleRange(vals, true);
+  const legendNote = [centreNote(min, max, fmtVal), outOfRangeNote()].filter(Boolean).join(" · ");
   return {
     textStyle: { fontFamily: c.font, color: c.label },
     tooltip: {
@@ -798,7 +799,7 @@ function buildHeatmap({ xCats, yCats, cells, format = {} }) {
     visualMap: {
       min, max, calculable: true, dimension: 2, orient: "horizontal", left: "center", bottom: 6,
       inRange: { color: c.ramp }, // single-hue sequential (soft → saturated), tokens; a pinned end saturates
-      text: [outOfRangeNote(), centreNote(min, max, fmtVal)].some(Boolean) ? [[centreNote(min, max, fmtVal), outOfRangeNote()].filter(Boolean).join(" · "), ""] : undefined,
+      text: legendNote ? [legendNote, ""] : undefined,
       textStyle: { color: c.muted, fontFamily: c.font }, formatter: (v) => fmtVal(v),
     },
     series: [circles
@@ -1196,10 +1197,11 @@ function sizeScaler(values, accessor) {
 }
 // The scale's ends: the data span unless Format pinned one.
 // Unpinned, a heatmap keeps its plain data span (`plain`); a scatter always gets a non-empty one.
-const colourPinned = () => drawing?.colorMin != null || drawing?.colorMax != null;
+// A diverging scale has no pins (its ends follow the centre), so Format hides them and a stored pin is ignored.
+const colourPinned = () => drawing?.colorScale !== "diverging" && (drawing?.colorMin != null || drawing?.colorMax != null);
 const colourScaleRange = (nums, plain = false) => {
   if (drawing?.colorScale === "diverging") { // symmetric about the centre, so the middle colour sits on it
-    const r = rangeOf(nums, drawing?.colorMin, drawing?.colorMax);
+    const r = rangeOf(nums);
     return divergingRange(r.min, r.max, drawing?.colorCentre);
   }
   if (plain && !colourPinned()) { const v = nums.filter((x) => Number.isFinite(x)); return { min: v.length ? Math.min(...v) : 0, max: v.length ? Math.max(...v) : 1 }; }

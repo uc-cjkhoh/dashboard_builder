@@ -18,7 +18,7 @@ const COLUMNS = {
   orders: [['amount', 'Float64', 'numeric'], ['qty', 'Int32', 'numeric'], ['region', 'String', 'text'], ['discount', 'Float64', 'numeric'], ['placed', 'DateTime', 'temporal']],
   customers: [['country', 'String', 'text']],
 };
-const REGIONS = ['APAC', 'EU', 'US'];
+const REGIONS = ['APAC', 'EU', 'US', 'LATAM', 'MEA', 'CA', 'UK', 'JP'];
 const queries = [];     // every /api/query body, in order
 let tables = ['orders', 'customers'];
 function answer({ method, path, body }) {
@@ -196,11 +196,33 @@ try {
     must(w.min + w.max === 40 && w.min <= lo && w.max >= hi, 'symmetric about 20: ' + J([w.min, w.max]));
     must(/centre 20/.test(w.text[0]), 'legend: ' + J(w.text));
     await shot('diverging-light.png');
-    await ev(`document.documentElement.setAttribute('data-theme', 'dark')`); await settle(300);
-    await shot('diverging-dark.png');
-    await ev(`document.documentElement.removeAttribute('data-theme')`);
+    must(!(await ev(`!!(${fmtField('Colour from')})`)), 'no pins while diverging (the ends follow the centre)');
+    await setNum('Colour centre', '1e20'); await settle(300);
+    must((await toastText()).includes('1e15'), 'bad centre refused with a toast: ' + await toastText());
+    must(await ev(`${fmtField('Colour centre')}.querySelector('input').value`) === '20', 'refused centre not kept');
+    await ev(`document.documentElement.setAttribute('data-scheme', 'dark')`); await settle(400);
+    await ev(`document.getElementById('toast').hidden = true`);
+    await shot('diverging-scatter-dark.png');
+    await ev(`document.documentElement.removeAttribute('data-scheme')`); await settle(300);
+    await ev(`document.getElementById('toast').hidden = true`);
+    await shot('diverging-scatter-light.png');
     await setSelect('Colour scale', 'sequential'); await settle(400);
     must((await vm()).inRange.color.length === 2, 'back to the sequential ramp');
+    must(await ev(`!!(${fmtField('Colour from')})`), 'pins return with the sequential scale');
+  });
+  await check('Diverging heatmap: legend names the centre; light and dark shots', async () => {
+    await ev(`document.querySelector('.ws-pick--chart .ws-pick__btn').click()`);
+    await ev(`[...document.querySelectorAll('.ws-charttypes .menu__item')].find((x) => x.textContent.trim() === 'Heatmap').click()`);
+    await settle(400);
+    await dragChip('country', `__t.zone('columns')`); await settle(400);
+    await setSelect('Colour scale', 'diverging'); await settle(500);
+    const v = await vm();
+    must(v && v.inRange.color.length === 3 && /centre/.test(v.text?.[0] ?? ''), 'heatmap legend: ' + J(v?.text));
+    await ev(`document.getElementById('toast').hidden = true`);
+    await shot('diverging-heatmap-light.png');
+    await ev(`document.documentElement.setAttribute('data-scheme', 'dark')`); await settle(400);
+    await shot('diverging-heatmap-dark.png');
+    await ev(`document.documentElement.removeAttribute('data-scheme')`);
   });
   if (b.consoleErrors.length) console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  '));
 } catch (e) {

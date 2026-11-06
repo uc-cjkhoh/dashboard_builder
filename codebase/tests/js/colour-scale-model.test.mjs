@@ -51,15 +51,17 @@ test("sheet round trip: colorRamp, colorMin, colorMax; old sheets default; bad v
   assert.equal(sw.format.colorMin, null); assert.equal(sw.format.colorMax, null); assert.ok(swapped.some((i) => /colour range/.test(i)));
 });
 
-import { SCALE_CHOICES, divergingColours, divergingRange } from "../../src/DashboardBuilder/Features/Dashboard/colour-scale-model.js";
+import { DIV_FALLBACK, colourCentreError, SCALE_CHOICES, divergingColours, divergingRange } from "../../src/DashboardBuilder/Features/Dashboard/colour-scale-model.js";
 
 test("scale choices: sequential and diverging", () => {
   assert.deepEqual(SCALE_CHOICES.map(([v]) => v), ["sequential", "diverging"]);
 });
 
 test("divergingColours: warm token low, surface centre, blue token high; reverse swaps the ends", () => {
-  assert.deepEqual(divergingColours(tk, false), [tk.cat[5], tk.surface, tk.cat[0]]);
-  assert.deepEqual(divergingColours(tk, true), [tk.cat[0], tk.surface, tk.cat[5]]);
+  const d = { ...tk, divLow: "#d98a4a", divHigh: "#2b62b8" };
+  assert.deepEqual(divergingColours(d, false), ["#d98a4a", tk.surface, "#2b62b8"]);
+  assert.deepEqual(divergingColours(d, true), ["#2b62b8", tk.surface, "#d98a4a"]);
+  assert.equal(divergingColours(tk, false)[0], DIV_FALLBACK.low); // no tokens: the fallbacks
 });
 
 test("divergingRange: symmetric about the centre so the middle colour sits on it", () => {
@@ -88,4 +90,15 @@ test("sheet round trip: colorScale and colorCentre; old sheets default; bad valu
   const issues = [];
   const bad = sanitizeSheet({ ...s, format: { ...s.format, colorScale: "x", colorCentre: "a" } }, "S", issues);
   assert.equal(bad.format.colorScale, "sequential"); assert.equal(bad.format.colorCentre, null); assert.equal(issues.length, 2);
+});
+
+test("colourCentreError: blank and sane numbers pass; huge ones refused", () => {
+  assert.equal(colourCentreError(null), null); assert.equal(colourCentreError(-3.5), null); assert.equal(colourCentreError(1e15), null);
+  assert.ok(colourCentreError(1e16)); assert.ok(colourCentreError(Infinity)); assert.ok(colourCentreError(NaN));
+});
+
+test("sanitize: an oversized colour centre is cleared and reported", () => {
+  const s = emptySheet("S"); const issues = [];
+  const r = sanitizeSheet({ ...s, format: { ...s.format, colorCentre: 1e20 } }, "S", issues);
+  assert.equal(r.format.colorCentre, null); assert.equal(issues.length, 1);
 });

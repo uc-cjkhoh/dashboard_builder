@@ -42,10 +42,19 @@ export function rangeOf(values, min, max) {
 /** [value, label] — `format.colorScale`: one hue low → high, or two hues meeting at a centre value. */
 export const SCALE_CHOICES = Object.freeze([["sequential", "Low → high"], ["diverging", "Diverging"]]);
 
-/** The diverging ramp's [low, centre, high]: warm token, surface, blue token (the table scale's pair). `tk.cat` = the eight categorical tokens. */
+/** Token fallbacks for the diverging pair (the light theme's values; core.css `--chart-div-low` / `--chart-div-high` win). */
+export const DIV_FALLBACK = Object.freeze({ low: "#d98a4a", high: "#2b62b8" });
+
+/** The diverging ramp's [low, centre, high]: the warm token, the surface, the cool token. `tk` = { surface, divLow, divHigh }. */
 export function divergingColours(tk, reverse) {
-  const [low, high] = [tk.cat[5] ?? tk.accent, tk.cat[0] ?? tk.accent];
+  const [low, high] = [tk.divLow ?? DIV_FALLBACK.low, tk.divHigh ?? DIV_FALLBACK.high];
   return reverse ? [high, tk.surface, low] : [low, tk.surface, high];
+}
+
+/** Why a colour centre is refused, or null (blank is fine; a finite number no larger than 1e15 in size). */
+export function colourCentreError(v) {
+  if (v == null) return null;
+  return Number.isFinite(v) && Math.abs(v) <= 1e15 ? null : "The colour centre must be a number no larger than 1e15.";
 }
 
 /**
