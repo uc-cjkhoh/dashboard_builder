@@ -312,6 +312,9 @@ test("a filter on a measure is kept when valid and removed when not", () => {
   assert.equal(bad.worksheets[0].sheet.rows[0].having, undefined);
   assert.equal(bad.worksheets[0].sheet.rows[1].having, undefined);
   assert.equal(bad.issues.filter((i) => /measure filter/.test(i)).length, 2);
+  const empty = sheetOf({ rows: [{ ...m, having: { op: ">=", value: "" } }] }); // chosen, not yet typed: dropped without a complaint
+  assert.equal(empty.worksheets[0].sheet.rows[0].having, undefined);
+  assert.equal(empty.issues.filter((i) => /measure filter/.test(i)).length, 0);
 });
 
 test("field settings (P28) round-trip; bad ones are dropped and counted", () => {

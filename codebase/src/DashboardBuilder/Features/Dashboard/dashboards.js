@@ -1544,7 +1544,7 @@ export function initDashboards() {
     const write = (opv) => {
       const next = opv === "between" ? { op: opv, values: [inputs[0]?.value ?? "", inputs[1]?.value ?? ""] } : { op: opv, value: inputs[0]?.value ?? "" };
       if (opv === "between" && cur.op !== "between") next.values = [inputs[0]?.value ?? "", ""];
-      if (!next.value && !next.values?.some((v) => String(v).trim())) delete f.having; else f.having = next;
+      f.having = next; // an operator with no number yet is kept (it filters nothing until the number is typed); Clear removes it
       commit(dash, s);
     };
     op.addEventListener("change", () => write(op.value));
@@ -1610,10 +1610,10 @@ export function initDashboards() {
       }
     }, { keep: (id) => id === "agg:percentile" || id === "labels", custom: { percent: () => percentInput(dash, s, f, label), having: () => havingEditor(dash, s, f, measureName({ ...f, agg: f.agg ?? "sum" })) } });
     const cast = calcPill ? null : castOf(f);
-    if (isMeasure && havingBadge(f.having)) { // the pill says it filters, in text and an icon (never colour alone)
+    if (isMeasure && checkHaving(f.having).state !== "empty") { // the pill says it filters, in text and an icon (never colour alone)
       const bad = checkHaving(f.having).state === "invalid";
       const b = el("span", `ws-pill__badge ws-pill__having-badge${bad ? " is-invalid" : ""}`);
-      b.append(icon(bad ? "warning" : "filter", { size: 12 }), document.createTextNode(havingBadge(f.having)));
+      b.append(icon(bad ? "warning" : "filter", { size: 12 }), document.createTextNode(bad ? "not applied" : havingBadge(f.having)));
       b.title = bad ? checkHaving(f.having).error : `Keeps groups where ${havingSentence(measureName({ ...f, agg: f.agg ?? "sum" }), f.having)}`;
       controls.append(b);
     }

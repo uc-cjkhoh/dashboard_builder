@@ -4,7 +4,7 @@
 // It never contains the connection or a password — a workbook is reopened against whatever server the
 // session is connected to. Format v2 holds `worksheets`, `dashboards`, optional `stories` and `tabs`; the v1 reader
 // (migrateV1: v1 `dashboards` were worksheets) stays for good — old files and old autosaves must open.
-import { cleanHaving } from "../Dashboard/having-model.js";
+import { cleanHaving, checkHaving } from "../Dashboard/having-model.js";
 import { emptySheet, defaultFormat } from "../Core/store.js";
 import { LIMITS, text, isFraction } from "../Core/validate.js";
 import { aggsFor } from "../Dashboard/filter-rules.js";
@@ -342,7 +342,9 @@ function cleanPill(raw, where, issues, needCategory = true) {
   // A filter on the aggregated measure: a valid comparison with a plain number, else dropped and reported.
   if (p.having !== undefined) {
     const h = cleanHaving(p.having);
-    if (h) p.having = h; else { issues.push(`${where}: the measure filter on ${p.table}.${p.column} was invalid — removed.`); delete p.having; }
+    if (h) p.having = h;
+    else if (checkHaving(p.having).state === "empty") delete p.having; // an operator with no number yet filters nothing
+    else { issues.push(`${where}: the measure filter on ${p.table}.${p.column} was invalid — removed.`); delete p.having; }
   }
   // Table calculation: a known type, direction and window (2–30).
   if (p.tableCalc !== undefined) {
