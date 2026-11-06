@@ -618,3 +618,18 @@ test("a saved file's old bookmarks are ignored without a report", () => {
   assert.equal(wb.bookmarks, undefined);
   assert.deepEqual(wb.issues, []);
 });
+
+test("a saved parameter action or band parameter that points at a missing parameter is dropped on open (ids are reused)", () => {
+  const raw = (params) => wbText({ parameters: params, dashboards: [{ name: "S", sheet: { paramAction: { param: "prm1" },
+    analytics: { ref: { kind: "none" }, band: { from: 0, to: 9, fromParam: "prm1", toParam: "prm2" } } } }] });
+  const p = (id, name) => ({ id, name, type: "number", value: 5, allowed: { kind: "any" } });
+  const kept = parseWorkbook(raw([p("prm1", "A"), p("prm2", "B")])).worksheets[0].sheet;
+  assert.deepEqual(kept.paramAction, { param: "prm1" });
+  assert.equal(kept.analytics.band.fromParam, "prm1");
+  assert.equal(kept.analytics.band.toParam, "prm2");
+  const gone = parseWorkbook(raw([p("prm2", "B")]));
+  assert.equal(gone.worksheets[0].sheet.paramAction, null);
+  assert.equal(gone.worksheets[0].sheet.analytics.band.fromParam, undefined);
+  assert.equal(gone.worksheets[0].sheet.analytics.band.toParam, "prm2");
+  assert.ok(gone.issues.some((i) => /parameter action/.test(i)));
+});

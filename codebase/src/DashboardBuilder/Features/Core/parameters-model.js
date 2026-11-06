@@ -82,3 +82,17 @@ export function cleanParameter(raw, issues) {
   if (!v.ok) issues.push(`Parameter "${name.value}": its value was invalid — reset.`);
   return p;
 }
+
+/** Clear every reference a worksheet holds to the parameter `id` (a filter, Top N, reference line, band end, parameter action); true when anything changed.
+ *  Ids are reused after a save and reopen, so a stale one would bind to an unrelated new parameter. Mutates `sheet`. */
+export function dropParamRefs(sheet, id) {
+  let changed = false;
+  const drop = (o, k) => { if (o && o[k] === id) { delete o[k]; changed = true; } };
+  for (const f of sheet?.filters ?? []) drop(f, "param");
+  drop(sheet?.format, "topNParam");
+  drop(sheet?.analytics?.ref, "param");
+  drop(sheet?.analytics?.band, "fromParam");
+  drop(sheet?.analytics?.band, "toParam");
+  if (sheet?.paramAction?.param === id) { sheet.paramAction = null; changed = true; }
+  return changed;
+}

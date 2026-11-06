@@ -24,6 +24,7 @@ import { renameInFormulas } from "../Calc/calc-workbook.js";
 import { renameParamInFormulas } from "../Calc/calc-params.js";
 import { copyName, copySheet, canDuplicate } from "../Tabs/duplicate-model.js";
 import { LIMITS } from "./validate.js";
+import { dropParamRefs } from "./parameters-model.js";
 import { clearNavTarget } from "../Board/nav-model.js";
 import { removeSheetWidgets, defaultTabName } from "../Board/board-model.js";
 import { dropTarget } from "../Story/story-model.js";
@@ -83,7 +84,10 @@ export function updateParameter(id, patch) {
 }
 export function removeParameter(id) {
   const i = parameters.findIndex((x) => x.id === id);
-  if (i >= 0) { parameters.splice(i, 1); emit("parameters:changed"); }
+  if (i < 0) return;
+  parameters.splice(i, 1);
+  for (const t of worksheets()) dropParamRefs(t.sheet, id); // before the event, so the views redraw without it
+  emit("parameters:changed");
 }
 
 // Named hierarchies: workbook-level { id, name, levels: [{ db, table, column }] } (Dashboard/hierarchy-model.js).

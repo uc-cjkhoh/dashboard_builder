@@ -131,6 +131,28 @@ try {
     await pickParamAction('Pick');
     must(J(await ev(`(async () => (await import('/features/Core/store.js')).activeWorksheet().sheet.paramAction)()`)) === '{"param":"prm1"}', 'not stored');
   });
+  await check('a typed band end follows a number parameter and re-draws when its value changes', async () => {
+    await setSheet(`s.analytics = { ref: { kind: 'none' }, band: { from: 0, to: 1000, fromParam: 'prm2' }, trend: 'none', forecast: 0, totals: { grand: false, sub: false } }`);
+    const area = () => ev(`(() => { const o = ${instOf}.getOption(); const a = o.series[0].markArea?.data?.[0]; return a ? JSON.stringify([a[0].yAxis ?? a[0].xAxis, a[1].yAxis ?? a[1].xAxis]) : ''; })()`);
+    await waitFor(`!!${chartHost}`, 'chart'); await settle();
+    await waitFor(`${instOf}.getOption().series[0].markArea?.data?.length`, 'band drawn');
+    must(J(JSON.parse(await area())) === '[5,1000]', `band: ${await area()}`);
+    await store(`st.updateParameter('prm2', { value: 7 })`);
+    await waitFor(`JSON.stringify((() => { const a = ${instOf}.getOption().series[0].markArea.data[0]; return [a[0].yAxis ?? a[0].xAxis, a[1].yAxis ?? a[1].xAxis]; })()) === '[7,1000]'`, 'band follows');
+  });
+  await check('deleting a parameter removes its chip button and clears the saved action (ids are reused after reopen)', async () => {
+    await clickBar('APAC');
+    await waitFor(`/Set Pick/.test(document.querySelector('.ws-select')?.textContent ?? '')`, 'Set Pick back');
+    await store(`st.removeParameter('prm1'); st.removeParameter('prm2')`);
+    await waitFor(`!/Set /.test(document.querySelector('.ws-select')?.textContent ?? '')`, 'chip button gone');
+    must(J(await ev(`(async () => (await import('/features/Core/store.js')).activeWorksheet().sheet.paramAction)()`)) === 'null', 'paramAction kept');
+    must(J(await ev(`(async () => (await import('/features/Core/store.js')).activeWorksheet().sheet.analytics.band.fromParam ?? null)()`)) === 'null', 'band link kept');
+    // a new parameter takes the next id and must not inherit the action
+    await store(`st.addParameter({ name: 'Fresh', type: 'text', value: 'x', allowed: { kind: 'any' } })`);
+    await clickBar('EU');
+    await waitFor(`!!document.querySelector('.ws-select')`, 'chip'); await b.sleep(200);
+    must(!/Set /.test(await chipText()), `chip: ${await chipText()}`);
+  });
 
 } finally { await b?.close(); }
 console.log(`${passed} passed, ${failed} failed`);

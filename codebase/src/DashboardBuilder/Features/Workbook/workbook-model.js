@@ -494,7 +494,14 @@ function cleanAnalytics(a, where, issues) {
     if (b.kind === "stddev" && (b.k === 1 || b.k === 2)) out.band = { kind: "stddev", k: b.k };
     else if (b.kind === "percentile" && ((b.lo === 25 && b.hi === 75) || (b.lo === 10 && b.hi === 90))) out.band = { kind: "percentile", lo: b.lo, hi: b.hi };
     else bad = true;
-  } else if (a.band != null) { if (fin(a.band.from) && fin(a.band.to)) out.band = { from: Math.min(a.band.from, a.band.to), to: Math.max(a.band.from, a.band.to) }; else bad = true; }
+  } else if (a.band != null) {
+    const pid = (v) => (/^prm\d{1,6}$/.test(v ?? "") ? v : undefined);
+    if (fin(a.band.from) && fin(a.band.to)) {
+      const fp = pid(a.band.fromParam), tp = pid(a.band.toParam);
+      out.band = fp || tp ? { from: a.band.from, to: a.band.to, ...(fp ? { fromParam: fp } : {}), ...(tp ? { toParam: tp } : {}) } // ends follow parameters: the typed numbers stay in saved order
+        : { from: Math.min(a.band.from, a.band.to), to: Math.max(a.band.from, a.band.to) };
+    } else bad = true;
+  }
   if (a.trend !== undefined) { if (TRENDS.has(a.trend)) out.trend = a.trend; else bad = true; }
   if (a.forecast !== undefined) { if (FORECASTS.has(a.forecast)) out.forecast = a.forecast; else bad = true; }
   if (a.totals != null) { out.totals = { grand: a.totals.grand === true, sub: a.totals.sub === true }; }
@@ -534,6 +541,9 @@ function dropMissingCalcs(sheet, ids, where, issues) {
 function unlinkParams(sheet, ids, where, issues) {
   for (const f of sheet.filters ?? []) if (f.param && !ids.has(f.param)) { delete f.param; issues.push(`${where}: a filter's parameter is missing — unlinked.`); }
   if (sheet.analytics?.ref?.param && !ids.has(sheet.analytics.ref.param)) { delete sheet.analytics.ref.param; issues.push(`${where}: the reference line's parameter is missing — unlinked.`); }
+  const band = sheet.analytics?.band;
+  for (const k of ["fromParam", "toParam"]) if (band?.[k] && !ids.has(band[k])) { delete band[k]; issues.push(`${where}: a band end's parameter is missing — unlinked.`); }
+  if (sheet.paramAction && !ids.has(sheet.paramAction.param)) { sheet.paramAction = null; issues.push(`${where}: the parameter action's parameter is missing — removed.`); }
   if (sheet.format?.topNParam && !ids.has(sheet.format.topNParam)) { delete sheet.format.topNParam; issues.push(`${where}: Top N's parameter is missing — unlinked.`); }
 }
 
