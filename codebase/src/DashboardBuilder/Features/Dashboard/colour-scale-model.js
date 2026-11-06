@@ -47,15 +47,17 @@ export const DIV_FALLBACK = Object.freeze({ low: "#d98a4a", high: "#2b62b8" });
 
 /** [value, label] — `format.colorPair`: which two hues the diverging scale meets between (tokens only, never a typed hex). */
 export const DIV_PAIR_CHOICES = Object.freeze([["default", "Orange / Blue"], ["amber-violet", "Amber / Violet"], ["green-violet", "Green / Violet"]]);
-const PAIR_SLOTS = { "amber-violet": [3, 6], "green-violet": [1, 6] }; // low, high: indexes into the eight categorical tokens
+const PAIR_HUES = { "amber-violet": ["amber", "violet"], "green-violet": ["green", "violet"] }; // [low, high]: core.css --chart-div-<hue>
+/** Token fallbacks for the chosen pairs (the light theme's values; core.css `--chart-div-amber` / `-violet` / `-green` win). */
+export const DIV_HUE_FALLBACK = Object.freeze({ amber: "#b8803a", violet: "#6b52c9", green: "#3f8f5a" });
 
 /**
  * The diverging ramp's [low, centre, high]: the surface between two hues. `pair` (a DIV_PAIR_CHOICES value) picks them from
- * the categorical tokens; the default is the warm / cool div tokens. `tk` = { surface, divLow, divHigh, cat[] }.
+ * the dedicated `--chart-div-<hue>` tokens (read as tk.hues, independent of the active palette); the default is the warm / cool div tokens. `tk` = { surface, divLow, divHigh, hues? }.
  */
 export function divergingColours(tk, reverse, pair) {
-  const slots = PAIR_SLOTS[pair];
-  const [low, high] = slots && tk.cat?.[slots[0]] && tk.cat[slots[1]] ? [tk.cat[slots[0]], tk.cat[slots[1]]] : [tk.divLow ?? DIV_FALLBACK.low, tk.divHigh ?? DIV_FALLBACK.high];
+  const hues = PAIR_HUES[pair];
+  const [low, high] = hues ? hues.map((h) => tk.hues?.[h] ?? DIV_HUE_FALLBACK[h]) : [tk.divLow ?? DIV_FALLBACK.low, tk.divHigh ?? DIV_FALLBACK.high];
   return reverse ? [high, tk.surface, low] : [low, tk.surface, high];
 }
 

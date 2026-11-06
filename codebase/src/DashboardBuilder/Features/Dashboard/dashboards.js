@@ -1381,13 +1381,17 @@ export function initDashboards() {
         const diverging = f.colorScale === "diverging";
         panel.append(fmtSelect("Colour scale", SCALE_CHOICES, f.colorScale ?? "sequential", (v) => set({ colorScale: v })),
           fmtSelect("Steps", STEP_CHOICES, f.colorSteps ?? 0, (v) => set({ colorSteps: Number(v) })),
-          ...(diverging ? [fmtSelect("Diverging colours", DIV_PAIR_CHOICES, f.colorPair ?? "default", (v) => set({ colorPair: v })), fmtNumber("Colour centre", f.colorCentre, "auto", (v) => { // cool above, warm below; no pins (the ends follow the centre)
+          ...(diverging ? [fmtNumber("Colour centre", f.colorCentre, "auto", (v) => { // cool above, warm below; no pins (the ends follow the centre)
             const err = colourCentreError(v);
             if (err) { toast(err, "danger"); set({ colorCentre: f.colorCentre }); return; }
             set({ colorCentre: v });
           })]
             : [fmtSelect("Colour ramp", RAMP_CHOICES, f.colorRamp ?? "brand", (v) => set({ colorRamp: v })),
               range("colorMin", "colorMax", "Colour from"), range("colorMax", "colorMin", "Colour to")]));
+        if (diverging) { // the pair sits on its own line, wide enough for "Green / Violet"
+          const pair = fmtSelect("Diverging colours", DIV_PAIR_CHOICES, f.colorPair ?? "default", (v) => set({ colorPair: v }));
+          pair.classList.add("ws-fmt-field--line"); panel.append(pair);
+        }
       }
       if (hasAxes)
         panel.append(
