@@ -310,6 +310,21 @@ try {
     must(await ev(`[...document.querySelectorAll('.ws-calc__dim span')].map((x) => x.textContent).join() === 'region (Rows),region (Columns)'`), 'duplicate labels');
     await ev(`document.querySelector('button[aria-label="Close editor"]').click()`);
   });
+  await check('table calculation editor: rank order and tie rule persist and rename the measure', async () => {
+    await setSheet(`${base} ${noMarks} s.chartType = 'table'; s.columns = []; s.rows = [f('region', 'text'), f('amount', 'numeric', { agg: 'sum' })]`); await settle();
+    await waitFor(`document.querySelectorAll('#ws-chart td.num').length > 0`, 'cells');
+    await ev(`[...document.querySelectorAll('.ws-shelf--rows .ws-pill')].at(-1).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 300, clientY: 200 }))`);
+    await ev(`[...document.querySelectorAll('.ctx-menu [role^=menuitem]')].find((x) => x.textContent.trim() === 'Table calculation…').click()`);
+    await waitFor(`!!document.querySelector('.ws-calc')`, 'calc panel');
+    const pick = (label, value) => ev(`(() => { const sel = [...document.querySelectorAll('.ws-calc .ws-fmt-field')].find((x) => x.textContent.startsWith(${J(label)})).querySelector('select'); sel.value = ${J(value)}; sel.dispatchEvent(new Event('change')); return true; })()`);
+    must(!(await ev(`[...document.querySelectorAll('.ws-calc .ws-fmt-field')].some((x) => x.textContent.startsWith('Ties'))`)), 'no Ties field before Rank');
+    await pick('Calculation', 'rank'); await settle();
+    await pick('Order', 'asc'); await pick('Ties', 'dense'); await settle();
+    const tc = await ev(`(async () => { const st = await import('/features/Core/store.js'); return JSON.stringify(st.activeWorksheet().sheet.rows[1].tableCalc); })()`);
+    must(tc === J({ type: 'rank', along: 'auto', order: 'asc', ties: 'dense' }), `stored: ${tc}`);
+    must(await ev(`document.body.textContent.includes('rank (lowest first, dense)')`), 'measure renamed');
+    await ev(`document.querySelector('button[aria-label="Close editor"]').click()`);
+  });
 
   await check('comparison range: a KPI shows the change vs the previous period, a bar draws a second series', async () => {
     const period = `s.period = { db: 'shop', table: 'orders', column: 'placed', category: 'temporal', preset: 'last30', from: null, to: null, compare: 'previous', compareFrom: null, compareTo: null }`;

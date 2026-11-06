@@ -29,7 +29,7 @@ import { PRESET_CHOICES, COMPARE_CHOICES, COMPARE_TYPES, newPeriod, resolveRange
 import { CF_MODE_CHOICES, CF_SCALE_CHOICES, CF_OP_CHOICES, CF_TONE_CHOICES, CF_MAX_RULES, measureKey, emptyRule, isActive } from "./conditional-model.js";
 import { templateError, buildActionUrl, applyParamAction, MAX_LABEL, MAX_TEMPLATE } from "./action-model.js";
 import { DATE_PART_CHOICES, stepPart } from "./date-parts.js";
-import { CALC_CHOICES, ALONG_CHOICES, WINDOW_CHOICES, isCalc, calcName } from "./table-calc.js";
+import { CALC_CHOICES, ALONG_CHOICES, WINDOW_CHOICES, RANK_ORDERS, RANK_TIES, isCalc, calcName } from "./table-calc.js";
 import { tooltipHtml, checkTooltipText, parseTooltip } from "./tooltip-model.js";
 import { openTooltipDialog } from "./tooltip-dialog.js";
 import { checkTooltipStyle, styleAfterTextEdit } from "./tooltip-style.js";
@@ -1815,6 +1815,7 @@ export function initDashboards() {
       const next = { ...c, ...patch };
       if (next.type === "none") delete f.tableCalc;
       else f.tableCalc = { type: next.type, along: next.along, ...(next.type === "moving" ? { window: next.window ?? 3 } : {}),
+        ...(next.type === "rank" && next.order === "asc" ? { order: "asc" } : {}), ...(next.type === "rank" && next.ties && next.ties !== "competition" ? { ties: next.ties } : {}),
         ...(next.along === "custom" ? { using: next.using?.length ? next.using : dims.map((_, d) => d) } : {}) };
       commit(dash, s);
     };
@@ -1829,6 +1830,9 @@ export function initDashboards() {
     row.append(fmtSelect("Calculation", CALC_CHOICES, c.type, (v) => set({ type: v })));
     if (c.type !== "none") row.append(fmtSelect("Along", ALONG_CHOICES, c.along, (v) => set({ along: v })));
     if (c.type === "moving") row.append(fmtSelect("Window", WINDOW_CHOICES.map((n) => [n, `${n} values`]), c.window ?? 3, (v) => set({ window: Number(v) })));
+    if (c.type === "rank") {
+      row.append(fmtSelect("Order", RANK_ORDERS, c.order ?? "desc", (v) => set({ order: v })), fmtSelect("Ties", RANK_TIES, c.ties ?? "competition", (v) => set({ ties: v })));
+    }
     panel.append(head, row);
     if (c.type !== "none" && c.along === "custom" && dims.length) {
       const using = new Set(c.using?.length ? c.using : dims.map((_, d) => d));

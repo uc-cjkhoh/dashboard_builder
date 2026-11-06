@@ -351,10 +351,12 @@ function cleanPill(raw, where, issues, needCategory = true) {
   if (p.tableCalc !== undefined) {
     const c = p.tableCalc;
     const ok = c && typeof c === "object" && TABLE_CALCS.has(c.type) && CALC_ALONG.has(c.along ?? "auto")
+      && (c.order === undefined || (c.type === "rank" && (c.order === "asc" || c.order === "desc")))
+      && (c.ties === undefined || (c.type === "rank" && ["competition", "dense", "unique"].includes(c.ties)))
       && (c.window === undefined || (Number.isInteger(c.window) && c.window >= 2 && c.window <= 30))
       && (c.along !== "custom" || (c.using === undefined || (Array.isArray(c.using) && c.using.length <= 16 && new Set(c.using).size === c.using.length && c.using.every((d) => Number.isInteger(d) && d >= 0 && d < 16))));
     if (!ok) { issues.push(`${where}: the table calculation on ${p.table}.${p.column} was invalid — removed.`); delete p.tableCalc; }
-    else p.tableCalc = { type: c.type, along: c.along ?? "auto", ...(c.window !== undefined ? { window: c.window } : {}), ...(c.along === "custom" && c.using?.length ? { using: [...c.using] } : {}) };
+    else p.tableCalc = { type: c.type, along: c.along ?? "auto", ...(c.window !== undefined ? { window: c.window } : {}), ...(c.order ? { order: c.order } : {}), ...(c.ties ? { ties: c.ties } : {}), ...(c.along === "custom" && c.using?.length ? { using: [...c.using] } : {}) };
   }
   // Date part: a known part on a date field only.
   if (p.datePart !== undefined && (!DATE_PARTS.has(p.datePart) || p.category !== "temporal")) {

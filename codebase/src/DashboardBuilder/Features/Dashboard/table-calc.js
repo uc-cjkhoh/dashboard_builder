@@ -14,7 +14,13 @@ export const WINDOW_CHOICES = [2, 3, 5, 7, 12, 30];
 export const PERCENT_CALCS = new Set(["pctTotal", "pctDiff", "pctRank", "compound"]);
 
 /** A short name for a calculation, used in the measure's label. */
-export const calcName = (c) => (c?.type === "moving" ? `moving avg (${c.window ?? 3})` : CALC_CHOICES.find(([v]) => v === c?.type)?.[1].toLowerCase() ?? "");
+export const RANK_ORDERS = [["desc", "Highest first"], ["asc", "Lowest first"]];
+export const RANK_TIES = [["competition", "Competition (1, 2, 2, 4)"], ["dense", "Dense (1, 2, 2, 3)"], ["unique", "Unique (1, 2, 3, 4)"]];
+const rankOrder = (c) => (c?.order === "asc" ? "asc" : "desc");
+const rankTies = (c) => (c?.ties === "dense" || c?.ties === "unique" ? c.ties : "competition");
+export const calcName = (c) => (c?.type === "moving" ? `moving avg (${c.window ?? 3})`
+  : c?.type === "rank" && (rankOrder(c) === "asc" || rankTies(c) !== "competition")
+    ? `rank (${[rankOrder(c) === "asc" ? "lowest first" : "", rankTies(c) !== "competition" ? rankTies(c) : ""].filter(Boolean).join(", ")})` : CALC_CHOICES.find(([v]) => v === c?.type)?.[1].toLowerCase() ?? "");
 
 /** Whether a pill's calculation does anything. */
 export const isCalc = (c) => Boolean(c && c.type !== "none" && TABLE_CALCS.has(c.type));
@@ -65,9 +71,16 @@ export function computeCalc(rows, mi, calc, rowDims, colDims) {
         break;
       }
       case "rank": {
-        // Competition ranking (1, 2, 2, 4), highest first; Other and blanks get none.
-        const ranked = idx.map((i, j) => ({ i, v: rows[i].isOther ? null : vals[j] })).filter((x) => x.v != null).sort((a, b) => b.v - a.v);
-        ranked.forEach((x, k) => { out[x.i] = k > 0 && x.v === ranked[k - 1].v ? out[ranked[k - 1].i] : k + 1; });
+        // Competition ranking (1, 2, 2, 4) by default, highest first; `ties` dense (1, 2, 2, 3) or unique (1, 2, 3, 4, in result order);
+        // `order: "asc"` ranks the lowest first. Other and blanks get none.
+        const dir = rankOrder(calc) === "asc" ? 1 : -1, ties = rankTies(calc);
+        const ranked = idx.map((i, j) => ({ i, v: rows[i].isOther ? null : vals[j] })).filter((x) => x.v != null).sort((a, b) => dir * (a.v - b.v)); // stable: equal values keep result order
+        let dense = 0;
+        ranked.forEach((x, k) => {
+          const tie = k > 0 && x.v === ranked[k - 1].v;
+          if (!tie) dense++;
+          out[x.i] = ties === "unique" ? k + 1 : tie ? out[ranked[k - 1].i] : ties === "dense" ? dense : k + 1;
+        });
         break;
       }
       case "pctRank": {

@@ -661,3 +661,11 @@ test("a custom percentile band with equal, NaN or string ends is reset on restor
     assert.ok(r.issues.some((i) => /analytics/.test(i)));
   }
 });
+
+test("a rank calculation keeps a valid order and tie rule and drops an invalid one", () => {
+  const m = { db: "s", table: "orders", column: "amount", category: "numeric" };
+  const ok = sheetOf({ rows: [{ ...m, tableCalc: { type: "rank", order: "asc", ties: "dense" } }] }).worksheets[0].sheet.rows[0].tableCalc;
+  assert.deepEqual(ok, { type: "rank", along: "auto", order: "asc", ties: "dense" });
+  const bad = sheetOf({ rows: [{ ...m, tableCalc: { type: "rank", ties: "nope" } }] });
+  assert.equal(bad.worksheets[0].sheet.rows[0].tableCalc, undefined);
+});

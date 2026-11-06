@@ -96,3 +96,19 @@ test("compound growth rate: per-period rate since the first value; blanks and no
   assert.equal(calcName({ type: "compound" }), "compound growth");
   assert.ok(applyTableCalcs({ rows: one([1, 2]), measures: ["m"] }, [{ type: "compound", along: "auto" }], 0, 1).percent.has(0));
 });
+
+test("rank ties: dense, unique, and ascending order", () => {
+  const v = [10, 30, 30, 5];
+  assert.deepEqual(run("rank", v, { ties: "competition" }), [3, 1, 1, 4]);
+  assert.deepEqual(run("rank", v, { ties: "dense" }), [2, 1, 1, 3]);
+  assert.deepEqual(run("rank", v, { ties: "unique" }), [3, 1, 2, 4]);
+  assert.deepEqual(run("rank", v, { order: "asc" }), [2, 3, 3, 1]);
+  assert.deepEqual(run("rank", v, { order: "asc", ties: "dense" }), [2, 3, 3, 1]);
+  assert.deepEqual(run("rank", v, { order: "asc", ties: "unique" }), [2, 3, 4, 1]);
+  assert.deepEqual(run("rank", v, { ties: "bogus", order: "bogus" }), [3, 1, 1, 4]); // unknown falls back to the default
+});
+test("rank label names a non-default order or tie rule", () => {
+  assert.equal(calcName({ type: "rank" }), "rank");
+  assert.equal(calcName({ type: "rank", order: "asc", ties: "dense" }), "rank (lowest first, dense)");
+  assert.equal(calcName({ type: "rank", ties: "unique" }), "rank (unique)");
+});
