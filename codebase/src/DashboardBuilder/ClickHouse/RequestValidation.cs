@@ -370,6 +370,17 @@ public static class RequestRules
         ValidateRange(r.Limit, ApiLimits.MaxProfileTop, "Top values", "limit");
     }
     public static void ValidateHistogram(HistogramRequest r) { ValidateRange(r.Buckets, ApiLimits.MaxBuckets, "Bins", "buckets"); ValidateStatFilters(r.Filters); }
+    /// <summary>A joined / calculated box plot: a worksheet-shaped request where the one row dimension is the value and the optional
+    /// one column dimension is the group — no measures, no measure filter. Everything else is the worksheet query's rules.</summary>
+    public static void ValidateBoxQuery(QueryRequest r)
+    {
+        ValidateQuery(r);
+        if (r.RowDimensions?.Length != 1) throw Bad("A box plot needs exactly one value field.", "rowDimensions");
+        if ((r.ColumnDimensions?.Length ?? 0) > 1) throw Bad("A box plot groups by at most one field.", "columnDimensions");
+        if ((r.Measures?.Length ?? 0) > 0) throw Bad("A box plot takes its value as a field, not a measure.", "measures");
+        if ((r.Having?.Length ?? 0) > 0) throw Bad("Measure filters don't apply to a box plot.", "having");
+    }
+
     public static void ValidateBoxPlot(BoxPlotRequest r) { ValidateRange(r.Limit, ApiLimits.MaxRowLimit, "Limit", "limit"); ValidateStatFilters(r.Filters); }
     public static void ValidateDistinctLimit(int? limit) => ValidateRange(limit, ApiLimits.MaxDistinct, "Limit", "limit");
     private static void ValidateStatFilters(StatFilter[]? filters)

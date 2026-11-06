@@ -62,10 +62,10 @@ export function syncCastCategories(sheet, shared, castOf, baseCategory) {
   return changed;
 }
 
-export const STAT_CAST_HINT = "Histogram and box plot don't use a data type cast yet — set the field's Data type back to Original.";
-/** Histogram / box plot run single-table endpoints that don't cast: the hint when a field on the sheet is cast, else null. */
+export const STAT_CAST_HINT = "A histogram doesn't use a data type cast yet — set the field's Data type back to Original.";
+/** The histogram runs a single-table endpoint that doesn't cast: the hint when a field on the sheet is cast, else null. */
 export function statCastProblem(sheet, castOf) {
-  if (sheet.chartType !== "histogram" && sheet.chartType !== "boxplot") return null;
+  if (sheet.chartType !== "histogram") return null;
   const refs = [...(sheet.columns ?? []), ...(sheet.rows ?? []), ...(sheet.filters ?? [])];
   return refs.some((r) => plain(r) && castOf(r)) ? STAT_CAST_HINT : null;
 }

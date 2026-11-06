@@ -4,7 +4,7 @@
 //   cd src/DashboardBuilder && dotnet run --no-launch-profile --urls http://localhost:5210 ; stop it with fuser -k 5210/tcp)
 // Env: APP_URL, SHOTS_DIR (screenshot folder), CDP_PORT (default: a free port), CHROME_BIN.
 import { launch } from './cdp.mjs';
-import { NEW_CALC, PAGE_CHIP } from './model.mjs';
+import { NEW_CALC, PAGE_CHIP, relateTables } from './model.mjs';
 import { writeFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -14,7 +14,7 @@ const SHOTS = process.env.SHOTS_DIR ?? join(tmpdir(), 'box-ui-shots');
 mkdirSync(SHOTS, { recursive: true });
 
 // ---- the mocked server ------------------------------------------------------------------------------------
-const COLUMNS = { orders: [['amount', 'Float64', 'numeric'], ['region', 'String', 'text']] };
+const COLUMNS = { orders: [['amount', 'Float64', 'numeric'], ['region', 'String', 'text']], customers: [['country', 'String', 'text']] };
 const boxReqs = [];
 const queries = [];
 let outliersTruncated = true;
@@ -22,10 +22,10 @@ function answer({ method, path, body }) {
   if (path === '/api/connection' && method === 'GET') return { json: { connected: false } };
   if (path === '/api/connection') return { json: { connected: true, host: 'mock-ch', port: 8443, user: 'default', secure: true, allowInvalidCert: false } };
   if (path === '/api/databases') return { json: ['shop'] };
-  if (path === '/api/databases/shop/tables') return { json: ['orders'] };
+  if (path === '/api/databases/shop/tables') return { json: ['orders', 'customers'] };
   const m = path.match(/^\/api\/databases\/shop\/tables\/(\w+)\/columns$/);
   if (m && COLUMNS[m[1]]) return { json: COLUMNS[m[1]].map(([name, type, category]) => ({ name, type, category })) };
-  if (path === '/api/databases/shop/tables/orders/boxplot') {
+  if (path === '/api/boxplot') {
     boxReqs.push(body);
     return { json: { truncated: false, outliersTruncated, groups: [
       { label: 'APAC', min: 1, q1: 10, median: 15, q3: 20, max: 95, lowerWhisker: 4, upperWhisker: 32 },
@@ -111,10 +111,11 @@ try {
   await ev(`(() => { document.getElementById('conn-host').value = 'mock-ch'; document.getElementById('conn-password').value = 'x'; document.getElementById('conn-connect').click(); return true; })()`);
   await waitFor(`document.getElementById('db-select').options.length > 1`, 'databases listed');
   await ev(`(() => { const s = document.getElementById('db-select'); s.value = 'shop'; s.dispatchEvent(new Event('change')); return true; })()`);
-  await waitFor(`document.querySelectorAll('.table-chip').length === 1`, 'tables listed');
-  for (const t of ['orders'])
+  await waitFor(`document.querySelectorAll('.table-chip').length === 2`, 'tables listed');
+  for (const t of ['orders', 'customers'])
     await ev(`document.dispatchEvent(new CustomEvent('table:add', { detail: { db: 'shop', table: ${J(t)} } }))`);
-  await waitFor(`document.querySelectorAll('.entity').length === 1 && [...document.querySelectorAll('.entity__status')].every((s) => s.hidden)`, 'both tables loaded');
+  await waitFor(`document.querySelectorAll('.entity').length === 2 && [...document.querySelectorAll('.entity__status')].every((s) => s.hidden)`, 'both tables loaded');
+  await relateTables(ev, waitFor, ['orders', 'region', 'customers', 'country']);
   await ev(`document.querySelector('.tab-add').click(); document.querySelector('[data-new-tab=worksheet]').click()`);
   await waitFor(`!document.getElementById('worksheet-view').hidden`, 'worksheet open');
   await installHelpers();
@@ -153,7 +154,7 @@ try {
   const axes = async () => { const o = await opt(); return [].concat(o.yAxis); };
 
   await check('Box plot: whiskers stop at the fences and outliers draw as hollow points', async () => {
-    await dragChip('region', `__t.zone('rows')`);
+    await dragChip('country', `__t.zone('rows')`); // a field of the joined table
     await dragChip('amount', `__t.zone('columns')`);
     await settle(400);
     await setType('Box plot'); await chartReady();
@@ -164,10 +165,26 @@ try {
     must(pts && pts.data.length === 3, `outlier points ${pts && pts.data.length}`);
     must(J(pts.data[0].value ?? pts.data[0]) === '[0,1]', `first point ${J(pts.data[0])}`);
     must(/first 500 outliers/.test(await ev(`document.body.textContent`)), 'truncation notice missing');
+    const req = boxReqs[boxReqs.length - 1];
+    must(req.joins?.length === 1, `no join in ${J(req)}`);
+    must(req.rowDimensions.length === 1 && req.rowDimensions[0].column === 'amount' && !('agg' in req.rowDimensions[0]), `value ${J(req.rowDimensions)}`);
+    must(req.columnDimensions.length === 1 && req.columnDimensions[0].column === 'country', `group ${J(req.columnDimensions)}`);
+    must(req.limit === 5000, `limit ${req.limit}`);
+    must(req.measures.length === 0, 'a box plot sends no measure');
     await shot('box-outliers-light.png');
     await theme('dark'); await shot('box-outliers-dark.png'); await theme('light');
   });
 
+  await check('Box plot: a calculated field is the value (a row-level tree, no aggregation)', async () => {
+    await newCalc('Doubled', '[orders.amount] * 2');
+    await ev(`(() => { for (const p of document.querySelectorAll('.ws-shelf--columns .ws-pill')) p.querySelector('.ws-pill__remove, [aria-label^="Remove"]')?.click(); return true; })()`);
+    await dragChip('Doubled', `__t.zone('columns')`);
+    await settle(500);
+    const req = boxReqs[boxReqs.length - 1];
+    must(req.rowDimensions[0].calc && !('agg' in req.rowDimensions[0]), `calc value ${J(req.rowDimensions)}`);
+    must(!/don't use calculated/.test(await chartText()), 'a calculation is refused');
+    await chartReady();
+  });
 
   if (b.consoleErrors.length) { console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  ')); failed++; }
 } catch (e) {

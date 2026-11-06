@@ -7,6 +7,7 @@ import { disposeChart, animateNextChart } from "./chart.js";
 import { renderWorksheet } from "./worksheet-render.js";
 import { renderHistogram, renderBoxplot } from "./render-special.js";
 import { outlierNotice } from "./box-model.js";
+import { boxPlan } from "./box-plan.js";
 import { perfLog, queryKindOf, rowCountOf } from "../Core/perf-log.js";
 import { createLatestGate, isAbortError, requestKey, truncationNotice } from "./query-runner.js";
 import { STAT_SINGLE_TABLE, statFieldHint } from "./show-me-rules.js";
@@ -67,7 +68,7 @@ export function createWorksheetView(container, getContext, options = {}) {
       onSelect: options.onSelect, onDrill: options.onDrill, onLegend: options.onLegend, legendFocus: options.legendFocus,
       onTooltipFields: options.onTooltipFields, onMemberColors: options.onMemberColors, onCollapse: options.onCollapse, onCollapseAll: options.onCollapseAll } });
   // The tables the sheet's query involves (never throws: a sheet that can't be planned reaches nothing).
-  const statSourceProblem = (s, entities) => ([...s.columns, ...s.rows].some((f) => sourceOfTable(entities, f.db, f.table)) ? "Histogram and box plot read one table — they can't read a union or unpivot yet." : null);
+  const statSourceProblem = (s, entities) => ([...s.columns, ...s.rows].some((f) => sourceOfTable(entities, f.db, f.table)) ? "A histogram reads one table — it can't read a union or unpivot yet." : null);
   const involvedOf = (c, s) => { try { return involvedTables(s, undefined, c.plan); } catch { return []; } };
   let extraNotice = null; // the line the last drawing wants in the notice (small-multiples cap, calculations on partial rows)
   let renderTimed = false; // set by fetchCached: the next draw is the one to time (not a table scroll-page redraw)
@@ -171,13 +172,15 @@ export function createWorksheetView(container, getContext, options = {}) {
     setNotice(c.noticeEl, filterNote);
     const heldOut = heldOutProblem(involvedOf(c, s), c.plan.entities, c.plan.relationships); // a table with no relationship stays out of every view
     if (heldOut) { container.replaceChildren(warn(heldOut)); return; }
-    // Statistical charts that run their own single-table endpoint (histogram / box plot).
-    if (STAT_SINGLE_TABLE.has(s.chartType)) {
-      const noCalc = statCalcProblem(s); // the single-table endpoints can't take a calculation: say so, send nothing
+    // Box plot: its own quantile endpoint over the worksheet's joins, filters and calculations.
+    if (s.chartType === "boxplot") { await runBox(c, s, ticket, filterNote); return; }
+    // Histogram: a single-table endpoint that knows nothing of calculations, casts or sources.
+    if (s.chartType === "histogram") {
+      const noCalc = statCalcProblem(s);
       if (noCalc) { container.replaceChildren(hint(noCalc)); return; }
-      const noSource = statSourceProblem(s, c.plan.entities); // nor a union / unpivot
+      const noSource = statSourceProblem(s, c.plan.entities);
       if (noSource) { container.replaceChildren(hint(noSource)); return; }
-      const noCast = statCastProblem(s, c.castOf); // nor a data type cast
+      const noCast = statCastProblem(s, c.castOf);
       if (noCast) { container.replaceChildren(hint(noCast)); return; }
       await runStat(c, s, ticket, joinNotices(filterNote, cross?.filter && !crossNote ? statNote(cross.filter) : null)); return; }
     const colorInPlay = s.color?.length && COLOR_USES.has(s.chartType);
@@ -263,10 +266,8 @@ export function createWorksheetView(container, getContext, options = {}) {
     more();
   }
 
-  // Histogram / box plot: single-table distribution charts. Histogram buckets one numeric column; a box plot
-  // summarises one numeric measure, optionally grouped by one same-table dimension. They use their own endpoints (a
-  // bucketing / quantile query shape), so they read fields directly rather than through buildPlan. All fields must live
-  // on ONE table (the endpoints don't join).
+  // Histogram: buckets one numeric column through its own single-table endpoint (a bucketing query shape), so it reads
+  // fields directly rather than through buildPlan. All fields must live on ONE table (the endpoint doesn't join).
   async function runStat(c, s, ticket, filterNote = null) {
     const allFields = [...s.columns, ...s.rows];
     const numeric = allFields.find((f) => f.category === "numeric");
@@ -275,28 +276,33 @@ export function createWorksheetView(container, getContext, options = {}) {
     // Only same-table, usable filters apply (the single-table endpoints take in/between too); the rest are counted and
     // reported in the notice.
     const { apply: filters, ignored } = statFilters(s.filters.map((f) => withParams(f, c.plan)), db, table, (f) => toServerFilter(f, c.plan));
-    const kind = s.chartType === "histogram" ? "histogram" : "box plot";
-    const ignoredNote = ignored > 0 ? `${ignored} filter${ignored === 1 ? "" : "s"} on other tables or calculated fields ${ignored === 1 ? "doesn't" : "don't"} apply to a ${kind}.` : null;
+    const ignoredNote = ignored > 0 ? `${ignored} filter${ignored === 1 ? "" : "s"} on other tables or calculated fields ${ignored === 1 ? "doesn't" : "don't"} apply to a histogram.` : null;
     const format = s.format ?? defaultFormat();
+    // Reuse Top-N as the bucket count when set (else the server default); server clamps 1..100.
+    const req = { column: numeric.column, buckets: s.format?.topN ?? null, filters };
+    const result = await fetchCached(c, ticket, requestKey("histogram", { db, table, req }), (signal) => api.histogram(db, table, req, { signal }));
+    if (!result) return;
+    if (!result.bins?.length) { container.replaceChildren(hint("No data for this field.")); setNotice(c.noticeEl, joinNotices(filterNote, ignoredNote)); return; }
+    renderHistogram(container, result.bins, format);
+    setNotice(c.noticeEl, joinNotices(filterNote, ignoredNote));
+  }
 
-    if (s.chartType === "histogram") {
-      // Reuse Top-N as the bucket count when set (else the server default); server clamps 1..100.
-      const req = { column: numeric.column, buckets: s.format?.topN ?? null, filters };
-      const result = await fetchCached(c, ticket, requestKey("histogram", { db, table, req }), (signal) => api.histogram(db, table, req, { signal }));
-      if (!result) return;
-      if (!result.bins?.length) { container.replaceChildren(hint("No data for this field.")); setNotice(c.noticeEl, joinNotices(filterNote, ignoredNote)); return; }
-      renderHistogram(container, result.bins, format);
-      setNotice(c.noticeEl, joinNotices(filterNote, ignoredNote));
-    } else {
-      // Box plot: group by the first same-table dimension, if any.
-      const dim = allFields.find((f) => f.category !== "numeric" && f.db === db && f.table === table);
-      const req = { dimension: dim ? dim.column : null, measure: numeric.column, filters, limit: s.format?.topN ?? LIMITS.rows };
-      const result = await fetchCached(c, ticket, requestKey("boxplot", { db, table, req }), (signal) => api.boxplot(db, table, req, { signal }));
-      if (!result) return;
-      if (!result.groups?.length) { container.replaceChildren(hint("No data for this field.")); setNotice(c.noticeEl, joinNotices(filterNote, ignoredNote)); return; }
-      renderBoxplot(container, result.groups, format, result.outliers);
-      setNotice(c.noticeEl, joinNotices(filterNote, ignoredNote, truncationNotice({ truncated: result.truncated, chartType: "boxplot", limit: req.limit }), outlierNotice(result.outliersTruncated)));
-    }
+  // Box plot: the worksheet's own plan with the numeric field as the value and the first other field as the group
+  // (box-plan.js), so joined tables, calculations, casts and a union / unpivot work as in any chart.
+  async function runBox(c, s, ticket, filterNote) {
+    if (!s.columns.concat(s.rows).some((f) => f.category === "numeric")) { container.replaceChildren(hint(statFieldHint("boxplot"))); return; }
+    const problem = calcProblem(s, calcContext(c.plan), appliedShared(c.plan)); // a calculation that can't be computed — say why, send nothing
+    if (problem) { container.replaceChildren(warn(problem)); return; }
+    const mixed = sourceProblem(involvedOf(c, s), c.plan.entities);
+    if (mixed) { container.replaceChildren(warn(mixed)); return; }
+    const req = boxPlan(s, c.plan, { crossFilter: cross?.filter ?? null });
+    if (!req) { container.replaceChildren(warn("These fields come from tables with no relationship between them — draw one in the Data Source.")); return; }
+    const format = s.format ?? defaultFormat();
+    const result = await fetchCached(c, ticket, requestKey("boxplot", req), (signal) => api.boxplot(req, { signal }));
+    if (!result) return;
+    if (!result.groups?.length) { container.replaceChildren(hint("No data for this field.")); setNotice(c.noticeEl, filterNote); return; }
+    renderBoxplot(container, result.groups, format, result.outliers);
+    setNotice(c.noticeEl, joinNotices(filterNote, truncationNotice({ truncated: result.truncated, chartType: "boxplot", limit: req.limit }), outlierNotice(result.outliersTruncated)));
   }
 
   return {

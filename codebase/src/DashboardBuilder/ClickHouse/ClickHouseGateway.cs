@@ -849,18 +849,46 @@ public sealed partial class ClickHouseGateway
         var qm = Identifier.Quote(req.Measure);
         var qualified = Identifier.QualifiedName(database, table);
         var qdim = hasDim ? Identifier.Quote(req.Dimension!) : null;
+        var parameters = new List<(string Name, string Type, object Value)>();
+        var where = BuildSingleTableFilters(req.Filters ?? [], byName, parameters);
+        return await RunBoxAsync(info, qm, qualified, qdim, where, parameters, req.Limit, "", ct);
+    }
+
+    /// <summary>
+    /// A box plot over the worksheet's own FROM / joins / WHERE: the request's one row dimension is the value (a numeric column
+    /// or a row-level numeric calculation), its optional column dimension the group. The same compilation as <see cref="QueryAsync"/>
+    /// (joins, filters, calculations, casts, date parts, a union / unpivot source), so every identifier is catalog-validated and quoted
+    /// there and every value bound; only the aggregation differs.
+    /// </summary>
+    public async Task<BoxPlotResult> BoxPlotAsync(ClickHouseConnectionInfo info, QueryRequest req, CancellationToken ct)
+    {
+        var parts = new BoxParts();
+        await QueryCoreAsync(info, req, ct, ApiLimits.MaxRowLimit, sample: false, parts);
+        return await RunBoxAsync(info, parts.Value, parts.From, parts.Group, parts.Where, parts.Parameters, req.Limit, parts.Settings, ct);
+    }
+
+    /// <summary>The pieces of a worksheet query a box plot reuses: the value and group SQL, the FROM (after the keyword) with joins,
+    /// the WHERE, the bound parameters, and the join-nulls setting.</summary>
+    private sealed class BoxParts
+    {
+        public string Value = "", From = "", Where = "", Settings = "";
+        public string? Group;
+        public List<(string Name, string Type, object Value)> Parameters = [];
+    }
+
+    private async Task<BoxPlotResult> RunBoxAsync(ClickHouseConnectionInfo info, string qm, string qualified, string? qdim, string where,
+        List<(string Name, string Type, object Value)> parameters, int? requestedLimit, string settings, CancellationToken ct)
+    {
+        var hasDim = qdim is not null;
         var sql = new StringBuilder("SELECT ");
         if (hasDim) sql.Append($"{qdim} AS __bx_label, ");
         sql.Append($"min({qm}) AS lo, quantile(0.25)({qm}) AS q1, quantile(0.5)({qm}) AS med, ")
            .Append($"quantile(0.75)({qm}) AS q3, max({qm}) AS hi FROM ")
            .Append(qualified);
-
-        var parameters = new List<(string Name, string Type, object Value)>();
-        var where = BuildSingleTableFilters(req.Filters ?? [], byName, parameters);
         sql.Append(where);
         if (hasDim) sql.Append(" GROUP BY __bx_label ORDER BY __bx_label ASC");
-        var limit = ProbeLimit(req.Limit);
-        sql.Append(" LIMIT ").Append(limit);
+        var limit = ProbeLimit(requestedLimit);
+        sql.Append(" LIMIT ").Append(limit).Append(settings);
 
         using var httpClient = CreateHttpClient(info);
         await using var conn = new ClickHouseConnection(BuildConnectionString(info), httpClient);
@@ -888,7 +916,7 @@ public sealed partial class ClickHouseGateway
         var whiskers = new Dictionary<string, (double Lo, double Hi)>(StringComparer.Ordinal); // keyed by BoxKey: NULL and "" never collide
         await using (var wcmd = conn.CreateCommand())
         {
-            wcmd.CommandText = BuildBoxWhiskerSql(qm, qualified, qdim, where, limit);
+            wcmd.CommandText = BuildBoxWhiskerSql(qm, qualified, qdim, where, limit) + settings;
             foreach (var (name, type, value) in parameters) wcmd.AddParameter(name, type, value);
             await using var wr = await wcmd.ExecuteReaderAsync(ct);
             var b = hasDim ? 1 : 0;
@@ -903,7 +931,7 @@ public sealed partial class ClickHouseGateway
         var outlierProbe = ApiLimits.MaxBoxOutliers + 1;
         await using (var ocmd = conn.CreateCommand())
         {
-            ocmd.CommandText = BuildBoxOutlierSql(qm, qualified, qdim, where, limit, outlierProbe);
+            ocmd.CommandText = BuildBoxOutlierSql(qm, qualified, qdim, where, limit, outlierProbe) + settings;
             foreach (var (name, type, value) in parameters) ocmd.AddParameter(name, type, value);
             await using var or = await ocmd.ExecuteReaderAsync(ct);
             var b = hasDim ? 1 : 0;
@@ -997,7 +1025,7 @@ public sealed partial class ClickHouseGateway
         return result;
     }
 
-    private async Task<QueryResult> QueryCoreAsync(ClickHouseConnectionInfo info, QueryRequest req, CancellationToken ct, int maxLimit, bool sample)
+    private async Task<QueryResult> QueryCoreAsync(ClickHouseConnectionInfo info, QueryRequest req, CancellationToken ct, int maxLimit, bool sample, BoxParts? box = null)
     {
         var aliases = new Dictionary<string, string>();                 // "db\0table" -> alias
         var categories = new Dictionary<string, Dictionary<string, string>>(); // "db\0table" -> col -> category
@@ -1113,10 +1141,25 @@ public sealed partial class ClickHouseGateway
             var refs = await CalcSql.ResolveCalcRefsAsync(CalcSql.CalcFields(calc), (db, table) => aliases.ContainsKey(Key(db, table)), ColumnsOf, QualifyAsync);
             return CalcSql.CompileCalc(calc, field, refs, parameters, $"c{calcCount++}", sampled, approximate);
         }
+        async Task<string> BoxValueAsync(ColumnRef d, string field)
+        {
+            if (d.Calc is { } calc)
+            {
+                var c = await CompileCalcAsync(calc, field);
+                if (c.Info.IsAggregate) throw new RequestValidationException("A box plot reads one value per row — a calculation with an aggregate has none.", field + ".calc");
+                if (c.Info.Type != CalcType.Number) throw new RequestValidationException("A box plot needs a numeric value — this calculation isn't a number.", field + ".calc");
+                return c.Sql;
+            }
+            var expr = await CastedAsync(d.Db, d.Table, d.Column, d.Cast, field);
+            if (CategoryOfRef(d.Db, d.Table, d.Column, d.Cast) != ClickHouseType.Numeric)
+                throw new RequestValidationException($"A box plot needs a numeric value — {d.Column} isn't one.", field);
+            return expr;
+        }
         var rowIndex = 0;
         foreach (var d in req.RowDimensions ?? [])
         {
             var field = $"rowDimensions[{rowIndex++}]";
+            if (box is not null) { dimExprs.Add(await BoxValueAsync(d, field)); rowDimNames.Add(d.Column); dimRefs.Add(d); continue; } // a box plot's value: one numeric expression per row
             dimExprs.Add(d.Calc is { } calc ? CalcSql.CalcDimensionSql(await CompileCalcAsync(calc, field), field) : await CastedAsync(d.Db, d.Table, d.Column, d.Cast, field));
             rowDimNames.Add(d.Calc is null ? $"{d.Table}.{d.Column}" : CalcSql.CalcLabel(d.Column));
             dimRefs.Add(d);
@@ -1237,6 +1280,14 @@ public sealed partial class ClickHouseGateway
             if (CategoryOfRef(d.Db, d.Table, d.Column, d.Cast) != ClickHouseType.Temporal)
                 throw new RequestValidationException($"A date part needs a date column — {d.Column} isn't one.", "datePart");
             dimExprs[i] = DatePartExpression(d.DatePart, dimExprs[i], DateOnlyOfRef(d.Db, d.Table, d.Column, d.Cast))!;
+        }
+
+        if (box is not null)
+        {
+            // A box plot takes the FROM, WHERE and bound values compiled above and runs its own quantile statements.
+            box.Value = dimExprs[0]; box.Group = dimExprs.Count > 1 ? dimExprs[1] : null;
+            box.From = from.ToString()[" FROM ".Length..]; box.Where = where; box.Parameters = parameters; box.Settings = Settings(anyLeft, info);
+            return null!;
         }
 
         DateBucketApplied? bucket = null;

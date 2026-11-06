@@ -72,9 +72,8 @@ export const api = {
   /** Histogram: equal-width bins over a numeric column → { bins: [{x0, x1, count}] }. */
   histogram: (db, table, plan, { signal } = {}) =>
     request("POST", `/api/databases/${encodeURIComponent(db)}/tables/${encodeURIComponent(table)}/histogram`, plan, signal),
-  /** Box plot: five-number summary per group → { groups: [{label, min, q1, median, q3, max}] }. */
-  boxplot: (db, table, plan, { signal } = {}) =>
-    request("POST", `/api/databases/${encodeURIComponent(db)}/tables/${encodeURIComponent(table)}/boxplot`, plan, signal),
+  /** Box plot over the worksheet's joins, filters and calculations (the plan is Dashboard/box-plan.js) → { groups: [{label, min, q1, median, q3, max, lowerWhisker, upperWhisker}], outliers, truncated }. */
+  boxplot: (plan, { signal } = {}) => request("POST", "/api/boxplot", plan, signal),
   /** Column profile: rows, NULLs, approximate distinct, min/max and top values of one column over the table's first rows. */
   profile: (db, table, req, { signal } = {}) =>
     request("POST", `/api/databases/${encodeURIComponent(db)}/tables/${encodeURIComponent(table)}/profile`, req, signal),

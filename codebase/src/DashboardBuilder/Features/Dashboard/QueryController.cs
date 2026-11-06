@@ -22,6 +22,10 @@ public sealed class QueryController : ApiControllerBase
     public Task<IResult> BoxPlot(string db, string table, [FromBody] BoxPlotRequest request, CancellationToken ct)
         => RunAsync(async info => { RequestRules.ValidateBoxPlot(request); return Results.Ok(await Gateway.BoxPlotAsync(info, db, table, request, ct)); });
 
+    [HttpPost("boxplot")]
+    public Task<IResult> BoxPlotQuery([FromBody] QueryRequest request, CancellationToken ct)
+        => RunAsync(async info => { RequestRules.ValidateBoxQuery(request); return Results.Ok(await Gateway.BoxPlotAsync(info, request, ct)); });
+
     [HttpPost("query")]
     public Task<IResult> Query([FromBody] QueryRequest request, CancellationToken ct)
         => RunAsync(async info => { RequestRules.ValidateQuery(request); return Results.Ok(await Gateway.QueryAsync(info, request, ct)); });

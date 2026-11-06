@@ -82,11 +82,12 @@ test("shared filters are re-categorised too", () => {
   assert.equal(shared[0].value, "5", "a value that still fits is kept");
 });
 
-test("histogram and box plot refuse a cast field, with a message", () => {
+test("the histogram refuses a cast field (the box plot casts like any chart), with a message", () => {
   const sheet = { chartType: "histogram", columns: [], rows: [{ db: "d", table: "t", column: "qty_s" }], filters: [] };
   assert.match(statCastProblem(sheet, castOf), /cast/i);
   assert.equal(statCastProblem({ ...sheet, rows: [{ db: "d", table: "t", column: "plain" }] }, castOf), null);
   assert.equal(statCastProblem({ ...sheet, chartType: "bar" }, castOf), null);
+  assert.equal(statCastProblem({ ...sheet, chartType: "boxplot" }, castOf), null);
 });
 
 const wb = (fields) => JSON.stringify({ format: WORKBOOK_FORMAT, version: 1, entities: [], relationships: [], dashboards: [], fields });

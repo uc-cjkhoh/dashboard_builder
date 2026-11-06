@@ -4,11 +4,10 @@
 import { compileCalculation, calcTables } from "./calc-resolve.js";
 import { isCalcPill, pillName, pillSlots } from "./calc-pill.js";
 import { percentLabel, isFraction } from "../Core/validate.js";
-import { STAT_SINGLE_TABLE } from "../Dashboard/show-me-rules.js";
 
-export const STAT_CALC_HINT = "Histogram and box plot don't use calculated fields yet.";
-/** Histogram / box plot run single-table endpoints that know nothing of calculations: the hint, or `null`. */
-export const statCalcProblem = (sheet) => (STAT_SINGLE_TABLE.has(sheet.chartType)
+export const STAT_CALC_HINT = "A histogram doesn't use calculated fields yet.";
+/** The histogram runs a single-table endpoint that knows nothing of calculations (the box plot reads the worksheet query): the hint, or `null`. */
+export const statCalcProblem = (sheet) => (sheet.chartType === "histogram"
   && [...(sheet.columns ?? []), ...(sheet.rows ?? [])].some(isCalcPill) ? STAT_CALC_HINT : null);
 
 const find = (f, ctx) => (ctx.calcs ?? []).find((c) => c.id === f.calc);

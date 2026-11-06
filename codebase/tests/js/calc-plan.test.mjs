@@ -126,11 +126,11 @@ test("wireTopBy never returns a calc-less ref for a calc ranking", () => {
   assert.equal(wireTopBy({ db: "", table: "", column: "Gone", calc: "c6", agg: "sum" }, ctx), null);
   assert.ok(wireTopBy({ db: "", table: "", column: "Net", calc: "c1", agg: "sum" }, ctx).calc);
 });
-test("statCalcProblem: histogram / box plot refuse calc pills with a hint, other charts do not", () => {
+test("statCalcProblem: the histogram refuses calc pills with a hint, other charts do not", () => {
   const withCalc = { chartType: "histogram", columns: [pillOf("c1")], rows: [] };
   assert.equal(statCalcProblem(withCalc), STAT_CALC_HINT);
-  assert.equal(STAT_CALC_HINT, "Histogram and box plot don't use calculated fields yet.");
-  assert.equal(statCalcProblem({ chartType: "boxplot", columns: [], rows: [pillOf("c1")] }), STAT_CALC_HINT);
+  assert.equal(STAT_CALC_HINT, "A histogram doesn't use calculated fields yet.");
+  assert.equal(statCalcProblem({ chartType: "boxplot", columns: [], rows: [pillOf("c1")] }), null, "the box plot reads the worksheet query, calculations included");
   assert.equal(statCalcProblem({ chartType: "bar", columns: [pillOf("c1")], rows: [] }), null);
   assert.equal(statCalcProblem({ chartType: "histogram", columns: [{ db: "a", table: "b", column: "c", category: "numeric" }], rows: [] }), null);
 });
