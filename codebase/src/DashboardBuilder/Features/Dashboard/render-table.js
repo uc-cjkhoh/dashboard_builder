@@ -8,7 +8,7 @@ import { collapseKey, canToggle, rollUp, expandNodes, collapsedOf, leafValue, he
 import { icon } from "../Core/icons.js";
 import { el, warn, iconSpan } from "./render-dom.js";
 import { tableStyleClasses } from "./table-style-model.js";
-import { PALETTES } from "../Core/theme-model.js";
+import { DIV_FALLBACK } from "./colour-scale-model.js";
 
 // The crosstab / text table and its conditional formatting, drawn from a result. Pure DOM output: nothing here
 // reads the editor, so any worksheet view can draw a table. `calcPercent` = result measure indexes whose values are
@@ -203,11 +203,11 @@ function conditionalFor(sheet, measures, shown) {
     return { cfg, name, ext: extentOf(shown[mi]), palette };
   });
 }
-// Scale colours from the chart tokens: sequential surface → blue; diverging orange ← surface → blue.
+// Scale colours from the chart tokens: sequential surface → the cool diverging token; diverging warm ← surface → cool (the same pair as the chart scale).
 function cfPalette() {
   const cs = getComputedStyle(document.documentElement);
   const t = (n, fb) => cs.getPropertyValue(n).trim() || fb;
-  return { surface: t("--surface", "#ffffff"), high: t("--chart-cat-1", PALETTES.default.light[0]), low: t("--chart-cat-6", PALETTES.default.light[5]),
+  return { surface: t("--surface", "#ffffff"), high: t("--chart-div-high", DIV_FALLBACK.high), low: t("--chart-div-low", DIV_FALLBACK.low),
     inks: [t("--ink", "#1c1719"), t("--surface", "#ffffff"), "#000000", "#ffffff"] };
 }
 // One formatted cell: a rule's tone + icon wins; otherwise a scale tint (with a contrast-picked ink)

@@ -39,7 +39,7 @@ import { applyToggle, MAX_COLLAPSED } from "./collapse-model.js";
 import { LINE_STYLE_CHOICES, linesTakeStyle } from "./line-style-model.js";
 import { HEATMAP_SHAPE_CHOICES } from "./heatmap-model.js";
 import { SECONDARY_CHOICES, dualAxisAllowed, dualAxisOn } from "./axis-sync-model.js";
-import { RAMP_CHOICES, colourRangeError } from "./colour-scale-model.js";
+import { RAMP_CHOICES, SCALE_CHOICES, colourCentreError, colourRangeError } from "./colour-scale-model.js";
 import { TABLE_ALIGN_CHOICES, TABLE_DENSITY_CHOICES, TABLE_SHADE_CHOICES } from "./table-style-model.js";
 import { MARK_BORDER_CHOICES, MARKER_SHAPE_CHOICES, markerSizeError } from "./mark-style-model.js";
 import { targetChoices, effectiveTargetMeasure } from "./bullet-model.js";
@@ -1339,8 +1339,15 @@ export function initDashboards() {
           if (err) { toast(err, "danger"); set({ [key]: f[key] }); return; } // redraw puts the kept value back
           set({ [key]: v });
         });
-        panel.append(fmtSelect("Colour ramp", RAMP_CHOICES, f.colorRamp ?? "brand", (v) => set({ colorRamp: v })),
-          range("colorMin", "colorMax", "Colour from"), range("colorMax", "colorMin", "Colour to"));
+        const diverging = f.colorScale === "diverging";
+        panel.append(fmtSelect("Colour scale", SCALE_CHOICES, f.colorScale ?? "sequential", (v) => set({ colorScale: v })),
+          ...(diverging ? [fmtNumber("Colour centre", f.colorCentre, "auto", (v) => { // cool above, warm below; no pins (the ends follow the centre)
+            const err = colourCentreError(v);
+            if (err) { toast(err, "danger"); set({ colorCentre: f.colorCentre }); return; }
+            set({ colorCentre: v });
+          })]
+            : [fmtSelect("Colour ramp", RAMP_CHOICES, f.colorRamp ?? "brand", (v) => set({ colorRamp: v })),
+              range("colorMin", "colorMax", "Colour from"), range("colorMax", "colorMin", "Colour to")]));
       }
       if (hasAxes)
         panel.append(

@@ -38,3 +38,31 @@ export function rangeOf(values, min, max) {
   if (hi <= lo) hi = lo + 1;
   return { min: lo, max: hi };
 }
+
+/** [value, label] — `format.colorScale`: one hue low → high, or two hues meeting at a centre value. */
+export const SCALE_CHOICES = Object.freeze([["sequential", "Low → high"], ["diverging", "Diverging"]]);
+
+/** Token fallbacks for the diverging pair (the light theme's values; core.css `--chart-div-low` / `--chart-div-high` win). */
+export const DIV_FALLBACK = Object.freeze({ low: "#d98a4a", high: "#2b62b8" });
+
+/** The diverging ramp's [low, centre, high]: the warm token, the surface, the cool token. `tk` = { surface, divLow, divHigh }. */
+export function divergingColours(tk, reverse) {
+  const [low, high] = [tk.divLow ?? DIV_FALLBACK.low, tk.divHigh ?? DIV_FALLBACK.high];
+  return reverse ? [high, tk.surface, low] : [low, tk.surface, high];
+}
+
+/** Why a colour centre is refused, or null (blank is fine; a finite number no larger than 1e15 in size). */
+export function colourCentreError(v) {
+  if (v == null) return null;
+  return Number.isFinite(v) && Math.abs(v) <= 1e15 ? null : "The colour centre must be a number no larger than 1e15.";
+}
+
+/**
+ * The diverging scale's ends and centre for data span lo..hi. The centre is the one set, else 0 when the span
+ * straddles it, else the middle. The ends are made symmetric about it so the middle colour sits on the centre.
+ */
+export function divergingRange(lo, hi, centre) {
+  const c = centre != null && Number.isFinite(centre) ? centre : lo < 0 && hi > 0 ? 0 : (lo + hi) / 2;
+  const half = Math.max(c - lo, hi - c, 0) || 1;
+  return { min: c - half, max: c + half, centre: c };
+}

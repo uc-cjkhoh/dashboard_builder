@@ -18,7 +18,7 @@ import { checkTooltipText } from "../Dashboard/tooltip-model.js";
 import { checkTooltipStyle } from "../Dashboard/tooltip-style.js";
 import { checkTooltipFormats } from "../Dashboard/tooltip-formats.js";
 import { markerSizeError } from "../Dashboard/mark-style-model.js";
-import { RAMP_CHOICES, colourRangeError } from "../Dashboard/colour-scale-model.js";
+import { RAMP_CHOICES, SCALE_CHOICES, colourCentreError, colourRangeError } from "../Dashboard/colour-scale-model.js";
 import { cleanParameter, MAX_PARAMS } from "../Core/parameters-model.js";
 import { cleanHierarchies, hierarchyTableKey } from "../Dashboard/hierarchy-model.js";
 import { cleanSource, wireSource } from "../Core/source-model.js";
@@ -620,6 +620,9 @@ function cleanFormat(f0, where, issues) {
     : (issues.push(`${w}: colour ramp "${f.colorRamp}" — reset to Brand.`), base.colorRamp);
   for (const k of ["colorMin", "colorMax"]) out[k] = f[k] == null ? null : Number.isFinite(f[k]) ? f[k] : (issues.push(`${w}: ${k} "${f[k]}" — cleared.`), null);
   if (colourRangeError(out.colorMin, out.colorMax)) { issues.push(`${w}: the colour range minimum was not less than the maximum — cleared.`); out.colorMin = out.colorMax = null; }
+  out.colorScale = SCALE_CHOICES.some(([v]) => v === f.colorScale) ? f.colorScale : f.colorScale === undefined ? base.colorScale
+    : (issues.push(`${w}: colour scale "${f.colorScale}" — reset to Low → high.`), base.colorScale);
+  out.colorCentre = f.colorCentre == null ? null : typeof f.colorCentre === "number" && !colourCentreError(f.colorCentre) ? f.colorCentre : (issues.push(`${w}: colour centre "${f.colorCentre}" — cleared.`), null);
   out.targetMeasure = f.targetMeasure == null ? null : Number.isInteger(f.targetMeasure) && f.targetMeasure >= 1 && f.targetMeasure <= MAX_TARGET_MEASURE ? f.targetMeasure
     : (issues.push(`${w}: target measure "${f.targetMeasure}" — cleared.`), null);
   for (const k of ["dataLabels", "colorByDimension", "syncAxes", "dualAxis", "paletteReverse", "downIsGood", "approximate"]) {
