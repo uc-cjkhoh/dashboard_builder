@@ -4,6 +4,7 @@
 import { hierarchies, addHierarchy, updateHierarchy, removeHierarchy } from "../Core/store.js";
 import { LIMITS } from "../Core/validate.js";
 import { checkHierarchy } from "./hierarchy-model.js";
+import { placesOnDblClick } from "./placement-model.js";
 import { makeButton, openDialog, closeDialog, toast, confirmDialog } from "../Core/ui.js";
 
 /** ctx: { tables: [{ db, table }], columnsFor(db, table) → Promise<[{ name }]>, castOf(f), startNew?: boolean, canApply?: boolean, onApply?(id) } */
@@ -41,6 +42,8 @@ export function openHierarchiesDialog(ctx) {
         if (!(await confirmDialog(`Delete the hierarchy “${h.name}”? Worksheets that already use it keep their drill levels.`, { danger: true, confirmText: "Delete" }))) return;
         removeHierarchy(h.id); render();
       });
+      // Double-click a row = Use (the Use button is the keyboard path).
+      li.addEventListener("dblclick", (e) => { if (placesOnDblClick(e.target) && !use.disabled) { ctx.onApply(h.id); finish(); } });
       li.append(info, use, edit, del);
       list.append(li);
     }
