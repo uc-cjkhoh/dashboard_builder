@@ -26,7 +26,6 @@ export function checkTooltipFormats(raw) {
     if (e.number != null) { if (typeof e.number !== "string" || !NUMBER_FORMATS.has(e.number)) return { ok: false, error: "Tooltip number format must be Auto, Compact, Currency or Percent." }; s.number = e.number; }
     if (e.decimals != null) { if (!Number.isInteger(e.decimals) || e.decimals < 0 || e.decimals > MAX_DECIMALS) return { ok: false, error: `Tooltip decimals must be a whole number from 0 to ${MAX_DECIMALS}.` }; s.decimals = e.decimals; }
     if (e.date != null) { if (typeof e.date !== "string" || !DATE_FORMATS.has(e.date)) return { ok: false, error: "Tooltip date format must be Date, Date and time, Month or Year." }; if (e.date !== "auto") s.date = e.date; }
-    if (s.number === "auto" && s.decimals == null) delete s.number;
     if (!Object.keys(s).length) continue;
     if (++n > LIMITS.tooltipFormats) return { ok: false, error: `Tooltip formats cover at most ${LIMITS.tooltipFormats} fields.` };
     out[name] = s;

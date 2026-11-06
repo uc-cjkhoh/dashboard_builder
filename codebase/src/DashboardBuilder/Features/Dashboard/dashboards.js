@@ -30,7 +30,7 @@ import { CALC_CHOICES, ALONG_CHOICES, WINDOW_CHOICES, isCalc, calcName } from ".
 import { tooltipHtml, checkTooltipText, parseTooltip } from "./tooltip-model.js";
 import { openTooltipDialog } from "./tooltip-dialog.js";
 import { checkTooltipStyle, styleAfterTextEdit } from "./tooltip-style.js";
-import { checkTooltipFormats, sampleLookup } from "./tooltip-formats.js";
+import { checkTooltipFormats, sampleLookup, pruneFormats } from "./tooltip-formats.js";
 import { SWATCHES, memberKey, fieldColorKey, setMemberColor, clearFieldColors, colourOf } from "./colour-model.js";
 import { createHistory } from "./history.js";
 import { applyToggle, MAX_COLLAPSED } from "./collapse-model.js";
@@ -2275,7 +2275,8 @@ export function initDashboards() {
       const st = r.value ? styleAfterTextEdit(s.tooltipText, r.value, s.tooltipStyle) : null; // the line count changed -> the style is cleared
       const cleared = s.tooltipStyle && !st;
       s.tooltipText = r.value; if (st) s.tooltipStyle = st; else delete s.tooltipStyle;
-      if (!r.value) delete s.tooltipFormats;
+      const kept = r.value ? pruneFormats(s.tooltipFormats, parseTooltip(r.value).fields) : null;
+      if (kept) s.tooltipFormats = kept; else delete s.tooltipFormats;
       if (cleared) note.textContent = "Line styles cleared — the number of lines changed."; else refresh();
       commit(dash, s);
     };

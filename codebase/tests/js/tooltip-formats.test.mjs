@@ -10,7 +10,7 @@ import { sanitizeSheet } from "../../src/DashboardBuilder/Features/Workbook/work
 test("checkTooltipFormats: null/empty -> null; defaults and empty entries are dropped", () => {
   assert.deepEqual(checkTooltipFormats(null), { ok: true, value: null });
   assert.deepEqual(checkTooltipFormats({}), { ok: true, value: null });
-  assert.deepEqual(checkTooltipFormats({ a: {}, b: { number: "auto" }, c: { date: "auto" } }), { ok: true, value: null });
+  assert.deepEqual(checkTooltipFormats({ a: {}, b: { number: "auto" }, c: { date: "auto" } }), { ok: true, value: { b: { number: "auto" } } });
   assert.deepEqual(checkTooltipFormats({ a: { number: "percent", decimals: 1 }, d: { date: "month" } }).value, { a: { number: "percent", decimals: 1 }, d: { date: "month" } });
   assert.deepEqual(checkTooltipFormats({ a: { number: "auto", decimals: 0 } }).value, { a: { number: "auto", decimals: 0 } });
 });
@@ -78,4 +78,9 @@ test("sampleLookup formats a measure from its raw sample only when it has a form
   const l = sampleLookup(cat, { m: { number: "compact" }, d: { date: "year" } });
   assert.equal(l("m"), "1.2M"); assert.equal(l("d"), "2024"); assert.equal(l("z"), "7"); assert.equal(l("q"), undefined);
   assert.equal(sampleLookup(cat, null)("m"), "$1.2M");
+});
+
+test("an explicit Auto number format overrides the view's number style", () => {
+  const get = tipLookup({ measures: { Sales: 1234 }, dims: new Map(), formats: { Sales: { number: "auto" } }, fmtVal: (v) => `$${v}`, format: { numberFormat: "currency" } });
+  assert.equal(get("Sales"), "1,234");
 });
