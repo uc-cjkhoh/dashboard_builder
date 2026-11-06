@@ -1175,7 +1175,7 @@ public sealed partial class ClickHouseGateway
         foreach (var d in req.RowDimensions ?? [])
         {
             var field = $"rowDimensions[{rowIndex++}]";
-            if (box is not null) { dimExprs.Add(await BoxValueAsync(d, field)); rowDimNames.Add(d.Column); dimRefs.Add(d); continue; } // a box plot's value: one numeric expression per row
+            if (box is not null) { dimExprs.Add(await BoxValueAsync(d, field)); dimRefs.Add(d); continue; } // a box plot's value: one numeric expression per row
             dimExprs.Add(d.Calc is { } calc ? CalcSql.CalcDimensionSql(await CompileCalcAsync(calc, field), field) : await CastedAsync(d.Db, d.Table, d.Column, d.Cast, field));
             rowDimNames.Add(d.Calc is null ? $"{d.Table}.{d.Column}" : CalcSql.CalcLabel(d.Column));
             dimRefs.Add(d);
