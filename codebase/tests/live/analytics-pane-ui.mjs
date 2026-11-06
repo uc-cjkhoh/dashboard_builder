@@ -21,6 +21,7 @@ const COLUMNS = {
 const REGIONS = ['APAC', 'EU', 'US'];
 const queries = [];     // every /api/query body, in order
 let tables = ['orders', 'customers'];
+let zeroFirst = false; // the first value is 0 (an exponential / power trend cannot be fitted)
 function answer({ method, path, body }) {
   if (path === '/api/connection' && method === 'GET') return { json: { connected: false } };
   if (path === '/api/connection') return { json: { connected: true, host: 'mock-ch', port: 8443, user: 'default', secure: true, allowInvalidCert: false } };
@@ -37,7 +38,7 @@ function answer({ method, path, body }) {
     return { json: {
       rowDimensions: (body.rowDimensions ?? []).map((d) => d.column), columnDimensions: (body.columnDimensions ?? []).map((d) => d.column),
       measures: (body.measures ?? []).map((_, i) => `v${i}`),
-      rows: combos.map((keys, r) => ({ keys, values: (body.measures ?? []).map((_, i) => (i === 0 ? 10 * (r + 1) : 15 * (r + 1) + 5)) })),
+      rows: combos.map((keys, r) => ({ keys, values: (body.measures ?? []).map((_, i) => (i === 0 ? (zeroFirst && r === 0 ? 0 : 10 * (r + 1)) : 15 * (r + 1) + 5)) })),
       truncated: false } };
   }
   return null;
@@ -210,6 +211,27 @@ try {
       const c = document.getElementById('ws-chart'); c.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt })); return true; })()`);
     await settle(300);
     must(queries.length === n && J(await sheetAna()) === before, 'state changed');
+  });
+
+  await check('exponential and power trends show formula, R² and n; non-positive values give a plain notice', async () => {
+    await openAna();
+    const trendName = async () => ev(`window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas')).getOption().series.map((x) => x.name).find((n) => /^Trend/.test(n)) ?? null`);
+    await aPick('Trend', 'exp');
+    let n = await trendName();
+    must(/exponential\): y = .*e\^\(.*x\), R² 0\.\d\d, n = \d+/.test(n), `exp name: ${n}`);
+    await aPick('Trend', 'power');
+    n = await trendName();
+    must(/power\): y = .*\(x\+1\)\^/.test(n), `power name: ${n}`);
+    await shot('trend-power-light.png');
+    await theme('dark'); await chartReady(); await shot('trend-power-dark.png'); await theme('light');
+    zeroFirst = true; const q = queries.length;
+    await ev(`document.querySelector('.ws-viewbar__btn[aria-label="Refresh"]')?.click()`);
+    await dragChip('discount', `__t.zone('columns')`); await settle(500); await chartReady();
+    must(queries.length > q, 'no requery');
+    must(await trendName() === null, 'trend should be absent');
+    must(/greater than zero/.test(await ev(`document.getElementById('ws-chart').parentElement.textContent`)), 'plain notice missing');
+    await shot('trend-notice-light.png');
+    zeroFirst = false;
   });
 
   if (b.consoleErrors.length) { console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  ')); failed++; }

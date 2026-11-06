@@ -341,6 +341,7 @@ test("analytics settings (P21) are kept when valid and reset part by part", () =
   assert.deepEqual(ok, { ref: { kind: "constant", value: 5 }, band: { from: 2, to: 9 }, trend: "poly2", forecast: 6, totals: { grand: true, sub: false } });
   const bad = sheetOf({ analytics: { ref: { kind: "mode" }, trend: "cubic", forecast: 99 } });
   assert.deepEqual(bad.worksheets[0].sheet.analytics.trend, "none");
+  for (const t of ["exp", "power"]) assert.equal(sheetOf({ analytics: { trend: t } }).worksheets[0].sheet.analytics.trend, t);
   assert.ok(bad.issues.some((i) => /analytics/.test(i)));
 });
 

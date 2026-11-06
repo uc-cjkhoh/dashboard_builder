@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { refValue, trendFit, trendSeries, combine, defaultAnalytics, ANALYTICS_ITEMS, itemsFor, itemActive, addItem, removeItem } from "../../src/DashboardBuilder/Features/Dashboard/analytics-model.js";
+import { TREND_CHOICES, trendProblem, trendFormula, refValue, trendFit, trendSeries, combine, defaultAnalytics, ANALYTICS_ITEMS, itemsFor, itemActive, addItem, removeItem } from "../../src/DashboardBuilder/Features/Dashboard/analytics-model.js";
 
 const close = (a, b, eps = 1e-9) => Math.abs(a - b) < eps;
 
@@ -147,4 +147,29 @@ test("custom percentile band choice, bounds and label", () => {
   assert.deepEqual(bandFromChoice("pcustom", null), { kind: "percentile", lo: 5, hi: 95, custom: true });
   assert.deepEqual(bandBounds({ kind: "percentile", lo: 0.5, hi: 99.5 }, [0, 100]), { from: 0.5, to: 99.5 });
   assert.equal(bandLabel({ kind: "percentile", lo: 2.5, hi: 97.5 }), "P2.5–P97.5");
+});
+
+test("exponential and power fits recover their curves; the fit reports its sample size", () => {
+  const ex = trendFit("exp", [2, 2 * Math.E, 2 * Math.E ** 2, 2 * Math.E ** 3]); // y = 2·e^x
+  assert.ok(close(ex.predict(4), 2 * Math.E ** 4, 1e-6) && close(ex.r2, 1, 1e-9) && ex.n === 4);
+  const pw = trendFit("power", [3, 3 * 2 ** 1.5, 3 * 3 ** 1.5, 3 * 4 ** 1.5]); // y = 3·(x+1)^1.5
+  assert.ok(close(pw.predict(5), 3 * 6 ** 1.5, 1e-6) && close(pw.r2, 1, 1e-9));
+});
+test("exponential and power refuse values at or below zero, in plain words, never NaN", () => {
+  assert.match(trendProblem("exp", [1, 0, 3]), /greater than zero/);
+  assert.match(trendProblem("power", [1, -2, 3]), /greater than zero/);
+  assert.equal(trendProblem("exp", [1, null, 3]), null); // blanks are skipped, not refused
+  assert.equal(trendProblem("linear", [1, -2, 3]), null);
+  assert.equal(trendFit("exp", [1, 0, 3]), null);
+  assert.equal(trendSeries("power", [1, -1, 3], 0), null);
+});
+test("the formula is written out with its coefficients", () => {
+  assert.equal(trendFormula("linear", trendFit("linear", [3, 5, 7, 9])), "y = 3 + 2·x");
+  assert.equal(trendFormula("exp", trendFit("exp", [2, 2 * Math.E, 2 * Math.E ** 2])), "y = 2·e^(1·x)");
+  assert.equal(trendFormula("power", trendFit("power", [3, 6, 9])), "y = 3·(x+1)^1");
+  assert.match(trendFormula("log", trendFit("log", [1, 2, 3])), /^y = .*ln\(x\+1\)$/);
+  assert.match(trendFormula("poly2", trendFit("poly2", [1, 2, 5, 10, 17])), /x²/);
+});
+test("trend choices list exponential and power", () => {
+  assert.deepEqual(TREND_CHOICES.map(([v]) => v), ["none", "linear", "log", "exp", "power", "poly2"]);
 });

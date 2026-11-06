@@ -1,10 +1,10 @@
 // Analytics pane — pure, DOM-free (unit-tested in tests/js/analytics-model.test.mjs). Everything is
 // computed in the browser over the rows the query returned: reference lines / bands, a trend line (with
 // R²) and a short forecast that extends it, and crosstab totals that respect each measure's aggregation.
-// sheet.analytics = { ref: { kind, value? }, band: { from, to, fromParam?, toParam? } | null, trend: none|linear|log|poly2,
+// sheet.analytics = { ref: { kind, value? }, band: { from, to, fromParam?, toParam? } | null, trend: none|linear|log|exp|power|poly2,
 //                     forecast: 0|3|6|12, totals: { grand, sub } }; a constant ref may carry `param` (a number parameter's id): refConstant().
 export const REF_CHOICES = [["none", "None"], ["average", "Average"], ["median", "Median"], ["min", "Minimum"], ["max", "Maximum"], ["constant", "Constant"]];
-export const TREND_CHOICES = [["none", "None"], ["linear", "Linear"], ["log", "Logarithmic"], ["poly2", "Polynomial (2nd order)"]];
+export const TREND_CHOICES = [["none", "None"], ["linear", "Linear"], ["log", "Logarithmic"], ["exp", "Exponential"], ["power", "Power"], ["poly2", "Polynomial (2nd order)"]];
 export const FORECAST_CHOICES = [[0, "None"], [3, "3 steps"], [6, "6 steps"], [12, "12 steps"]];
 // A band is typed numbers ({ from, to }), mean ± k standard deviations ({ kind: "stddev", k }) or a percentile range ({ kind: "percentile", lo, hi, custom? } - custom: typed 0 < lo < hi < 100);
 // the reference line and the band read the measure `ref.measure` (a shown-measure index, default 0) over the rows shown.
@@ -46,26 +46,55 @@ export function refValue(kind, values, constant) {
 
 /**
  * Least-squares trend over the points (x = position 0, 1, 2, … in category order; blanks skipped).
- * Returns { predict(x), r2 } or null when there are too few points. log fits y = a + b·ln(x + 1);
- * poly2 fits y = a + b·x + c·x².
+ * Returns { predict(x), r2, n, coef } or null when there are too few points or the model cannot be fitted.
+ * log fits y = a + b·ln(x + 1); poly2 fits y = a + b·x + c·x²; exp fits y = a·e^(b·x) and power y = a·(x + 1)^b
+ * by a straight-line fit of ln y (so every y must be above zero: see trendProblem). R² is always measured on the
+ * original values, not on ln y.
  */
 export function trendFit(type, values) {
   const pts = values.map((y, x) => [x, y == null || y === "" ? NaN : Number(y)]).filter(([, y]) => Number.isFinite(y));
   const need = type === "poly2" ? 3 : 2;
   if (pts.length < need || type === "none") return null;
-  const feat = (x) => (type === "log" ? [1, Math.log(x + 1)] : type === "poly2" ? [1, x, x * x] : [1, x]);
-  const X = pts.map(([x]) => feat(x)), Y = pts.map(([, y]) => y);
+  const grow = type === "exp" || type === "power";
+  if (grow && pts.some(([, y]) => y <= 0)) return null;
+  const feat = (x) => (type === "log" || type === "power" ? [1, Math.log(x + 1)] : type === "poly2" ? [1, x, x * x] : [1, x]);
+  const X = pts.map(([x]) => feat(x)), Y = pts.map(([, y]) => (grow ? Math.log(y) : y));
   const k = X[0].length;
   // Normal equations (XᵀX) β = Xᵀy, solved by Gaussian elimination (k ≤ 3).
   const A = Array.from({ length: k }, (_, i) => Array.from({ length: k }, (_, j) => X.reduce((s, r) => s + r[i] * r[j], 0)));
   const b = Array.from({ length: k }, (_, i) => X.reduce((s, r, n) => s + r[i] * Y[n], 0));
   const beta = solve(A, b);
   if (!beta) return null;
-  const predict = (x) => feat(x).reduce((s, f, i) => s + f * beta[i], 0);
-  const mean = Y.reduce((a, c) => a + c, 0) / Y.length;
-  const ssTot = Y.reduce((s, y) => s + (y - mean) ** 2, 0);
+  const coef = grow ? [Math.exp(beta[0]), beta[1]] : beta;
+  const predict = (x) => { const v = feat(x).reduce((s, f, i) => s + f * beta[i], 0); return grow ? Math.exp(v) : v; };
+  const ys = pts.map(([, y]) => y);
+  const mean = ys.reduce((a, c) => a + c, 0) / ys.length;
+  const ssTot = ys.reduce((s, y) => s + (y - mean) ** 2, 0);
   const ssRes = pts.reduce((s, [x, y]) => s + (y - predict(x)) ** 2, 0);
-  return { predict, r2: ssTot === 0 ? 1 : 1 - ssRes / ssTot };
+  const r2 = ssTot === 0 ? 1 : 1 - ssRes / ssTot;
+  if (!Number.isFinite(r2) || !coef.every(Number.isFinite)) return null;
+  return { predict, r2, n: pts.length, coef };
+}
+
+/** Why a model cannot be fitted to these values, in words, or null when it can (or the type has no limit). */
+export function trendProblem(type, values) {
+  if (type !== "exp" && type !== "power") return null;
+  const ys = values.filter((y) => y != null && y !== "").map(Number).filter(Number.isFinite);
+  return ys.some((y) => y <= 0) ? `The ${type === "exp" ? "exponential" : "power"} trend needs every value to be greater than zero.` : null;
+}
+
+const num = (v) => String(Number(v.toPrecision(3)));
+/** The fitted formula in words, e.g. "y = 3 + 2·x"; x is the category's position (the first is 0). */
+export function trendFormula(type, fit) {
+  const [a, b, c] = fit.coef;
+  const add = (v, term) => ` ${v < 0 ? "−" : "+"} ${num(Math.abs(v))}·${term}`;
+  switch (type) {
+    case "log": return `y = ${num(a)}${add(b, "ln(x+1)")}`;
+    case "exp": return `y = ${num(a)}·e^(${num(b)}·x)`;
+    case "power": return `y = ${num(a)}·(x+1)^${num(b)}`;
+    case "poly2": return `y = ${num(a)}${add(b, "x")}${add(c, "x²")}`;
+    default: return `y = ${num(a)}${add(b, "x")}`;
+  }
 }
 function solve(A, b) {
   const n = b.length, M = A.map((row, i) => [...row, b[i]]);
@@ -86,8 +115,9 @@ function solve(A, b) {
 export function trendSeries(type, values, forecast = 0) {
   const fit = trendFit(type === "none" && forecast ? "linear" : type, values);
   if (!fit) return null;
+  fit.type = type === "none" ? "linear" : type;
   const total = values.length + forecast;
-  return { data: Array.from({ length: total }, (_, x) => fit.predict(x)), extra: forecast, r2: fit.r2 };
+  return { data: Array.from({ length: total }, (_, x) => fit.predict(x)), extra: forecast, r2: fit.r2, n: fit.n, formula: trendFormula(fit.type, fit) };
 }
 
 /**

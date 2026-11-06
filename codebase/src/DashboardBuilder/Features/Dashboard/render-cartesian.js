@@ -2,7 +2,7 @@ import { renderChart as drawChart } from "./chart.js";
 import { dateLabelsOf } from "./date-labels.js";
 import { isCalcPill } from "../Calc/calc-pill.js";
 import { SCATTER_TYPES, marksOf, measureName as planMeasureName } from "./sheet-plan.js";
-import { REF_CHOICES, TREND_CHOICES, refValue, refConstant, trendSeries, pickMeasure, dataValues, bandBounds, bandLabel } from "./analytics-model.js";
+import { REF_CHOICES, TREND_CHOICES, trendProblem, refValue, refConstant, trendSeries, pickMeasure, dataValues, bandBounds, bandLabel } from "./analytics-model.js";
 import { parameters } from "../Core/store.js";
 import { hint } from "./render-dom.js";
 import { selectHandler, legendSpec, memberSpec } from "./render-handlers.js";
@@ -84,12 +84,14 @@ export function renderSeries(container, rc, sheet, a) {
     const fc = type === "line" || type === "area" ? A.forecast ?? 0 : 0;
     const t = (A.trend && A.trend !== "none") || fc ? trendSeries(A.trend ?? "none", vals, fc) : null;
     const trendLabel = TREND_CHOICES.find(([v]) => v === (A.trend && A.trend !== "none" ? A.trend : "linear"))[1].toLowerCase();
+    const tp = A.trend && A.trend !== "none" && !t ? trendProblem(A.trend, vals) ?? "The trend needs at least 2 values (3 for a polynomial)." : null;
+    if (tp) rc.extraNotice = joinNotices(rc.extraNotice, tp);
     const bb = bandBounds(A.band, mvals, parameters);
     analytics = {
       measure: mi,
       ref: rv == null ? null : { name: (refKind === "constant" ? "Reference" : REF_CHOICES.find(([v]) => v === refKind)[1]) + (refKind === "constant" ? "" : mname), value: rv },
       band: bb ? { ...bb, name: bandLabel(A.band) + (A.band.kind ? ` (shown rows)${mname}` : "") } : null,
-      trend: t ? { name: `Trend (${trendLabel}${fc ? ` + ${fc} forecast` : ""}) R² ${t.r2.toFixed(2)}`, short: `Trend · R² ${t.r2.toFixed(2)}`, data: t.data } : null,
+      trend: t ? { name: `Trend (${trendLabel}${fc ? ` + ${fc} forecast` : ""}): ${t.formula}, R² ${t.r2.toFixed(2)}, n = ${t.n}`, short: `Trend · ${t.formula} · R² ${t.r2.toFixed(2)} · n = ${t.n}`, data: t.data } : null,
     };
     if (t && t.extra) {
       catsOut = [...categories, ...Array.from({ length: t.extra }, (_, i) => `Forecast +${i + 1}`)];
