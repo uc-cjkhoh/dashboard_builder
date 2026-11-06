@@ -21,6 +21,19 @@ public sealed class ConnectionController : ApiControllerBase
     public IResult GetStatus()
         => Results.Ok(Registry.Current?.ToClientView() ?? ConnectionView.Disconnected);
 
+    /// <summary>
+    /// Liveness probe for the sidebar's status dot. <c>connected:false</c> = the session no longer holds a connection
+    /// (idle timeout, restart); <c>reachable</c> says whether <c>SELECT 1</c> still succeeds. Read-only, credential-free.
+    /// </summary>
+    [HttpGet("connection/ping")]
+    public async Task<IResult> Ping(CancellationToken ct)
+    {
+        var info = Registry.Current;
+        if (info is null) return Results.Ok(ConnectionView.Disconnected);
+        var (error, _) = await Gateway.ValidateAsync(info, ct);
+        return Results.Ok(new { connected = true, reachable = error is null });
+    }
+
     [HttpPost("connection")]
     public async Task<IResult> Connect([FromBody] ConnectRequest req, CancellationToken ct)
     {

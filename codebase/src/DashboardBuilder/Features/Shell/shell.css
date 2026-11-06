@@ -65,7 +65,7 @@
    The user's own collapsed choice is untouched and returns with the Data Source tab. */
 .sidebar__tools { display: none; gap: var(--s2); }
 .app[data-view="sheet"] .sidebar__tools { display: flex; }
-.app[data-view="sheet"] .sidebar__section--conn, .app[data-view="sheet"] #schema-section, .app[data-view="sheet"] #tables-section { display: none; }
+.app[data-view="sheet"] .sidebar__title, .app[data-view="board"] .sidebar__title, .app[data-view="sheet"] .sidebar__divider, .app[data-view="board"] .sidebar__divider, .app[data-view="sheet"] .sidebar__section--conn, .app[data-view="sheet"] #schema-section, .app[data-view="sheet"] #tables-section { display: none; }
 .app[data-view="board"], .app[data-view="sheet"] { grid-template-columns: var(--topbar-h) 1fr; }
 .app[data-view="sheet"] .sidebar__resizer, .app[data-view="board"] .sidebar__resizer,
 .app[data-view="board"] .sidebar__brand-text, .app[data-view="sheet"] .sidebar__brand-text,
@@ -79,7 +79,6 @@
 /* Performance timings: a tool tile at the bottom of the rail on a worksheet or dashboard — not on the Data Source tab, which has no queries to time.
    On a dashboard the body shows only this tile (the connection, tables and worksheet tools are hidden). */
 .sidebar__perf { flex: none; margin-top: auto; align-self: center; }
-.app[data-view="model"] .sidebar__perf { display: none; }
 .app[data-view="board"] .sidebar__body { padding: var(--s2) 0; align-items: center; }
 .app[data-view="board"] .sidebar__section--conn, .app[data-view="board"] #schema-section, .app[data-view="board"] #tables-section { display: none; }
 /* Clickable on glass = more solid than the glass: a ≥ 3:1 edge (--ctl-edge) and full-ink icon, so the tile reads in light and dark. */
@@ -96,9 +95,15 @@
   border-radius: var(--r);
   box-shadow: var(--elev-2);
 }
-.sidebar__section--conn { padding: var(--s2); flex: none; }
-.sidebar__section--conn:has(.conn-form:not([hidden])) { padding: var(--s4); }
+.sidebar__section--conn { padding: var(--s1); flex: none; }  /* connected: one 32px row inset 4px, like the rows below, so the dot sits on their 12px icon lane */
+.sidebar__section--conn:has(.conn-form:not([hidden])) { padding: var(--s2); }
 .sidebar__section--db { padding: 0; flex: none; }
+/* Flexible separation: the gap between Connection and Databases & Tables takes a 24px share (shrinking to 8px when the list needs the height);
+   its hairline runs edge to edge, through the body's 16px gutters. */
+/* Group titles above the Connection tile and the Databases & Tables group; aligned with the status dot / database icon inside the tiles. */
+.sidebar__title { flex: none; margin: 0; font-size: var(--fs-body); font-weight: 600; color: var(--ink-3); }
+.sidebar__divider { flex: 0 1 var(--s6); min-height: var(--s2); margin-inline: calc(-1 * var(--s4)); position: relative; }
+.sidebar__divider::before { content: ""; position: absolute; inset: 50% 0 auto; height: 1px; background: var(--line); }
 #tables-section { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--s2); }
 .bento--list { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 .bento--list .table-search { margin: 0; border-bottom: 1px solid var(--line); }

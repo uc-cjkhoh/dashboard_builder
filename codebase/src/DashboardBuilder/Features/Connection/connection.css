@@ -1,72 +1,91 @@
-/* Connection feature — the sidebar connection form + compact connected summary. */
+/* Connection feature — one tile: a single status row when connected, one filled form block when not.
+   Geometry: connected, the row is inset 4px in the tile, so its dot (16px slot) sits on the 12px icon lane of the database row and table rows
+   below and the host starts on their 36px text lane. The form is inset 8px; its labels start 8px inside the block. */
 
-/* Compact connected summary (replaces the form once connected) */
-/* Flat status row: no box — dot on the gutter, host, then the ghost buttons (glyph edge on the right gutter). */
-.conn-summary {
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
-  height: var(--ctl-h);
-  animation: rise-in var(--dur) var(--ease-out);
-}
-.conn-summary__dot {
-  flex: none;
-  width: 8px; height: 8px;
-  border-radius: var(--r-pill);
-  background: var(--ok-ink);
-}
-.conn-summary > .conn-summary__btn:last-child { margin-right: calc(-1 * var(--s2)); }
-.conn-summary__host { flex: 1; min-width: 0; font-size: var(--fs-body); font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.conn-summary__warn { flex: none; display: inline-grid; place-items: center; color: var(--warn-ink); }
-.conn-recent__meta { font-size: var(--fs-body); color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.conn-summary__btn { color: var(--ink-3); }
-.conn-summary__btn:hover { color: var(--ink); }
-.conn-summary__btn.iconbtn--danger:hover { color: var(--danger-ink); }
+@keyframes conn-in { from { opacity: 0; transform: translateY(4px); } }
+@keyframes conn-pop { 0% { transform: scale(.4); } 60% { transform: scale(1.15); } 100% { transform: none; } }
+@keyframes conn-pulse { to { opacity: .35; } }
 
-.conn-form__actions { display: flex; gap: var(--s2); }
-.conn-form__actions .btn { flex: 1; }
+/* ---- Connected: the status row ------------------------------------------- */
+.conn-summary { position: relative; animation: conn-in var(--dur) var(--ease-out); }
+.conn-row { display: flex; align-items: center; gap: var(--s2); height: 32px; padding-left: var(--s2); }
+/* Actions: one group, pushed to the right edge of the row. */
+.conn-row__actions { display: flex; align-items: center; gap: 3px; margin-left: auto; flex: none; }
+.conn-row__btn { flex: none; color: var(--ink-3); }
+.conn-row__btn:hover { color: var(--ink); }
+.conn-summary__host { flex: 1; min-width: 0; font-size: var(--fs-body); font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: color var(--dur) var(--ease); }
 
-/* ---- Connection form ----------------------------------------------------- */
-.conn-form { display: grid; gap: var(--s2); animation: fade-in var(--dur) var(--ease); }
-.conn-advanced { display: grid; gap: var(--s2); }
-.conn-advanced > summary { cursor: pointer; color: var(--ink-2); font-size: var(--fs-body); }
-.conn-advanced[open] > summary { margin-bottom: var(--s2); }
-.form-field { display: flex; flex-direction: column; gap: var(--s1); }
-.form-row { display: flex; gap: var(--s2); }
-.form-row .form-field { flex: 1; }
-.form-field label { font-size: var(--fs-body); color: var(--ink-3); }
-.form-field input[type="text"],
-.form-field input[type="number"],
-.form-field input[type="password"] {
-  width: 100%;
-  height: var(--ctl-h);
-  padding: 0 var(--s2);
-  font-size: var(--fs-body);
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--line-2);
-  border-radius: var(--r);
-}
-.form-field input {
-  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
-}
-.form-check { display: flex; align-items: flex-start; gap: var(--s2); font-size: var(--fs-body); }
-/* No UA margin: the box sits on the gutter. Nudged so it centres on the first line when a label wraps. */
-.form-check input { flex: none; width: 16px; height: 16px; margin: 4px 0 0; }
-.form-check--sub input { margin-top: 4px; }
-/* Sub-option under a checkbox (e.g. "trust invalid cert" under Secure) + its inline warning. */
-.form-check--sub { padding-left: calc(16px + var(--s2)); font-size: var(--fs-body); color: var(--ink-3); }  /* = parent's label x */
-.form-warn { margin: calc(-1 * var(--s1)) 0 0 calc(16px + var(--s2)); font-size: var(--fs-body); line-height: 1.35; color: var(--warn-ink); }
+/* Status slot — the only coloured element. Shape changes with colour: filled dot (ok), hollow pulsing ring (checking), cross-in-circle (lost). Each state has its own
+   animation, so a change of state replays one: the dot settles, the ring breathes, the cross pops in. */
+.conn-status { flex: none; display: inline-grid; place-items: center; width: 16px; height: 16px; }
+.conn-status::before { content: ""; width: 8px; height: 8px; border-radius: var(--r-pill); background: var(--ok-ink); animation: conn-pop var(--dur-slow) var(--ease-out); }
+.conn-summary[data-health="checking"] .conn-status::before { background: none; box-shadow: inset 0 0 0 2px var(--ink-3); animation: conn-pulse 1.2s var(--ease) infinite alternate; }
+.conn-summary[data-health="lost"] .conn-status::before { content: none; }
+.conn-summary[data-health="lost"] .conn-status { color: var(--danger-ink); animation: conn-pop var(--dur-slow) var(--ease-out); }
+.conn-summary[data-health="lost"] .conn-summary__host { color: var(--ink-3); }
+
+/* Lost: the way out sits under the row — message in danger ink, Retry. */
+.conn-lost { display: flex; align-items: center; gap: var(--s2); padding: var(--s1) var(--s1) var(--s1) var(--s2); animation: conn-in var(--dur) var(--ease-out); }
+.conn-lost__text { flex: 1; min-width: 0; font-size: var(--fs-body); color: var(--danger-ink); }
+
+/* ---- Not connected: recent sources + form --------------------------------- */
+.conn-recent { list-style: none; margin: 0 0 var(--s2); padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); }
+.conn-recent__item { position: relative; display: flex; align-items: center; border-radius: var(--r); animation: conn-in var(--dur) var(--ease-out) backwards;
+  transition: background var(--dur-fast) var(--ease); }
+.conn-recent__item:nth-child(2) { animation-delay: 30ms; } .conn-recent__item:nth-child(3) { animation-delay: 60ms; }
+.conn-recent__item:nth-child(4) { animation-delay: 90ms; } .conn-recent__item:nth-child(5) { animation-delay: 120ms; }
+.conn-recent__item:hover, .conn-recent__item:focus-within { background: color-mix(in srgb, var(--ink) 7%, transparent); }
+/* One line: host, then the user in grey. The text starts where a field's label does (8px in). */
+.conn-recent__pick { flex: 1; min-width: 0; display: flex; align-items: center; height: 32px; padding: 0 var(--s2); background: none; border-radius: var(--r); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.conn-recent__text { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: var(--s2); }
+.conn-recent__text .conn-summary__host { flex: 0 1 auto; font-weight: 500; }
+.conn-recent__meta { flex: 1 0 auto; max-width: 40%; font-size: var(--fs-body); color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Remove replaces the user on hover / focus, at the row's right end (its glyph, not its box, meets the 8px gutter). */
+.conn-recent__remove { position: absolute; right: 0; opacity: 0; scale: .8; color: var(--ink-3); transition: opacity var(--dur-fast) var(--ease), scale var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease); }
+.conn-recent__item:hover .conn-recent__remove, .conn-recent__item:focus-within .conn-recent__remove { opacity: 1; scale: 1; }
+.conn-recent__remove:hover { color: var(--ink); }
+.conn-recent__meta { transition: opacity var(--dur-fast) var(--ease); }
+.conn-recent__item:hover .conn-recent__meta, .conn-recent__item:focus-within .conn-recent__meta { opacity: 0; }
+
+.conn-form { display: grid; gap: var(--s2); } /* one rhythm: 8px between recent, fields, advanced and actions */
+/* Fields: one filled block, a row per field — label in a 64px lane, value beside it, hairline between. Focus deepens the row; an invalid row gets a 1px danger ring. */
+.conn-fields, .conn-options { display: grid; background: color-mix(in srgb, var(--ink) 5%, transparent); border-radius: var(--r); overflow: hidden; } /* two blocks, one fill, one radius */
+/* The label lane is shared (subgrid): as wide as the longest label, plus an 8px gap to the value — so the values align and no label touches its value. */
+.conn-fields { grid-template-columns: max-content minmax(0, 1fr); }
+.form-field { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; align-items: start; min-height: 32px; padding-right: var(--s2);
+  animation: conn-in var(--dur) var(--ease-out) backwards; transition: background var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease); }
+.form-field:nth-child(2) { animation-delay: 30ms; } .form-field:nth-child(3) { animation-delay: 60ms; } .form-field:nth-child(4) { animation-delay: 90ms; }
+.form-field + .form-field { box-shadow: inset 0 1px 0 var(--line); } /* a hairline that takes no height: every row is exactly 32px */
+.form-field:focus-within { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.form-field:has([aria-invalid="true"]) { box-shadow: inset 0 0 0 1px var(--danger-solid); }
+.form-field > .field-error { grid-column: 2; margin: 0 0 var(--s1); }
+.form-field label { line-height: 32px; padding: 0 var(--s2); font-size: var(--fs-body); color: var(--ink-3); }
+.form-field input[type="text"], .form-field input[type="number"], .form-field input[type="password"] {
+  width: 100%; height: 32px; padding: 0; font-size: var(--fs-body); color: var(--ink); background: transparent; border: 0; border-radius: 0; outline: none; }
+.form-field input[type][aria-invalid="true"] { color: var(--ink); }
+.form-field input::placeholder { color: var(--ink-3); }
 .form-field input:disabled { opacity: .55; cursor: not-allowed; }
 
+/* Advanced: a quiet chevron row; its options are switch rows (still checkboxes — on = ink, never a hue). */
+.conn-advanced { display: grid; gap: var(--s2); animation: conn-in var(--dur) var(--ease-out) 120ms backwards; }
+.conn-advanced > summary { display: flex; align-items: center; gap: var(--s1); height: 32px; padding: 0 var(--s2); list-style: none; cursor: pointer; color: var(--ink-3); font-size: var(--fs-body); font-weight: 500; border-radius: var(--r); transition: color var(--dur-fast) var(--ease); }
+.conn-advanced > summary::-webkit-details-marker { display: none; }
+.conn-advanced > summary::after { content: ""; width: 16px; height: 16px; background: currentColor; transition: rotate var(--dur) var(--ease-out);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 8l3 3 3-3'/%3E%3C/svg%3E") center / 16px no-repeat; }
+.conn-advanced:not([open]) > summary::after { rotate: -90deg; }
+.conn-advanced > summary:hover { color: var(--ink); }
+.form-check { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--s2); min-height: 32px; padding: 0 var(--s2); font-size: var(--fs-body); color: var(--ink-2); cursor: pointer; }
+.form-check input { order: 1; flex: none; appearance: none; position: relative; width: 28px; height: 16px; margin: 0; border-radius: var(--r-pill); background: var(--line-2); cursor: pointer; transition: background var(--dur-fast) var(--ease); }
+.form-check input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: var(--r-pill); background: var(--surface); transition: translate var(--dur) var(--ease-out), background var(--dur-fast) var(--ease); }
+.form-check input:checked { background: var(--ink); }
+.form-check input:checked::after { translate: 12px 0; background: var(--on-ink); }
+.form-check input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.form-check + .form-check, .form-check + .form-warn { border-top: 1px solid var(--line); }
+.form-warn { margin: 0; padding: var(--s2); font-size: var(--fs-body); line-height: 1.35; color: var(--warn-ink); animation: conn-in var(--dur) var(--ease-out); }
 
-/* Recent sources — shown above the form while it is open: flat rows (a server glyph, the host, then user · port), no boxes. Remove appears on hover / focus. */
-.conn-recent { list-style: none; margin: 0 0 var(--s2); padding: 0 0 var(--s2); display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; border-bottom: 1px solid var(--line); }
-.conn-recent__item { display: flex; align-items: center; margin-inline: calc(-1 * var(--s2)); border-radius: var(--r); } /* the glyph, not the hover wash, meets the form's left edge */
-.conn-recent__item:hover, .conn-recent__item:focus-within { background: color-mix(in srgb, var(--ink) 7%, transparent); }
-.conn-recent__pick { flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--s2); padding: var(--s1) var(--s2); background: none; border-radius: var(--r); color: inherit; font: inherit; text-align: left; cursor: pointer; }
-.conn-recent__icon { flex: none; color: var(--ink-3); }
-.conn-recent__text { min-width: 0; display: flex; flex-direction: column; }
-.conn-recent__text > * { max-width: 100%; }
-.conn-recent__remove { flex: none; opacity: 0; transition: opacity var(--dur-fast) var(--ease); }
-.conn-recent__item:hover .conn-recent__remove, .conn-recent__item:focus-within .conn-recent__remove { opacity: 1; }
+/* Actions: Connect fills the width; while it runs, a spinner takes the label's place. */
+.conn-form__actions { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s2); animation: conn-in var(--dur) var(--ease-out) 150ms backwards; }
+.conn-form__actions:has(#conn-cancel[hidden]) { grid-template-columns: 1fr; }
+#conn-connect[aria-busy="true"] { position: relative; color: transparent; }
+#conn-connect[aria-busy="true"]::after { content: ""; position: absolute; inset: 0; margin: auto; width: 16px; height: 16px; border-radius: var(--r-pill);
+  border: 2px solid color-mix(in srgb, var(--on-accent) 35%, transparent); border-top-color: var(--on-accent); animation: spin .8s linear infinite; }

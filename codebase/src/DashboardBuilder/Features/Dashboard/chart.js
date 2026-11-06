@@ -64,7 +64,7 @@ function tokens() {
   const catFallback = PALETTES.default.light;
   const cat = orderedPalette(catFallback.map((hex, i) => t(`--chart-cat-${i + 1}`, hex)), reversed());
   return {
-    series: t("--chart-series", ACCENTS.crimson.light.accent),
+    series: t("--chart-series", ACCENTS.signal.light.accent),
     cat,
     axis: t("--chart-axis", "#d9cfd1"),
     grid: t("--chart-grid", "#ebe4e5"),
@@ -75,10 +75,10 @@ function tokens() {
     font: t("--font", "system-ui, sans-serif"),
     radius: parseFloat(t("--r", "8")) || 8, // the one corner radius (golden rule 11)
     // Brand stops for the sequential heatmap ramp (single-hue soft→saturated, token-driven).
-    brand: t("--accent", ACCENTS.crimson.light.accent),
-    brandSoft: t("--accent-soft", ACCENTS.crimson.light.soft),
+    brand: t("--accent", ACCENTS.signal.light.accent),
+    brandSoft: t("--accent-soft", ACCENTS.signal.light.soft),
     // continuous low -> high: the chosen hue from the accent pair or a categorical token
-    ramp: rampColours(drawing?.colorRamp, { accent: t("--accent", ACCENTS.crimson.light.accent), accentSoft: t("--accent-soft", ACCENTS.crimson.light.soft), surface: t("--surface", "#ffffff"), cat: catFallback.map((hex, i) => t(`--chart-cat-${i + 1}`, hex)) }, reversed()),
+    ramp: rampColours(drawing?.colorRamp, { accent: t("--accent", ACCENTS.signal.light.accent), accentSoft: t("--accent-soft", ACCENTS.signal.light.soft), surface: t("--surface", "#ffffff"), cat: catFallback.map((hex, i) => t(`--chart-cat-${i + 1}`, hex)) }, reversed()),
   };
 }
 

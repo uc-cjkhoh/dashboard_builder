@@ -141,13 +141,17 @@
   .db-pick select.select::picker-icon { content: ""; width: 16px; height: 16px; margin-left: auto; background: var(--ink-3); transition: rotate var(--dur-fast) var(--ease);
     mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 8l3 3 3-3'/%3E%3C/svg%3E") center / 16px no-repeat; }
   .db-pick select.select:open::picker-icon { rotate: 180deg; }
+  /* One component: while open, the panel continues the tile it opens from — same width (tile = select + its 1px stroke), no gap, the tile's bottom
+     corners squared and its bottom stroke dropped, a hairline between the closed row and the list. */
   .db-pick select.select::picker(select) {
-    margin-top: var(--s1); padding: var(--s1); min-width: anchor-size(width); max-height: 50vh;
-    background: var(--surface); color: var(--ink); border: 1px solid var(--line-2); border-radius: var(--r); box-shadow: var(--elev-16);
+    margin: 0 0 0 -1px; padding: var(--s1); box-sizing: border-box; width: calc(anchor-size(width) + 2px); min-width: 0; max-height: 50vh; overflow-x: hidden;
+    background: var(--surface); color: var(--ink); border: 1px solid var(--line-2); border-top-color: var(--line); border-radius: 0 0 var(--r) var(--r); box-shadow: var(--elev-16);
   }
+  .sidebar__section--db:has(.db-pick select.select:open) { border-bottom-color: transparent; border-bottom-left-radius: 0; border-bottom-right-radius: 0; box-shadow: none; }
+  .db-pick select.select:open { border-radius: 0; }
   .db-pick select.select option {
     display: flex; align-items: center; gap: var(--s2); height: var(--ctl-h); padding: 0 var(--s2) 0 calc(var(--s1) + var(--s2) + 16px + var(--s2) - var(--s1) - 1px); border-radius: var(--r);  /* text on the closed control's text lane (36px in) */
-    background: none; color: var(--ink-2); font-size: var(--fs-body); cursor: pointer;
+    background: none; color: var(--ink-2); font-size: var(--fs-body); cursor: pointer; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
     transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
   }
   .db-pick select.select option:hover, .db-pick select.select option:focus-visible { background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--ink); outline: none; }

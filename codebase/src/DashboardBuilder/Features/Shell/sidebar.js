@@ -63,7 +63,13 @@ function initCollapse() {
 function initViewFlag() {
   const app = document.querySelector(".app");
   if (!app) return;
-  const sync = () => { app.dataset.view = isModelActive() ? "model" : isWorksheetActive() ? "sheet" : "board"; };
+  // The Performance tile has no use on the Data Source tab (no queries to time): it is taken out of the DOM there and put back last in the body elsewhere.
+  const perf = document.getElementById("perf-btn"), body = document.getElementById("sidebar-body");
+  const sync = () => {
+    app.dataset.view = isModelActive() ? "model" : isWorksheetActive() ? "sheet" : "board";
+    if (!perf || !body) return;
+    if (app.dataset.view === "model") perf.remove(); else if (!perf.isConnected) body.append(perf);
+  };
   bus.addEventListener("view:changed", sync);
   sync();
 }

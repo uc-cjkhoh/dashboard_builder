@@ -1,29 +1,40 @@
 @* Connection panel (sidebar top). Wired end-to-end in Connection/connection.js. Port/secure
    default to the TLS pair (8443, decision D10). *@
+<h2 class="sidebar__title" id="conn-title">Connections</h2>
 <section class="sidebar__section sidebar__section--conn" aria-labelledby="conn-title">
-    <h2 class="sr-only" id="conn-title">Connection</h2>
 
-    <!-- Compact connected summary — replaces the form once connected. -->
-    <div class="conn-summary" id="conn-summary" hidden>
-        <span class="conn-summary__dot" aria-hidden="true"></span>
-        <span class="conn-summary__host" id="conn-host-label"></span>
-        <span class="conn-summary__warn" id="conn-warn" hidden data-icon="warning" role="img"
-              aria-label="Certificate not verified" title="Certificate not verified"></span>
-        <button type="button" class="iconbtn conn-summary__btn" id="conn-change"
-                aria-label="Change connection" title="Change connection" aria-controls="conn-form" aria-expanded="false"><span data-icon="edit"></span></button>
-        <button type="button" class="iconbtn iconbtn--danger conn-summary__btn" id="conn-disconnect"
-                aria-label="Disconnect" title="Disconnect"><span data-icon="power"></span></button>
+    <!-- Connected: one row. Its dot is the only coloured thing here and shows the last liveness probe (ok / checking / lost),
+         never the moment of connecting. The two things you can do with a connection sit on the row, right-aligned. -->
+    <div class="conn-summary" id="conn-summary" data-health="ok" hidden>
+        <div class="conn-row">
+            <span class="conn-status" id="conn-status" aria-hidden="true"></span>
+            <span class="conn-summary__host" id="conn-host-label"></span>
+            <div class="conn-row__actions">
+                <button type="button" class="iconbtn conn-row__btn" id="conn-change" aria-controls="conn-form"
+                        aria-label="Change connection" title="Change connection"><span data-icon="edit"></span></button>
+                <button type="button" class="iconbtn conn-row__btn" id="conn-disconnect"
+                        aria-label="Disconnect" title="Disconnect"><span data-icon="power"></span></button>
+            </div>
+        </div>
+        <span class="sr-only" id="conn-health-text" role="status">Connected</span>
+    </div>
+
+    <!-- Shown only when probes fail: what happened, and the one way out. -->
+    <div class="conn-lost" id="conn-lost" hidden>
+        <span class="conn-lost__text">Connection lost</span>
+        <button type="button" class="btn conn-lost__retry" id="conn-retry">Retry</button>
     </div>
 
     <!-- Recent sources (host, port, user only — never a password). Shown with the form. -->
     <ul class="conn-recent" id="conn-recent" aria-label="Recent connections" hidden></ul>
 
     <form class="conn-form" id="conn-form" autocomplete="off">
-        <div class="form-field">
-            <label for="conn-host">Host</label>
-            <input type="text" id="conn-host" name="host" maxlength="253" placeholder="ClickHouse.example.com" />
-        </div>
-        <div class="form-row">
+        <!-- One block: a row per field, label left, value right. -->
+        <div class="conn-fields">
+            <div class="form-field">
+                <label for="conn-host">Host</label>
+                <input type="text" id="conn-host" name="host" maxlength="253" placeholder="clickhouse.example.com" />
+            </div>
             <div class="form-field">
                 <label for="conn-port">Port</label>
                 <input type="text" inputmode="numeric" maxlength="5" id="conn-port" name="port" value="8443" />
@@ -32,13 +43,14 @@
                 <label for="conn-user">User</label>
                 <input type="text" id="conn-user" name="user" maxlength="64" value="default" />
             </div>
-        </div>
-        <div class="form-field">
-            <label for="conn-password">Password</label>
-            <input type="password" id="conn-password" name="password" maxlength="256" />
+            <div class="form-field">
+                <label for="conn-password">Password</label>
+                <input type="password" id="conn-password" name="password" maxlength="256" />
+            </div>
         </div>
         <details class="conn-advanced" id="conn-advanced">
             <summary>Advanced</summary>
+            <div class="conn-options">
             <label class="form-check">
                 <input type="checkbox" id="conn-secure" name="secure" checked />
                 Secure (TLS)
@@ -52,6 +64,7 @@
             <p class="form-warn" id="conn-allowcert-warn" hidden>
                 Certificate validation is off — only for a server whose cert you trust.
             </p>
+            </div>
         </details>
         <div class="conn-form__actions">
             <button type="submit" class="btn btn--primary" id="conn-connect">Connect</button>

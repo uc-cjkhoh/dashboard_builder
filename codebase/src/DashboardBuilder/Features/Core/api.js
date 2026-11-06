@@ -26,14 +26,14 @@ async function guardedFetch(url, opts) {
 // Thin fetch wrapper for the JSON API. Parses the body, and on a non-2xx response throws
 // an Error carrying the server's { error } message so callers can surface it in a toast. An optional
 // AbortSignal cancels the request (the worksheet aborts a query a newer one supersedes).
-async function request(method, url, body, signal) {
+async function request(method, url, body, signal, { silent = false } = {}) {
   const opts = { method, headers: {}, signal };
   if (body !== undefined) {
     opts.headers["Content-Type"] = "application/json";
     opts.body = JSON.stringify(body);
   }
 
-  const tick = activity.start(describeRequest(method, url)); // shown to the user while the request is in flight (Shell/activity-bar.js)
+  const tick = silent ? 0 : activity.start(describeRequest(method, url)); // shown to the user while the request is in flight (Shell/activity-bar.js)
   try {
     const res = await guardedFetch(BASE + url, opts);
     const text = await res.text();
@@ -46,12 +46,14 @@ async function request(method, url, body, signal) {
       throw httpError(res.status, data);
     }
     return data;
-  } finally { activity.end(tick); }
+  } finally { if (tick) activity.end(tick); }
 }
 
 export const api = {
   /** Current session connection status (password-free). */
   getConnection: () => request("GET", "/api/connection"),
+  /** Liveness probe: { connected, reachable? } — silent (no activity-bar entry) because it runs on a timer. */
+  pingConnection: () => request("GET", "/api/connection/ping", undefined, undefined, { silent: true }),
   /** Validate + store a connection. Resolves to the connection view, or throws with a message. */
   connect: (payload) => request("POST", "/api/connection", payload),
   /** Drop the session connection. Uses POST **with a body** — the Apache proxy 403s DELETE outright and

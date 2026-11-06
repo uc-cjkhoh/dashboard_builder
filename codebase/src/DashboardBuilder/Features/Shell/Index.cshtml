@@ -10,6 +10,9 @@
     @* The zone the UI shows clock times in: Display:TimeZone, else the host machine's, else Malaysia (UTC+8) — Core/timezone.js reads it. *@
     <meta name="app-timezone" content="@AppTimeZone.Resolve(Config["Display:TimeZone"], TimeZoneInfo.Local.Id)" />
     <title>Dashboard Builder</title>
+    @* Favicon: the sidebar's four-square brand mark in the accent lime (#a9c43c, --accent). Inline, so it needs no extra request, no static
+       mapping and no path prefix — and the browser never asks for /favicon.ico. An SVG cannot read the CSS tokens, so the hex is kept in step by hand. *@
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23a9c43c'%3E%3Crect x='3' y='3' width='8' height='8' rx='1.5'/%3E%3Crect x='13' y='3' width='8' height='8' rx='1.5'/%3E%3Crect x='3' y='13' width='8' height='8' rx='1.5'/%3E%3Crect x='13' y='13' width='8' height='8' rx='1.5'/%3E%3C/svg%3E" />
     @* Sets <html data-scheme> before first paint (System / Light / Dark — Core/scheme.js), so dark never flashes light. *@
     <script src="~/features/Core/scheme-boot.js"></script>
     @* Core first (design tokens + shared components), then per-feature stylesheets. *@
@@ -52,6 +55,8 @@
 
             <div class="sidebar__body" id="sidebar-body">
                 <partial name="~/Features/Connection/_Connection.cshtml" />
+                <!-- Connection above, Databases & Tables below: a full-width hairline in a gap that absorbs spare height. Shown once connected. -->
+                <div class="sidebar__divider" id="sidebar-divider" role="separator" hidden></div>
                 <partial name="~/Features/Schema/_Schema.cshtml" />
                 <!-- Worksheet tabs only: Calculated fields, Parameters and Hierarchies (Dashboard/dashboards.js fills it). -->
                 <div class="sidebar__tools" id="ws-tools"></div>

@@ -2,7 +2,8 @@ import { icon } from "../Core/icons.js";
 import { api } from "../Core/api.js";
 import { show, hide, toggle, toast, fieldError, clearFieldError, checkField } from "../Core/ui.js";
 import { host, port, text, LIMITS } from "../Core/validate.js";
-import { advancedShouldOpen, summaryTitle, summaryWarns, formFromView } from "./connection-rules.js";
+import { advancedShouldOpen, summaryTitle, formFromView } from "./connection-rules.js";
+import { nextHealth, initialHealth, readProbe, HEALTH_TEXT, PING_EVERY_MS } from "./connection-health.js";
 import { remember, forget, sanitize, sourceKey, formValues } from "./recent-sources.js";
 
 // Recent sources live in this browser only (localStorage) and hold no secrets — see recent-sources.js.
@@ -12,20 +13,25 @@ const saveRecent = (list) => { try { localStorage.setItem(RECENT_KEY, JSON.strin
 
 // The sidebar connection flow. Gates the schema browser + canvas. Failures show as a
 // field error or a toast. Once connected the form is collapsed into a compact summary showing the
-// ClickHouse host (user, transport and port in its tooltip), with icon actions to change the connection (re-open the form) or disconnect.
+// ClickHouse host (user, transport and port in its tooltip), with icon buttons on the row to change the connection (re-open the form) or disconnect.
 export function initConnection() {
   const form = document.getElementById("conn-form");
   if (!form) return;
 
   const summary = document.getElementById("conn-summary");
   const hostLabel = document.getElementById("conn-host-label");
-  const warnIcon = document.getElementById("conn-warn");
+  const statusEl = document.getElementById("conn-status");
+  const healthText = document.getElementById("conn-health-text");
+  const lostRow = document.getElementById("conn-lost");
+  const retryBtn = document.getElementById("conn-retry");
   const connectBtn = document.getElementById("conn-connect");
   const cancelBtn = document.getElementById("conn-cancel");
   const changeBtn = document.getElementById("conn-change");
   const disconnectBtn = document.getElementById("conn-disconnect");
   const schemaSection = document.getElementById("schema-section");
   const tablesSection = document.getElementById("tables-section");
+  const divider = document.getElementById("sidebar-divider");
+  const dbHeading = document.getElementById("db-heading");
 
   const hostEl = document.getElementById("conn-host");
   const portEl = document.getElementById("conn-port");
@@ -49,17 +55,15 @@ export function initConnection() {
       pick.type = "button";
       pick.className = "conn-recent__pick";
       pick.dataset.key = sourceKey(e);
-      const ic = icon("database", { size: 16 });
-      ic.classList.add("conn-recent__icon");
       const text = document.createElement("span");
       text.className = "conn-recent__text";
       const h = document.createElement("span");
       h.className = "conn-summary__host"; h.textContent = e.host;
       const m = document.createElement("span");
-      m.className = "conn-recent__meta"; m.textContent = `${e.user} · ${e.port}`;
+      m.className = "conn-recent__meta"; m.textContent = e.user;
       text.append(h, m);
       pick.title = `${e.host} · ${e.user} · :${e.port}`;
-      pick.append(ic, text);
+      pick.append(text);
       pick.addEventListener("click", () => {
         fillForm(formValues(e));
         for (const i of [hostEl, portEl, userEl, passEl]) clearFieldError(i);
@@ -84,6 +88,42 @@ export function initConnection() {
     secureEl.checked = v.secure; allowCertEl.checked = v.allowInvalidCert;
   }
 
+  // Liveness: the dot reflects the last probe. Probes run on a timer while the tab is visible, on returning to the tab,
+  // on regaining network, and on Retry. A session the server has forgotten sends us back to the form.
+  let health = initialHealth();
+  let pingTimer = null;
+  let pinging = false;
+
+  function renderHealth() {
+    summary.dataset.health = health.state;
+    statusEl.replaceChildren(...(health.state === "lost" ? [icon("error", { size: 16 })] : []));
+    healthText.textContent = HEALTH_TEXT[health.state];
+    toggle(lostRow, health.state === "lost" && !summary.hidden);
+  }
+
+  async function probe() {
+    if (!current || pinging) return;
+    pinging = true;
+    let result;
+    try { result = readProbe(await api.pingConnection()); } catch { result = "unreachable"; }
+    pinging = false;
+    if (!current) return; // disconnected while the probe ran
+    if (result === "gone") {
+      applyState({ connected: false });
+      toast("Your session ended. Connect again — your tables and dashboards come back.", "info");
+      return;
+    }
+    health = nextHealth(health, result);
+    renderHealth();
+  }
+
+  function startPinging() { stopPinging(); pingTimer = setInterval(() => { if (!document.hidden) probe(); }, PING_EVERY_MS); }
+  function stopPinging() { clearInterval(pingTimer); pingTimer = null; }
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) probe(); });
+  window.addEventListener("online", probe);
+  window.addEventListener("offline", () => { if (current) { health = { state: "lost", failures: 2 }; renderHealth(); } });
+  retryBtn?.addEventListener("click", () => { health = { state: "checking", failures: 1 }; renderHealth(); probe(); });
+
   let current = null; // last connected view, for Cancel-back-to-summary
 
   // "Trust invalid / self-signed certificate" is checked by default. It only applies to a TLS
@@ -106,38 +146,44 @@ export function initConnection() {
   function showForm({ cancellable }) {
     syncAdvanced();
     hide(summary);
+    hide(lostRow);
     show(form);
     renderRecent();
     toggle(cancelBtn, cancellable);
-    changeBtn?.setAttribute("aria-expanded", "true");
     hostEl.focus();
   }
 
   function applyState(view) {
     const connected = Boolean(view && view.connected);
+    const sameConnection = connected && view === current; // Cancel re-applies the same view: keep what the last probe proved
     current = connected ? view : null;
 
     if (connected) {
       hostLabel.textContent = view.host;
       hostLabel.title = summaryTitle(view);
-      toggle(warnIcon, summaryWarns(view));
       // The form keeps what was entered (host included) for a later "change connection".
       fillForm(formFromView(view));
       syncCertControls();
-      changeBtn?.setAttribute("aria-expanded", "false");
       hide(form);
       renderRecent();
       show(summary);
       hide(cancelBtn);
+      if (!sameConnection) health = initialHealth();
+      renderHealth();
+      startPinging();
     } else {
+      stopPinging();
       syncAdvanced();
       show(form);
       renderRecent();
       hide(summary);
+      hide(lostRow);
       hide(cancelBtn);
     }
 
     toggle(schemaSection, connected);
+    toggle(divider, connected);
+    toggle(dbHeading, connected);
     if (!connected) hide(tablesSection);
 
     document.dispatchEvent(new CustomEvent("connection:changed", {

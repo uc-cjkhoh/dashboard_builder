@@ -75,6 +75,14 @@ public class ConnectionEndpointTests : IClassFixture<WebApplicationFactory<Progr
         Assert.False(view!.Connected);
     }
 
+    [Fact]
+    public async Task Ping_without_a_connection_reports_disconnected()
+    {
+        var client = _factory.CreateClient();
+        var view = await client.GetFromJsonAsync<StatusDto>("/api/connection/ping");
+        Assert.False(view!.Connected);
+    }
+
     private sealed record StatusDto(
         bool Connected, string? Host, int? Port, string? User, bool? Secure, bool? AllowInvalidCertificate);
 }

@@ -17,7 +17,7 @@ test("white on cat-4 is the known-bad case this helper fixes", () => {
   assert.ok(contrastRatio(pickInk("#eda100", ["#0f172a", "#ffffff"]), "#eda100") >= 4.5);
 });
 test("every chart category colour gets a >=4.5:1 label ink (tokens ink/surface plus pure black/white)", () => {
-  const light = { ink: "#1c1719", surface: "#ffffff" }, dark = { ink: "#f3eeef", surface: "#1c181b" };
+  const light = { ink: "#141516", surface: "#ffffff" }, dark = { ink: "#ececea", surface: "#1a1b1d" };
   const blocks = css.split(':root[data-scheme="dark"]');
   for (const [block, pair] of [[blocks[0], light], [blocks[1], dark]]) {
     const cats = [...block.matchAll(/--chart-cat-\d:\s*(#[0-9a-f]{6})/gi)].map((m) => m[1]);
@@ -39,7 +39,7 @@ test("token text pairs meet AA in light and dark", () => {
     ["danger-ink", "danger-bg"], ["danger-ink", "surface"], ["surface", "enc-ink"], ["surface", "warn-ink"]];
   for (const [name, t] of [["light", light], ["dark", dark], ["one dark pro", oneDark]]) {
     for (const [fg, bg] of pairs) assert.ok(contrastRatio(t[fg], t[bg]) >= 4.5, `${name} ${fg} on ${bg}`);
-    for (const bg of ["accent", "accent-hover", "accent-pressed"]) assert.ok(contrastRatio("#ffffff", t[bg]) >= 4.5, `${name} white on ${bg}`);
+    for (const bg of ["accent", "accent-hover", "accent-pressed"]) assert.ok(contrastRatio(t["on-accent"], t[bg]) >= 4.5, `${name} text on ${bg}`); // --on-accent: white, or dark on the Signal lime
     assert.ok(contrastRatio(t.accent, t.surface) >= 3, `${name} accent boundary`);
   }
 });
@@ -52,8 +52,8 @@ test("--ctl-edge holds 3:1 against glass in light and dark", () => {
   const blocks = css.split(':root[data-scheme="dark"]');
   const edge = (b) => b.match(/--ctl-edge:\s*(#[0-9a-f]{6})/i)[1];
   const cases = [
-    [edge(blocks[0]), ["#f6f3f3", "#f1e4e5"], (bg) => mix("#ffffff", .72, bg), (p) => mix("#ffffff", .80, p)],
-    [edge(blocks[1]), ["#141113", "#2a1418"], (bg) => mix("#1c181b", .70, bg), (p) => mix("#2b2529", .85, p)],
+    [edge(blocks[0]), ["#efefec", "#e9ecd6"], (bg) => mix("#ffffff", .72, bg), (p) => mix("#ffffff", .80, p)],
+    [edge(blocks[1]), ["#0b0b0c", "#171a0c"], (bg) => mix("#1a1b1d", .70, bg), (p) => mix("#2e2f32", .85, p)],
     [edge(blocks[2]), ["#181a1f", "#1f2230"], (bg) => mix("#21252b", .70, bg), (p) => mix("#2c313a", .85, p)], // One Dark Pro look
   ];
   for (const [e, bgs, panelOf, ctlOf] of cases) for (const bg of bgs) {

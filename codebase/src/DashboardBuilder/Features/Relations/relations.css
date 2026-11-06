@@ -74,6 +74,21 @@
   background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r); box-shadow: var(--elev-8);
   color: var(--ink-2); font-size: var(--fs-body); white-space: nowrap; max-width: calc(100% - 2 * var(--s4)); overflow: hidden; text-overflow: ellipsis; }
 
+/* The Relationships card: solid (it floats over the canvas), top right under the tab bar, collapsible; scrolls inside when long. */
+.rel-notes { position: absolute; top: calc(var(--topbar-h) + var(--s4)); right: var(--s4); z-index: 2; width: 288px; max-width: calc(100% - 2 * var(--s4));
+  max-height: 50%; display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r); box-shadow: var(--elev-8); }
+.rel-notes > summary { flex: none; display: flex; align-items: center; height: 40px; padding: 0 var(--s4); font-weight: 600; cursor: pointer; list-style: none; }
+.rel-notes > summary::-webkit-details-marker { display: none; }
+.rel-notes[open] > summary { border-bottom: 1px solid var(--line); }
+.rel-notes__list { list-style: none; margin: 0; padding: var(--s1); overflow-y: auto; min-height: 0; }
+.rel-note { display: grid; gap: var(--s1); padding: var(--s2) var(--s2); border-radius: var(--r); transition: background var(--dur-fast) var(--ease); }
+.rel-note + .rel-note { margin-top: var(--s1); }
+.rel-note--active { background: var(--accent-soft); }
+.rel-note p { margin: 0; }
+.rel-note__title { font-weight: 600; overflow-wrap: anywhere; }
+.rel-note__keys { color: var(--ink-3); overflow-wrap: anywhere; }
+.rel-note__text { color: var(--ink-2); }
+
 /* Relating from the keyboard: rows take an inset focus ring (the card list clips an outer one); the picked source gets a solid
    outline plus the word "From" (not colour alone); the instruction line sits above the how-to pill, wraps, and is visually
    hidden (but still a live region) while empty. */

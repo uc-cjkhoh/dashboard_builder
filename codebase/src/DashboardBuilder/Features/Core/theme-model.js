@@ -5,12 +5,19 @@
 // ≥ 4.5:1 on the surface and the accent ≥ 3:1 against the surface, in both schemes.
 import { contrastRatio } from "../Dashboard/contrast.js";
 
-export const SURFACE = { light: "#ffffff", dark: "#21252b" };
+export const SURFACE = { light: "#ffffff", dark: "#1a1b1d" };
 export const ON_ACCENT = "#ffffff";
 
 // accent, hover, pressed, ink (accent-coloured text), soft (tinted background), line (tinted border)
 const A = (accent, hover, pressed, ink, soft, line) => ({ accent, hover, pressed, ink, soft, line });
 export const ACCENTS = Object.freeze({
+  // Signal: near-black on paper, neon lime on charcoal. `on` is the text on the accent (dark on the lime), `signal` the lime that tints the wash.
+  signal: { label: "Signal", light: { ...A("#1a1c1f", "#2e3135", "#0c0d0f", "#1a1c1f", "#f1f4e2", "#d3dbae"), signal: "#c3df5a" },
+    dark: { ...A("#c3df5a", "#b3cf4a", "#a2bd3e", "#c3df5a", "#262a17", "#4a5427"), on: "#12130f", signal: "#c3df5a" } },
+  ultramarine: { label: "Ultramarine", light: A("#3340d1", "#2a35b4", "#222b94", "#2b36b8", "#eff0fb", "#ccd0f2"),
+    dark: A("#5460c4", "#4a55b0", "#3f499a", "#98a1d8", "#1f2449", "#353d75") },
+  monospace: { label: "Monospace", light: A("#6f4cde", "#6240c4", "#5536a9", "#6340cf", "#f3effd", "#d6c9f6"),
+    dark: A("#7b5ae0", "#6c4fc5", "#5e44aa", "#b3a0ee", "#252046", "#4b3a86") },
   crimson: { label: "Crimson", light: A("#b82035", "#9c1c32", "#821729", "#a51d31", "#fcf0f2", "#f3c3ca"),
     dark: A("#d42a3c", "#b72031", "#991b2a", "#eea0a7", "#3a1a20", "#6b2a33") },
   blue: { label: "Blue", light: A("#2260bf", "#1e55a9", "#1a4991", "#1f57ae", "#eef3fc", "#c4d6f4"),
@@ -28,8 +35,8 @@ export const ACCENTS = Object.freeze({
 // Eight categorical chart colours per scheme, in a fixed order (never cycled within one chart).
 export const PALETTES = Object.freeze({
   default: { label: "Default",
-    light: ["#2a78d6", "#146f14", "#e87ba4", "#c99424", "#1eac79", "#de6e41", "#4a3aa7", "#df4d4c"],
-    dark: ["#5696e1", "#3ba55c", "#ec93b7", "#e0b152", "#2ec48c", "#e3895e", "#a192ec", "#e77675"] },
+    light: ["#72872a", "#d9605a", "#d9a03a", "#7c63d6", "#2f9ea8", "#3f7fd0", "#4aa66a", "#6a6d72"],
+    dark: ["#c3df5a", "#e0827c", "#deb062", "#9b86e6", "#5cc0c8", "#7aa3dc", "#6fc486", "#8e9094"] },
   okabe: { label: "Colour-blind safe",
     light: ["#0072b2", "#e69f00", "#009e73", "#cc79a7", "#56b4e9", "#d55e00", "#f0e442", "#000000"],
     dark: ["#56b4e9", "#e69f00", "#009e73", "#cc79a7", "#0072b2", "#d55e00", "#f0e442", "#bbbbbb"] },
@@ -46,7 +53,7 @@ export const PALETTES = Object.freeze({
 export const SURFACES = Object.freeze({ default: { label: "Default" }, onedark: { label: "One Dark Pro" } });
 /** The One Dark Pro look as one choice: its surface, accent and chart colours together. */
 export const ONE_DARK_THEME = Object.freeze({ accent: "onedark", palette: "onedark", surface: "onedark" });
-export const DEFAULT_THEME = Object.freeze({ accent: "crimson", palette: "default" }); // no surface key = the default look (files stay as they were)
+export const DEFAULT_THEME = Object.freeze({ accent: "signal", palette: "default" }); // no surface key = the default look (files stay as they were)
 const HEX = /^#[0-9a-f]{6}$/i;
 
 const mix = (a, b, t) => {
@@ -83,20 +90,20 @@ export function deriveAccent(hex) {
   return { light: scheme(h, SURFACE.light, "#000000", 0.08, 0.3), dark: scheme(darkAccent, SURFACE.dark, "#ffffff", 0.18, 0.4) };
 }
 
-/** The accent token set for a theme and scheme (custom colours derived; unknown → crimson). */
+/** The accent token set for a theme and scheme (custom colours derived; unknown → Signal). */
 export function accentSet(theme, dark) {
   const key = dark ? "dark" : "light";
   const a = theme?.accent;
   if (a && ACCENTS[a]) return ACCENTS[a][key];
   if (HEX.test(a ?? "")) { const d = deriveAccent(a); if (!d.error) return d[key]; }
-  return ACCENTS.crimson[key];
+  return ACCENTS.signal[key];
 }
 
 /** The CSS custom properties a theme sets on :root for one scheme. */
 export function themeVars(theme, dark) {
   const s = accentSet(theme, dark);
   const cats = (PALETTES[theme?.palette] ?? PALETTES.default)[dark ? "dark" : "light"];
-  const vars = { "--accent": s.accent, "--accent-hover": s.hover, "--accent-pressed": s.pressed,
+  const vars = { "--on-accent": s.on ?? ON_ACCENT, "--signal": s.signal ?? s.accent, "--accent": s.accent, "--accent-hover": s.hover, "--accent-pressed": s.pressed,
     "--accent-ink": s.ink, "--accent-soft": s.soft, "--accent-line": s.line };
   cats.forEach((c, i) => { vars[`--chart-cat-${i + 1}`] = c; });
   return vars;

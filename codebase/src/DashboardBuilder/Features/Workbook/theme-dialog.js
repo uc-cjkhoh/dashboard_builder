@@ -32,7 +32,7 @@ export function openThemeDialog() {
     const fs = el("fieldset", "theme-group");
     fs.append(el("legend", "theme-group__title", "Look — dark-mode backgrounds and text"));
     const list = el("div", "theme-options");
-    const swatches = { default: ["#1c181b", "#2b2529", "#d42a3c"], onedark: ["#21252b", "#2c313a", "#456fc8"] };
+    const swatches = { default: ["#1a1b1d", "#2e2f32", "#c3df5a"], onedark: ["#21252b", "#2c313a", "#456fc8"] };
     for (const [id, s] of Object.entries(SURFACES)) list.append(option("look", id, s.label, surfaceOf(t) === id, swatches[id],
       () => setTheme(id === "onedark" ? { ...ONE_DARK_THEME } : { ...currentTheme(), surface: id })));
     fs.append(list);
@@ -52,7 +52,7 @@ export function openThemeDialog() {
     picker.value = custom ? t.accent : ACCENTS[t.accent][dark].accent;
     picker.setAttribute("aria-label", "Custom accent colour");
     const hex = el("input", "input theme-hex"); hex.type = "text"; hex.value = custom ? t.accent : "";
-    hex.placeholder = "#2260bf"; hex.maxLength = 7; hex.setAttribute("aria-label", "Custom accent as #rrggbb");
+    hex.placeholder = "#1a1c1f"; hex.maxLength = 7; hex.setAttribute("aria-label", "Custom accent as #rrggbb");
     const err = el("span", "field-error theme-error"); err.hidden = true; err.setAttribute("role", "alert");
     const tryCustom = (value) => {
       const v = value.trim().toLowerCase();

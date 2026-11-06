@@ -32,7 +32,7 @@ export const bus = new EventTarget();
 
 // Workbook theme: { accent: preset id | "#rrggbb", palette } (Core/theme-model.js). Applied to the
 // :root tokens by Core/theme.js on "theme:changed"; saved with the workbook.
-let theme = { accent: "crimson", palette: "default" };
+let theme = { accent: "signal", palette: "default" };
 
 // Shared filters: filter objects (same shape as sheet.filters) that every worksheet applies where
 // their table is in its view. Workbook-level; edited from any worksheet's Filters tool.

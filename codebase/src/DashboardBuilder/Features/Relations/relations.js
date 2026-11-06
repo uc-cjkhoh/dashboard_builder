@@ -9,6 +9,7 @@ import { compoundName } from "./key-pairs.js";
 import { linkSides, linkRoute, roundedPath } from "./link-route.js";
 import { openTypeWarning } from "./type-warning.js";
 import { COLUMN_MIME, encodeColumnDrag, parseColumnDrag, dropDecision } from "./link-drag.js";
+import { describeRelationship } from "./relation-describe.js";
 import { linkKeyAction, stepIndex, cardIndex, linkHint, rowLabel } from "./link-keys.js";
 
 // Relationships: logical, typed links the user draws between a column of one entity and a column of
@@ -21,7 +22,7 @@ const CARDINALITIES = ["1:1", "1:N", "N:1", "N:M"];
 let seq = 0;
 let selectedId = null;
 let hoverId = null;   // the link under the pointer
-let canvas, svg, labels, guide, keyHint;  // svg: the lines, under the cards; labels: the cardinality badges, over them
+let canvas, svg, labels, guide, keyHint, notes;  // svg: the lines, under the cards; labels: the cardinality badges, over them
 
 export function initRelations() {
   canvas = document.getElementById("model-view");
@@ -40,6 +41,11 @@ export function initRelations() {
   keyHint.className = "rel-guide rel-keyhint";
   keyHint.setAttribute("role", "status"); // always rendered so a screen reader announces text put into it; empty = visually hidden
   canvas.parentElement.append(keyHint); // the keyboard pick's instruction line, same spot as the guide
+  notes = document.createElement("details");
+  notes.className = "rel-notes";
+  notes.open = true;
+  notes.hidden = true;
+  canvas.parentElement.append(notes); // the "Relationships" card: each link in plain words (renderNotes)
   const help = document.createElement("p");
   help.id = "rel-key-help";
   help.className = "sr-only";
@@ -301,7 +307,34 @@ function render() {
   }
   markUnlinked();
   updateGuide();
+  renderNotes();
   markLinkedRows();
+}
+
+// The description card: one entry per relationship — tables and key columns, what the cardinality means, which rows the join keeps.
+// Hovering an entry lights its link and key rows like hovering the link does; the selected link's entry is marked.
+function renderNotes() {
+  if (!notes) return;
+  const rels = [...relationships.values()].filter((r) => entities.get(r.from.entityId) && entities.get(r.to.entityId));
+  notes.hidden = !isModelActive() || rels.length === 0;
+  const summary = document.createElement("summary");
+  summary.textContent = `Relationships (${rels.length})`;
+  const list = document.createElement("ul");
+  list.className = "rel-notes__list";
+  for (const rel of rels) {
+    const d = describeRelationship(rel, entities.get(rel.from.entityId).table, entities.get(rel.to.entityId).table);
+    const li = document.createElement("li");
+    li.className = "rel-note";
+    li.dataset.rel = rel.id;
+    const title = document.createElement("p"), keys = document.createElement("p");
+    title.className = "rel-note__title"; title.textContent = `${d.title} · ${joinBadge(rel.cardinality, rel.joinType, rel.pairs?.length ?? 0)}`;
+    keys.className = "rel-note__keys"; keys.textContent = d.keys;
+    li.append(title, keys, ...d.sentences.map((t) => { const p = document.createElement("p"); p.className = "rel-note__text"; p.textContent = t; return p; }));
+    li.addEventListener("pointerenter", () => { hoverId = rel.id; markLinkedRows(); });
+    li.addEventListener("pointerleave", () => { hoverId = null; markLinkedRows(); });
+    list.append(li);
+  }
+  notes.replaceChildren(summary, list);
 }
 
 // A column in a relationship is pinned to its card's key strip, above the scrolling list: the link's end is then always on a visible row.
@@ -388,6 +421,7 @@ function drawLink(rel, p1, s1, p2, s2, fromKind, toKind, lane, placed) {
 function markLinkedRows() {
   for (const el of canvas.querySelectorAll(".col-row--linked, .rel-link--hover")) el.classList.remove("col-row--linked", "rel-link--hover");
   if (hoverId) for (const el of canvas.querySelectorAll(`.rel-link[data-rel="${hoverId}"]`)) el.classList.add("rel-link--hover");
+  for (const li of notes?.querySelectorAll(".rel-note") ?? []) li.classList.toggle("rel-note--active", li.dataset.rel === selectedId || li.dataset.rel === hoverId);
   for (const id of new Set([selectedId, hoverId])) {
     const rel = id && relationships.get(id);
     if (!rel) continue;

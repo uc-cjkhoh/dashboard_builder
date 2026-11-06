@@ -261,7 +261,7 @@ test("the workbook theme (P41) round-trips; a missing one is the default", () =>
   const st = sampleState();
   const wb = parseWorkbook(JSON.stringify(serializeWorkbook({ ...st, theme: { accent: "violet", palette: "okabe" } })));
   assert.deepEqual(wb.theme, { accent: "violet", palette: "okabe" });
-  assert.deepEqual(sheetOf({}).theme, { accent: "crimson", palette: "default" });
+  assert.deepEqual(sheetOf({}).theme, { accent: "signal", palette: "default" });
 });
 
 test("shared filters (P40) round-trip, are checked, and capped at 4", () => {
