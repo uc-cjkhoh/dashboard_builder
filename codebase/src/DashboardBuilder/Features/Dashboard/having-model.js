@@ -72,3 +72,31 @@ export function havingNotice(entries, grain) {
   if (bad.length) parts.push(`${bad.length} measure filter${bad.length === 1 ? "" : "s"} not applied — fix the highlighted value.`);
   return parts.join(" ");
 }
+
+// ---- the range slider (a "between" filter drawn over the measure's span) ----
+/** { min, max } of measure column `index` over the result rows, widened by the span seen before (`prev`) and by a stored
+ *  "between" filter, so narrowing never shrinks the track. null when no finite number is known. */
+export function sliderBounds(rows, index, prev, h) {
+  const xs = [];
+  for (const r of rows ?? []) { const v = r?.values?.[index]; if (typeof v === "number" && Number.isFinite(v)) xs.push(v); }
+  if (prev) xs.push(prev.min, prev.max);
+  if (h?.op === "between" && checkHaving(h).state === "ok") xs.push(Number(h.values[0]), Number(h.values[1]));
+  if (!xs.length) return null;
+  return { min: Math.min(...xs), max: Math.max(...xs) };
+}
+
+/** The slider step: 1 when both ends are whole numbers and the span is at least 10, else the power of ten at or below 1/100 of the span. */
+export function sliderStep({ min, max }) {
+  const span = max - min;
+  if (Number.isInteger(min) && Number.isInteger(max) && span >= 10) return 1;
+  return span > 0 ? 10 ** Math.floor(Math.log10(span / 100)) : 1;
+}
+
+/** [from, to] for the two thumbs: the stored filter when it is a valid "between" inside the bounds, else the whole span. */
+export function sliderValues(b, h) {
+  if (h?.op === "between" && checkHaving(h).state === "ok") {
+    const lo = Number(h.values[0]), hi = Number(h.values[1]);
+    if (lo >= b.min && hi <= b.max) return [lo, hi];
+  }
+  return [b.min, b.max];
+}
