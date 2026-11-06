@@ -271,6 +271,40 @@ try {
     await ev(`import('/features/Core/scheme.js').then((m) => m.setSchemePref('light'))`); await settle(300);
   });
 
+  await check('Expand all / Collapse all: counted status line, one undo step, keyboard operable, focus stays', async () => {
+    const all = (mode) => `${tbl}.querySelector('.xt-all__btn[data-mode="${mode}"]')`;
+    const nCollapsed = () => ev(`import('/features/Core/store.js').then((m) => { const c = m.activeWorksheet().sheet.collapsed; return c ? c.rows.length + c.cols.length : 0; })`);
+    must(await ev(`!!${all('expand')} && !!${all('collapse')}`), 'two corner buttons');
+    must(await ev(`${all('collapse')}.getAttribute('aria-label')`) === 'Collapse all headers', 'named for assistive tech');
+    const before = await nCollapsed();
+    q0 = queries.length;
+    await ev(`${all('collapse')}.click()`);
+    await waitFor(`!${tbl}.querySelector('.xt-toggle[aria-expanded="true"]')`, 'every header collapsed');
+    must((await toastText()) === `Collapsed ${4 - before} header${4 - before === 1 ? '' : 's'}`, `toast: ${await toastText()}`);
+    must(await nCollapsed() === 4, `collapsed keys: ${await nCollapsed()}`);
+    await b.sleep(300);
+    must(await ev(`document.activeElement?.dataset.mode === 'collapse'`), 'focus stays on Collapse all');
+    must(queries.length === q0, 'no new query');
+    await ev(`document.querySelector('.ws-undo button').click()`);
+    await waitFor(`${tbl} !== null`, 'redrawn');
+    await b.sleep(300);
+    must(await nCollapsed() === before, `one undo restores ${before}, got ${await nCollapsed()}`);
+    await ev(`${all('collapse')}.click()`);
+    await b.sleep(300);
+    await ev(`${all('collapse')}.click()`);
+    must((await toastText()) === 'Every header is already collapsed', `no-op toast: ${await toastText()}`);
+    await shot('expand-all-collapsed-light.png');
+    await ev(`${all('expand')}.focus()`);
+    await b.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', text: '\r', windowsVirtualKeyCode: 13 });
+    await b.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
+    await waitFor(`!${tbl}.querySelector('.xt-toggle[aria-expanded="false"]')`, 'every header expanded');
+    must((await toastText()) === 'Expanded 4 headers', `toast: ${await toastText()}`);
+    must(await nCollapsed() === 0, 'state cleared');
+    await ev(`import('/features/Core/scheme.js').then((m) => m.setSchemePref('dark'))`); await settle(600);
+    await shot('expand-all-dark.png');
+    await ev(`import('/features/Core/scheme.js').then((m) => m.setSchemePref('light'))`); await settle(300);
+  });
+
   await check('no page exceptions', async () => { must(b.consoleErrors.length === 0, b.consoleErrors.join(' | ')); });
 } catch (e) {
   console.log(`FAIL harness: ${e.stack}`); failed++;

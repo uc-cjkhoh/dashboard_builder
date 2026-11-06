@@ -36,7 +36,7 @@ import { checkTooltipStyle, styleAfterTextEdit } from "./tooltip-style.js";
 import { checkTooltipFormats, sampleLookup, pruneFormats } from "./tooltip-formats.js";
 import { SWATCHES, memberKey, fieldColorKey, setMemberColor, clearFieldColors, colourOf } from "./colour-model.js";
 import { createHistory } from "./history.js";
-import { applyToggle, MAX_COLLAPSED } from "./collapse-model.js";
+import { applyToggle, applyAll, allMessage, MAX_COLLAPSED } from "./collapse-model.js";
 import { LINE_STYLE_CHOICES, linesTakeStyle } from "./line-style-model.js";
 import { HEATMAP_SHAPE_CHOICES } from "./heatmap-model.js";
 import { SECONDARY_CHOICES, dualAxisAllowed, dualAxisOn } from "./axis-sync-model.js";
@@ -207,7 +207,7 @@ export function initDashboards() {
   }), {
     interactive: true, onSelect: toggleSelection, onDrill: (raw) => drillDown(raw), onLegend: legendClick, legendFocus: () => legendFocus,
     onTooltipFields: (sheet, list) => setTooltipCat(sheet, list), onMemberColors: (sheet, field, members) => setMemberState(sheet, field, members),
-    onCollapse: (axis, key, valid) => collapseHeader(axis, key, valid),
+    onCollapse: (axis, key, valid) => collapseHeader(axis, key, valid), onCollapseAll: (mode, rowKeys, colKeys) => collapseAll(mode, rowKeys, colKeys),
     statusBar: setStatusBar, notices: sharedNote,
   });
   const runChart = () => sheetView.run();
@@ -220,6 +220,19 @@ export function initDashboards() {
     if (r.blocked) { toast(`At most ${MAX_COLLAPSED} headers can be collapsed — expand one first.`, "danger"); return; }
     s.collapsed = r.collapsed;
     commit(dash, s);
+  }
+
+  // Expand all / Collapse all (the crosstab corner): one commit = one undo step; the toast names what changed. Nothing to do → no edit.
+  function collapseAll(mode, rowKeys, colKeys) {
+    const dash = activeWorksheet();
+    if (!dash) return;
+    const s = dash.sheet;
+    const r = applyAll(s.collapsed, mode, rowKeys, colKeys);
+    if (r.blocked) { toast(`At most ${MAX_COLLAPSED} headers can be collapsed — collapse fewer levels first.`, "danger"); return; }
+    if (r.changed === 0) { toast(allMessage(mode, 0)); return; }
+    s.collapsed = r.collapsed;
+    commit(dash, s);
+    toast(allMessage(mode, r.changed));
   }
 
   let legendFocus = null; // the legend item the user clicked (highlighted), or null
