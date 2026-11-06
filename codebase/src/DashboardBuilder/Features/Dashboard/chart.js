@@ -3,7 +3,7 @@ import { ACCENTS, PALETTES } from "../Core/theme-model.js";
 import { fontToken } from "./font-model.js";
 import { pickInk } from "./contrast.js";
 import { orderedPalette } from "./colour-model.js";
-import { DIV_FALLBACK, divergingColours, divergingRange, rampColours, rangeOf } from "./colour-scale-model.js";
+import { DIV_FALLBACK, divergingColours, divergingRange, rampColours, rangeOf, stepPieces, mixHex } from "./colour-scale-model.js";
 import { tooltipHtml } from "./tooltip-model.js";
 import { tipLookup } from "./tooltip-formats.js";
 import { lineStep } from "./line-style-model.js";
@@ -100,6 +100,7 @@ export function renderChart(container, spec) {
   const st = stateOf(container);
   st.paletteReverse = !!spec.format?.paletteReverse;
   st.font = spec.format?.font;
+  st.colorSteps = spec.format?.colorSteps ?? 0;
   st.colorScale = spec.format?.colorScale; st.colorCentre = spec.format?.colorCentre ?? null;
   st.colorRamp = spec.format?.colorRamp; st.colorMin = spec.format?.colorMin ?? null; st.colorMax = spec.format?.colorMax ?? null;
   st.memberColors = spec.memberColors instanceof Map ? spec.memberColors : NO_MEMBER_COLORS;
@@ -670,12 +671,12 @@ function buildScatter({ categories, series, format = {}, sizes, sizeName, colorV
     return { value: arr, name, ...(colorByDim ? { itemStyle: { color: memberColor(name, c.cat[i % c.cat.length]) } } : {}) };
   });
   const symbolSize = sizeDim >= 0 ? sizeScaler(sizes, (v) => v[sizeDim]) : markerSizeOr(format.markerSize, 14); // a Size field wins
-  const visualMap = colorDim >= 0 ? continuousVisualMap(colorValues, colorDim, c, fmtVal, colorName) : undefined;
+  const legend = colorDim >= 0 ? continuousVisualMap(colorValues, colorDim, c, fmtVal, colorName) : undefined;
 
   return {
     textStyle: { fontFamily: c.font, color: c.label },
-    grid: { left: 6, right: 18, top: 18, bottom: 6 + 24 + (visualMap ? 24 : 0), containLabel: true },
-    visualMap,
+    grid: { left: 6, right: 18, top: 18, bottom: 6 + 24 + (legend ? 24 + (legend.title ? 24 : 0) : 0), containLabel: true },
+    ...legend,
     tooltip: {
       trigger: "item",
       backgroundColor: c.surface, borderColor: c.grid, borderWidth: 1,
@@ -765,7 +766,7 @@ function buildScatterShapes({ groups, xName, yName, hasSize, sizeName, format = 
 }
 
 // heatmap — two dimensions on the axes, one measure as colour intensity. Colour IS a channel
-// here, so a continuous visualMap legend accompanies it (identity also comes from the x/y labels).
+// here, so a visualMap legend accompanies it (identity also comes from the x/y labels).
 // spec: { xCats:string[], yCats:string[], cells:[[xi, yi, value]], format }
 function buildHeatmap({ xCats, yCats, cells, format = {} }) {
   const live = drawing ?? { instance: null }; // this container's state, read when ECharts sizes the circles
@@ -773,7 +774,8 @@ function buildHeatmap({ xCats, yCats, cells, format = {} }) {
   const fmtVal = makeValueFormatter(format);
   const circles = format.heatmapShape === "circle";
   // The cell separator stays the surface-coloured hairline unless a border is chosen.
-  const cellEdge = format.markBorder && format.markBorder !== "none" ? markBorder(format.markBorder, c.muted) : { borderColor: c.surface, borderWidth: 1 };
+  const cellEdge = format.markBorder && format.markBorder !== "none" ? markBorder(format.markBorder, c.muted)
+    : { borderColor: drawing?.colorSteps ? c.axis : c.surface, borderWidth: 1 }; // stepped: a visible hairline so a pale step is not a gap
   const vals = cells.map((d) => d[2]).filter((v) => v != null);
   const { min, max } = colourScaleRange(vals, true);
   const legendNote = [centreNote(min, max, fmtVal), outOfRangeNote()].filter(Boolean).join(" · ");
@@ -798,12 +800,7 @@ function buildHeatmap({ xCats, yCats, cells, format = {} }) {
       axisLine: { lineStyle: { color: c.axis } }, axisTick: { show: false },
       axisLabel: { color: c.muted },
     },
-    visualMap: {
-      min, max, calculable: true, dimension: 2, orient: "horizontal", left: "center", bottom: 6,
-      inRange: { color: c.ramp }, // single-hue sequential (soft → saturated), tokens; a pinned end saturates
-      text: legendNote ? [legendNote, ""] : undefined,
-      textStyle: { color: c.muted, fontFamily: c.font }, formatter: (v) => fmtVal(v),
-    },
+    ...colourLegend({ min, max, dimension: 2, c, fmtVal, note: legendNote, bottom: 6 }),
     series: [circles
       // Circles = scatter marks on the same category grid, sized by the cell, coloured by the
       // value through the same visualMap (dimension 2); the value label sits inside each circle.
@@ -1216,12 +1213,25 @@ const centreNote = (min, max, fmtVal) => (drawing?.colorScale === "diverging" ? 
 // A continuous visualMap (the gradient legend) over `values`, coloured on the single-hue token ramp.
 function continuousVisualMap(values, dimension, c, fmtVal, name) {
   const { min, max } = colourScaleRange((values ?? []).map((v) => Number(v)));
+  const note = [name ? String(name) : "", centreNote(min, max, fmtVal), outOfRangeNote()].filter(Boolean).join(" · ");
+  return colourLegend({ min, max, dimension, c, fmtVal, note, bottom: 0 });
+}
+// The colour legend + its note as chart options: a gradient bar, or (Format → Steps) a piecewise legend whose
+// swatches are labelled with their boundaries in words. A piecewise legend has no text slot, so its note is a title.
+// A Diverging ramp's centre is the surface, which vanishes against the page; stepped, it is the surface nudged toward
+// the ink so the neutral step reads as a swatch and a cell in both themes (a continuous gradient keeps the surface).
+const stepRamp = (c) => (c.ramp.length === 3 ? [c.ramp[0], mixHex(c.surface, c.ink, 0.15), c.ramp[2]] : c.ramp);
+function colourLegend({ min, max, dimension, c, fmtVal, note, bottom }) {
+  const textStyle = { color: c.muted, fontFamily: c.font };
+  const n = drawing?.colorSteps ?? 0;
+  if (!n) {
+    return { visualMap: { type: "continuous", min, max, dimension, calculable: true, orient: "horizontal", left: "center", bottom,
+      inRange: { color: c.ramp }, text: note ? [note, ""] : undefined, textStyle, formatter: (v) => fmtVal(v) } };
+  }
   return {
-    type: "continuous", min, max, dimension, calculable: true,
-    orient: "horizontal", left: "center", bottom: 0,
-    inRange: { color: c.ramp }, 
-    text: name || colourPinned() || drawing?.colorScale === "diverging" ? [[name ? String(name) : "", centreNote(min, max, fmtVal), outOfRangeNote()].filter(Boolean).join(" · "), ""] : undefined,
-    textStyle: { color: c.muted, fontFamily: c.font }, formatter: (v) => fmtVal(v),
+    visualMap: { type: "piecewise", dimension, orient: "horizontal", left: "center", bottom, itemWidth: 16, itemHeight: 12, itemGap: 8,
+      pieces: stepPieces(min, max, n, stepRamp(c), fmtVal), textStyle },
+    ...(note ? { title: { text: note, left: "center", bottom: bottom + 24, textStyle: { ...textStyle, fontSize: 14, fontWeight: "normal" } } } : {}),
   };
 }
 // The user's tooltip template → safe HTML. `measures` maps a measure name → its formatted value for
