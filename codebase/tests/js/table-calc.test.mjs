@@ -86,6 +86,12 @@ test("compound growth rate: per-period rate since the first value; blanks and no
   near(run("compound", [100, 50]), [null, -50]);
   near(run("compound", [0, 5, 6]), [null, null, null]);
   near(run("compound", [100, null, 121]), [null, null, 10]);
+  near(run("compound", [-100, -50, -25]), [null, null, null]);
+  near(run("compound", [100, -5]), [null, null]);
+  near(run("compound", [100, 0]), [null, -100]);
+  near(run("compound", [null, 5, 6]), [null, null, null]);
+  near(run("compound", [7]), [null]);
+  assert.equal(run("compound", [100, 110, 121]).length, 3);
   assert.ok(isCalc({ type: "compound" }));
   assert.equal(calcName({ type: "compound" }), "compound growth");
   assert.ok(applyTableCalcs({ rows: one([1, 2]), measures: ["m"] }, [{ type: "compound", along: "auto" }], 0, 1).percent.has(0));
