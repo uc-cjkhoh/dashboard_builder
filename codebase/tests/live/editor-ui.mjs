@@ -272,6 +272,16 @@ try {
     must(cells.length > 0 && cells.every((t) => /%$/.test(t.trim())), `cells: ${J(cells.slice(0, 4))}`);
   });
 
+  await check('table calculation editor: compound growth shows percent cells', async () => {
+    await setSheet(`${base} ${noMarks} s.chartType = 'table'; s.columns = []; s.rows = [f('region', 'text'), f('amount', 'numeric', { agg: 'sum' })]`); await settle();
+    await waitFor(`document.querySelectorAll('#ws-chart td.num').length > 0`, 'cells');
+    await ev(`[...document.querySelectorAll('.ws-shelf--rows .ws-pill')].at(-1).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 300, clientY: 200 }))`);
+    await ev(`[...document.querySelectorAll('.ctx-menu [role^=menuitem]')].find((x) => x.textContent.trim() === 'Table calculation…').click()`);
+    await waitFor(`!!document.querySelector('.ws-calc')`, 'calc panel');
+    await ev(`(() => { const sel = [...document.querySelectorAll('.ws-calc .ws-fmt-field')].find((x) => x.textContent.startsWith('Calculation')).querySelector('select'); sel.value = 'compound'; sel.dispatchEvent(new Event('change')); return true; })()`); await settle();
+    await waitFor(`[...document.querySelectorAll('#ws-chart td.num')].some((x) => /%$/.test(x.textContent.trim()))`, 'percent cells');
+    await ev(`document.querySelector('button[aria-label="Close editor"]').click()`);
+  });
   await check('table calculation editor: percentile rank, and compute-using picks dimensions that persist', async () => {
     await setSheet(`${base} ${noMarks} s.chartType = 'table'; s.columns = []; s.rows = [f('region', 'text'), f('channel', 'text'), f('amount', 'numeric', { agg: 'sum' })]`); await settle();
     await waitFor(`document.querySelectorAll('#ws-chart td.num').length > 0`, 'cells');

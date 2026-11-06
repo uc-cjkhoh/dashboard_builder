@@ -25,7 +25,7 @@ export const DATE_PARTS = new Set(["auto", "exact", "year", "quarter", "month", 
   "quarterOfYear", "monthOfYear", "dayOfWeek", "hourOfDay"]);
 export const DATE_LABELS = new Set(["all", "thin"]); // a date pill's axis labels (Dashboard/date-labels.js)
 // Quick table calculations on a measure pill (Dashboard/table-calc.js).
-export const TABLE_CALCS = new Set(["none", "running", "pctTotal", "diff", "pctDiff", "rank", "pctRank", "moving"]);
+export const TABLE_CALCS = new Set(["none", "running", "pctTotal", "diff", "pctDiff", "compound", "rank", "pctRank", "moving"]);
 export const CALC_ALONG = new Set(["auto", "columns", "rows", "custom"]);
 export const REF_KINDS = new Set(["none", "average", "median", "min", "max", "constant"]);
 export const TRENDS = new Set(["none", "linear", "log", "poly2"]);

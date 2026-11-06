@@ -78,3 +78,15 @@ test("compute using chosen dimensions: those run together, the rest restart", ()
   assert.deepEqual(using([9]), computeCalc(cube(), 0, { type: "running", along: "auto" }, 2, 1));
 });
 test("resolveAlong keeps custom", () => { assert.equal(resolveAlong("custom", 1, 1), "custom"); });
+
+test("compound growth rate: per-period rate since the first value; blanks and non-positive bases stay blank", () => {
+  const near = (a, b) => a.forEach((v, i) => (b[i] == null ? assert.equal(v, null) : assert.ok(Math.abs(v - b[i]) < 1e-9, `${v} vs ${b[i]}`)));
+  near(run("compound", [100, 110, 121]), [null, 10, 10]);
+  near(run("compound", [100, 200, 400, 800]), [null, 100, 100, 100]);
+  near(run("compound", [100, 50]), [null, -50]);
+  near(run("compound", [0, 5, 6]), [null, null, null]);
+  near(run("compound", [100, null, 121]), [null, null, 10]);
+  assert.ok(isCalc({ type: "compound" }));
+  assert.equal(calcName({ type: "compound" }), "compound growth");
+  assert.ok(applyTableCalcs({ rows: one([1, 2]), measures: ["m"] }, [{ type: "compound", along: "auto" }], 0, 1).percent.has(0));
+});

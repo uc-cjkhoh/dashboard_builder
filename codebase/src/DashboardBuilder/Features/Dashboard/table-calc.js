@@ -6,12 +6,12 @@ import { TABLE_CALCS } from "../Core/sheet-schema.js";
 
 export const CALC_CHOICES = [
   ["none", "None"], ["running", "Running total"], ["pctTotal", "% of total"], ["diff", "Difference"],
-  ["pctDiff", "% difference"], ["rank", "Rank"], ["pctRank", "Percentile rank"], ["moving", "Moving average"],
+  ["pctDiff", "% difference"], ["compound", "Compound growth"], ["rank", "Rank"], ["pctRank", "Percentile rank"], ["moving", "Moving average"],
 ];
 export const ALONG_CHOICES = [["auto", "Auto"], ["columns", "Across (Columns)"], ["rows", "Down (Rows)"], ["custom", "Specific dimensions"]];
 export const WINDOW_CHOICES = [2, 3, 5, 7, 12, 30];
 /** Calculations whose results are percentages. */
-export const PERCENT_CALCS = new Set(["pctTotal", "pctDiff", "pctRank"]);
+export const PERCENT_CALCS = new Set(["pctTotal", "pctDiff", "pctRank", "compound"]);
 
 /** A short name for a calculation, used in the measure's label. */
 export const calcName = (c) => (c?.type === "moving" ? `moving avg (${c.window ?? 3})` : CALC_CHOICES.find(([v]) => v === c?.type)?.[1].toLowerCase() ?? "");
@@ -58,6 +58,12 @@ export function computeCalc(rows, mi, calc, rowDims, colDims) {
         const p = vals[j - 1];
         out[i] = j === 0 || vals[j] == null || p == null || p === 0 ? null : ((vals[j] - p) / Math.abs(p)) * 100;
       }); break;
+      case "compound": {
+        // Per-period compound growth since the group's first value: (v / v0)^(1 / steps) − 1, in %. Needs a positive base.
+        const base = vals[0];
+        idx.forEach((i, j) => { out[i] = j === 0 || vals[j] == null || base == null || base <= 0 || vals[j] < 0 ? null : (Math.pow(vals[j] / base, 1 / j) - 1) * 100; });
+        break;
+      }
       case "rank": {
         // Competition ranking (1, 2, 2, 4), highest first; Other and blanks get none.
         const ranked = idx.map((i, j) => ({ i, v: rows[i].isOther ? null : vals[j] })).filter((x) => x.v != null).sort((a, b) => b.v - a.v);
