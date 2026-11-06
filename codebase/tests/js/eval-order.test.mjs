@@ -165,3 +165,14 @@ test("evaluationInput counts a filter on a calculation as a row-level calculatio
   assert.equal(evaluationInput(sheetOf({ filters: [f] }), opts).rowLevelCalcs, 1);
   assert.equal(evaluationInput(sheetOf({ filters: [f] }), { ...opts, isApplied: () => false }).rowLevelCalcs, 0);
 });
+
+test("a measure filter is said at the Aggregates stage, before the cap", () => {
+  const one = describeEvaluation({ ...base, measureFilters: 1 })[3].text;
+  assert.match(one, /Then 1 measure filter drops the groups whose total fails it, before the cap\./);
+  assert.match(describeEvaluation({ ...base, measureFilters: 2 })[3].text, /Then 2 measure filters drop the groups whose total fails them/);
+  assert.equal(describeEvaluation({ ...base })[3].text, "Each group is aggregated.");
+  const m = { db: "d", table: "t", column: "x", category: "numeric", agg: "sum", having: { op: ">", value: "5" } };
+  const s = evaluationInput(sheetOf({ rows: [{ db: "d", table: "t", column: "r", category: "text", role: "dimension" }], columns: [m] }), opts);
+  assert.equal(s.measureFilters, 1);
+  assert.equal(s.otherBucket, false); // the Other total isn't built with a measure filter
+});
