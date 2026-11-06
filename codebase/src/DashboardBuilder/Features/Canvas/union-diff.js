@@ -12,11 +12,12 @@ export function unionDiffControl(source) {
   btn.type = "button"; btn.setAttribute("aria-expanded", "false");
   const out = el("div", "entity__diff-out"); out.hidden = true; out.setAttribute("role", "status");
   wrap.append(btn, out);
-  let loaded = false;
+  let loaded = false, loading = false;
   btn.addEventListener("click", async () => {
     const open = btn.getAttribute("aria-expanded") !== "true";
     btn.setAttribute("aria-expanded", String(open)); out.hidden = !open;
-    if (!open || loaded) return;
+    if (!open || loaded || loading) return;
+    loading = true;
     out.textContent = "Loading…";
     try {
       const tables = await Promise.all(source.tables.map(async (table) => ({ table, columns: await api.columns(source.db, table) })));
@@ -27,7 +28,8 @@ export function unionDiffControl(source) {
       for (const x of m.kind) list.append(el("li", "", `${x.column}: unlike kinds (${Object.entries(x.kinds).map(([t, k]) => `${t} ${k}`).join(", ")})`));
       if (list.children.length) out.append(list);
       loaded = true;
-    } catch (err) { out.textContent = err.message; }
+    } catch (err) { out.textContent = `${err.message} Click Compare columns again to retry.`; }
+    finally { loading = false; }
   });
   return wrap;
 }

@@ -138,6 +138,7 @@ try {
     must(/q1: only in orders \(not in returns\)/.test(text) && /q2: only in orders/.test(text), `list: ${text}`);
     await shot('union-diff-light.png');
     await ev(`document.documentElement.dataset.scheme = 'dark'`);
+    await new Promise((r) => setTimeout(r, 800)); // let the colour transitions settle before the shot
     await shot('union-diff-dark.png');
     await ev(`document.documentElement.dataset.scheme = 'light'`);
     await ev(`${card}.querySelector('.entity__diff-btn').click()`);
