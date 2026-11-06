@@ -38,3 +38,22 @@ export function rangeOf(values, min, max) {
   if (hi <= lo) hi = lo + 1;
   return { min: lo, max: hi };
 }
+
+/** [value, label] — `format.colorScale`: one hue low → high, or two hues meeting at a centre value. */
+export const SCALE_CHOICES = Object.freeze([["sequential", "Low → high"], ["diverging", "Diverging"]]);
+
+/** The diverging ramp's [low, centre, high]: warm token, surface, blue token (the table scale's pair). `tk.cat` = the eight categorical tokens. */
+export function divergingColours(tk, reverse) {
+  const [low, high] = [tk.cat[5] ?? tk.accent, tk.cat[0] ?? tk.accent];
+  return reverse ? [high, tk.surface, low] : [low, tk.surface, high];
+}
+
+/**
+ * The diverging scale's ends and centre for data span lo..hi. The centre is the one set, else 0 when the span
+ * straddles it, else the middle. The ends are made symmetric about it so the middle colour sits on the centre.
+ */
+export function divergingRange(lo, hi, centre) {
+  const c = centre != null && Number.isFinite(centre) ? centre : lo < 0 && hi > 0 ? 0 : (lo + hi) / 2;
+  const half = Math.max(c - lo, hi - c, 0) || 1;
+  return { min: c - half, max: c + half, centre: c };
+}

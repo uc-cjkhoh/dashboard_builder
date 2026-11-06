@@ -257,6 +257,8 @@ export const defaultFormat = () => ({
   colorRamp: "brand", // brand | blue | green | amber | violet — scatter / heatmap continuous colour
   colorMin: null, // pinned low end of the continuous colour scale (null = the data's)
   colorMax: null, // pinned high end
+  colorScale: "sequential", // sequential | diverging — scatter / heatmap continuous colour
+  colorCentre: null, // the diverging scale's centre value (null = 0 when the data straddles it, else the middle)
   xTitle: null,
   yTitle: null,
   target: null,

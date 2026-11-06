@@ -183,6 +183,25 @@ try {
     await settle(300);
     await shot('scale-dark.png');
   });
+  await check('Diverging scale: three colours, centre in the legend, the ramp control gives way to a centre field', async () => {
+    await setNum('Colour from', ''); await setNum('Colour to', ''); await settle(300);
+    await setSelect('Colour scale', 'diverging'); await settle(500);
+    must(await ev(`!!(${fmtField('Colour centre')}) && !(${fmtField('Colour ramp')})`), 'centre field replaces the ramp');
+    const v = await vm();
+    must(v.inRange.color.length === 3 && v.inRange.color[0] !== v.inRange.color[2], 'three stops: ' + J(v.inRange.color));
+    must(/centre/.test(v.text[0]), 'legend names the centre: ' + J(v.text));
+    const lo = v.min, hi = v.max;
+    await setNum('Colour centre', '20'); await settle(400);
+    const w = await vm();
+    must(w.min + w.max === 40 && w.min <= lo && w.max >= hi, 'symmetric about 20: ' + J([w.min, w.max]));
+    must(/centre 20/.test(w.text[0]), 'legend: ' + J(w.text));
+    await shot('diverging-light.png');
+    await ev(`document.documentElement.setAttribute('data-theme', 'dark')`); await settle(300);
+    await shot('diverging-dark.png');
+    await ev(`document.documentElement.removeAttribute('data-theme')`);
+    await setSelect('Colour scale', 'sequential'); await settle(400);
+    must((await vm()).inRange.color.length === 2, 'back to the sequential ramp');
+  });
   if (b.consoleErrors.length) console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  '));
 } catch (e) {
   console.log(`FAIL harness: ${e.stack}`); failed++;

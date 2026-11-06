@@ -50,3 +50,42 @@ test("sheet round trip: colorRamp, colorMin, colorMax; old sheets default; bad v
   const swapped = []; const sw = sanitizeSheet({ ...s, format: { ...s.format, colorMin: 9, colorMax: 1 } }, "S", swapped);
   assert.equal(sw.format.colorMin, null); assert.equal(sw.format.colorMax, null); assert.ok(swapped.some((i) => /colour range/.test(i)));
 });
+
+import { SCALE_CHOICES, divergingColours, divergingRange } from "../../src/DashboardBuilder/Features/Dashboard/colour-scale-model.js";
+
+test("scale choices: sequential and diverging", () => {
+  assert.deepEqual(SCALE_CHOICES.map(([v]) => v), ["sequential", "diverging"]);
+});
+
+test("divergingColours: warm token low, surface centre, blue token high; reverse swaps the ends", () => {
+  assert.deepEqual(divergingColours(tk, false), [tk.cat[5], tk.surface, tk.cat[0]]);
+  assert.deepEqual(divergingColours(tk, true), [tk.cat[0], tk.surface, tk.cat[5]]);
+});
+
+test("divergingRange: symmetric about the centre so the middle colour sits on it", () => {
+  assert.deepEqual(divergingRange(-2, 10, 0), { min: -10, max: 10, centre: 0 });
+  assert.deepEqual(divergingRange(0, 100, 80), { min: 0, max: 160, centre: 80 }); // half-span = the larger distance (80)
+});
+
+test("divergingRange: unset centre is 0 when the data straddles it, else the middle", () => {
+  assert.equal(divergingRange(-5, 3, null).centre, 0);
+  assert.equal(divergingRange(10, 30, null).centre, 20);
+  assert.deepEqual(divergingRange(10, 30, null), { min: 10, max: 30, centre: 20 });
+});
+
+test("divergingRange: a flat span is never empty", () => {
+  const r = divergingRange(4, 4, 4);
+  assert.ok(r.max > r.min); assert.equal(r.centre, 4);
+});
+
+test("sheet round trip: colorScale and colorCentre; old sheets default; bad values reset", () => {
+  const s = emptySheet("S");
+  const d = sanitizeSheet(s, "S", []);
+  assert.equal(d.format.colorScale, "sequential"); assert.equal(d.format.colorCentre, null);
+  assert.equal(defaultFormat().colorScale, "sequential");
+  const ok = sanitizeSheet({ ...s, format: { ...s.format, colorScale: "diverging", colorCentre: 5 } }, "S", []);
+  assert.equal(ok.format.colorScale, "diverging"); assert.equal(ok.format.colorCentre, 5);
+  const issues = [];
+  const bad = sanitizeSheet({ ...s, format: { ...s.format, colorScale: "x", colorCentre: "a" } }, "S", issues);
+  assert.equal(bad.format.colorScale, "sequential"); assert.equal(bad.format.colorCentre, null); assert.equal(issues.length, 2);
+});
