@@ -50,11 +50,6 @@
 .form-field input {
   transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
 }
-.form-field input:focus {
-  outline: none;
-  border-color: var(--ink-3);
-  box-shadow: inset 0 -2px 0 var(--accent);
-}
 .form-check { display: flex; align-items: flex-start; gap: var(--s2); font-size: var(--fs-body); }
 /* No UA margin: the box sits on the gutter. Nudged so it centres on the first line when a label wraps. */
 .form-check input { flex: none; width: 16px; height: 16px; margin: 4px 0 0; }
@@ -65,9 +60,13 @@
 .form-field input:disabled { opacity: .55; cursor: not-allowed; }
 
 
-/* Recent sources — shown above the form while it is open */
-.conn-recent { list-style: none; margin: 0 0 var(--s2); padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s1); }
-.conn-recent__item { display: flex; align-items: center; gap: var(--s1); border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); }
-.conn-recent__pick { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; padding: var(--s1) var(--s2); background: none; border: 0; border-radius: var(--r); color: inherit; font: inherit; text-align: left; cursor: pointer; }
-.conn-recent__pick:hover { background: var(--surface-3); }
-.conn-recent__pick > * { max-width: 100%; }
+/* Recent sources — shown above the form while it is open: flat rows (a server glyph, the host, then user · port), no boxes. Remove appears on hover / focus. */
+.conn-recent { list-style: none; margin: 0 0 var(--s2); padding: 0 0 var(--s2); display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; border-bottom: 1px solid var(--line); }
+.conn-recent__item { display: flex; align-items: center; margin-inline: calc(-1 * var(--s2)); border-radius: var(--r); } /* the glyph, not the hover wash, meets the form's left edge */
+.conn-recent__item:hover, .conn-recent__item:focus-within { background: color-mix(in srgb, var(--ink) 7%, transparent); }
+.conn-recent__pick { flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--s2); padding: var(--s1) var(--s2); background: none; border-radius: var(--r); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.conn-recent__icon { flex: none; color: var(--ink-3); }
+.conn-recent__text { min-width: 0; display: flex; flex-direction: column; }
+.conn-recent__text > * { max-width: 100%; }
+.conn-recent__remove { flex: none; opacity: 0; transition: opacity var(--dur-fast) var(--ease); }
+.conn-recent__item:hover .conn-recent__remove, .conn-recent__item:focus-within .conn-recent__remove { opacity: 1; }

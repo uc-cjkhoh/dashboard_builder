@@ -69,21 +69,17 @@ try {
   await ev(`document.dispatchEvent(new CustomEvent('table:add', { detail: { db: 'shop', table: 'orders' } }))`);
   await waitFor(`document.querySelectorAll('.entity').length === 1 && [...document.querySelectorAll('.entity__status')].every((s) => s.hidden)`, 'orders loaded');
 
-  await check('top bar: perf and appearance buttons do not overlap; the right-most glyph meets the gutter', async () => {
-    const g = await ev(`(() => { const r = (id) => document.getElementById(id).getBoundingClientRect(); const bar = document.querySelector('.canvas__bar').getBoundingClientRect(); const p = r('perf-btn'), s = r('scheme-btn'); const pad = parseFloat(getComputedStyle(document.querySelector('.canvas__bar')).paddingRight); return { pRight: p.right, sLeft: s.left, sRight: s.right, barRight: bar.right, pad }; })()`);
-    must(g.pRight <= g.sLeft + 0.5, `overlap: ${J(g)}`);
+  await check('top bar: appearance and settings do not overlap, the Settings glyph meets the gutter; the perf button is a sidebar tool in the sidebar body', async () => {
+    const g = await ev(`(() => { const r = (id) => document.getElementById(id).getBoundingClientRect(); const bar = document.querySelector('.canvas__bar').getBoundingClientRect(); const s = r('scheme-btn'), t = r('settings-btn'); const perfIn = !!document.querySelector('#sidebar-body > #perf-btn.sidebar__tool') && !document.querySelector('.canvas__bar #perf-btn'); const pad = parseFloat(getComputedStyle(document.querySelector('.canvas__bar')).paddingRight); return { perfIn, sLeft: s.left, sRight: s.right, tRight: t.right, tLeft: t.left, barRight: bar.right, pad }; })()`);
+    must(g.perfIn, 'perf button not in the sidebar body'); must(g.sRight <= g.tLeft + 0.5, `overlap: ${J(g)}`);
     // the glyph (16px in a 32px box: 8px slack) sits on the bar's inner right edge: box overhangs by 8px
-    must(Math.abs((g.sRight - 8) - (g.barRight - g.pad)) <= 1, `glyph not on the gutter: ${J(g)}`);
+    must(Math.abs((g.tRight - 8) - (g.barRight - g.pad)) <= 1, `glyph not on the gutter: ${J(g)}`);
   });
 
-  await check('empty before any worksheet: dialog opens with the empty message and closes on Escape, focus returns', async () => {
-    await ev(`document.getElementById('perf-btn').click()`);
-    await waitFor(`${dlg} !== null`, 'dialog open');
-    must((await ev(`document.querySelector('.perf-empty')?.textContent ?? ''`)).includes('No timings yet'), 'no empty message');
-    await b.key('Escape', { vk: 27 });
-    await waitFor(`${dlg} === null`, 'dialog closed');
-    must(await ev(`document.activeElement.id`) === 'perf-btn', 'focus not returned to the button');
+  await check('the perf button is not shown on the Data Source tab', async () => {
+    must(await ev(`getComputedStyle(document.getElementById('perf-btn')).display === 'none' && document.querySelector('.app').dataset.view === 'model'`), 'perf tile visible on Data Source');
   });
+
 
   await ev(`document.querySelector('.tab-add').click(); document.querySelector('[data-new-tab=worksheet]').click()`);
   await waitFor(`!document.getElementById('worksheet-view').hidden`, 'worksheet open');
@@ -91,6 +87,15 @@ try {
     chip.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt })); target.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
     target.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt })); chip.dispatchEvent(new DragEvent('dragend', { bubbles: true, dataTransfer: dt })); } }; true`);
   await waitFor(`!!__t.chip('region')`, 'field pane filled');
+
+  await check('empty before any query: dialog opens with the empty message and closes on Escape, focus returns', async () => {
+    await ev(`document.getElementById('perf-btn').click()`);
+    await waitFor(`${dlg} !== null`, 'dialog open');
+    must((await ev(`document.querySelector('.perf-empty')?.textContent ?? ''`)).includes('No timings yet'), 'no empty message');
+    await b.key('Escape', { vk: 27 });
+    await waitFor(`${dlg} === null`, 'dialog closed');
+    must(await ev(`document.activeElement.id`) === 'perf-btn', 'focus not returned to the button');
+  });
   await ev(`__t.drag(__t.chip('region'), document.querySelector('.ws-shelf--rows .ws-shelf__zone'))`);
   await ev(`__t.drag(__t.chip('amount'), document.querySelector('.ws-shelf--columns .ws-shelf__zone'))`);
   const t0 = Date.now();

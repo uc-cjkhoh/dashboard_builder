@@ -8,7 +8,7 @@ import { describeEvaluation } from "./eval-order.js";
 let uid = 0;
 
 /** `getInput()` returns the `s` summary at open time, so the text is always current. Returns the wrapper element. */
-export function explainControl(getInput, { signal } = {}) {
+export function explainControl(getInput, { signal, getNote } = {}) {
   const id = `explain-${++uid}`;
   const wrap = document.createElement("span");
   wrap.className = "explain";
@@ -37,7 +37,10 @@ export function explainControl(getInput, { signal } = {}) {
   title.textContent = "How this is computed";
   const list = document.createElement("ol");
   list.className = "explain__list";
-  pop.append(title, list);
+  const note = document.createElement("p");
+  note.className = "explain__note";
+  note.hidden = true;
+  pop.append(title, list, note);
 
   const fill = () => {
     const items = describeEvaluation(getInput()).map((e) => {
@@ -50,6 +53,9 @@ export function explainControl(getInput, { signal } = {}) {
       return li;
     });
     list.replaceChildren(...items);
+    const text = getNote?.() ?? null; // e.g. "From the server cache (…)" — under the list
+    note.textContent = text ?? "";
+    note.hidden = !text;
   };
   const isOpen = () => !pop.hidden;
   const setOpen = (open, { restoreFocus = false } = {}) => {

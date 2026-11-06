@@ -216,8 +216,8 @@ try {
       const after = await ev(`document.activeElement.getAttribute('aria-expanded')`);
       must(before !== after && after !== null, `key "${key}": ${before} -> ${after}`);
     }
-    const o = await ev(`(() => { const s = getComputedStyle(document.activeElement); return s.outlineStyle + ' ' + s.outlineWidth; })()`);
-    must(/solid 2px/.test(o), `visible focus: ${o}`);
+    const o = await ev(`(() => { const s = getComputedStyle(document.activeElement); return s.outlineStyle + ' | ' + s.backgroundImage; })()`);
+    must(/^none \| linear-gradient/.test(o), `focus shows as a wash, not a ring: ${o}`);
   });
 
   await check('the collapsed state is saved with the sheet and drawn again after a redraw (restore)', async () => {

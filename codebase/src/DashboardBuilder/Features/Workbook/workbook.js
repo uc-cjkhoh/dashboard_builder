@@ -1,16 +1,15 @@
 import {
-  entities, relationships, tabs, bus, currentView, isDashboardActive,
-  createWorksheet, createDashboard, createStory, setSteps, isStoryActive, updateSheet, setWidgets, setDashboardSize, nextWidgetId, closeTab, showModel, switchTab, currentTheme, setTheme,
-  nextCalcId, sharedFilters, setSharedFilters, bookmarks, setBookmarks, fieldMeta, setAllFieldMeta, parameters, setParameters, hierarchies, setHierarchies, calculations, setCalculations,
+  entities, relationships, tabs, bus, currentView,
+  createWorksheet, createDashboard, createStory, setSteps, updateSheet, setWidgets, setDashboardSize, nextWidgetId, closeTab, showModel, switchTab, currentTheme, setTheme,
+  nextCalcId, sharedFilters, setSharedFilters, fieldMeta, setAllFieldMeta, parameters, setParameters, hierarchies, setHierarchies, calculations, setCalculations,
 } from "../Core/store.js";
 import { clearRoleChoices } from "../Calc/calc-pane-model.js";
 import { DEFAULT_THEME } from "../Core/theme-model.js";
 import { openThemeDialog } from "./theme-dialog.js";
-import { saveBookmarkDialog, openBookmarksDialog } from "./bookmarks-dialog.js";
-import { openParametersDialog } from "./parameters-dialog.js";
 import { wireMenu } from "../Core/menu.js";
 import { exit } from "../Core/motion.js";
-import { toast, confirmDialog, toggle, listDialog } from "../Core/ui.js";
+import { toast, confirmDialog, listDialog } from "../Core/ui.js";
+import { dateIn } from "../Core/timezone.js";
 import { addEntity, clearModel } from "../Canvas/canvas.js";
 import { restoreRelationship } from "../Relations/relations.js";
 import { serializeWorkbook, parseWorkbook, storageKey, legacyStorageKey } from "./workbook-model.js";
@@ -25,7 +24,7 @@ const SAVE_DELAY_MS = 500;
 const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
 const CHANGE_EVENTS = [
   "entity:added", "entity:moved", "entity:removed",
-  "rel:changed", "tabs:changed", "worksheet:changed", "dashboard:changed", "story:changed", "theme:changed", "bookmarks:changed", "fields:changed", "parameters:changed", "hierarchies:changed", "calculations:changed",
+  "rel:changed", "tabs:changed", "worksheet:changed", "dashboard:changed", "story:changed", "theme:changed", "fields:changed", "parameters:changed", "hierarchies:changed", "calculations:changed",
 ];
 
 let key = null;        // storage key for the connected server + user; null while disconnected
@@ -36,28 +35,19 @@ let blockedKey = null; // a stored workbook that couldn't be restored — never 
 let warned = ""; // the last not-saved warning shown (a toast once per cause, not on every autosave)
 
 export function initWorkbook() {
-  const exportBtn = document.getElementById("wb-export");
-  const importBtn = document.getElementById("wb-import");
   const fileInput = document.getElementById("wb-file");
-  if (!exportBtn || !importBtn || !fileInput) return;
+  if (!fileInput) return;
 
-  const menuBtn = document.getElementById("wb-menu-btn"), menuList = document.getElementById("wb-menu-list");
-  if (menuBtn && menuList) wireMenu(menuBtn, menuList);
+  const settingsBtn = document.getElementById("settings-btn"), settingsList = document.getElementById("settings-list");
+  if (settingsBtn && settingsList) wireMenu(settingsBtn, settingsList);
 
   document.addEventListener("connection:changed", (e) => onConnection(e.detail ?? {}));
-  // A dashboard or story has no single view to bookmark (bookmarks capture worksheets), so the action is hidden there.
-  const bookmarkAdd = document.getElementById("wb-bookmark-add");
-  const syncBookmarkAction = () => toggle(bookmarkAdd, !isDashboardActive() && !isStoryActive());
-  bus.addEventListener("view:changed", syncBookmarkAction);
-  syncBookmarkAction();
   for (const type of CHANGE_EVENTS) bus.addEventListener(type, scheduleSave);
 
-  exportBtn.addEventListener("click", exportFile);
+  bus.addEventListener("workbook:export", exportFile);
   document.getElementById("wb-theme")?.addEventListener("click", openThemeDialog);
-  document.getElementById("wb-bookmark-add")?.addEventListener("click", saveBookmarkDialog);
-  document.getElementById("wb-bookmarks")?.addEventListener("click", openBookmarksDialog);
-  document.getElementById("wb-parameters")?.addEventListener("click", openParametersDialog);
-  importBtn.addEventListener("click", () => {
+  // The worksheet view bar's Import button asks for a file here (it has no handle on the picker).
+  bus.addEventListener("workbook:import", () => {
     if (!key) { toast("Connect to ClickHouse first — a workbook opens against the connected server.", "info"); return; }
     fileInput.click();
   });
@@ -100,7 +90,6 @@ async function clearWorkspace() {
     showModel();
     setTheme(DEFAULT_THEME); // the saved workbook keeps its theme; it comes back on reconnect
     setSharedFilters([]);
-    setBookmarks([]);
     setAllFieldMeta({});
     setParameters([]);
     setHierarchies([]);
@@ -190,7 +179,7 @@ function openWorkbook(wb) {
       );
     }
 
-    // Tabs in strip order; widgets and bookmarks point at worksheets by saved index, so those are wired once every tab exists.
+    // Tabs in strip order; widgets point at worksheets by saved index, so those are wired once every tab exists.
     const worksheetIds = [], dashboardIds = [], storyIds = [];
     for (const t of wb.tabs) {
       if (t.kind === "worksheet") {
@@ -209,8 +198,6 @@ function openWorkbook(wb) {
       : w.kind === "spacer" ? { id: nextWidgetId(), kind: "spacer", x: w.x, y: w.y, w: w.w, h: w.h }
       : { id: nextWidgetId(), kind: "text", heading: w.heading, body: w.body, x: w.x, y: w.y, w: w.w, h: w.h }))));
     wb.dashboards.forEach((d, i) => { if (d.size) setDashboardSize(dashboardIds[i], d.size); });
-    // Bookmarks point at their worksheet by index; a missing one is recreated when applied.
-    setBookmarks((wb.bookmarks ?? []).map(({ worksheet, ...b }) => ({ ...b, worksheetId: worksheet !== null ? worksheetIds[worksheet] ?? null : null })));
     const activeId = wb.active ? (wb.active.kind === "worksheet" ? worksheetIds : wb.active.kind === "story" ? storyIds : dashboardIds)[wb.active.index] : null;
     if (activeId) switchTab(activeId);
     else showModel();
@@ -233,7 +220,7 @@ function exportFile() {
   const url = URL.createObjectURL(new Blob([json], { type: "application/json" }));
   const a = document.createElement("a");
   a.href = url;
-  a.download = `workbook-${new Date().toISOString().slice(0, 10)}.json`;
+  a.download = `workbook-${dateIn(Date.now())}.json`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
@@ -261,7 +248,7 @@ async function importFile(input) {
 
 // --- helpers -----------------------------------------------------------------
 function currentState() {
-  return { entities, relationships, tabs, active: currentView(), theme: currentTheme(), sharedFilters, bookmarks, fieldMeta, parameters, hierarchies, calculations, nextCalcId: nextCalcId() };
+  return { entities, relationships, tabs, active: currentView(), theme: currentTheme(), sharedFilters, fieldMeta, parameters, hierarchies, calculations, nextCalcId: nextCalcId() };
 }
 
 const isEmpty = () => entities.size === 0 && tabs.length === 0;

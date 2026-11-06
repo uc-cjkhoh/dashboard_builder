@@ -284,27 +284,6 @@ test("field choices (P40) are kept, include the shown field, and drop junk", () 
   assert.equal(lone.worksheets[0].sheet.columns[0].choices, undefined);
 });
 
-test("bookmarks (P39) round-trip with their worksheet, selection and shared filters", () => {
-  const st = sampleState();
-  const sheet = { ...st.tabs[0].sheet, chartType: "bar",
-    selection: { db: "s", table: "orders", column: "region", value: "EU", label: "orders.region = EU", action: "keep" } };
-  const sf = [{ db: "s", table: "orders", column: "region", category: "text", op: "=", value: "EU" }];
-  const bm = { id: "bm#1", name: "EU view", worksheetId: "ws#1", worksheetName: "Revenue", sheet, sharedFilters: sf, savedAt: "2026-10-13T00:00:00Z" };
-  const wb = parseWorkbook(JSON.stringify(serializeWorkbook({ ...st, bookmarks: [bm, { ...bm, name: "Closed", worksheetId: "ws#gone" }] })));
-  assert.equal(wb.bookmarks.length, 2);
-  assert.equal(wb.bookmarks[0].worksheet, 0);
-  assert.equal(wb.bookmarks[1].worksheet, null);
-  assert.equal(wb.bookmarks[0].sheet.selection.action, "keep");
-  assert.deepEqual(wb.bookmarks[0].sharedFilters, sf);
-  assert.equal(wb.bookmarks[0].sheet.pages.members, undefined);
-});
-test("bad bookmarks are skipped and reported; a bad link action is removed", () => {
-  const r = parseWorkbook(wbText({ bookmarks: [{ name: "", sheet: {} }, { name: "No view" }, { name: "Ok", sheet: { urlAction: { label: "x", template: "http://bad/{value}" } } }] }));
-  assert.equal(r.bookmarks.length, 1);
-  assert.equal(r.bookmarks[0].sheet.urlAction, null);
-  assert.ok(r.issues.some((i) => /link action/.test(i)));
-});
-
 test("a date part (P26) is kept on a date pill and reset elsewhere", () => {
   const d = { db: "s", table: "orders", column: "created", category: "temporal" };
   assert.equal(sheetOf({ columns: [{ ...d, datePart: "month" }] }).worksheets[0].sheet.columns[0].datePart, "month");
@@ -477,12 +456,6 @@ test("a calculated filter whose calculation is gone is removed on open; an in-li
   assert.equal(wb.worksheets[0].sheet.filters.length, 1);
   assert.deepEqual(wb.worksheets[0].sheet.filters[0].values, ["a", "b"]);
 });
-test("bookmark sheets drop calc pills whose calculation is gone", () => {
-  const bm = { name: "B", dashboard: 0, sheet: { rows: [cpill({ calc: "calc9" }), cpill()] }, sharedFilters: [] };
-  const wb = parseWorkbook(wbText({ calculations: calcList, dashboards: [{ name: "X", sheet: {} }], bookmarks: [bm] }));
-  assert.equal(wb.bookmarks[0].sheet.rows.length, 1);
-  assert.equal(wb.bookmarks[0].sheet.rows[0].calc, "calc1");
-});
 test("nextCalcId round-trips; absent or invalid falls back to undefined", () => {
   const st = sampleState();
   const saved = serializeWorkbook({ ...st, calculations: calcList, nextCalcId: 7 });
@@ -638,4 +611,10 @@ test("a calculated filter with a relative-date operator is removed with a messag
   const wb = parseWorkbook(wbText({ calculations: calcList, dashboards: [{ name: "X", sheet: { filters: [f] } }] }));
   assert.equal(wb.worksheets[0].sheet.filters.length, 0);
   assert.ok(wb.issues.some((i) => /relative-date/.test(i)));
+});
+
+test("a saved file's old bookmarks are ignored without a report", () => {
+  const wb = parseWorkbook(wbText({ dashboards: [{ name: "X", sheet: {} }], bookmarks: [{ name: "B", dashboard: 0, sheet: {}, sharedFilters: [] }, 5] }));
+  assert.equal(wb.bookmarks, undefined);
+  assert.deepEqual(wb.issues, []);
 });

@@ -19,10 +19,10 @@
 }
 .tab:hover { background: var(--glass-ctl-hover); border-color: var(--ink-3); color: var(--ink); box-shadow: inset 0 1px 0 var(--glass-rim), var(--elev-8); }
 .tab:active { transform: scale(.98); box-shadow: inset 0 1px 0 var(--glass-rim); }
-/* Selected: accent fill + accent edge + underline + weight — never colour alone. */
+/* Selected: accent fill + weight (+ a neutral lift) — never colour alone. */
 .tab[aria-selected="true"], .tab.is-active {
   background: var(--accent-soft); border-color: var(--accent); color: var(--ink); font-weight: 600;
-  box-shadow: inset 0 -2px 0 var(--accent), var(--elev-2);
+  box-shadow: var(--elev-2);
 }
 .tab__kind { flex: none; color: var(--ink-3); }
 .tab.is-active .tab__kind, .tab:hover .tab__kind { color: var(--accent-ink); }
@@ -36,7 +36,7 @@
 }
 .tab__close, .tab__dup {
   border: 0; background: transparent; color: var(--ink-3); cursor: pointer;
-  border-radius: var(--r-pill); width: 20px; height: 20px; line-height: 1; display: inline-grid; place-items: center; padding: 0;
+  border-radius: var(--r-pill); width: 24px; height: 24px; line-height: 1; display: inline-grid; place-items: center; padding: 0;
   transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
 }
 .tab__dup:hover { background: var(--accent-soft); color: var(--accent-ink); }
@@ -44,7 +44,7 @@
 .tab__rename {
   font-size: var(--fs-body); font-weight: 600; width: 130px;
   padding: var(--s1) var(--s2);
-  border: 1px solid var(--ink-3); border-radius: var(--r); box-shadow: inset 0 -2px 0 var(--accent);
+  border: 1px solid var(--ink-2); border-radius: var(--r);
   background: var(--surface); color: var(--ink);
 }
 .tab__rename:focus { outline: none; }

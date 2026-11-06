@@ -21,7 +21,7 @@
 .story-chip { flex: none; display: inline-flex; align-items: center; gap: var(--s1); max-width: 220px; height: var(--ctl-h); padding: 0 var(--s2);
   border: 1px solid var(--ctl-edge) !important; border-radius: var(--r); background: var(--glass-ctl); color: var(--ink-2); font-size: var(--fs-body); cursor: pointer; }
 .story-chip:hover { background: var(--glass-ctl-hover); color: var(--ink); }
-.story-chip[aria-selected="true"] { background: var(--accent-soft); border-color: var(--accent) !important; color: var(--ink); font-weight: 600; box-shadow: inset 0 -2px 0 var(--accent); }
+.story-chip[aria-selected="true"] { background: var(--accent-soft); border-color: var(--accent) !important; color: var(--ink); font-weight: 600; }
 .story-chip__n { flex: none; font-weight: 700; }
 .story-chip__text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .story-chip > svg { flex: none; color: var(--ink-3); }

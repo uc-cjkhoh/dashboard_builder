@@ -13,6 +13,8 @@ import { entities, relationships, activeWorksheet, isWorksheetActive, updateShee
 import { checkValue, paramTypeFor } from "../Core/parameters-model.js";
 import { exportChart, hasChartInstance, sizeChart, focusSeries } from "./chart.js";
 import { createWorksheetView, periodNotice } from "./worksheet-view.js";
+import { CACHE_NOTE } from "./notices.js";
+import { dateTimeIn, offsetLabel } from "../Core/timezone.js";
 import { fieldCopies } from "./field-copy-model.js";
 import { el, hint, iconSpan } from "./render-dom.js";
 import { updatedText, calcDefinitionLines } from "./data-notes.js";
@@ -47,6 +49,7 @@ import { keyOf, SCATTER_TYPES, COLOR_USES, colorMode, isDrillActive, drillActive
 import { catalogFromEntities } from "../Calc/calc-resolve.js";
 import { newCalcFilter, isCalcPill, makeCalcPill, refusal, syncCalcPills, pillSlots, clearCalcPills, clearFilterCalc, usesCalc, CALC_AGGS } from "../Calc/calc-pill.js";
 import { openCalcDialog } from "../Calc/calc-dialog.js";
+import { openParametersDialog } from "../Workbook/parameters-dialog.js";
 import { openGroupDialog } from "../Calc/group-dialog.js";
 import { openSplitDialog } from "../Calc/split-dialog.js";
 import { openCleanDialog } from "../Calc/clean-dialog.js";
@@ -162,13 +165,19 @@ const TYPE_ICONS = { numeric: "type-number", text: "type-text", temporal: "type-
 export function initDashboards() {
   const view = document.getElementById("worksheet-view");
   const fieldsEl = document.getElementById("ws-fields");
-  const toolsEl = document.getElementById("ws-tools"); // Calculated fields + Hierarchies live in the sidebar body while a worksheet is open (shell.css)
+  const toolsEl = document.getElementById("ws-tools"); // Calculated fields, Parameters + Hierarchies live in the sidebar body while a worksheet is open (shell.css)
   // The Marks slots (Color, Size, Label … Filters, Drill, Pages): a grid of three columns that lives in the field pane after Hierarchies.
   // One node for the worksheet's life — every pane rebuild re-inserts it, every header render refills its grid.
   const marksEl = fieldGroup("ws-shelf ws-shelf--marks", "marks", "Marks");
   const marksGrid = el("div", "ws-marks__grid");
   marksEl.append(marksGrid);
   const shelvesEl = document.getElementById("ws-shelves");
+  // The open mark tool's editor is a flyout: it opens beside the field pane, level with its slot, so a field is one short drag away and the
+  // chart stays in view. It floats over the worksheet (never pushes the chart down); Esc or ✕ closes it.
+  const toolFly = el("div", "ws-toolfly");
+  toolFly.hidden = true;
+  view?.querySelector(".worksheet")?.append(toolFly);
+  let focusFly = false; // set by a tile click: the opened panel takes keyboard focus once, never on a later re-render
   const chartEl = document.getElementById("ws-chart");
   const noticeEl = document.getElementById("ws-chart-notice");
   const headEl = document.getElementById("ws-chart-head");
@@ -229,9 +238,9 @@ export function initDashboards() {
 
   bus.addEventListener("view:changed", sync);
   bus.addEventListener("worksheet:changed", () => {
-    // A change from outside commit() (bookmark, workbook open, undo) becomes the new baseline.
+    // A change from outside commit() (workbook open, undo) becomes the new baseline.
     const d = activeWorksheet();
-    // ...and a restored sheet's calculated pills take the live calculation's type / role (undo, bookmark, open).
+    // ...and a restored sheet's calculated pills take the live calculation's type / role (undo, open).
     if (d && isWorksheetActive()) syncCalcPills(d.sheet, calculations, catalogFromEntities([...entities.values()]), parameters);
     if (d && isWorksheetActive()) lastSnap.set(d.id, structuredClone(d.sheet));
     if (isWorksheetActive()) { renderShelves(); runChart(); }
@@ -247,6 +256,11 @@ export function initDashboards() {
     if (dash.sheet.filters.filter((f) => !f.category).length < missing) { renderShelves(); runChart(); }
   });
   // chart.js reads colours from :root at render time — redraw when light/dark flips (Core/scheme.js; a cache hit, no query).
+  // An automatic title is the tab's name: when the tab is renamed, the title follows at once (a custom title is left alone).
+  bus.addEventListener("tabs:changed", () => {
+    const d = activeWorksheet(), auto = document.querySelector(".ws-titleblock__btn.ws-titleblock__title.is-auto");
+    if (d && auto && auto.textContent !== d.name) renderShelves();
+  });
   bus.addEventListener("scheme:changed", () => { if (isWorksheetActive()) runChart(); });
   bus.addEventListener("theme:changed", () => { if (isWorksheetActive()) runChart(); }); // redraw in the new colours
   // A rename / hide / default aggregation redraws the field pane, the pills and the chart's labels.
@@ -372,7 +386,7 @@ export function initDashboards() {
       groups.push(group);
     }
     if (seq !== fieldsSeq) return;
-    // The pane: Marks first, then the search and one tile per table. Calculated fields and Hierarchies are two icons in the sidebar (below).
+    // The pane: Marks first, then the search and one tile per table. Calculated fields, Parameters and Hierarchies are three icons in the sidebar (below).
     fieldsEl.replaceChildren(marksEl, fieldTools(hiddenCount), ...groups);
     filterFields();
   }
@@ -415,7 +429,7 @@ export function initDashboards() {
   }
 
   // --- named hierarchies: applying one copies its levels into sheet.drill -----
-  // The sidebar's two tool icons (worksheet tabs): each opens a dialog to add, edit or use the workbook's calculated fields / hierarchies.
+  // The sidebar's three tool icons (worksheet tabs): each opens a dialog to add, edit or use the workbook's calculated fields / parameters / hierarchies.
   const openHierarchies = (startNew) => openHierarchiesDialog({ tables: uniqueTables(), columnsFor, castOf, startNew, canApply: isWorksheetActive(), onApply: (id) => applyHierarchy(activeWorksheet(), id) });
   const manageCalcs = () => openCalcManager({
     state: () => paneState(calculations, catalogFromEntities([...entities.values()]), parameters),
@@ -430,7 +444,7 @@ export function initDashboards() {
       b.addEventListener("click", onClick);
       return b;
     };
-    toolsEl.replaceChildren(tool("calc", "Calculated fields", manageCalcs), tool("drill", "Hierarchies", () => openHierarchies(false)));
+    toolsEl.replaceChildren(tool("calc", "Calculated fields", manageCalcs), tool("param", "Parameters", openParametersDialog), tool("hierarchy", "Hierarchies", () => openHierarchies(false)));
   }
   async function applyHierarchy(dash, id) {
     const h = hierarchies.find((x) => x.id === id);
@@ -550,6 +564,7 @@ export function initDashboards() {
     if (meta.alias) { nameEl.title = `${meta.alias} — column ${col.name}`; chip.classList.add("is-renamed"); }
     if (meta.hidden) chip.classList.add("is-hidden");
     chip.dataset.search = `${col.name} ${meta.alias ?? ""}`.toLowerCase();
+    chip.dataset.field = JSON.stringify(payload); // the "Add field" picker in a Marks editor lists the pane's fields from this
     chip.append(typeIcon, nameEl);
     if (meta.cast) { chip.classList.add("is-cast"); chip.append(castBadge(meta.cast, col.category, false)); }
     chipOptions(chip, `field:${t.db}.${t.table}.${col.name}`, col.name, () => fieldEntries(payload, col, nameEl));
@@ -700,8 +715,9 @@ export function initDashboards() {
 
     const children = [columns, rows];
     const active = tools.find((t) => t.key === openTool);
-    const toolEl = calcFor ? calcPanel(dash, s) : choicesFor ? choicesPanel(dash, s) : active ? toolPanel(dash, s, active) : null;
-    if (toolEl) children.push(toolEl);                        // the one open tool editor
+    const toolEl = calcFor ? calcPanel(dash, s) : choicesFor ? choicesPanel(dash, s) : null; // inline editors under the shelves
+    const flyEl = !toolEl && active ? toolPanel(dash, s, active) : null;                    // the open mark tool's flyout
+    if (toolEl) children.push(toolEl);
     // Active-interaction chips (thin status bars for live drill / pages / click-selection state).
     if (isDrillActive(s)) children.push(drillChip(dash, s));  // breadcrumb + drill-up
     if (s.pages) children.push(pagesControl(dash, s));        // page/animate control
@@ -711,22 +727,24 @@ export function initDashboards() {
     const viewbar = el("div", "ws-viewbar");
     const vbRight = el("div", "ws-viewbar__group ws-viewbar__group--right");
     const vbIcons = el("div", "ws-viewbar__icons");
-    vbIcons.append(formatToggle(), analyticsToggle(), exportControl(dash, s), refreshButton(dash), sheetActions(dash, s), fullScreenButton());
+    vbIcons.append(formatToggle(), analyticsToggle(), refreshButton(dash), fullScreenButton(), exportControl(dash, s), importButton(), sheetActions(dash, s));
     vbRight.append(sortControl(dash, s), vbIcons);
     const vbLeft = el("div", "ws-viewbar__group");
     vbLeft.append(fieldsPaneButton(), chartTypePicker(dash, s), undoButtons(dash),
-      explainControl(() => evaluationInput(s, { sharedFilters: sharedFilters.filter((f) => checkFilter(f).state === "ok" && !sharedSkipped(s).includes(f)), parameters, calcs: calculations, isApplied: (f) => checkFilter(f).state === "ok", dimensions: planDims(s).keyOrder.filter(Boolean).map(nameOf) }), { signal: headerAbort.signal }));
+      explainControl(() => evaluationInput(s, { sharedFilters: sharedFilters.filter((f) => checkFilter(f).state === "ok" && !sharedSkipped(s).includes(f)), parameters, calcs: calculations, isApplied: (f) => checkFilter(f).state === "ok", dimensions: planDims(s).keyOrder.filter(Boolean).map(nameOf) }), { signal: headerAbort.signal, getNote: () => (lastCached ? CACHE_NOTE : null) }));
     viewbar.append(vbLeft, vbRight);
     const fmtEl = formatOpen ? formatPanel(dash, s) : analyticsOpen ? analyticsPanel(dash, s) : null; // format / analytics card
     const swEl = switchers(dash, s);
     const titleEl = s.showTitle === false ? null : titleBlock(dash, s);
     const cardsEl = filterCards(dash, s);
+    if (cardsEl && filtersInFly(s)) { cardsEl.classList.add("is-behind-fly"); cardsEl.inert = true; cardsEl.setAttribute("aria-hidden", "true"); } // the open Filters flyout holds the live cards; these keep the header's height so the chart never shifts
     const paramsEl = paramControls(s);
     headEl.replaceChildren(viewbar, ...(swEl ? [swEl] : []), ...(fmtEl ? [fmtEl] : []), ...(titleEl ? [titleEl] : []), ...(paramsEl ? [paramsEl] : []), ...(cardsEl ? [cardsEl] : []));
 
     // Motion only for what is new since the last render (every edit re-renders the header).
-    const panelKey = toolEl ? `tool:${openTool}` : fmtEl ? "format" : null;
-    if (panelKey && panelKey !== shownPanel) enter(toolEl ?? fmtEl);
+    mountFly(flyEl);
+    const panelKey = toolEl || flyEl ? `tool:${openTool}` : fmtEl ? "format" : null;
+    if (panelKey && panelKey !== shownPanel) enter(flyEl ?? toolEl ?? fmtEl, flyEl ? { y: 0, scale: .98 } : undefined);
     shownPanel = panelKey;
     const pillKeys = new Set();
     for (const p of shelvesEl.querySelectorAll(".ws-pill[data-key]")) {
@@ -876,6 +894,14 @@ export function initDashboards() {
     return btn;
   }
 
+  // Import workbook (a JSON file; Workbook/workbook.js owns the picker).
+  function importButton() {
+    const btn = iconButton("import", "Import workbook");
+    btn.title = "Import workbook…";
+    btn.addEventListener("click", () => bus.dispatchEvent(new Event("workbook:import")));
+    return btn;
+  }
+
   // The Analytics card toggle (like Format) and the card itself.
   function analyticsToggle() {
     const btn = iconButton("insights", "Analytics");
@@ -981,6 +1007,7 @@ export function initDashboards() {
       item("table", "CSV data", () => exportCsvRows(dash, s)),
       item("eye", "View data", () => viewData(dash, s, false)),
       item("print", "Print / PDF…", () => printView(dash, s)),
+      item("export", "Workbook (JSON)", () => bus.dispatchEvent(new Event("workbook:export"))), // the whole workbook as a file (Workbook/workbook.js)
     );
     wireMenu(btn, menu, { signal: headerAbort?.signal }); // click toggles; Esc/outside/item click close; arrows move
     wrap.append(btn, menu);
@@ -1096,9 +1123,11 @@ export function initDashboards() {
   }
   // The status bar under the chart: marks, rows × columns, the selection.
   let lastQueriedAt = null;
+  let lastCached = false; // the drawn result came from the server cache → noted in "How this is computed"
   function setStatusBar(s, result) {
     const bar = document.getElementById("ws-statusbar");
     if (!bar) return;
+    lastCached = Boolean(result?.cached);
     lastQueriedAt = result?.queriedAt ?? null; // a query that is starting, failed or was cancelled has no update time
     if (!result) { bar.replaceChildren(); toggle(bar, false); return; }
     bar.textContent = [statusText(s, result), updatedText(lastQueriedAt)].filter(Boolean).join(" · ");
@@ -1162,7 +1191,7 @@ export function initDashboards() {
     lines.push(...calcDefinitionLines(s, calculations, appliedShared()).map((l) => `Calculation: ${l}`));
     const updated = updatedText(lastQueriedAt);
     if (updated) lines.push(updated);
-    lines.push(`Printed ${new Date().toLocaleString()}`);
+    lines.push(`Printed ${dateTimeIn(Date.now())} (${offsetLabel()})`);
     for (const l of lines) printHead.append(el("p", "ws-print-head__line", l));
     card.prepend(printHead);
     sizeChart(chartEl, { width: 1000, height: 560 });
@@ -2133,7 +2162,7 @@ export function initDashboards() {
     const colorFields = s.color ?? (s.color = []);
     const drillLevels = s.drill?.levels ?? [];
     const one = (field, clear) => (field ? [markPill(field, clear)] : []); // single-field pill list
-    return [
+    const tools = [
       { key: "color", icon: "color", label: "Color", count: colorFields.length,
         pills: colorFields.map((f, i) => colorPill(dash, s, f, i)), onDrop: (f) => addColor(dash, f),
         hint: "Drop a field — categorical = colour series, numeric = gradient",
@@ -2166,8 +2195,8 @@ export function initDashboards() {
           ...sharedFilters.map((f, i) => filterPill(dash, s, f, i, sharedFilters))],
         onDrop: (f) => addFilter(dash, f),
         hint: "Drop a field to filter the view by it — share a filter (link button) to apply it on every dashboard",
-        note: sharedNote(s) },
-      { key: "period", icon: "calendar", label: "Date range", count: s.period ? 1 : 0,
+        note: sharedNote(s), editor: filtersInFly(s) ? filterCards(dash, s) : null },
+      { key: "period", icon: "calendar", label: "Dates", count: s.period ? 1 : 0,
         pills: s.period ? [markPill(s.period, () => { s.period = null; commit(dash, s); })] : [],
         onDrop: (f) => setPeriod(dash, f), editor: s.period ? periodEditor(dash, s) : null,
         hint: "Drop a date field to limit the view to a range — and compare it with another period" },
@@ -2179,6 +2208,10 @@ export function initDashboards() {
         pills: s.pages ? [pagesPill(dash, s)] : [], onDrop: (f) => addPages(dash, f),
         hint: "Drop a dimension to step/animate the view through its members" },
     ];
+    // For the editor flyout: whether a slot takes several fields, and which fields its Add field list offers.
+    const multi = new Set(["color", "detail", "tooltip", "filters", "drill"]);
+    const accepts = { size: (f) => f.category === "numeric", period: (f) => f.category === "temporal" };
+    return tools.map((t) => ({ ...t, multi: multi.has(t.key), accepts: accepts[t.key] ?? null }));
   }
 
   // A toolbar button: icon + short text, a count badge when it holds field(s), and drop-target + click.
@@ -2187,11 +2220,14 @@ export function initDashboards() {
     const btn = el("button", `ws-tool${openTool === tool.key ? " is-active" : ""}${set ? " is-set" : ""}`);
     btn.type = "button";
     btn.setAttribute("aria-pressed", String(openTool === tool.key));
+    btn.setAttribute("aria-expanded", String(openTool === tool.key));
+    btn.setAttribute("aria-controls", "ws-toolfly");
+    btn.dataset.tool = tool.key;
     btn.setAttribute("aria-label", `${tool.label}${set ? ` (${tool.count} field${tool.count > 1 ? "s" : ""})` : " (empty)"}`);
     btn.title = tool.hint || tool.label;
     btn.append(icon(tool.icon), el("span", "ws-tool__text", tool.label));
     if (set) btn.append(el("span", "ws-tool__badge", String(tool.count)));
-    btn.addEventListener("click", () => { openTool = openTool === tool.key ? null : tool.key; choicesFor = null; calcFor = null; formatOpen = false; renderShelves(); });
+    btn.addEventListener("click", () => { openTool = openTool === tool.key ? null : tool.key; focusFly = openTool !== null; choicesFor = null; calcFor = null; formatOpen = false; renderShelves(); });
     btn.addEventListener("dragover", (e) => { if (hasField(e)) { e.preventDefault(); btn.classList.add("is-over"); } });
     btn.addEventListener("dragleave", () => btn.classList.remove("is-over"));
     btn.addEventListener("drop", (e) => {
@@ -2202,26 +2238,117 @@ export function initDashboards() {
     return btn;
   }
 
-  // The editor panel for the open tool: a card with its current field pills over a drop zone (+ note).
+  // The Filters flyout shows the filter cards (values, bounds, checklists) under its pills, so they stay editable while it is open.
+  const filtersInFly = (s) => openTool === "filters" && !calcFor && !choicesFor && s.showFilterCards !== false;
+  // The editor panel for the open tool: its title, the field pills it holds over a drop zone, then its own editor / note.
   function toolPanel(dash, s, tool) {
     const panel = el("div", "ws-toolpanel");
+    panel.tabIndex = -1;
+    panel.setAttribute("role", "group");
     const head = el("div", "ws-toolpanel__head");
     const title = el("span", "ws-toolpanel__title");
+    title.id = `ws-toolpanel-${tool.key}`;
+    panel.setAttribute("aria-labelledby", title.id);
     title.append(icon(tool.icon), ` ${tool.label}`);
     head.append(title);
     const close = iconButton("close", "Close editor");
-    close.addEventListener("click", () => { openTool = null; renderShelves(); });
+    close.addEventListener("click", () => closeFly());
     head.append(close);
     panel.append(head);
     const zone = el("div", "ws-toolpanel__zone");
     if (!tool.pills.length) zone.append(el("span", "ws-shelf__hint", tool.hint || "Drag a field here"));
     for (const p of tool.pills) zone.append(p);
     wireFieldDrop(zone, tool.onDrop);
-    panel.append(zone);
+    panel.append(zone, fieldPicker(tool));
     if (tool.editor) panel.append(tool.editor);
     if (tool.note) panel.append(el("span", "ws-shelf__note", tool.note));
     return panel;
   }
+  // "Add field": the click and keyboard path to what a drag does. Lists the field pane's fields (grouped by table, searchable) that this slot accepts;
+  // choosing one goes through the slot's own drop handler, so every rule and message is the same as for a drag.
+  function fieldPicker(tool) {
+    const wrap = el("div", "ws-picker");
+    const btn = el("button", "ws-picker__btn");
+    btn.type = "button";
+    btn.append(icon("plus", { size: 14 }), el("span", null, !tool.multi && tool.count > 0 ? "Replace field" : "Add field"));
+    btn.setAttribute("aria-expanded", "false");
+    const box = el("div", "ws-picker__box");
+    box.hidden = true;
+    const search = el("input", "input ws-picker__search");
+    search.type = "search"; search.placeholder = "Search fields"; search.setAttribute("aria-label", "Search fields");
+    const list = el("div", "ws-picker__list");
+    box.append(search, list);
+    const build = () => {
+      list.replaceChildren();
+      let group = null, n = 0;
+      for (const chip of fieldsEl.querySelectorAll(".ws-field[data-field]:not(.is-hidden)")) {
+        const f = JSON.parse(chip.dataset.field);
+        if (tool.accepts && !tool.accepts(f)) continue;
+        const table = chip.closest(".ws-table")?.querySelector(".ws-group__name")?.textContent ?? "";
+        if (table !== group) { group = table; list.append(el("div", "ws-picker__group", table)); }
+        const item = el("button", "ws-picker__item");
+        item.type = "button";
+        item.dataset.search = chip.dataset.search;
+        const t = icon(TYPE_ICONS[f.category] ?? "type-other", { size: 14 }); t.classList.add("ws-field__type");
+        item.append(t, el("span", "ws-picker__name", chip.querySelector(".ws-field__name")?.textContent ?? f.column));
+        item.addEventListener("click", () => { focusFly = true; openTool = tool.key; tool.onDrop(f); });
+        list.append(item); n++;
+      }
+      if (!n) list.append(el("div", "ws-picker__empty", tool.accepts ? "No field here fits this slot." : "No fields yet — relate tables in the Data Source."));
+    };
+    const setOpen = (open) => {
+      btn.setAttribute("aria-expanded", String(open));
+      box.hidden = !open;
+      if (open) { build(); search.value = ""; search.focus(); }
+    };
+    btn.addEventListener("click", () => setOpen(box.hidden));
+    search.addEventListener("input", () => {
+      const q = search.value.trim().toLowerCase();
+      for (const it of list.querySelectorAll(".ws-picker__item")) it.hidden = Boolean(q) && !it.dataset.search.includes(q);
+      for (const g of list.querySelectorAll(".ws-picker__group")) { let n = g.nextElementSibling, any = false; while (n && !n.classList.contains("ws-picker__group")) { if (!n.hidden) any = true; n = n.nextElementSibling; } g.hidden = !any; }
+    });
+    box.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); setOpen(false); btn.focus(); } });
+    wrap.append(btn, box);
+    return wrap;
+  }
+  // Show (or clear) the flyout and put it level with its slot.
+  function mountFly(panel) {
+    if (!panel) { toolFly.hidden = true; toolFly.replaceChildren(); return; }
+    toolFly.id = "ws-toolfly";
+    toolFly.replaceChildren(panel);
+    toolFly.hidden = false;
+    placeFly();
+    if (focusFly) { focusFly = false; panel.focus({ preventScroll: true }); }
+  }
+  // Right of the field pane, level with the open slot but below the shelves, kept inside the worksheet. Reads layout, so it also runs on scroll / resize.
+  function placeFly() {
+    if (toolFly.hidden) return;
+    const host = worksheetEl.getBoundingClientRect();
+    const tile = marksGrid.querySelector(".ws-tool.is-active");
+    const paneShown = !fieldsEl.hidden && tile?.offsetParent;
+    const left = (paneShown ? fieldsEl.getBoundingClientRect().right : host.left) - host.left + 8;
+    const wanted = paneShown ? tile.getBoundingClientRect().top - host.top : 8;
+    const belowShelves = shelvesEl.getBoundingClientRect().bottom - host.top + 8; // Columns and Rows stay uncovered: they are drop targets too
+    const top = Math.max(8, Math.min(Math.max(wanted, belowShelves), host.height - toolFly.offsetHeight - 8));
+    toolFly.style.left = `${left}px`;
+    toolFly.style.top = `${top}px`;
+  }
+  function closeFly({ refocus = true } = {}) {
+    const key = openTool;
+    openTool = null; focusFly = false;
+    renderShelves();
+    if (refocus) marksGrid.querySelector(`.ws-tool[data-tool="${key}"]`)?.focus({ preventScroll: true });
+  }
+  // It floats over the chart's corner, so pressing the chart itself puts it away (the press still reaches the chart). The field pane,
+  // shelves and the panel are left alone: that is where fields are dragged from and to.
+  document.addEventListener("pointerdown", (e) => { if (!toolFly.hidden && chartEl.contains(e.target)) closeFly({ refocus: false }); });
+  toolFly.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !e.defaultPrevented && !e.target.closest?.("select, input, textarea")) { e.preventDefault(); e.stopPropagation(); closeFly(); }
+  });
+  fieldsEl.addEventListener("scroll", placeFly, { passive: true });
+  window.addEventListener("resize", placeFly);
+  new ResizeObserver(placeFly).observe(toolFly);
+  new ResizeObserver(placeFly).observe(fieldsEl);
 
   // --- Tooltip text ---------------------------------------------
   // The fields the last drawn chart offers ([{ name, sample }]) — the editor's chips and live preview.
@@ -2232,15 +2359,15 @@ export function initDashboards() {
   function tooltipEditor(dash, s) {
     const cat = () => (tooltipCatState.sheet === s ? tooltipCatState.list : []);
     const box = el("div", "ws-tipedit");
-    const label = el("label", "ws-fmt-field");
-    label.append(el("span", "ws-fmt-label", "Tooltip text"));
+    const head = el("div", "ws-tipedit__head"); // the label, with the full editor one click away at its right
+    head.append(el("span", "ws-fmt-label", "Tooltip text"));
     const ta = el("textarea", "input ws-tipedit__text");
+    ta.setAttribute("aria-label", "Tooltip text");
     ta.rows = 3;
     ta.maxLength = LIMITS.tooltipText;
     ta.placeholder = "Sales for <field>: <measure> — empty keeps the automatic tooltip";
     ta.value = s.tooltipText ?? "";
-    label.append(ta);
-    box.append(label);
+    box.append(head, ta);
     const chips = el("div", "ws-tipedit__chips");
     const drawChips = () => {
     chips.replaceChildren();
@@ -2282,7 +2409,7 @@ export function initDashboards() {
     };
     ta.addEventListener("input", refresh);
     ta.addEventListener("change", save);
-    const modal = el("button", "btn btn--ghost ws-tipedit__modal", "Edit tooltip…");
+    const modal = el("button", "ws-tipedit__modal", "Edit tooltip…");
     modal.type = "button";
     modal.addEventListener("click", () => openTooltipDialog({
       text: s.tooltipText ?? "", style: s.tooltipStyle ?? null, formats: s.tooltipFormats ?? null, format: s.format, fields: cat(),
@@ -2295,7 +2422,8 @@ export function initDashboards() {
         s.tooltipText = t.value; if (nextStyle) s.tooltipStyle = nextStyle; else delete s.tooltipStyle;
         if (nextFormats) s.tooltipFormats = nextFormats; else delete s.tooltipFormats; ta.value = t.value ?? ""; refresh(); commit(dash, s);
       } }));
-    box.append(modal, preview, note);
+    head.append(modal);
+    box.append(el("span", "ws-fmt-label", "Preview"), preview, note);
     const redraw = () => { if (!box.isConnected) return; drawChips(); refresh(); };
     tooltipRedraw = redraw;
     drawChips();

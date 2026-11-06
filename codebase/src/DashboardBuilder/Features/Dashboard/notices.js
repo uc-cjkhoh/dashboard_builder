@@ -15,11 +15,13 @@ export function periodNotice(s, cmp) {
   return `${rangeLabel(range)}${cmp ? ` vs ${rangeLabel(cmp.range)}` : ""}`;
 }
 
-/** Say when a result is approximate or came from the server's cache. */
+/** Shown in the "How this is computed" popover (not the notice line) when the result came from the server's cache. */
+export const CACHE_NOTE = "From the server cache (under a minute old) — Refresh re-runs it";
+
+/** Say when a result is approximate. */
 export function speedNotice(result, plan) {
   const parts = [];
   if (result.approx) parts.push(approxNotice(result.approx, plan.measures));
-  if (result.cached) parts.push("From the server cache (under a minute old) — Refresh re-runs it");
   return parts.join(" · ") || null;
 }
 /** Invalid filters are skipped by the query, so say so. */

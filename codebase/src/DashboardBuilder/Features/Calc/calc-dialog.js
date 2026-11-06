@@ -56,15 +56,13 @@ export function openCalcDialog(calcId = null) {
   ta.setAttribute("aria-controls", list.id);
   const hint = el("div", "hint"); hint.id = `calc-hint-${n}`;
   hint.append("Type ", el("code", null, "["), " to pick a field or another calculation, ", el("code", null, "[@"), " for a parameter, or the start of a function name (", el("code", null, "LO"), ").");
-  const fnBtn = makeButton("Functions", "btn calc-fn__btn"); fnBtn.type = "button";
-  fnBtn.prepend(icon("search", { size: 14 }));
-  const panel = el("div", "calc-fn"); panel.id = `calc-fn-${n}`; panel.hidden = true;
-  panel.setAttribute("role", "group"); panel.setAttribute("aria-label", "Function help");
-  fnBtn.setAttribute("aria-expanded", "false"); fnBtn.setAttribute("aria-controls", panel.id);
+  // The right panel: every function, always on screen beside the editor (no toggle).
+  const panel = el("div", "calc-fn"); panel.id = `calc-fn-${n}`;
+  panel.setAttribute("role", "group"); panel.setAttribute("aria-label", "Functions");
   const fMsg = el("div"); fMsg.id = `calc-fmsg-${n}`; fMsg.setAttribute("role", "alert");
   ta.setAttribute("aria-describedby", `${hint.id} ${fMsg.id}`);
   wrap.append(ta, list);
-  formulaField.append(fLabel, wrap, hint, fnBtn, panel, fMsg);
+  formulaField.append(fLabel, wrap, hint, fMsg);
 
   // Role chip + "Use as"
   const row = el("div", "row calc-dialog__row");
@@ -85,7 +83,10 @@ export function openCalcDialog(calcId = null) {
   const useHint = el("div", "hint", "Shown only for a row-level number. As a measure it is summed when dropped on a value shelf.");
   useHint.hidden = true;
 
-  body.append(nameField, formulaField, row, useHint);
+  // Two panels: the editor on the left, the available functions on the right.
+  const editPane = el("div", "calc-dialog__edit");
+  editPane.append(nameField, formulaField, row, useHint);
+  body.append(editPane, panel);
   const foot = el("div", "dialog__foot");
   const cancel = makeButton("Cancel", "btn"), save = makeButton("Save", "btn btn--primary");
   save.disabled = true;
@@ -199,7 +200,7 @@ export function openCalcDialog(calcId = null) {
   const fnList = el("div", "calc-fn__list");
   const detail = el("div", "calc-fn__detail"); detail.id = `${panel.id}-detail`;
   const insertBtn = makeButton("Insert example", "btn"); insertBtn.type = "button"; insertBtn.hidden = true;
-  panel.append(search, fnList, detail, insertBtn);
+  panel.append(el("h4", "calc-fn__title", "Functions"), search, fnList, detail, insertBtn);
   let shown = null;
   const insertText = (text) => {
     const v = ta.value, a = ta.selectionStart ?? v.length, z = ta.selectionEnd ?? a;
@@ -225,7 +226,7 @@ export function openCalcDialog(calcId = null) {
       ul.setAttribute("aria-label", g.group);
       for (const h of g.items) {
         const li = el("li"), b = el("button", "calc-fn__item"); b.type = "button";
-        b.append(el("span", "name", h.name), el("span", "sig", h.signature));
+        b.append(el("span", "name", h.name), el("span", "sig", h.signature.startsWith(h.name) ? h.signature.slice(h.name.length) : h.signature));
         b.setAttribute("aria-describedby", detail.id);
         b.addEventListener("mouseenter", () => show(h, false)); // hover previews; only keyboard focus picks the Insert example target
         b.addEventListener("focus", () => show(h));
@@ -236,14 +237,9 @@ export function openCalcDialog(calcId = null) {
     }
     if (shown && !found.includes(shown)) show(null);
   };
-  const togglePanel = (open) => {
-    panel.hidden = !open; fnBtn.setAttribute("aria-expanded", String(open));
-    if (open) { renderList(); show(null); search.focus(); } else ta.focus();
-  };
-  fnBtn.addEventListener("click", () => togglePanel(panel.hidden));
   search.addEventListener("input", renderList);
   insertBtn.addEventListener("click", () => { if (shown) insertText(shown.example); });
-  panel.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); togglePanel(false); } }); // close the panel, not the dialog
+  renderList(); show(null);
 
   const finish = () => closeDialog(dlg);
   cancel.addEventListener("click", finish);

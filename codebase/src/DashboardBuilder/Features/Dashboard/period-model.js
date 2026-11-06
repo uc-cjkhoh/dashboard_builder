@@ -1,8 +1,9 @@
 // Period comparison — pure, DOM-free (unit-tested in tests/js/period-model.test.mjs).
 // A worksheet's `period` limits the view to a date range on one date/time field and, optionally, runs the
 // same query over a comparison range (previous period, same period last year, or custom). Ranges are
-// whole days, inclusive, in the browser's calendar; they reach the server as one bound `between` filter.
+// whole days, inclusive, in the app time zone's calendar; they reach the server as one bound `between` filter.
 import { PERIOD_PRESETS, PERIOD_COMPARES } from "../Core/sheet-schema.js";
+import { todayIn } from "../Core/timezone.js";
 
 /** Range presets, in menu order. */
 export const PRESET_CHOICES = [
@@ -39,9 +40,9 @@ export function newPeriod(field) {
 
 /**
  * The period's range as inclusive ISO days { from, to }, or null when a custom range is incomplete or
- * inverted. `today` is the browser's local date.
+ * inverted. `today` is the app time zone's calendar date (Core/timezone.js; a Date whose local getters read it).
  */
-export function resolveRange(period, today = new Date()) {
+export function resolveRange(period, today = todayIn()) {
   if (!period || !PERIOD_PRESETS.has(period.preset)) return null;
   const t = d(today.getFullYear(), today.getMonth(), today.getDate());
   const y = t.getUTCFullYear(), m = t.getUTCMonth(), q = Math.floor(m / 3) * 3;

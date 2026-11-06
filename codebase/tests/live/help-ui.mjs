@@ -102,18 +102,14 @@ try {
     must(await formula() === 'LOWER([orders.region]', `formula: ${await formula()}`);
   });
 
-  await check('Functions panel: keyboard-reachable, labelled, opens with search focused', async () => {
-    must(await panelHidden(), 'panel open at start');
-    const info = await ev(`(() => { const b = document.querySelector('.calc-fn__btn'); return [b.textContent.trim(), b.getAttribute('aria-expanded'), b.getAttribute('aria-controls') === document.querySelector('.calc-fn').id]; })()`);
-    must(info[0] === 'Functions' && info[1] === 'false' && info[2], `button: ${J(info)}`);
-    await ev(`document.querySelector('.calc-fn__btn').focus()`);
-    await b.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' });
-    await b.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
-    await waitFor(`!document.querySelector('.calc-dialog .calc-fn').hidden`, 'panel opens from the keyboard');
-    must(await ev(`document.activeElement.classList.contains('calc-fn__search')`), 'search not focused');
-    must(await ev(`document.querySelector('.calc-fn__btn').getAttribute('aria-expanded')`) === 'true', 'aria-expanded');
+  await check('Functions panel: always shown right of the editor (two panels), no toggle button, labelled', async () => {
+    must(await ev(`!document.querySelector('.calc-fn__btn')`), 'a Functions toggle button still exists');
+    must(!(await panelHidden()), 'panel hidden');
+    const lay = await ev(`(() => { const e = document.querySelector('.calc-dialog__edit').getBoundingClientRect(), p = document.querySelector('.calc-fn').getBoundingClientRect(); return { editRight: e.right, panelLeft: p.left, sameTop: Math.abs(e.top - p.top) < 2, label: document.querySelector('.calc-fn').getAttribute('aria-label') }; })()`);
+    must(lay.editRight <= lay.panelLeft + 0.5 && lay.sameTop && lay.label === 'Functions', `layout: ${J(lay)}`);
     const groups = await ev(`[...document.querySelectorAll('.calc-fn__group')].map((h) => h.textContent)`);
     must(J(groups) === J(['Aggregate', 'Logic', 'Text', 'Date']), `groups: ${J(groups)}`);
+    must(await ev(`document.querySelector('.calc-fn__item .sig').textContent.startsWith('(')`), 'signature repeats the name');
   });
 
   await check('search "date" narrows; hover shows detail; click inserts the signature at the caret', async () => {
@@ -130,7 +126,7 @@ try {
     must(await ev(`document.activeElement.classList.contains('formula')`), 'focus not back in the formula');
   });
 
-  await check('Insert example button; no-match message; Esc closes the panel, not the dialog', async () => {
+  await check('Insert example button; no-match message', async () => {
     await focusAndType('.calc-fn__search', 'zzzz');
     must((await ev(`document.querySelector('.calc-fn__list').textContent`)).includes('No function matches'), 'no empty message');
     await focusAndType('.calc-fn__search', 'iif');
@@ -138,11 +134,6 @@ try {
     await ev(`document.querySelector('.calc-fn > .btn').click()`);
     must(await ev(`document.querySelector('.calc-fn > .btn').getAttribute('aria-label')`) === 'Insert example for IIF', 'aria-label');
     must((await formula()).includes("IIF([orders.qty] > 1, 'many', 'one')"), `formula: ${await formula()}`);
-    await ev(`document.querySelector('.calc-fn__search').focus()`);
-    await b.key('Escape', { vk: 27 });
-    await waitFor(`document.querySelector('.calc-dialog .calc-fn').hidden`, 'panel closed');
-    must(await ev(`${dlg} !== null`), 'Esc closed the dialog');
-    must(await ev(`document.activeElement.classList.contains('formula')`), 'focus not back in the formula');
   });
 
   const shots = [];
@@ -151,7 +142,6 @@ try {
       await b.setScheme(scheme);
       await ev(`document.documentElement.setAttribute('data-theme', ${J(scheme)})`);
       await ev(`(() => { const t = document.querySelector('.calc-dialog textarea.formula'); t.value = 'SUM([orders.amount]) / '; return true; })()`);
-      if (await panelHidden()) await ev(`document.querySelector('.calc-fn__btn').click()`);
       await focusAndType('.calc-fn__search', 'e');
       await ev(`[...document.querySelectorAll('.calc-fn__item')].find((x) => x.querySelector('.name').textContent === 'PERCENTILE').dispatchEvent(new MouseEvent('mouseenter'))`);
       await b.sleep(400);

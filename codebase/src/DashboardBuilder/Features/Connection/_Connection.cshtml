@@ -43,10 +43,10 @@
                 <input type="checkbox" id="conn-secure" name="secure" checked />
                 Secure (TLS)
             </label>
-            <!-- Certificate validation is on by default (decision D10). This opt-in trusts an
-                 invalid/self-signed cert — only shown under TLS, and it warns when checked. -->
+            <!-- Trusting an invalid / self-signed certificate is checked by default (these are internal servers). It is only
+                 shown under TLS, and it warns while checked; untick it to verify the certificate. -->
             <label class="form-check form-check--sub" id="conn-allowcert-row">
-                <input type="checkbox" id="conn-allowcert" name="allowInvalidCert" />
+                <input type="checkbox" id="conn-allowcert" name="allowInvalidCert" checked />
                 Trust invalid / self-signed certificate
             </label>
             <p class="form-warn" id="conn-allowcert-warn" hidden>

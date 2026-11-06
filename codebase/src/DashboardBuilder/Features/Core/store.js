@@ -136,23 +136,6 @@ export function removeCalculation(id) {
   if (i >= 0) { calculations.splice(i, 1); emit("calculations:changed"); }
 }
 
-// Bookmarks: named snapshots of one worksheet's view (its sheet, incl. selection / drill / page /
-// format) plus the shared filters at the time. { id, name, worksheetId, worksheetName, sheet, sharedFilters, savedAt }
-export const bookmarks = [];
-let bookmarkSeq = 0;
-export function addBookmark(b) {
-  bookmarkSeq += 1;
-  bookmarks.push({ ...b, id: `bm#${bookmarkSeq}` });
-  emit("bookmarks:changed");
-}
-export function removeBookmark(id) {
-  const i = bookmarks.findIndex((b) => b.id === id);
-  if (i >= 0) { bookmarks.splice(i, 1); emit("bookmarks:changed"); }
-}
-export function setBookmarks(list) {
-  bookmarks.splice(0, bookmarks.length, ...list.map((b) => ({ ...b, id: `bm#${++bookmarkSeq}` })));
-  emit("bookmarks:changed");
-}
 export const currentTheme = () => theme;
 export function setTheme(next) { theme = { ...next }; emit("theme:changed"); }
 

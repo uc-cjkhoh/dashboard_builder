@@ -32,11 +32,12 @@ test("token text pairs meet AA in light and dark", () => {
   const blocks = css.split(':root[data-scheme="dark"]');
   const read = (block) => Object.fromEntries([...block.matchAll(/--([a-z0-9-]+):\s*(#[0-9a-f]{6})\b/gi)].map((m) => [m[1], m[2]]));
   const light = read(blocks[0]); const dark = { ...light, ...read(blocks[1]) };
+  const oneDark = { ...dark, ...read(blocks[2]) }; // the Theme → One Dark Pro look (core.css, [data-look="onedark"])
   const pairs = [["ink", "bg"], ["ink-2", "surface-3"], ["ink-3", "bg"], ["ink-3", "surface-3"], ["ink-3", "surface-2"],
     ["accent-ink", "accent-soft"], ["accent-ink", "surface"], ["accent-ink", "surface-3"],
     ["dim-ink", "dim-bg"], ["meas-ink", "meas-bg"], ["enc-ink", "enc-bg"], ["ok-ink", "ok-bg"], ["warn-ink", "warn-bg"],
     ["danger-ink", "danger-bg"], ["danger-ink", "surface"], ["surface", "enc-ink"], ["surface", "warn-ink"]];
-  for (const [name, t] of [["light", light], ["dark", dark]]) {
+  for (const [name, t] of [["light", light], ["dark", dark], ["one dark pro", oneDark]]) {
     for (const [fg, bg] of pairs) assert.ok(contrastRatio(t[fg], t[bg]) >= 4.5, `${name} ${fg} on ${bg}`);
     for (const bg of ["accent", "accent-hover", "accent-pressed"]) assert.ok(contrastRatio("#ffffff", t[bg]) >= 4.5, `${name} white on ${bg}`);
     assert.ok(contrastRatio(t.accent, t.surface) >= 3, `${name} accent boundary`);
@@ -53,6 +54,7 @@ test("--ctl-edge holds 3:1 against glass in light and dark", () => {
   const cases = [
     [edge(blocks[0]), ["#f6f3f3", "#f1e4e5"], (bg) => mix("#ffffff", .72, bg), (p) => mix("#ffffff", .80, p)],
     [edge(blocks[1]), ["#141113", "#2a1418"], (bg) => mix("#1c181b", .70, bg), (p) => mix("#2b2529", .85, p)],
+    [edge(blocks[2]), ["#181a1f", "#1f2230"], (bg) => mix("#21252b", .70, bg), (p) => mix("#2c313a", .85, p)], // One Dark Pro look
   ];
   for (const [e, bgs, panelOf, ctlOf] of cases) for (const bg of bgs) {
     const panel = panelOf(bg);

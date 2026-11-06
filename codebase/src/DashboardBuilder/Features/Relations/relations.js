@@ -270,6 +270,7 @@ function onEntityRemoved(entityId) {
 // --- SVG rendering ------------------------------------------------------------
 function render() {
   if (!svg) return;
+  syncKeyStrips(); // pin key rows first: it moves rows and changes card heights, so anchors measured before it would point at the old positions
   svg.replaceChildren();
   labels.replaceChildren();
   const crect = canvas.getBoundingClientRect();
@@ -298,7 +299,6 @@ function render() {
     svg.append(line);
     labels.append(label);
   }
-  syncKeyStrips();
   markUnlinked();
   updateGuide();
   markLinkedRows();

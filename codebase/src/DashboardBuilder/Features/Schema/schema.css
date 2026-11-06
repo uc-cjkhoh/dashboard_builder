@@ -52,37 +52,72 @@
 .table-search .input { width: 100%; padding-left: calc(var(--s2) + 20px); }
 .table-list__empty { color: var(--ink-3); font-size: var(--fs-body); padding: var(--s2) 0; }
 
-/* ---- Column profile dialog (field properties + distinct / null share / top values). Tokens only; solid surface; neutral bars (red means danger). */
-.col-profile { width: min(560px, calc(100vw - 2 * var(--s4))); max-height: min(84vh, 760px); display: flex; flex-direction: column; }
+/* ---- Column profile dialog: a bento grid of glass cells over a colour wash (flat 2.0 + glass: no drop shadows, a 1px rim). The dialog itself stays
+   solid, so the blur only ever sees its own wash. Tokens only; neutral tints (red means danger). Cells rise in turn, then the tints grow (transform + opacity only). */
+.dialog.col-profile { width: min(720px, calc(100vw - 2 * var(--s4))); max-height: min(88vh, 800px); display: flex; flex-direction: column; }
 .col-profile[open] { display: flex; }
-.col-profile__head { display: flex; align-items: flex-start; gap: var(--s2); padding: var(--s4) var(--s4) var(--s2); }
+.col-profile__head { display: flex; align-items: flex-start; gap: var(--s2); padding: var(--s4) var(--s1) var(--s4) var(--s4); border-bottom: 1px solid var(--line); } /* right 4px: the X's glyph sits 12px inside its 32px button, so its edge lands on the 16px gutter the title uses on the left */
 .col-profile__titles { flex: 1; min-width: 0; }
-.col-profile__title { padding: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.col-profile__sub { margin: 4px 0 0; font-size: var(--fs-body); color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.col-profile__body { flex: 1; min-height: 120px; overflow: auto; padding: 0 var(--s4); display: grid; gap: var(--s2); align-content: start; }
-.col-profile__status { margin: 0; padding: var(--s4); text-align: center; color: var(--ink-3); font-size: var(--fs-body); }
+.col-profile__title { padding: 0; line-height: 32px; /* one control-height line, so the X button centres on the title */ overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.col-profile__sub { margin: 0; font-size: var(--fs-body); color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.col-profile__body { flex: 1; min-height: 120px; overflow: auto; padding: var(--s4); background-color: var(--bg); background-image: var(--wash);
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s2); align-content: start; }
+.col-profile__cell { display: grid; gap: var(--s1); align-content: start; min-width: 0; padding: var(--s4); background: var(--glass); border: 1px solid var(--glass-line); border-radius: var(--r); box-shadow: inset 0 1px 0 var(--glass-rim);
+  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+  animation: rise-in var(--dur) var(--ease-out) backwards; animation-delay: calc(min(var(--i, 0), 8) * 40ms); }
+.col-profile__cell--details, .col-profile__cell--size { grid-column: span 2; gap: 0; }
+/* Two depth tiers: the cells that carry the answer (Size, Most frequent values) are solid and lifted by the Data Source card shadow;
+   the supporting ones (Field, Range) stay flat glass, so the eye lands on the key figures first. */
+.col-profile__cell--size, .col-profile__cell--top { background: var(--surface); border-color: var(--line); box-shadow: inset 0 1px 0 var(--card-rim), var(--elev-card); -webkit-backdrop-filter: none; backdrop-filter: none; }
+.col-profile__cell--details { grid-template-rows: 1fr; } /* the field list spans the cell, first and last line level with Size's first and last row */
+.col-profile__cell--range { grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s4); }
+.col-profile__cell--note, .col-profile__cell--top { grid-column: 1 / -1; }
+.col-profile__cell--note { display: grid; gap: var(--s2); padding: var(--s2) var(--s4); color: var(--warn-ink); background: var(--warn-bg); border: 1px solid var(--warn-line); -webkit-backdrop-filter: none; backdrop-filter: none; font-size: var(--fs-body); }
+.col-profile__status { grid-column: 1 / -1; margin: 0; padding: var(--s6) var(--s4); display: flex; align-items: center; justify-content: center; gap: var(--s2); text-align: center; color: var(--ink-3); font-size: var(--fs-body); }
 .col-profile__status--error { color: var(--danger-ink); }
-.col-profile__glyph { display: inline-flex; vertical-align: middle; }
-.col-profile__props { display: grid; grid-template-columns: auto 1fr auto 1fr; gap: var(--s1) var(--s2); margin: 0; font-size: var(--fs-body); }
+.col-profile__status--busy { animation: fade-in var(--dur) var(--ease-out) var(--dur-fast) backwards; }
+.col-profile__status--busy .col-profile__glyph { animation: spin 1s linear infinite; }
+.col-profile__glyph { display: inline-flex; align-items: center; flex: none; height: 1.45em; }
+.col-profile__props { display: grid; grid-template-columns: auto minmax(0, 1fr); align-content: space-between; gap: var(--s2) var(--s4); margin: 0; height: 100%; font-size: var(--fs-body); }
 .col-profile__props dt { color: var(--ink-3); }
-.col-profile__props dd { margin: 0; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.col-profile__note { margin: 0; padding: var(--s1) var(--s2); font-size: var(--fs-body); color: var(--warn-ink); background: var(--warn-bg); border: 1px solid var(--warn-line); border-radius: var(--r); }
-.col-profile__tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: var(--s2); }
-.col-profile__tile { display: grid; gap: 4px; padding: var(--s2) var(--s2); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r); min-width: 0; }
+.col-profile__props dd { margin: 0; min-width: 0; color: var(--ink); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.col-profile__tile { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s2); min-width: 0; padding: var(--s2) 0; }
+.col-profile__cell--size .col-profile__tile + .col-profile__tile { border-top: 1px solid var(--glass-line); }
+.col-profile__cell--size .col-profile__tile:first-child { padding-top: 0; } /* the cell's 16px padding is the only top and bottom inset, as in Field */
+.col-profile__cell--size .col-profile__tile:last-child { padding-bottom: 0; }
+.col-profile__cell--range .col-profile__tile { display: grid; justify-content: stretch; gap: var(--s1); padding: 0; }
+.col-profile__tile-text { display: grid; min-width: 0; }
+.col-profile__note-line { margin: 0; display: flex; align-items: flex-start; gap: var(--s2); }
 .col-profile__tile-label { font-size: var(--fs-body); color: var(--ink-3); }
-.col-profile__tile-value { font-size: var(--fs-lead); font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.col-profile__tile-value { font-size: var(--fs-title); line-height: 1.2; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.col-profile__cell--range .col-profile__tile-value { font-size: var(--fs-lead); line-height: 1.45; }
 .col-profile__tile-note { font-size: var(--fs-body); color: var(--ink-3); }
-.col-profile__h { margin: 0; font-size: var(--fs-body); font-weight: 600; color: var(--ink-2); }
+.col-profile__h { margin: 0 0 var(--s1); font-size: var(--fs-body); font-weight: 600; color: var(--ink-2); }
+/* Most frequent values: each value is one 32px band; its share of the rows is the tint filling the band from the left, the label and figures sit on top. */
 .col-profile__top { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s1); }
-.col-profile__row { display: grid; grid-template-columns: minmax(80px, 1.2fr) minmax(60px, 1fr) 10ch 6ch; align-items: center; gap: var(--s2); font-size: var(--fs-body); }
+.col-profile__row { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto 7ch; align-items: center; gap: var(--s2); min-height: 32px; padding: 0 var(--s2);
+  border-radius: var(--r); background: var(--surface-2); font-size: var(--fs-body); overflow: hidden;
+  transition: opacity var(--dur-fast) var(--ease); }
+/* Pointing at one value quiets the rest, so its figures read alone. */
+.col-profile__top:hover .col-profile__row:not(:hover) { opacity: .55; }
+/* The leader — the most frequent real value — is the key point: heavier label, a stronger tint. */
+.col-profile__row--lead .col-profile__label { font-weight: 600; }
+.col-profile__row--lead .col-profile__fill { background: color-mix(in srgb, var(--ink) 22%, var(--surface-2)); }
+.col-profile__row > :not(.col-profile__fill) { position: relative; }
 .col-profile__label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
 .col-profile__row--null .col-profile__label, .col-profile__row--empty .col-profile__label { color: var(--ink-3); font-style: italic; }
-.col-profile__bar { height: 8px; border-radius: var(--r); background: var(--surface-3); overflow: hidden; }
-.col-profile__fill { display: block; height: 100%; width: var(--w, 0); background: var(--ink-3); border-radius: var(--r); }
-.col-profile__count { text-align: right; color: var(--ink-2); font-variant-numeric: tabular-nums; }
-.col-profile__share { text-align: right; color: var(--ink-3); font-variant-numeric: tabular-nums; }
-.col-profile__foot { align-items: center; padding-top: var(--s2); }
+@keyframes bar-grow { from { transform: scaleX(0); } to { transform: none; } }
+.col-profile__fill { position: absolute; inset: 0 auto 0 0; width: var(--w, 0); background: var(--line-2); transform-origin: left center;
+  animation: bar-grow var(--dur-slow) var(--ease-out) backwards; animation-delay: calc(var(--dur) + var(--i, 0) * 20ms); }
+.col-profile__row--null .col-profile__fill, .col-profile__row--empty .col-profile__fill { background: var(--line); }
+.col-profile__count { text-align: right; color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+.col-profile__share { text-align: right; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.col-profile__foot { align-items: center; border-top: 1px solid var(--line); }
 .col-profile__foot .btn--primary { margin-left: auto; }
+@media (max-width: 640px) {
+  .col-profile__body { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .col-profile__cell--details, .col-profile__cell--size { grid-column: 1 / -1; }
+}
 /* The field-row action on a canvas card: shown on hover / focus like the table chip's preview button, always reachable by keyboard. */
 .col-row__profile { opacity: 0; flex: none; transition: opacity var(--dur-fast) var(--ease); }
 .col-row:hover .col-row__profile, .col-row:focus-within .col-row__profile { opacity: 1; }

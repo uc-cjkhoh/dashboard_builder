@@ -512,7 +512,7 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
         if (tooltipText) return customTip(tooltipText, tooltipFields, tooltipStyle, tooltipFormats, fmtVal, format, arr[0].dataIndex, Object.fromEntries(arr.map((d) => [String(d.seriesName), d.value])));
         const head = `<span style="color:${c.muted}">${escapeHtml(String(arr[0].axisValueLabel ?? arr[0].name ?? ""))}</span>`;
         const lines = arr.map((d) =>
-          `<br><span style="display:inline-block;width:8px;height:8px;border-radius:${c.radius}px;background:${d.color};margin-right:6px"></span>` +
+          `<br><span style="display:inline-block;width:8px;height:8px;border-radius:${c.radius}px;background:${d.color};margin-right:8px"></span>` +
           `<b>${escapeHtml(String(d.seriesName))}:</b> ${fmtVal(d.value)}`).join("");
         return head + lines + extraTooltip(tooltipExtra, arr[0].dataIndex, c); // custom tooltip fields
       },

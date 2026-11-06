@@ -3,6 +3,7 @@
 // .../<base>/features/Core/api.js → "/<base>" — so it's "" when served at the site root.
 export const basePathFrom = (moduleUrl) =>
   new URL(".", moduleUrl).pathname.replace(/\/features\/Core\/$/i, "");
+import { activity, describeRequest } from "./activity-model.js";
 const BASE = basePathFrom(import.meta.url);
 
 export function errorMessage(status, data) {
@@ -32,17 +33,20 @@ async function request(method, url, body, signal) {
     opts.body = JSON.stringify(body);
   }
 
-  const res = await guardedFetch(BASE + url, opts);
-  const text = await res.text();
-  let data = null;
-  if (text) {
-    try { data = JSON.parse(text); } catch { /* non-JSON body */ }
-  }
+  const tick = activity.start(describeRequest(method, url)); // shown to the user while the request is in flight (Shell/activity-bar.js)
+  try {
+    const res = await guardedFetch(BASE + url, opts);
+    const text = await res.text();
+    let data = null;
+    if (text) {
+      try { data = JSON.parse(text); } catch { /* non-JSON body */ }
+    }
 
-  if (!res.ok) {
-    throw httpError(res.status, data);
-  }
-  return data;
+    if (!res.ok) {
+      throw httpError(res.status, data);
+    }
+    return data;
+  } finally { activity.end(tick); }
 }
 
 export const api = {
@@ -87,16 +91,19 @@ export const api = {
   joinPreview: (req, { signal } = {}) => request("POST", "/api/relationships/preview", req, signal),
   /** Export the worksheet query's rows as CSV text. Bounded server-side; returns raw text. */
   async exportCsv(plan) {
-    const res = await guardedFetch(BASE + "/api/query/export.csv", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(plan),
-    });
-    if (!res.ok) {
-      let data = null;
-      try { data = await res.json(); } catch { /* non-JSON */ }
-      throw httpError(res.status, data);
-    }
-    return res.text();
+    const tick = activity.start(describeRequest("POST", "/api/query/export.csv"));
+    try {
+      const res = await guardedFetch(BASE + "/api/query/export.csv", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(plan),
+      });
+      if (!res.ok) {
+        let data = null;
+        try { data = await res.json(); } catch { /* non-JSON */ }
+        throw httpError(res.status, data);
+      }
+      return await res.text();
+    } finally { activity.end(tick); }
   },
 };

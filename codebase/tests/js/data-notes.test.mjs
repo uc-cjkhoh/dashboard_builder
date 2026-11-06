@@ -9,8 +9,9 @@ const calcs = [
   { id: "c3", name: "Unused", formula: "1" },
 ];
 
-test("updatedText: local HH:MM:SS, nothing without a time", () => {
-  assert.equal(updatedText(new Date(2026, 9, 29, 9, 5, 7).getTime()), "Updated 09:05:07");
+test("updatedText: HH:MM:SS in the app time zone, nothing without a time", () => {
+  assert.equal(updatedText(Date.UTC(2026, 9, 29, 1, 5, 7), "Asia/Kuala_Lumpur"), "Updated 09:05:07");
+  assert.equal(updatedText(Date.UTC(2026, 9, 29, 1, 5, 7), "UTC"), "Updated 01:05:07");
   assert.equal(updatedText(undefined), null);
   assert.equal(updatedText(0), null);
 });

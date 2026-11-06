@@ -18,9 +18,8 @@
 .formula { display: block; width: 100%; min-height: 76px; padding: var(--s2) var(--s2); border: 1px solid var(--line-2); border-radius: var(--r);
   background: var(--surface); color: var(--ink); font: var(--fs-body)/1.5 ui-monospace, "Cascadia Code", Consolas, monospace; resize: vertical; box-sizing: border-box; }
 .formula:hover { border-color: var(--ink-3); }
-.formula:focus { outline: none; border-color: var(--ink-3); box-shadow: inset 0 -2px 0 var(--accent); }
 .formula:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-.formula[aria-invalid="true"] { border-color: var(--danger-solid); box-shadow: inset 0 -2px 0 var(--danger-solid); }
+.formula[aria-invalid="true"] { border-color: var(--danger-solid); }
 .caretmark { display: block; margin: 4px 0 0; font: var(--fs-body)/1.2 ui-monospace, "Cascadia Code", Consolas, monospace; color: var(--danger-ink); white-space: pre; overflow: hidden; }
 
 /* Role chip (always icon + words) */
@@ -49,7 +48,7 @@
   box-shadow: var(--elev-8); max-height: 220px; overflow: auto; }
 .suggest li { display: flex; align-items: center; gap: var(--s2); padding: var(--s2); border-radius: var(--r); font-size: var(--fs-body); cursor: pointer; }
 .suggest li:hover { background: var(--surface-3); }
-.suggest li[aria-selected="true"] { background: var(--surface-3); box-shadow: inset 2px 0 0 var(--accent); }
+.suggest li[aria-selected="true"] { background: var(--surface-3); }
 .suggest .name { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
 .suggest .kind { margin-left: auto; color: var(--ink-3); font-size: var(--fs-body); white-space: nowrap; }
 .suggest .icon { color: var(--ink-3); flex: none; }
@@ -80,28 +79,39 @@
 .explain__pop:focus-visible { outline: 1px solid var(--focus); outline-offset: 0; }
 .explain__title { margin: 0 0 var(--s2); font-size: var(--fs-body); font-weight: 700; }
 .explain__list { margin: 0; padding-left: var(--s4); display: flex; flex-direction: column; gap: var(--s2); font-size: var(--fs-body); }
+.explain__note { margin: var(--s2) 0 0; padding-top: var(--s2); border-top: 1px solid var(--line); font-size: var(--fs-body); color: var(--ink-3); }
 .explain__list li::marker { color: var(--ink-3); font-weight: 600; }
 .explain__list strong { display: block; color: var(--ink-2); font-size: var(--fs-body); }
 .explain__list span { color: var(--ink); }
 
-/* ---- Function help (inside the dialog) ---- */
-.calc-fn__btn { margin-top: var(--s2); gap: var(--s1); }
-.calc-fn__btn:focus-visible, .calc-fn__item:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-.calc-fn { margin-top: var(--s2); padding: var(--s2); border: 1px solid var(--line-2); border-radius: var(--r); background: var(--surface-2); display: grid; gap: var(--s2); }
-.calc-fn__list { max-height: 180px; overflow: auto; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); padding: var(--s1); }
-.calc-fn__group { margin: var(--s1) var(--s2) var(--s1); font-size: var(--fs-body); font-weight: 700; color: var(--ink-2); }
+/* ---- Calculated field dialog: two panels — the editor (left), the available functions (right) ---- */
+.calc-dialog { width: min(920px, calc(100vw - 2 * var(--s4))); }
+.calc-dialog:not(.dialog--sm) { width: min(920px, calc(100vw - 2 * var(--s4))); }
+.calc-dialog[open] { display: flex; flex-direction: column; max-height: calc(100vh - 2 * var(--s4)); }
+.calc-dialog__body { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: var(--s4); min-height: 0; overflow: auto; align-items: stretch; }
+.calc-dialog .dialog__foot { flex: none; }
+.calc-dialog__edit { display: grid; gap: var(--s4); align-content: start; min-width: 0; }
+.calc-dialog__edit .formula { min-height: 160px; }
+@media (max-width: 760px) { .calc-dialog__body { grid-template-columns: minmax(0, 1fr); } }
+.calc-fn { display: flex; flex-direction: column; gap: var(--s2); min-width: 0; min-height: 0; max-height: 480px; padding-left: var(--s4); border-left: 1px solid var(--line); }
+@media (max-width: 760px) { .calc-fn { padding-left: 0; border-left: 0; border-top: 1px solid var(--line); padding-top: var(--s4); max-height: 320px; } }
+.calc-fn__search, .calc-fn__title { flex: none; }
+.calc-fn__title { margin: 0; font-size: var(--fs-body); font-weight: 700; color: var(--ink-2); }
+.calc-fn__list { flex: 1; min-height: 120px; overflow: auto; margin-inline: calc(-1 * var(--s2)); padding-inline: var(--s1); }
+.calc-fn__group { margin: var(--s2) var(--s2) var(--s1); font-size: var(--fs-body); font-weight: 600; color: var(--ink-3); }
+.calc-fn__group:first-child { margin-top: 0; }
 .calc-fn__items { list-style: none; margin: 0; padding: 0; }
 .calc-fn__item { display: flex; align-items: baseline; gap: var(--s2); width: 100%; padding: 4px var(--s2); border: 0; border-radius: var(--r); background: none; color: var(--ink);
   font-family: inherit; font-size: var(--fs-body); line-height: 1.4; text-align: left; cursor: pointer; }
-.calc-fn__item:hover, .calc-fn__item:focus-visible { background: var(--surface-3); box-shadow: inset 2px 0 0 var(--accent); }
+.calc-fn__item:hover, .calc-fn__item:focus-visible { background: var(--surface-3); }
 .calc-fn__item .name { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-weight: 600; flex: none; min-width: 9ch; }
 .calc-fn__item .sig { color: var(--ink-3); font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: var(--fs-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.calc-fn__detail { font-size: var(--fs-body); min-height: 3.5em; }
+.calc-fn__detail { flex: none; max-height: 168px; overflow: auto; padding-top: var(--s2); border-top: 1px solid var(--line); font-size: var(--fs-body); }
 .calc-fn__detail p { margin: var(--s1) 0 0; }
 .calc-fn__detail code, .calc-fn__sig { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
 .calc-fn__sig { display: block; font-weight: 600; }
 .calc-fn__line strong { color: var(--ink-2); font-size: var(--fs-body); }
-.calc-fn > .btn { justify-self: start; }
+.calc-fn > .btn { flex: none; align-self: flex-start; }
 
 /* Group fields: the "Group…" dialog. */
 .grp-dialog { width: min(560px, calc(100vw - 2 * var(--s4))); }
@@ -122,8 +132,12 @@
 .grp-member { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s2); align-items: center; }
 .grp-member .grp-member__value { margin: 0; font-weight: 400; font-size: var(--fs-body); color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
 
-/* ---- Calculated fields dialog (opened from the sidebar icon): a field chip and its Edit button per row ---- */
+/* ---- Calculated fields dialog (opened from the sidebar icon): one row per calculation — the field chip, with Edit built into it ---- */
 .calc-manager { width: min(520px, calc(100vw - 2 * var(--s4))); }
 .calc-manager__list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s1); max-height: 50vh; overflow: auto; }
-.calc-manager__row { display: flex; align-items: center; gap: var(--s2); }
-.calc-manager__row > .ws-field { flex: 1; min-width: 0; }
+.calc-manager__row > .ws-field { width: 100%; min-width: 0; box-sizing: border-box; }
+.calc-manager .ws-field.calc-field { grid-template-columns: auto minmax(0, 1fr) auto auto auto; height: var(--ctl-h); padding-block: 0; }
+.calc-manager .calc-field .calc-chip { grid-area: 1 / 3; height: 20px; }
+.calc-manager .calc-field .ws-field__add { grid-area: 1 / 4; }
+.calc-manager__edit { grid-area: 1 / 5; width: 24px; height: 24px; }
+.calc-manager .calc-field .ws-field__name { cursor: pointer; }

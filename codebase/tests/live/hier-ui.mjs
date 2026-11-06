@@ -135,7 +135,9 @@ try {
   });
 
   await check('Use works with the Drill panel open and with it closed', async () => {
-    await waitFor(`!!document.querySelector('.ws-toolpanel__zone')`, 'drill panel (left open by the first Use)');
+    // (pressing the chart in the previous check put the flyout away, so open the Drill panel here)
+    await ev(`(() => { if (!document.querySelector('.ws-toolpanel__zone')) [...document.querySelectorAll('.ws-tool')].find((x) => /^Drill/.test(x.getAttribute('aria-label') ?? '')).click(); return true; })()`);
+    await waitFor(`!!document.querySelector('.ws-toolpanel__zone')`, 'drill panel open');
     await store(`d.sheet.drill = null; st.updateSheet(d.id, d.sheet)`);
     await waitFor(`!document.querySelector('.ws-drill')`, 'drill cleared');
     await ev(`(() => { if (!document.querySelector('.ws-toolpanel__zone')) [...document.querySelectorAll('.ws-tool')].find((x) => /^Drill/.test(x.getAttribute('aria-label') ?? '')).click(); return true; })()`);
@@ -195,8 +197,8 @@ try {
 
   await check('workbook round trip: exported file carries hierarchies; reopening restores them in the Hierarchies dialog', async () => {
     await ev(`(() => { window.__blobs = []; const orig = URL.createObjectURL; URL.createObjectURL = (x) => { x.text().then((t) => window.__blobs.push(t)); return orig.call(URL, x); }; return true; })()`);
-    await ev(`document.getElementById('wb-menu-btn').click()`);
-    await ev(`document.getElementById('wb-export').click()`);
+    await ev(`document.querySelector('.ws-export > .iconbtn').click()`);
+    await ev(`[...document.querySelectorAll('.ws-export .menu__item')].find((b) => b.textContent.trim() === 'Workbook (JSON)').click()`);
     await waitFor(`window.__blobs.length === 1`, 'export blob');
     const json = await ev(`window.__blobs[0]`);
     const wb = JSON.parse(json);

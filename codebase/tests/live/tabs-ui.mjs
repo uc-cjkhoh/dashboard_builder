@@ -96,11 +96,11 @@ try {
     must(await ev(`!!document.querySelector('.tab--worksheet .tab__kind')`), 'no kind icon');
     must(await ev(`document.querySelector('.tab--worksheet .tab__label').getAttribute('aria-label') === 'Worksheet 1 (worksheet)'`), 'accessible name lacks the kind');
     must(await ev(`document.getElementById('board-view').hidden`), 'board view visible on a worksheet');
-    must(await ev(`!document.getElementById('wb-bookmark-add').hidden`), 'bookmark action hidden on a worksheet');
+    must(await ev(`!!document.querySelector('.ws-viewbar__icons .ws-actions [aria-label="Sheet actions"]')`), 'sheet-actions button missing from the worksheet view bar');
     must(await ev(`document.activeElement === document.querySelector('.tab.is-active .tab__label')`), 'new tab label not focused');
   });
 
-  await check('New dashboard: "Dashboard 1", empty board body, no duplicate button, bookmark action hidden', async () => {
+  await check('New dashboard: "Dashboard 1", empty board body, no duplicate button, sheet-actions hidden', async () => {
     await addTab('dashboard');
     await waitFor(`!document.getElementById('board-view').hidden`, 'board view');
     must(J(await labels()) === J(['Worksheet 1', 'Dashboard 1']), `tabs: ${J(await labels())}`);
@@ -110,9 +110,9 @@ try {
     must(await ev(`!!document.querySelector('.tab--dashboard .tab__kind')`), 'no dashboard icon');
     must(await ev(`document.querySelector('.tab--dashboard .tab__label').getAttribute('aria-label') === 'Dashboard 1 (dashboard)'`), 'accessible name');
     must(await ev(`!document.querySelector('.tab--dashboard .tab__dup') && !!document.querySelector('.tab--worksheet .tab__dup')`), 'duplicate button on the wrong kind');
-    must(await ev(`document.getElementById('wb-bookmark-add').hidden`), 'bookmark action shown on a dashboard');
+    must(await ev(`!document.querySelector('.ws-viewbar__icons .ws-actions [aria-label="Sheet actions"]') || document.getElementById('worksheet-view').hidden`), 'sheet-actions button shown on a dashboard');
     await ev(`document.querySelector('.tab--worksheet .tab__label').click()`);
-    await waitFor(`!document.getElementById('worksheet-view').hidden && !document.getElementById('wb-bookmark-add').hidden`, 'back on the worksheet');
+    await waitFor(`!document.getElementById('worksheet-view').hidden && !!document.querySelector('.ws-viewbar__icons .ws-actions [aria-label="Sheet actions"]')`, 'back on the worksheet');
   });
 
   await check('default names count per kind; rename works on both kinds', async () => {
@@ -164,8 +164,8 @@ try {
     await addTab('worksheet'); await addTab('dashboard'); await addTab('worksheet');
     await store(`const [w1, w2] = st.worksheets(), db = st.dashboards()[0]; st.setWidgets(db.id, [{ id: st.nextWidgetId(), kind: 'sheet', sheetId: w2.id, x: 6, y: 0, w: 6, h: 4 }]); st.switchTab(db.id); return true;`);
     await ev(`(() => { window.__blobs = []; const orig = URL.createObjectURL; URL.createObjectURL = (x) => { x.text().then((t) => window.__blobs.push(t)); return orig.call(URL, x); }; return true; })()`);
-    await ev(`document.getElementById('wb-menu-btn').click()`);
-    await ev(`document.getElementById('wb-export').click()`);
+    await ev(`document.querySelector('.ws-export > .iconbtn').click()`);
+    await ev(`[...document.querySelectorAll('.ws-export .menu__item')].find((b) => b.textContent.trim() === 'Workbook (JSON)').click()`);
     await waitFor(`window.__blobs.length === 1`, 'export blob');
     const wb = JSON.parse(await ev(`window.__blobs[0]`));
     must(wb.version === 2, `version ${wb.version}`);
@@ -217,7 +217,6 @@ try {
     must((await toasts()).includes('Restored your last workbook (2 tables, 4 worksheets).'), `toasts: ${J(await toasts())}`); // no "N part(s) were reset"
     must(await ev(`!document.querySelector('dialog[open]')`), 'an issues dialog opened');
     must(await store(`return JSON.stringify(st.worksheets().map((w) => w.sheet.title)) === JSON.stringify(['Revenue by region', null, null, null]);`), 'sheet content differs');
-    must(await store(`return st.bookmarks.map((x) => x.worksheetId === null ? null : st.worksheetById(x.worksheetId).name).join('|') === 'Revenue|Status mix|';`), 'bookmark links differ');
     await waitFor(`localStorage.getItem('dashboardbuilder.workbook.v2|mock-ch|8443|default') !== null`, 'v2 autosave written');
     must(await ev(`localStorage.getItem('dashboardbuilder.workbook.v1|mock-ch|8443|default') === ${J(v1)}`), 'the v1 key was changed or removed');
   });
@@ -235,6 +234,13 @@ try {
     must(await ev(`!document.querySelector('dialog[open]')`), 'an issues dialog opened');
   });
 
+  await check('an automatic worksheet title follows the tab name when the tab is renamed (both texts match)', async () => {
+    await addTab('worksheet');
+    await waitFor(`!document.getElementById('worksheet-view').hidden && !!document.querySelector('.ws-titleblock__title.is-auto')`, 'worksheet with an automatic title');
+    await store(`st.renameTab(st.activeWorksheet().id, 'Sales Q4'); return true;`);
+    await waitFor(`document.querySelector('.ws-titleblock__title.is-auto')?.textContent === 'Sales Q4'`, 'title follows the tab');
+    must((await activeLabel()) === 'Sales Q4', `tab label: ${await activeLabel()}`);
+  });
   await check('the 50-tab limit: a toast at creation, nothing added', async () => {
     await store(`while (st.tabs.length < 50) st.createDashboard(); return true;`);
     await ev(`document.querySelector('.tab-add').click(); document.querySelector('[data-new-tab=dashboard]').click()`);
@@ -242,6 +248,11 @@ try {
     await ev(`document.querySelector('.tab-add').click(); document.querySelector('[data-new-tab=worksheet]').click()`);
     must(await store(`return st.tabs.length === 50;`), 'a 51st tab was added');
     must(await ev(`document.activeElement === document.querySelector('.tab-add')`), 'focus not returned to [+] after the refusal');
+  });
+
+  await check('the page carries the app time zone (default Malaysia, UTC+8 here)', async () => {
+    const tz = await ev(`document.querySelector('meta[name=app-timezone]')?.content`);
+    must(typeof tz === 'string' && tz.length > 2, `tz: ${tz}`);
   });
 
   if (b.consoleErrors.length) { console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  ')); failed++; }

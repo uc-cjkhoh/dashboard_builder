@@ -7,7 +7,6 @@ export const LIMITS = Object.freeze({
   filters: 8,
   sharedFilters: 4, // filters shared by every dashboard (server MaxFilters 20 = 8 + 4 + drill 5 + page + selection + date range)
   fieldChoices: 8,   // alternative fields one shelf slot can switch between
-  bookmarks: 30,     // saved views per workbook
   fieldSettings: 2000, // renamed / hidden / default-aggregation fields per workbook
   inValues: 500, pillsPerShelf: 20,
   tabs: 50,            // worksheet + dashboard tabs per workbook (client-side only; enforced at creation and on import)

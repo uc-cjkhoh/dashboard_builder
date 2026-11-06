@@ -40,7 +40,7 @@ const NOT_A_WORKBOOK = "This file is not a Dashboard Builder workbook.";
 /** Builder state → a plain JSON-safe object. DOM nodes, fetched columns and lazily-loaded page
  *  members are left out (they are re-fetched on open). `tabs` is the store's ordered list (worksheet and dashboard
  *  tabs); `active` is the store's activeView. */
-export function serializeWorkbook({ entities, relationships, tabs, active, theme, sharedFilters = [], bookmarks = [], fieldMeta = new Map(), parameters = [], calculations = [], nextCalcId, hierarchies = [] }) {
+export function serializeWorkbook({ entities, relationships, tabs, active, theme, sharedFilters = [], fieldMeta = new Map(), parameters = [], calculations = [], nextCalcId, hierarchies = [] }) {
   const worksheets = [], dashboards = [], storyTabs = [], order = [];
   const wsIndex = new Map(), dbIndex = new Map(), stIndex = new Map(); // tab id → index in the saved list
   for (const t of tabs) {
@@ -72,7 +72,7 @@ export function serializeWorkbook({ entities, relationships, tabs, active, theme
     ...(storyTabs.length ? { stories: storyTabs.map((s) => ({ name: s.name, steps: savedSteps(s.steps, wsIndex, dbIndex) })) } : {}), // (optional; absent in older files)
     tabs: order, // the strip's order
     active: activeIndex !== undefined ? { kind: active.kind, index: activeIndex } : null, // null = the Data Source view
-    theme: theme ? { accent: theme.accent, palette: theme.palette } : { ...DEFAULT_THEME },
+    theme: theme ? { accent: theme.accent, palette: theme.palette, ...(theme.surface && theme.surface !== "default" ? { surface: theme.surface } : {}) } : { ...DEFAULT_THEME },
     sharedFilters: structuredClone(sharedFilters),
     fields: Object.fromEntries(fieldMeta),
     parameters: structuredClone(parameters),
@@ -80,12 +80,6 @@ export function serializeWorkbook({ entities, relationships, tabs, active, theme
     calculations: calculations.map((c) => ({ id: c.id, name: c.name, formula: c.formula, ...(c.group ? { group: structuredClone(c.group) } : {}) })), // Plan B (no parsed tree); a group field saves its definition
     // The next calculation number, so a deleted highest id is never handed out again (absent when there never were any).
     ...(calculations.length || nextCalcId ? { nextCalcId: Math.max(Number.isInteger(nextCalcId) ? nextCalcId : 0, ...calculations.map((c) => Number(String(c.id).slice(4)) + 1)) } : {}),
-    // Each bookmark points at its worksheet by index (null when that worksheet was closed).
-    bookmarks: bookmarks.map((b) => {
-      const i = wsIndex.get(b.worksheetId);
-      return { name: b.name, worksheet: i !== undefined ? i : null, worksheetName: b.worksheetName, sheet: savedSheet(b.sheet),
-        sharedFilters: structuredClone(b.sharedFilters ?? []), savedAt: b.savedAt };
-    }),
   };
 }
 
@@ -96,16 +90,13 @@ function savedSheet(sheet) {
 }
 
 /** A v1 file read as v2: every v1 `dashboards[i]` (one worksheet each) becomes `worksheets[i]`, there are no dashboards, the tab
- *  order is the worksheet order (left unset: the reader derives it), `active` and each bookmark's `dashboard` index carry over as
- *  worksheet indexes. Pure and tolerant — malformed parts pass through so the v2 reader reports them. */
+ *  order is the worksheet order (left unset: the reader derives it), `active` carries over as a
+ *  worksheet index. Pure and tolerant — malformed parts pass through so the v2 reader reports them. */
 export function migrateV1(raw) {
-  const { dashboards, active, bookmarks, ...rest } = raw;
+  const { dashboards, active, bookmarks: _dropped, ...rest } = raw;
   return {
     ...rest, version: 2, worksheets: dashboards, tabs: undefined,
     active: Number.isInteger(active) ? { kind: "worksheet", index: active } : active,
-    bookmarks: Array.isArray(bookmarks)
-      ? bookmarks.map((b) => (b && typeof b === "object" ? { ...b, worksheet: b.dashboard, worksheetName: b.dashName } : b))
-      : bookmarks,
   };
 }
 
@@ -282,8 +273,6 @@ export function parseWorkbook(source) {
   }
   const theme = cleanTheme(raw.theme, issues); // absent (older workbooks) = the default theme
   const sharedFilters = cleanFilters(raw.sharedFilters, "Shared filters", issues, LIMITS.sharedFilters, { calc: false });
-  const bookmarks = cleanBookmarks(raw.bookmarks, wsAll.length, issues);
-  for (const b of bookmarks) b.worksheet = b.worksheet === null ? null : wsMap.get(b.worksheet) ?? null; // a worksheet cut by the tab cap reads as closed
   const fields = cleanFieldMeta(raw.fields, issues);
   const parameters = cleanParameters(raw.parameters, issues);
   const hierarchies = cleanHierarchies(raw.hierarchies, issues, { tables: new Set(entities.map((e) => hierarchyTableKey(e.db, e.table))) });
@@ -294,10 +283,6 @@ export function parseWorkbook(source) {
   const calculations = cleanCalculations(raw.calculations, issues); // Plan B
   const calcIds = new Set(calculations.map((c) => c.id));
   for (const d of worksheets) dropMissingCalcs(d.sheet, calcIds, `Sheet "${d.name}"`, issues);
-  for (const b of bookmarks) {
-    dropMissingCalcs(b.sheet, calcIds, `Bookmark "${b.name}"`, issues);
-    b.sharedFilters = dropMissingTopCalcs(b.sharedFilters, calcIds, `Bookmark "${b.name}" shared filters`, issues);
-  }
   const sharedKept = dropMissingTopCalcs(sharedFilters, calcIds, "Shared filters", issues);
   sharedFilters.splice(0, sharedFilters.length, ...sharedKept);
   let nextCalcId;
@@ -305,7 +290,7 @@ export function parseWorkbook(source) {
     if (Number.isInteger(raw.nextCalcId) && raw.nextCalcId >= 1 && raw.nextCalcId <= 999999) nextCalcId = raw.nextCalcId;
     else issues.push("The saved next calculation number was invalid — ignored.");
   }
-  return { entities, relationships, worksheets, dashboards, stories, tabs, active, theme, sharedFilters, bookmarks, fields, parameters, hierarchies, calculations, nextCalcId, issues: [...new Set(issues)] };
+  return { entities, relationships, worksheets, dashboards, stories, tabs, active, theme, sharedFilters, fields, parameters, hierarchies, calculations, nextCalcId, issues: [...new Set(issues)] };
 }
 
 /** A saved list of tab objects; a non-list is reported, and entries that aren't objects are skipped (and reported). */
@@ -530,7 +515,7 @@ function cleanParameters(list, issues) {
 }
 // A pill whose calculated field is gone (not in the workbook's list) is removed, on shelves and mark slots.
 const topGone = (f, ids) => f?.op === "top" && typeof f.topBy?.calc === "string" && !ids.has(f.topBy.calc);
-// A Top-N filter ranked by a calculation that isn't in the workbook is removed (shared filters and bookmarks' too).
+// A Top-N filter ranked by a calculation that isn't in the workbook is removed (shared filters too).
 function dropMissingTopCalcs(list, ids, where, issues) {
   if (!Array.isArray(list) || !list.some((f) => topGone(f, ids))) return list;
   issues.push(`${where}: a calculated field that no longer exists was removed.`);
@@ -569,30 +554,6 @@ function cleanFieldMeta(raw, issues) {
     if (Object.keys(m).length) out[k] = m;
   }
   if (bad) issues.push(`${bad} field setting(s) were invalid and were dropped.`);
-  return out;
-}
-
-// Bookmarks: a name, a sheet (validated like any sheet, but its click selection is part of the
-// view, so a well-formed one is kept), shared filters, and a worksheet index (null if out of range).
-function cleanBookmarks(list, wsCount, issues) {
-  if (list == null) return [];
-  if (!Array.isArray(list)) { issues.push("The bookmarks weren't a list — none were opened."); return []; }
-  if (list.length > LIMITS.bookmarks) issues.push(`Only the first ${LIMITS.bookmarks} bookmarks were opened.`);
-  const out = [];
-  for (const b of list.slice(0, LIMITS.bookmarks)) {
-    const name = b && typeof b === "object" ? text(b.name, { label: "Bookmark name", max: LIMITS.tabName, required: true }) : { ok: false };
-    if (!name.ok || !b.sheet || typeof b.sheet !== "object") { issues.push("Skipped a bookmark with no name or view."); continue; }
-    const where = `Bookmark "${name.value}"`;
-    const sheet = sanitizeSheet(b.sheet, where, issues);
-    const sel = b.sheet.selection;
-    if (sel && isStr(sel.db) && isStr(sel.table) && isStr(sel.column) && (typeof sel.value === "string" || typeof sel.value === "number")
-      && (sel.action == null || sel.action === "keep" || sel.action === "exclude"))
-      sheet.selection = { db: sel.db, table: sel.table, column: sel.column, value: sel.value, label: String(sel.label ?? "").slice(0, 300), action: sel.action ?? null };
-    const worksheet = Number.isInteger(b.worksheet) && b.worksheet >= 0 && b.worksheet < wsCount ? b.worksheet : null;
-    out.push({ name: name.value, worksheet, worksheetName: typeof b.worksheetName === "string" && b.worksheetName.trim() ? b.worksheetName.trim().slice(0, LIMITS.tabName) : name.value,
-      sheet, sharedFilters: cleanFilters(b.sharedFilters, `${where} shared filters`, issues, LIMITS.sharedFilters, { calc: false }),
-      savedAt: typeof b.savedAt === "string" ? b.savedAt : null });
-  }
   return out;
 }
 

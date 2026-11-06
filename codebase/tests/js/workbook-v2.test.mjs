@@ -13,7 +13,7 @@ const v2 = (patch) => JSON.stringify({ format: WORKBOOK_FORMAT, version: 2, enti
 const ws = (name, sheet = {}) => ({ name, sheet });
 const widget = (sheet, x, y, w = 6, h = 4) => ({ kind: "sheet", sheet, x, y, w, h });
 
-/** What Workbook/workbook.js does when it opens a parsed workbook: ids, tab order, bookmark ids. */
+/** What Workbook/workbook.js does when it opens a parsed workbook: ids and tab order. */
 function toStore(wb) {
   const tabs = [];
   const wsIds = wb.worksheets.map((_, i) => `ws#${i + 1}`);
@@ -32,7 +32,6 @@ function toStore(wb) {
     relationships: new Map(wb.relationships.map((r, i) => [i, r])),
     tabs, active, theme: wb.theme, sharedFilters: wb.sharedFilters, fieldMeta: new Map(Object.entries(wb.fields)), parameters: wb.parameters,
     calculations: wb.calculations, nextCalcId: wb.nextCalcId,
-    bookmarks: wb.bookmarks.map((b, i) => ({ ...b, id: `bm#${i}`, worksheetId: b.worksheet === null ? null : wsIds[b.worksheet] })),
   };
 }
 const roundTrip = (wb) => parseWorkbook(JSON.stringify(serializeWorkbook(toStore(wb))));
@@ -50,10 +49,6 @@ for (const name of ["full", "minimal"]) {
     for (const k of ["entities", "relationships", "theme", "sharedFilters", "fields", "parameters", "calculations", "nextCalcId"]) {
       assert.deepEqual(wb[k] === undefined ? undefined : json(wb[k]), expected[k], k);
     }
-    assert.deepEqual(json(wb.bookmarks.map((b) => ({ ...b, worksheet: undefined, worksheetName: undefined }))),
-      expected.bookmarks.map(({ dashboard, dashName, ...b }) => b), "bookmark content");
-    assert.deepEqual(wb.bookmarks.map((b) => b.worksheet), expected.bookmarks.map((b) => b.dashboard), "bookmark indexes carry over");
-    assert.deepEqual(wb.bookmarks.map((b) => b.worksheetName), expected.bookmarks.map((b) => b.dashName));
   });
 
   test(`v1 golden (${name}): v1 -> v2 -> serialize -> parse is stable`, () => {
@@ -71,23 +66,18 @@ test("v1 golden (full): the fixture's specifics survive", () => {
   const wb = parseWorkbook(fixture("workbook-v1-full.json"));
   assert.deepEqual(wb.worksheets.map((w) => w.name), ["Revenue", "Trend", "Customers", "Status mix"]);
   assert.deepEqual(wb.active, { kind: "worksheet", index: 2 });
-  assert.deepEqual(wb.bookmarks.map((b) => [b.name, b.worksheet, b.worksheetName]), [["EMEA revenue", 0, "Revenue"], ["Paid only", 3, "Status mix"], ["Closed one", null, "Gone"]]);
-  assert.equal(wb.bookmarks[1].sheet.selection.value, "paid"); // a bookmark keeps its view's selection
   assert.equal(wb.worksheets[0].sheet.title, "Revenue by region");
   assert.equal(wb.theme.accent, "teal");
   assert.equal(wb.calculations[0].name, "Margin");
   assert.equal(wb.nextCalcId, 2);
 });
 
-test("migrateV1 maps dashboards to worksheets, active and bookmark indexes, and leaves malformed parts for the reader", () => {
-  const m = migrateV1({ format: WORKBOOK_FORMAT, version: 1, dashboards: [ws("A"), ws("B")], active: 1, bookmarks: [{ name: "b", dashboard: 0, dashName: "A", sheet: {} }, 5] });
+test("migrateV1 maps dashboards to worksheets, and active, and leaves malformed parts for the reader", () => {
+  const m = migrateV1({ format: WORKBOOK_FORMAT, version: 1, dashboards: [ws("A"), ws("B")], active: 1 });
   assert.equal(m.version, 2);
   assert.deepEqual(m.worksheets.map((w) => w.name), ["A", "B"]);
   assert.equal(m.dashboards, undefined);
   assert.deepEqual(m.active, { kind: "worksheet", index: 1 });
-  assert.equal(m.bookmarks[0].worksheet, 0);
-  assert.equal(m.bookmarks[0].worksheetName, "A");
-  assert.equal(m.bookmarks[1], 5);
   assert.equal(migrateV1({ version: 1, active: null }).active, null);
   assert.equal(migrateV1({ version: 1, active: "x" }).active, "x");
   assert.equal(migrateV1({ version: 1, dashboards: 5 }).worksheets, 5);
@@ -108,7 +98,7 @@ test("version is 2 and files from a newer build are refused", () => {
   assert.throws(() => parseWorkbook(JSON.stringify({ format: WORKBOOK_FORMAT, version: 0 })), /version number/);
 });
 
-test("serialize: worksheets, dashboards, strip order, active and bookmarks by index", () => {
+test("serialize: worksheets, dashboards, strip order, and active", () => {
   const sheet = emptySheet();
   const tabs = [
     { id: "ws#1", kind: "worksheet", name: "Sales", sheet },
@@ -119,8 +109,7 @@ test("serialize: worksheets, dashboards, strip order, active and bookmarks by in
     ] },
     { id: "ws#2", kind: "worksheet", name: "Ops", sheet },
   ];
-  const f = serializeWorkbook({ entities: new Map(), relationships: new Map(), tabs, active: { kind: "dashboard", id: "db#1" },
-    bookmarks: [{ name: "b", worksheetId: "ws#2", worksheetName: "Ops", sheet, sharedFilters: [], savedAt: "t" }, { name: "c", worksheetId: "ws#9", worksheetName: "X", sheet, sharedFilters: [], savedAt: "t" }] });
+  const f = serializeWorkbook({ entities: new Map(), relationships: new Map(), tabs, active: { kind: "dashboard", id: "db#1" } });
   assert.equal(f.version, 2);
   assert.deepEqual(f.worksheets.map((w) => w.name), ["Sales", "Ops"]);
   assert.deepEqual(f.dashboards, [{ name: "Board", widgets: [
@@ -129,7 +118,6 @@ test("serialize: worksheets, dashboards, strip order, active and bookmarks by in
   ] }]);
   assert.deepEqual(f.tabs, [{ kind: "worksheet", index: 0 }, { kind: "dashboard", index: 0 }, { kind: "worksheet", index: 1 }]);
   assert.deepEqual(f.active, { kind: "dashboard", index: 0 });
-  assert.deepEqual(f.bookmarks.map((b) => [b.worksheet, b.worksheetName]), [[1, "Ops"], [null, "X"]]);
   const model = serializeWorkbook({ entities: new Map(), relationships: new Map(), tabs, active: { kind: "model" } });
   assert.equal(model.active, null);
   assert.equal(serializeWorkbook({ entities: new Map(), relationships: new Map(), tabs: [], active: { kind: "model" } }).tabs.length, 0);
@@ -174,7 +162,7 @@ test("no tabs list (hand-made file): worksheets then dashboards, no issue; a non
   assert.ok(parseWorkbook(v2({ worksheets: [ws("A")], tabs: "x" })).issues.some((i) => /tab order/.test(i)));
 });
 
-test("tabs past 50 are dropped and reported; widgets and bookmarks of cut worksheets are handled", () => {
+test("tabs past 50 are dropped and reported; widgets of cut worksheets are handled", () => {
   const worksheets = Array.from({ length: 49 }, (_, i) => ws(`W${i}`));
   const wsLast = ws("Cut"); // index 49, 51st tab once the two dashboards are listed first
   const wb = parseWorkbook(v2({
@@ -182,14 +170,12 @@ test("tabs past 50 are dropped and reported; widgets and bookmarks of cut worksh
     dashboards: [{ name: "D", widgets: [widget(0, 0, 0), widget(49, 6, 0)] }, { name: "D2", widgets: [] }],
     tabs: [{ kind: "dashboard", index: 0 }, ...worksheets.map((_, i) => ({ kind: "worksheet", index: i })), { kind: "dashboard", index: 1 }, { kind: "worksheet", index: 49 }],
     active: { kind: "worksheet", index: 49 },
-    bookmarks: [{ name: "b", worksheet: 49, worksheetName: "Cut", sheet: {} }, { name: "c", worksheet: 3, worksheetName: "W3", sheet: {} }],
   }));
   assert.equal(wb.tabs.length, LIMITS.tabs);
   assert.equal(wb.worksheets.length, 49);
   assert.equal(wb.dashboards.length, 1);
   assert.equal(wb.dashboards[0].widgets.length, 1);
   assert.equal(wb.active, null);
-  assert.deepEqual(wb.bookmarks.map((b) => b.worksheet), [null, 3]);
   assert.ok(wb.issues.some((i) => /first 50 tabs/.test(i)));
   assert.ok(wb.issues.some((i) => /worksheet is missing/.test(i)));
   assert.ok(wb.issues.some((i) => /active tab/.test(i)));
@@ -220,12 +206,6 @@ test("a dashboard with no name or a non-text name is reset and reported; a non-l
   assert.equal(wb.issues.length, 2);
   assert.ok(parseWorkbook(v2({ dashboards: 5 })).issues.some((i) => /dashboards weren't a list/.test(i)));
   assert.ok(parseWorkbook(v2({ worksheets: {} })).issues.some((i) => /worksheets weren't a list/.test(i)));
-});
-
-test("bookmarks in v2 carry worksheet indexes; shared state is cleaned as before", () => {
-  const wb = parseWorkbook(v2({ worksheets: [ws("A")], bookmarks: [{ name: "b", worksheet: 0, worksheetName: "A", sheet: {} }, { name: "c", worksheet: 4, sheet: {} }] }));
-  assert.deepEqual(wb.bookmarks.map((b) => [b.worksheet, b.worksheetName]), [[0, "A"], [null, "c"]]);
-  assert.deepEqual(wb.issues, []);
 });
 
 test("storage keys: v2 now, v1 for the fallback read", () => {

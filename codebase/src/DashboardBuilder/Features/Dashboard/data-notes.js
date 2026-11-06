@@ -1,15 +1,15 @@
 // Data notes for a worksheet's status bar and print header (pure): when the data was last queried and how the
 // calculated fields it uses are defined.
 import { pillSlots, isCalcPill } from "../Calc/calc-pill.js";
+import { clockIn } from "../Core/timezone.js";
 
 const MAX_FORMULA = 200;
 const pad = (n) => String(n).padStart(2, "0");
 
-/** "Updated 14:32:05" (local time) for a result's `queriedAt` (epoch ms), or null when there is none. */
-export function updatedText(ms) {
+/** "Updated 14:32:05" (in the app time zone, Core/timezone.js) for a result's `queriedAt` (epoch ms), or null when there is none. */
+export function updatedText(ms, tz) {
   if (!ms) return null;
-  const d = new Date(ms);
-  return `Updated ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  return `Updated ${clockIn(ms, tz)}`;
 }
 
 /** The calculations a sheet depends on — on any shelf or mark, in a Top-N filter (the sheet's or an applied shared one), or referenced as `[Name]` by one

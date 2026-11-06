@@ -72,7 +72,7 @@
 /* Keyboard/non-drag path to add a field to a shelf (a11y — mirrors the sidebar table chip's plus icon). */
 .ws-field__add {
   flex: none; border: 0; background: none; cursor: pointer; padding: 0;
-  width: 16px; height: 16px; line-height: 1; border-radius: var(--r);
+  width: 24px; height: 24px; line-height: 1; border-radius: var(--r); display: inline-grid; place-items: center;
   color: var(--ink-3); opacity: 0; transition: opacity var(--dur) var(--ease), color var(--dur) var(--ease);
 }
 .ws-field:hover .ws-field__add, .ws-field__add:focus-visible { opacity: 1; }
@@ -141,6 +141,8 @@
 .ws-pill__ctl { display: inline-flex; gap: 4px; align-items: center; }
 /* Convert-role toggle: a bordered chip so it reads as an action distinct from the remove icon. */
 .ws-pill .iconbtn { color: inherit; width: 16px; height: 16px; padding: 0; }
+.ws-pill .iconbtn { position: relative; }
+.ws-pill .iconbtn::after { content: ""; position: absolute; inset: calc(-1 * var(--s1)); } /* 24px hit area around the 16px glyph */
 .ws-pill .select { height: 16px; }
 .ws-pill .iconbtn:hover { color: var(--accent); background: transparent; }
 
@@ -212,8 +214,7 @@
 .ws-tool:not(:disabled):hover { background: var(--glass-ctl-hover); border-color: var(--ctl-edge); color: var(--ink);
   box-shadow: inset 0 1px 0 var(--glass-rim), var(--elev-2); }
 .ws-tool:not(:disabled):active { transform: scale(.97); box-shadow: none; }
-.ws-tool.is-active { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); font-weight: 600;
-  box-shadow: inset 0 -2px 0 var(--accent); }
+.ws-tool.is-active { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); font-weight: 600; }
 .ws-tool:disabled { opacity: .5; cursor: not-allowed; }
 .ws-tool.is-set { color: var(--accent-ink); }
 .ws-tool__text { line-height: 1; }
@@ -230,20 +231,53 @@
 .ws-field.is-cast .ws-field__name { min-width: 96px; } /* keeps the name on its own line: the tag wraps under it */
 .ws-field .ws-cast { order: 9; flex: 0 0 auto; margin-left: 24px; font-size: var(--fs-body); }
 .ws-cast { flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 0 var(--s1); font-size: var(--fs-body); line-height: 16px; color: var(--ink-2); border: 1px solid var(--line); border-radius: var(--r); white-space: nowrap; }
-/* The one open tool's editor: a card with its pills over a drop zone. */
+/* The open mark tool's editor: a flyout beside the field pane, level with its slot. It floats over the worksheet (the chart never
+   shifts), solid like every popover, and stays until ✕ / Esc / its slot is pressed again — a field can be dragged straight onto it. */
+.ws-toolfly { position: absolute; z-index: 5; width: min(320px, calc(100% - 16px)); max-height: calc(100% - 16px); overflow: auto; border-radius: var(--r); }
+.ws-toolfly[hidden] { display: none; }
 .ws-toolpanel {
   display: flex; flex-direction: column; gap: var(--s2);
   padding: var(--s2); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r);
 }
-.ws-toolpanel__head { display: flex; align-items: center; justify-content: space-between; }
+.ws-toolfly .ws-toolpanel { padding: var(--s2) var(--s4) var(--s4); gap: var(--s2); background: var(--surface); border-color: var(--line-2); box-shadow: var(--elev-16); }
+.ws-toolfly .ws-fmt-field { display: grid; gap: var(--s1); }
+.ws-toolfly select, .ws-toolfly .ws-period input[type="date"] { width: 100%; max-width: none; }
+.ws-toolfly .ws-period__row { display: grid; grid-template-columns: 1fr; gap: var(--s2); }
+.ws-toolfly .ws-tipedit__text { height: auto; min-height: 96px; }
+.ws-toolfly .ws-shelf__note { color: var(--ink-3); }
+.ws-picker { display: grid; gap: var(--s2); }
+.ws-picker__btn { justify-self: start; display: inline-flex; align-items: center; gap: var(--s1); height: var(--ctl-h); margin-left: calc(-1 * var(--s2)); padding: 0 var(--s2); border-radius: var(--r); background: transparent; color: var(--ink-2); font-size: var(--fs-body); cursor: pointer; }
+.ws-picker__btn:hover, .ws-picker__btn[aria-expanded="true"] { background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--ink); }
+/* A hairline between what the slot holds and its own editor. */
+.ws-toolfly .ws-picker + :not(.ws-shelf__note) { padding-top: var(--s2); border-top: 1px solid var(--line); }
+.ws-tipedit__head { display: flex; align-items: center; justify-content: space-between; min-height: var(--ctl-h); margin-top: calc(-1 * var(--s1)); }
+.ws-tipedit__head .ws-tipedit__modal { margin-right: calc(-1 * var(--s2)); height: var(--ctl-h); padding: 0 var(--s2); background: transparent; color: var(--ink-2); font-weight: 400; }
+.ws-tipedit__head .ws-tipedit__modal:hover { background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--ink); }
+.ws-filtercards.is-behind-fly { visibility: hidden; }
+.ws-toolfly .ws-filtercards { flex-direction: column; flex-wrap: nowrap; align-items: stretch; }
+.ws-toolfly .ws-fcard { max-width: none; width: 100%; background: var(--surface-2); }
+.ws-picker__box { display: grid; gap: var(--s1); }
+.ws-picker__box[hidden] { display: none; }
+.ws-picker__list { display: grid; gap: 0; max-height: 220px; overflow: auto; margin: 0 calc(-1 * var(--s2)); }
+.ws-picker__group { padding: var(--s1) var(--s2) 0; color: var(--ink-3); font-size: var(--fs-body); }
+.ws-picker__group[hidden], .ws-picker__item[hidden] { display: none; }
+.ws-picker__item { display: flex; align-items: center; gap: var(--s2); height: var(--ctl-h); padding: 0 var(--s2); border-radius: var(--r); background: transparent; color: var(--ink); text-align: left; cursor: pointer; font-size: var(--fs-body); }
+.ws-picker__item:hover, .ws-picker__item:focus-visible { background: color-mix(in srgb, var(--ink) 7%, transparent); }
+.ws-picker__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-picker__empty { padding: var(--s2); color: var(--ink-3); font-size: var(--fs-body); }  /* label over its control: the flyout is too narrow for them side by side */
+.ws-toolpanel:focus { outline: none; }
+.ws-toolpanel:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.ws-toolpanel__head { display: flex; align-items: center; justify-content: space-between; min-height: var(--ctl-h); }
 .ws-toolpanel__head > .iconbtn:last-child { margin-right: calc(-1 * var(--s2)); }  /* ✕ glyph flush with the zone's edge */
-.ws-toolpanel__title { font-size: var(--fs-body); font-weight: 700; color: var(--ink-2); }
+.ws-toolpanel__title { display: inline-flex; align-items: center; gap: var(--s2); font-size: var(--fs-body); font-weight: 700; color: var(--ink); }
+.ws-toolpanel__title .icon { color: var(--ink-2); }
 .ws-toolpanel__zone {
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2);
-  min-height: var(--ctl-h); padding: 4px var(--s2);
-  border: 1px dashed var(--line-2); border-radius: var(--r); background: var(--surface);
+  min-height: calc(var(--ctl-h) + var(--s2)); padding: var(--s1) var(--s2);
+  border: 1px dashed var(--line-2); border-radius: var(--r); background: var(--surface-2);
   transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
 }
+.ws-toolfly .ws-toolpanel__zone { background: var(--surface-2); }
 .ws-toolpanel__zone.is-over { border-color: var(--accent); border-style: solid; background: var(--accent-soft); }
 .ws-pill--mark { background: var(--enc-bg); border-color: var(--enc-line); color: var(--enc-ink); }
 
@@ -297,7 +331,7 @@
 .ws-viewbar__group { display: flex; align-items: center; gap: var(--s2); min-width: 0; }
 .ws-viewbar__group--right { margin-left: auto; }
 .ws-viewbar__icons { display: flex; align-items: center; gap: var(--s1); }
-.ws-viewbar__btn.is-active { background: var(--accent-soft); color: var(--accent-ink); box-shadow: inset 0 -2px 0 var(--accent); }
+.ws-viewbar__btn.is-active { background: var(--accent-soft); color: var(--accent-ink); }
 /* Ghost controls at the row's ends overhang by their 8px glyph slack, so the glyphs meet the card's inset. */
 .ws-viewbar__group > :first-child { margin-left: calc(-1 * var(--s2)); }
 .ws-viewbar__icons > :last-child { margin-right: calc(-1 * var(--s2)); }
@@ -396,7 +430,7 @@
 .ws-kpi__change--good { color: var(--up); }
 .ws-kpi__change--bad { color: var(--down); }
 .ws-kpi__change--neutral { color: var(--ink-3); }
-.ws-kpi__arrow { font-size: 0.8em; }
+.ws-kpi__arrow { font-size: var(--fs-body); }
 .ws-kpi__target { width: 132px; height: 6px; margin-top: var(--s2); border-radius: var(--r-pill); background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line); overflow: hidden; }
 .ws-kpi__target-fill { display: block; height: 100%; background: var(--accent); border-radius: inherit; }
 .ws-kpi__target.is-met .ws-kpi__target-fill { background: var(--up); }
@@ -438,7 +472,7 @@
 @media print {
   @page { size: landscape; margin: 12mm; }
   html, body { height: auto; overflow: visible; background: var(--print-paper); }
-  .sidebar, .canvas__bar, .ws-fields, .ws-fields__resizer, .ws-shelves, .ws-chart-head, .toast, #toast-live { display: none !important; }
+  .sidebar, .canvas__bar, .ws-fields, .ws-fields__resizer, .ws-shelves, .ws-toolfly, .ws-chart-head, .toast, #toast-live { display: none !important; }
   .app, .worksheet, .ws-main, .view--worksheet { display: block; height: auto; overflow: visible; }
   .ws-chart-card { border: 0; box-shadow: none; break-inside: avoid; }
   .ws-chart-notice { display: none; }
@@ -475,7 +509,7 @@
 .ws-undo { display: inline-flex; gap: 4px; }
 .ws-undo .iconbtn:disabled { opacity: .35; cursor: default; }
 .ws-titleblock { display: grid; gap: 4px; }
-.ws-titleblock__btn { justify-self: start; max-width: 100%; border: 1px solid transparent; border-radius: var(--r); background: none;
+.ws-titleblock__btn { min-height: 24px; justify-self: start; max-width: 100%; border: 1px solid transparent; border-radius: var(--r); background: none;
   padding: 0 var(--s1); margin-inline: calc(-1 * var(--s1)); color: var(--ink); cursor: text; text-align: left; font: inherit; }
 .ws-titleblock__btn:hover { border-color: var(--line-2); background: var(--surface-2); }
 .ws-titleblock__btn h2 { margin: 0; font-size: var(--fs-title); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
