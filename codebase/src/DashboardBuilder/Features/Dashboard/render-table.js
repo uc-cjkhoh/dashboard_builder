@@ -8,6 +8,7 @@ import { collapseKey, canToggle, rollUp, expandNodes, collapsedOf, leafValue, he
 import { icon } from "../Core/icons.js";
 import { el, warn, iconSpan } from "./render-dom.js";
 import { tableStyleClasses } from "./table-style-model.js";
+import { fontClass } from "./font-model.js";
 import { DIV_FALLBACK } from "./colour-scale-model.js";
 
 // The crosstab / text table and its conditional formatting, drawn from a result. Pure DOM output: nothing here
@@ -43,7 +44,7 @@ export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, ca
   const leftLevels = rd + (measureOnLeft ? 1 : 0);
   const topLevels = cd + (measureOnLeft ? 0 : 1);
 
-  const table = el("table", ["data xtab", ...tableStyleClasses(sheet.format)].join(" "));
+  const table = el("table", ["data xtab", ...tableStyleClasses(sheet.format), fontClass(sheet.format?.font)].filter(Boolean).join(" "));
   // Totals: a grand-total column (when Columns has dimensions), a grand-total row (when Rows has),
   // and a subtotal after each first-level Rows group — each combined by the measure's own aggregation.
   const tot = sheet.analytics?.totals ?? {};

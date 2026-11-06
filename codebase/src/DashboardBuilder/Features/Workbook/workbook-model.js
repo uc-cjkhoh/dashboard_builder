@@ -28,7 +28,7 @@ import { cleanSize, savedSize } from "../Board/board-size.js";
 import { cleanSteps, savedSteps } from "../Story/story-model.js";
 import { CALC_AGGS } from "../Calc/calc-pill.js";
 import {
-  CHART_TYPE_IDS, CATEGORIES, FILTER_OPS, NUMBER_FORMATS, DATE_FORMATS, LEGENDS, TOP_N, MAX_DECIMALS, DATE_BUCKETS, LINE_STYLES, HEATMAP_SHAPES, SECONDARY_TYPES, MARK_BORDERS, MARKER_SHAPES, MAX_TARGET_MEASURE, TABLE_ALIGNS, TABLE_DENSITIES, TABLE_SHADES,
+  CHART_TYPE_IDS, CATEGORIES, FILTER_OPS, NUMBER_FORMATS, DATE_FORMATS, LEGENDS, TOP_N, MAX_DECIMALS, DATE_BUCKETS, LINE_STYLES, HEATMAP_SHAPES, SECONDARY_TYPES, MARK_BORDERS, MARKER_SHAPES, MAX_TARGET_MEASURE, TABLE_ALIGNS, TABLE_DENSITIES, TABLE_SHADES, FONTS,
   PERIOD_PRESETS, PERIOD_COMPARES, DATE_PARTS, DATE_LABELS, TABLE_CALCS, CALC_ALONG, FIT_MODES, REF_KINDS, TRENDS, FORECASTS, CF_MODES, CF_SCALES, CF_OPS, CF_TONES, CF_MAX_RULES, CF_MAX_MEASURES,
 } from "../Core/sheet-schema.js";
 
@@ -611,6 +611,7 @@ function cleanFormat(f0, where, issues) {
   out.secondaryType = oneOf(SECONDARY_TYPES, f.secondaryType, base.secondaryType, w, "right-axis marks", issues);
   out.markerShape = oneOf(MARKER_SHAPES, f.markerShape, base.markerShape, w, "marker shape", issues);
   out.markBorder = oneOf(MARK_BORDERS, f.markBorder, base.markBorder, w, "mark border", issues);
+  out.font = oneOf(FONTS, f.font, base.font, w, "font", issues);
   out.tableAlign = oneOf(TABLE_ALIGNS, f.tableAlign, base.tableAlign, w, "table alignment", issues);
   out.tableDensity = oneOf(TABLE_DENSITIES, f.tableDensity, base.tableDensity, w, "row height", issues);
   out.tableShade = oneOf(TABLE_SHADES, f.tableShade, base.tableShade, w, "table shading", issues);

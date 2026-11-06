@@ -407,6 +407,8 @@
 .xtab.xt-a-left td, .xtab.xt-a-left thead th.num { text-align: left; }
 .xtab.xt-a-center td, .xtab.xt-a-center thead th.num { text-align: center; }
 .xtab.xt-a-right td, .xtab.xt-a-right thead th.num { text-align: right; }
+.xtab.xt-f-serif { font-family: var(--font-serif); }
+.xtab.xt-f-mono { font-family: var(--font-mono); }
 .xtab.xt-d-compact th, .xtab.xt-d-compact td { padding-block: 0; }
 .xtab.xt-d-roomy th, .xtab.xt-d-roomy td { padding: var(--s2) var(--s4); }
 /* Shading uses --surface-3 (visible beside the white / dark surface). Banding skips cells that carry a rule or scale (.xt-cf), whose own tint wins; the header keeps each cell's own ink. */
