@@ -36,7 +36,7 @@ const IS_FRACTIONAL = /Float|Decimal/; // the member list shows Decimal(10,2) as
 export const groupKind = (category, type = "") => (category === "text" ? (NOT_PLAIN_TEXT.test(String(type)) ? null : "text") : category === "numeric" ? (IS_FRACTIONAL.test(String(type)) ? null : "number") : category === "boolean" ? "boolean" : null);
 /** Why a column of this (original) category and ClickHouse `type` can't be grouped, or null. */
 export const groupCategoryProblem = (category, type = "") => (groupKind(category, type) ? null : category === "text" ? GROUP_TYPE_REFUSAL : category === "numeric" ? GROUP_FLOAT_REFUSAL : GROUP_CATEGORY_REFUSAL);
-const MEMBER_FORM = { number: /^-?\d+$/, boolean: /^(true|false)$/ };
+const MEMBER_FORM = { number: /^(0|-?[1-9]\d*)$/, boolean: /^(true|false)$/ };
 
 const fieldNode = (f) => ({ k: "field", db: f.db, table: f.table, column: f.column });
 // The field as the CASE reads it: itself for text, TEXT(field) for a number field (the engine compares text only). TEXT() refuses a
