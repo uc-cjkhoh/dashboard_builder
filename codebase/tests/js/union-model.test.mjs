@@ -22,3 +22,14 @@ test("the pick state says whether Show rows is allowed and what to tell the user
   assert.deepEqual(unionPickState(["a", "b"]), { ok: true, hint: "" });
   assert.equal(unionPickState(["a", "b", "c", "d", "e", "f"]).ok, false);
 });
+
+import { sharedUnionColumns, UNION_NONE } from "../../src/DashboardBuilder/Features/Rows/union-model.js";
+const c = (name, category) => ({ name, type: "x", category });
+test("shared columns need the same name and kind in every table", () => {
+  assert.deepEqual(sharedUnionColumns([[c("id", "number"), c("a", "text")], [c("id", "number"), c("a", "number")]]).map((x) => x.name), ["id"]);
+  assert.deepEqual(sharedUnionColumns([[c("a", "text")], [c("b", "text")]]), []);
+  assert.equal(sharedUnionColumns([[c("a", "text")], [c("a", "text")], [c("b", "text")]]).length, 0);
+});
+test("the no-shared-column sentence matches the server's", () => {
+  assert.equal(UNION_NONE, "These tables share no column with the same name and kind of values.");
+});

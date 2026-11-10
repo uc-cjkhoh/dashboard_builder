@@ -5,7 +5,7 @@ import { LIMITS } from "../Core/validate.js";
 import { entities } from "../Core/store.js";
 import { unionSource, takenNames } from "../Core/source-model.js";
 import { makeButton, openDialog, closeDialog, toast } from "../Core/ui.js";
-import { unionRequest, unionPickState } from "./union-model.js";
+import { unionRequest, unionPickState, sharedUnionColumns, UNION_NONE } from "./union-model.js";
 import { openRowsDialog } from "./rows-dialog.js";
 
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
@@ -34,10 +34,19 @@ export function openUnionDialog(db, tables) {
   document.body.append(dlg);
 
   const picked = () => boxes.filter((b) => b.checked).map((b) => b.value);
+  const colCache = new Map(); // table -> its columns, read once per dialog
+  const columnsOf = (t) => { if (!colCache.has(t)) colCache.set(t, api.columns(db, t).catch((e) => { colCache.delete(t); throw e; })); return colCache.get(t); };
+  /** Do the picked tables share a column? Resolves null when they do (or the columns can't be read: the server then decides), else the reason. */
+  const shareProblem = async (tbls) => {
+    try { return sharedUnionColumns(await Promise.all(tbls.map(columnsOf))).length ? null : UNION_NONE; } catch { return null; }
+  };
+  let seq = 0;
   const refresh = () => {
     const st = unionPickState(picked());
     go.disabled = add.disabled = !st.ok; hint.textContent = st.hint;
     for (const b of boxes) b.disabled = !b.checked && picked().length >= LIMITS.unionTables;
+    const mine = ++seq;
+    if (st.ok) shareProblem(picked()).then((why) => { if (mine === seq && why) { hint.textContent = why; add.disabled = true; } });
   };
   for (const b of boxes) b.addEventListener("change", refresh);
   refresh();
@@ -46,12 +55,16 @@ export function openUnionDialog(db, tables) {
   go.addEventListener("click", () => {
     let request;
     try { request = unionRequest(db, picked()); } catch (err) { toast(err.message, "danger"); return; }
-    closeDialog(dlg);
     openRowsDialog({ title: "Union — first rows", subtitle: `${db}: ${request.tables.join(" + ")}`, request, filename: "union", load: api.union });
   });
-  add.addEventListener("click", () => { // the union becomes a table on the Data Source (canvas.js adds it) that worksheets can read
+  add.addEventListener("click", async () => { // the union becomes a table on the Data Source (canvas.js adds it) that worksheets can read
+    if (add.disabled) return; // one click at a time: a double-click adds one card
+    add.disabled = true;
+    const why = await shareProblem(picked());
+    if (!dlg.isConnected) return;
+    if (why) { hint.textContent = why; return; } // refused in place: nothing is added
     let source;
-    try { source = unionSource(db, picked(), takenNames(entities, db, tables)); } catch (err) { toast(err.message, "danger"); return; }
+    try { source = unionSource(db, picked(), takenNames(entities, db, tables)); } catch (err) { add.disabled = false; toast(err.message, "danger"); return; }
     closeDialog(dlg);
     document.dispatchEvent(new CustomEvent("source:add", { detail: { source } }));
   });

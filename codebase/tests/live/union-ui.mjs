@@ -21,6 +21,8 @@ function answer({ method, path, body }) {
   if (path === '/api/connection') return { json: { connected: true, host: 'mock-ch', port: 8443, user: 'default', secure: true, allowInvalidCert: false } };
   if (path === '/api/databases') return { json: ['shop'] };
   if (path === '/api/databases/shop/tables') return { json: TABLES };
+  const mc = path.match(/^\/api\/databases\/shop\/tables\/(\w+)\/columns$/);
+  if (mc) return { json: (mc[1] === 'a4' ? [['k', 'UInt64', 'numeric']] : mc[1] === 'a5' ? [['name', 'String', 'text']] : [['id', 'UInt64', 'numeric'], ['region', 'String', 'text']]).map(([name, type, category]) => ({ name, type, category })) };
   if (path === '/api/union') { unionReqs.push(body); return unionReply ?? { json: UNION }; }
   return null;
 }
@@ -73,8 +75,23 @@ try {
     must(J(unionReqs.at(-1)) === J({ db: 'shop', tables: ['sales_2023', 'sales_2024'], limit: 20 }), `request: ${J(unionReqs.at(-1))}`);
     const heads = await ev(`[...${rd}.querySelectorAll('th')].map((t) => t.textContent)`);
     must(J(heads) === J(['Source tableString', 'idUInt64', 'regionString']), `heads: ${J(heads)}`);
-    must(await ev(`${ud}`) === null, 'pick dialog closed');
+    must(await ev(`${ud}`) !== null, 'pick dialog stays open under the preview');
     await shot('union-rows-light.png');
+  });
+  await check('closing the preview returns to the Union dialog with the picks kept', async () => {
+    // (the harness's synthetic Escape also reaches the dialog beneath, so close with the button)
+    await ev(`[...${rd}.querySelectorAll('.dialog__foot button')].find((x) => x.textContent === 'Close').click()`);
+    await waitFor(`${rd} === null`, 'preview closed');
+    must(await ev(`${ud} !== null && ${ud}.open`), 'union dialog still open');
+    must(J(await ev(`[...${ud}.querySelectorAll('input')].filter((x) => x.checked).map((x) => x.value)`)) === J(['sales_2023', 'sales_2024']), 'picks kept');
+  });
+  await check('tables with no shared column are refused in place: the reason shows, nothing is added', async () => {
+    await tick('sales_2023'); await tick('sales_2024'); await tick('a4'); await tick('a5');
+    await waitFor(`${ud}.querySelector('.union-dialog__hint').textContent.includes('share no column')`, 'reason on the status line');
+    must(await ev(`[...${ud}.querySelectorAll('button')].find((x) => x.textContent === 'Add to model').disabled`) === true, 'Add disabled');
+    must(await ev(`document.querySelectorAll('.entity').length`) === 0, 'no card added');
+    await tick('a4'); await tick('a5');
+    await ev(`${ud}.querySelector('button').click()`); await waitFor(`${ud} === null`, 'closed');
   });
   await check('a server refusal shows its sentence in the dialog', async () => {
     await b.key('Escape', { vk: 27 }); await waitFor(`${rd} === null`, 'closed');
@@ -84,6 +101,18 @@ try {
     await waitFor(`${rd} !== null && ${rd}.querySelector('.rows-dialog__status--error') !== null`, 'error shown');
     must((await ev(`${rd}.querySelector('.rows-dialog__status--error').textContent`)).includes('share no column'), 'message');
     unionReply = null;
+  });
+  await check('a double-click on Add to model adds one card', async () => {
+    await ev(`document.querySelector('dialog.rows-dialog[open] .dialog__foot .btn--primary')?.click()`); // the refusal check left its dialogs open
+    await waitFor(`${rd} === null`, 'preview closed');
+    await ev(`document.querySelectorAll('dialog.union-dialog[open]').forEach((d) => d.querySelector('.dialog__foot button').click())`);
+    await waitFor(`document.querySelector('dialog[open]') === null`, 'stale dialogs closed');
+    await ev(`document.getElementById('union-open').click()`);
+    await waitFor(`${ud} !== null`, 'open'); await tick('sales_2023'); await tick('sales_2024');
+    await ev(`(() => { window.__adds = 0; document.addEventListener('source:add', () => window.__adds++); const a = [...${ud}.querySelectorAll('button')].find((x) => x.textContent === 'Add to model'); a.click(); a.click(); return true; })()`);
+    await waitFor(`${ud} === null`, 'closed');
+    await b.sleep(200);
+    must(await ev(`window.__adds`) === 1, 'source:add fired once');
   });
   await check('dark scheme renders the pick dialog', async () => {
     await b.key('Escape', { vk: 27 }); await waitFor(`${rd} === null`, 'closed');

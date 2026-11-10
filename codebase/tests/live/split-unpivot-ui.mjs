@@ -61,6 +61,7 @@ try {
     must((await ev(`${ud}.querySelector('.union-dialog__hint').textContent`)) === 'Pick 2 to 50 columns to turn into rows.', 'hint');
     await tick(0, 'q1'); must(await ev(`${go}.disabled`) === true, 'disabled with one');
     await tick(0, 'q2'); must(await ev(`${go}.disabled`) === false, 'enabled with two');
+    must((await ev(`${ud}.querySelector('.union-dialog__hint').textContent`)) === '2 columns become rows.', 'ready line');
     await shot('unpivot-pick-light.png');
   });
   await check('a column ticked on one side is disabled on the other; mixed kinds are refused', async () => {
@@ -78,7 +79,16 @@ try {
     must(J(unpivotReqs.at(-1)) === J({ db: 'shop', table: 'sales', columns: ['q1', 'q2'], keep: ['id'], limit: 20 }), `request: ${J(unpivotReqs.at(-1))}`);
     const heads = await ev(`[...${rd}.querySelectorAll('th')].map((t) => t.textContent)`);
     must(J(heads) === J(['idUInt64', 'FieldString', 'ValueInt32']), `heads: ${J(heads)}`);
+    must(await ev(`${ud} !== null`), 'pick dialog stays open under the preview');
     await shot('unpivot-rows-light.png');
+  });
+  await check('closing the preview returns to the Unpivot dialog with the picks kept', async () => {
+    // (the harness's synthetic Escape also reaches the dialog beneath, so close with the button)
+    await ev(`[...${rd}.querySelectorAll('.dialog__foot button')].find((x) => x.textContent === 'Close').click()`);
+    await waitFor(`${rd} === null`, 'preview closed');
+    must(await ev(`${ud} !== null`), 'unpivot dialog still open');
+    must(J(await ev(`[...${ud}.querySelectorAll('input')].filter((x) => x.checked).map((x) => x.value)`)) === J(['q1', 'q2', 'id']), 'picks kept');
+    await ev(`${ud}.querySelector('button').click()`); await waitFor(`${ud} === null`, 'closed');
   });
   await check('a server refusal shows its sentence', async () => {
     await b.key('Escape', { vk: 27 }); await waitFor(`${rd} === null`, 'closed');

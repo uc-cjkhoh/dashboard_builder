@@ -33,8 +33,8 @@ export function tableRowsRequest(db, table, limit = PREVIEW_LIMIT, columns) {
  * a joined table, a NULL mark and Top-N rankings can't be applied to a single-table read: they are left out
  * and named in `notes`, never dropped silently.
  */
-export function buildRowsRequest({ plan, selection = null, limit, castOf = () => undefined }) {
-  const { db, table } = plan.from;
+export function buildRowsRequest({ plan, selection = null, limit, castOf = () => undefined, base = null }) {
+  const { db, table } = base ?? plan.from;
   const here = (x) => x.db === db && x.table === table;
   const notes = [];
   const filters = [];
@@ -58,6 +58,16 @@ export function buildRowsRequest({ plan, selection = null, limit, castOf = () =>
   }
   return { request: { db, table, filters, limit: checkedLimit(limit) }, notes };
 }
+
+/** The table of the first measure (`measures`: the sheet's planMeasures entries), the fact table behind the numbers. A
+ *  calculated pill has no single table here, so it is skipped; null when no measure names one (D95). */
+export function firstMeasureTable(measures) {
+  const e = measures.find((m) => m.field && !m.field.calc && m.field.db && m.field.table);
+  return e ? { db: e.field.db, table: e.field.table } : null;
+}
+
+/** The View data dialog's title: the table plainly, then the whole view or the selected mark. */
+export const viewDataTitle = ({ db, table }, markLabel) => `Rows of ${db}.${table} behind ${markLabel ?? "this view"}`;
 
 /** A cell for display: SQL NULL reads as "NULL" (flagged so it can be styled and is not mistaken for text). */
 export const cellText = (v) => (v === null || v === undefined ? { text: "NULL", isNull: true } : { text: String(v), isNull: false });
