@@ -164,7 +164,7 @@ What a theme can change:
 - **Look:** Default, or **One Dark Pro**. It is the one thing that changes surfaces, ink, status colours and glass,
   and only in dark mode: `Core/theme.js` sets `<html data-look="onedark">`, and `core.css`
   `:root[data-scheme="dark"][data-look="onedark"]` overrides the dark tokens. Picking it also picks the One Dark accent
-  (`#456fc8`, text `#6aa8e0`) and chart colours (`#6aa8e0` `#98c379` `#c678dd` `#e5c07b` `#56b6c2` `#d19a66` `#abb2bf` `#e06c75`);
+  (`#456fc8`, text `#6aa8e0`) and chart colours (`#6aa8e0` `#98c379` `#c678dd` `#e5c07b` `#56b6c2` `#d19a66` `#abb2bf` `#d68fc0`);
   both stay changeable. Surfaces are `--bg #181a1f`, `--surface #21252b`, `--surface-2 #282c34`, `--surface-3 #2c313a`;
   ink `#d7dae0` / `#abb2bf` / `#9aa2af`; lines `#3e4451` / `#4b5263`. Blue is desaturated to `#6aa8e0` (rule: HSL S ≤ 70 %),
   and the same AA / 3:1 checks run on this block (`tests/js/contrast.test.mjs`). The default look is Signal on charcoal.
