@@ -29,7 +29,7 @@ Format → Conditional formatting, in the Table and Text views. Set per measure,
 ### Totals and column order
 
 - **Grand totals** and **Subtotals** are in Format for Table and Text (and in Analytics): one setting, `analytics.totals`.
-- Column headers list their members in ascending order, like the rows, unless the sort is on a measure (then the query's order).
+- Column headers list their members in ascending order, like the rows, unless the sort is on a measure (then the query's order); a saved descending sort gives descending headers.
 
 ### Paging
 
@@ -55,7 +55,7 @@ A collapsible **Format** card (`formatPanel`, state on `sheet.format`) changes p
 
 | Setting | Effect |
 |---|---|
-| Number format | auto / compact / currency / percent + decimals (0–3 in the UI; a workbook may carry up to 10). Currency adds a **Symbol** choice: $ (default), €, £, ¥, RM, S$ or Custom… (1–3 visible characters, validated in the UI and on workbook import; `currency-model.js`) |
+| Number format | auto / compact / currency / percent + decimals (0–3 in the UI; a workbook may carry up to 10). Currency adds a **Symbol** choice: $ (default), €, £, ¥, RM, S$ or Custom… (a new custom symbol is 1–3 visible characters, validated in the box; a stored symbol of up to 8 characters, as import has always accepted, is kept and shown as custom; `currency-model.js`) |
 | Date format | for date-like dimension labels |
 | Top-N | Caps the chart query's `LIMIT`: All, 5, 10, 20, 50, 100, or **= a number parameter** (P32, clamped to 1–5000). **All** (the default) asks for up to 5000 groups. A set value keeps that many in sort order, so ascending and descending show different groups when there are more. A one-dimension bar / pie / donut / treemap then adds an **Other (N more)** mark (muted ink, not clickable) aggregating the rest. Also sets the histogram bin count |
 | Target | KPI: a goal for the first measure — progress bar + "% of target" ([worksheet-encodings.md](worksheet-encodings.md#date-range--comparison)). Gauge: the arc's maximum. Bullet: the target tick and bands ([worksheet-charts.md](worksheet-charts.md#chart-types)) |
