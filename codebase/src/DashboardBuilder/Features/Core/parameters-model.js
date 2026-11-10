@@ -62,6 +62,24 @@ export function effectiveTopN(format, params, cap) {
   return format?.topN ?? null;
 }
 
+export const WINDOW_PARAM_RANGE = [2, 30];
+export const FORECAST_PARAM_MAX = 24;
+const numParam = (params, id) => (id ? (params ?? []).find((x) => x.id === id && x.type === "number") : null);
+const wholeIn = (p, lo, hi) => { const n = Number(p?.value); return Number.isInteger(n) && n >= lo && n <= hi ? n : null; };
+
+/** A moving-average calculation's window: the bound number parameter's value when it is a whole number 2-30, else the typed window (default 3). Never clamped. */
+export function effectiveWindow(calc, params) {
+  return wholeIn(numParam(params, calc?.windowParam), ...WINDOW_PARAM_RANGE) ?? calc?.window ?? 3;
+}
+
+/** A chart's forecast steps: the bound number parameter's value when it is a whole number 0-24, else the typed steps (0 = none). Never clamped. */
+export function effectiveForecast(analytics, params) {
+  return wholeIn(numParam(params, analytics?.forecastParam), 0, FORECAST_PARAM_MAX) ?? analytics?.forecast ?? 0;
+}
+
+/** The measure pills of a sheet's shelves that carry a table calculation bound to a parameter. */
+const calcPills = (sheet) => [...(sheet?.rows ?? []), ...(sheet?.columns ?? [])].filter((f) => f?.tableCalc);
+
 /** A saved parameter, checked — or null (with an issue). */
 export function cleanParameter(raw, issues) {
   const name = raw && typeof raw === "object" ? checkParamName(raw.name) : { ok: false };
@@ -92,6 +110,8 @@ export function paramRefs(sheets, shared, id) {
     if (sheet?.format?.topNParam === id) out.push(`${w}Top N`);
     if (sheet?.analytics?.ref?.param === id) out.push(`${w}the reference line`);
     for (const k of ["fromParam", "toParam"]) if (sheet?.analytics?.band?.[k] === id) out.push(`${w}the band's ${k === "fromParam" ? "from" : "to"} end`);
+    for (const f of calcPills(sheet)) if (f.tableCalc.windowParam === id) out.push(`${w}the moving-average window on ${f.column ?? "a field"}`);
+    if (sheet?.analytics?.forecastParam === id) out.push(`${w}the forecast`);
     if (sheet?.paramAction?.param === id) out.push(`${w}the parameter action`);
   }
   for (const f of shared ?? []) if (f.param === id) out.push(`a shared filter on ${f.column ?? "a field"}`);
@@ -108,6 +128,8 @@ export function dropParamRefs(sheet, id) {
   drop(sheet?.analytics?.ref, "param");
   drop(sheet?.analytics?.band, "fromParam");
   drop(sheet?.analytics?.band, "toParam");
+  drop(sheet?.analytics, "forecastParam");
+  for (const f of calcPills(sheet)) drop(f.tableCalc, "windowParam");
   if (sheet?.paramAction?.param === id) { sheet.paramAction = null; changed = true; }
   return changed;
 }

@@ -648,6 +648,22 @@ test("a saved parameter action or band parameter that points at a missing parame
   assert.equal(gone.worksheets[0].sheet.analytics.band.toParam, "prm2");
   assert.ok(gone.issues.some((i) => /parameter action/.test(i)));
 });
+test("a moving-average window parameter and a forecast parameter survive a save/restore and are unlinked when missing", () => {
+  const field = { db: "s", table: "t", column: "amount", category: "numeric", agg: "sum", tableCalc: { type: "moving", along: "auto", window: 4, windowParam: "prm1" } };
+  const raw = (params) => wbText({ parameters: params, dashboards: [{ name: "S", sheet: { rows: [field], analytics: { forecast: 6, forecastParam: "prm1" } } }] });
+  const p = { id: "prm1", name: "A", type: "number", value: 5, allowed: { kind: "any" } };
+  const kept = parseWorkbook(raw([p]));
+  assert.equal(kept.worksheets[0].sheet.rows[0].tableCalc.windowParam, "prm1");
+  assert.equal(kept.worksheets[0].sheet.analytics.forecastParam, "prm1");
+  assert.equal(kept.worksheets[0].sheet.analytics.forecast, 6);
+  const gone = parseWorkbook(raw([]));
+  assert.equal(gone.worksheets[0].sheet.rows[0].tableCalc.windowParam, undefined);
+  assert.equal(gone.worksheets[0].sheet.rows[0].tableCalc.window, 4);
+  assert.equal(gone.worksheets[0].sheet.analytics.forecastParam, undefined);
+  assert.ok(gone.issues.some((i) => /window/.test(i)) && gone.issues.some((i) => /forecast/.test(i)));
+  const bad = parseWorkbook(wbText({ parameters: [p], dashboards: [{ name: "S", sheet: { analytics: { forecast: 3, forecastParam: "x<" } } }] }));
+  assert.equal(bad.worksheets[0].sheet.analytics.forecastParam, undefined);
+});
 test("a custom percentile band survives a save/restore", () => {
   const r = sheetOf({ analytics: { band: { kind: "percentile", lo: 5, hi: 95 } } });
   assert.deepEqual(r.worksheets[0].sheet.analytics.band, { kind: "percentile", lo: 5, hi: 95, custom: true });

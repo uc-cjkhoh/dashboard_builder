@@ -4,6 +4,7 @@ import { isCalcPill } from "../Calc/calc-pill.js";
 import { SCATTER_TYPES, marksOf, measureName as planMeasureName } from "./sheet-plan.js";
 import { REF_CHOICES, TREND_CHOICES, trendProblem, refValue, refConstant, trendSeries, pickMeasure, dataValues, bandBounds, bandLabel } from "./analytics-model.js";
 import { parameters } from "../Core/store.js";
+import { effectiveForecast } from "../Core/parameters-model.js";
 import { hint } from "./render-dom.js";
 import { selectHandler, legendSpec, memberSpec } from "./render-handlers.js";
 import { selectedIndicesOf } from "./dashboard-select.js";
@@ -81,7 +82,7 @@ export function renderSeries(container, rc, sheet, a) {
     const mname = mi > 0 ? ` (${series[mi].name})` : ""; // named only when a measure other than the default was chosen
     const refKind = A.ref?.kind ?? "none";
     const rv = refKind === "none" ? null : refValue(refKind, mvals, refConstant(A.ref, parameters));
-    const fc = type === "line" || type === "area" ? A.forecast ?? 0 : 0;
+    const fc = type === "line" || type === "area" ? effectiveForecast(A, parameters) : 0;
     const t = (A.trend && A.trend !== "none") || fc ? trendSeries(A.trend ?? "none", vals, fc) : null;
     const trendLabel = TREND_CHOICES.find(([v]) => v === (A.trend && A.trend !== "none" ? A.trend : "linear"))[1].toLowerCase();
     const tp = A.trend && A.trend !== "none" && !t ? (trendProblem(A.trend, vals) ?? "The trend needs at least 2 values (3 for a polynomial).") + (fc ? " The forecast is not drawn." : "") : null;

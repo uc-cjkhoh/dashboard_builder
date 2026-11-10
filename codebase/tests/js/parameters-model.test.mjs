@@ -77,3 +77,36 @@ test("paramRefs lists every reader of a parameter", () => {
   assert.ok(r.includes("S1: a filter on region") && r.includes("S1: Top N") && r.includes("a shared filter on c"));
   assert.deepEqual(paramRefs(sheets, [], "prm9"), []);
 });
+
+import { effectiveWindow, effectiveForecast, FORECAST_PARAM_MAX } from "../../src/DashboardBuilder/Features/Core/parameters-model.js";
+test("a moving-average window follows a number parameter (whole number 2-30), else its typed window", () => {
+  const p = (value) => [{ id: "prm1", type: "number", value }];
+  assert.equal(effectiveWindow({ window: 3, windowParam: "prm1" }, p(7)), 7);
+  assert.equal(effectiveWindow({ window: 3, windowParam: "prm1" }, p(1)), 3, "out of range: typed window, not clamped");
+  assert.equal(effectiveWindow({ window: 3, windowParam: "prm1" }, p(31)), 3);
+  assert.equal(effectiveWindow({ window: 3, windowParam: "prm1" }, p(2.5)), 3, "not a whole number");
+  assert.equal(effectiveWindow({ window: 5, windowParam: "gone" }, p(7)), 5);
+  assert.equal(effectiveWindow({ windowParam: "prm1" }, p(0)), 3, "default 3");
+  assert.equal(effectiveWindow({ window: 5 }, p(7)), 5);
+  assert.equal(effectiveWindow({ window: 5, windowParam: "prm1" }, [{ id: "prm1", type: "text", value: "9" }]), 5, "only a number parameter");
+});
+test("a forecast follows a number parameter (whole number 0-24), else its typed steps", () => {
+  const p = (value) => [{ id: "prm1", type: "number", value }];
+  assert.equal(FORECAST_PARAM_MAX, 24);
+  assert.equal(effectiveForecast({ forecast: 3, forecastParam: "prm1" }, p(8)), 8);
+  assert.equal(effectiveForecast({ forecast: 3, forecastParam: "prm1" }, p(0)), 0);
+  assert.equal(effectiveForecast({ forecast: 3, forecastParam: "prm1" }, p(25)), 3);
+  assert.equal(effectiveForecast({ forecast: 3, forecastParam: "prm1" }, p(-1)), 3);
+  assert.equal(effectiveForecast({ forecast: 6, forecastParam: "gone" }, p(8)), 6);
+  assert.equal(effectiveForecast({ forecast: 6 }, p(8)), 6);
+  assert.equal(effectiveForecast(null, p(8)), 0);
+});
+test("the window and forecast parameters are listed and dropped with the parameter", () => {
+  const sheet = { rows: [{ column: "amount", tableCalc: { type: "moving", along: "auto", window: 3, windowParam: "prm1" } }], columns: [], analytics: { forecast: 3, forecastParam: "prm1" } };
+  const r = paramRefs([{ name: "S1", sheet }], [], "prm1");
+  assert.deepEqual(r, ["S1: the moving-average window on amount", "S1: the forecast"]);
+  assert.equal(dropParamRefs(sheet, "prm1"), true);
+  assert.equal(sheet.rows[0].tableCalc.windowParam, undefined);
+  assert.equal(sheet.analytics.forecastParam, undefined);
+  assert.equal(sheet.rows[0].tableCalc.window, 3);
+});

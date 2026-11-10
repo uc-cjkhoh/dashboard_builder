@@ -2,7 +2,7 @@
 // computed in the browser over the rows the query returned: reference lines / bands, a trend line (with
 // R²) and a short forecast that extends it, and crosstab totals that respect each measure's aggregation.
 // sheet.analytics = { ref: { kind, value? }, band: { from, to, fromParam?, toParam? } | null, trend: none|linear|log|exp|power|poly2,
-//                     forecast: 0|3|6|12, totals: { grand, sub } }; a constant ref may carry `param` (a number parameter's id): refConstant().
+//                     forecast: 0|3|6|12, forecastParam?: a number parameter's id (whole 0-24), totals: { grand, sub } }; a constant ref may carry `param` (a number parameter's id): refConstant().
 export const REF_CHOICES = [["none", "None"], ["average", "Average"], ["median", "Median"], ["min", "Minimum"], ["max", "Maximum"], ["constant", "Constant"]];
 export const TREND_CHOICES = [["none", "None"], ["linear", "Linear"], ["log", "Logarithmic"], ["exp", "Exponential"], ["power", "Power"], ["poly2", "Polynomial (2nd order)"]];
 export const FORECAST_CHOICES = [[0, "None"], [3, "3 steps"], [6, "6 steps"], [12, "12 steps"]];
@@ -208,7 +208,7 @@ export function itemActive(a, id) {
     case "ref": return !!a.ref && a.ref.kind !== "none";
     case "band": return !!a.band;
     case "trend": return a.trend !== "none";
-    case "forecast": return a.forecast > 0;
+    case "forecast": return a.forecast > 0 || Boolean(a.forecastParam);
     default: return false;
   }
 }
@@ -229,7 +229,7 @@ export function removeItem(a, id) {
     case "ref": return { ...a, ref: { ...(a.ref?.measure ? { measure: a.ref.measure } : {}), kind: "none" } };
     case "band": return { ...a, band: null };
     case "trend": return { ...a, trend: "none" };
-    case "forecast": return { ...a, forecast: 0 };
+    case "forecast": return { ...a, forecast: 0, forecastParam: undefined };
     default: return a;
   }
 }
