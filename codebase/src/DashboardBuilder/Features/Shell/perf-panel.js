@@ -1,18 +1,19 @@
 // The performance dialog: the recent query and render timings (Core/perf-log.js), newest first, with
 // Copy as text and Clear. Opened from the sidebar's gauge tile; a native <dialog>, so Esc closes it
 // and focus is trapped while it is open. Nothing here leaves the browser.
-import { perfLog, formatPerfText, clock } from "../Core/perf-log.js";
+import { perfLog, formatPerfText, clock, cacheLabel } from "../Core/perf-log.js";
 import { offsetLabel } from "../Core/timezone.js";
 import { makeButton, openDialog, closeDialog, copyText } from "../Core/ui.js";
 
 const cell = (tag, text) => { const c = document.createElement(tag); c.textContent = text; return c; };
 
 function summaryOf(entries) {
-  const q = entries.filter((e) => e.kind !== "render" && !e.cached);
+  const q = entries.filter((e) => e.kind !== "render" && !e.cached && e.outcome === "ok");
   const hits = entries.filter((e) => e.cached).length;
+  const bad = entries.filter((e) => e.outcome !== "ok").length;
   if (!entries.length) return "";
   const avg = q.length ? Math.round(q.reduce((a, e) => a + e.ms, 0) / q.length) : 0;
-  return `${entries.length} recorded · ${q.length} queried (avg ${avg} ms) · ${hits} from cache`;
+  return `${entries.length} recorded · ${q.length} queried (avg ${avg} ms) · ${hits} from cache${bad ? ` · ${bad} failed or cancelled` : ""}`;
 }
 
 function fill(body, summary) {
@@ -31,7 +32,7 @@ function fill(body, summary) {
   for (const e of entries) {
     const tr = document.createElement("tr");
     tr.append(cell("td", clock(e.at)), cell("td", e.kind), cell("td", e.kind === "render" ? "" : String(e.ms)),
-      cell("td", e.rows ?? ""), cell("td", e.kind === "render" ? "" : e.cached ? "Hit" : "Miss"), cell("td", e.renderMs ?? ""));
+      cell("td", e.rows ?? ""), cell("td", cacheLabel(e)), cell("td", e.renderMs ?? ""));
     tbody.append(tr);
   }
   table.append(thead, tbody);

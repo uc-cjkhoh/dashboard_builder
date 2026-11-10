@@ -5,6 +5,7 @@
 import { clockIn } from "./timezone.js";
 
 export const KINDS = Object.freeze(["query", "histogram", "boxplot", "render", "other"]);
+export const OUTCOMES = Object.freeze(["ok", "failed", "aborted"]);
 const DEFAULT_CAPACITY = 200;
 
 const num = (v) => (typeof v === "number" && Number.isFinite(v) ? Math.max(0, Math.round(v)) : null);
@@ -21,7 +22,7 @@ export function rowCountOf(result) {
   return null;
 }
 
-/** A ring buffer of timing entries `{ at, kind, ms, rows, cached, renderMs }`; oldest dropped past `capacity`. */
+/** A ring buffer of timing entries `{ at, kind, ms, rows, cached, renderMs, outcome }` (outcome: ok | failed | aborted); oldest dropped past `capacity`. */
 export function createPerfLog({ capacity = DEFAULT_CAPACITY, now = Date.now } = {}) {
   let list = [];
   const subs = new Set();
@@ -31,13 +32,16 @@ export function createPerfLog({ capacity = DEFAULT_CAPACITY, now = Date.now } = 
     /** Record one entry. Only the whitelisted fields are kept; everything else is ignored. */
     record(e = {}) {
       push({ at: now(), kind: KINDS.includes(e.kind) ? e.kind : "other", ms: num(e.ms) ?? 0, rows: num(e.rows),
-        cached: e.cached === true, renderMs: num(e.renderMs) });
+        cached: e.cached === true, renderMs: num(e.renderMs), outcome: OUTCOMES.includes(e.outcome) ? e.outcome : "ok" });
+      const entry = list[list.length - 1];
       notify();
+      return entry; // an opaque handle: pass it to attachRender to time the draw of exactly this entry
     },
-    /** Attach a render time to the newest entry when it has none yet; otherwise add a render-only entry. */
-    attachRender(ms) {
-      const last = list[list.length - 1];
-      if (last && last.kind !== "render" && last.renderMs === null) { last.renderMs = num(ms); notify(); }
+    /** Attach a render time to `target` (a handle from record) or, without one, the newest entry, when it has
+     *  none yet; otherwise add a render-only entry. */
+    attachRender(ms, target) {
+      const last = target ?? list[list.length - 1];
+      if (last && list.includes(last) && last.kind !== "render" && last.outcome === "ok" && last.renderMs === null) { last.renderMs = num(ms); notify(); }
       else this.record({ kind: "render", ms: 0, renderMs: ms });
     },
     entries: () => list.map((e) => ({ ...e })),
@@ -52,9 +56,12 @@ export const perfLog = createPerfLog();
 /** hh:mm:ss in the app time zone (Core/timezone.js). */
 export const clock = (t, tz) => clockIn(t, tz);
 
+/** The cache column: Hit / Miss for a completed query, Failed / Aborted otherwise, blank for a render-only entry. */
+export const cacheLabel = (e) => e.kind === "render" ? "" : e.outcome === "failed" ? "Failed" : e.outcome === "aborted" ? "Aborted" : e.cached ? "Hit" : "Miss";
+
 /** The entries as tab-separated text (header + one line each), for copying out. */
 export function formatPerfText(entries) {
   if (!entries.length) return "No timings recorded.";
   const head = "time\tkind\tquery ms\trows\tcache\trender ms";
-  return [head, ...entries.map((e) => [clock(e.at), e.kind, e.ms, e.rows ?? "", e.kind === "render" ? "" : e.cached ? "hit" : "miss", e.renderMs ?? ""].join("\t"))].join("\n");
+  return [head, ...entries.map((e) => [clock(e.at), e.kind, e.ms, e.rows ?? "", cacheLabel(e).toLowerCase(), e.renderMs ?? ""].join("\t"))].join("\n");
 }

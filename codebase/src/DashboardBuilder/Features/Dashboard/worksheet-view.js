@@ -72,7 +72,7 @@ export function createWorksheetView(container, getContext, options = {}) {
   const statSourceProblem = (s, entities) => ([...s.columns, ...s.rows].some((f) => sourceOfTable(entities, f.db, f.table)) ? "A histogram reads one table — it can't read a union or unpivot yet." : null);
   const involvedOf = (c, s) => { try { return involvedTables(s, undefined, c.plan); } catch { return []; } };
   let extraNotice = null; // the line the last drawing wants in the notice (small-multiples cap, calculations on partial rows)
-  let renderTimed = false; // set by fetchCached: the next draw is the one to time (not a table scroll-page redraw)
+  let renderTimed = null; // the perf entry of the main fetch (set by fetchCached): the next draw is the one to time (not a table scroll-page redraw)
   // The Format → Background shade: set at the start of every run (so a saved shade shows before the first result and
   // loading / empty / error states carry the current one) and again on each draw.
   const applyBackground = (s) => {
@@ -84,7 +84,7 @@ export function createWorksheetView(container, getContext, options = {}) {
     extraNotice = null;
     const t0 = performance.now();
     extraNotice = draw(container, s, result, cmp ?? null, renderOptions())?.extraNotice ?? null;
-    if (renderTimed) { renderTimed = false; perfLog.attachRender(performance.now() - t0); } // only the draw that follows a fetch; timing only — Core/perf-log.js
+    if (renderTimed) { const entry = renderTimed; renderTimed = null; perfLog.attachRender(performance.now() - t0, entry); } // only the draw that follows a fetch; timing only — Core/perf-log.js
   };
   const gate = createLatestGate();
   // Table scroll-loading: the pages loaded so far for the table on screen (re-used while its plan stays the same, so a
@@ -123,20 +123,21 @@ export function createWorksheetView(container, getContext, options = {}) {
   // the request was superseded (silently) or failed (the error is shown in the container).
   async function fetchCached(c, ticket, key, run) {
     const cached = c.results.get(c.dash.id, key);
-    if (cached) { renderTimed = true; perfLog.record({ kind: queryKindOf(key), ms: 0, rows: rowCountOf(cached), cached: true }); markFresh(false); return cached; }
+    if (cached) { renderTimed = perfLog.record({ kind: queryKindOf(key), ms: 0, rows: rowCountOf(cached), cached: true }); markFresh(false); return cached; }
     container.replaceChildren(loadingView(c.noticeEl));
     const t0 = performance.now();
     try {
       const result = await run(ticket.signal);
-      if (!ticket.isCurrent()) return null;
-      renderTimed = true;
-      perfLog.record({ kind: queryKindOf(key), ms: performance.now() - t0, rows: rowCountOf(result), cached: false });
+      if (!ticket.isCurrent()) { perfLog.record({ kind: queryKindOf(key), ms: performance.now() - t0, outcome: "aborted" }); return null; } // answered after it was superseded: the result is dropped
+      renderTimed = perfLog.record({ kind: queryKindOf(key), ms: performance.now() - t0, rows: rowCountOf(result), cached: false });
       result.queriedAt = Date.now(); // kept in the cache with the result: the status bar and print header say when the data was read
       c.results.set(c.dash.id, key, result);
       markFresh(true);
       return result;
     } catch (err) {
-      if (!ticket.isCurrent() || isAbortError(err)) return null;
+      const aborted = !ticket.isCurrent() || isAbortError(err);
+      perfLog.record({ kind: queryKindOf(key), ms: performance.now() - t0, outcome: aborted ? "aborted" : "failed" });
+      if (aborted) return null;
       container.replaceChildren(warn(err.message));
       return null;
     }
@@ -153,8 +154,15 @@ export function createWorksheetView(container, getContext, options = {}) {
     const key = requestKey("query", plan);
     let result = c.results.get(c.dash.id, key);
     if (!result) {
+      const t0 = performance.now();
       try { result = await api.query(plan, { signal: ticket.signal }); }
-      catch (err) { if (!ticket.isCurrent() || isAbortError(err)) return undefined; toast(`Comparison failed: ${err.message}`, "danger"); return null; }
+      catch (err) {
+        const aborted = !ticket.isCurrent() || isAbortError(err);
+        perfLog.record({ kind: "query", ms: performance.now() - t0, outcome: aborted ? "aborted" : "failed" });
+        if (aborted) return undefined;
+        toast(`Comparison failed: ${err.message}`, "danger"); return null;
+      }
+      perfLog.record({ kind: "query", ms: performance.now() - t0, rows: rowCountOf(result), outcome: ticket.isCurrent() ? "ok" : "aborted" });
       if (!ticket.isCurrent()) return undefined;
       c.results.set(c.dash.id, key, result);
     }
