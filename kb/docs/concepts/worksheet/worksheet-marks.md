@@ -125,7 +125,8 @@ Format → Align · Row height · Shading, in the Table and Text views only. Sto
 Format → Background on every chart type and on Table / Text. Stored as `format.background` `none` | `subtle` | `muted` (absent reads `none`).
 
 - Subtle is `--surface-2`, Muted is `--surface-3`: palette tokens that follow light and dark, never a free colour. The class `ws-bg-subtle` / `ws-bg-muted` goes on the worksheet's container (worksheet view and dashboard widgets alike); None adds none.
-- The chart canvas and the table are transparent, so the shade shows behind them; a PNG export of a canvas chart fills with the container's shade.
+- The chart canvas and the table are transparent, so the shade shows behind them. The class is set at the start of every run and on each draw, so loading, empty and error states carry the current shade. A PNG export of a canvas chart fills with the shade; an SVG export is not shaded.
+- On Muted (the same step as table Shading) banded rows and header shading step to `--surface-2`, so Shading stays visible.
 - Code: `Dashboard/background-model.js` (`BACKGROUND_CHOICES`, `backgroundClass`), set in `worksheet-view.js`'s `drawResult`. `format.background` is not in `defaultFormat()`; the workbook loader keeps it only when present, so older files round-trip unchanged.
 
 ### Worksheet font (T01-23)
