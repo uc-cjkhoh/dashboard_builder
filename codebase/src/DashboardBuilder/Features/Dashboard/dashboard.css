@@ -423,6 +423,9 @@
 /* Format → Background: a surface token behind the worksheet (the chart canvas and table are transparent). */
 .ws-bg-subtle { background: var(--surface-2); }
 .ws-bg-muted { background: var(--surface-3); }
+/* Muted is the same step as table shading, so on it the bands and header step lighter instead — shading stays visible. */
+.ws-bg-muted .xtab.xt-s-banded tbody tr:nth-child(even) td:not(.xt-cf) { background: var(--surface-2); }
+.ws-bg-muted .xtab.xt-s-header thead th { background: var(--surface-2); }
 
 
 /* Honest worksheet notices — invalid filter pill + "first 200 values" cap note */

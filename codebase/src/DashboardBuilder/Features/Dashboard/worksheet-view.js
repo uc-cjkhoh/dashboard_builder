@@ -73,11 +73,16 @@ export function createWorksheetView(container, getContext, options = {}) {
   const involvedOf = (c, s) => { try { return involvedTables(s, undefined, c.plan); } catch { return []; } };
   let extraNotice = null; // the line the last drawing wants in the notice (small-multiples cap, calculations on partial rows)
   let renderTimed = false; // set by fetchCached: the next draw is the one to time (not a table scroll-page redraw)
+  // The Format → Background shade: set at the start of every run (so a saved shade shows before the first result and
+  // loading / empty / error states carry the current one) and again on each draw.
+  const applyBackground = (s) => {
+    const bg = backgroundClass(s.format?.background);
+    for (const [id] of BACKGROUND_CHOICES) container.classList.toggle(`ws-bg-${id}`, `ws-bg-${id}` === bg);
+  };
   const drawResult = (s, result, cmp) => {
+    applyBackground(s);
     extraNotice = null;
     const t0 = performance.now();
-    const bg = backgroundClass(s.format?.background);
-    for (const id of BACKGROUND_CHOICES) container.classList.toggle(`ws-bg-${id[0]}`, `ws-bg-${id[0]}` === bg);
     extraNotice = draw(container, s, result, cmp ?? null, renderOptions())?.extraNotice ?? null;
     if (renderTimed) { renderTimed = false; perfLog.attachRender(performance.now() - t0); } // only the draw that follows a fetch; timing only — Core/perf-log.js
   };
@@ -165,6 +170,7 @@ export function createWorksheetView(container, getContext, options = {}) {
     container.onscroll = null; // only the Table view loads on scroll (runTable sets it)
     statusBar(null, null);
     const s = dash.sheet;
+    applyBackground(s);
     cross = options.cross?.() ?? null;
     crossSig = crossSignature(cross, involvedOf(c, s));
     const crossNote = cross?.filter && !appliesTo(involvedOf(c, s), cross.filter) ? notAppliedNote(cross.filter) : null; // C3: its table isn't here — say so, never join

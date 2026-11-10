@@ -165,6 +165,12 @@ try {
     await shot('background-muted-dark.png');
     await ev(`import('/features/Core/scheme.js').then((m) => m.setSchemePref('light'))`);
   });
+  await check('Muted keeps table Shading visible', async () => {
+    await setSelect('Shading', 'banded'); await settle(300);
+    const even = await bgOf('#ws-chart table.xtab tbody tr:nth-child(2) td.num');
+    must(even !== await bgOf('#ws-chart') && even === await token('--surface-2'), 'banded row differs from the muted background: ' + even);
+    await setSelect('Shading', 'none'); await settle(300);
+  });
   await check('a chart takes the shading too; None restores', async () => {
     await ev(`document.querySelector('.ws-pick--chart .ws-pick__btn').click()`);
     await ev(`[...document.querySelectorAll('.ws-charttypes .menu__item')].find((x) => x.textContent.trim().startsWith('Bar')).click()`);

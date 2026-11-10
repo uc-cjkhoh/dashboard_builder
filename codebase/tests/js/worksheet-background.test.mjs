@@ -26,3 +26,15 @@ test("workbook round-trips the choice; an unknown one resets with a note; old sh
   assert.equal(sanitizeSheet(bad, "Sheet 1", issues).format.background, "none");
   assert.match(issues[0], /Sheet 1 format: unknown background "pink"/);
 });
+test("table shading stays visible on a Muted background (a different token)", () => {
+  const css = readFileSync(new URL("../../src/DashboardBuilder/Features/Dashboard/dashboard.css", import.meta.url), "utf8");
+  assert.match(css, /\.ws-bg-muted \.xtab\.xt-s-banded tbody tr:nth-child\(even\) td:not\(\.xt-cf\)\s*\{\s*background: var\(--surface-2\)/);
+  assert.match(css, /\.ws-bg-muted \.xtab\.xt-s-header thead th\s*\{\s*background: var\(--surface-2\)/);
+});
+test("the shade is applied at run start and on draw; a PNG export fills with it", () => {
+  const view = readFileSync(new URL("../../src/DashboardBuilder/Features/Dashboard/worksheet-view.js", import.meta.url), "utf8");
+  assert.match(view, /const s = dash\.sheet;\s*applyBackground\(s\);/);
+  assert.match(view, /const drawResult = \(s, result, cmp\) => \{\s*applyBackground\(s\);/);
+  const chart = readFileSync(new URL("../../src/DashboardBuilder/Features/Dashboard/chart.js", import.meta.url), "utf8");
+  assert.match(chart, /ws-bg-[\s\S]{0,200}getComputedStyle\(container\)\.backgroundColor[\s\S]{0,400}backgroundColor: surface/);
+});
