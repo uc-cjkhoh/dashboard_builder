@@ -25,7 +25,7 @@ import { createResultCache } from "./query-runner.js";
 import { CHART_TYPES, chartIcon, chartLabel, sortSummary } from "./viewbar-model.js";
 import { enter, MOTION } from "../Core/motion.js";
 import { wireResizer } from "../Core/resizer.js";
-import { PRESET_CHOICES, COMPARE_CHOICES, COMPARE_TYPES, newPeriod, resolveRange, compareRange, rangeLabel, withLatest, anchorLabel } from "./period-model.js";
+import { PRESET_CHOICES, COMPARE_CHOICES, COMPARE_TYPES, newPeriod, resolveRange, compareRange, rangeLabel, withLatest, refreshedLatest, anchorLabel } from "./period-model.js";
 import { newFilter, caseMiss, caseMissText, conflictFor, selectionLabel } from "./filter-hints.js";
 import { CF_MODE_CHOICES, CF_SCALE_CHOICES, CF_OP_CHOICES, CF_TONE_CHOICES, CF_MAX_RULES, measureKey, emptyRule, isActive } from "./conditional-model.js";
 import { templateError, buildActionUrl, applyParamAction, MAX_LABEL, MAX_TEMPLATE } from "./action-model.js";
@@ -725,6 +725,7 @@ export function initDashboards() {
     const dash = activeWorksheet();
     if (!dash) return;
     const s = dash.sheet;
+    if (s.period?.anchor === "latest" && !latestChecked.has(dash.id)) { latestChecked.add(dash.id); readLatest(dash, s.period); } // a saved day may be stale
     withCategories(s.filters, categoryOf);
     withCategories(sharedFilters, categoryOf);
     // Data controls live in the glass header; view controls live on the chart card they act on.
@@ -938,10 +939,15 @@ export function initDashboards() {
   // A collapsible row of presentation controls that never touch the query (except Top-N, which
   // caps the LIMIT). All state lives on sheet.format so it persists for the session (O1).
   // Re-run the query against ClickHouse, bypassing the result cache (data may have changed).
+  const latestChecked = new Set(); // sheets whose period's latest day was re-read this session (Refresh re-reads it)
   function refreshButton(dash) {
     const btn = iconButton("refresh", "Refresh");
     btn.title = "Re-run the query against ClickHouse";
-    btn.addEventListener("click", () => sheetView.refresh());
+    btn.addEventListener("click", () => {
+      const p = dash.sheet.period;
+      if (p?.anchor === "latest") readLatest(dash, p);
+      sheetView.refresh();
+    });
     return btn;
   }
 
@@ -2083,7 +2089,7 @@ export function initDashboards() {
     if (!String(f.value ?? "").trim() || isCalcPill(f)) return note;
     distinctOf(f).then((members) => {
       const m = caseMiss(f.value, members);
-      if (m != null) { note.textContent = caseMissText(nameOf(f), f.value, m); note.hidden = false; }
+      if (m != null) { note.textContent = caseMissText(f.value, m); note.hidden = false; }
     }).catch(() => {});
     return note;
   }
@@ -2717,14 +2723,19 @@ export function initDashboards() {
     if (f.category !== "temporal") { toast("Date range needs a date or date-time field.", "info"); return; }
     const period = newPeriod(f);
     dash.sheet.period = period;
+    latestChecked.add(dash.id); // the read below is this sheet's re-read
     commit(dash, dash.sheet);
     // Count the relative range from the field's latest day (one bounded read), not from today — so older data isn't emptied.
+    readLatest(dash, f);
+  }
+  // Read the field's latest day and keep it on the period (one bounded read). A failed read leaves the saved day as the fallback.
+  function readLatest(dash, f) {
     api.latest(f.db, f.table, f.column).then((r) => {
-      const cur = dash.sheet.period;
-      if (!r?.latest || cur !== period) return; // replaced, removed or changed meanwhile
-      dash.sheet.period = withLatest(cur, r.latest);
+      const next = refreshedLatest(dash.sheet.period, f, r?.latest); // null: replaced, removed, another field or unchanged
+      if (!next) return;
+      dash.sheet.period = next;
       commit(dash, dash.sheet);
-    }).catch(() => { /* no read: the range counts from today, and the panel says so */ });
+    }).catch(() => { /* no read: the range counts from the saved day, or today, and the panel says so */ });
   }
   // The Date range editor: preset (or custom days), comparison (or custom days), and the resolved ranges.
   function periodEditor(dash, s) {

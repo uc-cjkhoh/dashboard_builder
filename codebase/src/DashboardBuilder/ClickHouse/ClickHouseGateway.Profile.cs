@@ -111,8 +111,8 @@ public sealed partial class ClickHouseGateway
     {
         var columns = await DescribeColumnsAsync(info, database, table, ct); // validates db + table
         var col = columns.FirstOrDefault(c => string.Equals(c.Name, column, StringComparison.Ordinal))
-                  ?? throw new UnknownIdentifierException("Unknown column.");
-        if (col.Category != ClickHouseType.Temporal) throw new UnknownIdentifierException("Unknown date column.");
+                  ?? throw UnknownIdentifierException.Column(column, database, table);
+        if (col.Category != ClickHouseType.Temporal) throw new UnknownIdentifierException($"Column \"{col.Name}\" is not a date column.");
         using var httpClient = CreateHttpClient(info);
         await using var conn = new ClickHouseConnection(BuildConnectionString(info), httpClient);
         await conn.OpenAsync(ct);

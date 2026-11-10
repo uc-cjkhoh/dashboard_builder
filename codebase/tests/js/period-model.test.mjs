@@ -108,3 +108,16 @@ test("a saved period keeps its anchor and latest day; an older one counts from t
   const bad = sanitizeSheet({ period: { ...base, latest: "nope" } }, "w", []);
   assert.equal(bad.period, null);
 });
+
+import { refreshedLatest } from "../../src/DashboardBuilder/Features/Dashboard/period-model.js";
+test("refreshedLatest: a newer latest day replaces the saved one; anything else changes nothing", () => {
+  const fld = { db: "d", table: "t", column: "c" };
+  const p = withLatest(newPeriod({ ...fld, category: "temporal" }), "2024-03-31");
+  assert.equal(refreshedLatest(p, fld, "2024-05-31").latest, "2024-05-31");
+  assert.equal(refreshedLatest(p, fld, "2024-03-31"), null);        // unchanged
+  assert.equal(refreshedLatest(p, fld, null), null);                // empty column / failed read: keep the saved day
+  assert.equal(refreshedLatest(p, fld, "junk"), null);
+  assert.equal(refreshedLatest(p, { ...fld, column: "x" }, "2024-05-31"), null); // the field was replaced meanwhile
+  assert.equal(refreshedLatest({ ...p, anchor: "today" }, fld, "2024-05-31"), null);
+  assert.equal(refreshedLatest(null, fld, "2024-05-31"), null);
+});

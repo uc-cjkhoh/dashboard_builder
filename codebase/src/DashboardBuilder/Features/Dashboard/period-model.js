@@ -40,6 +40,12 @@ export function newPeriod(field) {
 }
 /** The period with the column's latest day recorded (ignored unless it is a YYYY-MM-DD day). */
 export const withLatest = (period, day) => ({ ...period, latest: ISO.test(day ?? "") ? day : null });
+/** The period with a freshly read latest day, or null when nothing changes (not anchored to the data, another field, no day, same day). */
+export function refreshedLatest(period, field, day) {
+  if (!period || period.anchor !== "latest" || !ISO.test(day ?? "")) return null;
+  if (period.db !== field.db || period.table !== field.table || period.column !== field.column) return null;
+  return period.latest === day ? null : withLatest(period, day);
+}
 const anchorDay = (p) => (p.anchor === "latest" ? parse(p.latest) : null);
 /** What a relative range counts from, for the panel; null for a custom range (it counts from nothing). */
 export function anchorLabel(p) {

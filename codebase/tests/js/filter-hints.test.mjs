@@ -23,7 +23,7 @@ test("caseMiss: a typed value that matches a member only by case names that memb
   assert.equal(caseMiss("Pending", members), null);       // no near member
   assert.equal(caseMiss("", members), null);
   assert.equal(caseMiss("x", []), null);
-  assert.equal(caseMissText("orders.status", "shipped", "Shipped"), "No member 'shipped' — did you mean 'Shipped'?");
+  assert.equal(caseMissText("shipped", "Shipped"), "No member 'shipped' — did you mean 'Shipped'?");
 });
 
 test("conflicts: two filters on one field that cannot both be true", () => {
@@ -79,4 +79,21 @@ test("empty '=' and empty 'in' filters are both kept on restore", () => {
 test("Top N names its allowed range", () => {
   const f = F("top", { value: "5000", topBy: { column: "x" } });
   assert.equal(checkFilter(f).error, "Top N must be 1–1000.");
+});
+
+test("conflicts compare numbers and dates by value, not as text", () => {
+  const N = (op, extra) => F(op, { category: "numeric", column: "qty", ...extra });
+  assert.equal(conflicts([N("=", { value: "1" }), N("=", { value: "1.0" })]).length, 0);
+  assert.equal(conflicts([N("=", { value: "1" }), N("=", { value: "2" })]).length, 1);
+  assert.equal(conflicts([N("in", { values: ["1", "2"] }), N("=", { value: "2.00" })]).length, 0);
+  const D = (op, extra) => F(op, { category: "temporal", column: "placed", ...extra });
+  assert.equal(conflicts([D("=", { value: "2024-03-01" }), D("=", { value: "2024-03-01 00:00:00" })]).length, 0);
+  assert.equal(conflicts([D("=", { value: "2024-03-01" }), D("=", { value: "2024-03-02" })]).length, 1);
+  assert.equal(conflicts([F("=", { value: "A" }), F("=", { value: "a" })]).length, 1); // text stays case-sensitive
+});
+test("a half-filled custom range is not applied, so it does not make an empty result a filter miss", () => {
+  const plain = { filters: [], period: null, pages: null, drill: null };
+  const custom = { preset: "custom", from: "2024-01-01", to: null };
+  assert.equal(emptyMessage({ ...plain, period: custom }), "No data for these fields.");
+  assert.equal(emptyMessage({ ...plain, period: { ...custom, to: "2024-02-01" } }), "No rows match the filters.");
 });

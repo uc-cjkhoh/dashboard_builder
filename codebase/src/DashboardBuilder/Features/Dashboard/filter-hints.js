@@ -2,6 +2,7 @@
 // exclude each other, the empty-result message and the Keep only / Exclude label for the Filters tile.
 // Unit-tested in tests/js/filter-hints.test.mjs.
 import { checkFilter } from "./filter-rules.js";
+import { resolveRange } from "./period-model.js";
 
 /** A new filter on a text dimension starts as an `in` value list (the bounded distinct-values picker); any other field as `=`. */
 export const defaultOpFor = (category) => (category === "text" ? "in" : "=");
@@ -18,14 +19,26 @@ export function caseMiss(value, members) {
   if (list.includes(v) || list.includes(String(value))) return null;
   return list.find((m) => m.toLowerCase() === v.toLowerCase()) ?? null;
 }
-export const caseMissText = (_column, value, member) => `No member '${String(value).trim()}' — did you mean '${member}'?`;
+export const caseMissText = (value, member) => `No member '${String(value).trim()}' — did you mean '${member}'?`;
 
 // What a simple filter allows: { inc: Set } (= / in) or { exc: Set } (not in). null = not a simple, applied filter.
+// A value as a comparable key: numbers by value (1 = 1.0), dates by instant (a bare day = its midnight), booleans as true / false.
+function norm(category, v) {
+  const t = String(v ?? "").trim();
+  if (category === "numeric") return Number.isFinite(Number(t)) && t !== "" ? String(Number(t)) : t;
+  if (category === "temporal") {
+    const m = /^(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}:\d{2})(?::(\d{2}))?)?$/.exec(t);
+    return m ? `${m[1]} ${m[2] ?? "00:00"}:${m[3] ?? "00"}` : t;
+  }
+  if (category === "boolean") return t === "1" ? "true" : t === "0" ? "false" : t.toLowerCase();
+  return t;
+}
 function allowance(f) {
   if (f.param || typeof f.calc === "string" || checkFilter(f).state !== "ok") return null;
-  if (f.op === "=") return { inc: new Set([String(f.value).trim()]) };
-  if (f.op === "in") return { inc: new Set(f.values) };
-  if (f.op === "notin") return { exc: new Set(f.values) };
+  const n = (v) => norm(f.category, v);
+  if (f.op === "=") return { inc: new Set([n(f.value)]) };
+  if (f.op === "in") return { inc: new Set(f.values.map(n)) };
+  if (f.op === "notin") return { exc: new Set(f.values.map(n)) };
   return null;
 }
 const disjoint = (a, b) => ![...a].some((v) => b.has(v));
@@ -63,7 +76,7 @@ export function conflictFor(filters, index) {
 
 /** The text for an empty result: filters, a date range, pages, a drill or a kept selection removed the rows, or the fields hold none. */
 export function emptyMessage(sheet, { shared = 0 } = {}) {
-  const limited = shared > 0 || (sheet.filters ?? []).some((f) => checkFilter(f).state === "ok") || sheet.period || sheet.pages
+  const limited = shared > 0 || (sheet.filters ?? []).some((f) => checkFilter(f).state === "ok") || (sheet.period && resolveRange(sheet.period)) || sheet.pages
     || (sheet.drill?.levels?.length ?? 0) > 0 || Boolean(sheet.selection?.action);
   return limited ? "No rows match the filters." : "No data for these fields.";
 }
