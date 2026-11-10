@@ -87,13 +87,24 @@ try {
       must(r.length === 0, 'outside the widget: ' + JSON.stringify(r));
     });
 
-    await check(`${scheme}: a pie with few slices shows each slice's percent; many slices stay unlabelled`, async () => {
-      const draw = (n) => b.evaluate(`(async () => { const h = ${host(420, 300)}; const cats = Array.from({ length: ${n} }, (_, i) => 'm' + i);
-        window.__chart.renderChart(h, { type: 'pie', categories: cats, format: {}, series: [{ name: 'q', data: cats.map((_, i) => 10 + i * 5) }] });
-        await new Promise((r) => setTimeout(r, 600)); return [...h.querySelectorAll('svg text')].map((t) => t.textContent).filter((x) => /%$/.test(x)).length; })()`);
-      must(await draw(4) === 4, 'four slices, four percents');
+    await check(`${scheme}: a pie shows percent only with Data labels on (few slices); a plain stacked bar keeps its label position; square/circle fit axes`, async () => {
+      const draw = (n, labels) => b.evaluate(`(async () => { const h = ${host(640, 420)}; const cats = Array.from({ length: ${n} }, (_, i) => 'm' + i);
+        window.__chart.renderChart(h, { type: 'pie', categories: cats, format: { dataLabels: ${labels} }, series: [{ name: 'q', data: cats.map((_, i) => 10 + i * 5) }] });
+        await new Promise((r) => setTimeout(r, 600)); return [...h.querySelectorAll('svg text')].map((t) => t.textContent).filter((x) => /%/.test(x)).length; })()`);
+      must(await draw(4, false) === 0, 'Data labels off: no slice labels');
+      { const n4 = await draw(4, true); must(n4 === 4, 'Data labels on, four slices: four percents, got ' + n4); }
+      must(await draw(12, true) === 0, 'twelve slices: no percent');
+      const pos = await b.evaluate(`(async () => { const h = ${host(420, 300)};
+        window.__chart.renderChart(h, { type: 'stacked', categories: ['a', 'b'], format: { dataLabels: true }, series: [{ name: 'x', data: [1, 2] }, { name: 'y', data: [2, 1] }] });
+        await new Promise((r) => setTimeout(r, 400)); return window.echarts.getInstanceByDom(h.querySelector('.ws-chart-canvas')).getOption().series[0].label.position; })()`);
+      must(pos === 'top', 'plain stacked label position: ' + pos);
+      for (const t of ['square', 'circle']) {
+        const sc = await b.evaluate(`(async () => { const h = ${host(420, 300)};
+          window.__chart.renderChart(h, { type: '${t}', categories: ['a', 'b'], format: {}, series: [{ name: 'x', data: [20000, 21000] }, { name: 'y', data: [800, 900] }] });
+          await new Promise((r) => setTimeout(r, 400)); const o = window.echarts.getInstanceByDom(h.querySelector('.ws-chart-canvas')).getOption(); return [].concat(o.xAxis)[0].scale && [].concat(o.yAxis)[0].scale; })()`);
+        must(sc === true, t + ' axes not fitted');
+      }
       await b.screenshot(join(SHOTS, `pie-${scheme}.png`));
-      must(await draw(12) === 0, 'twelve slices, none');
     });
 
     await check(`${scheme}: histogram of whole numbers labels bins 1, 2, 3 or 3–4`, async () => {

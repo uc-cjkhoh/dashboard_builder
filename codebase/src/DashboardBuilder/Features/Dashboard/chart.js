@@ -460,7 +460,7 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
   // seriesLabels[series][category]: a colour split's Label, laid out per cell; pointLabels[category]: one text per mark.
   const labelAt = (si, di) => (seriesLabels ? seriesLabels[si]?.[di] : pointLabels?.[di]);
   const dataLabel = (si) => ((pointLabels || seriesLabels || format.dataLabels)
-    ? { show: true, position: type === "stacked" ? "inside" : labelPos, color: c.label, fontFamily: c.font, fontSize: 14,
+    ? { show: true, position: type === "stacked" && seriesLabels ? "inside" : labelPos, // only a colour split's Label sits inside its stack segment color: c.label, fontFamily: c.font, fontSize: 14,
         formatter: (p) => ((pointLabels || seriesLabels) ? String(labelAt(si, p.dataIndex) ?? "") : fmtVal(p.value)) }
     : { show: false });
 
@@ -619,7 +619,7 @@ function addAnalytics(base, a, { c, fmtVal, horizontal }) {
 
 // pie / donut — one dimension (slices) × one measure (size). Colour IS the encoding, so a legend
 // shows by default (dataviz: identity never colour-alone; the legend supplies the labels).
-const PIE_AUTO_LABELS = 6; // up to this many slices show their percent without turning Data labels on
+const PIE_PERCENT_SLICES = 6; // with Data labels on, up to this many slices also show their percent
 function buildPie({ type, categories, series, format = {}, pointLabels, tooltipExtra, tooltipText, tooltipFields, tooltipStyle, tooltipFormats, otherIndex = -1 }) {
   const c = tokens();
   const fmtVal = makeValueFormatter(format);
@@ -627,7 +627,7 @@ function buildPie({ type, categories, series, format = {}, pointLabels, tooltipE
   const data = labels.map((name, i) => ({ name, value: series[0].data[i], ...(i === otherIndex ? { itemStyle: { color: c.muted } } : memberColors().has(name) ? { itemStyle: { color: memberColors().get(name) } } : {}) }));
   const { pos, legend } = legendFor(format, c, labels, true);
   const showLabels = !!format.dataLabels || !!pointLabels; // Label field forces slice labels on
-  const fewSlices = labels.length > 0 && labels.length <= PIE_AUTO_LABELS; // a few slices read straight off the chart: each shows its share
+  const fewSlices = labels.length <= PIE_PERCENT_SLICES; // few slices: the label adds the share
 
   return {
     color: c.cat,
@@ -649,9 +649,9 @@ function buildPie({ type, categories, series, format = {}, pointLabels, tooltipE
       radius: type === "donut" ? ["45%", "72%"] : "72%",
       center: legend && (pos === "left" || pos === "right") ? ["42%", "52%"] : ["50%", "54%"],
       data,
-      label: { show: showLabels || fewSlices, color: c.label, fontFamily: c.font,
-        formatter: (p) => (pointLabels ? String(pointLabels[p.dataIndex] ?? "") : showLabels ? `${p.name}: ${fmtVal(p.value)}` : `${p.percent}%`) },
-      labelLine: { show: showLabels || fewSlices },
+      label: { show: showLabels, color: c.label, fontFamily: c.font,
+        formatter: (p) => (pointLabels ? String(pointLabels[p.dataIndex] ?? "") : `${p.name}: ${fmtVal(p.value)}${fewSlices ? ` (${p.percent}%)` : ""}`) },
+      labelLine: { show: showLabels },
       itemStyle: edgeOr(format.markBorder, borderInk(format.markBorderColor, c), { borderColor: c.surface, borderWidth: 2 }),
       emphasis: { itemStyle: { shadowBlur: 10, shadowColor: "rgba(0,0,0,0.2)" } },
     }],
