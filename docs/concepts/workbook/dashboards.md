@@ -57,8 +57,8 @@ Each dashboard has its own size (`Board/board-size.js`).
     (`layoutBoard(…, { fixed })`, `fixedRowH`), so drag and resize snap to the drawn rows.
   - Rows never shrink below 16px, so a tall stack in a short box overflows.
   - The panel scrolls when the window is smaller than the box.
-- **Custom** (the "Custom…" option): a fixed board of an exact **Width** and **Height** in whole pixels, typed into two inputs beside the select (`customSizeProblem`); it starts at 1000 × 700 and behaves like any fixed size.
-  - An invalid pair (empty, not whole, outside the limits) is refused in place: the offending input gets `aria-invalid`, the status line says why, and the previous size stays; nothing is clamped.
+- **Custom** (the "Custom…" option): a fixed board of an exact **Width** and **Height** in whole pixels, typed into two inputs beside the select (`customSizeProblem`); it starts at the current size when that is not a preset, else 1000 × 700, and behaves like any fixed size.
+  - An invalid pair (empty, not whole, outside the limits) is refused in place: the offending input gets `aria-invalid`, the status line (warning icon + text, live region, tied to the inputs by `aria-describedby`, as for the range inputs) says why, and the previous size stays; nothing is clamped.
   - A pair equal to a preset shows as that preset on reload.
 - **Range** (the "Range…" option): an Automatic board bounded by up to four optional pixel limits (**Min width**, **Max width**, **Min height**, **Max height**; an empty input is no limit), saved as `range` on the dashboard.
   - The board is the panel width clamped into the width limits, centred when narrower; a minimum above the panel makes the panel scroll.
