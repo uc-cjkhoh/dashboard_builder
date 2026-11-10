@@ -120,3 +120,7 @@ dialog. A worksheet using it shows "Calculation 'X' can't be computed: …" and 
 ### D83 — Groups on whole-number and true/false fields, by listed value
 A group field can sit on a whole-number or true/false column (`group.kind` `"number"` / `"boolean"`; absent = text). The member list is exact values; the tree still compares text, so a number is read as `TEXT(field)` and a true/false column is tested as the condition itself (`TEXT()` refuses booleans). Decimal and floating-point columns, and dates, stay refused.
 - **Why:** it needs no server node and no `IN`; the member list writes `Decimal(10,2)` as `1.50` while ClickHouse's `toString` gives `1.5` (pinned live), so a listed decimal would never match. Ranges and date bins need range nodes and are left open.
+
+### D94 — A group field labels NULL with a first `isnull` WHEN
+`group.nullLabel` (optional, trimmed, ≤ 80 characters) adds a first `WHEN isnull(field) THEN '<label>'`. NULL is a value no member list can hold (the list skips it), so it is labelled beside the groups, not placed in one; giving it a group's name makes the two read as one group. It costs 3 nodes (one fewer member; two fewer with the remainder label too).
+- **Why:** no server node and no member-list change; reuses `isnull`, already in the engine. Making a group from marks selected on a chart needs a selection model on the pill and is left open.
