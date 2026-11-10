@@ -259,6 +259,8 @@ try {
 
   await check('k2: bare [qty], double-quoted text, and the argument-count signature', async () => {
     await openNewDialog();
+    await fillDialog('qty', 'SUM([orders.qty])');
+    must(/A column is also called qty/.test(await ev(`${dlg}.querySelector('[id^=calc-nmsg]').textContent`)), 'no column-clash note');
     await fillDialog('Bare', 'SUM([qty])');
     must(!(await saveDisabled()), `bare [qty] refused: ${await ev(`${dlg}.querySelector('[id^=calc-fmsg]').textContent`)}`);
     await focusAndType('.calc-dialog textarea.formula', 'IF [orders.amount] > 1 THEN "Big" ELSE "Small" END');

@@ -89,11 +89,25 @@ export function suggest(formula, caret, ctx) {
   return { from, to, items: items.slice(0, SUGGEST_MAX) };
 }
 
+// True when `before` ends inside an unclosed '…' or "…" literal (the other quote kind is plain text inside one).
+function inTextLiteral(before) {
+  let q = null;
+  for (const ch of before) { if (q === null) { if (ch === "'" || ch === '"') q = ch; } else if (ch === q) q = null; }
+  return q !== null;
+}
+
+/** The note shown when calculation name `name` equals a model column name (a bare `[name]` then means the calculation), else null. */
+export function columnClash(name, catalog) {
+  const n = String(name ?? "").trim();
+  if (n === "" || !(catalog?.fields ?? []).some((f) => f.column === n)) return null;
+  return `A column is also called ${n} — [${n}] will mean this calculation.`;
+}
+
 // A word being typed outside any [ ] or '…' (the caller already knows there is no open bracket).
 function functionSuggest(formula, before, to) {
   const next = formula.charAt(to);
   if (/[A-Za-z0-9_]/.test(next)) return null; // the caret is inside a word: LO|WER
-  if ((before.match(/'/g) ?? []).length % 2 === 1 || (before.match(/"/g) ?? []).length % 2 === 1) return null;
+  if (inTextLiteral(before)) return null;
   const m = /(?<![A-Za-z0-9_.])[A-Za-z_][A-Za-z0-9_]*$/.exec(before);
   if (!m) return null;
   const items = functionItems(m[0], SUGGEST_MAX);

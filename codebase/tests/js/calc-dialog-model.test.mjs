@@ -140,3 +140,12 @@ test("isDirty: an untouched dialog is clean; any edit to name or formula is dirt
   assert.equal(isDirty({ name: "A", formula: "1" }, { name: "A", formula: "12" }), true);
   assert.equal(isDirty({ name: "A", formula: "1" }, { name: "A ", formula: "1" }), false); // trailing space in the name is not a change
 });
+
+test("columnClash: a name equal to a model column is called out; autocomplete stays quiet inside double quotes with an apostrophe", async () => {
+  const { columnClash } = await import("../../src/DashboardBuilder/Features/Calc/calc-dialog-model.js");
+  assert.equal(columnClash("qty2", catalog), null);
+  assert.equal(columnClash("amount", catalog), "A column is also called amount — [amount] will mean this calculation.");
+  assert.equal(columnClash("  amount ", catalog), "A column is also called amount — [amount] will mean this calculation.");
+  assert.deepEqual(suggest(`IF 1 THEN "it's" ELSE LO`, 24, ctx).items.length > 0, true);
+  assert.deepEqual(suggest(`IF 1 THEN "it's LO`, 18, ctx).items, []);
+});

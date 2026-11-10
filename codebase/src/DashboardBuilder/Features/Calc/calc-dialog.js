@@ -5,7 +5,7 @@ import { icon } from "../Core/icons.js";
 import { LIMITS } from "../Core/validate.js";
 import { makeButton, openDialog, closeDialog, toast, confirmDialog } from "../Core/ui.js";
 import { catalogFromEntities } from "./calc-resolve.js";
-import { evaluateDraft, chipFor, suggest, isDirty } from "./calc-dialog-model.js";
+import { evaluateDraft, chipFor, suggest, isDirty, columnClash } from "./calc-dialog-model.js";
 import { searchHelp, groupHelp } from "./function-help.js";
 import { normaliseFormula, showUseAs, useAsRole, roleChoice, setRoleChoice, paneState } from "./calc-pane-model.js";
 
@@ -131,6 +131,8 @@ export function openCalcDialog(calcId = null) {
     const nameBad = !r.ok && r.field === "name";
     if (nameBad && nameTouched) name.setAttribute("aria-invalid", "true"); else name.removeAttribute("aria-invalid");
     message(nameMsg, nameBad && nameTouched ? r.message : "");
+    const clash = !nameBad ? columnClash(name.value, catalog) : null;
+    if (clash) { nameMsg.replaceChildren(el("div", "hint", clash)); }
     const untouched = formula.trim() === "";
     const formulaBad = !untouched && !f.ok && f.field === "formula";
     if (formulaBad) ta.setAttribute("aria-invalid", "true"); else ta.removeAttribute("aria-invalid");

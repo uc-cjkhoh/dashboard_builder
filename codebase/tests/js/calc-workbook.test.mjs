@@ -75,3 +75,13 @@ test("setCalculations(list, nextId): deleting the highest id and reopening never
   assert.equal(store.addCalculation({ name: "C", formula: "1" }).id, "calc42");
   store.setCalculations([]);
 });
+
+test("rename skips double-quoted text and is not fooled by an apostrophe inside it", async () => {
+  const { renameParamInFormulas } = await import("../../src/DashboardBuilder/Features/Calc/calc-params.js");
+  const f = (formula) => [{ id: "c", name: "X", formula }];
+  assert.equal(renameInFormulas(f('IF [Net] > 1 THEN "see [Net]" ELSE "x" END'), "Net", "Gross")[0].formula, 'IF [Gross] > 1 THEN "see [Net]" ELSE "x" END');
+  assert.equal(renameInFormulas(f(`IF [A] > 1 THEN "it's" ELSE [Net] END`), "Net", "Gross")[0].formula, `IF [A] > 1 THEN "it's" ELSE [Gross] END`);
+  assert.equal(renameInFormulas(f(`"say ""[Net]""" + [Net]`), "Net", "Gross")[0].formula, `"say ""[Net]""" + [Gross]`);
+  assert.equal(renameParamInFormulas(f('IF [@P] > 1 THEN "[@P]" ELSE "it\'s" END'), "P", "Q")[0].formula, 'IF [@Q] > 1 THEN "[@P]" ELSE "it\'s" END');
+  assert.equal(renameParamInFormulas(f(`"it's" + [@P]`), "P", "Q")[0].formula, `"it's" + [@Q]`);
+});
