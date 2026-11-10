@@ -146,7 +146,7 @@ Nothing here reaches the server; dashboards add no endpoint
   memberColors: {},              // T01-20 { "table.column": { member: "#rrggbb" } } (format.paletteReverse: bool, T03-33; format.colorRamp brand|blue|green|amber|violet, colorMin / colorMax number|null, T03-19; colorScale sequential|diverging, colorPair default|amber-violet|green-violet, colorCentre number|null; colorSteps 0|3–9, 0 = continuous)
   title: null | string, caption: null | string, showTitle: boolean,   // P23 (null = automatic)
   showFilterCards: boolean,                                          // P30
-  analytics: null | { ref: { kind, value?, param?, measure? }, band: { from, to, fromParam?, toParam? } | { kind: "stddev", k: 1|2|3 } | { kind: "percentile", lo, hi } | null, trend, forecast, totals: { grand, sub } },   // P21
+  analytics: null | { ref: { kind, value?, param?, measure? }, band: { from, to, fromParam?, toParam? } | { kind: "stddev", k: 1|2|3 } | { kind: "percentile", lo, hi } | null, trend, forecast, forecastParam?, totals: { grand, sub } },   // P21
   urlAction: null | { label, template },   // P39 link action — https:// with {value}
   paramAction: null | { param },           // P39 parameter action — a click can set this parameter (id) to the mark's value
   period: null | { db, table, column, category: "temporal", preset, from, to, compare, compareFrom, compareTo },
@@ -177,7 +177,7 @@ Nothing here reaches the server; dashboards add no endpoint
   A target field that no longer points at a later shelf measure is ignored and cleared when Format opens.
   An unknown value is reset with a workbook import issue. A workbook without these keys opens unchanged.
 - **Pill:** `{ db, table, column, category, role?, agg?, datePart?, tableCalc?, choices? }`.
-  - `datePart` (P26) is on a date dimension; `tableCalc` (P27) `{ type, along, window?, using? }` on a
+  - `datePart` (P26) is on a date dimension; `tableCalc` (P27) `{ type, along, window?, windowParam?, using? }` on a
     measure; `choices` (P40) holds the slot's alternative fields.
   - `role` overrides the type default: `'dimension'` → `GROUP BY`; `'measure'` → aggregated with `agg` ∈ `aggsFor(category)`.
     That is `sum/avg/min/max/median/stddev/variance/count/countDistinct/countNonNull/attr` for numbers,
