@@ -4,7 +4,7 @@
 // grouping happens in ClickHouse and the server needs no new code:
 //   CASE WHEN <member = 'a' OR member = 'b' …> THEN 'Group 1' … ELSE <the raw value> END
 // Every member is a `str` node (a bound parameter on the server, never SQL text). A member that matches no group keeps
-// its own value (ELSE the field itself); a NULL member compares as unknown, so it also falls to ELSE and stays NULL.
+// its own value (ELSE the field itself); NULL falls to ELSE and stays NULL unless a NULL label (spec.nullLabel) is set.
 // The engine allows 200 nodes per tree: a comparison is 3 nodes + 1 OR, a group's name 1, so a tree costs 2 + 4 per member,
 // and a field can hold MAX_GROUP_MEMBERS = 49 members across all its groups. checkGroupSpec refuses more at edit time.
 import { LIMITS } from "../Core/validate.js";
@@ -15,16 +15,20 @@ const kindOf = (spec) => (spec?.kind === "number" || spec?.kind === "boolean" ? 
 // Node costs: the CASE and its ELSE (2), a member 4 (field, literal, `=`, and the OR or the group's THEN name), the remainder WHEN 4
 // (not, isnull, field, str). A number / true-false field wraps every use of the field in TEXT(): +1 per member, for the ELSE, and for the remainder WHEN.
 const nodeCosts = (spec) => { const t = kindOf(spec) ? 1 : 0; return { base: 2 + t, member: 4 + t, other: OTHER_COST }; };
+// The NULL label's WHEN: isnull, field, str (the field is read raw, so no TEXT() wrap).
+const NULL_COST = 3;
+/** The NULL label of a spec, trimmed — "" when the empty value stays NULL. */
+export const nullLabelOf = (spec) => (typeof spec?.nullLabel === "string" ? spec.nullLabel.trim() : "");
 const countNodes = (n) => (n === null || typeof n !== "object" ? 1 : 1 + Object.values(n).reduce((a, v) => a + (Array.isArray(v) ? v.reduce((b, x) => b + (x && typeof x === "object" && ("c" in x || "t" in x) ? countNodes(x.c) + countNodes(x.t) : countNodes(x)), 0) : v && typeof v === "object" ? countNodes(v) : 0), 0));
 /** The node cost of a group field (a true/false field counts its generated tree). */
-export const groupCost = (spec) => { if (kindOf(spec) === "boolean") return countNodes(groupTree(spec)); const c = nodeCosts(spec); return c.base + c.member * (spec?.groups ?? []).reduce((n, g) => n + g.members.length, 0) + (otherLabel(spec) ? c.other : 0); };
+export const groupCost = (spec) => { if (kindOf(spec) === "boolean") return countNodes(groupTree(spec)); const c = nodeCosts(spec); return c.base + c.member * (spec?.groups ?? []).reduce((n, g) => n + g.members.length, 0) + (otherLabel(spec) ? c.other : 0) + (nullLabelOf(spec) ? NULL_COST : 0); };
 /** The remainder label ("Other") of a spec, trimmed — "" when ungrouped members keep their own value. */
 export const otherLabel = (spec) => (typeof spec?.other === "string" ? spec.other.trim() : "");
 const OTHER_COST = 4;
 /** The most members one text group field can hold under the engine's node limit. */
 export const MAX_GROUP_MEMBERS = Math.floor((CALC_LIMITS.nodes - 2) / 4);
 /** The most members this spec can hold: one fewer with a remainder label (its WHEN costs a member's worth of nodes); 39 (38) for a number or true/false field. */
-export const maxMembersFor = (spec) => { if (kindOf(spec) === "boolean") return 2; const c = nodeCosts(spec); return Math.floor((CALC_LIMITS.nodes - c.base - (otherLabel(spec) ? c.other : 0)) / c.member); };
+export const maxMembersFor = (spec) => { if (kindOf(spec) === "boolean") return 2; const c = nodeCosts(spec); return Math.floor((CALC_LIMITS.nodes - c.base - (otherLabel(spec) ? c.other : 0) - (nullLabelOf(spec) ? NULL_COST : 0)) / c.member); };
 
 export const GROUP_CATEGORY_REFUSAL = "Groups work on text, whole-number and true/false fields. Date fields can't be grouped yet.";
 export const GROUP_FLOAT_REFUSAL = "Groups work on whole-number fields, not decimal or floating-point ones (their text form can differ between the list and the database).";
@@ -55,6 +59,9 @@ function anyOf(conds) {
 /** The calculation tree of a (checked) group spec. */
 export const groupTree = (spec) => {
   const whens = spec.groups.map((g) => ({ c: anyOf(g.members.map((m) => equals(spec, m))), t: { k: "str", v: g.name } }));
+  // The NULL label goes first: NULL then reads as the label (naming a group's own name joins that group). Without it NULL stays NULL.
+  const nl = nullLabelOf(spec);
+  if (nl) whens.unshift({ c: { k: "isnull", arg: fieldNode(spec.field) }, t: { k: "str", v: nl } });
   // The remainder label: every non-NULL member no group took (the groups' WHENs come first); NULL fails the test and stays NULL via ELSE.
   const other = otherLabel(spec);
   if (other) whens.push({ c: { k: "not", arg: { k: "isnull", arg: fieldNode(spec.field) } }, t: { k: "str", v: other } });
@@ -96,6 +103,10 @@ export function checkGroupSpec(spec, knownMembers = []) {
   if (other.length > LIMITS.groupName) return { ok: false, error: `The label for ungrouped members must be at most ${LIMITS.groupName} characters.` };
   if (other && groups.some((g) => sameName(g.name.trim(), other))) return { ok: false, error: `'${other}' is already a group name — give the ungrouped members another label.` };
   if (other && knownMembers.some((m) => m === other && !owner.has(m))) return { ok: false, error: `The label '${other}' is also a member of this field outside the groups — give the ungrouped members another label, or put that member in a group.` };
+  if (spec.nullLabel !== undefined && typeof spec.nullLabel !== "string") return { ok: false, error: "The label for the empty (NULL) value must be text." };
+  const nl = nullLabelOf(spec);
+  if (nl.length > LIMITS.groupName) return { ok: false, error: `The label for the empty (NULL) value must be at most ${LIMITS.groupName} characters.` };
+  if (nl && knownMembers.some((m) => m === nl && !owner.has(m))) return { ok: false, error: `The NULL label '${nl}' is also a member of this field outside the groups — give it another label, or put that member in a group.` };
   const n = total(groups);
   if (n > LIMITS.groupMembers) return { ok: false, error: `At most ${LIMITS.groupMembers} members per group field.` };
   if (n > maxMembersFor(spec)) return { ok: false, error: `This group field has ${n} members. The calculation engine takes at most ${maxMembersFor(spec)} members across all groups (its ${CALC_LIMITS.nodes}-node limit) — put the largest group's members back, or make a second group field.` };
@@ -118,6 +129,10 @@ export function cleanGroupSpec(raw, where, issues) {
   if (raw.other !== undefined) {
     if (typeof raw.other !== "string") return fail("the label for ungrouped members is not text");
     if (raw.other.trim()) spec.other = raw.other.trim();
+  }
+  if (raw.nullLabel !== undefined) {
+    if (typeof raw.nullLabel !== "string") return fail("the NULL label is not text");
+    if (raw.nullLabel.trim()) spec.nullLabel = raw.nullLabel.trim();
   }
   const r = checkGroupSpec(spec);
   return r.ok ? spec : fail(r.error);

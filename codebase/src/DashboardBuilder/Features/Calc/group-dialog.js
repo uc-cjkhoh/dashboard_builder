@@ -30,13 +30,14 @@ export function openGroupDialog({ field, fieldName, calcId = null, kind: kindIn,
     for (const [m, gname] of byName) assign.set(m, groups.find((g) => g.name === gname).id);
   } else newGroup("Group 1");
   let otherOn = !!existing?.group.other, otherText = existing?.group.other ?? "Other";
+  let nullOn = !!existing?.group.nullLabel, nullText = existing?.group.nullLabel ?? "(none)";
 
   const dlg = el("dialog", "dialog grp-dialog");
   const title = el("h3", "dialog__title", existing ? `Edit groups · ${fieldName}` : `Group · ${fieldName}`);
   title.id = `grp-title-${n}`;
   dlg.setAttribute("aria-labelledby", title.id);
   const body = el("div", "dialog__body grp-dialog__body");
-  const hint = el("p", "grp-hint", "Members you put in a group are shown, counted and charted under the group's name. A member in no group keeps its own value, or the label below. The empty (NULL) value stays empty. Grouping is done by the database, so every member is matched exactly." + (kind ? " The group field is text: its values are the numbers or true / false as written." : ""));
+  const hint = el("p", "grp-hint", "Members you put in a group are shown, counted and charted under the group's name. A member in no group keeps its own value, or the ungrouped label below. The empty (NULL) value stays empty unless you label it. Grouping is done by the database, so every member is matched exactly." + (kind ? " The group field is text: its values are the numbers or true / false as written." : ""));
 
   const nameField = el("div", "field");
   const nameLabel = el("label", null, "Name of the group field"); nameLabel.htmlFor = `grp-name-${n}`;
@@ -59,6 +60,13 @@ export function openGroupDialog({ field, fieldName, calcId = null, kind: kindIn,
   otherInput.value = otherText; otherInput.disabled = !otherOn; otherInput.setAttribute("aria-label", "Label for ungrouped members");
   otherField.append(otherCheck, otherCheckLabel, otherInput);
 
+  const nullField = el("div", "field grp-other grp-null");
+  const nullCheck = el("input"); nullCheck.type = "checkbox"; nullCheck.id = `grp-nc-${n}`; nullCheck.checked = nullOn;
+  const nullCheckLabel = el("label", null, "Label empty (NULL) values"); nullCheckLabel.htmlFor = nullCheck.id;
+  const nullInput = el("input", "input"); nullInput.type = "text"; nullInput.autocomplete = "off"; nullInput.maxLength = LIMITS.groupName;
+  nullInput.value = nullText; nullInput.disabled = !nullOn; nullInput.setAttribute("aria-label", "Label for empty (NULL) values");
+  nullField.append(nullCheck, nullCheckLabel, nullInput);
+
   const membersField = el("div", "field");
   const membersHead = el("div", "label", "Members"); membersHead.id = `grp-mh-${n}`;
   const note = el("p", "grp-note", "Loading the field's members…"); note.setAttribute("aria-live", "polite");
@@ -67,7 +75,7 @@ export function openGroupDialog({ field, fieldName, calcId = null, kind: kindIn,
 
   const status = el("p", "grp-status"); status.setAttribute("aria-live", "polite");
   const msg = el("div", "grp-error"); msg.setAttribute("role", "alert");
-  body.append(hint, nameField, groupsField, otherField, membersField, status, msg);
+  body.append(hint, nameField, groupsField, otherField, nullField, membersField, status, msg);
   const foot = el("div", "dialog__foot");
   const cancel = makeButton("Cancel", "btn"), save = makeButton("Save", "btn btn--primary");
   save.disabled = true;
@@ -82,6 +90,7 @@ export function openGroupDialog({ field, fieldName, calcId = null, kind: kindIn,
     const out = { field: { db: field.db, table: field.table, column: field.column }, groups: named };
     if (kind) out.kind = kind;
     if (otherOn && otherText.trim()) out.other = otherText;
+    if (nullOn && nullText.trim()) out.nullLabel = nullText;
     return out;
   };
   const refresh = () => {
@@ -91,11 +100,11 @@ export function openGroupDialog({ field, fieldName, calcId = null, kind: kindIn,
     const dup = groups.find((g, i) => groups.some((o, j) => j < i && o.name.trim().toLowerCase() === g.name.trim().toLowerCase()));
     const blank = groups.find((g) => !g.name.trim() && [...assign.values()].includes(g.id));
     const r = dup ? { ok: false, error: `A group named '${dup.name.trim()}' already exists.` } : blank ? { ok: false, error: "Give every group a name." } : checkGroupSpec(s, selects.map((x) => x.member));
-    const noLabel = otherOn && !otherText.trim();
+    const noLabel = (otherOn && !otherText.trim()) || (nullOn && !nullText.trim());
     const nm = checkName(name.value, calculations, existing?.id);
     nameMsg.textContent = nm.ok ? "" : nm.error;
     if (nm.ok) name.removeAttribute("aria-invalid"); else name.setAttribute("aria-invalid", "true");
-    msg.textContent = noLabel ? "Give the ungrouped members a label." : !r.ok && (used > 0 || dup || blank || otherOn) ? r.error : "";
+    msg.textContent = noLabel ? (otherOn && !otherText.trim() ? "Give the ungrouped members a label." : "Give the empty (NULL) value a label.") : !r.ok && (used > 0 || dup || blank || otherOn || nullOn) ? r.error : "";
     save.disabled = !(r.ok && nm.ok) || noLabel;
   };
   const fillSelects = () => {
@@ -132,6 +141,8 @@ export function openGroupDialog({ field, fieldName, calcId = null, kind: kindIn,
   });
   name.addEventListener("input", refresh);
   otherCheck.addEventListener("change", () => { otherOn = otherCheck.checked; otherInput.disabled = !otherOn; refresh(); });
+  nullCheck.addEventListener("change", () => { nullOn = nullCheck.checked; nullInput.disabled = !nullOn; refresh(); });
+  nullInput.addEventListener("input", () => { nullText = nullInput.value; refresh(); });
   otherInput.addEventListener("input", () => { otherText = otherInput.value; refresh(); });
 
   const fillMembers = (values) => {
