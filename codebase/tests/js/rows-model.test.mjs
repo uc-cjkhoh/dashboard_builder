@@ -96,9 +96,18 @@ test("T02-34: a filter on a cast field, or a mark on one, is left out and named"
   assert.ok(notes.every((n) => /data type cast/.test(n)));
 });
 
-test("buildRowsRequest names a calculated-field filter it can't apply to a single-table read", () => {
-  const plan = { from: { db: "s", table: "o" }, filters: [{ db: "", table: "", column: "Net", op: ">", value: "1", values: null, calc: { k: "num", v: 1 } }] };
+test("buildRowsRequest sends a calculated filter whose fields are all on the base table, with its tree", () => {
+  const tree = { k: "bin", op: "*", l: { k: "field", db: "s", table: "o", column: "amount" }, r: { k: "num", v: 2 } };
+  const plan = { from: { db: "s", table: "o" }, filters: [{ db: "", table: "", column: "Net", op: ">", value: "1", values: null, calc: tree }] };
+  const { request, notes } = buildRowsRequest({ plan, limit: 10 });
+  assert.deepEqual(request.filters, [{ column: "Net", op: ">", value: "1", values: null, calc: tree }]);
+  assert.deepEqual(notes, []);
+});
+
+test("buildRowsRequest names a calculated filter that reads a joined table", () => {
+  const tree = { k: "bin", op: "+", l: { k: "field", db: "s", table: "o", column: "a" }, r: { k: "field", db: "s", table: "c", column: "b" } };
+  const plan = { from: { db: "s", table: "o" }, filters: [{ db: "", table: "", column: "Net", op: ">", value: "1", values: null, calc: tree }] };
   const { request, notes } = buildRowsRequest({ plan, limit: 10 });
   assert.deepEqual(request.filters, []);
-  assert.deepEqual(notes, ["1 filter on a calculated field isn't applied to rows."]);
+  assert.deepEqual(notes, ["1 filter on a calculated field across tables isn't applied to rows."]);
 });

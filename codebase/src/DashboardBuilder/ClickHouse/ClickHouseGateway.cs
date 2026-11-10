@@ -512,12 +512,27 @@ public sealed partial class ClickHouseGateway
     internal static string BuildSingleTableFilters(
         IReadOnlyList<StatFilter> filters,
         IReadOnlyDictionary<string, ColumnInfo> byName,
-        List<(string Name, string Type, object Value)> parameters)
+        List<(string Name, string Type, object Value)> parameters,
+        string? database = null, string? table = null)
     {
         var conditions = new List<string>();
         for (var i = 0; i < filters.Count; i++)
         {
             var f = filters[i];
+            if (f.Calc is { } calc)
+            {
+                // A row-level calculation over this one table: its fields resolve against the catalog already read, unqualified.
+                if (database is null || table is null) throw new UnknownIdentifierException("A calculated filter needs its table.");
+                var refs = new Dictionary<(string, string, string), (string Sql, string Category)>();
+                foreach (var fn in CalcSql.CalcFields(calc))
+                {
+                    if (fn.Db != database || fn.Table != table) throw new UnknownIdentifierException("Field references a table not in the query.");
+                    if (byName.TryGetValue(fn.Column, out var fc)) refs[(fn.Db, fn.Table, fn.Column)] = (Identifier.Quote(fn.Column), fc.Category);
+                }
+                var (calcExpr, calcCategory) = CalcSql.CalcFilterSql(CalcSql.CompileCalc(calc, $"filters[{i}]", refs, parameters, $"c{i}", false, false), $"filters[{i}]");
+                conditions.Add(BuildCondition(f.Op, $"p{i}", calcExpr, calcCategory, CalcSql.CalcLabel(f.Column), $"filters[{i}]", f.Value, f.Values, parameters));
+                continue;
+            }
             if (string.IsNullOrEmpty(f.Column) || !byName.TryGetValue(f.Column, out var ci)) throw new UnknownIdentifierException("Unknown column.");
             conditions.Add(BuildCondition(f.Op, $"p{i}", Identifier.Quote(f.Column), ci.Category, f.Column, $"filters[{i}]", f.Value, f.Values, parameters, ClickHouseType.IsDateOnly(ci.Type)));
         }
@@ -573,7 +588,7 @@ public sealed partial class ClickHouseGateway
         var (columns, colsTruncated) = PickRowColumns(all, req.Columns);
         var byName = all.ToDictionary(c => c.Name, c => c, StringComparer.Ordinal);
         var parameters = new List<(string Name, string Type, object Value)>();
-        var where = BuildSingleTableFilters(req.Filters ?? [], byName, parameters);
+        var where = BuildSingleTableFilters(req.Filters ?? [], byName, parameters, req.Db, req.Table);
         var limit = req.Limit ?? ApiLimits.DefaultRowsLimit;
         RequestRules.ValidateRowCells(limit, columns.Count, "limit");
         var probe = RowsProbeLimit(req.Limit);
@@ -787,7 +802,7 @@ public sealed partial class ClickHouseGateway
         var qualified = Identifier.QualifiedName(database, table);
 
         var parameters = new List<(string Name, string Type, object Value)>();
-        var where = BuildSingleTableFilters(req.Filters ?? [], byName, parameters);
+        var where = BuildSingleTableFilters(req.Filters ?? [], byName, parameters, database, table);
 
         // lo/hi from the same filtered set; width guards against a zero span (all-equal column).
         // `bin` is clamped to the last bucket so the maximum value lands inside, not in an extra bin.
@@ -850,7 +865,7 @@ public sealed partial class ClickHouseGateway
         var qualified = Identifier.QualifiedName(database, table);
         var qdim = hasDim ? Identifier.Quote(req.Dimension!) : null;
         var parameters = new List<(string Name, string Type, object Value)>();
-        var where = BuildSingleTableFilters(req.Filters ?? [], byName, parameters);
+        var where = BuildSingleTableFilters(req.Filters ?? [], byName, parameters, database, table);
         return await RunBoxAsync(info, qm, qualified, qdim, where, parameters, req.Limit, "", ct);
     }
 

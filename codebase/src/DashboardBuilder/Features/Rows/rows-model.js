@@ -2,6 +2,7 @@
 // "View data". Builds POST /api/rows requests, notes what could not be applied, and shapes the rows for
 // display and CSV. Unit-tested in tests/js/rows-model.test.mjs; the limits mirror ClickHouse/RequestValidation.cs.
 import { LIMITS } from "../Core/validate.js";
+import { calcOnTable } from "../Calc/calc-tree.js";
 
 export const DEFAULT_LIMIT = 100;   // server ApiLimits.DefaultRowsLimit
 export const PREVIEW_LIMIT = 20;    // a table preview is deliberately small
@@ -18,7 +19,7 @@ function checkedLimit(limit, columnCount = 0) {
 export const anyCellCut = (rows) => rows.some((r) => r.some((v) => typeof v === "string" && v.length > MAX_CELL && v.endsWith("…")));
 export const CUT_NOTE = "Some cells were cut at 1000 characters; the CSV export has the cut text too.";
 const MAX_CELL = 1000;
-const wire = (f) => ({ column: f.column, op: f.op, value: f.value ?? "", values: f.values ?? null });
+const wire = (f) => ({ column: f.column, op: f.op, value: f.value ?? "", values: f.values ?? null, ...(f.calc ? { calc: f.calc } : {}) });
 
 /** The first rows of one table, unfiltered. */
 export function tableRowsRequest(db, table, limit = PREVIEW_LIMIT, columns) {
@@ -28,7 +29,7 @@ export function tableRowsRequest(db, table, limit = PREVIEW_LIMIT, columns) {
 /**
  * The rows behind a worksheet view. `plan` is the sheet's query plan WITHOUT its click selection (the caller
  * builds it so); the rows are those of its base table (`plan.from`) narrowed by the view's own filters that
- * sit on that table, plus the selected mark as a bound `=` filter. Filters on joined tables, a selection on
+ * sit on that table (a calculated one only when it reads that table alone), plus the selected mark as a bound `=` filter. Filters on joined tables, a selection on
  * a joined table, a NULL mark and Top-N rankings can't be applied to a single-table read: they are left out
  * and named in `notes`, never dropped silently.
  */
@@ -40,13 +41,13 @@ export function buildRowsRequest({ plan, selection = null, limit, castOf = () =>
   let joined = 0, top = 0, casted = 0, calcs = 0;
   for (const f of plan.filters ?? []) {
     if (f.op === "top") top++;
-    else if (f.calc) calcs++; // a calculation can't be evaluated by the single-table read
+    else if (f.calc) { if (calcOnTable(f.calc, db, table)) filters.push(wire(f)); else calcs++; } // evaluated by the single-table read only when it reads this table alone
     else if (f.cast) casted++; // /api/rows compares the stored column, so a cast field's filter would match wrong rows
     else if (!here(f)) joined++;
     else filters.push(wire(f));
   }
   if (joined) notes.push(`${plural(joined, "filter", "filters")} on a joined table ${joined === 1 ? "isn't" : "aren't"} applied.`);
-  if (calcs) notes.push(`${plural(calcs, "filter", "filters")} on a calculated field ${calcs === 1 ? "isn't" : "aren't"} applied to rows.`);
+  if (calcs) notes.push(`${plural(calcs, "filter", "filters")} on a calculated field across tables ${calcs === 1 ? "isn't" : "aren't"} applied to rows.`);
   if (top) notes.push("Top-N filters aren't applied to rows.");
   if (casted) notes.push(`${plural(casted, "filter", "filters")} on a field with a data type cast ${casted === 1 ? "isn't" : "aren't"} applied to rows.`);
   if (selection) {

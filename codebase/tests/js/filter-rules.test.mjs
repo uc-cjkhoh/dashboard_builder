@@ -111,3 +111,17 @@ test("a calculated filter is checked like any other (value type, in-list bound)"
   assert.equal(checkFilter(f({ value: "abc" })).state, "invalid");
   assert.equal(checkFilter(f({ op: "in", values: Array.from({ length: 501 }, (_, i) => String(i)) })).state, "invalid");
 });
+
+test("statFilters applies a calculated filter whose fields are all on the table, carrying its tree", () => {
+  const tree = { k: "bin", op: "*", l: { k: "field", db: "s", table: "orders", column: "amount" }, r: { k: "num", v: 2 } };
+  const f = { calc: "c1", db: "", table: "", column: "Doubled", category: "numeric", op: ">", value: "10", values: null };
+  const r = statFilters([f], "s", "orders", () => ({ db: "", table: "", column: "Doubled", calc: tree, op: ">", value: "10", values: null }));
+  assert.deepEqual(r.apply, [{ column: "Doubled", op: ">", value: "10", values: null, calc: tree }]);
+  assert.equal(r.ignored, 0);
+});
+test("statFilters ignores (and counts) a calculated filter that reads another table or can't be wired", () => {
+  const f = { calc: "c1", db: "", table: "", column: "X", category: "numeric", op: ">", value: "1", values: null };
+  const across = { k: "bin", op: "+", l: { k: "field", db: "s", table: "orders", column: "a" }, r: { k: "field", db: "s", table: "customers", column: "b" } };
+  assert.deepEqual(statFilters([f], "s", "orders", () => ({ db: "", table: "", column: "X", calc: across, op: ">", value: "1", values: null })), { apply: [], ignored: 1 });
+  assert.deepEqual(statFilters([f], "s", "orders", () => null), { apply: [], ignored: 1 });
+});
