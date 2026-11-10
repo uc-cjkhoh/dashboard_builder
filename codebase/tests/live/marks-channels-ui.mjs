@@ -211,6 +211,15 @@ try {
     must(/discount|v2/.test(await tipText(0, 2)), 'the tooltip carries the size value');
     await shot('bar-size');
   });
+  await check('bar + Size + Data labels: each bar carries its value', async () => {
+    await ev(`${fmtTool}.click()`);
+    await waitFor(`!!(${fmtField('Data labels')})`, 'data labels control');
+    await ev(`${fmtField('Data labels')}.querySelector('input').click()`); await settle(500);
+    const t = await ev(`[...document.querySelectorAll('.ws-chart-canvas svg text')].map((x) => x.textContent).filter((x) => /^\\d+$/.test(x))`);
+    must(['10', '20', '30', '40', '50', '60', '70', '80'].every((v) => t.includes(v)), 'a label per bar: ' + J(t));
+    await ev(`${fmtField('Data labels')}.querySelector('input').click()`); await settle(300);
+    await ev(`${fmtTool}.click()`); await settle(300);
+  });
   await check('bar + Size: a click on a variable-width bar selects its member; the selection dims the others', async () => {
     const pos = await ev(`(() => { const d = ${inst}.getModel().getSeriesByIndex(0).getData(); const r = d.getItemGraphicEl(3).getBoundingRect(); const box = document.querySelector('.ws-chart-canvas').getBoundingClientRect(); return [box.left + r.x + r.width / 2, box.top + r.y + r.height / 2]; })()`);
     await b.click(pos[0], pos[1]); await settle(700);
@@ -332,7 +341,16 @@ try {
     must(o.legend?.[0]?.data?.length === 8, 'legend lists the members');
     const cols = o.series.map((s) => s.itemStyle.color);
     must(distinct(cols) === 8, 'distinct palette colours: ' + J(cols));
-    await ev(`${fmtTool}.click()`); await waitFor(`/Edit member colours|Hide member colours/.test(document.querySelector('.ws-fmt-panel, .ws-format, #ws-format')?.textContent ?? document.body.textContent)`, 'member colours control');
+    await ev(`${fmtTool}.click()`);
+    await waitFor(`!!document.querySelector('.ws-memcol__toggle') && !document.querySelector('.ws-memcol__toggle').disabled`, 'member colours enabled for scatter groups');
+    await ev(`document.querySelector('.ws-memcol__toggle').click()`);
+    must(await ev(`document.querySelectorAll('.ws-memcol__row').length`) === 8, 'eight member rows');
+    const before = (await opt()).series[1].itemStyle.color;
+    await ev(`document.querySelectorAll('.ws-memcol__row')[1].querySelectorAll('.ws-memcol__swatch')[15].click()`); // #000000
+    await settle(500);
+    const after = (await opt()).series[1].itemStyle.color;
+    must(after === '#000000' && after !== before, 'the chosen member colour reaches the points: ' + J([before, after]));
+    await ev(`document.querySelectorAll('.ws-memcol__row')[1].querySelector('.ws-memcol__reset').click()`); await settle(400);
     await ev(`${fmtTool}.click()`); await settle(300);
     await shot('scatter-colour');
   });
