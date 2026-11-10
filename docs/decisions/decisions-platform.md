@@ -286,3 +286,8 @@ The box plot reads the worksheet's own plan (joins, filters, calculations, casts
 - **Join fan-out:** over a one-to-many join the box counts every joined row, so quantiles are row-weighted (a customer with ten orders counts ten times when the value sits on the customer side). Aggregate-before-joining is refused (400 on `joins`) because it totals each table, which a box plot cannot use.
 - **Behaviour change:** filters on other tables, shared filters and dashboard selections now apply through the joins; the old single-table box plot ignored them and counted them in a notice.
 - **Kept:** the single-table `…/boxplot` route stays for existing callers; the browser no longer uses it. The histogram stays single-table.
+
+### D90 — Worksheet background is a two-step surface shade on the container
+Format → Background offers None, Subtle (`--surface-2`) and Muted (`--surface-3`) rather than a colour picker.
+- **Why:** the design rules allow palette tokens only; two steps read in light and dark and keep the ink's contrast.
+- **How:** a class on the worksheet container, so a chart and a table share one path. `format.background` stays out of `defaultFormat()` and is kept only when present, so existing workbooks round-trip unchanged.
