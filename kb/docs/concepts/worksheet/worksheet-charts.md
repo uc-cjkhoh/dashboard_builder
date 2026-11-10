@@ -150,10 +150,11 @@ On Bar / Line / Area the card opens with a row of **items**: Reference line, Ban
   - line / area / combo markers (default 8, which also keeps the dots on a long series);
   - the circle heatmap (otherwise 80 % of the cell).
   - It is not offered on squares heatmaps or on charts without point marks.
-- **Mark border** (`format.markBorder` `none` | `thin` (1 px) | `thick` (3 px), default `none`) — strokes marks in the muted chart ink (`--chart-muted`, so it follows light and dark).
+- **Mark border** (`format.markBorder` `none` | `thin` (1 px) | `medium` (2 px) | `thick` (3 px), default `none`) — strokes marks in the chosen border colour (default the muted chart ink, `--chart-muted`; all follow light and dark).
+  - **Border colour** (`format.markBorderColor` `muted` | `ink` | `surface` | `accent`, optional, absent reads `muted`) — a palette token resolved per theme (`borderInk`); the Format field shows only while a border is set. It is not a free colour (see backlog: palette editing).
   - Applies to bars (also stacked, combo, colour-by-category and the Other bar), scatter / shape points, line markers, heatmap cells, pie / donut slices, treemap tiles, funnel steps, histogram bins, box plot boxes, waterfall and Gantt bars, the bullet's value bar and Sankey nodes (gauge has no marks, so no border). Custom-drawn shapes (waterfall, Gantt) take a stroke (`strokeOf`); the rest an ECharts border.
   - `none` keeps the default look: the heatmap, pie, treemap, funnel, histogram and Sankey keep their surface-coloured gaps, and the box plot its series-coloured outline. A chosen border replaces that edge (`edgeOr`).
-  - Code: pure mapping in `Dashboard/mark-style-model.js` (`markBorder`, `edgeOr`, `strokeOf`, `BORDER_TYPES`, `markerSizeOr`, `markerSizeError`).
+  - Code: pure mapping in `Dashboard/mark-style-model.js` (`markBorder`, `borderInk`, `edgeOr`, `strokeOf`, `BORDER_TYPES`, `markerSizeOr`, `markerSizeError`).
 - **Marker shape** (line / area / combo; `format.markerShape` `circle` | `square` | `diamond` | `triangle`, default `circle`) — sets the symbol of the line markers (`markerSymbol` maps to the ECharts symbol). The shape is the same on every series of the sheet.
 - Both Format cards and the dashboard widgets read the same sheet `format`, so non-interactive views draw the options too. Browser check: `tests/live/charts2-ui.mjs`.
 
