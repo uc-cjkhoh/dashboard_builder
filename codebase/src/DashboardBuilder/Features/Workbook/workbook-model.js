@@ -9,7 +9,6 @@ import { cleanHaving, checkHaving } from "../Dashboard/having-model.js";
 import { emptySheet, defaultFormat } from "../Core/store.js";
 import { LIMITS, text, isFraction } from "../Core/validate.js";
 import { aggsFor } from "../Dashboard/filter-rules.js";
-import { currencyOk } from "../Dashboard/currency-model.js";
 import { CASTS } from "../Dashboard/cast-model.js";
 import { cleanMemberAliases } from "../Dashboard/member-labels.js";
 import { cleanTheme, DEFAULT_THEME } from "../Core/theme-model.js";
@@ -669,7 +668,7 @@ function cleanFormat(f0, where, issues) {
     else issues.push(`${w}: ${k} must be on or off — reset.`);
   }
   if (f.currencySymbol === undefined) out.currencySymbol = base.currencySymbol;
-  else if (currencyOk(f.currencySymbol)) out.currencySymbol = f.currencySymbol;
+  else if (typeof f.currencySymbol === "string" && f.currencySymbol.length <= 8) out.currencySymbol = f.currencySymbol;
   else issues.push(`${w}: the currency symbol was invalid — reset to ${base.currencySymbol}.`);
   for (const k of ["xTitle", "yTitle"]) {
     const r = f[k] == null ? null : typeof f[k] !== "string" ? { ok: false, error: "Axis title must be text" }

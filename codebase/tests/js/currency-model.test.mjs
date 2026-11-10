@@ -14,6 +14,9 @@ test("a custom symbol is 1-3 visible characters", () => {
   assert.match(currencyError("ABCD"), /1.*3/);
   assert.match(currencyError("a\nb"), /visible/);
 });
+test("a stored symbol longer than 3 shows as custom (kept, not cut)", () => {
+  assert.equal(currencyChoice("CHFXX"), "custom");
+});
 test("which select value a stored symbol shows", () => {
   assert.equal(currencyChoice("€"), "€");
   assert.equal(currencyChoice("CHF"), "custom");

@@ -1,4 +1,5 @@
-// Dashboard/currency-model.js — the Currency number format's symbol (pure, DOM-free). A short list plus a custom symbol of 1–3 characters.
+// Dashboard/currency-model.js — the Currency number format's symbol (pure, DOM-free). A short list plus a custom symbol of 1–3 characters typed in the Custom box;
+// a stored symbol (up to 8 characters, as before) is kept and shown as custom, never cut.
 export const DEFAULT_CURRENCY = "$";
 export const CURRENCY_CHOICES = Object.freeze([["$", "$"], ["€", "€"], ["£", "£"], ["¥", "¥"], ["RM", "RM"], ["S$", "S$"], ["custom", "Custom…"]]);
 export const CURRENCY_MAX = 3;
@@ -10,9 +11,6 @@ export function currencyError(v) {
   if (/[\p{Cc}\p{Cf}\s]/u.test(s)) return "A currency symbol must be visible characters, no spaces.";
   return null;
 }
-/** Is a stored value acceptable (workbook import)? */
-export const currencyOk = (v) => typeof v === "string" && currencyError(v) === null;
-
 /** What the select shows for a stored symbol: itself when it is in the list, else "custom". */
 export const currencyChoice = (sym) => {
   const s = sym ?? DEFAULT_CURRENCY;

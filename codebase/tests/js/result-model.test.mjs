@@ -177,5 +177,6 @@ test("orderColumnTuples: members ascend unless a measure sort applies", async ()
   const t = [["Returned"], ["Shipped"], ["Cancelled"], ["Delivered"]];
   assert.deepEqual(orderColumnTuples(t, false).map((x) => x[0]), ["Cancelled", "Delivered", "Returned", "Shipped"]);
   assert.deepEqual(orderColumnTuples(t, true).map((x) => x[0]), ["Returned", "Shipped", "Cancelled", "Delivered"]);
+  assert.deepEqual(orderColumnTuples(t, false, "desc").map((x) => x[0]), ["Shipped", "Returned", "Delivered", "Cancelled"]);
   assert.deepEqual(orderColumnTuples([["b", 2], ["a", 10], ["a", 9], [null, 1]], false), [["a", 9], ["a", 10], ["b", 2], [null, 1]]);
 });

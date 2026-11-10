@@ -3150,7 +3150,7 @@ function select(options, selected, className, label) {
 
 // --- format-panel controls. Each wraps its control in a <label> so the visible text is the
 // control's accessible name. `options` is [value, text] pairs; `current` matches by string value. ---
-// The Currency format's symbol: a short list, or "Custom…" with a 1-3 character box. $ unless chosen (existing sheets are unchanged).
+// The Currency format's symbol: a short list, or "Custom…" with a 1-3 character box. a stored symbol (up to 8 characters, as before) is kept and shown as custom.
 function currencyPicker(f, set) {
   const wrap = el("span", "ws-currency");
   const sym = f.currencySymbol ?? DEFAULT_CURRENCY;
@@ -3158,11 +3158,12 @@ function currencyPicker(f, set) {
   wrap.append(fmtSelect("Symbol", CURRENCY_CHOICES, choice, (v) => { if (v === "custom") set({ currencySymbol: customSeed(sym) }); else set({ currencySymbol: v }); }));
   if (choice === "custom") {
     const box = fmtText("Custom", sym, (v) => {
-      const err = currencyError(v ?? "");
+      const err = v === sym ? null : currencyError(v ?? ""); // an existing longer symbol stays until edited
       if (err) { toast(err, "danger"); set({ currencySymbol: sym }); return; } // redraw puts the kept symbol back
       set({ currencySymbol: v });
     });
-    const inp = box.querySelector("input"); inp.maxLength = CURRENCY_MAX; inp.classList.add("ws-currency__input"); inp.setAttribute("aria-label", "Custom currency symbol, up to 3 characters");
+    const inp = box.querySelector("input"); inp.maxLength = Math.max(8, sym.length); // never cuts an existing symbol; a new one over 3 is refused with a message
+    inp.classList.add("ws-currency__input"); inp.setAttribute("aria-label", "Custom currency symbol, up to 3 characters");
     wrap.append(box);
   }
   return wrap;

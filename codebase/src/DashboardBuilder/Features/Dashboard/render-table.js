@@ -36,7 +36,7 @@ export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, ca
 
   const rowTuples = uniqueTuples(rows.map((r) => r.keys.slice(0, rd)));
   // Column members ascend, like the rows; a sort on a measure orders them as the query did.
-  const colTuples = orderColumnTuples(uniqueTuples(rows.map((r) => r.keys.slice(rd, rd + cd))), String(sheet.sort?.by ?? "").startsWith("measure:"));
+  const colTuples = orderColumnTuples(uniqueTuples(rows.map((r) => r.keys.slice(rd, rd + cd))), String(sheet.sort?.by ?? "").startsWith("measure:"), sheet.sort?.dir === "desc" ? "desc" : "asc");
   const cells = new Map();
   for (const r of rows) cells.set(tupleKey(r.keys.slice(0, rd)) + "|" + tupleKey(r.keys.slice(rd, rd + cd)), r.values);
   const cellValue = (rt, ct, mi) => cells.get(tupleKey(rt) + "|" + tupleKey(ct))?.[mi];

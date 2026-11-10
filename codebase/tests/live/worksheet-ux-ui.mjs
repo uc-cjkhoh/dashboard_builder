@@ -1,6 +1,6 @@
 // Browser checks for the worksheet UX fixes (pill aggregation, plain menu labels, identifier columns, Format totals and currency, conditional rules, view bar, Marks): the real dev app (APP_URL, default http://localhost:5180) in headless
 // Chromium, driven over the DevTools protocol (tests/live/cdp.mjs), with every /api/* call answered by a mock —
-// nothing reaches a ClickHouse. Run:  node tests/live/pills-ui.mjs   (start the app first:
+// nothing reaches a ClickHouse. Run:  node tests/live/worksheet-ux-ui.mjs   (start the app first:
 //   cd src/DashboardBuilder && dotnet run --no-launch-profile --urls http://localhost:5180 ; stop it with fuser -k 5180/tcp)
 // Env: APP_URL, SHOTS_DIR (screenshot folder), CDP_PORT (default: a free port), CHROME_BIN.
 import { launch } from './cdp.mjs';
@@ -152,7 +152,7 @@ try {
   // a Table: region down, status across — column members sort ascending, totals reachable from Format
   await store(`const dash = st.activeWorksheet(); const f = (column, category, extra = {}) => ({ db: 'shop', table: 'orders', column, category, ...extra });
     dash.sheet = { ...dash.sheet, chartType: 'table', rows: [f('region', 'text', { role: 'dimension' })], columns: [f('status', 'text', { role: 'dimension' }), f('amount', 'numeric', { role: 'measure', agg: 'sum' })], analytics: undefined, format: { ...dash.sheet.format, currencySymbol: '$' } };
-    st.updateSheet ? st.updateSheet(dash.id, dash.sheet) : null; return true;`);
+    st.updateSheet(dash.id, dash.sheet); return true;`);
   await ev(`document.querySelector('.ws-viewbar [aria-label="Format"]').click(); document.querySelector('.ws-viewbar [aria-label="Format"]').click()`);
   await b.sleep(600);
   await check('table: column members read in ascending order; the status says "N × M table", the info line "result rows"', async () => {
@@ -178,7 +178,7 @@ try {
     const ph = await ev(`document.querySelector('.ws-cf__rule .ws-cf__num')?.placeholder`);
     must(ph === 'Type a value', 'placeholder ' + ph);
     must(await ev(`document.querySelector('.ws-cf__rule .ws-cf__num').value === ''`), 'threshold prefilled');
-    must(await ev(`!document.querySelector('.xtab .xt-cf__icon, .xt-legend__rule')`), 'a rule painted cells before a value was typed: ' + await ev(`document.querySelector('.xtab .xt-cf__icon, .xt-legend__rule')?.outerHTML.slice(0, 200)`));
+    must(await ev(`[...document.querySelectorAll('.xtab tbody td.num')].length > 0 && [...document.querySelectorAll('.xtab tbody td.num')].every((td) => !td.style.backgroundColor && !td.querySelector('.xt-cf__icon'))`) && await ev(`!document.querySelector('.xt-legend__rule')`), 'a rule painted cells before a value was typed: ' + await ev(`document.querySelector('.xtab .xt-cf__icon, .xt-legend__rule')?.outerHTML.slice(0, 200)`));
   });
   await check('Marks: collapsed with nothing set, one-line summary when set, choice remembered', async () => {
     must(await ev(`document.querySelector('.ws-shelf--marks').open === false`), 'open with nothing set; summary=' + await ev(`document.querySelector('.ws-marks__summary').textContent`));
