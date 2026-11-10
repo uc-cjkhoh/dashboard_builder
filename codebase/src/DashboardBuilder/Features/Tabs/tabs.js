@@ -1,12 +1,14 @@
 import {
   tabs, isModelActive, currentView, showModel, createWorksheet, createDashboard, createStory, tabLimitError,
-  switchTab, renameTab, duplicateWorksheet, closeTab, worksheetHasContent, bus,
+  switchTab, renameTab, duplicateWorksheet, closeTab, worksheetHasContent, bus, setWidgets, setSteps, emit,
 } from "../Core/store.js";
 import { dashboardsUsing } from "../Board/board-model.js";
+import { dashboardsLinking } from "../Board/nav-model.js";
+import { captureClose, sealClose, planRestore, closedToast } from "./close-undo.js";
 import { storiesUsing } from "../Story/story-model.js";
 import { icon } from "../Core/icons.js";
 import { wireMenu } from "../Core/menu.js";
-import { confirmDialog, toast } from "../Core/ui.js";
+import { confirmDialog, toast, toggle } from "../Core/ui.js";
 import { text, LIMITS } from "../Core/validate.js";
 
 // The view strip: a pinned "Data Source" tab (the shared entity canvas) followed by one ordered list of worksheet and
@@ -153,25 +155,65 @@ export function initTabs() {
     return wrap;
   }
 
+  // Closing is undoable for a few seconds: the snapshot (close-undo.js) goes back through the store's own setters.
+  const undoBar = document.createElement("div");
+  undoBar.className = "toast toast--info tab-undo";
+  undoBar.setAttribute("role", "status");
+  undoBar.hidden = true;
+  const undoText = document.createElement("span");
+  const undoBtn = document.createElement("button");
+  undoBtn.type = "button";
+  undoBtn.className = "btn tab-undo__btn";
+  undoBtn.textContent = "Undo";
+  undoBar.append(undoText, undoBtn);
+  document.body.append(undoBar);
+  let undoSnap = null, undoTimer = 0;
+  const hideUndo = () => { clearTimeout(undoTimer); undoSnap = null; toggle(undoBar, false); };
+  function offerUndo(snap) {
+    undoSnap = snap;
+    undoText.textContent = closedToast(snap.tab);
+    toggle(undoBar, true);
+    clearTimeout(undoTimer);
+    undoTimer = setTimeout(hideUndo, 10000);
+  }
+  undoBtn.addEventListener("click", () => {
+    const snap = undoSnap;
+    if (!snap) return;
+    const plan = planRestore(snap, tabs, LIMITS.tabs);
+    hideUndo();
+    if (!plan.ok) { toast(plan.error, "danger"); return; }
+    tabs.splice(plan.index, 0, snap.tab);
+    for (const w of plan.writes) (w.kind === "dashboard" ? setWidgets : setSteps)(w.id, w.value);
+    emit("tabs:changed");
+    if (snap.wasActive) switchTab(snap.tab.id);
+    toast(plan.skipped.length ? `Restored “${snap.tab.name}”. ${plan.skipped.join(", ")} changed since, so what it showed was not brought back.` : `Restored “${snap.tab.name}”.`, "ok");
+    strip.querySelector(".tab.is-active .tab__label")?.focus();
+  });
+
   async function requestClose(tab) {
     const inStories = tab.kind === "story" ? [] : storiesUsing(tabs, tab.id); // a closed worksheet or dashboard leaves the steps that showed it
     const stepNote = inStories.length ? ` Its steps will be removed from ${inStories.length === 1 ? "the story" : "the stories"}: ${inStories.map((s) => s.name).join(", ")}.` : "";
+    const linking = tab.kind === "story" ? [] : dashboardsLinking(tabs, tab.id).filter((d) => d.id !== tab.id); // their buttons to this tab are unlinked
+    const linkNote = linking.length ? ` Buttons that go to it will be unlinked on: ${linking.map((d) => d.name).join(", ")}.` : "";
     const ask = async (message) => confirmDialog(message, { danger: true, confirmText: "Close" });
     if (tab.kind === "worksheet") {
       const users = dashboardsUsing(tabs, tab.id);
       if (users.length) {
-        if (!(await ask(`Close the worksheet “${tab.name}”? Used on: ${users.map((d) => d.name).join(", ")}. It will be removed from ${users.length === 1 ? "that dashboard" : "those dashboards"}.${stepNote}`))) return;
-      } else if (inStories.length) {
-        if (!(await ask(`Close the worksheet “${tab.name}”?${stepNote}`))) return;
+        if (!(await ask(`Close the worksheet “${tab.name}”? Used on: ${users.map((d) => d.name).join(", ")}. It will be removed from ${users.length === 1 ? "that dashboard" : "those dashboards"}.${stepNote}${linkNote}`))) return;
+      } else if (inStories.length || linking.length) {
+        if (!(await ask(`Close the worksheet “${tab.name}”?${stepNote}${linkNote}`))) return;
       } else if (worksheetHasContent(tab.id)) {
         if (!(await ask(`Close the worksheet “${tab.name}”?`))) return;
       }
     } else if (tab.kind === "story") {
       if (tab.steps.length && !(await ask(`Close the story “${tab.name}”? The worksheets and dashboards it shows are not affected.`))) return;
-    } else if (tab.widgets.length || inStories.length) {
-      if (!(await ask(`Close the dashboard “${tab.name}”?${tab.widgets.length ? " The worksheets on it are not affected." : ""}${stepNote}`))) return;
+    } else if (tab.widgets.length || inStories.length || linking.length) {
+      if (!(await ask(`Close the dashboard “${tab.name}”?${tab.widgets.length ? " The worksheets on it are not affected." : ""}${stepNote}${linkNote}`))) return;
     }
+    const v = currentView();
+    const snap = captureClose(tabs, tab.id, v.kind === tab.kind && v.id === tab.id);
     closeTab(tab.id);
+    if (snap) { sealClose(snap, tabs); offerUndo(snap); }
   }
 
   function beginRename(tab, labelEl) {

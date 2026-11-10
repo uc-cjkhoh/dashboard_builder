@@ -21,6 +21,9 @@ export const navTargets = (tabs, ownId) => tabs.filter((t) => t.id !== ownId && 
 /** Does saving `value` change the button? (An unchanged save is not an undo step.) */
 export const navChanged = (w, v) => (w.label ?? "") !== v.label || (w.tip ?? "") !== v.tip || (w.target ?? null) !== v.target;
 
+/** The dashboards with a button that goes to tab `tabId`. */
+export const dashboardsLinking = (tabs, tabId) => tabs.filter((t) => t.kind === "dashboard" && t.widgets.some((w) => w.kind === "nav" && w.target === tabId));
+
 /** The widgets with every button that went to tab `tabId` unlinked (the same array when none did). */
 export function clearNavTarget(widgets, tabId) {
   return widgets.some((w) => w.kind === "nav" && w.target === tabId)
