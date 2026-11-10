@@ -154,7 +154,7 @@ Nothing here reaches the server; dashboards add no endpoint
   format: { numberFormat, decimals, currencySymbol, dateFormat, topN, dateBucket, target, downIsGood, conditional, legend,
             dataLabels, colorByDimension, xTitle, yTitle,
             lineStyle, heatmapShape, targetMeasure,
-            syncAxes, dualAxis, secondaryType, markerSize, markBorder, markerShape, font, tableAlign, tableDensity, tableShade }
+            syncAxes, dualAxis, secondaryType, markerSize, markBorder, markBorderColor?, markerShape, font, tableAlign, tableDensity, tableShade }
 }
 ```
 
@@ -171,7 +171,8 @@ Nothing here reaches the server; dashboards add no endpoint
   | `dualAxis` | boolean (default false; line / area right axis) |
   | `secondaryType` | `line` \| `bar` \| `area` (default `line`) |
   | `markerSize` | null (automatic) or a whole number 4–40 |
-  | `markBorder` | `none` \| `thin` \| `thick` (default `none`) |
+  | `markBorder` | `none` \| `thin` \| `medium` \| `thick` (default `none`) |
+  | `markBorderColor` | optional: `muted` \| `ink` \| `surface` \| `accent` (absent = `muted`) |
   | `markerShape` | `circle` \| `square` \| `diamond` \| `triangle` (default `circle`) |
 
   A target field that no longer points at a later shelf measure is ignored and cleared when Format opens.
