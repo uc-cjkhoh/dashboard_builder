@@ -78,7 +78,7 @@ The current version is **2**; this build also opens version 1. Shapes are in
 When a connection is established **and the canvas is empty**, the saved workbook for that server + user reopens.
 
 - A toast says `Restored your last workbook (N tables[, U unions/unpivots], M worksheets[, K dashboards][, L stories]).` Unions and unpivots are counted apart from tables; those parts and the dashboards and stories parts appear only when there are some.
-- Before the workbook opens, the live columns of the tables its worksheets use are read; a pill naming a column that isn't there is reported as an issue (`Sheet "X": orders.qty isn't in shop.orders — left out.`) and shown invalid on its shelf ([worksheet.md](../worksheet/worksheet.md)).
+- The restore never waits: the workbook opens first. Then the live columns of the tables its worksheets use are read (5 s limit; a read that doesn't answer adds nothing). A pill naming a column that isn't there is already shown invalid on its shelf ([worksheet.md](../worksheet/worksheet.md)); a second toast and a dialog then list it (`Sheet "X": orders.qty isn't in shop.orders — left out.`). An import reads the columns first (same limit), so its one summary includes these.
 - Tables re-fetch their columns. Relationships draw as soon as both key rows exist.
 - The previously open tab becomes active (a worksheet re-runs its query).
 - A table that no longer exists shows its card's **failed** state with Retry, and keeps its saved keys.
