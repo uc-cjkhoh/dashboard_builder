@@ -44,7 +44,7 @@ import { RAMP_CHOICES, SCALE_CHOICES, DIV_PAIR_CHOICES, colourCentreError, colou
 import { FONT_CHOICES } from "./font-model.js";
 import { BACKGROUND_CHOICES } from "./background-model.js";
 import { TABLE_ALIGN_CHOICES, TABLE_DENSITY_CHOICES, TABLE_SHADE_CHOICES } from "./table-style-model.js";
-import { MARK_BORDER_CHOICES, MARKER_SHAPE_CHOICES, BORDER_TYPES, markerSizeError } from "./mark-style-model.js";
+import { MARK_BORDER_CHOICES, MARKER_SHAPE_CHOICES, BORDER_TYPES, MARK_BORDER_COLOUR_CHOICES, markerSizeError } from "./mark-style-model.js";
 import { targetChoices, effectiveTargetMeasure } from "./bullet-model.js";
 import { sourceOfTable, wireSource, distinctPlan, distinctMembers } from "../Core/source-model.js";
 import { heldOutCards } from "../Relations/relation-rules.js";
@@ -1346,7 +1346,10 @@ export function initDashboards() {
         set({ markerSize: v });
       }));
     if (linesTakeStyle(s.chartType)) panel.append(fmtSelect("Marker shape", MARKER_SHAPE_CHOICES, f.markerShape ?? "circle", (v) => set({ markerShape: v })));
-    if (BORDER_TYPES.has(s.chartType)) panel.append(fmtSelect("Mark border", MARK_BORDER_CHOICES, f.markBorder ?? "none", (v) => set({ markBorder: v })));
+    if (BORDER_TYPES.has(s.chartType)) {
+      panel.append(fmtSelect("Mark border", MARK_BORDER_CHOICES, f.markBorder ?? "none", (v) => set({ markBorder: v })));
+      if ((f.markBorder ?? "none") !== "none") panel.append(fmtSelect("Border colour", MARK_BORDER_COLOUR_CHOICES, f.markBorderColor ?? "muted", (v) => set({ markBorderColor: v })));
+    }
     if (s.period && s.period.compare !== "none")
       panel.append(fmtCheck("A fall is good", f.downIsGood, (v) => set({ downIsGood: v })));
     if (!STAT_SINGLE_TABLE.has(s.chartType))

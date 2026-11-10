@@ -8,7 +8,7 @@ import { tooltipHtml } from "./tooltip-model.js";
 import { tipLookup } from "./tooltip-formats.js";
 import { lineStep } from "./line-style-model.js";
 import { syncRange, secondaryKind, dualAxisOn, rightAxisTitle, seriesAxis } from "./axis-sync-model.js";
-import { markBorder, markerSizeOr, markerSymbol, edgeOr, strokeOf } from "./mark-style-model.js";
+import { markBorder, markerSizeOr, markerSymbol, edgeOr, strokeOf, borderInk } from "./mark-style-model.js";
 import { circleSize, circleCells, HEATMAP_GUTTER } from "./heatmap-model.js";
 import { bandsFor } from "./bullet-model.js";
 import { ganttTime, ganttAxisTime, ganttLabelMargin } from "./gantt-model.js";
@@ -528,7 +528,7 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
   };
 
   const step = lineStep(format.lineStyle); // false | "end" | "middle"
-  const edge = markBorder(format.markBorder, c.muted); // the stroke of bars (and the lines' markers)
+  const edge = markBorder(format.markBorder, borderInk(format.markBorderColor, c)); // the stroke of bars (and the lines' markers)
   const secondary = secondaryKind(format.secondaryType); // how a combo draws its right-axis measures
   base.series = series.map((s, i) => {
     // A comparison series wears its measure's colour, faded and dashed (line) or muted (bar).
@@ -645,7 +645,7 @@ function buildPie({ type, categories, series, format = {}, pointLabels, tooltipE
       label: { show: showLabels, color: c.label, fontFamily: c.font,
         formatter: (p) => (pointLabels ? String(pointLabels[p.dataIndex] ?? "") : `${p.name}: ${fmtVal(p.value)}`) },
       labelLine: { show: showLabels },
-      itemStyle: edgeOr(format.markBorder, c.muted, { borderColor: c.surface, borderWidth: 2 }),
+      itemStyle: edgeOr(format.markBorder, borderInk(format.markBorderColor, c), { borderColor: c.surface, borderWidth: 2 }),
       emphasis: { itemStyle: { shadowBlur: 10, shadowColor: "rgba(0,0,0,0.2)" } },
     }],
   };
@@ -775,7 +775,7 @@ function buildHeatmap({ xCats, yCats, cells, format = {} }) {
   const fmtVal = makeValueFormatter(format);
   const circles = format.heatmapShape === "circle";
   // The cell separator stays the surface-coloured hairline unless a border is chosen.
-  const cellEdge = format.markBorder && format.markBorder !== "none" ? markBorder(format.markBorder, c.muted)
+  const cellEdge = format.markBorder && format.markBorder !== "none" ? markBorder(format.markBorder, borderInk(format.markBorderColor, c))
     : { borderColor: drawing?.colorSteps ? c.axis : c.surface, borderWidth: 1 }; // stepped: a visible hairline so a pale step is not a gap
   const vals = cells.map((d) => d[2]).filter((v) => v != null);
   const { min, max } = colourScaleRange(vals, true);
@@ -843,7 +843,7 @@ function buildTreemap({ tree, format = {} }) {
       type: "treemap", data, roam: false, nodeClick: false,
       breadcrumb: { show: false },
       label: { show: true, fontFamily: c.font, formatter: (p) => p.name },
-      itemStyle: { ...edgeOr(format.markBorder, c.muted, { borderColor: c.surface, borderWidth: 2 }), gapWidth: 2 },
+      itemStyle: { ...edgeOr(format.markBorder, borderInk(format.markBorderColor, c), { borderColor: c.surface, borderWidth: 2 }), gapWidth: 2 },
       levels: [{ color: c.cat, colorMappingBy: "index" }],
     }],
   };
@@ -879,7 +879,7 @@ function buildHistogram({ bins, format = {} }) {
     },
     series: [{
       type: "bar", data: bins.map((b) => b.count), barCategoryGap: "0%",
-      itemStyle: { color: c.series, ...edgeOr(format.markBorder, c.muted, { borderColor: c.surface, borderWidth: 1 }) },
+      itemStyle: { color: c.series, ...edgeOr(format.markBorder, borderInk(format.markBorderColor, c), { borderColor: c.surface, borderWidth: 1 }) },
       label: { show: !!format.dataLabels, position: "top", color: c.label, fontFamily: c.font, fontSize: 14, formatter: (p) => fmtVal(p.value) },
       emphasis: { itemStyle: { opacity: 0.85 } },
     }],
@@ -943,7 +943,7 @@ const valueAxis = (c, fmtVal, extra = {}) => ({
   splitLine: { lineStyle: { color: c.grid } }, axisLabel: { color: c.muted, formatter: fmtVal }, ...extra,
 });
 // A point mark's stroke — nothing added while the setting is None (keeps the old look).
-const pointEdge = (format, c) => (format.markBorder && format.markBorder !== "none" ? markBorder(format.markBorder, c.muted) : {});
+const pointEdge = (format, c) => (format.markBorder && format.markBorder !== "none" ? markBorder(format.markBorder, borderInk(format.markBorderColor, c)) : {});
 const catAxis = (c, data, extra = {}) => ({
   type: "category", data, axisLine: { lineStyle: { color: c.axis } }, axisTick: { show: false },
   axisLabel: { color: c.muted, hideOverlap: true }, ...extra,
@@ -993,7 +993,7 @@ function buildWaterfall({ categories, series, format = {} }) {
           const top = Math.min(a[1], b[1]), h = Math.max(1, Math.abs(a[1] - b[1]));
           return {
             type: "group", children: [
-              { type: "rect", shape: { x: a[0] - w / 2, y: top, width: w, height: h, r: 2 }, style: { fill: colour[st.kind], ...strokeOf(format.markBorder, c.muted) } },
+              { type: "rect", shape: { x: a[0] - w / 2, y: top, width: w, height: h, r: 2 }, style: { fill: colour[st.kind], ...strokeOf(format.markBorder, borderInk(format.markBorderColor, c)) } },
               { type: "text", style: { text: st.kind === "total" ? fmtVal(st.value) : signed(st.value), x: a[0], y: top - 4,
                   align: "center", verticalAlign: "bottom", fill: c.label, font: `14px ${c.font}` } },
             ],
@@ -1020,7 +1020,7 @@ function buildFunnel({ categories, series, format = {} }) {
     tooltip: { trigger: "item", ...tipBox(c), formatter: (p) => `<span style="color:${c.muted}">${escapeHtml(String(p.name))}</span><br><b>${fmtVal(p.value)}</b> (${((p.value / top) * 100).toFixed(1)}% of the first)` },
     series: [{
       type: "funnel", sort: "descending", gap: 2, left: "10%", right: "10%", top: legend ? 36 : 12, bottom: 12, minSize: "8%",
-      data, itemStyle: edgeOr(format.markBorder, c.muted, { borderColor: c.surface, borderWidth: 1 }),
+      data, itemStyle: edgeOr(format.markBorder, borderInk(format.markBorderColor, c), { borderColor: c.surface, borderWidth: 1 }),
       label: { show: true, position: "inside", fontFamily: c.font, lineHeight: 16,
         formatter: (p) => `${p.name}\n${fmtVal(p.value)} · ${((p.value / top) * 100).toFixed(0)}%` },
     }],
@@ -1116,7 +1116,7 @@ function buildGantt({ categories, gantt, name, format = {} }) {
           const a = api.coord([api.value(1), api.value(0)]), e = api.coord([api.value(2), api.value(0)]);
           const h = Math.min(28, api.size([0, 1])[1] * 0.6);
           return { type: "group", children: [
-            { type: "rect", shape: { x: a[0], y: a[1] - h / 2, width: Math.max(2, e[0] - a[0]), height: h, r: 2 }, style: { fill: c.cat[0], ...strokeOf(format.markBorder, c.muted) } },
+            { type: "rect", shape: { x: a[0], y: a[1] - h / 2, width: Math.max(2, e[0] - a[0]), height: h, r: 2 }, style: { fill: c.cat[0], ...strokeOf(format.markBorder, borderInk(format.markBorderColor, c)) } },
             { type: "text", style: { text: len(b), x: Math.max(e[0], a[0] + 2) + 4, y: a[1], align: "left", verticalAlign: "middle", fill: c.label, font: `14px ${c.font}` } },
           ] };
         } },
@@ -1142,7 +1142,7 @@ function buildSankey({ links, format = {} }) {
       emphasis: { focus: "adjacency" }, data: nodes, links,
       label: { color: c.label, fontFamily: c.font, formatter: (p) => label(p.name) },
       lineStyle: { color: "gradient", opacity: 0.35, curveness: 0.5 },
-      itemStyle: edgeOr(format.markBorder, c.muted, { borderColor: c.surface, borderWidth: 1 }),
+      itemStyle: edgeOr(format.markBorder, borderInk(format.markBorderColor, c), { borderColor: c.surface, borderWidth: 1 }),
     }],
   };
 }
