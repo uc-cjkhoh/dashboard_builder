@@ -35,14 +35,14 @@ Grouped by feature folder; each entry is the module, then what it owns.
 - `Connection/connection.js` — connection form, compact summary, gating — [connection.md](../concepts/data-source/connection.md)
 - `Start/start-model.js` — pure: `summarize` a workbook into counts, `rememberWorkbook` / `forgetWorkbook` / `sanitizeWorkbooks` the recent-workbooks metadata (no names, data or password), `ago` and `describe` for the row text; `start-store.js` reads / writes it in `localStorage`; `start.js` draws the start screen (`_Start.cshtml`, `start.css`) and dispatches `connection:prefill`, which `Connection/connection.js` handles
 - `Connection/recent-sources.js` — pure: `remember` / `forget` / `sanitize` recent connection sources (host as entered, port, user, TLS flags — never a password), most recent first, max 5; `formValues` refills the form from one
-- `Connection/connection-rules.js` — pure: `advancedShouldOpen` (the Advanced section opens when TLS is off or the cert opt-in is on), `summaryTitle` (compact-summary tooltip), `formFromView`
+- `Connection/connection-rules.js` — pure: `secureToggled` / `trustToggled` (Secure off clears Trust, on restores it), `certNoteVisible` (the "certificate not checked" note waits), `summaryTitle` / `summaryDetail` (compact-summary tooltip, user · port), `formFromView`
 
 ### Schema/ — database picker and table list
 
 - `Schema/schema.js` — database `<select>`, table search, table chips + drag payload — [schema-browser.md](../concepts/data-source/schema-browser.md)
 - `Schema/column-profile-dialog.js`, `Schema/column-profile-model.js` — the column profile dialog (`openColumnProfile(db, table, column)`, opened from a field row on a canvas card) and its pure rules:
   - `profileRequest`, `formatShare`, `roleOf`, `summarize` — [schema-browser.md](../concepts/data-source/schema-browser.md#column-profile--field-details)
-- `Schema/table-filter.js` — pure: `matchTables(names, query)` — the table search
+- `Schema/table-filter.js` (`matchTables`, the table search), `Schema/schema-model.js` (`splitDatabases`, `rememberDb` / `recallDb`), `Schema/type-kind.js` (`friendlyKind(rawType)`) — pure rules
 
 ### Canvas/ and Relations/ — the Data Source canvas
 
@@ -221,7 +221,7 @@ Grouped by feature folder; each entry is the module, then what it owns.
 ### Workbook/ — saving, import/export and workbook dialogs
 
 - `Workbook/parameters-dialog.js` — P32: the Parameters dialog (sidebar Parameters icon)
-- `Workbook/theme-dialog.js` — the Theme dialog (Settings menu)
+- `Workbook/theme-dialog.js` — the Theme dialog (opened by the Theme button)
 - `Workbook/workbook.js` — auto-save, restore on connect, Export/Import — [workbook.md](../concepts/workbook/workbook.md)
 - `Workbook/workbook-model.js` — pure (also `restoredSummary`, `issueCount`; `Dashboard/missing-columns.js` prunes pills whose column isn't in the catalog):
   - workbook serialize (v2) / `parseWorkbook` (full validation + issue list; v1 files via `migrateV1`) / `sanitizeSheet` / storage keys (`storageKey`, `legacyStorageKey`) — [workbook.md](../concepts/workbook/workbook.md#validation-parseworkbook)

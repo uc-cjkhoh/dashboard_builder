@@ -106,7 +106,7 @@ Controller: `Features/Connection/ConnectionController.cs`.
 
 | Method & path | Purpose | ClickHouse |
 |---|---|---|
-| `POST /api/connection` | validate and store the session connection (host, port, user, password, secure, allowInvalidCert); steps the guard settings down if the server refuses one | `SELECT 1` |
+| `POST /api/connection` | validate and store the session connection (host, port, user, password, secure, allowInvalidCert); steps the guard settings down if the server refuses one; failures name their cause ([Connect errors](#connect-errors)) | `SELECT 1` |
 | `GET /api/connection` | current connection view — password-free | — |
 | `GET /api/connection/ping` | liveness probe → `{ connected, reachable }`; `connected:false` = the session lost its connection; `reachable` = `SELECT 1` succeeded | `SELECT 1` |
 | `POST /api/connection/disconnect` | drop the session connection; body `{}` (proxy-safe) | — |
@@ -286,3 +286,14 @@ Request/response models: `ClickHouse/QueryModels.cs`, `StatisticalModels.cs`, `S
 
 `GET /` → `Features/Shell/ShellController.cs` renders the one page. Feature assets are served at
 `/features/<Feature>/<file>` (`.css`/`.js` only).
+
+### Connect errors
+
+`POST /api/connection` answers a failed connect with a plain message for the cause (never the password or exception text), and the form field it belongs to (any other failure: 502 "Could not connect to ClickHouse. Check the host, port, user, password, and TLS setting."):
+
+| Cause | Status | `field` | Message |
+|---|---|---|---|
+| wrong user or password (ClickHouse code 516 / 192 / 193) | 401 | `password` | Wrong user name or password. |
+| host or port does not answer (refused, DNS, timeout) | 502 | `host` | Can't reach host:port … / No answer from host:port … |
+| TLS on, but the port speaks plain HTTP | 502 | — | … Turn Secure (TLS) off for an HTTP port such as 8123. |
+| TLS off but the port speaks TLS; certificate not trusted | 502 | — | … Turn Secure (TLS) on … / … Switch on Trust self-signed certificate … |
