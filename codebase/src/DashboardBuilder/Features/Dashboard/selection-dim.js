@@ -3,7 +3,7 @@
 // columns, pie and donut slices); the other types are marked by the dashboard chip and the widget's header alone.
 export const DIM_OPACITY = 0.35;
 export const DIM_TYPES = new Set(["bar", "stacked", "pie", "donut"]);
-const MARKS = new Set(["bar", "pie"]); // series kinds that are marks (a trend / reference line over a bar chart is not)
+const MARKS = new Set(["bar", "pie", "custom"]); // series kinds that are marks ("custom" = bars of varying thickness); a trend / reference line over a bar chart is not
 
 const fade = (item) => {
   const obj = item !== null && typeof item === "object" && !Array.isArray(item);

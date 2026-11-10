@@ -1,7 +1,7 @@
 import { renderChart as drawChart } from "./chart.js";
 import { dateLabelsOf } from "./date-labels.js";
 import { isCalcPill } from "../Calc/calc-pill.js";
-import { SCATTER_TYPES, marksOf, planMeasures, measureName as planMeasureName } from "./sheet-plan.js";
+import { SCATTER_TYPES, marksOf, planMeasures, colorMode, measureName as planMeasureName } from "./sheet-plan.js";
 import { makeValueFormatter } from "../Core/format.js";
 import { REF_CHOICES, TREND_CHOICES, trendProblem, refValue, refConstant, trendSeries, pickMeasure, dataValues, bandBounds, bandLabel } from "./analytics-model.js";
 import { parameters } from "../Core/store.js";
@@ -11,7 +11,8 @@ import { fitWords } from "./chart-polish.js";
 import { selectHandler, legendSpec, memberSpec } from "./render-handlers.js";
 import { selectedIndicesOf } from "./dashboard-select.js";
 import { joinNotices } from "./notices.js";
-import { ANALYTICS_TYPES, scatterSymbol, primaryDim, chartOrientation, marksChannels, scatterShapeGroups, colorSplitData, colorSplitLabels, markFieldValues } from "./result-model.js";
+import { shapeColourNote, splitSizeNote } from "./mark-channel-model.js";
+import { ANALYTICS_TYPES, scatterSymbol, primaryDim, chartOrientation, marksChannels, scatterGroups, colorSplitData, colorSplitLabels, markFieldValues } from "./result-model.js";
 
 // The series charts: bar / stacked / line / area / combo, pie / donut, the scatter family (with Shape), and the colour
 // split. Each draws into `container` through chart.js and wires interaction only through the render context `rc`
@@ -19,6 +20,8 @@ import { ANALYTICS_TYPES, scatterSymbol, primaryDim, chartOrientation, marksChan
 
 /** Colour split: one series per colour value (the trailing group-by key); the primary dimension is the first non-colour key. */
 export function renderColorSplit(container, rc, sheet, type, result, format, fmtCat) {
+  const sizeNote = splitSizeNote(Boolean(marksOf(sheet).size)); // the split draws no Size: say so
+  if (sizeNote) container.append(hint(sizeNote));
   const { categories, series, catTuples, colorVals, cellRows } = colorSplitData(result, fmtCat);
   // Click a mark -> the primary (first non-colour) dimension value = catTuples[dataIndex][0].
   const rawKeys = catTuples.map((t) => t[0]);
@@ -37,14 +40,23 @@ export function renderColorSplit(container, rc, sheet, type, result, format, fmt
   drawChart(container, { type, categories, series, format, onSelect, selectedIndices, orientation, seriesLabels, ...memberColourSpec, ...legend });
 }
 
-/** Shape (scatter family): one scatter series per Shape member, each a distinct symbol (identity survives greyscale). */
-export function renderScatterShapes(container, rc, sheet, result, seriesIdx, sizeIdx, format, fmtCat) {
-  if (seriesIdx.length < 2) { container.append(hint("A shape scatter plots two measures (X and Y) — add a second measure.")); return; }
+/**
+ * The scatter family with a Colour dimension and / or a Shape dimension: one scatter series per Colour member, Shape member or
+ * pair. A Colour member wears its palette colour (or its Format → member colour) and a Shape member its own symbol (identity
+ * survives greyscale); the legend names the members (one legend when both are the same field, pairs otherwise).
+ */
+export function renderScatterShapes(container, rc, sheet, result, seriesIdx, sizeIdx, colorMeasureIdx, format, fmtCat) {
+  if (seriesIdx.length < 2) { container.append(hint("A point chart plots two measures (X and Y) — add a second measure.")); return; }
+  const note = shapeColourNote(colorMeasureIdx); // only one Colour slot: reached with Shape + a measure on Colour
+  if (note) container.append(hint(note));
   const xIdx = seriesIdx[0], yIdx = seriesIdx[1];
-  const { groups, byName } = scatterShapeGroups(sheet, result, seriesIdx, sizeIdx, fmtCat);
+  const { groups, legend, colourMembers } = scatterGroups(sheet, result, seriesIdx, sizeIdx, fmtCat);
+  const cf = colorMode(sheet) === "discrete" ? sheet.color[0] : null;
+  const memberColourSpec = cf && !isCalcPill(cf) ? memberSpec(rc, sheet, cf, colourMembers) : {};
   drawChart(container, {
-    ...legendSpec(rc, sheet, marksOf(sheet).shape, byName), // legend items are Shape members
-    type: "scatterShapes", groups, format,
+    ...legendSpec(rc, sheet, legend.field, legend.byName), // legend items are Colour / Shape members
+    ...memberColourSpec,
+    type: "scatterShapes", symbol: scatterSymbol(sheet.chartType), groups, format,
     xName: format.xTitle || result.measures[xIdx] || "x",
     yName: format.yTitle || result.measures[yIdx] || "y",
     hasSize: sizeIdx >= 0, sizeName: sizeIdx >= 0 ? result.measures[sizeIdx] : null,
@@ -63,6 +75,13 @@ export function renderSeries(container, rc, sheet, a) {
   // Mark channels: Size (bubble), continuous Colour (gradient), field-driven Label + custom Tooltip. All read
   // columns already in `result`; missing / unsupported mappings degrade to a note.
   const marks = marksChannels(sheet, result, mplan, sizeIdx, colorMeasureIdx, fmtVal, fmtCat, rowsOrdered, SCATTER_TYPES, (f) => planMeasureName(f, rc.plan));
+  const compareSeries = aligned && (type === "bar" || type === "line" || type === "area")
+    ? seriesIdx.map((mi) => ({ name: `${measures[mi]} (${cmp.name})`, data: aligned.map((r) => (r ? r.values[mi] : null)), compare: true }))
+    : [];
+  if (compareSeries.length && type === "bar" && marks.spec.sizes) { // the comparison bars are plain bars beside each main bar: varying thickness would not line up
+    delete marks.spec.sizes; delete marks.spec.sizeName;
+    marks.note = [marks.note, "Size is not drawn beside a comparison period — remove the comparison to vary bar thickness."].filter(Boolean).join(" ");
+  }
   rc.hooks.onTooltipFields?.(sheet, marks.tooltipCat);
   if (marks.note) container.append(hint(marks.note)); // a Marks hint sits above the chart, never blocks it
   // Click-to-filter: marks map 1:1 to result rows here, so a click's dataIndex -> rowsOrdered[i].keys[0] (the primary
@@ -76,9 +95,6 @@ export function renderSeries(container, rc, sheet, a) {
   const legend = (type === "pie" || type === "donut")
     ? legendSpec(rc, sheet, primaryDim(sheet), new Map(rowsOrdered.map((r, i) => [categories[i], r.isOther ? undefined : r.keys[0]])))
     : legendSpec(rc, sheet, null, new Map());
-  const compareSeries = aligned && (type === "bar" || type === "line" || type === "area")
-    ? seriesIdx.map((mi) => ({ name: `${measures[mi]} (${cmp.name})`, data: aligned.map((r) => (r ? r.values[mi] : null)), compare: true }))
-    : [];
   // Analytics: lines / bands on their chosen measure, the trend on its own: reference line, band, trend (+ forecast categories appended).
   let catsOut = categories, seriesOut = [...series, ...compareSeries], analytics = null;
   const A = sheet.analytics;
@@ -108,7 +124,8 @@ export function renderSeries(container, rc, sheet, a) {
     if ((t || rv != null || bb) && (result.truncated || result.partial)) rc.extraNotice = joinNotices(rc.extraNotice, "Analytics use only the rows shown — more exist.");
   }
   // Members coloured by a field — pie / donut slices and a single-measure bar coloured by category.
-  const byMember = (type === "pie" || type === "donut" || (type === "bar" && format.colorByDimension && series.length === 1 && !compareSeries.length)) && primaryDim(sheet) && !isCalcPill(primaryDim(sheet));
+  // A colour measure replaces them (the marks wear their value's colour).
+  const byMember = (type === "pie" || type === "donut" || (type === "bar" && format.colorByDimension && series.length === 1 && !compareSeries.length)) && !marks.spec.colorValues && primaryDim(sheet) && !isCalcPill(primaryDim(sheet));
   const memberColourSpec = byMember
     ? memberSpec(rc, sheet, primaryDim(sheet), rowsOrdered.map((r, i) => ({ name: categories[i], raw: r.keys[0], other: r.isOther })).filter((m) => !m.other))
     : {};

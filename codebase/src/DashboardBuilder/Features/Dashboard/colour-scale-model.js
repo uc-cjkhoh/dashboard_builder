@@ -113,3 +113,19 @@ export function stepPieces(min, max, n, ramp, fmt) {
     return piece;
   });
 }
+
+/** A value's place on min..max as 0..1, clamped at the ends (a pinned end saturates); null for a missing / non-numeric value. */
+export function positionOf(v, min, max) {
+  if (v == null || v === "" || !Number.isFinite(Number(v))) return null;
+  if (!(max > min)) max = min + 1;
+  return Math.min(1, Math.max(0, (Number(v) - min) / (max - min)));
+}
+/** The step a value falls in for `n` equal steps over min..max (same boundaries as stepPieces: outer steps open, a boundary belongs to the step above). */
+export function stepIndexOf(v, min, max, n) {
+  if (v == null || v === "" || !Number.isFinite(Number(v))) return null;
+  if (!(max > min)) max = min + 1;
+  const b = stepBounds(min, max, n);
+  let i = 0;
+  for (let k = 1; k < n; k++) if (Number(v) >= b[k]) i = k;
+  return i;
+}

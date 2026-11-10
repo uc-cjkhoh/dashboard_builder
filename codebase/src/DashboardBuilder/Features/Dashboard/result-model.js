@@ -1,11 +1,12 @@
 import { roleOf } from "./show-me-rules.js";
-import { marksOf, planDims, planMeasures, drillActiveDim } from "./sheet-plan.js";
+import { marksOf, planDims, planMeasures, drillActiveDim, colorMode } from "./sheet-plan.js";
 import { isCalcPill, sameCalcPill } from "../Calc/calc-pill.js";
 import { aggWord } from "../Calc/calc-plan.js";
 import { tooltipCatalog } from "./tooltip-model.js";
 import { checkFilter } from "./filter-rules.js";
 import { tupleKey, uniqueTuples } from "./grid-model.js";
 import { isCalc, calcName } from "./table-calc.js";
+import { colourChannel, sizeChannel } from "./mark-channel-model.js";
 
 // Pure shaping of a query result for drawing: which result column is a series or a mark channel, the pivots
 // behind the colour split, heatmap, treemap, Sankey and small multiples, display names, and the status / caption text.
@@ -143,7 +144,8 @@ export function markFieldValues(sheet, rows, mplan, field, fmtVal, fmtCat, measu
 
 /**
  * The mark-channel spec fed to chart.js: { spec: { sizes?, sizeName?, colorValues?, colorName?, pointLabels?,
- * tooltipExtra?, tooltipText?, tooltipFields? }, note?, tooltipCat }. Only channels valid for the current type / mapping
+ * tooltipExtra?, tooltipText?, tooltipFields? }, note?, tooltipCat }. `sizes` / `colorValues` are aligned with the rows
+ * (null for the "Other" row). Only channels valid for the current type / mapping (mark-channel-model.js)
  * are populated; anything unmet becomes a friendly `note` (a hint, never an error). `tooltipCat` is the field list the
  * Tooltip editor offers. `measureName(field)` is the display name of a measure field.
  */
@@ -155,23 +157,19 @@ export function marksChannels(sheet, result, mplan, sizeIdx, colorMeasureIdx, fm
   const rows = rowsOrdered ?? result.rows; // align channel arrays with the (possibly Path-ordered) rows
   const values = (f) => markFieldValues(sheet, rows, mplan, f, fmtVal, fmtCat, measureName);
 
-  // Size -> the scatter family's bubbles (variable bar/line width is out of scope for v1).
+  // Size and a continuous Colour read one result column each; which types accept them is mark-channel-model.js.
+  // The "Other" row (the cut-off members' total) is not a data point: it takes neither size nor colour.
+  const shelfCount = mplan.filter((e) => e.role === "shelf").length;
+  const column = (idx) => rows.map((r) => (r.isOther ? null : r.values[idx]));
   if (m.size) {
-    if (scatterTypes.has(type) && sizeIdx >= 0) {
-      spec.sizes = rows.map((r) => r.values[sizeIdx]);
-      spec.sizeName = result.measures[sizeIdx];
-    } else if (!scatterTypes.has(type)) {
-      notes.push("Size shapes a Scatter (bubble) chart — switch to Scatter to use it.");
-    }
+    const ch = sizeChannel(type, shelfCount);
+    if (ch.ok && sizeIdx >= 0) { spec.sizes = column(sizeIdx); spec.sizeName = result.measures[sizeIdx]; }
+    else if (!ch.ok) notes.push(ch.note);
   }
-  // Continuous Colour -> a token-derived gradient on scatter points, with a visualMap legend.
   if (colorMeasureIdx >= 0) {
-    if (scatterTypes.has(type)) {
-      spec.colorValues = rows.map((r) => r.values[colorMeasureIdx]);
-      spec.colorName = result.measures[colorMeasureIdx];
-    } else {
-      notes.push("Continuous colour applies to Scatter — drop a categorical field on Colour for other chart types.");
-    }
+    const ch = colourChannel(type, shelfCount);
+    if (ch.ok) { spec.colorValues = column(colorMeasureIdx); spec.colorName = result.measures[colorMeasureIdx]; }
+    else notes.push(ch.note);
   }
   // Label -> the field's value written on each mark. Numeric labels ride along as an aux measure; categorical labels
   // must be a group-by (on a shelf / Detail / Colour) to have one value per mark.
@@ -197,25 +195,51 @@ export function marksChannels(sheet, result, mplan, sizeIdx, colorMeasureIdx, fm
 }
 
 /**
- * Shape (scatter family): group rows by the Shape dimension's value -> one scatter series per value.
- * Returns { groups: [{ name, points: [{ value: [x, y, size?], name }] }], byName: Map(name -> raw shape value) }.
+ * The scatter family's groups: one series per Colour member, per Shape member, or per (Colour, Shape) pair, each holding its
+ * points. Returns { groups: [{ name, points: [{ value: [x, y, size?], name }], colour: { index, name, raw } | null,
+ * shape: { index, name, raw } | null }], legend: { field, byName }, colourMembers: [{ name, raw }], byName }.
+ * Colour and Shape on the SAME field are one grouping (one legend: its members); on different fields a series is named
+ * "colour member · shape member" and its legend is highlight-only (`legend.field` null). `byName` = legend name -> raw member.
  */
-export function scatterShapeGroups(sheet, result, seriesIdx, sizeIdx, fmtCat) {
+export function scatterGroups(sheet, result, seriesIdx, sizeIdx, fmtCat) {
   const { keyOrder } = planDims(sheet);
-  const si = keyOrder.findIndex((f) => sameField(f, marksOf(sheet).shape));
+  const cf = (sheet.color ?? [])[0];
+  const colourField = cf && colorMode(sheet) === "discrete" ? cf : null;
+  const shapeField = marksOf(sheet).shape ?? null;
+  const ci = colourField ? keyOrder.findIndex((f) => sameField(f, colourField)) : -1;
+  const si = shapeField ? keyOrder.findIndex((f) => sameField(f, shapeField)) : -1;
   const xIdx = seriesIdx[0], yIdx = seriesIdx[1];
-  const groupsMap = new Map();
+  const label = (k, i) => (k == null ? "—" : fmtCat(k, i));
+  const colourMembers = new Map(), shapeMembers = new Map(), groupsMap = new Map();
+  const member = (map, idx, r) => {
+    const key = tupleKey([r.keys[idx]]);
+    if (!map.has(key)) map.set(key, { index: map.size, name: label(r.keys[idx], idx), raw: r.keys[idx] });
+    return map.get(key);
+  };
   for (const r of result.rows) {
-    const sv = si >= 0 ? r.keys[si] : null;
-    const gk = tupleKey([sv]);
-    if (!groupsMap.has(gk)) groupsMap.set(gk, { name: sv == null ? "—" : fmtCat(sv, si), points: [], raw: sv });
+    const colour = ci >= 0 ? member(colourMembers, ci, r) : null;
+    const shape = si >= 0 ? member(shapeMembers, si, r) : null;
+    const gk = (colour ? colour.index : "") + "|" + (shape ? shape.index : "");
+    if (!groupsMap.has(gk)) {
+      const name = colour && shape && ci !== si ? `${colour.name} · ${shape.name}` : (colour ?? shape)?.name ?? "—";
+      groupsMap.set(gk, { name, points: [], colour, shape });
+    }
     const pt = [Number(r.values[xIdx]) || 0, Number(r.values[yIdx]) || 0];
     if (sizeIdx >= 0) pt.push(Number(r.values[sizeIdx]) || 0);
-    const label = r.keys.map((k, i) => (i === si ? null : (k == null ? "—" : fmtCat(k, i)))).filter((v) => v != null).join(" / ");
-    groupsMap.get(gk).points.push({ value: pt, name: label });
+    const pointName = r.keys.map((k, i) => (i === ci || i === si ? null : label(k, i))).filter((v) => v != null).join(" / ");
+    groupsMap.get(gk).points.push({ value: pt, name: pointName });
   }
   const groups = [...groupsMap.values()];
-  return { groups: groups.map(({ name, points }) => ({ name, points })), byName: new Map(groups.map((g) => [g.name, g.raw])) };
+  const pairs = ci >= 0 && si >= 0 && ci !== si; // two fields: a legend of pairs can't select one member
+  const legendField = pairs ? null : (ci >= 0 ? colourField : shapeField);
+  const byName = pairs ? new Map() : new Map(groups.map((g) => [g.name, (g.colour ?? g.shape).raw]));
+  return { groups, legend: { field: legendField, byName }, colourMembers: [...colourMembers.values()].map(({ name, raw }) => ({ name, raw })), byName };
+}
+
+/** Shape (scatter family) alone: scatterGroups with no Colour — one series per Shape member. */
+export function scatterShapeGroups(sheet, result, seriesIdx, sizeIdx, fmtCat) {
+  const g = scatterGroups({ ...sheet, color: [] }, result, seriesIdx, sizeIdx, fmtCat);
+  return { groups: g.groups.map(({ name, points }) => ({ name, points })), byName: g.byName };
 }
 
 /**
@@ -268,18 +292,29 @@ export function heatmapData(result, fmtCat) {
   return { xCats, yCats, cells };
 }
 
-/** Treemap: one dimension -> flat leaves; two -> dimension 0 groups, dimension 1 nests under it (values summed). */
-export function treemapTree(result, fmtCat) {
+/**
+ * Treemap: one dimension -> flat leaves; two -> dimension 0 groups, dimension 1 nests under it (values summed). With a Size measure
+ * (`ch.sizeIdx`) a tile's area is that measure and the shelf measure rides along as `shelf`; a colour measure (`ch.colourIdx`)
+ * rides along as `colour`. A parent has no colour of its own. Without either, the plain { name, value } tiles.
+ */
+export function treemapTree(result, fmtCat, ch = {}) {
   const dimCount = result.rowDimensions.length + result.columnDimensions.length;
+  const { sizeIdx = -1, colourIdx = -1 } = ch;
   const rows = result.rows;
-  if (dimCount === 1) return rows.map((r) => ({ name: r.keys[0] == null ? "—" : fmtCat(r.keys[0], 0), value: r.values[0] }));
+  const leaf = (name, r) => {
+    const base = { name, value: sizeIdx >= 0 ? r.values[sizeIdx] : r.values[0] };
+    if (sizeIdx >= 0) { base.shelf = r.values[0]; base.size = r.values[sizeIdx]; }
+    if (colourIdx >= 0) { base.colour = r.values[colourIdx]; if (sizeIdx < 0) base.shelf = r.values[0]; }
+    return base;
+  };
+  if (dimCount === 1) return rows.map((r) => leaf(r.keys[0] == null ? "—" : fmtCat(r.keys[0], 0), r));
   const parents = new Map();
   for (const r of rows) {
     const pk = tupleKey([r.keys[0]]);
     if (!parents.has(pk)) parents.set(pk, { name: r.keys[0] == null ? "—" : fmtCat(r.keys[0], 0), value: 0, children: [] });
     const node = parents.get(pk);
-    node.value += Number(r.values[0]) || 0;
-    node.children.push({ name: r.keys[1] == null ? "—" : fmtCat(r.keys[1], 1), value: r.values[0] });
+    node.value += Number(sizeIdx >= 0 ? r.values[sizeIdx] : r.values[0]) || 0;
+    node.children.push(leaf(r.keys[1] == null ? "—" : fmtCat(r.keys[1], 1), r));
   }
   return [...parents.values()];
 }
