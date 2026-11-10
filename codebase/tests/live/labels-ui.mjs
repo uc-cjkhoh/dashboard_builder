@@ -253,6 +253,26 @@ try {
     must(dim.calc.whens.length === 2 && dim.calc.whens[1].t.v === 'Other' && dim.calc.whens[1].c.k === 'not', `whens: ${J(dim.calc.whens).slice(0, 400)}`);
   });
 
+  await check('a NULL label: the empty value gets its own label via a first isnull WHEN; blank label disables Save', async () => {
+    await ev(`(() => { const c = (${PAGE_CHIP})('region (groups)'); c.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 40 })); [...document.querySelectorAll('.ctx-menu .menu__item')].find((x) => x.textContent.trim() === 'Edit…').click(); return true; })()`);
+    await waitFor(`!!document.querySelector('dialog.grp-dialog[open]') && document.querySelectorAll('.grp-member').length === 4`, 'edit dialog');
+    const NU = `document.querySelector('.grp-null')`;
+    must(await ev(`${NU}.querySelector('input[type=text]').disabled`), 'NULL label input off until ticked');
+    await ev(`${NU}.querySelector('input[type=checkbox]').click()`);
+    must(await ev(`${NU}.querySelector('input[type=text]').value === '(none)'`), 'default NULL label');
+    await typeInto('.grp-null input[type=text]', '');
+    must(await ev(`document.querySelector('dialog.grp-dialog .dialog__foot button.btn--primary').disabled`), 'blank NULL label disables Save');
+    must(/NULL/.test(await stripText('.grp-error:not(:empty)')), 'blank NULL label message');
+    await typeInto('.grp-null input[type=text]', '(none)');
+    await b.sleep(300);
+    await b.screenshot(join(SHOTS, 'group-null-light.png'));
+    await ev(`${dlgBtn('dialog.grp-dialog', 'Save')}.click()`);
+    await waitFor(`!document.querySelector('dialog.grp-dialog')`, 'closed');
+    await settle();
+    const dim = last().columnDimensions[0];
+    must(dim.calc.whens.length === 3 && dim.calc.whens[0].c.k === 'isnull' && dim.calc.whens[0].t.v === '(none)', `whens: ${J(dim.calc.whens).slice(0, 400)}`);
+  });
+
   await check('editing a group field reopens the dialog with the groups filled in', async () => {
     await ev(`(() => { const c = (${PAGE_CHIP})('region (groups)'); c.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 40 })); [...document.querySelectorAll('.ctx-menu .menu__item')].find((x) => x.textContent.trim() === 'Edit…').click(); return true; })()`);
     await waitFor(`!!document.querySelector('dialog.grp-dialog[open]') && document.querySelectorAll('.grp-member').length === 4`, 'edit dialog');

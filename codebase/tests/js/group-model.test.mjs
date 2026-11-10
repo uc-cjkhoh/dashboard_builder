@@ -286,3 +286,44 @@ test("a saved number group keeps its kind through cleanGroupSpec; an unknown kin
   assert.equal(issues.length, 2);
   assert.equal(cleanGroupSpec({ field: FIELD, groups: [g("A", "x")] }, '"x"', issues).kind, undefined);
 });
+
+// NULL label: the empty value goes under a label (spec.nullLabel) — a first WHEN isnull(field), so it can join a group by sharing its name.
+test("nullLabel: a first WHEN isnull(field) -> the label; cost +3; works for text, number and boolean", () => {
+  const OK = { db: "d", table: "t", column: "ok" };
+  const s = { ...spec([g("A", "a1")]), nullLabel: "(none)" };
+  const t = groupTree(s);
+  assert.deepEqual(t.whens[0], { c: { k: "isnull", arg: { k: "field", ...FIELD } }, t: { k: "str", v: "(none)" } });
+  assert.equal(t.whens.length, 2);
+  assert.equal(check(t, categoryOf).error, undefined);
+  assert.equal(count(t), groupCost(s));
+  assert.equal(groupCost(s), groupCost(spec(s.groups)) + 3);
+  for (const x of [numSpec([g("A", "1")], "number", { nullLabel: "n" }), { field: OK, kind: "boolean", groups: [g("Y", "true")], nullLabel: "n", other: "Rest" }]) {
+    assert.equal(count(groupTree(x)), groupCost(x));
+    assert.equal(groupTree(x).whens[0].c.k, "isnull");
+  }
+});
+test("nullLabel: blank or absent adds nothing; the member budget drops by one (2 with Other too), exactly that fits", () => {
+  assert.equal(groupTree({ ...spec([g("A", "a1")]), nullLabel: "  " }).whens.length, 1);
+  assert.equal(maxMembersFor({ nullLabel: "x" }), 48);
+  assert.equal(maxMembersFor({ nullLabel: "x", other: "o" }), 47);
+  for (const [extra, max] of [[{ nullLabel: "x" }, 48], [{ nullLabel: "x", other: "o" }, 47]]) {
+    const mk = (n) => ({ ...spec([g("All", ...Array.from({ length: n }, (_, i) => `m${i}`))]), ...extra });
+    assert.equal(checkGroupSpec(mk(max)).ok, true);
+    assert.equal(count(groupTree(mk(max))) <= CALC_LIMITS.nodes, true);
+    assert.equal(checkGroupSpec(mk(max + 1)).ok, false);
+  }
+});
+test("nullLabel: at most groupName characters; text; may equal a group name (NULL joins that group); not an ungrouped member", () => {
+  assert.equal(checkGroupSpec({ ...spec([g("A", "a")]), nullLabel: "x".repeat(LIMITS.groupName) }).ok, true);
+  assert.equal(checkGroupSpec({ ...spec([g("A", "a")]), nullLabel: "x".repeat(LIMITS.groupName + 1) }).ok, false);
+  assert.equal(checkGroupSpec({ ...spec([g("A", "a")]), nullLabel: 5 }).ok, false);
+  assert.equal(checkGroupSpec({ ...spec([g("A", "a")]), nullLabel: "a" }).ok, true);
+  assert.equal(checkGroupSpec({ ...spec([g("A", "a")]), nullLabel: "A" }, ["a", "b"]).ok, true);
+  assert.match(checkGroupSpec({ ...spec([g("A", "a")]), nullLabel: "b" }, ["a", "b"]).error, /also a member/);
+});
+test("nullLabel: survives a workbook clean; a non-text one skips the calculation", () => {
+  const issues = [];
+  assert.equal(cleanGroupSpec({ ...spec([g("A", "a")]), nullLabel: " None " }, "x", issues).nullLabel, "None");
+  assert.equal(cleanGroupSpec({ ...spec([g("A", "a")]), nullLabel: "" }, "x", issues).nullLabel, undefined);
+  assert.equal(cleanGroupSpec({ ...spec([g("A", "a")]), nullLabel: 3 }, "x", issues), null);
+});
