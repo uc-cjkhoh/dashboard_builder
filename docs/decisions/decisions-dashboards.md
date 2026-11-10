@@ -187,3 +187,10 @@ A beginner test found `order_id`, `line_no`, `customer_id` listed under Measures
 
 - **Only the default changes.** `defaultRole` (`Dashboard/field-role.js`) runs when a field is placed and when the pane is grouped; an explicit Continuous / Discrete choice and every role stored in a workbook are unchanged (`roleOf` still reads a pill's saved role first).
 - **Rejected:** guessing from the data (a distinct-count scan per column); a per-field role setting (more UI for the same result — the pill's Continuous / Discrete choice already does it).
+
+## D100 — Shape stays on the scatter family; Size on a line is the marker size
+
+- **Decision:** Shape (a dimension → one symbol per member) stays a scatter / square / circle channel only, as in Tableau, where Shape belongs to the Shape mark type; it is not added to bar, line, pie or the rest. A line's markers keep their one shape from Format → Marker shape. A Colour dimension on the scatter family *does* split the points (one series per member, member colours, a legend), also next to Shape on a different field (colour by the Colour member, symbol by the Shape member).
+- **Size on a line / area is the marker size,** 6–24 px per point by its share of the data's span. Tableau varies a line's thickness per segment; ECharts draws one width per line series, so the markers carry the Size value (always shown while Size is set) and a Size legend names the field and its range in words. A bar's thickness is a custom series (ECharts has no per-bar width), 6 px at the smallest value up to 80 % of the category band.
+- **A colour measure needs one measure on bar, line and area.** Tableau colours every measure's marks by the colour measure; here the measures would then look alike (the palette is what tells grouped bars and lines apart), so several measures give a hint and keep the palette. A Stacked bar and a Combo give a hint too.
+- **Not built:** Size on pie / donut (no per-slice meaning), a thickness per line segment, a free Shape on other types.

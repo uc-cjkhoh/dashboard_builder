@@ -1,5 +1,5 @@
 ---
-components: [src/DashboardBuilder/Features/Core/format.js, src/DashboardBuilder/Features/Core/icons.js, src/DashboardBuilder/Features/Dashboard/chart.js, src/DashboardBuilder/Features/Dashboard/colour-model.js, src/DashboardBuilder/Features/Dashboard/colour-scale-model.js, src/DashboardBuilder/Features/Dashboard/contrast.js, src/DashboardBuilder/Features/Dashboard/font-model.js, src/DashboardBuilder/Features/Dashboard/pill-options.js, src/DashboardBuilder/Features/Dashboard/table-style-model.js, src/DashboardBuilder/Features/Dashboard/toolbar-rules.js, src/DashboardBuilder/Features/Dashboard/tooltip-dialog.js, src/DashboardBuilder/Features/Dashboard/tooltip-model.js, src/DashboardBuilder/Features/Dashboard/tooltip-style.js]
+components: [src/DashboardBuilder/Features/Core/format.js, src/DashboardBuilder/Features/Core/icons.js, src/DashboardBuilder/Features/Dashboard/chart.js, src/DashboardBuilder/Features/Dashboard/colour-model.js, src/DashboardBuilder/Features/Dashboard/colour-scale-model.js, src/DashboardBuilder/Features/Dashboard/contrast.js, src/DashboardBuilder/Features/Dashboard/font-model.js, src/DashboardBuilder/Features/Dashboard/mark-channel-model.js, src/DashboardBuilder/Features/Dashboard/pill-options.js, src/DashboardBuilder/Features/Dashboard/table-style-model.js, src/DashboardBuilder/Features/Dashboard/toolbar-rules.js, src/DashboardBuilder/Features/Dashboard/tooltip-dialog.js, src/DashboardBuilder/Features/Dashboard/tooltip-model.js, src/DashboardBuilder/Features/Dashboard/tooltip-style.js]
 ---
 # Worksheet marks — Marks card, member colours, table look
 
@@ -9,7 +9,7 @@ What each Marks slot accepts and how it renders, plus member colours and the pal
 
 The Marks group sits at the top of the field pane and collapses like the other groups. Its open or collapsed state is remembered per browser (`dashboardbuilder.marks.pref`); with nothing remembered it starts collapsed only while no slot is set, and an open editor keeps it open. Collapsed, its header shows a one-line summary of the slots in use ("Color, Detail (2)"). It is a grid of **three columns** of slots: Color, Size, Label, Detail, Tooltip, Shape, Path, Angle, Filters, Date range, Drill, Pages.
 
-- **Every tool is always reachable** (there is no More menu). Tools the chart type doesn't use are **quiet** (dimmed) unless they hold fields: Size / Shape outside scatter, square, circle; Path outside line, area; Angle outside pie, donut; Detail, Drill and Pages by default.
+- **Every tool is always reachable** (there is no More menu). Tools the chart type doesn't use are **quiet** (dimmed) unless they hold fields: Size outside scatter, square, circle, bar, line, area and treemap (so it is quiet on pie, donut, KPI and table); Shape outside scatter, square, circle; Path outside line, area; Angle outside pie, donut; Detail, Drill and Pages by default.
 - **A slot** is an icon over its name, 65px × 50px with 8px of padding on every side and 4px between slots. It shows a **count badge** when it holds fields, riding the slot's top-right corner (half a gap outside it, so a two-digit count never reaches the icon), and is a **drop target** (drag a field straight onto it). The slot's long hint (what it accepts) is its `title`; an empty editor's drop zone says only "drop a field" / "drop fields".
 - **Click a slot** to open **one** editor, with its pills over a drop zone. It is a **flyout** (`.ws-toolfly`) that opens just right of the field pane, level with the slot but below the Columns and Rows lanes, so a field is one short drag away, the chart never shifts, and the lanes stay uncovered. At most one editor is open at a time.
   - Keyboard focus moves into the flyout when a slot is pressed; **Esc** or ✕ closes it and returns focus to the slot. Pressing the slot again also closes it.
@@ -17,7 +17,7 @@ The Marks group sits at the top of the field pane and collapses like the other g
   - Each editor has an **Add field** button (**Replace field** on a one-field slot that is full): a searchable list of the pane's fields, grouped by table, filtered to what the slot takes (Size numeric, Date range temporal). Choosing one goes through the slot's own drop handler, so rules and messages match a drag. It is the click and keyboard path.
   - A hairline separates what the slot holds from its own editor: **Date range** (full-width range and compare selects), **Tooltip** (the text, an **Edit tooltip…** link beside its label, a preview), and **Filters**, whose filter cards (values, bounds, checklists) are repeated in the flyout while it is open so they are never hidden behind it (the header's copy stays invisible and inert, keeping its height, so the chart does not shift).
   - The calculation and field-choices editors opened from a pill stay inline under the lanes.
-- Code: `.ws-shelf--marks`; `buildTools` / `toolButton`; `markGrid` in `Dashboard/pill-options.js` chunks the slots into rows of three. `visibleTools(chartType, tools)` (`Dashboard/toolbar-rules.js`, pure) decides which are quiet. The editor panel is `toolPanel` (`.ws-toolpanel`); `fieldPicker` builds the Add field list from the field pane's chips (`data-field`). Icons come from `Core/icons.js`.
+- Code: `.ws-shelf--marks`; `buildTools` / `toolButton`; `markGrid` in `Dashboard/pill-options.js` chunks the slots into rows of three. `visibleTools(chartType, tools)` (`Dashboard/toolbar-rules.js`, pure) decides which are quiet; which types accept a colour measure or Size is `Dashboard/mark-channel-model.js` (`colourChannel`, `sizeChannel`). The editor panel is `toolPanel` (`.ws-toolpanel`); `fieldPicker` builds the Add field list from the field pane's chips (`data-field`). Icons come from `Core/icons.js`.
 
 ## Marks
 
@@ -25,15 +25,38 @@ How each encoding reaches the query (`planDims` / `planMeasures`):
 
 | Encoding | Accepts | Query effect | Renders as |
 |---|---|---|---|
-| **Color** (categorical) | 1 dimension | extra group-by, appended last | one coloured series per value: bar → grouped, stacked → stacked, line/area → one line each; Table → extra header level |
-| **Color** (numeric) | 1 measure | extra measure | continuous token gradient (`visualMap`) — scatter and heatmap; hue and range in Format |
-| **Size** | 1 measure | extra measure | scatter bubble size |
+| **Color** (categorical) | 1 dimension | extra group-by, appended last | one coloured series per value: bar → grouped, stacked → stacked, line/area → one line each, scatter / square / circle → one point series per member (palette or member colour, legend); Table → extra header level |
+| **Color** (numeric) | 1 measure | extra measure | continuous token gradient or steps: scatter points and heatmap cells through `visualMap`; each bar, line / area marker and stretch, pie / donut slice and treemap tile wears its value's colour with a display-only legend (below); hue, range, centre and steps in Format |
+| **Size** | 1 measure | extra measure | scatter bubble size; bar thickness; line / area marker size; treemap tile area (below) |
 | **Label** | 1 field | numeric → extra measure; categorical reads an existing key | the value drawn on each mark (on a Colour split too: each bar shows its own cell's value) |
 | **Detail** | dimensions | extra group-by | more marks, no visual channel |
 | **Tooltip** | fields | numeric → extra measures | custom tooltip lines (`extraTooltip`); with a tooltip text set, the template replaces them (below) |
-| **Shape** | 1 dimension | extra group-by (scatter family) | one series per value with a distinct symbol + legend |
+| **Shape** | 1 dimension | extra group-by (scatter family only) | one series per value with a distinct symbol + legend ([D100](../../decisions/decisions-dashboards.md#d100--shape-stays-on-the-scatter-family-size-on-a-line-is-the-marker-size)) |
 | **Path** | 1 field | numeric → extra measure | orders line/area vertices (`pathOrderedRows`) |
 | **Angle** | 1 measure | — | acknowledged for pie/donut (already measure → angle); a hint elsewhere |
+
+### Colour, Size and Shape by chart type (T03-19, T03-20, T03-21, T01-21)
+
+Which chart types draw each channel, and what an unmet mapping says (always a hint above the chart, never an error). Rules: `Dashboard/mark-channel-model.js` (pure); the drawing is `Dashboard/chart.js`.
+
+| Type | Colour = a measure | Size = a measure | Colour = a dimension |
+|---|---|---|---|
+| Scatter / Square / Circle | gradient or steps on the points | bubble size (zero-based, 8–36 px) | one series per member (below) |
+| Bar | each bar its value's colour (one measure) | each bar's thickness (one measure) | grouped series (as before) |
+| Line / Area | markers coloured by value, the line (and area fill) a gradient along it (one measure) | each marker's size, shared by every line | one line per member |
+| Pie / Donut | each slice its value's colour | hint: no per-slice size | not used |
+| Treemap | each tile its value's colour | the tile **area** | not used |
+| Stacked, Combo, others | hint | hint (Stacked and Combo) | Stacked: as before |
+
+- **One measure on bar, line and area** for a colour measure (and for Size on a bar): with several the marks of different measures would look alike, so a hint says so and the palette stays. Line / area Size works with several measures (their series colours keep them apart). A Size bar chart with a comparison period keeps its plain bars and says so.
+- **A colour measure replaces the palette**, member colours and Colour by category (the Format checkbox is hidden while a measure is on Colour). The Other bar / slice keeps its muted colour. The legend is the same gradient or stepped swatches as the scatter's (`colourLegend`), named with the measure, centre and pin notes. On these types it is display only (no draggable handles; steps do not toggle).
+- **How the colours are found:** `valueColours` in `chart.js` maps each value through the legend's own range, ramp, pins, centre and steps (`positionOf`, `stepIndexOf` in `colour-scale-model.js`), so a mark and the legend agree. A value with no number takes no colour (a line stretch keeps its neighbour's).
+- **Bar thickness:** a Size bar chart is a `custom` series (ECharts has no per-bar width): each bar runs from a 6 px minimum at the smallest Size value to 80 % of the category band at the largest (`barThickness`, `sizeFractions`: the data's own span; all equal = full). Tooltip, labels, click-to-filter, Other, colour measure and the selection fade work as on plain bars. The Other bar is the thinnest.
+- **Line / area markers:** 6–24 px by the value's share of the span (`markerSizeFor`); markers are always shown while Size is set. Format → Marker size is overridden by a Size field. ([D100](../../decisions/decisions-dashboards.md#d100--shape-stays-on-the-scatter-family-size-on-a-line-is-the-marker-size))
+- **Treemap Size:** the Size measure sets each tile's area; the shelf measure is the label's second line and a tooltip row. Without Size the shelf measure is the area, as before. A parent's colour under a colour measure is the neutral grid colour behind its tiles.
+- **Size legend:** a line at the chart's top right names the field and its smallest and largest value in words ("Size: sum qty (3 to 41)"), on every type that draws Size.
+- **Scatter Colour dimension:** a Colour dimension on scatter / square / circle splits the points into one series per member (the Colour dimension is the last group-by, as on bar), in palette order with a legend; Format → Edit member colours lists the members. With **Shape on a different field** each series is a pair, named "colour member · shape member" (colour by the Colour member, symbol by the Shape member; the legend lists the pairs and only highlights). With the **same field on both** it is one grouping and one legend of members. Shape alone is unchanged. A colour measure is not drawn while points are split by Shape or a Colour dimension (a hint). Code: `scatterGroups` (`result-model.js`), `renderScatterShapes`, `buildScatterShapes`.
+- **Not built:** Size on pie / donut (no per-slice meaning), a colour measure on stacked / combo, varying a line's own thickness per segment (ECharts cannot).
 
 ### Tooltip text (T01-19) and the tooltip modal
 
@@ -74,7 +97,7 @@ The Tooltip tool panel also holds a **Tooltip text** editor: free text with `<Fi
 ### Marks rules
 
 - Extra measures never become chart series. With no marks set, the plan is byte-identical to a plain shelves plan.
-- **Colour split needs one measure:** multi-measure + Colour → a hint. Types outside `COLOR_USES` (pie, donut, scatter, combo, KPI) show a note and ignore the Colour pill.
+- **Colour split needs one measure:** multi-measure + Colour on bar / line / area → a hint. Types outside `COLOR_USES` (pie, donut, combo, KPI and the rest) show a note and ignore a Colour *dimension*; the scatter family takes it as a group-by.
 - Colour × category combinations are still capped by the query `LIMIT`.
 - Every unmet mapping shows a **hint, not an error**.
 
@@ -82,7 +105,7 @@ The Tooltip tool panel also holds a **Tooltip text** editor: free text with `<Fi
 
 ### Member colours
 
-- **Editing.** Format → **Edit member colours** lists the members the drawn chart colours by a discrete field: Colour-shelf members on bar / stacked / line / area, pie / donut slices, and the categories of a single-measure bar with *Colour by category*.
+- **Editing.** Format → **Edit member colours** lists the members the drawn chart colours by a discrete field: Colour-shelf members on bar / stacked / line / area / scatter, pie / donut slices, and the categories of a single-measure bar with *Colour by category*.
   - Each row offers 24 fixed swatches (the three workbook palettes' light colours) and **Reset**.
   - **Reset all for this field** below the list also removes colours of members no longer in the view (which still count toward the cap).
   - The list stays open across redraws and is disabled until such a chart is drawn.
@@ -91,19 +114,19 @@ The Tooltip tool panel also holds a **Tooltip text** editor: free text with `<Fi
 - **Limits** ([api.md](../../reference/api.md#limits), client-side only): 100 members per field, 20 fields, member key ≤ 100 chars, field key ≤ 200.
   - Maps are null-prototype, so a member named `constructor` or `__proto__` is an ordinary key; an imported `__proto__` is dropped and reported.
   - Invalid entries are dropped on import and reported. Workbooks without the key load with `{}`.
-- **Not covered:** a calculated field cannot be member-coloured; scatter groups and treemap / funnel are not yet wired.
+- **Not covered:** a calculated field cannot be member-coloured; treemap / funnel are not wired (a scatter's Colour members are).
 - **Contrast.** User colours are not adjusted. Label inks still come from `Dashboard/contrast.js` (`pickInk`), which picks the higher-contrast ink for any hex.
 - Code: `Dashboard/colour-model.js` (`setMemberColor`, `cleanMemberColors`, `colorsByName`, `orderedPalette`, `rampStops`, `SWATCHES`).
 
 ### Palette and colour scale
 
-- **Reverse palette** (`format.paletteReverse`, boolean, default off) reverses the eight categorical colours' order and swaps the continuous ramp's ends (heatmap and scatter colour). Member colours are unaffected.
-- **Continuous colour scale** (T03-19; Format, on Scatter and Heatmap):
+- **Reverse palette** (`format.paletteReverse`, boolean, default off) reverses the eight categorical colours' order and swaps the continuous ramp's ends (heatmap and every colour-measure type). Member colours are unaffected.
+- **Continuous colour scale** (T03-19; Format, on Heatmap and on every type that draws a colour measure: scatter, bar, line, area, pie, donut, treemap):
   - **Colour scale** (`format.colorScale`, default `sequential`) — Low → high, or Diverging: warm (`--chart-div-low`, orange) below a centre, the surface at it, cool (`--chart-div-high`, blue) above; the pair is theme-stable ([tokens.md](../../reference/design/tokens.md)) and shared with the table scale. The centre is bounded to ±1e15 (a toast refuses more; a saved one is cleared on import). Switching back to Low → high keeps the centre for later. **Colour centre** (`format.colorCentre`, blank = 0 when the data straddles it, else the middle) replaces the Colour ramp control while Diverging. The scale's ends are made symmetric about the centre (the larger distance from it, after any pins) so the middle colour sits on the centre; the legend names it in words ("centre 20"). **Diverging colours** (`format.colorPair`, default `default`) picks the two hues: Orange / Blue (the `--chart-div-*` pair), Amber / Violet or Green / Violet (each end reads its own `--chart-div-amber` / `-violet` / `-green` token (set per theme in `core.css`, tuned against the surface centre, never red, independent of the active categorical palette; never a typed hex), [D85](../../decisions/decisions-dashboards.md#d85--the-diverging-scale-picks-its-hues-from-tokens-not-a-free-hex-picker)). Reverse palette swaps the two ends. **Colour from / to are hidden while Diverging** (the ends follow the centre; a stored pin is kept but ignored, and returns with Low → high), so no "beyond range" note shows.
   - **Colour ramp** (Low → high only) — Brand (accent soft → accent), Blue, Green, Amber or Violet (the surface blended 20 % toward that categorical token, up to the token). `format.colorRamp`, default `brand`.
   - **Colour from / to** (Low → high only; `format.colorMin` / `colorMax`; blank = the data's own end) pin the ends of the scale. A value beyond a pinned end takes that end's colour (it saturates; nothing is greyed out). While a pin is active the legend reads "beyond range: end colour".
-  - **Steps** (`format.colorSteps`, default 0 = Continuous): 3 to 9 discrete colour steps instead of a gradient, on either scale (heatmap and scatter). The range (data span, pins, or the symmetric diverging span) is cut into equal steps; each step takes the ramp colour sampled evenly from end to end (the first and last steps equal the ramp's ends; an odd Diverging count puts a neutral on the centre step: the surface nudged 15 % toward the ink, so it reads as a swatch in both themes; stepped heatmap cells get a `--chart-axis` hairline instead of the surface one, so a pale step is not mistaken for a gap). The outer steps are open-ended, so a pinned range still saturates; a value on a boundary belongs to the step above it; flat data (one value) is widened by 1 so the steps stay distinct. The legend becomes a row of swatches labelled with their boundaries in words ("24 to 38"); the centre / "beyond range" note sits above it. A value outside 0, 3 to 9 is reset to Continuous on import and reported, never clamped.
-  - The controls show on a Heatmap, and on a Scatter only while a numeric field is on Color.
+  - **Steps** (`format.colorSteps`, default 0 = Continuous): 3 to 9 discrete colour steps instead of a gradient, on either scale (heatmap and every colour-measure type). The range (data span, pins, or the symmetric diverging span) is cut into equal steps; each step takes the ramp colour sampled evenly from end to end (the first and last steps equal the ramp's ends; an odd Diverging count puts a neutral on the centre step: the surface nudged 15 % toward the ink, so it reads as a swatch in both themes; stepped heatmap cells get a `--chart-axis` hairline instead of the surface one, so a pale step is not mistaken for a gap). The outer steps are open-ended, so a pinned range still saturates; a value on a boundary belongs to the step above it; flat data (one value) is widened by 1 so the steps stay distinct. The legend becomes a row of swatches labelled with their boundaries in words ("24 to 38"); the centre / "beyond range" note sits above it. A value outside 0, 3 to 9 is reset to Continuous on import and reported, never clamped.
+  - The controls show on a Heatmap, and on the other types only while a numeric field is on Color.
   - A minimum not below the maximum is refused with a toast; a saved one is cleared on import and reported.
   - An unpinned heatmap uses its plain data span. Reverse palette still swaps the ramp's ends.
   - Table cell scales have their own conditional-formatting colours and are unaffected.
