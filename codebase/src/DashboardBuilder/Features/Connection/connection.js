@@ -5,6 +5,7 @@ import { host, port, text, LIMITS } from "../Core/validate.js";
 import { summaryTitle, summaryDetail, formFromView, secureToggled, trustToggled, certNoteVisible } from "./connection-rules.js";
 import { nextHealth, initialHealth, readProbe, HEALTH_TEXT, PING_EVERY_MS } from "./connection-health.js";
 import { remember, forget, sanitize, sourceKey, formValues } from "./recent-sources.js";
+import { expandSidebar } from "../Shell/sidebar.js";
 
 // Recent sources live in this browser only (localStorage) and hold no secrets — see recent-sources.js.
 const RECENT_KEY = "dashboardbuilder.recent-sources";
@@ -44,7 +45,10 @@ export function initConnection() {
   const detailLabel = document.getElementById("conn-detail-label");
   const errorEl = document.getElementById("conn-error");
 
+  // Recent connections sit on the Data Source start card's right panel (Canvas/_Canvas.cshtml), shown only while disconnected.
+  const recentPanel = document.getElementById("start-recent-panel");
   const recentEl = document.getElementById("conn-recent");
+  const recentNone = document.getElementById("conn-recent-none");
   let recent = loadRecent();
 
   function renderRecent() {
@@ -56,16 +60,14 @@ export function initConnection() {
       pick.type = "button";
       pick.className = "conn-recent__pick";
       pick.dataset.key = sourceKey(e);
-      const text = document.createElement("span");
-      text.className = "conn-recent__text";
       const h = document.createElement("span");
       h.className = "conn-summary__host"; h.textContent = e.host;
       const m = document.createElement("span");
-      m.className = "conn-recent__meta"; m.textContent = e.user;
-      text.append(h, m);
+      m.className = "conn-recent__meta"; m.textContent = `${e.user} · ${e.port}`;
       pick.title = `${e.host} · ${e.user} · :${e.port}`;
-      pick.append(text);
+      pick.append(h, m);
       pick.addEventListener("click", () => {
+        expandSidebar(); // the form it fills is in the sidebar
         fillForm(formValues(e));
         for (const i of [hostEl, portEl, userEl, passEl]) clearFieldError(i);
         syncCertControls();
@@ -81,7 +83,10 @@ export function initConnection() {
       li.append(pick, rm);
       return li;
     }));
-    toggle(recentEl, recent.length > 0 && !form.hidden);
+    const disconnected = !current;
+    toggle(recentPanel, disconnected);
+    toggle(recentEl, disconnected && recent.length > 0);
+    toggle(recentNone, disconnected && recent.length === 0);
   }
 
   function fillForm(v) {

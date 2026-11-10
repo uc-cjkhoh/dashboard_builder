@@ -1,4 +1,4 @@
-// Browser check for recent sources on the connection panel (mocked /api). Run: node tests/live/start-ui.mjs
+// Browser check for recent connections on the Data Source start card (mocked /api). Run: node tests/live/start-ui.mjs
 // (app first: cd src/DashboardBuilder && dotnet run --no-launch-profile --urls http://localhost:5213)
 import { launch } from './cdp.mjs';
 import { mkdirSync } from 'node:fs';
@@ -25,7 +25,15 @@ try {
   const ev = (s) => b.evaluate(s);
   await b.goto(APP);
   await b.waitFor(`document.getElementById('conn-form') && !document.getElementById('conn-form').hidden`, { label: 'form' });
-  await check('no recent list on first run', async () => must(await ev(`document.getElementById('conn-recent').hidden`), 'list visible'));
+  await check('no recent list on first run; the start card says None yet', async () => {
+    must(await ev(`document.getElementById('conn-recent').hidden`), 'list visible');
+    must(await ev(`!document.getElementById('conn-recent-none').hidden`), 'None yet hidden');
+  });
+  await check('start card: the main panel takes 3/4, recent connections 1/4; none in the sidebar', async () => {
+    const r = await ev(`(() => { const m = document.querySelector('.start-card__main').getBoundingClientRect().width, s = document.getElementById('start-recent-panel').getBoundingClientRect().width; return m / (m + s); })()`);
+    must(Math.abs(r - 0.75) < 0.01, 'ratio ' + r);
+    must(await ev(`!document.querySelector('.sidebar .conn-recent')`), 'recent list still in the sidebar');
+  });
   await check('connecting stores a recent source without the password', async () => {
     await ev(`(() => { const s = (id, v) => { document.getElementById(id).value = v; }; s('conn-host', 'ch.example'); s('conn-port', '8443'); s('conn-user', 'ann'); s('conn-password', 'sekret'); document.getElementById('conn-form').requestSubmit(); return 1; })()`);
     await b.waitFor(`!document.getElementById('conn-summary').hidden`, { label: 'connected' });
@@ -46,6 +54,7 @@ try {
     await ev(`document.getElementById('conn-password').value = 'x'; document.getElementById('conn-form').requestSubmit()`);
     await b.waitFor(`!document.getElementById('conn-summary').hidden`, { label: 'connected' });
     must(await ev(`document.getElementById('conn-recent').hidden`), 'list visible while connected');
+    must(await ev(`document.getElementById('start-recent-panel').hidden`), 'start card panel visible while connected');
   });
   await check('remove forgets the entry', async () => {
     await ev(`(() => { document.getElementById('conn-disconnect').click(); [...document.querySelectorAll('dialog button')].find((x) => x.textContent === 'Disconnect').click(); return 1; })()`);
