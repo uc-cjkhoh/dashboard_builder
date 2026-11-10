@@ -28,7 +28,7 @@ How each encoding reaches the query (`planDims` / `planMeasures`):
 | **Color** (categorical) | 1 dimension | extra group-by, appended last | one coloured series per value: bar → grouped, stacked → stacked, line/area → one line each; Table → extra header level |
 | **Color** (numeric) | 1 measure | extra measure | continuous token gradient (`visualMap`) — scatter and heatmap; hue and range in Format |
 | **Size** | 1 measure | extra measure | scatter bubble size |
-| **Label** | 1 field | numeric → extra measure; categorical reads an existing key | the value drawn on each mark |
+| **Label** | 1 field | numeric → extra measure; categorical reads an existing key | the value drawn on each mark (on a Colour split too: each bar shows its own cell's value) |
 | **Detail** | dimensions | extra group-by | more marks, no visual channel |
 | **Tooltip** | fields | numeric → extra measures | custom tooltip lines (`extraTooltip`); with a tooltip text set, the template replaces them (below) |
 | **Shape** | 1 dimension | extra group-by (scatter family) | one series per value with a distinct symbol + legend |

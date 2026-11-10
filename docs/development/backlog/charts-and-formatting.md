@@ -27,3 +27,7 @@ Chart, authoring and formatting work not yet built. Format: [index.md](index.md#
 
 - **Worksheet formatting** (IDs: T01-23; priority P1) — partial: number, date, legend, fit, theme, font family, a worksheet background shade, and a table's alignment, row height and shading are built; missing: a font choice beyond the three system stacks (no per-element font; KPI cards and titles keep the app font), a chosen header/row colour (the background is two palette steps, not a colour), per-column alignment and column widths, and chart-view alignment. Needs: none.
 - **PDF export** (IDs: T01-28; priority P1) — partial: export is the browser print dialog on one worksheet; there is no generated PDF. A dashboard prints through the browser too (whole canvas); a generated PDF is not built. Needs: none.
+
+## Beginner-test follow-ups
+
+- **Heatmap cell labels, scatter point identity, stacked-scale warning** (priority P2) — a Heatmap draws values in its cells only when Format → Data labels is on, with no automatic labels for large cells and no ink picked per cell colour (`pickInk` exists); a Scatter / Circle / Square with a dimension draws every point in one colour, unlabelled, so countries cannot be told apart; a Stacked bar of measures on very different scales gives no warning that the small one is invisible. Pie / Donut percent labels for up to 6 slices are built, but cannot be switched off while Data labels is off. Needs: none.

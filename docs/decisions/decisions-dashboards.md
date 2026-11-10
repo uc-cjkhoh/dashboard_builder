@@ -173,3 +173,10 @@ Decided 2026-11-02 (autonomous build). A relationship may match on more than one
 - **Decision:** a worksheet widget carries an optional `note` (at most 300 characters, client-side only, rejected over the limit and never cut), edited inline from a Note button in the widget header. The printed header lists each as "Note on <worksheet>: …" in reading order; the on-widget note is hidden on paper so it is not printed twice.
 - **Why worksheet widgets only:** a text widget already is a note, and an image, spacer or button has nothing to explain. A note says how to read a chart, which is what the guidance item asks for.
 - **Not built:** the audience / goal planning prompt and a design-consistency check (fonts, colours and sizes across widgets); both stay in the backlog entry.
+
+## D97 — No red in the categorical palette, and a calm dark accent
+
+- **Decision:** the default and One Dark Pro categorical palettes carry no red (hue 345°–12°): default slot 2 is a rose-magenta (`#b8559c` light, `#d98ac2` dark), One Dark's last slot a mauve (`#b8559c` / `#d68fc0`). Red keeps meaning danger only (design rule 7), so colouring by a normal state such as "Shipped" no longer reads as an error. Slot order is unchanged, so slot-bound users (waterfall decrease = slot 6, data bars, bullet) are untouched.
+- **Dark accent:** `--accent` (single-measure bars, primary buttons) and categorical slot 1 move from the neon `#c3df5a` to the sage-lime `#a9bd6a` (S ≈ 38 %, contrast kept; `--on-accent` stays `#12130f`). The wash tint behind the glass keeps the lime `--signal`.
+- **Kept:** the Colour-blind safe palette keeps its Okabe-Ito vermilion (an opt-in, fixed published set); Muted has none.
+- **Guarded by:** `tests/js/contrast.test.mjs` (no red hue, S ≤ 70 %, a calm dark accent).
