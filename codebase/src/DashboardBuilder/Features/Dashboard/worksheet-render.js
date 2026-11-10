@@ -1,4 +1,5 @@
-import { defaultFormat } from "../Core/store.js";
+import { defaultFormat, parameters } from "../Core/store.js";
+import { effectiveWindow } from "../Core/parameters-model.js";
 import { makeValueFormatter, makeCategoryFormatter } from "../Core/format.js";
 import { COLOR_SPLIT_TYPES, chartIssue, TEXT_VALUE_HINT, COLOR_SPLIT_HINT } from "./show-me-rules.js";
 import { TEXT_VALUE_TYPES } from "./filter-rules.js";
@@ -63,7 +64,7 @@ function draw(container, rc, sheet, result, cmp) {
   // Display names on axes, legends and headers (the query used the real columns).
   result = aliasNames(sheet, result, rc.plan.metaOf);
   // Quick table calculations replace their measure's values (over the rows on hand).
-  const calcs = planMeasures(sheet).map((e) => (e.role === "shelf" ? e.field.tableCalc ?? null : null));
+  const calcs = planMeasures(sheet).map((e) => (e.role === "shelf" ? (e.field.tableCalc?.windowParam ? { ...e.field.tableCalc, window: effectiveWindow(e.field.tableCalc, parameters) } : e.field.tableCalc ?? null) : null));
   const applied = applyTableCalcs(result, calcs, result.rowDimensions.length, result.columnDimensions.length);
   result = applied.result;
   rc.calcPercent = applied.percent;
