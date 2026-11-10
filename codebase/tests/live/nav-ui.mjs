@@ -56,6 +56,7 @@ try {
     must(w.kind === 'nav' && w.w === 4 && w.h === 2 && w.target === null, J(w));
     const x = await btn();
     must(x.text === 'Go to' && x.disabled && !x.nativeDisabled && /not linked/.test(x.aria) && /Use Edit to choose one/.test(x.title), J(x));
+    must(await ev(`document.querySelector('.board-widget--nav .board-widget__empty').textContent.trim() === 'Pick a tab with Edit.'`), 'no quiet hint under the unlinked button');
   });
 
   await check('Edit: an empty label is refused in words, Escape discards', async () => {
@@ -83,6 +84,7 @@ try {
     await waitFor(`!document.querySelector('.board-widget--nav form')`, 'saved');
     const x = await btn();
     must(x.text === 'See sales' && x.title === 'Open the Sales worksheet' && !x.disabled && /goes to Sales/.test(x.aria), J(x));
+    must(await ev(`!document.querySelector('.board-widget--nav .board-widget__empty')`), 'the hint stayed after linking');
   });
 
   await check('screenshots: light and dark', async () => {

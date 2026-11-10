@@ -120,7 +120,7 @@ test("a target whose table holds the selected column sends the bound `=` filter;
   const byTable = Object.fromEntries(calls.map((q) => [q.from.table, q]));
   assert.deepEqual(byTable.orders.filters, [{ db: "shop", table: "orders", column: "region", op: "=", value: "EU", values: null }]);
   assert.deepEqual(byTable.people.filters, [], "no filter where the table isn't in the query");
-  assert.match(noticeText(away.noticeEl), /orders\.region: selected on another sheet, not applied here/);
+  assert.match(noticeText(away.noticeEl), /Not filtered: this sheet doesn't use orders/);
   assert.equal(noticeText(target.noticeEl), "");
 });
 test("the source is never filtered: it is handed the selection to highlight", async () => {

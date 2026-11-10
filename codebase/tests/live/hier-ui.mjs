@@ -128,10 +128,12 @@ try {
     await settle();
     must(J(last()).includes('"region"'), `no region grouping: ${J(last())}`);
     await waitFor(`!!${chartHost}`, 'chart');
+    must(await ev(`document.querySelector('.ws-drill .ws-drill__hint')?.textContent === 'Click a bar to drill down.'`), 'no drill hint above the finest level');
     await clickBar('EU');
     await waitFor(`/Showing: channel/.test(document.querySelector('.ws-drill')?.textContent ?? '')`, 'drilled to channel');
     await settle();
     must((last().filters ?? []).some((f) => f.column === 'region' && f.op === '=' && f.value === 'EU'), `no ancestor filter: ${J(last().filters)}`);
+    must(await ev(`!document.querySelector('.ws-drill .ws-drill__hint')`), 'the drill hint stayed at the finest level');
   });
 
   await check('Use works with the Drill panel open and with it closed', async () => {

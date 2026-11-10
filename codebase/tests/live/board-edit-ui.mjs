@@ -146,8 +146,9 @@ try {
     await mouse('mouseReleased', p.x - 6 * m.sx, p.y + 7 * m.sy);
     await waitFor(`document.querySelector('.board-ghost').hidden`, 'ghost hidden');
     must(J(await cells()) === J(snaps.at(-1)), `moved anyway: ${J(await cells())}`);
-    must(/^Can't move: it would overlap “Revenue by region”\.$/.test(await status()), `status: ${await status()}`);
+    must(/^Can't move: it would overlap “Revenue by region”\. Move or shrink that widget first\.$/.test(await status()), `status: ${await status()}`);
     must(await ev(`document.getElementById('board-status').classList.contains('is-refused') && !!document.querySelector('#board-status svg')`), 'refusal not marked with icon + text');
+    must(await ev(`(() => { const n = document.querySelector('.board-widget__refusal'); return !!n && n.closest('.board-widget').getAttribute('aria-label') === 'Share by channel' && /Move or shrink/.test(n.textContent) && !!n.querySelector('svg'); })()`), 'no refusal on the widget that stayed put');
   });
 
   await check('a drop outside the grid snaps back: left edge, top of the dashboard', async () => {
@@ -202,7 +203,7 @@ try {
     await focusWidget('T');
     await arrow('ArrowDown'); snaps.push(await cells()); // T (0,5): rows 5..6; touching A (row 7) is fine
     await arrow('ArrowDown'); // (0,6): rows 6..7 overlap A
-    must(/^Can't move: it would overlap “Revenue by region”\.$/.test(await status()) && J((await cells())[2]) === J([0, 5, 6, 2]), `overlap: ${J(await cells())} ${await status()}`);
+    must(/^Can't move: it would overlap “Revenue by region”\. Move or shrink that widget first\.$/.test(await status()) && J((await cells())[2]) === J([0, 5, 6, 2]), `overlap: ${J(await cells())} ${await status()}`);
     must(await ev(`document.activeElement === document.querySelector(${J(wsel('T'))})`), 'focus lost after a refused step');
   });
 

@@ -74,7 +74,7 @@ export function initInteract(ctx) {
         const dash = ctx.getDash();
         ctx.commit(dash.widgets.map((w) => (w.id === widget.id ? { ...w, x: r.cand.x, y: r.cand.y, w: r.cand.w, h: r.cand.h } : w)));
         ctx.status(r.mode === "move" ? movedMessage(r.cand) : resizedMessage(r.cand));
-      } else if (r.type === "revert") ctx.status(r.error, true); // snapped back: nothing moved
+      } else if (r.type === "revert") ctx.status(r.error, true, { near: widget.id }); // snapped back: nothing moved
       widgetEl?.focus({ preventScroll: true });
     };
     const onUp = (ev) => { if (mine(ev)) finish(true, ev); };
@@ -101,7 +101,7 @@ export function initInteract(ctx) {
     const r = widget && keyStep(dash.widgets, widget, e.key, e.shiftKey, ctx.nameOf);
     if (!r) return;
     e.preventDefault();
-    if (!r.ok) { ctx.status(r.message, true); return; }
+    if (!r.ok) { ctx.status(r.message, true, { near: widget.id }); return; }
     ctx.commit(dash.widgets.map((w) => (w.id === widget.id ? { ...w, x: r.cand.x, y: r.cand.y, w: r.cand.w, h: r.cand.h } : w)));
     ctx.status(r.message);
     el.scrollIntoView({ block: "nearest", inline: "nearest" });

@@ -55,7 +55,7 @@ test("selectedIndicesOf finds every mark of the selected value (strings compared
 });
 test("chip and not-applied texts", () => {
   assert.equal(chipText(DE), "Filtering by customers.country = DE");
-  assert.equal(notAppliedNote(DE), "customers.country: selected on another sheet, not applied here — its table isn't in this view.");
+  assert.equal(notAppliedNote(DE), "Not filtered: this sheet doesn't use customers.");
 });
 test("crossFor: the source gets a highlight, every other widget the filter, nothing when no selection", () => {
   assert.equal(crossFor(null, "w#1"), null);

@@ -20,12 +20,16 @@
 .board-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: transparent; }
 .board-main:fullscreen, .board-main.is-presenting { background: var(--bg); }
 .board-main.is-presenting { position: fixed; inset: 0; z-index: 50; }
-.board-bar { flex: none; display: flex; align-items: center; flex-wrap: wrap; gap: var(--s2); padding: var(--s2) var(--s4) 0; min-width: 0; }
+.board-bar { position: relative; flex: none; display: flex; align-items: center; flex-wrap: wrap; gap: var(--s2); padding: var(--s2) var(--s4) 0; min-width: 0; }
 .board-bar__title { margin: 0; font-size: var(--fs-title); font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .board-bar__count { margin: 0; font-size: var(--fs-body); color: var(--ink-3); white-space: nowrap; }
 .board-bar__status { min-height: 2.6em; flex: 1 1 14rem; min-width: 0; margin: 0; display: flex; align-items: center; gap: var(--s1); font-size: var(--fs-body); color: var(--ink-2); }
 .board-bar__status > span { overflow-wrap: anywhere; line-height: 1.3; }
 .board-bar__status > svg { flex: none; }
+.board-bar__status.is-quiet { position: absolute; width: 1px; height: 1px; min-height: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.board-bar.has-chip { flex-wrap: nowrap; } /* a filter chip is up: one row, the chip's text shortens first */
+.board-bar.has-chip .board-bar__title { flex: 0 0 auto; max-width: 40%; }
+.board-bar.has-chip .board-chip { flex: 0 1000 auto; }
 .board-bar__status.is-refused { color: var(--danger-ink); font-weight: 600; }
 .board-bar__iconbtn { width: var(--ctl-h); height: var(--ctl-h); }
 /* The dashboard filter chip: the selection the other widgets are filtered by — same selection tokens as the worksheet's chip. */
@@ -62,10 +66,10 @@
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--elev-2); }
 .board-widget__head { flex: none; display: flex; align-items: center; gap: var(--s2); padding: var(--s1) var(--s1) var(--s1) var(--s2);
   border-bottom: 1px solid var(--line); background: var(--surface-2); min-width: 0; }
-.board-widget__title { flex: 1; min-width: 0; margin: 0; font-size: var(--fs-body); font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board-widget__title { flex: 1 1 auto; min-width: 6ch; margin: 0; font-size: var(--fs-body); font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* The source of the dashboard selection: an outline plus a text badge in the header (the faded marks are never the only cue). */
 .board-widget.is-source { border-color: var(--enc-ink); box-shadow: 0 0 0 1px var(--enc-ink), var(--elev-2); }
-.board-widget__source { flex: 0 1 auto; min-width: 0; display: inline-flex; align-items: center; gap: var(--s1); padding: 0 var(--s2); height: 24px;
+.board-widget__source { flex: 0 1000 auto; min-width: 0; max-width: 40%; display: inline-flex; align-items: center; gap: var(--s1); padding: 0 var(--s2); height: 24px;
   font-size: var(--fs-body); font-weight: 600; color: var(--enc-ink); background: var(--enc-bg); border: 1px solid var(--enc-line); border-radius: var(--r); }
 .board-widget__source[hidden] { display: none; }
 .board-widget__source > svg { flex: none; }
@@ -97,7 +101,12 @@
 .board-widget__body .ws-chart-canvas { inset: var(--s2); min-height: 0; }
 .board-widget .ws-hint { padding: var(--s2); }
 .board-text { padding: var(--s2) var(--s2); }
-.board-nav { display: flex; align-items: center; justify-content: center; padding: var(--s2); }
+.board-widget__empty { margin: 0; padding: var(--s2); font-size: var(--fs-body); color: var(--ink-3); }
+/* A refused move / resize, drawn on the widget that stayed put (the bar above says it too). */
+.board-widget__refusal { position: absolute; left: var(--s2); right: var(--s2); bottom: var(--s2); z-index: 2; margin: 0; display: flex; align-items: center; gap: var(--s1);
+  padding: var(--s1) var(--s2); font-size: var(--fs-body); font-weight: 600; color: var(--danger-ink); background: var(--danger-bg); border: 1px solid var(--danger-line); border-radius: var(--r); }
+.board-widget__refusal > svg { flex: none; }
+.board-nav { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--s1); padding: var(--s2); }
 .board-nav__btn { max-width: 100%; min-width: 0; display: inline-flex; align-items: center; gap: var(--s1); }
 .board-nav__btn > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .board-image { display: flex; align-items: center; justify-content: center; padding: var(--s2); overflow: hidden; }

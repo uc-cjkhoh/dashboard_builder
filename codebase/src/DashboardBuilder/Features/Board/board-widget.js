@@ -218,6 +218,14 @@ export function createWidget(widget, host) {
     body.replaceChildren(f.form);
     f.focus();
   }
+  /** A quiet one-line hint in an empty widget: `before` + the Edit pencil + `after` (the pencil is spoken as "Edit"). */
+  function editHint(before, after) {
+    const p = h("p", "board-widget__empty");
+    const pencil = icon("edit", { size: 14 });
+    pencil.setAttribute("aria-hidden", "true");
+    p.append(`${before} `, pencil, h("span", "sr-only", "Edit"), /^[.,]/.test(after) ? after : ` ${after}`);
+    return p;
+  }
   function paintNav(w) {
     let btn = body.firstElementChild;
     if (!btn || !btn.classList.contains("board-nav__btn")) {
@@ -227,6 +235,8 @@ export function createWidget(widget, host) {
       body.replaceChildren(btn);
     }
     const dest = w.target ? tabById(w.target) : null;
+    while (btn.nextSibling) btn.nextSibling.remove();
+    if (!dest) body.append(editHint("Pick a tab with", "."));
     btn.replaceChildren(...(dest ? [icon("arrow-right", { size: 16 })] : []), h("span", null, w.label || NAV_LABEL));
     btn.title = dest ? w.tip ?? "" : "Not linked to a tab. Use Edit to choose one."; // the tooltip
     btn.setAttribute("aria-disabled", dest ? "false" : "true"); // not `disabled`: an unlinked button stays reachable by keyboard
@@ -235,6 +245,7 @@ export function createWidget(widget, host) {
   function paintText(w) {
     body.replaceChildren(); // the heading is the widget's title (header); the body is the text under it
     if (w.body) body.append(h("p", "board-text__body", w.body));
+    else body.append(editHint("Click", "to write text."));
   }
   function paintImage(w) {
     let img = body.firstElementChild;

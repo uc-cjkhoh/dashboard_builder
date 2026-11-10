@@ -188,6 +188,7 @@
 .ws-drill__crumb.is-current { background: var(--warn-ink); color: var(--on-ink); border-color: var(--warn-ink); cursor: default; }
 .ws-drill__up:disabled { opacity: .45; cursor: default; }
 .ws-drill__level { font-weight: 600; font-style: italic; }
+.ws-drill__hint { color: var(--ink-3); }
 
 /* Encodings toolbar (redesign 2): every non-Columns/Rows encoding as a compact icon+text tool button.
    Keeps the header to one short row; a clicked tool opens a single editor panel below. */
