@@ -160,6 +160,59 @@ try {
     must((await labels()).length === 0, 'cleanup');
   });
 
+  await check('closing a tab offers Undo: the tab, its dashboard widgets, button links and story steps come back', async () => {
+    await ev(`(async () => { const { bus } = await import('/features/Core/store.js'); bus.dispatchEvent(new Event('workbook:reset')); })()`);
+    await addTab('worksheet'); await addTab('dashboard'); await addTab('story');
+    const name = await store(`const ws = st.worksheets()[0], db = st.dashboards()[0], s = st.stories()[0];
+      st.updateSheet(ws.id, { ...ws.sheet, columns: [{ db: 'shop', table: 'orders', column: 'region', category: 'text' }] });
+      st.setWidgets(db.id, [{ id: st.nextWidgetId(), kind: 'sheet', sheetId: ws.id, x: 0, y: 0, w: 6, h: 4 }, { id: st.nextWidgetId(), kind: 'nav', label: 'Go', tip: '', target: ws.id, x: 6, y: 0, w: 4, h: 2 }]);
+      st.setSteps(s.id, [{ caption: 'c', target: ws.id }]); st.switchTab(ws.id); return ws.name;`);
+    await ev(`document.querySelector('.tab__close[aria-label="Close ${name}"]').click()`);
+    await waitFor(`!!document.querySelector('dialog[open]')`, 'confirm dialog');
+    const msg = await ev(`document.querySelector('dialog[open] .dialog__body').textContent`);
+    must(/Buttons that go to it will be unlinked on: Dashboard 1/.test(msg) && /Its steps will be removed/.test(msg), `confirm text: ${msg}`);
+    await ev(`${dialogButton('Close')}.click()`);
+    await waitFor(`!document.querySelector('.tab--worksheet') && !document.querySelector('.tab-undo').hidden`, 'undo toast');
+    must(await ev(`document.querySelector('.tab-undo').textContent`) === `Closed “${name}”.Undo`, 'toast text');
+    must(await store(`const d = st.dashboards()[0]; return d.widgets.length === 1 && d.widgets[0].target === null && st.stories()[0].steps.length === 0;`), 'close left widgets/steps');
+    await ev(`document.querySelector('.tab-undo__btn').click()`);
+    await waitFor(`!!document.querySelector('.tab--worksheet') && document.querySelector('.tab-undo').hidden`, 'tab back');
+    must(J(await labels()) === J([name, 'Dashboard 1', 'Story 1']), `order: ${J(await labels())}`);
+    must(await store(`const d = st.dashboards()[0]; const ws = st.worksheets()[0]; return d.widgets.length === 2 && d.widgets[1].target === ws.id && d.widgets[0].sheetId === ws.id && st.stories()[0].steps.length === 1 && st.currentView().id === ws.id;`), 'widgets, link, step or active tab not restored');
+    must(await store(`return st.worksheets()[0].sheet.columns.length === 1;`), 'the worksheet lost its fields');
+    await b.screenshot(join(SHOTS, 'tab-undo-toast.png'));
+    await ev(`document.querySelector('.tab__close[aria-label="Close Story 1"]').click()`);
+    await waitFor(`!!document.querySelector('dialog[open]')`, 'story confirm');
+    await ev(`${dialogButton('Close')}.click()`);
+    await waitFor(`!document.querySelector('.tab-undo').hidden && !document.querySelector('.tab--story')`, 'story undo toast');
+    await ev(`document.querySelector('.tab-undo__btn').click()`);
+    await waitFor(`!!document.querySelector('.tab--story')`, 'story back');
+    must(await store(`return st.stories()[0].steps.length === 1;`), 'story steps lost');
+    await store(`for (const t of [...st.tabs]) st.closeTab(t.id); return true;`);
+    await ev(`document.querySelector('.tab-undo__btn').click()`); // stale: the latest snapshot is gone only after Undo; a click with none is harmless
+  });
+
+  await check('Undo: two closes stack, and a workbook reset drops the snapshots and hides the toast', async () => {
+    await ev(`(async () => { const { bus } = await import('/features/Core/store.js'); bus.dispatchEvent(new Event('workbook:reset')); })()`);
+    await addTab('worksheet'); await addTab('worksheet');
+    const [n1, n2] = await store(`return st.worksheets().map((w) => w.name);`);
+    for (const n of [n1, n2]) {
+      await ev(`document.querySelector('.tab__close[aria-label="Close ${n}"]').click()`);
+      await waitFor(`!document.querySelector('.tab__close[aria-label="Close ${n}"]') || !!document.querySelector('dialog[open]')`, 'close');
+      if (await ev(`!!document.querySelector('dialog[open]')`)) await ev(`${dialogButton('Close')}.click()`);
+      await waitFor(`!document.querySelector('.tab__close[aria-label="Close ${n}"]')`, 'closed ' + n);
+    }
+    await ev(`document.querySelector('.tab-undo__btn').click()`);
+    must(J(await labels()) === J([n2]), `newest close first: ${J(await labels())}`);
+    must(!(await ev(`document.querySelector('.tab-undo').hidden`)) && (await ev(`document.querySelector('.tab-undo').textContent`)).startsWith(`Closed “${n1}”`), 'the older close is offered next');
+    await ev(`(async () => { const { bus } = await import('/features/Core/store.js'); bus.dispatchEvent(new Event('workbook:reset')); })()`);
+    await waitFor(`document.querySelector('.tab-undo').hidden`, 'toast hidden by the reset');
+    await ev(`document.querySelector('.tab-undo__btn').click()`);
+    must(J(await labels()) === J([n2]), 'a stale tab came back after the reset');
+    await store(`for (const t of [...st.tabs]) st.closeTab(t.id); return true;`);
+    await ev(`(async () => { const { bus } = await import('/features/Core/store.js'); bus.dispatchEvent(new Event('workbook:reset')); })()`);
+  });
+
   await check('export writes workbook v2: worksheets, dashboards, tabs order, active', async () => {
     await addTab('worksheet'); await addTab('dashboard'); await addTab('worksheet');
     await store(`const [w1, w2] = st.worksheets(), db = st.dashboards()[0]; st.setWidgets(db.id, [{ id: st.nextWidgetId(), kind: 'sheet', sheetId: w2.id, x: 6, y: 0, w: 6, h: 4 }]); st.switchTab(db.id); return true;`);

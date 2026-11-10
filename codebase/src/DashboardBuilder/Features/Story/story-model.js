@@ -8,7 +8,8 @@ const STEP_KINDS = new Set(["worksheet", "dashboard"]);
 /** A caption as typed → { ok, value } | { ok, error }. Empty is fine; over the limit is refused, never cut. */
 export function validateCaption(raw) {
   if (typeof raw !== "string") return { ok: false, error: "The caption must be text." };
-  return text(raw, { label: "The caption", max: LIMITS.stepCaption });
+  const r = text(raw, { label: "The caption", max: LIMITS.stepCaption });
+  return r.ok ? r : { ok: false, field: "caption", error: `The caption must be at most ${LIMITS.stepCaption} characters (it has ${raw.trim().length}).` };
 }
 
 const full = () => `A story holds at most ${LIMITS.storySteps} steps — remove one first.`;

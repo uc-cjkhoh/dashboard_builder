@@ -134,8 +134,23 @@ try {
     must(await drawn('Stock by sku'), 'unrelated widget lost its chart');
     must(J(await values('Stock by sku')) === J([10, 20, 30]), 'its data changed');
     const t = await noticeOf('Stock by sku');
-    must(t === "orders.region: selected on another sheet, not applied here — its table isn't in this view.", `note: ${t}`);
+    must(t === "Not filtered: this sheet doesn't use orders.", `note: ${t}`);
     must(since(0, 'sku').length === 1, `the unrelated widget queried ${since(0, 'sku').length} times in all`);
+  });
+
+  await check('the filter is said once, the bar stays one row, and the selected widget keeps its title', async () => {
+    const r = await ev(`(() => {
+      const bar = document.querySelector('.board-bar'), st = document.getElementById('board-status'), sb = st.getBoundingClientRect();
+      const kids = [...bar.children].filter((c) => !c.hidden && c.getBoundingClientRect().width > 4 && c !== st);
+      const tops = new Set(kids.map((c) => { const q = c.getBoundingClientRect(); return Math.round((q.top + q.bottom) / 2 / 4); }));
+      const t = ${W('Revenue by region')}.querySelector('.board-widget__title');
+      return { quiet: st.classList.contains('is-quiet'), w: Math.round(sb.width), h: Math.round(sb.height), rows: tops.size, barH: Math.round(bar.getBoundingClientRect().height),
+        text: st.textContent, titleCut: (() => { const rg = document.createRange(); rg.selectNodeContents(t); return Math.ceil(rg.getBoundingClientRect().width) > t.clientWidth + 1; })(), barTitle: document.getElementById('board-title').scrollWidth > document.getElementById('board-title').clientWidth + 1, title: t.textContent, titleW: Math.round(t.getBoundingClientRect().width) }; })()`);
+    must(r.quiet && r.w <= 1 && r.h <= 1, `the status line is drawn too: ${J(r)}`);
+    must(r.text === 'Filtering the other widgets by orders.region = EU.', 'the live region lost its message');
+    must(r.rows === 1, `the bar wraps: ${J(r)}`);
+    must(!r.titleCut, `the selected widget's title is cut: ${J(r)}`);
+    must(!r.barTitle, `the dashboard title is cut: ${J(r)}`);
   });
 
   await check('light + dark screenshots with a selection', async () => {

@@ -36,12 +36,12 @@ test("every refusal says why: edges, limits, overlap", () => {
   assert.equal(why("a", "ArrowUp"), "Can't move: the widget is at the top of the dashboard.");
   assert.equal(why("b", "ArrowRight"), "Can't move: the widget is at the right edge of the dashboard.");
   assert.equal(why("c", "ArrowDown"), "Can't move: the dashboard is at most 96 rows tall.");
-  assert.equal(why("a", "ArrowRight"), "Can't move: it would overlap “N-b”.");
+  assert.equal(why("a", "ArrowRight"), "Can't move: it would overlap “N-b”. Move or shrink that widget first.");
   assert.equal(why("d", "ArrowLeft", true), "Can't resize: a widget is at least 2 columns wide.");
   assert.equal(why("d", "ArrowUp", true), "Can't resize: a worksheet widget is at least 2 rows tall.");
   assert.equal(why("b", "ArrowRight", true), "Can't resize: the widget is at the right edge of the dashboard.");
   assert.equal(why("e", "ArrowDown", true), "Can't resize: a widget is at most 24 rows tall.");
-  assert.equal(why("a", "ArrowRight", true), "Can't resize: it would overlap “N-b”.");
+  assert.equal(why("a", "ArrowRight", true), "Can't resize: it would overlap “N-b”. Move or shrink that widget first.");
   assert.equal(why("c", "ArrowDown", true), "Can't resize: the dashboard is at most 96 rows tall.");
 });
 

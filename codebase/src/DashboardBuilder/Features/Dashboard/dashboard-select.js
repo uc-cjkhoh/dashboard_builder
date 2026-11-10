@@ -39,9 +39,9 @@ export function selectedIndicesOf(rawByIndex, sel, field) {
 export const UNSELECTABLE_NOTE = "That mark is the empty (NULL) value or the Other group — it can't be used as a filter.";
 
 export const chipText = (sel) => `Filtering by ${sel.label}`;
-export const notAppliedNote = (sel) => `${sel.table}.${sel.column}: selected on another sheet, not applied here — its table isn't in this view.`;
+export const notAppliedNote = (sel) => `Not filtered: this sheet doesn't use ${sel.table}.`;
 /** A histogram / box plot runs its own single-table query: it takes no dashboard selection. */
-export const statNote = (sel) => `${sel.table}.${sel.column}: selected on another sheet, not applied to a histogram or box plot.`;
+export const statNote = (sel) => `Not filtered: a histogram or box plot takes no dashboard filter (${sel.table}.${sel.column}).`;
 
 /** What a widget does with the dashboard selection: the source highlights its mark; every other widget filters; null = no selection. */
 export const crossFor = (sel, widgetId) => (!sel ? null : sel.sourceWidgetId === widgetId ? { selected: sel } : { filter: sel });

@@ -114,6 +114,7 @@ try {
     await hardClick('.board-panel__add-text');
     await waitFor(`document.querySelectorAll('.board-widget--text').length === 1`, 'text widget');
     must(J(await store(`const w = st.dashboards()[0].widgets[2]; return [w.x, w.y, w.w, w.h, w.kind];`)) === J([0, 4, 12, 2, 'text']), 'text cell');
+    must(await ev(`document.querySelector('.board-widget--text .board-widget__empty').textContent.trim() === 'Click Edit to write text.'`), 'no quiet placeholder in the empty text widget');
     // textContent only: markup in the stored text stays literal
     await store(`const d = st.dashboards()[0]; st.setWidgets(d.id, d.widgets.map((w) => w.kind === 'text' ? { ...w, heading: 'Q3 <b>review</b>', body: '*not bold*\\nsecond line <img src=x onerror=alert(1)>' } : w)); return true;`);
     must(await ev(`(() => { const t = document.querySelector('.board-widget--text'); return t.querySelector('b') === null && t.querySelector('img') === null && t.textContent.includes('<b>review</b>') && t.textContent.includes('*not bold*'); })()`), 'text widget interpreted markup');

@@ -54,14 +54,29 @@ export function initBoard() {
   const statusEl = $("board-status");
   let statusTimer = 0;
   /** The last edit's result — "Moved to column 3, row 2", or why a drop snapped back — in a polite live region (and visible). */
-  function status(message, refused = false) {
+  function status(message, refused = false, { near = null, quiet = false } = {}) {
     clearTimeout(statusTimer);
     const span = document.createElement("span"); // a fresh node each time, so an identical message is announced again
     span.textContent = message;
     statusEl.replaceChildren(...(refused ? [icon("warning", { size: 14 }), span] : [span]));
     statusEl.classList.toggle("is-refused", refused);
+    statusEl.classList.toggle("is-quiet", quiet); // announced, not drawn: the chip already says it
     statusTimer = setTimeout(() => statusEl.replaceChildren(), 8000);
+    if (refused && near) refuseNear(near, message);
   }
+  /** A refused move / resize also shows on the widget itself, so a mouse user does not have to look up at the bar. */
+  let refusalEl = null, refusalTimer = 0;
+  function refuseNear(widgetId, message) {
+    clearRefusal();
+    const host = entries.get(widgetId)?.el;
+    if (!host) return;
+    refusalEl = document.createElement("p");
+    refusalEl.className = "board-widget__refusal";
+    refusalEl.append(icon("warning", { size: 14 }), Object.assign(document.createElement("span"), { textContent: message }));
+    host.append(refusalEl);
+    refusalTimer = setTimeout(clearRefusal, 5000);
+  }
+  function clearRefusal() { clearTimeout(refusalTimer); refusalEl?.remove(); refusalEl = null; }
   /** One committed edit = one undo step. */
   function commit(next) {
     const dash = activeDashboard();
@@ -86,6 +101,7 @@ export function initBoard() {
   function paintChip() {
     chip.replaceChildren();
     toggle(chip, Boolean(selection));
+    chip.parentElement?.classList.toggle("has-chip", Boolean(selection)); // the bar stays one row while the chip is up
     if (!selection) return;
     const text = document.createElement("span");
     text.className = "board-chip__text";
@@ -117,7 +133,7 @@ export function initBoard() {
     const next = nextSelection(selection, field, raw, (v) => labelOf(metaOf(field), v, fmt), widget.id); // the chip names the member by its label; the value stays raw
     if (next === selection) return; // a null mark: nothing happens
     setSelection(next);
-    status(next ? `Filtering the other widgets by ${next.label}.` : "Dashboard filter cleared.");
+    status(next ? `Filtering the other widgets by ${next.label}.` : "Dashboard filter cleared.", false, { quiet: Boolean(next) });
   }
   /** The selection is only meaningful while its source widget and worksheet exist and still select that column; false = it was dropped (nothing re-run yet). */
   function dropStale(dash) {
@@ -191,7 +207,7 @@ export function initBoard() {
     const dash = activeDashboard();
     toggle(view, Boolean(dash));
     if (!dash) { teardown(); return; }
-    if (shownId !== dash.id) { teardown(); shownId = dash.id; statusEl.replaceChildren(); notes.close(); interact?.cancel(); }
+    if (shownId !== dash.id) { teardown(); shownId = dash.id; statusEl.replaceChildren(); clearRefusal(); notes.close(); interact?.cancel(); }
     known.add(dash.id);
     title.textContent = dash.name;
     count.textContent = `${dash.widgets.length} of ${LIMITS.widgets} widgets`;

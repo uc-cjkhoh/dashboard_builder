@@ -79,3 +79,15 @@ test("cleanWidgets: a button that points at its own dashboard is dangling", () =
   assert.deepEqual(out[1].target, { kind: "dashboard", index: 0 });
   assert.equal(issues.length, 1);
 });
+
+test("dashboardsLinking: the dashboards with a button that goes to a tab", async () => {
+  const { dashboardsLinking } = await import("../../src/DashboardBuilder/Features/Board/nav-model.js");
+  const tabs = [
+    { id: "d1", kind: "dashboard", name: "One", widgets: [nw(0, 0, { target: "ws#1" })] },
+    { id: "d2", kind: "dashboard", name: "Two", widgets: [nw(0, 0, { target: "ws#2" })] },
+    { id: "d3", kind: "dashboard", name: "Three", widgets: [{ kind: "text" }] },
+    { id: "ws#1", kind: "worksheet", name: "W" },
+  ];
+  assert.deepEqual(dashboardsLinking(tabs, "ws#1").map((d) => d.name), ["One"]);
+  assert.deepEqual(dashboardsLinking(tabs, "nope"), []);
+});

@@ -903,6 +903,7 @@ export function initDashboards() {
     wrap.append(crumbs);
     const showing = d.levels[Math.min(d.depth, d.levels.length - 1)]?.column;
     wrap.append(el("span", "ws-drill__level", `Showing: ${showing}`));
+    if (d.depth < d.levels.length - 1) wrap.append(el("span", "ws-drill__hint", "Click a bar to drill down."));
     const up = makeButton("Up", "ws-drill__crumb ws-drill__up");
     up.prepend(icon("chevron", { size: 14 }));
     up.firstChild.classList.add("icon--up");

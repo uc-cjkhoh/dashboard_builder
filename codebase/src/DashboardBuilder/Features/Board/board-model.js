@@ -74,7 +74,7 @@ export function explainRefusal(widgets, cand, verb, nameOf = () => "another widg
   if (y < 0) return `${lead} the widget is at the top of the dashboard.`;
   if (y + h > LIMITS.boardRows) return `${lead} the dashboard is at most ${LIMITS.boardRows} rows tall.`;
   const hit = widgets.find((o) => o.id !== cand.id && overlaps(cand, o));
-  if (hit) return `${lead} it would overlap “${nameOf(hit)}”.`;
+  if (hit) return `${lead} it would overlap “${nameOf(hit)}”. Move or shrink that widget first.`;
   return null;
 }
 

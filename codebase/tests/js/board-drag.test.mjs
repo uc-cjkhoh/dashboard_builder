@@ -68,10 +68,10 @@ test("dragging onto another widget: the ghost says why and the drop reverts with
   const d = createDrag();
   d.start("move", widgets[0], { x: 0, y: 0 });
   const g = d.move({ x: SX * 3, y: 0 }, ctx(widgets));
-  assert.equal(g.error, "Can't move: it would overlap “W-b”.");
+  assert.equal(g.error, "Can't move: it would overlap “W-b”. Move or shrink that widget first.");
   const r = d.end({ x: SX * 3, y: 0 }, ctx(widgets));
   assert.equal(r.type, "revert");
-  assert.equal(r.error, "Can't move: it would overlap “W-b”.");
+  assert.equal(r.error, "Can't move: it would overlap “W-b”. Move or shrink that widget first.");
   assert.deepEqual(r.cand, { ...widgets[0], x: 3, y: 0 });
 });
 

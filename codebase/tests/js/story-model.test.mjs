@@ -148,3 +148,17 @@ test("refocusTarget keeps the same role, falling back to the enabled opposite", 
   assert.equal(refocusTarget("later", { earlier: false, later: false }), "later");
   assert.equal(refocusTarget("earlier", { earlier: false, later: false }), "earlier");
 });
+
+test("an over-long caption is refused with its length, never cut", () => {
+  const r = validateCaption("x".repeat(LIMITS.stepCaption + 1));
+  assert.equal(r.error, `The caption must be at most ${LIMITS.stepCaption} characters (it has ${LIMITS.stepCaption + 1}).`);
+  const a = addStep([], "ws#1", "x".repeat(LIMITS.stepCaption + 1));
+  assert.equal(a.ok, false);
+  assert.match(a.error, /it has 301/);
+});
+
+test("an over-long caption error carries field: caption", () => {
+  assert.equal(validateCaption("x".repeat(LIMITS.stepCaption + 1)).field, "caption");
+  assert.equal(addStep([], "t", "x".repeat(LIMITS.stepCaption + 1)).field, "caption");
+  assert.equal(addStep([], "", "ok").field, undefined);
+});
