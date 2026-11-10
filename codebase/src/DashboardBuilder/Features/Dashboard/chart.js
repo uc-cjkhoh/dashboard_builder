@@ -8,7 +8,7 @@ import { tooltipHtml } from "./tooltip-model.js";
 import { tipLookup } from "./tooltip-formats.js";
 import { lineStep } from "./line-style-model.js";
 import { syncRange, secondaryKind, dualAxisOn, rightAxisTitle, seriesAxis } from "./axis-sync-model.js";
-import { markBorder, markerSizeOr, markerSymbol, edgeOr } from "./mark-style-model.js";
+import { markBorder, markerSizeOr, markerSymbol, edgeOr, strokeOf } from "./mark-style-model.js";
 import { circleSize, circleCells, HEATMAP_GUTTER } from "./heatmap-model.js";
 import { bandsFor } from "./bullet-model.js";
 import { ganttTime, ganttAxisTime, ganttLabelMargin } from "./gantt-model.js";
@@ -878,7 +878,7 @@ function buildHistogram({ bins, format = {} }) {
     },
     series: [{
       type: "bar", data: bins.map((b) => b.count), barCategoryGap: "0%",
-      itemStyle: { color: c.series, borderColor: c.surface, borderWidth: 1 },
+      itemStyle: { color: c.series, ...edgeOr(format.markBorder, c.muted, { borderColor: c.surface, borderWidth: 1 }) },
       label: { show: !!format.dataLabels, position: "top", color: c.label, fontFamily: c.font, fontSize: 14, formatter: (p) => fmtVal(p.value) },
       emphasis: { itemStyle: { opacity: 0.85 } },
     }],
@@ -924,7 +924,7 @@ function buildBoxplot({ boxes, outliers = [], format = {} }) {
     },
     series: [{
       type: "boxplot", data,
-      itemStyle: { color: c.brandSoft, borderColor: c.series },
+      itemStyle: { color: c.brandSoft, borderColor: c.series, ...pointEdge(format, c) },
       emphasis: { itemStyle: { borderColor: c.ink } },
     }, ...(points.length ? [{
       // Outliers: hollow rings, so they read apart from the box without relying on colour.
@@ -992,7 +992,7 @@ function buildWaterfall({ categories, series, format = {} }) {
           const top = Math.min(a[1], b[1]), h = Math.max(1, Math.abs(a[1] - b[1]));
           return {
             type: "group", children: [
-              { type: "rect", shape: { x: a[0] - w / 2, y: top, width: w, height: h, r: 2 }, style: { fill: colour[st.kind] } },
+              { type: "rect", shape: { x: a[0] - w / 2, y: top, width: w, height: h, r: 2 }, style: { fill: colour[st.kind], ...strokeOf(format.markBorder, c.muted) } },
               { type: "text", style: { text: st.kind === "total" ? fmtVal(st.value) : signed(st.value), x: a[0], y: top - 4,
                   align: "center", verticalAlign: "bottom", fill: c.label, font: `14px ${c.font}` } },
             ],
@@ -1081,7 +1081,7 @@ function buildBullet({ categories, values, target, targets, name, format = {} })
     series: [
       ...bands.map(([label, from, to, op]) => ({ type: "bar", name: label, stack: "bands", silent: true, barWidth: "60%",
         data: bandsFor(ts, from, to), itemStyle: { color: c.muted, opacity: op } })),
-      { type: "bar", name, data: vals, barWidth: "24%", barGap: "-70%", z: 3, itemStyle: { color: c.ink } },
+      { type: "bar", name, data: vals, barWidth: "24%", barGap: "-70%", z: 3, itemStyle: { color: c.ink, ...pointEdge(format, c) } },
       { type: "scatter", name: "Target", data: cats.map((_, i) => (ts[i] == null ? null : [ts[i], i])), symbol: "rect", symbolSize: [3, 26], z: 4,
         itemStyle: { color: c.series } },
     ],
@@ -1115,7 +1115,7 @@ function buildGantt({ categories, gantt, name, format = {} }) {
           const a = api.coord([api.value(1), api.value(0)]), e = api.coord([api.value(2), api.value(0)]);
           const h = Math.min(28, api.size([0, 1])[1] * 0.6);
           return { type: "group", children: [
-            { type: "rect", shape: { x: a[0], y: a[1] - h / 2, width: Math.max(2, e[0] - a[0]), height: h, r: 2 }, style: { fill: c.cat[0] } },
+            { type: "rect", shape: { x: a[0], y: a[1] - h / 2, width: Math.max(2, e[0] - a[0]), height: h, r: 2 }, style: { fill: c.cat[0], ...strokeOf(format.markBorder, c.muted) } },
             { type: "text", style: { text: len(b), x: Math.max(e[0], a[0] + 2) + 4, y: a[1], align: "left", verticalAlign: "middle", fill: c.label, font: `14px ${c.font}` } },
           ] };
         } },
@@ -1141,7 +1141,7 @@ function buildSankey({ links, format = {} }) {
       emphasis: { focus: "adjacency" }, data: nodes, links,
       label: { color: c.label, fontFamily: c.font, formatter: (p) => label(p.name) },
       lineStyle: { color: "gradient", opacity: 0.35, curveness: 0.5 },
-      itemStyle: { borderColor: c.surface, borderWidth: 1 },
+      itemStyle: edgeOr(format.markBorder, c.muted, { borderColor: c.surface, borderWidth: 1 }),
     }],
   };
 }

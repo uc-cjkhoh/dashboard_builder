@@ -352,6 +352,30 @@ try {
     }
   });
 
+  await check('Mark border on bullet and waterfall (P36 types): the value bar takes the stroke; the waterfall offers the choice and redraws', async () => {
+    await dragChip('discount', `__t.zone('columns')`); await settle(400);
+    await setType('Bullet'); await openFormat();
+    await pick('Target field', '1');
+    try { await chartReady(); } catch (e) { throw new Error(`Bullet: ${e.message}; chart text: ${await chartText()}`); }
+    must(await hasField('Mark border'), 'bullet has Mark border');
+    const bar = async () => (await opt()).series.find((x) => x.type === 'bar' && x.name === 'amount' || x.barWidth === '24%' || x.z === 3);
+    let o = await bar();
+    must(!o.itemStyle.borderWidth, `bullet none: ${J(o.itemStyle)}`);
+    await pick('Mark border', 'thick'); await chartReady();
+    o = await bar();
+    must(o.itemStyle.borderWidth === 3 && o.itemStyle.borderColor.length > 0, `bullet thick: ${J(o.itemStyle)}`);
+    await shot('bullet-thick-light.png');
+    await pick('Mark border', 'none');
+    await ev(`[...document.querySelectorAll('.ws-shelf--columns .ws-pill')].find((p) => p.textContent.includes('discount')).querySelector('button[aria-label="Remove field"]').click()`); await settle(300);
+    await setType('Waterfall'); await openFormat(); await chartReady();
+    must(await hasField('Mark border'), 'waterfall has Mark border');
+    await pick('Mark border', 'thin'); await chartReady();
+    must(await ev(`window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas')).getOption().series[0].type`) === 'custom', 'waterfall redraws');
+    await shot('waterfall-thin-light.png');
+    await theme('dark'); await settle(400); await chartReady(); await shot('waterfall-thin-dark.png'); await theme('light'); await settle(400);
+    await pick('Mark border', 'none');
+  });
+
   if (b.consoleErrors.length) { console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  ')); failed++; }
 } catch (e) {
   console.log(`FAIL harness: ${e.stack}`); failed++;

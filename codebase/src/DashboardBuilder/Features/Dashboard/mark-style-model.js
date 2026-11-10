@@ -24,3 +24,10 @@ const SYMBOLS = { circle: "circle", square: "rect", diamond: "diamond", triangle
 
 /** ECharts' symbol for a marker shape (circle when unset or unknown). */
 export const markerSymbol = (shape) => (MARKER_SHAPES.has(shape) ? SYMBOLS[shape] : "circle");
+
+/** Chart types whose marks take Format → Mark border (gauge has no marks; lines and areas have only markers on line types). */
+export const BORDER_TYPES = new Set(["bar", "stacked", "combo", "scatter", "square", "circle", "heatmap", "pie", "donut", "treemap", "funnel",
+  "histogram", "boxplot", "waterfall", "bullet", "gantt", "sankey"]);
+
+/** A zrender stroke (custom-series shapes) for a setting; empty for none, so the shape keeps its look. */
+export const strokeOf = (setting, colour) => (MARK_BORDERS.has(setting) && setting !== "none" ? { stroke: colour, lineWidth: WIDTHS[setting] } : {});

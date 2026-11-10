@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { syncRange, SECONDARY_CHOICES, secondaryKind, dualAxisOn, rightAxisTitle, dualAxisAllowed, seriesAxis } from "../../src/DashboardBuilder/Features/Dashboard/axis-sync-model.js";
 import { buildCartesian } from "../../src/DashboardBuilder/Features/Dashboard/chart.js";
-import { MARK_BORDER_CHOICES, markBorder, MARKER_SIZE, markerSizeError, markerSizeOr, MARKER_SHAPE_CHOICES, markerSymbol, edgeOr } from "../../src/DashboardBuilder/Features/Dashboard/mark-style-model.js";
+import { MARK_BORDER_CHOICES, markBorder, MARKER_SIZE, markerSizeError, markerSizeOr, MARKER_SHAPE_CHOICES, markerSymbol, edgeOr, strokeOf, BORDER_TYPES } from "../../src/DashboardBuilder/Features/Dashboard/mark-style-model.js";
 import { defaultFormat, emptySheet } from "../../src/DashboardBuilder/Features/Core/store.js";
 import { parseWorkbook, serializeWorkbook } from "../../src/DashboardBuilder/Features/Workbook/workbook-model.js";
 
@@ -171,4 +171,13 @@ test("buildCartesian: a reference line and band sit on their own measure's serie
   assert.equal(o.series[2].name, "Trend"); assert.equal(o.series[2].yAxisIndex, undefined);
   const dflt = build("line", { dualAxis: true }, [S("Sales"), S("Profit")], { analytics: { ref: { name: "R", value: 2 } } });
   assert.ok(dflt.series[0].markLine);
+});
+
+test("mark border reaches the P36 types: a custom shape gets a stroke, none keeps its look", () => {
+  for (const t of ["histogram", "boxplot", "waterfall", "bullet", "gantt", "sankey", "bar", "pie"]) assert.ok(BORDER_TYPES.has(t), t);
+  assert.ok(!BORDER_TYPES.has("gauge") && !BORDER_TYPES.has("line"));
+  assert.deepEqual(strokeOf("none", "#abc"), {});
+  assert.deepEqual(strokeOf(undefined, "#abc"), {});
+  assert.deepEqual(strokeOf("thin", "#abc"), { stroke: "#abc", lineWidth: 1 });
+  assert.deepEqual(strokeOf("thick", "#abc"), { stroke: "#abc", lineWidth: 3 });
 });

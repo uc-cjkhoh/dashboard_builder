@@ -43,7 +43,7 @@ import { SECONDARY_CHOICES, dualAxisAllowed, dualAxisOn } from "./axis-sync-mode
 import { RAMP_CHOICES, SCALE_CHOICES, DIV_PAIR_CHOICES, colourCentreError, colourRangeError, STEP_CHOICES } from "./colour-scale-model.js";
 import { FONT_CHOICES } from "./font-model.js";
 import { TABLE_ALIGN_CHOICES, TABLE_DENSITY_CHOICES, TABLE_SHADE_CHOICES } from "./table-style-model.js";
-import { MARK_BORDER_CHOICES, MARKER_SHAPE_CHOICES, markerSizeError } from "./mark-style-model.js";
+import { MARK_BORDER_CHOICES, MARKER_SHAPE_CHOICES, BORDER_TYPES, markerSizeError } from "./mark-style-model.js";
 import { targetChoices, effectiveTargetMeasure } from "./bullet-model.js";
 import { sourceOfTable, wireSource, distinctPlan, distinctMembers } from "../Core/source-model.js";
 import { heldOutCards } from "../Relations/relation-rules.js";
@@ -83,7 +83,6 @@ import { toggleDateLabels } from "./date-labels.js";
 // relationships drawn in the Data Source (a join path found by BFS over the relationship graph).
 // Chart types whose marks take Format → Marker size / Mark border (scatter family and line markers; bars and cells).
 const MARKER_TYPES = new Set(["scatter", "square", "circle", "line", "area", "combo", "heatmap"]);
-const BORDER_TYPES = new Set(["bar", "stacked", "combo", "scatter", "square", "circle", "heatmap", "pie", "donut", "treemap", "funnel"]);
 const FIELD_MIME = "application/x-ch-field";
 const ANALYTICS_MIME = "application/x-ch-analytics"; // an Analytics pane item dragged onto the chart
 // Column category from the Data Source catalog (entity.columns), for filters saved without one.
