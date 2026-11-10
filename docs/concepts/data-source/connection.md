@@ -54,6 +54,18 @@ After each successful connect, the source is remembered in this browser so it ca
 - The × on a row forgets that source (shown on hover and on keyboard focus).
 - If browser storage is blocked, nothing is remembered.
 
+## Start screen
+
+While no server is connected, a **Start** panel (`#start-screen`, `Features/Start/`) covers the Data Source view, under the tab bar.
+It has **Connect to a server** (focuses Host) and **Recent workbooks**: one row per server and user this browser has autosaved a workbook for,
+most recent first, at most 5 — the server and user, then `4 tables · 6 worksheets · 2 dashboards · 1 story · 3 h ago`. Picking a row refills the form
+exactly as a recent connection does (`connection:prefill`; password cleared and focused); after Connect, the workbook restores from its autosave
+([workbook.md](../workbook/workbook.md)). The × forgets the row only — the autosave itself stays. The panel hides on connect and returns on disconnect.
+
+- **Metadata only** (`localStorage` key `dashboardbuilder.recent-workbooks`): host, port, user, TLS flags, saved-at time and the four counts. No names,
+  data, queries or password; `sanitizeWorkbooks` drops anything else on load ([D89](../../decisions/decisions-connection.md#d89--the-start-screen-lists-recent-workbooks-as-browser-held-metadata)).
+- Written by `Workbook/workbook.js` after each successful autosave; a workbook with nothing in it removes its row.
+
 ## Validation
 
 1. On submit, every field is validated with `Core/validate.js` (`host`, `port`, `text`) before any request.

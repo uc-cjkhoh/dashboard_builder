@@ -19,6 +19,7 @@ database ([D21](../../decisions/decisions-platform.md#d21--workbooks-persist-in-
 - **Restore:** connecting with an empty canvas reopens the saved workbook; anything repaired is reported.
 - **Export / Import:** the **Workbook** menu downloads or opens a JSON file (format version 2; version 1 files still open).
 - **Validation never silently coerces:** a broken file is refused outright; any other problem is repaired and reported, one sentence per issue.
+- **Start-screen metadata:** each successful autosave also updates the recent-workbooks list (server, user, counts, time — no content) that the start screen shows ([connection.md](../data-source/connection.md#start-screen)).
 - **Never lose a stored workbook:** an unreadable entry is backed up, and autosave never overwrites what it couldn't read.
 
 ## What a workbook holds
