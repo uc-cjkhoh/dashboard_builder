@@ -208,7 +208,7 @@ try {
     const q = await waitReq(1);
     must(J(q) === J({ db: 'shop', table: 'orders', filters: [{ column: 'region', op: 'notin', value: '', values: ['APAC', 'US'] }], limit: 100 }), `request: ${J(q)}`);
     await waitFor(`${dlgSel} !== null && ${dlgSel}.querySelectorAll('tbody tr').length === 3`, 'rows');
-    must(await ev(`${dlgSel}.querySelector('.rows-dialog__title').textContent`) === 'Data behind this view', 'title');
+    must(await ev(`${dlgSel}.querySelector('.rows-dialog__title').textContent`) === 'Rows of shop.orders behind this view', 'title');
     must(await ev(`${dlgSel}.querySelector('.rows-dialog__notes').hidden`), 'no notes when everything applied');
     await closeDlg();
   });
@@ -231,7 +231,7 @@ try {
     const q = await waitReq(1);
     must(J(q.filters) === J([{ column: 'region', op: 'notin', value: '', values: ['APAC', 'US'] }, { column: 'region', op: '=', value: 'EU', values: null }]), `filters: ${J(q.filters)}`);
     await waitFor(`${dlgSel} !== null && ${dlgSel}.querySelectorAll('tbody tr').length === 3`, 'rows');
-    must((await ev(`${dlgSel}.querySelector('.rows-dialog__title').textContent`)).startsWith('Data behind orders.region'), 'title names the mark');
+    must((await ev(`${dlgSel}.querySelector('.rows-dialog__title').textContent`)).startsWith('Rows of shop.orders behind orders.region'), 'title names the table and the mark');
     await shot('rows-view-light.png');
     await closeDlg();
   });
@@ -241,6 +241,18 @@ try {
     await waitFor(`${dlgSel} !== null && ${dlgSel}.querySelector('.rows-dialog__summary').textContent !== ''`, 'summary');
     must(await ev(`${dlgSel}.querySelector('.rows-dialog__summary').textContent`) === 'First 3 rows — more exist', 'truncation notice');
     rowsReply = null; await closeDlg();
+  });
+  await check('View data reads the first measure\'s table (D95), not the first dimension\'s', async () => {
+    await dragChip('country', `__t.zone('rows')`); // customers.country joins orders.region; put it first
+    await ev(`(async () => { const st = await import('/features/Core/store.js'); const w = st.activeWorksheet(); const sh = w.sheet; st.updateSheet(w.id, { ...sh, rows: [...sh.rows].reverse(), selection: null }); return true; })()`);
+    await settle();
+    rowReqs.length = 0;
+    await menuItem('View data');
+    const q = await waitReq(1);
+    must(q.table === 'orders', `table: ${q.table}`);
+    await waitFor(`${dlgSel} !== null && ${dlgSel}.querySelectorAll('tbody tr').length === 3`, 'rows');
+    must(await ev(`${dlgSel}.querySelector('.rows-dialog__title').textContent`) === 'Rows of shop.orders behind this view', 'title');
+    await closeDlg();
   });
   await check('dark scheme renders the dialog with tokens', async () => {
     await b.setScheme('dark');

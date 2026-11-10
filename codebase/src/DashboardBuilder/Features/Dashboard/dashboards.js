@@ -60,7 +60,7 @@ import { cleanOps } from "../Calc/clean-model.js";
 import { groupCategoryProblem, groupKind } from "../Calc/group-model.js";
 import { openMemberLabelsDialog } from "./member-labels-dialog.js";
 import { openRowsDialog } from "../Rows/rows-dialog.js";
-import { buildRowsRequest } from "../Rows/rows-model.js";
+import { buildRowsRequest, firstMeasureTable, viewDataTitle } from "../Rows/rows-model.js";
 import { evaluationInput } from "../Calc/eval-order.js";
 import { explainControl } from "../Calc/explain-popover.js";
 import { paneState, deleteCalcPlan, roleChoice, setRoleChoice } from "../Calc/calc-pane-model.js";
@@ -1278,9 +1278,10 @@ export function initDashboards() {
     if (problem) { toast(problem, "danger"); return; }
     const plan = buildPlan({ ...s, selection: null }); // the mark is added back as a plain `=`, whatever Keep / Exclude did
     if (!plan) { toast("Add fields before viewing data.", "info"); return; }
-    if (plan.source) { toast("View data reads one table's rows — it isn't available for a union or unpivot yet.", "info"); return; }
-    const { request, notes } = buildRowsRequest({ plan, selection: ofMark ? s.selection : null, castOf });
-    openRowsDialog({ title: ofMark ? `Data behind ${s.selection.label}` : "Data behind this view", subtitle: `${request.db}.${request.table}`, request, notes, filename: `${exportBaseName(dash)}-data` });
+    const base = firstMeasureTable(planMeasures(s)) ?? plan.from; // the fact table behind the numbers, else the first dimension's table (D95)
+    if (sourceOfTable(entities, base.db, base.table)) { toast("View data reads one table's rows — it isn't available for a union or unpivot yet.", "info"); return; }
+    const { request, notes } = buildRowsRequest({ plan, base, selection: ofMark ? s.selection : null, castOf });
+    openRowsDialog({ title: viewDataTitle(base, ofMark ? s.selection.label : undefined), subtitle: `${request.db}.${request.table}`, request, notes, filename: `${exportBaseName(dash)}-data` });
   }
 
   async function exportCsvRows(dash, s) {

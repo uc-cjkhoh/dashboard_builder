@@ -15,7 +15,7 @@ export function unpivotPickState(cols, columns, keep) {
   const kind = (name) => cols.find((c) => c.name === name)?.category;
   if (columns.some((c) => kind(c) !== kind(columns[0]))) return { ok: false, hint: KIND_HINT };
   if (keep.length > LIMITS.unpivotKeep) return { ok: false, hint: `Keep at most ${LIMITS.unpivotKeep} columns.` };
-  return { ok: true, hint: "" };
+  return { ok: true, hint: `${n} columns become rows.` };
 }
 
 /** The POST /api/unpivot body for the first rows of `table` with `columns` turned into rows. Throws a sentence when it can't be. */

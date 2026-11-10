@@ -28,11 +28,15 @@ test("a column twice, kept and unpivoted, or more than five kept are refused", (
 test("the pick state says whether Show rows is allowed and why not", () => {
   assert.deepEqual(unpivotPickState(COLS, [], []), { ok: false, hint: "Pick 2 to 50 columns to turn into rows." });
   assert.deepEqual(unpivotPickState(COLS, ["q1"], []), { ok: false, hint: "Pick 2 to 50 columns to turn into rows." });
-  assert.deepEqual(unpivotPickState(COLS, ["q1", "q2"], ["id"]), { ok: true, hint: "" });
+  assert.deepEqual(unpivotPickState(COLS, ["q1", "q2"], ["id"]), { ok: true, hint: "2 columns become rows." });
   const mixed = unpivotPickState(COLS, ["q1", "note"], []);
   assert.equal(mixed.ok, false);
   assert.match(mixed.hint, /same kind/);
 });
 test("columns of one kind only: a text column is not offered beside numbers", () => {
   assert.deepEqual(unpivotPickState(COLS, ["q1", "q2", "id"], []).ok, true);
+});
+
+test("the ready line counts the columns, singular never needed (2 or more)", () => {
+  assert.equal(unpivotPickState(COLS, ["q1", "q2", "id"], []).hint, "3 columns become rows.");
 });

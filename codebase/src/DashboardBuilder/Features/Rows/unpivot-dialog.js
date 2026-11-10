@@ -79,7 +79,6 @@ export function openUnpivotDialog(db, tables) {
   go.addEventListener("click", () => {
     let request;
     try { request = unpivotRequest(db, select.value, ticked("asRow"), ticked("asKeep")); } catch (err) { toast(err.message, "danger"); return; }
-    closeDialog(dlg);
     openRowsDialog({ title: "Unpivot — first rows", subtitle: `${db}.${request.table}`, request, filename: "unpivot", load: api.unpivot });
   });
   add.addEventListener("click", () => { // the unpivot becomes a table on the Data Source (canvas.js adds it) that worksheets can read

@@ -111,3 +111,23 @@ test("buildRowsRequest names a calculated filter that reads a joined table", () 
   assert.deepEqual(request.filters, []);
   assert.deepEqual(notes, ["1 filter on a calculated field across tables isn't applied to rows."]);
 });
+
+import { firstMeasureTable, viewDataTitle } from "../../src/DashboardBuilder/Features/Rows/rows-model.js";
+test("the first measure's table is the base of View data, skipping a calculated pill", () => {
+  const m = (field) => ({ field, role: "shelf", agg: "sum" });
+  assert.deepEqual(firstMeasureTable([m({ db: "shop", table: "orders", column: "qty" }), m({ db: "shop", table: "x", column: "y" })]), { db: "shop", table: "orders" });
+  assert.deepEqual(firstMeasureTable([m({ calc: "[a]+1", name: "c" }), m({ db: "shop", table: "orders", column: "qty" })]), { db: "shop", table: "orders" });
+  assert.equal(firstMeasureTable([]), null);
+  assert.equal(firstMeasureTable([m({ calc: "1" })]), null);
+});
+test("a base other than the plan's first table reads that table; filters elsewhere are noted", () => {
+  const p = { from: { db: "d", table: "customers" }, joins: [], filters: [f("customers", "country", "=", "VN"), f("orders", "qty", ">", "1")], measures: [] };
+  const { request, notes } = buildRowsRequest({ plan: p, base: { db: "d", table: "orders" } });
+  assert.equal(request.table, "orders");
+  assert.deepEqual(request.filters, [{ column: "qty", op: ">", value: "1", values: null }]);
+  assert.match(notes[0], /1 filter on a joined table isn't applied/);
+});
+test("the dialog title names the table plainly", () => {
+  assert.equal(viewDataTitle({ db: "shop", table: "orders" }), "Rows of shop.orders behind this view");
+  assert.equal(viewDataTitle({ db: "shop", table: "orders" }, "Vietnam"), "Rows of shop.orders behind Vietnam");
+});
