@@ -391,7 +391,7 @@ export function initBoard() {
     }
     if (value === "custom") {
       setDashboardRange(dash.id, null);
-      setDashboardSize(dash.id, dash.size ?? { width: 1000, height: 700 });
+      setDashboardSize(dash.id, dash.size && !isPreset(dash.size) ? dash.size : { width: 1000, height: 700 }); // a preset would snap straight back: seed a box that is none
       status(`Fixed size ${sizeLabel(activeDashboard().size)}.`);
       return;
     }
@@ -434,7 +434,7 @@ export function initBoard() {
       const lab = document.createElement("label"); lab.className = "board-bar__rangelab";
       lab.append(document.createTextNode(k.startsWith("min") ? "Min" : "Max"));
       const inp = document.createElement("input");
-      inp.type = "number"; inp.className = "input board-bar__rangein"; inp.setAttribute("aria-label", `${RANGE_LABELS[k]} in pixels`);
+      inp.type = "number"; inp.className = "input board-bar__rangein"; inp.setAttribute("aria-label", `${RANGE_LABELS[k]} in pixels`); inp.setAttribute("aria-describedby", "board-status");
       inp.addEventListener("change", onRangeChange);
       rangeInputs[k] = inp; lab.append(inp); grp.append(lab);
     }
@@ -463,7 +463,7 @@ export function initBoard() {
     const lab = document.createElement("label"); lab.className = "board-bar__rangelab";
     lab.append(document.createTextNode(k === "width" ? "Width" : "Height"));
     const inp = document.createElement("input");
-    inp.type = "number"; inp.className = "input board-bar__rangein"; inp.setAttribute("aria-label", `Custom ${k} in pixels`);
+    inp.type = "number"; inp.className = "input board-bar__rangein"; inp.setAttribute("aria-label", `Custom ${k} in pixels`); inp.setAttribute("aria-describedby", "board-status");
     inp.addEventListener("change", onCustomChange);
     customInputs[k] = inp; lab.append(inp); customBox.append(lab);
   }

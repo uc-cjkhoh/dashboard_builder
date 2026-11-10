@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { SIZE_PRESETS, sizeError, cleanSize, savedSize, sizeKey } from "../../src/DashboardBuilder/Features/Board/board-size.js";
+import { customSizeProblem, isPreset, SIZE_PRESETS, sizeError, cleanSize, savedSize, sizeKey } from "../../src/DashboardBuilder/Features/Board/board-size.js";
 import { layoutBoard } from "../../src/DashboardBuilder/Features/Board/board-layout.js";
 import { parseWorkbook, serializeWorkbook } from "../../src/DashboardBuilder/Features/Workbook/workbook-model.js";
 
@@ -141,8 +141,6 @@ test("import: a dashboard with both size and range keeps the size and drops the 
   assert.equal(wb.dashboards[0].range, null);
   assert.ok(wb.issues.some((i) => /fixed size wins/.test(i)));
 });
-
-import { customSizeProblem, isPreset } from "../../src/DashboardBuilder/Features/Board/board-size.js";
 
 test("customSizeProblem: whole pixels inside the limits become a size; anything else is refused with the field at fault, never clamped", () => {
   assert.deepEqual(customSizeProblem("1000", " 700 "), { size: { width: 1000, height: 700 } });

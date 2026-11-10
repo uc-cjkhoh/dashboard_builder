@@ -232,6 +232,10 @@ try {
     await waitFor(`document.getElementById('board-grid').getBoundingClientRect().width === 1111`, 'custom after reload');
     must(await ev(`document.querySelector('[aria-label="Custom height in pixels"]').value`) === '555', 'height input not restored');
     await pick('1280x720');
+    await pick('custom');
+    await waitFor(`!document.querySelector('[aria-label="Custom width in pixels"]').closest('.board-bar__range').hidden`, 'preset -> Custom shows the inputs');
+    must(await ev(`document.querySelector('.board-bar__size').value`) === 'custom', 'select snapped back');
+    await pick('1280x720');
     must(await ev(`[...document.querySelectorAll('.board-bar__range')].every((e) => e.hidden)`), 'inputs still shown on a preset');
     await pick('auto');
   });
