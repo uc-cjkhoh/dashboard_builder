@@ -24,6 +24,7 @@ import { planTables, calcProblem, statCalcProblem } from "../Calc/calc-plan.js";
 import { isCalcPill, pillSlots } from "../Calc/calc-pill.js";
 import { el, hint, warn } from "./render-dom.js";
 import { joinNotices, periodNotice, speedNotice, invalidFilterNotice } from "./notices.js";
+import { BACKGROUND_CHOICES, backgroundClass } from "./background-model.js";
 
 // The worksheet's query-and-render lifecycle: plan -> latest-wins fetch (shared result cache) -> draw into one
 // container. One view owns one container, one latest-wins gate and its own table pager and fresh flag, so several
@@ -75,6 +76,8 @@ export function createWorksheetView(container, getContext, options = {}) {
   const drawResult = (s, result, cmp) => {
     extraNotice = null;
     const t0 = performance.now();
+    const bg = backgroundClass(s.format?.background);
+    for (const id of BACKGROUND_CHOICES) container.classList.toggle(`ws-bg-${id[0]}`, `ws-bg-${id[0]}` === bg);
     extraNotice = draw(container, s, result, cmp ?? null, renderOptions())?.extraNotice ?? null;
     if (renderTimed) { renderTimed = false; perfLog.attachRender(performance.now() - t0); } // only the draw that follows a fetch; timing only — Core/perf-log.js
   };

@@ -42,6 +42,7 @@ import { HEATMAP_SHAPE_CHOICES } from "./heatmap-model.js";
 import { SECONDARY_CHOICES, dualAxisAllowed, dualAxisOn } from "./axis-sync-model.js";
 import { RAMP_CHOICES, SCALE_CHOICES, DIV_PAIR_CHOICES, colourCentreError, colourRangeError, STEP_CHOICES } from "./colour-scale-model.js";
 import { FONT_CHOICES } from "./font-model.js";
+import { BACKGROUND_CHOICES } from "./background-model.js";
 import { TABLE_ALIGN_CHOICES, TABLE_DENSITY_CHOICES, TABLE_SHADE_CHOICES } from "./table-style-model.js";
 import { MARK_BORDER_CHOICES, MARKER_SHAPE_CHOICES, BORDER_TYPES, markerSizeError } from "./mark-style-model.js";
 import { targetChoices, effectiveTargetMeasure } from "./bullet-model.js";
@@ -1347,6 +1348,7 @@ export function initDashboards() {
       panel.append(fmtCheck("A fall is good", f.downIsGood, (v) => set({ downIsGood: v })));
     if (!STAT_SINGLE_TABLE.has(s.chartType))
       panel.append(fmtCheck("Approximate (faster)", f.approximate, (v) => set({ approximate: v })));
+    panel.append(fmtSelect("Background", BACKGROUND_CHOICES, f.background ?? "none", (v) => set({ background: v })));
     if (isChart || s.chartType === "table" || s.chartType === "text") panel.append(fmtSelect("Font", FONT_CHOICES, f.font ?? "default", (v) => set({ font: v })));
     if (s.chartType === "table" || s.chartType === "text") {
       panel.append(fmtSelect("Align", TABLE_ALIGN_CHOICES, f.tableAlign ?? "auto", (v) => set({ tableAlign: v })),

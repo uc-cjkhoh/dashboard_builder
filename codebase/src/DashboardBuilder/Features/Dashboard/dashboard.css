@@ -420,6 +420,9 @@
 /* Shading uses --surface-3 (visible beside the white / dark surface). Banding skips cells that carry a rule or scale (.xt-cf), whose own tint wins; the header keeps each cell's own ink. */
 .xtab.xt-s-banded tbody tr:nth-child(even) td:not(.xt-cf) { background: var(--surface-3); }
 .xtab.xt-s-header thead th { background: var(--surface-3); }
+/* Format → Background: a surface token behind the worksheet (the chart canvas and table are transparent). */
+.ws-bg-subtle { background: var(--surface-2); }
+.ws-bg-muted { background: var(--surface-3); }
 
 
 /* Honest worksheet notices — invalid filter pill + "first 200 values" cap note */

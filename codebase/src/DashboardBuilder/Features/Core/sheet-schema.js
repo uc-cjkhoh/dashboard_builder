@@ -40,6 +40,7 @@ export const MARKER_SHAPES = new Set(["circle", "square", "diamond", "triangle"]
 export const TABLE_ALIGNS = new Set(["auto", "left", "center", "right"]); // Format → Align (table values)
 export const TABLE_DENSITIES = new Set(["standard", "compact", "roomy"]); // Format → Row height
 export const FONTS = new Set(["default", "serif", "mono"]); // Format → Font (worksheet text family)
+export const BACKGROUNDS = new Set(["none", "subtle", "muted"]); // Format → Background (surface token behind the worksheet)
 export const TABLE_SHADES = new Set(["none", "banded", "header", "both"]); // Format → Shading
 export const MAX_TARGET_MEASURE = 19; // shelf index of the bullet target measure
 export const MAX_DECIMALS = 10;

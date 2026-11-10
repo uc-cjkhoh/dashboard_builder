@@ -298,7 +298,8 @@ export async function exportChart(container, kind) {
   // A canvas chart: PNG straight from the canvas; SVG by redrawing the same option off-screen as SVG.
   if (onCanvas) {
     if (kind === "png") {
-      const surface = getComputedStyle(document.documentElement).getPropertyValue("--surface").trim() || "#ffffff";
+      const shaded = /\bws-bg-/.test(container.className) ? getComputedStyle(container).backgroundColor : "";
+      const surface = shaded || getComputedStyle(document.documentElement).getPropertyValue("--surface").trim() || "#ffffff";
       const url = instance.getDataURL({ type: "png", pixelRatio: 2, backgroundColor: surface });
       return { blob: await (await fetch(url)).blob(), ext: "png" };
     }
