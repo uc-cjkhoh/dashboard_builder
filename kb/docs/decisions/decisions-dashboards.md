@@ -167,3 +167,9 @@ Decided 2026-11-02 (autonomous build). A relationship may match on more than one
 - **Bounds reject:** only recombinable aggregates (sum, count, count non-null, min, max, average), exactly two tables, no calculation and no top-N. Each is a 400 naming its field, never a silent fallback to the double-counting join.
 - **Known limits:** a date part or bucket groups in the outer query over raw-column subqueries (correct, but more intermediate rows); the implicit count is the base table's row count.
 - **Rejected for now:** three or more tables (each edge would need its own grain), distinct count / median / percentile (not recombinable from per-key partials), and a per-measure choice.
+
+## D92 — Per-widget notes are on worksheet widgets only, short, and printed in the header
+
+- **Decision:** a worksheet widget carries an optional `note` (at most 300 characters, client-side only, rejected over the limit and never cut), edited inline from a Note button in the widget header. The printed header lists each as "Note on <worksheet>: …" in reading order; the on-widget note is hidden on paper so it is not printed twice.
+- **Why worksheet widgets only:** a text widget already is a note, and an image, spacer or button has nothing to explain. A note says how to read a chart, which is what the guidance item asks for.
+- **Not built:** the audience / goal planning prompt and a design-consistency check (fonts, colours and sizes across widgets); both stay in the backlog entry.

@@ -16,7 +16,7 @@ A dashboard tab (`.tab--dashboard`) composes the workbook's worksheets, text blo
 - `board-panel.js` — the side panel
 - `board-interact.js` — pointer, keyboard and panel-drop wiring
 - `nav-edit.js` — the button widget's inline form
-- `notes-edit.js`, `board-notes.js` — the data note ([dashboard-print-notes.md](dashboard-print-notes.md))
+- `notes-edit.js`, `board-notes.js` — the data note; `widget-note.js` — a worksheet widget's note ([dashboard-print-notes.md](dashboard-print-notes.md))
 - `board.css`, `_Board.cshtml` (`#board-view`)
 - Pure, node-tested modules:
   - `board-layout.js` — cell ↔ pixel geometry
