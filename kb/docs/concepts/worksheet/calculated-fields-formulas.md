@@ -47,7 +47,7 @@ ref       := "[" name "]" | "[@" parameter "]"                   (a workbook par
 A text or number field's menu **Clean…** adds ONE calculated field. The data is never changed.
 
 - **Trim spaces** (text) → `TRIM`.
-- **Replace missing (NULL) values** → `IFNULL(f, 'text')`, or `IFNULL(f, 12.5)` on a number. It replaces NULL only, not an empty string.
+- **Replace missing (NULL) values** → `IFNULL(f, 'text')`, or `IFNULL(f, 12.5)` on a number. It replaces NULL only by default. On a text field, tick **Also replace empty text** to replace an empty string too: `IF(ISNULL(f) OR f = '', 'text', f)`.
 - **Recode values** → `old = new` lines, up to 20, each cut at the first `=`. Builds `CASE f WHEN 'old' THEN 'new' … ELSE f END`; unlisted values are kept unless unticked. The formula must stay within 500 characters.
 - **Read as a date** → `DATE(f)`.
 - **Naming:** `<field> (trimmed|filled|recoded|date)`, then ` 2`… when taken.
