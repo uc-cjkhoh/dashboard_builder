@@ -12,15 +12,32 @@ export const SIZE_PRESETS = Object.freeze([
 export const sizeKey = (size) => (size ? `${size.width}x${size.height}` : "auto");
 export const sizeLabel = (size) => (size ? `${size.width} × ${size.height}` : "Automatic");
 
-/** The first thing wrong with a size, in the user's words, or null. */
-export function sizeError(size) {
-  if (!size || typeof size !== "object") return "A fixed size needs a width and a height.";
+export const isPreset = (size) => Boolean(size) && SIZE_PRESETS.some((p) => sizeKey(p) === sizeKey(size));
+
+/** Two typed values (strings) → { size } or { error, keys } (keys = the fields at fault). Out of range is refused, never clamped. */
+export function customSizeProblem(widthText, heightText) {
+  const num = (t) => { const s = String(t ?? "").trim(); return s === "" ? null : Number(s); };
+  const width = num(widthText), height = num(heightText);
+  if (width === null) return { error: "Enter a width.", keys: ["width"] };
+  if (height === null) return { error: "Enter a height.", keys: ["height"] };
+  if (!Number.isFinite(width) || !Number.isFinite(height)) return { error: "The width and height are numbers.", keys: [Number.isFinite(width) ? "height" : "width"] };
+  const problem = sizeProblem({ width, height });
+  if (problem) return { error: problem.error, keys: [problem.field] };
+  return { size: { width, height } };
+}
+
+/** The first thing wrong with a size: { error, field } (field "width" | "height" | null), or null. */
+export function sizeProblem(size) {
+  if (!size || typeof size !== "object") return { error: "A fixed size needs a width and a height.", field: null };
   const { width, height } = size;
-  if (!Number.isInteger(width) || !Number.isInteger(height)) return "The width and height are whole pixels.";
-  if (width < SIZE_LIMITS.minW || width > SIZE_LIMITS.maxW) return `The width is ${SIZE_LIMITS.minW}–${SIZE_LIMITS.maxW} pixels.`;
-  if (height < SIZE_LIMITS.minH || height > SIZE_LIMITS.maxH) return `The height is ${SIZE_LIMITS.minH}–${SIZE_LIMITS.maxH} pixels.`;
+  if (!Number.isInteger(width)) return { error: "The width and height are whole pixels.", field: "width" };
+  if (!Number.isInteger(height)) return { error: "The width and height are whole pixels.", field: "height" };
+  if (width < SIZE_LIMITS.minW || width > SIZE_LIMITS.maxW) return { error: `The width is ${SIZE_LIMITS.minW}–${SIZE_LIMITS.maxW} pixels.`, field: "width" };
+  if (height < SIZE_LIMITS.minH || height > SIZE_LIMITS.maxH) return { error: `The height is ${SIZE_LIMITS.minH}–${SIZE_LIMITS.maxH} pixels.`, field: "height" };
   return null;
 }
+/** The first thing wrong with a size, in the user's words, or null. */
+export const sizeError = (size) => sizeProblem(size)?.error ?? null;
 
 /** Import: saved `size` → { width, height } or null (Automatic). Anything `sizeError` refuses (not an object, not whole pixels, out of range) is
  *  rejected, never clamped: the dashboard opens Automatic and the reason is pushed to `issues`. */

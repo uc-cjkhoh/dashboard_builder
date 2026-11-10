@@ -10,7 +10,7 @@ import { nextSelection, selectionRefusal, crossFor, chipText, stillValid, UNSELE
 import { placeNew, NAV_LABEL } from "./board-model.js";
 import { validateImageFile, isImageSrc, imageChars, budgetError } from "./image-model.js";
 import { layoutBoard, widgetOrder, fixedRowH } from "./board-layout.js";
-import { SIZE_PRESETS, sizeKey, sizeLabel, rangeProblem, rangedWidth, rangedHeight, rangeLabel, RANGE_KEYS } from "./board-size.js";
+import { SIZE_PRESETS, isPreset, customSizeProblem, sizeKey, sizeLabel, rangeProblem, rangedWidth, rangedHeight, rangeLabel, RANGE_KEYS } from "./board-size.js";
 import { createWidget } from "./board-widget.js";
 import { createNotes } from "./notes-edit.js";
 import { printLines } from "./board-notes.js";
@@ -389,18 +389,25 @@ export function initBoard() {
       status(`Size range ${rangeLabel(activeDashboard().range)}.`);
       return;
     }
+    if (value === "custom") {
+      setDashboardRange(dash.id, null);
+      setDashboardSize(dash.id, dash.size && !isPreset(dash.size) ? dash.size : { width: 1000, height: 700 }); // a preset would snap straight back: seed a box that is none
+      status(`Fixed size ${sizeLabel(activeDashboard().size)}.`);
+      return;
+    }
     setDashboardRange(dash.id, null);
-    const pick = value === "auto" ? null : SIZE_PRESETS.concat(dash.size ?? []).find((p) => sizeKey(p) === value) ?? null;
+    const pick = value === "auto" ? null : SIZE_PRESETS.find((p) => sizeKey(p) === value) ?? null;
     setDashboardSize(dash.id, pick);
     status(pick ? `Fixed size ${sizeLabel(pick)}.` : "Automatic size.");
   });
   function paintSize(dash) {
     const sizes = [null, ...SIZE_PRESETS];
     const ro = document.createElement("option"); ro.value = "range"; ro.textContent = "Range…";
-    if (dash.size && !SIZE_PRESETS.some((p) => sizeKey(p) === sizeKey(dash.size))) sizes.push(dash.size);
-    sizeSel.replaceChildren(...sizes.map((p) => { const o = document.createElement("option"); o.value = sizeKey(p); o.textContent = sizeLabel(p); return o; }), ro);
-    sizeSel.value = dash.range && !dash.size ? "range" : sizeKey(dash.size);
+    const co = document.createElement("option"); co.value = "custom"; co.textContent = "Custom…";
+    sizeSel.replaceChildren(...sizes.map((p) => { const o = document.createElement("option"); o.value = sizeKey(p); o.textContent = sizeLabel(p); return o; }), co, ro);
+    sizeSel.value = dash.range && !dash.size ? "range" : dash.size && !isPreset(dash.size) ? "custom" : sizeKey(dash.size);
     paintRange(dash);
+    paintCustom(dash);
   }
   // Range: four optional pixel limits (empty = no limit); an invalid set is refused in place, never clamped.
   const rangeBox = document.createElement("span");
@@ -427,7 +434,7 @@ export function initBoard() {
       const lab = document.createElement("label"); lab.className = "board-bar__rangelab";
       lab.append(document.createTextNode(k.startsWith("min") ? "Min" : "Max"));
       const inp = document.createElement("input");
-      inp.type = "number"; inp.className = "input board-bar__rangein"; inp.setAttribute("aria-label", `${RANGE_LABELS[k]} in pixels`);
+      inp.type = "number"; inp.className = "input board-bar__rangein"; inp.setAttribute("aria-label", `${RANGE_LABELS[k]} in pixels`); inp.setAttribute("aria-describedby", "board-status");
       inp.addEventListener("change", onRangeChange);
       rangeInputs[k] = inp; lab.append(inp); grp.append(lab);
     }
@@ -438,7 +445,35 @@ export function initBoard() {
     rangeBox.hidden = !on;
     for (const k of RANGE_KEYS) { rangeInputs[k].value = dash.range?.[k] ?? ""; rangeInputs[k].setAttribute("aria-invalid", "false"); }
   }
-  tools.append(sizeSel, rangeBox, notesBtn, undoBtn, redoBtn, fullBtn, printBtn);
+  // Custom: an exact width and height in whole pixels; an invalid pair is refused in place (the old size stays), never clamped.
+  const customBox = document.createElement("span");
+  customBox.className = "board-bar__range";
+  customBox.hidden = true;
+  const customInputs = {};
+  const onCustomChange = () => {
+    const dash = activeDashboard();
+    if (!dash?.size || isPreset(dash.size)) return;
+    const r = customSizeProblem(customInputs.width.value, customInputs.height.value);
+    for (const k of ["width", "height"]) customInputs[k].setAttribute("aria-invalid", r.keys?.includes(k) ? "true" : "false");
+    if (r.error) { status(r.error, true); return; }
+    setDashboardSize(dash.id, r.size);
+    status(`Fixed size ${sizeLabel(r.size)}.`);
+  };
+  for (const k of ["width", "height"]) {
+    const lab = document.createElement("label"); lab.className = "board-bar__rangelab";
+    lab.append(document.createTextNode(k === "width" ? "Width" : "Height"));
+    const inp = document.createElement("input");
+    inp.type = "number"; inp.className = "input board-bar__rangein"; inp.setAttribute("aria-label", `Custom ${k} in pixels`); inp.setAttribute("aria-describedby", "board-status");
+    inp.addEventListener("change", onCustomChange);
+    customInputs[k] = inp; lab.append(inp); customBox.append(lab);
+  }
+  function paintCustom(dash) {
+    const on = Boolean(dash.size && !isPreset(dash.size));
+    customBox.hidden = !on;
+    customInputs.width.value = on ? dash.size.width : ""; customInputs.height.value = on ? dash.size.height : "";
+    for (const k of ["width", "height"]) customInputs[k].setAttribute("aria-invalid", "false");
+  }
+  tools.append(sizeSel, rangeBox, customBox, notesBtn, undoBtn, redoBtn, fullBtn, printBtn);
 
   sync();
 }
