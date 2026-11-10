@@ -58,10 +58,13 @@ export function openUnionDialog(db, tables) {
     openRowsDialog({ title: "Union — first rows", subtitle: `${db}: ${request.tables.join(" + ")}`, request, filename: "union", load: api.union });
   });
   add.addEventListener("click", async () => { // the union becomes a table on the Data Source (canvas.js adds it) that worksheets can read
+    if (add.disabled) return; // one click at a time: a double-click adds one card
+    add.disabled = true;
     const why = await shareProblem(picked());
-    if (why) { hint.textContent = why; add.disabled = true; return; } // refused in place: nothing is added
+    if (!dlg.isConnected) return;
+    if (why) { hint.textContent = why; return; } // refused in place: nothing is added
     let source;
-    try { source = unionSource(db, picked(), takenNames(entities, db, tables)); } catch (err) { toast(err.message, "danger"); return; }
+    try { source = unionSource(db, picked(), takenNames(entities, db, tables)); } catch (err) { add.disabled = false; toast(err.message, "danger"); return; }
     closeDialog(dlg);
     document.dispatchEvent(new CustomEvent("source:add", { detail: { source } }));
   });

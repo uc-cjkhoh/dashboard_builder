@@ -83,7 +83,9 @@ try {
     await shot('unpivot-rows-light.png');
   });
   await check('closing the preview returns to the Unpivot dialog with the picks kept', async () => {
-    await ev(`[...${rd}.querySelectorAll('.dialog__foot button')].find((x) => x.textContent === 'Close').click()`); // (the harness's synthetic Escape also reaches the dialog beneath) await waitFor(`${rd} === null`, 'preview closed');
+    // (the harness's synthetic Escape also reaches the dialog beneath, so close with the button)
+    await ev(`[...${rd}.querySelectorAll('.dialog__foot button')].find((x) => x.textContent === 'Close').click()`);
+    await waitFor(`${rd} === null`, 'preview closed');
     must(await ev(`${ud} !== null`), 'unpivot dialog still open');
     must(J(await ev(`[...${ud}.querySelectorAll('input')].filter((x) => x.checked).map((x) => x.value)`)) === J(['q1', 'q2', 'id']), 'picks kept');
     await ev(`${ud}.querySelector('button').click()`); await waitFor(`${ud} === null`, 'closed');

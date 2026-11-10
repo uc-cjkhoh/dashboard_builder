@@ -79,7 +79,9 @@ try {
     await shot('union-rows-light.png');
   });
   await check('closing the preview returns to the Union dialog with the picks kept', async () => {
-    await ev(`[...${rd}.querySelectorAll('.dialog__foot button')].find((x) => x.textContent === 'Close').click()`); // (the harness's synthetic Escape also reaches the dialog beneath) await waitFor(`${rd} === null`, 'preview closed');
+    // (the harness's synthetic Escape also reaches the dialog beneath, so close with the button)
+    await ev(`[...${rd}.querySelectorAll('.dialog__foot button')].find((x) => x.textContent === 'Close').click()`);
+    await waitFor(`${rd} === null`, 'preview closed');
     must(await ev(`${ud} !== null && ${ud}.open`), 'union dialog still open');
     must(J(await ev(`[...${ud}.querySelectorAll('input')].filter((x) => x.checked).map((x) => x.value)`)) === J(['sales_2023', 'sales_2024']), 'picks kept');
   });
@@ -99,6 +101,18 @@ try {
     await waitFor(`${rd} !== null && ${rd}.querySelector('.rows-dialog__status--error') !== null`, 'error shown');
     must((await ev(`${rd}.querySelector('.rows-dialog__status--error').textContent`)).includes('share no column'), 'message');
     unionReply = null;
+  });
+  await check('a double-click on Add to model adds one card', async () => {
+    await ev(`document.querySelector('dialog.rows-dialog[open] .dialog__foot .btn--primary')?.click()`); // the refusal check left its dialogs open
+    await waitFor(`${rd} === null`, 'preview closed');
+    await ev(`document.querySelectorAll('dialog.union-dialog[open]').forEach((d) => d.querySelector('.dialog__foot button').click())`);
+    await waitFor(`document.querySelector('dialog[open]') === null`, 'stale dialogs closed');
+    await ev(`document.getElementById('union-open').click()`);
+    await waitFor(`${ud} !== null`, 'open'); await tick('sales_2023'); await tick('sales_2024');
+    await ev(`(() => { window.__adds = 0; document.addEventListener('source:add', () => window.__adds++); const a = [...${ud}.querySelectorAll('button')].find((x) => x.textContent === 'Add to model'); a.click(); a.click(); return true; })()`);
+    await waitFor(`${ud} === null`, 'closed');
+    await b.sleep(200);
+    must(await ev(`window.__adds`) === 1, 'source:add fired once');
   });
   await check('dark scheme renders the pick dialog', async () => {
     await b.key('Escape', { vk: 27 }); await waitFor(`${rd} === null`, 'closed');
