@@ -83,6 +83,16 @@ export function initConnection() {
     toggle(recentEl, recent.length > 0 && !form.hidden);
   }
 
+  // The start screen's recent workbook: refill the form with that server; the password is typed again.
+  document.addEventListener("connection:prefill", (ev) => {
+    const e = ev.detail;
+    if (!e || current) return;
+    fillForm(formValues(e));
+    for (const i of [hostEl, portEl, userEl, passEl]) clearFieldError(i);
+    syncCertControls(); syncAdvanced();
+    passEl.value = ""; passEl.focus();
+  });
+
   function fillForm(v) {
     hostEl.value = v.host; portEl.value = v.port; userEl.value = v.user;
     secureEl.checked = v.secure; allowCertEl.checked = v.allowInvalidCert;
