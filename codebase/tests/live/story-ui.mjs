@@ -180,9 +180,13 @@ try {
   });
 
   await check('add refuses an over-long caption and the 21st step with a message (nothing stored)', async () => {
-    await ev(`(() => { const c = document.querySelector('.story-add__caption'); c.maxLength = 1000; c.value = 'y'.repeat(301); document.getElementById('story-add').requestSubmit(); return true; })()`);
-    must(/300/.test(await ev(`document.querySelector('.story-add__error').textContent`)), 'no caption error');
+    must(await ev(`!document.querySelector('.story-add__caption').hasAttribute('maxlength')`), 'the add box cuts a long paste at maxlength');
+    await ev(`(() => { const c = document.querySelector('.story-add__caption'); c.value = 'y'.repeat(301); document.getElementById('story-add').requestSubmit(); return true; })()`);
+    must(/300 characters \(it has 301\)/.test(await ev(`document.querySelector('.story-add__error').textContent`)), 'no caption error with the count');
+    must(await ev(`(() => { const c = document.querySelector('.story-add__caption'); return c.value.length === 301 && c.getAttribute('aria-invalid') === 'true' && c.getAttribute('aria-describedby') === document.querySelector('.story-add__error').id && document.querySelector('.story-add__error').getAttribute('role') === 'alert'; })()`), 'caption cut or not marked invalid');
     must((await chips()).length === 3, 'step added');
+    await ev(`(() => { const c = document.querySelector('.story-add__caption'); c.value = ''; c.dispatchEvent(new Event('input')); return true; })()`);
+    must(await ev(`document.querySelector('.story-add__error').hidden && !document.querySelector('.story-add__caption').hasAttribute('aria-invalid')`), 'the refusal stayed after editing');
     await store(`const s = st.activeStory(); st.setSteps(s.id, Array.from({ length: 20 }, (_, i) => ({ caption: 'c' + i, target: ${J(ids.a)} }))); return true;`);
     await waitFor(`document.querySelectorAll('#story-strip .story-chip').length === 20`, '20 steps');
     await addStep(ids.a, 'one too many');
@@ -190,6 +194,18 @@ try {
     must((await chips()).length === 20, '21st step added');
     await store(`const s = st.activeStory(); st.setSteps(s.id, [{ caption: 'APAC leads revenue.', target: ${J(ids.a)} }, { caption: 'Web carries the channel mix.', target: ${J(ids.c)} }, { caption: '', target: ${J(ids.d)} }]); return true;`);
     await waitFor(`document.querySelectorAll('#story-strip .story-chip').length === 3`, 'back to 3');
+  });
+
+  await check('a long caption scrolls in its own box and the chart keeps its room', async () => {
+    const before = await ev(`document.getElementById('story-stage').getBoundingClientRect().height`);
+    await store(`const s = st.activeStory(); st.setSteps(s.id, s.steps.map((x, i) => (i === 0 ? { ...x, caption: 'Revenue is led by APAC.\\n'.repeat(12).trim() } : x))); return true;`);
+    await ev(`document.querySelector('#story-strip .story-chip').click()`);
+    await waitFor(`document.getElementById('story-caption').textContent.length > 250`, 'long caption shown');
+    await shot('story-long-caption.png');
+    const r = await ev(`(() => { const c = document.getElementById('story-caption'); return { h: c.clientHeight, sh: c.scrollHeight, stage: document.getElementById('story-stage').getBoundingClientRect().height, em: parseFloat(getComputedStyle(c).fontSize) }; })()`);
+    await store(`const s = st.activeStory(); st.setSteps(s.id, s.steps.map((x, i) => (i === 0 ? { ...x, caption: 'APAC leads revenue.' } : x))); return true;`);
+    must(r.h <= r.em * 6 + 2 && r.sh > r.h, `the caption is not capped: ${J(r)}`);
+    must(r.stage > 200, `the chart was squeezed: ${J(r)}`);
   });
 
   await check('remove a step: the next one becomes current, focus lands on the strip; the last removal empties the story', async () => {

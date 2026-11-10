@@ -80,8 +80,7 @@ export function initStory() {
     for (const o of offers) select.append(new Option(`${o.kind === "dashboard" ? "Dashboard" : "Worksheet"}: ${o.name}`, o.id));
     const cap = h("input", "story-add__caption");
     cap.type = "text";
-    cap.maxLength = LIMITS.stepCaption;
-    cap.id = `${id}-c`;
+    cap.id = `${id}-c`; // no maxlength: an over-long paste is refused in place with its length, never cut
     cap.setAttribute("aria-label", "Caption for the new step");
     cap.placeholder = "Caption";
     const add = makeButton("", "btn btn--primary story-btn");
@@ -89,14 +88,20 @@ export function initStory() {
     add.append(icon("plus", { size: 14 }), document.createTextNode("Add step"));
     add.disabled = offers.length === 0;
     const err = h("p", "story-add__error");
+    err.id = `${id}-e`;
     err.setAttribute("role", "alert");
     err.hidden = true;
+    cap.addEventListener("input", () => { err.hidden = true; cap.removeAttribute("aria-invalid"); cap.removeAttribute("aria-describedby"); });
     addForm.append(label, select, cap, add, err);
     if (!offers.length) { select.disabled = true; select.append(new Option("No worksheets or dashboards yet", "")); }
     addForm.onsubmit = (ev) => {
       ev.preventDefault();
       const r = addStep(story.steps, select.value, cap.value);
-      if (!r.ok) { err.textContent = r.error; err.hidden = false; return; }
+      if (!r.ok) {
+        err.textContent = r.error; err.hidden = false;
+        if (/caption/i.test(r.error)) { cap.setAttribute("aria-invalid", "true"); cap.setAttribute("aria-describedby", err.id); cap.focus(); }
+        return;
+      }
       err.hidden = true;
       addSig = null; // a fresh add row
       commit(story, r.steps, r.index);
@@ -239,7 +244,7 @@ export function initStory() {
       if (ev.key === "Escape") { ev.preventDefault(); ev.stopPropagation(); finish(); }
       else if (ev.key === "Enter" && ev.ctrlKey) { ev.preventDefault(); form.requestSubmit(); }
     });
-    caption.className = "story-step__caption";
+    caption.className = "story-step__caption is-editing";
     caption.replaceChildren(form);
   }
 
