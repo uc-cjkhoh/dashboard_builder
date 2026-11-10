@@ -149,7 +149,7 @@ Nothing here reaches the server; dashboards add no endpoint
   analytics: null | { ref: { kind, value?, param?, measure? }, band: { from, to, fromParam?, toParam? } | { kind: "stddev", k: 1|2|3 } | { kind: "percentile", lo, hi } | null, trend, trendMeasure?, forecast, forecastParam?, totals: { grand, sub } },   // P21
   urlAction: null | { label, template },   // P39 link action — https:// with {value}
   paramAction: null | { param },           // P39 parameter action — a click can set this parameter (id) to the mark's value
-  period: null | { db, table, column, category: "temporal", preset, from, to, compare, compareFrom, compareTo },
+  period: null | { db, table, column, category: "temporal", preset, from, to, compare, compareFrom, compareTo, anchor?: "latest" | "today", latest?: "YYYY-MM-DD" },
   marks:  { size, label, detail: [], tooltip: [], shape, path, angle },
   format: { numberFormat, decimals, currencySymbol, dateFormat, topN, dateBucket, target, downIsGood, conditional, legend,
             dataLabels, colorByDimension, xTitle, yTitle,

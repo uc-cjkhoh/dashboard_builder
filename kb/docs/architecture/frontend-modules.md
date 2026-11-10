@@ -170,8 +170,8 @@ Grouped by feature folder; each entry is the module, then what it owns.
   - `TIP_SIZES`, `TIP_COLOURS` (palette key → CSS token), `checkTooltipStyle`, `lineStyleCss`, and the modal's line model (`toLines`, `fromLines`, `moveLine`, `addLine`, `removeLine`, `insertField`) — [worksheet-marks.md](../concepts/worksheet/worksheet-marks.md#tooltip-text-t01-19-and-the-tooltip-modal)
 - `Dashboard/tooltip-formats.js` — pure: `checkTooltipFormats`, `pruneFormats`, `tipLookup` (raw value -> text with per-field formats, reusing `Core/format.js`), `sampleLookup`, `looksDate`
 - `Dashboard/tooltip-dialog.js` — DOM: the "Edit tooltip…" modal (lines editor, field formats, live preview)
-- `Dashboard/period-model.js` — pure (P35):
-  - `resolveRange` / `compareRange` (presets, previous period, last year), `rangeFilter`, `rangeLabel`, `changeOf` / `toneOf` / `pctText`, `alignCompare`, `targetProgress` — [worksheet-encodings.md](../concepts/worksheet/worksheet-encodings.md#date-range--comparison)
+- `Dashboard/period-model.js` — pure (P35); `Dashboard/filter-hints.js` — pure: `newFilter` (text → `in`), `caseMiss`, `conflicts`, `emptyMessage`, `selectionLabel`:
+  - `resolveRange` (counts from `period.latest` when `anchor` is "latest") / `compareRange` (presets, previous period, last year), `withLatest`, `anchorLabel`, `rangeFilter`, `rangeLabel`, `changeOf` / `toneOf` / `pctText`, `alignCompare`, `targetProgress` — [worksheet-encodings.md](../concepts/worksheet/worksheet-encodings.md#date-range--comparison)
 - `Dashboard/conditional-model.js` — pure (P37):
   - `measureKey`, `extentOf`, `midpointOf`, `scaleColors` (tint + contrast-picked ink), `barGeometry`, `matchRule`, `isActive` — [worksheet-table-view.md](../concepts/worksheet/worksheet-table-view.md#table-view--a-true-rows--columns-crosstab)
 - `Dashboard/colour-model.js` — pure (T01-20, T03-33):
