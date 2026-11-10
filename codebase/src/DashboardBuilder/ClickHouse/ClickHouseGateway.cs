@@ -108,7 +108,7 @@ public sealed partial class ClickHouseGateway
     /// accepted without validation — the escape hatch for internal servers presenting a
     /// self-signed cert (decision D11). The proper fix remains trusting the server's CA.
     /// </summary>
-    private static HttpClient CreateHttpClient(ClickHouseConnectionInfo info)
+    private static HttpClient CreateHttpClient(ClickHouseConnectionInfo info, CertProbe? probe = null)
     {
         // ClickHouse.Client requests compressed responses, so a hand-supplied HttpClient must
         // decompress them itself (its built-in handler does this for us otherwise).
@@ -116,6 +116,14 @@ public sealed partial class ClickHouseGateway
         if (BypassesCertificateValidation(info))
             handler.ServerCertificateCustomValidationCallback =
                 HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+        else if (probe is not null && info.Secure)
+            // Only called when the server actually presented a certificate, so a rejection here is language-independent proof
+            // that the certificate (not the TLS setting) is the problem.
+            handler.ServerCertificateCustomValidationCallback = (_, _, _, errors) =>
+            {
+                if (errors != System.Net.Security.SslPolicyErrors.None) probe.Rejected = true;
+                return errors == System.Net.Security.SslPolicyErrors.None;
+            };
 
         // Bound the wait so an unresponsive host fails cleanly instead of hanging.
         return new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(HttpTimeoutSeconds) };
@@ -169,20 +177,17 @@ public sealed partial class ClickHouseGateway
     {
         var chain = new List<Exception>();
         for (var e = ex; e is not null; e = e.InnerException) chain.Add(e);
-        var where = $"{info.Host}:{info.Port}";
+        var host = info.Host.Contains(':') && !info.Host.StartsWith('[') ? $"[{info.Host}]" : info.Host;
+        var where = $"{host}:{info.Port}";
 
         if (chain.OfType<ClickHouseServerException>().FirstOrDefault() is { ErrorCode: 516 or 192 or 193 })
             return new(StatusCodes.Status401Unauthorized, "Wrong user name or password.", "password");
         if (IsHttpTimeout(ex) || chain.OfType<System.Net.Sockets.SocketException>().Any(s => s.SocketErrorCode is System.Net.Sockets.SocketError.TimedOut))
             return new(StatusCodes.Status502BadGateway, $"No answer from {where}. Check the host and port.", "host");
-        if (chain.OfType<System.Security.Authentication.AuthenticationException>().FirstOrDefault() is { } auth)
-        {
-            var certificate = auth.Message.Contains("certificate", StringComparison.OrdinalIgnoreCase)
-                && !auth.Message.Contains("frame", StringComparison.OrdinalIgnoreCase);
-            return certificate
-                ? new(StatusCodes.Status502BadGateway, "The server's certificate is not trusted. Switch on Trust invalid / self-signed certificate if you know this server.")
-                : new(StatusCodes.Status502BadGateway, "The server did not answer as secure HTTPS. Turn Secure (TLS) off for an HTTP port such as 8123.");
-        }
+        if (chain.OfType<CertificateRejectedException>().Any())
+            return new(StatusCodes.Status502BadGateway, "The server's certificate is not trusted. Switch on Trust invalid / self-signed certificate if you know this server.");
+        if (chain.OfType<System.Security.Authentication.AuthenticationException>().Any())
+            return new(StatusCodes.Status502BadGateway, "The server did not answer as secure HTTPS. Turn Secure (TLS) off for an HTTP port such as 8123.");
         if (chain.OfType<System.Net.Sockets.SocketException>().Any())
             return new(StatusCodes.Status502BadGateway, $"Can't reach {where}. Check the host and port, and that the server is running.", "host");
         if (!info.Secure && chain.Any(e => e is HttpRequestException or IOException))
@@ -190,9 +195,20 @@ public sealed partial class ClickHouseGateway
         return new(StatusCodes.Status502BadGateway, "Could not connect to ClickHouse. Check the host, port, user, password, and TLS (secure) setting.");
     }
 
+    /// <summary>Set by the certificate callback when the server's certificate was refused.</summary>
+    private sealed class CertProbe { public bool Rejected; }
+    internal sealed class CertificateRejectedException(Exception inner) : Exception("certificate rejected", inner);
+
     private static async Task<string?> SelectOneAsync(ClickHouseConnectionInfo info, CancellationToken ct)
     {
-        using var httpClient = CreateHttpClient(info);
+        var probe = new CertProbe();
+        try { return await SelectOneCoreAsync(info, probe, ct); }
+        catch (Exception ex) when (probe.Rejected && ex is not OperationCanceledException) { throw new CertificateRejectedException(ex); }
+    }
+
+    private static async Task<string?> SelectOneCoreAsync(ClickHouseConnectionInfo info, CertProbe probe, CancellationToken ct)
+    {
+        using var httpClient = CreateHttpClient(info, probe);
         await using var conn = new ClickHouseConnection(BuildConnectionString(info), httpClient);
         await conn.OpenAsync(ct);
 

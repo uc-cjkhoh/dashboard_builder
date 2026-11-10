@@ -90,4 +90,19 @@ public class ConnectFailureTests
         }
         finally { l.Stop(); }
     }
+
+    [Fact] public void An_IPv6_host_is_bracketed_in_the_message()
+    {
+        var f = ClickHouseGateway.DescribeConnectFailure(new HttpRequestException("x", new System.Net.Sockets.SocketException((int)System.Net.Sockets.SocketError.ConnectionRefused)),
+            new("::1", 8123, "ann", Secret, false, false));
+        Assert.Contains("[::1]:8123", f.Message);
+    }
+
+    [Fact] public void A_TLS_failure_that_is_not_a_rejected_certificate_never_reads_the_message_text()
+    {
+        // A localised or reworded AuthenticationException message must not flip the classification.
+        var f = ClickHouseGateway.DescribeConnectFailure(new HttpRequestException("x", new System.Security.Authentication.AuthenticationException("certificate certificat Zertifikat")),
+            Info(8123, true));
+        Assert.Contains("Turn Secure (TLS) off", f.Message);
+    }
 }

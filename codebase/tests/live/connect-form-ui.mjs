@@ -103,7 +103,7 @@ try {
   await check('preview: friendly kinds with the raw type in the tooltip, wide enough for 11 columns', async () => {
     await ev(`document.querySelector('.table-chip__peek').click()`);
     await b.waitFor(`document.querySelectorAll('dialog[open] th').length === 11`, { label: 'preview' });
-    const r = JSON.parse(await ev(`JSON.stringify({ kinds: [...document.querySelectorAll('dialog[open] .rows-table__type')].map((e) => e.textContent), tip: document.querySelector('dialog[open] .rows-table__type').title, w: document.querySelector('dialog[open]').getBoundingClientRect().width, sw: document.querySelector('dialog[open] .rows-dialog__scroll').scrollWidth > document.querySelector('dialog[open] .rows-dialog__scroll').clientWidth })`));
+    const r = JSON.parse(await ev(`JSON.stringify({ kinds: [...document.querySelectorAll('dialog[open] .rows-table__type')].map((e) => e.textContent), tip: document.querySelector('dialog[open] .rows-table__type').title, w: document.querySelector('dialog[open]').getBoundingClientRect().width })`));
     must(r.kinds.slice(0, 6).join('|') === 'whole number|number|text|text|date & time|true/false', r.kinds.join('|'));
     must(r.tip === 'UInt64', r.tip);
     must(r.w >= 1000, `dialog ${r.w}px`);
