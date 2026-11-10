@@ -14,3 +14,13 @@ are never stored. Picking a source refills the form, and the user types the pass
   its warning, and Connect is still a deliberate press with the password typed.
 - **Trade-off:** not shared across browsers; cleared with site data. Entries are re-sanitised on load.
 - Detail: [connection.md](../concepts/data-source/connection.md#recent-connections).
+
+
+### D89 — The start screen lists recent workbooks as browser-held metadata
+The start screen (shown while disconnected) lists the workbooks this browser has autosaved, from a small
+`localStorage` list written beside each autosave: server, user, TLS flags, saved-at time and counts of tables,
+worksheets, dashboards and stories (max 5, one per host/port/user), following D21 and D70.
+- **Why metadata, not the workbook:** the list needs no parsing of large workbooks and holds no data, names or password (golden rule 4).
+- **Why a row refills the connection form:** a workbook is bound to its server + user and restores on connect; there is no application database and a workbook has no name of its own.
+- **Trade-off:** not shared across browsers; forgetting a row leaves the autosave in place (the next save lists it again).
+- Detail: [connection.md](../concepts/data-source/connection.md#start-screen).

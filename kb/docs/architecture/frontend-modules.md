@@ -33,6 +33,7 @@ Grouped by feature folder; each entry is the module, then what it owns.
 ### Connection/
 
 - `Connection/connection.js` — connection form, compact summary, gating — [connection.md](../concepts/data-source/connection.md)
+- `Start/start-model.js` — pure: `summarize` a workbook into counts, `rememberWorkbook` / `forgetWorkbook` / `sanitizeWorkbooks` the recent-workbooks metadata (no names, data or password), `ago` and `describe` for the row text; `start-store.js` reads / writes it in `localStorage`; `start.js` draws the start screen (`_Start.cshtml`, `start.css`) and dispatches `connection:prefill`, which `Connection/connection.js` handles
 - `Connection/recent-sources.js` — pure: `remember` / `forget` / `sanitize` recent connection sources (host as entered, port, user, TLS flags — never a password), most recent first, max 5; `formValues` refills the form from one
 - `Connection/connection-rules.js` — pure: `advancedShouldOpen` (the Advanced section opens when TLS is off or the cert opt-in is on), `summaryTitle` (compact-summary tooltip), `formFromView`
 
