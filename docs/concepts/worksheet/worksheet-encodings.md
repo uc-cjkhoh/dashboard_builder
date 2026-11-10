@@ -109,8 +109,8 @@ The **Date range** tool (calendar icon, P35) takes one date / date-time field (`
 - **Range** — Last 7 / 28 / 30 / 90 days (ending today), This / Last month, quarter, year, or **Custom** (two day pickers). Whole days, inclusive, in the [app time zone](../../reference/time-zone.md)'s calendar.
 - **Compare to** — No comparison, **Previous period** (the same number of days just before), **Same period last year** (29 Feb → 28 Feb) or **Custom**.
 
-- **Default:** a new range is **Last 30 days vs previous period**.
-- **Resolved days** show in the panel and the chart card's notice line ("1 Sept – 30 Sept 2026 vs 2 Aug – 31 Aug 2026"). An incomplete custom range says so and isn't applied.
+- **Default:** a new range is **Last 30 days vs previous period**, counted from the field's **latest day**, not from today, so older data isn't emptied. Adding the field reads that day once (`GET …/columns/{col}/latest`, one `maxOrNull`, date columns only); the range is stored as `period.anchor = "latest"` + `period.latest`. **Count from** (Latest data / Today) switches it; until the read returns, or when it fails or the column is empty, the range counts from today. A workbook saved before this carries no anchor and keeps counting from today. Custom ranges count from nothing.
+- **Resolved days** show in the panel (with "Counting from the latest data, 31 Mar 2024" or "Counting from today") and the chart card's notice line ("1 Sept – 30 Sept 2026 vs 2 Aug – 31 Aug 2026"). An incomplete custom range says so and isn't applied.
 - **Query:** the range is one bound `between` filter on the field (days for `Date`, `00:00:00`–`23:59:59` for `DateTime`). Like a filter, it may bring its table into the query.
 
 ### The comparison

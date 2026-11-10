@@ -31,3 +31,9 @@ Chart, authoring and formatting work not yet built. Format: [index.md](index.md#
 ## Beginner-test follow-ups
 
 - **Heatmap cell labels, scatter point identity, stacked-scale warning** (priority P2) — a Heatmap draws values in its cells only when Format → Data labels is on, with no automatic labels for large cells and no ink picked per cell colour (`pickInk` exists); a Scatter / Circle / Square with a dimension draws every point in one colour, unlabelled, so countries cannot be told apart; a Stacked bar of measures on very different scales gives no warning that the small one is invisible. Pie / Donut slice labels by default (without Data labels) need a tri-state Data labels setting. Needs: none.
+
+## Beginner-test follow-ups (filters and dates)
+
+- **Relative-date filters** (`in the last 30 days` as a filter pill) still count from today; only the Dates tool counts from the field's latest day.
+- **Keep only on the Filters tile** shows a pill and count but cannot be edited there (change it from the selection bar).
+- **Empty `=` on reload:** could not reproduce a drop in `sanitizeSheet`; both empty `=` and empty `in` are kept and covered by a test. If it still happens, it is in a path outside `workbook-model.js`.

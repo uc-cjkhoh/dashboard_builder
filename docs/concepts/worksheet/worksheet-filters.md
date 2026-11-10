@@ -7,7 +7,15 @@ Filter cards: column + operator + bound typed value, calculated fields as filter
 
 ## Filters
 
-Each Filters pill is a column + operator + value. Every value is a **bound typed parameter** ([golden rule 3](../../development/coding-standards.md#3-bind-every-value-bound-every-result)).
+Each Filters pill is a column + operator + value. A new filter on a **text** field starts as an `in` value list; any other field starts as `=` (`filter-hints.js`). A filter left empty (`=` with no value, `in` with none picked) filters nothing and is **kept** on reload, whichever operator it has.
+
+- **Case miss:** a text `=` whose value matches a loaded member only by case says "No member 'shipped' — did you mean 'Shipped'?" in its editor (members already loaded; the SQL stays case-sensitive).
+- **Excluding each other:** two applied filters on one field (`=`, `in`, `not in`) that cannot both be true warn on both pills (tooltip + warning icon) and in the line under the view: "These two filters on orders.status exclude each other."
+- **Empty result:** when filters, a date range, pages, a drill level or a Keep only / Exclude selection are in play the chart says "No rows match the filters."; otherwise "No data for these fields."
+- **Top N** outside 1–1000 is refused (not applied) with "Top N must be 1–1000." on the pill. A measure filter's badge groups thousands ("≥ 1,000,000").
+- **Keep only / Exclude** shows on the Filters tile (count and a pill, "Keep only Malaysia"; ✕ clears it). It is still the selection, not a saved filter.
+- A pill's menu inside the Filters flyout opens beside the flyout, never over its editor.
+ Every value is a **bound typed parameter** ([golden rule 3](../../development/coding-standards.md#3-bind-every-value-bound-every-result)).
 
 | Operator | Control | Binding |
 |---|---|---|
