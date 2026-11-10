@@ -94,7 +94,7 @@ Each dashboard has its own size (`Board/board-size.js`).
     There is no upload to the server and no remote-URL image: a link would fetch from a third party each time the board opens and break offline
     ([D71](../../decisions/decisions-dashboards.md#d71--dashboard-images-are-workbook-data-urls-not-links)).
 - **Add spacer** adds a blank 2 × 1 block.
-- **Text widgets** start with the heading "Text" and no body. They are 12 × 2 by default and may be resized down to 1 row.
+- **Text widgets** start with the heading "Text" and no body (the body shows the quiet hint "Click ✎ to write text." until it has text). They are 12 × 2 by default and may be resized down to 1 row.
 - **Dragging:** a worksheet row in the side panel is **draggable** (see Dropping from the panel). **Add** stays the keyboard path.
 - **Announcements:** adding also announces "Added “name” to the dashboard." through the polite live region (`#toast-live`).
   A worksheet widget's loading state has a **Cancel** button labelled "Cancel loading <worksheet name>".
@@ -127,7 +127,7 @@ and `aria-describedby` pointing at a one-line key hint.
   - **Goes to** — a list of every other tab, "Nowhere yet" by default.
 - **Linked:** the button shows the label with an arrow icon, and the tooltip as its `title`. A click opens the target tab (`switchTab`).
 - **Unlinked, or its target closed:** the button is `aria-disabled` (still keyboard-focusable, click ignored).
-  Its `aria-label` says "not linked to a tab", and its tooltip reads "Not linked to a tab. Use Edit to choose one."
+  Its `aria-label` says "not linked to a tab", its tooltip reads "Not linked to a tab. Use Edit to choose one.", and a quiet line under it says "Pick a tab with ✎." until it is linked.
 
 ### Worksheet widgets
 
@@ -161,7 +161,7 @@ draws the **ghost** and commits. Every committed edit is **one undo step** and f
     The dragged widget dims, and a dashed **ghost** covers the target cells.
   - **Refused drops:** when the target overlaps another widget, runs off the grid or breaks a size limit, the ghost turns refused
     (danger border + "Can't drop here" with an icon). A release then **snaps back**: nothing moves, and the status line says why
-    ("Can't move: it would overlap “Sales”."). The widget is never silently moved elsewhere.
+    ("Can't move: it would overlap “Sales”. Move or shrink that widget first."), and the same message shows on the widget that stayed put (`.board-widget__refusal`, 5 seconds). The widget is never silently moved elsewhere.
   - `pointercancel`, a lost capture, window blur and Esc end the drag with no ghost and no change.
 - **Keyboard.** Focus a widget (Tab):
   - **arrows** move it one cell;
@@ -173,7 +173,7 @@ draws the **ghost** and commits. Every committed edit is **one undo step** and f
   - Messages: "Moved to column 3, row 2", "Resized to 4 columns by 3 rows", "Text updated.", "Undid the last change.",
     or the refusal in the danger colour with a warning icon. It clears after 8 seconds.
   - The refusal wording comes from one place for the drag, the keys and the drop: `explainRefusal` in `board-model.js`.
-    It checks whole cells, size limits (w 2–12; h 2–24 worksheet, 1–24 text), left / right / top edge and 96 rows, then "it would overlap “name”".
+    It checks whole cells, size limits (w 2–12; h 2–24 worksheet, 1–24 text), left / right / top edge and 96 rows, then "it would overlap “name”. Move or shrink that widget first.".
 - **Dropping from the panel.** Drag a worksheet row (MIME type `application/x-dashboardbuilder-worksheet`, carrying the worksheet id) over the canvas.
   - The ghost shows a default-size (6 × 4) widget whose top-left is the cell under the pointer, slid left just far enough to stay inside the 12 columns.
   - The drop adds it there. Like Add, an added widget toasts "Added …".
@@ -215,16 +215,16 @@ A click on a mark in one worksheet widget filters the **other** worksheet widget
   - Each adds one bound `=` filter through the same `selectionFilter` the worksheet's click selection uses, replacing that widget's own click selection.
   - This happens only when the selected column's **table is already in the widget's query**; it never forces a join.
   - A widget it can't reach sends no new query, keeps its data and says so in its notice
-    ("orders.region: selected on another sheet, not applied here — its table isn't in this view.").
-  - A histogram (a single-table endpoint) says it doesn't take it; a box plot takes it like any chart.
+    ("Not filtered: this sheet doesn't use orders.").
+  - A histogram (a single-table endpoint) says it doesn't take it ("Not filtered: a histogram or box plot takes no dashboard filter (…)"); a box plot takes it like any chart.
   - Casts follow the plan as in the editor.
   - **Filter budget:** 8 own + 4 shared + 5 drill + 1 page + 1 period + 1 selection = the server's 20.
 - **The source widget** is never filtered.
   - It fades the other marks (bar, stacked, pie, donut; the other types have no per-mark style).
   - It keeps **every** mark of the selected value at full strength (two row dimensions give several).
-  - It shows an outline and a header badge "Selected: <label>" (text and icon, so the fade is never the only cue).
+  - It shows an outline and a header badge "Selected: <label>" (text and icon, so the fade is never the only cue); the badge takes at most 40% of the header and shrinks before the title.
 - **The chip** in the bar reads "Filtering by orders.region = EU", with a labelled clear button (focus returns to the source widget).
-  The polite status line announces set and clear. The value is data: always `textContent`.
+  The polite status line announces set and clear but is drawn only for "cleared" (`is-quiet` while the chip is up, so the message shows once); with the chip up the bar stays one row and the chip's text shortens first. The value is data: always `textContent`.
 - **Transient:** in memory only, never in the workbook or autosave. It ends when:
   - the dashboard stops being shown (tab switch, workbook open, reload);
   - its source widget is removed or its worksheet closed;

@@ -57,6 +57,10 @@ The close icon (`.tab__close`, `aria-label` "Close <name>") closes a tab.
 - **A dashboard with widgets** confirms ("The worksheets on it are not affected."). Closing a dashboard never touches a worksheet.
 - **A worksheet or dashboard shown by story steps** leaves those steps (each story is notified with `story:changed`); the confirm names the stories, and a worksheet or dashboard shown only by stories confirms too.
 - **A story with steps** confirms ("The worksheets and dashboards it shows are not affected.").
+- **Dashboard buttons** that go to the closed worksheet or dashboard are unlinked, and the confirm names those dashboards ("Buttons that go to it will be unlinked on: …").
+- **Undo:** every close (confirmed or not) then shows a toast "Closed “name”." with **Undo** for 10 seconds (`.tab-undo`, in `Tabs/`; `close-undo.js` is the pure model).
+  Undo puts the tab back at its position and, through the store's own setters, the dashboard widgets, button links and story steps the close removed, and shows the tab again if it was open.
+  A dashboard or story edited since keeps its newer content and is named in the "Restored …" toast. It refuses if the tab is back already or the workbook holds 50 tabs.
 
 ### Duplicate
 

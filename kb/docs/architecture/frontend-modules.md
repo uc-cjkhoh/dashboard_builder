@@ -56,7 +56,7 @@ Grouped by feature folder; each entry is the module, then what it owns.
 
 ### Tabs/, Board/ and Story/ — tabs, the dashboard board and stories
 
-- `Tabs/tabs.js` — Data Source tab + one ordered list of worksheet, dashboard and story tabs, the `[+]` menu, close confirms — [tabs.md](../concepts/workbook/tabs.md)
+- `Tabs/tabs.js` · `close-undo.js` — Data Source tab + one ordered list of worksheet, dashboard and story tabs, the `[+]` menu, close confirms and the Undo toast; `close-undo.js` is the pure snapshot / restore plan (`captureClose`, `sealClose`, `planRestore`) — [tabs.md](../concepts/workbook/tabs.md)
 - `Board/board-model.js` — pure (P24b):
   - widget geometry and limits — `overlaps`, `inBounds`, `firstFreeSpot`, `placeNew`, `placeAt` (a drop), `checkPlacement`, `explainRefusal` (the refusal in words), the import clean-up `cleanWidgets`, `savedWidgets`, `removeSheetWidgets`, `dashboardsUsing`, `defaultTabName` — [data-model.md](../reference/data-model.md#tabs-and-dashboards)
 - `Story/story-model.js` — pure (node-tested): `validateCaption`, `addStep`, `removeStep`, `moveStep`, `setCaption`, `goTo` (never wraps), `dropTarget` (used by `closeTab`), `offeredTargets`, `targetKind`, `stepName`, `savedSteps`, `cleanSteps` (import: bad steps skipped and reported) — [stories.md](../concepts/workbook/stories.md)
@@ -70,7 +70,7 @@ Grouped by feature folder; each entry is the module, then what it owns.
   - shows the active dashboard only, reconciles its widgets by id, lays them out from the tokens, add / remove, theme and resize handling, full screen and print — [dashboards.md](../concepts/workbook/dashboards.md)
 - `Board/board-widget.js` · `board-panel.js` — one widget (focusable; header with Edit / Remove over a select-only `createWorksheetView` or a text body; the corner grip; the inline text form) and the side panel (worksheets with Add, draggable with `SHEET_MIME`; Add text)
 - `Board/board-drag.js` — pure: the pointer state machine `createDrag()` (`start` / `move` → ghost / `end` → `commit` \| `revert` \| `none` / `cancel`, `DRAG_THRESHOLD`), `ghostFor`, `dropPlan` (a panel drop)
-- `Board/nav-model.js` · `nav-edit.js` — navigation button: pure `validateNavEdit`, `navTargets`, `navChanged`, `clearNavTarget` (used by `closeTab`); `nav-edit.js` builds the inline form (label, tooltip, Goes to)
+- `Board/nav-model.js` · `nav-edit.js` — navigation button: pure `validateNavEdit`, `navTargets`, `navChanged`, `dashboardsLinking`, `clearNavTarget` (used by `closeTab`); `nav-edit.js` builds the inline form (label, tooltip, Goes to)
 - `Board/board-keys.js` · `text-edit.js` · `image-model.js` · `board-history.js` — pure: `validateImageFile`, `isImageSrc`, `altFromName` (image widgets: raster data URLs only, size-bounded)
   - `keyStep` (arrow / Shift+arrow → candidate + status, or the refusal), `movedMessage`, `resizedMessage`
   - `validateTextEdit`, `textChanged`

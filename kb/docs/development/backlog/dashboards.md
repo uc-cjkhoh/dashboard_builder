@@ -13,6 +13,11 @@ Dashboard tabs are built: widgets render and save, and the board supports drag, 
 - **Set action (P39 remainder)** (IDs: T08-27; priority P3; effort S) — Open: a click adds a member to a set (sets are in [calculations.md](calculations.md)); it would sit on the selection chip beside the link and parameter actions. Partial: a click can set a parameter to the mark's value ([worksheet-encodings.md](../../concepts/worksheet/worksheet-encodings.md#click-to-filter)). Needs: P25.
 - **Dashboard guidance remainder** (IDs: T08-02, T08-30; priority P2) — Open: an audience / goal planning prompt and design-consistency checks (fonts, colours, sizes across widgets). Partial: a dashboard carries one free-text data note and each worksheet widget a note of up to 300 characters, and the print header lists the worksheets, selection filter, print time, the widget notes and the dashboard note ([dashboards.md](../../concepts/workbook/dashboard-print-notes.md)); the status bar shows the last-query time and a worksheet's print header lists its calculation definitions. Needs: none.
 
+## Beginner-test follow-ups (tabs, dashboard, story)
+
+- **First Add right after opening a dashboard** — A beginner saw the first worksheet Add add nothing, once. Four attempts (Add in the same tick as the tab click, next frame, next task, real mouse events) all added the widget, so no cause was found and nothing was changed. Open: reproduce on the live build and, if it recurs, log `add()` and the panel redraw. Needs: none.
+- **Undo after closing a tab: edited dashboards** — A dashboard or story edited after the close keeps its newer content, so Undo does not bring back the widgets or steps the close removed from it (the toast names it). Open: merge the removed widgets / steps into the edited list. Needs: none.
+
 ## Action design
 
 Actions form an explicit graph: a source-sheet event (select, hover, menu, multi-select) runs an action type (filter, highlight, navigate, go to sheet) on target sheets, matched by chosen fields, with Clear set to all, none or keep. A selected mark filters targets by its group keys, bound as typed values (golden rule 3), never by display labels. Field mappings across sheets are explicit when two sheets use different tables. Set actions stay P3.
