@@ -15,7 +15,7 @@ compare   := sum [("="|"!="|"<>"|"<"|"<="|">"|">=") sum]        (no chaining)
 sum       := term (("+"|"-") term)*
 term      := factor (("*"|"/") factor)*
 factor    := "-" factor | number | string | "(" expr ")" | aggregate | logic | ref
-string    := "'" text "'"
+string    := "'" text "'" | '"' text '"'
 aggregate := FN "(" expr ")" | "PERCENTILE" "(" expr "," number ")"
 ref       := "[" name "]" | "[@" parameter "]"                   (a workbook parameter, see Parameters below)
 ```
@@ -31,7 +31,8 @@ ref       := "[" name "]" | "[@" parameter "]"                   (a workbook par
 - **Logic** ([below](#logic-functions)): comparisons, `AND` / `OR` / `NOT`, `IN`, `BETWEEN`, `IF` / `IIF` / `CASE`, `IFNULL`, `ISNULL`, `ZN`, text, `TRUE` / `FALSE` and `NULL` literals.
 - **Text** ([below](#text-functions)): `TEXT` (alias `STR`), `LOWER`, `UPPER`, `TRIM`, `LTRIM`, `RTRIM`, `LEN`, `LEFT`, `RIGHT`, `MID`, `FIND`, `REPLACE`, `CONCAT`, `CONTAINS`, `STARTSWITH`, `ENDSWITH`, `ICONTAINS`, `ISTARTSWITH`, `IENDSWITH`, `SPLIT`.
 - **Date** ([below](#date-functions)): `DATEDIFF`, `DATEADD`, `YEAR`, `MONTH`, `DAY`, `QUARTER`, `WEEK`, `WEEKDAY`, `ISOYEAR`, `DATENAME`, `DATETRUNC`, `FISCALYEAR`, `FISCALQUARTER`, `MAKEDATE`, `DATE`.
-- **References:** `[table.column]` (`[db.table.column]` when two databases hold the same table name), or `[Name]` for another calculation. Calculations can refer to calculations. The browser expands every reference into one tree before sending, so the server never sees a calculation name.
+- **References:** `[table.column]` (`[db.table.column]` when two databases hold the same table name), or `[Name]` for another calculation. A bare `[column]` works when exactly one model column has that name (the formula keeps what you typed); when several tables have it the message lists them (`qty is in shop.orders and shop.returns — write [orders.qty] or [returns.qty].`). A calculation named like a column wins the bare name. Calculations can refer to calculations. The browser expands every reference into one tree before sending, so the server never sees a calculation name.
+- **Argument count:** a wrong count names the signature, e.g. `FISCALYEAR takes 2 arguments: FISCALYEAR(start month, date).`
 - **Division by zero** gives NULL, never an error. A formula with **no field references** (`1+2`) is valid but needs a field elsewhere on the sheet to group or total.
 
 ### Statistics
@@ -55,7 +56,7 @@ A text or number field's menu **Clean…** adds ONE calculated field. The data i
 
 ### Logic functions
 
-- **Text literal** `'open'`: a quote inside is doubled (`'it''s'`). At most 100 characters. It is sent as data, never as SQL text. There is no date literal: write `DATE('2024-01-01')`.
+- **Text literal** `'open'` or `"open"`: the same quote inside is doubled (`'it''s'`, `"say ""hi"""`). At most 100 characters. It is sent as data, never as SQL text. There is no date literal: write `DATE('2024-01-01')`.
 - **Comparison** `= != <> < <= > >=` (`<>` is `!=`) takes two numbers, two texts or two dates — never a mix and never a boolean (`Comparison needs two values of the same type — …`). Text compares exactly (case and accents count).
 - **Precedence**, loosest first: `OR`, `AND`, `NOT`, comparison, `+ -`, `* /`. So `1 + 2 > 2` works without parentheses.
 - **`AND` / `OR` / `NOT`** need booleans (a comparison, `ISNULL`, a boolean field, `TRUE` / `FALSE`) and give a boolean. A boolean is never compared with `=`: write the field itself.
