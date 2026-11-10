@@ -17,22 +17,23 @@ export function openSplitDialog({ field, fieldName }) {
   const mk = (label, input) => { const f = el("div", "field"); const l = el("label", null, label); input.id = `split-${n}-${label}`; l.htmlFor = input.id; f.append(l, input); return f; };
   const sep = el("input", "input"); sep.type = "text"; sep.autocomplete = "off"; sep.maxLength = SPLIT_MAX_SEP; sep.value = ",";
   const pieces = el("input", "input"); pieces.type = "number"; pieces.min = "2"; pieces.max = String(SPLIT_MAX_PIECES); pieces.step = "1"; pieces.value = "2";
+  const given = el("input", "input"); given.type = "text"; given.autocomplete = "off"; given.placeholder = "Optional, comma-separated";
   const names = el("ol", "split-dialog__names");
   const msg = el("div", "grp-error"); msg.setAttribute("role", "alert");
-  body.append(mk("Separator", sep), mk("Pieces", pieces), names, msg);
+  body.append(mk("Separator", sep), mk("Pieces", pieces), mk("Names", given), names, msg);
   const foot = el("div", "dialog__foot");
   const cancel = makeButton("Cancel", "btn"), create = makeButton("Create fields", "btn btn--primary");
   foot.append(cancel, create);
   dlg.append(title, body, foot);
   document.body.append(dlg);
 
-  const plan = () => splitPlan({ field, sep: sep.value, pieces: pieces.value === "" ? NaN : Number(pieces.value), calcs: calculations });
+  const plan = () => splitPlan({ field, sep: sep.value, pieces: pieces.value === "" ? NaN : Number(pieces.value), calcs: calculations, names: given.value });
   const refresh = () => {
     const p = plan();
     create.disabled = !p.ok; msg.textContent = p.ok ? "" : p.error;
     names.replaceChildren(...(p.ok ? p.calcs.map((c) => el("li", null, c.name)) : []));
   };
-  sep.addEventListener("input", refresh); pieces.addEventListener("input", refresh);
+  sep.addEventListener("input", refresh); pieces.addEventListener("input", refresh); given.addEventListener("input", refresh);
   refresh();
   cancel.addEventListener("click", () => closeDialog(dlg));
   dlg.addEventListener("cancel", (e) => { e.preventDefault(); closeDialog(dlg); });

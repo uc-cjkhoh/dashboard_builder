@@ -57,3 +57,25 @@ test("every planned formula compiles through the calculation engine to a text di
     }
   }
 });
+
+test("names the pieces in order; an empty entry keeps the default name", () => {
+  const p = plan({ names: "Country, ,City" });
+  assert.equal(p.ok, true);
+  assert.deepEqual(p.calcs.map((c) => c.name), ["Country", "tags 2", "City"]);
+  assert.equal(p.calcs[0].formula, "SPLIT([shop.orders.tags], ',', 1)");
+});
+test("fewer names than pieces name the first pieces; more names than pieces are refused", () => {
+  assert.deepEqual(plan({ names: "A" }).calcs.map((c) => c.name), ["A", "tags 2", "tags 3"]);
+  assert.match(plan({ names: "A,B,C,D" }).error, /4 names for 3 pieces/);
+  assert.equal(plan({ names: "" }).calcs[0].name, "tags 1");
+});
+test("a given name that is taken, repeated or not allowed is refused, never renamed", () => {
+  assert.match(plan({ names: "A,a" }).error, /more than once/);
+  assert.match(plan({ names: "A", calcs: [{ id: "c1", name: "a", formula: "" }] }).error, /already exists/);
+  assert.match(plan({ names: "A.B" }).error, /can't contain/);
+  assert.match(plan({ names: "x".repeat(61) }).error, /60/);
+});
+test("a default name that collides with a given name moves the defaults on", () => {
+  assert.deepEqual(plan({ names: ",tags 2" }).calcs.map((c) => c.name), ["tags 1", "tags 2", "tags 3"]);
+  assert.deepEqual(plan({ names: ",tags 1" }).calcs.map((c) => c.name), ["tags (split) 1", "tags 1", "tags (split) 3"]);
+});

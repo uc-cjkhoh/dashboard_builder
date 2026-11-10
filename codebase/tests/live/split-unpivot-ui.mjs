@@ -107,6 +107,11 @@ try {
     await ev(`(() => { const p = ${sd}.querySelector('input[type=number]'); p.value = '3'; p.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
     must(await ev(`[...${sd}.querySelectorAll('li')].map((l) => l.textContent).join('|')`) === 'tags 1|tags 2|tags 3', 'names');
     await shot('split-dialog-light.png');
+    await ev(`(() => { const n = ${sd}.querySelectorAll('input[type=text]')[1]; n.value = 'Country, ,Town'; n.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
+    must(await ev(`[...${sd}.querySelectorAll('li')].map((l) => l.textContent).join('|')`) === 'Country|tags 2|Town', 'given names');
+    await ev(`(() => { const n = ${sd}.querySelectorAll('input[type=text]')[1]; n.value = 'A,B,C,D'; n.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
+    must(await ev(`${sd}.querySelector('.grp-error').textContent`) === '4 names for 3 pieces.', 'too many names');
+    await ev(`(() => { const n = ${sd}.querySelectorAll('input[type=text]')[1]; n.value = ''; n.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
     await ev(`(() => { const p = ${sd}.querySelector('input[type=number]'); p.value = '11'; p.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
     must(await ev(`${sd}.querySelector('.dialog__foot .btn--primary').disabled`) === true, 'create disabled over 10');
     await ev(`(() => { const p = ${sd}.querySelector('input[type=number]'); p.value = '3'; p.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
