@@ -37,3 +37,10 @@ Decided 2026-11-10 (autonomous build). The histogram (`/api/databases/{db}/table
 - **Browser:** `statFilters` (histogram) and `buildRowsRequest` (View data) send a calculated filter when every field in its tree is on the view's table (`calcOnTable`); otherwise it is counted in the histogram's notice or named in the View data notes ("on a calculated field across tables"). Never dropped silently. The box plot needed nothing: it is a worksheet-shaped request and already applied the filter.
 - **Rejected:** routing the histogram through the worksheet query (a different bucketing statement and endpoint for one filter kind); joining in the single-table read.
 - **Not built:** a calculated *field* as the histogram's value; a calculated filter across tables in View data.
+
+### D95 — View data reads the first measure's table
+Decided 2026-11-10 (beginner-test fix). Amends the base-table rule of View data (D91 context): the rows are of the table of the view's **first measure**, not the first dimension's.
+- **Why:** "sum orders.quantity by customers.country" listed `shop.customers`, so the orders behind the numbers never appeared. The measure's table is the fact table.
+- **Rule:** `firstMeasureTable` (`Rows/rows-model.js`) takes the first measure of `planMeasures` that is a plain column (a calculated pill names no single table and is skipped); with none, the plan's first table as before. Still one table, never a join: filters or a mark on any other table are named in the amber note.
+- **Dialog title:** "Rows of shop.orders behind this view" (or behind the selected mark).
+- **Rejected:** joining the dimension's table in; asking the user which table.

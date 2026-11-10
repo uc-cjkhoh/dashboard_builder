@@ -25,7 +25,9 @@ The row **preview** of each is in [schema-browser.md](schema-browser.md#union).
 ## Adding one
 
 - **Buttons.** The Union and Unpivot dialogs have **Show rows** (the preview) and **Add to model** (primary).
-  Both are enabled by the same pick rules.
+  Both are enabled by the same pick rules. **Show rows** opens the preview over the dialog; closing it returns to the dialog with the picks kept.
+  The Union dialog reads the picked tables' columns and, when they share none with the same name and kind of values, says so on its status line ("These tables share no column with the same name and kind of values.") and disables **Add to model**, so nothing is added.
+  The Unpivot dialog's status line reads "N columns become rows." once the pick is valid.
   Add to model fires `source:add`. The canvas switches to the Data Source and puts the card in the first free slot
   ([canvas.md](canvas.md#union-and-unpivot-cards)).
 - **Name.** The name is automatic and not editable: `Union: a + b` or `Unpivot: sales`, cut to 200 characters (`LIMITS.sourceName`).
