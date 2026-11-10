@@ -288,6 +288,6 @@ The box plot reads the worksheet's own plan (joins, filters, calculations, casts
 - **Kept:** the single-table `…/boxplot` route stays for existing callers; the browser no longer uses it. The histogram stays single-table.
 
 ### D90 — Worksheet background is a two-step surface shade on the container
-Format → Background offers None, Subtle (`--surface-2`) and Muted (`--surface-3`) rather than a colour picker.
+Format → Background offers None, Subtle (`--surface-2`) and Muted (`--surface-3`) - no colour picker: two palette steps.
 - **Why:** the design rules allow palette tokens only; two steps read in light and dark and keep the ink's contrast.
 - **How:** a class on the worksheet container, so a chart and a table share one path. `format.background` stays out of `defaultFormat()` and is kept only when present, so existing workbooks round-trip unchanged.
