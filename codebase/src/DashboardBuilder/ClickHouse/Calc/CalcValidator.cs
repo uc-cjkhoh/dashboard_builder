@@ -215,6 +215,10 @@ public static class CalcValidator
                         case FnArg.Number:
                             if (arg.Type != CalcType.Number) throw new CalcException($"{upper} needs a number — {arg.Name} is {arg.Type}.", ap);
                             break;
+                        case FnArg.Month:
+                            if (fn.Args[n] is not NumNode { V: var month } || month != Math.Floor(month) || month < 1 || month > 12)
+                                throw new CalcException($"{upper}'s start month must be a whole number from 1 to 12 written in the formula.", ap);
+                            break;
                         case FnArg.Amount:
                             if (AmountLiteral(fn.Args[n]) is not { } amount || amount != Math.Floor(amount) || Math.Abs(amount) > CalcLimits.MaxDateAmount)
                                 throw new CalcException($"{upper}'s amount must be a whole number from -{CalcLimits.MaxDateAmount} to {CalcLimits.MaxDateAmount} written in the formula.", ap);

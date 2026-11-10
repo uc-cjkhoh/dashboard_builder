@@ -8,7 +8,7 @@ export const GROUPS = Object.freeze(["Aggregate", "Logic", "Text", "Date"]);
 
 const AGGREGATES = ["sum", "avg", "min", "max", "count", "countd", "median", "stddev", "variance", "percentile", "attr"];
 const TEXT = ["text", "lower", "upper", "trim", "ltrim", "rtrim", "len", "left", "right", "mid", "find", "replace", "concat", "contains", "startswith", "endswith", "icontains", "istartswith", "iendswith", "split"];
-const DATE = ["datediff", "dateadd", "year", "month", "day", "quarter", "week", "weekday", "date", "isoyear", "datename", "datetrunc", "makedate"];
+const DATE = ["datediff", "dateadd", "year", "month", "day", "quarter", "week", "weekday", "date", "isoyear", "datename", "datetrunc", "fiscalyear", "fiscalquarter", "makedate"];
 /** Logic keywords the parser handles itself: name -> { args: display text, result, insert }. */
 const LOGIC = {
   if: { sig: "IF(condition, then, else)", result: "same type as then / else" },
@@ -92,11 +92,13 @@ const TEXTS = {
   isoyear: ["The ISO 8601 year of the date.", "ISOYEAR([orders.placed])", "The year that owns the date's ISO week, so 30 Dec 2024 is in 2025. A NULL date gives NULL."],
   datename: ["The English name of the date's weekday or month.", "DATENAME('weekday', [orders.placed])", "The part is a text literal, 'weekday' (Monday to Sunday) or 'month' (January to December). Always English. A NULL date gives NULL."],
   datetrunc: ["A date cut back to the start of its unit.", "DATETRUNC('month', [orders.placed])", "The unit is a text literal: year, quarter, month, week, day, hour, minute or second. Weeks start on Monday. The result is a date with a time of 00:00:00 for the larger units. A NULL date gives NULL."],
+  fiscalyear: ["The fiscal year of the date, named by the calendar year it ends in.", "FISCALYEAR(10, [orders.placed])", "The first argument is the month the fiscal year starts, a literal whole number 1 to 12 (1 is the calendar year). With 10, 15 Oct 2024 is fiscal 2025. A NULL date gives NULL."],
+  fiscalquarter: ["The fiscal quarter (1 to 4) of the date.", "FISCALQUARTER(10, [orders.placed])", "The first argument is the month the fiscal year starts, a literal whole number 1 to 12. With 10, October to December is quarter 1. A NULL date gives NULL."],
   makedate: ["A date built from a year, month and day.", "MAKEDATE(2024, 2, 29)", `Empty (NULL) unless all three are whole numbers, the year is ${MAKEDATE_YEARS.from} to ${MAKEDATE_YEARS.to}, and the day exists in that month (29 Feb only in a leap year). A NULL part gives NULL.`],
   date: ["Reads text as a calendar date.", "DATE('2024-03-05')", "Empty when the text is not a real date (for example 2024-02-30)."],
 };
 
-const WORD = { value: "value", text: "text", length: "length", position: "position", separator: "separator", unit: "unit", amount: "amount", date: "date", part: "part", number: "number" };
+const WORD = { value: "value", text: "text", length: "length", position: "position", separator: "separator", unit: "unit", amount: "amount", date: "date", part: "part", number: "number", month: "start month" };
 const NAMES = new Map(); // lower-case name -> group
 for (const n of AGGREGATES) NAMES.set(n, "Aggregate");
 for (const n of Object.keys(LOGIC)) NAMES.set(n, "Logic");

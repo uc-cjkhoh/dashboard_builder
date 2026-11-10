@@ -17,7 +17,7 @@
 //              | "IF" expr "THEN" expr ("ELSEIF" expr "THEN" expr)* ["ELSE" expr] "END"      -- the same node as CASE WHEN
 //   text      := ("TEXT" | "STR" | "LOWER" | "UPPER" | "TRIM" | "LTRIM" | "RTRIM" | "LEN" | "LEFT" | "RIGHT" | "MID" | "FIND" | "REPLACE" | "CONCAT" | "CONTAINS" | "STARTSWITH" | "ENDSWITH" | "ICONTAINS" | "ISTARTSWITH" | "IENDSWITH" | "SPLIT")
 //                "(" expr ("," expr)* ")"        -- argument count and kinds are checked by check(), not here
-//   date      := ("DATEDIFF" | "DATEADD" | "YEAR" | "MONTH" | "DAY" | "QUARTER" | "WEEK" | "WEEKDAY" | "DATE" | "ISOYEAR" | "DATENAME" | "DATETRUNC" | "MAKEDATE") "(" expr ("," expr)* ")"   -- same shape as text
+//   date      := ("DATEDIFF" | "DATEADD" | "YEAR" | "MONTH" | "DAY" | "QUARTER" | "WEEK" | "WEEKDAY" | "DATE" | "ISOYEAR" | "DATENAME" | "DATETRUNC" | "FISCALYEAR" | "FISCALQUARTER" | "MAKEDATE") "(" expr ("," expr)* ")"   -- same shape as text
 //   string    := "'" text "'"        (a quote inside is doubled: 'it''s')
 //   ref       := "[" name "]"  |  "[@" parameter "]"      -- a workbook parameter (Calc/calc-params.js substitutes its value)
 //

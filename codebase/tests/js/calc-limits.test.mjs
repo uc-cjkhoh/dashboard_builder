@@ -47,14 +47,14 @@ test("the plain aggregations and the calculation functions agree with the server
 test("ROW_FUNCTIONS (calc-types.js) is the C# CalcCatalog.RowFunctions table", async () => {
   const { ROW_FUNCTIONS } = await import("../../src/DashboardBuilder/Features/Calc/calc-types.js");
   const body = csharp.match(/RowFunctions =[^{]*\{([\s\S]*?)\n    \};/)[1];
-  const kind = { Text: "text", Length: "length", Position: "position", Separator: "separator", Date: "date", Unit: "unit", Amount: "amount", Value: "value", Part: "part", Number: "number" };
+  const kind = { Text: "text", Length: "length", Position: "position", Separator: "separator", Date: "date", Unit: "unit", Amount: "amount", Value: "value", Part: "part", Number: "number", Month: "month" };
   const want = {};
   for (const m of body.matchAll(/\["([a-z]+)"\] = (?:Fn\(CalcType\.(\w+), ([^)]*)\)|new FnSpec\(\[([^\]]*)\], CalcType\.(\w+), (CalcLimits\.MaxConcat|MinArgs: \d+)\))/g)) {
     const list = (m[3] ?? m[4]).split(",").map((x) => kind[x.trim().replace("FnArg.", "")]);
     want[m[1]] = { args: list, result: (m[2] ?? m[5]).toLowerCase(), ...(m[6] === "CalcLimits.MaxConcat" ? { max: CALC_LIMITS.concat } : {}), ...(m[6]?.startsWith("MinArgs") ? { min: Number(m[6].slice(9)) } : {}) };
   }
   assert.deepEqual(JSON.parse(JSON.stringify(ROW_FUNCTIONS)), want);
-  assert.equal(Object.keys(want).length, 33);
+  assert.equal(Object.keys(want).length, 35);
 });
 
 test("DATE_NAME_PARTS (calc-types.js) is the C# CalcCatalog.DateNameParts list", async () => {

@@ -35,7 +35,7 @@ export const DATE_NAME_PARTS = Object.freeze(["weekday", "month"]);
 /** The row-level text and date functions (wire node `{ k: "fn", fn, args }`). `args` are kinds in order: `text` (any text expression),
  *  `length` (a whole-number literal 0..count), `position` (a whole-number literal 1..count), `separator` (a non-empty text
  *  literal, at most `separator` characters); the date kinds: `date` (a date expression), `unit` (a DATE_UNITS text literal),
- *  `amount` (a whole-number literal, either sign, at most `dateAmount`); `part` (a DATE_NAME_PARTS text literal); `number` (any number expression); `value` (a number, date or text expression). `max` above `args.length` repeats the last kind (CONCAT); `min` below `args.length` makes the trailing arguments optional (MID, FIND). Twin of CalcCatalog.RowFunctions. */
+ *  `amount` (a whole-number literal, either sign, at most `dateAmount`); `part` (a DATE_NAME_PARTS text literal); `month` (a whole-number literal 1..12, a fiscal start month); `number` (any number expression); `value` (a number, date or text expression). `max` above `args.length` repeats the last kind (CONCAT); `min` below `args.length` makes the trailing arguments optional (MID, FIND). Twin of CalcCatalog.RowFunctions. */
 export const ROW_FUNCTIONS = Object.freeze({
   lower: { args: ["text"], result: "text" },
   upper: { args: ["text"], result: "text" },
@@ -69,6 +69,8 @@ export const ROW_FUNCTIONS = Object.freeze({
   isoyear: { args: ["date"], result: "number" },
   datename: { args: ["part", "date"], result: "text" },
   datetrunc: { args: ["unit", "date"], result: "date" },
+  fiscalyear: { args: ["month", "date"], result: "number" },
+  fiscalquarter: { args: ["month", "date"], result: "number" },
   makedate: { args: ["number", "number", "number"], result: "date" },
 });
 
@@ -265,6 +267,10 @@ function typeOf(node, path, categoryOf) {
         } else if (kind === "part") {
           if (a.k !== "str" || !DATE_NAME_PARTS.includes(a.v.toLowerCase())) {
             throw new CalcError(`${upper}'s part must be ${DATE_NAME_PARTS.map((u) => `'${u}'`).join(" or ")} written in the formula as text.`, ap);
+          }
+        } else if (kind === "month") {
+          if (a.k !== "num" || !Number.isInteger(a.v) || a.v < 1 || a.v > 12) {
+            throw new CalcError(`${upper}'s start month must be a whole number from 1 to 12 written in the formula.`, ap);
           }
         } else if (kind === "number") {
           if (t.type !== "number") throw new CalcError(`${upper} needs a number — ${t.name} is ${t.type}.`, ap);
