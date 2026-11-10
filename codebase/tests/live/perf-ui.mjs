@@ -140,8 +140,7 @@ try {
     await waitFor(`${dlg} === null`, 'closed');
     failQueries = true;
     await ev(`__t.drag(__t.chip('qty'), document.querySelector('.ws-shelf--columns .ws-shelf__zone'))`);
-    await waitFor(`!!document.querySelector('.ws-warn, [role=alert]') || true`, 'settled');
-    await b.sleep(800);
+    await waitFor(`!!document.querySelector('.ws-warn, .ws-error, [role=alert]') || document.body.textContent.includes('mock failure')`, 'failure shown');
     failQueries = false;
     await ev(`document.getElementById('perf-btn').click()`);
     await waitFor(`${dlg} !== null`, 'open');

@@ -33,12 +33,15 @@ export function createPerfLog({ capacity = DEFAULT_CAPACITY, now = Date.now } = 
     record(e = {}) {
       push({ at: now(), kind: KINDS.includes(e.kind) ? e.kind : "other", ms: num(e.ms) ?? 0, rows: num(e.rows),
         cached: e.cached === true, renderMs: num(e.renderMs), outcome: OUTCOMES.includes(e.outcome) ? e.outcome : "ok" });
+      const entry = list[list.length - 1];
       notify();
+      return entry; // an opaque handle: pass it to attachRender to time the draw of exactly this entry
     },
-    /** Attach a render time to the newest entry when it has none yet; otherwise add a render-only entry. */
-    attachRender(ms) {
-      const last = list[list.length - 1];
-      if (last && last.kind !== "render" && last.outcome === "ok" && last.renderMs === null) { last.renderMs = num(ms); notify(); }
+    /** Attach a render time to `target` (a handle from record) or, without one, the newest entry, when it has
+     *  none yet; otherwise add a render-only entry. */
+    attachRender(ms, target) {
+      const last = target ?? list[list.length - 1];
+      if (last && list.includes(last) && last.kind !== "render" && last.outcome === "ok" && last.renderMs === null) { last.renderMs = num(ms); notify(); }
       else this.record({ kind: "render", ms: 0, renderMs: ms });
     },
     entries: () => list.map((e) => ({ ...e })),
