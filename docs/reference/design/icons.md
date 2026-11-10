@@ -29,7 +29,7 @@ Look an icon up here before drawing a new one; reuse beats adding.
 | `monitor`, `sun`, `moon` | the **Appearance** toggle: System, Light, Dark |
 | `drill` | the **Drill** Marks slot and the drill breadcrumb (no longer the Hierarchies icon) |
 | `edit` | the pencil **Edit** button built into each row of the Calculated fields dialog, and field renaming |
-| `export`, `import` | **Export** and **Import workbook…** in the worksheet view bar |
+| `export`, `import` | **Export** in the worksheet view bar, and **Workbook (JSON)** / **Import workbook…** in its menu |
 | `more` | the ⋯ **Sheet actions** menu |
 | `sidebar` | collapse / expand the sidebar and the field pane |
 | `plus`, `minus`, `close`, `check`, `chevron` | add, remove, dismiss, tick, disclosure |
@@ -43,7 +43,7 @@ Removed: `bookmark` and `bookmarks` (the Bookmarks feature was removed).
 - **Data source:** `connection`, `database`, `table`, `key`, `link`, `swap`, `story`, `dashboard`.
 - **Marks slots:** `color`, `size`, `label`, `tooltip`, `detail`, `shape`, `path`, `angle`, `pages`, `filter`, `calendar`.
 - **Analytics:** `insights`, `analytics`, `profile` (a histogram: the Data Source field row's Profile button), `ref-line`, `band`, `trend`, `forecast`, `show-me`.
-- **Actions:** `undo`, `redo`, `expand`, `collapse`, `print`, `sort`, `sort-asc`, `sort-desc`, `format`, `eye`, `refresh`, `power`, `duplicate`, `grip`, `search`, `stroke-width`, `arrow-left`, `arrow-right`.
+- **Actions:** `undo`, `redo`, `expand`, `collapse`, `print`, `sort`, `sort-asc`, `sort-desc`, `format`, `paint` (the view bar's Format), `eye`, `refresh`, `power`, `duplicate`, `grip`, `search`, `stroke-width`, `arrow-left`, `arrow-right`.
 - **Chart types:** `chart-bar`, `chart-stacked`, `chart-line`, `chart-area`, `chart-pie`, `chart-donut`, `chart-scatter`, `chart-combo`, `chart-square`, `chart-circle`, `chart-heatmap`, `chart-treemap`, `chart-histogram`, `chart-boxplot`, `chart-waterfall`, `chart-funnel`, `chart-gauge`, `chart-gantt`, `chart-bullet`, `chart-sankey`, `chart-multiples`, `chart-kpi`, `chart-text` (Table reuses `table`).
 
 ## Favicon

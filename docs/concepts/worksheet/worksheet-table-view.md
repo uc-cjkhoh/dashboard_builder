@@ -21,17 +21,22 @@ Format → Conditional formatting, in the Table and Text views. Set per measure,
   - **None**;
   - **Colour scale** — Low → high (surface → `--chart-div-high`), or **Diverging** (`--chart-div-low` ← surface → `--chart-div-high`, the pair the chart scale uses) around a **Midpoint**. Auto midpoint = 0 when values straddle it, else the middle;
   - **Data bars** — from zero; negatives extend left in `--chart-cat-6`.
-- **Rules:** up to **5** rules "value op threshold → Good / Bad / Warning / Note". The first match wins and overrides the scale or bar for that cell. Rules wear the status tokens **and an icon** (✓ / error / warning / info).
+- **Rules:** up to **5** rules "value op threshold → Good / Bad / Warning / Note". A new rule starts with an empty threshold ("Type a value") and applies to nothing, and shows no key entry, until a value is typed. The first match wins and overrides the scale or bar for that cell. Rules wear the status tokens **and an icon** (✓ / error / warning / info).
 - **Contrast:** scale tints top out at 85%, and each cell's ink is picked for ≥ 4.5:1 (`contrast.js`).
 - **Key:** above the table, showing each scale's low / high (and centre) and each rule. While pages are still loading it says "Scales and bars use the N rows loaded so far."
 - Code: rules in `Dashboard/conditional-model.js` (unit-tested).
+
+### Totals and column order
+
+- **Grand totals** and **Subtotals** are in Format for Table and Text (and in Analytics): one setting, `analytics.totals`.
+- Column headers list their members in ascending order, like the rows, unless the sort is on a measure (then the query's order).
 
 ### Paging
 
 Every row is shown, a page at a time.
 
 - The table asks for 500 rows plus the total (`withTotal`). When the pane scrolls within 400px of its end, the next 500 load (`offset`), and the crosstab redraws from all loaded rows.
-- The notice line reads "Rows 1–500 of 12,345 — scroll to load more", then "12,345 rows".
+- The notice line reads "Result rows 1–500 of 12,345 — scroll to load more", then "12,345 result rows".
 - Loaded pages are kept while only presentation changes. Refresh or any plan change starts over.
 - Code: `runTable` in `worksheet-view.js`; rules in `scale-model.js`.
 
@@ -50,7 +55,7 @@ A collapsible **Format** card (`formatPanel`, state on `sheet.format`) changes p
 
 | Setting | Effect |
 |---|---|
-| Number format | auto / compact / currency / percent + decimals (0–3 in the UI; a workbook may carry up to 10) |
+| Number format | auto / compact / currency / percent + decimals (0–3 in the UI; a workbook may carry up to 10). Currency adds a **Symbol** choice: $ (default), €, £, ¥, RM, S$ or Custom… (1–3 visible characters, validated in the UI and on workbook import; `currency-model.js`) |
 | Date format | for date-like dimension labels |
 | Top-N | Caps the chart query's `LIMIT`: All, 5, 10, 20, 50, 100, or **= a number parameter** (P32, clamped to 1–5000). **All** (the default) asks for up to 5000 groups. A set value keeps that many in sort order, so ascending and descending show different groups when there are more. A one-dimension bar / pie / donut / treemap then adds an **Other (N more)** mark (muted ink, not clickable) aggregating the rest. Also sets the histogram bin count |
 | Target | KPI: a goal for the first measure — progress bar + "% of target" ([worksheet-encodings.md](worksheet-encodings.md#date-range--comparison)). Gauge: the arc's maximum. Bullet: the target tick and bands ([worksheet-charts.md](worksheet-charts.md#chart-types)) |

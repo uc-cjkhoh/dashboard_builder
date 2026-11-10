@@ -24,7 +24,7 @@ Data sits on top; view controls sit on the chart ([design/layout.md](../../refer
 2. **Chart card** — flush (no margin, no radius). Its head is the **view bar**, left to right:
    - field-pane toggle;
    - the one chart-type control (`chartTypePicker`, [worksheet-charts.md](worksheet-charts.md#chart-type-control));
-   - sort picker · Format · Export · Refresh · **Full screen** (icon buttons with tooltips and `aria-label`s).
+   - sort picker · Format · Analytics · Refresh · **Full screen** · Export · sheet actions (icon buttons with tooltips and `aria-label`s). **Format** (brush icon) and **Analytics** also carry a text label from 1280 px up, icons only below (`VIEW_LABEL_MIN_WIDTH`). Importing a workbook is in the Export menu ("Import workbook…"), not in the bar.
 
    Below the view bar come the Format card, the result notice and the chart. Full screen and print: [layout.md](../../reference/design/layout.md#full-screen--print).
 
@@ -38,12 +38,12 @@ Data sits on top; view controls sit on the chart ([design/layout.md](../../refer
   - **Show title and caption** / **Show filter cards**.
   - Fit and the two toggles carry only a tick at the end of the row (radio-style for Fit); no icon, no extra text.
 - **Title and caption** under the view bar — click to edit, `Enter` saves, `Esc` cancels. Empty means the automatic one (the tab name, which follows a tab rename at once; "sum amount by customers.name · 2 filters"; a histogram says "distribution of orders.qty", a box plot "orders.qty by customers.country"). Printed too.
-- **Status bar** at the foot of the chart card: marks · rows × columns (Table / Text) · measures · the selection · `Updated hh:mm:ss`. The time is when the data was last read from ClickHouse; a cached result keeps the time it was fetched (`fetchCached` stamps `queriedAt`).
+- **Status bar** at the foot of the chart card: marks · "N × M table" (Table / Text; distinct from the notice line's "N result rows") · measures · the selection · `Updated hh:mm:ss`. The time is when the data was last read from ClickHouse; a cached result keeps the time it was fetched (`fetchCached` stamps `queriedAt`).
 - **Print header** (`beginPrint`): title, caption, date range, filters, the notice, the update time and the print time. It also lists each calculated field the view uses, and those it refers to, as `Calculation: Name = formula` (cut at 200 characters; `data-notes.js`).
 
 ### Field pane
 
-Beside the data header and chart card, the **field pane** holds, top to bottom: **Marks** (soft `--surface-3` slots; accent wash when set or open), the search box, then **each model table that is in a relationship** (a table card with none is held out — [relationships.md](../data-source/relationships.md#rendering)).
+Beside the data header and chart card, the **field pane** holds, top to bottom: **Marks** (soft `--surface-3` slots; accent wash when set or open; collapsed with a one-line summary of the set slots — see [worksheet-marks.md](worksheet-marks.md#marks-slots)), the search box, then **each model table that is in a relationship** (a table card with none is held out — [relationships.md](../data-source/relationships.md#rendering)).
 
 - **Resize** by dragging its right edge, or `←`/`→` on the handle.
 - **Hide / show** with the first button of the view bar; the worksheet takes the room. It sets `aria-expanded` and is remembered in `localStorage` as `dashboardbuilder.fields.collapsed`, like the sidebar rail.
@@ -71,7 +71,7 @@ The popup also has **Data type** (a query-time cast, `cast`: `text` | `number` |
 - **Columns** and **Rows** each hold **any number** of pills. The shelf sets the crosstab axis: Rows dimensions are the **left stub**, Columns dimensions the **top header**.
 - **Reorder** by dragging a pill's grip (⠿) within a shelf or across to the other one. Dropping onto a pill inserts before it; dropping onto empty space appends. Dimension order sets nesting / category order; measure order sets series order.
 - **Invariant: measures always sit behind dimensions** on a shelf. `normaliseShelf` re-sorts after every drop, role change or add, keeping relative order within each group.
-- **Role** defaults from type (numeric → measure, else dimension) and can be changed per pill from its popup. `roleOf(f)` resolves it.
+- **Role** of a newly placed field defaults from its type and name (`defaultRole`, `Dashboard/field-role.js`): a number is a measure, unless its name reads like an identifier (`id`, `*_id`, `orderId`, `*_no`, `*_num`, `*_number`, `*_key`, `*_code`, `*_ref`) — that groups as a dimension, and the field pane lists it under Dimensions ([D96](../../decisions/decisions-dashboards.md)). It can be changed per pill from its popup. `roleOf(f)` resolves a stored pill: its saved role, else numeric → measure, so saved workbooks do not change.
 - **Invalid pills.** A pill whose settings can't be sent (a filter with an unparseable value, a column no longer in the catalog, checked against the Data Source's loaded columns and again when they arrive) is **invalid**. It shows a dashed `--danger-line` border, a warning icon and a tooltip with the reason. It is left out of the query and the chart (a notice names it: `orders.qty isn't in shop.orders — left out.`), never silently altered in the saved sheet.
 
 ### Pill options
@@ -83,11 +83,11 @@ Options are not inline. Right-click a pill (or focus it and press `Enter` / the 
 - a date dimension: the date part radios with **Finer** / **Coarser**, and the **Show all date labels** tick;
 - a filter: its operator radios, **Apply on every dashboard** and the value editor.
 
-The pill itself shows only its name (a filter: name, operator and value), the cast tag, and Remove.
+The pill itself shows its name (a filter: name, operator and value), the cast tag, and Remove. A measure pill also shows its aggregation before the name ("Sum · orders.quantity") and, when a table calculation is on, its short name after it ("· running total"); the name is cut with an ellipsis and the full text ("Sum of orders.quantity · running total") is the tooltip. The automatic caption names a table calculation too ("sum quantity · % of total by …").
 
 ### Aggregation
 
-A measure pill's aggregation radios offer only what the column's type supports (`aggsFor` in `filter-rules.js`):
+The menus show plain labels (Sum, Average, Minimum, Maximum, Median, Percentile…, Standard deviation, Variance, Count, Count distinct, Count non-empty, Attribute (single value) — `agg-labels.js`); the saved values (`avg`, `countDistinct`…) are unchanged. A measure pill's aggregation radios offer only what the column's type supports (`aggsFor` in `filter-rules.js`):
 
 | Column type | Aggregations |
 |---|---|
