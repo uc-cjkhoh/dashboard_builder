@@ -50,10 +50,17 @@ const operand = (h) => (h.op === "between" ? `${String(h.values[0]).trim()} and 
 /** "sum Sales is at least 1000". */
 export const havingSentence = (label, h) => `${label} ${WORDS.get(h.op)} ${operand(h)}`;
 
-/** The short text on the pill: "≥ 1000", "1 – 5" ("" when none). */
+// A threshold with thousands separators ("1000000" → "1,000,000"); anything that isn't a plain number stays as typed.
+const grouped = (v) => {
+  const t = String(v).trim();
+  if (!/^-?\d+(\.\d+)?$/.test(t)) return t;
+  const [whole, frac] = t.split(".");
+  return `${whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}${frac ? `.${frac}` : ""}`;
+};
+/** The short text on the pill: "≥ 1,000", "1 – 5" ("" when none). */
 export function havingBadge(h) {
   if (checkHaving(h).state !== "ok") return "";
-  return h.op === "between" ? `${String(h.values[0]).trim()} – ${String(h.values[1]).trim()}` : `${SYMBOLS[h.op]} ${String(h.value).trim()}`;
+  return h.op === "between" ? `${grouped(h.values[0])} – ${grouped(h.values[1])}` : `${SYMBOLS[h.op]} ${grouped(h.value)}`;
 }
 
 /** The line under the view: the filter in words, and the grain it applies at. `entries` = [{ label, having }] for the shelf measures;

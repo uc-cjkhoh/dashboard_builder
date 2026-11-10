@@ -2,9 +2,15 @@
 const GAP = 8; // --s2: the closest the popup sits to a viewport edge
 
 /** Where a popup of this size goes so it stays inside the viewport (it is moved, never resized, unless larger than the viewport). */
-export function placeMenu({ x, y, width, height, viewW, viewH }) {
+export function placeMenu({ x, y, width, height, viewW, viewH, avoid = null }) {
   const clamp = (v, size, view) => Math.max(GAP, Math.min(v, view - size - GAP > GAP ? view - size - GAP : GAP));
-  return { left: x + width + GAP > viewW ? clamp(x, width, viewW) : x, top: y + height + GAP > viewH ? clamp(y, height, viewH) : y };
+  const at = { left: x + width + GAP > viewW ? clamp(x, width, viewW) : x, top: y + height + GAP > viewH ? clamp(y, height, viewH) : y };
+  // Keep off a rectangle the user is working in (the open tool flyout): beside it when there is room, else as placed.
+  if (avoid && at.left < avoid.right && at.left + width > avoid.left && at.top < avoid.bottom && at.top + height > avoid.top) {
+    if (avoid.right + GAP + width + GAP <= viewW) at.left = avoid.right + GAP;
+    else if (avoid.left - GAP - width >= GAP) at.left = avoid.left - GAP - width;
+  }
+  return at;
 }
 
 /** Does this keydown ask for the context popup? The ContextMenu key and Shift+F10 anywhere on the element; Enter only on the element itself (an inner button keeps its own Enter). */

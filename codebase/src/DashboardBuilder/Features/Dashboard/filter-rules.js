@@ -42,7 +42,7 @@ export function checkFilter(f) {
   }
   if (f.op === "top") {
     if (blank(f.value)) return { state: "empty" };
-    if (!isWhole(f.value, 1, 1000)) return { state: "invalid", error: "Top-N must be a whole number from 1 to 1000." };
+    if (!isWhole(f.value, 1, 1000)) return { state: "invalid", error: "Top N must be 1–1000." };
     if (!f.topBy?.column) return { state: "invalid", error: "Pick a measure to rank by." };
     return { state: "ok" };
   }

@@ -33,4 +33,9 @@ public sealed class SchemaController : ApiControllerBase
     [HttpPost("databases/{db}/tables/{table}/profile")]
     public Task<IResult> Profile(string db, string table, [FromBody] ProfileRequest request, CancellationToken ct)
         => RunAsync(async info => { RequestRules.ValidateProfile(request); return Results.Ok(await Gateway.ProfileColumnAsync(info, db, table, request, ct)); }, StatusCodes.Status404NotFound);
+
+    /// <summary>The newest day of a date column (<c>{ latest: "2024-03-31" | null }</c>), so relative ranges can count from the data.</summary>
+    [HttpGet("databases/{db}/tables/{table}/columns/{column}/latest")]
+    public Task<IResult> Latest(string db, string table, string column, CancellationToken ct)
+        => RunAsync(async info => Results.Ok(new { latest = await Gateway.LatestDayAsync(info, db, table, column, ct) }), StatusCodes.Status404NotFound);
 }

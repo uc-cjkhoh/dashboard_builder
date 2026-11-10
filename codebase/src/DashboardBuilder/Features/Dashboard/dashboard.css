@@ -137,7 +137,7 @@
 /* Filter controls: a compact multi-select for `in`, two bounds for `between`. */
 .ws-pill__in { font-size: var(--fs-body); min-width: 96px; max-width: 150px; padding: 0; }
 .ws-pill__range { display: inline-flex; gap: 4px; align-items: center; }
-.ws-pill__range .ws-pill__val { width: 56px; }
+.ws-pill__range .ws-pill__val { width: 72px; }
 .ws-pill__range-sep { color: var(--ink-3); }
 .ws-pill__ctl { display: inline-flex; gap: 4px; align-items: center; }
 /* Convert-role toggle: a bordered chip so it reads as an action distinct from the remove icon. */
@@ -553,7 +553,7 @@
 .ws-fcard__item { display: flex; align-items: center; gap: var(--s1); cursor: pointer; }
 .ws-fcard__item input { margin: 0; width: 16px; height: 16px; }
 .ws-pill__top { display: inline-flex; align-items: center; gap: var(--s1); }
-.ws-pill__topn { width: 48px; }
+.ws-pill__topn { width: 64px; flex: none; }
 .ws-pill__topby, .ws-pill__topdir, .ws-pill__rel { height: 24px; font-size: var(--fs-body); max-width: 160px; }
 /* Totals: bold on a tinted row / column, a heavier rule above the grand total. */
 .xtab .xt-total { font-weight: 600; background: var(--surface-2); }

@@ -595,14 +595,14 @@ function cleanPeriod(p, where, issues) {
   const day = (v) => (v == null ? null : typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : undefined);
   if (typeof p === "object" && p.calc !== undefined) { issues.push(`${where}: a calculated field can't be used as the date range — removed.`); return null; }
   const field = typeof p === "object" ? cleanPill(p, `${where} period`, issues) : null;
-  const days = ["from", "to", "compareFrom", "compareTo"].map((k) => day(p?.[k]));
+  const days = ["from", "to", "compareFrom", "compareTo", "latest"].map((k) => day(p?.[k]));
   if (!field || p.category !== "temporal" || !PERIOD_PRESETS.has(p.preset) || !PERIOD_COMPARES.has(p.compare) || days.includes(undefined)) {
     issues.push(`${where}: date range cleared.`);
     return null;
   }
-  const [from, to, compareFrom, compareTo] = days;
+  const [from, to, compareFrom, compareTo, latest] = days;
   return { db: p.db, table: p.table, column: p.column, category: "temporal", preset: p.preset, from, to,
-    compare: p.compare, compareFrom, compareTo };
+    compare: p.compare, compareFrom, compareTo, ...(p.anchor === "latest" ? { anchor: "latest", latest } : p.anchor === "today" ? { anchor: "today" } : {}) }; // no anchor = counts from today, as older saves did
 }
 
 function cleanDrill(d, where, issues) {

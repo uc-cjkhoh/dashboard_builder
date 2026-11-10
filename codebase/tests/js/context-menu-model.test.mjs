@@ -27,3 +27,17 @@ test("nextFocus wraps and supports Home / End", () => {
   assert.equal(nextFocus(0, 0, "ArrowDown"), -1);
   assert.equal(nextFocus(1, 4, "x"), 1);
 });
+
+test("placeMenu keeps clear of an avoided rectangle (the open tool flyout)", async () => {
+  const { placeMenu } = await import("../../src/DashboardBuilder/Features/Core/context-menu-model.js");
+  const avoid = { left: 300, top: 200, right: 620, bottom: 500 };
+  const base = { width: 360, height: 300, viewW: 1440, viewH: 900 };
+  // opened inside the flyout: moves to its right edge
+  assert.deepEqual(placeMenu({ ...base, x: 400, y: 330, avoid }), { left: 628, top: 330 });
+  // already clear: unchanged
+  assert.deepEqual(placeMenu({ ...base, x: 700, y: 330, avoid }), { left: 700, top: 330 });
+  // no room on the right: goes to the left of the flyout, or stays when neither side fits
+  assert.deepEqual(placeMenu({ ...base, width: 360, viewW: 760, x: 400, y: 330, avoid }), { left: 392, top: 330 }); // neither side fits: the normal placement
+  assert.equal(placeMenu({ ...base, width: 200, viewW: 700, x: 400, y: 330, avoid: { ...avoid, left: 250, right: 520 } }).left, 42);
+  assert.equal(placeMenu({ ...base, x: 400, y: 330, avoid: null }).left, 400);
+});

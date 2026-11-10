@@ -32,10 +32,26 @@ function addYears(t, n) {
   return d(y, m, Math.min(day, last));
 }
 
-/** A new period on a date field: the last 30 days against the previous 30. */
+/** A new period on a date field: the last 30 days against the previous 30, counted from the data's latest day
+ *  (`latest`, read once from the column) — "today" would empty a chart of older data. */
 export function newPeriod(field) {
   return { db: field.db, table: field.table, column: field.column, category: field.category,
-    preset: "last30", from: null, to: null, compare: "previous", compareFrom: null, compareTo: null };
+    preset: "last30", from: null, to: null, compare: "previous", compareFrom: null, compareTo: null, anchor: "latest", latest: null };
+}
+/** The period with the column's latest day recorded (ignored unless it is a YYYY-MM-DD day). */
+export const withLatest = (period, day) => ({ ...period, latest: ISO.test(day ?? "") ? day : null });
+/** The period with a freshly read latest day, or null when nothing changes (not anchored to the data, another field, no day, same day). */
+export function refreshedLatest(period, field, day) {
+  if (!period || period.anchor !== "latest" || !ISO.test(day ?? "")) return null;
+  if (period.db !== field.db || period.table !== field.table || period.column !== field.column) return null;
+  return period.latest === day ? null : withLatest(period, day);
+}
+const anchorDay = (p) => (p.anchor === "latest" ? parse(p.latest) : null);
+/** What a relative range counts from, for the panel; null for a custom range (it counts from nothing). */
+export function anchorLabel(p) {
+  if (!p || p.preset === "custom") return null;
+  const a = anchorDay(p);
+  return a ? `Counting from the latest data, ${a.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })}` : "Counting from today";
 }
 
 /**
@@ -44,7 +60,7 @@ export function newPeriod(field) {
  */
 export function resolveRange(period, today = todayIn()) {
   if (!period || !PERIOD_PRESETS.has(period.preset)) return null;
-  const t = d(today.getFullYear(), today.getMonth(), today.getDate());
+  const t = anchorDay(period) ?? d(today.getFullYear(), today.getMonth(), today.getDate());
   const y = t.getUTCFullYear(), m = t.getUTCMonth(), q = Math.floor(m / 3) * 3;
   const span = (from, to) => ({ from: iso(from), to: iso(to) });
   switch (period.preset) {
