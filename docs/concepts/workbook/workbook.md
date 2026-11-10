@@ -77,14 +77,15 @@ The current version is **2**; this build also opens version 1. Shapes are in
 
 When a connection is established **and the canvas is empty**, the saved workbook for that server + user reopens.
 
-- A toast says `Restored your last workbook (N tables, M worksheets[, K dashboards][, L stories]).` The dashboards and stories parts appear only when there are some.
+- A toast says `Restored your last workbook (N tables[, U unions/unpivots], M worksheets[, K dashboards][, L stories]).` Unions and unpivots are counted apart from tables; those parts and the dashboards and stories parts appear only when there are some.
+- Before the workbook opens, the live columns of the tables its worksheets use are read; a pill naming a column that isn't there is reported as an issue (`Sheet "X": orders.qty isn't in shop.orders — left out.`) and shown invalid on its shelf ([worksheet.md](../worksheet/worksheet.md)).
 - Tables re-fetch their columns. Relationships draw as soon as both key rows exist.
 - The previously open tab becomes active (a worksheet re-runs its query).
 - A table that no longer exists shows its card's **failed** state with Retry, and keeps its saved keys.
 
 Problems while restoring:
 
-- **Repairs are reported.** If validation reset or dropped anything, the toast adds "N part(s) were reset",
+- **Repairs are reported.** If validation reset or dropped anything, the toast adds "N issue(s) to review" (singular for one),
   and an issues dialog lists each one (first 20, then "…and N more").
 - **An unreadable or newer-format entry** is copied to `<key>:backup-<ISO time>` (an identical backup is not duplicated),
   and a danger toast says so. Saving then continues normally.
@@ -113,7 +114,7 @@ The actions:
 - **Import workbook…** (a worksheet view-bar icon) opens a `.json` file.
   - It needs a connection, because a workbook opens against the connected server.
   - If the canvas isn't empty, a confirm dialog asks before **replacing** it.
-  - The file is validated in full (below). Anything repaired is listed in an issues dialog ("Opened <file> with N issue(s)");
+  - The file is validated in full (below). Anything repaired is listed in an issues dialog ("Opened <file> with 1 issue" / "N issues"), including worksheet pills whose column is not in the connected table's catalog;
     otherwise a toast says "Opened <file>.".
 
 Two more parts save with the workbook but are not managed from this menu:

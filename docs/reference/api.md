@@ -131,7 +131,7 @@ Body `{ column, limit? }` → `{ column, type, category, rows, nulls, distinct, 
 - `distinct` is approximate (`uniq`, non-null). `min` / `max` are given for text, numeric and date columns only.
 - In `top`, `value` null means SQL NULL. A value is cut at 100 characters, counted in characters, not bytes
   (`cut`). Values that differ only after character 100 count together. Ties break by value.
-- An unknown column or table → 404.
+- An unknown column or table → 404. The message names the column and its table (`Unknown column "quantity_typo" in shop.orders.`; the name is stripped of control characters and cut at 64).
 
 ## Rows
 

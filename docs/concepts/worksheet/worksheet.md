@@ -72,7 +72,7 @@ The popup also has **Data type** (a query-time cast, `cast`: `text` | `number` |
 - **Reorder** by dragging a pill's grip (⠿) within a shelf or across to the other one. Dropping onto a pill inserts before it; dropping onto empty space appends. Dimension order sets nesting / category order; measure order sets series order.
 - **Invariant: measures always sit behind dimensions** on a shelf. `normaliseShelf` re-sorts after every drop, role change or add, keeping relative order within each group.
 - **Role** defaults from type (numeric → measure, else dimension) and can be changed per pill from its popup. `roleOf(f)` resolves it.
-- **Invalid pills.** A pill whose settings can't be sent (a filter with an unparseable value, a column no longer in the catalog) is **invalid**. It shows a dashed `--danger-line` border, a warning icon and a tooltip with the reason. It is left out of the query, never silently altered.
+- **Invalid pills.** A pill whose settings can't be sent (a filter with an unparseable value, a column no longer in the catalog, checked against the Data Source's loaded columns and again when they arrive) is **invalid**. It shows a dashed `--danger-line` border, a warning icon and a tooltip with the reason. It is left out of the query and the chart (a notice names it: `orders.qty isn't in shop.orders — left out.`), never silently altered in the saved sheet.
 
 ### Pill options
 
