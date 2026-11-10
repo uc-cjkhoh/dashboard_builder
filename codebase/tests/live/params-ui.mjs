@@ -249,6 +249,39 @@ try {
     must(st.param === pid && st.kind === 'constant', `ref not bound: ${J(st)}`);
   });
 
+  await check('forecast and moving-average window bind a number parameter', async () => {
+    const store = (code) => ev(`(async () => { const st = await import('/features/Core/store.js'); const d = st.activeWorksheet(); ${code} })()`);
+    const saved = await store(`return JSON.stringify(d.sheet);`), savedTax = await store(`return st.parameters.find((x) => x.name === 'Tax').value;`);
+    const f = (c, category, extra = '') => `{ db: 'shop', table: 'orders', column: '${c}', category: '${category}'${extra} }`;
+    await store(`const s = d.sheet; s.chartType = 'line'; s.columns = [${f('region', 'text')}]; s.rows = [${f('amount', 'numeric', ", agg: 'sum'")}]; st.updateSheet(d.id, s); return true;`);
+    await ev(`(() => { if (!document.querySelector('.ws-analytics')) document.querySelector('button[aria-label="Analytics"]').click(); return true; })()`);
+    await waitFor(`[...document.querySelectorAll('.ws-analytics .ws-fmt-field')].some((l) => l.textContent.startsWith('Forecast'))`, 'forecast select');
+    const pid = await ev(`(() => { const f = [...document.querySelectorAll('.ws-analytics .ws-fmt-field')].find((l) => l.textContent.startsWith('Forecast')); const o = [...f.querySelector('select').options].find((o) => o.text === 'Parameter: Tax'); if (!o) throw new Error('no parameter option: ' + f.textContent); const s = f.querySelector('select'); s.value = o.value; s.dispatchEvent(new Event('change')); return o.value; })()`);
+    await settle();
+    const a = await store(`return JSON.stringify(d.sheet.analytics);`);
+    must(JSON.parse(a).forecastParam === pid.slice(6), `forecast not bound: ${a}`);
+    await store(`const p = st.parameters.find((x) => x.name === 'Tax'); st.updateParameter(p.id, { value: 4 }); return true;`);
+    await settle();
+    // the moving-average window, on a table so the cells show the result
+    await store(`const s = d.sheet; s.chartType = 'table'; s.columns = []; s.rows = [${f('region', 'text')}, ${f('amount', 'numeric', ", agg: 'sum', tableCalc: { type: 'moving', along: 'auto', window: 2 }")}]; st.updateSheet(d.id, s); return true;`);
+    await waitFor(`document.querySelectorAll('#ws-chart td.num').length === 3`, 'cells');
+    const cells = () => ev(`[...document.querySelectorAll('#ws-chart td.num')].map((x) => x.textContent.trim()).join('|')`);
+    must(await cells() === '10|15|25', `window 2 cells: ${await cells()}`);
+    await ev(`[...document.querySelectorAll('.ws-shelf--rows .ws-pill')].at(-1).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 300, clientY: 200 }))`);
+    await ev(`[...document.querySelectorAll('.ctx-menu [role^=menuitem]')].find((x) => x.textContent.trim() === 'Table calculation…').click()`);
+    await waitFor(`!!document.querySelector('.ws-calc')`, 'calc panel');
+    const wid = await ev(`(() => { const sel = [...document.querySelectorAll('.ws-calc .ws-fmt-field')].find((x) => x.textContent.startsWith('Window')).querySelector('select'); const o = [...sel.options].find((o) => o.text === 'Parameter: Tax'); if (!o) throw new Error('no parameter option'); sel.value = o.value; sel.dispatchEvent(new Event('change')); return o.value; })()`);
+    await settle();
+    await waitFor(`document.querySelectorAll('#ws-chart td.num').length === 3`, 'cells again');
+    // Tax = 4 -> window 4 over 10, 20, 30 gives 10, 15, 20
+    must(await cells() === '10|15|20', `window follows the parameter: ${await cells()}`);
+    const tc = await store(`return JSON.stringify(d.sheet.rows[1].tableCalc);`);
+    must(JSON.parse(tc).windowParam === wid.slice(6) && JSON.parse(tc).window === 2, `stored: ${tc}`);
+    await ev(`document.querySelector('button[aria-label="Close editor"]').click()`);
+    await store(`Object.assign(d.sheet, JSON.parse(${J(saved)})); delete d.sheet.analytics.forecastParam; st.updateParameter(st.parameters.find((x) => x.name === 'Tax').id, { value: ${J(savedTax)} }); st.updateSheet(d.id, d.sheet); return true;`);
+    await settle();
+  });
+
   await check('delete: a parameter read by a calculation asks first; cancel keeps it; confirm shows the E15 state and sends no query', async () => {
     await openParams();
     await clickIn(pdlg, 'Delete parameter Tax');

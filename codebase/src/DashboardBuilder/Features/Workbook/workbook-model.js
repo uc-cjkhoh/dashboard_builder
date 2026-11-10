@@ -358,7 +358,7 @@ function cleanPill(raw, where, issues, needCategory = true) {
       && (c.window === undefined || (Number.isInteger(c.window) && c.window >= 2 && c.window <= 30))
       && (c.along !== "custom" || (c.using === undefined || (Array.isArray(c.using) && c.using.length <= 16 && new Set(c.using).size === c.using.length && c.using.every((d) => Number.isInteger(d) && d >= 0 && d < 16))));
     if (!ok) { issues.push(`${where}: the table calculation on ${p.table}.${p.column} was invalid — removed.`); delete p.tableCalc; }
-    else p.tableCalc = { type: c.type, along: c.along ?? "auto", ...(c.window !== undefined ? { window: c.window } : {}), ...(c.order ? { order: c.order } : {}), ...(c.ties ? { ties: c.ties } : {}), ...(c.along === "custom" && c.using?.length ? { using: [...c.using] } : {}) };
+    else p.tableCalc = { type: c.type, along: c.along ?? "auto", ...(c.window !== undefined ? { window: c.window } : {}), ...(c.type === "moving" && /^prm\d{1,6}$/.test(c.windowParam ?? "") ? { windowParam: c.windowParam } : {}), ...(c.order ? { order: c.order } : {}), ...(c.ties ? { ties: c.ties } : {}), ...(c.along === "custom" && c.using?.length ? { using: [...c.using] } : {}) };
   }
   // Date part: a known part on a date field only.
   if (p.datePart !== undefined && (!DATE_PARTS.has(p.datePart) || p.category !== "temporal")) {
@@ -521,6 +521,7 @@ function cleanAnalytics(a, where, issues) {
   }
   if (a.trend !== undefined) { if (TRENDS.has(a.trend)) out.trend = a.trend; else bad = true; }
   if (a.forecast !== undefined) { if (FORECASTS.has(a.forecast)) out.forecast = a.forecast; else bad = true; }
+  if (/^prm\d{1,6}$/.test(a.forecastParam ?? "")) out.forecastParam = a.forecastParam; // (checked against the workbook's parameters later)
   if (a.totals != null) { out.totals = { grand: a.totals.grand === true, sub: a.totals.sub === true }; }
   if (bad) issues.push(`${where}: part of the analytics settings was invalid — reset.`);
   return out;
@@ -558,6 +559,8 @@ function dropMissingCalcs(sheet, ids, where, issues) {
 function unlinkParams(sheet, ids, where, issues) {
   for (const f of sheet.filters ?? []) if (f.param && !ids.has(f.param)) { delete f.param; issues.push(`${where}: a filter's parameter is missing — unlinked.`); }
   if (sheet.analytics?.ref?.param && !ids.has(sheet.analytics.ref.param)) { delete sheet.analytics.ref.param; issues.push(`${where}: the reference line's parameter is missing — unlinked.`); }
+  if (sheet.analytics?.forecastParam && !ids.has(sheet.analytics.forecastParam)) { delete sheet.analytics.forecastParam; issues.push(`${where}: the forecast's parameter is missing — unlinked.`); }
+  for (const f of [...(sheet.rows ?? []), ...(sheet.columns ?? [])]) if (f?.tableCalc?.windowParam && !ids.has(f.tableCalc.windowParam)) { delete f.tableCalc.windowParam; issues.push(`${where}: the moving-average window's parameter is missing — unlinked.`); }
   const band = sheet.analytics?.band;
   for (const k of ["fromParam", "toParam"]) if (band?.[k] && !ids.has(band[k])) { delete band[k]; issues.push(`${where}: a band end's parameter is missing — unlinked.`); }
   if (sheet.paramAction && !ids.has(sheet.paramAction.param)) { sheet.paramAction = null; issues.push(`${where}: the parameter action's parameter is missing — removed.`); }

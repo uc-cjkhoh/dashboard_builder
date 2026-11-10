@@ -1013,8 +1013,11 @@ export function initDashboards() {
       if (a.band && a.band.kind && shown.length > 1 && !(a.ref.kind !== "none" && a.ref.kind !== "constant")) // the band reads the chosen measure (typed ranges read none)
         panel.append(fmtSelect("of", shown.map((n, i) => [i, n]), a.ref.measure ?? 0, (v) => set({ ref: { ...a.ref, measure: Number(v) } })));
       panel.append(fmtSelect("Trend", TREND_CHOICES, a.trend, (v) => set({ trend: v })));
-      if (s.chartType === "line" || s.chartType === "area")
-        panel.append(fmtSelect("Forecast", FORECAST_CHOICES, a.forecast, (v) => set({ forecast: Number(v) })));
+      if (s.chartType === "line" || s.chartType === "area") {
+        const numParams = parameters.filter((p) => p.type === "number"), bound = numParams.some((p) => p.id === a.forecastParam) ? a.forecastParam : "";
+        panel.append(fmtSelect("Forecast", [...FORECAST_CHOICES, ...numParams.map((p) => [`param:${p.id}`, `Parameter: ${p.name}`])], bound ? `param:${bound}` : a.forecast,
+          (v) => (v.startsWith("param:") ? set({ forecastParam: v.slice(6) }) : set({ forecast: Number(v), forecastParam: undefined }))));
+      }
       panel.append(el("span", "ws-shelf__note", "Lines and bands read the chosen measure over the rows shown (the “Other” remainder is left out); trend and forecast follow the first, in category order. A forecast extends the trend (linear if none is picked)."));
     } else if (isTable) {
       panel.append(fmtCheck("Grand totals", a.totals.grand, (v) => set({ totals: { ...a.totals, grand: v } })),
@@ -1856,7 +1859,7 @@ export function initDashboards() {
     const set = (patch) => {
       const next = { ...c, ...patch };
       if (next.type === "none") delete f.tableCalc;
-      else f.tableCalc = { type: next.type, along: next.along, ...(next.type === "moving" ? { window: next.window ?? 3 } : {}),
+      else f.tableCalc = { type: next.type, along: next.along, ...(next.type === "moving" ? { window: next.window ?? 3, ...(next.windowParam ? { windowParam: next.windowParam } : {}) } : {}),
         ...(next.type === "rank" && next.order === "asc" ? { order: "asc" } : {}), ...(next.type === "rank" && next.ties && next.ties !== "competition" ? { ties: next.ties } : {}),
         ...(next.along === "custom" ? { using: next.using?.length ? next.using : dims.map((_, d) => d) } : {}) };
       commit(dash, s);
@@ -1871,7 +1874,11 @@ export function initDashboards() {
     const row = el("div", "ws-cf__row");
     row.append(fmtSelect("Calculation", CALC_CHOICES, c.type, (v) => set({ type: v })));
     if (c.type !== "none") row.append(fmtSelect("Along", ALONG_CHOICES, c.along, (v) => set({ along: v })));
-    if (c.type === "moving") row.append(fmtSelect("Window", WINDOW_CHOICES.map((n) => [n, `${n} values`]), c.window ?? 3, (v) => set({ window: Number(v) })));
+    if (c.type === "moving") {
+      const numParams = parameters.filter((p) => p.type === "number"), bound = numParams.some((p) => p.id === c.windowParam) ? c.windowParam : "";
+      row.append(fmtSelect("Window", [...WINDOW_CHOICES.map((n) => [n, `${n} values`]), ...numParams.map((p) => [`param:${p.id}`, `Parameter: ${p.name}`])], bound ? `param:${bound}` : c.window ?? 3,
+        (v) => (v.startsWith("param:") ? set({ windowParam: v.slice(6) }) : set({ window: Number(v), windowParam: undefined }))));
+    }
     if (c.type === "rank") {
       row.append(fmtSelect("Order", RANK_ORDERS, c.order ?? "desc", (v) => set({ order: v })), fmtSelect("Ties", RANK_TIES, c.ties ?? "competition", (v) => set({ ties: v })));
     }
@@ -2067,6 +2074,8 @@ export function initDashboards() {
     const used = new Set([...s.filters, ...sharedFilters].map((f) => f.param).filter(Boolean));
     if (s.format?.topNParam) used.add(s.format.topNParam);
     if (s.analytics?.ref?.param) used.add(s.analytics.ref.param);
+    if (s.analytics?.forecastParam) used.add(s.analytics.forecastParam);
+    for (const f of [...s.rows, ...s.columns]) if (f.tableCalc?.windowParam) used.add(f.tableCalc.windowParam);
     for (const k of ["fromParam", "toParam"]) if (s.analytics?.band?.[k]) used.add(s.analytics.band[k]);
     const calcNames = new Set();
     for (const f of pillSlots(s)) if (isCalcPill(f)) calcParamNames(calculations, f.calc).forEach((n) => calcNames.add(n));
