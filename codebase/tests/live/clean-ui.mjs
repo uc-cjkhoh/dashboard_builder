@@ -104,10 +104,22 @@ try {
     const c = JSON.parse(await calcs()).at(-1);
     must(c[0] === 'tags (recoded)' && c[1] === "CASE [shop.sales.tags] WHEN 'NY' THEN 'New York' WHEN 'CA' THEN 'California' ELSE [shop.sales.tags] END", J(c));
   });
+  await check('replace missing can also replace empty text', async () => {
+    await menu('tags'); await ev(`[...document.querySelectorAll('.ctx-menu .menu__item')].find((x) => x.textContent.trim() === 'Clean…').click()`);
+    await waitFor(`${sd} !== null`, 'dialog');
+    await set('select', 'nullTo');
+    await set('input[type=text]', 'none');
+    await ev(`(() => { const c = ${sd}.querySelector('input[type=checkbox]'); c.checked = true; c.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+    must((await ev(`${sel('code')}.textContent`)).includes("IF(ISNULL([shop.sales.tags]) OR [shop.sales.tags] = ''"), 'preview');
+    await shot('clean-empty-light.png');
+    await ev(`${create}.click()`); await waitFor(`${sd} === null`, 'closed');
+    must(JSON.parse(await calcs()).at(-1)[1] === "IF(ISNULL([shop.sales.tags]) OR [shop.sales.tags] = '', 'none', [shop.sales.tags])", 'formula');
+  });
   await check('number field: only Replace missing, with a number', async () => {
     await menu('q1'); await ev(`[...document.querySelectorAll('.ctx-menu .menu__item')].find((x) => x.textContent.trim() === 'Clean…').click()`);
     await waitFor(`${sd} !== null`, 'dialog');
     must(await ev(`${sel('select')}.options.length`) === 1, 'one operation');
+    must(await ev(`${sd}.querySelector('input[type=checkbox]').closest('label').hidden`) === true, 'no empty-text option on numbers');
     await set('input[type=text]', 'abc');
     must(await ev(`${create}.disabled`) === true, 'rejects text');
     await set('input[type=text]', '0');

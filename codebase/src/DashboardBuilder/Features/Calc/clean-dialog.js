@@ -23,10 +23,12 @@ export function openCleanDialog({ field, fieldName, category }) {
   const pairs = el("textarea", "input clean-dialog__pairs"); pairs.rows = 5; pairs.spellcheck = false; pairs.placeholder = "NY = New York\nCA = California";
   const keep = el("input"); keep.type = "checkbox"; keep.checked = true;
   const keepRow = el("label", "clean-dialog__keep"); keepRow.append(keep, el("span", null, "Keep values not listed"));
+  const empty = el("input"); empty.type = "checkbox";
+  const emptyRow = el("label", "clean-dialog__keep"); emptyRow.append(empty, el("span", null, "Also replace empty text"));
   const fValue = mk("Use this value", "value", value), fPairs = mk(`Old = new, one per line (up to ${CLEAN_MAX_RECODE})`, "pairs", pairs);
   const preview = el("code", "clean-dialog__formula");
   const msg = el("div", "grp-error"); msg.setAttribute("role", "alert");
-  body.append(mk("Operation", "op", op), fValue, fPairs, keepRow, preview, msg);
+  body.append(mk("Operation", "op", op), fValue, emptyRow, fPairs, keepRow, preview, msg);
   const foot = el("div", "dialog__foot");
   const cancel = makeButton("Cancel", "btn"), create = makeButton("Create field", "btn btn--primary");
   foot.append(cancel, create);
@@ -39,16 +41,16 @@ export function openCleanDialog({ field, fieldName, category }) {
       if (r.error) return { ok: false, error: r.error };
       return cleanPlan({ field, category, op: "recode", pairs: r.pairs, keep: keep.checked, calcs: calculations, name: fieldName });
     }
-    return cleanPlan({ field, category, op: op.value, value: value.value, calcs: calculations, name: fieldName });
+    return cleanPlan({ field, category, op: op.value, value: value.value, emptyToo: empty.checked, calcs: calculations, name: fieldName });
   };
   const refresh = () => {
-    fValue.hidden = op.value !== "nullTo"; fPairs.hidden = keepRow.hidden = op.value !== "recode";
+    fValue.hidden = op.value !== "nullTo"; emptyRow.hidden = op.value !== "nullTo" || category !== "text"; fPairs.hidden = keepRow.hidden = op.value !== "recode";
     const p = plan();
     create.disabled = !p.ok;
     msg.textContent = p.ok || (op.value === "recode" && !pairs.value.trim()) ? "" : p.error;
     preview.textContent = p.ok ? `${p.calcs[0].name} = ${p.calcs[0].formula}` : "";
   };
-  for (const c of [op, value, pairs, keep]) c.addEventListener(c === op || c === keep ? "change" : "input", refresh);
+  for (const c of [op, value, pairs, keep, empty]) c.addEventListener(c === op || c === keep || c === empty ? "change" : "input", refresh);
   value.addEventListener("keydown", (e) => { if (e.key === "Enter" && !create.disabled) { e.preventDefault(); create.click(); } });
   refresh();
   cancel.addEventListener("click", () => closeDialog(dlg));

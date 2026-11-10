@@ -33,10 +33,10 @@ export function parseRecode(text) {
 
 /**
  * `field` { db, table, column }; `category` the column's category; `op` one of cleanOps; `value` (nullTo: the replacement, text or a
- * number as typed); `pairs` [{ from, to }] and `keep` (recode: keep unmatched values, default true); `calcs` the workbook's
+ * number as typed); `emptyToo` (nullTo on text: an empty string is replaced as well as NULL); `pairs` [{ from, to }] and `keep` (recode: keep unmatched values, default true); `calcs` the workbook's
  * calculations; `name` an optional base name (default: the column). { ok: true, calcs: [{ name, formula }] } or { ok: false, error }.
  */
-export function cleanPlan({ field, category, op, value, pairs, keep = true, calcs, name }) {
+export function cleanPlan({ field, category, op, value, emptyToo = false, pairs, keep = true, calcs, name }) {
   if (!SUFFIX[op]) return { ok: false, error: "Pick a cleaning operation." };
   if (!cleanOps(category).length) return { ok: false, error: "A date field can't be cleaned here." };
   if (!cleanOps(category).includes(op)) return { ok: false, error: "That operation needs a text field." };
@@ -57,7 +57,7 @@ export function cleanPlan({ field, category, op, value, pairs, keep = true, calc
     } else {
       const t = String(value ?? "");
       if (tooLong(t)) return { ok: false, error: textTooLong };
-      formula = `IFNULL(${ref}, ${lit(t)})`;
+      formula = emptyToo ? `IF(ISNULL(${ref}) OR ${ref} = '', ${lit(t)}, ${ref})` : `IFNULL(${ref}, ${lit(t)})`;
     }
   } else {
     if (!Array.isArray(pairs) || !pairs.length) return { ok: false, error: "Add at least one value to recode." };

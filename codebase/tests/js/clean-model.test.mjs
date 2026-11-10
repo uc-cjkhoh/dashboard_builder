@@ -32,6 +32,20 @@ test("replace empty: text literal with doubled quotes, or a number", () => {
   assert.match(cleanPlan({ field: F, category: "numeric", op: "nullTo", value: "1e999", calcs: [] }).error, /number/);
   assert.match(plan({ op: "nullTo", value: "x".repeat(101) }).error, /100/);
 });
+test("replace empty, also empty text: IF(ISNULL OR = '') on a text field", () => {
+  const p = plan({ op: "nullTo", value: "n/a", emptyToo: true });
+  assert.equal(p.calcs[0].formula, "IF(ISNULL([shop.orders.status]) OR [shop.orders.status] = '', 'n/a', [shop.orders.status])");
+  assert.equal(p.calcs[0].name, "status (filled)");
+  compiles(p);
+  const q = plan({ op: "nullTo", value: "it's", emptyToo: true });
+  assert.ok(q.calcs[0].formula.includes("'it''s'"));
+  compiles(q);
+  // a number field has no empty string: the flag is ignored
+  const n = cleanPlan({ field: { ...F, column: "qty" }, category: "numeric", op: "nullTo", value: "0", emptyToo: true, calcs: [] });
+  assert.equal(n.calcs[0].formula, "IFNULL([shop.orders.qty], 0)");
+  // off by default
+  assert.equal(plan({ op: "nullTo", value: "x" }).calcs[0].formula, "IFNULL([shop.orders.status], 'x')");
+});
 test("recode: simple CASE, unmatched values kept", () => {
   const p = plan({ op: "recode", pairs: [{ from: "NY", to: "New York" }, { from: "CA", to: "California" }] });
   assert.equal(p.calcs[0].formula, "CASE [shop.orders.status] WHEN 'NY' THEN 'New York' WHEN 'CA' THEN 'California' ELSE [shop.orders.status] END");
