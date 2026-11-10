@@ -273,6 +273,25 @@ try {
     await pick('Mark border', 'none');
   });
 
+  await check('Border colour: appears with a border, picks a palette token; Medium is 2 px; None hides the choice', async () => {
+    await setType('Bar'); await openFormat(); await chartReady();
+    must(!(await hasField('Border colour')), 'no colour choice while the border is none');
+    await pick('Mark border', 'medium'); await chartReady();
+    must(await hasField('Border colour'), 'colour choice with a border');
+    let o = await opt();
+    must(o.series[0].itemStyle.borderWidth === 2, `medium ${J(o.series[0].itemStyle)}`);
+    const muted = o.series[0].itemStyle.borderColor;
+    await pick('Border colour', 'accent'); await chartReady();
+    o = await opt();
+    const accent = await ev(`getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()`);
+    must(o.series[0].itemStyle.borderColor !== muted && o.series[0].itemStyle.borderColor.length > 0, `accent ${o.series[0].itemStyle.borderColor} vs ${muted} (token ${accent})`);
+    await shot('bar-medium-accent-light.png');
+    await theme('dark'); await settle(400); await shot('bar-medium-accent-dark.png'); await theme('light'); await settle(400);
+    await pick('Mark border', 'none');
+    await dragChip('channel', `__t.zone('columns')`); await settle(400);
+    await setType('Heatmap'); await openFormat(); await chartReady(); // the state the next check expects
+  });
+
   await check('Marker size: scatter, line and circle heatmap use it; out of range is refused; blank is automatic', async () => {
     // circle heatmap
     await pick('Shape', 'circle'); await chartReady();

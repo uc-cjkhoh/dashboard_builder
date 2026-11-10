@@ -43,7 +43,7 @@ test("secondary mark type: line, bar, area; anything else is line", () => {
 });
 
 test("mark border: none draws no stroke; thin and thick use the muted border colour", () => {
-  assert.deepEqual(MARK_BORDER_CHOICES.map((c) => c[0]), ["none", "thin", "thick"]);
+  assert.deepEqual(MARK_BORDER_CHOICES.map((c) => c[0]), ["none", "thin", "medium", "thick"]);
   assert.deepEqual(markBorder("none", "#abc"), { borderColor: "#abc", borderWidth: 0 });
   assert.deepEqual(markBorder("thin", "#abc"), { borderColor: "#abc", borderWidth: 1 });
   assert.deepEqual(markBorder("thick", "#abc"), { borderColor: "#abc", borderWidth: 3 });
@@ -180,4 +180,23 @@ test("mark border reaches the P36 types: a custom shape gets a stroke, none keep
   assert.deepEqual(strokeOf(undefined, "#abc"), {});
   assert.deepEqual(strokeOf("thin", "#abc"), { stroke: "#abc", lineWidth: 1 });
   assert.deepEqual(strokeOf("thick", "#abc"), { stroke: "#abc", lineWidth: 3 });
+});
+
+import { borderInk, MARK_BORDER_COLOUR_CHOICES } from "../../src/DashboardBuilder/Features/Dashboard/mark-style-model.js";
+test("border width Medium and border colour from palette tokens", () => {
+  assert.deepEqual(MARK_BORDER_CHOICES.map((c) => c[0]), ["none", "thin", "medium", "thick"]);
+  assert.equal(markBorder("medium", "#abc").borderWidth, 2);
+  assert.deepEqual(strokeOf("medium", "#abc"), { stroke: "#abc", lineWidth: 2 });
+  const c = { muted: "m", ink: "i", surface: "s", brand: "a" };
+  assert.deepEqual(MARK_BORDER_COLOUR_CHOICES.map((x) => x[0]), ["muted", "ink", "surface", "accent"]);
+  assert.deepEqual(["muted", "ink", "surface", "accent", undefined, "pink"].map((n) => borderInk(n, c)), ["m", "i", "s", "a", "m", "m"]);
+});
+test("workbook: markBorderColor optional, validated, rejected not clamped", () => {
+  const ok = roundTrip({ markBorder: "medium", markBorderColor: "accent" });
+  assert.deepEqual([ok.worksheets[0].sheet.format.markBorder, ok.worksheets[0].sheet.format.markBorderColor], ["medium", "accent"]);
+  const bad = roundTrip({ markBorderColor: "#ff0000" });
+  assert.equal(bad.worksheets[0].sheet.format.markBorderColor, "muted");
+  assert.ok(bad.issues.some((i) => /border colour/.test(i)), JSON.stringify(bad.issues));
+  const old = roundTrip({ markBorder: "thin" });
+  assert.equal(old.issues.length, 0); assert.equal(old.worksheets[0].sheet.format.markBorderColor, undefined);
 });

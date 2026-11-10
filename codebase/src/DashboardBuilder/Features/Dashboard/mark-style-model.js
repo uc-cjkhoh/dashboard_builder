@@ -1,8 +1,12 @@
 // Marker size and mark borders — pure, DOM-free (tests/js/charts2.test.mjs).
-import { MARK_BORDERS, MARKER_SHAPES } from "../Core/sheet-schema.js";
+import { MARK_BORDERS, MARK_BORDER_COLOURS, MARKER_SHAPES } from "../Core/sheet-schema.js";
 
-export const MARK_BORDER_CHOICES = [["none", "None"], ["thin", "Thin"], ["thick", "Thick"]];
-const WIDTHS = { none: 0, thin: 1, thick: 3 }; // px
+export const MARK_BORDER_CHOICES = [["none", "None"], ["thin", "Thin"], ["medium", "Medium"], ["thick", "Thick"]];
+const WIDTHS = { none: 0, thin: 1, medium: 2, thick: 3 }; // px
+export const MARK_BORDER_COLOUR_CHOICES = [["muted", "Muted"], ["ink", "Ink"], ["surface", "Surface"], ["accent", "Accent"]];
+
+/** The token colour a border colour name picks from the resolved chart tokens `c` (muted when unset or unknown). */
+export const borderInk = (name, c) => (MARK_BORDER_COLOURS.has(name) ? ({ muted: c.muted, ink: c.ink, surface: c.surface, accent: c.brand })[name] : c.muted);
 /** The marker-size range Format accepts (whole px). */
 export const MARKER_SIZE = Object.freeze({ min: 4, max: 40 });
 
