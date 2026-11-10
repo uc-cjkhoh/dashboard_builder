@@ -161,6 +161,7 @@ try {
   });
 
   await check('closing a tab offers Undo: the tab, its dashboard widgets, button links and story steps come back', async () => {
+    await ev(`(async () => { const { bus } = await import('/features/Core/store.js'); bus.dispatchEvent(new Event('workbook:reset')); })()`);
     await addTab('worksheet'); await addTab('dashboard'); await addTab('story');
     const name = await store(`const ws = st.worksheets()[0], db = st.dashboards()[0], s = st.stories()[0];
       st.updateSheet(ws.id, { ...ws.sheet, columns: [{ db: 'shop', table: 'orders', column: 'region', category: 'text' }] });
@@ -189,6 +190,27 @@ try {
     must(await store(`return st.stories()[0].steps.length === 1;`), 'story steps lost');
     await store(`for (const t of [...st.tabs]) st.closeTab(t.id); return true;`);
     await ev(`document.querySelector('.tab-undo__btn').click()`); // stale: the latest snapshot is gone only after Undo; a click with none is harmless
+  });
+
+  await check('Undo: two closes stack, and a workbook reset drops the snapshots and hides the toast', async () => {
+    await ev(`(async () => { const { bus } = await import('/features/Core/store.js'); bus.dispatchEvent(new Event('workbook:reset')); })()`);
+    await addTab('worksheet'); await addTab('worksheet');
+    const [n1, n2] = await store(`return st.worksheets().map((w) => w.name);`);
+    for (const n of [n1, n2]) {
+      await ev(`document.querySelector('.tab__close[aria-label="Close ${n}"]').click()`);
+      await waitFor(`!document.querySelector('.tab__close[aria-label="Close ${n}"]') || !!document.querySelector('dialog[open]')`, 'close');
+      if (await ev(`!!document.querySelector('dialog[open]')`)) await ev(`${dialogButton('Close')}.click()`);
+      await waitFor(`!document.querySelector('.tab__close[aria-label="Close ${n}"]')`, 'closed ' + n);
+    }
+    await ev(`document.querySelector('.tab-undo__btn').click()`);
+    must(J(await labels()) === J([n2]), `newest close first: ${J(await labels())}`);
+    must(!(await ev(`document.querySelector('.tab-undo').hidden`)) && (await ev(`document.querySelector('.tab-undo').textContent`)).startsWith(`Closed “${n1}”`), 'the older close is offered next');
+    await ev(`(async () => { const { bus } = await import('/features/Core/store.js'); bus.dispatchEvent(new Event('workbook:reset')); })()`);
+    await waitFor(`document.querySelector('.tab-undo').hidden`, 'toast hidden by the reset');
+    await ev(`document.querySelector('.tab-undo__btn').click()`);
+    must(J(await labels()) === J([n2]), 'a stale tab came back after the reset');
+    await store(`for (const t of [...st.tabs]) st.closeTab(t.id); return true;`);
+    await ev(`(async () => { const { bus } = await import('/features/Core/store.js'); bus.dispatchEvent(new Event('workbook:reset')); })()`);
   });
 
   await check('export writes workbook v2: worksheets, dashboards, tabs order, active', async () => {

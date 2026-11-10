@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { captureClose, sealClose, planRestore, closedToast } from "../../src/DashboardBuilder/Features/Tabs/close-undo.js";
+import { captureClose, sealClose, planRestore, closedToast, restoredToast } from "../../src/DashboardBuilder/Features/Tabs/close-undo.js";
 
 const ws = (id, name) => ({ id, kind: "worksheet", name, sheet: {} });
 const db = (id, name, widgets) => ({ id, kind: "dashboard", name, widgets, size: null, notes: "" });
@@ -82,6 +82,12 @@ test("refused when the tab is already back or the workbook is full", () => {
   assert.match(full.error, /at most 1 tabs|close one first/);
 });
 
-test("the toast names the tab; restoring reports what was skipped", () => {
+test("the toasts name the tab; restoring reports dashboards skipped because they changed", () => {
   assert.equal(closedToast({ name: "Worksheet 1" }), "Closed “Worksheet 1”.");
+  assert.equal(restoredToast({ name: "W" }, []), "Restored “W”.");
+  assert.equal(restoredToast({ name: "W" }, ["D", "E"]), "Restored “W”. D, E changed since, so what it showed was not brought back.");
+  const tabs = [ws("a", "A"), db("d", "D", [{ id: "w1", kind: "sheet", sheetId: "a" }])];
+  const snap = close(tabs, "a");
+  tabs[0].widgets = [];
+  assert.match(restoredToast(snap.tab, planRestore(snap, tabs, 50).skipped), /D changed since/);
 });

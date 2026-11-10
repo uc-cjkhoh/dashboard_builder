@@ -33,4 +33,7 @@ export function planRestore(snap, tabs, maxTabs) {
   return { ok: true, index: Math.min(snap.index, tabs.length), writes, skipped };
 }
 
+/** The toast after Undo: names dashboards / stories that were edited since and so did not get their content back. */
+export const restoredToast = (tab, skipped) => (skipped.length ? `Restored “${tab.name}”. ${skipped.join(", ")} changed since, so what it showed was not brought back.` : `Restored “${tab.name}”.`);
+
 export const closedToast = (tab) => `Closed “${tab.name}”.`;

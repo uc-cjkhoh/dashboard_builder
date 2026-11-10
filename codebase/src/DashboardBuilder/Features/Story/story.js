@@ -99,7 +99,7 @@ export function initStory() {
       const r = addStep(story.steps, select.value, cap.value);
       if (!r.ok) {
         err.textContent = r.error; err.hidden = false;
-        if (/caption/i.test(r.error)) { cap.setAttribute("aria-invalid", "true"); cap.setAttribute("aria-describedby", err.id); cap.focus(); }
+        if (r.field === "caption") { cap.setAttribute("aria-invalid", "true"); cap.setAttribute("aria-describedby", err.id); cap.focus(); }
         return;
       }
       err.hidden = true;
@@ -210,7 +210,7 @@ export function initStory() {
     const input = h("textarea", "story-edit__input");
     input.id = lab.htmlFor = id;
     input.rows = 3;
-    input.maxLength = LIMITS.stepCaption;
+    // no maxlength: an over-long paste is refused on Save with the count, never cut
     input.value = story.steps[i].caption;
     input.setAttribute("aria-describedby", `${id}-m`);
     const meta = h("p", "story-edit__meta");

@@ -9,7 +9,7 @@ const STEP_KINDS = new Set(["worksheet", "dashboard"]);
 export function validateCaption(raw) {
   if (typeof raw !== "string") return { ok: false, error: "The caption must be text." };
   const r = text(raw, { label: "The caption", max: LIMITS.stepCaption });
-  return r.ok ? r : { ok: false, error: `The caption must be at most ${LIMITS.stepCaption} characters (it has ${raw.trim().length}).` };
+  return r.ok ? r : { ok: false, field: "caption", error: `The caption must be at most ${LIMITS.stepCaption} characters (it has ${raw.trim().length}).` };
 }
 
 const full = () => `A story holds at most ${LIMITS.storySteps} steps — remove one first.`;

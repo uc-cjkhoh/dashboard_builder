@@ -97,6 +97,7 @@ async function clearWorkspace() {
   restoring = true;
   try {
     clearModel();
+    bus.dispatchEvent(new Event("workbook:reset")); // Tabs/: drop the close-undo snapshots
     for (const t of [...tabs]) closeTab(t.id);
     showModel();
     setTheme(DEFAULT_THEME); // the saved workbook keeps its theme; it comes back on reconnect
@@ -171,6 +172,7 @@ function openWorkbook(wb) {
   restoring = true;
   try {
     clearModel();
+    bus.dispatchEvent(new Event("workbook:reset")); // Tabs/: drop the close-undo snapshots
     for (const t of [...tabs]) closeTab(t.id);
     setSharedFilters(wb.sharedFilters ?? []); // before the tabs, so a worksheet's first query applies them
     setAllFieldMeta(wb.fields ?? {});

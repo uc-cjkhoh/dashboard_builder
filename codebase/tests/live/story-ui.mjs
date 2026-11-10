@@ -163,7 +163,8 @@ try {
     await waitFor(`!!document.querySelector('#story-caption textarea')`, 'editor');
     must(await ev(`document.querySelector('#story-caption label').textContent === 'Caption' && document.querySelector('#story-caption textarea').labels[0].textContent === 'Caption'`), 'label');
     must(await ev(`document.activeElement === document.querySelector('#story-caption textarea')`), 'editor not focused');
-    await ev(`(() => { const t = document.querySelector('#story-caption textarea'); t.maxLength = 1000; t.value = 'x'.repeat(301); t.dispatchEvent(new Event('input')); document.querySelector('#story-caption form').requestSubmit(); return true; })()`);
+    must(await ev(`!document.querySelector('#story-caption textarea').hasAttribute('maxlength')`), 'the editor cuts a long paste at maxlength');
+    await ev(`(() => { const t = document.querySelector('#story-caption textarea'); t.value = 'x'.repeat(301); t.dispatchEvent(new Event('input')); document.querySelector('#story-caption form').requestSubmit(); return true; })()`);
     must(/300/.test(await ev(`document.querySelector('.story-edit__error').textContent`)) && await ev(`document.querySelector('#story-caption textarea').getAttribute('aria-invalid') === 'true'`), 'no limit error');
     must(await store(`return st.activeStory().steps[0].caption === 'Revenue is led by APAC.';`), 'an over-long caption was stored or cut');
     await ev(`(() => { const t = document.querySelector('#story-caption textarea'); t.value = 'half typed'; t.dispatchEvent(new Event('input')); return true; })()`);

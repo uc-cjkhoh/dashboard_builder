@@ -4,7 +4,7 @@ import {
 } from "../Core/store.js";
 import { dashboardsUsing } from "../Board/board-model.js";
 import { dashboardsLinking } from "../Board/nav-model.js";
-import { captureClose, sealClose, planRestore, closedToast } from "./close-undo.js";
+import { captureClose, sealClose, planRestore, closedToast, restoredToast } from "./close-undo.js";
 import { storiesUsing } from "../Story/story-model.js";
 import { icon } from "../Core/icons.js";
 import { wireMenu } from "../Core/menu.js";
@@ -167,26 +167,30 @@ export function initTabs() {
   undoBtn.textContent = "Undo";
   undoBar.append(undoText, undoBtn);
   document.body.append(undoBar);
-  let undoSnap = null, undoTimer = 0;
-  const hideUndo = () => { clearTimeout(undoTimer); undoSnap = null; toggle(undoBar, false); };
-  function offerUndo(snap) {
-    undoSnap = snap;
+  const undoStack = []; // the last few closes, newest last; Undo takes the newest
+  let undoTimer = 0;
+  const hideUndo = () => { clearTimeout(undoTimer); undoStack.length = 0; toggle(undoBar, false); };
+  function showUndo() {
+    clearTimeout(undoTimer);
+    const snap = undoStack.at(-1);
+    if (!snap) { toggle(undoBar, false); return; }
     undoText.textContent = closedToast(snap.tab);
     toggle(undoBar, true);
-    clearTimeout(undoTimer);
     undoTimer = setTimeout(hideUndo, 10000);
   }
+  function offerUndo(snap) { undoStack.push(snap); if (undoStack.length > 5) undoStack.shift(); showUndo(); }
+  bus.addEventListener("workbook:reset", hideUndo); // a restore, import or disconnect replaces every tab: a snapshot of the old ones must never come back
   undoBtn.addEventListener("click", () => {
-    const snap = undoSnap;
+    const snap = undoStack.pop();
     if (!snap) return;
     const plan = planRestore(snap, tabs, LIMITS.tabs);
-    hideUndo();
+    showUndo(); // the next older close, if any
     if (!plan.ok) { toast(plan.error, "danger"); return; }
     tabs.splice(plan.index, 0, snap.tab);
     for (const w of plan.writes) (w.kind === "dashboard" ? setWidgets : setSteps)(w.id, w.value);
     emit("tabs:changed");
     if (snap.wasActive) switchTab(snap.tab.id);
-    toast(plan.skipped.length ? `Restored “${snap.tab.name}”. ${plan.skipped.join(", ")} changed since, so what it showed was not brought back.` : `Restored “${snap.tab.name}”.`, "ok");
+    toast(restoredToast(snap.tab, plan.skipped), "ok");
     strip.querySelector(".tab.is-active .tab__label")?.focus();
   });
 
