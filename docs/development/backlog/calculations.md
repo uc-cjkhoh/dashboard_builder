@@ -22,3 +22,7 @@ Rules for new work:
 - **Table-calculation formulas** (IDs: T05-18; priority P2) — Open: only the fixed quick-calculation list exists; no custom table functions. Needs: table-calculation polish.
 - **Level of detail** (IDs: T05-22, T05-23, T05-24, T05-25, T05-26, T05-27; priority P2) — Open: `FIXED`, `INCLUDE`, `EXCLUDE`, first-event cohort, aggregate-per-entity-then-average, higher-level benchmark. Needs: filter-order rules written down first. LOD compiles to SQL; whether it is a subquery or a window is settled in [platform.md](platform.md).
 - **P25 data-pane authoring** (priority P1; effort L) — Open: sets (named member subsets), bins (numeric buckets), folders. Groups and reusable hierarchies are in [data-model.md](data-model.md). Needs: calculated fields (built); a decision recorded before building.
+
+## Beginner-test follow-ups
+
+- **Calculated-field polish** — Open: parameters and hierarchies are still only in their sidebar dialogs (not searchable in the field pane); the Group dialog's Esc/Cancel still discards an edited draft without asking (the calculated-field dialog asks). Needs: none.
