@@ -293,7 +293,7 @@ export function createWorksheetView(container, getContext, options = {}) {
     // Only same-table, usable filters apply (the single-table endpoints take in/between too); the rest are counted and
     // reported in the notice.
     const { apply: filters, ignored } = statFilters(s.filters.map((f) => withParams(f, c.plan)), db, table, (f) => toServerFilter(f, c.plan));
-    const ignoredNote = ignored > 0 ? `${ignored} filter${ignored === 1 ? "" : "s"} on other tables or calculated fields ${ignored === 1 ? "doesn't" : "don't"} apply to a histogram.` : null;
+    const ignoredNote = ignored > 0 ? `${ignored} filter${ignored === 1 ? "" : "s"} on other tables or a calculation across tables ${ignored === 1 ? "doesn't" : "don't"} apply to a histogram.` : null;
     const format = s.format ?? defaultFormat();
     // Reuse Top-N as the bucket count when set (else the server default); server clamps 1..100.
     const req = { column: numeric.column, buckets: s.format?.topN ?? null, filters };

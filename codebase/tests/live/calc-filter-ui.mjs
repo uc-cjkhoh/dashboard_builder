@@ -20,6 +20,7 @@ const COLUMNS = {
 };
 const REGIONS = ['APAC', 'EU', 'US'];
 const queries = [];     // every /api/query body, in order
+const histograms = [];  // every histogram body, in order
 let tables = ['orders', 'customers'];
 function answer({ method, path, body }) {
   if (path === '/api/connection' && method === 'GET') return { json: { connected: false } };
@@ -29,6 +30,7 @@ function answer({ method, path, body }) {
   const m = path.match(/^\/api\/databases\/shop\/tables\/(\w+)\/columns$/);
   if (m && COLUMNS[m[1]]) return { json: COLUMNS[m[1]].map(([name, type, category]) => ({ name, type, category })) };
   if (/\/columns\/\w+\/distinct/.test(path)) return { json: REGIONS };
+  if (/\/tables\/\w+\/histogram$/.test(path)) { histograms.push(body); return { json: { bins: [{ x0: 0, x1: 10, count: 3 }, { x0: 10, x1: 20, count: 5 }] } }; }
   if (path === '/api/query') {
     queries.push(body);
     const dims = [...(body.rowDimensions ?? []), ...(body.columnDimensions ?? [])];
@@ -204,6 +206,29 @@ try {
     must(/Region calc/.test(text), `confirm text: ${J(text)}`);
     await ev(`[...(${confirmOpen}).querySelectorAll('button')].find((x) => x.textContent === 'Delete').click()`);
     await waitFor(`!document.querySelector('[data-ctx^="filter:"]')`, 'filter gone with its calculation');
+  });
+
+  await check('a histogram applies a calculated filter that reads its table: the request carries the tree; no "ignored" notice', async () => {
+    await ev(`(() => { __t.drag(__t.chip('Net'), ${filterTool}); return true; })()`);
+    await waitFor(`!!document.querySelector('[data-ctx^="filter:"]')`, 'filter pill');
+    await openFilterMenu();
+    await pickOp('>');
+    await waitFor(`document.querySelector('.ctx-menu input.ws-pill__val') !== null`, 'value input');
+    await ev(`(() => { const i = document.querySelector('.ctx-menu input.ws-pill__val'); i.value = '100'; i.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+    await settle(400);
+    histograms.length = 0;
+    await ev(`document.querySelector('.ws-pick--chart .ws-pick__btn').click()`);
+    await ev(`[...document.querySelectorAll('.ws-charttypes .menu__item')].find((x) => x.textContent.trim() === 'Histogram').click()`);
+    await until(() => histograms.length > 0, 'histogram request');
+    const f = (histograms[histograms.length - 1].filters ?? [])[0];
+    must(f && f.op === '>' && f.value === '100' && f.column === 'Net' && f.calc?.k === 'bin' && J(f.calc).includes('"orders"'), `histogram filter sent: ${J(f)}`);
+    must(!/don't apply to a histogram/.test(await ev(`document.getElementById('ws-notice')?.textContent ?? document.body.textContent`)), 'an ignored-filter notice is showing');
+    await shot('calc-filter-histogram.png');
+    await ev(`document.querySelector('.ws-pick--chart .ws-pick__btn').click()`);
+    await ev(`[...document.querySelectorAll('.ws-charttypes .menu__item')].find((x) => x.textContent.trim() === 'Bar').click()`);
+    await ev(`document.querySelector('[data-ctx^="filter:"] .ws-pill__remove, [data-ctx^="filter:"] button[aria-label^="Remove"]')?.click()`);
+    await ev(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
+    await waitFor(`!document.querySelector('[data-ctx^="filter:"]')`, 'filter removed');
   });
 
   await check('dark theme renders the calculated filter pill', async () => {

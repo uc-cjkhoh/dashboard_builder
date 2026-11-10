@@ -1,6 +1,7 @@
 // Pure worksheet rules (no DOM): aggregations per field, filter usability, stat-chart filter mapping.
 import { filterValue, range, LIMITS } from "../Core/validate.js";
 import { PERIOD_PRESETS } from "../Core/sheet-schema.js";
+import { calcOnTable } from "../Calc/calc-tree.js";
 export const AGGS = Object.freeze({
   numeric: ["sum", "avg", "min", "max", "median", "percentile", "stddev", "variance", "count", "countDistinct", "countNonNull", "attr"],
   ordered: ["count", "countDistinct", "countNonNull", "min", "max", "attr"], // text + temporal: min/max/attr come back as text
@@ -86,11 +87,13 @@ export function serverFilter(f, { resolve, dateOnly, wireTopBy, wireCalc } = {})
   return base;
 }
 export function statFilters(filters, db, table, convert = (f) => serverFilter(f)) {
-  // Top-N needs the worksheet query; it doesn't apply to a histogram / box plot (counted as ignored).
+  // Top-N needs the worksheet query; it doesn't apply to a histogram / box plot (counted as ignored). A calculated filter
+  // applies when every field it reads is on this table (the endpoint compiles its tree against that one table).
   const usable = filters.filter((f) => checkFilter(f).state === "ok");
-  const mine = usable.filter((f) => f.db === db && f.table === table && f.op !== "top").map(convert).filter(Boolean);
+  const mine = usable.filter((f) => f.op !== "top").map(convert).filter(Boolean)
+    .filter((f) => (f.calc ? calcOnTable(f.calc, db, table) : f.db === db && f.table === table));
   return {
-    apply: mine.map((f) => ({ column: f.column, op: f.op, value: f.value ?? "", values: f.values ?? null })),
+    apply: mine.map((f) => ({ column: f.column, op: f.op, value: f.value ?? "", values: f.values ?? null, ...(f.calc ? { calc: f.calc } : {}) })),
     ignored: usable.length - mine.length,
   };
 }

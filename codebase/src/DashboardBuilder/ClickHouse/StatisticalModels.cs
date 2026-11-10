@@ -1,3 +1,5 @@
+using DashboardBuilder.ClickHouse.Calc;
+
 namespace DashboardBuilder.ClickHouse;
 
 /// <summary>
@@ -11,8 +13,10 @@ public sealed record HistogramRequest(
     int? Buckets,
     StatFilter[]? Filters);
 
-/// <summary>A filter on a stat chart's source table: scalar <see cref="Value"/>, or <see cref="Values"/> for <c>in</c>/<c>between</c>.</summary>
-public sealed record StatFilter(string Column, string Op, string? Value, string[]? Values = null);
+/// <summary>A filter on a stat chart's source table: scalar <see cref="Value"/>, or <see cref="Values"/> for <c>in</c>/<c>between</c>.
+/// <see cref="Calc"/>: a row-level calculated field as the filtered expression (its fields must all be on the same table;
+/// <see cref="Column"/> is its label) — never a top-N.</summary>
+public sealed record StatFilter(string Column, string Op, string? Value, string[]? Values = null, ExprNode? Calc = null);
 
 /// <summary>One histogram bin: the half-open range <c>[X0, X1)</c> and how many rows fell in it.</summary>
 public sealed record HistogramBin(double X0, double X1, long Count);

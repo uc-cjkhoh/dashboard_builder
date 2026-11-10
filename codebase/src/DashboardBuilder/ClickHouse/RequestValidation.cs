@@ -421,6 +421,11 @@ public static class RequestRules
             ValidateFilterShape(f.Op, f.Value, f.Values, $"filters[{i}]");
             if (string.Equals(f.Op, "top", StringComparison.OrdinalIgnoreCase))
                 throw Bad("Top-N filters apply to the worksheet query, not a histogram, box plot or row read.", $"filters[{i}].op");
+            if (f.Calc is { } fc)
+            {
+                CheckCalcTree(fc, f.Column, $"filters[{i}]");
+                if (CalcValidator.ContainsAggregate(fc)) throw Bad("A filter can't contain an aggregate — it is applied to each row before the view is grouped.", $"filters[{i}].calc");
+            }
         }
     }
 }
