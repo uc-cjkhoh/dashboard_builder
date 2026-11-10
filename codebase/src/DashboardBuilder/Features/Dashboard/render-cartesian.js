@@ -11,6 +11,7 @@ import { fitWords } from "./chart-polish.js";
 import { selectHandler, legendSpec, memberSpec } from "./render-handlers.js";
 import { selectedIndicesOf } from "./dashboard-select.js";
 import { joinNotices } from "./notices.js";
+import { shapeColourNote, splitSizeNote } from "./mark-channel-model.js";
 import { ANALYTICS_TYPES, scatterSymbol, primaryDim, chartOrientation, marksChannels, scatterGroups, colorSplitData, colorSplitLabels, markFieldValues } from "./result-model.js";
 
 // The series charts: bar / stacked / line / area / combo, pie / donut, the scatter family (with Shape), and the colour
@@ -19,6 +20,8 @@ import { ANALYTICS_TYPES, scatterSymbol, primaryDim, chartOrientation, marksChan
 
 /** Colour split: one series per colour value (the trailing group-by key); the primary dimension is the first non-colour key. */
 export function renderColorSplit(container, rc, sheet, type, result, format, fmtCat) {
+  const sizeNote = splitSizeNote(Boolean(marksOf(sheet).size)); // the split draws no Size: say so
+  if (sizeNote) container.append(hint(sizeNote));
   const { categories, series, catTuples, colorVals, cellRows } = colorSplitData(result, fmtCat);
   // Click a mark -> the primary (first non-colour) dimension value = catTuples[dataIndex][0].
   const rawKeys = catTuples.map((t) => t[0]);
@@ -44,7 +47,8 @@ export function renderColorSplit(container, rc, sheet, type, result, format, fmt
  */
 export function renderScatterShapes(container, rc, sheet, result, seriesIdx, sizeIdx, colorMeasureIdx, format, fmtCat) {
   if (seriesIdx.length < 2) { container.append(hint("A point chart plots two measures (X and Y) — add a second measure.")); return; }
-  if (colorMeasureIdx >= 0) container.append(hint("A colour measure isn't drawn while points are split by Shape or a Colour field — remove one of them.")); // only one Colour slot: reached with Shape + a measure on Colour
+  const note = shapeColourNote(colorMeasureIdx); // only one Colour slot: reached with Shape + a measure on Colour
+  if (note) container.append(hint(note));
   const xIdx = seriesIdx[0], yIdx = seriesIdx[1];
   const { groups, legend, colourMembers } = scatterGroups(sheet, result, seriesIdx, sizeIdx, fmtCat);
   const cf = colorMode(sheet) === "discrete" ? sheet.color[0] : null;

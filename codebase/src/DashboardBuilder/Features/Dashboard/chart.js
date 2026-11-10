@@ -4,7 +4,7 @@ import { fontToken } from "./font-model.js";
 import { pickInk } from "./contrast.js";
 import { orderedPalette } from "./colour-model.js";
 import { DIV_FALLBACK, DIV_HUE_FALLBACK, divergingColours, divergingRange, rampColours, rangeOf, stepPieces, stepColours, stepIndexOf, positionOf, mixHex } from "./colour-scale-model.js";
-import { sizeFractions, sizeRange, barThickness, markerSizeFor } from "./mark-channel-model.js";
+import { sizeFractions, sizeRange, barThickness, markerSizeFor, drawsSize } from "./mark-channel-model.js";
 import { tooltipHtml } from "./tooltip-model.js";
 import { tipLookup } from "./tooltip-formats.js";
 import { lineStep } from "./line-style-model.js";
@@ -455,7 +455,7 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
     ? colourByValue(colorValues, c, fmtVal, colorName, showLegend && pos === "bottom" ? 28 : 0) : null;
   const colorByDim = type === "bar" && !multi && !!format.colorByDimension && !byValue;
   // Size (one measure): a bar's thickness (custom series), or a line / area marker's size. Neither applies with a comparison series or a dual axis.
-  const sizeFr = Array.isArray(sizes) && mainCount === 1 && (type === "bar" || type === "line" || type === "area") ? sizeFractions(sizes) : null;
+  const sizeFr = Array.isArray(sizes) && drawsSize(type, mainCount) ? sizeFractions(sizes) : null;
   const sizeNote = sizeFr ? sizeLegend(sizes, sizeName, c, fmtVal, showLegend && pos === "top" ? 24 : 2) : null;
   const xTitle = format.xTitle || null;
   const yTitle = format.yTitle || null;
@@ -903,7 +903,7 @@ function buildTreemap({ tree, sizeName, colourName, shelfName, format = {} }) {
     },
     series: [{
       type: "treemap", data, roam: false, nodeClick: false,
-      top: sizeNote ? 30 : 6, bottom: byValue ? byValue.room + 6 : 6,
+      ...(sizeNote || byValue ? { top: sizeNote ? 30 : 6, bottom: byValue ? byValue.room + 6 : 6 } : {}), // a plain treemap keeps ECharts' own box
       breadcrumb: { show: false },
       label: { show: true, fontFamily: c.font, lineHeight: 16, formatter: (p) => (p.data?.size !== undefined && p.data?.shelf !== undefined ? `${p.name}\n${fmtVal(p.data.shelf)}` : p.name) },
       itemStyle: { ...edgeOr(format.markBorder, borderInk(format.markBorderColor, c), { borderColor: c.surface, borderWidth: 2 }), gapWidth: 2 },

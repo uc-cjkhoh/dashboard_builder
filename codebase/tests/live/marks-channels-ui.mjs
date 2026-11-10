@@ -284,6 +284,43 @@ try {
     must(distinct(await fills()) === 8, 'markers coloured');
   });
 
+  await newSheet();
+  await dragChip('region', `__t.zone('columns')`);
+  await dragChip('amount', `__t.zone('rows')`); await dragChip('qty', `__t.zone('rows')`);
+  await settle(400);
+  await chartType('Line');
+  await check('line with two measures + Size: every series sizes its markers by the row\'s Size value, the legend names the field', async () => {
+    await dragChip('discount', toolEl('Size')); await settle(600);
+    must((await hints()).length === 0, 'no hint: ' + J(await hints()));
+    const sizes = (si) => ev(`(() => { const d = ${inst}.getModel().getSeriesByIndex(${si}).getData(); return Array.from({ length: d.count() }, (_, k) => { const s = d.getItemVisual(k, 'symbolSize'); return Array.isArray(s) ? s[0] : s; }); })()`);
+    const a = await sizes(0), c2 = await sizes(1);
+    must(distinct(a) === 8 && J(a) === J(c2) && a[0] < a[7], 'both measures share the Size scale: ' + J([a, c2]));
+    must(/^Size: /.test(await sizeText()), 'size legend');
+  });
+  await check('a bar chart split by a Colour field says Size is not drawn; a colour measure hides the member-colour editor', async () => {
+    await newSheet();
+    await dragChip('region', `__t.zone('columns')`);
+    await dragChip('amount', `__t.zone('rows')`);
+    await settle(300);
+    await chartType('Bar');
+    await dragChip('channel', toolEl('Color')); await dragChip('discount', toolEl('Size')); await settle(600);
+    must((await hints()).some((t) => /Size isn't drawn/.test(t)), 'hint: ' + J(await hints()));
+    must(await ev(`!!document.querySelector('#ws-chart svg, #ws-chart canvas')`), 'the split chart is still drawn');
+    await dragChip('qty', toolEl('Color')); await settle(600);
+    await ev(`${fmtTool}.click()`); await waitFor(`!!(${fmtField('Reverse palette')})`, 'format open');
+    must(await ev(`!document.querySelector('.ws-memcol__toggle')`), 'no member-colour editor while a measure is on Colour');
+    await ev(`${fmtTool}.click()`); await settle(300);
+  });
+  await newSheet();
+  await dragChip('region', `__t.zone('columns')`);
+  await dragChip('amount', `__t.zone('rows')`);
+  await settle(300);
+  await chartType('Treemap');
+  await check('a plain treemap keeps ECharts\' own box (no top / bottom set)', async () => {
+    const sr = (await opt()).series[0];
+    must(sr.bottom === undefined || sr.bottom === null, 'no bottom: ' + J([sr.top, sr.bottom]));
+  });
+
   // ---- pie / donut ---------------------------------------------------------------------------------------------------------
   await newSheet();
   await dragChip('region', `__t.zone('columns')`);

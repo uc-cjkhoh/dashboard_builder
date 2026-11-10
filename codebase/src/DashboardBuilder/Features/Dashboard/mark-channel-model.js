@@ -51,3 +51,10 @@ export function barThickness(fraction, band) {
 const MARKER = [6, 24];
 /** A line / area marker's size in px for a 0..1 share (null = the smallest). */
 export const markerSizeFor = (fraction) => Math.round(MARKER[0] + (fraction ?? 0) * (MARKER[1] - MARKER[0]));
+
+/** Does the drawn chart take Size? A bar needs one measure (a thickness per bar); line / area size every series' markers by the row's Size value. */
+export const drawsSize = (type, mainCount) => (type === "bar" ? mainCount === 1 : type === "line" || type === "area");
+/** The hint when Size sits beside a Colour dimension on a split bar / line / area / stacked chart (the split path draws no Size), else null. */
+export const splitSizeNote = (hasSize) => (hasSize ? "Size isn't drawn while a Colour field splits the chart — remove the Colour field to vary thickness or markers." : null);
+/** The hint when a colour measure sits beside Shape or a Colour dimension on the scatter family (one Colour slot, so only Shape + a measure), else null. */
+export const shapeColourNote = (colorMeasureIdx) => (colorMeasureIdx >= 0 ? "A colour measure isn't drawn while points are split by Shape or a Colour field — remove one of them." : null);

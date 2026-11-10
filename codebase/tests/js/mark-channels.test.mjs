@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { colourChannel, sizeChannel, sizeFractions, sizeRange, barThickness, markerSizeFor }
+import { colourChannel, sizeChannel, sizeFractions, sizeRange, barThickness, markerSizeFor, drawsSize, splitSizeNote, shapeColourNote }
   from "../../src/DashboardBuilder/Features/Dashboard/mark-channel-model.js";
 import { positionOf, stepIndexOf, stepPieces } from "../../src/DashboardBuilder/Features/Dashboard/colour-scale-model.js";
 import { marksChannels, scatterGroups, treemapTree } from "../../src/DashboardBuilder/Features/Dashboard/result-model.js";
@@ -180,4 +180,21 @@ test("applySelectionDim fades the bars of a custom (variable-width) series too",
   const out = applySelectionDim(opt, "bar", [1]);
   assert.equal(out.series[0].data[0].itemStyle.opacity, 0.35);
   assert.equal(out.series[0].data[1].itemStyle, undefined);
+});
+
+test("drawsSize: the drawn chart takes Size on a one-measure bar and on line / area with any number of measures (the gate chart.js uses)", () => {
+  assert.equal(drawsSize("bar", 1), true);
+  assert.equal(drawsSize("bar", 2), false);
+  for (const t of ["line", "area"]) for (const n of [1, 2, 3]) assert.equal(drawsSize(t, n), true, `${t} ${n}`);
+  for (const t of ["stacked", "combo", "pie"]) assert.equal(drawsSize(t, 1), false, t);
+  // it agrees with the hint rule: wherever sizeChannel says ok for these types, the drawing takes it
+  for (const t of ["bar", "line", "area"]) for (const n of [1, 2]) assert.equal(drawsSize(t, n), sizeChannel(t, n).ok, `${t} ${n}`);
+});
+test("splitSizeNote: Size on a Colour-split chart is a hint; nothing without Size", () => {
+  assert.match(splitSizeNote(true), /Size isn't drawn.*Colour/);
+  assert.equal(splitSizeNote(false), null);
+});
+test("shapeColourNote: a colour measure beside Shape or a Colour split is a hint; nothing without one", () => {
+  assert.match(shapeColourNote(2), /colour measure/);
+  assert.equal(shapeColourNote(-1), null);
 });

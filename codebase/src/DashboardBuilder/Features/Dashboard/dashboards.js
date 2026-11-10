@@ -1423,7 +1423,7 @@ export function initDashboards() {
       );
       if (canColourByCat)
         panel.append(fmtCheck("Colour by category", f.colorByDimension, (v) => set({ colorByDimension: v })));
-      panel.append(fmtCheck("Reverse palette", f.paletteReverse, (v) => set({ paletteReverse: v })), memberColourEditor(dash, s));
+      panel.append(fmtCheck("Reverse palette", f.paletteReverse, (v) => set({ paletteReverse: v })), ...(colorMode(s) === "continuous" ? [] : [memberColourEditor(dash, s)])); // a colour measure replaces member colours
       if (s.chartType === "heatmap" || (colorMode(s) === "continuous" && COLOUR_MEASURE_TYPES.has(s.chartType))) { // the continuous colour scale
         const range = (key, other, label) => fmtNumber(label, f[key], "auto", (v) => {
           const err = colourRangeError(...(key === "colorMin" ? [v, f[other]] : [f[other], v]));
