@@ -1605,11 +1605,12 @@ public sealed class UnknownIdentifierException(string message) : Exception(messa
     /// characters are dropped and it is cut at 64 characters; it is only ever echoed in the message, never used in SQL.</summary>
     public static UnknownIdentifierException Column(string? column, string? database = null, string? table = null)
     {
-        var name = new string((column ?? "").Where(ch => !char.IsControl(ch)).ToArray());
+        var name = Strip(column ?? "");
         if (name.Length > 64) name = name[..64] + "…";
         var where = string.IsNullOrEmpty(database) || string.IsNullOrEmpty(table) ? "" : $" in {Clean(database)}.{Clean(table)}";
         return new UnknownIdentifierException(name.Length == 0 ? "Unknown column." : $"Unknown column \"{name}\"{where}.");
     }
 
-    private static string Clean(string s) => s.Length > 64 ? s[..64] + "…" : new string(s.Where(ch => !char.IsControl(ch)).ToArray());
+    private static string Strip(string s) => new(s.Where(ch => !char.IsControl(ch) && ch != '\u2028' && ch != '\u2029').ToArray());
+    private static string Clean(string s) { s = Strip(s); return s.Length > 64 ? s[..64] + "…" : s; }
 }

@@ -16,6 +16,7 @@ mkdirSync(SHOTS, { recursive: true });
 const FIXTURE = join(dirname(fileURLToPath(import.meta.url)), '..', 'fixtures', 'workbook-v1-full.json');
 const BAD = join(SHOTS, 'wb-bad-column.json');
 const queries = [];
+let stall = false;
 
 const COLUMNS = {
   orders: [['amount', 'Float64', 'numeric'], ['qty', 'Int32', 'numeric'], ['region', 'String', 'text'], ['status', 'String', 'text'], ['created', 'DateTime', 'temporal'], ['customer_id', 'Int64', 'numeric']],
@@ -27,6 +28,7 @@ function answer({ method, path, body }) {
   if (path === '/api/connection') return { json: { connected: true, host: 'mock-ch', port: 8443, user: 'default', secure: true, allowInvalidCert: false } };
   if (path === '/api/databases') return { json: ['shop'] };
   if (path === '/api/databases/shop/tables') return { json: ['orders', 'customers'] };
+  if (stall && /\/tables\/\w+\/columns$/.test(path) && path.includes('/tables/orders/')) return new Promise(() => {}); // never answers
   const m = path.match(/^\/api\/databases\/shop\/tables\/(\w+)\/columns$/);
   if (m && COLUMNS[m[1]]) return { json: COLUMNS[m[1]].map(([name, type, category]) => ({ name, type, category })) };
   if (path === '/api/query') {
@@ -88,6 +90,16 @@ try {
     await new Promise((r) => setTimeout(r, 600));
     must(queries.length > 0 && !J(queries.at(-1)).includes('amount_typo'), `the last query still carries the missing column: ${J(queries.at(-1))}`);
     await b.screenshot(join(SHOTS, 'import-missing.png'), { x: 0, y: 0, width: 1400, height: 600 });
+  });
+
+  await check('a restore never waits on the column reads: with them stalled, the workbook still opens', async () => {
+    stall = true;
+    await ev(`localStorage.clear()`);
+    await ev(`localStorage.setItem('dashboardbuilder.workbook.v1|mock-ch|8443|default', ${J(readFileSync(BAD, 'utf8'))})`);
+    await b.send('Page.reload');
+    await connect();
+    await waitFor(`document.querySelectorAll('.tab:not(.tab--model)').length === 4`, 'tabs restored while the reads stall');
+    stall = false;
   });
 
   if (b.consoleErrors.length) { console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  ')); failed++; }

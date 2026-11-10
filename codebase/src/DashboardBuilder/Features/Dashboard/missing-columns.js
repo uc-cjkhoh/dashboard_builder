@@ -81,3 +81,16 @@ export function tablesNamed(worksheets) {
   for (const w of worksheets) for (const f of slots(w.sheet)) if (named(f)) out.set(columnKey(f.db, f.table), { db: f.db, table: f.table });
   return [...out.values()];
 }
+
+/** Reads the columns of `tables` with `read(db, table)`, giving up after `ms` (a slow or never-answering read adds nothing).
+ *  Resolves to the catalog Map for catalogIssues; it never rejects. */
+export async function readCatalog(tables, read, ms = 5000) {
+  const catalog = new Map();
+  const one = async ({ db, table }) => {
+    try { catalog.set(columnKey(db, table), new Set((await read(db, table)).map((c) => c.name))); } catch { /* unreadable: nothing to report for it */ }
+  };
+  let timer;
+  await Promise.race([Promise.all(tables.map(one)), new Promise((r) => { timer = setTimeout(r, ms); })]);
+  clearTimeout(timer);
+  return new Map(catalog);
+}

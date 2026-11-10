@@ -126,8 +126,8 @@ public class SourceQueryTests
     }
     [Fact] public void The_column_name_in_the_message_is_cleaned_and_cut()
     {
-        var ex = UnknownIdentifierException.Column("a\nb" + new string('x', 100));
-        Assert.DoesNotContain("\n", ex.Message);
+        var ex = UnknownIdentifierException.Column("a\nb\u2028c\u2029" + new string('x', 100));
+        Assert.DoesNotContain("\n", ex.Message); Assert.DoesNotContain("\u2028", ex.Message); Assert.DoesNotContain("\u2029", ex.Message);
         Assert.True(ex.Message.Length < 100);
         Assert.Equal("Unknown column.", UnknownIdentifierException.Column("").Message);
     }

@@ -16,7 +16,7 @@ import { loadWorkbooks, saveWorkbooks } from "../Start/start-store.js";
 import { rememberWorkbook, summarize } from "../Start/start-model.js";
 import { serializeWorkbook, parseWorkbook, storageKey, legacyStorageKey, restoredSummary, issueCount } from "./workbook-model.js";
 import { api } from "../Core/api.js";
-import { catalogIssues, tablesNamed, columnKey } from "../Dashboard/missing-columns.js";
+import { catalogIssues, tablesNamed, columnKey, readCatalog } from "../Dashboard/missing-columns.js";
 
 // Workbook: the whole builder state survives a reload. It auto-saves to this browser's storage —
 // one workbook per connected server + user — and reopens on the next connect when the canvas is
@@ -60,7 +60,7 @@ export function initWorkbook() {
 }
 
 // --- autosave & restore ------------------------------------------------------
-async function onConnection(v) {
+function onConnection(v) {
   flushSave(); // finish saving under the previous server's key
   view = v;
   key = storageKey(view);
@@ -72,9 +72,6 @@ async function onConnection(v) {
   let wb;
   try { wb = parseWorkbook(saved); } catch (err) { keepUnreadable(saved, err); return; }
   if (!wb.entities.length && !wb.tabs.length) return;
-  const stillThere = key;
-  await addCatalogIssues(wb); // the live columns are known now: a worksheet pill naming a missing one is reported
-  if (key !== stillThere || !isEmpty()) return; // disconnected or started building while the catalog was read
   if (!openWorkbook(wb)) { blockedKey = key; return; } // partial state must not overwrite the stored entry
   const restored = restoredSummary(wb);
   if (wb.issues.length) {
@@ -82,6 +79,15 @@ async function onConnection(v) {
     listDialog(`Restored your last workbook with ${issueCount(wb.issues.length)}`,
       wb.issues.slice(0, 20).concat(wb.issues.length > 20 ? [`…and ${wb.issues.length - 20} more.`] : []));
   } else toast(restored, "ok");
+  reportMissingColumns(wb, key); // the restore never waits on the column reads
+}
+
+/** After a restore: read the live columns and, when a worksheet pill names one that isn't there, say so (the pill is already marked). */
+async function reportMissingColumns(wb, forKey) {
+  const found = await catalogIssuesFor(wb);
+  if (!found.length || key !== forKey) return; // nothing missing, or disconnected meanwhile
+  toast(`${issueCount(found.length)} in your restored worksheets — a field's column isn't in its table.`, "info");
+  listDialog(`Your last workbook has ${issueCount(found.length)}`, found.slice(0, 20).concat(found.length > 20 ? [`…and ${found.length - 20} more.`] : []));
 }
 
 /** Disconnected: fade the cards and tabs out, then clear the model and close every tab.
@@ -251,7 +257,7 @@ async function importFile(input) {
     );
     if (!ok) return;
   }
-  await addCatalogIssues(wb);
+  wb.issues.push(...await catalogIssuesFor(wb)); // an import is deliberate: its summary includes the missing columns
   if (openWorkbook(wb)) blockedKey = null; // a deliberate import replaces whatever was stored
   if (wb.issues.length) {
     await listDialog(`Opened ${file.name} with ${issueCount(wb.issues.length)}`,
@@ -260,17 +266,12 @@ async function importFile(input) {
 }
 
 // --- helpers -----------------------------------------------------------------
-/** Reads the live columns of the tables the worksheets use and adds an issue for each pill naming a column that isn't there
- *  (the pill itself is marked and left out of its query by the worksheet). A table that can't be read adds nothing. */
-async function addCatalogIssues(wb) {
+/** The issues for worksheet pills naming a column the connected table lacks (live columns, read with a time limit; the pills themselves are marked and left out by the worksheet). */
+async function catalogIssuesFor(wb) {
   const real = new Set(wb.entities.filter((e) => !e.source).map((e) => columnKey(e.db, e.table)));
   const tables = tablesNamed(wb.worksheets).filter((t) => real.has(columnKey(t.db, t.table))).slice(0, 50);
-  if (!tables.length) return;
-  const catalog = new Map();
-  await Promise.all(tables.map(async ({ db, table }) => {
-    try { catalog.set(columnKey(db, table), new Set((await api.columns(db, table)).map((c) => c.name))); } catch { /* unreadable: nothing to report for it */ }
-  }));
-  wb.issues.push(...catalogIssues(wb.worksheets, catalog));
+  if (!tables.length) return [];
+  return catalogIssues(wb.worksheets, await readCatalog(tables, (db, table) => api.columns(db, table)));
 }
 
 function currentState() {

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { columnState, missingIn, pruneMissing, missingMessage, catalogIssues } from "../../src/DashboardBuilder/Features/Dashboard/missing-columns.js";
+import { readCatalog, columnState, missingIn, pruneMissing, missingMessage, catalogIssues } from "../../src/DashboardBuilder/Features/Dashboard/missing-columns.js";
 import { restoredSummary, issueCount } from "../../src/DashboardBuilder/Features/Workbook/workbook-model.js";
 
 const ent = (db, table, names, extra = {}) => ({ db, table, columns: names.map((name) => ({ name })), ...extra });
@@ -57,4 +57,13 @@ test("restoredSummary counts unions and unpivots apart from tables", () => {
 test("issueCount uses singular and plural", () => {
   assert.equal(issueCount(1), "1 issue");
   assert.equal(issueCount(3), "3 issues");
+});
+
+test("readCatalog gives up on a read that never answers and still returns what it got", async () => {
+  const read = (db, table) => (table === "orders" ? Promise.resolve([{ name: "country" }]) : new Promise(() => {}));
+  const t0 = Date.now();
+  const c = await readCatalog([{ db: "shop", table: "orders" }, { db: "shop", table: "stuck" }], read, 50);
+  assert.ok(Date.now() - t0 < 1000);
+  assert.deepEqual([...c.keys()], ["shop\u0000orders"]);
+  assert.deepEqual(await readCatalog([{ db: "shop", table: "x" }], () => Promise.reject(new Error("no")), 50), new Map());
 });
