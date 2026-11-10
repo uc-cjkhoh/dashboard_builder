@@ -136,7 +136,9 @@ export function createWorksheetView(container, getContext, options = {}) {
       markFresh(true);
       return result;
     } catch (err) {
-      if (!ticket.isCurrent() || isAbortError(err)) return null;
+      const aborted = !ticket.isCurrent() || isAbortError(err);
+      perfLog.record({ kind: queryKindOf(key), ms: performance.now() - t0, outcome: aborted ? "aborted" : "failed" });
+      if (aborted) return null;
       container.replaceChildren(warn(err.message));
       return null;
     }
@@ -153,9 +155,16 @@ export function createWorksheetView(container, getContext, options = {}) {
     const key = requestKey("query", plan);
     let result = c.results.get(c.dash.id, key);
     if (!result) {
+      const t0 = performance.now();
       try { result = await api.query(plan, { signal: ticket.signal }); }
-      catch (err) { if (!ticket.isCurrent() || isAbortError(err)) return undefined; toast(`Comparison failed: ${err.message}`, "danger"); return null; }
+      catch (err) {
+        const aborted = !ticket.isCurrent() || isAbortError(err);
+        perfLog.record({ kind: "query", ms: performance.now() - t0, outcome: aborted ? "aborted" : "failed" });
+        if (aborted) return undefined;
+        toast(`Comparison failed: ${err.message}`, "danger"); return null;
+      }
       if (!ticket.isCurrent()) return undefined;
+      perfLog.record({ kind: "query", ms: performance.now() - t0, rows: rowCountOf(result) });
       c.results.set(c.dash.id, key, result);
     }
     return { result, range, name: compareName(p.compare) };

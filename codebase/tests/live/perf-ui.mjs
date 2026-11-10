@@ -21,6 +21,7 @@ const COLUMNS = {
 const REGIONS = ['APAC', 'EU', 'US'];
 const queries = [];     // every /api/query body, in order
 let tables = ['orders', 'customers'];
+let failQueries = false;
 function answer({ method, path, body }) {
   if (path === '/api/connection' && method === 'GET') return { json: { connected: false } };
   if (path === '/api/connection') return { json: { connected: true, host: 'mock-ch', port: 8443, user: 'default', secure: true, allowInvalidCert: false } };
@@ -30,6 +31,7 @@ function answer({ method, path, body }) {
   if (m && COLUMNS[m[1]]) return { json: COLUMNS[m[1]].map(([name, type, category]) => ({ name, type, category })) };
   if (path === '/api/query') {
     queries.push(body);
+    if (failQueries) return { status: 500, json: { error: 'mock failure' } };
     const dims = [...(body.rowDimensions ?? []), ...(body.columnDimensions ?? [])];
     const n = dims.length ? REGIONS.length : 1;
     return { json: {
@@ -131,6 +133,22 @@ try {
     const rows = await rowsText();
     await b.screenshot(join(SHOTS, 'perf-populated.png'));
     must(rows.some((r) => /\|query\|0\|3\|Hit\|\d+$/.test(r)), `rows: ${J(rows)}`);
+  });
+
+  await check('a failed query is recorded as Failed (no render time) and the dialog summary counts it', async () => {
+    await b.key('Escape', { vk: 27 });
+    await waitFor(`${dlg} === null`, 'closed');
+    failQueries = true;
+    await ev(`__t.drag(__t.chip('qty'), document.querySelector('.ws-shelf--columns .ws-shelf__zone'))`);
+    await waitFor(`!!document.querySelector('.ws-warn, [role=alert]') || true`, 'settled');
+    await b.sleep(800);
+    failQueries = false;
+    await ev(`document.getElementById('perf-btn').click()`);
+    await waitFor(`${dlg} !== null`, 'open');
+    const rows = await rowsText();
+    await b.screenshot(join(SHOTS, 'perf-failed.png'));
+    must(rows.some((r) => /\|query\|\d+\|\|Failed\|$/.test(r)), `rows: ${J(rows)}`);
+    const sm = await ev(`document.querySelector('.perf-summary').textContent`); must(/\d+ failed or cancelled/.test(sm), sm);
   });
 
   await check('Clear empties the list and shows the empty message', async () => {
