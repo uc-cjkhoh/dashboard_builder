@@ -20,12 +20,13 @@ export function cleanNotes(raw, where, issues) {
 /** The saved fragment: `{ notes }` when there is a note, `{}` otherwise. */
 export const savedNotes = (notes) => (typeof notes === "string" && notes ? { notes } : {});
 
-/** The lines a dashboard's print header shows under its title, only those present: the worksheets, the selection filter, the print time, the note. */
-export function printLines({ sheets, filter, printedAt, notes }) {
+/** The lines a dashboard's print header shows under its title, only those present: the worksheets, the selection filter, the print time, the widget notes, the note. */
+export function printLines({ sheets, filter, printedAt, widgetNotes, notes }) {
   const lines = [];
   if (sheets?.length) lines.push(`Worksheets: ${sheets.join(", ")}`);
   if (filter) lines.push(`Filtered by ${filter}`);
   if (printedAt) lines.push(printedAt);
+  if (widgetNotes?.length) lines.push(...widgetNotes);
   if (notes) lines.push(notes);
   return lines;
 }

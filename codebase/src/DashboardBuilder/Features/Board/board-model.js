@@ -1,6 +1,6 @@
 // Dashboard board data — pure, DOM-free (unit-tested under tests/js/board-model.test.mjs). A dashboard tab holds
 // `widgets` on a 12-column snap grid, in whole cells, never overlapping:
-//   { id, kind: "sheet", sheetId, x, y, w, h }   a worksheet's view (sheetId = a worksheet tab id)
+//   { id, kind: "sheet", sheetId, note?, x, y, w, h }   a worksheet's view (sheetId = a worksheet tab id)
 //   { id, kind: "text", heading, body, x, y, w, h }
 //   { id, kind: "image", alt, src, x, y, w, h }   src = a base64 raster data URL (Board/image-model.js)
 //   { id, kind: "spacer", x, y, w, h }            a blank cell block
@@ -10,6 +10,7 @@
 //   | { kind: "nav", label, tip, target: { kind: "worksheet" | "dashboard", index } | null, x, y, w, h }
 // Limits live in Core/validate.js LIMITS. The board canvas (drag, resize, side panel) is UI on top of this module.
 import { LIMITS } from "../Core/validate.js";
+import { cleanWidgetNote } from "./widget-note.js";
 import { isImageSrc, budgetError } from "./image-model.js";
 
 /** Default size in cells for a new widget of each kind. */
@@ -129,7 +130,7 @@ export function cleanWidgets(raw, { worksheetCount, dashboardCount = 0, ownDashb
       Object.assign(fit, spot);
       issues.push(`${where}: a widget overlapped another and was moved to the first free spot.`);
     }
-    if (w.kind === "sheet") out.push({ kind: "sheet", sheet: w.sheet, ...fit });
+    if (w.kind === "sheet") { const note = cleanWidgetNote(w.note, where, issues); out.push({ kind: "sheet", sheet: w.sheet, ...(note ? { note } : {}), ...fit }); }
     else if (w.kind === "image") out.push({ kind: "image", alt: cleanText(w.alt, LIMITS.imageAlt, "alt text", where, issues, "an image widget's"), src: w.src, ...fit });
     else if (w.kind === "spacer") out.push({ kind: "spacer", ...fit });
     else if (w.kind === "nav") {
@@ -165,7 +166,7 @@ export function savedWidgets(widgets, indexOf, dbIndexOf = new Map()) {
     else if (w.kind === "nav") {
       const target = indexOf.has(w.target) ? { kind: "worksheet", index: indexOf.get(w.target) } : dbIndexOf.has(w.target) ? { kind: "dashboard", index: dbIndexOf.get(w.target) } : null;
       out.push({ kind: "nav", label: w.label ?? NAV_LABEL, tip: w.tip ?? "", target, x, y, w: cw, h });
-    } else if (indexOf.has(w.sheetId)) out.push({ kind: "sheet", sheet: indexOf.get(w.sheetId), x, y, w: cw, h });
+    } else if (indexOf.has(w.sheetId)) out.push({ kind: "sheet", sheet: indexOf.get(w.sheetId), ...(w.note ? { note: w.note } : {}), x, y, w: cw, h });
   }
   return out;
 }
