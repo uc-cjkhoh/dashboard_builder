@@ -8,7 +8,7 @@ import { scalePlan } from "./scale-model.js";
 import { havingPlan } from "./having-model.js";
 import { planJoinType } from "../Relations/relation-rules.js";
 import { catalogFromEntities } from "../Calc/calc-resolve.js";
-import { isCalcPill, calcPillId } from "../Calc/calc-pill.js";
+import { isCalcPill, calcPillId, sameCalcPill } from "../Calc/calc-pill.js";
 import { sourceOfTable, sourceProblem, wireSource } from "../Core/source-model.js";
 import { wireDim, wireMeasure, planTables, measureLabel, wireTopBy, wireCalcFilter, resolveSortTarget } from "../Calc/calc-plan.js";
 
@@ -26,8 +26,10 @@ export const marksOf = (s) => s.marks ?? EMPTY_MARKS;
 // Scatter-family types (scatter + square/circle marks): point charts that plot two measures.
 export const SCATTER_TYPES = new Set(["scatter", "square", "circle"]);
 export const isNumericField = (f) => Boolean(f) && f.category === "numeric";
-// Chart types that consume a Color dimension; the rest ignore a Color pill (the lane says so).
-export const COLOR_USES = new Set(["bar", "stacked", "line", "area", "table"]);
+// Chart types that consume a Color dimension (a group-by); the rest ignore a Color pill (the lane says so).
+export const COLOR_USES = new Set(["bar", "stacked", "line", "area", "table", ...SCATTER_TYPES]);
+// The same column (or the same calculated field) on two shelves.
+const sameColumn = (a, b) => (isCalcPill(a) || isCalcPill(b) ? sameCalcPill(a, b) : a.db === b.db && a.table === b.table && a.column === b.column);
 
 /** Calculated fields: the context the pure plan seam (Calc/calc-plan.js) compiles pills against. */
 export const calcContext = (ctx) => ({ calcs: ctx.calculations, catalog: catalogFromEntities([...ctx.entities.values()]), params: ctx.parameters });
@@ -115,7 +117,8 @@ export function planDims(sheet) {
   // Shape: a dimension -> distinct point shapes; it's a group-by only on the scatter family.
   const shapeDim = m.shape && SCATTER_TYPES.has(sheet.chartType) ? [m.shape] : [];
   const cf = (sheet.color ?? [])[0];
-  const colorDiscrete = cf && colorMode(sheet) === "discrete" && COLOR_USES.has(sheet.chartType) ? [cf] : [];
+  // The same field on Shape and Colour groups once (its members carry both the symbol and the colour).
+  const colorDiscrete = cf && colorMode(sheet) === "discrete" && COLOR_USES.has(sheet.chartType) && !(shapeDim.length && sameColumn(shapeDim[0], cf)) ? [cf] : [];
   const colDims = [
     ...sheet.columns.filter((f) => roleOf(f) === "dimension"),
     ...detail,

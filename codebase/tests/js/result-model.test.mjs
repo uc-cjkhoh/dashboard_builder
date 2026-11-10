@@ -83,13 +83,13 @@ test("markFieldValues reads a group-by key or a measure per row; null when the f
   assert.deepEqual(markFieldValues(s, rows, mplan, meas("amount"), (v) => `$${v}`, fmt, (f) => `${f.agg} ${f.column}`), { name: "sum amount", values: ["$5", "$7"] });
   assert.equal(markFieldValues(s, rows, mplan, dim("other"), fmt, fmt, () => ""), null);
 });
-test("marksChannels: Size and continuous Colour feed a scatter and become hints elsewhere; the tooltip catalog lists the fields", () => {
+test("marksChannels: Size and continuous Colour feed a scatter and become hints on a pie; the tooltip catalog lists the fields", () => {
   const marks = { ...sheet().marks, size: meas("qty"), tooltip: [dim("channel")] };
-  const s = sheet({ chartType: "bar", columns: [dim("region")], rows: [meas("amount")], marks });
+  const s = sheet({ chartType: "pie", columns: [dim("region")], rows: [meas("amount")], marks });
   const mplan = planMeasures(s);
   const result = res([row(["EU", "web"], 5, 2)], { measures: ["sum(amount)", "sum(qty)"], columnDimensions: ["channel"] });
   const out = marksChannels(s, result, mplan, 1, -1, fmt, fmt, undefined, SCATTER_TYPES, () => "n");
-  assert.match(out.note, /Size shapes a Scatter/);
+  assert.match(out.note, /per-slice/);
   assert.equal(out.spec.sizes, undefined);
   assert.ok(Array.isArray(out.tooltipCat));
   const sc = { ...s, chartType: "scatter" };
