@@ -34,7 +34,7 @@ try {
     must(!raw.includes('sekret') && !/password/i.test(raw), 'secret stored: ' + raw);
   });
   await check('disconnect shows the list; picking refills, clears the password and focuses it', async () => {
-    await ev(`document.getElementById('conn-disconnect').click()`);
+    await ev(`(() => { document.getElementById('conn-disconnect').click(); [...document.querySelectorAll('dialog button')].find((x) => x.textContent === 'Disconnect').click(); return 1; })()`);
     await b.waitFor(`!document.getElementById('conn-recent').hidden`, { label: 'recent visible' });
     await ev(`document.getElementById('conn-user').value = 'other'; document.querySelector('.conn-recent__pick').click()`);
     must(await ev(`document.getElementById('conn-host').value`) === 'ch.example', 'host not filled');
@@ -48,7 +48,7 @@ try {
     must(await ev(`document.getElementById('conn-recent').hidden`), 'list visible while connected');
   });
   await check('remove forgets the entry', async () => {
-    await ev(`document.getElementById('conn-disconnect').click()`);
+    await ev(`(() => { document.getElementById('conn-disconnect').click(); [...document.querySelectorAll('dialog button')].find((x) => x.textContent === 'Disconnect').click(); return 1; })()`);
     await b.waitFor(`!document.getElementById('conn-recent').hidden`, { label: 'recent visible' });
     await ev(`localStorage.setItem('dashboardbuilder.recent-sources', JSON.stringify([
       { host: 'ch-prod-analytics-eu-west-1.internal.example-corporation.com', port: 8443, user: 'reporting_readonly', secure: true, allowInvalidCert: false },

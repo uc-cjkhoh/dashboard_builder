@@ -1,5 +1,5 @@
 /* Raw-row dialog (schema-browser preview, worksheet "View data"). Tokens only; solid surface; the table scrolls inside. */
-.rows-dialog { width: min(960px, calc(100vw - 2 * var(--s4))); max-height: min(80vh, 720px); display: flex; flex-direction: column; }
+.dialog.rows-dialog:not(.dialog--sm) { width: min(1200px, calc(100vw - 2 * var(--s4))); max-height: min(80vh, 720px); display: flex; flex-direction: column; }
 .rows-dialog[open] { display: flex; }
 .rows-dialog__head { display: flex; align-items: flex-start; gap: var(--s2); padding: var(--s4) var(--s4) var(--s2); }
 .rows-dialog__titles { flex: 1; min-width: 0; }

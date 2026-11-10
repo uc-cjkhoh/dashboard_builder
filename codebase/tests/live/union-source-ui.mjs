@@ -250,7 +250,7 @@ try {
   await check('the sources are saved with the workbook and come back after a reload, with the worksheet', async () => {
     await ev(`(async () => { const st = await import('/features/Core/store.js'); const w = st.activeWorksheet(); st.updateSheet(w.id, { ...w.sheet, chartType: 'bar' }); return true; })()`);
     await b.sleep(900); // autosave is debounced (500 ms)
-    const saved = await ev(`(() => { const k = Object.keys(localStorage).find((x) => /workbook/i.test(x)); return k ? localStorage.getItem(k) : null; })()`);
+    const saved = await ev(`(() => { const k = Object.keys(localStorage).filter((x) => /workbook/i.test(x)).map((x) => localStorage.getItem(x)).find((v) => v.includes('\"source\"')); return k ?? Object.keys(localStorage).join(','); })()`);
     must(saved && saved.includes('"source"') && saved.includes('Union: orders + returns') && saved.includes('Unpivot: orders'), 'workbook has no sources');
     const entities = JSON.parse(saved).entities.filter((e) => e.source);
     must(entities.length === 2 && entities.every((e) => e.joinKeys.length === 0), `saved sources: ${J(entities)}`);

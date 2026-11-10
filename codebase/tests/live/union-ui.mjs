@@ -74,7 +74,7 @@ try {
     await waitFor(`${rd} !== null && ${rd}.querySelectorAll('tbody tr').length === 2`, 'rows rendered');
     must(J(unionReqs.at(-1)) === J({ db: 'shop', tables: ['sales_2023', 'sales_2024'], limit: 20 }), `request: ${J(unionReqs.at(-1))}`);
     const heads = await ev(`[...${rd}.querySelectorAll('th')].map((t) => t.textContent)`);
-    must(J(heads) === J(['Source tableString', 'idUInt64', 'regionString']), `heads: ${J(heads)}`);
+    must(J(heads) === J(['Source tabletext', 'idwhole number', 'regiontext']), `heads: ${J(heads)}`);
     must(await ev(`${ud}`) !== null, 'pick dialog stays open under the preview');
     await shot('union-rows-light.png');
   });

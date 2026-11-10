@@ -8,11 +8,14 @@
 
 /* ---- Connected: the status row ------------------------------------------- */
 .conn-summary { position: relative; animation: conn-in var(--dur) var(--ease-out); }
-.conn-row { display: flex; align-items: center; gap: var(--s2); height: 32px; padding-left: var(--s2); }
+.conn-row { display: flex; align-items: center; gap: var(--s2); min-height: 32px; padding-left: var(--s2); }
+/* Host over user · port: two lines, each ellipsised, so neither pushes the other out. */
+.conn-row__text { flex: 1; min-width: 0; display: grid; padding: var(--s1) 0; line-height: 1.3; }
 /* Actions: one group, pushed to the right edge of the row. */
 .conn-row__actions { display: flex; align-items: center; gap: var(--s1); margin-left: auto; flex: none; }
 .conn-row__btn { flex: none; color: var(--ink-3); }
 .conn-row__btn:hover { color: var(--ink); }
+.conn-summary__meta { min-width: 0; font-size: var(--fs-body); color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .conn-summary__host { flex: 1; min-width: 0; font-size: var(--fs-body); font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: color var(--dur) var(--ease); }
 
 /* Status slot — the only coloured element. Shape changes with colour: filled dot (ok), hollow pulsing ring (checking), cross-in-circle (lost). Each state has its own
@@ -66,14 +69,7 @@
 .form-field input::placeholder { color: var(--ink-3); }
 .form-field input:disabled { opacity: .55; cursor: not-allowed; }
 
-/* Advanced: a quiet chevron row; its options are switch rows (still checkboxes — on = ink, never a hue). */
-.conn-advanced { display: grid; gap: var(--s2); animation: conn-in var(--dur) var(--ease-out) 120ms backwards; }
-.conn-advanced > summary { display: flex; align-items: center; gap: var(--s1); height: 32px; padding: 0 var(--s2); list-style: none; cursor: pointer; color: var(--ink-3); font-size: var(--fs-body); font-weight: 500; border-radius: var(--r); transition: color var(--dur-fast) var(--ease); }
-.conn-advanced > summary::-webkit-details-marker { display: none; }
-.conn-advanced > summary::after { content: ""; width: 16px; height: 16px; background: currentColor; transition: rotate var(--dur) var(--ease-out);
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 8l3 3 3-3'/%3E%3C/svg%3E") center / 16px no-repeat; }
-.conn-advanced:not([open]) > summary::after { rotate: -90deg; }
-.conn-advanced > summary:hover { color: var(--ink); }
+/* Secure / Trust: two switch rows (still checkboxes — on = ink, never a hue), always visible. */
 .form-check { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--s2); min-height: 32px; padding: 0 var(--s2); font-size: var(--fs-body); color: var(--ink-2); cursor: pointer; }
 .form-check input { order: 1; flex: none; appearance: none; position: relative; width: 28px; height: 16px; margin: 0; border-radius: var(--r-pill); background: var(--line-2); cursor: pointer; transition: background var(--dur-fast) var(--ease); }
 .form-check input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: var(--r-pill); background: var(--surface); transition: translate var(--dur) var(--ease-out), background var(--dur-fast) var(--ease); }
@@ -81,6 +77,8 @@
 .form-check input:checked::after { translate: 12px 0; background: var(--on-ink); }
 .form-check input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .form-check + .form-check, .form-check + .form-warn { border-top: 1px solid var(--line); }
+.form-error { display: flex; align-items: flex-start; gap: var(--s2); margin: 0; padding: 0 var(--s2); font-size: var(--fs-body); line-height: 1.35; color: var(--danger-ink); animation: conn-in var(--dur) var(--ease-out); }
+.form-error > svg, .form-error > .icon { flex: none; margin-top: 2px; }
 .form-warn { margin: 0; padding: var(--s2); font-size: var(--fs-body); line-height: 1.35; color: var(--warn-ink); animation: conn-in var(--dur) var(--ease-out); }
 
 /* Actions: Connect fills the width; while it runs, a spinner takes the label's place. */

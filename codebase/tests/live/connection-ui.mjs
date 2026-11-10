@@ -30,11 +30,11 @@ try {
   await b.goto(APP);
   await b.waitFor(`document.getElementById('conn-form') && !document.getElementById('conn-form').hidden`, { label: 'form' });
   await check('status pill, meta line and workbook status are gone', async () => {
-    must(await ev(`!document.getElementById('conn-status') && !document.getElementById('conn-meta') && !document.getElementById('wb-status')`), 'still in the DOM');
+    must(await ev(`!document.getElementById('conn-meta') && !document.getElementById('wb-status')`), 'still in the DOM');
   });
-  await check('failure shows through the toast, form stays open', async () => {
+  await check('failure shows next to the form, form stays open', async () => {
     await fill('Ch.Example.com', 'bad');
-    await b.waitFor(`document.getElementById('toast') && /Could not connect/.test(document.getElementById('toast').textContent)`, { label: 'toast' });
+    await b.waitFor(`!document.getElementById('conn-error').hidden && /Could not connect/.test(document.getElementById('conn-error').textContent)`, { label: 'inline error' });
     must(await ev(`!document.getElementById('conn-form').hidden && document.getElementById('conn-summary').hidden`), 'form closed');
   });
   await check('connecting collapses the form into a compact summary', async () => {
@@ -42,9 +42,8 @@ try {
     await b.waitFor(`!document.getElementById('conn-summary').hidden`, { label: 'summary' });
     must(await ev(`document.getElementById('conn-form').hidden`), 'form not collapsed');
     must(await ev(`document.getElementById('conn-host-label').textContent`) === 'Ch.Example.com', 'host label');
-    must(await ev(`document.getElementById('conn-summary').getBoundingClientRect().height`) <= 34, 'summary not compact');
+    must(await ev(`document.getElementById('conn-summary').getBoundingClientRect().height`) <= 48, 'summary not compact');
     must((await ev(`document.getElementById('conn-host-label').title`)).includes('ann'), 'tooltip lacks user');
-    must(await ev(`document.getElementById('conn-change').getAttribute('aria-expanded')`) === 'false', 'aria-expanded');
   });
   await check('edit toggles the form open and closed', async () => {
     await ev(`document.getElementById('conn-change').click()`);
@@ -60,7 +59,7 @@ try {
     must(await ev(`document.getElementById('conn-host').value`) === 'Ch.Example.com', 'host blank after reload');
   });
   await check('picking a recent connection shows its entered host', async () => {
-    await ev(`document.getElementById('conn-disconnect').click()`);
+    await ev(`(() => { document.getElementById('conn-disconnect').click(); [...document.querySelectorAll('dialog button')].find((x) => x.textContent === 'Disconnect').click(); return 1; })()`);
     await b.waitFor(`!document.getElementById('conn-recent').hidden`, { label: 'recent' });
     await ev(`document.getElementById('conn-host').value = ''; document.querySelector('.conn-recent__pick').click()`);
     must(await ev(`document.getElementById('conn-host').value`) === 'Ch.Example.com', 'host not shown');

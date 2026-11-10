@@ -55,7 +55,7 @@ try {
   await check('connecting hides the start screen; disconnecting shows it again', async () => {
     await ev(`document.getElementById('conn-password').value = 'x'; document.getElementById('conn-form').requestSubmit()`);
     await b.waitFor(`document.getElementById('start-screen').hidden`, { label: 'start hidden' });
-    await ev(`document.getElementById('conn-disconnect').click()`);
+    await ev(`(() => { document.getElementById('conn-disconnect').click(); [...document.querySelectorAll('dialog button')].find((x) => x.textContent === 'Disconnect').click(); return 1; })()`);
     await b.waitFor(`!document.getElementById('start-screen').hidden`, { label: 'start back' });
   });
   await check('remove forgets the entry; stored metadata holds no password', async () => {

@@ -30,8 +30,8 @@ public sealed class ConnectionController : ApiControllerBase
     {
         var info = Registry.Current;
         if (info is null) return Results.Ok(ConnectionView.Disconnected);
-        var (error, _) = await Gateway.ValidateAsync(info, ct);
-        return Results.Ok(new { connected = true, reachable = error is null });
+        var (failure, _) = await Gateway.ValidateAsync(info, ct);
+        return Results.Ok(new { connected = true, reachable = failure is null });
     }
 
     [HttpPost("connection")]
@@ -57,9 +57,9 @@ public sealed class ConnectionController : ApiControllerBase
 
         // Validation may step the guard settings down (the server refused one), so store what it
         // returns.
-        var (error, validated) = await Gateway.ValidateAsync(info, ct);
-        if (error is not null)
-            return Results.Json(new ApiError(error), statusCode: StatusCodes.Status502BadGateway);
+        var (failure, validated) = await Gateway.ValidateAsync(info, ct);
+        if (failure is not null)
+            return Results.Json(new ApiError(failure.Message, failure.Field), statusCode: failure.Status);
 
         Registry.Save(validated);
         return Results.Ok(validated.ToClientView()); // password-free view

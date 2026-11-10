@@ -1,6 +1,8 @@
 // Pure rules for the column profile (no DOM): the POST body, number formatting and the shape the dialog shows.
 // Unit-tested in tests/js/column-profile-model.test.mjs; the limits mirror ClickHouse/RequestValidation.cs (ApiLimits).
 
+import { friendlyKind } from "./type-kind.js";
+
 export const PROFILE_LIMITS = Object.freeze({
   top: 10,            // ApiLimits.DefaultProfileTop
   maxTop: 50,         // ApiLimits.MaxProfileTop
@@ -54,6 +56,6 @@ export function summarize(p) {
   const cutNote = top.some((t) => t.cut) ? `Values are compared by their first ${PROFILE_LIMITS.valueLength} characters, so values that differ only after that count together.` : null;
   return {
     tiles, role, top, sampleNote, cutNote, empty: p.rows === 0, copyName: p.column, copyValues,
-    details: [["Name", p.column], ["Type", p.type], ["Kind", p.category], ["Role", role]],
+    details: [["Name", p.column], ["Type", friendlyKind(p.type), p.type], ["Role", role]], // the raw ClickHouse type is the Type row's tooltip
   };
 }

@@ -2,6 +2,7 @@ import { api } from "../Core/api.js";
 import { icon } from "../Core/icons.js";
 import { show, hide, toggle, toast } from "../Core/ui.js";
 import { matchTables } from "./table-filter.js";
+import { splitDatabases, rememberDb, recallDb, sanitizeDbMemory } from "./schema-model.js";
 import { openTablePreview } from "../Rows/rows-dialog.js";
 import { openUnionDialog } from "../Rows/union-dialog.js";
 import { openUnpivotDialog } from "../Rows/unpivot-dialog.js";
@@ -9,6 +10,11 @@ import { openUnpivotDialog } from "../Rows/unpivot-dialog.js";
 // Schema browser: fills the database <select> and renders the selected database's tables
 // as draggable chips. Driven by the `connection:changed` event from connection.js — it does
 // not touch the connection form. The table list scrolls internally inside its sidebar section.
+// The last database picked per server lives in this browser only (a name, no secrets), so a reload lands back on it.
+const DB_KEY = "dashboardbuilder.last-database";
+const loadMemory = () => { try { return sanitizeDbMemory(JSON.parse(localStorage.getItem(DB_KEY))); } catch { return {}; } };
+const saveMemory = (m) => { try { localStorage.setItem(DB_KEY, JSON.stringify(m)); } catch { /* not remembered — fine */ } };
+
 export function initSchema() {
   const dbSelect = document.getElementById("db-select");
   const tablesSection = document.getElementById("tables-section");
@@ -17,6 +23,7 @@ export function initSchema() {
   const searchEl = document.getElementById("table-search");
   const emptyEl = document.getElementById("table-empty");
   let names = []; // tables of the selected database, for the search box
+  let server = null; // the connected view, the key for the remembered database
 
   function applyFilter() {
     const shown = new Set(matchTables(names, searchEl?.value ?? ""));
@@ -51,9 +58,19 @@ export function initSchema() {
       placeholder.selected = true;
       dbSelect.add(placeholder);
       clearSearch();
-      for (const db of dbs) dbSelect.add(new Option(db, db));
+      // User databases first; system ones (selectable) under their own heading.
+      const { user, system } = splitDatabases(dbs);
+      for (const db of user) dbSelect.add(new Option(db, db));
+      if (system.length) {
+        const group = document.createElement("optgroup");
+        group.label = "System";
+        for (const db of system) group.append(new Option(db, db));
+        dbSelect.add(group);
+      }
       tableList.replaceChildren();
       hide(tablesSection);
+      const back = server ? recallDb(loadMemory(), server, dbs) : "";
+      if (back) { dbSelect.value = back; await loadTables(back); }
     } catch (err) {
       toast(err.message, "danger");
     }
@@ -145,10 +162,13 @@ export function initSchema() {
     return chip;
   }
 
-  dbSelect.addEventListener("change", () => loadTables(dbSelect.value));
+  dbSelect.addEventListener("change", () => {
+    if (server && dbSelect.value) saveMemory(rememberDb(loadMemory(), server, dbSelect.value));
+    loadTables(dbSelect.value);
+  });
 
   document.addEventListener("connection:changed", (event) => {
-    if (event.detail && event.detail.connected) loadDatabases();
-    else reset();
+    if (event.detail && event.detail.connected) { server = event.detail; loadDatabases(); }
+    else { server = null; reset(); }
   });
 }
