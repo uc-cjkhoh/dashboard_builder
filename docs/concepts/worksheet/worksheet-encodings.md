@@ -50,7 +50,7 @@ The **Drill** tool takes ≥2 dimension fields **from one table** as an ordered 
 
 1. The **current level leads the group-by.** `buildPlan` prepends it as the first row dimension, so it drives the category axis.
 2. Clicking a mark **drills one level finer**, pinning the clicked value. Every pinned ancestor is a bound `=` filter on the drill table (same table → never a join). An active drill takes clicks instead of selection.
-3. A **breadcrumb** shows `All › 2023 › Q2`. Each crumb jumps up; **Up** goes up one level. Clicking at the finest level does nothing. Style: `.ws-drill`, `--warn` tint.
+3. A **breadcrumb** shows `All › 2023 › Q2`. Each crumb jumps up; **Up** goes up one level. Clicking at the finest level does nothing. Above the finest level the bar says "Click a bar to drill down.". Style: `.ws-drill`, `--warn` tint.
 
 - A hierarchy holds at most **6** levels; a further add is refused with a toast.
 - Editing the levels resets the descent.
