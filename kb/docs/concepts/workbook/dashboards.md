@@ -57,13 +57,16 @@ Each dashboard has its own size (`Board/board-size.js`).
     (`layoutBoard(…, { fixed })`, `fixedRowH`), so drag and resize snap to the drawn rows.
   - Rows never shrink below 16px, so a tall stack in a short box overflows.
   - The panel scrolls when the window is smaller than the box.
+- **Custom** (the "Custom…" option): a fixed board of an exact **Width** and **Height** in whole pixels, typed into two inputs beside the select (`customSizeProblem`); it starts at 1000 × 700 and behaves like any fixed size.
+  - An invalid pair (empty, not whole, outside the limits) is refused in place: the offending input gets `aria-invalid`, the status line says why, and the previous size stays; nothing is clamped.
+  - A pair equal to a preset shows as that preset on reload.
 - **Range** (the "Range…" option): an Automatic board bounded by up to four optional pixel limits (**Min width**, **Max width**, **Min height**, **Max height**; an empty input is no limit), saved as `range` on the dashboard.
   - The board is the panel width clamped into the width limits, centred when narrower; a minimum above the panel makes the panel scroll.
   - Its height is the rows' height clamped into the height limits; past the maximum the board scrolls inside itself (stable scrollbar gutter; drag, resize and drops add the scroll offset).
   - A fixed size wins and drops the range (also on import, with an issue); print ignores the range (page width, stacked).
   - Inputs are grouped under visible "Width" and "Height" labels with "Min" / "Max". An invalid set (out of limits, minimum above maximum, no limit) is refused in place: only the offending inputs get `aria-invalid`, the status line says which limit, and nothing is clamped or saved.
 - **Limits:** 320–3840 × 240–2400 whole pixels (`sizeError`, `rangeError`). An import outside them opens Automatic with an issue.
-- A loaded size that is not a preset gets its own option in the select. Size and range are not part of undo / redo.
+- A loaded size that is not a preset shows as Custom with its values in the inputs. Size and range are not part of undo / redo.
 
 ### Canvas
 
