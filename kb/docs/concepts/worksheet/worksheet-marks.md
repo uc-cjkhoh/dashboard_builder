@@ -7,7 +7,7 @@ What each Marks slot accepts and how it renders, plus member colours and the pal
 
 ## Marks slots
 
-The Marks group sits at the top of the field pane and collapses like the other groups. It is a grid of **three columns** of slots: Color, Size, Label, Detail, Tooltip, Shape, Path, Angle, Filters, Date range, Drill, Pages.
+The Marks group sits at the top of the field pane and collapses like the other groups. Its open or collapsed state is remembered per browser (`dashboardbuilder.marks.pref`); with nothing remembered it starts collapsed only while no slot is set, and an open editor keeps it open. Collapsed, its header shows a one-line summary of the slots in use ("Color, Detail (2)"). It is a grid of **three columns** of slots: Color, Size, Label, Detail, Tooltip, Shape, Path, Angle, Filters, Date range, Drill, Pages.
 
 - **Every tool is always reachable** (there is no More menu). Tools the chart type doesn't use are **quiet** (dimmed) unless they hold fields: Size / Shape outside scatter, square, circle; Path outside line, area; Angle outside pie, donut; Detail, Drill and Pages by default.
 - **A slot** is an icon over its name, 65px × 50px with 8px of padding on every side and 4px between slots. It shows a **count badge** when it holds fields, riding the slot's top-right corner (half a gap outside it, so a two-digit count never reaches the icon), and is a **drop target** (drag a field straight onto it). The slot's long hint (what it accepts) is its `title`; an empty editor's drop zone says only "drop a field" / "drop fields".

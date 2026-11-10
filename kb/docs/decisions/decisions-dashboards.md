@@ -180,3 +180,10 @@ Decided 2026-11-02 (autonomous build). A relationship may match on more than one
 - **Dark accent:** `--accent` (single-measure bars, primary buttons) and categorical slot 1 move from the neon `#c3df5a` to the sage-lime `#a9bd6a` (S ≈ 38 %, contrast kept; `--on-accent` stays `#12130f`). The wash tint behind the glass keeps the lime `--signal`.
 - **Kept:** the Colour-blind safe palette keeps its Okabe-Ito vermilion (an opt-in, fixed published set); Muted has none.
 - **Guarded by:** `tests/js/contrast.test.mjs` (no red hue, S ≤ 70 %, a calm dark accent).
+
+### D96 — A number that looks like an identifier starts as a dimension
+
+A beginner test found `order_id`, `line_no`, `customer_id` listed under Measures and summed on placement. A newly placed numeric field whose name reads like an identifier (`id`, `uid`, `pk`, `key`, `code`, `*_id`, `*Id`, `*_no`, `*_num`, `*_number`, `*_nbr`, `*_key`, `*_code`, `*_ref`, case-insensitive) now defaults to a dimension (Discrete); the field pane lists it under Dimensions.
+
+- **Only the default changes.** `defaultRole` (`Dashboard/field-role.js`) runs when a field is placed and when the pane is grouped; an explicit Continuous / Discrete choice and every role stored in a workbook are unchanged (`roleOf` still reads a pill's saved role first).
+- **Rejected:** guessing from the data (a distinct-count scan per column); a per-field role setting (more UI for the same result — the pill's Continuous / Discrete choice already does it).

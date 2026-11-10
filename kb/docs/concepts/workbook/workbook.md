@@ -95,7 +95,7 @@ Problems while restoring:
 ## Export & Import
 
 The tab bar's right end holds the site-wide icons: **Appearance** and the **Settings** menu (Theme…, `Shell/Index.cshtml`, right-most). The **Performance** timings tile is in the sidebar body (worksheet and dashboard tabs only), and workbook actions live in the worksheet view bar.
-The worksheet view bar's icon row ends with **Export**, **Import workbook…** and the **Sheet actions** (⋯) menu, and the **Export** menu holds **Workbook (JSON)**, and the worksheet sidebar's **Parameters** icon opens the Parameters dialog.
+The worksheet view bar's icon row ends with **Export** and the **Sheet actions** (⋯) menu, and the **Export** menu holds **Workbook (JSON)** and **Import workbook…**, and the worksheet sidebar's **Parameters** icon opens the Parameters dialog.
 The actions:
 
 - **Workbook (JSON)** (worksheet view bar → Export) downloads `workbook-YYYY-MM-DD.json` of the current state. When the canvas is empty it says "Nothing to export yet".
