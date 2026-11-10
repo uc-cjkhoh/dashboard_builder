@@ -200,7 +200,7 @@ Nothing here reaches the server; dashboards add no endpoint
 
 | Key | Shape | Meaning |
 |---|---|---|
-| `marks.size` | pill \| null | numeric → scatter bubble size |
+| `marks.size` | pill \| null | numeric → scatter bubble size, bar thickness, line / area marker size, treemap area |
 | `marks.label` | pill \| null | value drawn on each mark |
 | `marks.detail` | [pill] | dimensions adding group-by granularity |
 | `marks.tooltip` | [pill] | custom tooltip lines |

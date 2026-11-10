@@ -24,15 +24,15 @@ An invalid field mapping shows a friendly **hint**, never an error (e.g. "A poin
 
 | Type | Needs | Notes |
 |---|---|---|
-| Bar | ≥1 measure | grouped at ≥2 measures |
+| Bar | ≥1 measure | grouped at ≥2 measures. A colour measure shades each bar; Size varies each bar's thickness (one measure) — [worksheet-marks.md](worksheet-marks.md#colour-size-and-shape-by-chart-type-t03-19-t03-20-t03-21-t01-21) |
 | Stacked bar | ≥1 measure | |
-| Line / Area | ≥1 measure | Path can reorder vertices |
-| Pie / Donut | 1 dimension + 1 measure | legend-labelled slices; measure → angle. Data labels writes "name: value" on each slice, plus its percent when there are up to 6 slices |
-| Scatter | 2 measures (X, Y) | Size, continuous Colour and Shape apply. Both axes fit the data (they do not start at 0) |
+| Line / Area | ≥1 measure | Path can reorder vertices. A colour measure (one measure) colours the markers and the line by value; Size scales each marker |
+| Pie / Donut | 1 dimension + 1 measure | legend-labelled slices; measure → angle; a colour measure shades the slices (Size has no meaning here). Data labels writes "name: value" on each slice, plus its percent when there are up to 6 slices |
+| Scatter | 2 measures (X, Y) | Size, continuous Colour, a Colour dimension (one series per member) and Shape apply. Both axes fit the data (they do not start at 0) |
 | Combo (dual-axis) | 2 measures | The 1st measure as bars; the rest on a right axis as a line (Format → **Right-axis marks**: Line, Bars or Area). Always vertical. Format → **Synchronise axes** shares one range |
 | Square / Circle | as scatter | scatter builder with a symbol override (same fitted axes) |
 | Heatmap | 2 dimensions + 1 measure | Single-hue token colour scale. Format → **Shape**: **Squares** (cells) or **Circles**. Circles are scatter marks on the same category grid: 80 % of the smaller cell side, 6–48 px, re-sized with the pane. Cells without a value draw no circle. Circles are coloured by the same value legend; labels, tooltip and Reverse palette behave as for squares; the cell banding is dropped |
-| Treemap | 1–2 dimensions + 1 measure | nested rectangles sized by the measure |
+| Treemap | 1–2 dimensions + 1 measure | nested rectangles sized by the measure, or by the Size measure (then the shelf measure is the label's second line); a colour measure shades the tiles |
 | Histogram | 1 numeric field | equal-width bins; own endpoint. A whole-number column (Int / UInt) bins on whole-number widths and the axis reads "3" or "3–4" (never "1–1.4"); the response carries `whole` |
 | Box plot | 1 numeric field, a column or a row-level calculation (+ optional group dimension, from any related table) | Q1 / median / Q3, whiskers at the 1.5 IQR (interquartile range) fences, outlier points beyond them (hollow rings, ≤ 500); `POST /api/boxplot` |
 | Waterfall | ≥1 dimension + 1 measure | Each value is a change from the running total, then a **Total** bar. Increases `--chart-cat-1`, decreases `--chart-cat-6`, total muted — legend-named, and each step labelled with its sign. May run below zero (drawn as a custom series) |
@@ -70,7 +70,7 @@ One control picks the chart type. The view bar's picker (icon + name, e.g. **KPI
 
 - **Dimmed types.** A type the fields can't draw is dimmed, with the reason as its tooltip. It is still pickable; the chart then shows the hint. The first matching rule wins:
   1. Min/Max of a text or date value → only Table / Text / KPI.
-  2. A discrete Colour split on bar / stacked / line / area needs exactly one measure. With one it is valid, since the split renders before the rule table.
+  2. A discrete Colour split on bar / stacked / line / area needs exactly one measure (scatter-family Colour splits need the usual two). With one it is valid, since the split renders before the rule table.
   3. Histogram / box plot need a numeric field.
   4. Then `CHART_NEEDS`.
 - **Best fit.** The best fit carries the Show Me icon (tooltip "Best fit for these fields"), only if it is valid and Columns / Rows aren't empty. It is chosen from the dimensions on Columns / Rows (plus a drill level); encodings don't steer it:
@@ -148,7 +148,7 @@ On Bar / Line / Area the card opens with a row of **items**: Reference line, Ban
   - Not built: scatter, independent mark types per measure, a user-set axis range.
 - **Marker size (px)** (`format.markerSize`: blank = automatic, else a whole number 4–40) — out-of-range input is refused with a toast, never clamped. It sets the point size of:
   - scatter / square / circle marks when no Size field is mapped (default 14, shape scatter 12);
-  - line / area / combo markers (default 8, which also keeps the dots on a long series);
+  - line / area / combo markers (default 8, which also keeps the dots on a long series; a Size field overrides it per point);
   - the circle heatmap (otherwise 80 % of the cell).
   - It is not offered on squares heatmaps or on charts without point marks.
 - **Mark border** (`format.markBorder` `none` | `thin` (1 px) | `medium` (2 px) | `thick` (3 px), default `none`) — strokes marks in the chosen border colour (default the muted chart ink, `--chart-muted`; all follow light and dark).
