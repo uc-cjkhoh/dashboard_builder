@@ -55,3 +55,11 @@ function and retrying as the keyword form on failure: it re-parses nested `IF (â
 - **`DATENAME(part, d)`** takes `'weekday'` or `'month'` and always answers in English: `dateName` does not read the server
   locale, so the same workbook reads the same everywhere. Other parts are refused (`YEAR`, `MONTH` already give numbers).
 - **`DATETRUNC`** returns one `DateTime64` type for every unit, so results of different units can share an `IF`.
+
+### D93 â€” `FISCALYEAR` and `FISCALQUARTER` take a literal start month
+- **`FISCALYEAR(s, d)` / `FISCALQUARTER(s, d)`** take the month the fiscal year starts (`s`, a literal whole number 1 to 12,
+  validated on both sides and bound as an `Int32`) and a date. They answer numbers, so they group, filter and sort like
+  `YEAR` and `QUARTER`. Fiscal calendars are not a workbook setting: the start month is written where it is used.
+- **The year is named by the calendar year it ends in** (start month 10: 15 Oct 2024 is fiscal 2025), the common
+  convention; start month 1 is the calendar year. **Rejected:** naming by the start year (reads as the wrong year for a
+  fiscal year that is mostly the next one); a start month from a field (the unit and amount rule: literals only).
