@@ -9,6 +9,7 @@ import { initTabs } from "../Tabs/tabs.js";
 import { initDashboards } from "../Dashboard/dashboards.js";
 import { initBoard } from "../Board/board.js";
 import { initStory } from "../Story/story.js";
+import { initStart } from "../Start/start.js";
 import { initWorkbook } from "../Workbook/workbook.js";
 import { initTheme } from "../Core/theme.js";
 import { initScheme } from "../Core/scheme.js";
@@ -48,5 +49,6 @@ initTabs();
 initDashboards();
 initBoard();
 initStory();
+initStart(); // the start screen over the Data Source view while disconnected
 initWorkbook(); // restores the saved workbook on the connection:changed event below
 initConnection();
