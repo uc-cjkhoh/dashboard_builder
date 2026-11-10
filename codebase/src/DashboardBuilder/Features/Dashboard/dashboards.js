@@ -49,6 +49,7 @@ import { targetChoices, effectiveTargetMeasure } from "./bullet-model.js";
 import { sourceOfTable, wireSource, distinctPlan, distinctMembers } from "../Core/source-model.js";
 import { heldOutCards } from "../Relations/relation-rules.js";
 import { keyOf, SCATTER_TYPES, COLOR_USES, colorMode, isDrillActive, drillActiveDim, planDims, planMeasures, sortTargets as planSortTargets, measureName as planMeasureName, buildPlan as planQuery, periodFilters as planPeriodFilters, calcContext, appliedShared as planAppliedShared, withParams, toServerFilter, isDateOnlyType } from "./sheet-plan.js";
+import { isMissingPill, missingIn, missingMessage } from "./missing-columns.js";
 import { catalogFromEntities } from "../Calc/calc-resolve.js";
 import { newCalcFilter, isCalcPill, makeCalcPill, refusal, syncCalcPills, pillSlots, clearCalcPills, clearFilterCalc, usesCalc, CALC_AGGS } from "../Calc/calc-pill.js";
 import { openCalcDialog } from "../Calc/calc-dialog.js";
@@ -265,6 +266,7 @@ export function initDashboards() {
   // restored filter's category — re-render once if any filter is still waiting for one.
   bus.addEventListener("entity:loaded", () => {
     const dash = activeWorksheet();
+    if (dash && isWorksheetActive() && missingIn(dash.sheet, entities).length) { renderShelves(); runChart(); return; } // the catalog just arrived and a pill names a column that isn't in it
     if (!dash || !isWorksheetActive() || !dash.sheet.filters.some((f) => !f.category)) return;
     const missing = dash.sheet.filters.filter((f) => !f.category).length;
     withCategories(dash.sheet.filters, categoryOf);
@@ -1718,6 +1720,14 @@ export function initDashboards() {
       const pl = readPill(e);
       if (pl) { e.preventDefault(); e.stopPropagation(); moveField(pl.shelf, pl.index, shelfKey, i); }
     });
+    return markMissing(p, f);
+  }
+  // A pill whose column isn't in the table's catalog: the invalid look (dashed danger border + warning icon + the reason); the query leaves it out.
+  function markMissing(p, f) {
+    if (!isMissingPill(f, entities)) return p;
+    p.classList.add("ws-pill--invalid");
+    p.prepend(icon("warning", { size: 14 }));
+    p.title = missingMessage(f);
     return p;
   }
   // Move a field pill within/between the Columns & Rows shelves, then enforce the invariant that
@@ -1778,7 +1788,7 @@ export function initDashboards() {
     const p = pill(`${f.table}.${f.column}${continuous ? " (gradient)" : ""}`, remove);
     p.classList.add("ws-pill--color");
     if (continuous) p.title = "Continuous colour — a sequential gradient (Bar/Scatter)";
-    return p;
+    return markMissing(p, f);
   }
   // Filter pill. The operator select drives which value control shows: a single input for the
   // scalar ops, a distinct-values multi-select for `in`, and two bounds for `between`.
@@ -1808,7 +1818,7 @@ export function initDashboards() {
     if (shared) { p.classList.add("ws-pill--shared"); p.prepend(el("span", "ws-pill__badge", "All dashboards")); }
     optionsOn(p, ctxId, nameOf(f), entries);
     if (chk.state === "invalid") p.title = `${chk.error} — right-click for options`;
-    return p;
+    return markMissing(p, f);
   }
   // The value editor in a filter's context popup; a refused value is marked on the input that failed.
   function filterValueEditor(dash, s, f, chk) {
@@ -2709,7 +2719,7 @@ export function initDashboards() {
   function markPill(f, remove) {
     const p = pill(nameOf(f), remove);
     p.classList.add("ws-pill--mark");
-    return p;
+    return markMissing(p, f);
   }
   // Size takes one NUMERIC field (it scales the mark — a bubble); non-numeric is nudged away.
   function addSize(dash, f) {

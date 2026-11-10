@@ -235,7 +235,7 @@ public sealed partial class ClickHouseGateway
     {
         var columns = await DescribeColumnsAsync(info, database, table, ct); // validates db + table
         if (!columns.Any(c => string.Equals(c.Name, column, StringComparison.Ordinal)))
-            throw new UnknownIdentifierException("Unknown column.");
+            throw UnknownIdentifierException.Column(column, database, table);
 
         var n = ClampDistinct(limit);
         var sql = $"SELECT DISTINCT {Identifier.Quote(column)} AS v FROM {Identifier.QualifiedName(database, table)} " +
@@ -533,7 +533,7 @@ public sealed partial class ClickHouseGateway
                 conditions.Add(BuildCondition(f.Op, $"p{i}", calcExpr, calcCategory, CalcSql.CalcLabel(f.Column), $"filters[{i}]", f.Value, f.Values, parameters));
                 continue;
             }
-            if (string.IsNullOrEmpty(f.Column) || !byName.TryGetValue(f.Column, out var ci)) throw new UnknownIdentifierException("Unknown column.");
+            if (string.IsNullOrEmpty(f.Column) || !byName.TryGetValue(f.Column, out var ci)) throw UnknownIdentifierException.Column(f.Column);
             conditions.Add(BuildCondition(f.Op, $"p{i}", Identifier.Quote(f.Column), ci.Category, f.Column, $"filters[{i}]", f.Value, f.Values, parameters, ClickHouseType.IsDateOnly(ci.Type)));
         }
         return conditions.Count > 0 ? " WHERE " + string.Join(" AND ", conditions) : string.Empty;
@@ -549,7 +549,7 @@ public sealed partial class ClickHouseGateway
         if (requested is { Length: > 0 })
         {
             var byName = all.ToDictionary(c => c.Name, c => c, StringComparer.Ordinal);
-            return (requested.Select(n => byName.TryGetValue(n, out var c) ? c : throw new UnknownIdentifierException("Unknown column.")).ToList(), false);
+            return (requested.Select(n => byName.TryGetValue(n, out var c) ? c : throw UnknownIdentifierException.Column(n)).ToList(), false);
         }
         return (all.Take(ApiLimits.MaxRowsColumns).ToList(), all.Count > ApiLimits.MaxRowsColumns);
     }
@@ -625,7 +625,7 @@ public sealed partial class ClickHouseGateway
             var picked = new List<ColumnInfo>();
             for (var i = 0; i < requested.Length; i++)
             {
-                if (maps.Any(m => !m.ContainsKey(requested[i]))) throw new UnknownIdentifierException("Unknown column.");
+                if (maps.Any(m => !m.ContainsKey(requested[i]))) throw UnknownIdentifierException.Column(requested[i]);
                 if (!Shared(requested[i])) throw new RequestValidationException($"'{requested[i]}' has a different kind of values in the tables, so they can't be stacked.", $"columns[{i}]");
                 picked.Add(maps[0][requested[i]]);
             }
@@ -719,8 +719,8 @@ public sealed partial class ClickHouseGateway
     internal static void CheckUnpivot(IReadOnlyList<ColumnInfo> described, string[] columns, string[] keep)
     {
         var byName = described.ToDictionary(c => c.Name, c => c, StringComparer.Ordinal);
-        foreach (var k in keep) if (!byName.ContainsKey(k)) throw new UnknownIdentifierException("Unknown column.");
-        foreach (var c in columns) if (!byName.ContainsKey(c)) throw new UnknownIdentifierException("Unknown column.");
+        foreach (var k in keep) if (!byName.ContainsKey(k)) throw UnknownIdentifierException.Column(k);
+        foreach (var c in columns) if (!byName.ContainsKey(c)) throw UnknownIdentifierException.Column(c);
         var kind = byName[columns[0]].Category;
         for (var i = 1; i < columns.Length; i++)
             if (byName[columns[i]].Category != kind) throw new RequestValidationException($"'{columns[i]}' has a different kind of values from '{columns[0]}', so they can't share one Value column.", $"columns[{i}]");
@@ -793,7 +793,7 @@ public sealed partial class ClickHouseGateway
         var columns = await DescribeColumnsAsync(info, database, table, ct); // validates db + table
         var byName = columns.ToDictionary(c => c.Name, c => c, StringComparer.Ordinal);
         if (string.IsNullOrEmpty(req.Column) || !byName.TryGetValue(req.Column, out var col))
-            throw new UnknownIdentifierException("Unknown column.");
+            throw UnknownIdentifierException.Column(req.Column, database, table);
         if (col.Category != ClickHouseType.Numeric)
             throw new UnknownIdentifierException("Histogram needs a numeric column.");
 
@@ -854,12 +854,12 @@ public sealed partial class ClickHouseGateway
         var columns = await DescribeColumnsAsync(info, database, table, ct); // validates db + table
         var byName = columns.ToDictionary(c => c.Name, c => c, StringComparer.Ordinal);
         if (string.IsNullOrEmpty(req.Measure) || !byName.TryGetValue(req.Measure, out var measure))
-            throw new UnknownIdentifierException("Unknown column.");
+            throw UnknownIdentifierException.Column(req.Measure, database, table);
         if (measure.Category != ClickHouseType.Numeric)
             throw new UnknownIdentifierException("Box plot needs a numeric measure.");
 
         var hasDim = !string.IsNullOrEmpty(req.Dimension);
-        if (hasDim && !byName.ContainsKey(req.Dimension!)) throw new UnknownIdentifierException("Unknown column.");
+        if (hasDim && !byName.ContainsKey(req.Dimension!)) throw UnknownIdentifierException.Column(req.Dimension, database, table);
 
         var qm = Identifier.Quote(req.Measure);
         var qualified = Identifier.QualifiedName(database, table);
@@ -1062,7 +1062,7 @@ public sealed partial class ClickHouseGateway
         async Task<string> QualifyAsync(string db, string table, string column)
         {
             var cols = await ColumnsOf(db, table);
-            if (!cols.ContainsKey(column)) throw new UnknownIdentifierException("Unknown column.");
+            if (!cols.ContainsKey(column)) throw UnknownIdentifierException.Column(column, db, table);
             if (!aliases.TryGetValue(Key(db, table), out var alias))
                 throw new UnknownIdentifierException("Field references a table not in the query.");
             return $"{alias}.{Identifier.Quote(column)}";
@@ -1126,13 +1126,13 @@ public sealed partial class ClickHouseGateway
             {
                 extraLeft.Add((await QualifyAsync(j.Left.Db, j.Left.Table, pair.Left), pair.Right));
                 await ColumnsOf(j.Right.Db, j.Right.Table);
-                if (!categories[Key(j.Right.Db, j.Right.Table)].ContainsKey(pair.Right)) throw new UnknownIdentifierException("Unknown column.");
+                if (!categories[Key(j.Right.Db, j.Right.Table)].ContainsKey(pair.Right)) throw UnknownIdentifierException.Column(pair.Right, j.Right.Db, j.Right.Table);
             }
 
             var rightKey = Key(j.Right.Db, j.Right.Table);
             await ColumnsOf(j.Right.Db, j.Right.Table);
             var rightCols = categories[rightKey];
-            if (!rightCols.ContainsKey(j.Right.Column)) throw new UnknownIdentifierException("Unknown column.");
+            if (!rightCols.ContainsKey(j.Right.Column)) throw UnknownIdentifierException.Column(j.Right.Column, j.Right.Db, j.Right.Table);
             if (!aliases.TryGetValue(rightKey, out var rightAlias))
             {
                 rightAlias = $"t{next++}";
@@ -1230,7 +1230,7 @@ public sealed partial class ClickHouseGateway
             var mAgg = (m.Agg ?? "count").ToLowerInvariant();
             if (!Aggregations.Contains(mAgg)) throw new UnknownIdentifierException("Unknown aggregation.");
             if (mAgg != "count" && !(await ColumnsOf(m.Db, m.Table)).ContainsKey(m.Column))
-                throw new UnknownIdentifierException("Unknown column.");
+                throw UnknownIdentifierException.Column(m.Column, m.Db, m.Table);
             var category = mAgg == "count" ? ClickHouseType.Numeric : TypeCast.EffectiveCategory((await ColumnsOf(m.Db, m.Table)).GetValueOrDefault(m.Column, ClickHouseType.Other), m.Cast);
             if (mAgg is "sum" or "avg" or "median" or "percentile" or "stddev" or "variance" && category != ClickHouseType.Numeric)
                 throw new RequestValidationException($"{char.ToUpperInvariant(mAgg[0])}{mAgg[1..]} needs a numeric column — {m.Column} is {category}.", $"measures[{mIdx}]");
@@ -1298,7 +1298,7 @@ public sealed partial class ClickHouseGateway
             else
             {
                 var byCols = await ColumnsOf(by.Db, by.Table);
-                if (!byCols.TryGetValue(by.Column, out var byCat)) throw new UnknownIdentifierException("Unknown column.");
+                if (!byCols.TryGetValue(by.Column, out var byCat)) throw UnknownIdentifierException.Column(by.Column, by.Db, by.Table);
                 byCat = TypeCast.EffectiveCategory(byCat, by.Cast);
                 if (agg == "attr" && byCat is ClickHouseType.Compound or ClickHouseType.Other)
                     throw new RequestValidationException($"Top-N can't rank by attr of {by.Column} — it is a compound column.", $"filters[{i}].topBy");
@@ -1599,4 +1599,17 @@ public sealed partial class ClickHouseGateway
 }
 
 /// <summary>Thrown when a client-supplied identifier isn't present in the live catalog.</summary>
-public sealed class UnknownIdentifierException(string message) : Exception(message);
+public sealed class UnknownIdentifierException(string message) : Exception(message)
+{
+    /// <summary>"Unknown column." naming the column (and its table when known). The name is the caller's text, so control
+    /// characters are dropped and it is cut at 64 characters; it is only ever echoed in the message, never used in SQL.</summary>
+    public static UnknownIdentifierException Column(string? column, string? database = null, string? table = null)
+    {
+        var name = new string((column ?? "").Where(ch => !char.IsControl(ch)).ToArray());
+        if (name.Length > 64) name = name[..64] + "…";
+        var where = string.IsNullOrEmpty(database) || string.IsNullOrEmpty(table) ? "" : $" in {Clean(database)}.{Clean(table)}";
+        return new UnknownIdentifierException(name.Length == 0 ? "Unknown column." : $"Unknown column \"{name}\"{where}.");
+    }
+
+    private static string Clean(string s) => s.Length > 64 ? s[..64] + "…" : new string(s.Where(ch => !char.IsControl(ch)).ToArray());
+}

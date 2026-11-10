@@ -14,7 +14,9 @@ import { addEntity, clearModel } from "../Canvas/canvas.js";
 import { restoreRelationship } from "../Relations/relations.js";
 import { loadWorkbooks, saveWorkbooks } from "../Start/start-store.js";
 import { rememberWorkbook, summarize } from "../Start/start-model.js";
-import { serializeWorkbook, parseWorkbook, storageKey, legacyStorageKey } from "./workbook-model.js";
+import { serializeWorkbook, parseWorkbook, storageKey, legacyStorageKey, restoredSummary, issueCount } from "./workbook-model.js";
+import { api } from "../Core/api.js";
+import { catalogIssues, tablesNamed, columnKey } from "../Dashboard/missing-columns.js";
 
 // Workbook: the whole builder state survives a reload. It auto-saves to this browser's storage —
 // one workbook per connected server + user — and reopens on the next connect when the canvas is
@@ -58,7 +60,7 @@ export function initWorkbook() {
 }
 
 // --- autosave & restore ------------------------------------------------------
-function onConnection(v) {
+async function onConnection(v) {
   flushSave(); // finish saving under the previous server's key
   view = v;
   key = storageKey(view);
@@ -70,11 +72,14 @@ function onConnection(v) {
   let wb;
   try { wb = parseWorkbook(saved); } catch (err) { keepUnreadable(saved, err); return; }
   if (!wb.entities.length && !wb.tabs.length) return;
+  const stillThere = key;
+  await addCatalogIssues(wb); // the live columns are known now: a worksheet pill naming a missing one is reported
+  if (key !== stillThere || !isEmpty()) return; // disconnected or started building while the catalog was read
   if (!openWorkbook(wb)) { blockedKey = key; return; } // partial state must not overwrite the stored entry
-  const restored = `Restored your last workbook (${count(wb.entities.length, "table")}, ${count(wb.worksheets.length, "worksheet")}${wb.dashboards.length ? `, ${count(wb.dashboards.length, "dashboard")}` : ""}${wb.stories.length ? `, ${count(wb.stories.length, "story")}` : ""}).`;
+  const restored = restoredSummary(wb);
   if (wb.issues.length) {
-    toast(`${restored} ${wb.issues.length} part(s) were reset.`, "info");
-    listDialog(`Restored your last workbook with ${wb.issues.length} issue(s)`,
+    toast(`${restored} ${issueCount(wb.issues.length)} to review.`, "info");
+    listDialog(`Restored your last workbook with ${issueCount(wb.issues.length)}`,
       wb.issues.slice(0, 20).concat(wb.issues.length > 20 ? [`…and ${wb.issues.length - 20} more.`] : []));
   } else toast(restored, "ok");
 }
@@ -246,20 +251,33 @@ async function importFile(input) {
     );
     if (!ok) return;
   }
+  await addCatalogIssues(wb);
   if (openWorkbook(wb)) blockedKey = null; // a deliberate import replaces whatever was stored
   if (wb.issues.length) {
-    await listDialog(`Opened ${file.name} with ${wb.issues.length} issue(s)`,
+    await listDialog(`Opened ${file.name} with ${issueCount(wb.issues.length)}`,
       wb.issues.slice(0, 20).concat(wb.issues.length > 20 ? [`…and ${wb.issues.length - 20} more.`] : []));
   } else toast(`Opened ${file.name}.`, "ok");
 }
 
 // --- helpers -----------------------------------------------------------------
+/** Reads the live columns of the tables the worksheets use and adds an issue for each pill naming a column that isn't there
+ *  (the pill itself is marked and left out of its query by the worksheet). A table that can't be read adds nothing. */
+async function addCatalogIssues(wb) {
+  const real = new Set(wb.entities.filter((e) => !e.source).map((e) => columnKey(e.db, e.table)));
+  const tables = tablesNamed(wb.worksheets).filter((t) => real.has(columnKey(t.db, t.table))).slice(0, 50);
+  if (!tables.length) return;
+  const catalog = new Map();
+  await Promise.all(tables.map(async ({ db, table }) => {
+    try { catalog.set(columnKey(db, table), new Set((await api.columns(db, table)).map((c) => c.name))); } catch { /* unreadable: nothing to report for it */ }
+  }));
+  wb.issues.push(...catalogIssues(wb.worksheets, catalog));
+}
+
 function currentState() {
   return { entities, relationships, tabs, active: currentView(), theme: currentTheme(), sharedFilters, fieldMeta, parameters, hierarchies, calculations, nextCalcId: nextCalcId() };
 }
 
 const isEmpty = () => entities.size === 0 && tabs.length === 0;
-const count = (n, noun) => `${n} ${noun}${n === 1 ? "" : "s"}`;
 
 function warnNotSaved(text) {
   if (warned === text) return;

@@ -689,3 +689,14 @@ export function storageKey(view, version = WORKBOOK_VERSION) {
 
 /** The v1 autosave key: read when no v2 entry exists yet (and never deleted or written). */
 export const legacyStorageKey = (view) => storageKey(view, 1);
+
+const plural = (n, noun) => `${n} ${noun}${n === 1 ? "" : "s"}`;
+/** "1 issue" / "3 issues". */
+export const issueCount = (n) => plural(n, "issue");
+/** The restore toast: tables apart from unions / unpivots; dashboards and stories only when there are some. */
+export function restoredSummary(wb) {
+  const sources = wb.entities.filter((e) => e.source).length;
+  const parts = [plural(wb.entities.length - sources, "table"), ...(sources ? [`${sources} ${sources === 1 ? "union/unpivot" : "unions/unpivots"}`] : []), plural(wb.worksheets.length, "worksheet"),
+    ...(wb.dashboards.length ? [plural(wb.dashboards.length, "dashboard")] : []), ...(wb.stories.length ? [plural(wb.stories.length, "story")] : [])];
+  return `Restored your last workbook (${parts.join(", ")}).`;
+}

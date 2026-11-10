@@ -106,7 +106,7 @@ public sealed partial class ClickHouseGateway
     {
         var cols = await DescribeColumnsAsync(info, e.Db, e.Table, ct); // validates db + table
         return cols.FirstOrDefault(c => string.Equals(c.Name, e.Column, StringComparison.Ordinal))
-               ?? throw new UnknownIdentifierException("Unknown column.");
+               ?? throw UnknownIdentifierException.Column(e.Column, e.Db, e.Table);
     }
 
     /// <summary>

@@ -115,6 +115,22 @@ public class SourceQueryTests
         var d = await Assert.ThrowsAsync<UnknownIdentifierException>(() => gw.QueryAsync(info, Req(rows: [new ColumnRef("d", "real", "x")]), default));
         Assert.Equal("Field references a table not in the query.", d.Message);
     }
+    [Fact] public async Task An_unknown_column_is_named_in_the_message()
+    {
+        using var stub = new StubClickHouse(Answer);
+        var gw = new ClickHouseGateway(NullLogger<ClickHouseGateway>.Instance);
+        var info = new ClickHouseConnectionInfo("127.0.0.1", stub.Port, "u", "p", false, false);
+        var ex = await Assert.ThrowsAsync<UnknownIdentifierException>(() => gw.QueryAsync(info, Req(measures: [new MeasureRef("d", "U", "quantity_typo", "sum")]), default));
+        Assert.Contains("quantity_typo", ex.Message);
+        Assert.Contains("d.U", ex.Message);
+    }
+    [Fact] public void The_column_name_in_the_message_is_cleaned_and_cut()
+    {
+        var ex = UnknownIdentifierException.Column("a\nb" + new string('x', 100));
+        Assert.DoesNotContain("\n", ex.Message);
+        Assert.True(ex.Message.Length < 100);
+        Assert.Equal("Unknown column.", UnknownIdentifierException.Column("").Message);
+    }
     [Fact] public async Task An_unknown_source_table_or_column_is_an_unknown_identifier()
     {
         using var stub = new StubClickHouse(Answer);
