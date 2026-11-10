@@ -14,7 +14,7 @@ open question, promote it to a decision.
 | D1–D25, D88, D90 (worksheet background shade; the box plot is a worksheet-shaped request) | this file |
 | D26–D60, D65–D68, D73 (calculated fields, parameters, member labels, groups, split / unpivot) | [decisions-calculated-fields.md](decisions-calculated-fields.md) |
 | D61–D64, D69, D71–D72, D74, D79–D81, D85–D86, D92, D96 (a number that looks like an identifier starts as a dimension), D97 (dashboards, hierarchies, option controls, desktop-only, compound join keys, Gantt, stories, diverging hue pair, no red in the categorical palette) | [decisions-dashboards.md](decisions-dashboards.md) |
-| D70 (recent connection sources), D89 (start screen: recent workbooks), D98 (Secure and Trust as visible switches; the certificate note waits) | [decisions-connection.md](decisions-connection.md) |
+| D70 (recent connection sources), D89 (start screen: recent workbooks — withdrawn), D98 (Secure and Trust as visible switches; the certificate note waits) | [decisions-connection.md](decisions-connection.md) |
 | D82 (calculated fields as row filters), D84, D87 (a filter on an aggregated measure, `HAVING`; its range slider), D91 (a calculated filter on a single-table read), D95 (View data reads the first measure's table) | [decisions-filters.md](decisions-filters.md) |
 | D83 (groups on whole-number and true/false fields), D94 (a NULL label on a group field) | [decisions-calculated-fields.md](decisions-calculated-fields.md) |
 | D75–D77 (`NULL`, `IN` / `BETWEEN`, keyword `IF`), D78 (`MAKEDATE`, `DATENAME`), D93 (`FISCALYEAR`, `FISCALQUARTER`) | [decisions-logic.md](decisions-logic.md) |
