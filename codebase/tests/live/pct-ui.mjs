@@ -49,6 +49,8 @@ async function check(name, fn) {
 }
 const must = (cond, msg) => { if (!cond) throw new Error(msg); };
 const J = JSON.stringify;
+const AGGL = { sum: 'Sum', avg: 'Average', min: 'Minimum', max: 'Maximum', median: 'Median', stddev: 'Standard deviation', variance: 'Variance', count: 'Count', countDistinct: 'Count distinct', countNonNull: 'Count non-empty', attr: 'Attribute (single value)' }; // the menu's plain labels
+const AGGRAW = Object.fromEntries(Object.entries(AGGL).map(([k, v]) => [v, k]));
 
 let wbDir = null, b = null;
 try {
@@ -129,8 +131,8 @@ try {
   await waitFor(`!!__t.chip('region')`, 'field pane filled');
 
 
-  const pillAggs = async () => { await ev(`document.querySelector('.ws-shelf--rows .ws-pill').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 300, clientY: 200 }))`); const r = await ev(`[...document.querySelectorAll('.ctx-menu [role=menuitemradio]')].map((o) => [o.textContent.trim() === 'Percentile…' ? 'percentile' : o.textContent.trim(), o.textContent.trim()])`); await ev(`document.querySelector('.ctx-menu')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`); return r; };
-  const setAgg = async (v) => { await ev(`document.querySelector('.ws-shelf--rows .ws-pill').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 300, clientY: 200 }))`); await ev(`[...document.querySelectorAll('.ctx-menu [role=menuitemradio]')].find((o) => o.textContent.trim() === ${J(v === 'percentile' ? 'Percentile…' : v)}).click()`); };
+  const pillAggs = async () => { await ev(`document.querySelector('.ws-shelf--rows .ws-pill').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 300, clientY: 200 }))`); const r = await ev(`[...document.querySelectorAll('.ctx-menu [role=menuitemradio]')].map((o) => [o.textContent.trim() === 'Percentile…' ? 'percentile' : (${J(AGGRAW)})[o.textContent.trim()] ?? o.textContent.trim(), o.textContent.trim()])`); await ev(`document.querySelector('.ctx-menu')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`); return r; };
+  const setAgg = async (v) => { await ev(`document.querySelector('.ws-shelf--rows .ws-pill').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 300, clientY: 200 }))`); await ev(`[...document.querySelectorAll('.ctx-menu [role=menuitemradio]')].find((o) => o.textContent.trim() === ${J(v === 'percentile' ? 'Percentile…' : AGGL[v] ?? v)}).click()`); };
   const pctInput = `document.querySelector('.ctx-menu .ws-pill__pctin')`;
   const typePct = async (text) => {
     await ev(`(() => { const e = ${pctInput}; e.focus(); e.select(); return true; })()`);
@@ -148,7 +150,7 @@ try {
     const opts = await pillAggs();
     const pct = opts.find(([v]) => v === 'percentile');
     must(pct && pct[1] === 'Percentile…', `menu: ${J(opts)}`);
-    must(opts.filter(([v, t]) => v !== 'percentile' && t !== v).length === 0, `renamed options: ${J(opts)}`);
+    must(opts.filter(([v, t]) => v !== 'percentile' && t !== (AGGL[v] ?? v)).length === 0, `renamed options: ${J(opts)}`);
     must(!(await ev(`!!document.querySelector('.ctx-menu .ws-pill__pctin')`)), 'percent box shown before choosing it');
   });
   await check('choosing Percentile… shows a labelled percent box at 90, and the request carries agg percentile with p 0.9', async () => {
@@ -197,7 +199,7 @@ try {
   await check('percentile is not in the field default-aggregation menu', async () => {
     await ev(`(() => { const c = __t.chip('amount'); c.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 40 })); return true; })()`);
     const items = await ev(`(() => { const c = __t.chip('amount'); return [...document.querySelectorAll('.ctx-menu .menu__item')].map((x) => x.textContent.trim()); })()`);
-    must(items.includes('median') && !items.includes('percentile'), `default menu: ${J(items)}`);
+    must(items.includes('Median') && !items.includes('percentile') && !items.includes('Percentile…'), `default menu: ${J(items)}`);
     await b.key('Escape', { code: 'Escape', vk: 27 });
   });
   await check('screenshots, light and dark', async () => {

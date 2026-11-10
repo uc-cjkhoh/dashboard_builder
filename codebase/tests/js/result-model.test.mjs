@@ -58,7 +58,7 @@ test("pathOrderedRows orders by the Path dimension key or measure; null without 
 test("statusText: marks and measures; rows x columns only for a table; the selection", () => {
   const r = res([row(["EU"], 1), row(["US"], 2)]);
   assert.equal(statusText(sheet(), r), "2 marks · 1 measure");
-  assert.equal(statusText(sheet({ chartType: "table" }), r), "2 marks · 2 rows × 1 column · 1 measure");
+  assert.equal(statusText(sheet({ chartType: "table" }), r), "2 marks · 2 × 1 table · 1 measure");
   assert.equal(statusText(sheet({ selection: { label: "region = EU" } }), res([row(["EU"], 1)], { measures: ["a", "b"] })), "1 mark · 2 measures · Selected: region = EU");
 });
 test("captionText: measures by dimensions plus the count of usable filters", () => {
@@ -163,4 +163,20 @@ test("scatterShapeGroups keeps raw Shape members of every kind for the legend: n
   assert.strictEqual(byName.get("7"), 7);
   assert.strictEqual(byName.get("007"), "007", "a numeric-looking string stays a string");
   assert.strictEqual(byName.get("web"), "web");
+});
+
+test("captionText names a table calculation after the measure", () => {
+  const names = { measureName: (f) => `${f.agg ?? "sum"} ${f.column}`, nameOf: (f) => f.column };
+  const m = { ...meas("amount"), tableCalc: { type: "pctTotal", along: "auto" } };
+  assert.equal(captionText(sheet({ rows: [dim("region")], columns: [m] }), names), "sum amount · % of total by region");
+  const none = { ...meas("amount"), tableCalc: { type: "none" } };
+  assert.equal(captionText(sheet({ rows: [dim("region")], columns: [none] }), names), "sum amount by region");
+});
+test("orderColumnTuples: members ascend unless a measure sort applies", async () => {
+  const { orderColumnTuples } = await import("../../src/DashboardBuilder/Features/Dashboard/grid-model.js");
+  const t = [["Returned"], ["Shipped"], ["Cancelled"], ["Delivered"]];
+  assert.deepEqual(orderColumnTuples(t, false).map((x) => x[0]), ["Cancelled", "Delivered", "Returned", "Shipped"]);
+  assert.deepEqual(orderColumnTuples(t, true).map((x) => x[0]), ["Returned", "Shipped", "Cancelled", "Delivered"]);
+  assert.deepEqual(orderColumnTuples(t, false, "desc").map((x) => x[0]), ["Shipped", "Returned", "Delivered", "Cancelled"]);
+  assert.deepEqual(orderColumnTuples([["b", 2], ["a", 10], ["a", 9], [null, 1]], false), [["a", 9], ["a", 10], ["b", 2], [null, 1]]);
 });

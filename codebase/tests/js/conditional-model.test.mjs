@@ -65,3 +65,11 @@ test("a setting is active with a scale, bars or any rule", () => {
   assert.equal(isActive({ ...emptyRule(), mode: "bars" }), true);
   assert.equal(isActive({ ...emptyRule(), rules: [{ op: ">", value: 1, tone: "good" }] }), true);
 });
+
+import { newRule, matchRule as _m } from "../../src/DashboardBuilder/Features/Dashboard/conditional-model.js";
+test("a new rule has no threshold and so applies to nothing until one is typed", () => {
+  const r = newRule();
+  assert.equal(r.value, null);
+  assert.equal(_m(5, [r]), null);
+  assert.equal(_m(5, [{ ...r, value: 3 }])?.tone, "good");
+});

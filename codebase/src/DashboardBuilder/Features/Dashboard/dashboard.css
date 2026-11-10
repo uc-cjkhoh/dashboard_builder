@@ -475,7 +475,7 @@
 .ws-cf { flex-basis: 100%; display: grid; gap: var(--s2); padding-top: var(--s2); border-top: 1px solid var(--line); }
 .ws-cf__title { font-weight: 600; }
 .ws-cf__row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s4); }
-.ws-cf__num { width: 96px; }
+.ws-cf__num { width: 112px; }
 .ws-cf__add { justify-self: start; }
 
 /* ---- presentation: full screen, print ------------------------- */
@@ -673,3 +673,26 @@
 .ws-pill__having-badge.is-invalid { color: var(--danger-ink); }
 .ws-pill__slider { flex-basis: 100%; display: flex; flex-direction: column; gap: var(--s1); }
 .ws-pill__slider-input { width: 100%; accent-color: var(--accent); }
+
+/* A measure pill: the aggregation before the name, a table calculation after it; a long name is cut with an ellipsis (full text on hover). */
+.ws-pill { max-width: 100%; }
+.ws-pill__text { min-width: 0; max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
+.ws-pill__agg, .ws-pill__calc { flex: none; font-weight: 400; }
+.ws-pill__agg::after { content: "·"; margin-left: var(--s1); opacity: .6; }
+.ws-pill__calc { max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+
+/* Format and Analytics carry their name beside the icon on a wide view bar (VIEW_LABEL_MIN_WIDTH in viewbar-model.js), icons only below. */
+.ws-viewbar__label { display: none; font-size: var(--fs-body); }
+@media (min-width: 1280px) {
+  .ws-viewbar__btn--labelled { display: inline-flex; align-items: center; width: auto; padding: 0 var(--s2); gap: var(--s1); }
+  .ws-viewbar__btn--labelled .ws-viewbar__label { display: inline; }
+}
+
+/* Marks block: the collapsed header carries a one-line summary of the slots in use. */
+.ws-marks__summary { margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 400; color: var(--ink-3); font-size: var(--fs-body); }
+.ws-shelf--marks[open] > .ws-group__head .ws-marks__summary { display: none; }
+
+/* Conditional-format rows: the measure and mode names are not cut off. */
+.ws-cf .ws-fmt-select { max-width: 200px; }
+.ws-currency { display: inline-flex; align-items: center; gap: var(--s2) var(--s4); }
+.ws-currency__input { width: 56px; }

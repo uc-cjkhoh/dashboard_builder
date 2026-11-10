@@ -37,9 +37,9 @@ test("the date-grouping notice names the grain", () => {
   assert.equal(bucketNotice(null), null);
 });
 test("table progress: partial, complete, unknown", () => {
-  assert.equal(tableProgress(500, 12345), "Rows 1–500 of 12,345 — scroll to load more");
-  assert.equal(tableProgress(12345, 12345), "12,345 rows");
-  assert.equal(tableProgress(1, 1), "1 row");
+  assert.equal(tableProgress(500, 12345), "Result rows 1–500 of 12,345 — scroll to load more");
+  assert.equal(tableProgress(12345, 12345), "12,345 result rows");
+  assert.equal(tableProgress(1, 1), "1 result row");
   assert.equal(tableProgress(10, null), null);
 });
 test("the next page loads near the bottom, and only while rows remain", () => {

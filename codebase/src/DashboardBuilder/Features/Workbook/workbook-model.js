@@ -480,7 +480,7 @@ function cleanConditional(c, w, issues) {
       issues.push(`${w}: conditional formatting for "${String(key).slice(0, 60)}" cleared.`);
       continue;
     }
-    const rules = cfg.rules.slice(0, CF_MAX_RULES).filter((r) => r && CF_OPS.has(r.op) && CF_TONES.has(r.tone) && num(r.value));
+    const rules = cfg.rules.slice(0, CF_MAX_RULES).filter((r) => r && CF_OPS.has(r.op) && CF_TONES.has(r.tone) && (r.value === null || num(r.value)));
     if (rules.length < Math.min(cfg.rules.length, CF_MAX_RULES) || cfg.rules.length > CF_MAX_RULES)
       issues.push(`${w}: some conditional-formatting rules for "${key.slice(0, 60)}" were dropped.`);
     out[key] = { mode: cfg.mode, scale: cfg.scale, mid: cfg.mid ?? null, rules: rules.map((r) => ({ op: r.op, value: r.value, tone: r.tone })) };

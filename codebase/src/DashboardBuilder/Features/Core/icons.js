@@ -35,6 +35,7 @@ export const PATHS = Object.freeze({
   drill: "M5 4v6a3 3 0 0 0 3 3h7M12 10l3 3-3 3",
   pages: "M6 3h8v14H6zM3 5v10M17 5v10",
   sort: "M6 4v12M3 13l3 3 3-3M14 16V4M11 7l3-3 3 3",
+  paint: "M14.5 3.5l2 2-7.5 7.5-3-1 1-3zM6 12.5c-1.5 0-2.5 1-2.5 2.5 0 1.2-.5 2-.5 2s3.5.5 4.5-1c.7-1 .7-2.5-1.5-3.5",
   format: "M4 6h8M15 6h1M4 14h2M9 14h7M12 4v4M7 12v4",
   export: "M10 3v9M6 8.5l4 4 4-4M4 15v2h12v-2",
   import: "M10 13V4M6 7.5l4-4 4 4M4 15v2h12v-2",

@@ -50,8 +50,8 @@ export const bucketNotice = (bucket) => (bucket?.grain ? `Dates grouped by ${buc
 export function tableProgress(loaded, total) {
   const n = (v) => Number(v).toLocaleString("en-US");
   if (total == null) return null;
-  if (loaded >= total) return `${n(total)} row${total === 1 ? "" : "s"}`;
-  return `Rows 1–${n(loaded)} of ${n(total)} — scroll to load more`;
+  if (loaded >= total) return `${n(total)} result row${total === 1 ? "" : "s"}`;
+  return `Result rows 1–${n(loaded)} of ${n(total)} — scroll to load more`;
 }
 
 /** Should the Table fetch its next page? Near the bottom (within `margin` px) and more to load. */

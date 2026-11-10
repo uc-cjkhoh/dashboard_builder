@@ -51,6 +51,8 @@ async function check(name, fn) {
 }
 const must = (cond, msg) => { if (!cond) throw new Error(msg); };
 const J = JSON.stringify;
+const AGGL = { sum: 'Sum', avg: 'Average', min: 'Minimum', max: 'Maximum', median: 'Median', stddev: 'Standard deviation', variance: 'Variance', count: 'Count', countDistinct: 'Count distinct', countNonNull: 'Count non-empty', attr: 'Attribute (single value)' }; // the menu's plain labels
+const AGGRAW = Object.fromEntries(Object.entries(AGGL).map(([k, v]) => [v, k]));
 
 let wbDir = null, b = null;
 try {
@@ -153,7 +155,7 @@ try {
   const theme = async (t) => { await ev(`document.documentElement.setAttribute('data-scheme', ${J(t)})`); await settle(500); };
   const chartReady = () => waitFor(`!!document.querySelector('.ws-chart-canvas') && !!window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas'))`, 'chart drawn');
 
-  const setAgg = async (pillSel, v) => { await ev(`document.querySelector(${J(pillSel)}).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 300, clientY: 200 }))`); await ev(`[...document.querySelectorAll('.ctx-menu [role=menuitemradio]')].find((o) => o.textContent.trim() === ${J(v)}).click()`); await settle(400); };
+  const setAgg = async (pillSel, v) => { await ev(`document.querySelector(${J(pillSel)}).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 300, clientY: 200 }))`); await ev(`[...document.querySelectorAll('.ctx-menu [role=menuitemradio]')].find((o) => o.textContent.trim() === ${J(AGGL[v] ?? v)}).click()`); await settle(400); };
   globalThis.__failShot = async (n) => shot('fail-' + n.slice(0, 12).replace(/\W/g, '_') + '.png');
 
   await check('Gantt: a date start (min) and a length in days draw one bar per region, first on top, never colour alone', async () => {

@@ -24,3 +24,7 @@ export function sortSummary(targets, sort) {
   if (!targets.length) return null;
   return { current: targets.find((t) => t.id === sort?.by) ?? targets[0], dir: sort?.dir === "desc" ? "desc" : "asc" };
 }
+
+/** Format and Analytics carry a text label beside their icon from this viewport width up (icons only below). */
+export const VIEW_LABEL_MIN_WIDTH = 1280;
+export const showViewLabels = (width) => width >= VIEW_LABEL_MIN_WIDTH;

@@ -723,3 +723,18 @@ test("an old file, a non-boolean flag and an unknown direction all read as the p
   assert.equal(t.aggregateFirst, true);
   assert.equal(t.filterDirection, undefined); // both is the default, never stored
 });
+
+test("a conditional rule with no threshold yet survives import; a long currency symbol is kept up to 8 characters", () => {
+  const key = "shop.orders.amount:sum";
+  const wb = parseWorkbook(wbText({ entities: [], dashboards: [{ name: "S", sheet: {
+    rows: [pill({})],
+    format: { currencySymbol: "ABCD", conditional: { [key]: { mode: "none", scale: "sequential", mid: null, rules: [{ op: ">", value: null, tone: "good" }] } } },
+  } }] }));
+  const sh = wb.worksheets[0].sheet;
+  assert.deepEqual(sh.format.conditional[key].rules, [{ op: ">", value: null, tone: "good" }]);
+  assert.equal(sh.format.currencySymbol, "ABCD"); // the import keeps what it always accepted: a string up to 8 characters
+  const long = parseWorkbook(wbText({ entities: [], dashboards: [{ name: "S", sheet: { rows: [pill({})], format: { currencySymbol: "123456789" } } }] }));
+  assert.equal(long.worksheets[0].sheet.format.currencySymbol, "$");
+  const ok = parseWorkbook(wbText({ entities: [], dashboards: [{ name: "S", sheet: { rows: [pill({})], format: { currencySymbol: "RM" } } }] }));
+  assert.equal(ok.worksheets[0].sheet.format.currencySymbol, "RM");
+});

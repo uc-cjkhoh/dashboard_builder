@@ -19,7 +19,7 @@ const COLUMNS = {
   customers: [['name', 'String', 'text']],
 };
 const ROWS = [['EU', 'FR'], ['EU', 'DE'], ['US', 'US'], ['US', 'CA']];
-const COLS = [['Retail', 'Gold'], ['Retail', 'Basic'], ['Trade', 'Gold']];
+const COLS = [['Retail', 'Basic'], ['Retail', 'Gold'], ['Trade', 'Gold']]; // ascending, as the table now orders its column members
 const queries = [];     // every /api/query body, in order
 let tables = ['orders', 'customers'];
 function answer({ method, path, body }) {
@@ -180,7 +180,7 @@ try {
     await shot('expand-collapse-rows-light.png');
   });
 
-  await check('the collapsed row\'s value is the sum of its children (110 + 210 = 320), the amount cell of Retail / Gold', async () => {
+  await check('the collapsed row\'s value is the sum of its children (110 + 210 = 320), the amount cell of Retail / Basic', async () => {
     await clickToggle('Expand EU (rows)');
     await waitFor(`[...${tbl}.tBodies[0].rows].length === 4`, 'EU expanded');
     const open = await bodyRows();

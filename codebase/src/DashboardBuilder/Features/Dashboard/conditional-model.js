@@ -20,6 +20,9 @@ export const measureKey = (entry) =>
 /** A fresh setting for one measure. */
 export const emptyRule = () => ({ mode: "none", scale: "sequential", mid: null, rules: [] });
 
+/** A fresh rule: no threshold yet, so it applies to nothing until one is typed. */
+export const newRule = () => ({ op: ">", value: null, tone: "good" });
+
 /** Finite min / max of some values, or null. */
 export function extentOf(values) {
   let min = Infinity, max = -Infinity;
@@ -86,6 +89,7 @@ export function matchRule(v, rules) {
   const n = Number(v);
   if (v == null || v === "" || !Number.isFinite(n)) return null;
   for (const r of rules ?? []) {
+    if (r.value == null || r.value === "") continue; // no threshold typed yet: the rule applies to nothing
     const t = Number(r.value);
     if (!Number.isFinite(t)) continue;
     const hit = r.op === ">" ? n > t : r.op === ">=" ? n >= t : r.op === "<" ? n < t : r.op === "<=" ? n <= t

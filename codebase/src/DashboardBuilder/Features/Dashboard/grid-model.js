@@ -33,3 +33,19 @@ export function levelSpans(leaves, ll) {
   }
   return spans;
 }
+
+/**
+ * Column members in ascending order (numbers numerically, text naturally, empty last), so the headers follow the same rule as the
+ * rows (a saved descending sort gives descending headers; empty stays last). `keepOrder` leaves the query's order alone — a sort on a measure orders the columns too.
+ */
+export function orderColumnTuples(tuples, keepOrder, dir = "asc") {
+  if (keepOrder) return tuples;
+  const cmp = (a, b) => {
+    if (a == null || a === "") return b == null || b === "" ? 0 : 1;
+    if (b == null || b === "") return -1;
+    if (typeof a === "number" && typeof b === "number") return a - b;
+    return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: "base" });
+  };
+  const sign = dir === "desc" ? -1 : 1;
+  return [...tuples].sort((x, y) => { for (let i = 0; i < Math.max(x.length, y.length); i++) { const a = x[i], b = y[i]; const empty = (v) => v == null || v === ""; if (empty(a) !== empty(b)) return empty(a) ? 1 : -1; const c = cmp(a, b); if (c) return sign * c; } return 0; });
+}

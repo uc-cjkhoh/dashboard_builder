@@ -25,3 +25,15 @@ test("sort summary falls back to the first target when the sorted field left the
   const targets = [{ id: "a", label: "t.a" }];
   assert.deepEqual(sortSummary(targets, { by: "gone", dir: "desc" }), { current: targets[0], dir: "desc" });
 });
+
+import { showViewLabels, VIEW_LABEL_MIN_WIDTH } from "../../src/DashboardBuilder/Features/Dashboard/viewbar-model.js";
+test("Format and Analytics show text labels from 1280 px up", () => {
+  assert.equal(VIEW_LABEL_MIN_WIDTH, 1280);
+  assert.equal(showViewLabels(1280), true);
+  assert.equal(showViewLabels(1279), false);
+});
+test("Format has its own brush glyph, not the swap arrows", () => {
+  assert.ok(PATHS.paint);
+  assert.notEqual(PATHS.paint, PATHS.swap);
+  assert.notEqual(PATHS.paint, PATHS.format);
+});
