@@ -12,6 +12,20 @@ export const SIZE_PRESETS = Object.freeze([
 export const sizeKey = (size) => (size ? `${size.width}x${size.height}` : "auto");
 export const sizeLabel = (size) => (size ? `${size.width} × ${size.height}` : "Automatic");
 
+export const isPreset = (size) => Boolean(size) && SIZE_PRESETS.some((p) => sizeKey(p) === sizeKey(size));
+
+/** Two typed values (strings) → { size } or { error, keys } (keys = the fields at fault). Out of range is refused, never clamped. */
+export function customSizeProblem(widthText, heightText) {
+  const num = (t) => { const s = String(t ?? "").trim(); return s === "" ? null : Number(s); };
+  const width = num(widthText), height = num(heightText);
+  if (width === null) return { error: "Enter a width.", keys: ["width"] };
+  if (height === null) return { error: "Enter a height.", keys: ["height"] };
+  if (!Number.isFinite(width) || !Number.isFinite(height)) return { error: "The width and height are numbers.", keys: [Number.isFinite(width) ? "height" : "width"] };
+  const error = sizeError({ width, height });
+  if (error) return { error, keys: [error.includes("width") && !error.includes("whole") ? "width" : error.includes("height") ? "height" : Number.isInteger(width) ? "height" : "width"] };
+  return { size: { width, height } };
+}
+
 /** The first thing wrong with a size, in the user's words, or null. */
 export function sizeError(size) {
   if (!size || typeof size !== "object") return "A fixed size needs a width and a height.";

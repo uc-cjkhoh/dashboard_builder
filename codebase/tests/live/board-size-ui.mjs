@@ -151,11 +151,11 @@ try {
   });
   await check('Range: an invalid set is refused in place and not saved', async () => {
     await setRange('Min height', '500'); // above the 300 maximum
-    const inv = await ev(`[...document.querySelectorAll('.board-bar__rangein')].map((i) => i.getAttribute('aria-invalid'))`);
+    const inv = await ev(`[...document.querySelectorAll('.board-bar__rangegrp .board-bar__rangein')].map((i) => i.getAttribute('aria-invalid'))`);
     must(J(inv) === J(['false', 'false', 'true', 'true']), 'only the two height inputs are invalid: ' + J(inv));
     must(await ev(`/minimum height/.test(document.querySelector('.board-bar__status')?.textContent ?? document.body.textContent)`), 'the status line does not say which limit');
     await setRange('Min height', '250'); // valid again: the marks clear
-    const ok = await ev(`[...document.querySelectorAll('.board-bar__rangein')].map((i) => i.getAttribute('aria-invalid'))`);
+    const ok = await ev(`[...document.querySelectorAll('.board-bar__rangegrp .board-bar__rangein')].map((i) => i.getAttribute('aria-invalid'))`);
     must(ok.every((v) => v === 'false'), 'aria-invalid not reset after a valid edit: ' + J(ok));
     must(await ev(`document.getElementById('board-grid').getBoundingClientRect().height === 300`), 'layout wrong after valid edit');
     await setRange('Min height', '500');
@@ -210,6 +210,29 @@ try {
     await pick('800x600');
     await waitFor(`!document.getElementById('board-grid').classList.contains('is-ranged') && document.getElementById('board-grid').getBoundingClientRect().width === 800`, 'fixed wins');
     must(await ev(`document.querySelector('.board-bar__range').hidden`), 'inputs still shown');
+    await pick('auto');
+  });
+
+  await check('Custom: exact width and height; a bad pair is refused in place (size kept); valid applies, saves and survives a reload', async () => {
+    await pick('custom');
+    await waitFor(`document.getElementById('board-grid').getBoundingClientRect().width === 1000`, 'custom default 1000');
+    const setIn = (k, v) => ev(`(() => { const i = document.querySelector('[aria-label="Custom ${k} in pixels"]'); i.value = ${J(String(v))}; i.dispatchEvent(new Event('change')); return true; })()`);
+    await setIn('width', 99999);
+    await b.sleep(150);
+    must(await ev(`document.querySelector('[aria-label="Custom width in pixels"]').getAttribute('aria-invalid')`) === 'true', 'width not flagged');
+    must(await ev(`document.getElementById('board-grid').getBoundingClientRect().width`) === 1000, 'size changed on a refused value');
+    await setIn('width', 1111); await setIn('height', 555);
+    await waitFor(`(() => { const r = document.getElementById('board-grid').getBoundingClientRect(); return r.width === 1111 && r.height === 555; })()`, 'custom applied');
+    must(await ev(`document.querySelector('.board-bar__size').value`) === 'custom', 'select not Custom');
+    await waitFor(`(() => { const v = localStorage.getItem(${J(KEY)}); const s = v && JSON.parse(v).dashboards[0].size; return s?.width === 1111 && s?.height === 555; })()`, 'autosaved');
+    await shot('board-size-custom.png');
+    await b.sleep(700);
+    await b.send('Page.reload');
+    await connect();
+    await waitFor(`document.getElementById('board-grid').getBoundingClientRect().width === 1111`, 'custom after reload');
+    must(await ev(`document.querySelector('[aria-label="Custom height in pixels"]').value`) === '555', 'height input not restored');
+    await pick('1280x720');
+    must(await ev(`[...document.querySelectorAll('.board-bar__range')].every((e) => e.hidden)`), 'inputs still shown on a preset');
     await pick('auto');
   });
 
