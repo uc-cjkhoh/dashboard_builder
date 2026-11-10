@@ -86,6 +86,7 @@ public static class CalcCompiler
                     // DATEADD's unit picks a fixed function below (nothing bound); DATEDIFF binds its unit word.
                     FnArg.Unit => fn.Fn is "dateadd" or "datetrunc" ? ((StrNode)fn.Args[i]).V.ToLowerInvariant() : Param(((StrNode)fn.Args[i]).V.ToLowerInvariant(), "String"),
                     FnArg.Part => ((StrNode)fn.Args[i]).V.ToLowerInvariant(), // picks a fixed dateName part below; nothing bound
+                    FnArg.Month => Param((int)((NumNode)fn.Args[i]).V, "Int32"),
                     FnArg.Amount => Param((int)CalcValidator.AmountLiteral(fn.Args[i])!.Value, "Int32"),
                     _ => Walk(fn.Args[i]),
                 });
@@ -125,6 +126,9 @@ public static class CalcCompiler
                 "isoyear" => $"toFloat64(toISOYear({a[0]}))",
                 "datename" => $"dateName('{a[0]}', toDateTime64({a[1]}, 0))",
                 "datetrunc" => DateTrunc(a[0], a[1]),
+                // A fiscal year is named by the calendar year it ends in (start month 1 is the calendar year); the quarter counts months from the start month.
+                "fiscalyear" => $"toFloat64(toYear({a[1]}) + if({a[0]} > 1 AND toMonth({a[1]}) >= {a[0]}, 1, 0))",
+                "fiscalquarter" => $"toFloat64(intDiv((toInt32(toMonth({a[1]})) - {a[0]} + 12) % 12, 3) + 1)",
                 "makedate" => MakeDate(a[0], a[1], a[2]),
                 _ => throw new InvalidOperationException($"Unsupported function '{fn.Fn}'."),
             };

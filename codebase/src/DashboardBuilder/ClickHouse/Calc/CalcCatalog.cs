@@ -55,8 +55,9 @@ public sealed record AggSpec(IReadOnlyList<string> Accepts, string? Result, bool
 /// <c>Date</c>: any date expression. <c>Unit</c>: a text literal naming one of <see cref="CalcCatalog.DateUnits"/> (any case).
 /// <c>Amount</c>: a whole-number literal, either sign, at most <see cref="CalcLimits.MaxDateAmount"/>.
 /// <c>Value</c>: a number, date or text expression (not a condition).
-/// <c>Part</c>: a <see cref="CalcCatalog.DateNameParts"/> text literal. <c>Number</c>: any number expression.</summary>
-public enum FnArg { Text, Length, Position, Separator, Date, Unit, Amount, Value, Part, Number }
+/// <c>Part</c>: a <see cref="CalcCatalog.DateNameParts"/> text literal. <c>Number</c>: any number expression.
+/// <c>Month</c>: a whole-number literal 1..12 (a fiscal year's start month).</summary>
+public enum FnArg { Text, Length, Position, Separator, Date, Unit, Amount, Value, Part, Number, Month }
 
 /// <summary>One row-level function: its arguments in order and its result type. <c>MaxArgs</c> above <c>Args.Count</c> lets
 /// the last argument kind repeat (<c>CONCAT</c>).</summary>
@@ -133,6 +134,8 @@ public static class CalcCatalog
         ["isoyear"] = Fn(CalcType.Number, FnArg.Date),
         ["datename"] = Fn(CalcType.Text, FnArg.Part, FnArg.Date),
         ["datetrunc"] = Fn(CalcType.Date, FnArg.Unit, FnArg.Date),
+        ["fiscalyear"] = Fn(CalcType.Number, FnArg.Month, FnArg.Date),
+        ["fiscalquarter"] = Fn(CalcType.Number, FnArg.Month, FnArg.Date),
         ["makedate"] = Fn(CalcType.Date, FnArg.Number, FnArg.Number, FnArg.Number),
     };
 

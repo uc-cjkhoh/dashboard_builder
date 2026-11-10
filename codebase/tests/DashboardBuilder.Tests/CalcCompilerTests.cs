@@ -486,6 +486,22 @@ public class CalcCompilerTests
     }
 
     [Fact]
+    public void FISCALYEAR_binds_the_start_month_and_names_the_year_the_fiscal_year_ends_in()
+    {
+        var (sql, ps) = Compile(Fn("fiscalyear", new NumNode(10), F("placed")));
+        Assert.Equal("toFloat64(toYear(t0.`placed`) + if({c0p0:Int32} > 1 AND toMonth(t0.`placed`) >= {c0p0:Int32}, 1, 0))", sql);
+        Assert.Equal(new[] { ("c0p0", "Int32", (object)10) }, ps);
+    }
+
+    [Fact]
+    public void FISCALQUARTER_counts_months_from_the_bound_start_month()
+    {
+        var (sql, ps) = Compile(Fn("fiscalquarter", new NumNode(4), F("placed")));
+        Assert.Equal("toFloat64(intDiv((toInt32(toMonth(t0.`placed`)) - {c0p0:Int32} + 12) % 12, 3) + 1)", sql);
+        Assert.Equal(new[] { ("c0p0", "Int32", (object)4) }, ps);
+    }
+
+    [Fact]
     public void MAKEDATE_guards_whole_numbers_range_and_the_day_round_trip_and_binds_each_literal_once()
     {
         var (sql, ps) = Compile(Fn("makedate", new NumNode(2024), new NumNode(2), new NumNode(30)));
