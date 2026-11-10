@@ -10,7 +10,7 @@
 .conn-summary { position: relative; animation: conn-in var(--dur) var(--ease-out); }
 .conn-row { display: flex; align-items: center; gap: var(--s2); height: 32px; padding-left: var(--s2); }
 /* Actions: one group, pushed to the right edge of the row. */
-.conn-row__actions { display: flex; align-items: center; gap: 3px; margin-left: auto; flex: none; }
+.conn-row__actions { display: flex; align-items: center; gap: var(--s1); margin-left: auto; flex: none; }
 .conn-row__btn { flex: none; color: var(--ink-3); }
 .conn-row__btn:hover { color: var(--ink); }
 .conn-summary__host { flex: 1; min-width: 0; font-size: var(--fs-body); font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: color var(--dur) var(--ease); }

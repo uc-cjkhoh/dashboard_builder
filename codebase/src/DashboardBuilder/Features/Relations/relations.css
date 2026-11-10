@@ -175,5 +175,7 @@
 .key-pairs__item { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); padding: var(--s1) var(--s2); border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); }
 .key-pairs__suggest { display: flex; flex-wrap: wrap; gap: var(--s2); }
 .key-pairs__add { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
+/* The centred toast owns the foot while it shows (--toast-h tall, 24px up): the guide sits one gap above it, never behind it. */
+body:has(#toast:not([hidden])) .rel-guide { bottom: calc(var(--s6) + var(--toast-h) + var(--s2)); }
 .key-pairs__select { min-width: 0; max-width: 100%; }
 .key-pairs__problem { margin: 0; color: var(--ink-2); }

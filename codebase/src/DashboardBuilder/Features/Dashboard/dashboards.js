@@ -2421,7 +2421,7 @@ export function initDashboards() {
     head.append(close);
     panel.append(head);
     const zone = el("div", "ws-toolpanel__zone");
-    if (!tool.pills.length) zone.append(el("span", "ws-shelf__hint", tool.hint || "Drag a field here"));
+    if (!tool.pills.length) zone.append(el("span", "ws-shelf__hint", tool.multi ? "drop fields" : "drop a field")); // the long hint stays on the tile's title
     for (const p of tool.pills) zone.append(p);
     wireFieldDrop(zone, tool.onDrop);
     panel.append(zone, fieldPicker(tool));
@@ -2559,7 +2559,8 @@ export function initDashboards() {
       preview.innerHTML = r.ok && r.value ? tooltipHtml(r.value, sample, s.tooltipStyle) : ""; // escaped parts only (tooltip-model.js)
       if (!r.ok || !r.value) preview.textContent = "Automatic tooltip";
       const unknown = r.ok && r.value ? parseTooltip(r.value).fields.filter((n) => sample(n) === undefined) : [];
-      note.textContent = r.ok ? `${ta.value.length}/${LIMITS.tooltipText} · automatic tooltip kept on Table, Text, KPI, Heatmap, Treemap, discrete-colour splits, Scatter with Shape and the other special chart types${unknown.length ? ` · not in this view: ${unknown.map((n) => `<${n}>`).join(" ")}` : ""}` : r.error;
+      note.title = "Automatic tooltip kept on Table, Text, KPI, Heatmap, Treemap, discrete-colour splits, Scatter with Shape and the other special chart types";
+      note.textContent = r.ok ? `${ta.value.length}/${LIMITS.tooltipText} · automatic tooltip kept on special chart types${unknown.length ? ` · not in this view: ${unknown.map((n) => `<${n}>`).join(" ")}` : ""}` : r.error;
     };
     const save = () => {
       const r = checkTooltipText(ta.value);

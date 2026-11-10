@@ -54,6 +54,7 @@
   --fs-body: 14px; --fs-lead: 16px; --fs-title: 24px; --fs-display: 32px;
   --s1: 4px; --s2: 8px; --s4: 16px; --s6: 24px;
   --r: 8px; --r-pill: 999px; --ctl-h: 32px; --sidebar-w: 264px;
+  --toast-h: calc(var(--s4) + var(--s6) + 2px); /* one-line toast: 8px padding twice + its 24px close button + the 1px border twice */
   --topbar-h: 60px;            /* shared height of the sidebar brand and the canvas tab bar */
   --elev-2: 0 1px 2px rgb(20 21 22 / .06), 0 0 1px rgb(20 21 22 / .08);
   --elev-8: 0 4px 10px rgb(20 21 22 / .08), 0 0 1px rgb(20 21 22 / .10);
@@ -320,7 +321,7 @@ select.select:not([multiple]), select.input:not([multiple]) { appearance: none; 
 
 /* ---- Toast (generic, reused everywhere; role=status + aria-live) --------- */
 .toast { position: fixed; left: 50%; bottom: var(--s6); transform: translateX(-50%); z-index: 100; display: flex; align-items: center;
-  gap: var(--s2); max-width: min(560px, calc(100vw - 2 * var(--s4))); padding: var(--s2) var(--s2) var(--s2) var(--s4);
+  gap: var(--s2); max-width: min(560px, calc(100vw - 2 * var(--s4))); min-height: var(--toast-h); padding: var(--s2) var(--s2) var(--s2) var(--s4);
   border-radius: var(--r); box-shadow: var(--elev-16); color: var(--ink); font-size: var(--fs-body); font-weight: 500;
   animation: toast-in var(--dur-slow) var(--ease-out); }
 .toast--ok { border-left: 3px solid var(--ok-ink); } .toast--info { border-left: 3px solid var(--ink-3); }

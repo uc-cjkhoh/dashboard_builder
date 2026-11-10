@@ -113,7 +113,7 @@
 }
 /* Drag-to-reorder (Columns/Rows): a grip is the only draggable part so the pill's controls still work.
    The dragged pill dims; a hovered drop-target pill shows an insertion outline. */
-.ws-pill__grip { cursor: grab; color: currentColor; opacity: .5; line-height: 1; padding: 0; margin-left: -3px; user-select: none; }
+.ws-pill__grip { cursor: grab; color: currentColor; opacity: .5; line-height: 1; padding: 0; margin-left: calc(-1 * var(--s1)); user-select: none; }
 .ws-pill__grip:hover { opacity: .9; }
 .ws-pill__grip:active { cursor: grabbing; }
 .ws-pill.is-dragging { opacity: .45; }
@@ -197,11 +197,12 @@
 .ws-marks__grid { display: grid; gap: var(--s1); }
 .ws-marks__row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s1); }
 .ws-marks__row .ws-tool { position: relative; flex-direction: column; justify-content: center; gap: var(--s1); height: auto; min-width: 0;
-  padding: var(--s2) var(--s1); border-color: var(--line); background: var(--surface); }
+  padding: var(--s2); border-color: var(--line); background: var(--surface); }
 .ws-marks__row .ws-tool__text { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ws-marks__row .ws-tool.is-active { font-weight: 400; } /* bold would clip "Filters" in a 60px tile; the accent edge marks it */
+.ws-marks__row .ws-tool.is-active { font-weight: 400; } /* bold would clip "Filters" in a 65px tile; the accent edge marks it */
 .ws-marks__row .ws-tool.is-quiet:not(.is-set):not(.is-active) { color: var(--ink-3); }
-.ws-marks__row .ws-tool__badge { position: absolute; top: var(--s1); right: var(--s1); }
+/* The count rides the tile's corner, half a gap outside it: inside, a two-digit count would reach the centred icon. */
+.ws-marks__row .ws-tool__badge { position: absolute; top: calc(-1 * var(--s1)); right: calc(-1 * var(--s1)); }
 /* Ghost on glass: no fill at rest (the icon + label identify it); a frosted pill on hover; sinks on press;
    the open tool reads as selected (accent fill + edge + underline + weight). */
 .ws-tool {
@@ -332,7 +333,7 @@
 .ws-viewbar { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
 .ws-viewbar__group { display: flex; align-items: center; gap: var(--s2); min-width: 0; }
 .ws-viewbar__group--right { margin-left: auto; }
-.ws-viewbar__icons { display: flex; align-items: center; gap: var(--s1); }
+.ws-viewbar__icons { display: flex; align-items: center; gap: var(--s2); }
 .ws-viewbar__btn.is-active { background: var(--accent-soft); color: var(--accent-ink); }
 /* Ghost controls at the row's ends overhang by their 8px glyph slack, so the glyphs meet the card's inset. */
 .ws-viewbar__group > :first-child { margin-left: calc(-1 * var(--s2)); }
@@ -511,7 +512,7 @@
 .ws-select__link { display: inline-flex; align-items: center; gap: var(--s1); }
 
 /* ---- field pane: search, hidden toggle, ⋯ menu, rename ------------------- */
-.ws-fieldtools { display: grid; gap: var(--s2); position: sticky; top: calc(-1 * var(--s2)); z-index: 2; padding-block: var(--s1);
+.ws-fieldtools { display: grid; gap: var(--s2); position: sticky; top: calc(-1 * var(--s2)); z-index: 2; padding-block: var(--s1); margin-block: calc(-1 * var(--s1)); /* net 8px to the Marks grid and to the first table */
   background: color-mix(in srgb, var(--surface), var(--ink) 2%); }
 .ws-fieldtools__search { width: 100%; height: var(--ctl-h); }
 .ws-fieldtools__hidden { justify-self: start; height: 26px; font-size: var(--fs-body); }
