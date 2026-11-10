@@ -35,7 +35,7 @@ explorer, not an admin template.
 | Feature | Key classes |
 |---|---|
 | Shell | `.sidebar`, `.sidebar__section`, `.sidebar__title`, `.sidebar__resizer` (+ shared `.resizer`) |
-| Connection | `.conn-form`, `.conn-advanced` (collapsed `<details>`), `.form-field`, `.form-check`, `.form-warn` (cert warning), `.conn-summary` |
+| Connection | `.conn-form`, `.form-field`, `.form-check` (switch rows), `.form-warn` (cert note), `.form-error`, `.conn-summary`; on the Data Source while disconnected: `.start-card` (`__main` 3/4, `__side` 1/4, `__heading`, `__none`), `.conn-recent` (`__item`, `__pick`, `__meta`, `__remove`) |
 | Schema | `.sidebar__sources` (pinned Union / Unpivot), `.table-search`, `.table-list`, `.table-list__empty`, `.table-chip` (`draggable="true"`; `--dragging`), `.table-chip__grip`, `.table-chip__icon`, `.table-chip__name` |
 | Canvas | `.canvas`, `.canvas__bar` (glass tab bar), `.canvas__empty` (`.empty__model` ghost model: `.empty__card`, `.empty__row`, `.empty__link`, `.empty__end`), `.entity`, `.entity__head`, `.entity__title`, `.entity__toggle`, `.entity__status`, `.entity__cols`, `.entity--collapsed`, `.entity--dragging`, `.col-row`, `.col-row__key`, `.col-row__type` |
 | Relations | `.rel-svg` (`--labels`), `.rel-link` (`--selected`, `--hover`, `--label`), `.rel-link__line`, `.rel-link__hit`, `.col-row--linked`, `.rel-end`, `.rel-badge`, `.rel-guide` (the how-to pill), `.entity__keys`, `.entity__need` |

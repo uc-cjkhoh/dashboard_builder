@@ -4,6 +4,7 @@ Visual and interaction changes (styles, markup, layout, labels, icons, focus). G
 
 ## 2026-11-10
 
+- Start card while disconnected: the Data Source empty state (3/4) beside Recent connections (1/4); recent list leaves the sidebar (`ede4682`)
 - Remove the start screen: while disconnected the Data Source view shows its own empty state again (`da6aefa`)
 - Worksheet UX: pill aggregation and calc marker, plain agg labels, identifier columns as dimensions (D96), Format totals and currency symbol, empty new CF rule, status wording, sorted column members, view bar labels and Format icon, Import in Export menu, collapsible Marks (`9989575`)
 - Story: refuse an over-long new caption in place, cap the caption height (`8654215`)
