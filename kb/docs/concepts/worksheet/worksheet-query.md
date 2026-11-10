@@ -63,12 +63,12 @@ View data shows the rows **behind** a view. Two entry points open the rows dialo
 - the Export menu's **View data** — the whole view;
 - the selection bar's **View data** (`ws-select`, beside Keep only / Exclude) — the selected mark.
 
-It shows the first **100** rows (server cap 1000) of the view's **base table** — the first table the view uses — from `POST /api/rows` ([api.md § Rows](../../reference/api.md#rows)).
+It shows the first **100** rows (server cap 1000) of the view's **base table** — the table of its **first measure** (the fact table, e.g. orders), else the first table the view uses when there is no measure (D95) — from `POST /api/rows` ([api.md § Rows](../../reference/api.md#rows)).
 
 How the request is built: `viewData` in `dashboards.js` builds the usual plan with the selection removed, then `buildRowsRequest` (`Rows/rows-model.js`) turns it into the request.
 
 - **Sent:** the view's filters that sit **on the base table** (user and shared filters, drill path, page, date range), already resolved (relative dates → a bound `between`, parameter values applied).
 - **Selected mark:** added as a bound `=` on its column, whatever Keep only / Exclude is set to.
 - **Left out, and named** in an amber note in the dialog (never silently): whatever a single-table read **cannot** apply — filters on **joined** tables, a mark on a joined table, a **NULL** mark, and Top-N rankings. So for a joined view the rows are the base table's, not the joined result. This is a decision: rows are of one table, never a join.
-- **Dialog:** the title is "Data behind this view" or "Data behind <table.column = value>". The dialog, its truncation notice ("First N rows — more exist") and its CSV export are the schema browser's.
+- **Dialog:** the title names the table: "Rows of shop.orders behind this view" or "Rows of shop.orders behind <table.column = value>". The dialog, its truncation notice ("First N rows — more exist") and its CSV export are the schema browser's.
 - **Empty or broken views:** a view with no fields yet says "Add fields before viewing data."; an invalid calculation shows its problem instead.
