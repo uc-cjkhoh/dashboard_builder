@@ -14,8 +14,8 @@ The connection panel sits at the top of the sidebar. It adds the session's Click
 
 Layout (`form#conn-form`): the four fields are **one filled block** — a row each (Host, Port, User, Password), the labels in one shared lane (a subgrid: as wide as the longest label plus an 8px gap, so values align and no label touches its value),
 every row exactly 32px (the hairline between rows is an inset shadow, not a border); focus deepens the row's fill and an invalid row gets a 1px danger ring with its message under the value.
-Motion: rows enter in a 30ms stagger (fields, recent sources), the status dot settles / breathes / pops per state, the lost row rises in, the chevrons
-and switch thumbs ease, and **Connect** shows a spinner while it runs; all of it collapses under reduced motion. The open form is one rhythm: recent sources, the fields block, the two switch rows and the actions are stacked 8px apart; the fields and the options (switches + certificate
+Motion: rows enter in a 30ms stagger (fields, recent connections on the start card), the status dot settles / breathes / pops per state, the lost row rises in, the chevrons
+and switch thumbs ease, and **Connect** shows a spinner while it runs; all of it collapses under reduced motion. The open form is one rhythm: the fields block, the two switch rows and the actions are stacked 8px apart; the fields and the options (switches + certificate
 warning) are two blocks with the same fill, radius and 8px side inset, and **Connect** / **Cancel** are two equal columns (Connect alone spans the row). Under the fields, **Secure (TLS)** and **Trust self-signed certificate** are two always-visible **switch rows** (still checkboxes with `role="switch"`; on = ink, never a hue), then an inline error line when a connect failed, then a full-width **Connect**.
 
 | Field | Default | Notes |
@@ -45,10 +45,10 @@ After each successful connect, the source is remembered in this browser so it ca
   The list is most recent first, at most 5, one per host/port/user.
 - **The password is never stored** (golden rule 4). `recent-sources.js` copies only the fields above, and `sanitize` drops anything else on load
   ([D70](../../decisions/decisions-connection.md#d70--recent-connection-sources-are-non-secret-and-kept-in-the-browser)).
-- **Where it shows:** the list (`#conn-recent`) sits above the form while the form is open, set off from it by one hairline.
-  Each row is one flat line: the host (ellipsised) and the user in grey (full `host · user · :port` in the tooltip). Hover or focus washes the row and reveals the × (`.conn-recent__remove`).
-  It is hidden when there are none or while the summary shows.
-- **Picking one** refills the fields and switches, clears the password and focuses it.
+- **Where it shows:** not in the sidebar. The list (`#conn-recent`) is the right panel of the start card on the Data Source view, shown only while disconnected
+  ([below](#while-disconnected)). Each row is two lines: the host (ellipsised), then `user · port` in grey (full `host · user · :port` in the tooltip).
+  Hover or focus washes the row and reveals the × (`.conn-recent__remove`) at its right end. With none yet, the panel says "None yet."
+- **Picking one** expands the sidebar if it is collapsed, refills the fields and switches, clears the password and focuses it.
   The host is refilled exactly as it was entered (`formValues`), because a recent source is stored from the entered value, never a derived one.
 - **Certificate opt-in:** it is remembered too. Picking such a source refills the Trust switch as on; the password is still typed.
 - The × on a row forgets that source (shown on hover and on keyboard focus).
@@ -56,9 +56,15 @@ After each successful connect, the source is remembered in this browser so it ca
 
 ## While disconnected
 
-There is no separate start screen ([D89](../../decisions/decisions-connection.md#d89--withdrawn-the-start-screen-lists-recent-workbooks)).
-The Data Source view shows its own empty state, "Connect to a ClickHouse server to begin." with a **Connect** button that focuses Host
-([canvas.md](canvas.md)). Earlier servers are offered by **Recent connections** above.
+The Data Source view shows a **start card** (`.start-card`, markup in `Canvas/_Canvas.cshtml`, styles in `connection.css`) with two panels:
+
+- **Left, 3/4** (`.start-card__main`): the canvas empty state — the ghost model, "Connect to a ClickHouse server to begin." and **Connect**, which focuses Host
+  ([canvas.md § Empty state](canvas.md#empty-state)).
+- **Right, 1/4** (`#start-recent-panel`): **Recent connections** ([above](#recent-connections)).
+
+The card is up to 960px wide, centred, and stacks the panels under 900px of window width. It is a card only while the right panel shows:
+`connection.js` hides that panel once connected, and the empty state goes back to the bare column for the database / table steps.
+There is no separate start screen and no recent-workbooks list ([D89](../../decisions/decisions-connection.md#d89--withdrawn-the-start-screen-lists-recent-workbooks)).
 
 ## Validation
 

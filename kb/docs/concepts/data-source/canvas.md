@@ -79,7 +79,7 @@ With no entities, the canvas shows **a ghost model**, **one sentence** and **one
 
 | State | Sentence | Button → focuses |
 |---|---|---|
-| not connected | "Connect to a ClickHouse server to begin." | Connect → `#conn-host` |
+| not connected | "Connect to a ClickHouse server to begin." — on the start card, beside Recent connections ([connection.md](connection.md#while-disconnected)) | Connect → `#conn-host` |
 | no database chosen | "Choose a database in the sidebar." | Choose a database → `#db-select` |
 | database chosen | "Drag a table here from the sidebar to start your data source." | Find a table → `#table-search` |
 
