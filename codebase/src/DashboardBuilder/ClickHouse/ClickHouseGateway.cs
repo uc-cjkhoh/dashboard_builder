@@ -806,7 +806,8 @@ public sealed partial class ClickHouseGateway
 
         // lo/hi from the same filtered set; width guards against a zero span (all-equal column).
         // `bin` is clamped to the last bucket so the maximum value lands inside, not in an extra bin.
-        var sql = BuildHistogramSql(qname, qualified, where, bins);
+        var whole = ClickHouseType.IsWholeNumber(col.Type);
+        var sql = BuildHistogramSql(qname, qualified, where, bins, whole);
 
         using var httpClient = CreateHttpClient(info);
         await using var conn = new ClickHouseConnection(BuildConnectionString(info), httpClient);
@@ -825,18 +826,20 @@ public sealed partial class ClickHouseGateway
             binsOut.Add(new HistogramBin(x0, x1,
                 reader.IsDBNull(3) ? 0L : Convert.ToInt64(reader.GetValue(3), CultureInfo.InvariantCulture)));
         }
-        return new HistogramResult(binsOut);
+        return new HistogramResult(binsOut, whole);
     }
 
     /// <summary>The bucketing query. NULLs are excluded (a NULL value has no bin); <paramref name="where"/> is
     /// empty or " WHERE …" from the user filters, which the guard is combined with.</summary>
-    internal static string BuildHistogramSql(string qname, string qualified, string where, int bins)
+    internal static string BuildHistogramSql(string qname, string qualified, string where, int bins, bool whole = false)
     {
         var w = where.Length == 0 ? $" WHERE {qname} IS NOT NULL" : $"{where} AND {qname} IS NOT NULL";
         return
             $"WITH (SELECT min({qname}) FROM {qualified}{w}) AS lo, " +
             $"(SELECT max({qname}) FROM {qualified}{w}) AS hi, " +
-            $"if(hi > lo, (hi - lo) / {bins}, 1) AS width " +
+            (whole // a whole-number column bins on whole-number widths (never 1–1.4), so a bin holds integers only
+                ? $"if(hi > lo, greatest(1, ceil((hi - lo + 1) / {bins})), 1) AS width "
+                : $"if(hi > lo, (hi - lo) / {bins}, 1) AS width ") +
             $"SELECT least(toUInt32(floor(({qname} - lo) / width)), {bins - 1}) AS bin, " +
             $"lo + bin * width AS x0, lo + (bin + 1) * width AS x1, count() AS c " +
             $"FROM {qualified}{w} GROUP BY bin, x0, x1 ORDER BY bin";

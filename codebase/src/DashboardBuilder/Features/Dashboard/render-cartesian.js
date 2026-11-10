@@ -1,15 +1,17 @@
 import { renderChart as drawChart } from "./chart.js";
 import { dateLabelsOf } from "./date-labels.js";
 import { isCalcPill } from "../Calc/calc-pill.js";
-import { SCATTER_TYPES, marksOf, measureName as planMeasureName } from "./sheet-plan.js";
+import { SCATTER_TYPES, marksOf, planMeasures, measureName as planMeasureName } from "./sheet-plan.js";
+import { makeValueFormatter } from "../Core/format.js";
 import { REF_CHOICES, TREND_CHOICES, trendProblem, refValue, refConstant, trendSeries, pickMeasure, dataValues, bandBounds, bandLabel } from "./analytics-model.js";
 import { parameters } from "../Core/store.js";
 import { effectiveForecast } from "../Core/parameters-model.js";
 import { hint } from "./render-dom.js";
+import { fitWords } from "./chart-polish.js";
 import { selectHandler, legendSpec, memberSpec } from "./render-handlers.js";
 import { selectedIndicesOf } from "./dashboard-select.js";
 import { joinNotices } from "./notices.js";
-import { ANALYTICS_TYPES, scatterSymbol, primaryDim, chartOrientation, marksChannels, scatterShapeGroups, colorSplitData } from "./result-model.js";
+import { ANALYTICS_TYPES, scatterSymbol, primaryDim, chartOrientation, marksChannels, scatterShapeGroups, colorSplitData, colorSplitLabels, markFieldValues } from "./result-model.js";
 
 // The series charts: bar / stacked / line / area / combo, pie / donut, the scatter family (with Shape), and the colour
 // split. Each draws into `container` through chart.js and wires interaction only through the render context `rc`
@@ -17,7 +19,7 @@ import { ANALYTICS_TYPES, scatterSymbol, primaryDim, chartOrientation, marksChan
 
 /** Colour split: one series per colour value (the trailing group-by key); the primary dimension is the first non-colour key. */
 export function renderColorSplit(container, rc, sheet, type, result, format, fmtCat) {
-  const { categories, series, catTuples, colorVals } = colorSplitData(result, fmtCat);
+  const { categories, series, catTuples, colorVals, cellRows } = colorSplitData(result, fmtCat);
   // Click a mark -> the primary (first non-colour) dimension value = catTuples[dataIndex][0].
   const rawKeys = catTuples.map((t) => t[0]);
   const onSelect = selectHandler(rc, sheet, primaryDim(sheet), type, rawKeys);
@@ -28,7 +30,11 @@ export function renderColorSplit(container, rc, sheet, type, result, format, fmt
   const legend = legendSpec(rc, sheet, sheet.color?.[0], byName);
   const cf = sheet.color?.[0];
   const memberColourSpec = cf && !isCalcPill(cf) ? memberSpec(rc, sheet, cf, series.map((sr, i) => ({ name: sr.name, raw: colorVals[i] }))) : {};
-  drawChart(container, { type, categories, series, format, onSelect, selectedIndices, orientation, ...memberColourSpec, ...legend });
+  // Label: the Label field's value per (category, colour) cell — the split's series are not the result's rows, so map them.
+  const labelField = marksOf(sheet).label;
+  const texts = labelField ? markFieldValues(sheet, result.rows, planMeasures(sheet), labelField, makeValueFormatter(format), fmtCat, (f) => planMeasureName(f, rc.plan)) : null;
+  const seriesLabels = texts ? colorSplitLabels({ cellRows }, texts.values) : undefined;
+  drawChart(container, { type, categories, series, format, onSelect, selectedIndices, orientation, seriesLabels, ...memberColourSpec, ...legend });
 }
 
 /** Shape (scatter family): one scatter series per Shape member, each a distinct symbol (identity survives greyscale). */
@@ -92,7 +98,7 @@ export function renderSeries(container, rc, sheet, a) {
       measure: mi,
       ref: rv == null ? null : { name: (refKind === "constant" ? "Reference" : REF_CHOICES.find(([v]) => v === refKind)[1]) + (refKind === "constant" ? "" : mname), value: rv },
       band: bb ? { ...bb, name: bandLabel(A.band) + (A.band.kind ? ` (shown rows)${mname}` : "") } : null,
-      trend: t ? { measure: ti, name: `Trend${ti > 0 ? ` of ${series[ti].name}` : ""} (${trendLabel}${fc ? ` + ${fc} forecast` : ""}): ${t.formula}, R² ${t.r2.toFixed(2)}, n = ${t.n}`, short: `Trend · R² ${t.r2.toFixed(2)} · n = ${t.n}`, data: t.data } : null,
+      trend: t ? { measure: ti, name: `Trend${ti > 0 ? ` of ${series[ti].name}` : ""} (${trendLabel}${fc ? ` + ${fc} forecast` : ""}): ${t.formula}, ${fitWords(t.r2)}, n = ${t.n}`, short: `Trend · ${fitWords(t.r2)} · n = ${t.n}`, data: t.data } : null,
     };
     if (t && t.extra) {
       catsOut = [...categories, ...Array.from({ length: t.extra }, (_, i) => `Forecast +${i + 1}`)];

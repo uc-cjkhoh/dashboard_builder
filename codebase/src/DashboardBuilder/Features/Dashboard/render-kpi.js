@@ -1,5 +1,6 @@
 import { changeOf, toneOf, pctText, targetProgress } from "./period-model.js";
 import { el } from "./render-dom.js";
+import { kpiLastNote } from "./chart-polish.js";
 
 // KPI tiles and the inline sparkline, drawn from a result; no editor state.
 
@@ -39,9 +40,11 @@ export function kpiView(measures, categories, series, dimCount, fmtVal, card = {
     } else {
       tile.append(el("div", "widget__kpi-num", fmtVal(data[data.length - 1])));
       tile.append(sparkline(data));
-      const sub = el("div", "widget__kpi-sub", name);
+      // The big number is the last member's, never a total: say which member, so it is not read as the sum.
       const lastCat = categories[categories.length - 1];
-      if (lastCat != null) sub.title = `latest: ${lastCat}`;
+      const sub = el("div", "widget__kpi-sub", name);
+      const note = kpiLastNote(lastCat, categories.length);
+      if (note) { sub.append(el("span", "widget__kpi-member", note)); sub.title = `${name}: ${note}`; }
       tile.append(sub);
     }
     wrap.append(tile);

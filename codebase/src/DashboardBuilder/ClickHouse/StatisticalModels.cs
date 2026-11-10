@@ -21,8 +21,8 @@ public sealed record StatFilter(string Column, string Op, string? Value, string[
 /// <summary>One histogram bin: the half-open range <c>[X0, X1)</c> and how many rows fell in it.</summary>
 public sealed record HistogramBin(double X0, double X1, long Count);
 
-/// <summary>The histogram data: bins in ascending range order.</summary>
-public sealed record HistogramResult(IReadOnlyList<HistogramBin> Bins);
+/// <summary>The histogram data: bins in ascending range order. <see cref="Whole"/>: the column holds whole numbers, so every bin is a whole-number range.</summary>
+public sealed record HistogramResult(IReadOnlyList<HistogramBin> Bins, bool Whole = false);
 
 /// <summary>
 /// A box-plot plan: the five-number summary

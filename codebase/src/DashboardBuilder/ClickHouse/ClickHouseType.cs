@@ -35,6 +35,13 @@ public static class ClickHouseType
         return Other;
     }
 
+    /// <summary>True for the integer types (<c>Int*</c>/<c>UInt*</c>, under Nullable/LowCardinality) — a column whose values are whole numbers.</summary>
+    public static bool IsWholeNumber(string? type)
+    {
+        var name = BaseName(Unwrap(type ?? string.Empty));
+        return name.StartsWith("UInt", StringComparison.Ordinal) || (name.StartsWith("Int", StringComparison.Ordinal) && !name.StartsWith("Interval", StringComparison.Ordinal));
+    }
+
     /// <summary>True for <c>Date</c>/<c>Date32</c> (after unwrapping Nullable/LowCardinality) — columns that hold no time of day.</summary>
     public static bool IsDateOnly(string? type) => BaseName(Unwrap(type ?? string.Empty)) is "Date" or "Date32";
 

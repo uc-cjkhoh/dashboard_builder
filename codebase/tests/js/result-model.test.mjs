@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { primaryDim, chartOrientation, aliasNames, pathOrderedRows, statusText, captionText, markFieldValues, marksChannels, scatterShapeGroups,
-  colorSplitData, heatmapData, treemapTree, sankeyLinks, multiplesData, scatterSymbol, MAX_PANELS, cmpValues, sameField }
+  colorSplitData, colorSplitLabels, heatmapData, treemapTree, sankeyLinks, multiplesData, scatterSymbol, MAX_PANELS, cmpValues, sameField }
   from "../../src/DashboardBuilder/Features/Dashboard/result-model.js";
 import { tupleKey, uniqueTuples, runs, levelSpans } from "../../src/DashboardBuilder/Features/Dashboard/grid-model.js";
 import { SCATTER_TYPES, planMeasures } from "../../src/DashboardBuilder/Features/Dashboard/sheet-plan.js";
@@ -67,6 +67,14 @@ test("captionText: measures by dimensions plus the count of usable filters", () 
   assert.equal(captionText(sheet({ rows: [dim("region")] }), names), "count by region");
   assert.equal(captionText(sheet(), names), "");
 });
+test("captionText: a histogram or box plot describes the distribution, not a sum", () => {
+  const names = { measureName: (f) => `${f.agg} ${f.column}`, nameOf: (f) => f.column };
+  const base = { rows: [dim("region")], columns: [meas("amount")] };
+  assert.equal(captionText(sheet({ ...base, chartType: "histogram" }), names), "distribution of amount");
+  assert.equal(captionText(sheet({ ...base, chartType: "boxplot" }), names), "amount by region");
+  assert.equal(captionText(sheet({ columns: [meas("amount")], chartType: "boxplot" }), names), "distribution of amount");
+  assert.equal(captionText(sheet({ columns: [meas("amount")], chartType: "boxplot", filters: [] }), names), "distribution of amount");
+});
 test("markFieldValues reads a group-by key or a measure per row; null when the field is not in the query", () => {
   const s = sheet({ rows: [dim("region")], columns: [meas("amount")] });
   const mplan = planMeasures(s);
@@ -105,6 +113,16 @@ test("colorSplitData pivots the trailing key into series and fills missing cells
   assert.deepEqual(d.categories, ["EU", "US"]);
   assert.deepEqual(d.series, [{ name: "web", data: [1, 3] }, { name: "shop", data: [2, null] }]);
   assert.deepEqual(d.colorVals, ["web", "shop"]);
+});
+test("colorSplitData also says which result row fills each series cell, so a Label can follow the split", () => {
+  const result = { rowDimensions: ["region"], columnDimensions: ["channel"], measures: ["m"],
+    rows: [row(["EU", "web"], 1), row(["EU", "shop"], 2), row(["US", "web"], 3)] };
+  assert.deepEqual(colorSplitData(result, fmt).cellRows, [[0, 2], [1, null]]);
+});
+test("colorSplitLabels maps per-row label texts onto each series cell", () => {
+  const result = { rowDimensions: ["region"], columnDimensions: ["channel"], measures: ["m"],
+    rows: [row(["EU", "web"], 1), row(["EU", "shop"], 2), row(["US", "web"], 3)] };
+  assert.deepEqual(colorSplitLabels(colorSplitData(result, fmt), ["a", "b", "c"]), [["a", "c"], ["b", ""]]);
 });
 test("heatmapData and treemapTree", () => {
   const result = { rowDimensions: ["r"], columnDimensions: ["c"], measures: ["m"], rows: [row(["a", "x"], 1), row(["a", "y"], 2), row(["b", "x"], 3)] };

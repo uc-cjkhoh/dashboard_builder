@@ -101,8 +101,23 @@ export function statusText(s, result) {
   return parts.join(" · ");
 }
 
+// A histogram / box plot draws the spread of one numeric field: "distribution of orders.qty" (a box plot with groups: "orders.qty by customers.country").
+function statCaption(s, names) {
+  const all = [...(s.columns ?? []), ...(s.rows ?? [])];
+  const num = all.find((f) => f.category === "numeric");
+  const parts = [];
+  if (num) {
+    const groups = s.chartType === "boxplot" ? all.filter((f) => f !== num && f.category !== "numeric").map(names.nameOf) : [];
+    parts.push(groups.length ? `${names.nameOf(num)} by ${groups.join(", ")}` : `distribution of ${names.nameOf(num)}`);
+  }
+  const nf = (s.filters ?? []).filter((f) => checkFilter(f).state === "ok").length;
+  if (nf) parts.push(`${nf} filter${nf === 1 ? "" : "s"}`);
+  return parts.join(" · ");
+}
+
 /** The automatic caption: "sum amount by customers.name, customers.country · 2 filters". `names` = { measureName(f), nameOf(f) }. */
 export function captionText(s, names) {
+  if (s.chartType === "histogram" || s.chartType === "boxplot") return statCaption(s, names);
   const ms = planMeasures(s).filter((e) => e.role === "shelf").map((e) => names.measureName({ ...e.field, agg: e.agg }));
   const ds = planDims(s).keyOrder.filter(Boolean).map(names.nameOf);
   const parts = [];
@@ -205,7 +220,8 @@ export function scatterShapeGroups(sheet, result, seriesIdx, sizeIdx, fmtCat) {
 /**
  * Colour split: pivot the trailing group-by key into one series per colour value; the remaining keys form the
  * category axis. Missing (category x colour) cells are null so series stay aligned. One measure only.
- * Returns { categories, series: [{ name, data }], catTuples, colorVals }.
+ * Returns { categories, series: [{ name, data }], catTuples, colorVals, cellRows } — cellRows[series][category] is the
+ * index of the result row behind that cell (null when the cell is empty).
  */
 export function colorSplitData(result, fmtCat) {
   const { rowDimensions, columnDimensions, rows } = result;
@@ -219,14 +235,20 @@ export function colorSplitData(result, fmtCat) {
     const k = tupleKey([cv]);
     if (!seen.has(k)) { seen.add(k); colorVals.push(cv); }
   }
-  const cell = new Map();
-  for (const r of rows) cell.set(tupleKey(catOf(r.keys)) + "|" + tupleKey([r.keys[colorIdx]]), r.values[0]);
+  const cell = new Map(), rowAt = new Map();
+  rows.forEach((r, ri) => { const ck = tupleKey(catOf(r.keys)) + "|" + tupleKey([r.keys[colorIdx]]); cell.set(ck, r.values[0]); rowAt.set(ck, ri); });
   const categories = catTuples.map((t) => (t.length ? t.map((k, i) => (k == null ? "—" : fmtCat(k, i))).join(" / ") : ""));
   const series = colorVals.map((cv) => ({
     name: cv == null ? "—" : fmtCat(cv, colorIdx),
     data: catTuples.map((t) => cell.get(tupleKey(t) + "|" + tupleKey([cv])) ?? null),
   }));
-  return { categories, series, catTuples, colorVals };
+  const cellRows = colorVals.map((cv) => catTuples.map((t) => rowAt.get(tupleKey(t) + "|" + tupleKey([cv])) ?? null));
+  return { categories, series, catTuples, colorVals, cellRows };
+}
+
+/** A Label field's per-result-row texts laid out per series cell: labels[series][category] ("" for an empty cell). */
+export function colorSplitLabels(split, rowTexts) {
+  return split.cellRows.map((rowsOfSeries) => rowsOfSeries.map((ri) => (ri == null ? "" : String(rowTexts[ri] ?? ""))));
 }
 
 /** Heatmap: two dimensions -> axes (dim 0 the Y axis, dim 1 the X axis), the first measure -> colour. */

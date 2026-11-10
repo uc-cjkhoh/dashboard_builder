@@ -60,9 +60,9 @@ export function renderP36(container, rc, type, rows, categories, series, seriesN
 }
 
 /** Histogram of one numeric column: `bins` as the histogram endpoint returns them. */
-export function renderHistogram(container, bins, format) {
+export function renderHistogram(container, bins, format, whole = false) {
   container.replaceChildren();
-  drawChart(container, { type: "histogram", bins, format });
+  drawChart(container, { type: "histogram", bins, whole, format });
 }
 
 /** Box plot: `boxes` = the boxplot endpoint's groups. */

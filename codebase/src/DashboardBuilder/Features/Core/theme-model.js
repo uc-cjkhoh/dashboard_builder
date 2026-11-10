@@ -13,7 +13,7 @@ const A = (accent, hover, pressed, ink, soft, line) => ({ accent, hover, pressed
 export const ACCENTS = Object.freeze({
   // Signal: near-black on paper, neon lime on charcoal. `on` is the text on the accent (dark on the lime), `signal` the lime that tints the wash.
   signal: { label: "Signal", light: { ...A("#1a1c1f", "#2e3135", "#0c0d0f", "#1a1c1f", "#f1f4e2", "#d3dbae"), signal: "#c3df5a" },
-    dark: { ...A("#c3df5a", "#b3cf4a", "#a2bd3e", "#c3df5a", "#262a17", "#4a5427"), on: "#12130f", signal: "#c3df5a" } },
+    dark: { ...A("#a9bd6a", "#9aad5c", "#8a9c50", "#a9bd6a", "#262a17", "#4a5427"), on: "#12130f", signal: "#c3df5a" } },
   ultramarine: { label: "Ultramarine", light: A("#3340d1", "#2a35b4", "#222b94", "#2b36b8", "#eff0fb", "#ccd0f2"),
     dark: A("#5460c4", "#4a55b0", "#3f499a", "#98a1d8", "#1f2449", "#353d75") },
   monospace: { label: "Monospace", light: A("#6f4cde", "#6240c4", "#5536a9", "#6340cf", "#f3effd", "#d6c9f6"),
@@ -35,14 +35,14 @@ export const ACCENTS = Object.freeze({
 // Eight categorical chart colours per scheme, in a fixed order (never cycled within one chart).
 export const PALETTES = Object.freeze({
   default: { label: "Default",
-    light: ["#72872a", "#d9605a", "#d9a03a", "#7c63d6", "#2f9ea8", "#3f7fd0", "#4aa66a", "#6a6d72"],
-    dark: ["#c3df5a", "#e0827c", "#deb062", "#9b86e6", "#5cc0c8", "#7aa3dc", "#6fc486", "#8e9094"] },
+    light: ["#72872a", "#b8559c", "#d9a03a", "#7c63d6", "#2f9ea8", "#3f7fd0", "#4aa66a", "#6a6d72"],
+    dark: ["#a9bd6a", "#d98ac2", "#deb062", "#9b86e6", "#5cc0c8", "#7aa3dc", "#6fc486", "#8e9094"] },
   okabe: { label: "Colour-blind safe",
     light: ["#0072b2", "#e69f00", "#009e73", "#cc79a7", "#56b4e9", "#d55e00", "#f0e442", "#000000"],
     dark: ["#56b4e9", "#e69f00", "#009e73", "#cc79a7", "#0072b2", "#d55e00", "#f0e442", "#bbbbbb"] },
   onedark: { label: "One Dark Pro",
-    light: ["#2a78d6", "#146f14", "#e87ba4", "#c99424", "#1eac79", "#de6e41", "#4a3aa7", "#df4d4c"],
-    dark: ["#6aa8e0", "#98c379", "#c678dd", "#e5c07b", "#56b6c2", "#d19a66", "#abb2bf", "#e06c75"] },
+    light: ["#2a78d6", "#146f14", "#e87ba4", "#c99424", "#1eac79", "#de6e41", "#4a3aa7", "#b8559c"],
+    dark: ["#6aa8e0", "#98c379", "#c678dd", "#e5c07b", "#56b6c2", "#d19a66", "#abb2bf", "#d68fc0"] },
   muted: { label: "Muted",
     light: ["#4e79a7", "#dd8e40", "#59a14f", "#b07aa1", "#76b7b2", "#e1c254", "#9c755f", "#bab0ac"],
     dark: ["#6b93c0", "#e3a061", "#73b86a", "#c495b6", "#8ccbc6", "#e7ce77", "#b9927c", "#cfc7c3"] },
