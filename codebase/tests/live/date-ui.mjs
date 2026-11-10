@@ -132,6 +132,8 @@ try {
   const chipOf = () => ev(`(${dlg}.querySelector('.calc-chip, .calc-dialog__chip, [class*=chip]')?.textContent ?? '').trim()`);
   const cancel = async () => {
     await ev(`[...${dlg}.querySelectorAll('.dialog__foot button')].find((x) => x.textContent === 'Cancel').click()`);
+    await waitFor(`!!(${confirmOpen})`, 'discard confirm');
+    await ev(`[...(${confirmOpen}).querySelectorAll('button')].find((x) => x.textContent === 'Discard').click()`);
     await waitFor(`${dlg} === null`, 'dialog closed');
   };
 
@@ -145,7 +147,7 @@ try {
     await focusAndType('.calc-dialog textarea.formula', "DATEADD('day', [orders.qty], [orders.placed])");
     must(/DATEADD's amount must be a whole number from -100000 to 100000 written in the formula\./.test(await msgOf()), `amount message: ${await msgOf()}`);
     await focusAndType('.calc-dialog textarea.formula', "DATEDIFF('day', [orders.placed])");
-    must(/DATEDIFF takes 3 arguments\./.test(await msgOf()), `arity message: ${await msgOf()}`);
+    must(/DATEDIFF takes 3 arguments: DATEDIFF\(unit, date, date\)\./.test(await msgOf()), `arity message: ${await msgOf()}`);
     await focusAndType('.calc-dialog textarea.formula', "DATE([orders.placed])");
     must(/DATE needs a text — orders\.placed is date\./.test(await msgOf()), `DATE message: ${await msgOf()}`);
     must(await saveDisabled(), 'Save enabled on a type error');

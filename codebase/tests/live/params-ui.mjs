@@ -193,6 +193,8 @@ try {
     const m2 = await ev(`document.querySelector('[id^=calc-fmsg]').textContent`);
     must(/Parameter \[@Nope\] was deleted or doesn't exist/.test(m2) && await saveDisabled(), `unknown: ${m2}`);
     await clickIn(dlg, 'Cancel');
+    await waitFor(`!!(${confirmOpen})`, 'discard confirm');
+    await clickIn(confirmOpen, 'Discard');
     await waitFor(`${dlg} === null`, 'closed');
   });
 

@@ -17,9 +17,9 @@ export function checkName(name, calcs, selfId) {
 }
 
 /** Rewrites the `[ref]` tokens of a formula outside text literals: `fn(inner)` returns the new text between the brackets, or undefined to keep it.
- *  `'…'` spans (`''` is a quote inside) are copied untouched, and a `[…]` is read before a quote, like the tokenizer does. */
+ *  `'…'` and `"…"` spans (a doubled quote is a quote inside) are copied untouched, and a `[…]` is read before a quote, like the tokenizer does. */
 export function mapRefs(formula, fn) {
-  return String(formula).replace(/\[[^[\]]*\]|'(?:[^']|'')*(?:'|$)/g, (tok) => {
+  return String(formula).replace(/\[[^[\]]*\]|'(?:[^']|'')*(?:'|$)|"(?:[^"]|"")*(?:"|$)/g, (tok) => {
     if (tok[0] !== "[") return tok;
     const out = fn(tok.slice(1, -1));
     return out === undefined ? tok : `[${out}]`;

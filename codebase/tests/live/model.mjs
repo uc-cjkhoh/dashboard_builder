@@ -27,7 +27,7 @@ export const NEW_CALC = `(() => { const man = () => document.querySelector('dial
   [...man().querySelectorAll('.dialog__foot button')].find((x) => /New calculated field/.test(x.textContent)).click(); mo.observe(document.body, { childList: true }); return true; })()`;
 
 export const PAGE_CHIP = `(name) => {
-  const find = () => [...document.querySelectorAll('#ws-fields .ws-field, dialog.calc-manager[open] .ws-field')].find((c) => c.querySelector('.ws-field__name')?.textContent === name);
+  const find = () => [...document.querySelectorAll('#ws-fields .ws-field, dialog.calc-manager[open] .ws-field')].find((c) => c.querySelector('.ws-field__name')?.textContent === name && !c.closest('[hidden]')); // the pane's Calculated group is hidden unless searching
   const hit = find(); if (hit) return hit;
   if (document.querySelector('dialog.calc-manager[open]') || !document.querySelector('button[aria-label="Calculated fields"]')) return undefined;
   document.querySelector('button[aria-label="Calculated fields"]').click();

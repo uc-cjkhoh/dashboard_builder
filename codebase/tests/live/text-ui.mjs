@@ -132,6 +132,8 @@ try {
   const chipOf = () => ev(`(${dlg}.querySelector('.calc-chip, .calc-dialog__chip, [class*=chip]')?.textContent ?? '').trim()`);
   const cancel = async () => {
     await ev(`[...${dlg}.querySelectorAll('.dialog__foot button')].find((x) => x.textContent === 'Cancel').click()`);
+    await waitFor(`!!(${confirmOpen})`, 'discard confirm');
+    await ev(`[...(${confirmOpen}).querySelectorAll('button')].find((x) => x.textContent === 'Discard').click()`);
     await waitFor(`${dlg} === null`, 'dialog closed');
   };
 
@@ -145,7 +147,7 @@ try {
     await focusAndType('.calc-dialog textarea.formula', "SPLIT([orders.status], '', 1)");
     must(/SPLIT's separator must be text written in the formula, 1 to 20 characters\./.test(await msgOf()), `separator message: ${await msgOf()}`);
     await focusAndType('.calc-dialog textarea.formula', 'LOWER([orders.status], 1)');
-    must(/LOWER takes 1 argument\./.test(await msgOf()), `arity message: ${await msgOf()}`);
+    must(/LOWER takes 1 argument: LOWER\(text\)\./.test(await msgOf()), `arity message: ${await msgOf()}`);
     await focusAndType('.calc-dialog textarea.formula', 'LOWER([orders.status]');
     must(/Expected \)/.test(await msgOf()), `paren message: ${await msgOf()}`);
     must(await saveDisabled(), 'Save enabled on a syntax error');

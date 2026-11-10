@@ -403,8 +403,15 @@ export function initDashboards() {
       groups.push(group);
     }
     if (seq !== fieldsSeq) return;
+    // Calculated and group fields appear here only while searching ("Calculated", with their role chip), so a name that clashes with a column is told apart.
+    const calcItems = paneState(calculations, catalogFromEntities([...entities.values()]), parameters).items;
+    if (calcItems.length) {
+      const calcGroup = fieldGroup("ws-table ws-fieldset ws-fieldset--calc", "calculated", "Calculated");
+      for (const item of calcItems) calcGroup.append(calcFieldChip(item));
+      groups.push(calcGroup);
+    }
     // The pane: Marks first, then the search and one tile per table. Calculated fields, Parameters and Hierarchies are three icons in the sidebar (below).
-    fieldsEl.replaceChildren(marksEl, fieldTools(hiddenCount), ...groups);
+    fieldsEl.replaceChildren(marksEl, fieldTools(hiddenCount, calcItems.length), ...groups);
     filterFields();
   }
 
@@ -412,13 +419,18 @@ export function initDashboards() {
   // display name; non-matching fields and empty groups get `hidden`.
   let fieldQuery = "";
   let showHiddenFields = false;
-  function fieldTools(hiddenCount) {
+  function fieldTools(hiddenCount, calcCount = 0) {
     const box = el("div", "ws-fieldtools");
     const search = el("input", "input ws-fieldtools__search");
     search.type = "search"; search.placeholder = "Search fields"; search.value = fieldQuery;
     search.setAttribute("aria-label", "Search fields");
     search.addEventListener("input", () => { fieldQuery = search.value; filterFields(); });
     box.append(search);
+    if (calcCount) {
+      const open = makeButton(`Calculated fields (${calcCount})`, "btn ws-fieldtools__hidden");
+      open.addEventListener("click", () => manageCalcs());
+      box.append(open);
+    }
     if (hiddenCount || showHiddenFields) {
       const t = makeButton(showHiddenFields ? `Hide hidden fields` : `Show hidden (${hiddenCount})`, "btn ws-fieldtools__hidden");
       t.setAttribute("aria-pressed", String(showHiddenFields));
@@ -441,7 +453,8 @@ export function initDashboards() {
         while (n && n.classList.contains("ws-field")) { if (!n.hidden) shown = true; n = n.nextElementSibling; }
         label.hidden = !shown;
       }
-      group.hidden = !any && Boolean(q);
+      // The Calculated group is only a search hit list: calculated fields otherwise live in their sidebar dialog.
+      group.hidden = group.classList.contains("ws-fieldset--calc") ? !q || !any : !any && Boolean(q);
     }
   }
 

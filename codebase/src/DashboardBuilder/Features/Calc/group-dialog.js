@@ -5,7 +5,7 @@ import { calculations, addCalculation, updateCalculation } from "../Core/store.j
 import { LIMITS } from "../Core/validate.js";
 import { makeButton, openDialog, closeDialog, toast } from "../Core/ui.js";
 import { checkName } from "./calc-workbook.js";
-import { checkGroupSpec, groupCalcName, assignmentsOf, groupsFromAssignments, maxMembersFor } from "./group-model.js";
+import { checkGroupSpec, groupCalcName, assignmentsOf, groupsFromAssignments, maxMembersFor, groupStatus } from "./group-model.js";
 
 let seq = 0;
 const el = (tag, cls, t) => { const e = document.createElement(tag); if (cls) e.className = cls; if (t !== undefined) e.textContent = t; return e; };
@@ -96,7 +96,7 @@ export function openGroupDialog({ field, fieldName, calcId = null, kind: kindIn,
   const refresh = () => {
     const s = spec();
     const used = s.groups.reduce((a, g) => a + g.members.length, 0);
-    status.textContent = `${used} of ${maxMembersFor(s)} members grouped · ${s.groups.length} group${s.groups.length === 1 ? "" : "s"}${used > maxMembersFor(s) ? " — over the limit" : ""}`;
+    status.textContent = groupStatus(used, selects.length, maxMembersFor(s), s.groups.length);
     const dup = groups.find((g, i) => groups.some((o, j) => j < i && o.name.trim().toLowerCase() === g.name.trim().toLowerCase()));
     const blank = groups.find((g) => !g.name.trim() && [...assign.values()].includes(g.id));
     const r = dup ? { ok: false, error: `A group named '${dup.name.trim()}' already exists.` } : blank ? { ok: false, error: "Give every group a name." } : checkGroupSpec(s, selects.map((x) => x.member));
