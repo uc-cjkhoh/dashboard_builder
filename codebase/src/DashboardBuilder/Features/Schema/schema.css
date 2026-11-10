@@ -37,11 +37,11 @@
 .table-chip__grip svg { stroke-width: 3; }
 /* Inset ring: the + sits near the chip edge, so an outside ring would collide with the chip border. */
 .table-chip .iconbtn:focus-visible { outline-offset: -2px; }
-/* Row actions (preview, add) overlay the row's right end on hover / focus, so names keep the full width at rest; the ghost glyph's 8px slack sits on the 8px gutter. */
-.table-chip .iconbtn { position: absolute; top: 0; right: 0; opacity: 0; }
+/* Row actions (preview, add) sit at the row's right end, quiet at rest and full on hover / focus, so a newcomer sees they exist; the name always leaves room for them; the ghost glyph's 8px slack sits on the 8px gutter. */
+.table-chip .iconbtn { position: absolute; top: 0; right: 0; opacity: 1; color: var(--ink-3); transition: color var(--dur-fast) var(--ease); }
 .table-chip .table-chip__peek { right: var(--ctl-h); }
-.table-chip:hover .iconbtn, .table-chip:focus-within .iconbtn { opacity: 1; }
-.table-chip:hover .table-chip__name, .table-chip:focus-within .table-chip__name { padding-right: calc(2 * var(--ctl-h) - var(--s2)); }
+.table-chip:hover .iconbtn, .table-chip:focus-within .iconbtn { color: var(--ink); }
+.table-chip__name { padding-right: calc(2 * var(--ctl-h) - var(--s2)); }
 .table-chip__name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .table-list .empty { color: var(--ink-3); font-size: var(--fs-body); padding: var(--s2); }
 
@@ -105,7 +105,7 @@
 .col-profile__row--lead .col-profile__fill { background: color-mix(in srgb, var(--ink) 22%, var(--surface-2)); }
 .col-profile__row > :not(.col-profile__fill) { position: relative; }
 .col-profile__label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
-.col-profile__row--null .col-profile__label, .col-profile__row--empty .col-profile__label { color: var(--ink-3); font-style: italic; }
+.col-profile__row--null .col-profile__label, .col-profile__row--empty .col-profile__label { color: var(--ink-2); font-style: italic; }
 @keyframes bar-grow { from { transform: scaleX(0); } to { transform: none; } }
 .col-profile__fill { position: absolute; inset: 0 auto 0 0; width: var(--w, 0); background: var(--line-2); transform-origin: left center;
   animation: bar-grow var(--dur-slow) var(--ease-out) backwards; animation-delay: calc(var(--dur) + var(--i, 0) * 20ms); }

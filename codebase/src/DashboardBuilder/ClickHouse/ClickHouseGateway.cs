@@ -128,7 +128,7 @@ public sealed partial class ClickHouseGateway
     /// </summary>
     /// <returns>A safe, credential-free error message (or <c>null</c> on success) and the connection
     /// info to store — carrying the guard level the server accepted.</returns>
-    public async Task<(string? Error, ClickHouseConnectionInfo Info)> ValidateAsync(
+    public async Task<(ConnectFailure? Failure, ClickHouseConnectionInfo Info)> ValidateAsync(
         ClickHouseConnectionInfo info, CancellationToken ct)
     {
         try
@@ -137,7 +137,8 @@ public sealed partial class ClickHouseGateway
             {
                 try
                 {
-                    return (await SelectOneAsync(info, ct), info);
+                    var error = await SelectOneAsync(info, ct);
+                    return (error is null ? null : new ConnectFailure(StatusCodes.Status502BadGateway, error), info);
                 }
                 catch (Exception ex) when (NextGuards(info.Guards, ex) is { } next)
                 {
@@ -155,8 +156,38 @@ public sealed partial class ClickHouseGateway
             // Log the failure TYPE only. Exception messages/URIs can carry host or credential
             // material, so neither the message nor the connection string is ever logged.
             _logger.LogWarning("ClickHouse connection validation failed: {ErrorType}", ex.GetType().Name);
-            return ("Could not connect to ClickHouse. Check the host, port, user, password, and TLS (secure) setting.", info);
+            return (DescribeConnectFailure(ex, info), info);
         }
+    }
+
+    /// <summary>
+    /// Which thing is wrong, in plain words: the user or password (401, on the password field), a host/port that does not answer
+    /// (on the host field), a TLS setting that does not match the port, or a certificate the server presents that is not trusted.
+    /// Built from the failure's kind only — never from its message — so no host or credential text leaks.
+    /// </summary>
+    internal static ConnectFailure DescribeConnectFailure(Exception ex, ClickHouseConnectionInfo info)
+    {
+        var chain = new List<Exception>();
+        for (var e = ex; e is not null; e = e.InnerException) chain.Add(e);
+        var where = $"{info.Host}:{info.Port}";
+
+        if (chain.OfType<ClickHouseServerException>().FirstOrDefault() is { ErrorCode: 516 or 192 or 193 })
+            return new(StatusCodes.Status401Unauthorized, "Wrong user name or password.", "password");
+        if (IsHttpTimeout(ex) || chain.OfType<System.Net.Sockets.SocketException>().Any(s => s.SocketErrorCode is System.Net.Sockets.SocketError.TimedOut))
+            return new(StatusCodes.Status502BadGateway, $"No answer from {where}. Check the host and port.", "host");
+        if (chain.OfType<System.Security.Authentication.AuthenticationException>().FirstOrDefault() is { } auth)
+        {
+            var certificate = auth.Message.Contains("certificate", StringComparison.OrdinalIgnoreCase)
+                && !auth.Message.Contains("frame", StringComparison.OrdinalIgnoreCase);
+            return certificate
+                ? new(StatusCodes.Status502BadGateway, "The server's certificate is not trusted. Switch on Trust invalid / self-signed certificate if you know this server.")
+                : new(StatusCodes.Status502BadGateway, "The server did not answer as secure HTTPS. Turn Secure (TLS) off for an HTTP port such as 8123.");
+        }
+        if (chain.OfType<System.Net.Sockets.SocketException>().Any())
+            return new(StatusCodes.Status502BadGateway, $"Can't reach {where}. Check the host and port, and that the server is running.", "host");
+        if (!info.Secure && chain.Any(e => e is HttpRequestException or IOException))
+            return new(StatusCodes.Status502BadGateway, "The server did not answer as plain HTTP. Turn Secure (TLS) on for a port such as 8443.");
+        return new(StatusCodes.Status502BadGateway, "Could not connect to ClickHouse. Check the host, port, user, password, and TLS (secure) setting.");
     }
 
     private static async Task<string?> SelectOneAsync(ClickHouseConnectionInfo info, CancellationToken ct)

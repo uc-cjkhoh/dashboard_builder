@@ -4,6 +4,7 @@
 import { api } from "../Core/api.js";
 import { icon } from "../Core/icons.js";
 import { makeButton, openDialog, closeDialog, toast } from "../Core/ui.js";
+import { friendlyKind } from "../Schema/type-kind.js";
 import { tableRowsRequest, rowsSummary, rowsToCsv, cellText, anyCellCut, CUT_NOTE } from "./rows-model.js";
 
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
@@ -81,7 +82,8 @@ function buildTable(res) {
   const thead = el("thead"); const hr = el("tr");
   for (const c of res.columns) {
     const th = el("th"); th.scope = "col";
-    th.append(el("span", "rows-table__name", c.name), el("span", "rows-table__type", c.type));
+    const kind = el("span", "rows-table__type", friendlyKind(c.type)); kind.title = c.type; // plain kind; the raw ClickHouse type is the tooltip
+    th.append(el("span", "rows-table__name", c.name), kind);
     hr.append(th);
   }
   thead.append(hr);

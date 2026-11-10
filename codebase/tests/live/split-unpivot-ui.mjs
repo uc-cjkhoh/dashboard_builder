@@ -78,7 +78,7 @@ try {
     await waitFor(`${rd} !== null && ${rd}.querySelectorAll('tbody tr').length === 2`, 'rows rendered');
     must(J(unpivotReqs.at(-1)) === J({ db: 'shop', table: 'sales', columns: ['q1', 'q2'], keep: ['id'], limit: 20 }), `request: ${J(unpivotReqs.at(-1))}`);
     const heads = await ev(`[...${rd}.querySelectorAll('th')].map((t) => t.textContent)`);
-    must(J(heads) === J(['idUInt64', 'FieldString', 'ValueInt32']), `heads: ${J(heads)}`);
+    must(J(heads) === J(['idwhole number', 'Fieldtext', 'Valuewhole number']), `heads: ${J(heads)}`);
     must(await ev(`${ud} !== null`), 'pick dialog stays open under the preview');
     await shot('unpivot-rows-light.png');
   });

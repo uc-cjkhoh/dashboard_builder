@@ -69,12 +69,12 @@ try {
   await check('title, properties and tiles show the profile in words', async () => {
     must((await text('.col-profile__title'))[0] === 'city', 'title');
     const dd = await text('.col-profile__props dd');
-    must(J(dd) === J(['city', 'Nullable(String)', 'text', 'dimension']), J(dd));
+    must(J(dd) === J(['city', 'text', 'dimension']), J(dd));
     const tiles = await text('.col-profile__tile');
-    must(tiles[0].startsWith('Rows1,000,000'), tiles[0]);
-    must(tiles[1].startsWith('Distinct (approx.)4,096'), tiles[1]);
-    must(tiles[2].startsWith('Null share1.3%') && tiles[2].includes('12,500 of 1,000,000 rows'), tiles[2]);
-    must((await text('.col-profile__note'))[0].includes('first 1,000,000 rows'), 'sample note');
+    must(tiles[0].startsWith('Rows') && tiles[0].endsWith('1,000,000'), tiles[0]); // the label, a "first 1,000,000 rows" note, then the figure
+    must(tiles[1].startsWith('Distinct (approx.)') && tiles[1].endsWith('4,096'), tiles[1]);
+    must(tiles[2].startsWith('Null share') && tiles[2].endsWith('1.3%') && tiles[2].includes('12,500 of 1,000,000 rows'), tiles[2]);
+    must((await text('.col-profile__cell--note'))[0].includes('first 1,000,000 rows'), 'sample note');
   });
   await check('top values: text labels, counts and shares; NULL and empty named; cut value ends with an ellipsis', async () => {
     const rows = await text('.col-profile__row');
@@ -102,10 +102,10 @@ try {
   await check('a numeric field is a measure and shows Min and Max tiles, no sample note', async () => {
     await open('amount');
     await waitFor(`document.querySelector('dialog[open] .col-profile__cell--top') !== null`, 'amount loaded');
-    must(J(await text('.col-profile__props dd')) === J(['amount', 'Float64', 'numeric', 'measure']), 'props');
+    must(J(await text('.col-profile__props dd')) === J(['amount', 'number', 'measure']), 'props');
     const labels = await text('.col-profile__tile-label');
     must(J(labels) === J(['Rows', 'Distinct (approx.)', 'Null share', 'Min', 'Max']), J(labels));
-    must((await text('.col-profile__note')).length === 0, 'unexpected note');
+    must((await text('.col-profile__cell--note')).length === 0, 'unexpected note');
     await shot('profile-numeric-light.png');
     await ev(`document.querySelector('dialog[open] .iconbtn').click()`);
     await waitFor(`document.querySelector('dialog') === null`, 'closed by X');

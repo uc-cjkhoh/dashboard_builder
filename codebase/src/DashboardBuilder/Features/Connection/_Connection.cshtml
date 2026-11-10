@@ -1,5 +1,5 @@
 @* Connection panel (sidebar top). Wired end-to-end in Connection/connection.js. Port/secure
-   default to the TLS pair (8443, decision D10). *@
+   default to the TLS pair (8443, decision D10); Secure and Trust are visible switches (D98). *@
 <h2 class="sidebar__title" id="conn-title">Connections</h2>
 <section class="sidebar__section sidebar__section--conn" aria-labelledby="conn-title">
 
@@ -8,7 +8,10 @@
     <div class="conn-summary" id="conn-summary" data-health="ok" hidden>
         <div class="conn-row">
             <span class="conn-status" id="conn-status" aria-hidden="true"></span>
-            <span class="conn-summary__host" id="conn-host-label"></span>
+            <span class="conn-row__text">
+                <span class="conn-summary__host" id="conn-host-label"></span>
+                <span class="conn-summary__meta" id="conn-detail-label"></span>
+            </span>
             <div class="conn-row__actions">
                 <button type="button" class="iconbtn conn-row__btn" id="conn-change" aria-controls="conn-form"
                         aria-label="Change connection" title="Change connection"><span data-icon="edit"></span></button>
@@ -33,7 +36,7 @@
         <div class="conn-fields">
             <div class="form-field">
                 <label for="conn-host">Host</label>
-                <input type="text" id="conn-host" name="host" maxlength="253" placeholder="clickhouse.example.com" />
+                <input type="text" id="conn-host" name="host" maxlength="253" placeholder="db.example.com" />
             </div>
             <div class="form-field">
                 <label for="conn-port">Port</label>
@@ -48,24 +51,22 @@
                 <input type="password" id="conn-password" name="password" maxlength="256" />
             </div>
         </div>
-        <details class="conn-advanced" id="conn-advanced">
-            <summary>Advanced</summary>
-            <div class="conn-options">
+        <!-- Secure (TLS) is on by default (D10). Trust is on by default too (D11, internal servers) and only shown under TLS; its note
+             appears once the user is about to connect with it on, or has touched the switch (D98). -->
+        <div class="conn-options">
             <label class="form-check">
-                <input type="checkbox" id="conn-secure" name="secure" checked />
+                <input type="checkbox" role="switch" id="conn-secure" name="secure" checked />
                 Secure (TLS)
             </label>
-            <!-- Trusting an invalid / self-signed certificate is checked by default (these are internal servers). It is only
-                 shown under TLS, and it warns while checked; untick it to verify the certificate. -->
-            <label class="form-check form-check--sub" id="conn-allowcert-row">
-                <input type="checkbox" id="conn-allowcert" name="allowInvalidCert" checked />
-                Trust invalid / self-signed certificate
+            <label class="form-check" id="conn-allowcert-row">
+                <input type="checkbox" role="switch" id="conn-allowcert" name="allowInvalidCert" checked />
+                Trust self-signed certificate
             </label>
             <p class="form-warn" id="conn-allowcert-warn" hidden>
-                Certificate validation is off — only for a server whose cert you trust.
+                The certificate is not checked. Use this only for a server you trust.
             </p>
-            </div>
-        </details>
+        </div>
+        <p class="form-error" id="conn-error" role="alert" hidden></p>
         <div class="conn-form__actions">
             <button type="submit" class="btn btn--primary" id="conn-connect">Connect</button>
             <button type="button" class="btn" id="conn-cancel" hidden>Cancel</button>

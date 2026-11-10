@@ -1,8 +1,8 @@
 import { icon } from "../Core/icons.js";
 import { api } from "../Core/api.js";
-import { show, hide, toggle, toast, fieldError, clearFieldError, checkField } from "../Core/ui.js";
+import { show, hide, toggle, toast, fieldError, clearFieldError, checkField, confirmDialog } from "../Core/ui.js";
 import { host, port, text, LIMITS } from "../Core/validate.js";
-import { advancedShouldOpen, summaryTitle, formFromView } from "./connection-rules.js";
+import { summaryTitle, summaryDetail, formFromView, secureToggled, trustToggled, certNoteVisible } from "./connection-rules.js";
 import { nextHealth, initialHealth, readProbe, HEALTH_TEXT, PING_EVERY_MS } from "./connection-health.js";
 import { remember, forget, sanitize, sourceKey, formValues } from "./recent-sources.js";
 
@@ -41,7 +41,8 @@ export function initConnection() {
   const allowCertEl = document.getElementById("conn-allowcert");
   const allowCertRow = document.getElementById("conn-allowcert-row");
   const allowCertWarn = document.getElementById("conn-allowcert-warn");
-  const advancedEl = document.getElementById("conn-advanced");
+  const detailLabel = document.getElementById("conn-detail-label");
+  const errorEl = document.getElementById("conn-error");
 
   const recentEl = document.getElementById("conn-recent");
   let recent = loadRecent();
@@ -67,7 +68,7 @@ export function initConnection() {
       pick.addEventListener("click", () => {
         fillForm(formValues(e));
         for (const i of [hostEl, portEl, userEl, passEl]) clearFieldError(i);
-        syncCertControls(); syncAdvanced();
+        syncCertControls();
         passEl.value = ""; passEl.focus();
       });
       const rm = document.createElement("button");
@@ -89,13 +90,14 @@ export function initConnection() {
     if (!e || current) return;
     fillForm(formValues(e));
     for (const i of [hostEl, portEl, userEl, passEl]) clearFieldError(i);
-    syncCertControls(); syncAdvanced();
+    syncCertControls();
     passEl.value = ""; passEl.focus();
   });
 
   function fillForm(v) {
     hostEl.value = v.host; portEl.value = v.port; userEl.value = v.user;
     secureEl.checked = v.secure; allowCertEl.checked = v.allowInvalidCert;
+    sw = { secure: v.secure, trust: v.allowInvalidCert, remembered: v.secure ? v.allowInvalidCert : sw.remembered };
   }
 
   // Liveness: the dot reflects the last probe. Probes run on a timer while the tab is visible, on returning to the tab,
@@ -136,25 +138,32 @@ export function initConnection() {
 
   let current = null; // last connected view, for Cancel-back-to-summary
 
-  // "Trust invalid / self-signed certificate" is checked by default. It only applies to a TLS
-  // connection, so hide it when Secure is off; warn while it's checked.
+  // Trust is on by default and only applies to a TLS connection: Secure off hides and clears it, Secure on brings back what it was.
+  // Its note ("not checked") waits until the user is about to connect with it on, or has touched the switch (D98).
+  let sw = { secure: true, trust: true, remembered: true };
+  let attempted = false, touched = false;
   function syncCertControls() {
-    const secure = secureEl.checked;
-    toggle(allowCertRow, secure);
-    if (!secure) allowCertEl.checked = false;
-    toggle(allowCertWarn, secure && allowCertEl.checked);
+    sw = { ...sw, secure: secureEl.checked, trust: allowCertEl.checked };
+    toggle(allowCertRow, sw.secure);
+    toggle(allowCertWarn, certNoteVisible({ ...sw, attempted, touched }));
   }
-  secureEl.addEventListener("change", syncCertControls);
-  allowCertEl.addEventListener("change", syncCertControls);
+  secureEl.addEventListener("change", () => {
+    sw = secureToggled(sw, secureEl.checked);
+    allowCertEl.checked = sw.trust;
+    syncCertControls();
+  });
+  allowCertEl.addEventListener("change", () => { touched = true; sw = trustToggled(sw, allowCertEl.checked); syncCertControls(); });
   syncCertControls();
 
-  // Advanced stays collapsed for the common (TLS, verified) case; open it when it holds a deviation.
-  function syncAdvanced() {
-    if (advancedEl) advancedEl.open = advancedShouldOpen({ secure: secureEl.checked, allowInvalidCert: allowCertEl.checked });
+  function showError(message) {
+    errorEl.replaceChildren(icon("error", { size: 16 }), document.createTextNode(message));
+    show(errorEl);
   }
+  function clearError() { hide(errorEl); errorEl.replaceChildren(); }
+  for (const i of [hostEl, portEl, userEl, passEl, secureEl, allowCertEl]) i.addEventListener("input", clearError);
 
   function showForm({ cancellable }) {
-    syncAdvanced();
+    clearError();
     hide(summary);
     hide(lostRow);
     show(form);
@@ -171,6 +180,8 @@ export function initConnection() {
     if (connected) {
       hostLabel.textContent = view.host;
       hostLabel.title = summaryTitle(view);
+      detailLabel.textContent = summaryDetail(view);
+      detailLabel.title = summaryTitle(view);
       // The form keeps what was entered (host included) for a later "change connection".
       fillForm(formFromView(view));
       syncCertControls();
@@ -183,7 +194,6 @@ export function initConnection() {
       startPinging();
     } else {
       stopPinging();
-      syncAdvanced();
       show(form);
       renderRecent();
       hide(summary);
@@ -204,6 +214,8 @@ export function initConnection() {
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
 
+    clearError();
+    attempted = true; syncCertControls();
     const fields = { host: hostEl, port: portEl, user: userEl, password: passEl };
     const values = {
       host: checkField(hostEl, host(hostEl.value)),
@@ -225,8 +237,9 @@ export function initConnection() {
       applyState(view);
       toast(`Connected to ${view.host}.`, "ok");
     } catch (err) {
-      if (err.field && fields[err.field]) fieldError(fields[err.field], err.message);
-      else toast(err.message, "danger");
+      // Next to the form, never only a toast: on the field it belongs to (host, password), else a line above Connect.
+      if (err.field && fields[err.field]) { fieldError(fields[err.field], err.message); fields[err.field].focus(); }
+      else showError(err.message);
     } finally {
       connectBtn.disabled = false;
       connectBtn.removeAttribute("aria-busy");
@@ -240,6 +253,9 @@ export function initConnection() {
   cancelBtn?.addEventListener("click", () => { if (current) applyState(current); });
 
   disconnectBtn?.addEventListener("click", async () => {
+    // Every tab closes on disconnect, so say first that nothing is lost.
+    const ok = await confirmDialog(`Disconnect from ${current?.host ?? "this server"}? Your workbook is saved in this browser and comes back when you reconnect.`, { confirmText: "Disconnect" });
+    if (!ok) return;
     try {
       const view = await api.disconnect();
       applyState(view);

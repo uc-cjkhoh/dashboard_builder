@@ -148,7 +148,7 @@ try {
     const label = await ev(`document.getElementById(${dlgSel}.getAttribute('aria-labelledby')).textContent`);
     must(label === 'orders — first rows', `label: ${label}`);
     const heads = await ev(`[...${dlgSel}.querySelectorAll('th')].map((t) => t.textContent)`);
-    must(J(heads) === J(['amountFloat64', 'regionString', 'noteNullable(String)']), `heads: ${J(heads)}`);
+    must(J(heads) === J(['amountnumber', 'regiontext', 'notetext']), `heads: ${J(heads)}`);
     must(await ev(`${dlgSel}.querySelector('.rows-table__null').textContent`) === 'NULL', 'NULL cell shown as NULL');
     must(await ev(`${dlgSel}.querySelector('.rows-dialog__summary').textContent`) === '3 rows', 'summary');
     await shot('rows-preview-light.png');

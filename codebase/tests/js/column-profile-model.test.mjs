@@ -39,7 +39,7 @@ test("summarize: tiles, honest wording, no sampling note for a whole table", () 
   assert.equal(s.tiles[2].note, "1 of 6 rows");
   assert.equal(s.sampleNote, null);
   assert.equal(s.role, "dimension");
-  assert.deepEqual(s.details, [["Name", "grp"], ["Type", "Nullable(String)"], ["Kind", "text"], ["Role", "dimension"]]);
+  assert.deepEqual(s.details, [["Name", "grp"], ["Type", "text", "Nullable(String)"], ["Role", "dimension"]]);
 });
 test("summarize: a sampled profile says so; min/max tiles only when present", () => {
   const s = summarize(P({ rows: 1000000, nulls: 0, distinct: 5000, sampled: true, category: "numeric", min: "5", max: "20" }));

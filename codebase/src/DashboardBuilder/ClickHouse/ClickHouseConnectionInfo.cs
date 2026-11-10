@@ -48,3 +48,6 @@ public sealed record ConnectionView(
 {
     public static readonly ConnectionView Disconnected = new(false, null, null, null, null);
 }
+
+/// <summary>Why a connect failed: the HTTP status to answer with, a plain-words message (never the password), and the form field it belongs to.</summary>
+public sealed record ConnectFailure(int Status, string Message, string? Field = null);

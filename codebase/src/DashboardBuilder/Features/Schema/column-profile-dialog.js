@@ -5,6 +5,7 @@ import { api } from "../Core/api.js";
 import { icon } from "../Core/icons.js";
 import { makeButton, openDialog, closeDialog, toast, copyText } from "../Core/ui.js";
 import { profileRequest, summarize } from "./column-profile-model.js";
+import { friendlyKind } from "./type-kind.js";
 
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
 let seq = 0;
@@ -17,7 +18,7 @@ export function openColumnProfile(db, table, column) {
   const head = el("div", "col-profile__head");
   const titles = el("div", "col-profile__titles");
   const h = el("h2", "dialog__title col-profile__title", column.name); h.id = `${id}-title`;
-  const sub = el("p", "col-profile__sub", `${db}.${table} · ${column.type}`); sub.title = sub.textContent;
+  const sub = el("p", "col-profile__sub", `${db}.${table} · ${friendlyKind(column.type)}`); sub.title = `${db}.${table} · ${column.type}`;
   titles.append(h, sub);
   const x = makeButton("", "iconbtn"); x.append(icon("close")); x.setAttribute("aria-label", "Close");
   head.append(titles, x);
@@ -89,7 +90,7 @@ function sections(s) {
     }
   }
   const dl = el("dl", "col-profile__props");
-  for (const [k, v] of s.details) { const dd = el("dd", "", v); dd.title = v; dl.append(el("dt", "", k), dd); }
+  for (const [k, v, tip] of s.details) { const dd = el("dd", "", v); dd.title = tip ?? v; dl.append(el("dt", "", k), dd); }
   cell("details").append(dl);
   const size = s.tiles.filter((t) => !RANGE.has(t.label)), range = s.tiles.filter((t) => RANGE.has(t.label));
   const sizeCell = cell("size"); sizeCell.append(...size.map(stat));
