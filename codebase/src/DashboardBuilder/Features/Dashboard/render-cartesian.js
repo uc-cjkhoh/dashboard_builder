@@ -73,11 +73,11 @@ export function renderSeries(container, rc, sheet, a) {
   const compareSeries = aligned && (type === "bar" || type === "line" || type === "area")
     ? seriesIdx.map((mi) => ({ name: `${measures[mi]} (${cmp.name})`, data: aligned.map((r) => (r ? r.values[mi] : null)), compare: true }))
     : [];
-  // Analytics on the first measure: reference line, band, trend (+ forecast categories appended).
+  // Analytics: lines / bands on their chosen measure, the trend on its own: reference line, band, trend (+ forecast categories appended).
   let catsOut = categories, seriesOut = [...series, ...compareSeries], analytics = null;
   const A = sheet.analytics;
   if (A && ANALYTICS_TYPES.has(type) && series.length) {
-    const vals = series[0].data; // the trend and forecast follow the first measure
+    const ti = pickMeasure(A.trendMeasure, series.length), vals = series[ti].data; // the trend and forecast follow the chosen measure (default the first)
     const mi = pickMeasure(A.ref?.measure, series.length), mvals = dataValues(series[mi].data, rowsOrdered); // the "Other" remainder aggregates cut-off members: not a data point
     const mname = mi > 0 ? ` (${series[mi].name})` : ""; // named only when a measure other than the default was chosen
     const refKind = A.ref?.kind ?? "none";
@@ -92,7 +92,7 @@ export function renderSeries(container, rc, sheet, a) {
       measure: mi,
       ref: rv == null ? null : { name: (refKind === "constant" ? "Reference" : REF_CHOICES.find(([v]) => v === refKind)[1]) + (refKind === "constant" ? "" : mname), value: rv },
       band: bb ? { ...bb, name: bandLabel(A.band) + (A.band.kind ? ` (shown rows)${mname}` : "") } : null,
-      trend: t ? { name: `Trend (${trendLabel}${fc ? ` + ${fc} forecast` : ""}): ${t.formula}, R² ${t.r2.toFixed(2)}, n = ${t.n}`, short: `Trend · R² ${t.r2.toFixed(2)} · n = ${t.n}`, data: t.data } : null,
+      trend: t ? { measure: ti, name: `Trend${ti > 0 ? ` of ${series[ti].name}` : ""} (${trendLabel}${fc ? ` + ${fc} forecast` : ""}): ${t.formula}, R² ${t.r2.toFixed(2)}, n = ${t.n}`, short: `Trend · R² ${t.r2.toFixed(2)} · n = ${t.n}`, data: t.data } : null,
     };
     if (t && t.extra) {
       catsOut = [...categories, ...Array.from({ length: t.extra }, (_, i) => `Forecast +${i + 1}`)];

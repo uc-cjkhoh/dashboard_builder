@@ -1013,12 +1013,14 @@ export function initDashboards() {
       if (a.band && a.band.kind && shown.length > 1 && !(a.ref.kind !== "none" && a.ref.kind !== "constant")) // the band reads the chosen measure (typed ranges read none)
         panel.append(fmtSelect("of", shown.map((n, i) => [i, n]), a.ref.measure ?? 0, (v) => set({ ref: { ...a.ref, measure: Number(v) } })));
       panel.append(fmtSelect("Trend", TREND_CHOICES, a.trend, (v) => set({ trend: v })));
+      if ((a.trend !== "none" || a.forecast > 0 || a.forecastParam) && shown.length > 1) // the trend and forecast read the chosen measure
+        panel.append(fmtSelect("trend of", shown.map((n, i) => [i, n]), a.trendMeasure ?? 0, (v) => set({ trendMeasure: Number(v) || undefined })));
       if (s.chartType === "line" || s.chartType === "area") {
         const numParams = parameters.filter((p) => p.type === "number"), bound = numParams.some((p) => p.id === a.forecastParam) ? a.forecastParam : "";
         panel.append(fmtSelect("Forecast", [...FORECAST_CHOICES, ...numParams.map((p) => [`param:${p.id}`, `Parameter: ${p.name}`])], bound ? `param:${bound}` : a.forecast,
           (v) => (v.startsWith("param:") ? set({ forecastParam: v.slice(6) }) : set({ forecast: Number(v), forecastParam: undefined }))));
       }
-      panel.append(el("span", "ws-shelf__note", "Lines and bands read the chosen measure over the rows shown (the “Other” remainder is left out); trend and forecast follow the first, in category order. A forecast extends the trend (linear if none is picked)."));
+      panel.append(el("span", "ws-shelf__note", "Lines and bands read the chosen measure over the rows shown (the “Other” remainder is left out); trend and forecast read the measure chosen under “trend of” (the first by default), in category order. A forecast extends the trend (linear if none is picked)."));
     } else if (isTable) {
       panel.append(fmtCheck("Grand totals", a.totals.grand, (v) => set({ totals: { ...a.totals, grand: v } })),
         fmtCheck("Subtotals", a.totals.sub, (v) => set({ totals: { ...a.totals, sub: v } })),

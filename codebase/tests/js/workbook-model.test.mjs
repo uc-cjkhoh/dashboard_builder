@@ -360,6 +360,19 @@ test("reference line measure and distribution bands (T07) are kept when valid, r
   assert.ok(m.issues.some((i) => /analytics/.test(i)));
 });
 
+test("the trend's measure (T07-01) is kept when a valid shown-measure index, rejected otherwise", () => {
+  const ok = sheetOf({ analytics: { trend: "linear", trendMeasure: 2 } }).worksheets[0].sheet.analytics;
+  assert.equal(ok.trendMeasure, 2);
+  assert.equal("trendMeasure" in sheetOf({ analytics: { trend: "linear" } }).worksheets[0].sheet.analytics, false);
+  assert.equal("trendMeasure" in sheetOf({ analytics: { trendMeasure: 0 } }).worksheets[0].sheet.analytics, false);
+  for (const trendMeasure of [-1, 20, 1.5, "1", null]) {
+    const r = sheetOf({ analytics: { trend: "log", trendMeasure } });
+    assert.equal("trendMeasure" in r.worksheets[0].sheet.analytics, false);
+    assert.equal(r.worksheets[0].sheet.analytics.trend, "log");
+    assert.ok(r.issues.some((i) => /analytics/.test(i)), String(trendMeasure));
+  }
+});
+
 test("a relationship's join type (P31) round-trips; anything but left reads as inner", () => {
   const st = sampleState();
   [...st.relationships.values()][0].joinType = "left";

@@ -122,6 +122,7 @@ try {
     await ev(`(() => { const s = [...document.querySelectorAll('.ws-analytics .ws-fmt-field')].find((l) => l.querySelector('.ws-fmt-label').textContent === ${J(label)}).querySelector('select'); s.value = ${J(value)}; s.dispatchEvent(new Event('change')); return true; })()`);
     await settle(400); await chartReady();
   };
+  const aHas = (label) => ev(`[...document.querySelectorAll('.ws-analytics .ws-fmt-field')].some((l) => l.querySelector('.ws-fmt-label').textContent === ${J(label)})`);
   const mark = async (k) => (await opt()).series[0][k];
 
   const item = (id) => `document.querySelector('.ws-ana-item[data-item="${id}"]')`;
@@ -238,6 +239,22 @@ try {
     must(/greater than zero/.test(await ev(`document.getElementById('ws-chart').parentElement.textContent`)), 'plain notice missing');
     await shot('trend-notice-light.png');
     zeroFirst = false;
+  });
+
+  await check('the trend (and forecast) read the measure chosen under "trend of", saved on the sheet', async () => {
+    await openAna();
+    await aPick('Trend', 'linear');
+    const trend = () => ev(`(() => { const t = window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas')).getOption().series.find((x) => /^Trend/.test(x.name)); return t ? { name: t.name, first: t.data[0] } : null; })()`);
+    const t0 = await trend();
+    must(t0 && !/ of /.test(t0.name), `default trend names no measure: ${J(t0)}`);
+    must(await aHas('trend of'), 'no "trend of" chooser with two measures');
+    await aPick('trend of', '1');
+    const t1 = await trend();
+    must(t1 && / of /.test(t1.name) && t1.first !== t0.first, `trend did not move to the second measure: ${J(t0)} -> ${J(t1)}`);
+    must((await sheetAna()).trendMeasure === 1, `saved: ${J(await sheetAna())}`);
+    await aPick('trend of', '0');
+    must(!('trendMeasure' in await sheetAna()) && J(await trend()) === J(t0), 'back to the first measure');
+    await shot('trend-of-light.png');
   });
 
   if (b.consoleErrors.length) { console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  ')); failed++; }

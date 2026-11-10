@@ -519,6 +519,7 @@ function cleanAnalytics(a, where, issues) {
         : { from: Math.min(a.band.from, a.band.to), to: Math.max(a.band.from, a.band.to) };
     } else bad = true;
   }
+  if (a.trendMeasure !== undefined) Object.assign(out, (({ measure }) => (measure ? { trendMeasure: measure } : {}))(refMeasure(a.trendMeasure, () => { bad = true; }))); // the measure the trend / forecast follow (absent = the first)
   if (a.trend !== undefined) { if (TRENDS.has(a.trend)) out.trend = a.trend; else bad = true; }
   if (a.forecast !== undefined) { if (FORECASTS.has(a.forecast)) out.forecast = a.forecast; else bad = true; }
   if (/^prm\d{1,6}$/.test(a.forecastParam ?? "")) out.forecastParam = a.forecastParam; // (checked against the workbook's parameters later)
