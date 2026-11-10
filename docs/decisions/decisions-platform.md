@@ -42,14 +42,14 @@ in one helper (`ClickHouse/Identifier.cs`).
 - Detail: [clickhouse-integration.md](../reference/clickhouse-integration.md#identifier-injection).
 
 ### D10 — Connect over TLS only: HTTPS port `8443`
-`secure` is on by default and `8443` is the default port.
+`secure` is on by default and `8443` is the default port. (Its switch is always visible: [D98](decisions-connection.md#d98--secure-and-trust-are-visible-switches-the-certificate-note-waits).)
 - **Why:** the target ClickHouse exposes only its secure ports ([ports](../reference/clickhouse-integration.md#driver--connection)).
 
 ### D11 — TLS certificate trust: self-signed is accepted by default, untick to verify
 The connection form ships with "Trust invalid / self-signed certificate" **ticked**, because the servers this tool targets use self-signed
 certificates. A secure connection validates the certificate against the host trust store only when the user unticks it (`allowInvalidCert`).
 The API itself still defaults to validating: a request that omits `allowInvalidCert` is verified.
-- **How it shows:** the checkbox appears only under Secure and a warning shows while it is ticked. Advanced is therefore open on a new form.
+- **How it shows:** the switch is always visible and appears only under Secure; its note shows once the user is about to connect with it on or has touched it ([D98](decisions-connection.md#d98--secure-and-trust-are-visible-switches-the-certificate-note-waits)).
   The connection summary flags an unverified connection (`TLS ⚠ cert unverified`).
 - **Enforced in:** the bypass is gated on TLS (`allowInvalidCert && secure`). It is applied via
   `DangerousAcceptAnyServerCertificateValidator` only when `BypassesCertificateValidation(info)` is true.
@@ -110,7 +110,7 @@ Windows 11 Fluent structure with Flat Design 2.0 surfaces:
 
 Spec: [design/index.md](../reference/design/index.md), [tokens.md](../reference/design/tokens.md).
 - **Why:** the red / black identity was heavy, ambiguous (brand vs. danger) and showed every control at
-  once. A calmer palette with progressive disclosure (Advanced connection settings, the encodings More
+  once. A calmer palette with progressive disclosure (the encodings More
   menu, the Workbook menu, collapsible field groups) lets a first-time user see only what matters.
   Nothing is removed, and an encoding that holds fields is never hidden.
 - **Red accent without red-means-error ambiguity** (the reason D7 was retired). Danger is a distinct

@@ -23,6 +23,8 @@ previews rows, and profiles columns.
 
 - **Filling it.** On `connection:changed` (connected), `schema.js` fills a native `<select>` from `GET /api/databases` (`SHOW DATABASES`).
   It has a disabled "Select a database…" placeholder. On disconnect it clears.
+- **System databases last.** User databases come first; `system`, `INFORMATION_SCHEMA` and `information_schema` follow under a **System** group (`<optgroup>`), still selectable (`splitDatabases` in `schema-model.js`).
+- **Remembered per server.** The last database picked is kept in this browser (`localStorage` key `dashboardbuilder.last-database`, a database name per host/port/user, at most 20, no secrets). After a reload, or a reconnect, the dropdown returns to it and its tables load, if it still exists (`recallDb`).
 - **Open list.** Where the browser supports customizable selects, the open list takes the table rows' design
   (`appearance: base-select`, `@supports` in `schema.css`):
   - a solid panel (`--surface`, one stroke, `--elev-16`, 8px radius on its bottom corners) of flat 32px rows;
@@ -43,7 +45,7 @@ previews rows, and profiles columns.
   The list scrolls internally.
 - **Drag.** Each chip is `draggable="true"` and writes the `application/x-ch-table` payload `{db, table}` on `dragstart`.
   The drop side is in [canvas.md](canvas.md#dragging-a-table-onto-the-canvas).
-- **`＋` button.** The non-drag fallback on each chip. It dispatches `table:add` `{db, table}`, which `canvas.js` consumes exactly like a drop.
+- **`＋` button.** The non-drag fallback on each chip. It and the preview eye sit at the row's right end, quiet (`--ink-3`) at rest and full ink on hover / focus, so they are always visible and keyboard reachable. It dispatches `table:add` `{db, table}`, which `canvas.js` consumes exactly like a drop.
 - **Search.** A search box (`#table-search`, `maxlength` 100) above the list filters the chips by name.
   - It is a client-side, case-insensitive substring match (`matchTables` in `table-filter.js`).
   - `Esc` clears it.
@@ -57,14 +59,13 @@ previews rows, and profiles columns.
 
 ## Row preview
 
-- **Opening it.** A **preview button** (eye icon, `.table-chip__peek`, `aria-label` "Preview rows of <table>") sits on each chip,
-  shown on hover / focus like the grip. It opens the **rows dialog** (`Rows/rows-dialog.js`).
+- **Opening it.** A **preview button** (eye icon, `.table-chip__peek`, `aria-label` "Preview rows of <table>") sits on each chip, quiet at rest. It opens the **rows dialog** (`Rows/rows-dialog.js`).
 - **What it shows:** the first **20** rows of the table, read-only, with no ordering (the first rows in storage order).
   - Request: `tableRowsRequest` in `Rows/rows-model.js` → `POST /api/rows` ([api.md § Rows](../../reference/api.md#rows)).
-  - A sticky header shows each column's **name and raw ClickHouse type**, then the rows follow.
+  - A sticky header shows each column's **name and a plain kind** — whole number, number, text, date, date & time, true/false (`friendlyKind` in `Schema/type-kind.js`) — with the raw ClickHouse type (`Nullable(String)`, `Decimal(10, 2)`) in its tooltip; a type with no plain kind is shown as it is. Then the rows follow.
 - **The dialog** is a native `<dialog>` labelled by its title ("<table> — first rows", with the `db.table` beneath).
   - **Esc**, the X or Close closes it. Closing also cancels a request still in flight.
-  - The table scrolls inside the dialog (max 80vh); the page never scrolls.
+  - The dialog is up to 1200px wide (never wider than the viewport minus 32px); the table scrolls inside it (max 80vh), sideways only when the columns need more; the page never scrolls.
 - **Cells and limits:**
   - A SQL `NULL` cell reads *NULL* in italic muted text, distinct from an empty string.
   - A cell longer than 1000 characters is cut with an ellipsis. When any cell was cut, the dialog says so

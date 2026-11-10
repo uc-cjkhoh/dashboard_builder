@@ -30,7 +30,7 @@ The builder is a two-world layout. A **left glass rail** owns connection and sch
   [D22](../../decisions/decisions-platform.md#d22--fluent-glass-design-language)).
 
 **Progressive disclosure:** a first-time user sees the few controls that matter. The rest appears when
-relevant, such as the connection form's Advanced section, the Workbook menu and collapsible field
+relevant, such as the Workbook menu and collapsible field
 groups. Nothing is removed: an encoding that holds fields is always shown.
 
 ## Rules that never bend
