@@ -55,7 +55,7 @@ let current = null;
 
 export function closeContextMenu() { current?.close(); }
 
-export function openContextMenu({ x, y, entries, label = "Options", returnFocus }) {
+export function openContextMenu({ x, y, entries, label = "Options", returnFocus, avoid }) {
   closeContextMenu();
   const list = document.createElement("div");
   list.className = "menu__list ctx-menu";
@@ -102,7 +102,7 @@ export function openContextMenu({ x, y, entries, label = "Options", returnFocus 
   build();
   document.body.append(list);
   const r = list.getBoundingClientRect();
-  const at = placeMenu({ x, y, width: r.width, height: r.height, viewW: window.innerWidth, viewH: window.innerHeight });
+  const at = placeMenu({ x, y, width: r.width, height: r.height, viewW: window.innerWidth, viewH: window.innerHeight, avoid: avoid?.() ?? null });
   list.style.left = `${at.left}px`; list.style.top = `${at.top}px`;
   enter(list, { y: -4, scale: .97 });
   itemEls()[0]?.focus();
@@ -125,16 +125,16 @@ export function openContextMenu({ x, y, entries, label = "Options", returnFocus 
 }
 
 /** Wire right-click and the keyboard equivalents on `target`. `entries` is read at open time; `returnFocus` finds the element to refocus (the target may be re-rendered meanwhile). */
-export function wireContextMenu(target, entries, { label, returnFocus } = {}) {
+export function wireContextMenu(target, entries, { label, returnFocus, avoid } = {}) {
   target.addEventListener("contextmenu", (e) => {
     e.preventDefault(); e.stopPropagation();
-    openContextMenu({ x: e.clientX, y: e.clientY, entries, label, returnFocus: returnFocus ?? (() => target) });
+    openContextMenu({ x: e.clientX, y: e.clientY, entries, label, returnFocus: returnFocus ?? (() => target), avoid });
   });
   target.addEventListener("keydown", (e) => {
     if (!opensContext(e)) return;
     e.preventDefault(); e.stopPropagation();
     const r = target.getBoundingClientRect();
-    openContextMenu({ x: r.left, y: r.bottom + 4, entries, label, returnFocus: returnFocus ?? (() => target) });
+    openContextMenu({ x: r.left, y: r.bottom + 4, entries, label, returnFocus: returnFocus ?? (() => target), avoid });
   });
   target.setAttribute("aria-haspopup", "menu");
 }

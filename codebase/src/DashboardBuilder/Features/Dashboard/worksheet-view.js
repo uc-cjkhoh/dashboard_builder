@@ -24,6 +24,7 @@ import { planTables, calcProblem, statCalcProblem } from "../Calc/calc-plan.js";
 import { isCalcPill, pillSlots } from "../Calc/calc-pill.js";
 import { el, hint, warn } from "./render-dom.js";
 import { pruneMissing, missingMessage } from "./missing-columns.js";
+import { emptyMessage, conflictNotice } from "./filter-hints.js";
 import { joinNotices, periodNotice, speedNotice, invalidFilterNotice } from "./notices.js";
 import { BACKGROUND_CHOICES, backgroundClass } from "./background-model.js";
 
@@ -65,7 +66,7 @@ export function createWorksheetView(container, getContext, options = {}) {
   let crossSig = null; // what that selection made the view show — sync() compares against it
   // What the drawing may do with the editor-only state around it (render-handlers.js): nothing when not interactive, and a
   // "select" view hands the host only onSelect.
-  const renderOptions = () => ({ plan: getContext().plan, interactive: mode, selected: cross?.selected ?? null,
+  const renderOptions = (s) => ({ plan: getContext().plan, emptyText: emptyMessage(s, { shared: appliedShared(getContext().plan).length }), interactive: mode, selected: cross?.selected ?? null,
     hooks: mode === "select" ? { onSelect: options.onSelect, onUnselectable: options.onUnselectable } : {
       onSelect: options.onSelect, onDrill: options.onDrill, onLegend: options.onLegend, legendFocus: options.legendFocus,
       onTooltipFields: options.onTooltipFields, onMemberColors: options.onMemberColors, onCollapse: options.onCollapse, onCollapseAll: options.onCollapseAll } });
@@ -84,7 +85,7 @@ export function createWorksheetView(container, getContext, options = {}) {
     applyBackground(s);
     extraNotice = null;
     const t0 = performance.now();
-    extraNotice = draw(container, s, result, cmp ?? null, renderOptions())?.extraNotice ?? null;
+    extraNotice = draw(container, s, result, cmp ?? null, renderOptions(s))?.extraNotice ?? null;
     if (renderTimed) { const entry = renderTimed; renderTimed = null; perfLog.attachRender(performance.now() - t0, entry); } // only the draw that follows a fetch; timing only — Core/perf-log.js
   };
   const gate = createLatestGate();
@@ -187,7 +188,7 @@ export function createWorksheetView(container, getContext, options = {}) {
     withCategories(s.filters, c.categoryOf);
     const statChart = STAT_SINGLE_TABLE.has(s.chartType);
     const havingNote = statChart ? ((s.columns ?? []).concat(s.rows ?? []).some((f) => f.having) ? "Measure filters don't apply to this chart." : null) : havingNotice(planMeasures(s).filter((e) => e.role === "shelf").map((e) => ({ label: measureName(e.field, c.plan), having: e.field.having })), planDims(s).keyOrder.map((f) => c.plan.nameOf(f)));
-    const filterNote = joinNotices(invalidFilterNotice(s), crossNote, havingNote, missingNote);
+    const filterNote = joinNotices(invalidFilterNotice(s), conflictNotice(s.filters), crossNote, havingNote, missingNote);
     setNotice(c.noticeEl, filterNote);
     const heldOut = heldOutProblem(involvedOf(c, s), c.plan.entities, c.plan.relationships); // a table with no relationship stays out of every view
     if (heldOut) { container.replaceChildren(warn(heldOut)); return; }

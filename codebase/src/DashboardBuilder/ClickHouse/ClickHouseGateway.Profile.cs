@@ -103,4 +103,25 @@ public sealed partial class ClickHouseGateway
 
     /// <summary>An empty or all-NULL column has no min/max (ClickHouse returns 0 for a non-Nullable one).</summary>
     internal static string? ProfileExtreme(string? raw, long rows, long nulls) => rows == 0 || nulls >= rows ? null : raw;
+
+    /// <summary>The newest day of one date / date-time column (null when empty or all NULL): the anchor for relative date ranges.
+    /// One bounded read-only <c>max</c>; the connection's time limit and <c>readonly=2</c> apply.</summary>
+    /// <exception cref="UnknownIdentifierException">No such database, table or column; or the column is not a date.</exception>
+    public async Task<string?> LatestDayAsync(ClickHouseConnectionInfo info, string database, string table, string column, CancellationToken ct)
+    {
+        var columns = await DescribeColumnsAsync(info, database, table, ct); // validates db + table
+        var col = columns.FirstOrDefault(c => string.Equals(c.Name, column, StringComparison.Ordinal))
+                  ?? throw new UnknownIdentifierException("Unknown column.");
+        if (col.Category != ClickHouseType.Temporal) throw new UnknownIdentifierException("Unknown date column.");
+        using var httpClient = CreateHttpClient(info);
+        await using var conn = new ClickHouseConnection(BuildConnectionString(info), httpClient);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = BuildLatestDaySql(database, table, col.Name);
+        await using var r = await cmd.ExecuteReaderAsync(ct);
+        return await r.ReadAsync(ct) && !r.IsDBNull(0) ? r.GetValue(0)?.ToString() : null;
+    }
+
+    internal static string BuildLatestDaySql(string database, string table, string column)
+        => $"SELECT toString(toDate(maxOrNull({Identifier.Quote(column)}))) FROM {Identifier.QualifiedName(database, table)}";
 }

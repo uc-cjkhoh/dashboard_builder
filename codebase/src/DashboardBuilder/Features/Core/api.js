@@ -74,6 +74,9 @@ export const api = {
     request("POST", `/api/databases/${encodeURIComponent(db)}/tables/${encodeURIComponent(table)}/histogram`, plan, signal),
   /** Box plot over the worksheet's joins, filters and calculations (the plan is Dashboard/box-plan.js) → { groups: [{label, min, q1, median, q3, max, lowerWhisker, upperWhisker}], outliers, truncated }. */
   boxplot: (plan, { signal } = {}) => request("POST", "/api/boxplot", plan, signal),
+  /** The newest day of a date column: { latest: "YYYY-MM-DD" | null }. */
+  latest: (db, table, column, { signal } = {}) =>
+    request("GET", `/api/databases/${encodeURIComponent(db)}/tables/${encodeURIComponent(table)}/columns/${encodeURIComponent(column)}/latest`, undefined, signal),
   /** Column profile: rows, NULLs, approximate distinct, min/max and top values of one column over the table's first rows. */
   profile: (db, table, req, { signal } = {}) =>
     request("POST", `/api/databases/${encodeURIComponent(db)}/tables/${encodeURIComponent(table)}/profile`, req, signal),

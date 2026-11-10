@@ -65,7 +65,11 @@ test("havingNotice flags an invalid filter as not applied", () => {
   assert.match(havingNotice([{ label: "sum Sales", having: { op: ">", value: "abc" } }], ["Region"]), /not applied/);
 });
 test("havingBadge: the short text on the pill", () => {
-  assert.equal(havingBadge({ op: ">=", value: "1000" }), "≥ 1000");
+  assert.equal(havingBadge({ op: ">=", value: "1000" }), "≥ 1,000");
+  assert.equal(havingBadge({ op: ">", value: "1000000" }), "> 1,000,000");
+  assert.equal(havingBadge({ op: ">", value: "1234.5" }), "> 1,234.5");
+  assert.equal(havingBadge({ op: ">", value: "-2500" }), "> -2,500");
+  assert.equal(havingBadge({ op: "between", values: ["1000", "250000"] }), "1,000 – 250,000");
   assert.equal(havingBadge({ op: "between", values: ["1", "5"] }), "1 – 5");
   assert.equal(havingBadge(undefined), "");
 });

@@ -42,7 +42,7 @@ import { keyAliasMaps, withMemberLabels } from "./member-labels.js";
 export function renderWorksheet(container, sheet, result, cmp, options = {}) {
   const rc = { container, plan: options.plan ?? { metaOf: () => ({}) }, interactive: options.interactive !== false && options.interactive !== "select",
     select: options.interactive !== false, selected: options.selected ?? null, hooks: options.hooks ?? {},
-    bucketedKey: null, calcPercent: new Set(), extraNotice: null };
+    bucketedKey: null, calcPercent: new Set(), extraNotice: null, emptyText: options.emptyText ?? "No data for these fields." };
   draw(container, rc, sheet, result, cmp);
   return { extraNotice: rc.extraNotice };
 }
@@ -72,7 +72,7 @@ function draw(container, rc, sheet, result, cmp) {
   if (calcs.some(isCalc) && (result.truncated || result.partial))
     rc.extraNotice = "Table calculations use only the rows shown — more exist.";
   const { rowDimensions, columnDimensions, measures, rows } = result;
-  if (!rows.length) { container.append(hint("No data for these fields.")); return; }
+  if (!rows.length) { container.append(hint(rc.emptyText)); return; }
   // Formatters: measure values + date-like dimension labels, from the sheet's format config.
   let format = sheet.format ?? defaultFormat(); // let: a percent table calculation adds a "%" suffix
   const fmtVal = makeValueFormatter(format);

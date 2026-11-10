@@ -25,7 +25,8 @@ import { createResultCache } from "./query-runner.js";
 import { CHART_TYPES, chartIcon, chartLabel, sortSummary } from "./viewbar-model.js";
 import { enter, MOTION } from "../Core/motion.js";
 import { wireResizer } from "../Core/resizer.js";
-import { PRESET_CHOICES, COMPARE_CHOICES, COMPARE_TYPES, newPeriod, resolveRange, compareRange, rangeLabel } from "./period-model.js";
+import { PRESET_CHOICES, COMPARE_CHOICES, COMPARE_TYPES, newPeriod, resolveRange, compareRange, rangeLabel, withLatest, anchorLabel } from "./period-model.js";
+import { newFilter, caseMiss, caseMissText, conflictFor, selectionLabel } from "./filter-hints.js";
 import { CF_MODE_CHOICES, CF_SCALE_CHOICES, CF_OP_CHOICES, CF_TONE_CHOICES, CF_MAX_RULES, measureKey, emptyRule, isActive } from "./conditional-model.js";
 import { templateError, buildActionUrl, applyParamAction, MAX_LABEL, MAX_TEMPLATE } from "./action-model.js";
 import { DATE_PART_CHOICES, stepPart } from "./date-parts.js";
@@ -1526,7 +1527,8 @@ export function initDashboards() {
   function optionsOn(p, ctxId, label, entries) {
     p.tabIndex = 0; p.dataset.ctx = ctxId;
     p.title = "Right-click for options";
-    wireContextMenu(p, entries, { label: `Options for ${label}`, returnFocus: () => shelvesEl.querySelector(`[data-ctx="${ctxId}"]`) });
+    wireContextMenu(p, entries, { label: `Options for ${label}`, returnFocus: () => shelvesEl.querySelector(`[data-ctx="${ctxId}"]`),
+      avoid: () => (!toolFly.hidden && toolFly.contains(p) ? toolFly.getBoundingClientRect() : null) }); // a pill in the flyout: its menu opens beside it, not over its editor
   }
   // Give pill-options entries their actions: `run(id)` on select; `keep(id)` = act, then rebuild instead of closing; `custom[id]()` = a custom row's element.
   function bindEntries(list, run, { keep = () => false, custom = {} } = {}) {
@@ -1829,9 +1831,12 @@ export function initDashboards() {
     const p = pill(text, () => { list.splice(i, 1); commit(dash, s); });
     p.classList.toggle("ws-pill--invalid", chk.state === "invalid");
     if (chk.state === "invalid") { p.prepend(icon("warning", { size: 14 })); p.title = chk.error; }
+    const clash = chk.state === "invalid" ? null : conflictFor(list, i);
+    if (clash) { p.classList.add("ws-pill--invalid"); p.prepend(icon("warning", { size: 14 })); p.title = clash; }
     if (shared) { p.classList.add("ws-pill--shared"); p.prepend(el("span", "ws-pill__badge", "All dashboards")); }
     optionsOn(p, ctxId, nameOf(f), entries);
     if (chk.state === "invalid") p.title = `${chk.error} — right-click for options`;
+    else if (clash) p.title = `${clash} Right-click for options.`;
     return markMissing(p, f);
   }
   // The value editor in a filter's context popup; a refused value is marked on the input that failed.
@@ -2055,12 +2060,33 @@ export function initDashboards() {
     val.setAttribute("aria-label", `Value for ${nameOf(f)}`);
     val.addEventListener("change", () => { f.value = val.value; commit(dash, s); });
     const bind = paramBinding(dash, s, f);
-    if (!bind) return val;
+    const hint = f.op === "=" && f.category === "text" && !f.param ? caseHint(f) : null; // "shipped" vs "Shipped": say so
+    if (!bind && !hint) return val;
     const wrap = el("span", "ws-pill__pwrap");
-    wrap.append(val, bind);
+    wrap.append(val);
+    if (bind) wrap.append(bind);
+    if (hint) wrap.append(hint);
     return wrap;
   }
 
+  function selectionPill(dash, s) {
+    const p = pill(selectionLabel(s.selection), () => { s.selection = null; legendFocus = null; commit(dash, s); });
+    p.classList.add("ws-pill--mark");
+    p.title = "From the selected mark — Clear selection removes it";
+    return p;
+  }
+  // A note under a text "=" value when it matches a member only by case, from the already-loaded members (no new query).
+  function caseHint(f) {
+    const note = el("span", "ws-fcard__op ws-pill__casehint");
+    note.hidden = true;
+    note.setAttribute("role", "status");
+    if (!String(f.value ?? "").trim() || isCalcPill(f)) return note;
+    distinctOf(f).then((members) => {
+      const m = caseMiss(f.value, members);
+      if (m != null) { note.textContent = caseMissText(nameOf(f), f.value, m); note.hidden = false; }
+    }).catch(() => {});
+    return note;
+  }
   // Top-N editor: [top|bottom] [n] by [measure on the shelves].
   function topControl(dash, s, f) {
     const wrap = el("span", "ws-pill__top");
@@ -2329,7 +2355,7 @@ export function initDashboards() {
       const problem = filterCalcProblem(f, calcFieldCtx());
       if (problem) { toast(problem, "info"); return; }
       dash.sheet.filters.push(newCalcFilter(f));
-    } else dash.sheet.filters.push({ db: f.db, table: f.table, column: f.column, category: f.category, op: "=", value: "" });
+    } else dash.sheet.filters.push(newFilter(f)); // a text dimension starts as an "in" list
     commit(dash, dash.sheet);
   }
   // Drop a field onto Color. A categorical field is discrete (group-by → coloured
@@ -2379,9 +2405,10 @@ export function initDashboards() {
       { key: "angle", icon: "angle", label: "Angle", count: m.angle ? 1 : 0,
         pills: one(m.angle, () => { m.angle = null; commit(dash, s); }), onDrop: (f) => addAngle(dash, f),
         hint: "A radial magnitude — pie already maps its measure to angle" },
-      { key: "filters", icon: "filter", label: "Filters", count: s.filters.length + sharedFilters.length,
+      { key: "filters", icon: "filter", label: "Filters", count: s.filters.length + sharedFilters.length + (selectionLabel(s.selection) ? 1 : 0),
         pills: [...s.filters.map((f, i) => filterPill(dash, s, f, i, s.filters)),
-          ...sharedFilters.map((f, i) => filterPill(dash, s, f, i, sharedFilters))],
+          ...sharedFilters.map((f, i) => filterPill(dash, s, f, i, sharedFilters)),
+          ...(selectionLabel(s.selection) ? [selectionPill(dash, s)] : [])], // Keep only / Exclude shows here; it is not a saved filter
         onDrop: (f) => addFilter(dash, f),
         hint: "Drop a field to filter the view by it — share a filter (link button) to apply it on every dashboard",
         note: sharedNote(s), editor: filtersInFly(s) ? filterCards(dash, s) : null },
@@ -2688,8 +2715,16 @@ export function initDashboards() {
     const refused = refusal(f, "period");
     if (refused) { toast(refused, "info"); return; }
     if (f.category !== "temporal") { toast("Date range needs a date or date-time field.", "info"); return; }
-    dash.sheet.period = newPeriod(f);
+    const period = newPeriod(f);
+    dash.sheet.period = period;
     commit(dash, dash.sheet);
+    // Count the relative range from the field's latest day (one bounded read), not from today — so older data isn't emptied.
+    api.latest(f.db, f.table, f.column).then((r) => {
+      const cur = dash.sheet.period;
+      if (!r?.latest || cur !== period) return; // replaced, removed or changed meanwhile
+      dash.sheet.period = withLatest(cur, r.latest);
+      commit(dash, dash.sheet);
+    }).catch(() => { /* no read: the range counts from today, and the panel says so */ });
   }
   // The Date range editor: preset (or custom days), comparison (or custom days), and the resolved ranges.
   function periodEditor(dash, s) {
@@ -2699,6 +2734,7 @@ export function initDashboards() {
     const row = el("div", "ws-period__row");
     row.append(fmtSelect("Range", PRESET_CHOICES, p.preset, (v) => set({ preset: v })));
     if (p.preset === "custom") row.append(dayInput("From", p.from, (v) => set({ from: v })), dayInput("To", p.to, (v) => set({ to: v })));
+    if (p.preset !== "custom" && p.latest) row.append(fmtSelect("Count from", [["latest", "Latest data"], ["today", "Today"]], p.anchor === "latest" ? "latest" : "today", (v) => set({ anchor: v })));
     row.append(fmtSelect("Compare to", COMPARE_CHOICES, p.compare, (v) => set({ compare: v })));
     if (p.compare === "custom")
       row.append(dayInput("From", p.compareFrom, (v) => set({ compareFrom: v })), dayInput("To", p.compareTo, (v) => set({ compareTo: v })));
@@ -2709,6 +2745,8 @@ export function initDashboards() {
       : p.compare === "custom" && !cmp ? `${rangeLabel(range)} · pick both comparison days.`
       : `${rangeLabel(range)}${cmp ? ` vs ${rangeLabel(cmp)}` : ""}`;
     box.append(el("span", `ws-shelf__note${range ? "" : " ws-shelf__note--warn"}`, summary));
+    const from = anchorLabel(p);
+    if (range && from) box.append(el("span", "ws-shelf__note", from));
     if (cmp && !COMPARE_TYPES.has(s.chartType))
       box.append(el("span", "ws-shelf__note", "The comparison shows on Bar, Line, Area and KPI; this chart uses the range only."));
     return box;
