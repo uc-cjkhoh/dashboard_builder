@@ -199,7 +199,7 @@ function openWorkbook(wb) {
     }
     wb.stories.forEach((s, i) => setSteps(storyIds[i], s.steps.map((x) => ({ caption: x.caption, target: (x.target.kind === "worksheet" ? worksheetIds : dashboardIds)[x.target.index] }))));
     wb.dashboards.forEach((d, i) => setWidgets(dashboardIds[i], d.widgets.map((w) => (w.kind === "sheet"
-      ? { id: nextWidgetId(), kind: "sheet", sheetId: worksheetIds[w.sheet], x: w.x, y: w.y, w: w.w, h: w.h }
+      ? { id: nextWidgetId(), kind: "sheet", sheetId: worksheetIds[w.sheet], ...(w.note ? { note: w.note } : {}), x: w.x, y: w.y, w: w.w, h: w.h }
       : w.kind === "image" ? { id: nextWidgetId(), kind: "image", alt: w.alt, src: w.src, x: w.x, y: w.y, w: w.w, h: w.h }
       : w.kind === "nav" ? { id: nextWidgetId(), kind: "nav", label: w.label, tip: w.tip, target: w.target ? (w.target.kind === "worksheet" ? worksheetIds : dashboardIds)[w.target.index] ?? null : null, x: w.x, y: w.y, w: w.w, h: w.h }
       : w.kind === "spacer" ? { id: nextWidgetId(), kind: "spacer", x: w.x, y: w.y, w: w.w, h: w.h }

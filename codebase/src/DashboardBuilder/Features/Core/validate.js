@@ -58,6 +58,7 @@ export const LIMITS = Object.freeze({
   navLabel: 40,        // characters in a navigation button's label
   navTip: 200,         // characters in a navigation button's tooltip
   storySteps: 20,      // steps in one story (client-side only; rejected past it, never cut)
+  widgetNote: 300,     // characters in a worksheet widget's note (client-side only)
   dashboardNotes: 1000, // characters in a dashboard's data note (client-side only)
   stepCaption: 300,    // characters in a story step's caption
   calcName: 60,      // characters in a calculation's name / label (server CalcLimits.MaxName)

@@ -14,6 +14,7 @@ import { SIZE_PRESETS, isPreset, customSizeProblem, sizeKey, sizeLabel, rangePro
 import { createWidget } from "./board-widget.js";
 import { createNotes } from "./notes-edit.js";
 import { printLines } from "./board-notes.js";
+import { widgetNoteLines } from "./widget-note.js";
 import { dateTimeIn, offsetLabel } from "../Core/timezone.js";
 import { createPanel } from "./board-panel.js";
 import { initInteract } from "./board-interact.js";
@@ -169,7 +170,7 @@ export function initBoard() {
     for (const w of dash.widgets) {
       const known = entries.get(w.id);
       if (known) { known.update(w); continue; }
-      const e = createWidget(w, { results, onRemove: remove, onSaveText: saveText, onSaveNav: saveNav, ownId: () => activeDashboard()?.id, onMark, onUnselectable: () => status(UNSELECTABLE_NOTE, true), crossFor: (id) => crossFor(selection, id) });
+      const e = createWidget(w, { results, onRemove: remove, onSaveText: saveText, onSaveNote: saveNote, onSaveNav: saveNav, ownId: () => activeDashboard()?.id, onMark, onUnselectable: () => status(UNSELECTABLE_NOTE, true), crossFor: (id) => crossFor(selection, id) });
       entries.set(w.id, e);
       grid.append(e.el);
       fresh.push(e);
@@ -264,6 +265,13 @@ export function initBoard() {
     if (!dash) return;
     commit(dash.widgets.map((w) => (w.id === widget.id ? { ...w, ...value } : w)));
     status("Text updated.");
+  }
+
+  function saveNote(widget, note) {
+    const dash = activeDashboard();
+    if (!dash) return;
+    commit(dash.widgets.map((w) => { if (w.id !== widget.id) return w; const { note: _drop, ...rest } = w; return note ? { ...rest, note } : rest; }));
+    status(note ? "Note saved." : "Note cleared.");
   }
 
   function saveNav(widget, value) {
@@ -364,7 +372,7 @@ export function initBoard() {
     printHead = el("div", "ws-print-head", "");
     printHead.append(el("h1", "ws-print-head__title", dash.name));
     const names = dash.widgets.filter((w) => w.kind === "sheet").map((w) => worksheetById(w.sheetId)?.name).filter(Boolean);
-    const lines = printLines({ sheets: [...new Set(names)], filter: selection?.label ?? null, printedAt: `Printed ${dateTimeIn(Date.now())} (${offsetLabel()})`, notes: dash.notes ?? "" });
+    const lines = printLines({ sheets: [...new Set(names)], filter: selection?.label ?? null, printedAt: `Printed ${dateTimeIn(Date.now())} (${offsetLabel()})`, widgetNotes: widgetNoteLines(dash.widgets, (w) => worksheetById(w.sheetId)?.name), notes: dash.notes ?? "" });
     for (const l of lines) printHead.append(el("p", `ws-print-head__line${l === dash.notes ? " board-print-note" : ""}`, l));
     main.insertBefore(printHead, main.querySelector(".board-bar").nextSibling);
   }

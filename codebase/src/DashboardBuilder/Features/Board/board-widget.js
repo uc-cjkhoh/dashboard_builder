@@ -10,6 +10,7 @@ import { validateTextEdit, textChanged } from "./text-edit.js";
 import { buildNavForm } from "./nav-edit.js";
 import { navChanged } from "./nav-model.js";
 import { NAV_LABEL } from "./board-model.js";
+import { validateWidgetNote } from "./widget-note.js";
 
 // One widget on the board: a header (title, Edit, Remove) over a body. A worksheet widget's body is a select-only
 // worksheet view (createWorksheetView({ interactive: "select" })) of its worksheet's sheet, run with its own latest-wins gate
@@ -29,7 +30,7 @@ function toolButton(name, label, className) {
 
 let formSeq = 0;
 /**
- * `host` = { results, onRemove(widget), onSaveText(widget, { heading, body }), crossFor(widgetId) -> { filter } | { selected } | null,
+ * `host` = { results, onRemove(widget), onSaveText(widget, { heading, body }), onSaveNote(widget, note), crossFor(widgetId) -> { filter } | { selected } | null,
  * onMark(widget, dimField, raw), onUnselectable() }. Returns { el, update(widget), run(), syncCross(), destroy(), body, focusEdit() }.
  */
 export function createWidget(widget, host) {
@@ -49,7 +50,10 @@ export function createWidget(widget, host) {
   remove.addEventListener("click", () => host.onRemove(current));
   const edit = toolButton("edit", "Edit", "board-widget__edit"); // worksheet → its tab; text → inline edit
   edit.addEventListener("click", () => (current.kind === "sheet" ? switchTab(current.sheetId) : current.kind === "nav" ? startNavEdit() : startEdit()));
-  tools.append(edit, remove);
+  const noteBtn = toolButton("info", "Note", "board-widget__note-btn"); // worksheet widgets only: a short note shown under the title and in the printed header
+  noteBtn.hidden = widget.kind !== "sheet";
+  noteBtn.addEventListener("click", () => startNote());
+  tools.append(noteBtn, edit, remove);
   head.append(title, source, tools);
   const grip = h("span", "board-widget__resize"); // bottom-right corner: drag to resize (the keyboard path is Shift + arrows)
   grip.setAttribute("aria-hidden", "true");
@@ -57,7 +61,9 @@ export function createWidget(widget, host) {
   notice.setAttribute("role", "status");
   notice.hidden = true;
   const body = h("div", widget.kind === "sheet" ? "board-widget__body ws-chart" : `board-widget__body board-${widget.kind}`);
-  el.append(head, ...(widget.kind === "sheet" ? [notice] : []), body, grip);
+  const noteEl = h("div", "board-widget__note"); // the saved note (textContent) or its inline form
+  noteEl.hidden = true;
+  el.append(head, ...(widget.kind === "sheet" ? [noteEl, notice] : []), body, grip);
   let current = widget;
 
   let view = null;
@@ -143,6 +149,63 @@ export function createWidget(widget, host) {
     hd.control.focus();
     hd.control.select();
   }
+  // --- a worksheet widget's note: inline form under the title (Save / Cancel, Ctrl+Enter saves, Esc cancels); over the limit is refused, never cut ---
+  let noting = false;
+  function paintNote(w) {
+    if (noting) return;
+    noteEl.replaceChildren();
+    noteEl.hidden = !w.note;
+    if (w.note) noteEl.append(h("p", "board-widget__note-text", w.note));
+    noteBtn.setAttribute("aria-label", w.note ? `Edit the note on “${labelFor(w)}”` : `Add a note to “${labelFor(w)}”`);
+    noteBtn.title = w.note ? "Edit note" : "Add note";
+  }
+  function startNote() {
+    if (noting || current.kind !== "sheet") return;
+    noting = true;
+    noteEl.hidden = false;
+    const id = `wn${++formSeq}`;
+    const form = h("form", "board-text-edit board-widget__note-form");
+    form.noValidate = true;
+    const lab = h("label", "board-text-edit__label", "Note");
+    const input = h("textarea", "board-text-edit__input");
+    input.id = lab.htmlFor = id;
+    input.rows = 2;
+    input.value = current.note ?? "";
+    input.setAttribute("aria-describedby", `${id}-m`);
+    const meta = h("p", "board-text-edit__meta");
+    meta.id = `${id}-m`;
+    const count = h("span", "board-text-edit__count"), err = h("span", "board-text-edit__error");
+    err.setAttribute("role", "alert");
+    meta.append(count, err);
+    const sync = () => { count.textContent = `${input.value.trim().length} / ${LIMITS.widgetNote}`; };
+    input.addEventListener("input", () => { sync(); err.textContent = ""; input.removeAttribute("aria-invalid"); });
+    sync();
+    const actions = h("div", "board-text-edit__actions");
+    const save = h("button", "btn btn--primary board-text-edit__save", "Save");
+    save.type = "submit";
+    save.setAttribute("aria-label", "Save the note");
+    const cancel = h("button", "btn board-text-edit__cancel", "Cancel");
+    cancel.type = "button";
+    cancel.setAttribute("aria-label", "Cancel editing the note");
+    actions.append(save, cancel);
+    form.append(lab, input, meta, actions);
+    noteEl.replaceChildren(form);
+    const finish = () => { noting = false; paintNote(current); noteBtn.focus(); };
+    form.addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      const r = validateWidgetNote(input.value);
+      if (!r.ok) { err.textContent = r.error; input.setAttribute("aria-invalid", "true"); input.focus(); return; }
+      const changed = r.value !== (current.note ?? "");
+      finish();
+      if (changed) host.onSaveNote(current, r.value);
+    });
+    cancel.addEventListener("click", finish);
+    form.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape") { ev.preventDefault(); ev.stopPropagation(); finish(); }
+      else if (ev.key === "Enter" && ev.ctrlKey) { ev.preventDefault(); form.requestSubmit(); }
+    });
+    input.focus();
+  }
   function startNavEdit() {
     if (editing || current.kind !== "nav") return;
     editing = { nav: true };
@@ -188,6 +251,7 @@ export function createWidget(widget, host) {
     edit.hidden = w.kind === "image" || w.kind === "spacer"; // nothing to edit: an image is replaced by removing it, a spacer is blank
     edit.setAttribute("aria-label", w.kind === "text" ? `Edit the text “${name}”` : `Edit the worksheet “${name}”`);
     el.setAttribute("aria-label", name);
+    if (w.kind === "sheet") paintNote(w);
     if (w.kind === "image") { paintImage(w); return; }
     if (w.kind === "nav") {
       edit.setAttribute("aria-label", `Edit the button “${name}”`);
