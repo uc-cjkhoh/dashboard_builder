@@ -23,6 +23,7 @@ import { appliesTo, notAppliedNote, statNote, crossSignature } from "./dashboard
 import { planTables, calcProblem, statCalcProblem } from "../Calc/calc-plan.js";
 import { isCalcPill, pillSlots } from "../Calc/calc-pill.js";
 import { el, hint, warn } from "./render-dom.js";
+import { pruneMissing, missingMessage } from "./missing-columns.js";
 import { joinNotices, periodNotice, speedNotice, invalidFilterNotice } from "./notices.js";
 import { BACKGROUND_CHOICES, backgroundClass } from "./background-model.js";
 
@@ -177,7 +178,8 @@ export function createWorksheetView(container, getContext, options = {}) {
     disposeChart(container); // tear down any live ECharts instance before we repaint
     container.onscroll = null; // only the Table view loads on scroll (runTable sets it)
     statusBar(null, null);
-    const s = dash.sheet;
+    const { sheet: s, missing } = pruneMissing(dash.sheet, c.plan.entities); // a pill whose column is gone is marked on the shelf and left out here
+    const missingNote = missing.length ? missing.map(missingMessage).join(" ") : null;
     applyBackground(s);
     cross = options.cross?.() ?? null;
     crossSig = crossSignature(cross, involvedOf(c, s));
@@ -185,7 +187,7 @@ export function createWorksheetView(container, getContext, options = {}) {
     withCategories(s.filters, c.categoryOf);
     const statChart = STAT_SINGLE_TABLE.has(s.chartType);
     const havingNote = statChart ? ((s.columns ?? []).concat(s.rows ?? []).some((f) => f.having) ? "Measure filters don't apply to this chart." : null) : havingNotice(planMeasures(s).filter((e) => e.role === "shelf").map((e) => ({ label: measureName(e.field, c.plan), having: e.field.having })), planDims(s).keyOrder.map((f) => c.plan.nameOf(f)));
-    const filterNote = joinNotices(invalidFilterNotice(s), crossNote, havingNote);
+    const filterNote = joinNotices(invalidFilterNotice(s), crossNote, havingNote, missingNote);
     setNotice(c.noticeEl, filterNote);
     const heldOut = heldOutProblem(involvedOf(c, s), c.plan.entities, c.plan.relationships); // a table with no relationship stays out of every view
     if (heldOut) { container.replaceChildren(warn(heldOut)); return; }
@@ -205,7 +207,7 @@ export function createWorksheetView(container, getContext, options = {}) {
     const m = s.marks ?? {};
     const marksInPlay = Boolean(m.detail?.length || m.size || m.label || m.tooltip?.length || m.shape || m.path || m.angle || s.color?.length);
     if (!s.columns.length && !s.rows.length && !colorInPlay && !drillInPlay && !marksInPlay) {
-      container.replaceChildren(hint("Drag fields onto Columns and Rows to build a chart — categorical fields group, numeric fields aggregate."));
+      container.replaceChildren(missingNote ? warn(missingNote) : hint("Drag fields onto Columns and Rows to build a chart — categorical fields group, numeric fields aggregate."));
       return;
     }
     const cctx = calcContext(c.plan);

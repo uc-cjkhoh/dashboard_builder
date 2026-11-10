@@ -33,7 +33,7 @@ test("table shading stays visible on a Muted background (a different token)", ()
 });
 test("the shade is applied at run start and on draw; a PNG export fills with it", () => {
   const view = readFileSync(new URL("../../src/DashboardBuilder/Features/Dashboard/worksheet-view.js", import.meta.url), "utf8");
-  assert.match(view, /const s = dash\.sheet;\s*applyBackground\(s\);/);
+  assert.match(view, /pruneMissing\(dash\.sheet[\s\S]{0,300}applyBackground\(s\);/);
   assert.match(view, /const drawResult = \(s, result, cmp\) => \{\s*applyBackground\(s\);/);
   const chart = readFileSync(new URL("../../src/DashboardBuilder/Features/Dashboard/chart.js", import.meta.url), "utf8");
   assert.match(chart, /ws-bg-[\s\S]{0,200}getComputedStyle\(container\)\.backgroundColor[\s\S]{0,400}backgroundColor: surface/);

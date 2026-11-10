@@ -14,7 +14,9 @@ import { addEntity, clearModel } from "../Canvas/canvas.js";
 import { restoreRelationship } from "../Relations/relations.js";
 import { loadWorkbooks, saveWorkbooks } from "../Start/start-store.js";
 import { rememberWorkbook, summarize } from "../Start/start-model.js";
-import { serializeWorkbook, parseWorkbook, storageKey, legacyStorageKey } from "./workbook-model.js";
+import { serializeWorkbook, parseWorkbook, storageKey, legacyStorageKey, restoredSummary, issueCount } from "./workbook-model.js";
+import { api } from "../Core/api.js";
+import { catalogIssues, tablesNamed, columnKey, readCatalog } from "../Dashboard/missing-columns.js";
 
 // Workbook: the whole builder state survives a reload. It auto-saves to this browser's storage —
 // one workbook per connected server + user — and reopens on the next connect when the canvas is
@@ -71,12 +73,21 @@ function onConnection(v) {
   try { wb = parseWorkbook(saved); } catch (err) { keepUnreadable(saved, err); return; }
   if (!wb.entities.length && !wb.tabs.length) return;
   if (!openWorkbook(wb)) { blockedKey = key; return; } // partial state must not overwrite the stored entry
-  const restored = `Restored your last workbook (${count(wb.entities.length, "table")}, ${count(wb.worksheets.length, "worksheet")}${wb.dashboards.length ? `, ${count(wb.dashboards.length, "dashboard")}` : ""}${wb.stories.length ? `, ${count(wb.stories.length, "story")}` : ""}).`;
+  const restored = restoredSummary(wb);
   if (wb.issues.length) {
-    toast(`${restored} ${wb.issues.length} part(s) were reset.`, "info");
-    listDialog(`Restored your last workbook with ${wb.issues.length} issue(s)`,
+    toast(`${restored} ${issueCount(wb.issues.length)} to review.`, "info");
+    listDialog(`Restored your last workbook with ${issueCount(wb.issues.length)}`,
       wb.issues.slice(0, 20).concat(wb.issues.length > 20 ? [`…and ${wb.issues.length - 20} more.`] : []));
   } else toast(restored, "ok");
+  reportMissingColumns(wb, key); // the restore never waits on the column reads
+}
+
+/** After a restore: read the live columns and, when a worksheet pill names one that isn't there, say so (the pill is already marked). */
+async function reportMissingColumns(wb, forKey) {
+  const found = await catalogIssuesFor(wb);
+  if (!found.length || key !== forKey) return; // nothing missing, or disconnected meanwhile
+  toast(`${issueCount(found.length)} in your restored worksheets — a field's column isn't in its table.`, "info");
+  listDialog(`Your last workbook has ${issueCount(found.length)}`, found.slice(0, 20).concat(found.length > 20 ? [`…and ${found.length - 20} more.`] : []));
 }
 
 /** Disconnected: fade the cards and tabs out, then clear the model and close every tab.
@@ -246,20 +257,28 @@ async function importFile(input) {
     );
     if (!ok) return;
   }
+  wb.issues.push(...await catalogIssuesFor(wb)); // an import is deliberate: its summary includes the missing columns
   if (openWorkbook(wb)) blockedKey = null; // a deliberate import replaces whatever was stored
   if (wb.issues.length) {
-    await listDialog(`Opened ${file.name} with ${wb.issues.length} issue(s)`,
+    await listDialog(`Opened ${file.name} with ${issueCount(wb.issues.length)}`,
       wb.issues.slice(0, 20).concat(wb.issues.length > 20 ? [`…and ${wb.issues.length - 20} more.`] : []));
   } else toast(`Opened ${file.name}.`, "ok");
 }
 
 // --- helpers -----------------------------------------------------------------
+/** The issues for worksheet pills naming a column the connected table lacks (live columns, read with a time limit; the pills themselves are marked and left out by the worksheet). */
+async function catalogIssuesFor(wb) {
+  const real = new Set(wb.entities.filter((e) => !e.source).map((e) => columnKey(e.db, e.table)));
+  const tables = tablesNamed(wb.worksheets).filter((t) => real.has(columnKey(t.db, t.table))).slice(0, 50);
+  if (!tables.length) return [];
+  return catalogIssues(wb.worksheets, await readCatalog(tables, (db, table) => api.columns(db, table)));
+}
+
 function currentState() {
   return { entities, relationships, tabs, active: currentView(), theme: currentTheme(), sharedFilters, fieldMeta, parameters, hierarchies, calculations, nextCalcId: nextCalcId() };
 }
 
 const isEmpty = () => entities.size === 0 && tabs.length === 0;
-const count = (n, noun) => `${n} ${noun}${n === 1 ? "" : "s"}`;
 
 function warnNotSaved(text) {
   if (warned === text) return;

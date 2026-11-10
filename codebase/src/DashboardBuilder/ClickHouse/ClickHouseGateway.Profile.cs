@@ -17,7 +17,7 @@ public sealed partial class ClickHouseGateway
     {
         var columns = await DescribeColumnsAsync(info, database, table, ct); // validates db + table
         var col = columns.FirstOrDefault(c => string.Equals(c.Name, req.Column, StringComparison.Ordinal))
-                  ?? throw new UnknownIdentifierException("Unknown column.");
+                  ?? throw UnknownIdentifierException.Column(req.Column, database, table);
         var top = req.Limit ?? ApiLimits.DefaultProfileTop;
 
         using var httpClient = CreateHttpClient(info);
