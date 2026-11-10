@@ -13,9 +13,10 @@ import { circleSize, circleCells, HEATMAP_GUTTER } from "./heatmap-model.js";
 import { bandsFor } from "./bullet-model.js";
 import { ganttTime, ganttAxisTime, ganttLabelMargin } from "./gantt-model.js";
 import { boxData, outlierPoints } from "./box-model.js";
-import { chartFit, markCount, applyFitMode, FIT } from "./chart-fit.js";
+import { chartFit, markCount, applyFitMode, rotatedLabelCap, FIT } from "./chart-fit.js";
 import { applySelectionDim } from "./selection-dim.js";
 import { dateFitMode } from "./date-labels.js";
+import { histogramLabel } from "./chart-polish.js";
 import { axisLabelPlan, shortDateLabels } from "./date-axis.js";
 
 // Charting adapter. Renders worksheet results through the self-hosted ECharts library
@@ -127,7 +128,7 @@ export function renderChart(container, spec) {
   try {
     option = buildOption(spec.type === "multiples" ? { ...spec, width: paneWidth(), height: paneHeight() } : spec);
     option = applySelectionDim(option, spec.type, spec.selectedIndices); // the dashboard's source widget fades the unselected marks
-    if (spec.type !== "multiples") showEveryCategory(option, fit.rotate, fit); // panels keep their own sparse labels
+    if (spec.type !== "multiples") showEveryCategory(option, fit.rotate, fit, paneHeight()); // panels keep their own sparse labels
     if (!fit.zoom) setDateAxisLabels(option, spec, paneWidth(), paneHeight());
     if (fit.zoom) addZoom(option, fit);
     if (onCanvas) tuneForSize(option);
@@ -152,7 +153,7 @@ export function renderChart(container, spec) {
     const next = applyFitMode(chartFit(spec, paneWidth(), paneHeight()), fitMode);
     if (next.rotate !== fit.rotate) {
       fit = next;
-      instance.setOption({ xAxis: [].concat(option.xAxis).map(() => ({ axisLabel: { rotate: fit.rotate } })) });
+      instance.setOption({ xAxis: [].concat(option.xAxis).map(() => ({ axisLabel: { rotate: fit.rotate, ...(fit.rotate ? { width: rotatedLabelCap(paneHeight()) } : {}) } })) });
     }
     if (!fit.zoom) { // a date axis re-picks its labels for the new size
       const d = dateAxisLabels(option, spec, paneWidth(), paneHeight());
@@ -201,13 +202,15 @@ function tuneForSize(option) {
 
 // Category axes label every category (no skipping); long labels truncate (the tooltip has the full
 // name), and bottom labels tilt when they can't sit side by side.
-function showEveryCategory(option, rotate, fit = {}) {
+function showEveryCategory(option, rotate, fit = {}, height = 0) {
   const fix = (axis, bottom) => {
     if (!axis || axis.type !== "category") return axis;
     // A fitted axis shares the pane: labels thin out instead of forcing a slot each.
+    // An upright bottom label is capped by the pane's height (a short widget would otherwise clip it); the ellipsis marks the cut.
+    const wide = bottom ? (rotate ? rotatedLabelCap(height) : FIT.labelMax) : FIT.sideMax;
     if (bottom ? fit.fittedX : fit.fittedY) return { ...axis, axisLabel: { ...axis.axisLabel, hideOverlap: true, width: bottom ? FIT.labelMax : FIT.sideMax, overflow: "truncate" } };
     return { ...axis, axisLabel: { ...axis.axisLabel, interval: 0, hideOverlap: false,
-      width: bottom ? FIT.labelMax : FIT.sideMax, overflow: "truncate", ...(bottom ? { rotate } : {}) } };
+      width: wide, overflow: "truncate", ...(bottom ? { rotate } : {}) } };
   };
   const each = (axes, bottom) => (Array.isArray(axes) ? axes.map((a) => fix(a, bottom)) : fix(axes, bottom));
   if (option.xAxis) option.xAxis = each(option.xAxis, true);
@@ -429,7 +432,7 @@ function legendFor(format, c, names, defaultOn) {
 // (the default). `orientation` is decided by the caller from the shelves; combo stays vertical (its
 // dual value axis is on y). Axis *titles* name the physical axes (xTitle = bottom, yTitle = left)
 // regardless of orientation, so the Format controls stay literal.
-export function buildCartesian({ type, categories, series, format = {}, orientation = "vertical", pointLabels, tooltipExtra, tooltipText, tooltipFields, tooltipStyle, tooltipFormats, otherIndex = -1, analytics = null }) {
+export function buildCartesian({ type, categories, series, format = {}, orientation = "vertical", pointLabels, seriesLabels, tooltipExtra, tooltipText, tooltipFields, tooltipStyle, tooltipFormats, otherIndex = -1, analytics = null }) {
   const c = tokens();
   const labels = (categories ?? []).map((l) => l ?? "—");
   // Comparison series (compare: true) ride beside their measure: they don't make a chart "multi"
@@ -454,10 +457,12 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
   // Label: when a Label field is mapped, marks show its per-row value; otherwise the toggle
   // shows the measure value. `pointLabels` is indexed by category (dataIndex).
   const labelPos = horizontal ? "right" : "top";
-  const dataLabel = (pointLabels || format.dataLabels)
-    ? { show: true, position: labelPos, color: c.label, fontFamily: c.font, fontSize: 14,
-        formatter: (p) => (pointLabels ? String(pointLabels[p.dataIndex] ?? "") : fmtVal(p.value)) }
-    : { show: false };
+  // seriesLabels[series][category]: a colour split's Label, laid out per cell; pointLabels[category]: one text per mark.
+  const labelAt = (si, di) => (seriesLabels ? seriesLabels[si]?.[di] : pointLabels?.[di]);
+  const dataLabel = (si) => ((pointLabels || seriesLabels || format.dataLabels)
+    ? { show: true, position: type === "stacked" && seriesLabels ? "inside" : labelPos, // only a colour split's Label sits inside its stack segment color: c.label, fontFamily: c.font, fontSize: 14,
+        formatter: (p) => ((pointLabels || seriesLabels) ? String(labelAt(si, p.dataIndex) ?? "") : fmtVal(p.value)) }
+    : { show: false });
 
   // Attach a name to an axis with placement suited to its physical position (bottom vs left).
   const nameStyle = { color: c.label, fontFamily: c.font, fontWeight: 600 };
@@ -558,7 +563,7 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
         areaStyle: type === "area" || (isCombo && secondary === "area") ? { opacity: 0.18, color } : undefined,
         lineStyle: { width: 2, color },
         itemStyle: { color, ...(format.markBorder && format.markBorder !== "none" ? edge : {}) },
-        label: dataLabel,
+        label: dataLabel(i),
         emphasis: { focus: "series" },
       };
     }
@@ -578,7 +583,7 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
         : s.data.map((v, di) => (di === otherIndex ? otherItem(v) : v)),
       barMaxWidth: 40,
       itemStyle: { color, borderRadius: barRadius, ...edge },
-      label: dataLabel,
+      label: dataLabel(i),
       emphasis: { focus: "series", itemStyle: colorByDim ? { opacity: 0.85 } : { color, opacity: 0.85 } },
     };
   });
@@ -595,12 +600,12 @@ function addAnalytics(base, a, { c, fmtVal, horizontal }) {
   if (a.ref) {
     s0.markLine = { silent: true, symbol: "none", animation: false,
       lineStyle: { color: c.ink, type: "dashed", width: 1.5 },
-      label: { formatter: `${a.ref.name}: ${fmtVal(a.ref.value)}`, color: c.label, fontFamily: c.font, position: horizontal ? "insideEndTop" : "insideEndTop" },
+      label: { formatter: `${a.ref.name}: ${fmtVal(a.ref.value)}`, color: c.label, fontFamily: c.font, position: "insideEndTop", distance: 6, backgroundColor: c.surface, padding: [2, 4], borderRadius: c.radius }, // sits above the line on a surface backing, never across it
       data: [{ [axis]: a.ref.value }] };
   }
   if (a.band) {
     s0.markArea = { silent: true, animation: false, itemStyle: { color: c.grid, opacity: 0.7 },
-      label: { show: true, formatter: `${a.band.name ?? "Band"} ${fmtVal(a.band.from)}–${fmtVal(a.band.to)}`, color: c.muted, fontFamily: c.font, position: "insideTopLeft" },
+      label: { show: true, formatter: `${a.band.name ?? "Band"} ${fmtVal(a.band.from)}–${fmtVal(a.band.to)}`, color: c.muted, fontFamily: c.font, position: "insideTopLeft", backgroundColor: c.surface, padding: [2, 4], borderRadius: c.radius },
       data: [[{ [axis]: a.band.from }, { [axis]: a.band.to }]] };
   }
   if (a.trend) {
@@ -614,6 +619,7 @@ function addAnalytics(base, a, { c, fmtVal, horizontal }) {
 
 // pie / donut — one dimension (slices) × one measure (size). Colour IS the encoding, so a legend
 // shows by default (dataviz: identity never colour-alone; the legend supplies the labels).
+const PIE_PERCENT_SLICES = 6; // with Data labels on, up to this many slices also show their percent
 function buildPie({ type, categories, series, format = {}, pointLabels, tooltipExtra, tooltipText, tooltipFields, tooltipStyle, tooltipFormats, otherIndex = -1 }) {
   const c = tokens();
   const fmtVal = makeValueFormatter(format);
@@ -621,6 +627,7 @@ function buildPie({ type, categories, series, format = {}, pointLabels, tooltipE
   const data = labels.map((name, i) => ({ name, value: series[0].data[i], ...(i === otherIndex ? { itemStyle: { color: c.muted } } : memberColors().has(name) ? { itemStyle: { color: memberColors().get(name) } } : {}) }));
   const { pos, legend } = legendFor(format, c, labels, true);
   const showLabels = !!format.dataLabels || !!pointLabels; // Label field forces slice labels on
+  const fewSlices = labels.length <= PIE_PERCENT_SLICES; // few slices: the label adds the share
 
   return {
     color: c.cat,
@@ -643,7 +650,7 @@ function buildPie({ type, categories, series, format = {}, pointLabels, tooltipE
       center: legend && (pos === "left" || pos === "right") ? ["42%", "52%"] : ["50%", "54%"],
       data,
       label: { show: showLabels, color: c.label, fontFamily: c.font,
-        formatter: (p) => (pointLabels ? String(pointLabels[p.dataIndex] ?? "") : `${p.name}: ${fmtVal(p.value)}`) },
+        formatter: (p) => (pointLabels ? String(pointLabels[p.dataIndex] ?? "") : `${p.name}: ${fmtVal(p.value)}${fewSlices ? ` (${p.percent}%)` : ""}`) },
       labelLine: { show: showLabels },
       itemStyle: edgeOr(format.markBorder, borderInk(format.markBorderColor, c), { borderColor: c.surface, borderWidth: 2 }),
       emphasis: { itemStyle: { shadowBlur: 10, shadowColor: "rgba(0,0,0,0.2)" } },
@@ -694,14 +701,14 @@ function buildScatter({ categories, series, format = {}, sizes, sizeName, colorV
         extraTooltip(tooltipExtra, p.dataIndex, c),
     },
     xAxis: {
-      type: "value", name: xName, nameLocation: "middle", nameGap: 28,
+      type: "value", scale: true, name: xName, nameLocation: "middle", nameGap: 28,
       nameTextStyle: { color: c.label, fontFamily: c.font, fontWeight: 600 },
       axisLine: { lineStyle: { color: c.axis } }, axisTick: { show: false },
       splitLine: { lineStyle: { color: c.grid } },
       axisLabel: { color: c.muted, formatter: fmtVal },
     },
     yAxis: {
-      type: "value", name: yName, nameLocation: "end", nameGap: 12,
+      type: "value", scale: true, name: yName, nameLocation: "end", nameGap: 12,
       nameTextStyle: { color: c.label, fontFamily: c.font, fontWeight: 600, align: "left" },
       axisLine: { show: false }, axisTick: { show: false },
       splitLine: { lineStyle: { color: c.grid } },
@@ -747,13 +754,13 @@ function buildScatterShapes({ groups, xName, yName, hasSize, sizeName, format = 
         (hasSize ? `<br><b>${escapeHtml(sizeName || "size")}:</b> ${fmtVal(p.value[2])}` : ""),
     },
     xAxis: {
-      type: "value", name: xName, nameLocation: "middle", nameGap: 28,
+      type: "value", scale: true, name: xName, nameLocation: "middle", nameGap: 28,
       nameTextStyle: { color: c.label, fontFamily: c.font, fontWeight: 600 },
       axisLine: { lineStyle: { color: c.axis } }, axisTick: { show: false },
       splitLine: { lineStyle: { color: c.grid } }, axisLabel: { color: c.muted, formatter: fmtVal },
     },
     yAxis: {
-      type: "value", name: yName, nameLocation: "end", nameGap: 12,
+      type: "value", scale: true, name: yName, nameLocation: "end", nameGap: 12,
       nameTextStyle: { color: c.label, fontFamily: c.font, fontWeight: 600, align: "left" },
       axisLine: { show: false }, axisTick: { show: false },
       splitLine: { lineStyle: { color: c.grid } }, axisLabel: { color: c.muted, formatter: fmtVal },
@@ -851,10 +858,10 @@ function buildTreemap({ tree, format = {} }) {
 
 // histogram — equal-width numeric bins from the server; a gapless bar of counts.
 // spec: { bins:[{x0, x1, count}], format }
-function buildHistogram({ bins, format = {} }) {
+function buildHistogram({ bins, whole = false, format = {} }) {
   const c = tokens();
   const fmtVal = makeValueFormatter(format);
-  const labels = bins.map((b) => `${fmtVal(b.x0)}–${fmtVal(b.x1)}`);
+  const labels = bins.map((b) => histogramLabel(b, whole, fmtVal));
   return {
     textStyle: { fontFamily: c.font, color: c.label },
     grid: { left: 6, right: 18, top: 18, bottom: 6 + (format.xTitle ? 24 : 0), containLabel: true },

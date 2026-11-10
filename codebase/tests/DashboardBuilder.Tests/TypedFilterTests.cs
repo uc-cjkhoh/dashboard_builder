@@ -59,4 +59,19 @@ public class TypedFilterTests
         var sql = ClickHouseGateway.BuildHistogramSql("`x`", "`d`.`t`", " WHERE `y` = {p0:String}", 10);
         Assert.Equal(3, System.Text.RegularExpressions.Regex.Matches(sql, @"WHERE `y` = \{p0:String\} AND `x` IS NOT NULL").Count);
     }
+    [Fact] public void Histogram_sql_of_a_whole_number_column_uses_whole_number_bin_widths()
+    {
+        var sql = ClickHouseGateway.BuildHistogramSql("`x`", "`d`.`t`", "", 10, whole: true);
+        Assert.Contains("greatest(1, ceil((hi - lo + 1) / 10))", sql);
+        Assert.DoesNotContain("(hi - lo) / 10", sql);
+    }
+    [Fact] public void Whole_number_types_are_the_integer_types_only()
+    {
+        Assert.True(ClickHouseType.IsWholeNumber("UInt64"));
+        Assert.True(ClickHouseType.IsWholeNumber("Nullable(Int32)"));
+        Assert.True(ClickHouseType.IsWholeNumber("LowCardinality(UInt8)"));
+        Assert.False(ClickHouseType.IsWholeNumber("Float64"));
+        Assert.False(ClickHouseType.IsWholeNumber("Decimal(10, 2)"));
+        Assert.False(ClickHouseType.IsWholeNumber("String"));
+    }
 }

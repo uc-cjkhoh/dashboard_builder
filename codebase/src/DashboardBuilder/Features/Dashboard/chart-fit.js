@@ -61,6 +61,12 @@ export function chartFit(spec, width = 0, height = 0) {
   return out;
 }
 
+/** The longest an upright (rotated) bottom label may be in a pane `height` px tall: about 40% of it (an ellipsis follows; the tooltip has the full text), within 48..labelMax. 0 = height unknown. */
+export function rotatedLabelCap(height = 0) {
+  if (!(height > 0)) return FIT.labelMax;
+  return Math.max(48, Math.min(FIT.labelMax, Math.round(height * 0.4)));
+}
+
 /** Fit (Format → Fit): "standard" keeps a slot per category (the pane scrolls); "width" / "height" /
  * "entire" fit that direction (or both) to the pane instead — categories share the room and labels may
  * thin out. Returns the adjusted fit plus which axes were fitted. */

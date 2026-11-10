@@ -32,7 +32,7 @@ export function openThemeDialog() {
     const fs = el("fieldset", "theme-group");
     fs.append(el("legend", "theme-group__title", "Look — dark-mode backgrounds and text"));
     const list = el("div", "theme-options");
-    const swatches = { default: ["#1a1b1d", "#2e2f32", "#c3df5a"], onedark: ["#21252b", "#2c313a", "#456fc8"] };
+    const swatches = { default: ["#1a1b1d", "#2e2f32", "#a9bd6a"], onedark: ["#21252b", "#2c313a", "#456fc8"] };
     for (const [id, s] of Object.entries(SURFACES)) list.append(option("look", id, s.label, surfaceOf(t) === id, swatches[id],
       () => setTheme(id === "onedark" ? { ...ONE_DARK_THEME } : { ...currentTheme(), surface: id })));
     fs.append(list);

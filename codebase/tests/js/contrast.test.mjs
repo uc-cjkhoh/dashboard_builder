@@ -62,3 +62,33 @@ test("--ctl-edge holds 3:1 against glass in light and dark", () => {
     assert.ok(contrastRatio(e, ctlOf(panel)) >= 3, `${e} on control ${ctlOf(panel)}`);
   }
 });
+
+// D97: red means danger only — no ordinary category colour in the default or One Dark palettes sits in the red hue band, and the
+// dark accent (single-measure bars, primary buttons) stays calm: HSL saturation <= 70 %.
+import { PALETTES } from "../../src/DashboardBuilder/Features/Core/theme-model.js";
+const hsl = (hex) => {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn, l = (mx + mn) / 2;
+  const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+  let h = d === 0 ? 0 : mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  h = (h * 60 + 360) % 360;
+  return { h, s, l };
+};
+test("D97: no default / One Dark category colour is red, and every one stays at S <= 70 %", () => {
+  for (const name of ["default", "onedark"]) for (const mode of ["light", "dark"]) for (const hex of PALETTES[name][mode]) {
+    const { h, s } = hsl(hex);
+    assert.ok(!(s > 0.25 && (h >= 345 || h <= 12)), `${name} ${mode} ${hex} is red (hue ${h.toFixed(0)})`);
+    assert.ok(s <= 0.705, `${name} ${mode} ${hex} S ${s.toFixed(2)}`);
+  }
+});
+test("D97: the core.css category tokens carry no red either, and the dark accent is calm", () => {
+  const blocks = css.split(':root[data-scheme="dark"]');
+  for (const block of blocks.slice(0, 3)) {
+    for (const m of block.matchAll(/--chart-cat-\d:\s*(#[0-9a-f]{6})/gi)) {
+      const { h, s } = hsl(m[1]);
+      assert.ok(!(s > 0.25 && (h >= 345 || h <= 12)), `${m[1]} is red`);
+    }
+  }
+  const accent = blocks[1].match(/--accent:\s*(#[0-9a-f]{6})/i)[1];
+  assert.ok(hsl(accent).s <= 0.5, `dark accent ${accent} S ${hsl(accent).s.toFixed(2)}`);
+});

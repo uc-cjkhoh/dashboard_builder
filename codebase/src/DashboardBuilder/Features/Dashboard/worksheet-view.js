@@ -300,7 +300,7 @@ export function createWorksheetView(container, getContext, options = {}) {
     const result = await fetchCached(c, ticket, requestKey("histogram", { db, table, req }), (signal) => api.histogram(db, table, req, { signal }));
     if (!result) return;
     if (!result.bins?.length) { container.replaceChildren(hint("No data for this field.")); setNotice(c.noticeEl, joinNotices(filterNote, ignoredNote)); return; }
-    renderHistogram(container, result.bins, format);
+    renderHistogram(container, result.bins, format, !!result.whole);
     setNotice(c.noticeEl, joinNotices(filterNote, ignoredNote));
   }
 

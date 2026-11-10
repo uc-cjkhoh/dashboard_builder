@@ -35,7 +35,7 @@
   --print-paper: #ffffff; --print-ink: #000000; /* print: always black on white, whatever the scheme */
   --chart-series: var(--accent); --chart-axis: var(--line-2); --chart-grid: var(--line);
   --chart-label: var(--ink-2); --chart-muted: var(--ink-3);
-  --chart-cat-1: #72872a; --chart-cat-2: #d9605a; --chart-cat-3: #d9a03a; --chart-cat-4: #7c63d6;
+  --chart-cat-1: #72872a; --chart-cat-2: #b8559c; --chart-cat-3: #d9a03a; --chart-cat-4: #7c63d6;
   --chart-cat-5: #2f9ea8; --chart-cat-6: #3f7fd0; --chart-cat-7: #4aa66a; --chart-cat-8: #6a6d72;
   /* Diverging pair (warm below the centre, cool above): theme-stable orange / blue, lighter orange vs darker blue so it reads by lightness too. */
   --chart-div-low: #d98a4a; --chart-div-high: #2b62b8;
@@ -79,7 +79,8 @@
   --ink: #ececea; --ink-2: #b8b9b6; --ink-3: #9a9c99; --line: #2b2c2f; --line-2: #3d3f43;
   --glass: rgb(26 27 29 / .70); --glass-line: rgb(255 255 255 / .08); --glass-rim: rgb(255 255 255 / .05);
   --glass-ctl: rgb(46 47 50 / .85); --glass-ctl-hover: rgb(58 60 64 / .96); --ctl-edge: #7d8087;
-  --accent: #c3df5a; --accent-hover: #b3cf4a; --accent-pressed: #a2bd3e; --accent-ink: #c3df5a;
+  /* dark accent: a calm sage-lime (HSL S ≈ 38 %), not the neon of the Signal wash — bars and primary buttons use it */
+  --accent: #a9bd6a; --accent-hover: #9aad5c; --accent-pressed: #8a9c50; --accent-ink: #a9bd6a;
   --accent-soft: #262a17; --accent-line: #4a5427; --on-accent: #12130f;
   --ok-bg: #0f2519; --ok-ink: #68c895; --ok-line: #1f5c3c;
   --warn-bg: #292010; --warn-ink: #d9b574; --warn-line: #6a4a13;
@@ -87,7 +88,7 @@
   --dim-bg: #161f33; --dim-ink: #8fb0e0; --dim-line: #2c4a78;
   --meas-bg: #0f2527; --meas-ink: #62c4c9; --meas-line: #1d5a5e;
   --enc-bg: #211c38; --enc-ink: #b6aee8; --enc-line: #4b3c8a;
-  --chart-cat-1: #c3df5a; --chart-cat-2: #e0827c; --chart-cat-3: #deb062; --chart-cat-4: #9b86e6;
+  --chart-cat-1: #a9bd6a; --chart-cat-2: #d98ac2; --chart-cat-3: #deb062; --chart-cat-4: #9b86e6;
   --chart-cat-5: #5cc0c8; --chart-cat-6: #7aa3dc; --chart-cat-7: #6fc486; --chart-cat-8: #8e9094;
   --chart-div-low: #e2b48c; --chart-div-high: #5a8ad6;
   --chart-div-amber: #e0b060; --chart-div-violet: #9b86e6; --chart-div-green: #6fc486;
@@ -114,7 +115,7 @@
   --meas-bg: #1f3236; --meas-ink: #56b6c2; --meas-line: #2d5a61;
   --enc-bg: #302538; --enc-ink: #c678dd; --enc-line: #5c3a6b;
   --chart-cat-1: #6aa8e0; --chart-cat-2: #98c379; --chart-cat-3: #c678dd; --chart-cat-4: #e5c07b;
-  --chart-cat-5: #56b6c2; --chart-cat-6: #d19a66; --chart-cat-7: #abb2bf; --chart-cat-8: #e06c75;
+  --chart-cat-5: #56b6c2; --chart-cat-6: #d19a66; --chart-cat-7: #abb2bf; --chart-cat-8: #d68fc0;
   --chart-div-low: #e0b084; --chart-div-high: #5c9ddb;
   --chart-div-amber: #e5c07b; --chart-div-violet: #c678dd; --chart-div-green: #98c379;
 }

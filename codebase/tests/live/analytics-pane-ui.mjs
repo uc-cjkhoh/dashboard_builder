@@ -219,7 +219,7 @@ try {
     const trendName = async () => ev(`window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas')).getOption().series.map((x) => x.name).find((n) => /^Trend/.test(n)) ?? null`);
     await aPick('Trend', 'exp');
     let n = await trendName();
-    must(/exponential\): y = .*e\^\(.*x\), R² 0\.\d\d, n = \d+/.test(n), `exp name: ${n}`);
+    must(/exponential\): y = .*e\^\(.*x\), (good|moderate|weak|poor) fit \(R² -?0\.\d\d\), n = \d+/.test(n), `exp name: ${n}`);
     await aPick('Trend', 'power');
     n = await trendName();
     must(/power\): y = .*\(x\+1\)\^/.test(n), `power name: ${n}`);

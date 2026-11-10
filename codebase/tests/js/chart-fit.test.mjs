@@ -50,3 +50,12 @@ test("a date axis is sized from its shortened labels (no needless upright turn)"
   assert.equal(chartFit(base, 1200).rotate, 90);
   assert.equal(chartFit({ ...base, dateLabels: "all" }, 1200).rotate, 0);
 });
+
+import { rotatedLabelCap } from "../../src/DashboardBuilder/Features/Dashboard/chart-fit.js";
+test("rotatedLabelCap: upright bottom labels never take more than ~40% of a short pane, within 48..labelMax", () => {
+  assert.equal(rotatedLabelCap(600), 160);
+  assert.equal(rotatedLabelCap(300), 120);
+  assert.equal(rotatedLabelCap(150), 60);
+  assert.equal(rotatedLabelCap(40), 48);
+  assert.equal(rotatedLabelCap(0), 160); // unknown height: the usual cap
+});
