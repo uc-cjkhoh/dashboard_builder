@@ -16,14 +16,17 @@ are never stored. Picking a source refills the form, and the user types the pass
 - Detail: [connection.md](../concepts/data-source/connection.md#recent-connections).
 
 
-### D89 — The start screen lists recent workbooks as browser-held metadata
-The start screen (shown while disconnected) lists the workbooks this browser has autosaved, from a small
+### D89 — Withdrawn: the start screen lists recent workbooks
+**Withdrawn 2026-11-10.** The start screen was removed at the user's request. While disconnected, the Data Source view shows its
+own empty state again, and autosave no longer writes the recent-workbooks list. The original text is kept below for the record.
+
+The start screen (shown while disconnected) listed the workbooks this browser has autosaved, from a small
 `localStorage` list written beside each autosave: server, user, TLS flags, saved-at time and counts of tables,
 worksheets, dashboards and stories (max 5, one per host/port/user), following D21 and D70.
 - **Why metadata, not the workbook:** the list needs no parsing of large workbooks and holds no data, names or password (golden rule 4).
 - **Why a row refills the connection form:** a workbook is bound to its server + user and restores on connect; there is no application database and a workbook has no name of its own.
 - **Trade-off:** not shared across browsers; forgetting a row leaves the autosave in place (the next save lists it again).
-- Detail: [connection.md](../concepts/data-source/connection.md#start-screen).
+- Now: [connection.md](../concepts/data-source/connection.md#while-disconnected).
 
 
 ### D98 — Secure and Trust are visible switches; the certificate note waits
