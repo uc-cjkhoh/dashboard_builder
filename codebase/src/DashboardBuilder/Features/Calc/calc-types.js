@@ -35,7 +35,7 @@ export const DATE_NAME_PARTS = Object.freeze(["weekday", "month"]);
 /** The row-level text and date functions (wire node `{ k: "fn", fn, args }`). `args` are kinds in order: `text` (any text expression),
  *  `length` (a whole-number literal 0..count), `position` (a whole-number literal 1..count), `separator` (a non-empty text
  *  literal, at most `separator` characters); the date kinds: `date` (a date expression), `unit` (a DATE_UNITS text literal),
- *  `amount` (a whole-number literal, either sign, at most `dateAmount`); `part` (a DATE_NAME_PARTS text literal); `number` (any number expression); `value` (a number, date or text expression). `max` above `args.length` repeats the last kind (CONCAT). Twin of CalcCatalog.RowFunctions. */
+ *  `amount` (a whole-number literal, either sign, at most `dateAmount`); `part` (a DATE_NAME_PARTS text literal); `number` (any number expression); `value` (a number, date or text expression). `max` above `args.length` repeats the last kind (CONCAT); `min` below `args.length` makes the trailing arguments optional (MID, FIND). Twin of CalcCatalog.RowFunctions. */
 export const ROW_FUNCTIONS = Object.freeze({
   lower: { args: ["text"], result: "text" },
   upper: { args: ["text"], result: "text" },
@@ -46,8 +46,8 @@ export const ROW_FUNCTIONS = Object.freeze({
   len: { args: ["text"], result: "number" },
   left: { args: ["text", "length"], result: "text" },
   right: { args: ["text", "length"], result: "text" },
-  mid: { args: ["text", "position", "length"], result: "text" },
-  find: { args: ["text", "text"], result: "number" },
+  mid: { args: ["text", "position", "length"], result: "text", min: 2 },
+  find: { args: ["text", "text", "position"], result: "number", min: 2 },
   replace: { args: ["text", "text", "text"], result: "text" },
   concat: { args: ["text", "text"], result: "text", max: CALC_LIMITS.concat },
   contains: { args: ["text", "text"], result: "boolean" },
@@ -236,8 +236,9 @@ function typeOf(node, path, categoryOf) {
       const label = node.fn === "text" ? "TEXT (or STR)" : upper;
       const args = Array.isArray(node.args) ? node.args : [];
       const max = Math.max(spec.max ?? 0, spec.args.length);
-      if (args.length < spec.args.length || args.length > max) {
-        throw new CalcError(`${label} takes ${max > spec.args.length ? `${spec.args.length} to ${max} arguments` : spec.args.length === 1 ? "1 argument" : `${spec.args.length} arguments`}.`, path);
+      const min = spec.min ?? spec.args.length;
+      if (args.length < min || args.length > max) {
+        throw new CalcError(`${label} takes ${max > min ? `${min} to ${max} arguments` : min === 1 ? "1 argument" : `${min} arguments`}.`, path);
       }
       const parts = args.map((a, i) => {
         const ap = child(path, `args.${i}`);

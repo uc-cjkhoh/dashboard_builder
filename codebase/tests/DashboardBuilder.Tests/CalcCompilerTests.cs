@@ -365,6 +365,22 @@ public class CalcCompilerTests
         Assert.Equal(new[] { ("c0p0", "UInt32", (object)2u), ("c0p1", "UInt32", (object)3u) }, ps);
     }
 
+    [Fact]
+    public void MID_without_a_length_runs_to_the_end()
+    {
+        var (sql, ps) = Compile(Fn("mid", F("status"), new NumNode(2)));
+        Assert.Equal("substringUTF8(t0.`status`, {c0p0:UInt32})", sql);
+        Assert.Equal(new[] { ("c0p0", "UInt32", (object)2u) }, ps);
+    }
+
+    [Fact]
+    public void FIND_with_a_start_binds_it_as_an_unsigned_integer()
+    {
+        var (sql, ps) = Compile(Fn("find", F("status"), S("ab"), new NumNode(3)));
+        Assert.Equal("toFloat64(positionUTF8(t0.`status`, {c0p0:String}, {c0p1:UInt32}))", sql);
+        Assert.Equal(new[] { ("c0p0", "String", (object)"ab"), ("c0p1", "UInt32", (object)3u) }, ps);
+    }
+
     [Theory]
     [InlineData("icontains", "(positionCaseInsensitiveUTF8(t0.`status`, {c0p0:String}) > 0)")]
     [InlineData("istartswith", "startsWith(lowerUTF8(t0.`status`), lowerUTF8({c0p0:String}))")]

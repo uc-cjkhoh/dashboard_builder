@@ -70,8 +70,8 @@ const TEXTS = {
   len: ["How many characters the text has.", "LEN([orders.status])", "A NULL text gives NULL, not 0."],
   left: ["The first n characters of the text.", "LEFT([orders.status], 3)", `n is a literal whole number 0 to ${CALC_LIMITS.count}.`],
   right: ["The last n characters of the text.", "RIGHT([orders.status], 3)", `n is a literal whole number 0 to ${CALC_LIMITS.count}.`],
-  mid: ["The characters from a start position, up to a length.", "MID([orders.status], 2, 3)", `Start is a literal whole number 1 to ${CALC_LIMITS.count} (1 is the first character), length a literal whole number 0 to ${CALC_LIMITS.count}. Shorter when the text ends first.`],
-  find: ["Where the piece first appears in the text (1 is the first character).", "FIND([orders.status], 'pen')", "0 when the piece is absent; case counts. An empty piece gives 1; a NULL text gives NULL."],
+  mid: ["The characters from a start position, up to a length.", "MID([orders.status], 2, 3)", `Start is a literal whole number 1 to ${CALC_LIMITS.count} (1 is the first character), length an optional literal whole number 0 to ${CALC_LIMITS.count} (without it MID runs to the end of the text). Shorter when the text ends first.`],
+  find: ["Where the piece first appears in the text (1 is the first character).", "FIND([orders.status], 'pen')", `0 when the piece is absent; case counts. An optional start (a literal whole number 1 to ${CALC_LIMITS.count}) skips the characters before it, and the answer still counts from the start of the text. An empty piece gives 1; a NULL text gives NULL.`],
   replace: ["The text with every occurrence of one piece replaced by another.", "REPLACE([orders.status], 'open', 'new')", "The piece to find and its replacement can be fields as well as text. A NULL text gives NULL (shown as a dash)."],
   concat: ["Several texts joined end to end.", "CONCAT([orders.status], ' - ', [orders.region])", `Two to ${CALC_LIMITS.concat} texts. Empty if any one is empty: wrap a part in IFNULL(x, '') to keep the rest.`],
   contains: ["True when the text includes the piece.", "CONTAINS([orders.status], 'pen')", "Case counts (ICONTAINS ignores it). An empty needle is always true; a NULL text gives NULL."],
@@ -110,7 +110,7 @@ function signatureOf(name) {
   const agg = FUNCTIONS[name];
   if (agg) return `${upper(name)}(${agg.fraction ? "number, p" : "value"})`;
   const row = ROW_FUNCTIONS[name];
-  const parts = row.args.map((a) => WORD[a] ?? a);
+  const parts = row.args.map((a, i) => (row.min != null && i >= row.min ? `[${WORD[a] ?? a}]` : WORD[a] ?? a));
   if (row.max) parts.push("…");
   return `${upper(name)}(${parts.join(", ")})`;
 }

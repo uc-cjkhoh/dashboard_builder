@@ -174,8 +174,8 @@ public static class CalcValidator
                     throw new CalcException($"Unknown function {fn.Fn}.", path);
                 var upper = fn.Fn.ToUpperInvariant();
                 var label = fn.Fn == "text" ? "TEXT (or STR)" : upper;
-                if (fn.Args.Length < spec.Args.Count || fn.Args.Length > spec.Max)
-                    throw new CalcException($"{label} takes " + (spec.Max > spec.Args.Count ? $"{spec.Args.Count} to {spec.Max} arguments."
+                if (fn.Args.Length < spec.Min || fn.Args.Length > spec.Max)
+                    throw new CalcException($"{label} takes " + (spec.Max > spec.Min ? $"{spec.Min} to {spec.Max} arguments."
                         : spec.Args.Count == 1 ? "1 argument." : $"{spec.Args.Count} arguments."), path);
                 var parts = new List<Typed>();
                 for (var n = 0; n < fn.Args.Length; n++)

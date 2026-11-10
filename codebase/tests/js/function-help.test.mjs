@@ -31,6 +31,8 @@ test("every entry is complete and grouped", () => {
 test("signature arity matches the type tables", () => {
   const sig = (n) => FUNCTION_HELP.find((h) => h.name === n).signature;
   assert.equal(sig("LEFT"), "LEFT(text, length)");
+  assert.equal(sig("MID"), "MID(text, position, [length])");
+  assert.equal(sig("FIND"), "FIND(text, text, [position])");
   assert.equal(sig("SPLIT"), "SPLIT(text, separator, position)");
   assert.equal(sig("DATEDIFF"), "DATEDIFF(unit, date, date)");
   assert.equal(sig("PERCENTILE"), "PERCENTILE(number, p)");

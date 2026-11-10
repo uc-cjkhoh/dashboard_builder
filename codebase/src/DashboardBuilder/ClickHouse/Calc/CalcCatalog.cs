@@ -60,9 +60,11 @@ public enum FnArg { Text, Length, Position, Separator, Date, Unit, Amount, Value
 
 /// <summary>One row-level function: its arguments in order and its result type. <c>MaxArgs</c> above <c>Args.Count</c> lets
 /// the last argument kind repeat (<c>CONCAT</c>).</summary>
-public sealed record FnSpec(IReadOnlyList<FnArg> Args, string Result, int MaxArgs = 0)
+public sealed record FnSpec(IReadOnlyList<FnArg> Args, string Result, int MaxArgs = 0, int MinArgs = 0)
 {
     public int Max => Math.Max(MaxArgs, Args.Count);
+    /// <summary>Fewest arguments: all of <c>Args</c> unless <c>MinArgs</c> makes the trailing ones optional (MID's length, FIND's start).</summary>
+    public int Min => MinArgs > 0 ? MinArgs : Args.Count;
 }
 
 /// <summary>The function table — the only place a function exists. Names are the lowercase wire names.</summary>
@@ -108,8 +110,8 @@ public static class CalcCatalog
         ["len"] = Fn(CalcType.Number, FnArg.Text),
         ["left"] = Fn(CalcType.Text, FnArg.Text, FnArg.Length),
         ["right"] = Fn(CalcType.Text, FnArg.Text, FnArg.Length),
-        ["mid"] = Fn(CalcType.Text, FnArg.Text, FnArg.Position, FnArg.Length),
-        ["find"] = Fn(CalcType.Number, FnArg.Text, FnArg.Text),
+        ["mid"] = new FnSpec([FnArg.Text, FnArg.Position, FnArg.Length], CalcType.Text, MinArgs: 2),
+        ["find"] = new FnSpec([FnArg.Text, FnArg.Text, FnArg.Position], CalcType.Number, MinArgs: 2),
         ["replace"] = Fn(CalcType.Text, FnArg.Text, FnArg.Text, FnArg.Text),
         ["concat"] = new FnSpec([FnArg.Text, FnArg.Text], CalcType.Text, CalcLimits.MaxConcat),
         ["contains"] = Fn(CalcType.Boolean, FnArg.Text, FnArg.Text),
