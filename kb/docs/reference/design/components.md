@@ -25,7 +25,7 @@ explorer, not an admin template.
 | Select | `.select`, `.select--light`; in the sidebar (`.sidebar .select`) it matches the text inputs — control height, edge, radius, padding, neutral focus wash — with a token-coloured gradient chevron instead of the UA arrow; `.select option` takes `--surface`/`--ink` so the open list follows the theme |
 | Data grid | `.data`, `.num` (right-aligned numerics), `.mono`, `.cell-strong`, `.cell-sub` |
 | Empty state | `.empty` |
-| Toast | `.toast` (`.toast--ok` / `--info` / `--danger`, a coloured left rule), `.toast__text`, `.toast__close`; announced through `#toast-live` |
+| Toast | `.toast` (`.toast--ok` / `--info` / `--danger`, a coloured left rule; one line is `--toast-h` = 42px tall, so the Data Source's `.rel-guide` can sit 8px above it), `.toast__text`, `.toast__close`; announced through `#toast-live` |
 | Issue list | `.dialog__list` (`ui.listDialog`) |
 | List-row dialogs (Parameters, Hierarchies) | `.bookmark-list`, `.bookmark` (`__info`, `__name`, `__meta`), `.bookmark-note` |
 | Theme dialog | `.theme-dialog` (`__body`), `.theme-group` (`__title`), `.theme-options`, `.theme-option` (`--custom`, `__label`), `.theme-swatches`, `.theme-swatch`, `.theme-picker`, `.theme-hex`, `.theme-error` |

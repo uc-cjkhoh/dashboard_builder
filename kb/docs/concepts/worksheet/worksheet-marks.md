@@ -10,7 +10,7 @@ What each Marks slot accepts and how it renders, plus member colours and the pal
 The Marks group sits at the top of the field pane and collapses like the other groups. It is a grid of **three columns** of slots: Color, Size, Label, Detail, Tooltip, Shape, Path, Angle, Filters, Date range, Drill, Pages.
 
 - **Every tool is always reachable** (there is no More menu). Tools the chart type doesn't use are **quiet** (dimmed) unless they hold fields: Size / Shape outside scatter, square, circle; Path outside line, area; Angle outside pie, donut; Detail, Drill and Pages by default.
-- **A slot** is an icon over its name. It shows a **count badge** when it holds fields and is a **drop target** (drag a field straight onto it).
+- **A slot** is an icon over its name, 65px × 50px with 8px of padding on every side and 4px between slots. It shows a **count badge** when it holds fields, riding the slot's top-right corner (half a gap outside it, so a two-digit count never reaches the icon), and is a **drop target** (drag a field straight onto it). The slot's long hint (what it accepts) is its `title`; an empty editor's drop zone says only "drop a field" / "drop fields".
 - **Click a slot** to open **one** editor, with its pills over a drop zone. It is a **flyout** (`.ws-toolfly`) that opens just right of the field pane, level with the slot but below the Columns and Rows lanes, so a field is one short drag away, the chart never shifts, and the lanes stay uncovered. At most one editor is open at a time.
   - Keyboard focus moves into the flyout when a slot is pressed; **Esc** or ✕ closes it and returns focus to the slot. Pressing the slot again also closes it.
   - Pressing the chart puts the flyout away (the press still reaches the chart); the field pane, lanes and the flyout itself are left alone, since fields are dragged from and to them.
@@ -43,7 +43,7 @@ The Tooltip tool panel also holds a **Tooltip text** editor: free text with `<Fi
 
 - **Placeholders:** group-by / Tooltip fields as `table.column`; measures as named in the view. Field chips insert a placeholder at the cursor. The chips offer only fields that resolve: group-by / Tooltip fields and the shelf measures (not Size / continuous-Colour measures).
 - **Editing:** Enter = new line. At most `LIMITS.tooltipText` = 300 characters (client-side only).
-- **Feedback:** a live preview fills the placeholders from the first mark, and a note lists placeholders not in the view.
+- **Feedback:** a live preview fills the placeholders from the first mark, and a note lists placeholders not in the view. The note under the preview is one short line ("0/300 · automatic tooltip kept on special chart types"); the list of those chart types is its `title`.
 - **Stored** on the sheet as `tooltipText` (`null` = the automatic tooltip) and saved with the workbook. `sanitizeSheet` drops over-long / non-text values with an import issue.
 - **Where it applies:** `chart.js` `customTip` renders it for bar / line / area / combo (axis tooltip: every series in the hover), pie / donut and scatter-family charts. The automatic tooltip is kept on Table, Text, KPI, Heatmap, Treemap, discrete-colour splits, Scatter with a Shape field and the P36 chart types.
 - **Rendering:** unknown placeholders show as literal text; values use the existing value / category formatters.

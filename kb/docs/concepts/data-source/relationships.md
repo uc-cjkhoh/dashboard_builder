@@ -42,7 +42,7 @@ the columns a relationship uses are simply the ones it joins.
 To remove a link, click its badge, then Delete.
 
 **The how-to line.** While any table card has no relationship, a pill at the foot of the Data Source (`.rel-guide`) says
-"Drag a column onto a column in another table to relate them." It goes once every card has one.
+"Drag a column onto a column in another table to relate them." It goes once every card has one. While a toast shows (it owns the centre of the foot) the pill steps up to sit one 8px gap above it (`--toast-h`).
 
 ## Drawing a link — keyboard
 

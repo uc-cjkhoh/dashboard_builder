@@ -232,6 +232,7 @@ sizes, and no ad-hoc sizes.
 
 - Spacing: `--s1` 4 · `--s2` 8 · `--s4` 16 · `--s6` 24 — nothing between ([design rule 2](../../development/coding-standards.md#12-design-rules)).
 - Radius: one `--r` 8px for every shape, inner or outer · `--r-pill` 999px.
+- `--toast-h`: 42px (`16px + 24px + 2px`) — a one-line toast: its 8px padding twice, the 24px close button and the 1px border twice. Anything that must clear the toast (the Data Source guide pill) offsets by it.
 - `--sidebar-w`: 264px default (resizable — [layout.md](layout.md#sidebar)).
 - `--topbar-h`: 60px — the shared `min-height` of the sidebar brand (`.sidebar__brand`) and the tab bar
   (`.canvas__bar`), so their bottom borders form one continuous line ([layout.md](layout.md#tab-bar)).

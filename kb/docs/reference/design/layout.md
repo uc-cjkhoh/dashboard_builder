@@ -52,6 +52,7 @@ Related items share one edge, measured on what the eye sees (glyphs and text), n
   - Stacked `<details>` field rows are spaced 4px apart (`.ws-group > :not(summary) + *`).
   - Single-choice `<select>`s show a chevron on the 16px gutter instead of the UA arrow; pill selects
     keep the native one.
+- **Icon-button rows use an 8px gap**, in the worksheet view bar and the dashboard bar alike. The field pane's rhythm is 8px too: Marks grid, search box and first table are 8px apart (`.ws-fieldtools` keeps 4px of padding for its sticky background and takes it back with a `-4px` block margin, so the net gap is 8px, not 12px).
 - **Ghost icon buttons at a row's end overhang by their 8px glyph slack** (`margin-inline: -8px`), so
   the glyph meets the edge. This applies to `#sidebar-toggle`, the appearance toggle (`.scheme`), the
   view bar's chart picker and last icon button, the tool-panel ✕, and both `.entity__head` buttons (the
