@@ -96,7 +96,7 @@ Tab:     { id: "ws#n", kind: "worksheet", name, sheet }                 one work
        | { id: "db#n", kind: "dashboard", name, widgets: [Widget], size }  a board of widgets; size = null (automatic) | { width, height } px
        | { id: "st#n", kind: "story", name, steps: [Step] }               ordered captioned steps (Story/story-model.js)
 Step:    { caption, target: "ws#n" | "db#n" }                             the worksheet or dashboard the step shows
-Widget:  { id: "w#n", kind: "sheet", sheetId: "ws#n", x, y, w, h }       a worksheet's view
+Widget:  { id: "w#n", kind: "sheet", sheetId: "ws#n", note?, x, y, w, h }  a worksheet's view; note = text ≤ 300
        | { id: "w#n", kind: "text", heading, body, x, y, w, h }          a text block
        | { id: "w#n", kind: "image", alt, src, x, y, w, h }              a picture; src = a base64 PNG / JPEG / GIF / WebP data URL
        | { id: "w#n", kind: "nav", label, tip, target, x, y, w, h }      a button; target = a tab id (worksheet or dashboard) | null
@@ -189,7 +189,7 @@ Nothing here reaches the server; dashboards add no endpoint
   (in workbooks saved without it), it is back-filled from the column catalog.
 - **Caps** (client `LIMITS`, `Core/validate.js`; the server's view caps are in
   [api.md § Limits](api.md#limits)): 20 pills per shelf · 12 dimensions · 10 measures · 8 filters ·
-  6 drill levels · 100 entities · 200 relationships · 50 tabs · 12 widgets per dashboard · tab name 60 characters · axis
+  6 drill levels · 100 entities · 200 relationships · 50 tabs · 12 widgets per dashboard · widget note 300 · tab name 60 characters · axis
   title 80 · filter value 1000.
 - **Format defaults:** `numberFormat:"auto"`, `decimals:null`, `currencySymbol:"$"`,
   `dateFormat:"auto"`, `topN:null` (All — up to 5000), `dateBucket:"auto"`, `conditional:{}` (P37: `{ [db.table.column:agg]: { mode: none|scale|bars, scale: sequential|diverging, mid, rules: [{ op, value, tone: good|bad|warn|info }] } }`), `legend:"auto"`, `dataLabels:false`,
@@ -223,7 +223,7 @@ What [workbook.md](../concepts/workbook/workbook.md) saves to `localStorage` and
   entities:      [ { id, db, table, x, y, joinKeys: [column], source? } ],   // source: a union / unpivot entity (its table = source.name); re-validated on open, a bad one skipped
   relationships: [ { from: { entityId, column }, to: { entityId, column }, cardinality, joinType, pairs?, aggregateFirst?, filterDirection? } ],
   worksheets:    [ { name, sheet } ],      // sheet as above, minus pages.members
-  dashboards:    [ { name, widgets: [ { kind: "sheet", sheet: worksheetIndex, x, y, w, h }
+  dashboards:    [ { name, widgets: [ { kind: "sheet", sheet: worksheetIndex, note?, x, y, w, h }
                                     | { kind: "text", heading, body, x, y, w, h } ],
                      size?: { width, height },   // fixed pixels; absent = automatic (older files). Anything outside the limits (not whole pixels, 320–3840 × 240–2400) → automatic with an import issue, never clamped
                      range?: { minWidth?, maxWidth?, minHeight?, maxHeight? },   // an automatic board's pixel limits (same limits; min <= max, one at least); invalid → dropped with an import issue
