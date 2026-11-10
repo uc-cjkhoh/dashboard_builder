@@ -13,9 +13,13 @@ export function renderHeatmap(container, result, format, fmtCat) {
   drawChart(container, { type: "heatmap", ...heatmapData(result, fmtCat), format });
 }
 
-/** Treemap: one or two dimensions form the hierarchy; the first measure sizes the rectangles. */
-export function renderTreemap(container, result, format, fmtCat) {
-  drawChart(container, { type: "treemap", tree: treemapTree(result, fmtCat), format });
+/**
+ * Treemap: one or two dimensions form the hierarchy; the first measure sizes the rectangles. With a Size measure (`sizeIdx`) that
+ * measure sets each tile's area and the first measure is the label's second line; a colour measure (`colourIdx`) shades the tiles.
+ */
+export function renderTreemap(container, result, format, fmtCat, { sizeIdx = -1, colourIdx = -1 } = {}) {
+  drawChart(container, { type: "treemap", tree: treemapTree(result, fmtCat, { sizeIdx, colourIdx }), format,
+    sizeName: sizeIdx >= 0 ? result.measures[sizeIdx] : null, colourName: colourIdx >= 0 ? result.measures[colourIdx] : null, shelfName: result.measures[0] });
 }
 
 /**

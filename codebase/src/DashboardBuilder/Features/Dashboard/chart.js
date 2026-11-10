@@ -3,7 +3,8 @@ import { ACCENTS, PALETTES } from "../Core/theme-model.js";
 import { fontToken } from "./font-model.js";
 import { pickInk } from "./contrast.js";
 import { orderedPalette } from "./colour-model.js";
-import { DIV_FALLBACK, DIV_HUE_FALLBACK, divergingColours, divergingRange, rampColours, rangeOf, stepPieces, mixHex } from "./colour-scale-model.js";
+import { DIV_FALLBACK, DIV_HUE_FALLBACK, divergingColours, divergingRange, rampColours, rangeOf, stepPieces, stepColours, stepIndexOf, positionOf, mixHex } from "./colour-scale-model.js";
+import { sizeFractions, sizeRange, barThickness, markerSizeFor } from "./mark-channel-model.js";
 import { tooltipHtml } from "./tooltip-model.js";
 import { tipLookup } from "./tooltip-formats.js";
 import { lineStep } from "./line-style-model.js";
@@ -432,7 +433,7 @@ function legendFor(format, c, names, defaultOn) {
 // (the default). `orientation` is decided by the caller from the shelves; combo stays vertical (its
 // dual value axis is on y). Axis *titles* name the physical axes (xTitle = bottom, yTitle = left)
 // regardless of orientation, so the Format controls stay literal.
-export function buildCartesian({ type, categories, series, format = {}, orientation = "vertical", pointLabels, seriesLabels, tooltipExtra, tooltipText, tooltipFields, tooltipStyle, tooltipFormats, otherIndex = -1, analytics = null }) {
+export function buildCartesian({ type, categories, series, format = {}, orientation = "vertical", pointLabels, seriesLabels, tooltipExtra, tooltipText, tooltipFields, tooltipStyle, tooltipFormats, otherIndex = -1, analytics = null, colorValues, colorName, sizes, sizeName }) {
   const c = tokens();
   const labels = (categories ?? []).map((l) => l ?? "—");
   // Comparison series (compare: true) ride beside their measure: they don't make a chart "multi"
@@ -448,9 +449,14 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
   const colorFor = (i, name) => (multi ? memberColor(name, c.cat[i % c.cat.length]) : c.series);
   // Colour-by-dimension: a single-measure bar chart colours each bar by its category. The
   // category axis already labels each bar, so colour restates identity (never colour-alone).
-  const colorByDim = type === "bar" && !multi && !!format.colorByDimension;
-
+  // A colour measure (one measure only) colours each bar / marker / line stretch by its value: it replaces the palette and Colour by category.
   const { show: showLegend, pos, legend } = legendFor(format, c, series.map((s) => s.name), multi || dual || hasCompare);
+  const byValue = Array.isArray(colorValues) && mainCount === 1 && (type === "bar" || type === "line" || type === "area")
+    ? colourByValue(colorValues, c, fmtVal, colorName, showLegend && pos === "bottom" ? 28 : 0) : null;
+  const colorByDim = type === "bar" && !multi && !!format.colorByDimension && !byValue;
+  // Size (one measure): a bar's thickness (custom series), or a line / area marker's size. Neither applies with a comparison series or a dual axis.
+  const sizeFr = Array.isArray(sizes) && mainCount === 1 && (type === "bar" || type === "line" || type === "area") ? sizeFractions(sizes) : null;
+  const sizeNote = sizeFr ? sizeLegend(sizes, sizeName, c, fmtVal, showLegend && pos === "top" ? 24 : 2) : null;
   const xTitle = format.xTitle || null;
   const yTitle = format.yTitle || null;
 
@@ -506,11 +512,13 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
   const base = {
     textStyle: { fontFamily: c.font, color: c.label }, // text wears text tokens, never the series colour
     legend,
+    ...(byValue?.legend ?? {}), // the colour measure's gradient / steps (display only)
+    ...(sizeNote ?? {}),
     grid: {
       left: 6 + (showLegend && pos === "left" ? 96 : 0),
       right: 18 + (showLegend && pos === "right" ? 96 : 0) + (dual ? 36 : 0),
-      top: 18 + (showLegend && pos === "top" ? 18 : 0) + (yTitle || dual ? 18 : 0),
-      bottom: 6 + (showLegend && pos === "bottom" ? 22 : 0) + (xTitle ? 24 : 0),
+      top: 18 + (showLegend && pos === "top" ? 18 : 0) + (yTitle || dual ? 18 : 0) + (sizeNote ? 24 : 0),
+      bottom: 6 + (showLegend && pos === "bottom" ? 22 : 0) + (xTitle ? 24 : 0) + (byValue ? byValue.room : 0),
       containLabel: true,
     },
     tooltip: {
@@ -520,12 +528,16 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
       textStyle: { color: c.ink, fontFamily: c.font },
       formatter: (p) => {
         const arr = Array.isArray(p) ? p : [p];
-        if (tooltipText) return customTip(tooltipText, tooltipFields, tooltipStyle, tooltipFormats, fmtVal, format, arr[0].dataIndex, Object.fromEntries(arr.map((d) => [String(d.seriesName), d.value])));
+        const val = (d) => (Array.isArray(d.value) ? d.value[horizontal ? 0 : 1] : d.value); // a variable-width bar's value is [position, value, size]
+        if (tooltipText) return customTip(tooltipText, tooltipFields, tooltipStyle, tooltipFormats, fmtVal, format, arr[0].dataIndex, Object.fromEntries(arr.map((d) => [String(d.seriesName), val(d)])));
         const head = `<span style="color:${c.muted}">${escapeHtml(String(arr[0].axisValueLabel ?? arr[0].name ?? ""))}</span>`;
         const lines = arr.map((d) =>
-          `<br><span style="display:inline-block;width:8px;height:8px;border-radius:${c.radius}px;background:${d.color};margin-right:8px"></span>` +
-          `<b>${escapeHtml(String(d.seriesName))}:</b> ${fmtVal(d.value)}`).join("");
-        return head + lines + extraTooltip(tooltipExtra, arr[0].dataIndex, c); // custom tooltip fields
+          `<br><span style="display:inline-block;width:8px;height:8px;border-radius:${c.radius}px;background:${d.color ?? d.data?.itemStyle?.color ?? c.series};margin-right:8px"></span>` +
+          `<b>${escapeHtml(String(d.seriesName))}:</b> ${fmtVal(val(d))}`).join("");
+        const at = arr[0].dataIndex;
+        const channels = (sizeFr && sizes[at] != null ? `<br><b>${escapeHtml(String(sizeName || "size"))}:</b> ${fmtVal(sizes[at])}` : "") +
+          (byValue && colorValues[at] != null ? `<br><b>${escapeHtml(String(colorName || "colour"))}:</b> ${fmtVal(colorValues[at])}` : "");
+        return head + lines + channels + extraTooltip(tooltipExtra, at, c); // custom tooltip fields
       },
     },
     xAxis,
@@ -554,14 +566,19 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
     const rightBars = isCombo && i >= 1 && secondary === "bar";
     const asLine = !rightBars && (type === "line" || type === "area" || (isCombo && i >= 1));
     if (asLine) {
+      // Size: each marker's own size; a colour measure: each marker its value's colour, the line a gradient along it (nulls keep the neighbour's).
+      const stroke = byValue ? lineGradient(byValue.colours, horizontal, color) : color;
+      const lineData = sizeFr || byValue
+        ? s.data.map((v, di) => (v == null ? v : { value: v, ...(sizeFr ? { symbolSize: markerSizeFor(sizeFr[di]) } : {}), ...(byValue?.colours[di] ? { itemStyle: { color: byValue.colours[di], ...(format.markBorder && format.markBorder !== "none" ? edge : {}) } } : {}) }))
+        : s.data;
       return {
         name: s.name, type: "line", step,
         yAxisIndex: seriesAxis(dual, i, isCombo),
-        data: s.data,
-        showSymbol: s.data.length <= 60 || format.markerSize != null, // dots only when they won't crowd (unless a size is chosen)
+        data: lineData,
+        showSymbol: s.data.length <= 60 || format.markerSize != null || !!sizeFr, // dots only when they won't crowd (unless a size is chosen)
         symbol: markerSymbol(format.markerShape), symbolSize: markerSizeOr(format.markerSize, 8), // ≥8px markers (dataviz mark spec) unless Format → Marker size
-        areaStyle: type === "area" || (isCombo && secondary === "area") ? { opacity: 0.18, color } : undefined,
-        lineStyle: { width: 2, color },
+        areaStyle: type === "area" || (isCombo && secondary === "area") ? { opacity: 0.18, color: stroke } : undefined,
+        lineStyle: { width: 2, color: stroke },
         itemStyle: { color, ...(format.markBorder && format.markBorder !== "none" ? edge : {}) },
         label: dataLabel(i),
         emphasis: { focus: "series" },
@@ -573,6 +590,10 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
     // The "Other" bar (everything past the limit) wears the muted ink (≥ 3:1 on the surface, apart from
     // the series hue); its label says what it is.
     const otherItem = (v) => ({ value: v, itemStyle: { color: c.muted, borderRadius: barRadius, ...edge } });
+    if (sizeFr && type === "bar") {
+      const fillAt = (di) => (di === otherIndex ? c.muted : byValue?.colours[di] ?? (colorByDim ? memberColor(labels[di], c.cat[di % c.cat.length]) : null));
+      return variableBars({ s, color, sizeFr, sizes, horizontal, c, edge, fillAt, dataLabel: (pointLabels || seriesLabels || format.dataLabels) ? (di, v) => (pointLabels || seriesLabels ? String(labelAt(i, di) ?? "") : fmtVal(v)) : null });
+    }
     return {
       name: s.name, type: "bar",
       yAxisIndex: rightBars ? 1 : 0,
@@ -580,7 +601,7 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
       // Colour-by-dimension: per-bar colours; otherwise the series colour.
       data: colorByDim
         ? s.data.map((v, di) => (di === otherIndex ? otherItem(v) : { value: v, itemStyle: { color: memberColor(labels[di], c.cat[di % c.cat.length]), borderRadius: barRadius, ...edge } }))
-        : s.data.map((v, di) => (di === otherIndex ? otherItem(v) : v)),
+        : s.data.map((v, di) => (di === otherIndex ? otherItem(v) : byValue?.colours[di] ? { value: v, itemStyle: { color: byValue.colours[di], borderRadius: barRadius, ...edge } } : v)),
       barMaxWidth: 40,
       itemStyle: { color, borderRadius: barRadius, ...edge },
       label: dataLabel(i),
@@ -620,11 +641,13 @@ function addAnalytics(base, a, { c, fmtVal, horizontal }) {
 // pie / donut — one dimension (slices) × one measure (size). Colour IS the encoding, so a legend
 // shows by default (dataviz: identity never colour-alone; the legend supplies the labels).
 const PIE_PERCENT_SLICES = 6; // with Data labels on, up to this many slices also show their percent
-function buildPie({ type, categories, series, format = {}, pointLabels, tooltipExtra, tooltipText, tooltipFields, tooltipStyle, tooltipFormats, otherIndex = -1 }) {
+function buildPie({ type, categories, series, format = {}, pointLabels, tooltipExtra, tooltipText, tooltipFields, tooltipStyle, tooltipFormats, otherIndex = -1, colorValues, colorName }) {
   const c = tokens();
   const fmtVal = makeValueFormatter(format);
   const labels = (categories ?? []).map((l) => l ?? "—");
-  const data = labels.map((name, i) => ({ name, value: series[0].data[i], ...(i === otherIndex ? { itemStyle: { color: c.muted } } : memberColors().has(name) ? { itemStyle: { color: memberColors().get(name) } } : {}) }));
+  // A colour measure colours each slice by its value (replacing the palette and member colours); the slice list stays the legend of members.
+  const byValue = Array.isArray(colorValues) ? colourByValue(colorValues, c, fmtVal, colorName) : null;
+  const data = labels.map((name, i) => ({ name, value: series[0].data[i], ...(i === otherIndex ? { itemStyle: { color: c.muted } } : byValue?.colours[i] ? { itemStyle: { color: byValue.colours[i] } } : !byValue && memberColors().has(name) ? { itemStyle: { color: memberColors().get(name) } } : {}) }));
   const { pos, legend } = legendFor(format, c, labels, true);
   const showLabels = !!format.dataLabels || !!pointLabels; // Label field forces slice labels on
   const fewSlices = labels.length <= PIE_PERCENT_SLICES; // few slices: the label adds the share
@@ -633,6 +656,7 @@ function buildPie({ type, categories, series, format = {}, pointLabels, tooltipE
     color: c.cat,
     textStyle: { fontFamily: c.font, color: c.label },
     legend,
+    ...(byValue?.legend ?? {}),
     tooltip: {
       trigger: "item",
       backgroundColor: c.surface, borderColor: c.grid, borderWidth: 1,
@@ -642,12 +666,13 @@ function buildPie({ type, categories, series, format = {}, pointLabels, tooltipE
         :
         `<span style="color:${c.muted}">${escapeHtml(String(p.name))}</span><br>` +
         `<b>${escapeHtml(String(series[0].name))}:</b> ${fmtVal(p.value)} (${p.percent}%)` +
+        (byValue && colorValues[p.dataIndex] != null ? `<br><b>${escapeHtml(String(colorName || "colour"))}:</b> ${fmtVal(colorValues[p.dataIndex])}` : "") +
         extraTooltip(tooltipExtra, p.dataIndex, c),
     },
     series: [{
       type: "pie",
-      radius: type === "donut" ? ["45%", "72%"] : "72%",
-      center: legend && (pos === "left" || pos === "right") ? ["42%", "52%"] : ["50%", "54%"],
+      radius: byValue ? (type === "donut" ? ["35%", "58%"] : "58%") : type === "donut" ? ["45%", "72%"] : "72%",
+      center: legend && (pos === "left" || pos === "right") ? ["42%", byValue ? "46%" : "52%"] : ["50%", byValue ? "46%" : "54%"],
       data,
       label: { show: showLabels, color: c.label, fontFamily: c.font,
         formatter: (p) => (pointLabels ? String(pointLabels[p.dataIndex] ?? "") : `${p.name}: ${fmtVal(p.value)}${fewSlices ? ` (${p.percent}%)` : ""}`) },
@@ -680,11 +705,13 @@ function buildScatter({ categories, series, format = {}, sizes, sizeName, colorV
   });
   const symbolSize = sizeDim >= 0 ? sizeScaler(sizes, (v) => v[sizeDim]) : markerSizeOr(format.markerSize, 14); // a Size field wins
   const legend = colorDim >= 0 ? continuousVisualMap(colorValues, colorDim, c, fmtVal, colorName) : undefined;
+  const sizeNote = sizeDim >= 0 ? sizeLegend(sizes, sizeName, c, fmtVal) : null;
 
   return {
     textStyle: { fontFamily: c.font, color: c.label },
-    grid: { left: 6, right: 18, top: 18, bottom: 6 + 24 + (legend ? 24 + (legend.title ? 24 : 0) : 0), containLabel: true },
+    grid: { left: 6, right: 18, top: 18 + (sizeNote ? 24 : 0), bottom: 6 + 24 + (legend ? 24 + (legend.title ? 24 : 0) : 0), containLabel: true },
     ...legend,
+    ...(sizeNote ?? {}),
     tooltip: {
       trigger: "item",
       backgroundColor: c.surface, borderColor: c.grid, borderWidth: 1,
@@ -728,22 +755,28 @@ function buildScatter({ categories, series, format = {}, sizes, sizeName, colorV
 
 // scatterShapes — one scatter series per Shape-dimension value, each a distinct symbol so
 // identity survives greyscale (shape is a non-colour channel). X/Y are the two shelf measures; an
-// optional Size dim scales the symbol. spec: { groups:[{name, points:[{value:[x,y,size?], name}]}],
-// xName, yName, hasSize, sizeName, format }.
+// optional Size dim scales the symbol. spec: { groups:[{name, points:[{value:[x,y,size?], name}], colour?: { index, name }, shape?: { index } }],
+// symbol (the mark type's symbol when a group has no Shape), xName, yName, hasSize, sizeName, format }. A group with a Colour member wears that
+// member's colour (a member colour from Format wins over the palette slot); one with a Shape member its symbol; shape alone keeps one palette colour per series.
 const SHAPE_SYMBOLS = ["circle", "rect", "triangle", "diamond", "roundRect", "pin", "arrow"];
-function buildScatterShapes({ groups, xName, yName, hasSize, sizeName, format = {} }) {
+function buildScatterShapes({ groups, symbol, xName, yName, hasSize, sizeName, format = {} }) {
   const c = tokens();
   const fmtVal = makeValueFormatter(format);
   const allSizes = hasSize ? groups.flatMap((g) => g.points.map((p) => p.value[2])) : null;
   const symbolSize = hasSize ? sizeScaler(allSizes, (v) => v[2]) : markerSizeOr(format.markerSize, 12);
   const names = groups.map((g) => g.name);
   const { show, pos, legend } = legendFor(format, c, names, true);
+  const symbolOf = (g) => (g.shape ? SHAPE_SYMBOLS[g.shape.index % SHAPE_SYMBOLS.length] : symbol || "circle");
+  const colourOf = (g, i) => (g.colour ? memberColor(g.colour.name, c.cat[g.colour.index % c.cat.length]) : c.cat[i % c.cat.length]);
+  if (legend && groups.some((g) => g.shape)) legend.data = groups.map((g) => (g.shape ? { name: g.name, icon: symbolOf(g) } : g.name)); // the legend swatch wears the symbol too
+  const sizeNote = hasSize ? sizeLegend(allSizes, sizeName, c, fmtVal, show && pos === "top" ? 24 : 2) : null;
   return {
     textStyle: { fontFamily: c.font, color: c.label },
     legend,
+    ...(sizeNote ?? {}),
     grid: {
       left: 6 + (show && pos === "left" ? 96 : 0), right: 18 + (show && pos === "right" ? 96 : 0),
-      top: 24 + (show && pos === "top" ? 18 : 0), bottom: 6 + 24 + (show && pos === "bottom" ? 22 : 0), containLabel: true,
+      top: 24 + (show && pos === "top" ? 18 : 0) + (sizeNote ? 24 : 0), bottom: 6 + 24 + (show && pos === "bottom" ? 22 : 0), containLabel: true,
     },
     tooltip: {
       trigger: "item", backgroundColor: c.surface, borderColor: c.grid, borderWidth: 1,
@@ -766,8 +799,8 @@ function buildScatterShapes({ groups, xName, yName, hasSize, sizeName, format = 
       splitLine: { lineStyle: { color: c.grid } }, axisLabel: { color: c.muted, formatter: fmtVal },
     },
     series: groups.map((g, i) => ({
-      name: g.name, type: "scatter", symbol: SHAPE_SYMBOLS[i % SHAPE_SYMBOLS.length], symbolSize,
-      data: g.points, itemStyle: { color: c.cat[i % c.cat.length], opacity: 0.85, ...pointEdge(format, c) },
+      name: g.name, type: "scatter", symbol: g.shape || g.colour ? symbolOf(g) : SHAPE_SYMBOLS[i % SHAPE_SYMBOLS.length], symbolSize,
+      data: g.points, itemStyle: { color: colourOf(g, i), opacity: 0.85, ...pointEdge(format, c) },
       emphasis: { focus: "series", itemStyle: { borderColor: c.ink, borderWidth: 1 } },
     })),
   };
@@ -830,28 +863,51 @@ function buildHeatmap({ xCats, yCats, cells, format = {} }) {
 }
 
 // treemap — nested rectangles sized by a measure; one or two dimensions form the hierarchy.
-// spec: { tree:[{ name, value, children? }], format }
-function buildTreemap({ tree, format = {} }) {
+// spec: { tree:[{ name, value, shelf?, size?, colour?, children? }], sizeName?, colourName?, shelfName?, format }. With a Size measure
+// a tile's area is `value` (= size) and the shelf measure is the label's second line; a colour measure colours each leaf by its value
+// on the legend's scale (a parent keeps a neutral fill under its children). Without either, each top-level tile takes a category colour.
+function buildTreemap({ tree, sizeName, colourName, shelfName, format = {} }) {
   const c = tokens();
   const fmtVal = makeValueFormatter(format);
+  const leaves = [];
+  const walk = (nodes) => nodes.forEach((n) => (n.children ? walk(n.children) : leaves.push(n)));
+  walk(tree);
+  const hasColour = leaves.some((n) => n.colour !== undefined);
+  const hasSize = leaves.some((n) => n.size !== undefined);
+  const byValue = hasColour ? colourByValue(leaves.map((n) => n.colour), c, fmtVal, colourName) : null;
+  const colourOf = new Map(leaves.map((n, i) => [n, byValue?.colours[i] ?? null]));
+  const sizeNote = hasSize ? sizeLegend(leaves.map((n) => n.size), sizeName, c, fmtVal) : null;
   // Label ink per tile: the tile colour is the top-level node's category colour (by index), and every
   // descendant keeps that hue, so pick the ink with the best contrast against it (>= 4.5:1).
   const inks = [c.ink, c.surface, "#000000", "#ffffff"];
   const withInk = (node, ink) => ({ ...node, label: { ...node.label, color: ink }, ...(node.children ? { children: node.children.map((k) => withInk(k, ink)) } : {}) });
-  const data = tree.map((n, i) => withInk(n, pickInk(c.cat[i % c.cat.length], inks)));
+  // A colour measure: each leaf its own colour and ink; a parent the neutral grid colour behind its children.
+  const paint = (node) => node.children
+    ? { ...node, itemStyle: { color: c.grid }, label: { color: c.ink }, children: node.children.map(paint) }
+    : { ...node, itemStyle: { color: colourOf.get(node) ?? c.muted }, label: { color: pickInk(colourOf.get(node) ?? c.muted, inks) } };
+  const data = hasColour ? tree.map(paint) : tree.map((n, i) => withInk(n, pickInk(c.cat[i % c.cat.length], inks)));
+  const sub = (label, v) => (v == null ? "" : `<br><b>${escapeHtml(String(label))}:</b> ${fmtVal(v)}`);
   return {
     textStyle: { fontFamily: c.font, color: c.label },
+    ...(byValue?.legend ?? {}),
+    ...(sizeNote ?? {}),
     tooltip: {
       backgroundColor: c.surface, borderColor: c.grid, borderWidth: 1,
       textStyle: { color: c.ink, fontFamily: c.font },
-      formatter: (p) => `<span style="color:${c.muted}">${escapeHtml(String(p.name))}</span><br><b>${fmtVal(p.value)}</b>`,
+      formatter: (p) => {
+        const d = p.data ?? {};
+        const head = `<span style="color:${c.muted}">${escapeHtml(String(p.name))}</span>`;
+        if (d.size === undefined && d.colour === undefined) return `${head}<br><b>${fmtVal(p.value)}</b>`;
+        return head + sub(sizeName || "size", d.size) + (d.shelf !== undefined && d.size !== undefined ? sub(shelfName || "value", d.shelf) : "") + sub(colourName || "colour", d.colour) + (d.size === undefined ? sub(shelfName || "value", d.shelf) : "");
+      },
     },
     series: [{
       type: "treemap", data, roam: false, nodeClick: false,
+      top: sizeNote ? 30 : 6, bottom: byValue ? byValue.room + 6 : 6,
       breadcrumb: { show: false },
-      label: { show: true, fontFamily: c.font, formatter: (p) => p.name },
+      label: { show: true, fontFamily: c.font, lineHeight: 16, formatter: (p) => (p.data?.size !== undefined && p.data?.shelf !== undefined ? `${p.name}\n${fmtVal(p.data.shelf)}` : p.name) },
       itemStyle: { ...edgeOr(format.markBorder, borderInk(format.markBorderColor, c), { borderColor: c.surface, borderWidth: 2 }), gapWidth: 2 },
-      levels: [{ color: c.cat, colorMappingBy: "index" }],
+      levels: hasColour ? [{}] : [{ color: c.cat, colorMappingBy: "index" }],
     }],
   };
 }
@@ -1229,17 +1285,95 @@ function continuousVisualMap(values, dimension, c, fmtVal, name) {
 // A Diverging ramp's centre is the surface, which vanishes against the page; stepped, it is the surface nudged toward
 // the ink so the neutral step reads as a swatch and a cell in both themes (a continuous gradient keeps the surface).
 const stepRamp = (c) => (c.ramp.length === 3 ? [c.ramp[0], mixHex(c.surface, c.ink, 0.15), c.ramp[2]] : c.ramp);
-function colourLegend({ min, max, dimension, c, fmtVal, note, bottom }) {
+// `only` = a display-only legend for marks coloured by `valueColours` (a bar, a line, a slice, a tile): it drives no series, so its handles and steps are inert.
+function colourLegend({ min, max, dimension, c, fmtVal, note, bottom, only = false }) {
   const textStyle = { color: c.muted, fontFamily: c.font };
   const n = drawing?.colorSteps ?? 0;
+  const inert = only ? { seriesIndex: [], hoverLink: false } : {}; // no hover link either: a hover would re-draw the marks under the pointer and swallow the click
   if (!n) {
-    return { visualMap: { type: "continuous", min, max, dimension, calculable: true, orient: "horizontal", left: "center", bottom,
+    return { visualMap: { type: "continuous", min, max, dimension, calculable: !only, ...inert, orient: "horizontal", left: "center", bottom,
       inRange: { color: c.ramp }, text: note ? [note, ""] : undefined, textStyle, formatter: (v) => fmtVal(v) } };
   }
   return {
-    visualMap: { type: "piecewise", dimension, orient: "horizontal", left: "center", bottom, itemWidth: 16, itemHeight: 12, itemGap: 8,
+    visualMap: { type: "piecewise", dimension, ...inert, ...(only ? { selectedMode: false } : {}), orient: "horizontal", left: "center", bottom, itemWidth: 16, itemHeight: 12, itemGap: 8,
       pieces: stepPieces(min, max, n, stepRamp(c), fmtVal), textStyle },
     ...(note ? { title: { text: note, left: "center", bottom: bottom + 24, textStyle: { ...textStyle, fontSize: 14, fontWeight: "normal" } } } : {}),
+  };
+}
+// The room a colour legend takes under the plot: its row, plus the note's title row when stepped.
+const legendRoom = (legend) => 24 + (legend.title ? 24 : 0);
+// Each value's colour on the legend's own scale (the same range, ramp, pins, centre and steps as the visualMap), for marks ECharts'
+// visualMap can't reach (a bar, a line stretch, a slice, a tile). A missing value has no colour (null).
+function valueColours(values, c) {
+  const nums = (values ?? []).map((v) => (v == null || v === "" ? NaN : Number(v)));
+  const { min, max } = colourScaleRange(nums);
+  const n = drawing?.colorSteps ?? 0;
+  const stepCols = n ? stepColours(stepRamp(c), n) : null;
+  const ec = window.echarts.color;
+  const at = (v) => {
+    if (stepCols) { const i = stepIndexOf(v, min, max, n); return i == null ? null : stepCols[i]; }
+    const t = positionOf(v, min, max);
+    return t == null ? null : hexOf(ec.parse(ec.lerp(t, c.ramp)));
+  };
+  return { min, max, colours: nums.map(at) };
+}
+// [r, g, b] (echarts.color.parse) as #rrggbb.
+const hexOf = ([r, g, b]) => "#" + [r, g, b].map((v) => Math.round(v).toString(16).padStart(2, "0")).join("");
+// A colour measure on a bar / line / area / pie / tile: per-mark colours plus the display-only legend (and the room it needs).
+function colourByValue(values, c, fmtVal, name, bottom = 0) {
+  const vc = valueColours(values, c);
+  const note = [name ? String(name) : "", centreNote(vc.min, vc.max, fmtVal), outOfRangeNote()].filter(Boolean).join(" · ");
+  const legend = colourLegend({ min: vc.min, max: vc.max, dimension: 2, c, fmtVal, note, bottom, only: true });
+  return { colours: vc.colours, legend, room: legendRoom(legend) + bottom };
+}
+// A line's stroke (and area fill) coloured stretch by stretch: a linear gradient across the line's own extent, a colour at each point
+// (hard bands when stepped). A point with no colour keeps its neighbour's.
+function lineGradient(colours, vertical, fallback) {
+  const first = colours.find((x) => x) ?? fallback;
+  let last = first;
+  const cols = colours.map((x) => (last = x ?? last));
+  const n = cols.length;
+  if (n < 2) return cols[0] ?? fallback;
+  const stops = [];
+  cols.forEach((col, i) => {
+    if (drawing?.colorSteps) stops.push({ offset: Math.max(0, (i - 0.5) / (n - 1)), color: col }, { offset: Math.min(1, (i + 0.5) / (n - 1)), color: col });
+    else stops.push({ offset: i / (n - 1), color: col });
+  });
+  return { type: "linear", x: 0, y: 0, x2: vertical ? 0 : 1, y2: vertical ? 1 : 0, colorStops: stops };
+}
+// The Size legend, in words (never size alone): the field and its smallest and largest value, at the top right of the chart.
+function sizeLegend(values, name, c, fmtVal, top = 2) {
+  const r = sizeRange(values);
+  if (!r || !name) return null;
+  return { graphic: [{ type: "text", right: 18, top, silent: true, style: { text: `Size: ${name} (${fmtVal(r.min)} to ${fmtVal(r.max)})`, fill: c.muted, font: `14px ${c.font}`, textAlign: "right" } }] };
+}
+// A bar chart whose bars vary in thickness with a Size measure: ECharts has no per-bar width, so the bars are a custom series that
+// draws each rectangle itself (value = [position, value, size], swapped when horizontal). Rounded growing end, per-item colour (colour
+// measure, Other, Colour by category) from the item's own style, a label per bar, and the same tooltip / click / selection fade as a bar.
+function variableBars({ s, color, sizeFr, sizes, horizontal, c, edge, fillAt, dataLabel }) {
+  const radius = horizontal ? [0, c.radius, c.radius, 0] : [c.radius, c.radius, 0, 0];
+  const item = (v, di) => {
+    const fill = fillAt(di); // the Other bar, a colour measure's value, or a category's colour; else the series colour
+    return { value: horizontal ? [v, di, sizes[di]] : [di, v, sizes[di]], ...(fill ? { itemStyle: { color: fill } } : {}) };
+  };
+  return {
+    name: s.name, type: "custom", encode: { x: 0, y: 1 },
+    data: s.data.map((v, di) => item(v, di)),
+    itemStyle: { color, ...edge },
+    emphasis: { focus: "series", itemStyle: { opacity: 0.85 } },
+    renderItem: (params, api) => {
+      const di = params.dataIndex, v = s.data[di];
+      if (v == null || !Number.isFinite(Number(v))) return null;
+      const band = api.size(horizontal ? [0, 1] : [1, 0])[horizontal ? 1 : 0];
+      const th = barThickness(sizeFr[di], band);
+      const base = horizontal ? api.coord([0, di]) : api.coord([di, 0]);
+      const tip = horizontal ? api.coord([Number(v), di]) : api.coord([di, Number(v)]);
+      const shape = horizontal
+        ? { x: Math.min(base[0], tip[0]), y: tip[1] - th / 2, width: Math.abs(tip[0] - base[0]), height: th, r: radius }
+        : { x: tip[0] - th / 2, y: Math.min(base[1], tip[1]), width: th, height: Math.abs(base[1] - tip[1]), r: radius };
+      return { type: "rect", shape, style: api.style(), emphasis: { style: api.styleEmphasis() },
+        ...(dataLabel ? { textContent: { style: { text: dataLabel(di, v), fill: c.label, font: `14px ${c.font}` } }, textConfig: { position: horizontal ? "right" : "top" } } : {}) };
+    },
   };
 }
 // The user's tooltip template → safe HTML. `measures` maps a measure name → its formatted value for

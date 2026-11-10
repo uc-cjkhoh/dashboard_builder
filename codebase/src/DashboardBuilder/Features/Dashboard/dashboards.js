@@ -45,6 +45,7 @@ import { RAMP_CHOICES, SCALE_CHOICES, DIV_PAIR_CHOICES, colourCentreError, colou
 import { FONT_CHOICES } from "./font-model.js";
 import { BACKGROUND_CHOICES } from "./background-model.js";
 import { TABLE_ALIGN_CHOICES, TABLE_DENSITY_CHOICES, TABLE_SHADE_CHOICES } from "./table-style-model.js";
+import { COLOUR_MEASURE_TYPES } from "./mark-channel-model.js";
 import { MARK_BORDER_CHOICES, MARKER_SHAPE_CHOICES, BORDER_TYPES, MARK_BORDER_COLOUR_CHOICES, markerSizeError } from "./mark-style-model.js";
 import { targetChoices, effectiveTargetMeasure } from "./bullet-model.js";
 import { sourceOfTable, wireSource, distinctPlan, distinctMembers } from "../Core/source-model.js";
@@ -1336,7 +1337,7 @@ export function initDashboards() {
     const f = s.format ?? (s.format = defaultFormat());
     const isChart = CHART_LIKE.has(s.chartType);              // pie/donut/scatter/… get legend etc.
     const hasAxes = isChart && !NO_AXES.has(s.chartType);
-    const canColourByCat = s.chartType === "bar" || s.chartType === "scatter";
+    const canColourByCat = (s.chartType === "bar" || s.chartType === "scatter") && colorMode(s) !== "continuous"; // a measure on Colour replaces it
     const set = (patch) => { s.format = { ...f, ...patch }; commit(dash, s); };
 
     const panel = el("div", "ws-format");
@@ -1423,7 +1424,7 @@ export function initDashboards() {
       if (canColourByCat)
         panel.append(fmtCheck("Colour by category", f.colorByDimension, (v) => set({ colorByDimension: v })));
       panel.append(fmtCheck("Reverse palette", f.paletteReverse, (v) => set({ paletteReverse: v })), memberColourEditor(dash, s));
-      if (s.chartType === "heatmap" || (s.chartType === "scatter" && colorMode(s) === "continuous")) { // the continuous colour scale
+      if (s.chartType === "heatmap" || (colorMode(s) === "continuous" && COLOUR_MEASURE_TYPES.has(s.chartType))) { // the continuous colour scale
         const range = (key, other, label) => fmtNumber(label, f[key], "auto", (v) => {
           const err = colourRangeError(...(key === "colorMin" ? [v, f[other]] : [f[other], v]));
           if (err) { toast(err, "danger"); set({ [key]: f[key] }); return; } // redraw puts the kept value back
@@ -1832,7 +1833,7 @@ export function initDashboards() {
     const continuous = f.category === "numeric";
     const p = pill(`${f.table}.${f.column}${continuous ? " (gradient)" : ""}`, remove);
     p.classList.add("ws-pill--color");
-    if (continuous) p.title = "Continuous colour — a sequential gradient (Bar/Scatter)";
+    if (continuous) p.title = "Continuous colour — each mark is shaded by this measure (Scatter, Bar, Line, Area, Pie, Donut, Treemap)";
     return markMissing(p, f);
   }
   // Filter pill. The operator select drives which value control shows: a single input for the
@@ -2411,10 +2412,10 @@ export function initDashboards() {
         pills: colorFields.map((f, i) => colorPill(dash, s, f, i)), onDrop: (f) => addColor(dash, f),
         hint: "Drop a field — categorical = colour series, numeric = gradient",
         note: colorFields.length && colorMode(s) === "discrete" && !COLOR_USES.has(s.chartType)
-          ? "Discrete colour needs Bar/Line/Area/Stacked/Table — or drop a numeric field for a gradient." : null },
+          ? "A categorical Colour field splits Bar, Line, Area, Stacked, Scatter and Table — or drop a numeric field for a gradient." : null },
       { key: "size", icon: "size", label: "Size", count: m.size ? 1 : 0,
         pills: one(m.size, () => { m.size = null; commit(dash, s); }), onDrop: (f) => addSize(dash, f),
-        hint: "Drop a numeric field to size the marks (scatter bubbles)" },
+        hint: "Drop a numeric field to size the marks: scatter bubbles, bar thickness, line / area markers, treemap area" },
       { key: "label", icon: "label", label: "Label", count: m.label ? 1 : 0,
         pills: one(m.label, () => { m.label = null; commit(dash, s); }), onDrop: (f) => addMarkSingle(dash, "label", f),
         hint: "Drop a field to write its value on each mark" },

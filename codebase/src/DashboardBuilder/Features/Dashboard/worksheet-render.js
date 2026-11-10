@@ -108,7 +108,8 @@ function draw(container, rc, sheet, result, cmp) {
   if (issue) { container.append(hint(issue)); return; }
 
   // Shape: on the scatter family, split points by a Shape dimension into one symbol per value.
-  if (SCATTER_TYPES.has(type) && marksOf(sheet).shape) { renderScatterShapes(container, rc, sheet, result, seriesIdx, sizeIdx, format, fmtCat); return; }
+  // A Colour dimension (a group-by on these types) splits the points the same way.
+  if (SCATTER_TYPES.has(type) && (marksOf(sheet).shape || colorMode(sheet) === "discrete")) { renderScatterShapes(container, rc, sheet, result, seriesIdx, sizeIdx, colorMeasureIdx, format, fmtCat); return; }
 
   // Path: a line/area orders its vertices by the Path field's value (not the category order).
   const usePath = type === "line" || type === "area";
@@ -128,7 +129,7 @@ function draw(container, rc, sheet, result, cmp) {
 
   // Heatmap / treemap reuse this multi-dimension result but pivot it differently.
   if (type === "heatmap") { renderHeatmap(container, result, format, fmtCat); return; }
-  if (type === "treemap") { renderTreemap(container, result, format, fmtCat); return; }
+  if (type === "treemap") { renderTreemap(container, result, format, fmtCat, { sizeIdx, colourIdx: colorMeasureIdx }); return; }
   if (P36_TYPES.has(type)) { renderP36(container, rc, type, rowsOrdered, categories, series, seriesNames, format, fmtCat); return; }
 
   // KPI: explicit type, or a plain series chart with no dimensions (one value per measure).
