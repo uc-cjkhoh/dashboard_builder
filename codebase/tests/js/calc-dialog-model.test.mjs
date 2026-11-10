@@ -42,7 +42,7 @@ test("syntax error keeps position", () => {
 });
 
 test("plain resolver messages, no E15 prefix", () => {
-  const a = evaluateDraft({ name: "X", formula: "[amount]" }, ctx);
+  const a = evaluateDraft({ name: "X", formula: "[nothing]" }, ctx);
   assert.equal(a.message, "Write the field as [table.column].");
   const b = evaluateDraft({ name: "X", formula: "[orders.zip]" }, ctx);
   assert.equal(b.message, "orders.zip isn't in the model.");
@@ -129,4 +129,14 @@ test("suggest: capped, never offers names with . [ ]", () => {
   assert.equal(r.items.length, 12);
   const r2 = suggest("[x", 2, { calcs: many, catalog });
   assert.deepEqual(r2.items, []);
+});
+
+test("isDirty: an untouched dialog is clean; any edit to name or formula is dirty", async () => {
+  const { isDirty } = await import("../../src/DashboardBuilder/Features/Calc/calc-dialog-model.js");
+  assert.equal(isDirty({ name: "", formula: "" }, { name: "", formula: "" }), false);
+  assert.equal(isDirty({ name: "A", formula: "[orders.qty]" }, { name: "A", formula: "[orders.qty]" }), false);
+  assert.equal(isDirty({ name: "A", formula: "x\ny" }, { name: "A", formula: "x\r\ny" }), false); // CRLF from a textarea
+  assert.equal(isDirty({ name: "", formula: "" }, { name: "N", formula: "" }), true);
+  assert.equal(isDirty({ name: "A", formula: "1" }, { name: "A", formula: "12" }), true);
+  assert.equal(isDirty({ name: "A", formula: "1" }, { name: "A ", formula: "1" }), false); // trailing space in the name is not a change
 });

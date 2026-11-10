@@ -18,7 +18,7 @@
 //   text      := ("TEXT" | "STR" | "LOWER" | "UPPER" | "TRIM" | "LTRIM" | "RTRIM" | "LEN" | "LEFT" | "RIGHT" | "MID" | "FIND" | "REPLACE" | "CONCAT" | "CONTAINS" | "STARTSWITH" | "ENDSWITH" | "ICONTAINS" | "ISTARTSWITH" | "IENDSWITH" | "SPLIT")
 //                "(" expr ("," expr)* ")"        -- argument count and kinds are checked by check(), not here
 //   date      := ("DATEDIFF" | "DATEADD" | "YEAR" | "MONTH" | "DAY" | "QUARTER" | "WEEK" | "WEEKDAY" | "DATE" | "ISOYEAR" | "DATENAME" | "DATETRUNC" | "FISCALYEAR" | "FISCALQUARTER" | "MAKEDATE") "(" expr ("," expr)* ")"   -- same shape as text
-//   string    := "'" text "'"        (a quote inside is doubled: 'it''s')
+//   string    := "'" text "'" | '"' text '"'   (the same quote inside is doubled: 'it''s', "say ""hi""")
 //   ref       := "[" name "]"  |  "[@" parameter "]"      -- a workbook parameter (Calc/calc-params.js substitutes its value)
 //
 // Hand-written tokenizer + recursive descent. Function names are case-insensitive; references are matched
@@ -60,13 +60,13 @@ function tokenize(text) {
       const raw = ["!=", "<=", ">=", "<>"].includes(two) ? two : ch;
       if (raw === "!") throw new ParseError("Unexpected character !", i);
       tokens.push({ t: "op", text: raw === "<>" ? "!=" : raw, raw, pos: i }); i += raw.length;
-    } else if (ch === "'") {
+    } else if (ch === "'" || ch === '"') {
       let j = i + 1, value = "";
       for (;;) {
-        if (j >= text.length) throw new ParseError("Missing ' to close the text", i);
-        if (text[j] === "'") {
-          if (text[j + 1] !== "'") break;
-          value += "'"; j += 2;
+        if (j >= text.length) throw new ParseError(`Missing ${ch} to close the text`, i);
+        if (text[j] === ch) {
+          if (text[j + 1] !== ch) break;
+          value += ch; j += 2;
         } else { value += text[j]; j++; }
       }
       if (value.length > CALC_LIMITS.string) throw new ParseError(`A text value can be at most ${CALC_LIMITS.string} characters.`, i);

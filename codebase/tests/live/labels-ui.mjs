@@ -210,7 +210,7 @@ try {
     must(await ev(`document.querySelector('dialog.grp-dialog .dialog__foot button.btn--primary').disabled`), 'Save disabled with nothing grouped');
     await typeInto('.grp-group__name', 'Asia & Europe');
     await ev(`(() => { const sels = document.querySelectorAll('.grp-member__select'); for (const i of [0, 1]) { sels[i].value = sels[i].options[1].value; sels[i].dispatchEvent(new Event('change', { bubbles: true })); } return true; })()`);
-    must(/2 of 49 members grouped/.test(await stripText('.grp-status')), `status: ${await stripText('.grp-status')}`);
+    must(/2 of \d+ members grouped · 1 group · up to 49 allowed/.test(await stripText('.grp-status')), `status: ${await stripText('.grp-status')}`);
     must(!(await ev(`document.querySelector('dialog.grp-dialog .dialog__foot button.btn--primary').disabled`)), 'Save enabled');
     await b.sleep(500);
     await b.screenshot(join(SHOTS, 'group-dialog-light.png'));
@@ -313,10 +313,10 @@ try {
     await fieldMenu('qty', 'Group');
     await waitFor(`!!document.querySelector('dialog.grp-dialog[open]') && document.querySelectorAll('.grp-member').length === 4`, 'qty dialog with 4 members');
     must(await ev(`[...document.querySelectorAll('.grp-member')].map((m) => m.textContent.trim().split(/\\s+/)[0]).join('|').startsWith('1')`), 'members listed');
-    must(/2 of 39 members grouped|0 of 39 members grouped/.test(await stripText('.grp-status')), `status: ${await stripText('.grp-status')}`);
+    must(/[02] of \d+ members grouped · \d groups? · up to 39 allowed/.test(await stripText('.grp-status')), `status: ${await stripText('.grp-status')}`);
     await typeInto('.grp-group__name', 'Low');
     await ev(`(() => { const sels = document.querySelectorAll('.grp-member__select'); for (const i of [0, 1]) { sels[i].value = sels[i].options[1].value; sels[i].dispatchEvent(new Event('change', { bubbles: true })); } return true; })()`);
-    must(/2 of 39 members grouped/.test(await stripText('.grp-status')), `status: ${await stripText('.grp-status')}`);
+    must(/2 of \d+ members grouped · \d groups? · up to 39 allowed/.test(await stripText('.grp-status')), `status: ${await stripText('.grp-status')}`);
     await b.sleep(400);
     await b.screenshot(join(SHOTS, 'group-number-light.png'));
     await ev(`${dlgBtn('dialog.grp-dialog', 'Save')}.click()`);

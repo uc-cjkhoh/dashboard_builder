@@ -327,3 +327,10 @@ test("nullLabel: survives a workbook clean; a non-text one skips the calculation
   assert.equal(cleanGroupSpec({ ...spec([g("A", "a")]), nullLabel: "" }, "x", issues).nullLabel, undefined);
   assert.equal(cleanGroupSpec({ ...spec([g("A", "a")]), nullLabel: 3 }, "x", issues), null);
 });
+
+test("groupStatus: the footer names the listed members and the limit apart", async () => {
+  const { groupStatus } = await import("../../src/DashboardBuilder/Features/Calc/group-model.js");
+  assert.equal(groupStatus(0, 5, 49, 0), "0 of 5 members grouped · 0 groups · up to 49 allowed");
+  assert.equal(groupStatus(2, 5, 49, 1), "2 of 5 members grouped · 1 group · up to 49 allowed");
+  assert.equal(groupStatus(50, 60, 49, 3), "50 of 60 members grouped · 3 groups · up to 49 allowed — over the limit");
+});

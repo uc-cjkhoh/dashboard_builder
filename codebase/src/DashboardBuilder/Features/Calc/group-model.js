@@ -30,6 +30,9 @@ export const MAX_GROUP_MEMBERS = Math.floor((CALC_LIMITS.nodes - 2) / 4);
 /** The most members this spec can hold: one fewer with a remainder label (its WHEN costs a member's worth of nodes); 39 (38) for a number or true/false field. */
 export const maxMembersFor = (spec) => { if (kindOf(spec) === "boolean") return 2; const c = nodeCosts(spec); return Math.floor((CALC_LIMITS.nodes - c.base - (otherLabel(spec) ? c.other : 0) - (nullLabelOf(spec) ? NULL_COST : 0)) / c.member); };
 
+/** The group dialog's footer: `listed` members shown, `used` of them grouped, `max` the most a field can group (a limit, not a count). */
+export const groupStatus = (used, listed, max, groups) => `${used} of ${listed} members grouped · ${groups} group${groups === 1 ? "" : "s"} · up to ${max} allowed${used > max ? " — over the limit" : ""}`;
+
 export const GROUP_CATEGORY_REFUSAL = "Groups work on text, whole-number and true/false fields. Date fields can't be grouped yet.";
 export const GROUP_FLOAT_REFUSAL = "Groups work on whole-number fields, not decimal or floating-point ones (their text form can differ between the list and the database).";
 export const GROUP_TYPE_REFUSAL = "Groups work on text columns, not UUID, IP address or enum columns.";

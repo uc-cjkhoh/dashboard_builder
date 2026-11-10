@@ -27,6 +27,7 @@ test("resolve parts", () => {
   assert.deepEqual(resolve(["Net"]), { calc: { name: "Net" } });
   assert.equal(resolve(["orders"]), null);
   assert.equal(parseFormula("[orders]", resolve).error.message, "Write the field as [table.column].");
+  assert.equal(parseFormula("[nothing]", resolve).error.message, "Write the field as [table.column].");
   assert.deepEqual(resolve(["items", "price"]), { error: "items.price is in more than one database — write [db.table.column]." });
   assert.deepEqual(resolve(["orders", "qty2"]), { error: "orders.qty2 isn't in the model." });
   assert.deepEqual(resolve(["orders", "tags"]), { error: "orders.tags can't be used in a calculation." });
@@ -143,4 +144,33 @@ test("text functions: a calculation reference inside a call is expanded before s
 test("text functions: a type error names the calculation and the argument", () => {
   const r = compileCalculation({ id: "x", name: "X", formula: "LOWER([orders.amount])" }, [], catalog);
   assert.equal(r.error.message, "Calculation 'X' can't be computed: LOWER needs a text — orders.amount is number.");
+});
+
+test("a bare [column] resolves when exactly one model column has that name", () => {
+  assert.deepEqual(resolve(["qty"]), { field: { db: "shop", table: "orders", column: "qty" } });
+  assert.deepEqual(parseFormula("[qty] * 2", resolve).ast.l, { k: "field", db: "shop", table: "orders", column: "qty" });
+});
+
+test("a bare [column] in several tables names the candidates", () => {
+  const r = makeResolve(catalogFromEntities([...entities, { id: "e4", db: "shop", table: "returns", columns: [col("qty", "numeric")] }]), new Set());
+  assert.deepEqual(r(["qty"]), { error: "qty is in shop.orders and shop.returns — write [orders.qty] or [returns.qty]." });
+  const same = makeResolve(catalog, new Set());
+  assert.match(same(["price"]).error, /^price is in shop\.items and archive\.items — write \[shop\.items\.price\] or \[archive\.items\.price\]\.$/);
+});
+
+test("a calculation name wins over a bare column of the same name", () => {
+  const r = makeResolve(catalog, new Set(["qty"]));
+  assert.deepEqual(r(["qty"]), { calc: { name: "qty" } });
+});
+
+test("a bare column that can't be used in a calculation says so", () => {
+  assert.deepEqual(resolve(["tags"]), { error: "orders.tags can't be used in a calculation." });
+});
+
+test("wrong argument count shows the signature", () => {
+  const c = calc("c9", "F", "FISCALYEAR([orders.status])");
+  const e = compileCalculation(c, [c], catalog).error.message;
+  assert.equal(e, "Calculation 'F' can't be computed: FISCALYEAR takes 2 arguments: FISCALYEAR(start month, date).");
+  const t = calc("c8", "T", "TEXT([orders.qty], [orders.qty])");
+  assert.match(compileCalculation(t, [t], catalog).error.message, /TEXT \(or STR\) takes 1 argument: TEXT\(value\)/);
 });

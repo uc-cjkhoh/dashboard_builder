@@ -37,6 +37,12 @@ export function evaluateDraft(draft, ctx) {
   return { ok: true, info: r.info, role: r.role, ast: r.ast };
 }
 
+/** True when the draft differs from what the dialog opened with (name trimmed, line endings ignored). */
+export function isDirty(initial, now) {
+  const norm = (d) => `${String(d?.name ?? "").trim()}\u0000${String(d?.formula ?? "").replace(/\r\n?/g, "\n")}`;
+  return norm(initial) !== norm(now);
+}
+
 const TYPE_WORD = { number: "number", text: "text", date: "date", boolean: "boolean" };
 
 /** The role chip: `{ icon, text }`. `icon` is a Core/icons.js name; the text always carries the meaning. */
@@ -87,7 +93,7 @@ export function suggest(formula, caret, ctx) {
 function functionSuggest(formula, before, to) {
   const next = formula.charAt(to);
   if (/[A-Za-z0-9_]/.test(next)) return null; // the caret is inside a word: LO|WER
-  if ((before.match(/'/g) ?? []).length % 2 === 1) return null;
+  if ((before.match(/'/g) ?? []).length % 2 === 1 || (before.match(/"/g) ?? []).length % 2 === 1) return null;
   const m = /(?<![A-Za-z0-9_.])[A-Za-z_][A-Za-z0-9_]*$/.exec(before);
   if (!m) return null;
   const items = functionItems(m[0], SUGGEST_MAX);

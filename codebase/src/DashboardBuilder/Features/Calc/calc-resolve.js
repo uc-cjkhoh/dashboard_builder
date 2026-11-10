@@ -6,6 +6,7 @@ import { check } from "./calc-types.js";
 import { substituteParams, missingParam } from "./calc-params.js";
 import { expandCalcs, roleOfCalc } from "./calc-model.js";
 import { groupTree } from "./group-model.js";
+import { FUNCTION_HELP } from "./function-help.js";
 
 const USABLE = new Set(["numeric", "text", "temporal", "boolean"]);
 const offered = (s) => typeof s === "string" && s !== "" && !/[.[\]]/.test(s);
@@ -34,7 +35,24 @@ export function makeResolve(catalog, calcNames, params = []) {
   const paramNames = new Set((params ?? []).map((p) => p.name));
   return (parts, kind) => {
     if (kind === "param") return paramNames.has(parts[0]) ? { param: { name: parts[0] } } : { error: missingParam(parts[0]) };
-    if (parts.length === 1) return calcNames.has(parts[0]) ? { calc: { name: parts[0] } } : null;
+    if (parts.length === 1) {
+      if (calcNames.has(parts[0])) return { calc: { name: parts[0] } };
+      // A bare [column] works when exactly one model column has that name.
+      const hits = catalog.fields.filter((f) => f.column === parts[0]);
+      if (hits.length === 0) return null;
+      if (hits.length > 1) {
+        const full = (f) => `${f.db}.${f.table}`;
+        const dbOf = (f) => hits.filter((h) => h.table === f.table).length > 1;
+        const write = hits.map((f) => `[${dbOf(f) ? `${full(f)}.` : `${f.table}.`}${f.column}]`);
+        const names = hits.map(full);
+        const list = (xs) => xs.length === 2 ? `${xs[0]} and ${xs[1]}` : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`;
+        const wlist = write.length === 2 ? `${write[0]} or ${write[1]}` : `${write.slice(0, -1).join(", ")} or ${write[write.length - 1]}`;
+        return { error: `${parts[0]} is in ${list(names)} — write ${wlist}.` };
+      }
+      const f = hits[0];
+      if (!USABLE.has(f.category)) return { error: `${f.table}.${f.column} can't be used in a calculation.` };
+      return { field: { db: f.db, table: f.table, column: f.column } };
+    }
     let db, table, column;
     if (parts.length === 2) {
       [table, column] = parts;
@@ -71,6 +89,12 @@ export function compileCalculation(calc, calcs, catalog, params = []) {
     if (r && r.error) resolverError = true;
     return r;
   };
+  // "FISCALYEAR takes 2 arguments." -> "... arguments: FISCALYEAR(start month, date)."
+  const withSignature = (message) => {
+    const m = /^(\w+)( \(or \w+\))? takes (.*?)\.$/.exec(message);
+    const h = m && FUNCTION_HELP.find((x) => x.name === m[1]);
+    return h ? `${m[1]}${m[2] ?? ""} takes ${m[3]}: ${h.signature}.` : message;
+  };
   const prefix = (message) => `Calculation '${calc.name}' can't be computed: ${message}`;
   const parse = (c) => {
     resolverError = false;
@@ -102,7 +126,7 @@ export function compileCalculation(calc, calcs, catalog, params = []) {
   const sub = substituteParams(ex.ast, params); // parameters become literals here, so check(), the cache key and the wire see only values
   if (sub.error) return { error: { message: prefix(sub.error.message) } };
   const info = check(sub.ast, catalog.categoryOf);
-  if (info.error) return { error: { message: prefix(info.error.message) } };
+  if (info.error) return { error: { message: prefix(withSignature(info.error.message)) } };
   return { ast: sub.ast, info, role: roleOfCalc(info) };
 }
 

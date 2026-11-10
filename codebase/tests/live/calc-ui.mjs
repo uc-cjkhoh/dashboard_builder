@@ -141,6 +141,8 @@ try {
     const msg2 = await ev(`${dlg}.querySelector('[id^=calc-fmsg]').textContent.trim()`);
     must(msg2.length > 0 && await saveDisabled(), `unknown field not refused (${msg2})`);
     await ev(`[...${dlg}.querySelectorAll('.dialog__foot button')].find((x) => x.textContent === 'Cancel').click()`);
+    await waitFor(`!!(${confirmOpen})`, 'discard confirm');
+    await ev(`[...(${confirmOpen}).querySelectorAll('button')].find((x) => x.textContent === 'Discard').click()`);
     await waitFor(`${dlg} === null`, 'dialog closed');
   });
 
@@ -215,9 +217,7 @@ try {
       await ev(`[...document.querySelectorAll('.ws-charttypes .menu__item')].find((x) => x.textContent.trim() === ${J(label)}).click()`);
     };
     await pickType('Histogram');
-    await waitFor(`/Histogram and box plot don't use calculated fields yet/.test(document.getElementById('ws-chart').textContent)`, 'histogram hint');
-    await pickType('Box plot');
-    await waitFor(`/Histogram and box plot don't use calculated fields yet/.test(document.getElementById('ws-chart').textContent)`, 'box plot hint');
+    await waitFor(`/A histogram doesn't use calculated fields yet/.test(document.getElementById('ws-chart').textContent)`, 'histogram hint');
     await settle(500);
     must(queries.length === 0, `${queries.length} /api/query call(s) sent`);
     await pickType('Bar');
@@ -240,9 +240,54 @@ try {
     const val = await ev(`${dlg}.querySelector('textarea.formula').value`);
     must(val === `[${second}]`, `inserted ${J(val)}, expected [${second}]`);
     must(await ev(`${dlg}.querySelector('ul.suggest').hidden`), 'listbox still open');
-    await b.key('Escape', { vk: 27 }); // closes the dialog (list already closed)
-    await ev(`${dlg} && (${dlg}.dispatchEvent(new Event('cancel', { cancelable: true })), true)`);
+    // Esc with the list closed and an edited draft asks first: Cancel keeps the draft, Discard closes.
+    await ev(`${dlg}.dispatchEvent(new Event('cancel', { cancelable: true }))`);
+    await waitFor(`!!(${confirmOpen})`, 'discard confirm');
+    await ev(`[...(${confirmOpen}).querySelectorAll('button')].find((x) => x.textContent === 'Cancel').click()`);
+    await waitFor(`!(${confirmOpen})`, 'confirm closed');
+    must(await ev(`${dlg}.querySelector('textarea.formula').value`) === val, 'draft lost after keeping it');
+    await ev(`${dlg}.dispatchEvent(new Event('cancel', { cancelable: true }))`);
+    await waitFor(`!!(${confirmOpen})`, 'discard confirm again');
+    await ev(`[...(${confirmOpen}).querySelectorAll('button')].find((x) => x.textContent === 'Discard').click()`);
     await waitFor(`${dlg} === null`, 'dialog closes');
+    // an untouched dialog closes at once
+    await openNewDialog();
+    await ev(`${dlg}.dispatchEvent(new Event('cancel', { cancelable: true }))`);
+    await waitFor(`${dlg} === null`, 'untouched dialog closes at once');
+    must(!(await ev(`!!(${confirmOpen})`)), 'confirm opened for an untouched dialog');
+  });
+
+  await check('k2: bare [qty], double-quoted text, and the argument-count signature', async () => {
+    await openNewDialog();
+    await fillDialog('Bare', 'SUM([qty])');
+    must(!(await saveDisabled()), `bare [qty] refused: ${await ev(`${dlg}.querySelector('[id^=calc-fmsg]').textContent`)}`);
+    await focusAndType('.calc-dialog textarea.formula', 'IF [orders.amount] > 1 THEN "Big" ELSE "Small" END');
+    await ev(`document.querySelector('.calc-dialog textarea.formula').blur()`);
+    must(!(await saveDisabled()), `double quotes refused: ${await ev(`${dlg}.querySelector('[id^=calc-fmsg]').textContent`)}`);
+    await focusAndType('.calc-dialog textarea.formula', 'FISCALYEAR([orders.placed])');
+    await ev(`document.querySelector('.calc-dialog textarea.formula').blur()`);
+    const msg = await ev(`${dlg}.querySelector('[id^=calc-fmsg]').textContent`);
+    must(/FISCALYEAR takes 2 arguments: FISCALYEAR\(start month, date\)/.test(msg), `message: ${msg}`);
+    await ev(`${dlg}.dispatchEvent(new Event('cancel', { cancelable: true }))`);
+    await waitFor(`!!(${confirmOpen})`, 'discard confirm');
+    await ev(`[...(${confirmOpen}).querySelectorAll('button')].find((x) => x.textContent === 'Discard').click()`);
+    await waitFor(`${dlg} === null`, 'dialog closes');
+  });
+
+  await check('k3: the field-pane search finds a calculated field under Calculated; the pane link opens the dialog', async () => {
+    const hitsFor = async (q) => {
+      await ev(`(() => { const i = document.querySelector('.ws-fieldtools__search'); i.value = ${J(q)}; i.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
+      return ev(`[...document.querySelectorAll('.ws-fieldset--calc .ws-field:not([hidden]) .ws-field__name')].map((x) => x.textContent)`);
+    };
+    await hitsFor('');
+    must(await ev(`document.querySelector('.ws-fieldset--calc').hidden`), 'Calculated group visible with no search');
+    const hits = await hitsFor('unit');
+    must(hits.length === 1 && hits[0] === 'Unit price', `hits: ${J(hits)}`);
+    must(await ev(`!document.querySelector('.ws-fieldset--calc').hidden && /Aggregate/.test(document.querySelector('.ws-fieldset--calc').textContent)`), 'no role chip in the Calculated group');
+    await hitsFor('');
+    await ev(`[...document.querySelectorAll('.ws-fieldtools button')].find((x) => x.textContent.trim().startsWith('Calculated fields (')).click()`);
+    await waitFor(`!!document.querySelector('dialog.calc-manager[open]')`, 'manager opens from the pane link');
+    await ev(`document.querySelector('dialog.calc-manager[open]').dispatchEvent(new Event('cancel', { cancelable: true }))`);
   });
 
   // (c) rename + dependent calculation
@@ -403,6 +448,8 @@ try {
       const p2 = join(SHOTS, `calc-dialog-${scheme}.png`);
       await b.screenshot(p2); shots.push(p2);
       await ev(`${dlg}.dispatchEvent(new Event('cancel', { cancelable: true }))`);
+      await waitFor(`!!(${confirmOpen})`, 'discard confirm');
+      await ev(`[...(${confirmOpen}).querySelectorAll('button')].find((x) => x.textContent === 'Discard').click()`);
       await waitFor(`${dlg} === null`, 'dialog closed');
     });
   }

@@ -3,9 +3,9 @@
 import { calculations, entities, parameters, addCalculation, updateCalculation } from "../Core/store.js";
 import { icon } from "../Core/icons.js";
 import { LIMITS } from "../Core/validate.js";
-import { makeButton, openDialog, closeDialog, toast } from "../Core/ui.js";
+import { makeButton, openDialog, closeDialog, toast, confirmDialog } from "../Core/ui.js";
 import { catalogFromEntities } from "./calc-resolve.js";
-import { evaluateDraft, chipFor, suggest } from "./calc-dialog-model.js";
+import { evaluateDraft, chipFor, suggest, isDirty } from "./calc-dialog-model.js";
 import { searchHelp, groupHelp } from "./function-help.js";
 import { normaliseFormula, showUseAs, useAsRole, roleChoice, setRoleChoice, paneState } from "./calc-pane-model.js";
 
@@ -242,8 +242,19 @@ export function openCalcDialog(calcId = null) {
   renderList(); show(null);
 
   const finish = () => closeDialog(dlg);
-  cancel.addEventListener("click", finish);
-  dlg.addEventListener("cancel", (e) => { e.preventDefault(); finish(); }); // Esc discards
+  // Cancel / Esc: an untouched dialog closes at once; an edited one asks before throwing the draft away.
+  const initial = { name: existing?.name ?? "", formula: existing?.formula ?? "" };
+  let asking = false;
+  const requestClose = async () => {
+    if (asking) return;
+    if (!isDirty(initial, { name: name.value, formula: ta.value })) { finish(); return; }
+    asking = true;
+    const discard = await confirmDialog("Discard your changes to this calculated field?", { danger: true, confirmText: "Discard" });
+    asking = false;
+    if (discard) finish(); else ta.focus();
+  };
+  cancel.addEventListener("click", requestClose);
+  dlg.addEventListener("cancel", (e) => { e.preventDefault(); requestClose(); });
   save.addEventListener("click", () => {
     nameTouched = true; refresh();
     const r = current;

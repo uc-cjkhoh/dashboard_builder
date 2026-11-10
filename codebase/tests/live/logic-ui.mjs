@@ -133,6 +133,8 @@ try {
   const chipOf = () => ev(`(${dlg}.querySelector('.calc-chip, .calc-dialog__chip, [class*=chip]')?.textContent ?? '').trim()`);
   const cancel = async () => {
     await ev(`[...${dlg}.querySelectorAll('.dialog__foot button')].find((x) => x.textContent === 'Cancel').click()`);
+    await waitFor(`!!(${confirmOpen})`, 'discard confirm');
+    await ev(`[...(${confirmOpen}).querySelectorAll('button')].find((x) => x.textContent === 'Discard').click()`);
     await waitFor(`${dlg} === null`, 'dialog closed');
   };
 

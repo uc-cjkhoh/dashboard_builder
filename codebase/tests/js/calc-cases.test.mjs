@@ -234,3 +234,11 @@ test("IF ( decides its form by a comma at depth 1, not by retrying", () => {
   assert.equal(parseFormula("IF([orders.qty] > 1, 1, 0)", resolve).ast.k, "case");
   assert.equal(parseFormula("IF ([orders.qty] > 1", resolve).error.message, "Expected ,");
 });
+
+test("double-quoted text is a text literal, with the same escaping as single quotes", () => {
+  assert.deepEqual(parseFormula('"Big"', resolve).ast, { k: "str", v: "Big" });
+  assert.deepEqual(parseFormula('"it\'s"', resolve).ast, { k: "str", v: "it's" });
+  assert.deepEqual(parseFormula('"say ""hi"""', resolve).ast, { k: "str", v: 'say "hi"' });
+  assert.deepEqual(parseFormula("'a\"b'", resolve).ast, { k: "str", v: 'a"b' });
+  assert.match(parseFormula('"open', resolve).error.message, /Missing " to close the text/);
+});
