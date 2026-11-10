@@ -16,7 +16,7 @@ open question, promote it to a decision.
 | D61–D64, D69, D71–D72, D74, D79–D81, D85–D86, D92 (dashboards, hierarchies, option controls, desktop-only, compound join keys, Gantt, stories, diverging hue pair) | [decisions-dashboards.md](decisions-dashboards.md) |
 | D70 (recent connection sources), D89 (start screen: recent workbooks) | [decisions-connection.md](decisions-connection.md) |
 | D82 (calculated fields as row filters), D84, D87 (a filter on an aggregated measure, `HAVING`; its range slider), D91 (a calculated filter on a single-table read) | [decisions-filters.md](decisions-filters.md) |
-| D83 (groups on whole-number and true/false fields) | [decisions-calculated-fields.md](decisions-calculated-fields.md) |
+| D83 (groups on whole-number and true/false fields), D94 (a NULL label on a group field) | [decisions-calculated-fields.md](decisions-calculated-fields.md) |
 | D75–D77 (`NULL`, `IN` / `BETWEEN`, keyword `IF`), D78 (`MAKEDATE`, `DATENAME`), D93 (`FISCALYEAR`, `FISCALQUARTER`) | [decisions-logic.md](decisions-logic.md) |
 
 ## Open questions
