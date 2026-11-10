@@ -27,13 +27,13 @@ An invalid field mapping shows a friendly **hint**, never an error (e.g. "A poin
 | Bar | ≥1 measure | grouped at ≥2 measures |
 | Stacked bar | ≥1 measure | |
 | Line / Area | ≥1 measure | Path can reorder vertices |
-| Pie / Donut | 1 dimension + 1 measure | legend-labelled slices; measure → angle |
-| Scatter | 2 measures (X, Y) | Size, continuous Colour and Shape apply |
+| Pie / Donut | 1 dimension + 1 measure | legend-labelled slices; measure → angle. Up to 6 slices also show their percent on the slice; Data labels shows "name: value" instead |
+| Scatter | 2 measures (X, Y) | Size, continuous Colour and Shape apply. Both axes fit the data (they do not start at 0) |
 | Combo (dual-axis) | 2 measures | The 1st measure as bars; the rest on a right axis as a line (Format → **Right-axis marks**: Line, Bars or Area). Always vertical. Format → **Synchronise axes** shares one range |
-| Square / Circle | as scatter | scatter builder with a symbol override |
+| Square / Circle | as scatter | scatter builder with a symbol override (same fitted axes) |
 | Heatmap | 2 dimensions + 1 measure | Single-hue token colour scale. Format → **Shape**: **Squares** (cells) or **Circles**. Circles are scatter marks on the same category grid: 80 % of the smaller cell side, 6–48 px, re-sized with the pane. Cells without a value draw no circle. Circles are coloured by the same value legend; labels, tooltip and Reverse palette behave as for squares; the cell banding is dropped |
 | Treemap | 1–2 dimensions + 1 measure | nested rectangles sized by the measure |
-| Histogram | 1 numeric field | equal-width bins; own endpoint |
+| Histogram | 1 numeric field | equal-width bins; own endpoint. A whole-number column (Int / UInt) bins on whole-number widths and the axis reads "3" or "3–4" (never "1–1.4"); the response carries `whole` |
 | Box plot | 1 numeric field, a column or a row-level calculation (+ optional group dimension, from any related table) | Q1 / median / Q3, whiskers at the 1.5 IQR (interquartile range) fences, outlier points beyond them (hollow rings, ≤ 500); `POST /api/boxplot` |
 | Waterfall | ≥1 dimension + 1 measure | Each value is a change from the running total, then a **Total** bar. Increases `--chart-cat-1`, decreases `--chart-cat-6`, total muted — legend-named, and each step labelled with its sign. May run below zero (drawn as a custom series) |
 | Funnel | 1 dimension + 1 measure | Stages widest first, each labelled with value and % of the first. Label ink picked per stage |
@@ -42,7 +42,7 @@ An invalid field mapping shows a friendly **hint**, never an error (e.g. "A poin
 | Gantt | 1 dimension + 2 measures (start, length) | One horizontal bar per member, first on top, from the first measure (start) to start + the second (length). A date start (a date field used as a measure with Minimum / Maximum) draws a time axis and the length counts days; a number start draws a value axis. The length is written at each bar's end and the tooltip shows start → end and the length, so colour carries nothing. The date axis shows the time too when the bars carry one and span under three days; whole days are calendar days (a daylight-saving change keeps the clock time). The right margin grows to fit the widest length label, and the one-item legend is not a toggle. Rows without a valid start, with a negative length, or whose end is not a finite date or number are skipped and counted in the notice; a zero length is a thin bar. Not a click-to-filter target ([D80](../../decisions/decisions-dashboards.md)) |
 | Sankey (flow) | 2 dimensions + 1 measure | Flows from the first dimension's members to the second's. Non-positive flows are skipped. A member on both sides stays two nodes |
 | Small multiples | 2 dimensions + ≥1 measure | A mini line chart per member of the **first** dimension (at most 24 panels, with a notice), the second along each x axis, one shared y scale |
-| KPI | measures | big number per measure; with a dimension, an inline SVG **sparkline** of the trend |
+| KPI | measures | big number per measure; with a dimension, an inline SVG **sparkline** of the trend, and the number is the **last member's**, not a total: the note under it names it ("SUM QUANTITY", then "Vietnam · last of 6") |
 | Text | — | renders the crosstab text grid |
 | Table | — | the crosstab ([worksheet-table-view.md](worksheet-table-view.md#table-view--a-true-rows--columns-crosstab)) |
 
@@ -107,6 +107,7 @@ On Bar / Line / Area the card opens with a row of **items**: Reference line, Ban
   - A σ / percentile band's label says "(shown rows)".
 - **Which measure (line and band).** They read the measure chosen in **of**: any measure on the shelf, shown when there are two or more. A non-default choice is named in the label ("Average (sum discount): 35"). They read the rows shown, with the "Other" remainder left out.
 - **Trend** — Linear, Logarithmic (`a + b·ln(x+1)`), Exponential (`a·e^(b·x)`), Power (`a·(x+1)^b`) or Polynomial (2nd order), on one measure in category order (the first, or the one chosen under **trend of** when two or more measures are shown; the choice also moves the forecast); x is the category's position (the first is 0). Exponential and power are fitted as a straight line through ln y, and their R² is measured on the original values. Drawn dotted and named at its end with R² and sample size ("Trend · R² 0.86 · n = 9"); the series name, with the formula ("y = 15.2·e^(0.251·x)", minus written "−", a negative exponent in parentheses), is in the tooltip. R² is measured on the original values, the scale the chart shows. If the fit would give a non-finite point the line is dropped; when a forecast was asked for, the info line says it is not drawn either. Exponential and power need every value above zero: otherwise no line is drawn and an info line says so (blanks are skipped, never counted as zero). On truncated data the existing "Analytics use only the rows shown" info line applies.
+- The trend label puts R² in words, keeping the number: "poor fit (R² -0.12)" (below 0.1 poor, 0.4 weak, 0.7 moderate, else good; `fitWords`). Reference-line and band labels sit on a surface backing above their line.
 - **Forecast** (Line / Area) — 3, 6 or 12 steps that extend the trend (linear if none is picked) into "Forecast +1 …" categories.
 
 ### Table / Text
@@ -185,7 +186,7 @@ On Bar / Line / Area the card opens with a row of **items**: Reference line, Ban
 - **Every category is shown and labelled — the pane scrolls instead of squeezing.**
   - `chartFit` (`Dashboard/chart-fit.js`, pure) gives each category a slot: 28px along a bottom axis (wider for grouped bars: 12px per bar), 24px down a left axis. It sets the host's `--chart-min-w` / `--chart-min-h`.
   - A chart with more categories than fit (e.g. 50 customers on a narrow pane) keeps that size and `#ws-chart` scrolls: sideways for vertical bars / lines / area / combo / histogram / boxplot, down for horizontal bars, both for a heatmap.
-  - Category axes label every category (`interval: 0`, no `hideOverlap`). Bottom labels turn upright when they can't sit side by side (re-checked on resize). Bottom labels truncate at 160px, left labels at 200px; the tooltip carries the full name.
+  - Category axes label every category (`interval: 0`, no `hideOverlap`). Bottom labels turn upright when they can't sit side by side (re-checked on resize). Bottom labels truncate at 160px (an upright one at about 40 % of a short pane, 48px at least — `rotatedLabelCap`, so a small dashboard widget shows "Philip…" instead of clipping), left labels at 200px; the tooltip carries the full name.
   - Pie, donut, treemap and scatter have no category axis and always fit the pane.
 - **Fit** (P23, `format.fit`) — `applyFitMode` drops the minimum width / height (and the zoom) on the fitted axis. Its labels then thin out (`hideOverlap`) instead of forcing a slot each.
 - **Big charts.**

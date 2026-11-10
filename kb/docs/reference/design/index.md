@@ -10,7 +10,7 @@ change, then the topic file from the [map](#map). **Source of truth:** `Features
 
 ## Concept
 
-> **Flat 2.0 + glass · charcoal neutrals + Signal (near-black in light, neon lime in dark) · light and dark · calm.**
+> **Flat 2.0 + glass · charcoal neutrals + Signal (near-black in light, calm sage-lime in dark) · light and dark · calm.**
 > Glass only on chrome that has nothing but the background wash beneath it (sidebar, tab bar, worksheet
 > header) · everything that floats over content — menus, popovers, toasts, dialogs — is solid · one
 > violet accent · danger is a separate vermilion that always carries an icon and words · a fixed

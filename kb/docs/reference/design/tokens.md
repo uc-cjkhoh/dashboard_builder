@@ -132,7 +132,7 @@ wash tint, in both themes.
 
 | Token | Light | Dark | Role |
 |---|---|---|---|
-| `--accent` / `-hover` / `-pressed` | `#1a1c1f` / `#2e3135` / `#0c0d0f` | `#c3df5a` / `#b3cf4a` / `#a2bd3e` | primary fill (`--on-accent` ≥ 4.5:1 in every state: white in light, `#12130f` on the dark lime); active tab underline, selected relationship, single chart series |
+| `--accent` / `-hover` / `-pressed` | `#1a1c1f` / `#2e3135` / `#0c0d0f` | `#a9bd6a` / `#9aad5c` / `#8a9c50` | primary fill (`--on-accent` ≥ 4.5:1 in every state: white in light, `#12130f` on the dark sage-lime, S ≈ 38 %); active tab underline, selected relationship, single chart series |
 | `--accent-ink` | `#1f57ae` | `#9cbced` | accent **text** |
 | `--accent-soft` / `--accent-line` | `#eef3fc` / `#c4d6f4` | `#172238` / `#2a4470` | tint / stroke |
 | `--focus` | `--ink` | `--ink` | neutral focus colour (kept for outlines a feature may still draw by hand; `:focus-visible` outlines are forced off) |
@@ -206,7 +206,7 @@ mark wears the series colour.**
 | `--chart-muted` | `--ink-3` | tick labels |
 | `--chart-div-low` / `--chart-div-high` | light `#d98a4a` / `#2b62b8`; dark `#e2b48c` / `#5a8ad6`; One Dark Pro `#e0b084` / `#5c9ddb` | diverging colour: warm below the centre, cool above (theme-stable; HSL S ≤ 70 %; the warm end is lighter than the cool end, so the pair also differs in lightness: simulated CIE L* gap light 27 / 15, dark 23 / 14 for deuteranopia / protanopia; One Dark Pro is the weakest at 17 / 8) |
 | `--chart-div-amber` / `-violet` / `-green` | light `#b8803a` / `#6b52c9` / `#3f8f5a`; dark `#e0b060` / `#9b86e6` / `#6fc486`; One Dark Pro `#e5c07b` / `#c678dd` / `#98c379`; the hue pairs of Format → Diverging colours (never red) |
-| `--chart-cat-1..8` | light `#72872a` `#d9605a` `#d9a03a` `#7c63d6` `#2f9ea8` `#3f7fd0` `#4aa66a` `#6a6d72`; dark `#c3df5a` `#e0827c` `#deb062` `#9b86e6` `#5cc0c8` `#7aa3dc` `#6fc486` `#8e9094` | categorical ramp, fixed order |
+| `--chart-cat-1..8` | light `#72872a` `#b8559c` `#d9a03a` `#7c63d6` `#2f9ea8` `#3f7fd0` `#4aa66a` `#6a6d72`; dark `#a9bd6a` `#d98ac2` `#deb062` `#9b86e6` `#5cc0c8` `#7aa3dc` `#6fc486` `#8e9094` | categorical ramp, fixed order; no red slot — red means danger only ([D97](../../decisions/decisions-dashboards.md#d97--no-red-in-the-categorical-palette-and-a-calm-dark-accent)) |
 
 - **One series** wears the accent. **≥2 series** (multiple measures, or a Colour split) draw
   `--chart-cat-*` in order, with a legend. Beyond 8 values the ramp repeats; the legend disambiguates.

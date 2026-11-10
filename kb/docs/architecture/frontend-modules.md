@@ -120,7 +120,7 @@ Grouped by feature folder; each entry is the module, then what it owns.
 - `Dashboard/date-axis.js` — pure:
   - `axisLabelPlan` (which category labels a bottom / left axis draws — evenly spread, first and last kept, none touching, upright when tight), `shortDateLabels`, `parseDateLabel` — [worksheet-charts.md](../concepts/worksheet/worksheet-charts.md#rendering--the-echarts-adapter)
 - `Dashboard/chart-fit.js` — pure:
-  - `chartFit(spec, width, height)` — the room a chart's category axes need (min width/height, label rotation, zoom window), `markCount` (canvas vs SVG) — [worksheet-charts.md](../concepts/worksheet/worksheet-charts.md#rendering--the-echarts-adapter)
+  - `chartFit(spec, width, height)` — the room a chart's category axes need (min width/height, label rotation, zoom window), `markCount` (canvas vs SVG), `rotatedLabelCap`; `chart-polish.js` — `fitWords`, `kpiLastNote`, `histogramLabel` — [worksheet-charts.md](../concepts/worksheet/worksheet-charts.md#rendering--the-echarts-adapter)
 - `Dashboard/viewbar-model.js` — pure: `CHART_TYPES`, `chartIcon` / `chartLabel` (the chart-type picker), `sortSummary` (what the sort picker shows)
 - `Dashboard/query-runner.js` — pure: latest-wins gate, per-worksheet result cache, truncation notice — [worksheet-query.md](../concepts/worksheet/worksheet-query.md#query-lifecycle)
 

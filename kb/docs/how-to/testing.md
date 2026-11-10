@@ -59,6 +59,7 @@ In the table below, `P##` tags (P28, P33 …) name the product phase whose cases
 | `tests/js/gantt-model.test.mjs` | Gantt bars (number / date start, skipped rows, calendar-day lengths across a DST change), axis time, label margin, registration |
 | `tests/js/conditional-model.test.mjs` | scale tints (sequential / diverging, midpoint), **every tint ≥ 4.5:1 light and dark**, data bars from zero, first-match rules |
 | `tests/js/scale-model.test.mjs` | table paging plan + progress, Other row, date-grouping plan, zoom past 1,000 categories, canvas mark counts |
+| `tests/js/chart-polish.test.mjs` | R² in words, the KPI last-member note, whole-number histogram labels |
 | `tests/js/chart-fit.test.mjs` | per-category slots (grouped, horizontal, heatmap), label rotation by pane width, no minimum for pie/scatter/treemap |
 | `tests/js/relation-rules.test.mjs`, `table-filter.test.mjs`, `empty-state.test.mjs`, `icons.test.mjs`, `contrast.test.mjs`, `format.test.mjs` | the other pure modules |
 | `tests/js/tokens.test.mjs` | no retired token, no hex outside `:root`, dark block redefines the surfaces, no stylesheet reads `prefers-color-scheme`, glass fallbacks cover dark |
