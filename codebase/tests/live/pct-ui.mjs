@@ -150,7 +150,7 @@ try {
     const opts = await pillAggs();
     const pct = opts.find(([v]) => v === 'percentile');
     must(pct && pct[1] === 'Percentile…', `menu: ${J(opts)}`);
-    must(opts.filter(([v, t]) => v !== 'percentile' && t !== v).length === 0, `renamed options: ${J(opts)}`);
+    must(opts.filter(([v, t]) => v !== 'percentile' && t !== (AGGL[v] ?? v)).length === 0, `renamed options: ${J(opts)}`);
     must(!(await ev(`!!document.querySelector('.ctx-menu .ws-pill__pctin')`)), 'percent box shown before choosing it');
   });
   await check('choosing Percentile… shows a labelled percent box at 90, and the request carries agg percentile with p 0.9', async () => {
@@ -199,7 +199,7 @@ try {
   await check('percentile is not in the field default-aggregation menu', async () => {
     await ev(`(() => { const c = __t.chip('amount'); c.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 40 })); return true; })()`);
     const items = await ev(`(() => { const c = __t.chip('amount'); return [...document.querySelectorAll('.ctx-menu .menu__item')].map((x) => x.textContent.trim()); })()`);
-    must(items.includes('median') && !items.includes('percentile'), `default menu: ${J(items)}`);
+    must(items.includes('Median') && !items.includes('percentile') && !items.includes('Percentile…'), `default menu: ${J(items)}`);
     await b.key('Escape', { code: 'Escape', vk: 27 });
   });
   await check('screenshots, light and dark', async () => {
