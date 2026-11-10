@@ -180,10 +180,10 @@ try {
     must(await ev(`!document.querySelector('.ws-shelf--rows .ws-pill select, .ws-shelf--rows .ws-pill__ctl .iconbtn')`), 'inline controls remain');
     await ctx('.ws-shelf--rows .ws-pill');
     const items = await ctxItems();
-    for (const w of ['sum', 'avg', 'median', 'Percentile…', 'Continuous', 'Discrete', 'Table calculation…', 'Field choices…']) must(items.includes(w), `missing ${w} in ${J(items)}`);
+    for (const w of ['Sum', 'Average', 'Median', 'Percentile…', 'Continuous', 'Discrete', 'Table calculation…', 'Field choices…']) must(items.includes(w), `missing ${w} in ${J(items)}`);
     await shot('ctx-light.png');
     await theme('dark'); await shot('ctx-dark.png'); await theme('light');
-    await ctxClick('avg'); await settle(300);
+    await ctxClick('Average'); await settle(300);
     must(J(lastQuery()).includes('"avg"'), 'avg not sent');
     must(await ev(`!document.querySelector('.ctx-menu')`), 'popup should close');
   });

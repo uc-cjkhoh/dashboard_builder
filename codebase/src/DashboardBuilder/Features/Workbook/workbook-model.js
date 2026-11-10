@@ -9,6 +9,7 @@ import { cleanHaving, checkHaving } from "../Dashboard/having-model.js";
 import { emptySheet, defaultFormat } from "../Core/store.js";
 import { LIMITS, text, isFraction } from "../Core/validate.js";
 import { aggsFor } from "../Dashboard/filter-rules.js";
+import { currencyOk } from "../Dashboard/currency-model.js";
 import { CASTS } from "../Dashboard/cast-model.js";
 import { cleanMemberAliases } from "../Dashboard/member-labels.js";
 import { cleanTheme, DEFAULT_THEME } from "../Core/theme-model.js";
@@ -480,7 +481,7 @@ function cleanConditional(c, w, issues) {
       issues.push(`${w}: conditional formatting for "${String(key).slice(0, 60)}" cleared.`);
       continue;
     }
-    const rules = cfg.rules.slice(0, CF_MAX_RULES).filter((r) => r && CF_OPS.has(r.op) && CF_TONES.has(r.tone) && num(r.value));
+    const rules = cfg.rules.slice(0, CF_MAX_RULES).filter((r) => r && CF_OPS.has(r.op) && CF_TONES.has(r.tone) && (r.value === null || num(r.value)));
     if (rules.length < Math.min(cfg.rules.length, CF_MAX_RULES) || cfg.rules.length > CF_MAX_RULES)
       issues.push(`${w}: some conditional-formatting rules for "${key.slice(0, 60)}" were dropped.`);
     out[key] = { mode: cfg.mode, scale: cfg.scale, mid: cfg.mid ?? null, rules: rules.map((r) => ({ op: r.op, value: r.value, tone: r.tone })) };
@@ -668,7 +669,7 @@ function cleanFormat(f0, where, issues) {
     else issues.push(`${w}: ${k} must be on or off — reset.`);
   }
   if (f.currencySymbol === undefined) out.currencySymbol = base.currencySymbol;
-  else if (typeof f.currencySymbol === "string" && f.currencySymbol.length <= 8) out.currencySymbol = f.currencySymbol;
+  else if (currencyOk(f.currencySymbol)) out.currencySymbol = f.currencySymbol;
   else issues.push(`${w}: the currency symbol was invalid — reset to ${base.currencySymbol}.`);
   for (const k of ["xTitle", "yTitle"]) {
     const r = f[k] == null ? null : typeof f[k] !== "string" ? { ok: false, error: "Axis title must be text" }

@@ -1,4 +1,5 @@
 // Dashboard/pill-options.js — which options a pill offers in its context popup, and the Marks slot grid (pure, DOM-free).
+import { aggLabel } from "./agg-labels.js";
 // An entry is { id, type: "radio" | "check" | "item" | "custom" | "sep", label, checked?, disabled? }; dashboards.js maps an id to its action.
 
 /** Drop leading, trailing and doubled separators. */
@@ -13,7 +14,7 @@ const sep = { type: "sep" };
 /** A Columns / Rows field pill. `aggs` null = nothing to aggregate with; `roleFlip` = may switch dimension <-> measure. */
 export function fieldPillOptions({ measure, aggs, agg, roleFlip, numeric, tableCalc, temporal, parts = [], part, finer, coarser, dateLabelsAll, choicesOk }) {
   const r = [];
-  if (measure && aggs) for (const a of aggs) r.push({ id: `agg:${a}`, type: "radio", label: a === "percentile" ? "Percentile…" : a, checked: (agg ?? aggs[0]) === a });
+  if (measure && aggs) for (const a of aggs) r.push({ id: `agg:${a}`, type: "radio", label: aggLabel(a), checked: (agg ?? aggs[0]) === a });
   if (measure && aggs && agg === "percentile") r.push({ id: "percent", type: "custom" });
   if (roleFlip && numeric) r.push(sep, { id: "dc:continuous", type: "radio", label: "Continuous", checked: Boolean(measure) }, { id: "dc:discrete", type: "radio", label: "Discrete", checked: !measure });
   else if (roleFlip) r.push(sep, { id: "role", type: "item", label: measure ? "Use as dimension" : "Use as measure" });

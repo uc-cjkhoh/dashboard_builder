@@ -49,6 +49,8 @@ async function check(name, fn) {
 }
 const must = (cond, msg) => { if (!cond) throw new Error(msg); };
 const J = JSON.stringify;
+const AGGL = { sum: 'Sum', avg: 'Average', min: 'Minimum', max: 'Maximum', median: 'Median', stddev: 'Standard deviation', variance: 'Variance', count: 'Count', countDistinct: 'Count distinct', countNonNull: 'Count non-empty', attr: 'Attribute (single value)' }; // the menu's plain labels
+const AGGRAW = Object.fromEntries(Object.entries(AGGL).map(([k, v]) => [v, k]));
 
 let wbDir = null, b = null;
 try {
@@ -129,8 +131,8 @@ try {
   await waitFor(`!!__t.chip('region')`, 'field pane filled');
 
 
-  const pillAggs = async () => { await ev(`document.querySelector('.ws-shelf--rows .ws-pill').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 300, clientY: 200 }))`); const r = await ev(`[...document.querySelectorAll('.ctx-menu [role=menuitemradio]')].map((o) => o.textContent.trim().replace('Percentile…', 'percentile'))`); await ev(`document.querySelector('.ctx-menu')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`); return r; };
-  const setAgg = async (v) => { await ev(`document.querySelector('.ws-shelf--rows .ws-pill').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 300, clientY: 200 }))`); await ev(`[...document.querySelectorAll('.ctx-menu [role=menuitemradio]')].find((o) => o.textContent.trim() === ${J(v === 'percentile' ? 'Percentile…' : v)}).click()`); };
+  const pillAggs = async () => { await ev(`document.querySelector('.ws-shelf--rows .ws-pill').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 300, clientY: 200 }))`); const r = await ev(`[...document.querySelectorAll('.ctx-menu [role=menuitemradio]')].map((o) => o.textContent.trim().replace('Percentile…', 'percentile')).map((t) => (${J(AGGRAW)})[t] ?? t)`); await ev(`document.querySelector('.ctx-menu')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`); return r; };
+  const setAgg = async (v) => { await ev(`document.querySelector('.ws-shelf--rows .ws-pill').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 300, clientY: 200 }))`); await ev(`[...document.querySelectorAll('.ctx-menu [role=menuitemradio]')].find((o) => o.textContent.trim() === ${J(v === 'percentile' ? 'Percentile…' : AGGL[v] ?? v)}).click()`); };
   const fmsg = () => ev(`${dlg}.querySelector('[id^=calc-fmsg]').textContent.trim()`);
 
   await check('pill menu: a numeric measure offers median, stddev, variance, attr and percentile', async () => {

@@ -27,7 +27,7 @@ import { enter, MOTION } from "../Core/motion.js";
 import { wireResizer } from "../Core/resizer.js";
 import { PRESET_CHOICES, COMPARE_CHOICES, COMPARE_TYPES, newPeriod, resolveRange, compareRange, rangeLabel, withLatest, refreshedLatest, anchorLabel } from "./period-model.js";
 import { newFilter, caseMiss, caseMissText, conflictFor, selectionLabel } from "./filter-hints.js";
-import { CF_MODE_CHOICES, CF_SCALE_CHOICES, CF_OP_CHOICES, CF_TONE_CHOICES, CF_MAX_RULES, measureKey, emptyRule, isActive } from "./conditional-model.js";
+import { CF_MODE_CHOICES, CF_SCALE_CHOICES, CF_OP_CHOICES, CF_TONE_CHOICES, CF_MAX_RULES, measureKey, emptyRule, isActive, newRule } from "./conditional-model.js";
 import { templateError, buildActionUrl, applyParamAction, MAX_LABEL, MAX_TEMPLATE } from "./action-model.js";
 import { DATE_PART_CHOICES, stepPart } from "./date-parts.js";
 import { CALC_CHOICES, ALONG_CHOICES, WINDOW_CHOICES, RANK_ORDERS, RANK_TIES, isCalc, calcName } from "./table-calc.js";
@@ -74,7 +74,10 @@ import { castChoices, castLabel, effectiveCategory, syncCastCategories } from ".
 import { aliasOf, labelOf } from "./member-labels.js";
 import { openCalcManager } from "./calc-manager.js";
 import { fieldGroup } from "./field-group.js";
-import { fieldsPaneView, readCollapsed, FIELDS_COLLAPSED_KEY } from "./fields-pane-model.js";
+import { fieldsPaneView, readCollapsed, FIELDS_COLLAPSED_KEY, MARKS_PREF_KEY, readMarksPref, marksOpen, marksSummary } from "./fields-pane-model.js";
+import { aggLabel, pillMarker } from "./agg-labels.js";
+import { defaultRole } from "./field-role.js";
+import { CURRENCY_CHOICES, currencyError, currencyChoice, DEFAULT_CURRENCY, CURRENCY_MAX } from "./currency-model.js";
 import { openHierarchiesDialog } from "./hierarchy-dialog.js";
 import { drillFromHierarchy } from "./hierarchy-model.js";
 import { BUCKET_TYPES, DATE_BUCKET_CHOICES } from "./scale-model.js";
@@ -175,6 +178,14 @@ export function initDashboards() {
   const marksEl = fieldGroup("ws-shelf ws-shelf--marks", "marks", "Marks");
   const marksGrid = el("div", "ws-marks__grid");
   marksEl.append(marksGrid);
+  const marksSummaryEl = el("span", "ws-marks__summary"); // the collapsed header's one-line summary of the slots in use
+  marksEl.querySelector(".ws-group__head").append(marksSummaryEl);
+  let marksApplied = marksEl.open; // the open state last applied by the code, so its own toggle event is not taken for the user's
+  marksEl.addEventListener("toggle", () => {
+    if (marksEl.open === marksApplied) return;
+    marksApplied = marksEl.open;
+    try { localStorage.setItem(MARKS_PREF_KEY, marksEl.open ? "open" : "closed"); } catch { /* not remembered — fine */ }
+  });
   const shelvesEl = document.getElementById("ws-shelves");
   // The open mark tool's editor is a flyout: it opens beside the field pane, level with its slot, so a field is one short drag away and the
   // chart stays in view. It floats over the worksheet (never pushes the chart down); Esc or ✕ closes it.
@@ -397,8 +408,9 @@ export function initDashboards() {
       // Hidden fields stay out of the pane unless "Show hidden" is on.
       const visible = cols.filter((c) => { const h = metaOf({ ...t, column: c.name }).hidden; if (h) hiddenCount++; return !h || showHiddenFields; });
       const catOf = (c) => effectiveCategory(c.category, castOf({ ...t, column: c.name }));
-      const dims = visible.filter((c) => catOf(c) !== "numeric");
-      const meas = visible.filter((c) => catOf(c) === "numeric");
+      const roleFor = (c) => defaultRole(c.name, catOf(c)); // an identifier-like number (order_id…) is listed with the dimensions (D96)
+      const dims = visible.filter((c) => roleFor(c) === "dimension");
+      const meas = visible.filter((c) => roleFor(c) === "measure");
       if (dims.length) { group.append(el("div", "ws-field-group", "Dimensions")); for (const c of dims) group.append(fieldChip(t, c, "dimension")); }
       if (meas.length) { group.append(el("div", "ws-field-group", "Measures")); for (const c of meas) group.append(fieldChip(t, c, "measure")); }
       groups.push(group);
@@ -651,7 +663,7 @@ export function initDashboards() {
     if (effCat === "numeric") {
       out.push({ type: "sep" }, { type: "heading", label: "Default aggregation" });
       for (const a of aggsFor(effCat).filter((x) => x !== "percentile")) // a default percentile would need a default fraction: pick it on the pill
-        item(a, () => setFieldMeta(f, { agg: a === "sum" ? null : a }), { role: "menuitemradio", checked: (meta.agg ?? "sum") === a });
+        item(aggLabel(a), () => setFieldMeta(f, { agg: a === "sum" ? null : a }), { role: "menuitemradio", checked: (meta.agg ?? "sum") === a });
     }
     // Read the field as another type (the server converts; a value that doesn't fit becomes empty).
     out.push({ type: "sep" }, { type: "heading", label: "Data type" });
@@ -740,6 +752,10 @@ export function initDashboards() {
 
     const tools = buildTools(dash, s);
     const { visible } = visibleTools(s.chartType, tools); // tools this chart type doesn't use stay reachable, just quieter
+    let pref = null; try { pref = readMarksPref(localStorage); } catch { /* blocked storage: no preference */ }
+    const wantOpen = marksOpen(pref, tools.filter((t) => t.count > 0).length) || tools.some((t) => t.key === openTool); // set marks and an open editor are never hidden
+    if (marksEl.open !== wantOpen) { marksApplied = wantOpen; marksEl.open = wantOpen; }
+    marksSummaryEl.textContent = marksSummary(tools);
     marksGrid.replaceChildren(...markGrid(tools).map((cells) => {
       const row = el("div", "ws-marks__row");
       for (const t of cells) {
@@ -765,7 +781,7 @@ export function initDashboards() {
     const viewbar = el("div", "ws-viewbar");
     const vbRight = el("div", "ws-viewbar__group ws-viewbar__group--right");
     const vbIcons = el("div", "ws-viewbar__icons");
-    vbIcons.append(formatToggle(), analyticsToggle(), refreshButton(dash), fullScreenButton(), exportControl(dash, s), importButton(), sheetActions(dash, s));
+    vbIcons.append(formatToggle(), analyticsToggle(), refreshButton(dash), fullScreenButton(), exportControl(dash, s), sheetActions(dash, s));
     vbRight.append(sortControl(dash, s), vbIcons);
     const vbLeft = el("div", "ws-viewbar__group");
     vbLeft.append(fieldsPaneButton(), chartTypePicker(dash, s), undoButtons(dash),
@@ -952,18 +968,11 @@ export function initDashboards() {
     return btn;
   }
 
-  // Import workbook (a JSON file; Workbook/workbook.js owns the picker).
-  function importButton() {
-    const btn = iconButton("import", "Import workbook");
-    btn.title = "Import workbook…";
-    btn.addEventListener("click", () => bus.dispatchEvent(new Event("workbook:import")));
-    return btn;
-  }
-
   // The Analytics card toggle (like Format) and the card itself.
   function analyticsToggle() {
     const btn = iconButton("insights", "Analytics");
-    btn.className = `iconbtn ws-viewbar__btn${analyticsOpen ? " is-active" : ""}`;
+    btn.className = `iconbtn ws-viewbar__btn ws-viewbar__btn--labelled${analyticsOpen ? " is-active" : ""}`;
+    btn.append(el("span", "ws-viewbar__label", "Analytics"));
     btn.setAttribute("aria-pressed", String(analyticsOpen));
     btn.setAttribute("aria-expanded", String(analyticsOpen));
     btn.title = "Analytics — reference lines, trend, forecast, totals";
@@ -1055,8 +1064,9 @@ export function initDashboards() {
   }
 
   function formatToggle() {
-    const btn = iconButton("format", "Format");
-    btn.className = `iconbtn ws-viewbar__btn${formatOpen ? " is-active" : ""}`;
+    const btn = iconButton("paint", "Format");
+    btn.className = `iconbtn ws-viewbar__btn ws-viewbar__btn--labelled${formatOpen ? " is-active" : ""}`;
+    btn.append(el("span", "ws-viewbar__label", "Format")); // shown from 1280 px up (dashboard.css), icon only below
     btn.setAttribute("aria-pressed", String(formatOpen));
     btn.title = "Format";
     btn.setAttribute("aria-expanded", String(formatOpen));
@@ -1088,6 +1098,7 @@ export function initDashboards() {
       item("eye", "View data", () => viewData(dash, s, false)),
       item("print", "Print / PDF…", () => printView(dash, s)),
       item("export", "Workbook (JSON)", () => bus.dispatchEvent(new Event("workbook:export"))), // the whole workbook as a file (Workbook/workbook.js)
+      item("import", "Import workbook…", () => bus.dispatchEvent(new Event("workbook:import"))), // a workbook-level action: it lives with Export, not in every view bar
     );
     wireMenu(btn, menu, { signal: headerAbort?.signal }); // click toggles; Esc/outside/item click close; arrows move
     wrap.append(btn, menu);
@@ -1334,6 +1345,7 @@ export function initDashboards() {
     panel.append(
       fmtSelect("Number", [["auto", "Auto"], ["compact", "Compact"], ["currency", "Currency"], ["percent", "Percent"]],
         f.numberFormat, (v) => set({ numberFormat: v })),
+      ...(f.numberFormat === "currency" ? [currencyPicker(f, set)] : []),
       fmtSelect("Decimals", [["null", "Auto"], ["0", "0"], ["1", "1"], ["2", "2"], ["3", "3"]],
         f.decimals ?? "null", (v) => set({ decimals: v === "null" ? null : Number(v) })),
       fmtSelect("Dates", [["auto", "Auto"], ["date", "Date"], ["month", "Month"], ["year", "Year"], ["datetime", "Date+time"]],
@@ -1383,6 +1395,9 @@ export function initDashboards() {
     panel.append(fmtSelect("Background", BACKGROUND_CHOICES, f.background ?? "none", (v) => set({ background: v })));
     if (isChart || s.chartType === "table" || s.chartType === "text") panel.append(fmtSelect("Font", FONT_CHOICES, f.font ?? "default", (v) => set({ font: v })));
     if (s.chartType === "table" || s.chartType === "text") {
+      const tot = { grand: false, sub: false, ...(s.analytics?.totals ?? {}) }; // the same setting as Analytics → Totals
+      const setTotals = (patch) => { s.analytics = { ...defaultAnalytics(), ...(s.analytics ?? {}), totals: { ...tot, ...patch } }; commit(dash, s); };
+      panel.append(fmtCheck("Grand totals", tot.grand, (v) => setTotals({ grand: v })), fmtCheck("Subtotals", tot.sub, (v) => setTotals({ sub: v })));
       panel.append(fmtSelect("Align", TABLE_ALIGN_CHOICES, f.tableAlign ?? "auto", (v) => set({ tableAlign: v })),
         fmtSelect("Row height", TABLE_DENSITY_CHOICES, f.tableDensity ?? "standard", (v) => set({ tableDensity: v })),
         fmtSelect("Shading", TABLE_SHADE_CHOICES, f.tableShade ?? "none", (v) => set({ tableShade: v })),
@@ -1718,7 +1733,14 @@ export function initDashboards() {
     const shown = isMeasure && !calcPill && f.agg === "percentile" ? `${label} · p${percentLabel(f.p)}` : label; // the pill names its percentile
     const p = pill(shown, remove, controls.childElementCount ? controls : null);
     p.classList.add(isMeasure ? "ws-pill--measure" : "ws-pill--dimension");
+    const marker = pillMarker(f, { measure: isMeasure, calcPill });
+    if (marker) { // the aggregation reads on the pill, and a table calculation is marked (full text on hover)
+      const text = p.querySelector(".ws-pill__text");
+      text.before(el("span", "ws-pill__agg", aggLabel(f.agg ?? "sum").replace("…", "")));
+      if (marker.calc) text.after(el("span", "ws-pill__calc", `· ${marker.calc}`));
+    }
     optionsOn(p, ctxId, label, entries);
+    if (marker) p.title = `${aggLabel(f.agg ?? "sum").replace("…", "")} of ${label}${marker.calc ? ` · ${marker.calc}` : ""} — right-click for options`;
 
     // Drag-to-reorder (Columns/Rows). A dedicated grip is the only draggable part, so the agg select /
     // convert / remove controls keep working. Dropping onto this pill inserts the dragged pill before
@@ -2331,7 +2353,7 @@ export function initDashboards() {
     const list = dash.sheet[shelfKey];
     if (list.some((x) => sameField(x, f))) return;
     const entry = slotEntry(f);
-    entry.role = isCalcPill(f) ? f.role : f.category === "numeric" ? "measure" : "dimension";
+    entry.role = isCalcPill(f) ? f.role : defaultRole(f.column, f.category); // identifier-like numbers start as dimensions (D96)
     if (!allowed(dash, shelfKey, f, entry.role)) return;
     if (entry.role === "measure") entry.agg = isCalcPill(f) ? f.agg : defaultAgg(f);
     if (entry.agg === undefined) delete entry.agg;
@@ -2980,7 +3002,7 @@ export function initDashboards() {
       const rr = el("div", "ws-cf__row ws-cf__rule");
       const setRule = (patch) => save({ rules: cfg.rules.map((x, j) => (j === i ? { ...x, ...patch } : x)) });
       rr.append(fmtSelect(`Rule ${i + 1}: value`, CF_OP_CHOICES, r.op, (v) => setRule({ op: v })),
-        fmtNumber("", r.value, "number", (v) => { if (v != null) setRule({ value: v }); }),
+        fmtNumber("", r.value, "type a value", (v) => { if (v != null) setRule({ value: v }); }),
         fmtSelect("show as", CF_TONE_CHOICES, r.tone, (v) => setRule({ tone: v })));
       const del = iconButton("close", `Remove rule ${i + 1}`);
       del.addEventListener("click", () => save({ rules: cfg.rules.filter((_, j) => j !== i) }));
@@ -2989,7 +3011,7 @@ export function initDashboards() {
     });
     if (cfg.rules.length < CF_MAX_RULES) {
       const add = makeButton("+ Add rule", "btn ws-cf__add");
-      add.addEventListener("click", () => save({ rules: [...cfg.rules, { op: ">", value: 0, tone: "good" }] }));
+      add.addEventListener("click", () => save({ rules: [...cfg.rules, newRule()] }));
       box.append(add);
     }
     return box;
@@ -3128,6 +3150,24 @@ function select(options, selected, className, label) {
 
 // --- format-panel controls. Each wraps its control in a <label> so the visible text is the
 // control's accessible name. `options` is [value, text] pairs; `current` matches by string value. ---
+// The Currency format's symbol: a short list, or "Custom…" with a 1-3 character box. $ unless chosen (existing sheets are unchanged).
+function currencyPicker(f, set) {
+  const wrap = el("span", "ws-currency");
+  const sym = f.currencySymbol ?? DEFAULT_CURRENCY;
+  const choice = currencyChoice(sym);
+  wrap.append(fmtSelect("Symbol", CURRENCY_CHOICES, choice, (v) => { if (v === "custom") set({ currencySymbol: customSeed(sym) }); else set({ currencySymbol: v }); }));
+  if (choice === "custom") {
+    const box = fmtText("Custom", sym, (v) => {
+      const err = currencyError(v ?? "");
+      if (err) { toast(err, "danger"); set({ currencySymbol: sym }); return; } // redraw puts the kept symbol back
+      set({ currencySymbol: v });
+    });
+    const inp = box.querySelector("input"); inp.maxLength = CURRENCY_MAX; inp.classList.add("ws-currency__input"); inp.setAttribute("aria-label", "Custom currency symbol, up to 3 characters");
+    wrap.append(box);
+  }
+  return wrap;
+}
+const customSeed = (sym) => (currencyChoice(sym) === "custom" ? sym : "¤"); // picking Custom… starts from a neutral sign the user then types over
 function fmtSelect(labelText, options, current, onPick) {
   const wrap = el("label", "ws-fmt-field");
   wrap.append(el("span", "ws-fmt-label", labelText));

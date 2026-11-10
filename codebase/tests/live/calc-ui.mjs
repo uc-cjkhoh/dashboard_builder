@@ -49,6 +49,8 @@ async function check(name, fn) {
 }
 const must = (cond, msg) => { if (!cond) throw new Error(msg); };
 const J = JSON.stringify;
+const AGGL = { sum: 'Sum', avg: 'Average', min: 'Minimum', max: 'Maximum', median: 'Median', stddev: 'Standard deviation', variance: 'Variance', count: 'Count', countDistinct: 'Count distinct', countNonNull: 'Count non-empty', attr: 'Attribute (single value)' }; // the menu's plain labels
+const AGGRAW = Object.fromEntries(Object.entries(AGGL).map(([k, v]) => [v, k]));
 
 let wbDir = null, b = null;
 try {
@@ -207,7 +209,7 @@ try {
     await dragChip('Net', `__t.zone('rows')`);
     await waitFor(`__t.pills('rows').length === 2`, 'Net pill on Rows');
     await ev(`(() => { const p = [...document.querySelectorAll('.ws-shelf--rows .ws-pill')].find((x) => /Net/.test(x.querySelector('.ws-pill__text').textContent)); p.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 300, clientY: 200 })); return true; })()`);
-    const opts = await ev(`[...document.querySelectorAll('.ctx-menu [role=menuitemradio]')].map((o) => o.textContent.trim().replace('Percentile…', 'percentile'))`);
+    const opts = await ev(`[...document.querySelectorAll('.ctx-menu [role=menuitemradio]')].map((o) => o.textContent.trim().replace('Percentile…', 'percentile')).map((t) => (${J(AGGRAW)})[t] ?? t)`);
     await ev(`document.querySelector('.ctx-menu').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
     must(!opts.includes('count') && opts.includes('sum') && opts.includes('countNonNull'), `calc aggregation options: ${J(opts)}`);
     await settle();

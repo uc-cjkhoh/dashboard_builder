@@ -5,6 +5,7 @@ import { aggWord } from "../Calc/calc-plan.js";
 import { tooltipCatalog } from "./tooltip-model.js";
 import { checkFilter } from "./filter-rules.js";
 import { tupleKey, uniqueTuples } from "./grid-model.js";
+import { isCalc, calcName } from "./table-calc.js";
 
 // Pure shaping of a query result for drawing: which result column is a series or a mark channel, the pivots
 // behind the colour split, heatmap, treemap, Sankey and small multiples, display names, and the status / caption text.
@@ -95,7 +96,7 @@ export function statusText(s, result) {
   const tuples = (from, count) => new Set(result.rows.map((r) => JSON.stringify(r.keys.slice(from, from + count)))).size;
   const rd = result.rowDimensions.length, cd = result.columnDimensions.length;
   if (s.chartType === "table" || s.chartType === "text")
-    parts.push(`${n(tuples(0, rd))} row${tuples(0, rd) === 1 ? "" : "s"} × ${n(tuples(rd, cd))} column${tuples(rd, cd) === 1 ? "" : "s"}`);
+    parts.push(`${n(tuples(0, rd))} × ${n(tuples(rd, cd))} table`);
   parts.push(`${result.measures.length} measure${result.measures.length === 1 ? "" : "s"}`);
   if (s.selection) parts.push(`Selected: ${s.selection.label}`);
   return parts.join(" · ");
@@ -118,7 +119,7 @@ function statCaption(s, names) {
 /** The automatic caption: "sum amount by customers.name, customers.country · 2 filters". `names` = { measureName(f), nameOf(f) }. */
 export function captionText(s, names) {
   if (s.chartType === "histogram" || s.chartType === "boxplot") return statCaption(s, names);
-  const ms = planMeasures(s).filter((e) => e.role === "shelf").map((e) => names.measureName({ ...e.field, agg: e.agg }));
+  const ms = planMeasures(s).filter((e) => e.role === "shelf").map((e) => names.measureName({ ...e.field, agg: e.agg }) + (isCalc(e.field.tableCalc) ? ` · ${calcName(e.field.tableCalc)}` : ""));
   const ds = planDims(s).keyOrder.filter(Boolean).map(names.nameOf);
   const parts = [];
   if (ms.length || ds.length) parts.push(`${ms.length ? ms.join(", ") : "count"}${ds.length ? ` by ${ds.join(", ")}` : ""}`);

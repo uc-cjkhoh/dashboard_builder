@@ -3,7 +3,7 @@ import { planMeasures } from "./sheet-plan.js";
 import { isCalc } from "./table-calc.js";
 import { combine } from "./analytics-model.js";
 import { CF_OP_CHOICES, CF_TONE_CHOICES, TONE_ICON, measureKey, extentOf, scaleColors, barGeometry, matchRule, isActive, midpointOf } from "./conditional-model.js";
-import { tupleKey, uniqueTuples, runs, levelSpans } from "./grid-model.js";
+import { tupleKey, uniqueTuples, runs, levelSpans, orderColumnTuples } from "./grid-model.js";
 import { collapseKey, canToggle, rollUp, expandNodes, collapsedOf, leafValue, headerKeys, shownValues } from "./collapse-model.js";
 import { icon } from "../Core/icons.js";
 import { el, warn, iconSpan } from "./render-dom.js";
@@ -35,7 +35,8 @@ export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, ca
   const measureOnLeft = !bothMeasures && rowMeasures.length > 0;   // else on top (incl. implicit count)
 
   const rowTuples = uniqueTuples(rows.map((r) => r.keys.slice(0, rd)));
-  const colTuples = uniqueTuples(rows.map((r) => r.keys.slice(rd, rd + cd)));
+  // Column members ascend, like the rows; a sort on a measure orders them as the query did.
+  const colTuples = orderColumnTuples(uniqueTuples(rows.map((r) => r.keys.slice(rd, rd + cd))), String(sheet.sort?.by ?? "").startsWith("measure:"));
   const cells = new Map();
   for (const r of rows) cells.set(tupleKey(r.keys.slice(0, rd)) + "|" + tupleKey(r.keys.slice(rd, rd + cd)), r.values);
   const cellValue = (rt, ct, mi) => cells.get(tupleKey(rt) + "|" + tupleKey(ct))?.[mi];
@@ -280,6 +281,7 @@ function conditionalLegend(cf, measures, fmtVal, loadedRows) {
       items.push(el("span", "xt-legend__item", `${name}: data bars (from zero)`));
     }
     for (const r of c.cfg.rules ?? []) {
+      if (r.value == null || r.value === "") continue; // no threshold typed yet: nothing to show
       const item = el("span", `xt-legend__item xt-legend__rule xt-rule--${r.tone}`);
       item.append(iconSpan("xt-cf__icon", TONE_ICON[r.tone]), el("span", null, `${name} ${CF_OP_CHOICES.find(([k]) => k === r.op)[1]} ${fmtVal(r.value)}`));
       items.push(item);
