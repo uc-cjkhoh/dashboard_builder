@@ -27,7 +27,7 @@ An invalid field mapping shows a friendly **hint**, never an error (e.g. "A poin
 | Bar | ≥1 measure | grouped at ≥2 measures |
 | Stacked bar | ≥1 measure | |
 | Line / Area | ≥1 measure | Path can reorder vertices |
-| Pie / Donut | 1 dimension + 1 measure | legend-labelled slices; measure → angle. Up to 6 slices also show their percent on the slice; Data labels shows "name: value" instead |
+| Pie / Donut | 1 dimension + 1 measure | legend-labelled slices; measure → angle. Data labels writes "name: value" on each slice, plus its percent when there are up to 6 slices |
 | Scatter | 2 measures (X, Y) | Size, continuous Colour and Shape apply. Both axes fit the data (they do not start at 0) |
 | Combo (dual-axis) | 2 measures | The 1st measure as bars; the rest on a right axis as a line (Format → **Right-axis marks**: Line, Bars or Area). Always vertical. Format → **Synchronise axes** shares one range |
 | Square / Circle | as scatter | scatter builder with a symbol override (same fitted axes) |
