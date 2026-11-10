@@ -1,4 +1,4 @@
-// Browser checks for the beginner-test fixes in the connection form, start panel and schema browser (mocked /api, nothing reaches ClickHouse).
+// Browser checks for the beginner-test fixes in the connection form and schema browser (mocked /api, nothing reaches ClickHouse).
 // Run: node tests/live/connect-form-ui.mjs   (app first: cd src/DashboardBuilder && dotnet run --no-launch-profile --urls http://localhost:5249)
 import { launch } from './cdp.mjs';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -149,11 +149,6 @@ try {
     must(await ev(`!document.getElementById('conn-summary').hidden`), 'disconnected after Cancel');
     await ev(`document.getElementById('conn-disconnect').click(); [...document.querySelectorAll('dialog button')].find((x) => x.textContent === 'Disconnect').click()`);
     await b.waitFor(`!document.getElementById('conn-summary').hidden === false`, { label: 'disconnected' });
-  });
-  await check('start panel says what you need', async () => {
-    await b.waitFor(`!document.getElementById('start-screen').hidden`, { label: 'start' });
-    must(await ev(`document.querySelector('.start__lead').textContent`) === 'You need a ClickHouse host, port and user.', 'lead');
-    await b.screenshot(join(SHOTS, 'start.png'));
   });
   console.log(failed ? `${failed} FAILED` : 'all ok');
 } finally { await b?.close(); }

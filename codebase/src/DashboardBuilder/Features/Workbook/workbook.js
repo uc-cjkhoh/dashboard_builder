@@ -11,8 +11,6 @@ import { toast, confirmDialog, listDialog } from "../Core/ui.js";
 import { dateIn } from "../Core/timezone.js";
 import { addEntity, clearModel } from "../Canvas/canvas.js";
 import { restoreRelationship } from "../Relations/relations.js";
-import { loadWorkbooks, saveWorkbooks } from "../Start/start-store.js";
-import { rememberWorkbook, summarize } from "../Start/start-model.js";
 import { serializeWorkbook, parseWorkbook, storageKey, legacyStorageKey, restoredSummary, issueCount } from "./workbook-model.js";
 import { api } from "../Core/api.js";
 import { catalogIssues, tablesNamed, columnKey, readCatalog } from "../Dashboard/missing-columns.js";
@@ -30,7 +28,6 @@ const CHANGE_EVENTS = [
   "rel:changed", "tabs:changed", "worksheet:changed", "dashboard:changed", "story:changed", "theme:changed", "fields:changed", "parameters:changed", "hierarchies:changed", "calculations:changed",
 ];
 
-let view = null;       // the connected view (host, port, user) the key came from
 let key = null;        // storage key for the connected server + user; null while disconnected
 let legacyKey = null;  // the v1 key for the same server + user (read-only fallback)
 let restoring = false; // no autosave while a workbook is being rebuilt
@@ -56,9 +53,8 @@ export function initWorkbook() {
 }
 
 // --- autosave & restore ------------------------------------------------------
-function onConnection(v) {
+function onConnection(view) {
   flushSave(); // finish saving under the previous server's key
-  view = v;
   key = storageKey(view);
   legacyKey = legacyStorageKey(view);
   if (!key) { clearWorkspace(); return; }
@@ -151,10 +147,8 @@ function save() {
     return;
   }
   try {
-    const saved = serializeWorkbook(currentState());
-    localStorage.setItem(key, JSON.stringify(saved));
+    localStorage.setItem(key, JSON.stringify(serializeWorkbook(currentState())));
     warned = "";
-    saveWorkbooks(rememberWorkbook(loadWorkbooks(), view, summarize(saved), Date.now())); // start-screen metadata only
   } catch (e) {
     const full = e?.name === "QuotaExceededError" || e?.code === 22;
     warnNotSaved(full ? "Not saved — browser storage is full (pictures take the most room). Use Export to keep a copy." : "Not saved — browser storage is unavailable. Use Export to keep a copy.");
