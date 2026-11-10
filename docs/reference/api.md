@@ -142,7 +142,7 @@ aggregation, no `ORDER BY`, no joins.
 |---|---|
 | `db`, `table` | required; validated against the live catalog (unknown → 400) |
 | `columns` | optional, ≤ 200, each a catalog column (unknown → 400, `columns[i]` blank → 400); order kept. Default: the table's first 200 |
-| `filters` | optional `StatFilter`s (`column`, `op`, `value`, `values`) — the typed rules of the histogram / box plot ([Typed filter values](#typed-filter-values)), ≤ 20, each bound; `top` is a 400; unknown column → 400 |
+| `filters` | optional `StatFilter`s (`column`, `op`, `value`, `values`, optional `calc`) — the typed rules of the histogram / box plot ([Typed filter values](#typed-filter-values)), ≤ 20, each bound; `top` is a 400; unknown column → 400 |
 | `limit` | 1–1000, default 100; outside → 400 (`limit`), never clamped. **rows × columns ≤ 50,000** (`MaxRowsCells`): over it is a 400 on `limit` saying how many rows fit (checked after the default column set is known) |
 
 Response `{ columns: [{name, type}], rows: [[string \| null]], truncated, limit, columnsTruncated }`:
@@ -274,7 +274,7 @@ A dimension, measure or `topBy` may carry a `calc` tree; the browser sends only 
 ### Histogram, single-table box plot and removed routes
 
 The histogram and single-table box-plot requests carry `filters` (`StatFilter`: column, op, value, values), applied with the
-same typed rules as the worksheet query. Filters on other tables can't apply to a single-table view, so the client counts them and shows a notice.
+same typed rules as the worksheet query. Filters on other tables can't apply to a single-table view, so the client counts them and shows a notice. A `StatFilter` may carry `calc` (a row-level calculation tree, `column` its label; the same wire as a worksheet calculated filter): every field in it must be on the request's own table (else 400), an aggregate or too deep a tree is a 400 at `filters[i].calc`, and it is compiled against that table's columns with its values bound. `POST /api/rows` takes it the same way ([D91](../decisions/decisions-filters.md#d91--a-calculated-filter-on-a-single-table-read-reads-that-table-only)).
 
 There are no single-table `aggregate`, `preview` or `count` routes under `/api/databases/{db}/tables/{table}/`;
 a request to them is an unmatched route (404). Raw rows have one home: `POST /api/rows` ([Rows](#rows)).

@@ -62,6 +62,7 @@ Grouped by feature folder; each entry is the module, then what it owns.
 - `Story/story-model.js` — pure (node-tested): `validateCaption`, `addStep`, `removeStep`, `moveStep`, `setCaption`, `goTo` (never wraps), `dropTarget` (used by `closeTab`), `offeredTargets`, `targetKind`, `stepName`, `savedSteps`, `cleanSteps` (import: bad steps skipped and reported) — [stories.md](../concepts/workbook/stories.md)
 - `Story/story.js` — the story tab's body (`#story-view`): add row, step strip (tablist), caption editor, step tools, Previous / Next, the stage (a static `createWorksheetView` or a dashboard link), print
 - `Board/board-size.js` — pure (node-tested): dashboard size — `SIZE_PRESETS`, `SIZE_LIMITS`, `sizeError`, `customSizeProblem`, `isPreset`, `cleanSize` (import), `savedSize`, `sizeKey` / `sizeLabel`; size range — `rangeError`, `cleanRange`, `savedRange`, `rangedWidth` / `rangedHeight` — [dashboards.md](../concepts/workbook/dashboards.md#layout)
+- `Board/widget-note.js` — pure (node-tested): a worksheet widget's note — `validateWidgetNote`, `cleanWidgetNote` (import), `widgetNoteLines` (print header) — [dashboard-print-notes.md](../concepts/workbook/dashboard-print-notes.md).
 - `Board/board-notes.js` — pure (node-tested): dashboard data notes — `validateNotes`, `cleanNotes` (import), `savedNotes`, `printLines` (print header) — [dashboard-print-notes.md](../concepts/workbook/dashboard-print-notes.md). `Board/notes-edit.js` — its inline editor (DOM).
 - `Board/board-layout.js` — pure (node-tested):
   - cell → pixel geometry — `layoutBoard(widgets, panelWidth, { rowH, gap, stack?, fixed? })` → `{ stacked, height, rects }` (`stack` is for print), `fixedRowH`, `columnWidth`, `widgetOrder` (reading order)
@@ -126,7 +127,7 @@ Grouped by feature folder; each entry is the module, then what it owns.
 
 ### Dashboard/ — field pane, pills and shelves
 
-- `Dashboard/filter-rules.js` — pure: `aggsFor`, `checkFilter`, `statFilters`, `withCategories`, `viewCounts`, `checkAdd` (drop-time caps) — [worksheet.md](../concepts/worksheet/worksheet.md#drop-time-limits)
+- `Dashboard/filter-rules.js` — pure: `aggsFor`, `checkFilter`, `statFilters` (applies a calculated filter only when `Calc/calc-tree.js` `calcOnTable` says all its fields sit on the histogram's table), `withCategories`, `viewCounts`, `checkAdd` (drop-time caps) — [worksheet.md](../concepts/worksheet/worksheet.md#drop-time-limits)
 - `Dashboard/show-me-rules.js` — pure:
   - chart-type field rules (`CHART_NEEDS`, `chartIssue`, the shared hint texts, `roleOf`) and the chart-type menu's cues — `issueFor`, `bestType`, `showMeOptions` — [worksheet-charts.md](../concepts/worksheet/worksheet-charts.md#chart-type-control)
 - `Dashboard/toolbar-rules.js` — pure: `visibleTools(chartType, tools)` — which Marks slots are quiet — [worksheet-marks.md](../concepts/worksheet/worksheet-marks.md#marks-slots)
