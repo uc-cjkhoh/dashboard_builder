@@ -27,7 +27,7 @@ export const marksOf = (s) => s.marks ?? EMPTY_MARKS;
 export const SCATTER_TYPES = new Set(["scatter", "square", "circle"]);
 export const isNumericField = (f) => Boolean(f) && f.category === "numeric";
 // Chart types that consume a Color dimension (a group-by); the rest ignore a Color pill (the lane says so).
-export const COLOR_USES = new Set(["bar", "stacked", "line", "area", "table", ...SCATTER_TYPES]);
+export const COLOR_USES = new Set(["bar", "stacked", "line", "area", "table", "gantt", ...SCATTER_TYPES]);
 // The same column (or the same calculated field) on two shelves.
 const sameColumn = (a, b) => (isCalcPill(a) || isCalcPill(b) ? sameCalcPill(a, b) : a.db === b.db && a.table === b.table && a.column === b.column);
 

@@ -37,7 +37,7 @@ function answer({ method, path, body }) {
     return { json: {
       rowDimensions: (body.rowDimensions ?? []).map((d) => d.column), columnDimensions: (body.columnDimensions ?? []).map((d) => d.column),
       measures: (body.measures ?? []).map((_, i) => `v${i}`),
-      rows: combos.map((keys, r) => ({ keys, values: (body.measures ?? []).map((m, i) => (m.column === 'placed' ? `2026-02-0${r + 1}` : i === 0 ? 10 * (r + 1) : (m.agg === 'avg' ? 1234567.5 : 3) * (r + 1))) })),
+      rows: combos.map((keys, r) => ({ keys, values: (body.measures ?? []).map((m, i) => (m.column === 'placed' ? (m.agg === 'max' ? `2026-02-1${r + 1}` : `2026-02-0${r + 1}`) : i === 0 ? 10 * (r + 1) : (m.agg === 'avg' ? 1234567.5 : 3) * (r + 1))) })),
       truncated: false } };
   }
   return null;
@@ -213,6 +213,74 @@ try {
     const w = await ev(`(() => { const i = window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas')); return i.getWidth(); })()`);
     must(w > o.grid[0].right, 'chart wider than the margin');
     await shot('gantt-long-label-light.png');
+  });
+  // ---- length from an end field, colour split per bar, click-to-filter ------------------------------------------------------
+  const ganttSeries = async () => (await opt()).series.filter((x) => x.type === 'custom');
+  await check('Gantt: Format -> Length = End draws the bar from the start to the end measure (numbers: end - start)', async () => {
+    // the sheet still holds region on Rows, qty (start) and amount (average) on Columns; the mock end is 1,234,567.5 x (row + 1)
+    await openFormat();
+    must(await hasField('Length'), 'a Length control on a Gantt');
+    await pick('Length', 'end'); await chartReady();
+    const s = (await ganttSeries())[0];
+    must(s.data.length === 3, `bars ${s.data.length}`);
+    must(s.data[0][1] === 10 && s.data[0][2] === 1234567.5, `first bar spans start to end: ${J(s.data[0])}`);
+    const txt = await ev(`document.querySelector('.ws-chart-canvas').textContent`);
+    must(/1,234,557/.test(txt), `length (end - start) written at the bar: ${txt.slice(0, 120)}`);
+    await shot('gantt-end-numeric-light.png');
+    await pick('Length', 'length'); await chartReady();
+    must((await ganttSeries())[0].data[0][2] === 10 + 1234567.5, 'back to Length: start + length');
+    await pick('Length', 'end');
+  });
+  await check('Gantt: a Colour field draws a bar per row and member, one series per member with a legend, and the tooltip names the member', async () => {
+    await dragChip('channel', `document.querySelector('.ws-tool[aria-label^="Color"]')`);
+    await settle(500); await chartReady();
+    const o = await opt();
+    const ss = await ganttSeries();
+    must(ss.length === 3 && J(ss.map((x) => x.name)) === J(REGIONS), `a series per member: ${J(ss.map((x) => x.name))}`);
+    must(ss.every((x) => x.data.length === 3), 'each member has a bar on every row');
+    must(J(o.yAxis[0].data) === J(REGIONS), `rows stay one slot each: ${J(o.yAxis[0].data)}`);
+    must(o.legend[0].data.length === 3 && o.legend[0].selectedMode !== false, `legend names the members: ${J(o.legend[0])}`);
+    const dq = lastQuery();
+    must(J(dq).includes('channel'), 'the colour field is a group-by in the query');
+    await shot('gantt-colour-light.png');
+    await theme('dark'); await setType('Bar'); await setType('Gantt'); await chartReady(); await shot('gantt-colour-dark.png'); await theme('light');
+  });
+  await check('Gantt + Colour: Show Me still offers Gantt (the Colour key is not a row dimension)', async () => {
+    await ev(`document.querySelector('.ws-pick--chart .ws-pick__btn').click()`);
+    const unfit = await ev(`(() => { const it = [...document.querySelectorAll('.ws-charttypes .menu__item')].find((x) => x.textContent.trim() === 'Gantt'); return it.classList.contains('is-unfit') ? it.title : ''; })()`);
+    await ev(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
+    must(unfit === '', `Gantt flagged unfit with a Colour field: ${unfit}`);
+  });
+  await check('Gantt + Colour: a legend click highlights that member (the others blur) and selects it', async () => {
+    await setType('Bar'); await setType('Gantt'); await chartReady(); await settle(300);
+    // each bar's fill and drawn opacity (a legend focus fades the other members' bars; the focused one wears the emphasis stroke)
+    const states = () => ev(`(() => { const i = window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas')); const els = i.getZr().storage.getDisplayList().filter((e) => e.type === 'rect' && e.shape && e.shape.height && e.shape.height < 40 && e.shape.width >= 2 && e.style && e.style.fill && e.style.fill !== 'transparent' && e.style.fill !== 'rgba(0,0,0,0)');
+      return els.map((e) => ({ fill: e.style.fill, op: e.style.opacity ?? 1, st: (e.currentStates ?? []).join('+') })); })()`);
+    const before = await states();
+    must(before.length === 9 && before.every((x) => x.op === 1 && x.st === ''), `no highlight before the click: ${J(before)}`);
+    await ev(`(() => { window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas')).dispatchAction({ type: 'legendToggleSelect', name: 'EU' }); return true; })()`);
+    await waitFor(`!!document.querySelector('.ws-select')`, 'selection chip from the legend');
+    await settle(400); await chartReady();
+    const after = await states();
+    const byFill = new Map(); for (const x of after) byFill.set(x.fill, [...(byFill.get(x.fill) ?? []), x]);
+    const groups = [...byFill.values()];
+    const bright = groups.filter((g) => g.every((x) => x.op === 1)), faded = groups.filter((g) => g.every((x) => x.op < 1));
+    must(groups.length === 3 && bright.length === 1 && faded.length === 2, `one member at full strength, the other two faded: ${J(after)}`);
+    must(bright[0].every((x) => /emphasis/.test(x.st)), 'the focused member wears the emphasis state');
+    await ev(`document.querySelector('.ws-select button[aria-label="Clear selection"], .ws-select .ws-select__clear')?.click()`);
+    await settle(300);
+  });
+  await check('Gantt: a click on a bar selects its row (the editor stores the selection; a second click clears it)', async () => {
+    await setType('Bar'); await setType('Gantt'); await chartReady(); await settle(300);
+    const pos = () => ev(`(() => { const d = document.querySelector('.ws-chart-canvas'); const i = window.echarts.getInstanceByDom(d); const r = d.getBoundingClientRect();
+      const s = i.getOption().series[0]; const bar = s.data[1]; const x = (bar[1] + bar[2]) / 2; const p = i.convertToPixel({ xAxisIndex: 0, yAxisIndex: 0 }, [x, bar[0]]); return { x: r.left + p[0], y: r.top + p[1] }; })()`);
+    const p = await pos();
+    await b.click(p.x, p.y); await settle(500);
+    const chip = await ev(`document.body.textContent.includes('= EU') || document.body.textContent.includes('region = EU')`);
+    must(chip, 'the selection names the clicked row (region = EU)');
+    await shot('gantt-selected-light.png');
+    const p2 = await pos(); await b.click(p2.x, p2.y); await settle(500);
+    must(!(await ev(`document.body.textContent.includes('region = EU')`)), 'a second click clears the selection');
   });
   if (b.consoleErrors.length) console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  '));
 } catch (e) {

@@ -246,6 +246,7 @@ export const defaultMarks = () => ({ size: null, label: null, detail: [], toolti
 //  colorByDimension: colour a single-measure bar chart's bars by their category
 //  xTitle/yTitle: axis titles (null = none)
 //  lineStyle / heatmapShape / targetMeasure / syncAxes / secondaryType / markerSize / markBorder: see the defaults below
+//  ganttLength:  "length" | "end" — a Gantt's second measure (absent = length; kept off the defaults so older files round-trip unchanged)
 //  target:       null | number — a KPI scorecard's goal; downIsGood: a fall shows as good
 //  conditional:  { [measureKey]: { mode, scale, mid, rules } } — Table / Text cell formatting
 export const defaultFormat = () => ({

@@ -50,7 +50,7 @@ export const CHART_NEEDS = Object.freeze({
     need("measures", 1, 2, "Bullet compares one measure with a target — use one measure, plus an optional second measure as its target."),
     need("dims", 0, 1, "Bullet takes at most one dimension (one bar per member).")]),
   gantt: Object.freeze([
-    need("measures", 2, 2, "Gantt draws each row as a bar — use exactly two measures: the start (a number or a date) and the length."),
+    need("measures", 2, 2, "Gantt draws each row as a bar — use exactly two measures: the start (a number or a date) and the length (or, in Format → Length, the end)."),
     need("dims", 1, 1, "Gantt needs exactly one dimension for its rows (one bar per member).")]),
   sankey: Object.freeze([
     need("dims", 2, 2, "Sankey draws flows between two dimensions — put one on Columns and one on Rows."),
@@ -59,6 +59,9 @@ export const CHART_NEEDS = Object.freeze({
     need("dims", 2, 2, "Small multiples needs two dimensions: the first makes a panel per member, the second runs along each panel."),
     need("measures", 1, ANY, "Small multiples plots a measure — add one.")]),
 });
+
+/** The group-by keys that count as the chart's dimensions: a Gantt's discrete Colour key splits its bars and is not a row. */
+export const dimsFor = (type, keyCount, discreteColour) => (type === "gantt" && discreteColour ? keyCount - 1 : keyCount);
 
 /** The rule-table hint for a type and its field counts, or null when it can draw them. */
 export function chartIssue(type, dimCount, measureCount) {
