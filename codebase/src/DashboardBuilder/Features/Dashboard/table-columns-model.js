@@ -15,7 +15,8 @@ export const COL_ALIGN_CHOICES = [["auto", "Table setting"], ["left", "Left"], [
 
 export const dimKey = (i) => `d${i}`;
 export const measKey = (i) => `m${i}`;
-const KEY = /^([dm])(\d{1,2})$/;
+const MAX_REPORTS = 5; // notes per sheet about column settings; the rest are counted
+const KEY = /^([dm])(0|[1-9]\d?)$/;
 const keyOk = (k) => { const m = KEY.exec(k); return !!m && Number(m[2]) < (m[1] === "d" ? LIMITS.dimensions : LIMITS.measures); };
 
 /** null when `w` is a whole pixel width in range, else the sentence that says why not. */
@@ -67,20 +68,23 @@ export function cleanTableCols(v, where, issues) {
   if (v == null) return undefined;
   if (typeof v !== "object" || Array.isArray(v)) { issues.push(`${where}: column settings were invalid — cleared.`); return undefined; }
   const out = {};
+  let reports = 0, dropped = 0;
+  const report = (msg) => { if (reports++ < MAX_REPORTS) issues.push(`${where}: ${msg}`); else dropped++; }; // a hand-edited file can't flood the list
   for (const [k, e] of Object.entries(v)) {
-    if (!keyOk(k)) { issues.push(`${where}: column ${String(k).slice(0, 12)} is not a known column — removed.`); continue; }
-    if (!e || typeof e !== "object" || Array.isArray(e)) { issues.push(`${where}: column ${k} was invalid — removed.`); continue; }
+    if (!keyOk(k)) { report(`column ${String(k).slice(0, 12)} is not a known column — removed.`); continue; }
+    if (!e || typeof e !== "object" || Array.isArray(e)) { report(`column ${k} was invalid — removed.`); continue; }
     const entry = {};
-    if (e.align !== undefined) {
+    if (e.align != null) { // null reads as unset, like an absent field
       if (TABLE_COL_ALIGNS.has(e.align)) entry.align = e.align;
-      else issues.push(`${where}: column ${k} alignment "${String(e.align).slice(0, 20)}" — reset to the table setting.`);
+      else report(`column ${k} alignment "${String(e.align).slice(0, 20)}" — reset to the table setting.`);
     }
-    if (e.width !== undefined) {
+    if (e.width != null) {
       const err = columnWidthError(e.width);
       if (err === null) entry.width = e.width;
-      else issues.push(`${where}: column ${k} width "${String(e.width).slice(0, 20)}" — reset to automatic.`);
+      else report(`column ${k} width "${String(e.width).slice(0, 20)}" — reset to automatic.`);
     }
     if (Object.keys(entry).length) out[k] = entry;
   }
+  if (dropped) issues.push(`${where}: ${dropped} more column setting${dropped === 1 ? "" : "s"} removed.`);
   return Object.keys(out).length ? out : undefined;
 }

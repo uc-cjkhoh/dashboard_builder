@@ -171,9 +171,12 @@ try {
     await colAlign('left'); await settle(300);
     must((await cellInfo('tbody tr td:nth-of-type(1)')).align === 'left', 'first measure column left: ' + J(await cellInfo('tbody tr td:nth-of-type(1)')));
     must((await cellInfo('tbody tr td:nth-of-type(2)')).align === 'center', 'second keeps the table setting');
+    must((await cellInfo('thead th.xt-meas', 0)).align === 'left', 'the header follows its column: ' + J(await cellInfo('thead th.xt-meas', 0)));
+    must((await cellInfo('thead th.xt-meas', 1)).align === 'center', 'the other header keeps the table setting');
     must(J(await sheetCols()) === J({ m0: { align: 'left' } }), 'stored: ' + J(await sheetCols()));
     await colAlign('right'); await settle(300);
     must((await cellInfo('tbody tr td:nth-of-type(1)')).align === 'right', 'right');
+    must((await cellInfo('thead th.xt-meas', 0)).align === 'right', 'header right');
     await colAlign('auto'); await settle(300);
     must((await cellInfo('tbody tr td:nth-of-type(1)')).align === 'center', 'auto returns to the table setting');
     must((await sheetCols()) === null, 'emptied column leaves nothing stored');
@@ -207,6 +210,16 @@ try {
     must((await sheetCols()).m0.width === 48, 'stops at the 48 px minimum: ' + J(await sheetCols()));
     await key('Delete', { windowsVirtualKeyCode: 46 }); await settle(300);
     must((await sheetCols()) === null, 'Delete returns to automatic');
+  });
+  await check('a drag that ends where it started commits nothing and leaves no widths behind', async () => {
+    const r = await ev(`(() => { const g = ${gripOf(1)}.getBoundingClientRect(); return { x: g.x + g.width / 2, y: g.y + g.height / 2 }; })()`);
+    await b.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: r.x, y: r.y, button: 'left', clickCount: 1 });
+    await b.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: r.x + 40, y: r.y, button: 'left' });
+    await b.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: r.x, y: r.y, button: 'left' });
+    await b.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: r.x, y: r.y, button: 'left', clickCount: 1 });
+    await settle(300);
+    must((await sheetCols()) === null, 'nothing stored: ' + J(await sheetCols()));
+    must(await ev(`!${tbl}.querySelector('.xt-w') && !${tbl}.classList.contains('xt-sized') && ${tbl}.querySelector('td.num').style.width === ''`), 'no leftover widths or xt-sized');
   });
   await check('dragging the handle resizes live and commits one width', async () => {
     const r = await ev(`(() => { const g = ${gripOf(1)}.getBoundingClientRect(); return { x: g.x + g.width / 2, y: g.y + g.height / 2, w: ${colHdr(1)}.getBoundingClientRect().width }; })()`);

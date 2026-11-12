@@ -698,9 +698,9 @@
 .ws-currency__input { width: 56px; }
 
 /* Table columns: a column's own alignment (beats the table-wide Align above) and fixed width; a resize handle on value-column headers. */
-.xtab thead th.xt-ca-left, .xtab tbody td.xt-ca-left, .xtab tbody th.xt-ca-left { text-align: left; }
-.xtab thead th.xt-ca-center, .xtab tbody td.xt-ca-center, .xtab tbody th.xt-ca-center { text-align: center; }
-.xtab thead th.xt-ca-right, .xtab tbody td.xt-ca-right, .xtab tbody th.xt-ca-right { text-align: right; }
+.xtab.xtab thead th.xt-ca-left, .xtab tbody td.xt-ca-left, .xtab tbody th.xt-ca-left { text-align: left; } /* the doubled .xtab lets a header beat the table-wide .xtab.xt-a-* thead th.num */
+.xtab.xtab thead th.xt-ca-center, .xtab tbody td.xt-ca-center, .xtab tbody th.xt-ca-center { text-align: center; }
+.xtab.xtab thead th.xt-ca-right, .xtab tbody td.xt-ca-right, .xtab tbody th.xt-ca-right { text-align: right; }
 .xtab.xt-sized { min-width: 0; } /* a fixed column width is kept, not stretched to fill the pane */
 .xtab .xt-w { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .xtab th.xt-sizable { position: relative; padding-right: var(--s4); }

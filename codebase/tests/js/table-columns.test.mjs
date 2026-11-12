@@ -78,3 +78,20 @@ test("workbook: absent in old sheets and untouched; round-trips; bad data report
   const notObj = JSON.parse(JSON.stringify(emptySheet())); notObj.format.tableCols = "wide";
   const i2 = []; assert.equal(sanitizeSheet(notObj, "Sheet 1", i2).format.tableCols, undefined); assert.equal(i2.length, 1);
 });
+test("keys have no leading zero (d01, m00 are not columns)", () => {
+  const issues = [];
+  assert.equal(cleanTableCols({ d01: { width: 90 }, m00: { width: 90 }, m0: { width: 90 } }, "S", issues).m0.width, 90);
+  assert.equal(issues.length, 2);
+});
+test("an explicit null align or width is unset, with no note", () => {
+  const issues = [];
+  assert.deepEqual(cleanTableCols({ m0: { align: null, width: 90 }, m1: { align: "left", width: null }, m2: { align: null, width: null } }, "S", issues), { m0: { width: 90 }, m1: { align: "left" } });
+  assert.deepEqual(issues, []);
+});
+test("notes about column settings are capped, with the rest counted", () => {
+  const issues = [];
+  const bad = {}; for (let i = 0; i < 30; i++) bad[`z${i}`] = { width: 1 };
+  assert.equal(cleanTableCols(bad, "S", issues), undefined);
+  assert.equal(issues.length, 6);
+  assert.match(issues[5], /25 more column settings removed/);
+});

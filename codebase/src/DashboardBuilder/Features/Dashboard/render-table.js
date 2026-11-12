@@ -69,6 +69,12 @@ export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, ca
     g.setAttribute("aria-valuemin", String(COL_MIN)); g.setAttribute("aria-valuemax", String(COL_MAX));
     const widthNow = () => Math.round(th.getBoundingClientRect().width);
     const apply = (w) => { table.classList.add("xt-sized"); for (const c of colCells.get(key) ?? []) setWidth(c, w); g.setAttribute("aria-valuenow", String(w)); };
+    const undoPreview = () => { // the stored look again: the saved width, or none
+      const saved = columnLook(sheet.format?.tableCols, key).width;
+      for (const c of colCells.get(key) ?? []) { if (saved) setWidth(c, saved); else { c.classList.remove("xt-w"); c.style.width = c.style.minWidth = c.style.maxWidth = ""; } }
+      if (!sized) table.classList.remove("xt-sized");
+      g.removeAttribute("aria-valuenow");
+    };
     const reset = () => { refocusGrip = key; columns.onSet(key, { width: null }); };
     g.addEventListener("focus", () => g.setAttribute("aria-valuenow", String(widthNow())));
     g.addEventListener("click", (e) => e.stopPropagation());
@@ -80,7 +86,11 @@ export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, ca
       const x0 = e.clientX, w0 = widthNow();
       let w = null;
       const move = (m) => { w = nudgeWidth(w0, (m.clientX - x0) / COL_STEP); apply(w); };
-      const up = () => { g.removeEventListener("pointermove", move); g.removeEventListener("pointerup", up); g.removeEventListener("pointercancel", up); if (w != null && w !== w0) { refocusGrip = key; columns.onSet(key, { width: w }); } };
+      const up = () => {
+        g.removeEventListener("pointermove", move); g.removeEventListener("pointerup", up); g.removeEventListener("pointercancel", up);
+        if (w != null && w !== w0) { refocusGrip = key; columns.onSet(key, { width: w }); return; }
+        if (w != null) undoPreview(); // dragged back to the start: nothing to commit, so the live widths go back to how the sheet draws them
+      };
       g.addEventListener("pointermove", move); g.addEventListener("pointerup", up); g.addEventListener("pointercancel", up);
     });
     g.addEventListener("keydown", (e) => {
