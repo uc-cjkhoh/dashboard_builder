@@ -159,7 +159,7 @@ Grouped by feature folder; each entry is the module, then what it owns.
 - `Dashboard/font-model.js` — pure: `FONT_CHOICES`, `fontToken`, `fontClass` — [worksheet-marks.md](../concepts/worksheet/worksheet-marks.md)
 - `Dashboard/table-style-model.js` — pure: `tableStyleClasses`, `TABLE_ALIGN_CHOICES`, `TABLE_DENSITY_CHOICES`, `TABLE_SHADE_CHOICES` — [worksheet-encodings.md](../concepts/worksheet/worksheet-encodings.md)
 - `Dashboard/line-style-model.js` / `heatmap-model.js` / `bullet-model.js` — pure: `LINE_STYLE_CHOICES`, `lineStep`, `linesTakeStyle`
-  - `HEATMAP_SHAPE_CHOICES`, `circleSize`
+  - `HEATMAP_SHAPE_CHOICES`, `circleSize`, `labelsShown` / `labelFits` / `cellSizeOf` (automatic cell labels); `stack-scale-model.js`: `tinyStackedSeries`, `stackedScaleNotice`
   - `targetChoices`, `bulletTargets`, `bandsFor`
   - `axis-sync-model.js` (`syncRange`, `secondaryKind`, `SECONDARY_CHOICES`) and `mark-style-model.js` (`markBorder`, `borderInk`, `edgeOr`, `markerSymbol`, `MARKER_SHAPE_CHOICES`, `markerSizeOr`, `markerSizeError`, `MARKER_SIZE`) — [worksheet-charts.md](../concepts/worksheet/worksheet-charts.md)
 - `Dashboard/gantt-model.js` — pure: `ganttBars` (start + length -> bars, date or number, skipped count), `ganttTime`, `ganttAxisTime`, `ganttLabelMargin`, `ganttNotice`
