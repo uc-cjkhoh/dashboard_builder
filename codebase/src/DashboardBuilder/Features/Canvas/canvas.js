@@ -10,7 +10,7 @@ import { snapTop } from "./align-snap.js";
 import { clampZoom, wheelZoom, panForZoom, panToReveal, toModel } from "./canvas-zoom.js";
 import { unionDiffControl } from "./union-diff.js";
 import { sourceNote, lossyNote, wireSource, MAX_SOURCE_COLUMNS, SQL_NOTE, defaultSql, sqlWire, lostKeys } from "../Core/source-model.js";
-import { relEnds } from "../Relations/relation-rules.js";
+import { relEnds, keyKindBreaks } from "../Relations/relation-rules.js";
 import { wireContextMenu } from "../Core/menu.js";
 import { openSqlDialog } from "./sql-dialog.js";
 
@@ -378,6 +378,10 @@ export function initCanvas() {
   const keyColumnsOf = (entity) => relationshipsFor(entity.id).flatMap(relEnds).filter((end) => end.entityId === entity.id).map((end) => end.column);
   const keysMessage = (lost) => `The relationships on this card use ${lost.map((c) => `“${c}”`).join(", ")}. Keep ${lost.length === 1 ? "that column" : "those columns"} in the query, or remove the relationship first.`;
 
+  // A key whose kind (number / text / date / boolean) would change to one its partner key can't match: a relationship needs the same kind on both ends.
+  const kindsMessage = ([k]) => `“${k.column}” is a key in a relationship with ${k.partner} (${k.other}), but the query would make it ${k.now}. Both ends must hold the same kind of value — change the query or remove the relationship first.`;
+  const brokenKinds = (entity, columns) => keyKindBreaks(entity.id, relationshipsFor(entity.id), entities, columns);
+
   function editSql(entity) {
     const own = () => defaultSql(entity.db, entity.table, entity.columns);
     openSqlDialog({
@@ -399,6 +403,8 @@ export function initCanvas() {
         const { columns } = await api.sourceColumns(sqlWire(entity.db, entity.table, sql)); // the server checks and describes the query; an error stays in the dialog
         const lost = lostKeys(keyColumnsOf(entity), columns);
         if (lost.length) throw new Error(keysMessage(lost));
+        const broken = brokenKinds(entity, columns);
+        if (broken.length) throw new Error(kindsMessage(broken));
         applyCustomSql(entity, sql, columns, mysql);
         toast(`${entity.table}: using your SQL.`, "ok");
       },
@@ -412,6 +418,8 @@ export function initCanvas() {
       const columns = await api.columns(entity.db, entity.table);
       const lost = lostKeys(keyColumnsOf(entity), columns);
       if (lost.length) { toast(keysMessage(lost), "danger"); return; }
+      const broken = brokenKinds(entity, columns);
+      if (broken.length) { toast(kindsMessage(broken), "danger"); return; }
       applyCustomSql(entity, null, columns);
       toast(`${entity.table}: back to the table.`, "ok");
     } catch (err) { toast(err.message, "danger"); }
@@ -470,9 +478,9 @@ export function initCanvas() {
       profile.setAttribute("aria-label", `Profile ${col.name}`);
       profile.title = "Profile this field (distinct values, nulls, top values)";
       profile.append(icon("profile", { size: 14 }));
-      profile.addEventListener("click", (event) => { event.preventDefault(); openColumnProfile(entity.db, entity.table, col); });
+      profile.addEventListener("click", (event) => { event.preventDefault(); openColumnProfile(entity.db, entity.table, col, entity.customSql ? sqlWire(entity.db, entity.table, entity.customSql) : null); });
 
-      if (isSource || entity.customSql) row.append(name, type); // no profile: it reads the table's own rows, which a union / unpivot or custom SQL card does not show
+      if (isSource) row.append(name, type); // no profile: it reads the table's own rows, which a union / unpivot card does not show
       else row.append(name, type, profile);
       cols.append(row);
     }

@@ -68,10 +68,9 @@ export function cleanSource(raw, db, name) {
 // --- Custom SQL on a card (D105) --------------------------------------------------------------------------------------------
 // Unlike a union / unpivot, a card with custom SQL stays an ordinary table card (it can be related and joined): `entity.customSql` is the
 // SELECT text, the card's columns are what that query returns, and every query that reads the table also carries `sources: [{ kind: "sql",
-// db, name: table, sql }]` so the server reads the derived table instead of the catalog table of that name.
+// db, name: table, sql }]` so the server reads the derived table instead of the catalog table of that name. The single-table reads (View data,
+// column profile, histogram, Check this join) carry the same entry as `source` (or `from.source` / `to.source`) for the table they read.
 export const SQL_NOTE = "Custom SQL";
-export const SQL_VIEW_DATA_MESSAGE = "View data reads the table's own rows — it isn't available for a card with custom SQL yet.";
-export const SQL_STAT_MESSAGE = "A histogram reads the table's own rows — it isn't available for a card with custom SQL yet.";
 
 const quoteName = (n) => `\`${n.replace(/[\\`]/g, "\\$&")}\``;
 

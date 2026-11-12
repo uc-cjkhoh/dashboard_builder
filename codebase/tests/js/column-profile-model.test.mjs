@@ -65,3 +65,9 @@ test("copy text: the name, and the plain non-null values (cut values left out)",
   assert.equal(s.copyName, "grp");
   assert.equal(s.copyValues, "a\nb");
 });
+
+test("a custom SQL card's profile request carries its query as `source`", () => {
+  const source = { kind: "sql", db: "shop", name: "orders", sql: "SELECT city FROM shop.o" };
+  assert.deepEqual(profileRequest("city", undefined, source), { column: "city", limit: 10, source });
+  assert.equal("source" in profileRequest("city", 5, null), false);
+});

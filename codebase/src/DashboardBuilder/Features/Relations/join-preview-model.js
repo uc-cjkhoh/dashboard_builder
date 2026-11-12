@@ -3,10 +3,15 @@
 // { rows, nullRows, keys, matchedKeys, matchedRows, maxDuplicates, avgDuplicates } over the rows examined.
 // A relationship is the user's declaration (golden rule 5): nothing here blocks anything, it only warns.
 
+import { sqlWire } from "../Core/source-model.js";
+
+// One end: the table and key column, plus the card's custom SQL (`source`) when it has any, so the check reads the query's rows.
+const end = (entity, column) => ({ db: entity.db, table: entity.table, column, ...(entity.customSql ? { source: sqlWire(entity.db, entity.table, entity.customSql) } : {}) });
+
 /** The request body for one key (a pair, plus extra `pairs` [{ from, to }] for a compound one); each entity is { db, table }. */
 export const previewRequest = (fromEntity, fromColumn, toEntity, toColumn, pairs = []) => ({
-  from: { db: fromEntity.db, table: fromEntity.table, column: fromColumn },
-  to: { db: toEntity.db, table: toEntity.table, column: toColumn },
+  from: end(fromEntity, fromColumn),
+  to: end(toEntity, toColumn),
   ...(pairs.length ? { pairs: pairs.map((p) => ({ left: p.from, right: p.to })) } : {}), // a compound key's extra pairs
 });
 

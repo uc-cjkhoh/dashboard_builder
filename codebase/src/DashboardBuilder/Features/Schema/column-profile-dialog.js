@@ -10,8 +10,8 @@ import { friendlyKind } from "./type-kind.js";
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
 let seq = 0;
 
-/** Profile one column of one table. `column` is `{ name, type, category }` as the catalog described it. */
-export function openColumnProfile(db, table, column) {
+/** Profile one column of one table. `column` is `{ name, type, category }` as the catalog (or the card's custom SQL) described it; `source` is that SQL (`sqlWire`) for a custom SQL card. */
+export function openColumnProfile(db, table, column, source = null) {
   const id = `col-profile-${++seq}`;
   const dlg = el("dialog", "dialog col-profile");
   dlg.setAttribute("aria-labelledby", `${id}-title`);
@@ -47,7 +47,7 @@ export function openColumnProfile(db, table, column) {
   close.focus();
 
   let req;
-  try { req = profileRequest(column.name); } catch (err) { showError(status, err.message); return dlg; }
+  try { req = profileRequest(column.name, undefined, source); } catch (err) { showError(status, err.message); return dlg; }
   api.profile(db, table, req, { signal: ctl.signal }).then((p) => {
     const s = summarize(p);
     copyValues.disabled = s.copyValues === "";

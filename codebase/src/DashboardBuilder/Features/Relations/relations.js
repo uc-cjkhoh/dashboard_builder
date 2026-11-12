@@ -262,8 +262,7 @@ function keyPairsFor(from, to, pairs, rel) {
       pairs: current, used: { from: usedOn(a), to: usedOn(b) }, onChange: (next) => { current = next; } },
     pairs: () => current,
     check: {
-      run: (signal) => (a.customSql || b.customSql) ? Promise.reject(new Error("Checking a join isn't available for a card with custom SQL yet.")) // the check reads the catalog tables, not the query
-        : api.joinPreview(previewRequest(a, from.column, b, to.column, current), { signal }),
+      run: (signal) => api.joinPreview(previewRequest(a, from.column, b, to.column, current), { signal }), // a card with custom SQL sends its query (previewRequest)
       names: () => ({ fromTable: a.table, toTable: b.table, fromColumn: compoundName(from.column, current, "from"), toColumn: compoundName(to.column, current, "to"), declared: rel?.cardinality }),
     },
   };
