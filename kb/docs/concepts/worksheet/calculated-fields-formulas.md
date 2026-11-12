@@ -14,8 +14,9 @@ not       := "NOT" not | compare
 compare   := sum [("="|"!="|"<>"|"<"|"<="|">"|">=") sum]        (no chaining)
 sum       := term (("+"|"-") term)*
 term      := factor (("*"|"/") factor)*
-factor    := "-" factor | number | string | "(" expr ")" | aggregate | logic | ref
+factor    := "-" factor | number | string | date | "(" expr ")" | aggregate | logic | ref
 string    := "'" text "'" | '"' text '"'
+date      := "#" yyyy-mm-dd "#"                                  (a date literal, see Logic functions)
 aggregate := FN "(" expr ")" | "PERCENTILE" "(" expr "," number ")"
 ref       := "[" name "]" | "[@" parameter "]"                   (a workbook parameter, see Parameters below)
 ```
@@ -52,15 +53,16 @@ A text or number field's menu **Clean…** adds ONE calculated field. The data i
 - **Recode values** → `old = new` lines, up to 20, each cut at the first `=`. Builds `CASE f WHEN 'old' THEN 'new' … ELSE f END`; unlisted values are kept unless unticked. The formula must stay within 500 characters.
 - **Read as a date** → `DATE(f)`.
 - **Naming:** `<field> (trimmed|filled|recoded|date)`, then ` 2`… when taken.
-- **Not offered** on a date field (no date literal), nor on a field whose names hold `.`, `[` or `]`.
+- **Not offered** on a date field (the dialog takes no date value; a formula has the date literal `#2024-01-31#`), nor on a field whose names hold `.`, `[` or `]`.
 
 ### Logic functions
 
-- **Text literal** `'open'` or `"open"`: the same quote inside is doubled (`'it''s'`, `"say ""hi"""`). At most 100 characters. It is sent as data, never as SQL text. There is no date literal: write `DATE('2024-01-01')`.
-- **Comparison** `= != <> < <= > >=` (`<>` is `!=`) takes two numbers, two texts or two dates — never a mix and never a boolean (`Comparison needs two values of the same type — …`). Text compares exactly (case and accents count).
+- **Text literal** `'open'` or `"open"`: the same quote inside is doubled (`'it''s'`, `"say ""hi"""`). At most 100 characters. It is sent as data, never as SQL text.
+- **Date literal** `#2024-01-31#` ([D101](../../decisions/decisions-logic.md#d101--a-date-literal-is-hash-delimited-in-over-dates-and-a-boolean-compares-with--and-)): year-month-day, a real day from 1970-01-01 to 2149-06-06 (what a ClickHouse `Date` holds); anything else is refused (`A date must be a real day from 1970-01-01 to 2149-06-06, written #2024-01-31#.`, or `Write a date as #2024-01-31#.` when the shape is wrong). It has the type date, is sent as a `date` node, and is bound as data (read by `toDate`, the type `DATE('2024-01-31')` answers), so `[orders.placed] >= #2024-01-01#` and `IF(c, #2024-01-01#, [orders.placed])` work. A date column holding a time of day compares at midnight, as with `DATE()` (`BETWEEN #2024-01-01# AND #2024-12-31#` leaves out the afternoon of 31 December). A `#` inside a text literal is plain text.
+- **Comparison** `= != <> < <= > >=` (`<>` is `!=`) takes two numbers, two texts or two dates — never a mix (`Comparison needs two values of the same type — …`). A boolean compares only with `=` and `!=`, and only with another boolean (`[orders.active] = TRUE`, `[a] = ([b] > 5)`); it has no order (`Comparison needs a number, text or date — orders.active is boolean.`). Text compares exactly (case and accents count).
 - **Precedence**, loosest first: `OR`, `AND`, `NOT`, comparison, `+ -`, `* /`. So `1 + 2 > 2` works without parentheses.
-- **`AND` / `OR` / `NOT`** need booleans (a comparison, `ISNULL`, a boolean field, `TRUE` / `FALSE`) and give a boolean. A boolean is never compared with `=`: write the field itself.
-- **`x IN (a, b, …)`** / **`NOT IN`** ([D76](../../decisions/decisions-logic.md#d76--in-is-a-list-node-of-bound-literals-at-most-50-between-is-two-comparisons)): `x` is a number or text; the 1 to 50 values are number or text literals of the same type written in the formula (a number or text `[@Parameter]` works), each bound as data. A field, a date, a mixed type or a longer list is refused. **`x BETWEEN a AND b`** / **`NOT BETWEEN`** is `x >= a AND x <= b` (ends included; number, text or date); a large `x` is evaluated twice in the SQL and counts twice against the node limit.
+- **`AND` / `OR` / `NOT`** need booleans (a comparison, `ISNULL`, a boolean field, `TRUE` / `FALSE`) and give a boolean. A boolean field is already a condition: write the field itself, or compare it (`= TRUE`).
+- **`x IN (a, b, …)`** / **`NOT IN`** ([D76](../../decisions/decisions-logic.md#d76--in-is-a-list-node-of-bound-literals-at-most-50-between-is-two-comparisons)): `x` is a number, text or date; the 1 to 50 values are number, text or date literals (`#2024-01-31#`) of the same type written in the formula (a number or text `[@Parameter]` works; a date `[@Parameter]` is not a list value), each bound as data. A field, a `DATE()` call, a boolean, a mixed type or a longer list is refused (`IN's values must be numbers, text or dates written in the formula.`). **`x BETWEEN a AND b`** / **`NOT BETWEEN`** is `x >= a AND x <= b` (ends included; number, text or date); a large `x` is evaluated twice in the SQL and counts twice against the node limit.
 - **`IF(cond, a, b)`** (also `IIF`), **`IF c THEN a [ELSEIF d THEN b]… [ELSE e] END`** and **`CASE WHEN c THEN a [WHEN …] [ELSE d] END`** (all one `case` node, [D77](../../decisions/decisions-logic.md#d77--the-keyword-if-is-another-spelling-of-case-when)):
   - The simple form `CASE [f] WHEN 'x' THEN a … END` tests `[f] = 'x'`. The subject is copied into every arm, so each arm costs its nodes again against the node limit.
   - Conditions are booleans. Every THEN and the ELSE must have **one type** (number, text, date or boolean); otherwise `All results must be the same type — … is text, not number.` shows at the offending branch.

@@ -25,8 +25,9 @@ reaches the server or SQL.
 | `num` | `v`, finite |
 | `un` / `bin` | `op: "-"` / `op` ∈ `+ - * /` |
 | `str` | `v`, ≤ 100 characters, bound as a `String` parameter |
+| `date` | `v`: `yyyy-MM-dd`, a real day from 1970-01-01 to 2149-06-06 (`CalcLimits.MinDate` / `MaxDate`); bound as a `String` parameter read by `toDate` ([D101](../decisions/decisions-logic.md)) |
 | `bool` / `null` | `v`: `true` or `false` / no members; compiled to the SQL keywords `true`, `false`, `NULL` (nothing user-typed in the SQL) |
-| `in` | `arg` and `list`: 1 to 50 `num` / `str` nodes (or `un` `-` over a `num`), each bound; `NOT IN` is `not` over it |
+| `in` | `arg` and `list`: 1 to 50 `num` / `str` / `date` nodes (or `un` `-` over a `num`), each bound; `NOT IN` is `not` over it |
 | `cmp` | `op` ∈ `= != < <= > >=`, `l`, `r` |
 | `logic` | `op` ∈ `and or`, `l`, `r` |
 | `ifnull` | `l`, `r` |
@@ -70,9 +71,10 @@ reaches the server or SQL.
     whole number from -100000 to 100000 written in the formula."; `CalcLimits.MaxDateAmount`, `CALC_LIMITS.dateAmount`).
 - **Logic typing** (400 at the node path; `w0.c` is the first WHEN's condition, `w1.t` the second's result, `else`):
   - A condition must be boolean ("A condition needs a boolean — orders.amount is number.").
-  - Every result has one type ("All results must be the same type — …"). A comparison takes two values of one type, never boolean ("Comparison needs two values of the same type — …").
+  - Every result has one type ("All results must be the same type — …"). A comparison takes two values of one type ("Comparison needs two values of the same type — …"); a boolean compares only with `=` / `!=` and only with a boolean ("Comparison needs a number, text or date — orders.active is boolean." for an order).
   - `NULL` takes the type of the results beside it (an `IF`/`CASE` result, an `IFNULL` side) and is refused elsewhere ("Arithmetic needs numbers — NULL is null."; "Comparison with NULL never matches — use ISNULL(value) instead."; with no typed result "NULL needs another value to take its type from — …") ([D75](../decisions/decisions-logic.md)).
-  - `in` (400): the value is a number or text ("IN needs a number or text — orders.placed is date." at `arg`); 1 to 50 values ("IN takes 1 to 50 values." at `list`); each a literal of the value's type ("IN's values must be numbers or text written in the formula." / "IN needs values of the same type — …" at `list.<i>`) ([D76](../decisions/decisions-logic.md)).
+  - `in` (400): the value is a number, text or date ("IN needs a number, text or date — orders.active is boolean." at `arg`); 1 to 50 values ("IN takes 1 to 50 values." at `list`); each a literal of the value's type ("IN's values must be numbers, text or dates written in the formula." / "IN needs values of the same type — …" at `list.<i>`) ([D76](../decisions/decisions-logic.md)).
+  - `date` (400 at its node): "A date must be a real day from 1970-01-01 to 2149-06-06, written #2024-01-31#."
   - `AND`/`OR`/`NOT` take booleans. A text literal is ≤ 100 characters ("A text value can be at most 100 characters.").
     A `case` needs an arm ("A CASE needs at least one WHEN.").
   - A boolean calculation is a dimension (keys `true` / `false` / `null`) or, when it aggregates, a measure. It takes no `sum`/`avg`.
