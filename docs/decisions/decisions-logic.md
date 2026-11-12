@@ -25,12 +25,12 @@ and `NULL` to `NULL`, since nothing the user typed reaches the SQL. A boolean co
 boolean ([D101](#d101--a-date-literal-is-hash-delimited-in-over-dates-and-a-boolean-compares-with--and-)); these literals are for `IF` results, `AND` / `OR` and that comparison.
 
 ### D76 — `IN` is a list node of bound literals, at most 50; `BETWEEN` is two comparisons
-- `x IN (a, b, …)` is `{ "k": "in", arg, list }`; `NOT IN` wraps it in `not`. The list holds number or text literals (a
+- `x IN (a, b, …)` is `{ "k": "in", arg, list }`; `NOT IN` wraps it in `not`. The list holds number, text or date literals (a
   negated number counts), written in the formula, 1 to `CALC_LIMITS.inList` (50, `CalcLimits.MaxInList`), all of the
-  value's type; the value is a number or text. Every list value is a bound parameter. A `[@Parameter]` works because it is
+  value's type; the value is a number, text or date. Every list value is a bound parameter. A `[@Parameter]` works because it is
   replaced by a literal first; a date parameter is not a list value.
 - Anything else is a 400, never clamped: no values or more than 50 (`IN takes 1 to 50 values.`, at `….calc.list`), a field or
-  expression in the list (`….calc.list.<i>`), a mixed type, a date value.
+  expression in the list (`….calc.list.<i>`), a mixed type, a date `[@Parameter]`.
 - **Why a node, not ORs:** a chain of `=` joined by `OR` nests as deep as the list is long and would hit the depth limit at
   about ten values. The list node costs one level.
 - **`BETWEEN`** is parser sugar for `x >= a AND x <= b` (ends included; `NOT BETWEEN` wraps it in `not`), so it adds no wire
