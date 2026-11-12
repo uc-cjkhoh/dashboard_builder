@@ -272,7 +272,7 @@ export function initCanvas() {
       show(bodyEl);
       emit("entity:loaded", { entityId: entity.id }); // relations.js draws links that wait on these rows
     } catch (err) {
-      setStatus(entity, "failed", err.message);
+      setStatus(entity, "failed", err.message, err.status === 400); // a 400 is a rule the card breaks (the server's reason is shown): trying again would say the same
     }
   }
 
@@ -487,7 +487,7 @@ export function initCanvas() {
     }
   }
 
-  function setStatus(entity, state, message) {
+  function setStatus(entity, state, message, refused = false) {
     const statusEl = entity.el.querySelector(".entity__status");
     statusEl.hidden = false;
     statusEl.replaceChildren();
@@ -507,8 +507,8 @@ export function initCanvas() {
     const retry = document.createElement("button");
     retry.type = "button";
     retry.className = "btn btn--danger";
-    retry.textContent = "Retry";
-    retry.addEventListener("click", () => loadEntity(entity));
+    retry.textContent = refused ? "Remove card" : "Retry"; // the same request would be refused again: offer the way out instead
+    retry.addEventListener("click", () => (refused ? removeEntity(entity) : loadEntity(entity)));
     statusEl.append(pill, document.createTextNode(" "), retry);
     if (message) {
       const detail = document.createElement("p");
