@@ -27,6 +27,7 @@ function answer({ method, path, body }) {
   if (path === '/api/databases/shop/tables') return { json: Object.keys(TABLES) };
   const m = path.match(/^\/api\/databases\/shop\/tables\/(\w+)\/columns$/);
   if (m && TABLES[m[1]]) return { json: TABLES[m[1]].map(([name, type, category]) => ({ name, type, category })) };
+  if (path === '/api/source/columns' && body.name?.includes('refused')) return { status: 400, json: { error: 'These tables share no column with the same name and kind of values.', field: 'source.tables' } };
   if (path === '/api/source/columns') {
     sourceReqs.push(body);
     const cols = body.kind === 'union'
@@ -316,6 +317,17 @@ try {
     must((await ev(`document.querySelector('.entity__note-lossy').textContent`)) === 'Types differ: read as Float64, large values may round.', 'lossy text');
     must(await ev(`document.querySelectorAll('.entity__note-lossy').length`) === 1, 'only the lossy card has it');
     await shot('union-lossy-note-light.png');
+  });
+
+  await check('a card the server refuses (400) shows the reason and offers Remove card, not Retry; Remove takes it off the canvas', async () => {
+    await ev(`document.dispatchEvent(new CustomEvent('source:add', { detail: { source: { kind: 'union', db: 'shop', name: 'Union: refused', tables: ['orders', 'returns'] } } }))`);
+    await waitFor(`!!document.querySelector('.entity__error')`, 'the failed card shows its reason');
+    const r = await ev(`(() => { const c = document.querySelector('.entity__error').closest('.entity'); return { reason: c.querySelector('.entity__error').textContent, button: c.querySelector('.entity__status .btn').textContent }; })()`);
+    must(r.reason === 'These tables share no column with the same name and kind of values.', `reason: ${r.reason}`);
+    must(r.button === 'Remove card', `button: ${r.button}`);
+    const before = await ev(`document.querySelectorAll('.entity').length`);
+    await ev(`document.querySelector('.entity__error').closest('.entity').querySelector('.entity__status .btn').click()`);
+    await waitFor(`document.querySelectorAll('.entity').length === ${before - 1}`, 'the card is gone');
   });
 
   if (b.consoleErrors.length) console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  '));
