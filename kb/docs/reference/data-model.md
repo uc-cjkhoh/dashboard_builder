@@ -154,12 +154,12 @@ Nothing here reaches the server; dashboards add no endpoint
   format: { numberFormat, decimals, currencySymbol, dateFormat, topN, dateBucket, target, downIsGood, conditional, legend,
             dataLabels, colorByDimension, xTitle, yTitle,
             lineStyle, heatmapShape, ganttLength?, targetMeasure,
-            syncAxes, dualAxis, secondaryType, markerSize, markBorder, markBorderColor?, markerShape, font, tableAlign, tableDensity, tableShade }
+            syncAxes, dualAxis, secondaryType, markerSize, markBorder, markBorderColor?, markerShape, font, tableAlign, tableDensity, tableShade, tableCols? }
 }
 ```
 
 - **Format font:** `font` `default` | `serif` | `mono` (default `default`) — the family of chart and table text.
-- **Format table settings:** `tableAlign` `auto` | `left` | `center` | `right` (default `auto`), `tableDensity` `standard` | `compact` | `roomy` (default `standard`), `tableShade` `none` | `banded` | `header` | `both` (default `none`); they apply to Table and Text views.
+- **Format table settings:** `tableAlign` `auto` | `left` | `center` | `right` (default `auto`), `tableDensity` `standard` | `compact` | `roomy` (default `standard`), `tableShade` `none` | `banded` | `header` | `both` (default `none`); they apply to Table and Text views. `tableCols?` `{ [d0…d11 | m0…m9]: { align?: left | center | right, width?: whole 48–600 } }` — one column's own alignment and width; absent when none is set ([worksheet-marks.md](../concepts/worksheet/worksheet-marks.md#table-columns-t01-23)).
 - **Format chart settings:**
 
   | Key | Values |
