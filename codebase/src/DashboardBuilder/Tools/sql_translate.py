@@ -779,10 +779,37 @@ def mysql_to_clickhouse(sql, sqlglot, ErrorLevel, fold_pairs=()):
             if root_with is not None:
                 probe.set("with_", root_with.copy())
             scope = probe.sql(dialect="clickhouse")
-        probes.append({"id": pid, "sql": scope})
+        probes.append({"id": pid, "sql": scope, "columns": 2})
         if pid in fold_pairs:
             changes.append("case-fold")
             node.replace(type(node)(this=fold(left.copy()), expression=fold(right.copy())))
+    # --- GROUP BY / ORDER BY / DISTINCT on a plain column: when ClickHouse says the column is text, a note (MySQL puts 'A' and 'a' in one group; ClickHouse in two). Not rewritten: the
+    # output values would change, and every reference to the column with them. Probes ask ClickHouse for the type, like the pairs above.
+    seen_cols = set()
+    for select in list(tree.find_all(exp.Select)):
+        group, order, distinct = select.args.get("group"), select.args.get("order"), select.args.get("distinct")
+        cols = []
+        if group is not None:
+            cols += [e for e in group.expressions if isinstance(e, exp.Column)]
+        if order is not None:
+            cols += [o.this for o in order.expressions if isinstance(o, exp.Ordered) and isinstance(o.this, exp.Column)]
+        if distinct is not None and not distinct.args.get("on"):
+            cols += [e for e in select.expressions if isinstance(e, exp.Column)]
+        for col in cols:
+            key = (id(select), col.sql())
+            if key in seen_cols or len(probes) >= MAX_PAIRS or select.args.get("from_") is None:
+                continue
+            seen_cols.add(key)
+            probe = exp.Select(expressions=[exp.alias_(col.copy(), "l")])
+            probe.set("from_", select.args["from_"].copy())
+            if select.args.get("joins"):
+                probe.set("joins", [j.copy() for j in select.args["joins"]])
+            if root_with is not None:
+                probe.set("with_", root_with.copy())
+            pid = len(probes)
+            probes.append({"id": pid, "sql": probe.sql(dialect="clickhouse"), "columns": 1})
+            if pid in fold_pairs:
+                note("Grouping, sorting and DISTINCT on text are case-sensitive in ClickHouse: 'Open' and 'open' are two values here, one in MySQL.")
     for n in tree.find_all(exp.Anonymous):
         if n.name.upper().startswith("MYSQL_"):
             raise Refusal(f"{n.name[6:].replace('_', ' ').title()} could not be translated.")

@@ -70,6 +70,23 @@ public class SqlColumnPairTests
             Assert.Equal(2, s2.Statements.Count(x => x.Sql.StartsWith("DESCRIBE TABLE", StringComparison.Ordinal)));
         }
     }
+    [Fact] public async Task Grouping_sorting_and_DISTINCT_on_a_text_column_say_that_ClickHouse_keeps_Open_and_open_apart()
+    {
+        StubClickHouse.Result One(string type) => new([new("name", "String"), new("type", "String")], [["l", type]]);
+        var (sql, changes, warnings, stub) = await Run("SELECT region, COUNT(*) FROM orders GROUP BY region ORDER BY region", _ => One("LowCardinality(String)"));
+        using (stub)
+        {
+            Assert.Equal("SELECT region, count(*) FROM orders GROUP BY region ORDER BY region NULLS FIRST", sql); // not rewritten: the output values would change
+            Assert.Equal(1, warnings); Assert.Contains("nulls-first", changes);
+            Assert.Single(stub.Statements, x => x.Sql.StartsWith("DESCRIBE TABLE", StringComparison.Ordinal)); // GROUP BY and ORDER BY on the same column ask once
+        }
+        var (_, _, numberWarnings, s2) = await Run("SELECT qty FROM orders GROUP BY qty", _ => One("UInt32"));
+        using (s2) Assert.Equal(0, numberWarnings);
+        var (_, _, distinctWarnings, s3) = await Run("SELECT DISTINCT region FROM orders", _ => One("String"));
+        using (s3) Assert.Equal(1, distinctWarnings);
+        var (_, _, aliasWarnings, s4) = await Run("SELECT UPPER(region) AS r FROM orders GROUP BY r", _ => throw new InvalidOperationException("unknown column")); // an alias: ClickHouse cannot type it here, so no note
+        using (s4) Assert.Equal(0, aliasWarnings);
+    }
     [Fact] public void Text_types_are_String_FixedString_and_Enum_also_inside_Nullable_and_LowCardinality()
     {
         foreach (var t in new[] { "String", "Nullable(String)", "LowCardinality(String)", "LowCardinality(Nullable(String))", "FixedString(4)", "Enum8('a' = 1)", "Nullable(Enum16('a' = 1))" })

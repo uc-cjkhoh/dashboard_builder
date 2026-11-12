@@ -18,8 +18,8 @@ public sealed record TranslateResult(string Sql, IReadOnlyList<string> Warnings,
     public IReadOnlyList<TypeProbe> ProbeList => Probes ?? [];
 }
 
-/// <summary>A query that describes the two columns of one comparison (<c>SELECT a.x AS l, b.y AS r FROM …</c>), by id.</summary>
-public sealed record TypeProbe(int Id, string Sql);
+/// <summary>A query that describes the one or two columns of a comparison or a GROUP BY / ORDER BY / DISTINCT (<c>SELECT a.x AS l, b.y AS r FROM …</c>), by id.</summary>
+public sealed record TypeProbe(int Id, string Sql, int Columns = 2);
 
 /// <summary>The translator is not usable here (no Python 3, or the vendored library is missing): the dialect switch is unavailable, nothing else is.</summary>
 public sealed class SqlTranslatorUnavailableException(string message) : Exception(message);
@@ -119,7 +119,7 @@ public sealed class SqlTranslator
                 ? c.EnumerateArray().Select(x => x.GetString()).OfType<string>().Where(x => x.Length is > 0 and <= 40).Take(10).ToList() : [];
             var probes = root.TryGetProperty("probes", out var pr) && pr.ValueKind == JsonValueKind.Array
                 ? pr.EnumerateArray().Select(x => x.TryGetProperty("id", out var i) && i.ValueKind == JsonValueKind.Number && x.TryGetProperty("sql", out var q) && q.GetString() is { Length: > 0 and <= ApiLimits.MaxCustomSqlChars } text2
-                    ? new TypeProbe(i.GetInt32(), text2) : null).OfType<TypeProbe>().Take(MaxProbes).ToList() : [];
+                    ? new TypeProbe(i.GetInt32(), text2, x.TryGetProperty("columns", out var n) && n.ValueKind == JsonValueKind.Number && n.GetInt32() is 1 or 2 ? n.GetInt32() : 2) : null).OfType<TypeProbe>().Take(MaxProbes).ToList() : [];
             return new TranslateResult(text, warnings, changes, probes);
         }
         var kind = root.TryGetProperty("kind", out var k) ? k.GetString() : "error";
