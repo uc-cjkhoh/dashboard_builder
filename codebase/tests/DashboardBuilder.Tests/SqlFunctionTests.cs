@@ -87,6 +87,22 @@ public class SqlFunctionTests
         Assert.Contains("arrayDistinct", await My2Ch("SELECT GROUP_CONCAT(DISTINCT a ORDER BY a DESC) FROM t"));
     }
 
+    [Fact] public async Task Logarithms_and_roots_are_NULL_outside_their_domain_as_in_MySQL()
+    {
+        var r = await My("SELECT LOG(0), LN(x), LOG10(5), SQRT(-1), SQRT(4), LOG2(x), LOG(3, x), ASIN(x) FROM t");
+        Assert.Equal("SELECT NULL, if(x > 0, ln(x), NULL), log10(5), NULL, sqrt(4), if(x > 0, log2(x), NULL), if(3 > 0 AND 3 <> 1 AND x > 0, divide(ln(x), ln(3)), NULL), if(x >= -1 AND x <= 1, asin(x), NULL) FROM t", r.Sql);
+        Assert.Contains("math-null", r.Changes);
+    }
+
+    [Fact] public async Task LOCATE_INSTR_and_POSITION_ignore_case_and_BIN_and_BIT_LENGTH_follow_MySQL()
+    {
+        var r = await My("SELECT LOCATE('B', s, 3), INSTR(s, 'b'), POSITION('b' IN s), BIN(x), BIT_LENGTH(s) FROM t");
+        Assert.Equal("SELECT positionCaseInsensitiveUTF8(s, 'B', 3), positionCaseInsensitiveUTF8(s, 'b'), positionCaseInsensitiveUTF8(s, 'b'), "
+            + "if(x = 0, '0', replaceRegexpOne(bin(toUInt64(x)), '^0+', '')), (length(s) * 8) FROM t", r.Sql); // bin() pads to whole bytes in ClickHouse; MySQL's does not
+        Assert.Contains("case-fold", r.Changes);
+        Assert.Contains("INSERT", await Refused("SELECT INSERT(s, 1, 2, 'x') FROM t"));
+    }
+
     [Fact] public async Task Text_helpers_ignore_case_and_answer_NULL_as_MySQL_does()
     {
         var r = await My("SELECT ELT(n, a, b), FIND_IN_SET(a, b), FIELD(a, 'x', 'y'), STRCMP(a, b) FROM t");
