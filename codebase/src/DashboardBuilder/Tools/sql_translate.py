@@ -145,7 +145,7 @@ def mysql_to_clickhouse(sql, sqlglot, ErrorLevel, fold_pairs=()):
 
     # --- parse: MySQL's date format functions are kept as plain calls with the original format text -------------------------------------------------------
     original_from_unixtime = MySQL.Parser.FUNCTIONS["FROM_UNIXTIME"]
-    raw = {"DATE_FORMAT": "MYSQL_DATE_FORMAT", "STR_TO_DATE": "MYSQL_STR_TO_DATE", "TIME_FORMAT": "MYSQL_TIME_FORMAT"}
+    raw = {"DATE_FORMAT": "MYSQL_DATE_FORMAT", "STR_TO_DATE": "MYSQL_STR_TO_DATE", "TIME_FORMAT": "MYSQL_TIME_FORMAT", "BIN": "MYSQL_BIN"}
 
     def keep(name):
         return lambda args: exp.Anonymous(this=name, expressions=args)
@@ -452,6 +452,10 @@ def mysql_to_clickhouse(sql, sqlglot, ErrorLevel, fold_pairs=()):
         changes.append("group-concat")
         return A("if", exp.EQ(this=A("countIf", present.copy()), expression=N(0)), exp.Null(), A("arrayStringConcat", items, sep.copy()))  # no rows with a value: NULL, as in MySQL
 
+    def bt_ok(node):
+        """A one-argument function, or LOG with a base of 2 or 10 (the only logarithm forms that go straight to a ClickHouse function)."""
+        return not isinstance(node, exp.Log) or number_text(node.args.get("this")) in ("2", "10")
+
     BITS = {exp.BitwiseAnd: "bitAnd", exp.BitwiseOr: "bitOr", exp.BitwiseXor: "bitXor", exp.BitwiseLeftShift: "bitShiftLeft", exp.BitwiseRightShift: "bitShiftRight"}
 
     def u64(node):
@@ -505,6 +509,38 @@ def mysql_to_clickhouse(sql, sqlglot, ErrorLevel, fold_pairs=()):
                 return node
             if not (text is not None or (isinstance(inner, exp.Literal) and inner.is_string)):
                 note("CAST(x AS SIGNED): MySQL rounds a decimal number to the nearest whole number (2.5 is 3); ClickHouse cuts the fraction (2.5 is 2).")
+        if isinstance(node, (exp.Ln, exp.Log, exp.Sqrt, exp.Asin, exp.Acos)):  # outside their domain MySQL answers NULL; ClickHouse gives -inf or nan
+            if isinstance(node, exp.Log):
+                base, x = node.args.get("this"), node.args.get("expression")
+                bt = number_text(base)
+                if bt in ("2", "10"):
+                    call, cond = A("log" + bt, x.copy()), exp.GT(this=x.copy(), expression=N(0))
+                else:
+                    call = A("divide", A("ln", x.copy()), A("ln", base.copy()))
+                    cond = exp.And(this=exp.And(this=exp.GT(this=base.copy(), expression=N(0)), expression=exp.NEQ(this=base.copy(), expression=N(1))), expression=exp.GT(this=x.copy(), expression=N(0)))
+                subject = x
+            else:
+                x = node.this
+                subject = x
+                name = {exp.Ln: "ln", exp.Sqrt: "sqrt", exp.Asin: "asin", exp.Acos: "acos"}[type(node)]
+                call = A(name, x.copy())
+                cond = (exp.GTE(this=x.copy(), expression=N(0)) if isinstance(node, exp.Sqrt) else exp.GT(this=x.copy(), expression=N(0)) if isinstance(node, exp.Ln)
+                        else exp.And(this=exp.GTE(this=x.copy(), expression=N(-1)), expression=exp.LTE(this=x.copy(), expression=N(1))))
+            changes.append("math-null")
+            sure = number_text(subject)  # a literal needs no run-time guard: inside the domain it is the call, outside it is NULL
+            if sure is not None and bt_ok(node):
+                v = float(sure)
+                inside = v >= 0 if isinstance(node, exp.Sqrt) else -1 <= v <= 1 if isinstance(node, (exp.Asin, exp.Acos)) else v > 0
+                return call if inside else exp.Null()
+            return A("if", cond, call, exp.Null())
+        if isinstance(node, exp.StrPosition):  # LOCATE / INSTR / POSITION ignore case in MySQL
+            changes.append("case-fold")
+            extra = [node.args["position"]] if node.args.get("position") is not None else []
+            return A("positionCaseInsensitiveUTF8", node.this, node.args["substr"], *extra)
+        if isinstance(node, exp.BitLength):  # bytes times eight
+            return exp.Paren(this=exp.Mul(this=A("length", node.this), expression=N(8)))
+        if isinstance(node, exp.Stuff):
+            raise Refusal("INSERT(str, pos, len, newstr) is not translated; build it with CONCAT and SUBSTRING.")
         if isinstance(node, (exp.Greatest, exp.Least)):  # NULL when any argument is NULL; ClickHouse ignores NULLs
             args = [node.this, *node.expressions]
             name = "greatest" if isinstance(node, exp.Greatest) else "least"
@@ -576,6 +612,9 @@ def mysql_to_clickhouse(sql, sqlglot, ErrorLevel, fold_pairs=()):
                 a, b = low(largs[0]), low(largs[1])
                 compare = A("multiIf", exp.LT(this=a, expression=b), N(-1), exp.EQ(this=a.copy(), expression=b.copy()), N(0), N(1))
                 return null_if_any_null(largs, compare)
+            if lname == "MYSQL_BIN" and len(largs) == 1:  # ClickHouse's bin() pads to whole bytes ('00000101'); MySQL's does not ('101')
+                bits = A("replaceRegexpOne", A("bin", A("toUInt64", largs[0].copy())), S("^0+"), S(""))
+                return A("if", exp.EQ(this=largs[0].copy(), expression=N(0)), S("0"), bits)
             if lname == "WEEKDAY" and len(largs) == 1:  # Monday = 0
                 return exp.Paren(this=exp.Sub(this=A("toDayOfWeek", exp.TsOrDsToDate(this=date_arg(largs[0]))), expression=N(1)))
             if lname in ("ADDDATE", "SUBDATE") and len(largs) == 2:

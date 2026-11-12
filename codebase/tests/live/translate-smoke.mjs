@@ -208,6 +208,20 @@ const cases = [
       c('JOIN ON two text columns ignores case', `COUNT(*) FROM (SELECT 'A' AS x) a JOIN (SELECT 'a' AS y) b ON a.x = b.y`, '1'), c('WHERE text col = text col', `COUNT(*) FROM (SELECT 'A' AS x, 'a' AS y) t WHERE t.x = t.y`, '1'),
       c('WHERE text col != text col', `COUNT(*) FROM (SELECT 'A' AS x, 'a' AS y) t WHERE t.x != t.y`, '0'), c('JOIN ON two number columns', `COUNT(*) FROM (SELECT 1 AS x) a JOIN (SELECT 1 AS y) b ON a.x = b.y`, '1'),
       c('JOIN ON different text values', `COUNT(*) FROM (SELECT 'A' AS x) a JOIN (SELECT 'b' AS y) b ON a.x = b.y`, '0'),
+      // ---- less common functions: a name ClickHouse also has may mean something else there ----
+      c('INET_ATON', `INET_ATON('192.168.1.1')`, '3232235777'), c('INET_NTOA', `INET_NTOA(3232235777)`, '192.168.1.1'), c('BIN', `BIN(5)`, '101'), c('OCT (ClickHouse has no such function: a loud failure)', `OCT(8)`, '(ClickHouse'), c('CONV (ClickHouse has no such function: a loud failure)', `CONV('ff', 16, 10)`, '(ClickHouse'),
+      c('TIME_TO_SEC (ClickHouse has no such function: a loud failure)', `TIME_TO_SEC('01:02:03')`, '(ClickHouse'), c('SEC_TO_TIME (ClickHouse has no such function: a loud failure)', `SEC_TO_TIME(3723)`, '(ClickHouse'), c('TO_BASE64', `TO_BASE64('abc')`, 'YWJj'), c('FROM_BASE64', `FROM_BASE64('YWJj')`, 'abc'),
+      c('CHAR of two codes', `CHAR(65, 66)`, 'AB'), c('ORD (ClickHouse has no such function: a loud failure)', `ORD('A')`, '(ClickHouse'), c('CRC32', `CRC32('a')`, '3904355907'), c('BIT_LENGTH', `BIT_LENGTH('a')`, '8'), c('OCTET_LENGTH counts bytes', `OCTET_LENGTH('é')`, '2'),
+      c('INSERT text function is refused', `INSERT('Quadratic', 3, 4, 'What')`, '(refused'), c('TRIM LEADING', `TRIM(LEADING 'x' FROM 'xxabc')`, 'abc'), c('TRIM BOTH', `TRIM(BOTH 'x' FROM 'xabcx')`, 'abc'), c('TRIM TRAILING', `TRIM(TRAILING 'x' FROM 'abcxx')`, 'abc'),
+      c('CAST negative AS UNSIGNED', `CAST(-1 AS UNSIGNED)`, '18446744073709551615'), c('CONVERT to SIGNED', `CONVERT('5', SIGNED)`, '5'), c('RADIANS', `ROUND(RADIANS(180), 4)`, '3.1416'), c('DEGREES', `DEGREES(PI())`, '180'),
+      c('ATAN2', `ROUND(ATAN2(1, 1), 4)`, '0.7854'), c('x % 0 is NULL', `7 % 0`, '\\N'), c('SUM DISTINCT', `SUM(DISTINCT number % 3) FROM numbers(10)`, '3'), c('STDDEV_SAMP', `ROUND(STDDEV_SAMP(number), 4) FROM numbers(5)`, '1.5811'),
+      c('VAR_SAMP', `VAR_SAMP(number) FROM numbers(5)`, '2.5'), c('BIT_AND aggregate', `BIT_AND(number + 1) FROM numbers(3)`, '0'), c('BIT_OR aggregate', `BIT_OR(number) FROM numbers(4)`, '3'), c('ANY_VALUE', `ANY_VALUE(number) FROM numbers(1)`, '0'),
+      c('COUNT DISTINCT two columns', `COUNT(DISTINCT a, b) FROM (SELECT 1 AS a, 2 AS b UNION ALL SELECT 1, 2 UNION ALL SELECT 1, 3) t`, '2'),
+      c('JSON_LENGTH (ClickHouse has no such function: a loud failure)', `JSON_LENGTH('[1,2,3]')`, '(ClickHouse'), c('JSON_VALID (ClickHouse has no such function: a loud failure)', `JSON_VALID('{"a":1}')`, '(ClickHouse'), c('JSON_TYPE (ClickHouse has no such function: a loud failure)', `JSON_TYPE('[1]')`, '(ClickHouse'), c('JSON_CONTAINS_PATH (ClickHouse has no such function: a loud failure)', `JSON_CONTAINS_PATH('{"a":1}', 'one', '$.a')`, '(ClickHouse'),
+      c('LOG of a non-positive is NULL', `LOG(0)`, '\\N'), c('SQRT of a negative is NULL', `SQRT(-1)`, '\\N'), c('CEILING of a negative', `CEILING(-1.5)`, '-1'), c('1/0 is NULL', `1 / 0`, '\\N'),
+      c('IS TRUE', `1 IS TRUE`, '1'), c('IS NOT NULL', `NULL IS NOT NULL`, '0'), c('NOT LIKE', `'abc' NOT LIKE 'a%'`, '0'), c('LIKE underscore', `'abc' LIKE 'a_c'`, '1'),
+      c('REPLACE ignores case? no: it is case-sensitive', `REPLACE('ABC', 'b', 'x')`, 'ABC'), c('LOCATE ignores case', `LOCATE('B', 'abc')`, '2'), c('INSTR ignores case', `INSTR('abc', 'B')`, '2'), c('LEFT of NULL', `LEFT(NULL, 2)`, '\\N'),
+      c('REPEAT zero', `REPEAT('a', 0)`, ''), c('SUBSTRING zero start is empty', `SUBSTRING('abc', 0)`, ''), c('SUBSTRING past the end', `SUBSTRING('abc', 5)`, ''), c('LPAD with NULL', `LPAD(NULL, 3, 'x')`, '\\N'),
       c('CAST AS SIGNED', `CAST('5' AS SIGNED) + 1`, '6'), c('CAST AS DATE', `CAST('2024-03-05' AS DATE)`, '2024-03-05'), c('CAST float AS SIGNED rounds', `CAST(2.5 AS SIGNED)`, '3'),
     ];
   })(),
@@ -222,7 +236,7 @@ for (const [label, mysql, expected] of cases) {
   let got;
   if (!r.ok) got = `(refused: ${r.error})`;
   else { try { got = (await ch(r.sql)).split('\n')[0]; } catch (e) { got = `(ClickHouse: ${e.message})`; } }
-  const ok = String(expected).startsWith('(refused') ? got.startsWith('(refused') : got === expected;
+  const ok = String(expected).startsWith('(refused') ? got.startsWith('(refused') : String(expected).startsWith('(ClickHouse') ? got.startsWith('(ClickHouse') : got === expected; // '(ClickHouse' = a loud failure is the documented answer
   if (!ok) failed++;
   console.log(`${ok ? 'ok       ' : 'DIFFERENT'} ${label.padEnd(52)} MySQL ${String(expected).padEnd(11)} ClickHouse ${got}${ok ? '' : `\n          ${r.sql ?? ''}`}`);
 }
