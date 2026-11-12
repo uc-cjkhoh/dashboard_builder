@@ -4,6 +4,7 @@ Functional changes (server, models, validation, calculations, charts, workbook).
 
 ## 2026-11-12
 
+- Calculated fields: REGEXP_MATCH, REGEXP_EXTRACT, REGEXP_EXTRACT_NTH, REGEXP_REPLACE (literal RE2 pattern bound as a value; look-around and back-references refused in the formula) (`b8d7652`)
 - Edit SQL translator: logarithms and roots NULL outside their domain, LOCATE/INSTR/POSITION ignore case, BIN without padding, BIT_LENGTH; smoke battery of 352 cases (`e5b8a1a`)
 - Edit SQL translator: col = col between text columns ignores case (types described by ClickHouse), ClickHouse names that differ from MySQL's are refused on the way to MySQL, GROUP_CONCAT DISTINCT limits (`a8c2e77`)
 - Edit SQL translator: ClickHouse to MySQL refuses functions MySQL lacks (by name), formatDateTime becomes DATE_FORMAT, ORDER BY NULL emulation and aggregate names round-trip, STR_TO_DATE reads unpadded numbers (`079ce27`)
