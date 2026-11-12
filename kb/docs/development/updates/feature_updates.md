@@ -4,6 +4,9 @@ Functional changes (server, models, validation, calculations, charts, workbook).
 
 ## 2026-11-12
 
+- Edit SQL translator: common MySQL functions (CONCAT_WS, REGEXP, ROUND, GREATEST, bit ops, GROUP_CONCAT, date parts, ...) match MySQL on the server; smoke battery of 288 cases (`6805120`)
+- Client: View data, profile, histogram and Check this join work on a custom SQL card; Edit SQL refuses a key kind change (`5579313`)
+- Rows, column profile, histogram and join check read a custom SQL card's query as a derived table (`6f8da32`)
 - Edit SQL translator, tier 2: date formats fixed, STR_TO_DATE, JSON, intervals, ESCAPE, dropped clauses (`17baa97`)
 - Edit SQL on a Data Source card, with a code editor and MySQL syntax; relationship card and title polish (`82c6a10`)
 - Gantt: End mode keeps the end's time of day in the axis decision (`0994a6b`)
