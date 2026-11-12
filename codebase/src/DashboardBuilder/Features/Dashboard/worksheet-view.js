@@ -268,13 +268,16 @@ export function createWorksheetView(container, getContext, options = {}) {
       if (pager !== tablePager || pager.loading || !needsNextPage(container, pager.rows.length, pager.total)) return;
       pager.loading = true;
       pager.ctl = new AbortController();
+      const t0 = performance.now();
       try {
         const page = await api.query({ ...pager.plan, offset: pager.rows.length, withTotal: false }, { signal: pager.ctl.signal });
+        perfLog.record({ kind: "query", ms: performance.now() - t0, rows: page.rows.length }); // a scroll page is a query too: the Performance dialog lists it
         if (pager !== tablePager) return;
         pager.rows = pager.rows.concat(page.rows);
         if (!page.rows.length) pager.total = pager.rows.length; // the data shrank under us — stop asking
         draw();
       } catch (err) {
+        perfLog.record({ kind: "query", ms: performance.now() - t0, outcome: isAbortError(err) ? "aborted" : "failed" });
         if (!isAbortError(err) && pager === tablePager) toast(err.message, "danger");
         pager.total = pager.rows.length; // don't retry in a loop; Refresh starts over
       } finally {
