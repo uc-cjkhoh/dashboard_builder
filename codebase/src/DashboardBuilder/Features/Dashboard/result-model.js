@@ -16,7 +16,7 @@ import { colourChannel, sizeChannel } from "./mark-channel-model.js";
 // Chart types that take reference lines / bands / a trend.
 export const ANALYTICS_TYPES = new Set(["bar", "line", "area"]);
 // Chart types whose marks map 1:1 to a category and so support click-to-filter.
-export const CLICK_TYPES = new Set(["bar", "stacked", "line", "area", "combo", "pie", "donut", "scatter"]);
+export const CLICK_TYPES = new Set(["bar", "stacked", "line", "area", "combo", "pie", "donut", "scatter", "gantt"]);
 // Types drawn from the ordinary /api/query result.
 export const P36_TYPES = new Set(["waterfall", "funnel", "gauge", "bullet", "sankey", "multiples", "gantt"]);
 // Small multiples draw at most this many panels.

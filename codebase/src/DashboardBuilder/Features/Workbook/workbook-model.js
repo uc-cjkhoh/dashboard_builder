@@ -31,7 +31,7 @@ import { cleanSize, savedSize, cleanRange, savedRange } from "../Board/board-siz
 import { cleanSteps, savedSteps } from "../Story/story-model.js";
 import { CALC_AGGS } from "../Calc/calc-pill.js";
 import {
-  CHART_TYPE_IDS, CATEGORIES, FILTER_OPS, NUMBER_FORMATS, DATE_FORMATS, LEGENDS, TOP_N, MAX_DECIMALS, DATE_BUCKETS, LINE_STYLES, HEATMAP_SHAPES, SECONDARY_TYPES, MARK_BORDERS, MARK_BORDER_COLOURS, MARKER_SHAPES, MAX_TARGET_MEASURE, TABLE_ALIGNS, BACKGROUNDS, TABLE_DENSITIES, TABLE_SHADES, FONTS,
+  CHART_TYPE_IDS, CATEGORIES, FILTER_OPS, NUMBER_FORMATS, DATE_FORMATS, LEGENDS, TOP_N, MAX_DECIMALS, DATE_BUCKETS, LINE_STYLES, HEATMAP_SHAPES, GANTT_LENGTHS, SECONDARY_TYPES, MARK_BORDERS, MARK_BORDER_COLOURS, MARKER_SHAPES, MAX_TARGET_MEASURE, TABLE_ALIGNS, BACKGROUNDS, TABLE_DENSITIES, TABLE_SHADES, FONTS,
   PERIOD_PRESETS, PERIOD_COMPARES, DATE_PARTS, DATE_LABELS, TABLE_CALCS, CALC_ALONG, FIT_MODES, REF_KINDS, TRENDS, FORECASTS, CF_MODES, CF_SCALES, CF_OPS, CF_TONES, CF_MAX_RULES, CF_MAX_MEASURES,
 } from "../Core/sheet-schema.js";
 
@@ -639,6 +639,7 @@ function cleanFormat(f0, where, issues) {
     : (issues.push(`${w}: target "${f.target}" — cleared.`), null);
   out.lineStyle = oneOf(LINE_STYLES, f.lineStyle, base.lineStyle, w, "line style", issues);
   out.heatmapShape = oneOf(HEATMAP_SHAPES, f.heatmapShape, base.heatmapShape, w, "heatmap shape", issues);
+  if (f.ganttLength !== undefined) out.ganttLength = oneOf(GANTT_LENGTHS, f.ganttLength, "length", w, "Gantt length", issues); // absent (older files) reads Length; kept off defaultFormat
   out.secondaryType = oneOf(SECONDARY_TYPES, f.secondaryType, base.secondaryType, w, "right-axis marks", issues);
   out.markerShape = oneOf(MARKER_SHAPES, f.markerShape, base.markerShape, w, "marker shape", issues);
   out.markBorder = oneOf(MARK_BORDERS, f.markBorder, base.markBorder, w, "mark border", issues);

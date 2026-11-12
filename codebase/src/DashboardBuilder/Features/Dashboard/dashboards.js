@@ -40,6 +40,7 @@ import { createHistory } from "./history.js";
 import { applyToggle, applyAll, allMessage, MAX_COLLAPSED } from "./collapse-model.js";
 import { LINE_STYLE_CHOICES, linesTakeStyle } from "./line-style-model.js";
 import { HEATMAP_SHAPE_CHOICES } from "./heatmap-model.js";
+import { GANTT_LENGTH_CHOICES } from "./gantt-model.js";
 import { SECONDARY_CHOICES, dualAxisAllowed, dualAxisOn } from "./axis-sync-model.js";
 import { RAMP_CHOICES, SCALE_CHOICES, DIV_PAIR_CHOICES, colourCentreError, colourRangeError, STEP_CHOICES } from "./colour-scale-model.js";
 import { FONT_CHOICES } from "./font-model.js";
@@ -1368,6 +1369,7 @@ export function initDashboards() {
         (v) => set({ targetMeasure: v === "null" ? null : Number(v) })));
     }
     if (linesTakeStyle(s.chartType)) panel.append(fmtSelect("Line style", LINE_STYLE_CHOICES, f.lineStyle ?? "straight", (v) => set({ lineStyle: v })));
+    if (s.chartType === "gantt") panel.append(fmtSelect("Length", GANTT_LENGTH_CHOICES, f.ganttLength ?? "length", (v) => set({ ganttLength: v })));
     if (s.chartType === "heatmap") panel.append(fmtSelect("Shape", HEATMAP_SHAPE_CHOICES, f.heatmapShape ?? "square", (v) => set({ heatmapShape: v })));
     const vertical = chartOrientation(s) !== "horizontal"; // a dimension on Rows draws horizontal bars-style: a right axis needs the category along the bottom
     if (dualAxisAllowed(s.chartType)) {
@@ -2412,7 +2414,7 @@ export function initDashboards() {
         pills: colorFields.map((f, i) => colorPill(dash, s, f, i)), onDrop: (f) => addColor(dash, f),
         hint: "Drop a field — categorical = colour series, numeric = gradient",
         note: colorFields.length && colorMode(s) === "discrete" && !COLOR_USES.has(s.chartType)
-          ? "A categorical Colour field splits Bar, Line, Area, Stacked, Scatter and Table — or drop a numeric field for a gradient." : null },
+          ? "A categorical Colour field splits Bar, Line, Area, Stacked, Scatter, Gantt and Table — or drop a numeric field for a gradient." : null },
       { key: "size", icon: "size", label: "Size", count: m.size ? 1 : 0,
         pills: one(m.size, () => { m.size = null; commit(dash, s); }), onDrop: (f) => addSize(dash, f),
         hint: "Drop a numeric field to size the marks: scatter bubbles, bar thickness, line / area markers, treemap area" },

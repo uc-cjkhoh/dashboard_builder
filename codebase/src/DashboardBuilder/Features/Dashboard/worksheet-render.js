@@ -104,7 +104,8 @@ function draw(container, rc, sheet, result, cmp) {
   }
 
   // An unsupported field mapping shows a hint, never an error.
-  const issue = chartIssue(type, rowDimensions.length + columnDimensions.length, shelfCount);
+  const ganttColour = type === "gantt" && colorMode(sheet) === "discrete"; // the Colour field is the last key, not a row dimension
+  const issue = chartIssue(type, rowDimensions.length + columnDimensions.length - (ganttColour ? 1 : 0), shelfCount);
   if (issue) { container.append(hint(issue)); return; }
 
   // Shape: on the scatter family, split points by a Shape dimension into one symbol per value.
@@ -130,7 +131,7 @@ function draw(container, rc, sheet, result, cmp) {
   // Heatmap / treemap reuse this multi-dimension result but pivot it differently.
   if (type === "heatmap") { renderHeatmap(container, result, format, fmtCat); return; }
   if (type === "treemap") { renderTreemap(container, result, format, fmtCat, { sizeIdx, colourIdx: colorMeasureIdx }); return; }
-  if (P36_TYPES.has(type)) { renderP36(container, rc, type, rowsOrdered, categories, series, seriesNames, format, fmtCat); return; }
+  if (P36_TYPES.has(type)) { renderP36(container, rc, type, rowsOrdered, categories, series, seriesNames, format, fmtCat, sheet); return; }
 
   // KPI: explicit type, or a plain series chart with no dimensions (one value per measure).
   if (type === "kpi" || (dimCount === 0 && (type === "bar" || type === "stacked" || type === "line" || type === "area"))) {

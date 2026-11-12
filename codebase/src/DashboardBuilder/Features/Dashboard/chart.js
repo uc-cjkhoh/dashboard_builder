@@ -1165,38 +1165,45 @@ function buildBullet({ categories, values, target, targets, name, format = {} })
   };
 }
 
-// gantt — one horizontal bar per row from its start to start + length (days for a date start), first row on
-// top; the length is written at the bar's end and named in the tooltip, so the bar's colour carries nothing.
-function buildGantt({ categories, gantt, name, format = {} }) {
+// gantt — one horizontal bar per row from its start to its end (start + length, or the end field), first row on top; the length
+// is written at the bar's end and named in the tooltip. A Colour field makes one series per member (its own colour, a legend that
+// highlights), several bars may share a row; a selected row keeps full strength and the others fade.
+function buildGantt({ categories, gantt, name, format = {}, selectedIndices, onLegend }) {
   const c = tokens();
   const fmtVal = makeValueFormatter(format);
-  const { bars, isDate, hasTime } = gantt;
+  const { bars, isDate, hasTime, groups } = gantt;
   const at = (v) => (isDate ? ganttTime(v, hasTime) : fmtVal(v));
   const len = (b) => (isDate ? `${fmtVal(b.duration)} ${b.duration === 1 ? "day" : "days"}` : fmtVal(b.duration));
   const label = name || "Length";
   const axisTime = ganttAxisTime(bars, hasTime);
+  const keep = new Set([].concat(selectedIndices ?? []).filter((i) => Number.isInteger(i) && i >= 0));
+  // One series per colour member, else one for all the bars.
+  const split = groups.length > 0;
+  const lists = split ? groups.map((_, gi) => bars.filter((b) => b.group === gi)) : [bars];
+  const colourOf = (gi) => (split ? memberColor(groups[gi], c.cat[gi % c.cat.length]) : c.cat[0]);
+  const names = split ? groups : [label];
   return {
-    color: [c.cat[0]],
+    color: names.map((_, gi) => colourOf(gi)),
     textStyle: { fontFamily: c.font, color: c.label },
-    legend: { top: 0, left: "center", data: [label], selectedMode: false, textStyle: { color: c.label, fontFamily: c.font }, icon: "roundRect" },
+    legend: { top: 0, left: "center", data: names, selectedMode: split && typeof onLegend === "function", textStyle: { color: c.label, fontFamily: c.font }, icon: "roundRect" },
     grid: { left: 6, right: ganttLabelMargin(bars.map(len)), top: 36, bottom: 6, containLabel: true },
     tooltip: { trigger: "item", ...tipBox(c),
-      formatter: (p) => { const b = bars[p.dataIndex]; return b ? `<span style="color:${c.muted}">${escapeHtml(String(b.name ?? ""))}</span><br>${at(b.start)} → ${at(b.end)}<br><b>${escapeHtml(label)}:</b> ${len(b)}` : ""; } },
+      formatter: (p) => { const b = lists[p.seriesIndex]?.[p.dataIndex]; return b ? `<span style="color:${c.muted}">${escapeHtml(String(b.name ?? ""))}${split ? ` · ${escapeHtml(String(groups[b.group] ?? ""))}` : ""}</span><br>${at(b.start)} → ${at(b.end)}<br><b>${escapeHtml(label)}:</b> ${len(b)}` : ""; } },
     xAxis: valueAxis(c, isDate ? undefined : fmtVal, isDate
       ? { type: "time", axisLabel: { color: c.muted, formatter: (v) => ganttTime(v, axisTime), hideOverlap: true } } : { scale: true }),
     yAxis: catAxis(c, categories ?? [], { inverse: true }),
-    series: [
-      { type: "custom", name: label, data: bars.map((b) => [b.i, b.start, b.end]), encode: { x: [1, 2], y: 0 },
-        renderItem: (params, api) => {
-          const b = bars[params.dataIndex];
-          const a = api.coord([api.value(1), api.value(0)]), e = api.coord([api.value(2), api.value(0)]);
-          const h = Math.min(28, api.size([0, 1])[1] * 0.6);
-          return { type: "group", children: [
-            { type: "rect", shape: { x: a[0], y: a[1] - h / 2, width: Math.max(2, e[0] - a[0]), height: h, r: 2 }, style: { fill: c.cat[0], ...strokeOf(format.markBorder, borderInk(format.markBorderColor, c)) } },
-            { type: "text", style: { text: len(b), x: Math.max(e[0], a[0] + 2) + 4, y: a[1], align: "left", verticalAlign: "middle", fill: c.label, font: `14px ${c.font}` } },
-          ] };
-        } },
-    ],
+    series: lists.map((list, gi) => ({
+      type: "custom", name: names[gi], data: list.map((b) => [b.i, b.start, b.end]), encode: { x: [1, 2], y: 0 },
+      renderItem: (params, api) => {
+        const b = list[params.dataIndex];
+        const a = api.coord([api.value(1), api.value(0)]), e = api.coord([api.value(2), api.value(0)]);
+        const h = Math.min(28, api.size([0, 1])[1] * 0.6);
+        const opacity = keep.size && !keep.has(b.i) ? 0.35 : 1;
+        return { type: "group", children: [
+          { type: "rect", shape: { x: a[0], y: a[1] - h / 2, width: Math.max(2, e[0] - a[0]), height: h, r: 2 }, style: { fill: colourOf(gi), opacity, ...strokeOf(format.markBorder, borderInk(format.markBorderColor, c)) } },
+          { type: "text", style: { text: len(b), x: Math.max(e[0], a[0] + 2) + 4, y: a[1], align: "left", verticalAlign: "middle", fill: c.label, opacity, font: `14px ${c.font}` } },
+        ] };
+      } })),
   };
 }
 

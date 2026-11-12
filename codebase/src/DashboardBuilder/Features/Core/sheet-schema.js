@@ -34,6 +34,7 @@ export const FIT_MODES = new Set(["standard", "width", "height", "entire"]); // 
 export const DATE_BUCKETS = new Set(["auto", "exact", "hour", "day", "week", "month", "quarter", "year"]);
 export const LINE_STYLES = new Set(["straight", "step", "jump"]); // Format → Line style
 export const HEATMAP_SHAPES = new Set(["square", "circle"]);
+export const GANTT_LENGTHS = new Set(["length", "end"]); // a Gantt's second measure: the bar's length, or the end it runs to
 export const SECONDARY_TYPES = new Set(["line", "bar", "area"]); // Format → Right-axis marks (combo)
 export const MARK_BORDERS = new Set(["none", "thin", "medium", "thick"]);
 export const MARK_BORDER_COLOURS = new Set(["muted", "ink", "surface", "accent"]); // Format → Border colour (palette tokens)
