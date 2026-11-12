@@ -4,6 +4,7 @@ Functional changes (server, models, validation, calculations, charts, workbook).
 
 ## 2026-11-12
 
+- Edit SQL translator: col = col between text columns ignores case (types described by ClickHouse), ClickHouse names that differ from MySQL's are refused on the way to MySQL, GROUP_CONCAT DISTINCT limits (`a8c2e77`)
 - Edit SQL translator: ClickHouse to MySQL refuses functions MySQL lacks (by name), formatDateTime becomes DATE_FORMAT, ORDER BY NULL emulation and aggregate names round-trip, STR_TO_DATE reads unpadded numbers (`079ce27`)
 - Edit SQL translator: common MySQL functions (CONCAT_WS, REGEXP, ROUND, GREATEST, bit ops, GROUP_CONCAT, date parts, ...) match MySQL on the server; smoke battery of 288 cases (`6805120`)
 - Client: View data, profile, histogram and Check this join work on a custom SQL card; Edit SQL refuses a key kind change (`5579313`)
