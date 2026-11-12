@@ -53,15 +53,24 @@ public class SqlTranslatorTests : IClassFixture<WebApplicationFactory<Program>>
             await My2Ch("SELECT TIMESTAMPDIFF(DAY, a, b), TIMESTAMPDIFF(WEEK, a, b), TIMESTAMPDIFF(MONTH, a, b), TIMESTAMPDIFF(QUARTER, a, b), TIMESTAMPDIFF(YEAR, a, b) FROM t"));
         Assert.Equal("SELECT intDiv(dateDiff('second', a, b), 3600), intDiv(dateDiff('second', a, b), 60), dateDiff('second', a, b) FROM t",
             await My2Ch("SELECT TIMESTAMPDIFF(HOUR, a, b), TIMESTAMPDIFF(MINUTE, a, b), TIMESTAMPDIFF(SECOND, a, b) FROM t"));
-        Assert.Contains("FRAC_SECOND", (await Assert.ThrowsAsync<SqlTranslateException>(() => My2Ch("SELECT TIMESTAMPDIFF(FRAC_SECOND, a, b) FROM t"))).Message);
-        Assert.Contains("MICROSECOND", (await Assert.ThrowsAsync<SqlTranslateException>(() => My2Ch("SELECT TIMESTAMPDIFF(MICROSECOND, a, b) FROM t"))).Message);
+        Assert.Equal("SELECT dateDiff('microsecond', a, b), dateDiff('microsecond', a, b) FROM t", await My2Ch("SELECT TIMESTAMPDIFF(MICROSECOND, a, b), TIMESTAMPDIFF(FRAC_SECOND, a, b) FROM t"));
+        Assert.Contains("SQL_TSI_FRAC", (await Assert.ThrowsAsync<SqlTranslateException>(() => My2Ch("SELECT TIMESTAMPDIFF(SQL_TSI_FRAC, a, b) FROM t"))).Message);
     }
-    [Fact] public async Task Date_arithmetic_becomes_plus_or_minus_an_interval_with_a_number()
+    [Fact] public async Task Date_arithmetic_becomes_plus_or_minus_an_interval_with_a_number_or_toInterval_for_an_expression()
     {
         Assert.Equal("SELECT d + INTERVAL 1 MONTH, NOW() - INTERVAL 7 DAY FROM t", await My2Ch("SELECT DATE_ADD(d, INTERVAL 1 MONTH), DATE_SUB(NOW(), INTERVAL 7 DAY) FROM t"));
         Assert.Equal("SELECT d + INTERVAL 1 DAY, d - INTERVAL 2 HOUR FROM t", await My2Ch("SELECT d + INTERVAL '1' DAY, d - INTERVAL '2' HOUR FROM t"));
-        Assert.Contains("YEAR_MONTH", (await Assert.ThrowsAsync<SqlTranslateException>(() => My2Ch("SELECT DATE_ADD(d, INTERVAL '1-2' YEAR_MONTH) FROM t"))).Message);
-        Assert.Contains("plain number", (await Assert.ThrowsAsync<SqlTranslateException>(() => My2Ch("SELECT DATE_ADD(d, INTERVAL n DAY) FROM t"))).Message);
+        Assert.Equal("SELECT d + toIntervalDay(n), d - toIntervalMonth(n), d + toIntervalHour(n) FROM t", await My2Ch("SELECT DATE_ADD(d, INTERVAL n DAY), DATE_SUB(d, INTERVAL n MONTH), d + INTERVAL n HOUR FROM t"));
+        Assert.Equal("SELECT toDate('2024-01-31') + INTERVAL 1 DAY, toDateTime('2024-03-31 10:00:00') - INTERVAL 1 HOUR", await My2Ch("SELECT DATE_ADD('2024-01-31', INTERVAL 1 DAY), '2024-03-31 10:00:00' - INTERVAL 1 HOUR"));
+        Assert.Contains("DAY_MICROSECOND", (await Assert.ThrowsAsync<SqlTranslateException>(() => My2Ch("SELECT DATE_ADD(d, INTERVAL '1' DAY_MICROSECOND) FROM t"))).Message);
+        Assert.Contains("whole number", (await Assert.ThrowsAsync<SqlTranslateException>(() => My2Ch("SELECT DATE_ADD(d, INTERVAL '1.5' DAY) FROM t"))).Message);
+    }
+    [Fact] public async Task A_compound_interval_is_one_interval_of_months_or_seconds_as_MySQL_adds_it()
+    {
+        Assert.Equal("SELECT d + INTERVAL 14 MONTH, d - INTERVAL -14 MONTH FROM t", await My2Ch("SELECT DATE_ADD(d, INTERVAL '1-2' YEAR_MONTH), DATE_SUB(d, INTERVAL '-1-2' YEAR_MONTH) FROM t")); // not +1 YEAR then +2 MONTH: the end of the month clamps once
+        Assert.Equal("SELECT d + INTERVAL 93780 SECOND, d + INTERVAL 18000 SECOND, d + INTERVAL 7380 SECOND, d + INTERVAL 93784 SECOND FROM t",
+            await My2Ch("SELECT DATE_ADD(d, INTERVAL '1 02:03' DAY_MINUTE), DATE_ADD(d, INTERVAL '5' DAY_HOUR), d + INTERVAL '02:03' HOUR_MINUTE, DATE_ADD(d, INTERVAL '1 02:03:04' DAY_SECOND) FROM t")); // '5' DAY_HOUR: the days are the part left out
+        Assert.Contains("does not fit", (await Assert.ThrowsAsync<SqlTranslateException>(() => My2Ch("SELECT DATE_ADD(d, INTERVAL '1-2-3' YEAR_MONTH) FROM t"))).Message);
     }
     [Fact] public async Task A_double_pipe_is_refused_because_it_means_OR_in_MySQL_and_joining_text_in_ClickHouse()
     {
@@ -70,10 +79,16 @@ public class SqlTranslatorTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.Equal("SELECT a OR b FROM t", await My2Ch("SELECT a OR b FROM t"));
         Assert.Contains("'x||y'", await My2Ch("SELECT 'x||y' AS s")); // inside text it is just text
     }
-    [Fact] public async Task LIKE_ignores_case_as_in_MySQL_so_it_becomes_ILIKE_keeping_NOT_and_ESCAPE()
+    [Fact] public async Task LIKE_ignores_case_as_in_MySQL_so_it_becomes_ILIKE_keeping_NOT()
+        => Assert.Equal("SELECT 1 FROM t WHERE y ILIKE 'a%' AND z NOT ILIKE '%b' AND NOT (w ILIKE 'x')", await My2Ch("SELECT 1 FROM t WHERE y LIKE 'a%' AND z NOT LIKE '%b' AND NOT (w LIKE 'x')"));
+    [Fact] public async Task LIKE_ESCAPE_becomes_the_backslash_escapes_ClickHouse_has()
     {
-        Assert.Equal("SELECT 1 FROM t WHERE y ILIKE 'a%' AND z NOT ILIKE '%b' AND NOT (w ILIKE 'x')", await My2Ch("SELECT 1 FROM t WHERE y LIKE 'a%' AND z NOT LIKE '%b' AND NOT (w LIKE 'x')"));
-        Assert.Contains("ESCAPE", await My2Ch("SELECT 1 FROM t WHERE y LIKE 'a#_%' ESCAPE '#'"));
+        Assert.Equal(@"SELECT a FROM t WHERE x ILIKE 'a\\_%'", await My2Ch("SELECT a FROM t WHERE x LIKE 'a#_%' ESCAPE '#'"));                  // # before _ : a literal underscore
+        Assert.Equal(@"SELECT a FROM t WHERE z ILIKE '50\\%'", await My2Ch("SELECT a FROM t WHERE z LIKE '50#%' ESCAPE '#'"));
+        Assert.Equal(@"SELECT a FROM t WHERE w ILIKE 'a\\\\b'", await My2Ch(@"SELECT a FROM t WHERE w LIKE 'a\\b' ESCAPE '#'"));            // a backslash is ordinary when the escape is #
+        Assert.Equal(@"SELECT a FROM t WHERE y NOT ILIKE 'b\\_'", await My2Ch(@"SELECT a FROM t WHERE y NOT LIKE 'b\\_' ESCAPE '\\'")); // the default escape: nothing to change
+        var ex = await Assert.ThrowsAsync<SqlTranslateException>(() => My2Ch("SELECT a FROM t WHERE x LIKE p ESCAPE '#'"));
+        Assert.Contains("written as text", ex.Message);
     }
     [Fact] public async Task Text_comparisons_ignore_case_as_in_MySQL_by_comparing_the_lower_cased_text_of_any_column_type()
     {
@@ -126,6 +141,89 @@ public class SqlTranslatorTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.Contains("LIKE 'A%'", my); Assert.DoesNotContain("ILIKE", my);
         Assert.Contains("x ILIKE 'A%'", await My2Ch(my));
     }
+    // --- tier 2: the date formats sqlglot rewrote into another style (found on a real ClickHouse: %i became %M, the MONTH NAME) ---------------------------------------
+    [Fact] public async Task DATE_FORMAT_keeps_MySQLs_codes_where_ClickHouse_prints_them_the_same()
+    {
+        Assert.Equal("SELECT formatDateTime(d, '%Y-%m-%d %H:%i:%s'), formatDateTime(d, '%W, %M %e %Y') FROM t", await My2Ch("SELECT DATE_FORMAT(d, '%Y-%m-%d %H:%i:%s'), DATE_FORMAT(d, '%W, %M %e %Y') FROM t"));
+        Assert.Equal("SELECT formatDateTime(toDate('2024-03-05'), '%d.%m.%Y')", await My2Ch("SELECT DATE_FORMAT('2024-03-05', '%d.%m.%Y')"));
+        Assert.Equal("SELECT formatDateTime(d, '%%')", await My2Ch("SELECT DATE_FORMAT(d, '%%')"));
+        Assert.Equal("SELECT formatDateTime(d, 'q')", await My2Ch("SELECT DATE_FORMAT(d, '%q')")); // an unknown code prints its letter, as in MySQL
+        Assert.Equal("SELECT ''", await My2Ch("SELECT DATE_FORMAT(d, '')"));
+    }
+    [Fact] public async Task DATE_FORMAT_rebuilds_the_codes_that_differ_with_expressions()
+    {
+        Assert.Equal("SELECT toString(toMonth(d))", await My2Ch("SELECT DATE_FORMAT(d, '%c')"));
+        Assert.Equal("SELECT toString(toHour(d))", await My2Ch("SELECT DATE_FORMAT(d, '%k')"));
+        Assert.Equal("SELECT toString(if(modulo(toHour(d), 12) = 0, 12, modulo(toHour(d), 12)))", await My2Ch("SELECT DATE_FORMAT(d, '%l')"));
+        Assert.Equal("SELECT formatDateTime(d, '%I:%i:%S %p')", await My2Ch("SELECT DATE_FORMAT(d, '%r')"));
+        Assert.Equal("SELECT lpad(toString(toWeek(d, 0)), 2, '0')", await My2Ch("SELECT DATE_FORMAT(d, '%U')"));
+        Assert.Equal("SELECT toString(intDiv(toYearWeek(d, 3), 100))", await My2Ch("SELECT DATE_FORMAT(d, '%x')"));
+        Assert.StartsWith("SELECT concat(toString(toDayOfMonth(d)), multiIf(toDayOfMonth(d) IN (11, 12, 13), 'th',", await My2Ch("SELECT DATE_FORMAT(d, '%D')"));
+        Assert.Equal("SELECT concat(toString(toMonth(d)), formatDateTime(d, '/%e'))", await My2Ch("SELECT DATE_FORMAT(d, '%c/%e')")); // pieces join with concat, direct codes stay one formatDateTime
+        Assert.DoesNotContain("%M:", await My2Ch("SELECT DATE_FORMAT(d, '%H:%i')"));
+    }
+    [Fact] public async Task FROM_UNIXTIME_with_a_format_uses_the_same_rebuilding_and_without_one_stays_sqlglots()
+    {
+        Assert.Equal("SELECT formatDateTime(toDateTime(n), '%Y-%m-%d %H:%i:%s')", await My2Ch("SELECT FROM_UNIXTIME(n, '%Y-%m-%d %H:%i:%s')"));
+        Assert.Equal("SELECT fromUnixTimestamp(CAST(n AS Nullable(Int64)))", await My2Ch("SELECT FROM_UNIXTIME(n)"));
+        Assert.Contains("TIME type", (await Assert.ThrowsAsync<SqlTranslateException>(() => My2Ch("SELECT TIME_FORMAT(t, '%H:%i')"))).Message);
+        Assert.Contains("written as text", (await Assert.ThrowsAsync<SqlTranslateException>(() => My2Ch("SELECT DATE_FORMAT(d, f) FROM t"))).Message);
+    }
+    [Fact] public async Task STR_TO_DATE_parses_with_parseDateTimeOrNull_to_a_Date_or_a_DateTime_and_says_what_ClickHouse_is_stricter_about()
+    {
+        Assert.Equal("SELECT parseDateTimeOrNull(s, '%d/%m/%Y %H:%i'), toDate(parseDateTimeOrNull(s, '%Y-%m-%d')), parseDateTimeOrNull(s, '%d %b %Y %h:%i:%s %p') FROM t",
+            await My2Ch("SELECT STR_TO_DATE(s, '%d/%m/%Y %H:%i'), STR_TO_DATE(s, '%Y-%m-%d'), STR_TO_DATE(s, '%d %b %Y %r') FROM t"));
+        Assert.Equal("SELECT parseDateTimeOrNull(s, '%H:%i:%s')", await My2Ch("SELECT STR_TO_DATE(s, '%T')"));
+        var note = await Warn("SELECT STR_TO_DATE(s, '%Y-%m-%d') FROM t");
+        Assert.Single(note); Assert.Contains("zero-padded", note[0]);
+        foreach (var refused in new[] { "%y", "%D", "%U", "%f", "%w" })
+            Assert.Contains($"%{refused[1]}", (await Assert.ThrowsAsync<SqlTranslateException>(() => My2Ch($"SELECT STR_TO_DATE(s, '{refused}')"))).Message);
+        Assert.Contains("written as text", (await Assert.ThrowsAsync<SqlTranslateException>(() => My2Ch("SELECT STR_TO_DATE(s, f) FROM t"))).Message);
+    }
+    [Fact] public async Task UNIX_TIMESTAMP_and_LAST_DAY_and_date_text_operands()
+    {
+        Assert.Equal("SELECT toUnixTimestamp(toDateTime(d)), toUnixTimestamp(now()), toUnixTimestamp(toDateTime('2024-01-01 00:00:00'))", await My2Ch("SELECT UNIX_TIMESTAMP(d), UNIX_TIMESTAMP(), UNIX_TIMESTAMP('2024-01-01 00:00:00')"));
+        Assert.Equal("SELECT toLastDayOfMonth(d), toLastDayOfMonth(toDate('2024-02-10'))", await My2Ch("SELECT LAST_DAY(d), LAST_DAY('2024-02-10')"));
+        Assert.Equal("SELECT dateDiff('day', toDate('2024-01-01'), toDate('2024-01-10')), age('day', toDate('2024-01-01'), toDateTime('2024-01-10 10:00:00')), dateDiff('day', b, a)",
+            await My2Ch("SELECT DATEDIFF('2024-01-10', '2024-01-01'), TIMESTAMPDIFF(DAY, '2024-01-01', '2024-01-10 10:00:00'), DATEDIFF(a, b)"));
+        Assert.Equal("SELECT dateDiff('day', b, a)", await My2Ch("SELECT DATEDIFF(a, b)")); // a column is never wrapped
+    }
+    [Fact] public async Task JSON_scalars_keep_text_numbers_booleans_null_and_a_missing_key_apart()
+    {
+        const string scalar = "if(JSONHas(j, 'a'), if(equals(JSONType(j, 'a'), 'String'), JSONExtractString(j, 'a'), JSONExtractRaw(j, 'a')), NULL)";
+        Assert.Equal($"SELECT {scalar}", await My2Ch("SELECT JSON_UNQUOTE(JSON_EXTRACT(j, '$.a'))"));
+        Assert.Equal($"SELECT {scalar}", await My2Ch("SELECT j->>'$.a'"));
+        Assert.Equal($"SELECT {scalar}", await My2Ch("SELECT JSON_VALUE(j, '$.a')"));
+        Assert.Contains("JSONHas(j, 'arr', 2)", await My2Ch("SELECT j->>'$.arr[1]'")); // MySQL counts array indexes from 0, ClickHouse from 1
+        Assert.Contains("JSONHas(j, 'k k', 'z')", await My2Ch("SELECT JSON_UNQUOTE(JSON_EXTRACT(j, '$.\"k k\".z'))"));
+        Assert.Equal("SELECT if(JSONHas(j, 'o'), JSONExtractRaw(j, 'o'), NULL)", await My2Ch("SELECT j->'$.o'")); // the JSON text, quotes and all; NULL for a missing key (JSONExtractRaw alone gives '')
+        Assert.Equal("SELECT if(JSONHas(j, 'a', 1), JSONExtractRaw(j, 'a', 1), NULL)", await My2Ch("SELECT JSON_EXTRACT(j, '$.a[0]')"));
+        Assert.Empty(await Changes("SELECT j->>'$.a'")); // the type test is a call, not `=`: the text-comparison repair never touches it
+        Assert.Contains("wildcard", (await Assert.ThrowsAsync<SqlTranslateException>(() => My2Ch("SELECT j->>'$.a[*]'"))).Message);
+        Assert.Contains("wildcard", (await Assert.ThrowsAsync<SqlTranslateException>(() => My2Ch("SELECT JSON_EXTRACT(j, '$.a[*]')"))).Message);
+        Assert.Contains("RETURNING", (await Assert.ThrowsAsync<SqlTranslateException>(() => My2Ch("SELECT JSON_VALUE(j, '$.a' RETURNING SIGNED)"))).Message);
+    }
+    [Fact] public async Task User_and_system_variables_are_refused_at_their_position()
+    {
+        var ex = await Assert.ThrowsAsync<SqlTranslateException>(() => My2Ch("SELECT a FROM t WHERE b = @y"));
+        Assert.Contains("@y", ex.Message); Assert.Equal((1, 28, 26), (ex.Failure.Line, ex.Failure.Col, ex.Failure.Start));
+        Assert.Contains("@x", (await Assert.ThrowsAsync<SqlTranslateException>(() => My2Ch("SELECT @x := 1"))).Message);
+        Assert.Contains("@@sql_mode", (await Assert.ThrowsAsync<SqlTranslateException>(() => My2Ch("SELECT @@sql_mode"))).Message);
+        Assert.Equal("SELECT '@x' AS s", await My2Ch("SELECT '@x' AS s")); // inside text it is just text
+    }
+    [Fact] public async Task Clauses_that_do_not_change_a_result_are_dropped_and_a_lock_says_so()
+    {
+        Assert.Equal("SELECT a FROM t WHERE a = 1 LIMIT 5", await My2Ch("SELECT SQL_CALC_FOUND_ROWS SQL_NO_CACHE a FROM t USE INDEX (i) FORCE INDEX (j) WHERE a = 1 LIMIT 5"));
+        Assert.Empty(await Warn("SELECT SQL_CALC_FOUND_ROWS a FROM t USE INDEX (i)")); // no note for hints
+        var locked = await Tr().TranslateAsync("SELECT a FROM t FOR UPDATE", "mysql", "clickhouse", default);
+        Assert.Equal("SELECT a FROM t", locked.Sql); Assert.Single(locked.Warnings); Assert.Contains("row locks", locked.Warnings[0]);
+        Assert.Equal("SELECT a FROM t1 INNER JOIN t2 ON t1.id = t2.id CROSS JOIN t3", await My2Ch("SELECT STRAIGHT_JOIN a FROM t1 STRAIGHT_JOIN t2 ON t1.id = t2.id STRAIGHT_JOIN t3"));
+    }
+    [Fact] public async Task Nested_repairs_all_apply()
+        => Assert.Equal("SELECT formatDateTime(d + INTERVAL 1 DAY, '%e') FROM t WHERE dateDiff('day', b, a + INTERVAL 2 DAY) = 1 AND lowerUTF8(toString(n)) = lowerUTF8('AbC')",
+            await My2Ch("SELECT DATE_FORMAT(DATE_ADD(d, INTERVAL 1 DAY), '%e') FROM t WHERE DATEDIFF(DATE_ADD(a, INTERVAL 2 DAY), b) = 1 AND n = 'AbC'"));
+    [Fact] public async Task WITH_RECURSIVE_passes_through_unchanged()
+        => Assert.Equal("WITH RECURSIVE c AS (SELECT 1 AS n UNION ALL SELECT n + 1 FROM c WHERE n < 5) SELECT n FROM c", await My2Ch("WITH RECURSIVE c AS (SELECT 1 AS n UNION ALL SELECT n + 1 FROM c WHERE n < 5) SELECT n FROM c"));
     [Fact] public async Task A_trailing_semicolon_is_dropped() => Assert.Equal("SELECT 1", await My2Ch("SELECT 1;"));
 
     [Fact] public async Task A_query_that_cannot_be_read_says_where()

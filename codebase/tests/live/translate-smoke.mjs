@@ -73,6 +73,64 @@ const cases = [
   ['/ by zero is NULL', 'SELECT 5 / 0', '\\N'],
   ['% by zero is NULL', 'SELECT 5 % 0', '\\N'],
   ['DIV', 'SELECT 7 DIV 2', '3'],
+  // ---- tier 2: date formats (MySQL's documented output for 2024-03-05 14:07:09.123456, a Tuesday) ----
+  ...(() => {
+    const dt = `CAST('2024-03-05 14:07:09.123456' AS DATETIME(6))`;
+    const f = (fmt, expected, label = `DATE_FORMAT ${fmt}`, value = dt) => [label, `SELECT DATE_FORMAT(${value}, '${fmt}')`, expected];
+    return [
+      f('%Y-%m-%d %H:%i:%s', '2024-03-05 14:07:09'), f('%W %M %e, %Y', 'Tuesday March 5, 2024'), f('%a %b %c', 'Tue Mar 3'), f('%l:%i %p', '2:07 PM'),
+      f('%h:%i:%s %p', '02:07:09 PM'), f('%r', '02:07:09 PM'), f('%T', '14:07:09'), f('%D', '5th'), f('%U %u %V %v %X %x', '09 10 09 10 2024 2024'),
+      f('%j %w %y %f', '065 2 24 123456'), f('%f %e', '000000 5', 'DATE_FORMAT %f on a plain DATETIME, %e unpadded', `CAST('2024-03-05 14:07:09' AS DATETIME)`), f('%%', '%'), f('%q', 'q', 'DATE_FORMAT unknown code stands for itself'), f('%i', '07', 'DATE_FORMAT %i is minutes, not the month name'),
+      f('%D', '1st', 'DATE_FORMAT %D 1st', `CAST('2024-03-01 00:00:00' AS DATETIME)`), f('%D', '22nd', 'DATE_FORMAT %D 22nd', `CAST('2024-03-22 00:00:00' AS DATETIME)`),
+      f('%D', '11th', 'DATE_FORMAT %D 11th', `CAST('2024-03-11 00:00:00' AS DATETIME)`), f('%k', '4', 'DATE_FORMAT %k hour without a leading zero', `CAST('2024-03-05 04:00:00' AS DATETIME)`),
+      f('%l %p', '12 AM', 'DATE_FORMAT %l at midnight', `CAST('2024-03-05 00:30:00' AS DATETIME)`), f('%V %X', '52 2024', 'DATE_FORMAT week 52 of 2024', `CAST('2024-12-30 10:00:00' AS DATETIME)`),
+      f('%v %x', '01 2025', 'DATE_FORMAT week 1 of 2025', `CAST('2024-12-30 10:00:00' AS DATETIME)`),
+      ['DATE_FORMAT of a text date', `SELECT DATE_FORMAT('2024-03-05', '%d.%m.%Y')`, '05.03.2024'],
+      ['FROM_UNIXTIME(n, fmt)', `SELECT FROM_UNIXTIME(UNIX_TIMESTAMP('2024-01-01 12:34:56'), '%Y-%m-%d %H:%i:%s')`, '2024-01-01 12:34:56'],
+      ['FROM_UNIXTIME(UNIX_TIMESTAMP(x)) round trip', `SELECT FROM_UNIXTIME(UNIX_TIMESTAMP('2024-01-01 12:34:56'))`, '2024-01-01 12:34:56'],
+      ['UNIX_TIMESTAMP(date) is local midnight', `SELECT UNIX_TIMESTAMP(CAST('2024-01-01' AS DATE)) = UNIX_TIMESTAMP('2024-01-01 00:00:00')`, '1'],
+      // STR_TO_DATE
+      ['STR_TO_DATE with a time format', `SELECT STR_TO_DATE('05/03/2024 14:07', '%d/%m/%Y %H:%i')`, '2024-03-05 14:07:00'],
+      ['STR_TO_DATE date-only is a DATE', `SELECT STR_TO_DATE('2024-03-05', '%Y-%m-%d') = CAST('2024-03-05' AS DATE)`, '1'],
+      ['STR_TO_DATE month names', `SELECT STR_TO_DATE('05 Mar 2024', '%d %b %Y')`, '2024-03-05'],
+      ['STR_TO_DATE %r', `SELECT STR_TO_DATE('2024-03-05 02:07:09 PM', '%Y-%m-%d %r')`, '2024-03-05 14:07:09'],
+      ['STR_TO_DATE unpadded %e/%c', `SELECT STR_TO_DATE('5/3/2024', '%e/%c/%Y')`, '2024-03-05'],
+      ['STR_TO_DATE of nonsense is NULL', `SELECT STR_TO_DATE('nope', '%Y-%m-%d')`, '\\N'],
+      ['STR_TO_DATE %y is refused', `SELECT STR_TO_DATE('24-03-05', '%y-%m-%d')`, '(refused'],
+      // LAST_DAY, JSON
+      ['LAST_DAY of a text date', `SELECT LAST_DAY('2024-02-10')`, '2024-02-29'], ['LAST_DAY of a datetime', `SELECT LAST_DAY(CAST('2023-02-10 10:00:00' AS DATETIME))`, '2023-02-28'],
+      ...(() => {
+        const J = `'{"a":"x","n":2,"f":true,"z":null,"e":"","o":{"k":1},"arr":[10,"y"]}'`;
+        const u = (path, expected, label = `JSON_UNQUOTE(JSON_EXTRACT ${path})`) => [label, `SELECT JSON_UNQUOTE(JSON_EXTRACT(${J}, '${path}'))`, expected];
+        return [u('$.a', 'x'), u('$.n', '2'), u('$.f', 'true'), u('$.z', 'null'), u('$.zz', '\\N', 'JSON_UNQUOTE of a missing key is NULL'), u('$.e', '', 'JSON_UNQUOTE of an empty text'),
+          u('$.arr[0]', '10'), u('$.arr[1]', 'y'), u('$.o.k', '1'),
+          ['JSON_EXTRACT of a missing key is NULL', `SELECT JSON_EXTRACT(${J}, '$.zz')`, '\\N'], ['-> of a missing key is NULL', `SELECT ${J}->'$.zz'`, '\\N'], ['JSON_EXTRACT of JSON null is the text null', `SELECT JSON_EXTRACT(${J}, '$.z')`, 'null'],
+          ['->> operator', `SELECT ${J}->>'$.a'`, 'x'], ['->> of a number', `SELECT ${J}->>'$.n'`, '2'], ['JSON_VALUE of a number', `SELECT JSON_VALUE(${J}, '$.n')`, '2'],
+          ['JSON_EXTRACT keeps the quotes of a text', `SELECT JSON_EXTRACT(${J}, '$.a')`, '"x"'], ['JSON_EXTRACT of a number', `SELECT JSON_EXTRACT(${J}, '$.n')`, '2'],
+          ['JSON wildcard path is refused', `SELECT ${J}->>'$.arr[*]'`, '(refused']];
+      })(),
+      // dates as text, intervals
+      ['DATEDIFF of text dates', `SELECT DATEDIFF('2024-01-10', '2024-01-01')`, '9'], ['TIMESTAMPDIFF of text dates', `SELECT TIMESTAMPDIFF(DAY, '2024-01-01', '2024-01-10 10:00:00')`, '9'],
+      ['TIMESTAMPDIFF MICROSECOND', `SELECT TIMESTAMPDIFF(MICROSECOND, CAST('2024-01-01 10:00:00.000100' AS DATETIME(6)), CAST('2024-01-01 10:00:00.000350' AS DATETIME(6)))`, '250'],
+      ['DATE_ADD of a text date', `SELECT DATE_ADD('2024-01-31', INTERVAL 1 DAY)`, '2024-02-01'],
+      ['DATE_ADD with a column as the amount', `SELECT DATE_ADD(CAST('2024-01-31' AS DATE), INTERVAL number DAY) FROM system.numbers WHERE number = 2 LIMIT 1`, '2024-02-02'],
+      ['INTERVAL with a column amount', `SELECT CAST('2024-01-31' AS DATE) + INTERVAL number MONTH FROM system.numbers WHERE number = 1 LIMIT 1`, '2024-02-29'],
+      ['YEAR_MONTH clamps the month end once (Feb 29 + 1y2m)', `SELECT DATE_ADD(CAST('2024-02-29' AS DATE), INTERVAL '1-2' YEAR_MONTH)`, '2025-04-29'],
+      ['YEAR_MONTH subtract', `SELECT DATE_SUB(CAST('2024-03-31' AS DATE), INTERVAL '1-1' YEAR_MONTH)`, '2023-02-28'], ['YEAR_MONTH negative', `SELECT DATE_ADD(CAST('2024-03-31' AS DATE), INTERVAL '-1-2' YEAR_MONTH)`, '2023-01-31'],
+      ['DAY_MINUTE', `SELECT DATE_ADD(CAST('2024-01-31 10:00:00' AS DATETIME), INTERVAL '1 02:03' DAY_MINUTE)`, '2024-02-01 12:03:00'],
+      ['DAY_HOUR with a short value leaves out the days', `SELECT DATE_ADD(CAST('2024-01-31 10:00:00' AS DATETIME), INTERVAL '5' DAY_HOUR)`, '2024-01-31 15:00:00'],
+      ['HOUR_MINUTE as an operator', `SELECT CAST('2024-01-31 10:00:00' AS DATETIME) + INTERVAL '02:03' HOUR_MINUTE`, '2024-01-31 12:03:00'],
+      // LIKE ... ESCAPE, modifiers, hints
+      ['LIKE ESCAPE: escaped underscore matches itself', `SELECT 'a_b' LIKE 'a#_b' ESCAPE '#'`, '1'], ['LIKE ESCAPE: ... and not another character', `SELECT 'axb' LIKE 'a#_b' ESCAPE '#'`, '0'],
+      ['LIKE ESCAPE: escaped percent', `SELECT '50%' LIKE '50#%' ESCAPE '#'`, '1'], ['LIKE ESCAPE: ... not a wildcard', `SELECT '500' LIKE '50#%' ESCAPE '#'`, '0'],
+      ['LIKE ESCAPE: a backslash is an ordinary character', String.raw`SELECT 'a\\b' LIKE 'a\\b' ESCAPE '#'`, '1'],
+      ['SQL_CALC_FOUND_ROWS is dropped', `SELECT count() FROM (SELECT SQL_CALC_FOUND_ROWS number FROM numbers(5) LIMIT 2) AS s`, '2'],
+      ['STRAIGHT_JOIN is an inner join', `SELECT count() FROM numbers(3) AS a STRAIGHT_JOIN numbers(3) AS b ON a.number = b.number`, '3'],
+      ['FOR UPDATE is dropped', `SELECT number FROM numbers(1) FOR UPDATE`, '0'],
+      ['WITH RECURSIVE (ClickHouse 26.8)', `WITH RECURSIVE c AS (SELECT 1 AS n UNION ALL SELECT n + 1 FROM c WHERE n < 5) SELECT sum(n) FROM c`, '15'],
+      ['a user variable is refused', `SELECT @x := 1`, '(refused'], ['a system variable is refused', `SELECT @@sql_mode`, '(refused'],
+    ];
+  })(),
   ['ORDER BY puts NULL first (ascending)', "SELECT x FROM (SELECT 1 AS x UNION ALL SELECT NULL UNION ALL SELECT 0) ORDER BY x LIMIT 1", '\\N'],
 ];
 let failed = 0;
@@ -82,7 +140,7 @@ for (const [label, mysql, expected] of cases) {
   let got;
   if (!r.ok) got = `(refused: ${r.error})`;
   else { try { got = (await ch(r.sql)).split('\n')[0]; } catch (e) { got = `(ClickHouse: ${e.message})`; } }
-  const ok = got === expected;
+  const ok = String(expected).startsWith('(refused') ? got.startsWith('(refused') : got === expected;
   if (!ok) failed++;
   console.log(`${ok ? 'ok       ' : 'DIFFERENT'} ${label.padEnd(52)} MySQL ${String(expected).padEnd(11)} ClickHouse ${got}${ok ? '' : `\n          ${r.sql ?? ''}`}`);
 }
@@ -109,6 +167,11 @@ const typical = [
   "SELECT count() FROM system.tables WHERE database NOT IN ('system', 'INFORMATION_SCHEMA')",
   'SELECT name FROM system.tables WHERE database = currentDatabase()',
   'SELECT name FROM system.tables ORDER BY name LIMIT 5',
+  "SELECT formatDateTime(metadata_modification_time, '%Y-%m') AS m FROM system.tables LIMIT 3",
+  "SELECT dateDiff('day', metadata_modification_time, now()) AS age_days FROM system.tables LIMIT 3",
+  'SELECT metadata_modification_time + INTERVAL 1 DAY AS d FROM system.tables LIMIT 3',
+  "SELECT formatDateTime(metadata_modification_time, '%H:%i') AS hm FROM system.tables LIMIT 3",
+  "SELECT formatDateTime(metadata_modification_time, '%M') AS month_name FROM system.tables LIMIT 3",
   'SELECT dummy FROM system.one',
   'SELECT a, b FROM (SELECT 1 AS a, 2 AS b)',
 ];

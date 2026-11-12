@@ -11,9 +11,12 @@ generated. sqlglot (MIT, vendored in ./vendor) does the work; this file only ada
 connection and runs no SQL. It is started by ClickHouse/SqlTranslator.cs with `python3 -I` (isolated: no PYTHON* variables, no user site).
 """
 import json
+import logging
 import os
 import re
 import sys
+
+logging.getLogger("sqlglot").setLevel(logging.CRITICAL)  # sqlglot logs "unsupported" notes to stderr; nobody reads them, and a full pipe would stall the script
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "vendor"))
@@ -37,14 +40,40 @@ def plain(description):
     return d or "This query could not be read."
 
 
-# MySQL interval units that ClickHouse has under the same name (compound ones such as YEAR_MONTH have none).
+# MySQL interval units that ClickHouse has under the same name.
 UNITS = {"MICROSECOND", "SECOND", "MINUTE", "HOUR", "DAY", "WEEK", "MONTH", "QUARTER", "YEAR"}
-# TIMESTAMPDIFF units: MICROSECOND is left out (not verified against ClickHouse).
-DIFF_UNITS = UNITS - {"MICROSECOND"}
+# MySQL compound interval units: the parts a value like '1 02:03' stands for, in order. The whole value is added at once in MySQL, so it becomes ONE interval
+# of the smallest whole unit (months, or seconds) rather than several additions (which would clamp the end of a month more than once).
+COMPOUND = {
+    "YEAR_MONTH": (("YEAR", 12), ("MONTH", 1), "MONTH"),
+    "DAY_HOUR": (("DAY", 86400), ("HOUR", 3600), "SECOND"),
+    "DAY_MINUTE": (("DAY", 86400), ("HOUR", 3600), ("MINUTE", 60), "SECOND"),
+    "DAY_SECOND": (("DAY", 86400), ("HOUR", 3600), ("MINUTE", 60), ("SECOND", 1), "SECOND"),
+    "HOUR_MINUTE": (("HOUR", 3600), ("MINUTE", 60), "SECOND"),
+    "HOUR_SECOND": (("HOUR", 3600), ("MINUTE", 60), ("SECOND", 1), "SECOND"),
+    "MINUTE_SECOND": (("MINUTE", 60), ("SECOND", 1), "SECOND"),
+}
 INTEGER = re.compile(r"^-?\d+$")
 # Text that is really a number or a date/time: converting the other side of a comparison to text would break it, so such literals are never case-folded.
 NUMBER_LIKE = re.compile(r"^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$|^0[xX][0-9a-fA-F]+$")
 DATE_LIKE = re.compile(r"^\d{4}-\d{2}-\d{2}([ T]\d{2}:\d{2}(:\d{2}(\.\d+)?)?)?\s*(Z|[+-]\d{2}:?\d{2})?$")
+STRICT_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+STRICT_DATETIME = re.compile(r"^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2})?$")
+STRICT_DATETIME_FRAC = re.compile(r"^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}\.\d+$")
+
+# DATE_FORMAT codes that ClickHouse's formatDateTime (MySQL-style) prints exactly as MySQL does (checked on a 26.8 server against MySQL's documented output).
+FORMAT_DIRECT = set("abdefHhIijMmpSsTWwYy%")
+# The ones that differ get an expression instead (week numbers use toWeek / toYearWeek, whose modes are MySQL's WEEK() modes).
+# STR_TO_DATE codes that ClickHouse's parseDateTime reads like MySQL (%y is refused: years 70-99 come out NULL, MySQL reads them as 19xx).
+PARSE_OK = set("abcdeHhIijklMmpSsWY%")
+PARSE_TIME = set("HhIiklpSsTr")
+PARSE_REFUSED = {
+    "D": "the day with a suffix (1st, 2nd)", "f": "fractions of a second", "U": "week numbers", "u": "week numbers", "V": "week numbers", "v": "week numbers",
+    "w": "the weekday number", "X": "the year of a week number", "x": "the year of a week number",
+    "y": "a two-digit year (ClickHouse reads 70-99 as NULL, MySQL as 1970-1999)",
+}
+# Hints and modifiers that do not change what a SELECT returns.
+DROPPED_MODIFIERS = {"SQL_CALC_FOUND_ROWS", "SQL_NO_CACHE", "SQL_CACHE", "SQL_SMALL_RESULT", "SQL_BIG_RESULT", "SQL_BUFFER_RESULT", "HIGH_PRIORITY", "STRAIGHT_JOIN"}
 
 
 class Refusal(Exception):
@@ -59,31 +88,67 @@ def mysql_to_clickhouse(sql, sqlglot, ErrorLevel):
     """Translate one MySQL query for ClickHouse. Where sqlglot's plain output would run but mean something else, the text is refused or repaired:
 
     * `||` is OR in MySQL's default mode and concatenation in ClickHouse: refused, so nobody gets 0/1 where they wanted text (write OR or CONCAT()).
-    * DATEDIFF(a, b) is a - b in days: written as dateDiff('day', b, a), the order ClickHouse takes (sqlglot gave DATE_DIFF(a, b), which has no unit).
-    * TIMESTAMPDIFF(unit, a, b) counts whole units (b - a, truncated toward zero). Checked against a ClickHouse 26.8 server: age('unit', a, b) is right for
-      DAY, WEEK, MONTH, QUARTER and YEAR, but age('hour', ...) is WRONG there (10:00 -> 12:30 gave 3, 10:59 -> 11:01 gave -1), so SECOND, MINUTE and HOUR use the
-      elapsed seconds instead: dateDiff('second', a, b), intDiv(..., 60), intDiv(..., 3600). dateDiff by itself counts boundaries for DAY and up, which is not MySQL's count.
-    * DATE_ADD / DATE_SUB(d, INTERVAL n unit): d +/- INTERVAL n unit, with n a number (sqlglot made it the string '1'); compound units and non-literal amounts are refused.
-    * LIKE becomes ILIKE: MySQL's default collation ignores case, ClickHouse's LIKE does not.   [changes: ilike]
-    * `=`, `!=` and IN against a text literal ignore case in MySQL and not in ClickHouse: written as lowerUTF8(toString(x)) = lowerUTF8('lit') (toString makes it work
-      for every column type, lowerUTF8 for non-ASCII letters), with a note that this can be slower. Not done for number- or date-like literals, a list that is not all
-      text, or when the other side is a literal, NULL or a subquery.   [changes: case-fold]
+    * `@var`, `@@var` have no ClickHouse equivalent: refused, at their position.
+    * DATEDIFF(a, b) is a - b in days: dateDiff('day', b, a), the order ClickHouse takes. TIMESTAMPDIFF counts whole units (b - a, truncated toward zero):
+      age('unit', a, b) for DAY..YEAR, elapsed seconds for SECOND/MINUTE/HOUR (age('hour') is WRONG on ClickHouse 26.8: 10:00 -> 12:30 gave 3), dateDiff('microsecond').
+    * DATE_ADD / DATE_SUB(d, INTERVAL n unit): d +/- INTERVAL n unit (n a number) or toIntervalUnit(n) (n an expression); a compound unit (YEAR_MONTH,
+      DAY_HOUR, ...) is ONE interval of months or seconds, as MySQL adds it. Date-like text operands become toDate / toDateTime.
+    * DATE_FORMAT(d, fmt) and FROM_UNIXTIME(n, fmt): sqlglot rewrites the codes into another style (%i -> %M, which ClickHouse reads as the MONTH NAME), so the
+      MySQL text is kept (parser subclass) and rebuilt: codes ClickHouse prints like MySQL go through formatDateTime, the rest become expressions (%c %l %D %r %U %u %V %v %X %x).
+    * STR_TO_DATE(s, fmt): parseDateTimeOrNull (NULL on a bad text, as MySQL), a Date for a date-only format, a DateTime otherwise; a few codes are refused.
+    * UNIX_TIMESTAMP, LAST_DAY, JSON_UNQUOTE(JSON_EXTRACT()), ->> and JSON_VALUE are translated (the JSON ones keep numbers, booleans, null and a missing key apart);
+      JSON_EXTRACT and -> give NULL for a missing key (JSONExtractRaw gives '', which is not NULL). A text that is not JSON gives NULL here; MySQL raises an error.
+    * LIKE becomes ILIKE (MySQL's default collation ignores case); LIKE ... ESCAPE c becomes the backslash escapes ClickHouse has.   [changes: ilike]
+    * `=`, `!=` and IN against a text literal ignore case in MySQL and not in ClickHouse: lowerUTF8(toString(x)) = lowerUTF8('lit').   [changes: case-fold]
     * a DIV 0 is NULL in MySQL: the divisor of DIV is wrapped in nullIf(..., 0) (sqlglot already does it for `/` and `%`).   [changes: div-null]
     * ORDER BY keeps MySQL's NULL-first order (sqlglot adds NULLS FIRST).   [changes: nulls-first]
+    * SQL_CALC_FOUND_ROWS, SQL_NO_CACHE, USE/FORCE/IGNORE INDEX and a SELECT-level STRAIGHT_JOIN are dropped (they do not change the result); a STRAIGHT_JOIN
+      join is an INNER (or CROSS) join; FOR UPDATE / FOR SHARE is dropped with a note (ClickHouse has no row locks).
     """
     from sqlglot import exp
     from sqlglot.dialects.dialect import Dialect
+    from sqlglot.dialects.mysql import MySQL
     from sqlglot.tokens import TokenType
 
-    for tok in Dialect.get_or_raise("mysql").tokenize(sql):
+    # --- user variables: no ClickHouse equivalent ---------------------------------------------------------------------------------------------------------
+    tokens = Dialect.get_or_raise("mysql").tokenize(sql)
+    for i, tok in enumerate(tokens):
         if tok.token_type == TokenType.DPIPE:
             raise Refusal("'||' means OR in MySQL but joins text in ClickHouse. Write OR, or CONCAT(a, b) for text.", "parse",
                           [{"line": tok.line, "col": tok.col, "start": tok.col - len(tok.text), "message": "'||' is ambiguous: write OR or CONCAT()."}])
-    trees = [t for t in sqlglot.parse(sql, read="mysql") if t]
+        if tok.token_type in (TokenType.PARAMETER, TokenType.SESSION_PARAMETER) and tok.text in ("@", "@@"):
+            name = tokens[i + 1].text if i + 1 < len(tokens) else ""
+            what = "System variables (@@" if tok.text == "@@" else "User variables (@"
+            msg = f"{what}{name}) have no ClickHouse equivalent. Write the value into the query."
+            end = tokens[i + 1].col if i + 1 < len(tokens) else tok.col
+            raise Refusal(msg, "parse", [{"line": tok.line, "col": end, "start": tok.col - len(tok.text), "message": msg}])
+
+    # --- parse: MySQL's date format functions are kept as plain calls with the original format text -------------------------------------------------------
+    original_from_unixtime = MySQL.Parser.FUNCTIONS["FROM_UNIXTIME"]
+    raw = {"DATE_FORMAT": "MYSQL_DATE_FORMAT", "STR_TO_DATE": "MYSQL_STR_TO_DATE", "TIME_FORMAT": "MYSQL_TIME_FORMAT"}
+
+    def keep(name):
+        return lambda args: exp.Anonymous(this=name, expressions=args)
+
+    class MySQLRaw(MySQL):
+        class Parser(MySQL.Parser):
+            FUNCTIONS = {**MySQL.Parser.FUNCTIONS, **{k: keep(v) for k, v in raw.items()},
+                         "FROM_UNIXTIME": lambda args, dialect: exp.Anonymous(this="MYSQL_FROM_UNIXTIME", expressions=args) if len(args) == 2 else original_from_unixtime(args, dialect)}
+
+    trees = [t for t in sqlglot.parse(sql, read=MySQLRaw()) if t]
     if len(trees) != 1:
         raise Refusal("Only one query can be translated.", "parse")
     warnings, changes = [], []
 
+    A = lambda name, *args: exp.Anonymous(this=name, expressions=list(args))  # a ClickHouse function call, name kept as written
+    S = exp.Literal.string
+    N = exp.Literal.number
+
+    def note(text):
+        if text not in warnings:
+            warnings.append(text)
+
+    # --- small predicates and builders --------------------------------------------------------------------------------------------------------------------
     def is_text(node):
         """A quoted text with letters that is not a number or a date/time: the kind of literal whose comparison MySQL does without regard to case."""
         return (isinstance(node, exp.Literal) and node.is_string and any(c.isalpha() for c in node.this)
@@ -93,6 +158,22 @@ def mysql_to_clickhouse(sql, sqlglot, ErrorLevel):
         """The other side of a comparison: anything but a literal, NULL or a subquery (whose type we cannot know)."""
         return not isinstance(node, (exp.Literal, exp.Null, exp.Subquery, exp.Select, exp.Lower, exp.Upper))  # LOWER(x) = 'a' already ignores case
 
+    def fold(node):
+        """lowerUTF8(toString(x)): the same text whatever the column's type, compared without regard to case."""
+        return A("lowerUTF8", A("toString", node))
+
+    def when(node):
+        """A date-like text literal as a ClickHouse date value (MySQL takes the text as it is; ClickHouse's date functions refuse text)."""
+        if isinstance(node, exp.Literal) and node.is_string:
+            t = node.this.strip()
+            if STRICT_DATE.match(t):
+                return A("toDate", node)
+            if STRICT_DATETIME.match(t):
+                return A("toDateTime", node)
+            if STRICT_DATETIME_FRAC.match(t):
+                return A("toDateTime64", node, N(6))
+        return node
+
     def unit_of(node, what, allowed=UNITS):
         u = node.args.get("unit")
         name = (u.name if u is not None else "").upper()
@@ -100,69 +181,278 @@ def mysql_to_clickhouse(sql, sqlglot, ErrorLevel):
             raise Refusal(f"{what} with the unit {name or '?'} has no ClickHouse equivalent.")
         return name
 
-    def amount_of(node, what):
-        e = node.args.get("expression")
-        if isinstance(e, exp.Literal) and INTEGER.match(e.this):
-            return exp.Literal.number(int(e.this))
-        raise Refusal(f"{what} needs the amount written as a plain number (for example INTERVAL 7 DAY).")
+    def interval_of(amount, unit, what):
+        """(the amount, the unit) of an interval, as ClickHouse wants it: a number for a literal, toIntervalUnit(...) for an expression; compound units become one."""
+        unit = (unit.name if unit is not None else "").upper()
+        if unit in COMPOUND:
+            *parts, base = COMPOUND[unit]
+            if not (isinstance(amount, exp.Literal)):
+                raise Refusal(f"{what} with the unit {unit} needs the amount written as text such as '1-2'.")
+            text = amount.this.strip()
+            sign = -1 if text.startswith("-") else 1
+            digits = [int(x) for x in re.findall(r"\d+", text)]
+            if not digits or len(digits) > len(parts):
+                raise Refusal(f"{what}: '{text}' does not fit the unit {unit}.")
+            digits = [0] * (len(parts) - len(digits)) + digits  # a short value leaves out the LEFTMOST parts, as in MySQL
+            total = sign * sum(d * mult for d, (_, mult) in zip(digits, parts))
+            return N(total), base
+        if unit not in UNITS:
+            raise Refusal(f"{what} with the unit {unit or '?'} has no ClickHouse equivalent.")
+        if isinstance(amount, exp.Literal) and INTEGER.match(amount.this):
+            return N(int(amount.this)), unit
+        if isinstance(amount, exp.Literal):
+            raise Refusal(f"{what} needs the amount written as a whole number.")
+        return amount, unit
 
-    def fold(node):
-        """lowerUTF8(toString(x)): the same text whatever the column's type, compared without regard to case."""
-        return exp.Anonymous(this="lowerUTF8", expressions=[exp.Anonymous(this="toString", expressions=[node])])
+    def interval_node(amount, unit):
+        if isinstance(amount, exp.Literal) or (isinstance(amount, exp.Neg) and isinstance(amount.this, exp.Literal)):
+            return exp.Interval(this=amount, unit=exp.var(unit))
+        return A("toInterval" + unit.title(), amount)
 
-    def fold_literal(lit):
-        return exp.Anonymous(this="lowerUTF8", expressions=[lit])
+    # --- DATE_FORMAT -----------------------------------------------------------------------------------------------------------------------------------------
+    def format_pieces(dt):
+        d = lambda: dt.copy()
+        day = lambda: A("toDayOfMonth", d())
+        hour12 = lambda: A("if", exp.EQ(this=A("modulo", A("toHour", d()), N(12)), expression=N(0)), N(12), A("modulo", A("toHour", d()), N(12)))
+        week = lambda mode: A("lpad", A("toString", A("toWeek", d(), N(mode))), N(2), S("0"))
+        yearweek = lambda mode: A("toString", A("intDiv", A("toYearWeek", d(), N(mode)), N(100)))
+        suffix = A("multiIf", exp.In(this=day(), expressions=[N(11), N(12), N(13)]), S("th"),
+                   exp.EQ(this=A("modulo", day(), N(10)), expression=N(1)), S("st"), exp.EQ(this=A("modulo", day(), N(10)), expression=N(2)), S("nd"),
+                   exp.EQ(this=A("modulo", day(), N(10)), expression=N(3)), S("rd"), S("th"))
+        return {
+            "c": A("toString", A("toMonth", d())), "k": A("toString", A("toHour", d())), "l": A("toString", hour12()),
+            "D": A("concat", A("toString", day()), suffix), "r": A("formatDateTime", d(), S("%I:%i:%S %p")),
+            "U": week(0), "u": week(1), "V": week(2), "v": week(3), "X": yearweek(2), "x": yearweek(3),
+        }
 
+    def date_format(dt, fmt):
+        """formatDateTime / concat(...) over `dt` for a MySQL format text (an unknown code stands for itself, as in MySQL)."""
+        if not (isinstance(fmt, exp.Literal) and fmt.is_string):
+            raise Refusal("DATE_FORMAT needs the format written as text.")
+        text, pieces = fmt.this, format_pieces(dt)
+        parts, cur, i = [], "", 0
+        while i < len(text):
+            c = text[i]
+            if c != "%" or i + 1 >= len(text):
+                cur += "%%" if c == "%" else c
+                i += 1
+                continue
+            spec = text[i + 1]
+            i += 2
+            if spec in FORMAT_DIRECT:
+                cur += "%" + spec
+            elif spec in pieces:
+                if cur:
+                    parts.append(A("formatDateTime", dt.copy(), S(cur)))
+                    cur = ""
+                parts.append(pieces[spec])
+            else:
+                cur += spec  # MySQL prints an unknown code's letter
+        if cur:
+            parts.append(A("formatDateTime", dt.copy(), S(cur)))
+        if not parts:
+            return S("")
+        return parts[0] if len(parts) == 1 else A("concat", *parts)
+
+    # --- STR_TO_DATE -----------------------------------------------------------------------------------------------------------------------------------------
+    def str_to_date(value, fmt):
+        if not (isinstance(fmt, exp.Literal) and fmt.is_string):
+            raise Refusal("STR_TO_DATE needs the format written as text.")
+        text, out_fmt, has_time, i = fmt.this, "", False, 0
+        while i < len(text):
+            c = text[i]
+            if c != "%" or i + 1 >= len(text):
+                out_fmt += "%%" if c == "%" else c
+                i += 1
+                continue
+            spec = text[i + 1]
+            i += 2
+            if spec == "r":
+                out_fmt, has_time = out_fmt + "%h:%i:%s %p", True
+            elif spec == "T":
+                out_fmt, has_time = out_fmt + "%H:%i:%s", True
+            elif spec in PARSE_OK:
+                out_fmt += "%" + spec
+                has_time = has_time or spec in PARSE_TIME
+            elif spec in PARSE_REFUSED:
+                raise Refusal(f"STR_TO_DATE with %{spec} ({PARSE_REFUSED[spec]}) has no ClickHouse equivalent.")
+            else:
+                raise Refusal(f"STR_TO_DATE with %{spec} is not translated.")
+        note("STR_TO_DATE: ClickHouse needs zero-padded numbers for %m %d %H %h %I %i %s %S (MySQL also reads 2024-3-5); text that does not match gives NULL. "
+             "%e %c %k %l read one or two digits.")
+        parsed = A("parseDateTimeOrNull", value, S(out_fmt))
+        return parsed if has_time else A("toDate", parsed)
+
+    # --- JSON ------------------------------------------------------------------------------------------------------------------------------------------------
+    def json_args(path, what):
+        """The key / index arguments of a ClickHouse JSON function for a MySQL path ($.a.b[0]); wildcards, slices and the like are refused."""
+        if not isinstance(path, exp.JSONPath):
+            raise Refusal(f"{what} needs the path written as text such as '$.name'.")
+        args = []
+        for step in path.expressions:
+            if isinstance(step, exp.JSONPathRoot):
+                continue
+            if isinstance(step, exp.JSONPathKey):
+                args.append(S(step.name) if isinstance(step.this, str) else step.this)
+            elif isinstance(step, exp.JSONPathSubscript) and isinstance(step.this, int):
+                args.append(N(step.this + 1))  # MySQL counts from 0, ClickHouse from 1
+            else:
+                raise Refusal(f"{what} with a wildcard, slice or other path step has no ClickHouse equivalent; write each key or index out.")
+        if not args:
+            raise Refusal(f"{what} needs a path below the root, such as '$.name'.")
+        return args
+
+    def json_scalar(doc, path, what):
+        """JSON_UNQUOTE(JSON_EXTRACT(doc, path)) / ->> / JSON_VALUE: a text value unquoted, anything else as its JSON text ('2', 'true', 'null'), NULL when the key is missing."""
+        args = json_args(path, what)
+        c = lambda: doc.copy()
+        has = A("JSONHas", c(), *[a.copy() for a in args])
+        is_text_value = A("equals", A("JSONType", c(), *[a.copy() for a in args]), S("String"))  # a call, not `=`: the text-comparison repair must not fold it
+        return A("if", has, A("if", is_text_value, A("JSONExtractString", c(), *[a.copy() for a in args]), A("JSONExtractRaw", c(), *[a.copy() for a in args])), exp.Null())
+
+    # --- LIKE ... ESCAPE ------------------------------------------------------------------------------------------------------------------------------------
+    def like_pattern(pattern, esc):
+        """The pattern in ClickHouse's backslash escaping: `esc` before % _ or itself is a literal; a backslash that is not the escape character is an ordinary one."""
+        out_p, i = "", 0
+        while i < len(pattern):
+            c = pattern[i]
+            if esc and c == esc and i + 1 < len(pattern):
+                n = pattern[i + 1]
+                out_p += ("\\" + n) if n in "%_\\" else n
+                i += 2
+            elif c == "\\":
+                out_p += "\\\\" if esc != "\\" else "\\\\"  # a literal backslash is two in ClickHouse; with the escape character '\\' the pattern is already written that way
+                i += 1
+            else:
+                out_p += c
+                i += 1
+        return out_p
+
+    # --- the repair of one node ---------------------------------------------------------------------------------------------------------------------------
     def fix(node):
+        if isinstance(node, exp.Anonymous):
+            name = node.name.upper()
+            args = node.expressions
+            if name == "MYSQL_DATE_FORMAT" and len(args) == 2:
+                return date_format(when(args[0]), args[1])
+            if name == "MYSQL_STR_TO_DATE" and len(args) == 2:
+                return str_to_date(args[0], args[1])
+            if name == "MYSQL_FROM_UNIXTIME" and len(args) == 2:
+                return date_format(A("toDateTime", args[0]), args[1])
+            if name == "MYSQL_TIME_FORMAT":
+                raise Refusal("TIME_FORMAT is not translated: ClickHouse has no TIME type. Use DATE_FORMAT on a date and time.")
+            if name == "UNIX_TIMESTAMP":
+                if not args:
+                    return A("toUnixTimestamp", A("now"))
+                if len(args) == 1:
+                    return A("toUnixTimestamp", A("toDateTime", args[0]))  # a Date means midnight in the session time zone, as in MySQL (a bare Date would be UTC midnight)
+            if name == "JSON_UNQUOTE" and len(args) == 1 and isinstance(args[0], exp.JSONExtract):
+                return json_scalar(args[0].this, args[0].args.get("expression"), "JSON_UNQUOTE(JSON_EXTRACT())")
+        if isinstance(node, exp.JSONExtract) and not node.args.get("expressions"):
+            args = json_args(node.args.get("expression"), "JSON_EXTRACT")
+            return A("if", A("JSONHas", node.this.copy(), *[a.copy() for a in args]), A("JSONExtractRaw", node.this.copy(), *[a.copy() for a in args]), exp.Null())
+        if isinstance(node, exp.JSONExtractScalar):
+            return json_scalar(node.this, node.args.get("expression"), "->>")
+        if isinstance(node, exp.JSONValue):
+            if node.args.get("returning"):
+                raise Refusal("JSON_VALUE ... RETURNING has no ClickHouse equivalent.")
+            return json_scalar(node.this, node.args.get("path"), "JSON_VALUE")
+        if isinstance(node, exp.LastDay):
+            return A("toLastDayOfMonth", when(node.this))
         if isinstance(node, exp.DateDiff) and node.args.get("unit") is None:  # MySQL DATEDIFF(a, b): this = a, expression = b
-            return exp.Anonymous(this="dateDiff", expressions=[exp.Literal.string("day"), node.args["expression"], node.args["this"]])
+            return A("dateDiff", S("day"), when(node.args["expression"]), when(node.args["this"]))
         if isinstance(node, exp.TimestampDiff):  # this = the later time (3rd argument), expression = the earlier one
-            unit, start, end = unit_of(node, "TIMESTAMPDIFF", DIFF_UNITS), node.args["expression"], node.args["this"]
+            unit = (node.args["unit"].name if node.args.get("unit") is not None else "").upper()
+            unit = "MICROSECOND" if unit == "FRAC_SECOND" else unit
+            if unit not in UNITS:
+                raise Refusal(f"TIMESTAMPDIFF with the unit {unit or '?'} has no ClickHouse equivalent.")
+            start, end = when(node.args["expression"]), when(node.args["this"])
+            if unit == "MICROSECOND":
+                return A("dateDiff", S("microsecond"), start, end)
             if unit in ("SECOND", "MINUTE", "HOUR"):  # elapsed seconds, truncated toward zero by intDiv
-                seconds = exp.Anonymous(this="dateDiff", expressions=[exp.Literal.string("second"), start, end])
-                return seconds if unit == "SECOND" else exp.Anonymous(this="intDiv", expressions=[seconds, exp.Literal.number(60 if unit == "MINUTE" else 3600)])
-            return exp.Anonymous(this="age", expressions=[exp.Literal.string(unit.lower()), start, end])
+                seconds = A("dateDiff", S("second"), start, end)
+                return seconds if unit == "SECOND" else A("intDiv", seconds, N(60 if unit == "MINUTE" else 3600))
+            return A("age", S(unit.lower()), start, end)
         if isinstance(node, (exp.DateAdd, exp.DateSub)):
             what = "DATE_ADD" if isinstance(node, exp.DateAdd) else "DATE_SUB"
-            unit = unit_of(node, what)  # the unit first: a compound unit such as YEAR_MONTH is the clearer thing to say
-            interval = exp.Interval(this=amount_of(node, what), unit=exp.var(unit))
-            return (exp.Add if isinstance(node, exp.DateAdd) else exp.Sub)(this=node.args["this"], expression=interval)
+            amount, unit = interval_of(node.args.get("expression"), node.args.get("unit"), what)
+            return (exp.Add if isinstance(node, exp.DateAdd) else exp.Sub)(this=when(node.args["this"]), expression=interval_node(amount, unit))
         if isinstance(node, exp.Interval):
-            if node.args.get("unit") is not None and node.args["unit"].name.upper() not in UNITS:
-                raise Refusal(f"INTERVAL with the unit {node.args['unit'].name} has no ClickHouse equivalent.")
-            amount = node.args.get("this")
-            if isinstance(amount, exp.Literal) and amount.is_string and INTEGER.match(amount.this):
-                return exp.Interval(this=exp.Literal.number(int(amount.this)), unit=node.args.get("unit"))
+            if isinstance(node.parent, (exp.DateAdd, exp.DateSub)):
+                return node
+            amount, unit = interval_of(node.args.get("this"), node.args.get("unit"), "INTERVAL")
+            return interval_node(amount, unit)
+        if isinstance(node, (exp.Add, exp.Sub)) and (isinstance(node.args.get("expression"), exp.Interval) or isinstance(node.args.get("this"), exp.Interval)):
+            changed = False
+            for key in ("this", "expression"):
+                w = when(node.args.get(key))
+                if w is not node.args.get(key) and not isinstance(node.args.get(key), exp.Interval):
+                    node.set(key, w)
+                    changed = True
+            return node if changed else node
+        if isinstance(node, exp.Escape) and isinstance(node.this, (exp.Like, exp.ILike)):
+            like, esc = node.this, node.args.get("expression")
+            pattern = like.args.get("expression")
+            if not (isinstance(pattern, exp.Literal) and pattern.is_string and isinstance(esc, exp.Literal) and esc.is_string and len(esc.this) <= 1):
+                raise Refusal("LIKE ... ESCAPE needs the pattern and the escape character written as text.")
+            changes.append("ilike")
+            rest = {k: v for k, v in like.args.items() if k not in ("this", "expression")}
+            return exp.ILike(this=like.args["this"], expression=S(like_pattern(pattern.this, esc.this)), **rest)
         if isinstance(node, exp.Like):
             changes.append("ilike")
-            return exp.ILike(**node.args)  # every argument kept: NOT LIKE is a Like with negate=True, and ESCAPE rides along
+            return exp.ILike(**node.args)  # every argument kept: NOT LIKE is a Like with negate=True
         if isinstance(node, exp.IntDiv):  # a DIV 0 is NULL in MySQL; the plain translation divides by zero
+            divisor = node.args["expression"]
+            if isinstance(divisor, exp.Anonymous) and divisor.name == "nullIf":
+                return node
             changes.append("div-null")
-            return exp.IntDiv(this=node.args["this"], expression=exp.Anonymous(this="nullIf", expressions=[node.args["expression"], exp.Literal.number(0)]))
+            return exp.IntDiv(this=node.args["this"], expression=A("nullIf", divisor, N(0)))
         if isinstance(node, (exp.EQ, exp.NEQ)):
             left, right = node.args.get("this"), node.args.get("expression")
             if is_text(right) and foldable(left):
                 changes.append("case-fold")
-                return type(node)(this=fold(left), expression=fold_literal(right))
+                return type(node)(this=fold(left), expression=A("lowerUTF8", right))
             if is_text(left) and foldable(right):
                 changes.append("case-fold")
-                return type(node)(this=fold_literal(left), expression=fold(right))
+                return type(node)(this=A("lowerUTF8", left), expression=fold(right))
         if isinstance(node, exp.In) and node.args.get("expressions") and not node.args.get("query") and not node.args.get("field"):
             items, subject = node.args["expressions"], node.args.get("this")
             if all(isinstance(i, exp.Literal) and i.is_string for i in items) and any(is_text(i) for i in items) and foldable(subject):
                 changes.append("case-fold")
-                return exp.In(this=fold(subject), expressions=[fold_literal(i) for i in items])
+                return exp.In(this=fold(subject), expressions=[A("lowerUTF8", i) for i in items])
         return node
 
-    tree = trees[0].transform(fix)
+    # --- clauses that do not change a result are dropped ------------------------------------------------------------------------------------------------------
+    tree = trees[0]
+    for select in list(tree.find_all(exp.Select)):
+        mods = select.args.get("operation_modifiers")
+        if mods:
+            kept = [m for m in mods if not (isinstance(m, exp.Var) and m.name.upper() in DROPPED_MODIFIERS)]
+            select.set("operation_modifiers", kept or None)
+        if select.args.get("locks"):
+            select.set("locks", None)
+            note("FOR UPDATE / FOR SHARE (row locks) do not exist in ClickHouse; the clause was left out.")
+    for join in tree.find_all(exp.Join):
+        if str(join.args.get("kind") or "").upper() == "STRAIGHT_JOIN":
+            join.set("kind", "INNER" if (join.args.get("on") or join.args.get("using")) else "CROSS")
+
+    # --- repair, until nothing changes (a rewritten node's children are repaired too) -------------------------------------------------------------------------------
+    for _ in range(6):
+        before = repr(tree)
+        tree = tree.transform(fix)
+        if repr(tree) == before:
+            break
+    for n in tree.find_all(exp.Anonymous):
+        if n.name.upper().startswith("MYSQL_"):
+            raise Refusal(f"{n.name[6:].replace('_', ' ').title()} could not be translated.")
     if any(True for _ in trees[0].find_all(exp.Div, exp.Mod)):
         changes.append("div-null")  # sqlglot wraps the divisor in nullIf(..., 0) itself
     result = tree.sql(dialect="clickhouse", unsupported_level=ErrorLevel.RAISE)
     if "NULLS FIRST" in result and "NULLS FIRST" not in sql.upper():
         changes.append("nulls-first")  # MySQL sorts NULL first; ClickHouse's default is last
     if "case-fold" in changes:
-        warnings.append("Text comparisons ignore upper/lower case, as in MySQL. They are written with lowerUTF8(), so a filter on a very large table can be slower "
-                        "(it cannot use the primary key), and accents still count as different letters.")
+        note("Text comparisons ignore upper/lower case, as in MySQL. They are written with lowerUTF8(), so a filter on a very large table can be slower "
+             "(it cannot use the primary key), and accents still count as different letters.")
     return result, warnings, sorted(set(changes))
 
 
