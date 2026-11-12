@@ -75,6 +75,19 @@ PARSE_REFUSED = {
 # Hints and modifiers that do not change what a SELECT returns.
 DROPPED_MODIFIERS = {"SQL_CALC_FOUND_ROWS", "SQL_NO_CACHE", "SQL_CACHE", "SQL_SMALL_RESULT", "SQL_BIG_RESULT", "SQL_BUFFER_RESULT", "HIGH_PRIORITY", "STRAIGHT_JOIN"}
 
+# Function names MySQL has (what the ClickHouse -> MySQL display may print). Anything else sqlglot prints (TODATE, UNIQEXACT, APPROX_DISTINCT, EXPLODE, TRANSFORM...) is
+# a ClickHouse function or another database's name: the query is refused instead of shown with a name MySQL would not know.
+MYSQL_FUNCTIONS = set("""
+ABS ACOS ADDDATE ANY_VALUE ASCII ASIN ATAN ATAN2 AVG BIT_AND BIT_COUNT BIT_LENGTH BIT_OR BIT_XOR CAST CEIL CEILING CHAR_LENGTH CHARACTER_LENGTH COALESCE CONCAT CONCAT_WS CONVERT COS COT
+COUNT CURDATE CURRENT_DATE CURRENT_TIME CURRENT_TIMESTAMP CURTIME DATABASE DATE DATE_ADD DATE_FORMAT DATE_SUB DATEDIFF DAY DAYNAME DAYOFMONTH DAYOFWEEK DAYOFYEAR DEGREES ELT EXP EXTRACT
+FIELD FIND_IN_SET FLOOR FROM_DAYS FROM_UNIXTIME GREATEST GROUP_CONCAT HEX HOUR IF IFNULL INSTR ISNULL LAST_DAY LCASE LEAST LEFT LENGTH LN LOCATE LOG LOG10 LOG2 LOWER LPAD LTRIM MAX MD5 MID
+MIN MINUTE MOD MONTH MONTHNAME NOW NULLIF OCTET_LENGTH PI POSITION POW POWER QUARTER RADIANS RAND REGEXP_LIKE REGEXP_REPLACE REGEXP_SUBSTR REPEAT REPLACE REVERSE RIGHT ROUND RPAD RTRIM
+SECOND SHA1 SHA2 SIGN SIN SPACE SQRT STD STDDEV STDDEV_POP STDDEV_SAMP STR_TO_DATE STRCMP SUBDATE SUBSTR SUBSTRING SUBSTRING_INDEX SUM TAN TIMESTAMP TIMESTAMPADD TIMESTAMPDIFF TO_DAYS
+TRIM TRUNCATE UCASE UNHEX UNIX_TIMESTAMP UPPER UUID VAR_POP VAR_SAMP VARIANCE VERSION WEEK WEEKDAY WEEKOFYEAR YEAR YEARWEEK
+""".split())
+# Words that start ClickHouse-only syntax: found in the text outside quotes and comments.
+CH_ONLY_SYNTAX = re.compile(r"\b(ARRAY\s+JOIN|WITH\s+TOTALS|WITH\s+FILL|GLOBAL|PREWHERE|FINAL|SAMPLE|SETTINGS|INTO\s+OUTFILE|FORMAT)\b", re.I)
+
 
 class Refusal(Exception):
     """A MySQL query that must not be translated: ambiguous or without a faithful ClickHouse form. `errors` places it in the text when it can."""
@@ -260,31 +273,48 @@ def mysql_to_clickhouse(sql, sqlglot, ErrorLevel):
         return parts[0] if len(parts) == 1 else A("concat", *parts)
 
     # --- STR_TO_DATE -----------------------------------------------------------------------------------------------------------------------------------------
+    LENIENT = {"m": "c", "d": "e", "H": "k", "h": "l", "I": "l"}  # the codes that read one or two digits (MySQL's %m reads '3' and '03'; ClickHouse's %m needs '03')
+
     def str_to_date(value, fmt):
         if not (isinstance(fmt, exp.Literal) and fmt.is_string):
             raise Refusal("STR_TO_DATE needs the format written as text.")
-        text, out_fmt, has_time, i = fmt.this, "", False, 0
+        text, items, has_time, i = fmt.this, [], False, 0  # items: ("lit", text) or ("code", letter)
         while i < len(text):
             c = text[i]
             if c != "%" or i + 1 >= len(text):
-                out_fmt += "%%" if c == "%" else c
+                items.append(("lit", "%%" if c == "%" else c))
                 i += 1
                 continue
             spec = text[i + 1]
             i += 2
             if spec == "r":
-                out_fmt, has_time = out_fmt + "%h:%i:%s %p", True
+                items += [("code", "h"), ("lit", ":"), ("code", "i"), ("lit", ":"), ("code", "s"), ("lit", " "), ("code", "p")]
+                has_time = True
             elif spec == "T":
-                out_fmt, has_time = out_fmt + "%H:%i:%s", True
+                items += [("code", "H"), ("lit", ":"), ("code", "i"), ("lit", ":"), ("code", "s")]
+                has_time = True
             elif spec in PARSE_OK:
-                out_fmt += "%" + spec
+                items.append(("code", spec))
                 has_time = has_time or spec in PARSE_TIME
             elif spec in PARSE_REFUSED:
                 raise Refusal(f"STR_TO_DATE with %{spec} ({PARSE_REFUSED[spec]}) has no ClickHouse equivalent.")
             else:
                 raise Refusal(f"STR_TO_DATE with %{spec} is not translated.")
-        note("STR_TO_DATE: ClickHouse needs zero-padded numbers for %m %d %H %h %I %i %s %S (MySQL also reads 2024-3-5); text that does not match gives NULL. "
-             "%e %c %k %l read one or two digits.")
+        if has_time and not any(kind == "code" and v in "YmcdeMbj" for kind, v in items):
+            raise Refusal("STR_TO_DATE with only a time has no ClickHouse equivalent (MySQL answers a TIME; ClickHouse has no such type). Add the date part.")
+        out_fmt, strict = "", False
+        for k, (kind, v) in enumerate(items):
+            if kind == "lit":
+                out_fmt += v
+                continue
+            alone = (k == 0 or items[k - 1][0] == "lit") and (k == len(items) - 1 or items[k + 1][0] == "lit")  # no other code touches it, so its width can vary
+            if v in LENIENT and alone:
+                out_fmt += "%" + LENIENT[v]
+            else:
+                out_fmt += "%" + v
+                strict = strict or v in "mdHhIisS"
+        if strict:
+            note("STR_TO_DATE: ClickHouse needs zero-padded numbers for %i %s %S, and for %m %d %H %h %I when another code follows it directly (MySQL also reads 2024-3-5, 7:5); text that does not match gives NULL.")
         parsed = A("parseDateTimeOrNull", value, S(out_fmt))
         return parsed if has_time else A("toDate", parsed)
 
@@ -650,6 +680,34 @@ def mysql_to_clickhouse(sql, sqlglot, ErrorLevel):
         if str(join.args.get("kind") or "").upper() == "STRAIGHT_JOIN":
             join.set("kind", "INNER" if (join.args.get("on") or join.args.get("using")) else "CROSS")
 
+    # --- ORDER BY: the NULL-last emulation MySQL needs (CASE WHEN x IS NULL THEN 1 ELSE 0 END, x) is ClickHouse's own default (x), so it is turned back ---------------
+    def null_key(key):
+        """The `x` of `CASE WHEN x IS NULL THEN 1 ELSE 0 END` or `x IS NULL`; None when `key` is neither."""
+        if isinstance(key, exp.Is) and isinstance(key.args.get("expression"), exp.Null):
+            return key.this
+        if isinstance(key, exp.Case) and key.args.get("this") is None and len(key.args.get("ifs") or []) == 1 and key.args.get("default") == N(0):
+            cond = key.args["ifs"][0]
+            if isinstance(cond.this, exp.Is) and isinstance(cond.this.args.get("expression"), exp.Null) and cond.args.get("true") == N(1):
+                return cond.this.this
+        return None
+
+    for order in tree.find_all(exp.Order):
+        items, merged, k = order.expressions, [], 0
+        while k < len(items):
+            flag = null_key(items[k].this) if isinstance(items[k], exp.Ordered) else None
+            if flag is not None and k + 1 < len(items) and isinstance(items[k + 1], exp.Ordered) and items[k + 1].this == flag:
+                # the flag sorts 0 (a value) before 1 (NULL): NULL last when ascending, first when descending; the key keeps its own direction
+                spec = {"desc": True} if items[k + 1].args.get("desc") else {}  # no `desc` at all for ascending: sqlglot would print an explicit ASC
+                if items[k].args.get("desc"):
+                    spec["nulls_first"] = True
+                merged.append(exp.Ordered(this=flag, **spec))
+                k += 2
+            else:
+                merged.append(items[k])
+                k += 1
+        if len(merged) != len(items):
+            order.set("expressions", merged)
+
     # --- repair, until nothing changes (a rewritten node's children are repaired too) -------------------------------------------------------------------------------
     for _ in range(6):
         before = repr(tree)
@@ -662,12 +720,63 @@ def mysql_to_clickhouse(sql, sqlglot, ErrorLevel):
     if any(True for _ in trees[0].find_all(exp.Div, exp.Mod)):
         changes.append("div-null")  # sqlglot wraps the divisor in nullIf(..., 0) itself
     result = tree.sql(dialect="clickhouse", unsupported_level=ErrorLevel.RAISE)
+    # ClickHouse names an unaliased column after its text (`count()`, `sum(x)`): the common aggregates keep the lower-case spelling ClickHouse queries use, outside quoted text
+    result = "".join(part if i % 2 else re.sub(r"\b(COUNT|SUM|AVG|MIN|MAX)\(", lambda m: m.group(1).lower() + "(", part)
+                     for i, part in enumerate(re.split(r"('(?:[^'\\]|\\.|'')*'|\"(?:[^\"\\]|\\.)*\"|`[^`]*`)", result)))
     if "NULLS FIRST" in result and "NULLS FIRST" not in sql.upper():
         changes.append("nulls-first")  # MySQL sorts NULL first; ClickHouse's default is last
     if "case-fold" in changes:
         note("Text comparisons ignore upper/lower case, as in MySQL. They are written with lowerUTF8(), so a filter on a very large table can be slower "
              "(it cannot use the primary key), and accents still count as different letters.")
     return result, warnings, sorted(set(changes))
+
+
+def clickhouse_to_mysql(sql, sqlglot, ErrorLevel):
+    """ClickHouse -> MySQL, for DISPLAY only (the text is never run on MySQL, and what is saved is the ClickHouse query). Whatever MySQL has no form for is refused with
+    its name, so the dialog keeps the query in ClickHouse syntax instead of showing text that looks like MySQL but is not: ClickHouse-only functions (sqlglot would print
+    TODATE(x), UNIQEXACT(x), TRANSFORM(a, x -> ...)), array access (it shifts the index), query parameters, PREWHERE / FINAL / SAMPLE / ARRAY JOIN / GLOBAL / SETTINGS / LIMIT n BY
+    / WITH TOTALS, and the start-of-period functions (sqlglot builds a date-arithmetic puzzle from year 0). formatDateTime(x, fmt) becomes DATE_FORMAT(x, fmt) for the codes both
+    print the same way (sqlglot's own conversion reads ClickHouse's %M, the month name, as minutes)."""
+    from sqlglot import exp
+
+    plain_text = re.sub(r"--[^\n]*|/\*.*?\*/|'(?:[^'\\]|\\.|'')*'|\"(?:[^\"\\]|\\.)*\"|`[^`]*`", " ", sql, flags=re.S)
+    m = CH_ONLY_SYNTAX.search(plain_text)
+    if m:
+        raise Refusal(f"{' '.join(m.group(1).upper().split())} is ClickHouse-only syntax with no MySQL form.")
+    trees = [t for t in sqlglot.parse(sql, read="clickhouse") if t]
+    if len(trees) != 1:
+        raise Refusal("Only one query can be translated.", "parse")
+    tree = trees[0]
+    for n in tree.find_all(exp.Bracket, exp.Array, exp.Lambda, exp.Transform, exp.Placeholder, exp.Parameter):
+        what = {"Bracket": "Array access (x[1])", "Array": "An array", "Lambda": "A lambda (x -> …)", "Transform": "arrayMap()", "Placeholder": "A query parameter ({name:Type})", "Parameter": "A query parameter"}[type(n).__name__]
+        raise Refusal(f"{what} has no MySQL form.")
+    for n in tree.find_all(exp.Limit):
+        if n.args.get("expressions"):
+            raise Refusal("LIMIT n BY has no MySQL form.")
+
+    def fix(node):
+        if isinstance(node, exp.TimeToStr):
+            fmt = node.args.get("format")
+            ok = isinstance(fmt, exp.Literal) and fmt.is_string and node.args.get("zone") is None
+            if ok:
+                codes = re.findall(r"%(.)", fmt.this)
+                ok = all(c in FORMAT_DIRECT for c in codes)
+            if not ok:
+                raise Refusal("formatDateTime with a time zone or a format code MySQL prints differently has no MySQL form.")
+            return exp.Anonymous(this="DATE_FORMAT", expressions=[node.this, fmt])
+        return node
+
+    tree = tree.transform(fix)
+    for n in tree.find_all(exp.Func):
+        mysql = n.sql(dialect="mysql")
+        name = re.match(r"([A-Za-z_][A-Za-z0-9_]*)\(", mysql)
+        if name and name.group(1).upper() not in MYSQL_FUNCTIONS:
+            original = re.match(r"([A-Za-z_][A-Za-z0-9_]*)", n.sql(dialect="clickhouse"))
+            raise Refusal(f"{original.group(1) if original else name.group(1)}() is a ClickHouse function with no MySQL form.")
+    result = tree.sql(dialect="mysql", unsupported_level=ErrorLevel.RAISE)
+    if "0000-01-01" in result:
+        raise Refusal("toStartOf…() and toMonday() have no readable MySQL form.")
+    return result
 
 
 def main():
@@ -689,6 +798,9 @@ def main():
         if src == "mysql" and dst == "clickhouse":
             result, warnings, changes = mysql_to_clickhouse(sql, sqlglot, ErrorLevel)
             out({"ok": True, "sql": result, "warnings": warnings, "changes": changes})
+            return
+        if src == "clickhouse" and dst == "mysql":
+            out({"ok": True, "sql": clickhouse_to_mysql(sql, sqlglot, ErrorLevel), "warnings": [], "changes": []})
             return
         result = [r for r in sqlglot.transpile(sql, read=src, write=dst, unsupported_level=ErrorLevel.RAISE) if r]
         if len(result) != 1:

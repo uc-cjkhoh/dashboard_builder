@@ -95,6 +95,13 @@ const cases = [
       ['STR_TO_DATE month names', `SELECT STR_TO_DATE('05 Mar 2024', '%d %b %Y')`, '2024-03-05'],
       ['STR_TO_DATE %r', `SELECT STR_TO_DATE('2024-03-05 02:07:09 PM', '%Y-%m-%d %r')`, '2024-03-05 14:07:09'],
       ['STR_TO_DATE unpadded %e/%c', `SELECT STR_TO_DATE('5/3/2024', '%e/%c/%Y')`, '2024-03-05'],
+      ['STR_TO_DATE unpadded month and day', `SELECT STR_TO_DATE('2024-3-5', '%Y-%m-%d') = CAST('2024-03-05' AS DATE)`, '1'],
+      ['STR_TO_DATE padded month and day', `SELECT STR_TO_DATE('2024-03-05', '%Y-%m-%d') = CAST('2024-03-05' AS DATE)`, '1'],
+      ['STR_TO_DATE unpadded hour', `SELECT STR_TO_DATE('2024-03-05 7:05', '%Y-%m-%d %H:%i')`, '2024-03-05 07:05:00'],
+      ['STR_TO_DATE unpadded 12-hour %r', `SELECT STR_TO_DATE('2024-03-05 2:07:09 PM', '%Y-%m-%d %r')`, '2024-03-05 14:07:09'],
+      ['STR_TO_DATE %T with a date', `SELECT STR_TO_DATE('2024-03-05 07:05:09', '%Y-%m-%d %T')`, '2024-03-05 07:05:09'],
+      ['STR_TO_DATE of only a time is refused (MySQL answers a TIME)', `SELECT STR_TO_DATE('07:05:09', '%T')`, '(refused'],
+      ['STR_TO_DATE touching codes %Y%m%d', `SELECT STR_TO_DATE('20240305', '%Y%m%d') = CAST('2024-03-05' AS DATE)`, '1'],
       ['STR_TO_DATE of nonsense is NULL', `SELECT STR_TO_DATE('nope', '%Y-%m-%d')`, '\\N'],
       ['STR_TO_DATE %y is refused', `SELECT STR_TO_DATE('24-03-05', '%y-%m-%d')`, '(refused'],
       // LAST_DAY, JSON

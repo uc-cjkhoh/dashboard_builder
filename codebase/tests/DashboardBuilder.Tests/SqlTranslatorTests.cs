@@ -20,6 +20,7 @@ public class SqlTranslatorTests : IClassFixture<WebApplicationFactory<Program>>
 
     private static readonly string Tools = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "DashboardBuilder", "Tools"));
     private static SqlTranslator Tr(string? python = null, TimeSpan? timeout = null, string? tools = null) => new(tools ?? Tools, python ?? "python3", timeout);
+    private static async Task<TranslateResult> My(string sql) => await Tr().TranslateAsync(sql, "mysql", "clickhouse", default);
     private static async Task<string> My2Ch(string sql) => (await Tr().TranslateAsync(sql, "mysql", "clickhouse", default)).Sql;
     private static async Task<IReadOnlyList<string>> Warn(string sql) => (await Tr().TranslateAsync(sql, "mysql", "clickhouse", default)).Warnings;
     private static async Task<IReadOnlyList<string>> Changes(string sql) => (await Tr().TranslateAsync(sql, "mysql", "clickhouse", default)).Changes;
@@ -36,12 +37,37 @@ public class SqlTranslatorTests : IClassFixture<WebApplicationFactory<Program>>
         var my = (await Tr().TranslateAsync("SELECT cust_id, amount FROM `shop`.`orders` WHERE amount > 10 ORDER BY amount DESC LIMIT 5", "clickhouse", "mysql", default)).Sql;
         Assert.Equal("SELECT cust_id, amount FROM `shop`.`orders` WHERE amount > 10 ORDER BY amount DESC LIMIT 5", my);
     }
-    [Fact] public async Task A_ClickHouse_only_function_does_not_survive_a_round_trip_so_the_browser_asks_ClickHouse_to_compare()
+    private static async Task<string> Ch2My(string sql) => (await Tr().TranslateAsync(sql, "clickhouse", "mysql", default)).Sql;
+    private static async Task<string> Ch2MyRefused(string sql) => (await Assert.ThrowsAsync<SqlTranslateException>(() => Ch2My(sql))).Message;
+    [Fact] public async Task A_ClickHouse_only_function_is_refused_by_name_instead_of_shown_as_text_MySQL_would_not_know()
     {
-        // toDate has no MySQL form: it comes back upper-cased, which ClickHouse (case-sensitive) would not know.
-        var my = (await Tr().TranslateAsync("SELECT toDate(ts) FROM t", "clickhouse", "mysql", default)).Sql;
-        Assert.Contains("TODATE(ts)", my);
-        Assert.Contains("TODATE(ts)", await My2Ch(my));
+        // sqlglot would print TODATE(ts), UNIQEXACT(a), TRANSFORM(a, x -> ...), EXPLODE(a), APPROX_DISTINCT(a): text that looks like MySQL and is neither syntax.
+        Assert.Contains("toDate()", await Ch2MyRefused("SELECT toDate(ts) FROM t"));
+        Assert.Contains("uniq()", await Ch2MyRefused("SELECT uniq(a) FROM t"));
+        Assert.Contains("uniqExact()", await Ch2MyRefused("SELECT uniqExact(a) FROM t"));
+        Assert.Contains("arrayJoin()", await Ch2MyRefused("SELECT arrayJoin(a) FROM t"));
+        Assert.Contains("Array access", await Ch2MyRefused("SELECT a[1] FROM t"));
+        Assert.Contains("arrayMap()", await Ch2MyRefused("SELECT arrayMap(x -> x + 1, a) FROM t"));
+        Assert.Contains("query parameter", await Ch2MyRefused("SELECT {p:String}"));
+        Assert.Contains("FINAL", await Ch2MyRefused("SELECT a FROM t FINAL"));
+        Assert.Contains("LIMIT n BY", await Ch2MyRefused("SELECT a FROM t LIMIT 1 BY a"));
+        Assert.Contains("toStartOf", await Ch2MyRefused("SELECT toStartOfMonth(d) FROM t")); // sqlglot builds date arithmetic from year 0
+        Assert.Equal("SELECT a FROM t WHERE x = 'FINAL (' LIMIT 5", await Ch2My("SELECT a FROM t WHERE x = 'FINAL (' LIMIT 5")); // inside quoted text it is just text
+    }
+    [Fact] public async Task formatDateTime_becomes_DATE_FORMAT_for_the_codes_both_print_alike_and_the_way_back_is_the_same_text()
+    {
+        Assert.Equal("SELECT DATE_FORMAT(d, '%M'), DATE_FORMAT(d, '%H:%i') FROM t", await Ch2My("SELECT formatDateTime(d, '%M'), formatDateTime(d, '%H:%i') FROM t")); // %M is the month name in both (sqlglot read it as minutes)
+        Assert.Equal("SELECT formatDateTime(d, '%M') FROM t", await My2Ch("SELECT DATE_FORMAT(d, '%M') FROM t"));
+        Assert.Contains("formatDateTime", await Ch2MyRefused("SELECT formatDateTime(d, '%Y', 'UTC') FROM t")); // a time zone
+    }
+    [Fact] public async Task ORDER_BY_keeps_NULL_order_through_MySQL_both_ways_and_ClickHouses_default_is_not_dressed_up_on_the_way_back()
+    {
+        Assert.Equal("SELECT a FROM t ORDER BY CASE WHEN a IS NULL THEN 1 ELSE 0 END, a", await Ch2My("SELECT a FROM t ORDER BY a"));            // ClickHouse: NULL last; MySQL needs the flag
+        Assert.Equal("SELECT a FROM t ORDER BY a DESC", await Ch2My("SELECT a FROM t ORDER BY a DESC"));                                           // NULL last in both
+        Assert.Equal("SELECT a FROM t ORDER BY a", await My2Ch("SELECT a FROM t ORDER BY CASE WHEN a IS NULL THEN 1 ELSE 0 END, a"));            // back to the default
+        Assert.Equal("SELECT a FROM t ORDER BY a DESC NULLS FIRST, b NULLS FIRST", await My2Ch("SELECT a FROM t ORDER BY CASE WHEN a IS NULL THEN 1 ELSE 0 END DESC, a DESC, b"));
+        Assert.Equal("SELECT a FROM t ORDER BY a DESC", await My2Ch("SELECT a FROM t ORDER BY a IS NULL, a DESC"));
+        Assert.Equal("SELECT count(*), count(DISTINCT a), sum(b) FROM t WHERE x = 'COUNT(1)'", (await My("SELECT COUNT(*), COUNT(DISTINCT a), SUM(b) FROM t WHERE x = 'COUNT(1)'")).Sql.Replace("lowerUTF8(toString(x)) = lowerUTF8('COUNT(1)')", "x = 'COUNT(1)'")); // names as ClickHouse queries write them, not inside text
     }
     // --- where sqlglot's plain output would run but mean something else (D106): each is pinned by its exact text -------------------------
     [Fact] public async Task DATEDIFF_is_a_minus_b_in_days_in_the_order_ClickHouse_takes()
@@ -171,11 +197,16 @@ public class SqlTranslatorTests : IClassFixture<WebApplicationFactory<Program>>
     }
     [Fact] public async Task STR_TO_DATE_parses_with_parseDateTimeOrNull_to_a_Date_or_a_DateTime_and_says_what_ClickHouse_is_stricter_about()
     {
-        Assert.Equal("SELECT parseDateTimeOrNull(s, '%d/%m/%Y %H:%i'), toDate(parseDateTimeOrNull(s, '%Y-%m-%d')), parseDateTimeOrNull(s, '%d %b %Y %h:%i:%s %p') FROM t",
+        // A code with a separator on each side reads one or two digits (%m -> %c, %d -> %e, %H -> %k, %h / %I -> %l), as MySQL does; %i %s %S and codes that touch another code stay strict.
+        Assert.Equal("SELECT parseDateTimeOrNull(s, '%e/%c/%Y %k:%i'), toDate(parseDateTimeOrNull(s, '%Y-%c-%e')), parseDateTimeOrNull(s, '%e %b %Y %l:%i:%s %p') FROM t",
             await My2Ch("SELECT STR_TO_DATE(s, '%d/%m/%Y %H:%i'), STR_TO_DATE(s, '%Y-%m-%d'), STR_TO_DATE(s, '%d %b %Y %r') FROM t"));
-        Assert.Equal("SELECT parseDateTimeOrNull(s, '%H:%i:%s')", await My2Ch("SELECT STR_TO_DATE(s, '%T')"));
-        var note = await Warn("SELECT STR_TO_DATE(s, '%Y-%m-%d') FROM t");
-        Assert.Single(note); Assert.Contains("zero-padded", note[0]);
+        Assert.Equal("SELECT parseDateTimeOrNull(s, '%Y-%c-%e %k:%i:%s')", await My2Ch("SELECT STR_TO_DATE(s, '%Y-%m-%d %T')"));
+        Assert.Contains("only a time", (await Assert.ThrowsAsync<SqlTranslateException>(() => My2Ch("SELECT STR_TO_DATE(s, '%T')"))).Message);
+        Assert.Equal("SELECT toDate(parseDateTimeOrNull(s, '%Y%m%d'))", await My2Ch("SELECT STR_TO_DATE(s, '%Y%m%d')")); // touching codes have fixed width
+        Assert.Empty(await Warn("SELECT STR_TO_DATE(s, '%Y-%m-%d') FROM t"));                                              // nothing stricter than MySQL left to say
+        var note = await Warn("SELECT STR_TO_DATE(s, '%d/%m/%Y %H:%i') FROM t");
+        Assert.Single(note); Assert.Contains("zero-padded", note[0]);                                                        // %i is
+        Assert.Contains("zero-padded", (await Warn("SELECT STR_TO_DATE(s, '%Y%m%d') FROM t"))[0]);
         foreach (var refused in new[] { "%y", "%D", "%U", "%f", "%w" })
             Assert.Contains($"%{refused[1]}", (await Assert.ThrowsAsync<SqlTranslateException>(() => My2Ch($"SELECT STR_TO_DATE(s, '{refused}')"))).Message);
         Assert.Contains("written as text", (await Assert.ThrowsAsync<SqlTranslateException>(() => My2Ch("SELECT STR_TO_DATE(s, f) FROM t"))).Message);
