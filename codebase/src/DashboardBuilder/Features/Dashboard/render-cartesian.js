@@ -11,6 +11,7 @@ import { fitWords } from "./chart-polish.js";
 import { selectHandler, legendSpec, memberSpec } from "./render-handlers.js";
 import { selectedIndicesOf } from "./dashboard-select.js";
 import { joinNotices } from "./notices.js";
+import { stackedScaleNotice } from "./stack-scale-model.js";
 import { shapeColourNote, splitSizeNote } from "./mark-channel-model.js";
 import { ANALYTICS_TYPES, scatterSymbol, primaryDim, chartOrientation, marksChannels, scatterGroups, colorSplitData, colorSplitLabels, markFieldValues } from "./result-model.js";
 
@@ -83,6 +84,7 @@ export function renderSeries(container, rc, sheet, a) {
     marks.note = [marks.note, "Size is not drawn beside a comparison period — remove the comparison to vary bar thickness."].filter(Boolean).join(" ");
   }
   rc.hooks.onTooltipFields?.(sheet, marks.tooltipCat);
+  if (type === "stacked") rc.extraNotice = joinNotices(rc.extraNotice, stackedScaleNotice(series)); // a measure far smaller than the rest is a sliver: say so
   if (marks.note) container.append(hint(marks.note)); // a Marks hint sits above the chart, never blocks it
   // Click-to-filter: marks map 1:1 to result rows here, so a click's dataIndex -> rowsOrdered[i].keys[0] (the primary
   // dimension's raw value).
