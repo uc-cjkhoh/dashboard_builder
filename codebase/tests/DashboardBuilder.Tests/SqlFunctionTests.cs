@@ -65,9 +65,26 @@ public class SqlFunctionTests
         Assert.Contains(plain.Warnings, w => w.Contains("1024"));
         Assert.Contains("group-concat", plain.Changes);
         Assert.Equal("SELECT if(countIf(isNotNull(a)) = 0, NULL, arrayStringConcat(arrayMap(t -> tupleElement(t, 1), arrayReverseSort(t -> tupleElement(t, 2), "
-            + "arrayDistinct(groupArrayIf(tuple(toString(a), tuple(isNotNull(b), b)), isNotNull(a))))), ';')) FROM t",
-            await My2Ch("SELECT GROUP_CONCAT(DISTINCT a ORDER BY b DESC SEPARATOR ';') FROM t"));
+            + "arrayDistinct(groupArrayIf(tuple(toString(a), tuple(isNotNull(a), a)), isNotNull(a))))), ';')) FROM t",
+            await My2Ch("SELECT GROUP_CONCAT(DISTINCT a ORDER BY a DESC SEPARATOR ';') FROM t"));
         Assert.Contains("ascending and others descending", await Refused("SELECT GROUP_CONCAT(a ORDER BY b, c DESC) FROM t"));
+    }
+
+    [Fact] public async Task A_ClickHouse_function_that_shares_a_name_with_a_MySQL_one_but_differs_is_refused_on_the_way_to_MySQL_so_it_cannot_change_on_the_way_back()
+    {
+        // upper / lower (ASCII only), concat_ws, DAYOFWEEK, SHA1, timestamp, addDate: ClickHouse's own versions differ from the MySQL ones this translator maps those names to.
+        foreach (var fn in new[] { "upper(a)", "lower(a)", "concat_ws(',', a, b)", "dayOfWeek(a)", "SHA1(a)", "timestamp(a)", "addDate(a, INTERVAL 1 DAY)", "subDate(a, INTERVAL 1 DAY)" })
+            Assert.Contains("means something else in MySQL", (await Assert.ThrowsAsync<SqlTranslateException>(() => Tr().TranslateAsync($"SELECT {fn} FROM t", "clickhouse", "mysql", default))).Message);
+        // ClickHouse's UTF-8 case functions ARE MySQL's UPPER / LOWER, and come back as the same text.
+        var my = (await Tr().TranslateAsync("SELECT lowerUTF8(a), upperUTF8(b) FROM t", "clickhouse", "mysql", default)).Sql;
+        Assert.Equal("SELECT LOWER(a), UPPER(b) FROM t", my);
+        Assert.Equal("SELECT lowerUTF8(a), upperUTF8(b) FROM t", await My2Ch(my));
+    }
+
+    [Fact] public async Task GROUP_CONCAT_DISTINCT_may_only_sort_by_the_value_because_distinct_is_taken_over_value_and_key_together()
+    {
+        Assert.Contains("sort by the value itself", await Refused("SELECT GROUP_CONCAT(DISTINCT a ORDER BY b) FROM t"));
+        Assert.Contains("arrayDistinct", await My2Ch("SELECT GROUP_CONCAT(DISTINCT a ORDER BY a DESC) FROM t"));
     }
 
     [Fact] public async Task Text_helpers_ignore_case_and_answer_NULL_as_MySQL_does()

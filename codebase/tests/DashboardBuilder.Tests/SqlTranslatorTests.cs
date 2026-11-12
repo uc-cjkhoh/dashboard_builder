@@ -309,7 +309,7 @@ public class SqlTranslatorTests : IClassFixture<WebApplicationFactory<Program>>
         => Assert.Equal(HttpStatusCode.MethodNotAllowed, (await _factory.CreateClient().GetAsync("/api/sql/translate")).StatusCode);
 
     // --- the controller, in process (a fake in-memory session stands in for the connection) ----------------------------------
-    private sealed class MemorySession : ISession
+    internal sealed class MemorySession : ISession
     {
         private readonly Dictionary<string, byte[]> _d = [];
         public bool IsAvailable => true; public string Id => "t"; public IEnumerable<string> Keys => _d.Keys;
