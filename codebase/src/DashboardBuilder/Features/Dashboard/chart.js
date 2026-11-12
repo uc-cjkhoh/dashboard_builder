@@ -10,7 +10,7 @@ import { tipLookup } from "./tooltip-formats.js";
 import { lineStep } from "./line-style-model.js";
 import { syncRange, secondaryKind, dualAxisOn, rightAxisTitle, seriesAxis } from "./axis-sync-model.js";
 import { markBorder, markerSizeOr, markerSymbol, edgeOr, strokeOf, borderInk } from "./mark-style-model.js";
-import { circleSize, circleCells, HEATMAP_GUTTER } from "./heatmap-model.js";
+import { circleSize, circleCells, HEATMAP_GUTTER, LABEL_FONT, cellSizeOf, labelsShown } from "./heatmap-model.js";
 import { bandsFor } from "./bullet-model.js";
 import { ganttTime, ganttAxisTime, ganttLabelMargin } from "./gantt-model.js";
 import { boxData, outlierPoints } from "./box-model.js";
@@ -820,6 +820,19 @@ function buildHeatmap({ xCats, yCats, cells, format = {} }) {
   const vals = cells.map((d) => d[2]).filter((v) => v != null);
   const { min, max } = colourScaleRange(vals, true);
   const legendNote = [centreNote(min, max, fmtVal), outOfRangeNote()].filter(Boolean).join(" · ");
+  const chartW = () => live.instance?.getWidth() ?? 800, chartH = () => live.instance?.getHeight() ?? 450;
+  const diameter = () => format.markerSize != null ? markerSizeOr(format.markerSize, 6) : circleSize(chartW() - HEATMAP_GUTTER.x, chartH() - HEATMAP_GUTTER.y, xCats.length, yCats.length);
+  // Value labels: Format → Data labels forces them on; otherwise they appear when the longest one fits a cell (read from the live chart on every
+  // draw, so a resize can show or hide them), in the ink that reads on that cell's own colour.
+  const forced = !!format.dataLabels;
+  const text = (v) => (v == null || !Number.isFinite(Number(v)) ? "" : fmtVal(v));
+  const longest = cells.reduce((a, d) => { const t = text(d[2]); return t.length > a.length ? t : a; }, "");
+  const inks = [c.ink, c.surface, "#000000", "#ffffff"];
+  const labelled = (list) => { const col = valueColours(list.map((d) => d[2]), c).colours; return list.map((d, i) => ({ value: d, label: { color: col[i] ? pickInk(col[i], inks) : c.ink } })); };
+  const cellLabel = (size) => ({
+    show: true, fontFamily: c.font, fontSize: LABEL_FONT, color: c.ink,
+    formatter: (p) => { const { w, h } = size(); return labelsShown({ forced, cellW: w, cellH: h, texts: [longest] }) ? text(p.value[2]) : ""; },
+  });
   return {
     textStyle: { fontFamily: c.font, color: c.label },
     tooltip: {
@@ -847,15 +860,15 @@ function buildHeatmap({ xCats, yCats, cells, format = {} }) {
       // value through the same visualMap (dimension 2); the value label sits inside each circle.
       ? {
         // Empty cells draw nothing; the size is re-read from the live chart on every draw, so it follows the pane.
-        type: "scatter", data: circleCells(cells), symbol: "circle",
-        symbolSize: () => format.markerSize != null ? markerSizeOr(format.markerSize, 6) : circleSize((live.instance?.getWidth() ?? 800) - HEATMAP_GUTTER.x, (live.instance?.getHeight() ?? 450) - HEATMAP_GUTTER.y, xCats.length, yCats.length),
-        label: { show: !!format.dataLabels, color: c.ink, fontFamily: c.font, formatter: (p) => fmtVal(p.value[2]) },
+        type: "scatter", data: labelled(circleCells(cells)), symbol: "circle",
+        symbolSize: diameter,
+        label: cellLabel(() => ({ w: diameter(), h: diameter() })),
         itemStyle: { opacity: 1, ...cellEdge },
         emphasis: { itemStyle: { borderColor: c.ink, borderWidth: 2 } },
       }
       : {
-        type: "heatmap", data: cells,
-        label: { show: !!format.dataLabels, color: c.ink, fontFamily: c.font, formatter: (p) => fmtVal(p.value[2]) },
+        type: "heatmap", data: labelled(cells),
+        label: cellLabel(() => cellSizeOf(chartW(), chartH(), xCats.length, yCats.length, HEATMAP_GUTTER)),
         itemStyle: cellEdge,
         emphasis: { itemStyle: { shadowBlur: 8, shadowColor: "rgba(0,0,0,0.25)" } },
       }],
