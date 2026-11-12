@@ -4,6 +4,7 @@ Functional changes (server, models, validation, calculations, charts, workbook).
 
 ## 2026-11-12
 
+- Edit SQL translator, tier 2: date formats fixed, STR_TO_DATE, JSON, intervals, ESCAPE, dropped clauses (`17baa97`)
 - Edit SQL on a Data Source card, with a code editor and MySQL syntax; relationship card and title polish (`82c6a10`)
 - Gantt: End mode keeps the end's time of day in the axis decision (`0994a6b`)
 - Trend models: polynomial orders 3 and 4, F-test p-value, refusal on a cut-off result and on too few values (`8b5073f`)

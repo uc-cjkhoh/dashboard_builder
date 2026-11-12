@@ -5,7 +5,7 @@ components: [src/DashboardBuilder/Tools/sql_translate.py, src/DashboardBuilder/C
 
 What the Edit SQL dialog ([sql-editor.md](../../concepts/data-source/sql-editor.md), [query-sources.md](../../concepts/data-source/query-sources.md#custom-sql-on-a-card)) and its MySQL ⇄ ClickHouse switch ([sql-syntax.md](../../concepts/data-source/sql-syntax.md), [D105](../../decisions/decisions-custom-sql.md), [D106](../../decisions/decisions-custom-sql.md#d106--mysql-syntax-in-edit-sql-translated-to-clickhouse)) still do not do. Format: [index.md](index.md#how-to-read-an-entry). Entries run by priority: **silent wrong results first, then loud failures, then gaps, then operations.**
 
-**Measured against** ClickHouse 26.8.36.3 (the test server) with `tests/live/translate-smoke.mjs`: 31 MySQL → ClickHouse cases match MySQL's documented results; 8 of 19 typical ClickHouse queries open in MySQL syntax, 11 in ClickHouse syntax. There is no MySQL server, so "MySQL's result" is its documented behaviour.
+**Measured against** ClickHouse 26.8.36.3 (the test server) with `tests/live/translate-smoke.mjs`: 106 MySQL → ClickHouse cases match MySQL's documented results; of the first 19 typical ClickHouse queries 8 open in MySQL syntax and 11 in ClickHouse syntax (12 of 24 with five date queries added later). There is no MySQL server, so "MySQL's result" is its documented behaviour.
 
 ## Decision to settle
 
@@ -18,8 +18,8 @@ What the Edit SQL dialog ([sql-editor.md](../../concepts/data-source/sql-editor.
 
 ## Loud failures (an error or a refusal that blocks the query)
 
-- **MySQL-only constructs passed through unchanged** (priority P2) — Open: `STR_TO_DATE`, `LAST_DAY`, `JSON_UNQUOTE`, `UNIX_TIMESTAMP`, `@var := …`, `SQL_CALC_FOUND_ROWS`, `STRAIGHT_JOIN`, `WITH RECURSIVE`, and `LIKE … ESCAPE` (ClickHouse has no `ESCAPE`) reach ClickHouse as written; it may refuse them or read them differently. `FOR UPDATE` is refused and `USE INDEX` is dropped silently. Each needs a mapping or a refusal with a reason, and an exact-output test.
-- **Refusals that could become translations** (priority P2; effort S) — Open: `DATE_ADD` / `DATE_SUB` with a column as the amount (`INTERVAL n DAY`) could become `d + toIntervalDay(n)` (the interval forms are confirmed to run); `TIMESTAMPDIFF` with MICROSECOND; `||` stays refused on purpose (it is OR in MySQL and concatenation in ClickHouse) unless a per-query choice is added.
+- **MySQL-only functions and clauses still passed through** (priority P3) — Partial: tier 2 translated `STR_TO_DATE`, `UNIX_TIMESTAMP`, `LAST_DAY`, `JSON_UNQUOTE` / `->>` / `JSON_VALUE`, `DATE_FORMAT`, `FROM_UNIXTIME`, `LIKE … ESCAPE`, compound intervals, `SQL_CALC_FOUND_ROWS`, hints, `STRAIGHT_JOIN` and `FOR UPDATE`, and refuses `@var`. Open, passed to ClickHouse as written (it may refuse them or read them differently): every other MySQL function — `GROUP_CONCAT` ordering details, `FIELD()`, `FIND_IN_SET`, `REGEXP_REPLACE` flags, `INET_ATON`, `BIT_*`, spatial and full-text functions, `CONVERT(x USING …)`, `INSERT`/`REPLACE` text functions. Each needs a mapping or a refusal with a reason and an exact-output test plus a smoke case; `TIME_FORMAT` and a non-text format are refused today.
+- **Stricter than MySQL, with a note or a refusal** (priority P3) — Open: `STR_TO_DATE` needs zero-padded `%m %d %H %h %I %i %s %S` (`'2024-3-5'` gives NULL; the note says so) and refuses `%y %D %f %U %u %V %v %w %X %x`; MySQL's behaviour for extra trailing text is not verified; a nested JSON object prints without MySQL's space after the colon; `JSON_VALUE … RETURNING`, wildcard and slice paths are refused; `||` stays refused on purpose (OR in MySQL, concatenation in ClickHouse) unless a per-query choice is added; a fractional interval amount and `*_MICROSECOND` units are refused.
 
 ## Gaps on a custom-SQL card
 
@@ -30,7 +30,7 @@ What the Edit SQL dialog ([sql-editor.md](../../concepts/data-source/sql-editor.
 ## Round trip and the ClickHouse → MySQL display
 
 - **Round-trip false alarms** (priority P2; effort M) — Partial: a query written in ClickHouse opens in MySQL only when the way back reports no meaning-changing repair, ClickHouse accepts it with the same columns, and `EXPLAIN SYNTAX` reads both texts the same way ([sql-syntax.md](../../concepts/data-source/sql-syntax.md#the-round-trip-check)). Known false alarms: a plain ascending `ORDER BY` (the `NULLS FIRST` added on the way back changes nothing, because the way to MySQL kept ClickHouse's NULL order with a `CASE` key) and `currentDatabase()` → `CURRENT_DATABASE()`. Genuine but avoidable: `count()` → `COUNT()` renames the output column.
-- **ClickHouse-only syntax shown as MySQL** (priority P3) — Open: ClickHouse-only functions have no MySQL form and are upper-cased or renamed (`toDate` → `TODATE`, `arrayJoin` → `EXPLODE`); `PREWHERE` / `FINAL` / `SAMPLE` are refused; `WITH TOTALS` comes out garbled; `LIMIT n BY` gets an unrelated rewrite; array indexes shift. Mitigated: such queries open in ClickHouse syntax, and unchanged text is never re-translated.
+- **ClickHouse-only syntax shown as MySQL** (priority P3) — Open: ClickHouse's `formatDateTime` codes are converted with sqlglot's strftime table, which is wrong for ClickHouse's MySQL-style codes (`%M` becomes minutes) — only a display, and the round-trip check catches it (that query opens in ClickHouse syntax); a repair would mirror the MySQL → ClickHouse one; ClickHouse-only functions have no MySQL form and are upper-cased or renamed (`toDate` → `TODATE`, `arrayJoin` → `EXPLODE`); `PREWHERE` / `FINAL` / `SAMPLE` are refused; `WITH TOTALS` comes out garbled; `LIMIT n BY` gets an unrelated rewrite; array indexes shift. Mitigated: such queries open in ClickHouse syntax, and unchanged text is never re-translated.
 
 ## Operations
 
@@ -40,4 +40,4 @@ What the Edit SQL dialog ([sql-editor.md](../../concepts/data-source/sql-editor.
 
 ## Built, not backlog
 
-Recorded here so nothing is re-opened by mistake: `||` refused; `DATEDIFF`, `TIMESTAMPDIFF` (whole units; hours through elapsed seconds because `age('hour')` is wrong on 26.8), `DATE_ADD` / `DATE_SUB`, `LIKE` → `ILIKE`, text comparison rewrite, `DIV` by zero; the three-part round-trip check; `DESCRIBE TABLE (subquery)` and `EXPLAIN SYNTAX` confirmed on the real server.
+Recorded here so nothing is re-opened by mistake: `||` refused; `DATEDIFF`, `TIMESTAMPDIFF` (whole units; hours through elapsed seconds because `age('hour')` is wrong on 26.8; microseconds), `DATE_ADD` / `DATE_SUB` (column amounts, compound units as one interval, text dates), `DATE_FORMAT` / `FROM_UNIXTIME` with every format code (sqlglot's own output printed minutes as the month name), `STR_TO_DATE`, `UNIX_TIMESTAMP`, `LAST_DAY`, JSON scalars, `LIKE` → `ILIKE` and `LIKE … ESCAPE`, text comparison rewrite, `DIV` by zero, the dropped clauses, `@var` refused; the three-part round-trip check; `DESCRIBE TABLE (subquery)` and `EXPLAIN SYNTAX` confirmed on the real server.
