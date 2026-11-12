@@ -11,7 +11,7 @@ const SUFFIX = { trim: "trimmed", nullTo: "filled", recode: "recoded", date: "da
 const unwritable = (s) => /[.[\]]/.test(s);
 const lit = (s) => `'${s.replaceAll("'", "''")}'`;
 
-/** The operations a column category offers, in menu order (a date column has none: the engine has no date literal). */
+/** The operations a column category offers, in menu order (a date column has none: the dialog takes no date value). */
 export function cleanOps(category) {
   if (category === "text") return ["trim", "nullTo", "recode", "date"];
   if (category === "numeric") return ["nullTo"];
