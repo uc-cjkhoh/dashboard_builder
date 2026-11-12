@@ -28,5 +28,4 @@ Relationships are logical, inner/left/right/full, with one equality pair each ([
 
 ## Beginner-test follow-ups (connection and schema)
 
-- **Friendly types on canvas cards** — The row preview and the column profile show a plain kind (whole number, text, date…) with the raw type in a tooltip; the canvas entity cards still show raw ClickHouse types (`LowCardinality…`, `Nullable(Strin…`) cut off. Open: use `friendlyKind` (`Schema/type-kind.js`) in `Canvas/canvas.js` (not changed in that pass; the owner has uncommitted work there). Needs: none.
 - **Union / Unpivot hint** — The two buttons at the bottom of the sidebar still say only "Union" and "Unpivot". Open: a one-line hint of what each does, without a secondary label. Needs: none.
