@@ -103,7 +103,6 @@
 .col-row__type {
   flex: none;
   max-width: 130px;
-  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
   font-size: var(--fs-body);
   color: var(--ink-3);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
