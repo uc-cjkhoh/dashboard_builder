@@ -240,6 +240,60 @@ for (const [label, mysql, expected] of cases) {
   if (!ok) failed++;
   console.log(`${ok ? 'ok       ' : 'DIFFERENT'} ${label.padEnd(52)} MySQL ${String(expected).padEnd(11)} ClickHouse ${got}${ok ? '' : `\n          ${r.sql ?? ''}`}`);
 }
+// ---- Part 1b: typical MySQL queries (joins, CTEs, windows, subqueries, the common functions) must translate and be accepted AND run by ClickHouse -------------------------
+// (no MySQL to compare with: the check is that the translated text is valid and executes on a real server; the value cases above say it means the right thing)
+const corpus = [
+ "SELECT database, COUNT(*) AS n FROM system.tables GROUP BY database HAVING COUNT(*) > 1 ORDER BY n DESC LIMIT 5",
+ "SELECT t.name, d.engine FROM system.tables t INNER JOIN system.databases d ON t.database = d.name WHERE t.database = 'system' LIMIT 5",
+ "SELECT t.name FROM system.tables t LEFT JOIN system.databases d ON t.database = d.name WHERE d.name IS NULL LIMIT 5",
+ "SELECT name, CASE WHEN total_rows > 1000 THEN 'big' WHEN total_rows > 10 THEN 'mid' ELSE 'small' END AS size FROM system.tables WHERE database = 'system' LIMIT 5",
+ "SELECT name FROM system.tables WHERE name LIKE '%log%' AND database NOT IN ('information_schema') LIMIT 5",
+ "SELECT database, ROUND(AVG(total_rows), 2) AS avg_rows, MAX(total_rows) AS mx FROM system.tables GROUP BY database ORDER BY avg_rows DESC LIMIT 3",
+ "WITH big AS (SELECT name, database FROM system.tables WHERE total_rows > 100) SELECT b.database, COUNT(*) FROM big b JOIN system.databases d ON b.database = d.name GROUP BY b.database LIMIT 5",
+ "SELECT name, ROW_NUMBER() OVER (PARTITION BY database ORDER BY name) AS rn FROM system.tables LIMIT 5",
+ "SELECT DISTINCT engine FROM system.tables WHERE engine IS NOT NULL ORDER BY engine LIMIT 5",
+ "SELECT UPPER(name) AS n, LENGTH(name) AS len, SUBSTRING(name, 1, 3) AS p FROM system.databases LIMIT 5",
+ "SELECT CONCAT(database, '.', name) AS full, IFNULL(engine, 'n/a') AS e FROM system.tables LIMIT 5",
+ "SELECT name FROM system.tables WHERE metadata_modification_time >= DATE_SUB(NOW(), INTERVAL 365 DAY) LIMIT 5",
+ "SELECT DATE_FORMAT(metadata_modification_time, '%Y-%m') AS ym, COUNT(*) AS n FROM system.tables GROUP BY ym ORDER BY ym LIMIT 5",
+ "SELECT YEAR(metadata_modification_time) AS y, QUARTER(metadata_modification_time) AS q, COUNT(*) FROM system.tables GROUP BY y, q LIMIT 5",
+ "SELECT name FROM system.tables WHERE database IN (SELECT name FROM system.databases WHERE name LIKE 's%') LIMIT 5",
+ "SELECT a.name, b.name FROM system.tables a JOIN system.tables b ON a.database = b.database AND a.name <> b.name LIMIT 3",
+ "SELECT database, GROUP_CONCAT(name ORDER BY name SEPARATOR ',') AS names FROM system.tables WHERE database = 'system' GROUP BY database",
+ "SELECT name, total_rows / NULLIF(total_bytes, 0) AS ratio FROM system.tables WHERE total_bytes IS NOT NULL LIMIT 5",
+ "SELECT name, IF(total_rows > 0, 'yes', 'no') AS has_rows FROM system.tables LIMIT 5",
+ "SELECT COUNT(DISTINCT engine) AS engines, SUM(total_rows) AS rows FROM system.tables",
+ "SELECT name FROM system.tables WHERE name REGEXP '^query' LIMIT 5",
+ "SELECT name, FIND_IN_SET(name, 'one,query_log,two') AS pos FROM system.tables WHERE database = 'system' LIMIT 5",
+ "SELECT x.name FROM (SELECT name FROM system.databases) x ORDER BY x.name LIMIT 3",
+ "SELECT name FROM system.tables WHERE database = 'system' UNION ALL SELECT name FROM system.databases LIMIT 5",
+ "SELECT database, COUNT(*) AS n FROM system.tables WHERE database != 'system' GROUP BY database ORDER BY n DESC, database LIMIT 5",
+ "SELECT name, DATEDIFF(NOW(), metadata_modification_time) AS days FROM system.tables LIMIT 3",
+ "SELECT name, TIMESTAMPDIFF(HOUR, metadata_modification_time, NOW()) AS hrs FROM system.tables LIMIT 3",
+ "SELECT name FROM system.tables WHERE total_rows BETWEEN 1 AND 100000 LIMIT 5",
+ "SELECT name, COALESCE(comment, '') AS c FROM system.tables WHERE comment <> '' LIMIT 3",
+ "SELECT `name`, `engine` FROM `system`.`tables` LIMIT 3",
+ "SELECT t.* FROM system.tables t LIMIT 2",
+ "SELECT COUNT(*) FROM system.columns c JOIN system.tables t ON c.table = t.name AND c.database = t.database",
+ "SELECT name FROM system.tables ORDER BY total_rows DESC LIMIT 5, 5",
+ "SELECT TRIM(name) AS n, LOWER(engine) AS e FROM system.tables WHERE LOWER(engine) = 'view' LIMIT 3",
+ "SELECT name FROM system.tables WHERE engine = 'View' LIMIT 3",
+ "SELECT name FROM system.databases WHERE name IN ('SYSTEM', 'default')",
+ "SELECT ABS(-5), CEIL(1.2), FLOOR(1.8), POW(2, 3), SQRT(16), MOD(10, 3), GREATEST(1, 2), LEAST(3, 4) FROM system.one",
+ "SELECT CAST(total_rows AS CHAR) AS s, CAST('5' AS SIGNED) AS n FROM system.tables LIMIT 2",
+];
+let rejected = 0;
+console.log('\nPart 1b — typical MySQL queries: translated, described and run by ClickHouse');
+for (const q of corpus) {
+  if (ONLY && !ONLY.test(q)) continue;
+  const r = await translateTyped(q);
+  if (!r.ok) { rejected++; console.log(`REFUSED   ${q.slice(0, 90)}\n          ${r.error}`); continue; }
+  try { await ch(`DESCRIBE TABLE (${r.sql})`); await ch(`SELECT * FROM (${r.sql}) LIMIT 1`); }
+  catch (e) { rejected++; console.log(`REJECTED  ${q.slice(0, 90)}\n          ${r.sql.slice(0, 200)}\n          ${e.message}`); }
+}
+console.log(rejected ? `${rejected} of ${corpus.length} typical MySQL queries did not run` : `all ${corpus.length} typical MySQL queries ran`);
+failed += rejected;
+
 // the canary for the fault that made hours go through elapsed seconds: say so if a newer server has fixed age('hour')
 const hourAge = await ch("SELECT age('hour', toDateTime('2024-01-01 10:59:00'), toDateTime('2024-01-01 11:01:00'))");
 console.log(`\nnote: age('hour', 10:59 -> 11:01) is ${hourAge} on this server (MySQL counts 0 whole hours)${hourAge === '0' ? ' — age() looks correct for hours here; the elapsed-seconds form is still right' : ' — age() is NOT usable for hours here; the translator uses elapsed seconds'}`);
