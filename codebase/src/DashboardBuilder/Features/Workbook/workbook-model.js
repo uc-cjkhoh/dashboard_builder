@@ -15,6 +15,7 @@ import { cleanTheme, DEFAULT_THEME } from "../Core/theme-model.js";
 import { normalizeJoinType, relEnds, applyAggregate } from "../Relations/relation-rules.js";
 import { cleanAction, cleanParamAction } from "../Dashboard/action-model.js";
 import { cleanMemberColors } from "../Dashboard/colour-model.js";
+import { cleanTableCols } from "../Dashboard/table-columns-model.js";
 import { cleanCollapsed } from "../Dashboard/collapse-model.js";
 import { checkTooltipText } from "../Dashboard/tooltip-model.js";
 import { checkTooltipStyle } from "../Dashboard/tooltip-style.js";
@@ -648,6 +649,8 @@ function cleanFormat(f0, where, issues) {
   out.tableAlign = oneOf(TABLE_ALIGNS, f.tableAlign, base.tableAlign, w, "table alignment", issues);
   out.tableDensity = oneOf(TABLE_DENSITIES, f.tableDensity, base.tableDensity, w, "row height", issues);
   out.tableShade = oneOf(TABLE_SHADES, f.tableShade, base.tableShade, w, "table shading", issues);
+  const tableCols = cleanTableCols(f.tableCols, w, issues); // absent when no column is set (older files, and the default), so a sheet round-trips unchanged
+  if (tableCols) out.tableCols = tableCols;
   out.markerSize = f.markerSize == null ? null : markerSizeError(f.markerSize) === null ? f.markerSize
     : (issues.push(`${w}: marker size "${f.markerSize}" — reset to Auto.`), null);
   out.colorRamp = RAMP_CHOICES.some(([v]) => v === f.colorRamp) ? f.colorRamp : f.colorRamp === undefined ? base.colorRamp

@@ -10,6 +10,7 @@ import { el, warn, iconSpan } from "./render-dom.js";
 import { tableStyleClasses } from "./table-style-model.js";
 import { fontClass } from "./font-model.js";
 import { DIV_FALLBACK } from "./colour-scale-model.js";
+import { columnLook, dimKey, measKey, nudgeWidth, COL_MIN, COL_MAX, COL_STEP } from "./table-columns-model.js";
 
 // The crosstab / text table and its conditional formatting, drawn from a result. Pure DOM output: nothing here
 // reads the editor, so any worksheet view can draw a table. `calcPercent` = result measure indexes whose values are
@@ -24,7 +25,10 @@ import { DIV_FALLBACK } from "./colour-scale-model.js";
 // collapsed state (sheet.collapsed) shows either way. A collapsed header stands for its whole subtree as one row / column.
 let refocusAll = null; // the Expand all / Collapse all button to focus after its redraw: "expand" | "collapse"
 let refocus = null; // the toggle to focus after the redraw a click causes: { axis, key }
-export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, calcPercent = new Set(), collapse = null) {
+let refocusGrip = null; // the column key whose resize handle to focus after the redraw a key press causes
+// `columns` (editor only): { onSet(key, { width? }) } — a header's resize handle commits through it. Each column's own alignment and width
+// (sheet.format.tableCols, table-columns-model.js) always show.
+export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, calcPercent = new Set(), collapse = null, columns = null) {
   const { rowDimensions, columnDimensions, measures, rows } = result;
   const rd = rowDimensions.length, cd = columnDimensions.length;
   const dimLabel = (v, i) => (v == null ? "—" : fmtCat(v, i)); // date-aware header label
@@ -46,7 +50,68 @@ export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, ca
   const leftLevels = rd + (measureOnLeft ? 1 : 0);
   const topLevels = cd + (measureOnLeft ? 0 : 1);
 
-  const table = el("table", ["data xtab", ...tableStyleClasses(sheet.format), fontClass(sheet.format?.font)].filter(Boolean).join(" "));
+  // Per-column look: a column's alignment class and width on every cell of it (registered so a drag can resize them all live).
+  const colCells = new Map();
+  const colStyle = (cell, key, sized = true) => {
+    if (key == null) return cell;
+    const l = columnLook(sheet.format?.tableCols, key);
+    if (l.align) cell.classList.add(`xt-ca-${l.align}`);
+    if (sized) { if (l.width) setWidth(cell, l.width); if (!colCells.has(key)) colCells.set(key, []); colCells.get(key).push(cell); }
+    return cell;
+  };
+  // A resize handle on a value column's header: drag it, or press ← / → (Shift = five steps) on it; Delete or a double click returns the column to automatic.
+  const grip = (th, key, name) => {
+    th.classList.add("xt-sizable");
+    const g = el("span", "xt-grip");
+    g.tabIndex = 0;
+    g.setAttribute("role", "separator"); g.setAttribute("aria-orientation", "vertical");
+    g.setAttribute("aria-label", `Resize column ${name}`);
+    g.setAttribute("aria-valuemin", String(COL_MIN)); g.setAttribute("aria-valuemax", String(COL_MAX));
+    const widthNow = () => Math.round(th.getBoundingClientRect().width);
+    const apply = (w) => { table.classList.add("xt-sized"); for (const c of colCells.get(key) ?? []) setWidth(c, w); g.setAttribute("aria-valuenow", String(w)); };
+    const undoPreview = () => { // the stored look again: the saved width, or none
+      const saved = columnLook(sheet.format?.tableCols, key).width;
+      for (const c of colCells.get(key) ?? []) { if (saved) setWidth(c, saved); else { c.classList.remove("xt-w"); c.style.width = c.style.minWidth = c.style.maxWidth = ""; } }
+      if (!sized) table.classList.remove("xt-sized");
+      g.removeAttribute("aria-valuenow");
+    };
+    const reset = () => { refocusGrip = key; columns.onSet(key, { width: null }); };
+    g.addEventListener("focus", () => g.setAttribute("aria-valuenow", String(widthNow())));
+    g.addEventListener("click", (e) => e.stopPropagation());
+    g.addEventListener("dblclick", reset);
+    g.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      g.setPointerCapture(e.pointerId);
+      const x0 = e.clientX, w0 = widthNow();
+      let w = null;
+      const move = (m) => { w = nudgeWidth(w0, (m.clientX - x0) / COL_STEP); apply(w); };
+      const up = () => {
+        g.removeEventListener("pointermove", move); g.removeEventListener("pointerup", up); g.removeEventListener("pointercancel", up);
+        if (w != null && w !== w0) { refocusGrip = key; columns.onSet(key, { width: w }); return; }
+        if (w != null) undoPreview(); // dragged back to the start: nothing to commit, so the live widths go back to how the sheet draws them
+      };
+      g.addEventListener("pointermove", move); g.addEventListener("pointerup", up); g.addEventListener("pointercancel", up);
+    });
+    g.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+        e.preventDefault();
+        const w = nudgeWidth(columnLook(sheet.format?.tableCols, key).width, (e.key === "ArrowRight" ? 1 : -1) * (e.shiftKey ? 5 : 1), widthNow());
+        refocusGrip = key; columns.onSet(key, { width: w });
+      } else if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); reset(); }
+    });
+    if (refocusGrip === key) { refocusGrip = null; requestAnimationFrame(() => { if (g.isConnected) g.focus(); }); }
+    th.append(g);
+    return th;
+  };
+  const valueHead = (cls, text, mi) => {
+    const th = colStyle(el("th", cls, text), measureOnLeft ? null : measKey(mi));
+    return columns && !measureOnLeft ? grip(th, measKey(mi), text) : th;
+  };
+  const valueKey = (mi) => (measureOnLeft ? null : measKey(mi));
+
+  const sized = Object.values(sheet.format?.tableCols ?? {}).some((c) => c?.width); // a fixed width holds only when the table doesn't stretch to fill the pane
+  const table = el("table", ["data xtab", ...tableStyleClasses(sheet.format), fontClass(sheet.format?.font), sized ? "xt-sized" : null].filter(Boolean).join(" "));
   // Totals: a grand-total column (when Columns has dimensions), a grand-total row (when Rows has),
   // and a subtotal after each first-level Rows group — each combined by the measure's own aggregation.
   const tot = sheet.analytics?.totals ?? {};
@@ -131,12 +196,12 @@ export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, ca
         tr.append(th);
       }
     } else {
-      for (const lf of topLeaves) tr.append(el("th", "num xt-meas", measures[lf.mi]));
+      for (const lf of topLeaves) tr.append(valueHead("num xt-meas", measures[lf.mi], lf.mi));
     }
     if (totalCol) {
       if (measureOnLeft) { if (tl === 0) { const th = el("th", "num xt-total", "Total"); th.rowSpan = Math.max(1, topLevels); tr.append(th); } }
       else if (tl === 0 && topLevels > 1) { const th = el("th", "xt-colhdr xt-total", "Total"); th.colSpan = measures.length; th.rowSpan = topLevels - 1; tr.append(th); }
-      else if (tl === topLevels - 1) for (const mi of totalMis) tr.append(el("th", "num xt-meas xt-total", topLevels > 1 ? measures[mi] : `Total ${measures[mi]}`));
+      else if (tl === topLevels - 1) for (const mi of totalMis) tr.append(valueHead("num xt-meas xt-total", topLevels > 1 ? measures[mi] : `Total ${measures[mi]}`, mi));
     }
     thead.append(tr);
   }
@@ -156,6 +221,7 @@ export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, ca
       const th = headerCell("xt-rowhdr", label, toggleOf("rows", rowDimensions, leftLeaf.tuple, ll, label));
       if (span > 1) th.rowSpan = span;
       if (leftLeaf.level === ll) th.colSpan = rd - ll;
+      colStyle(th, dimKey(ll), !th.colSpan || th.colSpan === 1); // a header that spans columns takes the alignment only
       tr.append(th);
     }
     if (measureOnLeft) tr.append(el("th", "xt-rowhdr xt-meas", measures[leftLeaf.mi]));
@@ -163,11 +229,11 @@ export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, ca
       const mi = measureOnLeft ? leftLeaf.mi : topLeaf.mi ?? 0;
       const v = leafAt(leftLeaf, topLeaf, mi);
       const text = calcPercent.has(mi) ? (v == null ? "—" : `${Number(v).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`) : fmtVal(v);
-      tr.append(cf[mi] ? formattedCell(v, text, cf[mi]) : el("td", "num", text));
+      tr.append(colStyle(cf[mi] ? formattedCell(v, text, cf[mi]) : el("td", "num", text), valueKey(mi)));
     }
     if (totalCol) for (const tmi of totalMis) {
       const mi = tmi ?? leftLeaf.mi;
-      tr.append(el("td", "num xt-total", showVal(mi, leftLeaf.level !== null && !complete ? null : total(mi, leftLeaf.members, colTuples))));
+      tr.append(colStyle(el("td", "num xt-total", showVal(mi, leftLeaf.level !== null && !complete ? null : total(mi, leftLeaf.members, colTuples))), valueKey(mi)));
     }
     tbody.append(tr);
     // Subtotal after the last row of each first-level group (measures on top, ≥ 2 Rows dimensions).
@@ -191,9 +257,9 @@ export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, ca
     if (measureOnLeft) tr.append(el("th", "xt-rowhdr xt-meas xt-total", measureName ?? ""));
     for (const topLeaf of topLeaves) {
       const mi = onlyMi ?? topLeaf.mi ?? 0;
-      tr.append(el("td", "num xt-total", showVal(mi, topLeaf.level !== null && !complete ? null : total(mi, rts, topLeaf.members))));
+      tr.append(colStyle(el("td", "num xt-total", showVal(mi, topLeaf.level !== null && !complete ? null : total(mi, rts, topLeaf.members))), valueKey(mi)));
     }
-    if (totalCol) for (const tmi of totalMis) { const mi = tmi ?? onlyMi ?? 0; tr.append(el("td", "num xt-total", showVal(mi, total(mi, rts, colTuples)))); }
+    if (totalCol) for (const tmi of totalMis) { const mi = tmi ?? onlyMi ?? 0; tr.append(colStyle(el("td", "num xt-total", showVal(mi, total(mi, rts, colTuples))), valueKey(mi))); }
     return tr;
   }
 
@@ -206,6 +272,12 @@ export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, ca
     return wrap;
   }
   return table;
+}
+
+// A cell fixed to `w` px: the width the user set (a longer text is clipped with an ellipsis, see .xt-w).
+function setWidth(cell, w) {
+  cell.classList.add("xt-w");
+  cell.style.width = cell.style.minWidth = cell.style.maxWidth = `${w}px`;
 }
 
 // --- conditional formatting ----------------------------------------
