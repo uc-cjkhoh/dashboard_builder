@@ -5,6 +5,7 @@ import { show, hide, toggle, confirmDialog, toast } from "../Core/ui.js";
 import { entities, relationshipsFor, emit, bus, isModelActive, showModel } from "../Core/store.js";
 import { expandSidebar } from "../Shell/sidebar.js";
 import { openColumnProfile } from "../Schema/column-profile-dialog.js";
+import { friendlyKind } from "../Schema/type-kind.js";
 import { entityWidth } from "./card-width.js";
 import { snapTop } from "./align-snap.js";
 import { clampZoom, wheelZoom, panForZoom, panToReveal, toModel } from "./canvas-zoom.js";
@@ -468,7 +469,7 @@ export function initCanvas() {
       const type = document.createElement("span");
       type.className = "col-row__type";
       type.dataset.category = col.category;
-      type.textContent = col.type;
+      type.textContent = friendlyKind(col.type); // a plain kind (whole number, text, date…); the raw ClickHouse type is the tooltip
       type.title = `${col.type} (${col.category})`;
 
       // Column profile + field details (Schema/column-profile-dialog.js). 
