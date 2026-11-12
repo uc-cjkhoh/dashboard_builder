@@ -24,7 +24,3 @@ Relationships are logical, inner/left/right/full, with one equality pair each ([
 ## Beginner-test follow-ups
 
 - **View data over a union or unpivot** — Over a source View data still says it isn't available; the first-measure rule (D95) leaves that unchanged. Needs: none.
-
-## Beginner-test follow-ups (connection and schema)
-
-- **Union / Unpivot hint** — The two buttons at the bottom of the sidebar still say only "Union" and "Unpivot". Open: a one-line hint of what each does, without a secondary label. Needs: none.

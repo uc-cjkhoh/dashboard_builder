@@ -120,7 +120,7 @@ An unknown or hostile name → **404** before any SQL is built
 
 ## Union
 
-The **Union** button beside the Tables heading opens a dialog listing the database's tables as checkboxes.
+The **Union** and **Unpivot** buttons at the foot of the sidebar each carry a one-line tooltip (stack tables that share columns into one source; turn columns into rows), no visible secondary label. The **Union** button opens a dialog listing the database's tables as checkboxes.
 
 - **Picking:** 2–5 tables. A sixth can't be ticked; the hint reads "Pick 2 to 5 tables."
 - **Show rows** is enabled for 2–5 ticked tables. It opens the rows dialog on `POST /api/union` ([api.md § Union](../../reference/api.md#union)):
