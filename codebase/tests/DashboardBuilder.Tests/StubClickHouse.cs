@@ -11,7 +11,7 @@ public sealed class StubClickHouse : IDisposable
     public sealed record Result(Col[] Columns, object?[][] Rows);
     public sealed record Seen(string Sql, string Url, string Form);
 
-    private readonly HttpListener _listener = new();
+    private HttpListener _listener = new(); // a new one per attempt: a listener whose Start() failed is disposed and cannot be tried again
     private readonly Func<string, Result> _answer;
     public List<Seen> Statements { get; } = [];
     public int Port { get; }
@@ -23,7 +23,7 @@ public sealed class StubClickHouse : IDisposable
         {
             var port = Random.Shared.Next(20000, 60000);
             try { _listener.Prefixes.Add($"http://127.0.0.1:{port}/"); _listener.Start(); Port = port; break; }
-            catch (HttpListenerException) when (tries < 20) { _listener.Prefixes.Clear(); }
+            catch (HttpListenerException) when (tries < 20) { try { _listener.Close(); } catch { /* already disposed */ } _listener = new HttpListener(); }
         }
         _ = Task.Run(Loop);
     }

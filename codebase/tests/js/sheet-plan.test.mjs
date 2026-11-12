@@ -177,3 +177,19 @@ test("buildPlan: a relationship that aggregates first marks its join, with a sin
   assert.equal(run({ aggregateFirst: true, filterDirection: "single" }).filterDirection, "single");
   assert.equal("aggregate" in run({ filterDirection: "single" }), false); // a direction means nothing unless aggregating
 });
+
+// --- custom SQL cards (D105) -------------------------------------------------------------------------------------------
+const sqlCtx = (extra = {}) => mkCtx({ entities: new Map([["e1", { ...ent("e1", "orders"), customSql: "SELECT id, region FROM shop.o" }], ["e2", ent("e2", "customers")]]), ...extra });
+test("buildPlan: a table whose card has custom SQL carries it as a sql source, and stays an ordinary table", () => {
+  const p = buildPlan(sheet({ columns: [dim("orders", "region")], rows: [meas("orders", "id")] }), undefined, sqlCtx());
+  assert.deepEqual(p.from, { db: "shop", table: "orders" });
+  assert.deepEqual(p.sources, [{ kind: "sql", db: "shop", name: "orders", sql: "SELECT id, region FROM shop.o" }]);
+  assert.equal("source" in p, false);
+});
+test("buildPlan: a plan that never reads the card carries no sources; a joined card is listed too", () => {
+  assert.equal("sources" in buildPlan(sheet({ columns: [dim("customers", "region")] }), undefined, sqlCtx()), false);
+  const rel = { from: { entityId: "e2", column: "id" }, to: { entityId: "e1", column: "id" }, cardinality: "1:N", joinType: "inner" };
+  const p = buildPlan(sheet({ columns: [dim("customers", "region")], rows: [meas("orders", "id")] }), undefined, sqlCtx({ relationships: new Map([["r1", rel]]) }));
+  assert.equal(p.joins.length, 1);
+  assert.deepEqual(p.sources.map((s) => s.name), ["orders"]);
+});

@@ -294,6 +294,24 @@ try {
     await waitFor(`document.querySelector('.ws-titleblock__title.is-auto')?.textContent === 'Sales Q4'`, 'title follows the tab');
     must((await activeLabel()) === 'Sales Q4', `tab label: ${await activeLabel()}`);
   });
+  await check('renaming a worksheet tab also replaces a custom title, so the title block shows the new name', async () => {
+    await store(`st.activeWorksheet().sheet.title = 'My custom'; st.emit('worksheet:changed', { id: st.activeWorksheet().id }); return true;`);
+    await waitFor(`document.querySelector('.ws-titleblock__btn.ws-titleblock__title')?.textContent === 'My custom'`, 'custom title shown');
+    await store(`st.renameTab(st.activeWorksheet().id, 'Sales Q5'); return true;`);
+    await waitFor(`document.querySelector('.ws-titleblock__btn.ws-titleblock__title')?.textContent === 'Sales Q5'`, 'title follows the tab');
+    must((await activeLabel()) === 'Sales Q5', `tab label: ${await activeLabel()}`);
+  });
+  await check('editing the worksheet title in the title block renames the tab, and an empty title keeps the name', async () => {
+    const title = `document.querySelector('.ws-titleblock__btn.ws-titleblock__title')`;
+    const edit = (v) => ev(`(() => { ${title}.click(); const i = document.querySelector('input.ws-titleblock__title'); i.value = ${J(v)}; i.dispatchEvent(new FocusEvent('blur')); return true; })()`);
+    await edit('Margin by region');
+    await waitFor(`${title}?.textContent === 'Margin by region'`, 'title shows the new name');
+    must((await activeLabel()) === 'Margin by region', `tab label: ${await activeLabel()}`);
+    must(await store(`return st.activeWorksheet().name === 'Margin by region' && st.activeWorksheet().sheet.title == null;`), 'tab name / title not in step');
+    await edit('');
+    await waitFor(`${title}?.textContent === 'Margin by region'`, 'title still the name');
+    must((await activeLabel()) === 'Margin by region', 'an empty title changed the tab');
+  });
   await check('the 50-tab limit: a toast at creation, nothing added', async () => {
     await store(`while (st.tabs.length < 50) st.createDashboard(); return true;`);
     await ev(`document.querySelector('.tab-add').click(); document.querySelector('[data-new-tab=dashboard]').click()`);

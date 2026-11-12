@@ -651,9 +651,13 @@
 .ws-fields .ws-group { margin-bottom: 0; }
 /* The pane itself never scrolls: each table tile shares the height left under Marks and the search and scrolls its own fields, its header pinned. */
 .ws-fields { overflow: hidden; }
-.ws-fields > .ws-fieldset { display: block; flex: 0 1 auto; min-height: calc(2 * var(--ctl-h) + 2 * var(--s1) + 2px); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.ws-fields > .ws-fieldset { display: block; flex: 1 1 0; max-height: max-content; min-height: calc(2 * var(--ctl-h) + 2 * var(--s1) + 2px); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
 .ws-fields > .ws-fieldset:not([open]) { overflow: hidden; }
-.ws-fields > .ws-fieldset > .ws-group__head { position: sticky; top: 0; z-index: 1; background: var(--surface); }
+/* A collapsed card, or one whose fields are all hidden, is just its header: the two-row minimum would leave blank space under it. */
+.ws-fields > .ws-fieldset:not([open]), .ws-fields > .ws-fieldset:not(:has(> .ws-field:not([hidden]))) { min-height: 0; }
+/* The card has no top padding: a sticky header stops below it, so scrolled rows would show in that strip above the title. The header carries the 4px itself (same look at rest). */
+.ws-fields > .ws-fieldset { padding-top: 0; }
+.ws-fields > .ws-fieldset > .ws-group__head { position: sticky; top: 0; z-index: 1; background: var(--surface); box-sizing: border-box; height: calc(var(--ctl-h) + var(--s1)); padding-top: calc(2 * var(--s1)); }
 /* The open Marks card keeps its height up to 45% of the pane; beyond that, on a short window, it scrolls inside itself — the pane still never scrolls. */
 .ws-fields > .ws-shelf--marks { flex: none; max-height: 45%; overflow-y: auto; overscroll-behavior: contain; }
 .ws-fields > .ws-fieldset > summary + * { margin-top: var(--s1); }

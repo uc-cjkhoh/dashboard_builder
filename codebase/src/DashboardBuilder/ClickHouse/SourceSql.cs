@@ -6,14 +6,15 @@ namespace DashboardBuilder.ClickHouse;
 /// <c>Field</c> / <c>Value</c> rows). <see cref="Name"/> is the table name the query's field references carry (it is never
 /// sent to ClickHouse as an identifier); every real table and column named here is catalog-validated and quoted.
 /// </summary>
-/// <param name="Kind"><c>union</c> or <c>unpivot</c>.</param>
+/// <param name="Kind"><c>union</c>, <c>unpivot</c> or <c>sql</c> (a card whose columns come from the user's own SELECT, D105).</param>
 /// <param name="Db">The database every real table lives in.</param>
 /// <param name="Name">The virtual table's name (what <see cref="TableRef.Table"/> and <see cref="ColumnRef.Table"/> say).</param>
 /// <param name="Tables">Union: the 2..5 tables.</param>
 /// <param name="Table">Unpivot: the table.</param>
 /// <param name="Columns">Union: the shared columns to keep (null = every shared column). Unpivot: the 2..50 columns turned into rows.</param>
 /// <param name="Keep">Unpivot: up to 5 columns kept beside Field and Value.</param>
-public sealed record QuerySource(string Kind, string Db, string Name, string[]? Tables = null, string? Table = null, string[]? Columns = null, string[]? Keep = null);
+/// <param name="Sql">Sql: the SELECT text (checked by <see cref="CustomSql"/>).</param>
+public sealed record QuerySource(string Kind, string Db, string Name, string[]? Tables = null, string? Table = null, string[]? Columns = null, string[]? Keep = null, string? Sql = null);
 
 /// <summary>A source ready to read: the derived-table SELECT, the columns it exposes, and the values it binds.</summary>
 public sealed record SourceBuild(string Sql, IReadOnlyList<ColumnInfo> Columns, bool ColumnsTruncated,
@@ -27,10 +28,10 @@ public sealed record SourceBuild(string Sql, IReadOnlyList<ColumnInfo> Columns, 
 /// </summary>
 public static class SourceSql
 {
-    public const string Union = "union", Unpivot = "unpivot";
+    public const string Union = "union", Unpivot = "unpivot", Sql = "sql";
 
     /// <summary>The real tables a source reads, in order (the order <see cref="Build"/> expects them described).</summary>
-    public static IReadOnlyList<string> TablesOf(QuerySource s) => s.Kind == Union ? s.Tables ?? [] : [s.Table ?? ""];
+    public static IReadOnlyList<string> TablesOf(QuerySource s) => s.Kind == Union ? s.Tables ?? [] : s.Kind == Sql ? [] : [s.Table ?? ""];
 
     private static readonly System.Text.RegularExpressions.Regex IntType = new(@"^(U?)Int(8|16|32|64|128|256)$", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
@@ -120,10 +121,23 @@ public static class SourceSql
         return new SourceBuild(sql, columns, false, parameters, lossy ? [value] : []);
     }
 
-    /// <summary>The derived table for a source; <paramref name="described"/> holds each of <see cref="TablesOf"/>'s columns, in order.</summary>
+    /// <summary>The custom SQL's derived table: the checked text itself (<see cref="CustomSql.Clean"/>) and the columns ClickHouse says it returns
+    /// (<c>DESCRIBE</c> of the query). Names must be unique and at most <see cref="ApiLimits.MaxRowsColumns"/>; nothing is bound.</summary>
+    internal static SourceBuild BuildSql(QuerySource s, IReadOnlyList<ColumnInfo> described)
+    {
+        var sql = CustomSql.Clean(s.Sql);
+        if (described.Count == 0) throw new RequestValidationException("The query returns no columns.", "source.sql");
+        if (described.Count > ApiLimits.MaxRowsColumns) throw new RequestValidationException($"The query returns {described.Count} columns; at most {ApiLimits.MaxRowsColumns} are allowed.", "source.sql");
+        var dup = described.GroupBy(c => c.Name, StringComparer.Ordinal).FirstOrDefault(g => g.Count() > 1);
+        if (dup is not null) throw new RequestValidationException($"The column '{dup.Key}' appears more than once; give one of them a different name with AS.", "source.sql");
+        return new SourceBuild(sql, described, false, [], []);
+    }
+
+    /// <summary>The derived table for a source; <paramref name="described"/> holds each of <see cref="TablesOf"/>'s columns, in order
+    /// (a custom SQL source: one entry, the query's own columns).</summary>
     public static SourceBuild Build(QuerySource s, IReadOnlyList<IReadOnlyList<ColumnInfo>> described)
     {
-        try { return s.Kind == Union ? BuildUnion(s, described) : BuildUnpivot(s, described[0]); }
+        try { return s.Kind == Union ? BuildUnion(s, described) : s.Kind == Sql ? BuildSql(s, described[0]) : BuildUnpivot(s, described[0]); }
         catch (RequestValidationException ex) when (ex.Field is { } f && !f.StartsWith("source.", StringComparison.Ordinal))
         { throw new RequestValidationException(ex.Message, "source." + f); } // the union / unpivot rules name the request's own fields
     }

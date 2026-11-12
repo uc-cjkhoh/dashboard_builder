@@ -86,7 +86,10 @@ public sealed record QueryRequest(
     QuerySource? Source = null,
     // A filter on aggregated measures (SQL HAVING): keeps the groups whose measure value passes. Each entry names a
     // measure by its position in Measures; see <see cref="HavingFilter"/>.
-    HavingFilter[]? Having = null);
+    HavingFilter[]? Having = null,
+    // Cards whose rows come from the user's own SELECT instead of the catalog table of the same (Db, Name) (D105; kind "sql" only). Unlike
+    // <see cref="Source"/> they take part in joins: wherever the query names that table — as the base or a join side — it reads the derived table.
+    QuerySource[]? Sources = null);
 
 /// <summary>A condition on one aggregated measure of the same request, applied to each group after grouping (HAVING).
 /// <see cref="Measure"/> is the index into <see cref="QueryRequest.Measures"/> (0 for the implicit count when there are none);

@@ -27,3 +27,7 @@ node_modules/
 # Screenshots from browser checks (tests/live/ writes them outside the repo)
 /screenshots/
 /shots/
+
+# Python bytecode written next to the vendored sqlglot (Tools/)
+__pycache__/
+*.pyc

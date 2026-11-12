@@ -9,7 +9,7 @@ import { havingPlan } from "./having-model.js";
 import { planJoinType } from "../Relations/relation-rules.js";
 import { catalogFromEntities } from "../Calc/calc-resolve.js";
 import { isCalcPill, calcPillId, sameCalcPill } from "../Calc/calc-pill.js";
-import { sourceOfTable, sourceProblem, wireSource } from "../Core/source-model.js";
+import { sourceOfTable, sourceProblem, wireSource, sqlSourcesFor } from "../Core/source-model.js";
 import { wireDim, wireMeasure, planTables, measureLabel, wireTopBy, wireCalcFilter, resolveSortTarget } from "../Calc/calc-plan.js";
 
 // The worksheet query plan — pure and DOM-free (tests/js/sheet-plan.test.mjs). Everything the plan reads
@@ -218,12 +218,14 @@ export function buildPlan(sheet, periodRange, ctx, { crossFilter = null } = {}) 
     if (t) sortColumn = t.alias;
   }
   const source = sourceOfTable(ctx.entities, db, table); // a union / unpivot the query reads instead of a catalog table
+  const sqlSources = sqlSourcesFor(ctx.entities, [{ db, table }, ...joins.flatMap((j) => [j.left, j.right])]); // cards with custom SQL the query reads (D105)
   const having = havingPlan(mplan); // a filter on an aggregated measure: HAVING, after grouping and before Top-N's cap
   const scale = scalePlan(sheet.chartType, { ...sheet.format, topN: effectiveTopN(sheet.format, ctx.parameters, LIMITS.rows) }, rowDimensions.length + columnDimensions.length);
   if (having.length) delete scale.otherBucket; // the "Other" total is of the groups past the cap; with a measure filter it can't be (D84)
   return withCasts({
     from: { db, table },
     ...(source ? { source: wireSource(source) } : {}),
+    ...(sqlSources.length ? { sources: sqlSources } : {}),
     joins,
     rowDimensions,
     columnDimensions,

@@ -128,3 +128,49 @@ test("mismatchSummary counts left-out columns", () => {
   assert.equal(mismatchSummary(m), "3 columns are left out: 2 not in every table, 1 of unlike kinds.");
   assert.equal(mismatchSummary({ missing: [{}], kind: [], shared: [] }), "1 column is left out: 1 not in every table, 0 of unlike kinds.");
 });
+
+// --- custom SQL on a card (D105) ---------------------------------------------------------------------------------------
+import {
+  defaultSql, sqlProblem, sqlWire, customSqlOf, sqlSourcesFor, cleanCustomSql, lostKeys, distinctPlanSql,
+} from "../../src/DashboardBuilder/Features/Core/source-model.js";
+
+test("the custom SQL limit mirrors the server", () => assert.equal(LIMITS.customSql, 10000));
+test("the default SQL lists every column, quoted, one per line, from the quoted db.table", () => {
+  assert.equal(defaultSql("shop", "orders", [{ name: "id" }, { name: "we`ird" }]), "SELECT\n  `id`,\n  `we\\`ird`\nFROM `shop`.`orders`");
+  assert.equal(defaultSql("shop", "orders"), "SELECT\n  *\nFROM `shop`.`orders`");
+});
+test("sqlProblem refuses empty and over-long text; the server checks the rest", () => {
+  assert.match(sqlProblem(""), /Write a SELECT/); assert.match(sqlProblem("  \n"), /Write a SELECT/);
+  assert.match(sqlProblem("x".repeat(10001)), /at most 10,000/);
+  assert.equal(sqlProblem("SELECT 1"), null);
+});
+test("custom SQL is read from the card of that table and sent as a sql source", () => {
+  const e = new Map([["a", { db: "shop", table: "orders", customSql: "SELECT 1" }], ["b", { db: "shop", table: "users" }]]);
+  assert.equal(customSqlOf(e, "shop", "orders"), "SELECT 1");
+  assert.equal(customSqlOf(e, "shop", "users"), null);
+  assert.deepEqual(sqlWire("shop", "orders", "SELECT 1"), { kind: "sql", db: "shop", name: "orders", sql: "SELECT 1" });
+  assert.deepEqual(sqlSourcesFor(e, [{ db: "shop", table: "users" }, { db: "shop", table: "orders" }, { db: "shop", table: "orders" }]), [sqlWire("shop", "orders", "SELECT 1")]);
+  assert.deepEqual(sqlSourcesFor(e, [{ db: "shop", table: "users" }]), []);
+});
+test("a card with custom SQL is not a union / unpivot source", () => {
+  const e = new Map([["a", { db: "shop", table: "orders", customSql: "SELECT 1" }]]);
+  assert.equal(sourceOfTable(e, "shop", "orders"), null);
+  assert.equal(sourceProblem(["shop\u0000orders", "shop\u0000users"], e), null); // it can be joined
+});
+test("a saved custom SQL must be text of an allowed length", () => {
+  assert.equal(cleanCustomSql("SELECT 1"), "SELECT 1");
+  for (const bad of [undefined, null, 5, "", "   ", "x".repeat(10001), {}]) assert.equal(cleanCustomSql(bad), null);
+});
+test("lostKeys names the relationship columns a new query no longer returns", () => {
+  const cols = [{ name: "id" }, { name: "region" }];
+  assert.deepEqual(lostKeys(["id", "region", "id"], cols), []);
+  assert.deepEqual(lostKeys(["id", "customer", "customer", "day"], cols), ["customer", "day"]);
+});
+test("the member list of a custom SQL column is a one-dimension query through sources", () => {
+  const p = distinctPlanSql("shop", "orders", "SELECT 1", "region", 201);
+  assert.deepEqual(p.from, { db: "shop", table: "orders" });
+  assert.deepEqual(p.sources, [sqlWire("shop", "orders", "SELECT 1")]);
+  assert.equal("source" in p, false);
+  assert.deepEqual(p.rowDimensions, [{ db: "shop", table: "orders", column: "region" }]);
+  assert.equal(p.limit, 201);
+});

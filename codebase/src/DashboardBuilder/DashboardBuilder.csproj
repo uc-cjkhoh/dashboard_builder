@@ -29,4 +29,10 @@
              CopyToOutputDirectory="Never" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The SQL translator (D106): a script plus the vendored sqlglot, run by the server as `python3 -I Tools/sql_translate.py`. Never served over HTTP. -->
+    <Content Include="Tools\**\*.py;Tools\vendor\LICENSE-sqlglot.txt" Exclude="Tools\**\__pycache__\**"
+             CopyToOutputDirectory="Never" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
