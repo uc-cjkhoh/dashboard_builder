@@ -47,7 +47,7 @@ export function wireMenu(button, list, { signal } = {}) {
 
 // --- Context popup ---------------------------------------------------------------------------------------------
 // A menu with no button: it opens at the pointer on right-click (contextmenu) or under the element on the ContextMenu key /
-// Shift+F10 / Enter (Core/context-menu-model.js). It is a plain `.menu__list` (role=menu) on <body>, so panels never clip it.
+// Shift+F10 / Enter (Core/context-menu-model.js). It is a plain `.menu__list` (role=menu) on <body> (inside the open modal dialog when opened from one), so panels never clip it.
 // Entries ({ type: item | radio | check | heading | sep | custom, label, checked, disabled, title, onSelect, keepOpen, el }) are
 // given as an array or a function re-read on every refresh. A radio / check / item closes the popup and then acts, unless
 // `keepOpen` (act, then rebuild the entries). Esc, Tab, outside click, scroll and resize close it.
@@ -55,7 +55,7 @@ let current = null;
 
 export function closeContextMenu() { current?.close(); }
 
-export function openContextMenu({ x, y, entries, label = "Options", returnFocus, avoid }) {
+export function openContextMenu({ x, y, entries, label = "Options", returnFocus, avoid, host }) {
   closeContextMenu();
   const list = document.createElement("div");
   list.className = "menu__list ctx-menu";
@@ -100,7 +100,13 @@ export function openContextMenu({ x, y, entries, label = "Options", returnFocus,
     }, 0);
   }
   build();
-  document.body.append(list);
+  // Over an open modal <dialog> (top layer, and the rest of the page inert) the popup lives inside that dialog and is promoted to the top layer too,
+  // so it draws in front of the dialog and stays clickable; elsewhere it is a plain child of <body>.
+  if (host && host !== document.body) {
+    list.setAttribute("popover", "manual");
+    host.append(list);
+    try { list.showPopover(); } catch { /* no Popover API: it stays a fixed child of the dialog */ }
+  } else document.body.append(list);
   const r = list.getBoundingClientRect();
   const at = placeMenu({ x, y, width: r.width, height: r.height, viewW: window.innerWidth, viewH: window.innerHeight, avoid: avoid?.() ?? null });
   list.style.left = `${at.left}px`; list.style.top = `${at.top}px`;
@@ -128,13 +134,13 @@ export function openContextMenu({ x, y, entries, label = "Options", returnFocus,
 export function wireContextMenu(target, entries, { label, returnFocus, avoid } = {}) {
   target.addEventListener("contextmenu", (e) => {
     e.preventDefault(); e.stopPropagation();
-    openContextMenu({ x: e.clientX, y: e.clientY, entries, label, returnFocus: returnFocus ?? (() => target), avoid });
+    openContextMenu({ x: e.clientX, y: e.clientY, entries, label, returnFocus: returnFocus ?? (() => target), avoid, host: target.closest("dialog[open]") });
   });
   target.addEventListener("keydown", (e) => {
     if (!opensContext(e)) return;
     e.preventDefault(); e.stopPropagation();
     const r = target.getBoundingClientRect();
-    openContextMenu({ x: r.left, y: r.bottom + 4, entries, label, returnFocus: returnFocus ?? (() => target), avoid });
+    openContextMenu({ x: r.left, y: r.bottom + 4, entries, label, returnFocus: returnFocus ?? (() => target), avoid, host: target.closest("dialog[open]") });
   });
   target.setAttribute("aria-haspopup", "menu");
 }

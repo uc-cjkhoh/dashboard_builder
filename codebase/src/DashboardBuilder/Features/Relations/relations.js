@@ -7,7 +7,7 @@ import { previewRequest } from "./join-preview-model.js";
 import { buildJoinCheck } from "./join-check.js";
 import { buildKeyPairs } from "./key-pairs-ui.js";
 import { compoundName, suggestTarget } from "./key-pairs.js";
-import { linkSides, linkRoute, roundedPath } from "./link-route.js";
+import { linkSides, linkRoute, roundedPath, placeBadge } from "./link-route.js";
 import { openTypeWarning } from "./type-warning.js";
 import { COLUMN_MIME, encodeColumnDrag, parseColumnDrag, dropDecision } from "./link-drag.js";
 import { describeRelationship } from "./relation-describe.js";
@@ -23,6 +23,7 @@ const CARDINALITIES = ["1:1", "1:N", "N:1", "N:M"];
 let seq = 0;
 let selectedId = null;
 let hoverId = null;   // the link under the pointer
+const openNotes = new Set(); // relationship ids whose dropdown in the Relationships card is open (kept across re-renders)
 let canvas, svg, labels, guide, keyHint, notes;  // svg: the lines, under the cards; labels: the cardinality badges, over them
 
 export function initRelations() {
@@ -54,6 +55,7 @@ export function initRelations() {
   canvas.parentElement.append(help);
 
   bus.addEventListener("entity:moved", () => render());
+  bus.addEventListener("canvas:zoomed", () => render());
   bus.addEventListener("entity:loaded", (e) => { markDraggable(e.detail.entityId); render(); }); // a restored link waits for its key rows
   bus.addEventListener("entity:removed", (e) => { cancelKeyPick(); onEntityRemoved(e.detail.entityId); });
   bus.addEventListener("view:changed", () => { cancelKeyPick(); selectedId = null; render(); });
@@ -297,12 +299,15 @@ function render() {
   svg.replaceChildren();
   labels.replaceChildren();
   const crect = canvas.getBoundingClientRect();
+  for (const layer of [svg, labels]) { layer.setAttribute("width", "0"); layer.setAttribute("height", "0"); } // measure the cards alone, so zooming out lets the scroll area shrink
+  const [w, h] = [canvas.scrollWidth, canvas.scrollHeight];
   for (const layer of [svg, labels]) {
-    layer.setAttribute("width", String(canvas.scrollWidth));
-    layer.setAttribute("height", String(canvas.scrollHeight));
+    layer.setAttribute("width", String(w));
+    layer.setAttribute("height", String(h));
   }
 
-  const placed = []; // badge boxes already laid out; a badge that would cover one steps down
+  const placed = []; // badge boxes already laid out; a badge never covers one
+  const cards = [...entities.values()].map((e) => { const r = e.el.getBoundingClientRect(); return { left: r.left - crect.left + canvas.scrollLeft, right: r.right - crect.left + canvas.scrollLeft, top: r.top - crect.top + canvas.scrollTop, bottom: r.bottom - crect.top + canvas.scrollTop }; });
   const used = new Map(); // links already run through each gutter, so they take different lanes there
   for (const rel of relationships.values()) {
     const a = entities.get(rel.from.entityId);
@@ -318,9 +323,9 @@ function render() {
     const edge = Math.round(sa === sb ? (sa > 0 ? Math.max(p1.x, p2.x) : Math.min(p1.x, p2.x)) : Math.min(p1.x, p2.x));
     const n = used.get(edge) ?? 0;
     used.set(edge, n + 1);
-    const { line, label } = drawLink(rel, p1, sa, p2, sb, fromKind, toKind, [0, 1, -1][n % 3], placed);
+    const { line, label, under } = drawLink(rel, p1, sa, p2, sb, fromKind, toKind, [0, 1, -1][n % 3], placed, cards);
     svg.append(line);
-    labels.append(label);
+    (under ? svg : labels).append(label); // a badge with no free spot beside the cards sits under them, never over
   }
   markUnlinked();
   updateGuide();
@@ -343,15 +348,39 @@ function renderNotes() {
     const li = document.createElement("li");
     li.className = "rel-note";
     li.dataset.rel = rel.id;
-    const title = document.createElement("p"), keys = document.createElement("p");
+    const more = document.createElement("details"); // a dropdown per link: the title row stays one line, the words open beneath it
+    more.className = "rel-note__more";
+    more.open = openNotes.has(rel.id);
+    more.addEventListener("toggle", () => { if (more.open) openNotes.add(rel.id); else openNotes.delete(rel.id); });
+    const head = document.createElement("summary"), title = document.createElement("span");
+    head.className = "rel-note__head";
     title.className = "rel-note__title"; title.textContent = `${d.title} · ${joinBadge(rel.cardinality, rel.joinType, rel.pairs?.length ?? 0)}`;
-    keys.className = "rel-note__keys"; keys.textContent = d.keys;
-    li.append(title, keys, ...d.sentences.map((t) => { const p = document.createElement("p"); p.className = "rel-note__text"; p.textContent = t; return p; }));
+    head.append(title);
+    more.append(head, ...d.sentences.map((t, i) => noteLine(t, d.refs, d.tones[i])));
+    li.append(more);
     li.addEventListener("pointerenter", () => { hoverId = rel.id; markLinkedRows(); });
     li.addEventListener("pointerleave", () => { hoverId = null; markLinkedRows(); });
     list.append(li);
   }
   notes.replaceChildren(summary, list);
+}
+
+// One sentence of a note: table and column names are set in a chip (bold + wash, so not colour alone); a caution or reassurance gets a tone.
+function noteLine(text, refs, tone) {
+  const p = document.createElement("p");
+  p.className = tone ? `rel-note__text rel-note__text--${tone}` : "rel-note__text";
+  const esc = (r) => r.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`(?<![\\w.])(${refs.map(esc).join("|")})(?![\\w])`, "g");
+  let at = 0;
+  for (const m of text.matchAll(re)) {
+    if (m.index > at) p.append(text.slice(at, m.index));
+    const b = document.createElement("strong");
+    b.className = "rel-ref"; b.textContent = m[0];
+    p.append(b);
+    at = m.index + m[0].length;
+  }
+  if (at < text.length) p.append(text.slice(at));
+  return p;
 }
 
 // A column in a relationship is pinned to its card's key strip, above the scrolling list: the link's end is then always on a visible row.
@@ -413,8 +442,8 @@ function markUnlinked() {
   }
 }
 
-function drawLink(rel, p1, s1, p2, s2, fromKind, toKind, lane, placed) {
-  const cls = `rel-link${rel.id === selectedId ? " rel-link--selected" : ""}`;
+function drawLink(rel, p1, s1, p2, s2, fromKind, toKind, lane, placed, cards) {
+  const cls = "rel-link";
   const line = svgEl("g", { class: cls, "data-rel": rel.id });
   const { points, label: spot } = linkRoute(p1, s1, p2, s2, lane);
   const d = roundedPath(points);
@@ -422,29 +451,27 @@ function drawLink(rel, p1, s1, p2, s2, fromKind, toKind, lane, placed) {
     endMarker(p1, { x: s1, y: 0 }, fromKind), endMarker(p2, { x: s2, y: 0 }, toKind));
   const label = svgEl("g", { class: `${cls} rel-link--label`, "data-rel": rel.id });
   const text = joinBadge(rel.cardinality, rel.joinType, rel.pairs?.length ?? 0), w = badgeWidth(text);
-  while (placed.some((b) => Math.abs(b.x - spot.x) < (b.w + w) / 2 && Math.abs(b.y - spot.y) < BADGE_H)) spot.y += BADGE_H + 2;
-  placed.push({ x: spot.x, y: spot.y, w });
-  label.append(badge(text, w, spot));
+  const at = placeBadge(spot, p1.y, p2.y, w, BADGE_H, cards, placed);
+  placed.push({ x: at.x, y: at.y, w, h: BADGE_H });
+  label.append(badge(text, w, at));
 
   for (const g of [line, label]) { // the line and its badge sit in two layers but act as one link
     g.addEventListener("click", (e) => { e.stopPropagation(); editRelationship(rel); });
     g.addEventListener("pointerenter", () => { hoverId = rel.id; markLinkedRows(); });
     g.addEventListener("pointerleave", () => { hoverId = null; markLinkedRows(); });
   }
-  return { line, label };
+  return { line, label, under: at.under };
 }
 
 // The two key rows a hovered or selected link joins read as one pair: both take the accent wash.
 function markLinkedRows() {
   for (const el of canvas.querySelectorAll(".col-row--linked, .rel-link--hover")) el.classList.remove("col-row--linked", "rel-link--hover");
   if (hoverId) for (const el of canvas.querySelectorAll(`.rel-link[data-rel="${hoverId}"]`)) el.classList.add("rel-link--hover");
-  for (const li of notes?.querySelectorAll(".rel-note") ?? []) li.classList.toggle("rel-note--active", li.dataset.rel === selectedId || li.dataset.rel === hoverId);
-  for (const id of new Set([selectedId, hoverId])) {
-    const rel = id && relationships.get(id);
-    if (!rel) continue;
+  for (const li of notes?.querySelectorAll(".rel-note") ?? []) li.classList.toggle("rel-note--active", li.dataset.rel === hoverId);
+  const rel = hoverId && relationships.get(hoverId); // hover only: selecting a link (which opens its dialog) highlights nothing
+  if (rel)
     for (const end of relEnds(rel))
       entities.get(end.entityId)?.el.querySelector(`.col-row[data-column="${cssEscape(end.column)}"]`)?.classList.add("col-row--linked");
-  }
 }
 
 function endMarker(p, u, kind) {
@@ -496,6 +523,7 @@ function editRelationship(rel) {
 
 function select(id) {
   selectedId = id;
+  hoverId = null; // render() replaces the hovered link, so its pointerleave never fires: clear the hover here
   render();
 }
 

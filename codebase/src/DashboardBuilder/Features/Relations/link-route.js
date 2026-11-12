@@ -44,3 +44,17 @@ export function roundedPath(points, r = CORNER) {
   d.push(`L${last.x},${last.y}`);
   return d.join(" ");
 }
+
+const hits = (b, r) => b.x - b.w / 2 < r.right && b.x + b.w / 2 > r.left && b.y - b.h / 2 < r.bottom && b.y + b.h / 2 > r.top;
+
+/** Where a link's badge (w × h) goes. It stays on the link's vertical run at `spot.x`: first the midpoint, then the nearest spot along the run
+ *  that covers neither a card (`cards`: { left, right, top, bottom }) nor an earlier badge (`placed`: { x, y, w, h }). If the whole run is blocked
+ *  it returns `under: true` — the badge then goes in the layer beneath the cards, at the midpoint, stepping clear of earlier badges. */
+export function placeBadge(spot, y1, y2, w, h, cards, placed) {
+  const lo = Math.min(y1, y2), hi = Math.max(y1, y2), step = 8;
+  const free = (y) => { const b = { x: spot.x, y, w, h }; return !cards.some((c) => hits(b, c)) && !placed.some((p) => hits(b, { left: p.x - p.w / 2, right: p.x + p.w / 2, top: p.y - p.h / 2, bottom: p.y + p.h / 2 })); };
+  for (let d = 0; d <= (hi - lo) / 2; d += step) for (const y of d ? [spot.y - d, spot.y + d] : [spot.y]) if (y >= lo && y <= hi && free(y)) return { x: spot.x, y, under: false };
+  let y = spot.y;
+  while (placed.some((p) => hits({ x: spot.x, y, w, h }, { left: p.x - p.w / 2, right: p.x + p.w / 2, top: p.y - p.h / 2, bottom: p.y + p.h / 2 }))) y += h + 2;
+  return { x: spot.x, y, under: true };
+}

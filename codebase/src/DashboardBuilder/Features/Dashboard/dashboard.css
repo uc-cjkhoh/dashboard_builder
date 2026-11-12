@@ -649,6 +649,15 @@
 .ws-fields { background: var(--surface-2); gap: var(--s2); padding: var(--s2) var(--s4) var(--s4); }
 .ws-fieldtools { background: var(--surface-2); }
 .ws-fields .ws-group { margin-bottom: 0; }
+/* The pane itself never scrolls: each table tile shares the height left under Marks and the search and scrolls its own fields, its header pinned. */
+.ws-fields { overflow: hidden; }
+.ws-fields > .ws-fieldset { display: block; flex: 0 1 auto; min-height: calc(2 * var(--ctl-h) + 2 * var(--s1) + 2px); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.ws-fields > .ws-fieldset:not([open]) { overflow: hidden; }
+.ws-fields > .ws-fieldset > .ws-group__head { position: sticky; top: 0; z-index: 1; background: var(--surface); }
+/* The open Marks card keeps its height up to 45% of the pane; beyond that, on a short window, it scrolls inside itself — the pane still never scrolls. */
+.ws-fields > .ws-shelf--marks { flex: none; max-height: 45%; overflow-y: auto; overscroll-behavior: contain; }
+.ws-fields > .ws-fieldset > summary + * { margin-top: var(--s1); }
+.ws-fields > .ws-fieldset > :not(summary) + * { margin-top: var(--s1); }
 .ws-table { background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r); box-shadow: var(--elev-2); padding: var(--s1); }
 .ws-table > .ws-group__head { margin-left: 0; padding: var(--s1) var(--s2); height: var(--ctl-h); font-weight: 600; color: var(--ink); }
 .ws-table > .ws-group__head .icon { order: 2; margin-left: auto; }

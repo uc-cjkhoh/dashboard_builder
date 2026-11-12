@@ -1,0 +1,44 @@
+@* The connect form, on the Data Source start card (Canvas/_Canvas.cshtml) — shown while disconnected and for "Change connection".
+   Wired in Connection/connection.js. Port/secure default to the TLS pair (8443, decision D10); Secure and Trust are visible switches (D98). *@
+<form class="conn-form" id="conn-form" autocomplete="off" aria-labelledby="conn-form-title" hidden>
+    <h2 class="conn-form__title" id="conn-form-title">Connect to a ClickHouse server</h2>
+    <!-- One block: a row per field, label left, value right. -->
+    <div class="conn-fields">
+        <div class="form-field">
+            <label for="conn-host">Host</label>
+            <input type="text" id="conn-host" name="host" maxlength="253" placeholder="db.example.com" />
+        </div>
+        <div class="form-field">
+            <label for="conn-port">Port</label>
+            <input type="text" inputmode="numeric" maxlength="5" id="conn-port" name="port" value="8443" />
+        </div>
+        <div class="form-field">
+            <label for="conn-user">User</label>
+            <input type="text" id="conn-user" name="user" maxlength="64" value="default" />
+        </div>
+        <div class="form-field">
+            <label for="conn-password">Password</label>
+            <input type="password" id="conn-password" name="password" maxlength="256" />
+        </div>
+    </div>
+    <!-- Secure (TLS) is on by default (D10). Trust is on by default too (D11, internal servers) and only shown under TLS; its note
+         appears once the user is about to connect with it on, or has touched the switch (D98). -->
+    <div class="conn-options">
+        <label class="form-check">
+            <input type="checkbox" role="switch" id="conn-secure" name="secure" checked />
+            Secure (TLS)
+        </label>
+        <label class="form-check" id="conn-allowcert-row">
+            <input type="checkbox" role="switch" id="conn-allowcert" name="allowInvalidCert" checked />
+            Trust self-signed certificate
+        </label>
+        <p class="form-warn" id="conn-allowcert-warn" hidden>
+            The certificate is not checked. Use this only for a server you trust.
+        </p>
+    </div>
+    <p class="form-error" id="conn-error" role="alert" hidden></p>
+    <div class="conn-form__actions">
+        <button type="submit" class="btn btn--primary" id="conn-connect">Connect</button>
+        <button type="button" class="btn" id="conn-cancel" hidden>Cancel</button>
+    </div>
+</form>

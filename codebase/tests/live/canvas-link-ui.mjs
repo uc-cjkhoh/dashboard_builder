@@ -87,6 +87,15 @@ try {
     must(r.edges.some((e) => Math.abs(e - r.xs[0]) < 1.5), `anchor ${J(r.xs[0])} vs edges ${J(r.edges)}`); // the end sits on a card edge; the turn (xs[1]) is in the middle of the gutter
     await shot('drag-link.png');
   });
+  await check('clicking a link and closing its dialog leaves no highlight (hover only)', async () => {
+    await ev(`(() => { const g = document.querySelector('.rel-link'); g.dispatchEvent(new PointerEvent('pointerenter')); return true; })()`);
+    must(await ev(`document.querySelectorAll('.col-row--linked').length > 0 && !!document.querySelector('.rel-link--hover')`), 'hover should highlight');
+    await ev(`document.querySelector('.rel-link').dispatchEvent(new MouseEvent('click', { bubbles: true }))`);
+    await waitFor(`document.querySelector('dialog[open] .rel-dialog') !== null`, 'dialog open');
+    await ev(`[...document.querySelectorAll('dialog[open] .btn')].find((x) => x.textContent === 'Cancel').click()`);
+    await waitFor(`document.querySelector('dialog[open]') === null`, 'dialog closed');
+    must(await ev(`document.querySelectorAll('.col-row--linked').length === 0 && !document.querySelector('.rel-link--hover') && !document.querySelector('.rel-note--active')`), 'highlight left behind');
+  });
   await check('a duplicate drop is refused with a toast and no dialog', async () => {
     await dragRow('customers', 'id', 'orders', 'cust_id');
     await b.sleep(300);

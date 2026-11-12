@@ -52,3 +52,14 @@ test("a straight run (equal y) stays a straight line", () => {
   const { points } = linkRoute({ x: 300, y: 50 }, 1, { x: 400, y: 50 }, -1);
   assert.equal(roundedPath(points), "M300,50 L350,50 L350,50 L400,50"); // zero-length turns add no curve
 });
+
+import { placeBadge } from "../../src/DashboardBuilder/Features/Relations/link-route.js";
+test("placeBadge: midpoint when free, slides off a card, goes under when the run is blocked", () => {
+  const spot = { x: 100, y: 100 };
+  assert.deepEqual(placeBadge(spot, 20, 180, 34, 24, [], []), { x: 100, y: 100, under: false });
+  const slid = placeBadge(spot, 20, 180, 34, 24, [{ left: 50, right: 150, top: 80, bottom: 120 }], []);
+  assert.equal(slid.under, false);
+  assert.ok(slid.y + 12 <= 80 || slid.y - 12 >= 120);
+  const blocked = placeBadge(spot, 20, 180, 34, 24, [{ left: 50, right: 150, top: 0, bottom: 200 }], []);
+  assert.deepEqual(blocked, { x: 100, y: 100, under: true });
+});

@@ -223,7 +223,7 @@ button { font: inherit; }
 .menu__item .menu__check { margin-left: auto; color: var(--accent-ink); visibility: hidden; }
 .menu__item[aria-checked="true"] .menu__check { visibility: visible; }
 /* Context popup (Core/menu.js openContextMenu): at the pointer, over everything, solid. */
-.ctx-menu { position: fixed; right: auto; z-index: 90; transform-origin: top left; max-height: calc(100vh - 16px); overflow: auto; }
+.ctx-menu { position: fixed; right: auto; inset: auto; margin: 0; z-index: 90; transform-origin: top left; max-height: calc(100vh - 16px); overflow: auto; }
 .ctx-menu__custom { padding: var(--s1) var(--s2); display: flex; flex-wrap: wrap; gap: var(--s1); align-items: center; }
 .menu__heading { padding: var(--s1) var(--s2) var(--s1); font-size: var(--fs-body); font-weight: 600; color: var(--ink-3); grid-column: 1 / -1; }
 .menu__sep { height: 1px; margin: 0; background: var(--line); grid-column: 1 / -1; }

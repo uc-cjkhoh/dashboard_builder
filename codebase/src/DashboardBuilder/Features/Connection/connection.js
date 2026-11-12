@@ -5,20 +5,22 @@ import { host, port, text, LIMITS } from "../Core/validate.js";
 import { summaryTitle, summaryDetail, formFromView, secureToggled, trustToggled, certNoteVisible } from "./connection-rules.js";
 import { nextHealth, initialHealth, readProbe, HEALTH_TEXT, PING_EVERY_MS } from "./connection-health.js";
 import { remember, forget, sanitize, sourceKey, formValues } from "./recent-sources.js";
-import { expandSidebar } from "../Shell/sidebar.js";
 
 // Recent sources live in this browser only (localStorage) and hold no secrets — see recent-sources.js.
 const RECENT_KEY = "dashboardbuilder.recent-sources";
 const loadRecent = () => { try { return sanitize(JSON.parse(localStorage.getItem(RECENT_KEY))); } catch { return []; } };
 const saveRecent = (list) => { try { localStorage.setItem(RECENT_KEY, JSON.stringify(list)); } catch { /* not remembered — fine */ } };
 
-// The sidebar connection flow. Gates the schema browser + canvas. Failures show as a
-// field error or a toast. Once connected the form is collapsed into a compact summary showing the
-// ClickHouse host (user, transport and port in its tooltip), with icon buttons on the row to change the connection (re-open the form) or disconnect.
+// The connection flow. Gates the schema browser + canvas. The form sits on the Data Source start card (with recent connections
+// beside it) while disconnected; failures show as a field error or a toast. Once connected, the sidebar's Connections tile shows a
+// compact summary — the ClickHouse host (user, transport and port in its tooltip), with icon buttons to change the connection
+// (re-opens the start card over the canvas, with Cancel / Esc back) or disconnect.
 export function initConnection() {
   const form = document.getElementById("conn-form");
   if (!form) return;
 
+  const section = document.getElementById("conn-section");
+  const sectionTitle = document.getElementById("conn-title");
   const summary = document.getElementById("conn-summary");
   const hostLabel = document.getElementById("conn-host-label");
   const statusEl = document.getElementById("conn-status");
@@ -45,7 +47,7 @@ export function initConnection() {
   const detailLabel = document.getElementById("conn-detail-label");
   const errorEl = document.getElementById("conn-error");
 
-  // Recent connections sit on the Data Source start card's right panel (Canvas/_Canvas.cshtml), shown only while disconnected.
+  // Recent connections sit on the Data Source start card's left panel (Canvas/_Canvas.cshtml), shown whenever the form is.
   const recentPanel = document.getElementById("start-recent-panel");
   const recentEl = document.getElementById("conn-recent");
   const recentNone = document.getElementById("conn-recent-none");
@@ -67,7 +69,6 @@ export function initConnection() {
       pick.title = `${e.host} · ${e.user} · :${e.port}`;
       pick.append(h, m);
       pick.addEventListener("click", () => {
-        expandSidebar(); // the form it fills is in the sidebar
         fillForm(formValues(e));
         for (const i of [hostEl, portEl, userEl, passEl]) clearFieldError(i);
         syncCertControls();
@@ -83,10 +84,10 @@ export function initConnection() {
       li.append(pick, rm);
       return li;
     }));
-    const disconnected = !current;
-    toggle(recentPanel, disconnected);
-    toggle(recentEl, disconnected && recent.length > 0);
-    toggle(recentNone, disconnected && recent.length === 0);
+    const open = !form.hidden;
+    toggle(recentPanel, open);
+    toggle(recentEl, open && recent.length > 0);
+    toggle(recentNone, open && recent.length === 0);
   }
 
   function fillForm(v) {
@@ -157,13 +158,16 @@ export function initConnection() {
   function clearError() { hide(errorEl); errorEl.replaceChildren(); }
   for (const i of [hostEl, portEl, userEl, passEl, secureEl, allowCertEl]) i.addEventListener("input", clearError);
 
+  // The canvas shows the start card whenever the form is open (Canvas/canvas.js listens).
+  const formToggled = () => document.dispatchEvent(new CustomEvent("connection:form", { detail: { open: !form.hidden } }));
+
+  // "Change connection": the summary stays in the sidebar (still connected until a new connect succeeds); the start card opens over the canvas.
   function showForm({ cancellable }) {
     clearError();
-    hide(summary);
-    hide(lostRow);
     show(form);
     renderRecent();
     toggle(cancelBtn, cancellable);
+    formToggled();
     hostEl.focus();
   }
 
@@ -182,6 +186,7 @@ export function initConnection() {
       syncCertControls();
       hide(form);
       renderRecent();
+      show(section); show(sectionTitle);
       show(summary);
       hide(cancelBtn);
       if (!sameConnection) health = initialHealth();
@@ -191,11 +196,13 @@ export function initConnection() {
       stopPinging();
       show(form);
       renderRecent();
+      hide(section); hide(sectionTitle);
       hide(summary);
       hide(lostRow);
       hide(cancelBtn);
     }
 
+    document.querySelector(".app")?.toggleAttribute("data-disconnected", !connected); // the sidebar narrows to its brand rail (shell.css)
     toggle(schemaSection, connected);
     toggle(divider, connected);
     toggle(dbHeading, connected);
@@ -244,8 +251,10 @@ export function initConnection() {
   // edit icon: change connection — reveal the form (still connected until a new connect succeeds).
   changeBtn?.addEventListener("click", () => { if (form.hidden) showForm({ cancellable: true }); else if (current) applyState(current); });
 
-  // Cancel out of "change" mode, back to the active connection's summary.
-  cancelBtn?.addEventListener("click", () => { if (current) applyState(current); });
+  // Cancel (or Esc) out of "change" mode, back to the active connection's summary — focus returns to the edit button.
+  const cancelChange = () => { if (!current || form.hidden) return; applyState(current); changeBtn?.focus(); };
+  cancelBtn?.addEventListener("click", cancelChange);
+  form.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.preventDefault(); cancelChange(); } });
 
   disconnectBtn?.addEventListener("click", async () => {
     // Every tab closes on disconnect, so say first that nothing is lost.

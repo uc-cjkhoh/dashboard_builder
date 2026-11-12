@@ -2,26 +2,30 @@
    Canvas/canvas.js (entities + empty state) and Relations/relations.js (links). *@
 <section class="view view--model" id="model-view" aria-label="Data source">
     <div class="canvas__empty" id="canvas-empty">
-        <!-- While disconnected this is the start card: the sentence + Connect on the left (3/4), recent connections on the
-             right (1/4, filled by Connection/connection.js). Connected, the right panel is hidden and the card styling goes with it. -->
+        <!-- The start card. While the connect form shows (disconnected, or "Change connection"), it is a card: recent connections on
+             the left, the form on the right (both driven by Connection/connection.js). Otherwise the recent panel and the form are
+             hidden, the card styling goes with them, and only the canvas empty state (sentence + one action) is left. -->
         <div class="start-card">
-            <div class="start-card__main">
-                <svg class="empty__model" viewBox="0 0 320 120" aria-hidden="true" focusable="false">
-                    <rect class="empty__card" x="1" y="9" width="112" height="102" rx="8" />
-                    <rect class="empty__card" x="207" y="9" width="112" height="102" rx="8" />
-                    <path class="empty__row" d="M17 33h56M17 57h72M17 81h48M223 33h64M223 57h40M223 81h72" />
-                    <path class="empty__link" d="M113 57h39a8 8 0 0 1 8 8v8a8 8 0 0 0 8 8h39" />
-                    <path class="empty__end" d="M125 49v16M207 81l-15-8M207 81h-15M207 81l-15 8" />
-                </svg>
-                <p class="empty__title" id="canvas-empty-title">Connect to a ClickHouse server to begin.</p>
-                <button type="button" class="btn btn--primary" id="canvas-empty-action">Connect</button>
-            </div>
             <section class="start-card__side" id="start-recent-panel" aria-labelledby="start-recent-title" hidden>
                 <h2 class="start-card__heading" id="start-recent-title">Recent connections</h2>
                 <!-- host, port and user only — never a password -->
                 <ul class="conn-recent" id="conn-recent" hidden></ul>
                 <p class="start-card__none" id="conn-recent-none" hidden>None yet.</p>
             </section>
+            <div class="start-card__main">
+                <div class="start-card__empty">
+                    <svg class="empty__model" viewBox="0 0 320 120" aria-hidden="true" focusable="false">
+                        <rect class="empty__card" x="1" y="9" width="112" height="102" rx="8" />
+                        <rect class="empty__card" x="207" y="9" width="112" height="102" rx="8" />
+                        <path class="empty__row" d="M17 33h56M17 57h72M17 81h48M223 33h64M223 57h40M223 81h72" />
+                        <path class="empty__link" d="M113 57h39a8 8 0 0 1 8 8v8a8 8 0 0 0 8 8h39" />
+                        <path class="empty__end" d="M125 49v16M207 81l-15-8M207 81h-15M207 81l-15 8" />
+                    </svg>
+                    <p class="empty__title" id="canvas-empty-title">Connect to a ClickHouse server to begin.</p>
+                    <button type="button" class="btn btn--primary" id="canvas-empty-action">Connect</button>
+                </div>
+                <partial name="~/Features/Connection/_ConnectForm.cshtml" />
+            </div>
         </div>
     </div>
 </section>

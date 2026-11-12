@@ -21,10 +21,13 @@
 /* The canvas ground: a 24px dot grid that scrolls with the cards, which snap to its 8px steps. */
 .view.view--model {
   background-image: radial-gradient(circle, var(--line-2) 1px, transparent 1.5px);
-  background-size: var(--s6) var(--s6);
-  background-position: var(--s4) var(--s4);
+  background-size: calc(var(--s6) * var(--zoom, 1)) calc(var(--s6) * var(--zoom, 1));  /* the dots zoom with the cards */
+  background-position: calc(var(--s4) * var(--zoom, 1) + var(--pan-x, 0px)) calc(var(--s4) * var(--zoom, 1) + var(--pan-y, 0px));
+  overflow: hidden;  /* an open ground: an empty spot pans on drag (any distance) and zooms on the wheel (canvas.js), so there is no scroll area */
+  cursor: grab;
   background-attachment: local;
 }
+.view.view--model.canvas--panning { cursor: grabbing; user-select: none; }
 .canvas--dragover { outline: 2px dashed var(--accent); outline-offset: -8px; background-color: color-mix(in srgb, var(--accent) 5%, transparent); }
 
 /* ---- Entity card (a dropped table) --------------------------------------- */
@@ -32,6 +35,8 @@
 .view--model { --entity-min: 312px; --entity-max: 480px; }
 .entity {
   position: absolute;
+  transform-origin: 0 0;  /* zoom (the scale property, canvas.js) grows the card from its top-left */
+  cursor: auto;
   width: var(--entity-min);
   display: flex;
   flex-direction: column;

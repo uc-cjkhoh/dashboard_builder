@@ -31,24 +31,31 @@
 .conn-lost { display: flex; align-items: center; gap: var(--s2); padding: var(--s1) var(--s1) var(--s1) var(--s2); animation: conn-in var(--dur) var(--ease-out); }
 .conn-lost__text { flex: 1; min-width: 0; font-size: var(--fs-body); color: var(--danger-ink); }
 
-/* ---- Not connected: the Data Source start card (markup in Canvas/_Canvas.cshtml) ----------------------------------
-   One card, two panels: the empty state's sentence + Connect on the left (3/4), recent connections on the right (1/4).
-   It is a card only while its right panel shows (disconnected); connected, the empty state is the bare column as before. */
+/* ---- The connect form's home: the Data Source start card (markup in Canvas/_Canvas.cshtml + _ConnectForm.cshtml) --------------
+   It is a card while the form is open (disconnected, or "Change connection" — then over the canvas, with a scrim): recent connections
+   on the left (288px), the form on the right. Otherwise the recent panel and form are hidden and the canvas empty state is the bare
+   column (ghost model, one sentence, one action).
+   Geometry: one 24px inset everywhere — the two headings share the top line (24px rows), the form block starts 24px from the border
+   and divider, and the list's text sits 24px in (16px padding + the rows' own 8px). The card is 752px wide; its height is the form's,
+   so top and bottom insets match; the list (up to 5 rows) fits inside it. Stacking follows the canvas width (a container query), not
+   the window's: under 640px of room the form goes on top in one column at most 480px wide, the list under a hairline. */
 .start-card { display: grid; }
-.start-card__main { display: grid; justify-items: center; align-content: center; gap: var(--s2); }
-.canvas__empty:has(.start-card__side:not([hidden])) { grid-template-columns: min(960px, 100%); padding: var(--s6); } /* one width, however short the list */
+.start-card__empty { display: grid; justify-items: center; gap: var(--s2); }
+.start-card:has(> .start-card__side:not([hidden])) .start-card__empty { display: none; } /* card mode: the form replaces the sentence + action */
+.canvas__empty:has(.start-card__side:not([hidden])) { container-type: inline-size; grid-template-columns: min(752px, 100%); padding: var(--s6); }
+.canvas__empty[data-over] { z-index: 3; pointer-events: auto; background: color-mix(in srgb, var(--bg) 72%, transparent); } /* changing over cards */
 .start-card:has(> .start-card__side:not([hidden])) {
-  grid-template-columns: minmax(0, 3fr) minmax(0, 1fr); justify-self: stretch; pointer-events: auto; text-align: left;
+  grid-template-columns: 288px minmax(0, 1fr); justify-self: stretch; pointer-events: auto; text-align: left;
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--elev-8);
   animation: conn-in var(--dur) var(--ease-out); }
-.start-card:has(> .start-card__side:not([hidden])) .start-card__main { padding: var(--s6); text-align: center; }
-.start-card__side { min-width: 0; display: grid; align-content: start; gap: var(--s2); padding: var(--s4) var(--s2); border-left: 1px solid var(--line); }
-.start-card__heading, .start-card__none { margin: 0; padding: 0 var(--s2); font-size: var(--fs-body); }
+.start-card:has(> .start-card__side:not([hidden])) .start-card__main { padding: var(--s6); }
+.start-card__side { min-width: 0; display: grid; align-content: start; gap: var(--s2); padding: var(--s6) var(--s4); border-right: 1px solid var(--line); }
+.start-card__heading, .start-card__none { margin: 0; padding: 0 var(--s2); font-size: var(--fs-body); line-height: 24px; }
 .start-card__heading { font-weight: 600; color: var(--ink-3); }
 .start-card__none { color: var(--ink-3); }
-@media (max-width: 900px) {
-  .start-card:has(> .start-card__side:not([hidden])) { grid-template-columns: minmax(0, 1fr); }
-  .start-card__side { border-left: 0; border-top: 1px solid var(--line); }
+@container (max-width: 639px) {
+  .start-card:has(> .start-card__side:not([hidden])) { grid-template-columns: minmax(0, 1fr); justify-self: center; width: min(480px, 100%); }
+  .start-card__side { order: 1; border-right: 0; border-top: 1px solid var(--line); padding-block: var(--s4); }
 }
 
 /* Recent connections: a row per source — host, then user · port in grey; × at the row's end on hover / focus. */
@@ -67,6 +74,8 @@
 .conn-recent__remove:hover { color: var(--ink); }
 
 .conn-form { display: grid; gap: var(--s2); } /* one rhythm: 8px between fields, switches and actions */
+/* The card's primary heading: 16px on the same 24px top line as "Recent connections"; 16px to the fields (gap + 8). */
+.conn-form__title { margin: 0 0 var(--s2); font-size: var(--fs-lead); font-weight: 600; line-height: 24px; color: var(--ink); }
 /* Fields: one filled block, a row per field — label in a 64px lane, value beside it, hairline between. Focus deepens the row; an invalid row gets a 1px danger ring. */
 .conn-fields, .conn-options { display: grid; background: color-mix(in srgb, var(--ink) 5%, transparent); border-radius: var(--r); overflow: hidden; } /* two blocks, one fill, one radius */
 /* The label lane is shared (subgrid): as wide as the longest label, plus an 8px gap to the value — so the values align and no label touches its value. */

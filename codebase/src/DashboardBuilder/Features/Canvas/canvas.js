@@ -7,6 +7,7 @@ import { expandSidebar } from "../Shell/sidebar.js";
 import { openColumnProfile } from "../Schema/column-profile-dialog.js";
 import { entityWidth } from "./card-width.js";
 import { snapTop } from "./align-snap.js";
+import { clampZoom, wheelZoom, panForZoom, panToReveal, toModel } from "./canvas-zoom.js";
 import { unionDiffControl } from "./union-diff.js";
 import { sourceNote, lossyNote, wireSource, MAX_SOURCE_COLUMNS } from "../Core/source-model.js";
 
@@ -34,6 +35,80 @@ export function initCanvas() {
   if (!canvas) return;
 
   let seq = 0; // entities/relationships live in the shared store (store.js)
+  let zoom = 1; // view zoom (wheel on an empty spot)
+  const pan = { x: 0, y: 0 }; // where the model origin sits in the view, px: dragging an empty spot moves it, with no limit (an open ground, not a scroll area)
+
+  // A card keeps its model x / y and size (offsetWidth is unscaled); the view draws it at model x zoom + pan, scaled from its top-left corner.
+  const place = (entity) => {
+    entity.el.style.left = `${entity.x * zoom + pan.x}px`;
+    entity.el.style.top = `${entity.y * zoom + pan.y}px`;
+    entity.el.style.scale = zoom === 1 ? "" : String(zoom);  // the `scale` property, so the card's entrance animation (a transform) never fights it
+  };
+  // Apply zoom / pan to every card and the dot grid, then let the links re-measure.
+  const refreshView = () => {
+    canvas.style.setProperty("--zoom", String(zoom));
+    canvas.style.setProperty("--pan-x", `${pan.x}px`);
+    canvas.style.setProperty("--pan-y", `${pan.y}px`);
+    for (const entity of entities.values()) place(entity);
+    emit("canvas:zoomed", { zoom });
+  };
+  const setZoom = (next, cursor) => {
+    next = clampZoom(next);
+    if (next === zoom) return;
+    Object.assign(pan, panForZoom(pan, cursor, zoom, next));
+    zoom = next;
+    refreshView();
+  };
+  // The browser may scroll the (overflow-hidden) view to reveal a focused row; the ground is not a scroll area, so that scroll becomes pan.
+  canvas.addEventListener("scroll", () => {
+    if (!canvas.scrollLeft && !canvas.scrollTop) return;
+    pan.x -= canvas.scrollLeft; pan.y -= canvas.scrollTop;
+    canvas.scrollLeft = 0; canvas.scrollTop = 0;
+    refreshView();
+  });
+  const reveal = (entity) => {
+    const r = entity.el.getBoundingClientRect(), v = canvas.getBoundingClientRect();
+    const next = panToReveal(pan, { left: r.left - v.left, top: r.top - v.top, right: r.right - v.left, bottom: r.bottom - v.top }, v.width, v.height);
+    if (next.x === pan.x && next.y === pan.y) return;
+    Object.assign(pan, next);
+    refreshView();
+  };
+  const onEmptySpot = (event) => event.target === canvas;
+
+  // Wheel on an empty spot zooms about the pointer; over a card or link the wheel still scrolls the card's own list / the view.
+  canvas.addEventListener("wheel", (event) => {
+    if (!onEmptySpot(event) || event.ctrlKey) return;
+    event.preventDefault();
+    const r = canvas.getBoundingClientRect();
+    setZoom(wheelZoom(zoom, event.deltaY, event.deltaMode), { x: event.clientX - r.left, y: event.clientY - r.top });
+  }, { passive: false });
+
+  // Dragging an empty spot pans the whole ground, as far as the user likes.
+  canvas.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0 || !onEmptySpot(event)) return;
+    const startX = event.clientX, startY = event.clientY, originX = pan.x, originY = pan.y;
+    let moved = false;
+    canvas.setPointerCapture(event.pointerId);
+    canvas.classList.add("canvas--panning");
+    const move = (ev) => {
+      if (!moved && Math.hypot(ev.clientX - startX, ev.clientY - startY) < 4) return; // a click is not a pan
+      moved = true;
+      pan.x = originX + (ev.clientX - startX);
+      pan.y = originY + (ev.clientY - startY);
+      refreshView();
+    };
+    const up = () => {
+      canvas.classList.remove("canvas--panning");
+      canvas.releasePointerCapture(event.pointerId);
+      canvas.removeEventListener("pointermove", move);
+      canvas.removeEventListener("pointerup", up);
+      canvas.removeEventListener("pointercancel", up);
+      if (moved) canvas.addEventListener("click", (e) => e.stopPropagation(), { capture: true, once: true }); // the pan's own release is not a click on the ground
+    };
+    canvas.addEventListener("pointermove", move);
+    canvas.addEventListener("pointerup", up);
+    canvas.addEventListener("pointercancel", up);
+  });
 
   const emptyTitle = document.getElementById("canvas-empty-title");
   const emptyAction = document.getElementById("canvas-empty-action");
@@ -43,8 +118,12 @@ export function initCanvas() {
   const currentEmpty = () => emptyState({ connected, databaseSelected: Boolean(dbSelect?.value) });
 
   // One sentence + one button, by state. The buttons focus controls that are visible in that state.
+  // While the connect form is open (Connection/connection.js), the start card shows even over cards — `data-over` adds a scrim.
+  const connForm = document.getElementById("conn-form");
   const refreshEmpty = () => {
-    toggle(empty, entities.size === 0);
+    const formOpen = Boolean(connForm && !connForm.hidden);
+    toggle(empty, entities.size === 0 || formOpen);
+    empty?.toggleAttribute("data-over", formOpen && entities.size > 0);
     const st = currentEmpty();
     if (emptyTitle) emptyTitle.textContent = st.text;
     if (emptyAction) emptyAction.textContent = st.action;
@@ -52,6 +131,7 @@ export function initCanvas() {
   emptyAction?.addEventListener("click", () => { expandSidebar(); document.getElementById(currentEmpty().focusId)?.focus(); });
   dbSelect?.addEventListener("change", refreshEmpty);
   document.addEventListener("connection:changed", (e) => { connected = Boolean(e.detail?.connected); refreshEmpty(); });
+  document.addEventListener("connection:form", refreshEmpty);
   refreshEmpty();
 
   // --- drop target ---------------------------------------------------------
@@ -72,8 +152,8 @@ export function initCanvas() {
     let payload;
     try { payload = JSON.parse(raw); } catch { return; }
     const rect = canvas.getBoundingClientRect();
-    const x = event.clientX - rect.left + canvas.scrollLeft - 24;
-    const y = event.clientY - rect.top + canvas.scrollTop - 12;
+    const x = (event.clientX - rect.left - pan.x) / zoom - 24;
+    const y = (event.clientY - rect.top - pan.y) / zoom - 12;
     addTableFromUser(payload?.db, payload?.table, Math.max(0, x), Math.max(0, y));
   });
 
@@ -105,13 +185,14 @@ export function initCanvas() {
   // card added with the + button never hides another card's title. Dropped cards keep the drop point.
   function freeSlot() {
     const pad = 16, gap = 96, w = 312, h = 312;  // pad = the view gutter (.view --s4), so cards line up with the tab strip; gap = room for a link's elbow and badge between cards
-    const boxes = [...entities.values()].map(({ el }) => ({ x: el.offsetLeft, y: el.offsetTop, w: el.offsetWidth, h: el.offsetHeight }));
-    const perRow = Math.max(1, Math.floor((canvas.clientWidth - 2 * pad + gap) / (w + gap)));
+    const boxes = [...entities.values()].map((e) => ({ x: e.x, y: e.y, w: e.el.offsetWidth, h: e.el.offsetHeight }));
+    const ox = Math.max(0, Math.ceil(-pan.x / zoom / 8) * 8), oy = Math.max(0, Math.ceil(-pan.y / zoom / 8) * 8); // slots start at the top-left of what is on screen
+    const perRow = Math.max(1, Math.floor((canvas.clientWidth / zoom - 2 * pad + gap) / (w + gap)));
     for (let i = 0; i < 400; i++) {
-      const x = pad + (i % perRow) * (w + gap), y = pad + Math.floor(i / perRow) * (h + gap);
+      const x = ox + pad + (i % perRow) * (w + gap), y = oy + pad + Math.floor(i / perRow) * (h + gap);
       if (!boxes.some((b) => x < b.x + b.w + gap && b.x < x + w + gap && y < b.y + b.h + gap && b.y < y + h + gap)) return { x, y };
     }
-    return { x: pad, y: pad };
+    return { x: ox + pad, y: oy + pad };
   }
 
   // --- entity lifecycle ----------------------------------------------------
@@ -119,7 +200,7 @@ export function initCanvas() {
     if (typeof db !== "string" || !db || typeof table !== "string" || !table) return; // malformed drag payload
     const existing = [...entities.values()].find((e) => e.db === db && e.table === table);
     if (existing) {
-      existing.el.scrollIntoView({ block: "nearest", inline: "nearest" });
+      reveal(existing);
       existing.el.focus({ preventScroll: true });
       existing.el.classList.add("is-flash");
       setTimeout(() => existing.el.classList.remove("is-flash"), 1200);
@@ -133,6 +214,7 @@ export function initCanvas() {
     const entity = { id: `${db}.${table}#${++seq}`, db, table, x, y, columns: [], el: null };
     if (source) entity.source = source;
     entity.el = renderCard(entity);
+    place(entity);
     entities.set(entity.id, entity);
     canvas.append(entity.el);
     refreshEmpty();
@@ -194,8 +276,6 @@ export function initCanvas() {
     card.tabIndex = -1; // focusable by script (a duplicate drop focuses the existing card)
     card.dataset.entityId = entity.id;
     if (entity.source) { card.classList.add("entity--source"); card.dataset.source = entity.source.kind; }
-    card.style.left = `${entity.x}px`;
-    card.style.top = `${entity.y}px`;
 
     const head = document.createElement("header");
     head.className = "entity__head";
@@ -363,7 +443,7 @@ export function initCanvas() {
   function straightenTops(entity) {
     const centre = (card, column) => {
       const row = card.el.querySelector(`.col-row[data-column="${CSS.escape(column)}"]`);
-      return row ? row.getBoundingClientRect().top - card.el.getBoundingClientRect().top + row.getBoundingClientRect().height / 2 : null;
+      return row ? (row.getBoundingClientRect().top - card.el.getBoundingClientRect().top + row.getBoundingClientRect().height / 2) / zoom : null;
     };
     const tops = [];
     if (entity.el.classList.contains("entity--collapsed")) return tops;
@@ -390,10 +470,9 @@ export function initCanvas() {
       head.setPointerCapture(event.pointerId);
 
       const move = (ev) => {
-        entity.x = snap(originX + (ev.clientX - startX));
-        entity.y = ev.altKey ? snap(originY + (ev.clientY - startY)) : snapTop(snap(originY + (ev.clientY - startY)), straightenTops(entity)); // Alt: no magnet
-        entity.el.style.left = `${entity.x}px`;
-        entity.el.style.top = `${entity.y}px`;
+        entity.x = snap(originX + toModel(ev.clientX - startX, zoom));
+        entity.y = ev.altKey ? snap(originY + toModel(ev.clientY - startY, zoom)) : snapTop(snap(originY + toModel(ev.clientY - startY, zoom)), straightenTops(entity)); // Alt: no magnet
+        place(entity);
         emit("entity:moved", { entityId: entity.id }); // relationship links re-route
       };
       const up = () => {
