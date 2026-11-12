@@ -20,6 +20,7 @@ Platform items, open risks and pending decisions. Items here need a decision bef
 - **ClickHouse dialect coverage** — percentiles, week rules and nulls differ; one whitelist table plus integration tests against a real server.
 - **Map data licensing** — bundle licensed local data; no service calls.
 - **Statistical parity** — publish methods and parameters; fixtures; make no parity claim with Tableau.
+- **Two browser suites fail on `main`** (found 2026-11-12, not caused by recent work: the same results on a clean checkout) — `tests/live/calc-ui.mjs` (8 ok, 3 failed: renaming a calculation, deleting one used by a worksheet, and a dialog that does not close after Save, all after the field-pane chip lookup returns nothing) and `tests/live/calc-filter-ui.mjs` (4 ok, 2 failed: the filter goes when its calculation is deleted; a histogram's calculated filter request). Either the app changed under the tests (the checks are stale) or a real fault; find out which before relying on them.
 - **Scope creep** — 229 inventory items is a multi-release product; P0 before P1 and a written reason for every new library.
 
 ## Workbook additions
