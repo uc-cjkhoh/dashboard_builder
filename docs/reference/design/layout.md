@@ -52,6 +52,7 @@ Related items share one edge, measured on what the eye sees (glyphs and text), n
   - Stacked `<details>` field rows are spaced 4px apart (`.ws-group > :not(summary) + *`).
   - Single-choice `<select>`s show a chevron on the 16px gutter instead of the UA arrow; pill selects
     keep the native one.
+- **The field pane never scrolls; its table cards do.** `#ws-fields` is `overflow: hidden`; each `details.ws-fieldset` is as tall as its visible fields and, when they don't all fit, the cards that need less keep their full height while the taller ones share what is left equally (`flex: 1 1 0` capped at `max-content` — hiding fields from one table never makes its card scroll while another still has spare room); never under header + two rows and scrolls inside itself with a sticky header (the card has no top padding — the header carries its 4px — so scrolled rows never show above the title) (a collapsed card, or one with every field hidden, is just its header — the two-row minimum applies only while it shows fields), and an open Marks card is capped at 45 % of the pane. A context popup opened over a modal dialog lives inside it (`popover`), so it draws above the dialog.
 - **Icon-button rows use an 8px gap**, in the worksheet view bar and the dashboard bar alike. The field pane's rhythm is 8px too: Marks grid, search box and first table are 8px apart (`.ws-fieldtools` keeps 4px of padding for its sticky background and takes it back with a `-4px` block margin, so the net gap is 8px, not 12px).
 - **Ghost icon buttons at a row's end overhang by their 8px glyph slack** (`margin-inline: -8px`), so
   the glyph meets the edge. This applies to `#sidebar-toggle`, the appearance toggle (`.scheme`), the
@@ -76,7 +77,7 @@ Related items share one edge, measured on what the eye sees (glyphs and text), n
     button does.
 - **The body follows the tab.** `Shell/sidebar.js` sets `.app[data-view="model"|"sheet"|"board"]` from
   `view:changed`.
-  - **Data Source:** the full sidebar, with connection, database and tables.
+  - **Data Source:** the full sidebar, with connection, database and tables — while connected. Disconnected (`.app[data-disconnected]`, set by `connection.js`), it is the dashboard's brand-only rail: the connect form is on the start card ([connection.md](../../concepts/data-source/connection.md#while-disconnected)).
   - **Worksheet and dashboard:** the sidebar shrinks to a `--topbar-h` rail that holds the brand mark.
     The brand name, toggle, resizer and the connection / database / tables are `display: none`.
   - On a **worksheet** the rail also carries the tool icons in one column, 1 × N (`#ws-tools`,

@@ -3,7 +3,7 @@ components: [src/DashboardBuilder/Features/Canvas/, src/DashboardBuilder/Feature
 ---
 # Schema browser — database picker & table list
 
-The schema browser sits in the sidebar, below the connection panel. It lists the connected server's databases and tables,
+The schema browser sits in the sidebar, below the Connections tile. It lists the connected server's databases and tables,
 previews rows, and profiles columns.
 
 **Code:**

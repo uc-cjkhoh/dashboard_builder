@@ -3,7 +3,7 @@ components: [src/DashboardBuilder/ClickHouse/, src/DashboardBuilder/Features/Api
 ---
 # Decisions — platform, frontend, builder, hosting
 
-D1–D25. Edit an entry in place when it changes. The lookup for every decision is in [README.md](README.md#where-each-decision-lives).
+D1–D25, D88, D90. Edit an entry in place when it changes. The lookup for every decision is in [README.md](README.md#where-each-decision-lives).
 
 ## Platform & safety
 

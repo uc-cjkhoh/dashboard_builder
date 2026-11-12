@@ -1,0 +1,31 @@
+---
+components: [src/DashboardBuilder/Features/Rows/SqlController.cs, src/DashboardBuilder/ClickHouse/SqlTranslator.cs, src/DashboardBuilder/ClickHouse/CustomSql.cs, src/DashboardBuilder/Features/Rows/SourceController.cs, src/DashboardBuilder/ClickHouse/RequestValidation.cs]
+---
+# API: custom SQL on a card
+
+`kind: "sql"` sources and the `sources` list on `/api/query`. The rest of the API: [api.md](api.md); the source shape shared with union and unpivot: [api.md § Source columns](api.md#source-columns).
+
+A card's own `SELECT` ([D105](../decisions/decisions-custom-sql.md#d105--edit-sql-free-text-select-on-a-data-source-card-the-one-exception-to-rules-2-and-3)) uses the same source shape with `kind: "sql"`:
+`{ kind: "sql", db, name, sql }`. `name` is the card's table name; `db`/`name` are never identifiers in SQL. `tables`, `table`, `columns` and `keep` are refused (`source.sql`).
+
+- `POST /api/source/columns` with it answers the columns the query returns (`DESCRIBE TABLE (query)`, no rows read). `truncated` is false and `lossy` empty.
+- `/api/query` (and CSV export) takes `sources: [QuerySource]` — custom SQL only (`sources[i].kind`), at most `ApiLimits.MaxJoins + 1` (`sources`), one per table (`sources[i].name`), and never beside `source` (400 `sources`). Wherever the query names `(db, name)` — `from` or a join side — it reads the derived table, so a custom-SQL card **can be joined**. Field references are checked against the query's columns (unknown → 400).
+- The text: `sql` ≤ 10,000 characters (`ApiLimits.MaxCustomSqlChars`, mirrored by `LIMITS.customSql`), one `SELECT` / `WITH` statement, no `;`, no `SETTINGS`, no outside-reading table function, balanced brackets. Any breach is a **400 `source.sql`** with a plain sentence.
+- **ClickHouse's message is returned** for a problem with the query itself (syntax, unknown column / table / function, wrong types, access denied), trimmed to one line of at most 400 characters without version or stack — the one place a ClickHouse message reaches the client ([D105](../decisions/decisions-custom-sql.md#d105--edit-sql-free-text-select-on-a-data-source-card-the-one-exception-to-rules-2-and-3)). Anything else is the usual generic 502 / 504.
+- The `sources` list is part of the result-cache key.
+
+## Translate
+
+`POST /api/sql/translate` (`Features/Rows/SqlController.cs`) — the Edit SQL dialog's syntax switch ([D106](../decisions/decisions-custom-sql.md#d106--mysql-syntax-in-edit-sql-translated-to-clickhouse)).
+Body `{ sql, from, to }`; `from` and `to` are `mysql` or `clickhouse`, and different (400 `from`). `sql` is required and ≤ 10,000 characters (400 `sql`). Answer `{ sql, warnings, changes }`: `warnings` is a list (at most 5) of plain sentences about differences the translation cannot remove (text comparisons now ignore case and can be slower; the dialog shows them and they never block anything); `changes` (at most 10 names: `ilike`, `case-fold`, `div-null`, `nulls-first`, …) lists the repairs that make the ClickHouse query mean something other than the same text read as ClickHouse, which the browser uses to decide how to open a query.
+
+- Needs a connected session like every endpoint (409 otherwise). It reads no tables and runs no SQL.
+- **400 `sql`** when the text can't be read, is ambiguous (`||` in MySQL text) or has no faithful equivalent (compound intervals, a non-numeric interval amount, unmapped units): a plain sentence, plus `line` (1-based), `col` (1-based, end of the offending token) and `start` (0-based column) when the translator can say where. Two statements: "Only one query can be translated." Over 10 s: "The translation took too long."
+- **503** `{ error }` when the server has no Python 3 or no vendored library; the dialog then switches MySQL off.
+- The result is **not** trusted: it goes through `CustomSql.Clean` when described or saved, like any custom SQL.
+- Details, the limits of the translation and how it runs: [sql-syntax.md](../concepts/data-source/sql-syntax.md).
+
+## Syntax
+
+`POST /api/source/syntax` (`Features/Rows/SourceController.cs`) takes the same custom SQL source as `/api/source/columns` and answers `{ syntax }`: the query as ClickHouse reads it (`EXPLAIN SYNTAX`, which prints functions as calls with names resolved and the layout gone, so two texts that print the same mean the same). Custom SQL only (400 `source.kind`); the same text rules as the columns (400 `source.sql`), ClickHouse's own words for a query problem, and no rows read. The dialog compares two of these to tell whether a MySQL round trip kept a query's meaning ([sql-syntax.md](../concepts/data-source/sql-syntax.md#the-round-trip-check)).
+

@@ -1,5 +1,5 @@
 ---
-components: [src/DashboardBuilder/ClickHouse/SourceSql.cs, src/DashboardBuilder/Features/Canvas/canvas.js, src/DashboardBuilder/Features/Core/source-model.js, src/DashboardBuilder/Features/Rows/SourceController.cs, src/DashboardBuilder/Features/Rows/union-dialog.js, src/DashboardBuilder/Features/Rows/unpivot-dialog.js]
+components: [src/DashboardBuilder/ClickHouse/SourceSql.cs, src/DashboardBuilder/ClickHouse/CustomSql.cs, src/DashboardBuilder/Features/Canvas/canvas.js, src/DashboardBuilder/Features/Canvas/sql-dialog.js, src/DashboardBuilder/Features/Canvas/sql-editor.js, src/DashboardBuilder/Features/Core/source-model.js, src/DashboardBuilder/Features/Rows/SourceController.cs, src/DashboardBuilder/Features/Rows/union-dialog.js, src/DashboardBuilder/Features/Rows/unpivot-dialog.js]
 ---
 # Union and unpivot as a data source
 
@@ -123,12 +123,41 @@ Safety rules:
 - Statements that reuse only part of the request (the auto date-grain probe) carry the parameters of their `FROM` too.
 - The helper alias prefix grows until no table column starts with it.
 
+## Custom SQL on a card
+
+Right-click a Data Source card → **Edit SQL** ([D105](../../decisions/decisions-custom-sql.md#d105--edit-sql-free-text-select-on-a-data-source-card-the-one-exception-to-rules-2-and-3)).
+Unlike a union or unpivot, the card **stays an ordinary table card**: it can be related and joined, and keeps its `db.table` name.
+Only its rows change: they come from the user's own `SELECT`.
+
+- **Menu.** The card's context menu (`cardMenu()` in `Canvas/canvas.js`, via `wireContextMenu`; the ContextMenu key and Shift+F10 work too) has **Edit SQL**, and **Reset to table** once the card has custom SQL. A union or unpivot card has no SQL of its own: its **Edit SQL** is disabled with a reason.
+- **Dialog** (`Canvas/sql-dialog.js`, **Edit SQL · table**): written in **MySQL** (the default) or ClickHouse syntax, chosen in the footer ([sql-syntax.md](sql-syntax.md)); a tall code editor on the card's current query, or for a table the default `SELECT` of every column, quoted, one per line (`defaultSql()`) — highlighting, syntax checking, auto-indent, bracket matching, Format and folding: [sql-editor.md](sql-editor.md). **Reset to default** refills the table's own `SELECT` (read from the catalog, not from the query's columns). **Format**, **Cancel**, Esc, and **Save** (Ctrl+Enter too). While you type, a clean query is also described by ClickHouse (debounced, no rows read) and the status line says how many columns it returns.
+- **Save** sends the text to `POST /api/source/columns` as `{ kind: "sql", db, name: table, sql }`. A refusal (syntax, unknown column, a rule of the guard) appears under the text in ClickHouse's own words and **nothing on the card changes**. The default text saved unchanged is a no-op.
+- **After a good save** the card shows the query's columns, with a `Custom SQL` note under its head (`.entity__note--sql`) and the class `entity--sql`; rows have no profile button. `entity:sql` clears the cached columns and filter members of that table; open worksheets redraw.
+- **Relationships are protected.** A new query must still return every column the card's relationships use; if not, Save is refused naming them (`lostKeys()`), and **Reset to table** is refused the same way if the table lacks one.
+- **Reset to table** asks first, then reads the table's columns and drops `customSql`.
+- **Worksheets.** `buildPlan` adds `sources: [sqlWire(…)]` for every table in `from` or a join that has custom SQL (`sqlSourcesFor()`), so the server reads the query as that table. The member list of a filter on such a column comes from a one-dimension query (`distinctPlanSql()`); the field pane's columns from `/api/source/columns`.
+- **Saved** as `customSql` on the entity (always ClickHouse SQL; plus `customSqlMysql`, the MySQL text it was written as, when it was); on open it is re-checked for type and length (`cleanCustomSql()`), the columns are fetched again from the server, and its catalog check is skipped (the pills' columns are the query's).
+- **Not available over it:** column profile, View data, the histogram, and *Check this join* (they read the catalog table); each says so.
+
+**SQL shape.** The checked text becomes a derived table where the query names the table: `FROM (SELECT … ) AS t0 [LEFT JOIN `db`.`other` AS t1 ON …]`, or as a join side `JOIN (SELECT … ) AS t1`; aggregate-before-join wraps it like a table. No parameter is bound for it. Approximate (sampled) reads skip a custom-SQL base table.
+
+**The guard** (`ClickHouse/CustomSql.cs`, unit-tested in `CustomSqlTests`):
+
+- one statement that starts with `SELECT` or `WITH`; ≤ 10,000 characters (`ApiLimits.MaxCustomSqlChars`, `LIMITS.customSql`); `--`, `#` and `/* */` comments are stripped (a trailing `--` cannot swallow the closing bracket); one trailing `;` is dropped, any other is refused;
+- brackets must balance and never close early, so the text cannot leave its wrapper;
+- no `SETTINGS` clause, so `readonly=2`, the time limit and result limits cannot be changed from inside;
+- no table function that reads outside ClickHouse's own tables: `url`, `file`, `s3`, `remote`, `mysql`, `postgresql`, `mongodb`, `redis`, `jdbc`, `odbc`, `sqlite`, `executable`, `input`, `hdfs`, `cluster` and similar (`CustomSql.BlockedFunctions`); a *column* called `url` is fine;
+- words inside quotes (`'…'`, `"…"`, `` `…` ``) are never checked;
+- the columns come from `DESCRIBE TABLE (query)`; a repeated name or more than 200 columns is a 400 on `source.sql`.
+
+Unqualified tables in the text resolve against the connection's default database; qualify them (`db.table`) to be sure.
+
 ## Not built
 
 Listed in [data-model.md](../../development/backlog/data-model.md):
 
 - joining a source to another table, or a relationship from a source;
 - manual column alignment and rename for a union;
-- editing a source in place;
+- editing a union or unpivot in place (a table card's SQL is editable — see above);
 - Show rows / profile / histogram over a source;
 - unions across databases.
