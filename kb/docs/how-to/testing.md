@@ -57,6 +57,7 @@ In the table below, `P##` tags (P28, P33 …) name the product phase whose cases
 | `tests/js/theme-model.test.mjs` | **every preset and derived custom accent passes contrast in light and dark**, refusals, palettes, saved-theme checks |
 | `tests/js/p36-charts.test.mjs` | waterfall steps (incl. below zero), round maxima, small-multiples grid, fit rules and registration of the seven P36 types |
 | `tests/js/gantt-model.test.mjs` | Gantt bars (number / date start, skipped rows, calendar-day lengths across a DST change), axis time, label margin, registration |
+| `tests/js/gantt-end.test.mjs` | Gantt length from an end field (numbers, dates, DST), colour slots and groups, `ganttSplit`, click / Colour registration, the `ganttLength` workbook field |
 | `tests/js/conditional-model.test.mjs` | scale tints (sequential / diverging, midpoint), **every tint ≥ 4.5:1 light and dark**, data bars from zero, first-match rules |
 | `tests/js/scale-model.test.mjs` | table paging plan + progress, Other row, date-grouping plan, zoom past 1,000 categories, canvas mark counts |
 | `tests/js/chart-polish.test.mjs` | R² in words, the KPI last-member note, whole-number histogram labels |

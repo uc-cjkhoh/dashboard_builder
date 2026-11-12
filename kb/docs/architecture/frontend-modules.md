@@ -162,7 +162,7 @@ Grouped by feature folder; each entry is the module, then what it owns.
   - `HEATMAP_SHAPE_CHOICES`, `circleSize`, `labelsShown` / `labelFits` / `cellSizeOf` (automatic cell labels); `stack-scale-model.js`: `tinyStackedSeries`, `stackedScaleNotice`
   - `targetChoices`, `bulletTargets`, `bandsFor`
   - `axis-sync-model.js` (`syncRange`, `secondaryKind`, `SECONDARY_CHOICES`) and `mark-style-model.js` (`markBorder`, `borderInk`, `edgeOr`, `markerSymbol`, `MARKER_SHAPE_CHOICES`, `markerSizeOr`, `markerSizeError`, `MARKER_SIZE`) — [worksheet-charts.md](../concepts/worksheet/worksheet-charts.md)
-- `Dashboard/gantt-model.js` — pure: `ganttBars` (start + length -> bars, date or number, skipped count), `ganttTime`, `ganttAxisTime`, `ganttLabelMargin`, `ganttNotice`
+- `Dashboard/gantt-model.js` — pure: `ganttBars` (start + length or end -> bars, date or number, slots and colour groups, skipped count), `ganttSplit` (the last key as the colour member), `GANTT_LENGTH_CHOICES`, `ganttTime`, `ganttAxisTime`, `ganttLabelMargin`, `ganttNotice`
 - `Dashboard/tooltip-model.js` — pure (T01-19):
   - `parseTooltip`, `checkTooltipText`, `tooltipHtml` (escaped parts only), `tooltipCatalog` — [worksheet-marks.md](../concepts/worksheet/worksheet-marks.md#tooltip-text-t01-19-and-the-tooltip-modal)
 - `Dashboard/tooltip-style.js` — pure:
