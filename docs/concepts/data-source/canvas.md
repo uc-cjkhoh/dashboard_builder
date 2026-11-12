@@ -101,7 +101,7 @@ A card with custom SQL shows a `Custom SQL` note under its head; its profile but
   Link anchors read the measured card box, so any width stays correct.
 - **Column rows** (`.col-row`) show a **type icon** (number / text / date / bool), the name and a **type badge**
   (`.col-row__type`, from the type category), and nothing else.
-  - The type is plain muted monospace text at the row's end (no chip).
+  - The type is a plain kind in muted text at the row's end (no chip): whole number, number, text, date, date & time, true/false, list, map, group (`friendlyKind`, `Schema/type-kind.js`); the raw ClickHouse type and the category are its tooltip.
   - Rows sit on a 16px gutter at both edges, so the left space equals the right and names line up under the head's title.
   - A row is a drag handle for relationships ([relationships.md](relationships.md)).
   - A column in a relationship is pinned to the card's key strip, and its name turns accent.
