@@ -3,16 +3,16 @@ components: [src/DashboardBuilder/ClickHouse/ConnectionRegistry.cs, src/Dashboar
 ---
 # Connection panel
 
-The connection panel sits at the top of the sidebar. It adds the session's ClickHouse connection and gates the rest of the UI until it exists.
+The connection adds the session's ClickHouse connection and gates the rest of the UI until it exists. While disconnected, its form sits on the **Data Source start card**, beside Recent connections, and the sidebar narrows to its brand rail ([below](#while-disconnected), [D99](../../decisions/decisions-connection.md#d99--the-connect-form-lives-on-the-start-card)). Once connected, the sidebar's **Connections** tile shows the status row.
 
 **Code:**
 
-- `Features/Connection/` — `ConnectionController.cs`, `_Connection.cshtml`, `connection.js`, `connection-rules.js`, `connection.css`
+- `Features/Connection/` — `ConnectionController.cs`, `_Connection.cshtml` (sidebar tile: status row, lost row), `_ConnectForm.cshtml` (the form, rendered inside `Canvas/_Canvas.cshtml`), `connection.js`, `connection-rules.js`, `connection.css`
 - `ClickHouse/ConnectionRegistry.cs` — holds the session's connection
 
 ## The form
 
-Layout (`form#conn-form`): the four fields are **one filled block** — a row each (Host, Port, User, Password), the labels in one shared lane (a subgrid: as wide as the longest label plus an 8px gap, so values align and no label touches its value),
+Layout (`form#conn-form`): under the heading "Connect to a ClickHouse server" (`.conn-form__title`, 16px semibold, 16px above the fields), the four fields are **one filled block** — a row each (Host, Port, User, Password), the labels in one shared lane (a subgrid: as wide as the longest label plus an 8px gap, so values align and no label touches its value),
 every row exactly 32px (the hairline between rows is an inset shadow, not a border); focus deepens the row's fill and an invalid row gets a 1px danger ring with its message under the value.
 Motion: rows enter in a 30ms stagger (fields, recent connections on the start card), the status dot settles / breathes / pops per state, the lost row rises in, the chevrons
 and switch thumbs ease, and **Connect** shows a spinner while it runs; all of it collapses under reduced motion. The open form is one rhythm: the fields block, the two switch rows and the actions are stacked 8px apart; the fields and the options (switches + certificate
@@ -45,10 +45,10 @@ After each successful connect, the source is remembered in this browser so it ca
   The list is most recent first, at most 5, one per host/port/user.
 - **The password is never stored** (golden rule 4). `recent-sources.js` copies only the fields above, and `sanitize` drops anything else on load
   ([D70](../../decisions/decisions-connection.md#d70--recent-connection-sources-are-non-secret-and-kept-in-the-browser)).
-- **Where it shows:** not in the sidebar. The list (`#conn-recent`) is the right panel of the start card on the Data Source view, shown only while disconnected
+- **Where it shows:** not in the sidebar. The list (`#conn-recent`) is the left panel of the start card on the Data Source view, shown whenever the form is
   ([below](#while-disconnected)). Each row is two lines: the host (ellipsised), then `user · port` in grey (full `host · user · :port` in the tooltip).
   Hover or focus washes the row and reveals the × (`.conn-recent__remove`) at its right end. With none yet, the panel says "None yet."
-- **Picking one** expands the sidebar if it is collapsed, refills the fields and switches, clears the password and focuses it.
+- **Picking one** refills the fields and switches beside it, clears the password and focuses it.
   The host is refilled exactly as it was entered (`formValues`), because a recent source is stored from the entered value, never a derived one.
 - **Certificate opt-in:** it is remembered too. Picking such a source refills the Trust switch as on; the password is still typed.
 - The × on a row forgets that source (shown on hover and on keyboard focus).
@@ -56,14 +56,22 @@ After each successful connect, the source is remembered in this browser so it ca
 
 ## While disconnected
 
-The Data Source view shows a **start card** (`.start-card`, markup in `Canvas/_Canvas.cshtml`, styles in `connection.css`) with two panels:
+The Data Source view shows a **start card** (`.start-card`, markup in `Canvas/_Canvas.cshtml` + `Connection/_ConnectForm.cshtml`, styles in `connection.css`) with two panels:
 
-- **Left, 3/4** (`.start-card__main`): the canvas empty state — the ghost model, "Connect to a ClickHouse server to begin." and **Connect**, which focuses Host
-  ([canvas.md § Empty state](canvas.md#empty-state)).
-- **Right, 1/4** (`#start-recent-panel`): **Recent connections** ([above](#recent-connections)).
+- **Left, 288px** (`#start-recent-panel`, first in the markup so reading and tab order follow it): **Recent connections** ([above](#recent-connections)).
+- **Right** (`.start-card__main`): the connect form ([above](#the-form)). The canvas empty state's ghost model, sentence and button (`.start-card__empty`) are hidden while the card shows.
 
-The card is up to 960px wide, centred, and stacks the panels under 900px of window width. It is a card only while the right panel shows:
-`connection.js` hides that panel once connected, and the empty state goes back to the bare column for the database / table steps.
+Geometry: the card is 752px wide and centred; its height is the form's, so the top and bottom insets match (24px), and the list (up to 5 rows) fits inside it.
+One 24px inset runs through it: the two headings share the top line (24px rows), the form block starts 24px from the border and divider, and the list's text sits 24px in.
+When the canvas (not the window) has less than 640px of room, the panels stack into one column at most 480px wide — the form on top, the list under a hairline.
+
+The sidebar has nothing to hold while disconnected, so `connection.js` sets `.app[data-disconnected]` and it narrows to the dashboard tab's brand-only rail
+([layout.md § Sidebar](../../reference/design/layout.md#sidebar)). The Connections tile (`#conn-section`, with its title) shows only while connected.
+
+**Change connection** (the edit button on the connected row) opens the same card over the canvas — over any entity cards, with a scrim (`.canvas__empty[data-over]`) —
+while the status row stays in the sidebar: the session is still connected until a new connect succeeds. **Cancel** or **Esc** closes it and returns focus to the edit button.
+The card shows whenever the form is open (`connection:form` event → `Canvas/canvas.js`); otherwise the recent panel and form are hidden, the card styling goes with them,
+and the empty state is the bare column for the database / table steps.
 There is no separate start screen and no recent-workbooks list ([D89](../../decisions/decisions-connection.md#d89--withdrawn-the-start-screen-lists-recent-workbooks)).
 
 ## Validation

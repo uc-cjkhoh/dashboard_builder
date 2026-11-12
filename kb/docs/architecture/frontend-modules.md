@@ -32,7 +32,7 @@ Grouped by feature folder; each entry is the module, then what it owns.
 
 ### Connection/
 
-- `Connection/connection.js` — connection form, compact summary, gating — [connection.md](../concepts/data-source/connection.md)
+- `Connection/connection.js` — connect form (on the start card), sidebar summary, change / cancel, gating — [connection.md](../concepts/data-source/connection.md)
 - `Connection/recent-sources.js` — pure: `remember` / `forget` / `sanitize` recent connection sources (host as entered, port, user, TLS flags — never a password), most recent first, max 5; `formValues` refills the form from one
 - `Connection/connection-rules.js` — pure: `secureToggled` / `trustToggled` (Secure off clears Trust, on restores it), `certNoteVisible` (the "certificate not checked" note waits), `summaryTitle` / `summaryDetail` (compact-summary tooltip, user · port), `formFromView`
 
@@ -45,7 +45,7 @@ Grouped by feature folder; each entry is the module, then what it owns.
 
 ### Canvas/ and Relations/ — the Data Source canvas
 
-- `Canvas/canvas.js` — drop handling, entity cards, card movement, zoom and pan (`canvas-zoom.js`), empty state — [canvas.md](../concepts/data-source/canvas.md)
+- `Canvas/canvas.js` — drop handling, entity cards, card menu and Edit SQL (`sql-dialog.js`, `sql-editor.js`, `Core/sql-check.js`), card movement, zoom and pan (`canvas-zoom.js`), empty state — [canvas.md](../concepts/data-source/canvas.md)
 - `Canvas/empty-state.js` — pure: `emptyState({connected, databaseSelected})` → the sentence, button and control to focus
 - `Relations/relations.js` — drag- and keyboard-to-relate (`link-keys.js`), links, the Relationships description card (`relation-describe.js`), cardinality, pinned keys — [relationships.md](../concepts/data-source/relationships.md)
 - `Relations/join-preview-model.js`, `Relations/join-check.js` — pure wording and declared-vs-observed comparison of a join preview (`describePreview`, `observedCardinality`, `pct`, `previewRequest`); the dialog's "Check this join" section (DOM, `textContent` only)
@@ -104,7 +104,7 @@ Grouped by feature folder; each entry is the module, then what it owns.
   - `collapseKey`, `rollUp` (distinct tuples → one node per visible row / column under the collapsed headers), `expandNodes`, `leafValue` (a collapsed pair is `combine`d, null for a non-additive measure or partial rows), `headerKeys`, `applyToggle` (prune + cap), `shownValues` (conditional-format extents), `collapsedOf`, `canToggle`, `cleanCollapsed` (import clean-up)
 - `Dashboard/data-notes.js` — pure (node-tested): `updatedText(queriedAt)`, `usedCalculations(sheet, calcs)`, `calcDefinitionLines` — the status bar's update time and the print header's calculation definitions
 - `Dashboard/result-model.js` · `grid-model.js` · `notices.js` — pure (node-tested):
-  - the shaping of a result for drawing — `primaryDim`, `chartOrientation`, `aliasNames`, `pathOrderedRows`, `marksChannels`, `scatterShapeGroups`, `colorSplitData`, `heatmapData`, `treemapTree`, `sankeyLinks`, `multiplesData`, `statusText`, `captionText`
+  - the shaping of a result for drawing — `primaryDim`, `chartOrientation`, `aliasNames`, `pathOrderedRows`, `marksChannels`, `scatterGroups` (`scatterShapeGroups`), `colorSplitData`, `heatmapData`, `treemapTree`, `sankeyLinks`, `multiplesData`, `statusText`, `captionText`
   - the tuple / leaf / span pivots of the crosstab
   - the notice text builders (`joinNotices`, `periodNotice`, `speedNotice`, `invalidFilterNotice`)
 - `Dashboard/sheet-plan.js` — pure:
@@ -113,7 +113,8 @@ Grouped by feature folder; each entry is the module, then what it owns.
 - `Dashboard/chart.js` — the only ECharts adapter; one chart per container element (state in a `WeakMap`), every export takes the container first
   - [worksheet-charts.md](../concepts/worksheet/worksheet-charts.md#rendering--the-echarts-adapter)
 - `Dashboard/contrast.js` — pure: WCAG (Web Content Accessibility Guidelines) `luminance`, `contrastRatio`, `pickInk` (treemap label ink)
-- `Dashboard/colour-scale-model.js` — pure (T03-19): continuous colour ramp hues, diverging colours and symmetric range, pinned range validation and span, colour steps — [worksheet-marks.md](../concepts/worksheet/worksheet-marks.md#member-colours-and-palette-order-t01-20-t03-33)
+- `Dashboard/mark-channel-model.js` — pure (T03-19 / T03-20 / T03-21): which chart types take a colour measure or Size and the hint when not (`colourChannel`, `sizeChannel`, `COLOUR_MEASURE_TYPES`), the Size scales (`sizeFractions`, `sizeRange`, `barThickness`, `markerSizeFor`) — [worksheet-marks.md](../concepts/worksheet/worksheet-marks.md#colour-size-and-shape-by-chart-type-t03-19-t03-20-t03-21-t01-21)
+- `Dashboard/colour-scale-model.js` — pure (T03-19): continuous colour ramp hues, diverging colours and symmetric range, pinned range validation and span, colour steps, a value's place on the scale (`positionOf`, `stepIndexOf`) — [worksheet-marks.md](../concepts/worksheet/worksheet-marks.md#member-colours-and-palette-order-t01-20-t03-33)
 - `Dashboard/scale-model.js` — pure:
   - `scalePlan` (limit / paging / Other / date grouping per chart type), `withOther`, `tableProgress`, `needsNextPage`, `bucketNotice` — [worksheet-table-view.md](../concepts/worksheet/worksheet-table-view.md#table-view--a-true-rows--columns-crosstab)
 - `Dashboard/date-axis.js` — pure:
@@ -151,7 +152,7 @@ Grouped by feature folder; each entry is the module, then what it owns.
 
 - `Dashboard/dashboard-select.js` · `selection-dim.js` — pure (P24c):
   - the dashboard selection — `nextSelection`, `selectionRefusal`, `crossFilterOf`, `appliesTo`, `selectedIndexOf`, `crossFor`, `crossSignature`, `stillValid`, the chip and note texts
-  - `applySelectionDim` (fade unselected bar / stacked / pie / donut marks) — [dashboards.md](../concepts/workbook/dashboards.md#cross-widget-filtering)
+  - `applySelectionDim` (fade unselected bar / stacked / pie / donut marks, variable-width bars included) — [dashboards.md](../concepts/workbook/dashboards.md#cross-widget-filtering)
 - `Dashboard/action-model.js` — pure (P39): `templateError`, `buildActionUrl` (https-only, encoded `{value}`), `cleanAction`; the parameter action: `cleanParamAction`, `applyParamAction`
 - `Dashboard/analytics-model.js` — pure (P21):
   - `refValue`, `refConstant` (a constant line's bound parameter), `trendFit` (linear / log / exp / power / poly2–4 least squares; R², F-test p, n, coefficients), `trendProblem` (why a model cannot fit: exp / power domain, too few values), `trendRefusal` (a cut-off result is not fitted), `pWords`, `trendFormula`, plus `stats-dist.js` (pure: log-gamma, incomplete beta, F survival for the p-value), `trendSeries` (+ forecast), `combine` (totals by aggregation), `bandBounds` / `bandLabel` / `bandChoice` (typed, mean ± kσ and percentile bands), `pickMeasure`, `ANALYTICS_ITEMS` / `itemsFor` / `itemActive` / `addItem` / `removeItem` (the pane's draggable items)
@@ -242,7 +243,7 @@ Grouped by feature folder; each entry is the module, then what it owns.
 - `Core/sheet-schema.js` — pure: the allowed values for a saved sheet (chart types, categories, filter ops, formats, Top-N)
 - `Core/icons.js` — the inline-SVG icon set — `icon(name, {size, label})`, `PATHS`, `ICON_NAMES`
 - `Core/menu.js` — `wireMenu(button, list)` — keyboard-operable popover menu (`menuitem` / `menuitemradio` items)
-  - `openContextMenu` / `wireContextMenu` — the context popup (right-click, ContextMenu key, `Shift+F10`, `Enter`)
+  - `openContextMenu` / `wireContextMenu` — the context popup (right-click, ContextMenu key, `Shift+F10`, `Enter`); opened from inside an open modal `<dialog>` (the Calculated fields dialog) it is appended to that dialog as a `popover="manual"`, so it is in the top layer above the dialog and still clickable
   - animated open/close via `motion.js`
 - `Core/context-menu-model.js` — pure: `placeMenu` (keep a popup in the viewport), `opensContext` (which keydown opens it), `nextFocus`
 - `Core/motion.js` — `enter` / `exit` (WAAPI, the Web Animations API; opacity + transform, Fluent timing) and `reducedMotion()`; no-ops under reduced motion — [motion-accessibility.md](../reference/design/motion-accessibility.md#motion)

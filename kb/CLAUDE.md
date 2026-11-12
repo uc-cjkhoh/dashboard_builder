@@ -20,7 +20,7 @@ One line each; full text in [coding-standards.md](docs/development/coding-standa
 1. **Read-only against ClickHouse** — `SELECT`/`SHOW`/`DESCRIBE` only, no DDL/DML endpoint in v1; ClickHouse's own
    `readonly=2` is set on every query as a second guard.
 2. **Validate + quote every identifier** against the live catalog, in `ClickHouse/Identifier.cs` only
-   (ClickHouse binds values, not identifiers).
+   (ClickHouse binds values, not identifiers). One exception: a card's **Edit SQL** text, guarded in `ClickHouse/CustomSql.cs` ([D105](docs/decisions/decisions-custom-sql.md#d105--edit-sql-free-text-select-on-a-data-source-card-the-one-exception-to-rules-2-and-3)).
 3. **Bind every value; bound every result** — whitelisted aggs/ops, typed values, validated `LIMIT`s;
    every query is time-limited; out-of-range input is rejected (400), never silently clamped. Charts cap at 5000 groups, tables page, CSV ≤ 100k (D24).
 4. **Credentials live in the session only** — never returned, logged, or put in a URL.
@@ -69,9 +69,10 @@ dotnet publish src/DashboardBuilder/DashboardBuilder.csproj -c Release -o publis
 ```
 src/DashboardBuilder/
 ├── Program.cs              # host, session, PathBase, no-cache static files, /features provider
+├── Tools/                  # sql_translate.py + vendored sqlglot: MySQL ⇄ ClickHouse for Edit SQL (D106); needs python3, never served
 ├── ClickHouse/             # shared server infra: Gateway (all SQL), Identifier, ClickHouseType,
 │                           #   RequestValidation (limits, rules, typed filter values),
-│                           #   ConnectionRegistry, CsvUtil, *Models.cs
+│                           #   ConnectionRegistry, CsvUtil, CustomSql (Edit SQL guard), SqlTranslator, *Models.cs
 └── Features/               # one folder per feature: controller + _View.cshtml + .css + .js
     ├── ApiControllerBase.cs  ApiErrors.cs   # RunAsync / SafeError; the one { error, field? } shape
     ├── Shell/  Core/  Connection/  Schema/  Canvas/  Relations/  Rows/  Tabs/  Board/  Story/  Dashboard/  Calc/  Workbook/
@@ -113,16 +114,16 @@ dashboard_builder/          (this KB)
 │   ├── getting-started/    # prerequisites · installation · configuration · quickstart
 │   ├── architecture/       # system-context · overview · data-flow · components · frontend-modules
 │   ├── concepts/           # core-concepts, then one folder per app area:
-│   │   ├── data-source/    #   connection · schema-browser · canvas · query-sources · relationships
+│   │   ├── data-source/    #   connection · schema-browser · canvas · query-sources · sql-editor · sql-syntax · relationships
 │   │   ├── worksheet/      #   worksheet (+ -query, -table-view) · worksheet-charts · worksheet-encodings (+ -marks, -filters) · calculated-fields (+ -formulas, -groups) · field-settings
 │   │   └── workbook/       #   tabs · dashboards · stories · workbook
 │   ├── how-to/             # local-development · testing · deployment · troubleshooting
 │   ├── reference/          # api (+ -calculated-fields) · clickhouse-integration (+ clickhouse-calculations) · data-model · source-table-guidance · glossary
 │   │   └── design/         #   index (concept + rules) · tokens · layout · components · motion-accessibility
-│   ├── decisions/          # README (D1–D85 lookup, open questions) · decisions-* by topic
+│   ├── decisions/          # README (D1–D106 lookup, open questions) · decisions-* by topic
 │   ├── operations/         # live-service · safe-operations (+ git-ignored credentials.local.md)
 │   ├── development/        # coding-standards · sharp-edges · review-guidelines · git-workflow · kb-maintenance · hooks
-│   │   ├── backlog/        #   undone work by topic · recommended order · design specs
+│   │   ├── backlog/        #   undone work by topic (incl. custom-sql) · recommended order · design specs
 │   │   ├── run-logs/       #   blocked work
 │   │   └── updates/        #   generated change logs
 │   └── archive/            # frozen P0–P20 build plan, old debug log — not maintained
@@ -136,6 +137,7 @@ dashboard_builder/          (this KB)
 | Add/adjust a ClickHouse query | `ClickHouse/ClickHouseGateway.cs` | [clickhouse-integration.md](docs/reference/clickhouse-integration.md) |
 | Add an API endpoint | `Features/*/…Controller.cs` (subclass `ApiControllerBase`) | [api.md](docs/reference/api.md) (calculation trees: [api-calculated-fields.md](docs/reference/api-calculated-fields.md)) |
 | Validate an input / add a limit | `ClickHouse/RequestValidation.cs` + `Features/Core/validate.js` (keep in step) | [api.md § Limits](docs/reference/api.md#limits) |
+| Edit SQL on a card (editor, MySQL / ClickHouse syntax, guard, translator) | `Features/Canvas/sql-dialog.js`, `sql-editor.js`, `Core/sql-check.js`, `Core/sql-roundtrip.js`, `ClickHouse/CustomSql.cs`, `SqlTranslator.cs`, `Tools/sql_translate.py` | [sql-editor.md](docs/concepts/data-source/sql-editor.md), [sql-syntax.md](docs/concepts/data-source/sql-syntax.md), [api-custom-sql.md](docs/reference/api-custom-sql.md), [D105–D106](docs/decisions/decisions-custom-sql.md), limits: [backlog/custom-sql.md](docs/development/backlog/custom-sql.md) |
 | Connection flow | `ClickHouse/ConnectionRegistry.cs`, `Features/Connection/` | [connection.md](docs/concepts/data-source/connection.md) |
 | Drag/drop, entity cards | `Features/Canvas/canvas.js` | [canvas.md](docs/concepts/data-source/canvas.md) |
 | Relationships / cardinality | `Features/Relations/relations.js` | [relationships.md](docs/concepts/data-source/relationships.md) |

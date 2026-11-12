@@ -84,6 +84,7 @@ The ClickHouse on `10.168.49.13` limits `default` to `127.0.0.1`, so from the ap
 | Validate connection | `ValidateAsync` | `SELECT 1` |
 | List databases / tables | `ListDatabasesAsync` / `ListTablesAsync` | `SHOW DATABASES` / `SHOW TABLES FROM {db}` |
 | Describe columns | `DescribeColumnsAsync` | `DESCRIBE TABLE {db}.{table}` |
+| Describe a custom SQL query | `DescribeQueryAsync` | `DESCRIBE TABLE (⏎{checked SELECT}⏎)` — no rows read; guard and echoed errors: [D105](../decisions/decisions-custom-sql.md) |
 | Distinct values | `DistinctValuesAsync` | `SELECT DISTINCT {col} AS v FROM … WHERE v IS NOT NULL ORDER BY v LIMIT n` (1..1000, rejected outside) |
 | Column profile | `ProfileColumnAsync` (`ClickHouseGateway.Profile.cs`) | two statements over a `LIMIT 1000000` subquery — [below](#column-profile-box-plot-raw-rows-and-join-preview) |
 | Worksheet query | `QueryAsync` | see below |

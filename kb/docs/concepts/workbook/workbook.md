@@ -143,7 +143,7 @@ naming the sheet and field ("Sheet "Sales": unknown chart type "radar" — reset
 
 | Part | Rule |
 |---|---|
-| Tables | `id`, `db`, `table` non-empty text; ids and `db.table` unique (first kept); position finite and ≥ 0 else reset to 0; `joinKeys` (written for older builds: the columns the relationships use) is read but not used; at most **100** tables |
+| Tables | `id`, `db`, `table` non-empty text; ids and `db.table` unique (first kept); position finite and ≥ 0 else reset to 0; `joinKeys` (written for older builds: the columns the relationships use) is read but not used; at most **100** tables; `customSql` must be text of at most 10,000 characters, else dropped with an issue and the card reads its table ([D105](../../decisions/decisions-custom-sql.md)) |
 | Relationships | both endpoints reference a kept table; cardinality one of `1:1`, `1:N`, `N:1`, `N:M`; `joinType` one of `inner`, `left`, `right`, `full` (anything else reads as `inner`); optional `pairs` (a compound key's extra `{ from, to }` column names; at most **3**, none reusing a column in any relationship — a bad one is skipped with an issue; absent = one pair); optional `aggregateFirst` (only `true` counts) and `filterDirection` (only `"single"` counts, and only with `aggregateFirst`; anything else reads as the plain join); at most **200** |
 | Worksheets / dashboards | each an object (others skipped and reported); name 1–60 characters (else reset to "Worksheet" / "Dashboard"); a non-list means none are opened |
 | Stories | an object each (others skipped and reported); a name like any tab; each step `{ caption, target: { kind: worksheet \| dashboard, index } }` with a text caption of at most 300 characters and a target in range — a bad step is **skipped and reported, not cut**; at most 20 steps (the rest dropped and reported); stories count toward the 50 tabs |
@@ -213,7 +213,7 @@ The rules are in `Board/board-model.js` (pure).
 `openWorkbook` (in `workbook.js`) rebuilds the workbook in this order:
 
 1. Clear the model (`canvas.clearModel()`) and close every tab.
-2. Re-add each table through `canvas.addEntity(db, table, x, y, { source })`, and map saved entity ids to the new ones.
+2. Re-add each table through `canvas.addEntity(db, table, x, y, { source, customSql })`, and map saved entity ids to the new ones.
 3. Recreate relationships via `relations.restoreRelationship`.
 4. Recreate the tabs in strip order (`createWorksheet` + `updateSheet`, `createDashboard`, `createStory`).
 5. Recreate each dashboard's widgets (`setWidgets`), with fresh `w#N` ids pointing at the new worksheet ids, and each story's steps (`setSteps`) pointing at the new tab ids.

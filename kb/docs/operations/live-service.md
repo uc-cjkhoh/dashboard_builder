@@ -95,6 +95,16 @@ state-changing call must be a `POST` with JSON ([sharp edges](../development/sha
   survive redeploys. Don't delete it, and keep it out of git.
 - **Static assets** are served `Cache-Control: no-cache` so browsers revalidate changed ES modules.
 
+## SQL translator (MySQL syntax in Edit SQL)
+
+The Edit SQL dialog's MySQL option ([D106](../decisions/decisions-custom-sql.md#d106--mysql-syntax-in-edit-sql-translated-to-clickhouse)) runs `python3 -I Tools/sql_translate.py` as the service user.
+
+- **Needs** `python3` on the service's `PATH` (3.9 on this host; no `pip install` and no root — sqlglot is vendored in `Tools/vendor/` and published with the app). Check: `python3 --version`.
+- **Deploy:** `Tools/` is part of the publish output; copy it with the rest (stop → copy → start, step 3 is for assets only). It is never served over HTTP.
+- **Config:** `Translate:Python` (environment `Translate__Python`) names another interpreter.
+- **If Python is missing** the MySQL option is switched off in the dialog (503 from `/api/sql/translate`); everything else works.
+- Python writes `__pycache__` next to the vendored library on first use (git-ignored); the service user must be able to write there, or each call compiles the library again (about 0.3 s).
+
 ## Deployed build vs. source
 
 The live bundle matches the source: MVC feature folders

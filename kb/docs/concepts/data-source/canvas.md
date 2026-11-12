@@ -79,9 +79,16 @@ With no entities, the canvas shows **a ghost model**, **one sentence** and **one
 
 | State | Sentence | Button → focuses |
 |---|---|---|
-| not connected | "Connect to a ClickHouse server to begin." — on the start card, beside Recent connections ([connection.md](connection.md#while-disconnected)) | Connect → `#conn-host` |
+| not connected | not shown — the start card shows the connect form instead ([connection.md](connection.md#while-disconnected)); `emptyState()` still returns "Connect to a ClickHouse server to begin." / Connect → `#conn-host` | — |
 | no database chosen | "Choose a database in the sidebar." | Choose a database → `#db-select` |
 | database chosen | "Drag a table here from the sidebar to start your data source." | Find a table → `#table-search` |
+
+## Card menu (Edit SQL)
+
+Right-click a card (or press the ContextMenu key / Shift+F10 with focus on it) for its menu: **Edit SQL**, and **Reset to table** once the card has custom SQL.
+**Edit SQL** opens a dialog on the card's `SELECT`; Save makes the card read the query. A union or unpivot card has no SQL to edit, so the item is disabled with a reason.
+Full behaviour, the SQL guard and what the card does afterwards: [query-sources.md § Custom SQL on a card](query-sources.md#custom-sql-on-a-card).
+A card with custom SQL shows a `Custom SQL` note under its head and no profile buttons; it can still be related and joined.
 
 ## Card anatomy
 

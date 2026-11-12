@@ -67,6 +67,8 @@ A table dropped onto the canvas ([canvas.md](../concepts/data-source/canvas.md))
 | `x`, `y` | canvas position |
 | `columns` | `{ name, type, category }[]` from `DESCRIBE` |
 | `el` | the card's DOM node |
+| `customSqlMysql` | with `customSql`, the MySQL text it was written as ([D106](../decisions/decisions-custom-sql.md#d106--mysql-syntax-in-edit-sql-translated-to-clickhouse)); shown when the card is edited again, dropped when it is saved in ClickHouse syntax; a bad value is dropped quietly |
+| `customSql` | present when the card reads the user's own `SELECT` instead of its table ([D105](../decisions/decisions-custom-sql.md)); the card stays an ordinary, relatable table card; saved as `customSql` and re-checked for type and length on open — [query-sources.md](../concepts/data-source/query-sources.md#custom-sql-on-a-card) |
 | `source` | present on a union / unpivot entity: `{ kind: "union", db, name, tables, columns? }` or `{ kind: "unpivot", db, name, table, columns, keep }`; `table` is then `name`, `columns` come from `/api/source/columns` — [query-sources.md](../concepts/data-source/query-sources.md) |
 
 ### Relationship
@@ -222,7 +224,7 @@ What [workbook.md](../concepts/workbook/workbook.md) saves to `localStorage` and
 ```
 {
   format: "dashboard-builder-workbook", version: 2 (integer ≥ 1; version 1 files still open), savedAt: ISO-8601,
-  entities:      [ { id, db, table, x, y, joinKeys: [column], source? } ],   // source: a union / unpivot entity (its table = source.name); re-validated on open, a bad one skipped
+  entities:      [ { id, db, table, x, y, joinKeys: [column], source?, customSql?, customSqlMysql? } ],   // source: a union / unpivot entity (its table = source.name); re-validated on open, a bad one skipped
   relationships: [ { from: { entityId, column }, to: { entityId, column }, cardinality, joinType, pairs?, aggregateFirst?, filterDirection? } ],
   worksheets:    [ { name, sheet } ],      // sheet as above, minus pages.members
   dashboards:    [ { name, widgets: [ { kind: "sheet", sheet: worksheetIndex, note?, x, y, w, h }

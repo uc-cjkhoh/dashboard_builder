@@ -42,5 +42,8 @@
         ]
       }
     ]
+  },
+  "enabledPlugins": {
+    "humanizer@humanizer": true
   }
 }

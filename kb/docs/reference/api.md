@@ -197,7 +197,7 @@ A **source** (`QuerySource`; `/api/query` carries it as `source`) is `{ kind, db
 
 | Field | Rule |
 |---|---|
-| `kind` | `union` or `unpivot`, else 400 (`source.kind`) |
+| `kind` | `union`, `unpivot` or `sql` (custom SQL, [api-custom-sql.md](api-custom-sql.md)), else 400 (`source.kind`) |
 | `db`, `name` | required (`source.db`, `source.name`); `name` ≤ 200 characters (`ApiLimits.MaxSourceName`, mirrored by `LIMITS.sourceName`) — the table name the query's fields carry; never an identifier in SQL |
 | union: `tables` | 2–5 distinct, non-blank names (`source.tables`, `source.tables[i]`); unknown → unknown identifier; `table` and `keep` are refused |
 | union: `columns` | optional, ≤ 200 distinct non-blank names (`source.columns[i]`); default every column shared by name and kind; none shared → 400 (`source.tables`); one missing from a table is unknown; one of a different kind is 400; the first 200 shared columns are returned with `truncated` |
@@ -209,7 +209,7 @@ A **source** (`QuerySource`; `/api/query` carries it as `source`) is `{ kind, db
   reference names that same `(db, name)`; any other table is a 400 ("Field references a table not in the query.").
 - The result shape, limits and caching are the same as for a table query. The definition is part of the cache key.
 
-SQL and rules: [query-sources.md](../concepts/data-source/query-sources.md#sql-shape).
+SQL and rules: [query-sources.md](../concepts/data-source/query-sources.md#sql-shape). A card's own `SELECT` (`kind: "sql"`, `sources` on `/api/query`): [api-custom-sql.md](api-custom-sql.md).
 
 ## Relationship preview
 

@@ -88,12 +88,12 @@ for the same reasons.
 
 - Links are **elbow lines with rounded corners** between the two column rows, drawn in two SVG overlays:
   - the lines (`.rel-svg`, `.rel-link`) sit **under** the cards, so a link to a far card slips under the cards between;
-  - the badges (`.rel-svg--labels`) sit **over** them, so a badge wider than the gutter is never clipped.
+  - the badges (`.rel-svg--labels`) sit **over** them, so a badge wider than the gutter is never clipped; a badge with no free spot beside the cards moves to the line layer instead (see below).
 - A wider invisible hit path (`.rel-link__hit`) makes the line easy to click. Line and badge act as one link (hover, click).
 - A **cardinality badge** (`.rel-badge`, a pill) sits on the link's middle run: "1:N", or "1:N · left" / "· right" / "· full" for an outer join.
 - **Shape-coded endpoints** (`.rel-end`) show cardinality without colour: a tick for "one", a crow's foot for "many", square to the card edge.
-- **Colour:** resting links use `--ink-3`. A link is `--accent` while **hovered, selected or being drawn**, and the two key rows it joins take the
-  accent wash (`.col-row--linked`), so which columns a line connects reads at a glance.
+- **Colour:** resting links use `--ink-3`. A link is `--accent` while **hovered or being drawn**, and the two key rows it joins take the
+  accent wash (`.col-row--linked`), so which columns a line connects reads at a glance. Only hover highlights: a selected link (clicked, with its dialog open) and keyboard focus draw no highlight of their own (focus keeps its ring).
 
 **Routing** (`link-route.js`, pure)
 
@@ -101,7 +101,7 @@ for the same reasons.
 - Cards with a gutter of at least 32px face each other, and the link turns in the middle of the gutter, so its badge sits equally far from both cards.
 - Closer or overlapping cards both use the right edge, and the link loops out past the farther one.
 - Links sharing a gutter take lanes 8px apart: the first runs on the middle, the next two either side.
-- A badge that would cover another steps down.
+- A badge never covers a card or another badge. It starts at the middle of the link's vertical run and slides along the run to the nearest free spot. If the whole run is blocked (the link passes behind a card), the badge drops into the line layer, **under** the cards, at the middle, stepping clear of other badges (`placeBadge` in `link-route.js`).
 
 **Rules.**
 
@@ -226,7 +226,7 @@ can't be recombined (distinct count, median, percentile, standard deviation, var
 an average is the sum of sums over the sum of counts, so it is the average over rows. Approximate mode reads such a view exactly.
 With no measure, the implicit count is the base table's row count (not the joined rows). A NULL key never matches, also in the "either table" filter.
 
-The Relationships card swaps its "totals repeat" line for the two sentences above. Pure: `applyAggregate()`, `aggregateChoice()`,
+The Relationships card swaps its "may be counted more than once" line for the two sentences above. Pure: `applyAggregate()`, `aggregateChoice()`,
 `normalizeFilterDirection()` in `relation-rules.js`; the dialog control is `buildAggregateChoice()` in `relations.js`; browser check `tests/live/agg-ui.mjs`.
 
 Not done: a view of more than two tables, calculations and top-N filters with it, and a per-field choice instead of a per-relationship one ([backlog](../../development/backlog/data-model.md)).
@@ -273,10 +273,10 @@ Not done: no hint on the drawn line, and nothing is saved with the relationship.
 ## The Relationships card
 
 A solid card (`.rel-notes`, a collapsible `<details>`, open by default) sits at the Data Source's top right, under the tab bar. It appears once there is
-at least one relationship and lists each one in plain words: `from → to · badge`, the key line (`orders.user_id = users.id`, a compound key joins its
-columns with `+`), what the cardinality means from the FROM side, which rows the join keeps, and — for 1:N and N:M — that the FROM side's totals repeat per
-matching row. Hovering an entry lights its link and key rows like hovering the link; the selected link's entry is washed. It scrolls inside when long and is
-hidden on other tabs. Wording is pure and unit-tested: `relation-describe.js` (`tests/js/relation-describe.test.mjs`); the card is built by `renderNotes()` in `relations.js`.
+at least one relationship and lists each one as a dropdown (a nested `<details class="rel-note__more">`, closed by default, chevron right of the title). The
+collapsed row is one line, `from → to · badge`, truncated with an ellipsis; opening it explains the link for a non-technical reader, every sentence naming `table.column` (a compound key reads `orders.user_id + orders.day`): what the cardinality means
+("Many orders rows can match many users rows. Matched on orders.user_id and users.id." for N:M; "One orders row can match many users rows. …" for 1:N: two short sentences, who matches whom, then the key columns), which rows are shown ("All orders rows, even with no match in users."; an inner link says "Only rows with a match. The others are left out."), and — for 1:N and N:M — a caution ("Heads up: totals from orders may be counted more than once."). With aggregate-before-join it says "Each table is added up first, so nothing is counted twice." and whether filtering one table also filters the other. The text is written for people who skim: short lines, "row" and "match" only (no "join" or "cardinality"), US-style "the other way around". The closed row says the kind in words, `orders → users · one to many` (`kindWords()` in `relation-describe.js`); the join type and key count are not repeated there, since "Rows shown" and "Matched on" say them (the canvas badge keeps the short `1:N · left`). Paragraphs are 16px apart (one line of air; 8px grid gap + 8px `.rel-note__part + .rel-note__part` margin), the title sits tight above its own text. Each paragraph sits under a short bold title naming its purpose — "How rows match", "Rows shown", then "Double counting" (the 1:N / N:M caution), or "No double counting" and "Filtering" (aggregate-before-join) — returned as `heads`, parallel to `sentences` and `tones`, and drawn by `notePart()` as a `.rel-note__label` above the paragraph (same ink as the card title; the title also lets the "Heads up:" caution read at a glance). There is no separate key line: the sentences carry the columns. Important words change text colour, never colour alone: table and column names are bold in the ok ink (`.rel-ref`, built by `noteLine()` from the `refs` list `describeRelationship()` returns); the double-counting caution is in the warning ink and starts "Heads up:" (`tones` = `warn`). No chips or boxes. Which entries are open survives re-renders (`openNotes` in `relations.js`). Hovering an entry lights its link and key rows like hovering the link; only the hovered entry is washed (selection does not).
+The card is as tall as its text: opening a dropdown grows it, and the list scrolls inside only once the card would pass the bottom of the Data Source (`max-height: 100% - top bar - 2 × 16px`, so it stops 16px above the bottom edge). A `<details>` slots its content in one anonymous box, so `.rel-notes::details-content { display: contents }` makes the list a flex child that can shrink (`flex: 0 1 auto; min-height: 0; overflow-y: auto`); a browser without `::details-content` falls back to a viewport-based cap on the list (`@supports not selector(::details-content)`). Browser check: `tests/live/rel-notes-ui.mjs`. The card's width fits the longest title (`width: max-content`, 288px minimum, capped to the Data Source's width minus gutters); the sentence lines take no intrinsic width, so opening a row never widens it — they wrap. Hidden on other tabs. Wording is pure and unit-tested: `relation-describe.js` (`tests/js/relation-describe.test.mjs`); the card is built by `renderNotes()` in `relations.js`.
 
 ## What cardinality means
 

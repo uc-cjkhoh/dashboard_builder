@@ -30,7 +30,10 @@ parameters bind **values, not identifiers**. Before an identifier reaches a quer
    `SHOW TABLES FROM` → `DESCRIBE`). Unknown → `UnknownIdentifierException` → **404**/**400**.
 2. **Quote** it with backticks, doubling any internal backticks. Do this via `ClickHouse/Identifier.cs` only.
 
-Never hand-format an identifier at a call site. Detail and the failure it prevents:
+Never hand-format an identifier at a call site. **One exception:** a card's custom SQL is the user's own
+`SELECT` text, accepted only by `ClickHouse/CustomSql.cs` and embedded only as a derived table inside the
+bounded, `readonly=2` query ([D105](../decisions/decisions-custom-sql.md#d105--edit-sql-free-text-select-on-a-data-source-card-the-one-exception-to-rules-2-and-3)).
+Detail and the failure it prevents:
 [clickhouse-integration.md § Identifier injection](../reference/clickhouse-integration.md#identifier-injection).
 
 ## 3. Bind every value; bound every result
@@ -46,7 +49,8 @@ Never hand-format an identifier at a call site. Detail and the failure it preven
   - CSV export ≤ 100,000 ([D24](../decisions/decisions-platform.md#d24--showing-all-data-bounded-requests-paging-other-date-grouping));
   - distinct values ≤ 1000;
   - histogram bins 1..100.
-- Never `SELECT *` without a bound; some tables are billions of rows.
+- Never `SELECT *` without a bound; some tables are billions of rows. (A custom-SQL card's own text is
+  bounded the same way: it sits inside the query's `LIMIT` and 12 s limit, and `SETTINGS` is refused.)
 - **Validate every input, on both sides.** The server's `RequestRules` is authoritative; the client's
   `validate.js` gives the inline message. Reject rather than clamp, drop or coerce
   ([D23](../decisions/decisions-platform.md#d23--validation-contract-validate-on-both-sides-server-authoritative-reject-dont-clamp)).
@@ -102,7 +106,7 @@ a legend; cardinality is **shape-coded**; Shape encodings survive greyscale. See
 ## 10. Self-hosted, framework-free frontend
 
 Vanilla JS ES modules + hand-written CSS, **no SPA framework, no build step, no CDN**. The one
-library, ECharts, is vendored at `Features/Core/vendor/echarts.min.js`. Why:
+library, ECharts, is vendored at `Features/Core/vendor/echarts.min.js`; the Edit SQL editor (CodeMirror 5 and sql-formatter, loaded only when that dialog opens) is vendored in `Features/Core/vendor/codemirror/`; the one server-side tool, the SQL translator (sqlglot run by `python3`), is vendored in `Tools/vendor/` ([D106](../decisions/decisions-custom-sql.md#d106--mysql-syntax-in-edit-sql-translated-to-clickhouse)) ([sql-editor.md](../concepts/data-source/sql-editor.md#vendored-files)). Why:
 [D4](../decisions/decisions-platform.md#d4--vanilla-js--hand-written-css-no-spa-framework),
 [D13](../decisions/decisions-platform.md#d13--charting-via-self-hosted-apache-echarts-svg-renderer-themed-from-tokens).
 
