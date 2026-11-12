@@ -45,6 +45,7 @@ import { RAMP_CHOICES, SCALE_CHOICES, DIV_PAIR_CHOICES, colourCentreError, colou
 import { FONT_CHOICES } from "./font-model.js";
 import { BACKGROUND_CHOICES } from "./background-model.js";
 import { TABLE_ALIGN_CHOICES, TABLE_DENSITY_CHOICES, TABLE_SHADE_CHOICES } from "./table-style-model.js";
+import { COL_ALIGN_CHOICES, tableColumnList, setTableColumn, columnLook, columnWidthError } from "./table-columns-model.js";
 import { COLOUR_MEASURE_TYPES } from "./mark-channel-model.js";
 import { MARK_BORDER_CHOICES, MARKER_SHAPE_CHOICES, BORDER_TYPES, MARK_BORDER_COLOUR_CHOICES, markerSizeError } from "./mark-style-model.js";
 import { targetChoices, effectiveTargetMeasure } from "./bullet-model.js";
@@ -222,6 +223,7 @@ export function initDashboards() {
     interactive: true, onSelect: toggleSelection, onDrill: (raw) => drillDown(raw), onLegend: legendClick, legendFocus: () => legendFocus,
     onTooltipFields: (sheet, list) => setTooltipCat(sheet, list), onMemberColors: (sheet, field, members) => setMemberState(sheet, field, members),
     onCollapse: (axis, key, valid) => collapseHeader(axis, key, valid), onCollapseAll: (mode, rowKeys, colKeys) => collapseAll(mode, rowKeys, colKeys),
+    onColumn: (key, patch) => setColumn(key, patch),
     statusBar: setStatusBar, notices: sharedNote,
   });
   const runChart = () => sheetView.run();
@@ -233,6 +235,18 @@ export function initDashboards() {
     const r = applyToggle(s.collapsed, axis, key, valid);
     if (r.blocked) { toast(`At most ${MAX_COLLAPSED} headers can be collapsed — expand one first.`, "danger"); return; }
     s.collapsed = r.collapsed;
+    commit(dash, s);
+  }
+
+  // One table column's alignment / width (Format → Columns, or a header's resize handle): one commit = one undo step. A field set to null clears it.
+  function setColumn(key, patch) {
+    const dash = activeWorksheet();
+    if (!dash) return;
+    const s = dash.sheet;
+    const cols = setTableColumn(s.format?.tableCols, key, patch, tableColumnList(s).map((c) => c.key));
+    if (JSON.stringify(cols ?? null) === JSON.stringify(s.format?.tableCols ?? null)) return; // nothing changed: no edit, no undo step
+    s.format = { ...(s.format ?? defaultFormat()) };
+    if (cols) s.format.tableCols = cols; else delete s.format.tableCols;
     commit(dash, s);
   }
 
@@ -253,6 +267,7 @@ export function initDashboards() {
   let calcFor = null;     // the measure slot whose table-calculation editor is open — { shelf, index } or null
   let choicesFor = null;  // the shelf slot whose field-choices editor is open — { shelf, index } or null
   let cfMeasure = null;   // which measure the Format card's conditional-formatting editor shows
+  let colFormat = null;   // which column the Format card's Columns editor shows (a table-columns-model key)
 
   let formatOpen = false; // whether the Format panel is expanded — ephemeral UI state
   let analyticsDrop = null; // set while the Analytics card is open: adds the dropped item (its id) to the sheet
@@ -1402,6 +1417,7 @@ export function initDashboards() {
       panel.append(fmtSelect("Align", TABLE_ALIGN_CHOICES, f.tableAlign ?? "auto", (v) => set({ tableAlign: v })),
         fmtSelect("Row height", TABLE_DENSITY_CHOICES, f.tableDensity ?? "standard", (v) => set({ tableDensity: v })),
         fmtSelect("Shading", TABLE_SHADE_CHOICES, f.tableShade ?? "none", (v) => set({ tableShade: v })),
+        columnEditor(s),
         conditionalEditor(dash, s));
     }
     if (CLICK_TYPES.has(s.chartType)) { panel.append(linkActionEditor(dash, s)); panel.append(paramActionEditor(dash, s)); }
@@ -2973,6 +2989,31 @@ export function initDashboards() {
   }
 
   // The Format card's editor: pick a measure, then its scale / bars and rules.
+  // Format → Columns: one column's own alignment and width (a header's resize handle sets the same width).
+  function columnEditor(s) {
+    const list = tableColumnList(s);
+    const box = el("div", "ws-cf");
+    box.append(el("span", "ws-fmt-label ws-cf__title", "Columns"));
+    if (!list.length) { box.append(el("span", "ws-shelf__note", "Add a field to format its column.")); return box; }
+    if (!list.some((c) => c.key === colFormat)) colFormat = list[0].key;
+    const key = colFormat, look = columnLook(s.format?.tableCols, key);
+    const row = el("div", "ws-cf__row");
+    row.append(fmtSelect("Column", list.map((c) => [c.key, c.label]), key, (v) => { colFormat = v; renderShelves(); }),
+      fmtSelect("Align", COL_ALIGN_CHOICES, look.align ?? "auto", (v) => setColumn(key, { align: v === "auto" ? null : v })),
+      fmtNumber("Width (px)", look.width, "auto", (v) => {
+        const err = v == null ? null : columnWidthError(v);
+        if (err) { toast(err, "danger"); return false; }
+        setColumn(key, { width: v });
+      }));
+    if (look.align || look.width) {
+      const reset = makeButton("Reset column", "btn");
+      reset.addEventListener("click", () => setColumn(key, { align: null, width: null }));
+      row.append(reset);
+    }
+    box.append(row);
+    return box;
+  }
+
   function conditionalEditor(dash, s) {
     const f = s.format;
     const mplan = planMeasures(s);

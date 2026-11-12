@@ -69,7 +69,7 @@ export function createWorksheetView(container, getContext, options = {}) {
   const renderOptions = (s) => ({ plan: getContext().plan, emptyText: emptyMessage(s, { shared: appliedShared(getContext().plan).length }), interactive: mode, selected: cross?.selected ?? null,
     hooks: mode === "select" ? { onSelect: options.onSelect, onUnselectable: options.onUnselectable } : {
       onSelect: options.onSelect, onDrill: options.onDrill, onLegend: options.onLegend, legendFocus: options.legendFocus,
-      onTooltipFields: options.onTooltipFields, onMemberColors: options.onMemberColors, onCollapse: options.onCollapse, onCollapseAll: options.onCollapseAll } });
+      onTooltipFields: options.onTooltipFields, onMemberColors: options.onMemberColors, onCollapse: options.onCollapse, onCollapseAll: options.onCollapseAll, onColumn: options.onColumn } });
   // The tables the sheet's query involves (never throws: a sheet that can't be planned reaches nothing).
   const statSourceProblem = (s, entities) => ([...s.columns, ...s.rows].some((f) => sourceOfTable(entities, f.db, f.table)) ? "A histogram reads one table — it can't read a union or unpivot yet." : null);
   const involvedOf = (c, s) => { try { return involvedTables(s, undefined, c.plan); } catch { return []; } };
