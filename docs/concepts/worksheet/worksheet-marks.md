@@ -1,5 +1,5 @@
 ---
-components: [src/DashboardBuilder/Features/Core/format.js, src/DashboardBuilder/Features/Core/icons.js, src/DashboardBuilder/Features/Dashboard/chart.js, src/DashboardBuilder/Features/Dashboard/colour-model.js, src/DashboardBuilder/Features/Dashboard/colour-scale-model.js, src/DashboardBuilder/Features/Dashboard/contrast.js, src/DashboardBuilder/Features/Dashboard/font-model.js, src/DashboardBuilder/Features/Dashboard/mark-channel-model.js, src/DashboardBuilder/Features/Dashboard/pill-options.js, src/DashboardBuilder/Features/Dashboard/table-style-model.js, src/DashboardBuilder/Features/Dashboard/toolbar-rules.js, src/DashboardBuilder/Features/Dashboard/tooltip-dialog.js, src/DashboardBuilder/Features/Dashboard/tooltip-model.js, src/DashboardBuilder/Features/Dashboard/tooltip-style.js]
+components: [src/DashboardBuilder/Features/Core/format.js, src/DashboardBuilder/Features/Core/icons.js, src/DashboardBuilder/Features/Dashboard/chart.js, src/DashboardBuilder/Features/Dashboard/colour-model.js, src/DashboardBuilder/Features/Dashboard/colour-scale-model.js, src/DashboardBuilder/Features/Dashboard/contrast.js, src/DashboardBuilder/Features/Dashboard/font-model.js, src/DashboardBuilder/Features/Dashboard/mark-channel-model.js, src/DashboardBuilder/Features/Dashboard/pill-options.js, src/DashboardBuilder/Features/Dashboard/table-columns-model.js, src/DashboardBuilder/Features/Dashboard/table-style-model.js, src/DashboardBuilder/Features/Dashboard/toolbar-rules.js, src/DashboardBuilder/Features/Dashboard/tooltip-dialog.js, src/DashboardBuilder/Features/Dashboard/tooltip-model.js, src/DashboardBuilder/Features/Dashboard/tooltip-style.js]
 ---
 # Worksheet marks — Marks card, member colours, table look
 
@@ -143,6 +143,16 @@ Format → Align · Row height · Shading, in the Table and Text views only. Sto
   - Banding skips cells carrying a rule or scale (`.xt-cf`), so their tone wins. Header shading keeps each header's own ink.
 - All three are classes on the table (`xt-a-*`, `xt-d-*`, `xt-s-*`; defaults add none). There is no free font, size or colour.
 - Code: `Dashboard/table-style-model.js` (`tableStyleClasses`, `TABLE_*_CHOICES`).
+
+### Table columns (T01-23)
+
+Format → **Columns**, in the Table and Text views: pick a column, then set its own **Align** (Table setting | Left | Centre | Right, over the table-wide Align) and **Width (px)** (blank = automatic); **Reset column** clears both. Stored as `format.tableCols`: `{ [key]: { align?, width? } }`, absent when no column is set, so older workbooks open unchanged.
+
+- **Columns** are the Rows dimensions (the left stub, keys `d0`, `d1`, …) and the measures when they run across the top (`m0`, `m1`, …). A key is a position, so renaming a field keeps its setting; reordering shelves moves it with the position. With measures down the left, only the dimensions are listed (the value columns are the Columns members). A column that no longer exists is dropped on the next change.
+- **Width** is a whole number, 48–600 px (`sheet-schema.js` `TABLE_COL_MIN` / `TABLE_COL_MAX`); anything else is refused with a toast, and a saved value out of range resets to automatic with a note. A fixed column clips long text with an ellipsis. Once any width is set the table stops stretching to fill the pane (`xt-sized`), so a width holds; a stub cell that spans columns (a collapsed header, a total label) takes the alignment only.
+- **Resize handle:** every measure header carries a vertical separator (`role="separator"`, focusable, a visible bar that turns accent on hover and focus). Drag it, or press ← / → on it (8 px; Shift = 40 px); Delete or a double click returns the column to automatic. Each commit is one undo step, and focus stays on the handle through the redraw. Dashboards draw the saved widths and alignments but no handle.
+- Alignment rides as `xt-ca-*` classes and a width as inline px on every cell of the column, so conditional-formatting tints and totals follow it. Not built: a chosen header or row colour, fonts beyond the three stacks, chart-view alignment ([backlog](../../development/backlog/charts-and-formatting.md)).
+- Code: `Dashboard/table-columns-model.js` (`tableColumnList`, `setTableColumn`, `columnLook`, `nudgeWidth`, `columnWidthError`, `cleanTableCols`), `render-table.js` (`colStyle`, `grip`), `dashboards.js` (`columnEditor`, `setColumn`); `tests/js/table-columns.test.mjs`, `tests/live/table-columns-ui.mjs`.
 
 ### Worksheet background (T01-23)
 
