@@ -31,6 +31,15 @@ public static class CalcLimits
     public const int MaxDateAmount = 100000;
     /// <summary>The most values an <c>IN</c> list takes.</summary>
     public const int MaxInList = 50;
+    /// <summary>The first and last day a ClickHouse <c>Date</c> holds; a date literal must be a real day between them (<c>yyyy-MM-dd</c> strings order as dates).</summary>
+    public const string MinDate = "1970-01-01";
+    public const string MaxDate = "2149-06-06";
+
+    /// <summary>Is <paramref name="v"/> a date-literal value: <c>yyyy-MM-dd</c>, a day that exists, between <see cref="MinDate"/> and <see cref="MaxDate"/>.</summary>
+    public static bool IsDateLiteral(string? v) =>
+        v is { Length: 10 } && v[4] == '-' && v[7] == '-' && v.Where((c, i) => i is not (4 or 7)).All(char.IsAsciiDigit)
+        && string.CompareOrdinal(v, MinDate) >= 0 && string.CompareOrdinal(v, MaxDate) <= 0
+        && DateTime.TryParseExact(v, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out _);
 }
 
 /// <summary>The type of a calculation value.</summary>

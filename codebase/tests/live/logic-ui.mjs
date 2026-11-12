@@ -226,9 +226,9 @@ try {
     await fillDialog('Bad in', "[orders.region] IN ('EU', 1)");
     must(/IN needs values of the same type — that value is number, not text\./.test(await msgOf()), `type: ${await msgOf()}`);
     await focusAndType('.calc-dialog textarea.formula', '[orders.qty] IN (1, [orders.amount])');
-    must(/IN's values must be numbers or text written in the formula\./.test(await msgOf()), `field: ${await msgOf()}`);
+    must(/IN's values must be numbers, text or dates written in the formula\./.test(await msgOf()), `field: ${await msgOf()}`);
     await focusAndType('.calc-dialog textarea.formula', "[orders.placed] IN ('2024-01-01')");
-    must(/IN needs a number or text — orders\.placed is date\./.test(await msgOf()), `date: ${await msgOf()}`);
+    must(/IN needs values of the same type — that value is text, not date\./.test(await msgOf()), `date: ${await msgOf()}`);
     await focusAndType('.calc-dialog textarea.formula', '[orders.qty] IN ()');
     must(/Expected a value after \(/.test(await msgOf()), `empty: ${await msgOf()}`);
     must(await saveDisabled(), 'Save enabled');
@@ -242,6 +242,37 @@ try {
     must(c?.k === 'not' && c.arg.k === 'in' && c.arg.list.length === 1 && c.arg.list[0].v === 'APAC', `tree: ${J(c)?.slice(0, 240)}`);
     await removeRowsPill("Core region");
     await waitFor(`__t.pills('rows').length === 1`, 'pill removed');
+  });
+
+  await check('a date literal #yyyy-mm-dd# works in IN and a comparison; a boolean compares with = ; bad days are refused', async () => {
+    await openNewDialog();
+    await fillDialog('Bad day', '[orders.placed] >= #2024-02-30#');
+    must(/A date must be a real day from 1970-01-01 to 2149-06-06, written #2024-01-31#\./.test(await msgOf()), `day: ${await msgOf()}`);
+    await focusAndType('.calc-dialog textarea.formula', '[orders.placed] >= #2024/02/01#');
+    must(/Write a date as #2024-01-31#\./.test(await msgOf()), `shape: ${await msgOf()}`);
+    await focusAndType('.calc-dialog textarea.formula', '[orders.placed] >= #2024-02-01');
+    must(/Missing # to close the date/.test(await msgOf()), `open: ${await msgOf()}`);
+    await focusAndType('.calc-dialog textarea.formula', '[orders.active] < TRUE');
+    must(/Comparison needs a number, text or date — orders\.active is boolean\./.test(await msgOf()), `order: ${await msgOf()}`);
+    must(await saveDisabled(), 'Save enabled');
+    await cancel();
+    await newCalc('Jan first', '[orders.placed] IN (#2024-01-01#, #2024-02-01#)');
+    await newCalc('Active only', "IF [orders.active] = TRUE THEN 'yes' ELSE 'no' END");
+    await waitFor(`!!__t.chip('Jan first') && !!__t.chip('Active only')`, 'chips');
+    await dragChip('Jan first', `__t.zone('rows')`);
+    await waitFor(`__t.pills('rows').length === 2`, 'pill');
+    await settle();
+    const c = lastQuery().rowDimensions?.[0]?.calc;
+    must(c?.k === 'in' && c.list.length === 2 && c.list[0].k === 'date' && c.list[0].v === '2024-01-01' && c.list[1].v === '2024-02-01', `tree: ${J(c)?.slice(0, 240)}`);
+    await removeRowsPill("Jan first");
+    await waitFor(`__t.pills('rows').length === 1`, 'pill removed');
+    await dragChip('Active only', `__t.zone('rows')`);
+    await waitFor(`__t.pills('rows').length === 2`, 'pill 2');
+    await settle();
+    const e = lastQuery().rowDimensions?.[0]?.calc;
+    must(e?.k === 'case' && e.whens[0].c.k === 'cmp' && e.whens[0].c.op === '=' && e.whens[0].c.r.k === 'bool', `eq tree: ${J(e)?.slice(0, 240)}`);
+    await removeRowsPill("Active only");
+    await waitFor(`__t.pills('rows').length === 1`, 'pill removed 2');
   });
 
   await check('BETWEEN, TRUE and NULL: they save, and the NULL traps read plainly', async () => {

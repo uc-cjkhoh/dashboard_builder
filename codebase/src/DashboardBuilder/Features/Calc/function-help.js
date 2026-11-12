@@ -53,7 +53,7 @@ const TEXTS = {
   ifnull: ["The value, or the fallback when the value is empty.", "IFNULL([orders.amount], 0)", "Both arguments must be the same type. Division by zero is empty, so IFNULL(a / b, 0) repairs it."],
   in: ["True when the value is one of the listed values.", "[orders.status] IN ('open', 'new')", `The values are numbers or text written in the formula (a [@Parameter] works), 1 to ${CALC_LIMITS.inList}, all the same type as the value. NOT IN flips it. An empty value gives empty.`],
   between: ["True when the value lies from the low end to the high end, both included.", "[orders.amount] BETWEEN 10 AND 100", "Numbers, dates or text; both ends the same type as the value. NOT BETWEEN flips it. An empty value gives empty."],
-  true: ["The boolean value true.", "IF [orders.amount] > 100 THEN TRUE ELSE FALSE END", "Combine it with AND, OR and IF; a field is compared by writing the field itself, not = TRUE."],
+  true: ["The boolean value true.", "IF [orders.amount] > 100 THEN TRUE ELSE FALSE END", "Combine it with AND, OR and IF. A boolean field is a condition by itself; = TRUE and != FALSE also work."],
   false: ["The boolean value false.", "IF [orders.amount] > 100 THEN TRUE ELSE FALSE END", "Combine it with AND, OR and IF."],
   null: ["An empty value, as an IF, CASE or IFNULL result.", "IF [orders.amount] > 0 THEN [orders.amount] ELSE NULL END", "It takes the type of the other results. It is refused elsewhere, and = NULL never matches: test with ISNULL(value)."],
   isnull: ["True when the value is empty.", "ISNULL([orders.amount])", "Never empty itself: it is true or false."],

@@ -76,7 +76,7 @@ function expectMap(r, want, label) {
 }
 
 // id grp score label flag
-//  1  A  10   x      true
+//  1  A  10   x      true    (d: 1 2024-01-01, 2 2024-01-01, 3 2024-02-29, 4 2023-12-31, 5 2024-03-01, 6 2024-01-31, 7 2024-02-29, 8 2024-01-01)
 //  2  A  20   y      false
 //  3  A  NULL x      true
 //  4  B  20   NULL   false     <- 20 ties across A, B, C
@@ -86,8 +86,8 @@ function expectMap(r, want, label) {
 //  8  C  1    it's   false
 async function setup() {
   await write(`DROP TABLE IF EXISTS ${T}`);
-  await write(`CREATE TABLE ${T} (id UInt32, grp String, score Nullable(Float64), label Nullable(String), flag Bool) ENGINE = MergeTree ORDER BY id`);
-  await write(`INSERT INTO ${T} VALUES (1,'A',10,'x',true),(2,'A',20,'y',false),(3,'A',NULL,'x',true),(4,'B',20,NULL,false),(5,'B',5,'z',true),(6,'B',NULL,NULL,false),(7,'C',20,'x',true),(8,'C',1,'it\\'s',false)`);
+  await write(`CREATE TABLE ${T} (id UInt32, grp String, score Nullable(Float64), label Nullable(String), flag Bool, d Date) ENGINE = MergeTree ORDER BY id`);
+  await write(`INSERT INTO ${T} VALUES (1,'A',10,'x',true,'2024-01-01'),(2,'A',20,'y',false,'2024-01-01'),(3,'A',NULL,'x',true,'2024-02-29'),(4,'B',20,NULL,false,'2023-12-31'),(5,'B',5,'z',true,'2024-03-01'),(6,'B',NULL,NULL,false,'2024-01-31'),(7,'C',20,'x',true,'2024-02-29'),(8,'C',1,'it\\'s',false,'2024-01-01')`);
 }
 async function teardown() {
   await write(`DROP TABLE IF EXISTS ${T}`);
@@ -219,6 +219,22 @@ async function main() {
     expectMap(ifn, { x: 3, y: 1, z: 1, null: 2, "it's": 1 }, 'IFNULL(NULL, label)');
     ok('IF(flag, TRUE, FALSE) true 4 / false 4; a boolean, text, number and IFNULL NULL branch all run with the other branch\'s type and NULL groups as expected');
   }
+  { // a date literal: a bound string read by toDate; IN over dates; a comparison; a boolean = a boolean
+    const date = (v) => ({ k: 'date', v });
+    const inD = await query({ ...base(), rowDimensions: [calcDim('d', inList(f('d'), [date('2024-01-01'), date('2024-02-29')]))], measures: [countRows] }, 'in dates');
+    expectMap(inD, { true: 5, false: 3 }, 'd IN (#2024-01-01#, #2024-02-29#)');
+    const ge = await query({ ...base(), rowDimensions: [calcDim('d', cmp('>=', f('d'), date('2024-02-01')))], measures: [countRows] }, 'date cmp');
+    expectMap(ge, { true: 3, false: 5 }, 'd >= #2024-02-01#');
+    const eq = await query({ ...base(), rowDimensions: [calcDim('b', cmp('=', f('flag'), cmp('>', score, num(15))))], measures: [countRows] }, 'bool eq');
+    expectMap(eq, { true: 3, false: 3, null: 2 }, 'flag = (score > 15)');
+    const eqT = await query({ ...base(), rowDimensions: [calcDim('b', cmp('=', f('flag'), { k: 'bool', v: true }))], measures: [countRows] }, 'bool eq true');
+    expectMap(eqT, { true: 4, false: 4 }, 'flag = TRUE');
+    const bad = await app('POST', '/api/query', { ...base(), rowDimensions: [calcDim('d', cmp('>=', f('d'), date("2024-02-30")))], measures: [countRows] });
+    assert.equal(bad.status, 400);
+    assert.match(bad.json.error, /A date must be a real day from 1970-01-01 to 2149-06-06/);
+    assert.equal(bad.json.field, 'rowDimensions[0].calc.r');
+    ok('d IN (two date literals) true 5 / false 3; d >= #2024-02-01# true 3; flag = (score > 15) true 3 / false 3 / NULL 2; flag = TRUE 4 / 4; #2024-02-30# is a 400 at calc.r');
+  }
   { // limits and shape: 400 with the node path
     const list = (n) => Array.from({ length: n }, (_, i) => num(i));
     const many = await app('POST', '/api/query', { ...base(), rowDimensions: [calcDim('x', inList(score, list(51)))], measures: [countRows] });
@@ -228,7 +244,7 @@ async function main() {
     await query({ ...base(), rowDimensions: [calcDim('x', inList(score, list(50)))], measures: [countRows] }, '50 values');
     const fieldVal = await app('POST', '/api/query', { ...base(), rowDimensions: [calcDim('x', inList(score, [num(1), f('id')]))], measures: [countRows] });
     assert.equal(fieldVal.status, 400);
-    assert.match(fieldVal.json.error, /IN's values must be numbers or text written in the formula\./);
+    assert.match(fieldVal.json.error, /IN's values must be numbers, text or dates written in the formula\./);
     assert.equal(fieldVal.json.field, 'rowDimensions[0].calc.list.1');
     const bare = await app('POST', '/api/query', { ...base(), rowDimensions: [calcDim('x', { k: 'null' })], measures: [countRows] });
     assert.equal(bare.status, 400);

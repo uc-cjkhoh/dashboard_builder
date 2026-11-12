@@ -185,6 +185,24 @@ public class CalcCompilerTests
     }
 
     [Fact]
+    public void A_date_literal_is_a_bound_string_read_as_a_Date_and_an_IN_list_of_dates_binds_each()
+    {
+        var (sql, ps) = Compile(new CmpNode(">=", F("placed"), new DateNode("2024-01-31")));
+        Assert.Equal("(t0.`placed` >= toDate({c0p0:String}))", sql);
+        Assert.Equal(new[] { ("c0p0", "String", (object)"2024-01-31") }, ps);
+        var (isql, ips) = Compile(new InNode(F("placed"), [new DateNode("2024-01-01"), new DateNode("2024-02-29")]));
+        Assert.Equal("(t0.`placed` IN (toDate({c0p0:String}), toDate({c0p1:String})))", isql);
+        Assert.Equal(new[] { ("c0p0", "String", (object)"2024-01-01"), ("c0p1", "String", (object)"2024-02-29") }, ips);
+    }
+
+    [Fact]
+    public void A_boolean_compared_with_equals_compiles_to_the_plain_comparison()
+    {
+        Assert.Equal("(t0.`active` = true)", Compile(new CmpNode("=", F("active"), new BoolNode(true))).Sql);
+        Assert.Equal("(t0.`active` != false)", Compile(new CmpNode("!=", F("active"), new BoolNode(false))).Sql);
+    }
+
+    [Fact]
     public void IFNULL_and_ISNULL()
     {
         Assert.Equal("ifNull(toFloat64(t0.`amount`), {c0p0:Float64})", Compile(new IfNullNode(F("amount"), new NumNode(0))).Sql);

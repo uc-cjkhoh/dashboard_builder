@@ -68,6 +68,11 @@ public static class CalcValidator
                 if (t.V.Length > CalcLimits.MaxString) throw new CalcException($"A text value can be at most {CalcLimits.MaxString} characters.", path);
                 return new Typed(CalcType.Text, false, true, Tables(), "that value");
 
+            case DateNode d:
+                if (!CalcLimits.IsDateLiteral(d.V))
+                    throw new CalcException($"A date must be a real day from {CalcLimits.MinDate} to {CalcLimits.MaxDate}, written #2024-01-31#.", path);
+                return new Typed(CalcType.Date, false, true, Tables(), "that value");
+
             case BoolNode:
                 return new Typed(CalcType.Boolean, false, true, Tables(), "that value");
 
@@ -77,15 +82,15 @@ public static class CalcValidator
             case InNode i:
             {
                 var arg = Type(i.Arg, Child(path, "arg"), categoryOf);
-                if (arg.Type is not (CalcType.Number or CalcType.Text))
-                    throw new CalcException($"IN needs a number or text — {arg.Name} is {arg.Type}.", Child(path, "arg"));
+                if (arg.Type is not (CalcType.Number or CalcType.Text or CalcType.Date))
+                    throw new CalcException($"IN needs a number, text or date — {arg.Name} is {arg.Type}.", Child(path, "arg"));
                 if (i.List.Length < 1 || i.List.Length > CalcLimits.MaxInList)
                     throw new CalcException($"IN takes 1 to {CalcLimits.MaxInList} values.", Child(path, "list"));
                 for (var n = 0; n < i.List.Length; n++)
                 {
                     var ip = Child(path, $"list.{n}");
-                    if (i.List[n] is not (NumNode or StrNode or UnNode { Op: "-", Arg: NumNode }))
-                        throw new CalcException("IN's values must be numbers or text written in the formula.", ip);
+                    if (i.List[n] is not (NumNode or StrNode or DateNode or UnNode { Op: "-", Arg: NumNode }))
+                        throw new CalcException("IN's values must be numbers, text or dates written in the formula.", ip);
                     var t = Type(i.List[n], ip, categoryOf);
                     if (t.Type != arg.Type) throw new CalcException($"IN needs values of the same type — {t.Name} is {t.Type}, not {arg.Type}.", ip);
                 }
@@ -99,8 +104,12 @@ public static class CalcValidator
                 var r = Type(c.R, Child(path, "r"), categoryOf);
                 if (l.Type == CalcType.Null || r.Type == CalcType.Null)
                     throw new CalcException("Comparison with NULL never matches — use ISNULL(value) instead.", path);
-                if (l.Type == CalcType.Boolean) throw new CalcException($"Comparison needs a number, text or date — {l.Name} is boolean.", Child(path, "l"));
-                if (r.Type == CalcType.Boolean) throw new CalcException($"Comparison needs a number, text or date — {r.Name} is boolean.", Child(path, "r"));
+                // A boolean compares only with = and != (and only with a boolean, below); it has no order.
+                if (c.Op is not ("=" or "!="))
+                {
+                    if (l.Type == CalcType.Boolean) throw new CalcException($"Comparison needs a number, text or date — {l.Name} is boolean.", Child(path, "l"));
+                    if (r.Type == CalcType.Boolean) throw new CalcException($"Comparison needs a number, text or date — {r.Name} is boolean.", Child(path, "r"));
+                }
                 if (l.Type != r.Type)
                     throw new CalcException($"Comparison needs two values of the same type — {l.Name} is {l.Type}, {r.Name} is {r.Type}.", path);
                 return Combine(CalcType.Boolean, path, l, r);

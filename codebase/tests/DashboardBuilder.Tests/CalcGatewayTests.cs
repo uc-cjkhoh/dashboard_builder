@@ -132,6 +132,22 @@ public class CalcGatewayTests
         Assert.Equal("filters[3].topBy.calc.arg", FieldOf(() => Compile(new AggNode("sum", new FieldNode("db", "orders", "nope")), "filters[3].topBy")));
 
     [Fact]
+    public void A_date_literal_compiles_end_to_end_and_a_bad_day_is_a_400_at_its_node()
+    {
+        var ps = Ps();
+        var c = Compile(new InNode(new FieldNode("db", "orders", "status"), [new StrNode("x")]), prefix: "c1", ps: ps);
+        Assert.Equal(CalcType.Boolean, c.Info.Type);
+        var d = Compile(new DateNode("2024-02-29"), prefix: "c2", ps: ps);
+        Assert.Equal(CalcType.Date, d.Info.Type);
+        Assert.Empty(d.Info.Tables);
+        Assert.Equal("toDate({c2p0:String})", d.Sql);
+        Assert.Equal(("c2p0", "String", (object)"2024-02-29"), ps.Last());
+        var e = Assert.Throws<RequestValidationException>(() => Compile(new InNode(Status, [new DateNode("2023-02-29")]), "rowDimensions[0]"));
+        Assert.Equal("rowDimensions[0].calc.list.0", e.Field);
+        Assert.Contains("A date must be a real day from 1970-01-01 to 2149-06-06", e.Message);
+    }
+
+    [Fact]
     public void A_constant_only_calculation_compiles_with_no_tables()
     {
         var ps = Ps();
