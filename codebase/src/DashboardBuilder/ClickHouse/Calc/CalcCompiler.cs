@@ -116,6 +116,11 @@ public static class CalcCompiler
                 "iendswith" => $"endsWith(lowerUTF8({a[0]}), lowerUTF8({a[1]}))",
                 // splitByString has no Nullable form, so a NULL value is answered before it; a position past the end is NULL.
                 "split" => $"if(isNull({a[0]}), NULL, arrayElementOrNull(splitByString({a[1]}, assumeNotNull({a[0]})), {a[2]}))",
+                // Regular expressions are RE2 (linear time, case-sensitive); the pattern and the replacement are bound constants. No match gives NULL for the extracts (ClickHouse's own answer is '').
+                "regexp_match" => $"match({a[0]}, {a[1]})",
+                "regexp_extract" => $"if(match({a[0]}, {a[1]}), extract({a[0]}, {a[1]}), NULL)",
+                "regexp_extract_nth" => $"if(match({a[0]}, {a[1]}), regexpExtract({a[0]}, {a[1]}, {a[2]}), NULL)",
+                "regexp_replace" => $"replaceRegexpAll({a[0]}, {a[1]}, {a[2]})",
                 "datediff" => $"toFloat64(dateDiff({a[0]}, {a[1]}, {a[2]}))",
                 "dateadd" => DateAdd(AddFunction(a[0]), a[2], a[1]),
                 "year" => $"toFloat64(toYear({a[0]}))",

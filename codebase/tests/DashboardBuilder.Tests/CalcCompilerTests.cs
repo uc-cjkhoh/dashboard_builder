@@ -419,6 +419,23 @@ public class CalcCompilerTests
     }
 
     [Fact]
+    public void Regular_expression_functions_bind_the_pattern_once_and_answer_NULL_for_no_match()
+    {
+        var (sql, ps) = Compile(Fn("regexp_match", F("status"), S("^op")));
+        Assert.Equal("match(t0.`status`, {c0p0:String})", sql);
+        Assert.Equal(new[] { ("c0p0", "String", (object)"^op") }, ps);
+        (sql, ps) = Compile(Fn("regexp_extract", F("status"), S("([a-z]+)-")));
+        Assert.Equal("if(match(t0.`status`, {c0p0:String}), extract(t0.`status`, {c0p0:String}), NULL)", sql); // one bound value, used twice
+        Assert.Single(ps);
+        (sql, ps) = Compile(Fn("regexp_extract_nth", F("status"), S("(a)(b)"), new NumNode(2)));
+        Assert.Equal("if(match(t0.`status`, {c0p0:String}), regexpExtract(t0.`status`, {c0p0:String}, {c0p1:UInt32}), NULL)", sql);
+        Assert.Equal(new[] { ("c0p0", "String", (object)"(a)(b)"), ("c0p1", "UInt32", (object)2u) }, ps);
+        (sql, ps) = Compile(Fn("regexp_replace", F("status"), S("[^0-9]"), S("")));
+        Assert.Equal("replaceRegexpAll(t0.`status`, {c0p0:String}, {c0p1:String})", sql);
+        Assert.Equal(new[] { ("c0p0", "String", (object)"[^0-9]"), ("c0p1", "String", (object)"") }, ps);
+    }
+
+    [Fact]
     public void A_literal_inside_a_nested_text_function_keeps_source_order_numbering()
     {
         var (sql, ps) = Compile(Fn("left", Fn("replace", F("status"), S("a"), S("b")), new NumNode(4)));

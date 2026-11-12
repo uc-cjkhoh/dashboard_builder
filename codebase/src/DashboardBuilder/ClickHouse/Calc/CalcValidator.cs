@@ -232,6 +232,16 @@ public static class CalcValidator
                             if (AmountLiteral(fn.Args[n]) is not { } amount || amount != Math.Floor(amount) || Math.Abs(amount) > CalcLimits.MaxDateAmount)
                                 throw new CalcException($"{upper}'s amount must be a whole number from -{CalcLimits.MaxDateAmount} to {CalcLimits.MaxDateAmount} written in the formula.", ap);
                             break;
+                        case FnArg.Pattern:
+                            if (fn.Args[n] is not StrNode { V.Length: >= 1 and <= CalcLimits.MaxString })
+                                throw new CalcException($"{upper}'s pattern must be a regular expression written in the formula as text, 1 to {CalcLimits.MaxString} characters.", ap);
+                            if (RegexProblem(((StrNode)fn.Args[n]).V) is { } why)
+                                throw new CalcException($"{upper}'s pattern isn't a regular expression ClickHouse can read: {why}.", ap);
+                            break;
+                        case FnArg.Replacement:
+                            if (fn.Args[n] is not StrNode { V.Length: <= CalcLimits.MaxString })
+                                throw new CalcException($"{upper}'s replacement must be text written in the formula, at most {CalcLimits.MaxString} characters.", ap);
+                            break;
                         case FnArg.Separator:
                             if (fn.Args[n] is not StrNode { V.Length: >= 1 and <= CalcLimits.MaxSeparator })
                                 throw new CalcException($"{upper}'s separator must be text written in the formula, 1 to {CalcLimits.MaxSeparator} characters.", ap);
@@ -304,6 +314,40 @@ public static class CalcValidator
     }
 
     /// <summary>The value of a <c>DATEADD</c> amount: a number literal or a single negated one; <c>null</c> for anything else.</summary>
+    /// <summary>Why a regular expression pattern can't run on ClickHouse (RE2: no look-ahead / look-behind, no atomic groups, no back-references in the pattern) or is not closed;
+    /// null when none of these applies. A cheap scan, not a parser: ClickHouse still has the last word (a stray quantifier is refused there). Twin of <c>regexProblem</c> in calc-types.js.</summary>
+    internal static string? RegexProblem(string p)
+    {
+        var depth = 0;
+        for (var i = 0; i < p.Length; i++)
+        {
+            var c = p[i];
+            if (c == '\\')
+            {
+                if (i + 1 < p.Length && p[i + 1] is >= '1' and <= '9') return "back-references such as \\1 aren't supported in a pattern";
+                i++;
+            }
+            else if (c == '[')
+            {
+                var j = i + 1;
+                if (j < p.Length && p[j] == '^') j++;
+                if (j < p.Length && p[j] == ']') j++; // a ] right after the opening is a letter of the class
+                for (; j < p.Length && p[j] != ']'; j++) if (p[j] == '\\') j++;
+                if (j >= p.Length) return "a [ is never closed";
+                i = j;
+            }
+            else if (c == '(')
+            {
+                if (string.CompareOrdinal(p, i, "(?=", 0, 3) == 0 || string.CompareOrdinal(p, i, "(?!", 0, 3) == 0 || string.CompareOrdinal(p, i, "(?<=", 0, 4) == 0 || string.CompareOrdinal(p, i, "(?<!", 0, 4) == 0)
+                    return "look-ahead and look-behind aren't supported";
+                if (string.CompareOrdinal(p, i, "(?>", 0, 3) == 0) return "atomic groups aren't supported";
+                depth++;
+            }
+            else if (c == ')' && --depth < 0) return "a ) has no ( before it";
+        }
+        return depth > 0 ? "a ( is never closed" : null;
+    }
+
     internal static double? AmountLiteral(ExprNode n) => n switch
     {
         NumNode { V: var v } => v,
