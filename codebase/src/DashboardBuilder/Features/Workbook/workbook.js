@@ -176,7 +176,7 @@ function openWorkbook(wb) {
     setCalculations(wb.calculations ?? [], wb.nextCalcId); // likewise: pills read their calculation by id
 
     const ids = new Map(); // saved entity id → new entity id
-    for (const e of wb.entities) ids.set(e.id, addEntity(e.db, e.table, e.x, e.y, { source: e.source }));
+    for (const e of wb.entities) ids.set(e.id, addEntity(e.db, e.table, e.x, e.y, { source: e.source, customSql: e.customSql, customSqlMysql: e.customSqlMysql }));
     for (const r of wb.relationships) {
       restoreRelationship(
         { entityId: ids.get(r.from.entityId), column: r.from.column },
@@ -260,7 +260,7 @@ async function importFile(input) {
 // --- helpers -----------------------------------------------------------------
 /** The issues for worksheet pills naming a column the connected table lacks (live columns, read with a time limit; the pills themselves are marked and left out by the worksheet). */
 async function catalogIssuesFor(wb) {
-  const real = new Set(wb.entities.filter((e) => !e.source).map((e) => columnKey(e.db, e.table)));
+  const real = new Set(wb.entities.filter((e) => !e.source && !e.customSql).map((e) => columnKey(e.db, e.table)));
   const tables = tablesNamed(wb.worksheets).filter((t) => real.has(columnKey(t.db, t.table))).slice(0, 50);
   if (!tables.length) return [];
   return catalogIssues(wb.worksheets, await readCatalog(tables, (db, table) => api.columns(db, table)));

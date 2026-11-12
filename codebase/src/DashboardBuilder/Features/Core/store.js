@@ -408,7 +408,10 @@ export function switchTab(id) {
 
 export function renameTab(id, name) {
   const tab = tabById(id);
-  if (tab && name) { tab.name = name; emit("tabs:changed"); }
+  if (!tab || !name) return;
+  if (tab.kind === "worksheet" && tab.sheet && name !== tab.name) tab.sheet.title = null; // a renamed worksheet's title follows the new name again (a custom title is dropped)
+  tab.name = name;
+  emit("tabs:changed");
 }
 
 /** Close a tab. Closing a worksheet also removes its widgets from every dashboard and its steps from every story (each notified); closing a dashboard or story touches no worksheet. */

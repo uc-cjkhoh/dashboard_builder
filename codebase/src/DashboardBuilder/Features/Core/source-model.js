@@ -65,6 +65,55 @@ export function cleanSource(raw, db, name) {
   return { kind: "unpivot", db, name, table: raw.table, columns: [...raw.columns], keep: [...keep] };
 }
 
+// --- Custom SQL on a card (D105) --------------------------------------------------------------------------------------------
+// Unlike a union / unpivot, a card with custom SQL stays an ordinary table card (it can be related and joined): `entity.customSql` is the
+// SELECT text, the card's columns are what that query returns, and every query that reads the table also carries `sources: [{ kind: "sql",
+// db, name: table, sql }]` so the server reads the derived table instead of the catalog table of that name.
+export const SQL_NOTE = "Custom SQL";
+export const SQL_VIEW_DATA_MESSAGE = "View data reads the table's own rows — it isn't available for a card with custom SQL yet.";
+export const SQL_STAT_MESSAGE = "A histogram reads the table's own rows — it isn't available for a card with custom SQL yet.";
+
+const quoteName = (n) => `\`${n.replace(/[\\`]/g, "\\$&")}\``;
+
+/** The SELECT a card starts from: every column, one per line (a card still loading says `*`). */
+export function defaultSql(db, table, columns = []) {
+  const list = columns.length ? columns.map((c) => `  ${quoteName(c.name)}`).join(",\n") : "  *";
+  return `SELECT\n${list}\nFROM ${quoteName(db)}.${quoteName(table)}`;
+}
+
+/** A sentence when `sql` can't be saved (the server re-checks everything and explains the rest), else null. */
+export function sqlProblem(sql) {
+  if (typeof sql !== "string" || !sql.trim()) return "Write a SELECT query.";
+  if (sql.length > LIMITS.customSql) return `The query can be at most ${LIMITS.customSql.toLocaleString("en-US")} characters.`;
+  return null;
+}
+
+/** What the server reads of one card's custom SQL (an entry of /api/query `sources`, or the body of /api/source/columns). */
+export const sqlWire = (db, table, sql) => ({ kind: "sql", db, name: table, sql });
+
+/** The custom SQL of the card showing (db, table), or null. `entities` is the store's Map. */
+export function customSqlOf(entities, db, table) {
+  for (const e of entities.values()) if (e.customSql && e.db === db && e.table === table) return e.customSql;
+  return null;
+}
+
+/** The `sources` of a query that reads these `tables` ({ db, table }): one entry per table whose card has custom SQL; [] when none. */
+export function sqlSourcesFor(entities, tables) {
+  const seen = new Set(), out = [];
+  for (const t of tables) {
+    const k = `${t.db}\u0000${t.table}`, sql = customSqlOf(entities, t.db, t.table);
+    if (sql && !seen.has(k)) { seen.add(k); out.push(sqlWire(t.db, t.table, sql)); }
+  }
+  return out;
+}
+
+/** A saved custom SQL, or null when it isn't text of an allowed length (a workbook file may be edited by hand; the server checks the rest). */
+export const cleanCustomSql = (raw) => (typeof raw === "string" && raw.trim() && raw.length <= LIMITS.customSql ? raw : null);
+
+/** The key columns a relationship needs that `columns` (what a new query returns) no longer has: [] when every one is still there.
+ *  `needed` is the column names the card's relationships use. */
+export const lostKeys = (needed, columns) => [...new Set(needed)].filter((n) => !columns.some((c) => c.name === n));
+
 /** The source an entity of (db, table) reads, or null for a catalog table. `entities` is the store's Map. */
 export function sourceOfTable(entities, db, table) {
   for (const e of entities.values()) if (e.source && e.db === db && e.table === table) return e.source;
@@ -82,6 +131,13 @@ export function sourceProblem(keys, entities) {
 export function distinctPlan(source, column, limit) {
   const ref = { db: source.db, table: source.name, column };
   return { from: { db: source.db, table: source.name }, source: wireSource(source), joins: [], rowDimensions: [ref], columnDimensions: [], measures: [], filters: [], limit,
+    sort: { column: "k0", desc: false } };
+}
+
+/** The same one-dimension query for a column of a card with custom SQL (D105): the table is read through `sources`, not `source`. */
+export function distinctPlanSql(db, table, sql, column, limit) {
+  const ref = { db, table, column };
+  return { from: { db, table }, sources: [sqlWire(db, table, sql)], joins: [], rowDimensions: [ref], columnDimensions: [], measures: [], filters: [], limit,
     sort: { column: "k0", desc: false } };
 }
 

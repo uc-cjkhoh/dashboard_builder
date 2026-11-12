@@ -755,10 +755,92 @@ public sealed partial class ClickHouseGateway
     /// <exception cref="UnknownIdentifierException">Unknown database, table or column.</exception>
     public async Task<(IReadOnlyList<ColumnInfo> Columns, bool Truncated, IReadOnlyList<string> Lossy)> SourceColumnsAsync(ClickHouseConnectionInfo info, QuerySource src, CancellationToken ct)
     {
-        var described = new List<IReadOnlyList<ColumnInfo>>();
-        foreach (var t in SourceSql.TablesOf(src)) described.Add(await DescribeColumnsAsync(info, src.Db, t, ct));
-        var built = SourceSql.Build(src, described);
+        var built = SourceSql.Build(src, await DescribeSourceAsync(info, src, ct));
         return (built.Columns, built.ColumnsTruncated, built.Lossy);
+    }
+
+    /// <summary>What <see cref="SourceSql.Build"/> expects described: each real table's columns (catalog-validated), or for a custom SQL source
+    /// the one list of columns its query returns.</summary>
+    private async Task<List<IReadOnlyList<ColumnInfo>>> DescribeSourceAsync(ClickHouseConnectionInfo info, QuerySource src, CancellationToken ct)
+    {
+        var described = new List<IReadOnlyList<ColumnInfo>>();
+        if (src.Kind == SourceSql.Sql) described.Add(await DescribeQueryAsync(info, CustomSql.Clean(src.Sql), ct));
+        else foreach (var t in SourceSql.TablesOf(src)) described.Add(await DescribeColumnsAsync(info, src.Db, t, ct)); // validates db + tables
+        return described;
+    }
+
+    /// <summary>The columns a user's SELECT returns: <c>DESCRIBE (query)</c> reads no rows. The text has passed <see cref="CustomSql.Clean"/> (D105).
+    /// A ClickHouse refusal that explains the query itself (syntax, unknown column / table, wrong types, no access) is returned to the user
+    /// as a 400 in ClickHouse's own words, trimmed of version and stack details; anything else stays a generic upstream failure.</summary>
+    internal async Task<IReadOnlyList<ColumnInfo>> DescribeQueryAsync(ClickHouseConnectionInfo info, string cleanSql, CancellationToken ct)
+    {
+        try
+        {
+            using var httpClient = CreateHttpClient(info);
+            await using var conn = new ClickHouseConnection(BuildConnectionString(info), httpClient);
+            await conn.OpenAsync(ct);
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = $"DESCRIBE TABLE (\n{cleanSql}\n)";
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            var columns = new List<ColumnInfo>();
+            while (await reader.ReadAsync(ct))
+            {
+                var name = reader.GetValue(0)?.ToString() ?? string.Empty;
+                var type = reader.GetValue(1)?.ToString() ?? string.Empty;
+                columns.Add(new ColumnInfo(name, type, ClickHouseType.Categorize(type)));
+            }
+            return columns;
+        }
+        catch (ClickHouseServerException ex) when (QueryProblemCodes.Contains(ex.ErrorCode))
+        {
+            throw new RequestValidationException(QueryProblem(ex.Message), "source.sql");
+        }
+    }
+
+    /// <summary>What ClickHouse itself makes of a custom SELECT: <c>EXPLAIN SYNTAX</c> returns the query as the server reads it (functions as calls, names resolved, layout gone),
+    /// so two texts that print the same mean the same. Reads no rows; the browser compares two of these to tell whether a MySQL round trip kept a query's meaning.
+    /// The text has passed <see cref="CustomSql.Clean"/>; errors are reported like <see cref="DescribeQueryAsync"/>'s.</summary>
+    internal async Task<string> ExplainSyntaxAsync(ClickHouseConnectionInfo info, string cleanSql, CancellationToken ct)
+    {
+        try
+        {
+            using var httpClient = CreateHttpClient(info);
+            await using var conn = new ClickHouseConnection(BuildConnectionString(info), httpClient);
+            await conn.OpenAsync(ct);
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = $"EXPLAIN SYNTAX\n{cleanSql}";
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            var lines = new List<string>();
+            while (await reader.ReadAsync(ct)) lines.Add(reader.GetValue(0)?.ToString() ?? string.Empty);
+            var text = string.Join("\n", lines);
+            return text.Length > 100_000 ? text[..100_000] : text;
+        }
+        catch (ClickHouseServerException ex) when (QueryProblemCodes.Contains(ex.ErrorCode))
+        {
+            throw new RequestValidationException(QueryProblem(ex.Message), "source.sql");
+        }
+    }
+
+    /// <summary>The syntax text of a custom SQL source (<see cref="ExplainSyntaxAsync"/>), after the same request checks as its columns.</summary>
+    public async Task<string> SourceSyntaxAsync(ClickHouseConnectionInfo info, QuerySource src, CancellationToken ct)
+        => await ExplainSyntaxAsync(info, CustomSql.Clean(src.Sql), ct);
+
+    // ClickHouse codes that describe the user's query rather than the server: syntax, unknown identifier / table / database / function, type and argument errors, access.
+    private static readonly HashSet<int> QueryProblemCodes = [27, 36, 42, 43, 44, 46, 47, 48, 53, 60, 62, 81, 215, 386, 497];
+
+    /// <summary>The readable part of a ClickHouse error message: after "DB::Exception:", before the version / stack trace, one line, at most 400 characters.</summary>
+    internal static string QueryProblem(string message)
+    {
+        var at = message.IndexOf("DB::Exception:", StringComparison.Ordinal);
+        var text = at >= 0 ? message[(at + "DB::Exception:".Length)..] : message;
+        foreach (var cut in new[] { " (version ", "Stack trace", "\n" })
+        {
+            var i = text.IndexOf(cut, StringComparison.Ordinal);
+            if (i >= 0) text = text[..i];
+        }
+        text = System.Text.RegularExpressions.Regex.Replace(text, @"\s+", " ").Trim();
+        if (text.Length > 400) text = text[..400].TrimEnd() + "…";
+        return text.Length == 0 ? "ClickHouse could not read the query." : text;
     }
 
     /// <summary>The unpivoted columns must exist and share one kind (text / number / date …) so the Value column is
@@ -1138,19 +1220,28 @@ public sealed partial class ClickHouseGateway
         SourceBuild? source = null;
         if (req.Source is { } src)
         {
-            var described = new List<IReadOnlyList<ColumnInfo>>();
-            foreach (var t in SourceSql.TablesOf(src)) described.Add(await DescribeColumnsAsync(info, src.Db, t, ct)); // validates db + tables
-            source = SourceSql.Build(src, described);
+            source = SourceSql.Build(src, await DescribeSourceAsync(info, src, ct)); // validates db + tables (or describes the custom SQL)
             categories[Key(src.Db, src.Name)] = source.Columns.ToDictionary(c => c.Name, c => c.Category, StringComparer.Ordinal);
             rawTypes[Key(src.Db, src.Name)] = source.Columns.ToDictionary(c => c.Name, c => c.Type, StringComparer.Ordinal);
             parameters.AddRange(source.Parameters);
         }
 
+        // Custom SQL cards (D105): each stands in for the catalog table of its name wherever the query reads it, so its columns are the query's own.
+        var derived = new Dictionary<string, string>(StringComparer.Ordinal); // "db\0table" -> "(SELECT …)"
+        foreach (var cs in req.Sources ?? [])
+        {
+            var built = SourceSql.Build(cs, await DescribeSourceAsync(info, cs, ct));
+            categories[Key(cs.Db, cs.Name)] = built.Columns.ToDictionary(c => c.Name, c => c.Category, StringComparer.Ordinal);
+            rawTypes[Key(cs.Db, cs.Name)] = built.Columns.ToDictionary(c => c.Name, c => c.Type, StringComparer.Ordinal);
+            derived[Key(cs.Db, cs.Name)] = $"({built.Sql})";
+        }
+        string TableExpr(string db, string table) => derived.TryGetValue(Key(db, table), out var d) ? d : Identifier.QualifiedName(db, table);
+
         // Base table = t0.
         await ColumnsOf(req.From.Db, req.From.Table);
         aliases[Key(req.From.Db, req.From.Table)] = "t0";
         var from = new StringBuilder(" FROM ")
-            .Append(source is null ? Identifier.QualifiedName(req.From.Db, req.From.Table) : $"({source.Sql})").Append(" AS t0");
+            .Append(source is null ? TableExpr(req.From.Db, req.From.Table) : $"({source.Sql})").Append(" AS t0");
         // In approximate mode a base table with a sampling key is read as a 10% sample; counts and sums
         // are scaled back by its _sample_factor below.
         // A right or full join can produce rows with no base-table row, which a base sample + its scale factor
@@ -1159,7 +1250,7 @@ public sealed partial class ClickHouseGateway
         var anyBeyondInner = joinTypes.Any(IsOuter);
         if (NullsUnavailable(joinTypes, info))
             throw new RequestValidationException("Right and full joins need the server to accept the join_use_nulls setting — this connection's profile refuses settings.", "joins");
-        var sampled = source is null && sample && req.Joins?.Any(j => j.Aggregate == true) != true && CanSample(joinTypes) && await HasSamplingKeyAsync(info, req.From.Db, req.From.Table, ct);
+        var sampled = source is null && !derived.ContainsKey(Key(req.From.Db, req.From.Table)) && sample && req.Joins?.Any(j => j.Aggregate == true) != true && CanSample(joinTypes) && await HasSamplingKeyAsync(info, req.From.Db, req.From.Table, ct);
         if (sampled) from.Append(" SAMPLE ").Append(SampleFraction.ToString(CultureInfo.InvariantCulture));
 
         var next = 1;
@@ -1191,15 +1282,15 @@ public sealed partial class ClickHouseGateway
                 {
                     if (source is not null) throw new RequestValidationException("A union or unpivot can't be joined.", "joins");
                     aggJ = new AggregateJoin(j.FilterDirection != "single");
-                    aggJ.AddSide("t0", Identifier.QualifiedName(req.From.Db, req.From.Table));
-                    aggJ.AddSide(rightAlias, Identifier.QualifiedName(j.Right.Db, j.Right.Table));
+                    aggJ.AddSide("t0", TableExpr(req.From.Db, req.From.Table));
+                    aggJ.AddSide(rightAlias, TableExpr(j.Right.Db, j.Right.Table));
                     aggJ.Keys([(Identifier.Quote(j.Left.Column), Identifier.Quote(j.Right.Column)),
                         .. (j.Pairs ?? []).Select(p => (Identifier.Quote(p.Left), Identifier.Quote(p.Right)))]);
                     aggJoin = JoinKeyword(j.Type);
                     aggOn = JoinOn(leftExpr, rightAlias, j.Right.Column, extraLeft);
                 }
                 else
-                    from.Append(JoinKeyword(j.Type)).Append(Identifier.QualifiedName(j.Right.Db, j.Right.Table))
+                    from.Append(JoinKeyword(j.Type)).Append(TableExpr(j.Right.Db, j.Right.Table))
                         .Append(" AS ").Append(rightAlias)
                         .Append(JoinOn(leftExpr, rightAlias, j.Right.Column, extraLeft));
             }

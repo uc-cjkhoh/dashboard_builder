@@ -9,7 +9,7 @@ import { roleOf, STAT_SINGLE_TABLE, showMeOptions, dimsFor } from "./show-me-rul
 import { toggle, makeButton, toast, fieldError, confirmDialog, copyText } from "../Core/ui.js";
 import { LIMITS, number, percent, percentLabel, isFraction, PERCENT_MESSAGE, DEFAULT_PERCENTILE } from "../Core/validate.js";
 import { aggsFor, checkAdd, checkFilter, viewCounts, withCategories, opsFor, OP_LABELS } from "./filter-rules.js";
-import { entities, relationships, activeWorksheet, isWorksheetActive, updateSheet, bus, defaultFormat, defaultMarks, sharedFilters, metaOf, nameOf, setFieldMeta, emptySheet, parameters, updateParameter, hierarchies, calculations, worksheets, addCalculation, removeCalculation } from "../Core/store.js";
+import { entities, relationships, activeWorksheet, isWorksheetActive, updateSheet, bus, defaultFormat, defaultMarks, sharedFilters, metaOf, nameOf, setFieldMeta, emptySheet, parameters, updateParameter, hierarchies, calculations, worksheets, addCalculation, removeCalculation, renameTab } from "../Core/store.js";
 import { checkValue, paramTypeFor } from "../Core/parameters-model.js";
 import { exportChart, hasChartInstance, sizeChart, focusSeries } from "./chart.js";
 import { createWorksheetView, periodNotice } from "./worksheet-view.js";
@@ -50,7 +50,7 @@ import { COL_ALIGN_CHOICES, tableColumnList, setTableColumn, columnLook, columnW
 import { COLOUR_MEASURE_TYPES } from "./mark-channel-model.js";
 import { MARK_BORDER_CHOICES, MARKER_SHAPE_CHOICES, BORDER_TYPES, MARK_BORDER_COLOUR_CHOICES, markerSizeError } from "./mark-style-model.js";
 import { targetChoices, effectiveTargetMeasure } from "./bullet-model.js";
-import { sourceOfTable, wireSource, distinctPlan, distinctMembers } from "../Core/source-model.js";
+import { sourceOfTable, wireSource, distinctPlan, distinctPlanSql, distinctMembers, customSqlOf, sqlWire, SQL_VIEW_DATA_MESSAGE } from "../Core/source-model.js";
 import { heldOutCards } from "../Relations/relation-rules.js";
 import { keyOf, SCATTER_TYPES, COLOR_USES, colorMode, isDrillActive, drillActiveDim, planDims, planMeasures, sortTargets as planSortTargets, measureName as planMeasureName, buildPlan as planQuery, periodFilters as planPeriodFilters, calcContext, appliedShared as planAppliedShared, withParams, toServerFilter, isDateOnlyType } from "./sheet-plan.js";
 import { isMissingPill, missingIn, missingMessage } from "./missing-columns.js";
@@ -302,10 +302,17 @@ export function initDashboards() {
     if (dash.sheet.filters.filter((f) => !f.category).length < missing) { renderShelves(); runChart(); }
   });
   // chart.js reads colours from :root at render time — redraw when light/dark flips (Core/scheme.js; a cache hit, no query).
-  // An automatic title is the tab's name: when the tab is renamed, the title follows at once (a custom title is left alone).
+  // An automatic title is the tab's name: when the tab is renamed, the title follows at once (renaming the tab also drops a custom title — store.renameTab — so the title always follows).
+  // A card switched to (or from) custom SQL: what was cached about its columns and members is stale. Redraw the open worksheet with the new columns.
+  bus.addEventListener("entity:sql", (e) => {
+    const { db, table } = e.detail;
+    columnsCache.delete(keyOf(db, table));
+    for (const k of [...distinctCache.keys()]) if (k.startsWith(`${db}.${table}.`)) distinctCache.delete(k);
+    if (isWorksheetActive()) { renderShelves(); runChart(); }
+  });
   bus.addEventListener("tabs:changed", () => {
-    const d = activeWorksheet(), auto = document.querySelector(".ws-titleblock__btn.ws-titleblock__title.is-auto");
-    if (d && auto && auto.textContent !== d.name) renderShelves();
+    const d = activeWorksheet(), btn = document.querySelector(".ws-titleblock__btn.ws-titleblock__title");
+    if (d && btn && !d.sheet.title && btn.textContent !== d.name) renderShelves();
   });
   bus.addEventListener("scheme:changed", () => { if (isWorksheetActive()) runChart(); });
   bus.addEventListener("theme:changed", () => { if (isWorksheetActive()) runChart(); }); // redraw in the new colours
@@ -1197,7 +1204,7 @@ export function initDashboards() {
   const dashboardHasContentSheet = (s) => Boolean(s.columns.length || s.rows.length || s.filters.length || s.color?.length || s.period || s.drill || s.pages);
   // The automatic caption: "sum amount by customers.name, customers.country · 2 filters".
   const autoCaption = (s) => captionText(s, { measureName, nameOf });
-  // Title (defaults to the tab name) and caption (defaults to autoCaption): click to edit, Enter saves,
+  // Title (the tab name: saving a new one renames the tab) and caption (defaults to autoCaption): click to edit, Enter saves,
   // Esc cancels; an empty value goes back to the automatic one.
   function titleBlock(dash, s) {
     const box = el("div", "ws-titleblock");
@@ -1217,6 +1224,7 @@ export function initDashboards() {
           if (done) return; done = true;
           if (!save) { renderShelves(); return; }
           const v = input.value.trim();
+          if (key === "title" && v && v !== auto) { renameTab(dash.id, v.slice(0, max)); renderShelves(); return; } // the title is the tab's name: the tab strip follows (renameTab also clears sheet.title)
           s[key] = v && v !== auto ? v.slice(0, max) : null;
           commit(dash, s);
         };
@@ -1225,7 +1233,7 @@ export function initDashboards() {
       });
       return b;
     };
-    box.append(editable("h2", "ws-titleblock__title", s.title, dash.name, 80, "title", "Title"),
+    box.append(editable("h2", "ws-titleblock__title", s.title, dash.name, LIMITS.tabName, "title", "Title"),
       editable("p", "ws-titleblock__caption", s.caption, autoCaption(s), 300, "caption", "Caption"));
     return box;
   }
@@ -1331,6 +1339,7 @@ export function initDashboards() {
     if (!plan) { toast("Add fields before viewing data.", "info"); return; }
     const base = firstMeasureTable(planMeasures(s)) ?? plan.from; // the fact table behind the numbers, else the first dimension's table (D95)
     if (sourceOfTable(entities, base.db, base.table)) { toast("View data reads one table's rows — it isn't available for a union or unpivot yet.", "info"); return; }
+    if (customSqlOf(entities, base.db, base.table)) { toast(SQL_VIEW_DATA_MESSAGE, "info"); return; }
     const { request, notes } = buildRowsRequest({ plan, base, selection: ofMark ? s.selection : null, castOf });
     openRowsDialog({ title: viewDataTitle(base, ofMark ? s.selection.label : undefined), subtitle: `${request.db}.${request.table}`, request, notes, filename: `${exportBaseName(dash)}-data` });
   }
@@ -2316,7 +2325,7 @@ export function initDashboards() {
     if (!plan) throw new Error("not plannable");
     const k = `calc:${JSON.stringify([plan.from, plan.joins, plan.rowDimensions])}`;
     if (!distinctCache.has(k)) {
-      try { distinctCache.set(k, distinctMembers(await api.query({ from: plan.from, ...(plan.source ? { source: plan.source } : {}), joins: plan.joins, rowDimensions: plan.rowDimensions, columnDimensions: [], measures: [], filters: [], limit: DISTINCT_FETCH, sort: { column: "k0", desc: false } }))); }
+      try { distinctCache.set(k, distinctMembers(await api.query({ from: plan.from, ...(plan.source ? { source: plan.source } : {}), ...(plan.sources ? { sources: plan.sources } : {}), joins: plan.joins, rowDimensions: plan.rowDimensions, columnDimensions: [], measures: [], filters: [], limit: DISTINCT_FETCH, sort: { column: "k0", desc: false } }))); }
       catch (e) { distinctCache.delete(k); throw e; }
     }
     return distinctCache.get(k);
@@ -2326,7 +2335,9 @@ export function initDashboards() {
     if (!distinctCache.has(k)) {
       try {
         const source = sourceOfTable(entities, db, table); // a union / unpivot has no catalog table to ask: its members come from a one-dimension query
-        distinctCache.set(k, source ? distinctMembers(await api.query(distinctPlan(source, column, DISTINCT_FETCH))) : await api.distinct(db, table, column, DISTINCT_FETCH));
+        const sql = customSqlOf(entities, db, table); // so does a card with custom SQL: its own query, not the catalog table
+        distinctCache.set(k, source ? distinctMembers(await api.query(distinctPlan(source, column, DISTINCT_FETCH)))
+          : sql ? distinctMembers(await api.query(distinctPlanSql(db, table, sql, column, DISTINCT_FETCH))) : await api.distinct(db, table, column, DISTINCT_FETCH));
       }
       catch (e) { distinctCache.delete(k); throw e; }
     }
@@ -3136,7 +3147,9 @@ export function initDashboards() {
     if (!columnsCache.has(k)) {
       try {
         const source = sourceOfTable(entities, db, table); // a union / unpivot: its columns come from the source, not the catalog
-        columnsCache.set(k, source ? (await api.sourceColumns(wireSource(source))).columns : await api.columns(db, table));
+        const sql = customSqlOf(entities, db, table); // custom SQL: the columns the query returns
+        columnsCache.set(k, source ? (await api.sourceColumns(wireSource(source))).columns
+          : sql ? (await api.sourceColumns(sqlWire(db, table, sql))).columns : await api.columns(db, table));
       }
       catch { columnsCache.set(k, []); }
     }

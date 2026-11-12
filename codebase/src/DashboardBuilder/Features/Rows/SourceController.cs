@@ -13,6 +13,17 @@ public sealed class SourceController : ApiControllerBase
     public SourceController(ConnectionRegistry registry, ClickHouseGateway gateway, ILoggerFactory loggers)
         : base(registry, gateway, loggers) { }
 
+    /// <summary><c>POST /api/source/syntax</c>: a custom SQL source as ClickHouse reads it (<c>EXPLAIN SYNTAX</c>), <c>{ syntax }</c>. The Edit SQL dialog compares two to see
+    /// whether a MySQL round trip kept a query's meaning. Custom SQL only (400 <c>source.kind</c>); reads no rows.</summary>
+    [HttpPost("source/syntax")]
+    public Task<IResult> Syntax([FromBody] QuerySource source, CancellationToken ct)
+        => RunAsync(async info =>
+        {
+            RequestRules.ValidateSource(source);
+            if (source.Kind != SourceSql.Sql) throw new RequestValidationException("Only a custom SQL source has a syntax text.", "source.kind");
+            return Results.Ok(new { syntax = await Gateway.SourceSyntaxAsync(info, source, ct) });
+        });
+
     [HttpPost("source/columns")]
     public Task<IResult> Columns([FromBody] QuerySource source, CancellationToken ct)
         => RunAsync(async info =>

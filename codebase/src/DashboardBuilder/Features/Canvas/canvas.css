@@ -124,3 +124,63 @@
 .data td.num, .data th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .data td.null { color: var(--ink-3); font-style: italic; }
 
+
+/* Edit SQL: a tall dialog with one code editor (CodeMirror, self-hosted: Core/vendor/codemirror/, structure only) themed from the tokens. The editor
+   box is user-resizable (drag its bottom-right corner); the footer keeps Reset / Format at the left, away from Save. */
+.dialog.sql-dialog:not(.dialog--sm) { width: min(840px, calc(100vw - 2 * var(--s4))); max-height: calc(100vh - 2 * var(--s4)); display: flex; flex-direction: column; }
+.sql-dialog__body { display: grid; gap: var(--s2); min-height: 0; overflow: auto; }
+.sql-dialog__editor { height: min(62vh, 640px); min-height: 240px; resize: vertical; overflow: hidden; border: 1px solid var(--line-2); border-radius: var(--r); background: var(--surface); }
+.sql-dialog__editor:focus-within { border-color: var(--ink); }
+.sql-dialog__editor .CodeMirror { height: 100%; font: var(--fs-body)/1.5 var(--font-mono); background: var(--surface); color: var(--ink); }
+.sql-editor__plain { width: 100%; height: 100%; border: 0; resize: none; font: var(--fs-body)/1.5 var(--font-mono); white-space: pre; overflow: auto; }
+.sql-dialog__status { margin: 0; min-height: calc(var(--s4) + var(--s2)); display: flex; align-items: flex-start; gap: var(--s1); color: var(--ink-2); font-size: var(--fs-body); }
+.sql-dialog__status--error { color: var(--danger-ink); }
+.sql-dialog__status--ok { color: var(--ok-ink); }
+.sql-dialog__status--warn { color: var(--warn-ink); }
+.sql-dialog__glyph { display: inline-grid; place-items: center; flex: none; height: 20px; }
+.sql-dialog__help { position: absolute; width: 1px; height: 1px; padding: 0; margin: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.sql-dialog__tools { display: flex; gap: var(--s2); margin-right: auto; }
+/* Theme: ink on the surface; each token class gets a colour AND a weight or style, so a word is not told apart by colour alone. */
+.sql-dialog .CodeMirror-gutters { background: var(--surface-2); border-right: 1px solid var(--line); }
+.sql-dialog .CodeMirror-linenumber { color: var(--ink-3); }
+.sql-dialog .CodeMirror-cursor { border-left: 1px solid var(--ink); }
+.sql-dialog .CodeMirror-selected { background: var(--accent-soft); }
+.sql-dialog .CodeMirror-focused .CodeMirror-selected { background: var(--accent-line); }
+.sql-dialog .CodeMirror-activeline-background { background: var(--surface-2); }
+.sql-dialog .cm-keyword { color: var(--enc-ink); font-weight: 600; }
+.sql-dialog .cm-builtin { color: var(--meas-ink); }
+.sql-dialog .cm-atom { color: var(--dim-ink); font-weight: 600; }
+.sql-dialog .cm-number { color: var(--dim-ink); }
+.sql-dialog .cm-string, .sql-dialog .cm-string-2 { color: var(--ok-ink); }
+.sql-dialog .cm-variable-2, .sql-dialog .cm-variable-3, .sql-dialog .cm-def { color: var(--warn-ink); }
+.sql-dialog .cm-comment { color: var(--ink-3); font-style: italic; }
+.sql-dialog .cm-operator, .sql-dialog .cm-punctuation { color: var(--ink-2); }
+.sql-dialog .cm-error { color: var(--danger-ink); text-decoration: underline; }
+.sql-dialog .CodeMirror-matchingbracket { background: var(--accent-soft); outline: 1px solid var(--accent-line); font-weight: 700; color: inherit; }
+.sql-dialog .CodeMirror-nonmatchingbracket { background: var(--danger-bg); color: var(--danger-ink); text-decoration: underline; }
+.sql-dialog .CodeMirror-foldgutter { width: var(--s4); }
+.sql-dialog .CodeMirror-foldgutter-open, .sql-dialog .CodeMirror-foldgutter-folded { color: var(--ink-3); text-align: center; }
+.sql-dialog .CodeMirror-foldgutter-open:hover, .sql-dialog .CodeMirror-foldgutter-folded:hover { color: var(--ink); }
+.sql-dialog .CodeMirror-foldmarker { color: var(--ink-2); background: var(--surface-3); border: 1px solid var(--line-2); border-radius: var(--r); padding: 0 var(--s1); font: inherit; line-height: inherit; text-shadow: none; }
+/* Syntax problems: a wavy underline in the text, a "!" in the margin, and the sentence in a tooltip and the status line. */
+.sql-dialog .CodeMirror-lint-markers { width: var(--s4); }
+.sql-dialog .CodeMirror-lint-mark-error { text-decoration: underline wavy var(--danger-ink); text-underline-offset: 3px; background: none; }
+.sql-dialog .CodeMirror-lint-marker { display: block; width: var(--s4); text-align: center; color: var(--danger-ink); font-weight: 700; cursor: default; }
+.sql-dialog .CodeMirror-lint-marker::before { content: "!"; }
+.CodeMirror-lint-tooltip { position: fixed; z-index: 1000; max-width: 360px; padding: var(--s1) var(--s2); background: var(--surface); color: var(--ink); border: 1px solid var(--line-2); border-radius: var(--r); box-shadow: var(--elev-8); font: var(--fs-body)/1.45 var(--font); white-space: pre-wrap; }
+.CodeMirror-lint-message-error { color: var(--danger-ink); }
+
+/* The syntax switch in the footer (MySQL | ClickHouse): one segmented control, the chosen segment solid ink and bold. */
+.sql-dialog .seg { display: inline-flex; border: 1px solid var(--line-2); border-radius: var(--r); overflow: hidden; }
+.sql-dialog .seg label { position: relative; display: inline-flex; align-items: center; height: var(--ctl-h); padding: 0 var(--s2); font-size: var(--fs-body); cursor: pointer; background: var(--surface); color: var(--ink-2); }
+.sql-dialog .seg label + label { border-left: 1px solid var(--line-2); }
+.sql-dialog .seg input { position: absolute; opacity: 0; pointer-events: none; }
+.sql-dialog .seg label.is-on { background: var(--ink); color: var(--on-ink); font-weight: 600; }
+.sql-dialog .seg label:focus-within { outline: 2px solid var(--focus); outline-offset: -2px; }
+.sql-dialog .seg label.is-off:not(.is-on) { cursor: not-allowed; color: var(--ink-3); text-decoration: line-through; }
+/* "ClickHouse SQL that will run": read-only, only in MySQL mode. */
+.sql-dialog__preview { border: 1px solid var(--line-2); border-radius: var(--r); background: var(--surface-2); }
+.sql-dialog__preview > summary { cursor: pointer; padding: var(--s1) var(--s2); font-weight: 600; }
+.sql-dialog__sql { margin: 0; padding: var(--s2); max-height: 160px; overflow: auto; border-top: 1px solid var(--line); font: var(--fs-body)/1.5 var(--font-mono); white-space: pre; user-select: text; }
+.sql-dialog__notes { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s1); color: var(--warn-ink); font-size: var(--fs-body); }
+.sql-dialog__notes li { display: flex; align-items: flex-start; gap: var(--s1); }

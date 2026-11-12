@@ -24,7 +24,7 @@ import { markerSizeError } from "../Dashboard/mark-style-model.js";
 import { RAMP_CHOICES, SCALE_CHOICES, DIV_PAIR_CHOICES, colourCentreError, colourRangeError, colourStepsError } from "../Dashboard/colour-scale-model.js";
 import { cleanParameter, MAX_PARAMS } from "../Core/parameters-model.js";
 import { cleanHierarchies, hierarchyTableKey } from "../Dashboard/hierarchy-model.js";
-import { cleanSource, wireSource } from "../Core/source-model.js";
+import { cleanSource, wireSource, cleanCustomSql } from "../Core/source-model.js";
 import { cleanCalculations } from "../Calc/calc-workbook.js";
 import { cleanWidgets, savedWidgets } from "../Board/board-model.js";
 import { cleanNotes, savedNotes } from "../Board/board-notes.js";
@@ -62,6 +62,8 @@ export function serializeWorkbook({ entities, relationships, tabs, active, theme
       // Join keys are the columns the relationships use (kept in the file so older builds still open it).
       joinKeys: [...new Set([...relationships.values()].flatMap(relEnds).filter((end) => end.entityId === e.id).map((end) => end.column))],
       ...(e.source ? { source: wireSource(e.source) } : {}), // a union / unpivot entity (its `table` is the source's name)
+      ...(e.customSql ? { customSql: e.customSql } : {}), // a table card reading the user's own SELECT (D105)
+      ...(e.customSql && e.customSqlMysql ? { customSqlMysql: e.customSqlMysql } : {}), // the MySQL text it was written as, shown when the card is edited again (D106)
     })),
     relationships: [...relationships.values()].map((r) => ({
       from: { entityId: r.from.entityId, column: r.from.column },
@@ -147,6 +149,11 @@ export function parseWorkbook(source) {
     if (e.source !== undefined) { // a saved union / unpivot: re-checked against the same rules; a bad one skips the whole entity
       const source = cleanSource(e.source, e.db, e.table);
       if (source) { entity.source = source; entity.joinKeys = []; } else { issues.push(`${e.db}.${e.table}: its union or unpivot definition wasn't valid — skipped.`); continue; }
+    }
+    if (e.customSql !== undefined && !entity.source) { // a saved custom SQL: text of an allowed length, or dropped with a note (the card falls back to its table)
+      const sql = cleanCustomSql(e.customSql);
+      if (sql) { entity.customSql = sql; const my = cleanCustomSql(e.customSqlMysql); if (my) entity.customSqlMysql = my; } // a bad MySQL text is simply dropped: the ClickHouse query is what runs
+      else issues.push(`${e.db}.${e.table}: its custom SQL wasn't valid — the card reads the table again.`);
     }
     entities.push(entity);
   }

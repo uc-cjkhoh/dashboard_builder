@@ -262,7 +262,8 @@ function keyPairsFor(from, to, pairs, rel) {
       pairs: current, used: { from: usedOn(a), to: usedOn(b) }, onChange: (next) => { current = next; } },
     pairs: () => current,
     check: {
-      run: (signal) => api.joinPreview(previewRequest(a, from.column, b, to.column, current), { signal }),
+      run: (signal) => (a.customSql || b.customSql) ? Promise.reject(new Error("Checking a join isn't available for a card with custom SQL yet.")) // the check reads the catalog tables, not the query
+        : api.joinPreview(previewRequest(a, from.column, b, to.column, current), { signal }),
       names: () => ({ fromTable: a.table, toTable: b.table, fromColumn: compoundName(from.column, current, "from"), toColumn: compoundName(to.column, current, "to"), declared: rel?.cardinality }),
     },
   };
@@ -354,15 +355,24 @@ function renderNotes() {
     more.addEventListener("toggle", () => { if (more.open) openNotes.add(rel.id); else openNotes.delete(rel.id); });
     const head = document.createElement("summary"), title = document.createElement("span");
     head.className = "rel-note__head";
-    title.className = "rel-note__title"; title.textContent = `${d.title} · ${joinBadge(rel.cardinality, rel.joinType, rel.pairs?.length ?? 0)}`;
+    title.className = "rel-note__title"; title.textContent = `${d.title} · ${d.kind}`; // words, not the canvas badge: "one to many" needs no decoding
     head.append(title);
-    more.append(head, ...d.sentences.map((t, i) => noteLine(t, d.refs, d.tones[i])));
+    more.append(head, ...d.sentences.map((t, i) => notePart(d.heads[i], noteLine(t, d.refs, d.tones[i]))));
     li.append(more);
     li.addEventListener("pointerenter", () => { hoverId = rel.id; markLinkedRows(); });
     li.addEventListener("pointerleave", () => { hoverId = null; markLinkedRows(); });
     list.append(li);
   }
   notes.replaceChildren(summary, list);
+}
+
+// A paragraph of a note under its short title (the purpose of the paragraph); the title is text in the same ink as the card title, so it never relies on colour.
+function notePart(heading, line) {
+  const part = document.createElement("div"), label = document.createElement("div");
+  part.className = "rel-note__part";
+  label.className = "rel-note__label"; label.textContent = heading;
+  part.append(label, line);
+  return part;
 }
 
 // One sentence of a note: table and column names are set in a chip (bold + wash, so not colour alone); a caution or reassurance gets a tone.

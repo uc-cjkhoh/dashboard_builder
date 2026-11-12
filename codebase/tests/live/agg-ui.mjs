@@ -85,7 +85,7 @@ try {
     await ev(`[...${dlg}.querySelectorAll('.card-choice')].find((x) => x.textContent === 'N:M').click(); ${dlg}.querySelector('.rel-dialog__foot .btn--primary').click()`);
     await waitFor(`document.querySelector('.rel-badge text')?.textContent === 'N:M'`, 'badge');
     const t = await ev(`document.querySelector('.rel-notes').textContent`);
-    must(/added up by this match first/.test(t) && /does not change the other/.test(t), `card: ${t}`);
+    must(/added up first/.test(t) && /does not change the other/.test(t), `card: ${t}`);
     must(!/counted more than once/.test(t), 'the fan-out warning should go');
     await shot('agg-linked.png');
   });
@@ -112,7 +112,7 @@ try {
     must(await ev(`${dlg}.querySelector('input[value=single]').checked`), 'single not preselected');
     await ev(`${dlg}.querySelector('.join-aggregate input[type=checkbox]').click()`);
     await ev(`[...${dlg}.querySelectorAll('.card-choice')].find((x) => x.textContent === 'N:M').click(); ${dlg}.querySelector('.rel-dialog__foot .btn--primary').click()`);
-    await waitFor(`!document.querySelector('.rel-notes').textContent.includes('added up by this match')`, 'card updated');
+    await waitFor(`!document.querySelector('.rel-notes').textContent.includes('added up first')`, 'card updated');
     queries.length = 0;
     await ev(`document.querySelectorAll('.tab:not(.tab--model) .tab__label')[0].click()`);
     await waitFor(`!document.getElementById('worksheet-view').hidden`, 'worksheet');

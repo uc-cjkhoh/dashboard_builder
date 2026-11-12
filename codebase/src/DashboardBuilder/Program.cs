@@ -69,6 +69,9 @@ builder.Services.AddScoped<ConnectionRegistry>();
 // Worksheet results are reused for a minute per server + user + request (bounded: ~256 units).
 builder.Services.AddMemoryCache(o => o.SizeLimit = 256);
 builder.Services.AddScoped<ClickHouseGateway>();
+// The Edit SQL dialect switch (D106): sqlglot, vendored in Tools/, run as a child `python3 -I` process. `Translate:Python` names another interpreter.
+builder.Services.AddSingleton(sp => new SqlTranslator(Path.Combine(sp.GetRequiredService<IWebHostEnvironment>().ContentRootPath, "Tools"),
+    builder.Configuration["Translate:Python"] ?? "python3"));
 
 var app = builder.Build();
 

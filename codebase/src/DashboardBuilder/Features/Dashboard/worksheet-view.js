@@ -13,7 +13,7 @@ import { createLatestGate, isAbortError, requestKey, truncationNotice } from "./
 import { STAT_SINGLE_TABLE, statFieldHint } from "./show-me-rules.js";
 import { statFilters, withCategories } from "./filter-rules.js";
 import { statCastProblem } from "./cast-model.js";
-import { sourceProblem, sourceOfTable } from "../Core/source-model.js";
+import { sourceProblem, sourceOfTable, customSqlOf, SQL_STAT_MESSAGE } from "../Core/source-model.js";
 import { heldOutProblem } from "../Relations/relation-rules.js";
 import { resolveRange, compareRange, compareName, COMPARE_TYPES } from "./period-model.js";
 import { tableProgress, needsNextPage, OTHER_TYPES, bucketNotice } from "./scale-model.js";
@@ -71,7 +71,8 @@ export function createWorksheetView(container, getContext, options = {}) {
       onSelect: options.onSelect, onDrill: options.onDrill, onLegend: options.onLegend, legendFocus: options.legendFocus,
       onTooltipFields: options.onTooltipFields, onMemberColors: options.onMemberColors, onCollapse: options.onCollapse, onCollapseAll: options.onCollapseAll, onColumn: options.onColumn } });
   // The tables the sheet's query involves (never throws: a sheet that can't be planned reaches nothing).
-  const statSourceProblem = (s, entities) => ([...s.columns, ...s.rows].some((f) => sourceOfTable(entities, f.db, f.table)) ? "A histogram reads one table — it can't read a union or unpivot yet." : null);
+  const statSourceProblem = (s, entities) => ([...s.columns, ...s.rows].some((f) => sourceOfTable(entities, f.db, f.table)) ? "A histogram reads one table — it can't read a union or unpivot yet."
+    : [...s.columns, ...s.rows].some((f) => customSqlOf(entities, f.db, f.table)) ? SQL_STAT_MESSAGE : null);
   const involvedOf = (c, s) => { try { return involvedTables(s, undefined, c.plan); } catch { return []; } };
   let extraNotice = null; // the line the last drawing wants in the notice (small-multiples cap, calculations on partial rows)
   let renderTimed = null; // the perf entry of the main fetch (set by fetchCached): the next draw is the one to time (not a table scroll-page redraw)

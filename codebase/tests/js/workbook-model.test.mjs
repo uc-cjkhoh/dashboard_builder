@@ -742,3 +742,42 @@ test("a conditional rule with no threshold yet survives import; a long currency 
   const ok = parseWorkbook(wbText({ entities: [], dashboards: [{ name: "S", sheet: { rows: [pill({})], format: { currencySymbol: "RM" } } }] }));
   assert.equal(ok.worksheets[0].sheet.format.currencySymbol, "RM");
 });
+
+test("custom SQL on a table card is saved and opened with it; the card stays an ordinary table (D105)", () => {
+  const state = sampleState();
+  const first = [...state.entities.values()][0];
+  first.customSql = "SELECT a, b FROM sales.t";
+  const saved = JSON.parse(JSON.stringify(serializeWorkbook(state)));
+  assert.equal(saved.entities[0].customSql, "SELECT a, b FROM sales.t");
+  assert.equal("customSql" in saved.entities[1], false);
+  const wb = parseWorkbook(JSON.stringify(saved));
+  assert.deepEqual(wb.issues, []);
+  assert.equal(wb.entities[0].customSql, "SELECT a, b FROM sales.t");
+  assert.equal("source" in wb.entities[0], false);
+});
+test("a saved custom SQL that is not text of an allowed length is dropped with a note, not the card", () => {
+  const state = sampleState();
+  const saved = JSON.parse(JSON.stringify(serializeWorkbook(state)));
+  saved.entities[0].customSql = 42;
+  const wb = parseWorkbook(JSON.stringify(saved));
+  assert.equal(wb.entities.length, saved.entities.length);
+  assert.equal("customSql" in wb.entities[0], false);
+  assert.ok(wb.issues.some((i) => /custom SQL/.test(i)));
+});
+
+test("the MySQL text a custom SQL was written as is saved beside it and opened with it (D106); a bad one is dropped quietly", () => {
+  const state = sampleState();
+  const first = [...state.entities.values()][0];
+  first.customSql = "SELECT a FROM sales.t LIMIT 3 OFFSET 2"; first.customSqlMysql = "SELECT a FROM sales.t LIMIT 2, 3";
+  const saved = JSON.parse(JSON.stringify(serializeWorkbook(state)));
+  assert.equal(saved.entities[0].customSqlMysql, "SELECT a FROM sales.t LIMIT 2, 3");
+  assert.equal("customSqlMysql" in saved.entities[1], false);
+  const wb = parseWorkbook(JSON.stringify(saved));
+  assert.deepEqual(wb.issues, []);
+  assert.equal(wb.entities[0].customSqlMysql, "SELECT a FROM sales.t LIMIT 2, 3");
+  saved.entities[0].customSqlMysql = 7;
+  const bad = parseWorkbook(JSON.stringify(saved));
+  assert.deepEqual(bad.issues, []); assert.equal("customSqlMysql" in bad.entities[0], false); assert.equal(bad.entities[0].customSql, "SELECT a FROM sales.t LIMIT 3 OFFSET 2");
+  // a MySQL text without a ClickHouse query is meaningless: it is not written
+  delete first.customSql; assert.equal("customSqlMysql" in JSON.parse(JSON.stringify(serializeWorkbook(state))).entities[0], false);
+});

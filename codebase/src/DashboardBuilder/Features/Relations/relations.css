@@ -142,20 +142,27 @@
 
 /* The Relationships card: solid (it floats over the canvas), top right under the tab bar, collapsible; scrolls inside when long. */
 .rel-notes { position: absolute; top: calc(var(--topbar-h) + var(--s4)); right: var(--s4); z-index: 2; width: max-content; min-width: 288px; max-width: calc(100% - 2 * var(--s4));
-  max-height: 50%; display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r); box-shadow: var(--elev-8); }
+  max-height: calc(100% - var(--topbar-h) - 2 * var(--s4)); display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r); box-shadow: var(--elev-8); }
 .rel-notes > summary { flex: none; display: flex; align-items: center; justify-content: space-between; height: 40px; padding: 0 var(--s4); font-weight: 600; cursor: pointer; list-style: none; }
 .rel-notes > summary::-webkit-details-marker, .rel-note__head::-webkit-details-marker { display: none; }
 .rel-notes > summary::after, .rel-note__head::after { content: ""; flex: none; width: 16px; height: 16px; background: currentColor; color: var(--ink-3); transition: rotate var(--dur) var(--ease-out);
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 8l3 3 3-3'/%3E%3C/svg%3E") center / 16px no-repeat; }
 .rel-notes:not([open]) > summary::after, .rel-note__more:not([open]) > .rel-note__head::after { rotate: -90deg; }
 .rel-notes[open] > summary { border-bottom: 1px solid var(--line); }
-/* <details> slots its content in one anonymous box, so the card's flex cap never reached the list: cap the list itself and scroll inside. */
-.rel-notes__list { list-style: none; margin: 0; padding: var(--s1); overflow-y: auto; max-height: calc(50vh - 40px); }
+/* The card is as tall as its text: opening a dropdown grows it, and the list scrolls inside only once the card would pass the bottom of the
+   Data Source (the card's max-height above). The details content box is made transparent so the list is a flex child that can shrink;
+   a browser without ::details-content gets a viewport-based cap instead. */
+.rel-notes::details-content { display: contents; }
+.rel-notes__list { list-style: none; margin: 0; padding: var(--s1); flex: 0 1 auto; min-height: 0; overflow-y: auto; }
+@supports not selector(::details-content) { .rel-notes__list { max-height: calc(100vh - var(--topbar-h) - 6 * var(--s4)); } }
 .rel-note { border-radius: var(--r); transition: background var(--dur-fast) var(--ease); }
 .rel-note + .rel-note { margin-top: var(--s1); }
 .rel-note--active { background: var(--accent-soft); }
 .rel-note p { margin: 0; }
-.rel-note__more { display: grid; gap: var(--s1); padding: var(--s2); }
+.rel-note__more { display: grid; gap: var(--s2); padding: var(--s2); }
+.rel-note__part { display: grid; gap: 0; width: 0; min-width: 100%; } /* a short title above its paragraph; like the text, it never sets the card's width */
+.rel-note__label { font-weight: 600; overflow-wrap: anywhere; }
+.rel-note__part + .rel-note__part { margin-top: var(--s2); } /* with the 8px grid gap: 16px between one paragraph and the next title, about a line of air */
 .rel-note__head { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); font-weight: 600; cursor: pointer; list-style: none; }
 .rel-note__head:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--r); }
 .rel-note__title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

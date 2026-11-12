@@ -19,6 +19,7 @@ public static class ApiLimits
     public const int MaxExportRows = 100_000; // CSV export of a whole worksheet result
     public const int DefaultRowsLimit = 100, MaxRowsLimit = 1000; // raw rows of one table (POST /api/rows): default / cap
     public const int MaxUnpivotColumns = 50, MaxUnpivotKeep = 5;  // wide columns one unpivot turns into rows / columns it keeps (POST /api/unpivot)
+    public const int MaxCustomSqlChars = 10_000; // characters in a card's custom SQL (D105)
     public const int MaxSourceName = 200;  // characters in a union / unpivot source's name (the table name its fields carry)
     public const int MaxUnionTables = 5;  // tables one union stacks (POST /api/union)
     public const int MaxRowsCells = 50_000; // rows x columns one row read may return
@@ -201,6 +202,7 @@ public static class RequestRules
     public static void ValidateQuery(QueryRequest r, int maxLimit)
     {
         if (r.From is null) throw Bad("'from' is required.", "from");
+        ValidateSources(r);
         if (r.Source is { } src)
         {
             ValidateSource(src);
@@ -302,14 +304,39 @@ public static class RequestRules
     }
     /// <summary>A union / unpivot used as a query source (QueryRequest.Source, POST /api/source/columns): a whitelisted kind, named tables and
     /// columns within the preview's limits (2..5 tables; 2..50 unpivoted, up to 5 kept), a bounded name. Never clamped. Field paths start "source.".</summary>
+    /// <summary>The custom SQL cards of a query (<see cref="QueryRequest.Sources"/>): custom SQL only, at most one per table, never beside a union / unpivot.</summary>
+    private static void ValidateSources(QueryRequest r)
+    {
+        var list = r.Sources ?? [];
+        if (list.Length == 0) return;
+        if (list.Length > ApiLimits.MaxJoins + 1) throw Bad($"A view can read at most {ApiLimits.MaxJoins + 1} tables with custom SQL.", "sources");
+        if (r.Source is not null) throw Bad("A union or unpivot can't be combined with a custom SQL table.", "sources");
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        for (var i = 0; i < list.Length; i++)
+        {
+            if (list[i] is not { } s) throw Bad($"'sources[{i}]' is required.", $"sources[{i}]");
+            if (s.Kind != SourceSql.Sql) throw Bad("Only a custom SQL table can be listed in 'sources'.", $"sources[{i}].kind");
+            try { ValidateSource(s); }
+            catch (RequestValidationException ex) { throw Bad(ex.Message, $"sources[{i}]." + (ex.Field ?? "").Replace("source.", "", StringComparison.Ordinal)); }
+            if (!seen.Add($"{s.Db}\0{s.Name}")) throw Bad($"'{s.Db}.{s.Name}' is listed twice.", $"sources[{i}].name");
+        }
+    }
+
     public static void ValidateSource(QuerySource s)
     {
-        if (s.Kind is not (SourceSql.Union or SourceSql.Unpivot)) throw Bad("A source is a union or an unpivot.", "source.kind");
+        if (s.Kind is not (SourceSql.Union or SourceSql.Unpivot or SourceSql.Sql)) throw Bad("A source is a union, an unpivot or a custom SQL query.", "source.kind");
         if (string.IsNullOrWhiteSpace(s.Db)) throw Bad("'source.db' is required.", "source.db");
         if (string.IsNullOrWhiteSpace(s.Name)) throw Bad("'source.name' is required.", "source.name");
         if (s.Name.Length > ApiLimits.MaxSourceName) throw Bad($"A source's name must be at most {ApiLimits.MaxSourceName} characters.", "source.name");
         var cols = s.Columns ?? [];
         var seen = new HashSet<string>(StringComparer.Ordinal);
+        if (s.Kind == SourceSql.Sql)
+        {
+            if (s.Tables is not null || s.Table is not null || s.Columns is not null || s.Keep is not null) throw Bad("A custom SQL source takes only 'sql'.", "source.sql");
+            CustomSql.Clean(s.Sql); // throws a 400 naming source.sql
+            return;
+        }
+        if (s.Sql is not null) throw Bad("Only a custom SQL source takes 'sql'.", "source.sql");
         if (s.Kind == SourceSql.Union)
         {
             var tables = s.Tables ?? [];

@@ -9,7 +9,10 @@ import { entityWidth } from "./card-width.js";
 import { snapTop } from "./align-snap.js";
 import { clampZoom, wheelZoom, panForZoom, panToReveal, toModel } from "./canvas-zoom.js";
 import { unionDiffControl } from "./union-diff.js";
-import { sourceNote, lossyNote, wireSource, MAX_SOURCE_COLUMNS } from "../Core/source-model.js";
+import { sourceNote, lossyNote, wireSource, MAX_SOURCE_COLUMNS, SQL_NOTE, defaultSql, sqlWire, lostKeys } from "../Core/source-model.js";
+import { relEnds } from "../Relations/relation-rules.js";
+import { wireContextMenu } from "../Core/menu.js";
+import { openSqlDialog } from "./sql-dialog.js";
 
 // Data Source canvas + entity cards. A table dropped from the sidebar (or added via the
 // `table:add` fallback) becomes an entity card: a db.table head over a fixed-height, scrollable
@@ -23,6 +26,7 @@ let createEntityImpl = null;
 let clearModelImpl = null;
 
 /** Add a table to the Data Source at (x, y). `source` makes it a union / unpivot entity (Core/source-model.js; its `table` is the source's name; it takes no relationship).
+ *  `customSql` is a saved SELECT the card reads instead of the table (D105; the card stays an ordinary, relatable table card); `customSqlMysql` the MySQL text it was written as (D106).
  *  Returns the new entity id, or null before the canvas is initialised. */
 export function addEntity(db, table, x, y, opts) { return createEntityImpl?.(db, table, x, y, opts) ?? null; }
 
@@ -210,9 +214,10 @@ export function initCanvas() {
     createEntity(db, table, x, y);
   }
 
-  function createEntity(db, table, x, y, { source = null } = {}) {
+  function createEntity(db, table, x, y, { source = null, customSql = null, customSqlMysql = null } = {}) {
     const entity = { id: `${db}.${table}#${++seq}`, db, table, x, y, columns: [], el: null };
     if (source) entity.source = source;
+    else if (customSql) { entity.customSql = customSql; if (customSqlMysql) entity.customSqlMysql = customSqlMysql; }
     entity.el = renderCard(entity);
     place(entity);
     entities.set(entity.id, entity);
@@ -259,7 +264,8 @@ export function initCanvas() {
         entity.el.querySelector(".entity__note-lossy")?.remove();
         if (lossy) { const p = document.createElement("p"); p.className = "entity__note entity__note-lossy"; p.textContent = lossy; p.title = res.lossy.join(", "); entity.el.querySelector(".entity__note")?.after(p); }
         if (res.truncated) toast(`${entity.table}: only the first ${MAX_SOURCE_COLUMNS} shared columns are listed.`, "info");
-      } else entity.columns = await api.columns(entity.db, entity.table);
+      } else if (entity.customSql) entity.columns = (await api.sourceColumns(sqlWire(entity.db, entity.table, entity.customSql))).columns; // the query's own columns
+      else entity.columns = await api.columns(entity.db, entity.table);
       renderColumns(entity);
       hide(statusEl);
       show(bodyEl);
@@ -276,6 +282,7 @@ export function initCanvas() {
     card.tabIndex = -1; // focusable by script (a duplicate drop focuses the existing card)
     card.dataset.entityId = entity.id;
     if (entity.source) { card.classList.add("entity--source"); card.dataset.source = entity.source.kind; }
+    wireContextMenu(card, () => cardMenu(entity), { label: `${entity.table} options`, returnFocus: () => card });
 
     const head = document.createElement("header");
     head.className = "entity__head";
@@ -343,7 +350,82 @@ export function initCanvas() {
       if (entity.source.kind === "union") note.after(unionDiffControl(entity.source));
     }
     card.append(head, status, body);
+    if (entity.customSql) syncSqlUi(entity, card);
     return card;
+  }
+
+  // --- custom SQL (D105) ---------------------------------------------------
+  // The card's right-click menu. A union / unpivot has no SQL of its own to edit; a card with custom SQL can go back to its table.
+  function cardMenu(entity) {
+    const noSql = Boolean(entity.source);
+    return [
+      { type: "item", label: "Edit SQL", disabled: noSql, title: noSql ? "A union or unpivot card is built from its dialog — it has no SQL to edit." : "Choose or change the columns with your own SELECT", onSelect: () => editSql(entity) },
+      ...(entity.customSql ? [{ type: "item", label: "Reset to table", onSelect: () => resetSql(entity) }] : []),
+    ];
+  }
+
+  // The card's marks for custom SQL: a class, and one note line under the head (like a union's), added or removed to match entity.customSql.
+  function syncSqlUi(entity, card = entity.el) {
+    card.classList.toggle("entity--sql", Boolean(entity.customSql));
+    const body = card.querySelector(".entity__body");
+    let note = body.querySelector(".entity__note--sql");
+    if (!entity.customSql) { note?.remove(); return; }
+    if (!note) { note = document.createElement("p"); note.className = "entity__note entity__note--sql"; body.prepend(note); }
+    note.textContent = SQL_NOTE;
+  }
+
+  // The key columns the card's relationships use: a new query has to keep them, or those links would point at nothing.
+  const keyColumnsOf = (entity) => relationshipsFor(entity.id).flatMap(relEnds).filter((end) => end.entityId === entity.id).map((end) => end.column);
+  const keysMessage = (lost) => `The relationships on this card use ${lost.map((c) => `“${c}”`).join(", ")}. Keep ${lost.length === 1 ? "that column" : "those columns"} in the query, or remove the relationship first.`;
+
+  function editSql(entity) {
+    const own = () => defaultSql(entity.db, entity.table, entity.columns);
+    openSqlDialog({
+      table: entity.table,
+      // MySQL is what the dialog opens in: the text it was written as, else the query translated for display (the default SELECT reads the same in both)
+      mysql: entity.customSql ? (entity.customSqlMysql ?? null) : own(),
+      translate: (text, from, to, signal) => api.translateSql(text, from, to, { signal }),
+      explain: (text, signal) => api.sourceSyntax(sqlWire(entity.db, entity.table, text), { signal }), // how ClickHouse reads it, to tell whether a MySQL round trip kept the meaning
+      validate: (sql, signal) => api.sourceColumns(sqlWire(entity.db, entity.table, sql), { signal }), // the live check while typing: describes the query, reads no rows
+      sql: entity.customSql ?? own(),
+      // "Default" is always the table's own SELECT, even when the card now shows a query's columns.
+      getDefault: async () => defaultSql(entity.db, entity.table, entity.customSql ? await api.columns(entity.db, entity.table) : entity.columns),
+      apply: async (sql, mysql) => { // `sql` is the ClickHouse query that will run; `mysql` the MySQL text it was written as, or null
+        if (!entity.customSql && sql.trim() === own().trim()) return; // the default text: nothing to change
+        if (sql === entity.customSql) { // the same query; only the way it was written may have changed
+          if ((mysql ?? null) !== (entity.customSqlMysql ?? null)) { if (mysql) entity.customSqlMysql = mysql; else delete entity.customSqlMysql; }
+          return;
+        }
+        const { columns } = await api.sourceColumns(sqlWire(entity.db, entity.table, sql)); // the server checks and describes the query; an error stays in the dialog
+        const lost = lostKeys(keyColumnsOf(entity), columns);
+        if (lost.length) throw new Error(keysMessage(lost));
+        applyCustomSql(entity, sql, columns, mysql);
+        toast(`${entity.table}: using your SQL.`, "ok");
+      },
+    });
+  }
+
+  async function resetSql(entity) {
+    const ok = await confirmDialog(`Go back to the table ${entity.db}.${entity.table}? Your SQL for this card will be removed.`, { confirmText: "Reset" });
+    if (!ok) return;
+    try {
+      const columns = await api.columns(entity.db, entity.table);
+      const lost = lostKeys(keyColumnsOf(entity), columns);
+      if (lost.length) { toast(keysMessage(lost), "danger"); return; }
+      applyCustomSql(entity, null, columns);
+      toast(`${entity.table}: back to the table.`, "ok");
+    } catch (err) { toast(err.message, "danger"); }
+  }
+
+  // Switch a card to a query (or back to its table): its columns become the query's, and everything that cached the old ones is told.
+  function applyCustomSql(entity, sql, columns, mysql = null) {
+    if (sql) entity.customSql = sql; else delete entity.customSql;
+    if (sql && mysql) entity.customSqlMysql = mysql; else delete entity.customSqlMysql; // the MySQL text it was written as, kept so reopening shows exactly it
+    entity.columns = columns;
+    syncSqlUi(entity);
+    renderColumns(entity);
+    emit("entity:sql", { entityId: entity.id, db: entity.db, table: entity.table });
+    emit("entity:loaded", { entityId: entity.id }); // links redraw on the new rows; worksheets re-check their fields
   }
 
   // Width follows the `db.table` text: measured in the title's own font, held between --entity-min and --entity-max.
@@ -390,7 +472,7 @@ export function initCanvas() {
       profile.append(icon("profile", { size: 14 }));
       profile.addEventListener("click", (event) => { event.preventDefault(); openColumnProfile(entity.db, entity.table, col); });
 
-      if (isSource) row.append(name, type); // no profile: a source takes no relationship and reads no table
+      if (isSource || entity.customSql) row.append(name, type); // no profile: it reads the table's own rows, which a union / unpivot or custom SQL card does not show
       else row.append(name, type, profile);
       cols.append(row);
     }

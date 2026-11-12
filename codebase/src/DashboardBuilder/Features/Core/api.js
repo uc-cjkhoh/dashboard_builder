@@ -14,6 +14,7 @@ export function errorMessage(status, data) {
 function httpError(status, data) {
   const e = new Error(errorMessage(status, data));
   e.status = status; e.field = data?.field ?? null;
+  if (data?.line != null) { e.line = data.line; e.col = data.col ?? null; e.start = data.start ?? null; } // a query the translator could not read: where
   return e;
 }
 async function guardedFetch(url, opts) {
@@ -90,6 +91,10 @@ export const api = {
   /** The first rows of one table with wide columns turned into rows (POST /api/unpivot): same shape as rows; the last two columns are Field and Value. */
   unpivot: (req, { signal } = {}) => request("POST", "/api/unpivot", req, signal),
   /** The columns a union / unpivot source exposes (POST /api/source/columns): { columns:[{name,type,category}], truncated }. */
+  /** A custom SQL source as ClickHouse reads it (POST /api/source/syntax, EXPLAIN SYNTAX): { syntax }. Two that print the same mean the same. */
+  sourceSyntax: (source, { signal } = {}) => request("POST", "/api/source/syntax", source, signal, { silent: true }),
+  /** Convert one query between MySQL and ClickHouse (POST /api/sql/translate, D106): { sql }. A 400 carries `line` / `col` / `start` when it can say where; a 503 means this server cannot translate. */
+  translateSql: (sql, from, to, { signal } = {}) => request("POST", "/api/sql/translate", { sql, from, to }, signal, { silent: true }),
   sourceColumns: (source, { signal } = {}) => request("POST", "/api/source/columns", source, signal),
   /** Join safety preview (POST /api/relationships/preview): bounded match / duplicate counts for a key pair → { from, to, sampleLimit, sampled }. */
   joinPreview: (req, { signal } = {}) => request("POST", "/api/relationships/preview", req, signal),
