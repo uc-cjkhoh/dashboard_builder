@@ -4,6 +4,7 @@ Functional changes (server, models, validation, calculations, charts, workbook).
 
 ## 2026-11-12
 
+- Performance log: a table's scroll pages are recorded (`0534f69`)
 - Edit SQL translator: a note when GROUP BY / ORDER BY / DISTINCT is on a text column (case-sensitive in ClickHouse) (`9c12e7b`)
 - Canvas: a card the server refuses (400) shows the reason and offers Remove card instead of Retry (`2bac347`)
 - Calculated fields: REGEXP_MATCH, REGEXP_EXTRACT, REGEXP_EXTRACT_NTH, REGEXP_REPLACE (literal RE2 pattern bound as a value; look-around and back-references refused in the formula) (`b8d7652`)
