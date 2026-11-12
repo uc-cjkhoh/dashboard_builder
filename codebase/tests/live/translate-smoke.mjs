@@ -43,7 +43,7 @@ async function translateTyped(sql) {
   const first = await translate(sql, 'mysql', 'clickhouse');
   if (!first.ok || !first.probes?.length) return first;
   const text = [];
-  for (const p of first.probes) { const cols = await columnsOf(p.sql); if (cols?.length === 2 && cols.every((c) => isText(c.type))) text.push(p.id); }
+  for (const p of first.probes) { const cols = await columnsOf(p.sql); if (cols?.length === (p.columns ?? 2) && cols.every((c) => isText(c.type))) text.push(p.id); }
   return text.length ? translate(sql, 'mysql', 'clickhouse', text) : first;
 }
 console.log(`server ${(await ch('SELECT version()'))} · translator ${SCRIPT.split('/').slice(-3).join('/')}\n`);

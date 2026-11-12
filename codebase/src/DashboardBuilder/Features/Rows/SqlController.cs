@@ -28,7 +28,7 @@ public sealed class SqlController : ApiControllerBase
             try
             {
                 var columns = await Gateway.DescribeQueryAsync(info, CustomSql.Clean(p.Sql), ct);
-                return columns.Count == 2 && columns.All(c => IsText(c.Type)) ? p.Id : null;
+                return columns.Count == p.Columns && columns.All(c => IsText(c.Type)) ? p.Id : null;
             }
             catch (Exception ex) when (ex is not OperationCanceledException) { return null; }
         }
