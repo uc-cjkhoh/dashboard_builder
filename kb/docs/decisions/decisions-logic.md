@@ -83,3 +83,10 @@ function and retrying as the keyword form on failure: it re-parses nested `IF (�
 - **Not built:** an `IN` list read from a field or another source (needs a subquery; stays in the
   [backlog](../development/backlog/calculations.md)), and a date `[@Parameter]` as a literal or list value (it still becomes
   `DATE(text)`, which is not a list value).
+
+### D107 — Regular expressions: four functions, a literal pattern, RE2
+`REGEXP_MATCH(t, p)`, `REGEXP_EXTRACT(t, p)`, `REGEXP_EXTRACT_NTH(t, p, n)` and `REGEXP_REPLACE(t, p, r)` are rows in the same `fn` table as the other text functions (compiled to ClickHouse's `match`, `extract`, `regexpExtract`, `replaceRegexpAll`).
+- **The pattern and the replacement are text written in the formula** (1–100 characters; the replacement may be empty), never a field: they are bound as `String` values like every other literal, so a formula still can't carry SQL, and ClickHouse sees a constant pattern (its regex functions need one).
+- **The engine is RE2**, which ClickHouse uses: it runs in linear time (no catastrophic backtracking, so a bad pattern can't hold a query hostage beyond the 12 s limit), is case-sensitive (`(?i)` at the start ignores case), and has **no look-ahead, look-behind, atomic groups or back-references in the pattern** (`\1` is only valid in a replacement). The validator refuses those, and an unclosed `(` or `[`, in the formula's own words before anything runs (`CalcValidator.RegexProblem`, twin `regexProblem` in `calc-types.js`); anything subtler (a stray quantifier) is ClickHouse's refusal, shown as a failed query.
+- **No match is NULL**, not an empty text, for the extracts (ClickHouse's own answer is `''`); `REGEXP_MATCH` of a NULL text is NULL; `REGEXP_EXTRACT` returns the first capture group when the pattern has one, else the whole match; `REGEXP_EXTRACT_NTH`'s `n` is a literal 1–1000 and must not exceed the groups (ClickHouse refuses it otherwise).
+- Behaviour: [calculated-fields-formulas.md](../concepts/worksheet/calculated-fields-formulas.md#text-functions); wire shape: [api-calculated-fields.md](../reference/api-calculated-fields.md).
