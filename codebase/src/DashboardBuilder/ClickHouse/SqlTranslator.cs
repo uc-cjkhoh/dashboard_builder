@@ -64,10 +64,12 @@ public sealed class SqlTranslator
                 limit.CancelAfter(_timeout);
                 try
                 {
+                    var errors = proc.StandardError.ReadToEndAsync(limit.Token); // drained and ignored: a full stderr pipe would stall the script
                     await proc.StandardInput.WriteAsync(JsonSerializer.Serialize(new { sql, from, to }));
                     proc.StandardInput.Close();
                     var text = await ReadLimitedAsync(proc.StandardOutput, limit.Token);
                     await proc.WaitForExitAsync(limit.Token);
+                    try { await errors; } catch (OperationCanceledException) when (!ct.IsCancellationRequested) { throw; } catch { /* nothing to report */ }
                     return Interpret(text);
                 }
                 catch (OperationCanceledException) when (!ct.IsCancellationRequested)
