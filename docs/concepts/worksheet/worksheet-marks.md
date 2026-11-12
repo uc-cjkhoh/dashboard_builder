@@ -25,7 +25,7 @@ How each encoding reaches the query (`planDims` / `planMeasures`):
 
 | Encoding | Accepts | Query effect | Renders as |
 |---|---|---|---|
-| **Color** (categorical) | 1 dimension | extra group-by, appended last | one coloured series per value: bar → grouped, stacked → stacked, line/area → one line each, scatter / square / circle → one point series per member (palette or member colour, legend); Table → extra header level |
+| **Color** (categorical) | 1 dimension | extra group-by, appended last | one coloured series per value: bar → grouped, stacked → stacked, line/area → one line each, scatter / square / circle → one point series per member (palette or member colour, legend), Gantt → a bar per row and member (palette or member colour, legend); Table → extra header level |
 | **Color** (numeric) | 1 measure | extra measure | continuous token gradient or steps: scatter points and heatmap cells through `visualMap`; each bar, line / area marker and stretch, pie / donut slice and treemap tile wears its value's colour with a display-only legend (below); hue, range, centre and steps in Format |
 | **Size** | 1 measure | extra measure | scatter bubble size; bar thickness; line / area marker size; treemap tile area (below) |
 | **Label** | 1 field | numeric → extra measure; categorical reads an existing key | the value drawn on each mark (on a Colour split too: each bar shows its own cell's value) |

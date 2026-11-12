@@ -40,7 +40,7 @@ How the action applies:
 - It is a bound-parameter filter appended in `buildPlan` **only when the column's table is already in the query** — a click never forces a join.
 - Exclude is a single-value `!=`. To exclude several members, use a `not in` filter.
 - Clicking the same mark again clears it.
-- Works on bar, stacked, line, area, combo, pie, donut and scatter (incl. colour-split). Other types and null values are no-ops.
+- Works on bar, stacked, line, area, combo, pie, donut, scatter (incl. colour-split) and Gantt (a bar selects its row). Other types and null values are no-ops.
 - On a dashboard the same click filters the other widgets at once ([dashboards.md](../workbook/dashboards.md#cross-widget-filtering)).
 - Why select-then-act: [D16](../../decisions/decisions-platform.md#d16--click-to-filter-is-a-select-then-act-worksheet-selection).
 

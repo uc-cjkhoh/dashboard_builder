@@ -153,7 +153,7 @@ Nothing here reaches the server; dashboards add no endpoint
   marks:  { size, label, detail: [], tooltip: [], shape, path, angle },
   format: { numberFormat, decimals, currencySymbol, dateFormat, topN, dateBucket, target, downIsGood, conditional, legend,
             dataLabels, colorByDimension, xTitle, yTitle,
-            lineStyle, heatmapShape, targetMeasure,
+            lineStyle, heatmapShape, ganttLength?, targetMeasure,
             syncAxes, dualAxis, secondaryType, markerSize, markBorder, markBorderColor?, markerShape, font, tableAlign, tableDensity, tableShade }
 }
 ```
@@ -166,6 +166,7 @@ Nothing here reaches the server; dashboards add no endpoint
   |---|---|
   | `lineStyle` | `straight` \| `step` \| `jump` (default `straight`; `jump` is shown as Step (centred)) |
   | `heatmapShape` | `square` \| `circle` (default `square`) |
+  | `ganttLength` | optional: `length` \| `end` (absent = `length`) — a Gantt's second measure is the bar's length or the end it runs to |
   | `targetMeasure` | null or a shelf-measure index 1–19 — the bullet's target field; null = the fixed `target` |
   | `syncAxes` | boolean (default false) |
   | `dualAxis` | boolean (default false; line / area right axis) |
