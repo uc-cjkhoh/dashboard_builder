@@ -1,5 +1,5 @@
 ---
-components: [src/DashboardBuilder/Features/Rows/SqlController.cs, src/DashboardBuilder/ClickHouse/SqlTranslator.cs, src/DashboardBuilder/ClickHouse/CustomSql.cs, src/DashboardBuilder/Features/Rows/SourceController.cs, src/DashboardBuilder/ClickHouse/RequestValidation.cs]
+components: [src/DashboardBuilder/Features/Rows/SqlController.cs, src/DashboardBuilder/ClickHouse/SqlTranslator.cs, src/DashboardBuilder/ClickHouse/CustomSql.cs, src/DashboardBuilder/Features/Rows/SourceController.cs, src/DashboardBuilder/ClickHouse/RequestValidation.cs, src/DashboardBuilder/ClickHouse/ClickHouseGateway.cs, src/DashboardBuilder/ClickHouse/JoinPreview.cs]
 ---
 # API: custom SQL on a card
 
@@ -29,3 +29,9 @@ Body `{ sql, from, to }`; `from` and `to` are `mysql` or `clickhouse`, and diffe
 
 `POST /api/source/syntax` (`Features/Rows/SourceController.cs`) takes the same custom SQL source as `/api/source/columns` and answers `{ syntax }`: the query as ClickHouse reads it (`EXPLAIN SYNTAX`, which prints functions as calls with names resolved and the layout gone, so two texts that print the same mean the same). Custom SQL only (400 `source.kind`); the same text rules as the columns (400 `source.sql`), ClickHouse's own words for a query problem, and no rows read. The dialog compares two of these to tell whether a MySQL round trip kept a query's meaning ([sql-syntax.md](../concepts/data-source/sql-syntax.md#the-round-trip-check)).
 
+
+## Reads over a custom-SQL card
+
+`POST /api/rows`, `POST /api/databases/{db}/tables/{table}/profile`, `POST /api/databases/{db}/tables/{table}/histogram` and `POST /api/relationships/preview` (`from.source`, `to.source`, each end on its own) take an optional `source`: `{ kind: "sql", db, name, sql }`, the card's query. The server describes the guarded text, then reads it as the derived table `(<sql>)` instead of the catalog table (`ClickHouseGateway.ReadableAsync`). Columns, filters and key kinds are validated against the **columns the query returns**; every limit, bound value, quote, time limit and `readonly=2` is unchanged. With no `columns`, View data returns the query's first 200.
+
+Refused (400): `source.kind` when it is not `sql` (a union or unpivot), `source.name` when `db` / `name` differ from the table in the request (for profile and histogram the URL's), `source.sql` for the guard's messages, ClickHouse's own refusal, "The query returns no columns.", more than 200 columns, or a repeated column name. On the join preview the paths are prefixed `from.source.*` / `to.source.*`. The histogram reads the query three times (min, max, buckets); the join preview's per-end `LIMIT` bounds output rows, not the query. Code: `RequestRules.ValidateSqlSource`.

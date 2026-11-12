@@ -88,7 +88,7 @@ With no entities, the canvas shows **a ghost model**, **one sentence** and **one
 Right-click a card (or press the ContextMenu key / Shift+F10 with focus on it) for its menu: **Edit SQL**, and **Reset to table** once the card has custom SQL.
 **Edit SQL** opens a dialog on the card's `SELECT`; Save makes the card read the query. A union or unpivot card has no SQL to edit, so the item is disabled with a reason.
 Full behaviour, the SQL guard and what the card does afterwards: [query-sources.md § Custom SQL on a card](query-sources.md#custom-sql-on-a-card).
-A card with custom SQL shows a `Custom SQL` note under its head and no profile buttons; it can still be related and joined.
+A card with custom SQL shows a `Custom SQL` note under its head; its profile buttons, View data, the histogram and *Check this join* read the card's query (as a derived table, the same one the worksheet uses), and it can be related and joined. A union or unpivot card has no profile buttons.
 
 ## Card anatomy
 
