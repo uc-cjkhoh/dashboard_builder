@@ -131,11 +131,72 @@ const cases = [
       ['a user variable is refused', `SELECT @x := 1`, '(refused'], ['a system variable is refused', `SELECT @@sql_mode`, '(refused'],
     ];
   })(),
+  // ---- common MySQL functions (MySQL's documented results) ----
+  ...(() => {
+    const c = (label, sql, expected) => [`fn: ${label}`, `SELECT ${sql}`, expected];
+    const D = `'2024-03-05'`, DT = `'2024-03-05 14:07:09'`;
+    return [
+      c('CONCAT', `CONCAT('a', 'b', 'c')`, 'abc'), c('CONCAT with NULL is NULL', `CONCAT('a', NULL)`, '\\N'), c('CONCAT_WS skips NULL', `CONCAT_WS('-', 'a', NULL, 'b')`, 'a-b'), c('CONCAT_WS single', `CONCAT_WS(',', 'x')`, 'x'),
+      c('LENGTH counts bytes', `LENGTH('héllo')`, '6'), c('CHAR_LENGTH counts characters', `CHAR_LENGTH('héllo')`, '5'), c('UPPER LOWER non-ASCII', `CONCAT(UPPER('aé'), '|', LOWER('AÉ'))`, 'AÉ|aé'),
+      c('TRIM LTRIM RTRIM', `CONCAT('[', TRIM('  a  '), LTRIM('  a'), RTRIM('a  '), ']')`, '[aaa]'), c('LEFT RIGHT', `CONCAT(LEFT('abcdef', 2), '|', RIGHT('abcdef', 2))`, 'ab|ef'),
+      c('SUBSTRING', `SUBSTRING('abcdef', 2, 3)`, 'bcd'), c('SUBSTR negative start', `SUBSTR('abcdef', -3)`, 'def'), c('MID', `MID('abcdef', 2, 2)`, 'bc'), c('SUBSTRING FROM', `SUBSTRING('abcdef' FROM 3)`, 'cdef'),
+      c('SUBSTRING_INDEX 2', `SUBSTRING_INDEX('a,b,c', ',', 2)`, 'a,b'), c('SUBSTRING_INDEX -1', `SUBSTRING_INDEX('a,b,c', ',', -1)`, 'c'),
+      c('REPLACE', `REPLACE('abcabc', 'b', 'X')`, 'aXcaXc'), c('REVERSE', `REVERSE('abc')`, 'cba'), c('REPEAT', `REPEAT('ab', 3)`, 'ababab'),
+      c('LPAD', `LPAD('5', 3, '0')`, '005'), c('RPAD', `RPAD('5', 3, '0')`, '500'), c('LPAD truncates', `LPAD('abcdef', 3, '0')`, 'abc'),
+      c('LOCATE', `LOCATE('b', 'abcb')`, '2'), c('LOCATE from', `LOCATE('b', 'abcb', 3)`, '4'), c('INSTR', `INSTR('abc', 'b')`, '2'), c('POSITION IN', `POSITION('b' IN 'abc')`, '2'),
+      c('FIND_IN_SET', `FIND_IN_SET('b', 'a,b,c')`, '2'), c('FIND_IN_SET missing', `FIND_IN_SET('z', 'a,b')`, '0'), c('FIELD', `FIELD('b', 'a', 'b', 'c')`, '2'), c('ELT', `ELT(2, 'a', 'b', 'c')`, 'b'),
+      c('REGEXP', `'abc' REGEXP '^a'`, '1'), c('RLIKE no match', `'abc' RLIKE 'z'`, '0'), c('REGEXP ignores case', `'abc' REGEXP '^A'`, '1'), c('REGEXP_LIKE ignores case', `REGEXP_LIKE('abc', '^A')`, '1'),
+      c('REGEXP_REPLACE', `REGEXP_REPLACE('abc123', '[0-9]+', '#')`, 'abc#'), c('REGEXP_SUBSTR', `REGEXP_SUBSTR('abc123', '[0-9]+')`, '123'),
+      c('ASCII', `ASCII('A')`, '65'), c('HEX number', `HEX(255)`, 'FF'), c('HEX text', `HEX('abc')`, '616263'), c('UNHEX', `UNHEX('4D')`, 'M'), c('FORMAT is refused (no thousands separator in ClickHouse)', `FORMAT(1234.567, 2)`, '(refused'), c('STRCMP', `STRCMP('a', 'b')`, '-1'),
+      c('MD5 is a hex text', `MD5('a')`, '0cc175b9c0f1b6a831c399e269772661'), c('SHA1 is a hex text', `SHA1('a')`, '86f7e437faa5a7fce15d1ddcb9eaeaea377667b8'), c('CAST AS CHAR', `CAST(5 AS CHAR)`, '5'),
+      c('ABS', `ABS(-5)`, '5'), c('CEIL', `CEIL(1.2)`, '2'), c('CEILING', `CEILING(1.2)`, '2'), c('FLOOR negative', `FLOOR(-1.2)`, '-2'), c('ROUND half away from zero', `ROUND(2.5)`, '3'), c('ROUND negative half', `ROUND(-2.5)`, '-3'),
+      c('ROUND digits', `ROUND(2.567, 1)`, '2.6'), c('ROUND negative digits', `ROUND(1234.567, -2)`, '1200'), c('TRUNCATE', `TRUNCATE(1.999, 1)`, '1.9'), c('TRUNCATE negative number', `TRUNCATE(-1.999, 1)`, '-1.9'), c('TRUNCATE negative digits', `TRUNCATE(1234, -2)`, '1200'),
+      c('MOD()', `MOD(10, 3)`, '1'), c('MOD operator', `10 MOD 3`, '1'), c('% sign follows the dividend', `-7 % 3`, '-1'), c('POW', `POW(2, 3)`, '8'), c('POWER', `POWER(2, 3)`, '8'), c('SQRT', `SQRT(16)`, '4'),
+      c('LOG base', `LOG(10, 100)`, '2'), c('LOG10', `LOG10(100)`, '2'), c('LOG2', `LOG2(8)`, '3'), c('LN', `LN(1)`, '0'), c('EXP', `EXP(0)`, '1'), c('SIGN', `SIGN(-5)`, '-1'), c('PI rounded', `ROUND(PI(), 3)`, '3.142'),
+      c('GREATEST', `GREATEST(1, 3, 2)`, '3'), c('LEAST', `LEAST(1, 3, 2)`, '1'), c('GREATEST with NULL is NULL', `GREATEST(1, NULL, 2)`, '\\N'), c('LEAST with NULL is NULL', `LEAST(1, NULL, 2)`, '\\N'),
+      c('BIT_COUNT', `BIT_COUNT(255)`, '8'), c('bit and', `5 & 3`, '1'), c('bit or', `5 | 3`, '7'), c('bit xor', `5 ^ 3`, '6'), c('shift left', `1 << 3`, '8'), c('shift right', `16 >> 2`, '4'), c('~ is unsigned 64-bit', `~5`, '18446744073709551610'),
+      c('IF', `IF(1 > 0, 'a', 'b')`, 'a'), c('IF NULL is false', `IF(NULL, 'a', 'b')`, 'b'), c('IFNULL', `IFNULL(NULL, 'x')`, 'x'), c('NULLIF', `NULLIF(1, 1)`, '\\N'), c('ISNULL', `ISNULL(NULL)`, '1'),
+      c('<=> both NULL', `NULL <=> NULL`, '1'), c('<=> NULL and 1', `1 <=> NULL`, '0'), c('COALESCE', `COALESCE(NULL, NULL, 3)`, '3'), c('CASE', `CASE WHEN 1 > 2 THEN 'a' WHEN 2 > 1 THEN 'b' END`, 'b'),
+      c('IN', `1 IN (1, 2)`, '1'), c('NOT IN', `3 NOT IN (1, 2)`, '1'), c('BETWEEN', `5 BETWEEN 1 AND 10`, '1'), c('NULL IN is NULL', `NULL IN (1, 2)`, '\\N'), c('TRUE + TRUE', `TRUE + TRUE`, '2'), c('XOR', `1 XOR 0`, '1'), c('NOT', `NOT 1`, '0'), c('! operator', `!1`, '0'),
+      c('COUNT(*)', `COUNT(*) FROM numbers(5)`, '5'), c('SUM', `SUM(number) FROM numbers(5)`, '10'), c('AVG', `AVG(number) FROM numbers(5)`, '2'), c('MIN MAX', `CONCAT(MIN(number), MAX(number)) FROM numbers(5)`, '04'),
+      c('GROUP_CONCAT ORDER BY SEPARATOR', `GROUP_CONCAT(number ORDER BY number SEPARATOR ',') FROM numbers(5)`, '0,1,2,3,4'), c('COUNT DISTINCT', `COUNT(DISTINCT number % 2) FROM numbers(5)`, '2'),
+      c('STDDEV_POP', `STDDEV_POP(number) FROM numbers(5)`, '1.4142135623730951'), c('VAR_POP', `VAR_POP(number) FROM numbers(5)`, '2'), c('VARIANCE', `VARIANCE(number) FROM numbers(5)`, '2'), c('STD', `STD(number) FROM numbers(5)`, '1.4142135623730951'),
+      c('DATE()', `DATE(${DT})`, '2024-03-05'), c('YEAR of text', `YEAR(${D})`, '2024'), c('MONTH of text', `MONTH(${D})`, '3'), c('DAY of text', `DAY(${D})`, '5'), c('DAYOFMONTH', `DAYOFMONTH(${D})`, '5'),
+      c('DAYOFWEEK Sunday=1', `DAYOFWEEK(${D})`, '3'), c('WEEKDAY Monday=0', `WEEKDAY(${D})`, '1'), c('DAYOFYEAR', `DAYOFYEAR(${D})`, '65'), c('WEEK', `WEEK(${D})`, '9'), c('WEEKOFYEAR', `WEEKOFYEAR(${D})`, '10'), c('YEARWEEK', `YEARWEEK(${D})`, '202409'),
+      c('QUARTER', `QUARTER(${D})`, '1'), c('HOUR of text', `HOUR(${DT})`, '14'), c('MINUTE of text', `MINUTE(${DT})`, '7'), c('SECOND of text', `SECOND(${DT})`, '9'), c('MONTHNAME', `MONTHNAME(${D})`, 'March'), c('DAYNAME', `DAYNAME(${D})`, 'Tuesday'),
+      c('ADDDATE days', `ADDDATE('2024-01-31', 1)`, '2024-02-01'), c('ADDDATE interval', `ADDDATE('2024-01-31', INTERVAL 1 MONTH)`, '2024-02-29'), c('SUBDATE days', `SUBDATE('2024-03-01', 1)`, '2024-02-29'),
+      c('TO_DAYS', `TO_DAYS(${D})`, '739315'), c('FROM_DAYS', `FROM_DAYS(739315)`, '2024-03-05'), c('EXTRACT YEAR', `EXTRACT(YEAR FROM ${D})`, '2024'), c('EXTRACT MONTH', `EXTRACT(MONTH FROM ${D})`, '3'),
+      c('TIMESTAMP()', `TIMESTAMP(${D})`, '2024-03-05 00:00:00'), c('MAKEDATE', `MAKEDATE(2024, 60)`, '2024-02-29'), c('TIMESTAMPADD', `TIMESTAMPADD(DAY, 1, '2024-01-31')`, '2024-02-01'),
+      c('CURDATE = CURRENT_DATE', `CURDATE() = CURRENT_DATE`, '1'), c('NOW is after 2020', `NOW() >= CAST('2020-01-01' AS DATETIME)`, '1'),
+      // ---- edge cases of the mapped functions: NULL columns, signs, case, ordering ----
+      c('CONCAT_WS skips a NULL column', `CONCAT_WS('-', a, b, c) FROM (SELECT 'x' AS a, NULL AS b, 'z' AS c) t`, 'x-z'), c('CONCAT_WS of numbers', `CONCAT_WS(',', 1, 2.5, 'a')`, '1,2.5,a'),
+      c('GREATEST with a NULL column', `GREATEST(a, b) FROM (SELECT 1 AS a, NULL AS b) t`, '\\N'), c('LEAST of text', `LEAST('b', 'a', 'c')`, 'a'),
+      c('FIND_IN_SET ignores case', `FIND_IN_SET('B', 'a,b,c')`, '2'), c('FIND_IN_SET with NULL is NULL', `FIND_IN_SET(a, 'a,b') FROM (SELECT NULL AS a) t`, '\\N'),
+      c('FIELD with NULL is 0', `FIELD(a, 'a', 'b') FROM (SELECT NULL AS a) t`, '0'), c('FIELD ignores case', `FIELD('B', 'a', 'b')`, '2'), c('FIELD numbers', `FIELD(3, 1, 2, 3)`, '3'),
+      c('ELT out of range is NULL', `ELT(5, 'a', 'b')`, '\\N'), c('ELT zero is NULL', `ELT(0, 'a', 'b')`, '\\N'),
+      c('STRCMP ignores case, less', `STRCMP('a', 'B')`, '-1'), c('STRCMP ignores case, equal', `STRCMP('A', 'a')`, '0'), c('STRCMP greater', `STRCMP('b', 'a')`, '1'), c('STRCMP with NULL is NULL', `STRCMP(a, 'a') FROM (SELECT NULL AS a) t`, '\\N'),
+      c('LOWER(x) = upper-case text', `LOWER('abc') = 'ABC'`, '1'), c('UPPER(x) = lower-case text', `UPPER('abc') = 'abc'`, '1'),
+      c('REGEXP_REPLACE $1 groups', `REGEXP_REPLACE('abc123', '([a-z]+)([0-9]+)', '$2-$1')`, '123-abc'), c('REGEXP_REPLACE ignores case', `REGEXP_REPLACE('ABC', 'b', 'x')`, 'AxC'),
+      c('REGEXP_SUBSTR no match is NULL', `REGEXP_SUBSTR('abc', '[0-9]+')`, '\\N'), c('NOT REGEXP', `'abc' NOT REGEXP 'z'`, '1'), c("REGEXP_LIKE match type 'c' is case-sensitive", `REGEXP_LIKE('abc', '^A', 'c')`, '0'),
+      c('SHA2 256', `SHA2('a', 256)`, 'ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb'), c('SHA2 odd length is refused', `SHA2('a', 100)`, '(refused'),
+      c('bit and with a negative', `-1 & 255`, '255'), c('~0', `~0`, '18446744073709551615'), c('shift left past 8 bits', `255 << 8`, '65280'), c('BIT_COUNT of -1', `BIT_COUNT(-1)`, '64'),
+      c('DAYOFWEEK Sunday', `DAYOFWEEK('2024-03-03')`, '1'), c('DAYOFWEEK Saturday', `DAYOFWEEK('2024-03-02')`, '7'), c('WEEKDAY Sunday', `WEEKDAY('2024-03-03')`, '6'),
+      c('MONTHNAME of a DATE', `MONTHNAME(CAST('2024-03-05' AS DATE))`, 'March'), c('DAYNAME of a DATETIME', `DAYNAME(CAST('2024-03-05 10:00:00' AS DATETIME))`, 'Tuesday'),
+      c('ROUND small half', `ROUND(0.5)`, '1'), c('ROUND negative digits of a negative', `ROUND(-2.567, 2)`, '-2.57'), c('CAST negative half AS SIGNED', `CAST(-2.5 AS SIGNED)`, '-3'),
+      c('GROUP_CONCAT default separator', `GROUP_CONCAT(number ORDER BY number) FROM numbers(5)`, '0,1,2,3,4'), c('GROUP_CONCAT DESC', `GROUP_CONCAT(number ORDER BY number DESC) FROM numbers(5)`, '4,3,2,1,0'),
+      c('GROUP_CONCAT DISTINCT', `GROUP_CONCAT(DISTINCT number % 2 ORDER BY number % 2) FROM numbers(5)`, '0,1'), c('GROUP_CONCAT skips NULL', `GROUP_CONCAT(x ORDER BY x) FROM (SELECT 1 AS x UNION ALL SELECT NULL UNION ALL SELECT 2) t`, '1,2'),
+      c('GROUP_CONCAT of only NULLs is NULL', `GROUP_CONCAT(x) FROM (SELECT NULL AS x) t`, '\\N'), c('GROUP_CONCAT two sort keys', `GROUP_CONCAT(a ORDER BY b DESC, c DESC) FROM (SELECT 'x' AS a, 1 AS b, 2 AS c UNION ALL SELECT 'y', 2, 1 UNION ALL SELECT 'z', 2, 3) t`, 'z,y,x'),
+      c('GROUP_CONCAT empty separator', `GROUP_CONCAT(number ORDER BY number SEPARATOR '') FROM numbers(3)`, '012'), c('GROUP_CONCAT of text', `GROUP_CONCAT(n ORDER BY n SEPARATOR ' | ') FROM (SELECT 'b' AS n UNION ALL SELECT 'a') t`, 'a | b'),
+      c('CAST AS SIGNED', `CAST('5' AS SIGNED) + 1`, '6'), c('CAST AS DATE', `CAST('2024-03-05' AS DATE)`, '2024-03-05'), c('CAST float AS SIGNED rounds', `CAST(2.5 AS SIGNED)`, '3'),
+    ];
+  })(),
   ['ORDER BY puts NULL first (ascending)', "SELECT x FROM (SELECT 1 AS x UNION ALL SELECT NULL UNION ALL SELECT 0) ORDER BY x LIMIT 1", '\\N'],
 ];
+const ONLY = process.env.ONLY ? new RegExp(process.env.ONLY, 'i') : null; // run only the cases whose label matches (while working on one group)
 let failed = 0;
 console.log('Part 1 — MySQL -> ClickHouse (the translated SQL must return what MySQL returns)');
 for (const [label, mysql, expected] of cases) {
+  if (ONLY && !ONLY.test(label)) continue;
   const r = await translate(mysql, 'mysql', 'clickhouse');
   let got;
   if (!r.ok) got = `(refused: ${r.error})`;
@@ -175,6 +236,7 @@ const typical = [
   'SELECT dummy FROM system.one',
   'SELECT a, b FROM (SELECT 1 AS a, 2 AS b)',
 ];
+if (process.env.SKIP_PART2) { console.log(failed ? `\n${failed} case(s) DIFFERENT from MySQL` : '\nall Part 1 cases match MySQL'); process.exit(failed ? 1 : 0); }
 console.log('\nPart 2 — ClickHouse -> MySQL -> ClickHouse: would the dialog open each query in MySQL syntax?');
 const tally = {};
 for (const q of typical) {

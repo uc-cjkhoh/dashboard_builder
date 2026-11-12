@@ -156,10 +156,15 @@ def mysql_to_clickhouse(sql, sqlglot, ErrorLevel):
 
     def foldable(node):
         """The other side of a comparison: anything but a literal, NULL or a subquery (whose type we cannot know)."""
-        return not isinstance(node, (exp.Literal, exp.Null, exp.Subquery, exp.Select, exp.Lower, exp.Upper))  # LOWER(x) = 'a' already ignores case
+        return not isinstance(node, (exp.Literal, exp.Null, exp.Subquery, exp.Select))
+
+    def lowered(node):
+        return isinstance(node, exp.Lower) or (isinstance(node, exp.Anonymous) and node.name == "lowerUTF8")
 
     def fold(node):
-        """lowerUTF8(toString(x)): the same text whatever the column's type, compared without regard to case."""
+        """lowerUTF8(toString(x)): the same text whatever the column's type, compared without regard to case (LOWER(x) is already lower-cased text)."""
+        if isinstance(node, exp.Lower) or (isinstance(node, exp.Anonymous) and node.name == "lowerUTF8"):
+            return node
         return A("lowerUTF8", A("toString", node))
 
     def when(node):
@@ -328,8 +333,217 @@ def mysql_to_clickhouse(sql, sqlglot, ErrorLevel):
                 i += 1
         return out_p
 
+
+    # --- helpers for the function mappings -------------------------------------------------------------------------------------------------------------------
+    def txt(node):
+        """`node` as text: a text literal stays, anything else goes through toString (arrays of mixed types, comparisons and joins need one type)."""
+        return node.copy() if (isinstance(node, exp.Literal) and node.is_string) else A("toString", node.copy())
+
+    def low(node):
+        return A("lowerUTF8", txt(node))
+
+    def either_null(nodes):
+        """`isNull(a) OR isNull(b) ...` for the operands that can be NULL (a literal never is); None when none can."""
+        cond = None
+        for n in nodes:
+            if isinstance(n, exp.Literal):
+                continue
+            test = A("isNull", n.copy())
+            cond = test if cond is None else exp.Or(this=cond, expression=test)
+        return cond
+
+    def null_if_any_null(nodes, result):
+        """MySQL answers NULL when any argument is NULL; ClickHouse's own version of the function often does not."""
+        cond = either_null(nodes)
+        return result if cond is None else A("if", cond, exp.Null(), result)
+
+    def lam(param, body):
+        return exp.Lambda(this=body, expressions=[exp.to_identifier(param)])
+
+    def number_text(node):
+        """The text of a numeric literal (a leading minus included), or None."""
+        if isinstance(node, exp.Neg) and isinstance(node.this, exp.Literal) and not node.this.is_string:
+            return "-" + node.this.this
+        if isinstance(node, exp.Literal) and not node.is_string:
+            return node.this
+        return None
+
+    def decimal_literal(text):
+        """An exact decimal for a numeric literal: MySQL treats 2.5 as an exact DECIMAL (ROUND gives 3), ClickHouse as a Float64 (ROUND gives 2)."""
+        scale = len(text.split(".")[1]) if "." in text and "e" not in text.lower() else None
+        return A("toDecimal128", S(text), N(scale)) if scale is not None and 0 < scale <= 30 else None
+
+    def ci_pattern(pattern):
+        """MySQL's REGEXP ignores case by default; RE2 (ClickHouse) is told so with a leading (?i)."""
+        if isinstance(pattern, exp.Literal) and pattern.is_string:
+            return pattern.copy() if pattern.this.startswith("(?i)") else S("(?i)" + pattern.this)
+        return A("concat", S("(?i)"), pattern.copy())
+
+    def date_arg(node):
+        return when(node.this if isinstance(node, exp.TsOrDsToDate) and isinstance(node.this, exp.Literal) else node)
+
+    def group_concat(node):
+        what = "GROUP_CONCAT"
+        value, order, distinct = node.this, [], False
+        if isinstance(value, exp.Order):
+            order, value = value.expressions, value.this
+        if isinstance(value, exp.Distinct):
+            distinct = True
+            value = value.expressions[0] if len(value.expressions) == 1 else exp.Concat(expressions=[e.copy() for e in value.expressions], safe=True, coalesce=False)
+        sep = node.args.get("separator")
+        if sep is None:
+            sep = S(",")
+        if not (isinstance(sep, exp.Literal) and sep.is_string):
+            raise Refusal(f"{what} needs the SEPARATOR written as text.")
+        if order and len({bool(o.args.get("desc")) for o in order}) > 1:
+            raise Refusal(f"{what} with some ORDER BY columns ascending and others descending has no ClickHouse equivalent; sort in a subquery.")
+        present = A("isNotNull", value.copy())
+        if order:
+            key = A("tuple", *[part for o in order for part in (A("isNotNull", o.this.copy()), o.this.copy())])  # NULL first when ascending, last when descending, as in MySQL
+            items = A("groupArrayIf", A("tuple", txt(value), key), present)
+            if distinct:
+                items = A("arrayDistinct", items)
+            ordered = A("arrayReverseSort" if order[0].args.get("desc") else "arraySort", lam("t", A("tupleElement", exp.column("t"), N(2))), items)
+            items = A("arrayMap", lam("t", A("tupleElement", exp.column("t"), N(1))), ordered)
+        else:
+            items = A("groupArrayIf", txt(value), present)
+            if distinct:
+                items = A("arrayDistinct", items)
+        note("GROUP_CONCAT: MySQL cuts the result at 1024 characters by default (group_concat_max_len); this query does not.")
+        changes.append("group-concat")
+        return A("if", exp.EQ(this=A("countIf", present.copy()), expression=N(0)), exp.Null(), A("arrayStringConcat", items, sep.copy()))  # no rows with a value: NULL, as in MySQL
+
+    BITS = {exp.BitwiseAnd: "bitAnd", exp.BitwiseOr: "bitOr", exp.BitwiseXor: "bitXor", exp.BitwiseLeftShift: "bitShiftLeft", exp.BitwiseRightShift: "bitShiftRight"}
+
+    def u64(node):
+        return A("toUInt64", node.copy())  # MySQL's bit operators work on unsigned 64-bit numbers (so ~5 is 18446744073709551610)
+
     # --- the repair of one node ---------------------------------------------------------------------------------------------------------------------------
     def fix(node):
+        # ---- common MySQL functions whose plain ClickHouse translation is missing, wrong or silently different ----
+        if isinstance(node, exp.ConcatWs):  # skips NULL arguments (sqlglot's COALESCE(x, '') leaves a doubled separator)
+            sep, rest = node.expressions[0], node.expressions[1:]
+            parts = A("arrayFilter", lam("x", A("isNotNull", exp.column("x"))), exp.Array(expressions=[txt(r) for r in rest]))
+            return A("arrayStringConcat", parts, sep.copy())
+        if isinstance(node, (exp.Upper, exp.Lower)):  # upper()/lower() in ClickHouse change ASCII letters only
+            return A("upperUTF8" if isinstance(node, exp.Upper) else "lowerUTF8", node.this)
+        if isinstance(node, exp.RegexpLike):
+            flag, mode = node.args.get("flag"), "i"
+            if flag is not None:
+                if not (isinstance(flag, exp.Literal) and flag.is_string and set(flag.this) <= set("ci")):
+                    raise Refusal("REGEXP_LIKE with a match type other than 'c' or 'i' is not translated.")
+                mode = flag.this[-1] if flag.this else "i"
+            if mode == "i":
+                changes.append("regexp-ci")
+            return A("match", node.this, ci_pattern(node.expression) if mode == "i" else node.expression)
+        if isinstance(node, exp.RegexpReplace):
+            if any(node.args.get(k) is not None for k in ("position", "occurrence", "parameters", "modifiers")):
+                raise Refusal("REGEXP_REPLACE with a start position, occurrence or match type is not translated.")
+            repl = node.args.get("replacement")
+            if isinstance(repl, exp.Literal) and repl.is_string:
+                repl = S(re.sub(r"\$(\d)", r"\\\1", repl.this))  # MySQL's $1 is ClickHouse's \1
+            changes.append("regexp-ci")
+            return A("replaceRegexpAll", node.this, ci_pattern(node.expression), repl)
+        if isinstance(node, exp.RegexpSubstr):
+            if any(node.args.get(k) is not None for k in ("position", "occurrence", "parameters", "group")):
+                raise Refusal("REGEXP_SUBSTR with a start position, occurrence or match type is not translated.")
+            changes.append("regexp-ci")
+            pat = ci_pattern(node.expression)
+            return A("if", A("match", node.this.copy(), pat.copy()), A("extract", node.this.copy(), pat), exp.Null())  # no match: NULL (extract gives '')
+        if isinstance(node, exp.Round) and node.args.get("this") is not None:
+            text = number_text(node.this)
+            dec = decimal_literal(text) if text is not None else None
+            if dec is not None:
+                changes.append("round-half-away")
+                return exp.Round(this=dec, decimals=node.args.get("decimals"))
+        if isinstance(node, exp.Cast) and isinstance(node.args.get("to"), exp.DataType) and node.args["to"].this in (exp.DType.BIGINT, exp.DType.UBIGINT) and not node.args.get("format"):
+            inner = node.this
+            text = number_text(inner)
+            dec = decimal_literal(text) if text is not None else None
+            if dec is not None:  # a decimal literal is rounded, not cut (2.5 is 3)
+                changes.append("round-half-away")
+                node.set("this", A("round", dec))
+                return node
+            if not (text is not None or (isinstance(inner, exp.Literal) and inner.is_string)):
+                note("CAST(x AS SIGNED): MySQL rounds a decimal number to the nearest whole number (2.5 is 3); ClickHouse cuts the fraction (2.5 is 2).")
+        if isinstance(node, (exp.Greatest, exp.Least)):  # NULL when any argument is NULL; ClickHouse ignores NULLs
+            args = [node.this, *node.expressions]
+            name = "greatest" if isinstance(node, exp.Greatest) else "least"
+            cond = either_null(args)
+            if cond is None:
+                return A(name, *args)
+            changes.append("null-aware")
+            return A("if", cond, exp.Null(), A(name, *[a.copy() for a in args]))
+        if type(node) in BITS:
+            changes.append("bit-ops")
+            return A(BITS[type(node)], u64(node.this), u64(node.expression))
+        if isinstance(node, exp.BitwiseNot):
+            changes.append("bit-ops")
+            return A("bitNot", u64(node.this))
+        if isinstance(node, exp.BitwiseCount):
+            changes.append("bit-ops")
+            return A("bitCount", u64(node.this))
+        if isinstance(node, exp.GroupConcat):
+            return group_concat(node)
+        if isinstance(node, exp.NumberToStr):
+            raise Refusal("FORMAT(number, decimals) is not translated: ClickHouse has no thousands-separator format. Use round() and write the grouping you need.")
+        if isinstance(node, exp.SHA):
+            return A("lower", A("hex", A("SHA1", node.this)))
+        if isinstance(node, exp.SHA2):
+            bits = node.args.get("length")
+            size = "256" if (isinstance(bits, exp.Literal) and bits.this == "0") else (bits.this if isinstance(bits, exp.Literal) else "")
+            if size not in ("224", "256", "384", "512"):
+                raise Refusal("SHA2 with a length other than 224, 256, 384 or 512 is not translated.")
+            return A("lower", A("hex", A("SHA" + size, node.this)))
+        if isinstance(node, exp.Elt):
+            items, n = node.expressions, node.this
+            inside = exp.And(this=exp.GTE(this=n.copy(), expression=N(1)), expression=exp.LTE(this=n.copy(), expression=N(len(items))))
+            return A("if", inside, A("arrayElement", exp.Array(expressions=[txt(i) for i in items]), n.copy()), exp.Null())  # out of range: NULL (arrayElement gives '')
+        if isinstance(node, exp.DayOfWeek):  # Sunday = 1 .. Saturday = 7
+            return exp.Paren(this=exp.Add(this=A("modulo", A("toDayOfWeek", node.this), N(7)), expression=N(1)))
+        if isinstance(node, exp.Dayname):
+            return A("dateName", S("weekday"), exp.TsOrDsToDate(this=date_arg(node.this)))
+        if isinstance(node, exp.TimeToStr) and isinstance(node.args.get("format"), exp.Literal) and node.args["format"].this == "%B":  # MONTHNAME
+            return A("dateName", S("month"), node.this)
+        if isinstance(node, (exp.Quarter, exp.Hour, exp.Minute, exp.Second)) and date_arg(node.this) is not node.this:
+            node.set("this", date_arg(node.this))
+            return node
+        if isinstance(node, exp.Extract) and date_arg(node.args.get("expression")) is not node.args.get("expression"):
+            node.set("expression", date_arg(node.args["expression"]))
+            return node
+        if isinstance(node, exp.Timestamp):
+            if node.args.get("zone") is not None:
+                raise Refusal("TIMESTAMP(date, time) with two arguments is not translated.")
+            return A("toDateTime", node.this)
+        if isinstance(node, exp.TimestampAdd):
+            return exp.DateAdd(this=node.this, expression=node.args.get("expression"), unit=node.args.get("unit"))
+        if isinstance(node, exp.Paren) and isinstance(node.this, exp.Add) and isinstance(node.this.this, exp.DateDiff) and node.this.expression == N(1):  # TO_DAYS
+            diff = node.this.this
+            if isinstance(diff.expression, exp.TsOrDsToDate) and diff.expression.this == S("0000-01-01"):
+                return exp.Paren(this=exp.Add(this=A("toRelativeDayNum", diff.this), expression=N(719528)))  # days from year 0; ClickHouse counts from 1970
+        if isinstance(node, exp.Anonymous):
+            lname, largs = node.name.upper(), node.expressions
+            if lname == "FIND_IN_SET" and len(largs) == 2:
+                changes.append("case-fold")
+                found = A("indexOf", A("splitByChar", S(","), low(largs[1])), low(largs[0]))
+                return null_if_any_null(largs, found)
+            if lname == "FIELD" and len(largs) >= 2:
+                if any(isinstance(a, exp.Literal) and a.is_string for a in largs):
+                    changes.append("case-fold")
+                    return A("indexOf", exp.Array(expressions=[low(a) for a in largs[1:]]), low(largs[0]))
+                return A("indexOf", exp.Array(expressions=[a.copy() for a in largs[1:]]), largs[0].copy())
+            if lname == "STRCMP" and len(largs) == 2:
+                changes.append("case-fold")
+                a, b = low(largs[0]), low(largs[1])
+                compare = A("multiIf", exp.LT(this=a, expression=b), N(-1), exp.EQ(this=a.copy(), expression=b.copy()), N(0), N(1))
+                return null_if_any_null(largs, compare)
+            if lname == "WEEKDAY" and len(largs) == 1:  # Monday = 0
+                return exp.Paren(this=exp.Sub(this=A("toDayOfWeek", exp.TsOrDsToDate(this=date_arg(largs[0]))), expression=N(1)))
+            if lname in ("ADDDATE", "SUBDATE") and len(largs) == 2:
+                cls = exp.DateAdd if lname == "ADDDATE" else exp.DateSub
+                if isinstance(largs[1], exp.Interval):
+                    return cls(this=largs[0], expression=largs[1].this, unit=largs[1].args.get("unit"))
+                return cls(this=largs[0], expression=largs[1], unit=exp.var("DAY"))
         if isinstance(node, exp.Anonymous):
             name = node.name.upper()
             args = node.expressions
@@ -409,10 +623,10 @@ def mysql_to_clickhouse(sql, sqlglot, ErrorLevel):
             return exp.IntDiv(this=node.args["this"], expression=A("nullIf", divisor, N(0)))
         if isinstance(node, (exp.EQ, exp.NEQ)):
             left, right = node.args.get("this"), node.args.get("expression")
-            if is_text(right) and foldable(left):
+            if is_text(right) and foldable(left) and not (lowered(left) and right.this == right.this.lower()):  # LOWER(x) = 'abc' already ignores case
                 changes.append("case-fold")
                 return type(node)(this=fold(left), expression=A("lowerUTF8", right))
-            if is_text(left) and foldable(right):
+            if is_text(left) and foldable(right) and not (lowered(right) and left.this == left.this.lower()):
                 changes.append("case-fold")
                 return type(node)(this=A("lowerUTF8", left), expression=fold(right))
         if isinstance(node, exp.In) and node.args.get("expressions") and not node.args.get("query") and not node.args.get("field"):
