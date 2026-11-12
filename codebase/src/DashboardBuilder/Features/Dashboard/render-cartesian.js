@@ -3,7 +3,7 @@ import { dateLabelsOf } from "./date-labels.js";
 import { isCalcPill } from "../Calc/calc-pill.js";
 import { SCATTER_TYPES, marksOf, planMeasures, colorMode, measureName as planMeasureName } from "./sheet-plan.js";
 import { makeValueFormatter } from "../Core/format.js";
-import { REF_CHOICES, TREND_CHOICES, trendProblem, refValue, refConstant, trendSeries, pickMeasure, dataValues, bandBounds, bandLabel } from "./analytics-model.js";
+import { REF_CHOICES, TREND_CHOICES, trendProblem, trendRefusal, pWords, refValue, refConstant, trendSeries, pickMeasure, dataValues, bandBounds, bandLabel } from "./analytics-model.js";
 import { parameters } from "../Core/store.js";
 import { effectiveForecast } from "../Core/parameters-model.js";
 import { hint } from "./render-dom.js";
@@ -105,16 +105,17 @@ export function renderSeries(container, rc, sheet, a) {
     const refKind = A.ref?.kind ?? "none";
     const rv = refKind === "none" ? null : refValue(refKind, mvals, refConstant(A.ref, parameters));
     const fc = type === "line" || type === "area" ? effectiveForecast(A, parameters) : 0;
-    const t = (A.trend && A.trend !== "none") || fc ? trendSeries(A.trend ?? "none", vals, fc) : null;
+    const refused = (A.trend && A.trend !== "none") || fc ? trendRefusal(result) : null; // a cut-off result is not fitted or extrapolated
+    const t = !refused && ((A.trend && A.trend !== "none") || fc) ? trendSeries(A.trend ?? "none", vals, fc) : null;
     const trendLabel = TREND_CHOICES.find(([v]) => v === (A.trend && A.trend !== "none" ? A.trend : "linear"))[1].toLowerCase();
-    const tp = A.trend && A.trend !== "none" && !t ? (trendProblem(A.trend, vals) ?? "The trend needs at least 2 values (3 for a polynomial).") + (fc ? " The forecast is not drawn." : "") : null;
+    const tp = refused ?? (A.trend && A.trend !== "none" && !t ? (trendProblem(A.trend, vals) ?? "The trend could not be fitted to these values.") + (fc ? " The forecast is not drawn." : "") : null);
     if (tp) rc.extraNotice = joinNotices(rc.extraNotice, tp);
     const bb = bandBounds(A.band, mvals, parameters);
     analytics = {
       measure: mi,
       ref: rv == null ? null : { name: (refKind === "constant" ? "Reference" : REF_CHOICES.find(([v]) => v === refKind)[1]) + (refKind === "constant" ? "" : mname), value: rv },
       band: bb ? { ...bb, name: bandLabel(A.band) + (A.band.kind ? ` (shown rows)${mname}` : "") } : null,
-      trend: t ? { measure: ti, name: `Trend${ti > 0 ? ` of ${series[ti].name}` : ""} (${trendLabel}${fc ? ` + ${fc} forecast` : ""}): ${t.formula}, ${fitWords(t.r2)}, n = ${t.n}`, short: `Trend · ${fitWords(t.r2)} · n = ${t.n}`, data: t.data } : null,
+      trend: t ? { measure: ti, name: `Trend${ti > 0 ? ` of ${series[ti].name}` : ""} (${trendLabel}${fc ? ` + ${fc} forecast` : ""}): ${t.formula}, ${fitWords(t.r2)}${t.p == null ? "" : `, ${pWords(t.p)}`}, n = ${t.n}`, short: `Trend · ${fitWords(t.r2)}${t.p == null ? "" : ` · ${pWords(t.p)}`} · n = ${t.n}`, data: t.data } : null,
     };
     if (t && t.extra) {
       catsOut = [...categories, ...Array.from({ length: t.extra }, (_, i) => `Forecast +${i + 1}`)];

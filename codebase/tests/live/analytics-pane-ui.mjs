@@ -21,6 +21,8 @@ const COLUMNS = {
 const REGIONS = ['APAC', 'EU', 'US'];
 const queries = [];     // every /api/query body, in order
 let tables = ['orders', 'customers'];
+let manyRows = 0;      // when set: this many single-dimension rows with a noisy rising first measure (a polynomial needs d + 2 values)
+let cutOff = false;    // the server reports the result truncated
 let zeroFirst = false; // the first value is 0 (an exponential / power trend cannot be fitted)
 function answer({ method, path, body }) {
   if (path === '/api/connection' && method === 'GET') return { json: { connected: false } };
@@ -34,6 +36,10 @@ function answer({ method, path, body }) {
     queries.push(body);
     const dims = [...(body.rowDimensions ?? []), ...(body.columnDimensions ?? [])];
     const nd = dims.length;
+    const NOISE = [0, 7, -5, 9, -3, 6, -8, 4];
+    if (manyRows && nd >= 1) return { json: {
+      rowDimensions: (body.rowDimensions ?? []).map((d) => d.column), columnDimensions: (body.columnDimensions ?? []).map((d) => d.column), measures: (body.measures ?? []).map((_, i) => `v${i}`),
+      rows: Array.from({ length: manyRows }, (_, r) => ({ keys: dims.map(() => `P${r}`), values: (body.measures ?? []).map((_, i) => 10 * (r + 1) * (i + 1) + NOISE[r % 8]) })), truncated: cutOff } };
     const combos = nd >= 2 ? REGIONS.flatMap((a) => REGIONS.map((c) => [a, c])) : dims.length ? REGIONS.map((a) => [a]) : [[]];
     return { json: {
       rowDimensions: (body.rowDimensions ?? []).map((d) => d.column), columnDimensions: (body.columnDimensions ?? []).map((d) => d.column),
@@ -219,7 +225,7 @@ try {
     const trendName = async () => ev(`window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas')).getOption().series.map((x) => x.name).find((n) => /^Trend/.test(n)) ?? null`);
     await aPick('Trend', 'exp');
     let n = await trendName();
-    must(/exponential\): y = .*e\^\(.*x\), (good|moderate|weak|poor) fit \(R² -?0\.\d\d\), n = \d+/.test(n), `exp name: ${n}`);
+    must(/exponential\): y = .*e\^\(.*x\), (good|moderate|weak|poor) fit \(R² -?0\.\d\d\), p (=|<) 0\.\d+, n = \d+/.test(n), `exp name: ${n}`);
     await aPick('Trend', 'power');
     n = await trendName();
     must(/power\): y = .*\(x\+1\)\^/.test(n), `power name: ${n}`);
@@ -255,6 +261,38 @@ try {
     await aPick('trend of', '0');
     must(!('trendMeasure' in await sheetAna()) && J(await trend()) === J(t0), 'back to the first measure');
     await shot('trend-of-light.png');
+  });
+
+  await check('polynomial orders, the p-value and the refusals (too few values, cut-off result)', async () => {
+    const trendName = async () => ev(`window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas')).getOption().series.map((x) => x.name).find((n) => /^Trend/.test(n)) ?? null`);
+    const noticeText = () => ev(`document.getElementById('ws-chart').parentElement.textContent`);
+    const refresh = async () => { await ev(`(() => { const r = [...document.querySelectorAll('.ws-viewbar button')].find((x) => /refresh/i.test(x.getAttribute('aria-label') ?? x.title ?? '')); if (!r) throw new Error('no Refresh button'); r.click(); return true; })()`); await settle(500); await chartReady(); };
+    await openAna();
+    await aPick('Trend', 'linear');
+    await refresh();
+    must(/polynomial/i.test(await ev(`[...document.querySelectorAll('.ws-analytics select')].flatMap((s) => [...s.options].map((o) => o.textContent)).join('|')`)), 'no polynomial choice');
+    must(await ev(`[...document.querySelectorAll('.ws-analytics select')].some((s) => [...s.options].some((o) => o.value === 'poly4'))`), 'no 4th order choice');
+    manyRows = 8; await refresh();
+    await aPick('Trend', 'poly3');
+    let n = await trendName();
+    must(/polynomial \(3rd order\)\): y = .*x³, (good|moderate|weak|poor) fit \(R² -?\d\.\d\d\), p (=|<) 0\.\d+, n = 8/.test(n), `poly3 name: ${n}`);
+    must((await sheetAna()).trend === 'poly3', `saved: ${J(await sheetAna())}`);
+    await aPick('Trend', 'poly4');
+    n = await trendName();
+    must(/\(4th order\)\): y = .*x⁴/.test(n), `poly4 name: ${n}`);
+    const short = await ev(`window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas')).getOption().series.find((x) => /^Trend/.test(x.name)).endLabel.formatter`);
+    must(/^Trend · .*p [=<] 0\.\d+ · n = 8$/.test(short), `end label: ${short}`);
+    await shot('trend-poly4-light.png');
+    await theme('dark'); await chartReady(); await shot('trend-poly4-dark.png'); await theme('light');
+    manyRows = 4; await refresh();
+    must(await trendName() === null && /at least 6 values/.test(await noticeText()), `too few values: ${await noticeText()}`);
+    manyRows = 8; cutOff = true; await refresh();
+    must(await trendName() === null, 'a trend was fitted to a cut-off result');
+    must(/cut off \(more rows exist\)/.test(await noticeText()), `no refusal message: ${await noticeText()}`);
+    await shot('trend-cutoff-light.png');
+    cutOff = false; await refresh();
+    must(await trendName() !== null, 'the trend should come back with the complete result');
+    manyRows = 0;
   });
 
   if (b.consoleErrors.length) { console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  ')); failed++; }

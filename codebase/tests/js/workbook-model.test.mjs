@@ -336,6 +336,10 @@ test("title, caption, showTitle and fit (P23) are checked", () => {
   assert.equal(bad.issues.length, 3);
 });
 
+test("a 3rd or 4th order polynomial trend is kept; a 5th order is reset", () => {
+  for (const t of ["poly3", "poly4"]) assert.equal(sheetOf({ analytics: { trend: t } }).worksheets[0].sheet.analytics.trend, t);
+  assert.equal(sheetOf({ analytics: { trend: "poly5" } }).worksheets[0].sheet.analytics.trend, "none");
+});
 test("analytics settings (P21) are kept when valid and reset part by part", () => {
   const ok = sheetOf({ analytics: { ref: { kind: "constant", value: 5 }, band: { from: 9, to: 2 }, trend: "poly2", forecast: 6, totals: { grand: true } } }).worksheets[0].sheet.analytics;
   assert.deepEqual(ok, { ref: { kind: "constant", value: 5 }, band: { from: 2, to: 9 }, trend: "poly2", forecast: 6, totals: { grand: true, sub: false } });
