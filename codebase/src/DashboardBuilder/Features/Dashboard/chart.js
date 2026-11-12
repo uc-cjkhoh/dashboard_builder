@@ -1168,7 +1168,7 @@ function buildBullet({ categories, values, target, targets, name, format = {} })
 // gantt — one horizontal bar per row from its start to its end (start + length, or the end field), first row on top; the length
 // is written at the bar's end and named in the tooltip. A Colour field makes one series per member (its own colour, a legend that
 // highlights), several bars may share a row; a selected row keeps full strength and the others fade.
-function buildGantt({ categories, gantt, name, format = {}, selectedIndices, onLegend }) {
+function buildGantt({ categories, gantt, name, format = {}, selectedIndices, onLegend, focus }) {
   const c = tokens();
   const fmtVal = makeValueFormatter(format);
   const { bars, isDate, hasTime, groups } = gantt;
@@ -1193,14 +1193,14 @@ function buildGantt({ categories, gantt, name, format = {}, selectedIndices, onL
       ? { type: "time", axisLabel: { color: c.muted, formatter: (v) => ganttTime(v, axisTime), hideOverlap: true } } : { scale: true }),
     yAxis: catAxis(c, categories ?? [], { inverse: true }),
     series: lists.map((list, gi) => ({
-      type: "custom", name: names[gi], data: list.map((b) => [b.i, b.start, b.end]), encode: { x: [1, 2], y: 0 },
+      type: "custom", name: names[gi], data: list.map((b) => [b.i, b.start, b.end]), encode: { x: [1, 2], y: 0 }, emphasis: { focus: "series" },
       renderItem: (params, api) => {
         const b = list[params.dataIndex];
         const a = api.coord([api.value(1), api.value(0)]), e = api.coord([api.value(2), api.value(0)]);
         const h = Math.min(28, api.size([0, 1])[1] * 0.6);
-        const opacity = keep.size && !keep.has(b.i) ? 0.35 : 1;
+        const opacity = (keep.size && !keep.has(b.i)) || (split && focus && names[gi] !== focus) ? 0.35 : 1; // a legend-focused member keeps full strength (ECharts does not blur custom marks)
         return { type: "group", children: [
-          { type: "rect", shape: { x: a[0], y: a[1] - h / 2, width: Math.max(2, e[0] - a[0]), height: h, r: 2 }, style: { fill: colourOf(gi), opacity, ...strokeOf(format.markBorder, borderInk(format.markBorderColor, c)) } },
+          { type: "rect", shape: { x: a[0], y: a[1] - h / 2, width: Math.max(2, e[0] - a[0]), height: h, r: 2 }, style: { fill: colourOf(gi), opacity, ...strokeOf(format.markBorder, borderInk(format.markBorderColor, c)) }, emphasis: { style: { stroke: c.ink, lineWidth: 1 } } },
           { type: "text", style: { text: len(b), x: Math.max(e[0], a[0] + 2) + 4, y: a[1], align: "left", verticalAlign: "middle", fill: c.label, opacity, font: `14px ${c.font}` } },
         ] };
       } })),

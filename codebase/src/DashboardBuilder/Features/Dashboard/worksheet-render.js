@@ -1,7 +1,7 @@
 import { defaultFormat, parameters } from "../Core/store.js";
 import { effectiveWindow } from "../Core/parameters-model.js";
 import { makeValueFormatter, makeCategoryFormatter } from "../Core/format.js";
-import { COLOR_SPLIT_TYPES, chartIssue, TEXT_VALUE_HINT, COLOR_SPLIT_HINT } from "./show-me-rules.js";
+import { COLOR_SPLIT_TYPES, chartIssue, dimsFor, TEXT_VALUE_HINT, COLOR_SPLIT_HINT } from "./show-me-rules.js";
 import { TEXT_VALUE_TYPES } from "./filter-rules.js";
 import { marksOf, planDims, planMeasures, colorMode, SCATTER_TYPES } from "./sheet-plan.js";
 import { withOther, OTHER_TYPES } from "./scale-model.js";
@@ -104,8 +104,7 @@ function draw(container, rc, sheet, result, cmp) {
   }
 
   // An unsupported field mapping shows a hint, never an error.
-  const ganttColour = type === "gantt" && colorMode(sheet) === "discrete"; // the Colour field is the last key, not a row dimension
-  const issue = chartIssue(type, rowDimensions.length + columnDimensions.length - (ganttColour ? 1 : 0), shelfCount);
+  const issue = chartIssue(type, dimsFor(type, rowDimensions.length + columnDimensions.length, colorMode(sheet) === "discrete"), shelfCount); // a Gantt's Colour key is not a row
   if (issue) { container.append(hint(issue)); return; }
 
   // Shape: on the scatter family, split points by a Shape dimension into one symbol per value.

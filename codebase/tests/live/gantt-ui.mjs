@@ -225,7 +225,7 @@ try {
     must(s.data.length === 3, `bars ${s.data.length}`);
     must(s.data[0][1] === 10 && s.data[0][2] === 1234567.5, `first bar spans start to end: ${J(s.data[0])}`);
     const txt = await ev(`document.querySelector('.ws-chart-canvas').textContent`);
-    must(/1,234,557\.5|1\.23M|1,234,557/.test(txt) || /Length/.test(txt), `length written: ${txt.slice(0, 120)}`);
+    must(/1,234,557/.test(txt), `length (end - start) written at the bar: ${txt.slice(0, 120)}`);
     await shot('gantt-end-numeric-light.png');
     await pick('Length', 'length'); await chartReady();
     must((await ganttSeries())[0].data[0][2] === 10 + 1234567.5, 'back to Length: start + length');
@@ -244,6 +244,31 @@ try {
     must(J(dq).includes('channel'), 'the colour field is a group-by in the query');
     await shot('gantt-colour-light.png');
     await theme('dark'); await setType('Bar'); await setType('Gantt'); await chartReady(); await shot('gantt-colour-dark.png'); await theme('light');
+  });
+  await check('Gantt + Colour: Show Me still offers Gantt (the Colour key is not a row dimension)', async () => {
+    await ev(`document.querySelector('.ws-pick--chart .ws-pick__btn').click()`);
+    const unfit = await ev(`(() => { const it = [...document.querySelectorAll('.ws-charttypes .menu__item')].find((x) => x.textContent.trim() === 'Gantt'); return it.classList.contains('is-unfit') ? it.title : ''; })()`);
+    await ev(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
+    must(unfit === '', `Gantt flagged unfit with a Colour field: ${unfit}`);
+  });
+  await check('Gantt + Colour: a legend click highlights that member (the others blur) and selects it', async () => {
+    await setType('Bar'); await setType('Gantt'); await chartReady(); await settle(300);
+    // each bar's fill and drawn opacity (a legend focus fades the other members' bars; the focused one wears the emphasis stroke)
+    const states = () => ev(`(() => { const i = window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas')); const els = i.getZr().storage.getDisplayList().filter((e) => e.type === 'rect' && e.shape && e.shape.height && e.shape.height < 40 && e.shape.width >= 2 && e.style && e.style.fill && e.style.fill !== 'transparent' && e.style.fill !== 'rgba(0,0,0,0)');
+      return els.map((e) => ({ fill: e.style.fill, op: e.style.opacity ?? 1, st: (e.currentStates ?? []).join('+') })); })()`);
+    const before = await states();
+    must(before.length === 9 && before.every((x) => x.op === 1 && x.st === ''), `no highlight before the click: ${J(before)}`);
+    await ev(`(() => { window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas')).dispatchAction({ type: 'legendToggleSelect', name: 'EU' }); return true; })()`);
+    await waitFor(`!!document.querySelector('.ws-select')`, 'selection chip from the legend');
+    await settle(400); await chartReady();
+    const after = await states();
+    const byFill = new Map(); for (const x of after) byFill.set(x.fill, [...(byFill.get(x.fill) ?? []), x]);
+    const groups = [...byFill.values()];
+    const bright = groups.filter((g) => g.every((x) => x.op === 1)), faded = groups.filter((g) => g.every((x) => x.op < 1));
+    must(groups.length === 3 && bright.length === 1 && faded.length === 2, `one member at full strength, the other two faded: ${J(after)}`);
+    must(bright[0].every((x) => /emphasis/.test(x.st)), 'the focused member wears the emphasis state');
+    await ev(`document.querySelector('.ws-select button[aria-label="Clear selection"], .ws-select .ws-select__clear')?.click()`);
+    await settle(300);
   });
   await check('Gantt: a click on a bar selects its row (the editor stores the selection; a second click clears it)', async () => {
     await setType('Bar'); await setType('Gantt'); await chartReady(); await settle(300);

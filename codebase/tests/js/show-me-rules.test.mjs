@@ -50,7 +50,7 @@ function legacyChartIssue(type, dimCount, measureCount) {
       if (dimCount > 1) return "Bullet takes at most one dimension (one bar per member).";
       return null;
     case "gantt":
-      if (measureCount !== 2) return "Gantt draws each row as a bar — use exactly two measures: the start (a number or a date) and the length.";
+      if (measureCount !== 2) return "Gantt draws each row as a bar — use exactly two measures: the start (a number or a date) and the length (or, in Format → Length, the end).";
       if (dimCount !== 1) return "Gantt needs exactly one dimension for its rows (one bar per member).";
       return null;
     case "sankey":

@@ -101,3 +101,12 @@ test("raws: each slot keeps the raw value of its first row (what a click filters
   assert.deepEqual(g.raws, [10, 20]);
   assert.deepEqual(ganttBars(["a", "b"], [1, 2], [1, 1], { raws: [7, 8] }).raws, [7, 8]);
 });
+
+test("Show Me and the chart hint count a Gantt's rows, not its Colour key", async () => {
+  const { dimsFor, issueFor } = await import("../../src/DashboardBuilder/Features/Dashboard/show-me-rules.js");
+  assert.equal(dimsFor("gantt", 2, true), 1, "the colour key is not a row dimension");
+  assert.equal(dimsFor("gantt", 1, false), 1);
+  assert.equal(dimsFor("bar", 2, true), 2, "other types count every key");
+  assert.equal(issueFor("gantt", { dims: dimsFor("gantt", 2, true), measures: 2 }), null);
+  assert.match(String(issueFor("gantt", { dims: 2, measures: 2 })), /one dimension/);
+});

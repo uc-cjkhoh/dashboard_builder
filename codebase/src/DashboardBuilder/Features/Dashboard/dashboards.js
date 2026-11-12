@@ -5,7 +5,7 @@ import { sameRef, choicesOf, switchField, removeChoice as removeChoiceFrom } fro
 import { defaultShelf, placesOnDblClick } from "./placement-model.js";
 import { fieldPillOptions, filterPillOptions, filterSummary, markGrid } from "./pill-options.js";
 import { visibleTools } from "./toolbar-rules.js";
-import { roleOf, STAT_SINGLE_TABLE, showMeOptions } from "./show-me-rules.js";
+import { roleOf, STAT_SINGLE_TABLE, showMeOptions, dimsFor } from "./show-me-rules.js";
 import { toggle, makeButton, toast, fieldError, confirmDialog, copyText } from "../Core/ui.js";
 import { LIMITS, number, percent, percentLabel, isFraction, PERCENT_MESSAGE, DEFAULT_PERCENTILE } from "../Core/validate.js";
 import { aggsFor, checkAdd, checkFilter, viewCounts, withCategories, opsFor, OP_LABELS } from "./filter-rules.js";
@@ -158,7 +158,7 @@ function showMeCounts(sheet, type) {
   const shelf = [...sheet.columns, ...sheet.rows];
   const measures = shelf.filter((f) => roleOf(f) === "measure");
   return {
-    dims: planDims({ ...sheet, chartType: type }).keyOrder.length,
+    dims: dimsFor(type, planDims({ ...sheet, chartType: type }).keyOrder.length, colorMode(sheet) === "discrete"),
     shelfDims: (drillActiveDim(sheet) ? 1 : 0) + shelf.filter((f) => roleOf(f) === "dimension").length,
     measures: measures.length,
     hasDate: shelf.some((f) => roleOf(f) === "dimension" && f.category === "temporal"),

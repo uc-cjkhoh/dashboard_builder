@@ -68,14 +68,14 @@ export function ganttBars(categories, starts, second, opts = {}) {
       if (isDate) { end = ends[row]?.ms ?? NaN; duration = wallDays(start, end); }
       else { end = sec == null || sec === "" ? NaN : Number(sec); duration = end - start; }
       if (!Number.isFinite(end) || !Number.isFinite(duration) || duration < 0) return;
-      if (isDate && ends[row].time) hasTime = true;
+      if (isDate && dates[row].time) hasTime = true;
     } else {
       duration = sec == null || sec === "" ? NaN : Number(sec);
       if (!Number.isFinite(duration) || duration < 0) return;
+      if (isDate && dates[row].time) hasTime = true; // before the end check: a row whose end can't be placed still counts, as it always did
       end = isDate ? addDays(start, duration) : start + duration;
       if (!Number.isFinite(end)) return; // a length too large to place
     }
-    if (isDate && dates[row].time) hasTime = true;
     bars.push({ i, name, start, end, duration, group });
   });
   return { bars, rows, groups, raws: slotRaws, isDate, hasTime, skipped: categories.length - bars.length };
