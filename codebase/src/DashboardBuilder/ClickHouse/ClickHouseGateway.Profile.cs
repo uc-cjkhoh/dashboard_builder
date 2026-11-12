@@ -15,7 +15,7 @@ public sealed partial class ClickHouseGateway
     public async Task<ColumnProfile> ProfileColumnAsync(
         ClickHouseConnectionInfo info, string database, string table, ProfileRequest req, CancellationToken ct)
     {
-        var columns = await DescribeColumnsAsync(info, database, table, ct); // validates db + table
+        var (columns, from) = await ReadableAsync(info, database, table, req.Source, ct); // validates db + table (or describes the custom SQL, read as a derived table)
         var col = columns.FirstOrDefault(c => string.Equals(c.Name, req.Column, StringComparison.Ordinal))
                   ?? throw UnknownIdentifierException.Column(req.Column, database, table);
         var top = req.Limit ?? ApiLimits.DefaultProfileTop;
@@ -25,7 +25,7 @@ public sealed partial class ClickHouseGateway
         await conn.OpenAsync(ct);
 
         long rows, nulls, distinct; string? lo = null, hi = null;
-        (rows, nulls, distinct, lo, hi) = await ReadProfileAsync(conn, info, BuildProfileStatsSql(database, table, col.Name, col.Category), async (r, token) =>
+        (rows, nulls, distinct, lo, hi) = await ReadProfileAsync(conn, info, BuildProfileStatsSql(database, table, col.Name, col.Category, from), async (r, token) =>
         {
             if (!await r.ReadAsync(token)) throw new InvalidOperationException("The profile query returned no row.");
             var n = Convert.ToInt64(r.GetValue(0), CultureInfo.InvariantCulture);
@@ -36,7 +36,7 @@ public sealed partial class ClickHouseGateway
                 : (n, nl, d, (string?)null, (string?)null);
         }, ct);
 
-        var values = rows == 0 ? new List<ProfileValue>() : await ReadProfileAsync(conn, info, BuildProfileTopSql(database, table, col.Name, top), async (r, token) =>
+        var values = rows == 0 ? new List<ProfileValue>() : await ReadProfileAsync(conn, info, BuildProfileTopSql(database, table, col.Name, top, from), async (r, token) =>
         {
             var list = new List<ProfileValue>();
             while (await r.ReadAsync(token))
@@ -76,29 +76,29 @@ public sealed partial class ClickHouseGateway
 
 
     // Compound and unclassified types are compared as text, so GROUP BY / ORDER BY / uniq work on any column.
-    private static string ProfileSubquery(string database, string table, string column, string category)
+    private static string ProfileSubquery(string database, string table, string column, string category, string? from = null)
     {
         var q = Identifier.Quote(column);
         var expr = category is ClickHouseType.Compound or ClickHouseType.Other ? $"toString({q})" : q;
-        return $"(SELECT {expr} AS v FROM {Identifier.QualifiedName(database, table)} LIMIT {ApiLimits.ProfileSampleRows})";
+        return $"(SELECT {expr} AS v FROM {from ?? Identifier.QualifiedName(database, table)} LIMIT {ApiLimits.ProfileSampleRows})";
     }
 
     /// <summary>Row, NULL and approximate distinct counts; min/max (as text) for numeric and date columns.</summary>
-    internal static string BuildProfileStatsSql(string database, string table, string column, string category)
+    internal static string BuildProfileStatsSql(string database, string table, string column, string category, string? from = null)
     {
         var extremes = category is ClickHouseType.Numeric or ClickHouseType.Temporal ? ", toString(min(v)) AS lo, toString(max(v)) AS hi" : "";
-        return $"SELECT count() AS n, countIf(isNull(v)) AS nulls, uniq(v) AS d{extremes} FROM {ProfileSubquery(database, table, column, category)}";
+        return $"SELECT count() AS n, countIf(isNull(v)) AS nulls, uniq(v) AS d{extremes} FROM {ProfileSubquery(database, table, column, category, from)}";
     }
 
     /// <summary>The most frequent values, grouped on the label cut to 100 characters (<c>leftUTF8</c> — characters, not bytes) and a
     /// "was cut" flag (<c>lengthUTF8 &gt; 100</c>), so a huge string never becomes a group key: values differing only after
     /// character 100 count together. Ties break by label; NULL stays NULL (its own group, last among equals).</summary>
-    internal static string BuildProfileTopSql(string database, string table, string column, int top)
+    internal static string BuildProfileTopSql(string database, string table, string column, int top, string? from = null)
     {
         var q = Identifier.Quote(column);
         return $"SELECT label, cut, count() AS cnt FROM (SELECT if(isNull({q}), NULL, leftUTF8(toString({q}), {ApiLimits.ProfileValueLength})) AS label, " +
                $"if(isNull({q}), 0, lengthUTF8(toString({q})) > {ApiLimits.ProfileValueLength}) AS cut " +
-               $"FROM {Identifier.QualifiedName(database, table)} LIMIT {ApiLimits.ProfileSampleRows}) GROUP BY label, cut ORDER BY cnt DESC, label ASC, cut ASC LIMIT {top}";
+               $"FROM {from ?? Identifier.QualifiedName(database, table)} LIMIT {ApiLimits.ProfileSampleRows}) GROUP BY label, cut ORDER BY cnt DESC, label ASC, cut ASC LIMIT {top}";
     }
 
     /// <summary>An empty or all-NULL column has no min/max (ClickHouse returns 0 for a non-Nullable one).</summary>

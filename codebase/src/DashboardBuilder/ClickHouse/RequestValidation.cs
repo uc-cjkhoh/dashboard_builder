@@ -301,6 +301,22 @@ public static class RequestRules
         ValidateRange(r.Limit, ApiLimits.MaxRowsLimit, "Limit", "limit");
         if (cols.Length > 0) ValidateRowCells(r.Limit ?? ApiLimits.DefaultRowsLimit, cols.Length, "limit");
         ValidateStatFilters(r.Filters);
+        ValidateSqlSource(r.Source, r.Db, r.Table);
+    }
+    /// <summary>The optional custom SQL a single-table read (rows, profile, histogram, join preview end) reads instead of the catalog table: kind
+    /// <c>sql</c> only, a query the guard accepts, and it must stand for the very table the request names (<paramref name="db"/>.<paramref name="table"/>).
+    /// <paramref name="prefix"/> (e.g. <c>"from."</c>) is put before the field path of whatever is refused.</summary>
+    public static void ValidateSqlSource(QuerySource? s, string? db, string? table, string prefix = "")
+    {
+        if (s is null) return;
+        try
+        {
+            if (s.Kind != SourceSql.Sql) throw Bad("Only a custom SQL source can stand in for a table here.", "source.kind");
+            ValidateSource(s);
+            if (!string.Equals(s.Db, db, StringComparison.Ordinal) || !string.Equals(s.Name, table, StringComparison.Ordinal))
+                throw Bad("The custom SQL must be the one of the table being read.", "source.name");
+        }
+        catch (RequestValidationException ex) { throw Bad(ex.Message, prefix + ex.Field); }
     }
     /// <summary>A union / unpivot used as a query source (QueryRequest.Source, POST /api/source/columns): a whitelisted kind, named tables and
     /// columns within the preview's limits (2..5 tables; 2..50 unpivoted, up to 5 kept), a bounded name. Never clamped. Field paths start "source.".</summary>
@@ -424,7 +440,11 @@ public static class RequestRules
         if (r.Column.Length > ApiLimits.MaxColumnName) throw Bad($"'column' must be at most {ApiLimits.MaxColumnName} characters.", "column");
         ValidateRange(r.Limit, ApiLimits.MaxProfileTop, "Top values", "limit");
     }
+    /// <summary>A column profile of the table <paramref name="db"/>.<paramref name="table"/> (from the URL): the request rules, and its custom SQL (if any) must be that table's.</summary>
+    public static void ValidateProfile(ProfileRequest r, string db, string table) { ValidateProfile(r); ValidateSqlSource(r.Source, db, table); }
     public static void ValidateHistogram(HistogramRequest r) { ValidateRange(r.Buckets, ApiLimits.MaxBuckets, "Bins", "buckets"); ValidateStatFilters(r.Filters); }
+    /// <summary>A histogram of the table <paramref name="db"/>.<paramref name="table"/> (from the URL): the request rules, and its custom SQL (if any) must be that table's.</summary>
+    public static void ValidateHistogram(HistogramRequest r, string db, string table) { ValidateHistogram(r); ValidateSqlSource(r.Source, db, table); }
     /// <summary>A joined / calculated box plot: a worksheet-shaped request where the one row dimension is the value and the optional
     /// one column dimension is the group — no measures, no measure filter. Everything else is the worksheet query's rules.</summary>
     public static void ValidateBoxQuery(QueryRequest r)

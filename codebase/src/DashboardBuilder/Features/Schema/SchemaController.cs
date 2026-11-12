@@ -32,7 +32,7 @@ public sealed class SchemaController : ApiControllerBase
     /// <summary>Column profile: rows, NULL share, approximate distinct count, min/max and top values of one column over the table's first rows.</summary>
     [HttpPost("databases/{db}/tables/{table}/profile")]
     public Task<IResult> Profile(string db, string table, [FromBody] ProfileRequest request, CancellationToken ct)
-        => RunAsync(async info => { RequestRules.ValidateProfile(request); return Results.Ok(await Gateway.ProfileColumnAsync(info, db, table, request, ct)); }, StatusCodes.Status404NotFound);
+        => RunAsync(async info => { RequestRules.ValidateProfile(request, db, table); return Results.Ok(await Gateway.ProfileColumnAsync(info, db, table, request, ct)); }, StatusCodes.Status404NotFound);
 
     /// <summary>The newest day of a date column (<c>{ latest: "2024-03-31" | null }</c>), so relative ranges can count from the data.</summary>
     [HttpGet("databases/{db}/tables/{table}/columns/{column}/latest")]

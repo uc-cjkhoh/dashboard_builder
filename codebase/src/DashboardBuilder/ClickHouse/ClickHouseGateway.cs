@@ -272,6 +272,23 @@ public sealed partial class ClickHouseGateway
     }
 
     /// <summary>
+    /// What a single-table read (rows, profile, histogram, a join-preview end) reads: the table's columns and the text that follows <c>FROM</c>.
+    /// Without a <paramref name="source"/> that is the catalog table (<see cref="DescribeColumnsAsync"/>, validated and quoted). With a custom SQL
+    /// <paramref name="source"/> (kind sql, for this very table, D105) it is the query's own columns (<c>DESCRIBE</c> of the checked text) and
+    /// <c>(&lt;checked sql&gt;)</c>, the derived table a worksheet query reads. The text is never built from identifiers; callers still validate every
+    /// column they name against <c>Columns</c> and quote it with <see cref="Identifier"/>.
+    /// </summary>
+    /// <exception cref="RequestValidationException">A source that is not custom SQL, names another table, or whose query the guard / ClickHouse refuses.</exception>
+    internal async Task<(IReadOnlyList<ColumnInfo> Columns, string From)> ReadableAsync(
+        ClickHouseConnectionInfo info, string database, string table, QuerySource? source, CancellationToken ct)
+    {
+        if (source is null) return (await DescribeColumnsAsync(info, database, table, ct), Identifier.QualifiedName(database, table)); // validates db + table
+        RequestRules.ValidateSqlSource(source, database, table);
+        var built = SourceSql.Build(source, await DescribeSourceAsync(info, source, ct));
+        return (built.Columns, $"({built.Sql})");
+    }
+
+    /// <summary>
     /// Distinct values of one column, for a filter dropdown: <c>SELECT DISTINCT col FROM db.table
     /// ORDER BY col LIMIT n</c>. The column is catalog-validated and quoted; the row count is clamped
     /// (<see cref="ClampDistinct"/>) so a high-cardinality column can't flood the client. Read-only.
@@ -603,8 +620,8 @@ public sealed partial class ClickHouseGateway
 
     /// <summary>The row-read statement. Every name is quoted; <paramref name="where"/> is empty or " WHERE …" with bound
     /// parameters; there is no ORDER BY (the first rows in storage order) and a hard LIMIT.</summary>
-    internal static string BuildRowsSql(string database, string table, IReadOnlyList<string> columns, string where, int probeLimit)
-        => $"SELECT {string.Join(", ", columns.Select(RowSelectExpr))} FROM {Identifier.QualifiedName(database, table)}{where} LIMIT {probeLimit}";
+    internal static string BuildRowsSql(string database, string table, IReadOnlyList<string> columns, string where, int probeLimit, string? from = null)
+        => $"SELECT {string.Join(", ", columns.Select(RowSelectExpr))} FROM {from ?? Identifier.QualifiedName(database, table)}{where} LIMIT {probeLimit}";
 
     /// <summary>One selected column, cut INSIDE ClickHouse so a huge value never leaves it: NULL stays NULL, anything
     /// else is its text (<c>toString</c>: arrays, tuples, maps, dates render as ClickHouse prints them) cut to
@@ -631,7 +648,7 @@ public sealed partial class ClickHouseGateway
     /// <exception cref="UnknownIdentifierException">Unknown database, table, column or filter column.</exception>
     public async Task<RowsResult> RowsAsync(ClickHouseConnectionInfo info, RowsRequest req, CancellationToken ct)
     {
-        var all = await DescribeColumnsAsync(info, req.Db, req.Table, ct); // validates db + table
+        var (all, from) = await ReadableAsync(info, req.Db, req.Table, req.Source, ct); // validates db + table (or describes the custom SQL)
         var (columns, colsTruncated) = PickRowColumns(all, req.Columns);
         var byName = all.ToDictionary(c => c.Name, c => c, StringComparer.Ordinal);
         var parameters = new List<(string Name, string Type, object Value)>();
@@ -639,7 +656,7 @@ public sealed partial class ClickHouseGateway
         var limit = req.Limit ?? ApiLimits.DefaultRowsLimit;
         RequestRules.ValidateRowCells(limit, columns.Count, "limit");
         var probe = RowsProbeLimit(req.Limit);
-        var sql = BuildRowsSql(req.Db, req.Table, columns.Select(c => c.Name).ToList(), where, probe);
+        var sql = BuildRowsSql(req.Db, req.Table, columns.Select(c => c.Name).ToList(), where, probe, from);
 
         using var httpClient = CreateHttpClient(info);
         await using var conn = new ClickHouseConnection(BuildConnectionString(info), httpClient);
@@ -919,7 +936,7 @@ public sealed partial class ClickHouseGateway
     public async Task<HistogramResult> HistogramAsync(
         ClickHouseConnectionInfo info, string database, string table, HistogramRequest req, CancellationToken ct)
     {
-        var columns = await DescribeColumnsAsync(info, database, table, ct); // validates db + table
+        var (columns, qualified) = await ReadableAsync(info, database, table, req.Source, ct); // validates db + table (or describes the custom SQL, read as a derived table)
         var byName = columns.ToDictionary(c => c.Name, c => c, StringComparer.Ordinal);
         if (string.IsNullOrEmpty(req.Column) || !byName.TryGetValue(req.Column, out var col))
             throw UnknownIdentifierException.Column(req.Column, database, table);
@@ -928,7 +945,6 @@ public sealed partial class ClickHouseGateway
 
         var bins = ClampBuckets(req.Buckets);
         var qname = Identifier.Quote(req.Column);
-        var qualified = Identifier.QualifiedName(database, table);
 
         var parameters = new List<(string Name, string Type, object Value)>();
         var where = BuildSingleTableFilters(req.Filters ?? [], byName, parameters, database, table);
