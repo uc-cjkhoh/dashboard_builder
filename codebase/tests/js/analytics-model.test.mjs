@@ -170,9 +170,6 @@ test("the formula is written out with its coefficients", () => {
   assert.match(trendFormula("log", trendFit("log", [1, 2, 3])), /^y = .*ln\(x\+1\)$/);
   assert.match(trendFormula("poly2", trendFit("poly2", [1, 2, 5, 10, 17])), /x²/);
 });
-test("trend choices list exponential and power", () => {
-  assert.deepEqual(TREND_CHOICES.map(([v]) => v), ["none", "linear", "log", "exp", "power", "poly2"]);
-});
 
 test("R² of an exponential fit is measured on the original values (hand-computed, y = [1, 3, 2, 8])", () => {
   // fit by hand: least squares of ln y on x, then R² on the original y
@@ -202,4 +199,81 @@ test("a blank in the middle is skipped but keeps its position; constant y gives 
 test("a series with a non-finite prediction is dropped", () => {
   assert.equal(trendSeries("exp", [1, 2, 3], 3000)?.data.every(Number.isFinite) ?? true, true);
   assert.equal(trendSeries("exp", [1e-300, 1e-200, 1e-100], 3000), null);
+});
+
+// ---- Trend models: polynomial degree, p-value, refusals ----
+import { trendRefusal, pWords } from "../../src/DashboardBuilder/Features/Dashboard/analytics-model.js";
+test("polynomial degrees 2, 3 and 4 recover exact polynomials", () => {
+  const poly = (cs) => (x) => cs.reduce((s, c, i) => s + c * x ** i, 0);
+  const cubic = poly([2, -1, 0.5, 0.25]), quartic = poly([1, 0, -2, 0, 0.1]);
+  const xs = Array.from({ length: 9 }, (_, i) => i);
+  const c3 = trendFit("poly3", xs.map(cubic)), c4 = trendFit("poly4", xs.map(quartic));
+  assert.ok(close(c3.r2, 1, 1e-9) && close(c4.r2, 1, 1e-9));
+  assert.ok(close(c3.predict(11), cubic(11), 1e-6) && close(c4.predict(11), quartic(11), 1e-5));
+  assert.ok(c3.coef.every((c, i) => close(c, [2, -1, 0.5, 0.25][i], 1e-7)), "coefficients are in x, not in a scaled x");
+  assert.ok(c4.coef.every((c, i) => close(c, [1, 0, -2, 0, 0.1][i], 1e-6)));
+});
+test("a high-degree polynomial stays stable over many points", () => {
+  const ys = Array.from({ length: 2000 }, (_, x) => 5 + 0.002 * x + 1e-7 * x * x);
+  const f = trendFit("poly4", ys);
+  assert.ok(f && f.r2 > 0.999999);
+  assert.ok(close(f.predict(1000), 5 + 2 + 0.1, 1e-3));
+});
+test("a polynomial of degree d needs at least d + 2 values (an exact interpolation proves nothing)", () => {
+  assert.equal(trendFit("poly2", [1, 4, 9]), null);
+  assert.ok(trendFit("poly2", [1, 4, 9, 17]));
+  assert.equal(trendFit("poly3", [1, 4, 9, 17]), null);
+  assert.ok(trendFit("poly3", [1, 4, 9, 17, 30]));
+  assert.equal(trendFit("poly4", [1, 2, 3, 4, 5]), null);
+  assert.ok(trendFit("poly4", [1, 2, 3, 5, 4, 8]));
+  assert.match(trendProblem("poly3", [1, 4, 9, 17]), /at least 5 values/);
+  assert.match(trendProblem("poly2", [1, 4, 9]), /at least 4 values/);
+  assert.match(trendProblem("linear", [1]), /at least 2 values/);
+  assert.equal(trendProblem("poly2", [1, 4, 9, 17]), null);
+  assert.equal(trendProblem("poly2", [1, null, 9, null, 17, 4]), null); // blanks are not counted
+  assert.match(trendProblem("poly2", [1, null, 9, null, 17]), /at least 4 values/);
+});
+test("the p-value is the F-test of the whole fit (hand-computed: y = [1, 3, 2, 5, 4], linear)", () => {
+  // slope 0.8, ssTot 10, ssReg 6.4, ssRes 3.6; F = 6.4 / (3.6 / 3) = 5.3333, df (1, 3)
+  const f = trendFit("linear", [1, 3, 2, 5, 4]);
+  assert.ok(close(f.r2, 0.64, 1e-9));
+  assert.ok(close(f.p, 0.1040, 5e-4), `p = ${f.p}`); // F(1,3) = 5.3333 -> p = 0.1040 (equals the slope's t-test, t = 2.309, 3 df)
+});
+test("the p-value is tiny for a clear trend, large for noise, 0 for an exact fit and null when it is undefined", () => {
+  assert.ok(trendFit("linear", [1, 2.1, 2.9, 4.2, 5, 5.9, 7.1, 8]).p < 1e-6);
+  assert.ok(trendFit("linear", [5, 1, 6, 2, 5, 1, 6, 2]).p > 0.5);
+  assert.equal(trendFit("linear", [3, 5, 7, 9]).p, 0);
+  assert.equal(trendFit("linear", [1, 3]).p, null, "two points leave no degrees of freedom");
+  assert.equal(trendFit("linear", [4, 4, 4]).p, null, "a flat series has no variation to test");
+  const q = trendFit("poly2", [1, 2, 5, 10, 17, 26]);
+  assert.ok(q.p < 1e-6);
+});
+test("an exponential's p-value is the F-test on its straight-line fit of ln y", () => {
+  const f = trendFit("exp", [2, 2 * Math.E, 2 * Math.E ** 2, 2 * Math.E ** 3]);
+  assert.equal(f.p, 0);
+  const g = trendFit("exp", [1, 3, 2, 8, 6, 20]);
+  assert.ok(g.p > 0 && g.p < 0.05);
+});
+test("p-value wording", () => {
+  assert.equal(pWords(0.0004), "p < 0.001");
+  assert.equal(pWords(0), "p < 0.001");
+  assert.equal(pWords(0.04567), "p = 0.046");
+  assert.equal(pWords(0.5), "p = 0.500");
+  assert.equal(pWords(null), "");
+});
+test("trendSeries carries the p-value", () => {
+  const t = trendSeries("linear", [1, 3, 2, 5, 4], 0);
+  assert.ok(close(t.p, 0.104, 5e-4));
+  assert.equal(trendSeries("poly3", [1, 4, 9, 17], 0), null);
+  assert.match(trendFormula("poly3", trendFit("poly3", [1, 4, 9, 17, 30, 50])), /x³/);
+  assert.match(trendFormula("poly4", trendFit("poly4", [1, 2, 3, 5, 4, 8, 7])), /x⁴/);
+});
+test("a trend (and its forecast) is refused when the result is cut off", () => {
+  assert.equal(trendRefusal({ truncated: false, partial: false }), null);
+  assert.equal(trendRefusal({}), null);
+  assert.match(trendRefusal({ truncated: true }), /cut off/);
+  assert.match(trendRefusal({ partial: true }), /cut off/);
+});
+test("trend choices list exponential, power and the polynomial orders", () => {
+  assert.deepEqual(TREND_CHOICES.map(([v]) => v), ["none", "linear", "log", "exp", "power", "poly2", "poly3", "poly4"]);
 });

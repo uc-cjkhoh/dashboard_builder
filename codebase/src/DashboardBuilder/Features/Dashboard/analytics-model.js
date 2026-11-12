@@ -1,10 +1,11 @@
 // Analytics pane — pure, DOM-free (unit-tested in tests/js/analytics-model.test.mjs). Everything is
 // computed in the browser over the rows the query returned: reference lines / bands, a trend line (with
 // R²) and a short forecast that extends it, and crosstab totals that respect each measure's aggregation.
-// sheet.analytics = { ref: { kind, value? }, band: { from, to, fromParam?, toParam? } | null, trend: none|linear|log|exp|power|poly2,
+// sheet.analytics = { ref: { kind, value? }, band: { from, to, fromParam?, toParam? } | null, trend: none|linear|log|exp|power|poly2|poly3|poly4,
 //                     forecast: 0|3|6|12, forecastParam?: a number parameter's id (whole 0-24), totals: { grand, sub } }; a constant ref may carry `param` (a number parameter's id): refConstant().
+import { fSurvival } from "./stats-dist.js";
 export const REF_CHOICES = [["none", "None"], ["average", "Average"], ["median", "Median"], ["min", "Minimum"], ["max", "Maximum"], ["constant", "Constant"]];
-export const TREND_CHOICES = [["none", "None"], ["linear", "Linear"], ["log", "Logarithmic"], ["exp", "Exponential"], ["power", "Power"], ["poly2", "Polynomial (2nd order)"]];
+export const TREND_CHOICES = [["none", "None"], ["linear", "Linear"], ["log", "Logarithmic"], ["exp", "Exponential"], ["power", "Power"], ["poly2", "Polynomial (2nd order)"], ["poly3", "Polynomial (3rd order)"], ["poly4", "Polynomial (4th order)"]];
 export const FORECAST_CHOICES = [[0, "None"], [3, "3 steps"], [6, "6 steps"], [12, "12 steps"]];
 // A band is typed numbers ({ from, to }), mean ± k standard deviations ({ kind: "stddev", k }) or a percentile range ({ kind: "percentile", lo, hi, custom? } - custom: typed 0 < lo < hi < 100);
 // the reference line and the band read the measure `ref.measure` (a shown-measure index, default 0) over the rows shown.
@@ -44,28 +45,35 @@ export function refValue(kind, values, constant) {
   }
 }
 
+/** The polynomial degree of a trend type (linear = 1, poly2..poly4 = 2..4), or 0 for the other types. */
+const degreeOf = (type) => (type === "linear" ? 1 : /^poly[234]$/.test(type) ? Number(type.slice(4)) : 0);
+/** Fewest values a model is fitted to: 2, and d + 2 for a polynomial of degree d ≥ 2 (d + 1 values interpolate exactly and prove nothing). */
+const minPoints = (type) => (degreeOf(type) >= 2 ? degreeOf(type) + 2 : 2);
+
 /**
  * Least-squares trend over the points (x = position 0, 1, 2, … in category order; blanks skipped).
- * Returns { predict(x), r2, n, coef } or null when there are too few points or the model cannot be fitted.
- * log fits y = a + b·ln(x + 1); poly2 fits y = a + b·x + c·x²; exp fits y = a·e^(b·x) and power y = a·(x + 1)^b
- * by a straight-line fit of ln y (so every y must be above zero: see trendProblem). R² is always measured on the
- * original values, not on ln y (the same scale as the chart).
+ * Returns { predict(x), r2, p, n, coef } or null when there are too few points (see minPoints) or the model cannot be fitted.
+ * log fits y = a + b·ln(x + 1); polyN fits y = a + b·x + … (degree N, solved on x scaled to 0..1 so a 4th power stays stable;
+ * coef is given in x); exp fits y = a·e^(b·x) and power y = a·(x + 1)^b by a straight-line fit of ln y (so every y must be
+ * above zero: see trendProblem). R² is always measured on the original values, not on ln y (the same scale as the chart).
+ * p is the F-test p-value of the whole fit (all slopes zero) in the space it was fitted (ln y for exp / power), or null
+ * when it is undefined (no degrees of freedom left, or no variation to explain); a perfect fit gives 0.
  */
 export function trendFit(type, values) {
   const pts = values.map((y, x) => [x, y == null || y === "" ? NaN : Number(y)]).filter(([, y]) => Number.isFinite(y));
-  const need = type === "poly2" ? 3 : 2;
-  if (pts.length < need || type === "none") return null;
+  if (pts.length < minPoints(type) || type === "none") return null;
   const grow = type === "exp" || type === "power";
   if (grow && pts.some(([, y]) => y <= 0)) return null;
-  const feat = (x) => (type === "log" || type === "power" ? [1, Math.log(x + 1)] : type === "poly2" ? [1, x, x * x] : [1, x]);
+  const deg = degreeOf(type), scale = deg ? Math.max(1, pts[pts.length - 1][0]) : 1;
+  const feat = (x) => (type === "log" || type === "power" ? [1, Math.log(x + 1)] : deg ? Array.from({ length: deg + 1 }, (_, i) => (x / scale) ** i) : [1, x]);
   const X = pts.map(([x]) => feat(x)), Y = pts.map(([, y]) => (grow ? Math.log(y) : y));
   const k = X[0].length;
-  // Normal equations (XᵀX) β = Xᵀy, solved by Gaussian elimination (k ≤ 3).
+  // Normal equations (XᵀX) β = Xᵀy, solved by Gaussian elimination (k ≤ 5).
   const A = Array.from({ length: k }, (_, i) => Array.from({ length: k }, (_, j) => X.reduce((s, r) => s + r[i] * r[j], 0)));
   const b = Array.from({ length: k }, (_, i) => X.reduce((s, r, n) => s + r[i] * Y[n], 0));
   const beta = solve(A, b);
   if (!beta) return null;
-  const coef = grow ? [Math.exp(beta[0]), beta[1]] : beta;
+  const coef = grow ? [Math.exp(beta[0]), beta[1]] : deg ? beta.map((c, i) => c / scale ** i) : beta;
   const predict = (x) => { const v = feat(x).reduce((s, f, i) => s + f * beta[i], 0); return grow ? Math.exp(v) : v; };
   const ys = pts.map(([, y]) => y);
   const mean = ys.reduce((a, c) => a + c, 0) / ys.length;
@@ -73,14 +81,33 @@ export function trendFit(type, values) {
   const ssRes = pts.reduce((s, [x, y]) => s + (y - predict(x)) ** 2, 0);
   const r2 = ssTot === 0 ? 1 : 1 - ssRes / ssTot;
   if (!Number.isFinite(r2) || !coef.every(Number.isFinite)) return null;
-  return { predict, r2, n: pts.length, coef };
+  // F-test in the fitted space: Y is ln y for exp / power, y otherwise.
+  const n = pts.length, mY = Y.reduce((a, c) => a + c, 0) / n;
+  const tot = Y.reduce((s, y) => s + (y - mY) ** 2, 0), res = X.reduce((s, r, i) => s + (Y[i] - r.reduce((t, f, j) => t + f * beta[j], 0)) ** 2, 0);
+  let p = null;
+  if (n - k >= 1 && tot > 0) p = res <= tot * 1e-20 ? 0 : fSurvival(((tot - res) / (k - 1)) / (res / (n - k)), k - 1, n - k);
+  return { predict, r2, p: Number.isFinite(p) ? p : null, n, coef };
 }
 
-/** Why a model cannot be fitted to these values, in words, or null when it can (or the type has no limit). */
+/** Why a model cannot be fitted to these values, in words, or null when it can: a value that is not above zero (exp / power), too few values. */
 export function trendProblem(type, values) {
-  if (type !== "exp" && type !== "power") return null;
   const ys = values.filter((y) => y != null && y !== "").map(Number).filter(Number.isFinite);
-  return ys.some((y) => y <= 0) ? `The ${type === "exp" ? "exponential" : "power"} trend needs every value to be greater than zero.` : null;
+  if ((type === "exp" || type === "power") && ys.some((y) => y <= 0)) return `The ${type === "exp" ? "exponential" : "power"} trend needs every value to be greater than zero.`;
+  if (type === "none") return null;
+  const need = minPoints(type);
+  if (ys.length < need) return `The ${TREND_CHOICES.find(([v]) => v === type)?.[1].toLowerCase() ?? "trend"} trend needs at least ${need} values.`;
+  return null;
+}
+
+/** Why no model is fitted to this result, or null: a result cut off at its limit (or partial) describes only part of the data, so it is not extrapolated. */
+export function trendRefusal(result) {
+  return result?.truncated || result?.partial ? "The trend and forecast are not fitted: the result is cut off (more rows exist), so a fit would describe only the rows shown. Filter or aggregate further." : null;
+}
+
+/** A p-value in words: "p = 0.046", or "p < 0.001" when it rounds to zero; "" when there is none. */
+export function pWords(p) {
+  if (p == null || !Number.isFinite(p)) return "";
+  return p < 0.001 ? "p < 0.001" : `p = ${p.toFixed(3)}`;
 }
 
 const num = (v) => String(Number(v.toPrecision(3))).replace("-", "\u2212");
@@ -94,6 +121,8 @@ export function trendFormula(type, fit) {
     case "exp": return `y = ${num(a)}·e^(${num(b)}·x)`;
     case "power": return `y = ${num(a)}·(x+1)^${pw(b)}`;
     case "poly2": return `y = ${num(a)}${add(b, "x")}${add(c, "x²")}`;
+    case "poly3": return `y = ${num(a)}${add(b, "x")}${add(c, "x²")}${add(fit.coef[3], "x³")}`;
+    case "poly4": return `y = ${num(a)}${add(b, "x")}${add(c, "x²")}${add(fit.coef[3], "x³")}${add(fit.coef[4], "x⁴")}`;
     default: return `y = ${num(a)}${add(b, "x")}`;
   }
 }
@@ -120,7 +149,7 @@ export function trendSeries(type, values, forecast = 0) {
   const total = values.length + forecast;
   const data = Array.from({ length: total }, (_, x) => fit.predict(x));
   if (!data.every(Number.isFinite)) return null;
-  return { data, extra: forecast, r2: fit.r2, n: fit.n, formula: trendFormula(fit.type, fit) };
+  return { data, extra: forecast, r2: fit.r2, p: fit.p, n: fit.n, formula: trendFormula(fit.type, fit) };
 }
 
 /**
