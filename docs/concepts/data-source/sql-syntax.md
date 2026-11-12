@@ -53,7 +53,7 @@ A false alarm only opens the query in ClickHouse syntax with "This query uses Cl
 
 ## Warnings
 
-The translator answers `{ sql, warnings: [text], changes: [name] }`. A warning is a difference the translation cannot remove, in a plain sentence (today: text comparisons now ignore case, can be slower on very large tables because the primary key cannot be used, and accents still count as different letters; `GROUP_CONCAT` is not cut at 1024 characters; `CAST(x AS SIGNED)` of a column cuts a fraction instead of rounding; each shown once). It shows under the status line with a warning icon, only in MySQL syntax, only for the text it was made for (typing hides it until the new text is known), and **never blocks Save**. `changes` is for the browser (the round-trip check above), not shown.
+The translator answers `{ sql, warnings: [text], changes: [name] }`. A warning is a difference the translation cannot remove, in a plain sentence (today: grouping, sorting and DISTINCT on a text column are case-sensitive; text comparisons now ignore case, can be slower on very large tables because the primary key cannot be used, and accents still count as different letters; `GROUP_CONCAT` is not cut at 1024 characters; `CAST(x AS SIGNED)` of a column cuts a fraction instead of rounding; each shown once). It shows under the status line with a warning icon, only in MySQL syntax, only for the text it was made for (typing hides it until the new text is known), and **never blocks Save**. `changes` is for the browser (the round-trip check above), not shown.
 
 ## Limitations
 
@@ -85,7 +85,7 @@ The translator is a best effort, not a guarantee. **Always check the "ClickHouse
 | Double-quoted `"text"` | read as a string, as in MySQL (in ClickHouse it would be a name) |
 | Backtick names | come out as `"name"` (valid in ClickHouse) |
 | A MySQL stored routine, `INSERT`, `UPDATE`, DDL | not a `SELECT`: refused by the same guard as any custom SQL |
-| Grouping, sorting and `DISTINCT` on text (MySQL treats `'A'` and `'a'` as one value, ClickHouse as two), accent-insensitivity, binary collations, implicit conversions (`'1' = 1`), `<` / `>` / `BETWEEN` on text, `ENGINE` details, MySQL's SQL modes | **not modelled**: there are no column types here to decide on, so these stay ClickHouse's behaviour, silently |
+| Grouping, sorting and `DISTINCT` on **text** (MySQL treats `'A'` and `'a'` as one value, ClickHouse as two) | **not rewritten** (the output values and every reference to the column would change) but **a note says so** when the column is a plain column ClickHouse reports as text (the same `DESCRIBE` probes as the two-column comparison, shared cap of 6; an alias or expression gets no note). Accent-insensitivity, binary collations, implicit conversions (`'1' = 1`), `<` / `>` / `BETWEEN` on text, `ENGINE` details and MySQL's SQL modes are **not modelled** and silent |
 
 **ClickHouse → MySQL** (display only; never run on MySQL; `clickhouse_to_mysql()` in `Tools/sql_translate.py`):
 
