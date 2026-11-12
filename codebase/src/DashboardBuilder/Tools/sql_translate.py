@@ -72,6 +72,7 @@ PARSE_REFUSED = {
     "w": "the weekday number", "X": "the year of a week number", "x": "the year of a week number",
     "y": "a two-digit year (ClickHouse reads 70-99 as NULL, MySQL as 1970-1999)",
 }
+MAX_PAIRS = 6  # column = column comparisons examined for case-folding per query
 # Hints and modifiers that do not change what a SELECT returns.
 DROPPED_MODIFIERS = {"SQL_CALC_FOUND_ROWS", "SQL_NO_CACHE", "SQL_CACHE", "SQL_SMALL_RESULT", "SQL_BIG_RESULT", "SQL_BUFFER_RESULT", "HIGH_PRIORITY", "STRAIGHT_JOIN"}
 
@@ -86,6 +87,9 @@ SECOND SHA1 SHA2 SIGN SIN SPACE SQRT STD STDDEV STDDEV_POP STDDEV_SAMP STR_TO_DA
 TRIM TRUNCATE UCASE UNHEX UNIX_TIMESTAMP UPPER UUID VAR_POP VAR_SAMP VARIANCE VERSION WEEK WEEKDAY WEEKOFYEAR YEAR YEARWEEK
 """.split())
 # Words that start ClickHouse-only syntax: found in the text outside quotes and comments.
+# ClickHouse functions that share a name with a MySQL function but mean something else (ASCII-only upper / lower, NULL-giving concat_ws, DAYOFWEEK from Monday, raw-byte SHA1,
+# addDate with an interval, timestamp()). The MySQL -> ClickHouse direction maps those names to ClickHouse's own forms, so these would not come back as they went: refused here.
+CH_NAME_CLASH = re.compile(r"\b(upper|lower|concat_ws|dayofweek|sha1|timestamp|adddate|subdate)\s*\(", re.I)
 CH_ONLY_SYNTAX = re.compile(r"\b(ARRAY\s+JOIN|WITH\s+TOTALS|WITH\s+FILL|GLOBAL|PREWHERE|FINAL|SAMPLE|SETTINGS|INTO\s+OUTFILE|FORMAT)\b", re.I)
 
 
@@ -97,7 +101,7 @@ class Refusal(Exception):
         self.kind, self.errors = kind, errors or []
 
 
-def mysql_to_clickhouse(sql, sqlglot, ErrorLevel):
+def mysql_to_clickhouse(sql, sqlglot, ErrorLevel, fold_pairs=()):
     """Translate one MySQL query for ClickHouse. Where sqlglot's plain output would run but mean something else, the text is refused or repaired:
 
     * `||` is OR in MySQL's default mode and concatenation in ClickHouse: refused, so nobody gets 0/1 where they wanted text (write OR or CONCAT()).
@@ -115,6 +119,9 @@ def mysql_to_clickhouse(sql, sqlglot, ErrorLevel):
     * `=`, `!=` and IN against a text literal ignore case in MySQL and not in ClickHouse: lowerUTF8(toString(x)) = lowerUTF8('lit').   [changes: case-fold]
     * a DIV 0 is NULL in MySQL: the divisor of DIV is wrapped in nullIf(..., 0) (sqlglot already does it for `/` and `%`).   [changes: div-null]
     * ORDER BY keeps MySQL's NULL-first order (sqlglot adds NULLS FIRST).   [changes: nulls-first]
+    * `col = col` / `col != col` between two columns: whether it needs the case-folding above depends on the columns' types, which this script cannot know (it reads
+      nothing). It lists each such pair as a candidate (`probes`: a query that describes the two columns); the caller asks ClickHouse for their types and calls again with
+      `fold_pairs` = the ids whose columns are both text, and those are folded like a comparison with a text literal.   [changes: case-fold]
     * SQL_CALC_FOUND_ROWS, SQL_NO_CACHE, USE/FORCE/IGNORE INDEX and a SELECT-level STRAIGHT_JOIN are dropped (they do not change the result); a STRAIGHT_JOIN
       join is an INNER (or CROSS) join; FOR UPDATE / FOR SHARE is dropped with a note (ClickHouse has no row locks).
     """
@@ -427,6 +434,8 @@ def mysql_to_clickhouse(sql, sqlglot, ErrorLevel):
             raise Refusal(f"{what} needs the SEPARATOR written as text.")
         if order and len({bool(o.args.get("desc")) for o in order}) > 1:
             raise Refusal(f"{what} with some ORDER BY columns ascending and others descending has no ClickHouse equivalent; sort in a subquery.")
+        if distinct and order and any(o.this != value for o in order):
+            raise Refusal(f"{what}(DISTINCT … ORDER BY …) can only sort by the value itself here; sort in a subquery.")
         present = A("isNotNull", value.copy())
         if order:
             key = A("tuple", *[part for o in order for part in (A("isNotNull", o.this.copy()), o.this.copy())])  # NULL first when ascending, last when descending, as in MySQL
@@ -529,7 +538,7 @@ def mysql_to_clickhouse(sql, sqlglot, ErrorLevel):
             items, n = node.expressions, node.this
             inside = exp.And(this=exp.GTE(this=n.copy(), expression=N(1)), expression=exp.LTE(this=n.copy(), expression=N(len(items))))
             return A("if", inside, A("arrayElement", exp.Array(expressions=[txt(i) for i in items]), n.copy()), exp.Null())  # out of range: NULL (arrayElement gives '')
-        if isinstance(node, exp.DayOfWeek):  # Sunday = 1 .. Saturday = 7
+        if isinstance(node, exp.DayOfWeek):  # Sunday = 1 .. Saturday = 7 (ClickHouse's DAYOFWEEK: Monday = 1)
             return exp.Paren(this=exp.Add(this=A("modulo", A("toDayOfWeek", node.this), N(7)), expression=N(1)))
         if isinstance(node, exp.Dayname):
             return A("dateName", S("weekday"), exp.TsOrDsToDate(this=date_arg(node.this)))
@@ -714,6 +723,27 @@ def mysql_to_clickhouse(sql, sqlglot, ErrorLevel):
         tree = tree.transform(fix)
         if repr(tree) == before:
             break
+    # --- column = column: candidates for the case-fold, folded where the caller found both columns to be text -------------------------------------------------------------
+    probes = []
+    root_with = tree.args.get("with_") if isinstance(tree, exp.Select) else None
+    for node in list(tree.find_all(exp.EQ, exp.NEQ)):
+        left, right = node.args.get("this"), node.args.get("expression")
+        if not (isinstance(left, exp.Column) and isinstance(right, exp.Column)) or len(probes) >= MAX_PAIRS:
+            continue
+        select, pid = node.find_ancestor(exp.Select), len(probes)
+        scope = None
+        if select is not None and select.args.get("from_") is not None:
+            probe = exp.Select(expressions=[exp.alias_(left.copy(), "l"), exp.alias_(right.copy(), "r")])
+            probe.set("from_", select.args["from_"].copy())
+            if select.args.get("joins"):
+                probe.set("joins", [j.copy() for j in select.args["joins"]])
+            if root_with is not None:
+                probe.set("with_", root_with.copy())
+            scope = probe.sql(dialect="clickhouse")
+        probes.append({"id": pid, "sql": scope})
+        if pid in fold_pairs:
+            changes.append("case-fold")
+            node.replace(type(node)(this=fold(left.copy()), expression=fold(right.copy())))
     for n in tree.find_all(exp.Anonymous):
         if n.name.upper().startswith("MYSQL_"):
             raise Refusal(f"{n.name[6:].replace('_', ' ').title()} could not be translated.")
@@ -728,7 +758,7 @@ def mysql_to_clickhouse(sql, sqlglot, ErrorLevel):
     if "case-fold" in changes:
         note("Text comparisons ignore upper/lower case, as in MySQL. They are written with lowerUTF8(), so a filter on a very large table can be slower "
              "(it cannot use the primary key), and accents still count as different letters.")
-    return result, warnings, sorted(set(changes))
+    return result, warnings, sorted(set(changes)), [p for p in probes if p["sql"]]
 
 
 def clickhouse_to_mysql(sql, sqlglot, ErrorLevel):
@@ -743,6 +773,9 @@ def clickhouse_to_mysql(sql, sqlglot, ErrorLevel):
     m = CH_ONLY_SYNTAX.search(plain_text)
     if m:
         raise Refusal(f"{' '.join(m.group(1).upper().split())} is ClickHouse-only syntax with no MySQL form.")
+    m = CH_NAME_CLASH.search(plain_text)
+    if m:
+        raise Refusal(f"{m.group(1)}() means something else in MySQL (ASCII-only case change, NULL handling, weekday numbering, raw bytes, interval arguments). Use the UTF-8 form, e.g. lowerUTF8().")
     trees = [t for t in sqlglot.parse(sql, read="clickhouse") if t]
     if len(trees) != 1:
         raise Refusal("Only one query can be translated.", "parse")
@@ -755,6 +788,8 @@ def clickhouse_to_mysql(sql, sqlglot, ErrorLevel):
             raise Refusal("LIMIT n BY has no MySQL form.")
 
     def fix(node):
+        if isinstance(node, exp.Anonymous) and node.name in ("upperUTF8", "lowerUTF8") and len(node.expressions) == 1:  # what MySQL's UPPER / LOWER do
+            return (exp.Upper if node.name == "upperUTF8" else exp.Lower)(this=node.expressions[0])
         if isinstance(node, exp.TimeToStr):
             fmt = node.args.get("format")
             ok = isinstance(fmt, exp.Literal) and fmt.is_string and node.args.get("zone") is None
@@ -796,8 +831,11 @@ def main():
         return
     try:
         if src == "mysql" and dst == "clickhouse":
-            result, warnings, changes = mysql_to_clickhouse(sql, sqlglot, ErrorLevel)
-            out({"ok": True, "sql": result, "warnings": warnings, "changes": changes})
+            fold_pairs = req.get("fold") or []
+            if not (isinstance(fold_pairs, list) and len(fold_pairs) <= MAX_PAIRS and all(isinstance(i, int) and 0 <= i < MAX_PAIRS for i in fold_pairs)):
+                raise ValueError("bad request")
+            result, warnings, changes, probes = mysql_to_clickhouse(sql, sqlglot, ErrorLevel, set(fold_pairs))
+            out({"ok": True, "sql": result, "warnings": warnings, "changes": changes, "probes": probes})
             return
         if src == "clickhouse" and dst == "mysql":
             out({"ok": True, "sql": clickhouse_to_mysql(sql, sqlglot, ErrorLevel), "warnings": [], "changes": []})

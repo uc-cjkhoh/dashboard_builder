@@ -24,19 +24,28 @@ async function ch(sql) { // one statement, TSV; the server's own guards (readonl
   if (!res.ok) throw new Error(text.split('\n')[0].slice(0, 200));
   return text;
 }
-function translate(sql, from, to) { // the real script, as the server starts it: python3 -I, the request on stdin, one JSON answer on stdout
+function translate(sql, from, to, fold) { // the real script, as the server starts it: python3 -I, the request on stdin, one JSON answer on stdout
   return new Promise((resolve) => {
     const child = spawn(process.env.PYTHON ?? 'python3', ['-I', SCRIPT], { stdio: ['pipe', 'pipe', 'ignore'], timeout: 20000 });
     let out = '';
     child.stdout.on('data', (d) => { out += d; });
     child.on('error', () => resolve({ ok: false, error: 'python3 did not start' }));
     child.on('close', () => { try { resolve(JSON.parse(out)); } catch { resolve({ ok: false, error: 'translator gave no answer' }); } });
-    child.stdin.end(JSON.stringify({ sql, from, to }));
+    child.stdin.end(JSON.stringify({ sql, from, to, ...(fold ? { fold } : {}) }));
   });
 }
 const columnsOf = async (sql) => { try { return (await ch(`DESCRIBE TABLE (${sql})`)).split('\n').map((l) => { const [name, type] = l.split('\t'); return { name, type }; }); } catch { return null; } };
 const syntaxOf = async (sql) => { try { return (await ch(`EXPLAIN SYNTAX ${sql}`)).replace(/\\n/g, '\n').replace(/\\'/g, "'"); } catch { return null; } };
 
+// MySQL -> ClickHouse as the app does it: `col = col` comparisons come back as probes, ClickHouse describes the two columns, and the pairs that are both text are folded (SqlController).
+const isText = (t) => { let x = t.trim(); while (/^(Nullable|LowCardinality)\(/.test(x)) x = x.replace(/^[A-Za-z]+\(/, '').slice(0, -1).trim(); return x === 'String' || /^(FixedString|Enum8|Enum16)\(/.test(x); };
+async function translateTyped(sql) {
+  const first = await translate(sql, 'mysql', 'clickhouse');
+  if (!first.ok || !first.probes?.length) return first;
+  const text = [];
+  for (const p of first.probes) { const cols = await columnsOf(p.sql); if (cols?.length === 2 && cols.every((c) => isText(c.type))) text.push(p.id); }
+  return text.length ? translate(sql, 'mysql', 'clickhouse', text) : first;
+}
 console.log(`server ${(await ch('SELECT version()'))} · translator ${SCRIPT.split('/').slice(-3).join('/')}\n`);
 
 // ---- Part 1 --------------------------------------------------------------------------------------------------------------------------------------------------
@@ -193,7 +202,12 @@ const cases = [
       c('GROUP_CONCAT default separator', `GROUP_CONCAT(number ORDER BY number) FROM numbers(5)`, '0,1,2,3,4'), c('GROUP_CONCAT DESC', `GROUP_CONCAT(number ORDER BY number DESC) FROM numbers(5)`, '4,3,2,1,0'),
       c('GROUP_CONCAT DISTINCT', `GROUP_CONCAT(DISTINCT number % 2 ORDER BY number % 2) FROM numbers(5)`, '0,1'), c('GROUP_CONCAT skips NULL', `GROUP_CONCAT(x ORDER BY x) FROM (SELECT 1 AS x UNION ALL SELECT NULL UNION ALL SELECT 2) t`, '1,2'),
       c('GROUP_CONCAT of only NULLs is NULL', `GROUP_CONCAT(x) FROM (SELECT NULL AS x) t`, '\\N'), c('GROUP_CONCAT two sort keys', `GROUP_CONCAT(a ORDER BY b DESC, c DESC) FROM (SELECT 'x' AS a, 1 AS b, 2 AS c UNION ALL SELECT 'y', 2, 1 UNION ALL SELECT 'z', 2, 3) t`, 'z,y,x'),
+      c('GROUP_CONCAT DISTINCT sorted by another column is refused', `GROUP_CONCAT(DISTINCT a ORDER BY b) FROM (SELECT 'x' AS a, 1 AS b UNION ALL SELECT 'x', 2) t`, '(refused'),
       c('GROUP_CONCAT empty separator', `GROUP_CONCAT(number ORDER BY number SEPARATOR '') FROM numbers(3)`, '012'), c('GROUP_CONCAT of text', `GROUP_CONCAT(n ORDER BY n SEPARATOR ' | ') FROM (SELECT 'b' AS n UNION ALL SELECT 'a') t`, 'a | b'),
+      // ---- column = column: case-insensitive for text columns, left alone for the rest (the types come from ClickHouse) ----
+      c('JOIN ON two text columns ignores case', `COUNT(*) FROM (SELECT 'A' AS x) a JOIN (SELECT 'a' AS y) b ON a.x = b.y`, '1'), c('WHERE text col = text col', `COUNT(*) FROM (SELECT 'A' AS x, 'a' AS y) t WHERE t.x = t.y`, '1'),
+      c('WHERE text col != text col', `COUNT(*) FROM (SELECT 'A' AS x, 'a' AS y) t WHERE t.x != t.y`, '0'), c('JOIN ON two number columns', `COUNT(*) FROM (SELECT 1 AS x) a JOIN (SELECT 1 AS y) b ON a.x = b.y`, '1'),
+      c('JOIN ON different text values', `COUNT(*) FROM (SELECT 'A' AS x) a JOIN (SELECT 'b' AS y) b ON a.x = b.y`, '0'),
       c('CAST AS SIGNED', `CAST('5' AS SIGNED) + 1`, '6'), c('CAST AS DATE', `CAST('2024-03-05' AS DATE)`, '2024-03-05'), c('CAST float AS SIGNED rounds', `CAST(2.5 AS SIGNED)`, '3'),
     ];
   })(),
@@ -204,7 +218,7 @@ let failed = 0;
 console.log('Part 1 — MySQL -> ClickHouse (the translated SQL must return what MySQL returns)');
 for (const [label, mysql, expected] of cases) {
   if (ONLY && !ONLY.test(label)) continue;
-  const r = await translate(mysql, 'mysql', 'clickhouse');
+  const r = await translateTyped(mysql);
   let got;
   if (!r.ok) got = `(refused: ${r.error})`;
   else { try { got = (await ch(r.sql)).split('\n')[0]; } catch (e) { got = `(ClickHouse: ${e.message})`; } }
@@ -240,6 +254,9 @@ const typical = [
   'SELECT metadata_modification_time + INTERVAL 1 DAY AS d FROM system.tables LIMIT 3',
   "SELECT formatDateTime(metadata_modification_time, '%H:%i') AS hm FROM system.tables LIMIT 3",
   "SELECT formatDateTime(metadata_modification_time, '%M') AS month_name FROM system.tables LIMIT 3",
+  'SELECT upper(name) FROM system.tables LIMIT 3',
+  'SELECT lowerUTF8(name) FROM system.tables LIMIT 3',
+  'SELECT count() FROM system.tables ORDER BY count() DESC',
   'SELECT dummy FROM system.one',
   'SELECT a, b FROM (SELECT 1 AS a, 2 AS b)',
 ];
