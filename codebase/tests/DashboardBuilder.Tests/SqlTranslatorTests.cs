@@ -115,7 +115,7 @@ public class SqlTranslatorTests : IClassFixture<WebApplicationFactory<Program>>
             Assert.Empty(await Warn(same));
             Assert.DoesNotContain("case-fold", await Changes(same));
         }
-        Assert.Equal("SELECT a FROM t WHERE LOWER(n) = 'x'", await My2Ch("SELECT a FROM t WHERE LOWER(n) = 'x'")); // LOWER() already ignores case
+        Assert.Equal("SELECT a FROM t WHERE lowerUTF8(n) = 'x'", await My2Ch("SELECT a FROM t WHERE LOWER(n) = 'x'")); // LOWER() against a lower-case text already ignores case
     }
     [Fact] public async Task DIV_by_zero_is_NULL_as_in_MySQL_and_the_repairs_that_change_meaning_are_reported()
     {
