@@ -23,7 +23,6 @@ Relationships are logical, inner/left/right/full, with one equality pair each ([
 
 ## Beginner-test follow-ups
 
-- **A broken union card already in a workbook** — The Union dialog now refuses tables that share no column, but a card of that kind saved earlier still reads "Failed to load" with a Retry button; the server's reason ("These tables share no column with the same name and kind of values.") is only in the card's error line, which the Relationships card can cover. Open: the card (`Canvas/canvas.js`, not changed in that pass) should show that reason beside the failed pill, or offer Remove instead of Retry when the error is a 400. Needs: none.
 - **View data over a union or unpivot** — Over a source View data still says it isn't available; the first-measure rule (D95) leaves that unchanged. Needs: none.
 
 ## Beginner-test follow-ups (connection and schema)

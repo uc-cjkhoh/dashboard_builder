@@ -54,7 +54,7 @@ On drop:
    [data-model.md](../../reference/data-model.md#entity).
 2. Fetch the columns with `GET …/columns` (`DESCRIBE`). Each column is tagged with a display category.
 3. Render the card with a **loading** status (amber) until the columns arrive.
-   A failed fetch shows a **failed** status (red) with **Retry**, never a bare error.
+   A failed fetch shows a **failed** status (red) with **Retry**, never a bare error. When the server **refused** the card (a 400: for example a union saved earlier whose tables share no column) the status shows the server's reason and **Remove card** instead, because asking again would give the same answer.
 4. Once the canvas has at least one entity, hide the empty state (`.canvas__empty`) with `hidden`.
 
 ## Union and unpivot cards
