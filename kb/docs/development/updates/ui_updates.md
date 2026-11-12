@@ -4,6 +4,7 @@ Visual and interaction changes (styles, markup, layout, labels, icons, focus). G
 
 ## 2026-11-12
 
+- Sidebar: tooltips say what Union and Unpivot do (`8052e0b`)
 - Canvas cards show a plain kind for each column (whole number, text, date…), the raw ClickHouse type in the tooltip (`ebe4802`)
 - Canvas zoom, relationship routing and describe, connect form, Fields pane scroll (owner's work in progress, committed as is) (`d4535dd`)
 - Gantt: Show Me ignores the Colour key, legend focus visibly fades the other members, hasTime order restored (`2b61b14`)
