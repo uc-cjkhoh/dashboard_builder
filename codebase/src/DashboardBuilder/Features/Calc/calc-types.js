@@ -32,10 +32,35 @@ export const DATE_UNITS = Object.freeze(["year", "quarter", "month", "week", "da
 /** The parts DATENAME takes, written as a text literal (any case): the name is always English. Twin of CalcCatalog.DateNameParts. */
 export const DATE_NAME_PARTS = Object.freeze(["weekday", "month"]);
 
+/** Why a regular expression pattern can't run on ClickHouse (RE2: no look-ahead / look-behind, no atomic groups, no back-references in the pattern) or is not
+ *  closed; null when none of these applies. A cheap scan, not a parser: ClickHouse still has the last word. Twin of CalcValidator.RegexProblem. */
+export function regexProblem(p) {
+  let depth = 0;
+  for (let i = 0; i < p.length; i++) {
+    const c = p[i];
+    if (c === "\\") {
+      if (i + 1 < p.length && p[i + 1] >= "1" && p[i + 1] <= "9") return "back-references such as \\1 aren't supported in a pattern";
+      i++;
+    } else if (c === "[") {
+      let j = i + 1;
+      if (p[j] === "^") j++;
+      if (p[j] === "]") j++; // a ] right after the opening is a letter of the class
+      for (; j < p.length && p[j] !== "]"; j++) if (p[j] === "\\") j++;
+      if (j >= p.length) return "a [ is never closed";
+      i = j;
+    } else if (c === "(") {
+      if (/^\(\?(=|!|<=|<!)/.test(p.slice(i, i + 4))) return "look-ahead and look-behind aren't supported";
+      if (p.startsWith("(?>", i)) return "atomic groups aren't supported";
+      depth++;
+    } else if (c === ")" && --depth < 0) return "a ) has no ( before it";
+  }
+  return depth > 0 ? "a ( is never closed" : null;
+}
+
 /** The row-level text and date functions (wire node `{ k: "fn", fn, args }`). `args` are kinds in order: `text` (any text expression),
  *  `length` (a whole-number literal 0..count), `position` (a whole-number literal 1..count), `separator` (a non-empty text
  *  literal, at most `separator` characters); the date kinds: `date` (a date expression), `unit` (a DATE_UNITS text literal),
- *  `amount` (a whole-number literal, either sign, at most `dateAmount`); `part` (a DATE_NAME_PARTS text literal); `month` (a whole-number literal 1..12, a fiscal start month); `number` (any number expression); `value` (a number, date or text expression). `max` above `args.length` repeats the last kind (CONCAT); `min` below `args.length` makes the trailing arguments optional (MID, FIND). Twin of CalcCatalog.RowFunctions. */
+ *  `amount` (a whole-number literal, either sign, at most `dateAmount`); `part` (a DATE_NAME_PARTS text literal); `month` (a whole-number literal 1..12, a fiscal start month); `pattern` (a non-empty text literal, a regular expression, at most `string` characters); `replacement` (a text literal, possibly empty, at most `string` characters); `number` (any number expression); `value` (a number, date or text expression). `max` above `args.length` repeats the last kind (CONCAT); `min` below `args.length` makes the trailing arguments optional (MID, FIND). Twin of CalcCatalog.RowFunctions. */
 export const ROW_FUNCTIONS = Object.freeze({
   lower: { args: ["text"], result: "text" },
   upper: { args: ["text"], result: "text" },
@@ -57,6 +82,10 @@ export const ROW_FUNCTIONS = Object.freeze({
   istartswith: { args: ["text", "text"], result: "boolean" },
   iendswith: { args: ["text", "text"], result: "boolean" },
   split: { args: ["text", "separator", "position"], result: "text" },
+  regexp_match: { args: ["text", "pattern"], result: "boolean" },
+  regexp_extract: { args: ["text", "pattern"], result: "text" },
+  regexp_extract_nth: { args: ["text", "pattern", "position"], result: "text" },
+  regexp_replace: { args: ["text", "pattern", "replacement"], result: "text" },
   datediff: { args: ["unit", "date", "date"], result: "number" },
   dateadd: { args: ["unit", "amount", "date"], result: "date" },
   year: { args: ["date"], result: "number" },
@@ -290,6 +319,16 @@ function typeOf(node, path, categoryOf) {
         } else if (kind === "month") {
           if (a.k !== "num" || !Number.isInteger(a.v) || a.v < 1 || a.v > 12) {
             throw new CalcError(`${upper}'s start month must be a whole number from 1 to 12 written in the formula.`, ap);
+          }
+        } else if (kind === "pattern") {
+          if (a.k !== "str" || a.v.length < 1 || a.v.length > CALC_LIMITS.string) {
+            throw new CalcError(`${upper}'s pattern must be a regular expression written in the formula as text, 1 to ${CALC_LIMITS.string} characters.`, ap);
+          }
+          const why = regexProblem(a.v);
+          if (why) throw new CalcError(`${upper}'s pattern isn't a regular expression ClickHouse can read: ${why}.`, ap);
+        } else if (kind === "replacement") {
+          if (a.k !== "str" || a.v.length > CALC_LIMITS.string) {
+            throw new CalcError(`${upper}'s replacement must be text written in the formula, at most ${CALC_LIMITS.string} characters.`, ap);
           }
         } else if (kind === "number") {
           if (t.type !== "number") throw new CalcError(`${upper} needs a number — ${t.name} is ${t.type}.`, ap);

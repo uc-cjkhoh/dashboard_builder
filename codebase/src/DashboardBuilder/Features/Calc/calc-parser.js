@@ -15,7 +15,7 @@
 //              | "ISNULL" "(" expr ")" | "ZN" "(" expr ")"
 //              | "CASE" [expr] ("WHEN" expr "THEN" expr)+ ["ELSE" expr] "END"
 //              | "IF" expr "THEN" expr ("ELSEIF" expr "THEN" expr)* ["ELSE" expr] "END"      -- the same node as CASE WHEN
-//   text      := ("TEXT" | "STR" | "LOWER" | "UPPER" | "TRIM" | "LTRIM" | "RTRIM" | "LEN" | "LEFT" | "RIGHT" | "MID" | "FIND" | "REPLACE" | "CONCAT" | "CONTAINS" | "STARTSWITH" | "ENDSWITH" | "ICONTAINS" | "ISTARTSWITH" | "IENDSWITH" | "SPLIT")
+//   text      := ("TEXT" | "STR" | "LOWER" | "UPPER" | "TRIM" | "LTRIM" | "RTRIM" | "LEN" | "LEFT" | "RIGHT" | "MID" | "FIND" | "REPLACE" | "CONCAT" | "CONTAINS" | "STARTSWITH" | "ENDSWITH" | "ICONTAINS" | "ISTARTSWITH" | "IENDSWITH" | "SPLIT" | "REGEXP_MATCH" | "REGEXP_EXTRACT" | "REGEXP_EXTRACT_NTH" | "REGEXP_REPLACE")
 //                "(" expr ("," expr)* ")"        -- argument count and kinds are checked by check(), not here
 //   date      := ("DATEDIFF" | "DATEADD" | "YEAR" | "MONTH" | "DAY" | "QUARTER" | "WEEK" | "WEEKDAY" | "DATE" | "ISOYEAR" | "DATENAME" | "DATETRUNC" | "FISCALYEAR" | "FISCALQUARTER" | "MAKEDATE") "(" expr ("," expr)* ")"   -- same shape as text
 //   datelit   := "#" yyyy-mm-dd "#"      -- a date literal, node { k: "date", v: "2024-01-31" } (shape only here; check() demands a real day in range)

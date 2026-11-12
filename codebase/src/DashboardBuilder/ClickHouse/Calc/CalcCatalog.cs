@@ -65,8 +65,10 @@ public sealed record AggSpec(IReadOnlyList<string> Accepts, string? Result, bool
 /// <c>Amount</c>: a whole-number literal, either sign, at most <see cref="CalcLimits.MaxDateAmount"/>.
 /// <c>Value</c>: a number, date or text expression (not a condition).
 /// <c>Part</c>: a <see cref="CalcCatalog.DateNameParts"/> text literal. <c>Number</c>: any number expression.
-/// <c>Month</c>: a whole-number literal 1..12 (a fiscal year's start month).</summary>
-public enum FnArg { Text, Length, Position, Separator, Date, Unit, Amount, Value, Part, Number, Month }
+/// <c>Month</c>: a whole-number literal 1..12 (a fiscal year's start month).
+/// <c>Pattern</c>: a non-empty text literal (a regular expression, ClickHouse's RE2: no look-around or back-references, so it runs in linear time), at most
+/// <see cref="CalcLimits.MaxString"/> characters. <c>Replacement</c>: a text literal, possibly empty, at most <see cref="CalcLimits.MaxString"/> characters (<c>\1</c> is a captured group).</summary>
+public enum FnArg { Text, Length, Position, Separator, Date, Unit, Amount, Value, Part, Number, Month, Pattern, Replacement }
 
 /// <summary>One row-level function: its arguments in order and its result type. <c>MaxArgs</c> above <c>Args.Count</c> lets
 /// the last argument kind repeat (<c>CONCAT</c>).</summary>
@@ -131,6 +133,10 @@ public static class CalcCatalog
         ["istartswith"] = Fn(CalcType.Boolean, FnArg.Text, FnArg.Text),
         ["iendswith"] = Fn(CalcType.Boolean, FnArg.Text, FnArg.Text),
         ["split"] = Fn(CalcType.Text, FnArg.Text, FnArg.Separator, FnArg.Position),
+        ["regexp_match"] = Fn(CalcType.Boolean, FnArg.Text, FnArg.Pattern),
+        ["regexp_extract"] = Fn(CalcType.Text, FnArg.Text, FnArg.Pattern),
+        ["regexp_extract_nth"] = Fn(CalcType.Text, FnArg.Text, FnArg.Pattern, FnArg.Position),
+        ["regexp_replace"] = Fn(CalcType.Text, FnArg.Text, FnArg.Pattern, FnArg.Replacement),
         ["datediff"] = Fn(CalcType.Number, FnArg.Unit, FnArg.Date, FnArg.Date),
         ["dateadd"] = Fn(CalcType.Date, FnArg.Unit, FnArg.Amount, FnArg.Date),
         ["year"] = Fn(CalcType.Number, FnArg.Date),

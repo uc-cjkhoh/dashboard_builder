@@ -7,7 +7,7 @@ import { FUNCTIONS, ROW_FUNCTIONS, CALC_LIMITS } from "./calc-types.js";
 export const GROUPS = Object.freeze(["Aggregate", "Logic", "Text", "Date"]);
 
 const AGGREGATES = ["sum", "avg", "min", "max", "count", "countd", "median", "stddev", "variance", "percentile", "attr"];
-const TEXT = ["text", "lower", "upper", "trim", "ltrim", "rtrim", "len", "left", "right", "mid", "find", "replace", "concat", "contains", "startswith", "endswith", "icontains", "istartswith", "iendswith", "split"];
+const TEXT = ["text", "lower", "upper", "trim", "ltrim", "rtrim", "len", "left", "right", "mid", "find", "replace", "concat", "contains", "startswith", "endswith", "icontains", "istartswith", "iendswith", "split", "regexp_match", "regexp_extract", "regexp_extract_nth", "regexp_replace"];
 const DATE = ["datediff", "dateadd", "year", "month", "day", "quarter", "week", "weekday", "date", "isoyear", "datename", "datetrunc", "fiscalyear", "fiscalquarter", "makedate"];
 /** Logic keywords the parser handles itself: name -> { args: display text, result, insert }. */
 const LOGIC = {
@@ -81,6 +81,10 @@ const TEXTS = {
   istartswith: ["True when the text begins with the piece, ignoring case.", "ISTARTSWITH([orders.status], 'OP')", "Same as STARTSWITH without regard to case. An empty needle is always true; a NULL text gives NULL."],
   iendswith: ["True when the text ends with the piece, ignoring case.", "IENDSWITH([orders.status], 'EN')", "Same as ENDSWITH without regard to case. An empty needle is always true; a NULL text gives NULL."],
   split: ["The k-th piece of the text cut at a separator (1 is the first).", "SPLIT([orders.status], '-', 1)", `The separator is a literal of 1 to ${CALC_LIMITS.separator} characters, k a literal whole number 1 to ${CALC_LIMITS.count}. Empty when there is no k-th piece.`],
+  regexp_match: ["True when the text matches the regular expression anywhere.", "REGEXP_MATCH([orders.status], '^op')", `The pattern is a literal of 1 to ${CALC_LIMITS.string} characters in RE2 syntax (no look-around or back-references); case counts (start the pattern with (?i) to ignore it). A NULL text gives NULL.`],
+  regexp_extract: ["The part of the text the pattern matches.", "REGEXP_EXTRACT([orders.status], '[A-Z]+-(\\d+)')", "With a capture group in parentheses it is the first group's text, otherwise the whole match. No match, or a NULL text, gives NULL (shown as a dash)."],
+  regexp_extract_nth: ["The text of the n-th capture group of the match.", "REGEXP_EXTRACT_NTH([orders.status], '([A-Z]+)-(\\d+)', 2)", `n is a literal whole number 1 to ${CALC_LIMITS.count} and must not exceed the groups in the pattern (0 would be the whole match). No match gives NULL.`],
+  regexp_replace: ["The text with every match of the pattern replaced.", "REGEXP_REPLACE([orders.status], '[^0-9]', '')", `The replacement is a literal of at most ${CALC_LIMITS.string} characters; \\1 inserts the first captured group. A NULL text gives NULL.`],
   datediff: ["How many whole units lie between two dates (end minus start).", "DATEDIFF('day', [orders.placed], DATE('2024-12-31'))", "Counts calendar boundaries crossed (31 Jan to 1 Feb is 1 month); weeks start on Monday. The unit is a text literal: year, quarter, month, week, day, hour, minute or second. A NULL date gives NULL."],
   dateadd: ["A date moved forward (or back, with a negative amount) by a number of units.", "DATEADD('month', 1, [orders.placed])", `A month step past a shorter month lands on its last day. The amount is a literal whole number -${CALC_LIMITS.dateAmount} to ${CALC_LIMITS.dateAmount}; the result is empty (NULL) outside ${DATEADD_WINDOW.after} to ${DATEADD_WINDOW.before}.`],
   year: ["The year of the date.", "YEAR([orders.placed])", "A NULL date gives NULL. Text is refused: use DATE() first."],
@@ -98,7 +102,7 @@ const TEXTS = {
   date: ["Reads text as a calendar date.", "DATE('2024-03-05')", "Empty when the text is not a real date (for example 2024-02-30)."],
 };
 
-const WORD = { value: "value", text: "text", length: "length", position: "position", separator: "separator", unit: "unit", amount: "amount", date: "date", part: "part", number: "number", month: "start month" };
+const WORD = { value: "value", pattern: "pattern", replacement: "replacement", text: "text", length: "length", position: "position", separator: "separator", unit: "unit", amount: "amount", date: "date", part: "part", number: "number", month: "start month" };
 const NAMES = new Map(); // lower-case name -> group
 for (const n of AGGREGATES) NAMES.set(n, "Aggregate");
 for (const n of Object.keys(LOGIC)) NAMES.set(n, "Logic");
