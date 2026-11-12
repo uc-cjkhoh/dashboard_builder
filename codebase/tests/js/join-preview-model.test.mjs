@@ -137,3 +137,13 @@ test("previewRequest carries the extra pairs only when there are some", () => {
   assert.equal("pairs" in previewRequest(a, "k", b, "k", []), false);
   assert.deepEqual(previewRequest(a, "k", b, "k", [{ from: "x", to: "y" }]).pairs, [{ left: "x", right: "y" }]);
 });
+
+test("an end whose card has custom SQL carries it as `source`; a plain table end does not", () => {
+  const sql = "SELECT id, region FROM shop.o";
+  const a = { db: "shop", table: "orders", customSql: sql }, b = { db: "shop", table: "customers" };
+  assert.deepEqual(previewRequest(a, "id", b, "id"), {
+    from: { db: "shop", table: "orders", column: "id", source: { kind: "sql", db: "shop", name: "orders", sql } },
+    to: { db: "shop", table: "customers", column: "id" } });
+  assert.equal("source" in previewRequest(b, "id", b, "id").from, false);
+  assert.deepEqual(previewRequest(b, "id", a, "id", [{ from: "x", to: "y" }]).to.source, { kind: "sql", db: "shop", name: "orders", sql });
+});

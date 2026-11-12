@@ -6,12 +6,14 @@ namespace DashboardBuilder.ClickHouse;
 /// A histogram plan: bucket a single numeric <see cref="Column"/>
 /// into <see cref="Buckets"/> equal-width bins over its [min,max] range and count rows per bin.
 /// Single-table (a distribution is one column); every identifier is catalog-validated and quoted,
-/// the bucket count is clamped, and filter values are bound as typed parameters.
+/// the bucket count is clamped, and filter values are bound as typed parameters. <see cref="Source"/>: a custom SQL card's query (kind sql, for this
+/// very table), read as a derived table.
 /// </summary>
 public sealed record HistogramRequest(
     string Column,
     int? Buckets,
-    StatFilter[]? Filters);
+    StatFilter[]? Filters,
+    QuerySource? Source = null);
 
 /// <summary>A filter on a stat chart's source table: scalar <see cref="Value"/>, or <see cref="Values"/> for <c>in</c>/<c>between</c>.
 /// <see cref="Calc"/>: a row-level calculated field as the filtered expression (its fields must all be on the same table;
@@ -53,9 +55,10 @@ public sealed record BoxPlotResult(IReadOnlyList<BoxPlotGroup> Groups, bool Trun
 /// <summary>
 /// A raw-row read of ONE table (POST /api/rows): the first <see cref="Limit"/> rows (default 100, max 1000) of
 /// the optional <see cref="Columns"/> (default: the table's first 200), narrowed by <see cref="Filters"/>.
-/// No ordering, no aggregation. Identifiers are catalog-validated and quoted; filter values are bound.
+/// No ordering, no aggregation. Identifiers are catalog-validated and quoted; filter values are bound. <see cref="Source"/>: the card's custom SQL
+/// (kind sql, for this very table), read as a derived table instead of the catalog table; the columns are then what the query returns.
 /// </summary>
-public sealed record RowsRequest(string Db, string Table, string[]? Columns, StatFilter[]? Filters, int? Limit);
+public sealed record RowsRequest(string Db, string Table, string[]? Columns, StatFilter[]? Filters, int? Limit, QuerySource? Source = null);
 
 /// <summary>A returned column: its name and raw ClickHouse type.</summary>
 public sealed record RowColumn(string Name, string Type);

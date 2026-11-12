@@ -1,8 +1,9 @@
 namespace DashboardBuilder.ClickHouse;
 
 /// <summary>A column profile request (POST /api/databases/{db}/tables/{table}/profile): one column, and how
-/// many top values to return (default 10, max 50; out of range is rejected).</summary>
-public sealed record ProfileRequest(string Column, int? Limit);
+/// many top values to return (default 10, max 50; out of range is rejected). <c>Source</c>: a custom SQL card's query (kind sql, for this very table),
+/// read as a derived table instead of the catalog table.</summary>
+public sealed record ProfileRequest(string Column, int? Limit, QuerySource? Source = null);
 
 /// <summary>One frequent value: its text (null = SQL NULL; cut at 100 characters, <see cref="Cut"/> says so) and how many
 /// of the profiled rows hold it.</summary>

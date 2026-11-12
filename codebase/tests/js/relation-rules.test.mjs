@@ -186,3 +186,33 @@ test("aggregateChoice reads a saved relationship back into the dialog's two cont
   assert.deepEqual(aggregateChoice({ aggregateFirst: true, filterDirection: "single" }), { aggregate: true, direction: "single" });
   assert.deepEqual(aggregateChoice({ aggregateFirst: "yes" }), { aggregate: false, direction: "both" });
 });
+
+// --- a new query must keep the kind of every key column (D105 follow-up) ---
+import { keyKindBreaks } from "../../src/DashboardBuilder/Features/Relations/relation-rules.js";
+const cols = (...c) => c.map(([name, category]) => ({ name, category }));
+const world = () => ({
+  entities: new Map([["o", { id: "o", table: "orders", columns: cols(["cust", "numeric"], ["region", "text"], ["amt", "numeric"]) }],
+    ["c", { id: "c", table: "customers", columns: cols(["id", "numeric"], ["region", "text"]) }]]),
+  rels: [{ from: { entityId: "o", column: "cust" }, to: { entityId: "c", column: "id" }, cardinality: "N:1", pairs: [{ from: "region", to: "region" }] }],
+});
+test("a query that keeps every key's kind passes", () => {
+  const { entities, rels } = world();
+  assert.deepEqual(keyKindBreaks("o", rels, entities, cols(["cust", "numeric"], ["region", "text"], ["amt", "text"])), []); // a non-key column may change kind
+  assert.deepEqual(keyKindBreaks("c", rels, entities, cols(["id", "numeric"], ["region", "text"])), []);
+});
+test("a key whose kind changes to one its partner can't match is reported with both kinds", () => {
+  const { entities, rels } = world();
+  assert.deepEqual(keyKindBreaks("o", rels, entities, cols(["cust", "text"], ["region", "text"])), [{ column: "cust", now: "text", other: "number", partner: "customers.id" }]);
+  assert.deepEqual(keyKindBreaks("c", rels, entities, cols(["id", "numeric"], ["region", "temporal"])), [{ column: "region", now: "date", other: "text", partner: "orders.region" }]); // a compound key's extra pair
+});
+test("a key kind that changes to a kind that still matches, a missing key, and a card with no links are not reported here", () => {
+  const { entities, rels } = world();
+  entities.get("c").columns = cols(["id", "text"], ["region", "text"]); // the partner now holds text, so a text key on this card fits
+  assert.deepEqual(keyKindBreaks("o", rels, entities, cols(["cust", "text"], ["region", "text"])), []);
+  assert.deepEqual(keyKindBreaks("o", rels, world().entities, cols(["region", "text"])), []); // cust is gone: lostKeys' job
+  assert.deepEqual(keyKindBreaks("o", [], entities, cols(["cust", "boolean"])), []);
+});
+test("a compound or unknown kind never fits", () => {
+  const { entities, rels } = world();
+  assert.equal(keyKindBreaks("o", rels, entities, cols(["cust", "compound"], ["region", "text"]))[0].now, "compound");
+});

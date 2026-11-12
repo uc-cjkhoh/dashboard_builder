@@ -12,11 +12,11 @@ export const PROFILE_LIMITS = Object.freeze({
 });
 
 /** The request body for one column; out-of-range input throws (the server rejects it too, it never clamps). */
-export function profileRequest(column, limit = PROFILE_LIMITS.top) {
+export function profileRequest(column, limit = PROFILE_LIMITS.top, source = null) {
   if (typeof column !== "string" || column.trim() === "") throw new Error("A column is required.");
   if (column.length > PROFILE_LIMITS.maxColumn) throw new Error(`The column name must be at most ${PROFILE_LIMITS.maxColumn} characters.`);
   if (!Number.isInteger(limit) || limit < 1 || limit > PROFILE_LIMITS.maxTop) throw new Error(`Top values must be between 1 and ${PROFILE_LIMITS.maxTop}.`);
-  return { column, limit };
+  return source ? { column, limit, source } : { column, limit }; // `source`: a custom SQL card's query (sqlWire), read instead of the catalog table
 }
 
 export const formatCount = (n) => Number(n).toLocaleString("en-US");

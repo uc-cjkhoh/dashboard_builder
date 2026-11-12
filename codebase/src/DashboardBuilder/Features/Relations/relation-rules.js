@@ -9,6 +9,29 @@ export function findDuplicate(relationships, from, to) {
 }
 /** Every column end a relationship uses: its first pair, then the extra pairs of a compound key (`pairs: [{ from, to }]`, column names on the same two tables). */
 export const relEnds = (r) => [r.from, r.to, ...(r.pairs ?? []).flatMap((p) => [{ entityId: r.from.entityId, column: p.from }, { entityId: r.to.entityId, column: p.to }])];
+/** The key columns of card `entityId` whose kind (number / text / date / boolean) would change, with a new `columns` list (what an edited query
+ *  or the table itself returns), to one that no longer fits the column on the other end of a relationship (`keysCompatible`). A key that is
+ *  gone from `columns` is not reported here (`lostKeys` does that); a key whose kind is unchanged is never reported.
+ *  `relationships` is any iterable of relationships (the card's, or all), `entities` the store's Map; returns [{ column, now, other, partner }]: the column, the kind it would have, the kind
+ *  the other end has, and that end as "table.column". */
+export function keyKindBreaks(entityId, relationships, entities, columns) {
+  const mine = entities.get(entityId), out = [], seen = new Set();
+  for (const r of relationships) {
+    const ends = [[r.from, r.to], ...(r.pairs ?? []).map((p) => [{ entityId: r.from.entityId, column: p.from }, { entityId: r.to.entityId, column: p.to }])];
+    for (const [a, b] of ends) {
+      const [self, other] = a.entityId === entityId ? [a, b] : b.entityId === entityId ? [b, a] : [null, null];
+      if (!self || seen.has(self.column)) continue;
+      const now = columns.find((c) => c.name === self.column);
+      const was = mine?.columns?.find((c) => c.name === self.column);
+      const partner = entities.get(other.entityId), theirs = partner?.columns?.find((c) => c.name === other.column);
+      if (!now || !theirs || was?.category === now.category || keysCompatible(now.category, theirs.category)) continue;
+      seen.add(self.column);
+      out.push({ column: self.column, now: kindLabel(now.category), other: kindLabel(theirs.category), partner: `${partner.table}.${other.column}` });
+    }
+  }
+  return out;
+}
+
 /** The relationship a column is already in (a column holds at most one), or null. */
 export function relationshipOf(relationships, end) {
   for (const r of relationships) if (relEnds(r).some((e) => sameEnd(e, end))) return r;

@@ -3,7 +3,8 @@ using ClickHouse.Client.Utility;
 
 namespace DashboardBuilder.ClickHouse;
 
-public sealed record JoinKeyRef(string Db, string Table, string Column);
+/// <summary>One end of the preview. <c>Source</c>: that table's custom SQL (kind sql, for this very table), read as a derived table instead of the catalog table.</summary>
+public sealed record JoinKeyRef(string Db, string Table, string Column, QuerySource? Source = null);
 
 /// <summary><c>POST /api/relationships/preview</c>. <see cref="SampleLimit"/> bounds the rows read from EACH table (default and cap 1,000,000).</summary>
 public sealed record JoinPreviewRequest(JoinKeyRef From, JoinKeyRef To, int? SampleLimit, JoinColumnPair[]? Pairs = null);
@@ -38,6 +39,7 @@ public static class JoinPreviewRules
         if (string.IsNullOrWhiteSpace(e.Db)) throw new RequestValidationException($"'{field}.db' is required.", $"{field}.db");
         if (string.IsNullOrWhiteSpace(e.Table)) throw new RequestValidationException($"'{field}.table' is required.", $"{field}.table");
         if (string.IsNullOrWhiteSpace(e.Column)) throw new RequestValidationException($"'{field}.column' is required.", $"{field}.column");
+        RequestRules.ValidateSqlSource(e.Source, e.Db, e.Table, $"{field}.");
     }
 
     /// <summary>ClickHouse codes for "these two key types can't be compared" (ILLEGAL_TYPE_OF_ARGUMENT 43, TYPE_MISMATCH 53, CANNOT_CONVERT_TYPE 70,
@@ -69,15 +71,18 @@ public sealed partial class ClickHouseGateway
     /// <exception cref="RequestValidationException">Key kinds that can't be related.</exception>
     public async Task<JoinPreviewResult> JoinPreviewAsync(ClickHouseConnectionInfo info, JoinPreviewRequest req, CancellationToken ct)
     {
-        var a = await FindKeyAsync(info, req.From, ct);
-        var b = await FindKeyAsync(info, req.To, ct);
+        // Each end is read once: the table's columns, or the columns its custom SQL returns (D105); `FromA` / `FromB` follow FROM.
+        var (colsA, fromA) = await ReadableAsync(info, req.From.Db, req.From.Table, req.From.Source, ct);
+        var (colsB, fromB) = await ReadableAsync(info, req.To.Db, req.To.Table, req.To.Source, ct);
+        var a = FindKey(colsA, req.From);
+        var b = FindKey(colsB, req.To);
         JoinPreviewRules.CheckKinds(a, b, $"{req.From.Table}.{req.From.Column}", $"{req.To.Table}.{req.To.Column}");
         var extra = new List<(string From, string To)>();
         var kinds = new List<string> { a.Category };
         foreach (var pair in req.Pairs ?? [])
         {
-            var pa = await FindKeyAsync(info, req.From with { Column = pair.Left }, ct);
-            var pb = await FindKeyAsync(info, req.To with { Column = pair.Right }, ct);
+            var pa = FindKey(colsA, req.From with { Column = pair.Left });
+            var pb = FindKey(colsB, req.To with { Column = pair.Right });
             JoinPreviewRules.CheckKinds(pa, pb, $"{req.From.Table}.{pair.Left}", $"{req.To.Table}.{pair.Right}");
             extra.Add((pair.Left, pair.Right));
             kinds.Add(pa.Category);
@@ -86,7 +91,7 @@ public sealed partial class ClickHouseGateway
         var text = a.Category == ClickHouseType.Text;
         try
         {
-            return await RunPreviewAsync(info, req, n, text, extra, kinds, ct);
+            return await RunPreviewAsync(info, req, n, text, extra, kinds, fromA, fromB, ct);
         }
         catch (global::ClickHouse.Client.ClickHouseServerException ex) when (JoinPreviewRules.IsTypeError(ex.ErrorCode))
         {
@@ -94,17 +99,16 @@ public sealed partial class ClickHouseGateway
         }
     }
 
-    private async Task<JoinPreviewResult> RunPreviewAsync(ClickHouseConnectionInfo info, JoinPreviewRequest req, int n, bool text, List<(string From, string To)> extra, List<string> kinds, CancellationToken ct)
+    private async Task<JoinPreviewResult> RunPreviewAsync(ClickHouseConnectionInfo info, JoinPreviewRequest req, int n, bool text, List<(string From, string To)> extra, List<string> kinds, string fromA, string fromB, CancellationToken ct)
     {
-        var fromTask = JoinSideAsync(info, BuildJoinSideSql(req.From.Db, req.From.Table, req.From.Column, req.To.Db, req.To.Table, req.To.Column, n, text, extra, kinds), ct);
-        var toTask = JoinSideAsync(info, BuildJoinSideSql(req.To.Db, req.To.Table, req.To.Column, req.From.Db, req.From.Table, req.From.Column, n, text, extra.Select(p => (p.To, p.From)).ToList(), kinds), ct);
+        var fromTask = JoinSideAsync(info, BuildJoinSideSql(req.From.Db, req.From.Table, req.From.Column, req.To.Db, req.To.Table, req.To.Column, n, text, extra, kinds, fromA, fromB), ct);
+        var toTask = JoinSideAsync(info, BuildJoinSideSql(req.To.Db, req.To.Table, req.To.Column, req.From.Db, req.From.Table, req.From.Column, n, text, extra.Select(p => (p.To, p.From)).ToList(), kinds, fromB, fromA), ct);
         var (from, to) = (await fromTask, await toTask);
         return new JoinPreviewResult(from, to, n, from.Rows >= n || to.Rows >= n);
     }
 
-    private async Task<ColumnInfo> FindKeyAsync(ClickHouseConnectionInfo info, JoinKeyRef e, CancellationToken ct)
+    private static ColumnInfo FindKey(IReadOnlyList<ColumnInfo> cols, JoinKeyRef e)
     {
-        var cols = await DescribeColumnsAsync(info, e.Db, e.Table, ct); // validates db + table
         return cols.FirstOrDefault(c => string.Equals(c.Name, e.Column, StringComparison.Ordinal))
                ?? throw UnknownIdentifierException.Column(e.Column, e.Db, e.Table);
     }
@@ -115,7 +119,7 @@ public sealed partial class ClickHouseGateway
     /// rows have a key present in the other table's first <paramref name="n"/> rows (NULLs never match). Names are quoted by
     /// <see cref="Identifier"/>; text keys compare as strings so UUID/Enum/FixedString mixes still match.
     /// </summary>
-    internal static string BuildJoinSideSql(string db, string table, string column, string otherDb, string otherTable, string otherColumn, int n, bool textKeys, IReadOnlyList<(string Column, string OtherColumn)>? extra = null, IReadOnlyList<string>? kinds = null)
+    internal static string BuildJoinSideSql(string db, string table, string column, string otherDb, string otherTable, string otherColumn, int n, bool textKeys, IReadOnlyList<(string Column, string OtherColumn)>? extra = null, IReadOnlyList<string>? kinds = null, string? from = null, string? otherFrom = null)
     {
         if (n < 1 || n > JoinPreviewRules.MaxSampleRows) throw new ArgumentOutOfRangeException(nameof(n));
         // A compound key is one string of its parts (char(31) between them), NULL when any part is NULL — a tuple can't be Nullable.
@@ -135,14 +139,14 @@ public sealed partial class ClickHouseGateway
             var anyNull = string.Join(" OR ", all.Select(x => $"isNull({Identifier.Quote(x)})"));
             return $"if({anyNull}, NULL, concat({string.Join(", char(31), ", all.Select((x, i) => Part(x, kinds is not null && i < kinds.Count ? kinds[i] : null)))}))";
         }
-        static string Keys(string d, string t, string expr, int n)
-            => $"SELECT {expr} AS k FROM {Identifier.QualifiedName(d, t)} LIMIT {n.ToString(CultureInfo.InvariantCulture)}";
+        static string Keys(string d, string t, string? f, string expr, int n) // f: a custom SQL card's derived table "(<sql>)", else the catalog table
+            => $"SELECT {expr} AS k FROM {f ?? Identifier.QualifiedName(d, t)} LIMIT {n.ToString(CultureInfo.InvariantCulture)}";
         var mine = Expr(column, (extra ?? []).Select(e => e.Column), textKeys, kinds);
         var theirs = Expr(otherColumn, (extra ?? []).Select(e => e.OtherColumn), textKeys, kinds);
-        var other = $"(SELECT k FROM ({Keys(otherDb, otherTable, theirs, n)}) WHERE isNotNull(k))";
+        var other = $"(SELECT k FROM ({Keys(otherDb, otherTable, otherFrom, theirs, n)}) WHERE isNotNull(k))";
         return "SELECT sum(cnt), sumIf(cnt, isNull(k)), countIf(isNotNull(k)), maxIf(cnt, isNotNull(k)), " +
                $"sumIf(cnt, isNotNull(k) AND k IN {other}), countIf(isNotNull(k) AND k IN {other}) " +
-               $"FROM (SELECT k, count() AS cnt FROM ({Keys(db, table, mine, n)}) GROUP BY k)";
+               $"FROM (SELECT k, count() AS cnt FROM ({Keys(db, table, from, mine, n)}) GROUP BY k)";
     }
 
     private async Task<JoinSideStats> JoinSideAsync(ClickHouseConnectionInfo info, string sql, CancellationToken ct)

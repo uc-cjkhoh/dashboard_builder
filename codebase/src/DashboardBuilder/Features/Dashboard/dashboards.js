@@ -50,7 +50,7 @@ import { COL_ALIGN_CHOICES, tableColumnList, setTableColumn, columnLook, columnW
 import { COLOUR_MEASURE_TYPES } from "./mark-channel-model.js";
 import { MARK_BORDER_CHOICES, MARKER_SHAPE_CHOICES, BORDER_TYPES, MARK_BORDER_COLOUR_CHOICES, markerSizeError } from "./mark-style-model.js";
 import { targetChoices, effectiveTargetMeasure } from "./bullet-model.js";
-import { sourceOfTable, wireSource, distinctPlan, distinctPlanSql, distinctMembers, customSqlOf, sqlWire, SQL_VIEW_DATA_MESSAGE } from "../Core/source-model.js";
+import { sourceOfTable, wireSource, distinctPlan, distinctPlanSql, distinctMembers, customSqlOf, sqlWire } from "../Core/source-model.js";
 import { heldOutCards } from "../Relations/relation-rules.js";
 import { keyOf, SCATTER_TYPES, COLOR_USES, colorMode, isDrillActive, drillActiveDim, planDims, planMeasures, sortTargets as planSortTargets, measureName as planMeasureName, buildPlan as planQuery, periodFilters as planPeriodFilters, calcContext, appliedShared as planAppliedShared, withParams, toServerFilter, isDateOnlyType } from "./sheet-plan.js";
 import { isMissingPill, missingIn, missingMessage } from "./missing-columns.js";
@@ -1339,8 +1339,9 @@ export function initDashboards() {
     if (!plan) { toast("Add fields before viewing data.", "info"); return; }
     const base = firstMeasureTable(planMeasures(s)) ?? plan.from; // the fact table behind the numbers, else the first dimension's table (D95)
     if (sourceOfTable(entities, base.db, base.table)) { toast("View data reads one table's rows — it isn't available for a union or unpivot yet.", "info"); return; }
-    if (customSqlOf(entities, base.db, base.table)) { toast(SQL_VIEW_DATA_MESSAGE, "info"); return; }
     const { request, notes } = buildRowsRequest({ plan, base, selection: ofMark ? s.selection : null, castOf });
+    const sql = customSqlOf(entities, base.db, base.table); // a card with custom SQL: its own query, read as a derived table
+    if (sql) request.source = sqlWire(base.db, base.table, sql);
     openRowsDialog({ title: viewDataTitle(base, ofMark ? s.selection.label : undefined), subtitle: `${request.db}.${request.table}`, request, notes, filename: `${exportBaseName(dash)}-data` });
   }
 

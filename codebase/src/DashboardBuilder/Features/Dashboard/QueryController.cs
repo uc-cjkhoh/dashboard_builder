@@ -16,7 +16,7 @@ public sealed class QueryController : ApiControllerBase
 
     [HttpPost("databases/{db}/tables/{table}/histogram")]
     public Task<IResult> Histogram(string db, string table, [FromBody] HistogramRequest request, CancellationToken ct)
-        => RunAsync(async info => { RequestRules.ValidateHistogram(request); return Results.Ok(await Gateway.HistogramAsync(info, db, table, request, ct)); });
+        => RunAsync(async info => { RequestRules.ValidateHistogram(request, db, table); return Results.Ok(await Gateway.HistogramAsync(info, db, table, request, ct)); });
 
     [HttpPost("databases/{db}/tables/{table}/boxplot")]
     public Task<IResult> BoxPlot(string db, string table, [FromBody] BoxPlotRequest request, CancellationToken ct)

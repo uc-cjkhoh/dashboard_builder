@@ -274,7 +274,7 @@ try {
     must(J(await cols('orders')) === J(['cust_id', 'amount', 'extra']), `columns: ${J(await cols('orders'))}`);
     must((await ev(`${card('orders')}.querySelector('.entity__note--sql').textContent`)) === 'Custom SQL', 'note');
     must(await ev(`document.querySelectorAll('.rel-badge').length === 1`), 'the link went away');
-    must(await ev(`${card('orders')}.querySelectorAll('.col-row__profile').length === 0`), 'profile buttons on a SQL card');
+    must(await ev(`${card('orders')}.querySelectorAll('.col-row__profile').length === 3`), 'a SQL card has a profile button on each column');
     must((await toastText()).includes('using your SQL'), `toast: ${await toastText()}`);
     await shot('edit-sql-applied.png');
   });
