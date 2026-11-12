@@ -6,7 +6,7 @@ namespace DashboardBuilder.ClickHouse.Calc;
 /// <summary>
 /// A calculated-field expression tree as it arrives on the wire. The browser parses the formula and
 /// sends this tree; no formula text ever reaches SQL. The JSON discriminator <c>k</c> is one of
-/// <c>field | num | un | bin | agg | str | bool | null | cmp | logic | not | in | case | ifnull | isnull | fn</c>; an unknown or missing <c>k</c>, a missing or wrongly typed
+/// <c>field | num | un | bin | agg | str | date | bool | null | cmp | logic | not | in | case | ifnull | isnull | fn</c>; an unknown or missing <c>k</c>, a missing or wrongly typed
 /// member, or a non-finite number fails deserialisation with a <see cref="JsonException"/> (a 400).
 /// Operators and function names are plain strings here — the validator whitelists them.
 /// </summary>
@@ -31,13 +31,17 @@ public sealed record AggNode(string Fn, ExprNode Arg, double? P = null) : ExprNo
 /// <summary>A text literal; always bound as a <c>String</c> parameter, never written into SQL.</summary>
 public sealed record StrNode(string V) : ExprNode;
 
+/// <summary>A date literal (<c>#2024-01-31#</c>), wire <c>{ "k": "date", "v": "2024-01-31" }</c>; the validator demands a real day a <c>Date</c> holds, and it is
+/// bound as a <c>String</c> parameter read by <c>toDate</c>, never written into SQL.</summary>
+public sealed record DateNode(string V) : ExprNode;
+
 /// <summary>A <c>TRUE</c> / <c>FALSE</c> literal; one of two fixed SQL keywords, never user text.</summary>
 public sealed record BoolNode(bool V) : ExprNode;
 
 /// <summary>A <c>NULL</c> literal; it takes the type of the results beside it (see <see cref="CalcType.Null"/>).</summary>
 public sealed record NullNode() : ExprNode;
 
-/// <summary><c>arg IN (v1, v2, …)</c>: the values are number or text literals (each bound as a parameter), at most <see cref="CalcLimits.MaxInList"/>; boolean result.</summary>
+/// <summary><c>arg IN (v1, v2, …)</c>: the values are number, text or date literals (each bound as a parameter), at most <see cref="CalcLimits.MaxInList"/>; boolean result.</summary>
 public sealed record InNode(ExprNode Arg, ExprNode[] List) : ExprNode;
 
 /// <summary>A comparison (<c>= != &lt; &lt;= &gt; &gt;=</c>) of two values of the same type; boolean result.</summary>
@@ -115,6 +119,7 @@ public sealed class ExprNodeConverter : JsonConverter<ExprNode>
             "bin" => new BinNode(Text(e, "op"), Child(e, "l"), Child(e, "r")),
             "agg" => new AggNode(Text(e, "fn"), Child(e, "arg"), OptionalNumber(e, "p")),
             "str" => new StrNode(Text(e, "v")),
+            "date" => new DateNode(Text(e, "v")),
             "bool" => new BoolNode(Bool(e, "v")),
             "null" => new NullNode(),
             "in" => new InNode(Child(e, "arg"), Children(e, "list")),
@@ -218,6 +223,9 @@ public sealed class ExprNodeConverter : JsonConverter<ExprNode>
                 break;
             case StrNode t:
                 w.WriteString("k", "str"); w.WriteString("v", t.V);
+                break;
+            case DateNode d:
+                w.WriteString("k", "date"); w.WriteString("v", d.V);
                 break;
             case BoolNode bl:
                 w.WriteString("k", "bool"); w.WriteBoolean("v", bl.V);

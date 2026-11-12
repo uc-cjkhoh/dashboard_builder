@@ -43,6 +43,17 @@ public class CalcJsonTests(WebApplicationFactory<Program> factory) : IClassFixtu
         Assert.Equal(JsonDocument.Parse(wire).RootElement.ToString(), JsonDocument.Parse(JsonSerializer.Serialize(node, Web)).RootElement.ToString());
     }
 
+    [Fact]
+    public void A_date_node_round_trips_and_a_malformed_one_is_a_JsonException()
+    {
+        const string wire = """{"k":"date","v":"2024-01-31"}""";
+        var node = JsonSerializer.Deserialize<ExprNode>(wire, Web);
+        Assert.Equal(new DateNode("2024-01-31"), node);
+        Assert.Equal(wire, JsonSerializer.Serialize(node, Web));
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<ExprNode>("""{"k":"date","v":20240131}""", Web));
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<ExprNode>("""{"k":"date"}""", Web));
+    }
+
     [Theory]
     [InlineData("""{"k":"bool","v":"yes"}""")]
     [InlineData("""{"k":"bool"}""")]

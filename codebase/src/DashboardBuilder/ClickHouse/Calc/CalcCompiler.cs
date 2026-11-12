@@ -9,7 +9,7 @@ namespace DashboardBuilder.ClickHouse.Calc;
 /// <c>qualified</c> callback returned (already catalog-validated and quoted by <c>Identifier</c>).
 /// Numeric columns are widened with <c>toFloat64</c> so unsigned or integer arithmetic cannot wrap or round;
 /// division by zero yields NULL through <c>nullIf(r, 0)</c>. A text literal is a bound <c>String</c> parameter.
-/// TRUE / FALSE / NULL compile to the SQL keywords; <c>IN</c> binds each value. Conditions follow SQL: a NULL condition is not true, so <c>IF</c>/<c>CASE</c> fall through to the next arm or the
+/// A date literal is a bound <c>String</c> read by <c>toDate</c>. TRUE / FALSE / NULL compile to the SQL keywords; <c>IN</c> binds each value. Conditions follow SQL: a NULL condition is not true, so <c>IF</c>/<c>CASE</c> fall through to the next arm or the
 /// else (NULL when there is none). Comparisons with NULL are NULL; <c>AND</c>/<c>OR</c> are three-valued.
 /// </summary>
 public static class CalcCompiler
@@ -36,6 +36,8 @@ public static class CalcCompiler
             BinNode { Op: "/" } b => $"({Walk(b.L)} / nullIf({Walk(b.R)}, 0))",
             BinNode { Op: "+" or "-" or "*" } b => $"({Walk(b.L)} {b.Op} {Walk(b.R)})",
             StrNode t => Param(t.V, "String"),
+            // A date literal is a validated yyyy-MM-dd string, bound as data and read by toDate (the same type DATE() answers).
+            DateNode d => $"toDate({Param(d.V, "String")})",
             // TRUE / FALSE / NULL are fixed keywords (nothing the user typed reaches the SQL); an IN value is a bound parameter.
             BoolNode bl => bl.V ? "true" : "false",
             NullNode => "NULL",

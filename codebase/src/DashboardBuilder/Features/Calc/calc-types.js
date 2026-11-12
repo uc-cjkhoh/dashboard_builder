@@ -74,6 +74,20 @@ export const ROW_FUNCTIONS = Object.freeze({
   makedate: { args: ["number", "number", "number"], result: "date" },
 });
 
+/** The first and last day a ClickHouse `Date` holds; a date literal (`#2024-01-31#`) must be a real day between them. Twin of CalcLimits.MinDate / MaxDate. */
+export const DATE_LITERAL_MIN = "1970-01-01";
+export const DATE_LITERAL_MAX = "2149-06-06";
+const DATE_SHAPE = /^\d{4}-\d{2}-\d{2}$/;
+const DATE_LITERAL_MESSAGE = `A date must be a real day from ${DATE_LITERAL_MIN} to ${DATE_LITERAL_MAX}, written #2024-01-31#.`;
+
+/** Is `v` a date-literal value: `yyyy-mm-dd`, a day that exists, within the range a `Date` holds (the YYYY-MM-DD strings order as dates). */
+export function isDateLiteral(v) {
+  if (typeof v !== "string" || !DATE_SHAPE.test(v)) return false;
+  if (v < DATE_LITERAL_MIN || v > DATE_LITERAL_MAX) return false;
+  const [y, m, d] = v.split("-").map(Number);
+  return m >= 1 && m <= 12 && d >= 1 && d <= new Date(Date.UTC(y, m, 0)).getUTCDate();
+}
+
 // Catalog category (ClickHouseType) -> calculation type; any other category can't be used.
 const TYPE_OF_CATEGORY = new Map([["numeric", "number"], ["text", "text"], ["temporal", "date"], ["boolean", "boolean"]]);
 
@@ -137,6 +151,10 @@ function typeOf(node, path, categoryOf) {
       if (node.v.length > CALC_LIMITS.string) throw new CalcError(`A text value can be at most ${CALC_LIMITS.string} characters.`, path);
       return { type: "text", isAggregate: false, isConst: true, tables: new Set(), name: "that value" };
 
+    case "date":
+      if (!isDateLiteral(node.v)) throw new CalcError(DATE_LITERAL_MESSAGE, path);
+      return { type: "date", isAggregate: false, isConst: true, tables: new Set(), name: "that value" };
+
     case "bool":
       if (typeof node.v !== "boolean") throw new CalcError("Unknown expression node.", path);
       return { type: "boolean", isAggregate: false, isConst: true, tables: new Set(), name: "that value" };
@@ -146,13 +164,13 @@ function typeOf(node, path, categoryOf) {
 
     case "in": {
       const arg = typeOf(node.arg, child(path, "arg"), categoryOf);
-      if (arg.type !== "number" && arg.type !== "text") throw new CalcError(`IN needs a number or text — ${arg.name} is ${arg.type}.`, child(path, "arg"));
+      if (arg.type !== "number" && arg.type !== "text" && arg.type !== "date") throw new CalcError(`IN needs a number, text or date — ${arg.name} is ${arg.type}.`, child(path, "arg"));
       const list = Array.isArray(node.list) ? node.list : [];
       if (list.length < 1 || list.length > CALC_LIMITS.inList) throw new CalcError(`IN takes 1 to ${CALC_LIMITS.inList} values.`, child(path, "list"));
       list.forEach((item, i) => {
         const ip = child(path, `list.${i}`);
-        const literal = isNode(item) && (item.k === "num" || item.k === "str" || (item.k === "un" && item.op === "-" && isNode(item.arg) && item.arg.k === "num"));
-        if (!literal) throw new CalcError("IN's values must be numbers or text written in the formula.", ip);
+        const literal = isNode(item) && (item.k === "num" || item.k === "str" || item.k === "date" || (item.k === "un" && item.op === "-" && isNode(item.arg) && item.arg.k === "num"));
+        if (!literal) throw new CalcError("IN's values must be numbers, text or dates written in the formula.", ip);
         const t = typeOf(item, ip, categoryOf);
         if (t.type !== arg.type) throw new CalcError(`IN needs values of the same type — ${t.name} is ${t.type}, not ${arg.type}.`, ip);
       });
@@ -164,8 +182,9 @@ function typeOf(node, path, categoryOf) {
       const l = typeOf(node.l, child(path, "l"), categoryOf);
       const r = typeOf(node.r, child(path, "r"), categoryOf);
       if (l.type === "null" || r.type === "null") throw new CalcError("Comparison with NULL never matches — use ISNULL(value) instead.", path);
+      // A boolean compares only with = and != (and only with a boolean, below); it has no order.
       for (const [t, p] of [[l, "l"], [r, "r"]]) {
-        if (t.type === "boolean") throw new CalcError(`Comparison needs a number, text or date — ${t.name} is boolean.`, child(path, p));
+        if (t.type === "boolean" && node.op !== "=" && node.op !== "!=") throw new CalcError(`Comparison needs a number, text or date — ${t.name} is boolean.`, child(path, p));
       }
       if (l.type !== r.type) {
         throw new CalcError(`Comparison needs two values of the same type — ${l.name} is ${l.type}, ${r.name} is ${r.type}.`, path);

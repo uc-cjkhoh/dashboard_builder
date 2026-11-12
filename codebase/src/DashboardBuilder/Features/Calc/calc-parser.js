@@ -8,7 +8,7 @@
 //                     | ["NOT"] "BETWEEN" sum "AND" sum)?           -- sugar for x >= a AND x <= b (NOT wraps it)      (no chaining)
 //   sum       := term (("+" | "-") term)*
 //   term      := factor (("*" | "/") factor)*
-//   factor    := "-" factor | number | string | "TRUE" | "FALSE" | "NULL" | "(" expr ")" | aggregate | logic | ref
+//   factor    := "-" factor | number | string | datelit | "TRUE" | "FALSE" | "NULL" | "(" expr ")" | aggregate | logic | ref
 //   aggregate := ("SUM" | "AVG" | "MIN" | "MAX" | "COUNT" | "COUNTD" | "MEDIAN" | "STDDEV" | "VARIANCE" | "ATTR") "(" expr ")"
 //              | "PERCENTILE" "(" expr "," number ")"      -- the fraction is a literal number (range-checked by check())
 //   logic     := ("IF" | "IIF") "(" expr "," expr "," expr ")" | "IFNULL" "(" expr "," expr ")"
@@ -18,11 +18,12 @@
 //   text      := ("TEXT" | "STR" | "LOWER" | "UPPER" | "TRIM" | "LTRIM" | "RTRIM" | "LEN" | "LEFT" | "RIGHT" | "MID" | "FIND" | "REPLACE" | "CONCAT" | "CONTAINS" | "STARTSWITH" | "ENDSWITH" | "ICONTAINS" | "ISTARTSWITH" | "IENDSWITH" | "SPLIT")
 //                "(" expr ("," expr)* ")"        -- argument count and kinds are checked by check(), not here
 //   date      := ("DATEDIFF" | "DATEADD" | "YEAR" | "MONTH" | "DAY" | "QUARTER" | "WEEK" | "WEEKDAY" | "DATE" | "ISOYEAR" | "DATENAME" | "DATETRUNC" | "FISCALYEAR" | "FISCALQUARTER" | "MAKEDATE") "(" expr ("," expr)* ")"   -- same shape as text
+//   datelit   := "#" yyyy-mm-dd "#"      -- a date literal, node { k: "date", v: "2024-01-31" } (shape only here; check() demands a real day in range)
 //   string    := "'" text "'" | '"' text '"'   (the same quote inside is doubled: 'it''s', "say ""hi""")
 //   ref       := "[" name "]"  |  "[@" parameter "]"      -- a workbook parameter (Calc/calc-params.js substitutes its value)
 //
 // Hand-written tokenizer + recursive descent. Function names are case-insensitive; references are matched
-// case-sensitively by the caller's `resolve`. Nodes are exactly the wire shapes (field | num | str | bool | null | un | bin | agg |
+// case-sensitively by the caller's `resolve`. Nodes are exactly the wire shapes (field | num | str | date | bool | null | un | bin | agg |
 // cmp | logic | not | in | case | ifnull | isnull | fn), plus the client-only `{ k: "calc", name }` for a reference to another calculation (expanded by
 // calc-model.js before anything is sent) and `{ k: "param", name }` for a parameter (replaced by a literal by calc-params.js).
 import { CALC_LIMITS, FUNCTIONS, ROW_FUNCTIONS } from "./calc-types.js";
@@ -34,10 +35,11 @@ class ParseError extends Error {
 const CMP_OPS = ["=", "!=", "<", "<=", ">", ">="];
 const NUMBER = /(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?/y;
 const IDENT = /[A-Za-z_][A-Za-z0-9_]*/y;
+const DATE_LITERAL = /^\d{4}-\d{2}-\d{2}$/;
 const WHITESPACE = /\s/;
 const match = (re, text, at) => { re.lastIndex = at; const m = re.exec(text); return m ? m[0] : null; };
 
-// Tokens: { t: "num" | "str" | "ref" | "id" | "op" | "(" | ")" | "," | "end", text, pos, v? }; for "ref", `text` is the
+// Tokens: { t: "num" | "str" | "date" | "ref" | "id" | "op" | "(" | ")" | "," | "end", text, pos, v? }; for "ref", `text` is the
 // name between the brackets; for "str", `text` is the unescaped value. A comparison is an "op" token whose text is
 // one of CMP_OPS (`<>` is normalised to `!=`).
 function tokenize(text) {
@@ -71,6 +73,13 @@ function tokenize(text) {
       }
       if (value.length > CALC_LIMITS.string) throw new ParseError(`A text value can be at most ${CALC_LIMITS.string} characters.`, i);
       tokens.push({ t: "str", text: value, raw: text.slice(i, j + 1), pos: i });
+      i = j + 1;
+    } else if (ch === "#") {
+      const j = text.indexOf("#", i + 1);
+      if (j === -1) throw new ParseError("Missing # to close the date", i);
+      const value = text.slice(i + 1, j);
+      if (!DATE_LITERAL.test(value)) throw new ParseError("Write a date as #2024-01-31#.", i);
+      tokens.push({ t: "date", text: value, raw: text.slice(i, j + 1), pos: i });
       i = j + 1;
     } else if (ch === "(" || ch === ")" || ch === ",") {
       tokens.push({ t: ch, text: ch, raw: ch, pos: i }); i++;
@@ -191,6 +200,7 @@ export function parseFormula(text, resolve) {
       if (tok.t === "op" && tok.text === "-") { next(); return { k: "un", op: "-", arg: factor("-") }; }
       if (tok.t === "num") { next(); return { k: "num", v: tok.v }; }
       if (tok.t === "str") { next(); return { k: "str", v: tok.text }; }
+      if (tok.t === "date") { next(); return { k: "date", v: tok.text }; }
       if (tok.t === "(") {
         next();
         const inner = expr("(");
