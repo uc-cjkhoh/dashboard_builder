@@ -3,8 +3,8 @@ import { ACCENTS, PALETTES } from "../Core/theme-model.js";
 import { fontToken } from "./font-model.js";
 import { pickInk } from "./contrast.js";
 import { orderedPalette } from "./colour-model.js";
-import { DIV_FALLBACK, DIV_HUE_FALLBACK, divergingColours, divergingRange, rampColours, rangeOf, stepPieces, stepColours, stepIndexOf, positionOf, mixHex } from "./colour-scale-model.js";
-import { sizeRange, barThickness, markerSizeFor, drawsSize, lineSizeMode } from "./mark-channel-model.js";
+import { DIV_FALLBACK, DIV_HUE_FALLBACK, divergingColours, divergingRange, effectiveScale, fullRangeRamp, rampColours, rangeOf, stepPieces, stepColours, stepIndexOf, positionOf, mixHex } from "./colour-scale-model.js";
+import { sizeRange, barThickness, markerSizeFor, drawsSize, lineSizeMode, measureCue } from "./mark-channel-model.js";
 import { sizeScaleOf, measureShareFn, memberShareFn, sizeLegendText, lineWidthFor } from "./size-scale-model.js";
 import { tooltipHtml } from "./tooltip-model.js";
 import { tipLookup } from "./tooltip-formats.js";
@@ -17,6 +17,7 @@ import { ganttTime, ganttAxisTime, ganttLabelMargin } from "./gantt-model.js";
 import { boxData, outlierPoints } from "./box-model.js";
 import { chartFit, markCount, applyFitMode, rotatedLabelCap, FIT } from "./chart-fit.js";
 import { applySelectionDim } from "./selection-dim.js";
+import { applyMarkOpacity, markOpacityOf, withAlpha, OPACITY_TYPES, ANALYTICS_ID } from "./mark-opacity-model.js";
 import { dateFitMode } from "./date-labels.js";
 import { histogramLabel } from "./chart-polish.js";
 import { axisLabelPlan, shortDateLabels } from "./date-axis.js";
@@ -68,7 +69,7 @@ function tokens() {
   // instead (below), keeping the common case on-brand.
   const catFallback = PALETTES.default.light;
   const cat = orderedPalette(catFallback.map((hex, i) => t(`--chart-cat-${i + 1}`, hex)), reversed());
-  const rampTk = { divLow: t("--chart-div-low", DIV_FALLBACK.low), divHigh: t("--chart-div-high", DIV_FALLBACK.high), accent: t("--accent", ACCENTS.signal.light.accent), accentSoft: t("--accent-soft", ACCENTS.signal.light.soft), surface: t("--surface", "#ffffff"), cat: catFallback.map((hex, i) => t(`--chart-cat-${i + 1}`, hex)), hues: Object.fromEntries(Object.entries(DIV_HUE_FALLBACK).map(([h, hex]) => [h, t(`--chart-div-${h}`, hex)])) };
+  const rampTk = { divLow: t("--chart-div-low", DIV_FALLBACK.low), divHigh: t("--chart-div-high", DIV_FALLBACK.high), accent: t("--accent", ACCENTS.signal.light.accent), accentSoft: t("--accent-soft", ACCENTS.signal.light.soft), surface: t("--surface", "#ffffff"), ink: t("--ink", "#1c1719"), cat: catFallback.map((hex, i) => t(`--chart-cat-${i + 1}`, hex)), hues: Object.fromEntries(Object.entries(DIV_HUE_FALLBACK).map(([h, hex]) => [h, t(`--chart-div-${h}`, hex)])) };
   return {
     series: t("--chart-series", ACCENTS.signal.light.accent),
     cat,
@@ -84,9 +85,19 @@ function tokens() {
     brand: t("--accent", ACCENTS.signal.light.accent),
     brandSoft: t("--accent-soft", ACCENTS.signal.light.soft),
     // continuous low -> high: the chosen hue from the accent pair or a categorical token
-    ramp: drawing?.colorScale === "diverging" ? divergingColours(rampTk, reversed(), drawing?.colorPair) : rampColours(drawing?.colorRamp, rampTk, reversed()),
+    ramp: drawing?.colorScale === "diverging" ? divergingColours(rampTk, reversed(), drawing?.colorPair, drawing?.colorAuto === true) : rampColours(drawing?.colorRamp, rampTk, reversed()),
   };
 }
+
+// The values the continuous colour scale reads for `spec` (a colour measure, a heatmap's cells, a treemap's leaves) — what Automatic looks at.
+function colourValuesOf(spec) {
+  if (Array.isArray(spec.colorValues)) return spec.colorValues;
+  if (spec.type === "heatmap") return (spec.cells ?? []).map((d) => d[2]);
+  if (spec.type === "treemap") { const out = []; const walk = (ns) => (ns ?? []).forEach((n) => (n.children ? walk(n.children) : out.push(n.colour))); walk(spec.tree); return out; }
+  return [];
+}
+/** The continuous colour scale the chart in `container` drew with ("sequential" or "diverging"): Automatic resolved against its data. */
+export function resolvedColourScale(container) { return stateOf(container).colorScale ?? "sequential"; }
 
 /**
  * Render a chart into `container`. Types: cartesian `bar` (grouped when ≥2 measures),
@@ -104,7 +115,10 @@ export function renderChart(container, spec) {
   st.paletteReverse = !!spec.format?.paletteReverse;
   st.font = spec.format?.font;
   st.colorSteps = spec.format?.colorSteps ?? 0;
-  st.colorScale = spec.format?.colorScale; st.colorPair = spec.format?.colorPair; st.colorCentre = spec.format?.colorCentre ?? null;
+  st.colorScale = effectiveScale(spec.format?.colorScale, colourValuesOf(spec)); // Automatic resolves here, once, against the values the scale reads: nothing below sees "auto"
+  st.colorAuto = spec.format?.colorScale === "auto" && st.colorScale === "diverging"; // an Automatic scale that resolved to Diverging has a visible neutral centre (D110)
+  st.colorFullRange = spec.format?.colorFullRange === true;
+  st.colorPair = spec.format?.colorPair; st.colorCentre = spec.format?.colorCentre ?? null;
   st.colorRamp = spec.format?.colorRamp; st.colorMin = spec.format?.colorMin ?? null; st.colorMax = spec.format?.colorMax ?? null;
   st.memberColors = spec.memberColors instanceof Map ? spec.memberColors : NO_MEMBER_COLORS;
   const host = document.createElement("div");
@@ -130,6 +144,7 @@ export function renderChart(container, spec) {
   try {
     option = buildOption(spec.type === "multiples" ? { ...spec, width: paneWidth(), height: paneHeight() } : spec);
     option = applySelectionDim(option, spec.type, spec.selectedIndices); // the dashboard's source widget fades the unselected marks
+    if (OPACITY_TYPES.has(spec.type)) option = applyMarkOpacity(option, markOpacityOf(spec.format)); // only the types whose Format offers the control (a stale setting on a Gauge is not applied) // Format → Opacity multiplies every mark's own opacity (after the dim, so a faded mark stays fainter than a kept one)
     if (spec.type !== "multiples") showEveryCategory(option, fit.rotate, fit, paneHeight()); // panels keep their own sparse labels
     if (!fit.zoom) setDateAxisLabels(option, spec, paneWidth(), paneHeight());
     if (fit.zoom) addZoom(option, fit);
@@ -452,8 +467,12 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
   // category axis already labels each bar, so colour restates identity (never colour-alone).
   // A colour measure (one measure only) colours each bar / marker / line stretch by its value: it replaces the palette and Colour by category.
   const { show: showLegend, pos, legend } = legendFor(format, c, series.map((s) => s.name), multi || dual || hasCompare);
-  const byValue = Array.isArray(colorValues) && mainCount === 1 && (type === "bar" || type === "line" || type === "area")
+  const byValue = Array.isArray(colorValues) && (type === "bar" || type === "stacked" || type === "line" || type === "area" || isCombo)
     ? colourByValue(colorValues, c, fmtVal, colorName, showLegend && pos === "bottom" ? 28 : 0) : null;
+  // With several measures every mark of every measure wears its row's colour, so colour no longer says which measure a mark is: each measure gets
+  // a cue of its own (a bar pattern, a line dash and marker; stacked segments are also separated by a surface stroke) and the legend swatches are neutral.
+  const cued = Boolean(byValue) && mainCount > 1;
+  const cueOf = (i) => (cued && !series[i]?.compare ? measureCue(i, format.markerShape) : null);
   const colorByDim = type === "bar" && !multi && !!format.colorByDimension && !byValue;
   // Size (a measure, or a dimension's member steps): a bar's thickness (custom series), a straight line's own thickness (a segment overlay), or an
   // area / stepped line's marker size. `sizes` is one value per category shared by every series; `sizeGrid` (beside a Colour split) one per series cell.
@@ -558,6 +577,10 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
   const step = lineStep(format.lineStyle); // false | "end" | "middle"
   const edge = markBorder(format.markBorder, borderInk(format.markBorderColor, c)); // the stroke of bars (and the lines' markers)
   const secondary = secondaryKind(format.secondaryType); // how a combo draws its right-axis measures
+  if (cued && legend) { // each legend entry wears its measure's cue: a line's marker symbol, a bar's roundRect with its pattern
+    const lineAt = (i) => !(isCombo && i >= 1 && secondary === "bar") && (type === "line" || type === "area" || (isCombo && i >= 1));
+    legend.data = legend.data.map((name, i) => ({ name, ...(cueOf(i) && lineAt(i) ? { icon: cueOf(i).symbol } : {}) }));
+  }
   const widthLines = []; // straight lines drawn with a Size: each gets a segment overlay (below)
   base.series = series.map((s, i) => {
     // A comparison series wears its measure's colour, faded and dashed (line) or muted (bar).
@@ -573,7 +596,8 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
               decal: { symbol: "rect", symbolSize: 1, dashArrayX: [1, 0], dashArrayY: [2, 4], rotation: Math.PI / 4, color: c.surface } },
             emphasis: { itemStyle: { opacity: 0.8 } } };
     }
-    const color = colorFor(i, s.name);
+    const cue = cueOf(i);
+    const color = cue ? c.muted : colorFor(i, s.name); // a cued measure's swatch (and a missing value's mark) is neutral: the cue, not a hue, names the measure
     // line/area always draw as a line; in a combo the 1st measure is a bar and the rest are lines.
     const rightBars = isCombo && i >= 1 && secondary === "bar";
     const asLine = !rightBars && (type === "line" || type === "area" || (isCombo && i >= 1));
@@ -590,10 +614,10 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
         yAxisIndex: seriesAxis(dual, i, isCombo),
         z: sizeFr && sizeMode === "width" ? 3 : undefined, // markers and the thin line stay above their thickness
         data: lineData,
-        showSymbol: s.data.length <= 60 || format.markerSize != null || markerSized, // dots only when they won't crowd (unless a marker size is chosen)
-        symbol: markerSymbol(format.markerShape), symbolSize: markerSizeOr(format.markerSize, 8), // ≥8px markers (dataviz mark spec) unless Format → Marker size
+        showSymbol: s.data.length <= 60 || format.markerSize != null || markerSized || Boolean(cue), // dots only when they won't crowd (unless a marker size is chosen; a cued line's markers name it)
+        symbol: cue ? cue.symbol : markerSymbol(format.markerShape), symbolSize: markerSizeOr(format.markerSize, 8), // ≥8px markers (dataviz mark spec) unless Format → Marker size
         areaStyle: type === "area" || (isCombo && secondary === "area") ? { opacity: 0.18, color: stroke } : undefined,
-        lineStyle: { width: 2, color: stroke },
+        lineStyle: { width: 2, color: stroke, ...(cue ? { type: cue.dash } : {}) },
         itemStyle: { color, ...(format.markBorder && format.markBorder !== "none" ? edge : {}) },
         label: dataLabel(i),
         emphasis: { focus: "series" },
@@ -604,7 +628,10 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
     const barRadius = stacked ? [0, 0, 0, 0] : (horizontal ? [0, c.radius, c.radius, 0] : [c.radius, c.radius, 0, 0]);
     // The "Other" bar (everything past the limit) wears the muted ink (≥ 3:1 on the surface, apart from
     // the series hue); its label says what it is.
-    const otherItem = (v) => ({ value: v, itemStyle: { color: c.muted, borderRadius: barRadius, ...edge } });
+    // A cued bar keeps its pattern; stacked segments of one bar share a colour, so a surface stroke (unless a border is chosen) separates them.
+    const barEdge = cue && stacked && !(format.markBorder && format.markBorder !== "none") ? { borderColor: c.surface, borderWidth: 1 } : edge;
+    const cueStyle = cue?.decal ? { decal: { ...cue.decal, color: c.surface } } : {};
+    const otherItem = (v) => ({ value: v, itemStyle: { color: c.muted, borderRadius: barRadius, ...barEdge } });
     if (sizeFr && type === "bar") {
       const fillAt = (di) => (di === otherIndex ? c.muted : byValue?.colours[di] ?? (colorByDim ? memberColor(labels[di], c.cat[di % c.cat.length]) : null));
       return variableBars({ s, color, sizeFr: sizeFr[i] ?? [], sizes: sz.grid[i] ?? [], slot: { at: i, of: mainCount }, horizontal, c, edge, fillAt, dataLabel: (pointLabels || seriesLabels || format.dataLabels) ? (di, v) => (pointLabels || seriesLabels ? String(labelAt(i, di) ?? "") : fmtVal(v)) : null });
@@ -616,14 +643,14 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
       // Colour-by-dimension: per-bar colours; otherwise the series colour.
       data: colorByDim
         ? s.data.map((v, di) => (di === otherIndex ? otherItem(v) : { value: v, itemStyle: { color: memberColor(labels[di], c.cat[di % c.cat.length]), borderRadius: barRadius, ...edge } }))
-        : s.data.map((v, di) => (di === otherIndex ? otherItem(v) : byValue?.colours[di] ? { value: v, itemStyle: { color: byValue.colours[di], borderRadius: barRadius, ...edge } } : v)),
+        : s.data.map((v, di) => (di === otherIndex ? otherItem(v) : byValue?.colours[di] ? { value: v, itemStyle: { color: byValue.colours[di], borderRadius: barRadius, ...barEdge } } : v)),
       barMaxWidth: 40,
-      itemStyle: { color, borderRadius: barRadius, ...edge },
+      itemStyle: { color, borderRadius: barRadius, ...barEdge, ...cueStyle },
       label: dataLabel(i),
       emphasis: { focus: "series", itemStyle: colorByDim ? { opacity: 0.85 } : { color, opacity: 0.85 } },
     };
   });
-  for (const w of widthLines) base.series.push(thickLine({ ...w, share: sizeFr[w.i] ?? [], horizontal }));
+  for (const w of widthLines) base.series.push(thickLine({ ...w, share: sizeFr[w.i] ?? [], horizontal, opacity: markOpacityOf(format) }));
   if (analytics) addAnalytics(base, analytics, { c, fmtVal, horizontal });
   return base;
 }
@@ -646,7 +673,7 @@ function addAnalytics(base, a, { c, fmtVal, horizontal }) {
       data: [[{ [axis]: a.band.from }, { [axis]: a.band.to }]] };
   }
   if (a.trend) {
-    base.series.push({ name: a.trend.name, type: "line", data: a.trend.data, showSymbol: false, z: 4, animation: false,
+    base.series.push({ id: `${ANALYTICS_ID}trend`, name: a.trend.name, type: "line", data: a.trend.data, showSymbol: false, z: 4, animation: false,
       lineStyle: { width: 2, type: "dotted", color: c.muted }, itemStyle: { color: c.muted },
       endLabel: { show: true, formatter: a.trend.short ?? a.trend.name, color: c.muted, backgroundColor: c.surface, padding: [2, 4], fontFamily: c.font, fontSize: 14 },
       tooltip: { valueFormatter: fmtVal } });
@@ -657,14 +684,21 @@ function addAnalytics(base, a, { c, fmtVal, horizontal }) {
 // pie / donut — one dimension (slices) × one measure (size). Colour IS the encoding, so a legend
 // shows by default (dataviz: identity never colour-alone; the legend supplies the labels).
 const PIE_PERCENT_SLICES = 6; // with Data labels on, up to this many slices also show their percent
-function buildPie({ type, categories, series, format = {}, pointLabels, tooltipExtra, tooltipText, tooltipFields, tooltipStyle, tooltipFormats, otherIndex = -1, colorValues, colorName }) {
+function buildPie({ type, categories, series, format = {}, pointLabels, tooltipExtra, tooltipText, tooltipFields, tooltipStyle, tooltipFormats, otherIndex = -1, colorValues, colorName, split }) {
   const c = tokens();
   const fmtVal = makeValueFormatter(format);
   const labels = (categories ?? []).map((l) => l ?? "—");
   // A colour measure colours each slice by its value (replacing the palette and member colours); the slice list stays the legend of members.
   const byValue = Array.isArray(colorValues) ? colourByValue(colorValues, c, fmtVal, colorName) : null;
-  const data = labels.map((name, i) => ({ name, value: series[0].data[i], ...(i === otherIndex ? { itemStyle: { color: c.muted } } : byValue?.colours[i] ? { itemStyle: { color: byValue.colours[i] } } : !byValue && memberColors().has(name) ? { itemStyle: { color: memberColors().get(name) } } : {}) }));
-  const { pos, legend } = legendFor(format, c, labels, true);
+  // A Colour field splits each slice into sub-slices, one per member of the field: a sub-slice is named for its member (so the legend lists the members and a
+  // legend click lights every sub-slice of one), wears its member's colour, and says "slice · member" in its label and tooltip. `split` = { members: [{ name }],
+  // memberIndex: per sub-slice (-1 = the Other remainder), memberNames: per sub-slice }.
+  const memberName = (i) => (split && split.memberIndex[i] >= 0 ? split.memberNames[i] : labels[i]);
+  const data = labels.map((full, i) => split
+    ? { name: memberName(i), full, value: series[0].data[i], itemStyle: { color: i === otherIndex || split.memberIndex[i] < 0 ? c.muted : memberColor(split.memberNames[i], c.cat[split.memberIndex[i] % c.cat.length]) } }
+    : { name: full, value: series[0].data[i], ...(i === otherIndex ? { itemStyle: { color: c.muted } } : byValue?.colours[i] ? { itemStyle: { color: byValue.colours[i] } } : !byValue && memberColors().has(full) ? { itemStyle: { color: memberColors().get(full) } } : {}) });
+  const fullName = (p) => p.data?.full ?? p.name;
+  const { pos, legend } = legendFor(format, c, split ? [...new Set(data.map((d) => d.name))] : labels, true);
   const showLabels = !!format.dataLabels || !!pointLabels; // Label field forces slice labels on
   const fewSlices = labels.length <= PIE_PERCENT_SLICES; // few slices: the label adds the share
 
@@ -680,7 +714,7 @@ function buildPie({ type, categories, series, format = {}, pointLabels, tooltipE
       formatter: (p) => tooltipText
         ? customTip(tooltipText, tooltipFields, tooltipStyle, tooltipFormats, fmtVal, format, p.dataIndex, { [String(series[0].name)]: p.value, Percent: `${p.percent}%` })
         :
-        `<span style="color:${c.muted}">${escapeHtml(String(p.name))}</span><br>` +
+        `<span style="color:${c.muted}">${escapeHtml(String(fullName(p)))}</span><br>` +
         `<b>${escapeHtml(String(series[0].name))}:</b> ${fmtVal(p.value)} (${p.percent}%)` +
         (byValue && colorValues[p.dataIndex] != null ? `<br><b>${escapeHtml(String(colorName || "colour"))}:</b> ${fmtVal(colorValues[p.dataIndex])}` : "") +
         extraTooltip(tooltipExtra, p.dataIndex, c),
@@ -691,7 +725,7 @@ function buildPie({ type, categories, series, format = {}, pointLabels, tooltipE
       center: legend && (pos === "left" || pos === "right") ? ["42%", byValue ? "46%" : "52%"] : ["50%", byValue ? "46%" : "54%"],
       data,
       label: { show: showLabels, color: c.label, fontFamily: c.font,
-        formatter: (p) => (pointLabels ? String(pointLabels[p.dataIndex] ?? "") : `${p.name}: ${fmtVal(p.value)}${fewSlices ? ` (${p.percent}%)` : ""}`) },
+        formatter: (p) => (pointLabels ? String(pointLabels[p.dataIndex] ?? "") : `${fullName(p)}: ${fmtVal(p.value)}${fewSlices ? ` (${p.percent}%)` : ""}`) },
       labelLine: { show: showLabels },
       itemStyle: edgeOr(format.markBorder, borderInk(format.markBorderColor, c), { borderColor: c.surface, borderWidth: 2 }),
       emphasis: { itemStyle: { shadowBlur: 10, shadowColor: "rgba(0,0,0,0.2)" } },
@@ -835,8 +869,9 @@ function buildHeatmap({ xCats, yCats, cells, format = {} }) {
   const cellEdge = format.markBorder && format.markBorder !== "none" ? markBorder(format.markBorder, borderInk(format.markBorderColor, c))
     : { borderColor: drawing?.colorSteps ? c.axis : c.surface, borderWidth: 1 }; // stepped: a visible hairline so a pale step is not a gap
   const vals = cells.map((d) => d[2]).filter((v) => v != null);
-  const { min, max } = colourScaleRange(vals, true);
-  const legendNote = [centreNote(min, max, fmtVal), outOfRangeNote()].filter(Boolean).join(" · ");
+  const range = colourScaleRange(vals, true);
+  const { min, max } = range;
+  const legendNote = [centreNote(range, fmtVal), outOfRangeNote()].filter(Boolean).join(" · ");
   const chartW = () => live.instance?.getWidth() ?? 800, chartH = () => live.instance?.getHeight() ?? 450;
   const diameter = () => format.markerSize != null ? markerSizeOr(format.markerSize, 6) : circleSize(chartW() - HEATMAP_GUTTER.x, chartH() - HEATMAP_GUTTER.y, xCats.length, yCats.length);
   // Value labels: Format → Data labels forces them on; otherwise they appear when the longest one fits a cell (read from the live chart on every
@@ -845,7 +880,7 @@ function buildHeatmap({ xCats, yCats, cells, format = {} }) {
   const text = (v) => (v == null || !Number.isFinite(Number(v)) ? "" : fmtVal(v));
   const longest = cells.reduce((a, d) => { const t = text(d[2]); return t.length > a.length ? t : a; }, "");
   const inks = [c.ink, c.surface, "#000000", "#ffffff"];
-  const labelled = (list) => { const col = valueColours(list.map((d) => d[2]), c).colours; return list.map((d, i) => ({ value: d, label: { color: col[i] ? pickInk(col[i], inks) : c.ink } })); };
+  const labelled = (list) => { const col = valueColours(list.map((d) => d[2]), c).colours, k = markOpacityOf(format); return list.map((d, i) => ({ value: d, label: { color: col[i] ? pickInk(k < 1 ? mixHex(c.surface, col[i], k) : col[i], inks) : c.ink } })); }; // the ink reads on the cell as it shows (Format → Opacity blends it into the surface)
   const cellLabel = (size) => ({
     show: true, fontFamily: c.font, fontSize: LABEL_FONT, color: c.ink,
     formatter: (p) => { const { w, h } = size(); return labelsShown({ forced, cellW: w, cellH: h, texts: [longest] }) ? text(p.value[2]) : ""; },
@@ -871,7 +906,7 @@ function buildHeatmap({ xCats, yCats, cells, format = {} }) {
       axisLine: { lineStyle: { color: c.axis } }, axisTick: { show: false },
       axisLabel: { color: c.muted },
     },
-    ...colourLegend({ min, max, dimension: 2, c, fmtVal, note: legendNote, bottom: 6 }),
+    ...colourLegend({ min, max, ramp: rampOf(range, c), dimension: 2, c, fmtVal, note: legendNote, bottom: 6 }),
     series: [circles
       // Circles = scatter marks on the same category grid, sized by the cell, coloured by the
       // value through the same visualMap (dimension 2); the value label sits inside each circle.
@@ -912,10 +947,13 @@ function buildTreemap({ tree, sizeName, colourName, shelfName, format = {} }) {
   const inks = [c.ink, c.surface, "#000000", "#ffffff"];
   const withInk = (node, ink) => ({ ...node, label: { ...node.label, color: ink }, ...(node.children ? { children: node.children.map((k) => withInk(k, ink)) } : {}) });
   // A colour measure: each leaf its own colour and ink; a parent the neutral grid colour behind its children.
+  // Format → Opacity: a tile takes no itemStyle opacity, so its colour is drawn with alpha, and its ink is picked against the tile as it shows (the colour blended into the surface).
+  const k = markOpacityOf(format);
+  const seen = (hex) => (k < 1 ? mixHex(c.surface, hex, k) : hex);
   const paint = (node) => node.children
-    ? { ...node, itemStyle: { color: c.grid }, label: { color: c.ink }, children: node.children.map(paint) }
-    : { ...node, itemStyle: { color: colourOf.get(node) ?? c.muted }, label: { color: pickInk(colourOf.get(node) ?? c.muted, inks) } };
-  const data = hasColour ? tree.map(paint) : tree.map((n, i) => withInk(n, pickInk(c.cat[i % c.cat.length], inks)));
+    ? { ...node, itemStyle: { color: withAlpha(c.grid, k) }, label: { color: c.ink }, children: node.children.map(paint) }
+    : { ...node, itemStyle: { color: withAlpha(colourOf.get(node) ?? c.muted, k) }, label: { color: pickInk(seen(colourOf.get(node) ?? c.muted), inks) } };
+  const data = hasColour ? tree.map(paint) : tree.map((n, i) => withInk(n, pickInk(seen(c.cat[i % c.cat.length]), inks)));
   const sub = (label, v) => (v == null ? "" : `<br><b>${escapeHtml(String(label))}:</b> ${fmtVal(v)}`);
   return {
     textStyle: { fontFamily: c.font, color: c.label },
@@ -937,7 +975,7 @@ function buildTreemap({ tree, sizeName, colourName, shelfName, format = {} }) {
       breadcrumb: { show: false },
       label: { show: true, fontFamily: c.font, lineHeight: 16, formatter: (p) => (p.data?.size !== undefined && p.data?.shelf !== undefined ? `${p.name}\n${fmtVal(p.data.shelf)}` : p.name) },
       itemStyle: { ...edgeOr(format.markBorder, borderInk(format.markBorderColor, c), { borderColor: c.surface, borderWidth: 2 }), gapWidth: 2 },
-      levels: hasColour ? [{}] : [{ color: c.cat, colorMappingBy: "index" }],
+      levels: hasColour ? [{}] : [{ color: k < 1 ? c.cat.map((h) => withAlpha(h, k)) : c.cat, colorMappingBy: "index" }],
     }],
   };
 }
@@ -1086,7 +1124,7 @@ function buildWaterfall({ categories, series, format = {} }) {
           const top = Math.min(a[1], b[1]), h = Math.max(1, Math.abs(a[1] - b[1]));
           return {
             type: "group", children: [
-              { type: "rect", shape: { x: a[0] - w / 2, y: top, width: w, height: h, r: 2 }, style: { fill: colour[st.kind], ...strokeOf(format.markBorder, borderInk(format.markBorderColor, c)) } },
+              { type: "rect", shape: { x: a[0] - w / 2, y: top, width: w, height: h, r: 2 }, style: { fill: colour[st.kind], ...(markOpacityOf(format) < 1 ? { opacity: markOpacityOf(format) } : {}), ...strokeOf(format.markBorder, borderInk(format.markBorderColor, c)) } },
               { type: "text", style: { text: st.kind === "total" ? fmtVal(st.value) : signed(st.value), x: a[0], y: top - 4,
                   align: "center", verticalAlign: "bottom", fill: c.label, font: `14px ${c.font}` } },
             ],
@@ -1217,7 +1255,7 @@ function buildGantt({ categories, gantt, name, format = {}, selectedIndices, onL
         const h = Math.min(28, api.size([0, 1])[1] * 0.6);
         const opacity = (keep.size && !keep.has(b.i)) || (split && focus && names[gi] !== focus) ? 0.35 : 1; // a legend-focused member keeps full strength (ECharts does not blur custom marks)
         return { type: "group", children: [
-          { type: "rect", shape: { x: a[0], y: a[1] - h / 2, width: Math.max(2, e[0] - a[0]), height: h, r: 2 }, style: { fill: colourOf(gi), opacity, ...strokeOf(format.markBorder, borderInk(format.markBorderColor, c)) }, emphasis: { style: { stroke: c.ink, lineWidth: 1 } } },
+          { type: "rect", shape: { x: a[0], y: a[1] - h / 2, width: Math.max(2, e[0] - a[0]), height: h, r: 2 }, style: { fill: colourOf(gi), opacity: opacity * markOpacityOf(format), ...strokeOf(format.markBorder, borderInk(format.markBorderColor, c)) }, emphasis: { style: { stroke: c.ink, lineWidth: 1 } } },
           { type: "text", style: { text: len(b), x: Math.max(e[0], a[0] + 2) + 4, y: a[1], align: "left", verticalAlign: "middle", fill: c.label, opacity, font: `14px ${c.font}` } },
         ] };
       } })),
@@ -1302,23 +1340,27 @@ function sizeScaler(values, accessor, { format, order } = {}) {
 // Unpinned, a heatmap keeps its plain data span (`plain`); a scatter always gets a non-empty one.
 // A diverging scale has no pins (its ends follow the centre), so Format hides them and a stored pin is ignored.
 const colourPinned = () => drawing?.colorScale !== "diverging" && (drawing?.colorMin != null || drawing?.colorMax != null);
+// Use full colour range applies to a smooth diverging scale; steps already wear both end colours, so they keep the symmetric split.
+const fullRangeOn = () => drawing?.colorScale === "diverging" && drawing?.colorFullRange === true && !drawing?.colorSteps;
 const colourScaleRange = (nums, plain = false) => {
-  if (drawing?.colorScale === "diverging") { // symmetric about the centre, so the middle colour sits on it
+  if (drawing?.colorScale === "diverging") { // symmetric about the centre (so the middle colour sits on it), or each side its own span with Use full colour range
     const r = rangeOf(nums);
-    return divergingRange(r.min, r.max, drawing?.colorCentre);
+    return divergingRange(r.min, r.max, drawing?.colorCentre, fullRangeOn());
   }
   if (plain && !colourPinned()) { const v = nums.filter((x) => Number.isFinite(x)); return { min: v.length ? Math.min(...v) : 0, max: v.length ? Math.max(...v) : 1 }; }
   return rangeOf(nums, drawing?.colorMin, drawing?.colorMax);
 };
+// The ramp a range is drawn on: the token ramp, or (full range, an off-centre centre) stops resampled so the centre colour stays on the centre.
+const rampOf = (range, c) => (range.full ? fullRangeRamp(c.ramp, range.min, range.max, range.centre) : c.ramp);
 // A pinned end saturates: values beyond it take that end's colour (the visualMap clamps), so a pin never reads as "missing".
 const outOfRangeNote = () => (colourPinned() ? "beyond range: end colour" : "");
 // A diverging legend names its centre in words (never colour alone): "centre 0".
-const centreNote = (min, max, fmtVal) => (drawing?.colorScale === "diverging" ? `centre ${fmtVal((min + max) / 2)}` : "");
+const centreNote = (range, fmtVal) => (drawing?.colorScale === "diverging" ? `centre ${fmtVal(range.centre ?? (range.min + range.max) / 2)}` : "");
 // A continuous visualMap (the gradient legend) over `values`, coloured on the single-hue token ramp.
 function continuousVisualMap(values, dimension, c, fmtVal, name) {
-  const { min, max } = colourScaleRange((values ?? []).map((v) => Number(v)));
-  const note = [name ? String(name) : "", centreNote(min, max, fmtVal), outOfRangeNote()].filter(Boolean).join(" · ");
-  return colourLegend({ min, max, dimension, c, fmtVal, note, bottom: 0 });
+  const range = colourScaleRange((values ?? []).map((v) => Number(v)));
+  const note = [name ? String(name) : "", centreNote(range, fmtVal), outOfRangeNote()].filter(Boolean).join(" · ");
+  return colourLegend({ min: range.min, max: range.max, ramp: rampOf(range, c), dimension, c, fmtVal, note, bottom: 0 });
 }
 // The colour legend + its note as chart options: a gradient bar, or (Format → Steps) a piecewise legend whose
 // swatches are labelled with their boundaries in words. A piecewise legend has no text slot, so its note is a title.
@@ -1326,13 +1368,13 @@ function continuousVisualMap(values, dimension, c, fmtVal, name) {
 // the ink so the neutral step reads as a swatch and a cell in both themes (a continuous gradient keeps the surface).
 const stepRamp = (c) => (c.ramp.length === 3 ? [c.ramp[0], mixHex(c.surface, c.ink, 0.15), c.ramp[2]] : c.ramp);
 // `only` = a display-only legend for marks coloured by `valueColours` (a bar, a line, a slice, a tile): it drives no series, so its handles and steps are inert.
-function colourLegend({ min, max, dimension, c, fmtVal, note, bottom, only = false }) {
+function colourLegend({ min, max, ramp, dimension, c, fmtVal, note, bottom, only = false }) {
   const textStyle = { color: c.muted, fontFamily: c.font };
   const n = drawing?.colorSteps ?? 0;
   const inert = only ? { seriesIndex: [], hoverLink: false } : {}; // no hover link either: a hover would re-draw the marks under the pointer and swallow the click
   if (!n) {
     return { visualMap: { type: "continuous", min, max, dimension, calculable: !only, ...inert, orient: "horizontal", left: "center", bottom,
-      inRange: { color: c.ramp }, text: note ? [note, ""] : undefined, textStyle, formatter: (v) => fmtVal(v) } };
+      inRange: { color: ramp ?? c.ramp }, text: note ? [note, ""] : undefined, textStyle, formatter: (v) => fmtVal(v) } };
   }
   return {
     visualMap: { type: "piecewise", dimension, ...inert, ...(only ? { selectedMode: false } : {}), orient: "horizontal", left: "center", bottom, itemWidth: 16, itemHeight: 12, itemGap: 8,
@@ -1346,24 +1388,25 @@ const legendRoom = (legend) => 24 + (legend.title ? 24 : 0);
 // visualMap can't reach (a bar, a line stretch, a slice, a tile). A missing value has no colour (null).
 function valueColours(values, c) {
   const nums = (values ?? []).map((v) => (v == null || v === "" ? NaN : Number(v)));
-  const { min, max } = colourScaleRange(nums);
+  const range = colourScaleRange(nums);
+  const { min, max } = range, ramp = rampOf(range, c);
   const n = drawing?.colorSteps ?? 0;
   const stepCols = n ? stepColours(stepRamp(c), n) : null;
   const ec = window.echarts.color;
   const at = (v) => {
     if (stepCols) { const i = stepIndexOf(v, min, max, n); return i == null ? null : stepCols[i]; }
     const t = positionOf(v, min, max);
-    return t == null ? null : hexOf(ec.parse(ec.lerp(t, c.ramp)));
+    return t == null ? null : hexOf(ec.parse(ec.lerp(t, ramp)));
   };
-  return { min, max, colours: nums.map(at) };
+  return { min, max, centre: range.centre, ramp, colours: nums.map(at) };
 }
 // [r, g, b] (echarts.color.parse) as #rrggbb.
 const hexOf = ([r, g, b]) => "#" + [r, g, b].map((v) => Math.round(v).toString(16).padStart(2, "0")).join("");
 // A colour measure on a bar / line / area / pie / tile: per-mark colours plus the display-only legend (and the room it needs).
 function colourByValue(values, c, fmtVal, name, bottom = 0) {
   const vc = valueColours(values, c);
-  const note = [name ? String(name) : "", centreNote(vc.min, vc.max, fmtVal), outOfRangeNote()].filter(Boolean).join(" · ");
-  const legend = colourLegend({ min: vc.min, max: vc.max, dimension: 2, c, fmtVal, note, bottom, only: true });
+  const note = [name ? String(name) : "", centreNote(vc, fmtVal), outOfRangeNote()].filter(Boolean).join(" · ");
+  const legend = colourLegend({ min: vc.min, max: vc.max, ramp: vc.ramp, dimension: 2, c, fmtVal, note, bottom, only: true });
   return { colours: vc.colours, legend, room: legendRoom(legend) + bottom };
 }
 // A line's stroke (and area fill) coloured stretch by stretch: a linear gradient across the line's own extent, a colour at each point
@@ -1434,7 +1477,7 @@ function variableBars({ s, color, sizeFr, sizes, slot = { at: 0, of: 1 }, horizo
 // segment (its width tapering from one point's thickness to the next, in the line's colour or the colour measure's value at the segment's end) beneath
 // the real line, which keeps the markers, tooltip, click and legend. It shares the line's name, so one legend entry toggles both.
 const WIDTH_ID = "size-width:";
-function thickLine({ s, i, share, horizontal, stroke, color, axis }) {
+function thickLine({ s, i, share, horizontal, stroke, color, axis, opacity = 1 }) {
   const at = (di) => (horizontal ? [Number(s.data[di]), di] : [di, Number(s.data[di])]);
   return {
     id: `${WIDTH_ID}${i}`, name: s.name, type: "custom", silent: true, z: 2, yAxisIndex: axis, encode: { x: 0, y: 1 }, tooltip: { show: false },
@@ -1446,7 +1489,7 @@ function thickLine({ s, i, share, horizontal, stroke, color, axis }) {
       const dx = p1[0] - p0[0], dy = p1[1] - p0[1], len = Math.hypot(dx, dy) || 1;
       const nx = -dy / len, ny = dx / len, w0 = lineWidthFor(share[di]) / 2, w1 = lineWidthFor(share[di + 1]) / 2;
       return { type: "polygon", silent: true, shape: { points: [[p0[0] + nx * w0, p0[1] + ny * w0], [p1[0] + nx * w1, p1[1] + ny * w1], [p1[0] - nx * w1, p1[1] - ny * w1], [p0[0] - nx * w0, p0[1] - ny * w0]] },
-        style: { fill: stroke?.[di + 1] ?? stroke?.[di] ?? color } };
+        style: { fill: stroke?.[di + 1] ?? stroke?.[di] ?? color, ...(opacity < 1 ? { opacity } : {}) } };
     },
   };
 }

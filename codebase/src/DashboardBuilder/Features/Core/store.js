@@ -294,11 +294,14 @@ export const defaultFormat = () => ({
 /** The tab limit's message (LIMITS.tabs covers both kinds); null while there is room. */
 export const tabLimitError = () => (tabs.length >= LIMITS.tabs ? `A workbook holds at most ${LIMITS.tabs} tabs — close one first.` : null);
 
+/** A blank sheet for a worksheet the user adds: as `emptySheet()`, but its continuous colour scale starts Automatic (Diverging when the data crosses zero). Files and `defaultFormat()` stay Low → high. */
+export const freshSheet = () => { const s = emptySheet(); s.format = { ...s.format, colorScale: "auto" }; return s; };
+
 /** A new, blank worksheet tab (activated), named "Worksheet N" unless `name` is given. Null at the tab limit. */
 export function createWorksheet(name) {
   if (tabLimitError()) return null;
   wsSeq += 1;
-  const tab = { id: `ws#${wsSeq}`, kind: "worksheet", name: name || defaultTabName("worksheet", tabs.map((t) => t.name)), sheet: emptySheet() };
+  const tab = { id: `ws#${wsSeq}`, kind: "worksheet", name: name || defaultTabName("worksheet", tabs.map((t) => t.name)), sheet: freshSheet() };
   tabs.push(tab);
   switchTab(tab.id);
   emit("tabs:changed");

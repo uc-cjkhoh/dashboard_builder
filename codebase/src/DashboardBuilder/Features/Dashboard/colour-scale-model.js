@@ -40,7 +40,18 @@ export function rangeOf(values, min, max) {
 }
 
 /** [value, label] — `format.colorScale`: one hue low → high, or two hues meeting at a centre value. */
-export const SCALE_CHOICES = Object.freeze([["sequential", "Low → high"], ["diverging", "Diverging"]]);
+export const SCALE_CHOICES = Object.freeze([["auto", "Automatic"], ["sequential", "Low → high"], ["diverging", "Diverging"]]);
+
+const numbers = (values) => (values ?? []).filter((v) => v != null && v !== "" && Number.isFinite(Number(v))).map(Number);
+/**
+ * The scale the drawing uses for `values`: "auto" (a new worksheet's start, as Tableau) is Diverging when the data runs from below zero to above it and
+ * Low → high otherwise; an explicit choice is kept; a sheet that stored nothing has always been Low → high.
+ */
+export function effectiveScale(scale, values) {
+  if (scale !== "auto") return scale === "diverging" ? "diverging" : "sequential";
+  const n = numbers(values);
+  return n.length && Math.min(...n) < 0 && Math.max(...n) > 0 ? "diverging" : "sequential";
+}
 
 /** Token fallbacks for the diverging pair (the light theme's values; core.css `--chart-div-low` / `--chart-div-high` win). */
 export const DIV_FALLBACK = Object.freeze({ low: "#d98a4a", high: "#2b62b8" });
@@ -55,10 +66,13 @@ export const DIV_HUE_FALLBACK = Object.freeze({ amber: "#b8803a", violet: "#6b52
  * The diverging ramp's [low, centre, high]: the surface between two hues. `pair` (a DIV_PAIR_CHOICES value) picks them from
  * the dedicated `--chart-div-<hue>` tokens (read as tk.hues, independent of the active palette); the default is the warm / cool div tokens. `tk` = { surface, divLow, divHigh, hues? }.
  */
-export function divergingColours(tk, reverse, pair) {
+export function divergingColours(tk, reverse, pair, neutral = false) {
   const hues = PAIR_HUES[pair];
   const [low, high] = hues ? hues.map((h) => tk.hues?.[h] ?? DIV_HUE_FALLBACK[h]) : [tk.divLow ?? DIV_FALLBACK.low, tk.divHigh ?? DIV_FALLBACK.high];
-  return reverse ? [high, tk.surface, low] : [low, tk.surface, high];
+  // `neutral` (a scale that came from Automatic): the centre is the surface nudged toward the ink, as a stepped scale's middle step is, so a mark AT the centre
+  // reads as a swatch instead of the page colour. An explicit Diverging keeps the surface (its legend and cells as saved sheets have always drawn).
+  const mid = neutral && tk.ink ? mixHex(tk.surface, tk.ink, 0.15) : tk.surface;
+  return reverse ? [high, mid, low] : [low, mid, high];
 }
 
 /** Why a colour centre is refused, or null (blank is fine; a finite number no larger than 1e15 in size). */
@@ -69,13 +83,26 @@ export function colourCentreError(v) {
 
 /**
  * The diverging scale's ends and centre for data span lo..hi. The centre is the one set, else 0 when the span
- * straddles it, else the middle. The ends are made symmetric about it so the middle colour sits on the centre.
+ * straddles it, else the middle. By default the ends are made symmetric about it so the middle colour sits on the centre.
+ * With `full` (Format → Use full colour range) each side keeps its own span — the lowest value wears the low colour and the
+ * highest the high colour — when the centre lies strictly inside the data (else there is one side only and it stays symmetric).
  */
-export function divergingRange(lo, hi, centre) {
+export function divergingRange(lo, hi, centre, full = false) {
   const c = centre != null && Number.isFinite(centre) ? centre : lo < 0 && hi > 0 ? 0 : (lo + hi) / 2;
+  if (full && fullRangeApplies(lo, hi, c)) return { min: lo, max: hi, centre: c, full: true };
   const half = Math.max(c - lo, hi - c, 0) || 1;
   return { min: c - half, max: c + half, centre: c };
 }
+/** Does Use full colour range change anything: the centre sits strictly inside the span (two sides to stretch). */
+export const fullRangeApplies = (lo, hi, centre) => Number.isFinite(lo) && Number.isFinite(hi) && lo < centre && centre < hi;
+/** The colour of value `v` on a full-range diverging scale lo..hi about `centre`: the centre colour at the centre, each end colour at its own end, a blend between. `ramp` = [low, centre, high]. */
+export function colourAtFull(ramp, lo, hi, centre, v) {
+  if (v <= centre) return mixHex(ramp[1], ramp[0], Math.min(1, (centre - v) / (centre - lo)));
+  return mixHex(ramp[1], ramp[2], Math.min(1, (v - centre) / (hi - centre)));
+}
+/** `samples` colours spaced evenly over lo..hi that put the centre colour on the centre (a continuous visualMap spaces its stops evenly, so an off-centre centre needs resampling). */
+export const fullRangeRamp = (ramp, lo, hi, centre, samples = 41) =>
+  Array.from({ length: samples }, (_, i) => colourAtFull(ramp, lo, hi, centre, lo + ((hi - lo) * i) / (samples - 1)));
 
 /** [value, label] — `format.colorSteps`: 0 = a smooth gradient, else that many discrete colour steps. */
 export const STEP_CHOICES = Object.freeze([[0, "Continuous"], ...[3, 4, 5, 6, 7, 8, 9].map((n) => [n, `${n} steps`])]);

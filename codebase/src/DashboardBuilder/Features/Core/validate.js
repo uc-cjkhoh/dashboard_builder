@@ -33,6 +33,7 @@ export const LIMITS = Object.freeze({
   tooltipText: 300,  // characters in a sheet's tooltip template (client-side only, the server never sees it)
   tooltipFormats: 24, // fields with their own tooltip number / date format (client-side only)
   tooltipLines: 12,  // lines a styled tooltip template covers (tooltip modal; client-side only)
+  colourFields: 3,        // categorical fields the Colour slot holds (client-side only; each is one more group-by of the 12)
   memberColors: 100,      // coloured members per field (client-side only)
   memberColorFields: 20,  // fields with member colours per sheet
   memberField: 200,       // characters in a coloured field's key (table.column)

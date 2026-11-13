@@ -1,0 +1,536 @@
+// Browser checks for the Colour channels: Format → Opacity, the Automatic colour scale (Diverging when the data crosses zero) and Use full colour range, a colour measure on several measures / Stacked / Combo, a Colour dimension on Pie / Donut, and several fields on Colour: the real
+// Chromium, driven over the DevTools protocol (tests/live/cdp.mjs), with every /api/* call answered by a mock —
+// nothing reaches a ClickHouse. Run:  node tests/live/marks-colour-ui.mjs   (start the app first:
+//   cd src/DashboardBuilder && dotnet run --no-launch-profile --urls http://localhost:5262 ; stop it with fuser -k 5262/tcp)
+// Env: APP_URL, SHOTS_DIR (screenshot folder), CDP_PORT (default: a free port), CHROME_BIN.
+import { launch } from './cdp.mjs';
+import { NEW_CALC, PAGE_CHIP, relateTables } from './model.mjs';
+import { writeFileSync, mkdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+const APP = process.env.APP_URL ?? 'http://localhost:5262';
+const SHOTS = process.env.SHOTS_DIR ?? join(tmpdir(), 'marks-colour-ui-shots');
+mkdirSync(SHOTS, { recursive: true });
+const SCHEME = process.env.SCHEME === 'dark' ? 'dark' : 'light'; // SCHEME=dark loads the page in the dark scheme (set before load)
+
+// ---- the mocked server ------------------------------------------------------------------------------------
+const COLUMNS = {
+  orders: [['amount', 'Float64', 'numeric'], ['qty', 'Int32', 'numeric'], ['region', 'String', 'text'], ['channel', 'String', 'text'], ['discount', 'Float64', 'numeric'], ['placed', 'DateTime', 'temporal']],
+  customers: [['country', 'String', 'text']],
+};
+const REGIONS = ['APAC', 'EU', 'US', 'LATAM', 'MEA', 'CA', 'UK', 'JP'];
+const DIMVALS = { region: REGIONS, channel: ['web', 'shop', 'app'], country: ['DE', 'FR'] };
+const queries = [];     // every /api/query body, in order
+let tables = ['orders', 'customers'];
+function answer({ method, path, body }) {
+  if (path === '/api/connection' && method === 'GET') return { json: { connected: false } };
+  if (path === '/api/connection') return { json: { connected: true, host: 'mock-ch', port: 8443, user: 'default', secure: true, allowInvalidCert: false } };
+  if (path === '/api/databases') return { json: ['shop'] };
+  if (path === '/api/databases/shop/tables') return { json: tables };
+  const m = path.match(/^\/api\/databases\/shop\/tables\/(\w+)\/columns$/);
+  if (m && COLUMNS[m[1]]) return { json: COLUMNS[m[1]].map(([name, type, category]) => ({ name, type, category })) };
+  if (/\/columns\/\w+\/distinct/.test(path)) return { json: REGIONS };
+  if (path === '/api/query') {
+    queries.push(body);
+    const dims = [...(body.rowDimensions ?? []), ...(body.columnDimensions ?? [])];
+    // every dimension has its own members; several dimensions give the full product (a group per pair), the way a group-by does
+    const members = dims.map((d) => DIMVALS[d.column] ?? REGIONS);
+    let combos = [[]];
+    for (const m of members) combos = combos.flatMap((c) => m.map((x) => [...c, x]));
+    const value = (m, i, r) => (m.column === 'discount' ? (r - Math.floor(combos.length / 2)) * 10 : 10 * (r + 1) + i); // `discount` crosses zero; the rest are positive
+    return { json: {
+      rowDimensions: (body.rowDimensions ?? []).map((d) => d.column), columnDimensions: (body.columnDimensions ?? []).map((d) => d.column),
+      measures: (body.measures ?? []).map((_, i) => `v${i}`),
+      rows: combos.map((keys, r) => ({ keys, values: (body.measures ?? []).map((m, i) => value(m, i, r)) })),
+      truncated: false } };
+  }
+  return null;
+}
+
+// ---- tiny test runner ---------------------------------------------------------------------------------------
+let failed = 0, passed = 0;
+async function check(name, fn) {
+  try { await fn(); console.log(`ok ${name}`); passed++; }
+  catch (e) { console.log(`FAIL ${name}: ${e.message}`); failed++; }
+}
+const must = (cond, msg) => { if (!cond) throw new Error(msg); };
+const J = JSON.stringify;
+const deepEq = (a, b) => a.length === b.length && a.every((x, i) => Math.abs(x - b[i]) <= 1); // measured pixel extents: one pixel of anti-aliasing is not a difference
+
+
+let b = null;
+try {
+  b = await launch({ port: process.env.CDP_PORT ? Number(process.env.CDP_PORT) : undefined });
+  await b.mock(answer);
+  const ev = (s) => b.evaluate(s);
+  const waitFor = (s, label) => b.waitFor(s, { label });
+  const toastText = () => ev(`(document.getElementById('toast').hidden ? '' : document.getElementById('toast').textContent)`);
+
+  // page helpers: HTML5 drag-and-drop with a real DataTransfer, text lookup, dialog typing
+  const installHelpers = () => ev(`(() => {
+    window.__t = {
+      chip: ${PAGE_CHIP},
+      drag(chip, target) {
+        const dt = new DataTransfer();
+        chip.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt }));
+        target.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
+        target.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
+        chip.dispatchEvent(new DragEvent('dragend', { bubbles: true, dataTransfer: dt }));
+      },
+      zone: (kind) => document.querySelector('.ws-shelf--' + kind + ' .ws-shelf__zone'),
+      pills: (kind) => [...document.querySelectorAll('.ws-shelf--' + kind + ' .ws-pill')].map((p) => p.querySelector('.ws-pill__text')?.textContent),
+      btn: (text, root = document) => [...root.querySelectorAll('button')].find((x) => x.textContent.trim() === text || x.getAttribute('aria-label') === text),
+    };
+    return true; })()`);
+  const dragChip = (name, target) => ev(`(() => { const c = __t.chip(${J(name)}); if (!c) throw new Error('no field chip ${name}'); __t.drag(c, ${target}); return true; })()`);
+  const pills = (kind) => ev(`__t.pills(${J(kind)})`);
+  const dlg = `document.querySelector('dialog.calc-dialog[open]')`;
+  const focusAndType = async (sel, text) => {
+    await ev(`(() => { const e = document.querySelector(${J(sel)}); e.focus(); e.select?.(); return true; })()`);
+    await b.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Delete', code: 'Delete', windowsVirtualKeyCode: 46 });
+    await b.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Delete', code: 'Delete', windowsVirtualKeyCode: 46 });
+    await b.type(text);
+  };
+  const openNewDialog = async () => {
+    await ev(NEW_CALC);
+    await waitFor(`${dlg} !== null`, 'calc dialog open');
+  };
+  const fillDialog = async (name, formula) => {
+    await focusAndType('.calc-dialog input.input', name);
+    await focusAndType('.calc-dialog textarea.formula', formula);
+    await ev(`document.querySelector('.calc-dialog textarea.formula').blur()`);
+  };
+  const saveDisabled = () => ev(`[...${dlg}.querySelectorAll('.dialog__foot button')].find((x) => x.textContent === 'Save').disabled`);
+  const saveDialog = async () => {
+    await ev(`[...${dlg}.querySelectorAll('.dialog__foot button')].find((x) => x.textContent === 'Save').click()`);
+    await waitFor(`${dlg} === null`, 'dialog closed after save');
+  };
+  const newCalc = async (name, formula) => { await openNewDialog(); await fillDialog(name, formula); await saveDialog(); };
+  const calcMenu = async (name, item) => {
+    await ev(`(() => { const c = __t.chip(${J(name)}); c.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 40 })); return true; })()`);
+    await ev(`(() => { const c = __t.chip(${J(name)}); [...document.querySelectorAll('.ctx-menu .menu__item')].find((x) => x.textContent.trim() === ${J(item)}).click(); return true; })()`);
+  };
+  const confirmOpen = `[...document.querySelectorAll('dialog[open]')].find((d) => !d.classList.contains('calc-dialog') && !d.classList.contains('calc-manager'))`;
+  const chartText = () => ev(`document.getElementById('ws-chart').textContent`);
+  const canvasDrawn = () => ev(`!!document.querySelector('#ws-chart canvas, #ws-chart svg')`);
+  const until = async (fn, label, timeout = 8000) => { const t0 = Date.now(); while (!fn()) { if (Date.now() - t0 > timeout) throw new Error(`timed out waiting for: ${label}`); await b.sleep(50); } };
+  // Wait until no new /api/query has arrived for `quiet` ms (polling, not a fixed sleep).
+  const settle = async (quiet = 300) => { let n = -1; for (let i = 0; i < 60 && n !== queries.length; i++) { n = queries.length; await b.sleep(quiet); } };
+  const lastQuery = () => queries[queries.length - 1];
+  const hasKey = (o, k) => J(o).includes(`"${k}"`);
+
+  // ---- setup: connect, add the two tables, open a worksheet -----------------------------------------------------
+  if (SCHEME === 'dark') await b.send('Page.addScriptToEvaluateOnNewDocument', { source: "new MutationObserver((_, o) => { if (document.documentElement) { document.documentElement.setAttribute('data-scheme', 'dark'); o.disconnect(); } }).observe(document, { childList: true })" }); // read at load
+  await b.goto(APP + '/');
+  await waitFor(`!!document.getElementById('conn-connect')`, 'app loaded');
+  await ev(`(() => { document.getElementById('conn-host').value = 'mock-ch'; document.getElementById('conn-password').value = 'x'; document.getElementById('conn-connect').click(); return true; })()`);
+  await waitFor(`document.getElementById('db-select').options.length > 1`, 'databases listed');
+  await ev(`(() => { const s = document.getElementById('db-select'); s.value = 'shop'; s.dispatchEvent(new Event('change')); return true; })()`);
+  await waitFor(`document.querySelectorAll('.table-chip').length === 2`, 'tables listed');
+  for (const t of ['orders', 'customers'])
+    await ev(`document.dispatchEvent(new CustomEvent('table:add', { detail: { db: 'shop', table: ${J(t)} } }))`);
+  await waitFor(`document.querySelectorAll('.entity').length === 2 && [...document.querySelectorAll('.entity__status')].every((s) => s.hidden)`, 'both tables loaded');
+  await relateTables(ev, waitFor, ['orders', 'region', 'customers', 'country']); // an unrelated table is held out of the field pane
+  await ev(`document.querySelector('.tab-add').click(); document.querySelector('[data-new-tab=worksheet]').click()`);
+  await waitFor(`!document.getElementById('worksheet-view').hidden`, 'worksheet open');
+  await installHelpers();
+  await waitFor(`!!__t.chip('region')`, 'field pane filled');
+
+  const filterTool = `document.querySelector('.ws-tool[aria-label^="Filters"]')`;
+  const opSelect = `document.querySelector('select[aria-label^="Filter operator for"]')`;
+  const shot = async (name) => { try { writeFileSync(join(SHOTS, `${name}-${SCHEME}.png`), Buffer.from((await b.send('Page.captureScreenshot', { format: 'png' })).data, 'base64')); } catch { /* optional */ } };
+  const fmtTool = `document.querySelector('.ws-viewbar__btn[aria-label="Format"]')`;
+  const fmtField = (label) => `[...document.querySelectorAll('.ws-fmt-field')].find((l) => l.textContent.includes(${J(label)}))`;
+  const setSelect = (label, v) => ev(`(() => { const s = ${fmtField(label)}.querySelector('select'); s.value = ${J(v)}; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+  const inst = `window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas'))`;
+  const opt = () => ev(`${inst}.getOption()`);
+  const hints = () => ev(`[...document.querySelectorAll('#ws-chart .ws-hint')].map((h) => h.textContent)`);
+  const chartType = async (name) => {
+    await ev(`document.querySelector('.ws-pick--chart .ws-pick__btn').click()`);
+    await ev(`[...document.querySelectorAll('.ws-charttypes .menu__item')].find((x) => x.textContent.trim() === ${J(name)}).click()`);
+    await settle(500);
+  };
+  const toolEl = (name) => `document.querySelector('.ws-tool[aria-label^="${name}"]')`;
+  const newSheet = async () => {
+    await ev(`document.querySelector('.tab-add').click(); document.querySelector('[data-new-tab=worksheet]').click()`);
+    await waitFor(`!document.getElementById('worksheet-view').hidden && !!__t.chip('region') && !document.querySelector('.ws-shelf--columns .ws-pill')`, 'a fresh worksheet');
+    await ev(`document.documentElement.${SCHEME === 'dark' ? "setAttribute('data-scheme', 'dark')" : "removeAttribute('data-scheme')"}`); // the boot script may have reset it
+  };
+  // The drawn marks, read from the live chart: per-item fill, graphic bounds, symbol size.
+  const per = (expr) => ev(`(() => { const d = ${inst}.getModel().getSeriesByIndex(0).getData(); return Array.from({ length: d.count() }, (_, k) => (${expr})); })()`);
+  const fills = () => per(`d.getItemVisual(k, 'style').fill`);
+  const extent = (dim) => per(`Math.round(d.getItemGraphicEl(k).getBoundingRect().${dim})`);
+  const symbolSizes = () => per(`(() => { const s = d.getItemVisual(k, 'symbolSize'); return Array.isArray(s) ? s[0] : s; })()`);
+  const sizeText = async () => J((await opt()).graphic ?? []).match(/Size: [^"]*/)?.[0] ?? '';
+  const distinct = (a) => new Set(a).size;
+  const hex = (c) => ev(`'#' + echarts.color.parse(${J(c)}).slice(0, 3).map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')`);
+  const tipText = async (si, di) => {
+    await ev(`${inst}.dispatchAction({ type: 'showTip', seriesIndex: ${si}, dataIndex: ${di} })`); await b.sleep(200);
+    return ev(`[...document.querySelectorAll('.ws-chart-canvas div')].map((d) => d.innerText).filter((t) => t && t.includes('\\n')).pop() ?? ''`);
+  };
+
+
+  const setField = (label, v) => ev(`(() => { const i = ${fmtField(label)}.querySelector('input'); i.value = ${J(v)}; i.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+  const toggle = (label) => ev(`${fmtField(label)}.querySelector('input').click()`);
+  const formatOpen = () => ev(`!!(${fmtField('Number')})`);
+  const openFormat = async () => { if (!(await formatOpen())) await ev(`${fmtTool}.click()`); await waitFor(`!!(${fmtField('Number')})`, 'format panel open'); };
+  const closeFormat = async () => { if (await formatOpen()) await ev(`${fmtTool}.click()`); await settle(300); };
+  // The mock answers rows in REGIONS order; a dimension's steps follow the SORTED members (APAC, CA, EU, JP, LATAM, MEA, UK, US): the expected rank of each row.
+  const rankOfRow = REGIONS.map((r) => [...REGIONS].sort().indexOf(r));
+  const byMember = (a) => rankOfRow.map((rk, i) => [rk, a[i]]).sort((x, y) => x[0] - y[0]).map((x) => x[1]); // values listed smallest member first
+  const rectDim = (dim) => per(`Math.round(d.getItemGraphicEl(k).getBoundingRect().${dim})`);
+  const cellClasses = () => ev(`[...document.querySelectorAll('#ws-chart table.xtab tbody td.num')].map((t) => t.className)`);
+  const monotone = (a, up = true) => a.every((x, i) => i === 0 || (up ? x > a[i - 1] : x < a[i - 1]));
+
+
+  // ---- Format → Opacity -----------------------------------------------------------------------------------------------------
+  const seriesOpacity = (i = 0) => ev(`${inst}.getOption().series[${i}].itemStyle.opacity ?? null`);
+  const markNodes = (sel) => ev(`[...document.querySelectorAll(${J(sel)})].map((n) => Number(getComputedStyle(n).opacity))`);
+  await newSheet();
+  await dragChip('region', `__t.zone('columns')`);
+  await dragChip('amount', `__t.zone('rows')`);
+  await settle(400);
+  await chartType('Bar');
+  await check('Opacity: the control is in Format for a bar; 40 % draws the bars at 0.4 on the live chart, 100 % removes the stored key', async () => {
+    await openFormat();
+    must(await ev(`!!(${fmtField('Opacity')})`), 'an Opacity control');
+    must((await seriesOpacity()) == null || (await seriesOpacity()) === 1, 'default draws no opacity: ' + await seriesOpacity());
+    await setSelect('Opacity', '40'); await settle(500);
+    must((await seriesOpacity()) === 0.4, 'series at 0.4: ' + await seriesOpacity());
+    const paths = await ev(`[...document.querySelectorAll('#ws-chart svg path')].filter((p) => p.getAttribute('fill') && p.getAttribute('fill') !== 'none' && p.getAttribute('fill-opacity') !== null).map((p) => Number(p.getAttribute('fill-opacity')))`);
+    must(paths.length >= 8 && paths.every((o) => Math.abs(o - 0.4) < 0.01), 'the bars are drawn at 40 % in the SVG: ' + J(paths.slice(0, 10)));
+    await shot('opacity-bar-40');
+    const stored = () => ev(`(() => { const k = Object.keys(localStorage).find((x) => x.startsWith('dashboardbuilder.workbook.v')); if (!k) return 'no-autosave'; const wb = JSON.parse(localStorage.getItem(k)); return JSON.stringify((wb.worksheets ?? []).map((w) => w.sheet?.format?.markOpacity ?? null)); })()`);
+    await settle(1500); // the autosave is debounced
+    must(/40/.test(await stored()), 'the sheet saves markOpacity 40: ' + await stored());
+    await setSelect('Opacity', '100'); await settle(500);
+    must((await seriesOpacity()) == null || (await seriesOpacity()) === 1, 'back to the default: ' + await seriesOpacity());
+    await settle(1500);
+    must(!/40/.test(await stored()), 'at 100 % the stored key is gone: ' + await stored());
+    await closeFormat();
+  });
+  // Distinct fill opacities of the drawn marks (SVG paths with a fill): the product of fill-opacity and opacity.
+  const fillOpacities = () => ev(`[...new Set([...document.querySelectorAll('#ws-chart svg path, #ws-chart svg rect, #ws-chart svg circle, #ws-chart svg polygon')].filter((n) => { const f = n.getAttribute('fill'); return f && f !== 'none' && f !== 'transparent' && !/^(rgba\\(0, ?0, ?0, ?0\\))$/.test(f) && n.getAttribute('width') !== '100%'; }).map((n) => Math.round(100 * Number(n.getAttribute('fill-opacity') ?? 1) * Number(n.getAttribute('opacity') ?? 1)) / 100))].sort()`);
+  const SETUPS = { Pie: { cols: ['region'], rows: ['amount'] }, Scatter: { cols: ['amount'], rows: ['qty'], detail: 'region' }, Line: { cols: ['region'], rows: ['amount'] }, Area: { cols: ['region'], rows: ['amount'] },
+    Heatmap: { cols: ['region'], rows: ['channel', 'amount'] }, Treemap: { cols: ['region'], rows: ['amount'] } };
+  await check('Opacity: every family that draws coloured marks dims at 40 % (pie, scatter, line, area, heatmap, treemap) and returns at 100 %', async () => {
+    for (const [t, su] of Object.entries(SETUPS)) {
+      await newSheet();
+      for (const f of su.cols) await dragChip(f, `__t.zone('columns')`);
+      for (const f of su.rows) await dragChip(f, `__t.zone('rows')`);
+      if (su.detail) await dragChip(su.detail, toolEl('Detail'));
+      await settle(400); await chartType(t); await settle(400);
+      await openFormat(); await setSelect('Opacity', '40'); await settle(500);
+      const dim = await fillOpacities(); await shot('opacity-' + t.toLowerCase());
+      await setSelect('Opacity', '100'); await settle(500);
+      const full = await fillOpacities();
+      const fainter = dim.filter((o) => o > 0 && o < 0.5 && !full.includes(o)); // a mark opacity that 100 % does not draw (0 = an invisible helper element)
+      must(fainter.length > 0, `${t}: marks fainter at 40 %: ${J(dim)} vs ${J(full)}`);
+      await closeFormat();
+    }
+  });
+  await check('Opacity: offered for a pie, a scatter and a line; not for a Table', async () => {
+    for (const t of ['Pie', 'Scatter', 'Line']) {
+      await chartType(t); await openFormat();
+      must(await ev(`!!(${fmtField('Opacity')})`), 'Opacity for ' + t);
+      await closeFormat();
+    }
+    await chartType('Table'); await openFormat();
+    must(await ev(`!(${fmtField('Opacity')})`), 'no Opacity for a table');
+    await closeFormat();
+  });
+
+  // ---- the Automatic colour scale and Use full colour range -------------------------------------------------------------------
+  const vmap = async () => { const v = (await opt()).visualMap; return Array.isArray(v) ? v[0] : v; };
+  const barFills = () => per(`d.getItemVisual(k, 'style').fill`);
+  await newSheet();
+  await dragChip('region', `__t.zone('columns')`);
+  await dragChip('amount', `__t.zone('rows')`);
+  await settle(400);
+  await chartType('Bar');
+  await check('Automatic (a new worksheet): a colour measure crossing zero is Diverging (three stops, "centre 0" named); the control reads Automatic', async () => {
+    await dragChip('discount', toolEl('Color')); await settle(600);
+    await openFormat();
+    must((await ev(`${fmtField('Colour scale')}.querySelector('select').value`)) === 'auto', 'the select reads Automatic');
+    must(await ev(`!!(${fmtField('Diverging colours')}) && !!(${fmtField('Colour centre')}) && !(${fmtField('Colour ramp')})`), 'the diverging controls show, not the ramp');
+    const v = await vmap();
+    must(v.inRange.color.length === 3 && /centre 0/.test(J(v.text)), 'diverging legend: ' + J([v.inRange.color.length, v.text]));
+    must(v.min === -40 && v.max === 40, 'symmetric about 0 by default: ' + J([v.min, v.max]));
+    const f0 = await barFills();
+    const surface = await ev(`getComputedStyle(document.documentElement).getPropertyValue('--surface').trim()`);
+    const surfaceHex = await hex(surface);
+    must(f0[4] !== surfaceHex && f0[4] !== '#ffffff', 'the bar whose colour value is exactly the centre (0) is not the page colour: ' + J([f0[4], surfaceHex]));
+    await shot('auto-diverging-bar');
+  });
+  await check('Automatic: a colour measure that stays positive is Low → high (two stops, the ramp controls)', async () => {
+    await ev(`document.querySelector('.ws-shelf--color, .ws-tool[aria-label^="Color"]')`);
+    await newSheet();
+    await dragChip('region', `__t.zone('columns')`);
+    await dragChip('amount', `__t.zone('rows')`);
+    await settle(300); await chartType('Bar');
+    await dragChip('qty', toolEl('Color')); await settle(600);
+    await openFormat();
+    must((await ev(`${fmtField('Colour scale')}.querySelector('select').value`)) === 'auto', 'Automatic');
+    must(await ev(`!!(${fmtField('Colour ramp')}) && !(${fmtField('Colour centre')})`), 'the ramp controls show');
+    const v = await vmap(); must(v.inRange.color.length === 2, 'two stops: ' + J(v.inRange.color));
+  });
+  await check('an explicit Low → high keeps crossing data sequential; choosing Automatic again diverges; the choice persists', async () => {
+    await newSheet();
+    await dragChip('region', `__t.zone('columns')`);
+    await dragChip('amount', `__t.zone('rows')`);
+    await settle(300); await chartType('Bar');
+    await dragChip('discount', toolEl('Color')); await settle(500);
+    await openFormat();
+    await setSelect('Colour scale', 'sequential'); await settle(500);
+    must((await vmap()).inRange.color.length === 2, 'explicit Low → high stays sequential with data crossing zero');
+    await setSelect('Colour scale', 'auto'); await settle(500);
+    must((await vmap()).inRange.color.length === 3, 'Automatic diverges again');
+    await closeFormat();
+  });
+  await check('Use full colour range (diverging): each side its own span: the legend runs min..max with the centre named, the highest bar wears the high colour; off = symmetric', async () => {
+    await openFormat();
+    must(await ev(`!!(${fmtField('Use full colour range')})`), 'the checkbox shows for a diverging scale');
+    const symFills = await barFills(); const symV = await vmap();
+    await toggle('Use full colour range'); await settle(500);
+    const v = await vmap();
+    must(v.min === -40 && v.max === 30, 'the legend spans the data: ' + J([v.min, v.max]));
+    must(v.inRange.color.length > 3 && /centre 0/.test(J(v.text)), 'resampled stops, centre still named: ' + J([v.inRange.color.length, v.text]));
+    const f = await barFills();
+    const lo = await hex(v.inRange.color[0]), hi = await hex(v.inRange.color[v.inRange.color.length - 1]);
+    must(f[0] === lo && f[7] === hi, 'the lowest bar wears the low end and the highest the high end: ' + J([f[0], f[7], lo, hi]));
+    must(symFills[7] !== f[7], 'symmetric (off) did not saturate the high end: ' + J([symFills[7], f[7]]));
+    await shot('full-range-bar');
+    await toggle('Use full colour range'); await settle(500);
+    const back = await barFills(); must(J(back) === J(symFills) && (await vmap()).max === symV.max, 'off again = symmetric');
+    await closeFormat();
+  });
+  await check('Automatic with Format open: when the data starts crossing zero the panel swaps the ramp controls for the diverging ones, with no reload', async () => {
+    await newSheet();
+    await dragChip('region', `__t.zone('columns')`);
+    await dragChip('amount', `__t.zone('rows')`);
+    await settle(300); await chartType('Bar');
+    await dragChip('qty', toolEl('Color')); await settle(600);
+    await openFormat();
+    must(await ev(`!!(${fmtField('Colour ramp')}) && !(${fmtField('Colour centre')})`), 'ramp controls while the data is positive');
+    await dragChip('discount', toolEl('Color')); await settle(900);
+    await waitFor(`!!(${fmtField('Colour centre')})`, 'the diverging controls appear');
+    must(await ev(`!(${fmtField('Colour ramp')})`), 'the ramp controls go');
+    await closeFormat();
+  });
+  await check('Steps ignore Use full colour range: the checkbox is gone while Steps is set', async () => {
+    await openFormat();
+    await setSelect('Steps', '5'); await settle(500);
+    must(await ev(`!(${fmtField('Use full colour range')})`), 'no checkbox with steps');
+    await setSelect('Steps', '0'); await settle(400);
+    await closeFormat();
+  });
+  await check('Clear sheet starts the colour scale Automatic again, as a new worksheet does', async () => {
+    await openFormat(); await setSelect('Colour scale', 'sequential'); await settle(400); await closeFormat();
+    await ev(`document.querySelector('.ws-actions .iconbtn').click()`);
+    await ev(`[...document.querySelectorAll('.ws-actions .menu__item')].find((x) => /Clear sheet/.test(x.textContent)).click()`);
+    await waitFor(`!!(${confirmOpen})`, 'confirm dialog');
+    await ev(`[...(${confirmOpen}).querySelectorAll('button')].find((x) => x.textContent.trim() === 'Clear').click()`);
+    await settle(500);
+    await dragChip('region', `__t.zone('columns')`); await dragChip('amount', `__t.zone('rows')`); await settle(300); await chartType('Bar');
+    await dragChip('discount', toolEl('Color')); await settle(700);
+    await openFormat();
+    must((await ev(`${fmtField('Colour scale')}.querySelector('select').value`)) === 'auto', 'Automatic after Clear');
+    await closeFormat();
+  });
+  await check('heatmap and scatter honour Automatic too (a heatmap of a measure that crosses zero is diverging)', async () => {
+    await newSheet();
+    await dragChip('region', `__t.zone('columns')`);
+    await dragChip('channel', `__t.zone('rows')`);
+    await dragChip('discount', `__t.zone('rows')`);
+    await settle(400); await chartType('Heatmap'); await settle(500);
+    const v = await vmap();
+    must(v.inRange.color.length === 3, 'heatmap diverges: ' + J(v.inRange.color));
+    await shot('auto-diverging-heatmap');
+  });
+
+  // ---- a colour measure beside several measures, on Stacked and on Combo ------------------------------------------------------
+  const seriesColours = async (i) => (await opt()).series[i].data.map((d) => d?.itemStyle?.color ?? null);
+  const twoMeasures = async (type) => {
+    await newSheet();
+    await dragChip('region', `__t.zone('columns')`);
+    await dragChip('amount', `__t.zone('rows')`);
+    await dragChip('qty', `__t.zone('rows')`);
+    await settle(300); await chartType(type);
+    await dragChip('discount', toolEl('Color')); await settle(700);
+  };
+  await check('bar with two measures + a colour measure: no hint; both measures\' bars wear the same per-row colours; the second measure is patterned; the legend names both', async () => {
+    await twoMeasures('Bar');
+    must((await hints()).length === 0, 'no hint: ' + J(await hints()));
+    const a = await seriesColours(0), c2 = await seriesColours(1);
+    must(distinct(a) >= 7 && J(a) === J(c2), 'same colours per row for both measures: ' + J(a.slice(0, 3)));
+    const o = await opt();
+    must(!J(o.series[0].itemStyle).includes('decal') && J(o.series[1].itemStyle).includes('decal'), 'the second measure carries a pattern: ' + J(o.series[1].itemStyle).slice(0, 160));
+    must(!!(await vmap()) && (await vmap()).type === 'continuous', 'one gradient legend for the colour measure');
+        await shot('colour-measure-two-bars');
+  });
+  await check('stacked with two measures + a colour measure: segments coloured by the row, a surface stroke between them, the second patterned', async () => {
+    await twoMeasures('Stacked bar');
+    must((await hints()).length === 0, 'no hint: ' + J(await hints()));
+    const o = await opt();
+    must(J(await seriesColours(0)) === J(await seriesColours(1)) && distinct(await seriesColours(0)) >= 7, 'segments coloured by row');
+    must(o.series.every((s) => s.stack === 'total') && o.series[0].itemStyle.borderWidth !== 0, 'stacked with a stroke: ' + J(o.series[0].itemStyle));
+    await shot('colour-measure-stacked');
+  });
+  await check('line and area with two measures + a colour measure: a dash and a marker per measure, the lines a gradient, no hint', async () => {
+    for (const t of ['Line', 'Area']) {
+      await twoMeasures(t);
+      must((await hints()).length === 0, t + ' no hint: ' + J(await hints()));
+      const o = await opt();
+      must(o.series[0].lineStyle.type === 'solid' && o.series[1].lineStyle.type === 'dashed', t + ' dash per measure: ' + J(o.series.map((s) => s.lineStyle.type)));
+      must(o.series[0].symbol !== o.series[1].symbol, t + ' marker per measure: ' + J(o.series.map((s) => s.symbol)));
+      must(J(o.series[0].lineStyle.color).includes('colorStops'), t + ' gradient');
+      await shot('colour-measure-' + t.toLowerCase());
+    }
+  });
+  await check('combo + a colour measure: bars coloured by the row on the left axis, the line on the right; Format shows the colour scale controls', async () => {
+    await twoMeasures('Combo (dual-axis)');
+    must((await hints()).length === 0, 'no hint: ' + J(await hints()));
+    const o = await opt();
+    must(o.series[0].type === 'bar' && o.series[1].type === 'line' && distinct(await seriesColours(0)) >= 7, 'bars and a line coloured by row');
+    await openFormat();
+    must(await ev(`!!(${fmtField('Colour scale')}) && !!(${fmtField('Steps')})`), 'the colour scale controls');
+    await closeFormat();
+    await shot('colour-measure-combo');
+  });
+
+  // ---- a Colour dimension on Pie / Donut ----------------------------------------------------------------------------------------
+  const pieData = async () => (await opt()).series[0].data.map((d) => ({ name: d.name, full: d.full, colour: d.itemStyle?.color }));
+  const colourPills = () => ev(`[...document.querySelectorAll('.ws-tool[aria-label^="Color"]')].length`);
+  await newSheet();
+  await dragChip('region', `__t.zone('columns')`);
+  await dragChip('amount', `__t.zone('rows')`);
+  await settle(300); await chartType('Pie');
+  await check('pie + a Colour field: each slice is split by the field\'s members (sub-slices grouped by slice), coloured by member; the legend lists the members; no hint', async () => {
+    await dragChip('channel', toolEl('Color')); await settle(700);
+    must((await hints()).length === 0, 'no hint: ' + J(await hints()));
+    must(hasKey(lastQuery().columnDimensions, 'column') && lastQuery().columnDimensions.map((d) => d.column).join() === 'region,channel', 'the Colour field is the last group-by: ' + J(lastQuery().columnDimensions.map((d) => d.column)));
+    const d = await pieData();
+    must(d.length === 24, '8 slices x 3 members: ' + d.length);
+    must(distinct(d.map((x) => x.colour)) === 3 && distinct(d.map((x) => x.name)) === 3, 'three member colours / names: ' + J(distinct(d.map((x) => x.colour))));
+    must(d[0].full === 'APAC · web' && d[1].full === 'APAC · shop' && d[3].full === 'EU · web', 'grouped under their slice: ' + J(d.slice(0, 4).map((x) => x.full)));
+    const o = await opt();
+    must(J(o.legend[0].data) === J(['web', 'shop', 'app']), 'legend lists the members: ' + J(o.legend[0].data));
+    must(/APAC · web/.test(await tipText(0, 0)), 'the tooltip says slice and member: ' + await tipText(0, 0));
+    await openFormat();
+    must(await ev(`!!(${fmtField('Top N (sub-slices)')})`), 'Top N says it counts sub-slices on a split pie');
+    await closeFormat();
+    await shot('pie-colour-members');
+  });
+  await check('pie split by one Colour field: a legend click selects that member (the chip appears)', async () => {
+    await ev(`${inst}.dispatchAction({ type: 'legendToggleSelect', name: 'shop' })`);
+    await waitFor(`!!document.querySelector('.ws-select')`, 'the selection chip');
+    must(/channel = shop/.test(await ev(`document.querySelector('.ws-select').textContent`)), 'member selected: ' + await ev(`document.querySelector('.ws-select').textContent`));
+    await ev(`${inst}.dispatchAction({ type: 'legendToggleSelect', name: 'shop' })`); await settle(600); // a second click clears it
+    must(!(await ev(`!!document.querySelector('.ws-select')`)), 'cleared again');
+  });
+  await check('donut + a Colour field draws the same split; Format lists the Colour members for member colours', async () => {
+    await chartType('Donut');
+    const d = await pieData(); must(d.length === 24 && distinct(d.map((x) => x.colour)) === 3, 'donut split');
+    await openFormat();
+    await ev(`document.querySelector('.ws-memcol__toggle').click()`);
+    const names = await ev(`[...document.querySelectorAll('.ws-memcol__name')].map((n) => n.textContent)`);
+    must(J(names) === J(['web', 'shop', 'app']), 'the member colour editor lists members: ' + J(names));
+    await ev(`document.querySelectorAll('.ws-memcol__row')[0].querySelectorAll('.ws-memcol__swatch')[3].click()`); await settle(500);
+    const d2 = await pieData();
+    must(d2[0].colour !== d[0].colour && d2[0].colour === d2[3].colour, 'a member colour recolours every sub-slice of the member: ' + J([d[0].colour, d2[0].colour]));
+    await ev(`document.querySelector('.ws-memcol__toggle').click()`);
+    await closeFormat();
+  });
+  await check('a Colour field that is already the slice field adds no group-by: the pie is as before', async () => {
+    await newSheet();
+    await dragChip('region', `__t.zone('columns')`);
+    await dragChip('amount', `__t.zone('rows')`);
+    await settle(300); await chartType('Pie');
+    await dragChip('region', toolEl('Color')); await settle(600);
+    must(lastQuery().columnDimensions.length === 1, 'one group-by: ' + J(lastQuery().columnDimensions.map((d) => d.column)));
+    must((await opt()).series[0].data.length === 8 && (await hints()).length === 0, '8 slices');
+  });
+
+  // ---- several fields on Colour ----------------------------------------------------------------------------------------------------
+  await newSheet();
+  await dragChip('region', `__t.zone('columns')`);
+  await dragChip('amount', `__t.zone('rows')`);
+  await settle(300); await chartType('Bar');
+  const seriesNames = async () => (await opt()).series.map((s) => s.name);
+  const pillTexts = () => ev(`[...document.querySelectorAll('.ws-tool-panel .ws-pill .ws-pill__text, .ws-fly .ws-pill .ws-pill__text')].map((p) => p.textContent)`);
+  await check('bar + two Colour fields: a series per combination "a · b", both fields are group-bys (last, in order), a legend of the combinations', async () => {
+    await dragChip('channel', toolEl('Color')); await settle(400);
+    await dragChip('country', toolEl('Color')); await settle(700);
+    must((await hints()).length === 0, 'no hint: ' + J(await hints()));
+    must(lastQuery().columnDimensions.map((d) => d.column).join() === 'region,channel,country', 'group-bys: ' + J(lastQuery().columnDimensions.map((d) => d.column)));
+    const names = await seriesNames();
+    must(names.length === 6 && names[0] === 'web · DE' && names[1] === 'web · FR' && names.includes('app · FR'), 'combinations: ' + J(names));
+    const o = await opt();
+    must(distinct(o.series.map((s) => s.itemStyle.color)) === 6, 'a colour per combination');
+    must(J(o.legend[0].data).includes('web · DE'), 'legend lists them');
+    await shot('colour-two-fields-bar');
+  });
+  const selChip = () => ev(`!!document.querySelector('.ws-select')`); // the selection chip (selectionChip in dashboards.js)
+  await check('legend click on a combination highlights it and selects nothing (no one field to filter by)', async () => {
+    must(!(await selChip()), 'no chip to begin with');
+    await ev(`${inst}.dispatchAction({ type: 'legendToggleSelect', name: 'web · DE' })`); await settle(700);
+    must(!(await selChip()), 'no selection chip for a combination');
+    await ev(`${inst}.dispatchAction({ type: 'legendAllSelect' })`);
+  });
+  await check('control: with ONE Colour field the same legend click selects the member (the chip appears), so the check above can fail', async () => {
+    await newSheet();
+    await dragChip('region', `__t.zone('columns')`);
+    await dragChip('amount', `__t.zone('rows')`);
+    await settle(300); await chartType('Bar');
+    await dragChip('channel', toolEl('Color')); await settle(700);
+    await ev(`${inst}.dispatchAction({ type: 'legendToggleSelect', name: 'web' })`);
+    await waitFor(`!!document.querySelector('.ws-select')`, 'the selection chip for the legend member');
+    must(/channel = web/.test(await ev(`document.querySelector('.ws-select').textContent`)), 'the chip names the member: ' + await ev(`document.querySelector('.ws-select').textContent`));
+    // re-enter the two-field sheet for the checks that follow
+    await dragChip('country', toolEl('Color')); await settle(700);
+    await ev(`document.querySelector('.ws-select__clear, .ws-select button[aria-label^="Clear"]')?.click()`);
+  });
+  await check('member colours for a combination: the editor lists "a · b", a pick recolours that series and survives a redraw', async () => {
+    await openFormat();
+    await ev(`document.querySelector('.ws-memcol__toggle').click()`);
+    const names = await ev(`[...document.querySelectorAll('.ws-memcol__name')].map((n) => n.textContent)`);
+    must(names.length === 6 && names[0] === 'web · DE', 'combined members listed: ' + J(names));
+    const before = (await opt()).series[0].itemStyle.color;
+    await ev(`document.querySelectorAll('.ws-memcol__row')[0].querySelectorAll('.ws-memcol__swatch')[3].click()`); await settle(600);
+    const after = (await opt()).series[0].itemStyle.color;
+    must(after !== before && (await opt()).series[1].itemStyle.color !== after, 'only that combination changed: ' + J([before, after]));
+    await ev(`document.querySelector('.ws-memcol__toggle').click()`);
+    await closeFormat();
+  });
+  await check('a third field joins (3 is the cap); a fourth is refused with a message and the Colour fields stay as they were', async () => {
+    await dragChip('placed', toolEl('Color')); await settle(700);
+    must(lastQuery().columnDimensions.length === 4, 'three Colour fields: ' + J(lastQuery().columnDimensions.map((d) => d.column)));
+    await dragChip('region', toolEl('Color')); await settle(300);
+    must(/at most 3/.test(await toastText()), 'refused: ' + await toastText());
+    must(lastQuery().columnDimensions.length === 4, 'unchanged');
+  });
+  await check('a measure on Colour replaces the fields (a gradient); a field then replaces the measure', async () => {
+    await dragChip('discount', toolEl('Color')); await settle(700);
+    must((await vmap())?.type === 'continuous' && !(await seriesNames()).some((n) => /·/.test(n)), 'gradient, no combinations');
+    await dragChip('channel', toolEl('Color')); await settle(900);
+    must(J(await seriesNames()) === J(['web', 'shop', 'app']) && !(await vmap()), 'one field: a series per member, the gradient gone: ' + J(await seriesNames()));
+  });
+  await check('scatter + two Colour fields: a series per combination', async () => {
+    await newSheet();
+    await dragChip('amount', `__t.zone('columns')`);
+    await dragChip('qty', `__t.zone('rows')`);
+    await settle(300); await chartType('Scatter');
+    await dragChip('channel', toolEl('Color')); await dragChip('country', toolEl('Color')); await settle(800);
+    const names = await seriesNames();
+    must(names.length === 6 && names[0] === 'web · DE', 'scatter combinations: ' + J(names));
+  });
+
+  if (b.consoleErrors.length) console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  '));
+} catch (e) {
+  console.log(`FAIL harness: ${e.stack}`); failed++;
+} finally {
+  if (b) await b.close();
+}
+console.log(`\n${passed} ok, ${failed} failed`);
+process.exit(failed ? 1 : 0);

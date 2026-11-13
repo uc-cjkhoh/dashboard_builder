@@ -1,7 +1,8 @@
 import { renderChart as drawChart } from "./chart.js";
 import { dateLabelsOf } from "./date-labels.js";
 import { isCalcPill } from "../Calc/calc-pill.js";
-import { SCATTER_TYPES, marksOf, planMeasures, colorMode, isSizeDimension, measureName as planMeasureName } from "./sheet-plan.js";
+import { SCATTER_TYPES, marksOf, planMeasures, colorMode, colourDimsOf, isSizeDimension, measureName as planMeasureName } from "./sheet-plan.js";
+import { memberColourField } from "./colour-fields-model.js";
 import { makeValueFormatter } from "../Core/format.js";
 import { REF_CHOICES, TREND_CHOICES, trendProblem, trendRefusal, pWords, refValue, refConstant, trendSeries, pickMeasure, dataValues, bandBounds, bandLabel } from "./analytics-model.js";
 import { parameters } from "../Core/store.js";
@@ -20,10 +21,10 @@ import { ANALYTICS_TYPES, scatterSymbol, primaryDim, chartOrientation, marksChan
 // (render-handlers.js), so a non-interactive view draws the same marks without handlers.
 
 /** Colour split: one series per colour value (the trailing group-by key); the primary dimension is the first non-colour key. */
-export function renderColorSplit(container, rc, sheet, type, result, format, fmtCat, sizeIdx = -1) {
+export function renderColorSplit(container, rc, sheet, type, result, format, fmtCat, sizeIdx = -1, colourKeys = 1) {
   const sizeNote = splitSizeNote(Boolean(marksOf(sheet).size), type); // a Stacked split can't draw Size: say so
   if (sizeNote) container.append(hint(sizeNote));
-  const { categories, series, catTuples, colorVals, cellRows } = colorSplitData(result, fmtCat);
+  const { categories, series, catTuples, memberRaws, cellRows } = colorSplitData(result, fmtCat, colourKeys);
   // Size beside the split: one value per (member series, category) cell — a measure's value, or a dimension's step.
   const sizeSpec = {};
   const sizeField = marksOf(sheet).size;
@@ -40,10 +41,12 @@ export function renderColorSplit(container, rc, sheet, type, result, format, fmt
   const selectedIndices = selectedIndicesOf(rawKeys, rc.selected, primaryDim(sheet));
   const orientation = chartOrientation(sheet);
   // Each legend item is a Colour member — clicking it highlights that series and selects the member.
-  const byName = new Map(series.map((sr, i) => [sr.name, colorVals[i]]));
-  const legend = legendSpec(rc, sheet, sheet.color?.[0], byName);
-  const cf = sheet.color?.[0];
-  const memberColourSpec = cf && !isCalcPill(cf) ? memberSpec(rc, sheet, cf, series.map((sr, i) => ({ name: sr.name, raw: colorVals[i] }))) : {};
+  // With several Colour fields a member is a combination: the legend highlights it (no one field to select by) and its colour is keyed by the fields in order.
+  const fields = colourDimsOf(sheet);
+  const cf = memberColourField(fields);
+  const byName = new Map(series.map((sr, i) => [sr.name, memberRaws[i]]));
+  const legend = legendSpec(rc, sheet, fields.length === 1 ? fields[0] : null, fields.length === 1 ? byName : new Map());
+  const memberColourSpec = cf ? memberSpec(rc, sheet, cf, series.map((sr, i) => ({ name: sr.name, raw: memberRaws[i] }))) : {};
   // Label: the Label field's value per (category, colour) cell — the split's series are not the result's rows, so map them.
   const labelField = marksOf(sheet).label;
   const texts = labelField ? markFieldValues(sheet, result.rows, planMeasures(sheet), labelField, makeValueFormatter(format), fmtCat, (f) => planMeasureName(f, rc.plan)) : null;
@@ -62,8 +65,8 @@ export function renderScatterShapes(container, rc, sheet, result, seriesIdx, siz
   if (note) container.append(hint(note));
   const xIdx = seriesIdx[0], yIdx = seriesIdx[1];
   const { groups, legend, colourMembers, sizeOrder, sizeName } = scatterGroups(sheet, result, seriesIdx, sizeIdx, fmtCat);
-  const cf = colorMode(sheet) === "discrete" ? sheet.color[0] : null;
-  const memberColourSpec = cf && !isCalcPill(cf) ? memberSpec(rc, sheet, cf, colourMembers) : {};
+  const cf = memberColourField(colourDimsOf(sheet));
+  const memberColourSpec = cf ? memberSpec(rc, sheet, cf, colourMembers) : {};
   drawChart(container, {
     ...legendSpec(rc, sheet, legend.field, legend.byName), // legend items are Colour / Shape members
     ...memberColourSpec,
@@ -80,7 +83,7 @@ export function renderScatterShapes(container, rc, sheet, result, seriesIdx, siz
  * the comparison series and member colours all feed one chart.js spec.
  */
 export function renderSeries(container, rc, sheet, a) {
-  const { result, rowsOrdered, categories, series, seriesIdx, sizeIdx, colorMeasureIdx, mplan, format, fmtVal, fmtCat, aligned, cmp } = a;
+  const { result, rowsOrdered, categories, series, seriesIdx, sizeIdx, colorMeasureIdx, mplan, format, fmtVal, fmtCat, aligned, cmp, split } = a;
   const type = sheet.chartType;
   const measures = result.measures;
   // Mark channels: Size (bubble), continuous Colour (gradient), field-driven Label + custom Tooltip. All read
@@ -106,9 +109,14 @@ export function renderSeries(container, rc, sheet, a) {
   const otherIndex = rowsOrdered.findIndex((r) => r.isOther);
   // On a pie / donut the legend lists the primary dimension's members; elsewhere it names measures (highlight only —
   // a measure isn't a member to keep or exclude).
-  const legend = (type === "pie" || type === "donut")
-    ? legendSpec(rc, sheet, primaryDim(sheet), new Map(rowsOrdered.map((r, i) => [categories[i], r.isOther ? undefined : r.keys[0]])))
-    : legendSpec(rc, sheet, null, new Map());
+  // A pie / donut split by Colour lists the Colour members instead (one field: a legend click selects the member; several: it highlights).
+  const splitFields = split ? colourDimsOf(sheet) : [];
+  const splitField = splitFields.length === 1 ? splitFields[0] : null;
+  const legend = split
+    ? legendSpec(rc, sheet, splitField, splitField ? new Map(split.members.map((m) => [m.name, m.raw])) : new Map())
+    : (type === "pie" || type === "donut")
+      ? legendSpec(rc, sheet, primaryDim(sheet), new Map(rowsOrdered.map((r, i) => [categories[i], r.isOther ? undefined : r.keys[0]])))
+      : legendSpec(rc, sheet, null, new Map());
   // Analytics: lines / bands on their chosen measure, the trend on its own: reference line, band, trend (+ forecast categories appended).
   let catsOut = categories, seriesOut = [...series, ...compareSeries], analytics = null;
   const A = sheet.analytics;
@@ -140,9 +148,11 @@ export function renderSeries(container, rc, sheet, a) {
   }
   // Members coloured by a field — pie / donut slices and a single-measure bar coloured by category.
   // A colour measure replaces them (the marks wear their value's colour).
-  const byMember = (type === "pie" || type === "donut" || (type === "bar" && format.colorByDimension && series.length === 1 && !compareSeries.length)) && !marks.spec.colorValues && primaryDim(sheet) && !isCalcPill(primaryDim(sheet));
+  const byMember = !split && (type === "pie" || type === "donut" || (type === "bar" && format.colorByDimension && series.length === 1 && !compareSeries.length)) && !marks.spec.colorValues && primaryDim(sheet) && !isCalcPill(primaryDim(sheet));
+  const splitColour = split ? memberColourField(splitFields) : null;
   const memberColourSpec = byMember
     ? memberSpec(rc, sheet, primaryDim(sheet), rowsOrdered.map((r, i) => ({ name: categories[i], raw: r.keys[0], other: r.isOther })).filter((m) => !m.other))
-    : {};
-  drawChart(container, { type, symbol: SCATTER_TYPES.has(type) ? scatterSymbol(type) : undefined, categories: catsOut, series: seriesOut, format, onSelect, selectedIndices, orientation: chartOrientation(sheet), otherIndex, analytics, dateLabels: dateLabelsOf(sheet, primaryDim), ...memberColourSpec, ...legend, ...marks.spec });
+    : splitColour ? memberSpec(rc, sheet, splitColour, split.members.map(({ name, raw }) => ({ name, raw }))) : {};
+  const splitSpec = split ? { split: { memberIndex: split.memberIndex, memberNames: split.memberIndex.map((i) => (i >= 0 ? split.members[i].name : null)) } } : {};
+  drawChart(container, { type, symbol: SCATTER_TYPES.has(type) ? scatterSymbol(type) : undefined, categories: catsOut, series: seriesOut, format, onSelect, selectedIndices, orientation: chartOrientation(sheet), otherIndex, analytics, dateLabels: dateLabelsOf(sheet, primaryDim), ...memberColourSpec, ...legend, ...marks.spec, ...splitSpec });
 }

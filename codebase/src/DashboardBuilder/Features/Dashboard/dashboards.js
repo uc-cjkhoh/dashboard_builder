@@ -9,7 +9,7 @@ import { roleOf, STAT_SINGLE_TABLE, showMeOptions, dimsFor } from "./show-me-rul
 import { toggle, makeButton, toast, fieldError, confirmDialog, copyText } from "../Core/ui.js";
 import { LIMITS, number, percent, percentLabel, isFraction, PERCENT_MESSAGE, DEFAULT_PERCENTILE } from "../Core/validate.js";
 import { aggsFor, checkAdd, checkFilter, viewCounts, withCategories, opsFor, OP_LABELS } from "./filter-rules.js";
-import { entities, relationships, activeWorksheet, isWorksheetActive, updateSheet, bus, defaultFormat, defaultMarks, sharedFilters, metaOf, nameOf, setFieldMeta, emptySheet, parameters, updateParameter, hierarchies, calculations, worksheets, addCalculation, removeCalculation, renameTab } from "../Core/store.js";
+import { freshSheet, entities, relationships, activeWorksheet, isWorksheetActive, updateSheet, bus, defaultFormat, defaultMarks, sharedFilters, metaOf, nameOf, setFieldMeta, emptySheet, parameters, updateParameter, hierarchies, calculations, worksheets, addCalculation, removeCalculation, renameTab } from "../Core/store.js";
 import { checkValue, paramTypeFor } from "../Core/parameters-model.js";
 import { exportChart, hasChartInstance, sizeChart, focusSeries } from "./chart.js";
 import { createWorksheetView, periodNotice } from "./worksheet-view.js";
@@ -49,6 +49,8 @@ import { TABLE_ALIGN_CHOICES, TABLE_DENSITY_CHOICES, TABLE_SHADE_CHOICES } from 
 import { COL_ALIGN_CHOICES, tableColumnList, setTableColumn, columnLook, columnWidthError } from "./table-columns-model.js";
 import { COLOUR_MEASURE_TYPES, sizeChannel } from "./mark-channel-model.js";
 import { MARK_BORDER_CHOICES, MARKER_SHAPE_CHOICES, BORDER_TYPES, MARK_BORDER_COLOUR_CHOICES, markerSizeError } from "./mark-style-model.js";
+import { OPACITY_TYPES, OPACITY_CHOICES, cleanMarkOpacity } from "./mark-opacity-model.js";
+import { addColourField, MULTI_COLOUR_TYPES } from "./colour-fields-model.js";
 import { SIZE_SCALE_TYPES, ZERO_BASED_TYPES, sizeScaleOf, sizeRangeError, cleanSizeScale } from "./size-scale-model.js";
 import { targetChoices, effectiveTargetMeasure } from "./bullet-model.js";
 import { sourceOfTable, wireSource, distinctPlan, distinctPlanSql, distinctMembers, customSqlOf, sqlWire } from "../Core/source-model.js";
@@ -160,7 +162,7 @@ function showMeCounts(sheet, type) {
   const shelf = [...sheet.columns, ...sheet.rows];
   const measures = shelf.filter((f) => roleOf(f) === "measure");
   return {
-    dims: dimsFor(type, planDims({ ...sheet, chartType: type }).keyOrder.length, colorMode(sheet) === "discrete"),
+    dims: (() => { const pd = planDims({ ...sheet, chartType: type }); return dimsFor(type, pd.keyOrder.length, pd.colourDims.length); })(),
     shelfDims: (drillActiveDim(sheet) ? 1 : 0) + shelf.filter((f) => roleOf(f) === "dimension").length,
     measures: measures.length,
     hasDate: shelf.some((f) => roleOf(f) === "dimension" && f.category === "temporal"),
@@ -223,12 +225,19 @@ export function initDashboards() {
     dash: activeWorksheet(), noticeEl, results, plan: planCtx(), categoryOf, castOf,
   }), {
     interactive: true, onSelect: toggleSelection, onDrill: (raw) => drillDown(raw), onLegend: legendClick, legendFocus: () => legendFocus,
-    onTooltipFields: (sheet, list) => setTooltipCat(sheet, list), onMemberColors: (sheet, field, members) => setMemberState(sheet, field, members),
+    onTooltipFields: (sheet, list) => setTooltipCat(sheet, list), onMemberColors: (sheet, field, members) => setMemberState(sheet, field, members), onColourScale: (sheet, scale) => noteColourScale(sheet, scale),
     onCollapse: (axis, key, valid) => collapseHeader(axis, key, valid), onCollapseAll: (mode, rowKeys, colKeys) => collapseAll(mode, rowKeys, colKeys),
     onColumn: (key, patch) => setColumn(key, patch),
     statusBar: setStatusBar, notices: sharedNote,
   });
   const runChart = () => sheetView.run();
+  // The continuous colour scale a sheet's last drawing resolved to (Automatic reads the data): Format shows that scale's controls. A change while Format is open redraws the header.
+  const drawnScale = new WeakMap();
+  let panelScale = null; // the scale the Format panel on screen was built for
+  const noteColourScale = (sheet, scale) => {
+    drawnScale.set(sheet, scale);
+    if (formatOpen && panelScale !== null && sheet.format?.colorScale === "auto" && panelScale !== scale) renderShelves(); // only a real change rebuilds the panel (an input being typed in keeps its focus)
+  };
   // A crosstab header's +/- — flips its key on sheet.collapsed (presentation only: the redraw reads the cached result).
   function collapseHeader(axis, key, valid) {
     const dash = activeWorksheet();
@@ -1195,7 +1204,7 @@ export function initDashboards() {
   }
   async function clearSheet(dash, s) {
     if (dashboardHasContentSheet(s) && !(await confirmDialog("Clear this sheet? Fields, filters, marks and format go — Undo brings them back.", { danger: true, confirmText: "Clear" }))) return;
-    const fresh = emptySheet();
+    const fresh = freshSheet(); // a cleared sheet starts as a new one does (the colour scale Automatic)
     fresh.chartType = s.chartType;
     choicesFor = null; calcFor = null; openTool = null;
     Object.keys(s).forEach((k) => delete s[k]);
@@ -1361,6 +1370,7 @@ export function initDashboards() {
   }
 
   function formatPanel(dash, s) {
+    panelScale = null; // set below when this panel shows the colour-scale controls
     const f = s.format ?? (s.format = defaultFormat());
     const isChart = CHART_LIKE.has(s.chartType);              // pie/donut/scatter/… get legend etc.
     const hasAxes = isChart && !NO_AXES.has(s.chartType);
@@ -1423,6 +1433,12 @@ export function initDashboards() {
       panel.append(fmtSelect("Mark border", MARK_BORDER_CHOICES, f.markBorder ?? "none", (v) => set({ markBorder: v })));
       if ((f.markBorder ?? "none") !== "none") panel.append(fmtSelect("Border colour", MARK_BORDER_COLOUR_CHOICES, f.markBorderColor ?? "muted", (v) => set({ markBorderColor: v })));
     }
+    if (OPACITY_TYPES.has(s.chartType)) panel.append(fmtSelect("Opacity", OPACITY_CHOICES, f.markOpacity ?? 100, (v) => { // the stored shape holds only what differs from 100 %
+      const { value } = cleanMarkOpacity(Number(v));
+      s.format = { ...f };
+      if (value != null) s.format.markOpacity = value; else delete s.format.markOpacity;
+      commit(dash, s);
+    }));
     if (s.period && s.period.compare !== "none")
       panel.append(fmtCheck("A fall is good", f.downIsGood, (v) => set({ downIsGood: v })));
     if (!STAT_SINGLE_TABLE.has(s.chartType))
@@ -1446,7 +1462,7 @@ export function initDashboards() {
         s.chartType === "histogram"
           ? fmtSelect("Bins", [["5", "5"], ["10", "10"], ["20", "20"], ["50", "50"], ["100", "100"]],
             f.topN ?? 20, (v) => set({ topN: Number(v) }))
-          : fmtSelect("Top N", [["null", "All"], ["5", "5"], ["10", "10"], ["20", "20"], ["50", "50"], ["100", "100"],
+          : fmtSelect((s.chartType === "pie" || s.chartType === "donut") && planDims(s).colourDims.length ? "Top N (sub-slices)" : "Top N", [["null", "All"], ["5", "5"], ["10", "10"], ["20", "20"], ["50", "50"], ["100", "100"],
               ...parameters.filter((p) => p.type === "number").map((p) => [`param:${p.id}`, `= ${p.name}`])],
             f.topNParam ? `param:${f.topNParam}` : f.topN ?? "null",
             (v) => (v.startsWith("param:") ? set({ topNParam: v.slice(6) }) : set({ topN: v === "null" ? null : Number(v), topNParam: undefined }))),
@@ -1465,7 +1481,8 @@ export function initDashboards() {
           if (err) { toast(err, "danger"); set({ [key]: f[key] }); return; } // redraw puts the kept value back
           set({ [key]: v });
         });
-        const diverging = f.colorScale === "diverging";
+        panelScale = f.colorScale === "auto" ? drawnScale.get(s) ?? "sequential" : f.colorScale; // Automatic: whichever the data made it
+        const diverging = panelScale === "diverging";
         panel.append(fmtSelect("Colour scale", SCALE_CHOICES, f.colorScale ?? "sequential", (v) => set({ colorScale: v })),
           fmtSelect("Steps", STEP_CHOICES, f.colorSteps ?? 0, (v) => set({ colorSteps: Number(v) })),
           ...(diverging ? [fmtNumber("Colour centre", f.colorCentre, "auto", (v) => { // cool above, warm below; no pins (the ends follow the centre)
@@ -1478,6 +1495,12 @@ export function initDashboards() {
         if (diverging) { // the pair sits on its own line, wide enough for "Green / Violet"
           const pair = fmtSelect("Diverging colours", DIV_PAIR_CHOICES, f.colorPair ?? "default", (v) => set({ colorPair: v }));
           pair.classList.add("ws-fmt-field--line"); panel.append(pair);
+          if (!f.colorSteps) { // steps already wear both end colours
+            const full = fmtCheck("Use full colour range", f.colorFullRange === true, (v) => { // off = symmetric about the centre; on = each side its own span
+              s.format = { ...f }; if (v) s.format.colorFullRange = true; else delete s.format.colorFullRange; commit(dash, s);
+            });
+            panel.append(full);
+          }
         }
       }
       if (hasAxes)
@@ -1868,7 +1891,7 @@ export function initDashboards() {
     const continuous = f.category === "numeric";
     const p = pill(`${f.table}.${f.column}${continuous ? " (gradient)" : ""}`, remove);
     p.classList.add("ws-pill--color");
-    if (continuous) p.title = "Continuous colour — each mark is shaded by this measure (Scatter, Bar, Line, Area, Pie, Donut, Treemap)";
+    if (continuous) p.title = "Continuous colour — each mark is shaded by this measure (Scatter, Bar, Stacked, Line, Area, Combo, Pie, Donut, Treemap)";
     return markMissing(p, f);
   }
   // Filter pill. The operator select drives which value control shows: a single input for the
@@ -2425,12 +2448,12 @@ export function initDashboards() {
     } else dash.sheet.filters.push(newFilter(f)); // a text dimension starts as an "in" list
     commit(dash, dash.sheet);
   }
-  // Drop a field onto Color. A categorical field is discrete (group-by → coloured
-  // series); a numeric field is continuous (gradient — see colorMode/planMeasures). Capped at one —
-  // a second drop replaces the first, matching Tableau's single Colour slot.
+  // Drop a field onto Color. Categorical fields are discrete (group-bys → coloured series; up to three, a mark's colour is its combination of members);
+  // a numeric field is continuous (gradient — see colorMode/planMeasures) and replaces them all, as a dimension replaces a measure.
   function addColor(dash, f) {
     if (!allowed(dash, "color", f, isCalcPill(f) ? f.role : "dimension")) return;
-    dash.sheet.color = [isCalcPill(f) ? { ...slotEntry(f), role: f.role } : { ...slotEntry(f), role: "dimension" }];
+    const entry = isCalcPill(f) ? { ...slotEntry(f), role: f.role } : { ...slotEntry(f), role: "dimension" };
+    dash.sheet.color = addColourField(dash.sheet.color, entry).list;
     commit(dash, dash.sheet);
   }
 
@@ -2447,9 +2470,11 @@ export function initDashboards() {
     const tools = [
       { key: "color", icon: "color", label: "Color", count: colorFields.length,
         pills: colorFields.map((f, i) => colorPill(dash, s, f, i)), onDrop: (f) => addColor(dash, f),
-        hint: "Drop a field — categorical = colour series, numeric = gradient",
+        hint: "Drop fields — categorical (up to 3, combined) = colour series, numeric = gradient",
         note: colorFields.length && colorMode(s) === "discrete" && !COLOR_USES.has(s.chartType)
-          ? "A categorical Colour field splits Bar, Line, Area, Stacked, Scatter, Gantt and Table — or drop a numeric field for a gradient." : null },
+          ? "A categorical Colour field splits Bar, Line, Area, Stacked, Scatter, Pie, Donut, Gantt and Table — or drop a numeric field for a gradient."
+          : colorMode(s) === "discrete" && colorFields.length > 1 && !MULTI_COLOUR_TYPES.has(s.chartType) && COLOR_USES.has(s.chartType)
+            ? "A Gantt or Table splits by the first Colour field only." : null },
       { key: "size", icon: "size", label: "Size", count: m.size ? 1 : 0,
         pills: one(m.size, () => { m.size = null; commit(dash, s); }), onDrop: (f) => addSize(dash, f),
         hint: "Drop a measure to size the marks by value, or a dimension to give each member a step: scatter bubbles, bar and line thickness, area markers, treemap area, Text / Table font size" },

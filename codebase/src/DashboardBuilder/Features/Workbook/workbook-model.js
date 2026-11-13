@@ -22,6 +22,8 @@ import { checkTooltipStyle } from "../Dashboard/tooltip-style.js";
 import { checkTooltipFormats } from "../Dashboard/tooltip-formats.js";
 import { markerSizeError } from "../Dashboard/mark-style-model.js";
 import { cleanSizeScale } from "../Dashboard/size-scale-model.js";
+import { markOpacityError } from "../Dashboard/mark-opacity-model.js";
+import { cleanColourList } from "../Dashboard/colour-fields-model.js";
 import { RAMP_CHOICES, SCALE_CHOICES, DIV_PAIR_CHOICES, colourCentreError, colourRangeError, colourStepsError } from "../Dashboard/colour-scale-model.js";
 import { cleanParameter, MAX_PARAMS } from "../Core/parameters-model.js";
 import { cleanHierarchies, hierarchyTableKey } from "../Dashboard/hierarchy-model.js";
@@ -428,6 +430,7 @@ export function sanitizeSheet(saved, where, issues) {
   sheet.chartType = s.chartType === undefined ? base.chartType : CHART_TYPE_IDS.has(s.chartType) ? s.chartType
     : (issues.push(`${where}: unknown chart type "${s.chartType}" — reset to Bar.`), "bar");
   for (const k of ["columns", "rows", "color"]) sheet[k] = cleanPills(s[k], `${where} ${k}`, issues);
+  { const c = cleanColourList(sheet.color); sheet.color = c.list; c.issues.forEach((m) => issues.push(`${where}: ${m}`)); } // Colour: one measure, or up to 3 fields
   sheet.filters = cleanFilters(s.filters, `${where} filters`, issues, LIMITS.filters);
   if (s.marks != null && (typeof s.marks !== "object" || Array.isArray(s.marks))) issues.push(`${where}: marks weren't an object — reset.`);
   const m = s.marks && typeof s.marks === "object" && !Array.isArray(s.marks) ? s.marks : {};
@@ -659,6 +662,10 @@ function cleanFormat(f0, where, issues) {
   out.tableDensity = oneOf(TABLE_DENSITIES, f.tableDensity, base.tableDensity, w, "row height", issues);
   out.tableShade = oneOf(TABLE_SHADES, f.tableShade, base.tableShade, w, "table shading", issues);
   if (f.sizeScale !== undefined) { const r = cleanSizeScale(f.sizeScale); r.issues.forEach((m) => issues.push(`${w}: ${m.replace(/^(the )?/, "Size: ")}`)); if (r.value) out.sizeScale = r.value; } // Edit Sizes: absent (older files, the default) stays off defaultFormat so a sheet round-trips unchanged
+  if (f.markOpacity !== undefined && f.markOpacity !== null) { // Format → Opacity: absent (older files, the default) stays off defaultFormat; a bad value is reset (never clamped)
+    if (markOpacityError(f.markOpacity) === null) out.markOpacity = f.markOpacity;
+    else issues.push(`${w}: opacity "${f.markOpacity}" — reset to 100 %.`);
+  }
   const tableCols = cleanTableCols(f.tableCols, w, issues); // absent when no column is set (older files, and the default), so a sheet round-trips unchanged
   if (tableCols) out.tableCols = tableCols;
   out.markerSize = f.markerSize == null ? null : markerSizeError(f.markerSize) === null ? f.markerSize
@@ -669,6 +676,10 @@ function cleanFormat(f0, where, issues) {
   if (colourRangeError(out.colorMin, out.colorMax)) { issues.push(`${w}: the colour range minimum was not less than the maximum — cleared.`); out.colorMin = out.colorMax = null; }
   out.colorScale = SCALE_CHOICES.some(([v]) => v === f.colorScale) ? f.colorScale : f.colorScale === undefined ? base.colorScale
     : (issues.push(`${w}: colour scale "${f.colorScale}" — reset to Low → high.`), base.colorScale);
+  if (f.colorFullRange !== undefined) { // Use full colour range: absent (older files, the default) stays off defaultFormat; off = the symmetric scale
+    if (typeof f.colorFullRange === "boolean") out.colorFullRange = f.colorFullRange;
+    else issues.push(`${w}: use full colour range must be on or off — reset.`);
+  }
   out.colorPair = DIV_PAIR_CHOICES.some(([v]) => v === f.colorPair) ? f.colorPair : f.colorPair === undefined ? base.colorPair
     : (issues.push(`${w}: diverging colours "${f.colorPair}" — reset to Orange / Blue.`), base.colorPair);
   out.colorSteps = f.colorSteps == null ? base.colorSteps : typeof f.colorSteps === "number" && !colourStepsError(f.colorSteps) ? f.colorSteps

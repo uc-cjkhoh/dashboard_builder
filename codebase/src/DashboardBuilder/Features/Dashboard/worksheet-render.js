@@ -8,10 +8,11 @@ import { sizeChannel, sizeRange } from "./mark-channel-model.js";
 import { tupleKey } from "./grid-model.js";
 import { sizeScaleOf, measureShares, sizeLegendText, textStepFor } from "./size-scale-model.js";
 import { withOther, OTHER_TYPES } from "./scale-model.js";
+import { pieSplit } from "./pie-split-model.js";
 import { isGroupingPart, labelParts } from "./date-parts.js";
 import { applyTableCalcs, isCalc } from "./table-calc.js";
 import { alignCompare } from "./period-model.js";
-import { disposeChart } from "./chart.js";
+import { disposeChart, resolvedColourScale } from "./chart.js";
 import { hint } from "./render-dom.js";
 import { crosstabTable } from "./render-table.js";
 import { kpiView } from "./render-kpi.js";
@@ -47,6 +48,7 @@ export function renderWorksheet(container, sheet, result, cmp, options = {}) {
     select: options.interactive !== false, selected: options.selected ?? null, hooks: options.hooks ?? {},
     bucketedKey: null, calcPercent: new Set(), extraNotice: null, emptyText: options.emptyText ?? "No data for these fields." };
   draw(container, rc, sheet, result, cmp);
+  rc.hooks.onColourScale?.(sheet, resolvedColourScale(container)); // the editor's Format panel shows the controls of the scale Automatic resolved to
   return { extraNotice: rc.extraNotice };
 }
 
@@ -105,27 +107,29 @@ function draw(container, rc, sheet, result, cmp) {
 
   // Discrete Colour: a categorical Colour dimension pivots the trailing group-by key into one series per distinct
   // value (bar -> grouped, stacked -> stacked, line/area -> one per value).
-  if (colorMode(sheet) === "discrete" && COLOR_SPLIT_TYPES.has(type)) {
+  const colourKeys = planDims(sheet).colourDims.length; // the Colour fields that are group-by keys: the last keys of every row
+  if (colourKeys > 0 && COLOR_SPLIT_TYPES.has(type)) {
     if (shelfCount !== 1) { container.append(hint(COLOR_SPLIT_HINT)); return; }
-    renderColorSplit(container, rc, sheet, type, result, format, fmtCat, sizeIdx);
+    renderColorSplit(container, rc, sheet, type, result, format, fmtCat, sizeIdx, colourKeys);
     return;
   }
 
   // An unsupported field mapping shows a hint, never an error.
-  const issue = chartIssue(type, dimsFor(type, rowDimensions.length + columnDimensions.length, colorMode(sheet) === "discrete"), shelfCount); // a Gantt's Colour key is not a row
+  const issue = chartIssue(type, dimsFor(type, rowDimensions.length + columnDimensions.length, colourKeys), shelfCount); // a Gantt's, Pie's and Donut's Colour keys are not rows
   if (issue) { container.append(hint(issue)); return; }
 
   // Shape: on the scatter family, split points by a Shape dimension into one symbol per value.
   // A Colour dimension (a group-by on these types) splits the points the same way.
-  if (SCATTER_TYPES.has(type) && (marksOf(sheet).shape || colorMode(sheet) === "discrete")) { renderScatterShapes(container, rc, sheet, result, seriesIdx, sizeIdx, colorMeasureIdx, format, fmtCat); return; }
+  if (SCATTER_TYPES.has(type) && (marksOf(sheet).shape || colourKeys > 0 || colorMode(sheet) === "discrete")) { renderScatterShapes(container, rc, sheet, result, seriesIdx, sizeIdx, colorMeasureIdx, format, fmtCat); return; }
 
   // Path: a line/area orders its vertices by the Path field's value (not the category order).
   const usePath = type === "line" || type === "area";
-  const rowsOrdered = usePath ? (pathOrderedRows(sheet, result, mplan) ?? rows) : rows;
+  const split = (type === "pie" || type === "donut") && colourKeys > 0 ? pieSplit(rows, colourKeys, fmtCat) : null; // a Colour field splits each slice into sub-slices, grouped by slice
+  const rowsOrdered = split ? split.rows : usePath ? (pathOrderedRows(sheet, result, mplan) ?? rows) : rows;
 
   // Flatten both dimension axes onto the category axis; one series per SHELF measure.
   const dimCount = rowDimensions.length + columnDimensions.length;
-  const categories = rowsOrdered.map((r) => r.keys.map((k, i) => (k == null ? "—" : fmtCat(k, i))).join(" / "));
+  const categories = split ? split.categories : rowsOrdered.map((r) => r.keys.map((k, i) => (k == null ? "—" : fmtCat(k, i))).join(" / "));
   const series = seriesIdx.map((mi) => ({ name: measures[mi], data: rowsOrdered.map((r) => r.values[mi]) }));
   const seriesNames = seriesIdx.map((mi) => measures[mi]);
   // A chart whose measures are all percentage calculations reads its values with "%".
@@ -151,7 +155,7 @@ function draw(container, rc, sheet, result, cmp) {
     container.append(kpiView(seriesNames, categories, series, dimCount, fmtVal, { prev, name: cmp?.name, format }));
     return;
   }
-  renderSeries(container, rc, sheet, { result, rowsOrdered, categories, series, seriesIdx, sizeIdx, colorMeasureIdx, mplan, format, fmtVal, fmtCat, aligned, cmp });
+  renderSeries(container, rc, sheet, { result, rowsOrdered, categories, series, seriesIdx, sizeIdx, colorMeasureIdx, mplan, format, fmtVal, fmtCat, aligned, cmp, split });
 }
 
 /**

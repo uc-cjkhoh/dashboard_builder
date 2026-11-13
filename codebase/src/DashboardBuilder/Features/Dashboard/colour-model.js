@@ -14,8 +14,8 @@ export const SWATCHES = Object.freeze([...new Set(Object.values(PALETTES).flatMa
 
 /** The storage key of a member value (null/undefined is its own key). */
 export const memberKey = (raw) => (raw == null ? NULL_KEY : String(raw));
-/** The storage key of a colour field. */
-export const fieldColorKey = (f) => `${f.table}.${f.column}`;
+/** The storage key of a colour field; several Colour fields ({ combined: [field…] }) key as a JSON array of their keys, in order. */
+export const fieldColorKey = (f) => (f.combined ? JSON.stringify(f.combined.map(fieldColorKey)) : `${f.table}.${f.column}`);
 
 const isPlain = (o) => o && typeof o === "object" && !Array.isArray(o);
 export const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
@@ -33,6 +33,7 @@ export function setMemberColor(map, field, member, hex) {
     return { ok: true, value: next };
   }
   if (!HEX.test(hex)) return { ok: false, error: "Enter a colour as #rrggbb." };
+  if (field.length > LIMITS.memberField) return { ok: false, error: `The Colour fields' names are too long to keep member colours (at most ${LIMITS.memberField} characters together) — they would be lost on reload.` };
   if (member.length > LIMITS.memberKey) return { ok: false, error: `A member name must be at most ${LIMITS.memberKey} characters to be coloured.` };
   const cur = has(next, field) ? next[field] : bare();
   if (!has(cur, member) && Object.keys(cur).length >= LIMITS.memberColors) return { ok: false, error: `At most ${LIMITS.memberColors} members per field can have a colour.` };
