@@ -37,6 +37,18 @@ public class QueryGuardTests
     }
 
     [Fact]
+    public void An_outer_joins_unmatched_side_reads_as_NULL_even_inside_a_cards_own_SQL()
+    {
+        // ClickHouse's default is the type's zero / '' (IFNULL(p.name, '(none)') would give ''); the setting rides on the connection, so a LEFT JOIN the app never sees is covered.
+        Assert.Equal("1", SettingsOf(Info())["join_use_nulls"].ToString());
+        Assert.Equal("1", SettingsOf(Info(QueryGuards.NoTimeLimit))["join_use_nulls"].ToString());
+    }
+
+    [Fact]
+    public void An_unknown_aggregate_or_window_function_is_a_problem_with_the_query_so_its_message_reaches_the_user()
+        => Assert.Contains(63, ClickHouseGateway.QueryProblemCodes); // CUME_DIST: "Aggregate function with name ... does not exist"
+
+    [Fact]
     public void A_client_disconnect_cancels_the_running_query()
         => Assert.Equal("1", SettingsOf(Info())["cancel_http_readonly_queries_on_client_close"].ToString());
 

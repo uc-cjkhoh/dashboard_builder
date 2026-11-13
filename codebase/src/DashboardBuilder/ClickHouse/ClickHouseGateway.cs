@@ -50,17 +50,21 @@ public sealed partial class ClickHouseGateway
         //  readonly=2 — the server itself refuses DDL/DML, so golden rule 1 doesn't rest on our SQL
         //    builders alone (2, not 1, so the driver's own settings such as compression still apply);
         //  max_execution_time — a runaway query is stopped server-side before the HTTP timeout;
-        //  cancel_http_readonly_queries_on_client_close — a superseded/aborted request kills its query.
+        //  cancel_http_readonly_queries_on_client_close — a superseded/aborted request kills its query;
+        //  join_use_nulls — an outer join's unmatched side reads as NULL, as in MySQL and SQL generally (ClickHouse's default is the type's zero / ''). The app's own joins
+        //    also say so in a SETTINGS clause; this covers a LEFT JOIN written inside a card's Edit SQL, which the app never sees. Inner joins are not affected.
         // A server that refuses a setting gets fewer (see NextGuards).
         return info.Guards switch
         {
             QueryGuards.Full => connectionString
                 + ";set_readonly=2"
                 + $";set_max_execution_time={MaxExecutionSeconds}"
-                + ";set_cancel_http_readonly_queries_on_client_close=1",
+                + ";set_cancel_http_readonly_queries_on_client_close=1"
+                + ";set_join_use_nulls=1",
             QueryGuards.NoTimeLimit => connectionString
                 + ";set_readonly=2"
-                + ";set_cancel_http_readonly_queries_on_client_close=1",
+                + ";set_cancel_http_readonly_queries_on_client_close=1"
+                + ";set_join_use_nulls=1",
             _ => connectionString,
         };
     }
@@ -842,8 +846,8 @@ public sealed partial class ClickHouseGateway
     public async Task<string> SourceSyntaxAsync(ClickHouseConnectionInfo info, QuerySource src, CancellationToken ct)
         => await ExplainSyntaxAsync(info, CustomSql.Clean(src.Sql), ct);
 
-    // ClickHouse codes that describe the user's query rather than the server: syntax, unknown identifier / table / database / function, type and argument errors, access.
-    private static readonly HashSet<int> QueryProblemCodes = [27, 36, 42, 43, 44, 46, 47, 48, 53, 60, 62, 81, 215, 386, 497];
+    // ClickHouse codes that describe the user's query rather than the server: syntax, unknown identifier / table / database / function (63: an unknown aggregate or window function), type and argument errors, access.
+    internal static readonly HashSet<int> QueryProblemCodes = [27, 36, 42, 43, 44, 46, 47, 48, 53, 60, 62, 63, 81, 215, 386, 497];
 
     /// <summary>The readable part of a ClickHouse error message: after "DB::Exception:", before the version / stack trace, one line, at most 400 characters.</summary>
     internal static string QueryProblem(string message)

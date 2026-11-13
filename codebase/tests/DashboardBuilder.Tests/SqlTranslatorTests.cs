@@ -77,7 +77,9 @@ public class SqlTranslatorTests : IClassFixture<WebApplicationFactory<Program>>
         // Checked on ClickHouse 26.8: age('hour', ...) is wrong there, so hours, minutes and seconds go through elapsed seconds.
         Assert.Equal("SELECT age('day', a, b), age('week', a, b), age('month', a, b), age('quarter', a, b), age('year', a, b) FROM t",
             await My2Ch("SELECT TIMESTAMPDIFF(DAY, a, b), TIMESTAMPDIFF(WEEK, a, b), TIMESTAMPDIFF(MONTH, a, b), TIMESTAMPDIFF(QUARTER, a, b), TIMESTAMPDIFF(YEAR, a, b) FROM t"));
-        Assert.Equal("SELECT intDiv(dateDiff('second', a, b), 3600), intDiv(dateDiff('second', a, b), 60), dateDiff('second', a, b) FROM t",
+        // The instants are subtracted in microseconds: dateDiff('second') counts second boundaries, so 10:00:00.9 -> 10:00:01.1 gave 1 on a DateTime64 column (MySQL: 0).
+        const string us = "toUnixTimestamp64Micro(toDateTime64(b, 6)) - toUnixTimestamp64Micro(toDateTime64(a, 6))";
+        Assert.Equal($"SELECT intDiv({us}, 3600000000), intDiv({us}, 60000000), intDiv({us}, 1000000) FROM t",
             await My2Ch("SELECT TIMESTAMPDIFF(HOUR, a, b), TIMESTAMPDIFF(MINUTE, a, b), TIMESTAMPDIFF(SECOND, a, b) FROM t"));
         Assert.Equal("SELECT dateDiff('microsecond', a, b), dateDiff('microsecond', a, b) FROM t", await My2Ch("SELECT TIMESTAMPDIFF(MICROSECOND, a, b), TIMESTAMPDIFF(FRAC_SECOND, a, b) FROM t"));
         Assert.Contains("SQL_TSI_FRAC", (await Assert.ThrowsAsync<SqlTranslateException>(() => My2Ch("SELECT TIMESTAMPDIFF(SQL_TSI_FRAC, a, b) FROM t"))).Message);
@@ -151,6 +153,32 @@ public class SqlTranslatorTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.Equal(["ilike"], await Changes("SELECT a FROM t WHERE x LIKE 'a%'"));
         Assert.Equal(["case-fold", "div-null", "ilike", "nulls-first"], await Changes("SELECT a / b FROM t WHERE x = 'q' AND y LIKE 'a%' ORDER BY a"));
         Assert.Empty(await Changes("SELECT DATEDIFF(a, b), DATE_ADD(d, INTERVAL 1 DAY), IFNULL(a, 0) FROM t")); // form-only repairs are not meaning changes
+    }
+    [Fact] public async Task A_literal_divisor_that_is_not_zero_gets_no_nullIf_and_is_not_a_meaning_change()
+    {
+        Assert.Equal("SELECT sum(x) / 1000, a % 4, a / -2 FROM t", await My2Ch("SELECT SUM(x) / 1000, a % 4, a / -2 FROM t"));
+        Assert.Empty(await Changes("SELECT SUM(x) / 1000 FROM t"));
+        Assert.Equal("SELECT a / nullIf(0, 0), a / nullIf(b, 0) FROM t", await My2Ch("SELECT a / 0, a / b FROM t")); // zero and a column still give NULL
+        Assert.Equal(["div-null"], await Changes("SELECT a / 1000, a / b FROM t"));
+    }
+    [Fact] public async Task LAG_LEAD_and_NTH_VALUE_give_NULL_where_there_is_no_row_as_in_MySQL()
+    {
+        // ClickHouse answers the type's zero ('' / 0) for a missing row unless the argument is Nullable; a default the query gives is kept.
+        Assert.Equal("SELECT lag(toNullable(x)) OVER (ORDER BY x NULLS FIRST), lead(toNullable(x), 2) OVER (ORDER BY x NULLS FIRST), lag(x, 1, 0) OVER (ORDER BY x NULLS FIRST), lead(toNullable(x), 2) OVER (ORDER BY x NULLS FIRST), NTH_VALUE(toNullable(x), 2) OVER (ORDER BY x NULLS FIRST) FROM t",
+            await My2Ch("SELECT LAG(x) OVER (ORDER BY x), LEAD(x, 2) OVER (ORDER BY x), LAG(x, 1, 0) OVER (ORDER BY x), LEAD(x, 2, NULL) OVER (ORDER BY x), NTH_VALUE(x, 2) OVER (ORDER BY x) FROM t"));
+        Assert.Contains("window-null", await Changes("SELECT LAG(x) OVER (ORDER BY x) FROM t"));
+        Assert.DoesNotContain("window-null", await Changes("SELECT LAG(x, 1, 0) OVER (ORDER BY x), FIRST_VALUE(x) OVER (ORDER BY x) FROM t"));
+    }
+    [Fact] public async Task CUME_DIST_is_written_in_the_lower_case_ClickHouse_knows()
+        => Assert.Equal("SELECT cume_dist() OVER (ORDER BY x NULLS FIRST), PERCENT_RANK() OVER (ORDER BY x NULLS FIRST) FROM t", await My2Ch("SELECT CUME_DIST() OVER (ORDER BY x), PERCENT_RANK() OVER (ORDER BY x) FROM t"));
+    [Fact] public async Task LPAD_and_RPAD_turn_a_number_into_text_first_and_count_characters()
+        => Assert.Equal("SELECT leftPadUTF8(toString(n), 3, '0'), rightPadUTF8(toString(s), 5, '*') FROM t", await My2Ch("SELECT LPAD(n, 3, '0'), RPAD(s, 5, '*') FROM t"));
+    [Fact] public async Task MySQL_8_window_functions_show_in_MySQL_syntax_and_a_ClickHouse_only_form_is_still_refused()
+    {
+        var shown = await Ch2My("SELECT row_number() OVER (PARTITION BY a ORDER BY b), rank() OVER (ORDER BY b), dense_rank() OVER (ORDER BY b), ntile(4) OVER (ORDER BY b) FROM t");
+        foreach (var name in new[] { "ROW_NUMBER() OVER", "RANK() OVER", "DENSE_RANK() OVER", "NTILE(4) OVER" }) Assert.Contains(name, shown); // (the ORDER BY gets MySQL's NULL-order key)
+        Assert.Contains("FIRST_VALUE(", await Ch2My("SELECT first_value(a) OVER (ORDER BY b), last_value(a) OVER (ORDER BY b), lag(a) OVER (ORDER BY b), lead(a, 2) OVER (ORDER BY b) FROM t"));
+        Assert.Contains("lagInFrame()", await Ch2MyRefused("SELECT lagInFrame(a) OVER (ORDER BY b) FROM t")); // ClickHouse's own frame-bound variant has no MySQL name
     }
     [Fact] public async Task A_ClickHouse_comparison_comes_back_from_MySQL_ignoring_case_so_the_round_trip_reports_a_change()
     {
