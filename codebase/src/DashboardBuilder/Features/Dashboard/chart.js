@@ -821,12 +821,12 @@ function buildScatter({ categories, series, format = {}, sizes, sizeName, sizeMe
 
 // scatterShapes — one scatter series per Shape-dimension value, each a distinct symbol so
 // identity survives greyscale (shape is a non-colour channel). X/Y are the two shelf measures; an
-// optional Size dim scales the symbol. spec: { groups:[{name, points:[{value:[x,y,size?], name}], colour?: { index, name }, shape?: { index } }],
+// optional Size dim scales the symbol. spec: { groups:[{name, points:[{value:[x,y,size?], name, row (the result row behind the point)}], colour?: { index, name }, shape?: { index } }],
 // symbol (the mark type's symbol when a group has no Shape), xName, yName, hasSize, sizeName, format }. A group with a Colour member wears that
 // member's colour (a member colour from Format wins over the palette slot); one with a Shape member its symbol; shape alone keeps one palette colour per series.
 // A Shape member wears the symbol chosen for it (`memberShapes`: displayed name -> shape key, Edit member shapes), else the one at its position in the set; a bin of a Shape measure its bin's symbol. `shapeName`
 // names a Shape measure in the tooltip, which then also says the point's exact value.
-function buildScatterShapes({ groups, symbol, xName, yName, hasSize, sizeName, sizeOrder, shapeName, memberShapes = new Map(), format = {} }) {
+function buildScatterShapes({ groups, symbol, xName, yName, hasSize, sizeName, sizeOrder, shapeName, memberShapes = new Map(), format = {}, rowLabels, labelMarks }) {
   const c = tokens();
   const fmtVal = makeValueFormatter(format);
   const allSizes = hasSize ? groups.flatMap((g) => g.points.map((p) => p.value[2])) : null;
@@ -837,6 +837,16 @@ function buildScatterShapes({ groups, symbol, xName, yName, hasSize, sizeName, s
   const colourOf = (g, i) => (g.colour ? memberColor(g.colour.name, c.cat[g.colour.index % c.cat.length]) : c.cat[i % c.cat.length]);
   if (legend && groups.some((g) => g.shape)) legend.data = groups.map((g) => (g.shape ? { name: g.name, icon: symbolOf(g) } : g.name)); // the legend swatch wears the symbol too
   const sizeNote = hasSize ? sizeLegend(allSizes, sizeName, c, fmtVal, show && pos === "top" ? 24 : 2, { order: sizeOrder, reversed: sizeScaleOf(format).reversed }) : null;
+  // Labels (Data labels, or a Label field written per result row): one per mark, in the member's series. Min & max is per member; Selected and Most recent name result
+  // rows, which every point carries. A point with no name of its own (Colour or Shape is the only dimension) says its member, so a label is never blank.
+  const labelled = Boolean(format.dataLabels || rowLabels);
+  const mask = labelled && labelMarks ? labelMask(labelMarks.mode, { series: groups.map((g) => g.points.map((p) => p.value[1])), selected: labelMarks.selected, recent: labelMarks.recent, keyOf: (si, di) => groups[si].points[di]?.row ?? di }) : null;
+  const labelPos = labelPositionSymbol(format.labelPosition) ?? "top";
+  const labelOf = (g, mark) => (rowLabels && mark?.row != null ? String(rowLabels[mark.row] ?? "") : mark?.name || g.name);
+  const seriesLabel = (g, si) => (labelled ? {
+    show: !mask?.hover, position: labelPos, color: c.muted, fontFamily: c.font, fontSize: 14,
+    formatter: (p) => (mask && !mask.at(si, p.dataIndex) ? "" : labelOf(g, g.points[p.dataIndex])),
+  } : undefined);
   return {
     textStyle: { fontFamily: c.font, color: c.label },
     legend,
@@ -869,7 +879,8 @@ function buildScatterShapes({ groups, symbol, xName, yName, hasSize, sizeName, s
     series: groups.map((g, i) => ({
       name: g.name, type: "scatter", symbol: g.shape || g.colour ? symbolOf(g) : symbolAt(i), symbolSize,
       data: g.points, itemStyle: { color: colourOf(g, i), opacity: 0.85, ...pointEdge(format, c) },
-      emphasis: { focus: "series", itemStyle: { borderColor: c.ink, borderWidth: 1 } },
+      ...(labelled ? { label: seriesLabel(g, i) } : {}),
+      emphasis: { focus: mask?.hover ? "self" : "series", itemStyle: { borderColor: c.ink, borderWidth: 1 }, ...(mask?.hover ? { label: { show: true } } : {}) }, // Highlighted: a label appears with its own mark's emphasis, so the focus is the mark, not the member
     })),
   };
 }

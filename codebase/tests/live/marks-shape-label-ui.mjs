@@ -40,7 +40,7 @@ function answer({ method, path, body }) {
       rowDimensions: (body.rowDimensions ?? []).map((d) => d.column), columnDimensions: (body.columnDimensions ?? []).map((d) => d.column),
       measures: (body.measures ?? []).map((_, i) => `v${i}`),
       // not monotonic (10, 40, 70, 20, 50, 80, 30, 60 + .37, so no label can be mistaken for an axis tick): the lowest is row 0, the highest row 5; a date key comes as an ISO month
-      rows: Array.from({ length: n }, (_, r) => ({ keys: dims.map((d) => (d.column === 'placed' ? (longSeries ? new Date(Date.UTC(2024, 0, 1 + r)).toISOString().slice(0, 10) : ISO[r]) : REGIONS[r])), values: (body.measures ?? []).map((_, i) => 10 * (((r * 3) % 8) + 1) + i + 0.37) })),
+      rows: Array.from({ length: n }, (_, r) => ({ keys: dims.map((d) => (d.column === 'placed' ? (longSeries ? new Date(Date.UTC(2024, 0, 1 + r)).toISOString().slice(0, 10) : ISO[r]) : d.column === 'channel' ? (r % 2 ? 'shop' : 'web') : REGIONS[r])), values: (body.measures ?? []).map((_, i) => 10 * (((r * 3) % 8) + 1) + i + 0.37) })),
       truncated: false } };
   }
   return null;
@@ -438,6 +438,94 @@ try {
     must(!(await ev(`!!(${fmtField('Label position')})`)), 'no Label position on a pie');
     await closeFormat();
   });
+
+
+  // ---- Labels on a point chart split by Shape or Colour -----------------------------------------------------------------------
+  // Region (on Columns, the primary dimension) names each point; channel (web on even rows, shop on odd) splits the points into two series. The mock's Y is 11.37, 41.37, 71.37, 21.37, 51.37, 81.37, 31.37, 61.37 by region:
+  // web = APAC 11, US 71, MEA 51, JP 31 -> lowest APAC, highest US; shop = EU 41, LATAM 21, CA 81, UK 61 -> lowest LATAM, highest CA.
+  const pointLabels = () => ev(`[...document.querySelectorAll('#ws-chart svg text, #ws-chart canvas')].map((t) => t.textContent).filter((t) => /^(APAC|EU|US|LATAM|MEA|CA|UK|JP)$/.test(t)).sort()`);
+  const splitSheet = async (channel) => {
+    await newSheet();
+    await dragChip('region', `__t.zone('columns')`); await dragChip('amount', `__t.zone('columns')`); await dragChip('qty', `__t.zone('rows')`);
+    await dragChip('channel', toolEl(channel));
+    await settle(400);
+    await chartType('Scatter');
+    await openFormat();
+    await ev(`[...document.querySelectorAll('.ws-fmt-field')].find((l) => l.textContent.includes('Data labels')).querySelector('input').click()`); await settle(500);
+    await closeFormat();
+  };
+  for (const channel of ['Shape', 'Color']) {
+    await splitSheet(channel);
+    await check(`split by ${channel}: two series, every point labelled by default, Label marks and Label position offered (they were not before)`, async () => {
+      const o = await opt();
+      must(o.series.length === 2 && o.series.map((x) => x.name).join() === 'web,shop', 'two member series: ' + J(o.series.map((x) => x.name)));
+      const t = await pointLabels();
+      must(t.length === 8 && J(t) === J([...REGIONS].sort()), 'all eight points carry their name: ' + J(t));
+      await openFormat();
+      must((await modes()) === 'all,minmax,selected,highlighted', 'modes: ' + await modes());
+      must(await ev(`!!(${fmtField('Label position')})`), 'Label position is offered');
+      await closeFormat();
+      await shot(`split-${channel.toLowerCase()}-all`);
+    });
+    await check(`split by ${channel}: Min & max labels the lowest and highest point of each member`, async () => {
+      await setMode('minmax');
+      const t = await pointLabels();
+      must(J(t) === J(['APAC', 'CA', 'LATAM', 'US']), 'web: APAC and US; shop: LATAM and CA: ' + J(t));
+      await shot(`split-${channel.toLowerCase()}-minmax`);
+    });
+    await check(`split by ${channel}: marks stay inert unless Label marks is Selected — a click on a point selects nothing`, async () => {
+      const px = await ev(`(() => { const d = ${inst}.getOption().series[1].data[1].value; const p = ${inst}.convertToPixel({ seriesIndex: 1 }, [d[0], d[1]]); const r = document.querySelector('.ws-chart-canvas').getBoundingClientRect(); return [r.left + p[0], r.top + p[1]]; })()`);
+      for (const type of ['mouseMoved', 'mousePressed', 'mouseReleased']) await b.send('Input.dispatchMouseEvent', { type, x: px[0], y: px[1], button: 'left', clickCount: 1 });
+      await settle(600);
+      must(await ev(`!document.querySelector('.ws-select')`), 'no selection chip while Label marks is Min & max');
+    });
+    await check(`split by ${channel}: Highlighted shows only the highlighted point's label`, async () => {
+      await setMode('highlighted');
+      must((await pointLabels()).length === 0, 'none at rest: ' + J(await pointLabels()));
+      await ev(`${inst}.dispatchAction({ type: 'highlight', seriesIndex: 1, dataIndex: 2 })`); await b.sleep(400);
+      const one = await pointLabels();
+      must(J(one) === J(['CA']), 'only that point (the third shop point, CA): ' + J(one));
+      await ev(`${inst}.dispatchAction({ type: 'downplay' })`); await b.sleep(300);
+      must((await pointLabels()).length === 0, 'the label goes with the highlight');
+    });
+    await check(`split by ${channel}: Selected — a click on a point selects its region and labels it, in whatever member it sits`, async () => {
+      await setMode('selected');
+      must((await pointLabels()).length === 0 && (await hints()).some((h) => /no mark in view is selected/.test(h)), 'nothing selected, a hint says so: ' + J(await hints()));
+      const px = await ev(`(() => { const d = ${inst}.getOption().series[1].data[1].value; const p = ${inst}.convertToPixel({ seriesIndex: 1 }, [d[0], d[1]]); const r = document.querySelector('.ws-chart-canvas').getBoundingClientRect(); return [r.left + p[0], r.top + p[1]]; })()`);
+      for (const type of ['mouseMoved', 'mousePressed', 'mouseReleased']) await b.send('Input.dispatchMouseEvent', { type, x: px[0], y: px[1], button: 'left', clickCount: 1 });
+      await waitFor(`!!document.querySelector('.ws-select')`, 'a selection chip after the click');
+      await settle(600);
+      const t = await pointLabels();
+      must(J(t) === J(['LATAM']), 'the clicked point (shop, LATAM) is labelled: ' + J(t));
+      await shot(`split-${channel.toLowerCase()}-selected`);
+      await ev(`document.querySelector('.ws-select button[aria-label="Clear selection"]').click()`); await settle(500);
+    });
+    await check(`split by ${channel}: Label position moves the labels of every member; the Label marks choice survives`, async () => {
+      await setMode('all');
+      const y = () => ev(`(() => { const t = [...document.querySelectorAll('#ws-chart svg text')].find((x) => x.textContent === 'APAC'); const m = /translate\\(([-0-9.]+) ([-0-9.]+)\\)/.exec(t.getAttribute('transform')); return [Number(m[1]), Number(m[2])]; })()`);
+      const still = async () => { let a = await y(); for (let i = 0; i < 20; i++) { await b.sleep(200); const n = await y(); if (J(n) === J(a)) return n; a = n; } return a; }; // the entrance animation has to finish
+      await openFormat(); await settle(600); // the Format pane takes room from the chart: measure with it open
+      const above = await still();
+      await setSelect('Label position', 'below'); await settle(600);
+      const below = await still();
+      must(below[1] > above[1] + 8, 'Below sits lower than Above: ' + J([above, below]));
+      await setSelect('Label position', 'right'); await settle(600);
+      const right = await still();
+      must(right[0] > above[0] + 4, 'Right sits to the right: ' + J([above, right]));
+      await shot(`split-${channel.toLowerCase()}-right`);
+      await setSelect('Label position', 'auto'); await settle(600);
+      await closeFormat();
+      must((await pointLabels()).length === 8, 'all eight again');
+    });
+    await check(`split by ${channel}: Data labels off draws no label and offers no Label marks; points and legend are as they were`, async () => {
+      await openFormat();
+      await ev(`[...document.querySelectorAll('.ws-fmt-field')].find((l) => l.textContent.includes('Data labels')).querySelector('input').click()`); await settle(500);
+      must(!(await labelControl()), 'no Label marks without labels');
+      await closeFormat();
+      must((await pointLabels()).length === 0, 'no label');
+      must((await opt()).series.length === 2 && (await opt()).series.every((x) => x.data.length === 4), 'two series of four points');
+    });
+  }
 
   if (b.consoleErrors.length) console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  '));
 } catch (e) {

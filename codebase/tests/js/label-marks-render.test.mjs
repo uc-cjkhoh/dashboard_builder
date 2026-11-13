@@ -206,3 +206,169 @@ test("a bar, a stacked bar, a combo's bars and a pie keep their own label place 
 test("with no Label position stored, the label positions are exactly as before (a line 'top', a point 'top')", () => {
   const s = dateSheet({}); assert.equal(pos(draw(s, dates(...DATED)).o), "top");
 });
+
+// A point chart split by a Shape or Colour dimension: one series per member, one label per mark.
+const SPLIT = [["EU", "web", 1, 5], ["US", "web", 2, 9], ["JP", "web", 3, 1], ["EU", "shop", 4, 2], ["US", "shop", 5, 2], ["JP", "shop", 6, 7]];
+const splitResult = (rows = SPLIT) => ({ rowDimensions: ["region"], columnDimensions: ["channel"], measures: ["a", "q"], rows: rows.map(([r, ch, a, q]) => ({ keys: [r, ch], values: [a, q] })), truncated: false });
+const splitSheet = (how, format = on, over = {}) => {
+  const s = sheet({ chartType: "scatter", columns: [dim("region"), meas("amount")], rows: [meas("qty")], format, ...over });
+  if (how === "shape") s.marks = { ...s.marks, shape: dim("channel") }; else s.color = [dim("channel")];
+  return s;
+};
+const splitText = (o, si, n = 3) => Array.from({ length: n }, (_, di) => o.series[si].label.formatter({ dataIndex: di }));
+
+for (const how of ["shape", "colour"]) {
+  test(`split by ${how}: Data labels draw one label per mark in every member's series, each saying its point`, () => {
+    const { o, c } = draw(splitSheet(how), splitResult());
+    assert.deepEqual(o.series.map((s) => s.name), ["web", "shop"]);
+    assert.deepEqual(o.series.map((s) => s.label.show), [true, true]);
+    assert.deepEqual(splitText(o, 0), ["EU", "US", "JP"]); assert.deepEqual(splitText(o, 1), ["EU", "US", "JP"]);
+    assert.deepEqual(hints(c), []);
+  });
+  test(`split by ${how}: Data labels off and no Label field draws no label, as before`, () => {
+    const { o } = draw(splitSheet(how, { labelMarks: "minmax" }), splitResult());
+    assert.deepEqual(o.series.map((s) => s.label), [undefined, undefined]); // the series is exactly the one drawn before labels existed here
+  });
+  test(`split by ${how}: Min & max is taken per member, over the Y values`, () => {
+    const { o } = draw(splitSheet(how, { ...on, labelMarks: "minmax" }), splitResult());
+    assert.deepEqual(splitText(o, 0), ["", "US", "JP"]); // web 5, 9, 1: max US, min JP
+    assert.deepEqual(splitText(o, 1), ["EU", "", "JP"]); // shop 2, 2, 7: min first at EU, max JP
+  });
+  test(`split by ${how}: Selected labels the selected region in every member; none selected says so`, () => {
+    const sel = { db: "shop", table: "orders", column: "region", value: "US", label: "region = US", action: null };
+    const { o, c } = draw(splitSheet(how, { ...on, labelMarks: "selected" }, { selection: sel }), splitResult());
+    assert.deepEqual(splitText(o, 0), ["", "US", ""]); assert.deepEqual(splitText(o, 1), ["", "US", ""]);
+    assert.deepEqual(hints(c), []);
+    const none = draw(splitSheet(how, { ...on, labelMarks: "selected" }), splitResult());
+    assert.deepEqual(splitText(none.o, 0), ["", "", ""]);
+    assert.match(hints(none.c)[0], /no mark in view is selected/);
+    const dash = draw(splitSheet(how, { ...on, labelMarks: "selected" }), splitResult(), { selected: { db: "shop", table: "orders", column: "region", value: "JP" } });
+    assert.deepEqual(splitText(dash.o, 1), ["", "", "JP"]);
+  });
+  test(`split by ${how}: Highlighted shows a label only with the mark's own emphasis`, () => {
+    const { o } = draw(splitSheet(how, { ...on, labelMarks: "highlighted" }), splitResult());
+    for (const s of o.series) { assert.equal(s.label.show, false); assert.equal(s.emphasis.label.show, true); assert.equal(s.emphasis.focus, "self"); }
+    assert.deepEqual(splitText(o, 0), ["EU", "US", "JP"]); // what the emphasis label says
+  });
+  test(`split by ${how}: without Highlighted the emphasis still focuses the series, as before`, () => {
+    const { o } = draw(splitSheet(how), splitResult());
+    for (const s of o.series) { assert.equal(s.emphasis.focus, "series"); assert.equal(s.emphasis.label, undefined); }
+  });
+  test(`split by ${how}: Label position moves every member's label`, () => {
+    for (const [choice, want] of [["above", "top"], ["below", "bottom"], ["left", "left"], ["right", "right"]]) {
+      const { o } = draw(splitSheet(how, { ...on, labelPosition: choice }), splitResult());
+      assert.deepEqual(o.series.map((s) => s.label.position), [want, want], choice);
+    }
+    assert.deepEqual(draw(splitSheet(how), splitResult()).o.series.map((s) => s.label.position), ["top", "top"]);
+  });
+  test(`split by ${how}: a Label field writes its text on each mark (a measure's value, a dimension's member) and keeps the mask`, () => {
+    const s = splitSheet(how, { labelMarks: "minmax" }); s.marks = { ...s.marks, label: meas("amount") };
+    const { o } = draw(s, splitResult());
+    assert.deepEqual(o.series.map((x) => x.label.show), [true, true]);
+    assert.deepEqual(splitText(o, 0), ["", "2", "3"]); // web: US is the max, JP the min — their amounts
+    assert.deepEqual(splitText(o, 1), ["4", "", "6"]);
+    const all = splitSheet(how, {}); all.marks = { ...all.marks, label: dim("channel") };
+    assert.deepEqual(splitText(draw(all, splitResult()).o, 1), ["shop", "shop", "shop"]);
+  });
+}
+
+test("split by Colour with Colour on the only dimension: a mark with no name of its own is labelled with its member, never blank", () => {
+  const s = sheet({ chartType: "scatter", columns: [meas("amount")], rows: [meas("qty")], color: [dim("channel")], format: on });
+  const res = { rowDimensions: ["channel"], columnDimensions: [], measures: ["a", "q"], rows: [["web", 1, 5], ["shop", 2, 6], ["web", 3, 7]].map(([ch, a, q]) => ({ keys: [ch], values: [a, q] })), truncated: false };
+  const { o } = draw(s, res);
+  assert.deepEqual(o.series.map((x) => x.name), ["web", "shop"]);
+  assert.deepEqual([splitText(o, 0, 2), splitText(o, 1, 1)], [["web", "web"], ["shop"]]);
+});
+
+test("split by Shape and Colour together, a member of one point, a NULL member and a NULL region: every mark is labelled once under Min & max, never blank", () => {
+  const s = splitSheet("colour", { ...on, labelMarks: "minmax" }); s.marks = { ...s.marks, shape: dim("tier") };
+  const rows = [["EU", "gold", "web", 1, 5], ["EU", "basic", "shop", 2, 5], ["US", null, "web", 3, 0], [null, "gold", "web", 4, 3]];
+  const res = { rowDimensions: ["region", "tier"], columnDimensions: ["channel"], measures: ["a", "q"], rows: rows.map(([r, t, ch, a, q]) => ({ keys: [r, t, ch], values: [a, q] })), truncated: false };
+  const { o } = draw(s, res);
+  assert.deepEqual(o.series.map((x) => x.name), ["web · gold", "shop · basic", "web · —"]);
+  assert.deepEqual(splitText(o, 0, 2), ["EU", "—"]); // y 5 (max) and 3 (min): the NULL region is a name, not a gap
+  assert.deepEqual(splitText(o, 1, 1), ["EU"]); // a member of one mark is its own min and max: labelled once
+  assert.deepEqual(splitText(o, 2, 1), ["US"]); // the NULL tier member; its Y of 0 is a value
+});
+
+test("the 5000-point cap: a split chart of 5000 marks builds and Min & max labels exactly two marks per member", () => {
+  const rows = Array.from({ length: 5000 }, (_, i) => [`r${i}`, i % 2 ? "web" : "shop", i, (i * 37) % 1000]);
+  const { o } = draw(splitSheet("shape", { ...on, labelMarks: "minmax" }), splitResult(rows));
+  assert.equal(o.series.reduce((n, s) => n + s.data.length, 0), 5000);
+  for (const [si, s] of o.series.entries()) assert.equal(s.data.filter((_, di) => o.series[si].label.formatter({ dataIndex: di }) !== "").length, 2);
+});
+
+test("a split chart with Data labels on and no label setting: plan and series are unchanged from the unlabelled draw but for the labels", () => {
+  const a = draw(splitSheet("colour", {}), splitResult()).o, b = draw(splitSheet("colour", on), splitResult()).o;
+  assert.deepEqual(a.series.map((s) => s.data), b.series.map((s) => s.data));
+  assert.deepEqual(a.series.map((s) => s.itemStyle), b.series.map((s) => s.itemStyle));
+  assert.deepEqual(a.series.map((s) => s.label), [undefined, undefined]);
+});
+
+test("split by Colour over a date: Most recent labels the latest date's mark in every member", () => {
+  const s = splitSheet("colour", { ...on, labelMarks: "recent" }); s.columns = [{ ...dim("placed"), category: "temporal" }, meas("amount")];
+  const rows = [["2024-03-01", "web", 1, 5], ["2024-04-01", "web", 2, 9], ["2024-04-01", "shop", 3, 1], ["2024-01-01", "shop", 4, 2]];
+  const res = { rowDimensions: ["placed"], columnDimensions: ["channel"], measures: ["a", "q"], rows: rows.map(([d, ch, a, q]) => ({ keys: [d, ch], values: [a, q] })), truncated: false };
+  const { o } = draw(s, res, { recentKey: "2024-04-01" });
+  assert.deepEqual(splitText(o, 0, 2), ["", "2024-04-01"]); // web: the second mark
+  assert.deepEqual(splitText(o, 1, 2), ["2024-04-01", ""]); // shop: the first mark
+});
+
+test("split by Shape: a click on a mark selects its region (the row behind that mark, not its place in the member's series)", () => {
+  const picked = [];
+  const { c } = draw(splitSheet("shape", { ...on, labelMarks: "selected" }), splitResult(), { interactive: true, select: true, hooks: { onSelect: (f, raw) => picked.push([f.column, raw]) } });
+  const click = insts.at(-1).handlers.find(([e]) => e === "click")?.[1];
+  assert.ok(click, "a click handler is wired");
+  click({ data: { row: 4 } }); // US, shop
+  click({ data: { row: 2 } }); // JP, web
+  assert.deepEqual(picked, [["region", "US"], ["region", "JP"]]);
+  assert.equal(c.children.some((x) => x.className === "ws-hint"), true); // nothing selected yet: the hint says so
+});
+
+test("split: Most recent works through the real render path (no recentKey injected): the worksheet finds the latest date itself", () => {
+  const s = splitSheet("colour", { ...on, labelMarks: "recent" }); s.columns = [{ ...dim("placed"), category: "temporal" }, meas("amount")];
+  const rows = [["2024-03-01", "web", 1, 5], ["2024-04-01", "web", 2, 9], ["2024-04-01", "shop", 3, 1], ["2024-01-01", "shop", 4, 2]];
+  const res = { rowDimensions: ["placed"], columnDimensions: ["channel"], measures: ["a", "q"], rows: rows.map(([d, ch, a, q]) => ({ keys: [d, ch], values: [a, q] })), truncated: false };
+  const { o, c } = draw(s, res);
+  assert.deepEqual(splitText(o, 0, 2), ["", "2024-04-01"]);
+  assert.deepEqual(splitText(o, 1, 2), ["2024-04-01", ""]);
+  assert.deepEqual(hints(c), []);
+});
+
+test("split: a Label field that is a dimension nowhere in the query says so, as the unsplit point chart does, and Data labels still draw", () => {
+  const s = splitSheet("colour", on); s.marks = { ...s.marks, label: dim("country") };
+  const { o, c } = draw(s, splitResult());
+  assert.match(hints(c)[0], /Label by a numeric field/);
+  assert.deepEqual(splitText(o, 0), ["EU", "US", "JP"]); // the Data labels text
+});
+
+// Marks of a split point chart select only while Label marks is Selected (and labels are drawn): existing split charts stay inert.
+const clickOf = (sh, options = {}) => { draw(sh, splitResult(), { hooks: { onSelect() {} }, ...options }); return insts.at(-1).handlers.find(([e]) => e === "click")?.[1]; };
+const editor = { interactive: true, select: true };
+const dashboard = { interactive: "select" }; // a dashboard widget: marks select, never drill, no legend selection (a widget with interactive:false has no select at all)
+
+test("split Scatter with Label marks All or Min & max, or with no labels drawn: no click handler, in the editor and on a dashboard", () => {
+  for (const how of ["shape", "colour"]) for (const opts of [editor, dashboard]) {
+    for (const format of [on, { ...on, labelMarks: "minmax" }, { ...on, labelMarks: "highlighted" }, { labelMarks: "selected" }, {}])
+      assert.equal(clickOf(splitSheet(how, format), opts), undefined, `${how} ${JSON.stringify(opts)} ${JSON.stringify(format)}`);
+  }
+});
+
+test("split Scatter set to Selected: a click handler in the editor and on a dashboard widget (select-only), which selects the row's region", () => {
+  for (const opts of [editor, dashboard]) {
+    const picked = [];
+    const click = clickOf(splitSheet("colour", { ...on, labelMarks: "selected" }), { ...opts, hooks: { onSelect: (f, raw) => picked.push([f.column, raw]) } });
+    assert.equal(typeof click, "function", JSON.stringify(opts));
+    click({ data: { row: 3 } });
+    assert.deepEqual(picked, [["region", "EU"]]);
+  }
+});
+
+test("a split Square or Circle never gets a click handler, even set to Selected", () => {
+  for (const chartType of ["square", "circle"])
+    for (const opts of [editor, dashboard]) assert.equal(clickOf(splitSheet("shape", { ...on, labelMarks: "selected" }, { chartType }), opts), undefined, `${chartType} ${JSON.stringify(opts)}`);
+});
+
+test("a static widget (interactive: false) never selects, whatever the mode", () => {
+  assert.equal(clickOf(splitSheet("colour", { ...on, labelMarks: "selected" }), { interactive: false }), undefined);
+});

@@ -127,12 +127,32 @@ test("a date part that is not a point in time (month of year) is not 'most recen
   assert.equal(labelContext(sheet({ columns: [g], format: { ...defaultFormat(), dataLabels: true } })).temporal, true);
 });
 
-test("labelContext: a point chart split by Shape or Colour draws no labels, so offers nothing", () => {
-  const s = sheet({ chartType: "scatter", columns: [meas("x")], rows: [meas("y")], format: { ...defaultFormat(), dataLabels: true } });
-  s.marks.shape = dim("region");
-  assert.equal(labelContext(s).drawn, false);
-  const plain = sheet({ chartType: "scatter", columns: [meas("x")], rows: [meas("y")], format: { ...defaultFormat(), dataLabels: true } });
-  assert.equal(labelContext(plain).drawn, true);
+test("labelContext: a point chart split by Shape or Colour draws labels like any other point chart, and offers every mode that means something there", () => {
+  const base = () => sheet({ chartType: "scatter", columns: [meas("x")], rows: [meas("y")], format: { ...defaultFormat(), dataLabels: true } });
+  const byShape = base(); byShape.marks.shape = dim("region");
+  assert.equal(labelContext(byShape).drawn, true);
+  const byColour = base(); byColour.color = [dim("channel")];
+  assert.equal(labelContext(byColour).drawn, true);
+  const byBoth = base(); byBoth.marks.shape = dim("region"); byBoth.color = [dim("channel")];
+  assert.equal(labelContext(byBoth).drawn, true);
+  assert.deepEqual(labelModesFor(labelContext(byColour)), ["all", "minmax", "selected", "highlighted"]); // no date on the view, not a line
+  assert.deepEqual(labelPositionsFor(labelContext(byShape)), ["auto", "above", "below", "left", "right"]);
+  assert.equal(labelContext(base()).drawn, true);
+  const off = byColour; off.format = { ...defaultFormat() };
+  assert.equal(labelContext(off).drawn, false); // Data labels off and no Label field: nothing drawn, nothing offered
+});
+
+test("Selected and Most recent through a mark key: the selection names marks of the whole chart, not an index inside each series", () => {
+  // two series whose marks are rows 0,2 and 1,3 of the result
+  const rows = [[0, 2], [1, 3]];
+  const keyOf = (si, di) => rows[si][di];
+  const m = labelMask("selected", { series: [[5, 6], [7, 8]], selected: [3], keyOf });
+  assert.deepEqual(idx(m, 0, 2), []); assert.deepEqual(idx(m, 1, 2), [1]);
+  const r = labelMask("recent", { series: [[5, 6], [7, 8]], recent: [0, 1], keyOf });
+  assert.deepEqual(idx(r, 0, 2), [0]); assert.deepEqual(idx(r, 1, 2), [0]);
+  assert.deepEqual(idx(labelMask("selected", { series: [[5, 6]], selected: [1] }), 0, 2), [1]); // no keyOf: the mark's index, as before
+  const mm = labelMask("minmax", { series: [[5, 1, 9], [2, 2]], keyOf }); // Min & max does not read the key
+  assert.deepEqual(idx(mm, 0, 3), [1, 2]); assert.deepEqual(idx(mm, 1, 2), [0]);
 });
 
 test("the hint for a stored mode that does not apply", () => {

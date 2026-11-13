@@ -18,6 +18,8 @@ import { binShapeValues, shapeOrder } from "./shape-model.js";
 
 // Chart types that take reference lines / bands / a trend.
 export const ANALYTICS_TYPES = new Set(["bar", "line", "area"]);
+/** Said when the Label field is a dimension that is not a group-by (so a mark has no one value for it). */
+export const LABEL_GROUP_NOTE = "Label by a numeric field, or add the Label field to Columns/Rows/Detail so it groups.";
 // Chart types whose marks map 1:1 to a category and so support click-to-filter.
 export const CLICK_TYPES = new Set(["bar", "stacked", "line", "area", "combo", "pie", "donut", "scatter", "gantt"]);
 // Types drawn from the ordinary /api/query result.
@@ -200,7 +202,7 @@ export function marksChannels(sheet, result, mplan, sizeIdx, colorMeasureIdx, fm
   if (m.label) {
     const resolved = values(m.label);
     if (resolved) spec.pointLabels = resolved.values;
-    else notes.push("Label by a numeric field, or add the Label field to Columns/Rows/Detail so it groups.");
+    else notes.push(LABEL_GROUP_NOTE);
   }
   // Tooltip -> extra lines listing each chosen field's per-mark value.
   const tips = (m.tooltip ?? []).map(values).filter(Boolean);
@@ -259,7 +261,7 @@ export function scatterGroups(sheet, result, seriesIdx, sizeIdx, fmtCat, shapeOp
     if (steps) pt.push(steps.ranks[ri] ?? 0);
     else if (sizeIdx >= 0) pt.push(Number(r.values[sizeIdx]) || 0);
     const pointName = r.keys.map((k, i) => (ci.includes(i) || i === si ? null : label(k, i))).filter((v) => v != null).join(" / ");
-    groupsMap.get(gk).points.push({ value: pt, name: pointName, ...(steps ? { sizeMember: steps.members[ri] } : {}), ...(binned ? { shapeValue: r.values[shapeOpts.shapeIdx] == null ? "—" : shapeOpts.fmtVal(r.values[shapeOpts.shapeIdx]) } : {}) });
+    groupsMap.get(gk).points.push({ value: pt, name: pointName, row: ri, ...(steps ? { sizeMember: steps.members[ri] } : {}), ...(binned ? { shapeValue: r.values[shapeOpts.shapeIdx] == null ? "—" : shapeOpts.fmtVal(r.values[shapeOpts.shapeIdx]) } : {}) });
   }
   const groups = binned ? shapeOrder([...groupsMap.values()]) : [...groupsMap.values()];
   const pairs = ci.length > 0 && (si >= 0 || binned) && !sameKey; // two fields: a legend of pairs can't select one member
