@@ -36,6 +36,7 @@ import { openTooltipDialog } from "./tooltip-dialog.js";
 import { checkTooltipStyle, styleAfterTextEdit } from "./tooltip-style.js";
 import { checkTooltipFormats, sampleLookup, pruneFormats } from "./tooltip-formats.js";
 import { SWATCHES, memberKey, fieldColorKey, setMemberColor, clearFieldColors, colourOf } from "./colour-model.js";
+import { SHAPE_CHOICES, SHAPE_BINS_MIN, SHAPE_BINS_MAX, shapeBinsOf, cleanShapeBins, setMemberShape, clearFieldShapes } from "./shape-model.js";
 import { createHistory } from "./history.js";
 import { applyToggle, applyAll, allMessage, MAX_COLLAPSED } from "./collapse-model.js";
 import { LINE_STYLE_CHOICES, linesTakeStyle } from "./line-style-model.js";
@@ -47,7 +48,8 @@ import { FONT_CHOICES } from "./font-model.js";
 import { BACKGROUND_CHOICES } from "./background-model.js";
 import { TABLE_ALIGN_CHOICES, TABLE_DENSITY_CHOICES, TABLE_SHADE_CHOICES } from "./table-style-model.js";
 import { COL_ALIGN_CHOICES, tableColumnList, setTableColumn, columnLook, columnWidthError } from "./table-columns-model.js";
-import { COLOUR_MEASURE_TYPES, sizeChannel } from "./mark-channel-model.js";
+import { COLOUR_MEASURE_TYPES, sizeChannel, shapeChannel } from "./mark-channel-model.js";
+import { LABEL_MARK_CHOICES, LABEL_POSITION_CHOICES, labelContext, labelModesFor, labelMarksOf, effectiveLabelMode, cleanLabelMarks, labelPositionsFor, labelPositionOf, cleanLabelPosition } from "./label-marks-model.js";
 import { MARK_BORDER_CHOICES, MARKER_SHAPE_CHOICES, BORDER_TYPES, MARK_BORDER_COLOUR_CHOICES, markerSizeError } from "./mark-style-model.js";
 import { OPACITY_TYPES, OPACITY_CHOICES, cleanMarkOpacity } from "./mark-opacity-model.js";
 import { addColourField, MULTI_COLOUR_TYPES } from "./colour-fields-model.js";
@@ -55,7 +57,7 @@ import { SIZE_SCALE_TYPES, ZERO_BASED_TYPES, sizeScaleOf, sizeRangeError, cleanS
 import { targetChoices, effectiveTargetMeasure } from "./bullet-model.js";
 import { sourceOfTable, wireSource, distinctPlan, distinctPlanSql, distinctMembers, customSqlOf, sqlWire } from "../Core/source-model.js";
 import { heldOutCards } from "../Relations/relation-rules.js";
-import { keyOf, SCATTER_TYPES, COLOR_USES, isSizeDimension, colorMode, isDrillActive, drillActiveDim, planDims, planMeasures, tableMeasures, exportPlan, sortTargets as planSortTargets, measureName as planMeasureName, buildPlan as planQuery, periodFilters as planPeriodFilters, calcContext, appliedShared as planAppliedShared, withParams, toServerFilter, isDateOnlyType } from "./sheet-plan.js";
+import { keyOf, SCATTER_TYPES, COLOR_USES, isSizeDimension, isShapeDimension, shapeMeasureOf, colorMode, isDrillActive, drillActiveDim, planDims, planMeasures, tableMeasures, exportPlan, sortTargets as planSortTargets, measureName as planMeasureName, buildPlan as planQuery, periodFilters as planPeriodFilters, calcContext, appliedShared as planAppliedShared, withParams, toServerFilter, isDateOnlyType } from "./sheet-plan.js";
 import { isMissingPill, missingIn, missingMessage } from "./missing-columns.js";
 import { catalogFromEntities } from "../Calc/calc-resolve.js";
 import { newCalcFilter, isCalcPill, makeCalcPill, refusal, syncCalcPills, pillSlots, clearCalcPills, clearFilterCalc, usesCalc, CALC_AGGS } from "../Calc/calc-pill.js";
@@ -225,7 +227,7 @@ export function initDashboards() {
     dash: activeWorksheet(), noticeEl, results, plan: planCtx(), categoryOf, castOf,
   }), {
     interactive: true, onSelect: toggleSelection, onDrill: (raw) => drillDown(raw), onLegend: legendClick, legendFocus: () => legendFocus,
-    onTooltipFields: (sheet, list) => setTooltipCat(sheet, list), onMemberColors: (sheet, field, members) => setMemberState(sheet, field, members), onColourScale: (sheet, scale) => noteColourScale(sheet, scale),
+    onTooltipFields: (sheet, list) => setTooltipCat(sheet, list), onMemberColors: (sheet, field, members) => setMemberState(sheet, field, members), onMemberShapes: (sheet, field, members) => setShapeState(sheet, field, members), onColourScale: (sheet, scale) => noteColourScale(sheet, scale),
     onCollapse: (axis, key, valid) => collapseHeader(axis, key, valid), onCollapseAll: (mode, rowKeys, colKeys) => collapseAll(mode, rowKeys, colKeys),
     onColumn: (key, patch) => setColumn(key, patch),
     statusBar: setStatusBar, notices: sharedNote,
@@ -1433,6 +1435,12 @@ export function initDashboards() {
       panel.append(fmtSelect("Mark border", MARK_BORDER_CHOICES, f.markBorder ?? "none", (v) => set({ markBorder: v })));
       if ((f.markBorder ?? "none") !== "none") panel.append(fmtSelect("Border colour", MARK_BORDER_COLOUR_CHOICES, f.markBorderColor ?? "muted", (v) => set({ markBorderColor: v })));
     }
+    if (shapeMeasureOf(s)) panel.append(fmtSelect("Shape bins", Array.from({ length: SHAPE_BINS_MAX - SHAPE_BINS_MIN + 1 }, (_, i) => [SHAPE_BINS_MIN + i, String(SHAPE_BINS_MIN + i)]), shapeBinsOf(f), (v) => { // equal-width bins of the Shape measure; the stored shape holds only what differs from the default
+      const { value } = cleanShapeBins(Number(v));
+      s.format = { ...f };
+      if (value != null) s.format.shapeBins = value; else delete s.format.shapeBins;
+      commit(dash, s);
+    }));
     if (OPACITY_TYPES.has(s.chartType)) panel.append(fmtSelect("Opacity", OPACITY_CHOICES, f.markOpacity ?? 100, (v) => { // the stored shape holds only what differs from 100 %
       const { value } = cleanMarkOpacity(Number(v));
       s.format = { ...f };
@@ -1472,9 +1480,24 @@ export function initDashboards() {
           f.legend, (v) => set({ legend: v })),
         fmtCheck("Data labels", f.dataLabels, (v) => set({ dataLabels: v })),
       );
+      const labelCtx = labelContext(s), labelModes = labelModesFor(labelCtx);
+      if (labelModes.length > 1) panel.append(fmtSelect("Label marks", LABEL_MARK_CHOICES.filter(([v]) => labelModes.includes(v)), effectiveLabelMode(labelMarksOf(f), labelCtx), (v) => { // which marks carry their label; the stored shape holds only what differs from All
+        const { value } = cleanLabelMarks(v);
+        s.format = { ...f };
+        if (value) s.format.labelMarks = value; else delete s.format.labelMarks;
+        commit(dash, s);
+      }));
+      const labelPositions = labelPositionsFor(labelCtx);
+      if (labelPositions.length) panel.append(fmtSelect("Label position", LABEL_POSITION_CHOICES, labelPositionOf(f), (v) => { // where a line's or point's label sits; the stored shape holds only what differs from Automatic
+        const { value } = cleanLabelPosition(v);
+        s.format = { ...f };
+        if (value) s.format.labelPosition = value; else delete s.format.labelPosition;
+        commit(dash, s);
+      }));
       if (canColourByCat)
         panel.append(fmtCheck("Colour by category", f.colorByDimension, (v) => set({ colorByDimension: v })));
-      panel.append(fmtCheck("Reverse palette", f.paletteReverse, (v) => set({ paletteReverse: v })), ...(colorMode(s) === "continuous" ? [] : [memberColourEditor(dash, s)])); // a colour measure replaces member colours
+      panel.append(fmtCheck("Reverse palette", f.paletteReverse, (v) => set({ paletteReverse: v })), ...(colorMode(s) === "continuous" ? [] : [memberColourEditor(dash, s)]), // a colour measure replaces member colours
+        ...(SCATTER_TYPES.has(s.chartType) && s.marks?.shape && isShapeDimension(s.marks.shape) ? [memberShapeEditor(dash, s)] : [])); // a measure on Shape has bins, not members
       if (s.chartType === "heatmap" || (colorMode(s) === "continuous" && COLOUR_MEASURE_TYPES.has(s.chartType))) { // the continuous colour scale
         const range = (key, other, label) => fmtNumber(label, f[key], "auto", (v) => {
           const err = colourRangeError(...(key === "colorMin" ? [v, f[other]] : [f[other], v]));
@@ -2489,8 +2512,8 @@ export function initDashboards() {
         hint: "Drop fields to list in each mark's tooltip", editor: tooltipEditor(dash, s) },
       { key: "shape", icon: "shape", label: "Shape", count: m.shape ? 1 : 0,
         pills: one(m.shape, () => { m.shape = null; commit(dash, s); }), onDrop: (f) => addShape(dash, f),
-        hint: "Drop a categorical field for per-value point symbols (scatter)",
-        note: m.shape && !SCATTER_TYPES.has(s.chartType) ? "Shape encodes Scatter / Square / Circle points." : null },
+        hint: "Drop a categorical field for per-value point symbols, or a measure to bin its values into symbols (scatter)",
+        note: m.shape && !shapeChannel(s.chartType, !isShapeDimension(m.shape)).ok ? shapeChannel(s.chartType, !isShapeDimension(m.shape)).note : null },
       { key: "path", icon: "path", label: "Path", count: m.path ? 1 : 0,
         pills: one(m.path, () => { m.path = null; commit(dash, s); }), onDrop: (f) => addMarkSingle(dash, "path", f),
         hint: "Drop a field to order a line/area's vertices" },
@@ -2802,6 +2825,74 @@ export function initDashboards() {
     return box;
   }
 
+  // --- Member shapes ------------------------------------------------
+  // The Shape members the last drawn chart gave a symbol ({ field, members: [{ name, raw }] }), kept like the member colours; the editor lists them and a
+  // pick stores a validated shape key in sheet.memberShapes (Dashboard/shape-model.js) and re-draws.
+  let shapeState = { sheet: null, field: null, members: [] };
+  let shapeOpen = false;
+  let shapeRedraw = null;
+  const setShapeState = (sheet, field, members) => { shapeState = { sheet, field, members }; shapeRedraw?.(); };
+  const shapeGlyph = (d) => { // a filled 20-unit glyph in the ink colour (never colour alone: the shape is the message)
+    const NS = "http://www.w3.org/2000/svg", svg = document.createElementNS(NS, "svg"), p = document.createElementNS(NS, "path");
+    for (const [k, v] of Object.entries({ viewBox: "0 0 20 20", width: 12, height: 12, fill: "currentColor", "aria-hidden": "true" })) svg.setAttribute(k, String(v));
+    p.setAttribute("d", d); svg.append(p); svg.classList.add("ws-memcol__glyph-svg");
+    return svg;
+  };
+  function memberShapeEditor(dash, s) {
+    const box = el("div", "ws-memcol");
+    const head = el("button", "btn btn--ghost ws-memcol__toggle"); head.type = "button";
+    const body = el("div", "ws-memcol__body");
+    const draw = () => {
+      if (!box.isConnected && body.childElementCount) return;
+      const st = shapeState.sheet === s ? shapeState : { field: null, members: [] };
+      const fieldKey = st.field ? fieldColorKey(st.field) : "";
+      const shapes = Object.prototype.hasOwnProperty.call(s.memberShapes ?? {}, fieldKey) ? s.memberShapes[fieldKey] : {};
+      head.textContent = `${shapeOpen ? "Hide" : "Edit"} member shapes`;
+      head.setAttribute("aria-expanded", String(shapeOpen));
+      head.disabled = !st.field;
+      head.title = st.field ? "" : "Add a second measure (X and Y) to a point chart to give its Shape members a symbol";
+      body.hidden = !shapeOpen || !st.field;
+      body.replaceChildren();
+      if (body.hidden) return;
+      const store = (next) => { if (Object.keys(next).length) s.memberShapes = next; else delete s.memberShapes; commit(dash, s); }; // the key stays off the sheet when none is set
+      const pick = (m, key) => {
+        const r = setMemberShape(s.memberShapes, fieldKey, memberKey(m.raw), key);
+        if (!r.ok) { toast(r.error, "danger"); return; }
+        store(r.value);
+      };
+      for (const [mi, m] of st.members.slice(0, LIMITS.memberColors).entries()) {
+        const stored = Object.prototype.hasOwnProperty.call(shapes, memberKey(m.raw)) ? shapes[memberKey(m.raw)] : null;
+        const row = el("div", "ws-memcol__row");
+        const now = el("span", "ws-memcol__glyph"); now.title = "Its symbol now"; // the symbol the chart draws for this member: the chosen one, else the one at its position
+        now.append(shapeGlyph(SHAPE_CHOICES.find((c) => c[0] === (stored ?? SHAPE_CHOICES[mi % SHAPE_CHOICES.length][0]))[3]));
+        row.append(now, el("span", "ws-memcol__name", m.name));
+        const sw = el("span", "ws-memcol__swatches");
+        for (const [key, name, , path] of SHAPE_CHOICES) {
+          const b = el("button", "ws-memcol__swatch"); b.type = "button"; b.title = name;
+          b.setAttribute("aria-label", `Shape ${m.name} ${name}`); b.setAttribute("aria-pressed", String(stored === key));
+          b.append(shapeGlyph(path));
+          b.addEventListener("click", () => pick(m, key));
+          sw.append(b);
+        }
+        const reset = el("button", "btn btn--ghost ws-memcol__reset", "Reset"); reset.type = "button"; reset.disabled = stored === null;
+        reset.addEventListener("click", () => pick(m, null));
+        row.append(sw, reset);
+        body.append(row);
+      }
+      const count = Object.keys(shapes).length;
+      const clearAll = el("button", "btn btn--ghost ws-memcol__clear", `Reset all for this field (${count})`); clearAll.type = "button"; clearAll.disabled = !count;
+      clearAll.title = "Also removes shapes of members that are no longer in the view";
+      clearAll.addEventListener("click", () => store(clearFieldShapes(s.memberShapes, fieldKey).value));
+      body.append(clearAll);
+      if (st.members.length > LIMITS.memberColors) body.append(el("p", "ws-memcol__note", `Only the first ${LIMITS.memberColors} members can be given a shape.`));
+    };
+    head.addEventListener("click", () => { shapeOpen = !shapeOpen; draw(); });
+    box.append(head, body);
+    shapeRedraw = draw;
+    draw();
+    return box;
+  }
+
   // --- Date range & comparison ---------------------------------------
   function setPeriod(dash, f) {
     const refused = refusal(f, "period");
@@ -2893,14 +2984,13 @@ export function initDashboards() {
     list.push(isCalcPill(f) ? slotEntry(f) : { ...slotEntry(f), ...(f.category === "numeric" ? { agg: "sum" } : {}) });
     commit(dash, dash.sheet);
   }
-  // Shape takes one CATEGORICAL field (distinct point symbols); numeric is nudged away.
+  // Shape takes one field: a categorical one gives each member its own symbol; a measure has its values binned into symbols (Format → Shape bins).
   function addShape(dash, f) {
     const refused = refusal(f, "shape");
     if (refused) { toast(refused, "info"); return; }
-    if (f.category === "numeric") { toast("Shape needs a categorical field (each value gets its own symbol).", "info"); return; }
     if (!allowed(dash, "shape", f)) return;
     const m = dash.sheet.marks ?? (dash.sheet.marks = defaultMarks());
-    m.shape = { db: f.db, table: f.table, column: f.column, category: f.category };
+    m.shape = { db: f.db, table: f.table, column: f.column, category: f.category, ...(f.category === "numeric" ? { agg: "sum" } : {}) };
     commit(dash, dash.sheet);
   }
   // Angle takes one NUMERIC field (a radial magnitude — pie already maps its measure to angle).

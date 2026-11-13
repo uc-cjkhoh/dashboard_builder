@@ -116,7 +116,7 @@ export function viewCounts(sheet) {
   const shelf = [...(sheet.columns ?? []), ...(sheet.rows ?? [])];
   const cf = (sheet.color ?? [])[0];
   let dims = shelf.filter((f) => roleOfField(f) === "dimension").length + (m.detail ?? []).length;
-  if (m.shape) dims++;
+  if (m.shape && !numeric(m.shape)) dims++; // a measure on Shape is binned, not grouped by
   if (m.size && !numeric(m.size) && roleOfField(m.size) !== "measure") dims++; // a Size dimension is one more group-by
   dims += colourDimensions(sheet.color).length; // every categorical Colour field is one more group-by
   if (sheet.drill) dims++;
@@ -124,6 +124,7 @@ export function viewCounts(sheet) {
   if (numeric(m.size)) measures++;
   if (numeric(cf)) measures++;
   for (const f of [m.label, m.path, ...(m.tooltip ?? [])]) if (numeric(f)) measures++;
+  if (numeric(m.shape)) measures++; // a measure on Shape rides along to be binned
   return { dims, measures };
 }
 /** May `field` go into `slot` ("columns"|"rows"|"color"|"detail"|"tooltip"|"size"|"label"|"path"|"shape")?

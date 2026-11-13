@@ -23,6 +23,8 @@ import { checkTooltipFormats } from "../Dashboard/tooltip-formats.js";
 import { markerSizeError } from "../Dashboard/mark-style-model.js";
 import { cleanSizeScale } from "../Dashboard/size-scale-model.js";
 import { markOpacityError } from "../Dashboard/mark-opacity-model.js";
+import { shapeBinsError, cleanMemberShapes } from "../Dashboard/shape-model.js";
+import { labelMarksError, labelPositionError } from "../Dashboard/label-marks-model.js";
 import { cleanColourList } from "../Dashboard/colour-fields-model.js";
 import { RAMP_CHOICES, SCALE_CHOICES, DIV_PAIR_CHOICES, colourCentreError, colourRangeError, colourStepsError } from "../Dashboard/colour-scale-model.js";
 import { cleanParameter, MAX_PARAMS } from "../Core/parameters-model.js";
@@ -472,6 +474,7 @@ export function sanitizeSheet(saved, where, issues) {
     if (!r.ok) issues.push(`${where}: the tooltip field formats were invalid — reset.`);
   }
   sheet.memberColors = cleanMemberColors(s.memberColors, where, issues);
+  { const shapes = cleanMemberShapes(s.memberShapes, where, issues); if (shapes) sheet.memberShapes = shapes; } // Edit member shapes: the key exists only once a member has one, so older files round-trip unchanged
   sheet.showFilterCards = s.showFilterCards !== false;
   sheet.analytics = cleanAnalytics(s.analytics, where, issues);
   { const c = cleanCollapsed(s.collapsed, where, issues); if (c) sheet.collapsed = c; }
@@ -665,6 +668,18 @@ function cleanFormat(f0, where, issues) {
   if (f.markOpacity !== undefined && f.markOpacity !== null) { // Format → Opacity: absent (older files, the default) stays off defaultFormat; a bad value is reset (never clamped)
     if (markOpacityError(f.markOpacity) === null) out.markOpacity = f.markOpacity;
     else issues.push(`${w}: opacity "${f.markOpacity}" — reset to 100 %.`);
+  }
+  if (f.shapeBins !== undefined && f.shapeBins !== null) { // Format → Shape bins: absent (older files, the default 5) stays off defaultFormat; a bad value is reset (never clamped)
+    if (shapeBinsError(f.shapeBins) === null) out.shapeBins = f.shapeBins;
+    else issues.push(`${w}: shape bins "${f.shapeBins}" — reset to 5.`);
+  }
+  if (f.labelMarks !== undefined && f.labelMarks !== null) { // Format → Label marks: absent (older files, All) stays off defaultFormat; a bad value is reset (never clamped)
+    if (labelMarksError(f.labelMarks) === null && f.labelMarks !== "all") out.labelMarks = f.labelMarks;
+    else if (labelMarksError(f.labelMarks) !== null) issues.push(`${w}: label marks "${f.labelMarks}" — reset to All.`);
+  }
+  if (f.labelPosition !== undefined && f.labelPosition !== null) { // Format → Label position: absent (older files, Automatic) stays off defaultFormat; a bad value is reset (never clamped)
+    if (labelPositionError(f.labelPosition) === null) { if (f.labelPosition !== "auto") out.labelPosition = f.labelPosition; }
+    else issues.push(`${w}: label position "${f.labelPosition}" — reset to Automatic.`);
   }
   const tableCols = cleanTableCols(f.tableCols, w, issues); // absent when no column is set (older files, and the default), so a sheet round-trips unchanged
   if (tableCols) out.tableCols = tableCols;
