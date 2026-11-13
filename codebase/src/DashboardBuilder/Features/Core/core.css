@@ -275,6 +275,7 @@ select.select:not([multiple]), select.input:not([multiple]) { appearance: none; 
 .ws-pill select.select { appearance: auto; -webkit-appearance: auto; background-image: none; padding-right: var(--s2); }
 .select option { background: var(--surface); color: var(--ink); } /* the open list follows the theme, like the closed control */
 .sidebar .select:disabled { opacity: .55; cursor: not-allowed; }
+.ws-fmt-select:disabled { opacity: .55; cursor: not-allowed; } /* a Format control that does nothing here (Line pattern / Line markers); its title says why */
 .input:hover, .select:hover { border-color: var(--ink-3); }
 .input[aria-invalid="true"], .select[aria-invalid="true"] { border-color: var(--danger-solid); }
 .field-error { display: flex; gap: var(--s1); margin-top: var(--s1); color: var(--danger-ink); font-size: var(--fs-body); }

@@ -40,6 +40,7 @@ import { SHAPE_CHOICES, SHAPE_BINS_MIN, SHAPE_BINS_MAX, shapeBinsOf, cleanShapeB
 import { createHistory } from "./history.js";
 import { applyToggle, applyAll, allMessage, MAX_COLLAPSED } from "./collapse-model.js";
 import { LINE_STYLE_CHOICES, linesTakeStyle } from "./line-style-model.js";
+import { wireLineControls } from "./line-controls.js";
 import { HEATMAP_SHAPE_CHOICES } from "./heatmap-model.js";
 import { GANTT_LENGTH_CHOICES } from "./gantt-model.js";
 import { SECONDARY_CHOICES, dualAxisAllowed, dualAxisOn } from "./axis-sync-model.js";
@@ -1425,6 +1426,7 @@ export function initDashboards() {
         set({ markerSize: v });
       }));
     if (linesTakeStyle(s.chartType)) panel.append(fmtSelect("Marker shape", MARKER_SHAPE_CHOICES, f.markerShape ?? "circle", (v) => set({ markerShape: v })));
+    wireLineControls(panel, s, fmtSelect, (next) => { s.format = next; commit(dash, s); }); // Line pattern, Line markers (each says why when it does nothing)
     if (s.marks?.size && SIZE_SCALE_TYPES.has(s.chartType) && sizeChannel(s.chartType, shelfMeasureCount(s), isSizeDimension(s.marks.size)).ok) panel.append(...sizesEditor(f, s, (next) => { // Edit Sizes: the stored shape holds only what differs from the default
       const { value } = cleanSizeScale(next);
       s.format = { ...f };
