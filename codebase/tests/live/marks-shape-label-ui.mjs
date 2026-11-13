@@ -20,6 +20,7 @@ const COLUMNS = {
   customers: [['country', 'String', 'text']],
 };
 const REGIONS = ['APAC', 'EU', 'US', 'LATAM', 'MEA', 'CA', 'UK', 'JP'];
+const ISO = ['2024-03-01', '2024-04-01', '2024-01-01', '2024-02-01', '2024-06-01', '2024-05-01', '2024-08-01', '2024-07-01']; // the latest is row 6
 const queries = [];     // every /api/query body, in order
 let tables = ['orders', 'customers'];
 function answer({ method, path, body }) {
@@ -37,7 +38,8 @@ function answer({ method, path, body }) {
     return { json: {
       rowDimensions: (body.rowDimensions ?? []).map((d) => d.column), columnDimensions: (body.columnDimensions ?? []).map((d) => d.column),
       measures: (body.measures ?? []).map((_, i) => `v${i}`),
-      rows: Array.from({ length: n }, (_, r) => ({ keys: dims.map(() => REGIONS[r]), values: (body.measures ?? []).map((_, i) => 10 * (r + 1) + i) })),
+      // not monotonic (10, 40, 70, 20, 50, 80, 30, 60 + .37, so no label can be mistaken for an axis tick): the lowest is row 0, the highest row 5; a date key comes as an ISO month
+      rows: Array.from({ length: n }, (_, r) => ({ keys: dims.map((d) => (d.column === 'placed' ? ISO[r] : REGIONS[r])), values: (body.measures ?? []).map((_, i) => 10 * (((r * 3) % 8) + 1) + i + 0.37) })),
       truncated: false } };
   }
   return null;
@@ -237,6 +239,132 @@ try {
     await ev(`[...document.querySelectorAll('.ws-memcol__clear')].pop().click()`); await settle(500);
     must(J((await opt()).series.map((s) => s.symbol)) === J(before), 'Reset all restores them');
     await ev(`${fmtTool}.click()`); await settle(300);
+  });
+
+  // ---- Label marks ---------------------------------------------------------------------------------------------------------
+  // The drawn label texts that carry a value (the mock's values all end in .37; axis ticks never do).
+  const labelTexts = () => ev(`[...document.querySelectorAll('#ws-chart svg text')].map((t) => t.textContent).filter((t) => /[.]37/.test(t))`);
+  const labelControl = () => ev(`!!(${fmtField('Label marks')})`);
+  const modes = () => ev(`[...${fmtField('Label marks')}.querySelectorAll('option')].map((o) => o.value).join(',')`);
+  const openFormat = async () => { await ev(`${fmtTool}.click()`); await waitFor(`!!(${fmtField('Opacity')}) || !!(${fmtField('Top N')})`, 'Format open'); };
+  const closeFormat = async () => { await ev(`${fmtTool}.click()`); await settle(300); };
+  const setMode = async (m) => { await openFormat(); await setSelect('Label marks', m); await settle(600); await closeFormat(); };
+  await newSheet();
+  await dragChip('region', `__t.zone('columns')`);
+  await dragChip('amount', `__t.zone('rows')`);
+  await settle(400);
+  await chartType('Bar');
+  await check('Label marks is offered only while labels are drawn: absent without Data labels or a Label field; then All, Min & max, Selected, Highlighted (no date, no line)', async () => {
+    await openFormat();
+    must(!(await labelControl()), 'no control while no label is drawn');
+    await ev(`[...document.querySelectorAll('.ws-fmt-field')].find((l) => l.textContent.includes('Data labels')).querySelector('input').click()`); await settle(500);
+    await waitFor(`!!(${fmtField('Label marks')})`, 'the control appears with Data labels');
+    must((await modes()) === 'all,minmax,selected,highlighted', 'modes: ' + await modes());
+    await closeFormat();
+    must((await labelTexts()).length === 8, 'every bar is labelled by default: ' + J(await labelTexts()));
+  });
+  await check('Min & max: the lowest and the highest bar carry their value, nothing else; All brings every label back', async () => {
+    await setMode('minmax');
+    const t = await labelTexts();
+    must(t.length === 2 && t.some((x) => /^10[.]37/.test(x)) && t.some((x) => /^80[.]37/.test(x)), 'two labels, the lowest 10.37 and the highest 80.37: ' + J(t));
+    await shot('label-minmax');
+    await setMode('all');
+    must((await labelTexts()).length === 8, 'all eight again');
+  });
+  await check('Highlighted: no label at rest; a highlighted bar shows its own label; a legend-style highlight of the series shows them all', async () => {
+    await setMode('highlighted');
+    must((await labelTexts()).length === 0, 'no label at rest: ' + J(await labelTexts()));
+    await ev(`${inst}.dispatchAction({ type: 'highlight', seriesIndex: 0, dataIndex: 3 })`); await b.sleep(400);
+    const one = await labelTexts();
+    must(one.length === 1 && /^20[.]37/.test(one[0]), 'only the highlighted bar is labelled: ' + J(one));
+    await shot('label-highlighted');
+    await ev(`${inst}.dispatchAction({ type: 'downplay' })`); await b.sleep(300);
+    must((await labelTexts()).length === 0, 'the label goes away with the highlight');
+    await ev(`${inst}.dispatchAction({ type: 'highlight', seriesIndex: 0 })`); await b.sleep(400);
+    must((await labelTexts()).length === 8, 'highlighting the whole series labels every mark: ' + (await labelTexts()).length);
+    await ev(`${inst}.dispatchAction({ type: 'downplay' })`);
+  });
+  await check('Selected: no label and a hint until a mark is clicked; the clicked bar then carries its label', async () => {
+    await setMode('selected');
+    must((await labelTexts()).length === 0, 'nothing selected, nothing labelled');
+    must((await hints()).some((h) => /no mark is selected/.test(h)), 'the hint says why: ' + J(await hints()));
+    const px = await ev(`(() => { const p = ${inst}.convertToPixel({ seriesIndex: 0 }, [2, 5]); const r = document.querySelector('.ws-chart-canvas').getBoundingClientRect(); return [r.left + p[0], r.top + p[1]]; })()`);
+    for (const type of ['mouseMoved', 'mousePressed', 'mouseReleased']) await b.send('Input.dispatchMouseEvent', { type, x: px[0], y: px[1], button: 'left', clickCount: 1 });
+    await waitFor(`!!document.querySelector('.ws-select')`, 'a selection chip after the click');
+    await settle(500);
+    const t = await labelTexts();
+    must(t.length === 1 && /^70[.]37/.test(t[0]), 'the clicked bar (third, 70.37) is labelled: ' + J(t));
+    must(!(await hints()).some((h) => /no mark is selected/.test(h)), 'the hint is gone');
+    await ev(`document.querySelector('.ws-select button[aria-label="Clear selection"]').click()`); await settle(500);
+    await setMode('all');
+  });
+  await check('a pie: Min & max labels two slices, and no leader lines are left for the rest', async () => {
+    await chartType('Pie');
+    await openFormat();
+    must((await modes()) === 'all,minmax,selected,highlighted', 'pie modes: ' + await modes());
+    await setSelect('Label marks', 'minmax'); await settle(600); await closeFormat();
+    const t = await labelTexts();
+    must(t.length === 2, 'two slices labelled: ' + J(t));
+    const o = await ev(`${inst}.getOption().series[0].data.map((d) => (d.labelLine ? d.labelLine.show : true))`);
+    must(o.filter((x) => x === false).length === 6, 'six unlabelled slices have no leader line: ' + J(o));
+    await shot('label-pie-minmax');
+    await setMode('all');
+  });
+
+  // ---- Label marks on a line over dates -----------------------------------------------------------------------------
+  await newSheet();
+  await dragChip('placed', `__t.zone('columns')`);
+  await dragChip('amount', `__t.zone('rows')`);
+  await settle(400);
+  await chartType('Line');
+  await openFormat();
+  await ev(`[...document.querySelectorAll('.ws-fmt-field')].find((l) => l.textContent.includes('Data labels')).querySelector('input').click()`); await settle(500);
+  await closeFormat();
+  await check('a line over dates offers Most recent and Line ends; Line ends labels the first and the last point', async () => {
+    await openFormat();
+    must((await modes()) === 'all,minmax,selected,highlighted,recent,ends', 'line modes: ' + await modes());
+    await setSelect('Label marks', 'ends'); await settle(600); await closeFormat();
+    const t = await labelTexts();
+    must(t.length === 2 && /^10[.]37/.test(t[0]) && /^60[.]37/.test(t[1]), 'the first (10.37) and last (60.37) points: ' + J(t));
+    await shot('label-line-ends');
+  });
+  await check('Most recent labels the latest date wherever it falls in the drawn order', async () => {
+    await setMode('recent');
+    const t = await labelTexts();
+    must(t.length === 1 && /^30[.]37/.test(t[0]), 'the latest date (row 7, 30.37): ' + J(t));
+  });
+  await check('switching to a bar keeps the stored mode out of the way: every mark is labelled and a hint says Line ends does not apply', async () => {
+    await setMode('ends');
+    await chartType('Bar');
+    await settle(500);
+    must((await labelTexts()).length === 8, 'every bar labelled');
+    must((await hints()).some((h) => /Line ends/.test(h)), 'the hint names it: ' + J(await hints()));
+    await chartType('Line'); await settle(500);
+    must((await labelTexts()).length === 2, 'back on a line the mode returns');
+  });
+
+  // ---- Label marks on a bar whose thickness follows Size (a custom series draws its own labels) ---------------------------
+  await newSheet();
+  await dragChip('region', `__t.zone('columns')`);
+  await dragChip('amount', `__t.zone('rows')`);
+  await dragChip('qty', toolEl('Size'));
+  await settle(400);
+  await chartType('Bar');
+  await openFormat();
+  await ev(`[...document.querySelectorAll('.ws-fmt-field')].find((l) => l.textContent.includes('Data labels')).querySelector('input').click()`); await settle(500);
+  await closeFormat();
+  const shownLabels = () => ev(`[...document.querySelectorAll('#ws-chart svg text')].filter((t) => /^[0-9]+[.]37$/.test(t.textContent) && Number(getComputedStyle(t).opacity) > 0 && t.getAttribute('opacity') !== '0' && t.getAttribute('fill-opacity') !== '0').map((t) => t.textContent)`);
+  await check('a Size bar chart: Min & max labels two bars; Highlighted hides the labels until a bar is highlighted', async () => {
+    must((await shownLabels()).length === 8, 'every thick bar is labelled: ' + J(await shownLabels()));
+    await setMode('minmax');
+    must((await shownLabels()).length === 2, 'two labelled: ' + J(await shownLabels()));
+    await setMode('highlighted');
+    must((await shownLabels()).length === 0, 'none at rest: ' + J(await shownLabels()));
+    await ev(`${inst}.dispatchAction({ type: 'highlight', seriesIndex: 0, dataIndex: 3 })`); await b.sleep(500);
+    const t = await shownLabels();
+    must(t.length === 1 && /^20[.]37/.test(t[0]), 'the highlighted bar shows its label: ' + J(t));
+    await ev(`${inst}.dispatchAction({ type: 'downplay' })`);
+    await shot('label-size-bar');
   });
 
   if (b.consoleErrors.length) console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  '));
