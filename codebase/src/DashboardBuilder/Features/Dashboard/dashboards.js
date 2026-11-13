@@ -233,10 +233,10 @@ export function initDashboards() {
   const runChart = () => sheetView.run();
   // The continuous colour scale a sheet's last drawing resolved to (Automatic reads the data): Format shows that scale's controls. A change while Format is open redraws the header.
   const drawnScale = new WeakMap();
+  let panelScale = null; // the scale the Format panel on screen was built for
   const noteColourScale = (sheet, scale) => {
-    if (drawnScale.get(sheet) === scale) return;
     drawnScale.set(sheet, scale);
-    if (formatOpen && sheet.format?.colorScale === "auto") renderShelves();
+    if (formatOpen && panelScale !== null && sheet.format?.colorScale === "auto" && panelScale !== scale) renderShelves(); // only a real change rebuilds the panel (an input being typed in keeps its focus)
   };
   // A crosstab header's +/- — flips its key on sheet.collapsed (presentation only: the redraw reads the cached result).
   function collapseHeader(axis, key, valid) {
@@ -1370,6 +1370,7 @@ export function initDashboards() {
   }
 
   function formatPanel(dash, s) {
+    panelScale = null; // set below when this panel shows the colour-scale controls
     const f = s.format ?? (s.format = defaultFormat());
     const isChart = CHART_LIKE.has(s.chartType);              // pie/donut/scatter/… get legend etc.
     const hasAxes = isChart && !NO_AXES.has(s.chartType);
@@ -1480,7 +1481,8 @@ export function initDashboards() {
           if (err) { toast(err, "danger"); set({ [key]: f[key] }); return; } // redraw puts the kept value back
           set({ [key]: v });
         });
-        const diverging = (f.colorScale === "auto" ? drawnScale.get(s) ?? "sequential" : f.colorScale) === "diverging"; // Automatic: whichever the data made it
+        panelScale = f.colorScale === "auto" ? drawnScale.get(s) ?? "sequential" : f.colorScale; // Automatic: whichever the data made it
+        const diverging = panelScale === "diverging";
         panel.append(fmtSelect("Colour scale", SCALE_CHOICES, f.colorScale ?? "sequential", (v) => set({ colorScale: v })),
           fmtSelect("Steps", STEP_CHOICES, f.colorSteps ?? 0, (v) => set({ colorSteps: Number(v) })),
           ...(diverging ? [fmtNumber("Colour centre", f.colorCentre, "auto", (v) => { // cool above, warm below; no pins (the ends follow the centre)

@@ -296,6 +296,19 @@ try {
     const back = await barFills(); must(J(back) === J(symFills) && (await vmap()).max === symV.max, 'off again = symmetric');
     await closeFormat();
   });
+  await check('Automatic with Format open: when the data starts crossing zero the panel swaps the ramp controls for the diverging ones, with no reload', async () => {
+    await newSheet();
+    await dragChip('region', `__t.zone('columns')`);
+    await dragChip('amount', `__t.zone('rows')`);
+    await settle(300); await chartType('Bar');
+    await dragChip('qty', toolEl('Color')); await settle(600);
+    await openFormat();
+    must(await ev(`!!(${fmtField('Colour ramp')}) && !(${fmtField('Colour centre')})`), 'ramp controls while the data is positive');
+    await dragChip('discount', toolEl('Color')); await settle(900);
+    await waitFor(`!!(${fmtField('Colour centre')})`, 'the diverging controls appear');
+    must(await ev(`!(${fmtField('Colour ramp')})`), 'the ramp controls go');
+    await closeFormat();
+  });
   await check('Steps ignore Use full colour range: the checkbox is gone while Steps is set', async () => {
     await openFormat();
     await setSelect('Steps', '5'); await settle(500);
