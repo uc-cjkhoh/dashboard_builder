@@ -168,10 +168,10 @@ test("treemapTree: with Size the area is the Size measure, the shelf measure sta
   assert.deepEqual(c[0], { name: "EU", value: 5, shelf: 5, colour: 1 });
 });
 
-test("visibleTools: Size is not quiet on bar, line, area and treemap; still quiet on pie, donut, KPI and table", () => {
+test("visibleTools: Size is not quiet on bar, line, area, treemap, Text and Table; still quiet on pie, donut and KPI", () => {
   const tools = [{ key: "size", count: 0 }];
-  for (const t of ["scatter", "square", "circle", "bar", "line", "area", "treemap"]) assert.equal(visibleTools(t, tools).visible.length, 1, t);
-  for (const t of ["pie", "donut", "kpi", "table", "stacked", "combo", "heatmap"]) assert.equal(visibleTools(t, tools).more.length, 1, t);
+  for (const t of ["scatter", "square", "circle", "bar", "line", "area", "treemap", "text", "table"]) assert.equal(visibleTools(t, tools).visible.length, 1, t);
+  for (const t of ["pie", "donut", "kpi", "stacked", "combo", "heatmap"]) assert.equal(visibleTools(t, tools).more.length, 1, t);
   assert.equal(visibleTools("square", [{ key: "shape", count: 0 }]).visible.length, 1, "Shape stays with the scatter family");
   assert.equal(visibleTools("bar", [{ key: "shape", count: 0 }]).more.length, 1);
 });
@@ -190,9 +190,9 @@ test("drawsSize: the drawn chart takes Size on a one-measure bar and on line / a
   // it agrees with the hint rule: wherever sizeChannel says ok for these types, the drawing takes it
   for (const t of ["bar", "line", "area"]) for (const n of [1, 2]) assert.equal(drawsSize(t, n), sizeChannel(t, n).ok, `${t} ${n}`);
 });
-test("splitSizeNote: Size on a Colour-split chart is a hint; nothing without Size", () => {
-  assert.match(splitSizeNote(true), /Size isn't drawn.*Colour/);
-  assert.equal(splitSizeNote(false), null);
+test("splitSizeNote: only a Stacked split can't draw Size (the rest draw it, size-channels.test.mjs); nothing without Size", () => {
+  assert.match(splitSizeNote(true, "stacked"), /Stacked/);
+  assert.equal(splitSizeNote(false, "stacked"), null);
 });
 test("shapeColourNote: a colour measure beside Shape or a Colour split is a hint; nothing without one", () => {
   assert.match(shapeColourNote(2), /colour measure/);

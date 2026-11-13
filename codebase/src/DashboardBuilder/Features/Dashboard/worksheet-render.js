@@ -3,7 +3,10 @@ import { effectiveWindow } from "../Core/parameters-model.js";
 import { makeValueFormatter, makeCategoryFormatter } from "../Core/format.js";
 import { COLOR_SPLIT_TYPES, chartIssue, dimsFor, TEXT_VALUE_HINT, COLOR_SPLIT_HINT } from "./show-me-rules.js";
 import { TEXT_VALUE_TYPES } from "./filter-rules.js";
-import { marksOf, planDims, planMeasures, colorMode, SCATTER_TYPES } from "./sheet-plan.js";
+import { marksOf, planDims, planMeasures, colorMode, isSizeDimension, SCATTER_TYPES } from "./sheet-plan.js";
+import { sizeChannel, sizeRange } from "./mark-channel-model.js";
+import { tupleKey } from "./grid-model.js";
+import { sizeScaleOf, measureShares, sizeLegendText, textStepFor } from "./size-scale-model.js";
 import { withOther, OTHER_TYPES } from "./scale-model.js";
 import { isGroupingPart, labelParts } from "./date-parts.js";
 import { applyTableCalcs, isCalc } from "./table-calc.js";
@@ -85,7 +88,12 @@ function draw(container, rc, sheet, result, cmp) {
     return;
   }
   // Table + Text mark both render as the crosstab text grid (values written into cells).
-  if (type === "table" || type === "text") { container.append(crosstabTable(sheet, result, fmtVal, fmtCat, result.partial, rc.calcPercent, rc.interactive && rc.hooks.onCollapse ? { onToggle: rc.hooks.onCollapse, onToggleAll: rc.hooks.onCollapseAll } : null, rc.interactive && rc.hooks.onColumn ? { onSet: rc.hooks.onColumn } : null)); return; }
+  if (type === "table" || type === "text") {
+    const sized = tableSizing(sheet, result, fmtVal);
+    if (sized.hint) container.append(hint(sized.hint));
+    container.append(crosstabTable(sheet, sized.result, fmtVal, fmtCat, result.partial, rc.calcPercent, rc.interactive && rc.hooks.onCollapse ? { onToggle: rc.hooks.onCollapse, onToggleAll: rc.hooks.onCollapseAll } : null, rc.interactive && rc.hooks.onColumn ? { onSet: rc.hooks.onColumn } : null, sized.sizing));
+    return;
+  }
 
   // Marks: re-derive the measure roles so size / continuous-colour / aux columns don't turn into spurious series.
   // Shelf measures (only) become series; the rest feed the mark channels.
@@ -99,7 +107,7 @@ function draw(container, rc, sheet, result, cmp) {
   // value (bar -> grouped, stacked -> stacked, line/area -> one per value).
   if (colorMode(sheet) === "discrete" && COLOR_SPLIT_TYPES.has(type)) {
     if (shelfCount !== 1) { container.append(hint(COLOR_SPLIT_HINT)); return; }
-    renderColorSplit(container, rc, sheet, type, result, format, fmtCat);
+    renderColorSplit(container, rc, sheet, type, result, format, fmtCat, sizeIdx);
     return;
   }
 
@@ -129,7 +137,12 @@ function draw(container, rc, sheet, result, cmp) {
 
   // Heatmap / treemap reuse this multi-dimension result but pivot it differently.
   if (type === "heatmap") { renderHeatmap(container, result, format, fmtCat); return; }
-  if (type === "treemap") { renderTreemap(container, result, format, fmtCat, { sizeIdx, colourIdx: colorMeasureIdx }); return; }
+  if (type === "treemap") {
+    const f = marksOf(sheet).size;
+    const c = f && isSizeDimension(f) ? sizeChannel(type, shelfCount, true) : null; // a treemap's area is a measure
+    if (c && !c.ok) container.append(hint(c.note));
+    renderTreemap(container, result, format, fmtCat, { sizeIdx, colourIdx: colorMeasureIdx }); return;
+  }
   if (P36_TYPES.has(type)) { renderP36(container, rc, type, rowsOrdered, categories, series, seriesNames, format, fmtCat, sheet); return; }
 
   // KPI: explicit type, or a plain series chart with no dimensions (one value per measure).
@@ -139,4 +152,26 @@ function draw(container, rc, sheet, result, cmp) {
     return;
   }
   renderSeries(container, rc, sheet, { result, rowsOrdered, categories, series, seriesIdx, sizeIdx, colorMeasureIdx, mplan, format, fmtVal, fmtCat, aligned, cmp });
+}
+
+/**
+ * A Table / Text with a Size measure: the Size column leaves the result (it is not a cell value) and each cell of a row-by-column pair gets one of
+ * three text steps (the type scale's body, lead and title sizes) by the measure's share, shaped by Format → Edit Sizes. -> { result, sizing?, hint? }
+ * `sizing` = { stepAt(rowTuple, colTuple) -> 0..2, note } for the crosstab; a Size dimension is a hint (member steps have no text meaning).
+ */
+function tableSizing(sheet, result, fmtVal) {
+  const f = marksOf(sheet).size;
+  if (!f) return { result };
+  if (isSizeDimension(f)) return { result, hint: sizeChannel(sheet.chartType, 1, true).note };
+  const si = planMeasures(sheet).findIndex((e) => e.role === "size");
+  if (si < 0 || si >= result.measures.length) return { result };
+  const rd = result.rowDimensions.length, cd = result.columnDimensions.length;
+  const scale = sizeScaleOf(sheet.format);
+  const shares = measureShares(result.rows.map((r) => r.values[si]), { zero: scale.fromZero ?? false, scale });
+  const steps = new Map(result.rows.map((r, i) => [tupleKey(r.keys.slice(0, rd)) + "|" + tupleKey(r.keys.slice(rd, rd + cd)), textStepFor(shares[i])]));
+  const drop = (a) => a.filter((_, i) => i !== si);
+  const range = sizeRange(result.rows.map((r) => r.values[si]));
+  const note = range ? sizeLegendText(result.measures[si], { range, reversed: scale.reversed, fmtVal }).replace(/\)$/, "), three text sizes") : null;
+  return { result: { ...result, measures: drop(result.measures), rows: result.rows.map((r) => ({ ...r, values: drop(r.values) })) },
+    sizing: { stepAt: (rt, ct) => steps.get(tupleKey(rt) + "|" + tupleKey(ct)) ?? 0, note } };
 }

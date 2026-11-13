@@ -4,7 +4,8 @@ import { fontToken } from "./font-model.js";
 import { pickInk } from "./contrast.js";
 import { orderedPalette } from "./colour-model.js";
 import { DIV_FALLBACK, DIV_HUE_FALLBACK, divergingColours, divergingRange, rampColours, rangeOf, stepPieces, stepColours, stepIndexOf, positionOf, mixHex } from "./colour-scale-model.js";
-import { sizeFractions, sizeRange, barThickness, markerSizeFor, drawsSize } from "./mark-channel-model.js";
+import { sizeRange, barThickness, markerSizeFor, drawsSize, lineSizeMode } from "./mark-channel-model.js";
+import { sizeScaleOf, measureShareFn, memberShareFn, sizeLegendText, lineWidthFor } from "./size-scale-model.js";
 import { tooltipHtml } from "./tooltip-model.js";
 import { tipLookup } from "./tooltip-formats.js";
 import { lineStep } from "./line-style-model.js";
@@ -392,7 +393,7 @@ export function disposeChart(container) {
 
 // Dispatch by chart-type family: circular (pie/donut), scatter (two value axes), or the
 // shared cartesian builder (bar/stacked/line/area/combo).
-function buildOption(spec) {
+export function buildOption(spec) {
   if (spec.type === "pie" || spec.type === "donut") return buildPie(spec);
   if (spec.type === "scatterShapes") return buildScatterShapes(spec); // shape-split scatter
   if (spec.type === "scatter" || spec.type === "square" || spec.type === "circle") return buildScatter(spec); // point marks
@@ -433,7 +434,7 @@ function legendFor(format, c, names, defaultOn) {
 // (the default). `orientation` is decided by the caller from the shelves; combo stays vertical (its
 // dual value axis is on y). Axis *titles* name the physical axes (xTitle = bottom, yTitle = left)
 // regardless of orientation, so the Format controls stay literal.
-export function buildCartesian({ type, categories, series, format = {}, orientation = "vertical", pointLabels, seriesLabels, tooltipExtra, tooltipText, tooltipFields, tooltipStyle, tooltipFormats, otherIndex = -1, analytics = null, colorValues, colorName, sizes, sizeName }) {
+export function buildCartesian({ type, categories, series, format = {}, orientation = "vertical", pointLabels, seriesLabels, tooltipExtra, tooltipText, tooltipFields, tooltipStyle, tooltipFormats, otherIndex = -1, analytics = null, colorValues, colorName, sizes, sizeName, sizeMembers, sizeOrder, sizeGrid, sizeMembersGrid }) {
   const c = tokens();
   const labels = (categories ?? []).map((l) => l ?? "—");
   // Comparison series (compare: true) ride beside their measure: they don't make a chart "multi"
@@ -454,9 +455,18 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
   const byValue = Array.isArray(colorValues) && mainCount === 1 && (type === "bar" || type === "line" || type === "area")
     ? colourByValue(colorValues, c, fmtVal, colorName, showLegend && pos === "bottom" ? 28 : 0) : null;
   const colorByDim = type === "bar" && !multi && !!format.colorByDimension && !byValue;
-  // Size (one measure): a bar's thickness (custom series), or a line / area marker's size. Neither applies with a comparison series or a dual axis.
-  const sizeFr = Array.isArray(sizes) && drawsSize(type, mainCount) ? sizeFractions(sizes) : null;
-  const sizeNote = sizeFr ? sizeLegend(sizes, sizeName, c, fmtVal, showLegend && pos === "top" ? 24 : 2) : null;
+  // Size (a measure, or a dimension's member steps): a bar's thickness (custom series), a straight line's own thickness (a segment overlay), or an
+  // area / stepped line's marker size. `sizes` is one value per category shared by every series; `sizeGrid` (beside a Colour split) one per series cell.
+  const sz = cartesianSizes({ sizes, sizeGrid, sizeOrder, type, mainCount, format });
+  const sizeFr = sz?.fr ?? null; // sizeFr[series][category] = 0..1
+  const sizeMode = lineSizeMode(type, format.lineStyle, mainCount * labels.length); // "width" | "marker" | null
+  const sizeNote = sz ? sizeLegend(sz.flat, sizeName, c, fmtVal, showLegend && pos === "top" ? 24 : 2, { order: sizeOrder, reversed: sizeScaleOf(format).reversed }) : null;
+  const sizeText = (si, di) => { // a cell's Size in words (a member's name, or the formatted value)
+    const m = sizeMembersGrid ? sizeMembersGrid[si]?.[di] : sizeMembers ? sizeMembers[di] : undefined;
+    if (m != null) return String(m);
+    const v = sizeGrid ? sizeGrid[si]?.[di] : sizes?.[di];
+    return v == null ? null : fmtVal(v);
+  };
   const xTitle = format.xTitle || null;
   const yTitle = format.yTitle || null;
 
@@ -527,15 +537,16 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
       backgroundColor: c.surface, borderColor: c.grid, borderWidth: 1,
       textStyle: { color: c.ink, fontFamily: c.font },
       formatter: (p) => {
-        const arr = Array.isArray(p) ? p : [p];
+        const arr = (Array.isArray(p) ? p : [p]).filter((d) => !String(d.seriesId ?? "").startsWith(WIDTH_ID)); // the line-thickness overlay is not a series to list
         const val = (d) => (Array.isArray(d.value) ? d.value[horizontal ? 0 : 1] : d.value); // a variable-width bar's value is [position, value, size]
         if (tooltipText) return customTip(tooltipText, tooltipFields, tooltipStyle, tooltipFormats, fmtVal, format, arr[0].dataIndex, Object.fromEntries(arr.map((d) => [String(d.seriesName), val(d)])));
         const head = `<span style="color:${c.muted}">${escapeHtml(String(arr[0].axisValueLabel ?? arr[0].name ?? ""))}</span>`;
         const lines = arr.map((d) =>
           `<br><span style="display:inline-block;width:8px;height:8px;border-radius:${c.radius}px;background:${d.color ?? d.data?.itemStyle?.color ?? c.series};margin-right:8px"></span>` +
-          `<b>${escapeHtml(String(d.seriesName))}:</b> ${fmtVal(val(d))}`).join("");
+          `<b>${escapeHtml(String(d.seriesName))}:</b> ${fmtVal(val(d))}` +
+          (sizeGrid && sizeFr && sizeText(d.seriesIndex, d.dataIndex) != null ? ` · <b>${escapeHtml(String(sizeName || "size"))}:</b> ${escapeHtml(sizeText(d.seriesIndex, d.dataIndex))}` : "")).join("");
         const at = arr[0].dataIndex;
-        const channels = (sizeFr && sizes[at] != null ? `<br><b>${escapeHtml(String(sizeName || "size"))}:</b> ${fmtVal(sizes[at])}` : "") +
+        const channels = (sizeFr && !sizeGrid && sizeText(0, at) != null ? `<br><b>${escapeHtml(String(sizeName || "size"))}:</b> ${escapeHtml(sizeText(0, at))}` : "") +
           (byValue && colorValues[at] != null ? `<br><b>${escapeHtml(String(colorName || "colour"))}:</b> ${fmtVal(colorValues[at])}` : "");
         return head + lines + channels + extraTooltip(tooltipExtra, at, c); // custom tooltip fields
       },
@@ -547,6 +558,7 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
   const step = lineStep(format.lineStyle); // false | "end" | "middle"
   const edge = markBorder(format.markBorder, borderInk(format.markBorderColor, c)); // the stroke of bars (and the lines' markers)
   const secondary = secondaryKind(format.secondaryType); // how a combo draws its right-axis measures
+  const widthLines = []; // straight lines drawn with a Size: each gets a segment overlay (below)
   base.series = series.map((s, i) => {
     // A comparison series wears its measure's colour, faded and dashed (line) or muted (bar).
     if (s.compare) {
@@ -568,14 +580,17 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
     if (asLine) {
       // Size: each marker's own size; a colour measure: each marker its value's colour, the line a gradient along it (nulls keep the neighbour's).
       const stroke = byValue ? lineGradient(byValue.colours, horizontal, color) : color;
-      const lineData = sizeFr || byValue
-        ? s.data.map((v, di) => (v == null ? v : { value: v, ...(sizeFr ? { symbolSize: markerSizeFor(sizeFr[di]) } : {}), ...(byValue?.colours[di] ? { itemStyle: { color: byValue.colours[di], ...(format.markBorder && format.markBorder !== "none" ? edge : {}) } } : {}) }))
+      const markerSized = Boolean(sizeFr) && sizeMode === "marker"; // an area / stepped line: Size scales the markers (a straight line's thickness is the overlay below)
+      const lineData = markerSized || byValue
+        ? s.data.map((v, di) => (v == null ? v : { value: v, ...(markerSized ? { symbolSize: markerSizeFor(sizeFr[i]?.[di]) } : {}), ...(byValue?.colours[di] ? { itemStyle: { color: byValue.colours[di], ...(format.markBorder && format.markBorder !== "none" ? edge : {}) } } : {}) }))
         : s.data;
+      if (sizeFr && sizeMode === "width") widthLines.push({ s, i, stroke: byValue ? byValue.colours : null, color, axis: seriesAxis(dual, i, isCombo) });
       return {
         name: s.name, type: "line", step,
         yAxisIndex: seriesAxis(dual, i, isCombo),
+        z: sizeFr && sizeMode === "width" ? 3 : undefined, // markers and the thin line stay above their thickness
         data: lineData,
-        showSymbol: s.data.length <= 60 || format.markerSize != null || !!sizeFr, // dots only when they won't crowd (unless a size is chosen)
+        showSymbol: s.data.length <= 60 || format.markerSize != null || markerSized, // dots only when they won't crowd (unless a marker size is chosen)
         symbol: markerSymbol(format.markerShape), symbolSize: markerSizeOr(format.markerSize, 8), // ≥8px markers (dataviz mark spec) unless Format → Marker size
         areaStyle: type === "area" || (isCombo && secondary === "area") ? { opacity: 0.18, color: stroke } : undefined,
         lineStyle: { width: 2, color: stroke },
@@ -592,7 +607,7 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
     const otherItem = (v) => ({ value: v, itemStyle: { color: c.muted, borderRadius: barRadius, ...edge } });
     if (sizeFr && type === "bar") {
       const fillAt = (di) => (di === otherIndex ? c.muted : byValue?.colours[di] ?? (colorByDim ? memberColor(labels[di], c.cat[di % c.cat.length]) : null));
-      return variableBars({ s, color, sizeFr, sizes, horizontal, c, edge, fillAt, dataLabel: (pointLabels || seriesLabels || format.dataLabels) ? (di, v) => (pointLabels || seriesLabels ? String(labelAt(i, di) ?? "") : fmtVal(v)) : null });
+      return variableBars({ s, color, sizeFr: sizeFr[i] ?? [], sizes: sz.grid[i] ?? [], slot: { at: i, of: mainCount }, horizontal, c, edge, fillAt, dataLabel: (pointLabels || seriesLabels || format.dataLabels) ? (di, v) => (pointLabels || seriesLabels ? String(labelAt(i, di) ?? "") : fmtVal(v)) : null });
     }
     return {
       name: s.name, type: "bar",
@@ -608,6 +623,7 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
       emphasis: { focus: "series", itemStyle: colorByDim ? { opacity: 0.85 } : { color, opacity: 0.85 } },
     };
   });
+  for (const w of widthLines) base.series.push(thickLine({ ...w, share: sizeFr[w.i] ?? [], horizontal }));
   if (analytics) addAnalytics(base, analytics, { c, fmtVal, horizontal });
   return base;
 }
@@ -686,7 +702,7 @@ function buildPie({ type, categories, series, format = {}, pointLabels, tooltipE
 // scatter — two measures map to the X and Y value axes; dimension keys label the points. marks:
 // `sizes` scales the symbol (bubble), `colorValues` ramps a continuous gradient (visualMap legend),
 // `pointLabels` writes a field on each point, `tooltipExtra` appends field lines to the tooltip.
-function buildScatter({ categories, series, format = {}, sizes, sizeName, colorValues, colorName, pointLabels, tooltipExtra, tooltipText, tooltipFields, tooltipStyle, tooltipFormats, symbol }) {
+function buildScatter({ categories, series, format = {}, sizes, sizeName, sizeMembers, sizeOrder, colorValues, colorName, pointLabels, tooltipExtra, tooltipText, tooltipFields, tooltipStyle, tooltipFormats, symbol }) {
   const c = tokens();
   const fmtVal = makeValueFormatter(format);
   const labels = (categories ?? []).map((l) => l ?? "—");
@@ -701,11 +717,12 @@ function buildScatter({ categories, series, format = {}, sizes, sizeName, colorV
     const arr = [num(series[0].data[i]), num(series[1].data[i])];
     if (sizeDim >= 0) arr.push(num(sizes[i]));
     if (colorDim >= 0) arr.push(num(colorValues[i]));
-    return { value: arr, name, ...(colorByDim ? { itemStyle: { color: memberColor(name, c.cat[i % c.cat.length]) } } : {}) };
+    return { value: arr, name, ...(sizeMembers ? { sizeMember: sizeMembers[i] } : {}), ...(colorByDim ? { itemStyle: { color: memberColor(name, c.cat[i % c.cat.length]) } } : {}) };
   });
-  const symbolSize = sizeDim >= 0 ? sizeScaler(sizes, (v) => v[sizeDim]) : markerSizeOr(format.markerSize, 14); // a Size field wins
+  const symbolSize = sizeDim >= 0 ? sizeScaler(sizes, (v) => v[sizeDim], { format, order: sizeOrder }) : markerSizeOr(format.markerSize, 14); // a Size field wins
+  const sizeShown = (p) => (p.data?.sizeMember != null ? p.data.sizeMember : fmtVal(p.value[sizeDim]));
   const legend = colorDim >= 0 ? continuousVisualMap(colorValues, colorDim, c, fmtVal, colorName) : undefined;
-  const sizeNote = sizeDim >= 0 ? sizeLegend(sizes, sizeName, c, fmtVal) : null;
+  const sizeNote = sizeDim >= 0 ? sizeLegend(sizes, sizeName, c, fmtVal, 2, { order: sizeOrder, reversed: sizeScaleOf(format).reversed }) : null;
 
   return {
     textStyle: { fontFamily: c.font, color: c.label },
@@ -718,12 +735,12 @@ function buildScatter({ categories, series, format = {}, sizes, sizeName, colorV
       textStyle: { color: c.ink, fontFamily: c.font },
       formatter: (p) => tooltipText
         ? customTip(tooltipText, tooltipFields, tooltipStyle, tooltipFormats, fmtVal, format, p.dataIndex, { [xName]: p.value[0], [yName]: p.value[1],
-          ...(sizeDim >= 0 ? { [sizeName || "size"]: p.value[sizeDim] } : {}),
+          ...(sizeDim >= 0 ? { [sizeName || "size"]: p.data?.sizeMember ?? p.value[sizeDim] } : {}),
           ...(colorDim >= 0 ? { [colorName || "colour"]: p.value[colorDim] } : {}) })
         :
         `<span style="color:${c.muted}">${escapeHtml(String(p.name ?? ""))}</span><br>` +
         `<b>${escapeHtml(xName)}:</b> ${fmtVal(p.value[0])}<br><b>${escapeHtml(yName)}:</b> ${fmtVal(p.value[1])}` +
-        (sizeDim >= 0 ? `<br><b>${escapeHtml(sizeName || "size")}:</b> ${fmtVal(p.value[sizeDim])}` : "") +
+        (sizeDim >= 0 ? `<br><b>${escapeHtml(sizeName || "size")}:</b> ${escapeHtml(String(sizeShown(p)))}` : "") +
         (colorDim >= 0 ? `<br><b>${escapeHtml(colorName || "colour")}:</b> ${fmtVal(p.value[colorDim])}` : "") +
         extraTooltip(tooltipExtra, p.dataIndex, c),
     },
@@ -759,17 +776,17 @@ function buildScatter({ categories, series, format = {}, sizes, sizeName, colorV
 // symbol (the mark type's symbol when a group has no Shape), xName, yName, hasSize, sizeName, format }. A group with a Colour member wears that
 // member's colour (a member colour from Format wins over the palette slot); one with a Shape member its symbol; shape alone keeps one palette colour per series.
 const SHAPE_SYMBOLS = ["circle", "rect", "triangle", "diamond", "roundRect", "pin", "arrow"];
-function buildScatterShapes({ groups, symbol, xName, yName, hasSize, sizeName, format = {} }) {
+function buildScatterShapes({ groups, symbol, xName, yName, hasSize, sizeName, sizeOrder, format = {} }) {
   const c = tokens();
   const fmtVal = makeValueFormatter(format);
   const allSizes = hasSize ? groups.flatMap((g) => g.points.map((p) => p.value[2])) : null;
-  const symbolSize = hasSize ? sizeScaler(allSizes, (v) => v[2]) : markerSizeOr(format.markerSize, 12);
+  const symbolSize = hasSize ? sizeScaler(allSizes, (v) => v[2], { format, order: sizeOrder }) : markerSizeOr(format.markerSize, 12);
   const names = groups.map((g) => g.name);
   const { show, pos, legend } = legendFor(format, c, names, true);
   const symbolOf = (g) => (g.shape ? SHAPE_SYMBOLS[g.shape.index % SHAPE_SYMBOLS.length] : symbol || "circle");
   const colourOf = (g, i) => (g.colour ? memberColor(g.colour.name, c.cat[g.colour.index % c.cat.length]) : c.cat[i % c.cat.length]);
   if (legend && groups.some((g) => g.shape)) legend.data = groups.map((g) => (g.shape ? { name: g.name, icon: symbolOf(g) } : g.name)); // the legend swatch wears the symbol too
-  const sizeNote = hasSize ? sizeLegend(allSizes, sizeName, c, fmtVal, show && pos === "top" ? 24 : 2) : null;
+  const sizeNote = hasSize ? sizeLegend(allSizes, sizeName, c, fmtVal, show && pos === "top" ? 24 : 2, { order: sizeOrder, reversed: sizeScaleOf(format).reversed }) : null;
   return {
     textStyle: { fontFamily: c.font, color: c.label },
     legend,
@@ -784,7 +801,7 @@ function buildScatterShapes({ groups, symbol, xName, yName, hasSize, sizeName, f
       formatter: (p) =>
         `<span style="color:${c.muted}">${escapeHtml(String(p.seriesName))}${p.data && p.data.name ? " · " + escapeHtml(String(p.data.name)) : ""}</span><br>` +
         `<b>${escapeHtml(xName)}:</b> ${fmtVal(p.value[0])}<br><b>${escapeHtml(yName)}:</b> ${fmtVal(p.value[1])}` +
-        (hasSize ? `<br><b>${escapeHtml(sizeName || "size")}:</b> ${fmtVal(p.value[2])}` : ""),
+        (hasSize ? `<br><b>${escapeHtml(sizeName || "size")}:</b> ${escapeHtml(String(p.data?.sizeMember != null ? p.data.sizeMember : fmtVal(p.value[2])))}` : ""),
     },
     xAxis: {
       type: "value", scale: true, name: xName, nameLocation: "middle", nameGap: 28,
@@ -1273,10 +1290,13 @@ function escapeHtml(s) {
 // --- marks helpers ------------------------------------------------------
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 // A symbol-size function mapping a datum's magnitude onto an 8–36px range (bubble scatter).
-function sizeScaler(values, accessor) {
+// Bubbles start at zero unless Format → Edit Sizes says otherwise; a dimension's members (`order`) are steps; the setting can reverse the sizes or keep
+// them inside a part of the 8–36 px range.
+function sizeScaler(values, accessor, { format, order } = {}) {
+  const scale = sizeScaleOf(format);
   const nums = (values ?? []).map((v) => Number(v) || 0);
-  const min = Math.min(...nums, 0), max = Math.max(...nums, 1), span = (max - min) || 1;
-  return (val) => { const v = accessor ? accessor(val) : (Number(val) || 0); return 8 + ((v - min) / span) * (36 - 8); };
+  const share = order ? memberShareFn(order.length, scale) : measureShareFn(nums, { zero: scale.fromZero ?? true, point: true, scale });
+  return (val) => { const v = accessor ? accessor(val) : (Number(val) || 0); return 8 + (share(order ? v : Number(v) || 0) ?? 0) * (36 - 8); };
 }
 // The scale's ends: the data span unless Format pinned one.
 // Unpinned, a heatmap keeps its plain data span (`plain`); a scatter always gets a non-empty one.
@@ -1361,16 +1381,29 @@ function lineGradient(colours, vertical, fallback) {
   });
   return { type: "linear", x: 0, y: 0, x2: vertical ? 0 : 1, y2: vertical ? 1 : 0, colorStops: stops };
 }
-// The Size legend, in words (never size alone): the field and its smallest and largest value, at the top right of the chart.
-function sizeLegend(values, name, c, fmtVal, top = 2) {
+// The Size legend, in words (never size alone): the field and its smallest and largest value (or member), at the top right of the chart.
+// `opts.order` = a dimension's member names smallest step first; `opts.reversed` says the scale runs the other way.
+function sizeLegend(values, name, c, fmtVal, top = 2, opts = {}) {
   const r = sizeRange(values);
-  if (!r || !name) return null;
-  return { graphic: [{ type: "text", right: 18, top, silent: true, style: { text: `Size: ${name} (${fmtVal(r.min)} to ${fmtVal(r.max)})`, fill: c.muted, font: `14px ${c.font}`, textAlign: "right" } }] };
+  if (!name || (!opts.order && !r)) return null;
+  const text = sizeLegendText(name, { range: r, members: opts.order, reversed: opts.reversed, fmtVal });
+  return { graphic: [{ type: "text", right: 18, top, silent: true, style: { text, fill: c.muted, font: `14px ${c.font}`, textAlign: "right" } }] };
+}
+// A cartesian chart's Size as shares: { fr[series][category] (0..1), grid (the values), flat }, or null where Size isn't drawn. Beside a Colour split
+// (`sizeGrid`, one row per member series) every bar / marker has its own cell; otherwise one array serves every series. A dimension's `sizeOrder`
+// makes the values steps; a measure shares the data's span (Format → Edit Sizes: reversed, a smallest..largest part of the range, From zero).
+function cartesianSizes({ sizes, sizeGrid, sizeOrder, type, mainCount, format }) {
+  const have = sizeGrid ?? (Array.isArray(sizes) ? Array.from({ length: mainCount }, () => sizes) : null);
+  if (!have || !drawsSize(type, sizeGrid ? 1 : mainCount)) return null;
+  const scale = sizeScaleOf(format);
+  const flat = (sizeGrid ?? [sizes]).flat();
+  const share = sizeOrder ? memberShareFn(sizeOrder.length, scale) : measureShareFn(flat, { zero: scale.fromZero ?? false, scale });
+  return { fr: have.map((row) => row.map(share)), grid: have, flat };
 }
 // A bar chart whose bars vary in thickness with a Size measure: ECharts has no per-bar width, so the bars are a custom series that
 // draws each rectangle itself (value = [position, value, size], swapped when horizontal). Rounded growing end, per-item colour (colour
 // measure, Other, Colour by category) from the item's own style, a label per bar, and the same tooltip / click / selection fade as a bar.
-function variableBars({ s, color, sizeFr, sizes, horizontal, c, edge, fillAt, dataLabel }) {
+function variableBars({ s, color, sizeFr, sizes, slot = { at: 0, of: 1 }, horizontal, c, edge, fillAt, dataLabel }) {
   const radius = horizontal ? [0, c.radius, c.radius, 0] : [c.radius, c.radius, 0, 0];
   const item = (v, di) => {
     const fill = fillAt(di); // the Other bar, a colour measure's value, or a category's colour; else the series colour
@@ -1385,14 +1418,35 @@ function variableBars({ s, color, sizeFr, sizes, horizontal, c, edge, fillAt, da
       const di = params.dataIndex, v = s.data[di];
       if (v == null || !Number.isFinite(Number(v))) return null;
       const band = api.size(horizontal ? [0, 1] : [1, 0])[horizontal ? 1 : 0];
-      const th = barThickness(sizeFr[di], band);
+      const room = band / slot.of, shift = (slot.at - (slot.of - 1) / 2) * room; // beside a Colour split the members' bars share the band, side by side
+      const th = barThickness(sizeFr[di], room);
       const base = horizontal ? api.coord([0, di]) : api.coord([di, 0]);
       const tip = horizontal ? api.coord([Number(v), di]) : api.coord([di, Number(v)]);
       const shape = horizontal
-        ? { x: Math.min(base[0], tip[0]), y: tip[1] - th / 2, width: Math.abs(tip[0] - base[0]), height: th, r: radius }
-        : { x: tip[0] - th / 2, y: Math.min(base[1], tip[1]), width: th, height: Math.abs(base[1] - tip[1]), r: radius };
+        ? { x: Math.min(base[0], tip[0]), y: tip[1] + shift - th / 2, width: Math.abs(tip[0] - base[0]), height: th, r: radius }
+        : { x: tip[0] + shift - th / 2, y: Math.min(base[1], tip[1]), width: th, height: Math.abs(base[1] - tip[1]), r: radius };
       return { type: "rect", shape, style: api.style(), emphasis: { style: api.styleEmphasis() },
         ...(dataLabel ? { textContent: { style: { text: dataLabel(di, v), fill: c.label, font: `14px ${c.font}` } }, textConfig: { position: horizontal ? "right" : "top" } } : {}) };
+    },
+  };
+}
+// A straight line whose own thickness follows Size: ECharts draws one stroke width per line, so a silent custom series draws one quadrilateral per
+// segment (its width tapering from one point's thickness to the next, in the line's colour or the colour measure's value at the segment's end) beneath
+// the real line, which keeps the markers, tooltip, click and legend. It shares the line's name, so one legend entry toggles both.
+const WIDTH_ID = "size-width:";
+function thickLine({ s, i, share, horizontal, stroke, color, axis }) {
+  const at = (di) => (horizontal ? [Number(s.data[di]), di] : [di, Number(s.data[di])]);
+  return {
+    id: `${WIDTH_ID}${i}`, name: s.name, type: "custom", silent: true, z: 2, yAxisIndex: axis, encode: { x: 0, y: 1 }, tooltip: { show: false },
+    data: s.data.map((v, di) => (horizontal ? [v, di] : [di, v])),
+    renderItem: (params, api) => {
+      const di = params.dataIndex;
+      if (di >= s.data.length - 1 || s.data[di] == null || s.data[di + 1] == null) return null;
+      const p0 = api.coord(at(di)), p1 = api.coord(at(di + 1));
+      const dx = p1[0] - p0[0], dy = p1[1] - p0[1], len = Math.hypot(dx, dy) || 1;
+      const nx = -dy / len, ny = dx / len, w0 = lineWidthFor(share[di]) / 2, w1 = lineWidthFor(share[di + 1]) / 2;
+      return { type: "polygon", silent: true, shape: { points: [[p0[0] + nx * w0, p0[1] + ny * w0], [p1[0] + nx * w1, p1[1] + ny * w1], [p1[0] - nx * w1, p1[1] - ny * w1], [p0[0] - nx * w0, p0[1] - ny * w0]] },
+        style: { fill: stroke?.[di + 1] ?? stroke?.[di] ?? color } };
     },
   };
 }

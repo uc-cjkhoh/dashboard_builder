@@ -4,7 +4,7 @@
 // so renaming a field keeps its setting. A column's alignment overrides Format → Align; its width is in px, MIN to MAX.
 import { TABLE_COL_ALIGNS, TABLE_COL_MIN, TABLE_COL_MAX } from "../Core/sheet-schema.js";
 import { LIMITS } from "../Core/validate.js";
-import { planDims, planMeasures } from "./sheet-plan.js";
+import { planDims, tableMeasures } from "./sheet-plan.js";
 import { roleOf } from "./show-me-rules.js";
 import { aggWord } from "../Calc/calc-plan.js";
 
@@ -33,7 +33,7 @@ export function columnWidthError(w) {
 export function tableColumnList(sheet) {
   const out = planDims(sheet).rowDims.map((f, i) => ({ key: dimKey(i), label: f.column }));
   const measuresLeft = sheet.rows.some((f) => roleOf(f) === "measure") && !sheet.columns.some((f) => roleOf(f) === "measure");
-  if (!measuresLeft) planMeasures(sheet).forEach((e, i) => out.push({ key: measKey(i), label: `${aggWord(e.agg, e.field.p)} ${e.field.column}` }));
+  if (!measuresLeft) tableMeasures(sheet).forEach((e, i) => out.push({ key: measKey(i), label: `${aggWord(e.agg, e.field.p)} ${e.field.column}` }));
   return out;
 }
 

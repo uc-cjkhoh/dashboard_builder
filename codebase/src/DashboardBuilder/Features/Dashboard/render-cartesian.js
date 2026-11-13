@@ -1,7 +1,7 @@
 import { renderChart as drawChart } from "./chart.js";
 import { dateLabelsOf } from "./date-labels.js";
 import { isCalcPill } from "../Calc/calc-pill.js";
-import { SCATTER_TYPES, marksOf, planMeasures, colorMode, measureName as planMeasureName } from "./sheet-plan.js";
+import { SCATTER_TYPES, marksOf, planMeasures, colorMode, isSizeDimension, measureName as planMeasureName } from "./sheet-plan.js";
 import { makeValueFormatter } from "../Core/format.js";
 import { REF_CHOICES, TREND_CHOICES, trendProblem, trendRefusal, pWords, refValue, refConstant, trendSeries, pickMeasure, dataValues, bandBounds, bandLabel } from "./analytics-model.js";
 import { parameters } from "../Core/store.js";
@@ -12,18 +12,28 @@ import { selectHandler, legendSpec, memberSpec } from "./render-handlers.js";
 import { selectedIndicesOf } from "./dashboard-select.js";
 import { joinNotices } from "./notices.js";
 import { stackedScaleNotice } from "./stack-scale-model.js";
-import { shapeColourNote, splitSizeNote } from "./mark-channel-model.js";
-import { ANALYTICS_TYPES, scatterSymbol, primaryDim, chartOrientation, marksChannels, scatterGroups, colorSplitData, colorSplitLabels, markFieldValues } from "./result-model.js";
+import { shapeColourNote, splitSizeNote, sizeChannel, lineSizeNote } from "./mark-channel-model.js";
+import { ANALYTICS_TYPES, scatterSymbol, primaryDim, chartOrientation, marksChannels, scatterGroups, colorSplitData, colorSplitLabels, markFieldValues, sizeSteps, sizeGridOf } from "./result-model.js";
 
 // The series charts: bar / stacked / line / area / combo, pie / donut, the scatter family (with Shape), and the colour
 // split. Each draws into `container` through chart.js and wires interaction only through the render context `rc`
 // (render-handlers.js), so a non-interactive view draws the same marks without handlers.
 
 /** Colour split: one series per colour value (the trailing group-by key); the primary dimension is the first non-colour key. */
-export function renderColorSplit(container, rc, sheet, type, result, format, fmtCat) {
-  const sizeNote = splitSizeNote(Boolean(marksOf(sheet).size)); // the split draws no Size: say so
+export function renderColorSplit(container, rc, sheet, type, result, format, fmtCat, sizeIdx = -1) {
+  const sizeNote = splitSizeNote(Boolean(marksOf(sheet).size), type); // a Stacked split can't draw Size: say so
   if (sizeNote) container.append(hint(sizeNote));
   const { categories, series, catTuples, colorVals, cellRows } = colorSplitData(result, fmtCat);
+  // Size beside the split: one value per (member series, category) cell — a measure's value, or a dimension's step.
+  const sizeSpec = {};
+  const sizeField = marksOf(sheet).size;
+  if (sizeField && !sizeNote && sizeChannel(type, 1, isSizeDimension(sizeField)).ok) {
+    const steps = isSizeDimension(sizeField) ? sizeSteps(sheet, result, result.rows, fmtCat) : null;
+    if (steps) Object.assign(sizeSpec, { sizeGrid: sizeGridOf({ cellRows }, steps.ranks), sizeMembersGrid: sizeGridOf({ cellRows }, steps.members), sizeOrder: steps.order, sizeName: steps.name });
+    else if (sizeIdx >= 0) Object.assign(sizeSpec, { sizeGrid: sizeGridOf({ cellRows }, result.rows.map((r) => (r.isOther ? null : r.values[sizeIdx]))), sizeName: result.measures[sizeIdx] });
+  }
+  const lineNote = sizeSpec.sizeGrid ? lineSizeNote(type, format.lineStyle, series.length * categories.length) : null;
+  if (lineNote) container.append(hint(lineNote));
   // Click a mark -> the primary (first non-colour) dimension value = catTuples[dataIndex][0].
   const rawKeys = catTuples.map((t) => t[0]);
   const onSelect = selectHandler(rc, sheet, primaryDim(sheet), type, rawKeys);
@@ -38,7 +48,7 @@ export function renderColorSplit(container, rc, sheet, type, result, format, fmt
   const labelField = marksOf(sheet).label;
   const texts = labelField ? markFieldValues(sheet, result.rows, planMeasures(sheet), labelField, makeValueFormatter(format), fmtCat, (f) => planMeasureName(f, rc.plan)) : null;
   const seriesLabels = texts ? colorSplitLabels({ cellRows }, texts.values) : undefined;
-  drawChart(container, { type, categories, series, format, onSelect, selectedIndices, orientation, seriesLabels, ...memberColourSpec, ...legend });
+  drawChart(container, { type, categories, series, format, onSelect, selectedIndices, orientation, seriesLabels, ...sizeSpec, ...memberColourSpec, ...legend });
 }
 
 /**
@@ -51,7 +61,7 @@ export function renderScatterShapes(container, rc, sheet, result, seriesIdx, siz
   const note = shapeColourNote(colorMeasureIdx); // only one Colour slot: reached with Shape + a measure on Colour
   if (note) container.append(hint(note));
   const xIdx = seriesIdx[0], yIdx = seriesIdx[1];
-  const { groups, legend, colourMembers } = scatterGroups(sheet, result, seriesIdx, sizeIdx, fmtCat);
+  const { groups, legend, colourMembers, sizeOrder, sizeName } = scatterGroups(sheet, result, seriesIdx, sizeIdx, fmtCat);
   const cf = colorMode(sheet) === "discrete" ? sheet.color[0] : null;
   const memberColourSpec = cf && !isCalcPill(cf) ? memberSpec(rc, sheet, cf, colourMembers) : {};
   drawChart(container, {
@@ -60,7 +70,7 @@ export function renderScatterShapes(container, rc, sheet, result, seriesIdx, siz
     type: "scatterShapes", symbol: scatterSymbol(sheet.chartType), groups, format,
     xName: format.xTitle || result.measures[xIdx] || "x",
     yName: format.yTitle || result.measures[yIdx] || "y",
-    hasSize: sizeIdx >= 0, sizeName: sizeIdx >= 0 ? result.measures[sizeIdx] : null,
+    hasSize: sizeIdx >= 0 || Boolean(sizeOrder), sizeName: sizeOrder ? sizeName : sizeIdx >= 0 ? result.measures[sizeIdx] : null, sizeOrder,
   });
 }
 
@@ -85,6 +95,8 @@ export function renderSeries(container, rc, sheet, a) {
   }
   rc.hooks.onTooltipFields?.(sheet, marks.tooltipCat);
   if (type === "stacked") rc.extraNotice = joinNotices(rc.extraNotice, stackedScaleNotice(series)); // a measure far smaller than the rest is a sliver: say so
+  const lineNote = marks.spec.sizes ? lineSizeNote(type, format.lineStyle, series.length * categories.length) : null; // a stepped or very long line varies its markers: say so
+  if (lineNote) marks.note = [marks.note, lineNote].filter(Boolean).join(" ");
   if (marks.note) container.append(hint(marks.note)); // a Marks hint sits above the chart, never blocks it
   // Click-to-filter: marks map 1:1 to result rows here, so a click's dataIndex -> rowsOrdered[i].keys[0] (the primary
   // dimension's raw value).

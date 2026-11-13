@@ -116,6 +116,7 @@ export function viewCounts(sheet) {
   const cf = (sheet.color ?? [])[0];
   let dims = shelf.filter((f) => roleOfField(f) === "dimension").length + (m.detail ?? []).length;
   if (m.shape) dims++;
+  if (m.size && !numeric(m.size) && roleOfField(m.size) !== "measure") dims++; // a Size dimension is one more group-by
   if (cf && !numeric(cf)) dims++;
   if (sheet.drill) dims++;
   let measures = shelf.filter((f) => roleOfField(f) === "measure").length;

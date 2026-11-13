@@ -3,7 +3,7 @@
 const POINTS = new Set(["scatter", "square", "circle"]);
 /** The chart types that draw a measure on Colour (the Format colour-scale controls follow them). */
 export const COLOUR_MEASURE_TYPES = new Set([...POINTS, "pie", "donut", "treemap", "bar", "line", "area"]);
-const SIZE_LIST = "Scatter bubbles, Bar thickness, Line / Area markers and Treemap area";
+const SIZE_LIST = "Scatter bubbles, Bar thickness, Line thickness, Area markers, Treemap area and Text / Table font size";
 const SINGLE = "a single measure on Columns / Rows";
 const NOTE = {
   colourMany: `A colour measure needs ${SINGLE} — with several, the marks of different measures would look alike.`,
@@ -11,7 +11,8 @@ const NOTE = {
   colourElsewhere: "A colour measure shades Scatter points, Bars, Lines, Areas, Pie / Donut slices and Treemap tiles — switch to one of those, or drop a categorical field on Colour.",
   sizeMany: `Size varies a bar's thickness for ${SINGLE} — use one measure, or switch chart type.`,
   sizeStacked: "Size doesn't apply to a Stacked bar — use Bar (one measure) or a point chart.",
-  sizePie: "Size has no per-slice meaning on a Pie / Donut — the slice angle is the measure.",
+  sizePie: "Size doesn't apply to a Pie / Donut — one pie has nothing to compare its size with, and the slice angle is the measure.",
+  sizeDimension: "A field on Size by member steps Scatter bubbles, Bar thickness, Line thickness and Area markers — Treemap, Text and Table take a measure.",
   sizeElsewhere: `Size scales ${SIZE_LIST} — switch chart type to use it.`,
 };
 
@@ -22,12 +23,18 @@ export function colourChannel(type, shelfCount) {
   return { ok: false, note: type === "stacked" ? NOTE.colourStacked : NOTE.colourElsewhere };
 }
 
-/** Can `type` draw a measure on Size? A bar's thickness is per mark, so it needs one measure; markers are shared by all lines. */
-export function sizeChannel(type, shelfCount) {
-  if (POINTS.has(type) || type === "line" || type === "area" || type === "treemap") return { ok: true, note: null };
-  if (type === "bar") return shelfCount === 1 ? { ok: true, note: null } : { ok: false, note: NOTE.sizeMany };
+/**
+ * Can `type` draw a Size field? A measure scales marks by value; a dimension (`dimension` true) gives each member a step. A bar's
+ * thickness is per mark, so it needs one measure; line / area markers and thickness are shared by all lines. Text / Table take a
+ * measure only (it sets the cell font size).
+ */
+export function sizeChannel(type, shelfCount, dimension = false) {
   if (type === "pie" || type === "donut") return { ok: false, note: NOTE.sizePie };
-  return { ok: false, note: type === "stacked" ? NOTE.sizeStacked : NOTE.sizeElsewhere };
+  if (type === "stacked") return { ok: false, note: NOTE.sizeStacked };
+  if (type === "bar") return shelfCount === 1 ? { ok: true, note: null } : { ok: false, note: NOTE.sizeMany };
+  if (POINTS.has(type) || type === "line" || type === "area") return { ok: true, note: null };
+  if (type === "treemap" || type === "text" || type === "table") return dimension ? { ok: false, note: NOTE.sizeDimension } : { ok: true, note: null };
+  return { ok: false, note: NOTE.sizeElsewhere };
 }
 
 const finite = (v) => v != null && v !== "" && Number.isFinite(Number(v));
@@ -54,7 +61,17 @@ export const markerSizeFor = (fraction) => Math.round(MARKER[0] + (fraction ?? 0
 
 /** Does the drawn chart take Size? A bar needs one measure (a thickness per bar); line / area size every series' markers by the row's Size value. */
 export const drawsSize = (type, mainCount) => (type === "bar" ? mainCount === 1 : type === "line" || type === "area");
-/** The hint when Size sits beside a Colour dimension on a split bar / line / area / stacked chart (the split path draws no Size), else null. */
-export const splitSizeNote = (hasSize) => (hasSize ? "Size isn't drawn while a Colour field splits the chart — remove the Colour field to vary thickness or markers." : null);
+/** A thickness overlay is one polygon per segment: above this many points in all the lines together the markers carry Size instead. */
+export const LINE_WIDTH_MAX_POINTS = 2000;
+/** How a line draws Size: "width" (its own thickness, a straight line within the point bound) or "marker" (the markers' size: a stepped line, an area, too many points); null elsewhere. */
+export const lineSizeMode = (type, lineStyle, points = 0) => (type === "line" ? ((lineStyle ?? "straight") === "straight" && points <= LINE_WIDTH_MAX_POINTS ? "width" : "marker") : type === "area" ? "marker" : null);
+/** The hint when a line varies its markers instead of its thickness (stepped, or over the point bound), else null. */
+export function lineSizeNote(type, lineStyle, points = 0) {
+  if (type !== "line") return null;
+  if ((lineStyle ?? "straight") !== "straight") return "A stepped line varies its markers' size with Size — set Format → Line style to Straight to vary the line's thickness.";
+  return points > LINE_WIDTH_MAX_POINTS ? `A line with more than ${LINE_WIDTH_MAX_POINTS.toLocaleString("en-US")} points varies its markers' size with Size — filter or lower Top N to draw the line's thickness.` : null;
+}
+/** The hint when Size sits beside a Colour dimension on a Stacked chart (its segments of one bar can't take a thickness), else null. */
+export const splitSizeNote = (hasSize, type) => (hasSize && type === "stacked" ? NOTE.sizeStacked : null);
 /** The hint when a colour measure sits beside Shape or a Colour dimension on the scatter family (one Colour slot, so only Shape + a measure), else null. */
 export const shapeColourNote = (colorMeasureIdx) => (colorMeasureIdx >= 0 ? "A colour measure isn't drawn while points are split by Shape or a Colour field — remove one of them." : null);
