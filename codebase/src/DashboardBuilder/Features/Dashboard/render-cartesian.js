@@ -10,6 +10,7 @@ import { REF_CHOICES, TREND_CHOICES, trendProblem, trendRefusal, pWords, refValu
 import { parameters } from "../Core/store.js";
 import { effectiveForecast } from "../Core/parameters-model.js";
 import { hint } from "./render-dom.js";
+import { noteLinePoints } from "./line-controls.js";
 import { fitWords } from "./chart-polish.js";
 import { selectHandler, legendSpec, memberSpec, memberShapeSpec } from "./render-handlers.js";
 import { selectedIndicesOf } from "./dashboard-select.js";
@@ -53,6 +54,7 @@ export function renderColorSplit(container, rc, sheet, type, result, format, fmt
     if (steps) Object.assign(sizeSpec, { sizeGrid: sizeGridOf({ cellRows }, steps.ranks), sizeMembersGrid: sizeGridOf({ cellRows }, steps.members), sizeOrder: steps.order, sizeName: steps.name });
     else if (sizeIdx >= 0) Object.assign(sizeSpec, { sizeGrid: sizeGridOf({ cellRows }, result.rows.map((r) => (r.isOther ? null : r.values[sizeIdx]))), sizeName: result.measures[sizeIdx] });
   }
+  noteLinePoints(sheet, series.length * categories.length); // the Format panel's Line pattern / Line markers read it
   const lineNote = sizeSpec.sizeGrid ? lineSizeNote(type, format.lineStyle, series.length * categories.length) : null;
   if (lineNote) container.append(hint(lineNote));
   // Click a mark -> the primary (first non-colour) dimension value = catTuples[dataIndex][0].
@@ -136,6 +138,7 @@ export function renderSeries(container, rc, sheet, a) {
   }
   rc.hooks.onTooltipFields?.(sheet, marks.tooltipCat);
   if (type === "stacked") rc.extraNotice = joinNotices(rc.extraNotice, stackedScaleNotice(series)); // a measure far smaller than the rest is a sliver: say so
+  noteLinePoints(sheet, series.length * categories.length); // the Format panel's Line pattern / Line markers read it
   const lineNote = marks.spec.sizes ? lineSizeNote(type, format.lineStyle, series.length * categories.length) : null; // a stepped or very long line varies its markers: say so
   if (lineNote) marks.note = [marks.note, lineNote].filter(Boolean).join(" ");
   const rawKeys = rowsOrdered.map((r) => (r.isOther ? null : r.keys[0]));
