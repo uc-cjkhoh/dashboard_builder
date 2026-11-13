@@ -23,6 +23,7 @@ const REGIONS = ['APAC', 'EU', 'US', 'LATAM', 'MEA', 'CA', 'UK', 'JP'];
 const ISO = ['2024-03-01', '2024-04-01', '2024-01-01', '2024-02-01', '2024-06-01', '2024-05-01', '2024-08-01', '2024-07-01']; // the latest is row 6
 const queries = [];     // every /api/query body, in order
 let tables = ['orders', 'customers'];
+let longSeries = false; // a date axis of 200 days: past 60 points a line draws no markers by default
 function answer({ method, path, body }) {
   if (path === '/api/connection' && method === 'GET') return { json: { connected: false } };
   if (path === '/api/connection') return { json: { connected: true, host: 'mock-ch', port: 8443, user: 'default', secure: true, allowInvalidCert: false } };
@@ -34,12 +35,12 @@ function answer({ method, path, body }) {
   if (path === '/api/query') {
     queries.push(body);
     const dims = [...(body.rowDimensions ?? []), ...(body.columnDimensions ?? [])];
-    const n = dims.length ? REGIONS.length : 1;
+    const n = dims.length ? (longSeries && dims.some((d) => d.column === 'placed') ? 200 : REGIONS.length) : 1;
     return { json: {
       rowDimensions: (body.rowDimensions ?? []).map((d) => d.column), columnDimensions: (body.columnDimensions ?? []).map((d) => d.column),
       measures: (body.measures ?? []).map((_, i) => `v${i}`),
       // not monotonic (10, 40, 70, 20, 50, 80, 30, 60 + .37, so no label can be mistaken for an axis tick): the lowest is row 0, the highest row 5; a date key comes as an ISO month
-      rows: Array.from({ length: n }, (_, r) => ({ keys: dims.map((d) => (d.column === 'placed' ? ISO[r] : REGIONS[r])), values: (body.measures ?? []).map((_, i) => 10 * (((r * 3) % 8) + 1) + i + 0.37) })),
+      rows: Array.from({ length: n }, (_, r) => ({ keys: dims.map((d) => (d.column === 'placed' ? (longSeries ? new Date(Date.UTC(2024, 0, 1 + r)).toISOString().slice(0, 10) : ISO[r]) : REGIONS[r])), values: (body.measures ?? []).map((_, i) => 10 * (((r * 3) % 8) + 1) + i + 0.37) })),
       truncated: false } };
   }
   return null;
@@ -287,14 +288,14 @@ try {
   await check('Selected: no label and a hint until a mark is clicked; the clicked bar then carries its label', async () => {
     await setMode('selected');
     must((await labelTexts()).length === 0, 'nothing selected, nothing labelled');
-    must((await hints()).some((h) => /no mark is selected/.test(h)), 'the hint says why: ' + J(await hints()));
+    must((await hints()).some((h) => /no mark in view is selected/.test(h)), 'the hint says why: ' + J(await hints()));
     const px = await ev(`(() => { const p = ${inst}.convertToPixel({ seriesIndex: 0 }, [2, 5]); const r = document.querySelector('.ws-chart-canvas').getBoundingClientRect(); return [r.left + p[0], r.top + p[1]]; })()`);
     for (const type of ['mouseMoved', 'mousePressed', 'mouseReleased']) await b.send('Input.dispatchMouseEvent', { type, x: px[0], y: px[1], button: 'left', clickCount: 1 });
     await waitFor(`!!document.querySelector('.ws-select')`, 'a selection chip after the click');
     await settle(500);
     const t = await labelTexts();
     must(t.length === 1 && /^70[.]37/.test(t[0]), 'the clicked bar (third, 70.37) is labelled: ' + J(t));
-    must(!(await hints()).some((h) => /no mark is selected/.test(h)), 'the hint is gone');
+    must(!(await hints()).some((h) => /no mark in view is selected/.test(h)), 'the hint is gone');
     await ev(`document.querySelector('.ws-select button[aria-label="Clear selection"]').click()`); await settle(500);
     await setMode('all');
   });
@@ -365,6 +366,37 @@ try {
     must(t.length === 1 && /^20[.]37/.test(t[0]), 'the highlighted bar shows its label: ' + J(t));
     await ev(`${inst}.dispatchAction({ type: 'downplay' })`);
     await shot('label-size-bar');
+  });
+
+  // ---- Label marks on a long line (past 60 points a line draws no markers: its labels must still show) ----------------------
+  await check('a line of 200 days: Line ends, Min & max and Most recent still draw their labels', async () => {
+    longSeries = true;
+    await newSheet();
+    await dragChip('placed', `__t.zone('columns')`);
+    await dragChip('amount', `__t.zone('rows')`);
+    await settle(500);
+    await chartType('Line');
+    await openFormat();
+    await ev(`[...document.querySelectorAll('.ws-fmt-field')].find((l) => l.textContent.includes('Data labels')).querySelector('input').click()`); await settle(500);
+    await closeFormat();
+    const n = await ev(`${inst}.getOption().series[0].data.length`);
+    must(n === 200, '200 points drawn: ' + n);
+    const lab = async (m) => { await setMode(m); return labelTexts(); };
+    const all = await labelTexts();
+    const ends = await lab('ends'), mm = await lab('minmax');
+    const recent = await lab('recent');
+    await shot('label-long-line');
+    must(ends.length === 2, 'Line ends labels the first and last point of 200: ' + J(ends) + ' (all: ' + all.length + ')');
+    must(mm.length === 2 && mm.some((t) => /^10[.]37/.test(t)) && mm.some((t) => /^80[.]37/.test(t)), 'Min & max labels the lowest and the highest point: ' + J(mm));
+    must(recent.length === 1, 'Most recent labels the last day: ' + J(recent));
+    await setMode('highlighted');
+    must((await labelTexts()).length === 0, 'Highlighted: no label at rest');
+    await ev(`${inst}.dispatchAction({ type: 'highlight', seriesIndex: 0, dataIndex: 100 })`); await b.sleep(500);
+    const one = await labelTexts();
+    must(one.length === 1, 'Highlighted on a long line: the highlighted point shows its label: ' + J(one));
+    await ev(`${inst}.dispatchAction({ type: 'downplay' })`);
+    await setMode('all');
+    longSeries = false;
   });
 
   if (b.consoleErrors.length) console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  '));

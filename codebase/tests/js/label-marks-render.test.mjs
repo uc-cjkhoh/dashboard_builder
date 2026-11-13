@@ -52,7 +52,7 @@ test("Selected labels the selected mark (the worksheet's own click selection)", 
 test("Selected with nothing selected labels nothing and says why; a dashboard's selection is read the same way", () => {
   const { o, c } = draw(sheet({ format: { ...on, labelMarks: "selected" } }));
   assert.deepEqual(labels(o, 0, [3, 9, 1, 9]), ["", "", "", ""]);
-  assert.match(hints(c)[0], /no mark is selected/);
+  assert.match(hints(c)[0], /no mark in view is selected/);
   const { o: o2 } = draw(sheet({ format: { ...on, labelMarks: "selected" } }), result(REGIONS), { selected: { db: "shop", table: "orders", column: "region", value: "US" } });
   assert.deepEqual(labels(o2, 0, [3, 9, 1, 9]), ["", "9", "", ""]);
 });
@@ -151,4 +151,22 @@ test("a Colour split: Min & max is taken per series (per colour member), on top 
   const text = (si) => [0, 1, 2].map((di) => o.series[si].label.formatter({ dataIndex: di }));
   assert.deepEqual(text(0), ["", "US", "JP"]); // web: max 9 (US), min 1 (JP)
   assert.deepEqual(text(1), ["EU", "", "JP"]); // shop: min 2 first at EU, max 7 at JP
+});
+
+const longDates = (n) => Array.from({ length: n }, (_, i) => [new Date(Date.UTC(2024, 0, 1 + i)).toISOString().slice(0, 10), (i * 7) % 50 + 1]);
+test("a long line draws no dots, so the labelled marks get one (ECharts puts a label on a mark's dot): the rest stay bare", () => {
+  const { o } = draw(dateSheet({ labelMarks: "ends" }), dates(...longDates(200)));
+  const s = o.series[0];
+  assert.equal(s.showSymbol, true); assert.equal(s.showAllSymbol, true);
+  assert.deepEqual(s.data.map((d) => d.symbolSize).filter((v) => v !== 0).length, 2);
+  assert.equal(s.data[0].symbolSize, 8); assert.equal(s.data[199].symbolSize, 8); assert.equal(s.data[100].symbolSize, 0);
+  assert.deepEqual([[0, 1], [100, 3], [199, 44]].map(([di, v]) => lbl(o, 0, di, v)), ["1", "", "44"]);
+});
+test("a short line, a line with every label and a line set to Highlighted keep their dots as they were", () => {
+  const short = draw(dateSheet({ labelMarks: "ends" }), dates(...DATED)).o.series[0];
+  assert.equal(short.showSymbol, true); assert.equal(short.showAllSymbol, undefined); assert.equal(typeof short.data[0], "number");
+  const all = draw(dateSheet({}), dates(...longDates(200))).o.series[0];
+  assert.equal(all.showSymbol, false); assert.equal(typeof all.data[0], "number");
+  const hl = draw(dateSheet({ labelMarks: "highlighted" }), dates(...longDates(200))).o.series[0];
+  assert.equal(hl.showSymbol, false); assert.equal(typeof hl.data[0], "number");
 });

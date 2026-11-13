@@ -615,12 +615,16 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
         ? s.data.map((v, di) => (v == null ? v : { value: v, ...(markerSized ? { symbolSize: markerSizeFor(sizeFr[i]?.[di]) } : {}), ...(byValue?.colours[di] ? { itemStyle: { color: byValue.colours[di], ...(format.markBorder && format.markBorder !== "none" ? edge : {}) } } : {}) }))
         : s.data;
       if (sizeFr && sizeMode === "width") widthLines.push({ s, i, stroke: byValue ? byValue.colours : null, color, axis: seriesAxis(dual, i, isCombo) });
+      const dots = s.data.length <= 60 || format.markerSize != null || markerSized || Boolean(cue); // dots only when they won't crowd (unless a marker size is chosen; a cued line's markers name it)
+      // Format → Label marks on a line with no dots (a long one): a label sits on its mark's dot, so only the labelled marks get one and the rest stay bare.
+      const labelDots = !dots && Boolean(mask) && !mask.hover && Boolean(pointLabels || seriesLabels || format.dataLabels);
+      const dotted = labelDots ? lineData.map((d, di) => (d == null ? d : { ...(isObjectItem(d) ? d : { value: d }), symbolSize: mask.at(i, di) ? markerSizeOr(format.markerSize, 8) : 0 })) : lineData;
       return {
         name: s.name, type: "line", step,
         yAxisIndex: seriesAxis(dual, i, isCombo),
         z: sizeFr && sizeMode === "width" ? 3 : undefined, // markers and the thin line stay above their thickness
-        data: lineData,
-        showSymbol: s.data.length <= 60 || format.markerSize != null || markerSized || Boolean(cue), // dots only when they won't crowd (unless a marker size is chosen; a cued line's markers name it)
+        data: dotted,
+        showSymbol: dots || labelDots, ...(labelDots ? { showAllSymbol: true } : {}), // ECharts thins dense symbols ("auto") — a labelled mark's must stay
         symbol: cue ? cue.symbol : markerSymbol(format.markerShape), symbolSize: markerSizeOr(format.markerSize, 8), // ≥8px markers (dataviz mark spec) unless Format → Marker size
         areaStyle: type === "area" || (isCombo && secondary === "area") ? { opacity: 0.18, color: stroke } : undefined,
         lineStyle: { width: 2, color: stroke, ...(cue ? { type: cue.dash } : {}) },
@@ -1455,6 +1459,7 @@ function cartesianSizes({ sizes, sizeGrid, sizeOrder, type, mainCount, format })
   const share = sizeOrder ? memberShareFn(sizeOrder.length, scale) : measureShareFn(flat, { zero: scale.fromZero ?? false, scale });
   return { fr: have.map((row) => row.map(share)), grid: have, flat };
 }
+const isObjectItem = (d) => d !== null && typeof d === "object" && !Array.isArray(d);
 // A bar chart whose bars vary in thickness with a Size measure: ECharts has no per-bar width, so the bars are a custom series that
 // draws each rectangle itself (value = [position, value, size], swapped when horizontal). Rounded growing end, per-item colour (colour
 // measure, Other, Colour by category) from the item's own style, a label per bar, and the same tooltip / click / selection fade as a bar.

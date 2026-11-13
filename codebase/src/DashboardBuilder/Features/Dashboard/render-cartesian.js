@@ -35,7 +35,7 @@ export function labelMarksSpec(rc, sheet, format, rawKeys) {
   if (mode === "all") return { spec: {}, note: LABEL_MARK_HINT(stored, ctx.type) };
   const selected = mode === "selected" ? selectedIndicesOf(rawKeys, rc.selected ?? sheet.selection ?? null, primaryDim(sheet)) : [];
   const recent = mode === "recent" && rc.recentKey != null ? rawKeys.flatMap((k, i) => (k != null && String(k) === String(rc.recentKey) ? [i] : [])) : [];
-  const note = mode === "selected" && !selected.length ? "Labels are set to Selected and no mark is selected — click a mark to show its label."
+  const note = mode === "selected" && !selected.length ? "Labels are set to Selected and no mark in view is selected — click a mark to show its label."
     : mode === "recent" && !recent.length ? "Labels are set to Most recent, but no date was found on the view." : null;
   return { spec: { labelMarks: { mode, selected, recent } }, note };
 }
