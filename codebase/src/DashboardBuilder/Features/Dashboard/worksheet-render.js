@@ -11,7 +11,7 @@ import { withOther, OTHER_TYPES } from "./scale-model.js";
 import { isGroupingPart, labelParts } from "./date-parts.js";
 import { applyTableCalcs, isCalc } from "./table-calc.js";
 import { alignCompare } from "./period-model.js";
-import { disposeChart } from "./chart.js";
+import { disposeChart, resolvedColourScale } from "./chart.js";
 import { hint } from "./render-dom.js";
 import { crosstabTable } from "./render-table.js";
 import { kpiView } from "./render-kpi.js";
@@ -47,6 +47,7 @@ export function renderWorksheet(container, sheet, result, cmp, options = {}) {
     select: options.interactive !== false, selected: options.selected ?? null, hooks: options.hooks ?? {},
     bucketedKey: null, calcPercent: new Set(), extraNotice: null, emptyText: options.emptyText ?? "No data for these fields." };
   draw(container, rc, sheet, result, cmp);
+  rc.hooks.onColourScale?.(sheet, resolvedColourScale(container)); // the editor's Format panel shows the controls of the scale Automatic resolved to
   return { extraNotice: rc.extraNotice };
 }
 

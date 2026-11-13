@@ -53,8 +53,8 @@ test("sheet round trip: colorRamp, colorMin, colorMax; old sheets default; bad v
 
 import { DIV_FALLBACK, colourCentreError, SCALE_CHOICES, divergingColours, divergingRange } from "../../src/DashboardBuilder/Features/Dashboard/colour-scale-model.js";
 
-test("scale choices: sequential and diverging", () => {
-  assert.deepEqual(SCALE_CHOICES.map(([v]) => v), ["sequential", "diverging"]);
+test("scale choices: automatic, sequential and diverging", () => {
+  assert.deepEqual(SCALE_CHOICES.map(([v]) => v), ["auto", "sequential", "diverging"]);
 });
 
 test("divergingColours: warm token low, surface centre, blue token high; reverse swaps the ends", () => {

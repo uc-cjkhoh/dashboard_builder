@@ -3,7 +3,7 @@ import { ACCENTS, PALETTES } from "../Core/theme-model.js";
 import { fontToken } from "./font-model.js";
 import { pickInk } from "./contrast.js";
 import { orderedPalette } from "./colour-model.js";
-import { DIV_FALLBACK, DIV_HUE_FALLBACK, divergingColours, divergingRange, rampColours, rangeOf, stepPieces, stepColours, stepIndexOf, positionOf, mixHex } from "./colour-scale-model.js";
+import { DIV_FALLBACK, DIV_HUE_FALLBACK, divergingColours, divergingRange, effectiveScale, fullRangeRamp, rampColours, rangeOf, stepPieces, stepColours, stepIndexOf, positionOf, mixHex } from "./colour-scale-model.js";
 import { sizeRange, barThickness, markerSizeFor, drawsSize, lineSizeMode } from "./mark-channel-model.js";
 import { sizeScaleOf, measureShareFn, memberShareFn, sizeLegendText, lineWidthFor } from "./size-scale-model.js";
 import { tooltipHtml } from "./tooltip-model.js";
@@ -89,6 +89,16 @@ function tokens() {
   };
 }
 
+// The values the continuous colour scale reads for `spec` (a colour measure, a heatmap's cells, a treemap's leaves) — what Automatic looks at.
+function colourValuesOf(spec) {
+  if (Array.isArray(spec.colorValues)) return spec.colorValues;
+  if (spec.type === "heatmap") return (spec.cells ?? []).map((d) => d[2]);
+  if (spec.type === "treemap") { const out = []; const walk = (ns) => (ns ?? []).forEach((n) => (n.children ? walk(n.children) : out.push(n.colour))); walk(spec.tree); return out; }
+  return [];
+}
+/** The continuous colour scale the chart in `container` drew with ("sequential" or "diverging"): Automatic resolved against its data. */
+export function resolvedColourScale(container) { return stateOf(container).colorScale ?? "sequential"; }
+
 /**
  * Render a chart into `container`. Types: cartesian `bar` (grouped when ≥2 measures),
  * `stacked`, `line`, `area`, `combo` (dual-axis: 1st measure bars, rest line on a 2nd axis);
@@ -105,7 +115,9 @@ export function renderChart(container, spec) {
   st.paletteReverse = !!spec.format?.paletteReverse;
   st.font = spec.format?.font;
   st.colorSteps = spec.format?.colorSteps ?? 0;
-  st.colorScale = spec.format?.colorScale; st.colorPair = spec.format?.colorPair; st.colorCentre = spec.format?.colorCentre ?? null;
+  st.colorScale = effectiveScale(spec.format?.colorScale, colourValuesOf(spec)); // Automatic resolves here, once, against the values the scale reads: nothing below sees "auto"
+  st.colorFullRange = spec.format?.colorFullRange === true;
+  st.colorPair = spec.format?.colorPair; st.colorCentre = spec.format?.colorCentre ?? null;
   st.colorRamp = spec.format?.colorRamp; st.colorMin = spec.format?.colorMin ?? null; st.colorMax = spec.format?.colorMax ?? null;
   st.memberColors = spec.memberColors instanceof Map ? spec.memberColors : NO_MEMBER_COLORS;
   const host = document.createElement("div");
@@ -837,8 +849,9 @@ function buildHeatmap({ xCats, yCats, cells, format = {} }) {
   const cellEdge = format.markBorder && format.markBorder !== "none" ? markBorder(format.markBorder, borderInk(format.markBorderColor, c))
     : { borderColor: drawing?.colorSteps ? c.axis : c.surface, borderWidth: 1 }; // stepped: a visible hairline so a pale step is not a gap
   const vals = cells.map((d) => d[2]).filter((v) => v != null);
-  const { min, max } = colourScaleRange(vals, true);
-  const legendNote = [centreNote(min, max, fmtVal), outOfRangeNote()].filter(Boolean).join(" · ");
+  const range = colourScaleRange(vals, true);
+  const { min, max } = range;
+  const legendNote = [centreNote(range, fmtVal), outOfRangeNote()].filter(Boolean).join(" · ");
   const chartW = () => live.instance?.getWidth() ?? 800, chartH = () => live.instance?.getHeight() ?? 450;
   const diameter = () => format.markerSize != null ? markerSizeOr(format.markerSize, 6) : circleSize(chartW() - HEATMAP_GUTTER.x, chartH() - HEATMAP_GUTTER.y, xCats.length, yCats.length);
   // Value labels: Format → Data labels forces them on; otherwise they appear when the longest one fits a cell (read from the live chart on every
@@ -873,7 +886,7 @@ function buildHeatmap({ xCats, yCats, cells, format = {} }) {
       axisLine: { lineStyle: { color: c.axis } }, axisTick: { show: false },
       axisLabel: { color: c.muted },
     },
-    ...colourLegend({ min, max, dimension: 2, c, fmtVal, note: legendNote, bottom: 6 }),
+    ...colourLegend({ min, max, ramp: rampOf(range, c), dimension: 2, c, fmtVal, note: legendNote, bottom: 6 }),
     series: [circles
       // Circles = scatter marks on the same category grid, sized by the cell, coloured by the
       // value through the same visualMap (dimension 2); the value label sits inside each circle.
@@ -1307,23 +1320,27 @@ function sizeScaler(values, accessor, { format, order } = {}) {
 // Unpinned, a heatmap keeps its plain data span (`plain`); a scatter always gets a non-empty one.
 // A diverging scale has no pins (its ends follow the centre), so Format hides them and a stored pin is ignored.
 const colourPinned = () => drawing?.colorScale !== "diverging" && (drawing?.colorMin != null || drawing?.colorMax != null);
+// Use full colour range applies to a smooth diverging scale; steps already wear both end colours, so they keep the symmetric split.
+const fullRangeOn = () => drawing?.colorScale === "diverging" && drawing?.colorFullRange === true && !drawing?.colorSteps;
 const colourScaleRange = (nums, plain = false) => {
-  if (drawing?.colorScale === "diverging") { // symmetric about the centre, so the middle colour sits on it
+  if (drawing?.colorScale === "diverging") { // symmetric about the centre (so the middle colour sits on it), or each side its own span with Use full colour range
     const r = rangeOf(nums);
-    return divergingRange(r.min, r.max, drawing?.colorCentre);
+    return divergingRange(r.min, r.max, drawing?.colorCentre, fullRangeOn());
   }
   if (plain && !colourPinned()) { const v = nums.filter((x) => Number.isFinite(x)); return { min: v.length ? Math.min(...v) : 0, max: v.length ? Math.max(...v) : 1 }; }
   return rangeOf(nums, drawing?.colorMin, drawing?.colorMax);
 };
+// The ramp a range is drawn on: the token ramp, or (full range, an off-centre centre) stops resampled so the centre colour stays on the centre.
+const rampOf = (range, c) => (range.full ? fullRangeRamp(c.ramp, range.min, range.max, range.centre) : c.ramp);
 // A pinned end saturates: values beyond it take that end's colour (the visualMap clamps), so a pin never reads as "missing".
 const outOfRangeNote = () => (colourPinned() ? "beyond range: end colour" : "");
 // A diverging legend names its centre in words (never colour alone): "centre 0".
-const centreNote = (min, max, fmtVal) => (drawing?.colorScale === "diverging" ? `centre ${fmtVal((min + max) / 2)}` : "");
+const centreNote = (range, fmtVal) => (drawing?.colorScale === "diverging" ? `centre ${fmtVal(range.centre ?? (range.min + range.max) / 2)}` : "");
 // A continuous visualMap (the gradient legend) over `values`, coloured on the single-hue token ramp.
 function continuousVisualMap(values, dimension, c, fmtVal, name) {
-  const { min, max } = colourScaleRange((values ?? []).map((v) => Number(v)));
-  const note = [name ? String(name) : "", centreNote(min, max, fmtVal), outOfRangeNote()].filter(Boolean).join(" · ");
-  return colourLegend({ min, max, dimension, c, fmtVal, note, bottom: 0 });
+  const range = colourScaleRange((values ?? []).map((v) => Number(v)));
+  const note = [name ? String(name) : "", centreNote(range, fmtVal), outOfRangeNote()].filter(Boolean).join(" · ");
+  return colourLegend({ min: range.min, max: range.max, ramp: rampOf(range, c), dimension, c, fmtVal, note, bottom: 0 });
 }
 // The colour legend + its note as chart options: a gradient bar, or (Format → Steps) a piecewise legend whose
 // swatches are labelled with their boundaries in words. A piecewise legend has no text slot, so its note is a title.
@@ -1331,13 +1348,13 @@ function continuousVisualMap(values, dimension, c, fmtVal, name) {
 // the ink so the neutral step reads as a swatch and a cell in both themes (a continuous gradient keeps the surface).
 const stepRamp = (c) => (c.ramp.length === 3 ? [c.ramp[0], mixHex(c.surface, c.ink, 0.15), c.ramp[2]] : c.ramp);
 // `only` = a display-only legend for marks coloured by `valueColours` (a bar, a line, a slice, a tile): it drives no series, so its handles and steps are inert.
-function colourLegend({ min, max, dimension, c, fmtVal, note, bottom, only = false }) {
+function colourLegend({ min, max, ramp, dimension, c, fmtVal, note, bottom, only = false }) {
   const textStyle = { color: c.muted, fontFamily: c.font };
   const n = drawing?.colorSteps ?? 0;
   const inert = only ? { seriesIndex: [], hoverLink: false } : {}; // no hover link either: a hover would re-draw the marks under the pointer and swallow the click
   if (!n) {
     return { visualMap: { type: "continuous", min, max, dimension, calculable: !only, ...inert, orient: "horizontal", left: "center", bottom,
-      inRange: { color: c.ramp }, text: note ? [note, ""] : undefined, textStyle, formatter: (v) => fmtVal(v) } };
+      inRange: { color: ramp ?? c.ramp }, text: note ? [note, ""] : undefined, textStyle, formatter: (v) => fmtVal(v) } };
   }
   return {
     visualMap: { type: "piecewise", dimension, ...inert, ...(only ? { selectedMode: false } : {}), orient: "horizontal", left: "center", bottom, itemWidth: 16, itemHeight: 12, itemGap: 8,
@@ -1351,24 +1368,25 @@ const legendRoom = (legend) => 24 + (legend.title ? 24 : 0);
 // visualMap can't reach (a bar, a line stretch, a slice, a tile). A missing value has no colour (null).
 function valueColours(values, c) {
   const nums = (values ?? []).map((v) => (v == null || v === "" ? NaN : Number(v)));
-  const { min, max } = colourScaleRange(nums);
+  const range = colourScaleRange(nums);
+  const { min, max } = range, ramp = rampOf(range, c);
   const n = drawing?.colorSteps ?? 0;
   const stepCols = n ? stepColours(stepRamp(c), n) : null;
   const ec = window.echarts.color;
   const at = (v) => {
     if (stepCols) { const i = stepIndexOf(v, min, max, n); return i == null ? null : stepCols[i]; }
     const t = positionOf(v, min, max);
-    return t == null ? null : hexOf(ec.parse(ec.lerp(t, c.ramp)));
+    return t == null ? null : hexOf(ec.parse(ec.lerp(t, ramp)));
   };
-  return { min, max, colours: nums.map(at) };
+  return { min, max, centre: range.centre, ramp, colours: nums.map(at) };
 }
 // [r, g, b] (echarts.color.parse) as #rrggbb.
 const hexOf = ([r, g, b]) => "#" + [r, g, b].map((v) => Math.round(v).toString(16).padStart(2, "0")).join("");
 // A colour measure on a bar / line / area / pie / tile: per-mark colours plus the display-only legend (and the room it needs).
 function colourByValue(values, c, fmtVal, name, bottom = 0) {
   const vc = valueColours(values, c);
-  const note = [name ? String(name) : "", centreNote(vc.min, vc.max, fmtVal), outOfRangeNote()].filter(Boolean).join(" · ");
-  const legend = colourLegend({ min: vc.min, max: vc.max, dimension: 2, c, fmtVal, note, bottom, only: true });
+  const note = [name ? String(name) : "", centreNote(vc, fmtVal), outOfRangeNote()].filter(Boolean).join(" · ");
+  const legend = colourLegend({ min: vc.min, max: vc.max, ramp: vc.ramp, dimension: 2, c, fmtVal, note, bottom, only: true });
   return { colours: vc.colours, legend, room: legendRoom(legend) + bottom };
 }
 // A line's stroke (and area fill) coloured stretch by stretch: a linear gradient across the line's own extent, a colour at each point

@@ -236,6 +236,84 @@ try {
     await closeFormat();
   });
 
+  // ---- the Automatic colour scale and Use full colour range -------------------------------------------------------------------
+  const vmap = async () => { const v = (await opt()).visualMap; return Array.isArray(v) ? v[0] : v; };
+  const barFills = () => per(`d.getItemVisual(k, 'style').fill`);
+  await newSheet();
+  await dragChip('region', `__t.zone('columns')`);
+  await dragChip('amount', `__t.zone('rows')`);
+  await settle(400);
+  await chartType('Bar');
+  await check('Automatic (a new worksheet): a colour measure crossing zero is Diverging (three stops, "centre 0" named); the control reads Automatic', async () => {
+    await dragChip('discount', toolEl('Color')); await settle(600);
+    await openFormat();
+    must((await ev(`${fmtField('Colour scale')}.querySelector('select').value`)) === 'auto', 'the select reads Automatic');
+    must(await ev(`!!(${fmtField('Diverging colours')}) && !!(${fmtField('Colour centre')}) && !(${fmtField('Colour ramp')})`), 'the diverging controls show, not the ramp');
+    const v = await vmap();
+    must(v.inRange.color.length === 3 && /centre 0/.test(J(v.text)), 'diverging legend: ' + J([v.inRange.color.length, v.text]));
+    must(v.min === -40 && v.max === 40, 'symmetric about 0 by default: ' + J([v.min, v.max]));
+    await shot('auto-diverging-bar');
+  });
+  await check('Automatic: a colour measure that stays positive is Low → high (two stops, the ramp controls)', async () => {
+    await ev(`document.querySelector('.ws-shelf--color, .ws-tool[aria-label^="Color"]')`);
+    await newSheet();
+    await dragChip('region', `__t.zone('columns')`);
+    await dragChip('amount', `__t.zone('rows')`);
+    await settle(300); await chartType('Bar');
+    await dragChip('qty', toolEl('Color')); await settle(600);
+    await openFormat();
+    must((await ev(`${fmtField('Colour scale')}.querySelector('select').value`)) === 'auto', 'Automatic');
+    must(await ev(`!!(${fmtField('Colour ramp')}) && !(${fmtField('Colour centre')})`), 'the ramp controls show');
+    const v = await vmap(); must(v.inRange.color.length === 2, 'two stops: ' + J(v.inRange.color));
+  });
+  await check('an explicit Low → high keeps crossing data sequential; choosing Automatic again diverges; the choice persists', async () => {
+    await newSheet();
+    await dragChip('region', `__t.zone('columns')`);
+    await dragChip('amount', `__t.zone('rows')`);
+    await settle(300); await chartType('Bar');
+    await dragChip('discount', toolEl('Color')); await settle(500);
+    await openFormat();
+    await setSelect('Colour scale', 'sequential'); await settle(500);
+    must((await vmap()).inRange.color.length === 2, 'explicit Low → high stays sequential with data crossing zero');
+    await setSelect('Colour scale', 'auto'); await settle(500);
+    must((await vmap()).inRange.color.length === 3, 'Automatic diverges again');
+    await closeFormat();
+  });
+  await check('Use full colour range (diverging): each side its own span: the legend runs min..max with the centre named, the highest bar wears the high colour; off = symmetric', async () => {
+    await openFormat();
+    must(await ev(`!!(${fmtField('Use full colour range')})`), 'the checkbox shows for a diverging scale');
+    const symFills = await barFills(); const symV = await vmap();
+    await toggle('Use full colour range'); await settle(500);
+    const v = await vmap();
+    must(v.min === -40 && v.max === 30, 'the legend spans the data: ' + J([v.min, v.max]));
+    must(v.inRange.color.length > 3 && /centre 0/.test(J(v.text)), 'resampled stops, centre still named: ' + J([v.inRange.color.length, v.text]));
+    const f = await barFills();
+    const lo = await hex(v.inRange.color[0]), hi = await hex(v.inRange.color[v.inRange.color.length - 1]);
+    must(f[0] === lo && f[7] === hi, 'the lowest bar wears the low end and the highest the high end: ' + J([f[0], f[7], lo, hi]));
+    must(symFills[7] !== f[7], 'symmetric (off) did not saturate the high end: ' + J([symFills[7], f[7]]));
+    await shot('full-range-bar');
+    await toggle('Use full colour range'); await settle(500);
+    const back = await barFills(); must(J(back) === J(symFills) && (await vmap()).max === symV.max, 'off again = symmetric');
+    await closeFormat();
+  });
+  await check('Steps ignore Use full colour range: the checkbox is gone while Steps is set', async () => {
+    await openFormat();
+    await setSelect('Steps', '5'); await settle(500);
+    must(await ev(`!(${fmtField('Use full colour range')})`), 'no checkbox with steps');
+    await setSelect('Steps', '0'); await settle(400);
+    await closeFormat();
+  });
+  await check('heatmap and scatter honour Automatic too (a heatmap of a measure that crosses zero is diverging)', async () => {
+    await newSheet();
+    await dragChip('region', `__t.zone('columns')`);
+    await dragChip('channel', `__t.zone('rows')`);
+    await dragChip('discount', `__t.zone('rows')`);
+    await settle(400); await chartType('Heatmap'); await settle(500);
+    const v = await vmap();
+    must(v.inRange.color.length === 3, 'heatmap diverges: ' + J(v.inRange.color));
+    await shot('auto-diverging-heatmap');
+  });
+
   if (b.consoleErrors.length) console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  '));
 } catch (e) {
   console.log(`FAIL harness: ${e.stack}`); failed++;

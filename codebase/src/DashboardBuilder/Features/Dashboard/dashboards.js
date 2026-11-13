@@ -224,12 +224,19 @@ export function initDashboards() {
     dash: activeWorksheet(), noticeEl, results, plan: planCtx(), categoryOf, castOf,
   }), {
     interactive: true, onSelect: toggleSelection, onDrill: (raw) => drillDown(raw), onLegend: legendClick, legendFocus: () => legendFocus,
-    onTooltipFields: (sheet, list) => setTooltipCat(sheet, list), onMemberColors: (sheet, field, members) => setMemberState(sheet, field, members),
+    onTooltipFields: (sheet, list) => setTooltipCat(sheet, list), onMemberColors: (sheet, field, members) => setMemberState(sheet, field, members), onColourScale: (sheet, scale) => noteColourScale(sheet, scale),
     onCollapse: (axis, key, valid) => collapseHeader(axis, key, valid), onCollapseAll: (mode, rowKeys, colKeys) => collapseAll(mode, rowKeys, colKeys),
     onColumn: (key, patch) => setColumn(key, patch),
     statusBar: setStatusBar, notices: sharedNote,
   });
   const runChart = () => sheetView.run();
+  // The continuous colour scale a sheet's last drawing resolved to (Automatic reads the data): Format shows that scale's controls. A change while Format is open redraws the header.
+  const drawnScale = new WeakMap();
+  const noteColourScale = (sheet, scale) => {
+    if (drawnScale.get(sheet) === scale) return;
+    drawnScale.set(sheet, scale);
+    if (formatOpen && sheet.format?.colorScale === "auto") renderShelves();
+  };
   // A crosstab header's +/- — flips its key on sheet.collapsed (presentation only: the redraw reads the cached result).
   function collapseHeader(axis, key, valid) {
     const dash = activeWorksheet();
@@ -1472,7 +1479,7 @@ export function initDashboards() {
           if (err) { toast(err, "danger"); set({ [key]: f[key] }); return; } // redraw puts the kept value back
           set({ [key]: v });
         });
-        const diverging = f.colorScale === "diverging";
+        const diverging = (f.colorScale === "auto" ? drawnScale.get(s) ?? "sequential" : f.colorScale) === "diverging"; // Automatic: whichever the data made it
         panel.append(fmtSelect("Colour scale", SCALE_CHOICES, f.colorScale ?? "sequential", (v) => set({ colorScale: v })),
           fmtSelect("Steps", STEP_CHOICES, f.colorSteps ?? 0, (v) => set({ colorSteps: Number(v) })),
           ...(diverging ? [fmtNumber("Colour centre", f.colorCentre, "auto", (v) => { // cool above, warm below; no pins (the ends follow the centre)
@@ -1485,6 +1492,12 @@ export function initDashboards() {
         if (diverging) { // the pair sits on its own line, wide enough for "Green / Violet"
           const pair = fmtSelect("Diverging colours", DIV_PAIR_CHOICES, f.colorPair ?? "default", (v) => set({ colorPair: v }));
           pair.classList.add("ws-fmt-field--line"); panel.append(pair);
+          if (!f.colorSteps) { // steps already wear both end colours
+            const full = fmtCheck("Use full colour range", f.colorFullRange === true, (v) => { // off = symmetric about the centre; on = each side its own span
+              s.format = { ...f }; if (v) s.format.colorFullRange = true; else delete s.format.colorFullRange; commit(dash, s);
+            });
+            panel.append(full);
+          }
         }
       }
       if (hasAxes)

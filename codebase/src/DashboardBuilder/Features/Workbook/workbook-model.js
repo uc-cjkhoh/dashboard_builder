@@ -674,6 +674,10 @@ function cleanFormat(f0, where, issues) {
   if (colourRangeError(out.colorMin, out.colorMax)) { issues.push(`${w}: the colour range minimum was not less than the maximum — cleared.`); out.colorMin = out.colorMax = null; }
   out.colorScale = SCALE_CHOICES.some(([v]) => v === f.colorScale) ? f.colorScale : f.colorScale === undefined ? base.colorScale
     : (issues.push(`${w}: colour scale "${f.colorScale}" — reset to Low → high.`), base.colorScale);
+  if (f.colorFullRange !== undefined) { // Use full colour range: absent (older files, the default) stays off defaultFormat; off = the symmetric scale
+    if (typeof f.colorFullRange === "boolean") out.colorFullRange = f.colorFullRange;
+    else issues.push(`${w}: use full colour range must be on or off — reset.`);
+  }
   out.colorPair = DIV_PAIR_CHOICES.some(([v]) => v === f.colorPair) ? f.colorPair : f.colorPair === undefined ? base.colorPair
     : (issues.push(`${w}: diverging colours "${f.colorPair}" — reset to Orange / Blue.`), base.colorPair);
   out.colorSteps = f.colorSteps == null ? base.colorSteps : typeof f.colorSteps === "number" && !colourStepsError(f.colorSteps) ? f.colorSteps
