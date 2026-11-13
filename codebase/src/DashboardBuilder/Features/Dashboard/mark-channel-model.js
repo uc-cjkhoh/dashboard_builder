@@ -61,8 +61,16 @@ export const markerSizeFor = (fraction) => Math.round(MARKER[0] + (fraction ?? 0
 
 /** Does the drawn chart take Size? A bar needs one measure (a thickness per bar); line / area size every series' markers by the row's Size value. */
 export const drawsSize = (type, mainCount) => (type === "bar" ? mainCount === 1 : type === "line" || type === "area");
-/** How a line draws Size: "width" (its own thickness, a straight line) or "marker" (the markers' size: a stepped line, an area); null elsewhere. */
-export const lineSizeMode = (type, lineStyle) => (type === "line" ? ((lineStyle ?? "straight") === "straight" ? "width" : "marker") : type === "area" ? "marker" : null);
+/** A thickness overlay is one polygon per segment: above this many points in all the lines together the markers carry Size instead. */
+export const LINE_WIDTH_MAX_POINTS = 2000;
+/** How a line draws Size: "width" (its own thickness, a straight line within the point bound) or "marker" (the markers' size: a stepped line, an area, too many points); null elsewhere. */
+export const lineSizeMode = (type, lineStyle, points = 0) => (type === "line" ? ((lineStyle ?? "straight") === "straight" && points <= LINE_WIDTH_MAX_POINTS ? "width" : "marker") : type === "area" ? "marker" : null);
+/** The hint when a line varies its markers instead of its thickness (stepped, or over the point bound), else null. */
+export function lineSizeNote(type, lineStyle, points = 0) {
+  if (type !== "line") return null;
+  if ((lineStyle ?? "straight") !== "straight") return "A stepped line varies its markers' size with Size — set Format → Line style to Straight to vary the line's thickness.";
+  return points > LINE_WIDTH_MAX_POINTS ? `A line with more than ${LINE_WIDTH_MAX_POINTS.toLocaleString("en-US")} points varies its markers' size with Size — filter or lower Top N to draw the line's thickness.` : null;
+}
 /** The hint when Size sits beside a Colour dimension on a Stacked chart (its segments of one bar can't take a thickness), else null. */
 export const splitSizeNote = (hasSize, type) => (hasSize && type === "stacked" ? NOTE.sizeStacked : null);
 /** The hint when a colour measure sits beside Shape or a Colour dimension on the scatter family (one Colour slot, so only Shape + a measure), else null. */

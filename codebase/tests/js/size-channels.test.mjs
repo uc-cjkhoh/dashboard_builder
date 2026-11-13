@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { sizeChannel, splitSizeNote, drawsSize, lineSizeMode } from "../../src/DashboardBuilder/Features/Dashboard/mark-channel-model.js";
+import { sizeChannel, splitSizeNote, drawsSize, lineSizeMode, lineSizeNote, LINE_WIDTH_MAX_POINTS } from "../../src/DashboardBuilder/Features/Dashboard/mark-channel-model.js";
 import { marksChannels, scatterGroups, colorSplitData, sizeGridOf, statusText } from "../../src/DashboardBuilder/Features/Dashboard/result-model.js";
-import { planDims, planMeasures, buildPlan, SCATTER_TYPES, sizeKeyIndex } from "../../src/DashboardBuilder/Features/Dashboard/sheet-plan.js";
+import { planDims, planMeasures, tableMeasures, exportPlan, buildPlan, SCATTER_TYPES, sizeKeyIndex } from "../../src/DashboardBuilder/Features/Dashboard/sheet-plan.js";
 import { visibleTools } from "../../src/DashboardBuilder/Features/Dashboard/toolbar-rules.js";
 import { viewCounts, checkAdd } from "../../src/DashboardBuilder/Features/Dashboard/filter-rules.js";
 
@@ -43,6 +43,15 @@ test("lineSizeMode: a straight line varies its own thickness; a stepped line, an
   for (const ls of ["step", "jump"]) assert.equal(lineSizeMode("line", ls), "marker", ls);
   assert.equal(lineSizeMode("area", "straight"), "marker");
   assert.equal(lineSizeMode("bar", "straight"), null);
+});
+test("lineSizeMode: a thickness overlay is bounded — above 2000 points in all the lines together the markers carry Size, and the note says why", () => {
+  assert.equal(LINE_WIDTH_MAX_POINTS, 2000);
+  assert.equal(lineSizeMode("line", "straight", 2000), "width");
+  assert.equal(lineSizeMode("line", "straight", 2001), "marker");
+  assert.match(lineSizeNote("line", "straight", 2001), /2,000 points/);
+  assert.match(lineSizeNote("line", "step", 10), /Straight/);
+  assert.equal(lineSizeNote("line", "straight", 10), null);
+  assert.equal(lineSizeNote("area", "straight", 5000), null, "an area never drew thickness: no note");
 });
 test("drawsSize still agrees with the hint rule for bar, line and area", () => {
   for (const t of ["bar", "line", "area"]) for (const n of [1, 2]) assert.equal(drawsSize(t, n), sizeChannel(t, n).ok, `${t} ${n}`);
@@ -133,4 +142,25 @@ test("statusText: a Table / Text Size measure is not counted as a measure of the
   assert.match(statusText(barSheet("text", { marks: marks({ size: meas("qty") }) }), r), /1 measure$/);
   assert.match(statusText(barSheet("text"), result([row(["EU"], 5)])), /1 measure$/);
   assert.match(statusText(barSheet("bar", { marks: marks({ size: meas("qty") }) }), r), /2 measures$/, "other types keep counting every column");
+});
+test("tableMeasures: a Table / Text crosstab's measures are the plan's without the Size column (it is stripped before drawing), later columns keep their place", () => {
+  const t = barSheet("text", { marks: marks({ size: meas("qty"), label: meas("id") }) });
+  assert.deepEqual(planMeasures(t).map((e) => e.role), ["shelf", "size", "aux"]);
+  assert.deepEqual(tableMeasures(t).map((e) => e.role), ["shelf", "aux"]);
+  assert.deepEqual(tableMeasures(barSheet("table", { marks: marks({ size: meas("qty") }) })).map((e) => e.role), ["shelf"]);
+  assert.deepEqual(tableMeasures(barSheet("text")).map((e) => e.role), ["shelf"]);
+});
+test("exportPlan: the CSV of a Table / Text matches the screen — the Size measure is not an exported column", () => {
+  const ctx = { calculations: [], entities: new Map([["e1", { id: "e1", db: "shop", table: "orders" }]]), relationships: new Map(), sharedFilters: [], parameters: [], metaOf: () => ({}), nameOf: (f) => f.column, columnType: () => "" };
+  for (const type of ["table", "text"]) {
+    const s = barSheet(type, { marks: marks({ size: meas("qty") }) });
+    const plan = buildPlan(s, null, ctx);
+    assert.equal(plan.measures.length, 2);
+    assert.equal(exportPlan(s, plan).measures.length, 1, type);
+  }
+  const bar = barSheet("bar", { marks: marks({ size: meas("qty") }) });
+  const p = buildPlan(bar, null, ctx);
+  assert.equal(exportPlan(bar, p), p, "other types export as before");
+  const none = barSheet("table"); const q = buildPlan(none, null, ctx);
+  assert.equal(exportPlan(none, q), q);
 });

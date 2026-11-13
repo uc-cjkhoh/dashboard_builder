@@ -364,6 +364,9 @@ try {
     await dragChip('channel', toolEl('Size')); await settle(600);
     must((await hints()).some((t) => /measure/.test(t)), 'hint: ' + J(await hints()));
     must((await ev(`document.querySelectorAll('#ws-chart table.xtab thead th').length`)) <= 3, 'no extra column');
+    await openFormat();
+    must(await ev(`!(${fmtField('Smallest size')})`), 'Edit Sizes is not offered while the Size field is only a hint');
+    await closeFormat();
   });
   await check('Table (crosstab) takes Size too', async () => {
     await dragChip('discount', toolEl('Size')); await settle(500);
@@ -395,6 +398,18 @@ try {
     await dragChip('discount', toolEl('Size')); await settle(700);
     const cls = await cellClasses();
     must(cls.filter((c) => /xt-fs-2/.test(c)).length >= 2 && cls.some((c) => !/xt-fs/.test(c)), 'steps with measures on Rows: ' + J(cls));
+  });
+
+  await newSheet();
+  await dragChip('region', `__t.zone('columns')`);
+  await dragChip('amount', `__t.zone('rows')`); await dragChip('qty', `__t.zone('rows')`);
+  await settle(400);
+  await chartType('Bar');
+  await check('a bar with two measures: Size is a hint and Edit Sizes is not offered', async () => {
+    await dragChip('discount', toolEl('Size')); await settle(500);
+    await openFormat();
+    must(await ev(`!(${fmtField('Smallest size')})`), 'no Edit Sizes controls');
+    await closeFormat();
   });
 
   // ---- hints -----------------------------------------------------------------------------------------------------------------------------

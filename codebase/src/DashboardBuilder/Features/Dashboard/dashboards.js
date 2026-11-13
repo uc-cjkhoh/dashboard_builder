@@ -47,13 +47,13 @@ import { FONT_CHOICES } from "./font-model.js";
 import { BACKGROUND_CHOICES } from "./background-model.js";
 import { TABLE_ALIGN_CHOICES, TABLE_DENSITY_CHOICES, TABLE_SHADE_CHOICES } from "./table-style-model.js";
 import { COL_ALIGN_CHOICES, tableColumnList, setTableColumn, columnLook, columnWidthError } from "./table-columns-model.js";
-import { COLOUR_MEASURE_TYPES } from "./mark-channel-model.js";
+import { COLOUR_MEASURE_TYPES, sizeChannel } from "./mark-channel-model.js";
 import { MARK_BORDER_CHOICES, MARKER_SHAPE_CHOICES, BORDER_TYPES, MARK_BORDER_COLOUR_CHOICES, markerSizeError } from "./mark-style-model.js";
 import { SIZE_SCALE_TYPES, ZERO_BASED_TYPES, sizeScaleOf, sizeRangeError, cleanSizeScale } from "./size-scale-model.js";
 import { targetChoices, effectiveTargetMeasure } from "./bullet-model.js";
 import { sourceOfTable, wireSource, distinctPlan, distinctPlanSql, distinctMembers, customSqlOf, sqlWire } from "../Core/source-model.js";
 import { heldOutCards } from "../Relations/relation-rules.js";
-import { keyOf, SCATTER_TYPES, COLOR_USES, isSizeDimension, colorMode, isDrillActive, drillActiveDim, planDims, planMeasures, sortTargets as planSortTargets, measureName as planMeasureName, buildPlan as planQuery, periodFilters as planPeriodFilters, calcContext, appliedShared as planAppliedShared, withParams, toServerFilter, isDateOnlyType } from "./sheet-plan.js";
+import { keyOf, SCATTER_TYPES, COLOR_USES, isSizeDimension, colorMode, isDrillActive, drillActiveDim, planDims, planMeasures, tableMeasures, exportPlan, sortTargets as planSortTargets, measureName as planMeasureName, buildPlan as planQuery, periodFilters as planPeriodFilters, calcContext, appliedShared as planAppliedShared, withParams, toServerFilter, isDateOnlyType } from "./sheet-plan.js";
 import { isMissingPill, missingIn, missingMessage } from "./missing-columns.js";
 import { catalogFromEntities } from "../Calc/calc-resolve.js";
 import { newCalcFilter, isCalcPill, makeCalcPill, refusal, syncCalcPills, pillSlots, clearCalcPills, clearFilterCalc, usesCalc, CALC_AGGS } from "../Calc/calc-pill.js";
@@ -1353,7 +1353,7 @@ export function initDashboards() {
     const view = buildPlan(s);
     if (!view) { toast("Add fields from related tables before exporting.", "info"); return; }
     // The whole result (up to 100,000 rows), not just what the view shows: no Top-N, no paging.
-    const plan = { ...view, limit: LIMITS.exportRows, offset: undefined, withTotal: undefined, otherBucket: undefined };
+    const plan = { ...exportPlan(s, view), limit: LIMITS.exportRows, offset: undefined, withTotal: undefined, otherBucket: undefined };
     try {
       const csv = await api.exportCsv(plan);
       downloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8" }), `${exportBaseName(dash)}.csv`);
@@ -1413,7 +1413,7 @@ export function initDashboards() {
         set({ markerSize: v });
       }));
     if (linesTakeStyle(s.chartType)) panel.append(fmtSelect("Marker shape", MARKER_SHAPE_CHOICES, f.markerShape ?? "circle", (v) => set({ markerShape: v })));
-    if (s.marks?.size && SIZE_SCALE_TYPES.has(s.chartType)) panel.append(...sizesEditor(f, s, (next) => { // Edit Sizes: the stored shape holds only what differs from the default
+    if (s.marks?.size && SIZE_SCALE_TYPES.has(s.chartType) && sizeChannel(s.chartType, shelfMeasureCount(s), isSizeDimension(s.marks.size)).ok) panel.append(...sizesEditor(f, s, (next) => { // Edit Sizes: the stored shape holds only what differs from the default
       const { value } = cleanSizeScale(next);
       s.format = { ...f };
       if (value) s.format.sizeScale = value; else delete s.format.sizeScale;
@@ -3052,7 +3052,7 @@ export function initDashboards() {
 
   function conditionalEditor(dash, s) {
     const f = s.format;
-    const mplan = planMeasures(s).filter((e) => e.role === "shelf"); // a Size measure is not a cell value
+    const mplan = tableMeasures(s); // a Size measure is not a cell value
     const box = el("div", "ws-cf");
     box.append(el("span", "ws-fmt-label ws-cf__title", "Conditional formatting"));
     if (!mplan.length) { box.append(el("span", "ws-shelf__note", "Add a measure to format its cells.")); return box; }

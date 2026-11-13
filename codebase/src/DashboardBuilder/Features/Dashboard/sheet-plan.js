@@ -169,6 +169,16 @@ export function planMeasures(sheet) {
   return out;
 }
 
+/** The measures a Table / Text crosstab draws as columns: the plan's, minus the Size column (it sets the text size and is stripped from the result first). */
+export const tableMeasures = (sheet) => planMeasures(sheet).filter((e) => e.role !== "size");
+
+/** `plan` as a CSV export sends it: a Table / Text does not export its Size measure (the screen shows it as the text size, not a column). */
+export function exportPlan(sheet, plan) {
+  if (sheet.chartType !== "table" && sheet.chartType !== "text") return plan;
+  const mplan = planMeasures(sheet);
+  return mplan.some((e) => e.role === "size") ? { ...plan, measures: plan.measures.filter((_, i) => mplan[i].role !== "size") } : plan;
+}
+
 /**
  * The orderable output columns, in the order the query selects them: all group-by dimensions as k0,k1,…; then the
  * SHELF measures as v0,v1,…. Marks-only measures (size/colour/aux) aren't sort targets but keep aliases past them.

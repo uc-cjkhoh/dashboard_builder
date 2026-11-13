@@ -72,13 +72,13 @@ function applyScale(f, scale, degenerate) {
 
 /**
  * A measure's share function: value -> 0..1 (null for a non-number). `zero` = whether the span starts at zero for this chart (the
- * setting, else the chart's default). From zero the span runs from min(0, smallest value) to max(1, largest) — a point chart's
- * long-standing rule; otherwise from the data's smallest to largest value (all equal = full size).
+ * setting, else the chart's default). From zero the span runs from min(0, smallest value) to max(0, largest value); a point chart (`point`)
+ * keeps its long-standing floor of 1 on the top (max(1, largest)); otherwise from the data's smallest to largest value (all equal = full size).
  */
-export function measureShareFn(values, { zero = false, scale = sizeScaleOf({}) } = {}) {
+export function measureShareFn(values, { zero = false, point = false, scale = sizeScaleOf({}) } = {}) {
   const nums = (values ?? []).filter(finite).map(Number);
   if (!zero && !nums.length) return () => null;
-  const lo = zero ? Math.min(...nums, 0) : Math.min(...nums), hi = zero ? Math.max(...nums, 1) : Math.max(...nums);
+  const lo = zero ? Math.min(...nums, 0) : Math.min(...nums), hi = zero ? Math.max(...nums, point ? 1 : 0) : Math.max(...nums);
   const degenerate = !zero && lo === hi, span = (hi - lo) || 1;
   return (v) => (finite(v) ? applyScale(degenerate ? 1 : (Number(v) - lo) / span, scale, degenerate) : null);
 }
@@ -89,12 +89,13 @@ export const measureShares = (values, opts) => { const f = measureShareFn(values
 export function memberOrder(rawKeys) {
   const seen = new Map();
   for (const raw of rawKeys) { const key = tupleKey([raw]); if (!seen.has(key)) seen.set(key, { raw, key }); }
+  const list = [...seen.values()];
+  const numeric = list.every((m) => m.raw == null || Number.isFinite(Number(m.raw))); // one rule for every pair, so the order is transitive
   const cmp = (a, b) => {
     if (a.raw == null || b.raw == null) return (a.raw == null) - (b.raw == null);
-    const na = Number(a.raw), nb = Number(b.raw);
-    return Number.isFinite(na) && Number.isFinite(nb) ? na - nb : String(a.raw).localeCompare(String(b.raw));
+    return numeric ? Number(a.raw) - Number(b.raw) : String(a.raw).localeCompare(String(b.raw));
   };
-  return [...seen.values()].sort(cmp);
+  return list.sort(cmp);
 }
 
 /** A member step's share function: rank -> 0..1 for `count` members spread evenly from smallest (0) to largest (1); one member = full size. */

@@ -1,5 +1,5 @@
 import { roleOf } from "./show-me-rules.js";
-import { planMeasures } from "./sheet-plan.js";
+import { tableMeasures } from "./sheet-plan.js";
 import { isCalc } from "./table-calc.js";
 import { combine } from "./analytics-model.js";
 import { CF_OP_CHOICES, CF_TONE_CHOICES, TONE_ICON, measureKey, extentOf, scaleColors, barGeometry, matchRule, isActive, midpointOf } from "./conditional-model.js";
@@ -116,7 +116,7 @@ export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, ca
   // Totals: a grand-total column (when Columns has dimensions), a grand-total row (when Rows has),
   // and a subtotal after each first-level Rows group — each combined by the measure's own aggregation.
   const tot = sheet.analytics?.totals ?? {};
-  const mplanT = planMeasures(sheet);
+  const mplanT = tableMeasures(sheet);
   const aggOfMi = (mi) => (isCalc(mplanT[mi]?.field?.tableCalc) ? null : mplanT[mi]?.agg ?? (mplanT.length ? "sum" : "count"));
   const total = (mi, rts, cts) => {
     const agg = aggOfMi(mi);
@@ -289,7 +289,7 @@ function setWidth(cell, w) {
 // Per result measure: its setting, value extent over the loaded rows, and token palette — or null.
 function conditionalFor(sheet, measures, shown) {
   const all = sheet.format?.conditional ?? {};
-  const mplan = planMeasures(sheet);
+  const mplan = tableMeasures(sheet);
   let palette = null;
   return measures.map((name, mi) => {
     const cfg = all[measureKey(mplan[mi])];

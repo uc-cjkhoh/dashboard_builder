@@ -68,6 +68,14 @@ test("a straight line's own thickness varies with Size: a silent segment series 
   const tip = o.tooltip.formatter([{ dataIndex: 1, seriesIndex: 0, seriesId: "x", seriesName: "v", value: 3, axisValueLabel: "b" }, { dataIndex: 1, seriesIndex: 1, seriesId: seg.id, seriesName: "v", value: [1, 3], axisValueLabel: "b" }]);
   assert.equal((tip.match(/<b>v:<\/b>/g) ?? []).length, 1, "the segment series is not listed twice");
 });
+test("a long line chart keeps marker size instead of one polygon per segment (more than 2000 points in all)", () => {
+  const n = 1001, cats = Array.from({ length: n }, (_, i) => `c${i}`);
+  const big = buildCartesian({ type: "line", categories: cats, series: [S("a", cats.map((_, i) => i)), S("b", cats.map((_, i) => -i))], format: {}, sizes: cats.map((_, i) => i), sizeName: "qty" });
+  assert.equal(big.series.filter((s) => s.type === "custom").length, 0);
+  assert.ok(big.series[0].data.every((d) => typeof d === "object" && d.symbolSize >= 6), "the markers carry Size");
+  const ok = buildCartesian({ type: "line", categories: cats, series: [S("a", cats.map((_, i) => i)), S("b", cats.map((_, i) => -i))].slice(0, 1), format: {}, sizes: cats.map((_, i) => i), sizeName: "qty" });
+  assert.equal(ok.series.filter((s) => s.type === "custom").length, 1, "2000 points or fewer keep the thickness");
+});
 test("a stepped line and an area keep marker size; the line's own width is untouched", () => {
   for (const [type, format] of [["line", { lineStyle: "step" }], ["area", {}]]) {
     const o = cart(type, [S("v", [1, 3, 2])], { sizes: [10, 20, 30], sizeName: "qty", format });
@@ -75,10 +83,13 @@ test("a stepped line and an area keep marker size; the line's own width is untou
     assert.deepEqual(o.series[0].data.map((d) => d.symbolSize), [6, 15, 24], type);
   }
 });
-test("a line with Size and no setting draws the same shares through Edit Sizes: Reversed flips the thickest segment", () => {
-  const th = (format) => { const o = cart("line", [S("v", [1, 3, 2])], { sizes: [10, 20, 30], sizeName: "qty", format }); const seg = o.series.find((s) => s.type === "custom");
-    const g = seg.renderItem({ dataIndex: 1 }, { coord: ([a, b]) => [a * 100, 300 - b * 10] }); return Math.round(Math.hypot(g.shape.points[0][0] - g.shape.points[3][0], g.shape.points[0][1] - g.shape.points[3][1])); };
-  assert.equal(th({}), 7); assert.equal(th({ sizeScale: { reversed: true } }), 7, "the middle point is the midpoint either way");
+test("Edit Sizes on a line: Reversed flips the end widths of the first segment ([2, 7] becomes [12, 7])", () => {
+  const ends = (format) => { const seg = cart("line", [S("v", [1, 3, 2])], { sizes: [10, 20, 30], sizeName: "qty", format }).series.find((s) => s.type === "custom");
+    const g = seg.renderItem({ dataIndex: 0 }, { coord: ([a, b]) => [a * 100, 300 - b * 10] }); const p = g.shape.points; const d = (x, y) => Math.round(Math.hypot(x[0] - y[0], x[1] - y[1]));
+    return [d(p[0], p[3]), d(p[1], p[2])]; };
+  assert.deepEqual(ends({}), [2, 7]);
+  assert.deepEqual(ends({ sizeScale: { reversed: true } }), [12, 7]);
+  assert.deepEqual(ends({ sizeScale: { smallest: 50 } }), [7, 10]);
 });
 test("Size beside a Colour split on a line: markers per cell, or thickness per cell", () => {
   const o = cart("area", [S("web", [1, 2, 3]), S("shop", [4, 5, 6])], { sizeGrid: [[10, 20, 30], [30, 20, 10]], sizeName: "qty" });

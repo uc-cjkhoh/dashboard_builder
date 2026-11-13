@@ -15,7 +15,7 @@ test("with nothing stored, the shares are exactly what the charts drew before (s
   assert.deepEqual(measureShares([5, 5], { zero: false, scale: DEFAULT }), [1, 1]);
   // the bubble rule of chart.js's old sizeScaler: min(…, 0) .. max(…, 1)
   const old = (vals) => { const min = Math.min(...vals, 0), max = Math.max(...vals, 1), span = (max - min) || 1; return vals.map((x) => (x - min) / span); };
-  for (const vals of [[3, 41, 9], [0.2, 0.5], [-4, 6, 0], [7], [0, 0]]) assert.deepEqual(measureShares(vals, { zero: true, scale: DEFAULT }), old(vals), JSON.stringify(vals));
+  for (const vals of [[3, 41, 9], [0.2, 0.5], [-4, 6, 0], [7], [0, 0]]) assert.deepEqual(measureShares(vals, { zero: true, point: true, scale: DEFAULT }), old(vals), JSON.stringify(vals));
   assert.equal(barThickness(measureShares([1, 3], { scale: DEFAULT })[1], 100), barThickness(sizeFractions([1, 3])[1], 100));
   assert.equal(markerSizeFor(measureShares([1, 3], { scale: DEFAULT })[0]), 6);
 });
@@ -33,6 +33,12 @@ test("the setting's defaults: smallest 0, largest 100, from zero follows the cha
 test("From zero: the span starts at 0 (or the smallest negative); off, at the data's smallest", () => {
   assert.deepEqual(measureShares([10, 20, 40], { zero: true, scale: DEFAULT }), [0.25, 0.5, 1]);
   assert.deepEqual(measureShares([10, 20, 40], { zero: false, scale: DEFAULT }), [0, 1 / 3, 1]);
+});
+test("From zero off a point chart has no floor of 1: values all below 1 still span the full range (bubbles keep today's floor)", () => {
+  assert.deepEqual(measureShares([0.01, 0.02, 0.05], { zero: true, scale: DEFAULT }).map((x) => Math.round(x * 100) / 100), [0.2, 0.4, 1]);
+  assert.deepEqual(measureShares([0.2, 0.5], { zero: true, point: true, scale: DEFAULT }), [0.2, 0.5], "bubbles: max(…, 1)");
+  assert.deepEqual(measureShares([-4, 6, 0], { zero: true, scale: DEFAULT }), [0, 1, 0.4]);
+  assert.deepEqual(measureShares([0, 0], { zero: true, scale: DEFAULT }), [0, 0]);
 });
 test("Reversed: the largest value gets the smallest mark; all equal (nothing to reverse) stays full", () => {
   const rev = { ...DEFAULT, reversed: true };
@@ -77,6 +83,8 @@ test("cleanSizeScale: only what differs from the default is kept; a bad part is 
 test("memberOrder: numbers by value, text by locale, no member last; first-seen duplicates collapse", () => {
   assert.deepEqual(memberOrder(["b", "a", "b", null, "c"]).map((m) => m.raw), ["a", "b", "c", null]);
   assert.deepEqual(memberOrder([10, 9, 100]).map((m) => m.raw), [9, 10, 100]);
+  assert.deepEqual(memberOrder([9, "10", "a", 100]).map((m) => m.raw), ["10", 100, 9, "a"], "mixed numbers and text: locale for every pair (transitive)");
+  assert.deepEqual(memberOrder([9, "10", 100]).map((m) => m.raw), [9, "10", 100], "all numeric: by value");
   assert.deepEqual(memberOrder(["2024-02", "2024-01"]).map((m) => m.raw), ["2024-01", "2024-02"]);
 });
 test("memberRanks / memberShares: each member a step, spread evenly smallest to largest; one member is full size; skipped rows stay null", () => {

@@ -459,7 +459,7 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
   // area / stepped line's marker size. `sizes` is one value per category shared by every series; `sizeGrid` (beside a Colour split) one per series cell.
   const sz = cartesianSizes({ sizes, sizeGrid, sizeOrder, type, mainCount, format });
   const sizeFr = sz?.fr ?? null; // sizeFr[series][category] = 0..1
-  const sizeMode = lineSizeMode(type, format.lineStyle); // "width" | "marker" | null
+  const sizeMode = lineSizeMode(type, format.lineStyle, mainCount * labels.length); // "width" | "marker" | null
   const sizeNote = sz ? sizeLegend(sz.flat, sizeName, c, fmtVal, showLegend && pos === "top" ? 24 : 2, { order: sizeOrder, reversed: sizeScaleOf(format).reversed }) : null;
   const sizeText = (si, di) => { // a cell's Size in words (a member's name, or the formatted value)
     const m = sizeMembersGrid ? sizeMembersGrid[si]?.[di] : sizeMembers ? sizeMembers[di] : undefined;
@@ -1295,7 +1295,7 @@ const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 function sizeScaler(values, accessor, { format, order } = {}) {
   const scale = sizeScaleOf(format);
   const nums = (values ?? []).map((v) => Number(v) || 0);
-  const share = order ? memberShareFn(order.length, scale) : measureShareFn(nums, { zero: scale.fromZero ?? true, scale });
+  const share = order ? memberShareFn(order.length, scale) : measureShareFn(nums, { zero: scale.fromZero ?? true, point: true, scale });
   return (val) => { const v = accessor ? accessor(val) : (Number(val) || 0); return 8 + (share(order ? v : Number(v) || 0) ?? 0) * (36 - 8); };
 }
 // The scale's ends: the data span unless Format pinned one.
