@@ -821,7 +821,7 @@ function buildScatter({ categories, series, format = {}, sizes, sizeName, sizeMe
 
 // scatterShapes — one scatter series per Shape-dimension value, each a distinct symbol so
 // identity survives greyscale (shape is a non-colour channel). X/Y are the two shelf measures; an
-// optional Size dim scales the symbol. spec: { groups:[{name, points:[{value:[x,y,size?], name}], colour?: { index, name }, shape?: { index } }],
+// optional Size dim scales the symbol. spec: { groups:[{name, points:[{value:[x,y,size?], name, row (the result row behind the point)}], colour?: { index, name }, shape?: { index } }],
 // symbol (the mark type's symbol when a group has no Shape), xName, yName, hasSize, sizeName, format }. A group with a Colour member wears that
 // member's colour (a member colour from Format wins over the palette slot); one with a Shape member its symbol; shape alone keeps one palette colour per series.
 // A Shape member wears the symbol chosen for it (`memberShapes`: displayed name -> shape key, Edit member shapes), else the one at its position in the set; a bin of a Shape measure its bin's symbol. `shapeName`

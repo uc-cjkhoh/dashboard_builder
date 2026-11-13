@@ -99,7 +99,8 @@ export function renderScatterShapes(container, rc, sheet, result, seriesIdx, siz
   const labelField = marksOf(sheet).label;
   const texts = labelField ? markFieldValues(sheet, result.rows, planMeasures(sheet), labelField, fmtVal, fmtCat, (f) => planMeasureName(f, rc.plan)) : null;
   if (labelField && !texts) container.append(hint(LABEL_GROUP_NOTE)); // a dimension that is not a group-by has no one value per mark: say so, as the unsplit point chart does
-  const pick = selectHandler(rc, sheet, primaryDim(sheet), sheet.chartType, rawKeys); // a click on a mark selects its primary-dimension value, as on any other point chart
+  // Marks of a split point chart stay inert (as they always were) unless Label marks is Selected while labels are drawn: only then does a click select the mark's primary-dimension value, so Selected has a way to be set.
+  const pick = lm.spec.labelMarks?.mode === "selected" ? selectHandler(rc, sheet, primaryDim(sheet), sheet.chartType, rawKeys) : undefined;
   const shapeField = marksOf(sheet).shape;
   const memberShapesSpec = isShapeDimension(shapeField) && !isCalcPill(shapeField) ? memberShapeSpec(rc, sheet, shapeField, shapeMembers) : {}; // a binned measure has no members to choose for
   drawChart(container, {

@@ -473,6 +473,12 @@ try {
       must(J(t) === J(['APAC', 'CA', 'LATAM', 'US']), 'web: APAC and US; shop: LATAM and CA: ' + J(t));
       await shot(`split-${channel.toLowerCase()}-minmax`);
     });
+    await check(`split by ${channel}: marks stay inert unless Label marks is Selected — a click on a point selects nothing`, async () => {
+      const px = await ev(`(() => { const d = ${inst}.getOption().series[1].data[1].value; const p = ${inst}.convertToPixel({ seriesIndex: 1 }, [d[0], d[1]]); const r = document.querySelector('.ws-chart-canvas').getBoundingClientRect(); return [r.left + p[0], r.top + p[1]]; })()`);
+      for (const type of ['mouseMoved', 'mousePressed', 'mouseReleased']) await b.send('Input.dispatchMouseEvent', { type, x: px[0], y: px[1], button: 'left', clickCount: 1 });
+      await settle(600);
+      must(await ev(`!document.querySelector('.ws-select')`), 'no selection chip while Label marks is Min & max');
+    });
     await check(`split by ${channel}: Highlighted shows only the highlighted point's label`, async () => {
       await setMode('highlighted');
       must((await pointLabels()).length === 0, 'none at rest: ' + J(await pointLabels()));

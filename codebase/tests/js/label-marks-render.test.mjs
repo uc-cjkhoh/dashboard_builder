@@ -341,3 +341,34 @@ test("split: a Label field that is a dimension nowhere in the query says so, as 
   assert.match(hints(c)[0], /Label by a numeric field/);
   assert.deepEqual(splitText(o, 0), ["EU", "US", "JP"]); // the Data labels text
 });
+
+// Marks of a split point chart select only while Label marks is Selected (and labels are drawn): existing split charts stay inert.
+const clickOf = (sh, options = {}) => { draw(sh, splitResult(), { hooks: { onSelect() {} }, ...options }); return insts.at(-1).handlers.find(([e]) => e === "click")?.[1]; };
+const editor = { interactive: true, select: true };
+const dashboard = { interactive: "select" }; // a dashboard widget: marks select, never drill, no legend selection (a widget with interactive:false has no select at all)
+
+test("split Scatter with Label marks All or Min & max, or with no labels drawn: no click handler, in the editor and on a dashboard", () => {
+  for (const how of ["shape", "colour"]) for (const opts of [editor, dashboard]) {
+    for (const format of [on, { ...on, labelMarks: "minmax" }, { ...on, labelMarks: "highlighted" }, { labelMarks: "selected" }, {}])
+      assert.equal(clickOf(splitSheet(how, format), opts), undefined, `${how} ${JSON.stringify(opts)} ${JSON.stringify(format)}`);
+  }
+});
+
+test("split Scatter set to Selected: a click handler in the editor and on a dashboard widget (select-only), which selects the row's region", () => {
+  for (const opts of [editor, dashboard]) {
+    const picked = [];
+    const click = clickOf(splitSheet("colour", { ...on, labelMarks: "selected" }), { ...opts, hooks: { onSelect: (f, raw) => picked.push([f.column, raw]) } });
+    assert.equal(typeof click, "function", JSON.stringify(opts));
+    click({ data: { row: 3 } });
+    assert.deepEqual(picked, [["region", "EU"]]);
+  }
+});
+
+test("a split Square or Circle never gets a click handler, even set to Selected", () => {
+  for (const chartType of ["square", "circle"])
+    for (const opts of [editor, dashboard]) assert.equal(clickOf(splitSheet("shape", { ...on, labelMarks: "selected" }, { chartType }), opts), undefined, `${chartType} ${JSON.stringify(opts)}`);
+});
+
+test("a static widget (interactive: false) never selects, whatever the mode", () => {
+  assert.equal(clickOf(splitSheet("colour", { ...on, labelMarks: "selected" }), { interactive: false }), undefined);
+});
