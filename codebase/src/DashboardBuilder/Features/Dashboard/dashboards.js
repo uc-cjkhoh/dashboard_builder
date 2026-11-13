@@ -49,6 +49,7 @@ import { BACKGROUND_CHOICES } from "./background-model.js";
 import { TABLE_ALIGN_CHOICES, TABLE_DENSITY_CHOICES, TABLE_SHADE_CHOICES } from "./table-style-model.js";
 import { COL_ALIGN_CHOICES, tableColumnList, setTableColumn, columnLook, columnWidthError } from "./table-columns-model.js";
 import { COLOUR_MEASURE_TYPES, sizeChannel, shapeChannel } from "./mark-channel-model.js";
+import { LABEL_MARK_CHOICES, labelContext, labelModesFor, labelMarksOf, effectiveLabelMode, cleanLabelMarks } from "./label-marks-model.js";
 import { MARK_BORDER_CHOICES, MARKER_SHAPE_CHOICES, BORDER_TYPES, MARK_BORDER_COLOUR_CHOICES, markerSizeError } from "./mark-style-model.js";
 import { OPACITY_TYPES, OPACITY_CHOICES, cleanMarkOpacity } from "./mark-opacity-model.js";
 import { addColourField, MULTI_COLOUR_TYPES } from "./colour-fields-model.js";
@@ -1479,6 +1480,13 @@ export function initDashboards() {
           f.legend, (v) => set({ legend: v })),
         fmtCheck("Data labels", f.dataLabels, (v) => set({ dataLabels: v })),
       );
+      const labelCtx = labelContext(s), labelModes = labelModesFor(labelCtx);
+      if (labelModes.length > 1) panel.append(fmtSelect("Label marks", LABEL_MARK_CHOICES.filter(([v]) => labelModes.includes(v)), effectiveLabelMode(labelMarksOf(f), labelCtx), (v) => { // which marks carry their label; the stored shape holds only what differs from All
+        const { value } = cleanLabelMarks(v);
+        s.format = { ...f };
+        if (value) s.format.labelMarks = value; else delete s.format.labelMarks;
+        commit(dash, s);
+      }));
       if (canColourByCat)
         panel.append(fmtCheck("Colour by category", f.colorByDimension, (v) => set({ colorByDimension: v })));
       panel.append(fmtCheck("Reverse palette", f.paletteReverse, (v) => set({ paletteReverse: v })), ...(colorMode(s) === "continuous" ? [] : [memberColourEditor(dash, s)]), // a colour measure replaces member colours

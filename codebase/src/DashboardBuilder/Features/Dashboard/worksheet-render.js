@@ -9,7 +9,8 @@ import { tupleKey } from "./grid-model.js";
 import { sizeScaleOf, measureShares, sizeLegendText, textStepFor } from "./size-scale-model.js";
 import { withOther, OTHER_TYPES } from "./scale-model.js";
 import { pieSplit } from "./pie-split-model.js";
-import { isGroupingPart, labelParts } from "./date-parts.js";
+import { isGroupingPart, labelParts, partLabel } from "./date-parts.js";
+import { mostRecentRaw, labelMarksOf } from "./label-marks-model.js";
 import { applyTableCalcs, isCalc } from "./table-calc.js";
 import { alignCompare } from "./period-model.js";
 import { disposeChart, resolvedColourScale } from "./chart.js";
@@ -46,10 +47,17 @@ import { keyAliasMaps, withMemberLabels } from "./member-labels.js";
 export function renderWorksheet(container, sheet, result, cmp, options = {}) {
   const rc = { container, plan: options.plan ?? { metaOf: () => ({}) }, interactive: options.interactive !== false && options.interactive !== "select",
     select: options.interactive !== false, selected: options.selected ?? null, hooks: options.hooks ?? {},
-    bucketedKey: null, calcPercent: new Set(), extraNotice: null, emptyText: options.emptyText ?? "No data for these fields." };
+    bucketedKey: null, recentKey: null, calcPercent: new Set(), extraNotice: null, emptyText: options.emptyText ?? "No data for these fields." };
   draw(container, rc, sheet, result, cmp);
   rc.hooks.onColourScale?.(sheet, resolvedColourScale(container)); // the editor's Format panel shows the controls of the scale Automatic resolved to
   return { extraNotice: rc.extraNotice };
+}
+
+/** Format → Label marks "Most recent": the latest date of the first group-by key, as the drawing will name it once date parts read as labels (null when not asked for, or no date). */
+function recentKeyOf(sheet, result, parts) {
+  if (labelMarksOf(sheet.format) !== "recent") return null;
+  const raw = mostRecentRaw(result.rows.map((r) => (r.isOther ? null : r.keys[0])));
+  return raw == null ? null : isGroupingPart(parts[0]) ? partLabel(parts[0], raw) : raw;
 }
 
 function draw(container, rc, sheet, result, cmp) {
@@ -64,6 +72,7 @@ function draw(container, rc, sheet, result, cmp) {
   if (result.other && OTHER_TYPES.has(sheet.chartType)) result = { ...result, rows: withOther(result.rows, result.other) };
   // Date-part keys read as "Mar 2024" / "Q1" / "Mon"; like a date-grouped axis, they aren't click-filterable.
   const parts = planDims(sheet).keyOrder.map((f) => f?.datePart ?? null);
+  rc.recentKey = recentKeyOf(sheet, result, parts); // before the keys read as labels
   result = labelParts(result, parts);
   if (cmp) cmp = { ...cmp, result: labelParts(cmp.result, parts) };
   if (isGroupingPart(parts[0])) rc.bucketedKey = 0;
