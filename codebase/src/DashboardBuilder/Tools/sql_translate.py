@@ -85,6 +85,7 @@ FIELD FIND_IN_SET FLOOR FROM_DAYS FROM_UNIXTIME GREATEST GROUP_CONCAT HEX HOUR I
 MIN MINUTE MOD MONTH MONTHNAME NOW NULLIF OCTET_LENGTH PI POSITION POW POWER QUARTER RADIANS RAND REGEXP_LIKE REGEXP_REPLACE REGEXP_SUBSTR REPEAT REPLACE REVERSE RIGHT ROUND RPAD RTRIM
 SECOND SHA1 SHA2 SIGN SIN SPACE SQRT STD STDDEV STDDEV_POP STDDEV_SAMP STR_TO_DATE STRCMP SUBDATE SUBSTR SUBSTRING SUBSTRING_INDEX SUM TAN TIMESTAMP TIMESTAMPADD TIMESTAMPDIFF TO_DAYS
 TRIM TRUNCATE UCASE UNHEX UNIX_TIMESTAMP UPPER UUID VAR_POP VAR_SAMP VARIANCE VERSION WEEK WEEKDAY WEEKOFYEAR YEAR YEARWEEK
+ROW_NUMBER RANK DENSE_RANK PERCENT_RANK CUME_DIST NTILE LAG LEAD FIRST_VALUE LAST_VALUE NTH_VALUE
 """.split())
 # Words that start ClickHouse-only syntax: found in the text outside quotes and comments.
 # ClickHouse functions that share a name with a MySQL function but mean something else (ASCII-only upper / lower, NULL-giving concat_ws, DAYOFWEEK from Monday, raw-byte SHA1,
@@ -186,6 +187,17 @@ def mysql_to_clickhouse(sql, sqlglot, ErrorLevel, fold_pairs=()):
         if isinstance(node, exp.Lower) or (isinstance(node, exp.Anonymous) and node.name == "lowerUTF8"):
             return node
         return A("lowerUTF8", A("toString", node))
+
+    def nonzero_literal(node):
+        """A number written in the query that is not zero (-2 too): dividing by it needs no nullIf, and keeps the column from becoming Nullable."""
+        if isinstance(node, exp.Neg):
+            node = node.this
+        if isinstance(node, exp.Paren):
+            node = node.this
+        try:
+            return isinstance(node, exp.Literal) and not node.is_string and float(node.this) != 0
+        except ValueError:
+            return False
 
     def when(node):
         """A date-like text literal as a ClickHouse date value (MySQL takes the text as it is; ClickHouse's date functions refuse text)."""
@@ -653,6 +665,23 @@ def mysql_to_clickhouse(sql, sqlglot, ErrorLevel, fold_pairs=()):
             return A("toLastDayOfMonth", when(node.this))
         if isinstance(node, exp.DateDiff) and node.args.get("unit") is None:  # MySQL DATEDIFF(a, b): this = a, expression = b
             return A("dateDiff", S("day"), when(node.args["expression"]), when(node.args["this"]))
+        if isinstance(node, (exp.Lag, exp.Lead, exp.NthValue)):
+            # A value that does not exist (LAG on the first row, LEAD on the last, NTH_VALUE before the n-th row) is NULL in MySQL; ClickHouse answers the type's zero ('' / 0) unless
+            # the argument is Nullable. An explicit default (LAG(x, 1, 0)) is kept as it is.
+            default = node.args.get("default")
+            explicit = default is not None and not isinstance(default, exp.Null)
+            if not explicit and not (isinstance(node.this, exp.Anonymous) and node.this.name == "toNullable"):
+                changes.append("window-null")
+                node.set("this", A("toNullable", node.this))
+                if isinstance(default, exp.Null):
+                    node.set("default", None)
+            return node
+        if isinstance(node, exp.CumeDist):
+            return A("cume_dist")  # ClickHouse knows only the lower-case name (CUME_DIST: unknown function)
+        if isinstance(node, exp.Pad):  # MySQL turns a number into text first (LPAD(7, 3, '0') = '007'); ClickHouse's leftPad refuses a number. UTF8 variants count characters, as MySQL does
+            fill = node.args.get("fill_pattern")
+            if fill is not None:
+                return A("leftPadUTF8" if node.args.get("is_left") else "rightPadUTF8", A("toString", node.this), node.args["expression"], fill)
         if isinstance(node, exp.TimestampDiff):  # this = the later time (3rd argument), expression = the earlier one
             unit = (node.args["unit"].name if node.args.get("unit") is not None else "").upper()
             unit = "MICROSECOND" if unit == "FRAC_SECOND" else unit
@@ -661,9 +690,11 @@ def mysql_to_clickhouse(sql, sqlglot, ErrorLevel, fold_pairs=()):
             start, end = when(node.args["expression"]), when(node.args["this"])
             if unit == "MICROSECOND":
                 return A("dateDiff", S("microsecond"), start, end)
-            if unit in ("SECOND", "MINUTE", "HOUR"):  # elapsed seconds, truncated toward zero by intDiv
-                seconds = A("dateDiff", S("second"), start, end)
-                return seconds if unit == "SECOND" else A("intDiv", seconds, N(60 if unit == "MINUTE" else 3600))
+            if unit in ("SECOND", "MINUTE", "HOUR"):
+                # Elapsed time, truncated toward zero by intDiv. dateDiff('second') counts the second BOUNDARIES crossed, so 10:00:00.9 -> 10:00:01.1 gave 1 (MySQL: 0) on a
+                # DateTime64 column; the difference of the two instants in microseconds is exact for Date, DateTime and DateTime64 alike.
+                micros = lambda t: A("toUnixTimestamp64Micro", A("toDateTime64", t, N(6)))
+                return A("intDiv", exp.Sub(this=micros(end), expression=micros(start)), N({"SECOND": 1000000, "MINUTE": 60000000, "HOUR": 3600000000}[unit]))
             return A("age", S(unit.lower()), start, end)
         if isinstance(node, (exp.DateAdd, exp.DateSub)):
             what = "DATE_ADD" if isinstance(node, exp.DateAdd) else "DATE_SUB"
@@ -696,6 +727,8 @@ def mysql_to_clickhouse(sql, sqlglot, ErrorLevel, fold_pairs=()):
         if isinstance(node, exp.IntDiv):  # a DIV 0 is NULL in MySQL; the plain translation divides by zero
             divisor = node.args["expression"]
             if isinstance(divisor, exp.Anonymous) and divisor.name == "nullIf":
+                return node
+            if nonzero_literal(divisor):
                 return node
             changes.append("div-null")
             return exp.IntDiv(this=node.args["this"], expression=A("nullIf", divisor, N(0)))
@@ -813,7 +846,13 @@ def mysql_to_clickhouse(sql, sqlglot, ErrorLevel, fold_pairs=()):
     for n in tree.find_all(exp.Anonymous):
         if n.name.upper().startswith("MYSQL_"):
             raise Refusal(f"{n.name[6:].replace('_', ' ').title()} could not be translated.")
-    if any(True for _ in trees[0].find_all(exp.Div, exp.Mod)):
+    guarded = False
+    for n in tree.find_all(exp.Div, exp.Mod):
+        if nonzero_literal(n.args.get("expression")):
+            n.set("safe", False)  # sqlglot's generator wraps the divisor in nullIf(..., 0) only for a "safe" division
+        else:
+            guarded = True
+    if guarded:
         changes.append("div-null")  # sqlglot wraps the divisor in nullIf(..., 0) itself
     result = tree.sql(dialect="clickhouse", unsupported_level=ErrorLevel.RAISE)
     # ClickHouse names an unaliased column after its text (`count()`, `sum(x)`): the common aggregates keep the lower-case spelling ClickHouse queries use, outside quoted text

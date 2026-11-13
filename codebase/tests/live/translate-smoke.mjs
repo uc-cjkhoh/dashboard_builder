@@ -18,8 +18,8 @@ const SCRIPT = fileURLToPath(new URL('../../src/DashboardBuilder/Tools/sql_trans
 const auth = 'Basic ' + Buffer.from(`${CH_USER}:${CH_PASSWORD}`).toString('base64');
 const base = `${process.env.PLAIN_HTTP ? 'http' : 'https'}://${CH_HOST}:${CH_PORT}/`;
 
-async function ch(sql) { // one statement, TSV; the server's own guards (readonly=2, 12 s) as in the app
-  const res = await fetch(`${base}?default_format=TSV&readonly=2&max_execution_time=12`, { method: 'POST', headers: { Authorization: auth }, body: sql, signal: AbortSignal.timeout(30000) });
+async function ch(sql) { // one statement, TSV; the server's own guards (readonly=2, 12 s, join_use_nulls=1: an outer join's unmatched side is NULL) as in the app
+  const res = await fetch(`${base}?default_format=TSV&readonly=2&max_execution_time=12&join_use_nulls=1`, { method: 'POST', headers: { Authorization: auth }, body: sql, signal: AbortSignal.timeout(30000) });
   const text = (await res.text()).replace(/\n$/, '');
   if (!res.ok) throw new Error(text.split('\n')[0].slice(0, 200));
   return text;
@@ -226,6 +226,41 @@ const cases = [
     ];
   })(),
   ['ORDER BY puts NULL first (ascending)', "SELECT x FROM (SELECT 1 AS x UNION ALL SELECT NULL UNION ALL SELECT 0) ORDER BY x LIMIT 1", '\\N'],
+  // found by running 10 complex queries over a real table (2026-11-13): each was a silent difference or a loud failure
+  ...(() => {
+    const rows3 = '(SELECT 1 AS x UNION ALL SELECT 2 UNION ALL SELECT 3) q';
+    const first = (expr) => `SELECT ${expr} FROM ${rows3} ORDER BY x LIMIT 1`, last = (expr) => `SELECT ${expr} FROM ${rows3} ORDER BY x DESC LIMIT 1`;
+    const ms = (s) => `CAST('${s}' AS DATETIME(3))`;
+    return [
+      ['win: LAG on the first row is NULL', first('LAG(x) OVER (ORDER BY x)'), '\\N'],
+      ['win: LAG on the second row is the first', `SELECT LAG(x) OVER (ORDER BY x) FROM ${rows3} ORDER BY x LIMIT 1 OFFSET 1`, '1'],
+      ['win: LEAD on the last row is NULL', last('LEAD(x) OVER (ORDER BY x)'), '\\N'],
+      ['win: LEAD(x, 2) on the second row is NULL', `SELECT LEAD(x, 2) OVER (ORDER BY x) FROM ${rows3} ORDER BY x LIMIT 1 OFFSET 1`, '\\N'],
+      ['win: LAG with a default keeps the default', first('LAG(x, 1, 0) OVER (ORDER BY x)'), '0'],
+      ['win: NTH_VALUE before the n-th row is NULL', first('NTH_VALUE(x, 2) OVER (ORDER BY x)'), '\\N'],
+      ['win: NTH_VALUE from the n-th row on', last('NTH_VALUE(x, 2) OVER (ORDER BY x)'), '2'],
+      ['win: CUME_DIST (lower-case name in ClickHouse)', `SELECT CUME_DIST() OVER (ORDER BY x) FROM ${rows3} ORDER BY x LIMIT 1`, '0.3333333333333333'],
+      ['win: PERCENT_RANK', last('PERCENT_RANK() OVER (ORDER BY x)'), '1'],
+      ['win: NTILE(2) first row', first('NTILE(2) OVER (ORDER BY x)'), '1'],
+      ['win: running SUM over an aggregate', "SELECT SUM(COUNT(*)) OVER (ORDER BY n) FROM (SELECT 1 AS n UNION ALL SELECT 1 UNION ALL SELECT 2) GROUP BY n ORDER BY n DESC LIMIT 1", '3'],
+      ['LPAD of a number', 'SELECT LPAD(7, 3, "0")', '007'],
+      ['RPAD of a number', 'SELECT RPAD(7, 3, "x")', '7xx'],
+      ['LPAD cuts a longer text to the length', 'SELECT LPAD("abcdef", 3, "0")', 'abc'],
+      ['LPAD counts characters, not bytes', 'SELECT LPAD("é", 3, "*")', '**é'],
+      ['LPAD of NULL is NULL', 'SELECT LPAD(NULL, 3, "0")', '\\N'],
+      ['TIMESTAMPDIFF SECOND 0.2 s across a second boundary (DATETIME(3))', `SELECT TIMESTAMPDIFF(SECOND, ${ms('2024-01-01 10:00:00.900')}, ${ms('2024-01-01 10:00:01.100')})`, '0'],
+      ['TIMESTAMPDIFF SECOND 1.2 s (DATETIME(3))', `SELECT TIMESTAMPDIFF(SECOND, ${ms('2024-01-01 10:00:00.900')}, ${ms('2024-01-01 10:00:02.100')})`, '1'],
+      ['TIMESTAMPDIFF SECOND negative 0.2 s (DATETIME(3))', `SELECT TIMESTAMPDIFF(SECOND, ${ms('2024-01-01 10:00:01.100')}, ${ms('2024-01-01 10:00:00.900')})`, '0'],
+      ['TIMESTAMPDIFF MINUTE 59.2 s across a minute boundary (DATETIME(3))', `SELECT TIMESTAMPDIFF(MINUTE, ${ms('2024-01-01 10:00:00.900')}, ${ms('2024-01-01 10:01:00.100')})`, '0'],
+      ['TIMESTAMPDIFF HOUR 3599.2 s across an hour boundary (DATETIME(3))', `SELECT TIMESTAMPDIFF(HOUR, ${ms('2024-01-01 10:00:00.900')}, ${ms('2024-01-01 11:00:00.100')})`, '0'],
+      ['TIMESTAMPDIFF HOUR between two dates', `SELECT TIMESTAMPDIFF(HOUR, ${D('2024-01-01')}, ${D('2024-01-02')})`, '24'],
+      ['TIMESTAMPDIFF SECOND between two date texts', `SELECT TIMESTAMPDIFF(SECOND, '2024-01-01 00:00:00', '2024-01-01 00:01:05')`, '65'],
+      ['LEFT JOIN: an unmatched side is NULL (IFNULL gives the fallback)', "SELECT IFNULL(b.name, '(none)') FROM (SELECT 1 AS k) a LEFT JOIN system.databases b ON b.name = 'no-such-database'", '(none)'],
+      ['LEFT JOIN: an unmatched number is NULL, not 0', "SELECT b.total_rows IS NULL FROM (SELECT 1 AS k) a LEFT JOIN system.tables b ON b.name = 'no-such-table'", '1'],
+      ['division by a literal keeps the column non-Nullable', "SELECT toTypeName(x / 1000) FROM (SELECT 5 AS x)", 'Float64'],
+      ['division by a literal still divides', 'SELECT 5000 / 1000, 7 % 4', '5\t3'],
+    ];
+  })(),
 ];
 const ONLY = process.env.ONLY ? new RegExp(process.env.ONLY, 'i') : null; // run only the cases whose label matches (while working on one group)
 let failed = 0;
@@ -280,6 +315,15 @@ const corpus = [
  "SELECT name FROM system.tables WHERE engine = 'View' LIMIT 3",
  "SELECT name FROM system.databases WHERE name IN ('SYSTEM', 'default')",
  "SELECT ABS(-5), CEIL(1.2), FLOOR(1.8), POW(2, 3), SQRT(16), MOD(10, 3), GREATEST(1, 2), LEAST(3, 4) FROM system.one",
+ // windows, as the 10 complex queries of 2026-11-13 used them
+ "SELECT database, COUNT(*) AS n, SUM(COUNT(*)) OVER (ORDER BY database) AS running, ROUND(100 * COUNT(*) / SUM(COUNT(*)) OVER (), 2) AS pct FROM system.tables GROUP BY database ORDER BY database LIMIT 5",
+ "SELECT database, COUNT(*) AS n, RANK() OVER (ORDER BY COUNT(*) DESC) AS r, DENSE_RANK() OVER (ORDER BY COUNT(*) DESC) AS dr, ROUND(PERCENT_RANK() OVER (ORDER BY COUNT(*)), 3) AS pr, ROUND(CUME_DIST() OVER (ORDER BY COUNT(*)), 3) AS cd FROM system.tables GROUP BY database ORDER BY r, database LIMIT 5",
+ "SELECT name, LAG(name) OVER w AS prev, LEAD(name, 2) OVER w AS nxt, ROUND(AVG(total_rows) OVER (w ROWS BETWEEN 2 PRECEDING AND CURRENT ROW), 1) AS moving FROM system.tables WHERE database = 'system' WINDOW w AS (ORDER BY name) ORDER BY name LIMIT 5",
+ "WITH ranked AS (SELECT database, name, ROW_NUMBER() OVER (PARTITION BY database ORDER BY name) AS rn, COUNT(*) OVER (PARTITION BY database) AS total FROM system.tables) SELECT CONCAT_WS('-', 'D', LPAD(rn, 3, '0')) AS label, database, name, total FROM ranked WHERE rn <= 3 ORDER BY database, rn LIMIT 5",
+ "SELECT q, COUNT(*) AS n, MIN(total_rows) AS lo, MAX(total_rows) AS hi, ROUND(AVG(total_rows), 1) AS av FROM (SELECT total_rows, NTILE(4) OVER (ORDER BY total_rows) AS q FROM system.tables WHERE total_rows IS NOT NULL) d GROUP BY q ORDER BY q",
+ "SELECT database, name, FIRST_VALUE(name) OVER (PARTITION BY database ORDER BY name) AS first_name, LAST_VALUE(name) OVER (PARTITION BY database ORDER BY name ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS last_name, NTH_VALUE(name, 2) OVER (PARTITION BY database ORDER BY name) AS second_name FROM system.tables ORDER BY database, name LIMIT 5",
+ "SELECT name, TIMESTAMPDIFF(SECOND, metadata_modification_time, NOW()) AS secs, TIMESTAMPDIFF(MINUTE, metadata_modification_time, NOW()) AS mins, DAYNAME(metadata_modification_time) AS wd FROM system.tables LIMIT 3",
+ "SELECT d.name, IFNULL(t.name, '(no table)') AS tbl FROM system.databases d LEFT JOIN system.tables t ON t.database = d.name AND t.name = 'no-such-table' ORDER BY d.name LIMIT 3",
  "SELECT CAST(total_rows AS CHAR) AS s, CAST('5' AS SIGNED) AS n FROM system.tables LIMIT 2",
 ];
 let rejected = 0;
