@@ -152,11 +152,12 @@ Nothing here reaches the server; dashboards add no endpoint
   urlAction: null | { label, template },   // P39 link action — https:// with {value}
   paramAction: null | { param },           // P39 parameter action — a click can set this parameter (id) to the mark's value
   period: null | { db, table, column, category: "temporal", preset, from, to, compare, compareFrom, compareTo, anchor?: "latest" | "today", latest?: "YYYY-MM-DD" },
-  marks:  { size, label, detail: [], tooltip: [], shape, path, angle },
+  memberShapes?: { "table.column": { member: "circle" | "square" | "triangle" | "diamond" | "roundSquare" | "pin" | "arrow" } },   // Edit member shapes (Shape dimension, scatter family); the key exists only once a member has one
+  marks:  { size, label, detail: [], tooltip: [], shape (a dimension, or a numeric field whose values are binned), path, angle },
   format: { numberFormat, decimals, currencySymbol, dateFormat, topN, dateBucket, target, downIsGood, conditional, legend,
             dataLabels, colorByDimension, xTitle, yTitle,
             lineStyle, heatmapShape, ganttLength?, targetMeasure,
-            syncAxes, dualAxis, secondaryType, markerSize, sizeScale?, markOpacity?, markBorder, markBorderColor?, markerShape, font, tableAlign, tableDensity, tableShade, tableCols? }
+            syncAxes, dualAxis, secondaryType, markerSize, sizeScale?, markOpacity?, shapeBins?, labelMarks?, markBorder, markBorderColor?, markerShape, font, tableAlign, tableDensity, tableShade, tableCols? }
 }
 ```
 
@@ -175,6 +176,8 @@ Nothing here reaches the server; dashboards add no endpoint
   | `secondaryType` | `line` \| `bar` \| `area` (default `line`) |
   | `markerSize` | null (automatic) or a whole number 4–40 |
   | `sizeScale` | optional `{ smallest?, largest?, fromZero?, reversed? }` (Format → Edit Sizes): `smallest` / `largest` whole 0–100 (default 0 / 100, smallest below largest), `fromZero` / `reversed` booleans (absent `fromZero` = the chart's own default); only parts that differ from the default are stored |
+  | `shapeBins` | optional whole number 2–6 (Format → Shape bins, while Shape holds a measure; absent = 5); an invalid saved value is reset to 5 and reported, never clamped |
+  | `labelMarks` | optional `minmax` \| `selected` \| `highlighted` \| `recent` \| `ends` (Format → Label marks; absent = All, every mark labelled); an unknown saved value is reset to All and reported |
   | `markOpacity` | optional whole percent, a multiple of 10 from 0 to 100 (Format → Opacity; absent = 100); an invalid saved value is reset and reported, never clamped |
   | `markBorder` | `none` \| `thin` \| `medium` \| `thick` (default `none`) |
   | `markBorderColor` | optional: `muted` \| `ink` \| `surface` \| `accent` (absent = `muted`) |
