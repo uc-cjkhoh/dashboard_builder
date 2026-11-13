@@ -1,7 +1,8 @@
 import { renderChart as drawChart } from "./chart.js";
 import { dateLabelsOf } from "./date-labels.js";
 import { isCalcPill } from "../Calc/calc-pill.js";
-import { SCATTER_TYPES, marksOf, planMeasures, colorMode, colourDimsOf, isSizeDimension, measureName as planMeasureName } from "./sheet-plan.js";
+import { SCATTER_TYPES, marksOf, planMeasures, colorMode, colourDimsOf, isSizeDimension, isShapeDimension, measureName as planMeasureName } from "./sheet-plan.js";
+import { shapeBinsOf } from "./shape-model.js";
 import { memberColourField } from "./colour-fields-model.js";
 import { makeValueFormatter } from "../Core/format.js";
 import { REF_CHOICES, TREND_CHOICES, trendProblem, trendRefusal, pWords, refValue, refConstant, trendSeries, pickMeasure, dataValues, bandBounds, bandLabel } from "./analytics-model.js";
@@ -9,7 +10,7 @@ import { parameters } from "../Core/store.js";
 import { effectiveForecast } from "../Core/parameters-model.js";
 import { hint } from "./render-dom.js";
 import { fitWords } from "./chart-polish.js";
-import { selectHandler, legendSpec, memberSpec } from "./render-handlers.js";
+import { selectHandler, legendSpec, memberSpec, memberShapeSpec } from "./render-handlers.js";
 import { selectedIndicesOf } from "./dashboard-select.js";
 import { joinNotices } from "./notices.js";
 import { stackedScaleNotice } from "./stack-scale-model.js";
@@ -64,16 +65,21 @@ export function renderScatterShapes(container, rc, sheet, result, seriesIdx, siz
   const note = shapeColourNote(colorMeasureIdx); // only one Colour slot: reached with Shape + a measure on Colour
   if (note) container.append(hint(note));
   const xIdx = seriesIdx[0], yIdx = seriesIdx[1];
-  const { groups, legend, colourMembers, sizeOrder, sizeName } = scatterGroups(sheet, result, seriesIdx, sizeIdx, fmtCat);
+  const fmtVal = makeValueFormatter(format);
+  const shapeIdx = planMeasures(sheet).findIndex((e) => e.role === "shape"); // a measure on Shape: its values are binned into symbols
+  const { groups, legend, colourMembers, shapeMembers, sizeOrder, sizeName } = scatterGroups(sheet, result, seriesIdx, sizeIdx, fmtCat, { shapeIdx, bins: shapeBinsOf(format), fmtVal });
   const cf = memberColourField(colourDimsOf(sheet));
   const memberColourSpec = cf ? memberSpec(rc, sheet, cf, colourMembers) : {};
+  const shapeField = marksOf(sheet).shape;
+  const memberShapesSpec = isShapeDimension(shapeField) && !isCalcPill(shapeField) ? memberShapeSpec(rc, sheet, shapeField, shapeMembers) : {}; // a binned measure has no members to choose for
   drawChart(container, {
     ...legendSpec(rc, sheet, legend.field, legend.byName), // legend items are Colour / Shape members
-    ...memberColourSpec,
+    ...memberColourSpec, ...memberShapesSpec,
     type: "scatterShapes", symbol: scatterSymbol(sheet.chartType), groups, format,
     xName: format.xTitle || result.measures[xIdx] || "x",
     yName: format.yTitle || result.measures[yIdx] || "y",
     hasSize: sizeIdx >= 0 || Boolean(sizeOrder), sizeName: sizeOrder ? sizeName : sizeIdx >= 0 ? result.measures[sizeIdx] : null, sizeOrder,
+    shapeName: shapeIdx >= 0 ? result.measures[shapeIdx] : null,
   });
 }
 

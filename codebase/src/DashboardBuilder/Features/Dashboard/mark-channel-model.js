@@ -50,6 +50,14 @@ export function sizeChannel(type, shelfCount, dimension = false) {
   return { ok: false, note: NOTE.sizeElsewhere };
 }
 
+/** The hint when a measure on Shape can't be drawn (Shape is a scatter-family channel: D100). */
+export const SHAPE_MEASURE_HINT = "A measure on Shape bins its values into point symbols on Scatter, Square and Circle — switch to one of those, or use a categorical field.";
+/** Can `type` draw Shape? Only the scatter family does; `asMeasure` = the Shape field is a measure (binned). -> { ok, note } (a hint, never an error). */
+export function shapeChannel(type, asMeasure = false) {
+  if (POINTS.has(type)) return { ok: true, note: null };
+  return { ok: false, note: asMeasure ? SHAPE_MEASURE_HINT : "Shape encodes Scatter / Square / Circle points." };
+}
+
 const finite = (v) => v != null && v !== "" && Number.isFinite(Number(v));
 /** The data's own span {min, max}, or null with no numbers. */
 export function sizeRange(values) {

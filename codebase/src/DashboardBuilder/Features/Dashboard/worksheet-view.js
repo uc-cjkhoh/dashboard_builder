@@ -46,7 +46,7 @@ import { BACKGROUND_CHOICES, backgroundClass } from "./background-model.js";
 //     onUnselectable()  a select-only view's click on a NULL member / the "Other" group (nothing is selected; the host says why)
 //     onSelect(dimField, raw)  a mark click selects (the host stores the selection);  onDrill(raw)  a click on a drill hierarchy
 //     onLegend({ sheet, field, name, raw, bucketed })  a legend click;  legendFocus() -> the highlighted legend item or null
-//     onTooltipFields(sheet, list), onMemberColors(sheet, field, members)  the editor panels that learn what the chart offers
+//     onTooltipFields(sheet, list), onMemberColors(sheet, field, members), onMemberShapes(sheet, field, members)  the editor panels that learn what the chart offers
 //     statusBar(sheet, result | null)  the host's status line (marks, rows x columns, selection)
 //     notices(sheet) -> string | null  a host line joined into the notice (the editor: shared filters not applied here)
 //     cancelLabel() -> a name for the loading state's Cancel button (aria-label "Cancel loading <name>"); default: none
@@ -69,7 +69,7 @@ export function createWorksheetView(container, getContext, options = {}) {
   const renderOptions = (s) => ({ plan: getContext().plan, emptyText: emptyMessage(s, { shared: appliedShared(getContext().plan).length }), interactive: mode, selected: cross?.selected ?? null,
     hooks: mode === "select" ? { onSelect: options.onSelect, onUnselectable: options.onUnselectable } : {
       onSelect: options.onSelect, onDrill: options.onDrill, onLegend: options.onLegend, legendFocus: options.legendFocus,
-      onTooltipFields: options.onTooltipFields, onMemberColors: options.onMemberColors, onColourScale: options.onColourScale, onCollapse: options.onCollapse, onCollapseAll: options.onCollapseAll, onColumn: options.onColumn } });
+      onTooltipFields: options.onTooltipFields, onMemberColors: options.onMemberColors, onMemberShapes: options.onMemberShapes, onColourScale: options.onColourScale, onCollapse: options.onCollapse, onCollapseAll: options.onCollapseAll, onColumn: options.onColumn } });
   // The tables the sheet's query involves (never throws: a sheet that can't be planned reaches nothing).
   const statSourceProblem = (s, entities) => ([...s.columns, ...s.rows].some((f) => sourceOfTable(entities, f.db, f.table)) ? "A histogram reads one table — it can't read a union or unpivot yet." : null);
   const involvedOf = (c, s) => { try { return involvedTables(s, undefined, c.plan); } catch { return []; } };

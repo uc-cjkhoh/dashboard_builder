@@ -34,7 +34,7 @@ import { keyAliasMaps, withMemberLabels } from "./member-labels.js";
  *                highlights; false = a static widget: no mark selection, drill or legend handlers
  *   selected     the dashboard selection the source widget highlights ({ db, table, column, value }) — bar / stacked / pie / donut fade the rest
  *   hooks        { onSelect(dimField, raw), onDrill(raw), onLegend({ sheet, field, name, raw, bucketed }), legendFocus(),
- *                  onTooltipFields(sheet, list), onMemberColors(sheet, field, members), onCollapse(axis, key, validKeys), onCollapseAll(mode, rowKeys, colKeys), onColumn(key, { width? }) } — what the host does with them
+ *                  onTooltipFields(sheet, list), onMemberColors(sheet, field, members), onMemberShapes(sheet, field, members), onCollapse(axis, key, validKeys), onCollapseAll(mode, rowKeys, colKeys), onColumn(key, { width? }) } — what the host does with them
  */
 
 /**
@@ -57,6 +57,7 @@ function draw(container, rc, sheet, result, cmp) {
   container.replaceChildren();
   rc.hooks.onTooltipFields?.(sheet, []);
   rc.hooks.onMemberColors?.(sheet, null, []);
+  rc.hooks.onMemberShapes?.(sheet, null, []);
   // Date-grouped key: its labels are bucket starts, not values a filter could match — no click-to-filter.
   rc.bucketedKey = result.bucket ? result.bucket.key : null;
   // "Other": the server's aggregate of every group past the limit, drawn as one last mark.

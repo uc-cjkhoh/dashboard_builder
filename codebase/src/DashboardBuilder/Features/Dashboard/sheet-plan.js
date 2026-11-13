@@ -117,6 +117,11 @@ export function involvedTables(sheet, periodRange, ctx) {
   return involvedKeys(sheet, periodFilters(sheet, periodRange, ctx), calcContext(ctx), keyOrder, planMeasures(sheet));
 }
 
+/** The Shape field when it is a dimension (one symbol per member); a numeric field on Shape is a measure binned into symbols. */
+export const isShapeDimension = (f) => Boolean(f) && !isNumericField(f);
+/** The Shape field when it is a measure the chart bins (the scatter family only, D100), else null. */
+export const shapeMeasureOf = (sheet) => { const f = marksOf(sheet).shape; return isNumericField(f) && SCATTER_TYPES.has(sheet.chartType) ? f : null; };
+
 /** The Size field when it is a dimension the chart can draw as member steps (mark-channel-model.js `sizeChannel`), else null. */
 export const isSizeDimension = (f) => Boolean(f) && !isNumericField(f) && roleOf(f) !== "measure";
 export function sizeDimensionOf(sheet) {
@@ -141,7 +146,7 @@ export function planDims(sheet) {
   const m = marksOf(sheet);
   const detail = m.detail ?? [];
   // Shape: a dimension -> distinct point shapes; it's a group-by only on the scatter family.
-  const shapeDim = m.shape && SCATTER_TYPES.has(sheet.chartType) ? [m.shape] : [];
+  const shapeDim = isShapeDimension(m.shape) && SCATTER_TYPES.has(sheet.chartType) ? [m.shape] : []; // a measure on Shape is not a group-by: its values are binned (planMeasures)
   // The same field on Shape and Colour groups once (its members carry both the symbol and the colour); a pie / donut's Colour field already on a shelf is that slice field (grouped once).
   const colourFields = colourDimsOf(sheet);
   const onShelf = (f) => [...sheet.rows, ...sheet.columns].some((x) => roleOf(x) === "dimension" && sameColumn(x, f));
@@ -161,7 +166,7 @@ export function planDims(sheet) {
 
 /**
  * Measures in SELECT value order, each tagged with its role: "shelf" (a series), "size", "color" (continuous
- * gradient) or "aux" (a numeric Label/Tooltip/Path field). Shelf measures come first so their aliases (v0,v1,…)
+ * gradient), "aux" (a numeric Label/Tooltip/Path field) or "shape" (a measure on Shape, last). Shelf measures come first so their aliases (v0,v1,…)
  * and series indices are unchanged when no marks are set. A Table shows only shelf measures.
  */
 export function planMeasures(sheet) {
@@ -179,6 +184,8 @@ export function planMeasures(sheet) {
   if (colorMode(sheet) === "continuous") { const cf = sheet.color[0]; out.push({ field: cf, role: "color", agg: cf.agg ?? "sum" }); }
   // Numeric Label / Tooltip / Path fields ride along as extra measures so their aggregated value is available per mark.
   for (const f of [m.label, m.path, ...(m.tooltip ?? [])]) if (isNumericField(f)) out.push({ field: f, role: "aux", agg: f.agg ?? "sum" });
+  const shape = shapeMeasureOf(sheet); // last, after the aux measures, so none of their positions move
+  if (shape) out.push({ field: shape, role: "shape", agg: shape.agg ?? "sum" });
   return out;
 }
 

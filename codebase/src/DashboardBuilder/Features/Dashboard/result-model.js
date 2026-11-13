@@ -9,6 +9,7 @@ import { tupleKey, uniqueTuples } from "./grid-model.js";
 import { isCalc, calcName } from "./table-calc.js";
 import { colourChannel, sizeChannel } from "./mark-channel-model.js";
 import { memberRanks } from "./size-scale-model.js";
+import { binShapeValues, shapeOrder } from "./shape-model.js";
 
 // Pure shaping of a query result for drawing: which result column is a series or a mark channel, the pivots
 // behind the colour split, heatmap, treemap, Sankey and small multiples, display names, and the status / caption text.
@@ -223,12 +224,15 @@ export function marksChannels(sheet, result, mplan, sizeIdx, colorMeasureIdx, fm
  * shape: { index, name, raw } | null }], legend: { field, byName }, colourMembers: [{ name, raw }], byName }.
  * Colour and Shape on the SAME field are one grouping (one legend: its members); on different fields a series is named
  * "colour member · shape member" and its legend is highlight-only (`legend.field` null). `byName` = legend name -> raw member.
+ * A MEASURE on Shape (`shapeOpts` = { shapeIdx: its result column, bins, fmtVal }) is cut into equal-width bins over every point: a group is a bin (named
+ * "10 to 20", its `shape.index` the bin's symbol, lowest first, a missing value last) and each point carries its exact `shapeValue`; its legend only highlights.
  */
-export function scatterGroups(sheet, result, seriesIdx, sizeIdx, fmtCat) {
+export function scatterGroups(sheet, result, seriesIdx, sizeIdx, fmtCat, shapeOpts = {}) {
   const { keyOrder, colourDims } = planDims(sheet);
   const fields = colourDimsOf(sheet);
   const colourField = fields.length === 1 ? fields[0] : null; // one field: a legend that can select its members
-  const shapeField = marksOf(sheet).shape ?? null;
+  const binned = shapeOpts.shapeIdx >= 0 ? binShapeValues(result.rows.map((r) => r.values[shapeOpts.shapeIdx]), shapeOpts.bins, shapeOpts.fmtVal) : null; // a measure on Shape
+  const shapeField = binned ? null : marksOf(sheet).shape ?? null;
   const si = shapeField ? keyOrder.findIndex((f) => sameField(f, shapeField)) : -1;
   // The Colour keys are the last keys; one field also on Shape was grouped once (no Colour key of its own), so its index is the Shape key's.
   const ci = colourDims.length ? Array.from({ length: colourDims.length }, (_, j) => keyOrder.length - colourDims.length + j) : fields.length === 1 && si >= 0 && sameField(fields[0], shapeField) ? [si] : [];
@@ -244,7 +248,8 @@ export function scatterGroups(sheet, result, seriesIdx, sizeIdx, fmtCat) {
   const sameKey = ci.length === 1 && ci[0] === si; // Colour and Shape on one field: one grouping
   for (const [ri, r] of result.rows.entries()) {
     const colour = ci.length ? member(colourMembers, ci, r) : null;
-    const shape = si >= 0 ? member(shapeMembers, [si], r) : null;
+    const bin = binned ? binned.bins.find((b) => b.index === binned.binOf[ri]) : null;
+    const shape = bin ? { index: bin.index, name: bin.name, raw: bin.index } : si >= 0 ? member(shapeMembers, [si], r) : null;
     const gk = (colour ? colour.index : "") + "|" + (shape ? shape.index : "");
     if (!groupsMap.has(gk)) {
       const name = colour && shape && !sameKey ? `${colour.name} · ${shape.name}` : (colour ?? shape)?.name ?? "—";
@@ -254,14 +259,14 @@ export function scatterGroups(sheet, result, seriesIdx, sizeIdx, fmtCat) {
     if (steps) pt.push(steps.ranks[ri] ?? 0);
     else if (sizeIdx >= 0) pt.push(Number(r.values[sizeIdx]) || 0);
     const pointName = r.keys.map((k, i) => (ci.includes(i) || i === si ? null : label(k, i))).filter((v) => v != null).join(" / ");
-    groupsMap.get(gk).points.push({ value: pt, name: pointName, ...(steps ? { sizeMember: steps.members[ri] } : {}) });
+    groupsMap.get(gk).points.push({ value: pt, name: pointName, ...(steps ? { sizeMember: steps.members[ri] } : {}), ...(binned ? { shapeValue: r.values[shapeOpts.shapeIdx] == null ? "—" : shapeOpts.fmtVal(r.values[shapeOpts.shapeIdx]) } : {}) });
   }
-  const groups = [...groupsMap.values()];
-  const pairs = ci.length > 0 && si >= 0 && !sameKey; // two fields: a legend of pairs can't select one member
+  const groups = binned ? shapeOrder([...groupsMap.values()]) : [...groupsMap.values()];
+  const pairs = ci.length > 0 && (si >= 0 || binned) && !sameKey; // two fields: a legend of pairs can't select one member
   const several = ci.length > 1; // a combination of Colour fields: the legend highlights, it can't select one field's member
   const legendField = pairs || several ? null : (ci.length ? colourField : shapeField);
-  const byName = pairs || several ? new Map() : new Map(groups.map((g) => [g.name, (g.colour ?? g.shape).raw]));
-  return { groups, sizeOrder: steps?.order, sizeName: steps?.name, legend: { field: legendField, byName }, colourMembers: [...colourMembers.values()].map(({ name, raw }) => ({ name, raw })), byName };
+  const byName = pairs || several || binned ? new Map() : new Map(groups.map((g) => [g.name, (g.colour ?? g.shape).raw]));
+  return { groups, sizeOrder: steps?.order, sizeName: steps?.name, legend: { field: legendField, byName }, colourMembers: [...colourMembers.values()].map(({ name, raw }) => ({ name, raw })), shapeMembers: [...shapeMembers.values()].map(({ name, raw }) => ({ name, raw })), byName };
 }
 
 /** Shape (scatter family) alone: scatterGroups with no Colour — one series per Shape member. */

@@ -1,4 +1,5 @@
 import { colorsByName, fieldColorKey } from "./colour-model.js";
+import { shapesByName } from "./shape-model.js";
 import { isDrillActive } from "./sheet-plan.js";
 import { focusSeries } from "./chart.js";
 import { CLICK_TYPES } from "./result-model.js";
@@ -54,4 +55,13 @@ export function legendSpec(rc, sheet, field, rawByName) {
 export function memberSpec(rc, sheet, field, members) {
   rc.hooks.onMemberColors?.(sheet, field, members);
   return { memberColors: colorsByName(sheet.memberColors?.[fieldColorKey(field)], members) };
+}
+
+/**
+ * The chart spec's displayed member name -> shape key map for the sheet's Shape field (Format → Edit member shapes); also tells the host which members
+ * the chart draws (its editor lists them). A host that never learns of members gets the shapes all the same.
+ */
+export function memberShapeSpec(rc, sheet, field, members) {
+  rc.hooks.onMemberShapes?.(sheet, field, members);
+  return { memberShapes: shapesByName(sheet.memberShapes?.[fieldColorKey(field)], members) };
 }

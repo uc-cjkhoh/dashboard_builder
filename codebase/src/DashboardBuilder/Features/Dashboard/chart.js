@@ -17,6 +17,7 @@ import { ganttTime, ganttAxisTime, ganttLabelMargin } from "./gantt-model.js";
 import { boxData, outlierPoints } from "./box-model.js";
 import { chartFit, markCount, applyFitMode, rotatedLabelCap, FIT } from "./chart-fit.js";
 import { applySelectionDim } from "./selection-dim.js";
+import { shapeSymbol, symbolAt } from "./shape-model.js";
 import { applyMarkOpacity, markOpacityOf, withAlpha, OPACITY_TYPES, ANALYTICS_ID } from "./mark-opacity-model.js";
 import { dateFitMode } from "./date-labels.js";
 import { histogramLabel } from "./chart-polish.js";
@@ -809,15 +810,16 @@ function buildScatter({ categories, series, format = {}, sizes, sizeName, sizeMe
 // optional Size dim scales the symbol. spec: { groups:[{name, points:[{value:[x,y,size?], name}], colour?: { index, name }, shape?: { index } }],
 // symbol (the mark type's symbol when a group has no Shape), xName, yName, hasSize, sizeName, format }. A group with a Colour member wears that
 // member's colour (a member colour from Format wins over the palette slot); one with a Shape member its symbol; shape alone keeps one palette colour per series.
-const SHAPE_SYMBOLS = ["circle", "rect", "triangle", "diamond", "roundRect", "pin", "arrow"];
-function buildScatterShapes({ groups, symbol, xName, yName, hasSize, sizeName, sizeOrder, format = {} }) {
+// A Shape member wears the symbol chosen for it (`memberShapes`: displayed name -> shape key, Edit member shapes), else the one at its position in the set; a bin of a Shape measure its bin's symbol. `shapeName`
+// names a Shape measure in the tooltip, which then also says the point's exact value.
+function buildScatterShapes({ groups, symbol, xName, yName, hasSize, sizeName, sizeOrder, shapeName, memberShapes = new Map(), format = {} }) {
   const c = tokens();
   const fmtVal = makeValueFormatter(format);
   const allSizes = hasSize ? groups.flatMap((g) => g.points.map((p) => p.value[2])) : null;
   const symbolSize = hasSize ? sizeScaler(allSizes, (v) => v[2], { format, order: sizeOrder }) : markerSizeOr(format.markerSize, 12);
   const names = groups.map((g) => g.name);
   const { show, pos, legend } = legendFor(format, c, names, true);
-  const symbolOf = (g) => (g.shape ? SHAPE_SYMBOLS[g.shape.index % SHAPE_SYMBOLS.length] : symbol || "circle");
+  const symbolOf = (g) => (g.shape ? (shapeName ? symbolAt(g.shape.index) : memberShapes.has(g.shape.name) ? shapeSymbol(memberShapes.get(g.shape.name)) : symbolAt(g.shape.index)) : symbol || "circle");
   const colourOf = (g, i) => (g.colour ? memberColor(g.colour.name, c.cat[g.colour.index % c.cat.length]) : c.cat[i % c.cat.length]);
   if (legend && groups.some((g) => g.shape)) legend.data = groups.map((g) => (g.shape ? { name: g.name, icon: symbolOf(g) } : g.name)); // the legend swatch wears the symbol too
   const sizeNote = hasSize ? sizeLegend(allSizes, sizeName, c, fmtVal, show && pos === "top" ? 24 : 2, { order: sizeOrder, reversed: sizeScaleOf(format).reversed }) : null;
@@ -835,7 +837,8 @@ function buildScatterShapes({ groups, symbol, xName, yName, hasSize, sizeName, s
       formatter: (p) =>
         `<span style="color:${c.muted}">${escapeHtml(String(p.seriesName))}${p.data && p.data.name ? " · " + escapeHtml(String(p.data.name)) : ""}</span><br>` +
         `<b>${escapeHtml(xName)}:</b> ${fmtVal(p.value[0])}<br><b>${escapeHtml(yName)}:</b> ${fmtVal(p.value[1])}` +
-        (hasSize ? `<br><b>${escapeHtml(sizeName || "size")}:</b> ${escapeHtml(String(p.data?.sizeMember != null ? p.data.sizeMember : fmtVal(p.value[2])))}` : ""),
+        (hasSize ? `<br><b>${escapeHtml(sizeName || "size")}:</b> ${escapeHtml(String(p.data?.sizeMember != null ? p.data.sizeMember : fmtVal(p.value[2])))}` : "") +
+        (shapeName && p.data?.shapeValue != null ? `<br><b>${escapeHtml(shapeName)}:</b> ${escapeHtml(String(p.data.shapeValue))}` : ""),
     },
     xAxis: {
       type: "value", scale: true, name: xName, nameLocation: "middle", nameGap: 28,
@@ -850,7 +853,7 @@ function buildScatterShapes({ groups, symbol, xName, yName, hasSize, sizeName, s
       splitLine: { lineStyle: { color: c.grid } }, axisLabel: { color: c.muted, formatter: fmtVal },
     },
     series: groups.map((g, i) => ({
-      name: g.name, type: "scatter", symbol: g.shape || g.colour ? symbolOf(g) : SHAPE_SYMBOLS[i % SHAPE_SYMBOLS.length], symbolSize,
+      name: g.name, type: "scatter", symbol: g.shape || g.colour ? symbolOf(g) : symbolAt(i), symbolSize,
       data: g.points, itemStyle: { color: colourOf(g, i), opacity: 0.85, ...pointEdge(format, c) },
       emphasis: { focus: "series", itemStyle: { borderColor: c.ink, borderWidth: 1 } },
     })),
