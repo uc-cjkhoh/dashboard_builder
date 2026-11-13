@@ -17,6 +17,7 @@ import { ganttTime, ganttAxisTime, ganttLabelMargin } from "./gantt-model.js";
 import { boxData, outlierPoints } from "./box-model.js";
 import { chartFit, markCount, applyFitMode, rotatedLabelCap, FIT } from "./chart-fit.js";
 import { applySelectionDim } from "./selection-dim.js";
+import { applyMarkOpacity, markOpacityOf, withAlpha, ANALYTICS_ID } from "./mark-opacity-model.js";
 import { dateFitMode } from "./date-labels.js";
 import { histogramLabel } from "./chart-polish.js";
 import { axisLabelPlan, shortDateLabels } from "./date-axis.js";
@@ -130,6 +131,7 @@ export function renderChart(container, spec) {
   try {
     option = buildOption(spec.type === "multiples" ? { ...spec, width: paneWidth(), height: paneHeight() } : spec);
     option = applySelectionDim(option, spec.type, spec.selectedIndices); // the dashboard's source widget fades the unselected marks
+    option = applyMarkOpacity(option, markOpacityOf(spec.format)); // Format → Opacity multiplies every mark's own opacity (after the dim, so a faded mark stays fainter than a kept one)
     if (spec.type !== "multiples") showEveryCategory(option, fit.rotate, fit, paneHeight()); // panels keep their own sparse labels
     if (!fit.zoom) setDateAxisLabels(option, spec, paneWidth(), paneHeight());
     if (fit.zoom) addZoom(option, fit);
@@ -623,7 +625,7 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
       emphasis: { focus: "series", itemStyle: colorByDim ? { opacity: 0.85 } : { color, opacity: 0.85 } },
     };
   });
-  for (const w of widthLines) base.series.push(thickLine({ ...w, share: sizeFr[w.i] ?? [], horizontal }));
+  for (const w of widthLines) base.series.push(thickLine({ ...w, share: sizeFr[w.i] ?? [], horizontal, opacity: markOpacityOf(format) }));
   if (analytics) addAnalytics(base, analytics, { c, fmtVal, horizontal });
   return base;
 }
@@ -646,7 +648,7 @@ function addAnalytics(base, a, { c, fmtVal, horizontal }) {
       data: [[{ [axis]: a.band.from }, { [axis]: a.band.to }]] };
   }
   if (a.trend) {
-    base.series.push({ name: a.trend.name, type: "line", data: a.trend.data, showSymbol: false, z: 4, animation: false,
+    base.series.push({ id: `${ANALYTICS_ID}trend`, name: a.trend.name, type: "line", data: a.trend.data, showSymbol: false, z: 4, animation: false,
       lineStyle: { width: 2, type: "dotted", color: c.muted }, itemStyle: { color: c.muted },
       endLabel: { show: true, formatter: a.trend.short ?? a.trend.name, color: c.muted, backgroundColor: c.surface, padding: [2, 4], fontFamily: c.font, fontSize: 14 },
       tooltip: { valueFormatter: fmtVal } });
@@ -845,7 +847,7 @@ function buildHeatmap({ xCats, yCats, cells, format = {} }) {
   const text = (v) => (v == null || !Number.isFinite(Number(v)) ? "" : fmtVal(v));
   const longest = cells.reduce((a, d) => { const t = text(d[2]); return t.length > a.length ? t : a; }, "");
   const inks = [c.ink, c.surface, "#000000", "#ffffff"];
-  const labelled = (list) => { const col = valueColours(list.map((d) => d[2]), c).colours; return list.map((d, i) => ({ value: d, label: { color: col[i] ? pickInk(col[i], inks) : c.ink } })); };
+  const labelled = (list) => { const col = valueColours(list.map((d) => d[2]), c).colours, k = markOpacityOf(format); return list.map((d, i) => ({ value: d, label: { color: col[i] ? pickInk(k < 1 ? mixHex(c.surface, col[i], k) : col[i], inks) : c.ink } })); }; // the ink reads on the cell as it shows (Format → Opacity blends it into the surface)
   const cellLabel = (size) => ({
     show: true, fontFamily: c.font, fontSize: LABEL_FONT, color: c.ink,
     formatter: (p) => { const { w, h } = size(); return labelsShown({ forced, cellW: w, cellH: h, texts: [longest] }) ? text(p.value[2]) : ""; },
@@ -912,10 +914,13 @@ function buildTreemap({ tree, sizeName, colourName, shelfName, format = {} }) {
   const inks = [c.ink, c.surface, "#000000", "#ffffff"];
   const withInk = (node, ink) => ({ ...node, label: { ...node.label, color: ink }, ...(node.children ? { children: node.children.map((k) => withInk(k, ink)) } : {}) });
   // A colour measure: each leaf its own colour and ink; a parent the neutral grid colour behind its children.
+  // Format → Opacity: a tile takes no itemStyle opacity, so its colour is drawn with alpha, and its ink is picked against the tile as it shows (the colour blended into the surface).
+  const k = markOpacityOf(format);
+  const seen = (hex) => (k < 1 ? mixHex(c.surface, hex, k) : hex);
   const paint = (node) => node.children
-    ? { ...node, itemStyle: { color: c.grid }, label: { color: c.ink }, children: node.children.map(paint) }
-    : { ...node, itemStyle: { color: colourOf.get(node) ?? c.muted }, label: { color: pickInk(colourOf.get(node) ?? c.muted, inks) } };
-  const data = hasColour ? tree.map(paint) : tree.map((n, i) => withInk(n, pickInk(c.cat[i % c.cat.length], inks)));
+    ? { ...node, itemStyle: { color: withAlpha(c.grid, k) }, label: { color: c.ink }, children: node.children.map(paint) }
+    : { ...node, itemStyle: { color: withAlpha(colourOf.get(node) ?? c.muted, k) }, label: { color: pickInk(seen(colourOf.get(node) ?? c.muted), inks) } };
+  const data = hasColour ? tree.map(paint) : tree.map((n, i) => withInk(n, pickInk(seen(c.cat[i % c.cat.length]), inks)));
   const sub = (label, v) => (v == null ? "" : `<br><b>${escapeHtml(String(label))}:</b> ${fmtVal(v)}`);
   return {
     textStyle: { fontFamily: c.font, color: c.label },
@@ -937,7 +942,7 @@ function buildTreemap({ tree, sizeName, colourName, shelfName, format = {} }) {
       breadcrumb: { show: false },
       label: { show: true, fontFamily: c.font, lineHeight: 16, formatter: (p) => (p.data?.size !== undefined && p.data?.shelf !== undefined ? `${p.name}\n${fmtVal(p.data.shelf)}` : p.name) },
       itemStyle: { ...edgeOr(format.markBorder, borderInk(format.markBorderColor, c), { borderColor: c.surface, borderWidth: 2 }), gapWidth: 2 },
-      levels: hasColour ? [{}] : [{ color: c.cat, colorMappingBy: "index" }],
+      levels: hasColour ? [{}] : [{ color: k < 1 ? c.cat.map((h) => withAlpha(h, k)) : c.cat, colorMappingBy: "index" }],
     }],
   };
 }
@@ -1217,7 +1222,7 @@ function buildGantt({ categories, gantt, name, format = {}, selectedIndices, onL
         const h = Math.min(28, api.size([0, 1])[1] * 0.6);
         const opacity = (keep.size && !keep.has(b.i)) || (split && focus && names[gi] !== focus) ? 0.35 : 1; // a legend-focused member keeps full strength (ECharts does not blur custom marks)
         return { type: "group", children: [
-          { type: "rect", shape: { x: a[0], y: a[1] - h / 2, width: Math.max(2, e[0] - a[0]), height: h, r: 2 }, style: { fill: colourOf(gi), opacity, ...strokeOf(format.markBorder, borderInk(format.markBorderColor, c)) }, emphasis: { style: { stroke: c.ink, lineWidth: 1 } } },
+          { type: "rect", shape: { x: a[0], y: a[1] - h / 2, width: Math.max(2, e[0] - a[0]), height: h, r: 2 }, style: { fill: colourOf(gi), opacity: opacity * markOpacityOf(format), ...strokeOf(format.markBorder, borderInk(format.markBorderColor, c)) }, emphasis: { style: { stroke: c.ink, lineWidth: 1 } } },
           { type: "text", style: { text: len(b), x: Math.max(e[0], a[0] + 2) + 4, y: a[1], align: "left", verticalAlign: "middle", fill: c.label, opacity, font: `14px ${c.font}` } },
         ] };
       } })),
@@ -1434,7 +1439,7 @@ function variableBars({ s, color, sizeFr, sizes, slot = { at: 0, of: 1 }, horizo
 // segment (its width tapering from one point's thickness to the next, in the line's colour or the colour measure's value at the segment's end) beneath
 // the real line, which keeps the markers, tooltip, click and legend. It shares the line's name, so one legend entry toggles both.
 const WIDTH_ID = "size-width:";
-function thickLine({ s, i, share, horizontal, stroke, color, axis }) {
+function thickLine({ s, i, share, horizontal, stroke, color, axis, opacity = 1 }) {
   const at = (di) => (horizontal ? [Number(s.data[di]), di] : [di, Number(s.data[di])]);
   return {
     id: `${WIDTH_ID}${i}`, name: s.name, type: "custom", silent: true, z: 2, yAxisIndex: axis, encode: { x: 0, y: 1 }, tooltip: { show: false },
@@ -1446,7 +1451,7 @@ function thickLine({ s, i, share, horizontal, stroke, color, axis }) {
       const dx = p1[0] - p0[0], dy = p1[1] - p0[1], len = Math.hypot(dx, dy) || 1;
       const nx = -dy / len, ny = dx / len, w0 = lineWidthFor(share[di]) / 2, w1 = lineWidthFor(share[di + 1]) / 2;
       return { type: "polygon", silent: true, shape: { points: [[p0[0] + nx * w0, p0[1] + ny * w0], [p1[0] + nx * w1, p1[1] + ny * w1], [p1[0] - nx * w1, p1[1] - ny * w1], [p0[0] - nx * w0, p0[1] - ny * w0]] },
-        style: { fill: stroke?.[di + 1] ?? stroke?.[di] ?? color } };
+        style: { fill: stroke?.[di + 1] ?? stroke?.[di] ?? color, ...(opacity < 1 ? { opacity } : {}) } };
     },
   };
 }

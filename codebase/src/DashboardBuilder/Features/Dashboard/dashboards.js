@@ -49,6 +49,7 @@ import { TABLE_ALIGN_CHOICES, TABLE_DENSITY_CHOICES, TABLE_SHADE_CHOICES } from 
 import { COL_ALIGN_CHOICES, tableColumnList, setTableColumn, columnLook, columnWidthError } from "./table-columns-model.js";
 import { COLOUR_MEASURE_TYPES, sizeChannel } from "./mark-channel-model.js";
 import { MARK_BORDER_CHOICES, MARKER_SHAPE_CHOICES, BORDER_TYPES, MARK_BORDER_COLOUR_CHOICES, markerSizeError } from "./mark-style-model.js";
+import { OPACITY_TYPES, OPACITY_CHOICES, cleanMarkOpacity } from "./mark-opacity-model.js";
 import { SIZE_SCALE_TYPES, ZERO_BASED_TYPES, sizeScaleOf, sizeRangeError, cleanSizeScale } from "./size-scale-model.js";
 import { targetChoices, effectiveTargetMeasure } from "./bullet-model.js";
 import { sourceOfTable, wireSource, distinctPlan, distinctPlanSql, distinctMembers, customSqlOf, sqlWire } from "../Core/source-model.js";
@@ -1423,6 +1424,12 @@ export function initDashboards() {
       panel.append(fmtSelect("Mark border", MARK_BORDER_CHOICES, f.markBorder ?? "none", (v) => set({ markBorder: v })));
       if ((f.markBorder ?? "none") !== "none") panel.append(fmtSelect("Border colour", MARK_BORDER_COLOUR_CHOICES, f.markBorderColor ?? "muted", (v) => set({ markBorderColor: v })));
     }
+    if (OPACITY_TYPES.has(s.chartType)) panel.append(fmtSelect("Opacity", OPACITY_CHOICES, f.markOpacity ?? 100, (v) => { // the stored shape holds only what differs from 100 %
+      const { value } = cleanMarkOpacity(Number(v));
+      s.format = { ...f };
+      if (value != null) s.format.markOpacity = value; else delete s.format.markOpacity;
+      commit(dash, s);
+    }));
     if (s.period && s.period.compare !== "none")
       panel.append(fmtCheck("A fall is good", f.downIsGood, (v) => set({ downIsGood: v })));
     if (!STAT_SINGLE_TABLE.has(s.chartType))

@@ -22,6 +22,7 @@ import { checkTooltipStyle } from "../Dashboard/tooltip-style.js";
 import { checkTooltipFormats } from "../Dashboard/tooltip-formats.js";
 import { markerSizeError } from "../Dashboard/mark-style-model.js";
 import { cleanSizeScale } from "../Dashboard/size-scale-model.js";
+import { markOpacityError } from "../Dashboard/mark-opacity-model.js";
 import { RAMP_CHOICES, SCALE_CHOICES, DIV_PAIR_CHOICES, colourCentreError, colourRangeError, colourStepsError } from "../Dashboard/colour-scale-model.js";
 import { cleanParameter, MAX_PARAMS } from "../Core/parameters-model.js";
 import { cleanHierarchies, hierarchyTableKey } from "../Dashboard/hierarchy-model.js";
@@ -659,6 +660,10 @@ function cleanFormat(f0, where, issues) {
   out.tableDensity = oneOf(TABLE_DENSITIES, f.tableDensity, base.tableDensity, w, "row height", issues);
   out.tableShade = oneOf(TABLE_SHADES, f.tableShade, base.tableShade, w, "table shading", issues);
   if (f.sizeScale !== undefined) { const r = cleanSizeScale(f.sizeScale); r.issues.forEach((m) => issues.push(`${w}: ${m.replace(/^(the )?/, "Size: ")}`)); if (r.value) out.sizeScale = r.value; } // Edit Sizes: absent (older files, the default) stays off defaultFormat so a sheet round-trips unchanged
+  if (f.markOpacity !== undefined && f.markOpacity !== null) { // Format → Opacity: absent (older files, the default) stays off defaultFormat; a bad value is reset (never clamped)
+    if (markOpacityError(f.markOpacity) === null) out.markOpacity = f.markOpacity;
+    else issues.push(`${w}: opacity "${f.markOpacity}" — reset to 100 %.`);
+  }
   const tableCols = cleanTableCols(f.tableCols, w, issues); // absent when no column is set (older files, and the default), so a sheet round-trips unchanged
   if (tableCols) out.tableCols = tableCols;
   out.markerSize = f.markerSize == null ? null : markerSizeError(f.markerSize) === null ? f.markerSize
