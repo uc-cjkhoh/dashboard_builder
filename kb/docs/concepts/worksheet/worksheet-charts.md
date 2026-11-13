@@ -149,7 +149,7 @@ On Bar / Line / Area the card opens with a row of **items**: Reference line, Ban
   - Not built: scatter, independent mark types per measure, a user-set axis range.
 - **Marker size (px)** (`format.markerSize`: blank = automatic, else a whole number 4–40) — out-of-range input is refused with a toast, never clamped. It sets the point size of:
   - scatter / square / circle marks when no Size field is mapped (default 14, shape scatter 12);
-  - line / area / combo markers (default 8, which also keeps the dots on a long series; a Size field overrides it per point);
+  - line / area / combo markers (default 8, which also keeps the dots on a long series; a Size field overrides it per point on an area or a stepped line, while a straight line's Size varies its thickness and keeps this size);
   - the circle heatmap (otherwise 80 % of the cell).
   - It is not offered on squares heatmaps or on charts without point marks.
 - **Mark border** (`format.markBorder` `none` | `thin` (1 px) | `medium` (2 px) | `thick` (3 px), default `none`) — strokes marks in the chosen border colour (default the muted chart ink, `--chart-muted`; all follow light and dark).
