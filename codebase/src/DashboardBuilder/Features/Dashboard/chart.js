@@ -17,7 +17,7 @@ import { ganttTime, ganttAxisTime, ganttLabelMargin } from "./gantt-model.js";
 import { boxData, outlierPoints } from "./box-model.js";
 import { chartFit, markCount, applyFitMode, rotatedLabelCap, FIT } from "./chart-fit.js";
 import { applySelectionDim } from "./selection-dim.js";
-import { applyMarkOpacity, markOpacityOf, withAlpha, ANALYTICS_ID } from "./mark-opacity-model.js";
+import { applyMarkOpacity, markOpacityOf, withAlpha, OPACITY_TYPES, ANALYTICS_ID } from "./mark-opacity-model.js";
 import { dateFitMode } from "./date-labels.js";
 import { histogramLabel } from "./chart-polish.js";
 import { axisLabelPlan, shortDateLabels } from "./date-axis.js";
@@ -69,7 +69,7 @@ function tokens() {
   // instead (below), keeping the common case on-brand.
   const catFallback = PALETTES.default.light;
   const cat = orderedPalette(catFallback.map((hex, i) => t(`--chart-cat-${i + 1}`, hex)), reversed());
-  const rampTk = { divLow: t("--chart-div-low", DIV_FALLBACK.low), divHigh: t("--chart-div-high", DIV_FALLBACK.high), accent: t("--accent", ACCENTS.signal.light.accent), accentSoft: t("--accent-soft", ACCENTS.signal.light.soft), surface: t("--surface", "#ffffff"), cat: catFallback.map((hex, i) => t(`--chart-cat-${i + 1}`, hex)), hues: Object.fromEntries(Object.entries(DIV_HUE_FALLBACK).map(([h, hex]) => [h, t(`--chart-div-${h}`, hex)])) };
+  const rampTk = { divLow: t("--chart-div-low", DIV_FALLBACK.low), divHigh: t("--chart-div-high", DIV_FALLBACK.high), accent: t("--accent", ACCENTS.signal.light.accent), accentSoft: t("--accent-soft", ACCENTS.signal.light.soft), surface: t("--surface", "#ffffff"), ink: t("--ink", "#1c1719"), cat: catFallback.map((hex, i) => t(`--chart-cat-${i + 1}`, hex)), hues: Object.fromEntries(Object.entries(DIV_HUE_FALLBACK).map(([h, hex]) => [h, t(`--chart-div-${h}`, hex)])) };
   return {
     series: t("--chart-series", ACCENTS.signal.light.accent),
     cat,
@@ -85,7 +85,7 @@ function tokens() {
     brand: t("--accent", ACCENTS.signal.light.accent),
     brandSoft: t("--accent-soft", ACCENTS.signal.light.soft),
     // continuous low -> high: the chosen hue from the accent pair or a categorical token
-    ramp: drawing?.colorScale === "diverging" ? divergingColours(rampTk, reversed(), drawing?.colorPair) : rampColours(drawing?.colorRamp, rampTk, reversed()),
+    ramp: drawing?.colorScale === "diverging" ? divergingColours(rampTk, reversed(), drawing?.colorPair, drawing?.colorAuto === true) : rampColours(drawing?.colorRamp, rampTk, reversed()),
   };
 }
 
@@ -116,6 +116,7 @@ export function renderChart(container, spec) {
   st.font = spec.format?.font;
   st.colorSteps = spec.format?.colorSteps ?? 0;
   st.colorScale = effectiveScale(spec.format?.colorScale, colourValuesOf(spec)); // Automatic resolves here, once, against the values the scale reads: nothing below sees "auto"
+  st.colorAuto = spec.format?.colorScale === "auto" && st.colorScale === "diverging"; // an Automatic scale that resolved to Diverging has a visible neutral centre (D110)
   st.colorFullRange = spec.format?.colorFullRange === true;
   st.colorPair = spec.format?.colorPair; st.colorCentre = spec.format?.colorCentre ?? null;
   st.colorRamp = spec.format?.colorRamp; st.colorMin = spec.format?.colorMin ?? null; st.colorMax = spec.format?.colorMax ?? null;
@@ -143,7 +144,7 @@ export function renderChart(container, spec) {
   try {
     option = buildOption(spec.type === "multiples" ? { ...spec, width: paneWidth(), height: paneHeight() } : spec);
     option = applySelectionDim(option, spec.type, spec.selectedIndices); // the dashboard's source widget fades the unselected marks
-    option = applyMarkOpacity(option, markOpacityOf(spec.format)); // Format → Opacity multiplies every mark's own opacity (after the dim, so a faded mark stays fainter than a kept one)
+    if (OPACITY_TYPES.has(spec.type)) option = applyMarkOpacity(option, markOpacityOf(spec.format)); // only the types whose Format offers the control (a stale setting on a Gauge is not applied) // Format → Opacity multiplies every mark's own opacity (after the dim, so a faded mark stays fainter than a kept one)
     if (spec.type !== "multiples") showEveryCategory(option, fit.rotate, fit, paneHeight()); // panels keep their own sparse labels
     if (!fit.zoom) setDateAxisLabels(option, spec, paneWidth(), paneHeight());
     if (fit.zoom) addZoom(option, fit);
@@ -1123,7 +1124,7 @@ function buildWaterfall({ categories, series, format = {} }) {
           const top = Math.min(a[1], b[1]), h = Math.max(1, Math.abs(a[1] - b[1]));
           return {
             type: "group", children: [
-              { type: "rect", shape: { x: a[0] - w / 2, y: top, width: w, height: h, r: 2 }, style: { fill: colour[st.kind], ...strokeOf(format.markBorder, borderInk(format.markBorderColor, c)) } },
+              { type: "rect", shape: { x: a[0] - w / 2, y: top, width: w, height: h, r: 2 }, style: { fill: colour[st.kind], ...(markOpacityOf(format) < 1 ? { opacity: markOpacityOf(format) } : {}), ...strokeOf(format.markBorder, borderInk(format.markBorderColor, c)) } },
               { type: "text", style: { text: st.kind === "total" ? fmtVal(st.value) : signed(st.value), x: a[0], y: top - 4,
                   align: "center", verticalAlign: "bottom", fill: c.label, font: `14px ${c.font}` } },
             ],

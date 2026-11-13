@@ -257,6 +257,10 @@ try {
     const v = await vmap();
     must(v.inRange.color.length === 3 && /centre 0/.test(J(v.text)), 'diverging legend: ' + J([v.inRange.color.length, v.text]));
     must(v.min === -40 && v.max === 40, 'symmetric about 0 by default: ' + J([v.min, v.max]));
+    const f0 = await barFills();
+    const surface = await ev(`getComputedStyle(document.documentElement).getPropertyValue('--surface').trim()`);
+    const surfaceHex = await hex(surface);
+    must(f0[4] !== surfaceHex && f0[4] !== '#ffffff', 'the bar whose colour value is exactly the centre (0) is not the page colour: ' + J([f0[4], surfaceHex]));
     await shot('auto-diverging-bar');
   });
   await check('Automatic: a colour measure that stays positive is Low → high (two stops, the ramp controls)', async () => {
@@ -413,6 +417,9 @@ try {
     const o = await opt();
     must(J(o.legend[0].data) === J(['web', 'shop', 'app']), 'legend lists the members: ' + J(o.legend[0].data));
     must(/APAC · web/.test(await tipText(0, 0)), 'the tooltip says slice and member: ' + await tipText(0, 0));
+    await openFormat();
+    must(await ev(`!!(${fmtField('Top N (sub-slices)')})`), 'Top N says it counts sub-slices on a split pie');
+    await closeFormat();
     await shot('pie-colour-members');
   });
   await check('pie split by one Colour field: a legend click selects that member (the chip appears)', async () => {

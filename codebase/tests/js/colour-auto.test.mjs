@@ -2,7 +2,7 @@
 // and what a new worksheet starts with. Chart integration (the legend and the marks' colours) is checked in tests/live/marks-colour-ui.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { SCALE_CHOICES, effectiveScale, divergingRange, fullRangeRamp, colourAtFull, fullRangeApplies, colourScaleKind } from "../../src/DashboardBuilder/Features/Dashboard/colour-scale-model.js";
+import { SCALE_CHOICES, effectiveScale, divergingRange, fullRangeRamp, colourAtFull, fullRangeApplies, divergingColours } from "../../src/DashboardBuilder/Features/Dashboard/colour-scale-model.js";
 import { sanitizeSheet } from "../../src/DashboardBuilder/Features/Workbook/workbook-model.js";
 import { emptySheet, defaultFormat, freshSheet } from "../../src/DashboardBuilder/Features/Core/store.js";
 
@@ -21,7 +21,6 @@ test("effectiveScale: Automatic is Diverging only when the values run from below
   assert.equal(effectiveScale("sequential", [-5, 5]), "sequential");
   assert.equal(effectiveScale("diverging", [1, 2]), "diverging");
   assert.equal(effectiveScale(undefined, [-5, 5]), "sequential", "a sheet that stored nothing has always been Low → high");
-  assert.equal(colourScaleKind("auto", [-5, 5]), "diverging");
 });
 test("divergingRange: Use full colour range gives each side its own span; symmetric (today) stays the default", () => {
   assert.deepEqual(divergingRange(-10, 100, 0), { min: -100, max: 100, centre: 0 });
@@ -54,4 +53,15 @@ test("the stored setting: Automatic is a new worksheet's start, never an old fil
   const bad = [];
   const s = sanitizeSheet({ ...emptySheet("S"), format: { colorFullRange: "yes", colorScale: "magic" } }, "S", bad);
   assert.equal("colorFullRange" in s.format, false); assert.equal(s.format.colorScale, "sequential"); assert.equal(bad.length, 2);
+});
+
+test("an Automatic scale's diverging centre is the surface nudged toward the ink, so a mark AT the centre is not the page colour; explicit Diverging keeps the surface", () => {
+  const tk = { surface: "#ffffff", ink: "#1c1719", divLow: "#d98a4a", divHigh: "#2b62b8" };
+  assert.deepEqual(divergingColours(tk, false), ["#d98a4a", "#ffffff", "#2b62b8"], "default: unchanged");
+  assert.equal(divergingColours(tk, false, "default", false)[1], "#ffffff");
+  const n = divergingColours(tk, false, "default", true);
+  assert.notEqual(n[1], tk.surface);
+  assert.deepEqual([n[0], n[2]], ["#d98a4a", "#2b62b8"], "the ends are untouched");
+  assert.equal(divergingColours(tk, true, "default", true)[1], n[1], "reversed keeps the same centre");
+  assert.equal(divergingColours({ surface: "#fff" }, false, undefined, true)[1], "#fff", "no ink token: the surface");
 });

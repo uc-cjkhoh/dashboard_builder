@@ -52,7 +52,6 @@ export function effectiveScale(scale, values) {
   const n = numbers(values);
   return n.length && Math.min(...n) < 0 && Math.max(...n) > 0 ? "diverging" : "sequential";
 }
-export const colourScaleKind = effectiveScale;
 
 /** Token fallbacks for the diverging pair (the light theme's values; core.css `--chart-div-low` / `--chart-div-high` win). */
 export const DIV_FALLBACK = Object.freeze({ low: "#d98a4a", high: "#2b62b8" });
@@ -67,10 +66,13 @@ export const DIV_HUE_FALLBACK = Object.freeze({ amber: "#b8803a", violet: "#6b52
  * The diverging ramp's [low, centre, high]: the surface between two hues. `pair` (a DIV_PAIR_CHOICES value) picks them from
  * the dedicated `--chart-div-<hue>` tokens (read as tk.hues, independent of the active palette); the default is the warm / cool div tokens. `tk` = { surface, divLow, divHigh, hues? }.
  */
-export function divergingColours(tk, reverse, pair) {
+export function divergingColours(tk, reverse, pair, neutral = false) {
   const hues = PAIR_HUES[pair];
   const [low, high] = hues ? hues.map((h) => tk.hues?.[h] ?? DIV_HUE_FALLBACK[h]) : [tk.divLow ?? DIV_FALLBACK.low, tk.divHigh ?? DIV_FALLBACK.high];
-  return reverse ? [high, tk.surface, low] : [low, tk.surface, high];
+  // `neutral` (a scale that came from Automatic): the centre is the surface nudged toward the ink, as a stepped scale's middle step is, so a mark AT the centre
+  // reads as a swatch instead of the page colour. An explicit Diverging keeps the surface (its legend and cells as saved sheets have always drawn).
+  const mid = neutral && tk.ink ? mixHex(tk.surface, tk.ink, 0.15) : tk.surface;
+  return reverse ? [high, mid, low] : [low, mid, high];
 }
 
 /** Why a colour centre is refused, or null (blank is fine; a finite number no larger than 1e15 in size). */

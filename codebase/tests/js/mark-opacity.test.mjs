@@ -103,3 +103,13 @@ test("workbook: absent stays absent; a valid value round-trips; an invalid one i
     assert.equal(issues.length, 1); assert.match(issues[0], /opacity/i);
   }
 });
+
+test("a waterfall's custom rectangles carry the opacity themselves (renderItem ignores the series style); none without the setting", () => {
+  const spec = (format) => buildOption({ type: "waterfall", categories: ["a", "b"], series: [{ name: "v", data: [5, -2] }], format });
+  const rect = (o) => o.series[0].renderItem({ dataIndex: 0 }, { coord: ([x, y]) => [x * 10, y * 10], value: (i) => [0, 0, 5][i], size: () => [100, 0] }).children[0];
+  assert.equal(rect(spec({ markOpacity: 40 })).style.opacity, 0.4);
+  assert.equal("opacity" in rect(spec({})).style, false);
+});
+test("a stale setting on a type without the control is not applied (renderChart gates on OPACITY_TYPES)", () => {
+  assert.equal(OPACITY_TYPES.has("gauge"), false); assert.equal(OPACITY_TYPES.has("waterfall"), true);
+});

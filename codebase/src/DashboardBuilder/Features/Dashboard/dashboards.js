@@ -1462,7 +1462,7 @@ export function initDashboards() {
         s.chartType === "histogram"
           ? fmtSelect("Bins", [["5", "5"], ["10", "10"], ["20", "20"], ["50", "50"], ["100", "100"]],
             f.topN ?? 20, (v) => set({ topN: Number(v) }))
-          : fmtSelect("Top N", [["null", "All"], ["5", "5"], ["10", "10"], ["20", "20"], ["50", "50"], ["100", "100"],
+          : fmtSelect((s.chartType === "pie" || s.chartType === "donut") && planDims(s).colourDims.length ? "Top N (sub-slices)" : "Top N", [["null", "All"], ["5", "5"], ["10", "10"], ["20", "20"], ["50", "50"], ["100", "100"],
               ...parameters.filter((p) => p.type === "number").map((p) => [`param:${p.id}`, `= ${p.name}`])],
             f.topNParam ? `param:${f.topNParam}` : f.topN ?? "null",
             (v) => (v.startsWith("param:") ? set({ topNParam: v.slice(6) }) : set({ topN: v === "null" ? null : Number(v), topNParam: undefined }))),
