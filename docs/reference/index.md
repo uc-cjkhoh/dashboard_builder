@@ -15,5 +15,6 @@ Contracts and specifications.
 | [data-model.md](data-model.md) | Server and client state shapes, incl. the worksheet `sheet` |
 | [source-table-guidance.md](source-table-guidance.md) | Sorting key, partitioning, types, join keys and sampling for the tables the app reads |
 | [time-zone.md](time-zone.md) | The app time zone: how it is chosen, where it applies |
+| [tableau-marks-comparison.md](tableau-marks-comparison.md) | The Marks card against Tableau's: matches, gaps, deliberate differences |
 | [glossary.md](glossary.md) | Domain terms |
 | [design/index.md](design/index.md) | The design system: concept, rules, tokens, layout, components, motion |
