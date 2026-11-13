@@ -16,7 +16,7 @@ import { selectedIndicesOf } from "./dashboard-select.js";
 import { joinNotices } from "./notices.js";
 import { stackedScaleNotice } from "./stack-scale-model.js";
 import { shapeColourNote, splitSizeNote, sizeChannel, lineSizeNote } from "./mark-channel-model.js";
-import { ANALYTICS_TYPES, scatterSymbol, primaryDim, chartOrientation, marksChannels, scatterGroups, colorSplitData, colorSplitLabels, markFieldValues, sizeSteps, sizeGridOf } from "./result-model.js";
+import { ANALYTICS_TYPES, scatterSymbol, primaryDim, chartOrientation, marksChannels, LABEL_GROUP_NOTE, scatterGroups, colorSplitData, colorSplitLabels, markFieldValues, sizeSteps, sizeGridOf } from "./result-model.js";
 
 // The series charts: bar / stacked / line / area / combo, pie / donut, the scatter family (with Shape), and the colour
 // split. Each draws into `container` through chart.js and wires interaction only through the render context `rc`
@@ -98,6 +98,7 @@ export function renderScatterShapes(container, rc, sheet, result, seriesIdx, siz
   if (lm.note) container.append(hint(lm.note));
   const labelField = marksOf(sheet).label;
   const texts = labelField ? markFieldValues(sheet, result.rows, planMeasures(sheet), labelField, fmtVal, fmtCat, (f) => planMeasureName(f, rc.plan)) : null;
+  if (labelField && !texts) container.append(hint(LABEL_GROUP_NOTE)); // a dimension that is not a group-by has no one value per mark: say so, as the unsplit point chart does
   const pick = selectHandler(rc, sheet, primaryDim(sheet), sheet.chartType, rawKeys); // a click on a mark selects its primary-dimension value, as on any other point chart
   const shapeField = marksOf(sheet).shape;
   const memberShapesSpec = isShapeDimension(shapeField) && !isCalcPill(shapeField) ? memberShapeSpec(rc, sheet, shapeField, shapeMembers) : {}; // a binned measure has no members to choose for

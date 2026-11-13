@@ -324,3 +324,20 @@ test("split by Shape: a click on a mark selects its region (the row behind that 
   assert.deepEqual(picked, [["region", "US"], ["region", "JP"]]);
   assert.equal(c.children.some((x) => x.className === "ws-hint"), true); // nothing selected yet: the hint says so
 });
+
+test("split: Most recent works through the real render path (no recentKey injected): the worksheet finds the latest date itself", () => {
+  const s = splitSheet("colour", { ...on, labelMarks: "recent" }); s.columns = [{ ...dim("placed"), category: "temporal" }, meas("amount")];
+  const rows = [["2024-03-01", "web", 1, 5], ["2024-04-01", "web", 2, 9], ["2024-04-01", "shop", 3, 1], ["2024-01-01", "shop", 4, 2]];
+  const res = { rowDimensions: ["placed"], columnDimensions: ["channel"], measures: ["a", "q"], rows: rows.map(([d, ch, a, q]) => ({ keys: [d, ch], values: [a, q] })), truncated: false };
+  const { o, c } = draw(s, res);
+  assert.deepEqual(splitText(o, 0, 2), ["", "2024-04-01"]);
+  assert.deepEqual(splitText(o, 1, 2), ["2024-04-01", ""]);
+  assert.deepEqual(hints(c), []);
+});
+
+test("split: a Label field that is a dimension nowhere in the query says so, as the unsplit point chart does, and Data labels still draw", () => {
+  const s = splitSheet("colour", on); s.marks = { ...s.marks, label: dim("country") };
+  const { o, c } = draw(s, splitResult());
+  assert.match(hints(c)[0], /Label by a numeric field/);
+  assert.deepEqual(splitText(o, 0), ["EU", "US", "JP"]); // the Data labels text
+});
