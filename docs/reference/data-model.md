@@ -156,7 +156,7 @@ Nothing here reaches the server; dashboards add no endpoint
   format: { numberFormat, decimals, currencySymbol, dateFormat, topN, dateBucket, target, downIsGood, conditional, legend,
             dataLabels, colorByDimension, xTitle, yTitle,
             lineStyle, heatmapShape, ganttLength?, targetMeasure,
-            syncAxes, dualAxis, secondaryType, markerSize, markBorder, markBorderColor?, markerShape, font, tableAlign, tableDensity, tableShade, tableCols? }
+            syncAxes, dualAxis, secondaryType, markerSize, sizeScale?, markBorder, markBorderColor?, markerShape, font, tableAlign, tableDensity, tableShade, tableCols? }
 }
 ```
 
@@ -174,6 +174,7 @@ Nothing here reaches the server; dashboards add no endpoint
   | `dualAxis` | boolean (default false; line / area right axis) |
   | `secondaryType` | `line` \| `bar` \| `area` (default `line`) |
   | `markerSize` | null (automatic) or a whole number 4–40 |
+  | `sizeScale` | optional `{ smallest?, largest?, fromZero?, reversed? }` (Format → Edit Sizes): `smallest` / `largest` whole 0–100 (default 0 / 100, smallest below largest), `fromZero` / `reversed` booleans (absent `fromZero` = the chart's own default); only parts that differ from the default are stored |
   | `markBorder` | `none` \| `thin` \| `medium` \| `thick` (default `none`) |
   | `markBorderColor` | optional: `muted` \| `ink` \| `surface` \| `accent` (absent = `muted`) |
   | `markerShape` | `circle` \| `square` \| `diamond` \| `triangle` (default `circle`) |
