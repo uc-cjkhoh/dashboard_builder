@@ -105,7 +105,7 @@ At run time it is a `JOIN … ON` between the two key columns.
   from a real value. If a default such as `0` or an empty string already means "none", the dashboard will
   count and average that default as data: `avg` over zeros-for-missing is wrong. Choose one convention per
   column and keep it.
-- A left, right or full join makes the app send `join_use_nulls = 1`, so unmatched rows return NULL
+- A left, right or full join makes the app send `join_use_nulls = 1` (every connection carries it, so a `LEFT JOIN` written in a card's own SQL gets it too), so unmatched rows return NULL
   instead of the type's default (`0`, empty string). The measures then skip them. The setting needs a
   ClickHouse account allowed to change it. On a connection whose server refuses settings, right and
   full joins are refused (400) ([relationships.md](../concepts/data-source/relationships.md#join-type-p31-t02-12-t02-13)).

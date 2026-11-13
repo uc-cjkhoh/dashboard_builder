@@ -38,6 +38,7 @@ or T02-34 are build-plan (Pnn) and backlog (Tnn-nn) item ids; D-numbers are [dec
 | `readonly` | `2` | the server itself refuses DDL/DML (schema and data changes), so read-only does not rest on our builders alone ([D1](../decisions/decisions-platform.md#d1--read-only-against-clickhouse)) |
 | `max_execution_time` | `12` s (`MaxExecutionSeconds`) | a runaway query stops server-side, before the 15s HTTP timeout (`HttpTimeoutSeconds`) |
 | `cancel_http_readonly_queries_on_client_close` | `1` | when the browser aborts a superseded query, the request is cancelled and ClickHouse kills the query |
+| `join_use_nulls` | `1` | an outer join's unmatched side is NULL, as in MySQL (ClickHouse's default is the type's zero / `''`). The app's own joins also add it in a `SETTINGS` clause; the connection-level setting covers a `LEFT JOIN` written inside a card's Edit SQL, which the app never sees. Inner joins are unaffected |
 
 - **Cancellation path:** browser `AbortController` → ASP.NET `RequestAborted` (the controllers'
   `CancellationToken`) → the driver's HTTP request is cancelled → ClickHouse stops the query.
