@@ -50,6 +50,7 @@ import { COL_ALIGN_CHOICES, tableColumnList, setTableColumn, columnLook, columnW
 import { COLOUR_MEASURE_TYPES, sizeChannel } from "./mark-channel-model.js";
 import { MARK_BORDER_CHOICES, MARKER_SHAPE_CHOICES, BORDER_TYPES, MARK_BORDER_COLOUR_CHOICES, markerSizeError } from "./mark-style-model.js";
 import { OPACITY_TYPES, OPACITY_CHOICES, cleanMarkOpacity } from "./mark-opacity-model.js";
+import { addColourField, MULTI_COLOUR_TYPES } from "./colour-fields-model.js";
 import { SIZE_SCALE_TYPES, ZERO_BASED_TYPES, sizeScaleOf, sizeRangeError, cleanSizeScale } from "./size-scale-model.js";
 import { targetChoices, effectiveTargetMeasure } from "./bullet-model.js";
 import { sourceOfTable, wireSource, distinctPlan, distinctPlanSql, distinctMembers, customSqlOf, sqlWire } from "../Core/source-model.js";
@@ -161,7 +162,7 @@ function showMeCounts(sheet, type) {
   const shelf = [...sheet.columns, ...sheet.rows];
   const measures = shelf.filter((f) => roleOf(f) === "measure");
   return {
-    dims: dimsFor(type, planDims({ ...sheet, chartType: type }).keyOrder.length, colorMode(sheet) === "discrete"),
+    dims: (() => { const pd = planDims({ ...sheet, chartType: type }); return dimsFor(type, pd.keyOrder.length, pd.colourDims.length); })(),
     shelfDims: (drillActiveDim(sheet) ? 1 : 0) + shelf.filter((f) => roleOf(f) === "dimension").length,
     measures: measures.length,
     hasDate: shelf.some((f) => roleOf(f) === "dimension" && f.category === "temporal"),
@@ -2445,12 +2446,12 @@ export function initDashboards() {
     } else dash.sheet.filters.push(newFilter(f)); // a text dimension starts as an "in" list
     commit(dash, dash.sheet);
   }
-  // Drop a field onto Color. A categorical field is discrete (group-by → coloured
-  // series); a numeric field is continuous (gradient — see colorMode/planMeasures). Capped at one —
-  // a second drop replaces the first, matching Tableau's single Colour slot.
+  // Drop a field onto Color. Categorical fields are discrete (group-bys → coloured series; up to three, a mark's colour is its combination of members);
+  // a numeric field is continuous (gradient — see colorMode/planMeasures) and replaces them all, as a dimension replaces a measure.
   function addColor(dash, f) {
     if (!allowed(dash, "color", f, isCalcPill(f) ? f.role : "dimension")) return;
-    dash.sheet.color = [isCalcPill(f) ? { ...slotEntry(f), role: f.role } : { ...slotEntry(f), role: "dimension" }];
+    const entry = isCalcPill(f) ? { ...slotEntry(f), role: f.role } : { ...slotEntry(f), role: "dimension" };
+    dash.sheet.color = addColourField(dash.sheet.color, entry).list;
     commit(dash, dash.sheet);
   }
 
@@ -2467,9 +2468,11 @@ export function initDashboards() {
     const tools = [
       { key: "color", icon: "color", label: "Color", count: colorFields.length,
         pills: colorFields.map((f, i) => colorPill(dash, s, f, i)), onDrop: (f) => addColor(dash, f),
-        hint: "Drop a field — categorical = colour series, numeric = gradient",
+        hint: "Drop fields — categorical (up to 3, combined) = colour series, numeric = gradient",
         note: colorFields.length && colorMode(s) === "discrete" && !COLOR_USES.has(s.chartType)
-          ? "A categorical Colour field splits Bar, Line, Area, Stacked, Scatter, Gantt and Table — or drop a numeric field for a gradient." : null },
+          ? "A categorical Colour field splits Bar, Line, Area, Stacked, Scatter, Pie, Donut, Gantt and Table — or drop a numeric field for a gradient."
+          : colorMode(s) === "discrete" && colorFields.length > 1 && !MULTI_COLOUR_TYPES.has(s.chartType) && COLOR_USES.has(s.chartType)
+            ? "A Gantt or Table splits by the first Colour field only." : null },
       { key: "size", icon: "size", label: "Size", count: m.size ? 1 : 0,
         pills: one(m.size, () => { m.size = null; commit(dash, s); }), onDrop: (f) => addSize(dash, f),
         hint: "Drop a measure to size the marks by value, or a dimension to give each member a step: scatter bubbles, bar and line thickness, area markers, treemap area, Text / Table font size" },

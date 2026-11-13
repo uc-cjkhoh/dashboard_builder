@@ -364,6 +364,108 @@ try {
     await shot('colour-measure-combo');
   });
 
+  // ---- a Colour dimension on Pie / Donut ----------------------------------------------------------------------------------------
+  const pieData = async () => (await opt()).series[0].data.map((d) => ({ name: d.name, full: d.full, colour: d.itemStyle?.color }));
+  const colourPills = () => ev(`[...document.querySelectorAll('.ws-tool[aria-label^="Color"]')].length`);
+  await newSheet();
+  await dragChip('region', `__t.zone('columns')`);
+  await dragChip('amount', `__t.zone('rows')`);
+  await settle(300); await chartType('Pie');
+  await check('pie + a Colour field: each slice is split by the field\'s members (sub-slices grouped by slice), coloured by member; the legend lists the members; no hint', async () => {
+    await dragChip('channel', toolEl('Color')); await settle(700);
+    must((await hints()).length === 0, 'no hint: ' + J(await hints()));
+    must(hasKey(lastQuery().columnDimensions, 'column') && lastQuery().columnDimensions.map((d) => d.column).join() === 'region,channel', 'the Colour field is the last group-by: ' + J(lastQuery().columnDimensions.map((d) => d.column)));
+    const d = await pieData();
+    must(d.length === 24, '8 slices x 3 members: ' + d.length);
+    must(distinct(d.map((x) => x.colour)) === 3 && distinct(d.map((x) => x.name)) === 3, 'three member colours / names: ' + J(distinct(d.map((x) => x.colour))));
+    must(d[0].full === 'APAC · web' && d[1].full === 'APAC · shop' && d[3].full === 'EU · web', 'grouped under their slice: ' + J(d.slice(0, 4).map((x) => x.full)));
+    const o = await opt();
+    must(J(o.legend[0].data) === J(['web', 'shop', 'app']), 'legend lists the members: ' + J(o.legend[0].data));
+    must(/APAC · web/.test(await tipText(0, 0)), 'the tooltip says slice and member: ' + await tipText(0, 0));
+    await shot('pie-colour-members');
+  });
+  await check('donut + a Colour field draws the same split; Format lists the Colour members for member colours', async () => {
+    await chartType('Donut');
+    const d = await pieData(); must(d.length === 24 && distinct(d.map((x) => x.colour)) === 3, 'donut split');
+    await openFormat();
+    await ev(`document.querySelector('.ws-memcol__toggle').click()`);
+    const names = await ev(`[...document.querySelectorAll('.ws-memcol__name')].map((n) => n.textContent)`);
+    must(J(names) === J(['web', 'shop', 'app']), 'the member colour editor lists members: ' + J(names));
+    await ev(`document.querySelectorAll('.ws-memcol__row')[0].querySelectorAll('.ws-memcol__swatch')[3].click()`); await settle(500);
+    const d2 = await pieData();
+    must(d2[0].colour !== d[0].colour && d2[0].colour === d2[3].colour, 'a member colour recolours every sub-slice of the member: ' + J([d[0].colour, d2[0].colour]));
+    await ev(`document.querySelector('.ws-memcol__toggle').click()`);
+    await closeFormat();
+  });
+  await check('a Colour field that is already the slice field adds no group-by: the pie is as before', async () => {
+    await newSheet();
+    await dragChip('region', `__t.zone('columns')`);
+    await dragChip('amount', `__t.zone('rows')`);
+    await settle(300); await chartType('Pie');
+    await dragChip('region', toolEl('Color')); await settle(600);
+    must(lastQuery().columnDimensions.length === 1, 'one group-by: ' + J(lastQuery().columnDimensions.map((d) => d.column)));
+    must((await opt()).series[0].data.length === 8 && (await hints()).length === 0, '8 slices');
+  });
+
+  // ---- several fields on Colour ----------------------------------------------------------------------------------------------------
+  await newSheet();
+  await dragChip('region', `__t.zone('columns')`);
+  await dragChip('amount', `__t.zone('rows')`);
+  await settle(300); await chartType('Bar');
+  const seriesNames = async () => (await opt()).series.map((s) => s.name);
+  const pillTexts = () => ev(`[...document.querySelectorAll('.ws-tool-panel .ws-pill .ws-pill__text, .ws-fly .ws-pill .ws-pill__text')].map((p) => p.textContent)`);
+  await check('bar + two Colour fields: a series per combination "a · b", both fields are group-bys (last, in order), a legend of the combinations', async () => {
+    await dragChip('channel', toolEl('Color')); await settle(400);
+    await dragChip('country', toolEl('Color')); await settle(700);
+    must((await hints()).length === 0, 'no hint: ' + J(await hints()));
+    must(lastQuery().columnDimensions.map((d) => d.column).join() === 'region,channel,country', 'group-bys: ' + J(lastQuery().columnDimensions.map((d) => d.column)));
+    const names = await seriesNames();
+    must(names.length === 6 && names[0] === 'web · DE' && names[1] === 'web · FR' && names.includes('app · FR'), 'combinations: ' + J(names));
+    const o = await opt();
+    must(distinct(o.series.map((s) => s.itemStyle.color)) === 6, 'a colour per combination');
+    must(J(o.legend[0].data).includes('web · DE'), 'legend lists them');
+    await shot('colour-two-fields-bar');
+  });
+  await check('legend click on a combination highlights it and selects nothing (no one field to filter by)', async () => {
+    await ev(`${inst}.dispatchAction({ type: 'legendToggleSelect', name: 'web · DE' })`); await settle(700);
+    must(!(await ev(`!!document.querySelector('.ws-selchip, .ws-selection')`)), 'no selection chip');
+    await ev(`${inst}.dispatchAction({ type: 'legendAllSelect' })`);
+  });
+  await check('member colours for a combination: the editor lists "a · b", a pick recolours that series and survives a redraw', async () => {
+    await openFormat();
+    await ev(`document.querySelector('.ws-memcol__toggle').click()`);
+    const names = await ev(`[...document.querySelectorAll('.ws-memcol__name')].map((n) => n.textContent)`);
+    must(names.length === 6 && names[0] === 'web · DE', 'combined members listed: ' + J(names));
+    const before = (await opt()).series[0].itemStyle.color;
+    await ev(`document.querySelectorAll('.ws-memcol__row')[0].querySelectorAll('.ws-memcol__swatch')[3].click()`); await settle(600);
+    const after = (await opt()).series[0].itemStyle.color;
+    must(after !== before && (await opt()).series[1].itemStyle.color !== after, 'only that combination changed: ' + J([before, after]));
+    await ev(`document.querySelector('.ws-memcol__toggle').click()`);
+    await closeFormat();
+  });
+  await check('a third field joins (3 is the cap); a fourth is refused with a message and the Colour fields stay as they were', async () => {
+    await dragChip('placed', toolEl('Color')); await settle(700);
+    must(lastQuery().columnDimensions.length === 4, 'three Colour fields: ' + J(lastQuery().columnDimensions.map((d) => d.column)));
+    await dragChip('region', toolEl('Color')); await settle(300);
+    must(/at most 3/.test(await toastText()), 'refused: ' + await toastText());
+    must(lastQuery().columnDimensions.length === 4, 'unchanged');
+  });
+  await check('a measure on Colour replaces the fields (a gradient); a field then replaces the measure', async () => {
+    await dragChip('discount', toolEl('Color')); await settle(700);
+    must((await vmap())?.type === 'continuous' && !(await seriesNames()).some((n) => /·/.test(n)), 'gradient, no combinations');
+    await dragChip('channel', toolEl('Color')); await settle(900);
+    must(J(await seriesNames()) === J(['web', 'shop', 'app']) && !(await vmap()), 'one field: a series per member, the gradient gone: ' + J(await seriesNames()));
+  });
+  await check('scatter + two Colour fields: a series per combination', async () => {
+    await newSheet();
+    await dragChip('amount', `__t.zone('columns')`);
+    await dragChip('qty', `__t.zone('rows')`);
+    await settle(300); await chartType('Scatter');
+    await dragChip('channel', toolEl('Color')); await dragChip('country', toolEl('Color')); await settle(800);
+    const names = await seriesNames();
+    must(names.length === 6 && names[0] === 'web · DE', 'scatter combinations: ' + J(names));
+  });
+
   if (b.consoleErrors.length) console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  '));
 } catch (e) {
   console.log(`FAIL harness: ${e.stack}`); failed++;

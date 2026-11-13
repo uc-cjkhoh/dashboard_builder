@@ -1,5 +1,6 @@
 import { roleOf } from "./show-me-rules.js";
-import { marksOf, planDims, planMeasures, drillActiveDim, colorMode, isSizeDimension, sizeKeyIndex } from "./sheet-plan.js";
+import { marksOf, planDims, planMeasures, drillActiveDim, colorMode, colourDimsOf, isSizeDimension, sizeKeyIndex } from "./sheet-plan.js";
+import { memberText, memberRaw } from "./colour-fields-model.js";
 import { isCalcPill, sameCalcPill } from "../Calc/calc-pill.js";
 import { aggWord } from "../Calc/calc-plan.js";
 import { tooltipCatalog } from "./tooltip-model.js";
@@ -224,39 +225,42 @@ export function marksChannels(sheet, result, mplan, sizeIdx, colorMeasureIdx, fm
  * "colour member · shape member" and its legend is highlight-only (`legend.field` null). `byName` = legend name -> raw member.
  */
 export function scatterGroups(sheet, result, seriesIdx, sizeIdx, fmtCat) {
-  const { keyOrder } = planDims(sheet);
-  const cf = (sheet.color ?? [])[0];
-  const colourField = cf && colorMode(sheet) === "discrete" ? cf : null;
+  const { keyOrder, colourDims } = planDims(sheet);
+  const fields = colourDimsOf(sheet);
+  const colourField = fields.length === 1 ? fields[0] : null; // one field: a legend that can select its members
   const shapeField = marksOf(sheet).shape ?? null;
-  const ci = colourField ? keyOrder.findIndex((f) => sameField(f, colourField)) : -1;
   const si = shapeField ? keyOrder.findIndex((f) => sameField(f, shapeField)) : -1;
+  // The Colour keys are the last keys; one field also on Shape was grouped once (no Colour key of its own), so its index is the Shape key's.
+  const ci = colourDims.length ? Array.from({ length: colourDims.length }, (_, j) => keyOrder.length - colourDims.length + j) : fields.length === 1 && si >= 0 && sameField(fields[0], shapeField) ? [si] : [];
   const xIdx = seriesIdx[0], yIdx = seriesIdx[1];
   const label = (k, i) => (k == null ? "—" : fmtCat(k, i));
   const colourMembers = new Map(), shapeMembers = new Map(), groupsMap = new Map();
-  const member = (map, idx, r) => {
-    const key = tupleKey([r.keys[idx]]);
-    if (!map.has(key)) map.set(key, { index: map.size, name: label(r.keys[idx], idx), raw: r.keys[idx] });
+  const member = (map, idxs, r) => { // one member per distinct value — or per combination of the values when several fields give it
+    const key = tupleKey(idxs.map((i) => r.keys[i]));
+    if (!map.has(key)) map.set(key, { index: map.size, name: idxs.length === 1 ? label(r.keys[idxs[0]], idxs[0]) : memberText(idxs.map((i) => (r.keys[i] == null ? null : fmtCat(r.keys[i], i)))), raw: idxs.length === 1 ? r.keys[idxs[0]] : memberRaw(idxs.map((i) => r.keys[i])) });
     return map.get(key);
   };
   const steps = sizeSteps(sheet, result, result.rows, fmtCat); // a Size dimension: the point's step, not a measure
+  const sameKey = ci.length === 1 && ci[0] === si; // Colour and Shape on one field: one grouping
   for (const [ri, r] of result.rows.entries()) {
-    const colour = ci >= 0 ? member(colourMembers, ci, r) : null;
-    const shape = si >= 0 ? member(shapeMembers, si, r) : null;
+    const colour = ci.length ? member(colourMembers, ci, r) : null;
+    const shape = si >= 0 ? member(shapeMembers, [si], r) : null;
     const gk = (colour ? colour.index : "") + "|" + (shape ? shape.index : "");
     if (!groupsMap.has(gk)) {
-      const name = colour && shape && ci !== si ? `${colour.name} · ${shape.name}` : (colour ?? shape)?.name ?? "—";
+      const name = colour && shape && !sameKey ? `${colour.name} · ${shape.name}` : (colour ?? shape)?.name ?? "—";
       groupsMap.set(gk, { name, points: [], colour, shape });
     }
     const pt = [Number(r.values[xIdx]) || 0, Number(r.values[yIdx]) || 0];
     if (steps) pt.push(steps.ranks[ri] ?? 0);
     else if (sizeIdx >= 0) pt.push(Number(r.values[sizeIdx]) || 0);
-    const pointName = r.keys.map((k, i) => (i === ci || i === si ? null : label(k, i))).filter((v) => v != null).join(" / ");
+    const pointName = r.keys.map((k, i) => (ci.includes(i) || i === si ? null : label(k, i))).filter((v) => v != null).join(" / ");
     groupsMap.get(gk).points.push({ value: pt, name: pointName, ...(steps ? { sizeMember: steps.members[ri] } : {}) });
   }
   const groups = [...groupsMap.values()];
-  const pairs = ci >= 0 && si >= 0 && ci !== si; // two fields: a legend of pairs can't select one member
-  const legendField = pairs ? null : (ci >= 0 ? colourField : shapeField);
-  const byName = pairs ? new Map() : new Map(groups.map((g) => [g.name, (g.colour ?? g.shape).raw]));
+  const pairs = ci.length > 0 && si >= 0 && !sameKey; // two fields: a legend of pairs can't select one member
+  const several = ci.length > 1; // a combination of Colour fields: the legend highlights, it can't select one field's member
+  const legendField = pairs || several ? null : (ci.length ? colourField : shapeField);
+  const byName = pairs || several ? new Map() : new Map(groups.map((g) => [g.name, (g.colour ?? g.shape).raw]));
   return { groups, sizeOrder: steps?.order, sizeName: steps?.name, legend: { field: legendField, byName }, colourMembers: [...colourMembers.values()].map(({ name, raw }) => ({ name, raw })), byName };
 }
 
@@ -272,27 +276,30 @@ export function scatterShapeGroups(sheet, result, seriesIdx, sizeIdx, fmtCat) {
  * Returns { categories, series: [{ name, data }], catTuples, colorVals, cellRows } — cellRows[series][category] is the
  * index of the result row behind that cell (null when the cell is empty).
  */
-export function colorSplitData(result, fmtCat) {
+export function colorSplitData(result, fmtCat, k = 1) {
   const { rowDimensions, columnDimensions, rows } = result;
-  const colorIdx = rowDimensions.length + columnDimensions.length - 1;
-  const catOf = (keys) => keys.filter((_, i) => i !== colorIdx);
+  const total = rowDimensions.length + columnDimensions.length;
+  const colourIdx = Array.from({ length: k }, (_, j) => total - k + j); // the Colour keys are the last k keys
+  const isColour = new Set(colourIdx);
+  const catOf = (keys) => keys.filter((_, i) => !isColour.has(i));
+  const tupleOf = (keys) => colourIdx.map((i) => keys[i]);
   const catTuples = uniqueTuples(rows.map((r) => catOf(r.keys)));
-  const colorVals = [];
+  const colorVals = []; // one colour key: the member's raw value; several: the tuple of raws
   const seen = new Set();
   for (const r of rows) {
-    const cv = r.keys[colorIdx];
-    const k = tupleKey([cv]);
-    if (!seen.has(k)) { seen.add(k); colorVals.push(cv); }
+    const t = tupleOf(r.keys);
+    const key = tupleKey(t);
+    if (!seen.has(key)) { seen.add(key); colorVals.push(k === 1 ? t[0] : t); }
   }
+  const tuples = colorVals.map((cv) => (k === 1 ? [cv] : cv));
   const cell = new Map(), rowAt = new Map();
-  rows.forEach((r, ri) => { const ck = tupleKey(catOf(r.keys)) + "|" + tupleKey([r.keys[colorIdx]]); cell.set(ck, r.values[0]); rowAt.set(ck, ri); });
-  const categories = catTuples.map((t) => (t.length ? t.map((k, i) => (k == null ? "—" : fmtCat(k, i))).join(" / ") : ""));
-  const series = colorVals.map((cv) => ({
-    name: cv == null ? "—" : fmtCat(cv, colorIdx),
-    data: catTuples.map((t) => cell.get(tupleKey(t) + "|" + tupleKey([cv])) ?? null),
-  }));
-  const cellRows = colorVals.map((cv) => catTuples.map((t) => rowAt.get(tupleKey(t) + "|" + tupleKey([cv])) ?? null));
-  return { categories, series, catTuples, colorVals, cellRows };
+  rows.forEach((r, ri) => { const ck = tupleKey(catOf(r.keys)) + "|" + tupleKey(tupleOf(r.keys)); cell.set(ck, r.values[0]); rowAt.set(ck, ri); });
+  const categories = catTuples.map((t) => (t.length ? t.map((v, i) => (v == null ? "—" : fmtCat(v, i))).join(" / ") : ""));
+  const nameOf = (t) => (k === 1 ? (t[0] == null ? "—" : fmtCat(t[0], colourIdx[0])) : memberText(t.map((v, j) => (v == null ? null : fmtCat(v, colourIdx[j])))));
+  const series = tuples.map((t) => ({ name: nameOf(t), data: catTuples.map((c) => cell.get(tupleKey(c) + "|" + tupleKey(t)) ?? null) }));
+  const cellRows = tuples.map((t) => catTuples.map((c) => rowAt.get(tupleKey(c) + "|" + tupleKey(t)) ?? null));
+  const memberRaws = k === 1 ? colorVals : colorVals.map(memberRaw); // a member's storage identity (member colours): the raw itself, or the combination as a JSON array
+  return { categories, series, catTuples, colorVals, memberRaws, cellRows };
 }
 
 /** A Label field's per-result-row texts laid out per series cell: labels[series][category] ("" for an empty cell). */

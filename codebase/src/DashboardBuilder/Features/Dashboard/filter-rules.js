@@ -2,6 +2,7 @@
 import { filterValue, range, LIMITS } from "../Core/validate.js";
 import { PERIOD_PRESETS } from "../Core/sheet-schema.js";
 import { calcOnTable } from "../Calc/calc-tree.js";
+import { addColourField, colourDimensions } from "./colour-fields-model.js";
 export const AGGS = Object.freeze({
   numeric: ["sum", "avg", "min", "max", "median", "percentile", "stddev", "variance", "count", "countDistinct", "countNonNull", "attr"],
   ordered: ["count", "countDistinct", "countNonNull", "min", "max", "attr"], // text + temporal: min/max/attr come back as text
@@ -117,7 +118,7 @@ export function viewCounts(sheet) {
   let dims = shelf.filter((f) => roleOfField(f) === "dimension").length + (m.detail ?? []).length;
   if (m.shape) dims++;
   if (m.size && !numeric(m.size) && roleOfField(m.size) !== "measure") dims++; // a Size dimension is one more group-by
-  if (cf && !numeric(cf)) dims++;
+  dims += colourDimensions(sheet.color).length; // every categorical Colour field is one more group-by
   if (sheet.drill) dims++;
   let measures = shelf.filter((f) => roleOfField(f) === "measure").length;
   if (numeric(m.size)) measures++;
@@ -139,7 +140,11 @@ export function checkAdd(sheet, slot, field, role) {
     if ((marks[slot] ?? []).length >= LIMITS.pillsPerShelf)
       return { ok: false, error: `The ${slot === "detail" ? "Detail" : "Tooltip"} shelf can hold at most ${LIMITS.pillsPerShelf} fields.` };
     marks[slot] = [...(marks[slot] ?? []), entry];
-  } else if (slot === "color") next.color = [entry];
+  } else if (slot === "color") {
+    const r = addColourField(sheet.color, entry);
+    if (!r.ok) return { ok: false, error: r.error };
+    next.color = r.list;
+  }
   else if (slot === "size" || slot === "label" || slot === "path" || slot === "shape") marks[slot] = entry;
   const before = viewCounts(sheet), after = viewCounts(next);
   if (after.dims > LIMITS.dimensions && after.dims > before.dims)

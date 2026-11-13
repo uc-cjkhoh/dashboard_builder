@@ -14,8 +14,8 @@ export const SWATCHES = Object.freeze([...new Set(Object.values(PALETTES).flatMa
 
 /** The storage key of a member value (null/undefined is its own key). */
 export const memberKey = (raw) => (raw == null ? NULL_KEY : String(raw));
-/** The storage key of a colour field. */
-export const fieldColorKey = (f) => `${f.table}.${f.column}`;
+/** The storage key of a colour field; several Colour fields ({ combined: [field…] }) key as a JSON array of their keys, in order. */
+export const fieldColorKey = (f) => (f.combined ? JSON.stringify(f.combined.map(fieldColorKey)) : `${f.table}.${f.column}`);
 
 const isPlain = (o) => o && typeof o === "object" && !Array.isArray(o);
 export const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);

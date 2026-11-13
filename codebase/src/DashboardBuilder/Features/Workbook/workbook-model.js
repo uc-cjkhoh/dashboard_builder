@@ -23,6 +23,7 @@ import { checkTooltipFormats } from "../Dashboard/tooltip-formats.js";
 import { markerSizeError } from "../Dashboard/mark-style-model.js";
 import { cleanSizeScale } from "../Dashboard/size-scale-model.js";
 import { markOpacityError } from "../Dashboard/mark-opacity-model.js";
+import { cleanColourList } from "../Dashboard/colour-fields-model.js";
 import { RAMP_CHOICES, SCALE_CHOICES, DIV_PAIR_CHOICES, colourCentreError, colourRangeError, colourStepsError } from "../Dashboard/colour-scale-model.js";
 import { cleanParameter, MAX_PARAMS } from "../Core/parameters-model.js";
 import { cleanHierarchies, hierarchyTableKey } from "../Dashboard/hierarchy-model.js";
@@ -429,6 +430,7 @@ export function sanitizeSheet(saved, where, issues) {
   sheet.chartType = s.chartType === undefined ? base.chartType : CHART_TYPE_IDS.has(s.chartType) ? s.chartType
     : (issues.push(`${where}: unknown chart type "${s.chartType}" — reset to Bar.`), "bar");
   for (const k of ["columns", "rows", "color"]) sheet[k] = cleanPills(s[k], `${where} ${k}`, issues);
+  { const c = cleanColourList(sheet.color); sheet.color = c.list; c.issues.forEach((m) => issues.push(`${where}: ${m}`)); } // Colour: one measure, or up to 3 fields
   sheet.filters = cleanFilters(s.filters, `${where} filters`, issues, LIMITS.filters);
   if (s.marks != null && (typeof s.marks !== "object" || Array.isArray(s.marks))) issues.push(`${where}: marks weren't an object — reset.`);
   const m = s.marks && typeof s.marks === "object" && !Array.isArray(s.marks) ? s.marks : {};

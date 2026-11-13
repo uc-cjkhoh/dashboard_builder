@@ -74,10 +74,13 @@ test("measure cap: 10 allowed, 11th refused", () => {
   const r = checkAdd(at10, "columns", mea(50), "measure");
   assert.equal(r.ok, false); assert.equal(r.error, "A view can show at most 10 measures.");
 });
-test("replacing a single-slot encoding at the cap is allowed; counts include marks", () => {
+test("replacing a single-slot encoding at the cap is allowed; counts include marks; a second Colour field is one more group-by", () => {
   const s = sheetOf({ columns: Array.from({ length: 11 }, (_, i) => dim(i)), color: [dim(90)] });
   assert.deepEqual(viewCounts(s), { dims: 12, measures: 0 });
-  assert.equal(checkAdd(s, "color", dim(91), "dimension").ok, true);
+  assert.equal(checkAdd(s, "shape", dim(91), "dimension").ok, false, "Shape is a group-by too");
+  assert.equal(checkAdd(s, "color", dim(91), "dimension").ok, false, "Colour holds several fields now: this one would be a 13th group-by");
+  assert.equal(checkAdd(s, "color", { ...dim(91), category: "numeric", role: "measure" }, "measure").ok, true, "a measure replaces the Colour fields");
+  assert.equal(checkAdd(s, "size", dim(92)).ok, false);
   assert.equal(checkAdd(s, "detail", dim(92)).ok, false);
 });
 test("not in is offered beside in, labelled, and checked like in", () => {

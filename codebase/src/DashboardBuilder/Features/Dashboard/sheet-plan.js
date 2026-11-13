@@ -1,5 +1,6 @@
 import { roleOf } from "./show-me-rules.js";
 import { sizeChannel } from "./mark-channel-model.js";
+import { colourDimensions, MULTI_COLOUR_TYPES } from "./colour-fields-model.js";
 import { checkFilter, serverFilter } from "./filter-rules.js";
 import { withParamValue, effectiveTopN } from "../Core/parameters-model.js";
 import { LIMITS } from "../Core/validate.js";
@@ -28,7 +29,7 @@ export const marksOf = (s) => s.marks ?? EMPTY_MARKS;
 export const SCATTER_TYPES = new Set(["scatter", "square", "circle"]);
 export const isNumericField = (f) => Boolean(f) && f.category === "numeric";
 // Chart types that consume a Color dimension (a group-by); the rest ignore a Color pill (the lane says so).
-export const COLOR_USES = new Set(["bar", "stacked", "line", "area", "table", "gantt", ...SCATTER_TYPES]);
+export const COLOR_USES = new Set(["bar", "stacked", "line", "area", "table", "gantt", "pie", "donut", ...SCATTER_TYPES]);
 // The same column (or the same calculated field) on two shelves.
 const sameColumn = (a, b) => (isCalcPill(a) || isCalcPill(b) ? sameCalcPill(a, b) : a.db === b.db && a.table === b.table && a.column === b.column);
 
@@ -51,6 +52,16 @@ export const toServerFilter = (f, ctx) => serverFilter(f, {
 export const measureName = (f, ctx) => measureLabel(f, ctx.calculations, ctx.metaOf(f).alias);
 /** Stable identity for a pill, so a stored sort target survives re-renders. */
 export const fieldId = (f, kind) => (isCalcPill(f) ? calcPillId(f, kind) : `${kind}:${f.db}.${f.table}.${f.column}:${f.agg ?? ""}${f.agg === "percentile" ? `@${f.p}` : ""}`);
+
+/**
+ * The categorical Colour fields the chart splits by, in order: every one on the types that take several (MULTI_COLOUR_TYPES), the first elsewhere
+ * (Gantt, Table), none when Colour holds a measure or the chart ignores Colour (`COLOR_USES`).
+ */
+export function colourDimsOf(sheet) {
+  if (!COLOR_USES.has(sheet.chartType)) return [];
+  const dims = colourDimensions(sheet.color);
+  return MULTI_COLOUR_TYPES.has(sheet.chartType) ? dims : dims.slice(0, 1);
+}
 
 /** Colour encoding: a numeric Colour field ramps a CONTINUOUS gradient; a categorical one splits DISCRETE series. */
 export function colorMode(sheet) {
@@ -131,9 +142,11 @@ export function planDims(sheet) {
   const detail = m.detail ?? [];
   // Shape: a dimension -> distinct point shapes; it's a group-by only on the scatter family.
   const shapeDim = m.shape && SCATTER_TYPES.has(sheet.chartType) ? [m.shape] : [];
-  const cf = (sheet.color ?? [])[0];
-  // The same field on Shape and Colour groups once (its members carry both the symbol and the colour).
-  const colorDiscrete = cf && colorMode(sheet) === "discrete" && COLOR_USES.has(sheet.chartType) && !(shapeDim.length && sameColumn(shapeDim[0], cf)) ? [cf] : [];
+  // The same field on Shape and Colour groups once (its members carry both the symbol and the colour); a pie / donut's Colour field already on a shelf is that slice field (grouped once).
+  const colourFields = colourDimsOf(sheet);
+  const onShelf = (f) => [...sheet.rows, ...sheet.columns].some((x) => roleOf(x) === "dimension" && sameColumn(x, f));
+  const colorDiscrete = colourFields.length === 1 && shapeDim.length && sameColumn(shapeDim[0], colourFields[0]) ? []
+    : sheet.chartType === "pie" || sheet.chartType === "donut" ? colourFields.filter((f) => !onShelf(f)) : colourFields;
   const sizeDim = sizeDimensionOf(sheet);
   const taken = [...rowDims, ...sheet.columns.filter((f) => roleOf(f) === "dimension"), ...detail, ...shapeDim, ...colorDiscrete];
   const colDims = [
@@ -143,7 +156,7 @@ export function planDims(sheet) {
     ...shapeDim,
     ...colorDiscrete, // discrete Colour MUST remain the last key (renderColorSplit)
   ];
-  return { rowDims, colDims, keyOrder: [...rowDims, ...colDims] };
+  return { rowDims, colDims, keyOrder: [...rowDims, ...colDims], colourDims: colorDiscrete }; // the Colour fields are the last keys, in order
 }
 
 /**

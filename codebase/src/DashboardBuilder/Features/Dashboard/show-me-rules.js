@@ -60,8 +60,8 @@ export const CHART_NEEDS = Object.freeze({
     need("measures", 1, ANY, "Small multiples plots a measure — add one.")]),
 });
 
-/** The group-by keys that count as the chart's dimensions: a Gantt's discrete Colour key splits its bars and is not a row. */
-export const dimsFor = (type, keyCount, discreteColour) => (type === "gantt" && discreteColour ? keyCount - 1 : keyCount);
+/** The group-by keys that count as the chart's dimensions: a Gantt's, Pie's and Donut's Colour keys (`colourKeys`, a count or true for one) split its bars or slices and are not rows. */
+export const dimsFor = (type, keyCount, colourKeys) => (type === "gantt" || type === "pie" || type === "donut" ? keyCount - (Number(colourKeys) || 0) : keyCount);
 
 /** The rule-table hint for a type and its field counts, or null when it can draw them. */
 export function chartIssue(type, dimCount, measureCount) {

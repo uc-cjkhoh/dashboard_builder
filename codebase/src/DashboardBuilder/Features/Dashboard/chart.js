@@ -683,14 +683,21 @@ function addAnalytics(base, a, { c, fmtVal, horizontal }) {
 // pie / donut — one dimension (slices) × one measure (size). Colour IS the encoding, so a legend
 // shows by default (dataviz: identity never colour-alone; the legend supplies the labels).
 const PIE_PERCENT_SLICES = 6; // with Data labels on, up to this many slices also show their percent
-function buildPie({ type, categories, series, format = {}, pointLabels, tooltipExtra, tooltipText, tooltipFields, tooltipStyle, tooltipFormats, otherIndex = -1, colorValues, colorName }) {
+function buildPie({ type, categories, series, format = {}, pointLabels, tooltipExtra, tooltipText, tooltipFields, tooltipStyle, tooltipFormats, otherIndex = -1, colorValues, colorName, split }) {
   const c = tokens();
   const fmtVal = makeValueFormatter(format);
   const labels = (categories ?? []).map((l) => l ?? "—");
   // A colour measure colours each slice by its value (replacing the palette and member colours); the slice list stays the legend of members.
   const byValue = Array.isArray(colorValues) ? colourByValue(colorValues, c, fmtVal, colorName) : null;
-  const data = labels.map((name, i) => ({ name, value: series[0].data[i], ...(i === otherIndex ? { itemStyle: { color: c.muted } } : byValue?.colours[i] ? { itemStyle: { color: byValue.colours[i] } } : !byValue && memberColors().has(name) ? { itemStyle: { color: memberColors().get(name) } } : {}) }));
-  const { pos, legend } = legendFor(format, c, labels, true);
+  // A Colour field splits each slice into sub-slices, one per member of the field: a sub-slice is named for its member (so the legend lists the members and a
+  // legend click lights every sub-slice of one), wears its member's colour, and says "slice · member" in its label and tooltip. `split` = { members: [{ name }],
+  // memberIndex: per sub-slice (-1 = the Other remainder), memberNames: per sub-slice }.
+  const memberName = (i) => (split && split.memberIndex[i] >= 0 ? split.memberNames[i] : labels[i]);
+  const data = labels.map((full, i) => split
+    ? { name: memberName(i), full, value: series[0].data[i], itemStyle: { color: i === otherIndex || split.memberIndex[i] < 0 ? c.muted : memberColor(split.memberNames[i], c.cat[split.memberIndex[i] % c.cat.length]) } }
+    : { name: full, value: series[0].data[i], ...(i === otherIndex ? { itemStyle: { color: c.muted } } : byValue?.colours[i] ? { itemStyle: { color: byValue.colours[i] } } : !byValue && memberColors().has(full) ? { itemStyle: { color: memberColors().get(full) } } : {}) });
+  const fullName = (p) => p.data?.full ?? p.name;
+  const { pos, legend } = legendFor(format, c, split ? [...new Set(data.map((d) => d.name))] : labels, true);
   const showLabels = !!format.dataLabels || !!pointLabels; // Label field forces slice labels on
   const fewSlices = labels.length <= PIE_PERCENT_SLICES; // few slices: the label adds the share
 
@@ -706,7 +713,7 @@ function buildPie({ type, categories, series, format = {}, pointLabels, tooltipE
       formatter: (p) => tooltipText
         ? customTip(tooltipText, tooltipFields, tooltipStyle, tooltipFormats, fmtVal, format, p.dataIndex, { [String(series[0].name)]: p.value, Percent: `${p.percent}%` })
         :
-        `<span style="color:${c.muted}">${escapeHtml(String(p.name))}</span><br>` +
+        `<span style="color:${c.muted}">${escapeHtml(String(fullName(p)))}</span><br>` +
         `<b>${escapeHtml(String(series[0].name))}:</b> ${fmtVal(p.value)} (${p.percent}%)` +
         (byValue && colorValues[p.dataIndex] != null ? `<br><b>${escapeHtml(String(colorName || "colour"))}:</b> ${fmtVal(colorValues[p.dataIndex])}` : "") +
         extraTooltip(tooltipExtra, p.dataIndex, c),
@@ -717,7 +724,7 @@ function buildPie({ type, categories, series, format = {}, pointLabels, tooltipE
       center: legend && (pos === "left" || pos === "right") ? ["42%", byValue ? "46%" : "52%"] : ["50%", byValue ? "46%" : "54%"],
       data,
       label: { show: showLabels, color: c.label, fontFamily: c.font,
-        formatter: (p) => (pointLabels ? String(pointLabels[p.dataIndex] ?? "") : `${p.name}: ${fmtVal(p.value)}${fewSlices ? ` (${p.percent}%)` : ""}`) },
+        formatter: (p) => (pointLabels ? String(pointLabels[p.dataIndex] ?? "") : `${fullName(p)}: ${fmtVal(p.value)}${fewSlices ? ` (${p.percent}%)` : ""}`) },
       labelLine: { show: showLabels },
       itemStyle: edgeOr(format.markBorder, borderInk(format.markBorderColor, c), { borderColor: c.surface, borderWidth: 2 }),
       emphasis: { itemStyle: { shadowBlur: 10, shadowColor: "rgba(0,0,0,0.2)" } },

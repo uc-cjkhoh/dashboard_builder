@@ -113,7 +113,8 @@ test("marksChannels: Size reaches bar (one measure), line and area; hints on pie
 
 test("COLOR_USES and planDims: a Colour dimension is a group-by on the scatter family too, last; one field on Colour and Shape groups once", () => {
   for (const t of ["scatter", "square", "circle"]) assert.ok(COLOR_USES.has(t), t);
-  for (const t of ["pie", "donut", "combo", "treemap"]) assert.ok(!COLOR_USES.has(t), t);
+  for (const t of ["pie", "donut"]) assert.ok(COLOR_USES.has(t), t + " splits its slices by a Colour field");
+  for (const t of ["combo", "treemap"]) assert.ok(!COLOR_USES.has(t), t);
   const s = sheet({ chartType: "scatter", columns: [meas("amount")], rows: [meas("qty")], color: [dim("channel")], marks: marks({ shape: dim("tier") }) });
   assert.deepEqual(planDims(s).keyOrder.map((f) => f.column), ["tier", "channel"]);
   const same = { ...s, color: [dim("tier")] };
