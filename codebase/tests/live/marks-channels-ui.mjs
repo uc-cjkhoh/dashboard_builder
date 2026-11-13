@@ -336,7 +336,7 @@ try {
     must(distinct(f) === 8, 'eight slice colours: ' + J(f));
     const o = await opt();
     must(o.visualMap?.[0]?.type === 'continuous', 'gradient legend');
-    must((await hints()).some((t) => /per-slice/.test(t)), 'size hint: ' + J(await hints()));
+    must((await hints()).some((t) => /compare its size/.test(t)), 'size hint: ' + J(await hints()));
     await shot('pie-colour');
     await chartType('Donut');
     must(distinct(await fills()) === 8, 'donut too');
