@@ -22,6 +22,7 @@ Not a Tableau clone ([index.md](../development/backlog/index.md#guards-every-ite
 | Detail: separate marks by a dimension's members | Detail slot, extra group-by |
 | Shape: a dimension gets a shape per member, a legend; a measure becomes discrete | Shape dimension; a measure is binned into at most six symbols plus one for missing ([D114](../decisions/decisions-dashboards.md#d114--a-measure-on-shape-is-binned-into-at-most-six-symbols-plus-one-for-a-missing-value)); Edit member shapes |
 | Path: orders Line vertices; line type Linear / Step / Jump | Path slot orders line and area vertices; Format → Line style: straight, step, jump |
+| Line markers: All or None; Line pattern: Solid, dashed or dotted (solid with a continuous Size) | Format → Line markers (Automatic, All, None; a lone value and a Size-sized or cued marker always stay) and Line pattern (Solid, Dashed, Dotted; solid under a Size thickness, a measure cue keeps its own dash) ([D119](../decisions/decisions-marks.md#d119--line-pattern-and-line-markers-on-the-marks-card)) |
 | Tooltip: field on Tooltip, Edit Tooltip text with inserted fields and formatting | Tooltip slot; Edit tooltip… with `<field>` placeholders, per-line size / bold / italic / colour, per-field number and date formats |
 | Mark-type defaults and the Size slider per type | The chart-type table in [worksheet-marks.md](../concepts/worksheet/worksheet-marks.md#colour-size-and-shape-by-chart-type-t03-19-t03-20-t03-21-t01-21); an unmet mapping is a hint, never an error |
 
@@ -34,8 +35,7 @@ Not a Tableau clone ([index.md](../development/backlog/index.md#guards-every-ite
 | Edit Sizes modes | "Sizes vary": Automatically, By range, From zero; typed start and end value in the legend | Smallest / largest % and From zero only | Backlog |
 | Colour palettes | A palette drop-down (categorical and ordinal), Assign Palette, Reset; a custom hex colour on the web | One fixed set of eight colours and 24 swatches; two diverging hue pairs | Backlog: needs a stored-colour contrast rule |
 | Colour: Include totals | Totals and subtotals feed the colour encoding | Not available; a table has its own conditional colours | Backlog |
-| Line markers | Effects → Markers: selected, all or none | Marker size and shape; points shown by line length | Backlog |
-| Line pattern | Solid, dashed or dotted line (Automatic or Line marks; solid with a continuous Size) | No user choice (dashes only mark a comparison or a measure cue) | Backlog |
+| Line markers: Selected points | Effects → Markers → Selected | Not offered yet: the chart gets the selected marks only for Label marks → Selected; All and None are built | Backlog |
 | Tooltip behaviour | Show Tooltips switch; Responsive or On Hover; command buttons (Keep Only, Exclude, Group Members, Create Set, View Data); Allow selection by category; a view in the tooltip | Text template only; no switch, no command buttons; a view in a tooltip is P38 | Backlog |
 | Mark halos | A halo colour over a background image or a map | Not available (no maps or background images) | Waits on maps |
 | Polygon mark | A Polygon type with Path | No Polygon chart type | Waits on maps |

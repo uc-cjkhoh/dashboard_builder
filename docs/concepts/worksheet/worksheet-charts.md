@@ -133,6 +133,26 @@ On Bar / Line / Area the card opens with a row of **items**: Reference line, Ban
 - **Step (centred)** — a connected step that changes half-way between two categories (stored as `jump`).
 - Code: `format.lineStyle`; ECharts `step` `end` / `middle` via `lineStep`.
 
+**Line pattern** (Format; Line, Area, Combo lines; `format.linePattern` `dashed` | `dotted`, absent = solid):
+
+- **Solid, Dashed, Dotted** apply to the plain measure lines: a line, an area's border (not its fill), a combo's line and area-marks series, every measure alike (colour and the legend still name them).
+- **Solid wherever the dash would carry or lose meaning:**
+  - a straight line whose own thickness follows a Size field (the thickness is drawn as polygons a dash cannot break up), whatever its point count;
+  - several measures under a colour measure, where each measure's own cue dash names it (the cue wins).
+  The control is then **disabled, reads Solid and its title says why**; a stored choice applies again once the cause goes.
+- **Comparison lines** stay dashed and faded; beside a Dashed or Dotted main line they take a dash-dot so the two still differ without colour. Reference lines, bands and the trend line (dotted, with its end label) are analytics and never patterned.
+- Both controls are disabled with a reason on a combo that draws no lines (one measure, or Right-axis marks = Bar).
+- Code: `Dashboard/line-style-model.js` (`effectivePattern`, `lineDash`, `comparisonDash`, `lineControlSpecs`), drawn in `buildCartesian`; the controls are wired by `Dashboard/line-controls.js` (`wireLineControls`); [D119](../../decisions/decisions-marks.md#d119--line-pattern-and-line-markers-on-the-marks-card).
+
+**Line markers** (Format; Line, Area, Combo lines; `format.lineMarkers` `all` | `none`, absent = Automatic):
+
+- **Automatic** — a dot on every point up to 60 points (or whenever Marker size is set); a longer line shows none.
+- **All** — a dot on every point however long the line (ECharts is told not to thin them).
+- **None** — no dots. A **lone value** (no neighbour to draw a line to: a one-point line, a point between gaps) keeps its dot so no value disappears. Hover still shows the point's dot and the tooltip (axis pointer); Data labels still draw, on dots filled and bordered `transparent` (not opacity 0, which a label would inherit) that come back in the mark's colour on hover. Its title notes that Marker size and Marker shape then have no other effect.
+- **A marker that is data stays:** Size on a stepped line or an area sizes the markers (D108), and a colour measure beside several measures gives each measure its own marker; the control is **disabled, reads All and says why**.
+- **Selected points** is not offered yet: the chart is handed the selected marks only while Label marks is Selected, so it needs that selection passed through for Line markers on its own (backlog).
+- Code: `Dashboard/line-marker-model.js` (`markerPlan`, `isolatedPoints`), `clearDots` in `chart.js`. Browser check: `tests/live/line-pattern-ui.mjs`.
+
 ### Dual axis, marker size, marker shape and mark borders
 
 - **Right-axis marks** (combo only; `format.secondaryType` `line` | `bar` | `area`, default `line`) — draws every measure after the first on the right axis as lines, bars or a filled line. Bars on the right axis sit beside the left bars. The line style applies to line and area.

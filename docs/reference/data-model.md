@@ -157,7 +157,7 @@ Nothing here reaches the server; dashboards add no endpoint
   format: { numberFormat, decimals, currencySymbol, dateFormat, topN, dateBucket, target, downIsGood, conditional, legend,
             dataLabels, colorByDimension, xTitle, yTitle,
             lineStyle, heatmapShape, ganttLength?, targetMeasure,
-            syncAxes, dualAxis, secondaryType, markerSize, sizeScale?, markOpacity?, shapeBins?, labelMarks?, labelPosition?, markBorder, markBorderColor?, markerShape, font, tableAlign, tableDensity, tableShade, tableCols? }
+            syncAxes, dualAxis, secondaryType, markerSize, linePattern?, lineMarkers?, sizeScale?, markOpacity?, shapeBins?, labelMarks?, labelPosition?, markBorder, markBorderColor?, markerShape, font, tableAlign, tableDensity, tableShade, tableCols? }
 }
 ```
 
@@ -183,6 +183,8 @@ Nothing here reaches the server; dashboards add no endpoint
   | `markBorder` | `none` \| `thin` \| `medium` \| `thick` (default `none`) |
   | `markBorderColor` | optional: `muted` \| `ink` \| `surface` \| `accent` (absent = `muted`) |
   | `markerShape` | `circle` \| `square` \| `diamond` \| `triangle` (default `circle`) |
+  | `linePattern` | optional `dashed` \| `dotted` (Format → Line pattern on a line, area or combo's lines; absent = solid); an unknown saved value is dropped and reported, never clamped |
+  | `lineMarkers` | optional `all` \| `none` (Format → Line markers; absent = Automatic, dots by line length); an unknown saved value is dropped and reported, never clamped |
 
   A target field that no longer points at a later shelf measure is ignored and cleared when Format opens.
   An unknown value is reset with a workbook import issue. A workbook without these keys opens unchanged.
