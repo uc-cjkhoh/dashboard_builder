@@ -372,6 +372,31 @@ try {
     must(cls.some((c) => /xt-fs-2/.test(c)), 'steps on a table: ' + J(cls));
   });
 
+  // The step lookup is keyed by the crosstab's own row and column tuples: a Columns dimension and measures down the left are the other layouts.
+  await newSheet();
+  await dragChip('region', `__t.zone('rows')`);
+  await dragChip('channel', `__t.zone('columns')`);
+  await dragChip('amount', `__t.zone('columns')`);
+  await settle(400);
+  await chartType('Text');
+  await check('Text table with a Columns dimension: the cells of the diagonal wear their text steps', async () => {
+    await dragChip('discount', toolEl('Size')); await settle(700);
+    const cls = await cellClasses();
+    const steps = cls.filter((c) => /xt-fs-/.test(c));
+    must(steps.length === 5 && steps.some((c) => /xt-fs-1/.test(c)) && steps.some((c) => /xt-fs-2/.test(c)), 'steps with a Columns dimension: ' + J(cls));
+  });
+  await newSheet();
+  await dragChip('region', `__t.zone('columns')`);
+  await dragChip('amount', `__t.zone('rows')`);
+  await dragChip('qty', `__t.zone('rows')`);
+  await settle(400);
+  await chartType('Text');
+  await check('Text table with measures down the left: every measure of a column wears its step', async () => {
+    await dragChip('discount', toolEl('Size')); await settle(700);
+    const cls = await cellClasses();
+    must(cls.filter((c) => /xt-fs-2/.test(c)).length >= 2 && cls.some((c) => !/xt-fs/.test(c)), 'steps with measures on Rows: ' + J(cls));
+  });
+
   // ---- hints -----------------------------------------------------------------------------------------------------------------------------
   await newSheet();
   await dragChip('region', `__t.zone('columns')`);
