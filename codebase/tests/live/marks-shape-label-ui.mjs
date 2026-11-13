@@ -431,6 +431,12 @@ try {
     await chartType('Bar'); await openFormat();
     must(!(await ev(`!!(${fmtField('Label position')})`)), 'no Label position on a bar');
     await closeFormat();
+    await chartType('Area'); await openFormat();
+    must(await ev(`!!(${fmtField('Label position')})`), 'Label position is offered on an area chart');
+    await closeFormat();
+    await chartType('Pie'); await openFormat();
+    must(!(await ev(`!!(${fmtField('Label position')})`)), 'no Label position on a pie');
+    await closeFormat();
   });
 
   if (b.consoleErrors.length) console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  '));
