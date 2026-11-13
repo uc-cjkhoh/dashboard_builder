@@ -1,4 +1,5 @@
 import { roleOf } from "./show-me-rules.js";
+import { sizeChannel } from "./mark-channel-model.js";
 import { checkFilter, serverFilter } from "./filter-rules.js";
 import { withParamValue, effectiveTopN } from "../Core/parameters-model.js";
 import { LIMITS } from "../Core/validate.js";
@@ -105,7 +106,21 @@ export function involvedTables(sheet, periodRange, ctx) {
   return involvedKeys(sheet, periodFilters(sheet, periodRange, ctx), calcContext(ctx), keyOrder, planMeasures(sheet));
 }
 
-/** Group-by dimensions in SELECT key order: [drill?, rows-dims, cols-dims, Detail-dims, discrete-Color]. Discrete Colour stays last. */
+/** The Size field when it is a dimension the chart can draw as member steps (mark-channel-model.js `sizeChannel`), else null. */
+export const isSizeDimension = (f) => Boolean(f) && !isNumericField(f) && roleOf(f) !== "measure";
+export function sizeDimensionOf(sheet) {
+  const f = marksOf(sheet).size;
+  if (!isSizeDimension(f)) return null;
+  const shelf = [...sheet.columns, ...sheet.rows].filter((x) => roleOf(x) === "measure").length;
+  return sizeChannel(sheet.chartType, shelf, true).ok ? f : null;
+}
+/** The position of the Size dimension in the query's group-by keys, or -1 (a measure on Size, none, or a chart that can't draw it). */
+export function sizeKeyIndex(sheet) {
+  const f = sizeDimensionOf(sheet);
+  return f ? planDims(sheet).keyOrder.findIndex((k) => sameColumn(k, f)) : -1;
+}
+
+/** Group-by dimensions in SELECT key order: [drill?, rows-dims, cols-dims, Detail-dims, Size-dim, Shape-dim, discrete-Color]. Discrete Colour stays last. */
 export function planDims(sheet) {
   const dd = drillActiveDim(sheet);
   const rowDims = [
@@ -119,9 +134,12 @@ export function planDims(sheet) {
   const cf = (sheet.color ?? [])[0];
   // The same field on Shape and Colour groups once (its members carry both the symbol and the colour).
   const colorDiscrete = cf && colorMode(sheet) === "discrete" && COLOR_USES.has(sheet.chartType) && !(shapeDim.length && sameColumn(shapeDim[0], cf)) ? [cf] : [];
+  const sizeDim = sizeDimensionOf(sheet);
+  const taken = [...rowDims, ...sheet.columns.filter((f) => roleOf(f) === "dimension"), ...detail, ...shapeDim, ...colorDiscrete];
   const colDims = [
     ...sheet.columns.filter((f) => roleOf(f) === "dimension"),
     ...detail,
+    ...(sizeDim && !taken.some((f) => sameColumn(f, sizeDim)) ? [sizeDim] : []), // a Size dimension is one more group-by (the same field elsewhere groups once)
     ...shapeDim,
     ...colorDiscrete, // discrete Colour MUST remain the last key (renderColorSplit)
   ];
@@ -138,9 +156,12 @@ export function planMeasures(sheet) {
     ...sheet.columns.filter((f) => roleOf(f) === "measure"),
     ...sheet.rows.filter((f) => roleOf(f) === "measure"),
   ].map((f) => ({ field: f, role: "shelf", agg: f.agg ?? "sum" }));
-  if (sheet.chartType === "table") return shelf; // crosstab shows shelf measures only
   const out = [...shelf];
   const m = marksOf(sheet);
+  if (sheet.chartType === "table") { // a crosstab shows shelf measures only; a Size measure rides along (last) to set the cell font size
+    if (isNumericField(m.size)) out.push({ field: m.size, role: "size", agg: m.size.agg ?? "sum" });
+    return out;
+  }
   if (isNumericField(m.size)) out.push({ field: m.size, role: "size", agg: m.size.agg ?? "sum" });
   if (colorMode(sheet) === "continuous") { const cf = sheet.color[0]; out.push({ field: cf, role: "color", agg: cf.agg ?? "sum" }); }
   // Numeric Label / Tooltip / Path fields ride along as extra measures so their aggregated value is available per mark.

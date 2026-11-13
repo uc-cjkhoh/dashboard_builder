@@ -89,7 +89,7 @@ test("marksChannels: Size and continuous Colour feed a scatter and become hints 
   const mplan = planMeasures(s);
   const result = res([row(["EU", "web"], 5, 2)], { measures: ["sum(amount)", "sum(qty)"], columnDimensions: ["channel"] });
   const out = marksChannels(s, result, mplan, 1, -1, fmt, fmt, undefined, SCATTER_TYPES, () => "n");
-  assert.match(out.note, /per-slice/);
+  assert.match(out.note, /compare its size/);
   assert.equal(out.spec.sizes, undefined);
   assert.ok(Array.isArray(out.tooltipCat));
   const sc = { ...s, chartType: "scatter" };

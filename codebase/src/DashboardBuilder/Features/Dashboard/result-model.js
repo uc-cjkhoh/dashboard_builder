@@ -1,5 +1,5 @@
 import { roleOf } from "./show-me-rules.js";
-import { marksOf, planDims, planMeasures, drillActiveDim, colorMode } from "./sheet-plan.js";
+import { marksOf, planDims, planMeasures, drillActiveDim, colorMode, isSizeDimension, sizeKeyIndex } from "./sheet-plan.js";
 import { isCalcPill, sameCalcPill } from "../Calc/calc-pill.js";
 import { aggWord } from "../Calc/calc-plan.js";
 import { tooltipCatalog } from "./tooltip-model.js";
@@ -7,6 +7,7 @@ import { checkFilter } from "./filter-rules.js";
 import { tupleKey, uniqueTuples } from "./grid-model.js";
 import { isCalc, calcName } from "./table-calc.js";
 import { colourChannel, sizeChannel } from "./mark-channel-model.js";
+import { memberRanks } from "./size-scale-model.js";
 
 // Pure shaping of a query result for drawing: which result column is a series or a mark channel, the pivots
 // behind the colour split, heatmap, treemap, Sankey and small multiples, display names, and the status / caption text.
@@ -143,6 +144,22 @@ export function markFieldValues(sheet, rows, mplan, field, fmtVal, fmtCat, measu
 }
 
 /**
+ * A Size dimension's steps for `rows` (result rows, in the drawn order): { ranks (a member's step, null for the Other row), members (its drawn
+ * name per row), order (member names, smallest step first), name (the field's name) }, or null when the sheet has no Size dimension the
+ * chart draws. Members are ordered by value (numbers) or locale (text); a missing member comes last.
+ */
+export function sizeSteps(sheet, result, rows, fmtCat) {
+  const ki = sizeKeyIndex(sheet);
+  if (ki < 0) return null;
+  const raw = rows.map((r) => (r.isOther ? undefined : r.keys[ki]));
+  const { ranks, order } = memberRanks(raw);
+  const label = (k) => (k == null ? "—" : fmtCat(k, ki));
+  return { ranks, members: raw.map((k) => (k === undefined ? null : label(k))), order: order.map((m) => label(m.raw)), name: [...result.rowDimensions, ...result.columnDimensions][ki] ?? "size" };
+}
+/** A per-result-row column (a Size measure or step) laid out per (series, category) cell of a colour split; null for an empty cell. */
+export const sizeGridOf = (split, values) => split.cellRows.map((rowsOfSeries) => rowsOfSeries.map((ri) => (ri == null ? null : values[ri] ?? null)));
+
+/**
  * The mark-channel spec fed to chart.js: { spec: { sizes?, sizeName?, colorValues?, colorName?, pointLabels?,
  * tooltipExtra?, tooltipText?, tooltipFields? }, note?, tooltipCat }. `sizes` / `colorValues` are aligned with the rows
  * (null for the "Other" row). Only channels valid for the current type / mapping (mark-channel-model.js)
@@ -162,9 +179,13 @@ export function marksChannels(sheet, result, mplan, sizeIdx, colorMeasureIdx, fm
   const shelfCount = mplan.filter((e) => e.role === "shelf").length;
   const column = (idx) => rows.map((r) => (r.isOther ? null : r.values[idx]));
   if (m.size) {
-    const ch = sizeChannel(type, shelfCount);
-    if (ch.ok && sizeIdx >= 0) { spec.sizes = column(sizeIdx); spec.sizeName = result.measures[sizeIdx]; }
-    else if (!ch.ok) notes.push(ch.note);
+    const asDim = isSizeDimension(m.size);
+    const ch = sizeChannel(type, shelfCount, asDim);
+    if (!ch.ok) notes.push(ch.note);
+    else if (asDim) { // a dimension: each member a step (sizes = the step, sizeMembers / sizeOrder name them)
+      const steps = sizeSteps(sheet, result, rows, fmtCat);
+      if (steps) { spec.sizes = steps.ranks; spec.sizeMembers = steps.members; spec.sizeOrder = steps.order; spec.sizeName = steps.name; }
+    } else if (sizeIdx >= 0) { spec.sizes = column(sizeIdx); spec.sizeName = result.measures[sizeIdx]; }
   }
   if (colorMeasureIdx >= 0) {
     const ch = colourChannel(type, shelfCount);
@@ -216,7 +237,8 @@ export function scatterGroups(sheet, result, seriesIdx, sizeIdx, fmtCat) {
     if (!map.has(key)) map.set(key, { index: map.size, name: label(r.keys[idx], idx), raw: r.keys[idx] });
     return map.get(key);
   };
-  for (const r of result.rows) {
+  const steps = sizeSteps(sheet, result, result.rows, fmtCat); // a Size dimension: the point's step, not a measure
+  for (const [ri, r] of result.rows.entries()) {
     const colour = ci >= 0 ? member(colourMembers, ci, r) : null;
     const shape = si >= 0 ? member(shapeMembers, si, r) : null;
     const gk = (colour ? colour.index : "") + "|" + (shape ? shape.index : "");
@@ -225,15 +247,16 @@ export function scatterGroups(sheet, result, seriesIdx, sizeIdx, fmtCat) {
       groupsMap.set(gk, { name, points: [], colour, shape });
     }
     const pt = [Number(r.values[xIdx]) || 0, Number(r.values[yIdx]) || 0];
-    if (sizeIdx >= 0) pt.push(Number(r.values[sizeIdx]) || 0);
+    if (steps) pt.push(steps.ranks[ri] ?? 0);
+    else if (sizeIdx >= 0) pt.push(Number(r.values[sizeIdx]) || 0);
     const pointName = r.keys.map((k, i) => (i === ci || i === si ? null : label(k, i))).filter((v) => v != null).join(" / ");
-    groupsMap.get(gk).points.push({ value: pt, name: pointName });
+    groupsMap.get(gk).points.push({ value: pt, name: pointName, ...(steps ? { sizeMember: steps.members[ri] } : {}) });
   }
   const groups = [...groupsMap.values()];
   const pairs = ci >= 0 && si >= 0 && ci !== si; // two fields: a legend of pairs can't select one member
   const legendField = pairs ? null : (ci >= 0 ? colourField : shapeField);
   const byName = pairs ? new Map() : new Map(groups.map((g) => [g.name, (g.colour ?? g.shape).raw]));
-  return { groups, legend: { field: legendField, byName }, colourMembers: [...colourMembers.values()].map(({ name, raw }) => ({ name, raw })), byName };
+  return { groups, sizeOrder: steps?.order, sizeName: steps?.name, legend: { field: legendField, byName }, colourMembers: [...colourMembers.values()].map(({ name, raw }) => ({ name, raw })), byName };
 }
 
 /** Shape (scatter family) alone: scatterGroups with no Colour — one series per Shape member. */
