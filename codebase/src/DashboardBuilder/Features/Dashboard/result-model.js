@@ -259,7 +259,7 @@ export function scatterGroups(sheet, result, seriesIdx, sizeIdx, fmtCat, shapeOp
     if (steps) pt.push(steps.ranks[ri] ?? 0);
     else if (sizeIdx >= 0) pt.push(Number(r.values[sizeIdx]) || 0);
     const pointName = r.keys.map((k, i) => (ci.includes(i) || i === si ? null : label(k, i))).filter((v) => v != null).join(" / ");
-    groupsMap.get(gk).points.push({ value: pt, name: pointName, ...(steps ? { sizeMember: steps.members[ri] } : {}), ...(binned ? { shapeValue: r.values[shapeOpts.shapeIdx] == null ? "—" : shapeOpts.fmtVal(r.values[shapeOpts.shapeIdx]) } : {}) });
+    groupsMap.get(gk).points.push({ value: pt, name: pointName, row: ri, ...(steps ? { sizeMember: steps.members[ri] } : {}), ...(binned ? { shapeValue: r.values[shapeOpts.shapeIdx] == null ? "—" : shapeOpts.fmtVal(r.values[shapeOpts.shapeIdx]) } : {}) });
   }
   const groups = binned ? shapeOrder([...groupsMap.values()]) : [...groupsMap.values()];
   const pairs = ci.length > 0 && (si >= 0 || binned) && !sameKey; // two fields: a legend of pairs can't select one member

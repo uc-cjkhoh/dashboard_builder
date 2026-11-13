@@ -2,14 +2,14 @@
 // have always drawn), the lowest and highest of each series, the selected mark, a mark while it is highlighted, the marks at the latest date, or the
 // first and last point of a line. `format.labelMarks` stores one of the names (absent = All, so older files are untouched); the drawing turns it into a
 // mask over each series' marks with `labelMask`. A mode that does not apply to the chart in hand draws every label, never none.
-import { marksOf, planDims, SCATTER_TYPES } from "./sheet-plan.js";
+import { marksOf, SCATTER_TYPES } from "./sheet-plan.js";
 import { primaryDim } from "./result-model.js";
 import { DATE_PARTS } from "../Core/sheet-schema.js";
 
 /** [value, label] — the choices Format → Label marks can offer (each chart offers the ones that mean something there). */
 export const LABEL_MARK_CHOICES = Object.freeze([["all", "All"], ["minmax", "Min & max"], ["selected", "Selected"], ["highlighted", "Highlighted"], ["recent", "Most recent"], ["ends", "Line ends"]]);
 const MODES = new Set(LABEL_MARK_CHOICES.map((c) => c[0]));
-/** Chart types whose marks carry labels from Data labels or a Label field (the point chart only while one series draws all its points). */
+/** Chart types whose marks carry labels from Data labels or a Label field (the point charts too when split by Shape or Colour: one series per member). */
 export const LABEL_TYPES = new Set(["bar", "stacked", "line", "area", "combo", "pie", "donut", ...SCATTER_TYPES]);
 const LINES = new Set(["line", "area"]);
 // Label position: a label sits on a point over the plot background on a line, an area and the point charts (ink on the surface, so no palette contrast to guard);
@@ -51,11 +51,9 @@ export function cleanLabelMarks(v) {
 export function labelContext(sheet) {
   const type = sheet.chartType;
   const labelsOn = Boolean(sheet.format?.dataLabels || marksOf(sheet).label);
-  // A point chart split by Shape or Colour is drawn one series per member and has no labels yet.
-  const splitPoints = SCATTER_TYPES.has(type) && Boolean(marksOf(sheet).shape || planDims(sheet).colourDims.length);
   const first = primaryDim(sheet);
   const temporal = Boolean(first) && first.category === "temporal" && !(first.datePart && DISCRETE_PARTS.has(first.datePart));
-  return { type, temporal, drawn: labelsOn && LABEL_TYPES.has(type) && !splitPoints };
+  return { type, temporal, drawn: labelsOn && LABEL_TYPES.has(type) };
 }
 const DISCRETE_PARTS = new Set([...DATE_PARTS].filter((p) => /OfYear$|OfWeek$|OfDay$/.test(p)));
 
@@ -80,15 +78,16 @@ const real = (v) => Number.isFinite(num(v));
 /**
  * The mask a mode makes over the marks: { hover, at(seriesIndex, markIndex) -> whether that mark carries its label }, or null for All (nothing to mask).
  * `series` = the values of each series by mark; `skip` = marks that are not data points (the Other group); `selected` / `recent` = the mark indices of the selection
- * and of the latest date. Highlighted has `hover` true: the chart shows a label
+ * and of the latest date — or, when the series are not aligned on one axis (a point chart split into a series per member), the keys `keyOf(series, mark)` gives
+ * (the result row behind each mark; default the mark's index). Min & max is per series either way. Highlighted has `hover` true: the chart shows a label
  * only while its mark is highlighted (`at` is true for every mark then). A missing value is never a candidate; a tie for the lowest or highest takes the first mark.
  */
-export function labelMask(mode, { series = [], skip = [], selected = [], recent = [] } = {}) {
+export function labelMask(mode, { series = [], skip = [], selected = [], recent = [], keyOf = (_si, di) => di } = {}) {
   if (!mode || mode === "all" || !MODES.has(mode)) return null;
   if (mode === "highlighted") return { hover: true, at: () => true };
   if (mode === "selected" || mode === "recent") {
     const keep = new Set(mode === "selected" ? selected : recent);
-    return { hover: false, at: (_si, di) => keep.has(di) };
+    return { hover: false, at: (si, di) => keep.has(keyOf(si, di)) };
   }
   const skipped = new Set(skip);
   const picks = series.map((values, si) => {

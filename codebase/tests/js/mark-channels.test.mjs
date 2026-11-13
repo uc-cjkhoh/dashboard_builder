@@ -153,7 +153,7 @@ test("scatterGroups: Shape alone is unchanged (no colour record); other keys lab
   const g = scatterGroups(s, r, [0, 1], 2, fmt);
   assert.equal(g.groups[0].colour, null);
   assert.equal(g.groups[0].shape.index, 0);
-  assert.deepEqual(g.groups[0].points[0], { value: [1, 2, 9], name: "EU" });
+  assert.deepEqual(g.groups[0].points[0], { value: [1, 2, 9], name: "EU", row: 0 });
 });
 
 test("treemapTree: with Size the area is the Size measure, the shelf measure stays as the label value, a colour measure rides along", () => {

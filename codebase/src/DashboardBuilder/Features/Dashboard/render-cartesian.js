@@ -91,11 +91,20 @@ export function renderScatterShapes(container, rc, sheet, result, seriesIdx, siz
   const { groups, legend, colourMembers, shapeMembers, sizeOrder, sizeName } = scatterGroups(sheet, result, seriesIdx, sizeIdx, fmtCat, { shapeIdx, bins: shapeBinsOf(format), fmtVal });
   const cf = memberColourField(colourDimsOf(sheet));
   const memberColourSpec = cf ? memberSpec(rc, sheet, cf, colourMembers) : {};
+  // Labels: one per mark, the series being the members. Each point knows its result row, which is how the Label field's text and the Selected / Most recent
+  // marks (named by the primary dimension's value on that row) reach it; a chart with no primary dimension has nothing a selection could name.
+  const rawKeys = primaryDim(sheet) ? result.rows.map((r) => (r.isOther ? null : r.keys[0])) : result.rows.map(() => null);
+  const lm = labelMarksSpec(rc, sheet, format, rawKeys);
+  if (lm.note) container.append(hint(lm.note));
+  const labelField = marksOf(sheet).label;
+  const texts = labelField ? markFieldValues(sheet, result.rows, planMeasures(sheet), labelField, fmtVal, fmtCat, (f) => planMeasureName(f, rc.plan)) : null;
+  const pick = selectHandler(rc, sheet, primaryDim(sheet), sheet.chartType, rawKeys); // a click on a mark selects its primary-dimension value, as on any other point chart
   const shapeField = marksOf(sheet).shape;
   const memberShapesSpec = isShapeDimension(shapeField) && !isCalcPill(shapeField) ? memberShapeSpec(rc, sheet, shapeField, shapeMembers) : {}; // a binned measure has no members to choose for
   drawChart(container, {
     ...legendSpec(rc, sheet, legend.field, legend.byName), // legend items are Colour / Shape members
-    ...memberColourSpec, ...memberShapesSpec,
+    ...memberColourSpec, ...memberShapesSpec, ...lm.spec,
+    ...(texts ? { rowLabels: texts.values } : {}), ...(pick ? { onSelect: (p) => pick({ dataIndex: p.data?.row }) } : {}),
     type: "scatterShapes", symbol: scatterSymbol(sheet.chartType), groups, format,
     xName: format.xTitle || result.measures[xIdx] || "x",
     yName: format.yTitle || result.measures[yIdx] || "y",
