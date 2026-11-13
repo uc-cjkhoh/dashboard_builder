@@ -21,6 +21,7 @@ import { checkTooltipText } from "../Dashboard/tooltip-model.js";
 import { checkTooltipStyle } from "../Dashboard/tooltip-style.js";
 import { checkTooltipFormats } from "../Dashboard/tooltip-formats.js";
 import { markerSizeError } from "../Dashboard/mark-style-model.js";
+import { cleanSizeScale } from "../Dashboard/size-scale-model.js";
 import { RAMP_CHOICES, SCALE_CHOICES, DIV_PAIR_CHOICES, colourCentreError, colourRangeError, colourStepsError } from "../Dashboard/colour-scale-model.js";
 import { cleanParameter, MAX_PARAMS } from "../Core/parameters-model.js";
 import { cleanHierarchies, hierarchyTableKey } from "../Dashboard/hierarchy-model.js";
@@ -657,6 +658,7 @@ function cleanFormat(f0, where, issues) {
   out.tableAlign = oneOf(TABLE_ALIGNS, f.tableAlign, base.tableAlign, w, "table alignment", issues);
   out.tableDensity = oneOf(TABLE_DENSITIES, f.tableDensity, base.tableDensity, w, "row height", issues);
   out.tableShade = oneOf(TABLE_SHADES, f.tableShade, base.tableShade, w, "table shading", issues);
+  if (f.sizeScale !== undefined) { const r = cleanSizeScale(f.sizeScale); r.issues.forEach((m) => issues.push(`${w}: ${m.replace(/^(the )?/, "Size: ")}`)); if (r.value) out.sizeScale = r.value; } // Edit Sizes: absent (older files, the default) stays off defaultFormat so a sheet round-trips unchanged
   const tableCols = cleanTableCols(f.tableCols, w, issues); // absent when no column is set (older files, and the default), so a sheet round-trips unchanged
   if (tableCols) out.tableCols = tableCols;
   out.markerSize = f.markerSize == null ? null : markerSizeError(f.markerSize) === null ? f.markerSize

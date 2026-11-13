@@ -99,7 +99,8 @@ export function statusText(s, result) {
   const rd = result.rowDimensions.length, cd = result.columnDimensions.length;
   if (s.chartType === "table" || s.chartType === "text")
     parts.push(`${n(tuples(0, rd))} × ${n(tuples(rd, cd))} table`);
-  parts.push(`${result.measures.length} measure${result.measures.length === 1 ? "" : "s"}`);
+  const nMeasures = result.measures.length - ((s.chartType === "table" || s.chartType === "text") && planMeasures(s).some((e) => e.role === "size") ? 1 : 0); // a Table / Text Size measure sets the text size: it is not a column
+  parts.push(`${nMeasures} measure${nMeasures === 1 ? "" : "s"}`);
   if (s.selection) parts.push(`Selected: ${s.selection.label}`);
   return parts.join(" · ");
 }

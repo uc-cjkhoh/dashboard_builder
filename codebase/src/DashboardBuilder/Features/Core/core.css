@@ -366,3 +366,8 @@ select.select:not([multiple]), select.input:not([multiple]) { appearance: none; 
 
 /* Native checkbox / radio default to a 3px margin: off the 4 / 8 / 16 / 24 scale, so none. */
 input[type="checkbox"], input[type="radio"] { margin: 0; }
+
+/* ---- Size on a Table / Text: a cell's text step (the type scale's lead and title sizes; the default is the body size) ---- */
+.xtab td.xt-fs-1 { font-size: var(--fs-lead); }
+.xtab td.xt-fs-2 { font-size: var(--fs-title); }
+@media print { .xtab td.xt-fs-1 { font-size: 1.15em; } .xtab td.xt-fs-2 { font-size: 1.7em; } }

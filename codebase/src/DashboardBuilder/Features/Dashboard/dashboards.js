@@ -49,10 +49,11 @@ import { TABLE_ALIGN_CHOICES, TABLE_DENSITY_CHOICES, TABLE_SHADE_CHOICES } from 
 import { COL_ALIGN_CHOICES, tableColumnList, setTableColumn, columnLook, columnWidthError } from "./table-columns-model.js";
 import { COLOUR_MEASURE_TYPES } from "./mark-channel-model.js";
 import { MARK_BORDER_CHOICES, MARKER_SHAPE_CHOICES, BORDER_TYPES, MARK_BORDER_COLOUR_CHOICES, markerSizeError } from "./mark-style-model.js";
+import { SIZE_SCALE_TYPES, ZERO_BASED_TYPES, sizeScaleOf, sizeRangeError, cleanSizeScale } from "./size-scale-model.js";
 import { targetChoices, effectiveTargetMeasure } from "./bullet-model.js";
 import { sourceOfTable, wireSource, distinctPlan, distinctPlanSql, distinctMembers, customSqlOf, sqlWire } from "../Core/source-model.js";
 import { heldOutCards } from "../Relations/relation-rules.js";
-import { keyOf, SCATTER_TYPES, COLOR_USES, colorMode, isDrillActive, drillActiveDim, planDims, planMeasures, sortTargets as planSortTargets, measureName as planMeasureName, buildPlan as planQuery, periodFilters as planPeriodFilters, calcContext, appliedShared as planAppliedShared, withParams, toServerFilter, isDateOnlyType } from "./sheet-plan.js";
+import { keyOf, SCATTER_TYPES, COLOR_USES, isSizeDimension, colorMode, isDrillActive, drillActiveDim, planDims, planMeasures, sortTargets as planSortTargets, measureName as planMeasureName, buildPlan as planQuery, periodFilters as planPeriodFilters, calcContext, appliedShared as planAppliedShared, withParams, toServerFilter, isDateOnlyType } from "./sheet-plan.js";
 import { isMissingPill, missingIn, missingMessage } from "./missing-columns.js";
 import { catalogFromEntities } from "../Calc/calc-resolve.js";
 import { newCalcFilter, isCalcPill, makeCalcPill, refusal, syncCalcPills, pillSlots, clearCalcPills, clearFilterCalc, usesCalc, CALC_AGGS } from "../Calc/calc-pill.js";
@@ -1412,6 +1413,12 @@ export function initDashboards() {
         set({ markerSize: v });
       }));
     if (linesTakeStyle(s.chartType)) panel.append(fmtSelect("Marker shape", MARKER_SHAPE_CHOICES, f.markerShape ?? "circle", (v) => set({ markerShape: v })));
+    if (s.marks?.size && SIZE_SCALE_TYPES.has(s.chartType)) panel.append(...sizesEditor(f, s, (next) => { // Edit Sizes: the stored shape holds only what differs from the default
+      const { value } = cleanSizeScale(next);
+      s.format = { ...f };
+      if (value) s.format.sizeScale = value; else delete s.format.sizeScale;
+      commit(dash, s);
+    }));
     if (BORDER_TYPES.has(s.chartType)) {
       panel.append(fmtSelect("Mark border", MARK_BORDER_CHOICES, f.markBorder ?? "none", (v) => set({ markBorder: v })));
       if ((f.markBorder ?? "none") !== "none") panel.append(fmtSelect("Border colour", MARK_BORDER_COLOUR_CHOICES, f.markBorderColor ?? "muted", (v) => set({ markBorderColor: v })));
@@ -2445,7 +2452,7 @@ export function initDashboards() {
           ? "A categorical Colour field splits Bar, Line, Area, Stacked, Scatter, Gantt and Table — or drop a numeric field for a gradient." : null },
       { key: "size", icon: "size", label: "Size", count: m.size ? 1 : 0,
         pills: one(m.size, () => { m.size = null; commit(dash, s); }), onDrop: (f) => addSize(dash, f),
-        hint: "Drop a numeric field to size the marks: scatter bubbles, bar thickness, line / area markers, treemap area" },
+        hint: "Drop a measure to size the marks by value, or a dimension to give each member a step: scatter bubbles, bar and line thickness, area markers, treemap area, Text / Table font size" },
       { key: "label", icon: "label", label: "Label", count: m.label ? 1 : 0,
         pills: one(m.label, () => { m.label = null; commit(dash, s); }), onDrop: (f) => addMarkSingle(dash, "label", f),
         hint: "Drop a field to write its value on each mark" },
@@ -2486,7 +2493,7 @@ export function initDashboards() {
     ];
     // For the editor flyout: whether a slot takes several fields, and which fields its Add field list offers.
     const multi = new Set(["color", "detail", "tooltip", "filters", "drill"]);
-    const accepts = { size: (f) => f.category === "numeric", period: (f) => f.category === "temporal" };
+    const accepts = { period: (f) => f.category === "temporal" };
     return tools.map((t) => ({ ...t, multi: multi.has(t.key), accepts: accepts[t.key] ?? null }));
   }
 
@@ -2838,12 +2845,11 @@ export function initDashboards() {
     p.classList.add("ws-pill--mark");
     return markMissing(p, f);
   }
-  // Size takes one NUMERIC field (it scales the mark — a bubble); non-numeric is nudged away.
+  // Size takes one field: a measure scales the mark by value, a dimension gives each member a step (sheet-plan.js `isSizeDimension`).
   function addSize(dash, f) {
-    if (f.category !== "numeric") { toast("Size needs a numeric field (it scales the mark).", "info"); return; }
-    if (!allowed(dash, "size", f)) return;
+    if (!allowed(dash, "size", f, isCalcPill(f) ? f.role : undefined)) return;
     const m = dash.sheet.marks ?? (dash.sheet.marks = defaultMarks());
-    m.size = isCalcPill(f) ? slotEntry(f) : { ...slotEntry(f), agg: "sum" };
+    m.size = isCalcPill(f) ? slotEntry(f) : f.category === "numeric" ? { ...slotEntry(f), agg: "sum" } : slotEntry(f);
     commit(dash, dash.sheet);
   }
   // Label holds one field of any kind (numeric → its aggregate; categorical → its grouped value).
@@ -3028,9 +3034,25 @@ export function initDashboards() {
     return box;
   }
 
+  // Format → Edit Sizes: the smallest and largest mark as a percent of the chart's size range, From zero, Reversed (size-scale-model.js).
+  function sizesEditor(f, s, save) {
+    const cur = sizeScaleOf(f);
+    const pctField = (label, key, value) => fmtNumber(label, value, key === "smallest" ? "0" : "100", (v) => {
+      const next = { smallest: cur.smallest, largest: cur.largest, [key]: v == null ? (key === "smallest" ? 0 : 100) : v };
+      const bad = sizeRangeError(next.smallest, next.largest);
+      if (bad) { toast(bad, "danger"); return false; }
+      save({ ...(f.sizeScale ?? {}), ...next });
+    });
+    const isDim = isSizeDimension(s.marks.size);
+    const zero = fmtCheck("From zero", cur.fromZero ?? ZERO_BASED_TYPES.has(s.chartType), (v) => save({ ...(f.sizeScale ?? {}), fromZero: v }));
+    if (isDim) { zero.querySelector("input").disabled = true; zero.title = "From zero applies to a measure; a dimension's members are steps."; }
+    return [pctField("Smallest size (%)", "smallest", f.sizeScale?.smallest), pctField("Largest size (%)", "largest", f.sizeScale?.largest), zero,
+      fmtCheck("Reversed", cur.reversed, (v) => save({ ...(f.sizeScale ?? {}), reversed: v }))];
+  }
+
   function conditionalEditor(dash, s) {
     const f = s.format;
-    const mplan = planMeasures(s);
+    const mplan = planMeasures(s).filter((e) => e.role === "shelf"); // a Size measure is not a cell value
     const box = el("div", "ws-cf");
     box.append(el("span", "ws-fmt-label ws-cf__title", "Conditional formatting"));
     if (!mplan.length) { box.append(el("span", "ws-shelf__note", "Add a measure to format its cells.")); return box; }

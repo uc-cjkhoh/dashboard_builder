@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { sizeChannel, splitSizeNote, drawsSize, lineSizeMode } from "../../src/DashboardBuilder/Features/Dashboard/mark-channel-model.js";
-import { marksChannels, scatterGroups, colorSplitData, sizeGridOf } from "../../src/DashboardBuilder/Features/Dashboard/result-model.js";
+import { marksChannels, scatterGroups, colorSplitData, sizeGridOf, statusText } from "../../src/DashboardBuilder/Features/Dashboard/result-model.js";
 import { planDims, planMeasures, buildPlan, SCATTER_TYPES, sizeKeyIndex } from "../../src/DashboardBuilder/Features/Dashboard/sheet-plan.js";
 import { visibleTools } from "../../src/DashboardBuilder/Features/Dashboard/toolbar-rules.js";
 import { viewCounts, checkAdd } from "../../src/DashboardBuilder/Features/Dashboard/filter-rules.js";
@@ -127,4 +127,10 @@ test("sizeGridOf: a Size column laid out per (series, category) cell of a Colour
     rows: [row(["EU", "web"], 1, 10), row(["EU", "shop"], 2, 20), row(["US", "web"], 3, 30)] };
   const split = colorSplitData(r, fmt);
   assert.deepEqual(sizeGridOf(split, [10, 20, 30]), [[10, 30], [20, null]]);
+});
+test("statusText: a Table / Text Size measure is not counted as a measure of the view", () => {
+  const r = result([row(["EU"], 5, 2)], { measures: ["sum(amount)", "sum(qty)"] });
+  assert.match(statusText(barSheet("text", { marks: marks({ size: meas("qty") }) }), r), /1 measure$/);
+  assert.match(statusText(barSheet("text"), result([row(["EU"], 5)])), /1 measure$/);
+  assert.match(statusText(barSheet("bar", { marks: marks({ size: meas("qty") }) }), r), /2 measures$/, "other types keep counting every column");
 });

@@ -28,7 +28,8 @@ let refocus = null; // the toggle to focus after the redraw a click causes: { ax
 let refocusGrip = null; // the column key whose resize handle to focus after the redraw a key press causes
 // `columns` (editor only): { onSet(key, { width? }) } — a header's resize handle commits through it. Each column's own alignment and width
 // (sheet.format.tableCols, table-columns-model.js) always show.
-export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, calcPercent = new Set(), collapse = null, columns = null) {
+// `sizing` (a Size measure): { stepAt(rowTuple, colTuple) -> 0..2, note } — a value cell wears the text step of its row-by-column pair (xt-fs-1 = lead, xt-fs-2 = title size).
+export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, calcPercent = new Set(), collapse = null, columns = null, sizing = null) {
   const { rowDimensions, columnDimensions, measures, rows } = result;
   const rd = rowDimensions.length, cd = columnDimensions.length;
   const dimLabel = (v, i) => (v == null ? "—" : fmtCat(v, i)); // date-aware header label
@@ -229,7 +230,10 @@ export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, ca
       const mi = measureOnLeft ? leftLeaf.mi : topLeaf.mi ?? 0;
       const v = leafAt(leftLeaf, topLeaf, mi);
       const text = calcPercent.has(mi) ? (v == null ? "—" : `${Number(v).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`) : fmtVal(v);
-      tr.append(colStyle(cf[mi] ? formattedCell(v, text, cf[mi]) : el("td", "num", text), valueKey(mi)));
+      const cell = cf[mi] ? formattedCell(v, text, cf[mi]) : el("td", "num", text);
+      const step = sizing && leftLeaf.level === null && topLeaf.level === null ? sizing.stepAt(leftLeaf.tuple, topLeaf.tuple) : 0; // a collapsed header combines cells: no size of its own
+      if (step) cell.classList.add(`xt-fs-${step}`);
+      tr.append(colStyle(cell, valueKey(mi)));
     }
     if (totalCol) for (const tmi of totalMis) {
       const mi = tmi ?? leftLeaf.mi;
@@ -264,8 +268,9 @@ export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, ca
   }
 
   const legend = conditionalLegend(cf, measures, fmtVal, partial ? rows.length : 0);
-  if (bothMeasures || legend) {
+  if (bothMeasures || legend || sizing?.note) {
     const wrap = el("div", "xt-wrap");
+    if (sizing?.note) wrap.append(el("div", "xt-legend", sizing.note));
     if (bothMeasures) wrap.append(warn("Measures are on both shelves — showing them across the top. Put all measures on one shelf for a clean crosstab."));
     if (legend) wrap.append(legend);
     wrap.append(table);

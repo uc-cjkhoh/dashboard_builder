@@ -264,11 +264,13 @@ try {
   await dragChip('amount', `__t.zone('rows')`);
   await settle(400);
   await chartType('Line');
-  await check('line + Size: each marker its own size, with a Size legend; + a colour measure: coloured markers and a gradient line', async () => {
+  await check('line + Size: the line\'s own thickness varies (a segment overlay; markers keep one size), with a Size legend; + a colour measure: coloured markers and a gradient line', async () => {
     await dragChip('discount', toolEl('Size')); await settle(500);
     must((await hints()).length === 0, 'no hint: ' + J(await hints()));
     const s = await symbolSizes();
-    must(distinct(s) === 8 && s[0] < s[7] && s[0] >= 6 && s[7] <= 24, 'marker sizes grow with the value, within 6 to 24: ' + J(s));
+    must(distinct(s) === 1, 'markers keep one size: ' + J(s));
+    const o0 = await opt();
+    must(o0.series.length === 2 && o0.series[1].type === 'custom' && o0.series[1].silent, 'a silent segment series sits beside the line: ' + J(o0.series.map((x) => x.type)));
     must(/^Size: /.test(await sizeText()), 'size legend');
     await dragChip('qty', toolEl('Color')); await settle(500);
     const o = await opt();
@@ -289,22 +291,23 @@ try {
   await dragChip('amount', `__t.zone('rows')`); await dragChip('qty', `__t.zone('rows')`);
   await settle(400);
   await chartType('Line');
-  await check('line with two measures + Size: every series sizes its markers by the row\'s Size value, the legend names the field', async () => {
+  await check('line with two measures + Size: every line takes its own thickness overlay from the row\'s Size value, the legend names the field once per measure', async () => {
     await dragChip('discount', toolEl('Size')); await settle(600);
     must((await hints()).length === 0, 'no hint: ' + J(await hints()));
-    const sizes = (si) => ev(`(() => { const d = ${inst}.getModel().getSeriesByIndex(${si}).getData(); return Array.from({ length: d.count() }, (_, k) => { const s = d.getItemVisual(k, 'symbolSize'); return Array.isArray(s) ? s[0] : s; }); })()`);
-    const a = await sizes(0), c2 = await sizes(1);
-    must(distinct(a) === 8 && J(a) === J(c2) && a[0] < a[7], 'both measures share the Size scale: ' + J([a, c2]));
+    const o = await opt();
+    must(o.series.filter((x) => x.type === 'custom').length === 2 && o.series.filter((x) => x.type === 'line').length === 2, 'two lines, two overlays: ' + J(o.series.map((x) => x.type)));
     must(/^Size: /.test(await sizeText()), 'size legend');
+    must(distinct(o.legend[0].data.map((d) => d.name ?? d)) === 2, 'the legend lists the two measures once: ' + J(o.legend[0].data));
   });
-  await check('a bar chart split by a Colour field says Size is not drawn; a colour measure hides the member-colour editor', async () => {
+  await check('a bar chart split by a Colour field draws Size as grouped bars (no hint); a colour measure hides the member-colour editor', async () => {
     await newSheet();
     await dragChip('region', `__t.zone('columns')`);
     await dragChip('amount', `__t.zone('rows')`);
     await settle(300);
     await chartType('Bar');
     await dragChip('channel', toolEl('Color')); await dragChip('discount', toolEl('Size')); await settle(600);
-    must((await hints()).some((t) => /Size isn't drawn/.test(t)), 'hint: ' + J(await hints()));
+    must((await hints()).length === 0, 'no hint: ' + J(await hints()));
+    must((await opt()).series.every((x) => x.type === 'custom'), 'custom bars draw the split');
     must(await ev(`!!document.querySelector('#ws-chart svg, #ws-chart canvas')`), 'the split chart is still drawn');
     await dragChip('qty', toolEl('Color')); await settle(600);
     await ev(`${fmtTool}.click()`); await waitFor(`!!(${fmtField('Reverse palette')})`, 'format open');

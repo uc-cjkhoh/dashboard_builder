@@ -33,7 +33,7 @@ export function columnWidthError(w) {
 export function tableColumnList(sheet) {
   const out = planDims(sheet).rowDims.map((f, i) => ({ key: dimKey(i), label: f.column }));
   const measuresLeft = sheet.rows.some((f) => roleOf(f) === "measure") && !sheet.columns.some((f) => roleOf(f) === "measure");
-  if (!measuresLeft) planMeasures(sheet).forEach((e, i) => out.push({ key: measKey(i), label: `${aggWord(e.agg, e.field.p)} ${e.field.column}` }));
+  if (!measuresLeft) planMeasures(sheet).filter((e) => e.role === "shelf").forEach((e, i) => out.push({ key: measKey(i), label: `${aggWord(e.agg, e.field.p)} ${e.field.column}` }));
   return out;
 }
 
