@@ -22,6 +22,12 @@ The app is desktop-only ([D74](../../decisions/decisions-dashboards.md#d74--desk
 | **Uploads and file ingestion** (5): T02-01 Upload CSV and delimited text; T02-02 Upload Excel files; T02-03 Import JSON files; T02-04 Import data from clipboard; T02-17 Wildcard union | The only data source is a read-only ClickHouse connection; a one-off file has to be loaded into ClickHouse outside the app. |
 | **Data preparation flows (saved, materialised output)** (30): T10-01 Visual flow builder; T10-02 Input node; T10-03 Flow input sample and preview; T10-04 Sample-size control; T10-05 Additional input connections; T10-06 Wildcard union node; T10-07 Input field exclusion; T10-08 Search and bulk-select input fields; T10-09 Profile pane; T10-10 Profile data table; T10-11 Cleaning step node; T10-12 Change log for cleaning steps; T10-13 Flow calculated-field step; T10-14 Construct date from year/month/day; T10-15 Edit/recode values; T10-16 Type conversion after recoding; T10-17 Rename cleaning steps; T10-18 Trim whitespace; T10-19 Automatic/custom split in a flow; T10-20 Group and replace similar strings; T10-21 Manual categorical grouping; T10-22 Union node; T10-23 Union field alignment; T10-24 Mismatched-fields only filter; T10-25 Join node; T10-26 Join profile/preview; T10-27 Output node; T10-28 Run flow; T10-29 Export cleaned data to CSV; T10-30 Save/reopen/re-run flow | Need saved flows and materialised output. Cleaning that needs none stays in the data source and calculation features (T02-26 to T02-34, T04-15 to T04-27). |
 
+## Excluded: custom shape palettes
+
+| Topic | Why excluded |
+|---|---|
+| Image files as a Shape palette, shared across sheets, with a default shape per field (Tableau's custom shapes) | The app takes no file uploads and stores specifications only; the seven built-in symbols and per-sheet member shapes stay ([D118](../../decisions/decisions-marks.md#d118--the-marks-card-follows-tableau-except-where-the-app-has-no-uploads-no-maps-or-no-contrast-rule-yet)). |
+
 ## Excluded or substituted book topics (13)
 
 | Topic | Why excluded |

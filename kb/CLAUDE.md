@@ -118,9 +118,9 @@ dashboard_builder/          (this KB)
 │   │   ├── worksheet/      #   worksheet (+ -query, -table-view) · worksheet-charts · worksheet-encodings (+ -marks, -filters) · calculated-fields (+ -formulas, -groups) · field-settings
 │   │   └── workbook/       #   tabs · dashboards · stories · workbook
 │   ├── how-to/             # local-development · testing · deployment · troubleshooting
-│   ├── reference/          # api (+ -calculated-fields) · clickhouse-integration (+ clickhouse-calculations) · data-model · source-table-guidance · glossary
+│   ├── reference/          # api (+ -calculated-fields) · clickhouse-integration (+ clickhouse-calculations) · data-model · source-table-guidance · tableau-marks-comparison · glossary
 │   │   └── design/         #   index (concept + rules) · tokens · layout · components · motion-accessibility
-│   ├── decisions/          # README (D1–D107 lookup, open questions) · decisions-* by topic
+│   ├── decisions/          # README (D1–D118 lookup, open questions) · decisions-* by topic
 │   ├── operations/         # live-service · safe-operations (+ git-ignored credentials.local.md)
 │   ├── development/        # coding-standards · sharp-edges · review-guidelines · git-workflow · kb-maintenance · hooks
 │   │   ├── backlog/        #   undone work by topic (incl. custom-sql) · recommended order · design specs
