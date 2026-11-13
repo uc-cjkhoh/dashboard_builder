@@ -10,6 +10,8 @@ import { emptySheet, defaultFormat } from "../../src/DashboardBuilder/Features/C
 
 globalThis.document ??= { documentElement: {} };
 globalThis.getComputedStyle ??= () => ({ getPropertyValue: () => "" });
+globalThis.window ??= {};
+window.echarts ??= { color: { parse: (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)), lerp: (t, ramp) => ramp[0] } }; // the heatmap's cell colours read echarts' colour helpers
 const S = (name, data = [1, 2, 3]) => ({ name, data });
 const cart = (type, series, extra = {}) => buildCartesian({ type, categories: ["a", "b", "c"], series, format: {}, ...extra });
 
@@ -29,6 +31,11 @@ test("opacity 100 / absent leaves the built option deep-equal to today's, for ev
   same({ type: "bar", categories: ["a"], series: [S("v", [1])] });
   same({ type: "line", categories: ["a", "b"], series: [S("v", [1, 2])] });
   same({ type: "pie", categories: ["a", "b"], series: [S("v", [1, 2])] });
+  same({ type: "treemap", tree: [{ name: "a", value: 3 }, { name: "b", value: 1 }] }); // the builders that read the setting themselves
+  same({ type: "heatmap", xCats: ["a", "b"], yCats: ["x"], cells: [[0, 0, 1], [1, 0, 5]] });
+  same({ type: "gantt", categories: ["t"], gantt: { bars: [{ i: 0, name: "t", start: 0, end: 5, duration: 5, group: 0 }], isDate: false, hasTime: false, groups: [] }, name: "Length" });
+  const bar = cart("line", [S("v")], { sizes: [1, 2, 3], sizeName: "q" }); // a Size line draws its thickness overlay through its own builder
+  assert.equal(JSON.stringify(applyMarkOpacity(bar, 1)), JSON.stringify(bar));
   const o = cart("bar", [S("v")]);
   assert.equal(applyMarkOpacity(o, 1), o, "no copy and no key when the setting is 100");
 });

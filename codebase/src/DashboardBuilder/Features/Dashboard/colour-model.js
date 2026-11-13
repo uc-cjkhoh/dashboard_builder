@@ -33,6 +33,7 @@ export function setMemberColor(map, field, member, hex) {
     return { ok: true, value: next };
   }
   if (!HEX.test(hex)) return { ok: false, error: "Enter a colour as #rrggbb." };
+  if (field.length > LIMITS.memberField) return { ok: false, error: `The Colour fields' names are too long to keep member colours (at most ${LIMITS.memberField} characters together) — they would be lost on reload.` };
   if (member.length > LIMITS.memberKey) return { ok: false, error: `A member name must be at most ${LIMITS.memberKey} characters to be coloured.` };
   const cur = has(next, field) ? next[field] : bare();
   if (!has(cur, member) && Object.keys(cur).length >= LIMITS.memberColors) return { ok: false, error: `At most ${LIMITS.memberColors} members per field can have a colour.` };

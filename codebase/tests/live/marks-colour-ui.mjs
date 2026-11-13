@@ -201,8 +201,13 @@ try {
     const paths = await ev(`[...document.querySelectorAll('#ws-chart svg path')].filter((p) => p.getAttribute('fill') && p.getAttribute('fill') !== 'none' && p.getAttribute('fill-opacity') !== null).map((p) => Number(p.getAttribute('fill-opacity')))`);
     must(paths.length >= 8 && paths.every((o) => Math.abs(o - 0.4) < 0.01), 'the bars are drawn at 40 % in the SVG: ' + J(paths.slice(0, 10)));
     await shot('opacity-bar-40');
+    const stored = () => ev(`(() => { const k = Object.keys(localStorage).find((x) => x.startsWith('dashboardbuilder.workbook.v')); if (!k) return 'no-autosave'; const wb = JSON.parse(localStorage.getItem(k)); return JSON.stringify((wb.worksheets ?? []).map((w) => w.sheet?.format?.markOpacity ?? null)); })()`);
+    await settle(1500); // the autosave is debounced
+    must(/40/.test(await stored()), 'the sheet saves markOpacity 40: ' + await stored());
     await setSelect('Opacity', '100'); await settle(500);
     must((await seriesOpacity()) == null || (await seriesOpacity()) === 1, 'back to the default: ' + await seriesOpacity());
+    await settle(1500);
+    must(!/40/.test(await stored()), 'at 100 % the stored key is gone: ' + await stored());
     await closeFormat();
   });
   // Distinct fill opacities of the drawn marks (SVG paths with a fill): the product of fill-opacity and opacity.
@@ -316,6 +321,19 @@ try {
     await setSelect('Steps', '0'); await settle(400);
     await closeFormat();
   });
+  await check('Clear sheet starts the colour scale Automatic again, as a new worksheet does', async () => {
+    await openFormat(); await setSelect('Colour scale', 'sequential'); await settle(400); await closeFormat();
+    await ev(`document.querySelector('.ws-actions .iconbtn').click()`);
+    await ev(`[...document.querySelectorAll('.ws-actions .menu__item')].find((x) => /Clear sheet/.test(x.textContent)).click()`);
+    await waitFor(`!!(${confirmOpen})`, 'confirm dialog');
+    await ev(`[...(${confirmOpen}).querySelectorAll('button')].find((x) => x.textContent.trim() === 'Clear').click()`);
+    await settle(500);
+    await dragChip('region', `__t.zone('columns')`); await dragChip('amount', `__t.zone('rows')`); await settle(300); await chartType('Bar');
+    await dragChip('discount', toolEl('Color')); await settle(700);
+    await openFormat();
+    must((await ev(`${fmtField('Colour scale')}.querySelector('select').value`)) === 'auto', 'Automatic after Clear');
+    await closeFormat();
+  });
   await check('heatmap and scatter honour Automatic too (a heatmap of a measure that crosses zero is diverging)', async () => {
     await newSheet();
     await dragChip('region', `__t.zone('columns')`);
@@ -397,6 +415,13 @@ try {
     must(/APAC · web/.test(await tipText(0, 0)), 'the tooltip says slice and member: ' + await tipText(0, 0));
     await shot('pie-colour-members');
   });
+  await check('pie split by one Colour field: a legend click selects that member (the chip appears)', async () => {
+    await ev(`${inst}.dispatchAction({ type: 'legendToggleSelect', name: 'shop' })`);
+    await waitFor(`!!document.querySelector('.ws-select')`, 'the selection chip');
+    must(/channel = shop/.test(await ev(`document.querySelector('.ws-select').textContent`)), 'member selected: ' + await ev(`document.querySelector('.ws-select').textContent`));
+    await ev(`${inst}.dispatchAction({ type: 'legendToggleSelect', name: 'shop' })`); await settle(600); // a second click clears it
+    must(!(await ev(`!!document.querySelector('.ws-select')`)), 'cleared again');
+  });
   await check('donut + a Colour field draws the same split; Format lists the Colour members for member colours', async () => {
     await chartType('Donut');
     const d = await pieData(); must(d.length === 24 && distinct(d.map((x) => x.colour)) === 3, 'donut split');
@@ -439,10 +464,25 @@ try {
     must(J(o.legend[0].data).includes('web · DE'), 'legend lists them');
     await shot('colour-two-fields-bar');
   });
+  const selChip = () => ev(`!!document.querySelector('.ws-select')`); // the selection chip (selectionChip in dashboards.js)
   await check('legend click on a combination highlights it and selects nothing (no one field to filter by)', async () => {
+    must(!(await selChip()), 'no chip to begin with');
     await ev(`${inst}.dispatchAction({ type: 'legendToggleSelect', name: 'web · DE' })`); await settle(700);
-    must(!(await ev(`!!document.querySelector('.ws-selchip, .ws-selection')`)), 'no selection chip');
+    must(!(await selChip()), 'no selection chip for a combination');
     await ev(`${inst}.dispatchAction({ type: 'legendAllSelect' })`);
+  });
+  await check('control: with ONE Colour field the same legend click selects the member (the chip appears), so the check above can fail', async () => {
+    await newSheet();
+    await dragChip('region', `__t.zone('columns')`);
+    await dragChip('amount', `__t.zone('rows')`);
+    await settle(300); await chartType('Bar');
+    await dragChip('channel', toolEl('Color')); await settle(700);
+    await ev(`${inst}.dispatchAction({ type: 'legendToggleSelect', name: 'web' })`);
+    await waitFor(`!!document.querySelector('.ws-select')`, 'the selection chip for the legend member');
+    must(/channel = web/.test(await ev(`document.querySelector('.ws-select').textContent`)), 'the chip names the member: ' + await ev(`document.querySelector('.ws-select').textContent`));
+    // re-enter the two-field sheet for the checks that follow
+    await dragChip('country', toolEl('Color')); await settle(700);
+    await ev(`document.querySelector('.ws-select__clear, .ws-select button[aria-label^="Clear"]')?.click()`);
   });
   await check('member colours for a combination: the editor lists "a · b", a pick recolours that series and survives a redraw', async () => {
     await openFormat();

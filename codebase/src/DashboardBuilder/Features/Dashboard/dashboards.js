@@ -9,7 +9,7 @@ import { roleOf, STAT_SINGLE_TABLE, showMeOptions, dimsFor } from "./show-me-rul
 import { toggle, makeButton, toast, fieldError, confirmDialog, copyText } from "../Core/ui.js";
 import { LIMITS, number, percent, percentLabel, isFraction, PERCENT_MESSAGE, DEFAULT_PERCENTILE } from "../Core/validate.js";
 import { aggsFor, checkAdd, checkFilter, viewCounts, withCategories, opsFor, OP_LABELS } from "./filter-rules.js";
-import { entities, relationships, activeWorksheet, isWorksheetActive, updateSheet, bus, defaultFormat, defaultMarks, sharedFilters, metaOf, nameOf, setFieldMeta, emptySheet, parameters, updateParameter, hierarchies, calculations, worksheets, addCalculation, removeCalculation, renameTab } from "../Core/store.js";
+import { freshSheet, entities, relationships, activeWorksheet, isWorksheetActive, updateSheet, bus, defaultFormat, defaultMarks, sharedFilters, metaOf, nameOf, setFieldMeta, emptySheet, parameters, updateParameter, hierarchies, calculations, worksheets, addCalculation, removeCalculation, renameTab } from "../Core/store.js";
 import { checkValue, paramTypeFor } from "../Core/parameters-model.js";
 import { exportChart, hasChartInstance, sizeChart, focusSeries } from "./chart.js";
 import { createWorksheetView, periodNotice } from "./worksheet-view.js";
@@ -1204,7 +1204,7 @@ export function initDashboards() {
   }
   async function clearSheet(dash, s) {
     if (dashboardHasContentSheet(s) && !(await confirmDialog("Clear this sheet? Fields, filters, marks and format go — Undo brings them back.", { danger: true, confirmText: "Clear" }))) return;
-    const fresh = emptySheet();
+    const fresh = freshSheet(); // a cleared sheet starts as a new one does (the colour scale Automatic)
     fresh.chartType = s.chartType;
     choicesFor = null; calcFor = null; openTool = null;
     Object.keys(s).forEach((k) => delete s[k]);

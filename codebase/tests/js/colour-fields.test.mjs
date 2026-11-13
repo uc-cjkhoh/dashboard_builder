@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { addColourField, colourDimensions, cleanColourList, memberText, memberRaw, combinedField, COLOUR_FIELDS_MAX, MULTI_COLOUR_TYPES } from "../../src/DashboardBuilder/Features/Dashboard/colour-fields-model.js";
-import { fieldColorKey, memberKey, colorsByName } from "../../src/DashboardBuilder/Features/Dashboard/colour-model.js";
+import { fieldColorKey, memberKey, colorsByName, setMemberColor, cleanMemberColors } from "../../src/DashboardBuilder/Features/Dashboard/colour-model.js";
 import { planDims, colourDimsOf, COLOR_USES } from "../../src/DashboardBuilder/Features/Dashboard/sheet-plan.js";
 import { viewCounts, checkAdd } from "../../src/DashboardBuilder/Features/Dashboard/filter-rules.js";
 import { sanitizeSheet } from "../../src/DashboardBuilder/Features/Workbook/workbook-model.js";
@@ -91,4 +91,17 @@ test("import: dimensions are kept up to the cap in order; a measure beside dimen
   assert.equal(ok.color.length, 2); assert.equal(i4.length, 0, "an ordinary pair is clean");
   const dup = []; assert.deepEqual(sanitizeSheet({ ...emptySheet("S"), color: [dim("a"), dim("a")] }, "S", dup).color.length, 1); assert.ok(dup.length >= 1);
   assert.deepEqual(cleanColourList([dim("a")]).issues, []);
+});
+
+test("a combination whose field key would not survive a reload is refused when the colour is set, with a message (import drops keys over the limit)", () => {
+  const long = (c) => dim(c.repeat(40), c.repeat(40));
+  const f = combinedField([long("a"), long("b"), long("c")]);
+  assert.ok(fieldColorKey(f).length > LIMITS.memberField, "three 40 + 40 character fields exceed the stored key's limit");
+  const r = setMemberColor({}, fieldColorKey(f), memberRaw(["x", "y", "z"]), "#112233");
+  assert.equal(r.ok, false); assert.match(r.error, /too long/);
+  const ok = setMemberColor({}, fieldColorKey(combinedField([dim("region"), dim("channel")])), memberRaw(["EU", "web"]), "#112233");
+  assert.equal(ok.ok, true, "ordinary names are fine");
+  const issues = [];
+  assert.equal(Object.keys(cleanMemberColors({ [fieldColorKey(f)]: { m: "#112233" } }, "S", issues)).length, 0, "and import would have dropped it");
+  assert.equal(issues.length, 1);
 });
