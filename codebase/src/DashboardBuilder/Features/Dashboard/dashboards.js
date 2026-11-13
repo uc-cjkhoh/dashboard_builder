@@ -1888,7 +1888,7 @@ export function initDashboards() {
     const continuous = f.category === "numeric";
     const p = pill(`${f.table}.${f.column}${continuous ? " (gradient)" : ""}`, remove);
     p.classList.add("ws-pill--color");
-    if (continuous) p.title = "Continuous colour — each mark is shaded by this measure (Scatter, Bar, Line, Area, Pie, Donut, Treemap)";
+    if (continuous) p.title = "Continuous colour — each mark is shaded by this measure (Scatter, Bar, Stacked, Line, Area, Combo, Pie, Donut, Treemap)";
     return markMissing(p, f);
   }
   // Filter pill. The operator select drives which value control shows: a single input for the

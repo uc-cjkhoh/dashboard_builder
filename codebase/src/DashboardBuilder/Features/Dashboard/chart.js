@@ -4,7 +4,7 @@ import { fontToken } from "./font-model.js";
 import { pickInk } from "./contrast.js";
 import { orderedPalette } from "./colour-model.js";
 import { DIV_FALLBACK, DIV_HUE_FALLBACK, divergingColours, divergingRange, effectiveScale, fullRangeRamp, rampColours, rangeOf, stepPieces, stepColours, stepIndexOf, positionOf, mixHex } from "./colour-scale-model.js";
-import { sizeRange, barThickness, markerSizeFor, drawsSize, lineSizeMode } from "./mark-channel-model.js";
+import { sizeRange, barThickness, markerSizeFor, drawsSize, lineSizeMode, measureCue } from "./mark-channel-model.js";
 import { sizeScaleOf, measureShareFn, memberShareFn, sizeLegendText, lineWidthFor } from "./size-scale-model.js";
 import { tooltipHtml } from "./tooltip-model.js";
 import { tipLookup } from "./tooltip-formats.js";
@@ -466,8 +466,12 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
   // category axis already labels each bar, so colour restates identity (never colour-alone).
   // A colour measure (one measure only) colours each bar / marker / line stretch by its value: it replaces the palette and Colour by category.
   const { show: showLegend, pos, legend } = legendFor(format, c, series.map((s) => s.name), multi || dual || hasCompare);
-  const byValue = Array.isArray(colorValues) && mainCount === 1 && (type === "bar" || type === "line" || type === "area")
+  const byValue = Array.isArray(colorValues) && (type === "bar" || type === "stacked" || type === "line" || type === "area" || isCombo)
     ? colourByValue(colorValues, c, fmtVal, colorName, showLegend && pos === "bottom" ? 28 : 0) : null;
+  // With several measures every mark of every measure wears its row's colour, so colour no longer says which measure a mark is: each measure gets
+  // a cue of its own (a bar pattern, a line dash and marker; stacked segments are also separated by a surface stroke) and the legend swatches are neutral.
+  const cued = Boolean(byValue) && mainCount > 1;
+  const cueOf = (i) => (cued && !series[i]?.compare ? measureCue(i, format.markerShape) : null);
   const colorByDim = type === "bar" && !multi && !!format.colorByDimension && !byValue;
   // Size (a measure, or a dimension's member steps): a bar's thickness (custom series), a straight line's own thickness (a segment overlay), or an
   // area / stepped line's marker size. `sizes` is one value per category shared by every series; `sizeGrid` (beside a Colour split) one per series cell.
@@ -572,6 +576,10 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
   const step = lineStep(format.lineStyle); // false | "end" | "middle"
   const edge = markBorder(format.markBorder, borderInk(format.markBorderColor, c)); // the stroke of bars (and the lines' markers)
   const secondary = secondaryKind(format.secondaryType); // how a combo draws its right-axis measures
+  if (cued && legend) { // each legend entry wears its measure's cue: a line's marker symbol, a bar's roundRect with its pattern
+    const lineAt = (i) => !(isCombo && i >= 1 && secondary === "bar") && (type === "line" || type === "area" || (isCombo && i >= 1));
+    legend.data = legend.data.map((name, i) => ({ name, ...(cueOf(i) && lineAt(i) ? { icon: cueOf(i).symbol } : {}) }));
+  }
   const widthLines = []; // straight lines drawn with a Size: each gets a segment overlay (below)
   base.series = series.map((s, i) => {
     // A comparison series wears its measure's colour, faded and dashed (line) or muted (bar).
@@ -587,7 +595,8 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
               decal: { symbol: "rect", symbolSize: 1, dashArrayX: [1, 0], dashArrayY: [2, 4], rotation: Math.PI / 4, color: c.surface } },
             emphasis: { itemStyle: { opacity: 0.8 } } };
     }
-    const color = colorFor(i, s.name);
+    const cue = cueOf(i);
+    const color = cue ? c.muted : colorFor(i, s.name); // a cued measure's swatch (and a missing value's mark) is neutral: the cue, not a hue, names the measure
     // line/area always draw as a line; in a combo the 1st measure is a bar and the rest are lines.
     const rightBars = isCombo && i >= 1 && secondary === "bar";
     const asLine = !rightBars && (type === "line" || type === "area" || (isCombo && i >= 1));
@@ -604,10 +613,10 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
         yAxisIndex: seriesAxis(dual, i, isCombo),
         z: sizeFr && sizeMode === "width" ? 3 : undefined, // markers and the thin line stay above their thickness
         data: lineData,
-        showSymbol: s.data.length <= 60 || format.markerSize != null || markerSized, // dots only when they won't crowd (unless a marker size is chosen)
-        symbol: markerSymbol(format.markerShape), symbolSize: markerSizeOr(format.markerSize, 8), // ≥8px markers (dataviz mark spec) unless Format → Marker size
+        showSymbol: s.data.length <= 60 || format.markerSize != null || markerSized || Boolean(cue), // dots only when they won't crowd (unless a marker size is chosen; a cued line's markers name it)
+        symbol: cue ? cue.symbol : markerSymbol(format.markerShape), symbolSize: markerSizeOr(format.markerSize, 8), // ≥8px markers (dataviz mark spec) unless Format → Marker size
         areaStyle: type === "area" || (isCombo && secondary === "area") ? { opacity: 0.18, color: stroke } : undefined,
-        lineStyle: { width: 2, color: stroke },
+        lineStyle: { width: 2, color: stroke, ...(cue ? { type: cue.dash } : {}) },
         itemStyle: { color, ...(format.markBorder && format.markBorder !== "none" ? edge : {}) },
         label: dataLabel(i),
         emphasis: { focus: "series" },
@@ -618,7 +627,10 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
     const barRadius = stacked ? [0, 0, 0, 0] : (horizontal ? [0, c.radius, c.radius, 0] : [c.radius, c.radius, 0, 0]);
     // The "Other" bar (everything past the limit) wears the muted ink (≥ 3:1 on the surface, apart from
     // the series hue); its label says what it is.
-    const otherItem = (v) => ({ value: v, itemStyle: { color: c.muted, borderRadius: barRadius, ...edge } });
+    // A cued bar keeps its pattern; stacked segments of one bar share a colour, so a surface stroke (unless a border is chosen) separates them.
+    const barEdge = cue && stacked && !(format.markBorder && format.markBorder !== "none") ? { borderColor: c.surface, borderWidth: 1 } : edge;
+    const cueStyle = cue?.decal ? { decal: { ...cue.decal, color: c.surface } } : {};
+    const otherItem = (v) => ({ value: v, itemStyle: { color: c.muted, borderRadius: barRadius, ...barEdge } });
     if (sizeFr && type === "bar") {
       const fillAt = (di) => (di === otherIndex ? c.muted : byValue?.colours[di] ?? (colorByDim ? memberColor(labels[di], c.cat[di % c.cat.length]) : null));
       return variableBars({ s, color, sizeFr: sizeFr[i] ?? [], sizes: sz.grid[i] ?? [], slot: { at: i, of: mainCount }, horizontal, c, edge, fillAt, dataLabel: (pointLabels || seriesLabels || format.dataLabels) ? (di, v) => (pointLabels || seriesLabels ? String(labelAt(i, di) ?? "") : fmtVal(v)) : null });
@@ -630,9 +642,9 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
       // Colour-by-dimension: per-bar colours; otherwise the series colour.
       data: colorByDim
         ? s.data.map((v, di) => (di === otherIndex ? otherItem(v) : { value: v, itemStyle: { color: memberColor(labels[di], c.cat[di % c.cat.length]), borderRadius: barRadius, ...edge } }))
-        : s.data.map((v, di) => (di === otherIndex ? otherItem(v) : byValue?.colours[di] ? { value: v, itemStyle: { color: byValue.colours[di], borderRadius: barRadius, ...edge } } : v)),
+        : s.data.map((v, di) => (di === otherIndex ? otherItem(v) : byValue?.colours[di] ? { value: v, itemStyle: { color: byValue.colours[di], borderRadius: barRadius, ...barEdge } } : v)),
       barMaxWidth: 40,
-      itemStyle: { color, borderRadius: barRadius, ...edge },
+      itemStyle: { color, borderRadius: barRadius, ...barEdge, ...cueStyle },
       label: dataLabel(i),
       emphasis: { focus: "series", itemStyle: colorByDim ? { opacity: 0.85 } : { color, opacity: 0.85 } },
     };

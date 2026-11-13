@@ -314,6 +314,56 @@ try {
     await shot('auto-diverging-heatmap');
   });
 
+  // ---- a colour measure beside several measures, on Stacked and on Combo ------------------------------------------------------
+  const seriesColours = async (i) => (await opt()).series[i].data.map((d) => d?.itemStyle?.color ?? null);
+  const twoMeasures = async (type) => {
+    await newSheet();
+    await dragChip('region', `__t.zone('columns')`);
+    await dragChip('amount', `__t.zone('rows')`);
+    await dragChip('qty', `__t.zone('rows')`);
+    await settle(300); await chartType(type);
+    await dragChip('discount', toolEl('Color')); await settle(700);
+  };
+  await check('bar with two measures + a colour measure: no hint; both measures\' bars wear the same per-row colours; the second measure is patterned; the legend names both', async () => {
+    await twoMeasures('Bar');
+    must((await hints()).length === 0, 'no hint: ' + J(await hints()));
+    const a = await seriesColours(0), c2 = await seriesColours(1);
+    must(distinct(a) >= 7 && J(a) === J(c2), 'same colours per row for both measures: ' + J(a.slice(0, 3)));
+    const o = await opt();
+    must(!J(o.series[0].itemStyle).includes('decal') && J(o.series[1].itemStyle).includes('decal'), 'the second measure carries a pattern: ' + J(o.series[1].itemStyle).slice(0, 160));
+    must(!!(await vmap()) && (await vmap()).type === 'continuous', 'one gradient legend for the colour measure');
+        await shot('colour-measure-two-bars');
+  });
+  await check('stacked with two measures + a colour measure: segments coloured by the row, a surface stroke between them, the second patterned', async () => {
+    await twoMeasures('Stacked bar');
+    must((await hints()).length === 0, 'no hint: ' + J(await hints()));
+    const o = await opt();
+    must(J(await seriesColours(0)) === J(await seriesColours(1)) && distinct(await seriesColours(0)) >= 7, 'segments coloured by row');
+    must(o.series.every((s) => s.stack === 'total') && o.series[0].itemStyle.borderWidth !== 0, 'stacked with a stroke: ' + J(o.series[0].itemStyle));
+    await shot('colour-measure-stacked');
+  });
+  await check('line and area with two measures + a colour measure: a dash and a marker per measure, the lines a gradient, no hint', async () => {
+    for (const t of ['Line', 'Area']) {
+      await twoMeasures(t);
+      must((await hints()).length === 0, t + ' no hint: ' + J(await hints()));
+      const o = await opt();
+      must(o.series[0].lineStyle.type === 'solid' && o.series[1].lineStyle.type === 'dashed', t + ' dash per measure: ' + J(o.series.map((s) => s.lineStyle.type)));
+      must(o.series[0].symbol !== o.series[1].symbol, t + ' marker per measure: ' + J(o.series.map((s) => s.symbol)));
+      must(J(o.series[0].lineStyle.color).includes('colorStops'), t + ' gradient');
+      await shot('colour-measure-' + t.toLowerCase());
+    }
+  });
+  await check('combo + a colour measure: bars coloured by the row on the left axis, the line on the right; Format shows the colour scale controls', async () => {
+    await twoMeasures('Combo (dual-axis)');
+    must((await hints()).length === 0, 'no hint: ' + J(await hints()));
+    const o = await opt();
+    must(o.series[0].type === 'bar' && o.series[1].type === 'line' && distinct(await seriesColours(0)) >= 7, 'bars and a line coloured by row');
+    await openFormat();
+    must(await ev(`!!(${fmtField('Colour scale')}) && !!(${fmtField('Steps')})`), 'the colour scale controls');
+    await closeFormat();
+    await shot('colour-measure-combo');
+  });
+
   if (b.consoleErrors.length) console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  '));
 } catch (e) {
   console.log(`FAIL harness: ${e.stack}`); failed++;

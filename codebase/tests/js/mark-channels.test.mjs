@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { colourChannel, sizeChannel, sizeFractions, sizeRange, barThickness, markerSizeFor, drawsSize, splitSizeNote, shapeColourNote }
+import { colourChannel, COLOUR_MEASURE_TYPES, measureCue, sizeChannel, sizeFractions, sizeRange, barThickness, markerSizeFor, drawsSize, splitSizeNote, shapeColourNote }
   from "../../src/DashboardBuilder/Features/Dashboard/mark-channel-model.js";
 import { positionOf, stepIndexOf, stepPieces } from "../../src/DashboardBuilder/Features/Dashboard/colour-scale-model.js";
 import { marksChannels, scatterGroups, treemapTree } from "../../src/DashboardBuilder/Features/Dashboard/result-model.js";
@@ -17,12 +17,11 @@ const sheet = (over = {}) => ({ columns: [], rows: [], color: [], filters: [], c
 const fmt = (v) => String(v);
 const row = (keys, ...values) => ({ keys, values });
 
-test("colourChannel: a colour measure shades bar, line, area, pie, donut, treemap and the point charts; other types get a hint", () => {
+test("colourChannel: a colour measure shades bar, stacked, line, area, combo, pie, donut, treemap and the point charts — one measure or several; other types get a hint", () => {
   for (const t of ["scatter", "square", "circle", "pie", "donut", "treemap"]) assert.deepEqual(colourChannel(t, 1), { ok: true, note: null }, t);
-  for (const t of ["bar", "line", "area"]) assert.equal(colourChannel(t, 1).ok, true, t);
-  for (const t of ["bar", "line", "area"]) { const c = colourChannel(t, 2); assert.equal(c.ok, false); assert.match(c.note, /single measure/); }
-  assert.match(colourChannel("stacked", 2).note, /Stacked/);
-  for (const t of ["combo", "waterfall", "kpi"]) { const c = colourChannel(t, 2); assert.equal(c.ok, false, t); assert.match(c.note, /Scatter.*Treemap/); }
+  for (const t of ["bar", "stacked", "line", "area", "combo"]) for (const n of [1, 2, 4]) assert.deepEqual(colourChannel(t, n), { ok: true, note: null }, `${t} with ${n} measures`);
+  for (const t of ["waterfall", "kpi", "heatmap"]) { const c = colourChannel(t, 2); assert.equal(c.ok, false, t); assert.match(c.note, /Scatter.*Stacked.*Combo.*Treemap/); }
+  for (const t of ["bar", "stacked", "line", "area", "combo", "scatter", "pie", "treemap"]) assert.ok(COLOUR_MEASURE_TYPES.has(t), `${t} shows the colour-scale controls`);
 });
 test("sizeChannel: Size scales point charts, bar thickness (one measure), line / area markers and treemap area; a pie gets its own hint", () => {
   for (const t of ["scatter", "square", "circle", "line", "area", "treemap"]) assert.equal(sizeChannel(t, 2).ok, true, t);
@@ -69,8 +68,8 @@ test("positionOf and stepIndexOf place a value on the scale: clamped at the ends
 const result = (rows, over = {}) => ({ rowDimensions: ["region"], columnDimensions: [], measures: ["sum(amount)", "sum(qty)"], rows, ...over });
 const barSheet = (type, over = {}) => sheet({ chartType: type, columns: [dim("region")], rows: [meas("amount")], ...over });
 
-test("marksChannels: a colour measure's values line up with the rows on bar, line, area and pie; a second measure turns it into a hint", () => {
-  for (const type of ["bar", "line", "area", "pie", "donut"]) {
+test("marksChannels: a colour measure's values line up with the rows on bar, line, area, pie, donut, stacked and combo; several measures are drawn too (no hint)", () => {
+  for (const type of ["bar", "line", "area", "pie", "donut", "stacked", "combo"]) {
     const s = barSheet(type, { color: [meas("qty")] });
     const r = result([row(["EU"], 5, 2), row(["US"], 7, 9)]);
     const out = marksChannels(s, r, planMeasures(s), -1, 1, fmt, fmt, undefined, SCATTER_TYPES, () => "n");
@@ -78,15 +77,16 @@ test("marksChannels: a colour measure's values line up with the rows on bar, lin
     assert.equal(out.spec.colorName, "sum(qty)");
     assert.equal(out.note, null, type);
   }
-  const two = barSheet("bar", { color: [meas("qty")], rows: [meas("amount"), meas("id")] });
-  const r2 = result([row(["EU"], 5, 6, 2)], { measures: ["a", "b", "c"] });
-  const o2 = marksChannels(two, r2, planMeasures(two), -1, 2, fmt, fmt, undefined, SCATTER_TYPES, () => "n");
-  assert.equal(o2.spec.colorValues, undefined);
-  assert.match(o2.note, /single measure/);
-  const st = barSheet("stacked", { color: [meas("qty")], rows: [meas("amount"), meas("id")] });
-  const o3 = marksChannels(st, r2, planMeasures(st), -1, 2, fmt, fmt, undefined, SCATTER_TYPES, () => "n");
-  assert.equal(o3.spec.colorValues, undefined);
-  assert.match(o3.note, /Stacked/);
+  for (const type of ["bar", "line", "area", "stacked", "combo"]) { // two shelf measures: the colour measure is the third column, one value per row for every measure's marks
+    const two = barSheet(type, { color: [meas("qty")], rows: [meas("amount"), meas("id")] });
+    const r2 = result([row(["EU"], 5, 6, 2), row(["US"], 7, 8, 9)], { measures: ["a", "b", "c"] });
+    const o2 = marksChannels(two, r2, planMeasures(two), -1, 2, fmt, fmt, undefined, SCATTER_TYPES, () => "n");
+    assert.deepEqual(o2.spec.colorValues, [2, 9], `${type} with two measures`);
+    assert.equal(o2.note, null, `${type}: no hint`);
+  }
+  const wf = barSheet("waterfall", { color: [meas("qty")] });
+  const ow = marksChannels(wf, result([row(["EU"], 5, 2)]), planMeasures(wf), -1, 1, fmt, fmt, undefined, SCATTER_TYPES, () => "n");
+  assert.equal(ow.spec.colorValues, undefined); assert.match(ow.note, /Scatter.*Stacked.*Combo/);
 });
 test("marksChannels: the Other row takes neither colour nor size", () => {
   const s = barSheet("bar", { color: [meas("qty")], marks: marks({ size: meas("id") }) });
@@ -197,4 +197,13 @@ test("splitSizeNote: only a Stacked split can't draw Size (the rest draw it, siz
 test("shapeColourNote: a colour measure beside Shape or a Colour split is a hint; nothing without one", () => {
   assert.match(shapeColourNote(2), /colour measure/);
   assert.equal(shapeColourNote(-1), null);
+});
+
+test("measureCue: each measure of a chart whose marks all wear one colour scale gets its own dash, marker and bar pattern — never colour alone", () => {
+  const cues = Array.from({ length: 10 }, (_, i) => measureCue(i, "circle"));
+  assert.equal(cues[0].dash, "solid"); assert.equal(cues[0].decal, null, "the first measure stays plain");
+  assert.equal(new Set(cues.map((c) => `${JSON.stringify(c.dash)}|${c.symbol}`)).size, 10, "ten measures (the limit) each differ in dash or marker");
+  assert.equal(new Set(cues.slice(0, 5).map((c) => JSON.stringify(c.decal))).size, 5, "five distinct bar patterns before one repeats");
+  assert.deepEqual(measureCue(0, "diamond").symbol, "diamond"); assert.notEqual(measureCue(1, "diamond").symbol, "diamond", "markers start from the chosen shape and cycle");
+  assert.equal(measureCue(0, "nonsense").symbol, "circle");
 });

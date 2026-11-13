@@ -1,14 +1,13 @@
 // Which chart types accept a measure on Colour and a measure on Size, and the pure size scales behind them — DOM-free
 // (tests/js/mark-channels.test.mjs). The hints here are what the Marks card says when a mapping can't be drawn: a hint, never an error.
+import { markerSymbol } from "./mark-style-model.js";
 const POINTS = new Set(["scatter", "square", "circle"]);
 /** The chart types that draw a measure on Colour (the Format colour-scale controls follow them). */
-export const COLOUR_MEASURE_TYPES = new Set([...POINTS, "pie", "donut", "treemap", "bar", "line", "area"]);
+export const COLOUR_MEASURE_TYPES = new Set([...POINTS, "pie", "donut", "treemap", "bar", "stacked", "line", "area", "combo"]);
 const SIZE_LIST = "Scatter bubbles, Bar thickness, Line thickness, Area markers, Treemap area and Text / Table font size";
 const SINGLE = "a single measure on Columns / Rows";
 const NOTE = {
-  colourMany: `A colour measure needs ${SINGLE} — with several, the marks of different measures would look alike.`,
-  colourStacked: "A Stacked bar can't take a colour measure (the segments of one bar would share a colour) — use Bar, or drop a categorical field on Colour.",
-  colourElsewhere: "A colour measure shades Scatter points, Bars, Lines, Areas, Pie / Donut slices and Treemap tiles — switch to one of those, or drop a categorical field on Colour.",
+  colourElsewhere: "A colour measure shades Scatter points, Bars, Stacked bars, Lines, Areas, Combo marks, Pie / Donut slices and Treemap tiles — switch to one of those, or drop a categorical field on Colour.",
   sizeMany: `Size varies a bar's thickness for ${SINGLE} — use one measure, or switch chart type.`,
   sizeStacked: "Size doesn't apply to a Stacked bar — use Bar (one measure) or a point chart.",
   sizePie: "Size doesn't apply to a Pie / Donut — one pie has nothing to compare its size with, and the slice angle is the measure.",
@@ -16,11 +15,25 @@ const NOTE = {
   sizeElsewhere: `Size scales ${SIZE_LIST} — switch chart type to use it.`,
 };
 
-/** Can `type` draw a measure on Colour? `shelfCount` = measures on Columns / Rows. -> { ok, note } (note = the hint when not ok). */
+/** Can `type` draw a measure on Colour? `shelfCount` = measures on Columns / Rows. -> { ok, note } (note = the hint when not ok). With several measures every mark of every measure wears the colour of its row's value, so each measure also gets its own `measureCue`. */
 export function colourChannel(type, shelfCount) {
-  if (POINTS.has(type) || type === "pie" || type === "donut" || type === "treemap") return { ok: true, note: null };
-  if (type === "bar" || type === "line" || type === "area") return shelfCount === 1 ? { ok: true, note: null } : { ok: false, note: NOTE.colourMany };
-  return { ok: false, note: type === "stacked" ? NOTE.colourStacked : NOTE.colourElsewhere };
+  if (COLOUR_MEASURE_TYPES.has(type)) return { ok: true, note: null };
+  return { ok: false, note: NOTE.colourElsewhere };
+}
+
+// What tells one measure from another when every mark wears the same colour scale (golden rule 9: never colour alone): a line's dash and marker,
+// a bar's pattern. The first measure stays plain; patterns are tiles of surface-coloured marks over the bar (a token, chosen by the chart).
+const DASHES = ["solid", "dashed", "dotted", [8, 3, 2, 3], [12, 4]];
+const SHAPES = ["circle", "square", "diamond", "triangle"];
+const DECALS = [null,
+  { symbol: "rect", symbolSize: 1, dashArrayX: [1, 0], dashArrayY: [2, 4], rotation: Math.PI / 4 },    // diagonal stripes
+  { symbol: "circle", symbolSize: 1, dashArrayX: [2, 4], dashArrayY: [2, 4], rotation: 0 },             // dots
+  { symbol: "rect", symbolSize: 1, dashArrayX: [1, 0], dashArrayY: [2, 4], rotation: -Math.PI / 4 },   // the other diagonal
+  { symbol: "rect", symbolSize: 1, dashArrayX: [1, 0], dashArrayY: [2, 4], rotation: 0 }];             // horizontal lines
+/** The non-colour identity of measure `i` ({ dash, symbol (an ECharts symbol), decal (or null) }); markers start from the chosen `shape` and cycle, dash and marker cycle at different lengths so ten measures all differ. */
+export function measureCue(i, shape) {
+  const base = Math.max(0, SHAPES.indexOf(shape));
+  return { dash: DASHES[i % DASHES.length], symbol: markerSymbol(SHAPES[(base + i) % SHAPES.length]), decal: DECALS[i % DECALS.length] };
 }
 
 /**
