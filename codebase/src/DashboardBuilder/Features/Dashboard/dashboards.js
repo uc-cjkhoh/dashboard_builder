@@ -2820,7 +2820,7 @@ export function initDashboards() {
   const shapeGlyph = (d) => { // a filled 20-unit glyph in the ink colour (never colour alone: the shape is the message)
     const NS = "http://www.w3.org/2000/svg", svg = document.createElementNS(NS, "svg"), p = document.createElementNS(NS, "path");
     for (const [k, v] of Object.entries({ viewBox: "0 0 20 20", width: 12, height: 12, fill: "currentColor", "aria-hidden": "true" })) svg.setAttribute(k, String(v));
-    p.setAttribute("d", d); svg.append(p);
+    p.setAttribute("d", d); svg.append(p); svg.classList.add("ws-memcol__glyph-svg");
     return svg;
   };
   function memberShapeEditor(dash, s) {
@@ -2845,10 +2845,12 @@ export function initDashboards() {
         if (!r.ok) { toast(r.error, "danger"); return; }
         store(r.value);
       };
-      for (const m of st.members.slice(0, LIMITS.memberColors)) {
+      for (const [mi, m] of st.members.slice(0, LIMITS.memberColors).entries()) {
         const stored = Object.prototype.hasOwnProperty.call(shapes, memberKey(m.raw)) ? shapes[memberKey(m.raw)] : null;
         const row = el("div", "ws-memcol__row");
-        row.append(el("span", "ws-memcol__dot"), el("span", "ws-memcol__name", m.name));
+        const now = el("span", "ws-memcol__glyph"); now.title = "Its symbol now"; // the symbol the chart draws for this member: the chosen one, else the one at its position
+        now.append(shapeGlyph(SHAPE_CHOICES.find((c) => c[0] === (stored ?? SHAPE_CHOICES[mi % SHAPE_CHOICES.length][0]))[3]));
+        row.append(now, el("span", "ws-memcol__name", m.name));
         const sw = el("span", "ws-memcol__swatches");
         for (const [key, name, , path] of SHAPE_CHOICES) {
           const b = el("button", "ws-memcol__swatch"); b.type = "button"; b.title = name;
