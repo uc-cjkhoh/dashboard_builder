@@ -12,6 +12,26 @@ const MODES = new Set(LABEL_MARK_CHOICES.map((c) => c[0]));
 /** Chart types whose marks carry labels from Data labels or a Label field (the point chart only while one series draws all its points). */
 export const LABEL_TYPES = new Set(["bar", "stacked", "line", "area", "combo", "pie", "donut", ...SCATTER_TYPES]);
 const LINES = new Set(["line", "area"]);
+// Label position: a label sits on a point over the plot background on a line, an area and the point charts (ink on the surface, so no palette contrast to guard);
+// a bar, stacked segment, combo bar or pie slice keeps its own place (the "inside" positions would put ink on a palette colour).
+const POSITIONED = new Set(["line", "area", ...SCATTER_TYPES]);
+/** [value, label] — Format → Label position. */
+export const LABEL_POSITION_CHOICES = Object.freeze([["auto", "Automatic"], ["above", "Above"], ["below", "Below"], ["left", "Left"], ["right", "Right"]]);
+const POSITIONS = { above: "top", below: "bottom", left: "left", right: "right" };
+/** Why a stored position is refused, or null. */
+export const labelPositionError = (v) => (v === "auto" || (typeof v === "string" && Object.hasOwn(POSITIONS, v)) ? null : "Label position must be Automatic, Above, Below, Left or Right.");
+/** The position a format asks for ("auto" when absent or, defensively, invalid). */
+export const labelPositionOf = (format) => (labelPositionError(format?.labelPosition) === null ? format.labelPosition : "auto");
+/** `format.labelPosition` as a sheet stores it -> { ok, value } (null = automatic, nothing to store). */
+export function cleanLabelPosition(v) {
+  if (v == null || v === "auto") return { ok: true, value: null };
+  const error = labelPositionError(v);
+  return error ? { ok: false, error } : { ok: true, value: v };
+}
+/** The positions `ctx` ({ type, drawn }) offers: all five on a line, area or point chart that draws labels, none elsewhere. */
+export const labelPositionsFor = ({ type, drawn }) => (drawn && POSITIONED.has(type) ? LABEL_POSITION_CHOICES.map((c) => c[0]) : []);
+/** The ECharts label position of a choice, or null for Automatic (the chart's own place). */
+export const labelPositionSymbol = (v) => (typeof v === "string" && Object.hasOwn(POSITIONS, v) ? POSITIONS[v] : null);
 
 /** Why a stored mode is refused, or null. */
 export const labelMarksError = (v) => (typeof v === "string" && MODES.has(v) ? null : "Label marks must be All, Min & max, Selected, Highlighted, Most recent or Line ends.");
@@ -49,7 +69,7 @@ export function effectiveLabelMode(mode, ctx) {
   return mode && mode !== "all" && labelModesFor({ ...ctx, drawn: true }).includes(mode) ? mode : "all";
 }
 /** The hint when a stored mode does not apply to the chart (every mark is labelled instead), else null. */
-export function LABEL_MARK_HINT(mode, type) {
+export function LABEL_MARK_HINT(mode) {
   if (mode === "ends") return `Line ends labels apply to Line and Area charts — every mark is labelled.`;
   if (mode === "recent") return "Most recent labels need a date on the view — every mark is labelled.";
   return null;
@@ -60,10 +80,10 @@ const real = (v) => Number.isFinite(num(v));
 /**
  * The mask a mode makes over the marks: { hover, at(seriesIndex, markIndex) -> whether that mark carries its label }, or null for All (nothing to mask).
  * `series` = the values of each series by mark; `skip` = marks that are not data points (the Other group); `selected` / `recent` = the mark indices of the selection
- * and of the latest date; `line[i]` = whether series i is a line (Line ends leaves the others labelled). Highlighted has `hover` true: the chart shows a label
+ * and of the latest date. Highlighted has `hover` true: the chart shows a label
  * only while its mark is highlighted (`at` is true for every mark then). A missing value is never a candidate; a tie for the lowest or highest takes the first mark.
  */
-export function labelMask(mode, { series = [], skip = [], selected = [], recent = [], line = [] } = {}) {
+export function labelMask(mode, { series = [], skip = [], selected = [], recent = [] } = {}) {
   if (!mode || mode === "all" || !MODES.has(mode)) return null;
   if (mode === "highlighted") return { hover: true, at: () => true };
   if (mode === "selected" || mode === "recent") {
@@ -79,7 +99,7 @@ export function labelMask(mode, { series = [], skip = [], selected = [], recent 
     for (const i of idx) { if (num(values[i]) < num(values[lo])) lo = i; if (num(values[i]) > num(values[hi])) hi = i; }
     return new Set([lo, hi]);
   });
-  return { hover: false, at: (si, di) => (mode === "ends" && line[si] === false ? true : picks[si]?.has(di) ?? false) };
+  return { hover: false, at: (si, di) => picks[si]?.has(di) ?? false };
 }
 
 const ISO = /^\d{4}-\d{2}-\d{2}/;

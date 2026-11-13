@@ -154,12 +154,15 @@ test("a Colour split: Min & max is taken per series (per colour member), on top 
 });
 
 const longDates = (n) => Array.from({ length: n }, (_, i) => [new Date(Date.UTC(2024, 0, 1 + i)).toISOString().slice(0, 10), (i * 7) % 50 + 1]);
-test("a long line draws no dots, so the labelled marks get one (ECharts puts a label on a mark's dot): the rest stay bare", () => {
+test("a long line draws no dots, so the labelled marks get one (ECharts puts a label on a mark's dot): the rest are clear but keep their size and hover dot", () => {
   const { o } = draw(dateSheet({ labelMarks: "ends" }), dates(...longDates(200)));
   const s = o.series[0];
   assert.equal(s.showSymbol, true); assert.equal(s.showAllSymbol, true);
-  assert.deepEqual(s.data.map((d) => d.symbolSize).filter((v) => v !== 0).length, 2);
-  assert.equal(s.data[0].symbolSize, 8); assert.equal(s.data[199].symbolSize, 8); assert.equal(s.data[100].symbolSize, 0);
+  const clear = s.data.filter((d) => d.itemStyle?.opacity === 0);
+  assert.equal(clear.length, 198); // every mark but the first and the last
+  assert.equal(s.data[0].itemStyle, undefined); assert.equal(s.data[199].itemStyle, undefined);
+  assert.equal(s.data[100].itemStyle.opacity, 0); assert.equal(s.data[100].emphasis.itemStyle.opacity, 1);
+  assert.ok(s.data.every((d) => d.symbolSize === undefined), "no mark is shrunk: the hover dot and the tooltip behave as on a plain long line");
   assert.deepEqual([[0, 1], [100, 3], [199, 44]].map(([di, v]) => lbl(o, 0, di, v)), ["1", "", "44"]);
 });
 test("a short line, a line with every label and a line set to Highlighted keep their dots as they were", () => {
@@ -169,4 +172,37 @@ test("a short line, a line with every label and a line set to Highlighted keep t
   assert.equal(all.showSymbol, false); assert.equal(typeof all.data[0], "number");
   const hl = draw(dateSheet({ labelMarks: "highlighted" }), dates(...longDates(200))).o.series[0];
   assert.equal(hl.showSymbol, false); assert.equal(typeof hl.data[0], "number");
+});
+
+const pos = (o, si = 0) => o.series[si].label.position;
+test("Label position moves a line's, an area's and a point chart's label; Automatic leaves the chart's own (above)", () => {
+  for (const type of ["line", "area"]) {
+    for (const [choice, want] of [["above", "top"], ["below", "bottom"], ["left", "left"], ["right", "right"]]) {
+      const s = dateSheet({ labelPosition: choice }); s.chartType = type;
+      assert.equal(pos(draw(s, dates(...DATED)).o), want, `${type} ${choice}`);
+    }
+    const auto = dateSheet({}); auto.chartType = type;
+    assert.equal(pos(draw(auto, dates(...DATED)).o), "top", `${type} automatic`);
+  }
+  const point = (labelPosition) => {
+    const s = sheet({ chartType: "scatter", columns: [dim("region"), meas("amount")], rows: [meas("qty")], format: { ...on, ...(labelPosition ? { labelPosition } : {}) } });
+    const res = { rowDimensions: ["region"], columnDimensions: [], measures: ["a", "q"], rows: [["EU", 1, 5], ["US", 2, 1]].map(([k, a, q]) => ({ keys: [k], values: [a, q] })), truncated: false };
+    return draw(s, res).o;
+  };
+  assert.deepEqual(["above", "below", "left", "right"].map((p) => pos(point(p))), ["top", "bottom", "left", "right"]);
+  assert.equal(pos(point()), "top");
+});
+
+test("a bar, a stacked bar, a combo's bars and a pie keep their own label place whatever is stored", () => {
+  for (const type of ["bar", "stacked"]) assert.equal(pos(draw(sheet({ chartType: type, format: { ...on, labelPosition: "left" } })).o), "top", type);
+  const horizontal = sheet({ chartType: "bar", columns: [], rows: [dim("region")], format: { ...on, labelPosition: "left" } });
+  const res = { rowDimensions: ["region"], columnDimensions: [], measures: ["v"], rows: REGIONS.map(([k, v]) => ({ keys: [k], values: [v] })), truncated: false };
+  horizontal.columns = [meas("amount")];
+  assert.equal(pos(draw(horizontal, res).o), "right");
+  const pie = draw(sheet({ chartType: "pie", format: { ...on, labelPosition: "left" } })).o;
+  assert.equal(pie.series[0].label.position, undefined);
+});
+
+test("with no Label position stored, the label positions are exactly as before (a line 'top', a point 'top')", () => {
+  const s = dateSheet({}); assert.equal(pos(draw(s, dates(...DATED)).o), "top");
 });

@@ -49,7 +49,7 @@ import { BACKGROUND_CHOICES } from "./background-model.js";
 import { TABLE_ALIGN_CHOICES, TABLE_DENSITY_CHOICES, TABLE_SHADE_CHOICES } from "./table-style-model.js";
 import { COL_ALIGN_CHOICES, tableColumnList, setTableColumn, columnLook, columnWidthError } from "./table-columns-model.js";
 import { COLOUR_MEASURE_TYPES, sizeChannel, shapeChannel } from "./mark-channel-model.js";
-import { LABEL_MARK_CHOICES, labelContext, labelModesFor, labelMarksOf, effectiveLabelMode, cleanLabelMarks } from "./label-marks-model.js";
+import { LABEL_MARK_CHOICES, LABEL_POSITION_CHOICES, labelContext, labelModesFor, labelMarksOf, effectiveLabelMode, cleanLabelMarks, labelPositionsFor, labelPositionOf, cleanLabelPosition } from "./label-marks-model.js";
 import { MARK_BORDER_CHOICES, MARKER_SHAPE_CHOICES, BORDER_TYPES, MARK_BORDER_COLOUR_CHOICES, markerSizeError } from "./mark-style-model.js";
 import { OPACITY_TYPES, OPACITY_CHOICES, cleanMarkOpacity } from "./mark-opacity-model.js";
 import { addColourField, MULTI_COLOUR_TYPES } from "./colour-fields-model.js";
@@ -1485,6 +1485,13 @@ export function initDashboards() {
         const { value } = cleanLabelMarks(v);
         s.format = { ...f };
         if (value) s.format.labelMarks = value; else delete s.format.labelMarks;
+        commit(dash, s);
+      }));
+      const labelPositions = labelPositionsFor(labelCtx);
+      if (labelPositions.length) panel.append(fmtSelect("Label position", LABEL_POSITION_CHOICES, labelPositionOf(f), (v) => { // where a line's or point's label sits; the stored shape holds only what differs from Automatic
+        const { value } = cleanLabelPosition(v);
+        s.format = { ...f };
+        if (value) s.format.labelPosition = value; else delete s.format.labelPosition;
         commit(dash, s);
       }));
       if (canColourByCat)

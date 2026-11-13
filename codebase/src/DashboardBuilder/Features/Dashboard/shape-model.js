@@ -38,7 +38,7 @@ export function cleanShapeBins(n) {
   return error ? { ok: false, error } : { ok: true, value: n };
 }
 
-const round = (x) => Number(x.toPrecision(12)); // 1 + 1.6 * 3 is 5.800000000000001 in floating point: the bound is what the legend says
+const round = (x) => Number(x.toPrecision(15)); // 1 + 1.6 * 3 is 5.800000000000001 in floating point: the bound is what the legend says (15 digits keep an epoch in milliseconds exact)
 /**
  * Cut `values` (one per point, in any order) into `n` equal-width bins over their own span. A value on a boundary belongs to the bin above;
  * the largest value belongs to the last bin; flat data is one bin. A missing / non-numeric value takes the seventh symbol as its own group.
@@ -50,8 +50,8 @@ export function binShapeValues(values, n, fmt) {
   const real = nums.filter((v) => v !== null);
   const lo = real.length ? Math.min(...real) : 0, hi = real.length ? Math.max(...real) : 0;
   const count = lo === hi ? 1 : Math.min(SHAPE_BINS_MAX, Math.max(1, n));
-  const width = (hi - lo) / count;
-  const edges = Array.from({ length: count + 1 }, (_, i) => (i === count ? hi : round(lo + width * i))); // the last edge is the data's own maximum
+  const width = hi / count - lo / count; // not (hi - lo) / count: a span of about 2e308 overflows to Infinity
+  const edges = Array.from({ length: count + 1 }, (_, i) => (i === 0 ? lo : i === count ? hi : round(lo + width * i))); // the first and last edges are the data's own minimum and maximum
   const binOf = nums.map((v) => {
     if (v === null) return NULL_INDEX;
     let b = 0;

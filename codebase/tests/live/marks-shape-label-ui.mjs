@@ -389,6 +389,12 @@ try {
     must(ends.length === 2, 'Line ends labels the first and last point of 200: ' + J(ends) + ' (all: ' + all.length + ')');
     must(mm.length === 2 && mm.some((t) => /^10[.]37/.test(t)) && mm.some((t) => /^80[.]37/.test(t)), 'Min & max labels the lowest and the highest point: ' + J(mm));
     must(recent.length === 1, 'Most recent labels the last day: ' + J(recent));
+    await setMode('ends');
+    await ev(`${inst}.dispatchAction({ type: 'showTip', seriesIndex: 0, dataIndex: 100 })`); await b.sleep(300);
+    const tip = await ev(`[...document.querySelectorAll('.ws-chart-canvas div')].map((d) => d.innerText).filter((t) => t && /[0-9]/.test(t) && t.includes('\\n')).pop() ?? ''`);
+    must(/2024-04-10|v0|amount/.test(tip) && /[0-9]+[.]37/.test(tip), 'the tooltip still shows on a clear (unlabelled) point of the long line: ' + J(tip));
+    const clearOp = await ev(`${inst}.getOption().series[0].data[100].itemStyle.opacity`);
+    must(clearOp === 0, 'an unlabelled point is clear, not shrunk');
     await setMode('highlighted');
     must((await labelTexts()).length === 0, 'Highlighted: no label at rest');
     await ev(`${inst}.dispatchAction({ type: 'highlight', seriesIndex: 0, dataIndex: 100 })`); await b.sleep(500);
@@ -397,6 +403,34 @@ try {
     await ev(`${inst}.dispatchAction({ type: 'downplay' })`);
     await setMode('all');
     longSeries = false;
+  });
+
+  // ---- Label position -------------------------------------------------------------------------------------------------------
+  await check('Label position: offered on a line, moves the labels (above / below), absent on a bar', async () => {
+    await newSheet();
+    await dragChip('placed', `__t.zone('columns')`);
+    await dragChip('amount', `__t.zone('rows')`);
+    await settle(400);
+    await chartType('Line');
+    await openFormat();
+    await ev(`[...document.querySelectorAll('.ws-fmt-field')].find((l) => l.textContent.includes('Data labels')).querySelector('input').click()`); await settle(500);
+    await waitFor(`!!(${fmtField('Label position')})`, 'Label position appears with labels on a line');
+    must(await ev(`[...${fmtField('Label position')}.querySelectorAll('option')].map((o) => o.value).join(',')`) === 'auto,above,below,left,right', 'five choices');
+    const y = () => ev(`(() => { const t = [...document.querySelectorAll('#ws-chart svg text')].find((x) => /^10[.]37$/.test(x.textContent)); const m = /translate\\(([-0-9.]+) ([-0-9.]+)\\)/.exec(t.getAttribute('transform')); return [Number(m[1]), Number(m[2])]; })()`);
+    const above = await y();
+    await setSelect('Label position', 'below'); await settle(600);
+    const below = await y();
+    must(below[1] > above[1] + 8, 'Below sits lower than the automatic (above) place: ' + J([above, below]));
+    await setSelect('Label position', 'right'); await settle(600);
+    const right = await y();
+    must(right[0] > above[0] + 4, 'Right sits to the right: ' + J([above, right]));
+    await shot('label-position-right');
+    await setSelect('Label position', 'auto'); await settle(600);
+    must(J(await y()) === J(above), 'Automatic is back where it was');
+    await closeFormat();
+    await chartType('Bar'); await openFormat();
+    must(!(await ev(`!!(${fmtField('Label position')})`)), 'no Label position on a bar');
+    await closeFormat();
   });
 
   if (b.consoleErrors.length) console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  '));

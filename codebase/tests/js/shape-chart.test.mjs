@@ -39,3 +39,10 @@ test("a binned Shape measure: the bin's index is its symbol (member shapes do no
   assert.match(tip, /rating:<\/b> 9/); assert.match(tip, /5 to 10/);
   assert.doesNotMatch(buildOption(spec(members("EU"))).tooltip.formatter({ seriesName: "EU", data: { name: "p" }, value: [1, 1] }), /rating/);
 });
+
+test("a Shape field name and value with markup are escaped in the tooltip", () => {
+  const g = [{ name: "a", points: [{ value: [1, 1], name: "<b>p</b>", shapeValue: "<img src=x onerror=1>" }], shape: { index: 0, name: "a", raw: 0 } }];
+  const tip = buildOption(spec(g, { shapeName: "<script>x</script>" })).tooltip.formatter({ seriesName: "<i>s</i>", data: g[0].points[0], value: [1, 1] });
+  assert.doesNotMatch(tip, /<script>|<img|<i>|<b>p/);
+  assert.match(tip, /&lt;script&gt;x&lt;\/script&gt;/); assert.match(tip, /&lt;img src=x onerror=1&gt;/);
+});

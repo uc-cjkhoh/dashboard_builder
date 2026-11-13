@@ -18,7 +18,7 @@ import { boxData, outlierPoints } from "./box-model.js";
 import { chartFit, markCount, applyFitMode, rotatedLabelCap, FIT } from "./chart-fit.js";
 import { applySelectionDim } from "./selection-dim.js";
 import { shapeSymbol, symbolAt } from "./shape-model.js";
-import { labelMask } from "./label-marks-model.js";
+import { labelMask, labelPositionSymbol } from "./label-marks-model.js";
 import { applyMarkOpacity, markOpacityOf, withAlpha, OPACITY_TYPES, ANALYTICS_ID } from "./mark-opacity-model.js";
 import { dateFitMode } from "./date-labels.js";
 import { histogramLabel } from "./chart-polish.js";
@@ -500,8 +500,9 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
   const mask = labelMarks ? labelMask(labelMarks.mode, { series: series.map((s) => s.data), skip: otherIndex >= 0 ? [otherIndex] : [], selected: labelMarks.selected, recent: labelMarks.recent }) : null;
   const hoverLabel = mask?.hover ? { label: { show: true } } : {}; // Highlighted: the label appears with the mark's emphasis (hover, or a legend item's highlight)
   const focusOf = mask?.hover ? "self" : "series"; // one mark's label on hover, not the whole series'
-  const dataLabel = (si) => ((pointLabels || seriesLabels || format.dataLabels)
-    ? { show: !mask?.hover, position: type === "stacked" && seriesLabels ? "inside" : labelPos, // only a colour split's Label sits inside its stack segment color: c.label, fontFamily: c.font, fontSize: 14,
+  const linePos = type === "line" || type === "area" ? labelPositionSymbol(format.labelPosition) : null; // Format → Label position: a line's label sits on its point; bars keep their own place
+  const dataLabel = (si, onLine = false) => ((pointLabels || seriesLabels || format.dataLabels)
+    ? { show: !mask?.hover, position: (onLine && linePos) || (type === "stacked" && seriesLabels ? "inside" : labelPos), // only a colour split's Label sits inside its stack segment color: c.label, fontFamily: c.font, fontSize: 14,
         formatter: (p) => (mask && !mask.at(si, p.dataIndex) ? "" : (pointLabels || seriesLabels) ? String(labelAt(si, p.dataIndex) ?? "") : fmtVal(p.value)) }
     : { show: false });
 
@@ -616,9 +617,9 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
         : s.data;
       if (sizeFr && sizeMode === "width") widthLines.push({ s, i, stroke: byValue ? byValue.colours : null, color, axis: seriesAxis(dual, i, isCombo) });
       const dots = s.data.length <= 60 || format.markerSize != null || markerSized || Boolean(cue); // dots only when they won't crowd (unless a marker size is chosen; a cued line's markers name it)
-      // Format → Label marks on a line with no dots (a long one): a label sits on its mark's dot, so only the labelled marks get one and the rest stay bare.
+      // Format → Label marks on a line with no dots (a long one): a label sits on its mark's dot, so only the labelled marks show one (the rest are clear until hovered).
       const labelDots = !dots && Boolean(mask) && !mask.hover && Boolean(pointLabels || seriesLabels || format.dataLabels);
-      const dotted = labelDots ? lineData.map((d, di) => (d == null ? d : { ...(isObjectItem(d) ? d : { value: d }), symbolSize: mask.at(i, di) ? markerSizeOr(format.markerSize, 8) : 0 })) : lineData;
+      const dotted = labelDots ? lineData.map((d, di) => (d == null ? d : { ...(isObjectItem(d) ? d : { value: d }), ...(mask.at(i, di) ? {} : { itemStyle: { ...(isObjectItem(d) ? d.itemStyle : {}), opacity: 0 }, emphasis: { itemStyle: { opacity: 1 } } }) })) : lineData; // an unlabelled mark keeps its normal size but is clear: the hover dot and the tooltip work as on a plain long line
       return {
         name: s.name, type: "line", step,
         yAxisIndex: seriesAxis(dual, i, isCombo),
@@ -629,7 +630,7 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
         areaStyle: type === "area" || (isCombo && secondary === "area") ? { opacity: 0.18, color: stroke } : undefined,
         lineStyle: { width: 2, color: stroke, ...(cue ? { type: cue.dash } : {}) },
         itemStyle: { color, ...(format.markBorder && format.markBorder !== "none" ? edge : {}) },
-        label: dataLabel(i),
+        label: dataLabel(i, true),
         emphasis: { focus: focusOf, ...hoverLabel },
       };
     }
@@ -810,7 +811,7 @@ function buildScatter({ categories, series, format = {}, sizes, sizeName, sizeMe
       type: "scatter", data, symbolSize, symbol: symbol || "circle", // square/circle marks
       itemStyle: { ...(colorByDim || continuous ? {} : { color: c.series, opacity: 0.8 }), ...pointEdge(format, c) },
       label: (pointLabels || format.dataLabels)
-        ? { show: !mask?.hover, position: "top", color: c.muted, fontFamily: c.font, fontSize: 14,
+        ? { show: !mask?.hover, position: labelPositionSymbol(format.labelPosition) ?? "top", color: c.muted, fontFamily: c.font, fontSize: 14,
             formatter: (p) => (mask && !mask.at(0, p.dataIndex) ? "" : pointLabels ? String(pointLabels[p.dataIndex] ?? "") : String(p.name ?? "")) }
         : { show: false },
       emphasis: { focus: "self", itemStyle: { borderColor: c.ink, borderWidth: 1 }, ...(mask?.hover && (pointLabels || format.dataLabels) ? { label: { show: true } } : {}) },

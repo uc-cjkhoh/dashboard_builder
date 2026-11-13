@@ -127,3 +127,19 @@ test("shapesByName maps displayed names to stored symbols (the null member too)"
   const m = shapesByName({ EU: "pin", "\u0000null": "arrow" }, [{ name: "EU", raw: "EU" }, { name: "—", raw: null }, { name: "US", raw: "US" }]);
   assert.equal(m.get("EU"), "pin"); assert.equal(m.get("—"), "arrow"); assert.equal(m.has("US"), false);
 });
+
+test("a span too wide for a double (about ±1e308) still cuts into equal bins, with a correct legend", () => {
+  const r = binShapeValues([-1e308, 0, 1e308], 5, fmt);
+  assert.deepEqual(r.binOf, [0, 2, 4]);
+  assert.deepEqual(r.bins.map((b) => b.name), ["-1e+308 to -6e+307", "-2e+307 to 2e+307", "6e+307 to 1e+308"]);
+  assert.ok(r.bins.every((b) => !/NaN|Infinity/.test(b.name)));
+});
+
+test("bounds beyond ±1e12 keep every digit of the data's own minimum and maximum (epoch milliseconds)", () => {
+  const r = binShapeValues([1234567890123, 1234567890128, 1234567890133], 2, fmt);
+  assert.deepEqual(r.binOf, [0, 1, 1]);
+  assert.deepEqual(r.bins.map((b) => b.name), ["1234567890123 to 1234567890128", "1234567890128 to 1234567890133"]);
+  const wide = binShapeValues([-5e14, 5e14], 4, fmt);
+  assert.deepEqual(wide.binOf, [0, 3]);
+  assert.deepEqual(wide.bins.map((b) => b.name), ["-500000000000000 to -250000000000000", "250000000000000 to 500000000000000"]);
+});

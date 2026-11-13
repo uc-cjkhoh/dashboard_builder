@@ -84,3 +84,9 @@ test("a Shape dimension is unchanged by the new argument", () => {
   assert.deepEqual(a.groups.map((x) => [x.name, x.shape.index]), [["EU", 0], ["US", 1]]);
   assert.equal(JSON.stringify(a), JSON.stringify(b));
 });
+
+test("viewCounts counts a Shape measure whatever the chart type (a conservative cap), so a saved chart type switch cannot slip past the limit", () => {
+  const base = viewCounts({ ...scatter(), chartType: "bar" });
+  const s = withShape(meas("rating")); s.chartType = "bar";
+  assert.deepEqual(viewCounts(s), { dims: base.dims, measures: base.measures + 1 });
+});

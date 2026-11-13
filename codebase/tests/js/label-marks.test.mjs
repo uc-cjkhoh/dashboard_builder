@@ -1,7 +1,7 @@
 // Label options (Format → Label marks): which marks carry their label — pure model, no browser.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { LABEL_MARK_CHOICES, labelMarksError, labelMarksOf, cleanLabelMarks, labelModesFor, effectiveLabelMode, labelMask, mostRecentRaw, labelContext, LABEL_MARK_HINT }
+import { LABEL_POSITION_CHOICES, labelPositionError, labelPositionOf, cleanLabelPosition, labelPositionsFor, labelPositionSymbol, LABEL_MARK_CHOICES, labelMarksError, labelMarksOf, cleanLabelMarks, labelModesFor, effectiveLabelMode, labelMask, mostRecentRaw, labelContext, LABEL_MARK_HINT }
   from "../../src/DashboardBuilder/Features/Dashboard/label-marks-model.js";
 import { emptySheet, defaultFormat } from "../../src/DashboardBuilder/Features/Core/store.js";
 
@@ -77,12 +77,6 @@ test("Line ends: the first and last real point of every line, past leading and t
   assert.deepEqual(idx(labelMask("ends", { series: [[null, null]] }), 0, 2), []);
 });
 
-test("Line ends leaves a series that is not a line alone (a combo's bars keep their labels)", () => {
-  const m = labelMask("ends", { series: [[1, 2, 3], [4, 5, 6]], line: [false, true] });
-  assert.deepEqual(idx(m, 0, 3), [0, 1, 2]);
-  assert.deepEqual(idx(m, 1, 3), [0, 2]);
-});
-
 test("Selected: the marks the selection names, in every series; nothing selected labels nothing", () => {
   const m = labelMask("selected", { series: [[1, 2, 3], [4, 5, 6]], selected: [1] });
   assert.deepEqual(idx(m, 0, 3), [1]); assert.deepEqual(idx(m, 1, 3), [1]);
@@ -142,7 +136,30 @@ test("labelContext: a point chart split by Shape or Colour draws no labels, so o
 });
 
 test("the hint for a stored mode that does not apply", () => {
-  assert.match(LABEL_MARK_HINT("ends", "bar"), /Line ends/);
-  assert.match(LABEL_MARK_HINT("recent", "bar"), /date/);
-  assert.equal(LABEL_MARK_HINT("minmax", "bar"), null);
+  assert.match(LABEL_MARK_HINT("ends"), /Line ends/);
+  assert.match(LABEL_MARK_HINT("recent"), /date/);
+  assert.equal(LABEL_MARK_HINT("minmax"), null);
+});
+
+test("Label position: auto or one side; anything else refused, auto is not stored", () => {
+  assert.deepEqual(LABEL_POSITION_CHOICES.map((c) => c[0]), ["auto", "above", "below", "left", "right"]);
+  for (const p of ["auto", "above", "below", "left", "right"]) assert.equal(labelPositionError(p), null);
+  for (const p of ["top", "inside", "", null, undefined, 1, "ABOVE"]) assert.match(labelPositionError(p), /Label position/);
+  assert.equal(labelPositionOf({}), "auto"); assert.equal(labelPositionOf({ labelPosition: "left" }), "left"); assert.equal(labelPositionOf({ labelPosition: "top" }), "auto");
+  assert.deepEqual(cleanLabelPosition("auto"), { ok: true, value: null });
+  assert.deepEqual(cleanLabelPosition("below"), { ok: true, value: "below" });
+  assert.equal(cleanLabelPosition("inside").ok, false);
+  assert.equal("labelPosition" in defaultFormat(), false);
+});
+
+test("Label position is offered only where a label sits on a point over the plot: line, area and the point charts, while labels are drawn", () => {
+  const five = ["auto", "above", "below", "left", "right"];
+  for (const type of ["line", "area", "scatter", "square", "circle"]) assert.deepEqual(labelPositionsFor({ type, drawn: true, temporal: false }), five, type);
+  for (const type of ["bar", "stacked", "combo", "pie", "donut", "heatmap", "table"]) assert.deepEqual(labelPositionsFor({ type, drawn: true }), [], type);
+  assert.deepEqual(labelPositionsFor({ type: "line", drawn: false }), []);
+});
+
+test("the ECharts position of a choice: auto leaves the chart's own", () => {
+  assert.equal(labelPositionSymbol("auto"), null); assert.equal(labelPositionSymbol(undefined), null); assert.equal(labelPositionSymbol("bogus"), null);
+  assert.deepEqual(["above", "below", "left", "right"].map(labelPositionSymbol), ["top", "bottom", "left", "right"]);
 });

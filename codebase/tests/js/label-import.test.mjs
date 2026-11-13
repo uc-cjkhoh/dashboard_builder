@@ -33,3 +33,19 @@ test("a mode that does not suit the chart is kept (it labels every mark there an
   assert.equal(r.worksheets[0].sheet.format.labelMarks, "ends");
   assert.equal(r.issues.length, 0);
 });
+
+// Format → Label position (`format.labelPosition`): absent = automatic; the same rules.
+const minePos = (r) => r.issues.filter((i) => /label position/.test(i));
+test("label position: a sheet that never set it round-trips without the key; each side round-trips; auto is not stored", () => {
+  assert.equal("labelPosition" in roundTrip(defaultFormat()).worksheets[0].sheet.format, false);
+  for (const p of ["above", "below", "left", "right"]) assert.equal(roundTrip({ ...defaultFormat(), labelPosition: p }).worksheets[0].sheet.format.labelPosition, p);
+  const auto = roundTrip({ ...defaultFormat(), labelPosition: "auto" });
+  assert.equal("labelPosition" in auto.worksheets[0].sheet.format, false); assert.equal(minePos(auto).length, 0);
+});
+test("an unknown label position is reset to automatic and reported, never coerced", () => {
+  for (const bad of ["top", "inside", "", 3, true, {}, ["left"], "LEFT"]) {
+    const r = roundTrip({ ...defaultFormat(), labelPosition: bad });
+    assert.equal("labelPosition" in r.worksheets[0].sheet.format, false, JSON.stringify(bad));
+    assert.equal(minePos(r).length, 1, JSON.stringify(bad));
+  }
+});
