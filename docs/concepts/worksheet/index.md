@@ -13,6 +13,7 @@ A worksheet tab: shelves, charts, encodings, calculations.
 | [worksheet-charts.md](worksheet-charts.md) | Chart types, orientation, ECharts adapter, export |
 | [worksheet-encodings.md](worksheet-encodings.md) | Click-to-filter, Drill, Pages, date range |
 | [worksheet-marks.md](worksheet-marks.md) | Marks card, tooltips, member colours, palette, table look |
+| [worksheet-marks-colour.md](worksheet-marks-colour.md) | The Colour channel: several measures, Automatic scale, opacity, several fields, pie split |
 | [worksheet-filters.md](worksheet-filters.md) | Filter cards, calculated-field filters, parameters, shared filters |
 | [calculated-fields.md](calculated-fields.md) | Dialog, field-pane group, roles, refusals, error state |
 | [calculated-fields-formulas.md](calculated-fields-formulas.md) | The formula language: grammar, functions, parameters, limits |

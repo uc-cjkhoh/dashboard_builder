@@ -137,7 +137,7 @@ Nothing here reaches the server; dashboards add no endpoint
 ```
 {
   columns: [pill], rows: [pill],      // ordered shelves; dimensions before measures
-  color:   [pill],                    // ≤1 field — Color encoding (categorical or continuous)
+  color:   [pill],                    // Color encoding: one measure (continuous), or 1–3 categorical fields (combined members; LIMITS.colourFields)
   filters: [{ db, table, column, category, op, value | values, param?, topBy?, bottom? }],   // param: P32; topBy / bottom: P30 top-N
   chartType: "bar",                   // see CHART_TYPES
   sort:      null | { by: fieldId, dir: "asc" | "desc" },
@@ -145,7 +145,7 @@ Nothing here reaches the server; dashboards add no endpoint
   collapsed: { rows: [key], cols: [key] },   // T03-29 collapsed crosstab headers; the key exists only once one is collapsed
   tooltipText: null | string,   // T01-19 tooltip template with <Field> placeholders (≤ 300; null = automatic)
   tooltipFormats?: { [field]: { number?, decimals?, date? } },   // T01-19 per-field tooltip formats (≤ 24 fields); absent = the view's formats
-  memberColors: {},              // T01-20 { "table.column": { member: "#rrggbb" } } (format.paletteReverse: bool, T03-33; format.colorRamp brand|blue|green|amber|violet, colorMin / colorMax number|null, T03-19; colorScale sequential|diverging, colorPair default|amber-violet|green-violet, colorCentre number|null; colorSteps 0|3–9, 0 = continuous)
+  memberColors: {},              // T01-20 { "table.column": { member: "#rrggbb" } } (format.paletteReverse: bool, T03-33; format.colorRamp brand|blue|green|amber|violet, colorMin / colorMax number|null, T03-19; colorScale auto|sequential|diverging (auto only on a worksheet the user adds; every older file stores sequential), colorFullRange? bool (diverging only; absent = symmetric), colorPair default|amber-violet|green-violet, colorCentre number|null; colorSteps 0|3–9, 0 = continuous)
   title: null | string, caption: null | string, showTitle: boolean,   // P23 (null = automatic)
   showFilterCards: boolean,                                          // P30
   analytics: null | { ref: { kind, value?, param?, measure? }, band: { from, to, fromParam?, toParam? } | { kind: "stddev", k: 1|2|3 } | { kind: "percentile", lo, hi } | null, trend, trendMeasure?, forecast, forecastParam?, totals: { grand, sub } },   // P21
@@ -156,7 +156,7 @@ Nothing here reaches the server; dashboards add no endpoint
   format: { numberFormat, decimals, currencySymbol, dateFormat, topN, dateBucket, target, downIsGood, conditional, legend,
             dataLabels, colorByDimension, xTitle, yTitle,
             lineStyle, heatmapShape, ganttLength?, targetMeasure,
-            syncAxes, dualAxis, secondaryType, markerSize, sizeScale?, markBorder, markBorderColor?, markerShape, font, tableAlign, tableDensity, tableShade, tableCols? }
+            syncAxes, dualAxis, secondaryType, markerSize, sizeScale?, markOpacity?, markBorder, markBorderColor?, markerShape, font, tableAlign, tableDensity, tableShade, tableCols? }
 }
 ```
 
@@ -175,6 +175,7 @@ Nothing here reaches the server; dashboards add no endpoint
   | `secondaryType` | `line` \| `bar` \| `area` (default `line`) |
   | `markerSize` | null (automatic) or a whole number 4–40 |
   | `sizeScale` | optional `{ smallest?, largest?, fromZero?, reversed? }` (Format → Edit Sizes): `smallest` / `largest` whole 0–100 (default 0 / 100, smallest below largest), `fromZero` / `reversed` booleans (absent `fromZero` = the chart's own default); only parts that differ from the default are stored |
+  | `markOpacity` | optional whole percent, a multiple of 10 from 0 to 100 (Format → Opacity; absent = 100); an invalid saved value is reset and reported, never clamped |
   | `markBorder` | `none` \| `thin` \| `medium` \| `thick` (default `none`) |
   | `markBorderColor` | optional: `muted` \| `ink` \| `surface` \| `accent` (absent = `muted`) |
   | `markerShape` | `circle` \| `square` \| `diamond` \| `triangle` (default `circle`) |
