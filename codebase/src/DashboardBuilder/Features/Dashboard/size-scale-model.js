@@ -17,6 +17,8 @@ export const SIZE_PCT = Object.freeze({ min: 0, max: 100 });
 /** The Sizes vary modes (Automatic is the chart's own default: bubbles from zero, everything else by range) and the bound on a typed Start / End value. */
 export const SIZE_VARY = Object.freeze(["automatic", "range", "zero"]);
 export const SIZE_VALUE_LIMIT = 1e12;
+/** The Sizes vary drop-down: [mode, label]. */
+export const VARY_CHOICES = Object.freeze([["automatic", "Automatic"], ["range", "By range"], ["zero", "From zero"]]);
 
 const isObj = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 const pct = (v) => Number.isInteger(v) && v >= SIZE_PCT.min && v <= SIZE_PCT.max;
