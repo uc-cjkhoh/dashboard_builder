@@ -202,6 +202,8 @@ export function initConnection() {
       hide(cancelBtn);
     }
 
+    hide(document.getElementById("app-loading"));
+    document.querySelector(".app")?.removeAttribute("data-connecting"); // first answer is in: the right empty state / card shows
     document.querySelector(".app")?.toggleAttribute("data-disconnected", !connected); // the sidebar narrows to its brand rail (shell.css)
     toggle(schemaSection, connected);
     toggle(divider, connected);

@@ -64,16 +64,18 @@
    - board (dashboard): the same rail with the brand mark only — the body is hidden;
    - disconnected (`.app[data-disconnected]`, set by Connection/connection.js): the board's brand-only rail too — the connect form and
      recent connections are on the Data Source start card, so the sidebar has nothing to hold.
+   - connecting (`.app[data-connecting]`, server-rendered, removed by Connection/connection.js on the first connection answer): the same rail, so a
+     reload does not flash the wide sidebar before it narrows; the loading bar below shows meanwhile.
    The user's own collapsed choice is untouched and returns with the Data Source tab. */
 .sidebar__tools { display: none; gap: var(--s2); }
 .app[data-view="sheet"] .sidebar__tools { display: flex; }
 .app[data-view="sheet"] .sidebar__title, .app[data-view="board"] .sidebar__title, .app[data-view="sheet"] .sidebar__divider, .app[data-view="board"] .sidebar__divider, .app[data-view="sheet"] .sidebar__section--conn, .app[data-view="sheet"] #schema-section, .app[data-view="sheet"] #tables-section { display: none; }
-.app[data-view="board"], .app[data-view="sheet"], .app[data-disconnected] { grid-template-columns: var(--topbar-h) 1fr; }
-.app[data-view="sheet"] .sidebar__resizer, .app[data-view="board"] .sidebar__resizer, .app[data-disconnected] .sidebar__resizer,
-.app[data-view="board"] .sidebar__brand-text, .app[data-view="sheet"] .sidebar__brand-text, .app[data-disconnected] .sidebar__brand-text,
-.app[data-view="board"] .sidebar__toggle, .app[data-view="sheet"] .sidebar__toggle, .app[data-disconnected] .sidebar__toggle { display: none; }
-.app[data-view="board"] .sidebar__brand, .app[data-view="sheet"] .sidebar__brand, .app[data-disconnected] .sidebar__brand { justify-content: center; padding-inline: 0; }
-.app[data-view="board"] .sidebar__mark, .app[data-view="sheet"] .sidebar__mark, .app[data-disconnected] .sidebar__mark { display: grid; }
+.app[data-view="board"], .app[data-view="sheet"], .app[data-connecting], .app[data-disconnected] { grid-template-columns: var(--topbar-h) 1fr; }
+.app[data-view="sheet"] .sidebar__resizer, .app[data-view="board"] .sidebar__resizer, .app[data-disconnected] .sidebar__resizer, .app[data-connecting] .sidebar__resizer,
+.app[data-view="board"] .sidebar__brand-text, .app[data-view="sheet"] .sidebar__brand-text, .app[data-disconnected] .sidebar__brand-text, .app[data-connecting] .sidebar__brand-text,
+.app[data-view="board"] .sidebar__toggle, .app[data-view="sheet"] .sidebar__toggle, .app[data-disconnected] .sidebar__toggle, .app[data-connecting] .sidebar__toggle { display: none; }
+.app[data-view="board"] .sidebar__brand, .app[data-view="sheet"] .sidebar__brand, .app[data-disconnected] .sidebar__brand, .app[data-connecting] .sidebar__brand { justify-content: center; padding-inline: 0; }
+.app[data-view="board"] .sidebar__mark, .app[data-view="sheet"] .sidebar__mark, .app[data-disconnected] .sidebar__mark, .app[data-connecting] .sidebar__mark { display: grid; }
 /* On a worksheet the rail also carries the tool icons in one column (1 × N), so the sidebar stays as narrow as the board's. */
 .app[data-view="sheet"] .sidebar__body { padding: var(--s2) 0; align-items: center; }
 /* The worksheet tools are two icon-only tiles (calculated fields, hierarchies); each opens its dialog. */
@@ -174,3 +176,11 @@
 .activity[hidden] { display: none; }
 .activity__glyph { display: inline-flex; flex: none; animation: spin 1s linear infinite; }
 .activity__text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* Loading bar: a 4px indeterminate strip across the top while the first connection answer is pending (Connection/connection.js hides it).
+   Only transform/opacity animate; it fades in after 200ms so a quick answer shows nothing, and sits still under reduced motion. */
+.app-loading { position: fixed; inset: 0 0 auto 0; height: 4px; overflow: hidden; z-index: 50; background: var(--accent-soft); animation: fade-in var(--dur) var(--ease) 200ms backwards; }
+.app-loading[hidden] { display: none; }
+.app-loading__bar { display: block; width: 40%; height: 100%; background: var(--accent); animation: loading-slide 1.2s var(--ease) infinite; }
+@keyframes loading-slide { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+@media (prefers-reduced-motion: reduce) { .app-loading__bar { animation: none; width: 100%; opacity: .4; } }

@@ -11,6 +11,8 @@
   text-align: center;
   pointer-events: none;
 }
+/* Until the first connection answer (Connection/connection.js removes data-connecting) neither the plain "Connect" empty state nor the card is the right one to show. */
+.app[data-connecting] .canvas__empty { visibility: hidden; }
 .canvas__empty .btn { pointer-events: auto; }
 .canvas__empty .empty__title { font-size: var(--fs-lead); color: var(--ink-2); }
 .canvas__empty .empty__model { width: 320px; max-width: 100%; height: auto; margin-bottom: var(--s2); }
