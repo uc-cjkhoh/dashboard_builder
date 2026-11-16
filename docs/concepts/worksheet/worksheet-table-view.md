@@ -24,7 +24,12 @@ Format → Conditional formatting, in the Table and Text views. Set per measure,
 - **Rules:** up to **5** rules "value op threshold → Good / Bad / Warning / Note". A new rule starts with an empty threshold ("Type a value") and applies to nothing, and shows no key entry, until a value is typed. The first match wins and overrides the scale or bar for that cell. Rules wear the status tokens **and an icon** (✓ / error / warning / info).
 - **Contrast:** scale tints top out at 85%, and each cell's ink is picked for ≥ 4.5:1 (`contrast.js`).
 - **Key:** above the table, showing each scale's low / high (and centre) and each rule. While pages are still loading it says "Scales and bars use the N rows loaded so far."
-- Code: rules in `Dashboard/conditional-model.js` (unit-tested).
+- **Include totals:** a per-measure check box under the Cells row (`format.conditional[key].totals`, stored only while on). Its total cells (grand-total column, subtotal rows, grand-total row and where they cross) are coloured by that measure's scale, bars and rules exactly like the other cells, and their values count when the scale's range is found ([D122](../../decisions/decisions-marks.md#d122--include-totals-in-the-colour-encoding)). Off, a total is plain, as before.
+  - **Availability:** it is disabled with its reason as text while Grand totals and Subtotals are both off ("Turn on Grand totals or Subtotals") or while the measure has no scale, bars or rule ("Pick a colour scale, data bars or a rule first"). A saved "on" stays clearable while no total is drawn, with the note "Grand totals and Subtotals are off, so no total is coloured yet". Setting Cells to None with no rules clears it.
+  - **A total is bigger than a cell,** so ticking it can make the cells paler: the Format note says "Totals are larger than single cells, so cells may look pale" while a scale or bars are on.
+  - **Totals that read "—"** (an average, median or distinct count has no combined total in the browser; a collapsed header while rows are still loading) are never coloured and add nothing to the range. A total keeps its bold look, separator and `xt-total` classes; its ink keeps >= 4.5:1; a rule on a total keeps its tone, icon and tooltip.
+  - **Key:** "Totals included" (or "Totals included: sum amount" when only some measures include them), only while a total is drawn. While pages are still loading it reads "Scales, bars and totals use the N rows loaded so far": the totals are those of the loaded rows, as shown.
+- Code: rules and the Include totals gate in `Dashboard/conditional-model.js` (`totalsIncluded`, `totalsGate`, `extentWithTotals`, `nextConditional`; unit-tested); the total cells in `render-table.js` (`totalValues`, `totalCell`).
 
 ### Totals and column order
 
