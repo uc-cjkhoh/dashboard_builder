@@ -216,7 +216,7 @@ function addZoom(option, fit) {
 // Canvas-sized charts: bars draw in ECharts' large mode, lines keep their shape with LTTB sampling
 // (peaks and dips survive) when there are more points than pixels.
 export function tuneForSize(option, spec = {}) {
-  const allMarkers = linesTakeStyle(spec.type) && spec.format?.lineMarkers === "all"; // Format → Line markers All: LTTB would drop points, and with them their markers
+  const allMarkers = linesTakeStyle(spec.type) && (spec.format?.lineMarkers === "all" || spec.format?.lineMarkers === "selected"); // Format → Line markers All / Selected: LTTB would drop points, and with them their markers (a selected mark's dot)
   for (const sr of [].concat(option.series ?? [])) {
     // Large mode draws plain values only — skip it when a bar carries its own style (Other, colour-by).
     if (sr.type === "bar" && (sr.data ?? []).every((v) => v === null || typeof v !== "object"))
@@ -458,7 +458,7 @@ function legendFor(format, c, names, defaultOn) {
 // (the default). `orientation` is decided by the caller from the shelves; combo stays vertical (its
 // dual value axis is on y). Axis *titles* name the physical axes (xTitle = bottom, yTitle = left)
 // regardless of orientation, so the Format controls stay literal.
-export function buildCartesian({ type, categories, series, format = {}, orientation = "vertical", pointLabels, seriesLabels, tooltipExtra, tooltipText, tooltipFields, tooltipStyle, tooltipFormats, otherIndex = -1, analytics = null, colorValues, colorName, sizes, sizeName, sizeMembers, sizeOrder, sizeGrid, sizeMembersGrid, labelMarks }) {
+export function buildCartesian({ type, categories, series, format = {}, orientation = "vertical", pointLabels, seriesLabels, tooltipExtra, tooltipText, tooltipFields, tooltipStyle, tooltipFormats, otherIndex = -1, analytics = null, colorValues, colorName, sizes, sizeName, sizeMembers, sizeOrder, sizeGrid, sizeMembersGrid, labelMarks, selectedMarks }) {
   const c = tokens();
   const labels = (categories ?? []).map((l) => l ?? "—");
   // Comparison series (compare: true) ride beside their measure: they don't make a chart "multi"
@@ -626,8 +626,8 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
         ? s.data.map((v, di) => (v == null ? v : { value: v, ...(markerSized ? { symbolSize: markerSizeFor(sizeFr[i]?.[di]) } : {}), ...(byValue?.colours[di] ? { itemStyle: { color: byValue.colours[di], ...(format.markBorder && format.markBorder !== "none" ? edge : {}) } } : {}) }))
         : s.data;
       if (sizeFr && sizeMode === "width") widthLines.push({ s, i, stroke: byValue ? byValue.colours : null, color, axis: seriesAxis(dual, i, isCombo) });
-      // Format → Line markers All / None decide the dots themselves; a marker that is data (a Size-sized marker, a cued line's marker) always stays.
-      const mk = markerPlan({ mode: format.lineMarkers, forced: markerSized || Boolean(cue), labelled: Boolean(pointLabels || seriesLabels || format.dataLabels), data: s.data });
+      // Format → Line markers Selected / All / None decide the dots themselves (`selectedMarks` = the click-selected categories' indexes); a marker that is data (a Size-sized marker, a cued line's marker) always stays.
+      const mk = markerPlan({ mode: format.lineMarkers, forced: markerSized || Boolean(cue), labelled: Boolean(pointLabels || seriesLabels || format.dataLabels), data: s.data, selected: selectedMarks });
       const dots = mk ? mk.show : s.data.length <= 60 || format.markerSize != null || markerSized || Boolean(cue); // dots only when they won't crowd (unless a marker size is chosen; a cued line's markers name it)
       // Format → Label marks on a line with no dots (a long one): a label sits on its mark's dot, so only the labelled marks show one (the rest are clear until hovered).
       const labelDots = !mk && !dots && Boolean(mask) && !mask.hover && Boolean(pointLabels || seriesLabels || format.dataLabels);
@@ -1487,7 +1487,7 @@ function cartesianSizes({ sizes, sizeGrid, sizeOrder, type, mainCount, format })
   return { fr: have.map((row) => row.map(share)), grid: have, flat };
 }
 const isObjectItem = (d) => d !== null && typeof d === "object" && !Array.isArray(d);
-// Format → Line markers None: every dot `clear` names stays in the option (a label's anchor, a hover target) but is filled and bordered "transparent" — not given
+// Format → Line markers None / Selected: every dot `clear` names stays in the option (a label's anchor, a hover target) but is filled and bordered "transparent" — not given
 // opacity 0, which a label sitting on it would inherit. Hovering restores the dot's own fill and border; the series' mark opacity still applies to both.
 const clearDots = (items, clear, { color, edge }) => items.map((d, di) => {
   if (d == null || !clear(di)) return d;

@@ -34,7 +34,7 @@ export const FIT_MODES = new Set(["standard", "width", "height", "entire"]); // 
 export const DATE_BUCKETS = new Set(["auto", "exact", "hour", "day", "week", "month", "quarter", "year"]);
 export const LINE_STYLES = new Set(["straight", "step", "jump"]); // Format → Line style
 export const LINE_PATTERNS = new Set(["solid", "dashed", "dotted"]); // Format → Line pattern (absent = solid; Dashboard/line-style-model.js)
-export const LINE_MARKERS = new Set(["auto", "all", "none"]); // Format → Line markers (absent = automatic; Dashboard/line-marker-model.js)
+export const LINE_MARKERS = new Set(["auto", "selected", "all", "none"]); // Format → Line markers (absent = automatic; Dashboard/line-marker-model.js)
 export const TOOLTIP_MODES = new Set(["responsive", "hover"]); // Format → tooltip command buttons: Responsive (a click pins the tooltip) or On hover (absent = Responsive; Dashboard/tooltip-behaviour-model.js)
 export const HEATMAP_SHAPES = new Set(["square", "circle"]);
 export const GANTT_LENGTHS = new Set(["length", "end"]); // a Gantt's second measure: the bar's length, or the end it runs to

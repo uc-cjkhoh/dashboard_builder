@@ -1,6 +1,8 @@
 // The Format panel's Line pattern and Line markers controls: what each shows comes from the pure `lineControlSpecs` (line-style-model.js), so the
 // panel and the drawing agree on when a control does something; this file reads the worksheet into those inputs and puts the controls on the panel.
 import { planMeasures, colorMode } from "./sheet-plan.js";
+import { primaryDim } from "./result-model.js";
+import { selectionRefusal } from "./dashboard-select.js";
 import { lineControlSpecs } from "./line-style-model.js";
 
 const DEFAULTS = { linePattern: "solid", lineMarkers: "auto" }; // not stored: absent reads as the default, so older files round-trip unchanged
@@ -11,6 +13,9 @@ const drawnPoints = new WeakMap();
 /** Record how many points `sheet`'s line chart drew (called by the cartesian render path). */
 export const noteLinePoints = (sheet, points) => { if (sheet && typeof sheet === "object") drawnPoints.set(sheet, points); };
 
+/** A click can select a mark on this sheet: it has a primary dimension that is a real column (a calculated field has no column to filter on). */
+const canSelectMark = (sheet) => { const d = primaryDim(sheet); return Boolean(d) && !selectionRefusal(d); };
+
 /** The worksheet as `lineControlSpecs` wants it: shelf measures (a colour / Size / Label measure is not one), a colour *measure*, a Size field. */
 export const lineControlInputs = (sheet) => ({
   type: sheet.chartType,
@@ -19,6 +24,7 @@ export const lineControlInputs = (sheet) => ({
   colourMeasure: colorMode(sheet) === "continuous",
   hasSize: Boolean(sheet.marks?.size), // a Size field is set (the panel's view); the drawing also needs its values, which a drawn chart has whenever the field is valid
   points: drawnPoints.get(sheet) ?? 0,
+  canSelect: canSelectMark(sheet), // Line markers → Selected needs a mark a click can select
 });
 
 /** `format` with `key` set to `value` — or without it when `value` is the default, so a default is never stored. */

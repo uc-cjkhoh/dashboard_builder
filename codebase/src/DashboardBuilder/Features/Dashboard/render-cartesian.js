@@ -5,6 +5,8 @@ import { SCATTER_TYPES, marksOf, planMeasures, colorMode, colourDimsOf, isSizeDi
 import { shapeBinsOf } from "./shape-model.js";
 import { labelContext, labelMarksOf, effectiveLabelMode, LABEL_MARK_HINT } from "./label-marks-model.js";
 import { memberColourField } from "./colour-fields-model.js";
+import { lineMarkersOf } from "./line-marker-model.js";
+import { linesTakeStyle } from "./line-style-model.js";
 import { makeValueFormatter } from "../Core/format.js";
 import { REF_CHOICES, TREND_CHOICES, trendProblem, trendRefusal, pWords, refValue, refConstant, trendSeries, pickMeasure, dataValues, bandBounds, bandLabel } from "./analytics-model.js";
 import { parameters } from "../Core/store.js";
@@ -41,6 +43,16 @@ export function labelMarksSpec(rc, sheet, format, rawKeys) {
   return { spec: { labelMarks: { mode, selected, recent } }, note };
 }
 
+/**
+ * Format → Line markers Selected as the spec chart.js reads: { selectedMarks: [category index …] } when the choice is Selected on a chart that draws lines, else {}.
+ * The selected marks are the same ones Label marks → Selected reads (a dashboard widget's cross-filter selection, else the worksheet's own click selection, on the
+ * primary dimension) — but handed over whatever Label marks is set to. `rawKeys` = each mark's primary-dimension value. A series' point at a selected category shows its dot.
+ */
+export function lineMarkersSpec(rc, sheet, format, rawKeys) {
+  if (lineMarkersOf(format) !== "selected" || !linesTakeStyle(sheet.chartType)) return {};
+  return { selectedMarks: selectedIndicesOf(rawKeys, rc.selected ?? sheet.selection ?? null, primaryDim(sheet)) };
+}
+
 /** Colour split: one series per colour value (the trailing group-by key); the primary dimension is the first non-colour key. */
 export function renderColorSplit(container, rc, sheet, type, result, format, fmtCat, sizeIdx = -1, colourKeys = 1) {
   const sizeNote = splitSizeNote(Boolean(marksOf(sheet).size), type); // a Stacked split can't draw Size: say so
@@ -75,7 +87,7 @@ export function renderColorSplit(container, rc, sheet, type, result, format, fmt
   const seriesLabels = texts ? colorSplitLabels({ cellRows }, texts.values) : undefined;
   const lm = labelMarksSpec(rc, sheet, format, rawKeys);
   if (lm.note) container.append(hint(lm.note));
-  drawChart(container, { type, categories, series, format, onSelect, selectedIndices, orientation, seriesLabels, ...sizeSpec, ...memberColourSpec, ...legend, ...lm.spec, ...tooltipButtonsSpec(rc, sheet, primaryDim(sheet), type, rawKeys, format, container) });
+  drawChart(container, { type, categories, series, format, onSelect, selectedIndices, orientation, seriesLabels, ...sizeSpec, ...memberColourSpec, ...legend, ...lm.spec, ...lineMarkersSpec(rc, sheet, format, rawKeys), ...tooltipButtonsSpec(rc, sheet, primaryDim(sheet), type, rawKeys, format, container) });
 }
 
 /**
@@ -197,5 +209,5 @@ export function renderSeries(container, rc, sheet, a) {
     ? memberSpec(rc, sheet, primaryDim(sheet), rowsOrdered.map((r, i) => ({ name: categories[i], raw: r.keys[0], other: r.isOther })).filter((m) => !m.other))
     : splitColour ? memberSpec(rc, sheet, splitColour, split.members.map(({ name, raw }) => ({ name, raw }))) : {};
   const splitSpec = split ? { split: { memberIndex: split.memberIndex, memberNames: split.memberIndex.map((i) => (i >= 0 ? split.members[i].name : null)) } } : {};
-  drawChart(container, { type, symbol: SCATTER_TYPES.has(type) ? scatterSymbol(type) : undefined, categories: catsOut, series: seriesOut, format, onSelect, ...tooltipButtonsSpec(rc, sheet, primaryDim(sheet), type, rawKeys, format, container), selectedIndices, orientation: chartOrientation(sheet), otherIndex, analytics, dateLabels: dateLabelsOf(sheet, primaryDim), ...memberColourSpec, ...legend, ...marks.spec, ...splitSpec, ...lm.spec });
+  drawChart(container, { type, symbol: SCATTER_TYPES.has(type) ? scatterSymbol(type) : undefined, categories: catsOut, series: seriesOut, format, onSelect, ...tooltipButtonsSpec(rc, sheet, primaryDim(sheet), type, rawKeys, format, container), selectedIndices, orientation: chartOrientation(sheet), otherIndex, analytics, dateLabels: dateLabelsOf(sheet, primaryDim), ...memberColourSpec, ...legend, ...marks.spec, ...splitSpec, ...lm.spec, ...lineMarkersSpec(rc, sheet, format, rawKeys) });
 }

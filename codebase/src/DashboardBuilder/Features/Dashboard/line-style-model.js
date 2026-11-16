@@ -53,6 +53,8 @@ const NOTE = {
   sizedMarkers: "Size varies the markers' size on this line, so the markers stay.",
   noLinesBar: "This combo draws no lines: its right-axis marks are bars.",
   noLinesOne: "This combo draws no lines yet: its lines start with the second measure.",
+  selected: "Selected: markers only on the marks you click, on every line (no selection = no markers). A lone point (no line to carry it) keeps its marker, and Marker size and Marker shape have no other effect.",
+  noSelect: "Nothing can be selected on this chart (it needs a dimension to click on, not a calculated field), so Selected draws no markers; a lone point keeps its marker.",
   none: "None: no markers on the line. A lone point (no line to carry it) keeps its marker, and Marker size and Marker shape have no other effect.",
 };
 
@@ -60,10 +62,11 @@ const NOTE = {
  * The Line pattern and Line markers controls for a worksheet's Format panel: [] when the chart type draws no lines, else
  * [{ key, label, choices, value, disabled, note }] — `disabled` is the reason the control does nothing (the panel shows it disabled with the reason
  * as its title), `value` what is really drawn (a disabled control reads the overriding value), `note` an extra hint for an enabled control.
+ * `canSelect` = a click can select a mark here (a real dimension; Selected is not offered otherwise, and a stored one says so).
  * `shelfCount` = measures on Columns / Rows; `colourMeasure` = a measure on Colour; `hasSize` = a Size field is set; `points` = the points the line chart drew
  * (series x categories, for the Size bound: a straight line with more draws its Size as marker size, so a dash can apply and the markers carry Size).
  */
-export function lineControlSpecs({ type, format = {}, shelfCount = 1, colourMeasure = false, hasSize = false, points = 0 }) {
+export function lineControlSpecs({ type, format = {}, shelfCount = 1, colourMeasure = false, hasSize = false, points = 0, canSelect = true }) {
   if (!linesTakeStyle(type)) return [];
   const sizeMode = hasSize ? lineSizeMode(type, format.lineStyle, points) : null; // "width" (a straight line within the point bound) | "marker" (stepped line, area, a line over the bound) | null
   const noLines = type === "combo" && (format.secondaryType === "bar" ? NOTE.noLinesBar : shelfCount < 2 ? NOTE.noLinesOne : null);
@@ -75,9 +78,9 @@ export function lineControlSpecs({ type, format = {}, shelfCount = 1, colourMeas
       const reason = why({ cued: NOTE.cuedPattern, size: sizeMode === "width" ? NOTE.thick : null });
       return { value: reason ? "solid" : linePatternOf(format), disabled: reason, note: null };
     })() },
-    { key: "lineMarkers", label: "Line markers", choices: LINE_MARKER_CHOICES, ...(() => {
+    { key: "lineMarkers", label: "Line markers", choices: canSelect || markers === "selected" ? LINE_MARKER_CHOICES : LINE_MARKER_CHOICES.filter(([v]) => v !== "selected"), ...(() => {
       const reason = why({ cued: NOTE.cuedMarkers, size: sizeMode === "marker" ? NOTE.sizedMarkers : null });
-      return { value: reason ? "all" : markers, disabled: reason, note: !reason && markers === "none" ? NOTE.none : null };
+      return { value: reason ? "all" : markers, disabled: reason, note: reason ? null : markers === "none" ? NOTE.none : markers === "selected" ? (canSelect ? NOTE.selected : NOTE.noSelect) : null };
     })() },
   ];
 }

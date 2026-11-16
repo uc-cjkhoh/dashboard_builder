@@ -249,7 +249,7 @@ export const defaultMarks = () => ({ size: null, label: null, detail: [], toolti
 //  sizeScale:    { smallest?, largest?, vary?, start?, end?, reversed?, fromZero? } — Format → Edit Sizes: whole percent 0–100 of the chart's size range, Sizes vary ("range" / "zero"; absent = Automatic, the chart's own default; an older file's `fromZero` boolean reads as the same mode), a typed Start / End value (finite numbers, start below end; a start is not used from zero), Reversed;
 //                absent when nothing differs from the default, so older files round-trip unchanged (Dashboard/size-scale-model.js)
 //  linePattern:  "dashed" | "dotted" — Format → Line pattern on a line / area / combo's lines; absent = solid (Dashboard/line-style-model.js)
-//  lineMarkers:  "all" | "none" — Format → Line markers; absent = automatic (dots by line length); kept off the defaults so older files round-trip unchanged (Dashboard/line-marker-model.js)
+//  lineMarkers:  "selected" | "all" | "none" — Format → Line markers; absent = automatic (dots by line length); kept off the defaults so older files round-trip unchanged (Dashboard/line-marker-model.js)
 //  showTooltips: false — Format → Show tooltips off (absent = on); tooltipButtons: true — Keep only / Exclude / View data in the tooltip (absent = off);
 //                tooltipMode: "hover" — those buttons in every hover tooltip (absent = Responsive: a click pins the tooltip). Kept off the defaults so older files round-trip unchanged (Dashboard/tooltip-behaviour-model.js)
 //  ganttLength:  "length" | "end" — a Gantt's second measure (absent = length; kept off the defaults so older files round-trip unchanged)
