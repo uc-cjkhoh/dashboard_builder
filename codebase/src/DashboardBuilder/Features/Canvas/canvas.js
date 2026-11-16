@@ -325,14 +325,14 @@ export function initCanvas() {
     need.title = "Held out of worksheets until this table is related to another one";
     need.hidden = true;
 
-    // Edit SQL (D105) sits left of the title; a union / unpivot card is built from its own dialog and has no SQL to edit, so it gets none.
+    // The Edit SQL icon button (D105) sits left of the title; a union / unpivot card is built from its own dialog and has no SQL to edit, so it gets none.
     if (!entity.source) {
       const edit = document.createElement("button");
       edit.type = "button";
-      edit.className = "btn entity__edit";
-      edit.title = "Choose or change the columns with your own SELECT";
+      edit.className = "iconbtn entity__edit";
+      edit.title = "Edit SQL — choose or change the columns with your own SELECT";
       edit.setAttribute("aria-label", `Edit SQL for ${entity.db}.${entity.table}`);
-      edit.append(icon("edit"), document.createTextNode("Edit"));
+      edit.append(icon("edit"));
       edit.addEventListener("click", () => editSql(entity));
       head.append(edit);
     }
