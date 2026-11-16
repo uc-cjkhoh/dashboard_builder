@@ -11,11 +11,14 @@ that reads at most the first 1,000,000 rows of each table. Pure wording: `join-p
 
 **When it runs.** On open (a busy note "Checking the data…" first), again 300 ms after a key pair is added or removed, and on the
 refresh icon button beside the heading (`.join-check__rerun`, "Check the data again"; also the way to retry after an error). A newer
-run cancels an older one, and closing the dialog cancels the request. Picking a cardinality sends nothing: the panel re-reads the last
+run cancels an older one, and closing the dialog cancels the request. A pending run (including the 300 ms wait after a pair change)
+drops the last result at once and shows the busy note, so a cardinality pick meanwhile never brings back numbers read for the old keys. Picking a cardinality sends nothing: the panel re-reads the last
 result against the new choice (`redescribe()`), so warnings and the **Use** button follow the live choice, on a new link too.
 
 **What it shows**, top to bottom:
 
+- **On a sampled result** the sampling note comes first, above the suggestion it qualifies, and the label reads
+  "Suggested cardinality, from a sample".
 - **Suggested cardinality**: the shape the data shows as a headline, `N:1 · many-to-one` (`1:1`, `1:N`, `N:1`, `N:M`; the first letter
   is the first table). Under it, a green "Matches your choice." note (check icon) or a **Use N:1** button that only selects. It never
   changes the choice by itself, on a new link or an edit. A new link still starts from the key names (`guessCardinality`).
@@ -24,6 +27,8 @@ result against the new choice (`redescribe()`), so warnings and the **Use** butt
   up to 14 rows for one key (about 5 on average), so orders is the "many" side."); two **Match** lines with each table's matched share
   ("94% of the rows in orders have a match in customers; 6% don't"); then a counts table, one column per side (`table.column`): rows read,
   rows with no key (NULL), distinct keys, keys found in the other table, rows with a match, most rows for one key, average rows per key.
+  On a sampled result a side that doesn't repeat is never called unique: "id doesn't repeat in the rows read from customers, so
+  customers looks like the "one" side. Rows past the sample could still repeat a key." A repeat is a fact either way.
   Pure: `joinEvidence()`, `suggestionLabel()`. An empty table gives no evidence, only its note.
 - A one-line hint: "Read from a bounded sample of each table. Any choice can be saved."
 
