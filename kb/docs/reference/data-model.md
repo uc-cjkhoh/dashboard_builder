@@ -184,7 +184,7 @@ Nothing here reaches the server; dashboards add no endpoint
   | `markBorderColor` | optional: `muted` \| `ink` \| `surface` \| `accent` (absent = `muted`) |
   | `markerShape` | `circle` \| `square` \| `diamond` \| `triangle` (default `circle`) |
   | `linePattern` | optional `dashed` \| `dotted` (Format → Line pattern on a line, area or combo's lines; absent = solid); an unknown saved value is dropped and reported, never clamped |
-  | `lineMarkers` | optional `all` \| `none` (Format → Line markers; absent = Automatic, dots by line length); an unknown saved value is dropped and reported, never clamped |
+  | `lineMarkers` | optional `selected` \| `all` \| `none` (Format → Line markers; absent = Automatic, dots by line length); an unknown saved value is dropped and reported, never clamped |
 | `showTooltips` | optional `false` (Format → Show tooltips off; absent = on); a non-boolean is dropped and reported ([D121](../decisions/decisions-marks.md#d121--tooltip-behaviour-show-tooltips-command-buttons-and-responsive-or-on-hover)) |
 | `tooltipButtons` | optional `true` (Format → command buttons in the tooltip; absent = off); a non-boolean is dropped and reported |
 | `tooltipMode` | optional `hover` (buttons in every hover tooltip; absent = Responsive, a click pins the tooltip); an unknown value is dropped and reported, never coerced |
