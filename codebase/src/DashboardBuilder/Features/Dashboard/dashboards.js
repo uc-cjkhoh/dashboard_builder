@@ -55,7 +55,7 @@ import { LABEL_MARK_CHOICES, LABEL_POSITION_CHOICES, labelContext, labelModesFor
 import { MARK_BORDER_CHOICES, MARKER_SHAPE_CHOICES, BORDER_TYPES, MARK_BORDER_COLOUR_CHOICES, markerSizeError } from "./mark-style-model.js";
 import { OPACITY_TYPES, OPACITY_CHOICES, cleanMarkOpacity } from "./mark-opacity-model.js";
 import { addColourField, MULTI_COLOUR_TYPES } from "./colour-fields-model.js";
-import { SIZE_SCALE_TYPES, ZERO_BASED_TYPES, sizeScaleOf, sizeRangeError, cleanSizeScale } from "./size-scale-model.js";
+import { SIZE_SCALE_TYPES, ZERO_BASED_TYPES, sizeScaleOf, sizeRangeError, cleanSizeScale, VARY_CHOICES, sizeVary, sizeVaryError, sizeEndsEdit, setSizeVary } from "./size-scale-model.js";
 import { targetChoices, effectiveTargetMeasure } from "./bullet-model.js";
 import { sourceOfTable, wireSource, distinctPlan, distinctPlanSql, distinctMembers, customSqlOf, sqlWire } from "../Core/source-model.js";
 import { heldOutCards } from "../Relations/relation-rules.js";
@@ -3157,20 +3157,41 @@ export function initDashboards() {
     return box;
   }
 
-  // Format → Edit Sizes: the smallest and largest mark as a percent of the chart's size range, From zero, Reversed (size-scale-model.js).
+  // Format → Edit Sizes: the smallest and largest mark as a percent of the chart's size range, Sizes vary (Automatic / By range / From zero), a typed
+  // Start / End value, Reversed (size-scale-model.js). Each control says why when it does nothing: a dimension's members are steps (no Sizes vary, no
+  // typed ends); From zero starts at zero (no Start; Reversed is not offered, as in Tableau).
   function sizesEditor(f, s, save) {
-    const cur = sizeScaleOf(f);
+    const cur = sizeScaleOf(f), stored = f.sizeScale ?? {};
     const pctField = (label, key, value) => fmtNumber(label, value, key === "smallest" ? "0" : "100", (v) => {
       const next = { smallest: cur.smallest, largest: cur.largest, [key]: v == null ? (key === "smallest" ? 0 : 100) : v };
       const bad = sizeRangeError(next.smallest, next.largest);
       if (bad) { toast(bad, "danger"); return false; }
-      save({ ...(f.sizeScale ?? {}), ...next });
+      save({ ...stored, ...next });
     });
     const isDim = isSizeDimension(s.marks.size);
-    const zero = fmtCheck("From zero", cur.fromZero ?? ZERO_BASED_TYPES.has(s.chartType), (v) => save({ ...(f.sizeScale ?? {}), fromZero: v }));
-    if (isDim) { zero.querySelector("input").disabled = true; zero.title = "From zero applies to a measure; a dimension's members are steps."; }
-    return [pctField("Smallest size (%)", "smallest", f.sizeScale?.smallest), pctField("Largest size (%)", "largest", f.sizeScale?.largest), zero,
-      fmtCheck("Reversed", cur.reversed, (v) => save({ ...(f.sizeScale ?? {}), reversed: v }))];
+    const vary = sizeVary(cur), zeroDefault = ZERO_BASED_TYPES.has(s.chartType), inZero = (cur.fromZero ?? zeroDefault) === true;
+    const mode = fmtSelect("Sizes vary", VARY_CHOICES, vary, (v) => {
+      const bad = sizeVaryError(v);
+      if (bad) { toast(bad, "danger"); return; }
+      save(setSizeVary(stored, v, zeroDefault));
+    });
+    const endField = (label, key, value) => fmtNumber(label, value, "auto", (v) => {
+      const r = sizeEndsEdit(stored, zeroDefault, key, v);
+      if (r.error) { toast(r.error, "danger"); return false; }
+      save(r.value);
+    });
+    const start = endField("Start value", "start", stored.start), end = endField("End value", "end", stored.end);
+    const reversed = fmtCheck("Reversed", cur.reversed, (v) => save({ ...stored, reversed: v }));
+    const off = (field, why) => { const i = field.querySelector("input,select"); i.disabled = true; field.title = why; };
+    if (isDim) {
+      off(mode, "Sizes vary applies to a measure; a dimension's members are steps.");
+      off(start, "Start and End values apply to a measure; a dimension's members are steps."); off(end, "Start and End values apply to a measure; a dimension's members are steps.");
+    } else if (inZero) {
+      off(start, cur.fromZero === true ? "From zero starts at zero, so there is no start value. Pick By range to set one." : "Automatic starts these marks at zero. Pick By range to set a start value.");
+      if (cur.fromZero === true) off(reversed, cur.reversed ? "Reversed is not available under From zero, but this sheet was saved with it and still draws reversed. Pick By range or Automatic to turn it off."
+        : "Reversed is not available under From zero. Pick By range or Automatic to reverse the sizes.");
+    }
+    return [pctField("Smallest size (%)", "smallest", f.sizeScale?.smallest), pctField("Largest size (%)", "largest", f.sizeScale?.largest), mode, start, end, reversed];
   }
 
   function conditionalEditor(dash, s) {

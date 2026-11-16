@@ -20,11 +20,11 @@ test("with nothing stored, the shares are exactly what the charts drew before (s
   assert.equal(markerSizeFor(measureShares([1, 3], { scale: DEFAULT })[0]), 6);
 });
 test("the setting's defaults: smallest 0, largest 100, from zero follows the chart, not reversed", () => {
-  assert.deepEqual(DEFAULT, { smallest: 0, largest: 100, fromZero: null, reversed: false });
+  assert.deepEqual(DEFAULT, { smallest: 0, largest: 100, fromZero: null, reversed: false, start: null, end: null });
   assert.equal(sizeScaleIsDefault({}), true);
   assert.equal(sizeScaleIsDefault({ sizeScale: { reversed: true } }), false);
-  assert.deepEqual(sizeScaleOf({ sizeScale: { smallest: 20, largest: 80, fromZero: false, reversed: true } }), { smallest: 20, largest: 80, fromZero: false, reversed: true });
-  assert.deepEqual(sizeScaleOf({ sizeScale: { smallest: 90, largest: 10 } }), { smallest: 0, largest: 100, fromZero: null, reversed: false }, "a bad stored pair reads as the default");
+  assert.deepEqual(sizeScaleOf({ sizeScale: { smallest: 20, largest: 80, fromZero: false, reversed: true } }), { smallest: 20, largest: 80, fromZero: false, reversed: true, start: null, end: null });
+  assert.deepEqual(sizeScaleOf({ sizeScale: { smallest: 90, largest: 10 } }), { smallest: 0, largest: 100, fromZero: null, reversed: false, start: null, end: null }, "a bad stored pair reads as the default");
   assert.deepEqual(sizeScaleOf({ sizeScale: "x" }), DEFAULT);
   assert.deepEqual([...ZERO_BASED_TYPES].sort(), ["circle", "scatter", "square"]);
   for (const t of ["scatter", "bar", "line", "area", "table", "text"]) assert.equal(SIZE_SCALE_TYPES.has(t), true, t);

@@ -6,7 +6,7 @@ import { TEXT_VALUE_TYPES } from "./filter-rules.js";
 import { marksOf, planDims, planMeasures, colorMode, isSizeDimension, SCATTER_TYPES } from "./sheet-plan.js";
 import { sizeChannel, sizeRange } from "./mark-channel-model.js";
 import { tupleKey } from "./grid-model.js";
-import { sizeScaleOf, measureShares, sizeLegendText, textStepFor } from "./size-scale-model.js";
+import { sizeScaleOf, measureShares, sizeLegendText, sizeEnds, textStepFor } from "./size-scale-model.js";
 import { withOther, OTHER_TYPES } from "./scale-model.js";
 import { pieSplit } from "./pie-split-model.js";
 import { isGroupingPart, labelParts, partLabel } from "./date-parts.js";
@@ -185,7 +185,7 @@ function tableSizing(sheet, result, fmtVal) {
   const steps = new Map(result.rows.map((r, i) => [tupleKey(r.keys.slice(0, rd)) + "|" + tupleKey(r.keys.slice(rd, rd + cd)), textStepFor(shares[i])]));
   const drop = (a) => a.filter((_, i) => i !== si);
   const range = sizeRange(result.rows.map((r) => r.values[si]));
-  const note = range ? sizeLegendText(result.measures[si], { range, reversed: scale.reversed, fmtVal }).replace(/\)$/, "), three text sizes") : null;
+  const note = range ? sizeLegendText(result.measures[si], { range, reversed: scale.reversed, fmtVal, ends: sizeEnds(scale, false) }).replace(/\)$/, "), three text sizes") : null;
   return { result: { ...result, measures: drop(result.measures), rows: result.rows.map((r) => ({ ...r, values: drop(r.values) })) },
     sizing: { stepAt: (rt, ct) => steps.get(tupleKey(rt) + "|" + tupleKey(ct)) ?? 0, note } };
 }

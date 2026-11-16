@@ -246,7 +246,7 @@ export const defaultMarks = () => ({ size: null, label: null, detail: [], toolti
 //  colorByDimension: colour a single-measure bar chart's bars by their category
 //  xTitle/yTitle: axis titles (null = none)
 //  lineStyle / heatmapShape / targetMeasure / syncAxes / secondaryType / markerSize / markBorder: see the defaults below
-//  sizeScale:    { smallest?, largest?, fromZero?, reversed? } — Format → Edit Sizes: whole percent 0–100 of the chart's size range, From zero (absent = the chart's own default), Reversed;
+//  sizeScale:    { smallest?, largest?, vary?, start?, end?, reversed?, fromZero? } — Format → Edit Sizes: whole percent 0–100 of the chart's size range, Sizes vary ("range" / "zero"; absent = Automatic, the chart's own default; an older file's `fromZero` boolean reads as the same mode), a typed Start / End value (finite numbers, start below end; a start is not used from zero), Reversed;
 //                absent when nothing differs from the default, so older files round-trip unchanged (Dashboard/size-scale-model.js)
 //  linePattern:  "dashed" | "dotted" — Format → Line pattern on a line / area / combo's lines; absent = solid (Dashboard/line-style-model.js)
 //  lineMarkers:  "all" | "none" — Format → Line markers; absent = automatic (dots by line length); kept off the defaults so older files round-trip unchanged (Dashboard/line-marker-model.js)

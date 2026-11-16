@@ -117,3 +117,33 @@ test("scatter with a Colour or Shape split: points carry their member's step and
   assert.match(o.tooltip.formatter({ seriesName: "g", data: s.data[1], value: s.data[1].value }), /tier:<\/b> b/);
   assert.equal(legendText(o), "Size: tier (a to b, 2 steps)");
 });
+
+// Edit Sizes → Sizes vary and typed Start / End: what the charts draw and say (D120).
+test("typed ends on bars: the legend names them, a value beyond saturates (never a hidden bar), From zero ignores a start", () => {
+  const bar = (format, sizes = [5, 20, 90]) => cart("bar", [S("v")], { sizes, sizeName: "qty", format });
+  const w = (o) => [0, 1, 2].map((i) => rect(o.series[0], i).shape.width);
+  const set = bar({ sizeScale: { vary: "range", start: 10, end: 50 } });
+  assert.deepEqual(w(set), [6, Math.round(6 + (10 / 40) * 74), 80], "5 is below the start: thinnest, 90 above the end: thickest");
+  assert.equal(legendText(set), "Size: qty (10 to 50, set)");
+  assert.equal(legendText(bar({ sizeScale: { start: 10 } })), "Size: qty (10 to 90, start set)");
+  assert.equal(legendText(bar({ sizeScale: { end: 50 } })), "Size: qty (5 to 50, end set)");
+  assert.equal(legendText(bar({ sizeScale: { vary: "zero", start: 10, end: 100 } })), "Size: qty (5 to 100, end set)", "a start is not in play from zero");
+  assert.equal(legendText(bar({ sizeScale: { vary: "range", start: 10, end: 50, reversed: true } })), "Size: qty (10 to 50, set, reversed)");
+  assert.deepEqual(w(bar({ sizeScale: { vary: "zero", end: 100 } }, [10, 50, 100])), [Math.round(6 + 0.1 * 74), Math.round(6 + 0.5 * 74), 80]);
+});
+test("typed ends on bubbles: Automatic is from zero, so a start waits for By range; an end applies either way", () => {
+  const sc = (format) => buildOption({ type: "scatter", categories: ["a", "b", "c"], series: [S("x"), S("y")], format, sizes: [10, 20, 40], sizeName: "qty" });
+  const px = (o, i) => o.series[0].symbolSize(o.series[0].data[i].value);
+  assert.deepEqual([0, 1, 2].map((i) => px(sc({ sizeScale: { start: 15 } }), i)), [8 + (10 / 40) * 28, 8 + (20 / 40) * 28, 36], "start ignored under the bubble default");
+  assert.equal(legendText(sc({ sizeScale: { start: 15 } })), "Size: qty (10 to 40)");
+  assert.deepEqual([0, 1, 2].map((i) => px(sc({ sizeScale: { vary: "range", start: 15 } }), i)), [8, 8 + (5 / 25) * 28, 36]);
+  assert.equal(legendText(sc({ sizeScale: { vary: "range", start: 15 } })), "Size: qty (15 to 40, start set)");
+  assert.deepEqual([0, 1, 2].map((i) => px(sc({ sizeScale: { end: 20 } }), i)), [8 + (10 / 20) * 28, 36, 36], "an end of 20: 40 saturates at the biggest bubble");
+  assert.equal(legendText(sc({ sizeScale: { end: 20 } })), "Size: qty (10 to 20, end set)");
+});
+test("a saved fromZero and a vary of the same mode draw identically", () => {
+  const w = (format) => [0, 1, 2].map((i) => rect(cart("bar", [S("v")], { sizes: [10, 20, 30], sizeName: "qty", format }).series[0], i).shape.width);
+  assert.deepEqual(w({ sizeScale: { fromZero: true } }), w({ sizeScale: { vary: "zero" } }));
+  assert.deepEqual(w({ sizeScale: { fromZero: false } }), w({ sizeScale: { vary: "range" } }));
+  assert.deepEqual(w({ sizeScale: { fromZero: true, reversed: true } }), [Math.round(6 + (1 - 10 / 30) * 74), Math.round(6 + (1 - 20 / 30) * 74), 6]);
+});

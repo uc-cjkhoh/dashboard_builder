@@ -200,7 +200,8 @@ try {
   await check('Edit Sizes: Reversed flips the steps; a smaller largest size narrows them; an invalid pair is refused with a message and nothing changes', async () => {
     await openFormat();
     must(await ev(`!!(${fmtField('Smallest size')}) && !!(${fmtField('Largest size')}) && !!(${fmtField('Reversed')})`), 'the controls show while Size is set');
-    must(await ev(`${fmtField('From zero')}.querySelector('input').disabled`), 'From zero is off for a dimension');
+    must(await ev(`${fmtField('Sizes vary')}.querySelector('select').disabled && /members are steps/.test(${fmtField('Sizes vary')}.title)`), 'Sizes vary is off for a dimension, with the reason');
+    must(await ev(`${fmtField('Start value')}.querySelector('input').disabled && ${fmtField('End value')}.querySelector('input').disabled`), 'Start / End are off for a dimension');
     await toggle('Reversed'); await settle(500);
     let w = await rectDim('width');
     must(distinct(w) === 8 && monotone(byMember(w), false), 'reversed: APAC is the widest: ' + J(byMember(w)));
@@ -225,17 +226,64 @@ try {
   await dragChip('amount', `__t.zone('rows')`);
   await settle(400);
   await chartType('Bar');
-  await check('bar + a measure on Size: From zero starts the thinnest bar above the minimum; the default is unchanged', async () => {
+  await check('bar + a measure on Size: Sizes vary From zero starts the thinnest bar above the minimum; the default (Automatic) is unchanged', async () => {
     await dragChip('discount', toolEl('Size')); await settle(500);
     const dflt = await rectDim('width');
     must(dflt[0] === 6, 'the smallest value gets the minimum thickness: ' + J(dflt));
     await openFormat();
-    must(await ev(`!${fmtField('From zero')}.querySelector('input').checked`), 'From zero is off by default on a bar');
-    await toggle('From zero'); await settle(500);
+    must((await ev(`${fmtField('Sizes vary')}.querySelector('select').value`)) === 'automatic', 'Sizes vary is Automatic by default');
+    await setSelect('Sizes vary', 'zero'); await settle(500);
     const z = await rectDim('width');
     must(z[0] > dflt[0] && Math.abs(z[7] - dflt[7]) <= 1, "from zero: the smallest bar is thicker, the largest unchanged: " + J([dflt, z]));
-    await toggle('From zero'); await closeFormat(); await settle(400); // measured with the panel closed, like the first reading
+    await setSelect('Sizes vary', 'automatic'); await closeFormat(); await settle(400); // measured with the panel closed, like the first reading
     { const again = await rectDim('width'); must(deepEq(again, dflt), 'off again = the default: ' + J([dflt, again])); }
+  });
+
+  // ---- bar: Sizes vary and a typed Start / End value --------------------------------------------------------------------------
+  await check('bar + a measure on Size: a typed Start / End sets the span; a value beyond saturates (a bar is never hidden); the legend names them; a refused pair keeps the stored value', async () => {
+    const dflt = await rectDim('width');
+    const legend0 = await sizeText();
+    const m = legend0.match(/\(([\d.]+) to ([\d.]+)\)/); must(m, 'a plain range legend: ' + legend0);
+    const lo = Number(m[1]), hi = Number(m[2]), mid = Math.round((lo + hi) / 2);
+    await openFormat();
+    await setField('Start value', String(mid)); await settle(500);
+    let w = await rectDim('width');
+    must(w.every((x) => x >= 6) && w.length === dflt.length, 'every bar is still drawn: ' + J(w));
+    must(w.filter((x) => x === 6).length === 4 && w.filter((x) => x > 6).length === 4, 'the four values below the start take the thinnest bar, the four above grow: ' + J(w));
+    must(Math.abs(w[w.length - 1] - dflt[dflt.length - 1]) <= 1, 'the largest value keeps the widest bar: ' + J(w));
+    must(new RegExp(`^Size: .* \\(${mid} to ${hi}, start set\\)`).test(await sizeText()), 'the legend names the typed start: ' + await sizeText());
+    await setField('End value', String(mid + 5)); await settle(500);
+    w = await rectDim('width');
+    const top = Math.max(...dflt);
+    must(w.every((x) => x >= 6 && x <= top + 1), 'every bar is drawn inside the size range: ' + J(w));
+    must(w.filter((x) => x === 6).length >= 1 && w.filter((x) => Math.abs(x - top) <= 1).length >= 1, 'saturating at both ends: ' + J(w));
+    must(new RegExp(`\\(${mid} to ${mid + 5}, set\\)`).test(await sizeText()), 'the legend names both: ' + await sizeText());
+    await shot('size-range-typed');
+    await setField('End value', String(mid - 1)); await settle(400);
+    must(/below the end/.test(await toastText()), 'a start at or above the end is refused: ' + await toastText());
+    must((await ev(`${fmtField('End value')}.querySelector('input').value`)) === String(mid + 5), 'the input returns to the stored end');
+    await setField('End value', 'abc'); await settle(300);
+    must(!!(await toastText()), 'a non-number is refused');
+    await setField('Start value', ''); await setField('End value', ''); await settle(500);
+    must((await sizeText()) === legend0, 'blank start and end: the legend is the default again: ' + await sizeText());
+    await closeFormat(); await settle(400); // measured with the panel closed, like the first reading
+    must(deepEq(await rectDim('width'), dflt), 'and the drawing: ' + J([dflt, await rectDim('width')]));
+  });
+  await check('Sizes vary From zero: Start and Reversed say why they are off; picking it drops a start and Reversed; By range / Automatic bring the controls back', async () => {
+    await openFormat();
+    await setSelect('Sizes vary', 'range'); await settle(400);
+    await setField('Start value', '30'); await toggle('Reversed'); await settle(500);
+    await setSelect('Sizes vary', 'zero'); await settle(500);
+    must(await ev(`${fmtField('Start value')}.querySelector('input').disabled && /starts at zero/.test(${fmtField('Start value')}.title)`), 'Start is off under From zero, with the reason');
+    must(await ev(`${fmtField('Reversed')}.querySelector('input').disabled && /not available under From zero/.test(${fmtField('Reversed')}.title)`), 'Reversed is off under From zero, with the reason');
+    must((await ev(`${fmtField('Start value')}.querySelector('input').value`)) === '', 'the start was dropped');
+    must(await ev(`!${fmtField('Reversed')}.querySelector('input').checked`), 'Reversed was dropped');
+    must(await ev(`!${fmtField('End value')}.querySelector('input').disabled`), 'End still applies from zero');
+    must(!/reversed/.test(await sizeText()), 'the legend no longer says reversed');
+    await shot('size-range-from-zero');
+    await setSelect('Sizes vary', 'range'); await settle(400);
+    must(await ev(`!${fmtField('Start value')}.querySelector('input').disabled && !${fmtField('Reversed')}.querySelector('input').disabled`), 'By range: Start and Reversed are back');
+    await setSelect('Sizes vary', 'automatic'); await closeFormat(); await settle(300);
   });
 
   // ---- scatter ---------------------------------------------------------------------------------------------------------------
@@ -250,25 +298,50 @@ try {
     must(distinct(s) === 8 && monotone(byMember(s)) && Math.min(...s) === 8 && Math.round(Math.max(...s)) === 36, 'eight bubble steps from 8 to 36 px: ' + J(byMember(s)));
     must(/^Size: channel \(APAC to US, 8 steps\)/.test(await sizeText()), await sizeText());
     await openFormat();
-    must(await ev(`${fmtField('From zero')}.querySelector('input').disabled`), 'From zero is off for a dimension');
+    must(await ev(`${fmtField('Sizes vary')}.querySelector('select').disabled && /members are steps/.test(${fmtField('Sizes vary')}.title)`), 'Sizes vary is off for a dimension, with the reason');
+    must(await ev(`${fmtField('Start value')}.querySelector('input').disabled && ${fmtField('End value')}.querySelector('input').disabled`), 'Start / End are off for a dimension');
     await toggle('Reversed'); await settle(500);
     const r = await symbolSizes();
     must(monotone(byMember(r), false), 'reversed: ' + J(byMember(r)));
     await shot('size-dimension-scatter');
     await toggle('Reversed'); await closeFormat();
   });
-  await check('scatter + a measure on Size: bubbles are zero-based by default; From zero off starts at the data minimum', async () => {
+  await check('scatter + a measure on Size: bubbles are zero-based by default (Automatic); By range starts at the data minimum', async () => {
     await ev(`(() => { const x = document.querySelector('.ws-tool[aria-label^="Size"]'); return true; })()`);
     await dragChip('discount', toolEl('Size')); await settle(600); // replaces the dimension
     const dflt = await symbolSizes();
     must(dflt[0] > 8 && Math.round(dflt[7]) === 36, 'zero-based: the smallest bubble is above the minimum: ' + J(dflt));
     await openFormat();
-    must(await ev(`${fmtField('From zero')}.querySelector('input').checked`), 'From zero is on by default for bubbles');
-    await toggle('From zero'); await settle(500);
+    must((await ev(`${fmtField('Sizes vary')}.querySelector('select').value`)) === 'automatic', 'Sizes vary is Automatic by default');
+    await setSelect('Sizes vary', 'range'); await settle(500);
     const off = await symbolSizes();
     must(Math.round(off[0]) === 8, 'from the data minimum: the smallest bubble is 8 px: ' + J(off));
-    await toggle('From zero'); await settle(500);
+    await setSelect('Sizes vary', 'automatic'); await settle(500);
     must(deepEq((await symbolSizes()).map(Math.round), dflt.map(Math.round)), 'back to the default');
+    await closeFormat();
+  });
+
+  await check('scatter + a measure on Size: under Automatic a start waits for By range (the control says so); an End applies and the legend names it', async () => {
+    await openFormat();
+    must(await ev(`${fmtField('Start value')}.querySelector('input').disabled && /Automatic starts these marks at zero/.test(${fmtField('Start value')}.title)`), 'Start is off under the bubble default, with the reason');
+    must(await ev(`!${fmtField('Reversed')}.querySelector('input').disabled`), 'Reversed still works on bubbles under Automatic');
+    const dflt = (await symbolSizes()).map(Math.round);
+    const t0 = await sizeText(); const hi = Number(t0.match(/to ([\d.]+)\)/)?.[1]);
+    await setField('End value', String(Math.round(hi / 2))); await settle(500);
+    const s = (await symbolSizes()).map(Math.round);
+    must(Math.max(...s) === 36 && s.filter((x) => x === 36).length > 1 && s.every((x) => x >= 8), 'values above the end saturate at the biggest bubble, none hidden: ' + J(s));
+    must(/end set\)/.test(await sizeText()), 'the legend names the end: ' + await sizeText());
+    await setSelect('Sizes vary', 'range'); await settle(400);
+    must(await ev(`!${fmtField('Start value')}.querySelector('input').disabled`), 'By range turns Start on');
+    await setField('Start value', '15'); await settle(500);
+    must((await sizeText()).includes(`(15 to ${Math.round(hi / 2)}, set)`), 'the legend names both ends: ' + await sizeText());
+    await setSelect('Sizes vary', 'automatic'); await settle(400); // the start (15) is stored but off again
+    must(await ev(`${fmtField('Start value')}.querySelector('input').disabled`), 'Start is off again under Automatic');
+    await setField('End value', '5'); await settle(500); // below the hidden start: accepted, the user is not blocked by a start they cannot clear
+    must((await ev(`${fmtField('End value')}.querySelector('input').value`)) === '5', 'the end 5 was accepted: ' + J([await ev(`${fmtField('End value')}.querySelector('input').value`), await sizeText(), await toastText()]));
+    must((await sizeText()).includes('to 5, end set)'), 'and it draws: ' + await sizeText());
+    await setField('Start value', ''); await setField('End value', ''); await setSelect('Sizes vary', 'automatic'); await settle(500);
+    must(deepEq((await symbolSizes()).map(Math.round), dflt), 'cleared = the default drawing');
     await closeFormat();
   });
 
