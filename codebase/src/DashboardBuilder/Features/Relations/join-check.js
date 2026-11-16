@@ -69,9 +69,12 @@ export function buildJoinCheck(dlg, { run, names, apply = null }) {
     const n = namesNow();
     const d = describePreview(last, n);
     const frag = document.createDocumentFragment();
+    const sampled = last.sampled === true;
+    const findings = [...d.findings];
+    if (sampled && findings.length) { const f = findings.shift(); frag.append(note(f.level, "info", f.text)); } // the sampling caveat comes before the suggestion it qualifies
     if (d.verdict) {
       const box = el("div", "join-check__suggest");
-      box.append(el("p", "join-check__label", "Suggested cardinality"), el("p", "join-check__pick", suggestionLabel(d.observed))); // the headline says what d.verdict says
+      box.append(el("p", "join-check__label", sampled ? "Suggested cardinality, from a sample" : "Suggested cardinality"), el("p", "join-check__pick", suggestionLabel(d.observed))); // the headline says what d.verdict says
       if (apply && apply.get() === d.observed) box.append(note("ok", "check", "Matches your choice."));
       else if (apply) {
         const use = makeButton(`Use ${d.observed}`, "btn join-check__use");
@@ -80,7 +83,7 @@ export function buildJoinCheck(dlg, { run, names, apply = null }) {
       }
       frag.append(box);
     }
-    for (const f of d.findings) frag.append(note(f.level, f.level === "warn" ? "warning" : "info", f.text));
+    for (const f of findings) frag.append(note(f.level, f.level === "warn" ? "warning" : "info", f.text));
     if (last.from.rows > 0 && last.to.rows > 0) {
       const ev = joinEvidence(last, n);
       const sec = el("div", "join-check__evidence");
@@ -99,14 +102,20 @@ export function buildJoinCheck(dlg, { run, names, apply = null }) {
     out.replaceChildren(frag);
   }
 
+  // A pending run drops the last result at once, so a cardinality pick meanwhile can't show numbers read for the old key pairs.
+  function pending() {
+    last = null;
+    again.disabled = true;
+    root.setAttribute("aria-busy", "true");
+    out.replaceChildren(note("busy", "refresh", "Checking the data…"));
+  }
+
   async function check() {
     clearTimeout(timer);
     ac?.abort();
     ac = new AbortController();
     const mine = ac;
-    again.disabled = true;
-    root.setAttribute("aria-busy", "true");
-    out.replaceChildren(note("busy", "refresh", "Checking the data…"));
+    pending();
     try {
       const result = await run(mine.signal);
       if (mine.signal.aborted) return;
@@ -126,7 +135,7 @@ export function buildJoinCheck(dlg, { run, names, apply = null }) {
   return {
     root,
     start: check,
-    rerun: () => { clearTimeout(timer); timer = setTimeout(check, 300); },
+    rerun: () => { clearTimeout(timer); ac?.abort(); pending(); timer = setTimeout(check, 300); },
     redescribe: show,
   };
 }

@@ -112,9 +112,15 @@ try {
     must(/Matches your choice/.test(await text('dialog[open] .join-check__suggest')), 'no match note');
     must(previews.length === before, 'a cardinality pick re-queried');
   });
-  await check('the re-check button runs the query again', async () => {
+  await check('the re-check button runs the query again; a cardinality pick while it runs keeps the busy note (no stale result)', async () => {
     const before = previews.length;
+    let release2; gate = new Promise((r) => { release2 = r; });
     await click('dialog[open] .join-check__rerun');
+    await waitFor(`document.querySelector('dialog[open] .join-check__note--busy') !== null`, 'busy');
+    await pick('1:1');
+    must(await ev(`document.querySelector('dialog[open] .join-check__note--busy') !== null && !document.querySelector('dialog[open] .join-check__pick')`), 'stale result shown during a re-run');
+    await pick('N:1');
+    gate = null; release2();
     await waitFor(`!document.querySelector('dialog[open] .join-check__rerun').disabled && !!document.querySelector('dialog[open] .join-check__pick')`, 'result again');
     must(previews.length === before + 1, 'no new request');
   });
@@ -142,7 +148,9 @@ try {
     previewMode = 'manyToMany';
     await click('dialog[open] .join-check__rerun');
     await waitFor(`document.querySelector('dialog[open] .join-check__out')?.textContent.includes('Within the sample')`, 'sampled reading');
-    must((await ev(`document.querySelector('dialog[open] .join-check__note')?.textContent`)).startsWith('Based on the first 1,000,000 rows of each table, in no particular order'), 'sampling note not first note');
+    must((await ev(`document.querySelector('dialog[open] .join-check__out > .join-check__note:first-child')?.textContent`) ?? '').startsWith('Based on the first 1,000,000 rows of each table, in no particular order'), 'sampling note not first, above the suggestion');
+    must((await text('dialog[open] .join-check__label')) === 'Suggested cardinality, from a sample', 'label not qualified');
+    must(!/is unique in/.test(await text('dialog[open] .join-check__out')), 'a sampled side called unique');
     must(await ev(`document.querySelectorAll('dialog[open] .join-check__note--warn').length`) === 0, 'amber warning on a sampled result');
     await shot('join-check-sampled.png');
   });

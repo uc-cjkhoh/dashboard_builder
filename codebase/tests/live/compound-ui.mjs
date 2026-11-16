@@ -68,13 +68,17 @@ try {
     const o = await ev(`[...${dlg}.querySelectorAll('.key-pairs__select')].map((s) => [...s.options].map((x) => x.value).filter(Boolean).join(','))`);
     must(o[0] === 'id,Region,amount,placed' && o[1] === 'region,name,born', `options: ${J(o)}`); // cust_id / customers.id are the first pair
   });
-  await check('adding a suggestion lists the pair; the preview then carries it', async () => {
+  await check('the suggestion ran as the dialog opened; adding a suggested pair runs it again with the pair', async () => {
+    await waitFor(`${dlg}.querySelector('.join-check__pick') !== null`, 'first suggestion');
+    must(previews.length === 1 && !previews[0].pairs, `first preview: ${J(previews)}`);
     await press2('Add Region = region');
     must((await texts('.key-pairs__item span'))[0] === 'Region = region', 'chip');
     must(!(await ev(`${dlg}.querySelector('.key-pairs__suggestion')`)), 'suggestion should be gone');
-    await press2('Check this join');
-    await waitFor(`${dlg}.querySelector('.join-check__summary') !== null`, 'preview result');
-    must(previews.length === 1 && J(previews[0].pairs) === J([{ left: 'Region', right: 'region' }]) && previews[0].from.column === 'cust_id', `preview body: ${J(previews[0])}`);
+    must(await ev(`${dlg}.querySelector('.join-check__note--busy') !== null && !${dlg}.querySelector('.join-check__pick')`), 'old result shown while the re-run is pending');
+    await ev(`[...${dlg}.querySelectorAll('.card-choice')].find((x) => x.textContent === '1:1').click()`); // a pick meanwhile must not bring the old result back
+    must(await ev(`!${dlg}.querySelector('.join-check__pick')`), 'a cardinality pick showed the stale result');
+    await waitFor(`${dlg}.querySelector('.join-check__pick') !== null`, 'preview result');
+    must(previews.length === 2 && J(previews[1].pairs) === J([{ left: 'Region', right: 'region' }]) && previews[1].from.column === 'cust_id', `preview body: ${J(previews[1])}`);
     must(/cust_id \+ Region/.test(await ev(`${dlg}.querySelector('.join-check__out').textContent`)), 'the result should name the compound key');
   });
   await check('refusals: a different kind, and a column already used, say why', async () => {
@@ -84,6 +88,9 @@ try {
     must((await texts('.key-pairs__item span')).join('|') === 'Region = region|placed = born', 'a date pair should be accepted');
     await press2('Remove placed = born');
     must((await texts('.key-pairs__item span')).join('|') === 'Region = region', 'remove');
+    await waitFor(`${dlg}.querySelector('.join-check__pick') !== null`, 'result after add / remove');
+    must(J(previews.at(-1).pairs) === J([{ left: 'Region', right: 'region' }]), `after remove: ${J(previews.at(-1))}`);
+    must(previews.length >= 3, `add + remove re-ran the check: ${previews.length}`);
   });
   await check('N:1 saves the link: the badge counts the keys and every key column is pinned', async () => {
     await ev(`[...${dlg}.querySelectorAll('.card-choice')].find((x) => x.textContent === 'N:1').click(); ${dlg}.querySelector('.rel-dialog__foot .btn--primary').click()`);

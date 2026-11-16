@@ -183,3 +183,11 @@ test("the suggestion headline names the shape in words", () => {
   assert.equal(suggestionLabel("N:1"), "N:1 · many-to-one");
   assert.equal(suggestionLabel("N:M"), "N:M · many-to-many");
 });
+
+test("evidence on a sampled result: a repeat is still a fact, a unique-looking side is only what the sample shows", () => {
+  const r = result({ maxDuplicates: 4, avgDuplicates: 2 }, {}, { sampled: true, sampleLimit: 500 });
+  const e = joinEvidence(r, names);
+  assert.match(e.reasons[0].text, /^cust_id repeats in orders: up to 4 rows for one key/);
+  assert.equal(e.reasons[1].text, 'id doesn\'t repeat in the rows read from customers, so customers looks like the "one" side. Rows past the sample could still repeat a key.');
+  assert.doesNotMatch(e.reasons[1].text, /unique/);
+});

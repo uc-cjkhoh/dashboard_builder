@@ -108,16 +108,20 @@ const avgText = (side) => (side.keys > 0 ? String(Math.round(side.avgDuplicates 
 /**
  * The evidence behind the suggestion, from the same preview result: why each side reads as "one" or "many"
  * (`reasons`, one per side, the FROM side first) and the raw counts per side (`rows`: { label, from, to } as text).
- * An empty side gives no reasons (there is nothing to read a shape from).
+ * An empty side gives no reasons (there is nothing to read a shape from). On a sampled result a "one" side is worded as what the
+ * sample shows, not as a fact about the table.
  */
 export function joinEvidence(result, { fromTable, toTable, fromColumn, toColumn }) {
   const { from, to } = result;
+  const sampled = result.sampled === true;
   const reasons = [];
   if (from.rows > 0 && to.rows > 0)
     for (const [t, c, s] of [[fromTable, fromColumn, from], [toTable, toColumn, to]])
       reasons.push(repeats(s)
         ? { side: "many", text: `${c} repeats in ${t}: up to ${count(s.maxDuplicates)} rows for one key (about ${avgText(s)} on average), so ${t} is the "many" side.` }
-        : { side: "one", text: `${c} is unique in ${t}: every key has one row, so ${t} is the "one" side.` });
+        : sampled // a sample can show a repeat, never that every key is unique
+          ? { side: "one", text: `${c} doesn't repeat in the rows read from ${t}, so ${t} looks like the "one" side. Rows past the sample could still repeat a key.` }
+          : { side: "one", text: `${c} is unique in ${t}: every key has one row, so ${t} is the "one" side.` });
   const rows = [
     { label: "Rows read", from: count(from.rows), to: count(to.rows) },
     { label: "Rows with no key (NULL)", from: withShare(from.nullRows, from.rows), to: withShare(to.nullRows, to.rows) },
