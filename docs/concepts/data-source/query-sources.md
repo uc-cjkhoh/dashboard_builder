@@ -125,11 +125,11 @@ Safety rules:
 
 ## Custom SQL on a card
 
-A Data Source card's **Edit** button (left of the title) → **Edit SQL** ([D105](../../decisions/decisions-custom-sql.md#d105--edit-sql-free-text-select-on-a-data-source-card-the-one-exception-to-rules-2-and-3)).
+A Data Source card's pencil icon (left of the title) → **Edit SQL** ([D105](../../decisions/decisions-custom-sql.md#d105--edit-sql-free-text-select-on-a-data-source-card-the-one-exception-to-rules-2-and-3)).
 Unlike a union or unpivot, the card **stays an ordinary table card**: it can be related and joined, and keeps its `db.table` name.
 Only its rows change: they come from the user's own `SELECT`.
 
-- **Button.** The card head's **Edit** button (`.entity__edit` in `Canvas/canvas.js`, pencil + "Edit", left of the title) opens the dialog; the card has no right-click menu. A union or unpivot card has no SQL of its own, so it has no Edit button.
+- **Button.** The card head's pencil icon button (`.entity__edit` in `Canvas/canvas.js`, left of the title, aria-label *Edit SQL for db.table*) opens the dialog; the card has no right-click menu. A union or unpivot card has no SQL of its own, so it has no pencil.
 - **Dialog** (`Canvas/sql-dialog.js`, **Edit SQL · table**): written in **MySQL** (the default) or ClickHouse syntax, chosen in the footer ([sql-syntax.md](sql-syntax.md)); a tall code editor on the card's current query, or for a table the default `SELECT` of every column, quoted, one per line (`defaultSql()`) — highlighting, syntax checking, auto-indent, bracket matching, Format and folding: [sql-editor.md](sql-editor.md). **Reset to default** refills the table's own `SELECT` (read from the catalog, not from the query's columns). **Format**, **Cancel**, Esc, and **Save** (Ctrl+Enter too). While you type, a clean query is also described by ClickHouse (debounced, no rows read) and the status line says how many columns it returns.
 - **Save** sends the text to `POST /api/source/columns` as `{ kind: "sql", db, name: table, sql }`. A refusal (syntax, unknown column, a rule of the guard) appears under the text in ClickHouse's own words and **nothing on the card changes**. The default text saved unchanged is a no-op on a table card; on a custom-SQL card, saving the table's default `SELECT` goes back to the table (below).
 - **After a good save** the card shows the query's columns, with a `Custom SQL` note under its head (`.entity__note--sql`) and the class `entity--sql`; rows have no profile button. `entity:sql` clears the cached columns and filter members of that table; open worksheets redraw.
