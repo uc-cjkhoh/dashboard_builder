@@ -41,11 +41,11 @@ Grouped by feature folder; each entry is the module, then what it owns.
 - `Schema/schema.js` — database `<select>`, table search, table chips + drag payload — [schema-browser.md](../concepts/data-source/schema-browser.md)
 - `Schema/column-profile-dialog.js`, `Schema/column-profile-model.js` — the column profile dialog (`openColumnProfile(db, table, column)`, opened from a field row on a canvas card) and its pure rules:
   - `profileRequest`, `formatShare`, `roleOf`, `summarize` — [schema-browser.md](../concepts/data-source/schema-browser.md#column-profile--field-details)
-- `Schema/table-filter.js` (`matchTables`, the table search), `Schema/schema-model.js` (`splitDatabases`, `rememberDb` / `recallDb`), `Schema/type-kind.js` (`friendlyKind(rawType)`) — pure rules
+- `Schema/table-filter.js` (`matchTables`, the table search), `Schema/schema-model.js` (`splitDatabases`, `rememberDb` / `recallDb`) — pure rules
 
 ### Canvas/ and Relations/ — the Data Source canvas
 
-- `Canvas/canvas.js` — drop handling, entity cards, card menu and Edit SQL (`sql-dialog.js`, `sql-editor.js`, `Core/sql-check.js`), card movement, list height from an edge drag (`card-height.js`), zoom and pan (`canvas-zoom.js`), empty state — [canvas.md](../concepts/data-source/canvas.md)
+- `Canvas/canvas.js` — drop handling, entity cards, card menu and Edit SQL (`sql-dialog.js`, `sql-editor.js`, `Core/sql-check.js`), card movement, list height from an edge drag (`card-height.js`), the column type label (`column-type.js`, pure `cardType`), zoom and pan (`canvas-zoom.js`), empty state — [canvas.md](../concepts/data-source/canvas.md)
 - `Canvas/empty-state.js` — pure: `emptyState({connected, databaseSelected})` → the sentence, button and control to focus
 - `Relations/relations.js` — drag- and keyboard-to-relate (`link-keys.js`), links, the Relationships description card (`relation-describe.js`), cardinality, pinned keys — [relationships.md](../concepts/data-source/relationships.md)
 - `Relations/join-preview-model.js`, `Relations/join-check.js` — pure wording and declared-vs-observed comparison of a join preview (`describePreview`, `observedCardinality`, `pct`, `previewRequest`); the dialog's "Check this join" section (DOM, `textContent` only)
@@ -247,7 +247,7 @@ Grouped by feature folder; each entry is the module, then what it owns.
   - animated open/close via `motion.js`
 - `Core/context-menu-model.js` — pure: `placeMenu` (keep a popup in the viewport), `opensContext` (which keydown opens it), `nextFocus`
 - `Core/motion.js` — `enter` / `exit` (WAAPI, the Web Animations API; opacity + transform, Fluent timing) and `reducedMotion()`; no-ops under reduced motion — [motion-accessibility.md](../reference/design/motion-accessibility.md#motion)
-- `Core/resizer.js` — `wireResizer(handle, …)` — drag / arrow-key width handle (`role="separator"`) used by the sidebar and the field pane; pure `clampWidth`
+- `Core/resizer.js` — `wireResizer(handle, …)` — drag / arrow-key width handle (`role="separator"`) used by the sidebar and the field pane; pure `clampWidth`. `Core/edge-resize.js` — `wireEdgeResize(root, …)`: expandable cards (hover a card's bottom border, click and drag to set its height; `Alt+↑/↓` on a header, double-click to reset) for the field pane's table cards; pure `onBottomEdge`, `clampHeight`, `heightStore`
 - `Core/store.js` — shared model + the ordered worksheet / dashboard tabs + active view + event bus — [data-model.md](../reference/data-model.md#client-side--featurescorestorejs)
 - `Core/format.js` — value and category formatters shared by charts, crosstab, KPI
 
@@ -288,7 +288,7 @@ Grouped by feature folder; each entry is the module, then what it owns.
 - **Visibility:** `show(el)` / `hide(el)` / `toggle(el, visible)` flip the `hidden` attribute — never
   `style.display`.
 - **`copyText(text, what)`** — writes to the clipboard and toasts "Copied <what>." (or a danger toast when the browser blocks it).
-- **`toast(message, kind)`** — `ok | danger | info`. `info` / `ok` auto-hide after 5 s; **`danger` stays
+- **`toast(message, kind, { action })`** — `ok | danger | info`; `action: { label, run }` adds one button (`.toast__action`, e.g. **Undo**) and keeps it 10 s. `info` / `ok` auto-hide after 5 s; **`danger` stays
   until dismissed** (a close button). The visible `#toast` is not a live region; messages are announced
   through the persistent visually-hidden `#toast-live`.
 - **`fieldError(input, msg)` / `clearFieldError(input)` / `checkField(input, result)`** — set

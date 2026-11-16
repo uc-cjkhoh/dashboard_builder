@@ -72,7 +72,14 @@ The sidebar has nothing to hold while disconnected, so `connection.js` sets `.ap
 while the status row stays in the sidebar: the session is still connected until a new connect succeeds. **Cancel** or **Esc** closes it and returns focus to the edit button.
 The card shows whenever the form is open (`connection:form` event → `Canvas/canvas.js`); otherwise the recent panel and form are hidden, the card styling goes with them,
 and the empty state is the bare column for the database / table steps.
+On load the server renders `.app[data-connecting]` and the form hidden, so until the first `GET /api/connection` answers neither the bare "Connect" empty state nor the card is the right one:
+`canvas.css` keeps `.canvas__empty` `visibility: hidden` while the flag is set, and `applyState` removes it with the first answer (connected or not, including a failed lookup).
+The sidebar is the brand-only rail meanwhile (`shell.css`) and a loading bar (`#app-loading`, [motion](../../reference/design/motion-accessibility.md#motion)) runs across the top; `applyState` hides the bar too.
+Without this a reload flashed the plain Connect button and a wide sidebar before the card appeared. Browser check: `tests/live/connect-flash-ui.mjs`.
 There is no separate start screen and no recent-workbooks list ([D89](../../decisions/decisions-connection.md#d89--withdrawn-the-start-screen-lists-recent-workbooks)).
+
+When the form shows because there is no connection (first load, after Disconnect) and nothing else has focus, the first empty field
+takes it — **Host**, or **Password** when a host is kept — so the user can type straight away.
 
 ## Validation
 

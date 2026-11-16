@@ -86,6 +86,9 @@ Gotchas that have bitten (or will bite) this app. Read before touching the area 
 - **Ports 5080 and 5199 are taken.** The launch profile pins 5080, and a long-running dev process holds
   5199. Smoke-test with `dotnet run --no-launch-profile --urls http://localhost:5180`; otherwise an
   `ASPNETCORE_URLS` or launch-profile setting wins.
+- **`::details-content { display: contents }` breaks closing a `<details>`.** Chrome hides closed content
+  with `content-visibility: hidden` on that box, which `display: contents` ignores, so scope it to `[open]`
+  (`.rel-notes[open]::details-content` in `relations.css`).
 - **A cache hit means no query.** Presentation-only changes re-render from the worksheet's result
   cache. If a change *should* re-query, it must change the plan (see
   [worksheet-query.md § Query lifecycle](../concepts/worksheet/worksheet-query.md#query-lifecycle)).

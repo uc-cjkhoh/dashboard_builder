@@ -39,6 +39,8 @@ Drawing relationships on top of the cards is covered in [relationships.md](relat
 - **No duplicates.** A table already on the canvas is not added twice. Instead, the existing card is scrolled into view
   and focused (`tabindex="-1"`), and a toast says so.
 - **The `＋` button takes the same path.** The chip's `＋` fallback fires the `table:add` event, which is handled like a drop.
+  The new card takes the first free grid slot from the top-left of the view; when that slot is below (or beside) what is on screen,
+  the ground pans just enough to show it (`reveal()`), so a card never lands out of sight.
   A dropped table always lands in the shared model: `table:add` switches to the Data Source tab first ([tabs.md](../workbook/tabs.md)).
 - **Where a card lands:**
   - A dropped card lands at the drop point.
@@ -97,12 +99,13 @@ A card with custom SQL shows a `Custom SQL` note under its head; its profile but
   - The Edit SQL pencil icon first, its ink on the left gutter like the ✕ on the right (not on a union or unpivot card), then the table name alone, in weight 600. The full `db.table` is its tooltip.
   - The database appears, muted after the name, only when another card holds the same table name from a different database.
   - A collapse caret and a remove icon sit at its right end. The caret toggles `.entity--collapsed`, leaving only the title bar.
-- **Card width** follows the title text plus the Edit SQL icon, from `--entity-min` (312px, the slot width) to `--entity-max` (480px) on `#model-view`
+- **Card width** follows the title text plus the Edit SQL icon (and the **Needs a partner** badge while it shows), from `--entity-min` (312px, the slot width) to `--entity-max` (480px) on `#model-view`
   (`card-width.js`, pure). Beyond the maximum the name ellipsises, with the full name in its `title`.
-  Link anchors read the measured card box, so any width stays correct.
+  Link anchors read the measured card box, so any width stays correct. When `relations.js` shows or hides the badge it emits
+  `entity:need` and the card refits before links are measured, so the badge never clips a short name ("custo…").
 - **Column rows** (`.col-row`) show a **type icon** (number / text / date / bool), the name and a **type badge**
   (`.col-row__type`, from the type category), and nothing else.
-  - The type is a plain kind in muted text at the row's end (no chip): whole number, number, text, date, date & time, true/false, list, map, group (`friendlyKind`, `Schema/type-kind.js`); the raw ClickHouse type and the category are its tooltip.
+  - The type is the column's **ClickHouse type** in muted text at the row's end (no chip): `UInt64`, `Nullable(String)`, `Decimal(18, 4)`. `LowCardinality(…)` wrappers are left out, because they are a storage encoding, not the data type: `LowCardinality(Nullable(String))` shows `Nullable(String)` (`cardType`, `Canvas/column-type.js`). Past 130px the label ends in an ellipsis. The full type and the category are its tooltip.
   - Rows sit on a 16px gutter at both edges, so the left space equals the right and names line up under the head's title.
   - A row is a drag handle for relationships ([relationships.md](relationships.md)).
   - A column in a relationship is pinned to the card's key strip, and its name turns accent.
@@ -123,7 +126,9 @@ A card with custom SQL shows a `Custom SQL` note under its head; its profile but
 
 - **Moving:** drag a card by its **head**. This uses pointer events, a separate gesture from dragging a chip with drag and drop.
   The entity's `x, y` snap to 8px steps and update, and `entity:moved` fires so links re-route.
-- **Removing** a card removes its relationships, with a confirm dialog when any exist.
+- **Removing** a card removes its relationships, with a confirm dialog when any exist. Either way a toast "Removed shop.orders."
+  carries **Undo** (10 s): it brings the card back with the same id, place, Edit SQL text and list height, and re-adds each of its
+  relationships whose other card is still there (`rel:reinstate`). If the same table was added again meanwhile, Undo says so instead.
   If a half-drawn link was waiting on that card, it is cancelled (no dangling "undefined" toast).
 
 ## Join keys
