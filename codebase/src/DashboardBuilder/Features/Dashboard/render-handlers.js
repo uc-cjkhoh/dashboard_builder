@@ -5,6 +5,8 @@ import { focusSeries } from "./chart.js";
 import { CLICK_TYPES } from "./result-model.js";
 import { BUTTON_TYPES, commandButtonsOn, tooltipsOn, tooltipModeOf, pinnedIndex } from "./tooltip-behaviour-model.js";
 import { selectionRefusal } from "./dashboard-select.js";
+import { hint } from "./render-dom.js";
+import { DATE_GROUPED_NOTE } from "./tooltip-behaviour-model.js";
 
 // The interaction wiring of a drawn worksheet (click-to-filter, drill, legend, member colours), kept
 // apart from the drawing. Every function reads the render context `rc` (worksheet-render.js): when `rc.interactive` is
@@ -38,13 +40,16 @@ export function selectHandler(rc, sheet, dimField, type, rawByIndex) {
  * not in the editor (a dashboard widget's selection is a cross-filter, not Keep only), not where a click would not select (selectHandler's own rules), not
  * while a drill hierarchy is active (a click steps down), not on a calculated dimension. `can(i)`: the mark has a value a filter could match (not Other, not NULL).
  */
-export function tooltipButtonsSpec(rc, sheet, dimField, type, rawByIndex, format) {
+export function tooltipButtonsSpec(rc, sheet, dimField, type, rawByIndex, format, container = null) {
   if (!commandButtonsOn(format) || !tooltipsOn(format) || rc.interactive !== true || typeof rc.hooks.onTooltipCommand !== "function") return {};
-  if (!BUTTON_TYPES.has(type) || isDrillActive(sheet) || !dimField || selectionRefusal(dimField) || !selectHandler(rc, sheet, dimField, type, rawByIndex)) return {};
+  if (!BUTTON_TYPES.has(type) || isDrillActive(sheet) || !dimField || selectionRefusal(dimField)) return {};
+  if (rc.bucketedKey === 0) { container?.append(hint(`Command buttons are not shown: ${DATE_GROUPED_NOTE}`)); return {}; } // the data decided the grouping (Group dates: Auto), which the Format panel could not know
+  if (!selectHandler(rc, sheet, dimField, type, rawByIndex)) return {};
+  const can = (i) => rawByIndex[i] !== undefined && rawByIndex[i] !== null;
   return { tooltipButtons: {
-    can: (i) => rawByIndex[i] !== undefined && rawByIndex[i] !== null,
+    can,
     pinned: pinnedIndex(tooltipModeOf(format), rawByIndex, rc.pin, dimField),
-    onCommand: (cmd, i) => rc.hooks.onTooltipCommand(cmd, dimField, rawByIndex[i]),
+    onCommand: (cmd, i) => { if (can(i)) rc.hooks.onTooltipCommand(cmd, dimField, rawByIndex[i]); }, // re-checked: the markup is only a hint of what may be run
   } };
 }
 

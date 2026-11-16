@@ -8,7 +8,7 @@ import { SPECS, snapshot, tooltipSnapshot } from "./tooltip-golden-cases.mjs";
 import { buildOption } from "../../src/DashboardBuilder/Features/Dashboard/chart.js";
 import {
   TOOLTIP_MODE_CHOICES, COMMANDS, tooltipsOn, commandButtonsOn, tooltipModeOf, showTooltipsError, tooltipButtonsError, tooltipModeError,
-  withTooltipSetting, applyTooltipBehaviour, commandsHtml, commandOf, buttonGate, gateInputs, tooltipControlSpecs, pinnedIndex, BUTTON_TYPES,
+  withTooltipSetting, applyTooltipBehaviour, commandsHtml, commandOf, buttonGate, buttonNote, gateInputs, tooltipControlSpecs, pinnedIndex, BUTTON_TYPES,
 } from "../../src/DashboardBuilder/Features/Dashboard/tooltip-behaviour-model.js";
 import { TOOLTIP_MODES } from "../../src/DashboardBuilder/Features/Core/sheet-schema.js";
 import { defaultFormat, emptySheet } from "../../src/DashboardBuilder/Features/Core/store.js";
@@ -180,6 +180,14 @@ test("gate: buttons are offered where a click selects by a dimension value, and 
   assert.match(buttonGate(gateInputs(sheet({ columns: [], rows: [measF("amount")] }))), /dimension/);
   assert.match(buttonGate(gateInputs(sheet({ drill: { levels: [dimF("a"), dimF("b")], depth: 0 } }))), /drill/i);
   assert.match(buttonGate(gateInputs(sheet({ columns: [{ ...dimF("day"), datePart: "month" }] }))), /date/i);
+  const dated = (over = {}) => sheet({ columns: [{ ...dimF("placed"), category: "temporal" }], ...over });
+  assert.equal(buttonGate(gateInputs(dated())), null, "Auto: the data decides, so the control stays on (with a note)");
+  assert.equal(buttonGate(gateInputs(dated({ format: { dateBucket: "exact" } }))), null, "Exact: dates are not grouped");
+  for (const g of ["hour", "day", "week", "month", "quarter", "year"]) assert.match(buttonGate(gateInputs(dated({ format: { dateBucket: g } }))), /Group dates is .*Exact/, g);
+  assert.equal(buttonGate(gateInputs(dated({ chartType: "scatter", format: { dateBucket: "day" } }))), null, "a chart type with no date grouping keeps its dates");
+  assert.equal(buttonGate(gateInputs(dated({ columns: [{ ...dimF("placed"), category: "temporal", datePart: "exact" }], format: { dateBucket: "day" } }))), null, "an exact date part is not grouped");
+  assert.equal(buttonGate(gateInputs(sheet({ columns: [{ ...dimF("region"), category: "text" }], format: { dateBucket: "day" } }))), null, "a text field is never date-grouped");
+  assert.match(buttonNote(gateInputs(dated())), /Group dates → Exact/); assert.equal(buttonNote(gateInputs(dated({ format: { dateBucket: "exact" } }))), null); assert.equal(buttonNote(gateInputs(sheet())), null);
   assert.match(buttonGate(gateInputs(sheet({ chartType: "scatter", marks: { ...emptySheet().marks, shape: dimF("kind") } }))), /split/i);
 });
 test("controls: Show tooltips on every hover-tooltip chart; the buttons and the mode explain themselves when they do nothing", () => {
@@ -196,6 +204,8 @@ test("controls: Show tooltips on every hover-tooltip chart; the buttons and the 
   assert.match(off.tooltipButtons.disabled, /Show tooltips/); assert.match(off.tooltipMode.disabled, /Show tooltips/);
   const heat = specs(sheet({ chartType: "heatmap" }));
   assert.match(heat.tooltipButtons.disabled, /select/i); assert.match(heat.tooltipMode.disabled, /select|command buttons/i);
+  const noted = tooltipControlSpecs({ type: "line", format: {}, gate: null, note: "n" }).find((c) => c.key === "tooltipButtons");
+  assert.equal(noted.note, "n"); assert.equal(noted.disabled, undefined, "a note does not disable the control");
   assert.deepEqual(tooltipControlSpecs({ type: "table", format: {}, gate: null }), [], "a table has no hover tooltip");
   assert.deepEqual(tooltipControlSpecs({ type: "kpi", format: {}, gate: null }), []);
   assert.ok(BUTTON_TYPES.has("bar") && !BUTTON_TYPES.has("gantt"));
@@ -231,7 +241,7 @@ test("the editor draws buttons on a selectable chart: enterable tooltip, the thr
   const ev = { target: { closest: () => ({ dataset: { ttCmd: "keep", ttIdx: "1" } }) }, prevented: false, stopped: false, preventDefault() { this.prevented = true; }, stopPropagation() { this.stopped = true; } };
   click.fn(ev);
   assert.deepEqual(calls, [["keep", { db: "shop", table: "orders", column: "region", category: "text" }, "US"]]);
-  assert.ok(ev.prevented && ev.stopped);
+  assert.ok(ev.prevented); assert.equal(ev.stopped, false, "the click still bubbles: an open menu or flyout closes on it");
   assert.deepEqual(inst.actions.at(-1), { type: "hideTip" }, "the tooltip is dismissed once a command is taken");
 });
 test("a click that is not on a command button does nothing", () => {
@@ -288,6 +298,21 @@ test("On hover pins nothing; Responsive pins the mark just clicked, once (an unc
   assert.equal(later.inst.actions.some((a) => a.type === "showTip"), false);
   assert.equal(later.o.tooltip.alwaysShowContent, undefined);
 });
+test("a date axis the server grouped (bucketedKey 0) drops the buttons and the chart says why, above it", () => {
+  const dated = sheet({ columns: [{ ...dimF("placed"), category: "temporal" }], format: WITH });
+  const bucketed = { ...result([["2024-01-01", 3], ["2024-02-01", 5]]), bucket: { key: 0, grain: "month" } };
+  const d = draw(dated, bucketed);
+  assert.equal(d.o.tooltip.enterable, undefined); assert.doesNotMatch(tip(d.o, 0), /<button/);
+  const hints = d.c.children.filter((x) => x.className === "ws-hint").map((x) => x.textContent);
+  assert.equal(hints.length, 1, JSON.stringify(hints)); assert.match(hints[0], /Command buttons are not shown.*Group dates → Exact/);
+  assert.ok(d.c.children.findIndex((x) => x.className === "ws-hint") < d.c.children.findIndex((x) => x.className === "ws-chart-canvas"), "above the chart");
+  const exact = draw(dated, result([["2024-01-01", 3], ["2024-02-01", 5]]));
+  assert.equal(exact.o.tooltip.enterable, true); assert.equal(exact.c.children.filter((x) => x.className === "ws-hint").length, 0, "no hint when the dates were not grouped");
+  const off = draw(sheet({ columns: [{ ...dimF("placed"), category: "temporal" }] }), bucketed);
+  assert.equal(off.c.children.filter((x) => x.className === "ws-hint").length, 0, "no hint when buttons were never asked for");
+  const widget = draw(dated, bucketed, { interactive: "select" });
+  assert.equal(widget.c.children.filter((x) => x.className === "ws-hint" && /Command buttons/.test(x.textContent)).length, 0, "a dashboard widget never says it");
+});
 test("a pin is spent by the drawing that finds it, even when that chart has no buttons", () => {
   pending = { db: "shop", table: "orders", column: "region", value: "US" };
   draw(sheet({ format: { tooltipButtons: true }, drill: { levels: [dimF("region"), dimF("city")], depth: 0 } }), result()); // a drill hierarchy: a chart with no buttons
@@ -305,9 +330,9 @@ test("Show tooltips off through the render path: no tooltip, marks and labels as
   assert.equal(o.series[0].data.length, 3);
 });
 
-test("a pinned tooltip is dismissed by Esc and by a click on empty chart, and Esc is only listened for while it is pinned", () => {
-  pending = { db: "shop", table: "orders", column: "region", value: "US" };
-  const d = draw(sheet({ format: { tooltipButtons: true } }));
+const pinnedDraw = () => { pending = { db: "shop", table: "orders", column: "region", value: "US" }; return draw(sheet({ format: { tooltipButtons: true } })); };
+test("a pinned tooltip is dismissed by Esc, which is only listened for while it is pinned", () => {
+  const d = pinnedDraw();
   const esc = docListeners.find((l) => l[0] === "keydown");
   assert.ok(esc, "a keydown listener while pinned");
   esc[1]({ key: "a" }); assert.equal(d.inst.actions.filter((a) => a.type === "hideTip").length, 0);
@@ -315,12 +340,27 @@ test("a pinned tooltip is dismissed by Esc and by a click on empty chart, and Es
   esc[1]({ key: "Escape" }); assert.deepEqual(d.inst.actions.at(-1), { type: "hideTip" });
   assert.deepEqual(d.inst.lastSet.tooltip, { alwaysShowContent: false, enterable: false, triggerOn: "mousemove|click", hideDelay: 0 }, "a pinned tooltip ignores hideTip, so the pin is given up first");
   assert.doesNotMatch(tip(d.o, 1), /<button/, "and hovering that mark again shows today's tooltip");
+  assert.equal(docListeners.filter((l) => l[0] === "keydown").length, 0, "the Esc listener is gone with the pin");
+  d.inst.actions.length = 0;
+  esc[1]({ key: "Escape" }); assert.equal(d.inst.actions.length, 0, "a stale Esc never hides an ordinary hover tooltip");
+  d.inst.zr.handlers.find((h) => h[0] === "click")[1]({ target: null }); assert.equal(d.inst.actions.length, 0, "nor does a click on empty chart");
+});
+test("a click on empty chart dismisses the pin; a click on a mark is the mark's own; the next drawing removes the Esc listener", () => {
+  const d = pinnedDraw();
   const blank = d.inst.zr.handlers.find((h) => h[0] === "click");
   d.inst.actions.length = 0;
-  blank[1]({ target: { type: "rect" } }); assert.equal(d.inst.actions.length, 0, "a click on a mark is the mark's own");
+  blank[1]({ target: { type: "rect" } }); assert.equal(d.inst.actions.length, 0);
   blank[1]({ target: null }); assert.deepEqual(d.inst.actions.at(-1), { type: "hideTip" });
-  renderWorksheet(d.c, sheet({ format: { tooltipButtons: true } }), result(), null, { plan, hooks: {} }); // the next drawing into the same container disposes this chart: its document listener goes with it
+  const e = pinnedDraw();
+  renderWorksheet(e.c, sheet({ format: { tooltipButtons: true } }), result(), null, { plan, hooks: {} });
   assert.equal(docListeners.filter((l) => l[0] === "keydown").length, 0);
+});
+test("a command from the pinned tooltip runs only for a mark that can be selected (re-checked when it runs)", () => {
+  const { calls, inst } = draw(sheet({ format: WITH }), result([["EU", 3], [null, 5], ["JP", 4]]));
+  const click = listeners.find((l) => l.el === inst.host && l.t === "click");
+  const press = (idx) => click.fn({ target: { closest: () => ({ dataset: { ttCmd: "keep", ttIdx: String(idx) } }) }, preventDefault() {}, stopPropagation() {} });
+  press(1); press(7); assert.deepEqual(calls, [], "a NULL mark and an index past the data run nothing");
+  press(2); assert.equal(calls.length, 1); assert.equal(calls[0][2], "JP");
 });
 test("On hover and unset charts add no document listener", () => {
   draw(sheet({ format: WITH })); draw(sheet());

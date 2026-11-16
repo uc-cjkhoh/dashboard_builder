@@ -10,6 +10,7 @@ import { TOOLTIP_MODES } from "../Core/sheet-schema.js";
 import { primaryDim } from "./result-model.js";
 import { planDims, isDrillActive, marksOf, colorMode, SCATTER_TYPES } from "./sheet-plan.js";
 import { isGroupingPart } from "./date-parts.js";
+import { BUCKET_TYPES, DATE_BUCKET_CHOICES } from "./scale-model.js";
 import { selectedIndicesOf } from "./dashboard-select.js";
 
 export const TOOLTIP_MODE_CHOICES = [["responsive", "Responsive"], ["hover", "On hover"]];
@@ -30,7 +31,7 @@ export const commandButtonsOn = (format) => format?.tooltipButtons === true;
 export const tooltipModeOf = (format) => (TOOLTIP_MODES.has(format?.tooltipMode) ? format.tooltipMode : "responsive");
 
 export const showTooltipsError = (v) => (typeof v === "boolean" ? null : "Show tooltips must be on or off.");
-export const tooltipButtonsError = (v) => (typeof v === "boolean" ? null : "Include command buttons must be on or off.");
+export const tooltipButtonsError = (v) => (typeof v === "boolean" ? null : "Command buttons must be on or off.");
 export const tooltipModeError = (v) => (TOOLTIP_MODES.has(v) ? null : "Tooltip mode must be Responsive or On hover.");
 
 /** `format` with `key` set to `value` — or without it when `value` is the default, so a default is never stored. */
@@ -42,31 +43,43 @@ export function withTooltipSetting(format, key, value) {
 
 // ---- the Format controls --------------------------------------------------------------------------------------------------------
 
-/** Why command buttons would do nothing on this worksheet, or null when they would work. `i` = { type, hasDim, drilling, firstKeyGrouped, split }. */
+/** Said where the first field's dates are grouped into periods: a mark is then a period, not a value a filter could match. */
+export const DATE_GROUPED_NOTE = "the first field's dates are grouped into periods (Format → Group dates, or a date part), so a mark has no value to keep or exclude. Choose Group dates → Exact to show them.";
+const grainLabel = (g) => DATE_BUCKET_CHOICES.find(([v]) => v === g)?.[1] ?? g;
+
+/** Why command buttons would do nothing on this worksheet, or null when they would work. `i` = { type, hasDim, drilling, firstKeyGrouped, split, dateBucket?, firstKeyDated? }. */
 export function buttonGate(i) {
   if (!BUTTON_TYPES.has(i.type)) return "Command buttons need a chart whose marks select by a field value (bar, line, area, pie, point).";
   if (!i.hasDim) return "Add a dimension: a mark needs a field value to keep or exclude.";
   if (i.drilling) return "A drill hierarchy is active: a click steps down instead of selecting a mark.";
   if (i.firstKeyGrouped) return "A date part groups the first field, so a mark has no value to keep or exclude.";
+  if (i.firstKeyDated && i.dateBucket && i.dateBucket !== "auto" && i.dateBucket !== "exact") return `Group dates is ${grainLabel(i.dateBucket)}, so a mark is a period, not a value to keep or exclude. Choose Group dates → Exact.`;
   if (i.split) return "A point chart split by Colour or Shape does not select its marks.";
   return null;
 }
 
+/** A note (not a reason to disable) for a first field that is a date the server may group on its own (Group dates: Auto): the buttons then appear only when it does not. */
+export const buttonNote = (i) => (i.firstKeyDated && (i.dateBucket ?? "auto") === "auto" ? "On a date axis, Group dates → Auto may group the dates into periods; the buttons then do not appear (the chart says so). Choose Group dates → Exact to always have them." : null);
+
 /** The worksheet as `buttonGate` wants it (the same rules the click uses: render-handlers.js `selectHandler`, worksheet-render.js). */
 export function gateInputs(sheet) {
   const dims = planDims(sheet);
+  const first = dims.keyOrder[0];
   return {
     type: sheet.chartType,
     hasDim: Boolean(primaryDim(sheet)),
     drilling: isDrillActive(sheet),
-    firstKeyGrouped: isGroupingPart(dims.keyOrder[0]?.datePart ?? null),
+    firstKeyGrouped: isGroupingPart(first?.datePart ?? null),
+    // a temporal first field the server groups by Format → Group dates (a calculated field, an exact / non-grouping part and a chart type with no grouping are never bucketed)
+    firstKeyDated: Boolean(first) && first.category === "temporal" && first.calc === undefined && (first.datePart == null || first.datePart === "auto") && BUCKET_TYPES.has(sheet.chartType),
+    dateBucket: sheet.format?.dateBucket ?? "auto",
     split: SCATTER_TYPES.has(sheet.chartType) && Boolean(marksOf(sheet).shape || dims.colourDims.length > 0 || colorMode(sheet) === "discrete"),
   };
 }
 
 /** The Format panel's controls for a chart: [{ key, label, kind: "check" | "select", value, choices?, disabled? }] — none for a chart with no hover tooltip.
  *  A control that does nothing here is disabled and says why. `gate` = buttonGate(...) of the worksheet. */
-export function tooltipControlSpecs({ type, format, gate }) {
+export function tooltipControlSpecs({ type, format, gate, note = null }) {
   if (!TOOLTIP_TYPES.has(type)) return [];
   const on = tooltipsOn(format);
   const buttons = commandButtonsOn(format);
@@ -74,7 +87,7 @@ export function tooltipControlSpecs({ type, format, gate }) {
   const why = !on ? noTips : gate;
   return [
     { key: "showTooltips", label: "Show tooltips", kind: "check", value: on },
-    { key: "tooltipButtons", label: "Command buttons", kind: "check", value: buttons, ...(why ? { disabled: why } : {}) },
+    { key: "tooltipButtons", label: "Command buttons", kind: "check", value: buttons, ...(why ? { disabled: why } : note ? { note } : {}) },
     { key: "tooltipMode", label: "Tooltip mode", kind: "select", value: tooltipModeOf(format), choices: TOOLTIP_MODE_CHOICES,
       ...(why ? { disabled: why } : !buttons ? { disabled: "Responsive or On hover only matters with command buttons." } : {}) },
   ];

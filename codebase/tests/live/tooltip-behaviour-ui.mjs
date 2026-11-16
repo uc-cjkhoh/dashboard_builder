@@ -38,10 +38,14 @@ function answer({ method, path, body }) {
     const dims = [...(body.rowDimensions ?? []), ...(body.columnDimensions ?? [])];
     const filt = (body.filters ?? []).find((f) => f.column === 'region');
     const members = !dims.length ? [null] : filt && filt.op === '=' ? REGIONS.filter((r) => r === filt.value) : filt && (filt.op === '!=' || filt.op === '<>') ? REGIONS.filter((r) => r !== filt.value) : REGIONS;
+    const dated = dims[0]?.column === 'placed'; // a date axis: the server groups it by the asked grain (Auto -> month) unless Group dates is Exact, and says which key it grouped
+    const MONTHS = ['2024-01-01', '2024-02-01', '2024-03-01', '2024-04-01'];
     return { json: {
       rowDimensions: (body.rowDimensions ?? []).map((d) => d.column), columnDimensions: (body.columnDimensions ?? []).map((d) => d.column),
       measures: (body.measures ?? []).map((_, i) => `v${i}`),
-      rows: members.map((mem, r) => ({ keys: dims.map(() => mem), values: (body.measures ?? []).map((_, i) => 10 * (REGIONS.indexOf(mem) + 1) + i * 3) })),
+      rows: dated ? MONTHS.map((m, r) => ({ keys: dims.map(() => m), values: (body.measures ?? []).map((_, i) => 10 * (r + 1) + i * 3) }))
+        : members.map((mem, r) => ({ keys: dims.map(() => mem), values: (body.measures ?? []).map((_, i) => 10 * (REGIONS.indexOf(mem) + 1) + i * 3) })),
+      ...(dated && body.dateBucket ? { bucket: { key: 0, grain: body.dateBucket === 'auto' ? 'month' : body.dateBucket } } : {}),
       truncated: false } };
   }
   return null;
@@ -371,10 +375,55 @@ try {
     must(!/Keep only|Exclude|View data|ws-tip/.test(svg), 'no tooltip text or buttons in the export');
     await clearSel(); await away();
   });
-  await check('Command buttons are not offered where a click would not select: a date-part key, a drill hierarchy... (the control is disabled with the reason)', async () => {
+  await check('Command buttons are disabled with their reason on a heatmap, and a table / KPI-style chart has no tooltip controls at all (the date-part, drill and split gates are unit-tested)', async () => {
+    await chartType('Heatmap'); await openFormat();
+    const c = await state('Command buttons'), m = await state('Tooltip mode');
+    must(c && c.disabled && /select/i.test(c.title), 'heatmap: ' + J(c));
+    must(m && m.disabled, 'mode: ' + J(m));
+    await closeFormat();
     await chartType('Table'); await openFormat();
     must((await state('Show tooltips')) === null, 'a table has no tooltip controls');
     await closeFormat(); await chartType('Bar');
+  });
+  await check('a date axis: Group dates Auto keeps the control with a note and the chart says why no buttons appear; a grain disables it with the reason; Exact brings the buttons back', async () => {
+    await dragChip('placed', `__t.zone('columns')`);
+    await ev(`(() => { const pills = [...document.querySelectorAll('.ws-shelf--columns .ws-pill')]; pills.find((p) => /region/.test(p.textContent))?.querySelector('[aria-label^="Remove"]')?.click(); return true; })()`);
+    await settle(600); await chartType('Line'); await openFormat();
+    await ev(`(() => { const c = ${ctl('Command buttons')}; if (!c.checked) c.click(); return true; })()`); await settle(500);
+    const auto = await state('Command buttons');
+    must(auto && auto.checked && !auto.disabled && /Group dates/.test(auto.title), 'Auto: enabled with a note: ' + J(auto));
+    const hintText = () => ev(`[...document.querySelectorAll('#ws-chart .ws-hint')].map((h) => h.textContent).join(' | ')`);
+    must(/Command buttons are not shown.*Group dates → Exact/.test(await hintText()), 'the chart says why: ' + (await hintText()));
+    await closeFormat();
+    await hoverMark(1); const t = await shown();
+    must(t && t.buttons.length === 0, 'the tooltip is plain: ' + J(t && t.buttons)); await away();
+    await openFormat(); await pick('Group dates', 'day');
+    const day = await state('Command buttons');
+    must(day.disabled && /Group dates is Day.*Exact/.test(day.title), 'Day: disabled with the reason: ' + J(day));
+    await pick('Group dates', 'exact');
+    const exact = await state('Command buttons');
+    must(!exact.disabled, 'Exact: enabled: ' + J(exact));
+    await pick('Tooltip mode', 'hover');
+    must(!/Command buttons are not shown/.test(await hintText()), 'no hint once the dates are not grouped: ' + (await hintText()));
+    await closeFormat();
+    await hoverMark(1); const t2 = await shown();
+    must(t2 && t2.buttons.length === 3, 'Exact: the buttons are in the tooltip: ' + J(t2 && t2.buttons)); await away();
+    await shot('date-axis-exact');
+    await openFormat(); await pick('Group dates', 'auto'); await closeFormat();
+  });
+  await check('clicking a tooltip button does not stop an open menu from closing on the click (the click still bubbles)', async () => {
+    await openFormat(); await pick('Group dates', 'exact'); await pick('Tooltip mode', 'hover'); await closeFormat();
+    await ev(`document.querySelector('.ws-pick--chart .ws-pick__btn').click()`);
+    must(await ev(`!!document.querySelector('.ws-charttypes')`), 'the chart-type menu is open');
+        await hoverMark(3); await b.sleep(200); // the last point lies right of the open menu
+    const p = await markXY(3); const t = await enterTip(p);
+    must(t && t.buttons.length === 3, 'a tooltip to click: ' + J(t && t.buttons));
+    await ev(`window.__docClicks = 0; document.addEventListener('click', () => { window.__docClicks++; }); true`); // a document-level click listener, like the menus' outside-click close
+    await clickBtn('Exclude');
+    must(await chip(), 'the command ran');
+    must((await ev('window.__docClicks')) >= 1, 'the click reached document-level handlers');
+    must(await ev(`!document.querySelector('.ws-charttypes') || getComputedStyle(document.querySelector('.ws-charttypes').closest('.menu__list, .menu') ?? document.body).display === 'none' || document.querySelector('.ws-charttypes').closest('[hidden]') !== null`), 'the menu closed on that click');
+    await clearSel();
   });
   if (b.consoleErrors.length) console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  '));
 } catch (e) {
