@@ -144,14 +144,14 @@ On Bar / Line / Area the card opens with a row of **items**: Reference line, Ban
 - Both controls are disabled with a reason on a combo that draws no lines (one measure, or Right-axis marks = Bar).
 - Code: `Dashboard/line-style-model.js` (`effectivePattern`, `lineDash`, `comparisonDash`, `lineControlSpecs`), drawn in `buildCartesian`; the controls are wired by `Dashboard/line-controls.js` (`wireLineControls`); [D119](../../decisions/decisions-marks.md#d119--line-pattern-and-line-markers-on-the-marks-card).
 
-**Line markers** (Format; Line, Area, Combo lines; `format.lineMarkers` `all` | `none`, absent = Automatic):
+**Line markers** (Format; Line, Area, Combo lines; `format.lineMarkers` `selected` | `all` | `none`, absent = Automatic):
 
 - **Automatic** — a dot on every point up to 60 points (or whenever Marker size is set); a longer line shows none.
+- **Selected** — a dot only at the **click-selected marks**: every series' point at a selected category (the worksheet's click selection in the editor, the board's cross-filter selection on a dashboard widget; independent of Label marks). **No selection = no markers** (stated in the control's title), except a lone value, which keeps its dot. Every other point keeps a clear (transparent) dot so a click can select it and hover shows it; a long line gets only the selected dots, and a big canvas chart skips LTTB sampling as for All. Offered only where a mark can be selected (a dimension that is a real column). An export shows the dots of the selection at export time ([D124](../../decisions/decisions-marks.md#d124--line-markers-selected-dots-only-at-the-click-selected-marks)).
 - **All** — a dot on every point however long the line (ECharts is told not to thin them, and a big canvas chart skips its LTTB sampling so no point, and no marker, is dropped; the point cap bounds the work).
 - **None** — no dots. A **lone value** (no neighbour to draw a line to: a one-point line, a point between gaps) keeps its dot so no value disappears. Hover still shows the point's dot and the tooltip (axis pointer); Data labels still draw, on dots filled and bordered `transparent` (not opacity 0, which a label would inherit) that come back in the mark's colour on hover. Its title notes that Marker size and Marker shape then have no other effect.
-- **A marker that is data stays:** Size on a stepped line or an area sizes the markers (D108), and a colour measure beside several measures gives each measure its own marker; the control is **disabled, reads All and says why**.
-- **Selected points** is not offered yet: the chart is handed the selected marks only while Label marks is Selected, so it needs that selection passed through for Line markers on its own (backlog).
-- Code: `Dashboard/line-marker-model.js` (`markerPlan`, `isolatedPoints`), `clearDots` in `chart.js`. Browser check: `tests/live/line-pattern-ui.mjs`.
+- **A marker that is data stays** (under Selected and None): Size on a stepped line or an area sizes the markers (D108), and a colour measure beside several measures gives each measure its own marker; the control is **disabled, reads All and says why**.
+- Code: `Dashboard/line-marker-model.js` (`markerPlan`, `isolatedPoints`), `lineMarkersSpec` in `render-cartesian.js`, `clearDots` in `chart.js`. Browser checks: `tests/live/line-pattern-ui.mjs`, `tests/live/line-selected-ui.mjs`.
 
 ### Dual axis, marker size, marker shape and mark borders
 
