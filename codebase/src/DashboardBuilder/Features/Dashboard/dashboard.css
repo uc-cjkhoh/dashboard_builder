@@ -649,8 +649,8 @@
 .ws-fields { background: var(--surface-2); gap: var(--s2); padding: var(--s2) var(--s4) var(--s4); }
 .ws-fieldtools { background: var(--surface-2); }
 .ws-fields .ws-group { margin-bottom: 0; }
-/* The pane itself never scrolls: each table tile shares the height left under Marks and the search and scrolls its own fields, its header pinned. */
-.ws-fields { overflow: hidden; }
+/* Each table tile shares the height left under Marks and the search and scrolls its own fields, its header pinned. Only when there are so many tables that their two-row minimums no longer fit does the pane itself scroll (vertical only). */
+.ws-fields { overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
 .ws-fields > .ws-fieldset { display: block; flex: 1 1 0; max-height: max-content; min-height: calc(2 * var(--ctl-h) + 2 * var(--s1) + 2px); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
 .ws-fields > .ws-fieldset:not([open]) { overflow: hidden; }
 /* A collapsed card, or one whose fields are all hidden, is just its header: the two-row minimum would leave blank space under it. */
@@ -660,6 +660,11 @@
 .ws-fields > .ws-fieldset > .ws-group__head { position: sticky; top: 0; z-index: 1; background: var(--surface); box-sizing: border-box; height: calc(var(--ctl-h) + var(--s1)); padding-top: calc(2 * var(--s1)); }
 /* The open Marks card keeps its height up to 45% of the pane; beyond that, on a short window, it scrolls inside itself — the pane still never scrolls. */
 .ws-fields > .ws-shelf--marks { flex: none; max-height: 45%; overflow-y: auto; overscroll-behavior: contain; }
+/* Expandable card (Core/edge-resize.js): hovering the bottom border lights it and shows the resize cursor; a dragged card keeps its own height (still capped at its content) and stops sharing the pane's leftover space. */
+.ws-fields > .ws-fieldset.is-sized { flex: none; height: var(--ws-h); }
+.ws-fields > .ws-fieldset.is-edge, .ws-fields > .ws-fieldset.is-edge * { cursor: ns-resize; }
+.ws-fields > .ws-fieldset.is-edge { box-shadow: var(--elev-2), inset 0 -2px 0 var(--accent); }
+body.is-resizing-y { cursor: ns-resize; user-select: none; }
 .ws-fields > .ws-fieldset > summary + * { margin-top: var(--s1); }
 .ws-fields > .ws-fieldset > :not(summary) + * { margin-top: var(--s1); }
 .ws-table { background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r); box-shadow: var(--elev-2); padding: var(--s1); }
@@ -673,6 +678,9 @@
 .ws-field--measure .ws-field__type { color: var(--meas-ink); }
 .ws-field:hover { background: color-mix(in srgb, var(--ink) 7%, transparent); border-color: transparent; }
 .ws-field.is-cast { height: auto; min-height: var(--ctl-h); }
+/* The pane's two sections: Marks above, then a divider and the "Fields" title over the search and the tables. The title matches Marks' header (no chevron: it does not collapse). */
+.ws-fields__divider { flex: none; width: 100%; height: 0; margin: var(--s2) 0 0; border: 0; border-top: 1px solid var(--line-2); }
+.ws-fields__title { flex: none; margin: 0; font-size: var(--fs-body); font-weight: 600; color: var(--ink-2); line-height: var(--ctl-h); }
 /* Marks: a plain header and soft tiles for the slots. */
 .ws-fields .ws-shelf--marks > .ws-group__head { font-weight: 600; color: var(--ink-2); }
 .ws-marks__row .ws-tool { border-color: transparent; background: var(--surface-3); }

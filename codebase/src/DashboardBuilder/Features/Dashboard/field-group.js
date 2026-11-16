@@ -8,6 +8,7 @@ const collapsed = new Set();
 export function fieldGroup(cls, key, title, id) {
   const group = document.createElement("details");
   group.className = `ws-group ${cls}`;
+  group.dataset.key = key;
   group.open = !collapsed.has(key);
   group.addEventListener("toggle", () => { if (group.open) collapsed.delete(key); else collapsed.add(key); });
   const head = document.createElement("summary");

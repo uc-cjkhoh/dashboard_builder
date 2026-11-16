@@ -25,6 +25,7 @@ import { createResultCache } from "./query-runner.js";
 import { CHART_TYPES, chartIcon, chartLabel, sortSummary } from "./viewbar-model.js";
 import { enter, MOTION } from "../Core/motion.js";
 import { wireResizer } from "../Core/resizer.js";
+import { wireEdgeResize, heightStore } from "../Core/edge-resize.js";
 import { PRESET_CHOICES, COMPARE_CHOICES, COMPARE_TYPES, newPeriod, resolveRange, compareRange, rangeLabel, withLatest, refreshedLatest, anchorLabel } from "./period-model.js";
 import { newFilter, caseMiss, caseMissText, conflictFor, selectionLabel } from "./filter-hints.js";
 import { CF_MODE_CHOICES, CF_SCALE_CHOICES, CF_OP_CHOICES, CF_TONE_CHOICES, CF_MAX_RULES, measureKey, emptyRule, isActive, newRule } from "./conditional-model.js";
@@ -206,6 +207,8 @@ export function initDashboards() {
   const headEl = document.getElementById("ws-chart-head");
   if (!view) return;
   initFieldResizer();
+  // Each table tile is an expandable card: hover its bottom border, then click and drag to set its height (remembered per table in this browser).
+  const cardHeights = wireEdgeResize(fieldsEl, { selector: ".ws-fieldset[open]", keyOf: (card) => card.dataset.key, store: heightStore(localStorageOrNull(), "dashboardbuilder.fields.heights") });
   // An Analytics pane item dropped on the chart view adds it (the item's button does the same from the keyboard).
   const hasItem = (e) => analyticsDrop && e.dataTransfer && Array.from(e.dataTransfer.types).includes(ANALYTICS_MIME);
   let overDepth = 0; // dragenter / dragleave pairs on the chart's children, so the highlight neither flickers nor sticks
@@ -449,6 +452,7 @@ export function initDashboards() {
       const meas = visible.filter((c) => roleFor(c) === "measure");
       if (dims.length) { group.append(el("div", "ws-field-group", "Dimensions")); for (const c of dims) group.append(fieldChip(t, c, "dimension")); }
       if (meas.length) { group.append(el("div", "ws-field-group", "Measures")); for (const c of meas) group.append(fieldChip(t, c, "measure")); }
+      cardHeights.apply(group);
       groups.push(group);
     }
     if (seq !== fieldsSeq) return;
@@ -459,8 +463,10 @@ export function initDashboards() {
       for (const item of calcItems) calcGroup.append(calcFieldChip(item));
       groups.push(calcGroup);
     }
-    // The pane: Marks first, then the search and one tile per table. Calculated fields, Parameters and Hierarchies are three icons in the sidebar (below).
-    fieldsEl.replaceChildren(marksEl, fieldTools(hiddenCount, calcItems.length), ...groups);
+    // The pane: Marks, a divider and the "Fields" title, then the search and one tile per table. Calculated fields, Parameters and Hierarchies are three icons in the sidebar (below).
+    const divider = el("hr", "ws-fields__divider");
+    const title = el("h2", "ws-fields__title", "Fields");
+    fieldsEl.replaceChildren(marksEl, divider, title, fieldTools(hiddenCount, calcItems.length), ...groups);
     filterFields();
   }
 
