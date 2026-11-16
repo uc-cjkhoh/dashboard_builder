@@ -5,7 +5,7 @@ import { pickInk } from "./contrast.js";
 import { orderedPalette } from "./colour-model.js";
 import { DIV_FALLBACK, DIV_HUE_FALLBACK, divergingColours, divergingRange, effectiveScale, fullRangeRamp, rampColours, rangeOf, stepPieces, stepColours, stepIndexOf, positionOf, mixHex } from "./colour-scale-model.js";
 import { sizeRange, barThickness, markerSizeFor, drawsSize, lineSizeMode, measureCue } from "./mark-channel-model.js";
-import { sizeScaleOf, measureShareFn, memberShareFn, sizeLegendText, lineWidthFor } from "./size-scale-model.js";
+import { sizeScaleOf, measureShareFn, memberShareFn, sizeLegendText, sizeEnds, lineWidthFor } from "./size-scale-model.js";
 import { tooltipHtml } from "./tooltip-model.js";
 import { tipLookup } from "./tooltip-formats.js";
 import { lineStep, lineDash, comparisonDash, effectivePattern, trendDash, linesTakeStyle } from "./line-style-model.js";
@@ -483,7 +483,7 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
   const sz = cartesianSizes({ sizes, sizeGrid, sizeOrder, type, mainCount, format });
   const sizeFr = sz?.fr ?? null; // sizeFr[series][category] = 0..1
   const sizeMode = lineSizeMode(type, format.lineStyle, mainCount * labels.length); // "width" | "marker" | null
-  const sizeNote = sz ? sizeLegend(sz.flat, sizeName, c, fmtVal, showLegend && pos === "top" ? 24 : 2, { order: sizeOrder, reversed: sizeScaleOf(format).reversed }) : null;
+  const sizeNote = sz ? sizeLegend(sz.flat, sizeName, c, fmtVal, showLegend && pos === "top" ? 24 : 2, { order: sizeOrder, scale: sizeScaleOf(format), zeroDefault: false }) : null;
   const sizeText = (si, di) => { // a cell's Size in words (a member's name, or the formatted value)
     const m = sizeMembersGrid ? sizeMembersGrid[si]?.[di] : sizeMembers ? sizeMembers[di] : undefined;
     if (m != null) return String(m);
@@ -779,7 +779,7 @@ function buildScatter({ categories, series, format = {}, sizes, sizeName, sizeMe
   const symbolSize = sizeDim >= 0 ? sizeScaler(sizes, (v) => v[sizeDim], { format, order: sizeOrder }) : markerSizeOr(format.markerSize, 14); // a Size field wins
   const sizeShown = (p) => (p.data?.sizeMember != null ? p.data.sizeMember : fmtVal(p.value[sizeDim]));
   const legend = colorDim >= 0 ? continuousVisualMap(colorValues, colorDim, c, fmtVal, colorName) : undefined;
-  const sizeNote = sizeDim >= 0 ? sizeLegend(sizes, sizeName, c, fmtVal, 2, { order: sizeOrder, reversed: sizeScaleOf(format).reversed }) : null;
+  const sizeNote = sizeDim >= 0 ? sizeLegend(sizes, sizeName, c, fmtVal, 2, { order: sizeOrder, scale: sizeScaleOf(format), zeroDefault: true }) : null;
 
   return {
     textStyle: { fontFamily: c.font, color: c.label },
@@ -844,7 +844,7 @@ function buildScatterShapes({ groups, symbol, xName, yName, hasSize, sizeName, s
   const symbolOf = (g) => (g.shape ? (shapeName ? symbolAt(g.shape.index) : memberShapes.has(g.shape.name) ? shapeSymbol(memberShapes.get(g.shape.name)) : symbolAt(g.shape.index)) : symbol || "circle");
   const colourOf = (g, i) => (g.colour ? memberColor(g.colour.name, c.cat[g.colour.index % c.cat.length]) : c.cat[i % c.cat.length]);
   if (legend && groups.some((g) => g.shape)) legend.data = groups.map((g) => (g.shape ? { name: g.name, icon: symbolOf(g) } : g.name)); // the legend swatch wears the symbol too
-  const sizeNote = hasSize ? sizeLegend(allSizes, sizeName, c, fmtVal, show && pos === "top" ? 24 : 2, { order: sizeOrder, reversed: sizeScaleOf(format).reversed }) : null;
+  const sizeNote = hasSize ? sizeLegend(allSizes, sizeName, c, fmtVal, show && pos === "top" ? 24 : 2, { order: sizeOrder, scale: sizeScaleOf(format), zeroDefault: true }) : null;
   // Labels (Data labels, or a Label field written per result row): one per mark, in the member's series. Min & max is per member; Selected and Most recent name result
   // rows, which every point carries. A point with no name of its own (Colour or Shape is the only dimension) says its member, so a label is never blank.
   const labelled = Boolean(format.dataLabels || rowLabels);
@@ -1461,11 +1461,13 @@ function lineGradient(colours, vertical, fallback) {
   return { type: "linear", x: 0, y: 0, x2: vertical ? 0 : 1, y2: vertical ? 1 : 0, colorStops: stops };
 }
 // The Size legend, in words (never size alone): the field and its smallest and largest value (or member), at the top right of the chart.
-// `opts.order` = a dimension's member names smallest step first; `opts.reversed` says the scale runs the other way.
+// `opts.order` = a dimension's member names smallest step first; `opts.scale` (sizeScaleOf) says whether the scale runs the other way and names typed Start / End
+// values; `opts.zeroDefault` = whether this chart's span starts at zero when Sizes vary is Automatic (a start is then not in play).
 function sizeLegend(values, name, c, fmtVal, top = 2, opts = {}) {
   const r = sizeRange(values);
   if (!name || (!opts.order && !r)) return null;
-  const text = sizeLegendText(name, { range: r, members: opts.order, reversed: opts.reversed, fmtVal });
+  const scale = opts.scale ?? sizeScaleOf({});
+  const text = sizeLegendText(name, { range: r, members: opts.order, reversed: scale.reversed, fmtVal, ends: opts.order ? null : sizeEnds(scale, opts.zeroDefault) });
   return { graphic: [{ type: "text", right: 18, top, silent: true, style: { text, fill: c.muted, font: `14px ${c.font}`, textAlign: "right" } }] };
 }
 // A cartesian chart's Size as shares: { fr[series][category] (0..1), grid (the values), flat }, or null where Size isn't drawn. Beside a Colour split
