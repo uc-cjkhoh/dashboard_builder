@@ -1301,9 +1301,10 @@ function buildGantt({ categories, gantt, name, format = {}, selectedIndices, onL
         const slot = api.size([0, 1])[1];
         const h = sizing ? ganttThickness(sizing.shares[barIndex.get(b)], slot) : Math.min(28, slot * 0.6); // a Size measure: 6 px .. 80% of the slot; else one fixed thickness
         const opacity = (keep.size && !keep.has(b.i)) || (split && focus && names[gi] !== focus) ? 0.35 : 1; // a legend-focused member keeps full strength (ECharts does not blur custom marks)
-        return { type: "group", ...(sizing ? { z2: 1000 - h } : {}), children: [ // thick bars sharing a row (Colour members) draw under the thinner ones
-          { type: "rect", shape: { x: a[0], y: a[1] - h / 2, width: Math.max(2, e[0] - a[0]), height: h, r: 2 }, style: { fill: colourOf(gi), opacity: opacity * markOpacityOf(format), ...strokeOf(format.markBorder, borderInk(format.markBorderColor, c)) }, emphasis: { style: { stroke: c.ink, lineWidth: 1 } } },
-          { type: "text", style: { text: len(b), x: Math.max(e[0], a[0] + 2) + 4, y: a[1], align: "left", verticalAlign: "middle", fill: c.label, opacity, font: `14px ${c.font}` } },
+        const z = sizing ? { z2: 1000 - h } : {}; // thick bars sharing a row (Colour members) draw under the thinner ones; ECharts reads z2 on the drawn child, not on its group
+        return { type: "group", children: [
+          { type: "rect", ...z, shape: { x: a[0], y: a[1] - h / 2, width: Math.max(2, e[0] - a[0]), height: h, r: 2 }, style: { fill: colourOf(gi), opacity: opacity * markOpacityOf(format), ...strokeOf(format.markBorder, borderInk(format.markBorderColor, c)) }, emphasis: { style: { stroke: c.ink, lineWidth: 1 } } },
+          { type: "text", ...z, style: { text: len(b), x: Math.max(e[0], a[0] + 2) + 4, y: a[1], align: "left", verticalAlign: "middle", fill: c.label, opacity, font: `14px ${c.font}` } },
         ] };
       } })),
   };

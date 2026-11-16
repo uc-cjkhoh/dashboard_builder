@@ -59,7 +59,7 @@ test("model: thickness is 6 px at the smallest up to 80% of the slot at the larg
 
 test("channel: a Size measure is drawn on a Gantt with its two measures; a dimension is a hint that says why", () => {
   assert.deepEqual(sizeChannel("gantt", 2, false), { ok: true, note: null });
-  assert.equal(sizeChannel("gantt", 1, false).ok, false, "a Gantt with fewer than two measures draws nothing, so Edit Sizes is not offered");
+  for (const n of [0, 1, 3]) assert.equal(sizeChannel("gantt", n, false).ok, false, `a Gantt with ${n} shelf measures draws a hint, not bars, so Edit Sizes is not offered`);
   const d = sizeChannel("gantt", 2, true);
   assert.equal(d.ok, false);
   assert.match(d.note, /Gantt/); assert.match(d.note, /one bar per row/); assert.match(d.note, /measure/);
@@ -132,7 +132,13 @@ test("a Colour split: each (row, member) bar takes its own cell's thickness on o
   assert.deepEqual(heights(sized(rows, { colour: true })), [6, 19, 32], "series order: todo (T1, T2), then done");
   const g = (s, di) => s.renderItem({ dataIndex: di }, fakeApi(s.data[di], 40));
   const todoT1 = g(o.series[0], 0), done = g(o.series[1], 0);
-  assert.ok(todoT1.z2 > done.z2, "the thinner bar has the higher z2");
+  const z = (el) => [el.children[0].z2, el.children[1].z2];
+  assert.equal(todoT1.z2, undefined, "ECharts ignores z2 on the group, so it is not set there");
+  assert.ok(z(todoT1)[0] > z(done)[0], "the thinner bar's rectangle has the higher z2");
+  assert.equal(z(todoT1)[1], z(todoT1)[0], "the length label follows its bar");
+  assert.equal(z(done)[1], z(done)[0]);
+  assert.equal(z(todoT1)[0], 1000 - 6); assert.equal(z(done)[0], 1000 - 32);
+  assert.equal(g(buildOption(SPECS.plain()).series[0], 0).children[0].z2, undefined, "no z2 without Size");
   assert.equal(o.series[0].data[0][0], o.series[1].data[0][0], "both bars share the row slot");
 });
 test("selection fade, opacity and the length label are as before beside Size", () => {

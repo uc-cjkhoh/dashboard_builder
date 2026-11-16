@@ -19,6 +19,7 @@ const COLUMNS = {
   customers: [['country', 'String', 'text']],
 };
 const REGIONS = ['APAC', 'EU', 'US'];
+let overlap = false;   // true: every bar starts at the same value, so the Colour members' bars of one row overlap
 const queries = [];     // every /api/query body, in order
 let tables = ['orders', 'customers'];
 function answer({ method, path, body }) {
@@ -37,7 +38,7 @@ function answer({ method, path, body }) {
     return { json: {
       rowDimensions: (body.rowDimensions ?? []).map((d) => d.column), columnDimensions: (body.columnDimensions ?? []).map((d) => d.column),
       measures: (body.measures ?? []).map((_, i) => `v${i}`),
-      rows: combos.map((keys, r) => ({ keys, values: (body.measures ?? []).map((m, i) => (m.column === 'placed' ? (m.agg === 'max' ? `2026-02-1${r + 1}` : `2026-02-0${r + 1}`) : i === 0 ? 10 * (r + 1) : (m.agg === 'avg' ? 1234567.5 : 3) * (r + 1))) })),
+      rows: combos.map((keys, r) => ({ keys, values: (body.measures ?? []).map((m, i) => (m.column === 'placed' ? (m.agg === 'max' ? `2026-02-1${r + 1}` : `2026-02-0${r + 1}`) : i === 0 ? (overlap ? 10 : 10 * (r + 1)) : (m.agg === 'avg' ? 1234567.5 : 3) * (r + 1))) })),
       truncated: false } };
   }
   return null;
@@ -290,8 +291,8 @@ try {
   const has = (label) => ev(`!!(${fmtField(label)})`);
   const hints = () => ev(`[...document.querySelectorAll('#ws-chart .ws-hint')].map((h) => h.textContent)`);
   const sizeText = async () => J((await opt()).graphic ?? []).match(/Size: [^"]*/)?.[0] ?? '';
-  // The Gantt's drawn bars, read from the live canvas: each rectangle's height in px (a bar is the only rect with a 2 px corner radius), in draw order.
-  const barHeights = () => ev(`(() => { const i = window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas')); return i.getZr().storage.getDisplayList().filter((e) => e.type === 'rect' && e.shape && e.shape.r === 2 && e.shape.width >= 2).map((e) => Math.round(e.shape.height * 100) / 100); })()`);
+  // The Gantt's drawn bars, read from the live canvas: each rectangle's height in px (a bar is the only rect with a 2 px corner radius), top row first (the draw order differs: thinner bars are drawn later).
+  const barHeights = () => ev(`(() => { const i = window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas')); return i.getZr().storage.getDisplayList().filter((e) => e.type === 'rect' && e.shape && e.shape.r === 2 && e.shape.width >= 2).sort((a, c) => (a.shape.y + a.shape.height / 2) - (c.shape.y + c.shape.height / 2)).map((e) => Math.round(e.shape.height * 100) / 100); })()`);
   const rowSlot = () => ev(`(() => { const i = window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas')); const a = i.convertToPixel({ xAxisIndex: 0, yAxisIndex: 0 }, [0, 0]), c = i.convertToPixel({ xAxisIndex: 0, yAxisIndex: 0 }, [0, 1]); return Math.abs(c[1] - a[1]); })()`);
   const distinct = (a) => new Set(a).size;
   const monotone = (a, up = true) => a.every((x, i) => i === 0 || (up ? x > a[i - 1] : x < a[i - 1]));
@@ -365,6 +366,29 @@ try {
     await ev(`${toolEl('Size')}.click()`); await settle(300);
     must(/one bar per row/.test(await ev(`document.querySelector('.ws-toolpanel .ws-shelf__note')?.textContent ?? ''`)), 'the Marks card says so too');
     await shot('gantt-size-dimension-light.png');
+  });
+  await check('Gantt + Colour + Size, members overlapping in time: the thinner bar is drawn above the thicker one (real display-list order), so none is hidden', async () => {
+    overlap = true;
+    await ev(`document.querySelector('.tab-add').click(); document.querySelector('[data-new-tab=worksheet]').click()`);
+    await settle(400);
+    await waitFor(`!!__t.chip('region') && !document.querySelector('.ws-shelf--columns .ws-pill')`, 'fresh worksheet');
+    await dragChip('region', `__t.zone('rows')`); await dragChip('qty', `__t.zone('columns')`); await dragChip('amount', `__t.zone('columns')`);
+    await dragChip('channel', toolEl('Color')); await dragChip('discount', toolEl('Size'));
+    await settle(500); await setType('Gantt'); await chartReady();
+    // each bar: its draw position in the display list (later = above), its row line (centre y) and thickness
+    const bars = await ev(`(() => { const i = window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas')); const l = i.getZr().storage.getDisplayList(true);
+      return l.map((e, k) => ({ k, e })).filter((x) => x.e.type === 'rect' && x.e.shape && x.e.shape.r === 2 && x.e.shape.width >= 2).map((x) => ({ k: x.k, row: Math.round(x.e.shape.y + x.e.shape.height / 2), h: Math.round(x.e.shape.height * 100) / 100 })); })()`);
+    must(bars.length === 9, `nine bars: ${J(bars)}`);
+    const rows = [...new Set(bars.map((x) => x.row))];
+    must(rows.length === 3, `three row lines: ${J(rows)}`);
+    for (const r of rows) {
+      const inRow = bars.filter((x) => x.row === r).sort((a, c) => a.k - c.k); // bottom to top
+      must(inRow.length === 3 && distinct(inRow.map((x) => x.h)) === 3, `three different thicknesses on a row: ${J(inRow)}`);
+      must(monotone(inRow.map((x) => x.h), false), `drawn thickest first, thinnest last (on top): ${J(inRow)}`);
+    }
+    await shot('gantt-size-overlap-light.png');
+    await theme('dark'); await setType('Bar'); await setType('Gantt'); await chartReady(); await shot('gantt-size-overlap-dark.png'); await theme('light');
+    overlap = false;
   });
   if (b.consoleErrors.length) console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  '));
 } catch (e) {
