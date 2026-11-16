@@ -157,7 +157,7 @@ Nothing here reaches the server; dashboards add no endpoint
   format: { numberFormat, decimals, currencySymbol, dateFormat, topN, dateBucket, target, downIsGood, conditional, legend,
             dataLabels, colorByDimension, xTitle, yTitle,
             lineStyle, heatmapShape, ganttLength?, targetMeasure,
-            syncAxes, dualAxis, secondaryType, markerSize, linePattern?, lineMarkers?, sizeScale?, markOpacity?, shapeBins?, labelMarks?, labelPosition?, markBorder, markBorderColor?, markerShape, font, tableAlign, tableDensity, tableShade, tableCols? }
+            syncAxes, dualAxis, secondaryType, markerSize, linePattern?, lineMarkers?, showTooltips?, tooltipButtons?, tooltipMode?, sizeScale?, markOpacity?, shapeBins?, labelMarks?, labelPosition?, markBorder, markBorderColor?, markerShape, font, tableAlign, tableDensity, tableShade, tableCols? }
 }
 ```
 
@@ -185,6 +185,9 @@ Nothing here reaches the server; dashboards add no endpoint
   | `markerShape` | `circle` \| `square` \| `diamond` \| `triangle` (default `circle`) |
   | `linePattern` | optional `dashed` \| `dotted` (Format → Line pattern on a line, area or combo's lines; absent = solid); an unknown saved value is dropped and reported, never clamped |
   | `lineMarkers` | optional `all` \| `none` (Format → Line markers; absent = Automatic, dots by line length); an unknown saved value is dropped and reported, never clamped |
+| `showTooltips` | optional `false` (Format → Show tooltips off; absent = on); a non-boolean is dropped and reported ([D121](../decisions/decisions-marks.md#d121--tooltip-behaviour-show-tooltips-command-buttons-and-responsive-or-on-hover)) |
+| `tooltipButtons` | optional `true` (Format → command buttons in the tooltip; absent = off); a non-boolean is dropped and reported |
+| `tooltipMode` | optional `hover` (buttons in every hover tooltip; absent = Responsive, a click pins the tooltip); an unknown value is dropped and reported, never coerced |
 
   A target field that no longer points at a later shelf measure is ignored and cleared when Format opens.
   An unknown value is reset with a workbook import issue. A workbook without these keys opens unchanged.

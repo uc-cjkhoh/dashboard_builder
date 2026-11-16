@@ -1,5 +1,5 @@
 ---
-components: [src/DashboardBuilder/Features/Dashboard/mark-channel-model.js, src/DashboardBuilder/Features/Dashboard/size-scale-model.js, src/DashboardBuilder/Features/Dashboard/colour-scale-model.js, src/DashboardBuilder/Features/Dashboard/label-marks-model.js, src/DashboardBuilder/Features/Dashboard/toolbar-rules.js, src/DashboardBuilder/Features/Dashboard/tooltip-model.js]
+components: [src/DashboardBuilder/Features/Dashboard/mark-channel-model.js, src/DashboardBuilder/Features/Dashboard/size-scale-model.js, src/DashboardBuilder/Features/Dashboard/colour-scale-model.js, src/DashboardBuilder/Features/Dashboard/label-marks-model.js, src/DashboardBuilder/Features/Dashboard/toolbar-rules.js, src/DashboardBuilder/Features/Dashboard/tooltip-behaviour-model.js, src/DashboardBuilder/Features/Dashboard/tooltip-model.js]
 ---
 # Marks card compared with Tableau
 
@@ -24,6 +24,7 @@ Not a Tableau clone ([index.md](../development/backlog/index.md#guards-every-ite
 | Path: orders Line vertices; line type Linear / Step / Jump | Path slot orders line and area vertices; Format → Line style: straight, step, jump |
 | Line markers: All or None; Line pattern: Solid, dashed or dotted (solid with a continuous Size) | Format → Line markers (Automatic, All, None; a lone value and a Size-sized or cued marker always stay) and Line pattern (Solid, Dashed, Dotted; solid under a Size thickness, a measure cue keeps its own dash) ([D119](../decisions/decisions-marks.md#d119--line-pattern-and-line-markers-on-the-marks-card)) |
 | Tooltip: field on Tooltip, Edit Tooltip text with inserted fields and formatting | Tooltip slot; Edit tooltip… with `<field>` placeholders, per-line size / bold / italic / colour, per-field number and date formats |
+| Tooltip behaviour: Show Tooltips; Responsive or On Hover; command buttons Keep Only, Exclude, View Data | Format → Show tooltips, Command buttons (Keep only, Exclude, View data on selecting charts in the editor) and Tooltip mode (Responsive: a click pins the tooltip; On hover) ([D121](../decisions/decisions-marks.md#d121--tooltip-behaviour-show-tooltips-command-buttons-and-responsive-or-on-hover)) |
 | Mark-type defaults and the Size slider per type | The chart-type table in [worksheet-marks.md](../concepts/worksheet/worksheet-marks.md#colour-size-and-shape-by-chart-type-t03-19-t03-20-t03-21-t01-21); an unmet mapping is a hint, never an error |
 
 ## Differences and gaps
@@ -35,7 +36,7 @@ Not a Tableau clone ([index.md](../development/backlog/index.md#guards-every-ite
 | Colour palettes | A palette drop-down (categorical and ordinal), Assign Palette, Reset; a custom hex colour on the web | One fixed set of eight colours and 24 swatches; two diverging hue pairs | Backlog: needs a stored-colour contrast rule |
 | Colour: Include totals | Totals and subtotals feed the colour encoding | Not available; a table has its own conditional colours | Backlog |
 | Line markers: Selected points | Effects → Markers → Selected | Not offered yet: the chart gets the selected marks only for Label marks → Selected; All and None are built | Backlog |
-| Tooltip behaviour | Show Tooltips switch; Responsive or On Hover; command buttons (Keep Only, Exclude, Group Members, Create Set, View Data); Allow selection by category; a view in the tooltip | Text template only; no switch, no command buttons; a view in a tooltip is P38 | Backlog |
+| Tooltip: Group Members, Create Set, Allow selection by category, a view in the tooltip | Command buttons Group Members and Create Set; select a field's members by clicking them in the tooltip; a view in the tooltip | Not built: no sets, no member-list step; a view in a tooltip is P38 | Backlog |
 | Mark halos | A halo colour over a background image or a map | Not available (no maps or background images) | Waits on maps |
 | Polygon mark | A Polygon type with Path | No Polygon chart type | Waits on maps |
 | Gantt bar size | Size sets the bar's width | A Gantt takes its length from a field in Format → Length, not Size | Backlog (Gantt remainders) |
