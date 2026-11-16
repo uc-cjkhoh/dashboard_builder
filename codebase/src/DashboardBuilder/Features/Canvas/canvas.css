@@ -88,7 +88,7 @@
 .entity__error { flex-basis: 100%; margin: 0; color: var(--danger-ink); font-size: var(--fs-body); }
 .entity__body { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 
-/* Scrollable column list, up to 240px tall; a short table is only as tall as its columns (no data preview in the entity view). */
+/* Scrollable column list, up to 240px tall (or --list-h after an edge drag, below); a short table is only as tall as its columns (no data preview in the entity view). */
 .entity__cols { max-height: 240px; overflow: auto; padding: var(--s1) 0; }
 /* The 10px scrollbar (core.css) is always reserved and sits in the right gutter, so the rows give up that much padding: their type text ends on
    the same 16px line as the pinned rows' and the head's ✕, whether or not the list overflows. */

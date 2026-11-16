@@ -134,6 +134,22 @@ try {
     await ev(`${card('wide')}.querySelector('.entity__toggle').click()`);
   });
 
+  await check('zoomed out: a top-edge drag keeps the card on the 8px grid and its bottom in place', async () => {
+    const v = await ev(`(() => { const r = document.getElementById('model-view').getBoundingClientRect(); return { x: r.right - 60, y: r.top + r.height * 0.6 }; })()`);
+    must(await ev(`document.elementFromPoint(${v.x}, ${v.y}) === document.getElementById('model-view')`), 'wheel point is not an empty spot');
+    await ev(`(() => { const t = document.elementFromPoint(${v.x}, ${v.y}); t.dispatchEvent(new WheelEvent('wheel', { clientX: ${v.x}, clientY: ${v.y}, deltaY: 300, bubbles: true, cancelable: true })); return true; })()`);
+    const zoom = await ev(`Number(getComputedStyle(document.getElementById('model-view')).getPropertyValue('--zoom'))`);
+    must(zoom > 0 && zoom < 1, `zoom ${zoom}`);
+    const r0 = await rect('wide');
+    await drag(r0.left + r0.width / 2, r0.top + 2, -37);
+    const r1 = await rect('wide');
+    const m = await ev(`import('/features/Core/store.js').then(({ entities }) => { const e = [...entities.values()].find((x) => x.table === 'wide'); return { y: e.y, h: e.listHeight }; })`);
+    must(m.y % 8 === 0 && m.h % 8 === 0, `y ${m.y}, list ${m.h}`);
+    must(Math.abs(r1.bottom - r0.bottom) < 1, `bottom moved ${r0.bottom}→${r1.bottom}`);
+    must(r1.top < r0.top, 'top did not move up');
+    await ev(`(() => { const t = document.elementFromPoint(${v.x}, ${v.y}); t.dispatchEvent(new WheelEvent('wheel', { clientX: ${v.x}, clientY: ${v.y}, deltaY: -300, bubbles: true, cancelable: true })); return true; })()`);
+  });
+
   await check('hover shows the accent line (screenshot)', async () => {
     const r = await rect('wide');
     await send('mouseMoved', r.left + r.width / 2, r.bottom - 3);
