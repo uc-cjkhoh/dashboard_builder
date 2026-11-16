@@ -62,7 +62,7 @@ previews rows, and profiles columns.
 - **Opening it.** A **preview button** (eye icon, `.table-chip__peek`, `aria-label` "Preview rows of <table>") sits on each chip, quiet at rest. It opens the **rows dialog** (`Rows/rows-dialog.js`).
 - **What it shows:** the first **20** rows of the table, read-only, with no ordering (the first rows in storage order).
   - Request: `tableRowsRequest` in `Rows/rows-model.js` → `POST /api/rows` ([api.md § Rows](../../reference/api.md#rows)).
-  - A sticky header shows each column's **name and a plain kind** — whole number, number, text, date, date & time, true/false (`friendlyKind` in `Schema/type-kind.js`) — with the raw ClickHouse type (`Nullable(String)`, `Decimal(10, 2)`) in its tooltip; a type with no plain kind is shown as it is. Then the rows follow.
+  - A sticky header shows each column's **name and its ClickHouse type** exactly as the server reports it (`UInt64`, `LowCardinality(String)`, `Decimal(10, 2)`), with the same type in its tooltip. Then the rows follow.
 - **The dialog** is a native `<dialog>` labelled by its title ("<table> — first rows", with the `db.table` beneath).
   - **Esc**, the X or Close closes it. Closing also cancels a request still in flight.
   - The dialog is up to 1200px wide (never wider than the viewport minus 32px); the table scrolls inside it (max 80vh), sideways only when the columns need more; the page never scrolls.
@@ -83,7 +83,7 @@ previews rows, and profiles columns.
   `aria-label` "Profile <column>"; shown on hover / focus).
   It opens the **profile dialog** (`Schema/column-profile-dialog.js`, rules in `column-profile-model.js`).
   The request is `POST /api/databases/{db}/tables/{table}/profile` ([api.md](../../reference/api.md)), read-only.
-- **Field details:** Name, Type (raw ClickHouse type), Kind (the display category) and Role
+- **Field details:** Name, Type (the ClickHouse type as it is; the subtitle under the title ends with it too), Kind (the display category) and Role
   (*measure* for numeric, else *dimension* — the worksheet's rule).
 - **Tiles:** Rows, Distinct (approx.), Null share (percent and "n of N rows"), and Min / Max for numeric and date columns.
 - **Most frequent values:** up to 10. Each is a 32px band: the label, the count and its share of the rows read sit on a tint that fills the band from the left in proportion to the share.

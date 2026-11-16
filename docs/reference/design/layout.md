@@ -31,7 +31,9 @@ Related items share one edge, measured on what the eye sees (glyphs and text), n
     ([canvas.md](../../concepts/data-source/canvas.md#dragging-a-table-onto-the-canvas)).
 - **Full-width lists align with their siblings.** `.table-list` keeps 2px shadow room with a matching
   `-4px` inline margin (equal to its padding), so table chips share the search box's edges.
-  - A chip is a flat 32px row: no border or shadow, and an ink wash on hover / focus.
+  - A chip is a flat 32px row: no border or shadow, and an ink wash on hover / focus. It is
+    `flex: none`, so a long list scrolls instead of squeezing every row to its text height (which
+    pushed the icon, name and the absolutely placed buttons out of line).
   - Its table icon sits on the 8px left gutter. The hover grip overlays the icon.
   - The preview and `+` buttons overlay the row's right end on hover / focus instead of reserving space.
 - **Entity cards** are measured on ink, not boxes (checked on the Data Source with the glyph's drawn
@@ -52,8 +54,8 @@ Related items share one edge, measured on what the eye sees (glyphs and text), n
   - Stacked `<details>` field rows are spaced 4px apart (`.ws-group > :not(summary) + *`).
   - Single-choice `<select>`s show a chevron on the 16px gutter instead of the UA arrow; pill selects
     keep the native one.
-- **The field pane never scrolls; its table cards do.** `#ws-fields` is `overflow: hidden`; each `details.ws-fieldset` is as tall as its visible fields and, when they don't all fit, the cards that need less keep their full height while the taller ones share what is left equally (`flex: 1 1 0` capped at `max-content` — hiding fields from one table never makes its card scroll while another still has spare room); never under header + two rows and scrolls inside itself with a sticky header (the card has no top padding — the header carries its 4px — so scrolled rows never show above the title) (a collapsed card, or one with every field hidden, is just its header — the two-row minimum applies only while it shows fields), and an open Marks card is capped at 45 % of the pane. A context popup opened over a modal dialog lives inside it (`popover`), so it draws above the dialog.
-- **Icon-button rows use an 8px gap**, in the worksheet view bar and the dashboard bar alike. The field pane's rhythm is 8px too: Marks grid, search box and first table are 8px apart (`.ws-fieldtools` keeps 4px of padding for its sticky background and takes it back with a `-4px` block margin, so the net gap is 8px, not 12px).
+- **The field pane's table cards scroll first; the pane only when there are too many tables.** `#ws-fields` is `overflow-y: auto` (`overflow-x: hidden`) — it scrolls only when the cards' two-row minimums together exceed it; each `details.ws-fieldset` is as tall as its visible fields and, when they don't all fit, the cards that need less keep their full height while the taller ones share what is left equally (`flex: 1 1 0` capped at `max-content` — hiding fields from one table never makes its card scroll while another still has spare room); never under header + two rows and scrolls inside itself with a sticky header (the card has no top padding — the header carries its 4px — so scrolled rows never show above the title) (a collapsed card, or one with every field hidden, is just its header — the two-row minimum applies only while it shows fields), and an open Marks card is capped at 45 % of the pane. A context popup opened over a modal dialog lives inside it (`popover`), so it draws above the dialog.
+- **Icon-button rows use an 8px gap**, in the worksheet view bar and the dashboard bar alike. The field pane's rhythm is 8px too: Marks grid, search box and first table are 8px apart, and a 1px `--line-2` divider (16px below Marks) plus the **Fields** title separate the Marks section from the search + tables section (`.ws-fieldtools` keeps 4px of padding for its sticky background and takes it back with a `-4px` block margin, so the net gap is 8px, not 12px).
 - **Ghost icon buttons at a row's end overhang by their 8px glyph slack** (`margin-inline: -8px`), so
   the glyph meets the edge. This applies to `#sidebar-toggle`, the appearance toggle (`.scheme`), the
   view bar's chart picker and last icon button, the tool-panel ✕, and both `.entity__head` buttons (the
@@ -77,7 +79,7 @@ Related items share one edge, measured on what the eye sees (glyphs and text), n
     button does.
 - **The body follows the tab.** `Shell/sidebar.js` sets `.app[data-view="model"|"sheet"|"board"]` from
   `view:changed`.
-  - **Data Source:** the full sidebar, with connection, database and tables — while connected. Disconnected (`.app[data-disconnected]`, set by `connection.js`), it is the dashboard's brand-only rail: the connect form is on the start card ([connection.md](../../concepts/data-source/connection.md#while-disconnected)).
+  - **Data Source:** the full sidebar, with connection, database and tables — while connected. Disconnected (`.app[data-disconnected]`, set by `connection.js`), it is the dashboard's brand-only rail: the connect form is on the start card ([connection.md](../../concepts/data-source/connection.md#while-disconnected)). Until the first connection answer after a load it is that same rail (`.app[data-connecting]`), so it never flashes wide then narrows.
   - **Worksheet and dashboard:** the sidebar shrinks to a `--topbar-h` rail that holds the brand mark.
     The brand name, toggle, resizer and the connection / database / tables are `display: none`.
   - On a **worksheet** the rail also carries the tool icons in one column, 1 × N (`#ws-tools`,
@@ -163,6 +165,8 @@ control is `--ctl-h` tall.
 **Resizable field pane:** a handle on its right edge (`#ws-fields-resizer`, the shared `.resizer` look)
 sets `.worksheet`'s `--ws-fields-w` (default 236px) between 180px and 40% of the worksheet. Drag it, or
 press `←`/`→` for 16px steps. The width is remembered in this browser (`dashboardbuilder.fields.width`).
+
+**Expandable table cards:** the bottom border of an open `.ws-fieldset` is its own grip — no separate handle, so nothing is drawn at rest. The hit strip is the card's last 6px (`EDGE` in `Core/edge-resize.js`); on hover the card gets `.is-edge` (`cursor: ns-resize`, a 2px `--accent` inset line under the bottom edge), and while dragging `body.is-resizing-y` keeps the cursor and stops text selection. A dragged card gets `.is-sized` (`flex: none; height: var(--ws-h)`), still capped by its `max-height: max-content` and floored by its two-row `min-height`. Mouse and pen only — touch keeps scrolling the card. Double-click the border resets; `Alt+↑/↓` on the header resizes from the keyboard (16px steps). Heights are remembered per table (`dashboardbuilder.fields.heights`).
 
 ## Dashboard board
 
