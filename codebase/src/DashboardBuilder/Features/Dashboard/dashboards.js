@@ -55,7 +55,7 @@ import { LABEL_MARK_CHOICES, LABEL_POSITION_CHOICES, labelContext, labelModesFor
 import { MARK_BORDER_CHOICES, MARKER_SHAPE_CHOICES, BORDER_TYPES, MARK_BORDER_COLOUR_CHOICES, markerSizeError } from "./mark-style-model.js";
 import { OPACITY_TYPES, OPACITY_CHOICES, cleanMarkOpacity } from "./mark-opacity-model.js";
 import { addColourField, MULTI_COLOUR_TYPES } from "./colour-fields-model.js";
-import { SIZE_SCALE_TYPES, ZERO_BASED_TYPES, sizeScaleOf, sizeRangeError, cleanSizeScale, VARY_CHOICES, sizeVary, sizeVaryError, sizeEndsError, setSizeVary } from "./size-scale-model.js";
+import { SIZE_SCALE_TYPES, ZERO_BASED_TYPES, sizeScaleOf, sizeRangeError, cleanSizeScale, VARY_CHOICES, sizeVary, sizeVaryError, sizeEndsEdit, setSizeVary } from "./size-scale-model.js";
 import { targetChoices, effectiveTargetMeasure } from "./bullet-model.js";
 import { sourceOfTable, wireSource, distinctPlan, distinctPlanSql, distinctMembers, customSqlOf, sqlWire } from "../Core/source-model.js";
 import { heldOutCards } from "../Relations/relation-rules.js";
@@ -3173,15 +3173,12 @@ export function initDashboards() {
     const mode = fmtSelect("Sizes vary", VARY_CHOICES, vary, (v) => {
       const bad = sizeVaryError(v);
       if (bad) { toast(bad, "danger"); return; }
-      save(setSizeVary(stored, v));
+      save(setSizeVary(stored, v, zeroDefault));
     });
     const endField = (label, key, value) => fmtNumber(label, value, "auto", (v) => {
-      const next = { start: stored.start ?? null, end: stored.end ?? null, [key]: v };
-      const bad = sizeEndsError(next.start, next.end);
-      if (bad) { toast(bad, "danger"); return false; }
-      const out = { ...stored };
-      for (const k of ["start", "end"]) if (next[k] == null) delete out[k]; else out[k] = next[k];
-      save(out);
+      const r = sizeEndsEdit(stored, zeroDefault, key, v);
+      if (r.error) { toast(r.error, "danger"); return false; }
+      save(r.value);
     });
     const start = endField("Start value", "start", stored.start), end = endField("End value", "end", stored.end);
     const reversed = fmtCheck("Reversed", cur.reversed, (v) => save({ ...stored, reversed: v }));
@@ -3191,7 +3188,8 @@ export function initDashboards() {
       off(start, "Start and End values apply to a measure; a dimension's members are steps."); off(end, "Start and End values apply to a measure; a dimension's members are steps.");
     } else if (inZero) {
       off(start, cur.fromZero === true ? "From zero starts at zero, so there is no start value. Pick By range to set one." : "Automatic starts these marks at zero. Pick By range to set a start value.");
-      if (cur.fromZero === true) off(reversed, "Reversed is not available under From zero. Pick By range or Automatic to reverse the sizes.");
+      if (cur.fromZero === true) off(reversed, cur.reversed ? "Reversed is not available under From zero, but this sheet was saved with it and still draws reversed. Pick By range or Automatic to turn it off."
+        : "Reversed is not available under From zero. Pick By range or Automatic to reverse the sizes.");
     }
     return [pctField("Smallest size (%)", "smallest", f.sizeScale?.smallest), pctField("Largest size (%)", "largest", f.sizeScale?.largest), mode, start, end, reversed];
   }

@@ -249,7 +249,7 @@ try {
     await setField('Start value', String(mid)); await settle(500);
     let w = await rectDim('width');
     must(w.every((x) => x >= 6) && w.length === dflt.length, 'every bar is still drawn: ' + J(w));
-    must(w[0] === 6 && w[1] === 6 || w.filter((x) => x === 6).length > 1, 'values below the start take the thinnest bar: ' + J(w));
+    must(w.filter((x) => x === 6).length === 4 && w.filter((x) => x > 6).length === 4, 'the four values below the start take the thinnest bar, the four above grow: ' + J(w));
     must(Math.abs(w[w.length - 1] - dflt[dflt.length - 1]) <= 1, 'the largest value keeps the widest bar: ' + J(w));
     must(new RegExp(`^Size: .* \\(${mid} to ${hi}, start set\\)`).test(await sizeText()), 'the legend names the typed start: ' + await sizeText());
     await setField('End value', String(mid + 5)); await settle(500);
@@ -334,7 +334,12 @@ try {
     await setSelect('Sizes vary', 'range'); await settle(400);
     must(await ev(`!${fmtField('Start value')}.querySelector('input').disabled`), 'By range turns Start on');
     await setField('Start value', '15'); await settle(500);
-    must(/start set|, set\)/.test(await sizeText()) && /^Size: .*\(15 to /.test(await sizeText()), 'the legend names the start: ' + await sizeText());
+    must((await sizeText()).includes(`(15 to ${Math.round(hi / 2)}, set)`), 'the legend names both ends: ' + await sizeText());
+    await setSelect('Sizes vary', 'automatic'); await settle(400); // the start (15) is stored but off again
+    must(await ev(`${fmtField('Start value')}.querySelector('input').disabled`), 'Start is off again under Automatic');
+    await setField('End value', '5'); await settle(500); // below the hidden start: accepted, the user is not blocked by a start they cannot clear
+    must((await ev(`${fmtField('End value')}.querySelector('input').value`)) === '5', 'the end 5 was accepted: ' + J([await ev(`${fmtField('End value')}.querySelector('input').value`), await sizeText(), await toastText()]));
+    must((await sizeText()).includes('to 5, end set)'), 'and it draws: ' + await sizeText());
     await setField('Start value', ''); await setField('End value', ''); await setSelect('Sizes vary', 'automatic'); await settle(500);
     must(deepEq((await symbolSizes()).map(Math.round), dflt), 'cleared = the default drawing');
     await closeFormat();

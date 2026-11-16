@@ -27,24 +27,27 @@ const typed = (v) => typeof v === "number" && Number.isFinite(v) && Math.abs(v) 
 
 /**
  * The setting as the drawing reads it: { smallest, largest, fromZero (null = the chart's default), reversed, start, end (null = the data's) }.
- * `fromZero` is resolved from `vary` (an older file's `fromZero` reads as the same mode). A typed pair that is crossed is ignored whole, and a start
- * is ignored under an explicit From zero. Never throws; defensive about a bad stored value.
+ * `fromZero` is resolved from `vary` (an older file's `fromZero` reads as the same mode). A start is ignored under an explicit From zero. Whether a
+ * start applies on a chart whose Automatic is From zero (bubbles), and whether a typed pair is crossed, is decided where the chart is known (`sizeEnds`).
+ * Never throws; defensive about a bad stored value.
  */
 export function sizeScaleOf(format) {
   const s = isObj(format?.sizeScale) ? format.sizeScale : {};
   const lo = pct(s.smallest) ? s.smallest : SIZE_PCT.min, hi = pct(s.largest) ? s.largest : SIZE_PCT.max, ok = lo < hi;
   const fromZero = SIZE_VARY.includes(s.vary) ? (s.vary === "zero" ? true : s.vary === "range" ? false : null) : typeof s.fromZero === "boolean" ? s.fromZero : null;
-  let start = typed(s.start) ? s.start : null, end = typed(s.end) ? s.end : null;
-  if (start != null && end != null && start >= end) start = end = null;
-  if (fromZero === true) start = null;
+  const start = fromZero === true ? null : typed(s.start) ? s.start : null, end = typed(s.end) ? s.end : null;
   return { smallest: ok ? lo : SIZE_PCT.min, largest: ok ? hi : SIZE_PCT.max, fromZero, reversed: s.reversed === true, start, end };
 }
 /** The Sizes vary mode a read setting is in: "automatic" | "range" | "zero". */
 export const sizeVary = (scale) => (scale.fromZero === true ? "zero" : scale.fromZero === false ? "range" : "automatic");
-/** The typed ends that apply: a start never applies where the span starts at zero (`zeroDefault` = the chart's own default, used when the mode is Automatic). */
+/**
+ * The typed ends that apply: a start never applies where the span starts at zero (`zeroDefault` = the chart's own default, used when the mode is
+ * Automatic), and a crossed pair (start at or above the end) is ignored whole. An inert stored start therefore never crosses or blocks an end.
+ */
 export function sizeEnds(scale, zeroDefault = false) {
   const zero = scale.fromZero ?? zeroDefault;
-  return { start: zero ? null : scale.start, end: scale.end };
+  const start = zero ? null : scale.start, end = scale.end;
+  return start != null && end != null && start >= end ? { start: null, end: null } : { start, end };
 }
 /** Does the stored setting change anything? */
 export const sizeScaleIsDefault = (format) => { const s = sizeScaleOf(format); return s.smallest === 0 && s.largest === 100 && s.fromZero === null && !s.reversed && s.start === null && s.end === null; };
@@ -60,12 +63,31 @@ export function sizeEndsError(start, end) {
   }
   return start != null && end != null && start >= end ? "The start value must be below the end value." : null;
 }
-/** The stored setting after picking a Sizes vary mode: the older `fromZero` key goes, and From zero drops what it makes meaningless (a start, Reversed). */
-export function setSizeVary(raw, vary) {
+/**
+ * Typing a Start / End value (`key`, `value` null = cleared) into the stored setting `raw` -> { error, value }: `value` is the stored shape to save
+ * (`raw` with the key set or removed). Where the span starts at zero (From zero, or Automatic on a chart whose default is From zero: `zeroDefault`) the
+ * Start field is off, so a start stored there is dropped (it could neither be cleared by the user nor be told apart from a crossing at import).
+ */
+export function sizeEndsEdit(raw, zeroDefault, key, value) {
+  const stored = isObj(raw) ? raw : {};
+  const inZero = (sizeScaleOf({ sizeScale: stored }).fromZero ?? zeroDefault) === true;
+  const next = { start: stored.start ?? null, end: stored.end ?? null, [key]: value };
+  if (inZero) next.start = null;
+  const error = sizeEndsError(next.start, next.end);
+  const out = { ...stored };
+  for (const k of ["start", "end"]) if (next[k] == null) delete out[k]; else out[k] = next[k];
+  return { error, value: out };
+}
+/**
+ * The stored setting after picking a Sizes vary mode: the older `fromZero` key goes, and From zero drops what it makes meaningless (a start, Reversed).
+ * Automatic on a chart whose default is From zero (`zeroDefault`, bubbles) drops the start too, as its field is off there.
+ */
+export function setSizeVary(raw, vary, zeroDefault = false) {
   const out = { ...(isObj(raw) ? raw : {}) };
   delete out.fromZero; delete out.vary;
   if (vary !== "automatic") out.vary = vary;
   if (vary === "zero") { delete out.start; delete out.reversed; }
+  else if (vary === "automatic" && zeroDefault) delete out.start;
   return out;
 }
 
@@ -136,7 +158,7 @@ function applyScale(f, scale, degenerate) {
 export function measureShareFn(values, { zero = false, point = false, scale = sizeScaleOf({}) } = {}) {
   const nums = (values ?? []).filter(finite).map(Number);
   if (!zero && !nums.length) return () => null;
-  const start = zero ? null : scale.start ?? null, end = scale.end ?? null;
+  const { start, end } = sizeEnds({ ...scale, fromZero: zero }, zero);
   const lo = start ?? (zero ? Math.min(...nums, 0) : Math.min(...nums));
   const hi = end ?? (zero ? Math.max(...nums, point ? 1 : 0) : Math.max(...nums));
   const degenerate = !zero && start == null && end == null && lo === hi, span = hi - lo;

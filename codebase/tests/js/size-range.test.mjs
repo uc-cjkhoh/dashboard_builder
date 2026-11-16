@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  sizeScaleOf, sizeScaleIsDefault, cleanSizeScale, measureShares, measureShareFn, sizeLegendText, sizeVary, sizeEnds, sizeVaryError, sizeEndsError, setSizeVary, SIZE_VALUE_LIMIT,
+  sizeScaleOf, sizeScaleIsDefault, cleanSizeScale, measureShares, measureShareFn, sizeLegendText, sizeVary, sizeEnds, sizeVaryError, sizeEndsError, sizeEndsEdit, setSizeVary, SIZE_VALUE_LIMIT,
 } from "../../src/DashboardBuilder/Features/Dashboard/size-scale-model.js";
 
 // Edit Sizes → Sizes vary (Automatic / By range / From zero) and a typed Start / End value: the pure maths (no DOM).
@@ -31,8 +31,9 @@ test("a stored Start / End is read only when finite numbers within the limit and
   assert.deepEqual([sc({ start: -2.5 }).start, sc({ start: -2.5 }).end], [-2.5, null], "start only");
   assert.deepEqual([sc({ end: 7 }).start, sc({ end: 7 }).end], [null, 7], "end only");
   for (const bad of [NaN, Infinity, -Infinity, "5", true, SIZE_VALUE_LIMIT * 10]) { assert.equal(sc({ start: bad }).start, null, String(bad)); assert.equal(sc({ end: bad }).end, null, String(bad)); }
-  assert.deepEqual([sc({ start: 50, end: 10 }).start, sc({ start: 50, end: 10 }).end], [null, null], "crossed: both ignored");
-  assert.deepEqual([sc({ start: 5, end: 5 }).start, sc({ start: 5, end: 5 }).end], [null, null], "equal: both ignored");
+  assert.deepEqual(sizeEnds(sc({ start: 50, end: 10 }), false), { start: null, end: null }, "crossed: both ignored");
+  assert.deepEqual(sizeEnds(sc({ start: 5, end: 5 }), false), { start: null, end: null }, "equal: both ignored");
+  assert.deepEqual(sizeEnds(sc({ start: 10, end: 5 }), true), { start: null, end: 5 }, "a start that does not apply cannot cross the end");
   assert.equal(sc({ vary: "zero", start: 5 }).start, null, "From zero starts at zero: a start is ignored");
   assert.equal(sc({ fromZero: true, start: 5 }).start, null);
   assert.equal(sc({ vary: "zero", end: 5 }).end, 5, "an end applies under From zero");
@@ -136,4 +137,30 @@ test("sizeLegendText names typed ends in words, and says which are set", () => {
   assert.equal(sizeLegendText("sum qty", { range, fmtVal, ends: { start: null, end: null } }), "Size: sum qty (3 to 41)");
   assert.equal(sizeLegendText("sum qty", { range, fmtVal }), "Size: sum qty (3 to 41)");
   assert.equal(sizeLegendText("region", { members: ["A", "B"], ends: { start: 1, end: 2 } }), "Size: region (A to B, 2 steps)", "a dimension ignores typed ends");
+});
+test("a start that does not apply never blocks or cancels an end: bubbles drop it (By range, start 10, back to Automatic, then End 5)", () => {
+  // bubble chart: Automatic = From zero, so the Start field is off
+  const back = setSizeVary({ vary: "range", start: 10 }, "automatic", true);
+  assert.deepEqual(back, {}, "Automatic on a zero-default chart drops the start");
+  assert.deepEqual(setSizeVary({ vary: "range", start: 10 }, "automatic", false), { start: 10 }, "a bar keeps it: Automatic is By range there");
+  const r = sizeEndsEdit(back, true, "end", 5);
+  assert.equal(r.error, null);
+  assert.deepEqual(r.value, { end: 5 });
+  assert.deepEqual(round(measureShares([2, 5, 9], { zero: true, point: true, scale: sc(r.value) })), [0.4, 1, 1], "the end draws");
+  // a start left over where it does not apply (the chart type changed under the setting): typing an end drops it, and is accepted
+  const left = sizeEndsEdit({ start: 10 }, true, "end", 5);
+  assert.equal(left.error, null); assert.deepEqual(left.value, { end: 5 });
+  assert.deepEqual(sizeEnds(sc({ start: 10, end: 5 }), true), { start: null, end: 5 }, "and the drawing never lets an inert start cross the end");
+  // the bar case: the start applies, so End 5 is refused and End 50 accepted
+  assert.match(sizeEndsEdit({ start: 10 }, false, "end", 5).error, /below/);
+  assert.deepEqual(sizeEndsEdit({ start: 10 }, false, "end", 50).value, { start: 10, end: 50 });
+  // By range on the bubble chart brings the start back into play
+  assert.match(sizeEndsEdit({ vary: "range", start: 10 }, true, "end", 5).error, /below/);
+  // explicit From zero: the start is off whatever the chart
+  assert.deepEqual(sizeEndsEdit({ vary: "zero", start: 10 }, false, "end", 5).value, { vary: "zero", end: 5 });
+  // clearing and the start key itself
+  assert.deepEqual(sizeEndsEdit({ start: 10, end: 5 }, false, "end", null).value, { start: 10 });
+  assert.match(sizeEndsEdit({ end: 5 }, false, "start", 9).error, /below/);
+  assert.deepEqual(sizeEndsEdit({ end: 50 }, false, "start", 9).value, { end: 50, start: 9 });
+  assert.equal(sizeEndsEdit(undefined, false, "end", 3).error, null);
 });
