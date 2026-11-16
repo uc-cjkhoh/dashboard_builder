@@ -207,7 +207,7 @@ Nothing here reaches the server; dashboards add no endpoint
   6 drill levels · 100 entities · 200 relationships · 50 tabs · 12 widgets per dashboard · widget note 300 · tab name 60 characters · axis
   title 80 · filter value 1000.
 - **Format defaults:** `numberFormat:"auto"`, `decimals:null`, `currencySymbol:"$"`,
-  `dateFormat:"auto"`, `topN:null` (All — up to 5000), `dateBucket:"auto"`, `conditional:{}` (P37: `{ [db.table.column:agg]: { mode: none|scale|bars, scale: sequential|diverging, mid, rules: [{ op, value, tone: good|bad|warn|info }] } }`), `legend:"auto"`, `dataLabels:false`,
+  `dateFormat:"auto"`, `topN:null` (All — up to 5000), `dateBucket:"auto"`, `conditional:{}` (P37: `{ [db.table.column:agg]: { mode: none|scale|bars, scale: sequential|diverging, mid, rules: [{ op, value, tone: good|bad|warn|info }], totals?: true } }`; `totals` = Include totals, present only while on, a non-boolean is dropped and reported on import, [D122](../decisions/decisions-marks.md#d122--include-totals-in-the-colour-encoding)), `legend:"auto"`, `dataLabels:false`,
   `colorByDimension:false`, axis titles `null`.
 
 ### Marks, pages, selection, drill
