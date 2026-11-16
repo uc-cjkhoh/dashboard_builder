@@ -1,4 +1,4 @@
-// Browser check for "Edit SQL" on a Data Source card (D105): the head's Edit button opens the dialog (right-click opens nothing), the dialog
+// Browser check for "Edit SQL" on a Data Source card (D105): the head's Edit icon button opens the dialog (right-click opens nothing), the dialog
 // starts on the default SELECT, a bad query is answered inside the dialog, a good one swaps the card's columns, relationship keys are
 // protected, Reset to default + Save goes back to the table, and the
 // worksheet query carries the SQL as `sources`. Real dev app (APP_URL, default http://localhost:5231) in headless Chromium, every /api/* call
@@ -104,11 +104,11 @@ try {
   const press = (label) => ev(`[...document.querySelectorAll('dialog[open] .dialog__foot .btn')].find((b) => b.textContent.trim() === ${J(label)}).click()`);
   const errorText = () => ev(`document.querySelector('dialog[open] .sql-dialog__status')?.textContent.trim() ?? ''`);
 
-  await check('right-click on a card opens no menu; the head has an Edit button left of the title', async () => {
+  await check('right-click on a card opens no menu; the head has an Edit icon button left of the title', async () => {
     await rightClick('orders');
     await new Promise((r) => setTimeout(r, 150));
     must(!(await ev(`!!document.querySelector('.ctx-menu')`)), 'a context menu opened');
-    must(await ev(`(() => { const b = ${editBtn('orders')}; return !!b && b.textContent.trim() === 'Edit' && b.nextElementSibling.classList.contains('entity__title'); })()`), 'no Edit button before the title');
+    must(await ev(`(() => { const b = ${editBtn('orders')}; return !!b && b.classList.contains('iconbtn') && b.textContent.trim() === '' && !!b.querySelector('svg') && /^Edit SQL/.test(b.getAttribute('aria-label')) && b.nextElementSibling.classList.contains('entity__title'); })()`), 'no Edit icon button before the title');
     const fit = await ev(`(() => { const h = ${card('orders')}.querySelector('.entity__head'); return h.scrollWidth <= h.clientWidth; })()`);
     must(fit, 'head overflows');
     await shot('edit-sql-button.png');
