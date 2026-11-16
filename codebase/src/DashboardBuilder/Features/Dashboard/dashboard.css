@@ -728,3 +728,8 @@ body.is-resizing-y { cursor: ns-resize; user-select: none; }
 .xt-grip { position: absolute; top: 0; right: 0; bottom: 0; width: var(--s2); cursor: col-resize; touch-action: none; border-right: 2px solid var(--line-2); }
 .xt-grip:hover, .xt-grip:focus-visible { border-right-color: var(--accent); background: var(--surface-3); }
 .xt-grip:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+
+/* The tooltip's command buttons (Format → Command buttons): a row under the tooltip text, the selection chip's own buttons. */
+.ws-tip__cmds { display: flex; gap: var(--s2); margin-top: var(--s2); padding-top: var(--s2); border-top: 1px solid var(--line); }
+.ws-tip__cmds .ws-select__btn { white-space: nowrap; }
+.ws-tip__cmds .ws-select__btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
