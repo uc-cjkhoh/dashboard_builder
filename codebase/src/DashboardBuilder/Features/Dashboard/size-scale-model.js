@@ -9,7 +9,7 @@
 import { tupleKey } from "./grid-model.js";
 
 /** Chart types Format → Edit Sizes applies to (a treemap's tile area IS the value, so it takes no range). */
-export const SIZE_SCALE_TYPES = new Set(["scatter", "square", "circle", "bar", "line", "area", "table", "text"]);
+export const SIZE_SCALE_TYPES = new Set(["scatter", "square", "circle", "bar", "gantt", "line", "area", "table", "text"]);
 /** Types whose bubbles start at zero unless the setting says otherwise. */
 export const ZERO_BASED_TYPES = new Set(["scatter", "square", "circle"]);
 /** The range Edit Sizes accepts, in whole percent of the chart's own size range. */

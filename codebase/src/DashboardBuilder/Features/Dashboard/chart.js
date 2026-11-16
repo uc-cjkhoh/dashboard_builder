@@ -14,7 +14,7 @@ import { syncRange, secondaryKind, dualAxisOn, rightAxisTitle, seriesAxis } from
 import { markBorder, markerSizeOr, markerSymbol, edgeOr, strokeOf, borderInk } from "./mark-style-model.js";
 import { circleSize, circleCells, HEATMAP_GUTTER, LABEL_FONT, cellSizeOf, labelsShown } from "./heatmap-model.js";
 import { bandsFor } from "./bullet-model.js";
-import { ganttTime, ganttAxisTime, ganttLabelMargin } from "./gantt-model.js";
+import { ganttTime, ganttAxisTime, ganttLabelMargin, ganttSizing, ganttThickness } from "./gantt-model.js";
 import { boxData, outlierPoints } from "./box-model.js";
 import { chartFit, markCount, applyFitMode, rotatedLabelCap, FIT } from "./chart-fit.js";
 import { applySelectionDim } from "./selection-dim.js";
@@ -1263,8 +1263,9 @@ function buildBullet({ categories, values, target, targets, name, format = {} })
 
 // gantt — one horizontal bar per row from its start to its end (start + length, or the end field), first row on top; the length
 // is written at the bar's end and named in the tooltip. A Colour field makes one series per member (its own colour, a legend that
-// highlights), several bars may share a row; a selected row keeps full strength and the others fade.
-function buildGantt({ categories, gantt, name, format = {}, selectedIndices, onLegend, focus }) {
+// highlights), several bars may share a row; a selected row keeps full strength and the others fade. A Size measure (`sizeName`, each bar's `size`) sets
+// each bar's thickness, 6 px to 80% of its row slot on one scale, with the Size legend under the Gantt's own and a Size line in the tooltip.
+function buildGantt({ categories, gantt, name, format = {}, selectedIndices, onLegend, focus, sizeName }) {
   const c = tokens();
   const fmtVal = makeValueFormatter(format);
   const { bars, isDate, hasTime, groups } = gantt;
@@ -1278,13 +1279,17 @@ function buildGantt({ categories, gantt, name, format = {}, selectedIndices, onL
   const lists = split ? groups.map((_, gi) => bars.filter((b) => b.group === gi)) : [bars];
   const colourOf = (gi) => (split ? memberColor(groups[gi], c.cat[gi % c.cat.length]) : c.cat[0]);
   const names = split ? groups : [label];
+  const sizing = sizeName ? ganttSizing(bars, format) : null; // shares[k] / values[k] follow `bars`
+  const barIndex = new Map(bars.map((b, k) => [b, k]));
+  const sizeNote = sizing ? sizeLegend(sizing.values, sizeName, c, fmtVal, 24, { scale: sizing.scale, zeroDefault: false }) : null;
   return {
     color: names.map((_, gi) => colourOf(gi)),
     textStyle: { fontFamily: c.font, color: c.label },
     legend: { top: 0, left: "center", data: names, selectedMode: split && typeof onLegend === "function", textStyle: { color: c.label, fontFamily: c.font }, icon: "roundRect" },
-    grid: { left: 6, right: ganttLabelMargin(bars.map(len)), top: 36, bottom: 6, containLabel: true },
+    ...(sizeNote ?? {}),
+    grid: { left: 6, right: ganttLabelMargin(bars.map(len)), top: sizeNote ? 60 : 36, bottom: 6, containLabel: true },
     tooltip: { trigger: "item", ...tipBox(c),
-      formatter: (p) => { const b = lists[p.seriesIndex]?.[p.dataIndex]; return b ? `<span style="color:${c.muted}">${escapeHtml(String(b.name ?? ""))}${split ? ` · ${escapeHtml(String(groups[b.group] ?? ""))}` : ""}</span><br>${at(b.start)} → ${at(b.end)}<br><b>${escapeHtml(label)}:</b> ${len(b)}` : ""; } },
+      formatter: (p) => { const b = lists[p.seriesIndex]?.[p.dataIndex]; return b ? `<span style="color:${c.muted}">${escapeHtml(String(b.name ?? ""))}${split ? ` · ${escapeHtml(String(groups[b.group] ?? ""))}` : ""}</span><br>${at(b.start)} → ${at(b.end)}<br><b>${escapeHtml(label)}:</b> ${len(b)}${sizing && b.size != null ? `<br><b>${escapeHtml(sizeName)}:</b> ${fmtVal(b.size)}` : ""}` : ""; } },
     xAxis: valueAxis(c, isDate ? undefined : fmtVal, isDate
       ? { type: "time", axisLabel: { color: c.muted, formatter: (v) => ganttTime(v, axisTime), hideOverlap: true } } : { scale: true }),
     yAxis: catAxis(c, categories ?? [], { inverse: true }),
@@ -1293,9 +1298,10 @@ function buildGantt({ categories, gantt, name, format = {}, selectedIndices, onL
       renderItem: (params, api) => {
         const b = list[params.dataIndex];
         const a = api.coord([api.value(1), api.value(0)]), e = api.coord([api.value(2), api.value(0)]);
-        const h = Math.min(28, api.size([0, 1])[1] * 0.6);
+        const slot = api.size([0, 1])[1];
+        const h = sizing ? ganttThickness(sizing.shares[barIndex.get(b)], slot) : Math.min(28, slot * 0.6); // a Size measure: 6 px .. 80% of the slot; else one fixed thickness
         const opacity = (keep.size && !keep.has(b.i)) || (split && focus && names[gi] !== focus) ? 0.35 : 1; // a legend-focused member keeps full strength (ECharts does not blur custom marks)
-        return { type: "group", children: [
+        return { type: "group", ...(sizing ? { z2: 1000 - h } : {}), children: [ // thick bars sharing a row (Colour members) draw under the thinner ones
           { type: "rect", shape: { x: a[0], y: a[1] - h / 2, width: Math.max(2, e[0] - a[0]), height: h, r: 2 }, style: { fill: colourOf(gi), opacity: opacity * markOpacityOf(format), ...strokeOf(format.markBorder, borderInk(format.markBorderColor, c)) }, emphasis: { style: { stroke: c.ink, lineWidth: 1 } } },
           { type: "text", style: { text: len(b), x: Math.max(e[0], a[0] + 2) + 4, y: a[1], align: "left", verticalAlign: "middle", fill: c.label, opacity, font: `14px ${c.font}` } },
         ] };

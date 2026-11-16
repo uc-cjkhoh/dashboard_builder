@@ -158,7 +158,7 @@ function draw(container, rc, sheet, result, cmp) {
     if (c && !c.ok) container.append(hint(c.note));
     renderTreemap(container, result, format, fmtCat, { sizeIdx, colourIdx: colorMeasureIdx }); return;
   }
-  if (P36_TYPES.has(type)) { renderP36(container, rc, type, rowsOrdered, categories, series, seriesNames, format, fmtCat, sheet); return; }
+  if (P36_TYPES.has(type)) { renderP36(container, rc, type, rowsOrdered, categories, series, seriesNames, format, fmtCat, sheet, type === "gantt" && sizeIdx >= 0 ? { values: rowsOrdered.map((r) => r.values[sizeIdx]), name: result.measures[sizeIdx] } : null); return; }
 
   // KPI: explicit type, or a plain series chart with no dimensions (one value per measure).
   if (type === "kpi" || (dimCount === 0 && (type === "bar" || type === "stacked" || type === "line" || type === "area"))) {
