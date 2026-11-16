@@ -47,7 +47,7 @@ import { keyAliasMaps, withMemberLabels } from "./member-labels.js";
 export function renderWorksheet(container, sheet, result, cmp, options = {}) {
   const rc = { container, plan: options.plan ?? { metaOf: () => ({}) }, interactive: options.interactive !== false && options.interactive !== "select",
     select: options.interactive !== false, selected: options.selected ?? null, hooks: options.hooks ?? {},
-    bucketedKey: null, recentKey: null, calcPercent: new Set(), extraNotice: null, emptyText: options.emptyText ?? "No data for these fields." };
+    bucketedKey: null, recentKey: null, pin: null, calcPercent: new Set(), extraNotice: null, emptyText: options.emptyText ?? "No data for these fields." };
   draw(container, rc, sheet, result, cmp);
   rc.hooks.onColourScale?.(sheet, resolvedColourScale(container)); // the editor's Format panel shows the controls of the scale Automatic resolved to
   return { extraNotice: rc.extraNotice };
@@ -62,6 +62,7 @@ function recentKeyOf(sheet, result, parts) {
 
 function draw(container, rc, sheet, result, cmp) {
   disposeChart(container); // a direct caller never leaks a previous instance or its ResizeObserver
+  rc.pin = rc.hooks.takePin?.() ?? null; // the mark a click just selected, for the Responsive tooltip pin: used by this drawing only, never by a later one
   container.replaceChildren();
   rc.hooks.onTooltipFields?.(sheet, []);
   rc.hooks.onMemberColors?.(sheet, null, []);

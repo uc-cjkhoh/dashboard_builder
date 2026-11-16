@@ -23,6 +23,7 @@ import { checkTooltipFormats } from "../Dashboard/tooltip-formats.js";
 import { markerSizeError } from "../Dashboard/mark-style-model.js";
 import { linePatternError } from "../Dashboard/line-style-model.js";
 import { lineMarkersError } from "../Dashboard/line-marker-model.js";
+import { showTooltipsError, tooltipButtonsError, tooltipModeError } from "../Dashboard/tooltip-behaviour-model.js";
 import { cleanSizeScale } from "../Dashboard/size-scale-model.js";
 import { markOpacityError } from "../Dashboard/mark-opacity-model.js";
 import { shapeBinsError, cleanMemberShapes } from "../Dashboard/shape-model.js";
@@ -690,6 +691,18 @@ function cleanFormat(f0, where, issues) {
   if (f.lineMarkers !== undefined && f.lineMarkers !== null) { // Format → Line markers: absent (older files, Automatic) stays off defaultFormat; a bad value is reset (never clamped)
     if (lineMarkersError(f.lineMarkers) === null) { if (f.lineMarkers !== "auto") out.lineMarkers = f.lineMarkers; }
     else issues.push(`${w}: line markers "${f.lineMarkers}" — reset to Automatic.`);
+  }
+  if (f.showTooltips !== undefined && f.showTooltips !== null) { // Format → Show tooltips: absent (older files, on) stays off defaultFormat; a bad value is reset (never coerced)
+    if (showTooltipsError(f.showTooltips) === null) { if (f.showTooltips === false) out.showTooltips = false; }
+    else issues.push(`${w}: show tooltips "${f.showTooltips}" — reset to on.`);
+  }
+  if (f.tooltipButtons !== undefined && f.tooltipButtons !== null) { // Format → command buttons in the tooltip: absent (older files, off) stays off defaultFormat
+    if (tooltipButtonsError(f.tooltipButtons) === null) { if (f.tooltipButtons === true) out.tooltipButtons = true; }
+    else issues.push(`${w}: tooltip command buttons "${f.tooltipButtons}" — reset to off.`);
+  }
+  if (f.tooltipMode !== undefined && f.tooltipMode !== null) { // Format → Responsive / On hover: absent (older files, Responsive) stays off defaultFormat
+    if (tooltipModeError(f.tooltipMode) === null) { if (f.tooltipMode !== "responsive") out.tooltipMode = f.tooltipMode; }
+    else issues.push(`${w}: tooltip mode "${f.tooltipMode}" — reset to Responsive (the choices are Responsive or On hover).`);
   }
   const tableCols = cleanTableCols(f.tableCols, w, issues); // absent when no column is set (older files, and the default), so a sheet round-trips unchanged
   if (tableCols) out.tableCols = tableCols;

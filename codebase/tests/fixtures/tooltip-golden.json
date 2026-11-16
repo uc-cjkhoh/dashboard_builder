@@ -1,0 +1,426 @@
+{
+ "bar": {
+  "tooltip": {
+   "trigger": "axis",
+   "axisPointer": {
+    "type": "shadow",
+    "lineStyle": {
+     "color": "#d9cfd1"
+    }
+   },
+   "backgroundColor": "#ffffff",
+   "borderColor": "#ebe4e5",
+   "borderWidth": 1,
+   "textStyle": {
+    "color": "#1c1719",
+    "fontFamily": "system-ui, sans-serif"
+   }
+  },
+  "tip": "<span style=\"color:#6b6165\">b</span><br><span style=\"display:inline-block;width:8px;height:8px;border-radius:8px;background:#123456;margin-right:8px\"></span><b>v:</b> 3",
+  "series": [
+   null
+  ]
+ },
+ "barMany": {
+  "tooltip": {
+   "trigger": "axis",
+   "axisPointer": {
+    "type": "shadow",
+    "lineStyle": {
+     "color": "#d9cfd1"
+    }
+   },
+   "backgroundColor": "#ffffff",
+   "borderColor": "#ebe4e5",
+   "borderWidth": 1,
+   "textStyle": {
+    "color": "#1c1719",
+    "fontFamily": "system-ui, sans-serif"
+   }
+  },
+  "tip": "<span style=\"color:#6b6165\">b</span><br><span style=\"display:inline-block;width:8px;height:8px;border-radius:8px;background:#123456;margin-right:8px\"></span><b>v:</b> 3",
+  "series": [
+   null,
+   null
+  ]
+ },
+ "barText": {
+  "tooltip": {
+   "trigger": "axis",
+   "axisPointer": {
+    "type": "shadow",
+    "lineStyle": {
+     "color": "#d9cfd1"
+    }
+   },
+   "backgroundColor": "#ffffff",
+   "borderColor": "#ebe4e5",
+   "borderWidth": 1,
+   "textStyle": {
+    "color": "#1c1719",
+    "fontFamily": "system-ui, sans-serif"
+   }
+  },
+  "tip": "Sales <b>3</b>",
+  "series": [
+   null
+  ]
+ },
+ "stacked": {
+  "tooltip": {
+   "trigger": "axis",
+   "axisPointer": {
+    "type": "shadow",
+    "lineStyle": {
+     "color": "#d9cfd1"
+    }
+   },
+   "backgroundColor": "#ffffff",
+   "borderColor": "#ebe4e5",
+   "borderWidth": 1,
+   "textStyle": {
+    "color": "#1c1719",
+    "fontFamily": "system-ui, sans-serif"
+   }
+  },
+  "tip": "<span style=\"color:#6b6165\">b</span><br><span style=\"display:inline-block;width:8px;height:8px;border-radius:8px;background:#123456;margin-right:8px\"></span><b>v:</b> 3",
+  "series": [
+   null,
+   null
+  ]
+ },
+ "line": {
+  "tooltip": {
+   "trigger": "axis",
+   "axisPointer": {
+    "type": "line",
+    "lineStyle": {
+     "color": "#d9cfd1"
+    }
+   },
+   "backgroundColor": "#ffffff",
+   "borderColor": "#ebe4e5",
+   "borderWidth": 1,
+   "textStyle": {
+    "color": "#1c1719",
+    "fontFamily": "system-ui, sans-serif"
+   }
+  },
+  "tip": "<span style=\"color:#6b6165\">b</span><br><span style=\"display:inline-block;width:8px;height:8px;border-radius:8px;background:#123456;margin-right:8px\"></span><b>v:</b> 3",
+  "series": [
+   null
+  ]
+ },
+ "area": {
+  "tooltip": {
+   "trigger": "axis",
+   "axisPointer": {
+    "type": "line",
+    "lineStyle": {
+     "color": "#d9cfd1"
+    }
+   },
+   "backgroundColor": "#ffffff",
+   "borderColor": "#ebe4e5",
+   "borderWidth": 1,
+   "textStyle": {
+    "color": "#1c1719",
+    "fontFamily": "system-ui, sans-serif"
+   }
+  },
+  "tip": "<span style=\"color:#6b6165\">b</span><br><span style=\"display:inline-block;width:8px;height:8px;border-radius:8px;background:#123456;margin-right:8px\"></span><b>v:</b> 3",
+  "series": [
+   null
+  ]
+ },
+ "combo": {
+  "tooltip": {
+   "trigger": "axis",
+   "axisPointer": {
+    "type": "shadow",
+    "lineStyle": {
+     "color": "#d9cfd1"
+    }
+   },
+   "backgroundColor": "#ffffff",
+   "borderColor": "#ebe4e5",
+   "borderWidth": 1,
+   "textStyle": {
+    "color": "#1c1719",
+    "fontFamily": "system-ui, sans-serif"
+   }
+  },
+  "tip": "<span style=\"color:#6b6165\">b</span><br><span style=\"display:inline-block;width:8px;height:8px;border-radius:8px;background:#123456;margin-right:8px\"></span><b>v:</b> 3",
+  "series": [
+   null,
+   null
+  ]
+ },
+ "pie": {
+  "tooltip": {
+   "trigger": "item",
+   "backgroundColor": "#ffffff",
+   "borderColor": "#ebe4e5",
+   "borderWidth": 1,
+   "textStyle": {
+    "color": "#1c1719",
+    "fontFamily": "system-ui, sans-serif"
+   }
+  },
+  "tip": "<span style=\"color:#6b6165\">a</span><br><b>v:</b> 3 (30%)",
+  "series": [
+   null
+  ]
+ },
+ "pieText": {
+  "tooltip": {
+   "trigger": "item",
+   "backgroundColor": "#ffffff",
+   "borderColor": "#ebe4e5",
+   "borderWidth": 1,
+   "textStyle": {
+    "color": "#1c1719",
+    "fontFamily": "system-ui, sans-serif"
+   }
+  },
+  "tip": "Share <b>3</b>",
+  "series": [
+   null
+  ]
+ },
+ "donut": {
+  "tooltip": {
+   "trigger": "item",
+   "backgroundColor": "#ffffff",
+   "borderColor": "#ebe4e5",
+   "borderWidth": 1,
+   "textStyle": {
+    "color": "#1c1719",
+    "fontFamily": "system-ui, sans-serif"
+   }
+  },
+  "tip": "<span style=\"color:#6b6165\">a</span><br><b>v:</b> 3 (30%)",
+  "series": [
+   null
+  ]
+ },
+ "scatter": {
+  "tooltip": {
+   "trigger": "item",
+   "backgroundColor": "#ffffff",
+   "borderColor": "#ebe4e5",
+   "borderWidth": 1,
+   "textStyle": {
+    "color": "#1c1719",
+    "fontFamily": "system-ui, sans-serif"
+   }
+  },
+  "tip": "<span style=\"color:#6b6165\">a</span><br><b>x:</b> —<br><b>y:</b> —",
+  "series": [
+   null
+  ]
+ },
+ "scatterShapes": {
+  "tooltip": {
+   "trigger": "item",
+   "backgroundColor": "#ffffff",
+   "borderColor": "#ebe4e5",
+   "borderWidth": 1,
+   "textStyle": {
+    "color": "#1c1719",
+    "fontFamily": "system-ui, sans-serif"
+   }
+  },
+  "tip": "<span style=\"color:#6b6165\">v · a</span><br><b>x:</b> —<br><b>y:</b> —",
+  "series": [
+   null
+  ]
+ },
+ "heatmap": {
+  "tooltip": {
+   "position": "top",
+   "backgroundColor": "#ffffff",
+   "borderColor": "#ebe4e5",
+   "borderWidth": 1,
+   "textStyle": {
+    "color": "#1c1719",
+    "fontFamily": "system-ui, sans-serif"
+   }
+  },
+  "tip": "<span style=\"color:#6b6165\"> · </span><br><b>—</b>",
+  "series": [
+   null
+  ]
+ },
+ "treemap": {
+  "tooltip": {
+   "backgroundColor": "#ffffff",
+   "borderColor": "#ebe4e5",
+   "borderWidth": 1,
+   "textStyle": {
+    "color": "#1c1719",
+    "fontFamily": "system-ui, sans-serif"
+   }
+  },
+  "tip": "<span style=\"color:#6b6165\">a</span><br><b>3</b>",
+  "series": [
+   null
+  ]
+ },
+ "histogram": {
+  "tooltip": {
+   "trigger": "axis",
+   "axisPointer": {
+    "type": "shadow"
+   },
+   "backgroundColor": "#ffffff",
+   "borderColor": "#ebe4e5",
+   "borderWidth": 1,
+   "textStyle": {
+    "color": "#1c1719",
+    "fontFamily": "system-ui, sans-serif"
+   }
+  },
+  "tip": "<span style=\"color:#6b6165\">a</span><br><b>3</b>",
+  "series": [
+   null
+  ]
+ },
+ "boxplot": {
+  "tooltip": {
+   "trigger": "item",
+   "backgroundColor": "#ffffff",
+   "borderColor": "#ebe4e5",
+   "borderWidth": 1,
+   "textStyle": {
+    "color": "#1c1719",
+    "fontFamily": "system-ui, sans-serif"
+   }
+  },
+  "tip": "<span style=\"color:#6b6165\"></span><br>max —<br>Q3 —<br>median <b>—</b><br>Q1 —<br>min —",
+  "series": [
+   null
+  ]
+ },
+ "waterfall": {
+  "tooltip": {
+   "trigger": "item",
+   "backgroundColor": "#ffffff",
+   "borderColor": "#ebe4e5",
+   "borderWidth": 1,
+   "textStyle": {
+    "color": "#1c1719",
+    "fontFamily": "system-ui, sans-serif"
+   }
+  },
+  "tip": "<span style=\"color:#6b6165\">b</span><br><b>+3</b><br>running total 4",
+  "series": [
+   null,
+   null,
+   null,
+   null
+  ]
+ },
+ "funnel": {
+  "tooltip": {
+   "trigger": "item",
+   "backgroundColor": "#ffffff",
+   "borderColor": "#ebe4e5",
+   "borderWidth": 1,
+   "textStyle": {
+    "color": "#1c1719",
+    "fontFamily": "system-ui, sans-serif"
+   }
+  },
+  "tip": "<span style=\"color:#6b6165\">a</span><br><b>3</b> (33.3% of the first)",
+  "series": [
+   null
+  ]
+ },
+ "gauge": {
+  "tooltip": {
+   "backgroundColor": "#ffffff",
+   "borderColor": "#ebe4e5",
+   "borderWidth": 1,
+   "textStyle": {
+    "color": "#1c1719",
+    "fontFamily": "system-ui, sans-serif"
+   }
+  },
+  "tip": "m: <b>4</b> of 10",
+  "series": [
+   null
+  ]
+ },
+ "bullet": {
+  "tooltip": {
+   "trigger": "axis",
+   "axisPointer": {
+    "type": "shadow"
+   },
+   "backgroundColor": "#ffffff",
+   "borderColor": "#ebe4e5",
+   "borderWidth": 1,
+   "textStyle": {
+    "color": "#1c1719",
+    "fontFamily": "system-ui, sans-serif"
+   }
+  },
+  "tip": "<span style=\"color:#6b6165\">b</span><br><b>m:</b> 3<br><b>Target:</b> 3 (100%)",
+  "series": [
+   null,
+   null,
+   null,
+   null,
+   null
+  ]
+ },
+ "gantt": {
+  "tooltip": {
+   "trigger": "item",
+   "backgroundColor": "#ffffff",
+   "borderColor": "#ebe4e5",
+   "borderWidth": 1,
+   "textStyle": {
+    "color": "#1c1719",
+    "fontFamily": "system-ui, sans-serif"
+   }
+  },
+  "tip": "<span style=\"color:#6b6165\">b</span><br>25 → 35<br><b>Length:</b> 10",
+  "series": [
+   null
+  ]
+ },
+ "sankey": {
+  "tooltip": {
+   "trigger": "item",
+   "backgroundColor": "#ffffff",
+   "borderColor": "#ebe4e5",
+   "borderWidth": 1,
+   "textStyle": {
+    "color": "#1c1719",
+    "fontFamily": "system-ui, sans-serif"
+   }
+  },
+  "tip": "<br><b>3</b>",
+  "series": [
+   null
+  ]
+ },
+ "multiples": {
+  "tooltip": {
+   "trigger": "axis",
+   "backgroundColor": "#ffffff",
+   "borderColor": "#ebe4e5",
+   "borderWidth": 1,
+   "textStyle": {
+    "color": "#1c1719",
+    "fontFamily": "system-ui, sans-serif"
+   }
+  },
+  "tip": null,
+  "series": [
+   null
+  ]
+ }
+}

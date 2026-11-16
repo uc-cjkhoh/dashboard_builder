@@ -250,6 +250,8 @@ export const defaultMarks = () => ({ size: null, label: null, detail: [], toolti
 //                absent when nothing differs from the default, so older files round-trip unchanged (Dashboard/size-scale-model.js)
 //  linePattern:  "dashed" | "dotted" — Format → Line pattern on a line / area / combo's lines; absent = solid (Dashboard/line-style-model.js)
 //  lineMarkers:  "all" | "none" — Format → Line markers; absent = automatic (dots by line length); kept off the defaults so older files round-trip unchanged (Dashboard/line-marker-model.js)
+//  showTooltips: false — Format → Show tooltips off (absent = on); tooltipButtons: true — Keep only / Exclude / View data in the tooltip (absent = off);
+//                tooltipMode: "hover" — those buttons in every hover tooltip (absent = Responsive: a click pins the tooltip). Kept off the defaults so older files round-trip unchanged (Dashboard/tooltip-behaviour-model.js)
 //  ganttLength:  "length" | "end" — a Gantt's second measure (absent = length; kept off the defaults so older files round-trip unchanged)
 //  target:       null | number — a KPI scorecard's goal; downIsGood: a fall shows as good
 //  conditional:  { [measureKey]: { mode, scale, mid, rules } } — Table / Text cell formatting
