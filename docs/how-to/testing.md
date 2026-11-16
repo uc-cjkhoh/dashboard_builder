@@ -44,6 +44,8 @@ In the table below, `P##` tags (P28, P33 …) name the product phase whose cases
 | `tests/js/validate.test.mjs` | each parser and its edge cases (blank, `1e3`, `0x10`, IPv6, over-length), `LIMITS` |
 | `tests/js/filter-rules.test.mjs`, `toolbar-rules.test.mjs` | `checkFilter` / `checkAdd` / `viewCounts`; tool visibility per chart type |
 | `tests/js/viewbar-model.test.mjs`, `resizer.test.mjs` | every chart type has an icon; sort-picker summary; resize width clamping |
+| `tests/js/edge-resize.test.mjs` (browser: `tests/live/edge-resize-ui.mjs`) | the bottom-edge grip strip, height clamping, remembered heights (corrupt / blocked storage); in the browser: hover, drag up / down, content cap, minimum, reload, double-click reset, `Alt+↑/↓`, collapsed card |
+| `tests/js/card-height.test.mjs` (browser: `tests/live/card-resize-ui.mjs`) | a Data Source card's list height from a top / bottom edge drag: 8px steps, minimum, content cap, top edge stops at y 0, saved `listHeight` round trip and reset; in the browser: hit strips and cursor, both edges (the other edge stays put), cap, minimum, ↓ key, double-click reset, short table, collapsed card, hover line |
 | `tests/js/period-model.test.mjs` | presets and calendar edges, previous / last-year comparison (29 Feb), Date vs DateTime range filter, change / tone / %, row alignment, target |
 | `tests/js/parameters-model.test.mjs` | value checks by type / list / range, bound filters read the value (missing → empty), Top N from a parameter (clamped), saved-parameter checks; workbook case: round-trip and orphan references unlinked |
 | `tests/js/analytics-model.test.mjs` | reference values, exact linear / quadratic / log fits and R², forecast extension, totals by aggregation |

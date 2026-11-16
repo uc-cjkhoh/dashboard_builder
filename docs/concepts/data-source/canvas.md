@@ -106,6 +106,13 @@ A card with custom SQL shows a `Custom SQL` note under its head; its profile but
   - A row is a drag handle for relationships ([relationships.md](relationships.md)).
   - A column in a relationship is pinned to the card's key strip, and its name turns accent.
 - **No rows on the card.** The column list scrolls inside the card, up to 240px tall; a short table is only as tall as its columns.
+- **Resize the list from either edge.** An 8px strip inside the card's top and bottom edge (`.entity__resize`) shows an `ns-resize` cursor and a 2px
+  accent line on hover. Dragging it sets the list's height (`entity.listHeight`, applied as `--list-h` on `.entity--sized`):
+  - the bottom edge moves the bottom; the top edge moves the top and keeps the bottom in place (the card's `y` changes, never below 0);
+  - heights step on the 8px grid, from 64px (about two rows) up to the list's full content height, so it never shows empty space;
+  - double-click either edge to go back to the default 240px; the bottom strip is also a keyboard separator (focus it, ↑ / ↓ in 8px steps);
+  - hidden while the card is collapsed, loading or failed; links re-route while dragging (`entity:moved`), and a saved workbook keeps the height.
+  - The maths is `card-height.js` (pure, `tests/js/card-height.test.mjs`); the browser check is `tests/live/card-resize-ui.mjs`.
   A table's rows are previewed from its chip in the schema browser ([schema-browser.md](schema-browser.md#row-preview)).
 - **Look:** a solid card with depth.
   - `--line-2` stroke and a `--card-rim` highlight on the head's top edge.
