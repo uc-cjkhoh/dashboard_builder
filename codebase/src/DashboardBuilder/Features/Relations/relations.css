@@ -86,16 +86,34 @@
 
 .join-aggregate__dir { margin: var(--s1) 0 0 var(--s4); }
 
-/* Join safety preview ("Check this join") in the relationship dialog. */
-.join-check { display: grid; gap: var(--s2); margin: 0 0 var(--s2); padding: var(--s2); border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); font-size: var(--fs-body); }
-.join-check__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s2); }
-.join-check__hint { color: var(--ink-3); font-size: var(--fs-body); }
-.join-check__out { display: grid; gap: var(--s2); max-height: 45vh; overflow-y: auto; }
-.join-check__summary { margin: 0; padding-left: var(--s4); display: grid; gap: var(--s1); }
-.join-check__verdict { margin: 0; font-weight: 600; }
-.join-check__use { justify-self: start; } /* "Use N:1": takes the check's reading into the Cardinality control */
+/* The data's suggestion (with its evidence) in the relationship dialog's right panel: it runs as the dialog opens. */
+.join-check { display: grid; gap: var(--s4); margin: 0 0 var(--s2); font-size: var(--fs-body); }
+.join-check__head { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); }
+.join-check__title { margin: 0; }
+.join-check__hint { margin: 0; color: var(--ink-3); }
+.join-check__out { display: grid; gap: var(--s4); max-height: 45vh; overflow-y: auto; }
+.join-check__suggest { display: grid; gap: var(--s1); padding: var(--s4); border: 1px solid var(--accent-line); border-radius: var(--r); background: var(--surface); }
+.join-check__suggest p { margin: 0; }
+.join-check__label { color: var(--ink-2); }
+.join-check__pick { font-size: var(--fs-title); font-weight: 600; line-height: 32px; color: var(--accent-ink); }
+.join-check__suggest .join-check__note, .join-check__use { margin-top: var(--s2); }
+.join-check__use { justify-self: start; } /* "Use N:1": takes the suggestion into the Cardinality control */
+.join-check__evidence { display: grid; gap: var(--s2); }
+.join-check__sub { margin: 0; font-size: var(--fs-body); font-weight: 600; color: var(--ink-2); }
+.join-check__reasons { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s2); }
+.join-check__reason { display: flex; align-items: baseline; gap: var(--s2); }
+.join-check__tag { flex: none; min-width: 48px; text-align: center; padding: 0 var(--s1); border: 1px solid var(--line-2); border-radius: var(--r); font-weight: 600; color: var(--ink-2); }
+.join-check__tag--many { border-color: var(--accent-line); color: var(--accent-ink); }
+.join-check__table { width: 100%; border-collapse: collapse; table-layout: fixed; font-variant-numeric: tabular-nums; }
+.join-check__caption { caption-side: top; text-align: left; padding-bottom: var(--s1); color: var(--ink-3); }
+.join-check__table th, .join-check__table td { padding: var(--s1) var(--s2); border-bottom: 1px solid var(--line); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.join-check__table th[scope="row"] { text-align: left; font-weight: 400; color: var(--ink-2); white-space: normal; width: 44%; }
+.join-check__table thead th { font-weight: 600; color: var(--ink-2); }
+.join-check__table tr > :first-child { padding-left: 0; }
+.join-check__table tr > :last-child { padding-right: 0; }
 .join-check__note { margin: 0; display: flex; gap: var(--s2); align-items: flex-start; padding: var(--s2) var(--s2); border: 1px solid var(--line); border-radius: var(--r); }
 .join-check__glyph { flex: none; display: inline-flex; margin-top: 1px; }
+.join-check__note--ok { background: var(--ok-bg); color: var(--ok-ink); border-color: var(--ok-line); }
 .join-check__note--warn { background: var(--warn-bg); color: var(--warn-ink); border-color: var(--warn-line); }
 .join-check__note--error { background: var(--danger-bg); color: var(--danger-ink); border-color: var(--danger-line); }
 .join-check__note--busy .join-check__glyph { animation: spin 1s linear infinite; }

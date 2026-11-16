@@ -47,7 +47,7 @@ test("declaring one side as 'one' when it repeats keys warns, naming the table a
   const w = d.findings.filter((f) => f.level === "warn");
   assert.equal(w.length, 1);
   assert.match(w[0].text, /customers/);
-  assert.match(w[0].text, /declared as the "one" side/);
+  assert.match(w[0].text, /You chose customers as the "one" side/);
   assert.match(w[0].text, /up to 3 times/);
 });
 
@@ -68,7 +68,7 @@ test("a declaration that agrees with the data draws no warning; with no declarat
 test("NULL keys, zero matches, sampling and empty tables are called out", () => {
   const d = describePreview(result({ rows: 100, nullRows: 20, keys: 80, matchedKeys: 0, matchedRows: 0 }, { matchedKeys: 0, matchedRows: 0 }, { sampled: true, sampleLimit: 500 }), { ...names, declared: "1:1" });
   assert.ok(d.findings.some((f) => f.level === "info" && /20% of orders rows have no cust_id/.test(f.text)));
-  assert.ok(d.findings.some((f) => f.level === "info" && /can't tell from a sample/i.test(f.text)));
+  assert.ok(d.findings.some((f) => f.level === "info" && /A sample can't tell/i.test(f.text)));
   assert.ok(d.findings.some((f) => /first 500 rows of each table/.test(f.text)));
   const e = describePreview(result({ rows: 0, keys: 0, matchedKeys: 0, matchedRows: 0, maxDuplicates: 0 }), { ...names });
   assert.ok(e.findings.some((f) => /empty/i.test(f.text)));
@@ -98,7 +98,7 @@ test("declared 1:1 but both sides repeat gives ONE warning that names the declar
   const r = result({ maxDuplicates: 4, avgDuplicates: 2 }, { maxDuplicates: 6, avgDuplicates: 3 });
   const w = describePreview(r, { ...names, declared: "1:1" }).findings.filter((f) => f.level === "warn");
   assert.equal(w.length, 1);
-  assert.match(w[0].text, /many-to-many/); assert.match(w[0].text, /double-count/); assert.match(w[0].text, /declared 1:1/);
+  assert.match(w[0].text, /many-to-many/); assert.match(w[0].text, /double-count/); assert.match(w[0].text, /You chose 1:1/);
 });
 
 const sampled = (from, to) => result(from, to, { sampled: true, sampleLimit: 500 });
@@ -115,7 +115,7 @@ test("sampled and no matches: no amber 'no keys match' warning, a neutral can't-
   const d = describePreview(sampled({ matchedKeys: 0, matchedRows: 0 }, { matchedKeys: 0, matchedRows: 0 }), { ...names, declared: "1:1" });
   assert.ok(!d.findings.some((f) => /No keys match at all/.test(f.text)));
   assert.deepEqual(d.findings.filter((f) => f.level === "warn"), []);
-  assert.ok(d.findings.some((f) => f.level === "info" && /can't tell from a sample/i.test(f.text)));
+  assert.ok(d.findings.some((f) => f.level === "info" && /A sample can't tell/i.test(f.text)));
 });
 
 test("sampled: both sides repeating is information only (overlap is unknown); a side declared 'one' that repeats still warns (a repeat is a fact)", () => {
@@ -146,4 +146,40 @@ test("an end whose card has custom SQL carries it as `source`; a plain table end
     to: { db: "shop", table: "customers", column: "id" } });
   assert.equal("source" in previewRequest(b, "id", b, "id").from, false);
   assert.deepEqual(previewRequest(b, "id", a, "id", [{ from: "x", to: "y" }]).to.source, { kind: "sql", db: "shop", name: "orders", sql });
+});
+
+import { joinEvidence, suggestionLabel } from "../../src/DashboardBuilder/Features/Relations/join-preview-model.js";
+
+test("evidence: one reason per side naming the many and the one side, FROM first", () => {
+  const r = result({ rows: 1000, keys: 200, matchedKeys: 190, matchedRows: 940, maxDuplicates: 14, avgDuplicates: 5 },
+    { rows: 200, keys: 200, matchedKeys: 190, matchedRows: 190 });
+  const e = joinEvidence(r, names);
+  assert.deepEqual(e.reasons.map((x) => x.side), ["many", "one"]);
+  assert.equal(e.reasons[0].text, 'cust_id repeats in orders: up to 14 rows for one key (about 5 on average), so orders is the "many" side.');
+  assert.equal(e.reasons[1].text, 'id is unique in customers: every key has one row, so customers is the "one" side.');
+});
+
+test("evidence rows: counts per side with shares, grouped thousands, averages to one decimal", () => {
+  const r = result({ rows: 12000, nullRows: 1200, keys: 3000, matchedKeys: 1500, matchedRows: 9000, maxDuplicates: 9, avgDuplicates: 3.6666 }, {});
+  const e = joinEvidence(r, names);
+  const row = (label) => e.rows.find((x) => x.label === label);
+  assert.deepEqual(row("Rows read"), { label: "Rows read", from: "12,000", to: "100" });
+  assert.equal(row("Rows with no key (NULL)").from, "1,200 (10%)");
+  assert.equal(row("Keys found in the other table").from, "1,500 (50%)");
+  assert.equal(row("Rows with a match").from, "9,000 (75%)");
+  assert.equal(row("Most rows for one key").from, "9");
+  assert.equal(row("Average rows per key").from, "3.7");
+  assert.equal(row("Average rows per key").to, "1");
+});
+
+test("evidence: an empty side gives no reasons and no false shares", () => {
+  const e = joinEvidence(result({ rows: 0, keys: 0, matchedKeys: 0, matchedRows: 0, maxDuplicates: 0, avgDuplicates: 0 }, {}), names);
+  assert.deepEqual(e.reasons, []);
+  assert.equal(e.rows.find((x) => x.label === "Rows with a match").from, "0 (0%)");
+  assert.equal(e.rows.find((x) => x.label === "Average rows per key").from, "—");
+});
+
+test("the suggestion headline names the shape in words", () => {
+  assert.equal(suggestionLabel("N:1"), "N:1 · many-to-one");
+  assert.equal(suggestionLabel("N:M"), "N:M · many-to-many");
 });

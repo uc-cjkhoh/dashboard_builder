@@ -130,10 +130,9 @@ try {
     await closeDialog();
   });
 
-  await check('Check this join sends the SQL end as `from.source` and a plain table end without one, and shows the reading', async () => {
+  await check('The relationship suggestion sends the SQL end as `from.source` and a plain table end without one, and shows the reading', async () => {
     await ev(`document.querySelector('.rel-badge').dispatchEvent(new MouseEvent('click', { bubbles: true }))`);
     await waitFor(`document.querySelector('dialog[open] .join-check') !== null`, 'dialog with the check');
-    await ev(`document.querySelector('dialog[open] .join-check__btn').click()`);
     await waitFor(`/have a match in customers/.test(document.querySelector('dialog[open] .join-check__out')?.textContent ?? '')`, 'result');
     must(J(calls.preview.at(-1)) === J({ from: { db: 'shop', table: 'orders', column: 'cust_id', source: wire }, to: { db: 'shop', table: 'customers', column: 'id' } }), `request: ${J(calls.preview.at(-1))}`);
     must(!/custom SQL yet/.test(await text('dialog[open] .join-check__out')), 'the old refusal');

@@ -251,7 +251,7 @@ function refuse(problem, kind, a, b) {
   openTypeWarning({ from: a, to: b, suggestions: joinable ? { table: b.table, kind: kindLabel(a.category), names } : null });
 }
 
-/** What the dialog needs for a compound key: the "Also match on" section's inputs and the "Check this join" request (which reads the pairs as they stand). */
+/** What the dialog needs for a compound key: the "Also match on" section's inputs and the suggestion's request (which reads the pairs as they stand). */
 function keyPairsFor(from, to, pairs, rel) {
   const a = entities.get(from.entityId), b = entities.get(to.entityId);
   if (!a || !b) return null;
@@ -589,7 +589,7 @@ function openCardinalityDialog({ current = "1:N", joinType = "inner", tables = [
   x.addEventListener("click", () => closeDialog(dlg));
   head.append(titles, x);
 
-  // Landscape: settings and the cardinality buttons on the left, "Check this join" on the right.
+  // Landscape: settings and the cardinality buttons on the left, the data's suggestion (with its evidence) on the right.
   const body = document.createElement("div");
   body.className = "rel-dialog";
   const left = document.createElement("div");
@@ -629,10 +629,13 @@ function openCardinalityDialog({ current = "1:N", joinType = "inner", tables = [
   left.append(section("join", 0, joinRow));
   let aggregate = agg.aggregate, direction = agg.direction;
   left.append(section("totals", 1, buildAggregateChoice(agg, (v) => { aggregate = v.aggregate; direction = v.direction; })));
+  // The suggestion runs as the dialog opens (start() below), re-runs when the key pairs change, and re-reads its result against
+  // each cardinality pick; "Use N:1" only selects (Confirm still saves).
+  let check = null;
   if (keys) {
-    left.append(section("pairs", 2, buildKeyPairs(keys.section)));
-    // the check's reading can be taken in one click ("Use N:1") when it differs from the chosen cardinality
-    right.append(buildJoinCheck(dlg, { ...keys.check, apply: { get: () => cardinality, set: (c) => cardButtons.find((o) => o.textContent === c)?.click() } }));
+    check = buildJoinCheck(dlg, { ...keys.check, apply: { get: () => cardinality, set: (c) => cardButtons.find((o) => o.textContent === c)?.click() } });
+    left.append(section("pairs", 2, buildKeyPairs({ ...keys.section, onChange: (next) => { keys.section.onChange(next); check.rerun(); } })));
+    right.append(check.root);
   }
   const choices = document.createElement("div");
   choices.className = "card-choices";
@@ -651,6 +654,7 @@ function openCardinalityDialog({ current = "1:N", joinType = "inner", tables = [
     b.addEventListener("click", () => {
       cardinality = c;
       for (const o of cardButtons) { const on = o === b; o.classList.toggle("is-active", on); o.setAttribute("aria-pressed", String(on)); }
+      check?.redescribe();
     });
     cardButtons.push(b);
     choices.append(b);
@@ -677,6 +681,7 @@ function openCardinalityDialog({ current = "1:N", joinType = "inner", tables = [
   dlg.addEventListener("cancel", (e) => { e.preventDefault(); closeDialog(dlg); });
   document.body.append(dlg);
   openDialog(dlg);
+  check?.start();
 }
 
 // "Total each table by the key before joining" + which way a filter works (only shown once the box is ticked). Reports every change.
