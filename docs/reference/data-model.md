@@ -175,7 +175,7 @@ Nothing here reaches the server; dashboards add no endpoint
   | `dualAxis` | boolean (default false; line / area right axis) |
   | `secondaryType` | `line` \| `bar` \| `area` (default `line`) |
   | `markerSize` | null (automatic) or a whole number 4–40 |
-  | `sizeScale` | optional `{ smallest?, largest?, fromZero?, reversed? }` (Format → Edit Sizes): `smallest` / `largest` whole 0–100 (default 0 / 100, smallest below largest), `fromZero` / `reversed` booleans (absent `fromZero` = the chart's own default); only parts that differ from the default are stored |
+  | `sizeScale` | optional `{ smallest?, largest?, vary?, start?, end?, reversed?, fromZero? }` (Format → Edit Sizes): `smallest` / `largest` whole 0–100 (default 0 / 100, smallest below largest); `vary` `"range"` / `"zero"` (absent = Automatic, the chart's own default); `start` / `end` finite numbers within ±1e12, start below end, no start under From zero; `reversed` boolean; `fromZero` boolean is the older form of `vary` (kept as saved, `vary` wins); only parts that differ from the default are stored |
   | `shapeBins` | optional whole number 2–6 (Format → Shape bins, while Shape holds a measure; absent = 5); an invalid saved value is reset to 5 and reported, never clamped |
   | `labelMarks` | optional `minmax` \| `selected` \| `highlighted` \| `recent` \| `ends` (Format → Label marks; absent = All, every mark labelled); an unknown saved value is reset to All and reported |
   | `labelPosition` | optional `above` \| `below` \| `left` \| `right` (Format → Label position on a line, area or point chart; absent = Automatic); an unknown saved value is reset to Automatic and reported |
