@@ -4,7 +4,7 @@ import { markerSymbol } from "./mark-style-model.js";
 const POINTS = new Set(["scatter", "square", "circle"]);
 /** The chart types that draw a measure on Colour (the Format colour-scale controls follow them). */
 export const COLOUR_MEASURE_TYPES = new Set([...POINTS, "pie", "donut", "treemap", "bar", "stacked", "line", "area", "combo"]);
-const SIZE_LIST = "Scatter bubbles, Bar thickness, Line thickness, Area markers, Treemap area and Text / Table font size";
+const SIZE_LIST = "Scatter bubbles, Bar thickness, Gantt bar thickness, Line thickness, Area markers, Treemap area and Text / Table font size";
 const SINGLE = "a single measure on Columns / Rows";
 const NOTE = {
   colourElsewhere: "A colour measure shades Scatter points, Bars, Stacked bars, Lines, Areas, Combo marks, Pie / Donut slices and Treemap tiles — switch to one of those, or drop a categorical field on Colour.",
@@ -12,6 +12,7 @@ const NOTE = {
   sizeStacked: "Size doesn't apply to a Stacked bar — use Bar (one measure) or a point chart.",
   sizePie: "Size doesn't apply to a Pie / Donut — one pie has nothing to compare its size with, and the slice angle is the measure.",
   sizeDimension: "A field on Size by member steps Scatter bubbles, Bar thickness, Line thickness and Area markers — Treemap, Text and Table take a measure.",
+  sizeGanttDimension: "A field on Size by member doesn't apply to a Gantt — it draws one bar per row, which a member step would split. Use a measure to set the bars' thickness.",
   sizeElsewhere: `Size scales ${SIZE_LIST} — switch chart type to use it.`,
 };
 
@@ -39,12 +40,14 @@ export function measureCue(i, shape) {
 /**
  * Can `type` draw a Size field? A measure scales marks by value; a dimension (`dimension` true) gives each member a step. A bar's
  * thickness is per mark, so it needs one measure; line / area markers and thickness are shared by all lines. Text / Table take a
- * measure only (it sets the cell font size).
+ * measure only (it sets the cell font size). A Gantt's bar thickness is per bar, so it takes a measure once exactly its start and length are on the shelf (the
+ * Size measure rides along as a third measure); a dimension would add a group-by that splits the one-bar-per-row layout, so it stays a hint.
  */
 export function sizeChannel(type, shelfCount, dimension = false) {
   if (type === "pie" || type === "donut") return { ok: false, note: NOTE.sizePie };
   if (type === "stacked") return { ok: false, note: NOTE.sizeStacked };
   if (type === "bar") return shelfCount === 1 ? { ok: true, note: null } : { ok: false, note: NOTE.sizeMany };
+  if (type === "gantt") return dimension ? { ok: false, note: NOTE.sizeGanttDimension } : shelfCount === 2 ? { ok: true, note: null } : { ok: false, note: null }; // exactly the start and the length: any other count draws a hint, not bars, so there is nothing to size
   if (POINTS.has(type) || type === "line" || type === "area") return { ok: true, note: null };
   if (type === "treemap" || type === "text" || type === "table") return dimension ? { ok: false, note: NOTE.sizeDimension } : { ok: true, note: null };
   return { ok: false, note: NOTE.sizeElsewhere };

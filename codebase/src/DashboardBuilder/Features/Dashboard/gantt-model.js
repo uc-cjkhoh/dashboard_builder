@@ -1,7 +1,10 @@
 // Gantt bars from a result — pure, DOM-free (tests/js/gantt-model.test.mjs). One dimension is the row, the
 // first measure the bar's start (a number, or a date the server returns as text), the second its length. With
 // a date start the length counts days. Format → Length can make the second measure the end instead. Rows without a usable start or a
-// length >= 0 are skipped and counted.
+// length >= 0 are skipped and counted. A Size measure (`opts.sizes`) sets each bar's thickness: `ganttSizing` turns the drawn bars' values into shares
+// (Format → Edit Sizes applies) and `ganttThickness` a share into pixels, the bar chart's rule (D123).
+import { sizeScaleOf, measureShareFn } from "./size-scale-model.js";
+import { barThickness } from "./mark-channel-model.js";
 
 const DAY = 86400000;
 const DATE_TEXT = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?/;
@@ -38,9 +41,10 @@ export const GANTT_LENGTH_CHOICES = Object.freeze([["length", "Length"], ["end",
  * y slot, and `opts.colours` (a member label per row) colours the bars by member; both come from a Colour field.
  * @returns {{ bars: {i, name, start, end, duration, group}[], rows: string[], raws: unknown[] (`opts.raws` of each slot's first row), groups: string[], isDate: boolean, hasTime: boolean, skipped: number }}
  * `i` is the bar's slot on the category axis (a skipped row keeps its slot, so no gap closes); `group` indexes `groups`, -1 with no colours.
+ * `opts.sizes` (a Size measure's value per row) adds `size` to each bar (null = missing); without it a bar has no `size` key.
  */
 export function ganttBars(categories, starts, second, opts = {}) {
-  const { end: endMode = false, slots = null, colours = null, raws = null } = opts;
+  const { end: endMode = false, slots = null, colours = null, raws = null, sizes = null } = opts;
   const dates = starts.map(parseDate);
   const ends = endMode ? second.map(parseDate) : null;
   const isDate = dates.some(Boolean);
@@ -76,10 +80,25 @@ export function ganttBars(categories, starts, second, opts = {}) {
       end = isDate ? addDays(start, duration) : start + duration;
       if (!Number.isFinite(end)) return; // a length too large to place
     }
-    bars.push({ i, name, start, end, duration, group });
+    bars.push(sizes ? { i, name, start, end, duration, group, size: sizes[row] ?? null } : { i, name, start, end, duration, group });
   });
   return { bars, rows, groups, raws: slotRaws, isDate, hasTime, skipped: categories.length - bars.length };
 }
+
+/**
+ * The drawn bars' Size as shares: { shares (0..1 or null per bar, aligned with `bars`), values (each bar's Size), scale } or null when the bars carry no Size.
+ * The span is the drawn bars' own (a skipped row's value is not in it) and one scale serves every bar, whatever its Colour member. Edit Sizes
+ * (`format.sizeScale`) applies as on a bar: Reversed, Smallest / Largest, Sizes vary, a typed start / end. A missing value has no share.
+ */
+export function ganttSizing(bars, format) {
+  if (!bars.some((b) => b.size !== undefined)) return null;
+  const scale = sizeScaleOf(format);
+  const values = bars.map((b) => b.size ?? null);
+  const share = measureShareFn(values, { zero: scale.fromZero ?? false, scale });
+  return { shares: values.map(share), values, scale };
+}
+/** A bar's thickness in px for a share (null = the thinnest) in a row slot `slot` px tall: 6 px at the smallest up to 80% of the slot (D108's bar rule). */
+export const ganttThickness = (share, slot) => barThickness(share, slot);
 
 /**
  * A Colour field splits a Gantt: the result's last key is the colour member and the keys before it name the row.

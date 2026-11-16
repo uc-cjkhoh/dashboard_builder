@@ -19,6 +19,7 @@ const COLUMNS = {
   customers: [['country', 'String', 'text']],
 };
 const REGIONS = ['APAC', 'EU', 'US'];
+let overlap = false;   // true: every bar starts at the same value, so the Colour members' bars of one row overlap
 const queries = [];     // every /api/query body, in order
 let tables = ['orders', 'customers'];
 function answer({ method, path, body }) {
@@ -37,7 +38,7 @@ function answer({ method, path, body }) {
     return { json: {
       rowDimensions: (body.rowDimensions ?? []).map((d) => d.column), columnDimensions: (body.columnDimensions ?? []).map((d) => d.column),
       measures: (body.measures ?? []).map((_, i) => `v${i}`),
-      rows: combos.map((keys, r) => ({ keys, values: (body.measures ?? []).map((m, i) => (m.column === 'placed' ? (m.agg === 'max' ? `2026-02-1${r + 1}` : `2026-02-0${r + 1}`) : i === 0 ? 10 * (r + 1) : (m.agg === 'avg' ? 1234567.5 : 3) * (r + 1))) })),
+      rows: combos.map((keys, r) => ({ keys, values: (body.measures ?? []).map((m, i) => (m.column === 'placed' ? (m.agg === 'max' ? `2026-02-1${r + 1}` : `2026-02-0${r + 1}`) : i === 0 ? (overlap ? 10 : 10 * (r + 1)) : (m.agg === 'avg' ? 1234567.5 : 3) * (r + 1))) })),
       truncated: false } };
   }
   return null;
@@ -281,6 +282,113 @@ try {
     await shot('gantt-selected-light.png');
     const p2 = await pos(); await b.click(p2.x, p2.y); await settle(500);
     must(!(await ev(`document.body.textContent.includes('region = EU')`)), 'a second click clears the selection');
+  });
+  // ---- a Size measure sets each bar's thickness (D123) ------------------------------------------------------------------------------
+  const toolEl = (name) => `document.querySelector('.ws-tool[aria-label^="${name}"]')`;
+  const fmtField = (label) => `[...document.querySelectorAll('.ws-fmt-field')].find((l) => l.textContent.includes(${J(label)}))`;
+  const setField = (label, v) => ev(`(() => { const i = ${fmtField(label)}.querySelector('input'); i.value = ${J(v)}; i.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+  const toggle = (label) => ev(`${fmtField(label)}.querySelector('input').click()`);
+  const has = (label) => ev(`!!(${fmtField(label)})`);
+  const hints = () => ev(`[...document.querySelectorAll('#ws-chart .ws-hint')].map((h) => h.textContent)`);
+  const sizeText = async () => J((await opt()).graphic ?? []).match(/Size: [^"]*/)?.[0] ?? '';
+  // The Gantt's drawn bars, read from the live canvas: each rectangle's height in px (a bar is the only rect with a 2 px corner radius), top row first (the draw order differs: thinner bars are drawn later).
+  const barHeights = () => ev(`(() => { const i = window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas')); return i.getZr().storage.getDisplayList().filter((e) => e.type === 'rect' && e.shape && e.shape.r === 2 && e.shape.width >= 2).sort((a, c) => (a.shape.y + a.shape.height / 2) - (c.shape.y + c.shape.height / 2)).map((e) => Math.round(e.shape.height * 100) / 100); })()`);
+  const rowSlot = () => ev(`(() => { const i = window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas')); const a = i.convertToPixel({ xAxisIndex: 0, yAxisIndex: 0 }, [0, 0]), c = i.convertToPixel({ xAxisIndex: 0, yAxisIndex: 0 }, [0, 1]); return Math.abs(c[1] - a[1]); })()`);
+  const distinct = (a) => new Set(a).size;
+  const monotone = (a, up = true) => a.every((x, i) => i === 0 || (up ? x > a[i - 1] : x < a[i - 1]));
+
+  await check('Gantt + Colour + a Size measure: each (row, member) bar takes its own thickness on one scale, 6 px up to 80% of the slot; the legend and the tooltip name the measure', async () => {
+    await dragChip('discount', toolEl('Size')); await settle(600); await chartReady();
+    const hs = await barHeights(), slot = await rowSlot();
+    must(hs.length === 9, `nine bars (three rows, three members): ${J(hs)}`);
+    must(distinct(hs) === 9, `every cell its own thickness: ${J(hs)}`);
+    must(Math.min(...hs) === 6, `the smallest value is 6 px: ${Math.min(...hs)}`);
+    must(Math.abs(Math.max(...hs) - slot * 0.8) <= 1, `the largest is 80% of the ${slot} px slot: ${Math.max(...hs)}`);
+    must(/^Size: v2 \(3 to 27\)/.test(await sizeText()), 'legend in words: ' + await sizeText());
+    must(J((await opt()).yAxis[0].data) === J(REGIONS), 'row order unchanged');
+    await ev(`window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas')).dispatchAction({ type: 'showTip', seriesIndex: 0, dataIndex: 1 })`); await b.sleep(250);
+    must(/v2:/.test(await ev(`[...document.querySelectorAll('.ws-chart-canvas div')].map((d) => d.innerText).filter((t) => t && t.includes('v2')).pop() ?? ''`)), 'the tooltip carries the Size line');
+    await shot('gantt-colour-size-light.png');
+    await theme('dark'); await setType('Bar'); await setType('Gantt'); await chartReady(); await shot('gantt-colour-size-dark.png'); await theme('light'); await setType('Bar'); await setType('Gantt'); await chartReady();
+  });
+
+  await check('Gantt + Size measure (fresh sheet): thickness follows the value, rows and extents unchanged; Edit Sizes is offered and changes it; a bar click still selects its row', async () => {
+    await ev(`document.querySelector('.tab-add').click(); document.querySelector('[data-new-tab=worksheet]').click()`);
+    await settle(400);
+    await waitFor(`!!__t.chip('region') && !document.querySelector('.ws-shelf--columns .ws-pill')`, 'fresh worksheet');
+    await dragChip('region', `__t.zone('rows')`); await dragChip('qty', `__t.zone('columns')`); await dragChip('amount', `__t.zone('columns')`);
+    await settle(400); await setType('Gantt'); await chartReady();
+    const plain = await barHeights(), slot0 = await rowSlot();
+    must(plain.length === 3 && distinct(plain) === 1 && Math.abs(plain[0] - Math.min(28, slot0 * 0.6)) < 0.5, `without Size every bar is one thickness: ${J(plain)}`);
+    const dataBefore = J((await ganttSeries())[0].data);
+    await openFormat();
+    must(!(await has('Smallest size')), 'Edit Sizes is not offered without a Size');
+    await dragChip('discount', toolEl('Size')); await settle(600); await chartReady();
+    const hs = await barHeights(), slot = await rowSlot();
+    must(J(hs.map((h) => Math.round(h))) === J([6, Math.round(6 + 0.5 * (slot * 0.8 - 6)), Math.round(slot * 0.8)]), `6 px, the middle, 80% of the slot: ${J(hs)} (slot ${slot})`);
+    must(J((await ganttSeries())[0].data) === dataBefore, 'start and end of every bar unchanged');
+    must(/^Size: v2 \(3 to 9\)/.test(await sizeText()), await sizeText());
+    must(await has('Smallest size') && await has('Largest size') && await has('Reversed'), 'Edit Sizes is offered while a Size measure is drawn');
+    await shot('gantt-size-light.png');
+    await toggle('Reversed'); await settle(500);
+    const rev = await barHeights();
+    must(monotone(rev, false) && rev[0] > rev[2], `Reversed: the largest value is the thinnest bar: ${J(rev)}`);
+    must(/reversed/.test(await sizeText()), 'the legend says so: ' + await sizeText());
+    await toggle('Reversed'); await settle(500);
+    await setField('Smallest size', '50'); await settle(500);
+    const half = await barHeights();
+    must(half[0] > 6 && half[2] === hs[2], `Smallest 50% lifts the thinnest bar: ${J(half)}`);
+    await setField('Smallest size', ''); await settle(400);
+    await setField('End value', '5'); await settle(500);
+    const sat = await barHeights();
+    must(sat.every((h) => h >= 6) && sat[2] === sat[1], `a value beyond a typed end saturates at the largest, none is hidden: ${J(sat)}`);
+    await setField('End value', ''); await settle(400);
+    await ev(`document.querySelector('.ws-viewbar__btn[aria-label="Format"]').click()`); await settle(400); // close Format: the chart gets the room
+    await theme('dark'); await setType('Bar'); await setType('Gantt'); await chartReady(); await shot('gantt-size-dark.png'); await theme('light'); await setType('Bar'); await setType('Gantt'); await chartReady();
+    const pos = () => ev(`(() => { const d = document.querySelector('.ws-chart-canvas'); const i = window.echarts.getInstanceByDom(d); const r = d.getBoundingClientRect();
+      const s = i.getOption().series[0]; const bar = s.data[1]; const x = (bar[1] + bar[2]) / 2; const p = i.convertToPixel({ xAxisIndex: 0, yAxisIndex: 0 }, [x, bar[0]]); return { x: r.left + p[0], y: r.top + p[1] }; })()`);
+    const p = await pos();
+    await b.click(p.x, p.y); await settle(500);
+    must(await ev(`document.body.textContent.includes('region = EU')`), 'a click on a sized bar selects its row (region = EU)');
+    await shot('gantt-size-selected-light.png');
+    const p2 = await pos(); await b.click(p2.x, p2.y); await settle(500);
+    must(!(await ev(`document.body.textContent.includes('region = EU')`)), 'a second click clears it');
+  });
+
+  await check('Gantt + a Size dimension: a hint that says why, no extra group-by, bars keep one thickness, Edit Sizes is not offered', async () => {
+    await dragChip('channel', toolEl('Size')); await settle(600); await chartReady();
+    must((await hints()).some((t) => /Gantt/.test(t) && /one bar per row/.test(t)), 'hint: ' + J(await hints()));
+    must(!hasKey(lastQuery().columnDimensions ?? [], 'channel') && !J(lastQuery()).includes('"channel"'), 'no group-by for the Size dimension: ' + J(lastQuery().columnDimensions));
+    const hs = await barHeights();
+    must(hs.length === 3 && distinct(hs) === 1, `bars keep one thickness: ${J(hs)}`);
+    await openFormat();
+    must(!(await has('Smallest size')), 'Edit Sizes is not offered for a dimension');
+    await ev(`${toolEl('Size')}.click()`); await settle(300);
+    must(/one bar per row/.test(await ev(`document.querySelector('.ws-toolpanel .ws-shelf__note')?.textContent ?? ''`)), 'the Marks card says so too');
+    await shot('gantt-size-dimension-light.png');
+  });
+  await check('Gantt + Colour + Size, members overlapping in time: the thinner bar is drawn above the thicker one (real display-list order), so none is hidden', async () => {
+    overlap = true;
+    await ev(`document.querySelector('.tab-add').click(); document.querySelector('[data-new-tab=worksheet]').click()`);
+    await settle(400);
+    await waitFor(`!!__t.chip('region') && !document.querySelector('.ws-shelf--columns .ws-pill')`, 'fresh worksheet');
+    await dragChip('region', `__t.zone('rows')`); await dragChip('qty', `__t.zone('columns')`); await dragChip('amount', `__t.zone('columns')`);
+    await dragChip('channel', toolEl('Color')); await dragChip('discount', toolEl('Size'));
+    await settle(500); await setType('Gantt'); await chartReady();
+    // each bar: its draw position in the display list (later = above), its row line (centre y) and thickness
+    const bars = await ev(`(() => { const i = window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas')); const l = i.getZr().storage.getDisplayList(true);
+      return l.map((e, k) => ({ k, e })).filter((x) => x.e.type === 'rect' && x.e.shape && x.e.shape.r === 2 && x.e.shape.width >= 2).map((x) => ({ k: x.k, row: Math.round(x.e.shape.y + x.e.shape.height / 2), h: Math.round(x.e.shape.height * 100) / 100 })); })()`);
+    must(bars.length === 9, `nine bars: ${J(bars)}`);
+    const rows = [...new Set(bars.map((x) => x.row))];
+    must(rows.length === 3, `three row lines: ${J(rows)}`);
+    for (const r of rows) {
+      const inRow = bars.filter((x) => x.row === r).sort((a, c) => a.k - c.k); // bottom to top
+      must(inRow.length === 3 && distinct(inRow.map((x) => x.h)) === 3, `three different thicknesses on a row: ${J(inRow)}`);
+      must(monotone(inRow.map((x) => x.h), false), `drawn thickest first, thinnest last (on top): ${J(inRow)}`);
+    }
+    await shot('gantt-size-overlap-light.png');
+    await theme('dark'); await setType('Bar'); await setType('Gantt'); await chartReady(); await shot('gantt-size-overlap-dark.png'); await theme('light');
+    overlap = false;
   });
   if (b.consoleErrors.length) console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  '));
 } catch (e) {
