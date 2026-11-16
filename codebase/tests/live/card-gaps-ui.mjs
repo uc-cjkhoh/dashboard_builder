@@ -95,12 +95,11 @@ try {
 
   const card = (t) => `([...document.querySelectorAll('.entity')].find((x) => x.querySelector('.entity__table').textContent === '${t}'))`;
   const cols = (t) => ev(`[...${card(t)}.querySelectorAll('.col-row')].map((r) => r.dataset.column)`);
-  const rightClick = (t) => ev(`(() => { const c = ${card(t)}, r = c.getBoundingClientRect(); c.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r.left + 20, clientY: r.top + 20 })); return true; })()`);
   const cmOf = `document.querySelector('dialog[open] .CodeMirror').CodeMirror`;
   const setSql = (v) => ev(`(() => { ${cmOf}.setValue(${J(v)}); return true; })()`);
   const press = (label) => ev(`[...document.querySelectorAll('dialog[open] .dialog__foot .btn')].find((b) => b.textContent.trim() === ${J(label)}).click()`);
   const statusText = () => ev(`document.querySelector('dialog[open] .sql-dialog__status')?.textContent.trim() ?? ''`);
-  const openEdit = async (t) => { await rightClick(t); await waitFor(`!!document.querySelector('.ctx-menu')`, 'menu'); await ev(`document.querySelector('.ctx-menu .menu__item').click()`); await waitFor(`!!document.querySelector('dialog[open] .CodeMirror')`, 'dialog'); };
+  const openEdit = async (t) => { await ev(`${card(t)}.querySelector('.entity__edit').click()`); await waitFor(`!!document.querySelector('dialog[open] .CodeMirror')`, 'dialog'); };
   const text = (sel) => ev(`document.querySelector(${J(sel)})?.textContent ?? ''`);
   const closeDialog = async () => { await b.key('Escape', { vk: 27 }); await waitFor(`!document.querySelector('dialog[open]')`, 'dialog closed'); };
 

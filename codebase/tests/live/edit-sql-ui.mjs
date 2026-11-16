@@ -1,5 +1,6 @@
-// Browser check for "Edit SQL" on a Data Source card (D105): right-click opens the menu, the dialog starts on the default SELECT, a bad query
-// is answered inside the dialog, a good one swaps the card's columns, relationship keys are protected, Reset goes back to the table, and the
+// Browser check for "Edit SQL" on a Data Source card (D105): the head's Edit button opens the dialog (right-click opens nothing), the dialog
+// starts on the default SELECT, a bad query is answered inside the dialog, a good one swaps the card's columns, relationship keys are
+// protected, Reset to default + Save goes back to the table, and the
 // worksheet query carries the SQL as `sources`. Real dev app (APP_URL, default http://localhost:5231) in headless Chromium, every /api/* call
 // mocked. Run:  node tests/live/edit-sql-ui.mjs   (start the app first, stop it by port).
 import { launch } from './cdp.mjs';
@@ -94,7 +95,8 @@ try {
   const card = (t) => `([...document.querySelectorAll('.entity')].find((x) => x.querySelector('.entity__table').textContent === '${t}'))`;
   const cols = (t) => ev(`[...${card(t)}.querySelectorAll('.col-row')].map((r) => r.dataset.column)`);
   const rightClick = (t) => ev(`(() => { const c = ${card(t)}, r = c.getBoundingClientRect(); c.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r.left + 20, clientY: r.top + 20 })); return true; })()`);
-  const menuItems = () => ev(`[...document.querySelectorAll('.ctx-menu .menu__item')].map((b) => b.textContent.trim() + (b.getAttribute('aria-disabled') === 'true' ? ' (disabled)' : ''))`);
+  const editBtn = (t) => `${card(t)}.querySelector('.entity__head > .entity__edit')`;
+  const clickEdit = async (t) => { await ev(`${editBtn(t)}.click()`); await waitFor(`!!document.querySelector('dialog[open] .CodeMirror')`, 'dialog'); };
   const store = (code) => ev(`(async () => { const st = await import('/features/Core/store.js'); ${code} })()`);
   const cmOf = `document.querySelector('dialog[open] .CodeMirror').CodeMirror`;
   const setSql = (v) => ev(`(() => { ${cmOf}.setValue(${J(v)}); return true; })()`);
@@ -102,16 +104,17 @@ try {
   const press = (label) => ev(`[...document.querySelectorAll('dialog[open] .dialog__foot .btn')].find((b) => b.textContent.trim() === ${J(label)}).click()`);
   const errorText = () => ev(`document.querySelector('dialog[open] .sql-dialog__status')?.textContent.trim() ?? ''`);
 
-  await check('right-click on a card offers Edit SQL (and no Reset while it reads the table)', async () => {
+  await check('right-click on a card opens no menu; the head has an Edit button left of the title', async () => {
     await rightClick('orders');
-    await waitFor(`!!document.querySelector('.ctx-menu')`, 'menu open');
-    const items = await menuItems();
-    must(J(items) === J(['Edit SQL']), `items: ${J(items)}`);
-    await shot('edit-sql-menu.png');
+    await new Promise((r) => setTimeout(r, 150));
+    must(!(await ev(`!!document.querySelector('.ctx-menu')`)), 'a context menu opened');
+    must(await ev(`(() => { const b = ${editBtn('orders')}; return !!b && b.textContent.trim() === 'Edit' && b.nextElementSibling.classList.contains('entity__title'); })()`), 'no Edit button before the title');
+    const fit = await ev(`(() => { const h = ${card('orders')}.querySelector('.entity__head'); return h.scrollWidth <= h.clientWidth; })()`);
+    must(fit, 'head overflows');
+    await shot('edit-sql-button.png');
   });
-  await check('Edit SQL opens a dialog on the default SELECT of every column', async () => {
-    await ev(`document.querySelector('.ctx-menu .menu__item').click()`);
-    await waitFor(`!!document.querySelector('dialog[open] .CodeMirror')`, 'dialog open');
+  await check('Edit opens a dialog on the default SELECT of every column', async () => {
+    await clickEdit('orders');
     const v = await getSql();
     must(v === 'SELECT\n  `cust_id`,\n  `amount`\nFROM `shop`.`orders`', `default: ${J(v)}`);
     must((await ev(`document.querySelector('dialog[open] .dialog__title').textContent`)) === 'Edit SQL · orders', 'title');
@@ -278,11 +281,8 @@ try {
     must((await toastText()).includes('using your SQL'), `toast: ${await toastText()}`);
     await shot('edit-sql-applied.png');
   });
-  await check('the menu now also offers Reset to table; reopening Edit SQL shows the saved query; Reset to default restores the table SELECT', async () => {
-    await rightClick('orders'); await waitFor(`!!document.querySelector('.ctx-menu')`, 'menu');
-    must(J(await menuItems()) === J(['Edit SQL', 'Reset to table']), `items: ${J(await menuItems())}`);
-    await ev(`document.querySelector('.ctx-menu .menu__item').click()`);
-    await waitFor(`!!document.querySelector('dialog[open] .CodeMirror')`, 'dialog');
+  await check('reopening Edit shows the saved query; Reset to default restores the table SELECT; Cancel keeps the query', async () => {
+    await clickEdit('orders');
     must((await getSql()) === 'SELECT IFNULL(cust_id, 0) AS cust_id, amount, extra FROM shop.orders LIMIT 1, 5', `saved MySQL text not shown: ${J(await getSql())}`);
     must((await syntaxIs()) === 'MySQL', 'not opened in MySQL syntax');
     await press('Reset to default');
@@ -304,7 +304,7 @@ try {
     must(q && q.sources[0].kind === 'sql' && q.sources[0].name === 'orders' && q.sources[0].sql === 'SELECT COALESCE(cust_id, 0) AS cust_id, amount, extra FROM shop.orders LIMIT 5 OFFSET 1', `query: ${J(q)}`);
     must(!('source' in q), 'sent as a union source');
   });
-  const openEdit = async (t) => { await rightClick(t); await waitFor(`!!document.querySelector('.ctx-menu')`, 'menu'); await ev(`document.querySelector('.ctx-menu .menu__item').click()`); await waitFor(`!!document.querySelector('dialog[open] .CodeMirror')`, 'dialog'); };
+  const openEdit = clickEdit;
   const cancelEdit = async () => { await press('Cancel'); await waitFor(`!document.querySelector('dialog[open]')`, 'closed'); };
   await check('a ClickHouse comparison that would ignore case after a MySQL round trip (the translator reports case-fold) opens in ClickHouse syntax with the warning', async () => {
     await ev(`document.querySelector('.tab--model').click()`);
@@ -400,13 +400,14 @@ try {
     must(await ev(`[...document.querySelectorAll('dialog[open] .seg input')].find((r) => r.parentElement.textContent.trim() === 'MySQL').disabled`), 'MySQL still selectable');
     await cancelEdit();
   });
-  await check('Reset to table restores the table\'s columns and clears the mark', async () => {
+  await check('Reset to default + Save goes back to the table: its columns return and the mark clears', async () => {
     await ev(`document.querySelector('.tab--model').click()`);
     await waitFor(`!document.getElementById('model-view')?.hidden || !!document.querySelector('.entity')`, 'data source');
-    await rightClick('orders'); await waitFor(`!!document.querySelector('.ctx-menu')`, 'menu');
-    await ev(`[...document.querySelectorAll('.ctx-menu .menu__item')].find((b) => b.textContent.trim() === 'Reset to table').click()`);
-    await waitFor(`!!document.querySelector('dialog[open] .btn--primary')`, 'confirm');
-    await ev(`document.querySelector('dialog[open] .btn--primary').click()`);
+    await clickEdit('orders');
+    await press('Reset to default');
+    await waitFor(`${cmOf}.getValue().startsWith('SELECT\\n') && ${cmOf}.getValue().includes('FROM')`, 'default restored');
+    await press('Save');
+    await waitFor(`!document.querySelector('dialog[open]')`, 'dialog closed');
     await waitFor(`!${card('orders')}.classList.contains('entity--sql')`, 'mark cleared');
     must(J(await cols('orders')) === J(['cust_id', 'amount']), `columns: ${J(await cols('orders'))}`);
     must(await ev(`!${card('orders')}.querySelector('.entity__note--sql')`), 'note stayed');

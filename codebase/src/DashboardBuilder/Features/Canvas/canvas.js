@@ -13,7 +13,6 @@ import { clampZoom, wheelZoom, panForZoom, panToReveal, toModel } from "./canvas
 import { unionDiffControl } from "./union-diff.js";
 import { sourceNote, lossyNote, wireSource, MAX_SOURCE_COLUMNS, SQL_NOTE, defaultSql, sqlWire, lostKeys } from "../Core/source-model.js";
 import { relEnds, keyKindBreaks } from "../Relations/relation-rules.js";
-import { wireContextMenu } from "../Core/menu.js";
 import { openSqlDialog } from "./sql-dialog.js";
 
 // Data Source canvas + entity cards. A table dropped from the sidebar (or added via the
@@ -285,7 +284,6 @@ export function initCanvas() {
     card.tabIndex = -1; // focusable by script (a duplicate drop focuses the existing card)
     card.dataset.entityId = entity.id;
     if (entity.source) { card.classList.add("entity--source"); card.dataset.source = entity.source.kind; }
-    wireContextMenu(card, () => cardMenu(entity), { label: `${entity.table} options`, returnFocus: () => card });
 
     const head = document.createElement("header");
     head.className = "entity__head";
@@ -312,8 +310,6 @@ export function initCanvas() {
       dbPart.textContent = entity.db;
       title.append(dbPart);
     }
-    // Fit the card to its name between the card's min/max tokens; beyond max the title ellipsises (title = full name).
-    fitWidth(card, title);
 
     const remove = document.createElement("button");
     remove.type = "button";
@@ -329,7 +325,20 @@ export function initCanvas() {
     need.title = "Held out of worksheets until this table is related to another one";
     need.hidden = true;
 
-    head.append(title, need, collapse, remove); // the caret sits by the ✕ so the title starts on the card's left gutter, like the column names
+    // Edit SQL (D105) sits left of the title; a union / unpivot card is built from its own dialog and has no SQL to edit, so it gets none.
+    if (!entity.source) {
+      const edit = document.createElement("button");
+      edit.type = "button";
+      edit.className = "btn entity__edit";
+      edit.title = "Choose or change the columns with your own SELECT";
+      edit.setAttribute("aria-label", `Edit SQL for ${entity.db}.${entity.table}`);
+      edit.append(icon("edit"), document.createTextNode("Edit"));
+      edit.addEventListener("click", () => editSql(entity));
+      head.append(edit);
+    }
+    head.append(title, need, collapse, remove); // the caret sits by the ✕
+    // Fit the card to its name (and the Edit button) between the card's min/max tokens; beyond max the title ellipsises (title = full name).
+    fitWidth(card, title, head.querySelector(".entity__edit"));
     enableDragMove(entity, head);
 
     const status = document.createElement("div");
@@ -412,15 +421,6 @@ export function initCanvas() {
   }
 
   // --- custom SQL (D105) ---------------------------------------------------
-  // The card's right-click menu. A union / unpivot has no SQL of its own to edit; a card with custom SQL can go back to its table.
-  function cardMenu(entity) {
-    const noSql = Boolean(entity.source);
-    return [
-      { type: "item", label: "Edit SQL", disabled: noSql, title: noSql ? "A union or unpivot card is built from its dialog — it has no SQL to edit." : "Choose or change the columns with your own SELECT", onSelect: () => editSql(entity) },
-      ...(entity.customSql ? [{ type: "item", label: "Reset to table", onSelect: () => resetSql(entity) }] : []),
-    ];
-  }
-
   // The card's marks for custom SQL: a class, and one note line under the head (like a union's), added or removed to match entity.customSql.
   function syncSqlUi(entity, card = entity.el) {
     card.classList.toggle("entity--sql", Boolean(entity.customSql));
@@ -441,6 +441,8 @@ export function initCanvas() {
 
   function editSql(entity) {
     const own = () => defaultSql(entity.db, entity.table, entity.columns);
+    let tableColumns = null; // the table's own columns, read once per dialog while the card shows a query's
+    const tableDefault = async () => defaultSql(entity.db, entity.table, tableColumns ??= await api.columns(entity.db, entity.table));
     openSqlDialog({
       table: entity.table,
       // MySQL is what the dialog opens in: the text it was written as, else the query translated for display (the default SELECT reads the same in both)
@@ -450,9 +452,10 @@ export function initCanvas() {
       validate: (sql, signal) => api.sourceColumns(sqlWire(entity.db, entity.table, sql), { signal }), // the live check while typing: describes the query, reads no rows
       sql: entity.customSql ?? own(),
       // "Default" is always the table's own SELECT, even when the card now shows a query's columns.
-      getDefault: async () => defaultSql(entity.db, entity.table, entity.customSql ? await api.columns(entity.db, entity.table) : entity.columns),
+      getDefault: async () => (entity.customSql ? tableDefault() : own()),
       apply: async (sql, mysql) => { // `sql` is the ClickHouse query that will run; `mysql` the MySQL text it was written as, or null
         if (!entity.customSql && sql.trim() === own().trim()) return; // the default text: nothing to change
+        if (entity.customSql && sql.trim() === (await tableDefault()).trim()) { backToTable(entity, tableColumns); return; } // Reset to default + Save = back to the table
         if (sql === entity.customSql) { // the same query; only the way it was written may have changed
           if ((mysql ?? null) !== (entity.customSqlMysql ?? null)) { if (mysql) entity.customSqlMysql = mysql; else delete entity.customSqlMysql; }
           return;
@@ -468,18 +471,14 @@ export function initCanvas() {
     });
   }
 
-  async function resetSql(entity) {
-    const ok = await confirmDialog(`Go back to the table ${entity.db}.${entity.table}? Your SQL for this card will be removed.`, { confirmText: "Reset" });
-    if (!ok) return;
-    try {
-      const columns = await api.columns(entity.db, entity.table);
-      const lost = lostKeys(keyColumnsOf(entity), columns);
-      if (lost.length) { toast(keysMessage(lost), "danger"); return; }
-      const broken = brokenKinds(entity, columns);
-      if (broken.length) { toast(kindsMessage(broken), "danger"); return; }
-      applyCustomSql(entity, null, columns);
-      toast(`${entity.table}: back to the table.`, "ok");
-    } catch (err) { toast(err.message, "danger"); }
+  // Drop the card's SQL and read the table again. Thrown errors (a relationship key the table lacks or types differently) stay in the dialog.
+  function backToTable(entity, columns) {
+    const lost = lostKeys(keyColumnsOf(entity), columns);
+    if (lost.length) throw new Error(keysMessage(lost));
+    const broken = brokenKinds(entity, columns);
+    if (broken.length) throw new Error(kindsMessage(broken));
+    applyCustomSql(entity, null, columns);
+    toast(`${entity.table}: back to the table.`, "ok");
   }
 
   // Switch a card to a query (or back to its table): its columns become the query's, and everything that cached the old ones is told.
@@ -494,12 +493,18 @@ export function initCanvas() {
   }
 
   // Width follows the `db.table` text: measured in the title's own font, held between --entity-min and --entity-max.
-  function fitWidth(card, title) {
-    const probe = title.cloneNode(true);
-    probe.style.cssText = "position:absolute;visibility:hidden;flex:none;overflow:visible;padding:0;white-space:nowrap";
-    canvas.append(probe);
-    const px = probe.getBoundingClientRect().width;
-    probe.remove();
+  function fitWidth(card, title, edit) {
+    const measure = (node) => {
+      const probe = node.cloneNode(true);
+      probe.style.cssText = "position:absolute;visibility:hidden;flex:none;overflow:visible;white-space:nowrap";
+      if (node === title) probe.style.padding = "0";
+      canvas.append(probe);
+      const w = probe.getBoundingClientRect().width;
+      probe.remove();
+      return w;
+    };
+    const gap = parseFloat(getComputedStyle(canvas).getPropertyValue("--s2")) || 8;
+    const px = measure(title) + (edit ? measure(edit) + gap : 0); // the Edit button and its gap ride on the title's width
     const cs = getComputedStyle(canvas);
     const limit = (name, fallback) => parseFloat(cs.getPropertyValue(name)) || fallback;
     const { width } = entityWidth(px, { min: limit("--entity-min", 300), max: limit("--entity-max", 480) });
@@ -607,7 +612,7 @@ export function initCanvas() {
 
   function enableDragMove(entity, head) {
     head.addEventListener("pointerdown", (event) => {
-      if (event.button !== 0 || event.target.closest(".iconbtn")) return;
+      if (event.button !== 0 || event.target.closest("button")) return;
       event.preventDefault();
       const startX = event.clientX;
       const startY = event.clientY;

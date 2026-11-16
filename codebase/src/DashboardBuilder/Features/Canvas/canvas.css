@@ -75,6 +75,8 @@
    that 12px of slack and the chevron sits just left of it. */
 .entity__head > .entity__toggle { margin-right: calc(-1 * var(--s1)); }
 .entity__head > .iconbtn:last-child { margin-right: calc(-1 * (var(--s2) + var(--s1))); }
+/* Edit SQL (D105): a labelled button on the left gutter, before the title; it never shrinks, the title ellipsises instead. */
+.entity__edit { flex: none; cursor: pointer; }
 .entity__db { margin-left: var(--s2); color: var(--ink-3); font-weight: 400; }
 .entity__table { font-weight: 600; }
 .entity__note { margin: 0; padding: var(--s1) var(--s4); font-size: var(--fs-body); color: var(--ink-2); border-bottom: 1px solid var(--line); }
