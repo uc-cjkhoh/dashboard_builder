@@ -18,7 +18,7 @@
 
 /* Relationship dialog: the column profile's frame (head with title, subtitle and X; body on the colour wash; foot) with two flat
    panels instead of bento cells. The body scrolls, the head and foot stay put. */
-.dialog.dialog--rel { width: min(990px, calc(100vw - 2 * var(--s4))); max-width: none; max-height: min(88vh, 800px); }
+.dialog.dialog--rel { width: min(1280px, calc(100vw - 2 * var(--s4))); max-width: none; max-height: min(88vh, 800px); }
 .dialog--rel[open] { display: flex; flex-direction: column; }
 .rel-dialog__head { flex: none; display: flex; align-items: flex-start; gap: var(--s2); padding: var(--s4) calc(var(--s6) - 12px) var(--s4) var(--s6); border-bottom: 1px solid var(--line); } /* right 12px: the X glyph sits 12px inside its 32px button, so it lands on the 24px gutter */
 .rel-dialog__titles { flex: 1; min-width: 0; }
@@ -26,8 +26,9 @@
 .rel-dialog__sub { margin: 0; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rel-dialog { flex: 1; min-height: 0; overflow: auto; padding: var(--s6); background-color: var(--bg); background-image: var(--wash);
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s4); align-content: start; }
-/* Two panels of exactly equal width; the divider is an inset shadow (no width) and each side keeps a 16px gutter to it. */
-.rel-dialog:not(.rel-dialog--single) { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0; }
+/* Two panels, settings 2 : suggestion 3 (the suggestion carries the evidence); the divider is an inset shadow (no width) and each side
+   keeps a 16px gutter to it. */
+.rel-dialog:not(.rel-dialog--single) { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 0; }
 .rel-dialog:not(.rel-dialog--single) .rel-dialog__left { padding-right: var(--s4); }
 .rel-dialog__left, .rel-dialog__right { min-width: 0; }
 /* Left: no boxes. Sections sit straight on the wash, split by one hairline and 24px of air; the chosen state is what draws the eye. */
@@ -47,7 +48,12 @@
 .rel-sec--card .card-choice:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 /* Right: the check result is the one panel that can outgrow the left. It takes the left's height (contain: size stops its own content
    from stretching the row) and scrolls inside when the text is longer. */
-.rel-dialog__right { position: relative; contain: size; overflow-y: auto; padding-left: var(--s4); box-shadow: inset 1px 0 0 var(--line); }
+.rel-dialog__right { position: relative; contain: size; container-type: inline-size; overflow-y: auto; padding-left: var(--s4); box-shadow: inset 1px 0 0 var(--line); }
+/* A wide suggestion panel puts the evidence in its own column beside the suggestion and its notes. */
+@container (min-width: 624px) {
+  .rel-dialog__right .join-check__out { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+  .rel-dialog__right .join-check__table { grid-column: 1 / -1; }
+}
 .rel-dialog__right .join-check { margin: 0; }
 .rel-dialog__right .join-check__out { max-height: none; overflow: visible; }
 .rel-dialog--single { grid-template-columns: minmax(0, 1fr); }
@@ -92,6 +98,7 @@
 .join-check__title { margin: 0; }
 .join-check__hint { margin: 0; color: var(--ink-3); }
 .join-check__out { display: grid; gap: var(--s4); max-height: 45vh; overflow-y: auto; }
+.join-check__main { display: grid; gap: var(--s4); min-width: 0; }
 .join-check__suggest { display: grid; gap: var(--s1); padding: var(--s4); border: 1px solid var(--accent-line); border-radius: var(--r); background: var(--surface); }
 .join-check__suggest p { margin: 0; }
 .join-check__label { color: var(--ink-2); }
@@ -107,7 +114,7 @@
 .join-check__table { width: 100%; border-collapse: collapse; table-layout: fixed; font-variant-numeric: tabular-nums; }
 .join-check__caption { caption-side: top; text-align: left; padding-bottom: var(--s1); color: var(--ink-3); }
 .join-check__table th, .join-check__table td { padding: var(--s1) var(--s2); border-bottom: 1px solid var(--line); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.join-check__table th[scope="row"] { text-align: left; font-weight: 400; color: var(--ink-2); white-space: normal; width: 44%; }
+.join-check__table th[scope="row"] { text-align: left; font-weight: 400; color: var(--ink-2); white-space: normal; width: 40%; }
 .join-check__table thead th { font-weight: 600; color: var(--ink-2); }
 .join-check__table tr > :first-child { padding-left: 0; }
 .join-check__table tr > :last-child { padding-right: 0; }
