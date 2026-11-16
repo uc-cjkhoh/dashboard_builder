@@ -8,7 +8,8 @@ import { sizeRange, barThickness, markerSizeFor, drawsSize, lineSizeMode, measur
 import { sizeScaleOf, measureShareFn, memberShareFn, sizeLegendText, lineWidthFor } from "./size-scale-model.js";
 import { tooltipHtml } from "./tooltip-model.js";
 import { tipLookup } from "./tooltip-formats.js";
-import { lineStep } from "./line-style-model.js";
+import { lineStep, lineDash, comparisonDash, effectivePattern, trendDash, linesTakeStyle } from "./line-style-model.js";
+import { markerPlan } from "./line-marker-model.js";
 import { syncRange, secondaryKind, dualAxisOn, rightAxisTitle, seriesAxis } from "./axis-sync-model.js";
 import { markBorder, markerSizeOr, markerSymbol, edgeOr, strokeOf, borderInk } from "./mark-style-model.js";
 import { circleSize, circleCells, HEATMAP_GUTTER, LABEL_FONT, cellSizeOf, labelsShown } from "./heatmap-model.js";
@@ -150,7 +151,7 @@ export function renderChart(container, spec) {
     if (spec.type !== "multiples") showEveryCategory(option, fit.rotate, fit, paneHeight()); // panels keep their own sparse labels
     if (!fit.zoom) setDateAxisLabels(option, spec, paneWidth(), paneHeight());
     if (fit.zoom) addZoom(option, fit);
-    if (onCanvas) tuneForSize(option);
+    if (onCanvas) tuneForSize(option, spec);
   } finally { drawing = null; }
   st.lastOption = option;
   instance.setOption({ ...option, ...motionOption(st.animateNext && !onCanvas) });
@@ -210,12 +211,13 @@ function addZoom(option, fit) {
 
 // Canvas-sized charts: bars draw in ECharts' large mode, lines keep their shape with LTTB sampling
 // (peaks and dips survive) when there are more points than pixels.
-function tuneForSize(option) {
+export function tuneForSize(option, spec = {}) {
+  const allMarkers = linesTakeStyle(spec.type) && spec.format?.lineMarkers === "all"; // Format → Line markers All: LTTB would drop points, and with them their markers
   for (const sr of [].concat(option.series ?? [])) {
     // Large mode draws plain values only — skip it when a bar carries its own style (Other, colour-by).
     if (sr.type === "bar" && (sr.data ?? []).every((v) => v === null || typeof v !== "object"))
       Object.assign(sr, { large: true, largeThreshold: 2000 });
-    if (sr.type === "line") sr.sampling = "lttb";
+    if (sr.type === "line" && !allMarkers) sr.sampling = "lttb";
   }
 }
 
@@ -589,6 +591,9 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
     legend.data = legend.data.map((name, i) => ({ name, ...(cueOf(i) && lineAt(i) ? { icon: cueOf(i).symbol } : {}) }));
   }
   const widthLines = []; // straight lines drawn with a Size: each gets a segment overlay (below)
+  // Format → Line pattern: a Size field setting a straight line's thickness (polygons, which a dash can't break up) keeps it solid, and a cued chart's measures keep their own dashes.
+  const patternThick = Boolean(sizeFr) && sizeMode === "width"; // the same rule the Format panel applies with the drawn point count (line-controls.js)
+  const pattern = effectivePattern({ pattern: format.linePattern, thick: patternThick, cued });
   base.series = series.map((s, i) => {
     // A comparison series wears its measure's colour, faded and dashed (line) or muted (bar).
     if (s.compare) {
@@ -596,7 +601,7 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
       const asLine = type === "line" || type === "area";
       return asLine
         ? { name: s.name, type: "line", step, yAxisIndex: seriesAxis(dual, i - mainCount), data: s.data, showSymbol: false, z: 1,
-            lineStyle: { width: 2, type: "dashed", color, opacity: 0.7 }, itemStyle: { color, opacity: 0.7 }, emphasis: { focus: "series" } }
+            lineStyle: { width: 2, type: comparisonDash(pattern), color, opacity: 0.7 }, itemStyle: { color, opacity: 0.7 }, emphasis: { focus: "series" } }
         : { name: s.name, type: "bar", data: s.data, barMaxWidth: 40,
             // Hatched as well as faded, so it reads as "the other period" without relying on colour.
             itemStyle: { color: c.muted, opacity: 0.55, borderRadius: horizontal ? [0, c.radius, c.radius, 0] : [c.radius, c.radius, 0, 0],
@@ -616,19 +621,22 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
         ? s.data.map((v, di) => (v == null ? v : { value: v, ...(markerSized ? { symbolSize: markerSizeFor(sizeFr[i]?.[di]) } : {}), ...(byValue?.colours[di] ? { itemStyle: { color: byValue.colours[di], ...(format.markBorder && format.markBorder !== "none" ? edge : {}) } } : {}) }))
         : s.data;
       if (sizeFr && sizeMode === "width") widthLines.push({ s, i, stroke: byValue ? byValue.colours : null, color, axis: seriesAxis(dual, i, isCombo) });
-      const dots = s.data.length <= 60 || format.markerSize != null || markerSized || Boolean(cue); // dots only when they won't crowd (unless a marker size is chosen; a cued line's markers name it)
+      // Format → Line markers All / None decide the dots themselves; a marker that is data (a Size-sized marker, a cued line's marker) always stays.
+      const mk = markerPlan({ mode: format.lineMarkers, forced: markerSized || Boolean(cue), labelled: Boolean(pointLabels || seriesLabels || format.dataLabels), data: s.data });
+      const dots = mk ? mk.show : s.data.length <= 60 || format.markerSize != null || markerSized || Boolean(cue); // dots only when they won't crowd (unless a marker size is chosen; a cued line's markers name it)
       // Format → Label marks on a line with no dots (a long one): a label sits on its mark's dot, so only the labelled marks show one (the rest are clear until hovered).
-      const labelDots = !dots && Boolean(mask) && !mask.hover && Boolean(pointLabels || seriesLabels || format.dataLabels);
-      const dotted = labelDots ? lineData.map((d, di) => (d == null ? d : { ...(isObjectItem(d) ? d : { value: d }), ...(mask.at(i, di) ? {} : { itemStyle: { ...(isObjectItem(d) ? d.itemStyle : {}), opacity: 0 }, emphasis: { itemStyle: { opacity: 1 } } }) })) : lineData; // an unlabelled mark keeps its normal size but is clear: the hover dot and the tooltip work as on a plain long line
+      const labelDots = !mk && !dots && Boolean(mask) && !mask.hover && Boolean(pointLabels || seriesLabels || format.dataLabels);
+      const dotted = labelDots ? lineData.map((d, di) => (d == null ? d : { ...(isObjectItem(d) ? d : { value: d }), ...(mask.at(i, di) ? {} : { itemStyle: { ...(isObjectItem(d) ? d.itemStyle : {}), opacity: 0 }, emphasis: { itemStyle: { opacity: 1 } } }) })) : mk?.clear ? clearDots(lineData, mk.clear, { color, edge: format.markBorder && format.markBorder !== "none" ? edge : null }) : lineData; // an unlabelled mark keeps its normal size but is clear: the hover dot and the tooltip work as on a plain long line (Line markers None: every dot but a lone value's)
+      const dash = lineDash({ pattern: format.linePattern, cue, thick: patternThick });
       return {
         name: s.name, type: "line", step,
         yAxisIndex: seriesAxis(dual, i, isCombo),
         z: sizeFr && sizeMode === "width" ? 3 : undefined, // markers and the thin line stay above their thickness
         data: dotted,
-        showSymbol: dots || labelDots, ...(labelDots ? { showAllSymbol: true } : {}), // ECharts thins dense symbols ("auto") — a labelled mark's must stay
+        showSymbol: dots || labelDots, ...(labelDots || mk?.all ? { showAllSymbol: true } : {}), // ECharts thins dense symbols ("auto") — a labelled mark's must stay
         symbol: cue ? cue.symbol : markerSymbol(format.markerShape), symbolSize: markerSizeOr(format.markerSize, 8), // ≥8px markers (dataviz mark spec) unless Format → Marker size
         areaStyle: type === "area" || (isCombo && secondary === "area") ? { opacity: 0.18, color: stroke } : undefined,
-        lineStyle: { width: 2, color: stroke, ...(cue ? { type: cue.dash } : {}) },
+        lineStyle: { width: 2, color: stroke, ...(dash !== undefined ? { type: dash } : {}) }, // a cue's own dash, else Format → Line pattern (solid = no type, as before)
         itemStyle: { color, ...(format.markBorder && format.markBorder !== "none" ? edge : {}) },
         label: dataLabel(i, true),
         emphasis: { focus: focusOf, ...hoverLabel },
@@ -662,13 +670,13 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
     };
   });
   for (const w of widthLines) base.series.push(thickLine({ ...w, share: sizeFr[w.i] ?? [], horizontal, opacity: markOpacityOf(format) }));
-  if (analytics) addAnalytics(base, analytics, { c, fmtVal, horizontal });
+  if (analytics) addAnalytics(base, analytics, { c, fmtVal, horizontal, trendDash: trendDash(pattern) });
   return base;
 }
 
 // Analytics overlays on a cartesian chart: a dashed reference line (labelled with its value), a
 // shaded band (labelled), and a dotted trend line named at its end — each carries words, never colour alone.
-function addAnalytics(base, a, { c, fmtVal, horizontal }) {
+function addAnalytics(base, a, { c, fmtVal, horizontal, trendDash = "dotted" }) {
   const s0 = base.series[a.measure ?? 0]; // the reference line and band sit on their own measure's axis (the trend follows the first)
   if (!s0) return;
   const axis = horizontal ? "xAxis" : "yAxis";
@@ -685,7 +693,7 @@ function addAnalytics(base, a, { c, fmtVal, horizontal }) {
   }
   if (a.trend) {
     base.series.push({ id: `${ANALYTICS_ID}trend`, name: a.trend.name, type: "line", data: a.trend.data, showSymbol: false, z: 4, animation: false,
-      lineStyle: { width: 2, type: "dotted", color: c.muted }, itemStyle: { color: c.muted },
+      lineStyle: { width: 2, type: trendDash, color: c.muted }, itemStyle: { color: c.muted },
       endLabel: { show: true, formatter: a.trend.short ?? a.trend.name, color: c.muted, backgroundColor: c.surface, padding: [2, 4], fontFamily: c.font, fontSize: 14 },
       tooltip: { valueFormatter: fmtVal } });
     base.grid.right = (Number(base.grid.right) || 0) + Math.max(84, Math.ceil((a.trend.short ?? a.trend.name).length * 8) + 8); // room for the short end label (14px text, ~8px a character)
@@ -1472,6 +1480,13 @@ function cartesianSizes({ sizes, sizeGrid, sizeOrder, type, mainCount, format })
   return { fr: have.map((row) => row.map(share)), grid: have, flat };
 }
 const isObjectItem = (d) => d !== null && typeof d === "object" && !Array.isArray(d);
+// Format → Line markers None: every dot `clear` names stays in the option (a label's anchor, a hover target) but is filled and bordered "transparent" — not given
+// opacity 0, which a label sitting on it would inherit. Hovering restores the dot's own fill and border; the series' mark opacity still applies to both.
+const clearDots = (items, clear, { color, edge }) => items.map((d, di) => {
+  if (d == null || !clear(di)) return d;
+  const own = isObjectItem(d) ? d : { value: d }, fill = own.itemStyle?.color ?? color;
+  return { ...own, itemStyle: { ...own.itemStyle, color: "transparent", ...(edge ? { borderColor: "transparent" } : {}) }, emphasis: { itemStyle: { color: fill, ...(edge ?? {}) } } };
+});
 // A bar chart whose bars vary in thickness with a Size measure: ECharts has no per-bar width, so the bars are a custom series that
 // draws each rectangle itself (value = [position, value, size], swapped when horizontal). Rounded growing end, per-item colour (colour
 // measure, Other, Colour by category) from the item's own style, a label per bar, and the same tooltip / click / selection fade as a bar.

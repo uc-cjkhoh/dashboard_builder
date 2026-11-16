@@ -248,6 +248,8 @@ export const defaultMarks = () => ({ size: null, label: null, detail: [], toolti
 //  lineStyle / heatmapShape / targetMeasure / syncAxes / secondaryType / markerSize / markBorder: see the defaults below
 //  sizeScale:    { smallest?, largest?, fromZero?, reversed? } — Format → Edit Sizes: whole percent 0–100 of the chart's size range, From zero (absent = the chart's own default), Reversed;
 //                absent when nothing differs from the default, so older files round-trip unchanged (Dashboard/size-scale-model.js)
+//  linePattern:  "dashed" | "dotted" — Format → Line pattern on a line / area / combo's lines; absent = solid (Dashboard/line-style-model.js)
+//  lineMarkers:  "all" | "none" — Format → Line markers; absent = automatic (dots by line length); kept off the defaults so older files round-trip unchanged (Dashboard/line-marker-model.js)
 //  ganttLength:  "length" | "end" — a Gantt's second measure (absent = length; kept off the defaults so older files round-trip unchanged)
 //  target:       null | number — a KPI scorecard's goal; downIsGood: a fall shows as good
 //  conditional:  { [measureKey]: { mode, scale, mid, rules } } — Table / Text cell formatting

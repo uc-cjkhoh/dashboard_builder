@@ -21,6 +21,8 @@ import { checkTooltipText } from "../Dashboard/tooltip-model.js";
 import { checkTooltipStyle } from "../Dashboard/tooltip-style.js";
 import { checkTooltipFormats } from "../Dashboard/tooltip-formats.js";
 import { markerSizeError } from "../Dashboard/mark-style-model.js";
+import { linePatternError } from "../Dashboard/line-style-model.js";
+import { lineMarkersError } from "../Dashboard/line-marker-model.js";
 import { cleanSizeScale } from "../Dashboard/size-scale-model.js";
 import { markOpacityError } from "../Dashboard/mark-opacity-model.js";
 import { shapeBinsError, cleanMemberShapes } from "../Dashboard/shape-model.js";
@@ -680,6 +682,14 @@ function cleanFormat(f0, where, issues) {
   if (f.labelPosition !== undefined && f.labelPosition !== null) { // Format → Label position: absent (older files, Automatic) stays off defaultFormat; a bad value is reset (never clamped)
     if (labelPositionError(f.labelPosition) === null) { if (f.labelPosition !== "auto") out.labelPosition = f.labelPosition; }
     else issues.push(`${w}: label position "${f.labelPosition}" — reset to Automatic.`);
+  }
+  if (f.linePattern !== undefined && f.linePattern !== null) { // Format → Line pattern: absent (older files, Solid) stays off defaultFormat; a bad value is reset (never clamped)
+    if (linePatternError(f.linePattern) === null) { if (f.linePattern !== "solid") out.linePattern = f.linePattern; }
+    else issues.push(`${w}: line pattern "${f.linePattern}" — reset to Solid.`);
+  }
+  if (f.lineMarkers !== undefined && f.lineMarkers !== null) { // Format → Line markers: absent (older files, Automatic) stays off defaultFormat; a bad value is reset (never clamped)
+    if (lineMarkersError(f.lineMarkers) === null) { if (f.lineMarkers !== "auto") out.lineMarkers = f.lineMarkers; }
+    else issues.push(`${w}: line markers "${f.lineMarkers}" — reset to Automatic.`);
   }
   const tableCols = cleanTableCols(f.tableCols, w, issues); // absent when no column is set (older files, and the default), so a sheet round-trips unchanged
   if (tableCols) out.tableCols = tableCols;
