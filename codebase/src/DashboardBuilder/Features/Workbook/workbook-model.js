@@ -502,7 +502,10 @@ function cleanConditional(c, w, issues) {
     if (rules.length < Math.min(cfg.rules.length, CF_MAX_RULES) || cfg.rules.length > CF_MAX_RULES)
       issues.push(`${w}: some conditional-formatting rules for "${key.slice(0, 60)}" were dropped.`);
     out[key] = { mode: cfg.mode, scale: cfg.scale, mid: cfg.mid ?? null, rules: rules.map((r) => ({ op: r.op, value: r.value, tone: r.tone })) };
-    if (cfg.totals === true) out[key].totals = true; // Include totals: stored only while on
+    if (cfg.totals === true) { // Include totals: stored only while on, and only where the measure draws something (the editor never stores an inert flag)
+      if (out[key].mode !== "none" || out[key].rules.length) out[key].totals = true;
+      else issues.push(`${w}: "Include totals" for "${key.slice(0, 60)}" has nothing to colour — dropped.`);
+    }
     else if (cfg.totals !== undefined && cfg.totals !== false) issues.push(`${w}: "Include totals" for "${key.slice(0, 60)}" must be on or off — dropped.`);
   }
   if (Object.keys(c).length > CF_MAX_MEASURES) issues.push(`${w}: only the first ${CF_MAX_MEASURES} conditional formats were kept.`);

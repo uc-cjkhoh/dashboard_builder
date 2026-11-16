@@ -150,7 +150,7 @@ try {
   };
   const cfBlock = `[...document.querySelectorAll('.ws-cf')].find((c) => c.querySelector('.ws-cf__title')?.textContent === 'Conditional formatting')`;
   const inclBox = `${cfBlock}.querySelector('.ws-cf__totals input')`;
-  const inclState = () => ev(`(() => { const i = ${inclBox}; const n = ${cfBlock}.querySelector('.ws-cf__totals-note'); return { exists: !!i, checked: i?.checked, disabled: i?.disabled, title: i?.closest('label')?.title ?? '', note: n ? n.textContent : '' }; })()`);
+  const inclState = () => ev(`(() => { const i = ${inclBox}; const n = ${cfBlock}.querySelector('.ws-cf__totals-note'); return { exists: !!i, checked: i?.checked, disabled: i?.disabled, title: i?.closest('label')?.title ?? '', desc: i?.getAttribute('aria-description') ?? '', note: n ? n.textContent : '' }; })()`);
   const checkboxOf = (label) => `[...document.querySelectorAll('.ws-fmt-check')].find((l) => l.textContent.trim() === ${J(label)}).querySelector('input')`;
   const keyText = () => ev(`(document.querySelector('#ws-chart .xt-legend')?.textContent ?? '')`);
   const cellBg = (sel) => ev(`getComputedStyle(${tbl}.querySelector(${J(sel)})).backgroundColor`);
@@ -173,14 +173,14 @@ try {
     await waitFor(`!!${cfBlock}`, 'conditional formatting block');
     const s = await inclState();
     must(s.exists && s.disabled && !s.checked, 'present, off and disabled: ' + J(s));
-    must(s.title === 'Turn on Grand totals or Subtotals' && s.note === 'Turn on Grand totals or Subtotals', 'says why, in the tooltip and as text: ' + J(s));
+    must(s.title === 'Turn on Grand totals or Subtotals' && s.desc === s.title && s.note === '', 'says why in the tooltip and the description, with no extra text on the card: ' + J(s));
   });
   let scaleOnHtml = null;
   await check('Grand totals on, but no scale yet: still disabled, now saying what to pick', async () => {
     await realClick(checkboxOf('Grand totals'));
     await waitFor(`${tbl}.querySelector('tr.xt-grand') !== null`, 'grand total row');
     const s = await inclState();
-    must(s.disabled && /colour scale, data bars or a rule/.test(s.note), J(s));
+    must(s.disabled && /colour scale, data bars or a rule/.test(s.title) && s.desc === s.title && s.note === '', J(s));
     must((await totalCells()).every((c) => !c.cf), 'totals are plain');
   });
   await check('Colour scale on: the checkbox enables; totals stay plain until it is ticked', async () => {

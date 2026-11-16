@@ -107,6 +107,16 @@ test("import: a non-boolean flag is dropped and reported, never coerced; the res
     assert.match(r.issues[0], /Include totals/);
   }
 });
+test("import: an inert flag (Cells None, no rules) is dropped and reported, as the editor never stores one", () => {
+  const r = sheetOf({ chartType: "table", format: { conditional: { [KEY]: { mode: "none", scale: "sequential", mid: 5, rules: [], totals: true } } } });
+  assert.deepEqual(entryOf(r), { [KEY]: { mode: "none", scale: "sequential", mid: 5, rules: [] } });
+  assert.equal(r.issues.length, 1);
+  assert.match(r.issues[0], /Include totals.*nothing to colour/);
+  // a rule alone is something to colour with
+  const ok = sheetOf({ chartType: "table", format: { conditional: { [KEY]: { mode: "none", scale: "sequential", mid: null, rules: [{ op: ">", value: 1, tone: "good" }], totals: true } } } });
+  assert.deepEqual(ok.issues, []);
+  assert.equal(entryOf(ok)[KEY].totals, true);
+});
 test("serialize then parse keeps the flag", () => {
   const sheet = { chartType: "table", columns: [], rows: [], color: [], filters: [], marks: {}, format: { conditional: { [KEY]: { mode: "scale", scale: "sequential", mid: null, rules: [], totals: true } } } };
   const saved = serializeWorkbook({ entities: new Map(), relationships: new Map(), tabs: [{ id: "ws#1", kind: "worksheet", name: "S", sheet }], active: { kind: "worksheet", id: "ws#1" } });

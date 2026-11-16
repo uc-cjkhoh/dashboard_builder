@@ -3252,9 +3252,9 @@ export function initDashboards() {
     const gate = totalsGate(cfg, s.analytics?.totals);
     const incl = fmtCheck("Include totals", cfg.totals === true, (v) => save({ totals: v }));
     incl.classList.add("ws-cf__totals");
-    if (!gate.enabled) { incl.querySelector("input").disabled = true; incl.title = gate.reason; }
+    if (!gate.enabled) { const cb = incl.querySelector("input"); cb.disabled = true; cb.setAttribute("aria-description", gate.reason); incl.title = gate.reason; } // the reason is the tooltip and the description, like the tooltip controls (D121)
     box.append(incl);
-    const msg = gate.enabled ? (gate.note ?? (cfg.totals === true && (cfg.mode === "scale" || cfg.mode === "bars") ? TOTALS_NOTE : null)) : gate.reason;
+    const msg = gate.enabled ? (gate.note ?? (cfg.totals === true && (cfg.mode === "scale" || cfg.mode === "bars") ? TOTALS_NOTE : null)) : null; // visible text only for a hint that helps while it is on
     if (msg) { const n = el("span", "ws-shelf__note ws-cf__totals-note", msg); n.setAttribute("role", "note"); box.append(n); }
     cfg.rules.forEach((r, i) => {
       const rr = el("div", "ws-cf__row ws-cf__rule");
