@@ -18,6 +18,8 @@ import { ganttTime, ganttAxisTime, ganttLabelMargin } from "./gantt-model.js";
 import { boxData, outlierPoints } from "./box-model.js";
 import { chartFit, markCount, applyFitMode, rotatedLabelCap, FIT } from "./chart-fit.js";
 import { applySelectionDim } from "./selection-dim.js";
+import { applyTooltipBehaviour } from "./tooltip-behaviour-model.js";
+import { wireTooltipCommands } from "./tooltip-commands.js";
 import { shapeSymbol, symbolAt } from "./shape-model.js";
 import { labelMask, labelPositionSymbol } from "./label-marks-model.js";
 import { applyMarkOpacity, markOpacityOf, withAlpha, OPACITY_TYPES, ANALYTICS_ID } from "./mark-opacity-model.js";
@@ -146,6 +148,7 @@ export function renderChart(container, spec) {
   drawing = st; // builders that size marks later (heatmap circles) capture this container's state
   try {
     option = buildOption(spec.type === "multiples" ? { ...spec, width: paneWidth(), height: paneHeight() } : spec);
+    option = applyTooltipBehaviour(option, spec); // Format → Show tooltips / command buttons (nothing set = the option as built)
     option = applySelectionDim(option, spec.type, spec.selectedIndices); // the dashboard's source widget fades the unselected marks
     if (OPACITY_TYPES.has(spec.type)) option = applyMarkOpacity(option, markOpacityOf(spec.format)); // only the types whose Format offers the control (a stale setting on a Gauge is not applied) // Format → Opacity multiplies every mark's own opacity (after the dim, so a faded mark stays fainter than a kept one)
     if (spec.type !== "multiples") showEveryCategory(option, fit.rotate, fit, paneHeight()); // panels keep their own sparse labels
@@ -158,6 +161,7 @@ export function renderChart(container, spec) {
 
   // Click-to-filter: forward mark clicks to the caller, which maps dataIndex → a dimension value.
   if (typeof spec.onSelect === "function") instance.on("click", (p) => { if (p.componentType !== "legend") spec.onSelect(p); });
+  st.undoTooltip = wireTooltipCommands(host, instance, option, spec); // the tooltip's Keep only / Exclude / View data, and the Responsive pin
   // A legend click highlights (and can select) instead of hiding the series — ECharts toggles the
   // item, so every item is shown again straight away and the click goes to the worksheet.
   if (typeof spec.onLegend === "function") instance.on("legendselectchanged", (p) => {
@@ -406,6 +410,7 @@ export function disposeChart(container) {
   const st = states.get(container);
   if (!st) return;
   if (st.resizeObserver) { st.resizeObserver.disconnect(); st.resizeObserver = null; }
+  if (st.undoTooltip) { st.undoTooltip(); st.undoTooltip = null; }
   if (st.instance) { st.instance.dispose(); st.instance = null; }
   st.lastOption = null; st.onCanvas = false;
 }

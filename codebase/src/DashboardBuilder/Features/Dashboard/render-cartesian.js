@@ -12,7 +12,7 @@ import { effectiveForecast } from "../Core/parameters-model.js";
 import { hint } from "./render-dom.js";
 import { noteLinePoints } from "./line-controls.js";
 import { fitWords } from "./chart-polish.js";
-import { selectHandler, legendSpec, memberSpec, memberShapeSpec } from "./render-handlers.js";
+import { selectHandler, legendSpec, memberSpec, memberShapeSpec, tooltipButtonsSpec } from "./render-handlers.js";
 import { selectedIndicesOf } from "./dashboard-select.js";
 import { joinNotices } from "./notices.js";
 import { stackedScaleNotice } from "./stack-scale-model.js";
@@ -75,7 +75,7 @@ export function renderColorSplit(container, rc, sheet, type, result, format, fmt
   const seriesLabels = texts ? colorSplitLabels({ cellRows }, texts.values) : undefined;
   const lm = labelMarksSpec(rc, sheet, format, rawKeys);
   if (lm.note) container.append(hint(lm.note));
-  drawChart(container, { type, categories, series, format, onSelect, selectedIndices, orientation, seriesLabels, ...sizeSpec, ...memberColourSpec, ...legend, ...lm.spec });
+  drawChart(container, { type, categories, series, format, onSelect, selectedIndices, orientation, seriesLabels, ...sizeSpec, ...memberColourSpec, ...legend, ...lm.spec, ...tooltipButtonsSpec(rc, sheet, primaryDim(sheet), type, rawKeys, format, container) });
 }
 
 /**
@@ -197,5 +197,5 @@ export function renderSeries(container, rc, sheet, a) {
     ? memberSpec(rc, sheet, primaryDim(sheet), rowsOrdered.map((r, i) => ({ name: categories[i], raw: r.keys[0], other: r.isOther })).filter((m) => !m.other))
     : splitColour ? memberSpec(rc, sheet, splitColour, split.members.map(({ name, raw }) => ({ name, raw }))) : {};
   const splitSpec = split ? { split: { memberIndex: split.memberIndex, memberNames: split.memberIndex.map((i) => (i >= 0 ? split.members[i].name : null)) } } : {};
-  drawChart(container, { type, symbol: SCATTER_TYPES.has(type) ? scatterSymbol(type) : undefined, categories: catsOut, series: seriesOut, format, onSelect, selectedIndices, orientation: chartOrientation(sheet), otherIndex, analytics, dateLabels: dateLabelsOf(sheet, primaryDim), ...memberColourSpec, ...legend, ...marks.spec, ...splitSpec, ...lm.spec });
+  drawChart(container, { type, symbol: SCATTER_TYPES.has(type) ? scatterSymbol(type) : undefined, categories: catsOut, series: seriesOut, format, onSelect, ...tooltipButtonsSpec(rc, sheet, primaryDim(sheet), type, rawKeys, format, container), selectedIndices, orientation: chartOrientation(sheet), otherIndex, analytics, dateLabels: dateLabelsOf(sheet, primaryDim), ...memberColourSpec, ...legend, ...marks.spec, ...splitSpec, ...lm.spec });
 }

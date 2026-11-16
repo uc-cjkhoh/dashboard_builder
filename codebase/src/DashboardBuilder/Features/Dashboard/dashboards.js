@@ -42,6 +42,7 @@ import { createHistory } from "./history.js";
 import { applyToggle, applyAll, allMessage, MAX_COLLAPSED } from "./collapse-model.js";
 import { LINE_STYLE_CHOICES, linesTakeStyle } from "./line-style-model.js";
 import { wireLineControls } from "./line-controls.js";
+import { wireTooltipControls } from "./tooltip-controls.js";
 import { HEATMAP_SHAPE_CHOICES } from "./heatmap-model.js";
 import { GANTT_LENGTH_CHOICES } from "./gantt-model.js";
 import { SECONDARY_CHOICES, dualAxisAllowed, dualAxisOn } from "./axis-sync-model.js";
@@ -224,13 +225,14 @@ export function initDashboards() {
   const history = createHistory(); // undo / redo per worksheet
   const lastSnap = new Map();       // worksheet id → the sheet as last committed (the "before" of the next edit)
   const results = sharedResults;
+  let tooltipPin = null; // see takeTooltipPin: declared before the view exists, since a drawing may ask for it
   // The editor's one worksheet view — created before anything (sync() below) can use it.
   // The query-and-render lifecycle is worksheet-view.js; the editor owns exactly one view, on #ws-chart, and
   // supplies the drawing of a result (worksheet-render.js) and the editor-only state around it.
   const sheetView = createWorksheetView(chartEl, () => ({
     dash: activeWorksheet(), noticeEl, results, plan: planCtx(), categoryOf, castOf,
   }), {
-    interactive: true, onSelect: toggleSelection, onDrill: (raw) => drillDown(raw), onLegend: legendClick, legendFocus: () => legendFocus,
+    interactive: true, onSelect: toggleSelection, onTooltipCommand: tooltipCommand, takePin: takeTooltipPin, onDrill: (raw) => drillDown(raw), onLegend: legendClick, legendFocus: () => legendFocus,
     onTooltipFields: (sheet, list) => setTooltipCat(sheet, list), onMemberColors: (sheet, field, members) => setMemberState(sheet, field, members), onMemberShapes: (sheet, field, members) => setShapeState(sheet, field, members), onColourScale: (sheet, scale) => noteColourScale(sheet, scale),
     onCollapse: (axis, key, valid) => collapseHeader(axis, key, valid), onCollapseAll: (mode, rowKeys, colKeys) => collapseAll(mode, rowKeys, colKeys),
     onColumn: (key, patch) => setColumn(key, patch),
@@ -1502,6 +1504,7 @@ export function initDashboards() {
         if (value) s.format.labelPosition = value; else delete s.format.labelPosition;
         commit(dash, s);
       }));
+      wireTooltipControls(panel, s, { fmtCheck, fmtSelect }, (next) => { s.format = next; commit(dash, s); }); // Show tooltips, Command buttons, Tooltip mode (each says why when it does nothing)
       if (canColourByCat)
         panel.append(fmtCheck("Colour by category", f.colorByDimension, (v) => set({ colorByDimension: v })));
       panel.append(fmtCheck("Reverse palette", f.paletteReverse, (v) => set({ paletteReverse: v })), ...(colorMode(s) === "continuous" ? [] : [memberColourEditor(dash, s)]), // a colour measure replaces member colours
@@ -3122,13 +3125,41 @@ export function initDashboards() {
     if (same) {
       s.selection = null;
     } else {
-      const fmtCat = makeCategoryFormatter(s.format ?? defaultFormat());
-      s.selection = {
-        db: dimField.db, table: dimField.table, column: dimField.column, value: rawValue,
-        label: `${dimField.table}.${dimField.column} = ${labelOf(metaOf(dimField), rawValue, fmtCat)}`, action: null,
-      };
+      s.selection = markSelection(dimField, rawValue, s);
+      tooltipPin = { db: dimField.db, table: dimField.table, column: dimField.column, value: rawValue, at: Date.now() }; // Responsive tooltips: the redraw this commit causes pins this mark's tooltip
     }
     commit(dash, s);
+  }
+
+  // The selection a click (or a tooltip command) makes on one mark: the same shape the selection chip reads.
+  function markSelection(dimField, rawValue, s, action = null) {
+    const fmtCat = makeCategoryFormatter(s.format ?? defaultFormat());
+    return {
+      db: dimField.db, table: dimField.table, column: dimField.column, value: rawValue,
+      label: `${dimField.table}.${dimField.column} = ${labelOf(metaOf(dimField), rawValue, fmtCat)}`, action,
+    };
+  }
+
+  // The tooltip's command buttons (Format → Command buttons) run the selection chip's own actions on the hovered mark: Keep only / Exclude select it with that
+  // action (never toggling: the mark may already be selected), View data reads its rows without changing the selection.
+  function tooltipCommand(cmd, dimField, rawValue) {
+    const dash = activeWorksheet();
+    if (!dash) return;
+    const refused = refusal(dimField, "selection");
+    if (refused) { toast(refused, "info"); return; }
+    const s = dash.sheet;
+    if (cmd === "data") { viewData(dash, { ...s, selection: markSelection(dimField, rawValue, s) }, true); return; }
+    if (cmd !== "keep" && cmd !== "exclude") return;
+    s.selection = markSelection(dimField, rawValue, s, cmd);
+    commit(dash, s);
+  }
+
+  // One-shot: the mark a click just selected, handed to the next drawing (it pins that mark's tooltip in Responsive mode) and then forgotten, so a later redraw
+  // (a Format edit, undo, returning to the tab) never re-opens a tooltip. A pin nobody drew within a few seconds is stale.
+  function takeTooltipPin() {
+    const p = tooltipPin;
+    tooltipPin = null;
+    return p && Date.now() - p.at < 3000 ? p : null;
   }
 
   // The Format card's editor: pick a measure, then its scale / bars and rules.

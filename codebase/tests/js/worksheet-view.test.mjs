@@ -183,3 +183,14 @@ test("a view reading a table with no relationship says so and sends nothing", as
   assert.equal(calls.length, before, "no query sent");
   assert.ok(JSON.stringify(container.children).includes("payments isn't related to another table yet"));
 });
+test("the editor view hands the drawing the tooltip's command hook and the one-shot pin; a select-only view never gets them", async () => {
+  calls.length = 0;
+  const seen = [];
+  const hooks = { onSelect() {}, onTooltipCommand() {}, takePin: () => null };
+  const mk = (interactive) => createWorksheetView(fakeEl(), () => ({ dash: { id: "ws#1", sheet: sheetOn("orders") }, noticeEl: fakeEl(), results: createResultCache(), plan: planCtx, categoryOf: () => undefined, castOf: () => undefined }),
+    { ...hooks, interactive, draw: (_c, _sheet, _r, _cmp, o) => { seen.push(o.hooks); return { extraNotice: null }; } });
+  await mk(true).run();
+  assert.equal(seen[0].onTooltipCommand, hooks.onTooltipCommand); assert.equal(seen[0].takePin, hooks.takePin);
+  await mk("select").run();
+  assert.equal("onTooltipCommand" in seen[1], false); assert.equal("takePin" in seen[1], false);
+});

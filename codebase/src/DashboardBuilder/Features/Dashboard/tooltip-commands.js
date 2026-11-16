@@ -1,0 +1,38 @@
+// The DOM side of the tooltip's command buttons (the pure rules are tooltip-behaviour-model.js): one delegated click listener on the chart host (the tooltip
+// is a child of it, rebuilt on every hover, so no handler is ever bound to a button), and the Responsive pin. Called by chart.js `renderChart` once the option is set.
+import { commandOf } from "./tooltip-behaviour-model.js";
+
+/**
+ * Wire `instance` (drawn into `host` from `option`) for `spec.tooltipButtons` = { pinned, onCommand(cmd, idx) }. Does nothing unless the option's tooltip is
+ * enterable (the model only makes it so where buttons apply). Returns a function that undoes the document-level listener.
+ */
+export function wireTooltipCommands(host, instance, option, spec) {
+  const tb = spec.tooltipButtons;
+  if (!tb || !option?.tooltip?.enterable || typeof tb.onCommand !== "function") return () => {};
+  // A pinned tooltip (alwaysShowContent) ignores hideTip, so dismissing it first gives that up, and with it the pin: hover tooltips are then today's again.
+  let offKey = () => {};
+  const hide = () => {
+    if (Number.isInteger(tb.pinned)) {
+      tb.pinned = null; offKey(); // the Esc listener goes with the pin
+      instance.setOption({ tooltip: { alwaysShowContent: false, enterable: false, triggerOn: "mousemove|click", hideDelay: 0 } });
+    }
+    instance.dispatchAction({ type: "hideTip" });
+  };
+  host.addEventListener("click", (e) => {
+    const c = commandOf(e.target);
+    if (!c) return;
+    e.preventDefault(); // the click still bubbles, so an open menu or flyout closes on it like on any outside click
+    hide();
+    tb.onCommand(c.cmd, c.idx);
+  });
+  instance.on("globalout", () => option.tooltip.position?.reset?.()); // the next mark is anchored afresh
+  if (!Number.isInteger(tb.pinned)) return () => {};
+  // Responsive: the clicked mark's tooltip stays open (nothing else shows or hides it) until Esc, a click on empty chart, a command, or the chart is redrawn.
+  // The handlers only act while pinned, so once it is dismissed they never hide an ordinary hover tooltip.
+  instance.dispatchAction({ type: "showTip", seriesIndex: 0, dataIndex: tb.pinned });
+  const onKey = (e) => { if (e.key === "Escape" && Number.isInteger(tb.pinned)) hide(); };
+  document.addEventListener("keydown", onKey);
+  offKey = () => document.removeEventListener("keydown", onKey);
+  instance.getZr?.().on("click", (e) => { if (!e.target && Number.isInteger(tb.pinned)) hide(); });
+  return () => offKey();
+}
