@@ -1,10 +1,12 @@
 import { renderChart as drawChart } from "./chart.js";
 import { dateLabelsOf } from "./date-labels.js";
 import { isCalcPill } from "../Calc/calc-pill.js";
-import { SCATTER_TYPES, marksOf, planMeasures, colorMode, colourDimsOf, isSizeDimension, isShapeDimension, measureName as planMeasureName } from "./sheet-plan.js";
+import { SCATTER_TYPES, marksOf, planMeasures, colorMode, colourDimsOf, isSizeDimension, isShapeDimension, isDrillActive, measureName as planMeasureName } from "./sheet-plan.js";
 import { shapeBinsOf } from "./shape-model.js";
 import { labelContext, labelMarksOf, effectiveLabelMode, LABEL_MARK_HINT } from "./label-marks-model.js";
 import { memberColourField } from "./colour-fields-model.js";
+import { lineMarkersOf, selectDrawnReason } from "./line-marker-model.js";
+import { linesTakeStyle } from "./line-style-model.js";
 import { makeValueFormatter } from "../Core/format.js";
 import { REF_CHOICES, TREND_CHOICES, trendProblem, trendRefusal, pWords, refValue, refConstant, trendSeries, pickMeasure, dataValues, bandBounds, bandLabel } from "./analytics-model.js";
 import { parameters } from "../Core/store.js";
@@ -41,6 +43,19 @@ export function labelMarksSpec(rc, sheet, format, rawKeys) {
   return { spec: { labelMarks: { mode, selected, recent } }, note };
 }
 
+/**
+ * Format → Line markers Selected as the spec chart.js reads: { spec: { selectedMarks: [category index …] } | {}, note }. The spec is set when the choice is Selected on a
+ * chart that draws lines. The selected marks are the same ones Label marks → Selected reads (a dashboard widget's cross-filter selection, else the worksheet's own click
+ * selection, on the primary dimension) — but handed over whatever Label marks is set to. `rawKeys` = each mark's primary-dimension value. A series' point at a selected
+ * category shows its dot. `note` says why no click can select a mark here (a date-grouped first key, an active drill hierarchy, a cast field on a dashboard widget), else null.
+ */
+export function lineMarkersSpec(rc, sheet, format, rawKeys) {
+  if (lineMarkersOf(format) !== "selected" || !linesTakeStyle(sheet.chartType)) return { spec: {}, note: null };
+  const dim = primaryDim(sheet);
+  const note = selectDrawnReason({ select: Boolean(rc.select), hasDim: Boolean(dim), bucketedKey: rc.bucketedKey, drilling: Boolean(rc.interactive) && isDrillActive(sheet), cast: !rc.interactive && Boolean(dim && rc.plan?.metaOf?.(dim)?.cast) });
+  return { spec: { selectedMarks: selectedIndicesOf(rawKeys, rc.selected ?? sheet.selection ?? null, dim) }, note };
+}
+
 /** Colour split: one series per colour value (the trailing group-by key); the primary dimension is the first non-colour key. */
 export function renderColorSplit(container, rc, sheet, type, result, format, fmtCat, sizeIdx = -1, colourKeys = 1) {
   const sizeNote = splitSizeNote(Boolean(marksOf(sheet).size), type); // a Stacked split can't draw Size: say so
@@ -75,7 +90,9 @@ export function renderColorSplit(container, rc, sheet, type, result, format, fmt
   const seriesLabels = texts ? colorSplitLabels({ cellRows }, texts.values) : undefined;
   const lm = labelMarksSpec(rc, sheet, format, rawKeys);
   if (lm.note) container.append(hint(lm.note));
-  drawChart(container, { type, categories, series, format, onSelect, selectedIndices, orientation, seriesLabels, ...sizeSpec, ...memberColourSpec, ...legend, ...lm.spec, ...tooltipButtonsSpec(rc, sheet, primaryDim(sheet), type, rawKeys, format, container) });
+  const lk = lineMarkersSpec(rc, sheet, format, rawKeys);
+  if (lk.note) container.append(hint(lk.note));
+  drawChart(container, { type, categories, series, format, onSelect, selectedIndices, orientation, seriesLabels, ...sizeSpec, ...memberColourSpec, ...legend, ...lm.spec, ...lk.spec, ...tooltipButtonsSpec(rc, sheet, primaryDim(sheet), type, rawKeys, format, container) });
 }
 
 /**
@@ -144,6 +161,8 @@ export function renderSeries(container, rc, sheet, a) {
   const rawKeys = rowsOrdered.map((r) => (r.isOther ? null : r.keys[0]));
   const lm = labelMarksSpec(rc, sheet, format, rawKeys);
   if (lm.note) marks.note = [marks.note, lm.note].filter(Boolean).join(" ");
+  const lk = lineMarkersSpec(rc, sheet, format, rawKeys);
+  if (lk.note) marks.note = [marks.note, lk.note].filter(Boolean).join(" ");
   if (marks.note) container.append(hint(marks.note)); // a Marks hint sits above the chart, never blocks it
   // Click-to-filter: marks map 1:1 to result rows here, so a click's dataIndex -> rowsOrdered[i].keys[0] (the primary
   // dimension's raw value).
@@ -197,5 +216,5 @@ export function renderSeries(container, rc, sheet, a) {
     ? memberSpec(rc, sheet, primaryDim(sheet), rowsOrdered.map((r, i) => ({ name: categories[i], raw: r.keys[0], other: r.isOther })).filter((m) => !m.other))
     : splitColour ? memberSpec(rc, sheet, splitColour, split.members.map(({ name, raw }) => ({ name, raw }))) : {};
   const splitSpec = split ? { split: { memberIndex: split.memberIndex, memberNames: split.memberIndex.map((i) => (i >= 0 ? split.members[i].name : null)) } } : {};
-  drawChart(container, { type, symbol: SCATTER_TYPES.has(type) ? scatterSymbol(type) : undefined, categories: catsOut, series: seriesOut, format, onSelect, ...tooltipButtonsSpec(rc, sheet, primaryDim(sheet), type, rawKeys, format, container), selectedIndices, orientation: chartOrientation(sheet), otherIndex, analytics, dateLabels: dateLabelsOf(sheet, primaryDim), ...memberColourSpec, ...legend, ...marks.spec, ...splitSpec, ...lm.spec });
+  drawChart(container, { type, symbol: SCATTER_TYPES.has(type) ? scatterSymbol(type) : undefined, categories: catsOut, series: seriesOut, format, onSelect, ...tooltipButtonsSpec(rc, sheet, primaryDim(sheet), type, rawKeys, format, container), selectedIndices, orientation: chartOrientation(sheet), otherIndex, analytics, dateLabels: dateLabelsOf(sheet, primaryDim), ...memberColourSpec, ...legend, ...marks.spec, ...splitSpec, ...lm.spec, ...lk.spec });
 }

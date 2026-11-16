@@ -129,10 +129,10 @@ test("mark opacity keeps the pattern", () => {
 
 // ---- the pure marker model ---------------------------------------------------------------------------------------------
 test("line marker choices, validation and reading", () => {
-  assert.deepEqual(LINE_MARKER_CHOICES, [["auto", "Automatic"], ["all", "All"], ["none", "None"]]);
-  assert.deepEqual([...LINE_MARKERS], ["auto", "all", "none"]);
-  for (const v of ["auto", "all", "none"]) assert.equal(lineMarkersError(v), null, v);
-  for (const v of ["selected", "ALL", "", null, 0, undefined]) assert.match(lineMarkersError(v), /Line markers/, String(v));
+  assert.deepEqual(LINE_MARKER_CHOICES, [["auto", "Automatic"], ["selected", "Selected"], ["all", "All"], ["none", "None"]]); // Selected: tests/js/line-selected.test.mjs
+  assert.deepEqual([...LINE_MARKERS], ["auto", "selected", "all", "none"]);
+  for (const v of ["auto", "selected", "all", "none"]) assert.equal(lineMarkersError(v), null, v);
+  for (const v of ["select", "ALL", "", null, 0, undefined]) assert.match(lineMarkersError(v), /Line markers/, String(v));
   assert.equal(lineMarkersOf({}), "auto"); assert.equal(lineMarkersOf({ lineMarkers: "none" }), "none"); assert.equal(lineMarkersOf({ lineMarkers: "x" }), "auto");
 });
 test("isolated points: a value with no neighbour to draw a line to", () => {
@@ -314,7 +314,7 @@ test("the controls' inputs are read from the sheet: shelf measures, a colour mea
   const dim = { db: "d", table: "t", column: "region", category: "text" };
   const meas = (column) => ({ db: "d", table: "t", column, category: "numeric", agg: "sum" });
   const sheet = (over) => ({ ...emptySheet(), chartType: "line", columns: [dim], rows: [meas("a")], ...over });
-  assert.deepEqual(lineControlInputs(sheet({})), { type: "line", format: sheet({}).format, shelfCount: 1, colourMeasure: false, hasSize: false, points: 0 });
+  assert.deepEqual(lineControlInputs(sheet({})), { type: "line", format: sheet({}).format, shelfCount: 1, colourMeasure: false, hasSize: false, points: 0, select: { reason: null, note: null } });
   const several = lineControlInputs(sheet({ rows: [meas("a"), meas("b")], color: [meas("q")] }));
   assert.equal(several.shelfCount, 2, "the colour measure is not a shelf measure"); assert.equal(several.colourMeasure, true);
   assert.equal(lineControlInputs(sheet({ color: [dim] })).colourMeasure, false, "a Colour dimension is not a colour measure");
@@ -344,10 +344,10 @@ test("workbook: an explicit default is dropped quietly; an invalid value is drop
   const ok = roundTrip({ ...defaultFormat(), linePattern: "solid", lineMarkers: "auto" });
   assert.equal(ok.issues.length, 0, JSON.stringify(ok.issues));
   assert.equal("linePattern" in ok.worksheets[0].sheet.format, false); assert.equal("lineMarkers" in ok.worksheets[0].sheet.format, false);
-  const bad = roundTrip({ ...defaultFormat(), linePattern: "wavy", lineMarkers: "selected" });
+  const bad = roundTrip({ ...defaultFormat(), linePattern: "wavy", lineMarkers: "sometimes" });
   assert.equal("linePattern" in bad.worksheets[0].sheet.format, false); assert.equal("lineMarkers" in bad.worksheets[0].sheet.format, false);
   assert.ok(bad.issues.some((i) => /line pattern "wavy" — reset to Solid/.test(i)), JSON.stringify(bad.issues));
-  assert.ok(bad.issues.some((i) => /line markers "selected" — reset to Automatic/.test(i)), JSON.stringify(bad.issues));
+  assert.ok(bad.issues.some((i) => /line markers "sometimes" — reset to Automatic/.test(i)), JSON.stringify(bad.issues));
   for (const v of [1, true, {}, ""]) assert.ok(roundTrip({ ...defaultFormat(), linePattern: v }).issues.some((i) => /line pattern/.test(i)), String(v));
 });
 
