@@ -132,8 +132,8 @@ export function applyTooltipBehaviour(option, spec = {}) {
   const b = spec.tooltipButtons;
   if (!b || !commandButtonsOn(format) || !BUTTON_TYPES.has(spec.type) || typeof tip.formatter !== "function") return option;
   const hoverMode = tooltipModeOf(format) === "hover";
-  const pinned = !hoverMode && Number.isInteger(b.pinned) ? b.pinned : null;
-  if (!hoverMode && pinned === null) return option; // Responsive with nothing pinned: today's tooltip
+  if (!hoverMode && !Number.isInteger(b.pinned)) return option; // Responsive with nothing pinned: today's tooltip
+  const pinnedNow = () => (!hoverMode && Number.isInteger(b.pinned) ? b.pinned : null); // read live: dismissing the pin (tooltip-commands.js) clears it
   const can = (i) => i >= 0 && (typeof b.can !== "function" || b.can(i) !== false);
   const base = tip.formatter;
   option.tooltip = {
@@ -142,7 +142,7 @@ export function applyTooltipBehaviour(option, spec = {}) {
     formatter: (p, ...rest) => {
       const html = base(p, ...rest);
       const i = dataIndexOf(p);
-      return can(i) && (hoverMode || i === pinned) ? html + commandsHtml(i) : html;
+      return can(i) && (hoverMode || i === pinnedNow()) ? html + commandsHtml(i) : html;
     },
   };
   return option;

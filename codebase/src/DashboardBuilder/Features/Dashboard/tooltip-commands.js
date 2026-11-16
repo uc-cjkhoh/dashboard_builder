@@ -9,7 +9,14 @@ import { commandOf } from "./tooltip-behaviour-model.js";
 export function wireTooltipCommands(host, instance, option, spec) {
   const tb = spec.tooltipButtons;
   if (!tb || !option?.tooltip?.enterable || typeof tb.onCommand !== "function") return () => {};
-  const hide = () => instance.dispatchAction({ type: "hideTip" });
+  // A pinned tooltip (alwaysShowContent) ignores hideTip, so dismissing it first gives that up, and with it the pin: hover tooltips are then today's again.
+  const hide = () => {
+    if (Number.isInteger(tb.pinned)) {
+      tb.pinned = null;
+      instance.setOption({ tooltip: { alwaysShowContent: false, enterable: false, triggerOn: "mousemove|click", hideDelay: 0 } });
+    }
+    instance.dispatchAction({ type: "hideTip" });
+  };
   host.addEventListener("click", (e) => {
     const c = commandOf(e.target);
     if (!c) return;

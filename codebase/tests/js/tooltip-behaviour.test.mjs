@@ -311,7 +311,10 @@ test("a pinned tooltip is dismissed by Esc and by a click on empty chart, and Es
   const esc = docListeners.find((l) => l[0] === "keydown");
   assert.ok(esc, "a keydown listener while pinned");
   esc[1]({ key: "a" }); assert.equal(d.inst.actions.filter((a) => a.type === "hideTip").length, 0);
+  assert.match(tip(d.o, 1), /<button/);
   esc[1]({ key: "Escape" }); assert.deepEqual(d.inst.actions.at(-1), { type: "hideTip" });
+  assert.deepEqual(d.inst.lastSet.tooltip, { alwaysShowContent: false, enterable: false, triggerOn: "mousemove|click", hideDelay: 0 }, "a pinned tooltip ignores hideTip, so the pin is given up first");
+  assert.doesNotMatch(tip(d.o, 1), /<button/, "and hovering that mark again shows today's tooltip");
   const blank = d.inst.zr.handlers.find((h) => h[0] === "click");
   d.inst.actions.length = 0;
   blank[1]({ target: { type: "rect" } }); assert.equal(d.inst.actions.length, 0, "a click on a mark is the mark's own");
