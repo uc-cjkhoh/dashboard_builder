@@ -19,7 +19,7 @@ window.echarts.init = (host) => {
 
 const { MATRIX, LABEL_SELECTED_CASES, sampled } = await import("./line-selected-cases.mjs");
 const { buildCartesian, tuneForSize } = await import("../../src/DashboardBuilder/Features/Dashboard/chart.js");
-const { LINE_MARKER_CHOICES, lineMarkersOf, lineMarkersError, markerPlan } = await import("../../src/DashboardBuilder/Features/Dashboard/line-marker-model.js");
+const { LINE_MARKER_CHOICES, lineMarkersOf, lineMarkersError, markerPlan, selectGate, selectNote, selectDrawnReason } = await import("../../src/DashboardBuilder/Features/Dashboard/line-marker-model.js");
 const { lineControlSpecs } = await import("../../src/DashboardBuilder/Features/Dashboard/line-style-model.js");
 const { lineControlInputs, wireLineControls } = await import("../../src/DashboardBuilder/Features/Dashboard/line-controls.js");
 const { LINE_MARKERS } = await import("../../src/DashboardBuilder/Features/Core/sheet-schema.js");
@@ -214,6 +214,8 @@ test("Line markers offers Selected, titled so: no selection = no markers", () =>
   assert.equal(s.value, "selected"); assert.equal(s.disabled, null);
   assert.match(s.note, /no selection = no markers/);
   assert.match(s.note, /lone/, "a lone value keeps its dot: say so");
+  assert.match(s.note, /Marker size and Marker shape style the markers that show/, "they DO style the selected dots");
+  assert.doesNotMatch(s.note, /no other effect/);
 });
 test("Selected is disabled with the reason where Size or a cue draws the markers (as for None), and reads All", () => {
   const sized = specs({ type: "area", hasSize: true, format: { lineMarkers: "selected" } })[1];
@@ -223,20 +225,54 @@ test("Selected is disabled with the reason where Size or a cue draws the markers
   const bars = specs({ type: "combo", shelfCount: 3, format: { secondaryType: "bar", lineMarkers: "selected" } })[1];
   assert.match(bars.disabled, /no lines/);
 });
-test("where no mark can be clicked (no dimension to select on) Selected is not offered, and a stored one says nothing can be selected", () => {
-  const off = specs({ canSelect: false })[1];
-  assert.deepEqual(off.choices.map((c) => c[0]), ["auto", "all", "none"]);
-  const stored = specs({ canSelect: false, format: { lineMarkers: "selected" } })[1];
-  assert.ok(stored.choices.some((c) => c[0] === "selected"), "a stored choice stays visible");
-  assert.match(stored.note, /no mark.*can be selected|nothing can be selected/i);
-  assert.deepEqual(specs({ canSelect: true })[1].choices, LINE_MARKER_CHOICES);
+test("Selected's choice is disabled with the reason where a click could never select (the other choices stay usable); a stored Selected says why", () => {
+  const off = specs({ selectReason: "No dimension." })[1];
+  assert.deepEqual(off.choices, LINE_MARKER_CHOICES, "every choice is still listed");
+  assert.deepEqual(off.disabledChoices, { selected: "No dimension." }); assert.equal(off.disabled, null, "the control itself stays live: Automatic, All and None still work");
+  const stored = specs({ selectReason: "No dimension.", format: { lineMarkers: "selected" } })[1];
+  assert.equal(stored.value, "selected"); assert.equal(stored.note, "No dimension.");
+  assert.equal(specs()[1].disabledChoices, null);
+  assert.match(specs({ selectNote: "Auto may group.", format: { lineMarkers: "selected" } })[1].note, /no selection = no markers.* Auto may group\./);
+  assert.equal(specs({ selectNote: "Auto may group." })[1].note, null, "the caveat rides only with a stored Selected");
 });
-test("the controls' inputs say whether a mark can be selected: a dimension that is a real column", () => {
+test("selectGate: no dimension, a calculated dimension, an active drill, a date part and an explicit Group dates grain each give a reason; Auto and Exact do not", () => {
+  const ok = { hasDim: true, refusal: null, drilling: false, firstKeyGrouped: false, firstKeyDated: false, dateBucket: "auto" };
+  assert.equal(selectGate(ok), null);
+  assert.match(selectGate({ ...ok, hasDim: false }), /Add a dimension/);
+  assert.equal(selectGate({ ...ok, refusal: "A calculated field can't be selected." }), "A calculated field can't be selected.");
+  assert.match(selectGate({ ...ok, drilling: true }), /drill hierarchy is active/);
+  assert.match(selectGate({ ...ok, firstKeyGrouped: true }), /date part/);
+  assert.match(selectGate({ ...ok, firstKeyDated: true, dateBucket: "month" }), /Group dates is Month.*Group dates → Exact/);
+  assert.equal(selectGate({ ...ok, firstKeyDated: true, dateBucket: "auto" }), null);
+  assert.equal(selectGate({ ...ok, firstKeyDated: true, dateBucket: "exact" }), null);
+  assert.equal(selectGate({ ...ok, dateBucket: "month" }), null, "a grain on a first field that is not a date is not a reason");
+  assert.match(selectNote({ ...ok, firstKeyDated: true, dateBucket: "auto" }), /Group dates → Auto may group/);
+  assert.equal(selectNote({ ...ok, firstKeyDated: true, dateBucket: "exact" }), null); assert.equal(selectNote(ok), null);
+});
+test("selectDrawnReason: a read-only view says nothing; a date-grouped first key, an active drill and a cast field on a dashboard widget each say why", () => {
+  const x = { select: true, hasDim: true, bucketedKey: null, drilling: false, cast: false };
+  assert.equal(selectDrawnReason(x), null);
+  assert.equal(selectDrawnReason({ ...x, select: false, bucketedKey: 0 }), null);
+  assert.match(selectDrawnReason({ ...x, bucketedKey: 0 }), /Selected.*dates are grouped into periods.*Group dates → Exact/);
+  assert.equal(selectDrawnReason({ ...x, bucketedKey: 1 }), null, "only the first key (the one a click selects) matters");
+  assert.match(selectDrawnReason({ ...x, drilling: true }), /drill hierarchy is active/);
+  assert.match(selectDrawnReason({ ...x, cast: true }), /Selected.*data type cast/);
+  assert.match(selectDrawnReason({ ...x, hasDim: false }), /Add a dimension/);
+});
+test("the controls' inputs carry the select gate: a dimension that is a real column, no drill, no date grain", () => {
   const dim = { db: "d", table: "t", column: "region", category: "text" };
+  const date = { db: "d", table: "t", column: "placed", category: "temporal" };
   const meas = { db: "d", table: "t", column: "a", category: "numeric", agg: "sum" };
   const base = { ...emptySheet(), chartType: "line", rows: [meas] };
-  assert.equal(lineControlInputs({ ...base, columns: [dim] }).canSelect, true);
-  assert.equal(lineControlInputs({ ...base, columns: [] }).canSelect, false);
+  assert.deepEqual(lineControlInputs({ ...base, columns: [dim] }).select, { reason: null, note: null });
+  assert.match(lineControlInputs({ ...base, columns: [] }).select.reason, /Add a dimension/);
+  assert.match(lineControlInputs({ ...base, columns: [dim], drill: { levels: [dim, { ...dim, column: "channel" }], depth: 0, path: [] } }).select.reason, /drill/);
+  const dated = { ...base, columns: [date] };
+  assert.deepEqual([lineControlInputs(dated).select.reason, /Auto may group/.test(lineControlInputs(dated).select.note)], [null, true], "Auto: a note, not a reason");
+  assert.match(lineControlInputs({ ...dated, format: { ...dated.format, dateBucket: "month" } }).select.reason, /Group dates is Month/);
+  assert.equal(lineControlInputs({ ...dated, format: { ...dated.format, dateBucket: "exact" } }).select.reason, null);
+  assert.match(lineControlInputs({ ...base, columns: [{ ...date, datePart: "month" }] }).select.reason, /date part/);
+  assert.equal(lineControlInputs({ ...base, columns: [dim], format: { ...base.format, dateBucket: "month" } }).select.reason, null);
 });
 test("the panel builds the select with Selected and titles it with the note", () => {
   const dim = { db: "d", table: "t", column: "region", category: "text" };
@@ -248,6 +284,21 @@ test("the panel builds the select with Selected and titles it with the note", ()
   const m = built.find((b) => b.label === "Line markers");
   assert.equal(m.value, "selected"); assert.deepEqual(m.choices.map((c) => c[0]), ["auto", "selected", "all", "none"]);
   assert.match(m.select.title, /no selection = no markers/); assert.equal(m.select.disabled, false);
+});
+
+test("the panel disables the Selected option with its reason where a click could never select; the other options stay enabled", () => {
+  const dim = { db: "d", table: "t", column: "region", category: "text" };
+  const meas = { db: "d", table: "t", column: "a", category: "numeric", agg: "sum" };
+  const sheet = { ...emptySheet(), chartType: "line", columns: [dim], rows: [meas], drill: { levels: [dim, { ...dim, column: "channel" }], depth: 0, path: [] }, format: { ...defaultFormat(), lineMarkers: "selected" } };
+  const options = ["auto", "selected", "all", "none"].map((value) => ({ value, disabled: false, title: "" }));
+  const fmtSelect = () => { const select = { title: "", options, setAttribute() {}, disabled: false }; return { querySelector: () => select, title: "" }; };
+  const built = [];
+  wireLineControls({ append: (f) => built.push(f) }, sheet, (label, ...rest) => { const f = fmtSelect(label, ...rest); f.label = label; return f; }, () => {});
+  const byValue = Object.fromEntries(options.map((o) => [o.value, o]));
+  assert.equal(byValue.selected.disabled, true); assert.match(byValue.selected.title, /drill hierarchy/);
+  for (const v of ["auto", "all", "none"]) assert.equal(byValue[v].disabled, false, v);
+  assert.match(built[1].querySelector().title, /drill hierarchy/, "a stored Selected: the control's title says why it draws nothing");
+  assert.equal(built[1].querySelector().disabled, false, "the control itself stays usable");
 });
 
 // ---- saved workbooks -------------------------------------------------------------------------------------------------------
@@ -327,6 +378,43 @@ test("drawing: a colour split — every member's point at the selected category 
   for (const s of ls) { assert.equal(s.showSymbol, true, s.name); assert.deepEqual(dotted(s).flatMap((d, i) => (d ? [i] : [])), [1], s.name); }
   const none = draw({ ...split, selection: null }, res).o.series.filter((s) => s.type === "line");
   for (const s of none) assert.equal(s.showSymbol, false, `${s.name}: nothing selected`);
+});
+const hints = (c) => c.children.filter((x) => x.className === "ws-hint").map((x) => x.textContent);
+const dated = (over = {}) => sheet({ columns: [{ ...dim("placed"), category: "temporal" }], format: { lineMarkers: "selected" }, ...over });
+test("drawing: a date-grouped first key (the server grouped the dates) cannot be clicked: a hint above the chart says why and names Group dates → Exact", () => {
+  const res = { ...result(REGIONS), bucket: { key: 0, grain: "month" } };
+  const { c, o } = draw(dated(), res);
+  assert.equal(hints(c).length, 1); assert.match(hints(c)[0], /Selected.*dates are grouped into periods.*Group dates → Exact/);
+  assert.equal(o.series[0].showSymbol, false);
+  const plain = draw(dated(), result(REGIONS));
+  assert.deepEqual(hints(plain.c), [], "Exact (no grouping happened): no hint");
+});
+test("drawing: a date part as the first key says why too, in the colour split as well", () => {
+  const part = { ...dim("placed"), category: "temporal", datePart: "month" };
+  const { c } = draw(sheet({ columns: [part], format: { lineMarkers: "selected" } }), result([["1", 3], ["2", 4]]));
+  assert.match(hints(c).join(" "), /Selected.*grouped into periods/);
+  const split = sheet({ columns: [dim("region"), dim("channel")], color: [dim("channel")], format: { lineMarkers: "selected" } });
+  const res = { rowDimensions: ["region", "channel"], columnDimensions: [], measures: ["sum(amount)"], rows: [["EU", "web", 1]].map(([r, ch, v]) => ({ keys: [r, ch], values: [v] })), truncated: false, bucket: { key: 0, grain: "day" } };
+  assert.match(hints(draw(split, res).c).join(" "), /Selected.*grouped into periods/);
+});
+test("drawing: an active drill hierarchy in the editor says a click steps down; a dashboard widget (select-only) on the same sheet selects and says nothing", () => {
+  const drill = { levels: [dim("region"), dim("channel")], depth: 0, path: [] };
+  const ed = draw(sheet({ format: { lineMarkers: "selected" }, drill }), result(REGIONS), { interactive: true, hooks: {} });
+  assert.match(hints(ed.c).join(" "), /drill hierarchy is active/);
+  const widget = draw(sheet({ format: { lineMarkers: "selected" }, drill }), result(REGIONS), { interactive: "select", hooks: {} });
+  assert.deepEqual(hints(widget.c), []);
+});
+test("drawing: a field with a data type cast on a dashboard widget cannot start a cross-filter: a hint says so; the editor does not mind", () => {
+  const castPlan = { ...plan, metaOf: (f) => (f.column === "region" ? { cast: "Int32" } : {}) };
+  const w = draw(sheet({ format: { lineMarkers: "selected" } }), result(REGIONS), { plan: castPlan, interactive: "select", hooks: {} });
+  assert.match(hints(w.c).join(" "), /data type cast/);
+  const ed = draw(sheet({ format: { lineMarkers: "selected" } }), result(REGIONS), { plan: castPlan, interactive: true, hooks: {} });
+  assert.deepEqual(hints(ed.c), []);
+});
+test("drawing: no hint where a click selects, where the choice is not Selected, or on a read-only view", () => {
+  assert.deepEqual(hints(draw(sheet({ format: { lineMarkers: "selected" } })).c), []);
+  assert.deepEqual(hints(draw(dated({ format: { lineMarkers: "all" } }), { ...result(REGIONS), bucket: { key: 0, grain: "month" } }).c), []);
+  assert.deepEqual(hints(draw(dated(), { ...result(REGIONS), bucket: { key: 0, grain: "month" } }, { interactive: false }).c), [], "a read-only view says nothing");
 });
 test("drawing: a bar chart is untouched by a stored Line markers Selected", () => {
   const a = draw(sheet({ chartType: "bar", format: { lineMarkers: "selected" }, selection: sk("EU") })).o;

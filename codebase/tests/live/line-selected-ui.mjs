@@ -39,6 +39,12 @@ function answer({ method, path, body }) {
     queries.push(body);
     const dims = [...(body.rowDimensions ?? []), ...(body.columnDimensions ?? [])];
     const n = dims.length ? REGIONS.length : 1;
+    if (dims[0]?.column === 'placed') { // a date axis: the server groups it by the asked grain (Auto -> month) unless Group dates is Exact, and says which key it grouped
+      const MONTHS = ['2024-01-01', '2024-02-01', '2024-03-01', '2024-04-01', '2024-05-01'];
+      return { json: { rowDimensions: (body.rowDimensions ?? []).map((d) => d.column), columnDimensions: (body.columnDimensions ?? []).map((d) => d.column),
+        measures: (body.measures ?? []).map((_, i) => `v${i}`), rows: MONTHS.map((m, r) => ({ keys: dims.map(() => m), values: (body.measures ?? []).map((_, i) => 10 * (r + 1) + i * 3) })),
+        ...(body.dateBucket ? { bucket: { key: 0, grain: body.dateBucket === 'auto' ? 'month' : body.dateBucket } } : {}), truncated: false } };
+    }
     return { json: {
       rowDimensions: (body.rowDimensions ?? []).map((d) => d.column), columnDimensions: (body.columnDimensions ?? []).map((d) => d.column),
       measures: (body.measures ?? []).map((_, i) => `v${i}`),
@@ -196,6 +202,7 @@ try {
   const marksOf = (si = 0) => ev(`(() => { const d = ${inst}.getModel().getSeriesByIndex(${si}).getData(); const drawn = [], visible = [];
     for (let k = 0; k < d.count(); k++) { const el = d.getItemGraphicEl(k); if (!el || el.ignore) continue; drawn.push(k); if (d.getItemVisual(k, 'style').fill !== 'transparent') visible.push(k); }
     return { drawn, visible }; })()`);
+  const snapPanel = async (name) => { await ev(`document.querySelector('#ws-toolfly .iconbtn[aria-label="Close editor"]')?.click()`); await openFormat(); const t = await ev(`document.documentElement.getAttribute('data-scheme') || 'light'`); try { writeFileSync(join(SHOTS, `${name}-${t}.png`), Buffer.from((await b.send('Page.captureScreenshot', { format: 'png' })).data, 'base64')); } catch { /* optional */ } }; // with the Format panel open (the disabled choice and its reason)
   const visible = async (si = 0) => (await marksOf(si)).visible;
   // A REAL mouse click on point `di` of series `si`, where the chart drew it.
   const pointXY = (di, si = 0) => ev(`(() => { const d = document.querySelector('.ws-chart-canvas'); d.scrollIntoView({ block: 'center' }); const i = ${inst}; const r = d.getBoundingClientRect();
@@ -315,6 +322,32 @@ try {
     await chartType('Bar'); await openFormat();
     must(await ev(`!(${fmtField('Line markers')})`), 'none on a bar');
     await chartType('Line'); await openFormat();
+  });
+
+  await check('a line over a date column: Auto keeps Selected with a hint above the chart; a grain disables the Selected choice with the reason; Exact selects with a real click', async () => {
+    await newSheet();
+    await dragChip('placed', `__t.zone('columns')`);
+    await dragChip('amount', `__t.zone('rows')`);
+    await settle(700); await chartType('Line'); await openFormat();
+    must(J((await fieldState('Line markers')).options) === J(['auto', 'selected', 'all', 'none']), 'Selected is offered');
+    await pickOpt('Line markers', 'selected');
+    const auto = await fieldState('Line markers');
+    must(auto.value === 'selected' && !auto.disabled && /Group dates → Auto may group/.test(auto.title), 'Auto: the control is live with a note: ' + J(auto));
+    const h = await hints(); must(h.some((t) => /Selected.*dates are grouped into periods.*Group dates → Exact/.test(t)), 'the chart says why no mark selects: ' + J(h));
+    await snap('selected-date-auto-hint');
+    await pickOpt('Group dates', 'month');
+    const optDis = await ev(`(() => { const o = [...${control('Line markers')}.options].find((x) => x.value === 'selected'); return { disabled: o.disabled, title: o.title }; })()`);
+    must(optDis.disabled && /Group dates is Month.*Exact/.test(optDis.title), 'a grain: the Selected choice is disabled with the reason: ' + J(optDis));
+    must(!(await fieldState('Line markers')).disabled, 'the other choices stay usable');
+    must((await fieldState('Line markers')).title.includes('Group dates is Month'), 'a stored Selected says why on the control');
+    await snapPanel('selected-date-grain-disabled');
+    await pickOpt('Group dates', 'exact');
+    must(!(await ev(`[...${control('Line markers')}.options].find((x) => x.value === 'selected').disabled`)), 'Exact: Selected is available again');
+    must((await hints()).every((t) => !/dates are grouped/.test(t)), 'and the hint is gone: ' + J(await hints()));
+    await clickPoint(2);
+    must(J(await visible()) === J([2]), 'Exact: a real click selects the third month: ' + J(await marksOf()));
+    await snap('selected-date-exact');
+    await clickPoint(2);
   });
 
   // ---- a dashboard widget: the board's cross-filter selection ------------------------------------------------------

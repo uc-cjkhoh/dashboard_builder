@@ -314,7 +314,7 @@ test("the controls' inputs are read from the sheet: shelf measures, a colour mea
   const dim = { db: "d", table: "t", column: "region", category: "text" };
   const meas = (column) => ({ db: "d", table: "t", column, category: "numeric", agg: "sum" });
   const sheet = (over) => ({ ...emptySheet(), chartType: "line", columns: [dim], rows: [meas("a")], ...over });
-  assert.deepEqual(lineControlInputs(sheet({})), { type: "line", format: sheet({}).format, shelfCount: 1, colourMeasure: false, hasSize: false, points: 0, canSelect: true });
+  assert.deepEqual(lineControlInputs(sheet({})), { type: "line", format: sheet({}).format, shelfCount: 1, colourMeasure: false, hasSize: false, points: 0, select: { reason: null, note: null } });
   const several = lineControlInputs(sheet({ rows: [meas("a"), meas("b")], color: [meas("q")] }));
   assert.equal(several.shelfCount, 2, "the colour measure is not a shelf measure"); assert.equal(several.colourMeasure, true);
   assert.equal(lineControlInputs(sheet({ color: [dim] })).colourMeasure, false, "a Colour dimension is not a colour measure");
