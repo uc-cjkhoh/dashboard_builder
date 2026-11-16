@@ -8,6 +8,7 @@ import { openColumnProfile } from "../Schema/column-profile-dialog.js";
 import { friendlyKind } from "../Schema/type-kind.js";
 import { entityWidth } from "./card-width.js";
 import { snapTop } from "./align-snap.js";
+import { dragListHeight, cleanListHeight } from "./card-height.js";
 import { clampZoom, wheelZoom, panForZoom, panToReveal, toModel } from "./canvas-zoom.js";
 import { unionDiffControl } from "./union-diff.js";
 import { sourceNote, lossyNote, wireSource, MAX_SOURCE_COLUMNS, SQL_NOTE, defaultSql, sqlWire, lostKeys } from "../Core/source-model.js";
@@ -215,11 +216,12 @@ export function initCanvas() {
     createEntity(db, table, x, y);
   }
 
-  function createEntity(db, table, x, y, { source = null, customSql = null, customSqlMysql = null } = {}) {
+  function createEntity(db, table, x, y, { source = null, customSql = null, customSqlMysql = null, listHeight = null } = {}) {
     const entity = { id: `${db}.${table}#${++seq}`, db, table, x, y, columns: [], el: null };
     if (source) entity.source = source;
     else if (customSql) { entity.customSql = customSql; if (customSqlMysql) entity.customSqlMysql = customSqlMysql; }
     entity.el = renderCard(entity);
+    setListHeight(entity, cleanListHeight(listHeight));
     place(entity);
     entities.set(entity.id, entity);
     canvas.append(entity.el);
@@ -350,9 +352,63 @@ export function initCanvas() {
       body.prepend(note);
       if (entity.source.kind === "union") note.after(unionDiffControl(entity.source));
     }
-    card.append(head, status, body);
+    card.append(head, status, body, resizeHandle(entity, "top"), resizeHandle(entity, "bottom"));
     if (entity.customSql) syncSqlUi(entity, card);
     return card;
+  }
+
+  // --- list height (drag the card's top or bottom edge) ---------------------
+  // The column list's height is the card's one adjustable size: null = the default (canvas.css), else a max-height in px that a saved workbook keeps.
+  function setListHeight(entity, h) {
+    if (h) { entity.listHeight = h; entity.el.style.setProperty("--list-h", `${h}px`); }
+    else { delete entity.listHeight; entity.el.style.removeProperty("--list-h"); }
+    entity.el.classList.toggle("entity--sized", Boolean(h));
+  }
+
+  // A thin strip along the top or bottom edge: drag it to grow or shrink the list (the top edge keeps the card's bottom in place),
+  // double-click it to go back to the default. The bottom one is also a keyboard separator (↑ / ↓ in 8px steps).
+  function resizeHandle(entity, edge) {
+    const grip = document.createElement("div");
+    grip.className = `entity__resize entity__resize--${edge}`;
+    grip.setAttribute("role", "separator");
+    grip.setAttribute("aria-orientation", "horizontal");
+    grip.setAttribute("aria-label", `Resize ${entity.table} column list`);
+    grip.title = "Drag to resize";
+    if (edge === "bottom") grip.tabIndex = 0;
+    const list = () => entity.el.querySelector(".entity__cols");
+    const apply = (dy, start) => {
+      const { h, y } = dragListHeight({ edge, startH: start.h, startY: start.y, dy, fit: list().scrollHeight });
+      setListHeight(entity, h);
+      if (y !== entity.y) { entity.y = y; place(entity); }
+      emit("entity:moved", { entityId: entity.id }); // links re-route; the workbook marks itself changed
+    };
+    const current = () => ({ h: list().getBoundingClientRect().height / zoom, y: entity.y });
+    grip.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const startY = event.clientY, start = current();
+      grip.setPointerCapture(event.pointerId);
+      entity.el.classList.add("entity--resizing"); grip.classList.add("is-active");
+      const move = (ev) => apply(toModel(ev.clientY - startY, zoom), start);
+      const up = () => {
+        entity.el.classList.remove("entity--resizing"); grip.classList.remove("is-active");
+        grip.releasePointerCapture(event.pointerId);
+        grip.removeEventListener("pointermove", move);
+        grip.removeEventListener("pointerup", up);
+        grip.removeEventListener("pointercancel", up);
+      };
+      grip.addEventListener("pointermove", move);
+      grip.addEventListener("pointerup", up);
+      grip.addEventListener("pointercancel", up);
+    });
+    grip.addEventListener("dblclick", () => { if (!entity.listHeight) return; setListHeight(entity, null); emit("entity:moved", { entityId: entity.id }); });
+    grip.addEventListener("keydown", (event) => {
+      if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+      event.preventDefault();
+      apply(event.key === "ArrowDown" ? 8 : -8, current());
+    });
+    return grip;
   }
 
   // --- custom SQL (D105) ---------------------------------------------------

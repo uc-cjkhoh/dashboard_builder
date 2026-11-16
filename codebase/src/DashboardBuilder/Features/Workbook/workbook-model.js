@@ -18,6 +18,7 @@ import { cleanMemberColors } from "../Dashboard/colour-model.js";
 import { cleanTableCols } from "../Dashboard/table-columns-model.js";
 import { cleanCollapsed } from "../Dashboard/collapse-model.js";
 import { checkTooltipText } from "../Dashboard/tooltip-model.js";
+import { cleanListHeight } from "../Canvas/card-height.js";
 import { checkTooltipStyle } from "../Dashboard/tooltip-style.js";
 import { checkTooltipFormats } from "../Dashboard/tooltip-formats.js";
 import { markerSizeError } from "../Dashboard/mark-style-model.js";
@@ -72,6 +73,7 @@ export function serializeWorkbook({ entities, relationships, tabs, active, theme
       ...(e.source ? { source: wireSource(e.source) } : {}), // a union / unpivot entity (its `table` is the source's name)
       ...(e.customSql ? { customSql: e.customSql } : {}), // a table card reading the user's own SELECT (D105)
       ...(e.customSql && e.customSqlMysql ? { customSqlMysql: e.customSqlMysql } : {}), // the MySQL text it was written as, shown when the card is edited again (D106)
+      ...(e.listHeight ? { listHeight: e.listHeight } : {}), // the column list's height, when an edge drag set one (Canvas/card-height.js)
     })),
     relationships: [...relationships.values()].map((r) => ({
       from: { entityId: r.from.entityId, column: r.from.column },
@@ -163,6 +165,7 @@ export function parseWorkbook(source) {
       if (sql) { entity.customSql = sql; const my = cleanCustomSql(e.customSqlMysql); if (my) entity.customSqlMysql = my; } // a bad MySQL text is simply dropped: the ClickHouse query is what runs
       else issues.push(`${e.db}.${e.table}: its custom SQL wasn't valid — the card reads the table again.`);
     }
+    if (e.listHeight !== undefined) { const h = cleanListHeight(e.listHeight); if (h) entity.listHeight = h; else issues.push(`${e.db}.${e.table}: its list height was invalid — reset.`); }
     entities.push(entity);
   }
   if (skipped) issues.push(`Skipped ${skipped} table(s) with missing details.`);
