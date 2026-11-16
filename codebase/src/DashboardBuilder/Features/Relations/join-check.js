@@ -68,7 +68,7 @@ export function buildJoinCheck(dlg, { run, names, apply = null }) {
     if (!last) return;
     const n = namesNow();
     const d = describePreview(last, n);
-    const frag = document.createDocumentFragment();
+    const frag = el("div", "join-check__main"); // the suggestion and its notes; the evidence sits beside it when the panel is wide
     const sampled = last.sampled === true;
     const findings = [...d.findings];
     if (sampled && findings.length) { const f = findings.shift(); frag.append(note(f.level, "info", f.text)); } // the sampling caveat comes before the suggestion it qualifies
@@ -96,8 +96,9 @@ export function buildJoinCheck(dlg, { run, names, apply = null }) {
       };
       for (const r of ev.reasons) reason(r.side === "one" ? "One" : "Many", r.side, r.text);
       for (const line of d.summary.slice(0, 2)) reason("Match", "match", line); // the match shares; the repeats line is the reasons above
-      sec.append(list, evidenceTable(ev.rows, n));
-      frag.append(sec);
+      sec.append(list);
+      out.replaceChildren(frag, sec, evidenceTable(ev.rows, n)); // the counts table spans the panel under both columns
+      return;
     }
     out.replaceChildren(frag);
   }

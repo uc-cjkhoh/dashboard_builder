@@ -103,6 +103,18 @@ try {
     must(await ev(`document.querySelectorAll('dialog[open] .join-check__note--warn').length`) === 0, 'unexpected warning');
     await shot('join-check-ok.png');
   });
+  await check('the dialog is up to 1280px wide, the suggestion panel takes 3/5, and the evidence sits beside the suggestion', async () => {
+    const g = await ev(`(() => { const r = (q) => { const b = document.querySelector('dialog[open] ' + q).getBoundingClientRect(); return { left: b.left, right: b.right, top: b.top, width: b.width }; };
+      return { dlg: r('').width, left: r('.rel-dialog__left').width, right: r('.rel-dialog__right').width, main: r('.join-check__main'), ev: r('.join-check__evidence'), table: r('.join-check__table') }; })()`);
+    must(g.dlg === Math.min(1280, 1400 - 32), `dialog width ${g.dlg}`);
+    must(g.right > g.left * 1.3, `panels ${g.left} / ${g.right}`);
+    must(g.ev.left >= g.main.right && Math.abs(g.ev.top - g.main.top) < 2, `evidence not beside: ${J(g)}`);
+    must(g.table.left <= g.main.left + 1 && g.table.right >= g.ev.right - 1, `counts table not full width: ${J(g)}`);
+    must(await ev(`[...document.querySelectorAll('dialog[open] .join-check__table thead th')].every((th) => th.scrollWidth <= th.clientWidth)`), 'a column head is cut off');
+    await ev(`(() => { const p = document.querySelector('dialog[open] .rel-dialog__right'); p.scrollTop = p.scrollHeight; return 1; })()`);
+    await shot('join-check-evidence.png');
+    await ev(`(() => { document.querySelector('dialog[open] .rel-dialog__right').scrollTop = 0; return 1; })()`);
+  });
   await check('the comparison follows the chosen cardinality without a new query: Use N:1 when it differs, "Matches your choice" when not', async () => {
     const before = previews.length;
     await pick('1:N');
@@ -148,7 +160,7 @@ try {
     previewMode = 'manyToMany';
     await click('dialog[open] .join-check__rerun');
     await waitFor(`document.querySelector('dialog[open] .join-check__out')?.textContent.includes('Within the sample')`, 'sampled reading');
-    must((await ev(`document.querySelector('dialog[open] .join-check__out > .join-check__note:first-child')?.textContent`) ?? '').startsWith('Based on the first 1,000,000 rows of each table, in no particular order'), 'sampling note not first, above the suggestion');
+    must((await ev(`document.querySelector('dialog[open] .join-check__main > .join-check__note:first-child')?.textContent`) ?? '').startsWith('Based on the first 1,000,000 rows of each table, in no particular order'), 'sampling note not first, above the suggestion');
     must((await text('dialog[open] .join-check__label')) === 'Suggested cardinality, from a sample', 'label not qualified');
     must(!/is unique in/.test(await text('dialog[open] .join-check__out')), 'a sampled side called unique');
     must(await ev(`document.querySelectorAll('dialog[open] .join-check__note--warn').length`) === 0, 'amber warning on a sampled result');
