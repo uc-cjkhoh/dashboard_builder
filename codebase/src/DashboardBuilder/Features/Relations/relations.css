@@ -152,8 +152,9 @@
 .rel-notes[open] > summary { border-bottom: 1px solid var(--line); }
 /* The card is as tall as its text: opening a dropdown grows it, and the list scrolls inside only once the card would pass the bottom of the
    Data Source (the card's max-height above). The details content box is made transparent so the list is a flex child that can shrink;
-   a browser without ::details-content gets a viewport-based cap instead. */
-.rel-notes::details-content { display: contents; }
+   a browser without ::details-content gets a viewport-based cap instead. Only while open: a closed <details> hides its content through
+   content-visibility on ::details-content, which a display: contents box ignores, so the list would never collapse. */
+.rel-notes[open]::details-content { display: contents; }
 .rel-notes__list { list-style: none; margin: 0; padding: var(--s1); flex: 0 1 auto; min-height: 0; overflow-y: auto; }
 @supports not selector(::details-content) { .rel-notes__list { max-height: calc(100vh - var(--topbar-h) - 6 * var(--s4)); } }
 .rel-note { border-radius: var(--r); transition: background var(--dur-fast) var(--ease); }

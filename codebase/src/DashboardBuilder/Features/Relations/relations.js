@@ -369,7 +369,7 @@ function renderNotes() {
     more.addEventListener("toggle", () => { if (more.open) openNotes.add(rel.id); else openNotes.delete(rel.id); });
     const head = document.createElement("summary"), title = document.createElement("span");
     head.className = "rel-note__head";
-    title.className = "rel-note__title"; title.textContent = `${d.title} · ${d.kind}`; // words, not the canvas badge: "one to many" needs no decoding
+    title.className = "rel-note__title"; title.textContent = d.title; // tables only: "How rows match" below says the kind in words
     head.append(title);
     more.append(head, ...d.sentences.map((t, i) => notePart(d.heads[i], noteLine(t, d.refs, d.tones[i]))));
     li.append(more);

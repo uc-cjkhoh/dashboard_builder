@@ -79,6 +79,15 @@ try {
     must(x.card > closedH && !x.scrolls, `grew ${closedH} -> ${J(x)}`);
     await shot('rel-notes-open.png');
   });
+  await check('clicking the card header collapses it to the header and opens it again', async () => {
+    const vis = `(() => { const l = document.querySelector('.rel-notes__list'); return l.getClientRects().length > 0 && l.checkVisibility(); })()`;
+    await ev(`document.querySelector('.rel-notes > summary').click()`); await b.sleep(300);
+    const shut = await m(), shown = await ev(vis);
+    must(shut.card <= 42 && !shown, `collapsed ${J(shut)} list visible ${shown}`);
+    await ev(`document.querySelector('.rel-notes > summary').click()`); await b.sleep(300);
+    const back = await m();
+    must(back.card > shut.card && await ev(vis), `reopened ${J(back)}`);
+  });
   await check('many long entries: the card stops 16px above the bottom of the Data Source and the list scrolls inside', async () => {
     await ev(`(() => { const ul = document.querySelector('.rel-notes__list'); const li = ul.firstElementChild; for (let i = 0; i < 12; i++) { const c = li.cloneNode(true); c.querySelector('details').open = true; ul.append(c); } return true; })()`);
     await b.sleep(300);

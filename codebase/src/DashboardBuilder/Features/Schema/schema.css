@@ -14,6 +14,7 @@
 }
 /* A table is a plain row, not a card: no border or shadow at rest; a soft ink wash on hover / focus. */
 .table-chip {
+  flex: none;              /* hold the 32px row: as a column-flex item it would otherwise shrink to its text height once the list overflows */
   display: flex;
   align-items: center;
   gap: var(--s2);
