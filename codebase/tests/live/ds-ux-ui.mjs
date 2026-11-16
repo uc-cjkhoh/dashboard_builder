@@ -72,7 +72,7 @@ const pressed = () => ev(`document.querySelector('dialog[open] .card-choice[aria
 await dragRow('orders','customer_id','customers','id'); await b.waitFor(`document.querySelector('dialog[open]')`);
 ok('1 FK->PK starts on N:1', await pressed() === 'N:1', await pressed());
 await ev(`document.querySelector('dialog[open] .card-choice:nth-child(2)').click()`); // pick 1:N
-await ev(`document.querySelector('dialog[open] .join-check__btn').click()`); await sleep(700);
+await sleep(700); // the suggestion ran as the dialog opened; picking 1:N re-reads it
 ok('1 Use N:1 offered when choice differs', await ev(`document.querySelector('dialog[open] .join-check__use')?.textContent`) === 'Use N:1');
 await shot('v-use');
 await ev(`document.querySelector('dialog[open] .join-check__use').click()`); await sleep(200);

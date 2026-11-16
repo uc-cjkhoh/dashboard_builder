@@ -61,7 +61,7 @@ export function describePreview(result, { fromTable, toTable, fromColumn, toColu
   const findings = [];
   const summary = [];
   if (sampled)
-    findings.push({ level: "info", text: `Based on the first ${result.sampleLimit.toLocaleString("en-US")} rows of each table, in no particular order. The two samples need not overlap, and a table read twice can differ, so treat this as a rough guide, not a fact about the whole tables.` });
+    findings.push({ level: "info", text: `Based on the first ${result.sampleLimit.toLocaleString("en-US")} rows of each table, in no particular order. The two samples may not overlap, and a table read twice can give different rows, so the whole tables may read differently.` });
   if (from.rows === 0 || to.rows === 0) {
     findings.push({ level: "info", text: `${from.rows === 0 ? fromTable : toTable} is empty (or has no rows in the examined range), so there is nothing to compare.` });
     return { observed, summary, verdict: "", findings };
@@ -77,8 +77,8 @@ export function describePreview(result, { fromTable, toTable, fromColumn, toColu
 
   if (from.matchedKeys === 0 || to.matchedKeys === 0)
     findings.push(sampled
-      ? { level: "info", text: `No keys match within the sample — can't tell from a sample whether ${fromTable}.${fromColumn} and ${toTable}.${toColumn} match across the whole tables.` }
-      : { level: "warn", text: `No keys match at all — check that ${fromTable}.${fromColumn} and ${toTable}.${toColumn} are the right columns.` });
+      ? { level: "info", text: `No keys match within the sample. A sample can't tell whether ${fromTable}.${fromColumn} and ${toTable}.${toColumn} match across the whole tables.` }
+      : { level: "warn", text: `No keys match at all. Check that ${fromTable}.${fromColumn} and ${toTable}.${toColumn} are the right columns.` });
   for (const [t, c, s] of [[fromTable, fromColumn, from], [toTable, toColumn, to]])
     if (s.nullRows > 0) findings.push({ level: "info", text: `${pct(share(s.nullRows, s.rows))} of ${t} rows have no ${c} (NULL); a NULL key never matches.` });
 
@@ -88,7 +88,7 @@ export function describePreview(result, { fromTable, toTable, fromColumn, toColu
     if (sampled)
       findings.push({ level: "info", text: "Keys repeat on both sides within the sample, so the join may be many-to-many: joined rows could multiply and sums and counts could double-count." });
     else if (repeatsMaterially(from) && repeatsMaterially(to))
-      findings.push({ level: "warn", text: `Keys repeat on both sides (many-to-many): joined rows multiply, so sums and counts from either table can double-count.${declaredOne(0) || declaredOne(1) ? ` You declared ${declared}.` : ""}` });
+      findings.push({ level: "warn", text: `Keys repeat on both sides (many-to-many): joined rows multiply, so sums and counts from either table can double-count.${declaredOne(0) || declaredOne(1) ? ` You chose ${declared}.` : ""}` });
     else
       findings.push({ level: "info", text: "A few keys repeat on both sides (the average is close to one row per key), so only a few rows multiply." });
   }
@@ -97,6 +97,38 @@ export function describePreview(result, { fromTable, toTable, fromColumn, toColu
   if (!(repeats(from) && repeats(to)))
     for (const [i, t, s] of [[0, fromTable, from], [1, toTable, to]])
       if (declaredOne(i) && repeats(s))
-        findings.push({ level: "warn", text: `${t} is declared as the "one" side, but a key there repeats (up to ${s.maxDuplicates} times) — joined rows will multiply. Declare it many or use a unique key.` });
+        findings.push({ level: "warn", text: `You chose ${t} as the "one" side, but a key there repeats up to ${s.maxDuplicates} times, so joined rows will multiply. Make it the many side or use a unique key.` });
   return { observed, summary, verdict, findings };
 }
+
+const count = (n) => Number(n).toLocaleString("en-US");
+const withShare = (n, of) => `${count(n)} (${pct(share(n, of))})`;
+const avgText = (side) => (side.keys > 0 ? String(Math.round(side.avgDuplicates * 10) / 10) : "—");
+
+/**
+ * The evidence behind the suggestion, from the same preview result: why each side reads as "one" or "many"
+ * (`reasons`, one per side, the FROM side first) and the raw counts per side (`rows`: { label, from, to } as text).
+ * An empty side gives no reasons (there is nothing to read a shape from).
+ */
+export function joinEvidence(result, { fromTable, toTable, fromColumn, toColumn }) {
+  const { from, to } = result;
+  const reasons = [];
+  if (from.rows > 0 && to.rows > 0)
+    for (const [t, c, s] of [[fromTable, fromColumn, from], [toTable, toColumn, to]])
+      reasons.push(repeats(s)
+        ? { side: "many", text: `${c} repeats in ${t}: up to ${count(s.maxDuplicates)} rows for one key (about ${avgText(s)} on average), so ${t} is the "many" side.` }
+        : { side: "one", text: `${c} is unique in ${t}: every key has one row, so ${t} is the "one" side.` });
+  const rows = [
+    { label: "Rows read", from: count(from.rows), to: count(to.rows) },
+    { label: "Rows with no key (NULL)", from: withShare(from.nullRows, from.rows), to: withShare(to.nullRows, to.rows) },
+    { label: "Distinct keys", from: count(from.keys), to: count(to.keys) },
+    { label: "Keys found in the other table", from: withShare(from.matchedKeys, from.keys), to: withShare(to.matchedKeys, to.keys) },
+    { label: "Rows with a match", from: withShare(from.matchedRows, from.rows), to: withShare(to.matchedRows, to.rows) },
+    { label: "Most rows for one key", from: count(from.maxDuplicates), to: count(to.maxDuplicates) },
+    { label: "Average rows per key", from: avgText(from), to: avgText(to) },
+  ];
+  return { reasons, rows };
+}
+
+/** The suggestion's headline: "N:1 · many-to-one". */
+export const suggestionLabel = (observed) => `${observed} · ${READING[observed]}`;

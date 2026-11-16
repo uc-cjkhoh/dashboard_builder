@@ -1,9 +1,10 @@
 import { makeButton } from "../Core/ui.js";
 import { icon } from "../Core/icons.js";
-import { describePreview } from "./join-preview-model.js";
+import { describePreview, joinEvidence, suggestionLabel } from "./join-preview-model.js";
 
-// The relationship dialog's "Check this join": one bounded read-only call, then a plain-words result. It never blocks
-// saving — a relationship is the user's declaration (golden rule 5). All text via textContent; state shown with `hidden`.
+// The relationship dialog's suggestion panel: as the dialog opens it makes one bounded read-only call and shows the
+// cardinality the data suggests, with the evidence behind it. It never blocks saving and never changes the choice by
+// itself — a relationship is the user's declaration (golden rule 5); "Use N:1" only selects. All text via textContent.
 const note = (kind, glyph, text) => {
   const p = document.createElement("p");
   p.className = `join-check__note join-check__note--${kind}`;
@@ -14,63 +15,118 @@ const note = (kind, glyph, text) => {
   p.append(g, t);
   return p;
 };
+const el = (tag, className, text) => { const e = document.createElement(tag); if (className) e.className = className; if (text != null) e.textContent = text; return e; };
+
+/** The counts table: one column per side, one row per measure (`rows` from joinEvidence). */
+function evidenceTable(rows, n) {
+  const table = el("table", "join-check__table");
+  const cap = el("caption", "join-check__caption", "Counts from both tables");
+  const head = el("tr");
+  head.append(el("td"), ...[`${n.fromTable}.${n.fromColumn}`, `${n.toTable}.${n.toColumn}`].map((t) => { const th = el("th", null, t); th.scope = "col"; th.title = t; return th; }));
+  const thead = el("thead"); thead.append(head);
+  const tbody = el("tbody");
+  for (const r of rows) {
+    const tr = el("tr");
+    const th = el("th", null, r.label); th.scope = "row";
+    tr.append(th, el("td", null, r.from), el("td", null, r.to));
+    tbody.append(tr);
+  }
+  table.append(cap, thead, tbody);
+  return table;
+}
 
 /** @param dlg the open <dialog> (the request is cancelled when it closes).
- *  @param {{run:(signal)=>Promise, names:object, apply?:{get:()=>string, set:(c:string)=>void}}} check — `apply` reads / sets the dialog's
- *  chosen cardinality: when the data reads differently, the verdict gets a "Use N:1" button (it only selects; Confirm still saves). */
+ *  @param {{run:(signal)=>Promise, names:object|(()=>object), apply?:{get:()=>string, set:(c:string)=>void}}} check — `apply` reads / sets the
+ *  dialog's chosen cardinality: the comparison follows the live choice, and when the data reads differently the suggestion gets a "Use N:1"
+ *  button (it only selects; Confirm still saves).
+ *  @returns {{root:HTMLElement, start:()=>void, rerun:()=>void, redescribe:()=>void}} — call `start()` once the dialog is built and open;
+ *  `rerun()` (debounced) after the key pairs change; `redescribe()` after the chosen cardinality changes (no new query). */
 export function buildJoinCheck(dlg, { run, names, apply = null }) {
-  const root = document.createElement("section");
-  root.className = "join-check";
-  root.setAttribute("aria-label", "Check this join");
-  const btn = makeButton("Check this join", "btn join-check__btn");
-  const hint = document.createElement("span");
-  hint.className = "join-check__hint";
-  hint.textContent = "Reads a bounded sample of both tables. Read-only; saving is never blocked.";
-  const head = document.createElement("div");
-  head.className = "join-check__head";
-  head.append(btn, hint);
-  const out = document.createElement("div");
-  out.className = "join-check__out";
+  const root = el("section", "join-check");
+  root.setAttribute("aria-labelledby", "join-check-title");
+  const head = el("div", "join-check__head");
+  const title = el("h3", "rel-dialog__h join-check__title", "Suggestion");
+  title.id = "join-check-title";
+  const again = makeButton("", "iconbtn join-check__rerun");
+  again.append(icon("refresh", { size: 16 }));
+  again.setAttribute("aria-label", "Check the data again");
+  again.title = "Check the data again";
+  head.append(title, again);
+  const out = el("div", "join-check__out");
   out.setAttribute("role", "status"); // always in the DOM, so a screen reader hears each change
   out.setAttribute("aria-live", "polite");
-  root.append(head, out);
+  const hint = el("p", "join-check__hint", "Read from a bounded sample of each table. Any choice can be saved.");
+  root.append(head, out, hint);
 
-  let ac = null;
-  dlg.addEventListener("close", () => ac?.abort());
-  btn.addEventListener("click", async () => {
+  let ac = null, last = null, timer = 0;
+  const namesNow = () => {
+    const n = typeof names === "function" ? names() : names;
+    return apply ? { ...n, declared: apply.get() } : n;
+  };
+
+  function show() {
+    if (!last) return;
+    const n = namesNow();
+    const d = describePreview(last, n);
+    const frag = document.createDocumentFragment();
+    if (d.verdict) {
+      const box = el("div", "join-check__suggest");
+      box.append(el("p", "join-check__label", "Suggested cardinality"), el("p", "join-check__pick", suggestionLabel(d.observed))); // the headline says what d.verdict says
+      if (apply && apply.get() === d.observed) box.append(note("ok", "check", "Matches your choice."));
+      else if (apply) {
+        const use = makeButton(`Use ${d.observed}`, "btn join-check__use");
+        use.addEventListener("click", () => apply.set(d.observed)); // the dialog's cardinality click calls redescribe()
+        box.append(use);
+      }
+      frag.append(box);
+    }
+    for (const f of d.findings) frag.append(note(f.level, f.level === "warn" ? "warning" : "info", f.text));
+    if (last.from.rows > 0 && last.to.rows > 0) {
+      const ev = joinEvidence(last, n);
+      const sec = el("div", "join-check__evidence");
+      sec.append(el("h4", "join-check__sub", "Evidence"));
+      const list = el("ul", "join-check__reasons");
+      const reason = (tagText, tagKind, text) => {
+        const li = el("li", "join-check__reason");
+        li.append(el("span", `join-check__tag join-check__tag--${tagKind}`, tagText), el("span", null, text)); // the shape in words, not colour alone
+        list.append(li);
+      };
+      for (const r of ev.reasons) reason(r.side === "one" ? "One" : "Many", r.side, r.text);
+      for (const line of d.summary.slice(0, 2)) reason("Match", "match", line); // the match shares; the repeats line is the reasons above
+      sec.append(list, evidenceTable(ev.rows, n));
+      frag.append(sec);
+    }
+    out.replaceChildren(frag);
+  }
+
+  async function check() {
+    clearTimeout(timer);
     ac?.abort();
     ac = new AbortController();
     const mine = ac;
-    btn.disabled = true;
-    out.replaceChildren(note("busy", "refresh", "Checking the join…"));
+    again.disabled = true;
+    root.setAttribute("aria-busy", "true");
+    out.replaceChildren(note("busy", "refresh", "Checking the data…"));
     try {
       const result = await run(mine.signal);
       if (mine.signal.aborted) return;
-      const d = describePreview(result, typeof names === "function" ? names() : names);
-      const frag = document.createDocumentFragment();
-      const list = document.createElement("ul");
-      list.className = "join-check__summary";
-      for (const line of d.summary) { const li = document.createElement("li"); li.textContent = line; list.append(li); }
-      if (d.summary.length) frag.append(list);
-      if (d.verdict) {
-        const v = document.createElement("p");
-        v.className = "join-check__verdict";
-        v.textContent = d.verdict;
-        frag.append(v);
-        if (apply && d.observed && apply.get() !== d.observed) {
-          const use = makeButton(`Use ${d.observed}`, "btn join-check__use");
-          use.addEventListener("click", () => { apply.set(d.observed); use.remove(); });
-          frag.append(use);
-        }
-      }
-      for (const f of d.findings) frag.append(note(f.level, f.level === "warn" ? "warning" : "info", f.text));
-      out.replaceChildren(frag);
+      last = result;
+      show();
     } catch (e) {
       if (mine.signal.aborted) return;
+      last = null;
       out.replaceChildren(note("error", "error", `Couldn't check the join: ${e?.message ?? "unknown error"}`));
     } finally {
-      if (ac === mine) btn.disabled = false;
+      if (ac === mine) { again.disabled = false; root.removeAttribute("aria-busy"); }
     }
-  });
-  return root;
+  }
+
+  dlg.addEventListener("close", () => { clearTimeout(timer); ac?.abort(); });
+  again.addEventListener("click", check);
+  return {
+    root,
+    start: check,
+    rerun: () => { clearTimeout(timer); timer = setTimeout(check, 300); },
+    redescribe: show,
+  };
 }
