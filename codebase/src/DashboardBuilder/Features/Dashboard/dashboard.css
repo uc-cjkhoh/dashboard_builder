@@ -466,6 +466,11 @@
 .xt-rule--bad { background: var(--danger-bg); color: var(--danger-ink); }
 .xt-rule--warn { background: var(--warn-bg); color: var(--warn-ink); }
 .xt-rule--info { background: var(--surface-3); color: var(--ink); } /* neutral: the accent is the brand red */
+/* A total cell is shaded by .xtab .xt-total, which would outrank the rule tone above: a rule on a total keeps its tone (and still carries its icon). */
+.xtab td.xt-total.xt-rule--good { background: var(--ok-bg); color: var(--ok-ink); }
+.xtab td.xt-total.xt-rule--bad { background: var(--danger-bg); color: var(--danger-ink); }
+.xtab td.xt-total.xt-rule--warn { background: var(--warn-bg); color: var(--warn-ink); }
+.xtab td.xt-total.xt-rule--info { background: var(--surface-3); color: var(--ink); }
 .xt-legend { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s4); font-size: var(--fs-body); color: var(--ink-2); }
 .xt-legend__item { display: inline-flex; align-items: center; gap: var(--s1); }
 .xt-legend__rule { padding: 0 var(--s2); border-radius: var(--r); }

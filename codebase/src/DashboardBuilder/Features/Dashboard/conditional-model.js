@@ -4,6 +4,7 @@
 // from the design tokens at render time; the text ink is picked per cell for ≥ 4.5:1 contrast.
 import { pickInk } from "./contrast.js";
 import { CF_MAX_RULES } from "../Core/sheet-schema.js";
+import { isCalc } from "./table-calc.js";
 
 export const CF_MODE_CHOICES = [["none", "None"], ["scale", "Colour scale"], ["bars", "Data bars"]];
 export const CF_SCALE_CHOICES = [["sequential", "Low → high"], ["diverging", "Diverging"]];
@@ -101,3 +102,55 @@ export function matchRule(v, rules) {
 
 /** Whether a measure's setting draws anything. */
 export const isActive = (cfg) => Boolean(cfg && (cfg.mode === "scale" || cfg.mode === "bars" || (cfg.rules?.length ?? 0) > 0));
+
+// --- Include totals ----------------------------------------------------------------------------------------------
+// A measure's setting may colour its total cells (grand-total column, subtotal rows, grand-total row, and where they cross) as it colours the
+// others, and count them when the scale's range is found. Stored as `totals: true` in the measure's entry, only while on.
+export const TOTALS_NOTE = "Totals are larger than single cells, so cells may look pale";
+export const TOTALS_OFF_REASON = "Turn on Grand totals or Subtotals";
+export const TOTALS_NONE_REASON = "Pick a colour scale, data bars or a rule first";
+export const TOTALS_IDLE_REASON = "Grand totals and Subtotals are off, so no total is coloured yet";
+export const TOTALS_LAYOUT_REASON = "No total is drawn in this layout";
+export const TOTALS_LAYOUT_NOTE = "No total is drawn in this layout, so none is coloured yet";
+export const TOTALS_NOVALUE_REASON = "A total of an average, median or distinct count has no value here";
+export const TOTALS_NOVALUE_NOTE = "A total of this measure has no value here, so none is coloured";
+
+// The aggregations a total can combine from the cells (analytics-model.js `combine`); the others (average, median, distinct count, percentile) read "—".
+const COMBINABLE = new Set(["sum", "count", "min", "max"]);
+/** Whether a total of this measure (a plan entry) has a value in a crosstab: a combinable aggregation, and not a table calculation. */
+export const totalCombinable = (entry) => Boolean(entry) && !isCalc(entry.field?.tableCalc) && COMBINABLE.has(entry.agg ?? (entry.field ? "sum" : "count"));
+
+/**
+ * Whether the layout draws any total: a grand-total column needs Columns dimensions, a grand-total row Rows dimensions, subtotals at least two Rows
+ * dimensions with the measures on top. `totals` = { grand, sub }; `layout` = { rd, cd, measureOnLeft }.
+ */
+export const totalsDrawn = (totals, { rd = 0, cd = 0, measureOnLeft = false } = {}) =>
+  Boolean(totals?.grand && (cd > 0 || rd > 0)) || Boolean(totals?.sub && rd >= 2 && !measureOnLeft);
+
+/** Whether the setting colours total cells: the flag is a real true and the measure draws something. */
+export const totalsIncluded = (cfg) => Boolean(cfg && cfg.totals === true && isActive(cfg));
+
+/**
+ * The Include totals control for one measure: { enabled, reason (why it is off), note (a hint while on) }. `totals` = { grand, sub };
+ * `ctx` = { combinable (the measure's total has a value; default true), drawn (the layout draws a total; default: a totals switch is on) }.
+ * A saved "on" stays enabled so it can be cleared, with a note saying why nothing is coloured.
+ */
+export function totalsGate(cfg, totals, { combinable = true, drawn } = {}) {
+  const shown = Boolean(totals?.grand || totals?.sub), live = drawn ?? shown, saved = cfg?.totals === true;
+  if (!combinable) return saved ? { enabled: true, reason: null, note: TOTALS_NOVALUE_NOTE } : { enabled: false, reason: TOTALS_NOVALUE_REASON, note: null };
+  if (!live && !saved) return { enabled: false, reason: shown ? TOTALS_LAYOUT_REASON : TOTALS_OFF_REASON, note: null };
+  if (!isActive(cfg)) return { enabled: false, reason: TOTALS_NONE_REASON, note: null };
+  return { enabled: true, reason: null, note: live ? null : shown ? TOTALS_LAYOUT_NOTE : TOTALS_IDLE_REASON };
+}
+
+/** The extent a scale or bar is measured on: the cells' values, and the totals' when they are included. */
+export const extentWithTotals = (cellValues, totalValues) => extentOf(totalValues?.length ? [...cellValues, ...totalValues] : cellValues);
+
+/** All measures' conditional settings after `patch` is applied to `key`'s: an entry that draws nothing (and has no midpoint) is removed; `totals` is stored only while true and active. */
+export function nextConditional(all, key, cfg, patch) {
+  const next = { ...cfg, ...patch };
+  if (next.totals !== true || !isActive(next)) delete next.totals;
+  const out = { ...all };
+  if (isActive(next) || next.mid != null) out[key] = next; else delete out[key];
+  return out;
+}

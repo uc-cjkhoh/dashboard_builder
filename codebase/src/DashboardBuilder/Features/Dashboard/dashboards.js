@@ -28,7 +28,7 @@ import { wireResizer } from "../Core/resizer.js";
 import { wireEdgeResize, heightStore } from "../Core/edge-resize.js";
 import { PRESET_CHOICES, COMPARE_CHOICES, COMPARE_TYPES, newPeriod, resolveRange, compareRange, rangeLabel, withLatest, refreshedLatest, anchorLabel } from "./period-model.js";
 import { newFilter, caseMiss, caseMissText, conflictFor, selectionLabel } from "./filter-hints.js";
-import { CF_MODE_CHOICES, CF_SCALE_CHOICES, CF_OP_CHOICES, CF_TONE_CHOICES, CF_MAX_RULES, measureKey, emptyRule, isActive, newRule } from "./conditional-model.js";
+import { CF_MODE_CHOICES, CF_SCALE_CHOICES, CF_OP_CHOICES, CF_TONE_CHOICES, CF_MAX_RULES, measureKey, emptyRule, newRule, nextConditional, totalsGate, totalsDrawn, totalCombinable, TOTALS_NOTE } from "./conditional-model.js";
 import { templateError, buildActionUrl, applyParamAction, MAX_LABEL, MAX_TEMPLATE } from "./action-model.js";
 import { DATE_PART_CHOICES, stepPart } from "./date-parts.js";
 import { CALC_CHOICES, ALONG_CHOICES, WINDOW_CHOICES, RANK_ORDERS, RANK_TIES, isCalc, calcName } from "./table-calc.js";
@@ -3236,10 +3236,7 @@ export function initDashboards() {
     const all = f.conditional ?? {};
     const cfg = { ...emptyRule(), ...(all[cfMeasure] ?? {}) };
     const save = (patch) => {
-      const next = { ...cfg, ...patch };
-      const conditional = { ...all };
-      if (isActive(next) || next.mid != null) conditional[cfMeasure] = next; else delete conditional[cfMeasure];
-      s.format = { ...f, conditional };
+      s.format = { ...f, conditional: nextConditional(all, cfMeasure, cfg, patch) };
       commit(dash, s);
     };
     const row = el("div", "ws-cf__row");
@@ -3251,6 +3248,16 @@ export function initDashboards() {
         row.append(fmtNumber("Midpoint", cfg.mid, "auto", (v) => save({ mid: v })));
     }
     box.append(row);
+    // Include totals: the grand-total column, subtotal rows and grand-total row wear this measure's colours too (and count toward the scale's range).
+    const pd = planDims(s), onLeft = s.rows.some((f) => roleOf(f) === "measure") && !s.columns.some((f) => roleOf(f) === "measure");
+    const gate = totalsGate(cfg, s.analytics?.totals, { combinable: totalCombinable(mplan.find((e) => measureKey(e) === cfMeasure)),
+      drawn: totalsDrawn(s.analytics?.totals, { rd: pd.rowDims.length, cd: pd.colDims.length, measureOnLeft: onLeft }) });
+    const incl = fmtCheck("Include totals", cfg.totals === true, (v) => save({ totals: v }));
+    incl.classList.add("ws-cf__totals");
+    if (!gate.enabled) { const cb = incl.querySelector("input"); cb.disabled = true; cb.setAttribute("aria-description", gate.reason); incl.title = gate.reason; } // the reason is the tooltip and the description, like the tooltip controls (D121)
+    box.append(incl);
+    const msg = gate.enabled ? (gate.note ?? (cfg.totals === true && (cfg.mode === "scale" || cfg.mode === "bars") ? TOTALS_NOTE : null)) : null; // visible text only for a hint that helps while it is on
+    if (msg) { const n = el("span", "ws-shelf__note ws-cf__totals-note", msg); n.setAttribute("role", "note"); box.append(n); }
     cfg.rules.forEach((r, i) => {
       const rr = el("div", "ws-cf__row ws-cf__rule");
       const setRule = (patch) => save({ rules: cfg.rules.map((x, j) => (j === i ? { ...x, ...patch } : x)) });
