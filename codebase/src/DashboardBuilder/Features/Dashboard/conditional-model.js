@@ -4,6 +4,7 @@
 // from the design tokens at render time; the text ink is picked per cell for ≥ 4.5:1 contrast.
 import { pickInk } from "./contrast.js";
 import { CF_MAX_RULES } from "../Core/sheet-schema.js";
+import { isCalc } from "./table-calc.js";
 
 export const CF_MODE_CHOICES = [["none", "None"], ["scale", "Colour scale"], ["bars", "Data bars"]];
 export const CF_SCALE_CHOICES = [["sequential", "Low → high"], ["diverging", "Diverging"]];
@@ -109,16 +110,37 @@ export const TOTALS_NOTE = "Totals are larger than single cells, so cells may lo
 export const TOTALS_OFF_REASON = "Turn on Grand totals or Subtotals";
 export const TOTALS_NONE_REASON = "Pick a colour scale, data bars or a rule first";
 export const TOTALS_IDLE_REASON = "Grand totals and Subtotals are off, so no total is coloured yet";
+export const TOTALS_LAYOUT_REASON = "No total is drawn in this layout";
+export const TOTALS_LAYOUT_NOTE = "No total is drawn in this layout, so none is coloured yet";
+export const TOTALS_NOVALUE_REASON = "A total of an average, median or distinct count has no value here";
+export const TOTALS_NOVALUE_NOTE = "A total of this measure has no value here, so none is coloured";
+
+// The aggregations a total can combine from the cells (analytics-model.js `combine`); the others (average, median, distinct count, percentile) read "—".
+const COMBINABLE = new Set(["sum", "count", "min", "max"]);
+/** Whether a total of this measure (a plan entry) has a value in a crosstab: a combinable aggregation, and not a table calculation. */
+export const totalCombinable = (entry) => Boolean(entry) && !isCalc(entry.field?.tableCalc) && COMBINABLE.has(entry.agg ?? (entry.field ? "sum" : "count"));
+
+/**
+ * Whether the layout draws any total: a grand-total column needs Columns dimensions, a grand-total row Rows dimensions, subtotals at least two Rows
+ * dimensions with the measures on top. `totals` = { grand, sub }; `layout` = { rd, cd, measureOnLeft }.
+ */
+export const totalsDrawn = (totals, { rd = 0, cd = 0, measureOnLeft = false } = {}) =>
+  Boolean(totals?.grand && (cd > 0 || rd > 0)) || Boolean(totals?.sub && rd >= 2 && !measureOnLeft);
 
 /** Whether the setting colours total cells: the flag is a real true and the measure draws something. */
 export const totalsIncluded = (cfg) => Boolean(cfg && cfg.totals === true && isActive(cfg));
 
-/** The Include totals control for one measure: { enabled, reason (why it is off), note (a hint while on) }; `totals` = { grand, sub }. */
-export function totalsGate(cfg, totals) {
-  const shown = Boolean(totals?.grand || totals?.sub);
-  if (!shown && cfg?.totals !== true) return { enabled: false, reason: TOTALS_OFF_REASON, note: null };
+/**
+ * The Include totals control for one measure: { enabled, reason (why it is off), note (a hint while on) }. `totals` = { grand, sub };
+ * `ctx` = { combinable (the measure's total has a value; default true), drawn (the layout draws a total; default: a totals switch is on) }.
+ * A saved "on" stays enabled so it can be cleared, with a note saying why nothing is coloured.
+ */
+export function totalsGate(cfg, totals, { combinable = true, drawn } = {}) {
+  const shown = Boolean(totals?.grand || totals?.sub), live = drawn ?? shown, saved = cfg?.totals === true;
+  if (!combinable) return saved ? { enabled: true, reason: null, note: TOTALS_NOVALUE_NOTE } : { enabled: false, reason: TOTALS_NOVALUE_REASON, note: null };
+  if (!live && !saved) return { enabled: false, reason: shown ? TOTALS_LAYOUT_REASON : TOTALS_OFF_REASON, note: null };
   if (!isActive(cfg)) return { enabled: false, reason: TOTALS_NONE_REASON, note: null };
-  return { enabled: true, reason: null, note: shown ? null : TOTALS_IDLE_REASON };
+  return { enabled: true, reason: null, note: live ? null : shown ? TOTALS_LAYOUT_NOTE : TOTALS_IDLE_REASON };
 }
 
 /** The extent a scale or bar is measured on: the cells' values, and the totals' when they are included. */

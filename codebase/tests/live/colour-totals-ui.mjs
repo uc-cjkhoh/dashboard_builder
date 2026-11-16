@@ -252,6 +252,41 @@ try {
     await shot('colour-totals-rule-light.png');
     await pageScheme('dark'); await shot('colour-totals-rule-dark.png'); await pageScheme('light');
   });
+  const setAgg = (agg) => ev(`(async () => {
+    const st = await import('/features/Core/store.js'); const tab = st.activeWorksheet(); const sheet = tab.sheet;
+    const m = sheet.columns.find((f) => f.category === 'numeric'); m.agg = ${J(agg)}; st.updateSheet(tab.id, sheet); return true; })()`);
+  await check('a measure whose totals read — (an average) has the box disabled with the reason, and no key text', async () => {
+    await ev(`(async () => { const st = await import('/features/Core/store.js'); const tab = st.activeWorksheet(); const sheet = tab.sheet;
+      sheet.format = { ...sheet.format, conditional: {} }; st.updateSheet(tab.id, sheet); return true; })()`);
+    await setAgg('avg'); await settle(500);
+    await waitFor(`${cfBlock}.querySelector('select').selectedOptions[0].textContent.toLowerCase().startsWith('avg')`, 'the Measure drop-down names the average');
+    let s = await inclState();
+    must(s.disabled && !s.checked && s.title === 'A total of an average, median or distinct count has no value here' && s.desc === s.title, J(s));
+    await setSelect('Cells', 'scale'); await settle(400);
+    s = await inclState();
+    must(s.disabled && s.title === 'A total of an average, median or distinct count has no value here', 'still disabled with a scale on: ' + J(s));
+    must(!/Totals included/.test(await keyText()), 'key: ' + await keyText());
+    must(!/look pale/.test(await ev(`${cfBlock}.textContent`)), 'no pale note');
+    await shot('colour-totals-avg-light.png');
+    await pageScheme('dark'); await shot('colour-totals-avg-dark.png'); await pageScheme('light');
+  });
+  await check('back to a sum the box is enabled again', async () => {
+    await setAgg('sum'); await settle(500);
+    await setSelect('Cells', 'scale'); await settle(400);
+    const s = await inclState();
+    must(!s.disabled && s.title === '', J(s));
+  });
+  await check('a layout that draws no total (Subtotals only, one Rows dimension) disables the box with the reason', async () => {
+    await realClick(checkboxOf('Grand totals'));
+    await realClick(checkboxOf('Subtotals'));
+    await waitFor(`${tbl}.querySelector('tr.xt-grand') === null`, 'no grand row');
+    must(await ev(`${tbl}.querySelector('tr.xt-subtotal') === null`), 'no subtotal row either');
+    const s = await inclState();
+    must(s.disabled && s.title === 'No total is drawn in this layout' && s.desc === s.title, J(s));
+    await realClick(checkboxOf('Grand totals'));
+    await waitFor(`${tbl}.querySelector('tr.xt-grand') !== null`, 'grand row back');
+    must(!(await inclState()).disabled, 'enabled again with a total drawn');
+  });
   if (b.consoleErrors.length) console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  '));
 } catch (e) {
   console.log(`FAIL harness: ${e.stack}`); failed++;

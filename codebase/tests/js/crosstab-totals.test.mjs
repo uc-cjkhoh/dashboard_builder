@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { draw, html, everyCombo, AMOUNT, QTY, keyOf, CASES } from "./crosstab-cases.mjs";
+import { draw, html, everyCombo, AMOUNT, QTY, keyOf, CASES, dim, meas } from "./crosstab-cases.mjs";
 import { scaleColors, extentOf, barGeometry } from "../../src/DashboardBuilder/Features/Dashboard/conditional-model.js";
 import { contrastRatio } from "../../src/DashboardBuilder/Features/Dashboard/contrast.js";
 
@@ -219,4 +219,22 @@ test("a partly loaded table says its scales, bars and totals use the rows loaded
   assert.equal(bgOf(tdByText(t, "62")[0]), scaleColors(62, ext, seq, palette).bg);
   // the old wording is kept when totals are not included
   assert.match(keyText(draw("partial", { conditional: { [A]: seq } })), /Scales and bars use the 4 rows loaded so far\./);
+});
+
+test("a measure whose totals read — is neither coloured nor named in the key; the sum next to it is", () => {
+  const avgQty = meas("qty", "avg");
+  const over = { columns: [dim("year"), AMOUNT, avgQty], rows: [dim("region"), dim("product")] };
+  const result = { ...CASES.twoMeasures.result, measures: ["sum(amount)", "avg(qty)"] };
+  const cond = { [A]: { ...seq, totals: true }, [keyOf(avgQty)]: { ...seq, totals: true } };
+  const t = draw("twoMeasures", { conditional: cond, over, result });
+  const notes = t.find((e) => e.classList.contains("xt-legend__note")).map(text);
+  assert.deepEqual(notes, ["Totals included: sum(amount)"], "only the sum measure is named");
+  const totals = cellsOf(t).filter((c) => c.classList.contains("xt-total"));
+  const sums = totals.filter((_, i) => i % 2 === 0), avgs = totals.filter((_, i) => i % 2 === 1);
+  assert.ok(sums.length > 0 && sums.every((c) => c.classList.contains("xt-cf") && c.style.background));
+  assert.ok(avgs.every((c) => text(c) === "—" && !c.classList.contains("xt-cf") && c.style.background === undefined));
+});
+test("when no included measure has a total value the key does not say Totals included", () => {
+  const avg = keyOf({ ...AMOUNT, agg: "avg" });
+  assert.ok(!keyText(draw("average", { conditional: { [avg]: { ...seq, totals: true } } })).includes("Totals included"));
 });

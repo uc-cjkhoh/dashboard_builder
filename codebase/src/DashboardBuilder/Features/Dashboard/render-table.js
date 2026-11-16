@@ -2,7 +2,7 @@ import { roleOf } from "./show-me-rules.js";
 import { tableMeasures } from "./sheet-plan.js";
 import { isCalc } from "./table-calc.js";
 import { combine } from "./analytics-model.js";
-import { CF_OP_CHOICES, CF_TONE_CHOICES, TONE_ICON, measureKey, extentWithTotals, scaleColors, barGeometry, matchRule, isActive, midpointOf, totalsIncluded } from "./conditional-model.js";
+import { CF_OP_CHOICES, CF_TONE_CHOICES, TONE_ICON, measureKey, extentOf, extentWithTotals, scaleColors, barGeometry, matchRule, isActive, midpointOf, totalsIncluded } from "./conditional-model.js";
 import { tupleKey, uniqueTuples, runs, levelSpans, orderColumnTuples } from "./grid-model.js";
 import { collapseKey, canToggle, rollUp, expandNodes, collapsedOf, leafValue, headerKeys, shownValues } from "./collapse-model.js";
 import { icon } from "../Core/icons.js";
@@ -322,8 +322,11 @@ function conditionalFor(sheet, measures, shown, totalValues = null) {
   const mplan = tableMeasures(sheet);
   let palette = null;
   const cfgs = measures.map((_, mi) => all[measureKey(mplan[mi])]);
-  const want = new Set(totalValues ? measures.map((_, mi) => mi).filter((mi) => totalsIncluded(cfgs[mi])) : []);
-  const totals = want.size ? totalValues(want) : null;
+  const asked = new Set(totalValues ? measures.map((_, mi) => mi).filter((mi) => totalsIncluded(cfgs[mi])) : []);
+  const found = asked.size ? totalValues(asked) : null;
+  // Only a measure with a total that has a value takes part: an average's totals read "—", so it is neither coloured nor named in the key.
+  const want = new Set([...asked].filter((mi) => extentOf(found[mi]) !== null));
+  const totals = found;
   return measures.map((name, mi) => {
     const cfg = cfgs[mi];
     if (!isActive(cfg)) return null;

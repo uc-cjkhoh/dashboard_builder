@@ -7,8 +7,8 @@ installFakeDom({ vars: PALETTE_VARS });
 const { crosstabTable } = await import("../../src/DashboardBuilder/Features/Dashboard/render-table.js");
 const { measureKey } = await import("../../src/DashboardBuilder/Features/Dashboard/conditional-model.js");
 
-const dim = (column) => ({ db: "d", table: "t", column, category: "text" });
-const meas = (column, agg = "sum") => ({ db: "d", table: "t", column, category: "numeric", agg });
+export const dim = (column) => ({ db: "d", table: "t", column, category: "text" });
+export const meas = (column, agg = "sum") => ({ db: "d", table: "t", column, category: "numeric", agg });
 export const AMOUNT = meas("amount"), QTY = meas("qty");
 export const keyOf = (m) => measureKey({ field: m, agg: m.agg });
 

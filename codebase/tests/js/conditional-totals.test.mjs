@@ -1,7 +1,8 @@
 // "Include totals" in Format -> Conditional formatting: the pure model (extent, gate, stored shape) and the import check.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { extentOf, extentWithTotals, totalsIncluded, totalsGate, nextConditional, emptyRule, isActive, TOTALS_NOTE, TOTALS_OFF_REASON, TOTALS_IDLE_REASON }
+import { extentOf, extentWithTotals, totalsIncluded, totalsGate, nextConditional, emptyRule, isActive, TOTALS_NOTE, TOTALS_OFF_REASON, TOTALS_IDLE_REASON,
+  totalCombinable, totalsDrawn, TOTALS_NOVALUE_REASON, TOTALS_NOVALUE_NOTE, TOTALS_LAYOUT_REASON, TOTALS_LAYOUT_NOTE }
   from "../../src/DashboardBuilder/Features/Dashboard/conditional-model.js";
 import { serializeWorkbook, parseWorkbook, WORKBOOK_FORMAT } from "../../src/DashboardBuilder/Features/Workbook/workbook-model.js";
 
@@ -55,6 +56,45 @@ test("the Include totals control says why it is unavailable", () => {
   assert.equal(idle.enabled, true);
   assert.equal(idle.note, TOTALS_IDLE_REASON);
   assert.match(TOTALS_NOTE, /Totals are larger than single cells, so cells may look pale/);
+});
+
+test("only a combinable aggregation has a total value", () => {
+  const e = (agg, extra = {}) => ({ field: { column: "x", ...extra }, agg });
+  for (const agg of ["sum", "count", "min", "max"]) assert.equal(totalCombinable(e(agg)), true, agg);
+  for (const agg of ["avg", "median", "distinct", "countDistinct", "countNonNull", "percentile"]) assert.equal(totalCombinable(e(agg)), false, agg);
+  assert.equal(totalCombinable(e("sum", { tableCalc: { type: "running" } })), false, "a table calculation has no combined total");
+  assert.equal(totalCombinable(undefined), false);
+});
+test("the gate: a measure whose totals read — is disabled with the reason, and a saved on stays clearable", () => {
+  const on = { grand: true, sub: false };
+  const avg = totalsGate(scale(), on, { combinable: false });
+  assert.deepEqual(avg, { enabled: false, reason: TOTALS_NOVALUE_REASON, note: null });
+  assert.equal(TOTALS_NOVALUE_REASON, "A total of an average, median or distinct count has no value here");
+  assert.deepEqual(totalsGate(scale(), on, { combinable: true }), { enabled: true, reason: null, note: null }, "a sum is enabled");
+  const saved = totalsGate(scale({ totals: true }), on, { combinable: false });
+  assert.equal(saved.enabled, true);
+  assert.equal(saved.note, TOTALS_NOVALUE_NOTE);
+  assert.equal(totalsGate(emptyRule(), on, { combinable: false }).reason, TOTALS_NOVALUE_REASON, "the missing total value is the first thing said");
+});
+test("the layout decides whether a total is drawn, and the gate says so", () => {
+  const both = { grand: true, sub: true };
+  assert.equal(totalsDrawn(both, { rd: 1, cd: 0 }), true, "a grand-total row needs a Rows dimension");
+  assert.equal(totalsDrawn({ grand: true, sub: false }, { rd: 0, cd: 1 }), true, "a grand-total column needs a Columns dimension");
+  assert.equal(totalsDrawn({ grand: true, sub: false }, { rd: 0, cd: 0 }), false, "no dimensions: no total");
+  assert.equal(totalsDrawn({ grand: false, sub: true }, { rd: 1, cd: 2 }), false, "subtotals need two Rows dimensions");
+  assert.equal(totalsDrawn({ grand: false, sub: true }, { rd: 2, cd: 0 }), true);
+  assert.equal(totalsDrawn({ grand: false, sub: true }, { rd: 2, cd: 0, measureOnLeft: true }), false, "and the measures on top");
+  assert.equal(totalsDrawn({ grand: false, sub: false }, { rd: 3, cd: 3 }), false);
+  assert.equal(totalsDrawn(undefined, { rd: 3, cd: 3 }), false);
+  const subOnly = { grand: false, sub: true };
+  const dead = totalsGate(scale(), subOnly, { drawn: totalsDrawn(subOnly, { rd: 1, cd: 1 }) });
+  assert.deepEqual(dead, { enabled: false, reason: TOTALS_LAYOUT_REASON, note: null });
+  assert.equal(TOTALS_LAYOUT_REASON, "No total is drawn in this layout");
+  const idle = totalsGate(scale({ totals: true }), subOnly, { drawn: false });
+  assert.equal(idle.enabled, true);
+  assert.equal(idle.note, TOTALS_LAYOUT_NOTE);
+  assert.deepEqual(totalsGate(scale(), subOnly, { drawn: true }), { enabled: true, reason: null, note: null });
+  assert.equal(totalsGate(scale(), { grand: false, sub: false }, { drawn: false }).reason, TOTALS_OFF_REASON, "switches off beats layout");
 });
 
 test("the flag is stored only while it is on and the measure draws something", () => {
