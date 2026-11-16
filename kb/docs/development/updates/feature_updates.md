@@ -4,6 +4,7 @@ Functional changes (server, models, validation, calculations, charts, workbook).
 
 ## 2026-11-16
 
+- Relationship suggestion review fixes: a pending re-run drops the last result (a cardinality pick can't show numbers for the old key pairs); on a sampled result the caveat comes first, the label says "from a sample" and a side is never called unique; live checks for the re-run on Add / Remove pair and the busy state (`e373fc8`)
 - Line markers Selected: say and gate where a click cannot select (date-grouped first key, drill hierarchy, cast field on a widget, no / calculated dimension) (`ed5835b`)
 - Line markers Selected: no clear dot on every point; a click selects through ECharts' hover symbol (verified with real clicks under None and Selected), so Selected mirrors None's plan (`f40626b`)
 - Format -> Line markers: Selected (dots only at the click-selected marks) (`dfe2a8a`)
