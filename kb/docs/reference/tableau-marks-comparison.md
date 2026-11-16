@@ -16,7 +16,7 @@ Not a Tableau clone ([index.md](../development/backlog/index.md#guards-every-ite
 | Color effects: Opacity, Mark borders | Format: Opacity (0 to 100, steps of 10), Mark border (none / thin / medium / thick, colour from four tokens) |
 | Edit Colors: pick a colour for one member | Edit member colours (24 fixed swatches) |
 | Size: a discrete field gives each member a size; a continuous field a range; legend shows it | Size dimension (steps) or measure; a Size legend line names the range |
-| Edit Sizes: range slider, Reversed, From zero | Format → Edit Sizes: smallest / largest %, From zero, Reversed |
+| Edit Sizes: Sizes vary (Automatically, By range, From zero), range slider, Reversed (not under From zero), Start / End value in the legend | Format → Edit Sizes: Sizes vary (Automatic, By range, From zero), smallest / largest %, typed Start / End value (a value beyond saturates), Reversed (off under From zero); Automatic keeps each chart's own default, not Tableau's data-driven rule ([D120](../decisions/decisions-marks.md#d120--edit-sizes-sizes-vary-and-a-typed-start-and-end-value)) |
 | Size by mark type: bars thicker, lines thicker, text bigger | Bar thickness, a line's own thickness, Text / Table font size (three steps) |
 | Label: a dimension labels by member, a measure by value; marks to label (All, Min / Max, Selected, Highlighted, Most recent, Line ends) | Label slot; Format → Label marks, same modes, plus Label position above / below / left / right ([D116](../decisions/decisions-dashboards.md#d116--label-marks-a-mask-over-the-marks-offered-only-where-it-does-something), [D117](../decisions/decisions-dashboards.md#d117--labels-on-a-point-chart-split-by-shape-or-colour-one-label-per-mark-the-mask-taken-across-the-members)) |
 | Detail: separate marks by a dimension's members | Detail slot, extra group-by |
@@ -32,7 +32,6 @@ Not a Tableau clone ([index.md](../development/backlog/index.md#guards-every-ite
 |---|---|---|---|
 | Size on a pie | Size sets the pie's overall size; a pie per member of a Rows / Columns dimension | A hint: one pie has nothing to compare | Backlog: panelled pie |
 | Bar width on a continuous axis | Size card → Fixed: width in axis units or days | Not available; bars sit on a category axis | Backlog, with the continuous time axis |
-| Edit Sizes modes | "Sizes vary": Automatically, By range, From zero; typed start and end value in the legend | Smallest / largest % and From zero only | Backlog |
 | Colour palettes | A palette drop-down (categorical and ordinal), Assign Palette, Reset; a custom hex colour on the web | One fixed set of eight colours and 24 swatches; two diverging hue pairs | Backlog: needs a stored-colour contrast rule |
 | Colour: Include totals | Totals and subtotals feed the colour encoding | Not available; a table has its own conditional colours | Backlog |
 | Line markers: Selected points | Effects → Markers → Selected | Not offered yet: the chart gets the selected marks only for Label marks → Selected; All and None are built | Backlog |
