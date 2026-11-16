@@ -56,7 +56,7 @@
 .entity__toggle { transition: transform var(--dur) var(--ease); }
 .entity--collapsed .entity__toggle { transform: rotate(-90deg); }
 /* Smoothly collapse the columns + preview; the head stays visible. */
-.entity__body { transition: max-height var(--dur-slow) var(--ease), opacity var(--dur) var(--ease); max-height: 1200px; }
+.entity__body { transition: max-height var(--dur-slow) var(--ease), opacity var(--dur) var(--ease); max-height: calc(var(--list-h, 240px) + 960px); }  /* room for a resized list (below) plus the notes and pinned keys */
 .entity--collapsed .entity__body { max-height: 0; opacity: 0; }
 .entity__head {
   display: flex;
@@ -93,6 +93,22 @@
 /* The 10px scrollbar (core.css) is always reserved and sits in the right gutter, so the rows give up that much padding: their type text ends on
    the same 16px line as the pinned rows' and the head's ✕, whether or not the list overflows. */
 .entity__cols { scrollbar-gutter: stable; }
+/* A list resized by dragging the card's top or bottom edge (canvas.js, Canvas/card-height.js): a max-height, so a list whose columns later shrink
+   never shows empty space. */
+.entity--sized .entity__cols { max-height: var(--list-h); }
+.entity--resizing { user-select: none; }
+.entity--resizing .entity__body { transition: none; }  /* the collapse transition on max-height would lag behind a fast drag and clip the list */
+/* The edge strips: 8px inside the card's top and bottom edge, an ns-resize cursor, and a 2px accent line along the edge on hover, drag or focus. */
+.entity__resize { position: absolute; left: 0; right: 0; height: var(--s2); z-index: 1; cursor: ns-resize; touch-action: none; }
+.entity__resize--top { top: 0; }
+.entity__resize--bottom { bottom: 0; }
+.entity__resize::after { content: ""; position: absolute; left: 0; right: 0; height: 2px; background: var(--accent); opacity: 0; transition: opacity var(--dur) var(--ease); }
+.entity__resize--top::after { top: 0; }
+.entity__resize--bottom::after { bottom: 0; }
+.entity__resize:hover::after, .entity__resize.is-active::after, .entity__resize:focus-visible::after { opacity: 1; }
+.entity__resize:focus-visible { outline: none; }
+/* Nothing to resize while the list is collapsed, loading or failed. */
+.entity--collapsed .entity__resize, .entity:has(> .entity__body[hidden]) .entity__resize { display: none; }
 .entity__cols .col-row { padding-right: calc(var(--s4) - 10px); }
 .col-row { display: flex; align-items: center; gap: var(--s2); padding: var(--s1) var(--s4); font-size: var(--fs-body); transition: background var(--dur) var(--ease); }  /* 16px both sides, like the head; table rows are drag handles (relations.css) */
 .col-row:hover { background: var(--surface-2); }
