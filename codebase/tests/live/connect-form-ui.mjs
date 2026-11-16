@@ -100,17 +100,17 @@ try {
     await b.waitFor(`document.querySelectorAll('.table-chip').length === 1`, { label: 'tables after reload' });
     must(await ev(`document.getElementById('db-select').value`) === 'shop', 'db not restored');
   });
-  await check('preview: friendly kinds with the raw type in the tooltip, wide enough for 11 columns', async () => {
+  await check('preview: the ClickHouse type under each name (and in the tooltip), wide enough for 11 columns', async () => {
     await ev(`document.querySelector('.table-chip__peek').click()`);
     await b.waitFor(`document.querySelectorAll('dialog[open] th').length === 11`, { label: 'preview' });
     const r = JSON.parse(await ev(`JSON.stringify({ kinds: [...document.querySelectorAll('dialog[open] .rows-table__type')].map((e) => e.textContent), tip: document.querySelector('dialog[open] .rows-table__type').title, w: document.querySelector('dialog[open]').getBoundingClientRect().width })`));
-    must(r.kinds.slice(0, 6).join('|') === 'whole number|number|text|text|date & time|true/false', r.kinds.join('|'));
+    must(r.kinds.slice(0, 6).join('|') === TYPES.slice(0, 6).join('|'), r.kinds.join('|'));
     must(r.tip === 'UInt64', r.tip);
     must(r.w >= 1000, `dialog ${r.w}px`);
     await b.screenshot(join(SHOTS, 'preview-wide.png'));
     await ev(`document.querySelector('dialog[open] .btn--primary').click()`);
   });
-  await check('column profile: friendly kind, frequent-value labels >= 4.5:1 in light and dark', async () => {
+  await check('column profile: the ClickHouse type, frequent-value labels >= 4.5:1 in light and dark', async () => {
     await ev(`document.dispatchEvent(new CustomEvent('table:add', { detail: { db: 'shop', table: 'orders' } }))`);
     await b.waitFor(`document.querySelectorAll('.col-row').length === 11`, { label: 'card' });
     for (const scheme of ['light', 'dark']) {
@@ -127,7 +127,7 @@ try {
           return Math.min(cr(rgb(l), bg), cr(rgb(l), fill)); });
         return JSON.stringify({ min: Math.min(...out), out, sub: document.querySelector('dialog[open] .col-profile__sub').textContent });
       })()`));
-      must(r.sub.endsWith('· text'), r.sub);
+      must(r.sub.endsWith('· LowCardinality(String)'), r.sub);
       await b.screenshot(join(SHOTS, `profile-${scheme}.png`));
       must(r.min >= 4.5, `${scheme}: ${JSON.stringify(r.out.map((x) => +x.toFixed(2)))}`);
       await ev(`document.querySelector('dialog[open] .btn--primary').click()`);

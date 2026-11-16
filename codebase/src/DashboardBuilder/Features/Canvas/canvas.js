@@ -5,7 +5,7 @@ import { show, hide, toggle, confirmDialog, toast } from "../Core/ui.js";
 import { entities, relationshipsFor, emit, bus, isModelActive, showModel } from "../Core/store.js";
 import { expandSidebar } from "../Shell/sidebar.js";
 import { openColumnProfile } from "../Schema/column-profile-dialog.js";
-import { friendlyKind } from "../Schema/type-kind.js";
+import { cardType } from "./column-type.js";
 import { entityWidth } from "./card-width.js";
 import { snapTop } from "./align-snap.js";
 import { dragListHeight, cleanListHeight } from "./card-height.js";
@@ -530,7 +530,7 @@ export function initCanvas() {
       const type = document.createElement("span");
       type.className = "col-row__type";
       type.dataset.category = col.category;
-      type.textContent = friendlyKind(col.type); // a plain kind (whole number, text, date…); the raw ClickHouse type is the tooltip
+      type.textContent = cardType(col.type); // the ClickHouse type (UInt64, Nullable(String)…) minus LowCardinality; the full type is the tooltip
       type.title = `${col.type} (${col.category})`;
 
       // Column profile + field details (Schema/column-profile-dialog.js). 
