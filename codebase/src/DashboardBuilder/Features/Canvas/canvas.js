@@ -17,8 +17,8 @@ import { wireContextMenu } from "../Core/menu.js";
 import { openSqlDialog } from "./sql-dialog.js";
 
 // Data Source canvas + entity cards. A table dropped from the sidebar (or added via the
-// `table:add` fallback) becomes an entity card: a db.table head over a fixed-height, scrollable
-// list of column rows (name + type badge). Cards are a uniform height, moved
+// `table:add` fallback) becomes an entity card: a db.table head over a scrollable list of column
+// rows (name + type badge), 240px tall unless an edge drag resized it. Cards are moved
 // by dragging the head and removed via the head's trash icon. No row preview here — data lives in
 // dashboard widgets. Entities are the shared model (store.js).
 const TABLE_MIME = "application/x-ch-table";
@@ -382,7 +382,7 @@ export function initCanvas() {
       if (y !== entity.y) { entity.y = y; place(entity); }
       emit("entity:moved", { entityId: entity.id }); // links re-route; the workbook marks itself changed
     };
-    const current = () => ({ h: list().getBoundingClientRect().height / zoom, y: entity.y });
+    const current = () => ({ h: list().offsetHeight, y: entity.y }); // offsetHeight is unscaled, so a zoomed view still lands on the 8px grid
     grip.addEventListener("pointerdown", (event) => {
       if (event.button !== 0) return;
       event.preventDefault();
