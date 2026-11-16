@@ -254,7 +254,7 @@ export const defaultMarks = () => ({ size: null, label: null, detail: [], toolti
 //                tooltipMode: "hover" — those buttons in every hover tooltip (absent = Responsive: a click pins the tooltip). Kept off the defaults so older files round-trip unchanged (Dashboard/tooltip-behaviour-model.js)
 //  ganttLength:  "length" | "end" — a Gantt's second measure (absent = length; kept off the defaults so older files round-trip unchanged)
 //  target:       null | number — a KPI scorecard's goal; downIsGood: a fall shows as good
-//  conditional:  { [measureKey]: { mode, scale, mid, rules } } — Table / Text cell formatting
+//  conditional:  { [measureKey]: { mode, scale, mid, rules, totals? } } — Table / Text cell formatting (totals: true = Include totals)
 export const defaultFormat = () => ({
   numberFormat: "auto",
   decimals: null,

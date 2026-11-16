@@ -50,11 +50,11 @@ export const CASES = {
 };
 
 /** The HTML crosstabTable draws for a case, with `conditional` (a { measureKey: entry } map) and optional totals / sheet overrides. */
-export function draw(name, { conditional, totals, over = {} } = {}) {
+export function draw(name, { conditional, totals, over = {}, result } = {}) {
   const c = CASES[name];
   const s = { ...c.sheet, ...over, format: { ...(over.format ?? {}), ...(conditional ? { conditional } : {}) } };
   if (totals) s.analytics = { totals };
-  const t = crosstabTable(s, c.result, fmt, cat, Boolean(c.partial));
+  const t = crosstabTable(s, result ?? c.result, fmt, cat, Boolean(c.partial));
   return t;
 }
 export const html = (name, opts) => draw(name, opts).html();

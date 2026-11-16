@@ -101,3 +101,34 @@ export function matchRule(v, rules) {
 
 /** Whether a measure's setting draws anything. */
 export const isActive = (cfg) => Boolean(cfg && (cfg.mode === "scale" || cfg.mode === "bars" || (cfg.rules?.length ?? 0) > 0));
+
+// --- Include totals ----------------------------------------------------------------------------------------------
+// A measure's setting may colour its total cells (grand-total column, subtotal rows, grand-total row, and where they cross) as it colours the
+// others, and count them when the scale's range is found. Stored as `totals: true` in the measure's entry, only while on.
+export const TOTALS_NOTE = "Totals are larger than single cells, so cells may look pale";
+export const TOTALS_OFF_REASON = "Turn on Grand totals or Subtotals";
+export const TOTALS_NONE_REASON = "Pick a colour scale, data bars or a rule first";
+export const TOTALS_IDLE_REASON = "Grand totals and Subtotals are off, so no total is coloured yet";
+
+/** Whether the setting colours total cells: the flag is a real true and the measure draws something. */
+export const totalsIncluded = (cfg) => Boolean(cfg && cfg.totals === true && isActive(cfg));
+
+/** The Include totals control for one measure: { enabled, reason (why it is off), note (a hint while on) }; `totals` = { grand, sub }. */
+export function totalsGate(cfg, totals) {
+  const shown = Boolean(totals?.grand || totals?.sub);
+  if (!shown && cfg?.totals !== true) return { enabled: false, reason: TOTALS_OFF_REASON, note: null };
+  if (!isActive(cfg)) return { enabled: false, reason: TOTALS_NONE_REASON, note: null };
+  return { enabled: true, reason: null, note: shown ? null : TOTALS_IDLE_REASON };
+}
+
+/** The extent a scale or bar is measured on: the cells' values, and the totals' when they are included. */
+export const extentWithTotals = (cellValues, totalValues) => extentOf(totalValues?.length ? [...cellValues, ...totalValues] : cellValues);
+
+/** All measures' conditional settings after `patch` is applied to `key`'s: an entry that draws nothing (and has no midpoint) is removed; `totals` is stored only while true and active. */
+export function nextConditional(all, key, cfg, patch) {
+  const next = { ...cfg, ...patch };
+  if (next.totals !== true || !isActive(next)) delete next.totals;
+  const out = { ...all };
+  if (isActive(next) || next.mid != null) out[key] = next; else delete out[key];
+  return out;
+}

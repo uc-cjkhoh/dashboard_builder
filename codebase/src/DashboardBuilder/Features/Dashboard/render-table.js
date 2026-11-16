@@ -2,7 +2,7 @@ import { roleOf } from "./show-me-rules.js";
 import { tableMeasures } from "./sheet-plan.js";
 import { isCalc } from "./table-calc.js";
 import { combine } from "./analytics-model.js";
-import { CF_OP_CHOICES, CF_TONE_CHOICES, TONE_ICON, measureKey, extentOf, scaleColors, barGeometry, matchRule, isActive, midpointOf } from "./conditional-model.js";
+import { CF_OP_CHOICES, CF_TONE_CHOICES, TONE_ICON, measureKey, extentWithTotals, scaleColors, barGeometry, matchRule, isActive, midpointOf, totalsIncluded } from "./conditional-model.js";
 import { tupleKey, uniqueTuples, runs, levelSpans, orderColumnTuples } from "./grid-model.js";
 import { collapseKey, canToggle, rollUp, expandNodes, collapsedOf, leafValue, headerKeys, shownValues } from "./collapse-model.js";
 import { icon } from "../Core/icons.js";
@@ -130,8 +130,37 @@ export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, ca
   const complete = !partial && !result.truncated;
   const leafAt = (l, t, mi) => leafValue(aggOfMi(mi), cellValue, l, t, mi, complete);
   const rowKeys = headerKeys(rowTuples, rowDimensions), colKeys = headerKeys(colTuples, columnDimensions);
-  // Per measure index, or null — scales and bars are measured on the values shown (a collapsed cell is a sum).
-  const cf = conditionalFor(sheet, measures, shownValues(leftLeaves, topLeaves, measureOnLeft, measures.length, leafAt));
+  // The total cells and their values — the one place that says which totals the table draws; the body below draws from the same functions.
+  const totalCol = Boolean(tot.grand) && cd > 0;
+  const totalMis = measureOnLeft ? [null] : measures.map((_, mi) => mi); // total columns: one per measure (on top) or one
+  const colTotalAt = (leftLeaf, mi) => (leftLeaf.level !== null && !complete ? null : total(mi, leftLeaf.members, colTuples)); // grand-total column
+  const rowTotalAt = (topLeaf, rts, mi) => (topLeaf.level !== null && !complete ? null : total(mi, rts, topLeaf.members));    // subtotal / grand-total row
+  const cornerAt = (rts, mi) => total(mi, rts, colTuples);                                                                      // where a row meets the column
+  const subGroupAfter = (ri) => { // the Rows group a subtotal follows the leaf `ri` of (measures on top, >= 2 Rows dimensions), or null
+    const leaf = leftLeaves[ri], next = leftLeaves[ri + 1];
+    if (!(tot.sub && rd >= 2 && !measureOnLeft && leaf.level !== 0 && (!next || tupleKey([next.tuple[0]]) !== tupleKey([leaf.tuple[0]])))) return null;
+    return rowTuples.filter((t) => tupleKey([t[0]]) === tupleKey([leaf.tuple[0]]));
+  };
+  const grandOnly = tot.grand && rd > 0 ? (measureOnLeft ? measures.map((_, mi) => mi) : [null]) : []; // one grand-total row, or one per measure
+  const anyTotals = totalCol || grandOnly.length > 0 || leftLeaves.some((_, ri) => subGroupAfter(ri));
+  // Per measure index, the values of its total cells — only for the measures that include totals (they widen the scale's extent).
+  const totalValues = (want) => {
+    const out = measures.map(() => []);
+    const push = (mi, v) => { if (want.has(mi)) out[mi].push(v); };
+    const rowSet = (rts, only) => {
+      for (const t of topLeaves) { const mi = only ?? t.mi ?? 0; push(mi, rowTotalAt(t, rts, mi)); }
+      if (totalCol) for (const tmi of totalMis) { const mi = tmi ?? only ?? 0; push(mi, cornerAt(rts, mi)); }
+    };
+    leftLeaves.forEach((l, ri) => {
+      if (totalCol) for (const tmi of totalMis) { const mi = tmi ?? l.mi; push(mi, colTotalAt(l, mi)); }
+      const g = subGroupAfter(ri);
+      if (g) rowSet(g, null);
+    });
+    for (const only of grandOnly) rowSet(rowTuples, only);
+    return out;
+  };
+  // Per measure index, or null — scales and bars are measured on the values shown (a collapsed cell is a sum), plus the totals' when included.
+  const cf = conditionalFor(sheet, measures, shownValues(leftLeaves, topLeaves, measureOnLeft, measures.length, leafAt), anyTotals ? totalValues : null);
   const toggleOf = (axis, names, tuple, level, label) => {
     if (!collapse || !canToggle(level, names.length)) return null;
     const key = collapseKey(names, tuple, level);
@@ -168,8 +197,6 @@ export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, ca
     th.append(box);
     return th;
   };
-  const totalCol = Boolean(tot.grand) && cd > 0;
-  const totalMis = measureOnLeft ? [null] : measures.map((_, mi) => mi); // total columns: one per measure (on top) or one
   const showVal = (mi, v) => (calcPercent.has(mi) ? (v == null ? "—" : `${Number(v).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`) : fmtVal(v));
 
   // --- header: one row per top level; a merged corner spans the left-stub width and all header rows.
@@ -237,21 +264,15 @@ export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, ca
     }
     if (totalCol) for (const tmi of totalMis) {
       const mi = tmi ?? leftLeaf.mi;
-      tr.append(colStyle(el("td", "num xt-total", showVal(mi, leftLeaf.level !== null && !complete ? null : total(mi, leftLeaf.members, colTuples))), valueKey(mi)));
+      tr.append(colStyle(totalCell(mi, colTotalAt(leftLeaf, mi)), valueKey(mi)));
     }
     tbody.append(tr);
     // Subtotal after the last row of each first-level group (measures on top, ≥ 2 Rows dimensions).
-    const next = leftLeaves[ri + 1];
-    if (tot.sub && rd >= 2 && !measureOnLeft && leftLeaf.level !== 0 && (!next || tupleKey([next.tuple[0]]) !== tupleKey([leftLeaf.tuple[0]]))) {
-      const group = rowTuples.filter((t) => tupleKey([t[0]]) === tupleKey([leftLeaf.tuple[0]]));
-      tbody.append(totalRow(`Subtotal · ${dimLabel(leftLeaf.tuple[0], 0)}`, group, null, "xt-subtotal"));
-    }
+    const group = subGroupAfter(ri);
+    if (group) tbody.append(totalRow(`Subtotal · ${dimLabel(leftLeaf.tuple[0], 0)}`, group, null, "xt-subtotal"));
   });
   // Grand-total row(s): one, or one per measure when measures run down the left.
-  if (tot.grand && rd > 0) {
-    if (measureOnLeft) measures.forEach((name, mi) => tbody.append(totalRow("Grand total", rowTuples, mi, "xt-grand", name)));
-    else tbody.append(totalRow("Grand total", rowTuples, null, "xt-grand"));
-  }
+  for (const only of grandOnly) tbody.append(totalRow("Grand total", rowTuples, only, "xt-grand", only == null ? undefined : measures[only]));
   table.append(tbody);
   function totalRow(label, rts, onlyMi, cls, measureName) {
     const tr = el("tr", `xt-total ${cls}`);
@@ -261,10 +282,18 @@ export function crosstabTable(sheet, result, fmtVal, fmtCat, partial = false, ca
     if (measureOnLeft) tr.append(el("th", "xt-rowhdr xt-meas xt-total", measureName ?? ""));
     for (const topLeaf of topLeaves) {
       const mi = onlyMi ?? topLeaf.mi ?? 0;
-      tr.append(colStyle(el("td", "num xt-total", showVal(mi, topLeaf.level !== null && !complete ? null : total(mi, rts, topLeaf.members))), valueKey(mi)));
+      tr.append(colStyle(totalCell(mi, rowTotalAt(topLeaf, rts, mi)), valueKey(mi)));
     }
-    if (totalCol) for (const tmi of totalMis) { const mi = tmi ?? onlyMi ?? 0; tr.append(colStyle(el("td", "num xt-total", showVal(mi, total(mi, rts, colTuples))), valueKey(mi))); }
+    if (totalCol) for (const tmi of totalMis) { const mi = tmi ?? onlyMi ?? 0; tr.append(colStyle(totalCell(mi, cornerAt(rts, mi)), valueKey(mi))); }
     return tr;
+  }
+  // A total cell: plain, or — when its measure includes totals — coloured like any cell of that measure (it keeps xt-total, so the bold look and separators stay).
+  function totalCell(mi, v) {
+    const text = showVal(mi, v);
+    if (!cf[mi]?.totals) return el("td", "num xt-total", text);
+    const td = formattedCell(v, text, cf[mi]);
+    td.classList.add("xt-total");
+    return td;
   }
 
   const legend = conditionalLegend(cf, measures, fmtVal, partial ? rows.length : 0);
@@ -287,15 +316,19 @@ function setWidth(cell, w) {
 
 // --- conditional formatting ----------------------------------------
 // Per result measure: its setting, value extent over the loaded rows, and token palette — or null.
-function conditionalFor(sheet, measures, shown) {
+// `totalValues` (a function of the set of measure indexes that include totals) is passed only when the table draws totals.
+function conditionalFor(sheet, measures, shown, totalValues = null) {
   const all = sheet.format?.conditional ?? {};
   const mplan = tableMeasures(sheet);
   let palette = null;
+  const cfgs = measures.map((_, mi) => all[measureKey(mplan[mi])]);
+  const want = new Set(totalValues ? measures.map((_, mi) => mi).filter((mi) => totalsIncluded(cfgs[mi])) : []);
+  const totals = want.size ? totalValues(want) : null;
   return measures.map((name, mi) => {
-    const cfg = all[measureKey(mplan[mi])];
+    const cfg = cfgs[mi];
     if (!isActive(cfg)) return null;
     palette ??= cfPalette();
-    return { cfg, name, ext: extentOf(shown[mi]), palette };
+    return { cfg, name, ext: extentWithTotals(shown[mi], want.has(mi) ? totals[mi] : null), palette, totals: want.has(mi) };
   });
 }
 // Scale colours from the chart tokens: sequential surface → the cool diverging token; diverging warm ← surface → cool (the same pair as the chart scale).
@@ -367,6 +400,9 @@ function conditionalLegend(cf, measures, fmtVal, loadedRows) {
   if (!items.length) return null;
   const box = el("div", "xt-legend");
   box.append(...items);
-  if (loadedRows) box.append(el("span", "xt-legend__note", `Scales and bars use the ${loadedRows.toLocaleString("en-US")} rows loaded so far.`));
+  // Include totals: the measures whose total cells wear the colours (all of them → just "Totals included").
+  const withTotals = cf.flatMap((c, mi) => (c?.totals ? [measures[mi]] : []));
+  if (withTotals.length) box.append(el("span", "xt-legend__note", withTotals.length === cf.filter(Boolean).length ? "Totals included" : `Totals included: ${withTotals.join(", ")}`));
+  if (loadedRows) box.append(el("span", "xt-legend__note", `${withTotals.length ? "Scales, bars and totals" : "Scales and bars"} use the ${loadedRows.toLocaleString("en-US")} rows loaded so far.`));
   return box;
 }

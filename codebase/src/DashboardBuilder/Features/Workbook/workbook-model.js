@@ -485,8 +485,8 @@ export function sanitizeSheet(saved, where, issues) {
   return sheet;
 }
 
-// Conditional formatting: per measure key, a known mode / scale, a numeric midpoint and ≤ 5 rules
-// (known op + tone, numeric value). Anything else is dropped and reported, never coerced.
+// Conditional formatting: per measure key, a known mode / scale, a numeric midpoint, ≤ 5 rules (known op + tone, numeric value)
+// and an optional `totals: true` (Include totals). Anything else is dropped and reported, never coerced.
 function cleanConditional(c, w, issues) {
   if (c == null) return {};
   if (typeof c !== "object" || Array.isArray(c)) { issues.push(`${w}: conditional formatting cleared.`); return {}; }
@@ -502,6 +502,8 @@ function cleanConditional(c, w, issues) {
     if (rules.length < Math.min(cfg.rules.length, CF_MAX_RULES) || cfg.rules.length > CF_MAX_RULES)
       issues.push(`${w}: some conditional-formatting rules for "${key.slice(0, 60)}" were dropped.`);
     out[key] = { mode: cfg.mode, scale: cfg.scale, mid: cfg.mid ?? null, rules: rules.map((r) => ({ op: r.op, value: r.value, tone: r.tone })) };
+    if (cfg.totals === true) out[key].totals = true; // Include totals: stored only while on
+    else if (cfg.totals !== undefined && cfg.totals !== false) issues.push(`${w}: "Include totals" for "${key.slice(0, 60)}" must be on or off — dropped.`);
   }
   if (Object.keys(c).length > CF_MAX_MEASURES) issues.push(`${w}: only the first ${CF_MAX_MEASURES} conditional formats were kept.`);
   return out;

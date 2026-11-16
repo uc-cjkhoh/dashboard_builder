@@ -13,7 +13,7 @@ export const TOP_N = new Set([5, 10, 20, 50, 100]);
 export const PERIOD_PRESETS = new Set(["last7", "last28", "last30", "last90", "thisMonth", "lastMonth",
   "thisQuarter", "lastQuarter", "thisYear", "lastYear", "custom"]);
 export const PERIOD_COMPARES = new Set(["none", "previous", "lastYear", "custom"]);
-// Conditional formatting (format.conditional: { [measureKey]: { mode, scale, mid, rules[] } }).
+// Conditional formatting (format.conditional: { [measureKey]: { mode, scale, mid, rules[], totals? } }).
 export const CF_MODES = new Set(["none", "scale", "bars"]);
 export const CF_SCALES = new Set(["sequential", "diverging"]);
 export const CF_OPS = new Set([">", ">=", "<", "<=", "=", "!="]);
