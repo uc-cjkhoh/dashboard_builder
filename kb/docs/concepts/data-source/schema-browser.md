@@ -46,7 +46,12 @@ previews rows, and profiles columns.
 - **Drag.** Each chip is `draggable="true"` and writes the `application/x-ch-table` payload `{db, table}` on `dragstart`.
   The drop side is in [canvas.md](canvas.md#dragging-a-table-onto-the-canvas).
 - **`＋` button.** The non-drag fallback on each chip. It and the preview eye sit at the row's right end, quiet (`--ink-3`) at rest and full ink on hover / focus, so they are always visible and keyboard reachable. It dispatches `table:add` `{db, table}`, which `canvas.js` consumes exactly like a drop.
-- **Search.** A search box (`#table-search`, `maxlength` 100) above the list filters the chips by name.
+  **On the canvas:** a chip whose table already has a card (`.table-chip--placed`) shows a **check** in place of the `＋`, with the label
+  "<table> is on the canvas — show it" and the tooltip "On the canvas — show it"; pressing it shows that card. Kept in step on `entity:added` / `entity:removed`.
+- **Keyboard.** The list is **one Tab stop** (roving tabindex on the chips' buttons, the last focused one keeps it): Up / Down / Home / End
+  move between the visible chips keeping eye or `＋` (`listStep()` in `table-filter.js`, pure), Left / Right switch between a chip's two buttons.
+- **Search.** A search box (`#table-search`, `maxlength` 100) above the list filters the chips by name. **Enter** adds the table when exactly
+  one chip is left; **Down** moves into the list; **Esc** clears the box.
   - It is a client-side, case-insensitive substring match (`matchTables` in `table-filter.js`).
   - `Esc` clears it.
   - When nothing matches, "No tables match." shows.
@@ -54,7 +59,7 @@ previews rows, and profiles columns.
 - **Look and tooltips.**
   - Chip icons are inline SVG (`Core/icons.js`).
   - A **grip** (`.table-chip__grip`) appears on hover / focus as the drag affordance.
-  - The chip's tooltip says "Drag <table> onto the canvas"; the `＋` button's says "Add to the canvas (or drag the table)".
+  - The chip's tooltip says "Drag <table> onto the canvas"; the `＋` button's says "Add to the canvas (or drag the table)" (both change once the table is on the canvas).
   - Chips are tier-2 glass controls ([tokens.md](../../reference/design/tokens.md#controls-on-glass--three-tiers-and-a-state-ladder)).
 
 ## Row preview
@@ -80,7 +85,7 @@ previews rows, and profiles columns.
 ## Column profile / field details
 
 - **Opening it.** Each field row on a canvas entity card has a **Profile button** (`.col-row__profile`, histogram `profile` icon,
-  `aria-label` "Profile <column>"; shown on hover / focus).
+  `aria-label` "Profile <column>"; half-shown on every row while the pointer or focus is in the card, full on the row itself).
   It opens the **profile dialog** (`Schema/column-profile-dialog.js`, rules in `column-profile-model.js`).
   The request is `POST /api/databases/{db}/tables/{table}/profile` ([api.md](../../reference/api.md)), read-only.
 - **Field details:** Name, Type (the ClickHouse type as it is; the subtitle under the title ends with it too), Kind (the display category) and Role
@@ -120,7 +125,9 @@ An unknown or hostile name → **404** before any SQL is built
 
 ## Union
 
-The **Union** and **Unpivot** buttons at the foot of the sidebar each carry a one-line tooltip (stack tables that share columns into one source; turn columns into rows), no visible secondary label. The **Union** button opens a dialog listing the database's tables as checkboxes.
+The **Union** and **Unpivot** buttons at the foot of the sidebar each carry a one-line tooltip (stack tables that share columns into one source; turn columns into rows), no visible secondary label. The **Union** button opens a dialog listing the database's tables as checkboxes,
+with the same close X as the other dialogs on its title row. Past 8 tables a **Search tables** box sits above the list and takes focus: it only
+hides rows (ticked tables stay ticked), says "No tables match." when nothing does, and Esc in it clears it rather than closing the dialog.
 
 - **Picking:** 2–5 tables. A sixth can't be ticked; the hint reads "Pick 2 to 5 tables."
 - **Show rows** is enabled for 2–5 ticked tables. It opens the rows dialog on `POST /api/union` ([api.md § Union](../../reference/api.md#union)):

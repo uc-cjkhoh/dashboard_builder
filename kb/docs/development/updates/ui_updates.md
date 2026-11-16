@@ -4,6 +4,7 @@ Visual and interaction changes (styles, markup, layout, labels, icons, focus). G
 
 ## 2026-11-16
 
+- Data Source polish: table list is one Tab stop (arrow keys inside), Enter / Down in the table search, on-canvas check on a table chip, profile icon half-shown on card hover, Union dialog search (past 8 tables) and close X, Esc closes Edit SQL from the editor (asks first when edited) (`3f7a59a`)
 - Relationships card collapses to its header again (::details-content display: contents only while open); note titles show the tables only; table chips hold their 32px row when the list overflows (`434c27c`)
 - Data Source UX fixes: start cardinality from key names + "Use N:1" after Check this join; Needs a partner badge no longer clips titles; a + card is revealed; refusals are info toasts; Undo for a removed card or relationship; connect form focuses the first empty field; "hold text" wording (`977c105`)
 - Data Source shows each column's ClickHouse type instead of a plain kind (card drops LowCardinality, full type in the tooltip; preview and profile verbatim) (`53923ad`)
