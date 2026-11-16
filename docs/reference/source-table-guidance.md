@@ -84,14 +84,14 @@ At run time it is a `JOIN … ON` between the two key columns.
   date-to-date and boolean-to-boolean links ([relationships.md](../concepts/data-source/relationships.md#what-may-be-linked)),
   but it does not look deeper. `UInt32` against `String` of digits is blocked, while `UInt32` against
   `Int64` links and relies on ClickHouse to compare them. If ClickHouse refuses to compare two types,
-  "Check this join" reports it as a 400 ([relationships.md](../concepts/data-source/relationships.md#check-this-join-join-safety-preview)).
+  the relationship suggestion reports it as a 400 ([relationships.md](../concepts/data-source/relationship-suggestion.md)).
 - **Keep the same width and sign too** (`UInt64` on both sides, not `UInt64` and `Int32`) so the join does not
   rely on implicit conversion.
 - **A cast does not apply to join keys.** The key columns are used as they are
   ([clickhouse-integration.md](clickhouse-integration.md#worksheet-query-queryasync)).
 - **Join from the large table to the small one.** ClickHouse builds the right-hand table in memory. Keep the
   dimension table (customers, products) small and the fact table large, and keep keys unique on the
-  "one" side. Use "Check this join" to see repeats. Keys that repeat materially on both sides mean
+  "one" side. The relationship suggestion shows repeats. Keys that repeat materially on both sides mean
   many-to-many fan-out, and sums and counts can double-count.
 - **Index the key as a sorting-key column** on the large side when you can (after the tenant and
   date columns), so a filter plus join reads less.
@@ -173,9 +173,9 @@ What this means for you:
 - **Column profile** reads at most the first 1,000,000 rows of the column, so the numbers describe that
   slice ("sampled" at 1,000,000 or more), not the whole table
   ([clickhouse-integration.md](clickhouse-integration.md#the-queries-all-read-only)).
-- **Check this join** reads at most 1,000,000 rows per side, with no `ORDER BY`. The first million
+- **The relationship suggestion** reads at most 1,000,000 rows per side, with no `ORDER BY`. The first million
   rows are not a statistical sample: on a table sorted by date they are the oldest rows
-  ([relationships.md](../concepts/data-source/relationships.md#check-this-join-join-safety-preview)).
+  ([relationships.md](../concepts/data-source/relationship-suggestion.md)).
 
 ## Checklist
 
@@ -184,7 +184,7 @@ What this means for you:
 - [ ] Dates are `Date` / `DateTime`, measures are numeric, so no casts are needed.
 - [ ] Low-distinct text dimensions are `LowCardinality(String)`.
 - [ ] Join keys have the same type on both sides; the "one" side's keys are unique.
-- [ ] "Check this join" shows no unexpected many-to-many warning.
+- [ ] The relationship suggestion shows no unexpected many-to-many warning.
 - [ ] NULL versus a default value is a deliberate choice per column.
 - [ ] A typical dashboard view answers well inside 12 seconds on the full table.
 - [ ] Dimensions have a coarse variant under 5,000 distinct values.

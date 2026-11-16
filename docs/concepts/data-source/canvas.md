@@ -91,7 +91,7 @@ The card head's pencil icon button (`.entity__edit`, aria-label *Edit SQL for db
 To go back to the table, press **Reset to default** in the dialog, then **Save**. A card has no right-click menu.
 A union or unpivot card has no SQL to edit, so it has no pencil.
 Full behaviour, the SQL guard and what the card does afterwards: [query-sources.md § Custom SQL on a card](query-sources.md#custom-sql-on-a-card).
-A card with custom SQL shows a `Custom SQL` note under its head; its profile buttons, View data, the histogram and *Check this join* read the card's query (as a derived table, the same one the worksheet uses), and it can be related and joined. A union or unpivot card has no profile buttons.
+A card with custom SQL shows a `Custom SQL` note under its head; its profile buttons, View data, the histogram and the relationship suggestion read the card's query (as a derived table, the same one the worksheet uses), and it can be related and joined. A union or unpivot card has no profile buttons.
 
 ## Card anatomy
 
