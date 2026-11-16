@@ -214,7 +214,7 @@ SQL and rules: [query-sources.md](../concepts/data-source/query-sources.md#sql-s
 ## Relationship preview
 
 Controller: `Features/Relations/RelationsController.cs`. `POST /api/relationships/preview` — the relationship
-dialog's "Check this join": bounded, read-only match and duplicate counts for one key pair. Joins nothing, writes nothing.
+dialog's suggestion (run as the dialog opens): bounded, read-only match and duplicate counts for one key pair. Joins nothing, writes nothing.
 
 | Field | Rule |
 |---|---|

@@ -21,8 +21,9 @@ table column on one toasts "A union or unpivot can't be related to a table yet."
 - **Join type** is inner, left, right or full, worded with the table names.
 - **A relationship can match on several column pairs** ([compound key](#compound-keys-and-key-suggestion)): up to four, joined with AND.
 - **Total each table by the key before joining** (optional, per relationship) stops a measure being repeated when the other table repeats the key; a filter direction goes with it ([below](#aggregate-before-joining-many-to-many)).
-- **Check this join** previews match rates and key repeats; its warnings never block saving. When the data reads as a different
-  cardinality from the one chosen, the verdict gets a **Use N:1** button (`.join-check__use`) that selects it (Confirm still saves).
+- **A suggestion shows by default** in the dialog: the cardinality the data reads as, with its evidence (which side repeats, match shares,
+  a counts table) and any warnings ([below](relationship-suggestion.md)). It never blocks saving or changes the choice
+  by itself; when it differs from the chosen cardinality a **Use N:1** button (`.join-check__use`) selects it (Confirm still saves).
 - **Cardinality is intent, not a data guarantee** — joins can still fan out.
 
 ## Drawing a link — drag a column
@@ -147,7 +148,7 @@ for the same reasons.
 - **Dialog layout.** The relationship dialog is landscape (`dialog.dialog--sm.dialog--rel`, up to 990 px wide — about 1.618 × its 610 px height, the golden ratio — with two panels of exactly equal width, the divider an inset shadow so it adds no width; one column under 640 px).
   It shares the column profile's frame (`.col-profile`) without its cells: a head with the title **Relationship**, the two tables as a subtitle (`orders → customers`) and an X; a body on the colour wash that scrolls on its own while head and foot stay put; a 24 px side gutter shared by head, body and foot (the X sits on it); a foot with **Delete** (left, edit only), **Cancel** and the primary **Confirm**. Nothing inside the body closes the dialog: the cardinality buttons only select (`aria-pressed`), and **Confirm** saves cardinality, join, totals and key pairs together. Group headings (**Join**, **Totals**, **Also match on**, **Cardinality**) use one voice (600, `--ink-2`) with 24 px between groups.
   The left panel (`.rel-dialog__left`) has no cards: four `.rel-sec` sections sit straight on the wash, split by one hairline and 24 px of space — **Join** (2 × 2 borderless radios, each a join name with a one-line hint; the chosen one takes the accent tint and a filled dot), **Totals** (a switch row), **Also match on** (two selects and Add pair on one line) and **Cardinality** (one segmented control; the chosen segment is solid ink). DOM order is reading order, so Cardinality (chosen, then saved by Confirm) comes last.
-  The right panel (`.rel-dialog__right`) holds **Check this join** and its result. It never makes the dialog taller than the left panel: `contain: size` lets the left panel set the row height, and the right panel scrolls inside when its text is longer (one column under 640 px, where it flows normally).
+  The right panel (`.rel-dialog__right`) holds the **Suggestion** and its evidence. It never makes the dialog taller than the left panel: `contain: size` lets the left panel set the row height, and the right panel scrolls inside when its text is longer (one column under 640 px, where it flows normally).
   A dialog with no key data has no right panel. Built in `openCardinalityDialog()` (`relations.js`); styles in `relations.css`.
 - Links re-route live on `entity:moved`.
 - Removing an entity prunes its links, and `rel:changed` fires.
@@ -189,7 +190,7 @@ The dialog's **Join** choice uses the SQL join names, each with a one-line hint 
 
 ## Compound keys and key suggestion
 
-The relationship dialog (new link and edit) has an **Also match on** section above **Check this join**. The link's first pair is the one dragged
+The relationship dialog (new link and edit) has an **Also match on** section; the [suggestion](relationship-suggestion.md) sits in the right panel. The link's first pair is the one dragged
 or picked; the section adds up to **three more pairs**, so the join is `a.k1 = b.k1 AND a.k2 = b.k2 …` (4 in all; more is refused,
 `LIMITS.joinExtraPairs` ↔ `ApiLimits.MaxJoinPairs`). Saved with the dialog's cardinality choice, like the join type.
 
@@ -207,7 +208,7 @@ or picked; the section adds up to **three more pairs**, so the join is `a.k1 = b
   The badge counts the keys ("N:1 · 2 keys", "N:1 · left · 3 keys").
 - **In worksheets.** The join sends the extra pairs (`joins[].pairs`, swapped when the link is crossed second-to-first); the server ANDs them into `ON`
   ([clickhouse-integration.md](../../reference/clickhouse-integration.md#worksheet-query-queryasync)).
-- **Check this join** reads the pairs as they stand in the dialog; the result names the key "a + b". A NULL in any part is a NULL key.
+- **The suggestion** reads the pairs as they stand in the dialog and runs again (300 ms after the last change) when a pair is added or removed; the result names the key "a + b". A NULL in any part is a NULL key.
 - **Saved** as optional `pairs` on the relationship ([workbook.md](../workbook/workbook.md)); a file without it is a one-pair link. On open, a malformed pair,
   one past the limit or one reusing a column already in a relationship is skipped with an import issue.
 
@@ -237,44 +238,10 @@ The Relationships card swaps its "may be counted more than once" line for the tw
 
 Not done: a view of more than two tables, calculations and top-N filters with it, and a per-field choice instead of a per-relationship one ([backlog](../../development/backlog/data-model.md)).
 
-## Check this join (join safety preview)
+## Relationship suggestion (join safety preview)
 
-The relationship dialog (new link and edit) has a **Check this join** button. It makes one bounded, read-only call
-(`POST /api/relationships/preview`, [api.md](../../reference/api.md#relationship-preview)) that reads at most the first
-1,000,000 rows of each table. Pure wording: `join-preview-model.js`.
-
-**What it reports**, in plain words:
-
-- the share of each table's rows that have a match in the other ("94% of the rows in orders have a match in customers; 6% don't");
-- how often a key repeats on each side;
-- NULL keys (they never match);
-- the shape the data shows (`1:1`, `1:N`, `N:1`, `N:M`; the first letter is the first table).
-
-**Sampled results** (a side reached the row bound):
-
-- The note comes first: "Based on the first N rows of each table, in no particular order".
-- The shares are worded "within the sample".
-- Nothing that needs the two slices to overlap is raised as a warning. "No keys match" becomes a neutral "can't tell from a sample" note,
-  and keys repeating on both sides becomes "may be many-to-many".
-- A declared "one" side whose keys repeat still warns, because a repeat is a fact about that table.
-- The preview reads each table twice (its own stats, and as the other side's key set) with no `ORDER BY`, so on a table being written to the two reads can differ.
-
-**Warnings** (icon + text, amber) never block saving; the relationship stays the user's declaration. They are:
-
-- keys repeat **materially** on **both** sides — an average of at least 1.1 rows per key on each (`MATERIAL_AVG`).
-  Many-to-many fan-out means sums and counts can double-count. A lone stray duplicate is only a note.
-  This is one combined warning that also names a conflicting declaration.
-- a side declared "one" whose keys repeat. Edit dialog only: a new link has no declaration yet, so it gets the reading instead.
-- no keys match at all.
-
-**States:**
-
-- While running, the button is disabled and a busy note shows.
-- The result area is an always-present `role="status"` region.
-- A failure shows the server message with an error icon. Examples: incompatible key kinds, ClickHouse refusing to compare the two types (a plain 400), or a timeout.
-- Closing the dialog cancels the request.
-
-Not done: no hint on the drawn line, and nothing is saved with the relationship.
+The dialog's right panel suggests a cardinality from the data, with its evidence, as soon as it opens. It never blocks saving
+or changes the choice by itself. Full detail: [relationship-suggestion.md](relationship-suggestion.md).
 
 ## The Relationships card
 

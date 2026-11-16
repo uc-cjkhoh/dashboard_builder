@@ -137,7 +137,7 @@ Only its rows change: they come from the user's own `SELECT`.
 - **Back to the table:** **Reset to default** then **Save** (`backToTable()`): the text matches the table's own `SELECT`, so the card reads the table's columns and drops `customSql` (toast "back to the table"); no confirm, since Save is the confirmation and Cancel undoes nothing.
 - **Worksheets.** `buildPlan` adds `sources: [sqlWire(…)]` for every table in `from` or a join that has custom SQL (`sqlSourcesFor()`), so the server reads the query as that table. The member list of a filter on such a column comes from a one-dimension query (`distinctPlanSql()`); the field pane's columns from `/api/source/columns`.
 - **Saved** as `customSql` on the entity (always ClickHouse SQL; plus `customSqlMysql`, the MySQL text it was written as, when it was); on open it is re-checked for type and length (`cleanCustomSql()`), the columns are fetched again from the server, and its catalog check is skipped (the pills' columns are the query's).
-- **Not available over it:** column profile, View data, the histogram, and *Check this join* (they read the catalog table); each says so.
+- **Not available over it:** column profile, View data, the histogram, and the relationship suggestion (they read the catalog table); each says so.
 
 **SQL shape.** The checked text becomes a derived table where the query names the table: `FROM (SELECT … ) AS t0 [LEFT JOIN `db`.`other` AS t1 ON …]`, or as a join side `JOIN (SELECT … ) AS t1`; aggregate-before-join wraps it like a table. No parameter is bound for it. Approximate (sampled) reads skip a custom-SQL base table.
 

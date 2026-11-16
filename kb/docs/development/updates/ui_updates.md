@@ -4,6 +4,7 @@ Visual and interaction changes (styles, markup, layout, labels, icons, focus). G
 
 ## 2026-11-16
 
+- Relationship dialog: the join check runs as the dialog opens and shows a suggested cardinality with its evidence (why each side is one or many, match shares, a counts table per side); re-runs on a key-pair change and a refresh button; the comparison follows the live cardinality pick; humanized wording (no dashes, "You chose") (`508fc73`)
 - Data Source polish: table list is one Tab stop (arrow keys inside), Enter / Down in the table search, on-canvas check on a table chip, profile icon half-shown on card hover, Union dialog search (past 8 tables) and close X, Esc closes Edit SQL from the editor (asks first when edited) (`3f7a59a`)
 - Relationships card collapses to its header again (::details-content display: contents only while open); note titles show the tables only; table chips hold their 32px row when the list overflows (`434c27c`)
 - Data Source UX fixes: start cardinality from key names + "Use N:1" after Check this join; Needs a partner badge no longer clips titles; a + card is revealed; refusals are info toasts; Undo for a removed card or relationship; connect form focuses the first empty field; "hold text" wording (`977c105`)
