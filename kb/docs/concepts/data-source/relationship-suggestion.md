@@ -30,6 +30,9 @@ result against the new choice (`redescribe()`), so warnings and the **Use** butt
   On a sampled result a side that doesn't repeat is never called unique: "id doesn't repeat in the rows read from customers, so
   customers looks like the "one" side. Rows past the sample could still repeat a key." A repeat is a fact either way.
   Pure: `joinEvidence()`, `suggestionLabel()`. An empty table gives no evidence, only its note.
+- **Layout.** The right panel is a size container: at 624 px or wider (the usual case, since the dialog is up to 1280 px) the suggestion
+  and its notes (`.join-check__main`) sit on the left, the Evidence lines on the right, and the counts table spans both columns underneath;
+  narrower, they stack in that order.
 - A one-line hint: "Read from a bounded sample of each table. Any choice can be saved."
 
 **Sampled results** (a side reached the row bound):
