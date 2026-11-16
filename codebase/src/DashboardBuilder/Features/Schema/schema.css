@@ -121,6 +121,8 @@
 }
 /* The field-row action on a canvas card: shown on hover / focus like the table chip's preview button, always reachable by keyboard. */
 .col-row__profile { opacity: 0; flex: none; transition: opacity var(--dur-fast) var(--ease); }
+/* Half-shown on every row while the pointer (or focus) is in the card, so profiling can be found; full on the row itself. */
+.entity:hover .col-row__profile, .entity:focus-within .col-row__profile { opacity: .5; }
 .col-row:hover .col-row__profile, .col-row:focus-within .col-row__profile { opacity: 1; }
 
 /* Bento tiles: the database picker and the table search are one pattern — a 40px row in a borderless tile, the icon centred on the row

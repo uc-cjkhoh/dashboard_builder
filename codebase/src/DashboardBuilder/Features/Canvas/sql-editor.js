@@ -90,6 +90,9 @@ export async function mountEditor(host, o) {
     extraKeys: {
       "Ctrl-Enter": () => o.onSubmit(), "Cmd-Enter": () => o.onSubmit(),
       "Shift-Alt-F": () => { format(); },
+      // CodeMirror's own Esc (back to one selection) swallows the key, so the dialog never heard it: with several cursors Esc
+      // still does that; otherwise it asks the dialog to close (o.onEscape), as Esc does everywhere else.
+      Esc: (c) => { if (c.listSelections().length > 1) c.execCommand("singleSelection"); else o.onEscape?.(); },
       "Ctrl-M": () => { tabMovesFocus = !tabMovesFocus; o.onNotice(tabMovesFocus ? "Tab now moves focus out of the editor. Ctrl+M switches it back." : "Tab indents again."); },
       Tab: (c) => (tabMovesFocus ? CodeMirror.Pass : c.somethingSelected() ? c.indentSelection("add") : c.execCommand("insertSoftTab")),
       "Shift-Tab": (c) => (tabMovesFocus ? CodeMirror.Pass : c.indentSelection("subtract")),

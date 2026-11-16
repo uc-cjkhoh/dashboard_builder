@@ -4,7 +4,9 @@ import { api } from "../Core/api.js";
 import { LIMITS } from "../Core/validate.js";
 import { entities } from "../Core/store.js";
 import { unionSource, takenNames } from "../Core/source-model.js";
-import { makeButton, openDialog, closeDialog, toast } from "../Core/ui.js";
+import { makeButton, openDialog, closeDialog, toast, hide, toggle } from "../Core/ui.js";
+import { icon } from "../Core/icons.js";
+import { matchTables } from "../Schema/table-filter.js";
 import { unionRequest, unionPickState, sharedUnionColumns, UNION_NONE } from "./union-model.js";
 import { openRowsDialog } from "./rows-dialog.js";
 
@@ -15,7 +17,18 @@ export function openUnionDialog(db, tables) {
   const dlg = el("dialog", "dialog union-dialog");
   dlg.setAttribute("aria-labelledby", "union-title");
   const title = el("h2", "dialog__title", "Union tables"); title.id = "union-title";
+  // The same close X as the other dialogs, on the title row.
+  const x = makeButton("", "iconbtn"); x.append(icon("close")); x.setAttribute("aria-label", "Close");
+  const top = el("div", "union-dialog__top"); top.append(title, x);
   const body = el("div", "dialog__body union-dialog__body");
+  // A long database (more than 8 tables) gets the sidebar's search box: it only hides rows, so ticked tables stay ticked.
+  const long = tables.length > 8;
+  const search = el("label", "table-search union-dialog__search");
+  const glass = el("span"); glass.setAttribute("aria-hidden", "true"); glass.append(icon("search"));
+  const query = el("input", "input"); query.type = "search"; query.placeholder = "Search tables"; query.setAttribute("aria-label", "Search tables");
+  query.maxLength = 100; query.autocomplete = "off"; query.spellcheck = false;
+  search.append(glass, query);
+  const none = el("p", "union-dialog__none", "No tables match."); hide(none);
   const list = el("div", "union-dialog__list"); list.setAttribute("role", "group"); list.setAttribute("aria-labelledby", "union-title");
   const boxes = tables.map((t) => {
     const label = el("label", "union-dialog__item");
@@ -24,13 +37,13 @@ export function openUnionDialog(db, tables) {
     return box;
   });
   const hint = el("p", "union-dialog__hint"); hint.setAttribute("role", "status");
-  body.append(list, hint);
+  body.append(...(long ? [search] : []), list, none, hint);
   const foot = el("div", "dialog__foot");
   const cancel = makeButton("Cancel", "btn");
   const go = makeButton("Show rows", "btn");
   const add = makeButton("Add to model", "btn btn--primary");
   foot.append(cancel, go, add);
-  dlg.append(title, body, foot);
+  dlg.append(top, body, foot);
   document.body.append(dlg);
 
   const picked = () => boxes.filter((b) => b.checked).map((b) => b.value);
@@ -49,6 +62,13 @@ export function openUnionDialog(db, tables) {
     if (st.ok) shareProblem(picked()).then((why) => { if (mine === seq && why) { hint.textContent = why; add.disabled = true; } });
   };
   for (const b of boxes) b.addEventListener("change", refresh);
+  query.addEventListener("input", () => {
+    const shown = new Set(matchTables(tables, query.value));
+    for (const b of boxes) b.parentElement.hidden = !shown.has(b.value);
+    toggle(none, shown.size === 0);
+  });
+  query.addEventListener("keydown", (e) => { if (e.key === "Escape" && query.value) { e.preventDefault(); e.stopPropagation(); query.value = ""; query.dispatchEvent(new Event("input")); } });
+  x.addEventListener("click", () => closeDialog(dlg));
   refresh();
   cancel.addEventListener("click", () => closeDialog(dlg));
   dlg.addEventListener("cancel", (e) => { e.preventDefault(); closeDialog(dlg); });
@@ -69,6 +89,6 @@ export function openUnionDialog(db, tables) {
     document.dispatchEvent(new CustomEvent("source:add", { detail: { source } }));
   });
   openDialog(dlg);
-  boxes[0].focus();
+  (long ? query : boxes[0]).focus();
   return dlg;
 }

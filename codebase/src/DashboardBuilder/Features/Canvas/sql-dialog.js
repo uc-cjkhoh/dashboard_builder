@@ -8,7 +8,7 @@ import { icon } from "../Core/icons.js";
 import { sqlProblem } from "../Core/source-model.js";
 import { checkSql, posOf, serverErrorPos } from "../Core/sql-check.js";
 import { meaningKept } from "../Core/sql-roundtrip.js";
-import { makeButton, openDialog, closeDialog } from "../Core/ui.js";
+import { makeButton, openDialog, closeDialog, confirmDialog } from "../Core/ui.js";
 import { mountEditor } from "./sql-editor.js";
 
 let seq = 0;
@@ -183,8 +183,21 @@ export async function openSqlDialog({ table, sql, mysql, getDefault, apply, vali
   let lastTranslated = null;
 
   const close = () => { closed = true; clearTimeout(checkTimer); ctl?.abort(); editor?.destroy(); closeDialog(dlg); };
+  // Esc asks first when the query was edited, so a stray key never throws typed SQL away; Cancel is a deliberate click and closes at once.
+  let opened = null; // the text as the editor first showed it
+  let asking = false;
+  const requestClose = async () => {
+    if (closed || asking) return;
+    if (editor && opened !== null && editor.getValue() !== opened) {
+      asking = true;
+      const ok = await confirmDialog("Discard your changes to this query?", { danger: true, confirmText: "Discard" });
+      asking = false;
+      if (!ok) { editor.focus(); return; }
+    }
+    close();
+  };
   cancel.addEventListener("click", close);
-  dlg.addEventListener("cancel", (e) => { e.preventDefault(); close(); });
+  dlg.addEventListener("cancel", (e) => { e.preventDefault(); requestClose(); });
   reset.addEventListener("click", async () => {
     reset.disabled = true;
     try { editor.setValue(await getDefault()); onChange(editor.getValue()); editor.focus(); } finally { reset.disabled = false; }
@@ -256,9 +269,10 @@ export async function openSqlDialog({ table, sql, mysql, getDefault, apply, vali
   dialect = shownDialect; radios[dialect].checked = true; syncSeg();
   openDialog(dlg);
   editor = await mountEditor(host, {
-    value: shown, dialect, onChange, onSubmit: submit, label: "SQL query",
+    value: shown, dialect, onChange, onSubmit: submit, onEscape: requestClose, label: "SQL query",
     onNotice: (t) => say(/^Can't|could not/.test(t) ? "error" : "", t), // a notice sits in the status line until the next change
   });
+  opened = editor.getValue();
   if (!editor.rich) format.hidden = true; // the plain fallback can't format
   editor.focus();
   onChange(editor.getValue()); // a saved query is checked as soon as it opens
