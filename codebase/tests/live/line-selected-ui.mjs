@@ -2,7 +2,7 @@
 // zrender drew it, found with convertToPixel): set Selected -> no marker is visible; click a point -> its dot shows on EVERY series; click it again -> cleared;
 // a click on another point moves the dot; hover still shows a point's dot and tooltip; a long line (70 points) shows only the selected dots; an area and a combo;
 // the control is disabled with the reason where Size draws the markers; a dashboard widget's cross-filter selection shows its dot; light + dark screenshots
-// (run once with SCHEME=dark for the dark set). What is "visible" is read from zrender's own drawn items (a clear dot is drawn but transparent).
+// (run once with SCHEME=dark for the dark set). What is "visible" is read from zrender's own drawn items (a clear dot is drawn but transparent: it stays for hover once something is selected).
 // Chromium over the DevTools protocol (tests/live/cdp.mjs), every /api/* call answered by a mock — nothing reaches a ClickHouse. Run:
 //   node tests/live/line-selected-ui.mjs   (start the app first:
 //   cd src/DashboardBuilder && dotnet run --no-launch-profile --urls http://localhost:5271 ; stop it with fuser -k 5271/tcp)
@@ -229,10 +229,10 @@ try {
     must(m.value === 'selected' && !m.disabled && /no selection = no markers/.test(m.title), J(m));
     const k = await marksOf();
     must(k.visible.length === 0, 'nothing visible: ' + J(k));
-    must(k.drawn.length === 8, 'but every point keeps a clear dot to click on: ' + J(k));
+    must(k.drawn.length === 0, 'no symbol is drawn at all (as under None): ' + J(k));
     await snap('selected-none');
   });
-  await check('a real click on a point selects it: its dot shows, the others stay clear; the redraw keeps Selected', async () => {
+  await check('a real click on a point selects it (no dot exists to click: the hover symbol takes the click); its dot shows, the others stay clear; the redraw keeps Selected', async () => {
     await clickPoint(3);
     await openFormat();
     must(J(await visible()) === J([3]), 'only point 3 shows a dot: ' + J(await marksOf()));
@@ -245,7 +245,9 @@ try {
     must(J(await visible()) === J([5]), 'the dot moved to point 5: ' + J(await marksOf()));
     await clickPoint(5);
     must((await visible()).length === 0, 'cleared: ' + J(await marksOf()));
-    must((await marksOf()).drawn.length === 8, 'still clickable');
+    must((await marksOf()).drawn.length === 0, 'no symbol again');
+    await clickPoint(5); must(J(await visible()) === J([5]), 'and still clickable');
+    await clickPoint(5);
   });
   await check('hovering a clear point still shows its dot and the tooltip lists its value', async () => {
     await clickPoint(2);
@@ -352,9 +354,9 @@ try {
     await settle(600); await chartType('Line'); await openFormat();
     must((await marksOf()).drawn.length === 0, 'Automatic: none past 60 points');
     await pickOpt('Line markers', 'selected');
-    must((await visible()).length === 0 && (await marksOf()).drawn.length === 70, 'no dot visible, 70 clear ones: ' + (await marksOf()).drawn.length);
+    must((await visible()).length === 0 && (await marksOf()).drawn.length === 0, 'no symbol drawn: ' + (await marksOf()).drawn.length);
     await clickPoint(33);
-    must(J(await visible()) === J([33]), 'only point 33: ' + J(await visible()));
+    must(J(await visible()) === J([33]), 'only point 33 shows a dot: ' + J(await marksOf()));
     await snap('selected-long');
     await clickPoint(33);
     must((await visible()).length === 0, 'cleared');

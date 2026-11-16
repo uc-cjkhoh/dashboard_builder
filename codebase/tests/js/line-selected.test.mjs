@@ -75,12 +75,10 @@ test("markerPlan Selected: the selected points keep their dot, every other point
   const two = markerPlan({ mode: "selected", selected: [0, 2], data: [1, 2, 3] });
   assert.deepEqual([0, 1, 2].map((i) => two.clear(i)), [false, true, false]);
 });
-test("markerPlan Selected: no selection shows no dot, but every point keeps a clear one to click on; a lone value stays visible", () => {
-  const none = markerPlan({ mode: "selected", selected: [], data: [1, 2, 3] });
-  assert.equal(none.show, true); assert.equal(none.all, true);
-  assert.deepEqual([0, 1, 2].map((i) => none.clear(i)), [true, true, true], "all clear: invisible, but a click and a hover land on them");
-  assert.deepEqual(markerPlan({ mode: "selected", data: [1, 2, 3] }).clear(0), true, "selected left out = none selected");
-  assert.deepEqual(markerPlan({ mode: "none", data: [1, 2, 3] }), { show: false, all: false, clear: null }, "None keeps no dot at all (unchanged)");
+test("markerPlan Selected: no selection draws no dot (show false), except a lone value", () => {
+  assert.deepEqual(markerPlan({ mode: "selected", selected: [], data: [1, 2, 3] }), { show: false, all: false, clear: null });
+  assert.deepEqual(markerPlan({ mode: "selected", data: [1, 2, 3] }), { show: false, all: false, clear: null }, "selected left out = none selected");
+  assert.deepEqual(markerPlan({ mode: "none", data: [1, 2, 3] }), markerPlan({ mode: "selected", data: [1, 2, 3] }), "the same plan as None when nothing is selected");
   const lone = markerPlan({ mode: "selected", selected: [], data: [1, null, 3] });
   assert.equal(lone.show, true); assert.deepEqual([0, 1, 2].map((i) => lone.clear(i)), [false, true, false], "both lone values keep their dot");
   const one = markerPlan({ mode: "selected", selected: [], data: [4] });
@@ -93,7 +91,7 @@ test("markerPlan Selected: a selected point and a lone value both keep their dot
 test("markerPlan Selected: a selected index with no value or out of range changes nothing (a gap draws no dot)", () => {
   const gap = markerPlan({ mode: "selected", selected: [1], data: [1, null, 3, 4] });
   assert.deepEqual([0, 1, 2, 3].map((i) => gap.clear(i)), [false, true, true, true], "0 is lone (neighbour is a gap), 1 selected but empty, 2-3 joined");
-  for (const bad of [[9], [-1], [1.5], [NaN], ["1"], [null]]) { const p = markerPlan({ mode: "selected", selected: bad, data: [1, 2, 3] }); assert.deepEqual([0, 1, 2].map((i) => p.clear(i)), [true, true, true], `${JSON.stringify(bad)}: nothing is kept`); }
+  for (const bad of [[9], [-1], [1.5], [NaN], ["1"], [null]]) assert.deepEqual(markerPlan({ mode: "selected", selected: bad, data: [1, 2, 3] }), { show: false, all: false, clear: null }, `${JSON.stringify(bad)}: nothing is kept`);
   for (const data of [[], [null, null], [undefined]]) assert.deepEqual(markerPlan({ mode: "selected", selected: [0], data }), { show: false, all: false, clear: null }, `no values: ${JSON.stringify(data)}`);
 });
 test("markerPlan Selected: a labelled series keeps clear anchors, the selected dots stay; a forced marker is left to chart.js", () => {
@@ -109,7 +107,7 @@ test("markerPlan Selected: object items count by their value", () => {
 });
 
 // ---- the built options -----------------------------------------------------------------------------------------------------
-test("Selected on a short line: the selected point is a plain visible dot, the others are clear until hovered or clicked", () => {
+test("Selected on a short line: the selected point is a plain visible dot, the others are clear until hovered", () => {
   const s = cart("line", [S("v")], sel({}, [1])).series[0];
   assert.equal(s.showSymbol, true); assert.equal(s.showAllSymbol, true);
   assert.deepEqual(dotted(s), [false, true, false]);
@@ -118,11 +116,10 @@ test("Selected on a short line: the selected point is a plain visible dot, the o
   assert.equal(s.data[0].emphasis.itemStyle.color, s.itemStyle.color, "hovering a clear dot brings it back in the series colour");
   assert.equal(s.data[0].value, 1, "values untouched");
 });
-test("Selected with nothing selected shows no marker (every point is a clear, clickable dot) and the tooltip still has the axis pointer", () => {
+test("Selected with nothing selected draws no marker at all, but the tooltip still has the axis pointer", () => {
   const o = cart("line", [S("v")], sel({}, []));
-  assert.equal(o.series[0].showSymbol, true); assert.equal(o.series[0].showAllSymbol, true);
-  assert.deepEqual(dotted(o.series[0]), [false, false, false]);
-  assert.deepEqual(o.series[0].data.map((d) => d.value), [1, 3, 2]);
+  assert.equal(o.series[0].showSymbol, false);
+  assert.deepEqual(o.series[0].data, [1, 3, 2]);
   assert.equal(o.tooltip.trigger, "axis");
 });
 test("Selected shows the dot on EVERY series at the selected category", () => {
@@ -144,8 +141,7 @@ test("Selected on a long line (more than 60 points): only the selected points sh
   const s = o.series[0];
   assert.equal(s.showSymbol, true); assert.equal(s.showAllSymbol, true, "ECharts must not thin the selected dots");
   assert.deepEqual(dotted(s).flatMap((d, i) => (d ? [i] : [])), [5, 40]);
-  const bare = buildCartesian({ type: "line", categories: cats(80), series: [S("v", data)], ...sel({}, []) }).series[0];
-  assert.equal(bare.showSymbol, true); assert.deepEqual(dotted(bare).filter(Boolean), [], "nothing selected: no visible dot on the long line either");
+  assert.equal(buildCartesian({ type: "line", categories: cats(80), series: [S("v", data)], ...sel({}, []) }).series[0].showSymbol, false);
   assert.equal(golden.matrix.longLine.absent.series[0].showSymbol, false);
 });
 test("Selected keeps a lone value's dot with no selection, and adds the selected dot beside it", () => {
@@ -287,7 +283,7 @@ const dotsOf = (o, si = 0) => dotted(o.series[si]).flatMap((d, i) => (d ? [i] : 
 
 test("drawing: with no selection a Selected line shows no marker; the worksheet's click selection shows that mark's dot", () => {
   const none = draw(sheet({ format: { lineMarkers: "selected" } })).o;
-  assert.equal(none.series[0].showSymbol, true); assert.deepEqual(dotsOf(none), [], "clear dots to click on, none visible");
+  assert.equal(none.series[0].showSymbol, false);
   const one = draw(sheet({ format: { lineMarkers: "selected" }, selection: sk("JP") })).o;
   assert.equal(one.series[0].showSymbol, true); assert.deepEqual(dotsOf(one), [2]);
 });
@@ -297,7 +293,7 @@ test("drawing: a dashboard widget's cross-filter selection shows its dot; the wo
 });
 test("drawing: a selection on another column selects nothing here", () => {
   const o = draw(sheet({ format: { lineMarkers: "selected" } }), result(REGIONS), { selected: { db: "shop", table: "orders", column: "country", value: "US" } }).o;
-  assert.deepEqual(dotsOf(o), []);
+  assert.equal(o.series[0].showSymbol, false);
 });
 test("drawing: selecting works with no Data labels and with Label marks left on All (it does not depend on Label marks)", () => {
   for (const format of [{ lineMarkers: "selected" }, { lineMarkers: "selected", labelMarks: "all" }, { lineMarkers: "selected", labelMarks: "minmax" }]) {
@@ -330,7 +326,7 @@ test("drawing: a colour split — every member's point at the selected category 
   assert.equal(ls.length, 2);
   for (const s of ls) { assert.equal(s.showSymbol, true, s.name); assert.deepEqual(dotted(s).flatMap((d, i) => (d ? [i] : [])), [1], s.name); }
   const none = draw({ ...split, selection: null }, res).o.series.filter((s) => s.type === "line");
-  for (const s of none) assert.deepEqual(dotted(s).filter(Boolean), [], `${s.name}: nothing selected, nothing visible`);
+  for (const s of none) assert.equal(s.showSymbol, false, `${s.name}: nothing selected`);
 });
 test("drawing: a bar chart is untouched by a stored Line markers Selected", () => {
   const a = draw(sheet({ chartType: "bar", format: { lineMarkers: "selected" }, selection: sk("EU") })).o;
