@@ -181,6 +181,12 @@ export function initCanvas() {
 
   // Show the model view only when it's the active view (dashboards render elsewhere).
   bus.addEventListener("view:changed", () => toggle(canvas, isModelActive()));
+  // relations.js showed or hid a card's "Needs a partner" badge: refit that card's width so the badge never clips its name
+  bus.addEventListener("entity:need", (e) => {
+    const entity = entities.get(e.detail?.entityId);
+    const head = entity?.el.querySelector(".entity__head");
+    if (head) fitWidth(entity.el, head.querySelector(".entity__title"), head.querySelector(".entity__edit"), head.querySelector(".entity__need"));
+  });
   toggle(canvas, isModelActive());
 
   createEntityImpl = createEntity;
@@ -212,11 +218,13 @@ export function initCanvas() {
       toast(`${db}.${table} is already on the canvas.`, "info");
       return;
     }
-    createEntity(db, table, x, y);
+    const id = createEntity(db, table, x, y);
+    reveal(entities.get(id)); // a + add can land below the visible ground (the grid fills down); bring it into view
   }
 
-  function createEntity(db, table, x, y, { source = null, customSql = null, customSqlMysql = null, listHeight = null } = {}) {
-    const entity = { id: `${db}.${table}#${++seq}`, db, table, x, y, columns: [], el: null };
+  function createEntity(db, table, x, y, { source = null, customSql = null, customSqlMysql = null, listHeight = null, id = null } = {}) {
+    // `id`: Undo of a remove gives the card its old id back, so worksheet fields that point at it find it again
+    const entity = { id: id && !entities.has(id) ? id : `${db}.${table}#${++seq}`, db, table, x, y, columns: [], el: null };
     if (source) entity.source = source;
     else if (customSql) { entity.customSql = customSql; if (customSqlMysql) entity.customSqlMysql = customSqlMysql; }
     entity.el = renderCard(entity);
@@ -247,10 +255,28 @@ export function initCanvas() {
       );
       if (!ok) return;
     }
+    // What Undo needs: the card as the workbook saves it, plus its relationships (copied before relations.js drops them).
+    const snap = { id: entity.id, db: entity.db, table: entity.table, x: entity.x, y: entity.y, source: entity.source ?? null,
+      customSql: entity.customSql ?? null, customSqlMysql: entity.customSqlMysql ?? null, listHeight: entity.listHeight ?? null,
+      rels: relationshipsFor(entity.id).map((r) => structuredClone(r)) };
     emit("entity:removed", { entityId: entity.id }); // relations.js drops its links
     entity.el.remove();
     entities.delete(entity.id);
     refreshEmpty();
+    const name = entity.source ? entity.table : `${entity.db}.${entity.table}`;
+    toast(`Removed ${name}.`, "info", { action: { label: "Undo", run: () => restoreRemoved(snap) } });
+  }
+
+  // Undo of a remove: the same card (same id, place, SQL, list height) and every relationship whose other card is still there.
+  function restoreRemoved(snap) {
+    if (!snap.source && [...entities.values()].some((e) => e.db === snap.db && e.table === snap.table)) {
+      toast(`${snap.db}.${snap.table} is already on the canvas.`, "info");
+      return;
+    }
+    const id = createEntity(snap.db, snap.table, snap.x, snap.y, snap);
+    reveal(entities.get(id));
+    const back = snap.rels.filter((r) => [r.from.entityId, r.to.entityId].every((e) => e === snap.id || entities.has(e)));
+    if (back.length) emit("rel:reinstate", { rels: back.map((r) => ({ ...r, from: { ...r.from, entityId: r.from.entityId === snap.id ? id : r.from.entityId }, to: { ...r.to, entityId: r.to.entityId === snap.id ? id : r.to.entityId } })) });
   }
 
   async function loadEntity(entity) {
@@ -338,7 +364,7 @@ export function initCanvas() {
     }
     head.append(title, need, collapse, remove); // the caret sits by the ✕
     // Fit the card to its name (and the Edit button) between the card's min/max tokens; beyond max the title ellipsises (title = full name).
-    fitWidth(card, title, head.querySelector(".entity__edit"));
+    fitWidth(card, title, head.querySelector(".entity__edit"), need);
     enableDragMove(entity, head);
 
     const status = document.createElement("div");
@@ -493,7 +519,7 @@ export function initCanvas() {
   }
 
   // Width follows the `db.table` text: measured in the title's own font, held between --entity-min and --entity-max.
-  function fitWidth(card, title, edit) {
+  function fitWidth(card, title, edit, need = null) {
     const measure = (node) => {
       const probe = node.cloneNode(true);
       probe.style.cssText = "position:absolute;visibility:hidden;flex:none;overflow:visible;white-space:nowrap";
@@ -504,7 +530,8 @@ export function initCanvas() {
       return w;
     };
     const gap = parseFloat(getComputedStyle(canvas).getPropertyValue("--s2")) || 8;
-    const px = measure(title) + (edit ? measure(edit) + gap : 0); // the Edit button and its gap ride on the title's width
+    // the Edit button, and the "Needs a partner" badge while it shows, ride on the title's width (each with its gap), so they never clip a short name
+    const px = measure(title) + (edit ? measure(edit) + gap : 0) + (need && !need.hidden ? measure(need) + gap : 0);
     const cs = getComputedStyle(canvas);
     const limit = (name, fallback) => parseFloat(cs.getPropertyValue(name)) || fallback;
     const { width } = entityWidth(px, { min: limit("--entity-min", 300), max: limit("--entity-max", 480) });

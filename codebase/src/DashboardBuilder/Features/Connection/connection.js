@@ -209,6 +209,10 @@ export function initConnection() {
     toggle(divider, connected);
     toggle(dbHeading, connected);
     if (!connected) hide(tablesSection);
+    // Disconnected (first load, or after Disconnect): the form is the only thing to do, so start typing in it — the first empty
+    // field (Host, or Password when a host is kept). Never steal focus from something the user is already on.
+    const idle = !document.activeElement || document.activeElement === document.body;
+    if (!connected && idle && !form.hidden) (hostEl.value.trim() ? passEl : hostEl).focus({ preventScroll: true });
 
     document.dispatchEvent(new CustomEvent("connection:changed", {
       detail: view ?? { connected: false },

@@ -93,6 +93,7 @@
 .join-check__out { display: grid; gap: var(--s2); max-height: 45vh; overflow-y: auto; }
 .join-check__summary { margin: 0; padding-left: var(--s4); display: grid; gap: var(--s1); }
 .join-check__verdict { margin: 0; font-weight: 600; }
+.join-check__use { justify-self: start; } /* "Use N:1": takes the check's reading into the Cardinality control */
 .join-check__note { margin: 0; display: flex; gap: var(--s2); align-items: flex-start; padding: var(--s2) var(--s2); border: 1px solid var(--line); border-radius: var(--r); }
 .join-check__glyph { flex: none; display: inline-flex; margin-top: 1px; }
 .join-check__note--warn { background: var(--warn-bg); color: var(--warn-ink); border-color: var(--warn-line); }

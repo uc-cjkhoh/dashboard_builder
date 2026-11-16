@@ -48,7 +48,7 @@ export function openTypeWarning({ from, to, suggestions = null }) {
       const hint = document.createElement("p");
       hint.className = "type-warning__hint";
       hint.textContent = suggestions.names.length
-        ? `${suggestions.table} columns that hold ${suggestions.kind}s and are free to join: ${suggestions.names.join(", ")}.`
+        ? `${suggestions.table} columns that hold ${suggestions.kind === "text" ? "text" : `${suggestions.kind}s`} and are free to join: ${suggestions.names.join(", ")}.` // "text" is uncountable: never "texts"
         : `${suggestions.table} has no free ${suggestions.kind} column to join to.`;
       body.append(hint);
     }

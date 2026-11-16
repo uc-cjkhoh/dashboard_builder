@@ -15,8 +15,10 @@ const note = (kind, glyph, text) => {
   return p;
 };
 
-/** @param dlg the open <dialog> (the request is cancelled when it closes). @param {{run:(signal)=>Promise, names:object}} check */
-export function buildJoinCheck(dlg, { run, names }) {
+/** @param dlg the open <dialog> (the request is cancelled when it closes).
+ *  @param {{run:(signal)=>Promise, names:object, apply?:{get:()=>string, set:(c:string)=>void}}} check — `apply` reads / sets the dialog's
+ *  chosen cardinality: when the data reads differently, the verdict gets a "Use N:1" button (it only selects; Confirm still saves). */
+export function buildJoinCheck(dlg, { run, names, apply = null }) {
   const root = document.createElement("section");
   root.className = "join-check";
   root.setAttribute("aria-label", "Check this join");
@@ -55,6 +57,11 @@ export function buildJoinCheck(dlg, { run, names }) {
         v.className = "join-check__verdict";
         v.textContent = d.verdict;
         frag.append(v);
+        if (apply && d.observed && apply.get() !== d.observed) {
+          const use = makeButton(`Use ${d.observed}`, "btn join-check__use");
+          use.addEventListener("click", () => { apply.set(d.observed); use.remove(); });
+          frag.append(use);
+        }
       }
       for (const f of d.findings) frag.append(note(f.level, f.level === "warn" ? "warning" : "info", f.text));
       out.replaceChildren(frag);

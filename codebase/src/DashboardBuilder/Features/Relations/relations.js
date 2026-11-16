@@ -1,5 +1,5 @@
 import { entities, relationships, bus, emit, isModelActive } from "../Core/store.js";
-import { relEnds, linkIssue, pinOrder, matchingColumns, keysCompatible, kindLabel, unlinkedCards, joinChoices, joinBadge, joinSelection, joinFromSelection, isLegacyLeft, applyAggregate, aggregateChoice } from "./relation-rules.js";
+import { relEnds, linkIssue, pinOrder, matchingColumns, keysCompatible, kindLabel, unlinkedCards, joinChoices, joinBadge, joinSelection, joinFromSelection, isLegacyLeft, applyAggregate, aggregateChoice, guessCardinality, findDuplicate } from "./relation-rules.js";
 import { toast, makeButton, openDialog, closeDialog } from "../Core/ui.js";
 import { api } from "../Core/api.js";
 import { icon } from "../Core/icons.js";
@@ -58,6 +58,7 @@ export function initRelations() {
   bus.addEventListener("canvas:zoomed", () => render());
   bus.addEventListener("entity:loaded", (e) => { markDraggable(e.detail.entityId); render(); }); // a restored link waits for its key rows
   bus.addEventListener("entity:removed", (e) => { cancelKeyPick(); onEntityRemoved(e.detail.entityId); });
+  bus.addEventListener("rel:reinstate", (e) => reinstate(e.detail?.rels ?? [])); // Undo of a card remove (canvas.js)
   bus.addEventListener("view:changed", () => { cancelKeyPick(); selectedId = null; render(); });
   canvas.addEventListener("scroll", render);
   initColumnDrag();
@@ -133,7 +134,7 @@ function initColumnDrag() {
     dragFrom = null; clearDropMarks();
     if (!from || !row) return;
     e.preventDefault();
-    if (entities.get(row.closest(".entity")?.dataset.entityId)?.source) { toast("A union or unpivot can't be related to a table yet.", "danger"); return; }
+    if (entities.get(row.closest(".entity")?.dataset.entityId)?.source) { toast("A union or unpivot can't be related to a table yet.", "info"); return; }
     proposeLink(endOf(from.entityId, from.column), rowEnd(row));
   });
   canvas.addEventListener("dragend", () => { dragFrom = null; clearDropMarks(); });
@@ -146,7 +147,7 @@ function proposeLink(a, b, focusEnd = null) {
   if (!ok) { refuse(problem, kind, a, b); return; }
   const from = { entityId: a.entityId, column: a.column };
   openCardinalityDialog({
-    current: "1:N",
+    current: guessCardinality(a.column, a.table, b.column, b.table), // orders.customer_id onto customers.id starts on N:1
     tables: [a.table, b.table],
     keys: keyPairsFor(from, { entityId: b.entityId, column: b.column }, [], null),
     onPick: (cardinality, sel, pairs, agg) => {
@@ -243,7 +244,7 @@ function initColumnKeys() {
 
 /** A refused link: a type mismatch gets a modal (both columns, their types, columns that would fit); anything else a toast. */
 function refuse(problem, kind, a, b) {
-  if (kind !== "type") { if (problem) toast(problem, "danger"); return; }
+  if (kind !== "type") { if (problem) toast(problem, "info"); return; } // a refused link is a notice, not a danger (red stays for failures)
   const used = [...relationships.values()].flatMap(relEnds).filter((e) => e.entityId === b.entityId).map((e) => e.column);
   const names = matchingColumns(entities.get(b.entityId)?.columns ?? [], a.category, used);
   const joinable = keysCompatible(a.category, a.category); // a compound / other column has no kind to match
@@ -285,6 +286,20 @@ export function restoreRelationship(from, to, cardinality, joinType = "inner", j
   render();
 }
 
+/** Undo: put removed relationships back as they were (fresh ids), skipping one whose card is gone or whose pair is related again. */
+function reinstate(rels) {
+  let any = false;
+  for (const r of rels) {
+    if (!entities.has(r.from.entityId) || !entities.has(r.to.entityId)) continue;
+    if (findDuplicate([...relationships.values()], r.from, r.to)) continue; // related again in the meantime (a restored card's columns may still be loading, so only this is checked)
+    const id = `rel#${++seq}`;
+    relationships.set(id, { ...r, id });
+    emit("rel:changed", { id });
+    any = true;
+  }
+  if (any) render();
+}
+
 function onEntityRemoved(entityId) {
   for (const rel of relationships.values()) {
     if (rel.from.entityId === entityId || rel.to.entityId === entityId) relationships.delete(rel.id);
@@ -296,6 +311,7 @@ function onEntityRemoved(entityId) {
 function render() {
   if (!svg) return;
   syncKeyStrips(); // pin key rows first: it moves rows and changes card heights, so anchors measured before it would point at the old positions
+  markUnlinked(); // before measuring too: showing / hiding "Needs a partner" refits the card's width (canvas.js)
   svg.replaceChildren();
   labels.replaceChildren();
   const crect = canvas.getBoundingClientRect();
@@ -327,7 +343,6 @@ function render() {
     svg.append(line);
     (under ? svg : labels).append(label); // a badge with no free spot beside the cards sits under them, never over
   }
-  markUnlinked();
   updateGuide();
   renderNotes();
   markLinkedRows();
@@ -447,7 +462,7 @@ function markUnlinked() {
     const flag = lone.has(entity.id);
     entity.el.classList.toggle("entity--unlinked", flag);
     const need = entity.el.querySelector(".entity__need");
-    if (need) need.hidden = !flag;
+    if (need && need.hidden === flag) { need.hidden = !flag; emit("entity:need", { entityId: entity.id }); }
   }
 }
 
@@ -526,7 +541,11 @@ function editRelationship(rel) {
     keys: keyPairsFor(rel.from, rel.to, rel.pairs ?? [], rel),
     agg: aggregateChoice(rel),
     onPick: (cardinality, sel, pairs, agg) => { rel.cardinality = cardinality; Object.assign(rel, joinFromSelection(sel)); applyAggregate(rel, agg); if (pairs?.length) rel.pairs = pairs; else delete rel.pairs; emit("rel:changed", { id: rel.id }); render(); },
-    onDelete: () => { relationships.delete(rel.id); emit("rel:changed", { id: rel.id }); select(null); render(); },
+    onDelete: () => {
+      relationships.delete(rel.id); emit("rel:changed", { id: rel.id }); select(null); render();
+      const ta = entities.get(rel.from.entityId)?.table, tb = entities.get(rel.to.entityId)?.table;
+      toast(`Removed the ${ta} → ${tb} relationship.`, "info", { action: { label: "Undo", run: () => reinstate([rel]) } });
+    },
   });
 }
 
@@ -612,7 +631,8 @@ function openCardinalityDialog({ current = "1:N", joinType = "inner", tables = [
   left.append(section("totals", 1, buildAggregateChoice(agg, (v) => { aggregate = v.aggregate; direction = v.direction; })));
   if (keys) {
     left.append(section("pairs", 2, buildKeyPairs(keys.section)));
-    right.append(buildJoinCheck(dlg, keys.check));
+    // the check's reading can be taken in one click ("Use N:1") when it differs from the chosen cardinality
+    right.append(buildJoinCheck(dlg, { ...keys.check, apply: { get: () => cardinality, set: (c) => cardButtons.find((o) => o.textContent === c)?.click() } }));
   }
   const choices = document.createElement("div");
   choices.className = "card-choices";

@@ -146,3 +146,20 @@ export function applyAggregate(rel, { aggregate, direction }) {
 }
 /** A saved relationship's two dialog controls. */
 export const aggregateChoice = (rel) => ({ aggregate: rel?.aggregateFirst === true, direction: rel?.aggregateFirst === true ? normalizeFilterDirection(rel.filterDirection) : "both" });
+
+// The cardinality a new link's dialog starts on, read from the two column names (the user still picks; Confirm saves).
+// A column is the table's own key when it is "id" / "key" or "<table>_id" / "<table>id" (table name singular or plural):
+// orders.customer_id dropped on customers.id reads many-to-one (N:1); the reverse drag reads 1:N; key to key reads 1:1.
+// Names that say nothing keep the old default, 1:N.
+const singular = (t) => (t.endsWith("ies") ? `${t.slice(0, -3)}y` : t.endsWith("ses") ? t.slice(0, -2) : t.endsWith("s") ? t.slice(0, -1) : t);
+export function isOwnKey(column, table) {
+  const c = String(column ?? "").toLowerCase(), t = String(table ?? "").toLowerCase();
+  if (c === "id" || c === "key") return true;
+  return [t, singular(t)].some((n) => n && (c === `${n}_id` || c === `${n}id` || c === `${n}_key`));
+}
+export function guessCardinality(fromColumn, fromTable, toColumn, toTable) {
+  const fromKey = isOwnKey(fromColumn, fromTable), toKey = isOwnKey(toColumn, toTable);
+  if (fromKey && toKey) return "1:1";
+  if (toKey) return "N:1";
+  return "1:N";
+}

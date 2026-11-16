@@ -48,10 +48,11 @@ try {
   await waitFor(`document.querySelectorAll('.entity').length === 3 && [...document.querySelectorAll('.entity__status')].every((s) => s.hidden)`, 'tables loaded');
   const card = (t) => `[...document.querySelectorAll('.entity')].find((x) => x.querySelector('.entity__table').textContent === ${J(t)})`;
 
-  await check('card width follows the name: short = min (312), long = max with an ellipsis and the full name in the title', async () => {
+  await check('card width follows the name (and the Needs a partner badge): short = min (312) without the badge, long = max with an ellipsis and the full name in the title', async () => {
     const w = await ev(`${card('orders')}.getBoundingClientRect().width + ',' + ${card(LONG)}.getBoundingClientRect().width`);
     const [a, c] = w.split(',').map(Number);
-    must(a === 312, `short card width ${a}`); // --entity-min is the 312px slot
+    // unlinked cards show the badge, which rides on the title's width: still at least the 312px slot, and the short name is never clipped
+    must(a >= 312 && a < 400 && await ev(`(() => { const t = ${card('orders')}.querySelector('.entity__title'); return t.scrollWidth <= t.clientWidth; })()`), `short card width ${a}`);
     must(c === 480, `long card width ${c}`);
     must(await ev(`(() => { const t = ${card(LONG)}.querySelector('.entity__title'); return t.scrollWidth > t.clientWidth && t.title === 'shop.${LONG}'; })()`), 'long name is not ellipsised with a full-name title');
     await shot('cards-width.png');

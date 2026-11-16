@@ -216,3 +216,22 @@ test("a compound or unknown kind never fits", () => {
   const { entities, rels } = world();
   assert.equal(keyKindBreaks("o", rels, entities, cols(["cust", "compound"], ["region", "text"]))[0].now, "compound");
 });
+
+import { guessCardinality, isOwnKey } from "../../src/DashboardBuilder/Features/Relations/relation-rules.js";
+test("own key: id, key, <table>_id singular or plural", () => {
+  assert.ok(isOwnKey("id", "orders"));
+  assert.ok(isOwnKey("ID", "orders"));
+  assert.ok(isOwnKey("customer_id", "customers"));
+  assert.ok(isOwnKey("category_id", "categories"));
+  assert.ok(isOwnKey("customers_id", "customers"));
+  assert.ok(!isOwnKey("customer_id", "orders"));
+  assert.ok(!isOwnKey("amount", "orders"));
+  assert.ok(!isOwnKey(undefined, undefined));
+});
+test("dialog start cardinality follows the key names", () => {
+  assert.equal(guessCardinality("customer_id", "orders", "id", "customers"), "N:1");   // foreign key onto the key
+  assert.equal(guessCardinality("id", "customers", "customer_id", "orders"), "1:N");   // the reverse drag
+  assert.equal(guessCardinality("customer_id", "orders", "customer_id", "customers"), "N:1");
+  assert.equal(guessCardinality("id", "users", "id", "profiles"), "1:1");
+  assert.equal(guessCardinality("code", "a", "code", "b"), "1:N");                    // names say nothing: the old default
+});
