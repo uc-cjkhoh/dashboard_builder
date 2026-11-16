@@ -65,6 +65,7 @@ A table dropped onto the canvas ([canvas.md](../concepts/data-source/canvas.md))
 | `id` | `db.table#n` |
 | `db`, `table` | source, from the drag payload |
 | `x`, `y` | canvas position |
+| `listHeight` | optional: the column list's height in px after an edge drag ([canvas.md](../concepts/data-source/canvas.md#card-anatomy)); absent = the default 240px; saved, and on open a whole number 64–4000 or reset with a note |
 | `columns` | `{ name, type, category }[]` from `DESCRIBE` |
 | `el` | the card's DOM node |
 | `customSqlMysql` | with `customSql`, the MySQL text it was written as ([D106](../decisions/decisions-custom-sql.md#d106--mysql-syntax-in-edit-sql-translated-to-clickhouse)); shown when the card is edited again, dropped when it is saved in ClickHouse syntax; a bad value is dropped quietly |
@@ -235,7 +236,7 @@ What [workbook.md](../concepts/workbook/workbook.md) saves to `localStorage` and
 ```
 {
   format: "dashboard-builder-workbook", version: 2 (integer ≥ 1; version 1 files still open), savedAt: ISO-8601,
-  entities:      [ { id, db, table, x, y, joinKeys: [column], source?, customSql?, customSqlMysql? } ],   // source: a union / unpivot entity (its table = source.name); re-validated on open, a bad one skipped
+  entities:      [ { id, db, table, x, y, joinKeys: [column], source?, customSql?, customSqlMysql?, listHeight? } ],   // source: a union / unpivot entity (its table = source.name); re-validated on open, a bad one skipped
   relationships: [ { from: { entityId, column }, to: { entityId, column }, cardinality, joinType, pairs?, aggregateFirst?, filterDirection? } ],
   worksheets:    [ { name, sheet } ],      // sheet as above, minus pages.members
   dashboards:    [ { name, widgets: [ { kind: "sheet", sheet: worksheetIndex, note?, x, y, w, h }
