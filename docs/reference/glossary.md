@@ -22,7 +22,7 @@ has a subtle or non-obvious meaning here, that is called out.
 | **Dimension / measure** | A field that groups (`GROUP BY`) vs. one that is aggregated. The default comes from the column type; each pill can be switched. |
 | **Shelf / pill** | A drop zone (Columns, Rows) and a field placed on it. |
 | **Encoding** | A Marks channel (Color, Size, Label, Detail, Tooltip, Shape, Path, Angle) mapping a field to a mark property. [worksheet-encodings.md](../concepts/worksheet/worksheet-encodings.md) |
-| **Custom SQL** | A `SELECT` the user writes for a Data Source card (right-click → Edit SQL). The card then reads that query instead of its table. [query-sources.md](../concepts/data-source/query-sources.md#custom-sql-on-a-card) |
+| **Custom SQL** | A `SELECT` the user writes for a Data Source card (the card's **Edit** button). The card then reads that query instead of its table. [query-sources.md](../concepts/data-source/query-sources.md#custom-sql-on-a-card) |
 | **Workbook** | The whole builder state (Data Source + every worksheet and dashboard). Auto-saved in the browser per server + user; exportable as a JSON file. Never holds a password. [workbook.md](../concepts/workbook/workbook.md) |
 | **Truncated result** | A grouped query that hit its row limit; the worksheet shows a "more exist" notice. |
 | **Crosstab** | The Table view: Rows × Columns pivot of measures, built client-side. |

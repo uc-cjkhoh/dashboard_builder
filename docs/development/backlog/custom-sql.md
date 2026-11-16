@@ -24,7 +24,7 @@ What the Edit SQL dialog ([sql-editor.md](../../concepts/data-source/sql-editor.
 ## Gaps on a custom-SQL card
 
 - **Reads over a custom-SQL card run the query several times** (priority P3) — Open: the histogram reads the derived table three times (min, max, buckets) and a join check's per-end `LIMIT` bounds the query's output rows, not the query; both are bounded only by the time limit. A profile of an aggregating or joining query can describe a cut-off input (`max_rows_to_read` with `break`) while `sampled` stays false, as for a view. Not tested over real HTTP: the .NET tests call the gateway and the rules directly, the browser test mocks `/api/*`.
-- **Union and unpivot cards** (priority P3) — Open: Edit SQL is disabled on them (they are built from their dialogs and have no SQL of their own).
+- **Union and unpivot cards** (priority P3) — Open: they have no Edit button (they are built from their dialogs and have no SQL of their own).
 - **Small rules** (priority P3) — Open: re-saving an old MySQL card re-translates it, and the aggregates are now written `count(…)` / `sum(…)`, so an unaliased `COUNT(*)` column is renamed `count()` (a worksheet field bound to the old name is not re-checked; alias the column to keep it); `CH_ONLY_SYNTAX` also refuses a column that is literally named `format`, `sample`, `final` or `global` when shown as MySQL (safe, it just opens in ClickHouse syntax); a table without a `db.` prefix resolves against the connection's default database; a new query must keep the columns the card's relationships use, but their types are not re-checked; the inner query is bounded only by the 12 s limit and the outer `LIMIT` (no `max_rows_to_read`).
 
 ## Round trip and the ClickHouse → MySQL display

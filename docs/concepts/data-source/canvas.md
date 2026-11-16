@@ -83,20 +83,21 @@ With no entities, the canvas shows **a ghost model**, **one sentence** and **one
 | no database chosen | "Choose a database in the sidebar." | Choose a database → `#db-select` |
 | database chosen | "Drag a table here from the sidebar to start your data source." | Find a table → `#table-search` |
 
-## Card menu (Edit SQL)
+## Edit button (Edit SQL)
 
-Right-click a card (or press the ContextMenu key / Shift+F10 with focus on it) for its menu: **Edit SQL**, and **Reset to table** once the card has custom SQL.
-**Edit SQL** opens a dialog on the card's `SELECT`; Save makes the card read the query. A union or unpivot card has no SQL to edit, so the item is disabled with a reason.
+The card head's **Edit** button (`.entity__edit`, pencil + text, left of the title) opens the Edit SQL dialog on the card's `SELECT`; Save makes the card read the query.
+To go back to the table, press **Reset to default** in the dialog, then **Save**. A card has no right-click menu.
+A union or unpivot card has no SQL to edit, so it has no Edit button.
 Full behaviour, the SQL guard and what the card does afterwards: [query-sources.md § Custom SQL on a card](query-sources.md#custom-sql-on-a-card).
 A card with custom SQL shows a `Custom SQL` note under its head; its profile buttons, View data, the histogram and *Check this join* read the card's query (as a derived table, the same one the worksheet uses), and it can be related and joined. A union or unpivot card has no profile buttons.
 
 ## Card anatomy
 
 - **Head** (`.entity__head`, on `--surface-2`):
-  - The table name alone, in weight 600. The full `db.table` is its tooltip.
+  - The **Edit** button first, on the left gutter (not on a union or unpivot card), then the table name alone, in weight 600. The full `db.table` is its tooltip.
   - The database appears, muted after the name, only when another card holds the same table name from a different database.
   - A collapse caret and a remove icon sit at its right end. The caret toggles `.entity--collapsed`, leaving only the title bar.
-- **Card width** follows the title text, from `--entity-min` (312px, the slot width) to `--entity-max` (480px) on `#model-view`
+- **Card width** follows the title text plus the Edit button, from `--entity-min` (312px, the slot width) to `--entity-max` (480px) on `#model-view`
   (`card-width.js`, pure). Beyond the maximum the name ellipsises, with the full name in its `title`.
   Link anchors read the measured card box, so any width stays correct.
 - **Column rows** (`.col-row`) show a **type icon** (number / text / date / bool), the name and a **type badge**
