@@ -217,6 +217,9 @@ function relateTables(aId, bId) {
   });
 }
 
+/** A long snake_case name wraps after an underscore, not mid-word (<wbr>, so a copy of the text stays the name). */
+const breakAfterUnderscores = (text) => text.split(/(?<=_)/).flatMap((part, i) => (i ? [document.createElement("wbr"), part] : [part]));
+
 /** "Relate orders to": every other table card, the likeliest first; one with no shared columns is shown, disabled. With one candidate, its dialog opens at once. */
 function openTablePicker(entityId) {
   const me = entities.get(entityId);
@@ -238,9 +241,10 @@ function openTablePicker(entityId) {
   for (const { e, rel, k } of others) {
     const b = makeButton("", "rel-pick__item");
     const name = document.createElement("span"), on = document.createElement("span");
-    name.className = "rel-pick__name"; name.textContent = e.table;
-    on.className = "rel-pick__key";
-    on.textContent = rel ? "Related" : k ? keyText(k) : "No matching columns";
+    name.className = "rel-pick__name"; name.append(...breakAfterUnderscores(e.table));
+    on.className = rel ? "rel-pick__key rel-pick__key--ok" : "rel-pick__key";
+    if (rel) on.append(icon("check", { size: 14 }), "Related");
+    else on.textContent = k ? keyText(k) : "No matching columns";
     b.append(name, on);
     b.disabled = !rel && !k;
     b.addEventListener("click", () => { closeDialog(dlg); relateTables(entityId, e.id); });
