@@ -185,7 +185,7 @@ export function initCanvas() {
   bus.addEventListener("entity:need", (e) => {
     const entity = entities.get(e.detail?.entityId);
     const head = entity?.el.querySelector(".entity__head");
-    if (head) fitWidth(entity.el, head.querySelector(".entity__title"), head.querySelector(".entity__edit"), head.querySelector(".entity__need"));
+    if (head) fitWidth(entity.el, head.querySelector(".entity__title"), head.querySelector(".entity__edit"), head.querySelector(".entity__need"), head.querySelector(".entity__relate"));
   });
   toggle(canvas, isModelActive());
 
@@ -344,12 +344,27 @@ export function initCanvas() {
     remove.append(icon("close"));
     remove.addEventListener("click", () => removeEntity(entity));
 
-    // Shown by relations.js while the card is in no relationship (the model has other cards to relate it to).
-    const need = document.createElement("span");
+    // Shown by relations.js while the card is in no relationship (the model has other cards to relate it to). A button: it opens
+    // "Relate <table> to" (relations.js, D127), so the warning is also the way out of it.
+    const need = document.createElement("button");
+    need.type = "button";
     need.className = "entity__need";
     need.textContent = "Needs a partner";
-    need.title = "Held out of worksheets until this table is related to another one";
+    need.title = "Held out of worksheets until this table is related to another one. Click to relate it.";
     need.hidden = true;
+    need.addEventListener("click", () => emit("rel:relate", { entityId: entity.id }));
+    // The link button: click for "Relate <table> to", or drag it onto another card to relate the two tables (relations.js, D127).
+    let relate = null;
+    if (!entity.source) {
+      relate = document.createElement("button");
+      relate.type = "button";
+      relate.className = "iconbtn entity__relate";
+      relate.draggable = true;
+      relate.title = "Relate to another table — click, or drag onto a table";
+      relate.setAttribute("aria-label", `Relate ${entity.table} to another table`);
+      relate.append(icon("link"));
+      relate.addEventListener("click", () => emit("rel:relate", { entityId: entity.id }));
+    }
 
     // The Edit SQL icon button (D105) sits left of the title; a union / unpivot card is built from its own dialog and has no SQL to edit, so it gets none.
     if (!entity.source) {
@@ -362,9 +377,9 @@ export function initCanvas() {
       edit.addEventListener("click", () => editSql(entity));
       head.append(edit);
     }
-    head.append(title, need, collapse, remove); // the caret sits by the ✕
+    head.append(title, need, ...(relate ? [relate] : []), collapse, remove); // the caret sits by the ✕
     // Fit the card to its name (and the Edit button) between the card's min/max tokens; beyond max the title ellipsises (title = full name).
-    fitWidth(card, title, head.querySelector(".entity__edit"), need);
+    fitWidth(card, title, head.querySelector(".entity__edit"), need, relate);
     enableDragMove(entity, head);
 
     const status = document.createElement("div");
@@ -519,7 +534,7 @@ export function initCanvas() {
   }
 
   // Width follows the `db.table` text: measured in the title's own font, held between --entity-min and --entity-max.
-  function fitWidth(card, title, edit, need = null) {
+  function fitWidth(card, title, edit, need = null, relate = null) {
     const measure = (node) => {
       const probe = node.cloneNode(true);
       probe.style.cssText = "position:absolute;visibility:hidden;flex:none;overflow:visible;white-space:nowrap";
@@ -531,7 +546,7 @@ export function initCanvas() {
     };
     const gap = parseFloat(getComputedStyle(canvas).getPropertyValue("--s2")) || 8;
     // the Edit button, and the "Needs a partner" badge while it shows, ride on the title's width (each with its gap), so they never clip a short name
-    const px = measure(title) + (edit ? measure(edit) + gap : 0) + (need && !need.hidden ? measure(need) + gap : 0);
+    const px = measure(title) + (edit ? measure(edit) + gap : 0) + (need && !need.hidden ? measure(need) + gap : 0) + (relate ? measure(relate) + gap : 0);
     const cs = getComputedStyle(canvas);
     const limit = (name, fallback) => parseFloat(cs.getPropertyValue(name)) || fallback;
     const { width } = entityWidth(px, { min: limit("--entity-min", 300), max: limit("--entity-max", 480) });

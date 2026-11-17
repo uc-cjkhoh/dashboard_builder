@@ -160,7 +160,40 @@
 .entity__keys .col-row--linked { background: var(--accent-line); }
 /* A card in no relationship, while the model has other cards to relate it to: dashed outline and words. */
 .entity--unlinked { border-style: dashed; border-color: var(--warn-line); }
-.entity__need { flex: none; font-size: var(--fs-body); font-weight: 400; color: var(--warn-ink); white-space: nowrap; }
+/* "Needs a partner" is a button (D127): it opens "Relate <table> to". Text + dashed outline + underline on hover, never colour alone. */
+.entity__need { flex: none; margin: 0; padding: 0 var(--s1); border: 0; border-radius: var(--r); background: none; font: inherit; font-size: var(--fs-body); font-weight: 400;
+  color: var(--warn-ink); white-space: nowrap; cursor: pointer; }
+.entity__need:hover { text-decoration: underline; background: var(--warn-bg); }
+.entity__need:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* The card's link button: click for the table picker, or drag it onto another card (which takes a solid accent outline while it would accept). */
+.entity__relate { cursor: grab; }
+.entity__relate:active { cursor: grabbing; }
+.entity--relate-ok { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* A proposed link (D127): dashed, in the accent, with its "Relate on …" button on the middle run; nothing is saved until the dialog is confirmed. */
+.rel-ghost__line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-dasharray: 6 6; stroke-linecap: round; opacity: .8; }
+.rel-ghost { position: absolute; z-index: 1; display: flex; align-items: center; gap: var(--s1); padding: var(--s1); background: var(--surface);
+  border: 1px dashed var(--accent); border-radius: var(--r); box-shadow: var(--elev-8); white-space: nowrap; }
+.rel-ghost button { display: inline-flex; align-items: center; gap: var(--s1); margin: 0; border: 0; border-radius: var(--r); background: none; font: inherit; cursor: pointer; }
+.rel-ghost__go { padding: var(--s1) var(--s2); font-size: var(--fs-body); font-weight: 600; color: var(--accent-ink); }
+.rel-ghost__go:hover { background: var(--accent-soft); }
+.rel-ghost__no { padding: var(--s1); color: var(--ink-3); }
+.rel-ghost__no:hover { color: var(--ink); background: var(--surface-2); }
+.rel-ghost button:focus-visible { outline: 2px solid var(--focus); outline-offset: 0; }
+
+/* "Relate <table> to": one button per other table, its name and the key the names point to. */
+.rel-pick { width: min(340px, calc(100vw - 2 * var(--s4))); }
+.rel-pick__list { display: grid; gap: var(--s1); padding-bottom: 0; max-height: 60vh; overflow-y: auto; }
+/* the item's text sits on the title's 16px edge: the list pads 8px, the item 8px more (optical alignment) */
+.rel-pick__list { padding-left: var(--s2); padding-right: var(--s2); }
+.rel-pick__item { display: grid; gap: 0; justify-items: start; padding: var(--s2); border: 1px solid transparent; border-radius: var(--r); background: none;
+  font: inherit; text-align: left; cursor: pointer; }
+.rel-pick__item:not(:disabled):hover { border-color: var(--accent); background: var(--accent-soft); }
+.rel-pick__item:focus-visible { outline: 2px solid var(--focus); outline-offset: 0; }
+.rel-pick__item:disabled { cursor: default; color: var(--ink-3); }
+.rel-pick__name { font-size: var(--fs-lead); font-weight: 600; }
+.rel-pick__key { font-size: var(--fs-body); color: var(--ink-2); }
+.rel-pick__item:disabled .rel-pick__key { color: var(--ink-3); }
 
 /* ---- Type-mismatch warning (a modal: both columns, their types, why, what would fit) -------------------------------- */
 .dialog--warn { max-width: 440px; }

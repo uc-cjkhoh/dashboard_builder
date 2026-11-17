@@ -36,6 +36,7 @@ export function linkHint(source, target, decision) {
   if (!source) return "";
   const head = `Relating ${nameOf(source)}.`;
   if (!target || (target.entityId === source.entityId && target.column === source.column)) return `${head} Move to a column in another table ([ and ] switch table), then press Enter. Escape cancels.`;
+  if (decision?.ok && decision.extend) return `${head} Press Enter to also match it on ${nameOf(target)} (one more key column).`;
   if (decision?.ok) return `${head} Press Enter to relate it to ${nameOf(target)}.`;
   return `Can't relate to ${nameOf(target)}${decision?.problem ? `: ${decision.problem}` : "."} ${head}`;
 }
