@@ -266,6 +266,10 @@ Request/response models: `ClickHouse/QueryModels.cs`, `StatisticalModels.cs`, `S
 
 | Cause | Status | `field` | Message |
 |---|---|---|---|
+| host not in `ClickHouse:AllowedHosts` (checked before any network) | 400 | `host` | This server can't connect to that host. Ask the administrator to add it to the allowed ClickHouse hosts. |
+| a typed link-local or unspecified address (169.254.x.x, fe80::/10, 0.0.0.0, ::) | 400 | `host` | That address can't be a ClickHouse server. Enter the server's host name or IP address. |
+| more than `ClickHouse:ConnectPerMinute` attempts (default 20) from one client address in a minute | 429 | — | Too many connection attempts. Wait a minute, then try again. |
+| the account's settings profile refuses `readonly=2` itself ([D137](../decisions/decisions-connection.md#d137--a-writable-account-never-runs-without-readonly2)) | 502 | `user` | This account's settings profile refuses read-only mode (readonly=2), so it can't be used here. … |
 | wrong user or password (ClickHouse code 516 / 192 / 193) | 401 | `password` | Wrong user name or password. |
 | host or port does not answer (refused, DNS, timeout) | 502 | `host` | Can't reach host:port … / No answer from host:port … |
 | TLS on, but the port speaks plain HTTP | 502 | — | … Turn Secure (TLS) off for an HTTP port such as 8123. |

@@ -40,6 +40,9 @@ In the table below, `P##` tags (P28, P33 …) name the product phase whose cases
 | `ScaleTests` | `offset` / export-limit / `dateBucket` validation, grain → function whitelist, `auto` grain choice |
 | `tests/js/query-runner.test.mjs` | latest-wins gate, result cache, truncation notice |
 | `tests/js/workbook-model.test.mjs` | workbook round-trip, no password, hard failures, per-field repair + issue list, caps, storage key |
+| `CustomSqlTests`, `tests/js/sql-check.test.mjs` | the Edit SQL guard on both sides: quoted table-function names, backslash escapes in backticks, the table-function allowlist (lists compared across the two files), `FORMAT` / `INTO OUTFILE` ([D136](../decisions/decisions-custom-sql.md#d136--edit-sql-quoted-names-are-names-and-only-listed-table-functions-go-where-a-table-goes)) |
+| `QueryGuardTests`, `ConnectPolicyTests` | the guard step-down never drops `readonly=2` on a 452 (D137); the connect host allowlist, link-local refusal and per-address rate limit (D135) |
+| `tests/live/data-source-guards-ui.mjs` (app started with `ClickHouse__AllowedHosts__0=ch.internal`) | Change connection A → B → A keeps each server's workbook its own; the Edit SQL editor flags a backtick-quoted `url`; the real server's host refusals on the connect form |
 | `tests/js/api-base.test.mjs` | the API base path under a proxy prefix and at the root, `errorMessage` shapes |
 | `tests/js/validate.test.mjs` | each parser and its edge cases (blank, `1e3`, `0x10`, IPv6, over-length), `LIMITS` |
 | `tests/js/filter-rules.test.mjs`, `toolbar-rules.test.mjs` | `checkFilter` / `checkAdd` / `viewCounts`; tool visibility per chart type |
