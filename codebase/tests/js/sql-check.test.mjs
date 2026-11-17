@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { checkSql, tokenize, posOf, serverErrorPos, canonSyntax, BLOCKED_FUNCTIONS } from "../../src/DashboardBuilder/Features/Core/sql-check.js";
+import { checkSql, tokenize, posOf, serverErrorPos, canonSyntax, BLOCKED_FUNCTIONS, ALLOWED_TABLE_FUNCTIONS } from "../../src/DashboardBuilder/Features/Core/sql-check.js";
 import { opensBlock } from "../../src/DashboardBuilder/Features/Canvas/sql-editor.js";
 
 const msgs = (sql) => checkSql(sql).map((p) => p.message);
@@ -22,6 +22,28 @@ test("the same refusals as the server's guard, with the position of the offendin
   for (const fn of ["url('x')", "file('a.csv')", "S3('x')", "remote('h', d.t)", "mysql('h', 'd', 't', 'u', 'p')"])
     assert.match(one(`SELECT * FROM ${fn}`).message, /outside this connection/, fn);
   assert.deepEqual(msgs("SELECT url FROM t"), []); // a column called url is not a call
+});
+test("quoted names are names, a backslash escapes in backticks too, and only allowed table functions go where a table goes (CustomSql.cs)", () => {
+  for (const [sql, re] of [
+    ["SELECT * FROM `url`('http://169.254.169.254/', 'LineAsString')", /'url' reads outside/],
+    ['SELECT * FROM "s3"(\'x\')', /'s3' reads outside/],
+    ["SELECT * FROM `ur\\l`('x')", /'url' reads outside/],
+    ["SELECT * FROM icebergS3('x')", /'icebergS3' reads outside/],
+    ["SELECT * FROM t, someFutureTableFunction('x')", /reads outside/],
+    ["SELECT a FROM t WHERE a IN (SELECT b FROM mongodb('h'))", /'mongodb' reads outside/],
+    ["SELECT 1 FORMAT JSON", /output format/],
+    ["SELECT a FROM t INTO OUTFILE 'x.csv'", /write a file/],
+  ]) assert.match(one(sql).message, re, sql);
+  assert.ok(msgs("SELECT 1 AS `\\` AS a, `, * FROM url('http://x/') SETTINGS max_execution_time=0").some((m) => /change settings/.test(m)));
+  for (const ok of ["SELECT number FROM numbers(10)", "SELECT * FROM t, numbers(3) AS n", "SELECT * FROM view(SELECT a FROM t)",
+    "SELECT EXTRACT(YEAR FROM toDate(created)) AS y FROM t", "SELECT trim(BOTH ' ' FROM upper(name)) FROM t", "SELECT x FROM t ARRAY JOIN splitByChar(',', tags) AS x",
+    "SELECT `a\\`b` FROM t", "SELECT URLHierarchy(page) AS h, format('{}', a) AS f FROM t", "SELECT a AS format FROM t", "SELECT format FROM t ORDER BY format DESC", "SELECT a, format FROM t ORDER BY a, format ASC",
+    "SELECT a FROM (SELECT a FROM t) AS s JOIN u ON s.a = lower(u.b)"]) assert.deepEqual(msgs(ok), [], ok);
+});
+test("the allowed table functions are the server's list", () => {
+  const cs = readFileSync(new URL("../../src/DashboardBuilder/ClickHouse/CustomSql.cs", import.meta.url), "utf8");
+  const block = cs.slice(cs.indexOf("AllowedTableFunctions = new"), cs.indexOf("};", cs.indexOf("AllowedTableFunctions = new")));
+  assert.deepEqual([...ALLOWED_TABLE_FUNCTIONS].sort(), [...new Set([...block.matchAll(/"([a-z0-9_]+)"/g)].map((m) => m[1]))].sort());
 });
 test("brackets: an extra ')' and a never-closed '(' are each pinned to their own character", () => {
   const extra = one("SELECT 1)"); assert.match(extra.message, /no '\('/); assert.equal(extra.from, 8);

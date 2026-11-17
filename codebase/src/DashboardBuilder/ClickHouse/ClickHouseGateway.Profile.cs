@@ -61,7 +61,7 @@ public sealed partial class ClickHouseGateway
     private static async Task<T> ReadProfileAsync<T>(ClickHouseConnection conn, ClickHouseConnectionInfo info, string sql,
         Func<System.Data.Common.DbDataReader, CancellationToken, Task<T>> read, CancellationToken ct)
     {
-        for (var withSettings = info.Guards != QueryGuards.None; ; withSettings = false)
+        for (var withSettings = TakesQuerySettings(info.Guards); ; withSettings = false)
         {
             try
             {

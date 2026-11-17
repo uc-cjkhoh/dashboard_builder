@@ -65,6 +65,7 @@ public sealed partial class ClickHouseGateway
                 + ";set_readonly=2"
                 + ";set_cancel_http_readonly_queries_on_client_close=1"
                 + ";set_join_use_nulls=1",
+            QueryGuards.ReadOnly => connectionString + ";set_readonly=2",
             _ => connectionString,
         };
     }
@@ -83,18 +84,23 @@ public sealed partial class ClickHouseGateway
     /// <summary>
     /// The guard level to retry with after the server refused <paramref name="current"/>, or
     /// <c>null</c> when <paramref name="ex"/> isn't a settings refusal (or nothing is left to drop).
-    /// Code 164 (READONLY): the account is already read-only, so <c>readonly=2</c> itself is refused —
-    /// send nothing. Code 452 (SETTING_CONSTRAINT_VIOLATION): a profile constraint, almost always on
-    /// <c>max_execution_time</c> — drop the time limit first, then everything.
+    /// Code 164 (READONLY): the account is already read-only on the server, so <c>readonly=2</c> itself is refused —
+    /// send nothing; the server guards it. Code 452 (SETTING_CONSTRAINT_VIOLATION): a profile constraint — drop the
+    /// time limit first, then everything but <c>readonly=2</c>, and never that: a refusal at <see cref="QueryGuards.ReadOnly"/>
+    /// fails the connect (<see cref="DescribeConnectFailure"/>), so an account that may write always runs read-only.
     /// </summary>
     internal static QueryGuards? NextGuards(QueryGuards current, Exception ex) =>
         (current, ex) switch
         {
-            (QueryGuards.Full, ClickHouseServerException { ErrorCode: 164 }) => QueryGuards.None,
+            (QueryGuards.Full or QueryGuards.NoTimeLimit or QueryGuards.ReadOnly, ClickHouseServerException { ErrorCode: 164 }) => QueryGuards.None,
             (QueryGuards.Full, ClickHouseServerException { ErrorCode: 452 }) => QueryGuards.NoTimeLimit,
-            (QueryGuards.NoTimeLimit, ClickHouseServerException { ErrorCode: 164 or 452 }) => QueryGuards.None,
+            (QueryGuards.NoTimeLimit, ClickHouseServerException { ErrorCode: 452 }) => QueryGuards.ReadOnly,
             _ => null,
         };
+
+    /// <summary>Whether a query may carry its own SETTINGS (join_use_nulls, max_threads, the profile's backstops): only while the server
+    /// accepted the connection's extra settings. At <see cref="QueryGuards.ReadOnly"/> one of them was refused, so none is sent.</summary>
+    internal static bool TakesQuerySettings(QueryGuards guards) => guards is QueryGuards.Full or QueryGuards.NoTimeLimit;
 
     /// <summary>
     /// Whether this connection bypasses TLS certificate validation. Safe by default
@@ -186,6 +192,8 @@ public sealed partial class ClickHouseGateway
 
         if (chain.OfType<ClickHouseServerException>().FirstOrDefault() is { ErrorCode: 516 or 192 or 193 })
             return new(StatusCodes.Status401Unauthorized, "Wrong user name or password.", "password");
+        if (chain.OfType<ClickHouseServerException>().FirstOrDefault() is { ErrorCode: 452 } && info.Guards == QueryGuards.ReadOnly)
+            return new(StatusCodes.Status502BadGateway, "This account's settings profile refuses read-only mode (readonly=2), so it can't be used here. Connect with an account limited to reading.", "user");
         if (IsHttpTimeout(ex) || chain.OfType<System.Net.Sockets.SocketException>().Any(s => s.SocketErrorCode is System.Net.Sockets.SocketError.TimedOut))
             return new(StatusCodes.Status502BadGateway, $"No answer from {where}. Check the host and port.", "host");
         if (chain.OfType<CertificateRejectedException>().Any())
@@ -638,7 +646,7 @@ public sealed partial class ClickHouseGateway
     internal static (string Skip, string Settings) PageClause(int? offset, bool storedTable, QueryGuards guards)
     {
         if (offset is not { } n) return ("", "");
-        return (n > 0 ? $" OFFSET {n}" : "", storedTable && guards != QueryGuards.None ? " SETTINGS max_threads = 1" : "");
+        return (n > 0 ? $" OFFSET {n}" : "", storedTable && TakesQuerySettings(guards) ? " SETTINGS max_threads = 1" : "");
     }
 
     /// <summary>One selected column, cut INSIDE ClickHouse so a huge value never leaves it: NULL stays NULL, anything
@@ -1598,7 +1606,7 @@ public sealed partial class ClickHouseGateway
         {
             // Reuses the compiled dimension and measure SQL, so it is sent with the same `parameters` as the page.
             var otherSql = OtherSql(dimExprs[0], measExprs, from.ToString(), where, ordered, limit,
-                anyLeft && info.Guards != QueryGuards.None ? ", join_use_nulls = 1" : "");
+                anyLeft && TakesQuerySettings(info.Guards) ? ", join_use_nulls = 1" : "");
             try { other = await OtherAsync(info, otherSql, parameters, measNumeric, ct); }
             catch (ClickHouseServerException ex)
             {
@@ -1650,12 +1658,12 @@ public sealed partial class ClickHouseGateway
     internal static bool CanSample(IEnumerable<string?> types) => !types.Any(t => t is "right" or "full");
     /// <summary>Right/full joins give wrong keys without join_use_nulls (unmatched sides read as 0 / ''), so they need the setting.</summary>
     internal static bool NullsUnavailable(IEnumerable<string?> types, ClickHouseConnectionInfo info) =>
-        info.Guards == QueryGuards.None && types.Any(t => t is "right" or "full");
+        !TakesQuerySettings(info.Guards) && types.Any(t => t is "right" or "full");
 
     /// <summary>A left join's unmatched side reads as NULL (ClickHouse's default is the type's zero / ""),
     /// unless the server refuses settings (then the defaults show).</summary>
     internal static string Settings(bool anyLeft, ClickHouseConnectionInfo info) =>
-        anyLeft && info.Guards != QueryGuards.None ? " SETTINGS join_use_nulls = 1" : "";
+        anyLeft && TakesQuerySettings(info.Guards) ? " SETTINGS join_use_nulls = 1" : "";
 
     /// <summary>Whether a table declares a sampling key (only then can it be read with SAMPLE).</summary>
     private async Task<bool> HasSamplingKeyAsync(ClickHouseConnectionInfo info, string db, string table, CancellationToken ct)

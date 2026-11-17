@@ -8,6 +8,9 @@ using Microsoft.AspNetCore.ResponseCompression;
 using System.IO.Compression;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.FileProviders;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.RateLimiting;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -64,6 +67,23 @@ builder.Services.AddResponseCompression(o =>
 builder.Services.Configure<BrotliCompressionProviderOptions>(o => o.Level = CompressionLevel.Fastest);
 builder.Services.Configure<GzipCompressionProviderOptions>(o => o.Level = CompressionLevel.Fastest);
 
+// Which hosts the connect form may reach, and how often (D135): ClickHouse:AllowedHosts (unset = any host) and
+// ClickHouse:ConnectPerMinute per client address. The app has no login, so this is what stops it being a network probe.
+var connectPolicy = new ConnectPolicy(builder.Configuration.GetSection("ClickHouse:AllowedHosts").Get<string[]>());
+builder.Services.AddSingleton(connectPolicy);
+var connectPerMinute = builder.Configuration.GetValue("ClickHouse:ConnectPerMinute", ConnectPolicy.DefaultPerMinute);
+builder.Services.AddRateLimiter(o =>
+{
+    o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    o.OnRejected = (ctx, ct) => new ValueTask(ctx.HttpContext.Response.WriteAsJsonAsync(new ApiError(ConnectPolicy.TooManyMessage), ct));
+    o.AddPolicy(ConnectPolicy.RateLimitPolicy, http => RateLimitPartition.GetFixedWindowLimiter(
+        http.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = connectPerMinute, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+});
+// Apache on this host proxies to Kestrel: take the client address (for the rate limit) and scheme from its X-Forwarded-* headers.
+// Only loopback proxies are trusted (the default), so a direct client can't spoof them.
+builder.Services.Configure<ForwardedHeadersOptions>(o => o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto);
+
 // Session-scoped connection store + the read-only ClickHouse gateway.
 builder.Services.AddScoped<ConnectionRegistry>();
 // Worksheet results are reused for a minute per server + user + request (bounded: ~256 units).
@@ -74,6 +94,9 @@ builder.Services.AddSingleton(sp => new SqlTranslator(Path.Combine(sp.GetRequire
     builder.Configuration["Translate:Python"] ?? "python3"));
 
 var app = builder.Build();
+app.UseForwardedHeaders();
+if (!connectPolicy.Restricted)
+    app.Logger.LogWarning("ClickHouse:AllowedHosts is not set: the connect form may reach any host. Set it on a shared server (D135).");
 
 // When hosted behind a reverse proxy under a path prefix (e.g. Apache proxying
 // /dashboardbuilder → this app), set PathBase (config key "PathBase", e.g. env
@@ -117,6 +140,7 @@ app.UseStaticFiles(new StaticFileOptions
 });
 
 app.UseRouting();
+app.UseRateLimiter();
 app.UseSession();
 
 // The Shell page (GET /) and the read-only /api/* controllers are all attribute-routed.

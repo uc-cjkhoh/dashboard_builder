@@ -11,8 +11,9 @@ namespace DashboardBuilder.Tests;
 /// time-limit settings, so the read-only invariant does not rest on our SQL builders alone, a
 /// runaway query is stopped server-side, and a client disconnect cancels the query. When the server
 /// refuses a setting, the connection steps down instead of failing: a settings constraint (code 452,
-/// usually on max_execution_time) drops only the time limit; an account the server already locks
-/// read-only (code 164) runs with no settings — the server guards it.
+/// usually on max_execution_time) drops only the time limit, a second one everything but readonly=2, and a
+/// third fails the connect; an account the server already locks read-only (code 164) runs with no
+/// settings — the server guards it.
 /// </summary>
 public class QueryGuardTests
 {
@@ -73,11 +74,41 @@ public class QueryGuardTests
     public void A_settings_constraint_drops_only_the_time_limit()
         => Assert.Equal(QueryGuards.NoTimeLimit, ClickHouseGateway.NextGuards(QueryGuards.Full, ServerError(452)));
 
-    [Theory]
-    [InlineData(164)]
-    [InlineData(452)]
-    public void A_further_refusal_without_the_time_limit_steps_down_to_no_settings(int code)
-        => Assert.Equal(QueryGuards.None, ClickHouseGateway.NextGuards(QueryGuards.NoTimeLimit, ServerError(code)));
+    [Fact]
+    public void A_read_only_account_steps_down_to_no_settings_from_any_level()
+    {
+        Assert.Equal(QueryGuards.None, ClickHouseGateway.NextGuards(QueryGuards.NoTimeLimit, ServerError(164)));
+        Assert.Equal(QueryGuards.None, ClickHouseGateway.NextGuards(QueryGuards.ReadOnly, ServerError(164)));
+    }
+
+    // Review 2026-11-17: a second constraint used to step down to no settings at all, so a writable account ran without readonly=2.
+    [Fact]
+    public void A_second_settings_constraint_keeps_readonly_and_drops_the_rest()
+    {
+        Assert.Equal(QueryGuards.ReadOnly, ClickHouseGateway.NextGuards(QueryGuards.NoTimeLimit, ServerError(452)));
+        var settings = SettingsOf(Info(QueryGuards.ReadOnly));
+        Assert.Equal("2", settings["readonly"].ToString());
+        Assert.Single(settings);
+    }
+
+    [Fact]
+    public void A_constraint_on_readonly_itself_fails_the_connect_in_plain_words()
+    {
+        Assert.Null(ClickHouseGateway.NextGuards(QueryGuards.ReadOnly, ServerError(452)));
+        var failure = ClickHouseGateway.DescribeConnectFailure(ServerError(452), Info(QueryGuards.ReadOnly));
+        Assert.Contains("read-only mode", failure.Message);
+        Assert.Equal("user", failure.Field);
+    }
+
+    [Fact]
+    public void Queries_add_their_own_settings_only_while_the_connection_takes_settings()
+    {
+        Assert.True(ClickHouseGateway.TakesQuerySettings(QueryGuards.Full));
+        Assert.True(ClickHouseGateway.TakesQuerySettings(QueryGuards.NoTimeLimit));
+        Assert.False(ClickHouseGateway.TakesQuerySettings(QueryGuards.ReadOnly));
+        Assert.False(ClickHouseGateway.TakesQuerySettings(QueryGuards.None));
+        Assert.Equal((" OFFSET 200", ""), ClickHouseGateway.PageClause(200, true, QueryGuards.ReadOnly));
+    }
 
     [Theory]
     [InlineData(164)]

@@ -1,5 +1,6 @@
 using DashboardBuilder.ClickHouse;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace DashboardBuilder.Features.Connection;
 
@@ -10,8 +11,10 @@ namespace DashboardBuilder.Features.Connection;
 /// </summary>
 public sealed class ConnectionController : ApiControllerBase
 {
-    public ConnectionController(ConnectionRegistry registry, ClickHouseGateway gateway, ILoggerFactory loggers)
-        : base(registry, gateway, loggers) { }
+    private readonly ConnectPolicy _policy;
+
+    public ConnectionController(ConnectionRegistry registry, ClickHouseGateway gateway, ILoggerFactory loggers, ConnectPolicy policy)
+        : base(registry, gateway, loggers) => _policy = policy;
 
     /// <summary>Connection request from the sidebar form. Port is required; Secure defaults to true.</summary>
     public sealed record ConnectRequest(
@@ -35,10 +38,13 @@ public sealed class ConnectionController : ApiControllerBase
     }
 
     [HttpPost("connection")]
+    [EnableRateLimiting(ConnectPolicy.RateLimitPolicy)]
     public async Task<IResult> Connect([FromBody] ConnectRequest req, CancellationToken ct)
     {
         try { RequestRules.ValidateConnect(req.Host, req.Port, req.User, req.Password); }
         catch (RequestValidationException ex) { return Invalid(ex); }
+        // Before any network: a host the operator hasn't allowed is never tried, so its answer can't be read (D135).
+        if (_policy.HostError(req.Host!) is { } refused) return Results.BadRequest(new ApiError(refused, "host"));
 
         var secure = req.Secure ?? true;
         var port = req.Port!.Value;
