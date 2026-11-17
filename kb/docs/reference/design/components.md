@@ -21,7 +21,7 @@ explorer, not an admin template.
 | Status pill | `.pill`, `.pill--warn` (loading), `.pill--danger` (failed) — the schema browser's table-load status |
 | Card / panel | `.card`, `.card--fill`, `.card__head`, `.card__body.flush`, `.card__foot` |
 | Dialog | `.dialog`, `.dialog--sm`, `.dialog__head/body/foot`, `.form-grid`, `.form-field` |
-| Cardinality picker | `.card-choice` |
+| Radio cards (one of several, 2 × 2) | `.choice-cards`, `.choice-card`, `__name`, `__hint` — the relationship dialog's Join and Cardinality (`radioCards()` in `relations.js`) |
 | Select | `.select`, `.select--light`; in the sidebar (`.sidebar .select`) it matches the text inputs — control height, edge, radius, padding, neutral focus wash — with a token-coloured gradient chevron instead of the UA arrow; `.select option` takes `--surface`/`--ink` so the open list follows the theme |
 | Data grid | `.data`, `.num` (right-aligned numerics), `.mono`, `.cell-strong`, `.cell-sub` |
 | Empty state | `.empty` |

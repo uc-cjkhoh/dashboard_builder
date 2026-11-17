@@ -77,7 +77,7 @@ first layer of a multi-layer `background` shorthand; the whole declaration would
 ### Buttons have no border
 
 `Core/buttons.css` (loaded last) removes the border of every button: `button`, `.btn`, `.iconbtn`,
-`.tab`, `.tab-add`, `.ws-tool`, `.card-choice`, `[role=button|tab]`. It uses `!important`, because
+`.tab`, `.tab-add`, `.ws-tool`, `[role=button|tab]`. (Radio cards are labels, not buttons, so they keep their border.) It uses `!important`, because
 feature sheets set their own.
 
 The fill carries the edge instead:
