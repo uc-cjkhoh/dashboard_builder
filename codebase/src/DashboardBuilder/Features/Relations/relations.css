@@ -18,7 +18,12 @@
 
 /* Relationship dialog: the column profile's frame (head with title, subtitle and X; body on the colour wash; foot) with two flat
    panels instead of bento cells. The body scrolls, the head and foot stay put. */
-.dialog.dialog--rel { width: min(1216px, calc(100vw - 2 * var(--s4))); max-width: none; max-height: min(88vh, 800px); }
+/* Golden ratio: the height is the width × 0.618 (752px at the full 1216px), capped only by the window less the 16px gutter; the body
+   scrolls when the content is taller and the wash fills it when shorter. One column under 640px goes back to content height
+   (fit-content, the browser default for a modal: auto would stretch it to the window). */
+.dialog.dialog--rel { width: min(1216px, calc(100vw - 2 * var(--s4))); max-width: none;
+  height: min(752px, calc((100vw - 2 * var(--s4)) * 0.618)); max-height: calc(100vh - 2 * var(--s4)); }
+@media (max-width: 640px) { .dialog.dialog--rel { height: fit-content; } }
 .dialog--rel[open] { display: flex; flex-direction: column; }
 .rel-dialog__head { flex: none; display: flex; align-items: flex-start; gap: var(--s2); padding: var(--s4) calc(var(--s6) - 12px) var(--s4) var(--s6); border-bottom: 1px solid var(--line); } /* right 12px: the X glyph sits 12px inside its 32px button, so it lands on the 24px gutter */
 .rel-dialog__titles { flex: 1; min-width: 0; }
@@ -28,7 +33,7 @@
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s4); align-content: start; }
 /* Two equal panels, so the divider runs down the middle of the dialog; the divider is an inset shadow (no width) and each side keeps a
    16px gutter to it. */
-.rel-dialog:not(.rel-dialog--single) { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0; }
+.rel-dialog:not(.rel-dialog--single) { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0; align-content: stretch; } /* the row fills the golden-ratio body, so the suggestion panel scrolls in the full height */
 .rel-dialog:not(.rel-dialog--single) .rel-dialog__left { padding-right: var(--s4); }
 .rel-dialog__left, .rel-dialog__right { min-width: 0; }
 /* Left: no boxes. Sections sit straight on the wash, split by one hairline and 24px of air; the chosen state is what draws the eye. */
