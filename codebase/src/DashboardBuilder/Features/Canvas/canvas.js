@@ -17,7 +17,7 @@ import { openSqlDialog } from "./sql-dialog.js";
 
 // Data Source canvas + entity cards. A table dropped from the sidebar (or added via the
 // `table:add` fallback) becomes an entity card: a db.table head over a scrollable list of column
-// rows (name + type badge), 240px tall unless an edge drag resized it. Cards are moved
+// rows (name + type), 240px tall unless an edge drag resized it. Cards are moved
 // by dragging the head and removed via the head's trash icon. No row preview here — data lives in
 // dashboard widgets. Entities are the shared model (store.js).
 const TABLE_MIME = "application/x-ch-table";
@@ -549,7 +549,7 @@ export function initCanvas() {
     const px = measure(title) + (edit ? measure(edit) + gap : 0) + (need && !need.hidden ? measure(need) + gap : 0) + (relate ? measure(relate) + gap : 0);
     const cs = getComputedStyle(canvas);
     const limit = (name, fallback) => parseFloat(cs.getPropertyValue(name)) || fallback;
-    const { width } = entityWidth(px, { min: limit("--entity-min", 300), max: limit("--entity-max", 480) });
+    const { width } = entityWidth(px, { min: limit("--entity-min", 312), max: limit("--entity-max", 480) });
     card.style.width = `${width}px`;
   }
 
