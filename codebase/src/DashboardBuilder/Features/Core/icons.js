@@ -42,6 +42,7 @@ export const PATHS = Object.freeze({
   eye: "M2.5 10S5 5 10 5s7.5 5 7.5 5-2.5 5-7.5 5-7.5-5-7.5-5zM10 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4z",
   settings: "M3 5h6M13 5h4M11 3a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM3 10h2M9 10h8M7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM3 15h8M15 15h2M13 13a2 2 0 1 0 0 4 2 2 0 0 0 0-4z",
   more: "M5 10h.01M10 10h.01M15 10h.01",
+  menu: "M4 6h12M4 10h12M4 14h12", // ☰: a card's actions (Canvas, D129)
   grip: "M7.5 5h.01M12.5 5h.01M7.5 10h.01M12.5 10h.01M7.5 15h.01M12.5 15h.01",
   search: "M9 4a5 5 0 1 0 0 10 5 5 0 0 0 0-10zM16 16l-3.5-3.5",
   close: "M5 5l10 10M15 5L5 15",
@@ -49,6 +50,8 @@ export const PATHS = Object.freeze({
   sidebar: "M3 4h14v12H3zM8 4v12",
   dashboard: "M3 3.5h6.5v6H3zM11.5 3.5H17v3.5h-5.5zM11.5 9H17v7.5h-5.5zM3 11.5h6.5v5H3z", // a board of tiles (the dashboard tab)
   chevron: "M7 8l3 3 3-3",
+  "chevron-left": "M12 6l-4 4 4 4",
+  "chevron-right": "M8 6l4 4-4 4",
   "arrow-right": "M4 10h12M11 5l5 5-5 5",
   "arrow-left": "M16 10H4M9 5l-5 5 5 5",
   story: "M3.5 5h5.5v11H3.5zM11 5h5.5v11H11zM5 8h2.5M5 11h2.5M12.5 8H15M12.5 11H15", // two facing pages (the story tab)

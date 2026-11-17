@@ -71,8 +71,7 @@ export function initRelations() {
   canvas.addEventListener("pointerleave", () => { if (focusEntityId) { focusEntityId = null; markLinkedRows(); } });
   initColumnDrag();
   initColumnKeys();
-  initTableDrag();
-  bus.addEventListener("rel:relate", (e) => openTablePicker(e.detail?.entityId)); // a card's link button or its "Needs a partner" (canvas.js)
+  bus.addEventListener("rel:relate", (e) => openTablePicker(e.detail?.entityId)); // a card's ☰ Relate to another table or its "Needs a partner" (canvas.js)
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") { cancelKeyPick(); select(null); }
   });
@@ -184,8 +183,7 @@ function extendRelationship(rel, a, b) {
   } } });
 }
 
-// --- relate two tables at once (D127): a card's link button, its "Needs a partner", a proposed link, or dragging the link button onto a card ---
-const RELATE_MIME = "application/x-ch-relate"; // our link button only
+// --- relate two tables at once (D127): a card's ☰ Relate to another table, its "Needs a partner", or a proposed link ---
 const dismissed = new Set(); // proposed links the user closed: "a\0b"
 const ghosts = new Map();    // key -> the proposed link's button pair, kept across redraws so focus stays on it
 const tableOf = (e) => ({ table: e.table, columns: e.columns ?? [] });
@@ -260,38 +258,6 @@ function openTablePicker(entityId) {
   document.body.append(dlg);
   openDialog(dlg);
   list.querySelector("button:not(:disabled)")?.focus();
-}
-
-// Dragging a card's link button onto another card relates the two tables (the dialog opens filled with the key their names point to).
-function initTableDrag() {
-  let from = null;
-  const target = (e) => { const card = e.target instanceof Element ? e.target.closest(".entity") : null; const id = card?.dataset.entityId; return id && id !== from && !entities.get(id)?.source ? card : null; };
-  const clear = () => { for (const el of canvas.querySelectorAll(".entity--relate-ok")) el.classList.remove("entity--relate-ok"); };
-  canvas.addEventListener("dragstart", (e) => {
-    const handle = e.target instanceof Element ? e.target.closest(".entity__relate") : null;
-    if (!handle || !e.dataTransfer) return;
-    from = handle.closest(".entity").dataset.entityId;
-    e.dataTransfer.setData(RELATE_MIME, from);
-    e.dataTransfer.effectAllowed = "link";
-    canvas.classList.add("canvas--relating");
-  });
-  canvas.addEventListener("dragover", (e) => {
-    if (!from || !e.dataTransfer || !Array.from(e.dataTransfer.types).includes(RELATE_MIME)) return;
-    const card = target(e);
-    for (const el of canvas.querySelectorAll(".entity--relate-ok")) if (el !== card) el.classList.remove("entity--relate-ok");
-    if (!card) { e.dataTransfer.dropEffect = "none"; return; }
-    card.classList.add("entity--relate-ok");
-    e.preventDefault(); e.dataTransfer.dropEffect = "link";
-  });
-  canvas.addEventListener("drop", (e) => {
-    if (!from || !e.dataTransfer || !Array.from(e.dataTransfer.types).includes(RELATE_MIME)) return;
-    const card = target(e), a = from;
-    from = null; clear(); canvas.classList.remove("canvas--relating");
-    if (!card) return;
-    e.preventDefault();
-    relateTables(a, card.dataset.entityId);
-  });
-  canvas.addEventListener("dragend", () => { from = null; clear(); canvas.classList.remove("canvas--relating"); });
 }
 
 /** Proposed links: for each card that needs a partner, the confident key to another card (one per table pair), drawn dashed with a

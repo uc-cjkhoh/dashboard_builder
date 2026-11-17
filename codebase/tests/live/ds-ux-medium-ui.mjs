@@ -107,11 +107,11 @@ ok('14 Esc in the search clears it, dialog stays', await ev(`!!document.querySel
 await ev(`document.querySelector('dialog[open] .union-dialog__top .iconbtn').click()`); await sleep(200);
 ok('14 the X closes it', !(await ev(`!!document.querySelector('dialog[open]')`)));
 // 15 edit SQL esc
-const r = JSON.parse(await ev(`JSON.stringify(document.querySelector('.entity__edit').getBoundingClientRect())`));
-await b.click(r.x + r.width/2, r.y + r.height/2); await sleep(1500);
+const openEdit = () => ev(`(() => { document.querySelector('.entity__menu').click(); [...document.querySelectorAll('.ctx-menu [role^="menuitem"]')].find((x) => x.textContent.trim() === 'Edit SQL').click(); return true; })()`); // via the card's ☰ menu (D129)
+await openEdit(); await sleep(1500);
 await b.key('Escape',{code:'Escape',vk:27}); await sleep(400);
 ok('15 Esc closes an untouched Edit SQL', !(await ev(`!!document.querySelector('dialog[open]')`)));
-await b.click(r.x + r.width/2, r.y + r.height/2); await sleep(1500);
+await openEdit(); await sleep(1500);
 await b.type(' -- note'); await sleep(200);
 await b.key('Escape',{code:'Escape',vk:27}); await sleep(400);
 const conf = await ev(`[...document.querySelectorAll('dialog[open]')].map(d=>d.innerText.slice(0,60)).join(' || ')`);

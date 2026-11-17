@@ -29,7 +29,7 @@
         </div>
     </div>
 </section>
-@* Data preview: the first rows of one card, docked under the canvas (Canvas/data-preview.js). Opened from a card's table button
+@* Data preview: the first rows of one card, docked under the canvas (Canvas/data-preview.js). Opened from Preview data in a card's ☰ menu
    and after Edit SQL is saved; shown only on the Data Source. A sibling of #model-view, so the ground (pan, zoom, free slots) shrinks
    above it and never runs under it. *@
 <section class="ds-preview" id="ds-preview" aria-labelledby="ds-preview-title" hidden>
@@ -38,6 +38,12 @@
     <header class="ds-preview__head">
         <h2 class="ds-preview__title" id="ds-preview-title"></h2>
         <span class="ds-preview__summary" id="ds-preview-summary" role="status"></span>
+        <nav class="ds-preview__pager" id="ds-preview-pager" aria-label="Pages of rows" hidden>
+            <button type="button" class="iconbtn" id="ds-preview-prev" aria-label="Previous 100 rows" title="Previous 100 rows" disabled><span data-icon="chevron-left"></span></button>
+            <label class="ds-preview__page">Page <input class="input ds-preview__page-input" id="ds-preview-page" type="text" inputmode="numeric"
+                autocomplete="off" spellcheck="false" value="1" aria-label="Page number" title="Type a page number, then Enter"></label>
+            <button type="button" class="iconbtn" id="ds-preview-next" aria-label="Next 100 rows" title="Next 100 rows" disabled><span data-icon="chevron-right"></span></button>
+        </nav>
         <button type="button" class="iconbtn" id="ds-preview-refresh" aria-label="Refresh rows" title="Refresh rows"><span data-icon="refresh"></span></button>
         <button type="button" class="iconbtn" id="ds-preview-csv" aria-label="Export CSV" title="Export CSV" disabled><span data-icon="export"></span></button>
         <button type="button" class="iconbtn" id="ds-preview-close" aria-label="Close data preview" title="Close"><span data-icon="close"></span></button>

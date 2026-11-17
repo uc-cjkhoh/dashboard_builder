@@ -198,11 +198,11 @@ button { font: inherit; }
 .table-list::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--ink-3) 45%, transparent); border-radius: var(--r-pill); border: 3px solid transparent; background-clip: padding-box; }
 .table-list::-webkit-scrollbar-thumb:hover { background: var(--accent); background-clip: padding-box; }
 
-.view, .entity__cols { scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
-.view::-webkit-scrollbar, .entity__cols::-webkit-scrollbar { width: 10px; height: 10px; }
-.view::-webkit-scrollbar-track, .entity__cols::-webkit-scrollbar-track { background: transparent; }
-.view::-webkit-scrollbar-thumb, .entity__cols::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: var(--r-pill); border: 3px solid transparent; background-clip: padding-box; }
-.view::-webkit-scrollbar-thumb:hover, .entity__cols::-webkit-scrollbar-thumb:hover { background: var(--accent); background-clip: padding-box; }
+.view, .entity__cols, .ds-preview__scroll { scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
+.view::-webkit-scrollbar, .entity__cols::-webkit-scrollbar, .ds-preview__scroll::-webkit-scrollbar { width: 10px; height: 10px; }
+.view::-webkit-scrollbar-track, .entity__cols::-webkit-scrollbar-track, .ds-preview__scroll::-webkit-scrollbar-track { background: transparent; }
+.view::-webkit-scrollbar-thumb, .entity__cols::-webkit-scrollbar-thumb, .ds-preview__scroll::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: var(--r-pill); border: 3px solid transparent; background-clip: padding-box; }
+.view::-webkit-scrollbar-thumb:hover, .entity__cols::-webkit-scrollbar-thumb:hover, .ds-preview__scroll::-webkit-scrollbar-thumb:hover { background: var(--accent); background-clip: padding-box; }
 
 /* ---- Menu (button + popover list; Core/menu.js) -------------------------- */
 .menu { position: relative; }

@@ -50,12 +50,12 @@ export function wireMenu(button, list, { signal } = {}) {
 // Shift+F10 / Enter (Core/context-menu-model.js). It is a plain `.menu__list` (role=menu) on <body> (inside the open modal dialog when opened from one), so panels never clip it.
 // Entries ({ type: item | radio | check | heading | sep | custom, label, checked, disabled, title, onSelect, keepOpen, el }) are
 // given as an array or a function re-read on every refresh. A radio / check / item closes the popup and then acts, unless
-// `keepOpen` (act, then rebuild the entries). Esc, Tab, outside click, scroll and resize close it.
+// `keepOpen` (act, then rebuild the entries). Esc, Tab, outside click, scroll and resize close it; `onClose` runs whenever it closes.
 let current = null;
 
 export function closeContextMenu() { current?.close(); }
 
-export function openContextMenu({ x, y, entries, label = "Options", returnFocus, avoid, host }) {
+export function openContextMenu({ x, y, entries, label = "Options", returnFocus, avoid, host, onClose }) {
   closeContextMenu();
   const list = document.createElement("div");
   list.className = "menu__list ctx-menu";
@@ -93,6 +93,7 @@ export function openContextMenu({ x, y, entries, label = "Options", returnFocus,
     if (closed) return; closed = true;
     ac.abort(); list.remove();
     if (current?.list === list) current = null;
+    onClose?.(); // the opener's own state (a menu button's aria-expanded), however the popup closed
     setTimeout(() => {
       const a = document.activeElement;
       if (a && a !== document.body) return; // focus went somewhere on purpose

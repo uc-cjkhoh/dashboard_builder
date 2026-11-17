@@ -18,6 +18,7 @@ public static class ApiLimits
     public const int MaxRowLimit = 5000, MaxBuckets = 100, MaxDistinct = 1000;
     public const int MaxExportRows = 100_000; // CSV export of a whole worksheet result
     public const int DefaultRowsLimit = 100, MaxRowsLimit = 1000; // raw rows of one table (POST /api/rows): default / cap
+    public const int MaxRowsOffset = 100_000; // rows a paged read (POST /api/rows, /api/unpivot: the Data Source preview's pages) may skip
     public const int MaxUnpivotColumns = 50, MaxUnpivotKeep = 5;  // wide columns one unpivot turns into rows / columns it keeps (POST /api/unpivot)
     public const int MaxCustomSqlChars = 10_000; // characters in a card's custom SQL (D105)
     public const int MaxSourceName = 200;  // characters in a union / unpivot source's name (the table name its fields carry)
@@ -299,6 +300,7 @@ public static class RequestRules
         for (var i = 0; i < cols.Length; i++)
             if (string.IsNullOrWhiteSpace(cols[i])) throw Bad($"'columns[{i}]' is required.", $"columns[{i}]");
         ValidateRange(r.Limit, ApiLimits.MaxRowsLimit, "Limit", "limit");
+        ValidateOffset(r.Offset);
         if (cols.Length > 0) ValidateRowCells(r.Limit ?? ApiLimits.DefaultRowsLimit, cols.Length, "limit");
         ValidateStatFilters(r.Filters);
         ValidateSqlSource(r.Source, r.Db, r.Table);
@@ -425,8 +427,12 @@ public static class RequestRules
             if (!seen.Add(keep[i])) throw Bad($"'{keep[i]}' is already used.", $"keep[{i}]");
         }
         ValidateRange(r.Limit, ApiLimits.MaxRowsLimit, "Limit", "limit");
+        ValidateOffset(r.Offset);
         ValidateRowCells(r.Limit ?? ApiLimits.DefaultRowsLimit, keep.Length + 2, "limit");
     }
+    /// <summary>A paged row read's offset (rows skipped): 0..<see cref="ApiLimits.MaxRowsOffset"/>, never clamped.</summary>
+    private static void ValidateOffset(int? offset)
+    { if (offset is { } n && (n < 0 || n > ApiLimits.MaxRowsOffset)) throw Bad($"Offset must be between 0 and {ApiLimits.MaxRowsOffset}.", "offset"); }
     /// <summary>rows x columns must stay within <see cref="ApiLimits.MaxRowsCells"/> — ask for fewer rows or columns.</summary>
     public static void ValidateRowCells(int rows, int columns, string field)
     {

@@ -1,7 +1,6 @@
 @* Database picker + table list (sidebar). Populated in Schema/schema.js, gated until connected. *@
-<h2 class="sidebar__title" id="db-heading" hidden>Databases &amp; Tables</h2>
-<section class="sidebar__section sidebar__section--db" hidden id="schema-section" aria-labelledby="db-title">
-    <h2 class="sr-only" id="db-title">Database</h2>
+<h2 class="sidebar__title" id="db-heading" hidden>Database</h2>
+<section class="sidebar__section sidebar__section--db" hidden id="schema-section" aria-labelledby="db-heading">
     <label class="table-search db-pick">
         <span data-icon="database" aria-hidden="true"></span>
         <select class="select" id="db-select" aria-label="Database"></select>
@@ -9,7 +8,7 @@
 </section>
 
 <section class="sidebar__section sidebar__section--grow" hidden id="tables-section" aria-labelledby="tables-title">
-    <h2 class="sr-only" id="tables-title">Tables</h2>
+    <h2 class="sidebar__title sidebar__title--next" id="tables-title">Table</h2>
     <div class="bento bento--list">
         <label class="table-search">
             <span data-icon="search" aria-hidden="true"></span>

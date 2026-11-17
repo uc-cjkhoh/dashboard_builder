@@ -26,6 +26,7 @@ export const LIMITS = Object.freeze({
   unpivotColumns: 50, // wide columns one unpivot turns into rows (server MaxUnpivotColumns)
   unpivotKeep: 5,     // columns an unpivot keeps beside Field / Value (server MaxUnpivotKeep)
   viewRows: 1000,     // raw rows one View data / table preview read returns (server MaxRowsLimit; default 100)
+  rowsOffset: 100000, // rows a paged read skips at most: the Data Source preview's last page starts here (server MaxRowsOffset)
   exportRows: 100000, // rows in a CSV export (server MaxExportRows)
   calculations: 20,  // calculated fields per workbook (CalcLimits.MaxCalcs; enforced client-side only)
   cleanRecode: 20,   // values one Clean… recode lists (client-side only)

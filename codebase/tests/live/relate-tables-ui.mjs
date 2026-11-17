@@ -1,5 +1,5 @@
 // Browser checks for relating tables in few steps (D127): proposed links, "Needs a partner" as a button and the table picker, the card's
-// link button dragged onto another card (compound key pre-filled), and dragging two more columns of related tables (one more key pair, Undo).
+// card's ☰ Relate to another table (compound key pre-filled, D129), and dragging two more columns of related tables (one more key pair, Undo).
 // Real dev app (APP_URL, default http://localhost:5223) in headless Chromium over the DevTools protocol (tests/live/cdp.mjs); /api/* is mocked.
 // Run: node tests/live/relate-tables-ui.mjs  (start the app: cd src/DashboardBuilder && dotnet run --no-launch-profile --urls http://localhost:5223; stop it by port)
 import { launch } from './cdp.mjs';
@@ -54,6 +54,7 @@ try {
   };
   const card = (t) => `[...document.querySelectorAll('.entity')].find((x) => x.querySelector('.entity__table').textContent === ${J(t)})`;
   const row = (t, c) => `${card(t)}.querySelector('.col-row[data-column=' + ${J(JSON.stringify(c))} + ']')`;
+  const act = (c, label) => `(() => { ${c}.querySelector('.entity__menu').click(); const it = [...document.querySelectorAll('.ctx-menu [role^="menuitem"]')].find((x) => x.textContent.trim() === '${label}'); if (!it) throw new Error('no menu item ${label}'); it.click(); return true; })()`; // the card's ☰ menu (D129)
   const dlg = `document.querySelector('dialog[open]')`;
   const confirm = () => ev(`(() => { [...${dlg}.querySelectorAll('button')].find((y) => y.textContent.trim() === 'Confirm').click(); return true; })()`);
   const rels = () => ev(`document.querySelectorAll('.rel-note').length`);
@@ -136,9 +137,11 @@ try {
   });
   await add('sales', 4);
   await add('stock', 5);
-  await check('dragging the link button of a card onto another card opens the dialog with every same-named key already matched', async () => {
-    await shot('5-before-handle-drag.png');
-    await drag(`${card('sales')}.querySelector('.entity__relate')`, `${card('stock')}.querySelector('.entity__title')`);
+  await check('☰ Relate to another table, then a table in the picker, opens the dialog with every same-named key already matched', async () => {
+    await shot('5-before-relate.png');
+    await ev(act(card('sales'), 'Relate to another table'));
+    await waitFor(`${dlg}?.classList.contains('rel-pick')`, 'picker');
+    await ev(`[...${dlg}.querySelectorAll('.rel-pick__item')].find((x) => x.textContent.startsWith('stock')).click()`);
     await waitFor(`${dlg}?.querySelector('.rel-dialog__sub')?.textContent === 'sales → stock'`, 'dialog');
     const chips = await ev(`[...${dlg}.querySelectorAll('.key-pairs__item span')].map((x) => x.textContent)`);
     must(J(chips) === J(['sku_code = sku_code']), J(chips));
@@ -146,15 +149,15 @@ try {
     must(J(sug) === J(['Add day = day']), J(sug));
     await waitFor(`${dlg}.querySelector('.join-check__pick') !== null`, 'suggestion');
     await ev(`${dlg}.querySelector('.rel-sec--pairs').scrollIntoView({ block: 'end' })`);
-    await pause(500); await shot('6-handle-drag-compound.png');
+    await pause(500); await shot('6-relate-compound.png');
     await confirm();
     await waitFor(`document.querySelectorAll('.rel-note').length === 3`, 'saved');
     must(await ev(`[...document.querySelectorAll('.rel-badge text')].some((t) => /2 keys/.test(t.textContent) && t.closest('[data-rel]'))`), 'badge');
     await pause(300);
     await shot('7-final-model.png');
   });
-  await check('the link button opens the picker from the keyboard; an already related table opens its relationship', async () => {
-    await ev(`${card('sales')}.querySelector('.entity__relate').click()`);
+  await check('☰ Relate to another table opens the picker; an already related table opens its relationship', async () => {
+    await ev(act(card('sales'), 'Relate to another table'));
     await waitFor(`${dlg}?.classList.contains('rel-pick')`, 'picker');
     const first = await ev(`[...${dlg}.querySelectorAll('.rel-pick__item')][0].textContent`);
     must(/stock.*Related/.test(first), first);
@@ -162,7 +165,7 @@ try {
     await ev(`${dlg}.querySelector('.rel-pick__item').click()`);
     await waitFor(`${dlg}?.querySelector('.rel-dialog__sub')?.textContent === 'sales → stock' && !!${dlg}.querySelector('.btn--danger')`, 'edit dialog');
     await ev(`${dlg}.querySelector('[aria-label=Close]').click()`);
-    await ev(`${card('stores')}.querySelector('.entity__relate').click()`); // two candidates: the picker
+    await ev(act(card('stores'), 'Relate to another table')); // two candidates: the picker
     await waitFor(`${dlg}?.classList.contains('rel-pick')`, 'picker');
     must(await ev(`[...${dlg}.querySelectorAll('button')].some((x) => x.textContent === 'Cancel')`), 'cancel');
   });

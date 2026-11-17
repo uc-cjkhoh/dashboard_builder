@@ -31,13 +31,44 @@ export function tableRowsRequest(db, table, limit = PREVIEW_LIMIT, columns) {
  * The Data Source preview of one card (Canvas/data-preview.js): which read shows its rows and the body to send. A table card reads
  * POST /api/rows; one with custom SQL sends that query as `source`, so the rows are the query's (D105); a union / unpivot card reads
  * POST /api/union / /api/unpivot with its saved definition. `load` is the api method name. Never more than `limit` rows.
+ * `offset` (the preview's pages, 0..LIMITS.rowsOffset) skips that many rows; a paged read always sends it, 0 included, so the server
+ * reads page 1 the same way as page 2. A union can't page (each table gets a share of the rows): see canPage.
  */
-export function entityRowsQuery(entity, limit = DEFAULT_LIMIT) {
+export function entityRowsQuery(entity, limit = DEFAULT_LIMIT, offset) {
   const n = checkedLimit(limit);
+  if (offset !== undefined && (!Number.isInteger(offset) || offset < 0 || offset > LIMITS.rowsOffset)) throw new Error(`Offset must be between 0 and ${LIMITS.rowsOffset}.`);
+  if (offset !== undefined && !canPage(entity)) throw new Error("A union shows its first rows only.");
+  const skip = offset === undefined ? {} : { offset };
   const s = entity.source;
   if (s?.kind === "union") return { load: "union", request: { db: s.db, tables: [...s.tables], ...(s.columns?.length ? { columns: [...s.columns] } : {}), limit: n } };
-  if (s?.kind === "unpivot") return { load: "unpivot", request: { db: s.db, table: s.table, columns: [...s.columns], keep: [...(s.keep ?? [])], limit: n } };
-  return { load: "rows", request: { db: entity.db, table: entity.table, limit: n, ...(entity.customSql ? { source: sqlWire(entity.db, entity.table, entity.customSql) } : {}) } };
+  if (s?.kind === "unpivot") return { load: "unpivot", request: { db: s.db, table: s.table, columns: [...s.columns], keep: [...(s.keep ?? [])], limit: n, ...skip } };
+  return { load: "rows", request: { db: entity.db, table: entity.table, limit: n, ...skip, ...(entity.customSql ? { source: sqlWire(entity.db, entity.table, entity.customSql) } : {}) } };
+}
+
+/** The last page the preview can show: the one that starts at LIMITS.rowsOffset (1,001 pages of DEFAULT_LIMIT). */
+export const MAX_PAGE = Math.floor(LIMITS.rowsOffset / DEFAULT_LIMIT) + 1;
+
+/** A typed page number: { page } (0-based) for a whole number 1..MAX_PAGE (spaces and thousands commas allowed), else { error }. Never clamped. */
+export function pageFromInput(text) {
+  const t = String(text ?? "").trim().replace(/,/g, "");
+  const n = /^\d{1,7}$/.test(t) ? Number(t) : NaN;
+  if (!(n >= 1 && n <= MAX_PAGE)) return { error: `Enter a page from 1 to ${MAX_PAGE.toLocaleString("en-US")}.` };
+  return { page: n - 1 };
+}
+
+/** Can the preview page through this card's rows? A table, custom SQL or unpivot card can; a union can't (each table gets a share of one read). */
+export const canPage = (entity) => entity?.source?.kind !== "union";
+
+/**
+ * The preview's pager for page `page` (0-based) of `limit` rows, given the read `res` ({ rows, truncated }): the page number shown,
+ * the summary ("Rows 101–200 — more exist") and which of Previous / Next work. Next stops where the next page would start past
+ * LIMITS.rowsOffset (the server's cap), and when the read found no row after this page.
+ */
+export function pageState(page, limit, { rows, truncated }) {
+  const from = page * limit, n = rows.length;
+  const summary = n === 0 ? (page === 0 ? "No rows" : "No rows on this page")
+    : `Rows ${(from + 1).toLocaleString("en-US")}–${(from + n).toLocaleString("en-US")}${truncated ? " — more exist" : ""}`;
+  return { label: `Page ${(page + 1).toLocaleString("en-US")}`, summary, prev: page > 0, next: Boolean(truncated) && from + limit <= LIMITS.rowsOffset };
 }
 
 /**

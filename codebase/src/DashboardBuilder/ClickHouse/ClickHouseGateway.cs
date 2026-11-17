@@ -624,8 +624,22 @@ public sealed partial class ClickHouseGateway
 
     /// <summary>The row-read statement. Every name is quoted; <paramref name="where"/> is empty or " WHERE …" with bound
     /// parameters; there is no ORDER BY (the first rows in storage order) and a hard LIMIT.</summary>
-    internal static string BuildRowsSql(string database, string table, IReadOnlyList<string> columns, string where, int probeLimit, string? from = null)
-        => $"SELECT {string.Join(", ", columns.Select(RowSelectExpr))} FROM {from ?? Identifier.QualifiedName(database, table)}{where} LIMIT {probeLimit}";
+    internal static string BuildRowsSql(string database, string table, IReadOnlyList<string> columns, string where, int probeLimit, string? from = null, string page = "")
+        => $"SELECT {string.Join(", ", columns.Select(RowSelectExpr))} FROM {from ?? Identifier.QualifiedName(database, table)}{where} LIMIT {probeLimit}{page}";
+
+    /// <summary>
+    /// The tail of a paged row read (the Data Source preview's pages): <c> OFFSET n</c> (validated 0..MaxRowsOffset upstream, an int, so
+    /// nothing to quote), and on a stored table <c> SETTINGS max_threads = 1</c>. A read with no ORDER BY returns its rows in whatever
+    /// order the threads finish; one thread reads a table's parts in order, so page 2 starts where page 1 ended (while the table
+    /// doesn't change). A card's custom SQL is read as written (its own ORDER BY orders its pages), and a server that takes no
+    /// settings (<see cref="QueryGuards.None"/>) gets no SETTINGS clause. No offset (every other caller): both empty. The SETTINGS part
+    /// always ends the whole statement (never inside a subquery).
+    /// </summary>
+    internal static (string Skip, string Settings) PageClause(int? offset, bool storedTable, QueryGuards guards)
+    {
+        if (offset is not { } n) return ("", "");
+        return (n > 0 ? $" OFFSET {n}" : "", storedTable && guards != QueryGuards.None ? " SETTINGS max_threads = 1" : "");
+    }
 
     /// <summary>One selected column, cut INSIDE ClickHouse so a huge value never leaves it: NULL stays NULL, anything
     /// else is its text (<c>toString</c>: arrays, tuples, maps, dates render as ClickHouse prints them) cut to
@@ -660,7 +674,8 @@ public sealed partial class ClickHouseGateway
         var limit = req.Limit ?? ApiLimits.DefaultRowsLimit;
         RequestRules.ValidateRowCells(limit, columns.Count, "limit");
         var probe = RowsProbeLimit(req.Limit);
-        var sql = BuildRowsSql(req.Db, req.Table, columns.Select(c => c.Name).ToList(), where, probe, from);
+        var (skip, settings) = PageClause(req.Offset, req.Source is null, info.Guards);
+        var sql = BuildRowsSql(req.Db, req.Table, columns.Select(c => c.Name).ToList(), where, probe, from, skip + settings);
 
         using var httpClient = CreateHttpClient(info);
         await using var conn = new ClickHouseConnection(BuildConnectionString(info), httpClient);
@@ -879,14 +894,14 @@ public sealed partial class ClickHouseGateway
     /// <summary>The unpivot statement: kept and unpivoted cells cut in SQL, each field name bound as <c>{n#:String}</c>,
     /// the result cut to <paramref name="probe"/> rows. ClickHouse applies a SELECT's LIMIT after its <c>arrayJoin</c>, so the one inner
     /// LIMIT bounds the unpivoted rows (verified live), not the source rows. No ORDER BY.</summary>
-    internal static string BuildUnpivotSql(string database, string table, IReadOnlyList<string> keep, IReadOnlyList<string> columns, int probe, IEnumerable<string>? tableColumns = null)
+    internal static string BuildUnpivotSql(string database, string table, IReadOnlyList<string> keep, IReadOnlyList<string> columns, int probe, IEnumerable<string>? tableColumns = null, string skip = "", string settings = "")
     {
         var p = FreeAliasPrefix("__u", tableColumns ?? keep.Concat(columns));
         var keepCells = keep.Select((c, i) => $"{RowSelectExpr(c)} AS `{p}k{i}`");
         var pairs = string.Join(", ", columns.Select((c, i) => $"({{n{i}:String}}, {RowSelectExpr(c)})"));
         var inner = string.Join(", ", keepCells.Append($"arrayJoin([{pairs}]) AS `{p}p`"));
         var outer = string.Join(", ", keep.Select((_, i) => $"`{p}k{i}`").Concat([$"tupleElement(`{p}p`, 1) AS `{p}n`", $"tupleElement(`{p}p`, 2) AS `{p}v`"]));
-        return $"SELECT {outer} FROM (SELECT {inner} FROM {Identifier.QualifiedName(database, table)} LIMIT {probe})";
+        return $"SELECT {outer} FROM (SELECT {inner} FROM {Identifier.QualifiedName(database, table)} LIMIT {probe}{skip}){settings}";
     }
 
     /// <summary>
@@ -901,7 +916,8 @@ public sealed partial class ClickHouseGateway
         CheckUnpivot(described, req.Columns, keep);
         var limit = req.Limit ?? ApiLimits.DefaultRowsLimit;
         var probe = limit + 1;
-        var sql = BuildUnpivotSql(req.Db, req.Table, keep, req.Columns, probe, described.Select(c => c.Name));
+        var (skip, settings) = PageClause(req.Offset, true, info.Guards);
+        var sql = BuildUnpivotSql(req.Db, req.Table, keep, req.Columns, probe, described.Select(c => c.Name), skip, settings);
 
         using var httpClient = CreateHttpClient(info);
         await using var conn = new ClickHouseConnection(BuildConnectionString(info), httpClient);
