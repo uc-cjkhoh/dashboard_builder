@@ -43,11 +43,13 @@ export function wireResizer(handle, { min, max, origin, current, apply, active =
   handle.addEventListener("pointerdown", (event) => {
     event.preventDefault();
     handle.setPointerCapture(event.pointerId);
+    handle.classList.add("is-active");
     document.body.classList.add("is-resizing");
     let last = current();
     const move = (e) => { last = set(e.clientX - origin()); };
     const up = () => {
       document.body.classList.remove("is-resizing");
+      handle.classList.remove("is-active");
       handle.releasePointerCapture(event.pointerId);
       handle.removeEventListener("pointermove", move);
       handle.removeEventListener("pointerup", up);
