@@ -4,6 +4,7 @@ Visual and interaction changes (styles, markup, layout, labels, icons, focus). G
 
 ## 2026-11-17
 
+- Relationship dialog: golden-ratio height (width × 0.618, 752px at full width), capped by the window less 16px; panels stretch to fill it; content height under 640px (`e2ab79e`)
 - Relationship dialog: up to 1216px wide (5% narrower), same two-panel structure (`ad6c74a`)
 - Relationships card: closed note titles vertically centred in their row (no grid gap under a closed dropdown's title) (`daf8a1e`)
 - Relationship dialog: equal panels; suggestion panel stacks suggestion / Evidence / Counts under hairlines, tags in one column, Suggestion level with Join, thin themed scrollbar in its own lane 16px clear of the content (`ba0be06`)

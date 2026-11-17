@@ -91,6 +91,8 @@ Gotchas that have bitten (or will bite) this app. Read before touching the area 
   (`.rel-notes[open]::details-content` in `relations.css`).
 - **A closed grid `<details>` keeps its `gap`.** The hidden content slot is still a grid item, so the gap
   sits under the summary and pushes it off centre; zero it with `:not([open])` (`.rel-note__more` in `relations.css`).
+- **`height: auto` stretches a modal `<dialog>` to the window.** The browser's own style is `height: fit-content`
+  on a modal with `inset: 0`; to undo a set height, go back to `fit-content` (`.dialog--rel` under 640px in `relations.css`).
 - **A cache hit means no query.** Presentation-only changes re-render from the worksheet's result
   cache. If a change *should* re-query, it must change the plan (see
   [worksheet-query.md § Query lifecycle](../concepts/worksheet/worksheet-query.md#query-lifecycle)).
