@@ -13,7 +13,7 @@ Drawing relationships on top of the cards is covered in [relationships.md](relat
 - `canvas.js` — drop handling, cards, moving and removing, zoom and pan
 - `canvas-zoom.js` — zoom limits, wheel-to-zoom, pan-for-zoom and bring-into-view maths (pure)
 - `empty-state.js` — the empty-state choice (pure)
-- `data-preview.js` — the data preview docked under the canvas ([below](#data-preview))
+- `data-preview.js` — the data preview docked under the canvas ([below](#data-preview)); `preview-columns.js` sizes its columns and resizes them from the header
 - `canvas.css` — styles
 
 ## Canvas ground
@@ -86,21 +86,29 @@ With no entities, the canvas shows **a ghost model**, **one sentence** and **one
 | no database chosen | "Choose a database in the sidebar." | Choose a database → `#db-select` |
 | database chosen | "Drag a table here from the sidebar to start your data source." | Find a table → `#table-search` |
 
-## Edit icon (Edit SQL)
+## The ☰ menu (card actions)
 
-The card head's pencil icon button (`.entity__edit`, aria-label *Edit SQL for db.table*, left of the title) opens the Edit SQL dialog on the card's `SELECT`; Save makes the card read the query.
-To go back to the table, press **Reset to default** in the dialog, then **Save**. A card has no right-click menu.
-A union or unpivot card has no SQL to edit, so it has no pencil.
+The card head's ☰ button (`.entity__menu`, the `menu` icon, aria-label *Actions for table*, `aria-haspopup="menu"`, `aria-expanded` while open) holds the card's actions ([D129](../../decisions/decisions-relationships.md#d129--a-cards-actions-sit-in-one--menu)):
+
+| Item | Does | Not on |
+|---|---|---|
+| **Edit SQL** (`edit` icon) | opens the Edit SQL dialog on the card's `SELECT`; Save makes the card read the query | a union or unpivot card |
+| **Relate to another table** (`link` icon) | opens **Relate table to** ([relating-tables.md](relating-tables.md)) | a union or unpivot card |
+| **Preview data** (`table` icon, a check item) | opens the [data preview](#data-preview) on this card, or closes it when it already shows this card; ticked while it does | — |
+
+- The menu is the shared context popup (`openContextMenu`, `Core/menu.js`): a `.menu__list.ctx-menu` on `<body>`, placed under the ☰, so canvas zoom never shrinks it and no card clips it. Entries are read at open time.
+- ↑ / ↓ move between items; Esc closes it and returns focus to the ☰; Tab, an outside click, scroll or resize close it. Pressing the ☰ again closes it.
+- To go back to the table after Edit SQL, press **Reset to default** in the dialog, then **Save**. A card has no right-click menu.
 Full behaviour, the SQL guard and what the card does afterwards: [query-sources.md § Custom SQL on a card](query-sources.md#custom-sql-on-a-card).
 A card with custom SQL shows a `Custom SQL` note under its head; its profile buttons, View data, the histogram and the relationship suggestion read the card's query (as a derived table, the same one the worksheet uses), and it can be related and joined. A union or unpivot card has no profile buttons.
 
 ## Card anatomy
 
 - **Head** (`.entity__head`, on `--surface-2`):
-  - The Edit SQL pencil icon first, its ink on the left gutter like the ✕ on the right (not on a union or unpivot card), then the table name alone, in weight 600. The full `db.table` is its tooltip.
+  - The table name first, alone, in weight 600, on the left gutter with the column names. The full `db.table` is its tooltip.
   - The database appears, muted after the name, only when another card holds the same table name from a different database.
-  - **Needs a partner** (a button, only while the card is in no relationship) follows the title. At the right end sit, in order, the link button (`.entity__relate`, not on a union or unpivot card), the table button (`.entity__peek`, [Data preview](#data-preview)), the collapse caret and the remove icon. The caret toggles `.entity--collapsed`, leaving only the title bar. [relating-tables.md](relating-tables.md) covers the link button and Needs a partner.
-- **Card width** follows the title text plus the Edit SQL icon, the link button ([relating-tables.md](relating-tables.md)), the table button and the **Needs a partner** button while it shows, from `--entity-min` (312px, the slot width) to `--entity-max` (480px) on `#model-view`
+  - **Needs a partner** (a button, only while the card is in no relationship) follows the title. At the right end sit, in order, the ☰ menu ([above](#the--menu-card-actions)), the collapse caret and the remove icon. The caret toggles `.entity--collapsed`, leaving only the title bar. [relating-tables.md](relating-tables.md) covers Needs a partner.
+- **Card width** follows the title text plus the ☰ button and the **Needs a partner** button while it shows (`fitWidth(card, title, menu, need)`), from `--entity-min` (312px, the slot width) to `--entity-max` (480px) on `#model-view`
   (`card-width.js`, pure). Beyond the maximum the name ellipsises, with the full name in its `title`.
   Link anchors read the measured card box, so any width stays correct. When `relations.js` shows or hides the Needs a partner button it emits
   `entity:need` and the card refits before links are measured, so the button never clips a short name ("custo…").
@@ -126,18 +134,35 @@ A card with custom SQL shows a `Custom SQL` note under its head; its profile but
 
 The first rows of one card, in a panel docked under the canvas (`data-preview.js`), so a table, or what a card's Edit SQL now returns, can be checked without leaving the Data Source.
 
-- **Open** it with a card's table button (`.entity__peek`, "Preview data"). The same button on the card it shows closes it; on another card it switches. Saving Edit SQL opens it on that card too ([D128](../../decisions/decisions-custom-sql.md#d128--saving-edit-sql-shows-the-cards-rows-in-the-data-preview)).
-- **What it reads** (`entityRowsQuery`, `Rows/rows-model.js`, pure): the first 100 rows.
+- **Open** it with **Preview data** in a card's ☰ menu. The same item on the card it shows closes it; on another card it switches. Saving Edit SQL opens it on that card too ([D128](../../decisions/decisions-custom-sql.md#d128--saving-edit-sql-shows-the-cards-rows-in-the-data-preview)).
+- **What it reads** (`entityRowsQuery`, `Rows/rows-model.js`, pure): 100 rows a page, the first 100 when it opens ([D131](../../decisions/decisions-custom-sql.md#d131--the-data-preview-pages-100-rows-at-a-time)).
   - A table card reads `POST /api/rows`. A card with custom SQL sends its query as `source`, so the rows are the query's.
   - A union or unpivot card reads `POST /api/union` or `/api/unpivot` with its saved definition.
-  - Nothing new on the server: the same bounded, read-only reads as the schema browser's row preview.
-- **Head:** the card's name (`db.table`; a union or unpivot by its own name), then the summary ("First 100 rows — more exist", "2 rows", "No rows"), prefixed **Custom SQL ·** for a card with a query. Then Refresh, Export CSV (the rows shown) and close (✕, its ink on the 16px gutter).
-- **Table:** the rows dialog's table (`rowsTable` in `Rows/rows-dialog.js`): a sticky head with each column's name and ClickHouse type, NULL in muted italics. Cells cut at 1000 characters get the dialog's note. The table scrolls inside the panel; the page never scrolls.
+  - Every paged read sends `offset` (page × 100; 0 on page 1). The same bounded, read-only reads as the schema browser's row preview, plus that offset.
+- **Pages** (`pageState`, `canPage`, `pageFromInput`, pure; tested in `tests/js/rows-model.test.mjs`): **‹ Page [n] ›** in the head (`.ds-preview__pager`, a `nav` labelled *Pages of rows*), left of Refresh.
+  - **Go to a page:** the page number is a field (`#ds-preview-page`, `.ds-preview__page-input`, *Page number*; its text is selected on focus). Type a page and press Enter, or type and leave the field. A whole number from 1 to 1,001 (`MAX_PAGE`; spaces and thousands commas allowed) reads that page; anything else is refused, never clamped: the field turns `aria-invalid` and the panel's notes say "Enter a page from 1 to 1,001." (warning icon + text, `role="alert"`) until it is edited. Escape puts the shown page back. A number typed while a page loads is dropped for the page loading.
+  - **Previous** (`chevron-left`, *Previous 100 rows*) is off on page 1; **Next** (`chevron-right`, *Next 100 rows*) is off when the read found no row after this page (`truncated` false) or the next page would start past row 100,000 (`LIMITS.rowsOffset` / `ApiLimits.MaxRowsOffset`).
+  - A click while a page loads is ignored (the buttons keep the last page's state). A focused button that turns off hands focus to the other one.
+  - **Refresh keeps the page**; another card, Edit SQL Save and a SQL change (`entity:sql`) go back to page 1.
+  - A page past the end (the table shrank) reads "No rows on this page", Previous still on.
+  - **A union card has no pager** (it is hidden): each of its tables gets a share of one read, so there is no single row order to page through. It shows its first 100 rows as before.
+  - Columns keep their width from page to page: a column's automatic width only grows while paging the same card (`widthMemory().auto`), and a SQL change measures afresh.
+  - **Order:** a stored table or unpivot is read on one thread (`SETTINGS max_threads = 1`) so page 2 starts where page 1 ended; a card's custom SQL is read as written, so give it an `ORDER BY` for a fixed page order. Rows can shift if the table changes between pages.
+- **Head:** the card's name (`db.table`; a union or unpivot by its own name), then the summary ("Rows 1–100 — more exist", "Rows 101–137", "No rows"; a union keeps "First 100 rows — more exist"), prefixed **Custom SQL ·** for a card with a query. Then the pager, Refresh, Export CSV (the rows shown: this page) and close (✕, its ink on the 16px gutter).
+- **Table:** the rows dialog's table (`rowsTable` in `Rows/rows-dialog.js`), drawn lighter in this panel only ([D130](../../decisions/decisions-custom-sql.md#d130--the-data-preview-is-a-light-grid-with-resizable-columns); the rows dialog and View data keep their look). Cells cut at 1000 characters get the dialog's note. The table scrolls inside the panel; the page never scrolls.
+  - **Header:** one sticky line of column names, highlighted so it reads apart from the rows: `--surface-3` fill, bold (700) `--ink` names, a `--line-2` rule under it. The ClickHouse type is not shown in the header: the card above lists it, the header's tooltip reads *name · type*, and a screen reader reads it (the type span is visually hidden).
+  - **Rows and columns:** hairline rules between rows, no stripes; the row under the pointer tints `--surface-2`. A 1px line between every two columns runs from the header to the last row (`--line` in the body, `--line-2` in the header), so each column reads as its own lane and the border to drag is always visible. NULL in muted italics.
+  - **Numbers** (`UInt*`, `Int*`, `Float*`, `BFloat16`, `Decimal*`, through `Nullable` / `LowCardinality`; `isNumericType`) are right-aligned with tabular figures, header included. The first column stays left-aligned, so the rows start on the 16px gutter under the title.
+  - **Widths:** each column starts as wide as its widest cell, 48px to 320px (`autoWidth`), measured after the web fonts load and while the panel shows. Every cell, header included, is measured as text to the subpixel, plus its padding and its 1px column rule, with the number classes already on (tabular figures change the width), so a value never ends in an ellipsis below the 320px cap. The table is only as wide as its columns, not stretched across the panel. Widths sit in a `<colgroup>` with `table-layout: fixed`.
+  - **Resize a column:** hover the right border of its header (an 8px `.rows-table__grip` inside the column line; a 2px accent line on hover, drag or focus; `col-resize` cursor) and drag; the column follows the pointer px for px. On the focused grip (a `separator`, `aria-valuenow`) ← / → step 8px, Shift five steps. Double-click or Delete goes back to the automatic width. 48px to 600px — the same handle, steps and bounds as a worksheet table's columns (`nudgeWidth`, `table-columns-model.js`).
+  - **Widths are view state:** kept per card and column name for the session (`widthMemory`), so Refresh and an Edit SQL re-read keep them; dropped when the card is removed; never saved in the workbook.
 - **Stays current:** it re-reads when that card's SQL changes (`entity:sql`, both "using your SQL" and "back to the table"), and Refresh re-reads by hand. The latest request wins: switching card, Refresh or close cancels one in flight. Errors show inline in the panel.
+  - **While it reads:** a first open or another card shows "Loading rows…". A re-read of the card on screen (another page, Refresh, a SQL change) keeps its rows, summary and notes in place: the rows area turns `aria-busy` and the table dims to half after a 150ms beat (`--dur-fast`, so a quick read never flickers), until the new rows replace it.
+  - **Notes** (a cut-cell note, a page-number error) sit between the head and the table with 8px above and below; a re-read swaps only the cut-cell note.
 - **Shown only on the Data Source** with a card picked, and not while the connect form covers the model. It closes when its card is removed or the connection drops.
-- **The card it shows** has a 2px accent outline (`.entity--previewed`) and its table button pressed (`aria-pressed`, `--accent-soft`). The panel title names the card as well, so colour is never the only sign.
-- **Layout:** a sibling of `#model-view` in `main.canvas` (`.ds-preview`), so the ground shrinks above it: pan, zoom, free slots and reveal never reach under it. It is 288px tall by default. Drag its top edge (`.ds-preview__grip`, a separator) or use ↑ / ↓ in 16px steps; double-click for the default. It is held between 120px and the height that leaves the ground 160px. The height is `--ds-preview-h` on `main.canvas`, view state only (reset on reload). The how-to pill lifts above the panel while it is open. Opening, closing and resizing re-measure the links (`canvas:zoomed`). The Relationships card's height stops above the panel too.
-- **Tests:** `entityRowsQuery` in `tests/js/rows-model.test.mjs`; the browser check (open, switch, close, Save and Reset in Edit SQL, resize, a union card, remove, other tabs) is `tests/live/data-preview-ui.mjs`.
+- **The card it shows** has a 2px accent outline (`.entity--previewed`), and **Preview data** is ticked in its ☰ menu (`aria-checked`, a check mark). The panel title names the card as well, so colour is never the only sign.
+- **Layout:** a sibling of `#model-view` in `main.canvas` (`.ds-preview`), so the ground shrinks above it: pan, zoom, free slots and reveal never reach under it. It is 288px tall by default. Drag its top edge (`.ds-preview__grip`, a separator) or use ↑ / ↓ in 16px steps; double-click for the default. It is held between 120px and the height that leaves the ground 160px. The height is `--ds-preview-h` on `main.canvas`, view state only (reset on reload). The how-to pill and the keyboard hint above it lift by the panel's height while it is open (`--rel-foot` on `main.canvas`), which also keeps them clear of a toast. The rows scroll with the app's thin themed scrollbar. Opening, closing and resizing re-measure the links (`canvas:zoomed`). The Relationships card's height stops above the panel too.
+- **Tests:** `entityRowsQuery` in `tests/js/rows-model.test.mjs`; the column helpers (numeric types, automatic width, drag and key steps, width memory) in `tests/js/preview-columns.test.mjs`; the browser check (open, switch, close, pages 1–3 with Next / Previous / Enter, a typed page (3, 9 past the end, 1002 refused, Escape), focus at the last page, Refresh on page 2, page 1 on another card, no pager on a union, the light grid, a column drag, ← / →, width kept over Refresh, double-click and Delete back to automatic, sticky header, a dark-theme screenshot, Save and Reset in Edit SQL, every number cell shown whole, the how-to pill above the panel while a toast shows, panel resize, a union card, remove, other tabs) is `tests/live/data-preview-ui.mjs`.
 
 ## Moving & removing
 

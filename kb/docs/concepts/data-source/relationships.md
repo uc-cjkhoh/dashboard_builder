@@ -16,7 +16,7 @@ table column on one toasts "A union or unpivot can't be related to a table yet."
 ## At a glance
 
 - **Drag a column onto a column** of another card to relate them, then pick the join type and cardinality in a dialog. [From the keyboard](#drawing-a-link--keyboard) the same link is made with Enter on two columns.
-- **Shortcuts** ([relating-tables.md](relating-tables.md)): a proposed link with **Relate on customer_id = id**, **Needs a partner** and each card's link button (a table picker), or the link button dragged onto another card. Each opens the same dialog filled with the key the column names point to.
+- **Shortcuts** ([relating-tables.md](relating-tables.md)): a proposed link with **Relate on customer_id = id**, **Needs a partner** and **Relate to another table** in each card's ☰ menu (a table picker). Each opens the same dialog filled with the key the column names point to.
 - **One relationship per table pair** ([D127](../../decisions/decisions-relationships.md#d127--a-table-pair-holds-one-relationship-related-in-few-steps)): relating two more columns of related tables adds a key pair to it, with Undo.
 - **One relationship per column** (extra key pairs included). Kinds must match (number↔number, text↔text, date↔date, boolean↔boolean).
 - **Every table card needs a partner** once there are two or more; an unrelated card is held out of worksheets.
@@ -36,7 +36,7 @@ the columns a relationship uses are simply the ones it joins.
 1. Drag a column row (`.col-row`, `draggable`; payload MIME type `application/x-ch-column`) and drop it on a row of another card.
 2. While dragging, the dragged row dims. The row under the pointer shows whether the drop is allowed:
    - a solid accent outline when the link is allowed;
-   - a dashed muted outline (drop effect none) when it isn't.
+   - a dashed red (`--danger-solid`) outline and a not-allowed cursor (drop effect none) when it isn't.
 3. A refused drop is reported (see [What may be linked](#what-may-be-linked)).
 4. An allowed drop is checked first, then opens the join + cardinality dialog (`<dialog>`; cardinality is a radio group `name=cardinality`: `1:1 | 1:N | N:1 | N:M`).
    The dialog **starts on a cardinality read from the two column names** (`guessCardinality()`, `relation-rules.js`, pure): a column is
@@ -50,7 +50,7 @@ To remove a link, click its line or badge (with [quiet badges](#rendering) a bad
 which puts it back as it was unless the two tables were related again meanwhile (a table pair holds one relationship, [D127](../../decisions/decisions-relationships.md#d127--a-table-pair-holds-one-relationship-related-in-few-steps)).
 
 **The how-to line.** While any table card has no relationship, a pill at the foot of the Data Source (`.rel-guide`) says
-"Drag a column onto a column in another table, or click Needs a partner." It goes once every card has one. While a toast shows (it owns the centre of the foot) the pill steps up to sit one 8px gap above it (`--toast-h`).
+"Drag a column onto a column in another table, or click Needs a partner." It goes once every card has one. While a toast shows (it owns the centre of the foot) the pill steps up to sit one 8px gap above it (`--toast-h`). The lift is one variable, `--rel-foot`, that moves the pill and the keyboard hint above it together; the Data Source's data preview raises it by the panel's height ([canvas.md § Data preview](canvas.md#data-preview)).
 
 ## Drawing a link — keyboard
 

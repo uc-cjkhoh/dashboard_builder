@@ -91,7 +91,7 @@ The ClickHouse on `10.168.49.13` limits `default` to `127.0.0.1`, so from the ap
 | Worksheet query | `QueryAsync` | see below |
 | Histogram | `HistogramAsync` | `WITH (SELECT min…) AS lo, (SELECT max…) AS hi, if(hi>lo,(hi-lo)/{bins},1) AS width SELECT least(toUInt32(floor(({c}-lo)/width)),{bins-1}) AS bin, … count() … GROUP BY bin … ORDER BY bin` |
 | Box plot | `BoxPlotAsync` | `SELECT [{dim} AS label,] min, quantile(0.25), quantile(0.5), quantile(0.75), max … [GROUP BY label] LIMIT n`, then two more — [below](#column-profile-box-plot-raw-rows-and-join-preview) |
-| Raw rows | `RowsAsync` | `SELECT {col}, … FROM {db}.{table} [WHERE …bound…] LIMIT n+1` — [below](#column-profile-box-plot-raw-rows-and-join-preview) |
+| Raw rows | `RowsAsync` | `SELECT {col}, … FROM {db}.{table} [WHERE …bound…] LIMIT n+1 [OFFSET o] [SETTINGS max_threads = 1]` — [below](#column-profile-box-plot-raw-rows-and-join-preview) |
 | CSV export | `QueryAsync` | the worksheet query, serialised by `CsvUtil` |
 
 `{db}`, `{table}`, `{col}` are **interpolated identifiers** ([see below](#identifier-injection)). Every other
@@ -120,6 +120,7 @@ builder runs ([api.md § Limits](api.md#limits)).
   `BuildSingleTableFilters`. There is **no ORDER BY**. `n` is 1..1000 (rejected outside), and an extra probe
   row sets `truncated`. Each column is selected as `if(isNull(c), NULL, left(toString(c), 1001))`, so a
   cell is cut inside ClickHouse ([limits](api.md#rows)).
+  A paged read (the Data Source preview, D131) adds `OFFSET o` (0..100,000) and, on a stored table, `SETTINGS max_threads = 1` at the end of the statement (`PageClause`), so pages follow one read order without an ORDER BY; custom SQL keeps its own order.
 - **Join preview** (`JoinPreviewAsync`, `ClickHouse/JoinPreview.cs`, [api.md](api.md#relationship-preview)) —
   one `SELECT` per side, run together, over `(SELECT {col} AS k FROM {db}.{table} LIMIT n)` grouped by key.
   It counts rows, NULL rows, distinct keys, max repeat, and `k IN (the other table's first n keys)`. Text
