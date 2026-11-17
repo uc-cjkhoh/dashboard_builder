@@ -82,7 +82,7 @@ One control picks the chart type. The view bar's picker (icon + name, e.g. **KPI
   - 1 dim → Bar;
   - 2 dims + 1 measure → Heatmap;
   - otherwise Table.
-- **Picking.** The current type is ticked. Picking sets the type in one commit (one undo step); Columns / Rows stay where they are.
+- **Picking.** The current type is ticked. Picking sets the type in one commit; Columns / Rows stay where they are.
 
 ## Analytics (P21)
 

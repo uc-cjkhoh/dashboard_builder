@@ -6,14 +6,14 @@ components: [src/DashboardBuilder/Features/Relations/join-check.js, src/Dashboar
 ## D127 — A table pair holds one relationship; related in few steps
 
 - **Chosen:** the relationship is between two *tables*, holding one to four column pairs. Relating two more columns of tables that are already related
-  adds a key pair to that relationship (no dialog, a toast with Undo) instead of making a second relationship. Shortcuts open the same dialog filled in:
-  a proposed link (dashed line + **Relate on customer_id = id**) on each card that needs a partner, **Needs a partner** as a button, a link button on
-  every card (click for a table picker, or drag onto another card; since D129 the picker is **Relate to another table** in the card's ☰ menu and the drag is gone). The key comes from column names (`proposeKey`): a foreign key onto the other
+  adds a key pair to that relationship (no dialog, a toast) instead of making a second relationship. Shortcuts open the same dialog filled in:
+  a proposed link (dashed line + **Relate on customer_id = id**) on each card that needs a partner, **Needs a partner**, a link button on
+  every card (since D129 the drag is gone; since D132 so is the table picker, and Needs a partner is a plain label). The key comes from column names (`proposeKey`): a foreign key onto the other
   table's own key, else every same-named key column as a compound key. [relating-tables.md](../concepts/data-source/relating-tables.md).
 - **Why:** users did not find the column drag (one pill at the foot said how), and a compound key took the dialog's last section: two selects and
   Add pair per column. Dragging a second column between related tables made a second, separate relationship, which looked like a compound key and was not.
 - **Kept:** the stored shape (`from` / `to` + `pairs`, D79), so workbooks are unchanged; the first pair still draws the line. Nothing is saved without
-  Confirm except the extra pair, which is the user's own drag and has Undo. Proposals use names only, are never saved, and can be closed.
+  Confirm except the extra pair, which is the user's own drag. (Its Undo is superseded by [D133](decisions-destructive-actions.md#d133--no-undo-double-confirmation-before-every-destructive-delete): the app has no Undo.) Proposals use names only, are never saved, and can be closed.
 - **Overrides:** D79's "extra pairs are added only in the dialog". A file with two relationships for one table pair still opens and joins as before.
 - **Deferred:** a single **Match columns** list at the top of the dialog (the first pair no longer special); proposals from key or value signals;
   remembering a closed proposal.
@@ -21,13 +21,13 @@ components: [src/DashboardBuilder/Features/Relations/join-check.js, src/Dashboar
 ## D129 — A card's actions sit in one ☰ menu
 
 - **Chosen:** a Data Source card's head is the name, **Needs a partner** while shown, a ☰ button, the collapse caret and ✕. The ☰ opens the shared context
-  popup (`openContextMenu`, `Core/menu.js`) under it with **Edit SQL**, **Relate to another table** and **Preview data** (a check item, ticked while the data
+  popup (`openContextMenu`, `Core/menu.js`) under it with **Edit SQL** and **Preview data** (**Relate to another table** was here until D132) (a check item, ticked while the data
   preview shows the card). A union or unpivot card's menu holds Preview data only. [canvas.md § The ☰ menu](../concepts/data-source/canvas.md#the--menu-card-actions).
 - **Why:** the user asked for it: three icon buttons (pencil, link, table) crowded the head and widened every card; one menu with words names each action.
 - **How:** the popup lives on `<body>`, so canvas zoom never shrinks it and no card clips it. `openContextMenu` gained `onClose`, which keeps the ☰'s
   `aria-expanded` true while it is open; pressing the ☰ again closes it instead of reopening.
-- **Overrides:** D127's link-button drag onto another card (the menu item can't be a drag source) and D128's "table button". Relating stays one picker away
-  through the menu item, **Needs a partner** or a proposed link; the column drag still works.
+- **Overrides:** D127's link-button drag onto another card (the menu item can't be a drag source) and D128's "table button". Relating stays one click away
+  through a proposed link; the column drag still works.
 - **Rejected:** a menu list inside the card (`wireMenu`: scaled by zoom and clipped by neighbouring cards); keeping a draggable link button beside the ☰
   (the head would still carry an extra icon).
 
@@ -47,3 +47,13 @@ components: [src/DashboardBuilder/Features/Relations/join-check.js, src/Dashboar
 - **A sample is worded as a sample:** the sampling note leads the notes card under the suggestion, the label says "from a sample", and a side with no repeat in the sample "looks like" the one side (a sample can show a repeat, never uniqueness).
 - **Cost accepted:** every opening of the dialog runs one bounded, time-limited, read-only query (at most 1,000,000 rows per side, the same request the button sent). Opening a link to read it now costs a query; the evidence is the reason to open it.
 - **Rejected:** applying the suggestion automatically (it would turn a sample's reading into the user's declaration, and on edit silently change a saved link); keeping the button and only adding evidence (the user asked for the suggestion shown by default); a server change for example keys (the existing counts carry the evidence).
+
+## D132 — No Relate to another table menu item or table picker
+
+- **Chosen:** the card's ☰ menu holds **Edit SQL** and **Preview data** only. **Relate to another table** and the **Relate X to** picker dialog behind it
+  are gone, and **Needs a partner** is a plain label (it opened the same picker). Relating is a proposed link or the column drag.
+- **Why:** the user found the menu item and its modal gave little information and did not need them: the picker restated what a proposed link already
+  shows on the canvas (the table and the key).
+- **Kept:** proposed links, `relateTables`, the relationship dialog, the column drag and keyboard pick, and the extra-pair drag (D127).
+- **Overrides:** D127's table picker and Needs a partner as a button; D129's menu list.
+

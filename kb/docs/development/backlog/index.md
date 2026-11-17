@@ -58,7 +58,7 @@ Risks are listed in [platform.md](platform.md#open-risks).
 - Single user, browser-held state; ClickHouse is the only data source; no uploads, extracts, accounts or publication ([out-of-scope.md](out-of-scope.md)).
 - Self-hosted, framework-free frontend, no CDN ([rule 10](../coding-standards.md#10-self-hosted-framework-free-frontend)); a new library is vendored with a written reason.
 - A workbook stores specifications and metadata, never data, credentials or executable code.
-- Every state-changing edit is undoable; the grain and active filters stay visible in words; everything draggable has a keyboard path; unavailable options say why.
+- There is no Undo: a destructive delete asks twice ([rule 13](../coding-standards.md#13-destructive-deletes-ask-twice-there-is-no-undo)); the grain and active filters stay visible in words; everything draggable has a keyboard path; unavailable options say why.
 - Not a Tableau clone: no `.twb`/`.hyper` compatibility, no Tableau branding, no claim of identical regression or forecast output.
 - The design rules and golden rules 6, 7 and 9 (tokens, `hidden`, never colour alone) apply.
 - Done means [review-guidelines.md](../review-guidelines.md): update the feature doc and delete the entry here.

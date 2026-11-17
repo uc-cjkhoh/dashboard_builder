@@ -11,7 +11,7 @@ A dashboard tab (`.tab--dashboard`) composes the workbook's worksheets, text blo
 
 **Code:** `Features/Board/`
 
-- `board.js` — orchestration, undo / redo, full screen, print
+- `board.js` — orchestration, full screen, print
 - `board-widget.js` — one widget, inline text edit
 - `board-panel.js` — the side panel
 - `board-interact.js` — pointer, keyboard and panel-drop wiring
@@ -22,7 +22,7 @@ A dashboard tab (`.tab--dashboard`) composes the workbook's worksheets, text blo
   - `board-layout.js` — cell ↔ pixel geometry
   - `board-model.js` — widget rules and limits
   - `board-drag.js` — the pointer state machine
-  - `board-keys.js`, `text-edit.js`, `image-model.js`, `nav-model.js`, `board-history.js`
+  - `board-keys.js`, `text-edit.js`, `image-model.js`, `nav-model.js`
 
 ## At a glance
 
@@ -30,7 +30,7 @@ A dashboard tab (`.tab--dashboard`) composes the workbook's worksheets, text blo
 - **Editing:** add from the side panel (button or drag), then move and resize by mouse or keyboard. A refused move snaps back and says why; it is never silently moved elsewhere.
 - **Worksheet widgets** show the worksheet's current sheet, read-only except for selecting marks. A mark click filters the other widgets (cross-widget filtering, never saved).
 - **Only the active dashboard renders**, and widgets reuse the worksheet editor's result cache, so re-showing an unchanged board sends no query.
-- **Undo / redo** covers layout edits for the session only. The layout itself is autosaved with the workbook.
+- **No undo:** the layout is autosaved with the workbook, and removing a widget asks twice ([D133](../../decisions/decisions-destructive-actions.md#d133--no-undo-double-confirmation-before-every-destructive-delete)).
 - **Data notes:** one free-text note per dashboard (**Notes** in the bar; [dashboard-print-notes.md](dashboard-print-notes.md)).
 - **Desktop only:** the board has no phone or tablet layout; print lays out a single column (fixed-size boards keep their arrangement).
 
@@ -44,7 +44,7 @@ A dashboard tab (`.tab--dashboard`) composes the workbook's worksheets, text blo
 
   The list redraws only when a worksheet is added, closed or renamed, so a button keeps focus when a widget is added.
 - **Bar** above the canvas holds, in order: the dashboard's name, "n of 12 widgets", the **status line** (below),
-  the **Size** select, **Undo** / **Redo**, **Full screen** and **Print**.
+  the **Size** select, **Full screen** and **Print**.
 
 ### Size
 
@@ -66,7 +66,7 @@ Each dashboard has its own size (`Board/board-size.js`).
   - A fixed size wins and drops the range (also on import, with an issue); print ignores the range (page width, stacked).
   - Inputs are grouped under visible "Width" and "Height" labels with "Min" / "Max". An invalid set (out of limits, minimum above maximum, no limit) is refused in place: only the offending inputs get `aria-invalid`, the status line says which limit, and nothing is clamped or saved.
 - **Limits:** 320–3840 × 240–2400 whole pixels (`sizeError`, `rangeError`). An import outside them opens Automatic with an issue.
-- A loaded size that is not a preset shows as Custom with its values in the inputs. Size and range are not part of undo / redo.
+- A loaded size that is not a preset shows as Custom with its values in the inputs.
 
 ### Canvas
 
@@ -98,8 +98,7 @@ Each dashboard has its own size (`Board/board-size.js`).
 - **Dragging:** a worksheet row in the side panel is **draggable** (see Dropping from the panel). **Add** stays the keyboard path.
 - **Announcements:** adding also announces "Added “name” to the dashboard." through the polite live region (`#toast-live`).
   A worksheet widget's loading state has a **Cancel** button labelled "Cancel loading <worksheet name>".
-- **Remove** (header button, `aria-label` "Remove “name” from the dashboard") drops the widget and toasts "Removed “name”. Undo brings it back.".
-  The removal is recorded like any other edit, so Undo restores it. Focus moves to the next widget's Remove button (else **Add text**). Siblings are not redrawn.
+- **Remove** (header button, `aria-label` "Remove “name” from the dashboard") asks to confirm twice (`confirmDeleteTwice`, button **Remove**; [D133](../../decisions/decisions-destructive-actions.md#d133--no-undo-double-confirmation-before-every-destructive-delete)), then drops the widget and toasts "Removed “name”.". Focus moves to the next widget's Remove button (else **Add text**). Siblings are not redrawn.
 - **Closing a worksheet** removes its widgets from every dashboard ([tabs.md](tabs.md)).
   A widget whose worksheet is missing reads "This worksheet was closed."
 
@@ -153,7 +152,7 @@ and `aria-describedby` pointing at a one-line key hint.
 ## Editing the layout
 
 All geometry and verdicts are pure. `board-interact.js` turns events into points relative to the grid (so scrolling mid-drag needs no correction),
-draws the **ghost** and commits. Every committed edit is **one undo step** and fires `dashboard:changed` (autosave).
+draws the **ghost** and commits. Every committed edit fires `dashboard:changed` (autosave).
 
 - **Move and resize with the pointer.** Press the widget **header** (not its buttons) and drag to move; drag the **corner grip** to resize.
   - Pointer capture is on the header / grip. A press that travels under 4px is a click, not a drag.
@@ -170,7 +169,7 @@ draws the **ghost** and commits. Every committed edit is **one undo step** and f
   Each key press is a committed step; a refused one changes nothing. Keys act only while the widget itself (not a button or field inside it) has focus,
   and focus stays on the widget after a step.
 - **Status line** (`#board-status`, a polite live region, visible in the bar).
-  - Messages: "Moved to column 3, row 2", "Resized to 4 columns by 3 rows", "Text updated.", "Undid the last change.",
+  - Messages: "Moved to column 3, row 2", "Resized to 4 columns by 3 rows", "Text updated.",
     or the refusal in the danger colour with a warning icon. It clears after 8 seconds.
   - The refusal wording comes from one place for the drag, the keys and the drop: `explainRefusal` in `board-model.js`.
     It checks whole cells, size limits (w 2–12; h 2–24 worksheet, 1–24 text), left / right / top edge and 96 rows, then "it would overlap “name”. Move or shrink that widget first.".
@@ -184,16 +183,7 @@ draws the **ghost** and commits. Every committed edit is **one undo step** and f
   - **Save:** Enter in the heading, Ctrl+Enter, or the **Save** button. **Discard:** Esc or **Cancel**. Focus returns to **Edit** either way.
   - `validateTextEdit` (`text-edit.js`) trims and checks both fields. An invalid save stays open, with a message under the field
     (`role="alert"`, `aria-invalid`) and focus on it.
-  - A save that changes nothing is not an undo step.
   - While the form is open, the widget grows over its neighbours (`.is-editing`), since a 2-row cell can't hold it.
-  - If the text changes underneath (an undo), the form closes.
-- **Undo / redo.**
-  - **Controls:** buttons in the bar (disabled when there is nothing to do), and **Ctrl+Z**, **Ctrl+Shift+Z** / **Ctrl+Y** while a dashboard tab is active.
-    Shortcuts never act while typing in an input, textarea, select or dialog, and never on a worksheet tab (the worksheet editor keeps its own shortcut).
-  - **What is recorded:** `Dashboard/history.js` (the editor's snapshot stack, 50 deep), keyed by dashboard id, holds the **widget list** before each edit:
-    add, remove, move, resize, text edit.
-  - A restore drops worksheet widgets whose worksheet has been closed since (`restorable`).
-  - **History is in memory.** A reload or a workbook open starts empty (the layout itself is autosaved), and closing a dashboard forgets its history.
 
 ## Cross-widget filtering
 
@@ -268,7 +258,7 @@ Notes under the bar, full screen and the printed header: [dashboard-print-notes.
   autosave holds the target by tab index, reload restores, a closed target unlinks it.
 - `tests/js/image-model.test.mjs` and the image / spacer cases of `board-model.test.mjs`.
 - `tests/live/image-spacer-ui.mjs` — real file input: a PNG is decoded and drawn with its alt text, SVG / non-image / oversize files
-  and a fifth image refused, spacer, autosave holds a data URL, reload restores, spacer hidden under print media, undo; light and dark screenshots.
+  and a fifth image refused, spacer, autosave holds a data URL, reload restores, spacer hidden under print media; light and dark screenshots.
 
 **Layout and editing**
 
@@ -276,10 +266,10 @@ Notes under the bar, full screen and the printed header: [dashboard-print-notes.
 - `board-model.test.mjs` — rules and limits.
 - `board-drag.test.mjs` — pixel → cell snapping, ghost, click threshold, every refusal, cancel, panel drop plan.
 - `board-keys.test.mjs` — every step and refusal message.
-- `text-edit.test.mjs`, `board-history.test.mjs`.
+- `text-edit.test.mjs`.
 - `tests/live/board-edit-ui.mjs` — real mouse events: move and resize with the ghost, overlapping / off-grid drops that snap back,
-  keyboard and the live status, text edit / limits / Esc, undo and redo of every edit type by button and shortcut, panel drag,
-  pointercancel / blur / Esc, reload keeps the layout but not the history;
+  keyboard and the live status, text edit / limits / Esc, panel drag,
+  pointercancel / blur / Esc, reload keeps the layout;
   light and dark screenshots with the ghost, a refused ghost and the focus wash.
 
 **Whole board**

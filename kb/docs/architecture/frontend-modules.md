@@ -55,7 +55,7 @@ Grouped by feature folder; each entry is the module, then what it owns.
 
 ### Tabs/, Board/ and Story/ — tabs, the dashboard board and stories
 
-- `Tabs/tabs.js` · `close-undo.js` — Data Source tab + one ordered list of worksheet, dashboard and story tabs, the `[+]` menu, close confirms and the Undo toast; `close-undo.js` is the pure snapshot / restore plan (`captureClose`, `sealClose`, `planRestore`) — [tabs.md](../concepts/workbook/tabs.md)
+- `Tabs/tabs.js` — Data Source tab + one ordered list of worksheet, dashboard and story tabs, the `[+]` menu and the double close confirm (`confirmDeleteTwice`) — [tabs.md](../concepts/workbook/tabs.md)
 - `Board/board-model.js` — pure (P24b):
   - widget geometry and limits — `overlaps`, `inBounds`, `firstFreeSpot`, `placeNew`, `placeAt` (a drop), `checkPlacement`, `explainRefusal` (the refusal in words), the import clean-up `cleanWidgets`, `savedWidgets`, `removeSheetWidgets`, `dashboardsUsing`, `defaultTabName` — [data-model.md](../reference/data-model.md#tabs-and-dashboards)
 - `Story/story-model.js` — pure (node-tested): `validateCaption`, `addStep`, `removeStep`, `moveStep`, `setCaption`, `goTo` (never wraps), `dropTarget` (used by `closeTab`), `offeredTargets`, `targetKind`, `stepName`, `savedSteps`, `cleanSteps` (import: bad steps skipped and reported) — [stories.md](../concepts/workbook/stories.md)
@@ -70,10 +70,9 @@ Grouped by feature folder; each entry is the module, then what it owns.
 - `Board/board-widget.js` · `board-panel.js` — one widget (focusable; header with Edit / Remove over a select-only `createWorksheetView` or a text body; the corner grip; the inline text form) and the side panel (worksheets with Add, draggable with `SHEET_MIME`; Add text)
 - `Board/board-drag.js` — pure: the pointer state machine `createDrag()` (`start` / `move` → ghost / `end` → `commit` \| `revert` \| `none` / `cancel`, `DRAG_THRESHOLD`), `ghostFor`, `dropPlan` (a panel drop)
 - `Board/nav-model.js` · `nav-edit.js` — navigation button: pure `validateNavEdit`, `navTargets`, `navChanged`, `dashboardsLinking`, `clearNavTarget` (used by `closeTab`); `nav-edit.js` builds the inline form (label, tooltip, Goes to)
-- `Board/board-keys.js` · `text-edit.js` · `image-model.js` · `board-history.js` — pure: `validateImageFile`, `isImageSrc`, `altFromName` (image widgets: raster data URLs only, size-bounded)
+- `Board/board-keys.js` · `text-edit.js` · `image-model.js` — pure: `validateImageFile`, `isImageSrc`, `altFromName` (image widgets: raster data URLs only, size-bounded)
   - `keyStep` (arrow / Shift+arrow → candidate + status, or the refusal), `movedMessage`, `resizedMessage`
   - `validateTextEdit`, `textChanged`
-  - `createBoardHistory` (the editor's `history.js`, keyed by dashboard id), `restorable`
 - `Board/board-interact.js` — DOM wiring over the pure modules: pointer move / resize with capture, the ghost, keyboard steps, dropping a worksheet from the panel — [dashboards.md](../concepts/workbook/dashboards.md#editing-the-layout)
 - `Tabs/duplicate-model.js` — pure: duplicate-worksheet naming, limit check, sheet copy (node-tested)
 
@@ -141,7 +140,6 @@ Grouped by feature folder; each entry is the module, then what it owns.
   - `checkHierarchyName`, `checkLevels` (2–6, one table, no calc / cast), `checkHierarchy`, `cleanHierarchies` (import clean-up), `drillFromHierarchy` (→ `sheet.drill`), `CAST_REFUSAL`
 - `Dashboard/hierarchy-dialog.js` — T03-29: the Hierarchies dialog (rows with Use, Edit, Delete)
   - `store.js` holds `hierarchies` + `setHierarchies` / `addHierarchy` / `updateHierarchy` / `removeHierarchy` (`hierarchies:changed`)
-- `Dashboard/history.js` — pure (P23): per-worksheet undo / redo stacks of sheet snapshots (50), keyed by tab id
 - `Dashboard/cast-model.js` — pure (T02-34): `castChoices`, `effectiveCategory`, `withCasts` (adds `cast` to the plan), `syncCastCategories`, `statCastProblem`
 - `Dashboard/date-parts.js` — pure (P26): `DATE_PART_CHOICES`, `stepPart` (+ / −), `partLabel`, `labelParts`
 - `Dashboard/member-labels.js` — pure (T02-29):
@@ -288,12 +286,12 @@ Grouped by feature folder; each entry is the module, then what it owns.
 - **Visibility:** `show(el)` / `hide(el)` / `toggle(el, visible)` flip the `hidden` attribute — never
   `style.display`.
 - **`copyText(text, what)`** — writes to the clipboard and toasts "Copied <what>." (or a danger toast when the browser blocks it).
-- **`toast(message, kind, { action })`** — `ok | danger | info`; `action: { label, run }` adds one button (`.toast__action`, e.g. **Undo**) and keeps it 10 s. `info` / `ok` auto-hide after 5 s; **`danger` stays
+- **`toast(message, kind)`** — `ok | danger | info` (no action button: the app has no Undo, [D133](../decisions/decisions-destructive-actions.md#d133--no-undo-double-confirmation-before-every-destructive-delete)). `info` / `ok` auto-hide after 5 s; **`danger` stays
   until dismissed** (a close button). The visible `#toast` is not a live region; messages are announced
   through the persistent visually-hidden `#toast-live`.
 - **`fieldError(input, msg)` / `clearFieldError(input)` / `checkField(input, result)`** — set
   `aria-invalid` and an inline `.field-error` linked by `aria-describedby`, cleared on the next `input`.
   `checkField` applies a `validate.js` result and returns the value or `undefined`.
 - **`listDialog(title, items)`** — a titled issue list with one OK button (workbook reports).
-- **Dialogs:** native `<dialog>`. `confirmDialog` replaces `window.confirm`. `openDialog`/`closeDialog`
+- **Dialogs:** native `<dialog>`. `confirmDialog(message, { danger, confirmText })` replaces `window.confirm`. **`confirmDeleteTwice(message, what, { confirmText = "Delete" })`** shows the danger `confirmDialog(message)` and, if confirmed, a second one "Really <confirmText lowercased> <what>? This can't be undone." with the button "<confirmText> for good"; it resolves `true` only when both are confirmed, and Cancel / Esc on either resolves `false` (`tests/js/confirm-delete.test.mjs`). Every destructive delete uses it ([D133](../decisions/decisions-destructive-actions.md#d133--no-undo-double-confirmation-before-every-destructive-delete)). `openDialog`/`closeDialog`
   fall back to the `open` attribute where `showModal` is unavailable (e.g. jsdom).

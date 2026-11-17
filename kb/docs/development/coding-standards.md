@@ -144,3 +144,16 @@ Enforced by `tests/js/tokens.test.mjs`.
 5. **Few font sizes.** `--fs-body` 14 / `--fs-lead` 16 for content, `--fs-title` 24 / `--fs-display` 32
    for titles and KPI numbers. No other screen `font-size` is used; chart text is 14px.
 6. **Let the layout explain.** No secondary labels or descriptions that the layout already conveys.
+
+## 13. Destructive deletes ask twice; there is no Undo
+
+The app has no Undo or Redo (typing undo inside the SQL and calculation editors is the text box's own). Every action that destroys
+something the user built goes through `confirmDeleteTwice(message, what, { confirmText })` in `Core/ui.js`: two danger dialogs in a row
+(the question, then "Really <verb> <what>? This can't be undone." with **<Verb> for good**); Cancel or Esc on either aborts.
+
+- Use it for: removing a table card, deleting a relationship, closing a tab that holds content, removing a dashboard widget or a story step,
+  deleting a calculated field, hierarchy or parameter, Clear sheet, discarding unsaved edits (Edit SQL, calculated field), replacing the workbook on import.
+- Not for: shelf pills, filter chips and marks, key pairs and groups inside an open dialog (a draft until saved), a recent connection, Disconnect.
+- Do not add an Undo toast, history stack or `toast` action button for a delete; add the double confirm instead. Never bypass it for "just this one".
+
+Why: [D133](../decisions/decisions-destructive-actions.md#d133--no-undo-double-confirmation-before-every-destructive-delete).
