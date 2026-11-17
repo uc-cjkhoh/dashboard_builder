@@ -26,9 +26,9 @@
 .rel-dialog__sub { margin: 0; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rel-dialog { flex: 1; min-height: 0; overflow: auto; padding: var(--s6); background-color: var(--bg); background-image: var(--wash);
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s4); align-content: start; }
-/* Two panels, settings 2 : suggestion 3 (the suggestion carries the evidence); the divider is an inset shadow (no width) and each side
-   keeps a 16px gutter to it. */
-.rel-dialog:not(.rel-dialog--single) { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 0; }
+/* Two equal panels, so the divider runs down the middle of the dialog; the divider is an inset shadow (no width) and each side keeps a
+   16px gutter to it. */
+.rel-dialog:not(.rel-dialog--single) { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0; }
 .rel-dialog:not(.rel-dialog--single) .rel-dialog__left { padding-right: var(--s4); }
 .rel-dialog__left, .rel-dialog__right { min-width: 0; }
 /* Left: no boxes. Sections sit straight on the wash, split by one hairline and 24px of air; the chosen state is what draws the eye. */
@@ -47,13 +47,14 @@
 .rel-sec--card .card-choice.is-active { background: var(--ink); color: var(--on-ink); }
 .rel-sec--card .card-choice:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 /* Right: the check result is the one panel that can outgrow the left. It takes the left's height (contain: size stops its own content
-   from stretching the row) and scrolls inside when the text is longer. */
-.rel-dialog__right { position: relative; contain: size; container-type: inline-size; overflow-y: auto; padding-left: var(--s4); box-shadow: inset 1px 0 0 var(--line); }
-/* A wide suggestion panel puts the evidence in its own column beside the suggestion and its notes. */
-@container (min-width: 624px) {
-  .rel-dialog__right .join-check__out { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
-  .rel-dialog__right .join-check__table { grid-column: 1 / -1; }
-}
+   from stretching the row) and scrolls inside when the text is longer. The scrollbar keeps its own lane (scrollbar-gutter) plus a 16px
+   gutter on each side of the content, so text never runs into the thumb and nothing shifts when the scrollbar appears. */
+.rel-dialog__right { position: relative; contain: size; overflow-y: auto; scrollbar-gutter: stable; padding-inline: var(--s4); margin-right: calc(-1 * var(--s4));
+  box-shadow: inset 1px 0 0 var(--line); scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
+.rel-dialog__right::-webkit-scrollbar { width: 10px; }
+.rel-dialog__right::-webkit-scrollbar-track { background: transparent; }
+.rel-dialog__right::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: var(--r-pill); border: 3px solid transparent; background-clip: padding-box; }
+.rel-dialog__right::-webkit-scrollbar-thumb:hover { background: var(--accent); background-clip: padding-box; }
 .rel-dialog__right .join-check { margin: 0; }
 .rel-dialog__right .join-check__out { max-height: none; overflow: visible; }
 .rel-dialog--single { grid-template-columns: minmax(0, 1fr); }
@@ -65,7 +66,7 @@
   .rel-dialog:not(.rel-dialog--single) { grid-template-columns: minmax(0, 1fr); }
   .rel-dialog { gap: var(--s4); }
   .rel-dialog:not(.rel-dialog--single) .rel-dialog__left { padding-right: 0; }
-  .rel-dialog__right { contain: none; overflow: visible; padding: var(--s4) 0 0; box-shadow: inset 0 1px 0 var(--line); }
+  .rel-dialog__right { contain: none; overflow: visible; padding: var(--s4) 0 0; margin-right: 0; box-shadow: inset 0 1px 0 var(--line); }
 }
 
 /* The join choice above the cardinality buttons. */
@@ -92,32 +93,38 @@
 
 .join-aggregate__dir { margin: var(--s1) 0 0 var(--s4); }
 
-/* The data's suggestion (with its evidence) in the relationship dialog's right panel: it runs as the dialog opens. */
+/* The data's suggestion (with its evidence) in the relationship dialog's right panel: it runs as the dialog opens. One column that
+   mirrors the left panel's rhythm: the suggestion, then Evidence, then Counts, each later group split off by a hairline and 16px of air. */
 .join-check { display: grid; gap: var(--s4); margin: 0 0 var(--s2); font-size: var(--fs-body); }
-.join-check__head { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); }
+/* The re-check button hangs into the head's margin so the title sits on the same line as "Join" opposite and the glyph lands on the
+   content's right edge (it sits 8px inside its 32px button). */
+.join-check__head { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); margin-block: calc((1lh - var(--ctl-h)) / 2); }
+.join-check__rerun { margin-right: calc(-1 * var(--s2)); }
 .join-check__title { margin: 0; }
 .join-check__hint { margin: 0; color: var(--ink-3); }
 .join-check__out { display: grid; gap: var(--s4); max-height: 45vh; overflow-y: auto; }
-.join-check__main { display: grid; gap: var(--s4); min-width: 0; }
+.join-check__main { display: grid; gap: var(--s2); min-width: 0; }
+.join-check__evidence, .join-check__counts { display: grid; gap: var(--s2); min-width: 0; padding-top: var(--s4); border-top: 1px solid var(--line); }
 .join-check__suggest { display: grid; gap: var(--s1); padding: var(--s4); border: 1px solid var(--accent-line); border-radius: var(--r); background: var(--surface); }
 .join-check__suggest p { margin: 0; }
 .join-check__label { color: var(--ink-2); }
 .join-check__pick { font-size: var(--fs-title); font-weight: 600; line-height: 32px; color: var(--accent-ink); }
 .join-check__suggest .join-check__note, .join-check__use { margin-top: var(--s2); }
 .join-check__use { justify-self: start; } /* "Use N:1": takes the suggestion into the Cardinality control */
-.join-check__evidence { display: grid; gap: var(--s2); }
 .join-check__sub { margin: 0; font-size: var(--fs-body); font-weight: 600; color: var(--ink-2); }
-.join-check__reasons { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s2); }
-.join-check__reason { display: flex; align-items: baseline; gap: var(--s2); }
-.join-check__tag { flex: none; min-width: 48px; text-align: center; padding: 0 var(--s1); border: 1px solid var(--line-2); border-radius: var(--r); font-weight: 600; color: var(--ink-2); }
+/* Tags share one column (subgrid), so every reason's text starts on the same line whatever its tag says. */
+.join-check__reasons { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--s2); }
+.join-check__reason { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: baseline; }
+.join-check__tag { text-align: center; padding: 0 var(--s1); border: 1px solid var(--line-2); border-radius: var(--r); font-weight: 600; color: var(--ink-2); }
 .join-check__tag--many { border-color: var(--accent-line); color: var(--accent-ink); }
 .join-check__table { width: 100%; border-collapse: collapse; table-layout: fixed; font-variant-numeric: tabular-nums; }
-.join-check__caption { caption-side: top; text-align: left; padding-bottom: var(--s1); color: var(--ink-3); }
+.join-check__caption { caption-side: top; text-align: left; padding-bottom: var(--s2); font-weight: 600; color: var(--ink-2); } /* reads as the group's heading, like "Evidence" */
 .join-check__table th, .join-check__table td { padding: var(--s1) var(--s2); border-bottom: 1px solid var(--line); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .join-check__table th[scope="row"] { text-align: left; font-weight: 400; color: var(--ink-2); white-space: normal; width: 40%; }
 .join-check__table thead th { font-weight: 600; color: var(--ink-2); }
 .join-check__table tr > :first-child { padding-left: 0; }
 .join-check__table tr > :last-child { padding-right: 0; }
+.join-check__table tbody tr:last-child > * { border-bottom: 0; }
 .join-check__note { margin: 0; display: flex; gap: var(--s2); align-items: flex-start; padding: var(--s2) var(--s2); border: 1px solid var(--line); border-radius: var(--r); }
 .join-check__glyph { flex: none; display: inline-flex; margin-top: 1px; }
 .join-check__note--ok { background: var(--ok-bg); color: var(--ok-ink); border-color: var(--ok-line); }
