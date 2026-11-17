@@ -194,6 +194,8 @@
 .rel-note--active { background: var(--accent-soft); }
 .rel-note p { margin: 0; }
 .rel-note__more { display: grid; gap: var(--s2); padding: var(--s2); }
+/* Closed, the hidden content slot is still a grid item: drop the gap so the title sits centred (8px above and below), not 8 over 16. */
+.rel-note__more:not([open]) { gap: 0; }
 .rel-note__part { display: grid; gap: 0; width: 0; min-width: 100%; } /* a short title above its paragraph; like the text, it never sets the card's width */
 .rel-note__label { font-weight: 600; overflow-wrap: anywhere; }
 .rel-note__part + .rel-note__part { margin-top: var(--s2); } /* with the 8px grid gap: 16px between one paragraph and the next title, about a line of air */
