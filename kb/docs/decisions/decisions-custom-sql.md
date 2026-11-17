@@ -3,7 +3,7 @@ components: [src/DashboardBuilder/ClickHouse/SqlTranslator.cs, src/DashboardBuil
 ---
 # Decisions — custom SQL on a card
 
-Continues [decisions-platform.md](decisions-platform.md). This file holds D105 (Edit SQL), the one place the server accepts SQL text, and D106 (MySQL syntax in it). Edit an entry in place when it changes.
+Continues [decisions-platform.md](decisions-platform.md). This file holds D105 (Edit SQL), the one place the server accepts SQL text, D106 (MySQL syntax in it) and D128 (the data preview after Save). Edit an entry in place when it changes.
 
 ### D105 — Edit SQL: free-text SELECT on a Data Source card, the one exception to rules 2 and 3
 The pencil icon button left of a Data Source card's title (a right-click menu until 2026-11-16) opens a dialog on the card's default `SELECT` (every column of its table). **Save** makes the card read the user's own query: its columns become what the query returns, and every worksheet query that reads that table reads the query instead.
@@ -31,3 +31,8 @@ The Edit SQL dialog has a footer switch **MySQL | ClickHouse**. **MySQL is the d
 - **Honest limits:** it is a translator, not a guarantee — several MySQL-only features still pass through unchanged and ClickHouse may refuse them. The full list is in [sql-syntax.md § Limitations](../concepts/data-source/sql-syntax.md#limitations).
 - Detail: [sql-syntax.md](../concepts/data-source/sql-syntax.md).
 
+### D128 — Saving Edit SQL shows the card's rows in the data preview
+The Data Source has a data preview docked under the canvas: the first 100 rows of one card ([canvas.md § Data preview](../concepts/data-source/canvas.md#data-preview)). A card's table button opens it, and **Save** in Edit SQL opens it on that card as well. If it already shows that card, it re-reads.
+- **Why:** the Edit SQL dialog's live check describes the query; it reads no rows. Users who change a card's SQL want to see that the data changed as they meant, and the column list alone can't show that.
+- **How:** no new endpoint. `POST /api/rows` already takes the card's custom SQL as `source` (D105), and a union or unpivot card reads `/api/union` / `/api/unpivot`. The panel is a sibling of the canvas ground, not a dialog, so the model stays in view beside the rows.
+- **Rejected:** opening the rows dialog over the model (it hides the card being checked and must be closed before the next edit); a row grid inside each card (cards would grow, and links and free slots depend on card size); leaving the preview closed after Save (the user would have to find the button for the most common check).

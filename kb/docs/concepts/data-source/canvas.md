@@ -13,6 +13,7 @@ Drawing relationships on top of the cards is covered in [relationships.md](relat
 - `canvas.js` — drop handling, cards, moving and removing, zoom and pan
 - `canvas-zoom.js` — zoom limits, wheel-to-zoom, pan-for-zoom and bring-into-view maths (pure)
 - `empty-state.js` — the empty-state choice (pure)
+- `data-preview.js` — the data preview docked under the canvas ([below](#data-preview))
 - `canvas.css` — styles
 
 ## Canvas ground
@@ -20,7 +21,7 @@ Drawing relationships on top of the cards is covered in [relationships.md](relat
 - The ground is a 24px dot grid that moves with the cards (pan and zoom, below).
   It is drawn on `.view--model` with `--line-2` dots, offset by the 16px gutter, and `background-attachment: local`.
 - Cards snap to the grid's 8px steps.
-  The free-slot step (312 + 96 = 408) is a whole number of dot cells.
+  The free-slot steps (312 + 144 = 456 across, 312 + 96 = 408 down) are whole numbers of dot cells.
 - **Zoom and pan** work only on an empty spot of the ground (the pointer is on `#model-view` itself, not on a card, link or badge). The ground is an open world, not a scroll area: `.view--model` is `overflow: hidden` and has no scrollbars.
   - Dragging the ground pans it by the pointer distance, any distance in any direction, whether or not the cards fill the view, so the user can place the cards where they want them on screen. A drag under 4 px is a click; the cursor is a hand, closed while panning; the pan's release does not count as a click on the ground.
   - The wheel zooms about the pointer, 25 % to 200 %, so the point under the pointer stays still. Ctrl + wheel is left to the browser. The wheel over a card still scrolls that card's column list.
@@ -45,7 +46,7 @@ Drawing relationships on top of the cards is covered in [relationships.md](relat
 - **Where a card lands:**
   - A dropped card lands at the drop point.
   - A `＋`-added card goes in the **first free grid slot**, so it never covers another card's title.
-    Slots are 312 × 312 cells measured from the 16px view gutter, with a 96px gutter between cards (room for a link's elbow and badge),
+    Slots are 312 × 312 cells measured from the 16px view gutter, with a 144px gutter between columns and 96px between rows (room for a link's elbow and badge; across it is wider because a card grows past 312 after it is placed, when its head's buttons and Needs a partner show),
     and as many columns as fit the visible canvas.
 
 ## Creating an entity
@@ -98,8 +99,8 @@ A card with custom SQL shows a `Custom SQL` note under its head; its profile but
 - **Head** (`.entity__head`, on `--surface-2`):
   - The Edit SQL pencil icon first, its ink on the left gutter like the ✕ on the right (not on a union or unpivot card), then the table name alone, in weight 600. The full `db.table` is its tooltip.
   - The database appears, muted after the name, only when another card holds the same table name from a different database.
-  - **Needs a partner** (a button, only while the card is in no relationship) follows the title. At the right end sit, in order, the link button (`.entity__relate`, not on a union or unpivot card), the collapse caret and the remove icon. The caret toggles `.entity--collapsed`, leaving only the title bar. [relating-tables.md](relating-tables.md) covers the link button and Needs a partner.
-- **Card width** follows the title text plus the Edit SQL icon, the link button ([relating-tables.md](relating-tables.md)) and the **Needs a partner** button while it shows, from `--entity-min` (312px, the slot width) to `--entity-max` (480px) on `#model-view`
+  - **Needs a partner** (a button, only while the card is in no relationship) follows the title. At the right end sit, in order, the link button (`.entity__relate`, not on a union or unpivot card), the table button (`.entity__peek`, [Data preview](#data-preview)), the collapse caret and the remove icon. The caret toggles `.entity--collapsed`, leaving only the title bar. [relating-tables.md](relating-tables.md) covers the link button and Needs a partner.
+- **Card width** follows the title text plus the Edit SQL icon, the link button ([relating-tables.md](relating-tables.md)), the table button and the **Needs a partner** button while it shows, from `--entity-min` (312px, the slot width) to `--entity-max` (480px) on `#model-view`
   (`card-width.js`, pure). Beyond the maximum the name ellipsises, with the full name in its `title`.
   Link anchors read the measured card box, so any width stays correct. When `relations.js` shows or hides the Needs a partner button it emits
   `entity:need` and the card refits before links are measured, so the button never clips a short name ("custo…").
@@ -108,7 +109,7 @@ A card with custom SQL shows a `Custom SQL` note under its head; its profile but
   - Rows sit on a 16px gutter at both edges, so the left space equals the right and names line up under the head's title.
   - A row is a drag handle for relationships ([relationships.md](relationships.md)).
   - A column in a relationship is pinned to the card's key strip, and its name turns accent.
-- **No rows on the card.** The column list scrolls inside the card, up to 240px tall; a short table is only as tall as its columns.
+- **No rows on the card.** The column list scrolls inside the card, up to 240px tall; a short table is only as tall as its columns. Rows show in the [data preview](#data-preview) under the canvas.
 - **Resize the list from either edge.** An 8px strip inside the card's top and bottom edge (`.entity__resize`) shows an `ns-resize` cursor and a 2px
   accent line on hover. Dragging it sets the list's height (`entity.listHeight`, applied as `--list-h` on `.entity--sized`):
   - the bottom edge moves the bottom; the top edge moves the top and keeps the bottom in place (the card's `y` changes, never below 0);
@@ -120,6 +121,23 @@ A card with custom SQL shows a `Custom SQL` note under its head; its profile but
 - **Look:** a solid card with depth.
   - `--line-2` stroke and a `--card-rim` highlight on the head's top edge.
   - Shadow `--elev-card` (a tight contact shadow plus a wide soft one), `--elev-card-hover` on hover and `--elev-16` while dragging.
+
+## Data preview
+
+The first rows of one card, in a panel docked under the canvas (`data-preview.js`), so a table, or what a card's Edit SQL now returns, can be checked without leaving the Data Source.
+
+- **Open** it with a card's table button (`.entity__peek`, "Preview data"). The same button on the card it shows closes it; on another card it switches. Saving Edit SQL opens it on that card too ([D128](../../decisions/decisions-custom-sql.md#d128--saving-edit-sql-shows-the-cards-rows-in-the-data-preview)).
+- **What it reads** (`entityRowsQuery`, `Rows/rows-model.js`, pure): the first 100 rows.
+  - A table card reads `POST /api/rows`. A card with custom SQL sends its query as `source`, so the rows are the query's.
+  - A union or unpivot card reads `POST /api/union` or `/api/unpivot` with its saved definition.
+  - Nothing new on the server: the same bounded, read-only reads as the schema browser's row preview.
+- **Head:** the card's name (`db.table`; a union or unpivot by its own name), then the summary ("First 100 rows — more exist", "2 rows", "No rows"), prefixed **Custom SQL ·** for a card with a query. Then Refresh, Export CSV (the rows shown) and close (✕, its ink on the 16px gutter).
+- **Table:** the rows dialog's table (`rowsTable` in `Rows/rows-dialog.js`): a sticky head with each column's name and ClickHouse type, NULL in muted italics. Cells cut at 1000 characters get the dialog's note. The table scrolls inside the panel; the page never scrolls.
+- **Stays current:** it re-reads when that card's SQL changes (`entity:sql`, both "using your SQL" and "back to the table"), and Refresh re-reads by hand. The latest request wins: switching card, Refresh or close cancels one in flight. Errors show inline in the panel.
+- **Shown only on the Data Source** with a card picked, and not while the connect form covers the model. It closes when its card is removed or the connection drops.
+- **The card it shows** has a 2px accent outline (`.entity--previewed`) and its table button pressed (`aria-pressed`, `--accent-soft`). The panel title names the card as well, so colour is never the only sign.
+- **Layout:** a sibling of `#model-view` in `main.canvas` (`.ds-preview`), so the ground shrinks above it: pan, zoom, free slots and reveal never reach under it. It is 288px tall by default. Drag its top edge (`.ds-preview__grip`, a separator) or use ↑ / ↓ in 16px steps; double-click for the default. It is held between 120px and the height that leaves the ground 160px. The height is `--ds-preview-h` on `main.canvas`, view state only (reset on reload). The how-to pill lifts above the panel while it is open. Opening, closing and resizing re-measure the links (`canvas:zoomed`). The Relationships card's height stops above the panel too.
+- **Tests:** `entityRowsQuery` in `tests/js/rows-model.test.mjs`; the browser check (open, switch, close, Save and Reset in Edit SQL, resize, a union card, remove, other tabs) is `tests/live/data-preview-ui.mjs`.
 
 ## Moving & removing
 
