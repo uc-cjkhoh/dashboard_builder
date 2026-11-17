@@ -601,7 +601,7 @@ function openCardinalityDialog({ current = "1:N", joinType = "inner", tables = [
   left.append(section("join", 0, radioCards("Join", "join-type", joinChoices(tables[0], tables[1], legacy), join, (v) => { join = v; }).root));
   let cardinality = current;
   let check = null;
-  const card = radioCards("Cardinality", "cardinality", cardinalityChoices(tables[0], tables[1]), cardinality, (v) => { cardinality = v; check?.redescribe(); });
+  const card = radioCards("Cardinality", "cardinality", cardinalityChoices(), cardinality, (v) => { cardinality = v; check?.redescribe(); });
   left.append(section("card", 1, card.root));
   let aggregate = agg.aggregate, direction = agg.direction;
   left.append(section("totals", 2, buildAggregateChoice(agg, (v) => { aggregate = v.aggregate; direction = v.direction; })));

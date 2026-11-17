@@ -39,12 +39,11 @@ test("dialog choices name the tables in plain words", () => {
   assert.match(c[0].hint, /only rows that match/i);
 });
 
-test("cardinality cards: 2 x 2 order, the kind in words with its code, which side has many rows", () => {
-  const c = cardinalityChoices("orders", "customers");
+test("cardinality cards: 2 x 2 order, the kind in words over its code", () => {
+  const c = cardinalityChoices();
   assert.deepEqual(c.map((x) => x.value), ["1:1", "1:N", "N:1", "N:M"]);
-  for (const x of c) assert.ok(x.text.endsWith(`(${x.value})`), x.text);
-  assert.equal(c[1].hint, "One orders row, many customers rows");
-  assert.equal(c[2].hint, "Many orders rows, one customers row");
+  assert.deepEqual(c.map((x) => x.text), ["One to one", "One to many", "Many to one", "Many to many"]);
+  for (const x of c) assert.equal(x.hint, x.value);
 });
 
 test("the FROM side is the left side: planning in reverse swaps left and right", () => {
