@@ -4,15 +4,13 @@ components: [src/DashboardBuilder/Features/Relations/relations.js, src/Dashboard
 # Relating two tables in few steps
 
 Shortcuts to the relationship dialog of [relationships.md](relationships.md), so a relationship needs no knowledge of the column drag
-([D127](../../decisions/decisions-relationships.md#d127--a-table-pair-holds-one-relationship-related-in-few-steps), [D129](../../decisions/decisions-relationships.md#d129--a-cards-actions-sit-in-one--menu)). Every path ends in the same
+([D127](../../decisions/decisions-relationships.md#d127--a-table-pair-holds-one-relationship-related-in-few-steps), [D132](../../decisions/decisions-relationships.md#d132--no-relate-to-another-table-menu-item-or-table-picker)). Every path ends in the same
 dialog, and nothing is saved until **Confirm** (golden rule 5).
 
 | Path | Steps |
 |---|---|
 | A proposed link: click **Relate on customer_id = id** | 1 click, then Confirm |
-| **Needs a partner**, then a table | 2 clicks (1 when there is one other table), then Confirm |
-| The card's ☰ → **Relate to another table**, then a table | 3 clicks (2 when there is one other table), then Confirm; same-named key columns are already matched |
-| Drag one more column of related tables onto the other | 1 drag; added at once, with Undo |
+| Drag one more column of related tables onto the other | 1 drag; added at once |
 | Drag a column onto a column ([relationships.md](relationships.md#drawing-a-link--drag-a-column)) | 1 drag, then Confirm |
 
 ## The key the names point to
@@ -42,19 +40,13 @@ Only a confident key is proposed on the canvas. Any key may open the dialog; oth
 - The pill is HTML over the cards, so it is reached with Tab; it is kept across redraws so focus stays on it. Text plus a dashed line, never colour alone.
 - Gone once the card is related. A proposal is not a relationship: worksheets don't see it.
 
-## "Needs a partner" and Relate to another table
+## "Needs a partner"
 
-- **Needs a partner** (`.entity__need`) is a button: it opens **Relate orders to** (`openTablePicker`). Underlined on hover, warning ink, dashed card outline.
-- Every table card's ☰ menu has **Relate to another table** (the `link` icon, [canvas.md § The ☰ menu](canvas.md#the--menu-card-actions)): it opens the
-  same picker. A union or unpivot card's menu has none. Both emit `rel:relate`, which `relations.js` answers with `openTablePicker`.
-- **The picker** is a standard small dialog (`.rel-pick`): title **Relate orders to**, one button per other table card (name, then the key it would use
-  as `store_id = store_id`, or a `check` icon and **Related** in `--ok-ink`), the likeliest first (related, then by score); a table with no shared
-  column is listed disabled with **No matching columns**; a **Cancel** foot. Focus starts on the first enabled table.
-- Items are flat buttons: no border, the accent wash on hover, the neutral wash on keyboard focus (Core/buttons.css). Item text sits on the
-  title's 16px edge. A long snake_case name wraps after an underscore (`<wbr>`), and anything longer still breaks anywhere rather than overflow.
-- Picking a table opens the new relationship's dialog with its key, or the existing relationship's edit dialog when the two are related.
-  A table with no key gets an info toast: "No matching columns in orders and customers. Drag a column onto a column to relate them."
-- With only one other table card that has a key or a relationship, the picker is skipped and the dialog opens at once.
+- **Needs a partner** (`.entity__need`) is a plain label (a `span`, warning ink) beside the title while the card is in no relationship, with the dashed
+  card outline. It does nothing on click: the way out is the card's **proposed link** above, or a column drag.
+- There is no **Relate to another table** item in the ☰ menu and no table picker: it listed the other tables with a key each, which a proposed link
+  already says on the canvas ([D132](../../decisions/decisions-relationships.md#d132--no-relate-to-another-table-menu-item-or-table-picker)).
+- A table with no same-named key column gets no proposal; relate it by dragging a column onto a column ([relationships.md](relationships.md#drawing-a-link--drag-a-column)).
 
 ## One more column of related tables
 
@@ -62,7 +54,7 @@ A table pair holds one relationship. Dragging (or relating from the keyboard) a 
 that relationship instead of making a second one (`dropDecision` returns `extend`, `link-drag.js`):
 
 - No dialog: the pair is added, oriented to the relationship's sides (`pairFor`), and a toast says "Added region = region to orders → customers (2 keys)."
-  with **Undo** (removes that pair if the relationship still exists).
+  To take the pair out, open the relationship and remove it there.
 - The usual refusals come first (kinds differ, column already in a relationship). A fifth pair is refused: "orders and customers already match on 4 columns,
   the most a relationship can."
 - The keyboard status line says "Press Enter to also match it on customers.region (one more key column)."

@@ -3,9 +3,9 @@ components: []
 ---
 # Backlog: dashboards, actions and stories
 
-Dashboard tabs are built: widgets render and save, and the board supports drag, resize, keyboard editing and undo ([dashboards.md](../../concepts/workbook/dashboards.md)). The entries below are what remains. Entries are in build order. Format: [index.md](index.md#how-to-read-an-entry).
+Dashboard tabs are built: widgets render and save, and the board supports drag, resize, keyboard editing ([dashboards.md](../../concepts/workbook/dashboards.md)). The entries below are what remains. Entries are in build order. Format: [index.md](index.md#how-to-read-an-entry).
 
-- **Layout and size** (IDs: T08-07, T08-08, T08-10; priority P2) — Open: floating (free-positioned, overlapping) widgets, undo/redo of size and range changes, device-specific layouts (out of scope: desktop only, D74). Partial: a dashboard is automatic, fixed to a preset or an exact custom width and height, or an automatic board with a min/max width and height range, saved in the workbook ([dashboards.md](../../concepts/workbook/dashboards.md#size)). Needs: none.
+- **Layout and size** (IDs: T08-07, T08-08, T08-10; priority P2) — Open: floating (free-positioned, overlapping) widgets, device-specific layouts (out of scope: desktop only, D74). Partial: a dashboard is automatic, fixed to a preset or an exact custom width and height, or an automatic board with a min/max width and height range, saved in the workbook ([dashboards.md](../../concepts/workbook/dashboards.md#size)). Needs: none.
 - **Configurable actions** (IDs: T08-20, T08-21, T08-22, T08-23, T08-24; priority P1) — Open: source/target/linking-field setup, hover or menu triggers, multi-mark selection (ctrl-click, rectangle, lasso). Partial: highlight inside one chart only; a click in one dashboard widget filters the other widgets by the clicked value on the clicked widget's primary dimension (one `=`, one selection, fixed behaviour — [dashboards.md](../../concepts/workbook/dashboards.md#cross-widget-filtering)); Clear restores everything with no preserve or filter-to-none option. Needs: none.
 - **Navigation** (IDs: T08-25, T08-26; priority P2) — Open: cross-dashboard interactions (a selection or filter carried to the dashboard a button opens). Partial: the navigation button goes to a worksheet or dashboard tab ([dashboards.md](../../concepts/workbook/dashboards.md#widgets)); the URL action opens external links only. Needs: none.
 - **P38 Drill-through and report tooltips** (IDs: T08-29, T06-15; priority P2; effort M) — Open: a mark menu "Go to <dashboard>" that opens the target with the mark's values as bound filters plus a Back button; a tooltip that renders a dashboard or chart filtered to the hovered mark (small, cached, latest-wins), with conditions. Tooltips show text fields only. Needs: none.
@@ -16,7 +16,6 @@ Dashboard tabs are built: widgets render and save, and the board supports drag, 
 ## Beginner-test follow-ups (tabs, dashboard, story)
 
 - **First Add right after opening a dashboard** — A beginner saw the first worksheet Add add nothing, once. Four attempts (Add in the same tick as the tab click, next frame, next task, real mouse events) all added the widget, so no cause was found and nothing was changed. Open: reproduce on the live build and, if it recurs, log `add()` and the panel redraw. Needs: none.
-- **Undo after closing a tab: edited dashboards** — A dashboard or story edited after the close keeps its newer content, so Undo does not bring back the widgets or steps the close removed from it (the toast names it). Open: merge the removed widgets / steps into the edited list. Needs: none.
 
 ## Action design
 

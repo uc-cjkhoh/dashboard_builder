@@ -35,7 +35,7 @@ The editing dialog has:
 - **Live message** — the first problem, in plain words, with `(at character N)` and a caret mark when the parser knows the position. Unknown field and cycle messages name the cause.
 - **Role chip** — icon plus text, never colour alone: `Aggregate · number`, `Row-level · text`, `Row-level · boolean`, "No formula yet", or "Can't be saved".
 - **Use as** — a Measure / Dimension choice, shown only for a **row-level number**. It is a session-only default for chips dragged afterwards and is not saved in the workbook. A pill already placed keeps its own role.
-- **Save** is disabled until the draft names, parses, resolves, type-checks and expands without a cycle. Cancel and Esc close an untouched dialog at once; after an edit they ask "Discard your changes to this calculated field?" (Cancel keeps the draft). Saving an edit under a new name rewrites `[Old]` to `[New]` in every other calculation's formula, so no reference breaks (`[table.Old]` is left alone).
+- **Save** is disabled until the draft names, parses, resolves, type-checks and expands without a cycle. Cancel and Esc close an untouched dialog at once; after an edit they ask twice (`confirmDeleteTwice`, button **Discard**): "Discard your changes to this calculated field?", then "Really discard your changes? This can't be undone." (Cancel or Esc on either keeps the draft). Saving an edit under a new name rewrites `[Old]` to `[New]` in every other calculation's formula, so no reference breaks (`[table.Old]` is left alone).
 
 ## Field pane group
 
@@ -45,7 +45,7 @@ Calculations are not listed in the field pane. The pane's search finds them: whi
 |---|---|
 | Edit… | opens the dialog (a group field: the Group dialog, [below](calculated-fields-groups.md)) |
 | Duplicate | adds `<name> copy` (`copy 2` … when taken) with the same formula (or groups) and Use-as choice |
-| Delete… | Refused with a toast `Used by calculation 'B'.` while another calculation refers to it. When worksheets or shared Top-N filters use it, a confirm says how many, and Delete clears its pills and filters (and a sort or Top-N ranking aimed at it) from them. Otherwise it deletes at once |
+| Delete… | Refused with a toast `Used by calculation 'B'.` while another calculation refers to it. Always asks twice (`confirmDeleteTwice`, button **Delete**), naming what uses it; when worksheets or shared Top-N filters use it, Delete clears its pills and filters (and a sort or Top-N ranking aimed at it) from them. See [D133](../../decisions/decisions-destructive-actions.md#d133--no-undo-double-confirmation-before-every-destructive-delete) |
 
 - **Broken calculation** (its field left the model, an imported cycle): shows an **Error** badge instead of the role chip, with its message as the tooltip. It cannot be dragged or added.
 - **Adding:** the **+** puts a calculation on a shelf (Rows for a measure, Columns for a dimension); calculations are not dragged from this list.
@@ -57,7 +57,7 @@ A pill is `{ calc: id, db: "", table: "", column: <name at last save>, category,
 - `category` follows the type (`numeric`, `text`, `temporal`, `boolean`).
 - The empty `db` / `table` keep every reader of `f.db` / `f.table` / `f.column` safe. The **live name** always comes from the workbook's list by `calc` id.
 - A row-level number used as a measure carries `agg: "sum"`.
-- After any calculation change, every sheet's pills refresh their category, role and name (`syncCalcPills`). After undo, redo or opening a workbook, the sheet's calculated pills re-read the live calculation's type and role.
+- After any calculation change, every sheet's pills refresh their category, role and name (`syncCalcPills`). After opening a workbook, the sheet's calculated pills re-read the live calculation's type and role.
 
 **Where it goes.** Calculated pills go on Rows, Columns, Color, and the Size, Label, Path and Detail / Tooltip slots. They may be a Top-N ranking measure and a sort target.
 
@@ -66,7 +66,7 @@ A pill is `{ calc: id, db: "", table: "", column: <name at last save>, category,
 
 **Top-N by a calculation.** A Top-N filter ranked by a calculation stores `topBy: { db: "", table: "", column, calc: id, agg? }` and is saved and restored like any other.
 
-- **Deleting the calculation** counts that filter as a use (the confirm appears). Confirming keeps the filter but clears its ranking. The filter panel then ranks by the first shelf measure again; until then the filter reports "Pick a measure to rank by." and is not sent.
+- **Deleting the calculation** counts that filter as a use (the confirm names it). Confirming keeps the filter but clears its ranking. The filter panel then ranks by the first shelf measure again; until then the filter reports "Pick a measure to rank by." and is not sent.
 - **Shared Top-N filters** behave the same: it counts as a use ("… and 1 shared Top N filter"), and its ranking is cleared.
 - **A calculation that can no longer be computed** stops the view with the usual `Calculation 'X' can't be computed: …` message. A ranking that cannot be wired is never sent as `topBy: null`. Such a Top-N is refused like a pill (below).
 

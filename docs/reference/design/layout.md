@@ -137,7 +137,7 @@ two bottom borders line up across the shell. If the tabs wrap, the bar grows tal
 - A caret in the head collapses the card to its title bar. A key column's name turns accent.
 - **States** (each shown by more than colour):
   - Hover: the border deepens to `--ink-3` and the shadow to `--elev-card-hover`.
-  - In no relationship while the model has other cards: a dashed `--warn-line` outline and the **Needs a partner** button (`.entity--unlinked`).
+  - In no relationship while the model has other cards: a dashed `--warn-line` outline and the **Needs a partner** label (`.entity--unlinked`).
   - Already added (a repeat drop or `＋`): a 2px accent outline while the card is brought into view and focused (`.is-flash`).
   - Link button dragged over it, when it would accept: a solid accent outline (`.entity--relate-ok`).
   - Dragging by the head: `--elev-16`, no rise-in; resizing the list: the edge strip shows a 2px accent line.
@@ -156,7 +156,7 @@ Data controls sit in the glass header; view controls sit on the chart card they 
    - One Marks editor (`.ws-toolpanel`, in `.ws-toolfly`) is open at a time, floating beside the field pane — see [worksheet-marks.md](../../concepts/worksheet/worksheet-marks.md).
 2. **Chart card** (`.ws-chart-card`, solid): a head (`.ws-chart-head`) with the **view bar**
    (`.ws-viewbar`), then the Format card when open, the result notice, and the chart pane.
-   - View bar, left: the field-pane toggle, the chart-type picker and undo / redo.
+   - View bar, left: the field-pane toggle, the chart-type picker.
    - View bar, right: the sort picker and a tight icon group (**Format** · **Analytics** · **Export** ·
      **Refresh** · **⋯ sheet actions** · **Full screen**, 4px apart).
    - The card has no margin or radius and isn't overflow-clipped, so its menus can extend past it.
@@ -182,7 +182,7 @@ The dashboard tab (`.view--board`, padding 0, no scroll of its own) is a two-col
 
 - **Side panel:** 240px, in the worksheet's field-pane slot.
 - **Main column:** a bar over `#board-scroll`, which scrolls inside itself while the page stays fixed.
-  The bar holds the name, widget count, the edit status line, Undo / Redo, Full screen and Print. The
+  The bar holds the name, widget count, the edit status line, Full screen and Print. The
   status line reserves two lines so the canvas never shifts.
 
 **Canvas:** 12 columns with rows of `calc(var(--ctl-h) * 2)` and `var(--s2)` gaps. Widgets are absolutely

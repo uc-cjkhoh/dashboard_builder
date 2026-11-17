@@ -10,14 +10,14 @@ Part of [dashboards.md](dashboards.md): the free-text note, the per-widget note,
 - **Notes** (bar) opens an inline editor under the bar: a labelled textarea, a count ("n / 1000"), **Save** and **Cancel**. Ctrl+Enter saves, Esc cancels.
 - **Limit:** at most **1000** characters after trimming (`LIMITS.dashboardNotes`, client-side only). Over it, the editor shows an alert, sets `aria-invalid` and keeps the text — rejected, never cut. Saving blanks clears the note.
 - **Shown** under the bar as plain text (`textContent`, line breaks kept); hidden when there is none. Switching dashboards closes an open editor.
-- **Saved** as an optional `notes` string on the dashboard (absent when empty); on import a non-string or over-long note is dropped with an issue. Not part of undo / redo. Specification text only — no data.
+- **Saved** as an optional `notes` string on the dashboard (absent when empty); on import a non-string or over-long note is dropped with an issue. Specification text only — no data.
 
 ## Widget notes
 
 - A **worksheet widget** has a **Note** button (info icon) in its header. It opens an inline form under the title: a labelled textarea, a count ("n / 300"), **Save** and **Cancel**. Ctrl+Enter saves, Esc cancels. Text, image, spacer and button widgets have no note.
 - **Limit:** at most **300** characters after trimming (`LIMITS.widgetNote`, client-side only). Over it, the form shows an alert, sets `aria-invalid` and keeps the text — rejected, never cut. Saving blanks clears the note.
 - **Shown** under the widget title as plain text (`textContent`, line breaks kept); hidden when there is none. The button's name says "Add a note to …" or "Edit the note on …". On paper the on-widget note is hidden and the header lists it instead.
-- **Saved** as an optional `note` string on the sheet widget (absent when empty); on import a non-string or over-long note is dropped with an issue. One undo step per change (it is a widget edit). Specification text only — no data.
+- **Saved** as an optional `note` string on the sheet widget (absent when empty); on import a non-string or over-long note is dropped with an issue. Specification text only — no data.
 
 ## Full screen and print
 
