@@ -76,6 +76,8 @@ The current version is **2**; this build also opens version 1. Shapes are in
 
 When a connection is established **and the canvas is empty**, the saved workbook for that server + user reopens.
 
+**Change connection to another server or user** first clears the screen (cards and tabs fade out; the old workbook is already saved under its own key), then restores the new server's workbook as above. Nothing is saved while it clears, so the old model is never written over the other server's workbook. With no saved workbook there, a toast says "Your workbook for the previous server is saved in this browser and comes back when you connect to it again." Reconnecting to the same server + user keeps the screen as it is. Test: `tests/live/data-source-guards-ui.mjs`.
+
 - A toast says `Restored your last workbook (N tables[, U unions/unpivots], M worksheets[, K dashboards][, L stories]).` Unions and unpivots are counted apart from tables; those parts and the dashboards and stories parts appear only when there are some.
 - The restore never waits: the workbook opens first. Then the live columns of the tables its worksheets use are read (5 s limit; a read that doesn't answer adds nothing). A pill naming a column that isn't there is already shown invalid on its shelf ([worksheet.md](../worksheet/worksheet.md)); a second toast and a dialog then list it (`Sheet "X": orders.qty isn't in shop.orders — left out.`). An import reads the columns first (same limit), so its one summary includes these.
 - Tables re-fetch their columns. Relationships draw as soon as both key rows exist.

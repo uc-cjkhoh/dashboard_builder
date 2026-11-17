@@ -44,3 +44,19 @@ The connection form shows **Secure (TLS)** and **Trust self-signed certificate**
 - **Change connection** re-opens the card over the canvas (scrim over any cards), with Cancel / Esc back; the session stays connected until a new connect succeeds.
 - **Not moved:** the connected status row — the start card hides once tables are on the canvas, so Change / Disconnect and the liveness dot would vanish with it.
 - Detail: [connection.md](../concepts/data-source/connection.md#while-disconnected).
+
+### D135 — The connect form reaches only allowed hosts, and not too often
+
+- **Decision:** `POST /api/connection` checks the host against `ClickHouse:AllowedHosts` (host names or IP addresses as typed, case-insensitive; `[::1]` and a trailing dot are normalised) before any network. Any other host gets 400 on the host field: "This server can't connect to that host. Ask the administrator to add it to the allowed ClickHouse hosts." Unset or empty = any host, with a startup warning. Link-local and unspecified addresses (169.254.x.x, fe80::/10, 0.0.0.0, ::, and IPv4-mapped forms) are refused even without a list. Connect attempts are rate-limited per client address (`ClickHouse:ConnectPerMinute`, default 20; 429 in the `{ error }` shape). Behind Apache the client address comes from `X-Forwarded-For`, trusted from loopback proxies only.
+- **Why:** the app has no login, and the connect messages say which host:port answers, refuses, or speaks TLS (they are meant to help a user fix a typo). Without a list, anyone who can open the page can scan the network the app sits on from the build host. The list stops that at the source, and the rate limit slows a scan where no list is set.
+- **Kept:** the detailed failure messages for allowed hosts — they are the user's best help, and an allowed host is one the operator chose.
+- **Gap:** a host name that resolves to a link-local address is not refused (only a typed address is checked); the allowlist is the real fix, so set it on any shared server.
+- **Rejected:** refusing private and loopback addresses outright (ClickHouse servers here are internal); one vague message for every failure (users lose the typo help); resolving DNS before connecting (a second lookup can differ from the connection's).
+- Code: `ClickHouse/ConnectPolicy.cs`, `Program.cs`. Detail: [connection.md](../concepts/data-source/connection.md#server-side). Review: [backlog/data-source-hardening.md](../development/backlog/data-source-hardening.md).
+
+### D137 — A writable account never runs without `readonly=2`
+
+- **Decision:** the guard step-down at connect (`NextGuards`) goes Full → NoTimeLimit (code 452) → ReadOnly (a second 452: `readonly=2` alone) and stops: a refusal at ReadOnly fails the connect, on the user field, with "This account's settings profile refuses read-only mode (readonly=2), so it can't be used here. Connect with an account limited to reading." Code 164 at any level still goes to None (the account is read-only on the server, which guards it). At ReadOnly and None a query adds no SETTINGS of its own (`TakesQuerySettings`): no `join_use_nulls`, `max_threads` or profile backstops.
+- **Why:** the old step-down went NoTimeLimit → None on a second 452, so an account whose profile pinned, say, `join_use_nulls` ran with no `readonly` at all. Golden rule 1 then rested on the app's own SQL alone.
+- **Cost:** a ReadOnly connection has no server-side time limit (the 15 s HTTP timeout still ends the wait) and no cancel-on-close; right and full joins are refused as at None.
+- Detail: [clickhouse-integration.md](../reference/clickhouse-integration.md#step-down-when-the-server-refuses-a-setting).
