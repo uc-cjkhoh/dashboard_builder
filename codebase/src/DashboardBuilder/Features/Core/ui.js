@@ -18,10 +18,9 @@ let toastTimer;
 let toastText; // the visible message span (NOT a live region)
 
 /** Transient message. `kind` is one of "ok" | "danger" | "info". Danger toasts stay until dismissed.
- *  `action` ({ label, run }) adds one button before the close X (e.g. Undo); the toast then stays 10 s, and clicking it hides the toast and runs it.
  *  Announcement goes through ONE persistent, always-rendered visually-hidden live region (#toast-live) that sits
  *  outside the `hidden` #toast container (a display:none live region is not announced). */
-export function toast(message, kind = "info", { action = null } = {}) {
+export function toast(message, kind = "info") {
   const el = document.getElementById("toast");
   if (!el) return;
   if (!toastText || !el.contains(toastText)) {
@@ -34,18 +33,12 @@ export function toast(message, kind = "info", { action = null } = {}) {
     el.replaceChildren(toastText, close);
   }
   toastText.textContent = message;
-  el.querySelector(".toast__action")?.remove();
-  if (action) {
-    const btn = makeButton(action.label, "btn toast__action");
-    btn.addEventListener("click", () => { clearTimeout(toastTimer); hide(el); action.run(); });
-    toastText.after(btn);
-  }
   el.className = `toast toast--${kind}`;
   show(el);
   const live = document.getElementById("toast-live");
   if (live) { live.textContent = ""; setTimeout(() => { live.textContent = message; }, 50); } // clear then set so repeats re-announce
   clearTimeout(toastTimer);
-  if (kind !== "danger") toastTimer = setTimeout(() => hide(el), action ? 10000 : 5000);
+  if (kind !== "danger") toastTimer = setTimeout(() => hide(el), 5000);
 }
 let fieldErrorSeq = 0;
 /** Mark a field invalid with an inline message under it; cleared on the next edit. */
@@ -134,4 +127,10 @@ export function confirmDialog(message, { danger = false, confirmText = "Confirm"
     dlg.addEventListener("cancel", (e) => { e.preventDefault(); finish(false); });
     openDialog(dlg);
   });
+}
+
+/** Delete confirmation, asked twice (there is no Undo): `message` first, then "Delete <what>? This can't be undone." Resolves true only when both are confirmed. */
+export async function confirmDeleteTwice(message, what, { confirmText = "Delete" } = {}) {
+  if (!(await confirmDialog(message, { danger: true, confirmText }))) return false;
+  return confirmDialog(`Really ${confirmText.toLowerCase()} ${what}? This can't be undone.`, { danger: true, confirmText: `${confirmText} for good` });
 }

@@ -160,11 +160,8 @@
 .entity__keys .col-row--linked { background: var(--accent-line); }
 /* A card in no relationship, while the model has other cards to relate it to: dashed outline and words. */
 .entity--unlinked { border-style: dashed; border-color: var(--warn-line); }
-/* "Needs a partner" is a button (D127): it opens "Relate <table> to". Text + dashed outline + underline on hover, never colour alone. */
-.entity__need { flex: none; margin: 0; padding: 0 var(--s1); border: 0; border-radius: var(--r); background: none; font: inherit; font-size: var(--fs-body); font-weight: 400;
-  color: var(--warn-ink); white-space: nowrap; cursor: pointer; }
-.entity__need:hover { text-decoration: underline; background: var(--warn-bg); }
-.entity__need:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* "Needs a partner" is a plain label (D127): text + the dashed outline, never colour alone. */
+.entity__need { flex: none; margin: 0; padding: 0 var(--s1); font-size: var(--fs-body); font-weight: 400; color: var(--warn-ink); white-space: nowrap; }
 
 /* A proposed link (D127): dashed, in the accent, with its "Relate on …" button on the middle run; nothing is saved until the dialog is confirmed. */
 .rel-ghost__line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-dasharray: 6 6; stroke-linecap: round; opacity: .8; }
@@ -176,23 +173,6 @@
 .rel-ghost__no { padding: var(--s1); color: var(--ink-3); }
 .rel-ghost__no:hover { color: var(--ink); background: var(--surface-2); }
 .rel-ghost button:focus-visible { outline: 2px solid var(--focus); outline-offset: 0; }
-
-/* "Relate <table> to": one button per other table, its name and the key the names point to.
-   Items are flat buttons (Core/buttons.css: no border, focus is the neutral wash); hover is the accent wash. The list pads 8px and
-   each item 8px more, so the text sits on the title's 16px edge (optical alignment). Long names and compound keys wrap. */
-.rel-pick { width: min(340px, calc(100vw - 2 * var(--s4))); }
-.rel-pick__list { display: grid; gap: var(--s1); padding: var(--s4) var(--s2) 0; max-height: 60vh; overflow-y: auto; }
-.rel-pick__item { display: grid; justify-items: start; min-width: 0; padding: var(--s2); border-radius: var(--r); background: none;
-  font: inherit; color: var(--ink); text-align: left; cursor: pointer; transition: background var(--dur-fast) var(--ease); }
-.rel-pick__item:not(:disabled):hover { background: var(--accent-soft); }
-.rel-pick__item:disabled { cursor: default; color: var(--ink-3); }
-.rel-pick__name, .rel-pick__key { max-width: 100%; overflow-wrap: anywhere; }
-.rel-pick__name { font-size: var(--fs-lead); font-weight: 600; }
-.rel-pick__key { font-size: var(--fs-body); color: var(--ink-2); }
-.rel-pick__item:disabled .rel-pick__key { color: var(--ink-3); }
-/* already related: a check and "Related" in the ok ink (icon + text + colour); picking it opens that relationship */
-.rel-pick__key--ok { display: inline-flex; align-items: center; gap: var(--s1); color: var(--ok-ink); }
-@media (prefers-reduced-motion: reduce) { .rel-pick__item { transition: none; } }
 
 /* ---- Type-mismatch warning (a modal: both columns, their types, why, what would fit) -------------------------------- */
 .dialog--warn { max-width: 440px; }

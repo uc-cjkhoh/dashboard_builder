@@ -6,7 +6,7 @@ import { defaultShelf, placesOnDblClick } from "./placement-model.js";
 import { fieldPillOptions, filterPillOptions, filterSummary, markGrid } from "./pill-options.js";
 import { visibleTools } from "./toolbar-rules.js";
 import { roleOf, STAT_SINGLE_TABLE, showMeOptions, dimsFor } from "./show-me-rules.js";
-import { toggle, makeButton, toast, fieldError, confirmDialog, copyText } from "../Core/ui.js";
+import { toggle, makeButton, toast, fieldError, confirmDeleteTwice, copyText } from "../Core/ui.js";
 import { LIMITS, number, percent, percentLabel, isFraction, PERCENT_MESSAGE, DEFAULT_PERCENTILE } from "../Core/validate.js";
 import { aggsFor, checkAdd, checkFilter, viewCounts, withCategories, opsFor, OP_LABELS } from "./filter-rules.js";
 import { freshSheet, entities, relationships, activeWorksheet, isWorksheetActive, updateSheet, bus, defaultFormat, defaultMarks, sharedFilters, metaOf, nameOf, setFieldMeta, emptySheet, parameters, updateParameter, hierarchies, calculations, worksheets, addCalculation, removeCalculation, renameTab } from "../Core/store.js";
@@ -38,7 +38,6 @@ import { checkTooltipStyle, styleAfterTextEdit } from "./tooltip-style.js";
 import { checkTooltipFormats, sampleLookup, pruneFormats } from "./tooltip-formats.js";
 import { SWATCHES, memberKey, fieldColorKey, setMemberColor, clearFieldColors, colourOf } from "./colour-model.js";
 import { SHAPE_CHOICES, SHAPE_BINS_MIN, SHAPE_BINS_MAX, shapeBinsOf, cleanShapeBins, setMemberShape, clearFieldShapes } from "./shape-model.js";
-import { createHistory } from "./history.js";
 import { applyToggle, applyAll, allMessage, MAX_COLLAPSED } from "./collapse-model.js";
 import { LINE_STYLE_CHOICES, linesTakeStyle } from "./line-style-model.js";
 import { wireLineControls } from "./line-controls.js";
@@ -222,8 +221,6 @@ export function initDashboards() {
   // Latest-wins queries + recent results per worksheet: a superseded query is aborted (its answer can
   // never overwrite a newer chart), and presentation-only changes re-render from the cached result
   // instead of re-querying ClickHouse. The Refresh button drops the worksheet's cache and re-queries.
-  const history = createHistory(); // undo / redo per worksheet
-  const lastSnap = new Map();       // worksheet id → the sheet as last committed (the "before" of the next edit)
   const results = sharedResults;
   let tooltipPin = null; // see takeTooltipPin: declared before the view exists, since a drawing may ask for it
   // The editor's one worksheet view — created before anything (sync() below) can use it.
@@ -257,19 +254,19 @@ export function initDashboards() {
     commit(dash, s);
   }
 
-  // One table column's alignment / width (Format → Columns, or a header's resize handle): one commit = one undo step. A field set to null clears it.
+  // One table column's alignment / width (Format → Columns, or a header's resize handle): one commit. A field set to null clears it.
   function setColumn(key, patch) {
     const dash = activeWorksheet();
     if (!dash) return;
     const s = dash.sheet;
     const cols = setTableColumn(s.format?.tableCols, key, patch, tableColumnList(s).map((c) => c.key));
-    if (JSON.stringify(cols ?? null) === JSON.stringify(s.format?.tableCols ?? null)) return; // nothing changed: no edit, no undo step
+    if (JSON.stringify(cols ?? null) === JSON.stringify(s.format?.tableCols ?? null)) return; // nothing changed: no edit
     s.format = { ...(s.format ?? defaultFormat()) };
     if (cols) s.format.tableCols = cols; else delete s.format.tableCols;
     commit(dash, s);
   }
 
-  // Expand all / Collapse all (the crosstab corner): one commit = one undo step; the toast names what changed. Nothing to do → no edit.
+  // Expand all / Collapse all (the crosstab corner): one commit; the toast names what changed. Nothing to do → no edit.
   function collapseAll(mode, rowKeys, colKeys) {
     const dash = activeWorksheet();
     if (!dash) return;
@@ -301,14 +298,11 @@ export function initDashboards() {
 
   bus.addEventListener("view:changed", sync);
   bus.addEventListener("worksheet:changed", () => {
-    // A change from outside commit() (workbook open, undo) becomes the new baseline.
     const d = activeWorksheet();
-    // ...and a restored sheet's calculated pills take the live calculation's type / role (undo, open).
+    // A restored sheet's calculated pills take the live calculation's type / role (open).
     if (d && isWorksheetActive()) syncCalcPills(d.sheet, calculations, catalogFromEntities([...entities.values()]), parameters);
-    if (d && isWorksheetActive()) lastSnap.set(d.id, structuredClone(d.sheet));
     if (isWorksheetActive()) { renderShelves(); runChart(); }
   });
-  initUndoKeys();
   // Safety net: an entity's columns finishing after the first render may be the only source of a
   // restored filter's category — re-render once if any filter is still waiting for one.
   bus.addEventListener("entity:loaded", () => {
@@ -341,7 +335,7 @@ export function initDashboards() {
     let activeChanged = false;
     for (const d of worksheets()) {
       if (!syncCastCategories(d.sheet, sharedFilters, castOf, baseCategoryOf)) continue;
-      if (d === active && isWorksheetActive()) activeChanged = true; else commitQuiet(d, d.sheet);
+      if (d === active && isWorksheetActive()) activeChanged = true; else commit(d, d.sheet);
     }
     if (!isWorksheetActive()) return;
     buildFields();
@@ -357,7 +351,7 @@ export function initDashboards() {
       const before = JSON.stringify(d.sheet);
       syncCalcPills(d.sheet, calculations, catalog, parameters);
       if (JSON.stringify(d.sheet) === before) continue;
-      if (d === active && isWorksheetActive()) activeChanged = true; else commitQuiet(d, d.sheet);
+      if (d === active && isWorksheetActive()) activeChanged = true; else commit(d, d.sheet);
     }
     if (!isWorksheetActive()) return;
     buildFields();
@@ -379,8 +373,6 @@ export function initDashboards() {
     const id = activeWorksheet()?.id ?? null;
     if (shownDash && id !== shownDash) enter(view.querySelector(".worksheet"), { y: 4, duration: MOTION.view });
     shownDash = id;
-    const cur = activeWorksheet();
-    if (cur && !lastSnap.has(cur.id)) lastSnap.set(cur.id, structuredClone(cur.sheet));
     await buildFields();
     renderShelves();
     runChart();
@@ -618,25 +610,24 @@ export function initDashboards() {
     const copy = addCalculation({ name: ok.value, formula: calc.formula, ...(calc.group ? { group: structuredClone(calc.group) } : {}) });
     setRoleChoice(copy.id, roleChoice(calc.id));
   }
-  // Refuse while another calculation uses it; ask first when worksheets use it; else just delete.
+  // Refuse while another calculation uses it; always ask twice (no Undo), naming the worksheets that use it.
   async function deleteCalcField(calc) {
     const plan = deleteCalcPlan(calculations, worksheets().map((d) => d.sheet), calc.id, sharedFilters);
     if (plan.refusedBy) { toast(`Used by calculation '${plan.refusedBy.join("', '")}'.`, "info"); return; }
+    const n = plan.usedInSheets, m = plan.usedInShared;
+    const where = [
+      n ? `${n} worksheet${n === 1 ? "" : "s"}` : "",
+      m ? `${m} shared Top N filter${m === 1 ? "" : "s"}` : "",
+    ].filter(Boolean).join(" and ");
+    const used = where ? ` It is used in ${where}; deleting it removes it from ${n + m === 1 ? "it" : "them"}.` : "";
+    if (!(await confirmDeleteTwice(`Delete the calculated field “${calc.name}”?${used}`, `“${calc.name}”`))) return;
     if (plan.usedInSheets || plan.usedInShared) {
-      const n = plan.usedInSheets, m = plan.usedInShared;
-      const where = [
-        n ? `${n} worksheet${n === 1 ? "" : "s"}` : "",
-        m ? `${m} shared Top N filter${m === 1 ? "" : "s"}` : "",
-      ].filter(Boolean).join(" and ");
-      const go = await confirmDialog(`“${calc.name}” is used in ${where}. Deleting it removes it from ${n + m === 1 ? "it" : "them"}.`, { danger: true, confirmText: "Delete" });
-      if (!go) return;
       clearFilterCalc(sharedFilters, calc.id); // saved with the workbook by the calculations:changed below
       // Commit every sheet that lost pills (the calculations:changed sync below sees them already cleared and wouldn't).
-      const active = activeWorksheet();
       for (const d of worksheets()) {
         if (!usesCalc(d.sheet, calc.id)) continue;
         clearCalcPills(d.sheet, calc.id);
-        if (d === active && isWorksheetActive()) commit(d, d.sheet); else commitQuiet(d, d.sheet);
+        commit(d, d.sheet);
       }
     }
     setRoleChoice(calc.id, null);
@@ -829,7 +820,7 @@ export function initDashboards() {
     vbIcons.append(formatToggle(), analyticsToggle(), refreshButton(dash), fullScreenButton(), exportControl(dash, s), sheetActions(dash, s));
     vbRight.append(sortControl(dash, s), vbIcons);
     const vbLeft = el("div", "ws-viewbar__group");
-    vbLeft.append(fieldsPaneButton(), chartTypePicker(dash, s), undoButtons(dash),
+    vbLeft.append(fieldsPaneButton(), chartTypePicker(dash, s),
       explainControl(() => evaluationInput(s, { sharedFilters: sharedFilters.filter((f) => checkFilter(f).state === "ok" && !sharedSkipped(s).includes(f)), parameters, calcs: calculations, isApplied: (f) => checkFilter(f).state === "ok", dimensions: planDims(s).keyOrder.filter(Boolean).map(nameOf) }), { signal: headerAbort.signal, getNote: () => (lastCached ? CACHE_NOTE : null) }));
     viewbar.append(vbLeft, vbRight);
     const fmtEl = formatOpen ? formatPanel(dash, s) : analyticsOpen ? analyticsPanel(dash, s) : null; // format / analytics card
@@ -1035,7 +1026,7 @@ export function initDashboards() {
         s.analytics = itemActive(a, id) ? removeItem(a, id) : addItem(a, id); commit(dash, s);
         headEl.querySelector(`.ws-ana-item[data-item="${id}"]`)?.focus(); // the re-render replaced this button
       };
-      analyticsDrop = (id) => { if (items.some((i) => i.id === id) && !itemActive(a, id)) { s.analytics = addItem(a, id); commit(dash, s); } }; // already on: no edit, no undo step
+      analyticsDrop = (id) => { if (items.some((i) => i.id === id) && !itemActive(a, id)) { s.analytics = addItem(a, id); commit(dash, s); } }; // already on: no edit
       const row = el("div", "ws-ana-items");
       for (const it of items) {
         const on = itemActive(a, it.id);
@@ -1150,34 +1141,7 @@ export function initDashboards() {
     return wrap;
   }
 
-  // --- worksheet chrome: undo / redo, sheet actions, title / caption, status bar ---
-  function undoButtons(dash) {
-    const wrap = el("div", "ws-undo");
-    const u = iconButton("undo", "Undo (Ctrl+Z)"), r = iconButton("redo", "Redo (Ctrl+Shift+Z)");
-    u.disabled = !history.canUndo(dash.id); r.disabled = !history.canRedo(dash.id);
-    u.title = "Undo (Ctrl+Z)"; r.title = "Redo (Ctrl+Shift+Z)";
-    u.addEventListener("click", () => step("undo")); r.addEventListener("click", () => step("redo"));
-    wrap.append(u, r);
-    return wrap;
-  }
-  function step(which) {
-    const dash = activeWorksheet();
-    if (!dash || !isWorksheetActive()) return;
-    stopPaging();
-    const target = history[which](dash.id, dash.sheet);
-    if (!target) return;
-    lastSnap.set(dash.id, structuredClone(target));
-    updateSheet(dash.id, target);
-  }
-  function initUndoKeys() {
-    document.addEventListener("keydown", (e) => {
-      if (!(e.ctrlKey || e.metaKey) || !isWorksheetActive() || view.hidden) return;
-      if (e.target.closest?.("input, textarea, select, [contenteditable='true'], dialog")) return; // the field's own undo
-      const k = e.key.toLowerCase();
-      if (k === "z" && !e.shiftKey) { e.preventDefault(); step("undo"); }
-      else if ((k === "z" && e.shiftKey) || k === "y") { e.preventDefault(); step("redo"); }
-    });
-  }
+  // --- worksheet chrome: sheet actions, title / caption, status bar ---
   // The ⋯ menu: Swap Rows ↔ Columns, Clear sheet…, Fit (radio), Show title.
   function sheetActions(dash, s) {
     const wrap = el("div", "menu ws-actions");
@@ -1214,7 +1178,7 @@ export function initDashboards() {
     commit(dash, s);
   }
   async function clearSheet(dash, s) {
-    if (dashboardHasContentSheet(s) && !(await confirmDialog("Clear this sheet? Fields, filters, marks and format go — Undo brings them back.", { danger: true, confirmText: "Clear" }))) return;
+    if (dashboardHasContentSheet(s) && !(await confirmDeleteTwice("Clear this sheet? Fields, filters, marks and format go.", "this sheet", { confirmText: "Clear" }))) return;
     const fresh = freshSheet(); // a cleared sheet starts as a new one does (the colour scale Automatic)
     fresh.chartType = s.chartType;
     choicesFor = null; calcFor = null; openTool = null;
@@ -2410,7 +2374,7 @@ export function initDashboards() {
   }
   // Chart-type picker (one control; Show Me folded in): the current type's icon + name; its menu is a two-column grid of every
   // type. A type the sheet's fields can't draw is dimmed with the reason as its tooltip, the best fit carries the Show Me icon, and
-  // picking one sets the type (one commit = one undo step); Columns / Rows stay where they are.
+  // picking one sets the type (one commit); Columns / Rows stay where they are.
   function chartTypePicker(dash, s) {
     const wrap = el("div", "menu ws-pick ws-pick--chart");
     const btn = el("button", "ws-pick__btn"); btn.type = "button";
@@ -2758,7 +2722,7 @@ export function initDashboards() {
     modal.addEventListener("click", () => openTooltipDialog({
       text: s.tooltipText ?? "", style: s.tooltipStyle ?? null, formats: s.tooltipFormats ?? null, format: s.format, fields: cat(),
       onClose: () => document.querySelector(".ws-tipedit__modal")?.focus(),
-      onApply: ({ text, style, formats }) => { // one commit = one undo step
+      onApply: ({ text, style, formats }) => { // one commit
         const t = checkTooltipText(text), st = checkTooltipStyle(style), fm = checkTooltipFormats(formats);
         if (!t.ok || !st.ok || !fm.ok) return;
         const nextStyle = t.value ? st.value : null, nextFormats = t.value ? fm.value : null;
@@ -3075,7 +3039,7 @@ export function initDashboards() {
           const pg = dash.sheet.pages;
           if (!pg || !Array.isArray(pg.members) || !pg.members.length) { stopPaging(); return; }
           pg.index = ((pg.index ?? 0) + 1) % pg.members.length;
-          commitQuiet(dash, s);
+          commit(dash, s);
         }, 1500);
         commit(dash, s);
       });
@@ -3083,16 +3047,8 @@ export function initDashboards() {
     }
     return wrap;
   }
-  // Every edit goes through commit() → worksheet:changed → renderShelves + runChart. Each commit also
-  // records the previous committed sheet for undo (edits mutate the sheet in place, so the "before" is
-  // the snapshot taken at the last commit). commitQuiet skips the history (Pages autoplay).
-  const commit = (dash, sheet) => {
-    const before = lastSnap.get(dash.id);
-    if (before) history.record(dash.id, before);
-    lastSnap.set(dash.id, structuredClone(sheet));
-    updateSheet(dash.id, sheet);
-  };
-  const commitQuiet = (dash, sheet) => { lastSnap.set(dash.id, structuredClone(sheet)); updateSheet(dash.id, sheet); };
+  // Every edit goes through commit() → worksheet:changed → renderShelves + runChart.
+  const commit = (dash, sheet) => updateSheet(dash.id, sheet);
 
   // A legend click highlights that item (a second click clears it); on a legend that lists a dimension's members
   // (`field` + `raw`) it also selects the member, so the selection bar offers Keep only / Exclude (the click-to-filter path).
@@ -3156,7 +3112,7 @@ export function initDashboards() {
   }
 
   // One-shot: the mark a click just selected, handed to the next drawing (it pins that mark's tooltip in Responsive mode) and then forgotten, so a later redraw
-  // (a Format edit, undo, returning to the tab) never re-opens a tooltip. A pin nobody drew within a few seconds is stale.
+  // (a Format edit, returning to the tab) never re-opens a tooltip. A pin nobody drew within a few seconds is stale.
   function takeTooltipPin() {
     const p = tooltipPin;
     tooltipPin = null;

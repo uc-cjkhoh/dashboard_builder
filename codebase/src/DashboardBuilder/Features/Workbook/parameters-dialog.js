@@ -4,7 +4,7 @@ import { parameters, calculations, worksheets, sharedFilters, addParameter, upda
 import { PARAM_TYPES, MAX_PARAMS, MAX_LIST, checkValue, checkStep, checkParamName, paramRefs } from "../Core/parameters-model.js";
 import { text } from "../Core/validate.js";
 import { calcsUsingParam } from "../Calc/calc-params.js";
-import { makeButton, openDialog, closeDialog, toast, confirmDialog } from "../Core/ui.js";
+import { makeButton, openDialog, closeDialog, toast, confirmDeleteTwice } from "../Core/ui.js";
 
 export function openParametersDialog() {
   const dlg = el("dialog", "dialog params-dialog");
@@ -38,8 +38,8 @@ export function openParametersDialog() {
         const refs = paramRefs(worksheets().map((t) => ({ name: t.name, sheet: t.sheet })), sharedFilters, p.id); // these fall back to their own typed value
         const notes = [];
         if (users.length) notes.push(`“${p.name}” is read by ${users.length === 1 ? "calculation" : "calculations"} ${users.map((u) => `'${u}'`).join(", ")}. Deleting it leaves ${users.length === 1 ? "it" : "them"} unable to compute until you edit the formula or add a parameter with that name.`);
-        if (refs.length) notes.push(`“${p.name}” is used by ${refs.join("; ")}. Deleting it unlinks them (each keeps its own typed value, so results may change). Deleting a parameter can't be undone.`);
-        if (notes.length && !(await confirmDialog(notes.join(" "), { danger: true, confirmText: "Delete" }))) return;
+        if (refs.length) notes.push(`“${p.name}” is used by ${refs.join("; ")}. Deleting it unlinks them (each keeps its own typed value, so results may change).`);
+        if (!(await confirmDeleteTwice([`Delete the parameter “${p.name}”?`, ...notes].join(" "), `“${p.name}”`))) return;
         removeParameter(p.id); render();
       });
       li.append(info, edit, del);

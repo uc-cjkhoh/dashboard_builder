@@ -5,7 +5,7 @@ import { icon } from "../Core/icons.js";
 
 // DOM wiring for editing the board: pointer move / resize, the keyboard, and dropping a worksheet from the side panel. All the
 // geometry and every verdict come from the pure modules (board-layout / board-drag / board-keys / board-model); this file turns
-// events into points, draws the ghost, and hands a result to `ctx.commit` — one committed step (one undo step) per edit.
+// events into points, draws the ghost, and hands a result to `ctx.commit` — one committed step per edit.
 //
 //   ctx = { grid, scroll, getDash(), nameOf(widget), metrics(), commit(next), status(message, refused?), addAt(sheetId, cand) }
 //   Points are grid-relative (clientX − grid left), so scrolling the canvas while dragging needs no correction.
@@ -130,7 +130,7 @@ export function initInteract(ctx) {
 
   return {
     cancel: () => { if (abort) abort(); else { drag.cancel(); endDrag(); } },
-    /** The widget list changed (an undo, a removal): a gesture on a widget that no longer exists ends, committing nothing. */
+    /** The widget list changed (a removal): a gesture on a widget that no longer exists ends, committing nothing. */
     cancelIfGone: () => { if (abort && !ctx.getDash()?.widgets.some((w) => w.id === dragId)) abort(); },
     get dragging() { return drag.pressed; },
   };

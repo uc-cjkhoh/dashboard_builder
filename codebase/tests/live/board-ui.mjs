@@ -65,6 +65,13 @@ try {
     const dom = w?.querySelector('.ws-chart-canvas'); const i = dom && window.echarts.getInstanceByDom(dom); return i ? i.getOption().series[0].type : null; })()`);
   const addSheet = (name) => ev(`document.querySelector('.board-panel__item[data-sheet-id="' + [...document.querySelectorAll('.board-panel__item')].find((x) => x.querySelector('.board-panel__name').textContent === ${J(name)}).dataset.sheetId + '"] button').click()`);
   const hardClick = (sel) => ev(`document.querySelector(${J(sel)}).click()`);
+  // Removing a widget asks twice: "Remove", then "Remove for good" on a second dialog.
+  const confirmRemove = async () => {
+    await waitFor(`!!document.querySelector('dialog[open]')`, 'remove confirm');
+    await ev(`[...document.querySelectorAll('dialog[open] button')].find((x) => x.textContent.trim() === 'Remove').click()`);
+    await waitFor(`/^Really remove /.test(document.querySelector('dialog[open] .dialog__body')?.textContent ?? '')`, 'second remove confirm');
+    await ev(`[...document.querySelectorAll('dialog[open] button')].find((x) => x.textContent.trim() === 'Remove for good').click()`);
+  };
   const shot = (name) => b.screenshot(join(SHOTS, name));
 
   await b.goto(APP + '/');
@@ -139,14 +146,32 @@ try {
     const s = await ev(`({ page: document.documentElement.scrollHeight - window.innerHeight, scroller: document.getElementById('board-scroll').scrollHeight - document.getElementById('board-scroll').clientHeight })`);
     must(s.page <= 0, `the page scrolls by ${s.page}`);
     must(s.scroller > 0, 'the canvas does not scroll inside its panel');
-    for (const w of (await widgets()).filter((x) => x.kind === 'text').slice(1)) await ev(`document.querySelector('[data-widget-id="${w.id}"] .board-widget__remove').click()`);
+    for (const w of (await widgets()).filter((x) => x.kind === 'text').slice(1)) {
+      await ev(`document.querySelector('[data-widget-id="${w.id}"] .board-widget__remove').click()`);
+      await confirmRemove();
+      await waitFor(`!document.querySelector('[data-widget-id="${w.id}"]')`, 'widget removed');
+    }
     must(await store(`return st.dashboards()[0].widgets.length === 4;`), 'cleanup');
   });
 
   await check('Remove drops the widget, keeps the others drawn, moves focus on, and marks the workbook dirty (autosave)', async () => {
     const before = await ev(`localStorage.getItem('dashboardbuilder.workbook.v2|mock-ch|8443|default')`);
     const n = queries.length;
+    // Cancel on either dialog keeps the widget
     await ev(`document.querySelector('.board-widget--text .board-widget__remove').click()`);
+    await waitFor(`!!document.querySelector('dialog[open]')`, 'first confirm');
+    await ev(`[...document.querySelectorAll('dialog[open] button')].find((x) => x.textContent.trim() === 'Cancel').click()`);
+    await waitFor(`!document.querySelector('dialog[open]')`, 'first confirm cancelled');
+    must(await ev(`!!document.querySelector('.board-widget--text')`), 'Cancel on the first dialog removed the widget');
+    await ev(`document.querySelector('.board-widget--text .board-widget__remove').click()`);
+    await waitFor(`!!document.querySelector('dialog[open]')`, 'first confirm again');
+    await ev(`[...document.querySelectorAll('dialog[open] button')].find((x) => x.textContent.trim() === 'Remove').click()`);
+    await waitFor(`/^Really remove /.test(document.querySelector('dialog[open] .dialog__body')?.textContent ?? '')`, 'second confirm');
+    await ev(`[...document.querySelectorAll('dialog[open] button')].find((x) => x.textContent.trim() === 'Cancel').click()`);
+    await waitFor(`!document.querySelector('dialog[open]')`, 'second confirm cancelled');
+    must(await ev(`!!document.querySelector('.board-widget--text')`), 'Cancel on the second dialog removed the widget');
+    await ev(`document.querySelector('.board-widget--text .board-widget__remove').click()`);
+    await confirmRemove();
     await waitFor(`!document.querySelector('.board-widget--text')`, 'text removed');
     must(await ev(`document.activeElement?.classList.contains('board-widget__remove')`), 'focus lost after Remove');
     must(await ev(`document.querySelectorAll('.board-widget .ws-chart-canvas svg').length === 2`), 'siblings redrawn or lost');

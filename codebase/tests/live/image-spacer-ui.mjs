@@ -1,6 +1,6 @@
 // Browser check for the image and spacer dashboard widgets (T08-15, T08-16): Add image through the real file input (a PNG is
 // drawn with its file name as alt text; an SVG, a non-image and an oversize file are refused with a message and add nothing; a fifth
-// image is refused), Add spacer, undo of both, Remove, autosave keeps the picture inside the workbook (no network request for it),
+// image is refused), Add spacer, Remove (asked twice: Cancel on the second keeps it), autosave keeps the picture inside the workbook (no network request for it),
 // a reload restores both, the stored picture is a data URL, and the spacer is hidden under print media. Real dev app (APP_URL),
 // every /api/* mocked; any page error fails the run. Screenshots (light + dark) go to SHOTS_DIR.
 import { launch } from './cdp.mjs';
@@ -143,11 +143,24 @@ try {
     must(v.sp === 'hidden' && v.im === 'visible', J(v));
   });
 
-  await check('Remove and undo: removing the spacer and undoing brings it back', async () => {
+  await check('Remove asks twice: Cancel on the second dialog keeps the spacer, confirming both removes it', async () => {
+    const dlgText = () => ev(`[...document.querySelectorAll('dialog[open].dialog--sm')].map((d) => d.innerText).join(' || ')`);
+    const dlgBtn = (label) => ev(`[...document.querySelectorAll('dialog[open] button')].find((x) => x.textContent.trim() === ${J(label)}).click()`);
     await click('.board-widget--spacer .board-widget__remove');
+    await waitFor(`!!document.querySelector('dialog[open].dialog--sm')`, 'first confirmation');
+    must(await ev(`!!document.querySelector('.board-widget--spacer')`), 'removed before any confirmation');
+    await dlgBtn('Remove');
+    await waitFor(`/Really remove/.test([...document.querySelectorAll('dialog[open].dialog--sm')].map((d) => d.innerText).join(' '))`, 'second confirmation');
+    must(/This can't be undone/.test(await dlgText()), await dlgText());
+    await dlgBtn('Cancel');
+    await waitFor(`!document.querySelector('dialog[open]')`, 'dialog closed');
+    must(await ev(`!!document.querySelector('.board-widget--spacer')`), 'Cancel on the second dialog removed the spacer');
+    await click('.board-widget--spacer .board-widget__remove');
+    await waitFor(`!!document.querySelector('dialog[open].dialog--sm')`, 'first confirmation again');
+    await dlgBtn('Remove');
+    await waitFor(`[...document.querySelectorAll('dialog[open] button')].some((x) => x.textContent.trim() === 'Remove for good')`, 'second confirmation again');
+    await dlgBtn('Remove for good');
     await waitFor(`!document.querySelector('.board-widget--spacer')`, 'removed');
-    await ev(`[...document.querySelectorAll('.board-bar__iconbtn')].find((x) => x.getAttribute('aria-label').startsWith('Undo')).click()`);
-    await waitFor(`!!document.querySelector('.board-widget--spacer')`, 'restored by undo');
   });
 
   await check('the workbook-wide picture budget (2 MB) refuses another image, in words', async () => {

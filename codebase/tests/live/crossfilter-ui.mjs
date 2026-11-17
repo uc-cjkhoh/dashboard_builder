@@ -60,6 +60,13 @@ try {
   await b.mock(answer);
   const ev = (s) => b.evaluate(s);
   const waitFor = (s, label) => b.waitFor(s, { label });
+  // Removing a widget asks twice: "Remove", then "Remove for good" on a second dialog.
+  const confirmRemove = async () => {
+    await waitFor(`!!document.querySelector('dialog[open]')`, 'remove confirm');
+    await ev(`[...document.querySelectorAll('dialog[open] button')].find((x) => x.textContent.trim() === 'Remove').click()`);
+    await waitFor(`/^Really remove /.test(document.querySelector('dialog[open] .dialog__body')?.textContent ?? '')`, 'second remove confirm');
+    await ev(`[...document.querySelectorAll('dialog[open] button')].find((x) => x.textContent.trim() === 'Remove for good').click()`);
+  };
   const store = (code) => ev(`(async () => { const st = await import('/features/Core/store.js'); ${code} })()`);
   const connect = async () => {
     await waitFor(`document.readyState === 'complete' && !!document.getElementById('conn-connect')`, 'app loaded');
@@ -250,6 +257,7 @@ try {
     await b.sleep(150);
     must(await chip() === null, 'a table cell selected');
     await ev(`${W('Orders table')}.querySelector('.board-widget__remove').click()`);
+    await confirmRemove();
     await waitFor(`!document.querySelector('.board-widget[aria-label="Orders table"]')`, 'table removed');
   });
 
@@ -270,6 +278,7 @@ try {
   await check('removing the source widget clears the selection and the targets show their own data again', async () => {
     const srcId = await ev(`document.querySelector('.is-source').dataset.widgetId`);
     await ev(`document.querySelector('.is-source .board-widget__remove').click()`);
+    await confirmRemove();
     await waitFor(`document.getElementById('board-filter').hidden`, 'chip cleared');
     await settle();
     must(await ev(`!document.querySelector('[data-widget-id="${srcId}"]')`), 'source still there');

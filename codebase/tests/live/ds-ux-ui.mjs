@@ -1,5 +1,5 @@
 // Browser checks for the Data Source UX fixes: connect form focus, a + card revealed, the Needs a partner badge never clips a title,
-// the dialog's start cardinality + "Use N:1", refusals as info toasts, Undo for a removed card / relationship, "hold text" wording.
+// the dialog's start cardinality + "Use N:1", refusals as info toasts, two confirmations (no Undo) for removing a card / relationship, "hold text" wording.
 // Every /api/* call is mocked. Run: APP_URL=http://localhost:5278 node tests/live/ds-ux-ui.mjs (start the app with dotnet run --urls on that port; stop it by port).
 import { launch } from './cdp.mjs'; export { launch };
 export const APP = process.env.APP_URL ?? 'http://localhost:5278';
@@ -87,26 +87,51 @@ ok('2 link starts on the refit card edge', anchorOk);
 // dup -> info toast
 await dragRow('customers','id','orders','customer_id'); await sleep(300);
 ok('4 already-related toast is info', await ev(`document.getElementById('toast').className`) === 'toast toast--info', await ev(`document.getElementById('toast').className`));
-// remove linked card -> confirm -> undo
-await ev(`[...document.querySelectorAll('.entity')].find(e=>e.querySelector('.entity__table').textContent==='customers').querySelector('.iconbtn--danger').click()`); await sleep(300);
-await ev(`[...document.querySelectorAll('dialog[open] button')].find(x=>x.textContent.trim()==='Remove').click()`); await sleep(400);
-await shot('v-undo-toast');
-ok('5 remove toast has Undo', await ev(`document.querySelector('#toast .toast__action')?.textContent`) === 'Undo', await ev(`document.getElementById('toast').innerText`));
-const idBefore = 'shop.customers#2';
-await ev(`document.querySelector('#toast .toast__action').click()`); await sleep(900);
-ok('5 undo brings card + relationship back (same id)', await ev(`!!document.querySelector('.entity[data-entity-id=${J(idBefore)}]') && document.querySelectorAll('.rel-link__line').length===1`), await ev(`[...document.querySelectorAll('.entity')].map(e=>e.dataset.entityId).join(',')+' rels='+document.querySelectorAll('.rel-link__line').length`));
-ok('5 restored link keeps N:1', await ev(`document.querySelector('.rel-badge text')?.textContent`) === 'N:1');
-// unlinked remove -> undo
-await ev(`[...document.querySelectorAll('.entity')].find(e=>e.querySelector('.entity__table').textContent==='products').querySelector('.iconbtn--danger').click()`); await sleep(300);
-ok('5 unlinked remove offers Undo', await ev(`document.querySelector('#toast .toast__action')?.textContent`) === 'Undo');
-await ev(`document.querySelector('#toast .toast__action').click()`); await sleep(700);
-ok('5 unlinked undo restores', await ev(`[...document.querySelectorAll('.entity')].some(e=>e.querySelector('.entity__table').textContent==='products')`));
-// relationship delete -> undo
-await ev(`document.querySelector('.rel-link').dispatchEvent(new MouseEvent('click', { bubbles: true }))`); await sleep(400);
-await ev(`[...document.querySelectorAll('dialog[open] button')].find(x=>x.textContent.trim()==='Delete').click()`); await sleep(400);
-ok('5 rel delete offers Undo', await ev(`document.querySelector('#toast .toast__action')?.textContent`) === 'Undo' && await ev(`document.querySelectorAll('.rel-link__line').length`) === 0, await ev(`document.getElementById('toast').innerText`));
-await ev(`document.querySelector('#toast .toast__action').click()`); await sleep(500);
-ok('5 rel undo restores', await ev(`document.querySelectorAll('.rel-link__line').length`) === 1);
+// remove cards / relationship: two confirmations, no Undo
+const dlgBtn = (label) => ev(`[...document.querySelectorAll('dialog[open] button')].find(x=>x.textContent.trim()===${J(label)})?.click()`);
+const dlgText = () => ev(`[...document.querySelectorAll('dialog[open].dialog--sm')].map(d=>d.innerText).join(' || ')`);
+const nDlg = () => ev(`document.querySelectorAll('dialog[open]').length`);
+const nRels = () => ev(`document.querySelectorAll('.rel-link__line').length`);
+const hasCard = (t) => ev(`[...document.querySelectorAll('.entity')].some(e=>e.querySelector('.entity__table').textContent===${J(t)})`);
+const removeCard = (t) => ev(`[...document.querySelectorAll('.entity')].find(e=>e.querySelector('.entity__table').textContent===${J(t)}).querySelector('.iconbtn--danger').click()`);
+const addCard = async (t) => { await ev(`[...document.querySelector('.table-chip[data-table=${J(t)}]').querySelectorAll('button')].at(-1).click()`); await sleep(700); };
+const noUndoToast = () => ev(`!document.querySelector('#toast .toast__action')`);
+// remove linked card: first dialog, second dialog, Cancel on the second keeps it
+await removeCard('customers'); await sleep(300);
+const c1 = await dlgText();
+ok('5 remove linked card asks first', /Remove shop\.customers and its relationship\(s\)\?/.test(c1), c1);
+await dlgBtn('Remove'); await sleep(300);
+const c2 = await dlgText();
+ok('5 a second dialog asks again, "for good"', /Really remove shop\.customers\? This can't be undone\./.test(c2) && await ev(`!![...document.querySelectorAll('dialog[open].dialog--sm button')].find(x=>x.textContent.trim()==='Remove for good')`), c2);
+await shot('v-confirm-twice');
+await dlgBtn('Cancel'); await sleep(300);
+ok('5 cancelling the second dialog keeps the card + relationship', await nDlg() === 0 && await hasCard('customers') && await nRels() === 1);
+await removeCard('customers'); await sleep(300); await dlgBtn('Remove'); await sleep(300); await dlgBtn('Remove for good'); await sleep(400);
+ok('5 both confirmed: card + its relationship gone, no Undo on the toast', !(await hasCard('customers')) && await nRels() === 0 && await noUndoToast(), await ev(`document.getElementById('toast').innerText`));
+// put the card and its N:1 relationship back by hand (there is no Undo)
+await addCard('customers');
+await dragRow('orders','customer_id','customers','id'); await b.waitFor(`document.querySelector('dialog[open]')`); await sleep(700);
+await ev(`document.querySelector('dialog[open] .rel-dialog__foot .btn--primary').click()`); await sleep(700);
+ok('5 card re-added and relationship re-created as N:1', await hasCard('customers') && await nRels() === 1 && await ev(`document.querySelector('.rel-badge text')?.textContent`) === 'N:1');
+// relationship delete: Delete in the cardinality dialog, then two confirmations
+const openRel = async () => { await ev(`document.querySelector('.rel-link').dispatchEvent(new MouseEvent('click', { bubbles: true }))`); await sleep(400); };
+await openRel(); await dlgBtn('Delete'); await sleep(300);
+const r1 = await dlgText();
+ok('5 rel delete asks first', /Remove the .* relationship\?/.test(r1) && await nRels() === 1, r1);
+await dlgBtn('Remove'); await sleep(300);
+ok('5 rel delete asks a second time', /Really remove the .* relationship\? This can't be undone\./.test(await dlgText()));
+await dlgBtn('Cancel'); await sleep(300);
+ok('5 cancelling the second dialog keeps the relationship', await nDlg() === 0 && await nRels() === 1);
+await openRel(); await dlgBtn('Delete'); await sleep(300); await dlgBtn('Remove'); await sleep(300); await dlgBtn('Remove for good'); await sleep(400);
+ok('5 both confirmed: relationship gone, no Undo on the toast', await nRels() === 0 && await noUndoToast(), await ev(`document.getElementById('toast').innerText`));
+// unlinked card: asked twice too
+await removeCard('products'); await sleep(300);
+ok('5 unlinked remove still asks first', /Remove shop\.products from the canvas\?/.test(await dlgText()));
+await dlgBtn('Remove'); await sleep(300);
+ok('5 unlinked remove asks a second time', /Really remove shop\.products\?/.test(await dlgText()));
+await dlgBtn('Remove for good'); await sleep(400);
+ok('5 unlinked card gone, no Undo on the toast', !(await hasCard('products')) && await noUndoToast());
+await addCard('products'); // the grammar check below needs it
 // grammar
 await dragRow('products','sku','orders','product_id'); await sleep(500);
 const txt = await ev(`document.querySelector('dialog[open] .type-warning__hint')?.textContent`);

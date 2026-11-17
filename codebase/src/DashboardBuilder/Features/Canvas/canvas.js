@@ -2,7 +2,7 @@ import { emptyState } from "./empty-state.js";
 import { api } from "../Core/api.js";
 import { icon } from "../Core/icons.js";
 import { openContextMenu } from "../Core/menu.js";
-import { show, hide, toggle, confirmDialog, toast } from "../Core/ui.js";
+import { show, hide, toggle, confirmDeleteTwice, toast } from "../Core/ui.js";
 import { entities, relationshipsFor, emit, bus, isModelActive, showModel } from "../Core/store.js";
 import { expandSidebar } from "../Shell/sidebar.js";
 import { openColumnProfile } from "../Schema/column-profile-dialog.js";
@@ -228,9 +228,8 @@ export function initCanvas() {
     reveal(entities.get(id)); // a + add can land below the visible ground (the grid fills down); bring it into view
   }
 
-  function createEntity(db, table, x, y, { source = null, customSql = null, customSqlMysql = null, listHeight = null, id = null } = {}) {
-    // `id`: Undo of a remove gives the card its old id back, so worksheet fields that point at it find it again
-    const entity = { id: id && !entities.has(id) ? id : `${db}.${table}#${++seq}`, db, table, x, y, columns: [], el: null };
+  function createEntity(db, table, x, y, { source = null, customSql = null, customSqlMysql = null, listHeight = null } = {}) {
+    const entity = { id: `${db}.${table}#${++seq}`, db, table, x, y, columns: [], el: null };
     if (source) entity.source = source;
     else if (customSql) { entity.customSql = customSql; if (customSqlMysql) entity.customSqlMysql = customSqlMysql; }
     entity.el = renderCard(entity);
@@ -254,35 +253,18 @@ export function initCanvas() {
   }
 
   async function removeEntity(entity) {
-    if (relationshipsFor(entity.id).length > 0) {
-      const ok = await confirmDialog(
-        `Remove ${entity.db}.${entity.table} and its relationship(s)?`,
-        { danger: true, confirmText: "Remove" },
-      );
-      if (!ok) return;
-    }
-    // What Undo needs: the card as the workbook saves it, plus its relationships (copied before relations.js drops them).
-    const snap = { id: entity.id, db: entity.db, table: entity.table, x: entity.x, y: entity.y, source: entity.source ?? null,
-      customSql: entity.customSql ?? null, customSqlMysql: entity.customSqlMysql ?? null, listHeight: entity.listHeight ?? null,
-      rels: relationshipsFor(entity.id).map((r) => structuredClone(r)) };
+    const name = entity.source ? entity.table : `${entity.db}.${entity.table}`;
+    const rels = relationshipsFor(entity.id).length;
+    const ok = await confirmDeleteTwice(
+      rels > 0 ? `Remove ${name} and its relationship(s)?` : `Remove ${name} from the canvas?`,
+      name, { confirmText: "Remove" },
+    );
+    if (!ok) return;
     emit("entity:removed", { entityId: entity.id }); // relations.js drops its links
     entity.el.remove();
     entities.delete(entity.id);
     refreshEmpty();
-    const name = entity.source ? entity.table : `${entity.db}.${entity.table}`;
-    toast(`Removed ${name}.`, "info", { action: { label: "Undo", run: () => restoreRemoved(snap) } });
-  }
-
-  // Undo of a remove: the same card (same id, place, SQL, list height) and every relationship whose other card is still there.
-  function restoreRemoved(snap) {
-    if (!snap.source && [...entities.values()].some((e) => e.db === snap.db && e.table === snap.table)) {
-      toast(`${snap.db}.${snap.table} is already on the canvas.`, "info");
-      return;
-    }
-    const id = createEntity(snap.db, snap.table, snap.x, snap.y, snap);
-    reveal(entities.get(id));
-    const back = snap.rels.filter((r) => [r.from.entityId, r.to.entityId].every((e) => e === snap.id || entities.has(e)));
-    if (back.length) emit("rel:reinstate", { rels: back.map((r) => ({ ...r, from: { ...r.from, entityId: r.from.entityId === snap.id ? id : r.from.entityId }, to: { ...r.to, entityId: r.to.entityId === snap.id ? id : r.to.entityId } })) });
+    toast(`Removed ${name}.`, "info");
   }
 
   async function loadEntity(entity) {
@@ -350,16 +332,13 @@ export function initCanvas() {
     remove.append(icon("close"));
     remove.addEventListener("click", () => removeEntity(entity));
 
-    // Shown by relations.js while the card is in no relationship (the model has other cards to relate it to). A button: it opens
-    // "Relate <table> to" (relations.js, D127), so the warning is also the way out of it.
-    const need = document.createElement("button");
-    need.type = "button";
+    // Shown by relations.js while the card is in no relationship (the model has other cards to relate it to). A plain label, not a button.
+    const need = document.createElement("span");
     need.className = "entity__need";
     need.textContent = "Needs a partner";
-    need.title = "Held out of worksheets until this table is related to another one. Click to relate it.";
+    need.title = "Held out of worksheets until this table is related to another one.";
     need.hidden = true;
-    need.addEventListener("click", () => emit("rel:relate", { entityId: entity.id }));
-    // The ☰ menu holds the card's actions (Edit SQL, Relate, Preview data), so the head is the name, the badge, ☰, the caret and the ✕ (D129).
+    // The ☰ menu holds the card's actions (Edit SQL, Preview data), so the head is the name, the badge, ☰, the caret and the ✕ (D129).
     const menu = document.createElement("button");
     menu.type = "button";
     menu.className = "iconbtn entity__menu";
@@ -613,7 +592,7 @@ export function initCanvas() {
   }
 
   // The card's ☰ menu (D129): a popup on <body> under the button (Core/menu.js), so canvas zoom and the card's edges never shrink or clip it.
-  // A union / unpivot card has no SQL to edit and is never related, so its menu holds Preview data only. Preview data is ticked while the panel shows this card.
+  // A union / unpivot card has no SQL to edit, so its menu holds Preview data only. Preview data is ticked while the panel shows this card.
   function wireCardMenu(entity, btn) {
     btn.setAttribute("aria-haspopup", "menu");
     btn.setAttribute("aria-expanded", "false");
@@ -621,7 +600,6 @@ export function initCanvas() {
     const entries = () => [
       ...(entity.source ? [] : [
         { type: "item", icon: "edit", label: "Edit SQL", title: "Choose or change the columns with your own SELECT", onSelect: () => editSql(entity) },
-        { type: "item", icon: "link", label: "Relate to another table", onSelect: () => emit("rel:relate", { entityId: entity.id }) },
       ]),
       { type: "check", icon: "table", label: "Preview data", checked: previewedId() === entity.id, onSelect: () => togglePreview(entity.id) },
     ];

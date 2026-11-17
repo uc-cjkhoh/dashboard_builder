@@ -5,7 +5,7 @@ import { hierarchies, addHierarchy, updateHierarchy, removeHierarchy } from "../
 import { LIMITS } from "../Core/validate.js";
 import { checkHierarchy } from "./hierarchy-model.js";
 import { placesOnDblClick } from "./placement-model.js";
-import { makeButton, openDialog, closeDialog, toast, confirmDialog } from "../Core/ui.js";
+import { makeButton, openDialog, closeDialog, toast, confirmDeleteTwice } from "../Core/ui.js";
 
 /** ctx: { tables: [{ db, table }], columnsFor(db, table) → Promise<[{ name }]>, castOf(f), startNew?: boolean, canApply?: boolean, onApply?(id) } */
 export function openHierarchiesDialog(ctx) {
@@ -39,7 +39,7 @@ export function openHierarchiesDialog(ctx) {
       edit.addEventListener("click", () => { editing = h.id; render(); });
       const del = makeButton("Delete", "btn"); del.setAttribute("aria-label", `Delete hierarchy ${h.name}`);
       del.addEventListener("click", async () => {
-        if (!(await confirmDialog(`Delete the hierarchy “${h.name}”? Worksheets that already use it keep their drill levels.`, { danger: true, confirmText: "Delete" }))) return;
+        if (!(await confirmDeleteTwice(`Delete the hierarchy “${h.name}”? Worksheets that already use it keep their drill levels.`, `“${h.name}”`))) return;
         removeHierarchy(h.id); render();
       });
       // Double-click a row = Use (the Use button is the keyboard path).

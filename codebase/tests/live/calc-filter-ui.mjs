@@ -205,6 +205,8 @@ try {
     const text = await ev(`(${confirmOpen}).textContent`);
     must(/Region calc/.test(text), `confirm text: ${J(text)}`);
     await ev(`[...(${confirmOpen}).querySelectorAll('button')].find((x) => x.textContent === 'Delete').click()`);
+    await waitFor(`/^Really delete /.test((${confirmOpen})?.textContent ?? '')`, 'second delete confirm');
+    await ev(`[...(${confirmOpen}).querySelectorAll('button')].find((x) => x.textContent === 'Delete for good').click()`);
     await waitFor(`!document.querySelector('[data-ctx^="filter:"]')`, 'filter gone with its calculation');
   });
 

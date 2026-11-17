@@ -271,7 +271,7 @@ export function createWidget(widget, host) {
     }
     if (w.kind !== "text") return;
     if (editing && !textChanged({ heading: editing.heading, body: editing.body }, { heading: w.heading ?? "", body: w.body ?? "" })) return; // keep the open form
-    editing = null; // the text changed under the form (undo / redo): show the new text
+    editing = null; // the text changed under the form (a restored dashboard): show the new text
     el.classList.remove("is-editing");
     paintText(w);
   }

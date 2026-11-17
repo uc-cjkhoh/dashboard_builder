@@ -1,6 +1,6 @@
 // Browser check for the navigation button widget (T08-17, T08-18, T08-25, T08-26): Add button, the inline edit form (label,
 // tooltip, target; validation messages; Escape discards), a click goes to a worksheet tab and to another dashboard, a closed target
-// leaves the button unlinked and disabled, undo, autosave holds the target by tab index, a reload restores it. Real dev app
+// leaves the button unlinked and disabled, autosave holds the target by tab index, a reload restores it. Real dev app
 // (APP_URL), every /api/* mocked; any page error fails the run. Screenshots (light + dark) go to SHOTS_DIR.
 import { launch } from './cdp.mjs';
 import { mkdirSync } from 'node:fs';

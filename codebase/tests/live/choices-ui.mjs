@@ -171,14 +171,6 @@ try {
     await b.sleep(400);
     must(await canvasDrawn(), 'chart not drawn'); // the amount query is cached, so no new /api/query is expected
   });
-  await check('undo and redo restore the removal', async () => {
-    await ev(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }))`);
-    await b.sleep(400);
-    const afterUndo = await rowPill();
-    await ev(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'y', ctrlKey: true, bubbles: true }))`);
-    await b.sleep(400);
-    console.log(`  (undo -> ${afterUndo}; redo -> ${await rowPill()})`);
-  });
   if (b.consoleErrors.length) { console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  ')); failed++; }
 } catch (e) {
   console.log(`FAIL harness: ${e.stack}`); failed++;

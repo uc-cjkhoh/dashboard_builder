@@ -144,7 +144,6 @@ try {
   const cellInfo = (sel, i = 0) => ev(`(() => { const e = ${tbl}.querySelectorAll(${J(sel)})[${i}]; const cs = getComputedStyle(e); return { align: cs.textAlign, w: Math.round(e.getBoundingClientRect().width), cls: e.className }; })()`);
   const key = (k, extra = {}) => b.send('Input.dispatchKeyEvent', { type: 'keyDown', key: k, code: k, ...extra }).then(() => b.send('Input.dispatchKeyEvent', { type: 'keyUp', key: k, code: k, ...extra }));
   const sheetCols = () => ev(`import('/features/Core/store.js').then((m) => m.activeWorksheet().sheet.format.tableCols ?? null)`);
-  const undoOnce = () => ev(`document.querySelector('.ws-undo button[aria-label^="Undo"]').click()`);
 
   await check('a table with two measures draws; Format → Columns lists the stub and measure columns', async () => {
     await dragChip('region', `__t.zone('rows')`);
@@ -196,7 +195,7 @@ try {
     must((await sheetCols()) === null, 'reset clears the column');
     must(await ev(`!${tbl}.querySelector('td.xt-w')`), 'and the widths');
   });
-  await check('the header handle: arrow keys step 8 px, Shift five steps, bounds hold, Delete resets; one undo step per press', async () => {
+  await check('the header handle: arrow keys step 8 px, Shift five steps, bounds hold, Delete resets', async () => {
     await ev(`${gripOf(0)}.focus()`);
     const w0 = (await cellInfo('thead th.xt-meas', 0)).w;
     must(await ev(`${gripOf(0)}.getAttribute('role') === 'separator' && ${gripOf(0)}.getAttribute('aria-label').startsWith('Resize column ')`), 'handle semantics');
@@ -244,11 +243,6 @@ try {
     const back = await ev(`(async () => { const st = await import('/features/Core/store.js'), wm = await import('/features/Workbook/workbook-model.js');
       return wm.restoreSheet(JSON.parse(JSON.stringify(st.activeWorksheet().sheet))).format.tableCols; })()`);
     must(J(back) === J({ d0: { width: 200 }, m1: back.m1 }) && back.m1.width > 0, 'round trip: ' + J(back));
-  });
-  await check('undo takes a width change back', async () => {
-    await ev(`document.activeElement.blur?.()`);
-    await undoOnce(); await settle(400);
-    must((await sheetCols())?.d0 === undefined, 'the stub width is undone: ' + J(await sheetCols()));
   });
   if (b.consoleErrors.length) console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  '));
 } catch (e) {

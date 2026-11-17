@@ -1,9 +1,9 @@
 // Browser check for editing the dashboard board (P24b stage 3): move by the header and resize by the corner with REAL mouse
 // events (snap to cells, a ghost while dragging, an overlapping or out-of-grid drop snaps back with a status message and changes
-// nothing); keyboard arrows / Shift+arrows with the live status; inline text edit (labels, limits, Save / Cancel / Esc); undo and
-// redo of every edit type, by button and Ctrl+Z / Ctrl+Y (not while typing); dragging a worksheet from the side panel onto the
+// nothing); keyboard arrows / Shift+arrows with the live status; inline text edit (labels, limits, Save / Cancel / Esc); Remove asks twice
+// (Cancel on the second dialog keeps the widget); dragging a worksheet from the side panel onto the
 // canvas; pointercancel / blur mid-drag leave no ghost. Real dev app (APP_URL), every /api/* mocked;
-// any page error fails the run. History is in memory only: a reload keeps the layout (autosave) but not the undo steps.
+// any page error fails the run. A reload keeps the layout (autosave).
 // Screenshots (light + dark: ghost mid-drag, a refused ghost, focus ring) go to SHOTS_DIR.
 import { launch } from './cdp.mjs';
 import { mkdirSync } from 'node:fs';
@@ -85,8 +85,17 @@ try {
   const ARROW = { ArrowLeft: 37, ArrowUp: 38, ArrowRight: 39, ArrowDown: 40 };
   const arrow = (k, shift = false) => keyPress(k, ARROW[k], shift ? 8 : 0);
   const focusWidget = (k) => ev(`document.querySelector(${J(wsel(k))}).focus()`);
-  const undoState = () => ev(`[...document.querySelectorAll('.board-bar__iconbtn')].map((x) => !x.disabled)`);
-  const clickBar = (label) => ev(`[...document.querySelectorAll('.board-bar__iconbtn')].find((x) => x.getAttribute('aria-label').startsWith(${J(label)})).click()`);
+  // Remove asks twice: "Remove ..." then "Really remove ...", buttons "Remove" and "Remove for good".
+  const dlgText = () => ev(`[...document.querySelectorAll('dialog[open].dialog--sm')].map((d) => d.innerText).join(' || ')`);
+  const dlgBtn = (label) => ev(`[...document.querySelectorAll('dialog[open] button')].find((x) => x.textContent.trim() === ${J(label)}).click()`);
+  const toastText = () => ev(`document.getElementById('toast')?.innerText ?? ''`);
+  const askTwice = async (sel) => { // click the X, confirm both dialogs
+    await ev(`document.querySelector(${J(sel)}).click()`);
+    await waitFor(`!!document.querySelector('dialog[open].dialog--sm')`, 'first confirmation');
+    await dlgBtn('Remove');
+    await waitFor(`[...document.querySelectorAll('dialog[open] button')].some((x) => x.textContent.trim() === 'Remove for good')`, 'second confirmation');
+    await dlgBtn('Remove for good');
+  };
 
   await b.goto(APP + '/');
   await connect();
@@ -106,13 +115,12 @@ try {
     return true;`);
   await waitFor(`document.querySelectorAll('.board-widget .ws-chart-canvas svg').length === 2`, 'widgets drawn');
   ID = await store(`const [a, b, t] = st.dashboards()[0].widgets; return { A: a.id, B: b.id, T: t.id };`);
-  const snaps = [await cells()]; // layout after each committed edit, for the undo walk
+  const snaps = [await cells()]; // layout after each committed edit: the last one is what the board must still show after a refused edit
 
   await check('widgets are focusable groups with a label, a role description and a key hint', async () => {
     const r = await ev(`(() => { const w = document.querySelector('.board-widget'); return { tab: w.tabIndex, role: w.getAttribute('role'), label: w.getAttribute('aria-label'), rd: w.getAttribute('aria-roledescription'),
       hint: document.getElementById(w.getAttribute('aria-describedby'))?.textContent }; })()`);
     must(r.tab === 0 && r.role === 'group' && r.label === 'Revenue by region' && r.rd === 'dashboard widget' && /Arrow keys move.*Shift plus arrow keys resize/.test(r.hint), J(r));
-    must(J(await undoState()) === J([false, false]), 'undo / redo enabled with nothing to undo');
   });
 
   await check('drag the header to a free cell: ghost shows the target cells while dragging; the drop moves it, saves it, and announces it', async () => {
@@ -131,13 +139,12 @@ try {
     must(J((await cells())[0]) === J([0, 7, 4, 3]), `cells ${J(await cells())}`);
     snaps.push(await cells());
     must((await status()) === 'Moved to column 1, row 8', `status: ${await status()}`);
-    must(J(await undoState()) === J([true, false]), 'undo not enabled');
     await waitFor(`localStorage.getItem(${J(KEY)}) !== null`, 'autosaved');
     await b.sleep(900);
     must(J((await saved())[0]) === J([0, 7, 4, 3]), `saved workbook ${J(await saved())}`);
   });
 
-  await check('drag onto another widget snaps back with a status message: refused ghost (icon + text), nothing moves, no new undo step', async () => {
+  await check('drag onto another widget snaps back with a status message: refused ghost (icon + text), nothing moves', async () => {
     const m = await metrics(), p = await headPoint('B');
     await drag(p, -6 * m.sx, 7 * m.sy, { release: false }); // B (6,0) → (0,7): where A now sits
     const g = await ghost();
@@ -207,7 +214,7 @@ try {
     must(await ev(`document.activeElement === document.querySelector(${J(wsel('T'))})`), 'focus lost after a refused step');
   });
 
-  await check('text edit: Edit opens labelled inputs (maxLength from the limits), Save commits and is one step; Cancel and Esc discard', async () => {
+  await check('text edit: Edit opens labelled inputs (maxLength from the limits), Save commits; Cancel and Esc discard', async () => {
     const before = await store(`return JSON.stringify(st.dashboards()[0].widgets.at(-1));`);
     await ev(`document.querySelector('.board-widget--text .board-widget__edit').click()`);
     const f = await ev(`(() => { const t = document.querySelector('.board-widget--text'); const h = t.querySelector('input'), x = t.querySelector('textarea');
@@ -235,12 +242,12 @@ try {
     must(J(w) === J(['Q3 review', 'Line one\nLine two <b>x</b>']), J(w));
     must(await ev(`document.querySelector('.board-widget--text b') === null && document.querySelector('.board-widget--text .board-text__body').textContent.includes('<b>x</b>')`), 'markup interpreted');
     must((await status()) === 'Text updated.', await status());
-    snaps.push(await cells()); // layout unchanged, but a step was recorded
-    // an unchanged Save is not a step
-    const steps = await ev(`document.querySelectorAll('.board-bar__iconbtn')[0].disabled`);
+    snaps.push(await cells()); // layout unchanged
+    // an unchanged Save changes nothing
+    const w0 = await store(`return JSON.stringify(st.dashboards()[0].widgets.at(-1));`);
     await ev(`document.querySelector('.board-widget--text .board-widget__edit').click()`);
     await ev(`document.querySelector('.board-text-edit__save').click()`);
-    must(await store(`return st.dashboards()[0].widgets.at(-1).heading;`) === 'Q3 review' && steps === false, 'unchanged save');
+    must(await store(`return JSON.stringify(st.dashboards()[0].widgets.at(-1));`) === w0, 'unchanged save');
   });
 
   await check('text edit validation: an over-long heading / body is refused with a message and aria-invalid; an empty heading is fine and reads "Text"', async () => {
@@ -273,14 +280,25 @@ try {
     await arrow('ArrowDown', true); snaps.push(await cells()); // back to 2 rows: room for the body
   });
 
-  await check('Add (button) and Remove are undo steps too', async () => {
+  await check('Add (button) places a widget; Remove asks twice: Cancel on the second dialog keeps it, confirming both removes it', async () => {
     await ev(`document.querySelector('.board-panel__item button').click()`);
     await waitFor(`document.querySelectorAll('.board-widget').length === 4`, 'added');
     snaps.push(await cells());
     const addedId = await store(`return st.dashboards()[0].widgets.at(-1).id;`);
     must(J((await cells()).at(-1)) === J([0, 0, 6, 4]), `Add placed it at ${J((await cells()).at(-1))}`);
-    await ev(`document.querySelector('.board-widget[data-widget-id="${addedId}"] .board-widget__remove').click()`);
+    const rm = `.board-widget[data-widget-id="${addedId}"] .board-widget__remove`;
+    await ev(`document.querySelector(${J(rm)}).click()`);
+    await waitFor(`!!document.querySelector('dialog[open].dialog--sm')`, 'first confirmation');
+    must(/^Remove .* from the dashboard\?/.test(await dlgText()) && await ev(`document.querySelectorAll('.board-widget').length === 4`), `first dialog: ${await dlgText()}`);
+    await dlgBtn('Remove');
+    await waitFor(`/Really remove/.test(document.querySelector('dialog[open].dialog--sm')?.innerText ?? '')`, 'second confirmation');
+    must(/This can't be undone/.test(await dlgText()) && await ev(`document.querySelectorAll('.board-widget').length === 4`), `second dialog: ${await dlgText()}`);
+    await dlgBtn('Cancel');
+    await waitFor(`!document.querySelector('dialog[open]')`, 'dialogs closed');
+    must(await ev(`document.querySelectorAll('.board-widget').length === 4`), 'Cancel on the second dialog still removed the widget');
+    await askTwice(rm);
     await waitFor(`document.querySelectorAll('.board-widget').length === 3`, 'removed');
+    must(!/Undo/.test(await toastText()), `toast: ${await toastText()}`);
     snaps.push(await cells());
   });
 
@@ -337,81 +355,49 @@ try {
     must((await ghost()) === null, 'ghost after a click');
   });
 
-  await check('undo / redo walks every edit back and forward in order (buttons), one step each', async () => {
-    const n = snaps.length;
-    console.log(`  (${n - 1} committed steps recorded by this check)`);
-    must(J(await cells()) === J(snaps.at(-1)), `current != last snapshot: ${J(await cells())} ${J(snaps.at(-1))}`);
-    for (let i = n - 2; i >= 0; i--) {
-      await clickBar('Undo');
-      must(J(await cells()) === J(snaps[i]), `undo to ${i}: ${J(await cells())} want ${J(snaps[i])}`);
-    }
-    must(J(await undoState()) === J([false, true]), `buttons at the start: ${J(await undoState())}`);
-    must((await cells()).length === 3, 'original three widgets');
-    await keyPress('z', 90, 2); // the shortcut with nothing left: says so (the button is disabled)
-    must(/Nothing to undo/.test(await status()), await status());
-    for (let i = 1; i < n; i++) {
-      await clickBar('Redo');
-      must(J(await cells()) === J(snaps[i]), `redo to ${i}: ${J(await cells())} want ${J(snaps[i])}`);
-    }
-    must(J(await undoState()) === J([true, false]), 'buttons at the end');
-  });
-
-  await check('text edit, remove and add undo restore exact content (heading + body, a removed widget returns)', async () => {
+  await check('text edit saves exact content (heading + body); removing a widget (both dialogs) drops it', async () => {
     const text = () => store(`const w = st.dashboards()[0].widgets.find((x) => x.kind === 'text'); return [w.heading, w.body.slice(0, 20)];`);
     await ev(`document.querySelector('.board-widget--text .board-widget__edit').click()`);
     await ev(`(() => { const t = document.querySelector('.board-widget--text'); t.querySelector('input').value = 'Edited'; t.querySelector('textarea').value = 'New body'; t.querySelector('.board-text-edit__save').click(); return true; })()`);
     await waitFor(`document.querySelector('.board-widget--text .board-widget__title').textContent === 'Edited'`, 'saved');
-    await clickBar('Undo');
-    must(await text().then((t) => t[0] === ''), `undo of the edit: ${J(await text())}`);
-    await clickBar('Redo');
-    must(J(await text()) === J(['Edited', 'New body']), 'redo of the edit');
+    must(J(await text()) === J(['Edited', 'New body']), `saved text ${J(await text())}`);
+    const all = await store(`return JSON.stringify(st.dashboards()[0].widgets);`); // to put the removed widget back afterwards (there is no Undo)
     const n = (await cells()).length;
-    await ev(`document.querySelector(${J(wsel('A'))}).querySelector('.board-widget__remove').click()`);
+    await askTwice(`${wsel('A')} .board-widget__remove`);
     await waitFor(`document.querySelectorAll('.board-widget').length === ${n - 1}`, 'removed');
-    await clickBar('Undo');
-    await waitFor(`document.querySelectorAll('.board-widget').length === ${n}`, 'remove undone');
+    must(await store(`return !st.dashboards()[0].widgets.some((w) => w.id === ${J(ID.A)});`), 'the widget is still in the store');
+    must(!/Undo/.test(await toastText()) && /Removed/.test(await toastText()), `toast: ${await toastText()}`);
+    await store(`st.setWidgets(st.dashboards()[0].id, ${all}); return true;`); // re-setup: the same widgets, A first again
+    await waitFor(`document.querySelectorAll('.board-widget').length === ${n}`, 'widgets back');
     await waitFor(`document.querySelectorAll('.board-widget .ws-chart-canvas svg').length >= 2`, 'restored widget drew');
   });
 
-  await check('Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y act on the dashboard tab, but not while typing in a text field', async () => {
+  await check('Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z do nothing to the dashboard (there is no Undo); typing in a text field keeps its own Ctrl+Z', async () => {
     await focusWidget('A');
-    const a = await cells();
     await arrow('ArrowDown');
-    must(J(await cells()) !== J(a), 'the step did not move');
-    await keyPress('z', 90, 2); // Ctrl+Z
-    await waitFor(`document.getElementById('board-status').textContent === 'Undid the last change.'`, 'ctrl+z');
-    must(J(await cells()) === J(a), 'ctrl+z did not undo');
-    await keyPress('y', 89, 2);
-    await waitFor(`document.getElementById('board-status').textContent === 'Redid the change.'`, 'ctrl+y');
-    await keyPress('z', 90, 2 | 8); // Ctrl+Shift+Z is redo too: nothing left to redo
-    must(/Nothing to redo/.test(await status()) || true, '');
-    // typing in the text editor: Ctrl+Z is the field's own, the board does not undo
+    const moved = await cells();
+    await keyPress('z', 90, 2); await keyPress('y', 89, 2); await keyPress('z', 90, 2 | 8);
+    await b.sleep(200);
+    must(J(await cells()) === J(moved), `a shortcut changed the board: ${J(await cells())} want ${J(moved)}`);
+    // typing in the text editor: Ctrl+Z is the field's own
     await ev(`document.querySelector('.board-widget--text .board-widget__edit').click()`);
-    const c = await cells();
     await keyPress('z', 90, 2);
-    must(J(await cells()) === J(c) && await ev(`!!document.querySelector('.board-widget--text form')`), 'Ctrl+Z in a text input undid the board');
+    must(J(await cells()) === J(moved) && await ev(`!!document.querySelector('.board-widget--text form')`), 'Ctrl+Z in a text input changed the board');
     await keyPress('Escape', 27);
-    // on a worksheet tab the board's shortcut does nothing to the dashboard
-    await store(`st.switchTab(st.worksheets()[0].id); return true;`);
-    await waitFor(`!document.getElementById('board-view') || document.getElementById('board-view').hidden`, 'board hidden');
-    await keyPress('z', 90, 2);
-    must(J(await store(`return st.dashboards()[0].widgets.map((w) => [w.x, w.y, w.w, w.h]);`)) === J(c), 'a worksheet tab undo touched the dashboard');
-    await store(`st.switchTab(st.dashboards()[0].id); return true;`);
-    await waitFor(`!document.getElementById('board-view').hidden && document.querySelectorAll('.board-widget').length === ${c.length}`, 'board back');
   });
 
-  await check('Ctrl+Z mid-drag is ignored; a drag whose widget disappears ends with no ghost; a second pointer cannot move or end a drag', async () => {
+  await check('a drag whose widget disappears ends with no ghost; a second pointer cannot move or end a drag', async () => {
     const before = await cells();
-    // (a) Ctrl+Z while dragging does nothing to the board, and the release still completes normally
+    const beforeW = await store(`return JSON.stringify(st.dashboards()[0].widgets);`);
+    // (a) a plain drag still commits on release
     let m = await metrics(), p = await headPoint('A');
     await drag(p, 0, m.sy * 3, { release: false });
     must((await ghost()) !== null, 'no ghost mid-drag');
-    await keyPress('z', 90, 2);
-    must(J(await cells()) === J(before), 'Ctrl+Z changed the board mid-drag');
     await mouse('mouseReleased', p.x, p.y + m.sy * 3);
     await waitFor(`document.querySelector('.board-ghost').hidden`, 'ghost hidden after release');
-    await clickBar('Undo'); // put A back where it was (the drag above was a committed move)
-    must(J(await cells()) === J(before), 'undo after the drag');
+    must(J(await cells()) !== J(before), 'the drag was not committed');
+    await store(`st.setWidgets(st.dashboards()[0].id, ${beforeW}); return true;`); // put A back where it was (there is no Undo)
+    must(J(await cells()) === J(before), 'restore after the drag');
     // (b) the dragged widget is removed underneath the drag (a store change): the gesture ends, nothing is committed, the next drag works
     m = await metrics(); p = await headPoint('A');
     await drag(p, m.sx, 0, { release: false });
@@ -434,14 +420,13 @@ try {
     await waitFor(`document.querySelector('.board-ghost').hidden`, 'ghost hidden');
   });
 
-  await check('after a reload the layout is kept (autosave) but undo history is gone (in memory only)', async () => {
+  await check('after a reload the layout is kept (autosave)', async () => {
     const want = await cells();
     await b.sleep(900);
     await b.send('Page.reload');
     await connect();
     await waitFor(`document.querySelectorAll('.board-widget').length === ${want.length}`, 'restored');
     must(J(await cells()) === J(want), `layout after reload ${J(await cells())} want ${J(want)}`);
-    must(J(await undoState()) === J([false, false]), 'undo survived a reload');
   });
 
   await check('screenshots: dark with a focused widget (focus ring)', async () => {

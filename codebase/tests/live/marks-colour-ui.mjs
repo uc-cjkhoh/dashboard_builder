@@ -331,6 +331,8 @@ try {
     await ev(`[...document.querySelectorAll('.ws-actions .menu__item')].find((x) => /Clear sheet/.test(x.textContent)).click()`);
     await waitFor(`!!(${confirmOpen})`, 'confirm dialog');
     await ev(`[...(${confirmOpen}).querySelectorAll('button')].find((x) => x.textContent.trim() === 'Clear').click()`);
+    await waitFor(`/^Really clear /.test((${confirmOpen})?.textContent ?? '')`, 'second confirm dialog');
+    await ev(`[...(${confirmOpen}).querySelectorAll('button')].find((x) => x.textContent.trim() === 'Clear for good').click()`);
     await settle(500);
     await dragChip('region', `__t.zone('columns')`); await dragChip('amount', `__t.zone('rows')`); await settle(300); await chartType('Bar');
     await dragChip('discount', toolEl('Color')); await settle(700);
