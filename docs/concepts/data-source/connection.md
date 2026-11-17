@@ -131,4 +131,6 @@ takes it — **Host**, or **Password** when a host is kept — so the user can t
 - `ConnectionRegistry` is session-scoped: cookie `DashboardBuilder.Session`, HttpOnly, 2h idle timeout, in-memory store.
   A new session, or a service restart, starts with no connection.
 - Endpoints called without a connection return **409** (`ApiControllerBase.NotConnected`).
+- **Which hosts** ([D135](../../decisions/decisions-connection.md#d135--the-connect-form-reaches-only-allowed-hosts-and-not-too-often)): with `ClickHouse:AllowedHosts` set, any other host is refused on the host field before any network ("This server can't connect to that host. Ask the administrator to add it to the allowed ClickHouse hosts."). Unset = any host, and the app logs a warning at startup. A typed link-local or unspecified address (169.254.x.x, fe80::/10, 0.0.0.0, ::) is always refused ("That address can't be a ClickHouse server. …"). `ConnectPolicy.cs`.
+- **How often:** `POST /api/connection` is rate-limited per client address, `ClickHouse:ConnectPerMinute` (default 20) per minute; over it, **429** "Too many connection attempts. Wait a minute, then try again." Behind Apache the address is read from `X-Forwarded-For` (loopback proxies only).
 - Endpoint contract: [api.md](../../reference/api.md#connection).
