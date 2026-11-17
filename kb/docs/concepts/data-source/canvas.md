@@ -20,7 +20,7 @@ Drawing relationships on top of the cards is covered in [relationships.md](relat
 - The ground is a 24px dot grid that moves with the cards (pan and zoom, below).
   It is drawn on `.view--model` with `--line-2` dots, offset by the 16px gutter, and `background-attachment: local`.
 - Cards snap to the grid's 8px steps.
-  The free-slot step (312 + 48 = 360) is a whole number of dot cells.
+  The free-slot step (312 + 96 = 408) is a whole number of dot cells.
 - **Zoom and pan** work only on an empty spot of the ground (the pointer is on `#model-view` itself, not on a card, link or badge). The ground is an open world, not a scroll area: `.view--model` is `overflow: hidden` and has no scrollbars.
   - Dragging the ground pans it by the pointer distance, any distance in any direction, whether or not the cards fill the view, so the user can place the cards where they want them on screen. A drag under 4 px is a click; the cursor is a hand, closed while panning; the pan's release does not count as a click on the ground.
   - The wheel zooms about the pointer, 25 % to 200 %, so the point under the pointer stays still. Ctrl + wheel is left to the browser. The wheel over a card still scrolls that card's column list.
@@ -98,13 +98,12 @@ A card with custom SQL shows a `Custom SQL` note under its head; its profile but
 - **Head** (`.entity__head`, on `--surface-2`):
   - The Edit SQL pencil icon first, its ink on the left gutter like the ✕ on the right (not on a union or unpivot card), then the table name alone, in weight 600. The full `db.table` is its tooltip.
   - The database appears, muted after the name, only when another card holds the same table name from a different database.
-  - A collapse caret and a remove icon sit at its right end. The caret toggles `.entity--collapsed`, leaving only the title bar.
-- **Card width** follows the title text plus the Edit SQL icon (and the **Needs a partner** badge while it shows), from `--entity-min` (312px, the slot width) to `--entity-max` (480px) on `#model-view`
+  - **Needs a partner** (a button, only while the card is in no relationship) follows the title. At the right end sit, in order, the link button (`.entity__relate`, not on a union or unpivot card), the collapse caret and the remove icon. The caret toggles `.entity--collapsed`, leaving only the title bar. [relating-tables.md](relating-tables.md) covers the link button and Needs a partner.
+- **Card width** follows the title text plus the Edit SQL icon, the link button ([relating-tables.md](relating-tables.md)) and the **Needs a partner** button while it shows, from `--entity-min` (312px, the slot width) to `--entity-max` (480px) on `#model-view`
   (`card-width.js`, pure). Beyond the maximum the name ellipsises, with the full name in its `title`.
-  Link anchors read the measured card box, so any width stays correct. When `relations.js` shows or hides the badge it emits
-  `entity:need` and the card refits before links are measured, so the badge never clips a short name ("custo…").
-- **Column rows** (`.col-row`) show a **type icon** (number / text / date / bool), the name and a **type badge**
-  (`.col-row__type`, from the type category), and nothing else.
+  Link anchors read the measured card box, so any width stays correct. When `relations.js` shows or hides the Needs a partner button it emits
+  `entity:need` and the card refits before links are measured, so the button never clips a short name ("custo…").
+- **Column rows** (`.col-row`) show the name and the **type** (`.col-row__type`), with a **Profile** icon button (`.col-row__profile`, not on a union or unpivot card): hidden at rest, half-strength while the card is hovered or holds focus, full strength on its own row (`schema.css`).
   - The type is the column's **ClickHouse type** in muted text at the row's end (no chip): `UInt64`, `Nullable(String)`, `Decimal(18, 4)`. `LowCardinality(…)` wrappers are left out, because they are a storage encoding, not the data type: `LowCardinality(Nullable(String))` shows `Nullable(String)` (`cardType`, `Canvas/column-type.js`). Past 130px the label ends in an ellipsis. The full type and the category are its tooltip.
   - Rows sit on a 16px gutter at both edges, so the left space equals the right and names line up under the head's title.
   - A row is a drag handle for relationships ([relationships.md](relationships.md)).

@@ -4,6 +4,8 @@ Visual and interaction changes (styles, markup, layout, labels, icons, focus). G
 
 ## 2026-11-17
 
+- Relate-to picker polish: Related row reads check icon + text in --ok-ink; long table names wrap after an underscore; drop dead border/outline rules the flat-button system overrides (`133ee91`)
+- Relate tables in few steps (D127): a table pair holds one relationship (`3a7cfa6`)
 - Relationship links: a lane per overlapping link in a gutter, ordered to cross least; links a hovered card or link doesn't touch fade; badges rest hidden from 4 links below 125 % zoom (`5167a55`)
 - Data Source sidebar: the on-canvas check on a table chip is drawn in the success green (--ok-ink) (`567eebf`)
 - Relationship suggestion: suggestion card on top, every note in one card below (one line each with its own glyph, card takes the most serious tone) (`42603d6`)

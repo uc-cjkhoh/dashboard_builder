@@ -1,24 +1,20 @@
 ---
 components: []
 ---
-# Merge to `main`
+# Commit and merge
 
-A standing authorisation to merge finished work into `main` without asking. It applies to the
-Dashboard Builder **app repo only** and does not carry over to any other repo, including this KB repo.
+**Ask before every commit and every merge** — in the Dashboard Builder app repo and in this KB repo alike.
+The earlier standing grant to merge the app repo's work branch to `main` once the suites were green was
+withdrawn on 2026-11-17.
 
 ## Do
 
-1. Wait until the suites in [review-guidelines.md](review-guidelines.md#verification) are green (or a
-   failing test or error has been fixed and they are green again).
-2. Merge the work branch into `main` locally, with no separate go-ahead.
-3. Run the suites again on the merged result.
-4. Remove the worktree and delete the merged branch.
+1. Make the change on a work branch and run the suites in [review-guidelines.md](review-guidelines.md#verification).
+2. Report the diff and the test results, and ask before `git commit`.
+3. Ask again before merging into `main`; after a merge, run the suites on the merged result and delete the
+   merged branch.
 
-## Stop and ask instead
+## Never
 
-- The main tree has uncommitted changes that overlap the merge — never stash or commit the user's work
-  without asking.
-- The branch is protected, or a remote or team flow exists.
-- The change goes beyond what the branch was for.
-
-**Never push.**
+- Commit, merge, stash or reset the user's work without asking.
+- Push.
