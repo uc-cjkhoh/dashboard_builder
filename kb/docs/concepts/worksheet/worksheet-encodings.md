@@ -67,7 +67,7 @@ A **named hierarchy** (T03-29) is a reusable drill path kept on the workbook: `{
   - Each row has **Use** (sets the worksheet's drill levels), **Edit** and **Delete** (Delete confirms).
   - Editing: a name, a table, and an ordered level list built with an "Add a level" picker and per-level **Up / Down / Remove** buttons (labelled, keyboard-operable; focus stays on the control just used).
 - **Applying.** **Use** on a dialog row **replaces the sheet's drill** with `{ levels, depth: 0, path: [] }` — the structure a hand-built drill has, each level carrying its column's category — so the chart, breadcrumb and click-to-drill behave identically.
-- **The sheet gets a copy** of the levels. Renaming, editing or deleting the hierarchy later never changes a sheet that already used it.
+- **The sheet gets a copy** of the levels. Renaming, editing or deleting the hierarchy later never changes a sheet that already used it. Deleting a hierarchy asks twice (`confirmDeleteTwice`).
 - **Refusals.** A column cast after the hierarchy was made refuses with the cast message, and a column no longer in the table refuses too. The dialog's Edit keeps a level whose column has vanished until it is removed or replaced.
 - Hierarchies are client-side only (the server never sees one) and save with the workbook ([workbook.md](../workbook/workbook.md)).
 
@@ -78,7 +78,7 @@ In the Table and Text views, a Rows or Columns header that has a next level belo
 - **Collapsing** hides every level below that header. The header stands for them as one row (or column, spanning the remaining header levels). The outermost collapsed header wins.
 - **No button** on a last-level header or the measure band. The Dashboard widget draws a sheet's saved collapsed state but has no buttons — only the editor toggles.
 - **Accessibility:** a real `<button>` with `aria-expanded` and an `aria-label` of "Collapse <header> (rows)" / "Expand <header> (columns)". The icon changes with the state, the header text beside it names the member, and focus returns to the button after the redraw.
-- **Expand all / Collapse all:** two icon buttons in the table's top-left corner (shown when the crosstab has Rows dimensions and at least one header with a level below it). Each flips every header on both axes in one commit, so one undo step undoes it. A toast names what changed ("Collapsed 6 headers", "Expanded 4 headers") and is announced to screen readers; when nothing would change it says "Every header is already collapsed / expanded" and makes no edit. Collapse all past 200 headers is refused with a message (the per-axis cap). The buttons are real `<button>`s (Tab, Enter / Space) with `aria-label` "Expand all headers" / "Collapse all headers", and focus stays on the pressed one. No server query.
+- **Expand all / Collapse all:** two icon buttons in the table's top-left corner (shown when the crosstab has Rows dimensions and at least one header with a level below it). Each flips every header on both axes in one commit. A toast names what changed ("Collapsed 6 headers", "Expanded 4 headers") and is announced to screen readers; when nothing would change it says "Every header is already collapsed / expanded" and makes no edit. Collapse all past 200 headers is refused with a message (the per-axis cap). The buttons are real `<button>`s (Tab, Enter / Space) with `aria-label` "Expand all headers" / "Collapse all headers", and focus stays on the pressed one. No server query.
 - Code: `Dashboard/collapse-model.js`, drawn by `crosstabTable`.
 
 - **Values stay correct.** A collapsed header's cells are its children's cells combined by the measure's own aggregation (`combine`, the rule the subtotals and grand totals use): sums and counts add; min / max take min / max.
@@ -91,7 +91,7 @@ In the Table and Text views, a Rows or Columns header that has a next level belo
   - A key names the dimensions down to the header plus its member path, so re-ordering the shelves never collapses other members. A key whose members no longer exist is ignored.
   - Import keeps only string keys (≤ 200 per axis, each ≤ 600 characters) and reports the rest.
   - A click first prunes keys that match no current header. At 200 collapsed headers a further collapse is refused with a toast and nothing changes.
-  - Undo / redo cover it (the sheet snapshot). Client-side only: the server never sees it.
+  - Client-side only: the server never sees it.
 
 ## Pages
 

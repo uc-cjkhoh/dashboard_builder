@@ -99,7 +99,7 @@ The actions:
 
 - **Workbook (JSON)** (worksheet view bar → Export) downloads `workbook-YYYY-MM-DD.json` of the current state. When the canvas is empty it says "Nothing to export yet".
     If the worksheet was closed, it is recreated under its saved name; a toast says why when the tab limit blocks that.
-- **Parameters…** (P32; the sidebar's Parameters icon on a worksheet tab) lists the workbook's parameters (at most 20) with **New**, **Edit** and **Delete**.
+- **Parameters…** (P32; the sidebar's Parameters icon on a worksheet tab) lists the workbook's parameters (at most 20) with **New**, **Edit** and **Delete** (Delete always asks twice, naming the calculations and worksheets that read the parameter).
   - Each has a name (unique, 1–60 characters), a type (number / text / date), the allowed values (any, a list of ≤ 50, or a number range) and the current value.
   - Each is checked before it is kept (`Core/parameters-model.js`).
   - Parameters save with the workbook; disconnecting clears them from the screen.
@@ -112,13 +112,13 @@ The actions:
   ([tokens.md](../../reference/design/tokens.md#workbook-themes-p41)).
 - **Import workbook…** (a worksheet view-bar icon) opens a `.json` file.
   - It needs a connection, because a workbook opens against the connected server.
-  - If the canvas isn't empty, a confirm dialog asks before **replacing** it.
+  - If the canvas isn't empty, it asks twice before **replacing** it (`confirmDeleteTwice`, button **Replace**, then "Really replace the current workbook? This can't be undone." with **Replace for good**; [D133](../../decisions/decisions-destructive-actions.md#d133--no-undo-double-confirmation-before-every-destructive-delete)).
   - The file is validated in full (below). Anything repaired is listed in an issues dialog ("Opened <file> with 1 issue" / "N issues"), including worksheet pills whose column is not in the connected table's catalog;
     otherwise a toast says "Opened <file>.".
 
 Two more parts save with the workbook but are not managed from this menu:
 
-- **Hierarchies** (T03-29) are managed in the Hierarchies dialog, opened from the sidebar's hierarchy (tree) icon
+- **Hierarchies** (T03-29) are managed in the Hierarchies dialog (Delete asks twice), opened from the sidebar's hierarchy (tree) icon
   ([worksheet-encodings.md](../worksheet/worksheet-encodings.md#named-hierarchies)).
   - They save as the optional `hierarchies` field of version 2, omitted when there are none.
   - A file without it (every older file) opens with none and **no issue**. `parseWorkbook` ignores fields it doesn't know, so the field needs no version bump.

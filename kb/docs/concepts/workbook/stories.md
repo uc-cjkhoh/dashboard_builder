@@ -33,7 +33,7 @@ plus **Open tab** (goes to the step's worksheet or dashboard, where the usual ex
 - **Edit caption** opens a labelled textarea with a count (the length is measured after trimming, on save and on import). Save (or Ctrl+Enter) stores it. An over-long caption is refused with an alert and
   `aria-invalid`, never cut. Esc or Cancel keeps the old caption and returns focus to Edit.
 - **Move earlier / later** swaps with the neighbour and keeps the moved step current; focus stays on the same tool. Disabled at the ends.
-- **Remove** drops the step; the step after it (else the one before) becomes current and focus goes to the strip, or to the Add row when none are left.
+- **Remove** asks to confirm twice (`confirmDeleteTwice`, button **Remove**; [D133](../../decisions/decisions-destructive-actions.md#d133--no-undo-double-confirmation-before-every-destructive-delete)), then drops the step; the step after it (else the one before) becomes current and focus goes to the strip, or to the Add row when none are left.
 
 ## Keyboard
 
@@ -51,7 +51,7 @@ worksheet print rules of `dashboard.css` size the chart). The chart is drawn at 
 - Only the active story renders; leaving it destroys the worksheet view (queries aborted). A worksheet edit, a theme or light / dark flip,
   or a parameter change re-runs the stage from the cache when it shows that worksheet.
 - **Closing a worksheet or dashboard removes every step that showed it** (each story notified with `story:changed`). The close confirm names the stories ("Its steps will be removed from the story: Tour."), also for a worksheet that is on no dashboard. Closing a story touches nothing else; a story with steps confirms first.
-- **No undo** for story edits (add, remove, move, caption) — unlike dashboards, there is no history.
+- **No undo** anywhere in the app ([D133](../../decisions/decisions-destructive-actions.md#d133--no-undo-double-confirmation-before-every-destructive-delete)): removing a step asks twice instead.
 - **Reconnect:** a stage that showed a hint while its tables' columns were loading runs again once they arrive (`entity:loaded`).
 - An open caption editor keeps what was typed through other redraws (rename, tab changes).
 - A navigation button on a dashboard never offers a story as its target.

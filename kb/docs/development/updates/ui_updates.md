@@ -4,6 +4,7 @@ Visual and interaction changes (styles, markup, layout, labels, icons, focus). G
 
 ## 2026-11-17
 
+- Resizer: light only the dragged handle, not every .resizer on body.is-resizing (`72815e4`)
 - Data preview: zebra stripes on the grid rows (D130) (`655a0e4`)
 - Data preview on the Data Source (D128): a card's first 100 rows in a panel docked under the canvas, opened by the card's table button and on Edit SQL Save; custom SQL read as source, union / unpivot via their own reads; resizable, latest request wins; + slots 144px apart across so the wider head never touches the next card (`abd92c6`)
 - Relate-to picker polish: Related row reads check icon + text in --ok-ink; long table names wrap after an underscore; drop dead border/outline rules the flat-button system overrides (`133ee91`)

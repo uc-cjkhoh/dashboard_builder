@@ -30,10 +30,10 @@ Data sits on top; view controls sit on the chart ([design/layout.md](../../refer
 
 ### Worksheet chrome (P23)
 
-- **Undo / Redo** — buttons beside the chart-type picker, plus `Ctrl/⌘+Z` and `Ctrl/⌘+Shift+Z` / `Ctrl+Y` (not while typing in a field). Every committed edit records the sheet as it was: 50 steps per worksheet, this session only. Pages autoplay doesn't record. Code: `Dashboard/history.js`.
+- **No undo:** the app has no Undo / Redo; destructive deletes ask twice instead ([D133](../../decisions/decisions-destructive-actions.md#d133--no-undo-double-confirmation-before-every-destructive-delete)). Typing undo inside the SQL and calculation editors is the text box's own.
 - **Sheet actions** (⋯ in the view bar):
   - **Swap Rows and Columns**.
-  - **Clear sheet…** — asks to confirm, keeps the chart type; Undo restores.
+  - **Clear sheet…** — asks to confirm twice (`confirmDeleteTwice`, button **Clear**; skipped when the sheet is empty), keeps the chart type.
   - **Fit** — Standard (a slot per category, the pane scrolls), Fit width, Fit height, Entire view (the fitted axis shares the pane and its labels thin out).
   - **Show title and caption** / **Show filter cards**.
   - Fit and the two toggles carry only a tick at the end of the row (radio-style for Fit); no icon, no extra text.
