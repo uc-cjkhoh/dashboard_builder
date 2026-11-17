@@ -8,7 +8,7 @@ components: [src/DashboardBuilder/Features/Relations/join-check.js, src/Dashboar
 - **Chosen:** the relationship is between two *tables*, holding one to four column pairs. Relating two more columns of tables that are already related
   adds a key pair to that relationship (no dialog, a toast with Undo) instead of making a second relationship. Shortcuts open the same dialog filled in:
   a proposed link (dashed line + **Relate on customer_id = id**) on each card that needs a partner, **Needs a partner** as a button, a link button on
-  every card (click for a table picker, or drag onto another card). The key comes from column names (`proposeKey`): a foreign key onto the other
+  every card (click for a table picker, or drag onto another card; since D129 the picker is **Relate to another table** in the card's ☰ menu and the drag is gone). The key comes from column names (`proposeKey`): a foreign key onto the other
   table's own key, else every same-named key column as a compound key. [relating-tables.md](../concepts/data-source/relating-tables.md).
 - **Why:** users did not find the column drag (one pill at the foot said how), and a compound key took the dialog's last section: two selects and
   Add pair per column. Dragging a second column between related tables made a second, separate relationship, which looked like a compound key and was not.
@@ -17,6 +17,19 @@ components: [src/DashboardBuilder/Features/Relations/join-check.js, src/Dashboar
 - **Overrides:** D79's "extra pairs are added only in the dialog". A file with two relationships for one table pair still opens and joins as before.
 - **Deferred:** a single **Match columns** list at the top of the dialog (the first pair no longer special); proposals from key or value signals;
   remembering a closed proposal.
+
+## D129 — A card's actions sit in one ☰ menu
+
+- **Chosen:** a Data Source card's head is the name, **Needs a partner** while shown, a ☰ button, the collapse caret and ✕. The ☰ opens the shared context
+  popup (`openContextMenu`, `Core/menu.js`) under it with **Edit SQL**, **Relate to another table** and **Preview data** (a check item, ticked while the data
+  preview shows the card). A union or unpivot card's menu holds Preview data only. [canvas.md § The ☰ menu](../concepts/data-source/canvas.md#the--menu-card-actions).
+- **Why:** the user asked for it: three icon buttons (pencil, link, table) crowded the head and widened every card; one menu with words names each action.
+- **How:** the popup lives on `<body>`, so canvas zoom never shrinks it and no card clips it. `openContextMenu` gained `onClose`, which keeps the ☰'s
+  `aria-expanded` true while it is open; pressing the ☰ again closes it instead of reopening.
+- **Overrides:** D127's link-button drag onto another card (the menu item can't be a drag source) and D128's "table button". Relating stays one picker away
+  through the menu item, **Needs a partner** or a proposed link; the column drag still works.
+- **Rejected:** a menu list inside the card (`wireMenu`: scaled by zoom and clipped by neighbouring cards); keeping a draggable link button beside the ☰
+  (the head would still carry an extra icon).
 
 ## D126 — Many links: a lane each, ordered to cross least; focus on hover; badges only on demand
 

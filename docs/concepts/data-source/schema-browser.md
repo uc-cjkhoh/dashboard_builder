@@ -3,7 +3,7 @@ components: [src/DashboardBuilder/Features/Canvas/, src/DashboardBuilder/Feature
 ---
 # Schema browser — database picker & table list
 
-The schema browser sits in the sidebar, below the Connections tile. It lists the connected server's databases and tables,
+The schema browser sits in the sidebar, below the Connection tile. It lists the connected server's databases and tables,
 previews rows, and profiles columns.
 
 **Code:**
@@ -130,7 +130,7 @@ with the same close X as the other dialogs on its title row. Past 8 tables a **S
 hides rows (ticked tables stay ticked), says "No tables match." when nothing does, and Esc in it clears it rather than closing the dialog.
 
 - **Picking:** 2–5 tables. A sixth can't be ticked; the hint reads "Pick 2 to 5 tables."
-- **Show rows** is enabled for 2–5 ticked tables. It opens the rows dialog on `POST /api/union` ([api.md § Union](../../reference/api.md#union)):
+- **Show rows** is enabled for 2–5 ticked tables. It opens the rows dialog on `POST /api/union` ([api-union-unpivot.md § Union](../../reference/api-union-unpivot.md#union)):
   the first 20 rows of the tables stacked over their shared columns, `Source table` first.
 - A refusal (no shared column, …) shows in the dialog.
 - **Add to model** (primary, same pick rule) puts the union on the Data Source as a card worksheets can read ([query-sources.md](query-sources.md)).
@@ -145,7 +145,7 @@ The **Unpivot** button beside **Union** opens a dialog.
   3. Optionally tick up to 5 columns to **keep** beside them.
 
   A column ticked on one side is disabled on the other. The hint under the lists says what is missing.
-- **Show rows** opens the rows dialog on `POST /api/unpivot` ([api.md § Unpivot](../../reference/api.md#unpivot)).
+- **Show rows** opens the rows dialog on `POST /api/unpivot` ([api-union-unpivot.md § Unpivot](../../reference/api-union-unpivot.md#unpivot)).
   It shows the first 20 rows: the kept columns, then `Field` (the column's name) and `Value`, one row per source row per chosen column.
   NULL stays empty and 0 stays 0.
 - A refusal shows in the dialog.

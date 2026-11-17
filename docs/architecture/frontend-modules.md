@@ -45,7 +45,7 @@ Grouped by feature folder; each entry is the module, then what it owns.
 
 ### Canvas/ and Relations/ — the Data Source canvas
 
-- `Canvas/canvas.js` — drop handling, entity cards, card menu and Edit SQL (`sql-dialog.js`, `sql-editor.js`, `Core/sql-check.js`), card movement, list height from an edge drag (`card-height.js`), the column type label (`column-type.js`, pure `cardType`), zoom and pan (`canvas-zoom.js`), empty state, the data preview docked under the canvas (`data-preview.js`, request rule `entityRowsQuery` in `Rows/rows-model.js`) — [canvas.md](../concepts/data-source/canvas.md)
+- `Canvas/canvas.js` — drop handling, entity cards, card menu and Edit SQL (`sql-dialog.js`, `sql-editor.js`, `Core/sql-check.js`), card movement, list height from an edge drag (`card-height.js`), the column type label (`column-type.js`, pure `cardType`), zoom and pan (`canvas-zoom.js`), empty state, the data preview docked under the canvas (`data-preview.js`, request rule `entityRowsQuery` in `Rows/rows-model.js`; column widths, resize grips and number alignment in `preview-columns.js`) — [canvas.md](../concepts/data-source/canvas.md)
 - `Canvas/empty-state.js` — pure: `emptyState({connected, databaseSelected})` → the sentence, button and control to focus
 - `Relations/relations.js` — drag- and keyboard-to-relate (`link-keys.js`), links, the Relationships description card (`relation-describe.js`), cardinality, pinned keys — [relationships.md](../concepts/data-source/relationships.md)
 - `Relations/join-preview-model.js`, `Relations/join-check.js` — pure wording and chosen-vs-observed comparison of a join preview (`describePreview`, `observedCardinality`, `joinEvidence`, `suggestionLabel`, `pct`, `previewRequest`); the dialog's Suggestion panel (DOM, `textContent` only): `buildJoinCheck()` returns `{ root, start, rerun, redescribe }`, run on open, re-run on a key-pair change, re-read on a cardinality pick
@@ -183,10 +183,10 @@ Grouped by feature folder; each entry is the module, then what it owns.
   - `tableRowsRequest`, `buildRowsRequest({plan, selection, limit})` (base-table filters + the mark as a bound `=`; `notes` for what couldn't apply), `rowsSummary`, `cellText`, `rowsToCsv`, `DEFAULT_LIMIT` — [worksheet-query.md](../concepts/worksheet/worksheet-query.md#view-data)
 - `Rows/rows-dialog.js` — the rows dialog:
   - `openTablePreview(db, table)` (schema browser) and `openRowsDialog({title, subtitle, request, notes, filename, load})` (`load` defaults to `api.rows`) — [schema-browser.md](../concepts/data-source/schema-browser.md#row-preview)
-- `Rows/union-model.js` — pure: `unionRequest(db, tables)` (2–5 different tables, throws a sentence otherwise), `unionPickState`, `UNION_LIMIT` (20) — [api.md § Union](../reference/api.md#union)
+- `Rows/union-model.js` — pure: `unionRequest(db, tables)` (2–5 different tables, throws a sentence otherwise), `unionPickState`, `UNION_LIMIT` (20) — [api-union-unpivot.md § Union](../reference/api-union-unpivot.md#union)
 - `Rows/union-dialog.js` — `openUnionDialog(db, tables)`: tick 2–5 tables, then **Show rows** (`openRowsDialog` with `api.union` rows) or **Add to model** (`source:add`)
 - `Rows/unpivot-model.js` — pure:
-  - `unpivotRequest(db, table, columns, keep)` (2–50 columns, ≤ 5 kept, no column in both roles; throws a sentence otherwise), `unpivotPickState(cols, columns, keep)` (same-kind rule), `UNPIVOT_LIMIT` (20) — [api.md § Unpivot](../reference/api.md#unpivot)
+  - `unpivotRequest(db, table, columns, keep)` (2–50 columns, ≤ 5 kept, no column in both roles; throws a sentence otherwise), `unpivotPickState(cols, columns, keep)` (same-kind rule), `UNPIVOT_LIMIT` (20) — [api-union-unpivot.md § Unpivot](../reference/api-union-unpivot.md#unpivot)
 - `Rows/unpivot-dialog.js` — `openUnpivotDialog(db, tables)`: table select, two checkbox lists (turn into rows / keep), then **Show rows** (`openRowsDialog` with `api.unpivot` rows) or **Add to model** (`source:add`)
 
 ### Calc/ — calculated fields
@@ -243,7 +243,7 @@ Grouped by feature folder; each entry is the module, then what it owns.
 - `Core/sheet-schema.js` — pure: the allowed values for a saved sheet (chart types, categories, filter ops, formats, Top-N)
 - `Core/icons.js` — the inline-SVG icon set — `icon(name, {size, label})`, `PATHS`, `ICON_NAMES`
 - `Core/menu.js` — `wireMenu(button, list)` — keyboard-operable popover menu (`menuitem` / `menuitemradio` items)
-  - `openContextMenu` / `wireContextMenu` — the context popup (right-click, ContextMenu key, `Shift+F10`, `Enter`); opened from inside an open modal `<dialog>` (the Calculated fields dialog) it is appended to that dialog as a `popover="manual"`, so it is in the top layer above the dialog and still clickable
+  - `openContextMenu` / `wireContextMenu` — the context popup (also opened under a Data Source card's ☰, `canvas.js`; `onClose` runs however it closes) (right-click, ContextMenu key, `Shift+F10`, `Enter`); opened from inside an open modal `<dialog>` (the Calculated fields dialog) it is appended to that dialog as a `popover="manual"`, so it is in the top layer above the dialog and still clickable
   - animated open/close via `motion.js`
 - `Core/context-menu-model.js` — pure: `placeMenu` (keep a popup in the viewport), `opensContext` (which keydown opens it), `nextFocus`
 - `Core/motion.js` — `enter` / `exit` (WAAPI, the Web Animations API; opacity + transform, Fluent timing) and `reducedMotion()`; no-ops under reduced motion — [motion-accessibility.md](../reference/design/motion-accessibility.md#motion)

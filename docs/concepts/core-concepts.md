@@ -11,7 +11,7 @@ What a user can do in the app, and which doc describes each capability.
 | Browse | database picker → searchable, draggable table chips | [schema-browser.md](data-source/schema-browser.md) |
 | Model | entity cards with type badges | [canvas.md](data-source/canvas.md) |
 | Union / unpivot | stack 2–5 tables, or turn wide columns into rows, and use the result like a table | [query-sources.md](data-source/query-sources.md) |
-| Custom SQL (Edit SQL) | press a card's pencil icon and write your own `SELECT` in MySQL (default) or ClickHouse syntax; the card reads it instead of its table | [sql-syntax.md](data-source/sql-syntax.md) |
+| Custom SQL (Edit SQL) | pick **Edit SQL** in a card's ☰ menu and write your own `SELECT` in MySQL (default) or ClickHouse syntax; the card reads it instead of its table | [sql-syntax.md](data-source/sql-syntax.md) |
 | Relate | drag-to-relate links with 1:1 / 1:N / N:1 / N:M cardinality | [relationships.md](data-source/relationships.md) |
 | Tabs | Data Source tab + any number of worksheet and dashboard tabs (50 in all) | [tabs.md](workbook/tabs.md) |
 | Worksheet | Columns/Rows shelves, automatic cross-table joins, crosstab, sort, format | [worksheet.md](worksheet/worksheet.md) |
