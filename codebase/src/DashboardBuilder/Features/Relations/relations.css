@@ -124,6 +124,9 @@
 .join-check__table tr > :last-child { padding-right: 0; }
 .join-check__table tbody tr:last-child > * { border-bottom: 0; }
 .join-check__note { margin: 0; display: flex; gap: var(--s2); align-items: flex-start; padding: var(--s2) var(--s2); border: 1px solid var(--line); border-radius: var(--r); }
+.join-check__notes { display: block; } /* all the findings in one card: one line each, 8px apart */
+.join-check__lines { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s2); }
+.join-check__line { display: flex; gap: var(--s2); align-items: flex-start; }
 .join-check__glyph { flex: none; display: inline-flex; margin-top: 1px; }
 .join-check__note--ok { background: var(--ok-bg); color: var(--ok-ink); border-color: var(--ok-line); }
 .join-check__note--warn { background: var(--warn-bg); color: var(--warn-ink); border-color: var(--warn-line); }

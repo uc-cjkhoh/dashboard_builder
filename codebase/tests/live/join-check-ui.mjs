@@ -165,14 +165,19 @@ try {
     
     must((await text('dialog[open] .join-check__out')).includes('10% of orders rows have no cust_id'), 'no NULL note');
     must(await ev(`document.querySelectorAll('dialog[open] .join-check__note--warn').length`) === 1, 'expected ONE combined fan-out warning');
+    must(await ev(`document.querySelectorAll('dialog[open] .join-check__main > .join-check__note').length`) === 1, 'notes not combined into one card');
+    must(await ev(`document.querySelector('dialog[open] .join-check__main').firstElementChild.classList.contains('join-check__suggest')`), 'suggestion not on top');
+    must(await ev(`[...document.querySelectorAll('dialog[open] .join-check__line')].every((l) => !!l.querySelector('svg'))`), 'a note line without an icon');
     must(/You chose N:1/.test(await text('dialog[open] .join-check__note--warn')), 'declaration not named');
     await shot('join-check-warn.png');
   });
-  await check('a sampled result leads with the sampling note, words shares within the sample, and raises no amber warning', async () => {
+  await check('a sampled result: the suggestion on top, then one notes card led by the sampling note; shares worded within the sample, no amber warning', async () => {
     previewMode = 'manyToMany';
     await click('dialog[open] .join-check__rerun');
     await waitFor(`document.querySelector('dialog[open] .join-check__out')?.textContent.includes('Within the sample')`, 'sampled reading');
-    must((await ev(`document.querySelector('dialog[open] .join-check__main > .join-check__note:first-child')?.textContent`) ?? '').startsWith('Based on the first 1,000,000 rows of each table, in no particular order'), 'sampling note not first, above the suggestion');
+    const kids = await ev(`[...document.querySelector('dialog[open] .join-check__main').children].map((c) => c.className)`);
+    must(kids.length === 2 && /join-check__suggest/.test(kids[0]) && /join-check__notes/.test(kids[1]), `not suggestion then one notes card: ${J(kids)}`);
+    must((await ev(`document.querySelector('dialog[open] .join-check__notes .join-check__line')?.textContent`) ?? '').startsWith('Based on the first 1,000,000 rows of each table, in no particular order'), 'sampling note not the first line of the notes card');
     must((await text('dialog[open] .join-check__label')) === 'Suggested cardinality, from a sample', 'label not qualified');
     must(!/is unique in/.test(await text('dialog[open] .join-check__out')), 'a sampled side called unique');
     must(await ev(`document.querySelectorAll('dialog[open] .join-check__note--warn').length`) === 0, 'amber warning on a sampled result');

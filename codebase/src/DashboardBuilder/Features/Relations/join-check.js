@@ -15,6 +15,25 @@ const note = (kind, glyph, text) => {
   p.append(g, t);
   return p;
 };
+/** Every finding in one card, one line each with its own glyph (icon + text, never colour alone); the card takes the most serious tone. */
+const notesCard = (findings) => {
+  const box = document.createElement("div");
+  box.className = `join-check__note join-check__note--${findings.some((f) => f.level === "warn") ? "warn" : "info"} join-check__notes`;
+  const list = document.createElement("ul");
+  list.className = "join-check__lines";
+  for (const f of findings) {
+    const li = document.createElement("li");
+    li.className = "join-check__line";
+    const g = document.createElement("span");
+    g.className = "join-check__glyph"; g.setAttribute("aria-hidden", "true"); g.append(icon(f.level === "warn" ? "warning" : "info", { size: 14 }));
+    const t = document.createElement("span");
+    t.textContent = f.text;
+    li.append(g, t);
+    list.append(li);
+  }
+  box.append(list);
+  return box;
+};
 const el = (tag, className, text) => { const e = document.createElement(tag); if (className) e.className = className; if (text != null) e.textContent = text; return e; };
 
 /** The counts table: one column per side, one row per measure (`rows` from joinEvidence). */
@@ -68,10 +87,8 @@ export function buildJoinCheck(dlg, { run, names, apply = null }) {
     if (!last) return;
     const n = namesNow();
     const d = describePreview(last, n);
-    const frag = el("div", "join-check__main"); // the suggestion and its notes
+    const frag = el("div", "join-check__main"); // the suggestion on top, then one card holding every note
     const sampled = last.sampled === true;
-    const findings = [...d.findings];
-    if (sampled && findings.length) { const f = findings.shift(); frag.append(note(f.level, "info", f.text)); } // the sampling caveat comes before the suggestion it qualifies
     if (d.verdict) {
       const box = el("div", "join-check__suggest");
       box.append(el("p", "join-check__label", sampled ? "Suggested cardinality, from a sample" : "Suggested cardinality"), el("p", "join-check__pick", suggestionLabel(d.observed))); // the headline says what d.verdict says
@@ -83,7 +100,7 @@ export function buildJoinCheck(dlg, { run, names, apply = null }) {
       }
       frag.append(box);
     }
-    for (const f of findings) frag.append(note(f.level, f.level === "warn" ? "warning" : "info", f.text));
+    if (d.findings.length) frag.append(notesCard(d.findings)); // the sampling caveat, when there is one, is its first line
     if (last.from.rows > 0 && last.to.rows > 0) {
       const ev = joinEvidence(last, n);
       const sec = el("div", "join-check__evidence");
