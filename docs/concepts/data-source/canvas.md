@@ -93,7 +93,6 @@ The card head's ☰ button (`.entity__menu`, the `menu` icon, aria-label *Action
 | Item | Does | Not on |
 |---|---|---|
 | **Edit SQL** (`edit` icon) | opens the Edit SQL dialog on the card's `SELECT`; Save makes the card read the query | a union or unpivot card |
-| **Relate to another table** (`link` icon) | opens **Relate table to** ([relating-tables.md](relating-tables.md)) | a union or unpivot card |
 | **Preview data** (`table` icon, a check item) | opens the [data preview](#data-preview) on this card, or closes it when it already shows this card; ticked while it does | — |
 
 - The menu is the shared context popup (`openContextMenu`, `Core/menu.js`): a `.menu__list.ctx-menu` on `<body>`, placed under the ☰, so canvas zoom never shrinks it and no card clips it. Entries are read at open time.
@@ -107,10 +106,10 @@ A card with custom SQL shows a `Custom SQL` note under its head; its profile but
 - **Head** (`.entity__head`, on `--surface-2`):
   - The table name first, alone, in weight 600, on the left gutter with the column names. The full `db.table` is its tooltip.
   - The database appears, muted after the name, only when another card holds the same table name from a different database.
-  - **Needs a partner** (a button, only while the card is in no relationship) follows the title. At the right end sit, in order, the ☰ menu ([above](#the--menu-card-actions)), the collapse caret and the remove icon. The caret toggles `.entity--collapsed`, leaving only the title bar. [relating-tables.md](relating-tables.md) covers Needs a partner.
-- **Card width** follows the title text plus the ☰ button and the **Needs a partner** button while it shows (`fitWidth(card, title, menu, need)`), from `--entity-min` (312px, the slot width) to `--entity-max` (480px) on `#model-view`
+  - **Needs a partner** (a label, only while the card is in no relationship) follows the title. At the right end sit, in order, the ☰ menu ([above](#the--menu-card-actions)), the collapse caret and the remove icon. The caret toggles `.entity--collapsed`, leaving only the title bar. It is a plain label, not a button; [relating-tables.md](relating-tables.md) covers it.
+- **Card width** follows the title text plus the ☰ button and the **Needs a partner** label while it shows (`fitWidth(card, title, menu, need)`), from `--entity-min` (312px, the slot width) to `--entity-max` (480px) on `#model-view`
   (`card-width.js`, pure). Beyond the maximum the name ellipsises, with the full name in its `title`.
-  Link anchors read the measured card box, so any width stays correct. When `relations.js` shows or hides the Needs a partner button it emits
+  Link anchors read the measured card box, so any width stays correct. When `relations.js` shows or hides the Needs a partner label it emits
   `entity:need` and the card refits before links are measured, so the button never clips a short name ("custo…").
 - **Column rows** (`.col-row`) show the name and the **type** (`.col-row__type`), with a **Profile** icon button (`.col-row__profile`, not on a union or unpivot card): hidden at rest, half-strength while the card is hovered or holds focus, full strength on its own row (`schema.css`).
   - The type is the column's **ClickHouse type** in muted text at the row's end (no chip): `UInt64`, `Nullable(String)`, `Decimal(18, 4)`. `LowCardinality(…)` wrappers are left out, because they are a storage encoding, not the data type: `LowCardinality(Nullable(String))` shows `Nullable(String)` (`cardType`, `Canvas/column-type.js`). Past 130px the label ends in an ellipsis. The full type and the category are its tooltip.
@@ -168,9 +167,7 @@ The first rows of one card, in a panel docked under the canvas (`data-preview.js
 
 - **Moving:** drag a card by its **head**. This uses pointer events, a separate gesture from dragging a chip with drag and drop.
   The entity's `x, y` snap to 8px steps and update, and `entity:moved` fires so links re-route.
-- **Removing** a card removes its relationships, with a confirm dialog when any exist. Either way a toast "Removed shop.orders."
-  carries **Undo** (10 s): it brings the card back with the same id, place, Edit SQL text and list height, and re-adds each of its
-  relationships whose other card is still there (`rel:reinstate`). If the same table was added again meanwhile, Undo says so instead.
+- **Removing** a card removes its relationships. It **always** asks twice (`confirmDeleteTwice`, button **Remove**: "Remove shop.orders and its relationship(s)?" or "Remove shop.orders from the canvas?", then "Really remove shop.orders? This can't be undone." with **Remove for good**; [D133](../../decisions/decisions-destructive-actions.md#d133--no-undo-double-confirmation-before-every-destructive-delete)), then toasts "Removed shop.orders.". There is no undo; add the table again.
   If a half-drawn link was waiting on that card, it is cancelled (no dangling "undefined" toast).
 
 ## Join keys

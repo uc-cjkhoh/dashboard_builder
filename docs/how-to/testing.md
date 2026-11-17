@@ -49,7 +49,7 @@ In the table below, `P##` tags (P28, P33 …) name the product phase whose cases
 | `tests/js/period-model.test.mjs` | presets and calendar edges, previous / last-year comparison (29 Feb), Date vs DateTime range filter, change / tone / %, row alignment, target |
 | `tests/js/parameters-model.test.mjs` | value checks by type / list / range, bound filters read the value (missing → empty), Top N from a parameter (clamped), saved-parameter checks; workbook case: round-trip and orphan references unlinked |
 | `tests/js/analytics-model.test.mjs` | reference values, exact linear / quadratic / log fits and R², forecast extension, totals by aggregation |
-| `tests/js/history.test.mjs` | undo / redo / redo cleared by a new edit, per-dashboard, copies, bounded; fit modes |
+| `tests/js/confirm-delete.test.mjs` | `confirmDeleteTwice`: both confirmed → true, the second dialog names the item and says it can't be undone; Cancel / Esc on the first stops there; Cancel / Esc on the second → false |
 | `tests/js/table-calc.test.mjs` | each calculation, blanks, competition rank (Other unranked), along Columns vs Rows partitions, renamed measures, `%` suffix |
 | `tests/js/date-parts.test.mjs` | part steps (Date stops at day), labels per part, only grouping parts relabel their own key |
 | `DatePartTests` (.NET) | each part → one function; auto / exact untouched; hostile / unknown parts rejected (400) |

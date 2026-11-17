@@ -58,9 +58,9 @@ The close icon (`.tab__close`, `aria-label` "Close <name>") closes a tab.
 - **A worksheet or dashboard shown by story steps** leaves those steps (each story is notified with `story:changed`); the confirm names the stories, and a worksheet or dashboard shown only by stories confirms too.
 - **A story with steps** confirms ("The worksheets and dashboards it shows are not affected.").
 - **Dashboard buttons** that go to the closed worksheet or dashboard are unlinked, and the confirm names those dashboards ("Buttons that go to it will be unlinked on: …").
-- **Undo:** every close (confirmed or not) then shows a toast "Closed “name”." with **Undo** for 10 seconds (`.tab-undo`, in `Tabs/`; `close-undo.js` is the pure model).
-  Undo puts the tab back at its position and, through the store's own setters, the dashboard widgets, button links and story steps the close removed, and shows the tab again if it was open.
-  A dashboard or story edited since keeps its newer content and is named in the "Restored …" toast. It refuses if the tab is back already or the workbook holds 50 tabs. The last 5 closes stack (Undo takes the newest); a workbook restore, import or disconnect (`workbook:reset`) drops them and hides the toast.
+- **Double confirm:** every close that asks (the cases above) asks **twice** (`confirmDeleteTwice`, button **Close**, then "Really close the <kind> “name”? This can't be undone." with **Close for good**; [D133](../../decisions/decisions-destructive-actions.md#d133--no-undo-double-confirmation-before-every-destructive-delete)).
+  An empty tab (a worksheet with no content that no dashboard or story uses, a dashboard with no widgets and no users, a story with no steps) closes at once with no prompt.
+  There is no undo: a closed tab, and the widgets, steps and button links it removed, are gone.
 
 ### Duplicate
 
@@ -68,7 +68,6 @@ The duplicate icon (`.tab__dup`, `aria-label` "Duplicate <name>") appears on **w
 
 - `store.duplicateWorksheet` deep-copies the sheet: shelves, calculated-field pills, filters, marks, format and chart type.
 - It resets the transient state: the selection is cleared, drill goes back to its first level, and pages go to the first member (members reload).
-  The copy has no undo history.
 - **Name:** `<name> copy`, then `<name> copy 2`, … A copy of a copy reuses the base name. The name is trimmed to 60 characters.
 - The copy is inserted right after the source and made active.
 - At the tab limit it toasts "A workbook holds at most 50 tabs." and adds nothing.

@@ -1,5 +1,5 @@
 ---
-components: [src/DashboardBuilder/Features/Board/board-interact.js, src/DashboardBuilder/Features/Board/board-layout.js, src/DashboardBuilder/Features/Board/board-model.js, src/DashboardBuilder/Features/Core/menu.js, src/DashboardBuilder/Features/Dashboard/history.js]
+components: [src/DashboardBuilder/Features/Board/board-interact.js, src/DashboardBuilder/Features/Board/board-layout.js, src/DashboardBuilder/Features/Board/board-model.js, src/DashboardBuilder/Features/Core/menu.js]
 ---
 # Decisions — dashboards
 
@@ -45,23 +45,21 @@ Only the active dashboard has live views: leaving it destroys every widget's wor
 - **Rejected:** keeping hidden dashboards alive (leaks); a separate cache per widget (the same query would run twice after an
   edit); CSS grid with `grid-column` (no pixel geometry to snap against).
 
-### D63 — Board edits are refused, never repaired; every verdict is pure; history is in memory
+### D63 — Board edits are refused, never repaired; every verdict is pure
 A move, resize, keyboard step or panel drop that overlaps a widget, leaves the grid or breaks a size limit is **refused with a
 reason and changes nothing** (the golden-rule-3 stance: reject, don't clamp).
 - **One verdict.** `explainRefusal` serves the ghost, the drop and the keys.
 - **One leniency:** a panel drop's x slides left to keep the default width inside the 12 columns (the pointer stays within the
   widget).
-- **Pure modules.** The pointer state machine, snapping, key steps, text validation and history are DOM-free modules with node
+- **Pure modules.** The pointer state machine, snapping, key steps, and text validation are DOM-free modules with node
   tests. `board-interact.js` only turns events into points.
-- **Undo** reuses the worksheet editor's `history.js` (snapshots of the **widget list**, keyed by dashboard id) and is **in
-  memory**: a reload keeps the autosaved layout but not the steps.
+- **No undo:** the board has no history; removing a widget asks twice instead ([D133](decisions-destructive-actions.md#d133--no-undo-double-confirmation-before-every-destructive-delete)).
 - **Text widgets** default to 12 × 2 (a 1-row cell showed no body), can still be shrunk to 1 row, and open over their
   neighbours while the edit form is open.
 - **Why:** a silent relocation (pushing neighbours aside, clamping into the grid) would make a drop land somewhere the user
-  didn't aim, and an exact verdict is testable. Persisting history would mean storing a stack of past layouts in the workbook
-  for a rarely needed feature, and the editor's history is not persisted either.
+  didn't aim, and an exact verdict is testable.
 - **Rejected:** auto-pushing overlapped widgets down (unpredictable, can run past 96 rows); a CSS-grid drag library (no tokens,
-  no node tests, a dependency); persisting undo; a second history implementation for the board.
+  no node tests, a dependency).
 
 ### D64 — One transient dashboard selection filters the other widgets
 A mark click in a worksheet widget sets the dashboard's one selection. Every other worksheet widget adds the same bound `=`
@@ -81,7 +79,7 @@ otherwise a note).
 ### D69 — A named hierarchy is a workbook list a sheet copies from, not a reference
 A hierarchy is `{ id, name, levels }` on the workbook. Applying it writes a fresh `sheet.drill` (the same shape the Drill tool
 builds).
-- **Why a copy:** the drill state machine, undo and the query path are untouched, and a sheet keeps working when the
+- **Why a copy:** the drill state machine and the query path are untouched, and a sheet keeps working when the
   hierarchy is renamed, edited or deleted. A live reference would need a missing-hierarchy state on every sheet.
 - **Cost:** editing a hierarchy doesn't update sheets that already used it (re-apply it).
 - **Levels** are plain columns of one table. A calculated or cast field is refused, because a cast or formula could change

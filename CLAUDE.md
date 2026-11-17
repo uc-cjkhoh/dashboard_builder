@@ -31,6 +31,7 @@ One line each; full text in [coding-standards.md](docs/development/coding-standa
 9. **Never colour alone** — icon + text + colour; legends; shape-coded cardinality.
 10. **Self-hosted, framework-free frontend** — vanilla JS/CSS, no build step, no CDN.
 11. **Update the KB after every prompt** — whatever the prompt changed, update its doc in the same turn, before you report done.
+12. **No Undo; destructive deletes ask twice** — `confirmDeleteTwice` in `Core/ui.js` ([full text: § 13](docs/development/coding-standards.md#13-destructive-deletes-ask-twice-there-is-no-undo)).
 
 ## What this is in one screen
 
@@ -120,7 +121,7 @@ dashboard_builder/          (this KB)
 │   ├── how-to/             # local-development · testing · deployment · troubleshooting
 │   ├── reference/          # api (+ -calculated-fields, -custom-sql, -union-unpivot) · clickhouse-integration (+ clickhouse-calculations) · data-model · source-table-guidance · tableau-marks-comparison · glossary
 │   │   └── design/         #   index (concept + rules) · tokens · layout · components · motion-accessibility
-│   ├── decisions/          # README (D1–D131 lookup, open questions) · decisions-* by topic
+│   ├── decisions/          # README (D1–D133 lookup, open questions) · decisions-* by topic
 │   ├── operations/         # live-service · safe-operations (+ git-ignored credentials.local.md)
 │   ├── development/        # coding-standards · sharp-edges · review-guidelines · git-workflow · kb-maintenance · hooks
 │   │   ├── backlog/        #   undone work by topic (incl. custom-sql) · recommended order · design specs
