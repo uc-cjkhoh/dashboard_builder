@@ -56,12 +56,13 @@ every later query uses it. On a refusal, `NextGuards` picks the next level and `
 | Level | Settings sent | Reached when |
 |---|---|---|
 | `Full` | all three | default |
-| `NoTimeLimit` | `readonly=2`, cancel-on-disconnect | code **452** (SETTING_CONSTRAINT_VIOLATION) — a profile constraint, almost always on `max_execution_time` |
-| `None` | nothing | code **164** (READONLY — the account is already read-only), or 164/452 again at `NoTimeLimit` |
+| `NoTimeLimit` | `readonly=2`, cancel-on-disconnect, `join_use_nulls` | code **452** (SETTING_CONSTRAINT_VIOLATION) — a profile constraint, almost always on `max_execution_time` |
+| `ReadOnly` | `readonly=2` only | 452 again at `NoTimeLimit` |
+| `None` | nothing | code **164** (READONLY — the account is already read-only on the server) at any level |
 
-- Any other error ends the retries with the usual "Could not connect" message. At most three attempts.
-- At `None` reached via 164, the server's own read-only still guards. At `None` reached via a `readonly`
-  constraint, read-only rests on the SQL builders alone.
+- **`readonly=2` is never dropped on a 452** ([D137](../decisions/decisions-connection.md#d137--a-writable-account-never-runs-without-readonly2)): a 452 at `ReadOnly` fails the connect on the user field — "This account's settings profile refuses read-only mode (readonly=2), so it can't be used here. Connect with an account limited to reading." Only `None` runs without it, and only for an account the server itself keeps read-only.
+- At `ReadOnly` and `None` a query adds no SETTINGS clause of its own (`TakesQuerySettings`): no `join_use_nulls` (right and full joins are refused), no `max_threads = 1` paging, no profile backstops. `ReadOnly` has no server-side time limit (the 15 s HTTP timeout still ends the wait).
+- Any other error ends the retries with the usual "Could not connect" message. At most four attempts.
 - The step-down is logged at Information (`ClickHouse refused guard settings Full; retrying with …`) —
   levels only, never the connection string.
 - Unit-tested in `QueryGuardTests`.

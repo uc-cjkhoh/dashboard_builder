@@ -86,6 +86,7 @@ state-changing call must be a `POST` with JSON ([sharp edges](../development/sha
 - **.NET 10**, framework-dependent (`net10.0`), Kestrel launched directly by systemd. The `web.config` in
   the deploy dir is for IIS and unused here.
 - **Config:** `appsettings.json` (logging, `AllowedHosts: *`). No secrets on disk.
+- **ClickHouse hosts (D135):** the live unit should set `Environment=ClickHouse__AllowedHosts__0=<host>` (one line per host, `__1`, `__2` …) to the ClickHouse servers users connect to. Unset, the connect form may reach any host and the app logs a warning at startup. Not set on the live unit yet: it needs the host list from the operator.
 - **Sessions:** in-memory (`AddDistributedMemoryCache`), so **every restart drops every session's
   ClickHouse connection**. Users must reconnect.
 - **Data Protection keys** persist to `keys/` under the content root
