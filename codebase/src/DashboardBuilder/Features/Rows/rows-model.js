@@ -3,6 +3,7 @@
 // display and CSV. Unit-tested in tests/js/rows-model.test.mjs; the limits mirror ClickHouse/RequestValidation.cs.
 import { LIMITS } from "../Core/validate.js";
 import { calcOnTable } from "../Calc/calc-tree.js";
+import { sqlWire } from "../Core/source-model.js";
 
 export const DEFAULT_LIMIT = 100;   // server ApiLimits.DefaultRowsLimit
 export const PREVIEW_LIMIT = 20;    // a table preview is deliberately small
@@ -24,6 +25,19 @@ const wire = (f) => ({ column: f.column, op: f.op, value: f.value ?? "", values:
 /** The first rows of one table, unfiltered. */
 export function tableRowsRequest(db, table, limit = PREVIEW_LIMIT, columns) {
   return { db, table, ...(columns ? { columns } : {}), limit: checkedLimit(limit, columns?.length ?? 0) };
+}
+
+/**
+ * The Data Source preview of one card (Canvas/data-preview.js): which read shows its rows and the body to send. A table card reads
+ * POST /api/rows; one with custom SQL sends that query as `source`, so the rows are the query's (D105); a union / unpivot card reads
+ * POST /api/union / /api/unpivot with its saved definition. `load` is the api method name. Never more than `limit` rows.
+ */
+export function entityRowsQuery(entity, limit = DEFAULT_LIMIT) {
+  const n = checkedLimit(limit);
+  const s = entity.source;
+  if (s?.kind === "union") return { load: "union", request: { db: s.db, tables: [...s.tables], ...(s.columns?.length ? { columns: [...s.columns] } : {}), limit: n } };
+  if (s?.kind === "unpivot") return { load: "unpivot", request: { db: s.db, table: s.table, columns: [...s.columns], keep: [...(s.keep ?? [])], limit: n } };
+  return { load: "rows", request: { db: entity.db, table: entity.table, limit: n, ...(entity.customSql ? { source: sqlWire(entity.db, entity.table, entity.customSql) } : {}) } };
 }
 
 /**

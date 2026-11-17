@@ -1,5 +1,6 @@
 // The raw-row dialog (DOM only; every rule lives in rows-model.js): a bounded, scrollable table of the first rows
-// of a table, opened from the schema browser's preview button and the worksheet's "View data". Read-only; Escape,
+// of a table, opened from the schema browser's preview button and the worksheet's "View data". Its table and CSV export are
+// shared with the Data Source preview panel (Canvas/data-preview.js). Read-only; Escape,
 // Close and the backdrop-free X all close it; closing cancels a request still in flight.
 import { api } from "../Core/api.js";
 import { icon } from "../Core/icons.js";
@@ -55,17 +56,13 @@ export function openRowsDialog({ title, subtitle = "", request, notes = [], file
   load(request, { signal: ctl.signal }).then((res) => {
     summary.textContent = rowsSummary(res) + (res.columnsTruncated ? ` · first ${res.columns.length} columns` : "");
     if (!res.rows.length) { status.textContent = "No rows."; return; }
-    scroll.replaceChildren(buildTable(res));
+    scroll.replaceChildren(rowsTable(res));
     if (anyCellCut(res.rows)) {
       const p = el("p", "rows-dialog__note"); const g = el("span", "rows-dialog__note-icon"); g.setAttribute("aria-hidden", "true"); g.append(icon("info", { size: 14 }));
       p.append(g, document.createTextNode(" " + CUT_NOTE)); noteBox.append(p); noteBox.hidden = false;
     }
     csv.disabled = false;
-    csv.addEventListener("click", () => {
-      const url = URL.createObjectURL(new Blob([rowsToCsv(res.columns, res.rows)], { type: "text/csv;charset=utf-8" }));
-      const a = el("a"); a.href = url; a.download = `${filename}.csv`; document.body.append(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 0);
-    });
+    csv.addEventListener("click", () => downloadRowsCsv(res, filename));
   }).catch((err) => {
     if (err?.name === "AbortError") return;
     const glyph = el("span", "rows-dialog__note-icon"); glyph.setAttribute("aria-hidden", "true"); glyph.append(icon("warning", { size: 14 }));
@@ -76,7 +73,15 @@ export function openRowsDialog({ title, subtitle = "", request, notes = [], file
   return dlg;
 }
 
-function buildTable(res) {
+/** Save the rows shown as `<filename>.csv` (the same text the dialog and the Data Source preview export). */
+export function downloadRowsCsv(res, filename) {
+  const url = URL.createObjectURL(new Blob([rowsToCsv(res.columns, res.rows)], { type: "text/csv;charset=utf-8" }));
+  const a = el("a"); a.href = url; a.download = `${filename}.csv`; document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+/** The read-only table of a rows result: a sticky head with each column's name and ClickHouse type, NULL styled apart. */
+export function rowsTable(res) {
   const table = el("table", "rows-table");
   const thead = el("thead"); const hr = el("tr");
   for (const c of res.columns) {

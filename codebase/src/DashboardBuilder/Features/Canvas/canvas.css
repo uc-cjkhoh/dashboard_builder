@@ -204,3 +204,29 @@
 .sql-dialog__sql { margin: 0; padding: var(--s2); max-height: 160px; overflow: auto; border-top: 1px solid var(--line); font: var(--fs-body)/1.5 var(--font-mono); white-space: pre; user-select: text; }
 .sql-dialog__notes { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s1); color: var(--warn-ink); font-size: var(--fs-body); }
 .sql-dialog__notes li { display: flex; align-items: flex-start; gap: var(--s1); }
+
+/* ---- Data preview (data-preview.js): the first rows of one card, docked under the ground ---------------- */
+/* A flex child of main.canvas after #model-view, so the ground shrinks above it (pan, zoom and free slots never reach under it). Solid
+   surface; only its table scrolls (golden rule 8). Height = --ds-preview-h on main.canvas, set by the top-edge drag. */
+.ds-preview { position: relative; flex: none; height: var(--ds-preview-h, 288px); display: flex; flex-direction: column; min-height: 0;
+  background: var(--surface); border-top: 1px solid var(--line-2); box-shadow: var(--elev-8); z-index: 2; }
+.ds-preview:not([hidden]) { animation: view-in var(--dur) var(--ease-out); }
+.ds-preview__grip { position: absolute; top: -4px; left: 0; right: 0; height: 8px; cursor: row-resize; z-index: 1; }
+.ds-preview__grip:hover, .ds-preview__grip.is-active, .ds-preview__grip:focus-visible { background: color-mix(in srgb, var(--accent) 40%, transparent); outline: none; }
+.ds-preview__head { flex: none; display: flex; align-items: center; gap: var(--s2); padding: var(--s1) var(--s4); border-bottom: 1px solid var(--line); }
+.ds-preview__title { margin: 0; min-width: 0; font-size: var(--fs-lead); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ds-preview__summary { flex: 1; min-width: 0; font-size: var(--fs-body); color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* the ✕'s ink ends on the 16px gutter, like a card's (its 32px box holds a 16px glyph: 8px of slack, plus the 4px stroke inset) */
+.ds-preview__head > .iconbtn:last-child { margin-right: calc(-1 * (var(--s2) + var(--s1))); }
+.ds-preview__notes { flex: none; padding: var(--s2) var(--s4) 0; display: grid; gap: var(--s1); }
+.ds-preview__scroll { flex: 1; min-height: 0; overflow: auto; }
+.ds-preview__scroll:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+/* The rows' text sits on the panel's 16px gutter, under the title and ending where the ✕'s ink ends (the dialog gets that from its scroll box's margin). */
+.ds-preview .rows-table th:first-child, .ds-preview .rows-table td:first-child { padding-left: var(--s4); }
+.ds-preview .rows-table th:last-child, .ds-preview .rows-table td:last-child { padding-right: var(--s4); }
+/* The how-to pill sits at the Data Source's foot and the Relationships card hangs from its top: both stay above the panel while it is open. */
+.canvas.has-ds-preview .rel-guide { bottom: calc(var(--ds-preview-h, 288px) + var(--s4)); }
+.canvas.has-ds-preview .rel-notes { max-height: calc(100% - var(--topbar-h) - 2 * var(--s4) - var(--ds-preview-h, 288px)); }
+/* The card the panel shows: an accent outline and its table button pressed (text in the panel title too) — never colour alone. */
+.entity.entity--previewed { outline: 2px solid var(--accent); outline-offset: 2px; }
+.entity__peek[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-ink); }

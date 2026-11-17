@@ -14,6 +14,7 @@ import { unionDiffControl } from "./union-diff.js";
 import { sourceNote, lossyNote, wireSource, MAX_SOURCE_COLUMNS, SQL_NOTE, defaultSql, sqlWire, lostKeys } from "../Core/source-model.js";
 import { relEnds, keyKindBreaks } from "../Relations/relation-rules.js";
 import { openSqlDialog } from "./sql-dialog.js";
+import { initDataPreview, showPreview, togglePreview, previewedId } from "./data-preview.js";
 
 // Data Source canvas + entity cards. A table dropped from the sidebar (or added via the
 // `table:add` fallback) becomes an entity card: a db.table head over a scrollable list of column
@@ -185,9 +186,10 @@ export function initCanvas() {
   bus.addEventListener("entity:need", (e) => {
     const entity = entities.get(e.detail?.entityId);
     const head = entity?.el.querySelector(".entity__head");
-    if (head) fitWidth(entity.el, head.querySelector(".entity__title"), head.querySelector(".entity__edit"), head.querySelector(".entity__need"), head.querySelector(".entity__relate"));
+    if (head) fitWidth(entity.el, head.querySelector(".entity__title"), head.querySelector(".entity__edit"), head.querySelector(".entity__need"), head.querySelector(".entity__relate"), head.querySelector(".entity__peek"));
   });
   toggle(canvas, isModelActive());
+  initDataPreview(); // the rows of one card, docked under the ground
 
   createEntityImpl = createEntity;
   clearModelImpl = clearAll;
@@ -195,13 +197,16 @@ export function initCanvas() {
   // First grid slot (left→right, top→bottom, fitted to the visible width) that no card overlaps, so a
   // card added with the + button never hides another card's title. Dropped cards keep the drop point.
   function freeSlot() {
-    const pad = 16, gap = 96, w = 312, h = 312;  // pad = the view gutter (.view --s4), so cards line up with the tab strip; gap = room for a link's elbow and badge between cards
+    // pad = the view gutter (.view --s4), so cards line up with the tab strip; gaps = room for a link's elbow and badge between cards. Across, the gap
+    // is wider (step 456 = 19 dot cells): a card grows after it is placed (the Needs a partner button shows once a second card arrives), and the head's
+    // buttons already take it past 312, so 96 would let it touch the next slot. Down, card width doesn't matter (step 408 = 17 cells).
+    const pad = 16, gapX = 144, gapY = 96, w = 312, h = 312;
     const boxes = [...entities.values()].map((e) => ({ x: e.x, y: e.y, w: e.el.offsetWidth, h: e.el.offsetHeight }));
     const ox = Math.max(0, Math.ceil(-pan.x / zoom / 8) * 8), oy = Math.max(0, Math.ceil(-pan.y / zoom / 8) * 8); // slots start at the top-left of what is on screen
-    const perRow = Math.max(1, Math.floor((canvas.clientWidth / zoom - 2 * pad + gap) / (w + gap)));
+    const perRow = Math.max(1, Math.floor((canvas.clientWidth / zoom - 2 * pad + gapX) / (w + gapX)));
     for (let i = 0; i < 400; i++) {
-      const x = ox + pad + (i % perRow) * (w + gap), y = oy + pad + Math.floor(i / perRow) * (h + gap);
-      if (!boxes.some((b) => x < b.x + b.w + gap && b.x < x + w + gap && y < b.y + b.h + gap && b.y < y + h + gap)) return { x, y };
+      const x = ox + pad + (i % perRow) * (w + gapX), y = oy + pad + Math.floor(i / perRow) * (h + gapY);
+      if (!boxes.some((b) => x < b.x + b.w + gapX && b.x < x + w + gapX && y < b.y + b.h + gapY && b.y < y + h + gapY)) return { x, y };
     }
     return { x: ox + pad, y: oy + pad };
   }
@@ -377,9 +382,18 @@ export function initCanvas() {
       edit.addEventListener("click", () => editSql(entity));
       head.append(edit);
     }
-    head.append(title, need, ...(relate ? [relate] : []), collapse, remove); // the caret sits by the ✕
+    // The table button: the card's first rows in the data preview under the canvas (data-preview.js); pressed while it shows this card.
+    const peek = document.createElement("button");
+    peek.type = "button";
+    peek.className = "iconbtn entity__peek";
+    peek.title = "Preview data";
+    peek.setAttribute("aria-label", `Preview data of ${entity.table}`);
+    peek.setAttribute("aria-pressed", "false");
+    peek.append(icon("table"));
+    peek.addEventListener("click", () => togglePreview(entity.id));
+    head.append(title, need, ...(relate ? [relate] : []), peek, collapse, remove); // the caret sits by the ✕
     // Fit the card to its name (and the Edit button) between the card's min/max tokens; beyond max the title ellipsises (title = full name).
-    fitWidth(card, title, head.querySelector(".entity__edit"), need, relate);
+    fitWidth(card, title, head.querySelector(".entity__edit"), need, relate, peek);
     enableDragMove(entity, head);
 
     const status = document.createElement("div");
@@ -531,10 +545,11 @@ export function initCanvas() {
     renderColumns(entity);
     emit("entity:sql", { entityId: entity.id, db: entity.db, table: entity.table });
     emit("entity:loaded", { entityId: entity.id }); // links redraw on the new rows; worksheets re-check their fields
+    if (previewedId() !== entity.id) showPreview(entity.id); // the data preview shows what the card now returns (it re-reads by itself when already on this card)
   }
 
   // Width follows the `db.table` text: measured in the title's own font, held between --entity-min and --entity-max.
-  function fitWidth(card, title, edit, need = null, relate = null) {
+  function fitWidth(card, title, edit, need = null, relate = null, peek = null) {
     const measure = (node) => {
       const probe = node.cloneNode(true);
       probe.style.cssText = "position:absolute;visibility:hidden;flex:none;overflow:visible;white-space:nowrap";
@@ -545,8 +560,8 @@ export function initCanvas() {
       return w;
     };
     const gap = parseFloat(getComputedStyle(canvas).getPropertyValue("--s2")) || 8;
-    // the Edit button, and the "Needs a partner" badge while it shows, ride on the title's width (each with its gap), so they never clip a short name
-    const px = measure(title) + (edit ? measure(edit) + gap : 0) + (need && !need.hidden ? measure(need) + gap : 0) + (relate ? measure(relate) + gap : 0);
+    // the Edit button, the link and table buttons, and the "Needs a partner" badge while it shows, ride on the title's width (each with its gap), so they never clip a short name
+    const px = measure(title) + (edit ? measure(edit) + gap : 0) + (need && !need.hidden ? measure(need) + gap : 0) + (relate ? measure(relate) + gap : 0) + (peek ? measure(peek) + gap : 0);
     const cs = getComputedStyle(canvas);
     const limit = (name, fallback) => parseFloat(cs.getPropertyValue(name)) || fallback;
     const { width } = entityWidth(px, { min: limit("--entity-min", 312), max: limit("--entity-max", 480) });
