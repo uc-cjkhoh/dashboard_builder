@@ -3,6 +3,21 @@ components: [src/DashboardBuilder/Features/Relations/join-check.js, src/Dashboar
 ---
 # Decisions — relationships on the Data Source
 
+## D127 — A table pair holds one relationship; related in few steps
+
+- **Chosen:** the relationship is between two *tables*, holding one to four column pairs. Relating two more columns of tables that are already related
+  adds a key pair to that relationship (no dialog, a toast with Undo) instead of making a second relationship. Shortcuts open the same dialog filled in:
+  a proposed link (dashed line + **Relate on customer_id = id**) on each card that needs a partner, **Needs a partner** as a button, a link button on
+  every card (click for a table picker, or drag onto another card). The key comes from column names (`proposeKey`): a foreign key onto the other
+  table's own key, else every same-named key column as a compound key. [relating-tables.md](../concepts/data-source/relating-tables.md).
+- **Why:** users did not find the column drag (one pill at the foot said how), and a compound key took the dialog's last section: two selects and
+  Add pair per column. Dragging a second column between related tables made a second, separate relationship, which looked like a compound key and was not.
+- **Kept:** the stored shape (`from` / `to` + `pairs`, D79), so workbooks are unchanged; the first pair still draws the line. Nothing is saved without
+  Confirm except the extra pair, which is the user's own drag and has Undo. Proposals use names only, are never saved, and can be closed.
+- **Overrides:** D79's "extra pairs are added only in the dialog". A file with two relationships for one table pair still opens and joins as before.
+- **Deferred:** a single **Match columns** list at the top of the dialog (the first pair no longer special); proposals from key or value signals;
+  remembering a closed proposal.
+
 ## D126 — Many links: a lane each, ordered to cross least; focus on hover; badges only on demand
 
 - **Chosen:** links that turn in one gutter and overlap vertically each take their own lane (no limit; 8px apart, squeezed to 3px at least in a narrow gutter), ordered so each link adds the fewest crossings (`assignLanes`, `laneCrossings` in `link-route.js`). Hovering a link, a Relationships card entry or a card with links fades every link it doesn't touch to 20 %. With 4 or more links below 125 % zoom (`quietBadges`), cardinality badges rest hidden and show on the hovered or focused links. [relationships.md](../concepts/data-source/relationships.md#rendering).

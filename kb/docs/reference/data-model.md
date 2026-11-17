@@ -89,7 +89,7 @@ A **logical** link — the database neither creates nor validates it
 | `filterDirection` | optional `"single"` (only with `aggregateFirst`) — a filter changes only its own table; absent = both |
 | `joinFixed` | `true` once saved by the join dialog: the sides are the link's own. Absent or false with `left`: a link saved before the dialog set it; it keeps the base side |
 
-A column is in at most one relationship. With two or more table cards, each card should be in one; a card
+A column is in at most one relationship, and a table pair in at most one ([D127](../decisions/decisions-relationships.md#d127--a-table-pair-holds-one-relationship-related-in-few-steps); a file saved before may hold two, which still load). With two or more table cards, each card should be in one; a card
 with none is held out of worksheets ([relationships.md](../concepts/data-source/relationships.md)).
 
 ### Tabs and dashboards

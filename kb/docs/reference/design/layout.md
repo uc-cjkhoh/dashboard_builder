@@ -41,7 +41,7 @@ Related items share one edge, measured on what the eye sees (glyphs and text), n
   - **One 16px gutter (`--s4`) on both sides**, so the space left of the content equals the space right
     of it. The head's title, the column names and a source card's note start on it. The type text, the
     head's ✕ ink and the pinned strip's type text end on it. A union / unpivot card uses the same lanes.
-  - Right end of the head: the caret sits just left of the ✕, and the title takes the left gutter. The ✕
+  - Head order: pencil (not on a union / unpivot card), title, **Needs a partner** while shown, link button (not on a union / unpivot card), caret, ✕. The caret sits just left of the ✕, and the pencil and title take the left gutter; the card's width counts every part that shows. The ✕
     is pulled out by its 12px slack (`margin-right: -(--s2 + --s1)`) so its ink ends on the gutter. The
     glyph is a 16px box in a 32px button, with strokes 4px inside.
   - The scrolling list reserves its 10px scrollbar (`scrollbar-gutter: stable`) and its rows give up that
@@ -133,6 +133,12 @@ two bottom borders line up across the shell. If the tabs wrap, the bar grows tal
   component spacing, so it sits outside the 4 / 8 / 16 / 24 steps.
 - **No data rows on the card.** A table's rows open in a dialog from its schema-browser chip.
 - A caret in the head collapses the card to its title bar. A key column's name turns accent.
+- **States** (each shown by more than colour):
+  - Hover: the border deepens to `--ink-3` and the shadow to `--elev-card-hover`.
+  - In no relationship while the model has other cards: a dashed `--warn-line` outline and the **Needs a partner** button (`.entity--unlinked`).
+  - Already added (a repeat drop or `＋`): a 2px accent outline while the card is brought into view and focused (`.is-flash`).
+  - Link button dragged over it, when it would accept: a solid accent outline (`.entity--relate-ok`).
+  - Dragging by the head: `--elev-16`, no rise-in; resizing the list: the edge strip shows a 2px accent line.
 
 ## Worksheet — data header and chart card
 
