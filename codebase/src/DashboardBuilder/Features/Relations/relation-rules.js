@@ -63,6 +63,17 @@ export function linkIssue({ relationships, from, to, fromCategory, toCategory, f
   return null;
 }
 
+/** The relationship that already joins cards `a` and `b` (either way round), or null. A table pair holds one relationship (D127):
+ *  relating two more of their columns adds a key pair to it instead of making a second one. */
+export function relationBetween(relationships, a, b) {
+  for (const r of relationships)
+    if ((r.from.entityId === a && r.to.entityId === b) || (r.from.entityId === b && r.to.entityId === a)) return r;
+  return null;
+}
+
+/** Ends `a` / `b` (any order) as a key pair of `rel`, oriented to its sides: { from, to } column names. */
+export const pairFor = (rel, a, b) => (rel.from.entityId === a.entityId ? { from: a.column, to: b.column } : { from: b.column, to: a.column });
+
 export function linkProblem(args) { return linkIssue(args)?.message ?? null; }
 
 /** The order a card's pinned key rows take so its links never cross: by where the partner card sits (top edge, top to bottom),
@@ -162,7 +173,7 @@ export const aggregateChoice = (rel) => ({ aggregate: rel?.aggregateFirst === tr
 // A column is the table's own key when it is "id" / "key" or "<table>_id" / "<table>id" (table name singular or plural):
 // orders.customer_id dropped on customers.id reads many-to-one (N:1); the reverse drag reads 1:N; key to key reads 1:1.
 // Names that say nothing keep the old default, 1:N.
-const singular = (t) => (t.endsWith("ies") ? `${t.slice(0, -3)}y` : t.endsWith("ses") ? t.slice(0, -2) : t.endsWith("s") ? t.slice(0, -1) : t);
+export const singular = (t) => (t.endsWith("ies") ? `${t.slice(0, -3)}y` : t.endsWith("ses") ? t.slice(0, -2) : t.endsWith("s") ? t.slice(0, -1) : t);
 export function isOwnKey(column, table) {
   const c = String(column ?? "").toLowerCase(), t = String(table ?? "").toLowerCase();
   if (c === "id" || c === "key") return true;

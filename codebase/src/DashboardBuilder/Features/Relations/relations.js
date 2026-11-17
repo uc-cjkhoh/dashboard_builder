@@ -1,12 +1,12 @@
 import { entities, relationships, bus, emit, isModelActive } from "../Core/store.js";
-import { relEnds, linkIssue, pinOrder, matchingColumns, keysCompatible, kindLabel, unlinkedCards, joinChoices, cardinalityChoices, joinBadge, joinSelection, joinFromSelection, isLegacyLeft, applyAggregate, aggregateChoice, guessCardinality, findDuplicate } from "./relation-rules.js";
+import { relEnds, linkIssue, pinOrder, matchingColumns, keysCompatible, kindLabel, unlinkedCards, joinChoices, cardinalityChoices, joinBadge, joinSelection, joinFromSelection, isLegacyLeft, applyAggregate, aggregateChoice, guessCardinality, findDuplicate, relationBetween, pairFor } from "./relation-rules.js";
 import { toast, makeButton, openDialog, closeDialog } from "../Core/ui.js";
 import { api } from "../Core/api.js";
 import { icon } from "../Core/icons.js";
 import { previewRequest } from "./join-preview-model.js";
 import { buildJoinCheck } from "./join-check.js";
 import { buildKeyPairs } from "./key-pairs-ui.js";
-import { compoundName, suggestTarget } from "./key-pairs.js";
+import { compoundName, suggestTarget, proposeKey, keyText, pairText } from "./key-pairs.js";
 import { linkSides, linkRoute, roundedPath, placeBadge, assignLanes, quietBadges } from "./link-route.js";
 import { openTypeWarning } from "./type-warning.js";
 import { COLUMN_MIME, encodeColumnDrag, parseColumnDrag, dropDecision } from "./link-drag.js";
@@ -38,7 +38,7 @@ export function initRelations() {
   guide = document.createElement("p");
   guide.className = "rel-guide";
   guide.hidden = true;
-  guide.textContent = "Drag a column onto a column in another table to relate them.";
+  guide.textContent = "Drag a column onto a column in another table, or click Needs a partner.";
   canvas.parentElement.append(guide); // over the Data Source, centred at its foot
   keyHint = document.createElement("p");
   keyHint.className = "rel-guide rel-keyhint";
@@ -71,6 +71,8 @@ export function initRelations() {
   canvas.addEventListener("pointerleave", () => { if (focusEntityId) { focusEntityId = null; markLinkedRows(); } });
   initColumnDrag();
   initColumnKeys();
+  initTableDrag();
+  bus.addEventListener("rel:relate", (e) => openTablePicker(e.detail?.entityId)); // a card's link button or its "Needs a partner" (canvas.js)
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") { cancelKeyPick(); select(null); }
   });
@@ -151,8 +153,9 @@ function initColumnDrag() {
 /** The one path to a new relationship, for a drop and for the keyboard: check the pair, then ask for the cardinality. */
 function proposeLink(a, b, focusEnd = null) {
   if (!a || !b) return;
-  const { ok, problem, kind } = dropDecision({ relationships: relationships.values(), from: a, to: b });
+  const { ok, problem, kind, extend } = dropDecision({ relationships: relationships.values(), from: a, to: b });
   if (!ok) { refuse(problem, kind, a, b); return; }
+  if (extend) { extendRelationship(relationships.get(extend), a, b); if (focusEnd) rowOf(focusEnd)?.focus(); return; }
   const from = { entityId: a.entityId, column: a.column };
   openCardinalityDialog({
     current: guessCardinality(a.column, a.table, b.column, b.table), // orders.customer_id onto customers.id starts on N:1
@@ -163,6 +166,170 @@ function proposeLink(a, b, focusEnd = null) {
       if (focusEnd) rowOf(focusEnd)?.focus(); // the link moves both rows into the key strips; keep the keyboard where it was
     },
   });
+}
+
+/** Two more columns of tables that are already related: one more key pair on that relationship (D127), with Undo. */
+function extendRelationship(rel, a, b) {
+  if (!rel) return;
+  const pair = pairFor(rel, a, b);
+  rel.pairs = [...(rel.pairs ?? []), pair];
+  emit("rel:changed", { id: rel.id });
+  render();
+  const ta = entities.get(rel.from.entityId)?.table, tb = entities.get(rel.to.entityId)?.table;
+  toast(`Added ${pairText(pair)} to ${ta} → ${tb} (${rel.pairs.length + 1} keys).`, "info", { action: { label: "Undo", run: () => {
+    if (!relationships.has(rel.id)) return;
+    rel.pairs = (rel.pairs ?? []).filter((p) => !(p.from === pair.from && p.to === pair.to));
+    if (!rel.pairs.length) delete rel.pairs;
+    emit("rel:changed", { id: rel.id }); render();
+  } } });
+}
+
+// --- relate two tables at once (D127): a card's link button, its "Needs a partner", a proposed link, or dragging the link button onto a card ---
+const RELATE_MIME = "application/x-ch-relate"; // our link button only
+const dismissed = new Set(); // proposed links the user closed: "a\0b"
+const ghosts = new Map();    // key -> the proposed link's button pair, kept across redraws so focus stays on it
+const tableOf = (e) => ({ table: e.table, columns: e.columns ?? [] });
+const relatable = (e) => e && !e.source && Array.isArray(e.columns);
+const usedOn = (id) => [...relationships.values()].flatMap(relEnds).filter((x) => x.entityId === id).map((x) => x.column);
+
+/** The key cards `aId` and `bId` would join on, oriented a → b, or null (proposeKey in key-pairs.js). */
+function keyBetween(aId, bId) {
+  const a = entities.get(aId), b = entities.get(bId);
+  if (!relatable(a) || !relatable(b)) return null;
+  return proposeKey(tableOf(a), tableOf(b), { from: usedOn(aId), to: usedOn(bId) });
+}
+
+/** Relate two cards: their relationship's dialog if they already have one, else a new relationship's dialog filled with the key the names point to. */
+function relateTables(aId, bId) {
+  const a = entities.get(aId), b = entities.get(bId);
+  if (!a || !b || aId === bId) return;
+  if (a.source || b.source) { toast("A union or unpivot can't be related to a table yet.", "info"); return; }
+  const rel = relationBetween(relationships.values(), aId, bId);
+  if (rel) { editRelationship(rel); return; }
+  const k = keyBetween(aId, bId);
+  if (!k) { toast(`No matching columns in ${a.table} and ${b.table}. Drag a column onto a column to relate them.`, "info"); return; }
+  const from = { entityId: aId, column: k.first.from }, to = { entityId: bId, column: k.first.to };
+  openCardinalityDialog({
+    current: guessCardinality(k.first.from, a.table, k.first.to, b.table),
+    tables: [a.table, b.table],
+    keys: keyPairsFor(from, to, k.pairs, null),
+    onPick: (cardinality, sel, pairs, agg) => createRelationship(from, to, cardinality, { ...joinFromSelection(sel), pairs, agg }),
+  });
+}
+
+/** "Relate orders to": every other table card, the likeliest first; one with no shared columns is shown, disabled. With one candidate, its dialog opens at once. */
+function openTablePicker(entityId) {
+  const me = entities.get(entityId);
+  if (!relatable(me)) return;
+  const others = [...entities.values()].filter((e) => e.id !== entityId && !e.source).map((e) => {
+    const rel = relationBetween(relationships.values(), entityId, e.id);
+    return { e, rel, k: rel ? null : keyBetween(entityId, e.id) };
+  }).sort((p, q) => (q.rel ? 4 : q.k?.score ?? 0) - (p.rel ? 4 : p.k?.score ?? 0));
+  if (!others.length) { toast("Add another table to relate it to.", "info"); return; }
+  if (others.length === 1 && (others[0].rel || others[0].k)) { relateTables(entityId, others[0].e.id); return; }
+  const dlg = document.createElement("dialog");
+  dlg.className = "dialog dialog--sm rel-pick"; // the standard small dialog: title, body, foot
+  dlg.setAttribute("aria-labelledby", "rel-pick-title");
+  const title = document.createElement("h2");
+  title.className = "dialog__title"; title.id = "rel-pick-title";
+  title.textContent = `Relate ${me.table} to`;
+  const list = document.createElement("div");
+  list.className = "dialog__body rel-pick__list";
+  for (const { e, rel, k } of others) {
+    const b = makeButton("", "rel-pick__item");
+    const name = document.createElement("span"), on = document.createElement("span");
+    name.className = "rel-pick__name"; name.textContent = e.table;
+    on.className = "rel-pick__key";
+    on.textContent = rel ? "Related" : k ? keyText(k) : "No matching columns";
+    b.append(name, on);
+    b.disabled = !rel && !k;
+    b.addEventListener("click", () => { closeDialog(dlg); relateTables(entityId, e.id); });
+    list.append(b);
+  }
+  const foot = document.createElement("div");
+  foot.className = "dialog__foot";
+  const cancel = makeButton("Cancel", "btn");
+  cancel.addEventListener("click", () => closeDialog(dlg));
+  foot.append(cancel);
+  dlg.append(title, list, foot);
+  dlg.addEventListener("cancel", (ev) => { ev.preventDefault(); closeDialog(dlg); });
+  document.body.append(dlg);
+  openDialog(dlg);
+  list.querySelector("button:not(:disabled)")?.focus();
+}
+
+// Dragging a card's link button onto another card relates the two tables (the dialog opens filled with the key their names point to).
+function initTableDrag() {
+  let from = null;
+  const target = (e) => { const card = e.target instanceof Element ? e.target.closest(".entity") : null; const id = card?.dataset.entityId; return id && id !== from && !entities.get(id)?.source ? card : null; };
+  const clear = () => { for (const el of canvas.querySelectorAll(".entity--relate-ok")) el.classList.remove("entity--relate-ok"); };
+  canvas.addEventListener("dragstart", (e) => {
+    const handle = e.target instanceof Element ? e.target.closest(".entity__relate") : null;
+    if (!handle || !e.dataTransfer) return;
+    from = handle.closest(".entity").dataset.entityId;
+    e.dataTransfer.setData(RELATE_MIME, from);
+    e.dataTransfer.effectAllowed = "link";
+    canvas.classList.add("canvas--relating");
+  });
+  canvas.addEventListener("dragover", (e) => {
+    if (!from || !e.dataTransfer || !Array.from(e.dataTransfer.types).includes(RELATE_MIME)) return;
+    const card = target(e);
+    for (const el of canvas.querySelectorAll(".entity--relate-ok")) if (el !== card) el.classList.remove("entity--relate-ok");
+    if (!card) { e.dataTransfer.dropEffect = "none"; return; }
+    card.classList.add("entity--relate-ok");
+    e.preventDefault(); e.dataTransfer.dropEffect = "link";
+  });
+  canvas.addEventListener("drop", (e) => {
+    if (!from || !e.dataTransfer || !Array.from(e.dataTransfer.types).includes(RELATE_MIME)) return;
+    const card = target(e), a = from;
+    from = null; clear(); canvas.classList.remove("canvas--relating");
+    if (!card) return;
+    e.preventDefault();
+    relateTables(a, card.dataset.entityId);
+  });
+  canvas.addEventListener("dragend", () => { from = null; clear(); canvas.classList.remove("canvas--relating"); });
+}
+
+/** Proposed links: for each card that needs a partner, the confident key to another card (one per table pair), drawn dashed with a
+ *  "Relate on …" button and a close button. Nothing is saved until the user confirms the dialog (golden rule 5). */
+function proposals() {
+  const lone = new Set(unlinkedCards([...entities.values()].map((e) => ({ id: e.id, source: Boolean(e.source) })), relationships.values()));
+  const out = [], seen = new Set();
+  for (const id of lone) {
+    let best = null;
+    for (const other of entities.values()) {
+      if (other.id === id || other.source) continue;
+      const pairKey = [id, other.id].sort().join("\u0000");
+      if (seen.has(pairKey) || dismissed.has(pairKey)) continue;
+      const k = keyBetween(id, other.id);
+      if (k?.confident && (!best || k.score > best.k.score)) best = { a: id, b: other.id, k, pairKey };
+    }
+    if (best) { seen.add(best.pairKey); out.push(best); }
+  }
+  return out;
+}
+
+function ghostButton(p) {
+  let g = ghosts.get(p.pairKey);
+  const a = entities.get(p.a), b = entities.get(p.b);
+  const text = `Relate on ${keyText(p.k)}`;
+  if (!g) {
+    g = document.createElement("div");
+    g.className = "rel-ghost";
+    const go = makeButton("", "rel-ghost__go"), no = makeButton("", "rel-ghost__no");
+    go.append(icon("link", { size: 14 }), document.createElement("span"));
+    no.append(icon("close", { size: 14 }));
+    go.addEventListener("click", () => relateTables(g._p.a, g._p.b));
+    no.addEventListener("click", () => { dismissed.add(g._p.pairKey); render(); });
+    g.append(go, no);
+    ghosts.set(p.pairKey, g);
+  }
+  g._p = p;
+  const go = g.querySelector(".rel-ghost__go");
+  go.querySelector("span").textContent = text;
+  go.setAttribute("aria-label", `Relate ${a.table} and ${b.table} on ${keyText(p.k)}`);
+  g.querySelector(".rel-ghost__no").setAttribute("aria-label", `Dismiss the suggested ${a.table} – ${b.table} relationship`);
+  return g;
 }
 
 // --- the keyboard way: Enter on a row picks it, Enter on a row of another table relates them -----------------
@@ -349,14 +516,27 @@ function render() {
     const ends = sa !== sb ? { left: [l.y], right: [r.y], room: r.x - l.x - 30 } : sa > 0 ? { left: [p1.y, p2.y], right: [] } : { left: [], right: [p1.y, p2.y] };
     links.push({ rel, sa, sb, p1, p2, group, lo: Math.min(p1.y, p2.y), hi: Math.max(p1.y, p2.y), ...ends });
   }
+  const props = proposals();
+  for (const p of props) { // a proposed link takes a lane like a real one, so it never sits on top of one
+    const a = entities.get(p.a), b = entities.get(p.b);
+    const [sa, sb] = linkSides(cardSpan(a, crect), cardSpan(b, crect));
+    const p1 = anchor(a, p.k.first.from, sa, crect), p2 = anchor(b, p.k.first.to, sb, crect);
+    const group = Math.round(sa === sb ? (sa > 0 ? Math.max(p1.x, p2.x) : Math.min(p1.x, p2.x)) : Math.min(p1.x, p2.x));
+    const [l, r] = p1.x <= p2.x ? [p1, p2] : [p2, p1];
+    const ends = sa !== sb ? { left: [l.y], right: [r.y], room: r.x - l.x - 30 } : sa > 0 ? { left: [p1.y, p2.y], right: [] } : { left: [], right: [p1.y, p2.y] };
+    links.push({ ghost: p, sa, sb, p1, p2, group, lo: Math.min(p1.y, p2.y), hi: Math.max(p1.y, p2.y), ...ends });
+  }
   const lanes = assignLanes(links);
-  links.forEach(({ rel, sa, sb, p1, p2 }, i) => {
+  const keep = new Set();
+  links.forEach(({ rel, ghost, sa, sb, p1, p2 }, i) => {
+    if (ghost) { keep.add(ghost.pairKey); drawGhost(ghost, p1, sa, p2, sb, lanes[i], placed, cards); return; }
     const [fromKind, toKind] = markerKinds(rel.cardinality);
     const { line, label, under } = drawLink(rel, p1, sa, p2, sb, fromKind, toKind, lanes[i], placed, cards);
     svg.append(line);
     (under ? svg : labels).append(label); // a badge with no free spot beside the cards sits under them, never over
   });
-  canvas.classList.toggle("rel-quiet", quietBadges(links.length, zoom)); // many links: badges only on the hovered / focused ones
+  for (const [k, g] of ghosts) if (!keep.has(k)) { g.remove(); ghosts.delete(k); }
+  canvas.classList.toggle("rel-quiet", quietBadges(links.length - props.length, zoom)); // many links: badges only on the hovered / focused ones
   updateGuide();
   renderNotes();
   markLinkedRows();
@@ -478,6 +658,25 @@ function markUnlinked() {
     const need = entity.el.querySelector(".entity__need");
     if (need && need.hidden === flag) { need.hidden = !flag; emit("entity:need", { entityId: entity.id }); }
   }
+}
+
+// A proposed link: a dashed line and, on its middle run, the "Relate on …" button with a close button (HTML over the cards, keyboard-reachable).
+function drawGhost(p, p1, s1, p2, s2, lane, placed, cards) {
+  const { points, label: spot } = linkRoute(p1, s1, p2, s2, lane);
+  svg.append(svgEl("path", { class: "rel-ghost__line", d: roundedPath(points), "data-ghost": p.pairKey }));
+  const g = ghostButton(p);
+  if (!g.isConnected) canvas.append(g);
+  const w = g.offsetWidth, h = g.offsetHeight;
+  let at = placeBadge(spot, p1.y, p2.y, w, h, cards, placed);
+  if (at.under) { // no room beside the cards (the pill is wider than most gutters): it sits 16px under the lower of the two, centred on the gap
+    const ra = entities.get(p.a).el.getBoundingClientRect(), rb = entities.get(p.b).el.getBoundingClientRect(), c = canvas.getBoundingClientRect();
+    const bottom = Math.max(ra.bottom, rb.bottom) - c.top + canvas.scrollTop;
+    at = { x: spot.x, y: bottom + 16 + h / 2 };
+    while (placed.some((q) => Math.abs(q.x - at.x) < (q.w + w) / 2 && Math.abs(q.y - at.y) < (q.h + h) / 2)) at = { x: at.x, y: at.y + h + 8 };
+  }
+  placed.push({ x: at.x, y: at.y, w, h });
+  g.style.left = `${at.x - w / 2}px`;
+  g.style.top = `${at.y - h / 2}px`;
 }
 
 function drawLink(rel, p1, s1, p2, s2, fromKind, toKind, lane, placed, cards) {

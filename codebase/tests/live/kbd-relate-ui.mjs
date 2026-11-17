@@ -142,14 +142,16 @@ try {
     await press('orders', 'region', 'Escape');
     must((await sug()).length === 0, 'suggestion not cleared');
   });
-  await check('a column with no same-name partner flags nothing; Enter on the suggested row still relates via the usual dialog', async () => {
+  await check('a column with no same-name partner flags nothing; Enter on the suggested row of the related table adds a key pair (D127)', async () => {
     await press('orders', 'note', 'Enter');
     must((await sug()).length === 0, 'unexpected suggestion');
     await press('orders', 'note', 'Escape');
     await press('orders', 'region', 'Enter');
+    await ev(`${row('customers', 'Region')}.focus()`);
+    must(/also match it on customers\.Region/.test(await hint()), `hint: ${await hint()}`);
     await press('customers', 'Region', 'Enter');
-    await waitFor(`document.querySelector('dialog[open]') !== null`, 'cardinality dialog');
-    await ev(`document.querySelector('dialog[open]').close()`);
+    await waitFor(`/Added region = Region to orders → customers \\(2 keys\\)/.test(document.getElementById('toast').textContent)`, 'extend toast');
+    must(await ev(`!document.querySelector('dialog[open]') && document.querySelector('.rel-badge text')?.textContent === 'N:1 · 2 keys'`), 'badge');
   });
   if (b.consoleErrors.length) console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  '));
 } catch (e) { console.log(`FAIL harness: ${e.stack}`); failed++; } finally { if (b) await b.close(); }
