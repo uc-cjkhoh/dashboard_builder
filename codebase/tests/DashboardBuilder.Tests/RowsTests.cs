@@ -53,6 +53,27 @@ public class RowsTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.Equal("SELECT if(isNull(`a\\`; DROP TABLE x; --`), NULL, left(toString(`a\\`; DROP TABLE x; --`), 1001)), if(isNull(`b`), NULL, left(toString(`b`), 1001)) FROM `d\\`b`.`t` WHERE `b` = {p0:String} LIMIT 101", sql);
         Assert.DoesNotContain("ORDER BY", sql);
     }
+    [Fact] public void An_offset_is_0_to_100000_and_never_clamped()
+    {
+        Assert.Null(FieldOf(new RowsRequest("db", "t", null, null, 100, null, 0)));
+        Assert.Null(FieldOf(new RowsRequest("db", "t", null, null, 100, null, ApiLimits.MaxRowsOffset)));
+        Assert.Equal("offset", FieldOf(new RowsRequest("db", "t", null, null, 100, null, -1)));
+        Assert.Equal("offset", FieldOf(new RowsRequest("db", "t", null, null, 100, null, ApiLimits.MaxRowsOffset + 1)));
+    }
+
+    [Fact] public void A_paged_read_skips_its_offset_and_reads_a_stored_table_on_one_thread()
+    {
+        Assert.Equal(("", ""), ClickHouseGateway.PageClause(null, true, QueryGuards.Full));                 // every other caller: unchanged
+        Assert.Equal(("", " SETTINGS max_threads = 1"), ClickHouseGateway.PageClause(0, true, QueryGuards.Full)); // page 1 reads in the same order as page 2
+        Assert.Equal((" OFFSET 200", " SETTINGS max_threads = 1"), ClickHouseGateway.PageClause(200, true, QueryGuards.NoTimeLimit));
+        Assert.Equal((" OFFSET 200", ""), ClickHouseGateway.PageClause(200, false, QueryGuards.Full));       // custom SQL: read as written
+        Assert.Equal((" OFFSET 200", ""), ClickHouseGateway.PageClause(200, true, QueryGuards.None));        // a server that takes no settings
+        var (skip, settings) = ClickHouseGateway.PageClause(100, true, QueryGuards.Full);
+        Assert.EndsWith("LIMIT 101 OFFSET 100 SETTINGS max_threads = 1", ClickHouseGateway.BuildRowsSql("db", "t", ["a"], "", 101, null, skip + settings));
+        var unpivot = ClickHouseGateway.BuildUnpivotSql("db", "t", [], ["a", "b"], 101, null, skip, settings);
+        Assert.EndsWith("LIMIT 101 OFFSET 100) SETTINGS max_threads = 1", unpivot); // the offset counts unpivoted rows; SETTINGS ends the statement
+    }
+
     [Fact] public void Filters_bind_values_through_the_existing_typed_rules()
     {
         var cols = new Dictionary<string, ColumnInfo> { ["n"] = new("n", "Float64", "numeric") };

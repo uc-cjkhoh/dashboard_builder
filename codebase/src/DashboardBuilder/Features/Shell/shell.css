@@ -101,10 +101,11 @@
 }
 .sidebar__section--conn { padding: var(--s1); flex: none; }  /* connected: one 32px row inset 4px, like the rows below, so the dot sits on their 12px icon lane */
 .sidebar__section--db { padding: 0; flex: none; }
-/* Flexible separation: the gap between Connection and Databases & Tables takes a 24px share (shrinking to 8px when the list needs the height);
+/* Flexible separation: the gap between Connection and Database takes a 24px share (shrinking to 8px when the list needs the height);
    its hairline runs edge to edge, through the body's 16px gutters. */
-/* Group titles above the Connection tile and the Databases & Tables group; aligned with the status dot / database icon inside the tiles. */
+/* Group titles above the Connection tile, the Database tile and the Table list; aligned with the status dot / database icon inside the tiles. */
 .sidebar__title { flex: none; margin: 0; font-size: var(--fs-body); font-weight: 600; color: var(--ink-3); }
+.sidebar__title--next { margin-top: var(--s2); }  /* Table follows the Database tile: 8px gap + 8px = 16px, so each title reads with the tile below it */
 .sidebar__divider { flex: 0 1 var(--s6); min-height: var(--s2); margin-inline: calc(-1 * var(--s4)); position: relative; }
 .sidebar__divider::before { content: ""; position: absolute; inset: 50% 0 auto; height: 1px; background: var(--line); }
 #tables-section { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--s2); }

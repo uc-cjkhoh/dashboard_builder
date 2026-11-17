@@ -155,3 +155,38 @@ test("the preview limit is checked like any row read", () => {
   assert.throws(() => entityRowsQuery({ db: "d", table: "t" }, 0), /Limit must be between 1 and 1000/);
   assert.throws(() => entityRowsQuery({ db: "d", table: "t" }, 1001), /Limit/);
 });
+
+test("a paged preview read sends its offset, 0 included; a union can't page", async () => {
+  const { canPage } = await import("../../src/DashboardBuilder/Features/Rows/rows-model.js");
+  assert.deepEqual(entityRowsQuery({ db: "d", table: "t" }, 100, 0).request, { db: "d", table: "t", limit: 100, offset: 0 });
+  assert.equal(entityRowsQuery({ db: "d", table: "t", customSql: "SELECT 1 AS x" }, 100, 200).request.offset, 200);
+  const unpivot = { kind: "unpivot", db: "d", name: "U", table: "t", columns: ["a", "b"] };
+  assert.equal(entityRowsQuery({ db: "d", table: "U", source: unpivot }, 100, 100).request.offset, 100);
+  const union = { kind: "union", db: "d", name: "Un", tables: ["a", "b"] };
+  assert.equal(canPage({ source: union }), false);
+  assert.equal(canPage({ source: unpivot }) && canPage({ db: "d", table: "t" }), true);
+  assert.throws(() => entityRowsQuery({ db: "d", table: "Un", source: union }, 100, 0), /first rows only/);
+  assert.throws(() => entityRowsQuery({ db: "d", table: "t" }, 100, -1), /Offset must be between 0 and 100000/);
+  assert.throws(() => entityRowsQuery({ db: "d", table: "t" }, 100, 100001), /Offset/);
+  assert.throws(() => entityRowsQuery({ db: "d", table: "t" }, 100, 1.5), /Offset/);
+});
+test("the pager: page number, rows shown, and which way it can go", async () => {
+  const { pageState } = await import("../../src/DashboardBuilder/Features/Rows/rows-model.js");
+  const rows = (n) => Array.from({ length: n }, () => ["x"]);
+  assert.deepEqual(pageState(0, 100, { rows: rows(100), truncated: true }), { label: "Page 1", summary: "Rows 1–100 — more exist", prev: false, next: true });
+  assert.deepEqual(pageState(1, 100, { rows: rows(37), truncated: false }), { label: "Page 2", summary: "Rows 101–137", prev: true, next: false });
+  assert.deepEqual(pageState(0, 100, { rows: [], truncated: false }), { label: "Page 1", summary: "No rows", prev: false, next: false });
+  assert.equal(pageState(4, 100, { rows: [], truncated: false }).summary, "No rows on this page");
+  assert.equal(pageState(999, 100, { rows: rows(100), truncated: true }).next, true);   // page 1001 starts at 100,000: the last the server reads
+  assert.equal(pageState(1000, 100, { rows: rows(100), truncated: true }).next, false);
+  assert.equal(pageState(1000, 100, { rows: rows(100), truncated: true }).summary, "Rows 100,001–100,100 — more exist");
+});
+
+test("a typed page number: 1 to 1,001, whole, never clamped", async () => {
+  const { pageFromInput, MAX_PAGE } = await import("../../src/DashboardBuilder/Features/Rows/rows-model.js");
+  assert.equal(MAX_PAGE, 1001);
+  assert.deepEqual(pageFromInput("1"), { page: 0 });
+  assert.deepEqual(pageFromInput(" 12 "), { page: 11 });
+  assert.deepEqual(pageFromInput("1,001"), { page: 1000 });
+  for (const bad of ["0", "1002", "-3", "2.5", "abc", "", "1e3", "99999999"]) assert.deepEqual(pageFromInput(bad), { error: "Enter a page from 1 to 1,001." }, bad);
+});

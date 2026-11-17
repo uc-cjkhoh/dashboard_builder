@@ -1,6 +1,6 @@
 // Entity card width follows its `db.table` name: the name's text width plus the head's always-present parts
-// (collapse + remove buttons, gaps, padding), held between the card's min and max. The other head parts (Edit SQL pencil,
-// link button, table button, "Needs a partner" button) are measured by canvas.js `fitWidth` and added to `textPx` before this is called. Pure: unit-tested
+// (collapse + remove buttons, gaps, padding), held between the card's min and max. The other head parts (the ☰ actions button,
+// "Needs a partner" button) are measured by canvas.js `fitWidth` and added to `textPx` before this is called. Pure: unit-tested
 // in tests/js/card-width.test.mjs. The limits are CSS tokens on `.view--model` (canvas.css), read by canvas.js.
 export const CARD_CHROME = 112; // 2 x 16 icon glyphs + paddings + gaps around the title, px
 

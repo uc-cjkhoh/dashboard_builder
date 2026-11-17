@@ -95,8 +95,9 @@ try {
   const card = (t) => `([...document.querySelectorAll('.entity')].find((x) => x.querySelector('.entity__table').textContent === '${t}'))`;
   const cols = (t) => ev(`[...${card(t)}.querySelectorAll('.col-row')].map((r) => r.dataset.column)`);
   const rightClick = (t) => ev(`(() => { const c = ${card(t)}, r = c.getBoundingClientRect(); c.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r.left + 20, clientY: r.top + 20 })); return true; })()`);
-  const editBtn = (t) => `${card(t)}.querySelector('.entity__head > .entity__edit')`;
-  const clickEdit = async (t) => { await ev(`${editBtn(t)}.click()`); await waitFor(`!!document.querySelector('dialog[open] .CodeMirror')`, 'dialog'); };
+  const act = (c, label) => `(() => { ${c}.querySelector('.entity__menu').click(); const it = [...document.querySelectorAll('.ctx-menu [role^="menuitem"]')].find((x) => x.textContent.trim() === '${label}'); if (!it) throw new Error('no menu item ${label}'); it.click(); return true; })()`; // the card's ☰ menu (D129)
+  const menuBtn = (t) => `${card(t)}.querySelector('.entity__head > .entity__menu')`;
+  const clickEdit = async (t) => { await ev(act(card(t), 'Edit SQL')); await waitFor(`!!document.querySelector('dialog[open] .CodeMirror')`, 'dialog'); };
   const store = (code) => ev(`(async () => { const st = await import('/features/Core/store.js'); ${code} })()`);
   const cmOf = `document.querySelector('dialog[open] .CodeMirror').CodeMirror`;
   const setSql = (v) => ev(`(() => { ${cmOf}.setValue(${J(v)}); return true; })()`);
@@ -104,11 +105,11 @@ try {
   const press = (label) => ev(`[...document.querySelectorAll('dialog[open] .dialog__foot .btn')].find((b) => b.textContent.trim() === ${J(label)}).click()`);
   const errorText = () => ev(`document.querySelector('dialog[open] .sql-dialog__status')?.textContent.trim() ?? ''`);
 
-  await check('right-click on a card opens no menu; the head has an Edit icon button left of the title', async () => {
+  await check('right-click on a card opens no menu; the head has a ☰ menu after the title with Edit SQL in it', async () => {
     await rightClick('orders');
     await new Promise((r) => setTimeout(r, 150));
     must(!(await ev(`!!document.querySelector('.ctx-menu')`)), 'a context menu opened');
-    must(await ev(`(() => { const b = ${editBtn('orders')}; return !!b && b.classList.contains('iconbtn') && b.textContent.trim() === '' && !!b.querySelector('svg') && /^Edit SQL/.test(b.getAttribute('aria-label')) && b.nextElementSibling.classList.contains('entity__title'); })()`), 'no Edit icon button before the title');
+    must(await ev(`(() => { const b = ${menuBtn('orders')}; return !!b && b.classList.contains('iconbtn') && b.textContent.trim() === '' && !!b.querySelector('svg') && b.getAttribute('aria-haspopup') === 'menu' && b.parentElement.firstElementChild.classList.contains('entity__title'); })()`), 'no ☰ button in the head, or the title is not first');
     const fit = await ev(`(() => { const h = ${card('orders')}.querySelector('.entity__head'); return h.scrollWidth <= h.clientWidth; })()`);
     must(fit, 'head overflows');
     await shot('edit-sql-button.png');

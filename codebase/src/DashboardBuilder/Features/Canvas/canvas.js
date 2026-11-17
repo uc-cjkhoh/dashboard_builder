@@ -1,6 +1,7 @@
 import { emptyState } from "./empty-state.js";
 import { api } from "../Core/api.js";
 import { icon } from "../Core/icons.js";
+import { openContextMenu } from "../Core/menu.js";
 import { show, hide, toggle, confirmDialog, toast } from "../Core/ui.js";
 import { entities, relationshipsFor, emit, bus, isModelActive, showModel } from "../Core/store.js";
 import { expandSidebar } from "../Shell/sidebar.js";
@@ -186,7 +187,7 @@ export function initCanvas() {
   bus.addEventListener("entity:need", (e) => {
     const entity = entities.get(e.detail?.entityId);
     const head = entity?.el.querySelector(".entity__head");
-    if (head) fitWidth(entity.el, head.querySelector(".entity__title"), head.querySelector(".entity__edit"), head.querySelector(".entity__need"), head.querySelector(".entity__relate"), head.querySelector(".entity__peek"));
+    if (head) fitWidth(entity.el, head.querySelector(".entity__title"), head.querySelector(".entity__menu"), head.querySelector(".entity__need"));
   });
   toggle(canvas, isModelActive());
   initDataPreview(); // the rows of one card, docked under the ground
@@ -358,42 +359,17 @@ export function initCanvas() {
     need.title = "Held out of worksheets until this table is related to another one. Click to relate it.";
     need.hidden = true;
     need.addEventListener("click", () => emit("rel:relate", { entityId: entity.id }));
-    // The link button: click for "Relate <table> to", or drag it onto another card to relate the two tables (relations.js, D127).
-    let relate = null;
-    if (!entity.source) {
-      relate = document.createElement("button");
-      relate.type = "button";
-      relate.className = "iconbtn entity__relate";
-      relate.draggable = true;
-      relate.title = "Relate to another table — click, or drag onto a table";
-      relate.setAttribute("aria-label", `Relate ${entity.table} to another table`);
-      relate.append(icon("link"));
-      relate.addEventListener("click", () => emit("rel:relate", { entityId: entity.id }));
-    }
-
-    // The Edit SQL icon button (D105) sits left of the title; a union / unpivot card is built from its own dialog and has no SQL to edit, so it gets none.
-    if (!entity.source) {
-      const edit = document.createElement("button");
-      edit.type = "button";
-      edit.className = "iconbtn entity__edit";
-      edit.title = "Edit SQL — choose or change the columns with your own SELECT";
-      edit.setAttribute("aria-label", `Edit SQL for ${entity.db}.${entity.table}`);
-      edit.append(icon("edit"));
-      edit.addEventListener("click", () => editSql(entity));
-      head.append(edit);
-    }
-    // The table button: the card's first rows in the data preview under the canvas (data-preview.js); pressed while it shows this card.
-    const peek = document.createElement("button");
-    peek.type = "button";
-    peek.className = "iconbtn entity__peek";
-    peek.title = "Preview data";
-    peek.setAttribute("aria-label", `Preview data of ${entity.table}`);
-    peek.setAttribute("aria-pressed", "false");
-    peek.append(icon("table"));
-    peek.addEventListener("click", () => togglePreview(entity.id));
-    head.append(title, need, ...(relate ? [relate] : []), peek, collapse, remove); // the caret sits by the ✕
-    // Fit the card to its name (and the Edit button) between the card's min/max tokens; beyond max the title ellipsises (title = full name).
-    fitWidth(card, title, head.querySelector(".entity__edit"), need, relate, peek);
+    // The ☰ menu holds the card's actions (Edit SQL, Relate, Preview data), so the head is the name, the badge, ☰, the caret and the ✕ (D129).
+    const menu = document.createElement("button");
+    menu.type = "button";
+    menu.className = "iconbtn entity__menu";
+    menu.title = "Table actions";
+    menu.setAttribute("aria-label", `Actions for ${entity.table}`);
+    menu.append(icon("menu"));
+    wireCardMenu(entity, menu);
+    head.append(title, need, menu, collapse, remove); // the caret sits by the ✕
+    // Fit the card to its name (and the ☰ and the badge) between the card's min/max tokens; beyond max the title ellipsises (title = full name).
+    fitWidth(card, title, menu, need);
     enableDragMove(entity, head);
 
     const status = document.createElement("div");
@@ -549,7 +525,7 @@ export function initCanvas() {
   }
 
   // Width follows the `db.table` text: measured in the title's own font, held between --entity-min and --entity-max.
-  function fitWidth(card, title, edit, need = null, relate = null, peek = null) {
+  function fitWidth(card, title, menu, need = null) {
     const measure = (node) => {
       const probe = node.cloneNode(true);
       probe.style.cssText = "position:absolute;visibility:hidden;flex:none;overflow:visible;white-space:nowrap";
@@ -560,8 +536,8 @@ export function initCanvas() {
       return w;
     };
     const gap = parseFloat(getComputedStyle(canvas).getPropertyValue("--s2")) || 8;
-    // the Edit button, the link and table buttons, and the "Needs a partner" badge while it shows, ride on the title's width (each with its gap), so they never clip a short name
-    const px = measure(title) + (edit ? measure(edit) + gap : 0) + (need && !need.hidden ? measure(need) + gap : 0) + (relate ? measure(relate) + gap : 0) + (peek ? measure(peek) + gap : 0);
+    // the ☰ button and the "Needs a partner" badge while it shows ride on the title's width (each with its gap), so they never clip a short name
+    const px = measure(title) + (menu ? measure(menu) + gap : 0) + (need && !need.hidden ? measure(need) + gap : 0);
     const cs = getComputedStyle(canvas);
     const limit = (name, fallback) => parseFloat(cs.getPropertyValue(name)) || fallback;
     const { width } = entityWidth(px, { min: limit("--entity-min", 312), max: limit("--entity-max", 480) });
@@ -634,6 +610,34 @@ export function initCanvas() {
       detail.textContent = message;
       statusEl.append(detail);
     }
+  }
+
+  // The card's ☰ menu (D129): a popup on <body> under the button (Core/menu.js), so canvas zoom and the card's edges never shrink or clip it.
+  // A union / unpivot card has no SQL to edit and is never related, so its menu holds Preview data only. Preview data is ticked while the panel shows this card.
+  function wireCardMenu(entity, btn) {
+    btn.setAttribute("aria-haspopup", "menu");
+    btn.setAttribute("aria-expanded", "false");
+    let open = false, closedAt = -Infinity, reopen = true;
+    const entries = () => [
+      ...(entity.source ? [] : [
+        { type: "item", icon: "edit", label: "Edit SQL", title: "Choose or change the columns with your own SELECT", onSelect: () => editSql(entity) },
+        { type: "item", icon: "link", label: "Relate to another table", onSelect: () => emit("rel:relate", { entityId: entity.id }) },
+      ]),
+      { type: "check", icon: "table", label: "Preview data", checked: previewedId() === entity.id, onSelect: () => togglePreview(entity.id) },
+    ];
+    // The popup closes on any pointerdown outside it (capture, before this button hears it), the ☰ included: a close in that same
+    // pointerdown means the ☰ was pressed to shut the menu, so the click that follows doesn't reopen it.
+    btn.addEventListener("pointerdown", () => { reopen = !(open || performance.now() - closedAt < 50); });
+    btn.addEventListener("click", () => {
+      if (!reopen) { reopen = true; return; }
+      const r = btn.getBoundingClientRect();
+      open = true;
+      btn.setAttribute("aria-expanded", "true");
+      openContextMenu({
+        x: r.left, y: r.bottom + 4, entries, label: `Actions for ${entity.table}`, returnFocus: () => btn,
+        onClose: () => { open = false; closedAt = performance.now(); btn.setAttribute("aria-expanded", "false"); },
+      });
+    });
   }
 
   // Collapse/expand a card's columns + preview (the head stays visible).

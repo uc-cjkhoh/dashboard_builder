@@ -99,7 +99,8 @@ try {
   const setSql = (v) => ev(`(() => { ${cmOf}.setValue(${J(v)}); return true; })()`);
   const press = (label) => ev(`[...document.querySelectorAll('dialog[open] .dialog__foot .btn')].find((b) => b.textContent.trim() === ${J(label)}).click()`);
   const statusText = () => ev(`document.querySelector('dialog[open] .sql-dialog__status')?.textContent.trim() ?? ''`);
-  const openEdit = async (t) => { await ev(`${card(t)}.querySelector('.entity__edit').click()`); await waitFor(`!!document.querySelector('dialog[open] .CodeMirror')`, 'dialog'); };
+  const act = (c, label) => `(() => { ${c}.querySelector('.entity__menu').click(); const it = [...document.querySelectorAll('.ctx-menu [role^="menuitem"]')].find((x) => x.textContent.trim() === '${label}'); if (!it) throw new Error('no menu item ${label}'); it.click(); return true; })()`; // the card's ☰ menu (D129)
+  const openEdit = async (t) => { await ev(act(card(t), 'Edit SQL')); await waitFor(`!!document.querySelector('dialog[open] .CodeMirror')`, 'dialog'); };
   const text = (sel) => ev(`document.querySelector(${J(sel)})?.textContent ?? ''`);
   const closeDialog = async () => { await b.key('Escape', { vk: 27 }); await waitFor(`!document.querySelector('dialog[open]')`, 'dialog closed'); };
 

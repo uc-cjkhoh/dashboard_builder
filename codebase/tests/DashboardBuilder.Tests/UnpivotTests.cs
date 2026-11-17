@@ -16,6 +16,13 @@ public class UnpivotTests : IClassFixture<WebApplicationFactory<Program>>
         => new(db, table, columns ?? ["a", "b"], keep, limit);
     private static string? FieldOf(UnpivotRequest r) { try { RequestRules.ValidateUnpivot(r); return null; } catch (RequestValidationException e) { return e.Field; } }
 
+    [Fact] public void An_unpivot_offset_is_0_to_100000()
+    {
+        Assert.Null(FieldOf(new UnpivotRequest("db", "t", ["a", "b"], null, 100, 300)));
+        Assert.Equal("offset", FieldOf(new UnpivotRequest("db", "t", ["a", "b"], null, 100, -5)));
+        Assert.Equal("offset", FieldOf(new UnpivotRequest("db", "t", ["a", "b"], null, 100, ApiLimits.MaxRowsOffset + 1)));
+    }
+
     [Fact] public void A_valid_request_passes() => Assert.Null(FieldOf(U()));
     [Fact] public void Db_and_table_are_required()
     {

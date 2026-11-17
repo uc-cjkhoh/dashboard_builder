@@ -58,7 +58,7 @@ public sealed record BoxPlotResult(IReadOnlyList<BoxPlotGroup> Groups, bool Trun
 /// No ordering, no aggregation. Identifiers are catalog-validated and quoted; filter values are bound. <see cref="Source"/>: the card's custom SQL
 /// (kind sql, for this very table), read as a derived table instead of the catalog table; the columns are then what the query returns.
 /// </summary>
-public sealed record RowsRequest(string Db, string Table, string[]? Columns, StatFilter[]? Filters, int? Limit, QuerySource? Source = null);
+public sealed record RowsRequest(string Db, string Table, string[]? Columns, StatFilter[]? Filters, int? Limit, QuerySource? Source = null, int? Offset = null);
 
 /// <summary>A returned column: its name and raw ClickHouse type.</summary>
 public sealed record RowColumn(string Name, string Type);
@@ -82,4 +82,4 @@ public sealed record UnionRequest(string Db, string[] Tables, string[]? Columns,
 /// entry (2..50 same-kind wide columns) holding the column's name and value, beside up to 5 <see cref="Keep"/> columns.
 /// The first <see cref="Limit"/> rows (default 100, max 1000), no ordering. Identifiers are catalog-validated and quoted.
 /// </summary>
-public sealed record UnpivotRequest(string Db, string Table, string[] Columns, string[]? Keep, int? Limit);
+public sealed record UnpivotRequest(string Db, string Table, string[] Columns, string[]? Keep, int? Limit, int? Offset = null);
