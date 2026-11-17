@@ -73,7 +73,9 @@ try {
     await shot('1-proposed-link.png');
   });
   await check('clicking the proposal opens the dialog filled in (N:1 from the names); Confirm draws the link and the proposal goes', async () => {
-    await ev(`document.querySelector('.rel-ghost__go').click()`);
+    // a real mouse press and release (not element.click()), so the canvas's own pointer handlers run too
+    const at = await ev(`(() => { const r = document.querySelector('.rel-ghost__go').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+    for (const type of ['mouseMoved', 'mousePressed', 'mouseReleased']) await b.send('Input.dispatchMouseEvent', { type, x: at.x, y: at.y, button: 'left', clickCount: 1 });
     await waitFor(`${dlg}?.querySelector('.rel-dialog__sub') != null`, 'dialog');
     must(await ev(`${dlg}.querySelector('.rel-dialog__sub').textContent`) === 'orders → customers', 'tables');
     must(await ev(`${dlg}.querySelector('input[name=cardinality]:checked').value`) === 'N:1', 'cardinality');
@@ -100,6 +102,24 @@ try {
     await ev(`${row('customers', 'name')}.focus()`); // text vs number: refused with the reason
     must(/Can't relate/.test(await ev(`document.querySelector('.rel-keyhint').textContent`)), 'refusal hint');
     await ev(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))`);
+  });
+  await check('Undo of a removed relationship is skipped once the two tables are related again (one per table pair)', async () => {
+    const before = await ev(`document.querySelector('.rel-note').dataset.rel`);
+    await ev(`document.querySelector('.rel-link[data-rel=' + JSON.stringify(${J('')} + document.querySelector('.rel-note').dataset.rel) + '] .rel-link__hit')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))`);
+    await waitFor(`!!${dlg}?.querySelector('.btn--danger')`, 'edit dialog');
+    await ev(`${dlg}.querySelector('.btn--danger').click()`);
+    await waitFor(`document.querySelectorAll('.rel-note').length === 0`, 'removed');
+    const undo = await ev(`(() => { const u = [...document.querySelectorAll('#toast button')].find((x) => x.textContent === 'Undo'); window.__undo = u; return !!u; })()`);
+    must(undo, 'undo offered');
+    await drag(row('orders', 'region'), row('customers', 'region')); // relate the two tables again, on other columns than the removed link's
+    await waitFor(`!!${dlg}?.querySelector('.rel-dialog__sub')`, 'dialog');
+    await confirm();
+    await waitFor(`document.querySelectorAll('.rel-note').length === 1`, 'related again');
+    await ev(`(() => { const t = document.getElementById('toast'); t.hidden = false; t.append(window.__undo); window.__undo.click(); return true; })()`);
+    await pause(200);
+    must(await rels() === 1, `two relationships for one table pair (was ${before})`);
+    await drag(row('orders', 'customer_id'), row('customers', 'id')); // back to two keys for the next checks
+    await waitFor(`[...document.querySelectorAll('.rel-badge text')].some((t) => / · 2 keys$/.test(t.textContent))`, 'two keys');
   });
   await add('stores', 3);
   await check('"Needs a partner" opens "Relate stores to", the likeliest table first with its key', async () => {

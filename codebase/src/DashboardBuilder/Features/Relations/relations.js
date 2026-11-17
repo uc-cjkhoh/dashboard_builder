@@ -1,5 +1,5 @@
 import { entities, relationships, bus, emit, isModelActive } from "../Core/store.js";
-import { relEnds, linkIssue, pinOrder, matchingColumns, keysCompatible, kindLabel, unlinkedCards, joinChoices, cardinalityChoices, joinBadge, joinSelection, joinFromSelection, isLegacyLeft, applyAggregate, aggregateChoice, guessCardinality, findDuplicate, relationBetween, pairFor } from "./relation-rules.js";
+import { relEnds, linkIssue, pinOrder, matchingColumns, keysCompatible, kindLabel, unlinkedCards, joinChoices, cardinalityChoices, joinBadge, joinSelection, joinFromSelection, isLegacyLeft, applyAggregate, aggregateChoice, guessCardinality, relationBetween, pairFor } from "./relation-rules.js";
 import { toast, makeButton, openDialog, closeDialog } from "../Core/ui.js";
 import { api } from "../Core/api.js";
 import { icon } from "../Core/icons.js";
@@ -466,7 +466,7 @@ function reinstate(rels) {
   let any = false;
   for (const r of rels) {
     if (!entities.has(r.from.entityId) || !entities.has(r.to.entityId)) continue;
-    if (findDuplicate([...relationships.values()], r.from, r.to)) continue; // related again in the meantime (a restored card's columns may still be loading, so only this is checked)
+    if (relationBetween(relationships.values(), r.from.entityId, r.to.entityId)) continue; // the two tables were related again meanwhile: a table pair holds one relationship (D127)
     const id = `rel#${++seq}`;
     relationships.set(id, { ...r, id });
     emit("rel:changed", { id });
