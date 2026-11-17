@@ -42,6 +42,8 @@
 .table-chip .iconbtn { position: absolute; top: 0; right: 0; opacity: 1; color: var(--ink-3); transition: color var(--dur-fast) var(--ease); }
 .table-chip .table-chip__peek { right: var(--ctl-h); }
 .table-chip:hover .iconbtn, .table-chip:focus-within .iconbtn { color: var(--ink); }
+/* On the canvas: the check reads in the success green at rest and on hover (icon + tooltip carry it too, never colour alone). */
+.table-chip.table-chip--placed .table-chip__add { color: var(--ok-ink); }
 .table-chip__name { padding-right: calc(2 * var(--ctl-h) - var(--s2)); }
 .table-chip__name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .table-list .empty { color: var(--ink-3); font-size: var(--fs-body); padding: var(--s2); }
