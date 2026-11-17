@@ -116,7 +116,7 @@ try {
     await press('orders', 'cust_id', 'Enter');
     await press('customers', 'id', 'Enter');
     await waitFor(`document.querySelector('dialog[open] .join-choice') !== null`, 'dialog open');
-    await ev(`[...document.querySelectorAll('dialog[open] .card-choice')].find((x) => x.textContent === 'N:1').click(); document.querySelector('dialog[open]').querySelector('.rel-dialog__foot .btn--primary').click()`);
+    await ev(`[...document.querySelectorAll('dialog[open] input[name=cardinality]')].find((x) => x.value === 'N:1').click(); document.querySelector('dialog[open]').querySelector('.rel-dialog__foot .btn--primary').click()`);
     await waitFor(`document.querySelector('.rel-badge text')?.textContent === 'N:1'`, 'badge');
     must(await ev(`document.querySelectorAll('.entity__keys .col-row').length === 2`), 'both joined rows should be pinned');
     must((await hint()) === '', 'hint left set');

@@ -21,7 +21,7 @@ test("compound and other keys never relate", () => {
 });
 
 // Right and full joins.
-import { JOIN_TYPES, normalizeJoinType, joinChoices, planJoinType, joinBadge, joinSelection, joinFromSelection, isLegacyLeft } from "../../src/DashboardBuilder/Features/Relations/relation-rules.js";
+import { JOIN_TYPES, normalizeJoinType, joinChoices, cardinalityChoices, planJoinType, joinBadge, joinSelection, joinFromSelection, isLegacyLeft } from "../../src/DashboardBuilder/Features/Relations/relation-rules.js";
 
 test("join types are inner, left, right, full; anything else reads as inner", () => {
   assert.deepEqual(JOIN_TYPES, ["inner", "left", "right", "full"]);
@@ -37,6 +37,14 @@ test("dialog choices name the tables in plain words", () => {
   assert.equal(c[2].hint, "All rows of customers");
   assert.equal(c[3].hint, "All rows of both");
   assert.match(c[0].hint, /only rows that match/i);
+});
+
+test("cardinality cards: 2 x 2 order, the kind in words with its code, which side has many rows", () => {
+  const c = cardinalityChoices("orders", "customers");
+  assert.deepEqual(c.map((x) => x.value), ["1:1", "1:N", "N:1", "N:M"]);
+  for (const x of c) assert.ok(x.text.endsWith(`(${x.value})`), x.text);
+  assert.equal(c[1].hint, "One orders row, many customers rows");
+  assert.equal(c[2].hint, "Many orders rows, one customers row");
 });
 
 test("the FROM side is the left side: planning in reverse swaps left and right", () => {

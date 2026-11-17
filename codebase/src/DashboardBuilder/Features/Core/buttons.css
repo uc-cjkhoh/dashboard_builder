@@ -1,7 +1,7 @@
 /* Flat buttons — loaded last. No button has a border: its fill (or, where it has none, the hover wash, the underline or the shadow) carries the edge.
    The `!important` is deliberate: dozens of feature stylesheets give their own buttons a border and state colour, and "any button" means all of them. */
 :root { --btn-fill: color-mix(in srgb, var(--ink) 8%, var(--surface)); --btn-fill-hover: color-mix(in srgb, var(--ink) 14%, var(--surface)); }
-button, .btn, .iconbtn, .tab, .tab-add, .ws-tool, .card-choice, [role="button"], [role="tab"] { border: 0 !important; }
+button, .btn, .iconbtn, .tab, .tab-add, .ws-tool, [role="button"], [role="tab"] { border: 0 !important; }
 
 .btn:not(.btn--primary):not(.btn--danger) { background: var(--btn-fill); }
 .btn:not(.btn--primary):not(.btn--danger):hover:not(:disabled) { background: var(--btn-fill-hover); }
@@ -13,19 +13,17 @@ button, .btn, .iconbtn, .tab, .tab-add, .ws-tool, .card-choice, [role="button"],
 .tab:hover, .tab-add:hover { background: var(--glass-ctl-hover); }
 .glass .sidebar__tool { background: color-mix(in srgb, var(--ink) 9%, var(--glass-ctl)); }
 .glass .sidebar__tool:not(:disabled):hover { background: color-mix(in srgb, var(--ink) 15%, var(--glass-ctl)); }
-.card-choice { background: var(--btn-fill); }
-.card-choice.is-active { background: var(--accent-soft); }
 
 /* ---- Polish: one state ladder for every button ------------------------------------------------------------
    rest → hover (deeper fill) → pressed (deeper still, and it sinks 1px) → focus (a neutral wash, below) → disabled (faded, not-allowed).
    Weight carries the hierarchy: the primary action is 600, everything else 500. Text buttons get 16px of side padding so a label
    never touches its edge; one with a leading icon keeps 8px on that side so the glyph sits optically level with the text above it. */
-.btn, .iconbtn, .tab, .tab-add, .menu__item, .card-choice {
+.btn, .iconbtn, .tab, .tab-add, .menu__item {
   transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease); }
 .btn { padding-inline: var(--s4); font-weight: 500; }
 .btn:has(> .icon:first-child) { padding-inline: var(--s2) var(--s4); }
 .btn--primary { font-weight: 600; }
-.btn:not(:disabled):active, .tab:not(:disabled):active, .tab-add:not(:disabled):active, .card-choice:not(:disabled):active { transform: translateY(1px); }
+.btn:not(:disabled):active, .tab:not(:disabled):active, .tab-add:not(:disabled):active { transform: translateY(1px); }
 .btn:not(.btn--primary):not(.btn--danger):not(:disabled):active { background: color-mix(in srgb, var(--ink) 20%, var(--surface)); }
 .btn--danger:not(:disabled):active { background: color-mix(in srgb, var(--danger-ink) 24%, var(--danger-bg)); }
 .btn--primary:not(:disabled):active { background: var(--accent-pressed); }
@@ -38,11 +36,11 @@ button, .btn, .iconbtn, .tab, .tab-add, .ws-tool, .card-choice, [role="button"],
 .btn.btn--ghost:not(.btn--primary):not(.btn--danger):hover:not(:disabled) { background: var(--btn-fill); }
 .btn.btn--ghost:not(.btn--primary):not(.btn--danger):active:not(:disabled) { background: var(--btn-fill-hover); }
 button:disabled, .btn:disabled, .iconbtn:disabled { cursor: not-allowed; }
-@media (prefers-reduced-motion: reduce) { .btn, .iconbtn, .tab, .tab-add, .menu__item, .card-choice { transition: none; } .btn:active, .iconbtn:active, .tab:active, .tab-add:active, .card-choice:active { transform: none !important; } }
+@media (prefers-reduced-motion: reduce) { .btn, .iconbtn, .tab, .tab-add, .menu__item { transition: none; } .btn:active, .iconbtn:active, .tab:active, .tab-add:active { transform: none !important; } }
 
 /* No box-shadow on a button or a field, of any colour or state: depth and edges come from fill and outline, never a shadow.
    (Panels, menus, dialogs and cards keep their elevation. `!important` for the same reason as the border rule at the top.) */
-button, .btn, .iconbtn, .tab, .tab-add, .ws-tool, .card-choice, .menu__item, [role="button"], [role="tab"],
+button, .btn, .iconbtn, .tab, .tab-add, .ws-tool, .menu__item, [role="button"], [role="tab"],
 input, select, textarea, .input, .select, .formula { box-shadow: none !important; }
 
 /* No :focus-visible outline or border highlight anywhere. Keyboard focus shows as a neutral wash laid over the element's own fill

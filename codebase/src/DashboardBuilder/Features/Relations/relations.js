@@ -1,5 +1,5 @@
 import { entities, relationships, bus, emit, isModelActive } from "../Core/store.js";
-import { relEnds, linkIssue, pinOrder, matchingColumns, keysCompatible, kindLabel, unlinkedCards, joinChoices, joinBadge, joinSelection, joinFromSelection, isLegacyLeft, applyAggregate, aggregateChoice, guessCardinality, findDuplicate } from "./relation-rules.js";
+import { relEnds, linkIssue, pinOrder, matchingColumns, keysCompatible, kindLabel, unlinkedCards, joinChoices, cardinalityChoices, joinBadge, joinSelection, joinFromSelection, isLegacyLeft, applyAggregate, aggregateChoice, guessCardinality, findDuplicate } from "./relation-rules.js";
 import { toast, makeButton, openDialog, closeDialog } from "../Core/ui.js";
 import { api } from "../Core/api.js";
 import { icon } from "../Core/icons.js";
@@ -18,7 +18,6 @@ import { linkKeyAction, stepIndex, cardIndex, linkHint, rowLabel } from "./link-
 // drag a column row onto a row of another card, pick a cardinality. Links render as an SVG overlay with shape-coded
 // endpoints (readable without colour) and a cardinality badge; clicking one edits/deletes it.
 const SVG_NS = "http://www.w3.org/2000/svg";
-const CARDINALITIES = ["1:1", "1:N", "N:1", "N:M"];
 
 let seq = 0;
 let selectedId = null;
@@ -596,70 +595,23 @@ function openCardinalityDialog({ current = "1:N", joinType = "inner", tables = [
   left.className = "rel-dialog__left";
   const right = document.createElement("div");
   right.className = "rel-dialog__right";
-  // How the two tables join — only matching rows, or keep every row of the first table (left),
-  // the second (right) or both (full). The link runs first → second. Pick it first; picking a cardinality saves both.
+  // Left, top to bottom: Join, Cardinality, Totals, Also match on. Join and Cardinality are the same control: one choice of four as
+  // radio cards in a 2 x 2. Picking only selects; Confirm saves. The link runs first → second.
   let join = joinType;
-  const joinRow = document.createElement("fieldset");
-  joinRow.className = "join-choice";
-  const legend = document.createElement("legend");
-  legend.textContent = "Join";
-  joinRow.append(legend);
-  // One choice of four: round radios on selectable tiles (a toggle would read as "pick several").
-  const options = document.createElement("div");
-  options.className = "join-options";
-  for (const { value: v, text, hint } of joinChoices(tables[0], tables[1], legacy)) {
-    const lab = document.createElement("label");
-    lab.className = "join-option";
-    const r = document.createElement("input");
-    r.type = "radio"; r.name = "join-type"; r.value = v; r.checked = v === join;
-    r.addEventListener("change", () => { if (r.checked) join = v; });
-    const words = document.createElement("span");
-    words.className = "join-option__text";
-    const name = document.createElement("span");
-    name.className = "join-option__name";
-    name.textContent = text;
-    const note = document.createElement("span");
-    note.className = "join-option__hint";
-    note.textContent = hint;
-    words.append(name, note);
-    lab.append(r, words);
-    options.append(lab);
-  }
-  joinRow.append(options);
-  left.append(section("join", 0, joinRow));
+  left.append(section("join", 0, radioCards("Join", "join-type", joinChoices(tables[0], tables[1], legacy), join, (v) => { join = v; }).root));
+  let cardinality = current;
+  let check = null;
+  const card = radioCards("Cardinality", "cardinality", cardinalityChoices(tables[0], tables[1]), cardinality, (v) => { cardinality = v; check?.redescribe(); });
+  left.append(section("card", 1, card.root));
   let aggregate = agg.aggregate, direction = agg.direction;
-  left.append(section("totals", 1, buildAggregateChoice(agg, (v) => { aggregate = v.aggregate; direction = v.direction; })));
+  left.append(section("totals", 2, buildAggregateChoice(agg, (v) => { aggregate = v.aggregate; direction = v.direction; })));
   // The suggestion runs as the dialog opens (start() below), re-runs when the key pairs change, and re-reads its result against
   // each cardinality pick; "Use N:1" only selects (Confirm still saves).
-  let check = null;
   if (keys) {
-    check = buildJoinCheck(dlg, { ...keys.check, apply: { get: () => cardinality, set: (c) => cardButtons.find((o) => o.textContent === c)?.click() } });
-    left.append(section("pairs", 2, buildKeyPairs({ ...keys.section, onChange: (next) => { keys.section.onChange(next); check.rerun(); } })));
+    check = buildJoinCheck(dlg, { ...keys.check, apply: { get: () => cardinality, set: (c) => card.inputs.find((r) => r.value === c)?.click() } });
+    left.append(section("pairs", 3, buildKeyPairs({ ...keys.section, onChange: (next) => { keys.section.onChange(next); check.rerun(); } })));
     right.append(check.root);
   }
-  const choices = document.createElement("div");
-  choices.className = "card-choices";
-  choices.setAttribute("role", "group");
-  choices.setAttribute("aria-labelledby", "rel-card-label");
-  const choicesLabel = document.createElement("h3");
-  choicesLabel.className = "rel-dialog__h";
-  choicesLabel.id = "rel-card-label";
-  choicesLabel.textContent = "Cardinality";
-  // Picking a cardinality only selects it; Confirm saves.
-  let cardinality = current;
-  const cardButtons = [];
-  for (const c of CARDINALITIES) {
-    const b = makeButton(c, `card-choice${c === cardinality ? " is-active" : ""}`);
-    b.setAttribute("aria-pressed", String(c === cardinality));
-    b.addEventListener("click", () => {
-      cardinality = c;
-      for (const o of cardButtons) { const on = o === b; o.classList.toggle("is-active", on); o.setAttribute("aria-pressed", String(on)); }
-      check?.redescribe();
-    });
-    cardButtons.push(b);
-    choices.append(b);
-  }
-  left.append(section("card", 3, choicesLabel, choices));
   body.append(left);
   if (keys) body.append(right);
   else body.classList.add("rel-dialog--single");
@@ -682,6 +634,39 @@ function openCardinalityDialog({ current = "1:N", joinType = "inner", tables = [
   document.body.append(dlg);
   openDialog(dlg);
   check?.start();
+}
+
+// One choice of several as radio cards in a 2 x 2 grid (a toggle would read as "pick several"): a bold name over a short hint.
+// The chosen card takes the accent border, a tint and a filled dot, so it never relies on colour alone. Reports each pick.
+function radioCards(title, name, choices, value, onPick) {
+  const root = document.createElement("fieldset");
+  root.className = "join-choice";
+  const legend = document.createElement("legend");
+  legend.textContent = title;
+  const grid = document.createElement("div");
+  grid.className = "choice-cards";
+  const inputs = [];
+  for (const { value: v, text, hint } of choices) {
+    const lab = document.createElement("label");
+    lab.className = "choice-card";
+    const r = document.createElement("input");
+    r.type = "radio"; r.name = name; r.value = v; r.checked = v === value;
+    r.addEventListener("change", () => { if (r.checked) onPick(v); });
+    const words = document.createElement("span");
+    words.className = "choice-card__text";
+    const n = document.createElement("span");
+    n.className = "choice-card__name";
+    n.textContent = text;
+    const h = document.createElement("span");
+    h.className = "choice-card__hint";
+    h.textContent = hint;
+    words.append(n, h);
+    lab.append(r, words);
+    inputs.push(r);
+    grid.append(lab);
+  }
+  root.append(legend, grid);
+  return { root, inputs };
 }
 
 // "Total each table by the key before joining" + which way a filter works (only shown once the box is ticked). Reports every change.

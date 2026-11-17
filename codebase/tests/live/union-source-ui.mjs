@@ -106,7 +106,7 @@ try {
     a.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt })); z.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
     z.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt })); a.dispatchEvent(new DragEvent('dragend', { bubbles: true, dataTransfer: dt })); return true; })()`);
   await waitFor(`document.querySelector('dialog[open] .join-choice') !== null`, 'relationship dialog');
-  await ev(`[...document.querySelectorAll('dialog[open] .card-choice')].find((x) => x.textContent === '1:1').click(); document.querySelector('dialog[open]').querySelector('.rel-dialog__foot .btn--primary').click()`);
+  await ev(`[...document.querySelectorAll('dialog[open] input[name=cardinality]')].find((x) => x.value === '1:1').click(); document.querySelector('dialog[open]').querySelector('.rel-dialog__foot .btn--primary').click()`);
   await waitFor(`document.querySelector('dialog[open]') === null`, 'dialog closed');
 
   await check('the Union dialog adds a union entity to the model, read from /api/source/columns', async () => {

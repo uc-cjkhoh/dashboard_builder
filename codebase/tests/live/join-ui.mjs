@@ -66,13 +66,13 @@ try {
   await waitFor(`document.querySelector('dialog[open] .join-choice') !== null`, 'relationship dialog open');
 
   await check('dialog offers inner, left, right, full in plain words naming the tables', async () => {
-    const labels = await ev(`[...document.querySelectorAll('dialog[open] .join-option__name')].map((l) => l.textContent.trim())`);
+    const labels = await ev(`[...document.querySelectorAll('dialog[open] .rel-sec--join .choice-card__name')].map((l) => l.textContent.trim())`);
     must(J(labels) === J(['Inner join', 'Left join', 'Right join', 'Full outer join']), `labels: ${J(labels)}`);
     await shot('join-dialog.png');
   });
   await check('picking "Right join" + N:1 draws a "· right" badge', async () => {
     await ev(`document.querySelector('dialog[open] input[value=right]').click()`);
-    await ev(`[...document.querySelectorAll('dialog[open] .card-choice')].find((x) => x.textContent === 'N:1').click(); document.querySelector('dialog[open]').querySelector('.rel-dialog__foot .btn--primary').click()`);
+    await ev(`[...document.querySelectorAll('dialog[open] input[name=cardinality]')].find((x) => x.value === 'N:1').click(); document.querySelector('dialog[open]').querySelector('.rel-dialog__foot .btn--primary').click()`);
     await waitFor(`document.querySelector('.rel-badge text')?.textContent === 'N:1 · right'`, 'badge');
   });
   await ev(`document.querySelector('.tab-add').click(); document.querySelector('[data-new-tab=worksheet]').click()`);
@@ -99,7 +99,7 @@ try {
     await waitFor(`document.querySelector('dialog[open] .join-choice') !== null`, 'edit dialog');
     must(await ev(`document.querySelector('dialog[open] input[value=right]').checked`), 'current join not preselected');
     await ev(`document.querySelector('dialog[open] input[value=full]').click()`);
-    await ev(`[...document.querySelectorAll('dialog[open] .card-choice')].find((x) => x.textContent === 'N:1').click(); document.querySelector('dialog[open]').querySelector('.rel-dialog__foot .btn--primary').click()`);
+    await ev(`[...document.querySelectorAll('dialog[open] input[name=cardinality]')].find((x) => x.value === 'N:1').click(); document.querySelector('dialog[open]').querySelector('.rel-dialog__foot .btn--primary').click()`);
     await waitFor(`document.querySelector('.rel-badge text')?.textContent === 'N:1 · full'`, 'badge full');
     queries.length = 0;
     await ev(`document.querySelectorAll('.tab:not(.tab--model) .tab__label')[0].click()`);

@@ -75,7 +75,7 @@ try {
     must((await texts('.key-pairs__item span'))[0] === 'Region = region', 'chip');
     must(!(await ev(`${dlg}.querySelector('.key-pairs__suggestion')`)), 'suggestion should be gone');
     must(await ev(`${dlg}.querySelector('.join-check__note--busy') !== null && !${dlg}.querySelector('.join-check__pick')`), 'old result shown while the re-run is pending');
-    await ev(`[...${dlg}.querySelectorAll('.card-choice')].find((x) => x.textContent === '1:1').click()`); // a pick meanwhile must not bring the old result back
+    await ev(`[...${dlg}.querySelectorAll('input[name=cardinality]')].find((x) => x.value === '1:1').click()`); // a pick meanwhile must not bring the old result back
     must(await ev(`!${dlg}.querySelector('.join-check__pick')`), 'a cardinality pick showed the stale result');
     await waitFor(`${dlg}.querySelector('.join-check__pick') !== null`, 'preview result');
     must(previews.length === 2 && J(previews[1].pairs) === J([{ left: 'Region', right: 'region' }]) && previews[1].from.column === 'cust_id', `preview body: ${J(previews[1])}`);
@@ -93,7 +93,7 @@ try {
     must(previews.length >= 3, `add + remove re-ran the check: ${previews.length}`);
   });
   await check('N:1 saves the link: the badge counts the keys and every key column is pinned', async () => {
-    await ev(`[...${dlg}.querySelectorAll('.card-choice')].find((x) => x.textContent === 'N:1').click(); ${dlg}.querySelector('.rel-dialog__foot .btn--primary').click()`);
+    await ev(`[...${dlg}.querySelectorAll('input[name=cardinality]')].find((x) => x.value === 'N:1').click(); ${dlg}.querySelector('.rel-dialog__foot .btn--primary').click()`);
     await waitFor(`document.querySelector('.rel-badge text')?.textContent === 'N:1 · 2 keys'`, 'badge');
     must(await ev(`document.querySelectorAll('.entity__keys .col-row').length === 4`), 'cust_id, Region, id, region should be pinned');
     await shot('compound-linked.png');
@@ -113,7 +113,7 @@ try {
     await waitFor(`document.querySelector('dialog[open] .key-pairs') !== null`, 'edit dialog');
     must((await texts('.key-pairs__item span'))[0] === 'Region = region', 'saved pair not shown');
     await ev(`[...${dlg}.querySelectorAll('button')].find((y) => y.getAttribute('aria-label') === 'Remove Region = region').click()`);
-    await ev(`[...${dlg}.querySelectorAll('.card-choice')].find((x) => x.textContent === 'N:1').click(); ${dlg}.querySelector('.rel-dialog__foot .btn--primary').click()`);
+    await ev(`[...${dlg}.querySelectorAll('input[name=cardinality]')].find((x) => x.value === 'N:1').click(); ${dlg}.querySelector('.rel-dialog__foot .btn--primary').click()`);
     await waitFor(`document.querySelector('.rel-badge text')?.textContent === 'N:1'`, 'plain badge');
     must(await ev(`document.querySelectorAll('.entity__keys .col-row').length === 2`), 'only the first pair stays pinned');
   });

@@ -78,7 +78,7 @@ try {
   await waitFor(`document.querySelector('dialog[open] .join-check') !== null`, 'dialog with the check');
   const click = (sel) => ev(`document.querySelector(${J(sel)}).click()`);
   const text = (sel) => ev(`document.querySelector(${J(sel)})?.textContent ?? ''`);
-  const pick = (c) => ev(`[...document.querySelectorAll('dialog[open] .card-choice')].find((x) => x.textContent === ${J(c)}).click()`);
+  const pick = (c) => ev(`[...document.querySelectorAll('dialog[open] input[name=cardinality]')].find((x) => x.value === ${J(c)}).click()`);
 
   await check('the suggestion runs as the dialog opens (no button): a busy note with an icon, the re-check button disabled', async () => {
     await waitFor(`document.querySelector('dialog[open] .join-check__note--busy svg') !== null`, 'busy note');
@@ -103,12 +103,17 @@ try {
     must(await ev(`document.querySelectorAll('dialog[open] .join-check__note--warn').length`) === 0, 'unexpected warning');
     await shot('join-check-ok.png');
   });
-  await check('the dialog is up to 1280px wide, two equal panels, the suggestion panel stacks suggestion / evidence / counts and keeps 16px clear of its scrollbar', async () => {
+  await check('the dialog is up to 1216px wide in golden ratio, two equal panels, the left panel reads Join, Cardinality, Totals, Also match on with Join and Cardinality as 2 x 2 radio cards, the suggestion panel stacks suggestion / evidence / counts and keeps 16px clear of its scrollbar', async () => {
     const g = await ev(`(() => { const r = (q) => { const b = document.querySelector('dialog[open] ' + q).getBoundingClientRect(); return { left: b.left, right: b.right, top: b.top, bottom: b.bottom, width: b.width }; };
       const p = document.querySelector('dialog[open] .rel-dialog__right'), pr = p.getBoundingClientRect();
       return { dlg: r(''), left: r('.rel-dialog__left').width, divider: pr.left, bar: pr.left + p.clientWidth, main: r('.join-check__main'), ev: r('.join-check__evidence'), table: r('.join-check__table'), out: r('.join-check__out'),
-        joinTop: r('.join-choice legend').top, titleTop: r('.join-check__title').top }; })()`);
-    must(g.dlg.width === Math.min(1280, 1400 - 32), `dialog width ${g.dlg.width}`);
+        joinTop: r('.join-choice legend').top, titleTop: r('.join-check__title').top, vh: innerHeight }; })()`);
+    must(g.dlg.width === Math.min(1216, 1400 - 32), `dialog width ${g.dlg.width}`);
+    must(Math.abs(g.dlg.width / (g.dlg.bottom - g.dlg.top) - 1.618) < 0.01 || g.dlg.bottom - g.dlg.top >= g.vh - 33, `not golden ratio: ${J(g.dlg)}`);
+    const order = await ev(`[...document.querySelectorAll('dialog[open] .rel-dialog__left > .rel-sec')].map((s) => s.querySelector('legend')?.textContent)`);
+    must(J(order) === J(['Join', 'Cardinality', 'Totals', 'Also match on']), `section order ${J(order)}`);
+    const grids = await ev(`[...document.querySelectorAll('dialog[open] .choice-cards')].map((g) => { const c = [...g.children].map((x) => x.getBoundingClientRect()); return { n: c.length, cols: new Set(c.map((x) => Math.round(x.left))).size, border: getComputedStyle(g.children[0]).borderTopWidth }; })`);
+    must(grids.length === 2 && grids.every((x) => x.n === 4 && x.cols === 2 && x.border === '1px'), `not 2 x 2 cards: ${J(grids)}`);
     must(Math.abs(g.divider - (g.dlg.left + g.dlg.width / 2)) < 1, `divider not centred: ${J(g)}`);
     must(g.ev.top >= g.main.bottom && g.table.top >= g.ev.bottom, `groups not stacked: ${J(g)}`);
     must(g.bar - g.out.right >= 16, `content within 16px of the scrollbar: ${J(g)}`);
@@ -123,7 +128,7 @@ try {
     await pick('1:N');
     must((await text('dialog[open] .join-check__use')) === 'Use N:1', 'no Use N:1');
     await click('dialog[open] .join-check__use');
-    must(await ev(`document.querySelector('dialog[open] .card-choice[aria-pressed=true]')?.textContent`) === 'N:1', 'Use did not select');
+    must(await ev(`document.querySelector('dialog[open] input[name=cardinality]:checked')?.value`) === 'N:1', 'Use did not select');
     must(/Matches your choice/.test(await text('dialog[open] .join-check__suggest')), 'no match note');
     must(previews.length === before, 'a cardinality pick re-queried');
   });
@@ -177,7 +182,7 @@ try {
     must(!(await ev(`document.querySelector('dialog[open] .join-check__rerun').disabled`)), 'button stuck');
   });
   await check('the dialog still saves after a failed check (never blocked)', async () => {
-    await ev(`[...document.querySelectorAll('dialog[open] .card-choice')].find((x) => x.textContent === '1:N').click(); document.querySelector('dialog[open]').querySelector('.rel-dialog__foot .btn--primary').click()`);
+    await ev(`[...document.querySelectorAll('dialog[open] input[name=cardinality]')].find((x) => x.value === '1:N').click(); document.querySelector('dialog[open]').querySelector('.rel-dialog__foot .btn--primary').click()`);
     await waitFor(`document.querySelector('.rel-badge text')?.textContent === '1:N'`, 'badge 1:N');
   });
   previewMode = 'fanout';

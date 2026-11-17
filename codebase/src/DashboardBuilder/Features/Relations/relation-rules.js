@@ -96,6 +96,17 @@ export function matchingColumns(columns, category, usedNames = [], limit = 5) {
 export const JOIN_TYPES = ["inner", "left", "right", "full"];
 export const normalizeJoinType = (t) => (JOIN_TYPES.includes(t) ? t : "inner");
 
+/** The dialog's cardinality cards, in the 2 x 2 order (1:1, 1:N / N:1, N:M): the kind in words with its short code (the canvas badge
+ *  and the suggestion use the code), and which side has many rows, worded with the two table names. */
+export function cardinalityChoices(fromTable, toTable) {
+  return [
+    { value: "1:1", text: "One to one (1:1)", hint: `One ${fromTable} row, one ${toTable} row` },
+    { value: "1:N", text: "One to many (1:N)", hint: `One ${fromTable} row, many ${toTable} rows` },
+    { value: "N:1", text: "Many to one (N:1)", hint: `Many ${fromTable} rows, one ${toTable} row` },
+    { value: "N:M", text: "Many to many (N:M)", hint: `Many ${fromTable} rows, many ${toTable} rows` },
+  ];
+}
+
 /** The dialog's radio options, worded with the two table names (never colour alone). A legacy left link
  *  (saved before sides were fixed) also gets its own choice, so it is never mislabelled "keep the FROM table". */
 export function joinChoices(fromTable, toTable, legacy = false) {

@@ -9,9 +9,9 @@ export async function relateTables(ev, waitFor, [fromTable, fromColumn, toTable,
     const a = row(${J(fromTable)}, ${J(fromColumn)}), z = row(${J(toTable)}, ${J(toColumn)}); const dt = new DataTransfer();
     a.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt })); z.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
     z.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt })); a.dispatchEvent(new DragEvent('dragend', { bubbles: true, dataTransfer: dt })); return true; })()`);
-  await waitFor(`document.querySelector('dialog[open] .card-choice') !== null`, 'relationship dialog');
-  await ev(`[...document.querySelectorAll('dialog[open] .card-choice')].find((x) => x.textContent === ${J(cardinality)}).click(); document.querySelector('dialog[open]').querySelector('.rel-dialog__foot .btn--primary').click()`);
-  await waitFor(`document.querySelector('.rel-badge') !== null && document.querySelector('dialog[open] .card-choice') === null`, 'relationship drawn');
+  await waitFor(`document.querySelector('dialog[open] input[name=cardinality]') !== null`, 'relationship dialog');
+  await ev(`[...document.querySelectorAll('dialog[open] input[name=cardinality]')].find((x) => x.value === ${J(cardinality)}).click(); document.querySelector('dialog[open]').querySelector('.rel-dialog__foot .btn--primary').click()`);
+  await waitFor(`document.querySelector('.rel-badge') !== null && document.querySelector('dialog[open] input[name=cardinality]') === null`, 'relationship drawn');
 }
 
 /** Calculated chips live in the sidebar's Calculated fields manager dialog, not in the field pane. A modal dialog left open would block
