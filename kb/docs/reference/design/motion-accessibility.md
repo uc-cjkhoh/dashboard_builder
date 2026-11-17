@@ -42,6 +42,7 @@ on every edit.
 | Loading bar | a 4px indeterminate strip across the top (`.app-loading`) while the first connection answer is pending after a load: fades in after 200ms (a quick answer shows nothing), a 40% segment slides across (`translateX`, 1.2s loop); `role="progressbar"`, still and at 40% under reduced motion |
 | Activity chip | any in-flight API request: appears after 300ms (rises 8px, `--dur`), its refresh glyph spins, the elapsed time ticks each second; gone when the last request ends |
 | Column profile | "Profiling…" fades in after 150ms with a spinning refresh glyph; the result's bento cells rise 8px in turn (40ms apart, capped at the 8th), then each band's tint grows from the left (`scaleX`, 20ms apart, 250ms); hovering a band dims the others to 55% (`--dur-fast`) |
+| Relationship links | hovering a link, a Relationships card entry or a card with links fades the links it doesn't touch to 20 % (`opacity`, `--dur`); with quiet badges a resting badge fades in on hover ([relationships.md](../../concepts/data-source/relationships.md#rendering)) |
 | Controls | colour / border transitions on hover (`--dur-fast`); a picker's caret flips while its menu is open |
 | Pages shelf | autoplay steps every 1.5s |
 

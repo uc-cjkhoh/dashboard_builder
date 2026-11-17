@@ -4,6 +4,9 @@ Visual and interaction changes (styles, markup, layout, labels, icons, focus). G
 
 ## 2026-11-17
 
+- Relationship links: a lane per overlapping link in a gutter, ordered to cross least; links a hovered card or link doesn't touch fade; badges rest hidden from 4 links below 125 % zoom (`5167a55`)
+- Data Source sidebar: the on-canvas check on a table chip is drawn in the success green (--ok-ink) (`567eebf`)
+- Relationship suggestion: suggestion card on top, every note in one card below (one line each with its own glyph, card takes the most serious tone) (`42603d6`)
 - Relationship dialog: cardinality cards read One to one (1:1) on one line, no hint; radio cards drop the hint line entirely (`0b45f57`)
 - Relationship dialog: Join cards show the join name only (no hint); radio and text vertically centred in every Join and Cardinality card (`06e3ea4`)
 - Relationship dialog left panel: Join, Cardinality, Totals, Also match on; Cardinality becomes radio cards like Join (One to many (1:N) + which side has many rows); Join and Cardinality share radioCards() as bordered 2 x 2 cards; drop the dead .card-choice styles; live checks pick cardinality by radio (`ed4f241`)
