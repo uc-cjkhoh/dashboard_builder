@@ -29,3 +29,19 @@
         </div>
     </div>
 </section>
+@* Data preview: the first rows of one card, docked under the canvas (Canvas/data-preview.js). Opened from a card's table button
+   and after Edit SQL is saved; shown only on the Data Source. A sibling of #model-view, so the ground (pan, zoom, free slots) shrinks
+   above it and never runs under it. *@
+<section class="ds-preview" id="ds-preview" aria-labelledby="ds-preview-title" hidden>
+    <div class="ds-preview__grip" id="ds-preview-grip" role="separator" aria-orientation="horizontal" aria-label="Resize data preview"
+         title="Drag to resize" tabindex="0"></div>
+    <header class="ds-preview__head">
+        <h2 class="ds-preview__title" id="ds-preview-title"></h2>
+        <span class="ds-preview__summary" id="ds-preview-summary" role="status"></span>
+        <button type="button" class="iconbtn" id="ds-preview-refresh" aria-label="Refresh rows" title="Refresh rows"><span data-icon="refresh"></span></button>
+        <button type="button" class="iconbtn" id="ds-preview-csv" aria-label="Export CSV" title="Export CSV" disabled><span data-icon="export"></span></button>
+        <button type="button" class="iconbtn" id="ds-preview-close" aria-label="Close data preview" title="Close"><span data-icon="close"></span></button>
+    </header>
+    <div class="ds-preview__notes" id="ds-preview-notes" hidden></div>
+    <div class="ds-preview__scroll" id="ds-preview-scroll" tabindex="0" role="region" aria-label="Rows"></div>
+</section>

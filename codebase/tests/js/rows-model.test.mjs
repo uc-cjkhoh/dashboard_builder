@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { LIMITS } from "../../src/DashboardBuilder/Features/Core/validate.js";
-import { buildRowsRequest, tableRowsRequest, rowsToCsv, rowsSummary, cellText, anyCellCut, DEFAULT_LIMIT } from "../../src/DashboardBuilder/Features/Rows/rows-model.js";
+import { buildRowsRequest, entityRowsQuery, tableRowsRequest, rowsToCsv, rowsSummary, cellText, anyCellCut, DEFAULT_LIMIT } from "../../src/DashboardBuilder/Features/Rows/rows-model.js";
 
 const plan = (filters = []) => ({ from: { db: "d", table: "orders" }, joins: [], filters, measures: [], limit: 50 });
 const f = (table, column, op, value, values = null) => ({ db: "d", table, column, op, value, values });
@@ -130,4 +130,28 @@ test("a base other than the plan's first table reads that table; filters elsewhe
 test("the dialog title names the table plainly", () => {
   assert.equal(viewDataTitle({ db: "shop", table: "orders" }), "Rows of shop.orders behind this view");
   assert.equal(viewDataTitle({ db: "shop", table: "orders" }, "Vietnam"), "Rows of shop.orders behind Vietnam");
+});
+
+// --- the Data Source preview of one card (Canvas/data-preview.js) ---
+test("a table card reads /api/rows with no source", () => {
+  assert.deepEqual(entityRowsQuery({ db: "d", table: "orders" }), { load: "rows", request: { db: "d", table: "orders", limit: 100 } });
+});
+test("a card with custom SQL sends its query as the source of the same table", () => {
+  assert.deepEqual(entityRowsQuery({ db: "d", table: "orders", customSql: "SELECT 1 AS x" }),
+    { load: "rows", request: { db: "d", table: "orders", limit: 100, source: { kind: "sql", db: "d", name: "orders", sql: "SELECT 1 AS x" } } });
+});
+test("a union card reads /api/union with its tables (and its columns when picked)", () => {
+  const source = { kind: "union", db: "d", name: "Union: a + b", tables: ["a", "b"] };
+  assert.deepEqual(entityRowsQuery({ db: "d", table: source.name, source }), { load: "union", request: { db: "d", tables: ["a", "b"], limit: 100 } });
+  assert.deepEqual(entityRowsQuery({ db: "d", table: source.name, source: { ...source, columns: ["id"] } }).request.columns, ["id"]);
+});
+test("an unpivot card reads /api/unpivot with its columns and kept columns", () => {
+  const source = { kind: "unpivot", db: "d", name: "Unpivot: t", table: "t", columns: ["q1", "q2"], keep: ["id"] };
+  assert.deepEqual(entityRowsQuery({ db: "d", table: source.name, source }), { load: "unpivot", request: { db: "d", table: "t", columns: ["q1", "q2"], keep: ["id"], limit: 100 } });
+  assert.deepEqual(entityRowsQuery({ db: "d", table: source.name, source: { ...source, keep: undefined } }).request.keep, []);
+});
+test("the preview limit is checked like any row read", () => {
+  assert.equal(entityRowsQuery({ db: "d", table: "t" }, 5).request.limit, 5);
+  assert.throws(() => entityRowsQuery({ db: "d", table: "t" }, 0), /Limit must be between 1 and 1000/);
+  assert.throws(() => entityRowsQuery({ db: "d", table: "t" }, 1001), /Limit/);
 });
