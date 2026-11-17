@@ -12,7 +12,7 @@ The only place for work not yet built, grouped by topic. Read it before picking 
 | [dashboards.md](dashboards.md) | Stories remainder, dashboard layout, image and spacer widgets, actions, navigation, P38, set action |
 | [calculations.md](calculations.md) | functions the engine lacks, LOD, table-calculation polish, P25 |
 | [data-model.md](data-model.md) | joins, union, groups, split, cast, hierarchies, aggregate-before-join |
-| [data-source-hardening.md](data-source-hardening.md) | Data Source security, robustness and UX gaps from the 2026-11-17 review: Edit SQL guard, connect host, query guards, Change connection, canvas overview, keyboard relationships |
+| [data-source-hardening.md](data-source-hardening.md) | Data Source security, robustness and UX gaps from the 2026-11-17 review: live host allowlist, canvas overview, keyboard relationships, stale answers, server bounds |
 | [custom-sql.md](custom-sql.md) | Edit SQL and the MySQL syntax: silent differences, refusals, card gaps, round-trip false alarms, operations; one decision to settle |
 | [charts-and-formatting.md](charts-and-formatting.md) | chart, authoring, formatting and export gaps |
 | [analytics-and-maps.md](analytics-and-maps.md) | statistics, forecasting, clustering, P42, maps |
@@ -33,7 +33,7 @@ The only place for work not yet built, grouped by topic. Read it before picking 
 
 ## Recommended order
 
-1. Data Source hardening — the four P0 items in [data-source-hardening.md](data-source-hardening.md) before any new feature.
+1. Data Source hardening — set the live service's allowed ClickHouse hosts, then the P1 items in [data-source-hardening.md](data-source-hardening.md).
 1. Calculation function remainders (logic, text, date) — the engine's tree path already exists.
 2. Table-calculation polish — builds on the function set.
 3. Data-model breadth (compound joins, union and split remainders, groups, hierarchies) — independent of the engine; compound joins come first. Edit SQL and MySQL-syntax remainders ([custom-sql.md](custom-sql.md)) go by their own tiers: text semantics and a second ClickHouse version first.
