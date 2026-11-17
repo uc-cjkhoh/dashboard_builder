@@ -14,3 +14,4 @@ The Data Source tab: connect, pick tables, model them.
 | [sql-editor.md](sql-editor.md) | The Edit SQL code editor: highlighting, checking, indenting, bracket matching, Format, folding, keys, vendored files |
 | [sql-syntax.md](sql-syntax.md) | MySQL or ClickHouse syntax in Edit SQL: the footer switch, the translator, the round-trip check, what is saved, limitations |
 | [relationships.md](relationships.md) | Drawing links, cardinality, shape-coded endpoints |
+| [relating-tables.md](relating-tables.md) | Relating two tables in few steps: proposed links, the table picker, card-onto-card drag, one more key column |

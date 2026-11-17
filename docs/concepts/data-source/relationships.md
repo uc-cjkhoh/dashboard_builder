@@ -16,9 +16,11 @@ table column on one toasts "A union or unpivot can't be related to a table yet."
 ## At a glance
 
 - **Drag a column onto a column** of another card to relate them, then pick the join type and cardinality in a dialog. [From the keyboard](#drawing-a-link--keyboard) the same link is made with Enter on two columns.
+- **Shortcuts** ([relating-tables.md](relating-tables.md)): a proposed link with **Relate on customer_id = id**, **Needs a partner** and each card's link button (a table picker), or the link button dragged onto another card. Each opens the same dialog filled with the key the column names point to.
+- **One relationship per table pair** ([D127](../../decisions/decisions-relationships.md#d127--a-table-pair-holds-one-relationship-related-in-few-steps)): relating two more columns of related tables adds a key pair to it, with Undo.
 - **One relationship per column** (extra key pairs included). Kinds must match (number↔number, text↔text, date↔date, boolean↔boolean).
 - **Every table card needs a partner** once there are two or more; an unrelated card is held out of worksheets.
-- **Join type** is inner, left, right or full, worded with the table names.
+- **Join type** is inner, left, right or full, shown as radio cards with the SQL names only (see [Join type](#join-type-p31-t02-12-t02-13)).
 - **A relationship can match on several column pairs** ([compound key](#compound-keys-and-key-suggestion)): up to four, joined with AND.
 - **Total each table by the key before joining** (optional, per relationship) stops a measure being repeated when the other table repeats the key; a filter direction goes with it ([below](#aggregate-before-joining-many-to-many)).
 - **A suggestion shows by default** in the dialog: the cardinality the data reads as, with its evidence (which side repeats, match shares,
@@ -45,10 +47,10 @@ the columns a relationship uses are simply the ones it joins.
 `link-drag.js` (pure) holds the payload parse and `dropDecision()`, which reuses `linkIssue()`.
 
 To remove a link, click its line or badge (with [quiet badges](#rendering) a badge shows on hover), then Delete. A toast "Removed the orders → customers relationship." carries **Undo** (10 s),
-which puts it back as it was unless the same pair was related again meanwhile.
+which puts it back as it was unless the two tables were related again meanwhile (a table pair holds one relationship, [D127](../../decisions/decisions-relationships.md#d127--a-table-pair-holds-one-relationship-related-in-few-steps)).
 
 **The how-to line.** While any table card has no relationship, a pill at the foot of the Data Source (`.rel-guide`) says
-"Drag a column onto a column in another table to relate them." It goes once every card has one. While a toast shows (it owns the centre of the foot) the pill steps up to sit one 8px gap above it (`--toast-h`).
+"Drag a column onto a column in another table, or click Needs a partner." It goes once every card has one. While a toast shows (it owns the centre of the foot) the pill steps up to sit one 8px gap above it (`--toast-h`).
 
 ## Drawing a link — keyboard
 
@@ -73,6 +75,7 @@ for the same reasons.
 
 - both ends are on the **same table**;
 - the same two columns are **already related** (either direction);
+- the two tables already match on **four column pairs** (another pair between related tables otherwise [extends that relationship](relating-tables.md#one-more-column-of-related-tables));
 - the key **kinds differ** — only number↔number, text↔text, date↔date and boolean↔boolean link
   (`keysCompatible`); `compound` and `other` columns never link;
 - a column is **already in a relationship** (see Rules below).
@@ -217,7 +220,7 @@ or picked; the section adds up to **three more pairs**, so the join is `a.k1 = b
 - **Saved** as optional `pairs` on the relationship ([workbook.md](../workbook/workbook.md)); a file without it is a one-pair link. On open, a malformed pair,
   one past the limit or one reusing a column already in a relationship is skipped with an import issue.
 
-Not done: no pair added by dragging or relating two more columns of already-related tables.
+- **By drag.** Relating two more columns of the two tables (drag or keyboard) adds a pair without the dialog ([relating-tables.md](relating-tables.md#one-more-column-of-related-tables)); the link button dragged onto a card fills every same-named key column in.
 
 ## Aggregate before joining (many-to-many)
 

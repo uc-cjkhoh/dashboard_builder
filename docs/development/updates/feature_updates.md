@@ -4,6 +4,8 @@ Functional changes (server, models, validation, calculations, charts, workbook).
 
 ## 2026-11-17
 
+- Card comments in step with the head: card-width.js names the parts fitWidth adds (pencil, link, Needs a partner) and the .view--model tokens; --entity-min fallback 312 like the token (`f4a9491`)
+- Relationship Undo: skipped once the two tables are related again (one relationship per table pair, D127); real-mouse check on the proposal (`e4c85b1`)
 - Relationship dialog: cardinality cards read the kind over its code (One to many / 1:N), two lines like the Join cards (`4db5c85`)
 
 ## 2026-11-16
