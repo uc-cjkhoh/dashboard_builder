@@ -229,8 +229,8 @@
 /* The rows' text sits on the panel's 16px gutter, under the title and ending where the ✕'s ink ends (the dialog gets that from its scroll box's margin). */
 .ds-preview .rows-table th:first-child, .ds-preview .rows-table td:first-child { padding-left: var(--s4); }
 .ds-preview .rows-table th:last-child, .ds-preview .rows-table td:last-child { padding-right: var(--s4); }
-/* A light grid (the shared rows table, scoped to this panel only): one header line, highlighted (--surface-3, bold names) so it reads apart from the rows, hairline rows with no
-   stripes (a row tints under the pointer instead), a hairline between every two columns from header to last row (a touch darker in
+/* A light grid (the shared rows table, scoped to this panel only): one header line, highlighted (--surface-3, bold names) so it reads apart from the rows, hairline rows with zebra
+   stripes (every second row --surface-2, so the eye can follow a row across; the row under the pointer tints --surface-3), a hairline between every two columns from header to last row (a touch darker in
    the header, where it is also the border to drag), columns as wide as their content rather than stretched across, numbers right-aligned
    in even digits. The ClickHouse type moves out of sight — the card above lists it, the header's tooltip says it, a screen reader reads it. */
 .ds-preview .rows-table { min-width: 0; }
@@ -239,8 +239,8 @@
 .ds-preview .rows-table th { border-right: 1px solid var(--line-2); }
 .ds-preview .rows-table__name { overflow: hidden; text-overflow: ellipsis; }
 .ds-preview .rows-table__type { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-.ds-preview .rows-table tbody tr:nth-child(even) td { background: none; }
-.ds-preview .rows-table tbody tr:hover td { background: var(--surface-2); }
+.ds-preview .rows-table tbody tr:nth-child(even) td { background: var(--surface-2); }
+.ds-preview .rows-table tbody tr:hover td { background: var(--surface-3); }
 .ds-preview .rows-table .is-num { text-align: right; font-variant-numeric: tabular-nums; }
 /* Sized (preview-columns.js): the <colgroup> holds every width, so a cell no longer stops at the shared 320px cap. */
 .ds-preview .rows-table--sized { table-layout: fixed; }
