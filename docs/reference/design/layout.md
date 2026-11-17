@@ -68,7 +68,9 @@ Related items share one edge, measured on what the eye sees (glyphs and text), n
 ## Sidebar
 
 - **Resizable:** a right-edge handle (`.sidebar__resizer`, `Shell/sidebar.js`) drags `--sidebar-w`
-  between a minimum and **30% of the viewport**.
+  between a minimum and **30% of the viewport**. The shared `.resizer` shows its 2px `--accent` line on
+  hover, focus, or while that handle is dragged (`.resizer.is-active`, set by `Core/resizer.js`) — never
+  from `body.is-resizing` alone, which the data preview's column grips also set.
 - **Collapsible:** the toggle at the right of the brand row (`#sidebar-toggle`, `sidebar` icon) collapses
   the sidebar to a **rail `--topbar-h` wide** holding only that button (`.app.is-sidebar-collapsed`).
   - The Connection/Schema body (`#sidebar-body`) and the resizer get `hidden`.
