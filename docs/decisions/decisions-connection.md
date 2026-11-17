@@ -39,7 +39,7 @@ The connection form shows **Secure (TLS)** and **Trust self-signed certificate**
 
 ### D99 — The connect form lives on the start card
 
-- **Decision:** while disconnected, the connect form (fields, Secure / Trust switches, Connect) sits on the Data Source start card, right of Recent connections; the sidebar narrows to its brand rail. Once connected, the sidebar's Connections tile keeps the status row (dot, host, Change, Disconnect).
+- **Decision:** while disconnected, the connect form (fields, Secure / Trust switches, Connect) sits on the Data Source start card, right of Recent connections; the sidebar narrows to its brand rail. Once connected, the sidebar's Connection tile keeps the status row (dot, host, Change, Disconnect).
 - **Why:** the form and the recent list answer the same question (which server?), so they belong on one surface; the start card used to repeat a second Connect button that only pointed back at the sidebar.
 - **Change connection** re-opens the card over the canvas (scrim over any cards), with Cancel / Esc back; the session stays connected until a new connect succeeds.
 - **Not moved:** the connected status row — the start card hides once tables are on the canvas, so Change / Disconnect and the liveness dot would vanish with it.
