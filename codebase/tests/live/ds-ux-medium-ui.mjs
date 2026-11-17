@@ -84,10 +84,20 @@ await ev(`(()=>{const s=document.getElementById('table-search'); s.value=''; s.d
 ok('8 placed chip says so', await ev(`${chip('customers')}.classList.contains('table-chip--placed') && ${chip('customers')}.querySelector('.table-chip__add').getAttribute('aria-label')`) === 'customers is on the canvas — show it');
 ok('8 other chips unchanged', await ev(`!${chip('orders')}.classList.contains('table-chip--placed') && ${chip('orders')}.title`) === 'Drag orders onto the canvas');
 await shot('v2-placed');
+const dlgBtn = (label) => ev(`[...document.querySelectorAll('dialog[open] button')].find(x=>x.textContent.trim()===${J(label)})?.click()`);
+const dlgText = () => ev(`[...document.querySelectorAll('dialog[open].dialog--sm')].map(d=>d.innerText).join(' || ')`);
 await ev(`document.querySelector('.entity .iconbtn--danger').click()`); await sleep(300);
-ok('8 removing the card clears the mark', await ev(`!${chip('customers')}.classList.contains('table-chip--placed')`));
-await ev(`document.querySelector('#toast .toast__action').click()`); await sleep(500);
-ok('8 undo marks it again', await ev(`${chip('customers')}.classList.contains('table-chip--placed')`));
+ok('8 removing a card asks first (even with no relationships)', /Remove shop\.customers from the canvas\?/.test(await dlgText()), await dlgText());
+await dlgBtn('Remove'); await sleep(300);
+ok('8 and asks a second time', /Really remove shop\.customers\? This can't be undone\./.test(await dlgText()), await dlgText());
+await dlgBtn('Cancel'); await sleep(300);
+ok('8 cancelling the second dialog keeps the card and its mark', await ev(`document.querySelectorAll('dialog[open]').length`) === 0 && await ev(`document.querySelectorAll('.entity').length`) === 1 && await ev(`${chip('customers')}.classList.contains('table-chip--placed')`));
+await ev(`document.querySelector('.entity .iconbtn--danger').click()`); await sleep(300);
+await dlgBtn('Remove'); await sleep(300); await dlgBtn('Remove for good'); await sleep(400);
+ok('8 removing the card clears the mark', await ev(`!${chip('customers')}.classList.contains('table-chip--placed')`) && await ev(`document.querySelectorAll('.entity').length`) === 0);
+ok('8 the removal toast has no Undo', await ev(`!document.querySelector('#toast .toast__action')`), await ev(`document.getElementById('toast').innerText`));
+await ev(`[...${chip('customers')}.querySelectorAll('button')].at(-1).click()`); await sleep(700); // no Undo: add it again, the later checks need a card
+ok('8 adding it again marks it again', await ev(`${chip('customers')}.classList.contains('table-chip--placed')`));
 // 13 profile half-shown on card hover
 const row = JSON.parse(await ev(`JSON.stringify(document.querySelector('.entity__head').getBoundingClientRect())`));
 await b.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: row.x + 40, y: row.y + 10 }); await sleep(400);
@@ -121,6 +131,13 @@ await ev(`[...document.querySelectorAll('dialog[open] button')].find(x=>x.textCo
 ok('15 keeping the edits leaves Edit SQL open', await ev(`document.querySelectorAll('dialog[open]').length`) === 1);
 await b.key('Escape',{code:'Escape',vk:27}); await sleep(400);
 await ev(`[...document.querySelectorAll('dialog[open] button')].find(x=>x.textContent==='Discard').click()`); await sleep(400);
-ok('15 Discard closes it', await ev(`document.querySelectorAll('dialog[open]').length`) === 0);
+const conf2 = await ev(`[...document.querySelectorAll('dialog[open].dialog--sm')].map(d=>d.innerText).join(' || ')`);
+ok('15 Discard asks a second time', /Really discard your changes\? This can't be undone\./.test(conf2) && await ev(`!![...document.querySelectorAll('dialog[open] button')].find(x=>x.textContent==='Discard for good')`), conf2);
+await ev(`[...document.querySelectorAll('dialog[open] button')].find(x=>x.textContent==='Cancel' && x.closest('.dialog--sm')).click()`); await sleep(300);
+ok('15 cancelling the second dialog leaves Edit SQL open', await ev(`document.querySelectorAll('dialog[open]').length`) === 1);
+await b.key('Escape',{code:'Escape',vk:27}); await sleep(400);
+await ev(`[...document.querySelectorAll('dialog[open] button')].find(x=>x.textContent==='Discard').click()`); await sleep(400);
+await ev(`[...document.querySelectorAll('dialog[open] button')].find(x=>x.textContent==='Discard for good').click()`); await sleep(400);
+ok('15 Discard for good closes it', await ev(`document.querySelectorAll('dialog[open]').length`) === 0);
 await b.close();
 console.log(res.join("\n")); if (res.some((r) => r.startsWith("FAIL"))) process.exitCode = 1;

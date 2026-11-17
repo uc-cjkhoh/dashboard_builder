@@ -76,7 +76,7 @@ try {
     must(await ev(`document.querySelectorAll('.entity .entity__menu').length`) === 2, '☰ buttons');
     await ev(`${card('orders')}.querySelector('.entity__menu').click()`);
     const items = await ev(`[...document.querySelectorAll('.ctx-menu [role^="menuitem"]')].map((x) => x.textContent.trim())`);
-    must(JSON.stringify(items) === JSON.stringify(['Edit SQL', 'Relate to another table', 'Preview data']), JSON.stringify(items));
+    must(JSON.stringify(items) === JSON.stringify(['Edit SQL', 'Preview data']), JSON.stringify(items));
     await b.key('Escape', { vk: 27 });
     await waitFor(`!document.querySelector('.ctx-menu')`, 'menu closed');
   });
@@ -325,6 +325,10 @@ try {
     must(onSheet, 'shown on a worksheet');
     must(!(await ev(`${panel}.hidden`)), 'not back on the Data Source');
     await ev(`${card('orders')}.querySelector('.iconbtn--danger').click()`);
+    await waitFor(`!!document.querySelector('dialog[open]')`, 'remove confirm'); // removing a card always asks twice
+    await ev(`[...document.querySelectorAll('dialog[open] button')].find((x) => x.textContent.trim() === 'Remove').click()`);
+    await waitFor(`/^Really remove /.test(document.querySelector('dialog[open] .dialog__body')?.textContent ?? '')`, 'second remove confirm');
+    await ev(`[...document.querySelectorAll('dialog[open] button')].find((x) => x.textContent.trim() === 'Remove for good').click()`);
     await b.sleep(300);
     const s = await state();
     must(s.hidden && s.ground === groundFull, JSON.stringify(s));

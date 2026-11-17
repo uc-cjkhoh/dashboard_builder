@@ -10,5 +10,5 @@ export function validateTextEdit({ heading, body }) {
   return { ok: false, errors: { ...(h.ok ? {} : { heading: h.error }), ...(b.ok ? {} : { body: b.error }) } };
 }
 
-/** Does saving `value` change the widget? (An unchanged save is not an undo step.) */
+/** Does saving `value` change the widget? */
 export const textChanged = (widget, value) => (widget.heading ?? "") !== value.heading || (widget.body ?? "") !== value.body;

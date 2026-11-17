@@ -228,20 +228,6 @@ try {
     await waitFor(`${tbl}.querySelectorAll('.xt-toggle[aria-expanded="false"]').length >= 1`, 'restored');
   });
 
-  await check('undo restores the collapsed state, redo re-applies it', async () => {
-    const before = J(await collapsedState());
-    await clickToggle('Collapse US (rows)');
-    await waitFor(`${tbl}.querySelectorAll('.xt-toggle[aria-label="Expand US (rows)"]').length === 1`, 'US collapsed');
-    must(J(await collapsedState()) !== before, 'state changed');
-    await ev(`[...document.querySelectorAll('button')].find((x) => x.getAttribute('aria-label') === 'Undo (Ctrl+Z)').click()`);
-    await waitFor(`${tbl}.querySelectorAll('.xt-toggle[aria-label="Collapse US (rows)"]').length === 1`, 'undone');
-    must(J(await collapsedState()) === before, `after undo: ${J(await collapsedState())} vs ${before}`);
-    await ev(`[...document.querySelectorAll('button')].find((x) => x.getAttribute('aria-label') === 'Redo (Ctrl+Shift+Z)').click()`);
-    await waitFor(`${tbl}.querySelectorAll('.xt-toggle[aria-label="Expand US (rows)"]').length === 1`, 'redone');
-    await clickToggle('Expand US (rows)');
-    await waitFor(`${tbl}.querySelectorAll('.xt-toggle[aria-label="Collapse US (rows)"]').length === 1`, 'US expanded');
-  });
-
   await check('geometry: toggle and header text are >= 4px apart, no overflow, rows and header cells do not touch', async () => {
     await clickToggle('Collapse US (rows)');
     await settle(300);
@@ -271,7 +257,7 @@ try {
     await ev(`import('/features/Core/scheme.js').then((m) => m.setSchemePref('light'))`); await settle(300);
   });
 
-  await check('Expand all / Collapse all: counted status line, one undo step, keyboard operable, focus stays', async () => {
+  await check('Expand all / Collapse all: counted status line, keyboard operable, focus stays', async () => {
     const all = (mode) => `${tbl}.querySelector('.xt-all__btn[data-mode="${mode}"]')`;
     const nCollapsed = () => ev(`import('/features/Core/store.js').then((m) => { const c = m.activeWorksheet().sheet.collapsed; return c ? c.rows.length + c.cols.length : 0; })`);
     must(await ev(`!!${all('expand')} && !!${all('collapse')}`), 'two corner buttons');
@@ -285,12 +271,6 @@ try {
     await b.sleep(300);
     must(await ev(`document.activeElement?.dataset.mode === 'collapse'`), 'focus stays on Collapse all');
     must(queries.length === q0, 'no new query');
-    await ev(`document.querySelector('.ws-undo button').click()`);
-    await waitFor(`${tbl} !== null`, 'redrawn');
-    await b.sleep(300);
-    must(await nCollapsed() === before, `one undo restores ${before}, got ${await nCollapsed()}`);
-    await ev(`${all('collapse')}.click()`);
-    await b.sleep(300);
     await ev(`${all('collapse')}.click()`);
     must((await toastText()) === 'Every header is already collapsed', `no-op toast: ${await toastText()}`);
     await shot('expand-all-collapsed-light.png');

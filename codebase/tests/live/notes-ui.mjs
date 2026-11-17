@@ -178,9 +178,9 @@ try {
     const second = await stamp();
     must(second && second !== first, `a new query should stamp a new time: ${first} -> ${second}`);
     queries.length = 0;
-    await ev(`__t.btn('Undo (Ctrl+Z)').click()`); // back to the first view: served from the cache
+    await ev(`(() => { const p = [...document.querySelectorAll('.ws-shelf--columns .ws-pill')].find((x) => x.textContent.includes('qty')); p.querySelector('[aria-label="Remove field"]').click(); return true; })()`); // remove the field again: back to the first view, served from the cache
     await settle(400);
-    must(queries.length === 0, `undo re-queried: ${queries.length}`);
+    must(queries.length === 0, `going back to the first view re-queried: ${queries.length}`);
     must(await stamp() === first, `cached view time: ${await stamp()} vs ${first}`);
   });
 

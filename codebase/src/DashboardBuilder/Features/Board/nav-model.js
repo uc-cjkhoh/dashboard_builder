@@ -18,7 +18,7 @@ export function validateNavEdit({ label, tip, target }, offered) {
 /** The tabs a button on dashboard `ownId` may go to: every worksheet and dashboard but that dashboard (never a story). */
 export const navTargets = (tabs, ownId) => tabs.filter((t) => t.id !== ownId && t.kind !== "story").map((t) => ({ id: t.id, name: t.name, kind: t.kind }));
 
-/** Does saving `value` change the button? (An unchanged save is not an undo step.) */
+/** Does saving `value` change the button? */
 export const navChanged = (w, v) => (w.label ?? "") !== v.label || (w.tip ?? "") !== v.tip || (w.target ?? null) !== v.target;
 
 /** The dashboards with a button that goes to tab `tabId`. */

@@ -127,7 +127,6 @@ test("a new sheet starts fully expanded, and a bad saved value is dropped with a
 
 // ---- review fixes ---------------------------------------------------------------------------------------------------
 import { applyToggle, headerKeys, shownValues } from "../../src/DashboardBuilder/Features/Dashboard/collapse-model.js";
-import { createHistory } from "../../src/DashboardBuilder/Features/Dashboard/history.js";
 import { extentOf } from "../../src/DashboardBuilder/Features/Dashboard/conditional-model.js";
 
 test("headerKeys: every prefix with a level below it, none for the last level", () => {
@@ -187,21 +186,6 @@ test("measures on the left: shownValues reads each leaf's own measure", () => {
   const left = [{ ...one(["EU", "FR"]), mi: 0 }, { ...one(["EU", "FR"]), mi: 1 }];
   const shown = shownValues(left, [{ ...none, mi: null }], true, 2, (l, t, mi) => mi * 100);
   assert.deepEqual(shown, [[0], [100]]);
-});
-
-test("undo restores the collapsed state (the history snapshots the whole sheet)", () => {
-  const h = createHistory();
-  const before = { ...emptySheet() };
-  const after = { ...before, collapsed: { rows: ["a"], cols: [] } };
-  h.record("ws#1", before);              // commit() records the sheet as it was
-  assert.equal(h.undo("ws#1", after).collapsed, undefined);
-  assert.deepEqual(h.redo("ws#1", before).collapsed, { rows: ["a"], cols: [] });
-  // collapse, collapse again, undo once: only the second is undone
-  const one1 = applyToggle(null, "rows", "a", new Set(["a", "b"])).collapsed;
-  const two = applyToggle(one1, "rows", "b", new Set(["a", "b"])).collapsed;
-  const h2 = createHistory();
-  h2.record("w", { collapsed: null }); h2.record("w", { collapsed: one1 });
-  assert.deepEqual(h2.undo("w", { collapsed: two }).collapsed, one1);
 });
 
 test("applyAll collapse: every header on both axes, counted; nothing to do is not a change", async () => {

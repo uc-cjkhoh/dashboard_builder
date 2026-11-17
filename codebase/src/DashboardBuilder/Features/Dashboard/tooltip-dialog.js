@@ -1,6 +1,6 @@
 // The "Edit tooltip…" modal: left = the tooltip's lines (text with <Field> tokens, reorder, size / bold / italic / colour per line),
 // right = a live preview built by the same tooltipHtml() the chart hover uses. DOM only — the rules are in tooltip-style.js and
-// tooltip-model.js. Edits are a draft until Apply (one commit = one undo step); Esc / Cancel discard.
+// tooltip-model.js. Edits are a draft until Apply (one commit); Esc / Cancel discard.
 import { makeButton, openDialog, closeDialog } from "../Core/ui.js";
 import { icon } from "../Core/icons.js";
 import { LIMITS } from "../Core/validate.js";

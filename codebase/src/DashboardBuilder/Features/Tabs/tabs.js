@@ -1,14 +1,13 @@
 import {
   tabs, isModelActive, currentView, showModel, createWorksheet, createDashboard, createStory, tabLimitError,
-  switchTab, renameTab, duplicateWorksheet, closeTab, worksheetHasContent, bus, setWidgets, setSteps, emit,
+  switchTab, renameTab, duplicateWorksheet, closeTab, worksheetHasContent, bus,
 } from "../Core/store.js";
 import { dashboardsUsing } from "../Board/board-model.js";
 import { dashboardsLinking } from "../Board/nav-model.js";
-import { captureClose, sealClose, planRestore, closedToast, restoredToast } from "./close-undo.js";
 import { storiesUsing } from "../Story/story-model.js";
 import { icon } from "../Core/icons.js";
 import { wireMenu } from "../Core/menu.js";
-import { confirmDialog, toast, toggle } from "../Core/ui.js";
+import { confirmDeleteTwice, toast } from "../Core/ui.js";
 import { text, LIMITS } from "../Core/validate.js";
 
 // The view strip: a pinned "Data Source" tab (the shared entity canvas) followed by one ordered list of worksheet and
@@ -155,51 +154,12 @@ export function initTabs() {
     return wrap;
   }
 
-  // Closing is undoable for a few seconds: the snapshot (close-undo.js) goes back through the store's own setters.
-  const undoBar = document.createElement("div");
-  undoBar.className = "toast toast--info tab-undo";
-  undoBar.setAttribute("role", "status");
-  undoBar.hidden = true;
-  const undoText = document.createElement("span");
-  const undoBtn = document.createElement("button");
-  undoBtn.type = "button";
-  undoBtn.className = "btn tab-undo__btn";
-  undoBtn.textContent = "Undo";
-  undoBar.append(undoText, undoBtn);
-  document.body.append(undoBar);
-  const undoStack = []; // the last few closes, newest last; Undo takes the newest
-  let undoTimer = 0;
-  const hideUndo = () => { clearTimeout(undoTimer); undoStack.length = 0; toggle(undoBar, false); };
-  function showUndo() {
-    clearTimeout(undoTimer);
-    const snap = undoStack.at(-1);
-    if (!snap) { toggle(undoBar, false); return; }
-    undoText.textContent = closedToast(snap.tab);
-    toggle(undoBar, true);
-    undoTimer = setTimeout(hideUndo, 10000);
-  }
-  function offerUndo(snap) { undoStack.push(snap); if (undoStack.length > 5) undoStack.shift(); showUndo(); }
-  bus.addEventListener("workbook:reset", hideUndo); // a restore, import or disconnect replaces every tab: a snapshot of the old ones must never come back
-  undoBtn.addEventListener("click", () => {
-    const snap = undoStack.pop();
-    if (!snap) return;
-    const plan = planRestore(snap, tabs, LIMITS.tabs);
-    showUndo(); // the next older close, if any
-    if (!plan.ok) { toast(plan.error, "danger"); return; }
-    tabs.splice(plan.index, 0, snap.tab);
-    for (const w of plan.writes) (w.kind === "dashboard" ? setWidgets : setSteps)(w.id, w.value);
-    emit("tabs:changed");
-    if (snap.wasActive) switchTab(snap.tab.id);
-    toast(restoredToast(snap.tab, plan.skipped), "ok");
-    strip.querySelector(".tab.is-active .tab__label")?.focus();
-  });
-
   async function requestClose(tab) {
     const inStories = tab.kind === "story" ? [] : storiesUsing(tabs, tab.id); // a closed worksheet or dashboard leaves the steps that showed it
     const stepNote = inStories.length ? ` Its steps will be removed from ${inStories.length === 1 ? "the story" : "the stories"}: ${inStories.map((s) => s.name).join(", ")}.` : "";
     const linking = tab.kind === "story" ? [] : dashboardsLinking(tabs, tab.id).filter((d) => d.id !== tab.id); // their buttons to this tab are unlinked
     const linkNote = linking.length ? ` Buttons that go to it will be unlinked on: ${linking.map((d) => d.name).join(", ")}.` : "";
-    const ask = async (message) => confirmDialog(message, { danger: true, confirmText: "Close" });
+    const ask = async (message) => confirmDeleteTwice(message, `the ${tab.kind} “${tab.name}”`, { confirmText: "Close" });
     if (tab.kind === "worksheet") {
       const users = dashboardsUsing(tabs, tab.id);
       if (users.length) {
@@ -214,10 +174,7 @@ export function initTabs() {
     } else if (tab.widgets.length || inStories.length || linking.length) {
       if (!(await ask(`Close the dashboard “${tab.name}”?${tab.widgets.length ? " The worksheets on it are not affected." : ""}${stepNote}${linkNote}`))) return;
     }
-    const v = currentView();
-    const snap = captureClose(tabs, tab.id, v.kind === tab.kind && v.id === tab.id);
     closeTab(tab.id);
-    if (snap) { sealClose(snap, tabs); offerUndo(snap); }
   }
 
   function beginRename(tab, labelEl) {

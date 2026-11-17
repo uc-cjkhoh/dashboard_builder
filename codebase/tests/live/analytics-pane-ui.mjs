@@ -146,9 +146,6 @@ try {
   const pressed = (id) => ev(`${item(id)}.getAttribute('aria-pressed')`);
   const focused = () => ev(`document.activeElement?.dataset?.item ?? null`);
   const hasCheck = (id) => ev(`!!${item(id)}.querySelector('svg:last-child') && ${item(id)}.querySelectorAll('svg').length === 2`);
-  const undo = async () => { await ev(`document.querySelector('[aria-label="Undo (Ctrl+Z)"]').click()`); await settle(400); await chartReady(); };
-  const redo = async () => { await ev(`document.querySelector('[aria-label="Redo (Ctrl+Shift+Z)"]').click()`); await settle(400); await chartReady(); };
-  const canUndo = () => ev(`!document.querySelector('[aria-label="Undo (Ctrl+Z)"]').disabled`);
 
   await check('items per chart type; distinct icons', async () => {
     await dragChip('region', `__t.zone('rows')`);
@@ -163,31 +160,23 @@ try {
     await setType('Bar'); await chartReady(); await openAna();
   });
 
-  await check('drop on an old sheet adds, shows a check, a repeat drop adds no undo step, undo / redo', async () => {
+  await check('drop on an old sheet adds, shows a check, a repeat drop changes nothing', async () => {
     await dropItem('ref'); await settle(400); await chartReady();
     must(await selVal('Reference line') === 'average' && (await mark('markLine')) != null, 'ref not added');
     must(await pressed('ref') === 'true' && await hasCheck('ref') && !(await hasCheck('band')), 'on-state cue');
-    await dropItem('ref'); await settle(300);
-    await undo(); // one undo must remove the ref (no spurious step from the repeat drop)
-    await openAna();
-    must(await selVal('Reference line') === 'none', 'one undo should remove the reference line');
-    await redo(); await openAna();
-    must(await selVal('Reference line') === 'average', 'redo lost the reference line');
+    await dropItem('ref'); await settle(300); await chartReady(); await openAna();
+    must(await selVal('Reference line') === 'average', 'a repeat drop should leave the reference line on average');
     await dropItem('trend'); await settle(400); await chartReady();
     await shot('items-light.png');
     await theme('dark'); await settle(400); await chartReady();
     await shot('items-dark.png'); await theme('light'); await settle(400);
   });
 
-  await check('pressing keeps focus on the item; press then undo / redo; press again switches off', async () => {
+  await check('pressing keeps focus on the item; press again switches off', async () => {
     await openAna();
     await ev(`${item('band')}.focus(); ${item('band')}.click()`); await settle(400); await chartReady();
     must(await focused() === 'band', `focus after press: ${await focused()}`);
     must(await selVal('Band') === 'stddev1', 'band not added');
-    await undo(); await openAna();
-    must(await selVal('Band') === 'none', 'undo of a press');
-    await redo(); await openAna();
-    must(await selVal('Band') === 'stddev1', 'redo of a press');
     await ev(`${item('band')}.click()`); await settle(400); await chartReady();
     must(await selVal('Band') === 'none' && await pressed('band') === 'false', 'band not removed');
     await aPick('Trend', 'log'); await openAna();

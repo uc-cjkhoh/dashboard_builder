@@ -1,6 +1,6 @@
 import { entities, relationships, bus, emit, isModelActive } from "../Core/store.js";
 import { relEnds, linkIssue, pinOrder, matchingColumns, keysCompatible, kindLabel, unlinkedCards, joinChoices, cardinalityChoices, joinBadge, joinSelection, joinFromSelection, isLegacyLeft, applyAggregate, aggregateChoice, guessCardinality, relationBetween, pairFor } from "./relation-rules.js";
-import { toast, makeButton, openDialog, closeDialog } from "../Core/ui.js";
+import { toast, makeButton, openDialog, closeDialog, confirmDeleteTwice } from "../Core/ui.js";
 import { api } from "../Core/api.js";
 import { icon } from "../Core/icons.js";
 import { previewRequest } from "./join-preview-model.js";
@@ -38,7 +38,7 @@ export function initRelations() {
   guide = document.createElement("p");
   guide.className = "rel-guide";
   guide.hidden = true;
-  guide.textContent = "Drag a column onto a column in another table, or click Needs a partner.";
+  guide.textContent = "Drag a column onto a column in another table, or click a proposed link.";
   canvas.parentElement.append(guide); // over the Data Source, centred at its foot
   keyHint = document.createElement("p");
   keyHint.className = "rel-guide rel-keyhint";
@@ -59,7 +59,6 @@ export function initRelations() {
   bus.addEventListener("canvas:zoomed", (e) => { zoom = e.detail?.zoom ?? zoom; render(); });
   bus.addEventListener("entity:loaded", (e) => { markDraggable(e.detail.entityId); render(); }); // a restored link waits for its key rows
   bus.addEventListener("entity:removed", (e) => { cancelKeyPick(); onEntityRemoved(e.detail.entityId); });
-  bus.addEventListener("rel:reinstate", (e) => reinstate(e.detail?.rels ?? [])); // Undo of a card remove (canvas.js)
   bus.addEventListener("view:changed", () => { cancelKeyPick(); selectedId = null; render(); });
   canvas.addEventListener("scroll", render);
   // Hovering a card focuses its links: they stay strong (with their badges), every other link fades back.
@@ -71,7 +70,6 @@ export function initRelations() {
   canvas.addEventListener("pointerleave", () => { if (focusEntityId) { focusEntityId = null; markLinkedRows(); } });
   initColumnDrag();
   initColumnKeys();
-  bus.addEventListener("rel:relate", (e) => openTablePicker(e.detail?.entityId)); // a card's ☰ Relate to another table or its "Needs a partner" (canvas.js)
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") { cancelKeyPick(); select(null); }
   });
@@ -167,7 +165,7 @@ function proposeLink(a, b, focusEnd = null) {
   });
 }
 
-/** Two more columns of tables that are already related: one more key pair on that relationship (D127), with Undo. */
+/** Two more columns of tables that are already related: one more key pair on that relationship (D127). */
 function extendRelationship(rel, a, b) {
   if (!rel) return;
   const pair = pairFor(rel, a, b);
@@ -175,15 +173,10 @@ function extendRelationship(rel, a, b) {
   emit("rel:changed", { id: rel.id });
   render();
   const ta = entities.get(rel.from.entityId)?.table, tb = entities.get(rel.to.entityId)?.table;
-  toast(`Added ${pairText(pair)} to ${ta} → ${tb} (${rel.pairs.length + 1} keys).`, "info", { action: { label: "Undo", run: () => {
-    if (!relationships.has(rel.id)) return;
-    rel.pairs = (rel.pairs ?? []).filter((p) => !(p.from === pair.from && p.to === pair.to));
-    if (!rel.pairs.length) delete rel.pairs;
-    emit("rel:changed", { id: rel.id }); render();
-  } } });
+  toast(`Added ${pairText(pair)} to ${ta} → ${tb} (${rel.pairs.length + 1} keys).`, "info");
 }
 
-// --- relate two tables at once (D127): a card's ☰ Relate to another table, its "Needs a partner", or a proposed link ---
+// --- relate two tables at once (D127): a proposed link ---
 const dismissed = new Set(); // proposed links the user closed: "a\0b"
 const ghosts = new Map();    // key -> the proposed link's button pair, kept across redraws so focus stays on it
 const tableOf = (e) => ({ table: e.table, columns: e.columns ?? [] });
@@ -213,51 +206,6 @@ function relateTables(aId, bId) {
     keys: keyPairsFor(from, to, k.pairs, null),
     onPick: (cardinality, sel, pairs, agg) => createRelationship(from, to, cardinality, { ...joinFromSelection(sel), pairs, agg }),
   });
-}
-
-/** A long snake_case name wraps after an underscore, not mid-word (<wbr>, so a copy of the text stays the name). */
-const breakAfterUnderscores = (text) => text.split(/(?<=_)/).flatMap((part, i) => (i ? [document.createElement("wbr"), part] : [part]));
-
-/** "Relate orders to": every other table card, the likeliest first; one with no shared columns is shown, disabled. With one candidate, its dialog opens at once. */
-function openTablePicker(entityId) {
-  const me = entities.get(entityId);
-  if (!relatable(me)) return;
-  const others = [...entities.values()].filter((e) => e.id !== entityId && !e.source).map((e) => {
-    const rel = relationBetween(relationships.values(), entityId, e.id);
-    return { e, rel, k: rel ? null : keyBetween(entityId, e.id) };
-  }).sort((p, q) => (q.rel ? 4 : q.k?.score ?? 0) - (p.rel ? 4 : p.k?.score ?? 0));
-  if (!others.length) { toast("Add another table to relate it to.", "info"); return; }
-  if (others.length === 1 && (others[0].rel || others[0].k)) { relateTables(entityId, others[0].e.id); return; }
-  const dlg = document.createElement("dialog");
-  dlg.className = "dialog dialog--sm rel-pick"; // the standard small dialog: title, body, foot
-  dlg.setAttribute("aria-labelledby", "rel-pick-title");
-  const title = document.createElement("h2");
-  title.className = "dialog__title"; title.id = "rel-pick-title";
-  title.textContent = `Relate ${me.table} to`;
-  const list = document.createElement("div");
-  list.className = "dialog__body rel-pick__list";
-  for (const { e, rel, k } of others) {
-    const b = makeButton("", "rel-pick__item");
-    const name = document.createElement("span"), on = document.createElement("span");
-    name.className = "rel-pick__name"; name.append(...breakAfterUnderscores(e.table));
-    on.className = rel ? "rel-pick__key rel-pick__key--ok" : "rel-pick__key";
-    if (rel) on.append(icon("check", { size: 14 }), "Related");
-    else on.textContent = k ? keyText(k) : "No matching columns";
-    b.append(name, on);
-    b.disabled = !rel && !k;
-    b.addEventListener("click", () => { closeDialog(dlg); relateTables(entityId, e.id); });
-    list.append(b);
-  }
-  const foot = document.createElement("div");
-  foot.className = "dialog__foot";
-  const cancel = makeButton("Cancel", "btn");
-  cancel.addEventListener("click", () => closeDialog(dlg));
-  foot.append(cancel);
-  dlg.append(title, list, foot);
-  dlg.addEventListener("cancel", (ev) => { ev.preventDefault(); closeDialog(dlg); });
-  document.body.append(dlg);
-  openDialog(dlg);
-  list.querySelector("button:not(:disabled)")?.focus();
 }
 
 /** Proposed links: for each card that needs a partner, the confident key to another card (one per table pair), drawn dashed with a
@@ -429,20 +377,6 @@ export function restoreRelationship(from, to, cardinality, joinType = "inner", j
   relationships.set(id, applyAggregate({ id, from, to, cardinality, joinType, joinFixed, ...(pairs.length ? { pairs } : {}) }, agg));
   emit("rel:changed", { id });
   render();
-}
-
-/** Undo: put removed relationships back as they were (fresh ids), skipping one whose card is gone or whose pair is related again. */
-function reinstate(rels) {
-  let any = false;
-  for (const r of rels) {
-    if (!entities.has(r.from.entityId) || !entities.has(r.to.entityId)) continue;
-    if (relationBetween(relationships.values(), r.from.entityId, r.to.entityId)) continue; // the two tables were related again meanwhile: a table pair holds one relationship (D127)
-    const id = `rel#${++seq}`;
-    relationships.set(id, { ...r, id });
-    emit("rel:changed", { id });
-    any = true;
-  }
-  if (any) render();
 }
 
 function onEntityRemoved(entityId) {
@@ -728,10 +662,11 @@ function editRelationship(rel) {
     keys: keyPairsFor(rel.from, rel.to, rel.pairs ?? [], rel),
     agg: aggregateChoice(rel),
     onPick: (cardinality, sel, pairs, agg) => { rel.cardinality = cardinality; Object.assign(rel, joinFromSelection(sel)); applyAggregate(rel, agg); if (pairs?.length) rel.pairs = pairs; else delete rel.pairs; emit("rel:changed", { id: rel.id }); render(); },
-    onDelete: () => {
-      relationships.delete(rel.id); emit("rel:changed", { id: rel.id }); select(null); render();
+    onDelete: async () => {
       const ta = entities.get(rel.from.entityId)?.table, tb = entities.get(rel.to.entityId)?.table;
-      toast(`Removed the ${ta} → ${tb} relationship.`, "info", { action: { label: "Undo", run: () => reinstate([rel]) } });
+      if (!(await confirmDeleteTwice(`Remove the ${ta} → ${tb} relationship?`, `the ${ta} → ${tb} relationship`, { confirmText: "Remove" }))) return;
+      relationships.delete(rel.id); emit("rel:changed", { id: rel.id }); select(null); render();
+      toast(`Removed the ${ta} → ${tb} relationship.`, "info");
     },
   });
 }

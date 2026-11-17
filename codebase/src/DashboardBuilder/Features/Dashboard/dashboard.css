@@ -527,9 +527,7 @@
 .ws-field.is-hidden { opacity: .55; }
 .ws-field__rename { flex: 1; min-width: 0; height: 24px; font-size: var(--fs-body); padding: 0 var(--s1); }
 
-/* ---- worksheet chrome: undo/redo, title + caption, status bar ------------ */
-.ws-undo { display: inline-flex; gap: 4px; }
-.ws-undo .iconbtn:disabled { opacity: .35; cursor: default; }
+/* ---- worksheet chrome: title + caption, status bar ------------ */
 .ws-titleblock { display: grid; gap: 4px; }
 .ws-titleblock__btn { min-height: 24px; justify-self: start; max-width: 100%; border: 1px solid transparent; border-radius: var(--r); background: none;
   padding: 0 var(--s1); margin-inline: calc(-1 * var(--s1)); color: var(--ink); cursor: text; text-align: left; font: inherit; }

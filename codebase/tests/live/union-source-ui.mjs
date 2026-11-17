@@ -327,6 +327,10 @@ try {
     must(r.button === 'Remove card', `button: ${r.button}`);
     const before = await ev(`document.querySelectorAll('.entity').length`);
     await ev(`document.querySelector('.entity__error').closest('.entity').querySelector('.entity__status .btn').click()`);
+    await waitFor(`!!document.querySelector('dialog[open]')`, 'remove confirm'); // Remove card asks twice
+    await ev(`[...document.querySelectorAll('dialog[open] button')].find((x) => x.textContent.trim() === 'Remove').click()`);
+    await waitFor(`/^Really remove /.test(document.querySelector('dialog[open] .dialog__body')?.textContent ?? '')`, 'second remove confirm');
+    await ev(`[...document.querySelectorAll('dialog[open] button')].find((x) => x.textContent.trim() === 'Remove for good').click()`);
     await waitFor(`document.querySelectorAll('.entity').length === ${before - 1}`, 'the card is gone');
   });
 

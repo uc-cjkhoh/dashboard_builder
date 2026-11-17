@@ -1,5 +1,5 @@
-import { bus, activeDashboard, worksheets, dashboards, worksheetById, setWidgets, setDashboardSize, setDashboardRange, setDashboardNotes, nextWidgetId, isDashboardActive } from "../Core/store.js";
-import { toggle, toast, makeButton } from "../Core/ui.js";
+import { bus, activeDashboard, worksheets, dashboards, worksheetById, setWidgets, setDashboardSize, setDashboardRange, setDashboardNotes, nextWidgetId } from "../Core/store.js";
+import { toggle, toast, makeButton, confirmDeleteTwice } from "../Core/ui.js";
 import { icon } from "../Core/icons.js";
 import { LIMITS } from "../Core/validate.js";
 import { makeCategoryFormatter } from "../Core/format.js";
@@ -18,7 +18,6 @@ import { widgetNoteLines } from "./widget-note.js";
 import { dateTimeIn, offsetLabel } from "../Core/timezone.js";
 import { createPanel } from "./board-panel.js";
 import { initInteract } from "./board-interact.js";
-import { createBoardHistory, restorable } from "./board-history.js";
 
 // The dashboard tab's body: a side panel (worksheets to add) and the 12-column canvas of widgets. Only the ACTIVE
 // dashboard renders — leaving it destroys every worksheet view (queries aborted, chart instances and their resize observers
@@ -49,8 +48,6 @@ export function initBoard() {
   let printing = false;
   let selection = null;      // the dashboard selection { db, table, column, value, label, sourceWidgetId }, or null
 
-  const history = createBoardHistory(); // undo / redo per dashboard id (in memory: a reload or a workbook open starts clean)
-  const known = new Set();              // dashboard ids seen, to forget the history of a closed one
   const statusEl = $("board-status");
   let statusTimer = 0;
   /** The last edit's result — "Moved to column 3, row 2", or why a drop snapped back — in a polite live region (and visible). */
@@ -77,11 +74,10 @@ export function initBoard() {
     refusalTimer = setTimeout(clearRefusal, 5000);
   }
   function clearRefusal() { clearTimeout(refusalTimer); refusalEl?.remove(); refusalEl = null; }
-  /** One committed edit = one undo step. */
+  /** One committed edit. */
   function commit(next) {
     const dash = activeDashboard();
     if (!dash) return;
-    history.record(dash.id, dash.widgets);
     setWidgets(dash.id, next); // → dashboard:changed → sync (autosave listens to the same event)
   }
   const nameOf = (w) => entries.get(w.id)?.el.getAttribute("aria-label") ?? (w.kind === "text" ? "Text" : w.kind === "image" ? "Image" : w.kind === "spacer" ? "Spacer" : w.kind === "nav" ? "Button" : "widget");
@@ -208,7 +204,6 @@ export function initBoard() {
     toggle(view, Boolean(dash));
     if (!dash) { teardown(); return; }
     if (shownId !== dash.id) { teardown(); shownId = dash.id; statusEl.replaceChildren(); clearRefusal(); notes.close(); interact?.cancel(); }
-    known.add(dash.id);
     title.textContent = dash.name;
     count.textContent = `${dash.widgets.length} of ${LIMITS.widgets} widgets`;
     panel.render(worksheets());
@@ -217,7 +212,6 @@ export function initBoard() {
     const dropped = dropStale(dash); // its source widget was removed / closed: the others show their own data again
     reconcile(dash);
     if (dropped) syncCross();
-    syncUndo(dash);
   }
 
   function add(kind, sheetId) {
@@ -264,14 +258,16 @@ export function initBoard() {
     reader.readAsDataURL(file);
   }
 
-  function remove(widget) {
+  async function remove(widget) {
     const dash = activeDashboard();
     if (!dash) return;
-    const ordered = widgetOrder(dash.widgets);
-    const at = ordered.findIndex((w) => w.id === widget.id);
     const name = entries.get(widget.id)?.el.getAttribute("aria-label") ?? "widget";
-    commit(dash.widgets.filter((w) => w.id !== widget.id));
-    toast(`Removed “${name}”. Undo brings it back.`, "info");
+    if (!(await confirmDeleteTwice(`Remove “${name}” from the dashboard?`, `“${name}”`, { confirmText: "Remove" }))) return;
+    const now = activeDashboard(); // the dialogs were open: the dashboard may have changed
+    if (!now || now.id !== dash.id || !now.widgets.some((w) => w.id === widget.id)) return;
+    const at = widgetOrder(now.widgets).findIndex((w) => w.id === widget.id);
+    commit(now.widgets.filter((w) => w.id !== widget.id));
+    toast(`Removed “${name}”.`, "info");
     const next = widgetOrder(activeDashboard().widgets)[Math.min(at, dash.widgets.length - 1)];
     (next ? entries.get(next.id)?.el.querySelector(".board-widget__remove") : $("board-panel").querySelector(".board-panel__add-text"))?.focus();
   }
@@ -296,32 +292,6 @@ export function initBoard() {
     commit(dash.widgets.map((w) => (w.id === widget.id ? { ...w, ...value } : w)));
     status("Button updated.");
   }
-
-  // --- undo / redo on the dashboard tab (Dashboard/history.js snapshots of the widget list, keyed by dashboard id) ---
-  const undoBtn = makeButton("", "iconbtn board-bar__iconbtn"), redoBtn = makeButton("", "iconbtn board-bar__iconbtn");
-  for (const [b, name, label] of [[undoBtn, "undo", "Undo (Ctrl+Z)"], [redoBtn, "redo", "Redo (Ctrl+Y)"]]) { b.append(icon(name, { size: 16 })); b.title = label; b.setAttribute("aria-label", label); }
-  function syncUndo(dash) { undoBtn.disabled = !history.canUndo(dash.id); redoBtn.disabled = !history.canRedo(dash.id); }
-  function step(which) {
-    const dash = activeDashboard();
-    if (!dash || !isDashboardActive()) return;
-    const target = history[which](dash.id, dash.widgets);
-    if (!target) { status(which === "undo" ? "Nothing to undo." : "Nothing to redo."); return; }
-    setWidgets(dash.id, restorable(target, (id) => worksheetById(id) !== null)); // a restore is not itself recorded
-    status(which === "undo" ? "Undid the last change." : "Redid the change.");
-  }
-  undoBtn.addEventListener("click", () => step("undo"));
-  redoBtn.addEventListener("click", () => step("redo"));
-  document.addEventListener("keydown", (e) => {
-    if (!(e.ctrlKey || e.metaKey) || !isDashboardActive() || view.hidden || interact.dragging) return; // never mid-drag
-    if (e.target.closest?.("input, textarea, select, [contenteditable='true'], dialog")) return; // the field's own undo
-    const k = e.key.toLowerCase();
-    if (k === "z" && !e.shiftKey) { e.preventDefault(); step("undo"); }
-    else if ((k === "z" && e.shiftKey) || k === "y") { e.preventDefault(); step("redo"); }
-  });
-  bus.addEventListener("tabs:changed", () => { // a closed dashboard's history goes with it
-    const live = new Set(dashboards().map((d) => d.id));
-    for (const id of [...known]) if (!live.has(id)) { known.delete(id); history.forget(id); }
-  });
 
   /** Pointer snapping uses the rows as drawn: a fixed dashboard stretches them to its height. */
   function dragMetrics() {
@@ -497,7 +467,7 @@ export function initBoard() {
     customInputs.width.value = on ? dash.size.width : ""; customInputs.height.value = on ? dash.size.height : "";
     for (const k of ["width", "height"]) customInputs[k].setAttribute("aria-invalid", "false");
   }
-  tools.append(sizeSel, rangeBox, customBox, notesBtn, undoBtn, redoBtn, fullBtn, printBtn);
+  tools.append(sizeSel, rangeBox, customBox, notesBtn, fullBtn, printBtn);
 
   sync();
 }

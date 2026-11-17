@@ -1,5 +1,5 @@
-// Browser checks for relating tables in few steps (D127): proposed links, "Needs a partner" as a button and the table picker, the card's
-// card's ☰ Relate to another table (compound key pre-filled, D129), and dragging two more columns of related tables (one more key pair, Undo).
+// Browser checks for relating tables in few steps (D127): proposed links, "Needs a partner" as a plain label (no table picker, no ☰ Relate item),
+// a proposed link's compound key pre-filled, and dragging two more columns of related tables (one more key pair).
 // Real dev app (APP_URL, default http://localhost:5223) in headless Chromium over the DevTools protocol (tests/live/cdp.mjs); /api/* is mocked.
 // Run: node tests/live/relate-tables-ui.mjs  (start the app: cd src/DashboardBuilder && dotnet run --no-launch-profile --urls http://localhost:5223; stop it by port)
 import { launch } from './cdp.mjs';
@@ -66,8 +66,8 @@ try {
 
   await add('orders', 1);
   await add('customers', 2);
-  await check('two tables: both need a partner (a button) and a proposed link offers the key the names point to', async () => {
-    must(await ev(`${card('orders')}.querySelector('.entity__need').tagName === 'BUTTON' && !${card('orders')}.querySelector('.entity__need').hidden`), 'need button');
+  await check('two tables: both need a partner (a plain label) and a proposed link offers the key the names point to', async () => {
+    must(await ev(`${card('orders')}.querySelector('.entity__need').tagName === 'SPAN' && !${card('orders')}.querySelector('.entity__need').hidden`), 'need label');
     await waitFor(`document.querySelector('.rel-ghost') !== null`, 'proposed link');
     must(await ev(`document.querySelector('.rel-ghost__go').textContent.trim()`) === 'Relate on customer_id = id', 'ghost text');
     must(await ev(`document.querySelectorAll('.rel-ghost__line').length`) === 1, 'dashed line');
@@ -86,17 +86,13 @@ try {
     await waitFor(`!document.querySelector('dialog[open]') && document.querySelectorAll('.rel-note').length === 1`, 'saved');
     must(await ev(`document.querySelector('.rel-ghost') === null`), 'ghost gone');
   });
-  await check('dragging two more columns of related tables adds a key pair to that relationship, with Undo', async () => {
+  await check('dragging two more columns of related tables adds a key pair to that relationship', async () => {
     await drag(row('orders', 'region'), row('customers', 'region'));
     await waitFor(`/Added region = region to orders → customers \\(2 keys\\)/.test(document.getElementById('toast').textContent)`, 'toast');
     must(await rels() === 1, 'still one relationship');
     must(await ev(`[...document.querySelectorAll('.rel-badge text')].some((t) => t.textContent === 'N:1 · 2 keys')`), 'badge counts keys');
     must(await ev(`!!${card('customers')}.querySelector('.entity__keys .col-row[data-column="region"]')`), 'region pinned');
     await shot('3-extend-by-drag.png');
-    await ev(`[...document.querySelectorAll('#toast button')].find((x) => x.textContent === 'Undo').click()`);
-    await waitFor(`[...document.querySelectorAll('.rel-badge text')].some((t) => t.textContent === 'N:1')`, 'undo');
-    await drag(row('orders', 'region'), row('customers', 'region')); // put it back for the next shots
-    await waitFor(`[...document.querySelectorAll('.rel-badge text')].some((t) => t.textContent === 'N:1 · 2 keys')`, 'again');
   });
   await check('from the keyboard, a refused pair between related tables still says why', async () => {
     await ev(`(() => { const r = ${row('orders', 'amount')}; r.focus(); r.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); return true; })()`);
@@ -104,44 +100,56 @@ try {
     must(/Can't relate/.test(await ev(`document.querySelector('.rel-keyhint').textContent`)), 'refusal hint');
     await ev(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))`);
   });
-  await check('Undo of a removed relationship is skipped once the two tables are related again (one per table pair)', async () => {
-    const before = await ev(`document.querySelector('.rel-note').dataset.rel`);
-    await ev(`document.querySelector('.rel-link[data-rel=' + JSON.stringify(${J('')} + document.querySelector('.rel-note').dataset.rel) + '] .rel-link__hit')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))`);
-    await waitFor(`!!${dlg}?.querySelector('.btn--danger')`, 'edit dialog');
-    await ev(`${dlg}.querySelector('.btn--danger').click()`);
+  await check('removing a relationship asks twice: Cancel on either dialog keeps it; confirming both removes it', async () => {
+    const btn = (t) => `[...document.querySelectorAll('dialog[open] button')].find((x) => x.textContent.trim() === ${J(t)})`;
+    const bodyText = () => ev(`document.querySelector('dialog[open] .dialog__body')?.textContent ?? ''`);
+    const openDelete = async () => { // the relationship's edit dialog, then its Delete button, which opens the first confirm
+      await ev(`document.querySelector('.rel-link[data-rel=' + JSON.stringify(${J('')} + document.querySelector('.rel-note').dataset.rel) + '] .rel-link__hit')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))`);
+      await waitFor(`!!${dlg}?.querySelector('.btn--danger')`, 'edit dialog');
+      await ev(`${dlg}.querySelector('.btn--danger').click()`);
+      await waitFor(`/^Remove the .* relationship\\?/.test(document.querySelector('dialog[open] .dialog__body')?.textContent ?? '')`, 'first confirm');
+    };
+    await openDelete();
+    await ev(`${btn('Cancel')}.click()`);
+    await waitFor(`!document.querySelector('dialog[open]')`, 'first confirm cancelled');
+    must(await rels() === 1, 'Cancel on the first dialog removed the relationship');
+    await openDelete();
+    await ev(`${btn('Remove')}.click()`);
+    await waitFor(`(document.querySelector('dialog[open] .dialog__body')?.textContent ?? '').startsWith('Really remove the ')`, 'second confirm');
+    must(/This can't be undone\.$/.test(await bodyText()), `second dialog text: ${await bodyText()}`);
+    must(await ev(`!${btn('Remove')} && !!${btn('Remove for good')}`), 'second dialog button');
+    must(await rels() === 1, 'the relationship was removed before the second confirm');
+    await ev(`${btn('Cancel')}.click()`);
+    await waitFor(`!document.querySelector('dialog[open]')`, 'second confirm cancelled');
+    must(await rels() === 1, 'Cancel on the second dialog removed the relationship');
+    await openDelete();
+    await ev(`${btn('Remove')}.click()`);
+    await waitFor(`(document.querySelector('dialog[open] .dialog__body')?.textContent ?? '').startsWith('Really remove the ')`, 'second confirm again');
+    await ev(`${btn('Remove for good')}.click()`);
     await waitFor(`document.querySelectorAll('.rel-note').length === 0`, 'removed');
-    const undo = await ev(`(() => { const u = [...document.querySelectorAll('#toast button')].find((x) => x.textContent === 'Undo'); window.__undo = u; return !!u; })()`);
-    must(undo, 'undo offered');
     await drag(row('orders', 'region'), row('customers', 'region')); // relate the two tables again, on other columns than the removed link's
     await waitFor(`!!${dlg}?.querySelector('.rel-dialog__sub')`, 'dialog');
     await confirm();
     await waitFor(`document.querySelectorAll('.rel-note').length === 1`, 'related again');
-    await ev(`(() => { const t = document.getElementById('toast'); t.hidden = false; t.append(window.__undo); window.__undo.click(); return true; })()`);
-    await pause(200);
-    must(await rels() === 1, `two relationships for one table pair (was ${before})`);
+    must(await rels() === 1, 'one relationship per table pair');
     await drag(row('orders', 'customer_id'), row('customers', 'id')); // back to two keys for the next checks
     await waitFor(`[...document.querySelectorAll('.rel-badge text')].some((t) => / · 2 keys$/.test(t.textContent))`, 'two keys');
   });
   await add('stores', 3);
-  await check('"Needs a partner" opens "Relate stores to", the likeliest table first with its key', async () => {
-    await ev(`${card('stores')}.querySelector('.entity__need').click()`);
-    await waitFor(`${dlg}?.classList.contains('rel-pick')`, 'picker');
-    must(await ev(`${dlg}.querySelector('#rel-pick-title').textContent`) === 'Relate stores to', 'title');
-    const items = await ev(`[...${dlg}.querySelectorAll('.rel-pick__item')].map((x) => [x.querySelector('.rel-pick__name').textContent, x.querySelector('.rel-pick__key').textContent, x.disabled])`);
-    must(J(items) === J([['orders', 'store_id = store_id', false], ['customers', 'No matching columns', true]]), J(items));
-    await pause(500); await shot('4-needs-a-partner-picker.png');
-    await ev(`${dlg}.querySelector('.rel-pick__item').click()`);
+  await check('a card that needs a partner gets a proposed link; its dialog opens with the key the names point to', async () => {
+    await waitFor(`document.querySelector('[aria-label^="Relate stores and orders"], [aria-label^="Relate orders and stores"]') !== null`, 'proposed link');
+    await pause(500); await shot('4-needs-a-partner-proposal.png');
+    await ev(`document.querySelector('[aria-label^="Relate stores and orders"], [aria-label^="Relate orders and stores"]').click()`);
     await waitFor(`${dlg}?.querySelector('.rel-dialog__sub')?.textContent === 'stores → orders'`, 'dialog');
     await confirm();
     await waitFor(`document.querySelectorAll('.rel-note').length === 2`, 'saved');
   });
   await add('sales', 4);
   await add('stock', 5);
-  await check('☰ Relate to another table, then a table in the picker, opens the dialog with every same-named key already matched', async () => {
+  await check('a proposed link opens the dialog with every same-named key already matched', async () => {
     await shot('5-before-relate.png');
-    await ev(act(card('sales'), 'Relate to another table'));
-    await waitFor(`${dlg}?.classList.contains('rel-pick')`, 'picker');
-    await ev(`[...${dlg}.querySelectorAll('.rel-pick__item')].find((x) => x.textContent.startsWith('stock')).click()`);
+    await waitFor(`document.querySelector('[aria-label^="Relate sales and stock"], [aria-label^="Relate stock and sales"]') !== null`, 'proposed link');
+    await ev(`document.querySelector('[aria-label^="Relate sales and stock"], [aria-label^="Relate stock and sales"]').click()`);
     await waitFor(`${dlg}?.querySelector('.rel-dialog__sub')?.textContent === 'sales → stock'`, 'dialog');
     const chips = await ev(`[...${dlg}.querySelectorAll('.key-pairs__item span')].map((x) => x.textContent)`);
     must(J(chips) === J(['sku_code = sku_code']), J(chips));
@@ -156,18 +164,12 @@ try {
     await pause(300);
     await shot('7-final-model.png');
   });
-  await check('☰ Relate to another table opens the picker; an already related table opens its relationship', async () => {
-    await ev(act(card('sales'), 'Relate to another table'));
-    await waitFor(`${dlg}?.classList.contains('rel-pick')`, 'picker');
-    const first = await ev(`[...${dlg}.querySelectorAll('.rel-pick__item')][0].textContent`);
-    must(/stock.*Related/.test(first), first);
-    must(await ev(`document.activeElement.classList.contains('rel-pick__item')`), 'focus in list');
-    await ev(`${dlg}.querySelector('.rel-pick__item').click()`);
-    await waitFor(`${dlg}?.querySelector('.rel-dialog__sub')?.textContent === 'sales → stock' && !!${dlg}.querySelector('.btn--danger')`, 'edit dialog');
-    await ev(`${dlg}.querySelector('[aria-label=Close]').click()`);
-    await ev(act(card('stores'), 'Relate to another table')); // two candidates: the picker
-    await waitFor(`${dlg}?.classList.contains('rel-pick')`, 'picker');
-    must(await ev(`[...${dlg}.querySelectorAll('button')].some((x) => x.textContent === 'Cancel')`), 'cancel');
+  await check('the ☰ menu and the card head hold no relate action or table picker', async () => {
+    await ev(`${card('sales')}.querySelector('.entity__menu').click()`);
+    const items = await ev(`[...document.querySelectorAll('.ctx-menu [role^="menuitem"]')].map((x) => x.textContent.trim())`);
+    must(!items.some((t) => /relate/i.test(t)), J(items));
+    await b.key('Escape', { vk: 27 });
+    must(await ev(`document.querySelector('.rel-pick') === null`), 'no picker');
   });
   void toastText;
 } catch (e) { console.log(`FAIL harness: ${e.stack}`); failed++; } finally { if (b) await b.close(); }

@@ -195,6 +195,8 @@ try {
     await clickIn(dlg, 'Cancel');
     await waitFor(`!!(${confirmOpen})`, 'discard confirm');
     await clickIn(confirmOpen, 'Discard');
+    await waitFor(`/^Really discard /.test(${confirmOpen}?.textContent ?? '')`, 'second discard confirm');
+    await clickIn(confirmOpen, 'Discard for good');
     await waitFor(`${dlg} === null`, 'closed');
   });
 
@@ -297,6 +299,8 @@ try {
     await clickIn(pdlg, 'Delete parameter Tax');
     await waitFor(`${confirmOpen} !== undefined`, 'confirm again');
     await clickIn(confirmOpen, 'Delete');
+    await waitFor(`/^Really delete /.test(${confirmOpen}?.textContent ?? '')`, 'second confirm');
+    await clickIn(confirmOpen, 'Delete for good');
     await waitFor(`!/Delete parameter Tax/.test(${pdlg}.innerHTML)`, 'deleted');
     await clickIn(pdlg, 'Done');
     await waitFor(`/can't be computed/.test(document.getElementById('ws-chart').textContent)`, 'E15 message');
@@ -307,11 +311,14 @@ try {
     must(/Tax/.test(pane), 'pane lost the calculation');
   });
 
-  await check('deleting a parameter nothing reads needs no confirm; restoring the name heals the calculation', async () => {
+  await check('deleting a parameter nothing reads asks twice too; restoring the name heals the calculation', async () => {
     await openParams();
     await clickIn(pdlg, 'Delete parameter Label');
-    await b.sleep(150);
-    must(await ev(`${confirmOpen} === undefined`), 'confirm shown for an unused parameter');
+    await waitFor(`${confirmOpen} !== undefined`, 'confirm dialog for an unused parameter');
+    await clickIn(confirmOpen, 'Delete');
+    await waitFor(`/^Really delete /.test(${confirmOpen}?.textContent ?? '')`, 'second confirm');
+    await clickIn(confirmOpen, 'Delete for good');
+    await waitFor(`!/Delete parameter Label/.test(${pdlg}.innerHTML)`, 'unused parameter deleted');
     await clickIn(pdlg, '+ New parameter');
     await setField('Name', 'Tax'); await setField('Type', 'number', 'select'); await setField('Current value', '0.5');
     await clickIn(pdlg, 'Save'); await clickIn(pdlg, 'Done');

@@ -8,7 +8,7 @@ import { icon } from "../Core/icons.js";
 import { sqlProblem } from "../Core/source-model.js";
 import { checkSql, posOf, serverErrorPos } from "../Core/sql-check.js";
 import { meaningKept } from "../Core/sql-roundtrip.js";
-import { makeButton, openDialog, closeDialog, confirmDialog } from "../Core/ui.js";
+import { makeButton, openDialog, closeDialog, confirmDeleteTwice } from "../Core/ui.js";
 import { mountEditor } from "./sql-editor.js";
 
 let seq = 0;
@@ -190,7 +190,7 @@ export async function openSqlDialog({ table, sql, mysql, getDefault, apply, vali
     if (closed || asking) return;
     if (editor && opened !== null && editor.getValue() !== opened) {
       asking = true;
-      const ok = await confirmDialog("Discard your changes to this query?", { danger: true, confirmText: "Discard" });
+      const ok = await confirmDeleteTwice("Discard your changes to this query?", "your changes", { confirmText: "Discard" });
       asking = false;
       if (!ok) { editor.focus(); return; }
     }

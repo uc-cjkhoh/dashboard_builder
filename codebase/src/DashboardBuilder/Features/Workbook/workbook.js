@@ -7,7 +7,7 @@ import { clearRoleChoices } from "../Calc/calc-pane-model.js";
 import { DEFAULT_THEME } from "../Core/theme-model.js";
 import { openThemeDialog } from "./theme-dialog.js";
 import { exit } from "../Core/motion.js";
-import { toast, confirmDialog, listDialog } from "../Core/ui.js";
+import { toast, confirmDeleteTwice, listDialog } from "../Core/ui.js";
 import { dateIn } from "../Core/timezone.js";
 import { addEntity, clearModel } from "../Canvas/canvas.js";
 import { restoreRelationship } from "../Relations/relations.js";
@@ -93,7 +93,6 @@ async function clearWorkspace() {
   restoring = true;
   try {
     clearModel();
-    bus.dispatchEvent(new Event("workbook:reset")); // Tabs/: drop the close-undo snapshots
     for (const t of [...tabs]) closeTab(t.id);
     showModel();
     setTheme(DEFAULT_THEME); // the saved workbook keeps its theme; it comes back on reconnect
@@ -166,7 +165,6 @@ function openWorkbook(wb) {
   restoring = true;
   try {
     clearModel();
-    bus.dispatchEvent(new Event("workbook:reset")); // Tabs/: drop the close-undo snapshots
     for (const t of [...tabs]) closeTab(t.id);
     setSharedFilters(wb.sharedFilters ?? []); // before the tabs, so a worksheet's first query applies them
     setAllFieldMeta(wb.fields ?? {});
@@ -243,9 +241,9 @@ async function importFile(input) {
   let wb;
   try { wb = parseWorkbook(await file.text()); } catch (err) { toast(err.message, "danger"); return; }
   if (!isEmpty()) {
-    const ok = await confirmDialog(
+    const ok = await confirmDeleteTwice(
       "Replace the current workbook? Its tables, relationships, worksheets, dashboards and stories will be removed.",
-      { danger: true, confirmText: "Replace" },
+      "the current workbook", { confirmText: "Replace" },
     );
     if (!ok) return;
   }

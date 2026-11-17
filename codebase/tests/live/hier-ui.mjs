@@ -176,6 +176,8 @@ try {
     await clickIn(hdlg, 'Delete hierarchy Places');
     await waitFor(`[...document.querySelectorAll('dialog[open]')].some((d) => !d.classList.contains('hier-dialog'))`, 'confirm');
     await ev(`[...document.querySelectorAll('dialog[open] button')].find((x) => x.textContent === 'Delete' && !x.getAttribute('aria-label')).click()`);
+    await waitFor(`/^Really delete /.test([...document.querySelectorAll('dialog[open]')].find((d) => !d.classList.contains('hier-dialog'))?.textContent ?? '')`, 'second confirm');
+    await ev(`[...document.querySelectorAll('dialog[open] button')].find((x) => x.textContent === 'Delete for good').click()`);
     await waitFor(`(${hdlg}?.querySelectorAll('.bookmark__name').length ?? 0) === 0`, 'row removed');
     must(J(await sheetDrill()) === before, 'delete changed the sheet drill');
     must(await ev(`!!document.querySelector('.ws-drill')`), 'drill chip gone');

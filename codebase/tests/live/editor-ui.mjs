@@ -1,5 +1,5 @@
 // Browser checks for the worksheet editor's chart interactions (P24a refactor safety net): click selection Keep / Exclude,
-// legend click, drill down / up, Pages stepping, SVG / PNG export, print sizing, undo / redo, the Table pager with a theme
+// legend click, drill down / up, Pages stepping, SVG / PNG export, print sizing, the Table pager with a theme
 // flip, Refresh and Cancel on a slow query, and leaving for the Data Source mid-query. The real dev app (APP_URL, default
 // http://localhost:5193) in headless Chromium; every /api/* call is mocked. Any page error fails the run (cdp.mjs).
 import { launch } from './cdp.mjs';
@@ -156,20 +156,6 @@ try {
     await ev(`(() => { window.dispatchEvent(new Event('afterprint')); return true; })()`);
     await waitFor(`${instOf}.getWidth() !== 1000`, 'width restored');
     must(Math.abs((await w()) - before) < 40, `width ${await w()} vs ${before}`);
-  });
-
-  await check('undo and redo restore and replay a shelf edit', async () => {
-    await ev(`document.querySelector('.ws-shelf--rows .ws-pill .ws-pill__remove, .ws-shelf--rows .ws-pill [aria-label^="Remove"]')?.click()`);
-    await waitFor(`document.querySelectorAll('.ws-shelf--rows .ws-pill').length === 0`, 'measure removed');
-    await settle();
-    await click('Undo (Ctrl+Z)');
-    await waitFor(`document.querySelectorAll('.ws-shelf--rows .ws-pill').length === 1`, 'measure back');
-    await settle();
-    await click('Redo (Ctrl+Shift+Z)');
-    await waitFor(`document.querySelectorAll('.ws-shelf--rows .ws-pill').length === 0`, 'redone');
-    await click('Undo (Ctrl+Z)');
-    await waitFor(`document.querySelectorAll('.ws-shelf--rows .ws-pill').length === 1`, 'measure back again');
-    await settle();
   });
 
   await check('Table pager loads the next page on scroll; a theme flip redraws from cache without re-querying', async () => {

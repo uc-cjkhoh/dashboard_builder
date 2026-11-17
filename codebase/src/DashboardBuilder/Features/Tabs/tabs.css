@@ -61,9 +61,3 @@
 .tab-add:active { transform: scale(.96); box-shadow: none; }
 /* The model tab has no close button, so give it symmetric padding to align with the rest. */
 .tab--model { padding: 0 var(--s2); }
-
-
-/* Closing a tab: a toast with Undo, a step above the generic toast so the two never overlap. */
-.tab-undo { bottom: calc(var(--s6) + var(--toast-h) + var(--s2)); }
-.tab-undo[hidden] { display: none; }
-.tab-undo__btn { height: var(--ctl-h); font-size: var(--fs-body); }

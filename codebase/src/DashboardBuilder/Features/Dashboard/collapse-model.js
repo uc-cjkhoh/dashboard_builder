@@ -108,7 +108,7 @@ export function applyToggle(collapsed, axis, key, valid) {
 /**
  * Collapse or expand every header at once. `rowKeys` / `colKeys` are the headers that exist now (`headerKeys`); stale keys are
  * pruned. "collapse" closes them all (blocked, nothing changed, when that would pass the cap); "expand" opens them all.
- * Returns { collapsed, changed, blocked } — `changed` counts the headers that flipped, so 0 means no edit (and no undo step).
+ * Returns { collapsed, changed, blocked } — `changed` counts the headers that flipped, so 0 means no edit.
  */
 export function applyAll(collapsed, mode, rowKeys, colKeys) {
   const live = { rows: rowKeys, cols: colKeys };

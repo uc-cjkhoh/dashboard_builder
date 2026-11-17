@@ -111,14 +111,6 @@ try {
     await b.sleep(300);
     must(await ev(`!!document.querySelector('.ws-shelf--rows .ws-pill--measure')`), 'amount not a measure again');
   });
-  const undo = async () => { await ev(`document.querySelector('[aria-label="Undo (Ctrl+Z)"]').click()`); await b.sleep(400); };
-  await check('undo of a Discrete toggle restores the measure', async () => {
-    must(await menu('rows', 'Discrete') === 'clicked', 'no Discrete item');
-    await b.sleep(300);
-    must(await ev(`!!document.querySelector('.ws-shelf--rows .ws-pill--dimension')`), 'not a dimension');
-    await undo();
-    must(await ev(`!!document.querySelector('.ws-shelf--rows .ws-pill--measure')`), 'undo did not restore the measure');
-  });
   await check('plus button: click, click, dblclick leaves one pill', async () => {
     await ev(`document.querySelector('.ws-shelf--rows .ws-pill__remove, .ws-shelf--rows .ws-pill button')?.click?.()`);
     await b.sleep(200);

@@ -204,7 +204,7 @@ try {
     await shot('tooltip-modal-light.png');
   });
 
-  await check('style a line (size, bold, italic, colour), add and reorder lines; the preview follows; Apply is one undo step', async () => {
+  await check('style a line (size, bold, italic, colour), add and reorder lines; the preview follows; Apply commits them; editing the text back to one line clears the style', async () => {
     await ev(`document.querySelector('.tipdlg__add').click()`);
     await setLine(1, 'Total <orders.region>');
     await ev(`(() => { const r = document.querySelectorAll('.tipdlg__line')[0]; const sz = r.querySelector('.tipdlg__size'); sz.value = '24'; sz.dispatchEvent(new Event('change')); r.querySelector('.tipdlg__tog').click(); const c = r.querySelector('.tipdlg__colour'); c.value = 'accent'; c.dispatchEvent(new Event('change')); return true; })()`);
@@ -224,11 +224,10 @@ try {
     must(html.includes('font-size:24px') && html.includes('font-weight:700') && html.includes('var(--accent-ink)'), `tooltip style: ${html}`);
     must(html.includes('<b>EU</b>'), 'values still rendered');
     await shot('tooltip-styled.png');
-    await ev(`document.querySelector('button[aria-label^="Undo"]').click()`);
-    await settle(300);
-    must(await ev(`document.querySelector('.ws-tipedit__text')?.value`) === '<orders.region>', 'undo restores the text');
+    await tipText('<orders.region>'); // back to one plain line: the line count changed, so the styles go
+    must(await ev(`document.querySelector('.ws-tipedit__text')?.value`) === '<orders.region>', 'the text is back');
     const html2 = await showTip();
-    must(!html2.includes('font-size:24px'), `undo restores the style: ${html2}`);
+    must(!html2.includes('font-size:24px'), `the style is cleared with the line count: ${html2}`);
   });
 
   await check('Escape discards the draft and returns focus; Reset ("Automatic") applies an empty tooltip', async () => {
@@ -286,7 +285,7 @@ try {
   const applyBtn = `[...document.querySelectorAll('.tipdlg .dialog__foot button')].find((x) => x.textContent === 'Apply')`;
   const fsel = (label, v) => ev(`(() => { const s = document.querySelector('.tipdlg select[aria-label=${J(label)}]'); if (!s) throw new Error('no select ${label}'); s.value = ${J(v)}; s.dispatchEvent(new Event('change')); return true; })()`);
   let measureName = '';
-  await check('the modal offers a per-field number format for a measure; preview and chart tooltip apply it; Apply is one undo step', async () => {
+  await check('the modal offers a per-field number format for a measure; preview and chart tooltip apply it', async () => {
     await tipText('<orders.region>: <v0>'); // the mock names the measure v0
     await ev(`document.querySelector('.ws-tipedit__modal').click()`);
     await waitFor(`${tdlg} !== null`, 'modal');
@@ -304,12 +303,6 @@ try {
     await waitFor(`${tdlg} === null`, 'closed');
     const html = await showTip();
     must(html.includes('<b>EU</b>') && html.includes('2,000.0%'), `chart tooltip: ${html}`);
-    await ev(`document.querySelector('button[aria-label^="Undo"]').click()`);
-    await settle(300);
-    const h2 = await showTip();
-    must(!h2.includes('%'), `undo restores the view format: ${h2}`);
-    await ev(`document.querySelector('button[aria-label^="Redo"]').click()`);
-    await settle(300);
   });
 
   await check('a date group-by gets a date format; dark theme; formats are dropped when the field leaves the template', async () => {
