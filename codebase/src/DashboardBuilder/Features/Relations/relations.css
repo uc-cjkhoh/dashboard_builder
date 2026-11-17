@@ -18,7 +18,7 @@
 
 /* Relationship dialog: the column profile's frame (head with title, subtitle and X; body on the colour wash; foot) with two flat
    panels instead of bento cells. The body scrolls, the head and foot stay put. */
-.dialog.dialog--rel { width: min(1280px, calc(100vw - 2 * var(--s4))); max-width: none; max-height: min(88vh, 800px); }
+.dialog.dialog--rel { width: min(1216px, calc(100vw - 2 * var(--s4))); max-width: none; max-height: min(88vh, 800px); }
 .dialog--rel[open] { display: flex; flex-direction: column; }
 .rel-dialog__head { flex: none; display: flex; align-items: flex-start; gap: var(--s2); padding: var(--s4) calc(var(--s6) - 12px) var(--s4) var(--s6); border-bottom: 1px solid var(--line); } /* right 12px: the X glyph sits 12px inside its 32px button, so it lands on the 24px gutter */
 .rel-dialog__titles { flex: 1; min-width: 0; }
