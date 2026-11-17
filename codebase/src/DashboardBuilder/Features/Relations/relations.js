@@ -636,7 +636,7 @@ function openCardinalityDialog({ current = "1:N", joinType = "inner", tables = [
   check?.start();
 }
 
-// One choice of several as radio cards in a 2 x 2 grid (a toggle would read as "pick several"): a bold name, over a short hint when given.
+// One choice of several as radio cards in a 2 x 2 grid (a toggle would read as "pick several"): a bold name.
 // The radio and the text sit vertically centred in the card.
 // The chosen card takes the accent border, a tint and a filled dot, so it never relies on colour alone. Reports each pick.
 function radioCards(title, name, choices, value, onPick) {
@@ -647,7 +647,7 @@ function radioCards(title, name, choices, value, onPick) {
   const grid = document.createElement("div");
   grid.className = "choice-cards";
   const inputs = [];
-  for (const { value: v, text, hint } of choices) {
+  for (const { value: v, text } of choices) {
     const lab = document.createElement("label");
     lab.className = "choice-card";
     const r = document.createElement("input");
@@ -659,12 +659,6 @@ function radioCards(title, name, choices, value, onPick) {
     n.className = "choice-card__name";
     n.textContent = text;
     words.append(n);
-    if (hint) { // Join has none; Cardinality's is its code
-      const h = document.createElement("span");
-      h.className = "choice-card__hint";
-      h.textContent = hint;
-      words.append(h);
-    }
     lab.append(r, words);
     inputs.push(r);
     grid.append(lab);

@@ -86,9 +86,7 @@
 .choice-card input:checked { border-color: var(--accent-ink); }
 .choice-card input:checked::after { scale: 1; }
 .choice-card__text { display: grid; min-width: 0; }
-.choice-card__name { font-weight: 600; color: var(--ink); }
-.choice-card__hint { color: var(--ink-3); overflow-wrap: anywhere; }
-.choice-card:has(input:checked) .choice-card__hint { color: var(--ink-2); }
+.choice-card__name { font-weight: 600; color: var(--ink); overflow-wrap: anywhere; }
 @media (max-width: 420px) { .choice-cards { grid-template-columns: minmax(0, 1fr); } }
 
 .join-aggregate__dir { margin: var(--s1) 0 0 var(--s4); }

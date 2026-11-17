@@ -96,14 +96,14 @@ export function matchingColumns(columns, category, usedNames = [], limit = 5) {
 export const JOIN_TYPES = ["inner", "left", "right", "full"];
 export const normalizeJoinType = (t) => (JOIN_TYPES.includes(t) ? t : "inner");
 
-/** The dialog's cardinality cards, in the 2 x 2 order (1:1, 1:N / N:1, N:M): the kind in words over its short code (the code is what the
- *  canvas badge and the suggestion show). */
+/** The dialog's cardinality cards, in the 2 x 2 order (1:1, 1:N / N:1, N:M): the kind in words with its short code, no hint (the code
+ *  is what the canvas badge and the suggestion show). */
 export function cardinalityChoices() {
   return [
-    { value: "1:1", text: "One to one", hint: "1:1" },
-    { value: "1:N", text: "One to many", hint: "1:N" },
-    { value: "N:1", text: "Many to one", hint: "N:1" },
-    { value: "N:M", text: "Many to many", hint: "N:M" },
+    { value: "1:1", text: "One to one (1:1)" },
+    { value: "1:N", text: "One to many (1:N)" },
+    { value: "N:1", text: "Many to one (N:1)" },
+    { value: "N:M", text: "Many to many (N:M)" },
   ];
 }
 

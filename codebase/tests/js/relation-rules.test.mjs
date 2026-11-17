@@ -36,11 +36,11 @@ test("join cards are the SQL join names, with no hint", () => {
   assert.ok(c.every((x) => x.hint === undefined));
 });
 
-test("cardinality cards: 2 x 2 order, the kind in words over its code", () => {
+test("cardinality cards: 2 x 2 order, the kind in words with its code, no hint", () => {
   const c = cardinalityChoices();
   assert.deepEqual(c.map((x) => x.value), ["1:1", "1:N", "N:1", "N:M"]);
-  assert.deepEqual(c.map((x) => x.text), ["One to one", "One to many", "Many to one", "Many to many"]);
-  for (const x of c) assert.equal(x.hint, x.value);
+  assert.deepEqual(c.map((x) => x.text), ["One to one (1:1)", "One to many (1:N)", "Many to one (N:1)", "Many to many (N:M)"]);
+  assert.ok(c.every((x) => x.hint === undefined));
 });
 
 test("the FROM side is the left side: planning in reverse swaps left and right", () => {
