@@ -107,15 +107,15 @@ export function cardinalityChoices() {
   ];
 }
 
-/** The dialog's radio options, worded with the two table names (never colour alone). A legacy left link
- *  (saved before sides were fixed) also gets its own choice, so it is never mislabelled "keep the FROM table". */
-export function joinChoices(fromTable, toTable, legacy = false) {
+/** The dialog's join cards: the SQL join name only, no hint (the Relationships card says in words which rows are shown). A legacy
+ *  left link (saved before sides were fixed) also gets its own choice, so it is never mislabelled "keep the FROM table". */
+export function joinChoices(legacy = false) {
   return [
-    { value: "inner", text: "Inner join", hint: "Only rows that match" },
-    ...(legacy ? [{ value: "legacy", text: "Left join (older link)", hint: "All rows of the base table" }] : []),
-    { value: "left", text: "Left join", hint: `All rows of ${fromTable}` },
-    { value: "right", text: "Right join", hint: `All rows of ${toTable}` },
-    { value: "full", text: "Full outer join", hint: "All rows of both" },
+    { value: "inner", text: "Inner join" },
+    ...(legacy ? [{ value: "legacy", text: "Left join (older link)" }] : []),
+    { value: "left", text: "Left join" },
+    { value: "right", text: "Right join" },
+    { value: "full", text: "Full outer join" },
   ];
 }
 

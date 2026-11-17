@@ -103,7 +103,7 @@ try {
     must(await ev(`document.querySelectorAll('dialog[open] .join-check__note--warn').length`) === 0, 'unexpected warning');
     await shot('join-check-ok.png');
   });
-  await check('the dialog is up to 1216px wide in golden ratio, two equal panels, the left panel reads Join, Cardinality, Totals, Also match on with Join and Cardinality as 2 x 2 radio cards, the suggestion panel stacks suggestion / evidence / counts and keeps 16px clear of its scrollbar', async () => {
+  await check('the dialog is up to 1216px wide in golden ratio, two equal panels, the left panel reads Join, Cardinality, Totals, Also match on with Join and Cardinality as 2 x 2 radio cards (no Join hint, content vertically centred), the suggestion panel stacks suggestion / evidence / counts and keeps 16px clear of its scrollbar', async () => {
     const g = await ev(`(() => { const r = (q) => { const b = document.querySelector('dialog[open] ' + q).getBoundingClientRect(); return { left: b.left, right: b.right, top: b.top, bottom: b.bottom, width: b.width }; };
       const p = document.querySelector('dialog[open] .rel-dialog__right'), pr = p.getBoundingClientRect();
       return { dlg: r(''), left: r('.rel-dialog__left').width, divider: pr.left, bar: pr.left + p.clientWidth, main: r('.join-check__main'), ev: r('.join-check__evidence'), table: r('.join-check__table'), out: r('.join-check__out'),
@@ -114,6 +114,10 @@ try {
     must(J(order) === J(['Join', 'Cardinality', 'Totals', 'Also match on']), `section order ${J(order)}`);
     const grids = await ev(`[...document.querySelectorAll('dialog[open] .choice-cards')].map((g) => { const c = [...g.children].map((x) => x.getBoundingClientRect()); return { n: c.length, cols: new Set(c.map((x) => Math.round(x.left))).size, border: getComputedStyle(g.children[0]).borderTopWidth }; })`);
     must(grids.length === 2 && grids.every((x) => x.n === 4 && x.cols === 2 && x.border === '1px'), `not 2 x 2 cards: ${J(grids)}`);
+    const off = await ev(`[...document.querySelectorAll('dialog[open] .choice-card')].map((c) => { const m = (e) => { const r = e.getBoundingClientRect(); return r.top + r.height / 2; };
+      return Math.max(Math.abs(m(c.querySelector('input')) - m(c)), Math.abs(m(c.querySelector('.choice-card__text')) - m(c))); })`);
+    must(off.every((d) => d < 1), `card radio / text not vertically centred: ${J(off)}`);
+    must(await ev(`document.querySelectorAll('dialog[open] .rel-sec--join .choice-card__hint').length`) === 0, 'Join cards still show a hint');
     must(Math.abs(g.divider - (g.dlg.left + g.dlg.width / 2)) < 1, `divider not centred: ${J(g)}`);
     must(g.ev.top >= g.main.bottom && g.table.top >= g.ev.bottom, `groups not stacked: ${J(g)}`);
     must(g.bar - g.out.right >= 16, `content within 16px of the scrollbar: ${J(g)}`);

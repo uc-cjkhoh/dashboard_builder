@@ -29,14 +29,11 @@ test("join types are inner, left, right, full; anything else reads as inner", ()
   for (const t of [undefined, null, "FULL", "cross", "full outer", 3]) assert.equal(normalizeJoinType(t), "inner");
 });
 
-test("dialog choices name the tables in plain words", () => {
-  const c = joinChoices("orders", "customers");
+test("join cards are the SQL join names, with no hint", () => {
+  const c = joinChoices();
   assert.deepEqual(c.map((x) => x.value), ["inner", "left", "right", "full"]);
   assert.deepEqual(c.map((x) => x.text), ["Inner join", "Left join", "Right join", "Full outer join"]);
-  assert.equal(c[1].hint, "All rows of orders");
-  assert.equal(c[2].hint, "All rows of customers");
-  assert.equal(c[3].hint, "All rows of both");
-  assert.match(c[0].hint, /only rows that match/i);
+  assert.ok(c.every((x) => x.hint === undefined));
 });
 
 test("cardinality cards: 2 x 2 order, the kind in words over its code", () => {
@@ -78,10 +75,10 @@ test("legacy left gets its own dialog choice; re-saving fixes the sides", () => 
   assert.equal(joinSelection("left", false), "legacy");
   assert.equal(joinSelection("left", true), "left");
   assert.equal(joinSelection("full", false), "full");
-  const c = joinChoices("orders", "customers", true);
+  const c = joinChoices(true);
   assert.deepEqual(c.map((x) => x.value), ["inner", "legacy", "left", "right", "full"]);
   assert.equal(c[1].text, "Left join (older link)");
-  assert.deepEqual(joinChoices("a", "b").map((x) => x.value), ["inner", "left", "right", "full"]);
+  assert.deepEqual(joinChoices().map((x) => x.value), ["inner", "left", "right", "full"]);
   assert.deepEqual(joinFromSelection("legacy"), { joinType: "left", joinFixed: false });
   assert.deepEqual(joinFromSelection("left"), { joinType: "left", joinFixed: true });
   assert.deepEqual(joinFromSelection("inner"), { joinType: "inner", joinFixed: true });

@@ -598,7 +598,7 @@ function openCardinalityDialog({ current = "1:N", joinType = "inner", tables = [
   // Left, top to bottom: Join, Cardinality, Totals, Also match on. Join and Cardinality are the same control: one choice of four as
   // radio cards in a 2 x 2. Picking only selects; Confirm saves. The link runs first → second.
   let join = joinType;
-  left.append(section("join", 0, radioCards("Join", "join-type", joinChoices(tables[0], tables[1], legacy), join, (v) => { join = v; }).root));
+  left.append(section("join", 0, radioCards("Join", "join-type", joinChoices(legacy), join, (v) => { join = v; }).root));
   let cardinality = current;
   let check = null;
   const card = radioCards("Cardinality", "cardinality", cardinalityChoices(), cardinality, (v) => { cardinality = v; check?.redescribe(); });
@@ -636,7 +636,8 @@ function openCardinalityDialog({ current = "1:N", joinType = "inner", tables = [
   check?.start();
 }
 
-// One choice of several as radio cards in a 2 x 2 grid (a toggle would read as "pick several"): a bold name over a short hint.
+// One choice of several as radio cards in a 2 x 2 grid (a toggle would read as "pick several"): a bold name, over a short hint when given.
+// The radio and the text sit vertically centred in the card.
 // The chosen card takes the accent border, a tint and a filled dot, so it never relies on colour alone. Reports each pick.
 function radioCards(title, name, choices, value, onPick) {
   const root = document.createElement("fieldset");
@@ -657,10 +658,13 @@ function radioCards(title, name, choices, value, onPick) {
     const n = document.createElement("span");
     n.className = "choice-card__name";
     n.textContent = text;
-    const h = document.createElement("span");
-    h.className = "choice-card__hint";
-    h.textContent = hint;
-    words.append(n, h);
+    words.append(n);
+    if (hint) { // Join has none; Cardinality's is its code
+      const h = document.createElement("span");
+      h.className = "choice-card__hint";
+      h.textContent = hint;
+      words.append(h);
+    }
     lab.append(r, words);
     inputs.push(r);
     grid.append(lab);
