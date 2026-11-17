@@ -4,6 +4,7 @@ Visual and interaction changes (styles, markup, layout, labels, icons, focus). G
 
 ## 2026-11-17
 
+- Relationships card: closed note titles vertically centred in their row (no grid gap under a closed dropdown's title) (`daf8a1e`)
 - Relationship dialog: equal panels; suggestion panel stacks suggestion / Evidence / Counts under hairlines, tags in one column, Suggestion level with Join, thin themed scrollbar in its own lane 16px clear of the content (`ba0be06`)
 
 ## 2026-11-16

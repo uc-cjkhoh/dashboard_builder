@@ -89,6 +89,8 @@ Gotchas that have bitten (or will bite) this app. Read before touching the area 
 - **`::details-content { display: contents }` breaks closing a `<details>`.** Chrome hides closed content
   with `content-visibility: hidden` on that box, which `display: contents` ignores, so scope it to `[open]`
   (`.rel-notes[open]::details-content` in `relations.css`).
+- **A closed grid `<details>` keeps its `gap`.** The hidden content slot is still a grid item, so the gap
+  sits under the summary and pushes it off centre; zero it with `:not([open])` (`.rel-note__more` in `relations.css`).
 - **A cache hit means no query.** Presentation-only changes re-render from the worksheet's result
   cache. If a change *should* re-query, it must change the plan (see
   [worksheet-query.md § Query lifecycle](../concepts/worksheet/worksheet-query.md#query-lifecycle)).
