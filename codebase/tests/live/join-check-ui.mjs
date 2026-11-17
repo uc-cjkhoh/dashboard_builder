@@ -103,13 +103,16 @@ try {
     must(await ev(`document.querySelectorAll('dialog[open] .join-check__note--warn').length`) === 0, 'unexpected warning');
     await shot('join-check-ok.png');
   });
-  await check('the dialog is up to 1280px wide, the suggestion panel takes 3/5, and the evidence sits beside the suggestion', async () => {
-    const g = await ev(`(() => { const r = (q) => { const b = document.querySelector('dialog[open] ' + q).getBoundingClientRect(); return { left: b.left, right: b.right, top: b.top, width: b.width }; };
-      return { dlg: r('').width, left: r('.rel-dialog__left').width, right: r('.rel-dialog__right').width, main: r('.join-check__main'), ev: r('.join-check__evidence'), table: r('.join-check__table') }; })()`);
-    must(g.dlg === Math.min(1280, 1400 - 32), `dialog width ${g.dlg}`);
-    must(g.right > g.left * 1.3, `panels ${g.left} / ${g.right}`);
-    must(g.ev.left >= g.main.right && Math.abs(g.ev.top - g.main.top) < 2, `evidence not beside: ${J(g)}`);
-    must(g.table.left <= g.main.left + 1 && g.table.right >= g.ev.right - 1, `counts table not full width: ${J(g)}`);
+  await check('the dialog is up to 1280px wide, two equal panels, the suggestion panel stacks suggestion / evidence / counts and keeps 16px clear of its scrollbar', async () => {
+    const g = await ev(`(() => { const r = (q) => { const b = document.querySelector('dialog[open] ' + q).getBoundingClientRect(); return { left: b.left, right: b.right, top: b.top, bottom: b.bottom, width: b.width }; };
+      const p = document.querySelector('dialog[open] .rel-dialog__right'), pr = p.getBoundingClientRect();
+      return { dlg: r(''), left: r('.rel-dialog__left').width, divider: pr.left, bar: pr.left + p.clientWidth, main: r('.join-check__main'), ev: r('.join-check__evidence'), table: r('.join-check__table'), out: r('.join-check__out'),
+        joinTop: r('.join-choice legend').top, titleTop: r('.join-check__title').top }; })()`);
+    must(g.dlg.width === Math.min(1280, 1400 - 32), `dialog width ${g.dlg.width}`);
+    must(Math.abs(g.divider - (g.dlg.left + g.dlg.width / 2)) < 1, `divider not centred: ${J(g)}`);
+    must(g.ev.top >= g.main.bottom && g.table.top >= g.ev.bottom, `groups not stacked: ${J(g)}`);
+    must(g.bar - g.out.right >= 16, `content within 16px of the scrollbar: ${J(g)}`);
+    must(Math.abs(g.joinTop - g.titleTop) < 1, `"Suggestion" not level with "Join": ${J(g)}`);
     must(await ev(`[...document.querySelectorAll('dialog[open] .join-check__table thead th')].every((th) => th.scrollWidth <= th.clientWidth)`), 'a column head is cut off');
     await ev(`(() => { const p = document.querySelector('dialog[open] .rel-dialog__right'); p.scrollTop = p.scrollHeight; return 1; })()`);
     await shot('join-check-evidence.png');
