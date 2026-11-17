@@ -45,7 +45,7 @@ Grouped by feature folder; each entry is the module, then what it owns.
 
 ### Canvas/ and Relations/ — the Data Source canvas
 
-- `Canvas/canvas.js` — drop handling, entity cards, card menu and Edit SQL (`sql-dialog.js`, `sql-editor.js`, `Core/sql-check.js`), card movement, list height from an edge drag (`card-height.js`), the column type label (`column-type.js`, pure `cardType`), zoom and pan (`canvas-zoom.js`), empty state — [canvas.md](../concepts/data-source/canvas.md)
+- `Canvas/canvas.js` — drop handling, entity cards, card menu and Edit SQL (`sql-dialog.js`, `sql-editor.js`, `Core/sql-check.js`), card movement, list height from an edge drag (`card-height.js`), the column type label (`column-type.js`, pure `cardType`), zoom and pan (`canvas-zoom.js`), empty state, the data preview docked under the canvas (`data-preview.js`, request rule `entityRowsQuery` in `Rows/rows-model.js`) — [canvas.md](../concepts/data-source/canvas.md)
 - `Canvas/empty-state.js` — pure: `emptyState({connected, databaseSelected})` → the sentence, button and control to focus
 - `Relations/relations.js` — drag- and keyboard-to-relate (`link-keys.js`), links, the Relationships description card (`relation-describe.js`), cardinality, pinned keys — [relationships.md](../concepts/data-source/relationships.md)
 - `Relations/join-preview-model.js`, `Relations/join-check.js` — pure wording and chosen-vs-observed comparison of a join preview (`describePreview`, `observedCardinality`, `joinEvidence`, `suggestionLabel`, `pct`, `previewRequest`); the dialog's Suggestion panel (DOM, `textContent` only): `buildJoinCheck()` returns `{ root, start, rerun, redescribe }`, run on open, re-run on a key-pair change, re-read on a cardinality pick

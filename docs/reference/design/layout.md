@@ -128,10 +128,10 @@ two bottom borders line up across the shell. If the tabs wrap, the bar grows tal
   `--elev-card` shadow (`--elev-card-hover` on hover) and a 1px `--card-rim` highlight along the head's
   top edge.
 - **Placement:** the Data Source ground is a 24px dot grid. Cards snap to 8px and are placed on a 312px
-  slot with a 96px gutter, which holds a link's elbow and badge
+  slot with a 144px gutter between columns and 96px between rows, which holds a link's elbow and badge
   ([canvas.md](../../concepts/data-source/canvas.md#canvas-ground)). The gutter is canvas placement, not
   component spacing, so it sits outside the 4 / 8 / 16 / 24 steps.
-- **No data rows on the card.** A table's rows open in a dialog from its schema-browser chip.
+- **No data rows on the card.** A card's rows show in the data preview docked under the canvas ([canvas.md](../../concepts/data-source/canvas.md#data-preview)); a table's rows also open in a dialog from its schema-browser chip.
 - A caret in the head collapses the card to its title bar. A key column's name turns accent.
 - **States** (each shown by more than colour):
   - Hover: the border deepens to `--ink-3` and the shadow to `--elev-card-hover`.

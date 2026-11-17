@@ -137,7 +137,7 @@ Body `{ column, limit? }` → `{ column, type, category, rows, nulls, distinct, 
 ## Rows
 
 Controller: `Features/Rows/RowsController.cs`. `POST /api/rows` reads the **first rows of one table** — no
-aggregation, no `ORDER BY`, no joins.
+aggregation, no `ORDER BY`, no joins. Also read by the Data Source's [data preview](../concepts/data-source/canvas.md#data-preview) (custom SQL as `source`).
 
 | Field | Rule |
 |---|---|
