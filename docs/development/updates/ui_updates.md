@@ -4,6 +4,7 @@ Visual and interaction changes (styles, markup, layout, labels, icons, focus). G
 
 ## 2026-11-17
 
+- Relationship dialog left panel: Join, Cardinality, Totals, Also match on; Cardinality becomes radio cards like Join (One to many (1:N) + which side has many rows); Join and Cardinality share radioCards() as bordered 2 x 2 cards; drop the dead .card-choice styles; live checks pick cardinality by radio (`ed4f241`)
 - Relationship dialog: golden-ratio height (width × 0.618, 752px at full width), capped by the window less 16px; panels stretch to fill it; content height under 640px (`e2ab79e`)
 - Relationship dialog: up to 1216px wide (5% narrower), same two-panel structure (`ad6c74a`)
 - Relationships card: closed note titles vertically centred in their row (no grid gap under a closed dropdown's title) (`daf8a1e`)
