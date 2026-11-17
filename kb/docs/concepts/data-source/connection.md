@@ -3,7 +3,7 @@ components: [src/DashboardBuilder/ClickHouse/ConnectionRegistry.cs, src/Dashboar
 ---
 # Connection panel
 
-The connection adds the session's ClickHouse connection and gates the rest of the UI until it exists. While disconnected, its form sits on the **Data Source start card**, beside Recent connections, and the sidebar narrows to its brand rail ([below](#while-disconnected), [D99](../../decisions/decisions-connection.md#d99--the-connect-form-lives-on-the-start-card)). Once connected, the sidebar's **Connections** tile shows the status row.
+The connection adds the session's ClickHouse connection and gates the rest of the UI until it exists. While disconnected, its form sits on the **Data Source start card**, beside Recent connections, and the sidebar narrows to its brand rail ([below](#while-disconnected), [D99](../../decisions/decisions-connection.md#d99--the-connect-form-lives-on-the-start-card)). Once connected, the sidebar's **Connection** tile shows the status row.
 
 **Code:**
 
@@ -66,7 +66,7 @@ One 24px inset runs through it: the two headings share the top line (24px rows),
 When the canvas (not the window) has less than 640px of room, the panels stack into one column at most 480px wide — the form on top, the list under a hairline.
 
 The sidebar has nothing to hold while disconnected, so `connection.js` sets `.app[data-disconnected]` and it narrows to the dashboard tab's brand-only rail
-([layout.md § Sidebar](../../reference/design/layout.md#sidebar)). The Connections tile (`#conn-section`, with its title) shows only while connected.
+([layout.md § Sidebar](../../reference/design/layout.md#sidebar)). The Connection tile (`#conn-section`, with its title) shows only while connected.
 
 **Change connection** (the edit button on the connected row) opens the same card over the canvas — over any entity cards, with a scrim (`.canvas__empty[data-over]`) —
 while the status row stays in the sidebar: the session is still connected until a new connect succeeds. **Cancel** or **Esc** closes it and returns focus to the edit button.
@@ -100,8 +100,8 @@ takes it — **Host**, or **Password** when a host is kept — so the user can t
 3. **Once connected**, the form is **collapsed by default** into a one-line **compact summary** (`.conn-summary`, control height):
    a **single status row** — status slot, host (as entered) over a quiet **user · :port** line (`#conn-detail-label`; each line ellipsised, the full `user · transport · :port` in the tooltip; no certificate icon), then one right-aligned group (`.conn-row__actions`) of two icon buttons:
    **Change connection** (edit) and **Disconnect** (power). There is no menu and no manual "check connection" button; liveness is probed automatically
-   (and **Retry** appears when lost). Above the tile sits a visible group title, **Connections** (`.sidebar__title`; **Databases & Tables** titles the lower group, shown once connected), flush with the tile edge. Below the tile, a full-width hairline divider (`#sidebar-divider`, shown once connected) separates Connection from
-   Databases & Tables; its gap flexes 24px → 8px as the table list needs height. Connected, the tile is inset 4px so the dot sits on the
+   (and **Retry** appears when lost). Above the tile sits a visible group title, **Connection** (`.sidebar__title`; below, **Database** titles the database picker, shown once connected, and **Table** titles the table list, shown with it, 16px under the picker — all three singular), flush with the tile edge. Below the tile, a full-width hairline divider (`#sidebar-divider`, shown once connected) separates Connection from
+   Database and Table; its gap flexes 24px → 8px as the table list needs height. Connected, the tile is inset 4px so the dot sits on the
    12px icon lane of the rows below and the host on their 36px text lane.
    - **The status slot is the panel's only coloured element, and it shows liveness, not "connected once".**
      Filled green dot = the last probe reached ClickHouse; hollow grey pulsing ring = checking (one failed probe);

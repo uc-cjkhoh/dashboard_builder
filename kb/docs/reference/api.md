@@ -63,6 +63,7 @@ so a valid UI never hits these.
 | Collapsed crosstab headers (client-side only) | ≤ 200 keys per axis, a key ≤ 600 characters (`MAX_COLLAPSED` in `Dashboard/collapse-model.js`) |
 | Member colours (client-side only) | ≤ 100 coloured members per field, ≤ 20 fields per sheet, member key ≤ 100 characters, colour `#rrggbb` (`LIMITS.memberColors` / `memberColorFields` / `memberField` / `memberKey`); member shapes use the same counts, a value is one of seven shape keys, and Shape bins are 2–6 ([worksheet-marks-shape-label.md](../concepts/worksheet/worksheet-marks-shape-label.md#edit-member-shapes)) |
 | `in` / `notin` values | ≤ 500; a filter value ≤ 1000 characters |
+| `offset` (rows, `/api/rows` and `/api/unpivot`) | 0–100,000 (`MaxRowsOffset`, mirrored by `LIMITS.rowsOffset`) |
 | `limit` (rows) | 1–1000, default 100 (`MaxRowsLimit`, mirrored by `LIMITS.viewRows`); ≤ 200 `columns` (`MaxRowsColumns`); a cell ≤ 1000 characters (`MaxCellLength`, cut not rejected); rows × columns ≤ 50,000 (`MaxRowsCells`, `LIMITS.viewCells`) |
 | `limit` (query, box plot, distinct) | 1–5000 (default 50; [D24](../decisions/decisions-platform.md#d24--showing-all-data-bounded-requests-paging-other-date-grouping)) · CSV export 1–100,000 · distinct 1–1000 (default 200) |
 | `limit` (profile) | 1–50 top values, default 10 (`MaxProfileTop`); `column` ≤ 1000 characters (`MaxColumnName`); scan bound 1,000,000 rows (`ProfileSampleRows`), a value ≤ 100 characters (`ProfileValueLength`) — mirrored by `PROFILE_LIMITS` in `Schema/column-profile-model.js` |
@@ -145,6 +146,7 @@ aggregation, no `ORDER BY`, no joins. Also read by the Data Source's [data previ
 | `columns` | optional, ≤ 200, each a catalog column (unknown → 400, `columns[i]` blank → 400); order kept. Default: the table's first 200 |
 | `filters` | optional `StatFilter`s (`column`, `op`, `value`, `values`, optional `calc`) — the typed rules of the histogram / box plot ([Typed filter values](#typed-filter-values)), ≤ 20, each bound; `top` is a 400; unknown column → 400 |
 | `limit` | 1–1000, default 100; outside → 400 (`limit`), never clamped. **rows × columns ≤ 50,000** (`MaxRowsCells`): over it is a 400 on `limit` saying how many rows fit (checked after the default column set is known) |
+| `offset` | optional, 0–100,000 (`ApiLimits.MaxRowsOffset`, mirrored by `LIMITS.rowsOffset`); outside → 400 (`offset`), never clamped. Rows to skip: the Data Source preview's pages ([D131](../decisions/decisions-custom-sql.md#d131--the-data-preview-pages-100-rows-at-a-time)). When sent (0 included) a stored table is read with `SETTINGS max_threads = 1`, so consecutive pages follow one order; a `source` (custom SQL) is read as written, and a server that takes no settings gets the offset alone. Absent: the read is unchanged |
 
 Response `{ columns: [{name, type}], rows: [[string \| null]], truncated, limit, columnsTruncated }`:
 - Every cell is display text (numbers invariant, dates ISO, arrays compact) or `null` for SQL NULL.
@@ -154,38 +156,9 @@ Response `{ columns: [{name, type}], rows: [[string \| null]], truncated, limit,
 - `truncated` = more rows matched than `limit`. `columnsTruncated` = the default column set was cut. Errors use the usual `{ error, field? }` shape: 400 for rule breaks and unknown names, 409 not connected,
   502 / 504 ClickHouse.
 
-### Union
+### Union and unpivot
 
-Controller: `Features/Rows/UnionController.cs`. `POST /api/union` stacks the **first rows of 2–5 tables of one database**
-(`UNION ALL`) and answers in the `/api/rows` shape. The first column is `Source table` (the table's name, bound as a
-parameter), followed by the shared columns. No ordering, no aggregation, no filters.
-
-| Field | Rule |
-|---|---|
-| `db`, `tables` | `db` required; `tables` 2–5 names (`ApiLimits.MaxUnionTables`, mirrored by `LIMITS.unionTables`), each blank → 400 (`tables[i]`), unknown → 400/404 |
-| `columns` | optional, ≤ 200. Default: the columns **every** table has with the same name **and kind** (text / number / date …), in the first table's order; none shared → 400 (`tables`). A requested column missing from a table is an unknown identifier; one whose kind differs between tables is a 400 (`columns[i]`). Types shown are the first table's |
-| `limit` | 1–1000, default 100, never clamped; (columns + 1) × rows ≤ 50,000. Each table gets an even share (`ceil(limit / tables)`) and is read to share + 1 inside ClickHouse, so every table shows; `truncated` = some table (or the total) had more; `columnsTruncated` when more than 200 columns are shared |
-
-Cells are cut in SQL like `/api/rows`. The UI (`Union` button in the Tables header → `Rows/union-dialog.js`) shows the first 20.
-
-### Unpivot
-
-Controller: `Features/Rows/UnpivotController.cs`. `POST /api/unpivot` turns **wide columns of one table into rows**: each source row becomes
-one row per chosen column, answered in the `/api/rows` shape. No ordering, no aggregation, no filters.
-
-- **Columns:** the `keep` columns, then `Field` (the column's name, bound as a parameter) and `Value`
-  (the cell as text, typed `String`; NULL stays `null`). A kept column already named `Field` or `Value`
-  turns ours into `Field_` / `Value_`.
-- Helper aliases in the SQL (here and in the union) use a prefix (`__u`, grown with `_`) that no table column starts with, because ClickHouse resolves a select alias ahead of a same-named column.
-
-| Field | Rule |
-|---|---|
-| `db`, `table` | required; unknown → 400/404 |
-| `columns` | 2–50 distinct names (`ApiLimits.MaxUnpivotColumns`, mirrored by `LIMITS.unpivotColumns`); blank or repeated → 400 (`columns[i]`); unknown → unknown identifier; all must be the **same kind** (text / number / date …), else 400 (`columns[i]`) |
-| `keep` | optional, ≤ 5 (`MaxUnpivotKeep` / `LIMITS.unpivotKeep`); blank → 400 (`keep[i]`); also in `columns` → 400 (`keep[i]`) |
-| `limit` | 1–1000, default 100, never clamped. The statement has one `LIMIT limit + 1`, which ClickHouse applies **after** the `arrayJoin`, so it bounds the unpivoted rows (a source row is read only as far as needed); `truncated` = more existed |
-
-Cells are cut in SQL like `/api/rows`. The UI (`Unpivot` button in the Tables header → `Rows/unpivot-dialog.js`) shows the first 20.
+`POST /api/union` (2–5 tables stacked) and `POST /api/unpivot` (wide columns turned into rows, with an optional `offset` like `/api/rows`) answer in the `/api/rows` shape: [api-union-unpivot.md](api-union-unpivot.md).
 
 ### Source columns
 

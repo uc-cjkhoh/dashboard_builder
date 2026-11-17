@@ -41,7 +41,7 @@ Related items share one edge, measured on what the eye sees (glyphs and text), n
   - **One 16px gutter (`--s4`) on both sides**, so the space left of the content equals the space right
     of it. The head's title, the column names and a source card's note start on it. The type text, the
     head's ✕ ink and the pinned strip's type text end on it. A union / unpivot card uses the same lanes.
-  - Head order: pencil (not on a union / unpivot card), title, **Needs a partner** while shown, link button (not on a union / unpivot card), caret, ✕. The caret sits just left of the ✕, and the pencil and title take the left gutter; the card's width counts every part that shows. The ✕
+  - Head order: title, **Needs a partner** while shown, ☰ (the card's actions menu), caret, ✕. The caret sits just left of the ✕, and the title takes the left gutter; the card's width counts every part that shows. The ✕
     is pulled out by its 12px slack (`margin-right: -(--s2 + --s1)`) so its ink ends on the gutter. The
     glyph is a 16px box in a 32px button, with strokes 4px inside.
   - The scrolling list reserves its 10px scrollbar (`scrollbar-gutter: stable`) and its rows give up that
@@ -99,7 +99,7 @@ Related items share one edge, measured on what the eye sees (glyphs and text), n
 The sidebar has **no section titles and no dividers** below the brand row; the Connection / Database /
 Tables headings are screen-reader-only. Spacing groups the connected summary and the database picker,
 then the search box and table list. The connected summary is a flat row: status slot on the gutter (green dot, grey ring or red cross — the last liveness probe),
-host, then change and disconnect icon buttons right-aligned on the row (no menu). A flexible gap with an edge-to-edge hairline (`.sidebar__divider`) separates the connection tile from Databases & Tables. **Union** and **Unpivot** are pinned under the scrolling
+host, then change and disconnect icon buttons right-aligned on the row (no menu). A flexible gap with an edge-to-edge hairline (`.sidebar__divider`) separates the connection tile from the **Database** picker; a **Table** title (singular, 16px under the picker) heads the table list. **Union** and **Unpivot** are pinned under the scrolling
 list with one hairline above them.
 
 The **performance** gauge tile (`#perf-btn`) closes the body: the same 40px sidebar tool tile as the worksheet tools, pinned to the bottom and centred in the rail on a worksheet or dashboard (where the body shows only the tools, or only this tile). It is **not in the DOM on the Data Source tab** (`Shell/sidebar.js` removes it there, which has no queries to time, and appends it back on a worksheet or dashboard tab), nor shown while the sidebar is collapsed.

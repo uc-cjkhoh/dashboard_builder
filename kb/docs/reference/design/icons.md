@@ -31,8 +31,10 @@ Look an icon up here before drawing a new one; reuse beats adding.
 | `edit` | the pencil **Edit** button built into each row of the Calculated fields dialog, and field renaming |
 | `export`, `import` | **Export** in the worksheet view bar, and **Workbook (JSON)** / **Import workbook…** in its menu |
 | `more` | the ⋯ **Sheet actions** menu |
+| `menu` | the ☰ on a Data Source card: its actions menu (D129) |
 | `sidebar` | collapse / expand the sidebar and the field pane |
 | `plus`, `minus`, `close`, `check`, `chevron` | add, remove, dismiss, tick, disclosure |
+| `chevron-left`, `chevron-right` | previous / next page (the data preview's pager) |
 | `warning`, `error`, `info` | notices and field errors, always with words |
 | `type-number`, `type-text`, `type-date`, `type-bool`, `type-other` | the field type on a field row |
 

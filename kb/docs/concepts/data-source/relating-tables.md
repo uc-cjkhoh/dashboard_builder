@@ -4,14 +4,14 @@ components: [src/DashboardBuilder/Features/Relations/relations.js, src/Dashboard
 # Relating two tables in few steps
 
 Shortcuts to the relationship dialog of [relationships.md](relationships.md), so a relationship needs no knowledge of the column drag
-([D127](../../decisions/decisions-relationships.md#d127--a-table-pair-holds-one-relationship-related-in-few-steps)). Every path ends in the same
+([D127](../../decisions/decisions-relationships.md#d127--a-table-pair-holds-one-relationship-related-in-few-steps), [D129](../../decisions/decisions-relationships.md#d129--a-cards-actions-sit-in-one--menu)). Every path ends in the same
 dialog, and nothing is saved until **Confirm** (golden rule 5).
 
 | Path | Steps |
 |---|---|
 | A proposed link: click **Relate on customer_id = id** | 1 click, then Confirm |
-| **Needs a partner** or the card's link button, then a table | 2 clicks (1 when there is one other table), then Confirm |
-| Drag the card's link button onto another card | 1 drag, then Confirm; same-named key columns are already matched |
+| **Needs a partner**, then a table | 2 clicks (1 when there is one other table), then Confirm |
+| The card's ☰ → **Relate to another table**, then a table | 3 clicks (2 when there is one other table), then Confirm; same-named key columns are already matched |
 | Drag one more column of related tables onto the other | 1 drag; added at once, with Undo |
 | Drag a column onto a column ([relationships.md](relationships.md#drawing-a-link--drag-a-column)) | 1 drag, then Confirm |
 
@@ -42,11 +42,11 @@ Only a confident key is proposed on the canvas. Any key may open the dialog; oth
 - The pill is HTML over the cards, so it is reached with Tab; it is kept across redraws so focus stays on it. Text plus a dashed line, never colour alone.
 - Gone once the card is related. A proposal is not a relationship: worksheets don't see it.
 
-## "Needs a partner" and the link button
+## "Needs a partner" and Relate to another table
 
 - **Needs a partner** (`.entity__need`) is a button: it opens **Relate orders to** (`openTablePicker`). Underlined on hover, warning ink, dashed card outline.
-- Every table card's head has a link button (`.entity__relate`, the `link` icon, `aria-label` "Relate orders to another table") between the title and the
-  collapse caret. Click or Enter opens the same picker. A union or unpivot card has none. Card width counts it (`fitWidth`).
+- Every table card's ☰ menu has **Relate to another table** (the `link` icon, [canvas.md § The ☰ menu](canvas.md#the--menu-card-actions)): it opens the
+  same picker. A union or unpivot card's menu has none. Both emit `rel:relate`, which `relations.js` answers with `openTablePicker`.
 - **The picker** is a standard small dialog (`.rel-pick`): title **Relate orders to**, one button per other table card (name, then the key it would use
   as `store_id = store_id`, or a `check` icon and **Related** in `--ok-ink`), the likeliest first (related, then by score); a table with no shared
   column is listed disabled with **No matching columns**; a **Cancel** foot. Focus starts on the first enabled table.
@@ -55,12 +55,6 @@ Only a confident key is proposed on the canvas. Any key may open the dialog; oth
 - Picking a table opens the new relationship's dialog with its key, or the existing relationship's edit dialog when the two are related.
   A table with no key gets an info toast: "No matching columns in orders and customers. Drag a column onto a column to relate them."
 - With only one other table card that has a key or a relationship, the picker is skipped and the dialog opens at once.
-
-## Drag a card onto a card
-
-- Drag the link button (HTML5 drag, MIME `application/x-ch-relate`, separate from the sidebar's `application/x-ch-table`) onto any part of another
-  table card. The card under the pointer takes a solid accent outline (`.entity--relate-ok`); a union / unpivot card or the same card accepts nothing.
-- The drop does what picking that table in the picker does: dialog with the proposed key, every same-named key column already in **Also match on**.
 
 ## One more column of related tables
 
