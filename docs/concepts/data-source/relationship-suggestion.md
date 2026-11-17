@@ -17,12 +17,15 @@ result against the new choice (`redescribe()`), so warnings and the **Use** butt
 
 **What it shows**, top to bottom:
 
-- **On a sampled result** the sampling note comes first, above the suggestion it qualifies, and the label reads
-  "Suggested cardinality, from a sample".
+- **On a sampled result** the label reads "Suggested cardinality, from a sample", and the sampling note is the first line of the
+  notes card below.
 - **Suggested cardinality**: the shape the data shows as a headline, `N:1 · many-to-one` (`1:1`, `1:N`, `N:1`, `N:M`; the first letter
   is the first table). Under it, a green "Matches your choice." note (check icon) or a **Use N:1** button that only selects. It never
   changes the choice by itself, on a new link or an edit. A new link still starts from the key names (`guessCardinality`).
-- **Notes and warnings** (below), sampling note first.
+- **Notes and warnings** in **one card** under the suggestion (`.join-check__notes`, built by `notesCard()`): one line per finding
+  (`.join-check__line`), 8 px apart, each with its own glyph (warning or info icon, so a line never relies on colour alone). The
+  card takes the most serious tone: amber (`--warn`) when any line is a warning, otherwise neutral. Sampling note first. No findings,
+  no card.
 - **Evidence**: one line per side saying why it reads as one or many, tagged **One** or **Many** in words ("cust_id repeats in orders:
   up to 14 rows for one key (about 5 on average), so orders is the "many" side."); two **Match** lines with each table's matched share
   ("94% of the rows in orders have a match in customers; 6% don't"); then a counts table, one column per side (`table.column`): rows read,
@@ -30,7 +33,7 @@ result against the new choice (`redescribe()`), so warnings and the **Use** butt
   On a sampled result a side that doesn't repeat is never called unique: "id doesn't repeat in the rows read from customers, so
   customers looks like the "one" side. Rows past the sample could still repeat a key." A repeat is a fact either way.
   Pure: `joinEvidence()`, `suggestionLabel()`. An empty table gives no evidence, only its note.
-- **Layout.** One column that mirrors the left panel's rhythm: the suggestion and its notes (`.join-check__main`), then **Evidence**
+- **Layout.** One column that mirrors the left panel's rhythm: the suggestion card on top, then the one notes card (`.join-check__main`), then **Evidence**
   (`.join-check__evidence`), then **Counts from both tables** (`.join-check__counts`, the table's caption styled as the group heading);
   each later group sits under a hairline with 16 px above it. The One / Many / Match tags share one column (CSS subgrid), so every
   reason's text starts on the same line. The **Suggestion** heading is level with **Join** opposite, and the refresh glyph lands on the
@@ -39,7 +42,7 @@ result against the new choice (`redescribe()`), so warnings and the **Use** butt
 
 **Sampled results** (a side reached the row bound):
 
-- The note comes first: "Based on the first N rows of each table, in no particular order".
+- The notes card's first line: "Based on the first N rows of each table, in no particular order".
 - The shares are worded "within the sample".
 - Nothing that needs the two slices to overlap is raised as a warning. "No keys match" becomes a neutral "can't tell from a sample" note,
   and keys repeating on both sides becomes "may be many-to-many".

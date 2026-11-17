@@ -46,7 +46,7 @@ previews rows, and profiles columns.
 - **Drag.** Each chip is `draggable="true"` and writes the `application/x-ch-table` payload `{db, table}` on `dragstart`.
   The drop side is in [canvas.md](canvas.md#dragging-a-table-onto-the-canvas).
 - **`＋` button.** The non-drag fallback on each chip. It and the preview eye sit at the row's right end, quiet (`--ink-3`) at rest and full ink on hover / focus, so they are always visible and keyboard reachable. It dispatches `table:add` `{db, table}`, which `canvas.js` consumes exactly like a drop.
-  **On the canvas:** a chip whose table already has a card (`.table-chip--placed`) shows a **check** in place of the `＋`, with the label
+  **On the canvas:** a chip whose table already has a card (`.table-chip--placed`) shows a **check** in place of the `＋`, drawn in the success green (`--ok-ink`, at rest and on hover), with the label
   "<table> is on the canvas — show it" and the tooltip "On the canvas — show it"; pressing it shows that card. Kept in step on `entity:added` / `entity:removed`.
 - **Keyboard.** The list is **one Tab stop** (roving tabindex on the chips' buttons, the last focused one keeps it): Up / Down / Home / End
   move between the visible chips keeping eye or `＋` (`listStep()` in `table-filter.js`, pure), Left / Right switch between a chip's two buttons.

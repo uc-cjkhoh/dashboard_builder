@@ -44,7 +44,7 @@ the columns a relationship uses are simply the ones it joins.
 
 `link-drag.js` (pure) holds the payload parse and `dropDecision()`, which reuses `linkIssue()`.
 
-To remove a link, click its badge, then Delete. A toast "Removed the orders → customers relationship." carries **Undo** (10 s),
+To remove a link, click its line or badge (with [quiet badges](#rendering) a badge shows on hover), then Delete. A toast "Removed the orders → customers relationship." carries **Undo** (10 s),
 which puts it back as it was unless the same pair was related again meanwhile.
 
 **The how-to line.** While any table card has no relationship, a pill at the foot of the Data Source (`.rel-guide`) says
@@ -98,16 +98,21 @@ for the same reasons.
   - the badges (`.rel-svg--labels`) sit **over** them, so a badge wider than the gutter is never clipped; a badge with no free spot beside the cards moves to the line layer instead (see below).
 - A wider invisible hit path (`.rel-link__hit`) makes the line easy to click. Line and badge act as one link (hover, click).
 - A **cardinality badge** (`.rel-badge`, a pill) sits on the link's middle run: "1:N", or "1:N · left" / "· right" / "· full" for an outer join.
+  - **Quiet badges:** with 4 or more links on the canvas, below 125 % zoom (`quietBadges` in `link-route.js`), badges rest hidden (`.rel-quiet` on the canvas, opacity 0, no pointer events) and show only on the hovered or focused links. The end shapes still carry the cardinality, and the Relationships card lists every join.
 - **Shape-coded endpoints** (`.rel-end`) show cardinality without colour: a tick for "one", a crow's foot for "many", square to the card edge.
 - **Colour:** resting links use `--ink-3`. A link is `--accent` while **hovered or being drawn**, and the two key rows it joins take the
   accent wash (`.col-row--linked`), so which columns a line connects reads at a glance. Only hover highlights: a selected link (clicked, with its dialog open) and keyboard focus draw no highlight of their own (focus keeps its ring).
+- **Focus:** while a link, a Relationships card entry or a card that has links is hovered, the links it doesn't touch fade to 20 % (`.rel-focus` on the canvas, `.rel-link--focus` on the kept ones, `markLinkedRows`). Hovering a card keeps all of that card's links, with their badges.
 
 **Routing** (`link-route.js`, pure)
 
 - A link leaves a card's side straight out, turns at right angles and enters the other card straight in.
 - Cards with a gutter of at least 32px face each other, and the link turns in the middle of the gutter, so its badge sits equally far from both cards.
 - Closer or overlapping cards both use the right edge, and the link loops out past the farther one.
-- Links sharing a gutter take lanes 8px apart: the first runs on the middle, the next two either side.
+- **Lanes** (`assignLanes`): links that turn in the same gutter and whose vertical runs overlap (or come within 8px) form a cluster, and each takes its own lane, with no limit on the count. A link that overlaps nothing runs on the middle.
+  - A cluster's lanes are centred on the gutter's middle, 8px apart, squeezed (to 3px at least) when the gutter is too narrow to hold them.
+  - Lanes are ordered to cross as little as possible: each link is inserted where it adds the fewest crossings (`laneCrossings`: a horizontal run that passes another link's lane inside that link's span). A fact table linked to a column of stacked dimensions draws them nested, with no crossings.
+  - `render()` measures every link first, then assigns lanes, then draws.
 - A badge never covers a card or another badge. It starts at the middle of the link's vertical run and slides along the run to the nearest free spot. If the whole run is blocked (the link passes behind a card), the badge drops into the line layer, **under** the cards, at the middle, stepping clear of other badges (`placeBadge` in `link-route.js`).
 
 **Rules.**
@@ -147,7 +152,7 @@ for the same reasons.
 - Clicking a link opens the edit/delete dialog: change the cardinality or join type, or remove it.
 - **Dialog layout.** The relationship dialog is landscape (`dialog.dialog--sm.dialog--rel`, up to 1216 px wide, never wider than the window less 16 px each side; golden ratio: its height is the width × 0.618, 752 px at full width, capped only by the window less 16 px top and bottom, and both panels stretch to that height so the suggestion panel scrolls in all of it (the body scrolls when the settings are taller); under 640 px it goes back to its content height with `height: fit-content`, the browser's modal default, because `auto` stretches a modal to the window; two equal panels, settings left and the suggestion with its evidence right, so the divider runs down the middle; the divider is an inset shadow so it adds no width; one column under 640 px).
   It shares the column profile's frame (`.col-profile`) without its cells: a head with the title **Relationship**, the two tables as a subtitle (`orders → customers`) and an X; a body on the colour wash that scrolls on its own while head and foot stay put; a 24 px side gutter shared by head, body and foot (the X sits on it); a foot with **Delete** (left, edit only), **Cancel** and the primary **Confirm**. Nothing inside the body closes the dialog: the cardinality buttons only select (`aria-pressed`), and **Confirm** saves cardinality, join, totals and key pairs together. Group headings (**Join**, **Totals**, **Also match on**, **Cardinality**) use one voice (600, `--ink-2`) with 24 px between groups.
-  The left panel (`.rel-dialog__left`) has four `.rel-sec` sections straight on the wash, split by one hairline and 24 px of space, in this order: **Join**, **Cardinality**, **Totals** (a switch row) and **Also match on** (two selects and Add pair on one line). Join and Cardinality are the same control, built by `radioCards()`: one choice of four as radio cards in a 2 × 2 grid (`.choice-cards` / `.choice-card`, one column under 420 px). Each card is a bordered surface with a round radio and a bold name, no hint; the radio and the name are vertically centred in the card (`align-items: center`); the chosen card takes the accent border, the accent tint and a filled dot, so it never relies on colour alone. Cardinality's choices come from `cardinalityChoices()` (`relation-rules.js`): the kind in words with its code on one line, e.g. **One to many (1:N)** (the code is what the canvas badge and the suggestion show). Picking only selects; Confirm saves. DOM order is reading order.
+  The left panel (`.rel-dialog__left`) has four `.rel-sec` sections straight on the wash, split by one hairline and 24 px of space, in this order: **Join**, **Cardinality**, **Totals** (one switch row: a checkbox drawn as a switch by `.form-check`) and **Also match on** (two selects and Add pair on one line). Join and Cardinality are the same control, built by `radioCards()`: one choice of four as radio cards in a 2 × 2 grid (`.choice-cards` / `.choice-card`, one column under 420 px). Each card is a bordered surface with a round radio and a bold name, no hint; the radio and the name are vertically centred in the card (`align-items: center`); the chosen card takes the accent border, the accent tint and a filled dot, so it never relies on colour alone. Cardinality's choices come from `cardinalityChoices()` (`relation-rules.js`): the kind in words with its code on one line, e.g. **One to many (1:N)** (the code is what the canvas badge and the suggestion show). Picking only selects; Confirm saves. DOM order is reading order.
   The right panel (`.rel-dialog__right`) holds the **Suggestion** and its evidence. It never makes the dialog taller: the row fills the golden-ratio body (`align-content: stretch`), `contain: size` keeps the panel's own text from stretching it, and the panel scrolls inside when its text is longer (one column under 640 px, where it flows normally). Its scrollbar is the thin themed one (`--line-2` thumb, accent on hover) in its own lane (`scrollbar-gutter: stable`, so nothing shifts when it appears), with a 16 px gutter between the content and that lane; the panel reaches 16 px into the body's side gutter so the lane sits there instead of narrowing the content.
   A dialog with no key data has no right panel. Built in `openCardinalityDialog()` (`relations.js`); styles in `relations.css`.
 - Links re-route live on `entity:moved`.
@@ -217,7 +222,7 @@ Not done: no pair added by dragging or relating two more columns of already-rela
 ## Aggregate before joining (many-to-many)
 
 A join repeats a row of one table once per matching row of the other, so with a one-to-many or many-to-many link a sum or count over the repeated
-side double-counts. The dialog's **Totals** section has a checkbox, **Total each table by the key before joining, so a total isn't repeated**
+side double-counts. The dialog's **Totals** section has a switch row (a checkbox drawn as a switch by `.form-check`), **Total each table by the key before joining, so a total isn't repeated**
 (off by default; `aggregateFirst` on the relationship, [D86](../../decisions/decisions-dashboards.md#d86--aggregate-before-joining-is-a-per-relationship-option-on-a-two-table-view)).
 Ticking it shows **Filters**, a two-way choice (`filterDirection`, "both" is the default and is not stored):
 
