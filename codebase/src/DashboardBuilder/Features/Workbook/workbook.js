@@ -34,6 +34,8 @@ let restoring = false; // no autosave while a workbook is being rebuilt
 let timer = null;
 let blockedKey = null; // a stored workbook that couldn't be restored — never autosave over it
 let warned = ""; // the last not-saved warning shown (a toast once per cause, not on every autosave)
+let switching = 0; // > 0 while one server's workspace is cleared for another's: nothing is saved, so the old model can't land under the new key
+let switchTicket = 0; // latest-wins when connection changes arrive while a switch is fading out
 
 export function initWorkbook() {
   const fileInput = document.getElementById("wb-file");
@@ -53,14 +55,23 @@ export function initWorkbook() {
 }
 
 // --- autosave & restore ------------------------------------------------------
-function onConnection(view) {
+async function onConnection(view) {
   flushSave(); // finish saving under the previous server's key
+  const previous = key, ticket = ++switchTicket;
   key = storageKey(view);
   legacyKey = legacyStorageKey(view);
   if (!key) { clearWorkspace(); return; }
+  // Change connection to another server (or user): its workbook is a different one. Clear this one (already saved under its own key)
+  // before restoring, and save nothing meanwhile — the old model must never be written over the other server's stored workbook.
+  const switched = previous && previous !== key && !isEmpty();
+  if (switched) {
+    switching++;
+    try { await clearWorkspace({ evenIfConnected: true }); } finally { switching--; }
+    if (ticket !== switchTicket) return; // another change came in meanwhile; it decides
+  }
   if (!isEmpty()) return;
   const saved = readStorage(key) ?? readStorage(legacyKey);
-  if (!saved) return;
+  if (!saved) { if (switched) toast("Your workbook for the previous server is saved in this browser and comes back when you connect to it again.", "info"); return; }
   let wb;
   try { wb = parseWorkbook(saved); } catch (err) { keepUnreadable(saved, err); return; }
   if (!wb.entities.length && !wb.tabs.length) return;
@@ -82,14 +93,14 @@ async function reportMissingColumns(wb, forKey) {
   listDialog(`Your last workbook has ${issueCount(found.length)}`, found.slice(0, 20).concat(found.length > 20 ? [`…and ${found.length - 20} more.`] : []));
 }
 
-/** Disconnected: fade the cards and tabs out, then clear the model and close every tab.
- *  Nothing is saved meanwhile (key is null), so the stored workbook for that server is untouched. */
-async function clearWorkspace() {
+/** Disconnected, or switched to another server: fade the cards and tabs out, then clear the model and close every tab.
+ *  Nothing is saved meanwhile (key is null, or a switch is under way), so the stored workbook for that server is untouched. */
+async function clearWorkspace({ evenIfConnected = false } = {}) {
   warned = "";
   if (isEmpty()) return;
   const leaving = [...[...entities.values()].map((e) => e.el), ...document.querySelectorAll(".tab:not(.tab--model)")];
   await Promise.all(leaving.filter(Boolean).map((el) => exit(el, { y: 0, scale: .98 })));
-  if (key) return; // reconnected while fading out — keep the workspace
+  if (key && !evenIfConnected) return; // reconnected while fading out — keep the workspace
   restoring = true;
   try {
     clearModel();
@@ -129,7 +140,7 @@ function keepUnreadable(saved, err) {
 }
 
 function scheduleSave() {
-  if (!key || restoring) return;
+  if (!key || restoring || switching) return;
   clearTimeout(timer);
   timer = setTimeout(save, SAVE_DELAY_MS);
 }
@@ -140,7 +151,7 @@ function flushSave() {
 
 function save() {
   timer = null;
-  if (!key || restoring) return;
+  if (!key || restoring || switching) return;
   if (key === blockedKey) {
     warnNotSaved("Not saved — your previous workbook couldn't be read and has been left untouched. Use Export to keep a copy.");
     return;

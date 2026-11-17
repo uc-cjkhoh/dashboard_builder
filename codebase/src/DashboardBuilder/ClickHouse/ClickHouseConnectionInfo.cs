@@ -32,7 +32,10 @@ public enum QueryGuards
     Full,
     /// <summary>A settings constraint refused the time limit (code 452): read-only and cancel-on-disconnect only.</summary>
     NoTimeLimit,
-    /// <summary>The account is already read-only on the server (code 164), or nothing else was accepted: no settings.</summary>
+    /// <summary>A second settings constraint (code 452) refused more: <c>readonly=2</c> only. A refusal of that too fails the connect —
+    /// an account that may write never runs without it.</summary>
+    ReadOnly,
+    /// <summary>The account is already read-only on the server (code 164): no settings — the server itself refuses writes.</summary>
     None,
 }
 

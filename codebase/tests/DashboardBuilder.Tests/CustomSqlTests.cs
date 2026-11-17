@@ -52,6 +52,39 @@ public class CustomSqlTests
     [InlineData("SELECT * FROM mysql('h:3306', 'd', 't', 'u', 'p')", "outside this connection")]
     public void Anything_else_is_refused_in_plain_words(string sql, string part) => Assert.Contains(part, Why(sql));
 
+    // Review 2026-11-17: a quoted name is still a name, a backslash escapes inside backticks too, and only a few table functions may go where a table goes.
+    [Theory]
+    [InlineData("SELECT * FROM `url`('http://169.254.169.254/', 'LineAsString')", "'url' reads outside")]
+    [InlineData("SELECT * FROM \"s3\"('x')", "'s3' reads outside")]
+    [InlineData("SELECT * FROM `ur\\l`('x')", "'url' reads outside")]
+    [InlineData("SELECT 1 AS `\\` AS a, `, * FROM url('http://x/','LineAsString') SETTINGS max_execution_time=0", "change settings")]
+    [InlineData("SELECT * FROM icebergS3('x')", "'icebergS3' reads outside")]
+    [InlineData("SELECT * FROM t, someFutureTableFunction('x')", "'someFutureTableFunction' reads outside")]
+    [InlineData("SELECT * FROM t JOIN `fileCluster`('c', 'x') USING k", "'fileCluster' reads outside")]
+    [InlineData("SELECT a FROM t WHERE a IN (SELECT b FROM mongodb('h', 'd', 'c', 'u', 'p', 'b String'))", "'mongodb' reads outside")]
+    [InlineData("SELECT * FROM view(SELECT 1 FROM hdfs('x'))", "'hdfs' reads outside")]
+    [InlineData("SELECT 1 FORMAT JSON", "output format")]
+    [InlineData("SELECT a FROM t FORMAT `TabSeparated`", "output format")]
+    [InlineData("SELECT a FROM t INTO OUTFILE 'x.csv'", "write a file")]
+    public void Quoted_or_new_table_functions_and_output_clauses_are_refused(string sql, string part) => Assert.Contains(part, Why(sql));
+
+    [Theory]
+    [InlineData("SELECT number FROM numbers(10)")]
+    [InlineData("SELECT * FROM t, numbers(3) AS n")]
+    [InlineData("SELECT * FROM view(SELECT a FROM t)")]
+    [InlineData("SELECT EXTRACT(YEAR FROM toDate(created)) AS y FROM t")]
+    [InlineData("SELECT trim(BOTH ' ' FROM upper(name)) FROM t")]
+    [InlineData("SELECT x FROM t ARRAY JOIN splitByChar(',', tags) AS x")]
+    [InlineData("SELECT a FROM t LEFT ARRAY JOIN arrayMap(v -> v * 2, vals) AS a")]
+    [InlineData("SELECT `a\\`b` FROM t")]
+    [InlineData("SELECT URLHierarchy(page) AS h, format('{}', a) AS f FROM t")]
+    [InlineData("SELECT a AS format FROM t")]
+    [InlineData("SELECT format FROM t ORDER BY format DESC")]
+    [InlineData("SELECT a, format FROM t ORDER BY a, format ASC")]
+    [InlineData("SELECT a FROM t GROUP BY a ORDER BY format NULLS LAST")]
+    [InlineData("SELECT a FROM (SELECT a FROM t) AS s JOIN u ON s.a = lower(u.b)")]
+    public void Ordinary_functions_subqueries_and_allowed_table_functions_pass(string sql) => Assert.Null(Why(sql));
+
     [Fact] public void Quoted_text_never_trips_the_checks()
     {
         Assert.Null(Why("SELECT 'DROP; (settings url(' AS note, `settings` FROM t"));

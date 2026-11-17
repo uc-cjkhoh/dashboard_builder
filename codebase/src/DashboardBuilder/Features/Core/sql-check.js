@@ -10,6 +10,32 @@ export const BLOCKED_FUNCTIONS = new Set([
   "input", "azureblobstorage", "azureblobstoragecluster", "deltalake", "iceberg", "hudi", "gcs", "oss", "cosn",
 ]);
 
+/** The only table functions allowed where a table goes (after FROM / JOIN, or a comma in a FROM list): CustomSql.AllowedTableFunctions. */
+export const ALLOWED_TABLE_FUNCTIONS = new Set([
+  "numbers", "numbers_mt", "zeros", "zeros_mt", "generate_series", "generateseries", "generaterandom", "values", "view", "merge", "null",
+]);
+const SORT_WORDS = new Set(["asc", "desc", "ascending", "descending", "nulls", "collate", "with"]);
+// Clause words that end a FROM list at its depth: CustomSql.EndsFrom.
+const ENDS_FROM = new Set(["where", "prewhere", "group", "having", "order", "limit", "union", "except", "intersect", "window", "qualify", "on", "using",
+  "array", "sample", "final", "offset", "select", "with"]);
+
+/** The name a word or a quoted name (` or ") stands for, quotes and escapes undone; null for anything else. */
+export function nameOf(t) {
+  if (!t) return null;
+  if (t.kind === "word") return t.value;
+  if (t.kind !== "quoted" || t.value[0] === "'" || t.open) return null;
+  const q = t.value[0], v = t.value;
+  let out = "";
+  for (let i = 1; i < v.length - 1; i++) {
+    if (v[i] === "\\" && i + 1 < v.length - 1) { out += v[++i]; continue; }
+    if (v[i] === q && v[i + 1] === q) { out += q; i++; continue; }
+    out += v[i];
+  }
+  return out;
+}
+const isWord = (t, w) => t?.kind === "word" && t.value.toLowerCase() === w;
+const isSym = (t, c) => t?.kind === "symbol" && t.value === c;
+
 /**
  * Cut `text` into tokens with their offsets: words, numbers, symbols, quoted runs, and the comments (kept, so a problem can sit on one).
  * An unterminated quote or block comment ends at the end of the text and carries `open: true`.
@@ -21,10 +47,10 @@ export function tokenize(text) {
   for (let i = 0; i < n;) {
     const c = text[i];
     if (/\s/.test(c)) { i++; continue; }
-    if (c === "'" || c === '"' || c === "`") { // a repeated quote inside the run, or (not for `) a backslash, does not end it
+    if (c === "'" || c === '"' || c === "`") { // a repeated quote inside the run, or a backslash (in ` too, as ClickHouse reads it), does not end it
       let j = i + 1, closed = false;
       for (; j < n; j++) {
-        if (text[j] === "\\" && c !== "`") { j++; continue; }
+        if (text[j] === "\\") { j++; continue; }
         if (text[j] === c) { if (text[j + 1] === c) { j++; continue; } closed = true; j++; break; }
       }
       const to = Math.min(j, n);
@@ -45,6 +71,26 @@ export function tokenize(text) {
     out.push({ kind: "symbol", from: i, to: i + 1, value: c }); i++;
   }
   return out;
+}
+
+/** A name (bare or quoted) followed by "(": a blocked table function anywhere, and where a table goes, anything not allowed (CustomSql.CheckFunctions). */
+function checkFunctions(tokens, add) {
+  const fromAt = new Set(), query = [true]; // query: per depth, the top level or brackets that start with SELECT / WITH (not a call such as EXTRACT(YEAR FROM d))
+  let depth = 0;
+  const outside = (t) => add(t.from, t.to, `'${nameOf(t)}' reads outside this connection's tables and can't be used here.`);
+  const isSource = (at) => nameOf(tokens[at]) !== null && isSym(tokens[at + 1], "(");
+  const checkSource = (at) => { if (!ALLOWED_TABLE_FUNCTIONS.has(nameOf(tokens[at]).toLowerCase())) outside(tokens[at]); return true; };
+  const flagged = new Set();
+  tokens.forEach((t, i) => {
+    if (isSym(t, "(")) { depth++; query.push(isWord(tokens[i + 1], "select") || isWord(tokens[i + 1], "with")); return; }
+    if (isSym(t, ")")) { fromAt.delete(depth); depth--; if (query.length > 1) query.pop(); return; }
+    const arrayJoin = isWord(tokens[i - 1], "array") || (isWord(tokens[i - 1], "left") && isWord(tokens[i - 2], "array"));
+    if (query.at(-1) && (isWord(t, "from") || (isWord(t, "join") && !arrayJoin))) { fromAt.add(depth); if (isSource(i + 1)) flagged.add(i + 1) && checkSource(i + 1); return; }
+    if (t.kind === "word" && ENDS_FROM.has(t.value.toLowerCase())) { fromAt.delete(depth); return; }
+    if (isSym(t, ",") && fromAt.has(depth) && isSource(i + 1)) { flagged.add(i + 1); checkSource(i + 1); return; }
+    const name = nameOf(t);
+    if (name !== null && !flagged.has(i) && isSym(tokens[i + 1], "(") && BLOCKED_FUNCTIONS.has(name.toLowerCase())) outside(t);
+  });
 }
 
 /** The problems in `text` as `{ from, to, message }` offsets (empty text has none: Save asks for a query). Order: by position. */
@@ -70,10 +116,15 @@ export function checkSql(text) {
     else if (t.kind === "symbol" && t.value === "(") stack.push(t);
     else if (t.kind === "symbol" && t.value === ")") { if (stack.pop() === undefined) add(t.from, t.to, "This ')' has no '(' before it."); }
     else if (t.kind === "word" && t.value.toLowerCase() === "settings") add(t.from, t.to, "A query can't change settings; remove the SETTINGS part.");
-    else if (t.kind === "word" && BLOCKED_FUNCTIONS.has(t.value.toLowerCase()) && tokens[i + 1]?.kind === "symbol" && tokens[i + 1].value === "(")
-      add(t.from, t.to, `'${t.value}' reads outside this connection's tables and can't be used here.`);
   });
   for (const open of stack) add(open.from, open.to, "This '(' is never closed.");
+  checkFunctions(tokens, add);
+  const end = tokens.slice(0, last + 1);
+  // not a column called format at the end of an ORDER BY (… BY format DESC, …, format ASC) or an alias (AS format x): CustomSql.CheckOutput
+  if (end.length >= 3 && isWord(end.at(-2), "format") && nameOf(end.at(-1)) !== null && !SORT_WORDS.has(nameOf(end.at(-1)).toLowerCase())
+    && !isWord(end.at(-3), "as") && !isWord(end.at(-3), "by") && !isSym(end.at(-3), ","))
+    add(end.at(-2).from, end.at(-1).to, "A query can't choose its output format; remove the FORMAT part.");
+  tokens.forEach((t, i) => { if (isWord(t, "into") && isWord(tokens[i + 1], "outfile")) add(t.from, tokens[i + 1].to, "A query can't write a file; remove the INTO OUTFILE part."); });
   return problems.sort((a, b) => a.from - b.from);
 }
 
