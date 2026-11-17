@@ -15,8 +15,8 @@ export function linkSides(a, b) {
 }
 
 /** The corner points of the route from p1 (leaving on side s1) to p2 (entering from side s2), and the label's spot.
- *  Facing cards: the turn (and so the badge) sits in the middle of the gutter, equally far from both cards. Loops: STUB past the farther edge. `lane` (-1, 0, 1) shifts it
- *  8px, so links that share a gutter run side by side instead of on one line. */
+ *  Facing cards: the turn (and so the badge) sits in the middle of the gutter, equally far from both cards. Loops: STUB past the farther edge. `lane` (from assignLanes:
+ *  any step, centred on 0) shifts it lane × 8px, so links that share a gutter run side by side instead of on one line. */
 export function linkRoute(p1, s1, p2, s2, lane = 0) {
   let x;
   if (s1 === -s2) {
@@ -27,6 +27,61 @@ export function linkRoute(p1, s1, p2, s2, lane = 0) {
   }
   return { points: [p1, { x, y: p1.y }, { x, y: p2.y }, p2], label: { x, y: (p1.y + p2.y) / 2 } };
 }
+
+/** The least clear space between two vertical runs that may share a lane, px. */
+export const LANE_PAD = 8;
+
+/** Lanes for links that share a gutter, so no two overlapping vertical runs ever lie on one line.
+ *  `runs`: [{ group, lo, hi, left?, right?, room? }] — the gutter a link turns in, the span of its vertical run, the y of each horizontal
+ *  run that enters the lane from the left / from the right, and the width the gutter leaves for lanes. Within a group, runs that overlap
+ *  (or come within LANE_PAD) form a cluster and each takes its own lane; a run that overlaps nothing stays on the middle.
+ *  A cluster's lanes are ordered to cross as little as possible (each run is inserted where it adds the fewest crossings, laneCrossings),
+ *  centred on 0 (1 lane → 0, 2 → −0.5 / 0.5, 3 → −1 / 0 / 1, no upper limit) and squeezed (to 3px apart at least) when the
+ *  narrowest `room` in the cluster can't hold them 8px apart. Returns one lane per run, in input order (pass it to linkRoute). */
+export function assignLanes(runs, pad = LANE_PAD) {
+  const out = new Array(runs.length).fill(0);
+  const groups = new Map();
+  runs.forEach((r, i) => { const g = groups.get(r.group) ?? []; g.push(i); groups.set(r.group, g); });
+  for (const idx of groups.values()) {
+    idx.sort((a, b) => runs[a].lo - runs[b].lo || runs[a].hi - runs[b].hi);
+    let cluster = [], reach = -Infinity;
+    const flush = () => {
+      const order = [];
+      for (const i of cluster) {
+        let best = order.length, bestCost = Infinity;
+        for (let p = 0; p <= order.length; p++) {
+          let cost = 0;
+          order.forEach((j, k) => { cost += k < p ? laneCrossings(runs[j], runs[i]) : laneCrossings(runs[i], runs[j]); });
+          if (cost <= bestCost) { bestCost = cost; best = p; } // ties go last: links that never cross keep their top-to-bottom order
+        }
+        order.splice(best, 0, i);
+      }
+      const n = order.length, room = Math.min(...order.map((i) => runs[i].room ?? Infinity));
+      const scale = n > 1 ? Math.max(3 / LANE, Math.min(1, room / ((n - 1) * LANE))) : 1;
+      order.forEach((i, k) => { out[i] = (k - (n - 1) / 2) * scale; });
+      cluster = [];
+    };
+    for (const i of idx) {
+      if (cluster.length && runs[i].lo >= reach + pad) flush();
+      cluster.push(i);
+      reach = cluster.length === 1 ? runs[i].hi : Math.max(reach, runs[i].hi);
+    }
+    if (cluster.length) flush();
+  }
+  return out;
+}
+
+/** How many times two links cross when `a` takes the lane left of `b`: a horizontal run entering `a` from the right passes over `b`'s
+ *  lane, and one entering `b` from the left passes over `a`'s, so each counts when its y falls inside the other's vertical span. */
+export function laneCrossings(a, b) {
+  const inside = (y, r) => y > r.lo && y < r.hi;
+  return (a.right ?? []).filter((y) => inside(y, b)).length + (b.left ?? []).filter((y) => inside(y, a)).length;
+}
+
+/** Badges are hidden at rest (shown only on the hovered or focused links) once the canvas holds this many links, below QUIET_ZOOM. */
+export const QUIET_LINKS = 4;
+export const QUIET_ZOOM = 1.25;
+export const quietBadges = (linkCount, zoom = 1) => linkCount >= QUIET_LINKS && zoom < QUIET_ZOOM;
 
 /** An SVG path through `points` with each interior corner rounded to `r` (less where a run is short). */
 export function roundedPath(points, r = CORNER) {

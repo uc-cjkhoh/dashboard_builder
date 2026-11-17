@@ -7,7 +7,7 @@ import { previewRequest } from "./join-preview-model.js";
 import { buildJoinCheck } from "./join-check.js";
 import { buildKeyPairs } from "./key-pairs-ui.js";
 import { compoundName, suggestTarget } from "./key-pairs.js";
-import { linkSides, linkRoute, roundedPath, placeBadge } from "./link-route.js";
+import { linkSides, linkRoute, roundedPath, placeBadge, assignLanes, quietBadges } from "./link-route.js";
 import { openTypeWarning } from "./type-warning.js";
 import { COLUMN_MIME, encodeColumnDrag, parseColumnDrag, dropDecision } from "./link-drag.js";
 import { describeRelationship } from "./relation-describe.js";
@@ -22,6 +22,8 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 let seq = 0;
 let selectedId = null;
 let hoverId = null;   // the link under the pointer
+let focusEntityId = null; // the card under the pointer: its links stay strong, the rest fade (markLinkedRows)
+let zoom = 1;         // the canvas zoom, for quietBadges
 const openNotes = new Set(); // relationship ids whose dropdown in the Relationships card is open (kept across re-renders)
 let canvas, svg, labels, guide, keyHint, notes;  // svg: the lines, under the cards; labels: the cardinality badges, over them
 
@@ -54,12 +56,19 @@ export function initRelations() {
   canvas.parentElement.append(help);
 
   bus.addEventListener("entity:moved", () => render());
-  bus.addEventListener("canvas:zoomed", () => render());
+  bus.addEventListener("canvas:zoomed", (e) => { zoom = e.detail?.zoom ?? zoom; render(); });
   bus.addEventListener("entity:loaded", (e) => { markDraggable(e.detail.entityId); render(); }); // a restored link waits for its key rows
   bus.addEventListener("entity:removed", (e) => { cancelKeyPick(); onEntityRemoved(e.detail.entityId); });
   bus.addEventListener("rel:reinstate", (e) => reinstate(e.detail?.rels ?? [])); // Undo of a card remove (canvas.js)
   bus.addEventListener("view:changed", () => { cancelKeyPick(); selectedId = null; render(); });
   canvas.addEventListener("scroll", render);
+  // Hovering a card focuses its links: they stay strong (with their badges), every other link fades back.
+  canvas.addEventListener("pointerover", (e) => {
+    const id = e.target.closest?.("[data-entity-id]")?.dataset.entityId ?? null;
+    const next = id && [...relationships.values()].some((r) => r.from.entityId === id || r.to.entityId === id) ? id : null;
+    if (next !== focusEntityId) { focusEntityId = next; markLinkedRows(); }
+  });
+  canvas.addEventListener("pointerleave", () => { if (focusEntityId) { focusEntityId = null; markLinkedRows(); } });
   initColumnDrag();
   initColumnKeys();
   document.addEventListener("keydown", (e) => {
@@ -323,7 +332,8 @@ function render() {
 
   const placed = []; // badge boxes already laid out; a badge never covers one
   const cards = [...entities.values()].map((e) => { const r = e.el.getBoundingClientRect(); return { left: r.left - crect.left + canvas.scrollLeft, right: r.right - crect.left + canvas.scrollLeft, top: r.top - crect.top + canvas.scrollTop, bottom: r.bottom - crect.top + canvas.scrollTop }; });
-  const used = new Map(); // links already run through each gutter, so they take different lanes there
+  // Measure every link first, then give links that share a gutter separate lanes wherever their vertical runs overlap (assignLanes).
+  const links = [];
   for (const rel of relationships.values()) {
     const a = entities.get(rel.from.entityId);
     const b = entities.get(rel.to.entityId);
@@ -333,15 +343,20 @@ function render() {
     const p1 = anchor(a, rel.from.column, sa, crect);
     const p2 = anchor(b, rel.to.column, sb, crect);
     if (!p1 || !p2) continue;
-
+    const group = Math.round(sa === sb ? (sa > 0 ? Math.max(p1.x, p2.x) : Math.min(p1.x, p2.x)) : Math.min(p1.x, p2.x));
+    // where each horizontal run comes from (the left card, the right card, or both ends from one side on a loop), so lanes can be ordered not to cross
+    const [l, r] = p1.x <= p2.x ? [p1, p2] : [p2, p1];
+    const ends = sa !== sb ? { left: [l.y], right: [r.y], room: r.x - l.x - 30 } : sa > 0 ? { left: [p1.y, p2.y], right: [] } : { left: [], right: [p1.y, p2.y] };
+    links.push({ rel, sa, sb, p1, p2, group, lo: Math.min(p1.y, p2.y), hi: Math.max(p1.y, p2.y), ...ends });
+  }
+  const lanes = assignLanes(links);
+  links.forEach(({ rel, sa, sb, p1, p2 }, i) => {
     const [fromKind, toKind] = markerKinds(rel.cardinality);
-    const edge = Math.round(sa === sb ? (sa > 0 ? Math.max(p1.x, p2.x) : Math.min(p1.x, p2.x)) : Math.min(p1.x, p2.x));
-    const n = used.get(edge) ?? 0;
-    used.set(edge, n + 1);
-    const { line, label, under } = drawLink(rel, p1, sa, p2, sb, fromKind, toKind, [0, 1, -1][n % 3], placed, cards);
+    const { line, label, under } = drawLink(rel, p1, sa, p2, sb, fromKind, toKind, lanes[i], placed, cards);
     svg.append(line);
     (under ? svg : labels).append(label); // a badge with no free spot beside the cards sits under them, never over
-  }
+  });
+  canvas.classList.toggle("rel-quiet", quietBadges(links.length, zoom)); // many links: badges only on the hovered / focused ones
   updateGuide();
   renderNotes();
   markLinkedRows();
@@ -490,6 +505,10 @@ function drawLink(rel, p1, s1, p2, s2, fromKind, toKind, lane, placed, cards) {
 function markLinkedRows() {
   for (const el of canvas.querySelectorAll(".col-row--linked, .rel-link--hover")) el.classList.remove("col-row--linked", "rel-link--hover");
   if (hoverId) for (const el of canvas.querySelectorAll(`.rel-link[data-rel="${hoverId}"]`)) el.classList.add("rel-link--hover");
+  // Focus: a hovered link, or every link of a hovered card, stays strong; the others fade (.rel-focus in relations.css).
+  const focused = (r) => r.id === hoverId || (focusEntityId && (r.from.entityId === focusEntityId || r.to.entityId === focusEntityId));
+  canvas.classList.toggle("rel-focus", !!(hoverId || focusEntityId));
+  for (const el of canvas.querySelectorAll(".rel-link[data-rel]")) el.classList.toggle("rel-link--focus", !!focused(relationships.get(el.dataset.rel) ?? {}));
   for (const li of notes?.querySelectorAll(".rel-note") ?? []) li.classList.toggle("rel-note--active", li.dataset.rel === hoverId);
   const rel = hoverId && relationships.get(hoverId); // hover only: selecting a link (which opens its dialog) highlights nothing
   if (rel)

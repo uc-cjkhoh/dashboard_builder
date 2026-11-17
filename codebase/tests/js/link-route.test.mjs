@@ -63,3 +63,43 @@ test("placeBadge: midpoint when free, slides off a card, goes under when the run
   const blocked = placeBadge(spot, 20, 180, 34, 24, [{ left: 50, right: 150, top: 0, bottom: 200 }], []);
   assert.deepEqual(blocked, { x: 100, y: 100, under: true });
 });
+
+import { assignLanes, laneCrossings, quietBadges, LANE_PAD } from "../../src/DashboardBuilder/Features/Relations/link-route.js";
+test("assignLanes: a lone run stays on the middle; runs that never overlap share it", () => {
+  assert.deepEqual(assignLanes([{ group: 300, lo: 0, hi: 100 }]), [0]);
+  assert.deepEqual(assignLanes([{ group: 300, lo: 0, hi: 100 }, { group: 300, lo: 100 + LANE_PAD, hi: 200 }]), [0, 0]);
+  assert.deepEqual(assignLanes([{ group: 300, lo: 0, hi: 100 }, { group: 500, lo: 0, hi: 100 }]), [0, 0]); // other gutter
+});
+
+test("assignLanes: overlapping runs never share a lane, however many, centred on 0", () => {
+  const runs = Array.from({ length: 6 }, (_, i) => ({ group: 300, lo: i * 10, hi: 400 }));
+  const lanes = assignLanes(runs);
+  assert.equal(new Set(lanes).size, 6); // the old 3-lane cycle put the 4th on the 1st
+  assert.deepEqual([...lanes].sort((a, b) => a - b), [-2.5, -1.5, -0.5, 0.5, 1.5, 2.5]);
+  assert.deepEqual(assignLanes([{ group: 1, lo: 0, hi: 50 }, { group: 1, lo: 20, hi: 80 }]), [-0.5, 0.5]);
+});
+
+test("assignLanes: a cluster's lanes are ordered so its links cross as little as possible", () => {
+  // two links up from a left card to a right card (the higher left end runs nearer the left card), two down (the higher one farther out)
+  const up = [{ group: 0, lo: 154, hi: 330, left: [330], right: [154] }, { group: 0, lo: 306, hi: 370, left: [370], right: [306] }];
+  const [u1, u2] = assignLanes(up);
+  assert.ok(u1 < u2);
+  assert.equal(laneCrossings(up[0], up[1]), 0);
+  const down = [{ group: 0, lo: 410, hi: 618, left: [410], right: [618] }, { group: 0, lo: 450, hi: 770, left: [450], right: [770] }];
+  const [d1, d2] = assignLanes(down);
+  assert.ok(d1 > d2);
+});
+
+test("assignLanes: lanes squeeze into a narrow gutter, never closer than 3px", () => {
+  const runs = Array.from({ length: 5 }, (_, i) => ({ group: 0, lo: i, hi: 100, room: 16 }));
+  const lanes = assignLanes(runs).sort((a, b) => a - b);
+  assert.equal((lanes[4] - lanes[0]) * 8, 16); // 4 gaps in 16px
+  const tight = assignLanes(runs.map((r) => ({ ...r, room: 2 }))).sort((a, b) => a - b);
+  assert.equal((tight[1] - tight[0]) * 8, 3);
+});
+
+test("quietBadges: from 4 links below 125 % zoom", () => {
+  assert.equal(quietBadges(3, 1), false);
+  assert.equal(quietBadges(4, 1), true);
+  assert.equal(quietBadges(9, 1.25), false);
+});

@@ -13,6 +13,12 @@
 .rel-badge text { fill: var(--ink-2); font-size: var(--fs-body); font-weight: 600; }
 .rel-link--hover .rel-badge rect { stroke: var(--accent); }
 .rel-link--hover .rel-badge text { fill: var(--accent-ink); }
+/* Focus: while a link or a card is hovered, the links it doesn't touch fade back (lines and badges), so its own read on top.
+   Quiet (4+ links below 125 % zoom, quietBadges): badges rest hidden and show on the hovered or focused links only; the crow's foot and
+   tick still carry the cardinality, and the Relationships card lists every join. A fade, not a visibility toggle: opacity animates. */
+.rel-link { transition: opacity var(--dur) var(--ease); }
+.rel-focus .rel-link:not(.rel-link--focus, .rel-link--hover) { opacity: 0.2; }
+.rel-quiet .rel-link--label:not(.rel-link--focus, .rel-link--hover) { opacity: 0; pointer-events: none; }
 
 
 
