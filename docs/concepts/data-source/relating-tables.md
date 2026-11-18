@@ -34,6 +34,11 @@ Only a confident key is proposed on the canvas. Any key may open the dialog; oth
 - For each card that **Needs a partner**, the confident key to another card with the highest score is drawn: a dashed accent line (`.rel-ghost__line`)
   between the two key rows, taking a lane like a real link, and a pill (`.rel-ghost`) with **Relate on customer_id = id** (`.rel-ghost__go`) and a close
   button (`.rel-ghost__no`). One proposal per table pair.
+- **Drawn on demand.** A proposal is drawn while the pointer or keyboard focus is on one of its two cards (or on the proposal itself), and stays after
+  a click on either card until a click on empty ground or Esc. The one exception is a model with no relationship yet and exactly one proposal, which
+  is always drawn: nothing else is there to cross. Resting, it fades (`.rel-ghost--idle`: opacity 0, no pointer events), so its button stays in the Tab
+  order and the accessibility tree and focus inside it always shows it. Leaving a card waits 250ms before the fade, so the pointer can cross the gap
+  to the pill. A drawn proposal can still cross a real link, and its pill can still cover one ([backlog](../../development/backlog/data-source-hardening.md)).
 - The pill sits on the line's middle run when it fits; it is wider than most gutters, so usually it sits 16px under the lower of the two cards, centred on
   the gap, stepping down past another pill.
 - Click (or Enter) opens the dialog filled with that key. Close hides that pair's proposal until the page reloads.
@@ -43,7 +48,7 @@ Only a confident key is proposed on the canvas. Any key may open the dialog; oth
 ## "Needs a partner"
 
 - **Needs a partner** (`.entity__need`) is a plain label (a `span`, warning ink) beside the title while the card is in no relationship, with the dashed
-  card outline. It does nothing on click: the way out is the card's **proposed link** above, or a column drag.
+  card outline. It does nothing on click: the way out is the card's **proposed link** above (point at the card to see it), or a column drag.
 - There is no **Relate to another table** item in the ☰ menu and no table picker: it listed the other tables with a key each, which a proposed link
   already says on the canvas ([D132](../../decisions/decisions-relationships.md#d132--no-relate-to-another-table-menu-item-or-table-picker)).
 - A table with no same-named key column gets no proposal; relate it by dragging a column onto a column ([relationships.md](relationships.md#drawing-a-link--drag-a-column)).
@@ -60,7 +65,7 @@ that relationship instead of making a second one (`dropDecision` returns `extend
 - The keyboard status line says "Press Enter to also match it on customers.region (one more key column)."
 - The badge counts the keys (`N:1 · 2 keys`) and both columns are pinned in the key strips.
 
-Browser check: `tests/live/relate-tables-ui.mjs` (also writes the screenshots used in the demo).
+Browser checks: `tests/live/relate-tables-ui.mjs` (also writes the screenshots used in the demo) and `tests/live/proposal-reveal-ui.mjs` (proposals on demand).
 
 ## Limits
 
