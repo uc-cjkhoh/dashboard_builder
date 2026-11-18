@@ -13,7 +13,8 @@ mkdirSync(SHOTS, { recursive: true });
 // ---- the mocked server ------------------------------------------------------------------------------------
 const COLUMNS = {
   orders: [['cust_id', 'Int32', 'numeric'], ['amount', 'Float64', 'numeric']],
-  customers: [['id', 'Int32', 'numeric'], ['name', 'String', 'text']],
+  customers: [['id', 'Int32', 'numeric'], ['name', 'String', 'text'], ['alt_id', 'Int32', 'numeric']], // alt_id: a column can be in one relationship only
+  order_line_items_with_a_deliberately_long_table_name: [['cust_id', 'Int32', 'numeric']],
 };
 const queries = [];
 function answer({ method, path, body }) {
@@ -87,6 +88,21 @@ try {
     await ev(`document.querySelector('.rel-notes > summary').click()`); await b.sleep(300);
     const back = await m();
     must(back.card > shut.card && await ev(vis), `reopened ${J(back)}`);
+  });
+  await check('a long table name ellipsises in the card: the width stays 288px and the whole link is a tooltip', async () => {
+    const LONG = 'order_line_items_with_a_deliberately_long_table_name';
+    await ev(`document.dispatchEvent(new CustomEvent('table:add', { detail: { db: 'shop', table: ${J(LONG)} } }))`);
+    await waitFor(`document.querySelectorAll('.entity').length === 3 && [...document.querySelectorAll('.entity__status')].every((s) => s.hidden)`, 'long table loaded');
+    await dragRow(LONG, 'cust_id', 'customers', 'alt_id');
+    await waitFor(`document.querySelector('dialog[open] .join-choice') !== null`, 'second relationship dialog');
+    await ev(`${dlg}.querySelector('.rel-dialog__foot .btn--primary').click()`);
+    await waitFor(`document.querySelectorAll('.rel-note').length === 2`, 'two notes');
+    const x = await ev(`(() => { const c = document.querySelector('.rel-notes'), r = c.getBoundingClientRect(), v = c.parentElement.getBoundingClientRect();
+      const t = [...c.querySelectorAll('.rel-note__title')].find((e) => e.textContent.startsWith('order_line_items'));
+      return { w: Math.round(r.width), right: Math.round(v.right - r.right), cut: t.scrollWidth > t.clientWidth, tip: t.title, text: t.textContent }; })()`);
+    must(x.w === 288 && x.right === 16, `card ${J(x)}`);
+    must(x.cut && x.tip === x.text && /order_line_items.* → customers$/.test(x.tip), `title ${J(x)}`);
+    await shot('rel-notes-long-name.png');
   });
   await check('many long entries: the card stops 16px above the bottom of the Data Source and the list scrolls inside', async () => {
     await ev(`(() => { const ul = document.querySelector('.rel-notes__list'); const li = ul.firstElementChild; for (let i = 0; i < 12; i++) { const c = li.cloneNode(true); c.querySelector('details').open = true; ul.append(c); } return true; })()`);

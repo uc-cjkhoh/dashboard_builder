@@ -198,8 +198,9 @@
   background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r); box-shadow: var(--elev-8);
   color: var(--ink-2); font-size: var(--fs-body); white-space: nowrap; max-width: calc(100% - 2 * var(--s4)); overflow: hidden; text-overflow: ellipsis; }
 
-/* The Relationships card: solid (it floats over the canvas), top right under the tab bar, collapsible; scrolls inside when long. */
-.rel-notes { position: absolute; top: calc(var(--topbar-h) + var(--s4)); right: var(--s4); z-index: 2; width: max-content; min-width: 288px; max-width: calc(100% - 2 * var(--s4));
+/* The Relationships card: solid (it floats over the canvas), top right under the tab bar, collapsible; scrolls inside when long. Its width is fixed
+   so a long table name ellipsises in its row (the full link is the row's tooltip) and never widens the card over the table cards. */
+.rel-notes { position: absolute; top: calc(var(--topbar-h) + var(--s4)); right: var(--s4); z-index: 2; width: 288px; max-width: calc(100% - 2 * var(--s4));
   max-height: calc(100% - var(--topbar-h) - 2 * var(--s4)); display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r); box-shadow: var(--elev-8); }
 .rel-notes > summary { flex: none; display: flex; align-items: center; justify-content: space-between; height: 40px; padding: 0 var(--s4); font-weight: 600; cursor: pointer; list-style: none; }
 .rel-notes > summary::-webkit-details-marker, .rel-note__head::-webkit-details-marker { display: none; }
@@ -218,7 +219,7 @@
 .rel-note + .rel-note { margin-top: var(--s1); }
 .rel-note--active { background: var(--accent-soft); }
 .rel-note p { margin: 0; }
-.rel-note__more { display: grid; gap: var(--s2); padding: var(--s2); }
+.rel-note__more { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s2); padding: var(--s2); } /* one column the card's width: a long title row ellipsises (.rel-note__title) instead of stretching it */
 /* Closed, the hidden content slot is still a grid item: drop the gap so the title sits centred (8px above and below), not 8 over 16. */
 .rel-note__more:not([open]) { gap: 0; }
 .rel-note__part { display: grid; gap: 0; width: 0; min-width: 100%; } /* a short title above its paragraph; like the text, it never sets the card's width */
