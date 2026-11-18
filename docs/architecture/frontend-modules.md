@@ -227,7 +227,7 @@ Grouped by feature folder; each entry is the module, then what it owns.
 ### Core/ — shared helpers
 
 - `Core/parameters-model.js` — pure (P32): `checkValue` (type + allowed values), `checkStep` (positive step size), `checkParamName`, `withParamValue`, `effectiveTopN`, `paramTypeFor`, `cleanParameter`
-- `Core/theme-model.js` — pure (P41): accent presets + palettes (light / dark), `deriveAccent` (custom colour → contrast-checked set, or a refusal), `themeVars`, `cleanTheme` — [tokens.md](../reference/design/tokens.md#workbook-themes-p41)
+- `Core/theme-model.js` — pure (P41): accent presets + palettes (light / dark; each accent's hover and pressed are derived — lifted toward white, with their own text colour, [D134](../decisions/decisions-buttons.md#d134--hover-and-pressed-are-brighter-than-rest-in-every-scheme)), `deriveAccent` (custom colour → contrast-checked set, or a refusal), `themeVars`, `cleanTheme` — [tokens.md](../reference/design/tokens.md#workbook-themes-p41)
 - `Core/scheme-model.js` — pure: `SCHEME_PREFS`, `normalizePref`, `resolveScheme(pref, osDark)` — [tokens.md](../reference/design/tokens.md#light-and-dark)
 - `Core/scheme-boot.js` — classic `<head>` script: sets `data-scheme` before first paint (mirrors `resolveScheme`)
 - `Core/scheme.js` — owns `<html data-scheme>`: `isDark`, `schemePref`, `setSchemePref` (`localStorage`), follows the OS while System; emits `scheme:changed`
