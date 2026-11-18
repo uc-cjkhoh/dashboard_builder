@@ -12,6 +12,7 @@ open question, promote it to a decision.
 | Decisions | File |
 |---|---|
 | D1–D25, D88, D90 (worksheet background shade; the box plot is a worksheet-shaped request) | [decisions-platform.md](decisions-platform.md) |
+| D140 (the Data Source's next step leads: a card's ✕ rests muted, the key strip has no fill) | [decisions-design.md](decisions-design.md) |
 | D139 (content-hash asset URLs cached for a year; shared ClickHouse HTTP clients) | [decisions-performance.md](decisions-performance.md) |
 | D105 (Edit SQL: a free-text `SELECT` on a Data Source card, the one exception to rules 2 and 3), D106 (MySQL syntax in Edit SQL, translated to ClickHouse), D128 (saving Edit SQL shows the card's rows in the data preview), D130 (the data preview is a light grid with resizable columns), D131 (the data preview pages 100 rows at a time), D136 (quoted names are names; only listed table functions go where a table goes), D138 (union and unpivot are written in Edit SQL, not built in the sidebar) | [decisions-custom-sql.md](decisions-custom-sql.md) |
 | D26–D60, D65–D68, D73 (calculated fields, parameters, member labels, groups, split / unpivot) | [decisions-calculated-fields.md](decisions-calculated-fields.md) |

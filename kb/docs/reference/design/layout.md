@@ -133,7 +133,7 @@ two bottom borders line up across the shell. If the tabs wrap, the bar grows tal
   ([canvas.md](../../concepts/data-source/canvas.md#canvas-ground)). The gutter is canvas placement, not
   component spacing, so it sits outside the 4 / 8 / 16 / 24 steps.
 - **No data rows on the card.** A card's rows show in the data preview docked under the canvas ([canvas.md](../../concepts/data-source/canvas.md#data-preview)); a table's rows also open in a dialog from its schema-browser chip.
-- A caret in the head collapses the card to its title bar. A key column's name turns accent.
+- A caret in the head collapses the card to its title bar. A key column's name turns accent. The ✕ rests muted (`--ink-3`) like the ☰ and caret and turns danger red on hover and keyboard focus; the key strip has no fill, only the rule under it and accent bold names, with the wash on hover ([D140](../../decisions/decisions-design.md#d140--the-data-source-gives-the-next-step-the-strongest-mark-a-cards--rests-muted-and-the-key-strip-has-no-fill)).
 - **States** (each shown by more than colour):
   - Hover: the border deepens to `--ink-3` and the shadow to `--elev-card-hover`.
   - In no relationship while the model has other cards: a dashed `--warn-line` outline and the **Needs a partner** label (`.entity--unlinked`).

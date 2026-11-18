@@ -13,7 +13,7 @@ explorer, not an admin template.
 | Pattern | Key classes |
 |---|---|
 | Buttons | `.btn`, `.btn--primary`, `.btn--danger`, `.btn--ghost` — states in [tokens.md § Button states](tokens.md#button-states) |
-| Icon actions | `.iconbtn`, `.iconbtn--danger` (remove entity, close tab, disconnect) |
+| Icon actions | `.iconbtn`, `.iconbtn--danger` (remove entity, close tab, disconnect); a card's ✕ rests muted and turns danger on hover / focus (D140) |
 | Icons | `Core/icons.js` `icon(name, {size, label})` → inline `<svg class="icon">`; static markup uses `<span data-icon="name">`, hydrated once by `Shell/app.js` |
 | Menu | `.menu`, `.menu__list` (solid `--surface`, never glass; `--start` anchors left), `.menu__item` (`[aria-checked]` radio items with `.menu__check`), `.menu__label`, `.menu__heading`, `.menu__sep` — wired by `Core/menu.js` |
 | Glass | `.glass` (tint + `--glass-blur` + 1px stroke + top rim) — only on chrome over the wash: sidebar, `.canvas__bar`; `.ws-shelves` uses the same tokens |
