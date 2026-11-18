@@ -20,7 +20,7 @@ public sealed partial class ClickHouseGateway
                   ?? throw UnknownIdentifierException.Column(req.Column, database, table);
         var top = req.Limit ?? ApiLimits.DefaultProfileTop;
 
-        using var httpClient = CreateHttpClient(info);
+        var httpClient = SharedClient(info);
         await using var conn = new ClickHouseConnection(BuildConnectionString(info), httpClient);
         await conn.OpenAsync(ct);
 
@@ -113,7 +113,7 @@ public sealed partial class ClickHouseGateway
         var col = columns.FirstOrDefault(c => string.Equals(c.Name, column, StringComparison.Ordinal))
                   ?? throw UnknownIdentifierException.Column(column, database, table);
         if (col.Category != ClickHouseType.Temporal) throw new UnknownIdentifierException($"Column \"{col.Name}\" is not a date column.");
-        using var httpClient = CreateHttpClient(info);
+        var httpClient = SharedClient(info);
         await using var conn = new ClickHouseConnection(BuildConnectionString(info), httpClient);
         await conn.OpenAsync(ct);
         await using var cmd = conn.CreateCommand();

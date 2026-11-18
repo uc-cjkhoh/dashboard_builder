@@ -1,7 +1,11 @@
 @using DashboardBuilder.Features.Shell
 @inject Microsoft.Extensions.Configuration.IConfiguration Config
+@inject AssetCatalog Catalog
 @{
     Layout = null;
+    // Every asset URL carries the content hash of the build (see Program.cs, AssetCaching), so the browser keeps them without revalidating.
+    var v = Catalog.Current;
+    var assets = Url.Content("~/features/" + v.Prefix);
 }
 <!DOCTYPE html>
 <html lang="en">
@@ -14,23 +18,30 @@
        mapping and no path prefix — and the browser never asks for /favicon.ico. An SVG cannot read the CSS tokens, so the hex is kept in step by hand. *@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23a9c43c'%3E%3Crect x='3' y='3' width='8' height='8' rx='1.5'/%3E%3Crect x='13' y='3' width='8' height='8' rx='1.5'/%3E%3Crect x='3' y='13' width='8' height='8' rx='1.5'/%3E%3Crect x='13' y='13' width='8' height='8' rx='1.5'/%3E%3C/svg%3E" />
     @* Sets <html data-scheme> before first paint (System / Light / Dark — Core/scheme.js), so dark never flashes light. *@
-    <script src="~/features/Core/scheme-boot.js"></script>
+    <script src="@(assets)/Core/scheme-boot.js"></script>
     @* Core first (design tokens + shared components), then per-feature stylesheets. *@
-    <link rel="stylesheet" href="~/features/Core/core.css" />
-    <link rel="stylesheet" href="~/features/Shell/shell.css" />
-    <link rel="stylesheet" href="~/features/Connection/connection.css" />
-    <link rel="stylesheet" href="~/features/Schema/schema.css" />
-    <link rel="stylesheet" href="~/features/Canvas/canvas.css" />
-    <link rel="stylesheet" href="~/features/Core/vendor/codemirror/codemirror-sql.css" /> <!-- structure of the Edit SQL code editor (colours: canvas.css); its script loads when a dialog first opens -->
-    <link rel="stylesheet" href="~/features/Relations/relations.css" />
-    <link rel="stylesheet" href="~/features/Tabs/tabs.css" />
-    <link rel="stylesheet" href="~/features/Dashboard/dashboard.css" />
-    <link rel="stylesheet" href="~/features/Board/board.css" />
-    <link rel="stylesheet" href="~/features/Story/story.css" />
-    <link rel="stylesheet" href="~/features/Workbook/workbook.css" />
-    <link rel="stylesheet" href="~/features/Calc/calc.css" />
-    <link rel="stylesheet" href="~/features/Rows/rows.css" />
-    <link rel="stylesheet" href="~/features/Core/buttons.css" />
+    <link rel="stylesheet" href="@(assets)/Core/core.css" />
+    <link rel="stylesheet" href="@(assets)/Shell/shell.css" />
+    <link rel="stylesheet" href="@(assets)/Connection/connection.css" />
+    <link rel="stylesheet" href="@(assets)/Schema/schema.css" />
+    <link rel="stylesheet" href="@(assets)/Canvas/canvas.css" />
+    <link rel="stylesheet" href="@(assets)/Core/vendor/codemirror/codemirror-sql.css" /> <!-- structure of the Edit SQL code editor (colours: canvas.css); its script loads when a dialog first opens -->
+    <link rel="stylesheet" href="@(assets)/Relations/relations.css" />
+    <link rel="stylesheet" href="@(assets)/Tabs/tabs.css" />
+    <link rel="stylesheet" href="@(assets)/Dashboard/dashboard.css" />
+    <link rel="stylesheet" href="@(assets)/Board/board.css" />
+    <link rel="stylesheet" href="@(assets)/Story/story.css" />
+    <link rel="stylesheet" href="@(assets)/Workbook/workbook.css" />
+    <link rel="stylesheet" href="@(assets)/Calc/calc.css" />
+    <link rel="stylesheet" href="@(assets)/Rows/rows.css" />
+    <link rel="stylesheet" href="@(assets)/Core/buttons.css" />
+    @* The whole module graph is known to the server (Shell/StaticAssets.cs), so the browser fetches every module and the charting library
+       in one parallel wave instead of discovering imports six levels deep. *@
+    <link rel="preload" as="script" href="@(assets)/Core/vendor/echarts.min.js" />
+    @foreach (var module in v.Modules)
+    {
+        <link rel="modulepreload" href="@(assets)/@module" />
+    }
 </head>
 <body>
     <div class="app" data-connecting>
@@ -107,7 +118,7 @@
 
     <!-- Self-hosted charting library (no CDN). Classic script runs before the deferred module
          graph, so `window.echarts` is ready when Dashboard/chart.js first renders. -->
-    <script src="~/features/Core/vendor/echarts.min.js"></script>
-    <script type="module" src="~/features/Shell/app.js"></script>
+    <script src="@(assets)/Core/vendor/echarts.min.js"></script>
+    <script type="module" src="@(assets)/Shell/app.js"></script>
 </body>
 </html>

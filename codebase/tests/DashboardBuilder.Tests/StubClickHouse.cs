@@ -9,7 +9,7 @@ public sealed class StubClickHouse : IDisposable
 {
     public sealed record Col(string Name, string Type);
     public sealed record Result(Col[] Columns, object?[][] Rows);
-    public sealed record Seen(string Sql, string Url, string Form);
+    public sealed record Seen(string Sql, string Url, string Form, string? Auth = null);
 
     private HttpListener _listener = new(); // a new one per attempt: a listener whose Start() failed is disposed and cannot be tried again
     private readonly Func<string, Result> _answer;
@@ -42,7 +42,7 @@ public sealed class StubClickHouse : IDisposable
                 var body = await reader.ReadToEndAsync();
                 var url = ctx.Request.Url!.Query;
                 var sql = ctx.Request.Url.Query.Contains("query=", StringComparison.Ordinal) ? WebUtility.UrlDecode(url.Split("query=")[1].Split('&')[0]) : body;
-                lock (Statements) Statements.Add(new Seen(sql, WebUtility.UrlDecode(url), body));
+                lock (Statements) Statements.Add(new Seen(sql, WebUtility.UrlDecode(url), body, ctx.Request.Headers["Authorization"] ?? ctx.Request.Headers["X-ClickHouse-User"]));
                 var bytes = sql.StartsWith("SELECT version()", StringComparison.Ordinal) ? Encoding.UTF8.GetBytes("24.3.1.1\tUTC\n") : Encode(_answer(sql));
                 ctx.Response.StatusCode = 200;
                 ctx.Response.ContentType = "application/octet-stream";

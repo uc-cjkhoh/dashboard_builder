@@ -1,8 +1,9 @@
 // When the app is hosted under a path prefix (e.g. /dashboardbuilder behind a reverse
 // proxy), API calls must carry that prefix. Derive it from this module's own URL —
-// .../<base>/features/Core/api.js → "/<base>" — so it's "" when served at the site root.
+// .../<base>/features/Core/api.js → "/<base>" — so it's "" when served at the site root. The page loads modules under a
+// content-hash prefix (.../<base>/features/v-<hash>/Core/api.js); the prefix is not part of the base.
 export const basePathFrom = (moduleUrl) =>
-  new URL(".", moduleUrl).pathname.replace(/\/features\/Core\/$/i, "");
+  new URL(".", moduleUrl).pathname.replace(/\/features\/(?:v-[0-9a-f]+\/)?Core\/$/i, "");
 import { activity, describeRequest } from "./activity-model.js";
 const BASE = basePathFrom(import.meta.url);
 

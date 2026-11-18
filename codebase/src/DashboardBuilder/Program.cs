@@ -1,5 +1,6 @@
 using DashboardBuilder.ClickHouse;
 using DashboardBuilder.Features;
+using DashboardBuilder.Features.Shell;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.DataProtection;
@@ -84,6 +85,9 @@ builder.Services.AddRateLimiter(o =>
 // Only loopback proxies are trusted (the default), so a direct client can't spoof them.
 builder.Services.Configure<ForwardedHeadersOptions>(o => o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto);
 
+// The page's asset ids (content hashes) and module-preload list, and the precompressed Brotli bytes (Features/Shell/StaticAssets.cs).
+builder.Services.AddSingleton(sp => new AssetCatalog(Path.Combine(sp.GetRequiredService<IWebHostEnvironment>().ContentRootPath, "Features")));
+
 // Session-scoped connection store + the read-only ClickHouse gateway.
 builder.Services.AddScoped<ConnectionRegistry>();
 // Worksheet results are reused for a minute per server + user + request (bounded: ~256 units).
@@ -113,15 +117,15 @@ app.UseResponseCompression();
 app.UseExceptionHandler(new ExceptionHandlerOptions { ExceptionHandler = ApiErrors.WriteUnhandledAsync });
 app.UseApiBodyLimit();
 
-// Force revalidation of static assets. The page's <script>/<link> tags are not version-stamped and
-// the ES-module imports (../Core/store.js, ../Core/ui.js, …) certainly aren't — so without this a
-// browser can serve a *stale* module from an earlier deploy, breaking the (interdependent) module
-// graph. `no-cache` + the ETag means unchanged files still 304 cheaply, but changed ones are always
-// re-fetched.
-static void NoCache(StaticFileResponseContext ctx)
-    => ctx.Context.Response.Headers.CacheControl = "no-cache";
+// Cache policy for static assets. The page links every feature file under /features/v-<content hash>/…, and the ES-module
+// imports are relative, so the whole module graph lives under that prefix: a changed file changes the hash, hence every URL, so
+// a browser can never mix modules from two builds — and can keep a file for a year without asking (`immutable`). Any other URL
+// (unversioned /features/…, an old hash) revalidates: `no-cache` + ETag, a cheap 304 when unchanged.
+static void AssetCaching(StaticFileResponseContext ctx) => PrecompressedAssets.SetCacheControl(ctx.Context);
 
-app.UseStaticFiles(new StaticFileOptions { OnPrepareResponse = NoCache });
+app.UseMiddleware<VersionedAssets>();
+app.UseMiddleware<PrecompressedAssets>();
+app.UseStaticFiles(new StaticFileOptions { OnPrepareResponse = AssetCaching });
 
 // Serve each feature's co-located CSS/JS from its folder under /features. A restricted content-type
 // map means ONLY .css and .js are ever served — the .cs source and .cshtml views in the same folders
@@ -136,8 +140,11 @@ app.UseStaticFiles(new StaticFileOptions
     RequestPath = "/features",
     ContentTypeProvider = featureAssetTypes,
     ServeUnknownFileTypes = false,
-    OnPrepareResponse = NoCache,
+    OnPrepareResponse = AssetCaching,
 });
+
+// Compress the assets once, in the background, so no request pays for it.
+app.Lifetime.ApplicationStarted.Register(() => _ = app.Services.GetRequiredService<AssetCatalog>().WarmAsync());
 
 app.UseRouting();
 app.UseRateLimiter();

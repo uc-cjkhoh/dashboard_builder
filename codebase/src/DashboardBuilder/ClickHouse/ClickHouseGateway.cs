@@ -118,15 +118,19 @@ public sealed partial class ClickHouseGateway
     /// accepted without validation — the escape hatch for internal servers presenting a
     /// self-signed cert (decision D11). The proper fix remains trusting the server's CA.
     /// </summary>
-    private static HttpClient CreateHttpClient(ClickHouseConnectionInfo info, CertProbe? probe = null)
+    private static HttpClient SharedClient(ClickHouseConnectionInfo info) => SharedHttpClients.For(info, HttpTimeoutSeconds);
+
+    /// <summary>
+    /// A one-off client for the connect check only: its certificate callback records whether the server's certificate was the
+    /// reason for a failure (<see cref="CertProbe"/>), which is per-call state, so it cannot be shared. The caller disposes it.
+    /// </summary>
+    private static HttpClient CreateProbeClient(ClickHouseConnectionInfo info, CertProbe probe)
     {
-        // ClickHouse.Client requests compressed responses, so a hand-supplied HttpClient must
-        // decompress them itself (its built-in handler does this for us otherwise).
         var handler = new HttpClientHandler { AutomaticDecompression = DecompressionMethods.All };
         if (BypassesCertificateValidation(info))
             handler.ServerCertificateCustomValidationCallback =
                 HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
-        else if (probe is not null && info.Secure)
+        else if (info.Secure)
             // Only called when the server actually presented a certificate, so a rejection here is language-independent proof
             // that the certificate (not the TLS setting) is the problem.
             handler.ServerCertificateCustomValidationCallback = (_, _, _, errors) =>
@@ -134,8 +138,6 @@ public sealed partial class ClickHouseGateway
                 if (errors != System.Net.Security.SslPolicyErrors.None) probe.Rejected = true;
                 return errors == System.Net.Security.SslPolicyErrors.None;
             };
-
-        // Bound the wait so an unresponsive host fails cleanly instead of hanging.
         return new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(HttpTimeoutSeconds) };
     }
 
@@ -220,7 +222,7 @@ public sealed partial class ClickHouseGateway
 
     private static async Task<string?> SelectOneCoreAsync(ClickHouseConnectionInfo info, CertProbe probe, CancellationToken ct)
     {
-        using var httpClient = CreateHttpClient(info, probe);
+        using var httpClient = CreateProbeClient(info, probe);
         await using var conn = new ClickHouseConnection(BuildConnectionString(info), httpClient);
         await conn.OpenAsync(ct);
 
@@ -265,7 +267,7 @@ public sealed partial class ClickHouseGateway
         await EnsureTableExistsAsync(info, database, table, ct);
         var sql = $"DESCRIBE TABLE {Identifier.QualifiedName(database, table)}";
 
-        using var httpClient = CreateHttpClient(info);
+        var httpClient = SharedClient(info);
         await using var conn = new ClickHouseConnection(BuildConnectionString(info), httpClient);
         await conn.OpenAsync(ct);
 
@@ -317,7 +319,7 @@ public sealed partial class ClickHouseGateway
         var sql = $"SELECT DISTINCT {Identifier.Quote(column)} AS v FROM {Identifier.QualifiedName(database, table)} " +
                   $"WHERE v IS NOT NULL ORDER BY v LIMIT {n}";
 
-        using var httpClient = CreateHttpClient(info);
+        var httpClient = SharedClient(info);
         await using var conn = new ClickHouseConnection(BuildConnectionString(info), httpClient);
         await conn.OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
@@ -685,7 +687,7 @@ public sealed partial class ClickHouseGateway
         var (skip, settings) = PageClause(req.Offset, req.Source is null, info.Guards);
         var sql = BuildRowsSql(req.Db, req.Table, columns.Select(c => c.Name).ToList(), where, probe, from, skip + settings);
 
-        using var httpClient = CreateHttpClient(info);
+        var httpClient = SharedClient(info);
         await using var conn = new ClickHouseConnection(BuildConnectionString(info), httpClient);
         await conn.OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
@@ -768,7 +770,7 @@ public sealed partial class ClickHouseGateway
         var share = UnionShare(limit, req.Tables.Length);
         var sql = BuildUnionSql(req.Db, req.Tables, columns.Select(c => c.Name).ToList(), share + 1, described.SelectMany(t => t.Select(c => c.Name)));
 
-        using var httpClient = CreateHttpClient(info);
+        var httpClient = SharedClient(info);
         await using var conn = new ClickHouseConnection(BuildConnectionString(info), httpClient);
         await conn.OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
@@ -820,7 +822,7 @@ public sealed partial class ClickHouseGateway
     {
         try
         {
-            using var httpClient = CreateHttpClient(info);
+            var httpClient = SharedClient(info);
             await using var conn = new ClickHouseConnection(BuildConnectionString(info), httpClient);
             await conn.OpenAsync(ct);
             await using var cmd = conn.CreateCommand();
@@ -848,7 +850,7 @@ public sealed partial class ClickHouseGateway
     {
         try
         {
-            using var httpClient = CreateHttpClient(info);
+            var httpClient = SharedClient(info);
             await using var conn = new ClickHouseConnection(BuildConnectionString(info), httpClient);
             await conn.OpenAsync(ct);
             await using var cmd = conn.CreateCommand();
@@ -927,7 +929,7 @@ public sealed partial class ClickHouseGateway
         var (skip, settings) = PageClause(req.Offset, true, info.Guards);
         var sql = BuildUnpivotSql(req.Db, req.Table, keep, req.Columns, probe, described.Select(c => c.Name), skip, settings);
 
-        using var httpClient = CreateHttpClient(info);
+        var httpClient = SharedClient(info);
         await using var conn = new ClickHouseConnection(BuildConnectionString(info), httpClient);
         await conn.OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
@@ -982,7 +984,7 @@ public sealed partial class ClickHouseGateway
         var whole = ClickHouseType.IsWholeNumber(col.Type);
         var sql = BuildHistogramSql(qname, qualified, where, bins, whole);
 
-        using var httpClient = CreateHttpClient(info);
+        var httpClient = SharedClient(info);
         await using var conn = new ClickHouseConnection(BuildConnectionString(info), httpClient);
         await conn.OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
@@ -1081,7 +1083,7 @@ public sealed partial class ClickHouseGateway
         var limit = ProbeLimit(requestedLimit);
         sql.Append(" LIMIT ").Append(limit).Append(settings);
 
-        using var httpClient = CreateHttpClient(info);
+        var httpClient = SharedClient(info);
         await using var conn = new ClickHouseConnection(BuildConnectionString(info), httpClient);
         await conn.OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
@@ -1622,20 +1624,19 @@ public sealed partial class ClickHouseGateway
         return new QueryResult(rowDimNames, colDimNames, measNames, rows, truncated, await totalTask, other, bucket, false, approx);
     }
 
-    /// <summary>An open connection that also disposes the HttpClient it was built on.</summary>
-    private sealed class OpenConnection(ClickHouseConnection conn, HttpClient http) : IAsyncDisposable
+    /// <summary>An open connection. The HttpClient it rides on is shared (<see cref="SharedHttpClients"/>) and outlives it.</summary>
+    private sealed class OpenConnection(ClickHouseConnection conn) : IAsyncDisposable
     {
         public ClickHouseCommand CreateCommand() => conn.CreateCommand();
-        public async ValueTask DisposeAsync() { await conn.DisposeAsync(); http.Dispose(); }
+        public async ValueTask DisposeAsync() => await conn.DisposeAsync();
     }
 
     private async Task<OpenConnection> OpenAsync(ClickHouseConnectionInfo info, CancellationToken ct)
     {
-        var http = CreateHttpClient(info);
-        var conn = new ClickHouseConnection(BuildConnectionString(info), http);
+        var conn = new ClickHouseConnection(BuildConnectionString(info), SharedClient(info));
         try { await conn.OpenAsync(ct); }
-        catch { await conn.DisposeAsync(); http.Dispose(); throw; }
-        return new OpenConnection(conn, http);
+        catch { await conn.DisposeAsync(); throw; }
+        return new OpenConnection(conn);
     }
 
     /// <summary>The ON clause of a join: <c>left = right</c>, ANDed with every extra pair (compound key). Left expressions arrive
@@ -1768,7 +1769,7 @@ public sealed partial class ClickHouseGateway
     private async Task<IReadOnlyList<string>> QueryStringColumnAsync(
         ClickHouseConnectionInfo info, string sql, CancellationToken ct)
     {
-        using var httpClient = CreateHttpClient(info);
+        var httpClient = SharedClient(info);
         await using var conn = new ClickHouseConnection(BuildConnectionString(info), httpClient);
         await conn.OpenAsync(ct);
 

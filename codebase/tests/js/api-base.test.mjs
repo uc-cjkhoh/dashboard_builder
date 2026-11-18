@@ -8,6 +8,11 @@ test("under a proxy prefix the base is the prefix", () => {
   assert.equal(basePathFrom("https://10.168.49.20:8443/dashboardbuilder/features/Core/api.js"), "/dashboardbuilder");
 });
 
+test("the content-hash prefix of a versioned module URL is not part of the base", () => {
+  assert.equal(basePathFrom("https://10.168.49.20:8443/dashboardbuilder/features/v-0123456789ab/Core/api.js"), "/dashboardbuilder");
+  assert.equal(basePathFrom("http://localhost:5080/features/v-0123456789ab/Core/api.js"), "");
+});
+
 test("at the site root the base is empty", () => {
   assert.equal(basePathFrom("http://localhost:5080/features/Core/api.js"), "");
 });
