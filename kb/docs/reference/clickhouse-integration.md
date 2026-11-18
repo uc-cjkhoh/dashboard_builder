@@ -22,7 +22,10 @@ or T02-34 are build-plan (Pnn) and backlog (Tnn-nn) item ids; D-numbers are [dec
 - **Connection string** is assembled server-side from the session's `ClickHouseConnectionInfo`; the
   password comes from the session store and is never logged or returned.
 - **Validate on connect:** open and run `SELECT 1` before reporting "connected".
-- **The `HttpClient`** handed to the driver:
+- **The `HttpClient`** handed to the driver is **shared per endpoint** (`SharedHttpClients`: host, port, TLS, trust flag; at most 32;
+  [D139](../decisions/decisions-performance.md#d139--static-assets-live-under-a-content-hash-url-and-are-cached-for-a-year-clickhouse-calls-share-one-http-client-per-endpoint)),
+  so queries reuse pooled connections. It never holds credentials (the driver sends them per request) and callers never dispose it. The connect
+  check alone uses a one-off client, because its certificate callback records per-call state. The client:
   - accepts an untrusted cert **only** when `allowInvalidCert && secure`
     (`BypassesCertificateValidation`) — [D11](../decisions/decisions-platform.md#d11--tls-certificate-trust-self-signed-is-accepted-by-default-untick-to-verify);
   - **must** set `AutomaticDecompression` — ClickHouse.Client asks for compressed responses and throws

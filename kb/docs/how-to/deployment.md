@@ -30,4 +30,4 @@ From the solution root (`/unified/user/cj/web_development/prototype/dashboard_bu
 
 4. **Verify:** `curl -sk -o /dev/null -w '%{http_code}\n' https://127.0.0.1:8443/dashboardbuilder/`
    → `200`, **and** a feature asset (`…/features/Core/api.js`) → `200`. Check both, because the page
-   alone also answers 200 on a stale build. Then hard-refresh the browser once.
+   alone also answers 200 on a stale build. The browser picks up the new build by itself: every asset URL carries a content hash ([D139](../decisions/decisions-performance.md)).

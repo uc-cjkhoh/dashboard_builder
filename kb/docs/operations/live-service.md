@@ -94,7 +94,10 @@ state-changing call must be a `POST` with JSON ([sharp edges](../development/sha
   `SetApplicationName("DashboardBuilder")`. Session cookies from before a restart therefore decrypt
   cleanly instead of logging `CryptographicException`. The dir must stay writable by `unified` and
   survive redeploys. Don't delete it, and keep it out of git.
-- **Static assets** are served `Cache-Control: no-cache` so browsers revalidate changed ES modules.
+- **Static assets** are linked as `/features/v-<content hash>/…` and served `public, max-age=31536000, immutable`; the hash changes
+  whenever any `.js` / `.css` changes, so a deploy needs no cache flush. The page (`/`) and unversioned `/features/…` URLs revalidate
+  (`no-cache`). Brotli copies of every asset are built in memory in the first seconds after start-up.
+  Apache serves HTTP/1.1 on `:8443` (six parallel requests); `Protocols h2 http/1.1` on the vhost would speed a cold load further ([resource-usage.md](resource-usage.md)).
 
 ## SQL translator (MySQL syntax in Edit SQL)
 
