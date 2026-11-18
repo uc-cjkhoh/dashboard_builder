@@ -6,3 +6,6 @@ docs/operations/credentials.local.md
 bin/
 obj/
 out/
+
+# Permission ledger hook (ledger itself is covered by *.local.md)
+.claude/permission-ledger.local.md.*

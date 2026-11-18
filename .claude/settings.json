@@ -28,6 +28,16 @@
             "statusMessage": "Checking for orphaned Chrome and dev servers..."
           }
         ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/unified/user/cj/knowledge/web_development/dashboard_builder/.claude/hooks/permission-ledger.py",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "Stop": [
@@ -38,6 +48,36 @@
             "command": "/unified/user/cj/knowledge/web_development/dashboard_builder/.claude/hooks/reap-orphans.sh",
             "timeout": 10,
             "statusMessage": "Checking for orphaned Chrome and dev servers..."
+          },
+          {
+            "type": "command",
+            "command": "/unified/user/cj/knowledge/web_development/dashboard_builder/.claude/hooks/permission-ledger.py",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/unified/user/cj/knowledge/web_development/dashboard_builder/.claude/hooks/permission-ledger.py",
+            "timeout": 5,
+            "statusMessage": "Checking permission ledger..."
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/unified/user/cj/knowledge/web_development/dashboard_builder/.claude/hooks/permission-ledger.py",
+            "timeout": 5
           }
         ]
       }
