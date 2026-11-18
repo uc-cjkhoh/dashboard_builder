@@ -4,6 +4,7 @@ Visual and interaction changes (styles, markup, layout, labels, icons, focus). G
 
 ## 2026-11-17
 
+- Remove Undo/Redo; double-confirm every destructive delete (`2a78313`)
 - Resizer: light only the dragged handle, not every .resizer on body.is-resizing (`72815e4`)
 - Data preview: zebra stripes on the grid rows (D130) (`655a0e4`)
 - Data preview on the Data Source (D128): a card's first 100 rows in a panel docked under the canvas, opened by the card's table button and on Edit SQL Save; custom SQL read as source, union / unpivot via their own reads; resizable, latest request wins; + slots 144px apart across so the wider head never touches the next card (`abd92c6`)
