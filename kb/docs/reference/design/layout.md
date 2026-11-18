@@ -129,7 +129,7 @@ two bottom borders line up across the shell. If the tabs wrap, the bar grows tal
 - **Surface:** a solid card lifted off the wash, with a visible `--line-2` stroke, the two-layer
   `--elev-card` shadow (`--elev-card-hover` on hover) and a 1px `--card-rim` highlight along the head's
   top edge.
-- **Placement:** the Data Source ground is a 24px dot grid. Cards snap to 8px and are placed on a 312px
+- **Placement:** the Data Source ground is a 24px dot grid whose dots sit on the cards' lattice (a card's top-left corner lands on a dot). Cards snap to 8px and are placed on a 312px
   slot with a 144px gutter between columns and 96px between rows, which holds a link's elbow and badge
   ([canvas.md](../../concepts/data-source/canvas.md#canvas-ground)). The gutter is canvas placement, not
   component spacing, so it sits outside the 4 / 8 / 16 / 24 steps.
