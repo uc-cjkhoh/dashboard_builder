@@ -5,8 +5,6 @@ import { matchTables, listStep } from "./table-filter.js";
 import { entities, bus } from "../Core/store.js";
 import { splitDatabases, rememberDb, recallDb, sanitizeDbMemory } from "./schema-model.js";
 import { openTablePreview } from "../Rows/rows-dialog.js";
-import { openUnionDialog } from "../Rows/union-dialog.js";
-import { openUnpivotDialog } from "../Rows/unpivot-dialog.js";
 
 // Schema browser: fills the database <select> and renders the selected database's tables
 // as draggable chips. Driven by the `connection:changed` event from connection.js — it does
@@ -81,8 +79,6 @@ export function initSchema() {
     names = [];
     hide(emptyEl);
   }
-  document.getElementById("union-open")?.addEventListener("click", () => openUnionDialog(dbSelect.value, names));
-  document.getElementById("unpivot-open")?.addEventListener("click", () => openUnpivotDialog(dbSelect.value, names));
   searchEl?.addEventListener("input", applyFilter);
   searchEl?.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && searchEl.value) { searchEl.value = ""; applyFilter(); }

@@ -91,7 +91,7 @@
 .sidebar__tool:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 /* Bento: the sidebar body is a grid of solid tiles on the glass, 8px apart, 16px from the rail's edges. Tiles: connection, database,
-   the table list (takes the remaining height), and the Union / Unpivot pair side by side. One radius, one stroke, one soft lift. */
+   and the table list (takes the remaining height). One radius, one stroke, one soft lift. */
 .sidebar__body { padding: var(--s4); gap: var(--s2); }
 .bento, .sidebar__section--conn, .sidebar__section--db {
   background: var(--surface);
@@ -112,9 +112,6 @@
 .bento--list { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 .bento--list .table-search { margin: 0; border-bottom: 1px solid var(--line); }
 .bento--list .table-list { padding: var(--s1); margin-inline: 0; }
-/* Union / unpivot: two equal tiles under the list. */
-.sidebar__sources { flex: none; display: grid; grid-template-columns: 1fr 1fr; gap: var(--s2); }
-.sidebar__sources .btn { height: 40px; box-shadow: var(--elev-2); border-color: var(--line); }
 
 /* Resize handle on the sidebar's right edge (drag → up to 30% of the viewport); look in core.css .resizer. */
 .sidebar__resizer { position: absolute; top: 0; right: -3px; bottom: 0; z-index: 3; }
