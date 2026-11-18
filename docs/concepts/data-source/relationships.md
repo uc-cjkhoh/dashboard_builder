@@ -133,7 +133,7 @@ for the same reasons.
 
 **Pinned keys.**
 
-- A column in a relationship moves out of the scrolling list into the card's key strip above it (`.entity__keys`, accent wash).
+- A column in a relationship moves out of the scrolling list into the card's key strip above it (`.entity__keys`: no fill at rest, a rule beneath it, accent bold names, the accent wash on hover — [D140](../../decisions/decisions-design.md#d140--the-data-source-gives-the-next-step-the-strongest-mark-a-cards--rests-muted-and-the-key-strip-has-no-fill)).
   It goes back to its place when the link goes. So a link's end is always on a visible row, however far the list is scrolled.
   Pinning runs at the start of every redraw, before the link ends are measured: pinning changes card heights, so measuring first left
   links on first load or restore pointing at the old row positions until a card was moved.
@@ -211,7 +211,7 @@ or picked; the section adds up to **three more pairs**, so the join is `a.k1 = b
 - **Remove.** Each added pair is a row `a = b` with a Remove button.
 - **Keyboard.** Relate two columns [from the keyboard](#drawing-a-link--keyboard); the dialog then opens with focus inside it, and the
   suggestion buttons, selects (arrow keys), Add pair and Remove are all native controls reached with `Tab` and `Enter`.
-- **On the canvas.** Every pair's columns are pinned in the key strips and take the accent wash; one line (the first pair) is drawn.
+- **On the canvas.** Every pair's columns are pinned in the key strips (accent bold names); one line (the first pair) is drawn.
   The badge counts the keys ("N:1 · 2 keys", "N:1 · left · 3 keys").
 - **In worksheets.** The join sends the extra pairs (`joins[].pairs`, swapped when the link is crossed second-to-first); the server ANDs them into `ON`
   ([clickhouse-integration.md](../../reference/clickhouse-integration.md#worksheet-query-queryasync)).
