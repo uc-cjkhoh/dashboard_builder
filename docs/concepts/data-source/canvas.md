@@ -19,7 +19,7 @@ Drawing relationships on top of the cards is covered in [relationships.md](relat
 ## Canvas ground
 
 - The ground is a 24px dot grid that moves with the cards (pan and zoom, below).
-  It is drawn on `.view--model` with `--line-2` dots, offset by the 16px gutter, and `background-attachment: local`.
+  It is drawn on `.view--model` with `--line-2` dots and `background-attachment: local`. A dot is the centre of its 24px tile, so the tile starts 4px past the 16px gutter and the dots sit on the card lattice (model x, y = 16 + 24k): a card's top-left corner and the free slots land on a dot, at every zoom (`tests/live/canvas-zoom-ui.mjs`).
 - Cards snap to the grid's 8px steps.
   The free-slot steps (312 + 144 = 456 across, 312 + 96 = 408 down) are whole numbers of dot cells.
 - **Zoom and pan** work only on an empty spot of the ground (the pointer is on `#model-view` itself, not on a card, link or badge). The ground is an open world, not a scroll area: `.view--model` is `overflow: hidden` and has no scrollbars.
