@@ -173,6 +173,12 @@
 .rel-ghost__no { padding: var(--s1); color: var(--ink-3); }
 .rel-ghost__no:hover { color: var(--ink); background: var(--surface-2); }
 .rel-ghost button:focus-visible { outline: 2px solid var(--focus); outline-offset: 0; }
+/* On demand (D127): relations.js drops --idle on a proposal while the pointer or focus is on one of its cards or a card was clicked. At rest it is a fade
+   (opacity, no pointer events), not `hidden`, so its button keeps its place in the Tab order and the accessibility tree; focus inside it always shows it. */
+.rel-ghost, .rel-ghost__line { transition: opacity var(--dur) var(--ease); }
+.rel-ghost__line.rel-ghost--idle, .rel-ghost.rel-ghost--idle { opacity: 0; }
+.rel-ghost.rel-ghost--idle { pointer-events: none; }
+.rel-ghost.rel-ghost--idle:focus-within { opacity: 1; pointer-events: auto; }
 
 /* ---- Type-mismatch warning (a modal: both columns, their types, why, what would fit) -------------------------------- */
 .dialog--warn { max-width: 440px; }

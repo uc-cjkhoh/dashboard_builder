@@ -59,7 +59,7 @@ export function initRelations() {
   bus.addEventListener("canvas:zoomed", (e) => { zoom = e.detail?.zoom ?? zoom; render(); });
   bus.addEventListener("entity:loaded", (e) => { markDraggable(e.detail.entityId); render(); }); // a restored link waits for its key rows
   bus.addEventListener("entity:removed", (e) => { cancelKeyPick(); onEntityRemoved(e.detail.entityId); });
-  bus.addEventListener("view:changed", () => { cancelKeyPick(); selectedId = null; render(); });
+  bus.addEventListener("view:changed", () => { cancelKeyPick(); selectedId = null; revealId = focusId = pinnedId = null; render(); });
   canvas.addEventListener("scroll", render);
   // Hovering a card focuses its links: they stay strong (with their badges), every other link fades back.
   canvas.addEventListener("pointerover", (e) => {
@@ -68,10 +68,11 @@ export function initRelations() {
     if (next !== focusEntityId) { focusEntityId = next; markLinkedRows(); }
   });
   canvas.addEventListener("pointerleave", () => { if (focusEntityId) { focusEntityId = null; markLinkedRows(); } });
+  initGhostReveal();
   initColumnDrag();
   initColumnKeys();
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") { cancelKeyPick(); select(null); }
+    if (e.key === "Escape") { cancelKeyPick(); select(null); if (pinnedId) { pinnedId = null; applyGhosts(); } }
   });
 }
 
@@ -179,7 +180,48 @@ function extendRelationship(rel, a, b) {
 // --- relate two tables at once (D127): a proposed link ---
 const dismissed = new Set(); // proposed links the user closed: "a\0b"
 const ghosts = new Map();    // key -> the proposed link's button pair, kept across redraws so focus stays on it
-const tableOf = (e) => ({ table: e.table, columns: e.columns ?? [] });
+
+// A proposal is drawn on demand (D127): while the pointer or focus is on one of its two cards (or on the proposal), while one of them was clicked
+// (pinned until a click elsewhere or Esc), or when it is the only one in a model with no relationship yet, where nothing else is there to cross.
+// Resting, it fades (opacity, no pointer events), never `hidden`, so its button stays in the Tab order and the accessibility tree.
+const GHOST_GRACE = 250; // ms a hovered proposal stays after the pointer leaves, so the pointer can cross the gap from the card to its pill
+let revealId = null;     // the card (or proposal pair key) the pointer is over
+let focusId = null;      // the card (or proposal) holding keyboard focus
+let pinnedId = null;     // the card (or proposal) last clicked
+let revealTimer = 0;
+let autoGhosts = false;  // set by render(): the one proposal of a model with no relationship yet
+let proposalCount = 0;   // set by render(): proposals that exist, shown or not (the guide's words)
+
+/** The card id, or the proposal's pair key, that an event target belongs to. */
+const revealTarget = (el) => {
+  const t = el?.closest?.("[data-entity-id], .rel-ghost");
+  return t ? (t.classList.contains("rel-ghost") ? t._p?.pairKey : t.dataset.entityId) ?? null : null;
+};
+const ghostShown = (p) => autoGhosts || [revealId, focusId, pinnedId].some((id) => id && (id === p.a || id === p.b || id === p.pairKey));
+
+/** Fade each proposal's line and pill in or out. Called at the end of every render(), so a redrawn line never flashes. */
+function applyGhosts() {
+  for (const g of ghosts.values()) g.classList.toggle("rel-ghost--idle", !ghostShown(g._p));
+  for (const line of svg.querySelectorAll(".rel-ghost__line")) {
+    const g = ghosts.get(line.dataset.ghost);
+    line.classList.toggle("rel-ghost--idle", !g || !ghostShown(g._p));
+  }
+}
+
+function initGhostReveal() {
+  const leave = () => { clearTimeout(revealTimer); revealTimer = setTimeout(() => { revealId = null; applyGhosts(); }, GHOST_GRACE); };
+  canvas.addEventListener("pointerover", (e) => {
+    const id = revealTarget(e.target);
+    clearTimeout(revealTimer);
+    if (!id) { if (revealId) leave(); } else if (id !== revealId) { revealId = id; applyGhosts(); }
+  });
+  canvas.addEventListener("pointerleave", () => { if (revealId) leave(); });
+  canvas.addEventListener("pointerdown", (e) => { const id = revealTarget(e.target); if (id !== pinnedId) { pinnedId = id; applyGhosts(); } });
+  canvas.addEventListener("focusin", (e) => { const id = revealTarget(e.target); if (id !== focusId) { focusId = id; applyGhosts(); } });
+  canvas.addEventListener("focusout", (e) => { if (focusId && !canvas.contains(e.relatedTarget)) { focusId = null; applyGhosts(); } });
+}
+
+const tableOf =(e) => ({ table: e.table, columns: e.columns ?? [] });
 const relatable = (e) => e && !e.source && Array.isArray(e.columns);
 const usedOn = (id) => [...relationships.values()].flatMap(relEnds).filter((x) => x.entityId === id).map((x) => x.column);
 
@@ -421,7 +463,9 @@ function render() {
     links.push({ rel, sa, sb, p1, p2, group, lo: Math.min(p1.y, p2.y), hi: Math.max(p1.y, p2.y), ...ends });
   }
   const props = proposals();
-  for (const p of props) { // a proposed link takes a lane like a real one, so it never sits on top of one
+  autoGhosts = relationships.size === 0 && props.length === 1;
+  proposalCount = props.length;
+  for (const p of props) { // a proposed link takes a lane like a real one, so it never runs along one (it can still cross one: shown on demand, D127)
     const a = entities.get(p.a), b = entities.get(p.b);
     const [sa, sb] = linkSides(cardSpan(a, crect), cardSpan(b, crect));
     const p1 = anchor(a, p.k.first.from, sa, crect), p2 = anchor(b, p.k.first.to, sb, crect);
@@ -440,6 +484,7 @@ function render() {
     (under ? svg : labels).append(label); // a badge with no free spot beside the cards sits under them, never over
   });
   for (const [k, g] of ghosts) if (!keep.has(k)) { g.remove(); ghosts.delete(k); }
+  applyGhosts();
   canvas.classList.toggle("rel-quiet", quietBadges(links.length - props.length, zoom)); // many links: badges only on the hovered / focused ones
   updateGuide();
   renderNotes();
@@ -551,6 +596,10 @@ function orderStrip(entity, strip) {
 function updateGuide() {
   if (!guide) return;
   guide.hidden = !isModelActive() || ![...entities.values()].some((e) => e.el.classList.contains("entity--unlinked"));
+  // the words follow what is on screen: a proposal in view can be clicked; one waiting for the pointer is pointed at; none leaves the drag
+  guide.textContent = autoGhosts ? "Drag a column onto a column in another table, or click a proposed link."
+    : proposalCount ? "Drag a column onto a column in another table, or point at a card that needs a partner to see its proposed link."
+    : "Drag a column onto a column in another table.";
 }
 
 // Every table card belongs to a relationship; one that doesn't says so (text + dashed outline, never colour alone).
