@@ -5,6 +5,8 @@ components: [src/DashboardBuilder/Features/Relations/join-check.js, src/Dashboar
 
 ## D127 — A table pair holds one relationship; related in few steps
 
+- **Amended 2026-11-18 (proposals on demand):** a proposed link is drawn only while the pointer or focus is on one of its cards, or after a click on one, except the one proposal of a model with no relationship yet. Why: with real links on the canvas, an always-drawn proposal crossed them and its pill covered one, and several proposals made a thicket of dashes before any link existed. Resting, it fades (opacity, no pointer events; never `hidden`, so the button stays in the Tab order). Rejected: hiding it with `hidden` (out of Tab order and the accessibility tree); routing proposals around real links (the crossing is forced when the two interleave in one gutter), which stays in the backlog.
+
 - **Chosen:** the relationship is between two *tables*, holding one to four column pairs. Relating two more columns of tables that are already related
   adds a key pair to that relationship (no dialog, a toast) instead of making a second relationship. Shortcuts open the same dialog filled in:
   a proposed link (dashed line + **Relate on customer_id = id**) on each card that needs a partner, **Needs a partner**, a link button on

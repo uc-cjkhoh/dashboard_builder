@@ -16,7 +16,7 @@ table column on one toasts "A union or unpivot can't be related to a table yet."
 ## At a glance
 
 - **Drag a column onto a column** of another card to relate them, then pick the join type and cardinality in a dialog. [From the keyboard](#drawing-a-link--keyboard) the same link is made with Enter on two columns.
-- **Shortcuts** ([relating-tables.md](relating-tables.md)): a proposed link with **Relate on customer_id = id** on each card that **Needs a partner**. It opens the dialog filled with the key the column names point to.
+- **Shortcuts** ([relating-tables.md](relating-tables.md)): a proposed link with **Relate on customer_id = id** for each card that **Needs a partner**, drawn when you point at the card. It opens the dialog filled with the key the column names point to.
 - **One relationship per table pair** ([D127](../../decisions/decisions-relationships.md#d127--a-table-pair-holds-one-relationship-related-in-few-steps)): relating two more columns of related tables adds a key pair to it.
 - **One relationship per column** (extra key pairs included). Kinds must match (number↔number, text↔text, date↔date, boolean↔boolean).
 - **Every table card needs a partner** once there are two or more; an unrelated card is held out of worksheets.
@@ -49,7 +49,7 @@ the columns a relationship uses are simply the ones it joins.
 To remove a link, click its line or badge (with [quiet badges](#rendering) a badge shows on hover), then Delete. **Remove** in the dialog asks twice (`confirmDeleteTwice`, button **Remove**: "Remove the orders → customers relationship?", then "Really remove the orders → customers relationship? This can't be undone." with **Remove for good**; [D133](../../decisions/decisions-destructive-actions.md#d133--no-undo-double-confirmation-before-every-destructive-delete)), then toasts "Removed the orders → customers relationship.". There is no undo; relate the tables again to bring it back (a table pair holds one relationship, [D127](../../decisions/decisions-relationships.md#d127--a-table-pair-holds-one-relationship-related-in-few-steps)). Removing a key pair inside the open dialog is a draft until **Confirm** and is not confirmed separately.
 
 **The how-to line.** While any table card has no relationship, a pill at the foot of the Data Source (`.rel-guide`) says
-"Drag a column onto a column in another table, or click a proposed link." It goes once every card has one. While a toast shows (it owns the centre of the foot) the pill steps up to sit one 8px gap above it (`--toast-h`). The lift is one variable, `--rel-foot`, that moves the pill and the keyboard hint above it together; the Data Source's data preview raises it by the panel's height ([canvas.md § Data preview](canvas.md#data-preview)).
+"Drag a column onto a column in another table, or click a proposed link." while a proposal is drawn at rest, "…or point at a card that needs a partner to see its proposed link." while proposals wait for the pointer, and only the drag when no card has one. It goes once every card has a relationship. While a toast shows (it owns the centre of the foot) the pill steps up to sit one 8px gap above it (`--toast-h`). The lift is one variable, `--rel-foot`, that moves the pill and the keyboard hint above it together; the Data Source's data preview raises it by the panel's height ([canvas.md § Data preview](canvas.md#data-preview)).
 
 ## Drawing a link — keyboard
 
