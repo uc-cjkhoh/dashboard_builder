@@ -298,8 +298,11 @@ select.select:not([multiple]), select.input:not([multiple]) { appearance: none; 
 /* Icon buttons in the light content world (entity / widget heads) */
 .entity .iconbtn, .widget .iconbtn { color: var(--ink-3); }
 .entity .iconbtn:hover, .widget .iconbtn:hover { color: var(--ink); background: var(--surface-3); }
-.entity .iconbtn--danger, .widget .iconbtn--danger { color: var(--danger-ink); }
-.entity .iconbtn--danger:hover, .widget .iconbtn--danger:hover { color: var(--danger-ink); background: var(--danger-bg); }
+.widget .iconbtn--danger { color: var(--danger-ink); }
+.widget .iconbtn--danger:hover { color: var(--danger-ink); background: var(--danger-bg); }
+/* A card's ✕ rests muted like its other head buttons, so four red marks never outshout the one next step on the Data Source; it turns danger on hover
+   and keyboard focus (D140). The icon and its "Remove …" label say what it does, and removing still asks twice (rule 12). */
+.entity .iconbtn--danger:hover, .entity .iconbtn--danger:focus-visible { color: var(--danger-ink); background: var(--danger-bg); }
 
 /* ---- Dialog (native <dialog>) -------------------------------------------- */
 /* Toast and dialog float over content, so they are solid surfaces (flat 2.0 + elevation), not glass. */

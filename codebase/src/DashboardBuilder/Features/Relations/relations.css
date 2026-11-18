@@ -154,10 +154,10 @@
 
 /* ---- Pinned join keys + unlinked cards ------------------------------------- */
 /* A column in a relationship lives in a strip above the scrolling list, so its link always ends on a visible row. */
-.entity__keys { flex: none; background: var(--accent-soft); border-bottom: 1px solid var(--accent-line); }
+.entity__keys { flex: none; border-bottom: 1px solid var(--accent-line); } /* no fill at rest (D140): the strip's place above the rule, the accent name and its 600 weight mark a key; the wash appears on hover */
 .entity__keys:empty { display: none; }
-.entity__keys .col-row:hover { background: var(--accent-line); }
-.entity__keys .col-row--linked { background: var(--accent-line); }
+.entity__keys .col-row:hover { background: var(--accent-soft); }
+.entity__keys .col-row--linked { background: var(--accent-soft); }
 /* A card in no relationship, while the model has other cards to relate it to: dashed outline and words. */
 .entity--unlinked { border-style: dashed; border-color: var(--warn-line); }
 /* "Needs a partner" is a plain label (D127): text + the dashed outline, never colour alone. */
