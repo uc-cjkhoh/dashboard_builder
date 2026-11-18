@@ -17,7 +17,7 @@ parameter), followed by the shared columns. No ordering, no aggregation, no filt
 | `columns` | optional, ≤ 200. Default: the columns **every** table has with the same name **and kind** (text / number / date …), in the first table's order; none shared → 400 (`tables`). A requested column missing from a table is an unknown identifier; one whose kind differs between tables is a 400 (`columns[i]`). Types shown are the first table's |
 | `limit` | 1–1000, default 100, never clamped; (columns + 1) × rows ≤ 50,000. Each table gets an even share (`ceil(limit / tables)`) and is read to share + 1 inside ClickHouse, so every table shows; `truncated` = some table (or the total) had more; `columnsTruncated` when more than 200 columns are shared |
 
-Cells are cut in SQL like `/api/rows`. The UI (`Union` button in the Tables header → `Rows/union-dialog.js`) shows the first 20.
+Cells are cut in SQL like `/api/rows`. The data preview of an existing union card reads it; no UI button calls it directly any more ([D138](../decisions/decisions-custom-sql.md#d138--union-and-unpivot-are-written-in-edit-sql-not-built-in-the-sidebar)).
 
 ## Unpivot
 
@@ -37,4 +37,4 @@ one row per chosen column, answered in the `/api/rows` shape. No ordering, no ag
 | `limit` | 1–1000, default 100, never clamped. The statement has one `LIMIT limit + 1`, which ClickHouse applies **after** the `arrayJoin`, so it bounds the unpivoted rows (a source row is read only as far as needed); `truncated` = more existed |
 | `offset` | optional, 0–100,000, as in `/api/rows`: `OFFSET n` on the same inner `LIMIT`, so it counts **unpivoted** rows; when sent, the statement ends `SETTINGS max_threads = 1` (checked on ClickHouse 26.8 under `readonly=2`) |
 
-Cells are cut in SQL like `/api/rows`. The UI (`Unpivot` button in the Tables header → `Rows/unpivot-dialog.js`) shows the first 20.
+Cells are cut in SQL like `/api/rows`. The data preview of an existing unpivot card reads it; no UI button calls it directly any more.

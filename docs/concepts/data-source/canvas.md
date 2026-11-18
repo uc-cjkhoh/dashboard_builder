@@ -62,7 +62,7 @@ On drop:
 
 ## Union and unpivot cards
 
-A union or unpivot added from the sidebar dialogs ([query-sources.md](query-sources.md)) becomes a card in the first free slot.
+A union or unpivot ([query-sources.md](query-sources.md)) becomes a card in the first free slot. Nothing in the UI fires `source:add` now (the sidebar dialogs are gone); a saved workbook's cards load through the workbook import.
 
 - It arrives as a `source:add` event, and the Data Source is shown first.
 - Its `table` is the source's automatic name. Its columns load from `POST /api/source/columns`.

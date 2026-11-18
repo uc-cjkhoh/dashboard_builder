@@ -121,7 +121,7 @@ dashboard_builder/          (this KB)
 │   ├── how-to/             # local-development · testing · deployment · troubleshooting
 │   ├── reference/          # api (+ -calculated-fields, -custom-sql, -union-unpivot) · clickhouse-integration (+ clickhouse-calculations) · data-model · source-table-guidance · tableau-marks-comparison · glossary
 │   │   └── design/         #   index (concept + rules) · tokens · layout · components · motion-accessibility
-│   ├── decisions/          # README (D1–D137 lookup, open questions) · decisions-* by topic
+│   ├── decisions/          # README (D1–D138 lookup, open questions) · decisions-* by topic
 │   ├── operations/         # live-service · safe-operations (+ git-ignored credentials.local.md)
 │   ├── development/        # coding-standards · sharp-edges · review-guidelines · git-workflow · kb-maintenance · hooks
 │   │   ├── backlog/        #   undone work by topic (incl. custom-sql) · recommended order · design specs

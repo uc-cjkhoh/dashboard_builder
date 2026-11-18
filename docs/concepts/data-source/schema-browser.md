@@ -16,7 +16,7 @@ previews rows, and profiles columns.
 - **Pick a database**, then drag a table chip onto the canvas (or press its `＋`); a search box filters the chips.
 - **Preview rows:** the eye button shows a table's first 20 rows, read-only, with CSV export.
 - **Profile a column:** a card row's Profile button summarises the first 1,000,000 rows ClickHouse returns.
-- **Union / Unpivot** dialogs preview a combined source and can add it to the model.
+- **Union and unpivot** have no sidebar buttons; write them in a card's **Edit SQL** ([query-sources.md](query-sources.md#union-and-unpivot-with-edit-sql)).
 - **Safety:** a database name is checked against `SHOW DATABASES` before it is used in SQL.
 
 ## Database picker
@@ -123,33 +123,11 @@ previews rows, and profiles columns.
 An unknown or hostile name → **404** before any SQL is built
 ([golden rule 2](../../development/coding-standards.md#2-never-interpolate-an-identifier-you-havent-validated)).
 
-## Union
+## Union and unpivot
 
-The **Union** and **Unpivot** buttons at the foot of the sidebar each carry a one-line tooltip (stack tables that share columns into one source; turn columns into rows), no visible secondary label. The **Union** button opens a dialog listing the database's tables as checkboxes,
-with the same close X as the other dialogs on its title row. Past 8 tables a **Search tables** box sits above the list and takes focus: it only
-hides rows (ticked tables stay ticked), says "No tables match." when nothing does, and Esc in it clears it rather than closing the dialog.
-
-- **Picking:** 2–5 tables. A sixth can't be ticked; the hint reads "Pick 2 to 5 tables."
-- **Show rows** is enabled for 2–5 ticked tables. It opens the rows dialog on `POST /api/union` ([api-union-unpivot.md § Union](../../reference/api-union-unpivot.md#union)):
-  the first 20 rows of the tables stacked over their shared columns, `Source table` first.
-- A refusal (no shared column, …) shows in the dialog.
-- **Add to model** (primary, same pick rule) puts the union on the Data Source as a card worksheets can read ([query-sources.md](query-sources.md)).
-
-## Unpivot
-
-The **Unpivot** button beside **Union** opens a dialog.
-
-- **Picking:**
-  1. Pick a table of the database.
-  2. Tick the columns to **turn into rows**: 2–50, all of one kind (all numbers, all text, …).
-  3. Optionally tick up to 5 columns to **keep** beside them.
-
-  A column ticked on one side is disabled on the other. The hint under the lists says what is missing.
-- **Show rows** opens the rows dialog on `POST /api/unpivot` ([api-union-unpivot.md § Unpivot](../../reference/api-union-unpivot.md#unpivot)).
-  It shows the first 20 rows: the kept columns, then `Field` (the column's name) and `Value`, one row per source row per chosen column.
-  NULL stays empty and 0 stays 0.
-- A refusal shows in the dialog.
-- **Add to model** (primary, same pick rule) puts the unpivot on the Data Source as a card worksheets can read ([query-sources.md](query-sources.md)).
-  There, `Value` keeps the columns' kind.
+The sidebar ends with the table list; it has **no Union or Unpivot buttons** ([D138](../../decisions/decisions-custom-sql.md#d138--union-and-unpivot-are-written-in-edit-sql-not-built-in-the-sidebar)).
+Stacking tables and turning columns into rows are `SELECT`s, so they are written in a card's **Edit SQL**:
+recipes in [query-sources.md § Union and unpivot with Edit SQL](query-sources.md#union-and-unpivot-with-edit-sql).
+A union or unpivot card saved in an earlier workbook still opens and reads as before.
 
 Splitting a text field is in [calculated-fields-formulas.md § Text functions](../worksheet/calculated-fields-formulas.md#text-functions).

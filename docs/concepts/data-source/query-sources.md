@@ -4,32 +4,27 @@ components: [src/DashboardBuilder/ClickHouse/SourceSql.cs, src/DashboardBuilder/
 # Union and unpivot as a data source
 
 A **union** stacks 2–5 tables. An **unpivot** turns wide same-kind columns of one table into `Field` / `Value` rows.
-Either can be added to the Data Source as a card and read by worksheets like a table.
-The row **preview** of each is in [schema-browser.md](schema-browser.md#union).
+Either is a card on the Data Source that worksheets read like a table.
+**No UI creates one any more:** the sidebar buttons were removed ([D138](../../decisions/decisions-custom-sql.md#d138--union-and-unpivot-are-written-in-edit-sql-not-built-in-the-sidebar)); write the same thing in **Edit SQL** ([recipes](#union-and-unpivot-with-edit-sql)).
+This page describes the cards a **saved workbook** can still hold.
 
 **Code:**
 
 - `Features/Core/source-model.js` — the pure rules
 - `Features/Canvas/canvas.js` — the card
-- `Features/Rows/union-dialog.js` / `unpivot-dialog.js` — the **Add to model** buttons
+- `Features/Rows/union-dialog.js` / `unpivot-dialog.js` — the former sidebar dialogs; nothing loads them now ([backlog](../../development/backlog/custom-sql.md#gaps-on-a-custom-sql-card))
 - `Features/Rows/SourceController.cs`
 - `ClickHouse/SourceSql.cs` — the derived table
 
 ## At a glance
 
-- **Add** a union or unpivot from its sidebar dialog with **Add to model**; it becomes a card with an automatic, non-editable name.
+- **Existing cards only.** A saved workbook's union or unpivot card has an automatic, non-editable name.
 - **Union columns** are the ones every table shares by name and kind, after `Source table`; types widen to an exact type where one exists, else `Float64` with a warning.
 - **Reads alone:** a source can't be joined or related to another table, and View data, profile and histogram are unavailable over it; a box plot can read it.
 - **Cost:** sources are read in full; the 12 s time limit and the table / column caps are the only bounds.
 
-## Adding one
+## Naming one
 
-- **Buttons.** The Union and Unpivot dialogs have **Show rows** (the preview) and **Add to model** (primary).
-  Both are enabled by the same pick rules. **Show rows** opens the preview over the dialog; closing it returns to the dialog with the picks kept.
-  The Union dialog reads the picked tables' columns and, when they share none with the same name and kind of values, says so on its status line ("These tables share no column with the same name and kind of values.") and disables **Add to model**, so nothing is added.
-  The Unpivot dialog's status line reads "N columns become rows." once the pick is valid.
-  Add to model fires `source:add`. The canvas switches to the Data Source and puts the card in the first free slot
-  ([canvas.md](canvas.md#union-and-unpivot-cards)).
 - **Name.** The name is automatic and not editable: `Union: a + b` or `Unpivot: sales`, cut to 200 characters (`LIMITS.sourceName`).
   - If a table of the database or a card on the canvas already uses the name, it gets ` 2`, ` 3` … (`takenNames`, `uniqueName`).
   - The name is the entity's `table`, so every field reads `db.<name>.column` unchanged and labels read `Union: a + b.region`.
@@ -64,6 +59,35 @@ The row **preview** of each is in [schema-browser.md](schema-browser.md#union).
 - `Value` has the unpivoted columns' kind. Its type is theirs if equal after dropping `Nullable`, else the union's rules above.
 - A column already named `Field` / `Value` makes ours `Field_` / `Value_`.
 - Unlike the preview, `Value` keeps its kind, so it aggregates (sum, avg …) and filters like a column of that kind.
+
+## Union and unpivot with Edit SQL
+
+Both are plain `SELECT`s, which a table card's **Edit SQL** accepts ([the guard](#custom-sql-on-a-card) allows `UNION ALL` and `ARRAY JOIN`).
+Add any one table of the result to the Data Source, open its ☰ → **Edit SQL**, and save the query.
+The card keeps that table's name, shows `Custom SQL`, and — unlike a union or unpivot card — can be related and joined.
+MySQL syntax (the default) and ClickHouse syntax both work; the unpivot below uses `UNION ALL` in MySQL and `arrayJoin` in ClickHouse.
+
+- **Union** — a literal for the source column, the shared columns by name, one `SELECT` per table:
+  ```sql
+  SELECT 'orders_2024' AS `Source table`, id, region, amount FROM shop.orders_2024
+  UNION ALL
+  SELECT 'orders_2025' AS `Source table`, id, region, amount FROM shop.orders_2025
+  ```
+  Write a `CAST` where a column's type differs between tables (`toInt128(n)`, `toFloat64(n)`): nothing is widened for you.
+  Any number of tables, and tables of other databases (`db.table`), work.
+- **Unpivot** — one `SELECT` per column, in MySQL syntax:
+  ```sql
+  SELECT id, 'q1' AS `Field`, q1 AS `Value` FROM shop.sales
+  UNION ALL
+  SELECT id, 'q2', q2 FROM shop.sales
+  ```
+  Or, in ClickHouse syntax, read the table once:
+  ```sql
+  SELECT id, tupleElement(p, 1) AS `Field`, tupleElement(p, 2) AS `Value`
+  FROM shop.sales ARRAY JOIN [('q1', q1), ('q2', q2)] AS p
+  ```
+  `Value` keeps the type the query gives it, so it aggregates like a column of that kind.
+- **Differences from the old cards:** no table or column cap beyond the guard's (10,000 characters, 200 columns); no automatic shared-column pick or **Compare columns** — name the columns yourself; the query runs as written, so give it an `ORDER BY` for a fixed page order.
 
 ## Reading one
 

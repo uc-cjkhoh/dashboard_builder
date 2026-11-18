@@ -58,3 +58,10 @@ The Data Source's data preview shows the first 100 rows of a card, with **‹ Pa
 - **Not a table position:** `FROM` inside a call (`EXTRACT(YEAR FROM d)`, `trim(BOTH ' ' FROM s)`) — only brackets that start with `SELECT` / `WITH` are queries; `ARRAY JOIN` takes an expression.
 - **Rejected:** a prefix blocklist (`url…`, `s3…`) — it refuses scalar functions such as `URLHierarchy`.
 - Tests: `CustomSqlTests`, `tests/js/sql-check.test.mjs` (both lists are compared across the two files). Detail: [api-custom-sql.md](../reference/api-custom-sql.md).
+
+### D138 — Union and unpivot are written in Edit SQL, not built in the sidebar
+
+- **Decision:** the **Union** and **Unpivot** buttons at the foot of the sidebar are removed. A union or an unpivot is written in a table card's **Edit SQL** ([recipes](../concepts/data-source/query-sources.md#union-and-unpivot-with-edit-sql)).
+- **Why:** both are single `SELECT`s, and the guard accepts `UNION ALL` and `ARRAY JOIN` (`CustomSqlTests`). The old cards already read as a derived table (`FROM (SELECT … UNION ALL …) AS t0`), the same shape Edit SQL produces. Edit SQL does more: any number of tables, other databases, hand-picked types, and the card stays a table card, so it can be related and joined (a union or unpivot card reads alone).
+- **What is lost:** the no-SQL path, the automatic shared-column pick and type widening, and **Compare columns**.
+- **Kept:** union and unpivot cards in saved workbooks still open and read; the endpoints they use stay. The dead dialogs are listed in [backlog/custom-sql.md](../development/backlog/custom-sql.md#gaps-on-a-custom-sql-card).
