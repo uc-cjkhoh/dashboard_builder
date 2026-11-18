@@ -62,7 +62,7 @@ first layer of a multi-layer `background` shorthand; the whole declaration would
 | `--glass-rim` | `rgb(255 255 255 / .9)` | `rgb(255 190 198 / .08)` | inset top highlight (tinted, never pure white, in dark) |
 | `--glass-blur` | `blur(20px) saturate(150%)` | same | backdrop filter |
 | `--glass-ctl` | `rgb(255 255 255 / .80)` | `rgb(43 37 41 / .85)` | fill of a control on glass (tier 2) |
-| `--glass-ctl-hover` | `#fbf1f2` | `rgb(56 48 53 / .96)` | its hover fill (light is rose-tinted: white on near-white glass would not show) |
+| `--glass-ctl-hover` | `#ffffff` | `rgb(58 60 64 / .96)` | its hover fill — brighter than `--glass-ctl` in both schemes; in light the hover edge `--lift-edge` (`buttons.css`) keeps solid white visible on near-white glass |
 | `--ctl-edge` | `#8f8487` | `#7d7377` | outline of a control on glass — ≥ 3:1 against the panel and the control fill (WCAG 1.4.11) |
 
 **Where glass is allowed — only where nothing but the wash is beneath it:**
@@ -82,7 +82,7 @@ feature sheets set their own.
 
 The fill carries the edge instead:
 
-- `.btn`: `--btn-fill` / `--btn-fill-hover` (8 % / 14 % ink over `--surface`);
+- `.btn`: `--btn-fill` at rest (8 % ink over `--surface`); `--btn-fill-hover` / `--btn-fill-active` are **brighter** — light 4 % / 2 % ink (the grey lifts toward white), dark 14 % / 20 % ink (more light ink) ([D134](../../decisions/decisions-buttons.md#d134--hover-and-pressed-are-brighter-than-rest-in-every-scheme));
 - the glass tiers and the sidebar tools: `--btn-fill`-tinted frosted fills;
 - a danger button: `--danger-bg`;
 - a primary button: the accent.
@@ -93,7 +93,17 @@ Where the ≥ 3:1 edge rule below mentions a border, read it as "a fill that sta
 
 **No button or field has a `box-shadow`**, of any colour or in any state (`Core/buttons.css` forces it off). Panels, menus, dialogs and cards keep their elevation (see below).
 
-Every button runs the same ladder (`Core/buttons.css`): **rest → hover** (deeper fill) **→ pressed** (deeper still, and it sinks: `translateY(1px)` for text buttons, `scale(.96)` for icon buttons) **→ focus** (the neutral 2px ring) **→ disabled** (faded, `not-allowed`).
+Every button runs the same ladder (`Core/buttons.css`): **rest → hover** (brighter fill) **→ pressed** (brighter still, and it sinks: `translateY(1px)` for text buttons, `scale(.96)` for icon buttons) **→ focus** (the neutral wash) **→ disabled** (faded, `not-allowed`). "Brighter" means higher relative luminance in **both** schemes ([D134](../../decisions/decisions-buttons.md#d134--hover-and-pressed-are-brighter-than-rest-in-every-scheme)):
+
+| Control | Light | Dark |
+|---|---|---|
+| `.btn` | `--btn-fill-hover` / `-active` (4 % / 2 % ink: grey lifts toward white) | 14 % / 20 % ink |
+| `.btn--primary` | `--accent-hover` / `--accent-pressed`, the accent **lifted toward white** by 14 % / 28 % (`LIFT_HOVER` / `LIFT_PRESSED`, `theme-model.js`); text `--on-accent-hover` / `-pressed` | same lift |
+| `.btn--danger`, `.iconbtn--danger` | `--danger-hover` / `-active` (toward `--surface`); a transparent danger icon button lifts to `--surface` with a `--danger-line` hairline | `--danger-ink` 16 % / 24 % over `--danger-bg` |
+| transparent at rest (`.iconbtn`, `.btn--ghost`, `.ws-tool`, `.story-chip`, `.ws-select__btn`, `.ws-pages__btn`, `.ws-drill__crumb`, `.ws-pick__btn`, `.xt-toggle`, `.ws-titleblock__btn`, `.toast__close`) | solid `--lift` (= `--surface`; on glass `--glass-ctl-hover`, `#ffffff`) **plus a hairline `--lift-edge`** (`--ink-3`) — nothing is lighter than white, so the edge keeps the state off the surface | `--lift` / `--lift-active` (12 % / 18 % ink); no edge |
+| `.tab`, `.tab-add`, `.sidebar__tool` (glass) | `--glass-ctl-hover` (`#ffffff`) + `--lift-edge` | `--glass-ctl-hover` (brighter than `--glass-ctl`) |
+
+A selected or open control (`.is-active`, `.is-set`, `aria-selected` / `-pressed` / `-expanded`) keeps its own fill. List rows, menu items, cards and pickers are selection washes, not buttons with a fill of their own, so they keep `--surface-2` / `-3`. The pill, select and chip-clear icon buttons stay flat and turn accent.
 
 - **Weight is the hierarchy:** the primary action is 600, every other `.btn` is 500.
 - **Side padding:** a text `.btn` has 16px each side; with a leading icon, 8px on that side so the glyph sits level with the text above it.
@@ -116,8 +126,8 @@ edge / shadow / ink / weight:
 
 | State | Treatment |
 |---|---|
-| hover | `--glass-ctl-hover`, edge darkens to `--ink-3` (ghost: gains fill), icon turns accent |
-| pressed | deeper fill, `scale(.96–.98)` or a 1px sink |
+| hover | `--glass-ctl-hover` (brighter), hairline edge `--lift-edge` in light (ghost: gains fill), icon turns accent |
+| pressed | brighter still (never darker than hover), `scale(.96–.98)` or a 1px sink |
 | selected (active tab, open tool, Format on) | `--accent-soft` fill + weight 600 (no accent shadow or underline on a button) |
 | focus | a neutral wash (12 % `--ink`, 6 % on a text field) laid over the element's own fill — no ring, outline or border change |
 | dragging (table chip) | `--accent` edge + `--elev-16`, grip shown |
@@ -132,7 +142,7 @@ wash tint, in both themes.
 
 | Token | Light | Dark | Role |
 |---|---|---|---|
-| `--accent` / `-hover` / `-pressed` | `#1a1c1f` / `#2e3135` / `#0c0d0f` | `#a9bd6a` / `#9aad5c` / `#8a9c50` | primary fill (`--on-accent` ≥ 4.5:1 in every state: white in light, `#12130f` on the dark sage-lime, S ≈ 38 %); active tab underline, selected relationship, single chart series |
+| `--accent` / `-hover` / `-pressed` | `#1a1c1f` / `#3a3c3e` / `#5a5c5e` | `#a9bd6a` / `#b5c67f` / `#c1cf94` | primary fill; hover and pressed are **brighter** (lifted toward white). Text is `--on-accent` / `--on-accent-hover` / `--on-accent-pressed` — each ≥ 4.5:1 on its fill: white where it holds, else `#12130f` (the dark Signal lime always; most dark presets and some light ones flip to dark text on hover / pressed, because a lighter fill outgrows white text). Active tab underline, selected relationship, single chart series |
 | `--accent-ink` | `#1f57ae` | `#9cbced` | accent **text** |
 | `--accent-soft` / `--accent-line` | `#eef3fc` / `#c4d6f4` | `#172238` / `#2a4470` | tint / stroke |
 | `--focus` | `--ink` | `--ink` | neutral focus colour (kept for outlines a feature may still draw by hand; `:focus-visible` outlines are forced off) |
