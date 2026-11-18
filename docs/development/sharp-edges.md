@@ -46,9 +46,11 @@ Gotchas that have bitten (or will bite) this app. Read before touching the area 
 - **Never `pkill -f DashboardBuilder.dll`**; it matches the live service too. Kill dev runs by port.
 - **A restart resets every session**, because the session store is in memory. Users must reconnect;
   their workbook restores from the browser on reconnect.
-- **Stale ES modules.** Imports aren't version-stamped; static files are served `Cache-Control:
-  no-cache` so browsers revalidate. Keep that header. If the UI goes inert after a deploy,
-  hard-refresh once.
+- **Stale ES modules.** Imports aren't version-stamped, but the page serves every asset under
+  `/features/v-<content hash>/…`, so a changed file means new URLs for the whole graph and the browser keeps a
+  matching build for a year (`immutable`). Keep imports **relative** (an absolute `/features/…` import skips the
+  prefix and loads an unversioned copy) and keep the HTML uncached. Unversioned and old-hash URLs answer
+  `no-cache`. [D139](../decisions/decisions-performance.md#d139--static-assets-live-under-a-content-hash-url-and-are-cached-for-a-year-clickhouse-calls-share-one-http-client-per-endpoint).
 
 ## Frontend
 

@@ -11,7 +11,9 @@ each feature owns its controller, view partial, CSS and JS in one folder. Source
 
 | Path | Role |
 |---|---|
-| `Program.cs` | host, session (in-memory, 2h idle), persisted Data Protection keys, `PathBase`, `no-cache` static files, the `/features` asset provider, controllers |
+| `Program.cs` | host, session (in-memory, 2h idle), persisted Data Protection keys, `PathBase`, the `/features` asset provider with its cache policy ([D139](../decisions/decisions-performance.md#d139--static-assets-live-under-a-content-hash-url-and-are-cached-for-a-year-clickhouse-calls-share-one-http-client-per-endpoint)), controllers |
+| `Features/Shell/StaticAssets.cs` | `AssetCatalog` (content-hash id, module preload list, precompressed Brotli), `VersionedAssets` (`/features/v-<hash>/…` → `/features/…`, immutable when current), `PrecompressedAssets` |
+| `ClickHouse/SharedHttpClients.cs` | one pooled `HttpClient` per ClickHouse endpoint (no credentials in it) |
 | `ClickHouse/ClickHouseGateway.cs` | every SQL statement; the pure query builders |
 | `ClickHouse/RequestValidation.cs` | `ApiLimits`, `RequestRules` (every input rule), `FilterValues` (typed filter values) |
 | `ClickHouse/CustomSql.cs`, `SqlTranslator.cs`; `Tools/sql_translate.py` | the guard for a card's custom SQL ([D105](../decisions/decisions-custom-sql.md)); the MySQL ⇄ ClickHouse translator run as a child Python process, with sqlglot vendored in `Tools/vendor/` ([D106](../decisions/decisions-custom-sql.md#d106--mysql-syntax-in-edit-sql-translated-to-clickhouse)) |

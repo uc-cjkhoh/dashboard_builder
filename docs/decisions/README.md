@@ -11,7 +11,8 @@ open question, promote it to a decision.
 
 | Decisions | File |
 |---|---|
-| D1–D25, D88, D90 (worksheet background shade; the box plot is a worksheet-shaped request) | this file |
+| D1–D25, D88, D90 (worksheet background shade; the box plot is a worksheet-shaped request) | [decisions-platform.md](decisions-platform.md) |
+| D139 (content-hash asset URLs cached for a year; shared ClickHouse HTTP clients) | [decisions-performance.md](decisions-performance.md) |
 | D105 (Edit SQL: a free-text `SELECT` on a Data Source card, the one exception to rules 2 and 3), D106 (MySQL syntax in Edit SQL, translated to ClickHouse), D128 (saving Edit SQL shows the card's rows in the data preview), D130 (the data preview is a light grid with resizable columns), D131 (the data preview pages 100 rows at a time), D136 (quoted names are names; only listed table functions go where a table goes), D138 (union and unpivot are written in Edit SQL, not built in the sidebar) | [decisions-custom-sql.md](decisions-custom-sql.md) |
 | D26–D60, D65–D68, D73 (calculated fields, parameters, member labels, groups, split / unpivot) | [decisions-calculated-fields.md](decisions-calculated-fields.md) |
 | D61–D64, D69, D71–D72, D74, D79–D81, D85–D86, D92, D96 (a number that looks like an identifier starts as a dimension), D97, D100, D102, D103, D104, D108 (dashboards, hierarchies, option controls, desktop-only, compound join keys, Gantt, stories, diverging hue pair, no red in the categorical palette, Shape on the scatter family only and Size as the line marker size, heatmap cell labels and the stacked-scale notice, trend p-value / polynomial orders / refusal on a cut-off result, Gantt end field / colour split / click-to-filter, Size from a dimension / Edit Sizes / a line's own thickness / Text size / Size beside a Colour split) | [decisions-dashboards.md](decisions-dashboards.md) |
