@@ -106,7 +106,7 @@ Windows 11 Fluent structure with Flat Design 2.0 surfaces:
   top rim) over a faint accent-tint background wash;
 - **solid data surfaces and overlays** (entity cards, chart area, crosstab, menus, popovers, toasts,
   dialogs);
-- **light and dark** (System / Light / Dark toggle).
+- **light and dark** (Light / Dark choice, Light by default; [D148](decisions-design.md#d148--the-appearance-card-has-no-system-mode)).
 
 Spec: [design/index.md](../reference/design/index.md), [tokens.md](../reference/design/tokens.md).
 - **Why:** the red / black identity was heavy, ambiguous (brand vs. danger) and showed every control at

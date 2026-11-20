@@ -1,5 +1,5 @@
 ---
-components: [src/DashboardBuilder/Features/Core/core.css, src/DashboardBuilder/Features/Relations/relations.css]
+components: [src/DashboardBuilder/Features/Core/core.css, src/DashboardBuilder/Features/Relations/relations.css, src/DashboardBuilder/Features/Shell/appearance.js, src/DashboardBuilder/Features/Shell/shell.css]
 ---
 # Decisions: design review outcomes
 
@@ -25,3 +25,19 @@ Strings were green (`--ok-ink`) and quoted names amber (`--warn-ink`), the same 
 - **Also:** the "ClickHouse SQL that will run" box, a permanent row in MySQL syntax that few people open, became a **ClickHouse SQL** toggle at the right of the verdict row (28 px tall for the pointer); the translated query still opens below the warnings, and by itself when ClickHouse refuses the translation. One chrome row instead of two in the idle dialog.
 - **Why:** colour that means something (ok, warn, danger) should mean it everywhere on the screen; the verdict is the thing the eye is checking.
 - **Rejected:** a monochrome editor (strings and names would blur together); keeping the box and only shortening its label (the row stays in the way).
+
+### D146 — One Appearance card replaces the mode menu and the theme dialog
+The tab bar had two icons for one idea: **Appearance** (a three-row menu for System / Light / Dark) and **Colour theme** (a modal dialog with three long-titled groups, a Done button and a Reset button). They were two different cards, one for each half of "how this looks".
+- **How:** one **Appearance** button opens one card on the menu surface. Mode is a segmented row at the top (Light / Dark; D148); Dark look, Accent and Chart colours follow as short headings (the long legends are gone); **Reset theme** closes it. Accents are 24px swatches whose chosen one carries a tick, and the heading names it. Looks and palettes are menu rows with a colour strip and the tick. Picking applies at once and the card stays open (`wireMenu(…, { stayOpen: true })`); Esc, an outside click or Tab closes it. The Colour theme button, its dialog (`Workbook/theme-dialog.js`) and the Done button are removed.
+- **Why:** a choice that applies live needs no confirmation step, so the modal (and its interruption and protected focus) bought nothing; both halves are the same task, so they share one door and one card style.
+- **Trade-off:** the card is about 520px tall, so it scrolls inside on a window shorter than that. Accent names live in a tooltip and the heading's value, not beside each swatch.
+- **Rejected:** keeping two buttons and only restyling the dialog as a popover (two doors for one task); a row per accent (nine more rows, a card taller than most windows).
+- **Replaces:** the Settings → Theme… / Colour theme dialog in [workbook.md](../concepts/workbook/workbook.md) and the System / Light / Dark-only menu.
+
+### D148 — The Appearance card has no System mode
+Mode had three choices, and System (the default) followed the OS `prefers-color-scheme` and re-painted when the OS flipped. A third segment for "no choice" made the row wider than the question it asks.
+- **How:** the mode is **Light** or **Dark**, two segments. Light is the default. The OS setting is not read anywhere: no `matchMedia` in `Core/scheme.js` or `Core/scheme-boot.js`, no `monitor` icon. A stored `"system"` (or any unknown value) reads as Light, so a browser that had System stays usable and lands on Light until its viewer picks. Live tests switch scheme through the card's own rows (`tests/live/cdp.mjs` `setScheme`), not by emulating the OS.
+- **Why:** one explicit choice is easier to explain and to test than a third state that depends on a setting outside the app, and the page no longer changes by itself while it is open.
+- **Trade-off:** a viewer whose OS is dark starts on Light the first time and has to pick Dark once (it is then remembered in that browser).
+- **Rejected:** keeping System but hiding it (a state that still exists but cannot be chosen); defaulting to the OS's value once at first load and never again (still reads the OS, and a first paint that differs by machine is harder to test).
+- **Replaces:** the System default in [tokens.md § Light and dark](../reference/design/tokens.md#light-and-dark) and the three-choice toggle in [D22](decisions-platform.md#d22--fluent-glass-design-language).

@@ -17,18 +17,19 @@ before styling anything. Each is a CSS custom property in the `:root` block of `
 
 ## Light and dark
 
-The viewer picks **System** (the default, which follows the OS `prefers-color-scheme`), **Light** or **Dark** from
-the toggle at the right end of the tab bar ([layout.md § Tab bar](layout.md#tab-bar)). The choice is a
-per-browser preference (`localStorage` `dashboardbuilder.scheme`), never saved in the workbook.
+The viewer picks **Light** (the default) or **Dark** in the Appearance card at the right end of the tab bar
+([layout.md § Tab bar](layout.md#tab-bar)). The app does not read the OS setting. The choice is a
+per-browser preference (`localStorage` `dashboardbuilder.scheme`), never saved in the workbook; a missing, unknown
+or retired `"system"` value reads as Light ([D148](../../decisions/decisions-design.md#d148--the-appearance-card-has-no-system-mode)).
 
 - **One switch:** `<html data-scheme="light|dark">` is the only thing the stylesheets key off. No
   stylesheet reads `prefers-color-scheme` (`tokens.test.mjs` enforces it). `color-scheme` follows the
   attribute, so native controls and scrollbars match.
 - **No flash:** `Core/scheme-boot.js`, a classic script in `<head>`, sets the attribute before first paint.
-  It repeats `resolveScheme` from the pure `Core/scheme-model.js`; `tests/js/scheme.test.mjs` runs the
-  boot script against it for every stored value × OS setting. If storage is blocked, the choice is System.
+  It repeats `normalizePref` from the pure `Core/scheme-model.js`; `tests/js/scheme.test.mjs` runs the
+  boot script against it for every stored value. If storage is blocked, the choice is Light.
 - **Runtime:** `Core/scheme.js` owns the attribute (`isDark()`, `schemePref()`, `setSchemePref()`). It
-  follows OS changes only while the choice is System. It emits `scheme:changed` on the bus when the
+  never reads the OS. It emits `scheme:changed` on the bus when the
   painted scheme flips, and the workbook theme (`Core/theme.js`) and the active chart (`dashboards.js`)
   re-apply on it.
 - **Specificity:** `:root[data-scheme="dark"]` outweighs a bare `:root`, so the opaque-glass fallbacks
@@ -153,7 +154,7 @@ Inputs on focus get the neutral wash and their caret; the border does not change
 ### Workbook themes (P41)
 
 P41 in the heading is the product phase ID for workbook themes. A workbook may carry a **theme**
-(`{ accent, palette, surface? }`, Settings → **Theme…**) that overrides the accent set above and
+(`{ accent, palette, surface? }`, the **Appearance** card) that overrides the accent set above and
 `--chart-cat-1…8`, and may select a **look** (dark-mode surfaces).
 
 - `Core/theme.js` sets the overrides inline on `:root` and re-applies them on `scheme:changed`. The

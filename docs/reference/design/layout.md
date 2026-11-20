@@ -1,5 +1,5 @@
 ---
-components: [src/DashboardBuilder/Features/Board/board-layout.js, src/DashboardBuilder/Features/Core/menu.js, src/DashboardBuilder/Features/Core/ui.js, src/DashboardBuilder/Features/Dashboard/dashboards.js, src/DashboardBuilder/Features/Shell/perf-panel.js, src/DashboardBuilder/Features/Shell/scheme-toggle.js, src/DashboardBuilder/Features/Shell/sidebar.js]
+components: [src/DashboardBuilder/Features/Board/board-layout.js, src/DashboardBuilder/Features/Core/menu.js, src/DashboardBuilder/Features/Core/ui.js, src/DashboardBuilder/Features/Dashboard/dashboards.js, src/DashboardBuilder/Features/Shell/perf-panel.js, src/DashboardBuilder/Features/Shell/appearance.js, src/DashboardBuilder/Features/Shell/sidebar.js]
 ---
 # Layout rules
 
@@ -110,10 +110,10 @@ A glass bar across the top of the content area (`.canvas__bar`). From left to ri
 
 1. Frosted-pill tabs; the active one has an accent fill and bold text.
 2. The quiet autosave text.
-3. The **appearance toggle** (`#scheme-btn`, `Shell/scheme-toggle.js`). It is an icon button
-   whose glyph shows the current choice (monitor / sun / moon; label "Appearance: System"). It opens a
-   System / Light / Dark radio menu ([tokens.md § Light and dark](tokens.md#light-and-dark)).
-4. Right-most, the **Settings** menu (Theme…; [workbook.md](../../concepts/workbook/workbook.md)).
+3. Right-most, **Appearance** (`#scheme-btn`, `Shell/appearance.js`). It is an icon button
+   whose glyph shows the current mode (sun / moon; label "Appearance: Light"). It opens one
+   314px card on the menu surface: a two-segment mode row (Light / Dark), then Dark look, Accent, Chart colours and Reset theme
+   ([tokens.md § Light and dark](tokens.md#light-and-dark), [workbook.md](../../concepts/workbook/workbook.md)). It scrolls inside when the window is short (checked at a 420px-high window: the card scrolls, the page does not). Spacing: 8px card padding; 4px between rows of one group; 8px each side of a separator; a group heading carries 8px above and none below, so it sits with its own rows. Every left edge (heading, row, strip, swatch, picker) is 16px in from the card's edge, every right edge (tick, swatch, hex field, accent name) 16px; the tick and the Reset icon are pulled 2px so their ink, not their box, meets those edges. The nine swatches have exact 8px gaps (the width is 2 + 2×8 + 2×8 + 9×24 + 8×8). The custom-colour row is one 32px field (a 24px swatch that opens the picker, the name “Custom” and the hex, right-aligned; the swatch sits 3px from the field's edge on every side), its outer edges on the swatch row's; Left / Right walk the mode row and the accent swatches.
 
 The **performance** gauge button (`#perf-btn`, `Shell/perf-panel.js`) is not in this bar: it is a sidebar tool tile in the sidebar body (see § Sidebar).
 
