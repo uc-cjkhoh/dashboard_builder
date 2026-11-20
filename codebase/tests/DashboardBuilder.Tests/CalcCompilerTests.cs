@@ -496,6 +496,8 @@ public class CalcCompilerTests
     [Theory]
     [InlineData("weekday", "dateName('weekday', toDateTime64(t0.`placed`, 0))")]
     [InlineData("Month", "dateName('month', toDateTime64(t0.`placed`, 0))")]
+    [InlineData("year", "dateName('year', toDateTime64(t0.`placed`, 0))")]
+    [InlineData("QUARTER", "dateName('quarter', toDateTime64(t0.`placed`, 0))")]
     public void DATENAME_picks_a_fixed_part_and_binds_nothing(string part, string expected)
     {
         var (sql, ps) = Compile(Fn("datename", S(part), F("placed")));

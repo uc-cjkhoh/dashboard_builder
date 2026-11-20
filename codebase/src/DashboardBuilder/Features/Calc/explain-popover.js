@@ -22,6 +22,7 @@ export function explainControl(getInput, { signal, getNote } = {}) {
   btn.title = "How this is computed — the order a view is evaluated";
   const label = document.createElement("span");
   label.textContent = "How this is computed";
+  label.className = "sr-only"; // icon-only in the view bar (quiet next to Sort / Format / Analytics); the title is the tooltip
   btn.append(icon("info"), label);
 
   const pop = document.createElement("div");

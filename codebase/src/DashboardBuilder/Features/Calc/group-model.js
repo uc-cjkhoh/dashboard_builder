@@ -142,6 +142,13 @@ export function cleanGroupSpec(raw, where, issues) {
 }
 
 /** The default calculation name for a field: "region (groups)", numbered when taken; never holds . [ ] (a calculation name can't). */
+/** A comparable key for the group dialog's whole draft, so Cancel / Esc can tell an edited dialog from an untouched one: the name (trimmed), every group's id
+ *  and name, each member's group, and the two labels (a label counts only while its box is ticked). */
+export function groupDraftKey({ name, groups, assign, otherOn, otherText, nullOn, nullText }) {
+  const members = [...assign].map(([m, id]) => [String(m), id]).sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+  return JSON.stringify([String(name ?? "").trim(), (groups ?? []).map((g) => [g.id, String(g.name)]), members, otherOn ? String(otherText ?? "") : null, nullOn ? String(nullText ?? "") : null]);
+}
+
 export function groupCalcName(column, calcs) {
   const base = `${String(column).replace(/[.[\]]+/g, " ").trim() || "field"} (groups)`;
   const taken = (n) => calcs.some((c) => c.name.toLowerCase() === n.toLowerCase());

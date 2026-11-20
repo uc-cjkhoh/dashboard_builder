@@ -105,7 +105,7 @@ public static class CalcCatalog
     public static readonly IReadOnlyList<string> DateUnits = ["year", "quarter", "month", "week", "day", "hour", "minute", "second"];
 
     /// <summary>The parts <c>DATENAME</c> takes. The names are always English (ClickHouse's <c>dateName</c> is locale-free).</summary>
-    public static readonly IReadOnlyList<string> DateNameParts = ["weekday", "month"];
+    public static readonly IReadOnlyList<string> DateNameParts = ["weekday", "month", "year", "quarter"];
 
     private static FnSpec Fn(string result, params FnArg[] args) => new(args, result);
 

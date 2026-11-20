@@ -3,9 +3,9 @@
 // field. DOM only; every rule is in group-model.js. Members and names are shown with textContent / input values only.
 import { calculations, addCalculation, updateCalculation } from "../Core/store.js";
 import { LIMITS } from "../Core/validate.js";
-import { makeButton, openDialog, closeDialog, toast } from "../Core/ui.js";
+import { makeButton, openDialog, closeDialog, toast, confirmDeleteTwice } from "../Core/ui.js";
 import { checkName } from "./calc-workbook.js";
-import { checkGroupSpec, groupCalcName, assignmentsOf, groupsFromAssignments, maxMembersFor, groupStatus } from "./group-model.js";
+import { checkGroupSpec, groupCalcName, assignmentsOf, groupsFromAssignments, maxMembersFor, groupStatus, groupDraftKey } from "./group-model.js";
 
 let seq = 0;
 const el = (tag, cls, t) => { const e = document.createElement(tag); if (cls) e.className = cls; if (t !== undefined) e.textContent = t; return e; };
@@ -165,8 +165,20 @@ export function openGroupDialog({ field, fieldName, calcId = null, kind: kindIn,
   };
 
   const finish = () => closeDialog(dlg);
-  cancel.addEventListener("click", finish);
-  dlg.addEventListener("cancel", (e) => { e.preventDefault(); finish(); });
+  // Cancel / Esc: an untouched dialog closes at once; an edited one asks (twice: there is no Undo) before throwing the draft away, like the calculated-field dialog.
+  const draftKey = () => groupDraftKey({ name: name.value, groups, assign, otherOn, otherText, nullOn, nullText });
+  const initialKey = draftKey();
+  let asking = false;
+  const requestClose = async () => {
+    if (asking) return;
+    if (draftKey() === initialKey) { finish(); return; }
+    asking = true;
+    const discard = await confirmDeleteTwice("Discard your changes to these groups?", "your changes", { confirmText: "Discard" });
+    asking = false;
+    if (discard) finish(); else name.focus();
+  };
+  cancel.addEventListener("click", requestClose);
+  dlg.addEventListener("cancel", (e) => { e.preventDefault(); requestClose(); });
   save.addEventListener("click", () => {
     refresh();
     if (save.disabled) return;

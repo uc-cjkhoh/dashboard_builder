@@ -219,7 +219,7 @@ public static class CalcValidator
                             break;
                         case FnArg.Part:
                             if (fn.Args[n] is not StrNode { V: var part } || !CalcCatalog.DateNameParts.Contains(part.ToLowerInvariant()))
-                                throw new CalcException($"{upper}'s part must be {string.Join(" or ", CalcCatalog.DateNameParts.Select(u => $"'{u}'"))} written in the formula as text.", ap);
+                                throw new CalcException($"{upper}'s part must be {string.Join(", ", CalcCatalog.DateNameParts.SkipLast(1).Select(u => $"'{u}'"))} or '{CalcCatalog.DateNameParts[^1]}' written in the formula as text.", ap);
                             break;
                         case FnArg.Number:
                             if (arg.Type != CalcType.Number) throw new CalcException($"{upper} needs a number — {arg.Name} is {arg.Type}.", ap);

@@ -30,7 +30,7 @@ export const FUNCTIONS = Object.freeze({
 export const DATE_UNITS = Object.freeze(["year", "quarter", "month", "week", "day", "hour", "minute", "second"]);
 
 /** The parts DATENAME takes, written as a text literal (any case): the name is always English. Twin of CalcCatalog.DateNameParts. */
-export const DATE_NAME_PARTS = Object.freeze(["weekday", "month"]);
+export const DATE_NAME_PARTS = Object.freeze(["weekday", "month", "year", "quarter"]);
 
 /** Why a regular expression pattern can't run on ClickHouse (RE2: no look-ahead / look-behind, no atomic groups, no back-references in the pattern) or is not
  *  closed; null when none of these applies. A cheap scan, not a parser: ClickHouse still has the last word. Twin of CalcValidator.RegexProblem. */
@@ -314,7 +314,7 @@ function typeOf(node, path, categoryOf) {
           }
         } else if (kind === "part") {
           if (a.k !== "str" || !DATE_NAME_PARTS.includes(a.v.toLowerCase())) {
-            throw new CalcError(`${upper}'s part must be ${DATE_NAME_PARTS.map((u) => `'${u}'`).join(" or ")} written in the formula as text.`, ap);
+            throw new CalcError(`${upper}'s part must be ${DATE_NAME_PARTS.slice(0, -1).map((u) => `'${u}'`).join(", ")} or '${DATE_NAME_PARTS[DATE_NAME_PARTS.length - 1]}' written in the formula as text.`, ap);
           }
         } else if (kind === "month") {
           if (a.k !== "num" || !Number.isInteger(a.v) || a.v < 1 || a.v > 12) {

@@ -334,3 +334,24 @@ test("groupStatus: the footer names the listed members and the limit apart", asy
   assert.equal(groupStatus(2, 5, 49, 1), "2 of 5 members grouped · 1 group · up to 49 allowed");
   assert.equal(groupStatus(50, 60, 49, 3), "50 of 60 members grouped · 3 groups · up to 49 allowed — over the limit");
 });
+
+import { groupDraftKey } from "../../src/DashboardBuilder/Features/Calc/group-model.js";
+
+test("the group dialog's draft key changes with every edit and ignores nothing that is saved", () => {
+  const base = () => ({ name: "region (groups)", groups: [{ id: 1, name: "Group 1" }], assign: new Map([["EU", 1]]), otherOn: false, otherText: "Other", nullOn: false, nullText: "(none)" });
+  const key = groupDraftKey(base());
+  assert.equal(groupDraftKey(base()), key, "same draft, same key");
+  assert.notEqual(groupDraftKey({ ...base(), name: "x" }), key);
+  assert.notEqual(groupDraftKey({ ...base(), groups: [{ id: 1, name: "Asia" }] }), key);
+  assert.notEqual(groupDraftKey({ ...base(), groups: [...base().groups, { id: 2, name: "Group 2" }] }), key);
+  assert.notEqual(groupDraftKey({ ...base(), assign: new Map([["EU", 1], ["US", 1]]) }), key);
+  assert.notEqual(groupDraftKey({ ...base(), assign: new Map() }), key);
+  assert.notEqual(groupDraftKey({ ...base(), otherOn: true }), key);
+  assert.notEqual(groupDraftKey({ ...base(), nullOn: true }), key);
+});
+test("the draft key ignores a trimmed name's padding, the order members were assigned in, and a label whose box is off", () => {
+  const a = { name: "g", groups: [{ id: 1, name: "A" }], assign: new Map([["x", 1], ["y", 1]]), otherOn: false, otherText: "Other", nullOn: false, nullText: "(none)" };
+  const b = { ...a, name: "  g ", assign: new Map([["y", 1], ["x", 1]]), otherText: "Rest", nullText: "none" };
+  assert.equal(groupDraftKey(a), groupDraftKey(b));
+  assert.notEqual(groupDraftKey({ ...a, otherOn: true, otherText: "Other" }), groupDraftKey({ ...a, otherOn: true, otherText: "Rest" }));
+});

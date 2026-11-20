@@ -71,7 +71,7 @@
 
 /* ---- View bar: How this is computed ---- */
 .explain { position: relative; display: inline-flex; }
-.explain__btn { display: inline-flex; align-items: center; gap: var(--s1); width: auto; padding-inline: var(--s2); font-size: var(--fs-body); white-space: nowrap; }
+.explain__btn { display: inline-flex; align-items: center; justify-content: center; font-size: var(--fs-body); white-space: nowrap; }
 .explain__btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .explain__pop { position: absolute; top: calc(100% + var(--s1)); left: 0; z-index: 30; width: min(380px, 90vw); max-height: 60vh; overflow: auto;
   padding: var(--s2); background: var(--surface); color: var(--ink); border: 1px solid var(--line-2); border-radius: var(--r); box-shadow: var(--elev-8); }
