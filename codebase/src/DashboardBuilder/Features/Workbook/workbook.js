@@ -8,7 +8,7 @@ import { DEFAULT_THEME } from "../Core/theme-model.js";
 import { exit } from "../Core/motion.js";
 import { toast, confirmDeleteTwice, listDialog } from "../Core/ui.js";
 import { dateIn } from "../Core/timezone.js";
-import { addEntity, clearModel } from "../Canvas/canvas.js";
+import { addEntity, clearModel, fitCanvas } from "../Canvas/canvas.js";
 import { restoreRelationship } from "../Relations/relations.js";
 import { serializeWorkbook, parseWorkbook, storageKey, legacyStorageKey, restoredSummary, issueCount } from "./workbook-model.js";
 import { api } from "../Core/api.js";
@@ -195,6 +195,7 @@ function openWorkbook(wb) {
         { aggregate: r.aggregateFirst === true, direction: r.filterDirection },
       );
     }
+    fitCanvas(); // every restored card in view (it waits for their columns), whatever size the window was when it was saved
 
     // Tabs in strip order; widgets point at worksheets by saved index, so those are wired once every tab exists.
     const worksheetIds = [], dashboardIds = [], storyIds = [];

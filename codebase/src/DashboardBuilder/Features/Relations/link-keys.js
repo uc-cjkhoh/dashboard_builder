@@ -46,3 +46,17 @@ export function rowLabel(end, type, source) {
   const base = `${end.column}, ${type}, in ${end.table}`;
   return source && source.entityId === end.entityId && source.column === end.column ? `${base}, source` : base;
 }
+
+/** What a key does on a focused relationship link: Enter / Space edit it (the dialog), Delete / Backspace remove it (which asks twice). Other keys: null. */
+export function linkEdgeAction(key) {
+  if (key === "Enter" || key === " ") return "edit";
+  if (key === "Delete" || key === "Backspace") return "remove";
+  return null;
+}
+
+/** Accessible name of a link: which table.column joins which, in words, and what the keys do. `rel` is `{ from, to, cardinality, pairs }`; `kind` is the cardinality in words. */
+export function linkLabel(rel, fromTable, toTable, kind) {
+  const pairs = [{ from: rel.from.column, to: rel.to.column }, ...(rel.pairs ?? [])];
+  const keys = pairs.map((p) => `${fromTable}.${p.from} to ${toTable}.${p.to}`).join(", and ");
+  return `Relationship ${keys}, ${kind}. Enter edits it, Delete removes it.`;
+}

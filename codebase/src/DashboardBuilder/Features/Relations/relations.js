@@ -10,8 +10,8 @@ import { compoundName, suggestTarget, proposeKey, keyText, pairText } from "./ke
 import { linkSides, linkRoute, roundedPath, placeBadge, assignLanes, quietBadges } from "./link-route.js";
 import { openTypeWarning } from "./type-warning.js";
 import { COLUMN_MIME, encodeColumnDrag, parseColumnDrag, dropDecision } from "./link-drag.js";
-import { describeRelationship } from "./relation-describe.js";
-import { linkKeyAction, stepIndex, cardIndex, linkHint, rowLabel } from "./link-keys.js";
+import { describeRelationship, kindWords } from "./relation-describe.js";
+import { linkKeyAction, stepIndex, cardIndex, linkHint, rowLabel, linkEdgeAction, linkLabel } from "./link-keys.js";
 
 // Relationships: logical, typed links the user draws between a column of one entity and a column of
 // another (decision D5 — ClickHouse neither creates nor validates them). Creation is drag-and-drop only:
@@ -24,8 +24,7 @@ let selectedId = null;
 let hoverId = null;   // the link under the pointer
 let focusEntityId = null; // the card under the pointer: its links stay strong, the rest fade (markLinkedRows)
 let zoom = 1;         // the canvas zoom, for quietBadges
-const openNotes = new Set(); // relationship ids whose dropdown in the Relationships card is open (kept across re-renders)
-let canvas, svg, labels, guide, keyHint, notes;  // svg: the lines, under the cards; labels: the cardinality badges, over them
+let canvas, svg, labels, guide, keyHint;  // svg: the lines, under the cards; labels: the cardinality badges, over them
 
 export function initRelations() {
   canvas = document.getElementById("model-view");
@@ -44,11 +43,6 @@ export function initRelations() {
   keyHint.className = "rel-guide rel-keyhint";
   keyHint.setAttribute("role", "status"); // always rendered so a screen reader announces text put into it; empty = visually hidden
   canvas.parentElement.append(keyHint); // the keyboard pick's instruction line, same spot as the guide
-  notes = document.createElement("details");
-  notes.className = "rel-notes";
-  notes.open = true;
-  notes.hidden = true;
-  canvas.parentElement.append(notes); // the "Relationships" card: each link in plain words (renderNotes)
   const help = document.createElement("p");
   help.id = "rel-key-help";
   help.className = "sr-only";
@@ -56,6 +50,7 @@ export function initRelations() {
   canvas.parentElement.append(help);
 
   bus.addEventListener("entity:moved", () => render());
+  bus.addEventListener("entity:collapsing", () => render()); // fired every frame while a card folds or unfolds, so its links follow the edge
   bus.addEventListener("canvas:zoomed", (e) => { zoom = e.detail?.zoom ?? zoom; render(); });
   bus.addEventListener("entity:loaded", (e) => { markDraggable(e.detail.entityId); render(); }); // a restored link waits for its key rows
   bus.addEventListener("entity:removed", (e) => { cancelKeyPick(); onEntityRemoved(e.detail.entityId); });
@@ -72,7 +67,10 @@ export function initRelations() {
   initColumnDrag();
   initColumnKeys();
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") { cancelKeyPick(); select(null); if (pinnedId) { pinnedId = null; applyGhosts(); } }
+    if (e.key === "Escape") {
+      cancelKeyPick(); select(null);
+      if (pinnedId) { pinnedId = null; applyGhosts(); }
+    }
   });
 }
 
@@ -405,8 +403,21 @@ function keyPairsFor(from, to, pairs, rel) {
 }
 
 // --- relationship lifecycle ---------------------------------------------------
+// A link made by the user arrives once: render() rebuilds every link on each zoom, drag and resize, so a CSS animation on its own would replay.
+// The birth time is kept instead, and a redraw inside the window resumes the animation where it was (animation-delay = -age). Restored links never enter.
+const LINK_IN_MS = 450;
+const bornAt = new Map();
+function arrival(rel, ...parts) {
+  const t = bornAt.get(rel.id);
+  if (t === undefined) return;
+  const age = performance.now() - t;
+  if (age >= LINK_IN_MS) { bornAt.delete(rel.id); return; }
+  for (const el of parts) { el.classList.add("is-arriving"); el.style.setProperty("--age", `${Math.round(age)}ms`); }
+}
+
 function createRelationship(from, to, cardinality, { joinType, joinFixed, pairs, agg } = { joinType: "inner", joinFixed: true }) {
   const id = `rel#${++seq}`;
+  bornAt.set(id, performance.now());
   relationships.set(id, applyAggregate({ id, from, to, cardinality, joinType, joinFixed, ...(pairs?.length ? { pairs } : {}) }, agg ?? {}));
   emit("rel:changed", { id });
   select(id);
@@ -433,6 +444,7 @@ function render() {
   if (!svg) return;
   syncKeyStrips(); // pin key rows first: it moves rows and changes card heights, so anchors measured before it would point at the old positions
   markUnlinked(); // before measuring too: showing / hiding "Needs a partner" refits the card's width (canvas.js)
+  const focusedRel = canvas.contains(document.activeElement) ? document.activeElement.closest?.(".rel-link[data-rel]")?.dataset.rel : null; // render() redraws every link: a focused one is refocused below
   svg.replaceChildren();
   labels.replaceChildren();
   const crect = canvas.getBoundingClientRect();
@@ -484,59 +496,17 @@ function render() {
     (under ? svg : labels).append(label); // a badge with no free spot beside the cards sits under them, never over
   });
   for (const [k, g] of ghosts) if (!keep.has(k)) { g.remove(); ghosts.delete(k); }
+  if (focusedRel) svg.querySelector(`.rel-link[data-rel="${focusedRel}"]`)?.focus({ preventScroll: true });
   applyGhosts();
   canvas.classList.toggle("rel-quiet", quietBadges(links.length - props.length, zoom)); // many links: badges only on the hovered / focused ones
   updateGuide();
-  renderNotes();
   markLinkedRows();
 }
 
-// The description card: one entry per relationship — tables and key columns, what the cardinality means, which rows the join keeps.
-// Hovering an entry lights its link and key rows like hovering the link does; the selected link's entry is marked.
-function renderNotes() {
-  if (!notes) return;
-  const rels = [...relationships.values()].filter((r) => entities.get(r.from.entityId) && entities.get(r.to.entityId));
-  notes.hidden = !isModelActive() || rels.length === 0;
-  const summary = document.createElement("summary");
-  summary.textContent = `Relationships (${rels.length})`;
-  const list = document.createElement("ul");
-  list.className = "rel-notes__list";
-  for (const rel of rels) {
-    const d = describeRelationship(rel, entities.get(rel.from.entityId).table, entities.get(rel.to.entityId).table);
-    const li = document.createElement("li");
-    li.className = "rel-note";
-    li.dataset.rel = rel.id;
-    const more = document.createElement("details"); // a dropdown per link: the title row stays one line, the words open beneath it
-    more.className = "rel-note__more";
-    more.open = openNotes.has(rel.id);
-    more.addEventListener("toggle", () => { if (more.open) openNotes.add(rel.id); else openNotes.delete(rel.id); });
-    const head = document.createElement("summary"), title = document.createElement("span");
-    head.className = "rel-note__head";
-    title.className = "rel-note__title"; title.textContent = d.title; // tables only: "How rows match" below says the kind in words
-    title.title = d.title; // the row ellipsises at the card's fixed width: the whole link is its tooltip
-    head.append(title);
-    more.append(head, ...d.sentences.map((t, i) => notePart(d.heads[i], noteLine(t, d.refs, d.tones[i]))));
-    li.append(more);
-    li.addEventListener("pointerenter", () => { hoverId = rel.id; markLinkedRows(); });
-    li.addEventListener("pointerleave", () => { hoverId = null; markLinkedRows(); });
-    list.append(li);
-  }
-  notes.replaceChildren(summary, list);
-}
-
-// A paragraph of a note under its short title (the purpose of the paragraph); the title is text in the same ink as the card title, so it never relies on colour.
-function notePart(heading, line) {
-  const part = document.createElement("div"), label = document.createElement("div");
-  part.className = "rel-note__part";
-  label.className = "rel-note__label"; label.textContent = heading;
-  part.append(label, line);
-  return part;
-}
-
-// One sentence of a note: table and column names are set in a chip (bold + wash, so not colour alone); a caution or reassurance gets a tone.
-function noteLine(text, refs, tone) {
+// One sentence of the dialog's summary: table and column names are set bold; a caution gets the warning tone (and starts "Heads up:", so not colour alone).
+function summaryLine(text, refs, tone) {
   const p = document.createElement("p");
-  p.className = tone ? `rel-note__text rel-note__text--${tone}` : "rel-note__text";
+  p.className = tone ? `rel-sum__line rel-sum__line--${tone}` : "rel-sum__line";
   const esc = (r) => r.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const re = new RegExp(`(?<![\\w.])(${refs.map(esc).join("|")})(?![\\w])`, "g");
   let at = 0;
@@ -640,12 +610,27 @@ function drawLink(rel, p1, s1, p2, s2, fromKind, toKind, lane, placed, cards) {
   const d = roundedPath(points);
   line.append(svgEl("path", { class: "rel-link__hit", d }), svgEl("path", { class: "rel-link__line", d }),
     endMarker(p1, { x: s1, y: 0 }, fromKind), endMarker(p2, { x: s2, y: 0 }, toKind));
-  const label = svgEl("g", { class: `${cls} rel-link--label`, "data-rel": rel.id });
+  const ta = entities.get(rel.from.entityId)?.table ?? "first table", tb = entities.get(rel.to.entityId)?.table ?? "second table";
+  // The line is the keyboard's handle on the link (the badge repeats it for the eye, so it is hidden from a screen reader): focus reads like hover, Enter / Space edit, Delete removes.
+  line.setAttribute("tabindex", "0");
+  line.setAttribute("role", "button");
+  line.setAttribute("aria-label", linkLabel(rel, ta, tb, kindWords(rel.cardinality)));
+  const label = svgEl("g", { class: `${cls} rel-link--label`, "data-rel": rel.id, "aria-hidden": "true" });
   const text = joinBadge(rel.cardinality, rel.joinType, rel.pairs?.length ?? 0), w = badgeWidth(text);
   const at = placeBadge(spot, p1.y, p2.y, w, BADGE_H, cards, placed);
   placed.push({ x: at.x, y: at.y, w, h: BADGE_H });
   label.append(badge(text, w, at));
 
+  arrival(rel, line, label);
+  line.addEventListener("keydown", (e) => {
+    const action = linkEdgeAction(e.key);
+    if (!action || e.altKey || e.ctrlKey || e.metaKey) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (action === "edit") editRelationship(rel); else removeRelationship(rel);
+  });
+  line.addEventListener("focus", () => { hoverId = rel.id; markLinkedRows(); });
+  line.addEventListener("blur", () => { if (hoverId === rel.id) { hoverId = null; markLinkedRows(); } });
   for (const g of [line, label]) { // the line and its badge sit in two layers but act as one link
     g.addEventListener("click", (e) => { e.stopPropagation(); editRelationship(rel); });
     g.addEventListener("pointerenter", () => { hoverId = rel.id; markLinkedRows(); });
@@ -662,7 +647,6 @@ function markLinkedRows() {
   const focused = (r) => r.id === hoverId || (focusEntityId && (r.from.entityId === focusEntityId || r.to.entityId === focusEntityId));
   canvas.classList.toggle("rel-focus", !!(hoverId || focusEntityId));
   for (const el of canvas.querySelectorAll(".rel-link[data-rel]")) el.classList.toggle("rel-link--focus", !!focused(relationships.get(el.dataset.rel) ?? {}));
-  for (const li of notes?.querySelectorAll(".rel-note") ?? []) li.classList.toggle("rel-note--active", li.dataset.rel === hoverId);
   const rel = hoverId && relationships.get(hoverId); // hover only: selecting a link (which opens its dialog) highlights nothing
   if (rel)
     for (const end of relEnds(rel))
@@ -712,13 +696,17 @@ function editRelationship(rel) {
     keys: keyPairsFor(rel.from, rel.to, rel.pairs ?? [], rel),
     agg: aggregateChoice(rel),
     onPick: (cardinality, sel, pairs, agg) => { rel.cardinality = cardinality; Object.assign(rel, joinFromSelection(sel)); applyAggregate(rel, agg); if (pairs?.length) rel.pairs = pairs; else delete rel.pairs; emit("rel:changed", { id: rel.id }); render(); },
-    onDelete: async () => {
-      const ta = entities.get(rel.from.entityId)?.table, tb = entities.get(rel.to.entityId)?.table;
-      if (!(await confirmDeleteTwice(`Remove the ${ta} → ${tb} relationship?`, `the ${ta} → ${tb} relationship`, { confirmText: "Remove" }))) return;
-      relationships.delete(rel.id); emit("rel:changed", { id: rel.id }); select(null); render();
-      toast(`Removed the ${ta} → ${tb} relationship.`, "info");
-    },
+    onDelete: () => removeRelationship(rel),
   });
+}
+
+/** Remove a relationship after asking twice (rule 12): from the dialog's Remove button, or Delete on a focused link. */
+async function removeRelationship(rel) {
+  const ta = entities.get(rel.from.entityId)?.table, tb = entities.get(rel.to.entityId)?.table;
+  if (!(await confirmDeleteTwice(`Remove the ${ta} → ${tb} relationship?`, `the ${ta} → ${tb} relationship`, { confirmText: "Remove" }))) return;
+  relationships.delete(rel.id); emit("rel:changed", { id: rel.id }); select(null); render();
+  toast(`Removed the ${ta} → ${tb} relationship.`, "info");
+  if (!canvas.contains(document.activeElement) || document.activeElement === document.body) canvas.focus({ preventScroll: true }); // the link had focus: land on the ground, not nowhere
 }
 
 function select(id) {
@@ -771,19 +759,24 @@ function openCardinalityDialog({ current = "1:N", joinType = "inner", tables = [
   // Left, top to bottom: Join, Cardinality, Totals, Also match on. Join and Cardinality are the same control: one choice of four as
   // radio cards in a 2 x 2. Picking only selects; Confirm saves. The link runs first → second.
   let join = joinType;
-  left.append(section("join", 0, radioCards("Join", "join-type", joinChoices(legacy), join, (v) => { join = v; }).root));
   let cardinality = current;
   let check = null;
-  const card = radioCards("Cardinality", "cardinality", cardinalityChoices(), cardinality, (v) => { cardinality = v; check?.redescribe(); });
-  left.append(section("card", 1, card.root));
   let aggregate = agg.aggregate, direction = agg.direction;
-  left.append(section("totals", 2, buildAggregateChoice(agg, (v) => { aggregate = v.aggregate; direction = v.direction; })));
+  // "What this link does": the picks below in plain words, rewritten after every change, before anything is saved. It reads the same sentences
+  // the link would be described with once saved (describeRelationship), so there is one account of a relationship, here.
+  const summary = keys ? buildSummary(tables, keys.section.first) : null;
+  const redescribe = () => summary?.show({ cardinality, ...joinFromSelection(join), pairs: keys.pairs(), aggregateFirst: aggregate, filterDirection: direction });
+  left.append(section("join", 0, radioCards("Join", "join-type", joinChoices(legacy), join, (v) => { join = v; redescribe(); }).root));
+  const card = radioCards("Cardinality", "cardinality", cardinalityChoices(), cardinality, (v) => { cardinality = v; check?.redescribe(); redescribe(); });
+  left.append(section("card", 1, card.root));
+  left.append(section("totals", 2, buildAggregateChoice(agg, (v) => { aggregate = v.aggregate; direction = v.direction; redescribe(); })));
   // The suggestion runs as the dialog opens (start() below), re-runs when the key pairs change, and re-reads its result against
   // each cardinality pick; "Use N:1" only selects (Confirm still saves).
   if (keys) {
     check = buildJoinCheck(dlg, { ...keys.check, apply: { get: () => cardinality, set: (c) => card.inputs.find((r) => r.value === c)?.click() } });
-    left.append(section("pairs", 3, buildKeyPairs({ ...keys.section, onChange: (next) => { keys.section.onChange(next); check.rerun(); } })));
-    right.append(check.root);
+    left.append(section("pairs", 3, buildKeyPairs({ ...keys.section, onChange: (next) => { keys.section.onChange(next); check.rerun(); redescribe(); } })));
+    right.append(summary.root, check.root);
+    redescribe();
   }
   body.append(left);
   if (keys) body.append(right);
@@ -807,6 +800,26 @@ function openCardinalityDialog({ current = "1:N", joinType = "inner", tables = [
   document.body.append(dlg);
   openDialog(dlg);
   check?.start();
+}
+
+/** The dialog's "What this link does" block: `show(rel)` rewrites it from a relationship-shaped object (cardinality, join, key pairs, totals).
+ *  `first` is the first key pair ({ from, to } column names). A polite live region, so a screen reader hears what each pick changes. */
+function buildSummary(tables, first) {
+  const root = document.createElement("section");
+  root.className = "rel-sum";
+  root.setAttribute("aria-labelledby", "rel-sum-title");
+  const h = document.createElement("h3");
+  h.id = "rel-sum-title"; h.className = "rel-dialog__h"; h.textContent = "What this link does";
+  const out = document.createElement("div");
+  out.className = "rel-sum__out"; out.setAttribute("role", "status"); out.setAttribute("aria-live", "polite");
+  root.append(h, out);
+  return {
+    root,
+    show(rel) {
+      const d = describeRelationship({ from: { column: first.from }, to: { column: first.to }, ...rel }, tables[0], tables[1]);
+      out.replaceChildren(...d.sentences.map((t, i) => summaryLine(t, d.refs, d.tones[i])));
+    },
+  };
 }
 
 // One choice of several as radio cards in a 2 x 2 grid (a toggle would read as "pick several"): a bold name.
@@ -884,7 +897,7 @@ function cardSpan(entity, crect) {
   return { left: r.left - crect.left + canvas.scrollLeft, right: r.right - crect.left + canvas.scrollLeft };
 }
 
-// Anchor a link on the card edge `side` (+1 right, -1 left), at the key row's vertical centre.
+// Anchor a link on the card edge `side` (+1 right, -1 left), at the key row's vertical centre (a collapsed card: the card's own centre).
 function anchor(entity, column, side, crect) {
   const r = entity.el.getBoundingClientRect();
   const top = r.top - crect.top + canvas.scrollTop;
@@ -892,7 +905,8 @@ function anchor(entity, column, side, crect) {
 
   let y = top + 24;
   const row = entity.el.querySelector(`.col-row[data-column="${cssEscape(column)}"]`);
-  if (row) {
+  if (entity.el.classList.contains("entity--collapsed")) y = (top + bottom) / 2; // folded: the link meets the title bar at its vertical centre
+  else if (row) {
     const rr = row.getBoundingClientRect();
     y = clamp(rr.top + rr.height / 2 - crect.top + canvas.scrollTop, top + 8, bottom - 8);
   }

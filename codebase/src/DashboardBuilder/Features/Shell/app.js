@@ -17,6 +17,7 @@ import { initPerfPanel } from "./perf-panel.js";
 import { initActivityBar } from "./activity-bar.js";
 import { toast } from "../Core/ui.js";
 import { icon } from "../Core/icons.js";
+import { initHoverTips } from "../Core/hover-tip.js";
 
 // Last-resort handlers: an unexpected error is told to the user, never only logged. Aborted queries are normal.
 window.addEventListener("error", (e) => {
@@ -35,6 +36,7 @@ for (const el of document.querySelectorAll("[data-icon]")) el.replaceChildren(ic
 // Schema + canvas + relations + tabs + dashboards first so their `connection:changed` /
 // `table:add` / bus listeners are registered before the connection module's initial status
 // check fires an event.
+initHoverTips(); // one styled tooltip for every button's title: on hover and on keyboard focus
 initScheme();  // light / dark (data-scheme) before anything reads it
 initAppearance();
 initPerfPanel();

@@ -43,10 +43,10 @@ test("a one-to-many link warns that the one side repeats", () => {
 test("a link that aggregates before joining says totals are not repeated, and which way filters go", () => {
   const plain = describeRelationship(rel({ cardinality: "N:M" }), "a", "b").sentences;
   const agg = describeRelationship(rel({ cardinality: "N:M", aggregateFirst: true }), "a", "b").sentences;
-  assert.ok(agg.some((s) => /added up first/i.test(s)));
+  assert.ok(agg.some((s) => /totalled by the key first/i.test(s)));
   assert.ok(agg.some((s) => /filtering a also filters b/i.test(s)));
   assert.ok(!agg.some((s) => /counted more than once/.test(s))); // the fan-out warning goes
-  assert.ok(plain.some((s) => /counted more than once/.test(s)));
+  assert.ok(plain.some((s) => /counted more than once\. Turn on Totals/.test(s))); // the caution says what to do about it
   assert.ok(describeRelationship(rel({ aggregateFirst: true, filterDirection: "single" }), "a", "b").sentences.some((s) => /does not change the other/i.test(s)));
 });
 test("tones mark the caution and the reassurance; refs list the names to mark, longest first", () => {
@@ -57,13 +57,6 @@ test("tones mark the caution and the reassurance; refs list the names to mark, l
   assert.ok(d.refs.includes("orders") && d.refs.includes("users"));
   assert.deepEqual(describeRelationship(rel({ aggregateFirst: true }), "a", "b").tones, ["", "", "ok", ""]);
 });
-test("every paragraph has a short title naming its purpose", () => {
-  const titles = (o) => describeRelationship(rel(o), "a", "b").heads;
-  assert.deepEqual(titles({ cardinality: "N:1" }), ["How rows match", "Rows shown"]);
-  assert.deepEqual(titles({ cardinality: "1:N" }), ["How rows match", "Rows shown", "Double counting"]);
-  assert.deepEqual(titles({ aggregateFirst: true }), ["How rows match", "Rows shown", "No double counting", "Filtering"]);
-  for (const o of [{ cardinality: "N:M" }, { aggregateFirst: true }, {}]) {
-    const d = describeRelationship(rel(o), "a", "b");
-    assert.equal(d.heads.length, d.sentences.length);
-  }
+test("a note is its sentences only: no section titles repeating what each says", () => {
+  for (const o of [{ cardinality: "N:M" }, { aggregateFirst: true }, {}]) assert.equal(describeRelationship(rel(o), "a", "b").heads, undefined);
 });

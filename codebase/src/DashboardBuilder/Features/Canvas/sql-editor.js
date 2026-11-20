@@ -74,7 +74,7 @@ export const opensBlock = (before) => /[([]$/.test(before) || /(^|\s)(select|fro
  * Mount an editor in `host`.
  * @param {HTMLElement} host
  * @param {{ value: string, dialect?: "mysql"|"clickhouse", onChange: (text: string) => void, onSubmit: () => void, onNotice: (text: string) => void, label: string }} o
- * @returns {Promise<{ getValue(): string, setValue(text: string): void, setDialect(d: "mysql"|"clickhouse"): void, setReadOnly(on: boolean): void, focus(): void, setProblems(list: {from:{line:number,ch:number},to:{line:number,ch:number},message:string}[]): void,
+ * @returns {Promise<{ getValue(): string, setValue(text: string): void, replaceValue(text: string): void, setDialect(d: "mysql"|"clickhouse"): void, setReadOnly(on: boolean): void, focus(): void, setProblems(list: {from:{line:number,ch:number},to:{line:number,ch:number},message:string}[]): void,
  *   format(): Promise<void>, rich: boolean, destroy(): void }>}
  */
 export async function mountEditor(host, o) {
@@ -143,6 +143,7 @@ export async function mountEditor(host, o) {
     rich: true,
     getValue: () => cm.getValue(),
     setValue: (text) => { cm.setValue(text); cm.clearHistory(); },
+    replaceValue: (text) => { const last = cm.lastLine(); cm.replaceRange(text, CodeMirror.Pos(0, 0), CodeMirror.Pos(last, cm.getLine(last).length)); }, // one edit, so Ctrl+Z brings the old text back
     setDialect: (d) => { dialect = d; cm.setOption("mode", MODES[d]); },
     setReadOnly: (on) => cm.setOption("readOnly", on ? "nocursor" : false), // while a conversion is under way, so typing can't be overwritten by its result
     focus: () => { cm.refresh(); cm.focus(); cm.setCursor(CodeMirror.Pos(0, 0)); },
@@ -164,6 +165,7 @@ function plainEditor(host, o) {
     rich: false,
     getValue: () => text.value,
     setValue: (v) => { text.value = v; },
+    replaceValue: (v) => { text.focus(); text.select(); if (!document.execCommand?.("insertText", false, v)) text.value = v; }, // insertText keeps the browser's own undo
     setDialect() {},
     setReadOnly: (on) => { text.readOnly = on; },
     focus: () => { text.focus(); text.setSelectionRange(0, 0); },

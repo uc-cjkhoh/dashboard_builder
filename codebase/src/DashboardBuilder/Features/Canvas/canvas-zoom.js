@@ -33,3 +33,32 @@ export function panToReveal(pan, box, w, h, margin = 16) {
 
 /** A pointer movement of `px` screen pixels as a model distance. */
 export const toModel = (px, zoom) => px / zoom;
+
+export const ZOOM_STEP = 1.25; // one click of + / − (or the + / − key): a quarter more or less
+export const PAN_STEP = 64;    // one arrow key, screen px (Shift: four times that)
+
+/** The zoom one step in (dir > 0) or out (dir < 0) from `zoom`, rounded to a whole percent so the readout never drifts, held between the limits. */
+export function stepZoom(zoom, dir) {
+  const next = clampZoom(zoom) * (dir > 0 ? ZOOM_STEP : 1 / ZOOM_STEP);
+  return clampZoom(Math.round(next * 100) / 100);
+}
+
+/** The view that shows every box (model px: x, y, w, h) inside a view `w` x `h`, `margin` from its edges: as large as fits, never past 100 %, never below
+ *  ZOOM_MIN; centred on the cards where they fit, and top-left at the margin where even ZOOM_MIN cannot show them all. No boxes: 100 % at the origin. */
+export function fitView(boxes, w, h, margin = 16) {
+  const list = (boxes ?? []).filter((b) => b && [b.x, b.y, b.w, b.h].every(Number.isFinite));
+  if (!list.length || !(w > 0) || !(h > 0)) return { zoom: 1, pan: { x: 0, y: 0 } };
+  const left = Math.min(...list.map((b) => b.x)), top = Math.min(...list.map((b) => b.y));
+  const right = Math.max(...list.map((b) => b.x + b.w)), bottom = Math.max(...list.map((b) => b.y + b.h));
+  const bw = Math.max(1, right - left), bh = Math.max(1, bottom - top);
+  const zoom = clampZoom(Math.min(1, (w - 2 * margin) / bw, (h - 2 * margin) / bh));
+  const place = (size, lo, span) => (span * zoom <= size - 2 * margin ? (size - span * zoom) / 2 : margin) - lo * zoom;
+  return { zoom, pan: { x: place(w, left, bw), y: place(h, top, bh) } };
+}
+
+/** The pan after an arrow key (screen px; the ground follows the key's direction as if the view moved that way). Any other key: unchanged. */
+export function panByKey(pan, key, big = false) {
+  const d = (big ? 4 : 1) * PAN_STEP;
+  const move = { ArrowLeft: [d, 0], ArrowRight: [-d, 0], ArrowUp: [0, d], ArrowDown: [0, -d] }[key];
+  return move ? { x: pan.x + move[0], y: pan.y + move[1] } : pan;
+}

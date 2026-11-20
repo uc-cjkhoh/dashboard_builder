@@ -60,3 +60,19 @@ test("row labels no longer carry instructions", () => {
   assert.equal(rowLabel({ ...src }, "Int32", null), "cust_id, Int32, in orders");
   assert.equal(rowLabel({ ...src }, "Int32", src), "cust_id, Int32, in orders, source");
 });
+
+import { linkEdgeAction, linkLabel } from "../../src/DashboardBuilder/Features/Relations/link-keys.js";
+
+test("on a focused link Enter and Space edit it, Delete and Backspace remove it, the rest do nothing", () => {
+  assert.equal(linkEdgeAction("Enter"), "edit");
+  assert.equal(linkEdgeAction(" "), "edit");
+  assert.equal(linkEdgeAction("Delete"), "remove");
+  assert.equal(linkEdgeAction("Backspace"), "remove");
+  for (const k of ["Escape", "ArrowDown", "a", "Tab"]) assert.equal(linkEdgeAction(k), null);
+});
+test("a link's name says which columns it joins, every key pair, its kind, and the keys", () => {
+  const rel = { from: { column: "cust_id" }, to: { column: "id" }, cardinality: "N:1" };
+  assert.equal(linkLabel(rel, "orders", "customers", "many to one"), "Relationship orders.cust_id to customers.id, many to one. Enter edits it, Delete removes it.");
+  const compound = { ...rel, pairs: [{ from: "day", to: "day" }] };
+  assert.match(linkLabel(compound, "orders", "customers", "many to one"), /orders\.cust_id to customers\.id, and orders\.day to customers\.day,/);
+});

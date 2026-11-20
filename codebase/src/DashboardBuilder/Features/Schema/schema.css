@@ -1,13 +1,13 @@
-/* Schema feature — the database picker section + draggable table chip list. */
+/* Schema feature — the database tree (databases open to draggable table rows) and its search. */
 
 /* ---- Table list + draggable chips (schema browser) ----------------------- */
-#schema-section, #tables-section { animation: fade-in var(--dur) var(--ease); }
+#schema-section { animation: fade-in var(--dur) var(--ease); }
 .table-list {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: var(--s1);
-  overflow: auto;          /* the list scrolls internally; the page never does */
+  overflow: auto;          /* the tree scrolls internally; the page never does */
   min-height: 0;
   padding: 4px;            /* room for focus rings… */
   margin-inline: -4px;     /* …without insetting the rows: their edges match the search box */
@@ -53,11 +53,38 @@
 .table-search { position: relative; display: block; margin-bottom: var(--s2); }
 .table-search .icon { position: absolute; left: var(--s2); top: 50%; transform: translateY(-50%); color: var(--ink-3); pointer-events: none; }
 .table-search .input { width: 100%; padding-left: calc(var(--s2) + 20px); }
-.table-list__empty { color: var(--ink-3); font-size: var(--fs-body); padding: var(--s2) 0; }
+.table-list__empty, .table-list__status { margin: 0; color: var(--ink-3); font-size: var(--fs-body); padding: var(--s2); border-top: 1px solid var(--line); }
+
+/* ---- The tree: a database is a 32px row (chevron, database icon, name, the count of its tables on the canvas); its tables are the chip rows
+   below it, one indent (24px: the chevron and its gap) in so the table icon is under the database icon. System databases sit in one closed group at the end, one more indent for their own tables. ------------------ */
+.db-node, .db-children { display: flex; flex-direction: column; gap: var(--s1); }
+.db-children { margin-left: var(--s6); }   /* 24px = the chevron (16) + its gap (8): a table's icon sits exactly under its database's icon, the names under the name */
+.db-row {
+  display: flex; align-items: center; gap: var(--s2); width: 100%; height: var(--ctl-h); padding: 0 var(--s2); flex: none;
+  border: 0; border-radius: var(--r); background: none; color: var(--ink); font: inherit; font-size: var(--fs-body); text-align: left; cursor: pointer;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.db-row:hover, .db-row:focus-visible { background: color-mix(in srgb, var(--ink) 7%, transparent); }
+.db-row:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.db-row:active { background: color-mix(in srgb, var(--ink) 11%, transparent); }
+.tree-row__chev, .tree-row__icon { flex: none; display: inline-grid; place-items: center; color: var(--ink-3); }
+.tree-row__chev { transition: rotate var(--dur-fast) var(--ease); }
+.db-row[aria-expanded="false"] .tree-row__chev { rotate: -90deg; }
+.tree-row__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.db-row__count { flex: none; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.tree-note { display: flex; align-items: center; gap: var(--s2); min-height: var(--ctl-h); margin: 0; padding: 0 var(--s2); color: var(--ink-3); font-size: var(--fs-body); }
+.tree-note--error { color: var(--danger-ink); }
+.tree-note__glyph { flex: none; display: inline-grid; place-items: center; }
+.tree-spin { animation: spin 1s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .tree-spin { animation: none; } }
+.tree-note__btn { margin-left: auto; }
+.tree-more { align-self: flex-start; margin-left: var(--s2); }
+
 
 /* ---- Column profile dialog: no card. The body is the dialog's own surface and the content runs the full width and height of it, in two sections split by hairlines (the figures; the most frequent values), on the same 24px gutter as the head and foot. Tokens only: neutral bands, the leader in the accent, NULL / empty in the warning tone (red means danger, so never here).
    The content fades in once, then the value tints grow (transform + opacity only). */
-.dialog.col-profile { width: min(720px, calc(100vw - 2 * var(--s4))); max-height: min(88vh, 800px); display: flex; flex-direction: column; }
+.dialog.col-profile { --phi: 1.618; --ph: min(800px, 92vh, calc((100vw - 2 * var(--s4)) / var(--phi))); width: calc(var(--ph) * var(--phi)); height: var(--ph); display: flex; flex-direction: column; } /* a golden rectangle: width = height x 1.618. The height is the base (800px, or 92% of the window, or whatever keeps the width inside the window) and the width follows from it, so the shape holds at every window size; one fixed size for every column, so the dialog never changes size between fields */
+@media (max-width: 899px) { .dialog.col-profile { width: min(960px, calc(100vw - 2 * var(--s4))); height: auto; max-height: min(92vh, 840px); } } /* a phone or a narrow window is too small for the ratio: the dialog is as wide as the window and as tall as its content */
 .col-profile[open] { display: flex; }
 .col-profile__head { display: flex; align-items: flex-start; gap: var(--s2); padding: var(--s4) calc(var(--s6) - 12px) var(--s4) var(--s6); border-bottom: 1px solid var(--line); } /* right 12px: the X's glyph sits 12px inside its 32px button, so its edge lands on the 24px gutter the title uses on the left */
 .col-profile__titles { flex: 1; min-width: 0; }
@@ -67,34 +94,37 @@
 .col-profile__cell { display: flex; flex-direction: column; flex: 1 0 auto; min-width: 0; /* full width, and the full height the body has */
   animation: fade-in var(--dur) var(--ease-out) backwards; animation-delay: calc(min(var(--i, 0), 8) * 40ms); }
 .col-profile__section { display: grid; gap: var(--s1); align-content: start; min-width: 0; padding: var(--s4) var(--s6); }
-.col-profile__section--top { flex: 1; } /* the last section takes whatever height is left */
-.col-profile__section + .col-profile__section { border-top: 1px solid var(--line); } /* the one divider between the sections, edge to edge */
-.col-profile__section--figures { gap: 0; padding: 0; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: 1fr; } /* the figures are a ruled grid that runs edge to edge: each cell carries the padding, the lines carry the structure. One grid for every figure (the Size and Range rows lay their tiles on it as subgrids), and 1fr rows: every figure is as tall as the tallest, so a tile with a note (Null share) does not make its neighbours shorter */
+.col-profile__panels { flex: 1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); min-width: 0; } /* two equal panels: Statistics left, Most frequent values right */
+.col-profile__panel { display: flex; flex-direction: column; min-width: 0; }
+.col-profile__panel + .col-profile__panel { border-left: 1px solid var(--line); } /* the one vertical divider, head to foot */
+.col-profile__panel-head { margin: 0; padding: var(--s4) var(--s6); font-size: var(--fs-body); line-height: 24px; font-weight: 600; color: var(--ink-2); border-bottom: 1px solid var(--line); } /* both panels open with the same bar, so their rules line up across the divider */
+.col-profile__panel-body { display: grid; gap: var(--s1); align-content: start; padding: var(--s4) var(--s6); }
+.col-profile__section--empty { grid-column: 1 / -1; }
+.col-profile__section + .col-profile__section, .col-profile__panel > .col-profile__section--dist { border-top: 1px solid var(--line); } /* the one divider between the sections, edge to edge */
+.col-profile__section--figures { gap: 0; padding: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: auto; } /* the figures are a ruled two-column grid that runs edge to edge of the left panel: each cell carries the padding, the lines carry the structure. One grid for every figure (each group lays its tiles on it as a subgrid); a row is as tall as its tallest tile, so the two figures side by side are the same height (every figure is one label and one value, so in practice every row is the same) */
 .col-profile__cell--note { flex: none; gap: var(--s2); padding: var(--s2) var(--s6); color: var(--warn-ink); background: var(--warn-bg); border-bottom: 1px solid var(--warn-line); font-size: var(--fs-body); } /* a strip across the top, above the figures it qualifies */
 .col-profile__status { grid-column: 1 / -1; margin: 0; padding: var(--s6) var(--s4); display: flex; align-items: center; justify-content: center; gap: var(--s2); text-align: center; color: var(--ink-3); font-size: var(--fs-body); }
 .col-profile__status--error { color: var(--danger-ink); }
 .col-profile__status--busy { animation: fade-in var(--dur) var(--ease-out) var(--dur-fast) backwards; }
 .col-profile__status--busy .col-profile__glyph { animation: spin 1s linear infinite; }
 .col-profile__glyph { display: inline-flex; align-items: center; flex: none; height: 1.45em; }
-.col-profile__size, .col-profile__range { display: grid; grid-template-columns: subgrid; grid-template-rows: subgrid; grid-column: 1 / -1; grid-row: span 1; } /* the section's three columns and its equal rows, so every vertical rule lines up (Min under Rows, Max under Distinct) and every figure has the same height */
-.col-profile__range { box-shadow: inset 0 1px 0 var(--line); } /* the rule above the Range row is drawn inside its first pixel row, not as a border, so its tiles stay as tall as the Size row's */
-.col-profile__range::after { content: ""; border-left: 1px solid var(--line); } /* the empty third cell still carries its rule */
-.col-profile__tile + .col-profile__tile { border-left: 1px solid var(--line); }
-.col-profile__stats { display: grid; grid-template-columns: subgrid; grid-template-rows: subgrid; grid-column: 1 / -1; grid-row: span var(--rows, 1); box-shadow: inset 0 1px 0 var(--line); } /* the numeric summary: the same three columns, as many rows as it needs; the rule above it is an inset shadow so its tiles stay as tall as the others */
-.col-profile__stats > .col-profile__tile:nth-child(3n+1) { border-left: 0; }
-.col-profile__stats > .col-profile__tile:nth-child(n+4) { box-shadow: inset 0 1px 0 var(--line); }
-.col-profile__range--stack { grid-row: span var(--n, 1); } /* either of Min / Max is long: one under the other, each on the full width and one row of the section's grid (--n tiles, set by column-profile-dialog.js) */
-.col-profile__range--stack .col-profile__tile { grid-column: 1 / -1; }
-.col-profile__range--stack::after { display: none; }
-.col-profile__range--stack .col-profile__tile + .col-profile__tile { border-left: 0; border-top: 1px solid var(--line); }
+.col-profile__group { display: grid; grid-template-columns: subgrid; grid-template-rows: subgrid; grid-column: 1 / -1; grid-row: span var(--rows, 1); } /* a group of figures (the counts; Min and Max; the numeric summary): the panel's two columns, as many rows as it needs (--rows, set by column-profile-dialog.js) */
+.col-profile__group + .col-profile__group { box-shadow: inset 0 1px 0 var(--line); } /* the rule above a group is drawn inside its first pixel row, not as a border, so its tiles stay as tall as the others */
+.col-profile__group > .col-profile__tile:nth-child(2n) { border-left: 1px solid var(--line); }
+.col-profile__group > .col-profile__tile:nth-child(n+3) { box-shadow: inset 0 1px 0 var(--line); }
+.col-profile__group--stack > .col-profile__tile:nth-child(n) { grid-column: 1 / -1; border-left: 0; box-shadow: inset 0 1px 0 var(--line); } /* Min or Max is long: one under the other, each on the full width */
+.col-profile__group--stack > .col-profile__tile:nth-child(1) { box-shadow: none; }
 .col-profile__cell--profile { container: profile / inline-size; }
-@container profile (max-width: 40rem) { /* too narrow for three columns: every figure on its own ruled row */
+@container profile (max-width: 44rem) { /* too narrow for two panels side by side: Most frequent values goes under Statistics */
+  .col-profile__panels { grid-template-columns: minmax(0, 1fr); }
+  .col-profile__panel + .col-profile__panel { border-left: 0; border-top: 1px solid var(--line); }
+}
+@container profile (max-width: 28rem) { /* too narrow for two figure columns: every figure on its own ruled row */
   .col-profile__section--figures { grid-template-columns: minmax(0, 1fr); }
-  .col-profile__size, .col-profile__range { grid-row: span var(--n, 1); }
-  .col-profile__range::after { display: none; }
-  .col-profile__stats { grid-row: span var(--n, 1); }
+  .col-profile__group { grid-row: span var(--n, 1); }
+  .col-profile__group > .col-profile__tile:nth-child(n) { grid-column: 1 / -1; border-left: 0; box-shadow: inset 0 1px 0 var(--line); }
+  .col-profile__group > .col-profile__tile:nth-child(1) { box-shadow: none; }
   .col-profile__tile--blank { display: none; }
-  .col-profile__tile + .col-profile__tile, .col-profile__stats > .col-profile__tile:nth-child(n+4) { border-left: 0; border-top: 1px solid var(--line); box-shadow: none; }
 }
 .col-profile__tile { display: grid; align-content: center; min-width: 0; padding: var(--s4) var(--s6); }
 .col-profile__tile-label, .col-profile__tile-note { font-size: var(--fs-body); color: var(--ink-3); }
@@ -105,12 +135,11 @@
 .col-profile__top + .col-profile__reason { margin-top: var(--s1); } /* on top of the section's 4px gap: 8px below the list */
 .col-profile__h { margin: 0 0 var(--s1); font-size: var(--fs-body); font-weight: 600; color: var(--ink-2); }
 /* Most frequent values: each value is one 32px band; its share of the rows is the tint filling the band from the left, the label and figures sit on top. */
-/* Distribution: one bar per bin, as tall as its count against the fullest bin; the fullest is the accent bar and the caption under the axis says which it is (colour is never the only cue). */
-.col-profile__bins { list-style: none; margin: 0; padding: 0; display: flex; align-items: flex-end; gap: var(--s1); height: 96px; border-bottom: 1px solid var(--line); }
+/* Distribution: one bar per bin, as tall as its count against the fullest bin; one colour (the accent), brighter the fuller the bin (--k, 0..1: smallest..fullest bin); the caption under the axis names the fullest, so colour is never the only cue. */
+.col-profile__bins { list-style: none; margin: 0; padding: 0; display: flex; align-items: flex-end; gap: var(--s1); height: 56px; border-bottom: 1px solid var(--line); }
 .col-profile__bin { flex: 1 1 0; min-width: 0; height: 100%; display: flex; align-items: flex-end; }
-.col-profile__bar { display: block; width: 100%; height: var(--h, 0); min-height: 2px; background: var(--line-2); border-radius: var(--r) var(--r) 0 0; transform-origin: bottom center;
+.col-profile__bar { display: block; width: 100%; height: var(--h, 0); min-height: 2px; background: color-mix(in srgb, var(--accent) calc(20% + var(--k, 1) * 60%), var(--surface)); border-radius: var(--r) var(--r) 0 0; transform-origin: bottom center;
   animation: bar-rise var(--dur-slow) var(--ease-out) backwards; animation-delay: calc(var(--dur) + var(--i, 0) * 20ms); }
-.col-profile__bin--peak .col-profile__bar { background: color-mix(in srgb, var(--accent) 38%, var(--surface-2)); }
 @keyframes bar-rise { from { transform: scaleY(0); } to { transform: none; } }
 .col-profile__axis { display: flex; justify-content: space-between; gap: var(--s2); font-size: var(--fs-body); color: var(--ink-3); font-variant-numeric: tabular-nums; }
 .col-profile__reason--busy { animation: fade-in var(--dur) var(--ease-out) var(--dur-fast) backwards; }
@@ -120,16 +149,14 @@
 .col-profile__top { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s1); }
 .col-profile__row { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto 7ch; align-items: start; gap: var(--s2); min-height: 32px; padding: var(--s1) var(--s2); line-height: 24px;
   border-radius: var(--r); background: var(--surface-2); font-size: var(--fs-body); overflow: hidden; }
-/* The leader — the most frequent real value — is the key point: heavier label and the accent tint. */
+/* The leader — the most frequent real value — is the key point: heavier label. */
 .col-profile__row--lead .col-profile__label { font-weight: 600; }
-.col-profile__row--lead .col-profile__fill { background: color-mix(in srgb, var(--accent) 38%, var(--surface-2)); } /* the one accent in the list: the leader */
 .col-profile__row > :not(.col-profile__fill) { position: relative; }
 .col-profile__label { overflow-wrap: anywhere; color: var(--ink); } /* a long value wraps inside its band (the band grows), never an ellipsis */
-.col-profile__row--null .col-profile__label, .col-profile__row--empty .col-profile__label { color: var(--ink-2); font-style: italic; }
+.col-profile__row--null .col-profile__label, .col-profile__row--empty .col-profile__label, .col-profile__row--other .col-profile__label { color: var(--ink-2); font-style: italic; } /* (NULL), (empty) and Other values are not values of the column: quiet italic */
 @keyframes bar-grow { from { transform: scaleX(0); } to { transform: none; } }
-.col-profile__fill { position: absolute; inset: 0 auto 0 0; width: var(--w, 0); background: var(--line-2); transform-origin: left center;
+.col-profile__fill { position: absolute; inset: 0 auto 0 0; width: var(--w, 0); background: color-mix(in srgb, var(--accent) calc(10% + var(--k, 1) * 28%), var(--surface-2)); /* one colour; brighter the more frequent (--k: least..most frequent of the ten) */ transform-origin: left center;
   animation: bar-grow var(--dur-slow) var(--ease-out) backwards; animation-delay: calc(var(--dur) + var(--i, 0) * 20ms); }
-.col-profile__row--null .col-profile__fill, .col-profile__row--empty .col-profile__fill { background: color-mix(in srgb, var(--warn-line) 55%, var(--surface-2)); } /* absences read as a data-quality caution; the (NULL) / (empty) italic label carries the meaning */
 .col-profile__count { text-align: right; color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
 .col-profile__share { text-align: right; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .col-profile__foot { align-items: center; flex-wrap: wrap; padding-inline: var(--s6); border-top: 1px solid var(--line); } /* head and foot take no fill of their own, only the neutral rule that parts them from the body; wrap whole buttons, never their labels */

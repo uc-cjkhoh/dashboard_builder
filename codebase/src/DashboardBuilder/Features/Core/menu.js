@@ -8,6 +8,7 @@ import { placeMenu, opensContext, nextFocus } from "./context-menu-model.js";
 
 export function wireMenu(button, list, { signal, stayOpen = false } = {}) {
   const items = () => [...list.querySelectorAll('[role^="menuitem"]')];
+  const opensUp = () => getComputedStyle(list).top === "auto"; // a card docked at the foot (Shell/shell.css .canvas__dock) opens upward
   let seq = 0; // a newer open/close supersedes a close still fading out
   const setOpen = (open) => {
     const was = !list.hidden;
@@ -15,10 +16,10 @@ export function wireMenu(button, list, { signal, stayOpen = false } = {}) {
     button.setAttribute("aria-expanded", String(open));
     if (open) {
       list.hidden = false;
-      if (!was) enter(list, { y: -4, scale: .97 });
+      if (!was) enter(list, { y: opensUp() ? 4 : -4, scale: .97 }); // grows from the button: up from below it, down from above it
       (items().find((i) => i.getAttribute("aria-checked") === "true") ?? items()[0])?.focus();
     } else if (was) {
-      exit(list, { y: -2, scale: .98 }).then(() => { if (run === seq) list.hidden = true; });
+      exit(list, { y: opensUp() ? 2 : -2, scale: .98 }).then(() => { if (run === seq) list.hidden = true; });
     }
   };
   button.setAttribute("aria-haspopup", "menu"); button.setAttribute("aria-expanded", "false");

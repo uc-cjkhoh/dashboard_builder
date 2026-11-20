@@ -75,23 +75,26 @@ export function histogramView(h, rows) {
   const bins = Array.isArray(h?.bins) ? h.bins : [];
   const whole = Boolean(h?.whole);
   if (bins.length === 0 || bins.every((b) => !b.count)) return { empty: true, reason: "There are no values to chart.", bars: [], min: null, max: null, peak: null };
-  const peak = Math.max(...bins.map((b) => b.count));
+  const peak = Math.max(...bins.map((b) => b.count)), floor = Math.min(...bins.map((b) => b.count));
   const range = (b) => {
     const lo = formatNumber(b.x0), hi = formatNumber(whole ? b.x1 - 1 : b.x1);
     return whole ? (b.x1 - b.x0 <= 1 || lo === hi ? lo : `${lo}–${hi}`) : `${lo} – ${hi}`;
   };
   const peakAt = bins.findIndex((b) => b.count === peak);
-  const bars = bins.map((b, i) => ({ range: range(b), count: b.count, countText: formatCount(b.count), shareText: formatShare(b.count, rows), height: b.count > 0 ? Math.max(1, Math.round((b.count / peak) * 100)) : 0, peak: i === peakAt }));
+  const bars = bins.map((b, i) => ({ range: range(b), count: b.count, countText: formatCount(b.count), shareText: formatShare(b.count, rows), height: b.count > 0 ? Math.max(1, Math.round((b.count / peak) * 100)) : 0, peak: i === peakAt, tone: toneOf(b.count, floor, peak) }));
   const top = bars[peakAt];
   return { empty: false, reason: null, bars, min: formatNumber(bins[0].x0), max: formatNumber(whole ? bins[bins.length - 1].x1 - 1 : bins[bins.length - 1].x1), peak: `Fullest bin: ${top.range}, ${top.countText} ${peak === 1 ? "row" : "rows"} (${top.shareText})` };
 }
 
 /** Everything the dialog shows, from the server's profile. `custom`: the profile is of a custom SQL card's query, not a catalog table. */
+/** Where a count sits between the smallest and the largest in its set, 0..1 — the brightness of the one accent colour (all equal: full). */
+export function toneOf(count, lo, hi) { return hi > lo ? Math.round(((count - lo) / (hi - lo)) * 100) / 100 : 1; }
+
 export function summarize(p, custom = false) {
   const tiles = [
     { label: "Rows", value: formatCount(p.rows), note: null },
     { label: "Distinct (approx.)", value: formatCount(p.distinct), note: null },
-    { label: "Null share", value: formatShare(p.nulls, p.rows), note: `${formatCount(p.nulls)} null ${p.nulls === 1 ? "row" : "rows"}` },
+    { label: "Null value", value: formatCount(p.nulls), note: null },
   ];
   if (p.min != null) tiles.push({ label: "Min", value: p.min, note: null });
   if (p.max != null) tiles.push({ label: "Max", value: p.max, note: null });
@@ -101,12 +104,17 @@ export function summarize(p, custom = false) {
     ["Mean", sm.mean], ["Median (approx.)", sm.median], ["Std. deviation", sm.stdDev], ["Q1 (approx.)", sm.q1], ["Q3 (approx.)", sm.q3],
   ].map(([label, v]) => ({ label, value: formatNumber(v), note: null })).filter((t) => t.value !== null) : [];
   const role = roleOf(p.category);
+  const counts = p.top.map((t) => t.count), lo = Math.min(...counts), hi = Math.max(...counts);
   const top = p.top.map((t) => {
     const kind = t.value === null ? "null" : t.value === "" ? "empty" : "value";
     const label = kind === "null" ? "(NULL)" : kind === "empty" ? "(empty)" : t.cut ? `${t.value}…` : t.value;
     const share = p.rows > 0 ? (t.count / p.rows) * 100 : 0;
-    return { label, kind, cut: Boolean(t.cut), count: t.count, countText: formatCount(t.count), shareText: formatShare(t.count, p.rows), bar: t.count > 0 ? Math.max(1, Math.round(share)) : 0 };
+    return { label, kind, cut: Boolean(t.cut), count: t.count, countText: formatCount(t.count), shareText: formatShare(t.count, p.rows), bar: t.count > 0 ? Math.max(1, Math.round(share)) : 0, tone: toneOf(t.count, lo, hi) };
   });
+  // The list is the Top N, so its shares only reach 100% when the column has N or fewer groups. The rest of the rows (every group outside the Top N) is one more
+  // line, "Other values", so the list always adds up to every row. Null when the Top N already covers every row.
+  const rest = p.rows - p.top.reduce((n, t) => n + t.count, 0);
+  const other = rest > 0 ? { label: "Other values", kind: "other", cut: false, count: rest, countText: formatCount(rest), shareText: formatShare(rest, p.rows), bar: Math.max(1, Math.round((rest / p.rows) * 100)), tone: 0 } : null;
   const copyValues = p.top.filter((t) => t.value !== null && t.value !== "" && !t.cut).map((t) => t.value).join("\n");
   const cutNote = top.some((t) => t.cut) ? `Values are compared by their first ${PROFILE_LIMITS.valueLength} characters, so values that differ only after that count together.` : null;
   // Why there is nothing (or nothing plain) to show: no rows at all, or every row is NULL / empty. Null when there is data.
@@ -117,5 +125,5 @@ export function summarize(p, custom = false) {
       ? `Every row is ${top.some((t) => t.kind === "null") && top.some((t) => t.kind === "empty") ? "NULL or empty" : top[0].kind === "null" ? "NULL" : "empty"}, so there are no values to list and no Min or Max.`
       : null;
   return {
-    tiles, summary, role, top, cutNote, empty, reason, copyValues };
+    tiles, summary, role, top, other, cutNote, empty, reason, copyValues };
 }

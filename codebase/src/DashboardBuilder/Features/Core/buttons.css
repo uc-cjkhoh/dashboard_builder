@@ -1,18 +1,32 @@
 /* Flat buttons — loaded last. No button has a border: its fill (or, where it has none, the hover wash, the underline or the shadow) carries the edge.
    The `!important` is deliberate: dozens of feature stylesheets give their own buttons a border and state colour, and "any button" means all of them. */
-:root { --btn-fill: color-mix(in srgb, var(--ink) 8%, var(--surface)); --btn-fill-hover: color-mix(in srgb, var(--ink) 14%, var(--surface)); }
+:root {
+  /* Hover and pressed are BRIGHTER than rest, in both schemes. Dark: --ink is light, so more ink = brighter. Light: --ink is dark, so *less* ink =
+     brighter (the 8% grey rest fill lifts toward white). A control that is transparent at rest has nothing lighter to go to on white, so it lifts
+     to a solid fill and gains a hairline (--lift-edge) so the state never matches the surface under it. */
+  --btn-fill: color-mix(in srgb, var(--ink) 8%, var(--surface));
+  --btn-fill-hover: color-mix(in srgb, var(--ink) 4%, var(--surface)); --btn-fill-active: color-mix(in srgb, var(--ink) 2%, var(--surface));
+  --lift: var(--surface); --lift-active: var(--surface); --lift-edge: var(--ink-3); --lift-edge-danger: var(--danger-line); --danger-lift: var(--surface); /* a transparent danger icon button lifts to white with a red hairline: a pink tint would be darker than the surface */
+  --danger-hover: color-mix(in srgb, var(--surface) 55%, var(--danger-bg)); --danger-active: color-mix(in srgb, var(--surface) 85%, var(--danger-bg));
+}
+:root[data-scheme="dark"] {
+  --btn-fill-hover: color-mix(in srgb, var(--ink) 14%, var(--surface)); --btn-fill-active: color-mix(in srgb, var(--ink) 20%, var(--surface));
+  --lift: color-mix(in srgb, var(--ink) 12%, var(--surface)); --lift-active: color-mix(in srgb, var(--ink) 18%, var(--surface));
+  --lift-edge: transparent; --lift-edge-danger: transparent; --danger-lift: var(--danger-hover);
+  --danger-hover: color-mix(in srgb, var(--danger-ink) 16%, var(--danger-bg)); --danger-active: color-mix(in srgb, var(--danger-ink) 24%, var(--danger-bg));
+}
 button, .btn, .iconbtn, .tab, .tab-add, .ws-tool, [role="button"], [role="tab"] { border: 0 !important; }
 
 .btn:not(.btn--primary):not(.btn--danger) { background: var(--btn-fill); }
 .btn:not(.btn--primary):not(.btn--danger):hover:not(:disabled) { background: var(--btn-fill-hover); }
 .btn--danger { background: var(--danger-bg); }
-.btn--danger:hover:not(:disabled) { background: color-mix(in srgb, var(--danger-ink) 16%, var(--danger-bg)); }
+.btn--danger:hover:not(:disabled) { background: var(--danger-hover); outline: 1px solid var(--lift-edge-danger); outline-offset: -1px; }
 
 /* Glass tiers: the frosted fill is the control, not the border. */
 .tab, .tab-add { background: var(--glass-ctl); }
-.tab:hover, .tab-add:hover { background: var(--glass-ctl-hover); }
+.tab:hover:not(.is-active):not([aria-selected="true"]), .tab-add:hover { background: var(--glass-ctl-hover); outline: 1px solid var(--lift-edge); outline-offset: -1px; }
 .glass .sidebar__tool { background: color-mix(in srgb, var(--ink) 9%, var(--glass-ctl)); }
-.glass .sidebar__tool:not(:disabled):hover { background: color-mix(in srgb, var(--ink) 15%, var(--glass-ctl)); }
+.glass .sidebar__tool:not(:disabled):hover { background: var(--glass-ctl-hover) !important; outline: 1px solid var(--lift-edge); outline-offset: -1px; }
 
 /* ---- Polish: one state ladder for every button ------------------------------------------------------------
    rest → hover (deeper fill) → pressed (deeper still, and it sinks 1px) → focus (a neutral wash, below) → disabled (faded, not-allowed).
@@ -24,17 +38,39 @@ button, .btn, .iconbtn, .tab, .tab-add, .ws-tool, [role="button"], [role="tab"] 
 .btn:has(> .icon:first-child) { padding-inline: var(--s2) var(--s4); }
 .btn--primary { font-weight: 600; }
 .btn:not(:disabled):active, .tab:not(:disabled):active, .tab-add:not(:disabled):active { transform: translateY(1px); }
-.btn:not(.btn--primary):not(.btn--danger):not(:disabled):active { background: color-mix(in srgb, var(--ink) 20%, var(--surface)); }
-.btn--danger:not(:disabled):active { background: color-mix(in srgb, var(--danger-ink) 24%, var(--danger-bg)); }
-.btn--primary:not(:disabled):active { background: var(--accent-pressed); }
-.iconbtn:not(:disabled):active { background: color-mix(in srgb, var(--ink) 14%, transparent); transform: scale(.96); }
-.iconbtn--danger:not(:disabled):active { background: color-mix(in srgb, var(--danger-ink) 20%, var(--danger-bg)); }
+.btn:not(.btn--primary):not(.btn--danger):not(:disabled):active { background: var(--btn-fill-active); }
+.btn--danger:not(:disabled):active { background: var(--danger-active); }
+/* Primary: hover and pressed lift toward white; the text switches to its own on-colour where white would fall under 4.5:1 (tokens in core.css). */
+.btn--primary:hover:not(:disabled) { background: var(--accent-hover); color: var(--on-accent-hover); }
+.btn--primary:not(:disabled):active { background: var(--accent-pressed); color: var(--on-accent-pressed); }
+/* Icon buttons are transparent at rest: hover and pressed lift to a solid fill. Excluded: the pill / select / chip clear buttons, which stay flat and turn accent,
+   and the Data Source's own icon buttons (the scope below), which have no hover box: the icon's own colour changes. */
+.iconbtn:not(:disabled):not(.iconbtn--danger):not(.ws-pill .iconbtn):not(.ws-select .iconbtn):not(:is(.entity, [id="model-view"], .sidebar__brand, [id="conn-section"], [id="schema-section"], .dialog--rel, .rows-dialog, .col-profile, .ds-preview, .canvas__dock) .iconbtn):not(.is-active):not([aria-pressed="true"]):not([aria-expanded="true"]):hover { background: var(--lift) !important; outline: 1px solid var(--lift-edge); outline-offset: -1px; }
+.iconbtn:not(:disabled):not(.iconbtn--danger):not(.ws-pill .iconbtn):not(.ws-select .iconbtn):not(:is(.entity, [id="model-view"], .sidebar__brand, [id="conn-section"], [id="schema-section"], .dialog--rel, .rows-dialog, .col-profile, .ds-preview, .canvas__dock) .iconbtn):not(.is-active):not([aria-pressed="true"]):not([aria-expanded="true"]):active { background: var(--lift-active) !important; outline: 1px solid var(--lift-edge); outline-offset: -1px; transform: scale(.96); }
+.iconbtn--danger:not(:disabled):not(:is(.entity, [id="model-view"], .sidebar__brand, [id="conn-section"], [id="schema-section"], .dialog--rel, .rows-dialog, .col-profile, .ds-preview, .canvas__dock) .iconbtn):hover { background: var(--danger-lift) !important; outline: 1px solid var(--lift-edge-danger); outline-offset: -1px; }
+.iconbtn--danger:not(:disabled):not(:is(.entity, [id="model-view"], .sidebar__brand, [id="conn-section"], [id="schema-section"], .dialog--rel, .rows-dialog, .col-profile, .ds-preview, .canvas__dock) .iconbtn):active { background: var(--danger-lift) !important; outline: 1px solid var(--lift-edge-danger); outline-offset: -1px; transform: scale(.96); }
+/* Data Source icon buttons — the cards' caret / ☰ / ✕ / Profile, the sidebar's connection and table-chip buttons and its collapse, the data preview's toolbar, and the
+   dialogs opened from there (relationship, rows, column profile) — show hover with no box: the glyph steps from its muted rest ink to a colour chosen by what the
+   button does (--ib-hover, below), pressed also scales to .96. The dock (Appearance, Fit) keeps the fill and hairline it rests in and changes the glyph only.
+   The hue is a second cue, never the only one: every button keeps its icon and its title / aria-label (golden rule 9), and red stays danger alone (rule 7).
+     --ib-hover default   --ink          move on or put away: close, previous / next, collapse caret, sidebar collapse
+     --accent-ink         the product's own action: open the ☰ menu, inspect (Profile, peek, preview), edit the connection, refresh / re-run, export, Fit, Appearance
+     --ok-ink             add to the model: a table chip's add
+     --warn-ink           ends something recoverable: Disconnect
+     --danger-ink         removes it: a card's ✕, a key pair's remove, a recent connection's remove */
+.entity__menu, .col-row__profile, .table-chip__peek, [id="conn-change"], [id="ds-preview-refresh"], [id="ds-preview-csv"], .join-check__rerun, .canvas__fit, [id="scheme-btn"] { --ib-hover: var(--accent-ink); }
+.table-chip__add { --ib-hover: var(--ok-ink); }
+[id="conn-disconnect"] { --ib-hover: var(--warn-ink); }
+.iconbtn--danger, .key-pairs__rm, .conn-recent__remove { --ib-hover: var(--danger-ink); }
+:is(.entity, [id="model-view"], .sidebar__brand, [id="conn-section"], [id="schema-section"], .dialog--rel, .rows-dialog, .col-profile, .ds-preview) .iconbtn:not(:disabled):is(:hover, :active) { color: var(--ib-hover, var(--ink)); background: transparent !important; outline: 0; }
+.canvas__dock .iconbtn:not(:disabled):is(:hover, :active) { color: var(--ib-hover, var(--ink)); background: var(--surface) !important; }
+:is(.entity, [id="model-view"], .sidebar__brand, [id="conn-section"], [id="schema-section"], .dialog--rel, .rows-dialog, .col-profile, .ds-preview, .canvas__dock) .iconbtn:not(:disabled):active { transform: scale(.96); }
 .menu__item:not(:disabled):active { background: color-mix(in srgb, var(--ink) 12%, transparent); }
-.tab:not(:disabled):active, .tab-add:not(:disabled):active { background: var(--glass-ctl-hover); }
+.tab:not(:disabled):not(.is-active):not([aria-selected="true"]):active, .tab-add:not(:disabled):active { background: var(--glass-ctl-hover); outline: 1px solid var(--lift-edge); outline-offset: -1px; }
 /* Ghost: no fill at rest — a 1px outline for the edge (buttons have no border and no shadow) — and the same fill as a button on hover. */
 .btn.btn--ghost:not(.btn--primary):not(.btn--danger) { background: transparent; outline: 1px solid var(--line-2); outline-offset: -1px; }
-.btn.btn--ghost:not(.btn--primary):not(.btn--danger):hover:not(:disabled) { background: var(--btn-fill); }
-.btn.btn--ghost:not(.btn--primary):not(.btn--danger):active:not(:disabled) { background: var(--btn-fill-hover); }
+.btn.btn--ghost:not(.btn--primary):not(.btn--danger):hover:not(:disabled) { background: var(--lift); outline-color: var(--lift-edge); }
+.btn.btn--ghost:not(.btn--primary):not(.btn--danger):active:not(:disabled) { background: var(--lift-active); outline-color: var(--lift-edge); }
 button:disabled, .btn:disabled, .iconbtn:disabled { cursor: not-allowed; }
 @media (prefers-reduced-motion: reduce) { .btn, .iconbtn, .tab, .tab-add, .menu__item { transition: none; } .btn:active, .iconbtn:active, .tab:active, .tab-add:active { transform: none !important; } }
 
@@ -50,3 +86,12 @@ input, select, textarea, .input, .select, .formula { box-shadow: none !important
   background-image: linear-gradient(color-mix(in srgb, var(--ink) 12%, transparent), color-mix(in srgb, var(--ink) 12%, transparent)); }
 :is(input:not([type="checkbox"]):not([type="radio"]), textarea, .formula):focus-visible {
   background-image: linear-gradient(color-mix(in srgb, var(--ink) 6%, transparent), color-mix(in srgb, var(--ink) 6%, transparent)); }
+
+/* ---- Brighter hover for the feature-sheet buttons (they set their own darker hover) ---------------------------------------------------
+   Buttons that rest transparent or on a glass fill and darken on hover in the light scheme (--surface-2/-3 are darker than white).
+   List rows, menu items, cards and pickers are not here: they are selection washes, not buttons with a fill of their own.
+   Selected / open states keep their own fill. */
+:is(.ws-select__btn, .ws-pages__btn, .ws-drill__crumb, .ws-pick__btn, .xt-all__btn, .xt-toggle, .ws-titleblock__btn, .story-chip, .rel-ghost__no, .toast__close, .ws-tool, .tab__dup):hover:not(:disabled):not(.is-active):not(.is-set):not([aria-selected="true"]):not([aria-pressed="true"]):not([aria-expanded="true"]) {
+  background: var(--glass-ctl-hover) !important; outline: 1px solid var(--lift-edge); outline-offset: -1px; }
+:is(.ws-select__btn, .ws-pages__btn, .ws-drill__crumb, .ws-pick__btn, .xt-all__btn, .xt-toggle, .ws-titleblock__btn, .story-chip, .rel-ghost__no, .toast__close, .ws-tool, .tab__dup):active:not(:disabled):not(.is-active):not(.is-set):not([aria-selected="true"]):not([aria-pressed="true"]):not([aria-expanded="true"]) {
+  background: var(--lift-active) !important; outline: 1px solid var(--lift-edge); outline-offset: -1px; }

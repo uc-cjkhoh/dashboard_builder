@@ -90,18 +90,21 @@
                 <h1 class="sr-only">Data source, worksheets, dashboards and stories</h1>
                 <div class="tabs" id="tabs" role="tablist" aria-label="Data source, worksheets, dashboards and stories"></div>
                 <partial name="~/Features/Workbook/_Workbook.cshtml" />
-                <!-- Appearance (Shell/appearance.js): one card for mode (Light / Dark, kept in this browser), dark look, accent and chart colours (saved with the workbook). -->
-                <div class="menu scheme">
-                    <button type="button" class="iconbtn" id="scheme-btn" aria-controls="scheme-list"
-                            aria-label="Appearance" title="Appearance"><span data-icon="sun"></span></button>
-                    <div class="menu__list" id="scheme-list" role="menu" aria-label="Appearance" hidden></div>
-                </div>
             </div>
 
             <partial name="~/Features/Canvas/_Canvas.cshtml" />
             <partial name="~/Features/Dashboard/_Dashboard.cshtml" />
             <partial name="~/Features/Board/_Board.cshtml" />
             <partial name="~/Features/Story/_Story.cshtml" />
+            <!-- Dock, bottom right over every view: Appearance on top (Shell/appearance.js: one card for mode (Light / Dark, kept in this browser), dark look, accent
+                 and chart colours (saved with the workbook)), Fit all cards below it (Canvas/canvas.js adds it while the Data Source shows cards). -->
+            <div class="canvas__dock" id="canvas-dock">
+                <div class="menu scheme">
+                    <button type="button" class="iconbtn" id="scheme-btn" aria-controls="scheme-list"
+                            aria-label="Appearance" title="Appearance"><span data-icon="sun"></span></button>
+                    <div class="menu__list" id="scheme-list" role="menu" aria-label="Appearance" hidden></div>
+                </div>
+            </div>
         </main>
     </div>
 

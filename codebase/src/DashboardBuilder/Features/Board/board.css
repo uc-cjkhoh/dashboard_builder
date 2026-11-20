@@ -48,7 +48,7 @@
 .board-bar__rangelab { display: inline-flex; align-items: center; gap: var(--s1); }
 .board-bar__range[hidden] { display: none; }
 .board-bar__rangein { width: 88px; font-size: var(--fs-body); }
-.board-scroll { flex: 1; min-height: 0; overflow: auto; padding: var(--s4) var(--s4) var(--s4); scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
+.board-scroll { flex: 1; min-height: 0; overflow: auto; padding: var(--s4) var(--s4) var(--s4); }
 .board-grid { position: relative; width: 100%; }
 /* A fixed size: exactly the chosen box (board.js sets its width and height); the panel scrolls when the window is smaller. */
 .board-grid.is-fixed { flex: none; }

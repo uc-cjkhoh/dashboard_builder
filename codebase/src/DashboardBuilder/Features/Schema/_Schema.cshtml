@@ -1,21 +1,14 @@
-@* Database picker + table list (sidebar). Populated in Schema/schema.js, gated until connected. *@
-<h2 class="sidebar__title" id="db-heading" hidden>Database</h2>
-<section class="sidebar__section sidebar__section--db" hidden id="schema-section" aria-labelledby="db-heading">
-    <label class="table-search db-pick">
-        <span data-icon="database" aria-hidden="true"></span>
-        <select class="select" id="db-select" aria-label="Database"></select>
-    </label>
-</section>
-
-<section class="sidebar__section sidebar__section--grow" hidden id="tables-section" aria-labelledby="tables-title">
-    <h2 class="sidebar__title sidebar__title--next" id="tables-title">Table</h2>
+@* Database tree + search (sidebar). Populated in Schema/schema.js, gated until connected. The heading names the tree for screen readers only. *@
+<h2 class="sidebar__title" id="db-heading" hidden>Databases and tables</h2>
+<section class="sidebar__section sidebar__section--grow" hidden id="schema-section" aria-labelledby="db-heading">
     <div class="bento bento--list">
         <label class="table-search">
             <span data-icon="search" aria-hidden="true"></span>
-            <input type="search" class="input" id="table-search" placeholder="Search tables" aria-label="Search tables"
+            <input type="search" class="input" id="table-search" placeholder="Search tables" aria-label="Search databases and tables"
                    maxlength="100" autocomplete="off" spellcheck="false" />
         </label>
-        <p class="table-list__empty" id="table-empty" hidden>No tables match.</p>
-        <div class="table-list" id="table-list"></div>
+        <p class="table-list__status" id="table-status" role="status" hidden></p>
+        <p class="table-list__empty" id="table-empty" hidden>No matches.</p>
+        <div class="table-list" id="table-list" role="tree" aria-labelledby="db-heading"></div>
     </div>
 </section>

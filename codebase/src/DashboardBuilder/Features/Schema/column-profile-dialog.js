@@ -1,5 +1,5 @@
 // The column profile dialog (DOM only; every rule lives in column-profile-model.js): one field's properties, rows / distinct /
-// null share / min / max tiles and its most frequent values, read-only, from POST .../profile. Opened from a field row on a
+// null value count / min / max tiles (a numeric column: its summary and distribution too) on the left and its most frequent values on the right, read-only, from POST .../profile. Opened from a field row on a
 // canvas card. Escape, Close and the X close it; closing cancels a request still in flight. Text is always set with textContent.
 import { api } from "../Core/api.js";
 import { icon } from "../Core/icons.js";
@@ -81,8 +81,9 @@ const longIn = (tiles) => tiles.some((t) => t.value.length > LONG_FIGURE); // on
 const LONG_FIGURE = 12;  // characters: a group with a longer figure steps from 24px to 16px
 const STACK_RANGE = 18;  // characters: when Min or Max is longer, they stack so each has the full width
 
-// One full-width block (no card) in two sections (figures, then frequent values) split by a hairline; a caveat note, when there is one, is a strip above it,
-// before the figures it qualifies. The field's name, type and role are the title and subtitle, so they are not listed again.
+// One full-width block (no card) in two symmetric panels split by a vertical hairline: Statistics on the left (the figures), Most frequent
+// values on the right (then a numeric column's distribution); a caveat note, when there is one, is a strip above them, before the figures it qualifies. The field's name, type and role are the title and subtitle, so they
+// are not listed again.
 function sections(s, withDistribution = false) {
   const out = [];
   let distribution = null;
@@ -108,44 +109,52 @@ function sections(s, withDistribution = false) {
     line.append(g, document.createTextNode(text)); return line;
   };
   const profile = card("profile");
-  // No rows: nothing to measure, so the block is the reason alone (zeros and a 0% null share would only mislead).
-  if (s.empty) { section(profile, "empty", "Nothing to profile").append(reason(s.reason)); return { cells: out, distribution: null }; }
-  const size = s.tiles.filter((t) => !RANGE.has(t.label)), range = s.tiles.filter((t) => RANGE.has(t.label));
-  const figures = section(profile, "figures", "Figures");
-  const sizeRow = el("div", "col-profile__size"); sizeRow.append(...size.map((t) => stat(t, longIn(size)))); sizeRow.style.setProperty("--n", size.length); figures.append(sizeRow);
-  if (range.length) { const r = el("div", `col-profile__range${range.some((t) => t.value.length > STACK_RANGE) ? " col-profile__range--stack" : ""}`); r.append(...range.map((t) => stat(t, longIn(range)))); r.style.setProperty("--n", range.length); figures.append(r); }
-  if (s.summary.length) {
-    const group = el("div", "col-profile__stats"), cells = s.summary.length, padded = Math.ceil(cells / 3) * 3;
-    group.append(...s.summary.map((t) => stat(t, longIn(s.summary))));
-    for (let i = cells; i < padded; i++) group.append(el("div", "col-profile__tile col-profile__tile--blank")); // an empty cell still carries its rule
-    group.style.setProperty("--n", cells); group.style.setProperty("--rows", padded / 3);
-    figures.append(group);
-  }
+  const panels = el("div", "col-profile__panels"); profile.append(panels);
+  // No rows: nothing to measure, so the block is the reason alone (zeros would only mislead).
+  if (s.empty) { section(panels, "empty", "Nothing to profile").append(reason(s.reason)); return { cells: out, distribution: null }; }
+  // Left panel: Statistics (the ruled two-column grid of figures). Right panel: Most frequent values, then a numeric column's distribution.
+  const stats = el("div", "col-profile__panel col-profile__panel--stats"); stats.append(el("h3", "col-profile__panel-head", "Statistics"));
+  const figures = section(stats, "figures", "Figures");
+  // A group of figures: laid two to a row on the grid's columns, padded with empty ruled cells to a full row; one size per group (if any figure is long, they all step down together).
+  const group = (tiles, stack = false) => {
+    const g = el("div", `col-profile__group${stack ? " col-profile__group--stack" : ""}`), cells = stack ? tiles.length : Math.ceil(tiles.length / 2) * 2;
+    g.append(...tiles.map((t) => stat(t, longIn(tiles))));
+    for (let i = tiles.length; i < cells; i++) g.append(el("div", "col-profile__tile col-profile__tile--blank"));
+    g.style.setProperty("--n", tiles.length); g.style.setProperty("--rows", stack ? tiles.length : cells / 2);
+    figures.append(g);
+  };
+  group(s.tiles.filter((t) => !RANGE.has(t.label)));
+  const range = s.tiles.filter((t) => RANGE.has(t.label));
+  if (range.length) group(range, range.some((t) => t.value.length > STACK_RANGE));
+  if (s.summary.length) group(s.summary);
+  const freq = el("section", "col-profile__panel col-profile__panel--top"); freq.setAttribute("aria-label", "Most frequent values (Top 10)");
+  const freqBody = el("div", "col-profile__panel-body");
+  freq.append(el("h3", "col-profile__panel-head", "Most frequent values (Top 10)"), freqBody);
+  // The distribution is the right panel's second block, under the values: the left panel is the taller one (a ruled row per pair of figures), so putting it there would push the dialog past its height and bring a scrollbar.
   if (withDistribution) {
-    distribution = section(profile, "dist", "Distribution");
+    distribution = section(freq, "dist", "Distribution");
     distribution.append(el("h3", "col-profile__h", "Distribution"));
     const busy = el("p", "col-profile__reason col-profile__reason--busy", "Reading the distribution…"); busy.setAttribute("role", "status");
     const g = el("span", "col-profile__glyph"); g.setAttribute("aria-hidden", "true"); g.append(icon("refresh", { size: 14 })); busy.prepend(g);
     distribution.append(busy);
   }
-  const freq = section(profile, "top", "Most frequent values");
-  freq.append(el("h3", "col-profile__h", "Most frequent values"));
-  if (s.top.length === 0) { freq.append(reason("There are no values to list.")); return { cells: out, distribution }; }
+  panels.append(stats, freq);
+  if (s.top.length === 0) { freqBody.append(reason("There are no values to list.")); return { cells: out, distribution }; }
   const leader = s.top.findIndex((t) => t.kind === "value");
   const list = el("ol", "col-profile__top");
-  for (const [i, t] of s.top.entries()) {
+  for (const [i, t] of (s.other ? [...s.top, s.other] : s.top).entries()) {
     const li = el("li", `col-profile__row col-profile__row--${t.kind}${i === leader ? " col-profile__row--lead" : ""}`);
     const label = el("span", "col-profile__label", t.label); label.title = t.label;
-    const fill = el("span", "col-profile__fill"); fill.setAttribute("aria-hidden", "true"); fill.style.setProperty("--w", `${t.bar}%`); fill.style.setProperty("--i", i);
+    const fill = el("span", "col-profile__fill"); fill.setAttribute("aria-hidden", "true"); fill.style.setProperty("--w", `${t.bar}%`); fill.style.setProperty("--k", t.tone); fill.style.setProperty("--i", i);
     li.append(fill, label, el("span", "col-profile__count", t.countText), el("span", "col-profile__share", t.shareText));
     list.append(li);
   }
-  freq.append(list);
-  if (s.reason) freq.append(reason(s.reason));
+  freqBody.append(list);
+  if (s.reason) freqBody.append(reason(s.reason));
   return { cells: out, distribution };
 }
 
-// The distribution section: bars (one per bin, tallest = the accent), the first and last value under them, the fullest bin in words, and every bin's range and count as
+// The distribution section: bars (one per bin, the accent's brightness follows the count), the first and last value under them, the fullest bin in words, and every bin's range and count as
 // text for assistive tech and the tooltip. Its own error / empty line replaces only the chart, never the figures above.
 function fillDistribution(section, res, rows, custom) {
   const note = (text, glyph) => {
@@ -160,7 +169,7 @@ function fillDistribution(section, res, rows, custom) {
   for (const [i, b] of v.bars.entries()) {
     const li = el("li", `col-profile__bin${b.peak ? " col-profile__bin--peak" : ""}`);
     li.title = `${b.range}: ${b.countText} ${b.count === 1 ? "row" : "rows"} (${b.shareText})`;
-    const bar = el("span", "col-profile__bar"); bar.setAttribute("aria-hidden", "true"); bar.style.setProperty("--h", `${b.height}%`); bar.style.setProperty("--i", i);
+    const bar = el("span", "col-profile__bar"); bar.setAttribute("aria-hidden", "true"); bar.style.setProperty("--h", `${b.height}%`); bar.style.setProperty("--k", b.tone); bar.style.setProperty("--i", i);
     li.append(bar, el("span", "col-profile__sr", li.title));
     list.append(li);
   }

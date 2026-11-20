@@ -12,8 +12,13 @@ import { makeButton, openDialog, closeDialog, confirmDeleteTwice } from "../Core
 import { mountEditor } from "./sql-editor.js";
 
 let seq = 0;
+let opening = false; // set until the dialog is in the page (the saved query may be decided first), then the dialog itself says one is open
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
-const CHECK_DELAY_MS = 800; // after the last keystroke, before the server is asked
+const CHECK_DELAY_MS = 800; // after the last keystroke, before the server is asked (a query that has just opened is asked at once)
+const OPENING = "Opening your query…";
+/** What a saved ClickHouse query opened as (D106), kept for the page's life: deciding takes two translations and four ClickHouse calls, and the answer for the
+ *  same text does not change. Only a decided answer is kept, never a failure. Key: table name + ClickHouse text. */
+const openedAs = new Map();
 const columnsText = (n) => `Valid query · ${n} column${n === 1 ? "" : "s"}`;
 const DIALECTS = [["mysql", "MySQL"], ["clickhouse", "ClickHouse"]];
 const LOSSY_OPEN = "This query uses ClickHouse features MySQL doesn't have, so it opens in ClickHouse syntax. You can still switch to MySQL for an approximation.";
@@ -40,22 +45,32 @@ export function translateMarker(err) {
  * @returns {Promise<HTMLDialogElement>} resolves once the editor is in the dialog
  */
 export async function openSqlDialog({ table, sql, mysql, getDefault, apply, validate, explain, translate }) {
+  // One Edit SQL at a time: a second request (a double click, a key repeat) while one is opening or on screen brings that one forward instead of opening another.
+  const live = document.querySelector("dialog.sql-dialog");
+  if (live || opening) { live?.querySelector(".CodeMirror textarea, textarea, [tabindex]")?.focus?.(); return live ?? null; }
+  opening = true;
   const n = ++seq;
   const dlg = el("dialog", "dialog sql-dialog");
   dlg.setAttribute("aria-labelledby", `sql-title-${n}`);
   const title = el("h2", "dialog__title", `Edit SQL · ${table}`); title.id = `sql-title-${n}`;
   const body = el("div", "dialog__body sql-dialog__body");
+  const frame = el("div", "sql-dialog__frame"); // one code-editor frame: toolbar above the text, verdict, warnings and the translated query below it
+  const bar = el("div", "sql-dialog__bar");
   const host = el("div", "sql-dialog__editor");
+  const readout = el("div", "sql-dialog__readout"); // the verdict at the left; at the right, the way to see the ClickHouse query that will run (MySQL syntax only)
   const status = el("p", "sql-dialog__status"); status.setAttribute("role", "status");
   const notes = el("ul", "sql-dialog__notes"); notes.hidden = true; // differences the translation can't hide: a warning each, never a blocker
-  const preview = el("details", "sql-dialog__preview"); preview.hidden = true;
-  const previewText = el("pre", "sql-dialog__sql");
-  preview.append(el("summary", null, "ClickHouse SQL that will run"), previewText);
+  const previewText = el("pre", "sql-dialog__sql"); previewText.hidden = true; previewText.id = `sql-out-${n}`;
+  previewText.tabIndex = 0; previewText.setAttribute("role", "region"); previewText.setAttribute("aria-label", "ClickHouse SQL that will run"); // focusable, so a long query can be scrolled by keyboard
+  const peek = el("button", "sql-dialog__peek"); peek.type = "button"; peek.hidden = true; peek.setAttribute("aria-controls", previewText.id);
+  const chev = el("span", "sql-dialog__chev"); chev.setAttribute("aria-hidden", "true"); chev.append(icon("chevron-right", { size: 14 }));
+  peek.append(chev, document.createTextNode("ClickHouse SQL"));
+  readout.append(status, peek);
   const help = el("p", "sql-dialog__help", "Ctrl+Enter saves. Shift+Alt+F formats. Tab indents; Ctrl+M makes Tab move focus instead."); help.id = "sql-editor-help";
-  body.append(host, status, notes, preview, help);
+  frame.append(bar, host, readout, notes, previewText);
+  body.append(frame, help);
 
   const foot = el("div", "dialog__foot sql-dialog__foot");
-  const tools = el("div", "sql-dialog__tools");
   const seg = el("div", "seg"); seg.setAttribute("role", "radiogroup"); seg.setAttribute("aria-label", "SQL syntax");
   const radios = {};
   for (const [value, text] of DIALECTS) {
@@ -65,12 +80,13 @@ export async function openSqlDialog({ table, sql, mysql, getDefault, apply, vali
   }
   // The selected / unavailable look follows these classes (set from the radios' state, whoever changed it).
   function syncSeg() { for (const r of Object.values(radios)) { r.parentElement.classList.toggle("is-on", r.checked); r.parentElement.classList.toggle("is-off", r.disabled); } }
-  const reset = makeButton("Reset to default", "btn");
-  const format = makeButton("Format", "btn"); format.title = "Lay the query out (Shift+Alt+F)";
-  tools.append(seg, reset, format);
+  const reset = makeButton("Reset to default", "btn btn--ghost"); // ghost: outlined like the switch beside it, readable on the grey toolbar
+  const format = makeButton("Format", "btn btn--ghost"); format.title = "Lay the query out (Shift+Alt+F)";
+  const acts = el("div", "sql-dialog__acts"); acts.append(reset, format); // what to do with the text; wraps as one group when the bar is narrow
+  bar.append(seg, acts); // the editor's own controls: the syntax it is written in, and what to do with its text
   const cancel = makeButton("Cancel", "btn");
   const save = makeButton("Save", "btn btn--primary");
-  foot.append(tools, cancel, save);
+  foot.append(cancel, save); // the dialog's decision: nothing else shares this row
   dlg.append(title, body, foot);
   document.body.append(dlg);
 
@@ -86,7 +102,11 @@ export async function openSqlDialog({ table, sql, mysql, getDefault, apply, vali
     notes.replaceChildren(...(list ?? []).map((t) => { const li = el("li"); const g = el("span", "sql-dialog__glyph"); g.setAttribute("aria-hidden", "true"); g.append(icon("warning", { size: 14 })); li.append(g, document.createTextNode(t)); return li; }));
     notes.hidden = !list?.length || dialect !== "mysql";
   };
-  const showPreview = (ch) => { preview.hidden = !ch || dialect !== "mysql"; previewText.textContent = ch ?? ""; };
+  let peekOpen = false; // kept while the button is hidden, so the panel comes back as it was
+  const syncPeek = () => { const on = !peek.hidden && peekOpen; previewText.hidden = !on; peek.setAttribute("aria-expanded", String(on)); peek.title = on ? "Hide the ClickHouse SQL" : "Show the ClickHouse SQL that will run"; };
+  const showPreview = (ch) => { peek.hidden = !ch || dialect !== "mysql"; previewText.textContent = ch ?? ""; syncPeek(); };
+  const openPreview = () => { peekOpen = true; syncPeek(); };
+  peek.addEventListener("click", () => { peekOpen = !peekOpen; syncPeek(); });
 
   let editor = null, dialect = "mysql", checkTimer = 0, ctl = null, ticket = 0, lastOk = null, closed = false, busy = false;
   const pairs = []; // { mysql, ch } texts known to mean the same, so a round trip gives back exactly what was there (MySQL text is never turned back into ClickHouse by guesswork)
@@ -128,8 +148,8 @@ export async function openSqlDialog({ table, sql, mysql, getDefault, apply, vali
     say("error", TRANSLATOR_DOWN);
   }
 
-  // On every change: instant checks first; only a clean text goes further (after a pause), and only the latest answer counts.
-  const onChange = (text) => {
+  // On every change: instant checks first; only a clean text goes further (after a pause while typing, at once when `delay` is 0), and only the latest answer counts.
+  const check = (text, delay) => {
     clearTimeout(checkTimer); ctl?.abort(); ticket++;
     if (!(lastOk && text === lastOk.text && dialect === lastOk.dialect)) { showPreview(null); showNotes(null); } // the panel and notes say what the text means now: hidden until it is known again
     const local = listProblems(text);
@@ -138,8 +158,9 @@ export async function openSqlDialog({ table, sql, mysql, getDefault, apply, vali
     if (!text.trim()) { say("", ""); showPreview(null); return; }
     if (lastOk && text === lastOk.text && dialect === lastOk.dialect) { say("ok", columnsText(lastOk.count)); showPreview(lastOk.ch); showNotes(lastOk.notes); return; }
     say("busy", dialect === "mysql" ? "Translating and checking with ClickHouse…" : "Checking with ClickHouse…");
-    checkTimer = setTimeout(() => deepCheck(text), CHECK_DELAY_MS);
+    if (delay) checkTimer = setTimeout(() => deepCheck(text), delay); else deepCheck(text);
   };
+  const onChange = (text) => check(text, CHECK_DELAY_MS);
   async function deepCheck(text) {
     const mine = ++ticket;
     ctl = new AbortController();
@@ -150,7 +171,7 @@ export async function openSqlDialog({ table, sql, mysql, getDefault, apply, vali
         if (mine !== ticket || closed) return;
         lastTranslated = ch;
         const back = listProblems(ch);
-        if (back.length) { showPreview(ch); preview.open = true; say("error", `The translated ClickHouse query is refused: ${back[0].message}`); return; }
+        if (back.length) { showPreview(ch); openPreview(); say("error", `The translated ClickHouse query is refused: ${back[0].message}`); return; }
       }
       const { columns } = await validate(ch, ctl.signal);
       if (mine !== ticket || closed) return;
@@ -178,7 +199,7 @@ export async function openSqlDialog({ table, sql, mysql, getDefault, apply, vali
     editor.setProblems([]); // ClickHouse refused the translated query: its positions belong to the other text, so the words only
     const refused = err.field === "source.sql"; // from ClickHouse (a translator or key-column message has no such field): it is about the translated query
     say("error", refused ? `ClickHouse refused the translated query: ${err.message}` : err.message);
-    if (refused && lastTranslated) { showPreview(lastTranslated); preview.open = true; }
+    if (refused && lastTranslated) { showPreview(lastTranslated); openPreview(); }
   }
   let lastTranslated = null;
 
@@ -200,7 +221,7 @@ export async function openSqlDialog({ table, sql, mysql, getDefault, apply, vali
   dlg.addEventListener("cancel", (e) => { e.preventDefault(); requestClose(); });
   reset.addEventListener("click", async () => {
     reset.disabled = true;
-    try { editor.setValue(await getDefault()); onChange(editor.getValue()); editor.focus(); } finally { reset.disabled = false; }
+    try { editor.replaceValue(await getDefault()); onChange(editor.getValue()); editor.focus(); say("", "Reset to the table's query. Ctrl+Z undoes it."); } finally { reset.disabled = false; } // a replace, not a setValue: the old text stays one Ctrl+Z away
   });
   format.addEventListener("click", async () => { format.disabled = true; try { await editor.format(); } finally { format.disabled = false; editor.focus(); } });
 
@@ -246,7 +267,7 @@ export async function openSqlDialog({ table, sql, mysql, getDefault, apply, vali
       if (dialect === "mysql") {
         ch = await convert(text, "mysql", "clickhouse");
         const back = listProblems(ch);
-        if (back.length) { showPreview(ch); preview.open = true; throw new Error(`The translated ClickHouse query is refused: ${back[0].message}`); }
+        if (back.length) { showPreview(ch); openPreview(); throw new Error(`The translated ClickHouse query is refused: ${back[0].message}`); }
         lastTranslated = ch;
       }
       const made = pairs.find((p) => p.mysql === text && p.derived); // MySQL text that is only our translation of the ClickHouse query: nothing was written in MySQL
@@ -258,24 +279,49 @@ export async function openSqlDialog({ table, sql, mysql, getDefault, apply, vali
   save.addEventListener("click", submit);
 
   // --- open: the card's query in MySQL (what was written, else translated); in ClickHouse syntax when that can't be done ---
-  let shown = sql, shownDialect = "clickhouse", openNote = null;
-  if (mysql != null) { shown = mysql; shownDialect = "mysql"; remember(mysql, sql); }
-  else {
+  /** What to show: { shown, shownDialect, openNote }. Known at once when the MySQL text was kept or this query has opened before; else it takes a translation and
+   *  some ClickHouse calls (the dialog is already on screen by then). */
+  async function decideOpen() {
+    if (mysql != null) { remember(mysql, sql); return { shown: mysql, shownDialect: "mysql", openNote: null }; }
+    const key = `${table}\u0000${sql}`;
+    const known = openedAs.get(key);
+    if (known) { if (known.shownDialect === "mysql") remember(known.shown, sql, true); return known; }
     try {
-      shown = await convert(sql, "clickhouse", "mysql"); shownDialect = "mysql";
-      if (!(await keepsMeaning(sql, shown))) { shown = sql; shownDialect = "clickhouse"; openNote = LOSSY_OPEN; pairs.length = 0; } // the guess would not mean the same: show the real thing
-    } catch (err) { openNote = translatorDown(err) ? TRANSLATOR_DOWN : `Shown in ClickHouse syntax: ${err.message}`; if (translatorDown(err)) { radios.mysql.disabled = true; radios.mysql.parentElement.title = TRANSLATOR_DOWN; } }
+      const my = await convert(sql, "clickhouse", "mysql");
+      if (!(await keepsMeaning(sql, my))) { pairs.length = 0; const d = { shown: sql, shownDialect: "clickhouse", openNote: LOSSY_OPEN }; openedAs.set(key, d); return d; } // the guess would not mean the same: show the real thing
+      const d = { shown: my, shownDialect: "mysql", openNote: null }; openedAs.set(key, d); return d;
+    } catch (err) {
+      if (translatorDown(err)) { radios.mysql.disabled = true; radios.mysql.parentElement.title = TRANSLATOR_DOWN; }
+      return { shown: sql, shownDialect: "clickhouse", openNote: translatorDown(err) ? TRANSLATOR_DOWN : `Shown in ClickHouse syntax: ${err.message}` };
+    }
   }
-  dialect = shownDialect; radios[dialect].checked = true; syncSeg();
+  const hold = (on) => { busy = on; save.disabled = reset.disabled = format.disabled = on; }; // nothing to save, reset or format until the text is there
+  const instant = mysql != null || openedAs.has(`${table}\u0000${sql}`);
+  const deciding = instant ? null : decideOpen(); // started now, so it runs while the dialog opens and the editor files load
+  let first;
+  try { first = instant ? await decideOpen() : { shown: "", shownDialect: "mysql", openNote: null }; } finally { opening = false; } // openDialog follows with no await between, so no gap
+  hold(true);
+  if (deciding) say("busy", OPENING);
+  dialect = first.shownDialect; radios[dialect].checked = true; syncSeg();
   openDialog(dlg);
   editor = await mountEditor(host, {
-    value: shown, dialect, onChange, onSubmit: submit, onEscape: requestClose, label: "SQL query",
+    value: first.shown, dialect, onChange, onSubmit: submit, onEscape: requestClose, label: "SQL query",
     onNotice: (t) => say(/^Can't|could not/.test(t) ? "error" : "", t), // a notice sits in the status line until the next change
   });
+  if (closed) { editor.destroy(); return dlg; } // closed while the editor files were loading
+  if (deciding) {
+    editor.setReadOnly(true);
+    first = await deciding;
+    if (closed) return dlg;
+    dialect = first.shownDialect; radios[dialect].checked = true; editor.setDialect(dialect); editor.setValue(first.shown); syncSeg();
+    editor.setReadOnly(false);
+  }
+  hold(false);
   opened = editor.getValue();
   if (!editor.rich) format.hidden = true; // the plain fallback can't format
   editor.focus();
-  onChange(editor.getValue()); // a saved query is checked as soon as it opens
-  if (openNote) say(openNote === LOSSY_OPEN ? "warn" : "error", openNote);
+  // A saved query is checked as soon as it opens, with no typing pause; when a note explains how it opened, the old pause keeps that note readable first.
+  check(editor.getValue(), first.openNote ? CHECK_DELAY_MS : 0);
+  if (first.openNote) say(first.openNote === LOSSY_OPEN ? "warn" : "error", first.openNote);
   return dlg;
 }

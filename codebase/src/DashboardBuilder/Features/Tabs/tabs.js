@@ -92,6 +92,7 @@ export function initTabs() {
     close.type = "button";
     close.className = "tab__close";
     close.setAttribute("aria-label", `Close ${tab.name}`);
+    close.title = `Close ${tab.name}`;
     close.append(icon("close", { size: 14 }));
     close.addEventListener("click", (event) => { event.stopPropagation(); requestClose(tab); });
 

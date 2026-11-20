@@ -10,6 +10,7 @@ import { api } from "../Core/api.js";
 import { icon } from "../Core/icons.js";
 import { entities, bus, emit, isModelActive } from "../Core/store.js";
 import { clampHeight } from "../Core/edge-resize.js";
+import { exit } from "../Core/motion.js";
 import { entityRowsQuery, rowsSummary, anyCellCut, CUT_NOTE, canPage, pageState, pageFromInput, DEFAULT_LIMIT } from "../Rows/rows-model.js";
 import { rowsTable, downloadRowsCsv } from "../Rows/rows-dialog.js";
 import { sizeColumns, widthMemory } from "./preview-columns.js";
@@ -111,7 +112,18 @@ function mark(id, on) {
 function sync() {
   const formOpen = !(document.getElementById("conn-form")?.hidden ?? true);
   const visible = Boolean(currentId) && isModelActive() && !formOpen;
+  const run = ++syncRun; // latest wins: a reopen during the exit below cancels the hide
   if (panel.hidden === !visible) return;
+  if (!visible) { // leaving: the panel drops 8px and fades (--dur-exit) before the ground takes its height back
+    panel.inert = true;
+    exit(panel, { y: 8 }).then(() => { panel.inert = false; if (run === syncRun) commit(false); });
+    return;
+  }
+  commit(true);
+}
+
+let syncRun = 0;
+function commit(visible) {
   panel.hidden = !visible;
   main.classList.toggle("has-ds-preview", visible);
   if (visible) { setHeight(height); if (unsized?.table.isConnected) size(unsized); }

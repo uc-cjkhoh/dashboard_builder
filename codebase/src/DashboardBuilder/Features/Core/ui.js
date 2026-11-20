@@ -29,6 +29,7 @@ export function toast(message, kind = "info") {
     const close = makeButton("", "toast__close");
     close.append(icon("close", { size: 14 }));
     close.setAttribute("aria-label", "Dismiss");
+    close.title = "Dismiss";
     close.addEventListener("click", () => hide(el));
     el.replaceChildren(toastText, close);
   }

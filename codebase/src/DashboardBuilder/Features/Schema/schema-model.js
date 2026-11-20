@@ -1,7 +1,8 @@
-// Pure rules for the schema browser (no DOM): which databases are system ones, and the last database picked per server.
-// tests/js/schema-model.test.mjs. The memory holds only a database name per host/port/user — no secrets.
+// Pure rules for the schema tree (no DOM): which databases are system ones, and which databases a server's tree has open.
+// tests/js/schema-model.test.mjs. The memory holds only database names per host/port/user — no secrets.
 const SYSTEM = new Set(["system", "information_schema"]);
-export const MAX_REMEMBERED = 20;
+export const MAX_REMEMBERED = 20; // servers kept
+export const MAX_OPEN = 50;       // open databases kept per server
 
 export function splitDatabases(list) {
   const user = [], system = [];
@@ -11,20 +12,25 @@ export function splitDatabases(list) {
 
 export const dbMemoryKey = (v) => `${v.host}|${v.port}|${v.user}`;
 
-export const sanitizeDbMemory = (m) => (m && typeof m === "object" && !Array.isArray(m)
-  ? Object.fromEntries(Object.entries(m).filter(([, v]) => typeof v === "string" && v !== "").slice(-MAX_REMEMBERED))
+const cleanState = (s) => ({
+  open: [...new Set((Array.isArray(s?.open) ? s.open : []).filter((n) => typeof n === "string" && n !== ""))].slice(-MAX_OPEN),
+  system: s?.system === true,
+});
+
+/** Stored memory → `{ "host|port|user": { open: [names], system: boolean } }`, cleaned and bounded. */
+export const sanitizeOpenMemory = (m) => (m && typeof m === "object" && !Array.isArray(m)
+  ? Object.fromEntries(Object.entries(m).filter(([, v]) => v && typeof v === "object" && !Array.isArray(v)).map(([k, v]) => [k, cleanState(v)]).slice(-MAX_REMEMBERED))
   : {});
 
-export function rememberDb(m, view, db) {
-  const next = { ...sanitizeDbMemory(m) };
+export function rememberOpen(m, view, state) {
+  const next = { ...sanitizeOpenMemory(m) };
   const key = dbMemoryKey(view);
-  delete next[key]; // newest last, so the oldest entries fall off first
-  next[key] = db;
-  return sanitizeDbMemory(next);
+  delete next[key]; // newest last, so the oldest servers fall off first
+  next[key] = cleanState(state);
+  return sanitizeOpenMemory(next);
 }
 
-/** The remembered database for this server if it is still in `dbs`, else "". */
-export function recallDb(m, view, dbs) {
-  const db = sanitizeDbMemory(m)[dbMemoryKey(view)];
-  return db && dbs.includes(db) ? db : "";
+/** The open set remembered for this server, or null when it has none (a first visit). */
+export function recallOpen(m, view) {
+  return sanitizeOpenMemory(m)[dbMemoryKey(view)] ?? null;
 }

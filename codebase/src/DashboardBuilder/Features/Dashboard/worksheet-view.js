@@ -208,7 +208,7 @@ export function createWorksheetView(container, getContext, options = {}) {
     const m = s.marks ?? {};
     const marksInPlay = Boolean(m.detail?.length || m.size || m.label || m.tooltip?.length || m.shape || m.path || m.angle || s.color?.length);
     if (!s.columns.length && !s.rows.length && !colorInPlay && !drillInPlay && !marksInPlay) {
-      container.replaceChildren(missingNote ? warn(missingNote) : hint("Drag fields onto Columns and Rows to build a chart — categorical fields group, numeric fields aggregate."));
+      container.replaceChildren(missingNote ? warn(missingNote) : hint("Drag fields onto Columns and Rows to build a chart — categorical fields group, numeric fields aggregate.", true));
       return;
     }
     const cctx = calcContext(c.plan);

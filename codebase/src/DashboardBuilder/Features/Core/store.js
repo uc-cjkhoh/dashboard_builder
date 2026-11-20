@@ -15,7 +15,7 @@
 //
 // entities:      id -> { id, db, table, x, y, columns, el }   (the shared model)
 // relationships: id -> { id, from:{entityId,column}, to:{entityId,column}, cardinality }
-// bus events:    entity:moved / entity:removed / rel:changed / canvas:zoomed  (model),
+// bus events:    entity:moved / entity:collapsing / entity:removed / rel:changed / canvas:zoomed  (model),
 //                view:changed / tabs:changed                                    (the strip + active view),
 //                worksheet:changed {id}  (a worksheet's sheet was replaced),
 //                dashboard:changed {id}  (a dashboard's widgets changed: layout, text, add, remove),

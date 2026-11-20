@@ -1,6 +1,6 @@
-// Plain-language description of a relationship (pure, no DOM). Feeds the "Relationships" card on the Data Source.
+// Plain-language description of a relationship (pure, no DOM). Feeds the relationship dialog's "What this link does" block, which rewrites it as the picks change.
 // Written for a non-technical reader: every sentence names the table and column ("orders.user_id"), never "FROM/TO", "cardinality" or "join".
-// Built for people who skim: the closed card row says the tables and "one to many" in words; the body is short lines under short titles.
+// Built for people who skim: short lines, each saying what it is about.
 // A relationship runs FROM → TO; cardinality "1:N" means one FROM row relates to many TO rows.
 
 /** `t`, `u`: the two table names; `a`, `b`: their key labels, e.g. "orders.user_id" (a compound key reads "orders.user_id + orders.day").
@@ -12,7 +12,7 @@ const MATCH = {
   "N:M": (t, u) => `Many ${t} rows can match many ${u} rows.`,
 };
 
-/** The relationship in three or four plain words, for the card's one-line title (the canvas badge keeps the short "1:N"). */
+/** The relationship in three or four plain words (the canvas badge keeps the short "1:N"). */
 const KIND = { "1:1": "one to one", "1:N": "one to many", "N:1": "many to one", "N:M": "many to many" };
 export const kindWords = (cardinality) => KIND[cardinality] ?? KIND["N:M"];
 
@@ -32,15 +32,14 @@ export function describeRelationship(rel, fromTable, toTable) {
     `${(MATCH[rel.cardinality] ?? MATCH["N:M"])(fromTable, toTable)} Matched on ${label(fromTable, "from")} and ${label(toTable, "to")}.`,
     keepSentence(rel.joinType, fromTable, toTable, rel.joinFixed),
   ];
-  const heads = ["How rows match", "Rows shown"]; // parallel to sentences: a short title naming each paragraph's purpose
   const tones = ["", ""]; // parallel to sentences: "warn" = a caution (prefixed "Heads up:", never colour alone), "ok" = reassurance
   if (rel.aggregateFirst === true) {
-    sentences.push("Each table is added up first, so nothing is counted twice.");
-    tones.push("ok", ""); heads.push("No double counting", "Filtering");
+    sentences.push("Each table is totalled by the key first, so nothing is counted twice.");
+    tones.push("ok", "");
     sentences.push(rel.filterDirection === "single" ? "Filtering one table does not change the other." : `Filtering ${fromTable} also filters ${toTable}, and the other way around.`);
   } else if (rel.cardinality === "1:N" || rel.cardinality === "N:M")
-    tones.push("warn"), heads.push("Double counting"), sentences.push(`Heads up: totals from ${fromTable} may be counted more than once.`);
+    tones.push("warn"), sentences.push(`Heads up: totals from ${fromTable} may be counted more than once. Turn on Totals to count each once.`);
   // refs: the names worth marking in the text (table.column labels and table names), longest first so "a.id" wins over "a".
   const refs = [...new Set([label(fromTable, "from"), label(toTable, "to"), ...pairs.flatMap((p) => [`${fromTable}.${p.from}`, `${toTable}.${p.to}`]), fromTable, toTable])].sort((x, y) => y.length - x.length);
-  return { title: `${fromTable} → ${toTable}`, kind: kindWords(rel.cardinality), heads, sentences, tones, refs };
+  return { title: `${fromTable} → ${toTable}`, kind: kindWords(rel.cardinality), sentences, tones, refs };
 }

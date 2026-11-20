@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { profileFailure, profileRequest, formatCount, formatShare, formatNumber, histogramRequest, histogramView, distributionFailure, roleOf, summarize, PROFILE_LIMITS } from "../../src/DashboardBuilder/Features/Schema/column-profile-model.js";
+import { profileFailure, profileRequest, formatCount, formatShare, formatNumber, histogramRequest, histogramView, distributionFailure, roleOf, summarize, toneOf, PROFILE_LIMITS } from "../../src/DashboardBuilder/Features/Schema/column-profile-model.js";
 
 test("limits mirror the server (DefaultProfileTop / MaxProfileTop / MaxColumnName)", () => {
   assert.deepEqual({ ...PROFILE_LIMITS }, { top: 10, maxTop: 50, maxColumn: 1000, valueLength: 100, bins: 20 });
@@ -35,16 +35,16 @@ const P = (over = {}) => ({ column: "grp", type: "Nullable(String)", category: "
 
 test("summarize: tiles and honest wording", () => {
   const s = summarize(P());
-  assert.deepEqual(s.tiles.map((t) => [t.label, t.value]), [["Rows", "6"], ["Distinct (approx.)", "3"], ["Null share", "17%"]]);
+  assert.deepEqual(s.tiles.map((t) => [t.label, t.value]), [["Rows", "6"], ["Distinct (approx.)", "3"], ["Null value", "1"]]);
   assert.equal(s.tiles[1].note, null);
-  assert.equal(s.tiles[2].note, "1 null row");
+  assert.equal(s.tiles[2].note, null);
   assert.equal(s.role, "dimension");
   assert.equal(s.details, undefined); // name and type are the dialog's title and subtitle, never a second time
 });
 test("summarize: min/max tiles only when present; a large table reads like any other", () => {
   const s = summarize(P({ rows: 1000000, nulls: 0, distinct: 5000, category: "numeric", min: "5", max: "20" }));
   assert.equal(s.cutNote, null);
-  assert.deepEqual(s.tiles.map((t) => t.label), ["Rows", "Distinct (approx.)", "Null share", "Min", "Max"]);
+  assert.deepEqual(s.tiles.map((t) => t.label), ["Rows", "Distinct (approx.)", "Null value", "Min", "Max"]);
   assert.equal(s.tiles[0].note, null);
   assert.equal(s.sampleNote, undefined);
   assert.equal(s.role, "measure");
@@ -53,12 +53,20 @@ test("summarize: top rows carry labels, counts, shares and bar widths; NULL and 
   const s = summarize(P({ top: [...P().top, { value: "x".repeat(100), count: 1, cut: true }] }));
   assert.deepEqual(s.top.map((t) => [t.label, t.kind, t.countText, t.shareText]),
     [["a", "value", "2", "33%"], ["b", "value", "2", "33%"], ["(empty)", "empty", "1", "17%"], ["(NULL)", "null", "1", "17%"], ["x".repeat(100) + "…", "value", "1", "17%"]]);
-  assert.equal(s.top[0].bar, 33); assert.equal(s.top[4].cut, true);
+  assert.equal(s.top[0].bar, 33); assert.equal(s.top[0].tone, 1); assert.equal(Math.min(...s.top.map((t) => t.tone)), 0); assert.equal(s.top[4].cut, true);
   assert.match(s.cutNote, /first 100 characters.*differ only after/);
 });
-test("summarize: an empty table has no tiles' shares to divide and no top values", () => {
+test("summarize: Other values closes the list at every row when the Top N leaves some out", () => {
+  const s = summarize(P({ rows: 100, top: [{ value: "a", count: 40, cut: false }, { value: "b", count: 30, cut: false }] }));
+  assert.deepEqual([s.other.label, s.other.kind, s.other.countText, s.other.shareText, s.other.bar], ["Other values", "other", "30", "30%", 30]);
+  assert.equal(s.top.length, 2); // the Top N itself is unchanged (copy, leader, "every row is NULL" all read it)
+  assert.equal(s.top.reduce((n, t) => n + t.count, 0) + s.other.count, 100);
+  assert.equal(summarize(P()).other, null); // the Top N already covers every row
+  assert.equal(summarize(P({ rows: 0, nulls: 0, distinct: 0, top: [] })).other, null);
+});
+test("summarize: an empty table has nothing to divide and no top values", () => {
   const s = summarize(P({ rows: 0, nulls: 0, distinct: 0, top: [] }));
-  assert.equal(s.tiles[2].value, "0%"); assert.equal(s.top.length, 0); assert.equal(s.empty, true);
+  assert.equal(s.tiles[2].value, "0"); assert.equal(s.top.length, 0); assert.equal(s.empty, true);
 });
 test("copy text: the plain non-null values (cut values left out)", () => {
   const s = summarize(P({ top: [...P().top, { value: "x".repeat(100), count: 1, cut: true }] }));
@@ -110,7 +118,7 @@ test("formatNumber: short, never a long float, never a rounded-away integer part
 const NUM = (over = {}) => P({ column: "n", type: "Int32", category: "numeric", rows: 10, nulls: 0, distinct: 10, min: "1", max: "10", summary: { mean: 5.5, median: 5.5, stdDev: 3.0276503540974917, q1: 3, q3: 8 }, ...over });
 test("summarize: a numeric summary is its own group, never among the count or range tiles; text and date columns have none", () => {
   const s = summarize(NUM());
-  assert.deepEqual(s.tiles.map((t) => t.label), ["Rows", "Distinct (approx.)", "Null share", "Min", "Max"]);
+  assert.deepEqual(s.tiles.map((t) => t.label), ["Rows", "Distinct (approx.)", "Null value", "Min", "Max"]);
   assert.deepEqual(s.summary.map((t) => [t.label, t.value]), [["Mean", "5.5"], ["Median (approx.)", "5.5"], ["Std. deviation", "3.03"], ["Q1 (approx.)", "3"], ["Q3 (approx.)", "8"]]);
   assert.deepEqual(summarize(P()).summary, []);
   assert.deepEqual(summarize(P({ category: "temporal", min: "2020-01-01", max: "2020-12-31" })).summary, []);
@@ -141,4 +149,10 @@ test("distributionFailure: a timeout is reworded, anything else passes through",
   assert.match(distributionFailure({ status: 504, message: "x" }), /ran past the time limit/);
   assert.match(distributionFailure({ status: 504, message: "x" }, true), /Edit SQL/);
   assert.equal(distributionFailure({ status: 502, message: "Down." }), "Down.");
+});
+
+test("toneOf: 0 at the smallest count, 1 at the largest, 1 when all are equal; histogramView bars carry it", () => {
+  assert.equal(toneOf(5, 5, 25), 0); assert.equal(toneOf(25, 5, 25), 1); assert.equal(toneOf(15, 5, 25), 0.5); assert.equal(toneOf(7, 7, 7), 1);
+  const v = histogramView({ bins: [{ x0: 0, x1: 10, count: 5 }, { x0: 10, x1: 20, count: 20 }] }, 25);
+  assert.deepEqual(v.bars.map((b) => b.tone), [0, 1]);
 });

@@ -69,7 +69,7 @@
    The user's own collapsed choice is untouched and returns with the Data Source tab. */
 .sidebar__tools { display: none; gap: var(--s2); }
 .app[data-view="sheet"] .sidebar__tools { display: flex; }
-.app[data-view="sheet"] .sidebar__title, .app[data-view="board"] .sidebar__title, .app[data-view="sheet"] .sidebar__divider, .app[data-view="board"] .sidebar__divider, .app[data-view="sheet"] .sidebar__section--conn, .app[data-view="sheet"] #schema-section, .app[data-view="sheet"] #tables-section { display: none; }
+.app[data-view="sheet"] .sidebar__title, .app[data-view="board"] .sidebar__title, .app[data-view="sheet"] .sidebar__divider, .app[data-view="board"] .sidebar__divider, .app[data-view="sheet"] .sidebar__section--conn, .app[data-view="sheet"] #schema-section { display: none; }
 .app[data-view="board"], .app[data-view="sheet"], .app[data-connecting], .app[data-disconnected] { grid-template-columns: var(--topbar-h) 1fr; }
 .app[data-view="sheet"] .sidebar__resizer, .app[data-view="board"] .sidebar__resizer, .app[data-disconnected] .sidebar__resizer, .app[data-connecting] .sidebar__resizer,
 .app[data-view="board"] .sidebar__brand-text, .app[data-view="sheet"] .sidebar__brand-text, .app[data-disconnected] .sidebar__brand-text, .app[data-connecting] .sidebar__brand-text,
@@ -84,31 +84,29 @@
    On a dashboard the body shows only this tile (the connection, tables and worksheet tools are hidden). */
 .sidebar__perf { flex: none; margin-top: auto; align-self: center; }
 .app[data-view="board"] .sidebar__body { padding: var(--s2) 0; align-items: center; }
-.app[data-view="board"] .sidebar__section--conn, .app[data-view="board"] #schema-section, .app[data-view="board"] #tables-section { display: none; }
+.app[data-view="board"] .sidebar__section--conn, .app[data-view="board"] #schema-section { display: none; }
 /* Clickable on glass = more solid than the glass: a ≥ 3:1 edge (--ctl-edge) and full-ink icon, so the tile reads in light and dark. */
 .glass .sidebar__tool { width: 40px; height: 40px; background: var(--glass-ctl); border: 1px solid var(--ctl-edge); box-shadow: inset 0 1px 0 var(--glass-rim), var(--elev-2); color: var(--ink); }
 .glass .sidebar__tool:not(:disabled):hover { background: var(--glass-ctl-hover); border-color: var(--ink-3); color: var(--accent-ink); box-shadow: inset 0 1px 0 var(--glass-rim), var(--elev-8); }
 .sidebar__tool:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
-/* Bento: the sidebar body is a grid of solid tiles on the glass, 8px apart, 16px from the rail's edges. Tiles: connection, database,
-   and the table list (takes the remaining height). One radius, one stroke, one soft lift. */
+/* Bento: the sidebar body is a grid of solid tiles on the glass, 8px apart, 16px from the rail's edges. Tiles: connection and the
+   database tree with its search (takes the remaining height). One radius, one stroke, one soft lift. */
 .sidebar__body { padding: var(--s4); gap: var(--s2); }
-.bento, .sidebar__section--conn, .sidebar__section--db {
+.bento, .sidebar__section--conn {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r);
   box-shadow: var(--elev-2);
 }
 .sidebar__section--conn { padding: var(--s1); flex: none; }  /* connected: one 32px row inset 4px, like the rows below, so the dot sits on their 12px icon lane */
-.sidebar__section--db { padding: 0; flex: none; }
 /* Flexible separation: the gap between Connection and Database takes a 24px share (shrinking to 8px when the list needs the height);
    its hairline runs edge to edge, through the body's 16px gutters. */
-/* Group titles above the Connection tile, the Database tile and the Table list; aligned with the status dot / database icon inside the tiles. */
-.sidebar__title { flex: none; margin: 0; font-size: var(--fs-body); font-weight: 600; color: var(--ink-3); }
-.sidebar__title--next { margin-top: var(--s2); }  /* Table follows the Database tile: 8px gap + 8px = 16px, so each title reads with the tile below it */
+/* The Connection and tree headings name their tiles for screen readers only: the tiles say what they are (host and status dot; search + tree). */
+.sidebar__title { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .sidebar__divider { flex: 0 1 var(--s6); min-height: var(--s2); margin-inline: calc(-1 * var(--s4)); position: relative; }
 .sidebar__divider::before { content: ""; position: absolute; inset: 50% 0 auto; height: 1px; background: var(--line); }
-#tables-section { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--s2); }
+#schema-section { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--s2); }
 .bento--list { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 .bento--list .table-search { margin: 0; border-bottom: 1px solid var(--line); }
 .bento--list .table-list { padding: var(--s1); margin-inline: 0; }
@@ -149,14 +147,20 @@
   position: relative; z-index: 3;  /* the Workbook menu must paint above the view below */
 }
 
-/* Appearance, right-most in the bar: as close to the Workbook ··· as that group's own buttons sit, and its glyph (not its 32px box)
-   meets the right gutter, over the content's right edge. */
+/* Dock: Appearance over Fit all cards, a column at the canvas's bottom right (the bar keeps only the tabs and the workbook). The buttons are solid
+   (they float over content) with a hairline for the edge, 8px apart; the dock sits above every view, and the activity chip steps left of it.
+   With the data preview open the dock rides above the panel. The Appearance card opens upward and grows from the button's bottom right. */
+.canvas__dock { position: absolute; right: var(--s4); bottom: var(--s4); z-index: 4; display: flex; flex-direction: column; align-items: flex-end; gap: var(--s2); }
+.canvas.has-ds-preview .canvas__dock { bottom: calc(var(--ds-preview-h, 288px) + var(--s4)); }
+.canvas__dock .iconbtn { background: var(--surface); outline: 1px solid var(--line-2); outline-offset: -1px; } /* buttons carry no shadow (buttons.css): fill + hairline */
+.canvas__dock .menu__list { top: auto; bottom: calc(100% + var(--s2)); transform-origin: bottom right; }
 .scheme { flex: none; }
+
 /* The Appearance card (Shell/appearance.js): the `.menu__list` surface, 314px wide so nine 24px accent swatches fill a row with 8px gaps
    (2px edge + 2 × 8px padding + 2 × 8px row inset + 9 × 24 + 8 × 8). Rows, headings, separators and the tick are the menu's own; the selected row is
    bold + ticked, the selected swatch carries a tick. Rhythm: 4px between rows of one group, 8px each side of a separator, and a heading sits with its
    own group (8px above, none below). Every left edge (heading, row, strip, swatch, picker) is 16px in from the card's edge, every right edge 16px. */
-.appearance { width: 314px; padding: var(--s2); max-height: calc(100vh - var(--topbar-h) - 2 * var(--s4)); overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
+.appearance { width: 314px; padding: var(--s2); max-height: calc(100vh - 2 * var(--s4) - var(--ctl-h) - var(--s2) - var(--s6)); overflow-y: auto; overflow-x: hidden; /* 1px of rounding must not raise a horizontal bar */ }
 .appearance .menu__sep { margin-block: var(--s1); }
 .appearance__modes { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--s1); grid-column: 1 / -1; }
 .appearance__mode { display: flex; align-items: center; justify-content: center; gap: var(--s2); height: var(--ctl-h); padding: 0; border: 0; border-radius: var(--r);
@@ -198,8 +202,6 @@
 .appearance .menu__item .menu__check { margin-right: -2px; }
 .appearance .menu__item > .icon:first-child { margin-left: -2px; }
 
-.canvas__bar > :last-child { margin-right: calc(-1 * var(--s2)); }
-
 /* Performance timings dialog (Shell/perf-panel.js). */
 .perf-dialog { width: min(560px, calc(100vw - 2 * var(--s4))); }
 .perf-dialog[open] { display: flex; flex-direction: column; max-height: calc(100vh - 2 * var(--s4)); }
@@ -212,8 +214,8 @@
 .perf-summary { margin: 0; padding: var(--s2) var(--s4) 0; color: var(--ink-2); font-size: var(--fs-body); }
 .perf-empty { margin: 0; padding: var(--s2) 0; color: var(--ink-2); }
 
-/* ---- Activity chip: what the app is waiting on. Solid (it floats over content), bottom-right so the centred toast keeps its place. ---- */
-.activity { position: fixed; right: var(--s4); bottom: var(--s4); z-index: 99; display: flex; align-items: center; gap: var(--s2);
+/* ---- Activity chip: what the app is waiting on. Solid (it floats over content), bottom-right, left of the dock, so the centred toast keeps its place. ---- */
+.activity { position: fixed; right: calc(var(--s4) + var(--ctl-h) + var(--s2)); bottom: var(--s4); z-index: 99; display: flex; align-items: center; gap: var(--s2);
   max-width: min(480px, calc(100vw - 2 * var(--s4))); padding: var(--s2) var(--s4); background: var(--surface); border: 1px solid var(--line-2);
   border-radius: var(--r); box-shadow: var(--elev-16); color: var(--ink-2); font-size: var(--fs-body);
   animation: rise-in var(--dur) var(--ease-out); }

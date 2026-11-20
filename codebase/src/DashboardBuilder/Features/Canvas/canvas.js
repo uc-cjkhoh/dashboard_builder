@@ -3,14 +3,15 @@ import { api } from "../Core/api.js";
 import { icon } from "../Core/icons.js";
 import { openContextMenu } from "../Core/menu.js";
 import { show, hide, toggle, confirmDeleteTwice, toast } from "../Core/ui.js";
+import { exit } from "../Core/motion.js";
 import { entities, relationshipsFor, emit, bus, isModelActive, showModel } from "../Core/store.js";
 import { expandSidebar } from "../Shell/sidebar.js";
 import { openColumnProfile } from "../Schema/column-profile-dialog.js";
 import { cardType } from "./column-type.js";
-import { entityWidth } from "./card-width.js";
+import { entityWidth, rowsWidth } from "./card-width.js";
 import { snapTop } from "./align-snap.js";
 import { dragListHeight, cleanListHeight } from "./card-height.js";
-import { clampZoom, wheelZoom, panForZoom, panToReveal, toModel } from "./canvas-zoom.js";
+import { clampZoom, wheelZoom, panForZoom, panToReveal, toModel, stepZoom, fitView, panByKey } from "./canvas-zoom.js";
 import { unionDiffControl } from "./union-diff.js";
 import { sourceNote, lossyNote, wireSource, MAX_SOURCE_COLUMNS, SQL_NOTE, defaultSql, sqlWire, lostKeys } from "../Core/source-model.js";
 import { relEnds, keyKindBreaks } from "../Relations/relation-rules.js";
@@ -27,6 +28,7 @@ const TABLE_MIME = "application/x-ch-table";
 // Set by initCanvas — the entry points the Workbook feature uses to rebuild the model.
 let createEntityImpl = null;
 let clearModelImpl = null;
+let fitCanvasImpl = null;
 
 /** Add a table to the Data Source at (x, y). `source` makes it a union / unpivot entity (Core/source-model.js; its `table` is the source's name; it takes no relationship).
  *  `customSql` is a saved SELECT the card reads instead of the table (D105; the card stays an ordinary, relatable table card); `customSqlMysql` the MySQL text it was written as (D106).
@@ -35,6 +37,10 @@ export function addEntity(db, table, x, y, opts) { return createEntityImpl?.(db,
 
 /** Remove every entity (and so every relationship) without asking — used when opening a workbook. */
 export function clearModel() { clearModelImpl?.(); }
+
+/** Zoom and pan so every card shows, once the cards have their columns (a card's height settles when they load) and the Data Source is on screen.
+ *  Used after a workbook is opened; a pan, zoom or Fit by the user in the meantime cancels it. */
+export function fitCanvas() { fitCanvasImpl?.(); }
 
 export function initCanvas() {
   const canvas = document.getElementById("model-view");
@@ -61,6 +67,7 @@ export function initCanvas() {
   };
   const setZoom = (next, cursor) => {
     next = clampZoom(next);
+    pendingFit = false; // the user took the view: a fit waiting on the cards would undo it
     if (next === zoom) return;
     Object.assign(pan, panForZoom(pan, cursor, zoom, next));
     zoom = next;
@@ -100,6 +107,7 @@ export function initCanvas() {
     const move = (ev) => {
       if (!moved && Math.hypot(ev.clientX - startX, ev.clientY - startY) < 4) return; // a click is not a pan
       moved = true;
+      pendingFit = false;
       pan.x = originX + (ev.clientX - startX);
       pan.y = originY + (ev.clientY - startY);
       refreshView();
@@ -117,12 +125,67 @@ export function initCanvas() {
     canvas.addEventListener("pointercancel", up);
   });
 
+  // --- overview: Fit, keyboard pan and zoom ----------------------
+  let pendingFit = false; // a fit asked for before the cards had their columns (or before the Data Source was on screen)
+  const viewCentre = () => ({ x: canvas.clientWidth / 2, y: canvas.clientHeight / 2 });
+  const zoomBy = (dir) => setZoom(stepZoom(zoom, dir), viewCentre());
+  // Zoom and pan so every card shows, as large as fits and never past 100 %.
+  function fit() {
+    pendingFit = false;
+    const boxes = [...entities.values()].map((e) => ({ x: e.x, y: e.y, w: e.el.offsetWidth, h: e.el.offsetHeight }));
+    if (!boxes.length || !canvas.clientWidth) return;
+    const v = fitView(boxes, canvas.clientWidth, canvas.clientHeight, 16);
+    zoom = v.zoom;
+    Object.assign(pan, v.pan);
+    refreshView();
+  }
+  function tryFit() {
+    if (!pendingFit || !canvas.clientWidth || [...entities.values()].some((e) => e.loading)) return;
+    fit();
+  }
+  fitCanvasImpl = () => { pendingFit = true; tryFit(); };
+
+  // Fit is the one overview control with no pointer-only equivalent (the wheel zooms, F is a key): a solid icon button in the bottom-right dock, under Appearance (Shell/Index.cshtml).
+  const fitBtn = document.createElement("button");
+  fitBtn.type = "button";
+  fitBtn.className = "iconbtn canvas__fit";
+  fitBtn.setAttribute("aria-label", "Fit all cards (F)");
+  fitBtn.title = "Fit all cards (F)";
+  fitBtn.hidden = true;
+  fitBtn.append(icon("expand"));
+  fitBtn.addEventListener("click", fit);
+  (document.getElementById("canvas-dock") ?? canvas).append(fitBtn);
+
+  // The ground itself takes focus (cards, rows and inputs keep their own keys): arrows pan (Shift: four steps), + and − zoom, 0 is 100 %, F fits.
+  canvas.tabIndex = 0;
+  canvas.setAttribute("aria-describedby", "canvas-key-help");
+  const keyHelp = document.createElement("p");
+  keyHelp.id = "canvas-key-help";
+  keyHelp.className = "sr-only";
+  keyHelp.textContent = "Arrow keys pan, Shift and an arrow pan further. Plus and minus zoom, 0 resets to 100 percent, F fits every card.";
+  canvas.parentElement.append(keyHelp);
+  canvas.addEventListener("keydown", (event) => {
+    if (event.target !== canvas || event.altKey || event.ctrlKey || event.metaKey) return;
+    const key = event.key;
+    if (key.startsWith("Arrow")) {
+      const next = panByKey(pan, key, event.shiftKey);
+      if (next === pan) return;
+      event.preventDefault();
+      pendingFit = false;
+      Object.assign(pan, next);
+      refreshView();
+    } else if (key === "+" || key === "=") { event.preventDefault(); zoomBy(1); }
+    else if (key === "-" || key === "_") { event.preventDefault(); zoomBy(-1); }
+    else if (key === "0") { event.preventDefault(); setZoom(1, viewCentre()); }
+    else if (key === "f" || key === "F") { event.preventDefault(); fit(); }
+  });
+
   const emptyTitle = document.getElementById("canvas-empty-title");
   const emptyAction = document.getElementById("canvas-empty-action");
   let connected = false;
 
-  const dbSelect = document.getElementById("db-select");
-  const currentEmpty = () => emptyState({ connected, databaseSelected: Boolean(dbSelect?.value) });
+  let databaseOpen = false; // a database is open in the sidebar tree (schema.js says so)
+  const currentEmpty = () => emptyState({ connected, databaseOpen });
 
   // One sentence + one button, by state. The buttons focus controls that are visible in that state.
   // While the connect form is open (Connection/connection.js), the start card shows even over cards — `data-over` adds a scrim.
@@ -130,13 +193,14 @@ export function initCanvas() {
   const refreshEmpty = () => {
     const formOpen = Boolean(connForm && !connForm.hidden);
     toggle(empty, entities.size === 0 || formOpen);
+    fitBtn.hidden = entities.size === 0 || formOpen; // nothing to fit, or the start card is over the cards
     empty?.toggleAttribute("data-over", formOpen && entities.size > 0);
     const st = currentEmpty();
     if (emptyTitle) emptyTitle.textContent = st.text;
     if (emptyAction) emptyAction.textContent = st.action;
   };
   emptyAction?.addEventListener("click", () => { expandSidebar(); document.getElementById(currentEmpty().focusId)?.focus(); });
-  dbSelect?.addEventListener("change", refreshEmpty);
+  document.addEventListener("schema:open", (e) => { databaseOpen = (e.detail?.open ?? 0) > 0; refreshEmpty(); });
   document.addEventListener("connection:changed", (e) => { connected = Boolean(e.detail?.connected); refreshEmpty(); });
   document.addEventListener("connection:form", refreshEmpty);
   refreshEmpty();
@@ -182,12 +246,10 @@ export function initCanvas() {
   });
 
   // Show the model view only when it's the active view (dashboards render elsewhere).
-  bus.addEventListener("view:changed", () => toggle(canvas, isModelActive()));
+  bus.addEventListener("view:changed", () => { toggle(canvas, isModelActive()); tryFit(); });
   // relations.js showed or hid a card's "Needs a partner" badge: refit that card's width so the badge never clips its name
   bus.addEventListener("entity:need", (e) => {
-    const entity = entities.get(e.detail?.entityId);
-    const head = entity?.el.querySelector(".entity__head");
-    if (head) fitWidth(entity.el, head.querySelector(".entity__title"), head.querySelector(".entity__menu"), head.querySelector(".entity__need"));
+    refit(entities.get(e.detail?.entityId));
   });
   toggle(canvas, isModelActive());
   initDataPreview(); // the rows of one card, docked under the ground
@@ -245,9 +307,9 @@ export function initCanvas() {
 
   function clearAll() {
     for (const entity of [...entities.values()]) {
+      entities.delete(entity.id); // out of the store first, so a listener that redraws (relations.js) never counts the card that is going
       emit("entity:removed", { entityId: entity.id }); // relations.js drops its links
       entity.el.remove();
-      entities.delete(entity.id);
     }
     refreshEmpty();
   }
@@ -260,9 +322,11 @@ export function initCanvas() {
       name, { confirmText: "Remove" },
     );
     if (!ok) return;
+    entities.delete(entity.id); // out of the store first: relations.js redraws on the event, and a card that is leaving must not take part (no proposal to it, no count)
     emit("entity:removed", { entityId: entity.id }); // relations.js drops its links
+    entity.el.inert = true; // leaving: no more clicks or focus while it fades (the model is already without it)
+    await exit(entity.el, { y: 4, scale: .98 });
     entity.el.remove();
-    entities.delete(entity.id);
     refreshEmpty();
     toast(`Removed ${name}.`, "info");
   }
@@ -272,6 +336,7 @@ export function initCanvas() {
     const bodyEl = entity.el.querySelector(".entity__body");
     setStatus(entity, "loading");
     hide(bodyEl);
+    entity.loading = true; // a pending Fit (opening a workbook) waits for every card's height to settle
     try {
       if (entity.source) {
         const res = await api.sourceColumns(wireSource(entity.source));
@@ -288,6 +353,9 @@ export function initCanvas() {
       emit("entity:loaded", { entityId: entity.id }); // relations.js draws links that wait on these rows
     } catch (err) {
       setStatus(entity, "failed", err.message, err.status === 400); // a 400 is a rule the card breaks (the server's reason is shown): trying again would say the same
+    } finally {
+      entity.loading = false;
+      tryFit();
     }
   }
 
@@ -306,6 +374,7 @@ export function initCanvas() {
     collapse.type = "button";
     collapse.className = "iconbtn entity__toggle";
     collapse.setAttribute("aria-label", "Collapse columns");
+    collapse.title = "Collapse columns";
     collapse.setAttribute("aria-expanded", "true");
     collapse.append(icon("chevron"));
     collapse.addEventListener("click", () => toggleCollapsed(entity, collapse));
@@ -317,18 +386,14 @@ export function initCanvas() {
     tablePart.textContent = entity.table;
     title.append(tablePart);
     title.title = `${entity.db}.${entity.table}`;
-    // The database only earns space in the title when another card has the same table name.
-    if ([...entities.values()].some((e) => e !== entity && e.table === entity.table && e.db !== entity.db)) {
-      const dbPart = document.createElement("span");
-      dbPart.className = "entity__db";
-      dbPart.textContent = entity.db;
-      title.append(dbPart);
-    }
+    // The database only earns space in the title when another card has the same table name (syncDbLabels, below, keeps that true as cards come and go).
+    if (collides(entity)) title.append(dbLabel(entity));
 
     const remove = document.createElement("button");
     remove.type = "button";
     remove.className = "iconbtn iconbtn--danger";
     remove.setAttribute("aria-label", `Remove ${entity.db}.${entity.table}`);
+    remove.title = `Remove ${entity.db}.${entity.table}`;
     remove.append(icon("close"));
     remove.addEventListener("click", () => removeEntity(entity));
 
@@ -503,7 +568,51 @@ export function initCanvas() {
     if (previewedId() !== entity.id) showPreview(entity.id); // the data preview shows what the card now returns (it re-reads by itself when already on this card)
   }
 
-  // Width follows the `db.table` text: measured in the title's own font, held between --entity-min and --entity-max.
+  // Width follows the `db.table` text and the longest column name + type: measured in their own fonts, held between --entity-min and --entity-max.
+  const collides = (entity) => [...entities.values()].some((e) => e !== entity && e.table === entity.table && e.db !== entity.db);
+  const dbLabel = (entity) => {
+    const dbPart = document.createElement("span");
+    dbPart.className = "entity__db";
+    dbPart.textContent = entity.db;
+    return dbPart;
+  };
+  // A card's database label follows the other cards: it appears on both once two cards share a table name in different databases,
+  // and goes again when the twin is removed. The card refits, because the label changes its title's width.
+  function syncDbLabels() {
+    for (const entity of entities.values()) {
+      const title = entity.el.querySelector(".entity__title");
+      if (!title) continue;
+      const want = collides(entity), has = title.querySelector(".entity__db");
+      if (want && !has) title.append(dbLabel(entity));
+      else if (!want && has) has.remove();
+      else continue;
+      refit(entity);
+    }
+  }
+  bus.addEventListener("entity:added", () => queueMicrotask(syncDbLabels));
+  bus.addEventListener("entity:removed", () => queueMicrotask(syncDbLabels)); // (the card is already out of the store; the microtask is kept for the listeners that read the DOM)
+
+  /** The width the browser really gives a card's column-list scrollbar (thin, classic or overlay, whichever the platform draws), px. Measured on a
+   *  hidden list with the same class, so core.css decides the look; the rows' right padding and the card width read it (--sb-w). */
+  function measureScrollbar() {
+    const probe = document.createElement("div");
+    probe.className = "entity__cols";
+    probe.style.cssText = "position:absolute;visibility:hidden;width:100px;height:40px;max-height:none;overflow:scroll;padding:0";
+    probe.innerHTML = '<div style="height:200px"></div>';
+    canvas.append(probe);
+    const w = probe.offsetWidth - probe.clientWidth;
+    probe.remove();
+    canvas.style.setProperty("--sb-w", `${w}px`);
+    return w;
+  }
+  let scrollbarW = measureScrollbar();
+  window.addEventListener("resize", () => { scrollbarW = measureScrollbar(); }); // a zoom or a changed OS setting can change it
+
+  const rowsNeeded = new WeakMap(); // card element → the width its column rows ask for (renderColumns), so a long name never ellipsises for want of room
+  function refit(entity) {
+    const head = entity?.el.querySelector(".entity__head");
+    if (head) fitWidth(entity.el, head.querySelector(".entity__title"), head.querySelector(".entity__menu"), head.querySelector(".entity__need"));
+  }
   function fitWidth(card, title, menu, need = null) {
     const measure = (node) => {
       const probe = node.cloneNode(true);
@@ -519,14 +628,28 @@ export function initCanvas() {
     const px = measure(title) + (menu ? measure(menu) + gap : 0) + (need && !need.hidden ? measure(need) + gap : 0);
     const cs = getComputedStyle(canvas);
     const limit = (name, fallback) => parseFloat(cs.getPropertyValue(name)) || fallback;
-    const { width } = entityWidth(px, { min: limit("--entity-min", 312), max: limit("--entity-max", 480) });
+    const { width } = entityWidth(px, { min: limit("--entity-min", 312), max: limit("--entity-max", 480) }, rowsNeeded.get(card) ?? 0);
     card.style.width = `${width}px`;
+  }
+
+  const textCtx = document.createElement("canvas").getContext?.("2d") ?? null; // text metrics work on a hidden or collapsed card too
+  /** The widest of `labels` in the list's own font (`weight` "600" for names, which a key column bolds), px; 0 without a canvas. */
+  function widestText(cols, labels, weight = "400") {
+    if (!textCtx) return 0;
+    const cs = getComputedStyle(cols);
+    textCtx.font = `${weight} ${cs.fontSize} ${cs.fontFamily}`;
+    return Math.ceil(Math.max(0, ...labels.map((l) => textCtx.measureText(l).width)));
   }
 
   function renderColumns(entity) {
     const cols = entity.el.querySelector(".entity__cols");
     cols.replaceChildren();
     entity.el.querySelector(".entity__keys")?.replaceChildren();
+    // One type-column width per card (the longest label, measured), so the profile icon before it sits at the same x on every row.
+    const typeW = widestText(cols, entity.columns.map((c) => cardType(c.type)));
+    if (typeW) cols.style.setProperty("--type-w", `${typeW}px`); else cols.style.removeProperty("--type-w");
+    rowsNeeded.set(entity.el, rowsWidth(widestText(cols, entity.columns.map((c) => c.name), "600"), typeW, { profile: !entity.source, scrollbar: scrollbarW }));
+    refit(entity);
     for (const [index, col] of entity.columns.entries()) {
       const row = document.createElement("div");
       row.className = "col-row";
@@ -552,7 +675,7 @@ export function initCanvas() {
       profile.setAttribute("aria-label", `Profile ${col.name}`);
       profile.title = "Profile this field (distinct values, nulls, top values)";
       profile.append(icon("profile", { size: 14 }));
-      profile.addEventListener("click", (event) => { event.preventDefault(); openColumnProfile(entity.db, entity.table, col, entity.customSql ? sqlWire(entity.db, entity.table, entity.customSql) : null); });
+      profile.addEventListener("click", (event) => { event.preventDefault(); openColumnProfile(entity.db, entity.table, col, entity.customSql ? sqlWire(entity.db, entity.table, entity.customSql) : null, profile); });
 
       if (isSource) row.append(name, type); // no profile: it reads the table's own rows, which a union / unpivot card does not show
       else row.append(name, type, profile);
@@ -623,6 +746,20 @@ export function initCanvas() {
     const collapsed = entity.el.classList.toggle("entity--collapsed");
     btn.setAttribute("aria-expanded", String(!collapsed));
     btn.setAttribute("aria-label", collapsed ? "Expand columns" : "Collapse columns");
+    btn.title = collapsed ? "Expand columns" : "Collapse columns";
+    followFold(entity);
+  }
+
+  // The body folds over a max-height transition (--dur-slow, 250ms): re-route the card's links every frame until it has settled.
+  // A fixed window, not a transition check: the transition only exists after the next style pass, and reduced motion has none.
+  function followFold(entity) {
+    cancelAnimationFrame(entity.foldFrame);
+    const until = performance.now() + 300;
+    const tick = () => {
+      emit("entity:collapsing", { entityId: entity.id });
+      if (performance.now() < until) entity.foldFrame = requestAnimationFrame(tick);
+    };
+    tick();
   }
 
   // Cards sit on the dot grid's 8px steps, never at a negative offset.

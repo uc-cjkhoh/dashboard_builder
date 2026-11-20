@@ -13,6 +13,15 @@
 .rel-badge text { fill: var(--ink-2); font-size: var(--fs-body); font-weight: 600; }
 .rel-link--hover .rel-badge rect { stroke: var(--accent); }
 .rel-link--hover .rel-badge text { fill: var(--accent-ink); }
+/* A new link arrives (relations.js arrival): the line fades in, its two end shapes settle from 60 %, then the badge rises; ~400ms in all. Animations sit on the
+   inner shapes, never on the link's own group, so the focus fade and the quiet-badge opacity (below) keep working. `--age` resumes the run after a redraw. */
+@keyframes rel-line-in { from { opacity: 0; } }
+@keyframes rel-end-in { from { opacity: 0; transform: scale(.6); } }
+@keyframes rel-badge-in { from { opacity: 0; transform: translateY(4px); } }
+.rel-link.is-arriving .rel-link__line { animation: rel-line-in var(--dur) var(--ease-out) backwards; animation-delay: calc(0ms - var(--age, 0ms)); }
+.rel-link.is-arriving .rel-end { transform-box: fill-box; transform-origin: center; animation: rel-end-in var(--dur-fast) var(--ease-out) backwards; animation-delay: calc(100ms - var(--age, 0ms)); }
+.rel-link.is-arriving .rel-badge { animation: rel-badge-in var(--dur) var(--ease-out) backwards; animation-delay: calc(150ms - var(--age, 0ms)); }
+@media (prefers-reduced-motion: reduce) { .rel-link.is-arriving :is(.rel-link__line, .rel-end, .rel-badge) { animation: none; } }
 /* Focus: while a link or a card is hovered, the links it doesn't touch fade back (lines and badges), so its own read on top.
    Quiet (4+ links below 125 % zoom, quietBadges): badges rest hidden and show on the hovered or focused links only; the crow's foot and
    tick still carry the cardinality, and the Relationships card lists every join. A fade, not a visibility toggle: opacity animates. */
@@ -24,11 +33,11 @@
 
 /* Relationship dialog: the column profile's frame (head with title, subtitle and X; body on the colour wash; foot) with two flat
    panels instead of bento cells. The body scrolls, the head and foot stay put. */
-/* Golden ratio: the height is the width × 0.618 (752px at the full 1216px), capped only by the window less the 16px gutter; the body
-   scrolls when the content is taller and the wash fills it when shorter. One column under 640px goes back to content height
-   (fit-content, the browser default for a modal: auto would stretch it to the window). */
+/* Golden ratio: the height is the width × 0.618 (752px at the full 1216px), but never under 600px (a shorter frame makes both panels scroll for
+   nothing) and never past the window less the 16px gutter. From 880px down the two panels stack into one scrolling body, and under 640px the
+   frame goes back to content height (fit-content, the browser default for a modal: auto would stretch it to the window). */
 .dialog.dialog--rel { width: min(1216px, calc(100vw - 2 * var(--s4))); max-width: none;
-  height: min(752px, calc((100vw - 2 * var(--s4)) * 0.618)); max-height: calc(100vh - 2 * var(--s4)); }
+  height: min(max(calc((100vw - 2 * var(--s4)) * 0.618), 600px), 752px); max-height: calc(100vh - 2 * var(--s4)); }
 @media (max-width: 640px) { .dialog.dialog--rel { height: fit-content; } }
 .dialog--rel[open] { display: flex; flex-direction: column; }
 .rel-dialog__head { flex: none; display: flex; align-items: flex-start; gap: var(--s2); padding: var(--s4) calc(var(--s6) - 12px) var(--s4) var(--s6); border-bottom: 1px solid var(--line); } /* right 12px: the X glyph sits 12px inside its 32px button, so it lands on the 24px gutter */
@@ -37,41 +46,38 @@
 .rel-dialog__sub { margin: 0; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rel-dialog { flex: 1; min-height: 0; overflow: auto; padding: var(--s6); background-color: var(--bg); background-image: var(--wash);
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s4); align-content: start; }
-/* Two equal panels, so the divider runs down the middle of the dialog; the divider is an inset shadow (no width) and each side keeps a
-   16px gutter to it. */
-.rel-dialog:not(.rel-dialog--single) { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0; align-content: stretch; } /* the row fills the golden-ratio body, so the suggestion panel scrolls in the full height */
-.rel-dialog:not(.rel-dialog--single) .rel-dialog__left { padding-right: var(--s4); }
+/* Two panels, so the divider runs down the middle of the dialog. The body itself does not scroll: each panel does, on its own, so there is never
+   a scroll inside a scroll. The 24px of air above and below is each panel's own padding, so text slides under the head and foot hairlines instead
+   of stopping 24px short of them. The divider is an inset shadow (no width) and each side keeps a 16px gutter to it. */
+.rel-dialog:not(.rel-dialog--single) { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); gap: 0; align-content: stretch; padding: 0 var(--s6); overflow: hidden; }
 .rel-dialog__left, .rel-dialog__right { min-width: 0; }
-/* Left: no boxes. Sections sit straight on the wash, split by one hairline and 24px of air; the chosen state is what draws the eye. */
+/* Left: no boxes. Sections sit straight on the wash, split by one hairline and 16px of air each side; the chosen state is what draws the eye. */
 .rel-dialog__left { display: flex; flex-direction: column; gap: var(--s4); }
+.rel-dialog:not(.rel-dialog--single) .rel-dialog__left { min-height: 0; overflow-y: auto; padding: var(--s6) var(--s4) var(--s6) 0; }
 .rel-sec { min-width: 0; animation: rise-in var(--dur) var(--ease-out) backwards; animation-delay: calc(var(--i, 0) * 40ms); }
 .rel-sec + .rel-sec { padding-top: var(--s4); border-top: 1px solid var(--line); }
 .rel-sec .join-choice, .rel-sec .key-pairs { margin: 0; }
 .rel-sec .join-aggregate__dir { margin: var(--s1) 0 0; }
 .rel-sec .form-check { padding: 0; }
-.rel-sec--pairs .key-pairs__select { flex: 1 1 0; }
-/* Right: the check result is the one panel that can outgrow the body. It takes the row's height (contain: size stops its own content
-   from stretching the row) and scrolls inside when the text is longer. The scrollbar keeps its own lane (scrollbar-gutter) plus a 16px
-   gutter on each side of the content, so text never runs into the thumb and nothing shifts when the scrollbar appears. */
-.rel-dialog__right { position: relative; contain: size; overflow-y: auto; scrollbar-gutter: stable; padding-inline: var(--s4); margin-right: calc(-1 * var(--s4));
-  box-shadow: inset 1px 0 0 var(--line); scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
-.rel-dialog__right::-webkit-scrollbar { width: 10px; }
-.rel-dialog__right::-webkit-scrollbar-track { background: transparent; }
-.rel-dialog__right::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: var(--r-pill); border: 3px solid transparent; background-clip: padding-box; }
-.rel-dialog__right::-webkit-scrollbar-thumb:hover { background: var(--accent); background-clip: padding-box; }
-.rel-dialog__right .join-check { margin: 0; }
+/* Right: what the choices mean, then what the data says. "What this link does" is pinned to the top, so the consequence of a pick stays in view while the
+   suggestion's evidence scrolls beneath it. The scrollbar keeps its own lane (scrollbar-gutter) plus a 16px gutter on each side of the content, so text
+   never runs into the thumb and nothing shifts when the scrollbar appears. */
+.rel-dialog__right { position: relative; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; padding-inline: var(--s4); margin-right: calc(-1 * var(--s4));
+  box-shadow: inset 1px 0 0 var(--line); }
+.rel-dialog__right .join-check { margin: 0; padding-bottom: var(--s6); }
 .rel-dialog__right .join-check__out { max-height: none; overflow: visible; }
 .rel-dialog--single { grid-template-columns: minmax(0, 1fr); }
 .rel-dialog__h { margin: 0 0 var(--s2); font-size: var(--fs-body); font-weight: 600; color: var(--ink-2); }
 .rel-dialog__foot { flex: none; padding-inline: var(--s6); border-top: 1px solid var(--line); }
 .rel-dialog__foot .btn--danger { margin-right: auto; } /* Delete sits apart from the dismissing button */
-@media (max-width: 640px) {
-  .rel-dialog { grid-template-columns: minmax(0, 1fr); }
-  .rel-dialog:not(.rel-dialog--single) { grid-template-columns: minmax(0, 1fr); }
-  .rel-dialog { gap: var(--s4); }
-  .rel-dialog:not(.rel-dialog--single) .rel-dialog__left { padding-right: 0; }
-  .rel-dialog__right { contain: none; overflow: visible; padding: var(--s4) 0 0; margin-right: 0; box-shadow: inset 0 1px 0 var(--line); }
+@media (max-width: 880px) { /* too narrow for two panels: one column, the whole body scrolls, and the frame takes the window's height */
+  .dialog.dialog--rel { height: min(752px, calc(100vh - 2 * var(--s4))); }
+  .rel-dialog, .rel-dialog:not(.rel-dialog--single) { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-auto-rows: max-content; gap: var(--s4); align-content: start; padding: var(--s6); overflow: auto; }
+  .rel-dialog:not(.rel-dialog--single) .rel-dialog__left { min-height: auto; overflow: visible; padding: 0; } /* min-height 0 would let a panel shrink under its text and overlap the next */
+  .rel-dialog__right { min-height: auto; overflow: visible; padding: var(--s4) 0 0; margin-right: 0; scrollbar-gutter: auto; box-shadow: inset 0 1px 0 var(--line); }
+  .rel-dialog__right .join-check { padding-bottom: 0; }
 }
+@media (max-width: 640px) { .dialog.dialog--rel { height: fit-content; } } /* after the 880px rule, which would otherwise win at equal specificity */
 
 /* A titled group in the relationship dialog's left panel (Join, Cardinality, Totals). */
 .join-choice { border: 0; margin: 0 0 var(--s4); padding: 0; display: grid; gap: var(--s1); font-size: var(--fs-body); }
@@ -198,42 +204,16 @@
   background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r); box-shadow: var(--elev-8);
   color: var(--ink-2); font-size: var(--fs-body); white-space: nowrap; max-width: calc(100% - 2 * var(--s4)); overflow: hidden; text-overflow: ellipsis; }
 
-/* The Relationships card: solid (it floats over the canvas), top right under the tab bar, collapsible; scrolls inside when long. Its width is fixed
-   so a long table name ellipsises in its row (the full link is the row's tooltip) and never widens the card over the table cards. */
-.rel-notes { position: absolute; top: calc(var(--topbar-h) + var(--s4)); right: var(--s4); z-index: 2; width: 288px; max-width: calc(100% - 2 * var(--s4));
-  max-height: calc(100% - var(--topbar-h) - 2 * var(--s4)); display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r); box-shadow: var(--elev-8); }
-.rel-notes > summary { flex: none; display: flex; align-items: center; justify-content: space-between; height: 40px; padding: 0 var(--s4); font-weight: 600; cursor: pointer; list-style: none; }
-.rel-notes > summary::-webkit-details-marker, .rel-note__head::-webkit-details-marker { display: none; }
-.rel-notes > summary::after, .rel-note__head::after { content: ""; flex: none; width: 16px; height: 16px; background: currentColor; color: var(--ink-3); transition: rotate var(--dur) var(--ease-out);
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 8l3 3 3-3'/%3E%3C/svg%3E") center / 16px no-repeat; }
-.rel-notes:not([open]) > summary::after, .rel-note__more:not([open]) > .rel-note__head::after { rotate: -90deg; }
-.rel-notes[open] > summary { border-bottom: 1px solid var(--line); }
-/* The card is as tall as its text: opening a dropdown grows it, and the list scrolls inside only once the card would pass the bottom of the
-   Data Source (the card's max-height above). The details content box is made transparent so the list is a flex child that can shrink;
-   a browser without ::details-content gets a viewport-based cap instead. Only while open: a closed <details> hides its content through
-   content-visibility on ::details-content, which a display: contents box ignores, so the list would never collapse. */
-.rel-notes[open]::details-content { display: contents; }
-.rel-notes__list { list-style: none; margin: 0; padding: var(--s1); flex: 0 1 auto; min-height: 0; overflow-y: auto; }
-@supports not selector(::details-content) { .rel-notes__list { max-height: calc(100vh - var(--topbar-h) - 6 * var(--s4)); } }
-.rel-note { border-radius: var(--r); transition: background var(--dur-fast) var(--ease); }
-.rel-note + .rel-note { margin-top: var(--s1); }
-.rel-note--active { background: var(--accent-soft); }
-.rel-note p { margin: 0; }
-.rel-note__more { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s2); padding: var(--s2); } /* one column the card's width: a long title row ellipsises (.rel-note__title) instead of stretching it */
-/* Closed, the hidden content slot is still a grid item: drop the gap so the title sits centred (8px above and below), not 8 over 16. */
-.rel-note__more:not([open]) { gap: 0; }
-.rel-note__part { display: grid; gap: 0; width: 0; min-width: 100%; } /* a short title above its paragraph; like the text, it never sets the card's width */
-.rel-note__label { font-weight: 600; overflow-wrap: anywhere; }
-.rel-note__part + .rel-note__part { margin-top: var(--s2); } /* with the 8px grid gap: 16px between one paragraph and the next title, about a line of air */
-.rel-note__head { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); font-weight: 600; cursor: pointer; list-style: none; }
-.rel-note__head:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--r); }
-.rel-note__title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* The card sizes to its longest title, never to a sentence: body lines take no intrinsic width (0 wide, filled to 100%) and wrap inside it. */
-.rel-note__text { width: 0; min-width: 100%; overflow-wrap: anywhere; }
-.rel-note__text { color: var(--ink-2); }
-/* Important words change text colour (and names go bold, a caution starts "Heads up:" — never colour alone): table and column names take the ok ink, a caution the warning ink. */
-.rel-ref { font-weight: 600; color: var(--ok-ink); }
-.rel-note__text--warn { color: var(--warn-ink); }
+/* "What this link does" in the relationship dialog's right panel: the picks in plain sentences, 8px apart, above the data's suggestion. Names go bold;
+   the one colour is the caution, in the warning ink, and it starts "Heads up:" (never colour alone). */
+.rel-sum { position: sticky; top: 0; z-index: 1; padding: var(--s6) 0 var(--s4); background: var(--bg); border-bottom: 1px solid var(--line); } /* opaque, so the evidence slides under it; the body is flat --bg */
+.rel-sum + .join-check { padding-top: var(--s4); }
+.rel-sum__out { display: grid; gap: var(--s2); }
+.rel-sum__line { margin: 0; color: var(--ink-2); overflow-wrap: anywhere; }
+.rel-ref { font-weight: 600; color: var(--ink); }
+.rel-sum__line--warn { color: var(--warn-ink); }
+.rel-sum__line--warn .rel-ref { color: inherit; }
+@media (max-width: 880px) { .rel-sum { position: static; padding: 0 0 var(--s4); } } /* stacked: nothing to pin it above */
 
 /* Relating from the keyboard: rows take an inset focus ring (the card list clips an outer one); the picked source gets a solid
    outline plus the word "From" (not colour alone); the instruction line sits above the how-to pill, wraps, and is visually
@@ -253,8 +233,36 @@ body:has(#toast:not([hidden])) { --rel-foot: calc(var(--toast-h) + var(--s4)); }
 .key-pairs { border: 0; margin: 0 0 var(--s4); padding: 0; display: grid; gap: var(--s2); font-size: var(--fs-body); }
 .key-pairs legend { font-weight: 600; color: var(--ink-2); margin-bottom: var(--s1); padding: 0; }
 .key-pairs__list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s1); }
-.key-pairs__item { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); padding: var(--s1) var(--s2); border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); }
+/* A pair already added: a control-height row (32px, as the selects below), the remove button flush right so its glyph lands on the row's inner 8px. */
+.key-pairs__item { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); min-height: var(--ctl-h); padding: 0 0 0 var(--s2); border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); }
+.key-pairs__item span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.key-pairs__rm { flex: none; }
 .key-pairs__suggest { display: flex; flex-wrap: wrap; gap: var(--s2); }
-.key-pairs__add { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
+/* The manual pair: column of the first table = column of the second, then Add. The "=" is the sign the added rows use, so the row reads as a pair. */
+.key-pairs__add { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: var(--s2); }
 .key-pairs__select { min-width: 0; max-width: 100%; }
-.key-pairs__problem { margin: 0; color: var(--ink-2); }
+.key-pairs__eq { color: var(--ink-3); }
+/* Add sits under the two selects, on the right, so the selects keep the whole line: a column name has room, and the pair reads as one equation. */
+.key-pairs__go { grid-column: 1 / -1; justify-self: end; }
+/* A column in the closed control and in the open list: the name (the only part that can end in an ellipsis) and, apart from it, its kind in --ink-3, always whole.
+   The open list is as wide as its longest row but never wider than 32rem (nor than the window less a 16px gutter): a very long name is cut there, its full text in
+   the row's title. The right-hand select's list lines up with its right edge. Without customizable select the native list is drawn and none of this applies. */
+.key-pairs__col { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.key-pairs__kind { flex: none; color: var(--ink-3); }
+@supports (appearance: base-select) {
+  select.select.select--menu.key-pairs__select selectedcontent { display: flex; gap: var(--s2); }
+  select.select.select--menu.key-pairs__select option .key-pairs__col { flex: 1 1 auto; }
+  select.select.select--menu.key-pairs__select::picker(select) { max-inline-size: min(32rem, calc(100vw - 2 * var(--s4))); }
+  select.select.select--menu.key-pairs__select--to::picker(select) { position-area: block-end span-inline-start !important; position-try-fallbacks: flip-block !important; }
+}
+/* A refusal sits where the eye already is, glyph beside the words (never colour alone), in the warning tone the suggestion panel's notes use. */
+.key-pairs__problem, .key-pairs__full { margin: 0; display: flex; gap: var(--s2); align-items: flex-start; }
+.key-pairs__problem { padding: var(--s2); border: 1px solid var(--warn-line); border-radius: var(--r); background: var(--warn-bg); color: var(--warn-ink); }
+.key-pairs__full { color: var(--ink-3); }
+.key-pairs__glyph { flex: none; display: inline-flex; margin-top: 1px; }
+
+/* A link takes keyboard focus (Tab; Enter edits, Delete removes): it reads like hover (accent line, badge shown, key rows washed) and adds a wider
+   halo under the line, so focus is never colour alone. */
+.rel-link:focus { outline: none; }
+.rel-link:focus-visible .rel-link__line { stroke-width: 3; }
+.rel-link:focus-visible .rel-link__hit { stroke: var(--focus); stroke-opacity: .16; }

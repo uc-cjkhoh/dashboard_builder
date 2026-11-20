@@ -384,6 +384,13 @@
 .ws-spark__dot { fill: var(--accent); }
 .ws-hint { color: var(--ink-3); font-size: var(--fs-body); padding: var(--s4); text-align: center; max-width: 480px; margin: auto; line-height: 1.5; }
 .ws-hint--warn { color: var(--danger-ink); }
+.ws-hint--lead { color: var(--ink); font-size: var(--fs-lead); }
+/* The empty worksheet: the lone lead hint sits in the middle of the pane (the pane is a block, so margin:auto alone centres only sideways) under a dashed ghost chart. */
+.ws-chart > .ws-hint--lead { position: absolute; inset: 0; width: fit-content; height: fit-content; display: flex; flex-direction: column; align-items: center; gap: var(--s4); }
+.ws-ghost { width: 240px; max-width: 100%; height: auto; }
+.ws-ghost__bar { fill: var(--surface); stroke: var(--line-2); stroke-width: 2; stroke-dasharray: 6 6; }
+.ws-ghost__axis { fill: none; stroke: var(--ink-3); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+@media (max-height: 600px) { .ws-ghost { display: none; } } /* a short pane keeps the sentence only */
 .ws-loading { color: var(--ink-3); padding: var(--s4); animation: fade-in var(--dur) var(--ease) 150ms both; } /* only shows if the wait is noticeable */
 
 /* Crosstab (pivot) — Rows shelf = left stub, Columns shelf = top header, measures = cells.
