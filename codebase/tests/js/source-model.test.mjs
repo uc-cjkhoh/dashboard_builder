@@ -2,40 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { LIMITS } from "../../src/DashboardBuilder/Features/Core/validate.js";
 import {
-  unionSource, unpivotSource, uniqueName, wireSource, cleanSource, sourceOfTable, sourceProblem, sourceNote,
-  distinctPlan, distinctMembers, takenNames, lossyNote, MIXED_MESSAGE, UNION_NOTE,
+  wireSource, cleanSource, sourceOfTable, sourceProblem, sourceNote,
+  distinctPlan, distinctMembers, lossyNote, MIXED_MESSAGE, UNION_NOTE,
 } from "../../src/DashboardBuilder/Features/Core/source-model.js";
 
 test("the name limit mirrors the server", () => assert.equal(LIMITS.sourceName, 200));
 
-test("a union source is named after its tables and keeps them in order", () => {
-  assert.deepEqual(unionSource("d", ["a", "b"]), { kind: "union", db: "d", name: "Union: a + b", tables: ["a", "b"] });
-});
-test("a union needs two to five different tables", () => {
-  assert.throws(() => unionSource("d", ["a"]), /between 2 and 5/);
-  assert.throws(() => unionSource("d", ["a", "b", "c", "d", "e", "f"]), /between 2 and 5/);
-  assert.throws(() => unionSource("d", ["a", "a"]), /different/);
-});
-test("an unpivot source is named after its table and carries its columns and kept columns", () => {
-  assert.deepEqual(unpivotSource("d", "sales", ["q1", "q2"], ["region"]), { kind: "unpivot", db: "d", name: "Unpivot: sales", table: "sales", columns: ["q1", "q2"], keep: ["region"] });
-});
-test("an unpivot is refused outside the limits or with a column in both roles", () => {
-  assert.throws(() => unpivotSource("d", "t", ["a"]), /between 2 and 50/);
-  assert.throws(() => unpivotSource("d", "t", Array.from({ length: 51 }, (_, i) => `c${i}`)), /between 2 and 50/);
-  assert.throws(() => unpivotSource("d", "t", ["a", "b"], ["k1", "k2", "k3", "k4", "k5", "k6"]), /at most 5/);
-  assert.throws(() => unpivotSource("d", "t", ["a", "b"], ["a"]), /different columns/);
-});
-test("a second source with the same name gets a number, and a long name is cut to fit", () => {
-  assert.equal(unionSource("d", ["a", "b"], ["Union: a + b"]).name, "Union: a + b 2");
-  assert.equal(uniqueName("x", ["x", "x 2"]), "x 3");
-  const long = "t".repeat(190);
-  const name = unionSource("d", [long, long + "2"]).name;
-  assert.ok(name.length <= LIMITS.sourceName);
-  assert.ok(uniqueName("y".repeat(250), []).length <= LIMITS.sourceName);
-  const taken = [uniqueName("y".repeat(250), [])];
-  const second = uniqueName("y".repeat(250), taken);
-  assert.notEqual(second, taken[0]); assert.ok(second.length <= LIMITS.sourceName);
-});
 test("the wire shape carries only what its kind uses", () => {
   assert.deepEqual(wireSource({ kind: "union", db: "d", name: "N", tables: ["a", "b"], columns: [], extra: 1 }), { kind: "union", db: "d", name: "N", tables: ["a", "b"] });
   assert.deepEqual(wireSource({ kind: "union", db: "d", name: "N", tables: ["a", "b"], columns: ["id"] }), { kind: "union", db: "d", name: "N", tables: ["a", "b"], columns: ["id"] });
@@ -87,11 +59,6 @@ test("a filter's member list is a one-dimension query over the source", () => {
   assert.deepEqual([plan.joins, plan.measures, plan.filters, plan.limit], [[], [], [], 201]);
   assert.deepEqual(distinctMembers({ rows: [{ keys: ["a"] }, { keys: [null] }, { keys: ["b"] }] }), ["a", "b"]);
   assert.deepEqual(distinctMembers(null), []);
-});
-test("a new source avoids the database's tables and the entities on the canvas, in that database only", () => {
-  const entities = new Map([["1", { db: "d", table: "Union: a + b" }], ["2", { db: "x", table: "other" }]]);
-  assert.deepEqual(takenNames(entities, "d", ["a", "b"]), ["a", "b", "Union: a + b"]);
-  assert.equal(unionSource("d", ["a", "b"], takenNames(entities, "d", ["a", "b"])).name, "Union: a + b 2");
 });
 test("a saved source whose name is longer than the server allows is dropped", () => {
   const name = "n".repeat(LIMITS.sourceName);

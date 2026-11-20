@@ -32,7 +32,6 @@ export function initConnection() {
   const changeBtn = document.getElementById("conn-change");
   const disconnectBtn = document.getElementById("conn-disconnect");
   const schemaSection = document.getElementById("schema-section");
-  const tablesSection = document.getElementById("tables-section");
   const divider = document.getElementById("sidebar-divider");
   const dbHeading = document.getElementById("db-heading");
 
@@ -208,7 +207,6 @@ export function initConnection() {
     toggle(schemaSection, connected);
     toggle(divider, connected);
     toggle(dbHeading, connected);
-    if (!connected) hide(tablesSection);
     // Disconnected (first load, or after Disconnect): the form is the only thing to do, so start typing in it — the first empty
     // field (Host, or Password when a host is kept). Never steal focus from something the user is already on.
     const idle = !document.activeElement || document.activeElement === document.body;

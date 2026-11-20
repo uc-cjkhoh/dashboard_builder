@@ -20,29 +20,6 @@ const distinct = (a) => new Set(a).size === a.length;
 /** The note one card shows under its head. */
 export const sourceNote = (s) => (s.kind === "union" ? UNION_NOTE : unpivotNote(s.columns.length));
 
-/** A name not in `taken`: `base`, then `base 2`, `base 3` …, cut so it fits LIMITS.sourceName. */
-export function uniqueName(base, taken) {
-  const used = new Set(taken);
-  const fit = (n, suffix = "") => `${n.slice(0, LIMITS.sourceName - suffix.length)}${suffix}`;
-  if (!used.has(fit(base))) return fit(base);
-  for (let i = 2; ; i++) if (!used.has(fit(base, ` ${i}`))) return fit(base, ` ${i}`);
-}
-
-/** The union source for `tables` of `db`. Throws a sentence when it can't be one. */
-export function unionSource(db, tables, taken = []) {
-  if (tables.length < 2 || tables.length > LIMITS.unionTables) throw new Error(`A union needs between 2 and ${LIMITS.unionTables} tables.`);
-  if (!distinct(tables)) throw new Error("Pick different tables.");
-  return { kind: "union", db, name: uniqueName(`Union: ${tables.join(" + ")}`, taken), tables: [...tables] };
-}
-
-/** The unpivot source for `columns` of `table` (keeping `keep`). Throws a sentence when it can't be one. */
-export function unpivotSource(db, table, columns, keep = [], taken = []) {
-  if (columns.length < 2 || columns.length > LIMITS.unpivotColumns) throw new Error(`An unpivot needs between 2 and ${LIMITS.unpivotColumns} columns.`);
-  if (keep.length > LIMITS.unpivotKeep) throw new Error(`An unpivot can keep at most ${LIMITS.unpivotKeep} columns.`);
-  if (!distinct([...columns, ...keep])) throw new Error("Pick different columns for each role.");
-  return { kind: "unpivot", db, name: uniqueName(`Unpivot: ${table}`, taken), table, columns: [...columns], keep: [...keep] };
-}
-
 /** What the server reads of a source (POST /api/query `source`, POST /api/source/columns): only the fields its kind uses. */
 export function wireSource(s) {
   return s.kind === "union"
@@ -142,9 +119,6 @@ export function distinctPlanSql(db, table, sql, column, limit) {
 
 /** The members a distinctPlan result lists (text, non-null), in order. */
 export const distinctMembers = (result) => (result?.rows ?? []).map((r) => r.keys[0]).filter((k) => k !== null && k !== undefined);
-
-/** Names a new source must avoid in `db`: the database's tables (a real one of that name could be dragged on later) and the entities already on the canvas. */
-export const takenNames = (entities, db, tables) => [...tables, ...[...entities.values()].filter((e) => e.db === db).map((e) => e.table)];
 
 /** What a union leaves out, from each table's columns ({ table, columns: [{name, type, category}] }, in order): the same rule the server
  *  applies (a column is kept when every table has it under one kind). `missing`: columns some tables lack; `kind`: columns every table

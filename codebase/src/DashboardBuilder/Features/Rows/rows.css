@@ -24,32 +24,12 @@
 .table-chip__peek { opacity: 0; transition: opacity var(--dur-fast) var(--ease); }
 .table-chip:hover .table-chip__peek, .table-chip:focus-within .table-chip__peek { opacity: 1; }
 
-/* Union dialog: a list of ticked tables, then the shared rows dialog shows the stacked rows. */
-.union-dialog { width: min(480px, calc(100vw - 2 * var(--s4))); }
-.union-dialog__body { display: grid; gap: var(--s2); }
-.union-dialog__top { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); padding-right: var(--s2); }
-.union-dialog__top .iconbtn { margin-top: var(--s4); } /* the title carries 16px of top padding: the X centres on its line, not on the padding */
-.union-dialog__list { display: grid; gap: var(--s2); max-height: 40vh; overflow: auto; }
-.union-dialog__item { display: flex; align-items: center; gap: var(--s2); font-size: var(--fs-body); }
-.union-dialog__hint { margin: 0; min-height: 1lh; color: var(--ink-2); font-size: var(--fs-body); }
-.union-dialog__none { margin: 0; color: var(--ink-2); font-size: var(--fs-body); }
-
-/* Unpivot dialog: pick a table, the columns to turn into rows and the ones to keep. */
-.unpivot-dialog { width: min(560px, calc(100vw - 2 * var(--s4))); }
-.unpivot-dialog[open] { display: flex; flex-direction: column; max-height: calc(100vh - 2 * var(--s4)); }
-.unpivot-dialog__body { display: grid; gap: var(--s4); overflow: auto; min-height: 0; align-content: start; }
-.unpivot-dialog .dialog__foot { flex: none; }
-.unpivot-dialog__cols { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s4); }
-.unpivot-dialog__list { display: grid; gap: var(--s2); max-height: 30vh; overflow: auto; align-content: start; }
-.unpivot-dialog__head { font-size: var(--fs-body); font-weight: 600; margin-bottom: var(--s1); }
-.unpivot-dialog__type { color: var(--ink-3); }
-
 /* Split dialog (Calc): a separator and a piece count. */
 .split-dialog { width: min(420px, calc(100vw - 2 * var(--s4))); }
 .split-dialog__body { display: grid; gap: var(--s4); }
 .split-dialog__names { margin: 0; padding-left: var(--s4); color: var(--ink-2); font-size: var(--fs-body); }
-.unpivot-dialog .field > label, .split-dialog .field > label { display: block; font-size: var(--fs-body); font-weight: 600; margin-bottom: var(--s1); }
-.unpivot-dialog .select, .split-dialog .input { width: 100%; }
+.split-dialog .field > label { display: block; font-size: var(--fs-body); font-weight: 600; margin-bottom: var(--s1); }
+.split-dialog .input { width: 100%; }
 .clean-dialog .select, .clean-dialog .input { width: 100%; }
 .clean-dialog .field > label { display: block; font-size: var(--fs-body); font-weight: 600; margin-bottom: var(--s1); }
 .clean-dialog__pairs { height: auto; resize: vertical; font-family: inherit; }
