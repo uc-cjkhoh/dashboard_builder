@@ -17,8 +17,8 @@ before styling anything. Each is a CSS custom property in the `:root` block of `
 
 ## Light and dark
 
-The viewer picks **Light** (the default) or **Dark** in the Appearance card at the right end of the tab bar
-([layout.md § Tab bar](layout.md#tab-bar)). The app does not read the OS setting. The choice is a
+The viewer picks **Light** (the default) or **Dark** in the Appearance card in the dock at the canvas's bottom right
+([layout.md § Dock](layout.md#dock)). The app does not read the OS setting. The choice is a
 per-browser preference (`localStorage` `dashboardbuilder.scheme`), never saved in the workbook; a missing, unknown
 or retired `"system"` value reads as Light ([D148](../../decisions/decisions-design.md#d148--the-appearance-card-has-no-system-mode)).
 

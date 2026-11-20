@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
-"""PostToolUse hook: keep docs/development/updates/ui_updates.md and docs/development/updates/feature_updates.md current.
+"""PostToolUse hook: keep docs/development/updates/change_log.md current.
 
 Fires after a Bash call; does nothing unless the command contains `git merge` or `git commit`. It then
-rebuilds both logs from the app repo's `main` history (idempotent: no state file, same input -> same
-output), one section per commit date (newest first), one table row (Time | Change | Commit) per commit.
-Time is the commit's author time (HH:MM, in the committer's own timezone); a collapsed row shows its earliest commit's time.
+rebuilds the log from the app repo's `main` history (idempotent: no state file, same input -> same
+output), one section per commit date (newest first), one table row (Time | Change | Commits) per topic.
+Time is the commit's author time (HH:MM, in the committer's own timezone); a grouped row shows its earliest-latest range.
 
-Classification (each commit lands in exactly one file):
-  skipped  - merge commits, and commits that touch only tests/, docs or nothing user-visible
-  UI       - touches .css/.cshtml with no server (.cs) change, or is JS-only with a visual keyword
-  feature  - everything else (server, model, validation, behaviour)
-Redundancy: commits of one date whose subjects open with the same four words are one bullet (earliest subject, every sha).
+Skipped: merge commits, and commits that touch only tests/, docs or nothing user-visible.
+Grouping: commits of one date that share a topic become one row. The topic is the subject's text before its first
+colon (up to six words); a subject with no colon is its own topic unless its first four words match another's.
+A grouped row lists each commit's text after the topic as a bullet, oldest first, with every sha.
 Run with --rebuild from the shell to regenerate without the hook payload.
 """
 import json, os, re, subprocess, sys
@@ -19,63 +18,71 @@ from collections import OrderedDict
 KB = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 APP = "/unified/user/cj/web_development/prototype/dashboard_builder"
 OUT = os.path.join(KB, "docs", "development", "updates")
-VISUAL = re.compile(r"\b(colou?r|palette|icon|spacing|tooltip|focus|align\w*|design|look|legend|shading|theme|hatch\w*)\b", re.I)
-LOGIC = re.compile(r"\b(model|validation|import|limits?|tests?)\b", re.I)
 
 def git(*args):
     return subprocess.run(["git", "-C", APP, *args], capture_output=True, text=True).stdout
 
-def classify(subject, files):
-    shipped = [f for f in files if not f.startswith(("tests/", "docs/")) and not f.endswith(".md")]
-    if not shipped:
-        return None
-    if any(f.endswith(".cs") for f in shipped):
-        return "feature"
-    if any(f.endswith((".css", ".cshtml")) for f in shipped):
-        return "ui"
-    return "ui" if VISUAL.search(subject) and not LOGIC.search(subject) else "feature"
+def shipped(files):
+    return any(not f.startswith(("tests/", "docs/")) and not f.endswith(".md") for f in files)
+
+def split_topic(subject):
+    """(topic key, topic label, detail). A subject with no short colon prefix is its own detail under its first four words."""
+    m = re.match(r"^([^:]{3,60}?):\s+(.+)$", subject)
+    if m and len(m.group(1).split()) <= 6:
+        label, detail = m.group(1), m.group(2)
+        return " ".join(re.sub(r"\W+", " ", label.lower()).split()), label, detail
+    return " ".join(re.sub(r"\W+", " ", subject.lower()).split()[:4]), None, subject
 
 def collect():
-    rows = {"ui": OrderedDict(), "feature": OrderedDict()}
+    days = OrderedDict()
     for line in git("log", "--no-merges", "--reverse", "--format=%x1e%h%x1f%ad%x1f%s", "--date=format:%Y-%m-%d %H:%M", "--name-only", "main").split("\x1e")[1:]:
         head, *files = [l for l in line.split("\n") if l.strip()]
         sha, stamp, subject = head.split("\x1f")
-        date, clock = stamp.split(" ")
-        kind = classify(subject, files)
-        if not kind:
+        if not shipped(files):
             continue
-        key = " ".join(re.sub(r"\W+", " ", subject.lower()).split()[:4])
-        day = rows[kind].setdefault(date, OrderedDict())
-        if key in day:
-            day[key][0].append(sha)
-        else:
-            day[key] = ([sha], subject, clock)
-    return rows
+        date, clock = stamp.split(" ")
+        key, label, detail = split_topic(subject)
+        group = days.setdefault(date, OrderedDict()).setdefault(key, {"label": label, "items": []})
+        group["label"] = group["label"] or label
+        group["items"].append((sha, clock, detail, subject))
+    return days
 
-def row(shas, subject, clock):
-    return "| {} | {} | {} |".format(clock, subject.replace("|", "\\|"), ", ".join("`%s`" % h for h in shas))
+def esc(text):
+    return text.replace("|", "\\|")
+
+def row(group):
+    items = group["items"]  # oldest first
+    clocks = sorted(c for _, c, _, _ in items)
+    clock = clocks[0] if clocks[0] == clocks[-1] else f"{clocks[0]}–{clocks[-1]}"
+    shas = ", ".join(f"`{sha}`" for sha, _, _, _ in items)
+    if len(items) == 1:
+        return clocks[-1], f"| {clock} | {esc(items[0][3])} | {shas} |"
+    seen, parts = set(), []
+    for _, _, detail, subject in items:
+        if detail not in seen:
+            seen.add(detail)
+            parts.append(detail if group["label"] else subject)
+    title = group["label"] or items[0][3]
+    return clocks[-1], f"| {clock} | **{esc(title)}**<br>" + "<br>".join("• " + esc(d) for d in parts) + f" | {shas} |"
 
 def render(title, blurb, days):
     out = [f"# {title}", "", blurb, ""]
     for date in sorted(days, reverse=True):
-        out += [f"## {date}", "", "| Time | Change | Commit |", "| --- | --- | --- |"]
-        out += [row(*v) for v in reversed(days[date].values())] + [""]
+        rows = sorted((row(g) for g in days[date].values()), key=lambda r: r[0], reverse=True)
+        out += [f"## {date}", "", "| Time | Change | Commits |", "| --- | --- | --- |"] + [r[1] for r in rows] + [""]
     return "\n".join(out).rstrip() + "\n"
 
 def rebuild():
-    rows = collect()
+    days = collect()
     os.makedirs(OUT, exist_ok=True)
     note = ("Generated by `.claude/hooks/update-log.py` from the app repo's `main` history after each `git merge` / `git commit`; "
-            "do not edit by hand. Grouped by commit date, newest first; Time is the commit time (HH:MM, +08:00). Rules: [../hooks.md](../hooks.md).")
-    for kind, name, title, what in (
-        ("ui", "ui_updates.md", "UI updates", "Visual and interaction changes (styles, markup, layout, labels, icons, focus)."),
-        ("feature", "feature_updates.md", "Feature updates", "Functional changes (server, models, validation, calculations, charts, workbook)."),
-    ):
-        text = render(title, f"{what} {note}", rows[kind])
-        path = os.path.join(OUT, name)
-        if not os.path.exists(path) or open(path, encoding="utf-8").read() != text:
-            open(path, "w", encoding="utf-8").write(text)
-    return {k: sum(len(v) for v in d.values()) for k, d in rows.items()}
+            "do not edit by hand. Grouped by commit date, newest first; commits that share a topic on one day are one row; "
+            "Time is the commit time (HH:MM, +08:00), a range for a grouped row. Rules: [../hooks.md](../hooks.md).")
+    text = render("Change log", note, days)
+    path = os.path.join(OUT, "change_log.md")
+    if not os.path.exists(path) or open(path, encoding="utf-8").read() != text:
+        open(path, "w", encoding="utf-8").write(text)
+    return {"days": len(days), "rows": sum(len(d) for d in days.values()), "commits": sum(len(g["items"]) for d in days.values() for g in d.values())}
 
 def main():
     if "--rebuild" in sys.argv:

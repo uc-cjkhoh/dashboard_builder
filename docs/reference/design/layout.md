@@ -15,8 +15,12 @@ any region's size, spacing or position. Regions and their behaviour are in
   over the body's flat `--bg` (`--wash` is `none`). Chrome is glass; data
   surfaces (entity cards, chart area, crosstab, field list) are solid `--surface`.
 - Scrolling happens **inside regions**: the sidebar's table list, each entity card's column list, the
-  worksheet field pane and the chart area. Scrollbars are thin and themed (muted ink thumb, accent on
-  hover).
+  worksheet field pane and the chart area. Every scroller in the app shares one scrollbar: a 10px lane, no arrow buttons, a pill thumb in `--line-2`
+  (accent on hover; the sidebar's table list uses muted ink on its glass). One universal rule in `core.css`
+  (`*::-webkit-scrollbar…`, plus the custom select's `::picker(select)`) draws it for Chrome and Safari, so a new
+  scroller needs no scrollbar CSS and feature stylesheets set none. `scrollbar-width` / `scrollbar-color` are set
+  only where those rules are unsupported (`@supports not selector(::-webkit-scrollbar)`, Firefox), because Chrome
+  would otherwise ignore the rules and show its native arrows.
 
 ## Alignment grid
 
@@ -44,8 +48,9 @@ Related items share one edge, measured on what the eye sees (glyphs and text), n
   - Head order: title, **Needs a partner** while shown, ☰ (the card's actions menu), caret, ✕. The caret sits just left of the ✕, and the title takes the left gutter; the card's width counts every part that shows. The ✕
     is pulled out by its 12px slack (`margin-right: -(--s2 + --s1)`) so its ink ends on the gutter. The
     glyph is a 16px box in a 32px button, with strokes 4px inside.
-  - The scrolling list reserves its 10px scrollbar (`scrollbar-gutter: stable`) and its rows give up that
-    much right padding. The type text therefore ends on the same line whether or not the list overflows.
+  - The scrolling list reserves its scrollbar (`scrollbar-gutter: stable`) and its rows give up that
+    much right padding. The width is measured, not assumed (`--sb-w` on the canvas, from a hidden probe
+    list; 0 for an overlay scrollbar), so a thin, classic or overlay scrollbar all end the type text on the gutter. The type text therefore ends on the same line whether or not the list overflows.
   - Vertical: caret, title, name and type text all share one optical centre (the cap-height midpoint of
     the 14px text) within 0.5px. The first and last rows sit 4px inside the list's top and bottom edges.
     A failed card's status line uses the same 16px gutter.
@@ -110,15 +115,21 @@ A glass bar across the top of the content area (`.canvas__bar`). From left to ri
 
 1. Frosted-pill tabs; the active one has an accent fill and bold text.
 2. The quiet autosave text.
-3. Right-most, **Appearance** (`#scheme-btn`, `Shell/appearance.js`). It is an icon button
-   whose glyph shows the current mode (sun / moon; label "Appearance: Light"). It opens one
-   314px card on the menu surface: a two-segment mode row (Light / Dark), then Dark look, Accent, Chart colours and Reset theme
-   ([tokens.md § Light and dark](tokens.md#light-and-dark), [workbook.md](../../concepts/workbook/workbook.md)). It scrolls inside when the window is short (checked at a 420px-high window: the card scrolls, the page does not). Spacing: 8px card padding; 4px between rows of one group; 8px each side of a separator; a group heading carries 8px above and none below, so it sits with its own rows. Every left edge (heading, row, strip, swatch, picker) is 16px in from the card's edge, every right edge (tick, swatch, hex field, accent name) 16px; the tick and the Reset icon are pulled 2px so their ink, not their box, meets those edges. The nine swatches have exact 8px gaps (the width is 2 + 2×8 + 2×8 + 9×24 + 8×8). The custom-colour row is one 32px field (a 24px swatch that opens the picker, the name “Custom” and the hex, right-aligned; the swatch sits 3px from the field's edge on every side), its outer edges on the swatch row's; Left / Right walk the mode row and the accent swatches.
 
 The **performance** gauge button (`#perf-btn`, `Shell/perf-panel.js`) is not in this bar: it is a sidebar tool tile in the sidebar body (see § Sidebar).
 
 The bar's contents are vertically centred. It shares `--topbar-h` with the sidebar brand block, so the
 two bottom borders line up across the shell. If the tabs wrap, the bar grows taller than the brand.
+
+## Dock
+
+Two solid icon buttons stacked at the canvas's bottom right (`.canvas__dock`, absolutely placed in `main.canvas`, over every view): **Appearance** on top, **Fit all cards** under it (added by `Canvas/canvas.js` while the Data Source shows cards; the dock holds only Appearance otherwise). Right and bottom edges are 16px in (`--s4`); the buttons are 32px with 8px between them, a hairline (`--line-2`) for the edge on a `--surface` fill (buttons carry no shadow, `buttons.css`). The dock rises above the Data preview panel while it is open (`.has-ds-preview`), and the activity chip steps left of it.
+
+**Appearance** (`#scheme-btn`, `Shell/appearance.js`) is an icon button whose glyph shows the current mode (sun / moon; label "Appearance: Light"). It opens one
+314px card on the menu surface: a two-segment mode row (Light / Dark), then Dark look, Accent, Chart colours and Reset theme
+([tokens.md § Light and dark](tokens.md#light-and-dark), [workbook.md](../../concepts/workbook/workbook.md)). It scrolls inside when the window is short (checked at a 420px-high window: the card scrolls, the page does not). Spacing: 8px card padding; 4px between rows of one group; 8px each side of a separator; a group heading carries 8px above and none below, so it sits with its own rows. Every left edge (heading, row, strip, swatch, picker) is 16px in from the card's edge, every right edge (tick, swatch, hex field, accent name) 16px; the tick and the Reset icon are pulled 2px so their ink, not their box, meets those edges. The nine swatches have exact 8px gaps (the width is 2 + 2×8 + 2×8 + 9×24 + 8×8). The custom-colour row is one 32px field (a 24px swatch that opens the picker, the name “Custom” and the hex, right-aligned; the swatch sits 3px from the field's edge on every side), its outer edges on the swatch row's; Left / Right walk the mode row and the accent swatches.
+
+The card opens **upward** (`top: auto; bottom: calc(100% + 8px)`) and grows from the button's bottom right (`Core/menu.js` reads the computed `top` to pick the animation direction); its height is capped to the room above the dock.
 
 ## Entity cards
 

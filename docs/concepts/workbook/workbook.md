@@ -95,7 +95,7 @@ Problems while restoring:
 
 ## Export & Import
 
-The tab bar's right end holds the site-wide icons: **Appearance** (`Shell/Index.cshtml`, right-most): one button, one card. The **Performance** timings tile is in the sidebar body (worksheet and dashboard tabs only), and workbook actions live in the worksheet view bar.
+**Appearance** is the top button of the dock at the canvas's bottom right (`Shell/Index.cshtml`, `#canvas-dock`; **Fit all cards** sits under it on the Data Source): one button, one card. The **Performance** timings tile is in the sidebar body (worksheet and dashboard tabs only), and workbook actions live in the worksheet view bar.
 The worksheet view bar's icon row ends with **Export** and the **Sheet actions** (⋯) menu, and the **Export** menu holds **Workbook (JSON)** and **Import workbook…**, and the worksheet sidebar's **Parameters** icon opens the Parameters dialog.
 The actions:
 
@@ -105,7 +105,7 @@ The actions:
   - Each has a name (unique, 1–60 characters), a type (number / text / date), the allowed values (any, a list of ≤ 50, or a number range) and the current value.
   - Each is checked before it is kept (`Core/parameters-model.js`).
   - Parameters save with the workbook; disconnecting clears them from the screen.
-- **Appearance** (the canvas bar's right-most icon; its glyph shows the mode) opens one card, not a dialog. It stays open while you pick, and Esc, an outside click or Tab closes it. Top to bottom:
+- **Appearance** (the dock's top icon at the canvas's bottom right; its glyph shows the mode) opens one card, upward, not a dialog. It stays open while you pick, and Esc, an outside click or Tab closes it. Top to bottom:
   - the mode (Light or Dark, Light by default; kept in this browser, not in the workbook);
   - **Dark look**: Default or One Dark Pro (dark-mode surfaces; it also picks the One Dark accent and chart colours);
   - **Accent**: Signal (the default), Ultramarine, Monospace, Crimson, Blue, Teal, Violet, One Dark and Graphite as swatches (the chosen one carries a tick; the heading names it), then a custom colour (a picker and a `#rrggbb` field, refused with the reason if it can't carry white text; Signal carries dark text on its dark-mode lime);
