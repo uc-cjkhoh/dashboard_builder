@@ -36,18 +36,18 @@ Grouped by feature folder; each entry is the module, then what it owns.
 - `Connection/recent-sources.js` — pure: `remember` / `forget` / `sanitize` recent connection sources (host as entered, port, user, TLS flags — never a password), most recent first, max 5; `formValues` refills the form from one
 - `Connection/connection-rules.js` — pure: `secureToggled` / `trustToggled` (Secure off clears Trust, on restores it), `certNoteVisible` (the "certificate not checked" note waits), `summaryTitle` / `summaryDetail` (compact-summary tooltip, user · port), `formFromView`
 
-### Schema/ — database picker and table list
+### Schema/ — database tree
 
-- `Schema/schema.js` — database `<select>`, table search, table chips + drag payload — [schema-browser.md](../concepts/data-source/schema-browser.md)
+- `Schema/schema.js` — the database tree (lazy per-database table listing, search, table rows + drag payload, `schema:open`) — [schema-browser.md](../concepts/data-source/schema-browser.md)
 - `Schema/column-profile-dialog.js`, `Schema/column-profile-model.js` — the column profile dialog (`openColumnProfile(db, table, column)`, opened from a field row on a canvas card) and its pure rules:
-  - `profileRequest`, `formatShare`, `roleOf`, `summarize` — [schema-browser.md](../concepts/data-source/schema-browser.md#column-profile--field-details)
-- `Schema/table-filter.js` (`matchTables`, the table search), `Schema/schema-model.js` (`splitDatabases`, `rememberDb` / `recallDb`) — pure rules
+  - `profileRequest`, `formatShare`, `roleOf`, `summarize`, `profileFailure` — [schema-browser.md](../concepts/data-source/schema-browser.md#column-profile--field-details)
+- `Schema/table-filter.js` (`matchTables`, `listStep`), `Schema/schema-model.js` (`splitDatabases`, `rememberOpen` / `recallOpen`), `Schema/tree-model.js` (`filterTree`, `capRows`, `runLimited`, `initialOpen`) — pure rules
 
 ### Canvas/ and Relations/ — the Data Source canvas
 
 - `Canvas/canvas.js` — drop handling, entity cards, card menu and Edit SQL (`sql-dialog.js`, `sql-editor.js`, `Core/sql-check.js`), card movement, list height from an edge drag (`card-height.js`), the column type label (`column-type.js`, pure `cardType`), zoom and pan (`canvas-zoom.js`), empty state, the data preview docked under the canvas (`data-preview.js`, request rule `entityRowsQuery` in `Rows/rows-model.js`; column widths, resize grips and number alignment in `preview-columns.js`) — [canvas.md](../concepts/data-source/canvas.md)
 - `Canvas/empty-state.js` — pure: `emptyState({connected, databaseSelected})` → the sentence, button and control to focus
-- `Relations/relations.js` — drag- and keyboard-to-relate (`link-keys.js`), links, the Relationships description card (`relation-describe.js`), cardinality, pinned keys — [relationships.md](../concepts/data-source/relationships.md)
+- `Relations/relations.js` — drag- and keyboard-to-relate (`link-keys.js`), links, the relationship dialog and its "What this link does" summary (`relation-describe.js`), cardinality, pinned keys — [relationships.md](../concepts/data-source/relationships.md)
 - `Relations/join-preview-model.js`, `Relations/join-check.js` — pure wording and chosen-vs-observed comparison of a join preview (`describePreview`, `observedCardinality`, `joinEvidence`, `suggestionLabel`, `pct`, `previewRequest`); the dialog's Suggestion panel (DOM, `textContent` only): `buildJoinCheck()` returns `{ root, start, rerun, redescribe }`, run on open, re-run on a key-pair change, re-read on a cardinality pick
 - `Relations/link-route.js` — pure: `linkSides` (which card edge each end uses), `linkRoute` (the elbow's corner points, lanes, badge spot), `roundedPath`, `placeBadge` (badge spot that avoids cards and other badges), `assignLanes` / `laneCrossings` (a lane per overlapping link in a gutter, ordered to cross least), `quietBadges` (badges hidden at rest from 4 links) — the link geometry
 - `Relations/key-pairs.js`, `Relations/key-pairs-ui.js` — a compound key: pure `suggestPairs`, `addPair`, `compoundName`, `MAX_EXTRA_PAIRS`; the dialog's "Also match on" section (native controls, `textContent` only)
@@ -181,11 +181,6 @@ Grouped by feature folder; each entry is the module, then what it owns.
   - `tableRowsRequest`, `buildRowsRequest({plan, selection, limit})` (base-table filters + the mark as a bound `=`; `notes` for what couldn't apply), `rowsSummary`, `cellText`, `rowsToCsv`, `DEFAULT_LIMIT` — [worksheet-query.md](../concepts/worksheet/worksheet-query.md#view-data)
 - `Rows/rows-dialog.js` — the rows dialog:
   - `openTablePreview(db, table)` (schema browser) and `openRowsDialog({title, subtitle, request, notes, filename, load})` (`load` defaults to `api.rows`) — [schema-browser.md](../concepts/data-source/schema-browser.md#row-preview)
-- `Rows/union-model.js` — pure: `unionRequest(db, tables)` (2–5 different tables, throws a sentence otherwise), `unionPickState`, `UNION_LIMIT` (20) — [api-union-unpivot.md § Union](../reference/api-union-unpivot.md#union)
-- `Rows/union-dialog.js` — `openUnionDialog(db, tables)`: tick 2–5 tables, then **Show rows** (`openRowsDialog` with `api.union` rows) or **Add to model** (`source:add`)
-- `Rows/unpivot-model.js` — pure:
-  - `unpivotRequest(db, table, columns, keep)` (2–50 columns, ≤ 5 kept, no column in both roles; throws a sentence otherwise), `unpivotPickState(cols, columns, keep)` (same-kind rule), `UNPIVOT_LIMIT` (20) — [api-union-unpivot.md § Unpivot](../reference/api-union-unpivot.md#unpivot)
-- `Rows/unpivot-dialog.js` — `openUnpivotDialog(db, tables)`: table select, two checkbox lists (turn into rows / keep), then **Show rows** (`openRowsDialog` with `api.unpivot` rows) or **Add to model** (`source:add`)
 
 ### Calc/ — calculated fields
 
@@ -219,7 +214,7 @@ Grouped by feature folder; each entry is the module, then what it owns.
 ### Workbook/ — saving, import/export and workbook dialogs
 
 - `Workbook/parameters-dialog.js` — P32: the Parameters dialog (sidebar Parameters icon)
-- `Workbook/theme-dialog.js` — the Theme dialog (opened by the Theme button)
+- `Workbook/theme-dialog.js` — the Colour theme dialog (opened by the Colour theme button)
 - `Workbook/workbook.js` — auto-save, restore on connect, Export/Import — [workbook.md](../concepts/workbook/workbook.md)
 - `Workbook/workbook-model.js` — pure (also `restoredSummary`, `issueCount`; `Dashboard/missing-columns.js` prunes pills whose column isn't in the catalog):
   - workbook serialize (v2) / `parseWorkbook` (full validation + issue list; v1 files via `migrateV1`) / `sanitizeSheet` / storage keys (`storageKey`, `legacyStorageKey`) — [workbook.md](../concepts/workbook/workbook.md#validation-parseworkbook)
@@ -233,13 +228,14 @@ Grouped by feature folder; each entry is the module, then what it owns.
 - `Core/scheme.js` — owns `<html data-scheme>`: `isDark`, `schemePref`, `setSchemePref` (`localStorage`), follows the OS while System; emits `scheme:changed`
 - `Core/theme.js` — applies the workbook theme's custom properties on `:root` (`theme:changed`, `scheme:changed`)
 - `Core/source-model.js` — pure ([query-sources.md](../concepts/data-source/query-sources.md)):
-  - `unionSource` / `unpivotSource` (the definition + automatic name, throws a sentence), `uniqueName`, `takenNames`, `wireSource`, `cleanSource` (workbook re-check), `sourceOfTable(entities, db, table)`, `sourceProblem(keys, entities)` (the mixed-view refusal), `sourceNote`, `distinctPlan` / `distinctMembers` (a filter's member list over a source)
+  - `wireSource`, `cleanSource` (workbook re-check), `sourceOfTable(entities, db, table)`, `sourceProblem(keys, entities)` (the mixed-view refusal), `sourceNote`, `distinctPlan` / `distinctMembers` (a filter's member list over a source)
 - `Core/api.js` — `fetch` helpers (JSON, errors, path base, optional `AbortSignal`); `api.sourceColumns(source)` → `POST /api/source/columns`
 - `Core/ui.js` — toast, pill, `show`/`hide`/`toggle`, `fieldError` / `clearFieldError` / `checkField`, `listDialog`, `confirmDialog`, `openDialog`/`closeDialog`, `copyText(text, what)` (clipboard + toast)
 - `Core/validate.js` — pure input parsers (`host`, `port`, `text`, `number`, `dateTime`, `filterValue`, `range`, `percent`, with `isFraction` / `percentLabel` for the percentile fraction) returning `{ ok, value }` or `{ ok:false, error }`, plus `LIMITS` and `HOST_MESSAGES`
   - mirror of the server's `ApiLimits` / `RequestRules`
 - `Core/sheet-schema.js` — pure: the allowed values for a saved sheet (chart types, categories, filter ops, formats, Top-N)
 - `Core/icons.js` — the inline-SVG icon set — `icon(name, {size, label})`, `PATHS`, `ICON_NAMES`
+- `Core/hover-tip.js` — `initHoverTips()`: one delegated, styled tip for every `button[title]` / `[role=button][title]` (hover rest, keyboard focus; [motion-accessibility.md](../reference/design/motion-accessibility.md#accessibility-posture)); `Core/hover-tip-model.js` — pure `placeTip`, `delayFor`
 - `Core/menu.js` — `wireMenu(button, list)` — keyboard-operable popover menu (`menuitem` / `menuitemradio` items)
   - `openContextMenu` / `wireContextMenu` — the context popup (also opened under a Data Source card's ☰, `canvas.js`; `onClose` runs however it closes) (right-click, ContextMenu key, `Shift+F10`, `Enter`); opened from inside an open modal `<dialog>` (the Calculated fields dialog) it is appended to that dialog as a `popover="manual"`, so it is in the top layer above the dialog and still clickable
   - animated open/close via `motion.js`

@@ -51,7 +51,7 @@ entities:      Map id → Entity              ┐ ONE shared data source
 relationships: Map id → Relationship        ┘ (the Data Source tab)
 tabs:          [ Tab, … ]                   ONE ordered list — worksheet and dashboard tabs (below)
 activeView:    { kind: "model" } | { kind: "worksheet", id } | { kind: "dashboard", id }
-bus:           EventTarget — entity:added · entity:loaded · entity:moved · entity:removed
+bus:           EventTarget — entity:added · entity:loaded · entity:moved · entity:collapsing · entity:removed
                              rel:changed · view:changed · tabs:changed
                              worksheet:changed { id } · dashboard:changed { id }
 ```

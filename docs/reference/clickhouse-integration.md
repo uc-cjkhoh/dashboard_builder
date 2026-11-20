@@ -91,7 +91,7 @@ The ClickHouse on `10.168.49.13` limits `default` to `127.0.0.1`, so from the ap
 | Describe columns | `DescribeColumnsAsync` | `DESCRIBE TABLE {db}.{table}` |
 | Describe a custom SQL query | `DescribeQueryAsync` | `DESCRIBE TABLE (⏎{checked SELECT}⏎)` — no rows read; guard and echoed errors: [D105](../decisions/decisions-custom-sql.md) |
 | Distinct values | `DistinctValuesAsync` | `SELECT DISTINCT {col} AS v FROM … WHERE v IS NOT NULL ORDER BY v LIMIT n` (1..1000, rejected outside) |
-| Column profile | `ProfileColumnAsync` (`ClickHouseGateway.Profile.cs`) | two statements over a `LIMIT 1000000` subquery — [below](#column-profile-box-plot-raw-rows-and-join-preview) |
+| Column profile | `ProfileColumnAsync` (`ClickHouseGateway.Profile.cs`) | two statements over every row of the column — [below](#column-profile-box-plot-raw-rows-and-join-preview) |
 | Worksheet query | `QueryAsync` | see below |
 | Histogram | `HistogramAsync` | `WITH (SELECT min…) AS lo, (SELECT max…) AS hi, if(hi>lo,(hi-lo)/{bins},1) AS width SELECT least(toUInt32(floor(({c}-lo)/width)),{bins-1}) AS bin, … count() … GROUP BY bin … ORDER BY bin` |
 | Box plot | `BoxPlotAsync` | `SELECT [{dim} AS label,] min, quantile(0.25), quantile(0.5), quantile(0.75), max … [GROUP BY label] LIMIT n`, then two more — [below](#column-profile-box-plot-raw-rows-and-join-preview) |
@@ -104,16 +104,15 @@ builder runs ([api.md § Limits](api.md#limits)).
 
 ### Column profile, box plot, raw rows and join preview
 
-- **Column profile** — two statements over a `LIMIT 1000000` subquery of the column:
+- **Column profile** — two statements over every row of the column (no `LIMIT`; the result is bounded, the scan is not — [D143](../decisions/decisions-performance.md#d143--the-column-profile-reads-every-row)):
   - `SELECT count(), countIf(isNull(v)), uniq(v)[, toString(min(v)), toString(max(v))]`. Min/max are for
     numeric and date columns only, hidden when empty or all-NULL; compound types read as `toString`.
   - `SELECT label, cut, count() FROM (SELECT leftUTF8(toString(c), 100) AS label, lengthUTF8(toString(c)) > 100 AS cut …) GROUP BY label, cut ORDER BY count() DESC, label LIMIT n`
     (`n` 1..50, default 10). It groups on the cut label, so a huge string is never a key and values
     differing only after character 100 count together.
-  - Both end `SETTINGS max_rows_to_read = 1000000, read_overflow_mode = 'break', max_bytes_before_external_group_by, max_memory_usage`,
-    so the bound holds for views / Merge / Distributed tables. A server refusing the settings (codes 115,
-    164, 452) gets the plain statement.
-  - `uniq` is approximate. `sampled` is true at ≥ 1,000,000 rows.
+  - Both end `SETTINGS max_bytes_before_external_group_by, max_memory_usage`, which bound a wide-key `GROUP BY`. A server refusing the
+    settings (codes 115, 164, 452) gets the plain statement.
+  - `uniq` is approximate.
 - **Box plot** — after the summary `SELECT`, two more bounded SELECTs run on the same filtered rows, joining
   per-group Q1/Q3 (`CROSS JOIN` when ungrouped). The same bound filter parameters are reused. `BoxPlotAsync(info, QueryRequest)` (`POST /api/boxplot`)
   compiles the worksheet query up to its FROM / joins / WHERE and its value and group expressions (the box hook in `QueryCoreAsync`: the same

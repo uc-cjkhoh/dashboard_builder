@@ -170,8 +170,8 @@ What this means for you:
 
 - **Row preview** (`/api/rows`): `LIMIT n+1` with no `ORDER BY`, up to 1,000 rows. Cheap on any table
   since ClickHouse stops at the limit.
-- **Column profile** reads at most the first 1,000,000 rows of the column, so the numbers describe that
-  slice ("sampled" at 1,000,000 or more), not the whole table
+- **Column profile** reads every row of the column, so the numbers describe the whole table; on a very large table
+  it can hit the time limit and fail with a 504
   ([clickhouse-integration.md](clickhouse-integration.md#the-queries-all-read-only)).
 - **The relationship suggestion** reads at most 1,000,000 rows per side, with no `ORDER BY`. The first million
   rows are not a statistical sample: on a table sorted by date they are the oldest rows

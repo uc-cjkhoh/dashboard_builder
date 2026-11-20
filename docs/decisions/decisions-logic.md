@@ -54,6 +54,8 @@ function and retrying as the keyword form on failure: it re-parses nested `IF (â
   NULL. **Rejected:** a bad date as an error (the values are data, not the formula); clamping to the month end.
 - **`DATENAME(part, d)`** takes `'weekday'` or `'month'` and always answers in English: `dateName` does not read the server
   locale, so the same workbook reads the same everywhere. Other parts are refused (`YEAR`, `MONTH` already give numbers).
+  *Amended 2026-11-19:* `'year'` and `'quarter'` are accepted too, as text (`'2024'`, `'1'`); they are locale-free, and let a name be built by `CONCAT`
+  without a `TEXT()` cast. The result stays text for every part.
 - **`DATETRUNC`** returns one `DateTime64` type for every unit, so results of different units can share an `IF`.
 
 ### D93 â€” `FISCALYEAR` and `FISCALQUARTER` take a literal start month

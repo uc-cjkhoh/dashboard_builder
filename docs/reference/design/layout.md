@@ -12,7 +12,7 @@ any region's size, spacing or position. Regions and their behaviour are in
 - `html, body { height: 100%; overflow: hidden }` — **the page never scrolls**
   ([golden rule 8](../../development/coding-standards.md#8-keep-the-shell-fixed-scroll-inside-panels)).
 - The shell is a full-screen grid: **glass sidebar** (`var(--sidebar-w)`) + **content area**. Both sit
-  over the body's fixed `--wash` background, so the glass has something to blur. Chrome is glass; data
+  over the body's flat `--bg` (`--wash` is `none`). Chrome is glass; data
   surfaces (entity cards, chart area, crosstab, field list) are solid `--surface`.
 - Scrolling happens **inside regions**: the sidebar's table list, each entity card's column list, the
   worksheet field pane and the chart area. Scrollbars are thin and themed (muted ink thumb, accent on
@@ -68,7 +68,7 @@ Related items share one edge, measured on what the eye sees (glyphs and text), n
 ## Sidebar
 
 - **Resizable:** a right-edge handle (`.sidebar__resizer`, `Shell/sidebar.js`) drags `--sidebar-w`
-  between a minimum and **30% of the viewport**. The shared `.resizer` shows its 2px `--accent` line on
+  (**330px** by default; it shows in full only on the connected Data Source tab, the other tabs use the rail) between a minimum and **30% of the viewport**. The shared `.resizer` shows its 2px `--accent` line on
   hover, focus, or while that handle is dragged (`.resizer.is-active`, set by `Core/resizer.js`) — never
   from `body.is-resizing` alone, which the data preview's column grips also set.
 - **Collapsible:** the toggle at the right of the brand row (`#sidebar-toggle`, `sidebar` icon) collapses
@@ -98,10 +98,9 @@ Related items share one edge, measured on what the eye sees (glyphs and text), n
 - The empty Data Source shows one centred sentence + one button that focuses the control for the next
   step ([canvas.md](../../concepts/data-source/canvas.md#empty-state)).
 
-The sidebar has **no section titles and no dividers** below the brand row; the Connection / Database /
-Tables headings are screen-reader-only. Spacing groups the connected summary and the database picker,
-then the search box and table list. The connected summary is a flat row: status slot on the gutter (green dot, grey ring or red cross — the last liveness probe),
-host, then change and disconnect icon buttons right-aligned on the row (no menu). A flexible gap with an edge-to-edge hairline (`.sidebar__divider`) separates the connection tile from the **Database** picker; a **Table** title (singular, 16px under the picker) heads the table list.
+The sidebar's headings (Connection, Databases and tables) are screen-reader-only: the tiles say what they are. Below the brand row are two tiles,
+the connected summary and the **database tree** (its search box above the databases and their table rows). The connected summary is a flat row: status slot on the gutter (green dot, grey ring or red cross — the last liveness probe),
+host, then change and disconnect icon buttons right-aligned on the row (no menu). A flexible gap with an edge-to-edge hairline (`.sidebar__divider`) separates the connection tile from the database tree.
 
 The **performance** gauge tile (`#perf-btn`) closes the body: the same 40px sidebar tool tile as the worksheet tools, pinned to the bottom and centred in the rail on a worksheet or dashboard (where the body shows only the tools, or only this tile). It is **not in the DOM on the Data Source tab** (`Shell/sidebar.js` removes it there, which has no queries to time, and appends it back on a worksheet or dashboard tab), nor shown while the sidebar is collapsed.
 

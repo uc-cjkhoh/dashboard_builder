@@ -66,7 +66,7 @@ so a valid UI never hits these.
 | `offset` (rows, `/api/rows` and `/api/unpivot`) | 0–100,000 (`MaxRowsOffset`, mirrored by `LIMITS.rowsOffset`) |
 | `limit` (rows) | 1–1000, default 100 (`MaxRowsLimit`, mirrored by `LIMITS.viewRows`); ≤ 200 `columns` (`MaxRowsColumns`); a cell ≤ 1000 characters (`MaxCellLength`, cut not rejected); rows × columns ≤ 50,000 (`MaxRowsCells`, `LIMITS.viewCells`) |
 | `limit` (query, box plot, distinct) | 1–5000 (default 50; [D24](../decisions/decisions-platform.md#d24--showing-all-data-bounded-requests-paging-other-date-grouping)) · CSV export 1–100,000 · distinct 1–1000 (default 200) |
-| `limit` (profile) | 1–50 top values, default 10 (`MaxProfileTop`); `column` ≤ 1000 characters (`MaxColumnName`); scan bound 1,000,000 rows (`ProfileSampleRows`), a value ≤ 100 characters (`ProfileValueLength`) — mirrored by `PROFILE_LIMITS` in `Schema/column-profile-model.js` |
+| `limit` (profile) | 1–50 top values, default 10 (`MaxProfileTop`); `column` ≤ 1000 characters (`MaxColumnName`); no scan bound (every row is read), a value ≤ 100 characters (`ProfileValueLength`) — mirrored by `PROFILE_LIMITS` in `Schema/column-profile-model.js` |
 | `offset` (query) | 0–10,000,000 |
 | `having` (query) | filters on aggregated measures (`HavingFilter`: `measure` index into `measures`, `op` `= != > >= < <= between`, `value` or `values [from, to]` plain numbers): ≤ 10 (`MaxHaving`, `LIMITS.having`); bad `op` → 400 `having[i].op`, non-number or From > To → `having[i].value` / `.values`, index outside the view → `having[i].measure`, with `otherBucket` → `otherBucket` ([D84](../decisions/decisions-filters.md#d84--a-filter-on-an-aggregated-measure-having-keeps-groups-after-grouping)) |
 | Filter `calc` | a calculated filter: `db` / `table` empty, `column` the label, `calc` a row-level tree (an aggregate, `op: "top"` or a `cast` is 400 at `filters[i].calc` / `.cast`); values bound as for a plain field, coerced by the calculation's type ([D82](../decisions/decisions-filters.md#d82--a-calculated-field-is-a-row-filter-applied-before-grouping)) |
@@ -127,9 +127,9 @@ Controller: `Features/Schema/SchemaController.cs`.
 
 ### Column profile
 
-Body `{ column, limit? }` → `{ column, type, category, rows, nulls, distinct, min, max, top: [{ value, count, cut }], sampled, sampleLimit }`.
-- It reads the **first 1,000,000 rows ClickHouse returns, in no particular order**. This is not a
-  statistical sample. `sampled` means the table has at least that many rows.
+Body `{ column, limit? }` → `{ column, type, category, rows, nulls, distinct, min, max, top: [{ value, count, cut }] }`.
+- It reads **every row** of the table ([D143](../decisions/decisions-performance.md#d143--the-column-profile-reads-every-row)); the result is still bounded
+  (one stats row, ≤ 50 top values). A scan that outlasts the connection's time limit is a 504, not a partial answer.
 - `distinct` is approximate (`uniq`, non-null). `min` / `max` are given for text, numeric and date columns only.
 - In `top`, `value` null means SQL NULL. A value is cut at 100 characters, counted in characters, not bytes
   (`cut`). Values that differ only after character 100 count together. Ties break by value.

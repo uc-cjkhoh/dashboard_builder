@@ -100,8 +100,8 @@ takes it — **Host**, or **Password** when a host is kept — so the user can t
 3. **Once connected**, the form is **collapsed by default** into a one-line **compact summary** (`.conn-summary`, control height):
    a **single status row** — status slot, host (as entered) over a quiet **user · :port** line (`#conn-detail-label`; each line ellipsised, the full `user · transport · :port` in the tooltip; no certificate icon), then one right-aligned group (`.conn-row__actions`) of two icon buttons:
    **Change connection** (edit) and **Disconnect** (power). There is no menu and no manual "check connection" button; liveness is probed automatically
-   (and **Retry** appears when lost). Above the tile sits a visible group title, **Connection** (`.sidebar__title`; below, **Database** titles the database picker, shown once connected, and **Table** titles the table list, shown with it, 16px under the picker — all three singular), flush with the tile edge. Below the tile, a full-width hairline divider (`#sidebar-divider`, shown once connected) separates Connection from
-   Database and Table; its gap flexes 24px → 8px as the table list needs height. Connected, the tile is inset 4px so the dot sits on the
+   (and **Retry** appears when lost). The sidebar's headings are screen-reader-only (`.sidebar__title`). Below the tile, a full-width hairline divider (`#sidebar-divider`, shown once connected) separates Connection from
+   the database tree; its gap flexes 24px → 8px as the tree needs height. Connected, the tile is inset 4px so the dot sits on the
    12px icon lane of the rows below and the host on their 36px text lane.
    - **The status slot is the panel's only coloured element, and it shows liveness, not "connected once".**
      Filled green dot = the last probe reached ClickHouse; hollow grey pulsing ring = checking (one failed probe);
@@ -122,13 +122,13 @@ takes it — **Host**, or **Password** when a host is kept — so the user can t
 
 ## Gating & events
 
-- Until connected, the database picker, table list and canvas dropzone are hidden via the `hidden` attribute.
+- Until connected, the database tree and canvas dropzone are hidden via the `hidden` attribute.
 - Every state change dispatches **`connection:changed`** on `document`. Its detail is the connection view, or `{connected:false}`.
   [schema-browser.md](schema-browser.md) listens to load or clear databases.
 
 ## Server side
 
-- `ConnectionRegistry` is session-scoped: cookie `DashboardBuilder.Session`, HttpOnly, 2h idle timeout, in-memory store.
+- `ConnectionRegistry` is session-scoped: cookie `DashboardBuilder.Session`, HttpOnly, SameSite Lax, Secure whenever the request is HTTPS (behind Apache: its `X-Forwarded-Proto`, read by `UseForwardedHeaders` from loopback proxies only; `tests/DashboardBuilder.Tests/SessionCookieTests.cs`), 2h idle timeout, in-memory store.
   A new session, or a service restart, starts with no connection.
 - Endpoints called without a connection return **409** (`ApiControllerBase.NotConnected`).
 - **Which hosts** ([D135](../../decisions/decisions-connection.md#d135--the-connect-form-reaches-only-allowed-hosts-and-not-too-often)): with `ClickHouse:AllowedHosts` set, any other host is refused on the host field before any network ("This server can't connect to that host. Ask the administrator to add it to the allowed ClickHouse hosts."). Unset = any host, and the app logs a warning at startup. A typed link-local or unspecified address (169.254.x.x, fe80::/10, 0.0.0.0, ::) is always refused ("That address can't be a ClickHouse server. …"). `ConnectPolicy.cs`.

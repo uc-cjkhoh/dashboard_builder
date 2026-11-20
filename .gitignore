@@ -9,3 +9,9 @@ out/
 
 # Permission ledger hook (ledger itself is covered by *.local.md)
 .claude/permission-ledger.local.md.*
+
+# Design review gate snapshot (design-gate.py)
+.claude/design-review.state/
+
+# Python bytecode from the hooks
+__pycache__/

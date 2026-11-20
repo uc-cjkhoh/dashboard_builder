@@ -1,5 +1,5 @@
 ---
-components: [src/DashboardBuilder/ClickHouse/SourceSql.cs, src/DashboardBuilder/ClickHouse/CustomSql.cs, src/DashboardBuilder/Features/Canvas/canvas.js, src/DashboardBuilder/Features/Canvas/sql-dialog.js, src/DashboardBuilder/Features/Canvas/sql-editor.js, src/DashboardBuilder/Features/Core/source-model.js, src/DashboardBuilder/Features/Rows/SourceController.cs, src/DashboardBuilder/Features/Rows/union-dialog.js, src/DashboardBuilder/Features/Rows/unpivot-dialog.js]
+components: [src/DashboardBuilder/ClickHouse/SourceSql.cs, src/DashboardBuilder/ClickHouse/CustomSql.cs, src/DashboardBuilder/Features/Canvas/canvas.js, src/DashboardBuilder/Features/Canvas/sql-dialog.js, src/DashboardBuilder/Features/Canvas/sql-editor.js, src/DashboardBuilder/Features/Core/source-model.js, src/DashboardBuilder/Features/Rows/SourceController.cs]
 ---
 # Union and unpivot as a data source
 
@@ -12,7 +12,6 @@ This page describes the cards a **saved workbook** can still hold.
 
 - `Features/Core/source-model.js` — the pure rules
 - `Features/Canvas/canvas.js` — the card
-- `Features/Rows/union-dialog.js` / `unpivot-dialog.js` — the former sidebar dialogs; nothing loads them now ([backlog](../../development/backlog/custom-sql.md#gaps-on-a-custom-sql-card))
 - `Features/Rows/SourceController.cs`
 - `ClickHouse/SourceSql.cs` — the derived table
 
@@ -25,8 +24,7 @@ This page describes the cards a **saved workbook** can still hold.
 
 ## Naming one
 
-- **Name.** The name is automatic and not editable: `Union: a + b` or `Unpivot: sales`, cut to 200 characters (`LIMITS.sourceName`).
-  - If a table of the database or a card on the canvas already uses the name, it gets ` 2`, ` 3` … (`takenNames`, `uniqueName`).
+- **Name.** The name is automatic and not editable: `Union: a + b` or `Unpivot: sales`, at most 200 characters (`LIMITS.sourceName`; a longer saved name is skipped on open).
   - The name is the entity's `table`, so every field reads `db.<name>.column` unchanged and labels read `Union: a + b.region`.
 - **Columns** come from `POST /api/source/columns` ([api.md § Source columns](../../reference/api.md#source-columns)).
 - A union with more than 200 shared columns lists the first 200 and says so in a toast.
@@ -154,7 +152,7 @@ Unlike a union or unpivot, the card **stays an ordinary table card**: it can be 
 Only its rows change: they come from the user's own `SELECT`.
 
 - **Opening it.** **Edit SQL** in the card head's ☰ menu (`.entity__menu` in `Canvas/canvas.js`, [canvas.md § The ☰ menu](canvas.md#the--menu-card-actions)) opens the dialog; the card has no right-click menu. A union or unpivot card has no SQL of its own, so its menu has no Edit SQL.
-- **Dialog** (`Canvas/sql-dialog.js`, **Edit SQL · table**): written in **MySQL** (the default) or ClickHouse syntax, chosen in the footer ([sql-syntax.md](sql-syntax.md)); a tall code editor on the card's current query, or for a table the default `SELECT` of every column, quoted, one per line (`defaultSql()`) — highlighting, syntax checking, auto-indent, bracket matching, Format and folding: [sql-editor.md](sql-editor.md). **Reset to default** refills the table's own `SELECT` (read from the catalog, not from the query's columns). **Format**, **Cancel**, Esc, and **Save** (Ctrl+Enter too). While you type, a clean query is also described by ClickHouse (debounced, no rows read) and the status line says how many columns it returns.
+- **Dialog** (`Canvas/sql-dialog.js`, **Edit SQL · table**): written in **MySQL** (the default) or ClickHouse syntax, chosen in the editor toolbar ([sql-syntax.md](sql-syntax.md)); a tall code editor on the card's current query, or for a table the default `SELECT` of every column, quoted, one per line (`defaultSql()`) — highlighting, syntax checking, auto-indent, bracket matching, Format and folding: [sql-editor.md](sql-editor.md). **Reset to default** refills the table's own `SELECT` (read from the catalog, not from the query's columns). **Format**, **Cancel**, Esc, and **Save** (Ctrl+Enter too). While you type, a clean query is also described by ClickHouse (debounced, no rows read) and the status line says how many columns it returns.
 - **Save** sends the text to `POST /api/source/columns` as `{ kind: "sql", db, name: table, sql }`. A refusal (syntax, unknown column, a rule of the guard) appears under the text in ClickHouse's own words and **nothing on the card changes**. The default text saved unchanged is a no-op on a table card; on a custom-SQL card, saving the table's default `SELECT` goes back to the table (below).
 - **After a good save** the card shows the query's columns, with a `Custom SQL` note under its head (`.entity__note--sql`) and the class `entity--sql`; rows have no profile button. `entity:sql` clears the cached columns and filter members of that table; open worksheets redraw.
 - **Relationships are protected.** A new query must still return every column the card's relationships use; if not, Save is refused naming them (`lostKeys()`), and going back to the table is refused the same way (in the dialog) if the table lacks one.

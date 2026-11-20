@@ -36,13 +36,15 @@ on every edit.
 | Chart | fresh data from ClickHouse: ECharts entrance 300ms `cubicOut` (not its 1s default); a re-render from the cache (format tweaks, theme flip) has no animation. Table/KPI fade in |
 | Loading / notice | "Loading…" fades in after 150ms (no flash on fast queries); the result notice fades in |
 | Disconnect | cards and dashboard tabs fade out (`--dur-exit`) before the workspace clears |
-| Entity cards | rise in on drop; collapse by animating `max-height`; no hover lift |
+| Entity cards | rise in on drop; **removing** one (after the second confirm) takes it out of the model at once, then it is `inert` and fades out with a 4px drop and 98 % scale (`--dur-exit`) before it leaves the DOM; collapse by animating `max-height`; no hover lift |
 | Toasts / dialogs | toasts slide up from the bottom centre; dialogs scale in over a dimming scrim |
 | Status | the loading pill glyph spins |
 | Loading bar | a 4px indeterminate strip across the top (`.app-loading`) while the first connection answer is pending after a load: fades in after 200ms (a quick answer shows nothing), a 40% segment slides across (`translateX`, 1.2s loop); `role="progressbar"`, still and at 40% under reduced motion |
 | Activity chip | any in-flight API request: appears after 300ms (rises 8px, `--dur`), its refresh glyph spins, the elapsed time ticks each second; gone when the last request ends |
-| Column profile | "Profiling…" fades in after 150ms with a spinning refresh glyph; the result's bento cells rise 8px in turn (40ms apart, capped at the 8th), then each band's tint grows from the left (`scaleX`, 20ms apart, 250ms); hovering a band dims the others to 55% (`--dur-fast`) |
-| Relationship links | hovering a link, a Relationships card entry or a card with links fades the links it doesn't touch to 20 % (`opacity`, `--dur`); with quiet badges a resting badge fades in on hover ([relationships.md](../../concepts/data-source/relationships.md#rendering)) |
+| Column profile | "Reading every row…" fades in after 150ms with a spinning refresh glyph; the result's cells rise 8px in turn (40ms apart), then each band's tint grows from the left (`scaleX`, 20ms apart, 250ms) |
+| New relationship | a link the user just made **arrives once** ([relationships.md § Rendering](../../concepts/data-source/relationships.md#rendering)): the line fades in (`--dur`), its two end shapes settle from 60 % (`--dur-fast`, 100ms in), then the badge rises 4px (`--dur`, 150ms in); about 400ms. Only `opacity` / `transform`, each on the *inner* shape, never on the link group (that carries the focus fade). A redraw inside the window resumes the run; links restored from a workbook and every later redraw (zoom, drag, resize) never animate |
+| Data preview panel | opens with the view fade (`--dur`); **closing** drops it 8px and fades it (`--dur-exit`, `inert` meanwhile) before the ground takes its height back; reopening during the exit keeps the panel (latest wins) |
+| Relationship links | hovering a link or a card with links fades the links it doesn't touch to 20 % (`opacity`, `--dur`); with quiet badges a resting badge fades in on hover ([relationships.md](../../concepts/data-source/relationships.md#rendering)) |
 | Controls | colour / border transitions on hover (`--dur-fast`); a picker's caret flips while its menu is open |
 | Pages shelf | autoplay steps every 1.5s |
 
@@ -59,6 +61,7 @@ understand state.
   - cardinality is shape-coded (tick vs. crow's foot);
   - Shape encodings give a second, non-colour channel;
   - an invalid pill has a dashed border **and** a warning icon and tooltip.
+- **Icon-only buttons** carry an `aria-label` **and** a `title` (the same words). `Core/hover-tip.js` shows that `title` in one styled tip (`.hover-tip`, solid inverse ink-on-surface, in the top layer so it also draws over a modal dialog): after the pointer rests 400ms (at once when another tip is up or hid under 300ms ago, so a sweep along a toolbar reads straight through), and **at once on keyboard focus** (`:focus-visible` only). It hides on leave, press, scroll, Esc and window blur; touch shows none; it flips above near the bottom edge and keeps 8px inside the window (`Core/hover-tip-model.js`). While a button is armed its `title` is held back so the browser's own tooltip never doubles it, and put back when the tip hides. A **disabled** button keeps its native title (it gets no pointer events, and the title says why). No visible text labels on icons: design rule 6.
 - **Forms:** an invalid field gets `aria-invalid="true"` and an inline message (`.field-error`: warning
   icon + text) linked by `aria-describedby`, cleared on the next edit. Applying is blocked and focus
   moves to the first invalid field (`ui.fieldError`).

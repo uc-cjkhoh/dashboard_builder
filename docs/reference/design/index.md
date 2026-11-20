@@ -10,7 +10,7 @@ change, then the topic file from the [map](#map). **Source of truth:** `Features
 
 ## Concept
 
-> **Flat 2.0 + glass · charcoal neutrals + Signal (near-black in light, calm sage-lime in dark) · light and dark · calm.**
+> **Flat 2.0 + glass · charcoal neutrals + Signal (one sage-lime hue: deep olive in light, calm lime in dark) · light and dark · calm.**
 > Glass only on chrome that has nothing but the background wash beneath it (sidebar, tab bar, worksheet
 > header) · everything that floats over content — menus, popovers, toasts, dialogs — is solid · one
 > violet accent · danger is a separate vermilion that always carries an icon and words · a fixed
@@ -21,7 +21,7 @@ The builder is a two-world layout. A **left glass rail** owns connection and sch
 
 - **Structure** follows Windows 11 Fluent: 4/8/16/24 px spacing, one 8 px radius, 32 px controls and a
   soft elevation ramp.
-- **Surfaces** follow Flat Design 2.0. The fixed chrome is translucent and blurs a faint accent-tint background wash.
+- **Surfaces** follow Flat Design 2.0. The fixed chrome is translucent over a flat background (no ambient light).
   Entity cards, the chart area, the crosstab and every overlay stay solid, so text is never read
   through other text.
 - **Light or dark** is the viewer's choice: a **System / Light / Dark** toggle at the right end of the
@@ -49,7 +49,7 @@ groups. Nothing is removed: an encoding that holds fields is always shown.
 - **`hidden` attribute** for show/hide — never `style.display`.
 - **Fixed shell** — the page never scrolls.
 - **Never colour alone** — status is icon + text + colour.
-- **One control height** — every toolbar control is `--ctl-h`. The sidebar's 40px tools, database select, and table search are the one documented exception ([layout.md](layout.md)). Click targets are ≥ 24px: small glyphs get a padded hit area.
+- **One control height** — every toolbar control is `--ctl-h`. The sidebar's 40px tools and search box are the one documented exception ([layout.md](layout.md)). Click targets are ≥ 24px: small glyphs get a padded hit area.
 - **Icons are inline SVG** from `Core/icons.js` — no icon font, no Unicode glyph icons.
 
 These are golden rules 6–9 in [coding-standards.md](../../development/coding-standards.md).
