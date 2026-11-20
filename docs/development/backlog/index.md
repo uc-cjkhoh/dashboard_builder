@@ -21,6 +21,14 @@ The only place for work not yet built, grouped by topic. Read it before picking 
 | [out-of-scope.md](out-of-scope.md) | what is deliberately excluded, and why (not backlog) |
 | [blocked.md](../run-logs/blocked.md) | work that could not be built, and why |
 
+## Terminal plans (not to-dos)
+
+Shelved plans kept for their analysis. They are not scheduled, appear in no list above and are not in the recommended order.
+
+| File | Holds |
+|---|---|
+| [multi-connection-federation.md](multi-connection-federation.md) | several ClickHouse and MySQL connections and cross-connection SQL (Trino-style): approaches, the preferred push-down design, open checks |
+
 ## How to read an entry
 
 `- **name** (IDs: Txx-nn; priority P0–P3; effort S/M/L if stated) — open: nothing implements it, or partial: what exists and what is missing. Needs: dependency or none. Spec: file.`

@@ -24,7 +24,7 @@ sends them with each request, so sessions never share an identity (`SharedHttpCl
 - The connect check keeps a one-off client: its certificate callback records per-call state.
 
 ### D143 — The column profile reads every row
-The profile dialog used to scan only the first 1,000,000 rows ClickHouse returned (a `LIMIT 1000000` subquery plus `max_rows_to_read` with `read_overflow_mode = 'break'`) and said so in a warning band. It now scans the whole column, so Rows, Distinct, Null share, Min / Max and the top values describe the table.
+The profile dialog used to scan only the first 1,000,000 rows ClickHouse returned (a `LIMIT 1000000` subquery plus `max_rows_to_read` with `read_overflow_mode = 'break'`) and said so in a warning band. It now scans the whole column, so Rows, Distinct, Null value, Min / Max and the top values describe the table.
 - **Why:** the first million rows are in no particular order and not a statistical sample, so on a big table the figures could mislead; the user asked for full-data statistics.
 - **What changed:** both statements lose the `LIMIT`; the row-bound settings are gone (the memory settings stay); `sampled` and `sampleLimit` leave the response; the dialog has no sampling note and the Rows tile no "first N rows" note. `ApiLimits.ProfileSampleRows` and `PROFILE_LIMITS.sampleRows` are removed.
 - **Rule 3 still holds:** the *result* is bounded (one stats row, ≤ 50 top values, a value cut at 100 characters) and the query is time-limited. What is no longer bounded is the rows scanned. A table too big to finish in the connection's time limit (or the 15 s HTTP wait where there is no server-side limit) fails with a 504 and a message; there is no fallback to a partial scan.
