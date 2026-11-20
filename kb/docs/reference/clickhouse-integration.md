@@ -105,8 +105,11 @@ builder runs ([api.md § Limits](api.md#limits)).
 ### Column profile, box plot, raw rows and join preview
 
 - **Column profile** — two statements over every row of the column (no `LIMIT`; the result is bounded, the scan is not — [D143](../decisions/decisions-performance.md#d143--the-column-profile-reads-every-row)):
-  - `SELECT count(), countIf(isNull(v)), uniq(v)[, toString(min(v)), toString(max(v))]`. Min/max are for
-    numeric and date columns only, hidden when empty or all-NULL; compound types read as `toString`.
+  - `SELECT count(), countIf(isNull(v)), uniq(v)[, toString(min(v)), toString(max(v))[, avg(toFloat64(v)), stddevSamp(toFloat64(v)), quantile(0.25)(toFloat64(v)), quantile(0.5)(…), quantile(0.75)(…)]]`. Min/max are for
+    numeric and date columns only, hidden when empty or all-NULL; compound types read as `toString`. The last five (mean, sample standard deviation, quartiles) are for numeric columns only, in the same scan:
+    the value is cast to Float64 so no numeric type (Int256, Decimal, UInt64) is refused or overflows; `quantile` is the box plot's function (approximate, bounded memory), never `quantileExact`, which would hold every value of a whole-table scan;
+    there is **no `sum`** (it wraps silently on 64-bit integers). A non-finite figure is returned as `null` (`ProfileFigure`).
+  - The dialog's distribution of a numeric column is not a profile statement: it is the worksheet's histogram ([api.md](api.md#histogram-single-table-box-plot-and-removed-routes); 20 equal-width bins over every non-NULL value), requested in parallel.
   - `SELECT label, cut, count() FROM (SELECT leftUTF8(toString(c), 100) AS label, lengthUTF8(toString(c)) > 100 AS cut …) GROUP BY label, cut ORDER BY count() DESC, label LIMIT n`
     (`n` 1..50, default 10). It groups on the cut label, so a huge string is never a key and values
     differing only after character 100 count together.
