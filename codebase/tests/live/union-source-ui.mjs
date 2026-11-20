@@ -82,7 +82,6 @@ try {
   const dragIn = (group, name, kind) => ev(`(() => { const c = __t.in(${J(group)}, ${J(name)}); if (!c) throw new Error('no chip ${name} in ${group}'); __t.drag(c, __t.zone(${J(kind)})); return true; })()`);
   const dragChip = (name, kind) => ev(`(() => { const c = __t.chip(${J(name)}); if (!c) throw new Error('no field chip ${name}'); __t.drag(c, __t.zone(${J(kind)})); return true; })()`);
   const clearShelves = () => ev(`(async () => { const st = await import('/features/Core/store.js'); const w = st.activeWorksheet(); st.updateSheet(w.id, { ...st.emptySheet(), chartType: 'bar' }); return true; })()`);
-  const dialogBtn = (text) => `[...document.querySelectorAll('dialog[open] button')].find((x) => x.textContent.trim() === ${J(text)})`;
   const cards = () => ev(`[...document.querySelectorAll('.entity')].map((c) => c.querySelector('.entity__title').textContent)`);
   const loaded = (n) => waitFor(`document.querySelectorAll('.entity').length === ${n} && [...document.querySelectorAll('.entity__status')].every((s) => s.hidden)`, `${n} cards loaded`);
 
@@ -90,8 +89,8 @@ try {
   const connect = async () => {
     await waitFor(`!!document.getElementById('conn-connect')`, 'app loaded');
     await ev(`(() => { document.getElementById('conn-host').value = 'mock-ch'; document.getElementById('conn-password').value = 'x'; document.getElementById('conn-connect').click(); return true; })()`);
-    await waitFor(`document.getElementById('db-select').options.length > 1`, 'databases listed');
-    await ev(`(() => { const s = document.getElementById('db-select'); s.value = 'shop'; s.dispatchEvent(new Event('change')); return true; })()`);
+    await waitFor(`document.querySelectorAll('.db-row[data-db]').length > 0`, 'databases listed');
+    await ev(`(() => { for (const r of document.querySelectorAll('.db-row[data-db]')) if ((r.dataset.db === 'shop') !== (r.getAttribute('aria-expanded') === 'true')) r.click(); return true; })()`);
     await waitFor(`document.querySelectorAll('.table-chip').length === 2`, 'tables listed');
   };
   await b.goto(APP + '/');
@@ -109,13 +108,10 @@ try {
   await ev(`[...document.querySelectorAll('dialog[open] input[name=cardinality]')].find((x) => x.value === '1:1').click(); document.querySelector('dialog[open]').querySelector('.rel-dialog__foot .btn--primary').click()`);
   await waitFor(`document.querySelector('dialog[open]') === null`, 'dialog closed');
 
-  await check('the Union dialog adds a union entity to the model, read from /api/source/columns', async () => {
-    await ev(`document.getElementById('union-open').click()`);
-    await waitFor(`!!document.querySelector('dialog.union-dialog[open]')`, 'union dialog');
-    must(await ev(`${dialogBtn('Add to model')}.disabled`) === true, 'Add to model is enabled before two tables are ticked');
-    await ev(`(() => { for (const c of document.querySelectorAll('.union-dialog__item input')) { c.checked = true; c.dispatchEvent(new Event('change', { bubbles: true })); } return true; })()`);
-    must(await ev(`${dialogBtn('Add to model')}.disabled`) === false, 'Add to model stays disabled with two tables');
-    await ev(`${dialogBtn('Add to model')}.click()`);
+  // No UI builds a union / unpivot now (D138): the saved-workbook path fires the same event, so the cards are added by it.
+  const addSource = (source) => ev(`document.dispatchEvent(new CustomEvent('source:add', { detail: { source: ${J(source)} } }))`);
+  await check('a union entity on the model is read from /api/source/columns', async () => {
+    await addSource({ kind: 'union', db: 'shop', name: 'Union: orders + returns', tables: ['orders', 'returns'] });
     await loaded(3);
     must(J(await cards()) === J(['orders', 'returns', 'Union: orders + returns']), `cards: ${J(await cards())}`);
     must(J(sourceReqs[0]) === J({ kind: 'union', db: 'shop', name: 'Union: orders + returns', tables: ['orders', 'returns'] }), `source request: ${J(sourceReqs[0])}`);
@@ -147,13 +143,7 @@ try {
   });
 
   await check('an unpivot is added the same way: kept column, then Field and Value', async () => {
-    await ev(`document.getElementById('unpivot-open').click()`);
-    await waitFor(`!!document.querySelector('dialog.unpivot-dialog[open]') && document.querySelectorAll('.unpivot-dialog__list input').length > 0`, 'unpivot dialog loaded');
-    await ev(`(() => { const sel = document.querySelector('.unpivot-dialog select'); sel.value = 'orders'; sel.dispatchEvent(new Event('change')); return true; })()`);
-    await waitFor(`document.querySelectorAll('.unpivot-dialog__list')[0].querySelectorAll('input').length === 4`, 'orders columns');
-    const tick = (side, name) => ev(`(() => { const c = [...document.querySelectorAll('.unpivot-dialog__list')[${side}].querySelectorAll('input')].find((x) => x.value === ${J(name)}); c.checked = true; c.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
-    await tick(0, 'q1'); await tick(0, 'q2'); await tick(1, 'region');
-    await ev(`${dialogBtn('Add to model')}.click()`);
+    await addSource({ kind: 'unpivot', db: 'shop', name: 'Unpivot: orders', table: 'orders', columns: ['q1', 'q2'], keep: ['region'] });
     await loaded(4);
     must(J(sourceReqs[1]) === J({ kind: 'unpivot', db: 'shop', name: 'Unpivot: orders', table: 'orders', columns: ['q1', 'q2'], keep: ['region'] }), `source request: ${J(sourceReqs[1])}`);
     const names = await ev(`[...document.querySelectorAll('.entity--source')][1].querySelectorAll('.col-row__name')`.replace(/$/, '.length') );

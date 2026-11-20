@@ -41,8 +41,8 @@ try {
   await b.goto(APP + '/');
   await waitFor(`!!document.getElementById('conn-connect')`, 'app loaded');
   await ev(`(() => { document.getElementById('conn-host').value = 'mock-ch'; document.getElementById('conn-password').value = 'x'; document.getElementById('conn-connect').click(); return true; })()`);
-  await waitFor(`document.getElementById('db-select').options.length > 1`, 'databases listed');
-  await ev(`(() => { const s = document.getElementById('db-select'); s.value = 'shop'; s.dispatchEvent(new Event('change')); return true; })()`);
+  await waitFor(`document.querySelectorAll('.db-row[data-db]').length > 0`, 'databases listed');
+  await ev(`(() => { for (const r of document.querySelectorAll('.db-row[data-db]')) if ((r.dataset.db === 'shop') !== (r.getAttribute('aria-expanded') === 'true')) r.click(); return true; })()`);
   await waitFor(`document.querySelectorAll('.table-chip').length === 2`, 'tables listed');
   for (const t of ['orders', 'customers']) await ev(`document.dispatchEvent(new CustomEvent('table:add', { detail: { db: 'shop', table: ${J(t)} } }))`);
   await waitFor(`document.querySelectorAll('.entity').length === 2 && [...document.querySelectorAll('.entity__status')].every((s) => s.hidden)`, 'tables loaded');
@@ -67,6 +67,16 @@ try {
   await check('the selects list only free columns of each table', async () => {
     const o = await ev(`[...${dlg}.querySelectorAll('.key-pairs__select')].map((s) => [...s.options].map((x) => x.value).filter(Boolean).join(','))`);
     must(o[0] === 'id,Region,amount,placed' && o[1] === 'region,name,born', `options: ${J(o)}`); // cust_id / customers.id are the first pair
+    const ph = await ev(`[...${dlg}.querySelectorAll('.key-pairs__select')].map((x) => x.options[0].textContent)`);
+    must(J(ph) === J(['orders', 'customers']), `placeholders name the table: ${J(ph)}`);
+    must(await ev(`!!${dlg}.querySelector('.key-pairs__eq')`), 'the = between the selects');
+    must(await ev(`[...${dlg}.querySelectorAll('.key-pairs__select')].every((x) => x.classList.contains('select--menu') && x.options[0].hidden)`), 'menu-styled selects with the prompt out of the open list');
+  });
+  await check('each column option keeps its name and its kind apart (only the name can ellipsise); Add pair sits under the two selects', async () => {
+    const o = await ev(`[...${dlg}.querySelectorAll('.key-pairs__select')[0].options].slice(1).map((x) => [x.querySelector('.key-pairs__col')?.textContent, x.querySelector('.key-pairs__kind')?.textContent, x.title].join('|'))`);
+    must(o[0] === 'id|(number)|id (number)' && o[1] === 'Region|(text)|Region (text)', `options: ${J(o)}`);
+    const g = await ev(`(() => { const s = [...${dlg}.querySelectorAll('.key-pairs__select')].map((x) => x.getBoundingClientRect()); const a = ${dlg}.querySelector('.key-pairs__go').getBoundingClientRect(); return { sameLine: Math.abs(s[0].top - s[1].top) < 1, below: a.top >= s[0].bottom, right: Math.abs(a.right - s[1].right) < 1 }; })()`);
+    must(g.sameLine && g.below && g.right, `layout: ${J(g)}`);
   });
   await check('the suggestion ran as the dialog opened; adding a suggested pair runs it again with the pair', async () => {
     await waitFor(`${dlg}.querySelector('.join-check__pick') !== null`, 'first suggestion');

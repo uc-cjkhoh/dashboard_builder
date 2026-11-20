@@ -37,7 +37,7 @@ try {
   const connect = async () => {
     await waitFor(`document.readyState === 'complete' && !!document.getElementById('conn-connect')`, 'app loaded');
     await ev(`(() => { document.getElementById('conn-host').value = 'mock-ch'; document.getElementById('conn-password').value = 'x'; document.getElementById('conn-connect').click(); return true; })()`);
-    await waitFor(`document.getElementById('db-select').options.length > 1`, 'databases listed');
+    await waitFor(`document.querySelectorAll('.db-row[data-db]').length > 0`, 'databases listed');
   };
   const click = (sel) => ev(`document.querySelector(${J(sel)}).click()`);
   const active = () => store(`const v = st.currentView(); return { ...v, name: st.tabById(v.id)?.name };`);

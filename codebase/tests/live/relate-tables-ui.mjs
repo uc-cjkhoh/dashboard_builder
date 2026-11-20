@@ -44,8 +44,8 @@ try {
   await b.goto(APP + '/');
   await waitFor(`!!document.getElementById('conn-connect')`, 'app loaded');
   await ev(`(() => { document.getElementById('conn-host').value = 'mock-ch'; document.getElementById('conn-password').value = 'x'; document.getElementById('conn-connect').click(); return true; })()`);
-  await waitFor(`document.getElementById('db-select').options.length > 1`, 'databases listed');
-  await ev(`(() => { const s = document.getElementById('db-select'); s.value = 'shop'; s.dispatchEvent(new Event('change')); return true; })()`);
+  await waitFor(`document.querySelectorAll('.db-row[data-db]').length > 0`, 'databases listed');
+  await ev(`(() => { for (const r of document.querySelectorAll('.db-row[data-db]')) if ((r.dataset.db === 'shop') !== (r.getAttribute('aria-expanded') === 'true')) r.click(); return true; })()`);
   await waitFor(`document.querySelectorAll('.table-chip').length === 5`, 'tables listed');
   const add = async (t, n) => {
     await ev(`document.dispatchEvent(new CustomEvent('table:add', { detail: { db: 'shop', table: ${J(t)} } }))`);
@@ -57,7 +57,7 @@ try {
   const act = (c, label) => `(() => { ${c}.querySelector('.entity__menu').click(); const it = [...document.querySelectorAll('.ctx-menu [role^="menuitem"]')].find((x) => x.textContent.trim() === '${label}'); if (!it) throw new Error('no menu item ${label}'); it.click(); return true; })()`; // the card's ☰ menu (D129)
   const dlg = `document.querySelector('dialog[open]')`;
   const confirm = () => ev(`(() => { [...${dlg}.querySelectorAll('button')].find((y) => y.textContent.trim() === 'Confirm').click(); return true; })()`);
-  const rels = () => ev(`document.querySelectorAll('.rel-note').length`);
+  const rels = () => ev(`document.querySelectorAll('.rel-link[data-rel]:not(.rel-link--label)').length`);
   const toastText = () => ev(`document.getElementById('toast').textContent`);
   // HTML5 drag and drop with one DataTransfer, as the browser would hand it from dragstart to drop
   const drag = (src, dst) => ev(`(() => { const s = ${src}, d = ${dst}; const dt = new DataTransfer();
@@ -83,7 +83,7 @@ try {
     await waitFor(`${dlg}.querySelector('.join-check__pick') !== null`, 'suggestion');
     await pause(500); await shot('2-dialog-from-proposal.png');
     await confirm();
-    await waitFor(`!document.querySelector('dialog[open]') && document.querySelectorAll('.rel-note').length === 1`, 'saved');
+    await waitFor(`!document.querySelector('dialog[open]') && document.querySelectorAll('.rel-link[data-rel]:not(.rel-link--label)').length === 1`, 'saved');
     must(await ev(`document.querySelector('.rel-ghost') === null`), 'ghost gone');
   });
   await check('dragging two more columns of related tables adds a key pair to that relationship', async () => {
@@ -104,7 +104,7 @@ try {
     const btn = (t) => `[...document.querySelectorAll('dialog[open] button')].find((x) => x.textContent.trim() === ${J(t)})`;
     const bodyText = () => ev(`document.querySelector('dialog[open] .dialog__body')?.textContent ?? ''`);
     const openDelete = async () => { // the relationship's edit dialog, then its Delete button, which opens the first confirm
-      await ev(`document.querySelector('.rel-link[data-rel=' + JSON.stringify(${J('')} + document.querySelector('.rel-note').dataset.rel) + '] .rel-link__hit')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))`);
+      await ev(`document.querySelector('.rel-link[data-rel=' + JSON.stringify(${J('')} + document.querySelector('.rel-link:not(.rel-link--label)').dataset.rel) + '] .rel-link__hit')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))`);
       await waitFor(`!!${dlg}?.querySelector('.btn--danger')`, 'edit dialog');
       await ev(`${dlg}.querySelector('.btn--danger').click()`);
       await waitFor(`/^Remove the .* relationship\\?/.test(document.querySelector('dialog[open] .dialog__body')?.textContent ?? '')`, 'first confirm');
@@ -126,11 +126,11 @@ try {
     await ev(`${btn('Remove')}.click()`);
     await waitFor(`(document.querySelector('dialog[open] .dialog__body')?.textContent ?? '').startsWith('Really remove the ')`, 'second confirm again');
     await ev(`${btn('Remove for good')}.click()`);
-    await waitFor(`document.querySelectorAll('.rel-note').length === 0`, 'removed');
+    await waitFor(`document.querySelectorAll('.rel-link[data-rel]:not(.rel-link--label)').length === 0`, 'removed');
     await drag(row('orders', 'region'), row('customers', 'region')); // relate the two tables again, on other columns than the removed link's
     await waitFor(`!!${dlg}?.querySelector('.rel-dialog__sub')`, 'dialog');
     await confirm();
-    await waitFor(`document.querySelectorAll('.rel-note').length === 1`, 'related again');
+    await waitFor(`document.querySelectorAll('.rel-link[data-rel]:not(.rel-link--label)').length === 1`, 'related again');
     must(await rels() === 1, 'one relationship per table pair');
     await drag(row('orders', 'customer_id'), row('customers', 'id')); // back to two keys for the next checks
     await waitFor(`[...document.querySelectorAll('.rel-badge text')].some((t) => / · 2 keys$/.test(t.textContent))`, 'two keys');
@@ -142,7 +142,7 @@ try {
     await ev(`document.querySelector('[aria-label^="Relate stores and orders"], [aria-label^="Relate orders and stores"]').click()`);
     await waitFor(`${dlg}?.querySelector('.rel-dialog__sub')?.textContent === 'stores → orders'`, 'dialog');
     await confirm();
-    await waitFor(`document.querySelectorAll('.rel-note').length === 2`, 'saved');
+    await waitFor(`document.querySelectorAll('.rel-link[data-rel]:not(.rel-link--label)').length === 2`, 'saved');
   });
   await add('sales', 4);
   await add('stock', 5);
@@ -159,7 +159,7 @@ try {
     await ev(`${dlg}.querySelector('.rel-sec--pairs').scrollIntoView({ block: 'end' })`);
     await pause(500); await shot('6-relate-compound.png');
     await confirm();
-    await waitFor(`document.querySelectorAll('.rel-note').length === 3`, 'saved');
+    await waitFor(`document.querySelectorAll('.rel-link[data-rel]:not(.rel-link--label)').length === 3`, 'saved');
     must(await ev(`[...document.querySelectorAll('.rel-badge text')].some((t) => /2 keys/.test(t.textContent) && t.closest('[data-rel]'))`), 'badge');
     await pause(300);
     await shot('7-final-model.png');

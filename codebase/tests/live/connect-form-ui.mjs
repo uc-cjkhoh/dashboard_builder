@@ -11,7 +11,7 @@ let session = { connected: false };
 const COLS = ['id', 'amount', 'region', 'note', 'created', 'flag', 'qty', 'price', 'city', 'code', 'tag'];
 const TYPES = ['UInt64', 'Decimal(10, 2)', 'LowCardinality(String)', 'Nullable(String)', 'DateTime', 'Bool', 'Int32', 'Float64', 'String', 'FixedString(3)', 'Date'];
 const ROWS = { columns: COLS.map((name, i) => ({ name, type: TYPES[i] })), rows: [COLS.map((c, i) => `${c}-value-${i}-long text`)], truncated: false, limit: 100, columnsTruncated: false };
-const PROFILE = { column: 'region', type: 'LowCardinality(String)', category: 'text', rows: 100, nulls: 5, distinct: 4, min: null, max: null, sampled: false, sampleLimit: 1000000,
+const PROFILE = { column: 'region', type: 'LowCardinality(String)', category: 'text', rows: 100, nulls: 5, distinct: 4, min: null, max: null, 
   top: [{ value: 'Central', count: 40, cut: false }, { value: 'South', count: 30, cut: false }, { value: '', count: 20, cut: false }, { value: null, count: 5, cut: false }, { value: 'East', count: 5, cut: false }] };
 const answer = ({ method, path, body }) => {
   if (path === '/api/connection/disconnect') { session = { connected: false }; return { json: session }; }
@@ -84,21 +84,21 @@ try {
     await b.waitFor(`!document.getElementById('conn-summary').hidden`, { label: 'summary' });
     must(await ev(`document.getElementById('conn-detail-label').textContent`) === 'ann · :8443', 'detail');
   });
-  await check('databases: user ones first, System group after, still selectable', async () => {
-    await b.waitFor(`document.getElementById('db-select').options.length > 1`, { label: 'dbs' });
-    const r = await ev(`JSON.stringify({ top: [...document.getElementById('db-select').children].map((c) => c.tagName === 'OPTGROUP' ? 'G:' + c.label + ':' + [...c.children].map((o) => o.value).join(',') : c.value) })`);
-    must(r === JSON.stringify({ top: ['', 'default', 'shop', 'G:System:INFORMATION_SCHEMA,information_schema,system'] }), r);
+  await check('databases: user ones first, the System group after', async () => {
+    await b.waitFor(`document.querySelectorAll('.db-row[data-db]').length > 0`, { label: 'dbs' });
+    const r = await ev(`JSON.stringify([...document.querySelectorAll('#table-list > .db-node > .db-row')].map((r) => r.dataset.db ?? r.dataset.key))`);
+    must(r === JSON.stringify(['default', 'shop', 'sys']), r);
   });
   await check('table rows: Preview and Add are visible at rest', async () => {
-    await ev(`(() => { const s = document.getElementById('db-select'); s.value = 'shop'; s.dispatchEvent(new Event('change')); return 1; })()`);
+    await ev(`(() => { for (const r of document.querySelectorAll('.db-row[data-db]')) if ((r.dataset.db === 'shop') !== (r.getAttribute('aria-expanded') === 'true')) r.click(); return 1; })()`);
     await b.waitFor(`document.querySelectorAll('.table-chip').length === 1`, { label: 'tables' });
     must(await ev(`[...document.querySelectorAll('.table-chip .iconbtn')].every((e) => getComputedStyle(e).opacity === '1')`), 'hidden at rest');
     await b.screenshot(join(SHOTS, 'schema-light.png'));
   });
-  await check('after a reload the last database and its tables come back', async () => {
+  await check('after a reload the open databases and their tables come back', async () => {
     await b.goto(APP);
     await b.waitFor(`document.querySelectorAll('.table-chip').length === 1`, { label: 'tables after reload' });
-    must(await ev(`document.getElementById('db-select').value`) === 'shop', 'db not restored');
+    must(await ev(`document.querySelector('.db-row[data-db="shop"]')?.getAttribute('aria-expanded') === 'true'`), 'db not restored');
   });
   await check('preview: the ClickHouse type under each name (and in the tooltip), wide enough for 11 columns', async () => {
     await ev(`document.querySelector('.table-chip__peek').click()`);
@@ -116,7 +116,7 @@ try {
     for (const scheme of ['light', 'dark']) {
       await b.setScheme(scheme);
       await ev(`document.querySelector('.col-row[data-column="region"] .col-row__profile').click()`);
-      await b.waitFor(`document.querySelector('dialog[open] .col-profile__cell--top') !== null`, { label: 'profile' });
+      await b.waitFor(`document.querySelector('dialog[open] .col-profile__cell--profile') !== null`, { label: 'profile' });
       await b.sleep(900);
       const r = JSON.parse(await ev(`(() => {
         const px = document.createElement('canvas').getContext('2d');
@@ -127,7 +127,7 @@ try {
           return Math.min(cr(rgb(l), bg), cr(rgb(l), fill)); });
         return JSON.stringify({ min: Math.min(...out), out, sub: document.querySelector('dialog[open] .col-profile__sub').textContent });
       })()`));
-      must(r.sub.endsWith('· LowCardinality(String)'), r.sub);
+      must(r.sub === 'shop.orders · LowCardinality(String) · dimension', r.sub); // the subtitle: table · type · role (field details, T02-33)
       await b.screenshot(join(SHOTS, `profile-${scheme}.png`));
       must(r.min >= 4.5, `${scheme}: ${JSON.stringify(r.out.map((x) => +x.toFixed(2)))}`);
       await ev(`document.querySelector('dialog[open] .btn--primary').click()`);
@@ -135,12 +135,16 @@ try {
     }
     await b.setScheme('light');
   });
-  await check('Theme button opens the theme dialog directly (no one-item menu)', async () => {
-    must(await ev(`!document.getElementById('settings-list') && document.getElementById('settings-btn').getAttribute('aria-label') === 'Theme'`), 'still a menu');
-    await ev(`document.getElementById('settings-btn').click()`);
-    await b.waitFor(`document.querySelector('dialog[open]') !== null`, { label: 'theme dialog' });
-    await b.key('Escape'); await b.sleep(200);
-    await ev(`document.querySelectorAll('dialog[open]').forEach((d) => d.close())`);
+  await check('Appearance is one card: mode, dark look, accent and chart colours; picking keeps it open, Esc closes it', async () => {
+    must(await ev(`!document.getElementById('settings-btn') && !document.querySelector('dialog.theme-dialog')`), 'a separate theme button or dialog is back');
+    await ev(`document.getElementById('scheme-btn').click()`);
+    await b.waitFor(`!document.getElementById('scheme-list').hidden`, { label: 'appearance card' });
+    must(await ev(`document.querySelectorAll('#scheme-list [data-scheme-pref]').length === 2 && document.querySelectorAll('#scheme-list .appearance__accent').length >= 5 && document.querySelectorAll('#scheme-list .appearance__strip').length >= 4`), 'card is missing mode, accent or colour rows');
+    await ev(`document.querySelector('#scheme-list .appearance__accent[title="Teal"]').click()`);
+    must(await ev(`!document.getElementById('scheme-list').hidden && document.querySelector('#scheme-list .appearance__value').textContent === 'Teal'`), 'picking an accent closed the card or did not apply');
+    await ev(`[...document.querySelectorAll('#scheme-list [role=menuitem]')].find((x) => x.textContent === 'Reset theme').click()`);
+    await b.key('Escape'); await b.sleep(400);
+    must(await ev(`document.getElementById('scheme-list').hidden && document.activeElement.id === 'scheme-btn'`), 'Esc did not close the card and return focus');
   });
   await check('Disconnect asks first and says the workbook comes back', async () => {
     await ev(`document.getElementById('conn-disconnect').click()`);

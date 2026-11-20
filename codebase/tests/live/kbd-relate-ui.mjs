@@ -41,8 +41,8 @@ try {
   await b.goto(APP + '/');
   await waitFor(`!!document.getElementById('conn-connect')`, 'app loaded');
   await ev(`(() => { document.getElementById('conn-host').value = 'mock-ch'; document.getElementById('conn-password').value = 'x'; document.getElementById('conn-connect').click(); return true; })()`);
-  await waitFor(`document.getElementById('db-select').options.length > 1`, 'databases listed');
-  await ev(`(() => { const s = document.getElementById('db-select'); s.value = 'shop'; s.dispatchEvent(new Event('change')); return true; })()`);
+  await waitFor(`document.querySelectorAll('.db-row[data-db]').length > 0`, 'databases listed');
+  await ev(`(() => { for (const r of document.querySelectorAll('.db-row[data-db]')) if ((r.dataset.db === 'shop') !== (r.getAttribute('aria-expanded') === 'true')) r.click(); return true; })()`);
   await waitFor(`document.querySelectorAll('.table-chip').length === 3`, 'tables listed');
   for (const t of ['orders', 'customers']) await ev(`document.dispatchEvent(new CustomEvent('table:add', { detail: { db: 'shop', table: ${J(t)} } }))`);
   await waitFor(`document.querySelectorAll('.entity').length === 2 && [...document.querySelectorAll('.entity__status')].every((s) => s.hidden)`, 'tables loaded');
@@ -96,7 +96,7 @@ try {
   await check('moving focus out of the rows (toolbar) drops a pending pick; Esc then does nothing harmful', async () => {
     await press('orders', 'cust_id', 'Enter');
     must((await hint()) !== '', 'pick not made');
-    await ev(`document.getElementById('db-select').focus()`);
+    await ev(`document.getElementById('db-first').focus()`);
     must((await hint()) === '' && await ev(`document.querySelector('.col-row--key-source') === null`), 'pick survived focus loss');
   });
   await check('Esc pressed on the page (not on a row) cancels a pick', async () => {
@@ -152,6 +152,41 @@ try {
     await press('customers', 'Region', 'Enter');
     await waitFor(`/Added region = Region to orders → customers \\(2 keys\\)/.test(document.getElementById('toast').textContent)`, 'extend toast');
     must(await ev(`!document.querySelector('dialog[open]') && document.querySelector('.rel-badge text')?.textContent === 'N:1 · 2 keys'`), 'badge');
+  });
+  // ---- a link is reachable from the keyboard: Tab, Enter edits, Delete removes (asks twice) -----------------------------------
+  const link = `document.querySelector('#model-view > svg.rel-svg:not(.rel-svg--labels) .rel-link[data-rel]')`;
+  const linkKey = (k) => ev(`(() => { const l = ${link}; l.focus(); l.dispatchEvent(new KeyboardEvent('keydown', { key: ${J(k)}, bubbles: true, cancelable: true })); return true; })()`);
+  await check('a link is a focusable button named by the columns it joins, and focusing it reads like hover (every key row washed)', async () => {
+    must(await ev(`(() => { const l = ${link}; return l.tabIndex === 0 && l.getAttribute('role') === 'button' && /^Relationship orders\.cust_id to customers\.id, and orders\.region to customers\.Region, many to one\./.test(l.getAttribute('aria-label')); })()`), 'label: ' + await ev(`${link}.getAttribute('aria-label')`));
+    must(await ev(`document.querySelector('.rel-link--label').getAttribute('aria-hidden') === 'true'`), 'badge should be hidden from a screen reader (the line says it all)');
+    await ev(`${link}.focus()`);
+    must(await ev(`${link}.classList.contains('rel-link--hover') && document.querySelectorAll('.col-row--linked').length === 4`), 'focus did not wash the four key rows (two pairs)');
+    await shot('kbd-link-focus.png');
+  });
+  await check('Enter on a focused link opens its dialog; Cancel returns focus to the (redrawn) link', async () => {
+    await linkKey('Enter');
+    await waitFor(`document.querySelector('dialog[open] .join-choice') !== null`, 'dialog open');
+    await ev(`[...document.querySelectorAll('dialog[open] .rel-dialog__foot .btn')].find((x) => /cancel/i.test(x.textContent)).click()`);
+    await waitFor(`document.querySelector('dialog[open]') === null`, 'dialog closed');
+    must(await ev(`document.activeElement === ${link}`), 'focus not on the link after the dialog closed: ' + await ev(`document.activeElement.tagName + '.' + document.activeElement.className`));
+  });
+  await check('saving the dialog keeps focus on the link', async () => {
+    await linkKey(' ');
+    await waitFor(`document.querySelector('dialog[open] .join-choice') !== null`, 'dialog open');
+    await ev(`[...document.querySelectorAll('dialog[open] input[name=cardinality]')].find((x) => x.value === '1:1').click(); document.querySelector('dialog[open] .rel-dialog__foot .btn--primary').click()`);
+    await waitFor(`document.querySelector('.rel-badge text')?.textContent.startsWith('1:1')`, 'badge changed');
+    must(await ev(`document.activeElement === ${link}`), 'focus lost after saving');
+  });
+  await check('Delete on a focused link asks twice, then removes it and lands focus on the ground', async () => {
+    await linkKey('Delete');
+    await waitFor(`document.querySelector('dialog[open]') !== null`, 'first confirm');
+    await ev(`document.querySelector('dialog[open] .btn--danger').click()`);
+    await b.sleep(400);
+    must(await ev(`${link} !== null`), 'removed after one confirmation');
+    await waitFor(`document.querySelector('dialog[open]') !== null`, 'second confirm');
+    await ev(`document.querySelector('dialog[open] .btn--danger').click()`);
+    await waitFor(`${link} === null`, 'link removed');
+    must(await ev(`document.activeElement === document.getElementById('model-view')`), 'focus after removal: ' + await ev(`document.activeElement.tagName`));
   });
   if (b.consoleErrors.length) console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  '));
 } catch (e) { console.log(`FAIL harness: ${e.stack}`); failed++; } finally { if (b) await b.close(); }

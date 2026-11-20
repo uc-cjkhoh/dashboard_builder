@@ -39,7 +39,7 @@ function answer({ method, path, body }) {
   }
   if (path === '/api/databases/shop/tables/orders/profile') {
     calls.profile.push(body);
-    return { json: { column: body.column, type: 'Float64', category: 'numeric', rows: 6, nulls: 0, distinct: 4, min: '5', max: '20', sampled: false, sampleLimit: 1000000,
+    return { json: { column: body.column, type: 'Float64', category: 'numeric', rows: 6, nulls: 0, distinct: 4, min: '5', max: '20', 
       top: [{ value: '5', count: 2, cut: false }, { value: '7', count: 2, cut: false }] } };
   }
   if (path === '/api/databases/shop/tables/orders/histogram') {
@@ -78,8 +78,8 @@ try {
   await b.goto(APP + '/');
   await waitFor(`!!document.getElementById('conn-connect')`, 'app loaded');
   await ev(`(() => { document.getElementById('conn-host').value = 'mock-ch'; document.getElementById('conn-password').value = 'x'; document.getElementById('conn-connect').click(); return true; })()`);
-  await waitFor(`document.getElementById('db-select').options.length > 1`, 'databases listed');
-  await ev(`(() => { const s = document.getElementById('db-select'); s.value = 'shop'; s.dispatchEvent(new Event('change')); return true; })()`);
+  await waitFor(`document.querySelectorAll('.db-row[data-db]').length > 0`, 'databases listed');
+  await ev(`(() => { for (const r of document.querySelectorAll('.db-row[data-db]')) if ((r.dataset.db === 'shop') !== (r.getAttribute('aria-expanded') === 'true')) r.click(); return true; })()`);
   await waitFor(`document.querySelectorAll('.table-chip').length === 2`, 'tables listed');
   for (const t of ['orders', 'customers'])
     await ev(`document.dispatchEvent(new CustomEvent('table:add', { detail: { db: 'shop', table: ${J(t)} } }))`);
@@ -97,7 +97,7 @@ try {
   const cols = (t) => ev(`[...${card(t)}.querySelectorAll('.col-row')].map((r) => r.dataset.column)`);
   const cmOf = `document.querySelector('dialog[open] .CodeMirror').CodeMirror`;
   const setSql = (v) => ev(`(() => { ${cmOf}.setValue(${J(v)}); return true; })()`);
-  const press = (label) => ev(`[...document.querySelectorAll('dialog[open] .dialog__foot .btn')].find((b) => b.textContent.trim() === ${J(label)}).click()`);
+  const press = (label) => ev(`[...document.querySelectorAll('dialog[open] .dialog__foot .btn, dialog[open] .sql-dialog__bar .btn')].find((b) => b.textContent.trim() === ${J(label)}).click()`);
   const statusText = () => ev(`document.querySelector('dialog[open] .sql-dialog__status')?.textContent.trim() ?? ''`);
   const act = (c, label) => `(() => { ${c}.querySelector('.entity__menu').click(); const it = [...document.querySelectorAll('.ctx-menu [role^="menuitem"]')].find((x) => x.textContent.trim() === '${label}'); if (!it) throw new Error('no menu item ${label}'); it.click(); return true; })()`; // the card's ☰ menu (D129)
   const openEdit = async (t) => { await ev(act(card(t), 'Edit SQL')); await waitFor(`!!document.querySelector('dialog[open] .CodeMirror')`, 'dialog'); };
@@ -124,7 +124,7 @@ try {
   await check('a custom SQL card shows the profile button on every column and the dialog sends the query as `source`', async () => {
     must(await ev(`${card('orders')}.querySelectorAll('.col-row__profile').length === 3`), 'profile buttons missing');
     await ev(`${card('orders')}.querySelector('.col-row[data-column=amount] .col-row__profile').click()`);
-    await waitFor(`document.querySelector('dialog[open] .col-profile__cell--top') !== null`, 'profile loaded');
+    await waitFor(`document.querySelector('dialog[open] .col-profile__cell--profile') !== null`, 'profile loaded');
     must(J(calls.profile.at(-1)) === J({ column: 'amount', limit: 10, source: wire }), `request: ${J(calls.profile.at(-1))}`);
     must(/amount/.test(await text('dialog[open] .col-profile__title')), 'title');
     await shot('card-gaps-profile.png');

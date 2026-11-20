@@ -1,5 +1,5 @@
 // Browser checks for the Data Source polish: one Tab stop in the table list (arrow keys inside), Enter / Down in the table search,
-// the on-canvas mark on a table chip, the profile icon half-shown on card hover, the Union dialog's search and X, Esc on Edit SQL (asks when edited).
+// the on-canvas mark on a table chip, the profile icon half-shown on card hover, Esc on Edit SQL (asks when edited).
 // Every /api/* call is mocked. Run: APP_URL=http://localhost:5278 node tests/live/ds-ux-medium-ui.mjs (start the app with dotnet run --urls on that port; stop it by port).
 import { launch } from './cdp.mjs'; export { launch };
 export const APP = process.env.APP_URL ?? 'http://localhost:5278';
@@ -29,7 +29,7 @@ export function answer({ method, path, body }) {
   const d = path.match(/columns\/(\w+)\/distinct$/); if (d) return { json: { values: ['a','b','c'], truncated: false } };
   if (path === '/api/rows') { const cols = COLUMNS[body.table ?? body.source?.name ?? 'orders'] ?? COLUMNS.orders;
     return { json: { columns: cols.map(c=>({name:c.name,type:c.type})), rows: Array.from({length: 40}, (_, r) => cols.map((c,i)=> c.category==='numeric'? String(r*7+i) : c.category==='temporal' ? '2024-03-0'+(r%9+1)+' 10:00:00' : (r%5===0? null : 'val_'+r))), truncated: true, limit: 100, columnsTruncated: false } }; }
-  if (/\/profile$/.test(path)) return { json: { column: body.column, type: 'UInt32', category: 'numeric', rows: 120000, nulls: 12, distinct: 4300, min: '1', max: '99812', sampled: false, sampleLimit: 1000000, top: [{ value: '5', count: 220, cut: false }, { value: '7', count: 180, cut: false }] } };
+  if (/\/profile$/.test(path)) return { json: { column: body.column, type: 'UInt32', category: 'numeric', rows: 120000, nulls: 12, distinct: 4300, min: '1', max: '99812', top: [{ value: '5', count: 220, cut: false }, { value: '7', count: 180, cut: false }] } };
   if (/\/histogram$/.test(path)) return { json: { bins: [{ x0: 0, x1: 10, count: 4 }, { x0: 10, x1: 20, count: 2 }], whole: false } };
   if (path === '/api/relationships/preview') return { json: { from: side({ keys: 200, matchedKeys: 190, matchedRows: 940, maxDuplicates: 14, avgDuplicates: 5 }), to: side({ rows: 200, keys: 200, matchedKeys: 190, matchedRows: 190 }), sampleLimit: 1000000, sampled: false } };
   if (path === '/api/query') return { json: { rowDimensions: [], columnDimensions: [], measures: [], rows: [], truncated: false } };
@@ -45,8 +45,8 @@ export async function start({ width = 1400, height = 900, connect = true, db = t
   await b.waitFor(`!!document.getElementById('conn-connect')`, { label: 'loaded' });
   if (connect) {
     await ev(`(() => { document.getElementById('conn-host').value = 'ch.internal'; document.getElementById('conn-password').value = 'x'; document.getElementById('conn-connect').click(); return 1; })()`);
-    await b.waitFor(`document.getElementById('db-select').options.length > 1`, { label: 'dbs' });
-    if (db) { await ev(`(() => { const s = document.getElementById('db-select'); s.value = 'shop'; s.dispatchEvent(new Event('change')); return 1; })()`);
+    await b.waitFor(`document.querySelectorAll('.db-row[data-db]').length > 0`, { label: 'dbs' });
+    if (db) { await ev(`(() => { for (const r of document.querySelectorAll('.db-row[data-db]')) if ((r.dataset.db === 'shop') !== (r.getAttribute('aria-expanded') === 'true')) r.click(); return 1; })()`);
       await b.waitFor(`document.querySelectorAll('.table-chip').length > 5`, { label: 'tables' }); }
   }
   return { b, ev, shot };
@@ -56,19 +56,19 @@ const res = []; const ok = (n, c, d='') => { res.push((c?'ok   ':'FAIL ')+n+(d?'
 const { b, ev, shot } = await start();
 const chip = (t) => `document.querySelector('.table-chip[data-table=${J(t)}]')`;
 // 9 one tab stop
-const stops = await ev(`[...document.querySelectorAll('#table-list button')].filter(x=>x.tabIndex===0).map(x=>x.getAttribute('aria-label')).join('|')`);
-ok('9 one tab stop in the list', stops === 'Add orders to the canvas', stops);
+const stops = await ev(`[...document.querySelectorAll('#table-list button')].filter(x=>x.tabIndex===0).length`);
+ok('9 one tab stop in the tree', stops === 1, stops);
 await ev(`document.getElementById('table-search').focus()`);
-await b.key('Tab',{code:'Tab',vk:9}); const a1 = await ev(`document.activeElement.getAttribute('aria-label')`);
+await b.key('Tab',{code:'Tab',vk:9}); const a1 = await ev(`document.activeElement.classList.contains('db-row') ? 'database row' : document.activeElement.getAttribute('aria-label')`);
 await b.key('Tab',{code:'Tab',vk:9}); const a2 = await ev(`document.activeElement.textContent.trim() || document.activeElement.getAttribute('aria-label')`);
-ok('9 Tab from search: list, then past it (Union)', a1 === 'Add orders to the canvas' && a2 === 'Union', a1 + ' > ' + a2);
+ok('9 Tab from search: the tree, then past it (the sidebar resizer)', a1 === 'database row' && a2 === 'Resize sidebar', a1 + ' > ' + a2);
 await ev(`${chip('orders')}.querySelector('.table-chip__add').focus()`);
 await b.key('ArrowDown',{code:'ArrowDown',vk:40}); await b.key('ArrowDown',{code:'ArrowDown',vk:40});
 ok('9 Down moves to the next table', await ev(`document.activeElement.getAttribute('aria-label')`) === 'Add products to the canvas', await ev(`document.activeElement.getAttribute('aria-label')`));
 await b.key('ArrowLeft',{code:'ArrowLeft',vk:37});
 ok('9 Left goes to the eye', await ev(`document.activeElement.getAttribute('aria-label')`) === 'Preview rows of products');
 await b.key('End',{code:'End',vk:35});
-ok('9 End goes to the last table (eye kept)', await ev(`document.activeElement.getAttribute('aria-label')`) === 'Preview rows of events_29', await ev(`document.activeElement.getAttribute('aria-label')`));
+ok('9 End goes to the last row of the tree (the System group)', await ev(`document.activeElement.dataset.key`) === 'sys', await ev(`document.activeElement.dataset.key`));
 ok('9 tab stop follows focus', await ev(`[...document.querySelectorAll('#table-list button')].filter(x=>x.tabIndex===0).length`) === 1);
 // 10 Enter in search
 await ev(`(()=>{const s=document.getElementById('table-search'); s.focus(); s.value='custom'; s.dispatchEvent(new Event('input',{bubbles:true})); return 1})()`);
@@ -78,7 +78,10 @@ await ev(`(()=>{const s=document.getElementById('table-search'); s.value='ord'; 
 await b.key('Enter',{code:'Enter',vk:13}); await sleep(400);
 ok('10 Enter with two matches adds nothing', await ev(`document.querySelectorAll('.entity').length`) === 1);
 await b.key('ArrowDown',{code:'ArrowDown',vk:40});
-ok('10 Down from search enters the list', await ev(`document.activeElement.getAttribute('aria-label')`) === 'Add orders to the canvas');
+// the results keep their database row as the tree's first row (a search narrows the tree, it does not flatten it): Down enters at that row, the next Down is the first match
+ok('10 Down from search enters the tree at its first row (the database)', await ev(`document.activeElement.dataset.key`) === 'db:shop', await ev(`document.activeElement.dataset.key`));
+await b.key('ArrowDown',{code:'ArrowDown',vk:40});
+ok('10 Down again reaches the first match', await ev(`document.activeElement.getAttribute('aria-label')`) === 'Add orders to the canvas', await ev(`document.activeElement.getAttribute('aria-label')`));
 await ev(`(()=>{const s=document.getElementById('table-search'); s.value=''; s.dispatchEvent(new Event('input',{bubbles:true})); return 1})()`);
 // 8 placed marker
 ok('8 placed chip says so', await ev(`${chip('customers')}.classList.contains('table-chip--placed') && ${chip('customers')}.querySelector('.table-chip__add').getAttribute('aria-label')`) === 'customers is on the canvas — show it');
@@ -105,17 +108,6 @@ ok('13 profile icon half-shown while over the card', await ev(`getComputedStyle(
 await shot('v2-profile');
 await b.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 1300, y: 800 }); await sleep(400);
 ok('13 hidden away from the card', await ev(`getComputedStyle(document.querySelector('.col-row__profile')).opacity`) === '0');
-// 14 union
-await ev(`document.getElementById('union-open').click()`); await sleep(500);
-ok('14 union opens on its search box', await ev(`document.activeElement.getAttribute('aria-label')`) === 'Search tables' && await ev(`!!document.querySelector('dialog[open] .union-dialog__search input')`));
-await ev(`document.querySelector('dialog[open] input[value="orders"]').click()`);
-await b.type('events_0'); await sleep(200);
-ok('14 search filters, ticked rows stay ticked', await ev(`[...document.querySelectorAll('dialog[open] .union-dialog__item')].filter(l=>!l.hidden).length`) === 10 && await ev(`document.querySelector('dialog[open] input[value="orders"]').checked`));
-await shot('v2-union');
-await b.key('Escape',{code:'Escape',vk:27}); await sleep(200);
-ok('14 Esc in the search clears it, dialog stays', await ev(`!!document.querySelector('dialog[open]') && document.querySelector('dialog[open] .union-dialog__search input').value === ''`));
-await ev(`document.querySelector('dialog[open] .union-dialog__top .iconbtn').click()`); await sleep(200);
-ok('14 the X closes it', !(await ev(`!!document.querySelector('dialog[open]')`)));
 // 15 edit SQL esc
 const openEdit = () => ev(`(() => { document.querySelector('.entity__menu').click(); [...document.querySelectorAll('.ctx-menu [role^="menuitem"]')].find((x) => x.textContent.trim() === 'Edit SQL').click(); return true; })()`); // via the card's ☰ menu (D129)
 await openEdit(); await sleep(1500);

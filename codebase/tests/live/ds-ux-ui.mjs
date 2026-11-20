@@ -29,7 +29,7 @@ export function answer({ method, path, body }) {
   const d = path.match(/columns\/(\w+)\/distinct$/); if (d) return { json: { values: ['a','b','c'], truncated: false } };
   if (path === '/api/rows') { const cols = COLUMNS[body.table ?? body.source?.name ?? 'orders'] ?? COLUMNS.orders;
     return { json: { columns: cols.map(c=>({name:c.name,type:c.type})), rows: Array.from({length: 40}, (_, r) => cols.map((c,i)=> c.category==='numeric'? String(r*7+i) : c.category==='temporal' ? '2024-03-0'+(r%9+1)+' 10:00:00' : (r%5===0? null : 'val_'+r))), truncated: true, limit: 100, columnsTruncated: false } }; }
-  if (/\/profile$/.test(path)) return { json: { column: body.column, type: 'UInt32', category: 'numeric', rows: 120000, nulls: 12, distinct: 4300, min: '1', max: '99812', sampled: false, sampleLimit: 1000000, top: [{ value: '5', count: 220, cut: false }, { value: '7', count: 180, cut: false }] } };
+  if (/\/profile$/.test(path)) return { json: { column: body.column, type: 'UInt32', category: 'numeric', rows: 120000, nulls: 12, distinct: 4300, min: '1', max: '99812', top: [{ value: '5', count: 220, cut: false }, { value: '7', count: 180, cut: false }] } };
   if (/\/histogram$/.test(path)) return { json: { bins: [{ x0: 0, x1: 10, count: 4 }, { x0: 10, x1: 20, count: 2 }], whole: false } };
   if (path === '/api/relationships/preview') return { json: { from: side({ keys: 200, matchedKeys: 190, matchedRows: 940, maxDuplicates: 14, avgDuplicates: 5 }), to: side({ rows: 200, keys: 200, matchedKeys: 190, matchedRows: 190 }), sampleLimit: 1000000, sampled: false } };
   if (path === '/api/query') return { json: { rowDimensions: [], columnDimensions: [], measures: [], rows: [], truncated: false } };
@@ -45,8 +45,8 @@ export async function start({ width = 1400, height = 900, connect = true, db = t
   await b.waitFor(`!!document.getElementById('conn-connect')`, { label: 'loaded' });
   if (connect) {
     await ev(`(() => { document.getElementById('conn-host').value = 'ch.internal'; document.getElementById('conn-password').value = 'x'; document.getElementById('conn-connect').click(); return 1; })()`);
-    await b.waitFor(`document.getElementById('db-select').options.length > 1`, { label: 'dbs' });
-    if (db) { await ev(`(() => { const s = document.getElementById('db-select'); s.value = 'shop'; s.dispatchEvent(new Event('change')); return 1; })()`);
+    await b.waitFor(`document.querySelectorAll('.db-row[data-db]').length > 0`, { label: 'dbs' });
+    if (db) { await ev(`(() => { for (const r of document.querySelectorAll('.db-row[data-db]')) if ((r.dataset.db === 'shop') !== (r.getAttribute('aria-expanded') === 'true')) r.click(); return 1; })()`);
       await b.waitFor(`document.querySelectorAll('.table-chip').length > 5`, { label: 'tables' }); }
   }
   return { b, ev, shot };
@@ -69,6 +69,8 @@ const dragRow = (fromT, fromC, toT, toC) => ev(`(() => { const row = (t, c) => [
   a.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt })); z.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
   z.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt })); a.dispatchEvent(new DragEvent('dragend', { bubbles: true, dataTransfer: dt })); return 1; })()`);
 const pressed = () => ev(`document.querySelector('dialog[open] input[name=cardinality]:checked')?.value`);
+const widthOf = (t) => ev(`[...document.querySelectorAll('.entity')].find(e=>e.querySelector('.entity__table').textContent===${J(t)}).offsetWidth`);
+const wBefore = await widthOf('orders'); // a lone card: "Needs a partner" shows; its rows (longest name + type + chrome) set the width, as the title is short
 await dragRow('orders','customer_id','customers','id'); await b.waitFor(`document.querySelector('dialog[open]')`);
 ok('1 FK->PK starts on N:1', await pressed() === 'N:1', await pressed());
 await ev(`document.querySelector('dialog[open] input[name=cardinality][value="1:N"]').click()`); // pick 1:N
@@ -80,7 +82,7 @@ ok('1 Use N:1 selects N:1 and goes away', await pressed() === 'N:1' && !(await e
 await ev(`document.querySelector('dialog[open] .rel-dialog__foot .btn--primary').click()`); await sleep(700);
 ok('1 saved N:1', await ev(`document.querySelector('.rel-badge text')?.textContent`) === 'N:1');
 const wOrders = await ev(`[...document.querySelectorAll('.entity')].find(e=>e.querySelector('.entity__table').textContent==='orders').offsetWidth`);
-ok('2 linked card back to its natural width', wOrders === 312, String(wOrders));
+ok('2 linked card keeps the width its column rows need (the label going away never leaves it wider)', wOrders >= 312 && wOrders <= wBefore && wOrders === (await widthOf('orders')), `before ${wBefore}, after ${wOrders}`);
 // link anchor on card edge after width refit
 const anchorOk = await ev(`(()=>{const d=document.querySelector('.rel-link__line').getAttribute('d').match(/-?[\\d.]+/g).map(Number); const o=[...document.querySelectorAll('.entity')].find(e=>e.querySelector('.entity__table').textContent==='orders').getBoundingClientRect(); const c=document.getElementById('model-view').getBoundingClientRect(); return Math.abs(d[0]-(o.right-c.left))<3 || Math.abs(d[0]-(o.left-c.left))<3 })()`);
 ok('2 link starts on the refit card edge', anchorOk);

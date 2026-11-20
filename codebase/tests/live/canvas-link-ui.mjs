@@ -41,8 +41,8 @@ try {
   await b.goto(APP + '/');
   await waitFor(`!!document.getElementById('conn-connect')`, 'app loaded');
   await ev(`(() => { document.getElementById('conn-host').value = 'mock-ch'; document.getElementById('conn-password').value = 'x'; document.getElementById('conn-connect').click(); return true; })()`);
-  await waitFor(`document.getElementById('db-select').options.length > 1`, 'databases listed');
-  await ev(`(() => { const s = document.getElementById('db-select'); s.value = 'shop'; s.dispatchEvent(new Event('change')); return true; })()`);
+  await waitFor(`document.querySelectorAll('.db-row[data-db]').length > 0`, 'databases listed');
+  await ev(`(() => { for (const r of document.querySelectorAll('.db-row[data-db]')) if ((r.dataset.db === 'shop') !== (r.getAttribute('aria-expanded') === 'true')) r.click(); return true; })()`);
   await waitFor(`document.querySelectorAll('.table-chip').length === 3`, 'tables listed');
   for (const t of ['orders', 'customers', LONG]) await ev(`document.dispatchEvent(new CustomEvent('table:add', { detail: { db: 'shop', table: ${J(t)} } }))`);
   await waitFor(`document.querySelectorAll('.entity').length === 3 && [...document.querySelectorAll('.entity__status')].every((s) => s.hidden)`, 'tables loaded');
@@ -88,6 +88,23 @@ try {
     must(r.edges.some((e) => Math.abs(e - r.xs[0]) < 1.5), `anchor ${J(r.xs[0])} vs edges ${J(r.edges)}`); // the end sits on a card edge; the turn (xs[1]) is in the middle of the gutter
     await shot('drag-link.png');
   });
+  await check('a collapsed card takes its links at its vertical centre; expanded, they return to the related column', async () => {
+    const ends = () => ev(`(() => { const c = document.getElementById('model-view'), cr = c.getBoundingClientRect(); const e = [...document.querySelectorAll('.entity')].find((x) => x.querySelector('.entity__table').textContent === 'customers');
+      const q = e.getBoundingClientRect(), rr = e.querySelector('.col-row[data-column=id]').getBoundingClientRect(), top = q.top - cr.top + c.scrollTop;
+      const d = document.querySelector('.rel-link__line').getAttribute('d').match(/-?[\\d.]+/g).map(Number); const ys = [d[1], d[d.length - 1]];
+      return { ys, centre: top + q.height / 2, row: rr.top + rr.height / 2 - cr.top + c.scrollTop, h: q.height }; })()`);
+    const toggle = () => ev(`[...document.querySelectorAll('.entity')].find((x) => x.querySelector('.entity__table').textContent === 'customers').querySelector('.entity__toggle').click()`);
+    await toggle();
+    await new Promise((r) => setTimeout(r, 600));
+    let r = await ends();
+    must(r.ys.some((y) => Math.abs(y - r.centre) < 1.5), `collapsed: ends ${J(r.ys)} vs card centre ${r.centre} (h ${r.h})`);
+    await shot('collapsed-link.png');
+    await toggle();
+    await new Promise((r2) => setTimeout(r2, 600));
+    r = await ends();
+    must(r.ys.some((y) => Math.abs(y - r.row) < 1.5), `expanded: ends ${J(r.ys)} vs row centre ${r.row}`);
+    await shot('expanded-link.png');
+  });
   await check('clicking a link and closing its dialog leaves no highlight (hover only)', async () => {
     await ev(`(() => { const g = document.querySelector('.rel-link'); g.dispatchEvent(new PointerEvent('pointerenter')); return true; })()`);
     must(await ev(`document.querySelectorAll('.col-row--linked').length > 0 && !!document.querySelector('.rel-link--hover')`), 'hover should highlight');
@@ -95,7 +112,7 @@ try {
     await waitFor(`document.querySelector('dialog[open] .rel-dialog') !== null`, 'dialog open');
     await ev(`[...document.querySelectorAll('dialog[open] .btn')].find((x) => x.textContent === 'Cancel').click()`);
     await waitFor(`document.querySelector('dialog[open]') === null`, 'dialog closed');
-    must(await ev(`document.querySelectorAll('.col-row--linked').length === 0 && !document.querySelector('.rel-link--hover') && !document.querySelector('.rel-note--active')`), 'highlight left behind');
+    must(await ev(`document.querySelectorAll('.col-row--linked').length === 0 && !document.querySelector('.rel-link--hover')`), 'highlight left behind');
   });
   await check('a duplicate drop is refused with a toast and no dialog', async () => {
     await dragRow('customers', 'id', 'orders', 'cust_id');

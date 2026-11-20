@@ -57,14 +57,14 @@ try {
   const connect = async () => {
     await waitFor(`document.readyState === 'complete' && !!document.getElementById('conn-connect')`, 'app loaded');
     await ev(`(() => { document.getElementById('conn-host').value = 'mock-ch'; document.getElementById('conn-password').value = 'x'; document.getElementById('conn-connect').click(); return true; })()`);
-    await waitFor(`document.getElementById('db-select').options.length > 1`, 'databases listed');
+    await waitFor(`document.querySelectorAll('.db-row[data-db]').length > 0`, 'databases listed');
   };
   const box = (sel) => ev(`(() => { const r = document.querySelector(${J(sel)}).getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), l: r.left, t: r.top }; })()`);
   const pick = (value) => ev(`(() => { const s = document.querySelector('.board-bar__size'); s.value = ${J(value)}; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
 
   await b.goto(APP + '/');
   await connect();
-  await ev(`(() => { const s = document.getElementById('db-select'); s.value = 'shop'; s.dispatchEvent(new Event('change')); return true; })()`);
+  await ev(`(() => { for (const r of document.querySelectorAll('.db-row[data-db]')) if ((r.dataset.db === 'shop') !== (r.getAttribute('aria-expanded') === 'true')) r.click(); return true; })()`);
   await waitFor(`document.querySelectorAll('.table-chip').length === 1`, 'tables listed');
   await ev(`document.dispatchEvent(new CustomEvent('table:add', { detail: { db: 'shop', table: 'orders' } }))`);
   await waitFor(`document.querySelectorAll('.entity').length === 1 && [...document.querySelectorAll('.entity__status')].every((s) => s.hidden)`, 'orders loaded');

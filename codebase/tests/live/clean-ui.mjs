@@ -40,18 +40,14 @@ try {
   const ev = (s) => b.evaluate(s);
   const waitFor = (s, label) => b.waitFor(s, { label });
   const shot = async (name) => { try { writeFileSync(join(SHOTS, name), Buffer.from((await b.send('Page.captureScreenshot', { format: 'png' })).data, 'base64')); } catch { /* optional */ } };
-  const ud = `document.querySelector('dialog.unpivot-dialog[open]')`;
-  const rd = `document.querySelector('dialog.rows-dialog[open]')`;
   const sd = `document.querySelector('dialog.clean-dialog[open]')`;
-  const go = `[...${ud}.querySelectorAll('button')].find((x) => x.textContent === 'Show rows')`;
-  const tick = (side, name) => ev(`(() => { const c = [...${ud}.querySelectorAll('.unpivot-dialog__list')[${side}].querySelectorAll('input')].find((x) => x.value === ${J(name)}); c.checked = !c.checked; c.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
   const store = (code) => ev(`(async () => { const st = await import('/features/Core/store.js'); ${code}; })()`);
 
   await b.goto(APP + '/');
   await waitFor(`!!document.getElementById('conn-connect')`, 'app loaded');
   await ev(`(() => { document.getElementById('conn-host').value = 'mock-ch'; document.getElementById('conn-password').value = 'x'; document.getElementById('conn-connect').click(); return true; })()`);
-  await waitFor(`document.getElementById('db-select').options.length > 1`, 'databases listed');
-  await ev(`(() => { const s = document.getElementById('db-select'); s.value = 'shop'; s.dispatchEvent(new Event('change')); return true; })()`);
+  await waitFor(`document.querySelectorAll('.db-row[data-db]').length > 0`, 'databases listed');
+  await ev(`(() => { for (const r of document.querySelectorAll('.db-row[data-db]')) if ((r.dataset.db === 'shop') !== (r.getAttribute('aria-expanded') === 'true')) r.click(); return true; })()`);
   await waitFor(`document.querySelectorAll('.table-chip').length === 2`, 'tables listed');
 
 

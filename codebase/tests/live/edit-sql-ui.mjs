@@ -18,7 +18,7 @@ const COLUMNS = {
   customers: [['id', 'Int32', 'numeric'], ['name', 'String', 'text']],
 };
 const queries = [], sourceCalls = [], translateCalls = [];
-function answer({ method, path, body }) {
+async function answer({ method, path, body }) {
   if (path === '/api/connection' && method === 'GET') return { json: { connected: false } };
   if (path === '/api/connection') return { json: { connected: true, host: 'mock-ch', port: 8443, user: 'default', secure: true, allowInvalidCert: false } };
   if (path === '/api/databases') return { json: ['shop'] };
@@ -27,6 +27,7 @@ function answer({ method, path, body }) {
   if (m && COLUMNS[m[1]]) return { json: COLUMNS[m[1]].map(([name, type, category]) => ({ name, type, category })) };
   if (path === '/api/sql/translate') { // a stand-in for the real translator (covered by the .NET tests): enough rules to drive the dialog
     translateCalls.push(body);
+    if (/SLOWOPEN/.test(body.sql)) await new Promise((r) => setTimeout(r, 400)); // a slow translator: the dialog must not wait for it to appear
     if (/NOPY/.test(body.sql)) return { status: 503, json: { error: 'Python 3 is not installed on this server.' } };
     if (/TRANSERR/.test(body.sql)) return { status: 400, json: { error: 'The query looks unfinished here: something is missing.', field: 'sql', line: 1, col: 27, start: 17 } };
     if (body.from === 'clickhouse' && /arrayJoin/.test(body.sql)) return { status: 400, json: { error: 'Part of this query has no equivalent in the other dialect: arrayJoin.', field: 'sql' } };
@@ -75,8 +76,8 @@ try {
   await b.goto(APP + '/');
   await waitFor(`!!document.getElementById('conn-connect')`, 'app loaded');
   await ev(`(() => { document.getElementById('conn-host').value = 'mock-ch'; document.getElementById('conn-password').value = 'x'; document.getElementById('conn-connect').click(); return true; })()`);
-  await waitFor(`document.getElementById('db-select').options.length > 1`, 'databases listed');
-  await ev(`(() => { const s = document.getElementById('db-select'); s.value = 'shop'; s.dispatchEvent(new Event('change')); return true; })()`);
+  await waitFor(`document.querySelectorAll('.db-row[data-db]').length > 0`, 'databases listed');
+  await ev(`(() => { for (const r of document.querySelectorAll('.db-row[data-db]')) if ((r.dataset.db === 'shop') !== (r.getAttribute('aria-expanded') === 'true')) r.click(); return true; })()`);
   await waitFor(`document.querySelectorAll('.table-chip').length === 2`, 'tables listed');
   for (const t of ['orders', 'customers'])
     await ev(`document.dispatchEvent(new CustomEvent('table:add', { detail: { db: 'shop', table: ${J(t)} } }))`);
@@ -98,11 +99,12 @@ try {
   const act = (c, label) => `(() => { ${c}.querySelector('.entity__menu').click(); const it = [...document.querySelectorAll('.ctx-menu [role^="menuitem"]')].find((x) => x.textContent.trim() === '${label}'); if (!it) throw new Error('no menu item ${label}'); it.click(); return true; })()`; // the card's ☰ menu (D129)
   const menuBtn = (t) => `${card(t)}.querySelector('.entity__head > .entity__menu')`;
   const clickEdit = async (t) => { await ev(act(card(t), 'Edit SQL')); await waitFor(`!!document.querySelector('dialog[open] .CodeMirror')`, 'dialog'); };
-  const store = (code) => ev(`(async () => { const st = await import('/features/Core/store.js'); ${code} })()`);
+  // the page's own module graph lives under /features/v-<hash>/ (D139): importing the unversioned path would give a second, empty copy of the store
+  const store = (code) => ev(`(async () => { const base = document.querySelector('script[type=module][src$="/Shell/app.js"]').src.replace(/\\/Shell\\/app\\.js$/, ''); const st = await import(base + '/Core/store.js'); ${code} })()`);
   const cmOf = `document.querySelector('dialog[open] .CodeMirror').CodeMirror`;
   const setSql = (v) => ev(`(() => { ${cmOf}.setValue(${J(v)}); return true; })()`);
   const getSql = () => ev(`${cmOf}.getValue()`);
-  const press = (label) => ev(`[...document.querySelectorAll('dialog[open] .dialog__foot .btn')].find((b) => b.textContent.trim() === ${J(label)}).click()`);
+  const press = (label) => ev(`[...document.querySelectorAll('dialog[open] .dialog__foot .btn, dialog[open] .sql-dialog__bar .btn')].find((b) => b.textContent.trim() === ${J(label)}).click()`);
   const errorText = () => ev(`document.querySelector('dialog[open] .sql-dialog__status')?.textContent.trim() ?? ''`);
 
   await check('right-click on a card opens no menu; the head has a ☰ menu after the title with Edit SQL in it', async () => {
@@ -172,10 +174,10 @@ try {
     must(await ev(`!${cmOf}.lineInfo(0).gutterMarkers?.['CodeMirror-lint-markers']`), 'marker on line 1');
     await pickSyntax('MySQL');
   });
-  await check('the footer offers MySQL and ClickHouse syntax, MySQL first and chosen by default, with the matching highlighting', async () => {
-    const labels = await ev(`[...document.querySelectorAll('dialog[open] .dialog__foot .seg label')].map((l) => l.textContent.trim())`);
+  await check('the editor toolbar offers MySQL and ClickHouse syntax, MySQL first and chosen by default, with the matching highlighting', async () => {
+    const labels = await ev(`[...document.querySelectorAll('dialog[open] .sql-dialog__bar .seg label')].map((l) => l.textContent.trim())`);
     must(J(labels) === J(['MySQL', 'ClickHouse']), `labels: ${J(labels)}`);
-    must(await ev(`!!document.querySelector('dialog[open] .dialog__foot .seg')`), 'switch not in the footer');
+    must(await ev(`!!document.querySelector('dialog[open] .sql-dialog__frame .sql-dialog__bar .seg') && !document.querySelector('dialog[open] .dialog__foot .seg')`), 'switch not in the editor toolbar');
     must((await syntaxIs()) === 'MySQL', `default: ${await syntaxIs()}`);
     must((await ev(`${cmOf}.getOption('mode')`)) === 'text/x-mysql', 'mode');
     await shot('edit-sql-mysql.png');
@@ -186,7 +188,16 @@ try {
     await setSql(my);
     await statusIs(/Valid query · 3 columns/);
     must(sourceCalls.length === before + 1 && /COALESCE\(cust_id, 0\)/.test(sourceCalls.at(-1).sql) && /LIMIT 5 OFFSET 1/.test(sourceCalls.at(-1).sql), `describe got: ${J(sourceCalls.at(-1))}`);
-    must(await ev(`!document.querySelector('dialog[open] .sql-dialog__preview').hidden && document.querySelector('dialog[open] .sql-dialog__sql').textContent.includes('COALESCE(cust_id, 0)')`), 'panel not showing the ClickHouse SQL');
+    must(await ev(`!document.querySelector('dialog[open] .sql-dialog__peek').hidden && document.querySelector('dialog[open] .sql-dialog__sql').textContent.includes('COALESCE(cust_id, 0)')`), 'toggle not offered for the ClickHouse SQL');
+    { const st = () => ev(`(() => { const d = document.querySelector('dialog[open]'); const pk = d.querySelector('.sql-dialog__peek'); return { panelHidden: d.querySelector('.sql-dialog__sql').hidden, expanded: pk.getAttribute('aria-expanded'), inReadout: !!pk.closest('.sql-dialog__readout') }; })()`);
+      const toggle = () => ev(`document.querySelector('dialog[open] .sql-dialog__peek').click()`);
+      const was = await st(); // (an earlier refusal may have opened the panel: it is a toggle, whichever way it starts)
+      must(was.inReadout && was.panelHidden === (was.expanded === 'false'), `toggle state is inconsistent: ${J(was)}`);
+      await toggle(); const flipped = await st();
+      must(flipped.panelHidden !== was.panelHidden && flipped.expanded !== was.expanded, `the toggle did not flip: ${J(flipped)}`);
+      await toggle(); const back = await st();
+      must(J(back) === J(was), `the toggle did not flip back: ${J(back)}`);
+      if (back.panelHidden) { await toggle(); must(await ev(`document.querySelector('dialog[open] .sql-dialog__sql').textContent.includes('COALESCE(cust_id, 0)')`), 'the open panel does not show the ClickHouse SQL'); } }
     await b.sleep(600);
     await shot('edit-sql-translated.png');
   });
@@ -195,7 +206,7 @@ try {
     await pickSyntax('ClickHouse');
     must(/COALESCE\(cust_id, 0\)/.test(await getSql()) && /LIMIT 5 OFFSET 1/.test(await getSql()), `ClickHouse text: ${J(await getSql())}`);
     must((await ev(`${cmOf}.getOption('mode')`)) === 'text/x-clickhouse', 'mode');
-    must(await ev(`document.querySelector('dialog[open] .sql-dialog__preview').hidden`), 'panel shown in ClickHouse syntax');
+    must(await ev(`document.querySelector('dialog[open] .sql-dialog__peek').hidden && document.querySelector('dialog[open] .sql-dialog__sql').hidden`), 'toggle or panel shown in ClickHouse syntax');
     const calls = translateCalls.length;
     await pickSyntax('MySQL');
     must((await getSql()) === my, `back: ${J(await getSql())}`);
@@ -241,7 +252,7 @@ try {
   await check('Format lays the query out, keeps names as typed, and Ctrl+Z undoes it', async () => {
     const original = 'select a, count(*) as n from shop.orders where amount > 1 and region in (select region from shop.regions) group by a';
     await setSql(original);
-    await ev(`[...document.querySelectorAll('dialog[open] .dialog__foot .btn')].find((x) => x.textContent.trim() === 'Format').click()`);
+    await ev(`[...document.querySelectorAll('dialog[open] .sql-dialog__bar .btn')].find((x) => x.textContent.trim() === 'Format').click()`);
     await waitFor(`${cmOf}.lineCount() > 8`, 'formatted');
     const out = await getSql();
     must(/^select\n  a,\n  count\(\*\) as n\nfrom\n/.test(out), `format: ${J(out)}`); // case kept: "n" is not upper-cased
@@ -249,7 +260,7 @@ try {
     await statusIs(/Formatted/);
     await ev(`${cmOf}.undo()`);
     must((await getSql()) === original, 'undo did not restore');
-    await setSql('select ( from'); await ev(`[...document.querySelectorAll('dialog[open] .dialog__foot .btn')].find((x) => x.textContent.trim() === 'Format').click()`);
+    await setSql('select ( from'); await ev(`[...document.querySelectorAll('dialog[open] .sql-dialog__bar .btn')].find((x) => x.textContent.trim() === 'Format').click()`);
     await statusIs(/Can't format yet/);
   });
   await check('a multi-line bracket folds from the margin arrow, and unfolds', async () => {
@@ -282,12 +293,29 @@ try {
     must((await toastText()).includes('using your SQL'), `toast: ${await toastText()}`);
     await shot('edit-sql-applied.png');
   });
+  await check('Edit SQL asked twice at once (a double click on the menu item) opens one dialog', async () => {
+    await ev(`(() => { ${card('orders')}.querySelector('.entity__menu').click(); const it = [...document.querySelectorAll('.ctx-menu [role^="menuitem"]')].find((x) => x.textContent.trim() === 'Edit SQL'); it.click(); it.click(); return true; })()`);
+    await waitFor(`!!document.querySelector('dialog[open] .CodeMirror')`, 'dialog');
+    await b.sleep(600);
+    must((await ev(`document.querySelectorAll('dialog.sql-dialog').length`)) === 1, `dialogs: ${await ev(`document.querySelectorAll('dialog.sql-dialog').length`)}`);
+    await press('Cancel');
+    await waitFor(`!document.querySelector('dialog.sql-dialog')`, 'dialog closed');
+    await clickEdit('orders'); // and a later request still opens one
+    must((await ev(`document.querySelectorAll('dialog.sql-dialog').length`)) === 1, 'no dialog on the next request');
+    await press('Cancel');
+    await waitFor(`!document.querySelector('dialog.sql-dialog')`, 'closed again');
+  });
   await check('reopening Edit shows the saved query; Reset to default restores the table SELECT; Cancel keeps the query', async () => {
     await clickEdit('orders');
     must((await getSql()) === 'SELECT IFNULL(cust_id, 0) AS cust_id, amount, extra FROM shop.orders LIMIT 1, 5', `saved MySQL text not shown: ${J(await getSql())}`);
     must((await syntaxIs()) === 'MySQL', 'not opened in MySQL syntax');
     await press('Reset to default');
     await waitFor(`${cmOf}.getValue().startsWith('SELECT\\n') && ${cmOf}.getValue().includes('FROM')`, 'default restored');
+    must(/Reset to the table's query\. Ctrl\+Z undoes it\./.test(await ev(`document.querySelector('dialog[open] .sql-dialog__status').textContent`)), 'no notice that Reset can be undone');
+    await ev(`${cmOf}.undo()`); // Reset is one edit, not a wipe of the history
+    must((await getSql()) === 'SELECT IFNULL(cust_id, 0) AS cust_id, amount, extra FROM shop.orders LIMIT 1, 5', `Ctrl+Z did not bring the query back: ${J(await getSql())}`);
+    await ev(`${cmOf}.redo()`);
+    await waitFor(`${cmOf}.getValue().startsWith('SELECT\\n')`, 'redo restores the default');
     await press('Cancel');
     await waitFor(`!document.querySelector('dialog[open]')`, 'dialog closed');
     must(J(await cols('orders')) === J(['cust_id', 'amount', 'extra']), 'Cancel changed the card');
@@ -305,7 +333,8 @@ try {
     must(q && q.sources[0].kind === 'sql' && q.sources[0].name === 'orders' && q.sources[0].sql === 'SELECT COALESCE(cust_id, 0) AS cust_id, amount, extra FROM shop.orders LIMIT 5 OFFSET 1', `query: ${J(q)}`);
     must(!('source' in q), 'sent as a union source');
   });
-  const openEdit = clickEdit;
+  // a card saved in ClickHouse syntax is worked out while the dialog is already open (empty, "Opening your query…"): most checks want it ready
+  const openEdit = async (t) => { await clickEdit(t); await waitFor(`!/Opening your query/.test(document.querySelector('dialog[open] .sql-dialog__status')?.textContent ?? '')`, 'dialog ready'); };
   const cancelEdit = async () => { await press('Cancel'); await waitFor(`!document.querySelector('dialog[open]')`, 'closed'); };
   await check('a ClickHouse comparison that would ignore case after a MySQL round trip (the translator reports case-fold) opens in ClickHouse syntax with the warning', async () => {
     await ev(`document.querySelector('.tab--model').click()`);
@@ -400,6 +429,43 @@ try {
     must((await syntaxIs()) === 'ClickHouse', `syntax: ${await syntaxIs()}`);
     must(await ev(`[...document.querySelectorAll('dialog[open] .seg input')].find((r) => r.parentElement.textContent.trim() === 'MySQL').disabled`), 'MySQL still selectable');
     await cancelEdit();
+  });
+  await check('a saved query that is not edited shows its verdict at once, not after the typing pause', async () => {
+    const t0 = Date.now();
+    await clickEdit('orders');
+    await statusIs(/Valid query/);
+    const took = Date.now() - t0;
+    must(took < 600, `verdict ${took} ms after opening (the typing pause alone is 800 ms)`);
+    await cancelEdit();
+  });
+  await check('a saved ClickHouse query opens the dialog at once (empty, read-only, "Opening your query…"), fills in when its translation is ready, and opens filled the next time', async () => {
+    await store(`const e = [...st.entities.values()].find((x) => x.table === 'orders'); e.customSql = 'SELECT SLOWOPEN FROM shop.orders'; delete e.customSqlMysql; return true;`);
+    await clickEdit('orders');
+    must((await getSql()) === '', `not empty at once: ${J(await getSql())}`);
+    must(/Opening your query/.test(await errorText()), `status: ${await errorText()}`);
+    must(await ev(`[...document.querySelectorAll('dialog[open] .dialog__foot .btn, dialog[open] .sql-dialog__bar .btn')].every((b) => b.disabled || b.textContent.trim() === 'Cancel')`), 'Save, Reset or Format enabled while opening');
+    must(await ev(`${cmOf}.getOption('readOnly') !== false`), 'editable while opening');
+    await waitFor(`${cmOf}.getValue().includes('SLOWOPEN')`, 'filled in');
+    const filled = Date.now();
+    must((await syntaxIs()) === 'MySQL', `syntax: ${await syntaxIs()}`);
+    must(await ev(`!${cmOf}.getOption('readOnly')`), 'still read-only');
+    await statusIs(/Valid query/);
+    must(Date.now() - filled < 600, `verdict ${Date.now() - filled} ms after the text appeared`);
+    await cancelEdit();
+    const before = translateCalls.length;
+    await clickEdit('orders');
+    must((await getSql()).includes('SLOWOPEN'), `second open not filled at once: ${J(await getSql())}`);
+    must((await syntaxIs()) === 'MySQL', `second open syntax: ${await syntaxIs()}`);
+    must(translateCalls.length === before, 'translated again on reopening');
+    await cancelEdit();
+  });
+  await check('closing while the dialog is still opening leaves nothing behind', async () => {
+    await store(`const e = [...st.entities.values()].find((x) => x.table === 'orders'); e.customSql = 'SELECT SLOWOPEN, 2 FROM shop.orders'; delete e.customSqlMysql; return true;`);
+    await clickEdit('orders');
+    await cancelEdit();
+    await new Promise((r) => setTimeout(r, 1200)); // longer than the slow translation
+    must(!(await ev(`!!document.querySelector('dialog[open]')`)), 'a dialog is open');
+    must(!(await ev(`!!document.querySelector('dialog.sql-dialog')`)), 'a dialog stayed in the page');
   });
   await check('Reset to default + Save goes back to the table: its columns return and the mark clears', async () => {
     await ev(`document.querySelector('.tab--model').click()`);

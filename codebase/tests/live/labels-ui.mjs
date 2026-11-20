@@ -80,6 +80,15 @@ try {
     await ev(`(() => { const c = [...document.querySelectorAll('#ws-fields .ws-field')].find((x) => x.querySelector('.ws-field__name')?.textContent === ${J(name)}); [...document.querySelectorAll('.ctx-menu .menu__item')].find((x) => x.textContent.trim().startsWith(${J(item)})).click(); return true; })()`);
   };
   const dlgBtn = (sel, text) => `[...document.querySelector(${J(sel)}).querySelectorAll('.dialog__foot button')].find((x) => x.textContent === ${J(text)})`;
+  // Cancel on an EDITED group dialog asks twice before it drops the draft: click through both.
+  const discardGroup = async () => {
+    await ev(`${dlgBtn('dialog.grp-dialog', 'Cancel')}.click()`);
+    for (const label of ['Discard', 'Discard for good']) {
+      const btn = `[...document.querySelectorAll('dialog.dialog--sm[open] button')].find((x) => x.textContent === ${J(label)})`;
+      await waitFor(`!!${btn}`, `"${label}" confirm`);
+      await ev(`${btn}.click()`);
+    }
+  };
   const typeInto = async (selector, text) => {
     await ev(`(() => { const e = document.querySelector(${J(selector)}); e.focus(); e.select(); return true; })()`);
     await b.key('Delete', { vk: 46 });
@@ -91,8 +100,8 @@ try {
   await b.goto(APP + '/');
   await waitFor(`!!document.getElementById('conn-connect')`, 'app loaded');
   await ev(`(() => { document.getElementById('conn-host').value = 'mock-ch'; document.getElementById('conn-password').value = 'x'; document.getElementById('conn-connect').click(); return true; })()`);
-  await waitFor(`document.getElementById('db-select').options.length > 1`, 'databases listed');
-  await ev(`(() => { const s = document.getElementById('db-select'); s.value = 'shop'; s.dispatchEvent(new Event('change')); return true; })()`);
+  await waitFor(`document.querySelectorAll('.db-row[data-db]').length > 0`, 'databases listed');
+  await ev(`(() => { for (const r of document.querySelectorAll('.db-row[data-db]')) if ((r.dataset.db === 'shop') !== (r.getAttribute('aria-expanded') === 'true')) r.click(); return true; })()`);
   await waitFor(`document.querySelectorAll('.table-chip').length === 1`, 'tables');
   await ev(`document.dispatchEvent(new CustomEvent('table:add', { detail: { db: 'shop', table: 'orders' } }))`);
   await waitFor(`document.querySelectorAll('.entity').length === 1 && [...document.querySelectorAll('.entity__status')].every((s) => s.hidden)`, 'orders loaded');
@@ -219,6 +228,33 @@ try {
     await waitFor(`${CALC_NAMES}.includes('region (groups)')`, 'group field in the pane');
   });
 
+  await check('Group dialog Cancel / Esc: untouched closes at once; an edited draft asks twice, and "No" keeps it', async () => {
+    const esc = () => ev(`document.querySelector('dialog.grp-dialog').dispatchEvent(new Event('cancel', { cancelable: true }))`);
+    const confirmBtn = (re) => `[...document.querySelectorAll('dialog.dialog--sm[open] button')].find((x) => ${re}.test(x.textContent))`;
+    const before = await ev(`${CALC_NAMES}.length`);
+    await fieldMenu('region', 'Group');
+    await waitFor(`!!document.querySelector('dialog.grp-dialog[open]') && document.querySelectorAll('.grp-member').length === 4`, 'group dialog');
+    await esc();
+    await waitFor(`!document.querySelector('dialog.grp-dialog')`, 'untouched dialog closed at once');
+    await fieldMenu('region', 'Group');
+    await waitFor(`!!document.querySelector('dialog.grp-dialog[open]') && document.querySelectorAll('.grp-member').length === 4`, 'group dialog again');
+    await typeInto('.grp-group__name', 'Draft name');
+    await esc();
+    await waitFor(`!!document.querySelector('dialog.dialog--sm[open]')`, 'first confirm');
+    must(await ev(`/Discard your changes to these groups/.test(document.querySelector('dialog.dialog--sm[open]').textContent)`), 'first confirm wording');
+    await ev(`${confirmBtn('/^Cancel$/')}.click()`);
+    await waitFor(`!document.querySelector('dialog.dialog--sm')`, 'confirm closed');
+    must(await ev(`document.querySelector('dialog.grp-dialog[open]') !== null && document.querySelector('.grp-group__name').value === 'Draft name'`), 'the draft was lost on No');
+    await ev(`${dlgBtn('dialog.grp-dialog', 'Cancel')}.click()`);
+    await waitFor(`!!document.querySelector('dialog.dialog--sm[open]')`, 'first confirm (Cancel button)');
+    await ev(`${confirmBtn('/^Discard$/')}.click()`);
+    await waitFor(`!!document.querySelector('dialog.dialog--sm[open]') && /Really discard/.test(document.querySelector('dialog.dialog--sm[open]').textContent)`, 'second confirm');
+    must(await ev(`document.querySelector('dialog.grp-dialog[open]') !== null`), 'dialog closed after only one Yes');
+    await ev(`${confirmBtn('/^Discard for good$/')}.click()`);
+    await waitFor(`!document.querySelector('dialog.grp-dialog')`, 'dialog closed after two confirmations');
+    must((await ev(`${CALC_NAMES}.length`)) === before, 'a calculated field was saved');
+  });
+
   await check('using the group field: the request carries the CASE tree with bound string literals; the chart shows the group names', async () => {
     await setSheet(`const st2 = st; const c = st2.calculations.find((x) => x.name === 'region (groups)'); const { makeCalcPill } = await import('/features/Calc/calc-pill.js'); s.columns = [makeCalcPill(c, { type: 'text', isAggregate: false })]; s.rows = [f('amount', 'numeric', { agg: 'sum' })]; s.filters = []`);
     await settle();
@@ -296,7 +332,7 @@ try {
     must(/48 members/.test(await stripText('.grp-error:not(:empty)')), `message: ${await stripText('.grp-error:not(:empty)')}`);
     await assign(48);
     must(!(await ev(`document.querySelector('dialog.grp-dialog .dialog__foot button.btn--primary').disabled`)), 'Save enabled at 48 with the label');
-    await ev(`${dlgBtn('dialog.grp-dialog', 'Cancel')}.click()`);
+    await discardGroup();
     await waitFor(`!document.querySelector('dialog.grp-dialog')`, 'closed');
   });
 

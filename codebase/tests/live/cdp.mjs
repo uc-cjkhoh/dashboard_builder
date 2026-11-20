@@ -77,6 +77,12 @@ export async function launch({ port, width = 1400, height = 900 } = {}) {
   const api = {
     send, on, consoleErrors,
     async evaluate(expression) {
+      // D139: the page imports its modules from /features/v-<id>/…, so a test's import('/features/…') would load a second copy of each module (its own empty store).
+      // Point such imports at the page's own prefix.
+      if (/['"`]\/features\//.test(expression)) {
+        const pre = (await send('Runtime.evaluate', { returnByValue: true, expression: `(() => { for (const e of document.querySelectorAll('script[src], link[href]')) { const m = /^(.*\\/features\\/v-[0-9a-f]{12})\\//.exec(new URL(e.src || e.href, location.href).pathname); if (m) return m[1]; } return ''; })()` })).result.value;
+        if (pre) expression = expression.replace(/(['"`])\/features\//g, `$1${pre}/`);
+      }
       const r = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true });
       if (r.exceptionDetails) throw new Error(`evaluate failed: ${r.exceptionDetails.exception?.description ?? r.exceptionDetails.text}\n  in: ${expression.slice(0, 200)}`);
       return r.result.value;
@@ -97,7 +103,12 @@ export async function launch({ port, width = 1400, height = 900 } = {}) {
       const { data } = await send('Page.captureScreenshot', { format: 'png', ...(clip ? { clip: { ...clip, scale: 1 } } : {}) });
       (await import('node:fs')).writeFileSync(path, Buffer.from(data, 'base64'));
     },
-    async setScheme(scheme) { await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: scheme }] }); },
+    /** Light or dark, the way a viewer picks it (the app ignores the OS setting): stored for pages that load next, and applied now through the Appearance card's own rows. */
+    async setScheme(scheme) {
+      const store = `try { localStorage.setItem('dashboardbuilder.scheme', ${JSON.stringify(scheme)}); } catch (e) { /* about:blank */ }`;
+      await send('Page.addScriptToEvaluateOnNewDocument', { source: store });
+      await send('Runtime.evaluate', { expression: `(() => { ${store} document.querySelector('[data-scheme-pref=${scheme}]')?.click(); return true; })()` });
+    },
     async click(x, y) {
       for (const type of ['mouseMoved', 'mousePressed', 'mouseReleased'])
         await send('Input.dispatchMouseEvent', { type, x, y, button: 'left', buttons: type === 'mousePressed' ? 1 : 0, clickCount: 1 });

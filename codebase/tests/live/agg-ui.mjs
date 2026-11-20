@@ -52,8 +52,8 @@ try {
   await b.goto(APP + '/');
   await waitFor(`!!document.getElementById('conn-connect')`, 'app loaded');
   await ev(`(() => { document.getElementById('conn-host').value = 'mock-ch'; document.getElementById('conn-password').value = 'x'; document.getElementById('conn-connect').click(); return true; })()`);
-  await waitFor(`document.getElementById('db-select').options.length > 1`, 'databases listed');
-  await ev(`(() => { const s = document.getElementById('db-select'); s.value = 'shop'; s.dispatchEvent(new Event('change')); return true; })()`);
+  await waitFor(`document.querySelectorAll('.db-row[data-db]').length > 0`, 'databases listed');
+  await ev(`(() => { for (const r of document.querySelectorAll('.db-row[data-db]')) if ((r.dataset.db === 'shop') !== (r.getAttribute('aria-expanded') === 'true')) r.click(); return true; })()`);
   await waitFor(`document.querySelectorAll('.table-chip').length === 2`, 'tables listed');
   for (const t of ['orders', 'customers'])
     await ev(`document.dispatchEvent(new CustomEvent('table:add', { detail: { db: 'shop', table: ${J(t)} } }))`);
@@ -80,13 +80,20 @@ try {
     await shot('agg-dialog.png');
     await ev(`document.documentElement.dataset.scheme = 'dark'`); await b.sleep(500); await shot('agg-dialog-dark.png'); await ev(`delete document.documentElement.dataset.scheme`);
   });
-  await check('single + N:M saves; the Relationships card says totals are not repeated', async () => {
+  await check('single + N:M: the dialog says in words that totals are not repeated, and the link saves', async () => {
     await ev(`${dlg}.querySelector('input[value=single]').click()`);
-    await ev(`[...${dlg}.querySelectorAll('input[name=cardinality]')].find((x) => x.value === 'N:M').click(); ${dlg}.querySelector('.rel-dialog__foot .btn--primary').click()`);
-    await waitFor(`document.querySelector('.rel-badge text')?.textContent === 'N:M'`, 'badge');
-    const t = await ev(`document.querySelector('.rel-notes').textContent`);
-    must(/added up first/.test(t) && /does not change the other/.test(t), `card: ${t}`);
+    await ev(`[...${dlg}.querySelectorAll('input[name=cardinality]')].find((x) => x.value === 'N:M').click()`);
+    const t = await ev(`${dlg}.querySelector('.rel-sum').textContent`);
+    must(/Many orders rows can match many customers rows/.test(t), `match line: ${t}`);
+    must(/totalled by the key first/.test(t) && /does not change the other/.test(t), `summary: ${t}`);
     must(!/counted more than once/.test(t), 'the fan-out warning should go');
+    await ev(`${dlg}.querySelector('.join-aggregate input[type=checkbox]').click()`); // untick: the caution comes back, and says what to turn on
+    const u = await ev(`${dlg}.querySelector('.rel-sum').textContent`);
+    must(/Heads up: totals from orders may be counted more than once\. Turn on Totals/.test(u) && !/totalled/.test(u), `unticked: ${u}`);
+    await ev(`${dlg}.querySelector('.join-aggregate input[type=checkbox]').click()`);
+    await ev(`${dlg}.querySelector('.rel-dialog__foot .btn--primary').click()`);
+    await waitFor(`document.querySelector('.rel-badge text')?.textContent === 'N:M'`, 'badge');
+    must(await ev(`!document.querySelector('.rel-notes, .rel-notes__btn')`), 'the Relationships button and popover are gone');
     await shot('agg-linked.png');
   });
   await ev(`document.querySelector('.tab-add').click(); document.querySelector('[data-new-tab=worksheet]').click()`);
@@ -112,7 +119,7 @@ try {
     must(await ev(`${dlg}.querySelector('input[value=single]').checked`), 'single not preselected');
     await ev(`${dlg}.querySelector('.join-aggregate input[type=checkbox]').click()`);
     await ev(`[...${dlg}.querySelectorAll('input[name=cardinality]')].find((x) => x.value === 'N:M').click(); ${dlg}.querySelector('.rel-dialog__foot .btn--primary').click()`);
-    await waitFor(`!document.querySelector('.rel-notes').textContent.includes('added up first')`, 'card updated');
+    await waitFor(`document.querySelector('dialog[open]') === null`, 'dialog closed');
     queries.length = 0;
     await ev(`document.querySelectorAll('.tab:not(.tab--model) .tab__label')[0].click()`);
     await waitFor(`!document.getElementById('worksheet-view').hidden`, 'worksheet');

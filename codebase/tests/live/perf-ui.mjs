@@ -65,17 +65,18 @@ try {
   await b.goto(APP + '/');
   await waitFor(`!!document.getElementById('conn-connect')`, 'app loaded');
   await ev(`(() => { document.getElementById('conn-host').value = 'mock-ch'; document.getElementById('conn-password').value = 'x'; document.getElementById('conn-connect').click(); return true; })()`);
-  await waitFor(`document.getElementById('db-select').options.length > 1`, 'databases listed');
-  await ev(`(() => { const s = document.getElementById('db-select'); s.value = 'shop'; s.dispatchEvent(new Event('change')); return true; })()`);
+  await waitFor(`document.querySelectorAll('.db-row[data-db]').length > 0`, 'databases listed');
+  await ev(`(() => { for (const r of document.querySelectorAll('.db-row[data-db]')) if ((r.dataset.db === 'shop') !== (r.getAttribute('aria-expanded') === 'true')) r.click(); return true; })()`);
   await waitFor(`document.querySelectorAll('.table-chip').length === 2`, 'tables listed');
   await ev(`document.dispatchEvent(new CustomEvent('table:add', { detail: { db: 'shop', table: 'orders' } }))`);
   await waitFor(`document.querySelectorAll('.entity').length === 1 && [...document.querySelectorAll('.entity__status')].every((s) => s.hidden)`, 'orders loaded');
 
-  await check('top bar: appearance and settings do not overlap, the Settings glyph meets the gutter; the perf button is not on the Data Source tab or in the top bar', async () => {
-    const g = await ev(`(() => { const r = (id) => document.getElementById(id).getBoundingClientRect(); const bar = document.querySelector('.canvas__bar').getBoundingClientRect(); const s = r('scheme-btn'), t = r('settings-btn'); const perfIn = !document.getElementById('perf-btn') && !document.querySelector('.canvas__bar #perf-btn'); const pad = parseFloat(getComputedStyle(document.querySelector('.canvas__bar')).paddingRight); return { perfIn, sLeft: s.left, sRight: s.right, tRight: t.right, tLeft: t.left, barRight: bar.right, pad }; })()`);
-    must(g.perfIn, 'perf button present on the Data Source tab or in the top bar'); must(g.sRight <= g.tLeft + 0.5, `overlap: ${J(g)}`);
-    // the glyph (16px in a 32px box: 8px slack) sits on the bar's inner right edge: box overhangs by 8px
-    must(Math.abs((g.tRight - 8) - (g.barRight - g.pad)) <= 1, `glyph not on the gutter: ${J(g)}`);
+  await check('dock: Appearance sits bottom right over Fit; no separate theme button; the perf button is not on the Data Source tab or in the top bar', async () => {
+    const g = await ev(`(() => { const r = (el) => el.getBoundingClientRect(); const c = r(document.getElementById('canvas')); const s = r(document.getElementById('scheme-btn')); const fitEl = document.querySelector('.canvas__fit'); const f = fitEl && r(fitEl); const noTheme = !document.getElementById('settings-btn'); const perfIn = !document.getElementById('perf-btn') && !document.querySelector('.canvas__bar #perf-btn'); const inBar = Boolean(document.querySelector('.canvas__bar #scheme-btn')); return { perfIn, noTheme, inBar, sRight: s.right, sTop: s.top, sBottom: s.bottom, fTop: f?.top, fRight: f?.right, fBottom: f?.bottom, cRight: c.right, cBottom: c.bottom }; })()`);
+    must(g.perfIn, 'perf button present on the Data Source tab or in the top bar'); must(g.noTheme, `a separate theme button is back: ${J(g)}`);
+    must(!g.inBar, `Appearance is still in the top bar: ${J(g)}`);
+    must(Math.abs(g.sRight - (g.cRight - 16)) <= 1 && Math.abs(g.fRight - g.sRight) <= 1, `buttons not on the 16px right gutter, one column: ${J(g)}`);
+    must(g.fTop != null && Math.abs(g.fBottom - (g.cBottom - 16)) <= 1 && Math.abs(g.fTop - g.sBottom - 8) <= 1, `Fit is not 8px under Appearance at the foot: ${J(g)}`);
   });
 
   await check('the perf button is removed from the DOM on the Data Source tab', async () => {

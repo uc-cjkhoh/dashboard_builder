@@ -52,8 +52,8 @@ try {
   await b.goto(APP + '/');
   await waitFor(`!!document.getElementById('conn-connect')`, 'app loaded');
   await ev(`(() => { document.getElementById('conn-host').value = 'mock-ch'; document.getElementById('conn-password').value = 'x'; document.getElementById('conn-connect').click(); return true; })()`);
-  await waitFor(`document.getElementById('db-select').options.length > 1`, 'databases listed');
-  await ev(`(() => { const s = document.getElementById('db-select'); s.value = 'shop'; s.dispatchEvent(new Event('change')); return true; })()`);
+  await waitFor(`document.querySelectorAll('.db-row[data-db]').length > 0`, 'databases listed');
+  await ev(`(() => { for (const r of document.querySelectorAll('.db-row[data-db]')) if ((r.dataset.db === 'shop') !== (r.getAttribute('aria-expanded') === 'true')) r.click(); return true; })()`);
   await waitFor(`document.querySelectorAll('.table-chip').length === 2`, 'tables listed');
   for (const t of ['orders', 'customers'])
     await ev(`document.dispatchEvent(new CustomEvent('table:add', { detail: { db: 'shop', table: ${J(t)} } }))`);
@@ -133,6 +133,14 @@ try {
     const back = await cardRect();
     must(Math.abs(back.left - r0.left) < 1, `card back at ${back.left}, was ${r0.left}`);
   });
+  await check('the dots sit on the card lattice at every zoom: a card\'s top-left corner lands on a dot', async () => {
+    for (const dy of [0, -200, 300]) {
+      if (dy) await wheel(empty.x, empty.y, dy);
+      const g = await ev(`(() => { const c = document.getElementById('model-view'), cs = getComputedStyle(c), v = c.getBoundingClientRect(), e = document.querySelector('.entity').getBoundingClientRect();
+        const [bx, by] = cs.backgroundPosition.split(' ').map(parseFloat), cell = parseFloat(cs.backgroundSize); return { dx: e.left - v.left - bx - cell / 2, dy: e.top - v.top - by - cell / 2, cell }; })()`);
+      must(Math.abs(g.dx) < 0.1 && Math.abs(g.dy) < 0.1, `the corner is ${g.dx.toFixed(2)}, ${g.dy.toFixed(2)} px off the dot centre (cell ${g.cell})`);
+    }
+  });
   await check('the dot grid moves with the pan', async () => {
     const bg = await ev(`document.getElementById('model-view').style.getPropertyValue('--pan-x')`);
     must(/^-?\d/.test(bg), `--pan-x is "${bg}"`);
@@ -152,6 +160,62 @@ try {
   await check('links are still drawn after zooming', async () => {
     await shot('zoomed-in.png');
     must(await ev(`document.querySelectorAll('.rel-svg').length === 2`), 'overlay layers missing');
+  });
+  // ---- overview: Fit button, keyboard ------------------------------------------------------------------
+  const clickFit = () => ev(`(() => { document.querySelector('.canvas__fit').click(); return true; })()`);
+  const readout = async () => `${Math.round(((await cardW()) / w0) * 100)}%`; // the zoom, read off a card's width
+  const key = (k, extra = '') => ev(`(() => { const c = document.getElementById('model-view'); c.focus(); c.dispatchEvent(new KeyboardEvent('keydown', { key: ${J(k)}, bubbles: true, cancelable: true${extra} })); return true; })()`);
+  const inView = async () => ev(`(() => { const v = document.getElementById('model-view').getBoundingClientRect();
+    return [...document.querySelectorAll('.entity')].map((e) => { const r = e.getBoundingClientRect(); return { l: r.left - v.left, t: r.top - v.top, r: v.right - r.right, b: v.bottom - r.bottom }; }); })()`);
+  await check('one Fit button shows with cards; the − / + steps and the percentage readout are gone', async () => {
+    await reset();
+    must(await ev(`!document.querySelector('.canvas__fit').hidden && document.querySelector('.canvas__fit').getAttribute('aria-label').startsWith('Fit all cards')`), 'Fit hidden with two cards');
+    must(await ev(`!document.querySelector('.canvas__zoom') && !document.querySelector('.canvas__zoom-value')`), 'the zoom pill is back');
+  });
+  await check('Fit shows every card inside the view, from far zoomed in and from far panned away', async () => {
+    await reset();
+    for (let i = 0; i < 4; i++) await key('+');
+    await drag(empty.x, empty.y, -500, -300);
+    await clickFit();
+    for (const m of await inView()) must(m.l >= 15 && m.t >= 15 && m.r >= 15 && m.b >= 15, `a card is outside the margin after Fit: ${J(m)}`);
+    must(Number.parseInt(await readout(), 10) <= 100, `Fit zoomed past 100% (${await readout()})`);
+    await shot('fit.png');
+  });
+  await check('keys on the focused ground: arrows pan, + and − zoom, 0 resets to 100 %, F fits', async () => {
+    must(await ev(`document.getElementById('model-view').tabIndex === 0`), 'the ground is not focusable');
+    await reset();
+    const r0 = await cardRect();
+    await key('ArrowRight');
+    const r1 = await cardRect();
+    must(Math.abs(r1.left - r0.left + 64) < 1, `ArrowRight moved the cards ${r1.left - r0.left}px, expected -64`);
+    await key('ArrowDown', ', shiftKey: true');
+    const r2 = await cardRect();
+    must(Math.abs(r2.top - r1.top + 256) < 1, `Shift+ArrowDown moved the cards ${r2.top - r1.top}px, expected -256`);
+    await key('0');
+    must((await readout()) === '100%', `0 gave ${await readout()}`);
+    await key('+');
+    must((await readout()) === '125%', `+ gave ${await readout()}`);
+    await key('-');
+    await key('-');
+    must((await readout()) === '80%', `− − gave ${await readout()}`);
+    await key('F');
+    for (const m of await inView()) must(m.l >= 15 && m.t >= 15 && m.r >= 15 && m.b >= 15, `F left a card outside: ${J(m)}`);
+  });
+  await check('keys typed on a card do not pan or zoom the ground', async () => {
+    const before = await readout(), r0 = await cardRect();
+    await ev(`(() => { const e = document.querySelector('.entity'); e.focus(); e.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true })); e.dispatchEvent(new KeyboardEvent('keydown', { key: '+', bubbles: true, cancelable: true })); return true; })()`);
+    const r1 = await cardRect();
+    must((await readout()) === before && Math.abs(r1.left - r0.left) < 0.5 && Math.abs(r1.top - r0.top) < 0.5, 'the ground moved for a key on a card');
+  });
+  await check('links re-measure after Fit (the overlay layers stay)', async () => {
+    await clickFit();
+    must(await ev(`document.querySelectorAll('.rel-svg').length === 2`), 'overlay layers missing');
+  });
+  await check('the Appearance card opens upward from the dock: clear of Fit, inside the window', async () => {
+    await ev(`document.getElementById('scheme-btn').click()`); await b.sleep(450);
+    const r = await ev(`(() => { const f = document.querySelector('.canvas__fit').getBoundingClientRect(), s = document.getElementById('scheme-btn').getBoundingClientRect(), c = document.getElementById('scheme-list').getBoundingClientRect(); return { covers: c.left < f.right && c.right > f.left && c.top < f.bottom && c.bottom > f.top, above: c.bottom <= s.top, inside: c.top >= 0 && c.right <= innerWidth }; })()`);
+    await ev(`document.getElementById('scheme-btn').click()`); await b.sleep(450);
+    must(!r.covers && r.above && r.inside, `the card is not above the dock and inside the window: ${J(r)}`);
   });
   if (b.consoleErrors.length) console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  '));
 } catch (e) {

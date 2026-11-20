@@ -53,8 +53,8 @@ try {
   await b.goto(APP + '/');
   await waitFor(`!!document.getElementById('conn-connect')`, 'app loaded');
   await ev(`(() => { document.getElementById('conn-host').value = 'mock-ch'; document.getElementById('conn-password').value = 'x'; document.getElementById('conn-connect').click(); return true; })()`);
-  await waitFor(`document.getElementById('db-select').options.length > 1`, 'databases listed');
-  await ev(`(() => { const s = document.getElementById('db-select'); s.value = 'shop'; s.dispatchEvent(new Event('change')); return true; })()`);
+  await waitFor(`document.querySelectorAll('.db-row[data-db]').length > 0`, 'databases listed');
+  await ev(`(() => { for (const r of document.querySelectorAll('.db-row[data-db]')) if ((r.dataset.db === 'shop') !== (r.getAttribute('aria-expanded') === 'true')) r.click(); return true; })()`);
   await waitFor(`document.querySelectorAll('.table-chip').length === 2`, 'tables listed');
   for (const t of ['orders', 'customers']) await ev(`document.dispatchEvent(new CustomEvent('table:add', { detail: { db: 'shop', table: '${t}' } }))`);
   await waitFor(`document.querySelectorAll('.entity').length === 2 && [...document.querySelectorAll('.entity__status')].every((s) => s.hidden)`, 'both tables loaded');
@@ -109,7 +109,7 @@ try {
   const colW = (name) => ev(`Math.round(${th(name)}.getBoundingClientRect().width)`);
   const mouse = (type, x, y) => b.send('Input.dispatchMouseEvent', { type, x, y, button: 'left', buttons: type === 'mouseReleased' ? 0 : 1, clickCount: 1 });
 
-  await check('a light grid: one-line headers, types in the tooltip, no stripes, columns fit their content, numbers right-aligned after the first', async () => {
+  await check('a light grid: one-line headers, types in the tooltip, zebra stripes (every second row --surface-2), columns fit their content, numbers right-aligned after the first', async () => {
     const g = await ev(`(() => { const t = ${panel}.querySelector('.rows-table'); const h = ${th('amount')}; const cs = (e) => getComputedStyle(e);
       const tds = t.tBodies[0].rows; return { headH: Math.round(t.tHead.getBoundingClientRect().height), rowH: Math.round(tds[0].getBoundingClientRect().height),
         typeW: ${th('amount')}.querySelector('.rows-table__type').getBoundingClientRect().width, title: h.title,
@@ -118,7 +118,7 @@ try {
         tableW: Math.round(t.getBoundingClientRect().width), scrollW: ${panel}.querySelector('.ds-preview__scroll').clientWidth }; })()`);
     must(g.headH <= g.rowH + 2, `header ${g.headH}px vs row ${g.rowH}px — two lines?`);
     must(g.typeW <= 1 && g.title === 'amount · Float64', JSON.stringify(g));
-    must(g.even === g.odd, `striped ${g.even} vs ${g.odd}`);
+    must(g.even !== g.odd && g.even !== 'rgba(0, 0, 0, 0)', `every second row should carry the --surface-2 stripe: even ${g.even}, odd ${g.odd}`); // D130: zebra stripes (canvas.md)
     const lines = await ev(`(() => { const t = ${panel}.querySelector('.rows-table'); const w = (e) => getComputedStyle(e).borderRightWidth;
       return [...t.tHead.rows[0].cells, ...t.tBodies[0].rows[5].cells].map(w); })()`);
     must(lines.every((x) => x === '1px'), `column lines ${lines}`);
@@ -252,6 +252,7 @@ try {
     await waitFor(`document.getElementById('ds-preview-title').textContent === 'shop.customers'`, 'switched');
     must((await state()).previewed.join() === 'customers', 'outline did not move');
     await ev(act(card('customers'), 'Preview data'));
+    await waitFor(`document.getElementById('ds-preview').hidden`, 'hidden after its exit (~100ms)');
     const s = await state();
     must(s.hidden && s.previewed.length === 0 && s.ground === groundFull, JSON.stringify(s));
   });

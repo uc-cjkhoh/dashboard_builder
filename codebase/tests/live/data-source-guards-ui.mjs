@@ -46,8 +46,8 @@ try {
   const shot = async (name) => writeFileSync(join(SHOTS, name), Buffer.from((await b.send('Page.captureScreenshot', { format: 'png' })).data, 'base64'));
   const connect = (host) => ev(`(() => { const s = (id, v) => { document.getElementById(id).value = v; }; s('conn-host', ${J(host)}); s('conn-port', '8443'); s('conn-user', 'ann'); s('conn-password', 'pw');
     document.getElementById('conn-form').requestSubmit(); return 1; })()`);
-  const pickDb = async () => { await waitFor(`document.getElementById('db-select').options.length > 1`, 'databases');
-    await ev(`(() => { const s = document.getElementById('db-select'); s.value = 'shop'; s.dispatchEvent(new Event('change')); return 1; })()`); await waitFor(`document.querySelectorAll('.table-chip').length === 2`, 'tables'); };
+  const pickDb = async () => { await waitFor(`document.querySelectorAll('.db-row[data-db]').length > 0`, 'databases');
+    await ev(`(() => { for (const r of document.querySelectorAll('.db-row[data-db]')) if ((r.dataset.db === 'shop') !== (r.getAttribute('aria-expanded') === 'true')) r.click(); return 1; })()`); await waitFor(`document.querySelectorAll('.table-chip').length === 2`, 'tables'); };
   const add = (t) => ev(`document.dispatchEvent(new CustomEvent('table:add', { detail: { db: 'shop', table: ${J(t)} } }))`);
   const cards = () => ev(`[...document.querySelectorAll('.entity .entity__table')].map((e) => e.textContent).join(',')`);
   const stored = (host) => ev(`(() => { const v = localStorage.getItem(${J(KEY(host))}); return v ? JSON.parse(v).entities.map((e) => e.table).join(',') : '(none)'; })()`);
