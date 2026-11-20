@@ -22,7 +22,7 @@ Grouped by feature folder; each entry is the module, then what it owns.
 
 - `Shell/app.js` — bootstrap
   - hydrates `[data-icon]` placeholders, installs the global `error` / `unhandledrejection` handlers (danger toast "Something went wrong — try again."; aborted queries and the benign `ResizeObserver loop` notice are ignored), wires every module's `init*`, listeners before the initial status check
-- `Shell/scheme-toggle.js` — the tab bar's appearance toggle: System / Light / Dark radio menu (`Core/menu.js`), glyph + label follow the choice
+- `Shell/appearance.js` — the tab bar's one **Appearance** card (`#scheme-btn` → `#scheme-list`, `wireMenu` with `stayOpen`): mode (Light / Dark, `Core/scheme.js`), dark look, accent (preset swatches + a custom colour) and chart colours (`Core/theme-model.js`), then **Reset theme**. Built once; `sync` repaints the selection and swatches on `scheme:pref`, `scheme:changed` and `theme:changed`. Left / Right move within the mode row and the accent row. The button's glyph + label follow the mode
 - `Shell/perf-panel.js` — the sidebar's gauge tile (`#perf-btn`, bottom of the sidebar body; `sidebar.js` takes it out of the DOM on the Data Source tab and puts it back elsewhere) opens the Performance dialog: recent query / render timings newest first (time in the app zone, kind, query ms, rows, cache hit / miss / failed / aborted, render ms) with a one-line summary (counts failed or cancelled queries), **Copy as text** (tab-separated) and **Clear**; a native `<dialog>` (Esc closes, focus returns to the button); updates live while open
 - `Core/timezone.js` — pure: the app time zone (`<meta name="app-timezone">`, [time-zone.md](../reference/time-zone.md)): `clockIn`, `dateIn`, `todayIn`, `offsetLabel`.
 - `Shell/activity-bar.js` — the **activity chip** (`#activity`, bottom-right, solid, `role=status` / `aria-live=polite`): while any API request is in flight it says what the app is waiting on and for how long ("Loading tables in sales… · 3 s"). Shown after 300 ms (no flash on fast requests), refreshed each second, `hidden` when idle.
@@ -214,7 +214,6 @@ Grouped by feature folder; each entry is the module, then what it owns.
 ### Workbook/ — saving, import/export and workbook dialogs
 
 - `Workbook/parameters-dialog.js` — P32: the Parameters dialog (sidebar Parameters icon)
-- `Workbook/theme-dialog.js` — the Colour theme dialog (opened by the Colour theme button)
 - `Workbook/workbook.js` — auto-save, restore on connect, Export/Import — [workbook.md](../concepts/workbook/workbook.md)
 - `Workbook/workbook-model.js` — pure (also `restoredSummary`, `issueCount`; `Dashboard/missing-columns.js` prunes pills whose column isn't in the catalog):
   - workbook serialize (v2) / `parseWorkbook` (full validation + issue list; v1 files via `migrateV1`) / `sanitizeSheet` / storage keys (`storageKey`, `legacyStorageKey`) — [workbook.md](../concepts/workbook/workbook.md#validation-parseworkbook)
@@ -223,9 +222,9 @@ Grouped by feature folder; each entry is the module, then what it owns.
 
 - `Core/parameters-model.js` — pure (P32): `checkValue` (type + allowed values), `checkStep` (positive step size), `checkParamName`, `withParamValue`, `effectiveTopN`, `paramTypeFor`, `cleanParameter`
 - `Core/theme-model.js` — pure (P41): accent presets + palettes (light / dark; each accent's hover and pressed are derived — lifted toward white, with their own text colour, [D134](../decisions/decisions-buttons.md#d134--hover-and-pressed-are-brighter-than-rest-in-every-scheme)), `deriveAccent` (custom colour → contrast-checked set, or a refusal), `themeVars`, `cleanTheme` — [tokens.md](../reference/design/tokens.md#workbook-themes-p41)
-- `Core/scheme-model.js` — pure: `SCHEME_PREFS`, `normalizePref`, `resolveScheme(pref, osDark)` — [tokens.md](../reference/design/tokens.md#light-and-dark)
-- `Core/scheme-boot.js` — classic `<head>` script: sets `data-scheme` before first paint (mirrors `resolveScheme`)
-- `Core/scheme.js` — owns `<html data-scheme>`: `isDark`, `schemePref`, `setSchemePref` (`localStorage`), follows the OS while System; emits `scheme:changed`
+- `Core/scheme-model.js` — pure: `SCHEME_PREFS` (light, dark), `normalizePref` — [tokens.md](../reference/design/tokens.md#light-and-dark)
+- `Core/scheme-boot.js` — classic `<head>` script: sets `data-scheme` before first paint (mirrors `normalizePref`)
+- `Core/scheme.js` — owns `<html data-scheme>`: `isDark`, `schemePref`, `setSchemePref` (`localStorage`); never reads the OS; emits `scheme:changed`
 - `Core/theme.js` — applies the workbook theme's custom properties on `:root` (`theme:changed`, `scheme:changed`)
 - `Core/source-model.js` — pure ([query-sources.md](../concepts/data-source/query-sources.md)):
   - `wireSource`, `cleanSource` (workbook re-check), `sourceOfTable(entities, db, table)`, `sourceProblem(keys, entities)` (the mixed-view refusal), `sourceNote`, `distinctPlan` / `distinctMembers` (a filter's member list over a source)

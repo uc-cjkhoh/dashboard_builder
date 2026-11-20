@@ -95,7 +95,7 @@ Problems while restoring:
 
 ## Export & Import
 
-The tab bar's right end holds the site-wide icons: **Appearance** and the **Settings** menu (Theme…, `Shell/Index.cshtml`, right-most). The **Performance** timings tile is in the sidebar body (worksheet and dashboard tabs only), and workbook actions live in the worksheet view bar.
+The tab bar's right end holds the site-wide icons: **Appearance** (`Shell/Index.cshtml`, right-most): one button, one card. The **Performance** timings tile is in the sidebar body (worksheet and dashboard tabs only), and workbook actions live in the worksheet view bar.
 The worksheet view bar's icon row ends with **Export** and the **Sheet actions** (⋯) menu, and the **Export** menu holds **Workbook (JSON)** and **Import workbook…**, and the worksheet sidebar's **Parameters** icon opens the Parameters dialog.
 The actions:
 
@@ -105,13 +105,15 @@ The actions:
   - Each has a name (unique, 1–60 characters), a type (number / text / date), the allowed values (any, a list of ≤ 50, or a number range) and the current value.
   - Each is checked before it is kept (`Core/parameters-model.js`).
   - Parameters save with the workbook; disconnecting clears them from the screen.
-- **Theme** (the canvas bar's right-most icon, labelled "Colour theme", so it is not mistaken for the Appearance toggle beside it) opens the theme dialog directly, with choices as labelled swatches:
-  - a look: Default or One Dark Pro (dark-mode surfaces; it also picks the One Dark accent and chart colours);
-  - an accent: Signal (the default), Ultramarine, Monospace, Blue, Crimson, Teal, Violet, Graphite or a custom colour (refused with the reason if it can't carry white text; Signal carries dark text on its dark-mode lime);
-  - chart colours: Default, Colour-blind safe, Muted.
+- **Appearance** (the canvas bar's right-most icon; its glyph shows the mode) opens one card, not a dialog. It stays open while you pick, and Esc, an outside click or Tab closes it. Top to bottom:
+  - the mode (Light or Dark, Light by default; kept in this browser, not in the workbook);
+  - **Dark look**: Default or One Dark Pro (dark-mode surfaces; it also picks the One Dark accent and chart colours);
+  - **Accent**: Signal (the default), Ultramarine, Monospace, Crimson, Blue, Teal, Violet, One Dark and Graphite as swatches (the chosen one carries a tick; the heading names it), then a custom colour (a picker and a `#rrggbb` field, refused with the reason if it can't carry white text; Signal carries dark text on its dark-mode lime);
+  - **Chart colours**: Default, Colour-blind safe, One Dark Pro, Muted, each a strip of its eight colours;
+  - **Reset theme**, which returns the look, accent and chart colours to the default and leaves the mode alone.
 
-  Choices apply live and save with the workbook. Disconnecting returns the screen to the default theme until the workbook reopens
-  ([tokens.md](../../reference/design/tokens.md#workbook-themes-p41)).
+  The look, accent and chart colours apply live and save with the workbook. Disconnecting returns the screen to the default theme until the workbook reopens
+  ([tokens.md](../../reference/design/tokens.md#workbook-themes-p41), [D146](../../decisions/decisions-design.md#d146--one-appearance-card-replaces-the-mode-menu-and-the-theme-dialog)).
 - **Import workbook…** (a worksheet view-bar icon) opens a `.json` file.
   - It needs a connection, because a workbook opens against the connected server.
   - If the canvas isn't empty, it asks twice before **replacing** it (`confirmDeleteTwice`, button **Replace**, then "Really replace the current workbook? This can't be undone." with **Replace for good**; [D133](../../decisions/decisions-destructive-actions.md#d133--no-undo-double-confirmation-before-every-destructive-delete)).

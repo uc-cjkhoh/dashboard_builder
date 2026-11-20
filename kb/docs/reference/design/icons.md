@@ -26,7 +26,7 @@ Look an icon up here before drawing a new one; reuse beats adding.
 | `hierarchy` | the **Hierarchies** tool in the worksheet sidebar — a parent over two children |
 | `calc`, `param` | the **Calculated fields** and **Parameters** sidebar tools |
 | `chart-gauge` | the **Performance timings** tile at the bottom of the sidebar body. It is also the Gauge chart type's glyph, so the two share a drawing |
-| `monitor`, `sun`, `moon` | the **Appearance** toggle: System, Light, Dark |
+| `sun`, `moon` | the **Appearance** card: Light, Dark (the button shows the current one) |
 | `drill` | the **Drill** Marks slot and the drill breadcrumb (no longer the Hierarchies icon) |
 | `edit` | the pencil **Edit** button built into each row of the Calculated fields dialog, and field renaming |
 | `export`, `import` | **Export** in the worksheet view bar, and **Workbook (JSON)** / **Import workbook…** in its menu |

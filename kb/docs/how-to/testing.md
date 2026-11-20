@@ -71,7 +71,7 @@ In the table below, `P##` tags (P28, P33 …) name the product phase whose cases
 | `tests/js/chart-fit.test.mjs` | per-category slots (grouped, horizontal, heatmap), label rotation by pane width, no minimum for pie/scatter/treemap |
 | `tests/js/relation-rules.test.mjs`, `table-filter.test.mjs`, `empty-state.test.mjs`, `icons.test.mjs`, `contrast.test.mjs`, `format.test.mjs` | the other pure modules |
 | `tests/js/tokens.test.mjs` | no retired token, no hex outside `:root`, dark block redefines the surfaces, no stylesheet reads `prefers-color-scheme`, glass fallbacks cover dark |
-| `tests/js/scheme.test.mjs` | System / Light / Dark resolution against the OS, unknown stored values → System, and `scheme-boot.js` agreeing with `resolveScheme` (incl. blocked storage) |
+| `tests/js/scheme.test.mjs` | Light / Dark only, unknown or retired `"system"` stored values → Light, no OS read in `scheme.js` or `scheme-boot.js`, and `scheme-boot.js` agreeing with `normalizePref` (incl. blocked storage) |
 
 ## Smoke and live checks
 
