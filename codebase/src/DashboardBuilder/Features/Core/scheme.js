@@ -1,12 +1,11 @@
 // Light / dark scheme at runtime — the only module that knows which one is showing. Sets
-// <html data-scheme> (Core/core.css keys the dark tokens off it), follows the OS while the choice is
-// System, and emits `scheme:changed` on the bus whenever the painted scheme flips so charts and the
-// workbook theme re-apply. The choice lives in this browser (localStorage), not in the workbook.
+// <html data-scheme> (Core/core.css keys the dark tokens off it) and emits `scheme:changed` on the
+// bus whenever the painted scheme flips so charts and the workbook theme re-apply. The choice lives in
+// this browser (localStorage), not in the workbook; the OS setting is not read.
 import { bus } from "./store.js";
-import { STORAGE_KEY, normalizePref, resolveScheme } from "./scheme-model.js";
+import { STORAGE_KEY, normalizePref } from "./scheme-model.js";
 
-const os = matchMedia("(prefers-color-scheme: dark)");
-let pref = "system";
+let pref = "light";
 
 export const schemePref = () => pref;
 export const isDark = () => document.documentElement.getAttribute("data-scheme") === "dark";
@@ -19,14 +18,12 @@ export function setSchemePref(p) {
 }
 
 function apply() {
-  const next = resolveScheme(pref, os.matches);
-  if (document.documentElement.getAttribute("data-scheme") === next) return;
-  document.documentElement.setAttribute("data-scheme", next);
-  bus.dispatchEvent(new CustomEvent("scheme:changed", { detail: next }));
+  if (document.documentElement.getAttribute("data-scheme") === pref) return;
+  document.documentElement.setAttribute("data-scheme", pref);
+  bus.dispatchEvent(new CustomEvent("scheme:changed", { detail: pref }));
 }
 
 export function initScheme() {
-  try { pref = normalizePref(localStorage.getItem(STORAGE_KEY)); } catch { /* storage blocked — System */ }
-  os.addEventListener("change", () => { if (pref === "system") apply(); });
+  try { pref = normalizePref(localStorage.getItem(STORAGE_KEY)); } catch { /* storage blocked — Light */ }
   apply(); // scheme-boot.js has normally set it already; this is a no-op then
 }

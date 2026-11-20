@@ -1,12 +1,12 @@
 // Core/menu.js — a button toggling a [role=menu] list. Esc, outside click and item click close it;
 // ArrowUp/ArrowDown move focus. Items are [role=menuitem] or [role=menuitemradio]. Visibility via
 // `hidden` only; opening scales/fades in from the button and closing fades out quicker (Core/motion.js).
-// Pass an AbortSignal for menus that are re-rendered.
+// Pass an AbortSignal for menus that are re-rendered, `stayOpen` for a card whose rows apply a choice without closing it.
 import { enter, exit } from "./motion.js";
 import { icon } from "./icons.js";
 import { placeMenu, opensContext, nextFocus } from "./context-menu-model.js";
 
-export function wireMenu(button, list, { signal } = {}) {
+export function wireMenu(button, list, { signal, stayOpen = false } = {}) {
   const items = () => [...list.querySelectorAll('[role^="menuitem"]')];
   let seq = 0; // a newer open/close supersedes a close still fading out
   const setOpen = (open) => {
@@ -23,9 +23,11 @@ export function wireMenu(button, list, { signal } = {}) {
   };
   button.setAttribute("aria-haspopup", "menu"); button.setAttribute("aria-expanded", "false");
   button.addEventListener("click", () => { setOpen(button.getAttribute("aria-expanded") !== "true"); }, { signal });
-  list.addEventListener("click", (e) => { if (e.target.closest('[role^="menuitem"]')) setOpen(false); }, { signal });
+  // `stayOpen`: a card of live choices (Shell/appearance.js) — picking a row applies it and the card stays until Esc / outside click / Tab.
+  if (!stayOpen) list.addEventListener("click", (e) => { if (e.target.closest('[role^="menuitem"]')) setOpen(false); }, { signal });
   list.addEventListener("keydown", (e) => {
     const all = items(), i = all.indexOf(document.activeElement);
+    if (e.target.matches?.("input") && e.key !== "Escape") return; // a field inside the card keeps its own keys
     if (e.key === "ArrowDown") { e.preventDefault(); all[(i + 1) % all.length]?.focus(); }
     else if (e.key === "ArrowUp") { e.preventDefault(); all[(i - 1 + all.length) % all.length]?.focus(); }
     else if (e.key === "Escape") { setOpen(false); button.focus(); }

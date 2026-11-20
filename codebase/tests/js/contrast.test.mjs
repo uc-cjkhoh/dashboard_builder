@@ -39,7 +39,11 @@ test("token text pairs meet AA in light and dark", () => {
     ["danger-ink", "danger-bg"], ["danger-ink", "surface"], ["surface", "enc-ink"], ["surface", "warn-ink"]];
   for (const [name, t] of [["light", light], ["dark", dark], ["one dark pro", oneDark]]) {
     for (const [fg, bg] of pairs) assert.ok(contrastRatio(t[fg], t[bg]) >= 4.5, `${name} ${fg} on ${bg}`);
-    for (const bg of ["accent", "accent-hover", "accent-pressed"]) assert.ok(contrastRatio(t["on-accent"], t[bg]) >= 4.5, `${name} text on ${bg}`); // --on-accent: white, or dark on the Signal lime
+    assert.ok(contrastRatio(t["on-accent"], t.accent) >= 4.5, `${name} text on accent`); // --on-accent: white, or dark on the Signal lime
+    for (const k of ["hover", "pressed"]) { // hover / pressed are brighter, and carry their own text colour
+      assert.ok(contrastRatio(t[`on-accent-${k}`], t[`accent-${k}`]) >= 4.5, `${name} text on accent-${k}`);
+      assert.ok(contrastRatio("#ffffff", t[`accent-${k}`]) < contrastRatio("#ffffff", t.accent), `${name} accent-${k} is brighter than the accent`);
+    }
     assert.ok(contrastRatio(t.accent, t.surface) >= 3, `${name} accent boundary`);
   }
 });

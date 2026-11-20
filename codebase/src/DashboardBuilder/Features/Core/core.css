@@ -18,9 +18,10 @@
   --glass-blur: blur(20px) saturate(150%);
   /* Controls on glass sit one tier more solid than the panel; --ctl-edge keeps their outline ≥ 3:1
      against the glass (WCAG 1.4.11) whatever the wash does beneath it. */
-  --glass-ctl: rgb(255 255 255 / .80); --glass-ctl-hover: #f1f1ee; --ctl-edge: #7b7e82; /* hover: a faint grey tint — white on near-white glass would not show */
-  /* One accent — Signal: near-black in light, neon lime in dark (text on it is `--on-accent`). Danger is a separate vermilion and always carries an icon + words */
-  --accent: #1a1c1f; --accent-hover: #2e3135; --accent-pressed: #0c0d0f; --accent-ink: #1a1c1f;
+  --glass-ctl: rgb(255 255 255 / .80); --glass-ctl-hover: #ffffff; --ctl-edge: #7b7e82; /* hover: solid white, brighter than the .80 glass above it; a hover edge (--lift-edge, buttons.css) keeps it visible on near-white glass */
+  /* One accent — Signal: one sage-lime hue, deep olive in light and calm lime in dark (text on it is `--on-accent`). Danger is a separate vermilion and always carries an icon + words */
+  --accent: #566a17; --accent-hover: #748541; --accent-pressed: #8c9a61; --accent-ink: #566a17; /* hover and pressed are brighter than the accent (theme-model.js LIFT_*) */
+  --on-accent-hover: #12130f; --on-accent-pressed: #12130f;
   --accent-soft: #f1f4e2; --accent-line: #d3dbae; --signal: #c3df5a; --on-accent: #ffffff; --on-ink: var(--surface);
   --focus: var(--ink);
   --ok-bg: #edfcf3; --ok-ink: #136945; --ok-line: #abefc6;
@@ -80,7 +81,8 @@
   --glass: rgb(26 27 29 / .70); --glass-line: rgb(255 255 255 / .08); --glass-rim: rgb(255 255 255 / .05);
   --glass-ctl: rgb(46 47 50 / .85); --glass-ctl-hover: rgb(58 60 64 / .96); --ctl-edge: #7d8087;
   /* dark accent: a calm sage-lime (HSL S ≈ 38 %), not the neon of the Signal wash — bars and primary buttons use it */
-  --accent: #a9bd6a; --accent-hover: #9aad5c; --accent-pressed: #8a9c50; --accent-ink: #a9bd6a;
+  --accent: #a9bd6a; --accent-hover: #b5c67f; --accent-pressed: #c1cf94; --accent-ink: #a9bd6a;
+  --on-accent-hover: #12130f; --on-accent-pressed: #12130f;
   --accent-soft: #262a17; --accent-line: #4a5427; --on-accent: #12130f;
   --ok-bg: #0f2519; --ok-ink: #68c895; --ok-line: #1f5c3c;
   --warn-bg: #292010; --warn-ink: #d9b574; --warn-line: #6a4a13;
@@ -106,7 +108,8 @@
   --ink: #d7dae0; --ink-2: #abb2bf; --ink-3: #9aa2af; --line: #3e4451; --line-2: #4b5263;
   --glass: rgb(33 37 43 / .70); --glass-line: rgb(171 178 191 / .10); --glass-rim: rgb(171 178 191 / .08);
   --glass-ctl: rgb(44 49 58 / .85); --glass-ctl-hover: rgb(57 63 74 / .96); --ctl-edge: #7f8794;
-  --accent: #456fc8; --accent-hover: #3d64b3; --accent-pressed: #33559a; --accent-ink: #6aa8e0;
+  --accent: #456fc8; --accent-hover: #5f83d0; --accent-pressed: #7997d7; --accent-ink: #6aa8e0;
+  --on-accent-hover: #12130f; --on-accent-pressed: #12130f;
   --accent-soft: #262f45; --accent-line: #3d5a94; --on-accent: #ffffff;
   --ok-bg: #243026; --ok-ink: #98c379; --ok-line: #3f5a35;
   --warn-bg: #33291a; --warn-ink: #e5c07b; --warn-line: #6b5425;

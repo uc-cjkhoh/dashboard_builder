@@ -149,9 +149,55 @@
   position: relative; z-index: 3;  /* the Workbook menu must paint above the view below */
 }
 
-/* Light / dark toggle, then Settings right-most in the bar: as close to the Workbook ··· as that group's own buttons
-   sit, and its glyph (not its 32px box) meets the right gutter, over the content's right edge. */
-.scheme, .settings { flex: none; }
+/* Appearance, right-most in the bar: as close to the Workbook ··· as that group's own buttons sit, and its glyph (not its 32px box)
+   meets the right gutter, over the content's right edge. */
+.scheme { flex: none; }
+/* The Appearance card (Shell/appearance.js): the `.menu__list` surface, 314px wide so nine 24px accent swatches fill a row with 8px gaps
+   (2px edge + 2 × 8px padding + 2 × 8px row inset + 9 × 24 + 8 × 8). Rows, headings, separators and the tick are the menu's own; the selected row is
+   bold + ticked, the selected swatch carries a tick. Rhythm: 4px between rows of one group, 8px each side of a separator, and a heading sits with its
+   own group (8px above, none below). Every left edge (heading, row, strip, swatch, picker) is 16px in from the card's edge, every right edge 16px. */
+.appearance { width: 314px; padding: var(--s2); max-height: calc(100vh - var(--topbar-h) - 2 * var(--s4)); overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
+.appearance .menu__sep { margin-block: var(--s1); }
+.appearance__modes { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--s1); grid-column: 1 / -1; }
+.appearance__mode { display: flex; align-items: center; justify-content: center; gap: var(--s2); height: var(--ctl-h); padding: 0; border: 0; border-radius: var(--r);
+  background: transparent; color: var(--ink-2); font-size: var(--fs-body); cursor: pointer; }
+.appearance__mode:hover, .appearance__mode:focus-visible { background: var(--surface-3); color: var(--ink); }
+.appearance__mode[aria-checked="true"] { background: var(--accent-soft); color: var(--accent-ink); font-weight: 600; }
+.appearance__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s2); padding-block: var(--s2) 0; line-height: 20px; } /* whole pixels, so every row below sits on one */
+.appearance__value { font-weight: 400; color: var(--ink-2); }
+.appearance__strip { position: relative; display: flex; flex: none; width: 96px; height: 16px; overflow: hidden; border-radius: var(--r); }
+/* The edge ring is drawn over the colours (an inset shadow on the strip itself sits under them), so a near-black first colour still shows where the strip starts. */
+.appearance__strip::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 40%, transparent); pointer-events: none; }
+.appearance__strip > span { flex: 1; }
+.appearance__accents { display: flex; justify-content: space-between; gap: var(--s1); padding-inline: var(--s2); }
+.appearance__accent { display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: var(--r); cursor: pointer; }
+.appearance__accent:focus-visible { outline-offset: 2px; }
+.appearance__accent-tick { visibility: hidden; }
+.appearance__accent[aria-checked="true"] .appearance__accent-tick { visibility: visible; }
+/* Custom accent: one field in the card's own field style (edge, radius, hover) holding a 24px swatch that opens the picker (ticked when the custom colour is
+   the chosen accent, like the presets), its name (bold when chosen, like a menu row) and the #rrggbb, right-aligned like the Accent heading's value. The swatch sits 3px from the edge on every side, so the field's outer edges, not the swatch, meet the row's. */
+.appearance__custom { display: flex; align-items: center; gap: var(--s2); height: var(--ctl-h); margin: var(--s1) var(--s2) 0; padding: 0 var(--s2) 0 calc(var(--s1) - 1px);
+  border: 1px solid var(--line-2); border-radius: var(--r); background: var(--surface); transition: border-color var(--dur-fast) var(--ease); }
+.appearance__custom:hover { border-color: var(--ink-3); }
+.appearance__custom:has(.appearance__hex[aria-invalid="true"]) { border-color: var(--danger-solid); }
+.appearance__custom:has(:focus-visible) { background-image: linear-gradient(color-mix(in srgb, var(--ink) 6%, transparent), color-mix(in srgb, var(--ink) 6%, transparent)); }
+.appearance__swatch { position: relative; flex: none; display: grid; place-items: center; width: 24px; height: 24px; border-radius: var(--r); cursor: pointer; }
+.appearance__swatch::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 40%, transparent); pointer-events: none; }
+.appearance__swatch-tick { visibility: hidden; }
+.appearance__swatch[data-chosen="true"] .appearance__swatch-tick { visibility: visible; }
+.appearance__picker { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0; border: 0; background: none; opacity: 0; cursor: pointer; }
+/* The field's wash is on the whole field (above), so the text input drops its own (`!important`: the shared field rule is more specific). */
+.appearance__custom-title { flex: none; cursor: pointer; }
+.appearance__swatch[data-chosen="true"] + .appearance__custom-title { font-weight: 600; }
+.appearance__hex { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--ink); font: inherit; font-size: var(--fs-body); font-variant-numeric: tabular-nums; text-align: right; }
+.appearance__hex:focus-visible { background-image: none !important; }
+.appearance__hex::placeholder { color: var(--ink-3); opacity: 1; }
+.appearance__error { padding-inline: var(--s2); }
+/* Optical corrections, measured on the render: a glyph's ink sits ~2px inside its box, so the tick reaches the swatches' and the field's right edge,
+   and the Reset icon meets the strips' left edge. */
+.appearance .menu__item .menu__check { margin-right: -2px; }
+.appearance .menu__item > .icon:first-child { margin-left: -2px; }
+
 .canvas__bar > :last-child { margin-right: calc(-1 * var(--s2)); }
 
 /* Performance timings dialog (Shell/perf-panel.js). */

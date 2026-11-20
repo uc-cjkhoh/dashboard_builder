@@ -5,7 +5,6 @@ import {
 } from "../Core/store.js";
 import { clearRoleChoices } from "../Calc/calc-pane-model.js";
 import { DEFAULT_THEME } from "../Core/theme-model.js";
-import { openThemeDialog } from "./theme-dialog.js";
 import { exit } from "../Core/motion.js";
 import { toast, confirmDeleteTwice, listDialog } from "../Core/ui.js";
 import { dateIn } from "../Core/timezone.js";
@@ -45,7 +44,6 @@ export function initWorkbook() {
   for (const type of CHANGE_EVENTS) bus.addEventListener(type, scheduleSave);
 
   bus.addEventListener("workbook:export", exportFile);
-  document.getElementById("settings-btn")?.addEventListener("click", openThemeDialog);
   // The worksheet view bar's Import button asks for a file here (it has no handle on the picker).
   bus.addEventListener("workbook:import", () => {
     if (!key) { toast("Connect to ClickHouse first — a workbook opens against the connected server.", "info"); return; }

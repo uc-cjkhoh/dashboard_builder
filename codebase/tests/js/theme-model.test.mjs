@@ -7,7 +7,10 @@ import { contrastRatio as cr } from "../../src/DashboardBuilder/Features/Dashboa
 const checkSet = (s, scheme, name) => {
   const on = s.on ?? ON_ACCENT; // the text on the accent: white, or dark on the Signal lime
   assert.ok(cr(on, s.accent) >= 4.5, `${name} ${scheme}: text on accent ${cr(on, s.accent).toFixed(2)}`);
-  assert.ok(cr(on, s.hover) >= 4.5, `${name} ${scheme}: text on hover`);
+  assert.ok(cr(s.onHover, s.hover) >= 4.5, `${name} ${scheme}: text on hover`);
+  assert.ok(cr(s.onPressed, s.pressed) >= 4.5, `${name} ${scheme}: text on pressed`);
+  // Brighter on hover, brighter again when pressed (relative luminance: white contrast falls as a colour brightens).
+  assert.ok(cr("#ffffff", s.hover) < cr("#ffffff", s.accent) && cr("#ffffff", s.pressed) < cr("#ffffff", s.hover), `${name} ${scheme}: accent < hover < pressed in brightness`);
   assert.ok(cr(s.ink, SURFACE[scheme]) >= 4.5, `${name} ${scheme}: accent text on surface`);
   assert.ok(cr(s.ink, s.soft) >= 4.5, `${name} ${scheme}: accent text on soft`);
   assert.ok(cr(s.accent, SURFACE[scheme]) >= 3, `${name} ${scheme}: accent vs surface ${cr(s.accent, SURFACE[scheme]).toFixed(2)}`);
@@ -29,7 +32,7 @@ test("a custom accent is derived to pass, or refused with the reason", () => {
   assert.match(deriveAccent("blue").error, /#rrggbb/);
 });
 test("the default theme is Signal + default palette; core.css values match", () => {
-  assert.equal(accentSet(DEFAULT_THEME, false).accent, "#1a1c1f");
+  assert.equal(accentSet(DEFAULT_THEME, false).accent, "#566a17");
   assert.equal(PALETTES.default.light[0], "#72872a");
   assert.ok(isDefaultTheme(DEFAULT_THEME));
   assert.ok(!isDefaultTheme({ accent: "crimson", palette: "default" }));
