@@ -16,7 +16,6 @@ public class ColumnProfileTests : IClassFixture<WebApplicationFactory<Program>>
 
     [Fact] public void The_bounds_are_explicit()
     {
-        Assert.Equal(1_000_000, ApiLimits.ProfileSampleRows);
         Assert.Equal(10, ApiLimits.DefaultProfileTop);
         Assert.Equal(50, ApiLimits.MaxProfileTop);
         Assert.Equal(100, ApiLimits.ProfileValueLength);
@@ -28,15 +27,34 @@ public class ColumnProfileTests : IClassFixture<WebApplicationFactory<Program>>
     [Theory] [InlineData(null)] [InlineData(1)] [InlineData(50)]
     public void A_limit_in_range_is_accepted(int? limit) => Assert.Null(FieldOf(new("a", limit)));
 
-    [Fact] public void The_stats_sql_scans_a_bounded_subquery_and_quotes_every_identifier()
+    [Fact] public void The_stats_sql_scans_the_whole_column_and_quotes_every_identifier()
     {
         var sql = ClickHouseGateway.BuildProfileStatsSql("d`b", "t", "a`; DROP TABLE x; --", ClickHouseType.Numeric);
-        Assert.Equal("SELECT count() AS n, countIf(isNull(v)) AS nulls, uniq(v) AS d, toString(min(v)) AS lo, toString(max(v)) AS hi " +
-                     "FROM (SELECT `a\\`; DROP TABLE x; --` AS v FROM `d\\`b`.`t` LIMIT 1000000)", sql);
+        Assert.Equal("SELECT count() AS n, countIf(isNull(v)) AS nulls, uniq(v) AS d, toString(min(v)) AS lo, toString(max(v)) AS hi, " +
+                     "avg(toFloat64(v)) AS mean, stddevSamp(toFloat64(v)) AS sd, quantile(0.25)(toFloat64(v)) AS q1, quantile(0.5)(toFloat64(v)) AS med, quantile(0.75)(toFloat64(v)) AS q3 " +
+                     "FROM (SELECT `a\\`; DROP TABLE x; --` AS v FROM `d\\`b`.`t`)", sql);
+    }
+    [Fact] public void The_numeric_summary_is_cast_to_float_and_never_exact_or_a_sum()
+    {
+        var sql = ClickHouseGateway.BuildProfileStatsSql("d", "t", "a", ClickHouseType.Numeric);
+        Assert.Contains("quantile(0.5)(toFloat64(v))", sql); // the box plot's function: approximate, bounded memory
+        Assert.DoesNotContain("quantileExact", sql);      // would hold every value of a whole-table scan
+        Assert.DoesNotContain("sum(", sql);               // sum wraps silently on 64-bit integers
+        foreach (var other in new[] { ClickHouseType.Text, ClickHouseType.Temporal, ClickHouseType.Compound })
+            Assert.DoesNotContain("avg(", ClickHouseGateway.BuildProfileStatsSql("d", "t", "a", other));
+    }
+    [Fact] public void A_summary_figure_is_finite_or_null()
+    {
+        Assert.Null(ClickHouseGateway.ProfileFigure(null, 5, 0));
+        Assert.Null(ClickHouseGateway.ProfileFigure(double.NaN, 5, 0));
+        Assert.Null(ClickHouseGateway.ProfileFigure(double.PositiveInfinity, 5, 0));
+        Assert.Null(ClickHouseGateway.ProfileFigure(3.5, 0, 0));
+        Assert.Null(ClickHouseGateway.ProfileFigure(3.5, 5, 5));
+        Assert.Equal(3.5, ClickHouseGateway.ProfileFigure(3.5, 5, 1));
     }
     [Fact] public void Text_has_no_min_max_and_compound_columns_are_stringified()
     {
-        Assert.Equal("SELECT count() AS n, countIf(isNull(v)) AS nulls, uniq(v) AS d FROM (SELECT `s` AS v FROM `d`.`t` LIMIT 1000000)",
+        Assert.Equal("SELECT count() AS n, countIf(isNull(v)) AS nulls, uniq(v) AS d FROM (SELECT `s` AS v FROM `d`.`t`)",
             ClickHouseGateway.BuildProfileStatsSql("d", "t", "s", ClickHouseType.Text));
         Assert.Contains("(SELECT toString(`arr`) AS v FROM", ClickHouseGateway.BuildProfileStatsSql("d", "t", "arr", ClickHouseType.Compound));
         Assert.DoesNotContain("min(", ClickHouseGateway.BuildProfileStatsSql("d", "t", "arr", ClickHouseType.Compound));
@@ -48,12 +66,13 @@ public class ColumnProfileTests : IClassFixture<WebApplicationFactory<Program>>
         var sql = ClickHouseGateway.BuildProfileTopSql("d", "t", "a`b", 10);
         Assert.Equal("SELECT label, cut, count() AS cnt FROM (SELECT if(isNull(`a\\`b`), NULL, leftUTF8(toString(`a\\`b`), 100)) AS label, " +
                      "if(isNull(`a\\`b`), 0, lengthUTF8(toString(`a\\`b`)) > 100) AS cut " +
-                     "FROM `d`.`t` LIMIT 1000000) GROUP BY label, cut ORDER BY cnt DESC, label ASC, cut ASC LIMIT 10", sql);
+                     "FROM `d`.`t`) GROUP BY label, cut ORDER BY cnt DESC, label ASC, cut ASC LIMIT 10", sql);
     }
-    [Fact] public void The_backstop_settings_bound_the_read_and_the_memory()
+    [Fact] public void The_backstop_settings_bound_the_memory_and_never_the_rows()
     {
-        Assert.Contains("max_rows_to_read = 1000000", ClickHouseGateway.ProfileSettings);
-        Assert.Contains("read_overflow_mode = 'break'", ClickHouseGateway.ProfileSettings);
+        Assert.DoesNotContain("max_rows_to_read", ClickHouseGateway.ProfileSettings);
+        Assert.DoesNotContain("read_overflow_mode", ClickHouseGateway.ProfileSettings);
+        Assert.DoesNotContain("LIMIT 1000000", ClickHouseGateway.BuildProfileStatsSql("d", "t", "a", ClickHouseType.Numeric));
         Assert.Contains("max_memory_usage", ClickHouseGateway.ProfileSettings);
     }
     [Fact] public void Min_and_max_are_hidden_for_an_empty_or_all_null_column()

@@ -56,7 +56,7 @@ async function main() {
 
   // grp: a x2, b x2 (a tie, broken by value), c x1, NULL x1 (NULL last among equal counts)
   let p = await profile('bk_profile', { column: 'grp' });
-  assert.deepEqual([p.rows, p.nulls, p.distinct, p.sampled, p.category], [6, 1, 3, false, 'text']);
+  assert.deepEqual([p.rows, p.nulls, p.distinct, p.category], [6, 1, 3, 'text']);
   assert.deepEqual(tops(p), [['a', 2], ['b', 2], ['c', 1], [null, 1]]);
   assert.equal(p.min, null); assert.equal(p.max, null);
   ok('text with NULLs and a tie: rows 6, nulls 1, distinct 3, top a2 b2 c1 NULL1');
@@ -81,7 +81,7 @@ async function main() {
   assert.deepEqual(tops(p).slice(0, 2).map((t) => t[1]), [2, 2]); ok('Array column profiles as text: 3 distinct arrays, two appear twice');
 
   p = await profile('bk_profile_empty', { column: 's' });
-  assert.deepEqual([p.rows, p.nulls, p.distinct, p.top.length, p.sampled], [0, 0, 0, 0, false]); ok('an empty table profiles to zeros and no top values');
+  assert.deepEqual([p.rows, p.nulls, p.distinct, p.top.length], [0, 0, 0, 0]); ok('an empty table profiles to zeros and no top values');
   p = await profile('bk_profile_empty', { column: 'id' });
   assert.equal(p.min, null); assert.equal(p.max, null); ok('an empty numeric column has no min/max (not 0)');
 

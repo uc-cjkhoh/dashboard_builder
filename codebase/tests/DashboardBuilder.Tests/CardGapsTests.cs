@@ -86,8 +86,8 @@ public class CardGapsTests
         Assert.Equal("amount", p.Column); Assert.Equal("Float64", p.Type); Assert.Equal(10, p.Rows);
         var sel = Selects(stub);
         Assert.Equal(2, sel.Count);
-        Assert.Contains($"FROM (SELECT `amount` AS v FROM ({UserSql}) LIMIT {ApiLimits.ProfileSampleRows})", sel[0]);
-        Assert.Contains($"FROM ({UserSql}) LIMIT {ApiLimits.ProfileSampleRows}) GROUP BY label", sel[1]);
+        Assert.Contains($"FROM (SELECT `amount` AS v FROM ({UserSql}))", sel[0]);
+        Assert.Contains($"FROM ({UserSql})) GROUP BY label", sel[1]);
         Assert.EndsWith("LIMIT 5", sel[1].Split(" SETTINGS ")[0]);
         NoCatalogRead(stub);
     }

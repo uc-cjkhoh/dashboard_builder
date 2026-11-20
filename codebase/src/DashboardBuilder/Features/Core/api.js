@@ -79,7 +79,7 @@ export const api = {
   /** The newest day of a date column: { latest: "YYYY-MM-DD" | null }. */
   latest: (db, table, column, { signal } = {}) =>
     request("GET", `/api/databases/${encodeURIComponent(db)}/tables/${encodeURIComponent(table)}/columns/${encodeURIComponent(column)}/latest`, undefined, signal),
-  /** Column profile: rows, NULLs, approximate distinct, min/max and top values of one column over the table's first rows. */
+  /** Column profile: rows, NULLs, approximate distinct, min/max and top values of one column over every row of the table. */
   profile: (db, table, req, { signal } = {}) =>
     request("POST", `/api/databases/${encodeURIComponent(db)}/tables/${encodeURIComponent(table)}/profile`, req, signal),
   /** Worksheet query (may join related tables): { rowDimensions, columnDimensions, measures, rows,

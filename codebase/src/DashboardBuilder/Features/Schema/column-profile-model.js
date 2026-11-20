@@ -6,8 +6,8 @@ export const PROFILE_LIMITS = Object.freeze({
   top: 10,            // ApiLimits.DefaultProfileTop
   maxTop: 50,         // ApiLimits.MaxProfileTop
   maxColumn: 1000,    // ApiLimits.MaxColumnName
-  sampleRows: 1_000_000, // ApiLimits.ProfileSampleRows: the profile reads the first N rows
   valueLength: 100,   // ApiLimits.ProfileValueLength: characters kept per top value
+  bins: 20,           // the distribution's equal-width bins (ClampBuckets' default; the server's cap is ApiLimits.MaxBuckets, 100)
 });
 
 /** The request body for one column; out-of-range input throws (the server rejects it too, it never clamps). */
@@ -31,19 +31,75 @@ export function formatShare(part, whole) {
   return whole_ >= 100 ? "99.9%" : `${whole_}%`;
 }
 
+/** A computed figure (mean, deviation, quartile) as short text: never a long float, never a rounded-away integer part.
+ *  10,000+ → whole numbers; 100+ → 1 decimal; 1+ → 2; below 1 → 3 significant digits; extreme sizes in exponent form. null / NaN / ∞ → null (the tile is left out). */
+export function formatNumber(n) {
+  if (n === null || n === undefined || !Number.isFinite(Number(n))) return null;
+  const x = Number(n), a = Math.abs(x);
+  if (a === 0) return "0";
+  if (a >= 1e15 || a < 1e-4) return x.toExponential(3).replace(/\.?0+e/, "e");
+  const opts = a >= 10000 ? { maximumFractionDigits: 0 } : a >= 100 ? { maximumFractionDigits: 1 } : a >= 1 ? { maximumFractionDigits: 2 } : { maximumSignificantDigits: 3 };
+  const text = x.toLocaleString("en-US", opts);
+  return text === "-0" ? "0" : text;
+}
+
 /** The worksheet's rule: a numeric field is a measure, everything else a dimension. */
 export const roleOf = (category) => (category === "numeric" ? "measure" : "dimension");
 
-/** Everything the dialog shows, from the server's profile. */
-export function summarize(p) {
-  const sampleNote = p.sampled ? `Only the first ${formatCount(p.sampleLimit)} rows ClickHouse returned were read, in no particular order. This is not a statistical sample: the figures describe those rows, not the whole table.` : null;
+/** The message for a failed profile. The server's timeout advice (a filter, a lower Top-N, fewer fields) is for worksheets and means nothing here:
+ *  the profile has no filter and reads every row, so say why it ran long and, for a custom SQL card, the one thing that helps. */
+export function profileFailure(err, custom = false) {
+  const message = err?.message || "The profile could not be read.";
+  if (err?.status !== 504) return message;
+  const stopped = message.split(". ")[0].replace(/\.$/, "");
+  return `${stopped}. The profile reads every row, so a very large table can run past the limit.${custom ? " Narrow the query with Edit SQL, then profile again." : ""}`;
+}
+
+/** The request body of the distribution: equal-width bins over every non-NULL value (POST .../histogram, the worksheet's endpoint).
+ *  `source`: a custom SQL card's query, read instead of the catalog table. */
+export function histogramRequest(column, source = null, buckets = PROFILE_LIMITS.bins) {
+  profileRequest(column); // the same column rules
+  return source ? { column, buckets, source } : { column, buckets };
+}
+
+/** The message for a distribution that could not be read; the profile figures above it stay. */
+export function distributionFailure(err, custom = false) {
+  const message = err?.message || "The distribution could not be read.";
+  if (err?.status !== 504) return message;
+  return `The distribution ran past the time limit. It reads every row, so a very large table can run past it.${custom ? " Narrow the query with Edit SQL, then profile again." : ""}`;
+}
+
+/** The distribution as bars: one per bin, each as tall as its count against the fullest bin. `whole`: a whole-number column, so a bin is a range of integers
+ *  and reads "10–19", not "10 – 20". The fullest bin is the peak (the one accent bar); every bar's range and count are also text. */
+export function histogramView(h, rows) {
+  const bins = Array.isArray(h?.bins) ? h.bins : [];
+  const whole = Boolean(h?.whole);
+  if (bins.length === 0 || bins.every((b) => !b.count)) return { empty: true, reason: "There are no values to chart.", bars: [], min: null, max: null, peak: null };
+  const peak = Math.max(...bins.map((b) => b.count));
+  const range = (b) => {
+    const lo = formatNumber(b.x0), hi = formatNumber(whole ? b.x1 - 1 : b.x1);
+    return whole ? (b.x1 - b.x0 <= 1 || lo === hi ? lo : `${lo}–${hi}`) : `${lo} – ${hi}`;
+  };
+  const peakAt = bins.findIndex((b) => b.count === peak);
+  const bars = bins.map((b, i) => ({ range: range(b), count: b.count, countText: formatCount(b.count), shareText: formatShare(b.count, rows), height: b.count > 0 ? Math.max(1, Math.round((b.count / peak) * 100)) : 0, peak: i === peakAt }));
+  const top = bars[peakAt];
+  return { empty: false, reason: null, bars, min: formatNumber(bins[0].x0), max: formatNumber(whole ? bins[bins.length - 1].x1 - 1 : bins[bins.length - 1].x1), peak: `Fullest bin: ${top.range}, ${top.countText} ${peak === 1 ? "row" : "rows"} (${top.shareText})` };
+}
+
+/** Everything the dialog shows, from the server's profile. `custom`: the profile is of a custom SQL card's query, not a catalog table. */
+export function summarize(p, custom = false) {
   const tiles = [
-    { label: "Rows", value: formatCount(p.rows), note: p.sampled ? `first ${formatCount(p.sampleLimit)} rows` : null },
-    { label: "Distinct (approx.)", value: formatCount(p.distinct), note: "non-null values, estimated" },
-    { label: "Null share", value: formatShare(p.nulls, p.rows), note: `${formatCount(p.nulls)} of ${formatCount(p.rows)} rows` },
+    { label: "Rows", value: formatCount(p.rows), note: null },
+    { label: "Distinct (approx.)", value: formatCount(p.distinct), note: null },
+    { label: "Null share", value: formatShare(p.nulls, p.rows), note: `${formatCount(p.nulls)} null ${p.nulls === 1 ? "row" : "rows"}` },
   ];
   if (p.min != null) tiles.push({ label: "Min", value: p.min, note: null });
   if (p.max != null) tiles.push({ label: "Max", value: p.max, note: null });
+  // The numeric summary: its own group of figures (never in `tiles`, which are the counts and the range). A figure the server could not give is left out.
+  const sm = p.summary ?? null;
+  const summary = sm ? [
+    ["Mean", sm.mean], ["Median (approx.)", sm.median], ["Std. deviation", sm.stdDev], ["Q1 (approx.)", sm.q1], ["Q3 (approx.)", sm.q3],
+  ].map(([label, v]) => ({ label, value: formatNumber(v), note: null })).filter((t) => t.value !== null) : [];
   const role = roleOf(p.category);
   const top = p.top.map((t) => {
     const kind = t.value === null ? "null" : t.value === "" ? "empty" : "value";
@@ -53,8 +109,13 @@ export function summarize(p) {
   });
   const copyValues = p.top.filter((t) => t.value !== null && t.value !== "" && !t.cut).map((t) => t.value).join("\n");
   const cutNote = top.some((t) => t.cut) ? `Values are compared by their first ${PROFILE_LIMITS.valueLength} characters, so values that differ only after that count together.` : null;
+  // Why there is nothing (or nothing plain) to show: no rows at all, or every row is NULL / empty. Null when there is data.
+  const empty = p.rows === 0;
+  const reason = empty
+    ? (custom ? "The query returns no rows, so there is nothing to profile. Check its filters in Edit SQL." : "This table has no rows, so there is nothing to profile.")
+    : top.length > 0 && top.every((t) => t.kind !== "value")
+      ? `Every row is ${top.some((t) => t.kind === "null") && top.some((t) => t.kind === "empty") ? "NULL or empty" : top[0].kind === "null" ? "NULL" : "empty"}, so there are no values to list and no Min or Max.`
+      : null;
   return {
-    tiles, role, top, sampleNote, cutNote, empty: p.rows === 0, copyName: p.column, copyValues,
-    details: [["Name", p.column], ["Type", p.type], ["Role", role]], // the ClickHouse type as it is
-  };
+    tiles, summary, role, top, cutNote, empty, reason, copyValues };
 }
