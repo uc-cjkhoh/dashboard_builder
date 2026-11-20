@@ -127,10 +127,13 @@ Controller: `Features/Schema/SchemaController.cs`.
 
 ### Column profile
 
-Body `{ column, limit? }` → `{ column, type, category, rows, nulls, distinct, min, max, top: [{ value, count, cut }] }`.
+Body `{ column, limit? }` → `{ column, type, category, rows, nulls, distinct, min, max, top: [{ value, count, cut }], summary }`.
 - It reads **every row** of the table ([D143](../decisions/decisions-performance.md#d143--the-column-profile-reads-every-row)); the result is still bounded
   (one stats row, ≤ 50 top values). A scan that outlasts the connection's time limit is a 504, not a partial answer.
 - `distinct` is approximate (`uniq`, non-null). `min` / `max` are given for text, numeric and date columns only.
+- `summary` is `{ mean, stdDev, q1, median, q3 }` for a numeric column and `null` for any other. Each figure is a finite number or `null` (an empty or all-NULL column, one non-null row's standard deviation,
+  NaN and infinity are `null`: JSON cannot carry them). `mean` and `stdDev` (sample) cover every non-null row; the quartiles are approximate (`quantile`, the box plot's function). There is no sum.
+  The dialog's distribution is not part of this response: it is `POST .../histogram` ([below](#histogram-single-table-box-plot-and-removed-routes)) with `{ column, buckets: 20, source? }`.
 - In `top`, `value` null means SQL NULL. A value is cut at 100 characters, counted in characters, not bytes
   (`cut`). Values that differ only after character 100 count together. Ties break by value.
 - An unknown column or table → 404. The message names the column and its table (`Unknown column "quantity_typo" in shop.orders.`; the name is stripped of control characters and cut at 64).

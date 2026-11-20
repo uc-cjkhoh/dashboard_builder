@@ -86,15 +86,31 @@ each opening to its tables, with one search box above it. It previews rows and f
 - **Opening it.** Each field row on a canvas entity card has a **Profile button** (`.col-row__profile`, histogram `profile` icon,
   `aria-label` "Profile <column>"; half-shown on every row while the pointer or focus is in the card, full on the row itself).
   It opens the **profile dialog** (`Schema/column-profile-dialog.js`, rules in `column-profile-model.js`).
+  The dialog **grows out of that Profile button and folds back into it** on Escape, X or Close ([motion-accessibility.md](../../reference/design/motion-accessibility.md#motion), `openColumnProfile(…, origin)`); the button is passed in by the card's click handler, and without one (or under reduced motion) the dialog just appears.
   The request is `POST /api/databases/{db}/tables/{table}/profile` ([api.md](../../reference/api.md)), read-only.
 - **Title and subtitle:** the title is the column name; the subtitle reads `database.table · type · role` (the ClickHouse type as it is; *measure* for numeric, else *dimension*
   — the worksheet's rule). The dialog lists name, type and role nowhere else.
-- **Figures:** Rows, Distinct (approx.) and Null share (the percent, and "n null rows" under it) in one cell, on three tracks; Min and Max for numeric and date columns sit under them on the same tracks, behind a hairline.
-- **Most frequent values:** up to 10. Each is a 32px band: the label, the count and its share of all rows sit on a tint that fills the band from the left in proportion to the share.
+- **Figures:** the first section is a **ruled grid** that runs the full width of the dialog body: 1px `--line` rules between the cells, the same rule as the divider under it. Each cell has 16px top and bottom and 24px side padding, so labels share the 24px gutter of the head, the foot and the values heading below.
+  Rows, Distinct (approx.) and Null share (the percent, and "n null rows" under it) are three equal columns; Min and Max for numeric and date columns are a second row on the **same three columns** (Min under Rows, Max under Distinct, the third cell empty but ruled), so every vertical rule lines up.
+  **Every figure is the same height** and its text is **centred vertically** in its cell: the section is one grid with `1fr` rows and the Size and Range rows lay their tiles on it as subgrids (`--n`, the tile count, is set by `column-profile-dialog.js` so a stacked or one-column row spans that many grid rows). So Null share's "n null rows" line does not make its neighbours shorter, and the Min / Max row is as tall as the one above it (its top rule is an inset shadow, not a border, so it takes no height).
+  Below 40rem of body width (a narrow dialog) the grid becomes one column, every figure on its own ruled row.
+  **A figure is never clipped** — no ellipsis, no hidden overflow. The rules, in order:
+  1. When Min or Max is over 18 characters they **stack**, each on the full width (`.col-profile__range--stack`).
+  2. A group (the counts; Min and Max) whose longest figure is over 12 characters steps **every** figure in it from 24px to 16px (`--fs-lead`, `.col-profile__tile-value--long`), so one row never mixes sizes.
+  3. As the last resort a figure wraps anywhere (`overflow-wrap: anywhere`) and its cell grows; the full text is also in the cell's `title`.
+- **Numeric summary:** a numeric column adds its own group of figures under Min and Max, on the same three columns (`.col-profile__stats`): **Mean**, **Median (approx.)**, **Std. deviation** (sample), **Q1 (approx.)** and **Q3 (approx.)** — one scan with the rest ([clickhouse-integration.md](../../reference/clickhouse-integration.md#column-profile-box-plot-raw-rows-and-join-preview)).
+  The quartiles are approximate (`quantile`, the box plot's function) and say so in their label. Figures are short (`formatNumber`: whole numbers from 10,000, one decimal from 100, two from 1, three significant digits below 1, exponent form at extremes), so a float never trips the long-figure rules.
+  A figure the server cannot give (one non-null row has no standard deviation) leaves its tile out; the group is padded with empty ruled cells to a full row, and below 40rem they are hidden. There is no Sum (it wraps silently on 64-bit integers). Text and date columns have no summary.
+- **Distribution:** a numeric column with at least one non-NULL value gets a **Distribution** section between the figures and the values (not `flex: 1`; `--top` keeps the leftover height): 20 equal-width bars, each as tall as its count against the fullest bin (96px tall, `--r` top corners, `bar-rise` motion),
+  the first and last value under them and "Fullest bin: 10–19, 20 rows (77%)" in words. The fullest bin is the one accent bar, the others neutral; the caption says which, so colour is never the only cue. Every bar has a `title` and a visually hidden "range: n rows (share)" for assistive tech (the bar is `aria-hidden`).
+  An integer column's bins read as integer ranges ("10–19"). It is the worksheet's histogram endpoint (`POST .../histogram`, custom SQL as `source`), requested in parallel with the profile and aborted with it; it reads every row like the profile.
+  It has its own states inside the section: "Reading the distribution…", an icon + sentence on failure (a timeout is reworded; the figures above stay), "There are no values to chart.". Not yet: a distribution for date columns (the endpoint is numeric only), a log scale, a choice of bin count.
+- **Most frequent values:** up to 10. Each is a band of at least 32px: the label, the count and its share of all rows sit on a tint that fills the band from the left in proportion to the share.
   - NULL reads *(NULL)* and an empty string reads *(empty)*, in italic, so neither is mistaken for the text "NULL".
-  - A value over 100 characters is cut with an ellipsis.
-  - The tint is neutral (red means danger); the text carries every figure.
-  - The NULL and empty tints are lighter than value tints, so they read as absences, not values.
+  - A value over 100 characters is cut to 100 and marked with a trailing … (the server's cut); a long label wraps inside its band, which grows, and never ends in an ellipsis of its own.
+  - Colour is a role, never the only cue (the text carries every figure): value bands are a neutral tint; the **leader** (the most frequent real value) is the one accent band, with a bold label;
+    NULL and empty bands take the warning tone (`--warn-line` mixed into `--surface-2`) and are the shortest of the tints, so they read as absences to check, not values. Red is never used here (red means danger).
+    The labels keep ≥ 4.5:1 on every tint in light, dark and One Dark (probe `contrast` empty).
 - **Honesty about what was read:**
   - Every row is read: the figures describe the whole table, with no row cap and no sampling warning ([D143](../../decisions/decisions-performance.md#d143--the-column-profile-reads-every-row)).
     A table too big to scan within the connection's time limit fails with a 504 and a message, never a partial figure.
@@ -103,15 +119,20 @@ each opening to its tables, with one search box above it. It previews rows and f
   - A share never rounds a partial share up to 100%, and tiny ones read "<0.1%".
 - **Copy name** copies the column name. **Copy values** copies the plain top values, one per line (NULL, empty and cut values left out).
   Both use `navigator.clipboard` and say so in a toast, or report that the browser blocked it.
-- **Layout:** 720px wide. The dialog, header and footer are solid; the body carries the app's `--wash` over `--bg` and holds two solid `--surface` cells lifted by `--elev-card`:
-  **Figures**, then **Most frequent values** (full width). A warning note, when there is one (a value was cut), is a third cell above them so the caveat comes before the figures it qualifies;
-  it is a solid warn-toned strip with a 1px warn border. Each frequent-value band is a flat `--surface-2` strip; the leader (the most frequent real value, not NULL or empty)
-  has a bold label and a stronger tint. Head, body and foot share a 24px side gutter (the X glyph sits on it); body padding 24px, 8px between cells.
-  Below 640px the figures use two tracks. Cut text carries a `title` with the full text.
+- **Layout:** 720px wide. **No card:** the body is the dialog's `--surface` with no padding and no wash; its content runs the full width and height of it,
+  in sections split by full-width hairlines: **Figures** (a `section` named "Figures" for assistive tech, no visible heading), then, for a numeric column, **Distribution**, then **Most frequent values**, which takes the height that is left.
+  **Head and foot take no fill of their own**: they sit on the dialog surface, parted from the body by the neutral 1px `--line` rule on the edge that faces the body.
+  In the foot the Copy buttons are the ordinary `.btn` fill (hover brighter than rest in every scheme) and Close stays the solid accent. The foot wraps **whole buttons**, never their labels (`white-space: nowrap`): at 420px Close drops to a second line on the right.
+  Head, body and foot share one 24px side gutter (the X glyph sits on it); each section has 16px top and bottom padding. A warning note, when there is one (a value was cut), is a `--warn-bg` strip across the top of the body with a
+  1px `--warn-line` rule under it, so the caveat comes before the figures it qualifies. Each frequent-value band is a flat `--surface-2` strip; the leader (the most frequent real value, not NULL or empty)
+  has a bold label and the accent tint. The content fades in once (no rise). Below 40rem of body width the figures reflow to one column. Text always carries a `title` with the full text.
 - **States:** "Reading every row…" while loading (closing cancels the request; Copy values stays disabled until figures arrive, and when the top values are all NULL, empty or cut its tooltip says why).
   A failure (404 / 502 / 504) shows icon + message in the dialog only (no toast: it would say the same thing twice). A timeout (504) is reworded by `profileFailure`:
   the server's advice (a filter, a lower Top-N, fewer fields) is for worksheets, so the dialog says the profile reads every row and a very large table can run past the limit,
   and on a custom SQL card adds "Narrow the query with Edit SQL, then profile again." **Esc**, X or Close close it.
+  **Nothing to show** always says why, as a neutral icon + sentence (`summarize().reason`, `.col-profile__reason`; the warn strip stays for the cut-value caveat):
+  - *No rows* — the block is the reason alone, with no figures (zeros and a 0% null share would mislead): "This table has no rows, so there is nothing to profile."; on a custom SQL card "The query returns no rows, so there is nothing to profile. Check its filters in Edit SQL." Copy values is disabled with the tooltip "No values to copy: there are no rows".
+  - *Every row NULL, empty or both* — the figures and the band(s) stay, and a line under the list reads "Every row is NULL, so there are no values to list and no Min or Max." (or "empty", "NULL or empty").
 - Not yet: sort order and semantic-role editing (see the backlog).
 
 ## Safety

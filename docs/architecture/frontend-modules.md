@@ -40,7 +40,7 @@ Grouped by feature folder; each entry is the module, then what it owns.
 
 - `Schema/schema.js` — the database tree (lazy per-database table listing, search, table rows + drag payload, `schema:open`) — [schema-browser.md](../concepts/data-source/schema-browser.md)
 - `Schema/column-profile-dialog.js`, `Schema/column-profile-model.js` — the column profile dialog (`openColumnProfile(db, table, column)`, opened from a field row on a canvas card) and its pure rules:
-  - `profileRequest`, `formatShare`, `roleOf`, `summarize`, `profileFailure` — [schema-browser.md](../concepts/data-source/schema-browser.md#column-profile--field-details)
+  - `profileRequest`, `formatShare`, `formatNumber`, `roleOf`, `summarize` (incl. the numeric `summary` group), `profileFailure`, `histogramRequest`, `histogramView`, `distributionFailure` — [schema-browser.md](../concepts/data-source/schema-browser.md#column-profile--field-details)
 - `Schema/table-filter.js` (`matchTables`, `listStep`), `Schema/schema-model.js` (`splitDatabases`, `rememberOpen` / `recallOpen`), `Schema/tree-model.js` (`filterTree`, `capRows`, `runLimited`, `initialOpen`) — pure rules
 
 ### Canvas/ and Relations/ — the Data Source canvas

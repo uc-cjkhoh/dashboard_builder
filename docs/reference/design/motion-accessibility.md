@@ -14,7 +14,8 @@ Interaction is calm: short, purposeful transitions, nothing decorative. The styl
 - **Entrances decelerate; exits accelerate and run quicker.**
 - Durations stay within 100–300ms; past ~400ms feels slow.
 - **Only `opacity` / `transform` animate.** These are compositor-only; never animate
-  width/height/top/left.
+  width/height/top/left. One deliberate exception: the dialog **morph** below also animates `clip-path`
+  (paint-only, no layout), because a clip window reveals the dialog without stretching its text.
 - Motion marks what changed. It never replays on routine re-renders.
 
 Tokens:
@@ -23,7 +24,7 @@ Tokens:
 - Easing: `--ease` `cubic-bezier(.33,0,.67,1)` (standard), `--ease-out` `cubic-bezier(.1,.9,.2,1)`
   (entrances), `--ease-in` `cubic-bezier(.5,0,.75,0)` (exits).
 
-JS-driven motion goes through `Core/motion.js` (`enter` / `exit`, same values). Use it for what CSS
+JS-driven motion goes through `Core/motion.js` (`enter` / `exit`, same values; `morphIn` / `morphOut` for a modal growing out of its trigger: 300ms in on `easeMorph` `cubic-bezier(.2,0,0,1)`, 200ms out on `easeMorphOut` `cubic-bezier(.3,0,.8,.15)` — a morph covers distance, so `--ease-out`, which has arrived by 15% of its time, would read as a pop; JS-only, so no CSS token). Use it for what CSS
 can't do: animating into `hidden`, or animating only the *first* appearance of something re-rendered
 on every edit.
 
@@ -41,7 +42,8 @@ on every edit.
 | Status | the loading pill glyph spins |
 | Loading bar | a 4px indeterminate strip across the top (`.app-loading`) while the first connection answer is pending after a load: fades in after 200ms (a quick answer shows nothing), a 40% segment slides across (`translateX`, 1.2s loop); `role="progressbar"`, still and at 40% under reduced motion |
 | Activity chip | any in-flight API request: appears after 300ms (rises 8px, `--dur`), its refresh glyph spins, the elapsed time ticks each second; gone when the last request ends |
-| Column profile | "Reading every row…" fades in after 150ms with a spinning refresh glyph; the result's cells rise 8px in turn (40ms apart), then each band's tint grows from the left (`scaleX`, 20ms apart, 250ms) |
+| Column profile | **opens by morphing out of the Profile button** and folds back into it on close (`morphIn` / `morphOut`, below); then "Reading every row…" fades in after 150ms with a spinning refresh glyph; the result's cells rise 8px in turn (40ms apart), then each band's tint grows from the left (`scaleX`, 20ms apart, 250ms) |
+| Dialog morph (column profile) | the dialog is revealed through a **clip window** that starts as the trigger's size, centred in the dialog, while the dialog itself starts centred on the trigger; both ease to rest together (`transform` + `clip-path`, 300ms), and head / body / foot fade in behind it (180ms, after 75ms). Close: the content fades out (100ms), then the bare surface folds into the button (200ms) as the scrim fades. The window reveals, it never scales, so text is never stretched. The dialog's own `dialog-in` entrance is switched off for it; `will-change` holds only for the length of the animation. Skipped (the plain entrance, instant close) under `prefers-reduced-motion`, with no usable trigger box, or when the trigger has left the page; a second Escape / Close during the fold-back is ignored |
 | New relationship | a link the user just made **arrives once** ([relationships.md § Rendering](../../concepts/data-source/relationships.md#rendering)): the line fades in (`--dur`), its two end shapes settle from 60 % (`--dur-fast`, 100ms in), then the badge rises 4px (`--dur`, 150ms in); about 400ms. Only `opacity` / `transform`, each on the *inner* shape, never on the link group (that carries the focus fade). A redraw inside the window resumes the run; links restored from a workbook and every later redraw (zoom, drag, resize) never animate |
 | Data preview panel | opens with the view fade (`--dur`); **closing** drops it 8px and fades it (`--dur-exit`, `inert` meanwhile) before the ground takes its height back; reopening during the exit keeps the panel (latest wins) |
 | Relationship links | hovering a link or a card with links fades the links it doesn't touch to 20 % (`opacity`, `--dur`); with quiet badges a resting badge fades in on hover ([relationships.md](../../concepts/data-source/relationships.md#rendering)) |
