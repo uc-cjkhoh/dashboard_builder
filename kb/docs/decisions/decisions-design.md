@@ -1,5 +1,5 @@
 ---
-components: [src/DashboardBuilder/Features/Core/core.css, src/DashboardBuilder/Features/Relations/relations.css, src/DashboardBuilder/Features/Shell/appearance.js, src/DashboardBuilder/Features/Shell/shell.css]
+components: [src/DashboardBuilder/Features/Core/core.css, src/DashboardBuilder/Features/Relations/relations.css, src/DashboardBuilder/Features/Shell/appearance.js, src/DashboardBuilder/Features/Shell/shell.css, src/DashboardBuilder/Features/Canvas/canvas.js]
 ---
 # Decisions: design review outcomes
 
@@ -34,6 +34,13 @@ The tab bar had two icons for one idea: **Appearance** (a three-row menu for Sys
 - **Rejected:** keeping two buttons and only restyling the dialog as a popover (two doors for one task); a row per accent (nine more rows, a card taller than most windows).
 - **Replaces:** the Settings → Theme… / Colour theme dialog in [workbook.md](../concepts/workbook/workbook.md) and the System / Light / Dark-only menu.
 
+### D147 — The Data Source's zoom pill is one Fit button
+A pill at the ground's top right held Zoom out (−), a percentage readout, Zoom in (+) and Fit all cards. It floated over cards, and three of its four parts repeated what the ground already does.
+- **How:** the pill is gone. One **Fit all cards** icon button stays at the same spot (`.canvas__fit`); zoom is the wheel on empty ground and `+` / `-` / `0` on the focused ground, and `F` fits.
+- **Why:** the wheel is the natural zoom and the buttons only zoomed about the centre; nothing needs the percentage (zoom is not saved, links and badges do not scale). Fit is the one action with no pointer-only equivalent, so a pointer user who has panned away keeps a visible way back to every card.
+- **Trade-off:** a trackpad or mouse user who wants a one-step zoom has the wheel only; the keys are not shown on screen (an `sr-only` line describes them).
+- **Rejected:** removing Fit as well (no visible way back); keeping the readout without the buttons (a number nobody acts on).
+
 ### D148 — The Appearance card has no System mode
 Mode had three choices, and System (the default) followed the OS `prefers-color-scheme` and re-painted when the OS flipped. A third segment for "no choice" made the row wider than the question it asks.
 - **How:** the mode is **Light** or **Dark**, two segments. Light is the default. The OS setting is not read anywhere: no `matchMedia` in `Core/scheme.js` or `Core/scheme-boot.js`, no `monitor` icon. A stored `"system"` (or any unknown value) reads as Light, so a browser that had System stays usable and lands on Light until its viewer picks. Live tests switch scheme through the card's own rows (`tests/live/cdp.mjs` `setScheme`), not by emulating the OS.
@@ -41,3 +48,11 @@ Mode had three choices, and System (the default) followed the OS `prefers-color-
 - **Trade-off:** a viewer whose OS is dark starts on Light the first time and has to pick Dark once (it is then remembered in that browser).
 - **Rejected:** keeping System but hiding it (a state that still exists but cannot be chosen); defaulting to the OS's value once at first load and never again (still reads the OS, and a first paint that differs by machine is harder to test).
 - **Replaces:** the System default in [tokens.md § Light and dark](../reference/design/tokens.md#light-and-dark) and the three-choice toggle in [D22](decisions-platform.md#d22--fluent-glass-design-language).
+
+### D149 — Appearance and Fit sit in a bottom-right dock
+Appearance was the right-most icon of the tab bar and Fit all cards floated at the Data Source's top right: two global controls in two corners, one of them over the cards.
+- **How:** both live in one column at the canvas's bottom right (`#canvas-dock`, `.canvas__dock`): Appearance on top, Fit all cards under it, 16px from the edges and 8px apart, solid with a hairline edge. The Appearance card opens upward. The bar keeps only the tabs and the workbook text; the activity chip moves left of the dock; the dock rises above the data preview panel.
+- **Why:** the corner is quiet on every tab, so the controls are in one known place whatever the view, and the top-right corner is left to the content. Fit stays visible because it has no pointer-only equivalent ([D147](#d147--the-data-sources-zoom-pill-is-one-fit-button)).
+- **Trade-off:** the dock floats over the bottom-right 32px × 72px of every view (a chart, a dashboard, a story); a card or chart edge can sit under it.
+- **Rejected:** keeping Appearance in the bar and moving only Fit (two corners again); a dock that hides until hover (a control with no visible door).
+- **Replaces:** the bar-end placement in [D146](#d146--one-appearance-card-replaces-the-mode-menu-and-the-theme-dialog) and the top-right Fit in D147.

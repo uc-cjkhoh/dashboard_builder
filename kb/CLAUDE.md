@@ -109,7 +109,7 @@ The one copy of the folder tree; other docs link here.
 dashboard_builder/          (this KB)
 ├── README.md               # project introduction and entry point
 ├── CLAUDE.md               # instructions for AI coding agents (loaded automatically)
-├── CHANGELOG.md            # pointer to the generated change logs
+├── CHANGELOG.md            # pointer to the generated change log
 ├── docs/
 │   ├── README.md           # KB index and navigation
 │   ├── getting-started/    # prerequisites · installation · configuration · quickstart
@@ -121,12 +121,12 @@ dashboard_builder/          (this KB)
 │   ├── how-to/             # local-development · testing · deployment · troubleshooting
 │   ├── reference/          # api (+ -calculated-fields, -custom-sql, -union-unpivot) · clickhouse-integration (+ clickhouse-calculations) · data-model · source-table-guidance · tableau-marks-comparison · glossary
 │   │   └── design/         #   index (concept + rules) · tokens · layout · components · motion-accessibility
-│   ├── decisions/          # README (D1–D148 lookup, open questions) · decisions-* by topic
+│   ├── decisions/          # README (D1–D149 lookup, open questions) · decisions-* by topic
 │   ├── operations/         # live-service · resource-usage · safe-operations (+ git-ignored credentials.local.md)
 │   ├── development/        # coding-standards · sharp-edges · review-guidelines · design-review · git-workflow · kb-maintenance · hooks
 │   │   ├── backlog/        #   undone work by topic (incl. custom-sql) · recommended order · design specs
 │   │   ├── run-logs/       #   blocked work
-│   │   └── updates/        #   generated change logs
+│   │   └── updates/        #   generated change log
 │   └── archive/            # frozen P0–P20 build plan, old debug log — not maintained
 └── .claude/                # hooks (kb-verify, update-log, reap-orphans, design-lint, design-gate), settings, skills
 ```

@@ -14,7 +14,7 @@ which is the source of truth. The sibling MNP Web Portal KB uses the same rules
 - **Current state, not history.** Overwrite existing lines. Do not append changelog entries
   ("shipped 2026-…", "Correction, same day", "Nth build pass", "was X, now Y", "✅ Shipped"). Keep the
   facts and the *why* behind a decision; drop the journey. History lives only in the generated
-  [update logs](../../CHANGELOG.md).
+  [change log](updates/change_log.md).
 - **Atomic, MECE chunks.** Small, self-contained sections with precise titles. No two files overlap or
   contradict; each markdown file is the single source of truth for its topic. When you find a
   contradiction, reconcile to the single current truth — when docs and code disagree, the code wins.
@@ -38,7 +38,7 @@ you add, move or remove a folder.
 | `reference/` | APIs, SQL, state shapes, configuration, glossary, design system |
 | `decisions/` | decision records, one topic per file, `README.md` holds the lookup |
 | `operations/` | running the live service, safe operation, credentials |
-| `development/` | engineering standards, review gates, git workflow, KB upkeep, backlog, run logs, generated change logs |
+| `development/` | engineering standards, review gates, git workflow, KB upkeep, backlog, run logs, the generated change log |
 | `archive/` | frozen history, not maintained (exempt from the checks) |
 
 A topic lives in exactly one folder. Never scaffold app code into the KB.
@@ -77,7 +77,7 @@ A topic lives in exactly one folder. Never scaffold app code into the KB.
 
 ## Enforcement
 
-Hooks check every KB edit and generate the update logs: [hooks.md](hooks.md). Fix what `kb-verify.py`
+Hooks check every KB edit and generate the change log: [hooks.md](hooks.md). Fix what `kb-verify.py`
 reports in the same change. Check everything by hand with `python3 .claude/hooks/kb-verify.py --all`.
 
 ## Related

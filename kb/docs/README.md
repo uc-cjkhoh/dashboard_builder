@@ -22,7 +22,7 @@ the golden rules.
 | `reference/` | API, ClickHouse SQL, state shapes, glossary, design system, source-table guidance | [index](reference/index.md) |
 | `decisions/` | why things are the way they are (D1–D107) | [README](decisions/README.md) |
 | `operations/` | the live service, safe operation, credentials | [index](operations/index.md) |
-| `development/` | engineering rules, review gates, git workflow, KB upkeep, backlog, change logs | [index](development/index.md) |
+| `development/` | engineering rules, review gates, git workflow, KB upkeep, backlog, change log | [index](development/index.md) |
 | `archive/` | frozen build plan and old run log, not maintained | [index](archive/index.md) |
 
 ## Find a topic
@@ -37,4 +37,4 @@ the golden rules.
 | Know what the API accepts and returns | [reference/api.md](reference/api.md) |
 | See the visual language | [reference/design/index.md](reference/design/index.md) |
 | Find work not yet built | [development/backlog/index.md](development/backlog/index.md) |
-| See what changed and when | [CHANGELOG.md](../CHANGELOG.md) |
+| See what changed and when | [change_log.md](development/updates/change_log.md) |

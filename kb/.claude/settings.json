@@ -25,7 +25,7 @@
             "type": "command",
             "command": "/unified/user/cj/knowledge/web_development/dashboard_builder/.claude/hooks/update-log.py",
             "timeout": 15,
-            "statusMessage": "Updating docs/development/updates logs..."
+            "statusMessage": "Updating docs/development/updates/change_log.md..."
           },
           {
             "type": "command",

@@ -24,8 +24,8 @@ The builder is a two-world layout. A **left glass rail** owns connection and sch
 - **Surfaces** follow Flat Design 2.0. The fixed chrome is translucent over a flat background (no ambient light).
   Entity cards, the chart area, the crosstab and every overlay stay solid, so text is never read
   through other text.
-- **Light or dark** is the viewer's choice: a **Light / Dark** choice in the Appearance card at the right end of the
-  tab bar, with Light as the default (the OS setting is not read)
+- **Light or dark** is the viewer's choice: a **Light / Dark** choice in the Appearance card in the dock at the canvas's
+  bottom right, with Light as the default (the OS setting is not read)
   ([tokens.md § Light and dark](tokens.md#light-and-dark), design decision
   [D22](../../decisions/decisions-platform.md#d22--fluent-glass-design-language)).
 
