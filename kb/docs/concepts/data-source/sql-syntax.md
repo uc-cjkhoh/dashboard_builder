@@ -3,7 +3,7 @@ components: [src/DashboardBuilder/ClickHouse/SqlTranslator.cs, src/DashboardBuil
 ---
 # MySQL and ClickHouse syntax in Edit SQL
 
-The Edit SQL dialog ([sql-editor.md](sql-editor.md)) can be written in **MySQL** or **ClickHouse** syntax. A switch in the footer picks one; **MySQL is the default**, because
+The Edit SQL dialog ([sql-editor.md](sql-editor.md)) can be written in **MySQL** or **ClickHouse** syntax. A switch in the editor toolbar picks one; **MySQL is the default**, because
 many users know it, while ClickHouse is what the database speaks and what always runs ([D106](../../decisions/decisions-custom-sql.md#d106--mysql-syntax-in-edit-sql-translated-to-clickhouse)).
 
 **Code:**
@@ -16,10 +16,10 @@ many users know it, while ClickHouse is what the database speaks and what always
 
 ## What you see
 
-- **Footer switch** `MySQL | ClickHouse` (a radio group, left of Reset and Format). The chosen segment is solid ink and bold.
-- **Opening a card:** the default `SELECT` reads the same in both and opens in MySQL. A saved query opens as the MySQL text it was written as; a query written in ClickHouse is translated for display, and opens in **ClickHouse** syntax with a warning when the translation would not mean the same (below), or when it can't be translated.
+- **Toolbar switch** `MySQL | ClickHouse` (a radio group at the left of the editor toolbar; Reset and Format are at its right). The chosen segment is solid ink and bold.
+- **Opening a card:** the default `SELECT` reads the same in both and opens in MySQL. A saved query opens as the MySQL text it was written as; a query written in ClickHouse is translated for display, and opens in **ClickHouse** syntax with a warning when the translation would not mean the same (below), or when it can't be translated. The dialog is on screen while that is worked out ([sql-editor.md](sql-editor.md#at-a-glance)).
 - **Switching** converts the text in place (the editor is read-only meanwhile). If it can't be converted the switch is undone and the reason shown ("Can't convert to MySQL syntax: …"). Highlighting (`text/x-mysql` / `text/x-clickhouse`) and Format follow the syntax.
-- **ClickHouse SQL that will run** — in MySQL syntax, a read-only panel under the status line shows the translation of the current text (hidden while it is being worked out; it opens by itself when ClickHouse refuses the translation).
+- **ClickHouse SQL that will run** — in MySQL syntax, a **ClickHouse SQL** toggle at the right of the status line opens a read-only panel at the bottom of the editor frame with the translation of the current text (the toggle is hidden while it is being worked out; the panel opens by itself when ClickHouse refuses the translation).
 - **Status line:** in MySQL syntax the message is "Translating and checking with ClickHouse…", then "Valid query · N columns", or the problem. A translator parse error is underlined **in the MySQL text** at the place it names. A refusal from ClickHouse is about the *translated* query, so it is shown in words only ("ClickHouse refused the translated query: …"; its line and column belong to the other text).
 
 ## What is saved
@@ -57,7 +57,7 @@ The translator answers `{ sql, warnings: [text], changes: [name] }`. A warning i
 
 ## Limitations
 
-The translator is a best effort, not a guarantee. **Always check the "ClickHouse SQL that will run" panel for anything beyond a plain SELECT.** Measured on the vendored version:
+The translator is a best effort, not a guarantee. **Always open the "ClickHouse SQL" panel and check it for anything beyond a plain SELECT.** Measured on the vendored version:
 
 **MySQL → ClickHouse** (what runs):
 

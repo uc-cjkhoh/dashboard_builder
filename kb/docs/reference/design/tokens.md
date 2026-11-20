@@ -49,7 +49,7 @@ Colours below are capped at HSL saturation 70 %.
 The neutrals are charcoal, almost colourless (ink `#141516` / `#ececea`, rules `#e3e3df` / `#2b2c2f`). The dark ground is deliberately darker than every surface on it (`#0b0b0c` under `#1a1b1d` cards and `#2e2f32` hover fills) so cards, shelves and buttons stand off the page. Captions (`--ink-3`) reach ≥ 5.1:1
 on every surface in both themes.
 
-`--wash` is the app background: a faint ambient tint, three large radial gradients that fade out by ~70 % and are all derived from `--signal`, the lime of the Signal theme (every other preset and custom accent sets `--signal` to its own accent). It should be felt, not seen. Strengths are tokens: `--wash-1` (`--halo`, top right) 16 %, `--wash-2` (`--signal`, bottom left) 9 %, `--wash-3` (`--halo`, centre) 3 %, stepped down to 7 / 4 / 1 % in the dark schemes, where the same tint reads stronger. `--halo` is the accent mixed 65 % toward `--on-accent`, so it follows the theme
+`--wash` is `none`: the app background is flat `--bg`, with no ambient light or tint (it was three accent-coloured radial gradients until 2026-11-18). The token stays as the one place a background image would go; `body` and the dialog bodies read it. The glass chrome still blurs whatever is beneath it, which is now the flat colour.
 on `--bg`. It is set as `background-color` + `background-image`, because a colour cannot sit in the
 first layer of a multi-layer `background` shorthand; the whole declaration would be dropped.
 
@@ -138,13 +138,13 @@ blur is never animated.
 `tests/js/contrast.test.mjs` pins `--ctl-edge` at ≥ 3:1 against the glass over the base and the strongest
 wash tint, in both themes.
 
-## Accent — one blue
+## Accent — one sage-lime
 
 | Token | Light | Dark | Role |
 |---|---|---|---|
-| `--accent` / `-hover` / `-pressed` | `#1a1c1f` / `#3a3c3e` / `#5a5c5e` | `#a9bd6a` / `#b5c67f` / `#c1cf94` | primary fill; hover and pressed are **brighter** (lifted toward white). Text is `--on-accent` / `--on-accent-hover` / `--on-accent-pressed` — each ≥ 4.5:1 on its fill: white where it holds, else `#12130f` (the dark Signal lime always; most dark presets and some light ones flip to dark text on hover / pressed, because a lighter fill outgrows white text). Active tab underline, selected relationship, single chart series |
-| `--accent-ink` | `#1f57ae` | `#9cbced` | accent **text** |
-| `--accent-soft` / `--accent-line` | `#eef3fc` / `#c4d6f4` | `#172238` / `#2a4470` | tint / stroke |
+| `--accent` / `-hover` / `-pressed` | `#566a17` / `#748541` / `#8c9a61` | `#a9bd6a` / `#b5c67f` / `#c1cf94` | primary fill; hover and pressed are **brighter** (lifted toward white). Text is `--on-accent` / `--on-accent-hover` / `--on-accent-pressed` — each ≥ 4.5:1 on its fill: white where it holds, else `#12130f` (the dark Signal lime always, and Signal's light hover / pressed; most dark presets and some light ones flip to dark text on hover / pressed, because a lighter fill outgrows white text). Active tab underline, selected relationship, single chart series |
+| `--accent-ink` | `#566a17` | `#a9bd6a` | accent **text** |
+| `--accent-soft` / `--accent-line` | `#f1f4e2` / `#d3dbae` | `#262a17` / `#4a5427` | tint / stroke |
 | `--focus` | `--ink` | `--ink` | neutral focus colour (kept for outlines a feature may still draw by hand; `:focus-visible` outlines are forced off) |
 
 Inputs on focus get the neutral wash and their caret; the border does not change. An invalid input uses
@@ -234,7 +234,7 @@ sizes, and no ad-hoc sizes.
 | Token | Size | Role |
 |---|---|---|
 | `--fs-title` | 24px | dashboard and worksheet titles, dialog titles |
-| `--fs-lead` | 16px | lead text |
+| `--fs-lead` | 16px | lead text: the empty-worksheet hint (`.ws-hint--lead`, full-strength `--ink`, the one next action on an empty surface, centred under a dashed ghost chart) |
 | `--fs-body` | 14px | everything else: body, rows, chips, captions, badges, chart text |
 | `--fs-display` | 32px | KPI numbers |
 
@@ -243,7 +243,7 @@ sizes, and no ad-hoc sizes.
 - Spacing: `--s1` 4 · `--s2` 8 · `--s4` 16 · `--s6` 24 — nothing between ([design rule 2](../../development/coding-standards.md#12-design-rules)).
 - Radius: one `--r` 8px for every shape, inner or outer · `--r-pill` 999px.
 - `--toast-h`: 42px (`16px + 24px + 2px`) — a one-line toast: its 8px padding twice, the 24px close button and the 1px border twice. Anything that must clear the toast (the Data Source guide pill) offsets by it.
-- `--sidebar-w`: 264px default (resizable — [layout.md](layout.md#sidebar)).
+- `--sidebar-w`: 330px default (resizable — [layout.md](layout.md#sidebar)).
 - `--topbar-h`: 60px — the shared `min-height` of the sidebar brand (`.sidebar__brand`) and the tab bar
   (`.canvas__bar`), so their bottom borders form one continuous line ([layout.md](layout.md#tab-bar)).
 - **`--ctl-h`: 32px** — the shared control height for inputs, selects, `.btn`, toolbar buttons, icon buttons, the brand mark and

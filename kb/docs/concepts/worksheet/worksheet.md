@@ -12,6 +12,7 @@ Each worksheet tab is one Tableau-style worksheet: a field pane beside shelves y
 ## At a glance
 
 - **What it is:** one Tableau-style worksheet per tab. Drag fields onto **Columns** / **Rows** (and Marks slots); the view is a chart or a crosstab.
+- **Empty sheet:** with nothing on the shelves the pane shows one centred block — a dashed ghost bar chart (`.ws-ghost`, decoration only) above the 16px lead hint "Drag fields onto Columns and Rows to build a chart …" (`hint(text, true)` in `Dashboard/render-dom.js`). Under 600px of window height the picture is dropped and the sentence stays. Other hints (no data, a refusal) stay small and pictureless.
 - **One request:** the sheet becomes a single bounded `POST /api/query` (`buildPlan`), run latest-wins with a short-lived cache; limits are rejected, never clamped.
 
 **Sections:** Layout · Shelves & pills · Calculated fields on the worksheet · Drop-time limits · Building the query · Query lifecycle · Cross-table joins · View data · Table view · Sort · Format
@@ -24,6 +25,7 @@ Data sits on top; view controls sit on the chart ([design/layout.md](../../refer
 2. **Chart card** — flush (no margin, no radius). Its head is the **view bar**, left to right:
    - field-pane toggle;
    - the one chart-type control (`chartTypePicker`, [worksheet-charts.md](worksheet-charts.md#chart-type-control));
+   - **How this is computed** (info icon, icon-only: the text is `sr-only` and the tooltip) — it opens the evaluation-order popover ([calculated-fields.md](calculated-fields.md#how-this-is-computed));
    - sort picker · Format · Analytics · Refresh · **Full screen** · Export · sheet actions (icon buttons with tooltips and `aria-label`s). **Format** (brush icon) and **Analytics** also carry a text label from 1280 px up, icons only below (`VIEW_LABEL_MIN_WIDTH`). Importing a workbook is in the Export menu ("Import workbook…"), not in the bar.
 
    Below the view bar come the Format card, the result notice and the chart. Full screen and print: [layout.md](../../reference/design/layout.md#full-screen--print).

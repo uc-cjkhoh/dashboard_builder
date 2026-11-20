@@ -11,7 +11,7 @@ Drawing relationships on top of the cards is covered in [relationships.md](relat
 
 - `_Canvas.cshtml` — the view markup
 - `canvas.js` — drop handling, cards, moving and removing, zoom and pan
-- `canvas-zoom.js` — zoom limits, wheel-to-zoom, pan-for-zoom and bring-into-view maths (pure)
+- `canvas-zoom.js` — zoom limits, wheel-to-zoom, zoom steps, pan-for-zoom, bring-into-view, fit-all and arrow-key pan maths (pure)
 - `empty-state.js` — the empty-state choice (pure)
 - `data-preview.js` — the data preview docked under the canvas ([below](#data-preview)); `preview-columns.js` sizes its columns and resizes them from the header
 - `canvas.css` — styles
@@ -27,13 +27,18 @@ Drawing relationships on top of the cards is covered in [relationships.md](relat
   - The wheel zooms about the pointer, 25 % to 200 %, so the point under the pointer stays still. Ctrl + wheel is left to the browser. The wheel over a card still scrolls that card's column list.
   - A card keeps its model `x` / `y` and size. The view draws it at model position times zoom plus the pan (`left` / `top`, and the CSS `scale` property from its top-left corner). A card drag moves it by the pointer distance divided by zoom, a table dropped from the sidebar lands at the pointer, a table added with its + button takes the first free slot from the top-left of what is on screen, and an already-added table is brought into view (`panToReveal`). If the browser scrolls the hidden view to reveal a focused row, canvas.js folds that scroll into the pan.
   - The dot grid zooms and pans with the cards (`--zoom`, `--pan-x`, `--pan-y`). Links re-measure after every zoom and pan (`canvas:zoomed`); line widths and badges do not scale, only the cards do.
-  - Zoom and pan are view state: not saved in a workbook, reset on reload. No keyboard shortcut yet.
-- While a table chip is dragged over the canvas, the ground takes a faint accent wash and the dashed accent outline.
+  - Zoom and pan are view state: not saved in a workbook, reset on reload.
+- **Overview controls** (cards present, start card not showing): a pill at the ground's top right (`.canvas__zoom`, a `role="group"` named *Zoom*) holds **Zoom out** (−), the zoom as a percentage (`<output>`), **Zoom in** (+) and **Fit all cards**. A step is a quarter (×1.25, rounded to a whole percent) about the view centre; − and + are disabled at 25 % and 200 %.
+  - **Fit** (`fitView` in `canvas-zoom.js`) zooms and pans so every card shows, 16px inside the view: as large as fits, never past 100 %, centred where the cards fit, top-left at the margin where even 25 % cannot show them all. It reads each card's rendered height, so it is correct once the column lists have loaded.
+  - **Opening a workbook fits** (`fitCanvas()` after the cards and relationships are restored): the fit waits until every card has its columns (a card's height settles then) and the Data Source is on screen, and a pan, zoom or Fit by the user in the meantime cancels it.
+  - **Keyboard:** the ground takes focus (`tabindex="0"`, focus ring `--focus`, described by an `sr-only` line). With focus on the ground itself (not a card, row or field, which keep their own keys): arrows pan 64px (Shift: 256px), `+` / `=` and `-` zoom a step, `0` returns to 100 %, `F` fits.
+  - Tests: `tests/js/canvas-zoom.test.mjs` (steps, fit, arrow keys); browser checks in `tests/live/canvas-zoom-ui.mjs` (controls, limits, Fit from far away, keys on the ground and not on a card).
+- While a table row is dragged over the canvas, the ground takes a faint accent wash and the dashed accent outline.
 
 ## Dragging a table onto the canvas
 
 - **Only our chips are accepted.** A sidebar chip's `dragstart` sets `application/x-ch-table` = `{db, table}` with
-  `effectAllowed = 'copy'` ([schema-browser.md](schema-browser.md#table-list)). Because the MIME type is custom,
+  `effectAllowed = 'copy'` ([schema-browser.md](schema-browser.md#table-rows)). Because the MIME type is custom,
   the canvas never accepts arbitrary text or files.
 - The canvas handles `dragover` (`preventDefault()`, `dropEffect = 'copy'`) and `drop`.
 - A drop whose payload isn't `{db, table}` strings is ignored.
@@ -62,7 +67,7 @@ On drop:
 
 ## Union and unpivot cards
 
-A union or unpivot ([query-sources.md](query-sources.md)) becomes a card in the first free slot. Nothing in the UI fires `source:add` now (the sidebar dialogs are gone); a saved workbook's cards load through the workbook import.
+A union or unpivot ([query-sources.md](query-sources.md)) becomes a card in the first free slot. Nothing in the UI fires `source:add` now (the sidebar dialogs are gone, [D138](../../decisions/decisions-custom-sql.md#d138--union-and-unpivot-are-written-in-edit-sql-not-built-in-the-sidebar)); the browser checks use it, and a saved workbook's cards load through the workbook import.
 
 - It arrives as a `source:add` event, and the Data Source is shown first.
 - Its `table` is the source's automatic name. Its columns load from `POST /api/source/columns`.
@@ -70,6 +75,7 @@ A union or unpivot ([query-sources.md](query-sources.md)) becomes a card in the 
 - One note line under the head says how its columns are matched.
 - Its title, column names and note start at the same x as a table card's (the left lane stays empty on both).
 - Remove and collapse work as on any card.
+- **Removing a card** (✕ in its head, asked twice) takes it out of the model **before** `entity:removed` is emitted (`removeEntity`, `clearAll` in `canvas.js`), so `relations.js` redraws without it: its links go at once, no proposed link is drawn to it, and a card left behind shows or hides *Needs a partner* by the cards that remain (a single card needs none). The card's element fades out afterwards (`inert` meanwhile). Browser check: `tests/live/card-remove-ui.mjs`.
 
 ## Empty state
 
@@ -83,8 +89,8 @@ With no entities, the canvas shows **a ghost model**, **one sentence** and **one
 | State | Sentence | Button → focuses |
 |---|---|---|
 | not connected | not shown — the start card shows the connect form instead ([connection.md](connection.md#while-disconnected)); `emptyState()` still returns "Connect to a ClickHouse server to begin." / Connect → `#conn-host` | — |
-| no database chosen | "Choose a database in the sidebar." | Choose a database → `#db-select` |
-| database chosen | "Drag a table here from the sidebar to start your data source." | Find a table → `#table-search` |
+| no database open | "Open a database in the sidebar." | Open a database → `#db-first` (the first database row) |
+| a database open | "Drag a table here from the sidebar to start your data source." | Find a table → `#table-search` |
 
 ## The ☰ menu (card actions)
 
@@ -97,7 +103,7 @@ The card head's ☰ button (`.entity__menu`, the `menu` icon, aria-label *Action
 
 - The menu is the shared context popup (`openContextMenu`, `Core/menu.js`): a `.menu__list.ctx-menu` on `<body>`, placed under the ☰, so canvas zoom never shrinks it and no card clips it. Entries are read at open time.
 - ↑ / ↓ move between items; Esc closes it and returns focus to the ☰; Tab, an outside click, scroll or resize close it. Pressing the ☰ again closes it.
-- To go back to the table after Edit SQL, press **Reset to default** in the dialog, then **Save**. A card has no right-click menu.
+- To go back to the table after Edit SQL, press **Reset to default** (in the editor toolbar), then **Save** (in the footer; the dialog's layout: [sql-editor.md](sql-editor.md#at-a-glance)). A card has no right-click menu.
 Full behaviour, the SQL guard and what the card does afterwards: [query-sources.md § Custom SQL on a card](query-sources.md#custom-sql-on-a-card).
 A card with custom SQL shows a `Custom SQL` note under its head; its profile buttons, View data, the histogram and the relationship suggestion read the card's query (as a derived table, the same one the worksheet uses), and it can be related and joined. A union or unpivot card has no profile buttons.
 
@@ -105,13 +111,14 @@ A card with custom SQL shows a `Custom SQL` note under its head; its profile but
 
 - **Head** (`.entity__head`, on `--surface-2`):
   - The table name first, alone, in weight 600, on the left gutter with the column names. The full `db.table` is its tooltip.
-  - The database appears, muted after the name, only when another card holds the same table name from a different database.
-  - **Needs a partner** (a label, only while the card is in no relationship) follows the title. At the right end sit, in order, the ☰ menu ([above](#the--menu-card-actions)), the collapse caret and the remove icon. The caret toggles `.entity--collapsed`, leaving only the title bar. It is a plain label, not a button; [relating-tables.md](relating-tables.md) covers it.
+  - The database appears, muted after the name, only when another card holds the same table name from a different database — on both cards, kept in step as cards are added and removed.
+  - **Needs a partner** (a label, only while the card is in no relationship) follows the title. At the right end sit, in order, the ☰ menu ([above](#the--menu-card-actions)), the collapse caret and the remove icon. The caret toggles `.entity--collapsed`, leaving only the title bar. Links to a collapsed card meet it at the title bar's vertical centre ([relationships.md](relationships.md#editing--cleanup)). It is a plain label, not a button; [relating-tables.md](relating-tables.md) covers it.
 - **Card width** follows the title text plus the ☰ button and the **Needs a partner** label while it shows (`fitWidth(card, title, menu, need)`), from `--entity-min` (312px, the slot width) to `--entity-max` (480px) on `#model-view`
-  (`card-width.js`, pure). Beyond the maximum the name ellipsises, with the full name in its `title`.
+  (`card-width.js`, pure). It also grows to fit the card's column rows: the longest column name (measured semibold) plus the type column plus the row chrome (`rowsWidth`, `ROW_CHROME` 82px, 42px on a union / unpivot card, which has no Profile button), so a name only ellipsises once the card is at the maximum. `renderColumns` records that need and refits the card. Beyond the maximum a title or column name ellipsises, with the full text in its `title`.
   Link anchors read the measured card box, so any width stays correct. When `relations.js` shows or hides the Needs a partner label it emits
   `entity:need` and the card refits before links are measured, so the button never clips a short name ("custo…").
 - **Column rows** (`.col-row`) show the name and the **type** (`.col-row__type`), with a **Profile** icon button (`.col-row__profile`, not on a union or unpivot card): hidden at rest, half-strength while the card is hovered or holds focus, full strength on its own row (`schema.css`).
+  The type column is one width per card, the longest type label measured (`--type-w`, set by `renderColumns`, capped at 130px), and right-aligned: the Profile icons line up in one column and the types end flush with the head's ✕. The card widens to fit the longest name beside it (see Card width above).
   - The type is the column's **ClickHouse type** in muted text at the row's end (no chip): `UInt64`, `Nullable(String)`, `Decimal(18, 4)`. `LowCardinality(…)` wrappers are left out, because they are a storage encoding, not the data type: `LowCardinality(Nullable(String))` shows `Nullable(String)` (`cardType`, `Canvas/column-type.js`). Past 130px the label ends in an ellipsis. The full type and the category are its tooltip.
   - Rows sit on a 16px gutter at both edges, so the left space equals the right and names line up under the head's title.
   - A row is a drag handle for relationships ([relationships.md](relationships.md)).
@@ -134,6 +141,7 @@ A card with custom SQL shows a `Custom SQL` note under its head; its profile but
 The first rows of one card, in a panel docked under the canvas (`data-preview.js`), so a table, or what a card's Edit SQL now returns, can be checked without leaving the Data Source.
 
 - **Open** it with **Preview data** in a card's ☰ menu. The same item on the card it shows closes it; on another card it switches. Saving Edit SQL opens it on that card too ([D128](../../decisions/decisions-custom-sql.md#d128--saving-edit-sql-shows-the-cards-rows-in-the-data-preview)).
+- **Motion:** it opens with the view fade and **leaves with an exit** (the panel drops 8px and fades over `--dur-exit`, `inert` meanwhile); the ground takes its height back and the links re-measure when the exit ends. A reopen during the exit keeps the panel (`syncRun`, latest wins). Removing a card likewise fades the card out before it leaves ([motion](../../reference/design/motion-accessibility.md#motion)).
 - **What it reads** (`entityRowsQuery`, `Rows/rows-model.js`, pure): 100 rows a page, the first 100 when it opens ([D131](../../decisions/decisions-custom-sql.md#d131--the-data-preview-pages-100-rows-at-a-time)).
   - A table card reads `POST /api/rows`. A card with custom SQL sends its query as `source`, so the rows are the query's.
   - A union or unpivot card reads `POST /api/union` or `/api/unpivot` with its saved definition.
@@ -160,8 +168,8 @@ The first rows of one card, in a panel docked under the canvas (`data-preview.js
   - **Notes** (a cut-cell note, a page-number error) sit between the head and the table with 8px above and below; a re-read swaps only the cut-cell note.
 - **Shown only on the Data Source** with a card picked, and not while the connect form covers the model. It closes when its card is removed or the connection drops.
 - **The card it shows** has a 2px accent outline (`.entity--previewed`), and **Preview data** is ticked in its ☰ menu (`aria-checked`, a check mark). The panel title names the card as well, so colour is never the only sign.
-- **Layout:** a sibling of `#model-view` in `main.canvas` (`.ds-preview`), so the ground shrinks above it: pan, zoom, free slots and reveal never reach under it. It is 288px tall by default. Drag its top edge (`.ds-preview__grip`, a separator) or use ↑ / ↓ in 16px steps; double-click for the default. It is held between 120px and the height that leaves the ground 160px. The height is `--ds-preview-h` on `main.canvas`, view state only (reset on reload). The how-to pill and the keyboard hint above it lift by the panel's height while it is open (`--rel-foot` on `main.canvas`), which also keeps them clear of a toast. The rows scroll with the app's thin themed scrollbar. Opening, closing and resizing re-measure the links (`canvas:zoomed`). The Relationships card's height stops above the panel too.
-- **Tests:** `entityRowsQuery` in `tests/js/rows-model.test.mjs`; the column helpers (numeric types, automatic width, drag and key steps, width memory) in `tests/js/preview-columns.test.mjs`; the browser check (open, switch, close, pages 1–3 with Next / Previous / Enter, a typed page (3, 9 past the end, 1002 refused, Escape), focus at the last page, Refresh on page 2, page 1 on another card, no pager on a union, the light grid, a column drag, ← / →, width kept over Refresh, double-click and Delete back to automatic, sticky header, a dark-theme screenshot, Save and Reset in Edit SQL, every number cell shown whole, the how-to pill above the panel while a toast shows, panel resize, a union card, remove, other tabs) is `tests/live/data-preview-ui.mjs`.
+- **Layout:** a sibling of `#model-view` in `main.canvas` (`.ds-preview`), so the ground shrinks above it: pan, zoom, free slots and reveal never reach under it. It is 288px tall by default. Drag its top edge (`.ds-preview__grip`, a separator) or use ↑ / ↓ in 16px steps; double-click for the default. It is held between 120px and the height that leaves the ground 160px. The height is `--ds-preview-h` on `main.canvas`, view state only (reset on reload). The how-to pill and the keyboard hint above it lift by the panel's height while it is open (`--rel-foot` on `main.canvas`), which also keeps them clear of a toast. The rows scroll with the app's thin themed scrollbar. Opening, closing and resizing re-measure the links (`canvas:zoomed`).
+- **Tests:** `entityRowsQuery` in `tests/js/rows-model.test.mjs`; the column helpers (numeric types, automatic width, drag and key steps, width memory) in `tests/js/preview-columns.test.mjs`; the browser check (open, switch, close, pages 1–3 with Next / Previous / Enter, a typed page (3, 9 past the end, 1002 refused, Escape), focus at the last page, Refresh on page 2, page 1 on another card, no pager on a union, the light grid, a column drag, ← / →, width kept over Refresh, double-click and Delete back to automatic, sticky header, a dark-theme screenshot, Save and Reset in Edit SQL, every number cell shown whole, the how-to pill above the panel while a toast shows, panel resize, a union card, remove, other tabs) is `tests/live/data-preview-ui.mjs`; the motion (a new link arrives and resumes across a redraw, a removed card and a closed preview exit, reduced motion drops all three) is `tests/live/data-source-motion-ui.mjs`.
 
 ## Moving & removing
 

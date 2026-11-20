@@ -21,7 +21,7 @@ Body `{ sql, from, to }`; `from` and `to` are `mysql` or `clickhouse`, and diffe
 
 - Needs a connected session like every endpoint (409 otherwise). It reads no rows and runs no SQL; for a MySQL → ClickHouse query that compares two columns it also has ClickHouse `DESCRIBE` them (up to 6 probes, run in parallel) to learn whether they are text — see [sql-syntax.md](../concepts/data-source/sql-syntax.md#limitations).
 - **400 `sql`** when the text can't be read, is ambiguous (`||` in MySQL text) or has no faithful equivalent (compound intervals, a non-numeric interval amount, unmapped units): a plain sentence, plus `line` (1-based), `col` (1-based, end of the offending token) and `start` (0-based column) when the translator can say where. Two statements: "Only one query can be translated." Over 10 s: "The translation took too long."
-- **503** `{ error }` when the server has no Python 3 or no vendored library; the dialog then switches MySQL off.
+- **503** `{ error }` when the server has no Python 3 or no vendored library, when the translator stopped unexpectedly (a broken pipe to python), or when all its slots are taken for 5 seconds ("The SQL translator is busy. Try again in a moment."; at most 4 translations run at once, `SqlTranslator`'s own gate, so a flood never queues without bound); the dialog then switches MySQL off.
 - The result is **not** trusted: it goes through `CustomSql.Clean` when described or saved, like any custom SQL.
 - Details, the limits of the translation and how it runs: [sql-syntax.md](../concepts/data-source/sql-syntax.md).
 

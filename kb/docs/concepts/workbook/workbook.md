@@ -105,7 +105,7 @@ The actions:
   - Each has a name (unique, 1–60 characters), a type (number / text / date), the allowed values (any, a list of ≤ 50, or a number range) and the current value.
   - Each is checked before it is kept (`Core/parameters-model.js`).
   - Parameters save with the workbook; disconnecting clears them from the screen.
-- **Theme** (the canvas bar's right-most icon, labelled "Theme") opens the theme dialog directly, with choices as labelled swatches:
+- **Theme** (the canvas bar's right-most icon, labelled "Colour theme", so it is not mistaken for the Appearance toggle beside it) opens the theme dialog directly, with choices as labelled swatches:
   - a look: Default or One Dark Pro (dark-mode surfaces; it also picks the One Dark accent and chart colours);
   - an accent: Signal (the default), Ultramarine, Monospace, Blue, Crimson, Teal, Violet, Graphite or a custom colour (refused with the reason if it can't carry white text; Signal carries dark text on its dark-mode lime);
   - chart colours: Default, Colour-blind safe, Muted.

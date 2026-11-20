@@ -25,7 +25,8 @@ Gotchas that have bitten (or will bite) this app. Read before touching the area 
 - **A hand-built `HttpClient` must set `AutomaticDecompression`**, or ClickHouse.Client throws
   "server returned compressed result but HttpClient did not decompress it".
 - **A union or unpivot source multiplies the scan.** A union reads every source table in full; an
-  unpivot produces up to 50 rows per source row. Only `max_execution_time` bounds it, and a profile that
+  unpivot produces up to 50 rows per source row. Only `max_execution_time` bounds it, and so a profile
+  (which reads every row, [D143](../decisions/decisions-performance.md#d143--the-column-profile-reads-every-row)) that
   refuses settings has no bound at all ([query-sources.md](../concepts/data-source/query-sources.md#cost-limit)).
 - **Two connections, same server, different databases is normal.** Scope every query to the
   connection + database the request names, never a global default.
@@ -90,11 +91,13 @@ Gotchas that have bitten (or will bite) this app. Read before touching the area 
   `ASPNETCORE_URLS` or launch-profile setting wins.
 - **`::details-content { display: contents }` breaks closing a `<details>`.** Chrome hides closed content
   with `content-visibility: hidden` on that box, which `display: contents` ignores, so scope it to `[open]`
-  (`.rel-notes[open]::details-content` in `relations.css`).
+  (the old Relationships card did this before [D142](../decisions/decisions-design.md#d142--the-relationship-dialog-says-in-words-what-the-link-does-no-relationships-card) removed it).
 - **A closed grid `<details>` keeps its `gap`.** The hidden content slot is still a grid item, so the gap
-  sits under the summary and pushes it off centre; zero it with `:not([open])` (`.rel-note__more` in `relations.css`).
+  sits under the summary and pushes it off centre; zero it with `:not([open])`.
 - **`height: auto` stretches a modal `<dialog>` to the window.** The browser's own style is `height: fit-content`
   on a modal with `inset: 0`; to undo a set height, go back to `fit-content` (`.dialog--rel` under 640px in `relations.css`).
+- **A grid item with `min-height: 0` shrinks under its text once the grid has a definite height.** Resetting a two-panel grid to one column
+  for a narrow window needs `min-height: auto` back on the panels, or the first panel's row collapses and the next one overlaps it (the relationship dialog under 880px).
 - **A cache hit means no query.** Presentation-only changes re-render from the worksheet's result
   cache. If a change *should* re-query, it must change the plan (see
   [worksheet-query.md § Query lifecycle](../concepts/worksheet/worksheet-query.md#query-lifecycle)).

@@ -8,7 +8,7 @@ What a user can do in the app, and which doc describes each capability.
 | Area | Capability | Doc |
 |---|---|---|
 | Connect | validated form (host/port/user), TLS, with self-signed certificates trusted by default (untick the Trust switch to verify); credentials stay in the server session | [connection.md](data-source/connection.md) |
-| Browse | database picker → searchable, draggable table chips | [schema-browser.md](data-source/schema-browser.md) |
+| Browse | database tree → searchable, draggable table rows | [schema-browser.md](data-source/schema-browser.md) |
 | Model | entity cards with type badges | [canvas.md](data-source/canvas.md) |
 | Union / unpivot | stack 2–5 tables, or turn wide columns into rows, and use the result like a table | [query-sources.md](data-source/query-sources.md) |
 | Custom SQL (Edit SQL) | pick **Edit SQL** in a card's ☰ menu and write your own `SELECT` in MySQL (default) or ClickHouse syntax; the card reads it instead of its table | [sql-syntax.md](data-source/sql-syntax.md) |

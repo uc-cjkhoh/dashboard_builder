@@ -11,7 +11,7 @@ has a subtle or non-obvious meaning here, that is called out.
 | **Connection** | The session's ClickHouse connection (host/port/user/password/TLS) held on the server; credentials never leave it. [connection.md](../concepts/data-source/connection.md) |
 | **Database / Table** | ClickHouse objects discovered by introspection (`SHOW DATABASES`, `SHOW TABLES`). Read-only. |
 | **Introspection** | Reading schema metadata (`SHOW`, `DESCRIBE`, `system.*`) — never modifying it. [clickhouse-integration.md](clickhouse-integration.md) |
-| **Table chip** | A draggable sidebar item carrying `db` + `table` in its drag payload. [schema-browser.md](../concepts/data-source/schema-browser.md) |
+| **Table chip** | A draggable table row in the sidebar's database tree, carrying `db` + `table` in its drag payload. [schema-browser.md](../concepts/data-source/schema-browser.md) |
 | **Data Source** | The pinned tab: the one shared canvas of entities + relationships every worksheet builds from. [tabs.md](../concepts/workbook/tabs.md) |
 | **Entity / entity card** | A table dropped onto the Data Source canvas, shown as a card of columns with type badges. [canvas.md](../concepts/data-source/canvas.md) |
 | **Join key** | A column a relationship uses. Made by dragging it onto a column of another table; pinned to the card's key strip. |

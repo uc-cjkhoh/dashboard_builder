@@ -121,14 +121,14 @@ dashboard_builder/          (this KB)
 │   ├── how-to/             # local-development · testing · deployment · troubleshooting
 │   ├── reference/          # api (+ -calculated-fields, -custom-sql, -union-unpivot) · clickhouse-integration (+ clickhouse-calculations) · data-model · source-table-guidance · tableau-marks-comparison · glossary
 │   │   └── design/         #   index (concept + rules) · tokens · layout · components · motion-accessibility
-│   ├── decisions/          # README (D1–D140 lookup, open questions) · decisions-* by topic
+│   ├── decisions/          # README (D1–D145 lookup, open questions) · decisions-* by topic
 │   ├── operations/         # live-service · resource-usage · safe-operations (+ git-ignored credentials.local.md)
-│   ├── development/        # coding-standards · sharp-edges · review-guidelines · git-workflow · kb-maintenance · hooks
+│   ├── development/        # coding-standards · sharp-edges · review-guidelines · design-review · git-workflow · kb-maintenance · hooks
 │   │   ├── backlog/        #   undone work by topic (incl. custom-sql) · recommended order · design specs
 │   │   ├── run-logs/       #   blocked work
 │   │   └── updates/        #   generated change logs
 │   └── archive/            # frozen P0–P20 build plan, old debug log — not maintained
-└── .claude/                # hooks (kb-verify, update-log, reap-orphans), settings, skills
+└── .claude/                # hooks (kb-verify, update-log, reap-orphans, design-lint, design-gate), settings, skills
 ```
 
 ## Where things live
