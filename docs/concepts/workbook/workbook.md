@@ -54,7 +54,7 @@ The current version is **2**; this build also opens version 1. Shapes are in
 
 ## Auto-save
 
-- **When:** any model or worksheet change (`entity:added/moved/removed`, `rel:changed`, `tabs:changed`, `worksheet:changed`, `dashboard:changed`)
+- **When:** any model or worksheet change (`entity:added/moved/removed`, `entity:sql` and `entity:sqltext` — Edit SQL saved, or only its MySQL text changed — `rel:changed`, `tabs:changed`, `worksheet:changed`, `dashboard:changed`)
   schedules a save **500 ms** later to `localStorage`.
 - **Where:** one workbook per **server + user**, under key `dashboardbuilder.workbook.v2|<host>|<port>|<user>`.
   - Nothing is saved while disconnected.
