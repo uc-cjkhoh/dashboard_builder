@@ -37,13 +37,19 @@ public sealed class SqlTranslator
     internal const int MaxOutputBytes = 64 * 1024;
     /// <summary>Column pairs per query whose types are asked for (the script's <c>MAX_PAIRS</c>).</summary>
     internal const int MaxProbes = 6;
-    private static readonly SemaphoreSlim Gate = new(4);
+    /// <summary>How long a request waits for one of the translator's slots before it is told the translator is busy.</summary>
+    internal static readonly TimeSpan DefaultGateWait = TimeSpan.FromSeconds(5);
+
+    private readonly SemaphoreSlim _gate; // at most `concurrency` python processes at a time; this class is a singleton, so the bound is the server's
+    private readonly TimeSpan _gateWait;
 
     private readonly string _script, _python;
     private readonly TimeSpan _timeout;
 
-    public SqlTranslator(string toolsDir, string python = "python3", TimeSpan? timeout = null)
+    public SqlTranslator(string toolsDir, string python = "python3", TimeSpan? timeout = null, int concurrency = 4, TimeSpan? gateWait = null)
     {
+        _gate = new SemaphoreSlim(Math.Max(1, concurrency));
+        _gateWait = gateWait ?? DefaultGateWait;
         _script = Path.Combine(toolsDir, "sql_translate.py");
         _python = python;
         _timeout = timeout ?? TimeSpan.FromSeconds(10);
@@ -59,7 +65,7 @@ public sealed class SqlTranslator
         if (sql.Length > ApiLimits.MaxCustomSqlChars) throw new RequestValidationException($"The query can be at most {ApiLimits.MaxCustomSqlChars:N0} characters.", "sql");
         if (!File.Exists(_script)) throw new SqlTranslatorUnavailableException("The SQL translator is not installed on this server.");
 
-        await Gate.WaitAsync(ct);
+        if (!await _gate.WaitAsync(_gateWait, ct)) throw new SqlTranslatorUnavailableException("The SQL translator is busy. Try again in a moment."); // a queue never grows without bound
         try
         {
             var psi = new ProcessStartInfo(_python) { RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true, StandardInputEncoding = new UTF8Encoding(false), StandardOutputEncoding = Encoding.UTF8 };
@@ -87,10 +93,14 @@ public sealed class SqlTranslator
                     try { proc.Kill(true); } catch { /* already gone */ }
                     throw new RequestValidationException("The translation took too long. Try a shorter query.", "sql");
                 }
+                catch (Exception ex) when (ex is IOException or ObjectDisposedException)
+                {
+                    throw new SqlTranslatorUnavailableException("The SQL translator stopped unexpectedly."); // a broken pipe to python is the translator's fault, not ClickHouse's
+                }
                 finally { if (!proc.HasExited) { try { proc.Kill(true); } catch { /* already gone */ } } }
             }
         }
-        finally { Gate.Release(); }
+        finally { _gate.Release(); }
     }
 
     private static async Task<string> ReadLimitedAsync(StreamReader reader, CancellationToken ct)

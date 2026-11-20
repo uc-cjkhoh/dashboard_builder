@@ -25,7 +25,6 @@ public static class ApiLimits
     public const int MaxUnionTables = 5;  // tables one union stacks (POST /api/union)
     public const int MaxRowsCells = 50_000; // rows x columns one row read may return
     public const int MaxRowsColumns = 200, MaxCellLength = 1000;  // columns one row read returns; characters kept per cell
-    public const int ProfileSampleRows = 1_000_000;  // a column profile scans the first N rows of the table
     public const int DefaultProfileTop = 10, MaxProfileTop = 50, ProfileValueLength = 100, MaxColumnName = 1000; // top values; characters kept per value
     public const int MaxOffset = 10_000_000;  // how deep a table may page
     public const int MaxCalcDepth = CalcLimits.MaxDepth, MaxCalcNodes = CalcLimits.MaxNodes; // calculation tree; formula length (500) is client-only

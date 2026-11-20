@@ -308,6 +308,44 @@ public class SqlTranslatorTests : IClassFixture<WebApplicationFactory<Program>>
     [Fact] public async Task The_text_goes_over_stdin_so_quotes_and_shell_characters_are_just_text()
         => Assert.Contains("'$(touch /tmp/x); `id` \"q\"'", await My2Ch("SELECT '$(touch /tmp/x); `id` \"q\"' AS s"));
 
+    private static string FakeTools(string script)
+    {
+        var dir = Directory.CreateTempSubdirectory("translator-tools").FullName;
+        File.WriteAllText(Path.Combine(dir, "sql_translate.py"), script);
+        return dir;
+    }
+
+    [Fact] public async Task A_request_that_cannot_get_a_slot_in_time_is_told_the_translator_is_busy()
+    {
+        var dir = FakeTools("import time\ntime.sleep(3)\n"); // one slot, held for 3 s
+        try
+        {
+            var tr = new SqlTranslator(dir, "python3", TimeSpan.FromSeconds(10), concurrency: 1, gateWait: TimeSpan.FromMilliseconds(200));
+            using var cts = new CancellationTokenSource();
+            var first = tr.TranslateAsync("SELECT 1", "mysql", "clickhouse", cts.Token);
+            await Task.Delay(500);
+            var ex = await Assert.ThrowsAsync<SqlTranslatorUnavailableException>(() => tr.TranslateAsync("SELECT 2", "mysql", "clickhouse", default));
+            Assert.Contains("busy", ex.Message);
+            cts.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => first);
+            // the slot came back: a third request is not "busy" (it reaches the fake script, which answers nothing usable)
+            var third = await Assert.ThrowsAsync<SqlTranslatorUnavailableException>(() => new SqlTranslator(FakeTools("import sys\nsys.exit(1)\n"), "python3").TranslateAsync("SELECT 3", "mysql", "clickhouse", default));
+            Assert.DoesNotContain("busy", third.Message);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact] public async Task A_translator_that_dies_without_answering_is_the_translators_failure_not_a_database_one()
+    {
+        var dir = FakeTools("import sys\nsys.exit(3)\n");
+        try
+        {
+            var ex = await Assert.ThrowsAsync<SqlTranslatorUnavailableException>(() => Tr(tools: dir).TranslateAsync("SELECT 1", "mysql", "clickhouse", default));
+            Assert.Contains("SQL translator", ex.Message);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
     [Fact] public async Task A_server_without_the_tools_or_python_says_so()
     {
         await Assert.ThrowsAsync<SqlTranslatorUnavailableException>(() => Tr(tools: Path.Combine(Path.GetTempPath(), "no-such-tools")).TranslateAsync("SELECT 1", "mysql", "clickhouse", default));

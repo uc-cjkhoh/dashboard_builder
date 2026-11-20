@@ -3,6 +3,9 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace DashboardBuilder.Features.Rows;
 
+/// <summary>A refused translation: the one <c>{ error, field }</c> shape (<see cref="ApiError"/>) plus where in the text the translator stopped (null when it could not say).</summary>
+public sealed record TranslateError(string Error, string Field, int? Line, int? Col, int? Start);
+
 /// <summary>The body of <c>POST /api/sql/translate</c>.</summary>
 public sealed record TranslateRequest(string Sql, string From, string To);
 
@@ -61,7 +64,7 @@ public sealed class SqlController : ApiControllerBase
             catch (SqlTranslateException ex)
             {
                 var f = ex.Failure;
-                return Results.Json(new { error = ex.Message, field = "sql", line = f.Line, col = f.Col, start = f.Start }, statusCode: StatusCodes.Status400BadRequest);
+                return Results.Json(new TranslateError(ex.Message, "sql", f.Line, f.Col, f.Start), statusCode: StatusCodes.Status400BadRequest);
             }
             catch (SqlTranslatorUnavailableException ex)
             {

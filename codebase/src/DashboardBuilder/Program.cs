@@ -51,6 +51,8 @@ builder.Services.AddSession(options =>
     options.Cookie.Name = "DashboardBuilder.Session";
     options.Cookie.HttpOnly = true;
     options.Cookie.IsEssential = true;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest; // Secure whenever the request is HTTPS, as Apache's X-Forwarded-Proto says (UseForwardedHeaders runs first)
+    options.Cookie.SameSite = SameSiteMode.Lax;
     options.IdleTimeout = TimeSpan.FromHours(2);
 });
 builder.Services.AddHttpContextAccessor();
