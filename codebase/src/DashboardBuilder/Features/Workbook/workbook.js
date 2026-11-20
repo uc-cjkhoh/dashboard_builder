@@ -23,7 +23,7 @@ import { catalogIssues, tablesNamed, columnKey, readCatalog } from "../Dashboard
 const SAVE_DELAY_MS = 500;
 const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
 const CHANGE_EVENTS = [
-  "entity:added", "entity:moved", "entity:removed",
+  "entity:added", "entity:moved", "entity:removed", "entity:sql", "entity:sqltext",
   "rel:changed", "tabs:changed", "worksheet:changed", "dashboard:changed", "story:changed", "theme:changed", "fields:changed", "parameters:changed", "hierarchies:changed", "calculations:changed",
 ];
 

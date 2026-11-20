@@ -467,7 +467,7 @@ export function initCanvas() {
         if (!entity.customSql && sql.trim() === own().trim()) return; // the default text: nothing to change
         if (entity.customSql && sql.trim() === (await tableDefault()).trim()) { backToTable(entity, tableColumns); return; } // Reset to default + Save = back to the table
         if (sql === entity.customSql) { // the same query; only the way it was written may have changed
-          if ((mysql ?? null) !== (entity.customSqlMysql ?? null)) { if (mysql) entity.customSqlMysql = mysql; else delete entity.customSqlMysql; }
+          if ((mysql ?? null) !== (entity.customSqlMysql ?? null)) { if (mysql) entity.customSqlMysql = mysql; else delete entity.customSqlMysql; emit("entity:sqltext", { entityId: entity.id }); } // nothing else changes, but the workbook saves the new text
           return;
         }
         const { columns } = await api.sourceColumns(sqlWire(entity.db, entity.table, sql)); // the server checks and describes the query; an error stays in the dialog
