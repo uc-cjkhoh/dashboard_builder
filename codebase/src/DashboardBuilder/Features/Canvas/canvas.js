@@ -2,7 +2,7 @@ import { emptyState } from "./empty-state.js";
 import { api } from "../Core/api.js";
 import { icon } from "../Core/icons.js";
 import { openContextMenu } from "../Core/menu.js";
-import { show, hide, toggle, confirmDeleteTwice, toast } from "../Core/ui.js";
+import { show, hide, toggle, confirmDestructive, toast } from "../Core/ui.js";
 import { exit } from "../Core/motion.js";
 import { entities, relationshipsFor, emit, bus, isModelActive, showModel } from "../Core/store.js";
 import { expandSidebar } from "../Shell/sidebar.js";
@@ -317,9 +317,9 @@ export function initCanvas() {
   async function removeEntity(entity) {
     const name = entity.source ? entity.table : `${entity.db}.${entity.table}`;
     const rels = relationshipsFor(entity.id).length;
-    const ok = await confirmDeleteTwice(
+    const ok = await confirmDestructive(
       rels > 0 ? `Remove ${name} and its relationship(s)?` : `Remove ${name} from the canvas?`,
-      name, { confirmText: "Remove" },
+      { confirmText: "Remove" },
     );
     if (!ok) return;
     entities.delete(entity.id); // out of the store first: relations.js redraws on the event, and a card that is leaving must not take part (no proposal to it, no count)

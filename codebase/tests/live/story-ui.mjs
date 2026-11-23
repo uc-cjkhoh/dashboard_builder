@@ -212,10 +212,8 @@ try {
   await check('remove a step: the next one becomes current, focus lands on the strip; the last removal empties the story', async () => {
     await click('#story-strip .story-chip:nth-child(2)');
     await click('[aria-label="Remove step 2"]');
-    await waitFor(`!!document.querySelector('dialog[open]')`, 'remove confirm'); // removing a step asks twice
+    await waitFor(`!!document.querySelector('dialog[open]')`, 'remove confirm'); // removing a step asks once
     await ev(`[...document.querySelectorAll('dialog[open] button')].find((x) => x.textContent.trim() === 'Remove').click()`);
-    await waitFor(`/^Really remove step 2/.test(document.querySelector('dialog[open] .dialog__body')?.textContent ?? '')`, 'second remove confirm');
-    await ev(`[...document.querySelectorAll('dialog[open] button')].find((x) => x.textContent.trim() === 'Remove for good').click()`);
     await waitFor(`document.querySelectorAll('#story-strip .story-chip').length === 2`, 'removed');
     must(await selected() === 1 && /Overview/.test(await stepTitle()), 'selection after remove');
     must(await ev(`document.activeElement.classList.contains('story-chip')`), 'focus not on the strip');
@@ -251,8 +249,6 @@ try {
     const msg = await ev(`document.querySelector('dialog[open] .dialog__body').textContent`);
     must(/Its steps will be removed from the story: Story 1/.test(msg), `confirm text: ${msg}`);
     await ev(`[...document.querySelectorAll('dialog[open] button')].find((x) => x.textContent.trim() === 'Close').click()`);
-    await waitFor(`/^Really close /.test(document.querySelector('dialog[open] .dialog__body')?.textContent ?? '')`, 'second confirm dialog');
-    await ev(`[...document.querySelectorAll('dialog[open] button')].find((x) => x.textContent.trim() === 'Close for good').click()`);
     await waitFor(`!document.querySelector('dialog[open]')`, 'confirmed');
     await store(`st.switchTab(st.stories()[0].id); return true;`);
     await waitFor(`document.querySelectorAll('#story-strip .story-chip').length === 2`, 'step removed with the worksheet');

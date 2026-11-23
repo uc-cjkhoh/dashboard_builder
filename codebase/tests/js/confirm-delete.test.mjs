@@ -11,43 +11,37 @@ function fakeEl(tag) {
 }
 const dialogs = [];
 globalThis.document = { createElement: (tag) => { const e = fakeEl(tag); if (tag === "dialog") dialogs.push(e); return e; }, body: fakeEl("body") };
-const { confirmDeleteTwice } = await import("../../src/DashboardBuilder/Features/Core/ui.js");
+const { confirmDestructive } = await import("../../src/DashboardBuilder/Features/Core/ui.js");
 
 const buttons = (dlg) => dlg.children.at(-1).children; // the foot: [Cancel, confirm]
 const body = (dlg) => dlg.children[0].textContent;
-const tick = () => new Promise((r) => setTimeout(r, 0));
 
-test("both confirmations → true; the second names the item and says it can't be undone", async () => {
+test("one confirmation → true; the one dialog carries the message and says it can't be undone", async () => {
   dialogs.length = 0;
-  const p = confirmDeleteTwice("Delete the thing?", "“thing”");
+  const p = confirmDestructive("Delete the thing?");
   assert.equal(dialogs.length, 1);
-  assert.equal(body(dialogs[0]), "Delete the thing?");
+  assert.equal(body(dialogs[0]), "Delete the thing? This can't be undone.");
+  assert.equal(buttons(dialogs[0])[1].textContent, "Delete");
   buttons(dialogs[0])[1].handlers.click();
-  await tick();
-  assert.equal(dialogs.length, 2);
-  assert.match(body(dialogs[1]), /Really delete “thing”\? This can't be undone\./);
-  assert.equal(buttons(dialogs[1])[1].textContent, "Delete for good");
-  buttons(dialogs[1])[1].handlers.click();
+  assert.equal(await p, true);
+  assert.equal(dialogs.length, 1, "no second dialog follows");
+});
+
+test("the confirm button takes its label from confirmText", async () => {
+  dialogs.length = 0;
+  const p = confirmDestructive("Remove x?", { confirmText: "Remove" });
+  assert.equal(buttons(dialogs[0])[1].textContent, "Remove");
+  buttons(dialogs[0])[1].handlers.click();
   assert.equal(await p, true);
 });
 
-test("cancelling the first dialog stops there: no second dialog, false", async () => {
-  dialogs.length = 0;
-  const p = confirmDeleteTwice("Delete?", "x");
-  buttons(dialogs[0])[0].handlers.click();
-  assert.equal(await p, false);
-  assert.equal(dialogs.length, 1);
-});
-
-test("cancelling the second dialog (button or Esc) → false", async () => {
+test("Cancel or Esc → false", async () => {
   for (const how of ["button", "escape"]) {
     dialogs.length = 0;
-    const p = confirmDeleteTwice("Remove?", "x", { confirmText: "Remove" });
-    buttons(dialogs[0])[1].handlers.click();
-    await tick();
-    assert.match(body(dialogs[1]), /^Really remove x\?/);
-    if (how === "button") buttons(dialogs[1])[0].handlers.click();
-    else dialogs[1].handlers.cancel({ preventDefault() {} });
+    const p = confirmDestructive("Remove?", { confirmText: "Remove" });
+    if (how === "button") buttons(dialogs[0])[0].handlers.click();
+    else dialogs[0].handlers.cancel({ preventDefault() {} });
     assert.equal(await p, false);
+    assert.equal(dialogs.length, 1);
   }
 });

@@ -49,8 +49,6 @@ try {
     await ev(`${card('customers')}.querySelector('.iconbtn--danger').click()`);
     await waitFor(`!!document.querySelector('dialog.dialog--sm[open]')`, 'first confirm');
     await confirm(/^Remove$/);
-    await waitFor(`!!document.querySelector('dialog.dialog--sm[open]') && /Really remove/.test(document.querySelector('dialog.dialog--sm[open]').textContent)`, 'second confirm');
-    await confirm(/^Remove for good$/);
     // the card is still fading out (entity.el.inert); the model already lacks it
     await waitFor(`document.querySelector('dialog.dialog--sm') === null`, 'confirm closed');
     const state = await ev(`(() => ({ ghosts: document.querySelectorAll('.rel-ghost, .rel-ghost__line').length, links: document.querySelectorAll('.rel-link__line').length,

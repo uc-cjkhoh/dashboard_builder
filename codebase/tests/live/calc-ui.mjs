@@ -145,8 +145,6 @@ try {
     await ev(`[...${dlg}.querySelectorAll('.dialog__foot button')].find((x) => x.textContent === 'Cancel').click()`);
     await waitFor(`!!(${confirmOpen})`, 'discard confirm');
     await ev(`[...(${confirmOpen}).querySelectorAll('button')].find((x) => x.textContent === 'Discard').click()`);
-    await waitFor(`/^Really discard /.test((${confirmOpen})?.textContent ?? '')`, 'second discard confirm');
-    await ev(`[...(${confirmOpen}).querySelectorAll('button')].find((x) => x.textContent === 'Discard for good').click()`);
     await waitFor(`${dlg} === null`, 'dialog closed');
   });
 
@@ -253,8 +251,6 @@ try {
     await ev(`${dlg}.dispatchEvent(new Event('cancel', { cancelable: true }))`);
     await waitFor(`!!(${confirmOpen})`, 'discard confirm again');
     await ev(`[...(${confirmOpen}).querySelectorAll('button')].find((x) => x.textContent === 'Discard').click()`);
-    await waitFor(`/^Really discard /.test((${confirmOpen})?.textContent ?? '')`, 'second discard confirm');
-    await ev(`[...(${confirmOpen}).querySelectorAll('button')].find((x) => x.textContent === 'Discard for good').click()`);
     await waitFor(`${dlg} === null`, 'dialog closes');
     // an untouched dialog closes at once
     await openNewDialog();
@@ -279,8 +275,6 @@ try {
     await ev(`${dlg}.dispatchEvent(new Event('cancel', { cancelable: true }))`);
     await waitFor(`!!(${confirmOpen})`, 'discard confirm');
     await ev(`[...(${confirmOpen}).querySelectorAll('button')].find((x) => x.textContent === 'Discard').click()`);
-    await waitFor(`/^Really discard /.test((${confirmOpen})?.textContent ?? '')`, 'second discard confirm');
-    await ev(`[...(${confirmOpen}).querySelectorAll('button')].find((x) => x.textContent === 'Discard for good').click()`);
     await waitFor(`${dlg} === null`, 'dialog closes');
   });
 
@@ -342,17 +336,13 @@ try {
     const msg = await ev(`(${confirmOpen}).textContent`);
     must(/Double/.test(msg) && /worksheet/.test(msg), `confirm text: ${msg}`);
     await ev(`[...(${confirmOpen}).querySelectorAll('button')].find((x) => x.textContent === 'Delete').click()`);
-    await waitFor(`/^Really delete /.test((${confirmOpen})?.textContent ?? '')`, 'second delete confirm');
-    await ev(`[...(${confirmOpen}).querySelectorAll('button')].find((x) => x.textContent === 'Delete for good').click()`);
     await waitFor(`!__t.chip('Double')`, 'Double chip gone');
     const rows = await pills('rows');
     must(rows.length === 1 && !rows.some((p) => p.includes('Double')), `Rows pills: ${J(rows)}`);
     // now Avg price (only on the sheet) goes too, after a confirm
     await calcMenu('Avg price', 'Delete…');
-    await waitFor(`!!(${confirmOpen})`, 'second confirm');
+    await waitFor(`!!(${confirmOpen})`, 'delete confirm');
     await ev(`[...(${confirmOpen}).querySelectorAll('button')].find((x) => x.textContent === 'Delete').click()`);
-    await waitFor(`/^Really delete /.test((${confirmOpen})?.textContent ?? '')`, 'second delete confirm');
-    await ev(`[...(${confirmOpen}).querySelectorAll('button')].find((x) => x.textContent === 'Delete for good').click()`);
     await waitFor(`!__t.chip('Avg price')`, 'Avg price gone');
     must((await pills('rows')).length === 0, `Rows not cleared: ${J(await pills('rows'))}`);
   });
@@ -464,8 +454,6 @@ try {
       await ev(`${dlg}.dispatchEvent(new Event('cancel', { cancelable: true }))`);
       await waitFor(`!!(${confirmOpen})`, 'discard confirm');
       await ev(`[...(${confirmOpen}).querySelectorAll('button')].find((x) => x.textContent === 'Discard').click()`);
-      await waitFor(`/^Really discard /.test((${confirmOpen})?.textContent ?? '')`, 'second discard confirm');
-      await ev(`[...(${confirmOpen}).querySelectorAll('button')].find((x) => x.textContent === 'Discard for good').click()`);
       await waitFor(`${dlg} === null`, 'dialog closed');
     });
   }
@@ -516,11 +504,9 @@ try {
     await ev(`document.querySelector('.tab--model .tab__label').click()`);
     await waitFor(`document.getElementById('worksheet-view').hidden && document.querySelector('.entity') !== null`, 'model tab shown');
     await ev(`document.querySelector('.entity [aria-label="Remove shop.orders"]').click()`);
-    // removing a table card always asks twice
+    // removing a table card asks once
     await waitFor(`!!${confirmOpen}`, 'remove confirm');
     await ev(`[...(${confirmOpen}).querySelectorAll('button')].find((x) => x.textContent === 'Remove').click()`);
-    await waitFor(`/^Really remove /.test((${confirmOpen})?.textContent ?? '')`, 'second remove confirm');
-    await ev(`[...(${confirmOpen}).querySelectorAll('button')].find((x) => x.textContent === 'Remove for good').click()`);
     queries.length = 0;
     await waitFor(`document.querySelectorAll('.entity').length === 1`, 'entity removed');
     await ev(`document.querySelectorAll('.tab:not(.tab--model) .tab__label')[0].click()`);

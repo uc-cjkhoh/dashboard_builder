@@ -153,7 +153,7 @@ try {
     await waitFor(`/Added region = Region to orders → customers \\(2 keys\\)/.test(document.getElementById('toast').textContent)`, 'extend toast');
     must(await ev(`!document.querySelector('dialog[open]') && document.querySelector('.rel-badge text')?.textContent === 'N:1 · 2 keys'`), 'badge');
   });
-  // ---- a link is reachable from the keyboard: Tab, Enter edits, Delete removes (asks twice) -----------------------------------
+  // ---- a link is reachable from the keyboard: Tab, Enter edits, Delete removes (asks once) -----------------------------------
   const link = `document.querySelector('#model-view > svg.rel-svg:not(.rel-svg--labels) .rel-link[data-rel]')`;
   const linkKey = (k) => ev(`(() => { const l = ${link}; l.focus(); l.dispatchEvent(new KeyboardEvent('keydown', { key: ${J(k)}, bubbles: true, cancelable: true })); return true; })()`);
   await check('a link is a focusable button named by the columns it joins, and focusing it reads like hover (every key row washed)', async () => {
@@ -177,13 +177,10 @@ try {
     await waitFor(`document.querySelector('.rel-badge text')?.textContent.startsWith('1:1')`, 'badge changed');
     must(await ev(`document.activeElement === ${link}`), 'focus lost after saving');
   });
-  await check('Delete on a focused link asks twice, then removes it and lands focus on the ground', async () => {
+  await check('Delete on a focused link asks once, then removes it and lands focus on the ground', async () => {
     await linkKey('Delete');
-    await waitFor(`document.querySelector('dialog[open]') !== null`, 'first confirm');
-    await ev(`document.querySelector('dialog[open] .btn--danger').click()`);
-    await b.sleep(400);
-    must(await ev(`${link} !== null`), 'removed after one confirmation');
-    await waitFor(`document.querySelector('dialog[open]') !== null`, 'second confirm');
+    await waitFor(`document.querySelector('dialog[open]') !== null`, 'confirm');
+    must(await ev(`${link} !== null`), 'removed before the confirmation');
     await ev(`document.querySelector('dialog[open] .btn--danger').click()`);
     await waitFor(`${link} === null`, 'link removed');
     must(await ev(`document.activeElement === document.getElementById('model-view')`), 'focus after removal: ' + await ev(`document.activeElement.tagName`));

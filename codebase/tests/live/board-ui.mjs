@@ -65,12 +65,10 @@ try {
     const dom = w?.querySelector('.ws-chart-canvas'); const i = dom && window.echarts.getInstanceByDom(dom); return i ? i.getOption().series[0].type : null; })()`);
   const addSheet = (name) => ev(`document.querySelector('.board-panel__item[data-sheet-id="' + [...document.querySelectorAll('.board-panel__item')].find((x) => x.querySelector('.board-panel__name').textContent === ${J(name)}).dataset.sheetId + '"] button').click()`);
   const hardClick = (sel) => ev(`document.querySelector(${J(sel)}).click()`);
-  // Removing a widget asks twice: "Remove", then "Remove for good" on a second dialog.
+  // Removing a widget asks once: "Remove" on one dialog.
   const confirmRemove = async () => {
     await waitFor(`!!document.querySelector('dialog[open]')`, 'remove confirm');
     await ev(`[...document.querySelectorAll('dialog[open] button')].find((x) => x.textContent.trim() === 'Remove').click()`);
-    await waitFor(`/^Really remove /.test(document.querySelector('dialog[open] .dialog__body')?.textContent ?? '')`, 'second remove confirm');
-    await ev(`[...document.querySelectorAll('dialog[open] button')].find((x) => x.textContent.trim() === 'Remove for good').click()`);
   };
   const shot = (name) => b.screenshot(join(SHOTS, name));
 
@@ -165,11 +163,9 @@ try {
     must(await ev(`!!document.querySelector('.board-widget--text')`), 'Cancel on the first dialog removed the widget');
     await ev(`document.querySelector('.board-widget--text .board-widget__remove').click()`);
     await waitFor(`!!document.querySelector('dialog[open]')`, 'first confirm again');
-    await ev(`[...document.querySelectorAll('dialog[open] button')].find((x) => x.textContent.trim() === 'Remove').click()`);
-    await waitFor(`/^Really remove /.test(document.querySelector('dialog[open] .dialog__body')?.textContent ?? '')`, 'second confirm');
     await ev(`[...document.querySelectorAll('dialog[open] button')].find((x) => x.textContent.trim() === 'Cancel').click()`);
-    await waitFor(`!document.querySelector('dialog[open]')`, 'second confirm cancelled');
-    must(await ev(`!!document.querySelector('.board-widget--text')`), 'Cancel on the second dialog removed the widget');
+    await waitFor(`!document.querySelector('dialog[open]')`, 'confirm cancelled');
+    must(await ev(`!!document.querySelector('.board-widget--text')`), 'Cancel removed the widget');
     await ev(`document.querySelector('.board-widget--text .board-widget__remove').click()`);
     await confirmRemove();
     await waitFor(`!document.querySelector('.board-widget--text')`, 'text removed');

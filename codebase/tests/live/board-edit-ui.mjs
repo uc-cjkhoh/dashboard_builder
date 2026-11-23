@@ -1,7 +1,7 @@
 // Browser check for editing the dashboard board (P24b stage 3): move by the header and resize by the corner with REAL mouse
 // events (snap to cells, a ghost while dragging, an overlapping or out-of-grid drop snaps back with a status message and changes
-// nothing); keyboard arrows / Shift+arrows with the live status; inline text edit (labels, limits, Save / Cancel / Esc); Remove asks twice
-// (Cancel on the second dialog keeps the widget); dragging a worksheet from the side panel onto the
+// nothing); keyboard arrows / Shift+arrows with the live status; inline text edit (labels, limits, Save / Cancel / Esc); Remove asks once
+// (Cancel keeps the widget); dragging a worksheet from the side panel onto the
 // canvas; pointercancel / blur mid-drag leave no ghost. Real dev app (APP_URL), every /api/* mocked;
 // any page error fails the run. A reload keeps the layout (autosave).
 // Screenshots (light + dark: ghost mid-drag, a refused ghost, focus ring) go to SHOTS_DIR.
@@ -85,16 +85,14 @@ try {
   const ARROW = { ArrowLeft: 37, ArrowUp: 38, ArrowRight: 39, ArrowDown: 40 };
   const arrow = (k, shift = false) => keyPress(k, ARROW[k], shift ? 8 : 0);
   const focusWidget = (k) => ev(`document.querySelector(${J(wsel(k))}).focus()`);
-  // Remove asks twice: "Remove ..." then "Really remove ...", buttons "Remove" and "Remove for good".
+  // Remove asks once: "Remove ... This can't be undone.", buttons "Cancel" and "Remove".
   const dlgText = () => ev(`[...document.querySelectorAll('dialog[open].dialog--sm')].map((d) => d.innerText).join(' || ')`);
   const dlgBtn = (label) => ev(`[...document.querySelectorAll('dialog[open] button')].find((x) => x.textContent.trim() === ${J(label)}).click()`);
   const toastText = () => ev(`document.getElementById('toast')?.innerText ?? ''`);
-  const askTwice = async (sel) => { // click the X, confirm both dialogs
+  const askOnce = async (sel) => { // click the X, confirm the dialog
     await ev(`document.querySelector(${J(sel)}).click()`);
     await waitFor(`!!document.querySelector('dialog[open].dialog--sm')`, 'first confirmation');
     await dlgBtn('Remove');
-    await waitFor(`[...document.querySelectorAll('dialog[open] button')].some((x) => x.textContent.trim() === 'Remove for good')`, 'second confirmation');
-    await dlgBtn('Remove for good');
   };
 
   await b.goto(APP + '/');
@@ -280,7 +278,7 @@ try {
     await arrow('ArrowDown', true); snaps.push(await cells()); // back to 2 rows: room for the body
   });
 
-  await check('Add (button) places a widget; Remove asks twice: Cancel on the second dialog keeps it, confirming both removes it', async () => {
+  await check('Add (button) places a widget; Remove asks once: Cancel keeps it, confirming removes it', async () => {
     await ev(`document.querySelector('.board-panel__item button').click()`);
     await waitFor(`document.querySelectorAll('.board-widget').length === 4`, 'added');
     snaps.push(await cells());
@@ -289,14 +287,11 @@ try {
     const rm = `.board-widget[data-widget-id="${addedId}"] .board-widget__remove`;
     await ev(`document.querySelector(${J(rm)}).click()`);
     await waitFor(`!!document.querySelector('dialog[open].dialog--sm')`, 'first confirmation');
-    must(/^Remove .* from the dashboard\?/.test(await dlgText()) && await ev(`document.querySelectorAll('.board-widget').length === 4`), `first dialog: ${await dlgText()}`);
-    await dlgBtn('Remove');
-    await waitFor(`/Really remove/.test(document.querySelector('dialog[open].dialog--sm')?.innerText ?? '')`, 'second confirmation');
-    must(/This can't be undone/.test(await dlgText()) && await ev(`document.querySelectorAll('.board-widget').length === 4`), `second dialog: ${await dlgText()}`);
+    must(/^Remove .* from the dashboard\?.*This can't be undone/.test(await dlgText()) && await ev(`document.querySelectorAll('.board-widget').length === 4`), `dialog: ${await dlgText()}`);
     await dlgBtn('Cancel');
-    await waitFor(`!document.querySelector('dialog[open]')`, 'dialogs closed');
-    must(await ev(`document.querySelectorAll('.board-widget').length === 4`), 'Cancel on the second dialog still removed the widget');
-    await askTwice(rm);
+    await waitFor(`!document.querySelector('dialog[open]')`, 'dialog closed');
+    must(await ev(`document.querySelectorAll('.board-widget').length === 4`), 'Cancel still removed the widget');
+    await askOnce(rm);
     await waitFor(`document.querySelectorAll('.board-widget').length === 3`, 'removed');
     must(!/Undo/.test(await toastText()), `toast: ${await toastText()}`);
     snaps.push(await cells());
@@ -355,7 +350,7 @@ try {
     must((await ghost()) === null, 'ghost after a click');
   });
 
-  await check('text edit saves exact content (heading + body); removing a widget (both dialogs) drops it', async () => {
+  await check('text edit saves exact content (heading + body); removing a widget (one dialog) drops it', async () => {
     const text = () => store(`const w = st.dashboards()[0].widgets.find((x) => x.kind === 'text'); return [w.heading, w.body.slice(0, 20)];`);
     await ev(`document.querySelector('.board-widget--text .board-widget__edit').click()`);
     await ev(`(() => { const t = document.querySelector('.board-widget--text'); t.querySelector('input').value = 'Edited'; t.querySelector('textarea').value = 'New body'; t.querySelector('.board-text-edit__save').click(); return true; })()`);
@@ -363,7 +358,7 @@ try {
     must(J(await text()) === J(['Edited', 'New body']), `saved text ${J(await text())}`);
     const all = await store(`return JSON.stringify(st.dashboards()[0].widgets);`); // to put the removed widget back afterwards (there is no Undo)
     const n = (await cells()).length;
-    await askTwice(`${wsel('A')} .board-widget__remove`);
+    await askOnce(`${wsel('A')} .board-widget__remove`);
     await waitFor(`document.querySelectorAll('.board-widget').length === ${n - 1}`, 'removed');
     must(await store(`return !st.dashboards()[0].widgets.some((w) => w.id === ${J(ID.A)});`), 'the widget is still in the store');
     must(!/Undo/.test(await toastText()) && /Removed/.test(await toastText()), `toast: ${await toastText()}`);

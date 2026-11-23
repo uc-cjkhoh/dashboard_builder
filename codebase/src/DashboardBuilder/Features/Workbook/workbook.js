@@ -6,7 +6,7 @@ import {
 import { clearRoleChoices } from "../Calc/calc-pane-model.js";
 import { DEFAULT_THEME } from "../Core/theme-model.js";
 import { exit } from "../Core/motion.js";
-import { toast, confirmDeleteTwice, listDialog } from "../Core/ui.js";
+import { toast, confirmDestructive, listDialog } from "../Core/ui.js";
 import { dateIn } from "../Core/timezone.js";
 import { addEntity, clearModel, fitCanvas } from "../Canvas/canvas.js";
 import { restoreRelationship } from "../Relations/relations.js";
@@ -251,9 +251,9 @@ async function importFile(input) {
   let wb;
   try { wb = parseWorkbook(await file.text()); } catch (err) { toast(err.message, "danger"); return; }
   if (!isEmpty()) {
-    const ok = await confirmDeleteTwice(
+    const ok = await confirmDestructive(
       "Replace the current workbook? Its tables, relationships, worksheets, dashboards and stories will be removed.",
-      "the current workbook", { confirmText: "Replace" },
+      { confirmText: "Replace" },
     );
     if (!ok) return;
   }

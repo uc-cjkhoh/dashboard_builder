@@ -3,7 +3,7 @@
 import { calculations, entities, parameters, addCalculation, updateCalculation } from "../Core/store.js";
 import { icon } from "../Core/icons.js";
 import { LIMITS } from "../Core/validate.js";
-import { makeButton, openDialog, closeDialog, toast, confirmDeleteTwice } from "../Core/ui.js";
+import { makeButton, openDialog, closeDialog, toast, confirmDestructive } from "../Core/ui.js";
 import { catalogFromEntities } from "./calc-resolve.js";
 import { evaluateDraft, chipFor, suggest, isDirty, columnClash } from "./calc-dialog-model.js";
 import { searchHelp, groupHelp } from "./function-help.js";
@@ -251,7 +251,7 @@ export function openCalcDialog(calcId = null) {
     if (asking) return;
     if (!isDirty(initial, { name: name.value, formula: ta.value })) { finish(); return; }
     asking = true;
-    const discard = await confirmDeleteTwice("Discard your changes to this calculated field?", "your changes", { confirmText: "Discard" });
+    const discard = await confirmDestructive("Discard your changes to this calculated field?", { confirmText: "Discard" });
     asking = false;
     if (discard) finish(); else ta.focus();
   };

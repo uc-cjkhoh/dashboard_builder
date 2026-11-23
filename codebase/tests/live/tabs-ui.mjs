@@ -53,12 +53,10 @@ try {
   const activeLabel = () => ev(`document.querySelector('.tab.is-active .tab__label')?.textContent`);
   const addTab = async (kind) => { await ev(`document.querySelector('.tab-add').click(); document.querySelector('[data-new-tab=${kind}]').click()`); };
   const dialogButton = (text) => `[...document.querySelectorAll('dialog[open] button')].find((x) => x.textContent.trim() === ${J(text)})`;
-  // A double-confirmed delete: click `text` on the first dialog, wait for the second ("Really …"), click "<text> for good".
-  const confirmTwice = async (text) => {
-    await waitFor(`!!document.querySelector('dialog[open]')`, 'first confirm dialog');
+  // A confirmed delete: wait for the dialog, click `text`.
+  const confirmOnce = async (text) => {
+    await waitFor(`!!document.querySelector('dialog[open]')`, 'confirm dialog');
     await ev(`${dialogButton(text)}.click()`);
-    await waitFor(`/^Really /.test(document.querySelector('dialog[open] .dialog__body')?.textContent ?? '')`, 'second confirm dialog');
-    await ev(`${dialogButton(text + ' for good')}.click()`);
   };
   const connect = async () => {
     await waitFor(`document.readyState === 'complete' && !!document.getElementById('conn-connect')`, 'app loaded');
@@ -150,7 +148,7 @@ try {
     must((await labels()).includes('Worksheet 1'), 'cancel closed the worksheet');
     must(await store(`return st.dashboards()[0].widgets.length === 2;`), 'cancel removed a widget');
     await ev(`document.querySelector('.tab__close[aria-label="Close Worksheet 1"]').click()`);
-    await confirmTwice('Close');
+    await confirmOnce('Close');
     await waitFor(`!(${'document.querySelector(\'.tab__close[aria-label="Close Worksheet 1"]\')'})`, 'worksheet closed');
     must(await store(`const w = st.dashboards()[0].widgets; return w.length === 1 && w[0].kind === 'text';`), 'the worksheet widget was not removed');
     // a dashboard with widgets: confirm, and no worksheet is touched
@@ -159,14 +157,14 @@ try {
     await ev(`document.querySelector('.tab__close[aria-label="Close Dashboard 1"]').click()`);
     await waitFor(`!!document.querySelector('dialog[open]')`, 'dashboard confirm');
     must(/not affected/.test(await ev(`document.querySelector('dialog[open] .dialog__body').textContent`)), 'dashboard confirm text');
-    await confirmTwice('Close');
+    await confirmOnce('Close');
     await waitFor(`!document.querySelector('.tab--dashboard')`, 'dashboard closed');
     must(await store(`return st.worksheets().length === 1;`), 'closing the dashboard touched a worksheet');
     await store(`st.closeTab(st.worksheets()[0].id); return true;`);
     must((await labels()).length === 0, 'cleanup');
   });
 
-  await check('closing a content tab asks twice: Cancel on either dialog keeps the tab, its widgets, button links and story steps; both confirmed closes it; an empty tab closes with no prompt', async () => {
+  await check('closing a content tab asks once: Cancel (button or Esc) keeps the tab, its widgets, button links and story steps; confirming closes it; an empty tab closes with no prompt', async () => {
     await addTab('worksheet'); await addTab('dashboard'); await addTab('story');
     const name = await store(`const ws = st.worksheets()[0], db = st.dashboards()[0], s = st.stories()[0];
       st.updateSheet(ws.id, { ...ws.sheet, columns: [{ db: 'shop', table: 'orders', column: 'region', category: 'text' }] });
@@ -176,57 +174,40 @@ try {
     const intact = () => store(`const d = st.dashboards()[0]; const ws = st.worksheets()[0]; return !!ws && d.widgets.length === 2 && d.widgets[1].target === ws.id && d.widgets[0].sheetId === ws.id && st.stories()[0].steps.length === 1 && ws.sheet.columns.length === 1;`);
     const dialogs = () => ev(`document.querySelectorAll('dialog[open]').length`);
     const body = () => ev(`document.querySelector('dialog[open] .dialog__body')?.textContent ?? ''`);
-    // first dialog: the consequences; Cancel keeps everything
+    // the dialog: the consequences; Cancel keeps everything
     await ev(`${closeBtn}.click()`);
-    await waitFor(`!!document.querySelector('dialog[open]')`, 'first confirm dialog');
+    await waitFor(`!!document.querySelector('dialog[open]')`, 'confirm dialog');
     const msg = await body();
-    must(/Buttons that go to it will be unlinked on: Dashboard 1/.test(msg) && /Its steps will be removed/.test(msg), `confirm text: ${msg}`);
+    must(/Buttons that go to it will be unlinked on: Dashboard 1/.test(msg) && /Its steps will be removed/.test(msg) && /This can't be undone\.$/.test(msg), `confirm text: ${msg}`);
+    must(await dialogs() === 1 && await ev(`!${dialogButton('Close for good')}`), 'more than one dialog, or a "for good" button');
     must(await ev(`!!${dialogButton('Close')} && ${dialogButton('Close')}.classList.contains('btn--danger')`), 'first dialog lacks the danger Close button');
     await ev(`${dialogButton('Cancel')}.click()`);
     await waitFor(`!document.querySelector('dialog[open]')`, 'first dialog cancelled');
     must(await ev(`!!${closeBtn}`) && await intact(), 'Cancel on the first dialog changed something');
-    // Close on the first dialog opens a second, different one
+    await b.screenshot(join(SHOTS, 'tab-close-confirm.png'));
+    // Esc (the dialog's cancel event) also aborts
     await ev(`${closeBtn}.click()`);
-    await waitFor(`!!document.querySelector('dialog[open]')`, 'first confirm dialog again');
-    await ev(`${dialogButton('Close')}.click()`);
-    await waitFor(`/^Really /.test(document.querySelector('dialog[open] .dialog__body')?.textContent ?? '')`, 'second confirm dialog');
-    must(await dialogs() === 1, 'two dialogs open at once');
-    must(await body() === `Really close the worksheet “${name}”? This can't be undone.`, `second dialog text: ${await body()}`);
-    must(await ev(`!${dialogButton('Close')} && !!${dialogButton('Close for good')} && ${dialogButton('Close for good')}.classList.contains('btn--danger')`), 'second dialog lacks the danger "Close for good" button');
-    must(await ev(`!!${closeBtn}`) && await intact(), 'the tab closed before the second confirm');
-    await b.screenshot(join(SHOTS, 'tab-close-second-confirm.png'));
-    // Esc (the dialog's cancel event) on the second dialog also aborts
+    await waitFor(`!!document.querySelector('dialog[open]')`, 'confirm dialog again');
     await ev(`document.querySelector('dialog[open]').dispatchEvent(new Event('cancel', { cancelable: true }))`);
-    await waitFor(`!document.querySelector('dialog[open]')`, 'second dialog cancelled');
-    must(await ev(`!!${closeBtn}`) && await intact(), 'cancelling the second dialog changed something');
-    // Cancel button on the second dialog
+    await waitFor(`!document.querySelector('dialog[open]')`, 'dialog cancelled by Esc');
+    must(await ev(`!!${closeBtn}`) && await intact(), 'Esc changed something');
+    // confirmed: the tab closes, widgets unlinked, steps removed
     await ev(`${closeBtn}.click()`);
-    await waitFor(`!!document.querySelector('dialog[open]')`, 'first confirm dialog (third time)');
+    await waitFor(`!!document.querySelector('dialog[open]')`, 'confirm dialog (third time)');
     await ev(`${dialogButton('Close')}.click()`);
-    await waitFor(`/^Really /.test(document.querySelector('dialog[open] .dialog__body')?.textContent ?? '')`, 'second confirm dialog again');
-    await ev(`${dialogButton('Cancel')}.click()`);
-    await waitFor(`!document.querySelector('dialog[open]')`, 'second dialog cancelled by the button');
-    must(await ev(`!!${closeBtn}`) && await intact(), 'Cancel on the second dialog changed something');
-    // both confirmed: the tab closes, widgets unlinked, steps removed
-    await ev(`${closeBtn}.click()`);
-    await waitFor(`!!document.querySelector('dialog[open]')`, 'first confirm dialog (fourth time)');
-    await ev(`${dialogButton('Close')}.click()`);
-    await waitFor(`/^Really /.test(document.querySelector('dialog[open] .dialog__body')?.textContent ?? '')`, 'second confirm dialog (confirm)');
-    await ev(`${dialogButton('Close for good')}.click()`);
     await waitFor(`!document.querySelector('.tab--worksheet') && !document.querySelector('dialog[open]')`, 'worksheet closed');
     must(await store(`const d = st.dashboards()[0]; return d.widgets.length === 1 && d.widgets[0].target === null && st.stories()[0].steps.length === 0;`), 'close left widgets/steps');
     must(J(await labels()) === J(['Dashboard 1', 'Story 1']), `tabs after close: ${J(await labels())}`);
-    // a story with steps asks twice as well
+    // a story with steps asks once as well
     await store(`const s = st.stories()[0]; st.setSteps(s.id, [{ caption: 'c', target: st.dashboards()[0].id }]); return true;`);
     await ev(`document.querySelector('.tab__close[aria-label="Close Story 1"]').click()`);
     await waitFor(`!!document.querySelector('dialog[open]')`, 'story confirm');
-    await ev(`${dialogButton('Close')}.click()`);
-    await waitFor(`(document.querySelector('dialog[open] .dialog__body')?.textContent ?? '').startsWith('Really close the story “Story 1”')`, 'story second confirm');
+    must((await body()).startsWith('Close the story “Story 1”') && /This can't be undone\.$/.test(await body()), `story dialog: ${await body()}`);
     await ev(`${dialogButton('Cancel')}.click()`);
-    await waitFor(`!document.querySelector('dialog[open]')`, 'story second dialog cancelled');
+    await waitFor(`!document.querySelector('dialog[open]')`, 'story dialog cancelled');
     must(await ev(`!!document.querySelector('.tab--story')`), 'cancel closed the story');
     await ev(`document.querySelector('.tab__close[aria-label="Close Story 1"]').click()`);
-    await confirmTwice('Close');
+    await confirmOnce('Close');
     await waitFor(`!document.querySelector('.tab--story')`, 'story closed');
     // an empty tab closes straight away, no dialog
     await addTab('worksheet');

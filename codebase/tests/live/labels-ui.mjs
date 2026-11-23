@@ -80,10 +80,10 @@ try {
     await ev(`(() => { const c = [...document.querySelectorAll('#ws-fields .ws-field')].find((x) => x.querySelector('.ws-field__name')?.textContent === ${J(name)}); [...document.querySelectorAll('.ctx-menu .menu__item')].find((x) => x.textContent.trim().startsWith(${J(item)})).click(); return true; })()`);
   };
   const dlgBtn = (sel, text) => `[...document.querySelector(${J(sel)}).querySelectorAll('.dialog__foot button')].find((x) => x.textContent === ${J(text)})`;
-  // Cancel on an EDITED group dialog asks twice before it drops the draft: click through both.
+  // Cancel on an EDITED group dialog asks once before it drops the draft.
   const discardGroup = async () => {
     await ev(`${dlgBtn('dialog.grp-dialog', 'Cancel')}.click()`);
-    for (const label of ['Discard', 'Discard for good']) {
+    for (const label of ['Discard']) {
       const btn = `[...document.querySelectorAll('dialog.dialog--sm[open] button')].find((x) => x.textContent === ${J(label)})`;
       await waitFor(`!!${btn}`, `"${label}" confirm`);
       await ev(`${btn}.click()`);
@@ -228,7 +228,7 @@ try {
     await waitFor(`${CALC_NAMES}.includes('region (groups)')`, 'group field in the pane');
   });
 
-  await check('Group dialog Cancel / Esc: untouched closes at once; an edited draft asks twice, and "No" keeps it', async () => {
+  await check('Group dialog Cancel / Esc: untouched closes at once; an edited draft asks once, and "No" keeps it', async () => {
     const esc = () => ev(`document.querySelector('dialog.grp-dialog').dispatchEvent(new Event('cancel', { cancelable: true }))`);
     const confirmBtn = (re) => `[...document.querySelectorAll('dialog.dialog--sm[open] button')].find((x) => ${re}.test(x.textContent))`;
     const before = await ev(`${CALC_NAMES}.length`);
@@ -247,11 +247,9 @@ try {
     must(await ev(`document.querySelector('dialog.grp-dialog[open]') !== null && document.querySelector('.grp-group__name').value === 'Draft name'`), 'the draft was lost on No');
     await ev(`${dlgBtn('dialog.grp-dialog', 'Cancel')}.click()`);
     await waitFor(`!!document.querySelector('dialog.dialog--sm[open]')`, 'first confirm (Cancel button)');
+    must(await ev(`/This can't be undone/.test(document.querySelector('dialog.dialog--sm[open]').textContent)`), 'the confirm does not say it cannot be undone');
     await ev(`${confirmBtn('/^Discard$/')}.click()`);
-    await waitFor(`!!document.querySelector('dialog.dialog--sm[open]') && /Really discard/.test(document.querySelector('dialog.dialog--sm[open]').textContent)`, 'second confirm');
-    must(await ev(`document.querySelector('dialog.grp-dialog[open]') !== null`), 'dialog closed after only one Yes');
-    await ev(`${confirmBtn('/^Discard for good$/')}.click()`);
-    await waitFor(`!document.querySelector('dialog.grp-dialog')`, 'dialog closed after two confirmations');
+    await waitFor(`!document.querySelector('dialog.grp-dialog')`, 'dialog closed after one confirmation');
     must((await ev(`${CALC_NAMES}.length`)) === before, 'a calculated field was saved');
   });
 

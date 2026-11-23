@@ -100,32 +100,23 @@ try {
     must(/Can't relate/.test(await ev(`document.querySelector('.rel-keyhint').textContent`)), 'refusal hint');
     await ev(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))`);
   });
-  await check('removing a relationship asks twice: Cancel on either dialog keeps it; confirming both removes it', async () => {
+  await check('removing a relationship asks once: Cancel keeps it; confirming removes it', async () => {
     const btn = (t) => `[...document.querySelectorAll('dialog[open] button')].find((x) => x.textContent.trim() === ${J(t)})`;
     const bodyText = () => ev(`document.querySelector('dialog[open] .dialog__body')?.textContent ?? ''`);
-    const openDelete = async () => { // the relationship's edit dialog, then its Delete button, which opens the first confirm
+    const openDelete = async () => { // the relationship's edit dialog, then its Delete button, which opens the confirm
       await ev(`document.querySelector('.rel-link[data-rel=' + JSON.stringify(${J('')} + document.querySelector('.rel-link:not(.rel-link--label)').dataset.rel) + '] .rel-link__hit')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))`);
       await waitFor(`!!${dlg}?.querySelector('.btn--danger')`, 'edit dialog');
       await ev(`${dlg}.querySelector('.btn--danger').click()`);
-      await waitFor(`/^Remove the .* relationship\\?/.test(document.querySelector('dialog[open] .dialog__body')?.textContent ?? '')`, 'first confirm');
+      await waitFor(`/^Remove the .* relationship\\?/.test(document.querySelector('dialog[open] .dialog__body')?.textContent ?? '')`, 'confirm');
     };
     await openDelete();
     await ev(`${btn('Cancel')}.click()`);
-    await waitFor(`!document.querySelector('dialog[open]')`, 'first confirm cancelled');
-    must(await rels() === 1, 'Cancel on the first dialog removed the relationship');
+    await waitFor(`!document.querySelector('dialog[open]')`, 'confirm cancelled');
+    must(await rels() === 1, 'Cancel removed the relationship');
     await openDelete();
+    must(/This can't be undone\.$/.test(await bodyText()), `dialog text: ${await bodyText()}`);
+    must(await rels() === 1, 'the relationship was removed before the confirm');
     await ev(`${btn('Remove')}.click()`);
-    await waitFor(`(document.querySelector('dialog[open] .dialog__body')?.textContent ?? '').startsWith('Really remove the ')`, 'second confirm');
-    must(/This can't be undone\.$/.test(await bodyText()), `second dialog text: ${await bodyText()}`);
-    must(await ev(`!${btn('Remove')} && !!${btn('Remove for good')}`), 'second dialog button');
-    must(await rels() === 1, 'the relationship was removed before the second confirm');
-    await ev(`${btn('Cancel')}.click()`);
-    await waitFor(`!document.querySelector('dialog[open]')`, 'second confirm cancelled');
-    must(await rels() === 1, 'Cancel on the second dialog removed the relationship');
-    await openDelete();
-    await ev(`${btn('Remove')}.click()`);
-    await waitFor(`(document.querySelector('dialog[open] .dialog__body')?.textContent ?? '').startsWith('Really remove the ')`, 'second confirm again');
-    await ev(`${btn('Remove for good')}.click()`);
     await waitFor(`document.querySelectorAll('.rel-link[data-rel]:not(.rel-link--label)').length === 0`, 'removed');
     await drag(row('orders', 'region'), row('customers', 'region')); // relate the two tables again, on other columns than the removed link's
     await waitFor(`!!${dlg}?.querySelector('.rel-dialog__sub')`, 'dialog');

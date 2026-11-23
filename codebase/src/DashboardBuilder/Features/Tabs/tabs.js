@@ -7,7 +7,7 @@ import { dashboardsLinking } from "../Board/nav-model.js";
 import { storiesUsing } from "../Story/story-model.js";
 import { icon } from "../Core/icons.js";
 import { wireMenu } from "../Core/menu.js";
-import { confirmDeleteTwice, toast } from "../Core/ui.js";
+import { confirmDestructive, toast } from "../Core/ui.js";
 import { text, LIMITS } from "../Core/validate.js";
 
 // The view strip: a pinned "Data Source" tab (the shared entity canvas) followed by one ordered list of worksheet and
@@ -160,7 +160,7 @@ export function initTabs() {
     const stepNote = inStories.length ? ` Its steps will be removed from ${inStories.length === 1 ? "the story" : "the stories"}: ${inStories.map((s) => s.name).join(", ")}.` : "";
     const linking = tab.kind === "story" ? [] : dashboardsLinking(tabs, tab.id).filter((d) => d.id !== tab.id); // their buttons to this tab are unlinked
     const linkNote = linking.length ? ` Buttons that go to it will be unlinked on: ${linking.map((d) => d.name).join(", ")}.` : "";
-    const ask = async (message) => confirmDeleteTwice(message, `the ${tab.kind} “${tab.name}”`, { confirmText: "Close" });
+    const ask = (message) => confirmDestructive(message, { confirmText: "Close" });
     if (tab.kind === "worksheet") {
       const users = dashboardsUsing(tabs, tab.id);
       if (users.length) {

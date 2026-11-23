@@ -134,8 +134,6 @@ try {
     await ev(`[...${dlg}.querySelectorAll('.dialog__foot button')].find((x) => x.textContent === 'Cancel').click()`);
     await waitFor(`!!(${confirmOpen})`, 'discard confirm');
     await ev(`[...(${confirmOpen}).querySelectorAll('button')].find((x) => x.textContent === 'Discard').click()`);
-    await waitFor(`/^Really discard /.test((${confirmOpen})?.textContent ?? '')`, 'second discard confirm');
-    await ev(`[...(${confirmOpen}).querySelectorAll('button')].find((x) => x.textContent === 'Discard for good').click()`);
     await waitFor(`${dlg} === null`, 'dialog closed');
   };
 

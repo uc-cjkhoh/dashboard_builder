@@ -4,7 +4,7 @@ import { parameters, calculations, worksheets, sharedFilters, addParameter, upda
 import { PARAM_TYPES, MAX_PARAMS, MAX_LIST, checkValue, checkStep, checkParamName, paramRefs } from "../Core/parameters-model.js";
 import { text } from "../Core/validate.js";
 import { calcsUsingParam } from "../Calc/calc-params.js";
-import { makeButton, openDialog, closeDialog, toast, confirmDeleteTwice } from "../Core/ui.js";
+import { makeButton, openDialog, closeDialog, toast, confirmDestructive } from "../Core/ui.js";
 
 export function openParametersDialog() {
   const dlg = el("dialog", "dialog params-dialog");
@@ -39,7 +39,7 @@ export function openParametersDialog() {
         const notes = [];
         if (users.length) notes.push(`“${p.name}” is read by ${users.length === 1 ? "calculation" : "calculations"} ${users.map((u) => `'${u}'`).join(", ")}. Deleting it leaves ${users.length === 1 ? "it" : "them"} unable to compute until you edit the formula or add a parameter with that name.`);
         if (refs.length) notes.push(`“${p.name}” is used by ${refs.join("; ")}. Deleting it unlinks them (each keeps its own typed value, so results may change).`);
-        if (!(await confirmDeleteTwice([`Delete the parameter “${p.name}”?`, ...notes].join(" "), `“${p.name}”`))) return;
+        if (!(await confirmDestructive([`Delete the parameter “${p.name}”?`, ...notes].join(" ")))) return;
         removeParameter(p.id); render();
       });
       li.append(info, edit, del);

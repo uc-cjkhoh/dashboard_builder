@@ -6,7 +6,7 @@ import { defaultShelf, placesOnDblClick } from "./placement-model.js";
 import { fieldPillOptions, filterPillOptions, filterSummary, markGrid } from "./pill-options.js";
 import { visibleTools } from "./toolbar-rules.js";
 import { roleOf, STAT_SINGLE_TABLE, showMeOptions, dimsFor } from "./show-me-rules.js";
-import { toggle, makeButton, toast, fieldError, confirmDeleteTwice, copyText } from "../Core/ui.js";
+import { toggle, makeButton, toast, fieldError, confirmDestructive, copyText } from "../Core/ui.js";
 import { LIMITS, number, percent, percentLabel, isFraction, PERCENT_MESSAGE, DEFAULT_PERCENTILE } from "../Core/validate.js";
 import { aggsFor, checkAdd, checkFilter, viewCounts, withCategories, opsFor, OP_LABELS } from "./filter-rules.js";
 import { freshSheet, entities, relationships, activeWorksheet, isWorksheetActive, updateSheet, bus, defaultFormat, defaultMarks, sharedFilters, metaOf, nameOf, setFieldMeta, emptySheet, parameters, updateParameter, hierarchies, calculations, worksheets, addCalculation, removeCalculation, renameTab } from "../Core/store.js";
@@ -610,7 +610,7 @@ export function initDashboards() {
     const copy = addCalculation({ name: ok.value, formula: calc.formula, ...(calc.group ? { group: structuredClone(calc.group) } : {}) });
     setRoleChoice(copy.id, roleChoice(calc.id));
   }
-  // Refuse while another calculation uses it; always ask twice (no Undo), naming the worksheets that use it.
+  // Refuse while another calculation uses it; always ask (no Undo), naming the worksheets that use it.
   async function deleteCalcField(calc) {
     const plan = deleteCalcPlan(calculations, worksheets().map((d) => d.sheet), calc.id, sharedFilters);
     if (plan.refusedBy) { toast(`Used by calculation '${plan.refusedBy.join("', '")}'.`, "info"); return; }
@@ -620,7 +620,7 @@ export function initDashboards() {
       m ? `${m} shared Top N filter${m === 1 ? "" : "s"}` : "",
     ].filter(Boolean).join(" and ");
     const used = where ? ` It is used in ${where}; deleting it removes it from ${n + m === 1 ? "it" : "them"}.` : "";
-    if (!(await confirmDeleteTwice(`Delete the calculated field “${calc.name}”?${used}`, `“${calc.name}”`))) return;
+    if (!(await confirmDestructive(`Delete the calculated field “${calc.name}”?${used}`))) return;
     if (plan.usedInSheets || plan.usedInShared) {
       clearFilterCalc(sharedFilters, calc.id); // saved with the workbook by the calculations:changed below
       // Commit every sheet that lost pills (the calculations:changed sync below sees them already cleared and wouldn't).
@@ -1178,7 +1178,7 @@ export function initDashboards() {
     commit(dash, s);
   }
   async function clearSheet(dash, s) {
-    if (dashboardHasContentSheet(s) && !(await confirmDeleteTwice("Clear this sheet? Fields, filters, marks and format go.", "this sheet", { confirmText: "Clear" }))) return;
+    if (dashboardHasContentSheet(s) && !(await confirmDestructive("Clear this sheet? Fields, filters, marks and format go.", { confirmText: "Clear" }))) return;
     const fresh = freshSheet(); // a cleared sheet starts as a new one does (the colour scale Automatic)
     fresh.chartType = s.chartType;
     choicesFor = null; calcFor = null; openTool = null;

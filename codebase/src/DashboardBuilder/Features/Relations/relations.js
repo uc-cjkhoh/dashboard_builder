@@ -1,6 +1,6 @@
 import { entities, relationships, bus, emit, isModelActive } from "../Core/store.js";
 import { relEnds, linkIssue, pinOrder, matchingColumns, keysCompatible, kindLabel, unlinkedCards, joinChoices, cardinalityChoices, joinBadge, joinSelection, joinFromSelection, isLegacyLeft, applyAggregate, aggregateChoice, guessCardinality, relationBetween, pairFor } from "./relation-rules.js";
-import { toast, makeButton, openDialog, closeDialog, confirmDeleteTwice } from "../Core/ui.js";
+import { toast, makeButton, openDialog, closeDialog, confirmDestructive } from "../Core/ui.js";
 import { api } from "../Core/api.js";
 import { icon } from "../Core/icons.js";
 import { previewRequest } from "./join-preview-model.js";
@@ -700,10 +700,10 @@ function editRelationship(rel) {
   });
 }
 
-/** Remove a relationship after asking twice (rule 12): from the dialog's Remove button, or Delete on a focused link. */
+/** Remove a relationship after asking once (rule 12): from the dialog's Remove button, or Delete on a focused link. */
 async function removeRelationship(rel) {
   const ta = entities.get(rel.from.entityId)?.table, tb = entities.get(rel.to.entityId)?.table;
-  if (!(await confirmDeleteTwice(`Remove the ${ta} → ${tb} relationship?`, `the ${ta} → ${tb} relationship`, { confirmText: "Remove" }))) return;
+  if (!(await confirmDestructive(`Remove the ${ta} → ${tb} relationship?`, { confirmText: "Remove" }))) return;
   relationships.delete(rel.id); emit("rel:changed", { id: rel.id }); select(null); render();
   toast(`Removed the ${ta} → ${tb} relationship.`, "info");
   if (!canvas.contains(document.activeElement) || document.activeElement === document.body) canvas.focus({ preventScroll: true }); // the link had focus: land on the ground, not nowhere

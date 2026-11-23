@@ -56,8 +56,6 @@ try {
     await ev(`${card(t)}.querySelector('.iconbtn--danger').click()`);
     await waitFor(`!!document.querySelector('dialog[open]')`, 'remove confirm');
     await ev(`[...document.querySelectorAll('dialog[open] button')].find((x) => x.textContent.trim() === 'Remove').click()`);
-    await waitFor(`/^Really remove /.test(document.querySelector('dialog[open] .dialog__body')?.textContent ?? '')`, 'second confirm');
-    await ev(`[...document.querySelectorAll('dialog[open] button')].find((x) => x.textContent.trim() === 'Remove for good').click()`);
   };
   const openPreview = async (t) => {
     await ev(`(() => { ${card(t)}.querySelector('.entity__menu').click(); [...document.querySelectorAll('.ctx-menu [role^="menuitem"]')].find((x) => x.textContent.trim() === 'Preview data').click(); return true; })()`);

@@ -3,7 +3,7 @@
 // field. DOM only; every rule is in group-model.js. Members and names are shown with textContent / input values only.
 import { calculations, addCalculation, updateCalculation } from "../Core/store.js";
 import { LIMITS } from "../Core/validate.js";
-import { makeButton, openDialog, closeDialog, toast, confirmDeleteTwice } from "../Core/ui.js";
+import { makeButton, openDialog, closeDialog, toast, confirmDestructive } from "../Core/ui.js";
 import { checkName } from "./calc-workbook.js";
 import { checkGroupSpec, groupCalcName, assignmentsOf, groupsFromAssignments, maxMembersFor, groupStatus, groupDraftKey } from "./group-model.js";
 
@@ -165,7 +165,7 @@ export function openGroupDialog({ field, fieldName, calcId = null, kind: kindIn,
   };
 
   const finish = () => closeDialog(dlg);
-  // Cancel / Esc: an untouched dialog closes at once; an edited one asks (twice: there is no Undo) before throwing the draft away, like the calculated-field dialog.
+  // Cancel / Esc: an untouched dialog closes at once; an edited one asks (there is no Undo) before throwing the draft away, like the calculated-field dialog.
   const draftKey = () => groupDraftKey({ name: name.value, groups, assign, otherOn, otherText, nullOn, nullText });
   const initialKey = draftKey();
   let asking = false;
@@ -173,7 +173,7 @@ export function openGroupDialog({ field, fieldName, calcId = null, kind: kindIn,
     if (asking) return;
     if (draftKey() === initialKey) { finish(); return; }
     asking = true;
-    const discard = await confirmDeleteTwice("Discard your changes to these groups?", "your changes", { confirmText: "Discard" });
+    const discard = await confirmDestructive("Discard your changes to these groups?", { confirmText: "Discard" });
     asking = false;
     if (discard) finish(); else name.focus();
   };

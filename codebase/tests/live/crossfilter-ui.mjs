@@ -60,12 +60,10 @@ try {
   await b.mock(answer);
   const ev = (s) => b.evaluate(s);
   const waitFor = (s, label) => b.waitFor(s, { label });
-  // Removing a widget asks twice: "Remove", then "Remove for good" on a second dialog.
+  // Removing a widget asks once: "Remove" on one dialog.
   const confirmRemove = async () => {
     await waitFor(`!!document.querySelector('dialog[open]')`, 'remove confirm');
     await ev(`[...document.querySelectorAll('dialog[open] button')].find((x) => x.textContent.trim() === 'Remove').click()`);
-    await waitFor(`/^Really remove /.test(document.querySelector('dialog[open] .dialog__body')?.textContent ?? '')`, 'second remove confirm');
-    await ev(`[...document.querySelectorAll('dialog[open] button')].find((x) => x.textContent.trim() === 'Remove for good').click()`);
   };
   const store = (code) => ev(`(async () => { const st = await import('/features/Core/store.js'); ${code} })()`);
   const connect = async () => {

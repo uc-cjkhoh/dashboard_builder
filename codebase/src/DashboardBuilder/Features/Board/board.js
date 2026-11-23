@@ -1,5 +1,5 @@
 import { bus, activeDashboard, worksheets, dashboards, worksheetById, setWidgets, setDashboardSize, setDashboardRange, setDashboardNotes, nextWidgetId } from "../Core/store.js";
-import { toggle, toast, makeButton, confirmDeleteTwice } from "../Core/ui.js";
+import { toggle, toast, makeButton, confirmDestructive } from "../Core/ui.js";
 import { icon } from "../Core/icons.js";
 import { LIMITS } from "../Core/validate.js";
 import { makeCategoryFormatter } from "../Core/format.js";
@@ -262,8 +262,8 @@ export function initBoard() {
     const dash = activeDashboard();
     if (!dash) return;
     const name = entries.get(widget.id)?.el.getAttribute("aria-label") ?? "widget";
-    if (!(await confirmDeleteTwice(`Remove “${name}” from the dashboard?`, `“${name}”`, { confirmText: "Remove" }))) return;
-    const now = activeDashboard(); // the dialogs were open: the dashboard may have changed
+    if (!(await confirmDestructive(`Remove “${name}” from the dashboard?`, { confirmText: "Remove" }))) return;
+    const now = activeDashboard(); // the dialog was open: the dashboard may have changed
     if (!now || now.id !== dash.id || !now.widgets.some((w) => w.id === widget.id)) return;
     const at = widgetOrder(now.widgets).findIndex((w) => w.id === widget.id);
     commit(now.widgets.filter((w) => w.id !== widget.id));

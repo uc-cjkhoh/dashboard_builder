@@ -173,8 +173,6 @@ try {
     await clickDlg(dlgSel, 'Delete parameter Pick');
     await waitFor(`${confirmSel} !== null`, 'confirm 2');
     await clickDlg(confirmSel, 'Delete');
-    await waitFor(`/^Really delete /.test(${confirmSel}?.textContent ?? '')`, 'second confirm');
-    await clickDlg(confirmSel, 'Delete for good');
     await waitFor(`!/Set /.test(document.querySelector('.ws-select')?.textContent ?? '')`, 'chip button gone');
     must(J(await ev(`(async () => (await import('/features/Core/store.js')).activeWorksheet().sheet.paramAction)()`)) === 'null', 'paramAction kept');
     const left = await ev(`(async () => { const st = await import('/features/Core/store.js'); return JSON.stringify([st.activeWorksheet().sheet.filters[0].param ?? null, st.sharedFilters[0].param ?? null]); })()`);

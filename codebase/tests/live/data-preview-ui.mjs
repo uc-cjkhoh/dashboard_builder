@@ -326,10 +326,8 @@ try {
     must(onSheet, 'shown on a worksheet');
     must(!(await ev(`${panel}.hidden`)), 'not back on the Data Source');
     await ev(`${card('orders')}.querySelector('.iconbtn--danger').click()`);
-    await waitFor(`!!document.querySelector('dialog[open]')`, 'remove confirm'); // removing a card always asks twice
+    await waitFor(`!!document.querySelector('dialog[open]')`, 'remove confirm'); // removing a card asks once
     await ev(`[...document.querySelectorAll('dialog[open] button')].find((x) => x.textContent.trim() === 'Remove').click()`);
-    await waitFor(`/^Really remove /.test(document.querySelector('dialog[open] .dialog__body')?.textContent ?? '')`, 'second remove confirm');
-    await ev(`[...document.querySelectorAll('dialog[open] button')].find((x) => x.textContent.trim() === 'Remove for good').click()`);
     await b.sleep(300);
     const s = await state();
     must(s.hidden && s.ground === groundFull, JSON.stringify(s));

@@ -1,5 +1,5 @@
 import { bus, activeStory, tabs, tabById, switchTab, worksheetById, setSteps } from "../Core/store.js";
-import { toggle, makeButton, toast, confirmDeleteTwice } from "../Core/ui.js";
+import { toggle, makeButton, toast, confirmDestructive } from "../Core/ui.js";
 import { icon } from "../Core/icons.js";
 import { LIMITS } from "../Core/validate.js";
 import { createWorksheetView } from "../Dashboard/worksheet-view.js";
@@ -183,8 +183,8 @@ export function initStory() {
       commit(story, r.steps, r.index); status(`Step moved to position ${r.index + 1}.`); focusMoved("later");
     }, i === story.steps.length - 1, "later");
     const remove = tool("close", `Remove step ${i + 1}`, async () => {
-      if (!(await confirmDeleteTwice(`Remove step ${i + 1} from the story “${story.name}”? The tab it shows is not affected.`, `step ${i + 1}`, { confirmText: "Remove" }))) return;
-      if (!story.steps[i]) return; // the story changed while the dialogs were open
+      if (!(await confirmDestructive(`Remove step ${i + 1} from the story “${story.name}”? The tab it shows is not affected.`, { confirmText: "Remove" }))) return;
+      if (!story.steps[i]) return; // the story changed while the dialog was open
       const steps = removeStep(story.steps, i);
       commit(story, steps, Math.min(i, steps.length - 1)); status(`Removed step ${i + 1}.`);
       (steps.length ? strip.querySelector('[aria-selected="true"]') : addForm.querySelector("select"))?.focus();

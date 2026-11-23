@@ -47,7 +47,7 @@ export function rowLabel(end, type, source) {
   return source && source.entityId === end.entityId && source.column === end.column ? `${base}, source` : base;
 }
 
-/** What a key does on a focused relationship link: Enter / Space edit it (the dialog), Delete / Backspace remove it (which asks twice). Other keys: null. */
+/** What a key does on a focused relationship link: Enter / Space edit it (the dialog), Delete / Backspace remove it (which asks once). Other keys: null. */
 export function linkEdgeAction(key) {
   if (key === "Enter" || key === " ") return "edit";
   if (key === "Delete" || key === "Backspace") return "remove";

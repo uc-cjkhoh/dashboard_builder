@@ -130,8 +130,7 @@ export function confirmDialog(message, { danger = false, confirmText = "Confirm"
   });
 }
 
-/** Delete confirmation, asked twice (there is no Undo): `message` first, then "Delete <what>? This can't be undone." Resolves true only when both are confirmed. */
-export async function confirmDeleteTwice(message, what, { confirmText = "Delete" } = {}) {
-  if (!(await confirmDialog(message, { danger: true, confirmText }))) return false;
-  return confirmDialog(`Really ${confirmText.toLowerCase()} ${what}? This can't be undone.`, { danger: true, confirmText: `${confirmText} for good` });
+/** Destructive confirmation, asked once (there is no Undo, so the dialog says so): `message` plus "This can't be undone.", a danger button labelled `confirmText`. Resolves true only when confirmed. */
+export function confirmDestructive(message, { confirmText = "Delete" } = {}) {
+  return confirmDialog(`${message} This can't be undone.`, { danger: true, confirmText });
 }

@@ -344,7 +344,7 @@ select.select:not([multiple]), select.input:not([multiple]) { appearance: none; 
 .widget .iconbtn--danger { color: var(--danger-ink); }
 .widget .iconbtn--danger:hover { color: var(--danger-ink); background: var(--danger-bg); }
 /* A card's ✕ rests muted like its other head buttons, so four red marks never outshout the one next step on the Data Source; it turns danger on hover
-   and keyboard focus (D140). The icon and its "Remove …" label say what it does, and removing still asks twice (rule 12). */
+   and keyboard focus (D140). The icon and its "Remove …" label say what it does, and removing still asks once (rule 12). */
 .entity .iconbtn--danger:focus-visible { color: var(--danger-ink); background: var(--danger-bg); }
 
 /* ---- Dialog (native <dialog>) -------------------------------------------- */
