@@ -17,8 +17,8 @@ before styling anything. Each is a CSS custom property in the `:root` block of `
 
 ## Light and dark
 
-The viewer picks **Light** (the default) or **Dark** in the Appearance card in the dock at the canvas's bottom right
-([layout.md § Dock](layout.md#dock)). The app does not read the OS setting. The choice is a
+The viewer picks **Light** (the default) or **Dark** in the Appearance card in the sidebar foot
+([layout.md § Sidebar foot](layout.md#sidebar-foot)). The app does not read the OS setting. The choice is a
 per-browser preference (`localStorage` `dashboardbuilder.scheme`), never saved in the workbook; a missing, unknown
 or retired `"system"` value reads as Light ([D148](../../decisions/decisions-design.md#d148--the-appearance-card-has-no-system-mode)).
 
@@ -222,6 +222,7 @@ mark wears the series colour.**
 - **One series** wears the accent. **≥2 series** (multiple measures, or a Colour split) draw
   `--chart-cat-*` in order, with a legend. Beyond 8 values the ramp repeats; the legend disambiguates.
 - **Colour-by-category** (Format panel) colours a single-measure bar chart's bars from the same ramp.
+- **Tab-strip groups** underline a dashboard's group in `--chart-cat-1…7` (slot 8 is the neutral grey, skipped), beside the group's name ([tabs.md](../../concepts/workbook/tabs.md#groups)).
 - **Heatmap** and **continuous Colour** use a single-hue `--accent-soft` → `--accent` scale.
 - **Treemap tile labels** pick black or white per tile with `Dashboard/contrast.js` (`pickInk`) so the
   label meets contrast on every `--chart-cat-*` fill.

@@ -22,7 +22,7 @@ Grouped by feature folder; each entry is the module, then what it owns.
 
 - `Shell/app.js` — bootstrap
   - hydrates `[data-icon]` placeholders, installs the global `error` / `unhandledrejection` handlers (danger toast "Something went wrong — try again."; aborted queries and the benign `ResizeObserver loop` notice are ignored), wires every module's `init*`, listeners before the initial status check
-- `Shell/appearance.js` — the dock's one **Appearance** card (`#scheme-btn` → `#scheme-list`, in `#canvas-dock` at the canvas's bottom right; it opens upward; `wireMenu` with `stayOpen`): mode (Light / Dark, `Core/scheme.js`), dark look, accent (preset swatches + a custom colour) and chart colours (`Core/theme-model.js`), then **Reset theme**. Built once; `sync` repaints the selection and swatches on `scheme:pref`, `scheme:changed` and `theme:changed`. Left / Right move within the mode row and the accent row. The button's glyph + label follow the mode
+- `Shell/appearance.js` — the one **Appearance** card (`#scheme-btn` → `#scheme-list`, in the sidebar foot `#sidebar-foot`; it opens upward from the tile, over the canvas; `wireMenu` with `stayOpen`): mode (Light / Dark, `Core/scheme.js`), dark look, accent (preset swatches + a custom colour) and chart colours (`Core/theme-model.js`), then **Reset theme**. Built once; `sync` repaints the selection and swatches on `scheme:pref`, `scheme:changed` and `theme:changed`. Left / Right move within the mode row and the accent row. The button's glyph + label follow the mode
 - `Shell/perf-panel.js` — the sidebar's gauge tile (`#perf-btn`, bottom of the sidebar body; `sidebar.js` takes it out of the DOM on the Data Source tab and puts it back elsewhere) opens the Performance dialog: recent query / render timings newest first (time in the app zone, kind, query ms, rows, cache hit / miss / failed / aborted, render ms) with a one-line summary (counts failed or cancelled queries), **Copy as text** (tab-separated) and **Clear**; a native `<dialog>` (Esc closes, focus returns to the button); updates live while open
 - `Core/timezone.js` — pure: the app time zone (`<meta name="app-timezone">`, [time-zone.md](../reference/time-zone.md)): `clockIn`, `dateIn`, `todayIn`, `offsetLabel`.
 - `Shell/activity-bar.js` — the **activity chip** (`#activity`, bottom-right, solid, `role=status` / `aria-live=polite`): while any API request is in flight it says what the app is waiting on and for how long ("Loading tables in sales… · 3 s"). Shown after 300 ms (no flash on fast requests), refreshed each second, `hidden` when idle.
@@ -55,7 +55,7 @@ Grouped by feature folder; each entry is the module, then what it owns.
 
 ### Tabs/, Board/ and Story/ — tabs, the dashboard board and stories
 
-- `Tabs/tabs.js` — Data Source tab + one ordered list of worksheet, dashboard and story tabs, the `[+]` menu and the double close confirm (`confirmDeleteTwice`) — [tabs.md](../concepts/workbook/tabs.md)
+- `Tabs/tabs.js` — Data Source tab + one ordered list of worksheet, dashboard and story tabs drawn on one row (shrink, then scroll) with a group per dashboard, the `[+]` menu and the double close confirm (`confirmDeleteTwice`) — [tabs.md](../concepts/workbook/tabs.md)
 - `Board/board-model.js` — pure (P24b):
   - widget geometry and limits — `overlaps`, `inBounds`, `firstFreeSpot`, `placeNew`, `placeAt` (a drop), `checkPlacement`, `explainRefusal` (the refusal in words), the import clean-up `cleanWidgets`, `savedWidgets`, `removeSheetWidgets`, `dashboardsUsing`, `defaultTabName` — [data-model.md](../reference/data-model.md#tabs-and-dashboards)
 - `Story/story-model.js` — pure (node-tested): `validateCaption`, `addStep`, `removeStep`, `moveStep`, `setCaption`, `goTo` (never wraps), `dropTarget` (used by `closeTab`), `offeredTargets`, `targetKind`, `stepName`, `savedSteps`, `cleanSteps` (import: bad steps skipped and reported) — [stories.md](../concepts/workbook/stories.md)
@@ -75,6 +75,7 @@ Grouped by feature folder; each entry is the module, then what it owns.
   - `validateTextEdit`, `textChanged`
 - `Board/board-interact.js` — DOM wiring over the pure modules: pointer move / resize with capture, the ghost, keyboard steps, dropping a worksheet from the panel — [dashboards.md](../concepts/workbook/dashboards.md#editing-the-layout)
 - `Tabs/duplicate-model.js` — pure: duplicate-worksheet naming, limit check, sheet copy (node-tested)
+- `Tabs/tab-groups-model.js` — pure: dashboard group membership, strip display order, colour slots, the close neighbour, the shrink solver `fitTabWidth`, and the cleaners for the saved `groupSlot` / `collapsed` (node-tested)
 
 ### Dashboard/ — worksheet editor, view and rendering
 
@@ -215,6 +216,8 @@ Grouped by feature folder; each entry is the module, then what it owns.
 
 - `Workbook/parameters-dialog.js` — P32: the Parameters dialog (sidebar Parameters icon)
 - `Workbook/workbook.js` — auto-save, restore on connect, Export/Import — [workbook.md](../concepts/workbook/workbook.md)
+- `Workbook/backup.js` — auto-backup: the picked folder (a handle in IndexedDB), permission, the timed writes of what autosave stored, restore, and the Settings dialog opened by the sidebar foot's Settings tile — [auto-backup.md](../concepts/workbook/auto-backup.md)
+- `Workbook/backup-model.js` — pure: backup file names, `safeSegment` / `connectionFolder`, `namesToPrune` (own names only), `decideWrite` (empty / unchanged / too soon), `hashText`, the saved settings, `describeError`
 - `Workbook/workbook-model.js` — pure (also `restoredSummary`, `issueCount`; `Dashboard/missing-columns.js` prunes pills whose column isn't in the catalog):
   - workbook serialize (v2) / `parseWorkbook` (full validation + issue list; v1 files via `migrateV1`) / `sanitizeSheet` / storage keys (`storageKey`, `legacyStorageKey`) — [workbook.md](../concepts/workbook/workbook.md#validation-parseworkbook)
 

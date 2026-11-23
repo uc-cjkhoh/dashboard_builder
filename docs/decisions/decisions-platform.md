@@ -228,7 +228,7 @@ no accounts.
 - **Never stored:** the connection, host credentials or any password. A workbook reopens against
   whatever server the session is connected to.
 - **Keyed by server + user** so a workbook built against one server never auto-opens against another.
-- **Trade-off:** not shared across browsers or users; cleared with the site data. Export is the backup.
+- **Trade-off:** not shared across browsers or users; cleared with the site data. Export is the backup, and [D150](decisions-workbook-backup.md) adds an automatic copy in a folder the user picks.
 - **Rejected:** server-side JSON files keyed by session (sessions reset on restart: storage without durability).
 - Detail: [workbook.md](../concepts/workbook/workbook.md).
 
