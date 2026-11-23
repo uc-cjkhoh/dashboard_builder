@@ -53,7 +53,7 @@ reason and changes nothing** (the golden-rule-3 stance: reject, don't clamp).
   widget).
 - **Pure modules.** The pointer state machine, snapping, key steps, and text validation are DOM-free modules with node
   tests. `board-interact.js` only turns events into points.
-- **No undo:** the board has no history; removing a widget asks twice instead ([D133](decisions-destructive-actions.md#d133--no-undo-double-confirmation-before-every-destructive-delete)).
+- **No undo:** the board has no history; removing a widget asks once instead ([D133](decisions-destructive-actions.md#d133--no-undo-one-confirmation-before-every-destructive-delete)).
 - **Text widgets** default to 12 × 2 (a 1-row cell showed no body), can still be shrunk to 1 row, and open over their
   neighbours while the edit form is open.
 - **Why:** a silent relocation (pushing neighbours aside, clamping into the grid) would make a drop land somewhere the user

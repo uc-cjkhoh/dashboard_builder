@@ -20,7 +20,7 @@ Parameters get their own marker, `[@Name]`, which is not dot-split.
   back to a parameter (silent ambiguity when a calculation is later added).
 
 ### D66 — Deleting a parameter a formula reads asks; renaming rewrites the formulas
-Like deleting a calculation a sheet uses, deleting a parameter that a formula mentions asks first (twice, since [D133](decisions-destructive-actions.md#d133--no-undo-double-confirmation-before-every-destructive-delete); a parameter always asks). Afterwards the calculation
+Like deleting a calculation a sheet uses, deleting a parameter that a formula mentions asks first (once, since [D133](decisions-destructive-actions.md#d133--no-undo-one-confirmation-before-every-destructive-delete); a parameter always asks). Afterwards the calculation
 shows the broken-calculation state ([D47](decisions-calculated-fields.md#d47--a-broken-calculation-stays)) with its formula untouched, so re-adding the name heals it.
 - **Why:** refusing outright would block a legitimate clean-up; silently rewriting would hide the damage.
 - The scan is textual (`[@Name]` anywhere in the formula, including inside a text literal), so it can only over-ask.

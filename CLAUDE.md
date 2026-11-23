@@ -31,7 +31,7 @@ One line each; full text in [coding-standards.md](docs/development/coding-standa
 9. **Never colour alone** — icon + text + colour; legends; shape-coded cardinality.
 10. **Self-hosted, framework-free frontend** — vanilla JS/CSS, no build step, no CDN.
 11. **Update the KB after every prompt** — whatever the prompt changed, update its doc in the same turn, before you report done.
-12. **No Undo; destructive deletes ask twice** — `confirmDeleteTwice` in `Core/ui.js` ([full text: § 13](docs/development/coding-standards.md#13-destructive-deletes-ask-twice-there-is-no-undo)).
+12. **No Undo; destructive deletes ask once** — `confirmDestructive` in `Core/ui.js` ([full text: § 13](docs/development/coding-standards.md#13-destructive-deletes-ask-once-there-is-no-undo)).
 
 ## What this is in one screen
 

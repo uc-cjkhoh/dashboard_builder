@@ -48,7 +48,7 @@ The status line is a live region: a problem, a notice (Formatted, Tab now moves 
 | Shift+Alt+F | Format |
 | Tab / Shift+Tab | Indent / outdent |
 | Ctrl+M | Tab moves focus out of the editor instead (and back), so the keyboard is never trapped |
-| Esc | Closes the dialog, from inside the editor too (CodeMirror's own Esc only acts with several cursors). Once the text differs from what the dialog opened with, Esc first asks twice (`confirmDeleteTwice`, button **Discard**: "Discard your changes to this query?", then "Really discard your changes? This can't be undone." with **Discard for good**; Cancel or Esc on either keeps the dialog open); **Cancel** (a deliberate click) closes at once |
+| Esc | Closes the dialog, from inside the editor too (CodeMirror's own Esc only acts with several cursors). Once the text differs from what the dialog opened with, Esc first asks once (`confirmDestructive`, button **Discard**: "Discard your changes to this query? This can't be undone."; Cancel or Esc keeps the dialog open); **Cancel** (a deliberate click) closes at once |
 | Ctrl+Z / Ctrl+Y | Undo / redo of typing in the editor (Format is one step) |
 
 These are also read to screen readers (`aria-describedby`).

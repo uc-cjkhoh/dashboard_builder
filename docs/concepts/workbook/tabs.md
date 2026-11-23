@@ -78,7 +78,7 @@ The close icon (`.tab__close`, `aria-label` "Close <name>") closes a tab.
 - **A worksheet or dashboard shown by story steps** leaves those steps (each story is notified with `story:changed`); the confirm names the stories, and a worksheet or dashboard shown only by stories confirms too.
 - **A story with steps** confirms ("The worksheets and dashboards it shows are not affected.").
 - **Dashboard buttons** that go to the closed worksheet or dashboard are unlinked, and the confirm names those dashboards ("Buttons that go to it will be unlinked on: …").
-- **Double confirm:** every close that asks (the cases above) asks **twice** (`confirmDeleteTwice`, button **Close**, then "Really close the <kind> “name”? This can't be undone." with **Close for good**; [D133](../../decisions/decisions-destructive-actions.md#d133--no-undo-double-confirmation-before-every-destructive-delete)).
+- **One confirm:** every close that asks (the cases above) asks **once** (`confirmDestructive`, button **Close**, the question ending "This can't be undone."; [D133](../../decisions/decisions-destructive-actions.md#d133--no-undo-one-confirmation-before-every-destructive-delete)).
   An empty tab (a worksheet with no content that no dashboard or story uses, a dashboard with no widgets and no users, a story with no steps) closes at once with no prompt.
   There is no undo: a closed tab, and the widgets, steps and button links it removed, are gone.
 

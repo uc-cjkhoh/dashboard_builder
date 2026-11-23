@@ -56,7 +56,7 @@ danger toast per cause (not one per save).
 ## Restore
 
 1. **Settings → Restore** reads the chosen file and hands its text to the workbook module (`workbook:open-text`). It opens through the
-   same checks as an imported file: full validation, the issues dialog, and two confirmations before a non-empty canvas is replaced.
+   same checks as an imported file: full validation, the issues dialog, and the replace confirmation before a non-empty canvas is replaced.
 2. **On connect, with nothing stored in this browser** (`workbook:none-stored`) and the folder still known and already allowed, a
    dialog offers *Restore your workbook from the backup of <time>?*. Once per connection per page load. If the browser needs a click
    to allow the folder first, nothing is offered; use Settings.

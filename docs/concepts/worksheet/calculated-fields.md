@@ -35,7 +35,7 @@ The editing dialog has:
 - **Live message** — the first problem, in plain words, with `(at character N)` and a caret mark when the parser knows the position. Unknown field and cycle messages name the cause.
 - **Role chip** — icon plus text, never colour alone: `Aggregate · number`, `Row-level · text`, `Row-level · boolean`, "No formula yet", or "Can't be saved".
 - **Use as** — a Measure / Dimension choice, shown only for a **row-level number**. It is a session-only default for chips dragged afterwards and is not saved in the workbook. A pill already placed keeps its own role.
-- **Save** is disabled until the draft names, parses, resolves, type-checks and expands without a cycle. Cancel and Esc close an untouched dialog at once; after an edit they ask twice (`confirmDeleteTwice`, button **Discard**): "Discard your changes to this calculated field?", then "Really discard your changes? This can't be undone." (Cancel or Esc on either keeps the draft). Saving an edit under a new name rewrites `[Old]` to `[New]` in every other calculation's formula, so no reference breaks (`[table.Old]` is left alone).
+- **Save** is disabled until the draft names, parses, resolves, type-checks and expands without a cycle. Cancel and Esc close an untouched dialog at once; after an edit they ask once (`confirmDestructive`, button **Discard**): "Discard your changes to this calculated field? This can't be undone." (Cancel or Esc keeps the draft). Saving an edit under a new name rewrites `[Old]` to `[New]` in every other calculation's formula, so no reference breaks (`[table.Old]` is left alone).
 
 ## Field pane group
 
@@ -45,7 +45,7 @@ Calculations are not listed in the field pane. The pane's search finds them: whi
 |---|---|
 | Edit… | opens the dialog (a group field: the Group dialog, [below](calculated-fields-groups.md)) |
 | Duplicate | adds `<name> copy` (`copy 2` … when taken) with the same formula (or groups) and Use-as choice |
-| Delete… | Refused with a toast `Used by calculation 'B'.` while another calculation refers to it. Always asks twice (`confirmDeleteTwice`, button **Delete**), naming what uses it; when worksheets or shared Top-N filters use it, Delete clears its pills and filters (and a sort or Top-N ranking aimed at it) from them. See [D133](../../decisions/decisions-destructive-actions.md#d133--no-undo-double-confirmation-before-every-destructive-delete) |
+| Delete… | Refused with a toast `Used by calculation 'B'.` while another calculation refers to it. Always asks once (`confirmDestructive`, button **Delete**), naming what uses it; when worksheets or shared Top-N filters use it, Delete clears its pills and filters (and a sort or Top-N ranking aimed at it) from them. See [D133](../../decisions/decisions-destructive-actions.md#d133--no-undo-one-confirmation-before-every-destructive-delete) |
 
 - **Broken calculation** (its field left the model, an imported cycle): shows an **Error** badge instead of the role chip, with its message as the tooltip. It cannot be dragged or added.
 - **Adding:** the **+** puts a calculation on a shelf (Rows for a measure, Columns for a dimension); calculations are not dragged from this list.

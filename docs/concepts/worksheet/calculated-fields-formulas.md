@@ -154,7 +154,7 @@ A formula reads a workbook parameter ([worksheet-filters.md](worksheet-filters.m
 - **Autocomplete:** typing `[@` offers only the workbook's parameters (`parameter · number`), narrowed by what follows.
 - **Changing a value** re-plans the open worksheet and every dashboard widget. The request carries the new literal — a different request key, so a fresh query, not a cached one. The sheet shows a control for each parameter its calculated pills read (the same controls as for filters). Calculated pills are re-typed when a parameter's type changes.
 - **Rename:** renaming a parameter rewrites `[@Old]` in every formula, and renaming a calculation rewrites `[Old]`, both outside text literals (`'[@Old]'` stays text).
-- **Delete:** deleting a parameter always **asks twice**, naming the calculations that mention it. If confirmed, the calculation keeps its formula and shows the broken-calculation [error state](calculated-fields.md#error-state) `Calculation 'X' can't be computed: Parameter [@Y] was deleted or doesn't exist.` (no query is sent) until a parameter with that name exists again.
+- **Delete:** deleting a parameter always **asks once**, naming the calculations that mention it. If confirmed, the calculation keeps its formula and shows the broken-calculation [error state](calculated-fields.md#error-state) `Calculation 'X' can't be computed: Parameter [@Y] was deleted or doesn't exist.` (no query is sent) until a parameter with that name exists again.
 - The workbook saves formula text only (format unchanged).
 
 ### Roles and types
