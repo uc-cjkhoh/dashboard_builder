@@ -30,7 +30,7 @@ A dashboard tab (`.tab--dashboard`) composes the workbook's worksheets, text blo
 - **Editing:** add from the side panel (button or drag), then move and resize by mouse or keyboard. A refused move snaps back and says why; it is never silently moved elsewhere.
 - **Worksheet widgets** show the worksheet's current sheet, read-only except for selecting marks. A mark click filters the other widgets (cross-widget filtering, never saved).
 - **Only the active dashboard renders**, and widgets reuse the worksheet editor's result cache, so re-showing an unchanged board sends no query.
-- **No undo:** the layout is autosaved with the workbook, and removing a widget asks twice ([D133](../../decisions/decisions-destructive-actions.md#d133--no-undo-double-confirmation-before-every-destructive-delete)).
+- **No undo:** the layout is autosaved with the workbook, and removing a widget asks once ([D133](../../decisions/decisions-destructive-actions.md#d133--no-undo-one-confirmation-before-every-destructive-delete)).
 - **Data notes:** one free-text note per dashboard (**Notes** in the bar; [dashboard-print-notes.md](dashboard-print-notes.md)).
 - **Desktop only:** the board has no phone or tablet layout; print lays out a single column (fixed-size boards keep their arrangement).
 
@@ -98,7 +98,7 @@ Each dashboard has its own size (`Board/board-size.js`).
 - **Dragging:** a worksheet row in the side panel is **draggable** (see Dropping from the panel). **Add** stays the keyboard path.
 - **Announcements:** adding also announces "Added “name” to the dashboard." through the polite live region (`#toast-live`).
   A worksheet widget's loading state has a **Cancel** button labelled "Cancel loading <worksheet name>".
-- **Remove** (header button, `aria-label` "Remove “name” from the dashboard") asks to confirm twice (`confirmDeleteTwice`, button **Remove**; [D133](../../decisions/decisions-destructive-actions.md#d133--no-undo-double-confirmation-before-every-destructive-delete)), then drops the widget and toasts "Removed “name”.". Focus moves to the next widget's Remove button (else **Add text**). Siblings are not redrawn.
+- **Remove** (header button, `aria-label` "Remove “name” from the dashboard") asks to confirm once (`confirmDestructive`, button **Remove**; [D133](../../decisions/decisions-destructive-actions.md#d133--no-undo-one-confirmation-before-every-destructive-delete)), then drops the widget and toasts "Removed “name”.". Focus moves to the next widget's Remove button (else **Add text**). Siblings are not redrawn.
 - **Closing a worksheet** removes its widgets from every dashboard ([tabs.md](tabs.md)).
   A widget whose worksheet is missing reads "This worksheet was closed."
 

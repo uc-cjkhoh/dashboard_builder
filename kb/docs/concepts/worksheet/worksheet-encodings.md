@@ -67,7 +67,7 @@ A **named hierarchy** (T03-29) is a reusable drill path kept on the workbook: `{
   - Each row has **Use** (sets the worksheet's drill levels), **Edit** and **Delete** (Delete confirms).
   - Editing: a name, a table, and an ordered level list built with an "Add a level" picker and per-level **Up / Down / Remove** buttons (labelled, keyboard-operable; focus stays on the control just used).
 - **Applying.** **Use** on a dialog row **replaces the sheet's drill** with `{ levels, depth: 0, path: [] }` — the structure a hand-built drill has, each level carrying its column's category — so the chart, breadcrumb and click-to-drill behave identically.
-- **The sheet gets a copy** of the levels. Renaming, editing or deleting the hierarchy later never changes a sheet that already used it. Deleting a hierarchy asks twice (`confirmDeleteTwice`).
+- **The sheet gets a copy** of the levels. Renaming, editing or deleting the hierarchy later never changes a sheet that already used it. Deleting a hierarchy asks once (`confirmDestructive`).
 - **Refusals.** A column cast after the hierarchy was made refuses with the cast message, and a column no longer in the table refuses too. The dialog's Edit keeps a level whose column has vanished until it is removed or replaced.
 - Hierarchies are client-side only (the server never sees one) and save with the workbook ([workbook.md](../workbook/workbook.md)).
 

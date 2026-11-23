@@ -32,10 +32,10 @@ Data sits on top; view controls sit on the chart ([design/layout.md](../../refer
 
 ### Worksheet chrome (P23)
 
-- **No undo:** the app has no Undo / Redo; destructive deletes ask twice instead ([D133](../../decisions/decisions-destructive-actions.md#d133--no-undo-double-confirmation-before-every-destructive-delete)). Typing undo inside the SQL and calculation editors is the text box's own.
+- **No undo:** the app has no Undo / Redo; destructive deletes ask once instead ([D133](../../decisions/decisions-destructive-actions.md#d133--no-undo-one-confirmation-before-every-destructive-delete)). Typing undo inside the SQL and calculation editors is the text box's own.
 - **Sheet actions** (⋯ in the view bar):
   - **Swap Rows and Columns**.
-  - **Clear sheet…** — asks to confirm twice (`confirmDeleteTwice`, button **Clear**; skipped when the sheet is empty), keeps the chart type.
+  - **Clear sheet…** — asks to confirm once (`confirmDestructive`, button **Clear**; skipped when the sheet is empty), keeps the chart type.
   - **Fit** — Standard (a slot per category, the pane scrolls), Fit width, Fit height, Entire view (the fitted axis shares the pane and its labels thin out).
   - **Show title and caption** / **Show filter cards**.
   - Fit and the two toggles carry only a tick at the end of the row (radio-style for Fit); no icon, no extra text.

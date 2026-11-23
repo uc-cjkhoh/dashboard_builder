@@ -15,7 +15,7 @@ components: [src/DashboardBuilder/Features/Relations/join-check.js, src/Dashboar
 - **Why:** users did not find the column drag (one pill at the foot said how), and a compound key took the dialog's last section: two selects and
   Add pair per column. Dragging a second column between related tables made a second, separate relationship, which looked like a compound key and was not.
 - **Kept:** the stored shape (`from` / `to` + `pairs`, D79), so workbooks are unchanged; the first pair still draws the line. Nothing is saved without
-  Confirm except the extra pair, which is the user's own drag. (Its Undo is superseded by [D133](decisions-destructive-actions.md#d133--no-undo-double-confirmation-before-every-destructive-delete): the app has no Undo.) Proposals use names only, are never saved, and can be closed.
+  Confirm except the extra pair, which is the user's own drag. (Its Undo is superseded by [D133](decisions-destructive-actions.md#d133--no-undo-one-confirmation-before-every-destructive-delete): the app has no Undo.) Proposals use names only, are never saved, and can be closed.
 - **Overrides:** D79's "extra pairs are added only in the dialog". A file with two relationships for one table pair still opens and joins as before.
 - **Deferred:** a single **Match columns** list at the top of the dialog (the first pair no longer special); proposals from key or value signals;
   remembering a closed proposal.

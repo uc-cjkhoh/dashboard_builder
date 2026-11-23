@@ -37,7 +37,7 @@ on every edit.
 | Chart | fresh data from ClickHouse: ECharts entrance 300ms `cubicOut` (not its 1s default); a re-render from the cache (format tweaks, theme flip) has no animation. Table/KPI fade in |
 | Loading / notice | "Loading…" fades in after 150ms (no flash on fast queries); the result notice fades in |
 | Disconnect | cards and dashboard tabs fade out (`--dur-exit`) before the workspace clears |
-| Entity cards | rise in on drop; **removing** one (after the second confirm) takes it out of the model at once, then it is `inert` and fades out with a 4px drop and 98 % scale (`--dur-exit`) before it leaves the DOM; collapse by animating `max-height`; no hover lift |
+| Entity cards | rise in on drop; **removing** one (after the confirm) takes it out of the model at once, then it is `inert` and fades out with a 4px drop and 98 % scale (`--dur-exit`) before it leaves the DOM; collapse by animating `max-height`; no hover lift |
 | Toasts / dialogs | toasts slide up from the bottom centre; dialogs scale in over a dimming scrim |
 | Status | the loading pill glyph spins |
 | Loading bar | a 4px indeterminate strip across the top (`.app-loading`) while the first connection answer is pending after a load: fades in after 200ms (a quick answer shows nothing), a 40% segment slides across (`translateX`, 1.2s loop); `role="progressbar"`, still and at 40% under reduced motion |

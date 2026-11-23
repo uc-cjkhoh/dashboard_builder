@@ -55,7 +55,7 @@ Grouped by feature folder; each entry is the module, then what it owns.
 
 ### Tabs/, Board/ and Story/ — tabs, the dashboard board and stories
 
-- `Tabs/tabs.js` — Data Source tab + one ordered list of worksheet, dashboard and story tabs drawn on one row (shrink, then scroll) with a group per dashboard, the `[+]` menu and the double close confirm (`confirmDeleteTwice`) — [tabs.md](../concepts/workbook/tabs.md)
+- `Tabs/tabs.js` — Data Source tab + one ordered list of worksheet, dashboard and story tabs drawn on one row (shrink, then scroll) with a group per dashboard, the `[+]` menu and the close confirm (`confirmDestructive`) — [tabs.md](../concepts/workbook/tabs.md)
 - `Board/board-model.js` — pure (P24b):
   - widget geometry and limits — `overlaps`, `inBounds`, `firstFreeSpot`, `placeNew`, `placeAt` (a drop), `checkPlacement`, `explainRefusal` (the refusal in words), the import clean-up `cleanWidgets`, `savedWidgets`, `removeSheetWidgets`, `dashboardsUsing`, `defaultTabName` — [data-model.md](../reference/data-model.md#tabs-and-dashboards)
 - `Story/story-model.js` — pure (node-tested): `validateCaption`, `addStep`, `removeStep`, `moveStep`, `setCaption`, `goTo` (never wraps), `dropTarget` (used by `closeTab`), `offeredTargets`, `targetKind`, `stepName`, `savedSteps`, `cleanSteps` (import: bad steps skipped and reported) — [stories.md](../concepts/workbook/stories.md)
@@ -284,12 +284,12 @@ Grouped by feature folder; each entry is the module, then what it owns.
 - **Visibility:** `show(el)` / `hide(el)` / `toggle(el, visible)` flip the `hidden` attribute — never
   `style.display`.
 - **`copyText(text, what)`** — writes to the clipboard and toasts "Copied <what>." (or a danger toast when the browser blocks it).
-- **`toast(message, kind)`** — `ok | danger | info` (no action button: the app has no Undo, [D133](../decisions/decisions-destructive-actions.md#d133--no-undo-double-confirmation-before-every-destructive-delete)). `info` / `ok` auto-hide after 5 s; **`danger` stays
+- **`toast(message, kind)`** — `ok | danger | info` (no action button: the app has no Undo, [D133](../decisions/decisions-destructive-actions.md#d133--no-undo-one-confirmation-before-every-destructive-delete)). `info` / `ok` auto-hide after 5 s; **`danger` stays
   until dismissed** (a close button). The visible `#toast` is not a live region; messages are announced
   through the persistent visually-hidden `#toast-live`.
 - **`fieldError(input, msg)` / `clearFieldError(input)` / `checkField(input, result)`** — set
   `aria-invalid` and an inline `.field-error` linked by `aria-describedby`, cleared on the next `input`.
   `checkField` applies a `validate.js` result and returns the value or `undefined`.
 - **`listDialog(title, items)`** — a titled issue list with one OK button (workbook reports).
-- **Dialogs:** native `<dialog>`. `confirmDialog(message, { danger, confirmText })` replaces `window.confirm`. **`confirmDeleteTwice(message, what, { confirmText = "Delete" })`** shows the danger `confirmDialog(message)` and, if confirmed, a second one "Really <confirmText lowercased> <what>? This can't be undone." with the button "<confirmText> for good"; it resolves `true` only when both are confirmed, and Cancel / Esc on either resolves `false` (`tests/js/confirm-delete.test.mjs`). Every destructive delete uses it ([D133](../decisions/decisions-destructive-actions.md#d133--no-undo-double-confirmation-before-every-destructive-delete)). `openDialog`/`closeDialog`
+- **Dialogs:** native `<dialog>`. `confirmDialog(message, { danger, confirmText })` replaces `window.confirm`. **`confirmDestructive(message, { confirmText = "Delete" })`** shows one danger `confirmDialog` with `message` followed by "This can't be undone." and the button `confirmText`; it resolves `true` only when confirmed, and Cancel / Esc resolves `false` (`tests/js/confirm-delete.test.mjs`). Every destructive delete uses it ([D133](../decisions/decisions-destructive-actions.md#d133--no-undo-one-confirmation-before-every-destructive-delete)). `openDialog`/`closeDialog`
   fall back to the `open` attribute where `showModal` is unavailable (e.g. jsdom).

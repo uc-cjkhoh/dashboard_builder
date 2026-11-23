@@ -75,7 +75,7 @@ A union or unpivot ([query-sources.md](query-sources.md)) becomes a card in the 
 - One note line under the head says how its columns are matched.
 - Its title, column names and note start at the same x as a table card's (the left lane stays empty on both).
 - Remove and collapse work as on any card.
-- **Removing a card** (✕ in its head, asked twice) takes it out of the model **before** `entity:removed` is emitted (`removeEntity`, `clearAll` in `canvas.js`), so `relations.js` redraws without it: its links go at once, no proposed link is drawn to it, and a card left behind shows or hides *Needs a partner* by the cards that remain (a single card needs none). The card's element fades out afterwards (`inert` meanwhile). Browser check: `tests/live/card-remove-ui.mjs`.
+- **Removing a card** (✕ in its head, asked once) takes it out of the model **before** `entity:removed` is emitted (`removeEntity`, `clearAll` in `canvas.js`), so `relations.js` redraws without it: its links go at once, no proposed link is drawn to it, and a card left behind shows or hides *Needs a partner* by the cards that remain (a single card needs none). The card's element fades out afterwards (`inert` meanwhile). Browser check: `tests/live/card-remove-ui.mjs`.
 
 ## Empty state
 
@@ -175,7 +175,7 @@ The first rows of one card, in a panel docked under the canvas (`data-preview.js
 
 - **Moving:** drag a card by its **head**. This uses pointer events, a separate gesture from dragging a chip with drag and drop.
   The entity's `x, y` snap to 8px steps and update, and `entity:moved` fires so links re-route.
-- **Removing** a card removes its relationships. It **always** asks twice (`confirmDeleteTwice`, button **Remove**: "Remove shop.orders and its relationship(s)?" or "Remove shop.orders from the canvas?", then "Really remove shop.orders? This can't be undone." with **Remove for good**; [D133](../../decisions/decisions-destructive-actions.md#d133--no-undo-double-confirmation-before-every-destructive-delete)), then toasts "Removed shop.orders.". There is no undo; add the table again.
+- **Removing** a card removes its relationships. It **always** asks once (`confirmDestructive`, button **Remove**: "Remove shop.orders and its relationship(s)? This can't be undone." or "Remove shop.orders from the canvas? This can't be undone."; [D133](../../decisions/decisions-destructive-actions.md#d133--no-undo-one-confirmation-before-every-destructive-delete)), then toasts "Removed shop.orders.". There is no undo; add the table again.
   If a half-drawn link was waiting on that card, it is cancelled (no dangling "undefined" toast).
 
 ## Join keys

@@ -24,7 +24,7 @@ open question, promote it to a decision.
 | D134 (hover and pressed are brighter than rest in every scheme) | [decisions-buttons.md](decisions-buttons.md) |
 | D152 (the tab strip is one row: tabs shrink, then scroll inside the bar), D153 (a dashboard that holds worksheets is a derived group on the strip) | [decisions-tab-strip.md](decisions-tab-strip.md) |
 | D150 (the workbook is also copied to a user-picked folder by the browser: 5 rolling copies, nothing on the server) | [decisions-workbook-backup.md](decisions-workbook-backup.md) |
-| D133 (no Undo anywhere; every destructive delete asks twice through `confirmDeleteTwice`) | [decisions-destructive-actions.md](decisions-destructive-actions.md) |
+| D133 (no Undo anywhere; every destructive delete asks once through `confirmDestructive`) | [decisions-destructive-actions.md](decisions-destructive-actions.md) |
 | D70 (recent connection sources), D89 (start screen: recent workbooks — withdrawn), D98 (Secure and Trust as visible switches; the certificate note waits), D99 (the connect form lives on the start card), D135 (the connect form reaches only allowed hosts, rate-limited), D137 (a writable account never runs without `readonly=2`) | [decisions-connection.md](decisions-connection.md) |
 | D82 (calculated fields as row filters), D84, D87 (a filter on an aggregated measure, `HAVING`; its range slider), D91 (a calculated filter on a single-table read), D95 (View data reads the first measure's table) | [decisions-filters.md](decisions-filters.md) |
 | D83 (groups on whole-number and true/false fields), D94 (a NULL label on a group field) | [decisions-calculated-fields.md](decisions-calculated-fields.md) |
