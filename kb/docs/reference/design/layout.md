@@ -119,17 +119,24 @@ A glass bar across the top of the content area (`.canvas__bar`). From left to ri
 The **performance** gauge button (`#perf-btn`, `Shell/perf-panel.js`) is not in this bar: it is a sidebar tool tile in the sidebar body (see § Sidebar).
 
 The bar's contents are vertically centred. It shares `--topbar-h` with the sidebar brand block, so the
-two bottom borders line up across the shell. If the tabs wrap, the bar grows taller than the brand.
+two bottom borders line up across the shell. The tabs never wrap: they shrink, then scroll inside the bar ([tabs.md](../../concepts/workbook/tabs.md#one-row)), so the bar keeps its height. A dashboard group's underline hangs in the bar's bottom padding.
 
-## Dock
+## Sidebar foot
 
-Two solid icon buttons stacked at the canvas's bottom right (`.canvas__dock`, absolutely placed in `main.canvas`, over every view): **Appearance** on top, **Fit all cards** under it (added by `Canvas/canvas.js` while the Data Source shows cards; the dock holds only Appearance otherwise). Right and bottom edges are 16px in (`--s4`); the buttons are 32px with 8px between them, a hairline (`--line-2`) for the edge on a `--surface` fill (buttons carry no shadow, `buttons.css`). The dock rises above the Data preview panel while it is open (`.has-ds-preview`), and the activity chip steps left of it.
+Two 40px glass tiles at the foot of the sidebar (`.sidebar__foot`, `#sidebar-foot`): **Appearance** first, then **Settings** (`#settings-dock-btn`, the auto-backup dialog). The foot is a child of `aside.sidebar` after `#sidebar-body`, not inside it, so it stays when the body is hidden (collapsed rail, dashboard tab, disconnected). The tiles are `.iconbtn.sidebar__tool`, the same tile as the Performance tile, so every sidebar button on glass looks alike. Nothing floats over the canvas.
+
+- **Wide sidebar** (Data Source, connected): its own section under a full-width 1px hairline (`border-top: 1px solid var(--line)`, the same line as the divider under the connection tile). The tiles are a row on the 16px gutter (`--s4`), 8px apart, 16px below the hairline and 16px above the sidebar's bottom edge; the body above keeps its 16px padding, so the table list is 16px from the hairline.
+- **Rail** (collapsed, worksheet, dashboard, story, disconnected, connecting): one centred column at the bottom, 8px apart, under the Performance tile where it shows, 16px above the bottom edge; no hairline (the rail is 60px wide, and the tiles already stand apart). `--foot-rise` lowers the Appearance card's height cap by the Settings tile below it.
+- **Fit all cards** is not in the foot: it acts on the Data Source's cards, so it is the tab bar's right-most control (`.canvas__fit` in `.canvas__bar`, `margin-left: auto`, 16px gutter), hidden on every other tab.
+- The activity chip sits at the window's bottom right (16px) with nothing to step around, and the data preview panel no longer moves any control.
+- Probe (light, dark, One Dark; wide, 900px, collapsed rail, worksheet rail): no alignment, gap, rhythm, contrast, type, radius or target findings. On the whole `.sidebar` the probe also lists parts this change did not touch: the brand row's space-between gap (mark, name, toggle), the screen-reader-only `h2.sidebar__title` (21px, clipped on purpose) and a 1px offset of the table chip's hover grip. The foot's hairline is `--line`, no finding. The one `colour` finding is the tile fill, `color-mix(ink 9%, glass-ctl)` from `buttons.css`, shared with the Performance tile and the worksheet tools (a tint reads as off-token to the probe).
+- `.sidebar` is `z-index: 4`, above the tab bar (3) and the data preview (2), so the Appearance card paints over the canvas.
 
 **Appearance** (`#scheme-btn`, `Shell/appearance.js`) is an icon button whose glyph shows the current mode (sun / moon; label "Appearance: Light"). It opens one
 314px card on the menu surface: a two-segment mode row (Light / Dark), then Dark look, Accent, Chart colours and Reset theme
 ([tokens.md § Light and dark](tokens.md#light-and-dark), [workbook.md](../../concepts/workbook/workbook.md)). It scrolls inside when the window is short (checked at a 420px-high window: the card scrolls, the page does not). Spacing: 8px card padding; 4px between rows of one group; 8px each side of a separator; a group heading carries 8px above and none below, so it sits with its own rows. Every left edge (heading, row, strip, swatch, picker) is 16px in from the card's edge, every right edge (tick, swatch, hex field, accent name) 16px; the tick and the Reset icon are pulled 2px so their ink, not their box, meets those edges. The nine swatches have exact 8px gaps (the width is 2 + 2×8 + 2×8 + 9×24 + 8×8). The custom-colour row is one 32px field (a 24px swatch that opens the picker, the name “Custom” and the hex, right-aligned; the swatch sits 3px from the field's edge on every side), its outer edges on the swatch row's; Left / Right walk the mode row and the accent swatches.
 
-The card opens **upward** (`top: auto; bottom: calc(100% + 8px)`) and grows from the button's bottom right (`Core/menu.js` reads the computed `top` to pick the animation direction); its height is capped to the room above the dock.
+The card opens **upward** from its tile (`top: auto; bottom: calc(100% + 8px); left: 0`) and grows from the tile's bottom left (`Core/menu.js` reads the computed `top` to pick the animation direction); its height is capped to the room above the foot (`100vh − 80px`, less `--foot-rise` on a rail). Checked at 900px and at a 420px-high window on a rail: the card is inside the window, above its tile and on top of the canvas.
 
 ## Entity cards
 

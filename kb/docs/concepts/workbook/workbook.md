@@ -1,5 +1,5 @@
 ---
-components: [src/DashboardBuilder/Features/Board/board-model.js, src/DashboardBuilder/Features/Core/parameters-model.js, src/DashboardBuilder/Features/Core/sheet-schema.js, src/DashboardBuilder/Features/Core/validate.js, src/DashboardBuilder/Features/Workbook/]
+components: [src/DashboardBuilder/Features/Workbook/backup.js, src/DashboardBuilder/Features/Board/board-model.js, src/DashboardBuilder/Features/Core/parameters-model.js, src/DashboardBuilder/Features/Core/sheet-schema.js, src/DashboardBuilder/Features/Core/validate.js, src/DashboardBuilder/Features/Workbook/]
 ---
 # Workbook — save, restore, export, import
 
@@ -18,6 +18,7 @@ database ([D21](../../decisions/decisions-platform.md#d21--workbooks-persist-in-
 - **Auto-save:** every change is saved to `localStorage` 500 ms later, one workbook per server + user. No password is ever saved.
 - **Restore:** connecting with an empty canvas reopens the saved workbook; anything repaired is reported.
 - **Export / Import:** the **Workbook** menu downloads or opens a JSON file (format version 2; version 1 files still open).
+- **Auto-backup:** the browser also copies the workbook to a folder the user picks, every 10 minutes, 5 kept: [auto-backup.md](auto-backup.md). `save()` announces each stored workbook (`workbook:saved`), a connect with nothing stored (`workbook:none-stored`), and `importText` opens a backup's text (`workbook:open-text`).
 - **Validation never silently coerces:** a broken file is refused outright; any other problem is repaired and reported, one sentence per issue.
 - **Never lose a stored workbook:** an unreadable entry is backed up, and autosave never overwrites what it couldn't read.
 
@@ -95,7 +96,7 @@ Problems while restoring:
 
 ## Export & Import
 
-**Appearance** is the top button of the dock at the canvas's bottom right (`Shell/Index.cshtml`, `#canvas-dock`; **Fit all cards** sits under it on the Data Source): one button, one card. The **Performance** timings tile is in the sidebar body (worksheet and dashboard tabs only), and workbook actions live in the worksheet view bar.
+**Appearance** is the first tile of the sidebar foot (`Shell/Index.cshtml`, `#sidebar-foot`, with **Settings** next to it; **Fit all cards** is the tab bar's right-most control on the Data Source): one button, one card. The **Performance** timings tile is in the sidebar body (worksheet and dashboard tabs only), and workbook actions live in the worksheet view bar.
 The worksheet view bar's icon row ends with **Export** and the **Sheet actions** (⋯) menu, and the **Export** menu holds **Workbook (JSON)** and **Import workbook…**, and the worksheet sidebar's **Parameters** icon opens the Parameters dialog.
 The actions:
 
@@ -105,7 +106,7 @@ The actions:
   - Each has a name (unique, 1–60 characters), a type (number / text / date), the allowed values (any, a list of ≤ 50, or a number range) and the current value.
   - Each is checked before it is kept (`Core/parameters-model.js`).
   - Parameters save with the workbook; disconnecting clears them from the screen.
-- **Appearance** (the dock's top icon at the canvas's bottom right; its glyph shows the mode) opens one card, upward, not a dialog. It stays open while you pick, and Esc, an outside click or Tab closes it. Top to bottom:
+- **Appearance** (the first tile of the sidebar foot, bottom left; its glyph shows the mode) opens one card, upward, not a dialog. It stays open while you pick, and Esc, an outside click or Tab closes it. Top to bottom:
   - the mode (Light or Dark, Light by default; kept in this browser, not in the workbook);
   - **Dark look**: Default or One Dark Pro (dark-mode surfaces; it also picks the One Dark accent and chart colours);
   - **Accent**: Signal (the default), Ultramarine, Monospace, Crimson, Blue, Teal, Violet, One Dark and Graphite as swatches (the chosen one carries a tick; the heading names it), then a custom colour (a picker and a `#rrggbb` field, refused with the reason if it can't carry white text; Signal carries dark text on its dark-mode lime);
@@ -152,6 +153,7 @@ naming the sheet and field ("Sheet "Sales": unknown chart type "radar" — reset
 | Worksheets / dashboards | each an object (others skipped and reported); name 1–60 characters (else reset to "Worksheet" / "Dashboard"); a non-list means none are opened |
 | Stories | an object each (others skipped and reported); a name like any tab; each step `{ caption, target: { kind: worksheet \| dashboard, index } }` with a text caption of at most 300 characters and a target in range — a bad step is **skipped and reported, not cut**; at most 20 steps (the rest dropped and reported); stories count toward the 50 tabs |
 | Tab order | `tabs` entries `{ kind, index }` pointing at a kept worksheet, dashboard or story, no repeats — others skipped; tabs it leaves out are added at the end; absent = worksheets then dashboards (no issue); at most **50 tabs of both kinds**, the rest dropped |
+| Dashboard group (`groupSlot`, `collapsed`) | optional on each dashboard, no version bump: `groupSlot` an integer 1–7 (the group's `--chart-cat` colour) and `collapsed` `true`; anything else is dropped and reported (never clamped), and duplicate slots are kept (more than seven dashboards repeat colours). A dashboard saved without a slot takes the lowest least-used one on open |
 | Dashboard widgets | see [Dashboard widgets](#dashboard-widgets) below |
 | Sheet | `chartType` one of the 23 types; pills carry `db`, `table`, `column`, `category`; `role` and `agg` valid for the column's category (a bad `agg` resets to sum / count); a `percentile` pill needs a finite `p` 0..1 (else it resets with an issue; `p` on any other aggregation is dropped; a percentile Top-N with a bad `topBy.p` is dropped); at most 20 pills per shelf; at most 8 filters; `collapsed` string keys only (≤ 200 per axis), the rest dropped with an issue |
 | Filters | known `op` (incl. P30 `contains` / `startsWith` / `endsWith` / `relative` / `top`; a `top` must carry its `topBy` measure); single value text (a non-text value resets to empty); `in` / `between` carry a text list; the `category` may be absent (back-filled from the catalog at runtime) |

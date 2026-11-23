@@ -117,11 +117,11 @@ dashboard_builder/          (this KB)
 │   ├── concepts/           # core-concepts, then one folder per app area:
 │   │   ├── data-source/    #   connection · schema-browser · canvas · query-sources · sql-editor · sql-syntax · relationships (+ relationship-suggestion, relating-tables)
 │   │   ├── worksheet/      #   worksheet (+ -query, -table-view) · worksheet-charts · worksheet-encodings (+ -marks, -filters) · calculated-fields (+ -formulas, -groups) · field-settings
-│   │   └── workbook/       #   tabs · dashboards · stories · workbook
+│   │   └── workbook/       #   tabs · dashboards · stories · workbook · auto-backup
 │   ├── how-to/             # local-development · testing · deployment · troubleshooting
 │   ├── reference/          # api (+ -calculated-fields, -custom-sql, -union-unpivot) · clickhouse-integration (+ clickhouse-calculations) · data-model · source-table-guidance · tableau-marks-comparison · glossary
 │   │   └── design/         #   index (concept + rules) · tokens · layout · components · motion-accessibility
-│   ├── decisions/          # README (D1–D149 lookup, open questions) · decisions-* by topic
+│   ├── decisions/          # README (D1–D150 lookup, open questions) · decisions-* by topic
 │   ├── operations/         # live-service · resource-usage · safe-operations (+ git-ignored credentials.local.md)
 │   ├── development/        # coding-standards · sharp-edges · review-guidelines · design-review · git-workflow · kb-maintenance · hooks
 │   │   ├── backlog/        #   undone work by topic (incl. custom-sql) · recommended order · design specs
@@ -149,6 +149,7 @@ dashboard_builder/          (this KB)
 | Query caching / latest-wins / truncation notice | `Features/Dashboard/query-runner.js` | [worksheet-query.md § Query lifecycle](docs/concepts/worksheet/worksheet-query.md#query-lifecycle) |
 | Story tab (steps, strip, caption, print) | `Features/Story/story.js`, `story-model.js` | [stories.md](docs/concepts/workbook/stories.md) |
 | Save / restore / export / import | `Features/Workbook/` | [workbook.md](docs/concepts/workbook/workbook.md) |
+| Auto-backup to a folder on disk, the Settings dialog and its sidebar-foot tile | `Features/Workbook/backup.js`, `backup-model.js`, the sidebar foot in `Shell/Index.cshtml` | [auto-backup.md](docs/concepts/workbook/auto-backup.md), [D150](docs/decisions/decisions-workbook-backup.md) |
 | Colour / spacing / type | `Features/Core/core.css` `:root` | [tokens.md](docs/reference/design/tokens.md) |
 | Motion / transitions | `Features/Core/motion.js` + `core.css` motion tokens | [motion-accessibility.md](docs/reference/design/motion-accessibility.md#motion) |
 | Gotchas before editing | — | [sharp-edges.md](docs/development/sharp-edges.md) |
