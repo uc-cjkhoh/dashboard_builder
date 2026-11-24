@@ -47,7 +47,7 @@ on every edit.
 | New relationship | a link the user just made **arrives once** ([relationships.md § Rendering](../../concepts/data-source/relationships.md#rendering)): the line fades in (`--dur`), its two end shapes settle from 60 % (`--dur-fast`, 100ms in), then the badge rises 4px (`--dur`, 150ms in); about 400ms. Only `opacity` / `transform`, each on the *inner* shape, never on the link group (that carries the focus fade). A redraw inside the window resumes the run; links restored from a workbook and every later redraw (zoom, drag, resize) never animate |
 | Data preview panel | opens with the view fade (`--dur`); **closing** drops it 8px and fades it (`--dur-exit`, `inert` meanwhile) before the ground takes its height back; reopening during the exit keeps the panel (latest wins) |
 | Relationship links | hovering a link or a card with links fades the links it doesn't touch to 20 % (`opacity`, `--dur`); with quiet badges a resting badge fades in on hover ([relationships.md](../../concepts/data-source/relationships.md#rendering)) |
-| Controls | colour / border transitions on hover (`--dur-fast`); a picker's caret flips while its menu is open |
+| Controls | colour / border transitions on hover (`--dur-fast`); a picker's caret flips while its menu is open; a Marks flyout's field slot darkens its dashed edges and fills the Drop Field Here row with `--surface-2` on hover |
 | Pages shelf | autoplay steps every 1.5s |
 
 **All of it is gated by `prefers-reduced-motion: reduce`.** The CSS media query zeroes every duration,
