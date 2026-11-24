@@ -146,7 +146,7 @@ Nothing here reaches the server; dashboards add no endpoint
   collapsed: { rows: [key], cols: [key] },   // T03-29 collapsed crosstab headers; the key exists only once one is collapsed
   tooltipText: null | string,   // T01-19 tooltip template with <Field> placeholders (≤ 300; null = automatic)
   tooltipFormats?: { [field]: { number?, decimals?, date? } },   // T01-19 per-field tooltip formats (≤ 24 fields); absent = the view's formats
-  memberColors: {},              // T01-20 { "table.column": { member: "#rrggbb" } } (format.paletteReverse: bool, T03-33; format.colorRamp brand|blue|green|amber|violet, colorMin / colorMax number|null, T03-19; colorScale auto|sequential|diverging (auto only on a worksheet the user adds; every older file stores sequential), colorFullRange? bool (diverging only; absent = symmetric), colorPair default|amber-violet|green-violet, colorCentre number|null; colorSteps 0|3–9, 0 = continuous)
+  memberColors: {},              // T01-20 { "table.column": { member: "#rrggbb" } } (format.colorRamp brand|blue|green|amber|violet, colorMin / colorMax number|null, T03-19; colorScale auto|sequential|diverging (auto only on a worksheet the user adds; every older file stores sequential), colorFullRange? bool (diverging only; absent = symmetric), colorPair default|amber-violet|green-violet, colorCentre number|null; colorSteps 0|3–9, 0 = continuous)
   title: null | string, caption: null | string, showTitle: boolean,   // P23 (null = automatic)
   showFilterCards: boolean,                                          // P30
   analytics: null | { ref: { kind, value?, param?, measure? }, band: { from, to, fromParam?, toParam? } | { kind: "stddev", k: 1|2|3 } | { kind: "percentile", lo, hi } | null, trend, trendMeasure?, forecast, forecastParam?, totals: { grand, sub } },   // P21
@@ -156,7 +156,7 @@ Nothing here reaches the server; dashboards add no endpoint
   memberShapes?: { "table.column": { member: "circle" | "square" | "triangle" | "diamond" | "roundSquare" | "pin" | "arrow" } },   // Edit member shapes (Shape dimension, scatter family); the key exists only once a member has one
   marks:  { size, label, detail: [], tooltip: [], shape (a dimension, or a numeric field whose values are binned), path, angle },
   format: { numberFormat, decimals, currencySymbol, dateFormat, topN, dateBucket, target, downIsGood, conditional, legend,
-            dataLabels, colorByDimension, xTitle, yTitle,
+            dataLabels, xTitle, yTitle,
             lineStyle, heatmapShape, ganttLength?, targetMeasure,
             syncAxes, dualAxis, secondaryType, markerSize, linePattern?, lineMarkers?, showTooltips?, tooltipButtons?, tooltipMode?, sizeScale?, markOpacity?, shapeBins?, labelMarks?, labelPosition?, markBorder, markBorderColor?, markerShape, font, tableAlign, tableDensity, tableShade, tableCols? }
 }
@@ -180,8 +180,8 @@ Nothing here reaches the server; dashboards add no endpoint
   | `shapeBins` | optional whole number 2–6 (Shape flyout → Shape bins, while Shape holds a measure; absent = 5); an invalid saved value is reset to 5 and reported, never clamped |
   | `labelMarks` | optional `minmax` \| `selected` \| `highlighted` \| `recent` \| `ends` (Label flyout → Label marks; absent = All, every mark labelled); an unknown saved value is reset to All and reported |
   | `labelPosition` | optional `above` \| `below` \| `left` \| `right` (Label flyout → Label position on a line, area or point chart; absent = Automatic); an unknown saved value is reset to Automatic and reported |
-  | `markOpacity` | optional whole percent, a multiple of 10 from 0 to 100 (Color flyout → Opacity; absent = 100); an invalid saved value is reset and reported, never clamped |
-  | `markBorder` | `none` \| `thin` \| `medium` \| `thick` (default `none`) |
+  | `markOpacity` | optional whole percent from 0 to 100 (Color flyout → Opacity; absent = 100); an invalid saved value is reset and reported, never clamped |
+  | `markBorder` | `none` or a width in px, 0.5 to 3 in steps of 0.5 (default `none`); an older file's `thin` / `medium` / `thick` read as 1 / 2 / 3 and import stores the number; an off-step value is reset and reported, never rounded |
   | `markBorderColor` | optional: `muted` \| `ink` \| `surface` \| `accent` (absent = `muted`) |
   | `markerShape` | `circle` \| `square` \| `diamond` \| `triangle` (default `circle`) |
   | `linePattern` | optional `dashed` \| `dotted` (Path flyout → Line pattern on a line, area or combo's lines; absent = solid); an unknown saved value is dropped and reported, never clamped |
@@ -209,7 +209,7 @@ Nothing here reaches the server; dashboards add no endpoint
   title 80 · filter value 1000.
 - **Format defaults:** `numberFormat:"auto"`, `decimals:null`, `currencySymbol:"$"`,
   `dateFormat:"auto"`, `topN:null` (All — up to 5000), `dateBucket:"auto"`, `conditional:{}` (P37: `{ [db.table.column:agg]: { mode: none|scale|bars, scale: sequential|diverging, mid, rules: [{ op, value, tone: good|bad|warn|info }], totals?: true } }`; `totals` = Include totals, present only while on, a non-boolean is dropped and reported on import, [D122](../decisions/decisions-marks.md#d122--include-totals-in-the-colour-encoding)), `legend:"auto"`, `dataLabels:false`,
-  `colorByDimension:false`, axis titles `null`.
+  axis titles `null`.
 
 ### Marks, pages, selection, drill
 
