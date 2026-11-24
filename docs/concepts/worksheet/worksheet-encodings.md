@@ -119,7 +119,7 @@ The comparison is the same query over the comparison range. It is cached like an
 
 | View | Shows |
 |---|---|
-| **KPI** (no dimensions) — the scorecard | Under each value: ▲ / ▼ / ■ + signed % + "vs previous period", coloured `--up` / `--down` (good / bad) with an `aria-label`; the previous value in its tooltip. Format → **A fall is good** flips the tone. Format → **Target** (KPI) adds a progress bar and "78% of 40,000" under the first measure (✓ when met) |
+| **KPI** (no dimensions) — the scorecard | Under each value: ▲ / ▼ / ■ + signed % + "vs previous period", coloured `--up` / `--down` (good / bad) with an `aria-label`; the previous value in its tooltip. Dates flyout → **A fall is good** flips the tone. Format → **Target** (KPI) adds a progress bar and "78% of 40,000" under the first measure (✓ when met) |
 | **Line / Area** | a dashed, faded line per measure, named "<measure> (previous period)" in the legend |
 | **Bar** | a hatched, muted bar beside each bar, named in the legend |
 

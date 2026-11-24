@@ -31,7 +31,7 @@ Chart, authoring and formatting work not yet built. Format: [index.md](index.md#
 
 ## Beginner-test follow-ups
 
-- **Pie / Donut slice labels by default** (priority P2) — a Pie / Donut draws slice labels only when Format → Data labels is on; labelling by default (without Data labels) needs a tri-state Data labels setting (automatic / on / off in `Core/store.js`, which would also let a Heatmap hide labels that fit, [D102](../../decisions/decisions-dashboards.md#d102--heatmap-labels-draw-themselves-when-they-fit-a-stack-of-very-different-scales-is-flagged)). Needs: none.
+- **Pie / Donut slice labels by default** (priority P2) — a Pie / Donut draws slice labels only when Label flyout → Data labels is on; labelling by default (without Data labels) needs a tri-state Data labels setting (automatic / on / off in `Core/store.js`, which would also let a Heatmap hide labels that fit, [D102](../../decisions/decisions-dashboards.md#d102--heatmap-labels-draw-themselves-when-they-fit-a-stack-of-very-different-scales-is-flagged)). Needs: none.
 
 ## Beginner-test follow-ups (filters and dates)
 
