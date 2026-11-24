@@ -144,7 +144,7 @@ try {
   const fly = `document.getElementById('ws-toolfly')`;
   const addBtn = `${fly}.querySelector('.ws-picker__btn')`;
   const menu = `document.querySelector('.ws-picker__box--side')`;
-  const group = `${fly}.querySelector('.ws-colourfly__group')`;
+  const group = `${fly}.querySelector('.ws-flyedit__group')`;
   const mouse = (type, x, y) => b.send('Input.dispatchMouseEvent', { type, x, y, button: 'none', buttons: 0 });
   const centre = (r) => [r.l + r.w / 2, r.t + r.h / 2];
 

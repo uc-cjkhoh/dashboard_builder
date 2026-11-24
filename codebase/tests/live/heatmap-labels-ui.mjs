@@ -1,4 +1,4 @@
-// Browser checks for heatmap cell labels (automatic when they fit, forced by Format → Data labels, ink per cell colour) and the
+// Browser checks for heatmap cell labels (automatic when they fit, forced by the Label flyout's Data labels, ink per cell colour) and the
 // stacked-scale notice: the real dev app (APP_URL, default http://localhost:5261) in headless
 // Chromium, driven over the DevTools protocol (tests/live/cdp.mjs), with every /api/* call answered by a mock —
 // nothing reaches a ClickHouse. Run:  node tests/live/heatmap-labels-ui.mjs   (start the app first:
@@ -195,7 +195,7 @@ try {
     must(distinct(inks) > 1, 'both inks are used across the ramp: ' + J([...new Set(inks)]));
     await shot('heatmap-labels');
   });
-  await check('heatmap: cells too small hold no labels; Format → Data labels forces them on anyway', async () => {
+  await check('heatmap: cells too small hold no labels; Label flyout Data labels forces them on anyway', async () => {
     CHANNELS = 40;
     await newSheet();
     await dragChip('region', `__t.zone('rows')`);
@@ -206,14 +206,14 @@ try {
     must(await ev(`!!document.querySelector('#ws-chart .ws-chart-canvas svg')`), 'chart drawn: ' + (await chartText()).slice(0, 200));
     must((await cellTexts()).length === 320 && (await labelled()) === 0, 'no labels on the tiny cells: ' + await labelled());
     await shot('heatmap-labels-tiny');
-    await ev(`${fmtTool}.click()`);
-    await waitFor(`!!(${fmtField('Data labels')})`, 'data labels control');
+    await ev(`document.querySelector('.ws-tool[data-tool="label"]').click()`); // Data labels live in the Label tile's flyout (D151), not in Format
+    await waitFor(`!!document.querySelector('#ws-toolfly:not([hidden]) #ws-toolpanel-label') && !!(${fmtField('Data labels')})`, 'data labels control');
     await ev(`${fmtField('Data labels')}.querySelector('input').click()`); await settle(600);
     must((await labelled()) === 320, 'forced labels appear on every cell: ' + await labelled());
     await shot('heatmap-labels-forced');
     await ev(`${fmtField('Data labels')}.querySelector('input').click()`); await settle(500);
     must((await labelled()) === 0, 'unchecked: back to automatic (none, the cells are tiny)');
-    await ev(`${fmtTool}.click()`); await settle(300);
+    await ev(`document.querySelector('#ws-toolfly:not([hidden]) .iconbtn[aria-label="Close editor"]')?.click()`); await settle(300);
     CHANNELS = 3;
   });
   await check('heatmap circles: a label is drawn inside each circle that is big enough for it', async () => {

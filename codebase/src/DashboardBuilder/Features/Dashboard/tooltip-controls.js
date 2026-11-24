@@ -1,6 +1,12 @@
-// The Format panel's tooltip controls (Show tooltips, Command buttons, Tooltip mode): what each shows, and why one is disabled, comes from the pure
+// The Tooltip flyout's Behaviour controls (Show tooltips, Command buttons, Tooltip mode): what each shows, and why one is disabled, comes from the pure
 // `tooltipControlSpecs` (tooltip-behaviour-model.js), so the panel and the drawing agree on when a control does something.
 import { tooltipControlSpecs, buttonGate, buttonNote, gateInputs, withTooltipSetting } from "./tooltip-behaviour-model.js";
+
+/** The keys of the controls `wireTooltipControls` would append for `sheet` (the Tooltip flyout's Behaviour section lists them). */
+export function tooltipKeysFor(sheet) {
+  const inputs = gateInputs(sheet);
+  return tooltipControlSpecs({ type: sheet.chartType, format: sheet.format ?? {}, gate: buttonGate(inputs), note: buttonNote(inputs) }).map((c) => c.key);
+}
 
 /**
  * Append the controls to `panel` (nothing for a chart with no hover tooltip). `fmtCheck` / `fmtSelect` are the panel's builders; `replaceFormat(next)` commits a

@@ -539,7 +539,7 @@ try {
     await settle(400); await chartType('Bar'); await settle(300);
     await openColour();
     await setSelect('Opacity', '60'); await settle(500);
-    must(await ev(`document.activeElement?.closest?.('[data-colour-ctl]')?.dataset.colourCtl`) === 'opacity', 'focus after Opacity: ' + await ev(`document.activeElement?.tagName + '.' + document.activeElement?.className`));
+    must(await ev(`document.activeElement?.closest?.('[data-fly-ctl]')?.dataset.flyCtl`) === 'opacity', 'focus after Opacity: ' + await ev(`document.activeElement?.tagName + '.' + document.activeElement?.className`));
     await setSelect('Opacity', '100'); await settle(400);
     await closeColour();
   });
@@ -561,7 +561,7 @@ try {
     must(bar.map((x) => x.label).join() === 'Color,Opacity,Effects', 'sections: ' + J(bar));
     must(bar[0].slot && !bar[1].slot && !bar[2].slot, 'the slot opens the Color section only: ' + J(bar));
     must(await ev(`document.querySelectorAll('#ws-toolfly .ws-toolpanel > .ws-toolpanel__slot').length === 0`), 'no section of the slot\'s own above Color');
-    must(await ev(`getComputedStyle(document.querySelector('#ws-toolfly .ws-colourfly__group + .ws-colourfly__group')).borderTopWidth === '1px'`), 'a hairline between sections');
+    must(await ev(`getComputedStyle(document.querySelector('#ws-toolfly .ws-flyedit__group + .ws-flyedit__group')).borderTopWidth === '1px'`), 'a hairline between sections');
     await closeColour();
     await chartType('Table'); await openColour();
     must(await ev(`!!document.querySelector('#ws-toolfly .ws-toolpanel > .ws-toolpanel__slot') && !document.querySelector('#ws-toolfly .ws-colourfly')`), 'a table: the slot alone');
@@ -571,7 +571,7 @@ try {
   await check('design probe: the Color flyout has no alignment, gap, colour, contrast or scale findings (categorical bar, continuous scale, line; light, dark, One Dark; 1400 and 700 px)', async () => {
     const { designProbe, formatProbe } = await import('./design-probe.mjs');
     const probe = async (label) => {
-      const r = await designProbe(ev, '#ws-toolfly .ws-colourfly__group > :not(.ws-toolpanel__slot)', { sleep: b.sleep }); // the controls; the field slot (pill, Add field) is the same in every flyout
+      const r = await designProbe(ev, '#ws-toolfly .ws-flyedit__group > :not(.ws-toolpanel__slot)', { sleep: b.sleep }); // the controls; the field slot (pill, Add field) is the same in every flyout
       if (r.findings.length) console.log(label + '\n' + formatProbe(r));
       must(r.findings.length === 0, `${label}: ${r.findings.length} finding(s): ` + J(r.findings.map((x) => x.rule + ': ' + x.msg).slice(0, 4)));
     };

@@ -19,3 +19,8 @@ test("a tool in use is never hidden behind More", () => {
   const r = visibleTools("bar", tools({ detail: 1, pages: 1 }));
   assert.ok(keys(r.visible).includes("detail")); assert.ok(keys(r.visible).includes("pages"));
 });
+test("a tool with controls is visible on a chart type that otherwise dims it", () => {
+  const r = visibleTools("pie", [{ key: "size", count: 0, controls: true }, { key: "shape", count: 0 }]);
+  assert.deepEqual(keys(r.visible), ["size"]);
+  assert.deepEqual(keys(r.more), ["shape"]);
+});

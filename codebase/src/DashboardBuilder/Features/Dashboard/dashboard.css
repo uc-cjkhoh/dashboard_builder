@@ -247,7 +247,7 @@
 .ws-toolfly .ws-toolpanel { padding: 0; gap: 0; border: 0; border-radius: 0; background: transparent; }
 .ws-toolfly .ws-toolpanel > :not(.ws-toolpanel__head) { padding: var(--s4); }
 .ws-toolfly .ws-toolpanel > * + * { border-top: 1px solid var(--line); }
-.ws-toolfly .ws-toolpanel > .ws-colourfly { padding: 0; }
+.ws-toolfly .ws-toolpanel > .ws-flyedit { padding: 0; }
 .ws-toolfly .ws-toolpanel > .ws-shelf__note { padding: var(--s2) var(--s4); background: var(--surface-2); }
 .ws-toolfly .ws-toolpanel__head { position: sticky; top: 0; z-index: 1; padding: var(--s1) var(--s4); background: var(--surface-2); }
 .ws-toolpanel__slot { display: grid; gap: var(--s2); }
@@ -270,15 +270,15 @@
 .ws-toolfly .ws-fcard:not(.is-invalid) { padding: 0; border: 0; background: transparent; }
 .ws-toolfly .ws-fcard:not(.is-invalid) .ws-fcard__head > .iconbtn:last-child { margin-right: calc(-1 * var(--s2)); } /* ✕ glyph flush with the panel's, as in its head */
 .ws-toolfly .ws-fcard:not(.is-invalid) + .ws-fcard:not(.is-invalid) { padding-top: var(--s4); border-top: 1px solid var(--line); border-radius: 0; }
-/* The Color flyout's controls (colour-flyout-model.js): the Color / Opacity / Effects sections split by a hairline, no visible group labels (each carries an aria-label). */
+/* Every Marks flyout's controls (colour-flyout-model.js, marks-flyout-model.js): the sections split by a hairline, no visible group labels (each carries an aria-label). */
 .ws-toolfly .ws-fmt-check { display: inline-flex; align-items: center; gap: var(--s2); min-height: var(--s6); } /* a 24 px hit target */
-.ws-colourfly { display: grid; }
-.ws-colourfly__group { display: grid; gap: var(--s2); padding: var(--s4); }
+.ws-flyedit { display: grid; }
+.ws-flyedit__group { display: grid; gap: var(--s2); padding: var(--s4); }
 /* 4 px inside a label-over-control pair, 16 between the rows of a group that holds pairs: each label reads with its own control. */
-.ws-colourfly__group:has(.ws-fmt-field:not(.ws-fmt-check) + .ws-fmt-field:not(.ws-fmt-check)) { gap: var(--s4); }
-.ws-colourfly__group + .ws-colourfly__group { border-top: 1px solid var(--line); }
-/* The Color section opens with the field slot: 16 between it and each control, an even rhythm. */
-.ws-colourfly__group:has(> .ws-toolpanel__slot) { gap: var(--s4); }
+.ws-flyedit__group:has(.ws-fmt-field:not(.ws-fmt-check) + .ws-fmt-field:not(.ws-fmt-check)) { gap: var(--s4); }
+.ws-flyedit__group + .ws-flyedit__group { border-top: 1px solid var(--line); }
+/* The first section opens with the field slot: 16 between it and each control, an even rhythm. */
+.ws-flyedit__group:has(> .ws-toolpanel__slot) { gap: var(--s4); }
 /* A progress bar with its value read out (fmtMeter): the track fills with the accent up to the thumb. */
 .ws-meter__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s2); }
 .ws-meter__value { font-size: var(--fs-body); color: var(--ink); font-variant-numeric: tabular-nums; }

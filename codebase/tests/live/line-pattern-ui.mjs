@@ -1,4 +1,4 @@
-// Browser checks for Format → Line pattern (Solid / Dashed / Dotted) and Format → Line markers (Automatic / All / None) on Line, Area and Combo: the controls and their
+// Browser checks for the Path flyout's Line pattern (Solid / Dashed / Dotted) and the Color flyout's Line markers (Automatic / All / None) on Line, Area and Combo: the controls and their
 // gates (a Size-thickness line, a stepped line, a cued chart, a combo with bar right-axis marks), what is drawn (zrender's own line dash and the symbols), hover with markers None,
 // Data labels beside None, and screenshots (run once with SCHEME=dark for the dark set) (the PNG export reads the same chart instance's scene, which the dash assertions read; its bytes are not deterministic in headless, so they are not diffed).
 // Chromium, driven over the DevTools protocol (tests/live/cdp.mjs), with every /api/* call answered by a mock —
@@ -173,14 +173,17 @@ try {
   const formatOpen = () => ev(`!!(${fmtField('Number')})`);
   const openFormat = async () => { if (!(await formatOpen())) await ev(`${fmtTool}.click()`); await waitFor(`!!(${fmtField('Number')})`, 'format panel open'); };
   const closeFormat = async () => { if (await formatOpen()) await ev(`${fmtTool}.click()`); await closeColour(); await settle(300); }; // both panels: a snapshot shows the bare chart
-  // Line pattern stays in Format, Line markers moved to the Color flyout (D151); the two are never open together, so each helper opens the one that holds its label.
-  const colTool = `document.querySelector('.ws-tool[data-tool="color"]')`;
-  const colourOpen = () => ev(`!!document.querySelector('#ws-toolfly:not([hidden]) #ws-toolpanel-color')`);
-  const closeColour = async () => { if (await colourOpen()) await ev(`${colTool}.click()`); };
+  // Line pattern and Line style live in the Path tile's flyout, Line markers in the Color flyout, Data labels in the Label flyout (D151); Format and a flyout are never open together,
+  // so each helper opens the panel that holds its label (a flyout opens with a tile click and closes with the same click).
+  const FLY_OF = { 'Line markers': 'color', 'Line pattern': 'path', 'Line style': 'path', 'Data labels': 'label' };
+  const flyTool = (k) => `document.querySelector('.ws-tool[data-tool="${k}"]')`;
+  const flyOpen = (k) => ev(`!!document.querySelector('#ws-toolfly:not([hidden]) #ws-toolpanel-${k}')`);
+  const closeColour = async () => { for (const k of ['color', 'path', 'label']) if (await flyOpen(k)) await ev(`${flyTool(k)}.click()`); }; // whichever flyout is open
   const ensure = async (label) => {
-    if (label === 'Line markers') {
-      if (!(await colourOpen())) await ev(`${colTool}.click()`);
-      await waitFor(`!!document.querySelector('#ws-toolfly:not([hidden]) .ws-colourfly .ws-fmt-field')`, 'Color flyout open');
+    const k = FLY_OF[label];
+    if (k) {
+      if (!(await flyOpen(k))) await ev(`${flyTool(k)}.click()`);
+      await waitFor(`!!document.querySelector('#ws-toolfly:not([hidden]) #ws-toolpanel-${k}')`, `${k} flyout open`); await settle(150); // the flyout may hold no such control (a bar): the caller asks hasField
     } else await openFormat();
   };
   const hasField = async (label) => { await ensure(label); return ev(`!!(${fmtField(label)})`); };
@@ -312,7 +315,7 @@ try {
     await pickOpt('Line pattern', 'solid');
   });
   await check('Size removed: the pattern control is live again', async () => {
-    if (await ev(`document.getElementById('ws-toolfly').hidden`)) { await ev(`${toolEl('Size')}.click()`); await settle(300); }
+    if (!(await flyOpen('size'))) { await ev(`${toolEl('Size')}.click()`); await settle(300); } // the Size flyout (a Path / Color one may be open now)
     await ev(`document.querySelector('#ws-toolfly .ws-pill button[aria-label="Remove field"]').click()`);
     await settle(700); await openFormat();
     must(await ev(`!document.querySelector('.ws-tool[aria-label^="Size"].is-set')`), 'Size is cleared');

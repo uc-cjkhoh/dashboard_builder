@@ -1,4 +1,4 @@
-// Browser checks for the Shape and Label channels: a measure on Shape (binned symbols, Format → Shape bins), Format → Edit member shapes, and the Label options (Format → Label marks). The real dev app (APP_URL, default http://localhost:5263) in headless
+// Browser checks for the Shape and Label channels: a measure on Shape (binned symbols, Shape flyout → Shape bins), Shape flyout → Edit member shapes, and the Label options (Label flyout → Data labels, Label marks, Label position; D151 moved them out of Format). The real dev app (APP_URL, default http://localhost:5263) in headless
 // Chromium, driven over the DevTools protocol (tests/live/cdp.mjs), with every /api/* call answered by a mock —
 // nothing reaches a ClickHouse. Run:  node tests/live/marks-shape-label-ui.mjs   (start the app first:
 //   cd src/DashboardBuilder && dotnet run --no-launch-profile --urls http://localhost:5263 ; stop it with fuser -k 5263/tcp)
@@ -138,7 +138,19 @@ try {
   const shot = async (name) => { try { writeFileSync(join(SHOTS, `${name}-${SCHEME}.png`), Buffer.from((await b.send('Page.captureScreenshot', { format: 'png' })).data, 'base64')); } catch { /* optional */ } };
   const fmtTool = `document.querySelector('.ws-viewbar__btn[aria-label="Format"]')`;
   const fmtField = (label) => `[...document.querySelectorAll('.ws-fmt-field')].find((l) => l.textContent.includes(${J(label)}))`;
-  const setSelect = (label, v) => ev(`(() => { const s = ${fmtField(label)}.querySelector('select'); s.value = ${J(v)}; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+  // Shape bins / Edit member shapes live in the Shape flyout; Data labels / Label marks / Label position in the Label flyout (Marks tiles). Format and a flyout are never open together: opening one closes the other.
+  const OWNER = { 'Shape bins': 'shape', 'Marker shape': 'shape', 'Data labels': 'label', 'Label marks': 'label', 'Label position': 'label' };
+  const flyOpen = () => ev(`!!document.querySelector('#ws-toolfly:not([hidden]) .ws-flyedit__group')`);
+  const openFly = async (key) => {
+    if (!(await ev(`document.querySelector('.ws-tool[data-tool="${key}"]')?.getAttribute('aria-expanded') === 'true'`))) await ev(`document.querySelector('.ws-tool[data-tool="${key}"]').click()`);
+    await waitFor(`!!document.querySelector('.ws-tool[data-tool="${key}"][aria-expanded="true"]') && !!document.querySelector('#ws-toolfly:not([hidden]) .ws-flyedit__group')`, `the ${key} flyout`);
+  };
+  const ensure = async (label) => { await openFly(OWNER[label] ?? 'label'); };
+  const closeAll = async () => { // both panels: Format and any flyout
+    if (await ev(`!!(${fmtField('Number')}) || !!(${fmtField('Top N')})`)) await ev(`${fmtTool}.click()`);
+    if (await flyOpen()) await ev(`document.querySelector('#ws-toolfly .iconbtn[aria-label="Close editor"]')?.click()`);
+    await settle(300); };
+  const setSelect = async (label, v) => { await ensure(label); return ev(`(() => { const s = ${fmtField(label)}.querySelector('select'); s.value = ${J(v)}; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`); };
   const inst = `window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas'))`;
   const opt = () => ev(`${inst}.getOption()`);
   const hints = () => ev(`[...document.querySelectorAll('#ws-chart .ws-hint')].map((h) => h.textContent)`);
@@ -188,14 +200,14 @@ try {
     await shot('shape-measure');
   });
   await check('Format → Shape bins: shown only while Shape holds a measure; 3 bins give three series; 7 is not offered', async () => {
-    await ev(`${fmtTool}.click()`);
+    await ensure('Shape bins');
     await waitFor(`!!(${fmtField('Shape bins')})`, 'the Shape bins control');
     must(await ev(`[...${fmtField('Shape bins')}.querySelectorAll('option')].map((o) => o.value).join(',')`) === '2,3,4,5,6', 'two to six');
     must(await ev(`!document.querySelector('.ws-memcol__toggle') || ![...document.querySelectorAll('.ws-memcol__toggle')].some((t) => /shapes/.test(t.textContent))`), 'no member shapes while Shape holds a measure');
     await setSelect('Shape bins', '3'); await settle(600);
     const o = await opt();
     must(o.series.length === 3 && distinct(o.series.map((s) => s.symbol)) === 3, 'three bins: ' + J(o.series.map((s) => s.name)));
-    await ev(`${fmtTool}.click()`); await settle(300);
+    await closeAll();
   });
   await check('a legend click on a bin only highlights: it never becomes a filter on the measure', async () => {
     await ev(`${inst}.dispatchAction({ type: 'legendToggleSelect', name: ${J((await opt()).series[0].name)} })`); await settle(500);
@@ -203,14 +215,13 @@ try {
     must(!(lastQuery().filters ?? []).length, 'no filter sent');
   });
   await check('Shape bins is gone when Shape is cleared; a dimension on Shape brings Edit member shapes instead', async () => {
-    await ev(`${toolEl('Shape')}.click()`);
+    await ensure('Shape bins');
     await waitFor(`!!document.querySelector('.ws-pill--mark')`, 'the Shape pill is listed');
     await ev(`document.querySelector('.ws-pill--mark button').click()`);
     await settle(500);
-    await ev(`${fmtTool}.click()`);
-    await waitFor(`!!(${fmtField('Number')})`, 'Format open');
+    await waitFor(`!!document.querySelector('.ws-tool[data-tool="shape"][aria-expanded="true"]')`, 'the Shape flyout stays open'); // the Shape flyout is where Shape bins would be (a scatter with an empty Shape has no section in it, only the field slot)
     must(await ev(`!(${fmtField('Shape bins')})`), 'no Shape bins control once Shape is empty');
-    await ev(`${fmtTool}.click()`); await settle(300);
+    await closeAll();
   });
   await newSheet();
   await dragChip('amount', `__t.zone('columns')`); await dragChip('qty', `__t.zone('columns')`);
@@ -220,7 +231,7 @@ try {
   await check('a dimension on Shape: Edit member shapes lists the members; a pick changes that member\'s symbol and its legend icon; Reset and Reset all undo it', async () => {
     const before = (await opt()).series.map((s) => s.symbol);
     must(before.length === 8 && distinct(before) === 7, 'a symbol per member (seven symbols, the eighth repeats): ' + J(before));
-    await ev(`${fmtTool}.click()`);
+    await ensure('Marker shape');
     await waitFor(`[...document.querySelectorAll('.ws-memcol__toggle')].some((t) => /member shapes/.test(t.textContent) && !t.disabled)`, 'the member shapes editor is enabled');
     must(await ev(`!(${fmtField('Shape bins')})`), 'no bins control for a dimension');
     await ev(`[...document.querySelectorAll('.ws-memcol__toggle')].find((t) => /member shapes/.test(t.textContent)).click()`);
@@ -239,7 +250,7 @@ try {
     await ev(`${rows}[2].querySelectorAll('.ws-memcol__swatch')[6].click()`); await settle(400);
     await ev(`[...document.querySelectorAll('.ws-memcol__clear')].pop().click()`); await settle(500);
     must(J((await opt()).series.map((s) => s.symbol)) === J(before), 'Reset all restores them');
-    await ev(`${fmtTool}.click()`); await settle(300);
+    await closeAll();
   });
 
   // ---- Label marks ---------------------------------------------------------------------------------------------------------
@@ -247,8 +258,8 @@ try {
   const labelTexts = () => ev(`[...document.querySelectorAll('#ws-chart svg text')].map((t) => t.textContent).filter((t) => /[.]37/.test(t))`);
   const labelControl = () => ev(`!!(${fmtField('Label marks')})`);
   const modes = () => ev(`[...${fmtField('Label marks')}.querySelectorAll('option')].map((o) => o.value).join(',')`);
-  const openFormat = async () => { await ev(`${fmtTool}.click()`); await waitFor(`!!(${fmtField('Number')}) || !!(${fmtField('Top N')})`, 'Format open'); };
-  const closeFormat = async () => { await ev(`${fmtTool}.click()`); await settle(300); };
+  const openFormat = () => openFly('label'); // the Label flyout (kept under the old name: every caller opens it for Data labels / Label marks / Label position)
+  const closeFormat = closeAll;
   const setMode = async (m) => { await openFormat(); await setSelect('Label marks', m); await settle(600); await closeFormat(); };
   await newSheet();
   await dragChip('region', `__t.zone('columns')`);

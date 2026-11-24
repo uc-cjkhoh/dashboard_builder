@@ -1,4 +1,4 @@
-// Browser check for Format → Line markers → Selected: dots only at the click-selected marks. REAL mouse clicks on the real chart (a point is clicked where
+// Browser check for the Color flyout's Line markers → Selected: dots only at the click-selected marks. REAL mouse clicks on the real chart (a point is clicked where
 // zrender drew it, found with convertToPixel): set Selected -> no marker is visible; click a point -> its dot shows on EVERY series; click it again -> cleared;
 // a click on another point moves the dot; hover still shows a point's dot and tooltip; a long line (70 points) shows only the selected dots; an area and a combo;
 // the control is disabled with the reason where Size draws the markers; a dashboard widget's cross-filter selection shows its dot; light + dark screenshots
@@ -183,11 +183,15 @@ try {
   const colTool = `document.querySelector('.ws-tool[data-tool="color"]')`;
   const colourOpen = () => ev(`!!document.querySelector('#ws-toolfly:not([hidden]) #ws-toolpanel-color')`);
   const openColour = async () => { if (!(await colourOpen())) await ev(`${colTool}.click()`); await waitFor(`!!document.querySelector('#ws-toolfly:not([hidden]) #ws-toolpanel-color')`, 'Color flyout open'); };
-  const closeColour = async () => { if (await colourOpen()) await ev(`${colTool}.click()`); await settle(300); };
-  // Data labels, Label marks, Group dates … stay in Format; the two are never open together, so a helper opens the panel that holds its label.
+  const labTool = `document.querySelector('.ws-tool[data-tool="label"]')`;
+  const labelOpen = () => ev(`!!document.querySelector('#ws-toolfly:not([hidden]) #ws-toolpanel-label')`);
+  const openLabel = async () => { if (!(await labelOpen())) await ev(`${labTool}.click()`); await waitFor(`!!document.querySelector('#ws-toolfly:not([hidden]) #ws-toolpanel-label')`, 'Label flyout open'); };
+  const closeColour = async () => { if (await colourOpen()) await ev(`${colTool}.click()`); if (await labelOpen()) await ev(`${labTool}.click()`); await settle(300); }; // whichever flyout is open
+  // Data labels moved to the Label flyout, Line markers to the Color flyout; Group dates … stay in Format. Format and a flyout are never open together, so a helper opens the panel that holds its label.
   const formatOpen = () => ev(`!!(${fmtField('Number')})`);
   const ensure = async (label) => {
     if (label === 'Line markers') await openColour();
+    else if (label === 'Data labels') await openLabel();
     else { if (!(await formatOpen())) await ev(`${fmtTool}.click()`); await waitFor(`!!(${fmtField('Number')})`, 'format panel open'); }
   };
   // The mock answers rows in REGIONS order; a dimension's steps follow the SORTED members (APAC, CA, EU, JP, LATAM, MEA, UK, US): the expected rank of each row.
@@ -285,10 +289,10 @@ try {
     await settle(500);
   });
   await check('Selected is independent of Label marks: Data labels with Label marks All still label every point, the dot follows the selection', async () => {
-    await openColour();
+    await openLabel();
     await toggle('Data labels'); await settle(600);
     const labelled = await zr(`list.filter((e) => e.type === 'tspan' && e.style && String(e.style.text ?? '') !== '' && !e.ignore).length`);
-    await closeColour(); await clickPoint(1); await openColour();
+    await closeColour(); await clickPoint(1); await openLabel();
     const after = await zr(`list.filter((e) => e.type === 'tspan' && e.style && String(e.style.text ?? '') !== '' && !e.ignore).length`);
     must(labelled >= 8 && after >= 8, `the labels are drawn: ${labelled} / ${after}`);
     must(J(await visible()) === J([1]), 'the dot follows the click: ' + J(await visible()));

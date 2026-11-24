@@ -145,11 +145,21 @@ try {
     if (!(await ev(`!!document.querySelector('.ws-format')`))) await ev(`${fmtTool}.click()`);
     await waitFor(`!!document.querySelector('.ws-format')`, 'format panel');
   };
+  // Line style moved to the Path tile's flyout (D151); Format and a flyout are never open together, so a helper opens the panel that holds its label (everything else stays in Format).
+  const FLY_OF = { 'Line style': 'path' };
+  const flyOpen = (k) => ev(`!!document.querySelector('#ws-toolfly:not([hidden]) #ws-toolpanel-${k}')`);
+  const ensure = async (label) => {
+    const k = FLY_OF[label];
+    if (!k) return openFormat();
+    if (!(await flyOpen(k))) await ev(`document.querySelector('.ws-tool[data-tool="${k}"]').click()`);
+    await waitFor(`!!document.querySelector('#ws-toolfly:not([hidden]) #ws-toolpanel-${k}')`, `${k} flyout open`); await settle(150);
+  };
   const pick = async (label, value) => {
+    await ensure(label);
     await ev(`(() => { const s = [...document.querySelectorAll('.ws-fmt-field')].find((l) => l.querySelector('.ws-fmt-label').textContent === ${J(label)}).querySelector('select'); s.value = ${J(value)}; s.dispatchEvent(new Event('change')); return true; })()`);
     await settle(400);
   };
-  const hasField = (label) => ev(`[...document.querySelectorAll('.ws-fmt-field')].some((l) => l.querySelector('.ws-fmt-label').textContent === ${J(label)})`);
+  const hasField = async (label) => { await ensure(label); return ev(`[...document.querySelectorAll('.ws-fmt-field')].some((l) => l.querySelector('.ws-fmt-label').textContent === ${J(label)})`); };
   const theme = async (t) => { await ev(`document.documentElement.setAttribute('data-scheme', ${J(t)})`); await settle(500); };
   const chartReady = () => waitFor(`!!document.querySelector('.ws-chart-canvas') && !!window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas'))`, 'chart drawn');
 

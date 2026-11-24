@@ -138,18 +138,18 @@ try {
 
   await check('Use works with the Drill panel open and with it closed', async () => {
     // (pressing the chart in the previous check put the flyout away, so open the Drill panel here)
-    await ev(`(() => { if (!document.querySelector('.ws-toolpanel__zone')) [...document.querySelectorAll('.ws-tool')].find((x) => /^Drill/.test(x.getAttribute('aria-label') ?? '')).click(); return true; })()`);
-    await waitFor(`!!document.querySelector('.ws-toolpanel__zone')`, 'drill panel open');
+    await ev(`(() => { if (!document.querySelector('#ws-toolfly:not([hidden]) .ws-toolpanel')) [...document.querySelectorAll('.ws-tool')].find((x) => /^Drill/.test(x.getAttribute('aria-label') ?? '')).click(); return true; })()`);
+    await waitFor(`!!document.querySelector('#ws-toolfly:not([hidden]) .ws-toolpanel')`, 'drill panel open');
     await store(`d.sheet.drill = null; st.updateSheet(d.id, d.sheet)`);
     await waitFor(`!document.querySelector('.ws-drill')`, 'drill cleared');
-    await ev(`(() => { if (!document.querySelector('.ws-toolpanel__zone')) [...document.querySelectorAll('.ws-tool')].find((x) => /^Drill/.test(x.getAttribute('aria-label') ?? '')).click(); return true; })()`);
-    await waitFor(`!!document.querySelector('.ws-toolpanel__zone')`, 'panel open');
+    await ev(`(() => { if (!document.querySelector('#ws-toolfly:not([hidden]) .ws-toolpanel')) [...document.querySelectorAll('.ws-tool')].find((x) => /^Drill/.test(x.getAttribute('aria-label') ?? '')).click(); return true; })()`);
+    await waitFor(`!!document.querySelector('#ws-toolfly:not([hidden]) .ws-toolpanel')`, 'panel open');
     await useHier('Geo');
     await waitFor(`/Showing: region/.test(document.querySelector('.ws-drill')?.textContent ?? '')`, 'applied with the panel open');
     await store(`d.sheet.drill = null; st.updateSheet(d.id, d.sheet)`);
     await waitFor(`!document.querySelector('.ws-drill')`, 'drill cleared again');
-    await ev(`(() => { if (document.querySelector('.ws-toolpanel__zone')) [...document.querySelectorAll('.ws-tool')].find((x) => /^Drill/.test(x.getAttribute('aria-label') ?? '')).click(); return true; })()`);
-    await waitFor(`!document.querySelector('.ws-toolpanel__zone')`, 'panel closed');
+    await ev(`(() => { if (document.querySelector('#ws-toolfly:not([hidden]) .ws-toolpanel')) [...document.querySelectorAll('.ws-tool')].find((x) => /^Drill/.test(x.getAttribute('aria-label') ?? '')).click(); return true; })()`);
+    await waitFor(`!document.querySelector('#ws-toolfly:not([hidden]) .ws-toolpanel')`, 'panel closed');
     await useHier('Geo');
     await waitFor(`/Showing: region/.test(document.querySelector('.ws-drill')?.textContent ?? '')`, 'applied with the panel closed');
     must((await sheetDrill()).levels.length === 2, 'levels');

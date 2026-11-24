@@ -1,4 +1,4 @@
-// The Line pattern (Format) and Line markers (Color flyout) controls: what each shows comes from the pure `lineControlSpecs` (line-style-model.js), so the
+// The Line pattern (Path flyout) and Line markers (Color flyout) controls: what each shows comes from the pure `lineControlSpecs` (line-style-model.js), so the
 // panel and the drawing agree on when a control does something; this file reads the worksheet into those inputs and puts the controls on the panel.
 import { planMeasures, colorMode } from "./sheet-plan.js";
 import { primaryDim } from "./result-model.js";
@@ -43,10 +43,13 @@ export function withLineSetting(format, key, value) {
   return next;
 }
 
+/** The keys of the controls `wireLineControls` would append for `sheet` (the Path flyout reads whether Line pattern is among them). */
+export const lineKeysFor = (sheet) => lineControlSpecs(controlArgs(sheet)).map((c) => c.key);
+
 /**
  * Append Line pattern / Line markers to `panel` (nothing for a chart that draws no lines). `fmtSelect` is the panel's select builder;
  * `replaceFormat(next)` commits a whole new format. A control that does nothing is disabled and says why (its title); a note rides the same way.
- * `keys` (optional) limits it to those controls: Format wires `["linePattern"]`, the Color flyout `["lineMarkers"]`; without it both are appended.
+ * `keys` (optional) limits it to those controls: the Path flyout wires `["linePattern"]`, the Color flyout `["lineMarkers"]`; without it both are appended.
  */
 export function wireLineControls(panel, sheet, fmtSelect, replaceFormat, keys) {
   for (const c of lineControlSpecs(controlArgs(sheet))) {

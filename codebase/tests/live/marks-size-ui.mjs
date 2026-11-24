@@ -1,7 +1,8 @@
-// Browser checks for Size: a dimension on Size (member steps), Format → Edit Sizes (range, From zero, Reversed), a line's own thickness, Size on Text / Table (font steps), Size beside a Colour split, and the hints where Size has no meaning: the real dev app (APP_URL, default http://localhost:5261) in headless
+// Browser checks for Size: a dimension on Size (member steps), the Size flyout's Edit Sizes (range, From zero, Reversed), a line's own thickness, Size on Text / Table (font steps), Size beside a Colour split, and the hints where Size has no meaning: the real dev app (APP_URL, default http://localhost:5261) in headless
 // Chromium, driven over the DevTools protocol (tests/live/cdp.mjs), with every /api/* call answered by a mock —
 // nothing reaches a ClickHouse. Run:  node tests/live/marks-size-ui.mjs   (start the app first:
 //   cd src/DashboardBuilder && dotnet run --no-launch-profile --urls http://localhost:5261 ; stop it with fuser -k 5261/tcp)
+// Marker size / Edit Sizes live in the Size tile's flyout and Line style in the Path tile's (never open together with Format): the helpers open the panel that owns a label.
 // Env: APP_URL, SHOTS_DIR (screenshot folder), CDP_PORT (default: a free port), CHROME_BIN.
 import { launch } from './cdp.mjs';
 import { NEW_CALC, PAGE_CHIP, relateTables } from './model.mjs';
@@ -137,7 +138,7 @@ try {
   const shot = async (name) => { try { writeFileSync(join(SHOTS, `${name}-${SCHEME}.png`), Buffer.from((await b.send('Page.captureScreenshot', { format: 'png' })).data, 'base64')); } catch { /* optional */ } };
   const fmtTool = `document.querySelector('.ws-viewbar__btn[aria-label="Format"]')`;
   const fmtField = (label) => `[...document.querySelectorAll('.ws-fmt-field')].find((l) => l.textContent.includes(${J(label)}))`;
-  const setSelect = (label, v) => ev(`(() => { const s = ${fmtField(label)}.querySelector('select'); s.value = ${J(v)}; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+  const setSelect = async (label, v) => { await ensure(label); return ev(`(() => { const s = ${fmtField(label)}.querySelector('select'); s.value = ${J(v)}; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`); };
   const inst = `window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas'))`;
   const opt = () => ev(`${inst}.getOption()`);
   const hints = () => ev(`[...document.querySelectorAll('#ws-chart .ws-hint')].map((h) => h.textContent)`);
@@ -166,11 +167,21 @@ try {
   };
 
 
-  const setField = (label, v) => ev(`(() => { const i = ${fmtField(label)}.querySelector('input'); i.value = ${J(v)}; i.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
-  const toggle = (label) => ev(`${fmtField(label)}.querySelector('input').click()`);
+  const setField = async (label, v) => { await ensure(label); return ev(`(() => { const i = ${fmtField(label)}.querySelector('input'); i.value = ${J(v)}; i.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`); };
+  const toggle = async (label) => { await ensure(label); return ev(`${fmtField(label)}.querySelector('input').click()`); };
   const formatOpen = () => ev(`!!(${fmtField('Number')})`);
   const openFormat = async () => { if (!(await formatOpen())) await ev(`${fmtTool}.click()`); await waitFor(`!!(${fmtField('Number')})`, 'format panel open'); };
-  const closeFormat = async () => { if (await formatOpen()) await ev(`${fmtTool}.click()`); await settle(300); };
+  // Edit Sizes and Marker size live in the Size tile's flyout, Line style in the Path tile's (D151); Format and a flyout are never open together, so each helper opens the panel that holds its label.
+  const FLY_TOOL = { 'Marker size (px)': 'size', 'Smallest size': 'size', 'Largest size': 'size', 'Sizes vary': 'size', 'Start value': 'size', 'End value': 'size', 'Reversed': 'size', 'Line style': 'path' };
+  const flyOpen = (tool) => ev(`!!document.querySelector('#ws-toolfly:not([hidden]) #ws-toolpanel-${tool}')`);
+  const closeFly = async () => { await ev(`document.querySelector('#ws-toolfly:not([hidden]) .iconbtn[aria-label="Close editor"]')?.click()`); };
+  const ensure = async (label) => {
+    const tool = FLY_TOOL[label];
+    if (!tool) return openFormat();
+    if (!(await flyOpen(tool))) await ev(`document.querySelector('.ws-tool[data-tool="${tool}"]').click()`);
+    await waitFor(`!!document.querySelector('#ws-toolfly:not([hidden]) #ws-toolpanel-${tool}')`, `${tool} flyout open`);
+  };
+  const closeFormat = async () => { if (await formatOpen()) await ev(`${fmtTool}.click()`); await closeFly(); await settle(300); }; // both panels: the bare chart
   // The mock answers rows in REGIONS order; a dimension's steps follow the SORTED members (APAC, CA, EU, JP, LATAM, MEA, UK, US): the expected rank of each row.
   const rankOfRow = REGIONS.map((r) => [...REGIONS].sort().indexOf(r));
   const byMember = (a) => rankOfRow.map((rk, i) => [rk, a[i]]).sort((x, y) => x[0] - y[0]).map((x) => x[1]); // values listed smallest member first
@@ -198,7 +209,7 @@ try {
     await shot('size-dimension-bar');
   });
   await check('Edit Sizes: Reversed flips the steps; a smaller largest size narrows them; an invalid pair is refused with a message and nothing changes', async () => {
-    await openFormat();
+    await ensure('Smallest size');
     must(await ev(`!!(${fmtField('Smallest size')}) && !!(${fmtField('Largest size')}) && !!(${fmtField('Reversed')})`), 'the controls show while Size is set');
     must(await ev(`${fmtField('Sizes vary')}.querySelector('select').disabled && /members are steps/.test(${fmtField('Sizes vary')}.title)`), 'Sizes vary is off for a dimension, with the reason');
     must(await ev(`${fmtField('Start value')}.querySelector('input').disabled && ${fmtField('End value')}.querySelector('input').disabled`), 'Start / End are off for a dimension');
@@ -230,7 +241,7 @@ try {
     await dragChip('discount', toolEl('Size')); await settle(500);
     const dflt = await rectDim('width');
     must(dflt[0] === 6, 'the smallest value gets the minimum thickness: ' + J(dflt));
-    await openFormat();
+    await ensure('Smallest size');
     must((await ev(`${fmtField('Sizes vary')}.querySelector('select').value`)) === 'automatic', 'Sizes vary is Automatic by default');
     await setSelect('Sizes vary', 'zero'); await settle(500);
     const z = await rectDim('width');
@@ -245,7 +256,7 @@ try {
     const legend0 = await sizeText();
     const m = legend0.match(/\(([\d.]+) to ([\d.]+)\)/); must(m, 'a plain range legend: ' + legend0);
     const lo = Number(m[1]), hi = Number(m[2]), mid = Math.round((lo + hi) / 2);
-    await openFormat();
+    await ensure('Smallest size');
     await setField('Start value', String(mid)); await settle(500);
     let w = await rectDim('width');
     must(w.every((x) => x >= 6) && w.length === dflt.length, 'every bar is still drawn: ' + J(w));
@@ -270,7 +281,7 @@ try {
     must(deepEq(await rectDim('width'), dflt), 'and the drawing: ' + J([dflt, await rectDim('width')]));
   });
   await check('Sizes vary From zero: Start and Reversed say why they are off; picking it drops a start and Reversed; By range / Automatic bring the controls back', async () => {
-    await openFormat();
+    await ensure('Smallest size');
     await setSelect('Sizes vary', 'range'); await settle(400);
     await setField('Start value', '30'); await toggle('Reversed'); await settle(500);
     await setSelect('Sizes vary', 'zero'); await settle(500);
@@ -297,7 +308,7 @@ try {
     const s = await symbolSizes();
     must(distinct(s) === 8 && monotone(byMember(s)) && Math.min(...s) === 8 && Math.round(Math.max(...s)) === 36, 'eight bubble steps from 8 to 36 px: ' + J(byMember(s)));
     must(/^Size: channel \(APAC to US, 8 steps\)/.test(await sizeText()), await sizeText());
-    await openFormat();
+    await ensure('Smallest size');
     must(await ev(`${fmtField('Sizes vary')}.querySelector('select').disabled && /members are steps/.test(${fmtField('Sizes vary')}.title)`), 'Sizes vary is off for a dimension, with the reason');
     must(await ev(`${fmtField('Start value')}.querySelector('input').disabled && ${fmtField('End value')}.querySelector('input').disabled`), 'Start / End are off for a dimension');
     await toggle('Reversed'); await settle(500);
@@ -311,7 +322,7 @@ try {
     await dragChip('discount', toolEl('Size')); await settle(600); // replaces the dimension
     const dflt = await symbolSizes();
     must(dflt[0] > 8 && Math.round(dflt[7]) === 36, 'zero-based: the smallest bubble is above the minimum: ' + J(dflt));
-    await openFormat();
+    await ensure('Smallest size');
     must((await ev(`${fmtField('Sizes vary')}.querySelector('select').value`)) === 'automatic', 'Sizes vary is Automatic by default');
     await setSelect('Sizes vary', 'range'); await settle(500);
     const off = await symbolSizes();
@@ -322,7 +333,7 @@ try {
   });
 
   await check('scatter + a measure on Size: under Automatic a start waits for By range (the control says so); an End applies and the legend names it', async () => {
-    await openFormat();
+    await ensure('Smallest size');
     must(await ev(`${fmtField('Start value')}.querySelector('input').disabled && /Automatic starts these marks at zero/.test(${fmtField('Start value')}.title)`), 'Start is off under the bubble default, with the reason');
     must(await ev(`!${fmtField('Reversed')}.querySelector('input').disabled`), 'Reversed still works on bubbles under Automatic');
     const dflt = (await symbolSizes()).map(Math.round);
@@ -360,10 +371,9 @@ try {
     must(polys === 8, 'one item per point: ' + polys);
     must((await hints()).length === 0, 'no hint');
     await shot('line-thickness');
-    await setSelect('Line style', 'step').catch(() => {});
   });
-  await check('line thickness: Format → Line style Step keeps the markers\' size and says how to get thickness back', async () => {
-    await openFormat();
+  await check('line thickness: Path flyout → Line style Step keeps the markers\' size and says how to get thickness back', async () => {
+    await ensure('Line style');
     await setSelect('Line style', 'step'); await settle(600);
     const o = await opt();
     must(o.series.every((x) => x.type !== 'custom'), 'no overlay on a stepped line');
@@ -430,14 +440,14 @@ try {
     await shot('text-size');
   });
   await check('Text table: Reversed flips the steps; a Size dimension is a hint, not a column', async () => {
-    await openFormat(); await toggle('Reversed'); await settle(500);
+    await ensure('Smallest size'); await toggle('Reversed'); await settle(500);
     const cls = await cellClasses();
     must(/xt-fs-2/.test(cls[0]) && !/xt-fs/.test(cls[7]), 'reversed: ' + J(cls));
     await toggle('Reversed'); await closeFormat();
     await dragChip('channel', toolEl('Size')); await settle(600);
     must((await hints()).some((t) => /measure/.test(t)), 'hint: ' + J(await hints()));
     must((await ev(`document.querySelectorAll('#ws-chart table.xtab thead th').length`)) <= 3, 'no extra column');
-    await openFormat();
+    await ensure('Smallest size');
     must(await ev(`!(${fmtField('Smallest size')})`), 'Edit Sizes is not offered while the Size field is only a hint');
     await closeFormat();
   });
@@ -480,7 +490,7 @@ try {
   await chartType('Bar');
   await check('a bar with two measures: Size is a hint and Edit Sizes is not offered', async () => {
     await dragChip('discount', toolEl('Size')); await settle(500);
-    await openFormat();
+    await ensure('Smallest size');
     must(await ev(`!(${fmtField('Smallest size')})`), 'no Edit Sizes controls');
     await closeFormat();
   });
@@ -502,7 +512,7 @@ try {
     must(await ev(`!!document.querySelector('#ws-chart svg, #ws-chart canvas')`), 'the treemap still draws');
   });
   await check('Edit Sizes is not offered on a treemap', async () => {
-    await openFormat();
+    await ensure('Smallest size');
     must(await ev(`!(${fmtField('Smallest size')})`), 'no range on a treemap');
     await closeFormat();
   });

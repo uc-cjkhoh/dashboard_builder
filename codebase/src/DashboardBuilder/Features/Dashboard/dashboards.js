@@ -40,8 +40,9 @@ import { SWATCHES, memberKey, fieldColorKey, setMemberColor, clearFieldColors, c
 import { SHAPE_CHOICES, SHAPE_BINS_MIN, SHAPE_BINS_MAX, shapeBinsOf, cleanShapeBins, setMemberShape, clearFieldShapes } from "./shape-model.js";
 import { applyToggle, applyAll, allMessage, MAX_COLLAPSED } from "./collapse-model.js";
 import { LINE_STYLE_CHOICES, linesTakeStyle } from "./line-style-model.js";
-import { wireLineControls } from "./line-controls.js";
-import { wireTooltipControls } from "./tooltip-controls.js";
+import { wireLineControls, lineKeysFor } from "./line-controls.js";
+import { wireTooltipControls, tooltipKeysFor } from "./tooltip-controls.js";
+import { flyoutSections } from "./marks-flyout-model.js";
 import { HEATMAP_SHAPE_CHOICES } from "./heatmap-model.js";
 import { GANTT_LENGTH_CHOICES } from "./gantt-model.js";
 import { SECONDARY_CHOICES, dualAxisAllowed, dualAxisOn } from "./axis-sync-model.js";
@@ -98,8 +99,6 @@ import { toggleDateLabels } from "./date-labels.js";
 // Columns (dimension), Rows (measure) and Filters shelves; the chart renders from a bounded,
 // identifier-safe query. Fields from *different* tables are joined automatically along the
 // relationships drawn in the Data Source (a join path found by BFS over the relationship graph).
-// Chart types whose marks take Format → Marker size / Border thickness (scatter family and line markers; bars and cells).
-const MARKER_TYPES = new Set(["scatter", "square", "circle", "line", "area", "combo", "heatmap"]);
 const FIELD_MIME = "application/x-ch-field";
 const ANALYTICS_MIME = "application/x-ch-analytics"; // an Analytics pane item dragged onto the chart
 // Column category from the Data Source catalog (entity.columns), for filters saved without one.
@@ -834,7 +833,7 @@ export function initDashboards() {
 
     // Motion only for what is new since the last render (every edit re-renders the header).
     mountFly(flyEl);
-    restoreColourFocus();
+    restoreFlyFocus();
     const panelKey = toolEl || flyEl ? `tool:${openTool}` : fmtEl ? "format" : null;
     if (panelKey && panelKey !== shownPanel) enter(flyEl ?? toolEl ?? fmtEl, flyEl ? { y: 0, scale: .98 } : undefined);
     shownPanel = panelKey;
@@ -1380,7 +1379,6 @@ export function initDashboards() {
       if (choices.length) panel.append(fmtSelect("Target field", [["null", "None (use Target)"], ...choices], f.targetMeasure ?? "null",
         (v) => set({ targetMeasure: v === "null" ? null : Number(v) })));
     }
-    if (linesTakeStyle(s.chartType)) panel.append(fmtSelect("Line style", LINE_STYLE_CHOICES, f.lineStyle ?? "straight", (v) => set({ lineStyle: v })));
     if (s.chartType === "gantt") panel.append(fmtSelect("Length", GANTT_LENGTH_CHOICES, f.ganttLength ?? "length", (v) => set({ ganttLength: v })));
     if (s.chartType === "heatmap") panel.append(fmtSelect("Shape", HEATMAP_SHAPE_CHOICES, f.heatmapShape ?? "square", (v) => set({ heatmapShape: v })));
     const vertical = chartOrientation(s) !== "horizontal"; // a dimension on Rows draws horizontal bars-style: a right axis needs the category along the bottom
@@ -1393,27 +1391,6 @@ export function initDashboards() {
       if (s.chartType === "combo") panel.append(fmtSelect("Right-axis marks", SECONDARY_CHOICES, f.secondaryType ?? "line", (v) => set({ secondaryType: v })));
       panel.append(fmtCheck("Synchronise axes", f.syncAxes, (v) => set({ syncAxes: v })));
     }
-    if (MARKER_TYPES.has(s.chartType) && (s.chartType !== "heatmap" || f.heatmapShape === "circle")) // blank = automatic (a heatmap: circles only)
-      panel.append(fmtNumber("Marker size (px)", f.markerSize, "auto", (v) => {
-        if (v != null && markerSizeError(v)) { toast(markerSizeError(v), "danger"); return; }
-        set({ markerSize: v });
-      }));
-    if (linesTakeStyle(s.chartType)) panel.append(fmtSelect("Marker shape", MARKER_SHAPE_CHOICES, f.markerShape ?? "circle", (v) => set({ markerShape: v })));
-    wireLineControls(panel, s, fmtSelect, (next) => { s.format = next; commit(dash, s); }, ["linePattern"]); // Line pattern (says why when it does nothing); Line markers live in the Color flyout
-    if (s.marks?.size && SIZE_SCALE_TYPES.has(s.chartType) && sizeChannel(s.chartType, shelfMeasureCount(s), isSizeDimension(s.marks.size)).ok) panel.append(...sizesEditor(f, s, (next) => { // Edit Sizes: the stored shape holds only what differs from the default
-      const { value } = cleanSizeScale(next);
-      s.format = { ...f };
-      if (value) s.format.sizeScale = value; else delete s.format.sizeScale;
-      commit(dash, s);
-    }));
-    if (shapeMeasureOf(s)) panel.append(fmtSelect("Shape bins", Array.from({ length: SHAPE_BINS_MAX - SHAPE_BINS_MIN + 1 }, (_, i) => [SHAPE_BINS_MIN + i, String(SHAPE_BINS_MIN + i)]), shapeBinsOf(f), (v) => { // equal-width bins of the Shape measure; the stored shape holds only what differs from the default
-      const { value } = cleanShapeBins(Number(v));
-      s.format = { ...f };
-      if (value != null) s.format.shapeBins = value; else delete s.format.shapeBins;
-      commit(dash, s);
-    }));
-    if (s.period && s.period.compare !== "none")
-      panel.append(fmtCheck("A fall is good", f.downIsGood, (v) => set({ downIsGood: v })));
     if (!STAT_SINGLE_TABLE.has(s.chartType))
       panel.append(fmtCheck("Approximate (faster)", f.approximate, (v) => set({ approximate: v })));
     panel.append(fmtSelect("Background", BACKGROUND_CHOICES, f.background ?? "none", (v) => set({ background: v })));
@@ -1443,24 +1420,7 @@ export function initDashboards() {
           ? [fmtSelect("Group dates", DATE_BUCKET_CHOICES, f.dateBucket ?? "auto", (v) => set({ dateBucket: v }))] : []),
         fmtSelect("Legend", [["auto", "Auto"], ["hidden", "Hidden"], ["top", "Top"], ["bottom", "Bottom"], ["left", "Left"], ["right", "Right"]],
           f.legend, (v) => set({ legend: v })),
-        fmtCheck("Data labels", f.dataLabels, (v) => set({ dataLabels: v })),
       );
-      const labelCtx = labelContext(s), labelModes = labelModesFor(labelCtx);
-      if (labelModes.length > 1) panel.append(fmtSelect("Label marks", LABEL_MARK_CHOICES.filter(([v]) => labelModes.includes(v)), effectiveLabelMode(labelMarksOf(f), labelCtx), (v) => { // which marks carry their label; the stored shape holds only what differs from All
-        const { value } = cleanLabelMarks(v);
-        s.format = { ...f };
-        if (value) s.format.labelMarks = value; else delete s.format.labelMarks;
-        commit(dash, s);
-      }));
-      const labelPositions = labelPositionsFor(labelCtx);
-      if (labelPositions.length) panel.append(fmtSelect("Label position", LABEL_POSITION_CHOICES, labelPositionOf(f), (v) => { // where a line's or point's label sits; the stored shape holds only what differs from Automatic
-        const { value } = cleanLabelPosition(v);
-        s.format = { ...f };
-        if (value) s.format.labelPosition = value; else delete s.format.labelPosition;
-        commit(dash, s);
-      }));
-      wireTooltipControls(panel, s, { fmtCheck, fmtSelect }, (next) => { s.format = next; commit(dash, s); }); // Show tooltips, Command buttons, Tooltip mode (each says why when it does nothing)
-      if (SCATTER_TYPES.has(s.chartType) && s.marks?.shape && isShapeDimension(s.marks.shape)) panel.append(memberShapeEditor(dash, s)); // a measure on Shape has bins, not members
       if (hasAxes)
         panel.append(
           fmtText("X title", f.xTitle, (v) => set({ xTitle: v })),
@@ -2437,23 +2397,25 @@ export function initDashboards() {
       { key: "size", icon: "size", label: "Size", count: m.size ? 1 : 0,
         pills: one(m.size, () => { m.size = null; commit(dash, s); }), onDrop: (f) => addSize(dash, f),
         hint: "Drop a measure to size the marks by value, or a dimension to give each member a step: scatter bubbles, bar, Gantt bar and line thickness, area markers, treemap area, Text / Table font size",
+        editor: openTool === "size" ? tileEditor(dash, s, "size") : null,
         note: s.chartType === "gantt" && m.size && isSizeDimension(m.size) ? sizeChannel("gantt", shelfMeasureCount(s), true).note : null },
       { key: "label", icon: "label", label: "Label", count: m.label ? 1 : 0,
         pills: one(m.label, () => { m.label = null; commit(dash, s); }), onDrop: (f) => addMarkSingle(dash, "label", f),
-        hint: "Drop a field to write its value on each mark" },
+        hint: "Drop a field to write its value on each mark", editor: openTool === "label" ? tileEditor(dash, s, "label") : null },
       { key: "detail", icon: "detail", label: "Detail", count: (m.detail ?? []).length,
         pills: (m.detail ?? []).map((f, i) => markPill(f, () => { m.detail.splice(i, 1); commit(dash, s); })), onDrop: (f) => addMarkList(dash, "detail", f),
         hint: "Drop dimensions to add mark granularity (no visual channel)" },
       { key: "tooltip", icon: "tooltip", label: "Tooltip", count: (m.tooltip ?? []).length,
         pills: (m.tooltip ?? []).map((f, i) => markPill(f, () => { m.tooltip.splice(i, 1); commit(dash, s); })), onDrop: (f) => addMarkList(dash, "tooltip", f),
-        hint: "Drop fields to list in each mark's tooltip", editor: tooltipEditor(dash, s) },
+        hint: "Drop fields to list in each mark's tooltip", editor: openTool === "tooltip" ? tileEditor(dash, s, "tooltip") : null },
       { key: "shape", icon: "shape", label: "Shape", count: m.shape ? 1 : 0,
         pills: one(m.shape, () => { m.shape = null; commit(dash, s); }), onDrop: (f) => addShape(dash, f),
         hint: "Drop a categorical field for per-value point symbols, or a measure to bin its values into symbols (scatter)",
+        editor: openTool === "shape" ? tileEditor(dash, s, "shape") : null,
         note: m.shape && !shapeChannel(s.chartType, !isShapeDimension(m.shape)).ok ? shapeChannel(s.chartType, !isShapeDimension(m.shape)).note : null },
       { key: "path", icon: "path", label: "Path", count: m.path ? 1 : 0,
         pills: one(m.path, () => { m.path = null; commit(dash, s); }), onDrop: (f) => addMarkSingle(dash, "path", f),
-        hint: "Drop a field to order a line/area's vertices" },
+        hint: "Drop a field to order a line/area's vertices", editor: openTool === "path" ? tileEditor(dash, s, "path") : null },
       { key: "angle", icon: "angle", label: "Angle", count: m.angle ? 1 : 0,
         pills: one(m.angle, () => { m.angle = null; commit(dash, s); }), onDrop: (f) => addAngle(dash, f),
         hint: "A radial magnitude — pie already maps its measure to angle" },
@@ -2466,7 +2428,7 @@ export function initDashboards() {
         note: sharedNote(s), editor: filtersInFly(s) ? filterCards(dash, s) : null },
       { key: "period", icon: "calendar", label: "Dates", count: s.period ? 1 : 0,
         pills: s.period ? [markPill(s.period, () => { s.period = null; commit(dash, s); })] : [],
-        onDrop: (f) => setPeriod(dash, f), editor: s.period ? periodEditor(dash, s) : null,
+        onDrop: (f) => setPeriod(dash, f), editor: openTool === "period" ? tileEditor(dash, s, "period") : null,
         hint: "Drop a date field to limit the view to a range — and compare it with another period" },
       { key: "drill", icon: "drill", label: "Drill", count: drillLevels.length,
         pills: drillLevels.map((f, i) => drillLevelPill(dash, s, f, i)), onDrop: (f) => addDrillLevel(dash, f),
@@ -2479,7 +2441,8 @@ export function initDashboards() {
     // For the editor flyout: whether a slot takes several fields, and which fields its Add field list offers.
     const multi = new Set(["color", "detail", "tooltip", "filters", "drill"]);
     const accepts = { period: (f) => f.category === "temporal" };
-    return tools.map((t) => ({ ...t, multi: multi.has(t.key), accepts: accepts[t.key] ?? null }));
+    const inputs = flyoutInputs(s); // a tile whose flyout has a control for this chart type is not quiet (marks-flyout-model.js)
+    return tools.map((t) => ({ ...t, multi: multi.has(t.key), accepts: accepts[t.key] ?? null, controls: flyoutSections(t.key, inputs).length > 0 }));
   }
 
   // A toolbar button: icon + short text, a count badge when it holds field(s), and drop-target + click.
@@ -2523,21 +2486,13 @@ export function initDashboards() {
     close.addEventListener("click", () => closeFly());
     head.append(close);
     panel.append(head);
-    const side = tool.key === "color"; // Color: the dashed zone holds the pills only (none, no zone), Add field is its own row and its list opens beside the flyout
-    const zone = el("div", "ws-toolpanel__zone"); // one component: the pills, then Add field, inside the one dashed drop target
+    const zone = el("div", "ws-toolpanel__zone"); // the dashed drop target holds the pills only (none, no zone)
     for (const p of tool.pills) zone.append(p);
-    const picker = fieldPicker(tool, { side });
-    let slot;
-    if (side) {
-      slot = slotSection(...(tool.pills.length ? [zone] : []), picker.btn);
-      wireFieldDrop(slot, tool.onDrop); // the whole slot takes the drop, so an empty one still does
-      panel.sideMenu = picker;
-    } else {
-      zone.append(picker.btn);
-      wireFieldDrop(zone, tool.onDrop);
-      slot = slotSection(zone, picker.box);
-    }
-    if (tool.key === "color" && tool.editor) colourSection(tool.editor).prepend(slot); // the field is what Color paints from: it opens the Color section, not a fourth one
+    const picker = fieldPicker(tool, { side: true }); // Add field is its own full-width row; its list opens as a side menu beside the flyout (every tile, like Color)
+    const slot = slotSection(...(tool.pills.length ? [zone] : []), picker.btn);
+    wireFieldDrop(slot, tool.onDrop); // the whole slot takes the drop, so an empty one still does
+    panel.sideMenu = picker;
+    if (tool.editor?.classList.contains("ws-flyedit")) firstSection(tool.editor, tool.label).prepend(slot); // the field is what the tile works from: it opens the first section, not an extra one
     else panel.append(slot);
     if (tool.editor) panel.append(tool.editor);
     if (tool.note) panel.append(el("span", "ws-shelf__note", tool.note));
@@ -2547,7 +2502,7 @@ export function initDashboards() {
   function slotSection(...nodes) { const sec = el("div", "ws-toolpanel__slot"); sec.append(...nodes); return sec; }
   // "Add field": the zone's last item, the click and keyboard path to what a drag does. Returns { btn, box } (the button sits in the zone, the list under it). Lists the field pane's fields (grouped by table, searchable) that this slot accepts;
   // choosing one goes through the slot's own drop handler, so every rule and message is the same as for a drag.
-  // { side: true } (the Color flyout): the list is not inside the flyout (its overflow would clip it) but a sibling menu, mounted by mountFly, that opens on hover as well as on click
+  // { side: true } (every Marks flyout): the list is not inside the flyout (its overflow would clip it) but a sibling menu, mounted by mountFly, that opens on hover as well as on click
   // and sits border to border with the flyout's right edge (placeFly), never over it.
   function fieldPicker(tool, { side = false } = {}) {
     const btn = el("button", "ws-picker__btn");
@@ -2638,14 +2593,14 @@ export function initDashboards() {
     // A narrow worksheet shrinks it (240 px down to 120) rather than moving it.
     const menu = sideMenu.box, flyRight = left + toolFly.offsetWidth;
     menu.style.width = `${Math.max(120, Math.min(240, host.width - 8 - (flyRight - 1)))}px`;
-    const anchor = sideMenu.btn.closest(".ws-colourfly__group") ?? sideMenu.btn;
+    const anchor = sideMenu.btn.closest(".ws-flyedit__group") ?? sideMenu.btn;
     const wantedTop = anchor.getBoundingClientRect().top - worksheetEl.getBoundingClientRect().top;
     menu.style.left = `${flyRight - 1}px`;
     menu.style.top = `${Math.max(8, Math.min(wantedTop, host.height - menu.offsetHeight - 8))}px`;
   }
   function closeFly({ refocus = true } = {}) {
     const key = openTool;
-    openTool = null; focusFly = false; colourFocus = null;
+    openTool = null; focusFly = false; flyFocus = null;
     renderShelves();
     if (refocus) marksGrid.querySelector(`.ws-tool[data-tool="${key}"]`)?.focus({ preventScroll: true });
   }
@@ -2809,12 +2764,110 @@ export function initDashboards() {
   // What Format held for colour (the continuous scale, Reverse palette, member colours, Opacity, Border thickness, Line markers) is the Color tile's flyout,
   // like Tableau's Color button. Which controls show is colour-flyout-model.js; every control keeps its stored key and its commit.
   // A commit rebuilds the flyout (worksheet:changed → renderShelves), so the control last changed is remembered and focused again.
-  let colourFocus = null;
+  let flyFocus = null;
   let limitsOpen = false;
-  function restoreColourFocus() {
-    if (!colourFocus || openTool !== "color") return;
-    const key = colourFocus; colourFocus = null;
-    toolFly.querySelector(`[data-colour-ctl="${key}"] select, [data-colour-ctl="${key}"] input, [data-colour-ctl="${key}"] .ws-swatch[aria-pressed="true"]`)?.focus({ preventScroll: true });
+  function restoreFlyFocus() {
+    if (!flyFocus || !openTool) return;
+    const key = flyFocus; flyFocus = null;
+    toolFly.querySelector(`[data-fly-ctl="${key}"] select, [data-fly-ctl="${key}"] input, [data-fly-ctl="${key}"] .ws-swatch[aria-pressed="true"]`)?.focus({ preventScroll: true });
+  }
+  // The pieces every Marks flyout is made of (Color's, and each tile's own controls; the keys come from marks-flyout-model.js / colour-flyout-model.js).
+  // flyCtl remembers which control changed (capture: before the control's own handler rebuilds the flyout); flySection is one hairline-divided section
+  // with an aria-label and no visible heading; flyEditor is the editor's root (null when no section has a control, so the flyout is the slot alone).
+  function flyCtl(key, node) {
+    node.dataset.flyCtl = key;
+    for (const x of node.querySelectorAll("select, input")) x.addEventListener("change", () => { flyFocus = key; }, true);
+    for (const x of node.querySelectorAll('button.ws-swatch[aria-pressed="false"]')) x.addEventListener("click", () => { flyFocus = key; }, true);
+    return node;
+  }
+  function flySection(label, nodes = []) {
+    const group = el("div", "ws-flyedit__group");
+    group.setAttribute("role", "group"); group.setAttribute("aria-label", label);
+    group.dataset.section = label;
+    group.append(...nodes);
+    return group;
+  }
+  function flyEditor(sections, extraClass = "") {
+    const root = el("div", `ws-flyedit${extraClass ? ` ${extraClass}` : ""}`);
+    for (const s of sections) if (s?.childElementCount) root.append(s);
+    return root.childElementCount ? root : null;
+  }
+  // The first section of a flyout editor (the one the field slot opens), made when the editor has none under that label.
+  function firstSection(root, label) {
+    let group = root.querySelector(":scope > .ws-flyedit__group");
+    if (!group) { group = flySection(label); root.prepend(group); }
+    return group;
+  }
+  // The inputs marks-flyout-model.js reads, from the worksheet: what each tile's flyout may show for this chart type and what the tile holds.
+  function flyoutInputs(s) {
+    const f = s.format ?? {}, isChart = CHART_LIKE.has(s.chartType);
+    const labelCtx = labelContext(s);
+    return {
+      chartType: s.chartType, isChart,
+      heatmapCircle: f.heatmapShape === "circle",
+      sizeEdit: Boolean(s.marks?.size && SIZE_SCALE_TYPES.has(s.chartType) && sizeChannel(s.chartType, shelfMeasureCount(s), isSizeDimension(s.marks.size)).ok), // Edit Sizes: only while the chart draws the Size it holds
+      shapeBins: Boolean(shapeMeasureOf(s)),
+      memberShapes: SCATTER_TYPES.has(s.chartType) && Boolean(s.marks?.shape) && isShapeDimension(s.marks.shape), // a measure on Shape has bins, not members
+      labelMarks: isChart && labelModesFor(labelCtx).length > 1,
+      labelPosition: isChart && labelPositionsFor(labelCtx).length > 0,
+      lineKeys: linesTakeStyle(s.chartType) ? lineKeysFor(s) : [],
+      tooltipKeys: isChart ? tooltipKeysFor(s) : [],
+      periodSet: Boolean(s.period),
+      compare: Boolean(s.period && s.period.compare !== "none"),
+    };
+  }
+
+  // Each tile's own controls (marks-flyout-model.js decides which show for this chart type): what Format held for Size, Shape, Label, Tooltip, Path and Dates.
+  // Every control keeps its stored key and its commit; only where it lives changed (D155). Returns a flyout editor, or null when the tile has none (the slot alone).
+  function tileEditor(dash, s, key) {
+    const sections = flyoutSections(key, flyoutInputs(s));
+    if (!sections.length) return null;
+    const f = s.format ?? (s.format = defaultFormat());
+    const set = (patch) => { s.format = { ...f, ...patch }; commit(dash, s); };
+    const replaceFormat = (next) => { s.format = next; commit(dash, s); };
+    const wired = (prefix, wire) => { const tmp = el("div"); wire(tmp); return [...tmp.children].map((n, i) => flyCtl(`${prefix}:${i}`, n)); }; // the helpers that append their own controls to a panel
+    const labelCtx = labelContext(s);
+    const build = {
+      markerSize: () => [flyCtl("markerSize", fmtNumber("Marker size (px)", f.markerSize, "auto", (v) => { // blank = automatic (a heatmap: circles only)
+        if (v != null && markerSizeError(v)) { toast(markerSizeError(v), "danger"); return; }
+        set({ markerSize: v });
+      }))],
+      editSizes: () => sizesEditor(f, s, (next) => { // Edit Sizes: the stored shape holds only what differs from the default
+        const { value } = cleanSizeScale(next);
+        s.format = { ...f };
+        if (value) s.format.sizeScale = value; else delete s.format.sizeScale;
+        commit(dash, s);
+      }).map((n, i) => flyCtl(`editSizes:${i}`, n)),
+      markerShape: () => [flyCtl("markerShape", fmtSelect("Marker shape", MARKER_SHAPE_CHOICES, f.markerShape ?? "circle", (v) => set({ markerShape: v })))],
+      shapeBins: () => [flyCtl("shapeBins", fmtSelect("Shape bins", Array.from({ length: SHAPE_BINS_MAX - SHAPE_BINS_MIN + 1 }, (_, i) => [SHAPE_BINS_MIN + i, String(SHAPE_BINS_MIN + i)]), shapeBinsOf(f), (v) => { // equal-width bins of the Shape measure
+        const { value } = cleanShapeBins(Number(v));
+        s.format = { ...f };
+        if (value != null) s.format.shapeBins = value; else delete s.format.shapeBins;
+        commit(dash, s);
+      }))],
+      memberShapes: () => [memberShapeEditor(dash, s)],
+      dataLabels: () => [flyCtl("dataLabels", fmtCheck("Data labels", f.dataLabels, (v) => set({ dataLabels: v })))],
+      labelMarks: () => [flyCtl("labelMarks", fmtSelect("Label marks", LABEL_MARK_CHOICES.filter(([v]) => labelModesFor(labelCtx).includes(v)), effectiveLabelMode(labelMarksOf(f), labelCtx), (v) => { // which marks carry their label
+        const { value } = cleanLabelMarks(v);
+        s.format = { ...f };
+        if (value) s.format.labelMarks = value; else delete s.format.labelMarks;
+        commit(dash, s);
+      }))],
+      labelPosition: () => [flyCtl("labelPosition", fmtSelect("Label position", LABEL_POSITION_CHOICES, labelPositionOf(f), (v) => { // where a line's or point's label sits
+        const { value } = cleanLabelPosition(v);
+        s.format = { ...f };
+        if (value) s.format.labelPosition = value; else delete s.format.labelPosition;
+        commit(dash, s);
+      }))],
+      text: () => [tooltipEditor(dash, s)],
+      lineStyle: () => [flyCtl("lineStyle", fmtSelect("Line style", LINE_STYLE_CHOICES, f.lineStyle ?? "straight", (v) => set({ lineStyle: v })))],
+      linePattern: () => wired("linePattern", (tmp) => wireLineControls(tmp, s, fmtSelect, replaceFormat, ["linePattern"])), // says why when it does nothing
+      period: () => [periodEditor(dash, s)],
+      fallGood: () => [flyCtl("fallGood", fmtCheck("A fall is good", f.downIsGood, (v) => set({ downIsGood: v })))],
+    };
+    return flyEditor(sections.map(({ label, keys }) => flySection(label, label === "Behaviour"
+      ? wired("tooltip", (tmp) => wireTooltipControls(tmp, s, { fmtCheck, fmtSelect }, replaceFormat)) // Show tooltips, Command buttons, Tooltip mode (each says why when it does nothing)
+      : keys.flatMap((k) => build[k]()))));
   }
   function colourEditor(dash, s) {
     panelScale = null; // set below when the flyout shows the colour-scale controls
@@ -2829,25 +2882,19 @@ export function initDashboards() {
       canColourByCat: (s.chartType === "bar" || s.chartType === "scatter") && mode !== "continuous", // a measure on Colour replaces it
       borderOn: (f.markBorder ?? "none") !== "none", scale: panelScale, steps: Boolean(f.colorSteps),
     });
-    const ctl = (key, node) => { // remembers which control changed (capture: before the control's own handler rebuilds the flyout)
-      node.dataset.colourCtl = key;
-      for (const x of node.querySelectorAll("select, input")) x.addEventListener("change", () => { colourFocus = key; }, true);
-      for (const x of node.querySelectorAll('button.ws-swatch[aria-pressed="false"]')) x.addEventListener("click", () => { colourFocus = key; }, true);
-      return node;
-    };
-    const range = (key, other, label) => ctl(key, fmtNumber(label, f[key], "auto", (v) => {
+    const range = (key, other, label) => flyCtl(key, fmtNumber(label, f[key], "auto", (v) => {
       const err = colourRangeError(...(key === "colorMin" ? [v, f[other]] : [f[other], v]));
       if (err) { toast(err, "danger"); set({ [key]: f[key] }); return; } // redraw puts the kept value back
       set({ [key]: v });
     }));
-    const lineMarkers = () => { const tmp = el("div"); wireLineControls(tmp, s, fmtSelect, (next) => { s.format = next; commit(dash, s); }, ["lineMarkers"]); return tmp.firstElementChild ? ctl("lineMarkers", tmp.firstElementChild) : null; };
+    const lineMarkers = () => { const tmp = el("div"); wireLineControls(tmp, s, fmtSelect, (next) => { s.format = next; commit(dash, s); }, ["lineMarkers"]); return tmp.firstElementChild ? flyCtl("lineMarkers", tmp.firstElementChild) : null; };
     const limits = () => { // start / end (or the centre of a diverging scale), closed until asked for
       const box = el("details", "ws-colourfly__limits"); box.open = limitsOpen;
       box.addEventListener("toggle", () => { limitsOpen = box.open; });
       const sum = el("summary"); sum.append(icon("chevron", { size: 14 }), el("span", null, "Limits")); // a chevron, like the field pane's group heads: the text alone would not say it opens
       box.append(sum);
       const body = el("div", "ws-colourfly__limitsbody");
-      if (panelScale === "diverging") body.append(ctl("colorCentre", fmtNumber("Colour centre", f.colorCentre, "auto", (v) => { // cool above, warm below; no pins (the ends follow the centre)
+      if (panelScale === "diverging") body.append(flyCtl("colorCentre", fmtNumber("Colour centre", f.colorCentre, "auto", (v) => { // cool above, warm below; no pins (the ends follow the centre)
         const err = colourCentreError(v);
         if (err) { toast(err, "danger"); set({ colorCentre: f.colorCentre }); return; }
         set({ colorCentre: v });
@@ -2857,42 +2904,25 @@ export function initDashboards() {
       return box;
     };
     const build = {
-      colourByCategory: () => ctl("colourByCategory", fmtCheck("Colour by category", f.colorByDimension, (v) => set({ colorByDimension: v }))),
-      opacity: () => ctl("opacity", fmtMeter("Opacity", OPACITY_STOPS, f.markOpacity ?? 100, (v) => without("markOpacity", cleanMarkOpacity(Number(v)).value))), // blank at 100 %
-      border: () => ctl("border", fmtMeter("Border thickness", MARK_BORDER_STOPS.map(([, px, text]) => [px, text]), MARK_BORDER_STOPS.find(([key]) => key === (f.markBorder ?? "none"))?.[1] ?? 0, (px) => set({ markBorder: MARK_BORDER_STOPS.find(([, w]) => String(w) === px)[0] }))), // the key is stored, the bar speaks px
-      borderColour: () => ctl("borderColour", fmtSwatches("Border colour", MARK_BORDER_COLOUR_CHOICES, f.markBorderColor ?? "muted", (v) => set({ markBorderColor: v }))),
+      colourByCategory: () => flyCtl("colourByCategory", fmtCheck("Colour by category", f.colorByDimension, (v) => set({ colorByDimension: v }))),
+      opacity: () => flyCtl("opacity", fmtMeter("Opacity", OPACITY_STOPS, f.markOpacity ?? 100, (v) => without("markOpacity", cleanMarkOpacity(Number(v)).value))), // blank at 100 %
+      border: () => flyCtl("border", fmtMeter("Border thickness", MARK_BORDER_STOPS.map(([, px, text]) => [px, text]), MARK_BORDER_STOPS.find(([key]) => key === (f.markBorder ?? "none"))?.[1] ?? 0, (px) => set({ markBorder: MARK_BORDER_STOPS.find(([, w]) => String(w) === px)[0] }))), // the key is stored, the bar speaks px
+      borderColour: () => flyCtl("borderColour", fmtSwatches("Border colour", MARK_BORDER_COLOUR_CHOICES, f.markBorderColor ?? "muted", (v) => set({ markBorderColor: v }))),
       lineMarkers,
-      scale: () => ctl("scale", fmtSelect("Colour scale", SCALE_CHOICES.map(([v, t]) => [v, v === "auto" ? `${t} · ${panelScale === "diverging" ? "Diverging" : "Low → high"}` : t]), f.colorScale ?? "sequential", (v) => set({ colorScale: v }))), // Automatic names what the data made it
-      steps: () => ctl("steps", fmtSelect("Steps", STEP_CHOICES, f.colorSteps ?? 0, (v) => set({ colorSteps: Number(v) }))),
-      ramp: () => ctl("ramp", fmtSelect("Colour ramp", RAMP_CHOICES, f.colorRamp ?? "brand", (v) => set({ colorRamp: v }))),
-      pair: () => ctl("pair", fmtSelect("Diverging colours", DIV_PAIR_CHOICES, f.colorPair ?? "default", (v) => set({ colorPair: v }))),
-      fullRange: () => ctl("fullRange", fmtCheck("Use full colour range", f.colorFullRange === true, (v) => without("colorFullRange", v || null))), // off = symmetric about the centre; on = each side its own span
-      reverse: () => ctl("reverse", fmtCheck("Reverse palette", f.paletteReverse, (v) => set({ paletteReverse: v }))),
+      scale: () => flyCtl("scale", fmtSelect("Colour scale", SCALE_CHOICES.map(([v, t]) => [v, v === "auto" ? `${t} · ${panelScale === "diverging" ? "Diverging" : "Low → high"}` : t]), f.colorScale ?? "sequential", (v) => set({ colorScale: v }))), // Automatic names what the data made it
+      steps: () => flyCtl("steps", fmtSelect("Steps", STEP_CHOICES, f.colorSteps ?? 0, (v) => set({ colorSteps: Number(v) }))),
+      ramp: () => flyCtl("ramp", fmtSelect("Colour ramp", RAMP_CHOICES, f.colorRamp ?? "brand", (v) => set({ colorRamp: v }))),
+      pair: () => flyCtl("pair", fmtSelect("Diverging colours", DIV_PAIR_CHOICES, f.colorPair ?? "default", (v) => set({ colorPair: v }))),
+      fullRange: () => flyCtl("fullRange", fmtCheck("Use full colour range", f.colorFullRange === true, (v) => without("colorFullRange", v || null))), // off = symmetric about the centre; on = each side its own span
+      reverse: () => flyCtl("reverse", fmtCheck("Reverse palette", f.paletteReverse, (v) => set({ paletteReverse: v }))),
       limits,
       members: () => memberColourEditor(dash, s),
     };
-    const root = el("div", "ws-colourfly");
-    for (const [label, keys] of [["Color", groups.colour], ["Opacity", groups.opacity], ["Effects", groups.effects]]) {
-      const nodes = keys.map((k) => build[k]()).filter(Boolean);
-      if (!nodes.length) continue;
-      root.append(colourGroup(label, nodes));
-    }
-    return root.childElementCount ? root : null; // a table has nothing here: pills only, no stray divider
+    return flyEditor(
+      [["Color", groups.colour], ["Opacity", groups.opacity], ["Effects", groups.effects]].map(([label, keys]) => flySection(label, keys.map((k) => build[k]()).filter(Boolean))),
+      "ws-colourfly", // a table has nothing here: pills only, no stray divider
+    );
   }
-  function colourGroup(label, nodes = []) {
-    const group = el("div", "ws-colourfly__group");
-    group.setAttribute("role", "group"); group.setAttribute("aria-label", label);
-    group.dataset.section = label;
-    group.append(...nodes);
-    return group;
-  }
-  // The Color section of a flyout built by colourEditor, made (first) when the chart type has no Color controls but has Opacity or Effects.
-  function colourSection(root) {
-    let group = root.querySelector(":scope > [data-section='Color']");
-    if (!group) { group = colourGroup("Color"); root.prepend(group); }
-    return group;
-  }
-
   // --- Member shapes ------------------------------------------------
   // The Shape members the last drawn chart gave a symbol ({ field, members: [{ name, raw }] }), kept like the member colours; the editor lists them and a
   // pick stores a validated shape key in sheet.memberShapes (Dashboard/shape-model.js) and re-draws.

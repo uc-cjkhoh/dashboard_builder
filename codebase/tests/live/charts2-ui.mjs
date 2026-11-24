@@ -145,14 +145,14 @@ try {
     if (!(await ev(`!!document.querySelector('.ws-format')`))) await ev(`${fmtTool}.click()`);
     await waitFor(`!!document.querySelector('.ws-format')`, 'format panel');
   };
-  // The Colour controls live in the Color tile's flyout (D151), the rest in Format; the two are never open together, so each helper opens the one that holds its label.
-  const COLOUR_LABELS = new Set(['Border thickness', 'Border colour', 'Opacity', 'Line markers']);
-  const colTool = `document.querySelector('.ws-tool[data-tool="color"]')`;
+  // The Colour controls live in the Color tile's flyout, Marker size in Size's, Marker shape in Shape's (D151), the rest in Format; Format and a flyout are never open together, so each helper opens the one that holds its label.
+  const FLY_OF = { 'Border thickness': 'color', 'Border colour': 'color', 'Opacity': 'color', 'Line markers': 'color', 'Marker size (px)': 'size', 'Marker shape': 'shape' };
   const ensure = async (label) => {
-    if (COLOUR_LABELS.has(label)) {
-      if (!(await ev(`!!document.querySelector('#ws-toolfly:not([hidden]) #ws-toolpanel-color')`))) await ev(`${colTool}.click()`);
-      await waitFor(`!!document.querySelector('#ws-toolfly:not([hidden]) #ws-toolpanel-color')`, 'Color flyout');
-    } else await openFormat();
+    const k = FLY_OF[label];
+    if (!k) return openFormat();
+    const open = `!!document.querySelector('#ws-toolfly:not([hidden]) #ws-toolpanel-${k}')`;
+    if (!(await ev(open))) await ev(`document.querySelector('.ws-tool[data-tool="${k}"]').click()`);
+    await waitFor(open, `${k} flyout`); await settle(150); // a flyout may hold no such control (Marker size on a bar): the caller asks hasField
   };
   const THICKNESS = { none: 0, thin: 1, medium: 2, thick: 3 }; // Border thickness is a bar over px; the stored key is the name
   const pick = async (label, value) => {
