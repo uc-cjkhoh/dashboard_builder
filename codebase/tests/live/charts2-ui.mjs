@@ -145,20 +145,33 @@ try {
     if (!(await ev(`!!document.querySelector('.ws-format')`))) await ev(`${fmtTool}.click()`);
     await waitFor(`!!document.querySelector('.ws-format')`, 'format panel');
   };
+  // The Colour controls live in the Color tile's flyout (D151), the rest in Format; the two are never open together, so each helper opens the one that holds its label.
+  const COLOUR_LABELS = new Set(['Border thickness', 'Border colour', 'Opacity', 'Line markers']);
+  const colTool = `document.querySelector('.ws-tool[data-tool="color"]')`;
+  const ensure = async (label) => {
+    if (COLOUR_LABELS.has(label)) {
+      if (!(await ev(`!!document.querySelector('#ws-toolfly:not([hidden]) #ws-toolpanel-color')`))) await ev(`${colTool}.click()`);
+      await waitFor(`!!document.querySelector('#ws-toolfly:not([hidden]) #ws-toolpanel-color')`, 'Color flyout');
+    } else await openFormat();
+  };
+  const THICKNESS = { none: 0, thin: 1, medium: 2, thick: 3 }; // Border thickness is a bar over px; the stored key is the name
   const pick = async (label, value) => {
-    await ev(`(() => { const s = [...document.querySelectorAll('.ws-fmt-field')].find((l) => l.querySelector('.ws-fmt-label').textContent === ${J(label)}).querySelector('select'); s.value = ${J(value)}; s.dispatchEvent(new Event('change')); return true; })()`);
+    await ensure(label);
+    if (label === 'Border thickness') value = THICKNESS[value];
+    await ev(`(() => { const s = [...document.querySelectorAll('.ws-fmt-field')].find((l) => l.querySelector('.ws-fmt-label').textContent === ${J(label)}).querySelector('select, input[type=range]'); s.value = ${J(value)}; s.dispatchEvent(new Event('change')); return true; })()`);
     await settle(400);
   };
-  const hasField = (label) => ev(`[...document.querySelectorAll('.ws-fmt-field')].some((l) => l.querySelector('.ws-fmt-label').textContent === ${J(label)})`);
+  const hasField = async (label) => { await ensure(label); return ev(`[...document.querySelectorAll('.ws-fmt-field')].some((l) => l.querySelector('.ws-fmt-label').textContent === ${J(label)})`); };
   const theme = async (t) => { await ev(`import('/features/Core/scheme.js').then((m) => m.setSchemePref(${J(t)}))`); await settle(600); };
   const chartReady = () => waitFor(`!!document.querySelector('.ws-chart-canvas') && !!window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas'))`, 'chart drawn');
 
   const setNum = async (label, v) => {
+    await ensure(label);
     await ev(`(() => { const i = [...document.querySelectorAll('.ws-fmt-field')].find((l) => l.querySelector('.ws-fmt-label').textContent === ${J(label)}).querySelector('input'); i.value = ${J(v)}; i.dispatchEvent(new Event('change')); return true; })()`);
     await settle(400);
   };
   const tick = (id) => ev(`document.getElementById('toast') && !document.getElementById('toast').hidden ? document.getElementById('toast').textContent : ''`);
-  const check1 = (id) => ev(`(() => { const l = [...document.querySelectorAll('.ws-fmt-field')].find((l) => l.querySelector('.ws-fmt-label').textContent === ${J(id)}); const c = l.querySelector('input'); c.checked = !c.checked; c.dispatchEvent(new Event('change')); return true; })()`);
+  const check1 = async (id) => { await ensure(id); return ev(`(() => { const l = [...document.querySelectorAll('.ws-fmt-field')].find((l) => l.querySelector('.ws-fmt-label').textContent === ${J(id)}); const c = l.querySelector('input'); c.checked = !c.checked; c.dispatchEvent(new Event('change')); return true; })()`); };
   globalThis.__failShot = async (n) => shot('fail-' + n.slice(0, 12).replace(/\W/g, '_') + '.png');
   const axes = async () => { const o = await opt(); return [].concat(o.yAxis); };
 
@@ -242,17 +255,17 @@ try {
     await chartReady();
   });
 
-  await check('Mark border: bars and heatmap cells take thin / thick strokes in the muted theme ink; None keeps the old look', async () => {
+  await check('Border thickness: bars and heatmap cells take thin / thick strokes in the muted theme ink; None keeps the old look', async () => {
     await setType('Bar'); await openFormat(); await chartReady();
-    must(await hasField('Mark border') && !(await hasField('Marker size (px)')), 'bar has border but no marker size');
+    must(await hasField('Border thickness') && !(await hasField('Marker size (px)')), 'bar has border but no marker size');
     let o = await opt();
     must(!o.series[0].itemStyle.borderWidth, `none: ${o.series[0].itemStyle.borderWidth}`);
-    await pick('Mark border', 'thin'); await chartReady();
+    await pick('Border thickness', 'thin'); await chartReady();
     o = await opt();
     const muted = await ev(`getComputedStyle(document.documentElement).getPropertyValue('--chart-muted').trim()`);
     must(o.series[0].itemStyle.borderWidth === 1 && o.series[0].itemStyle.borderColor.length > 0, `thin ${J(o.series[0].itemStyle)}`);
     await shot('bar-thin-light.png');
-    await pick('Mark border', 'thick'); await chartReady();
+    await pick('Border thickness', 'thick'); await chartReady();
     o = await opt();
     must(o.series[0].itemStyle.borderWidth === 3, 'thick');
     const colLight = o.series[0].itemStyle.borderColor;
@@ -260,23 +273,23 @@ try {
     const colDark = (await opt()).series[0].itemStyle.borderColor;
     must(colLight !== colDark, `border colour follows the theme: ${colLight} / ${colDark}`);
     await shot('bar-thick-dark.png'); await theme('light'); await settle(400);
-    await pick('Mark border', 'none');
+    await pick('Border thickness', 'none');
     await dragChip('channel', `__t.zone('columns')`); await settle(400);
     await setType('Heatmap'); await openFormat(); await chartReady();
     o = await opt();
     must(o.series[0].itemStyle.borderWidth === 1 && o.series[0].type === 'heatmap', 'heatmap keeps its hairline by default');
-    await pick('Mark border', 'thick'); await chartReady();
+    await pick('Border thickness', 'thick'); await chartReady();
     o = await opt();
     must(o.series[0].itemStyle.borderWidth === 3, `heatmap thick ${J(o.series[0].itemStyle)}`);
     await shot('heatmap-thick-light.png');
     await theme('dark'); await shot('heatmap-thick-dark.png'); await theme('light');
-    await pick('Mark border', 'none');
+    await pick('Border thickness', 'none');
   });
 
   await check('Border colour: appears with a border, picks a palette token; Medium is 2 px; None hides the choice', async () => {
     await setType('Bar'); await openFormat(); await chartReady();
     must(!(await hasField('Border colour')), 'no colour choice while the border is none');
-    await pick('Mark border', 'medium'); await chartReady();
+    await pick('Border thickness', 'medium'); await chartReady();
     must(await hasField('Border colour'), 'colour choice with a border');
     let o = await opt();
     must(o.series[0].itemStyle.borderWidth === 2, `medium ${J(o.series[0].itemStyle)}`);
@@ -287,7 +300,7 @@ try {
     must(o.series[0].itemStyle.borderColor !== muted && o.series[0].itemStyle.borderColor.length > 0, `accent ${o.series[0].itemStyle.borderColor} vs ${muted} (token ${accent})`);
     await shot('bar-medium-accent-light.png');
     await theme('dark'); await settle(400); await shot('bar-medium-accent-dark.png'); await theme('light'); await settle(400);
-    await pick('Mark border', 'none');
+    await pick('Border thickness', 'none');
     await dragChip('channel', `__t.zone('columns')`); await settle(400);
     await setType('Heatmap'); await openFormat(); await chartReady(); // the state the next check expects
   });
@@ -322,12 +335,12 @@ try {
     await setNum('Marker size (px)', '28'); await chartReady();
     o = await opt();
     must(o.series[0].symbolSize === 28, `scatter 28: ${o.series[0].symbolSize}`);
-    await pick('Mark border', 'thick'); await chartReady();
+    await pick('Border thickness', 'thick'); await chartReady();
     o = await opt();
     must(o.series[0].itemStyle.borderWidth === 3, 'scatter border');
     await shot('scatter-28-thick-light.png');
     await theme('dark'); await shot('scatter-28-thick-dark.png'); await theme('light');
-    await pick('Mark border', 'none'); await setNum('Marker size (px)', '');
+    await pick('Border thickness', 'none'); await setNum('Marker size (px)', '');
   });
 
   await check('Marker shape: line charts offer four shapes; the symbol follows; bars do not offer it', async () => {
@@ -346,7 +359,7 @@ try {
     must(!(await hasField('Marker shape')), 'bar has no Marker shape');
   });
 
-  await check('Mark border on pie, treemap and funnel: none keeps the surface gap; thin / thick use the muted ink', async () => {
+  await check('Border thickness on pie, treemap and funnel: none keeps the surface gap; thin / thick use the muted ink', async () => {
     // Part-to-whole charts take one measure and one dimension: keep amount and region only.
     for (const f of ['channel', 'discount']) {
       await ev(`[...document.querySelectorAll('.ws-shelf--columns .ws-pill')].find((p) => p.textContent.includes(${J(f)})).querySelector('button[aria-label="Remove field"]').click()`); await settle(300);
@@ -354,45 +367,45 @@ try {
     for (const [label, pathOf, dflt] of [['Pie', 'series[0].itemStyle', 2], ['Treemap', 'series[0].itemStyle', 2], ['Funnel', 'series[0].itemStyle', 1]]) {
       await setType(label); await openFormat();
       try { await chartReady(); } catch (e) { throw new Error(`${label}: ${e.message}; chart text: ${await chartText()}`); }
-      must(await hasField('Mark border') && !(await hasField('Marker size (px)')), `${label}: border but no marker size`);
+      must(await hasField('Border thickness') && !(await hasField('Marker size (px)')), `${label}: border but no marker size`);
       let o = await opt();
       must(o.series[0].itemStyle.borderWidth === dflt, `${label} none: ${J(o.series[0].itemStyle)}`);
       const surface = o.series[0].itemStyle.borderColor;
-      await pick('Mark border', 'thin'); await chartReady();
+      await pick('Border thickness', 'thin'); await chartReady();
       o = await opt();
       must(o.series[0].itemStyle.borderWidth === 1 && o.series[0].itemStyle.borderColor !== surface, `${label} thin: ${J(o.series[0].itemStyle)}`);
-      await pick('Mark border', 'thick'); await chartReady();
+      await pick('Border thickness', 'thick'); await chartReady();
       o = await opt();
       must(o.series[0].itemStyle.borderWidth === 3, `${label} thick`);
       await shot(`${label.toLowerCase()}-thick-light.png`);
       await theme('dark'); await settle(400); await chartReady();
       await shot(`${label.toLowerCase()}-thick-dark.png`); await theme('light'); await settle(400);
-      await pick('Mark border', 'none');
+      await pick('Border thickness', 'none');
     }
   });
 
-  await check('Mark border on bullet and waterfall (P36 types): the value bar takes the stroke; the waterfall offers the choice and redraws', async () => {
+  await check('Border thickness on bullet and waterfall (P36 types): the value bar takes the stroke; the waterfall offers the choice and redraws', async () => {
     await dragChip('discount', `__t.zone('columns')`); await settle(400);
     await setType('Bullet'); await openFormat();
     await pick('Target field', '1');
     try { await chartReady(); } catch (e) { throw new Error(`Bullet: ${e.message}; chart text: ${await chartText()}`); }
-    must(await hasField('Mark border'), 'bullet has Mark border');
+    must(await hasField('Border thickness'), 'bullet has Border thickness');
     const bar = async () => (await opt()).series.find((x) => x.type === 'bar' && x.name === 'amount' || x.barWidth === '24%' || x.z === 3);
     let o = await bar();
     must(!o.itemStyle.borderWidth, `bullet none: ${J(o.itemStyle)}`);
-    await pick('Mark border', 'thick'); await chartReady();
+    await pick('Border thickness', 'thick'); await chartReady();
     o = await bar();
     must(o.itemStyle.borderWidth === 3 && o.itemStyle.borderColor.length > 0, `bullet thick: ${J(o.itemStyle)}`);
     await shot('bullet-thick-light.png');
-    await pick('Mark border', 'none');
+    await pick('Border thickness', 'none');
     await ev(`[...document.querySelectorAll('.ws-shelf--columns .ws-pill')].find((p) => p.textContent.includes('discount')).querySelector('button[aria-label="Remove field"]').click()`); await settle(300);
     await setType('Waterfall'); await openFormat(); await chartReady();
-    must(await hasField('Mark border'), 'waterfall has Mark border');
-    await pick('Mark border', 'thin'); await chartReady();
+    must(await hasField('Border thickness'), 'waterfall has Border thickness');
+    await pick('Border thickness', 'thin'); await chartReady();
     must(await ev(`window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas')).getOption().series[0].type`) === 'custom', 'waterfall redraws');
     await shot('waterfall-thin-light.png');
     await theme('dark'); await settle(400); await chartReady(); await shot('waterfall-thin-dark.png'); await theme('light'); await settle(400);
-    await pick('Mark border', 'none');
+    await pick('Border thickness', 'none');
   });
 
   if (b.consoleErrors.length) { console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  ')); failed++; }

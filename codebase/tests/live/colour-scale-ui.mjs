@@ -134,7 +134,10 @@ try {
   const opSelect = `document.querySelector('select[aria-label^="Filter operator for"]')`;
   const shot = async (name) => { try { writeFileSync(join(SHOTS, name), Buffer.from((await b.send('Page.captureScreenshot', { format: 'png' })).data, 'base64')); } catch { /* optional */ } };
 
-  const fmtTool = `document.querySelector('.ws-viewbar__btn[aria-label="Format"]')`;
+  const colTool = `document.querySelector('.ws-tool[data-tool="color"]')`; // the Colour controls live in the Color tile's flyout (D151)
+  const colourOpen = () => ev(`!!document.querySelector('#ws-toolfly:not([hidden]) .ws-colourfly')`);
+  const openColour = async () => { if (!(await colourOpen())) await ev(`${colTool}.click()`); await waitFor(`!!document.querySelector('#ws-toolfly .ws-colourfly')`, 'Color flyout open'); }; // a drop on the tile opens it already
+  const closeColour = async () => { if (await colourOpen()) await ev(`${colTool}.click()`); await settle(300); };
 
   const fillsNow = async () => (await vm()).inRange.color;
   const vm = async () => (await ev(`window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas')).getOption()`)).visualMap?.[0];
@@ -142,7 +145,7 @@ try {
   const setSelect = (label, v) => ev(`(() => { const s = ${fmtField(label)}.querySelector('select'); s.value = ${J(v)}; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
   const setNum = (label, v) => ev(`(() => { const i = ${fmtField(label)}.querySelector('input'); i.value = ${J(v)}; i.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
 
-  await check('a scatter with continuous Colour draws on the brand ramp; Format offers ramp and range', async () => {
+  await check('a scatter with continuous Colour draws on the brand ramp; the Color flyout offers ramp and range', async () => {
     await dragChip('region', `__t.zone('rows')`);
     await dragChip('amount', `__t.zone('columns')`);
     await dragChip('qty', `__t.zone('columns')`);
@@ -152,8 +155,8 @@ try {
     await settle(400);
     await dragChip('discount', `document.querySelector('.ws-tool[aria-label^="Color"]')`);
     await settle(500);
-    await waitFor(`${fmtTool} !== null`, 'format tool');
-    await ev(`${fmtTool}.click()`);
+    await waitFor(`${colTool} !== null`, 'Color tile');
+    await openColour();
     await waitFor(`!!(${fmtField('Colour ramp')})`, 'ramp control');
     must(await ev(`!!(${fmtField('Colour from')}) && !!(${fmtField('Colour to')})`), 'range controls');
     const f = await fillsNow();
@@ -232,8 +235,8 @@ try {
     must(!/beyond|centre/.test(await title()), 'no pin or centre note: ' + await title());
     await setSelect('Colour scale', 'diverging'); await settle(400);
     must(/centre/.test(await title()), 'diverging note: ' + await title());
-    await settleScheme(); await ev(`${fmtTool}.click()`); await settle(400); await shot(`steps-scatter-diverging-${SCHEME}.png`); await ev(`${fmtTool}.click()`); await settle(300); // panel closed so the legend is in view
-    await setSelect('Colour scale', 'sequential'); await settle(300); await settleScheme(); await ev(`${fmtTool}.click()`); await settle(400); await shot(`steps-scatter-sequential-${SCHEME}.png`); await ev(`${fmtTool}.click()`); await settle(300);
+    await settleScheme(); await closeColour(); await settle(400); await shot(`steps-scatter-diverging-${SCHEME}.png`); await openColour(); // flyout closed for the shot so the legend is in view
+    await setSelect('Colour scale', 'sequential'); await settle(300); await settleScheme(); await closeColour(); await settle(400); await shot(`steps-scatter-sequential-${SCHEME}.png`); await openColour();
     await setSelect('Steps', '0'); await settle(400);
     must((await vm()).type === 'continuous', 'Continuous restores the gradient');
   });
@@ -253,7 +256,7 @@ try {
     await shot('diverging-pair-dark.png');
     await setSelect('Diverging colours', 'amber-violet'); await settle(300); await setSelect('Diverging colours', 'green-violet'); await settle(400); // redraw under the dark scheme
     { const d = (await fillsNow()).slice(); const e = await expect(); must(rgb(d[0]) === e[0] && rgb(d[2]) === e[1] && J(d) !== J(g), 'ends are the --chart-div tokens (dark): ' + J([d, e])); }
-    must(await ev(`!!document.querySelector('.ws-fmt-field--line')`), 'pair select on its own line'); await ev(`document.documentElement.removeAttribute('data-scheme')`); await settle(300);
+    must(await ev(`(${fmtField('Diverging colours')}).querySelector('select').getBoundingClientRect().width >= 200`), 'pair select on its own line, as wide as the flyout'); await ev(`document.documentElement.removeAttribute('data-scheme')`); await settle(300);
     await setSelect('Diverging colours', 'default'); await settle(400);
     must(J(await fillsNow()) === J(a), 'back to Orange / Blue');
     await setSelect('Colour scale', 'sequential'); await settle(300);

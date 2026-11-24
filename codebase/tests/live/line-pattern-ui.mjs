@@ -139,7 +139,7 @@ try {
   const shot = async (name) => { try { writeFileSync(join(SHOTS, `${name}-${SCHEME}.png`), Buffer.from((await b.send('Page.captureScreenshot', { format: 'png' })).data, 'base64')); } catch { /* optional */ } };
   const fmtTool = `document.querySelector('.ws-viewbar__btn[aria-label="Format"]')`;
   const fmtField = (label) => `[...document.querySelectorAll('.ws-fmt-field')].find((l) => l.textContent.includes(${J(label)}))`;
-  const setSelect = (label, v) => ev(`(() => { const s = ${fmtField(label)}.querySelector('select'); s.value = ${J(v)}; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+  const setSelect = async (label, v) => { await ensure(label); return ev(`(() => { const s = ${fmtField(label)}.querySelector('select'); s.value = ${J(v)}; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`); };
   const inst = `window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas'))`;
   const opt = () => ev(`${inst}.getOption()`);
   const hints = () => ev(`[...document.querySelectorAll('#ws-chart .ws-hint')].map((h) => h.textContent)`);
@@ -169,10 +169,21 @@ try {
 
 
   const setField = (label, v) => ev(`(() => { const i = ${fmtField(label)}.querySelector('input'); i.value = ${J(v)}; i.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
-  const toggle = (label) => ev(`${fmtField(label)}.querySelector('input').click()`);
+  const toggle = async (label) => { await ensure(label); return ev(`${fmtField(label)}.querySelector('input').click()`); };
   const formatOpen = () => ev(`!!(${fmtField('Number')})`);
   const openFormat = async () => { if (!(await formatOpen())) await ev(`${fmtTool}.click()`); await waitFor(`!!(${fmtField('Number')})`, 'format panel open'); };
-  const closeFormat = async () => { if (await formatOpen()) await ev(`${fmtTool}.click()`); await settle(300); };
+  const closeFormat = async () => { if (await formatOpen()) await ev(`${fmtTool}.click()`); await closeColour(); await settle(300); }; // both panels: a snapshot shows the bare chart
+  // Line pattern stays in Format, Line markers moved to the Color flyout (D151); the two are never open together, so each helper opens the one that holds its label.
+  const colTool = `document.querySelector('.ws-tool[data-tool="color"]')`;
+  const colourOpen = () => ev(`!!document.querySelector('#ws-toolfly:not([hidden]) #ws-toolpanel-color')`);
+  const closeColour = async () => { if (await colourOpen()) await ev(`${colTool}.click()`); };
+  const ensure = async (label) => {
+    if (label === 'Line markers') {
+      if (!(await colourOpen())) await ev(`${colTool}.click()`);
+      await waitFor(`!!document.querySelector('#ws-toolfly:not([hidden]) .ws-colourfly .ws-fmt-field')`, 'Color flyout open');
+    } else await openFormat();
+  };
+  const hasField = async (label) => { await ensure(label); return ev(`!!(${fmtField(label)})`); };
   // The mock answers rows in REGIONS order; a dimension's steps follow the SORTED members (APAC, CA, EU, JP, LATAM, MEA, UK, US): the expected rank of each row.
   const rankOfRow = REGIONS.map((r) => [...REGIONS].sort().indexOf(r));
   const byMember = (a) => rankOfRow.map((rk, i) => [rk, a[i]]).sort((x, y) => x[0] - y[0]).map((x) => x[1]); // values listed smallest member first
@@ -191,11 +202,12 @@ try {
     writeFileSync(join(SHOTS, `${name}-${t}.png`), Buffer.from((await b.send('Page.captureScreenshot', { format: 'png' })).data, 'base64')); } catch { /* optional */ } await openFormat(); }; // the chart without the Format panel over it; named by the scheme actually showing
   const snapPanel = async (name) => { await ev(`document.querySelector('#ws-toolfly .iconbtn[aria-label="Close editor"]')?.click()`); await openFormat(); const t = await ev(`document.documentElement.getAttribute('data-scheme') || 'light'`); try { writeFileSync(join(SHOTS, `${name}-${t}.png`), Buffer.from((await b.send('Page.captureScreenshot', { format: 'png' })).data, 'base64')); } catch { /* optional */ } }; // with the Format panel open (the disabled controls and their reasons)
   const control = (label) => `${fmtField(label)}.querySelector('select')`;
-  const fieldState = async (label) => ev(`(() => { const s = ${control(label)}; return s ? { value: s.value, disabled: s.disabled, title: s.title } : null; })()`);
+  const fieldState = async (label) => { await ensure(label); return ev(`(() => { const s = ${control(label)}; return s ? { value: s.value, disabled: s.disabled, title: s.title } : null; })()`); };
+  const opacityOf = async (label) => { await ensure(label); return ev(`getComputedStyle(${control(label)}).opacity`); };
   const pickOpt = async (label, v) => { await setSelect(label, v); await settle(500); };
   const scheme = async (t) => { await ev(`document.documentElement.${t === 'dark' ? "setAttribute('data-scheme', 'dark')" : "removeAttribute('data-scheme')"}`); await settle(500); };
   const series0 = async () => (await opt()).series[0];
-  const hoverDot = async (di) => { // dispatch a hover over a point and report whether its dot exists and what the tooltip says
+  const hoverDot = async (di) => { await closeFormat(); // a panel over the chart's corner must not hide the point // dispatch a hover over a point and report whether its dot exists and what the tooltip says
     await ev(`${inst}.dispatchAction({ type: 'showTip', seriesIndex: 0, dataIndex: ${di} })`);
     await ev(`${inst}.dispatchAction({ type: 'highlight', seriesIndex: 0, dataIndex: ${di} })`); await b.sleep(250);
     const dot = await ev(`(() => { const el = ${inst}.getModel().getSeriesByIndex(0).getData().getItemGraphicEl(${di}); return !!el && !el.ignore; })()`);
@@ -211,13 +223,13 @@ try {
   await chartType('Line'); await openFormat();
 
   await check('Line pattern and Line markers are offered on a line, start at Solid / Automatic, and draw as before', async () => {
-    must(await ev(`!!(${fmtField('Line pattern')}) && !!(${fmtField('Line markers')})`), 'both controls on a line');
+    must(await hasField('Line pattern') && await hasField('Line markers'), 'both controls on a line');
     const p = await fieldState('Line pattern'), m = await fieldState('Line markers');
     must(p.value === 'solid' && !p.disabled && m.value === 'auto' && !m.disabled, J([p, m]));
     const s = await series0();
     must((s.lineStyle.type === undefined || s.lineStyle.type === 'solid') && s.showSymbol === false, 'a plain 70-point line: solid, no markers (as before): ' + J([s.lineStyle.type, s.showSymbol]));
     must((await dashes()).every((d) => d === null), 'every drawn line solid: ' + J(await dashes()));
-    must(!/(Line pattern|Line markers)/.test(await ev(`(${fmtField('Number')}).textContent`)), 'sanity');
+    must(await ev(`!!(${fmtField('Line markers')}) && !(${fmtField('Line pattern')})`), 'the Color flyout has Line markers but not Line pattern');
   });
   await check('Dashed / Dotted: the drawn line really is dashed (zrender lineDash), Solid brings it back; light and dark screenshots', async () => {
     await pickOpt('Line pattern', 'dashed');
@@ -270,7 +282,7 @@ try {
   });
   await check('an Area takes both controls: the border is dashed, the fill is not', async () => {
     await chartType('Area'); await openFormat();
-    must(await ev(`!!(${fmtField('Line pattern')}) && !!(${fmtField('Line markers')})`), 'both on an area');
+    must(await hasField('Line pattern') && await hasField('Line markers'), 'both on an area');
     await pickOpt('Line pattern', 'dashed');
     const s = await series0(); must(s.lineStyle.type === 'dashed' && !!s.areaStyle, 'area: dashed border + fill');
     await snap('area-dashed');
@@ -279,7 +291,7 @@ try {
   });
   await check('a Bar chart offers neither control', async () => {
     await chartType('Bar'); await openFormat();
-    must(await ev(`!(${fmtField('Line pattern')}) && !(${fmtField('Line markers')})`), 'no controls on a bar');
+    must(!(await hasField('Line pattern')) && !(await hasField('Line markers')), 'no controls on a bar');
     await chartType('Line'); await openFormat();
   });
   await check('Size on a straight line sets its thickness: Line pattern is disabled with the reason and the line stays solid; Line markers stay offered', async () => {
@@ -287,7 +299,7 @@ try {
     await dragChip('discount', toolEl('Size')); await settle(700); await openFormat();
     const p = await fieldState('Line pattern');
     must(p.disabled && /thickness/.test(p.title) && p.value === 'solid', J(p));
-    must(await ev(`getComputedStyle(${control('Line pattern')}).opacity < 1 && getComputedStyle(${control('Line markers')}).opacity === '1'`), 'the disabled control looks disabled, the live one does not');
+    must(Number(await opacityOf('Line pattern')) < 1 && await opacityOf('Line markers') === '1', 'the disabled control looks disabled, the live one does not');
     must((await dashes()).every((x) => x === null), 'the line is solid: ' + J(await dashes()));
     const s = (await opt()).series; must(s.some((x) => x.type === 'custom'), 'the thickness overlay is drawn');
     must(!(await fieldState('Line markers')).disabled, 'markers are offered');

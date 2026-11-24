@@ -133,7 +133,7 @@ try {
   const opSelect = `document.querySelector('select[aria-label^="Filter operator for"]')`;
   const shot = async (name) => { try { writeFileSync(join(SHOTS, name), Buffer.from((await b.send('Page.captureScreenshot', { format: 'png' })).data, 'base64')); } catch { /* optional */ } };
 
-  const fmtTool = `document.querySelector('.ws-viewbar__btn[aria-label="Format"]')`;
+  const fmtTool = `document.querySelector('.ws-tool[data-tool="color"]')`; // the Colour controls live in the Color tile's flyout (D151)
   const fills = () => ev(`[...document.querySelectorAll('.ws-chart-canvas svg path')].map((p) => (p.getAttribute('fill') || '').toLowerCase()).filter((f) => /^#[0-9a-f]{6}$/.test(f))`);
   const lum = (h) => { const n = parseInt(h.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255]; };
 

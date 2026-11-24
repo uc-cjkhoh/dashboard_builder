@@ -379,6 +379,16 @@ test("wireLineControls builds the two selects, disables one that does nothing an
   const bars = []; wireLineControls({ append: (...k) => bars.push(...k) }, { ...sheet, chartType: "bar" }, fmtSelect, () => {});
   assert.deepEqual(bars, [], "a bar chart gets neither control");
 });
+test("wireLineControls takes an optional key filter: Line pattern stays in Format, Line markers moves to the Color flyout", async () => {
+  const { wireLineControls } = await import("../../src/DashboardBuilder/Features/Dashboard/line-controls.js");
+  const fmtSelect = (label) => ({ label, title: "", querySelector: () => ({ title: "", disabled: false, setAttribute() {} }) });
+  const dim = { db: "d", table: "t", column: "region", category: "text" };
+  const sheet = { ...emptySheet(), chartType: "line", columns: [dim], rows: [{ db: "d", table: "t", column: "a", category: "numeric", agg: "sum" }] };
+  const only = (keys) => { const kids = []; wireLineControls({ append: (...k) => kids.push(...k) }, sheet, fmtSelect, () => {}, keys); return kids.map((k) => k.label); };
+  assert.deepEqual(only(["lineMarkers"]), ["Line markers"]);
+  assert.deepEqual(only(["linePattern"]), ["Line pattern"]);
+  assert.deepEqual(only(undefined), ["Line pattern", "Line markers"], "no filter: both, as before");
+});
 
 // ---- the Size bound: the panel reads the drawn point count, so it agrees with the drawing --------------------------------
 const wide = (n, format, extra = {}) => buildCartesian({ type: "line", categories: cats(n), series: [S("v", many(n))], sizes: many(n).map((v) => v + 1), sizeName: "qty", format, ...extra });

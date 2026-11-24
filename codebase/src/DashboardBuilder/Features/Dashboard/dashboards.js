@@ -50,10 +50,11 @@ import { FONT_CHOICES } from "./font-model.js";
 import { BACKGROUND_CHOICES } from "./background-model.js";
 import { TABLE_ALIGN_CHOICES, TABLE_DENSITY_CHOICES, TABLE_SHADE_CHOICES } from "./table-style-model.js";
 import { COL_ALIGN_CHOICES, tableColumnList, setTableColumn, columnLook, columnWidthError } from "./table-columns-model.js";
-import { COLOUR_MEASURE_TYPES, sizeChannel, shapeChannel } from "./mark-channel-model.js";
+import { sizeChannel, shapeChannel } from "./mark-channel-model.js";
+import { colourFlyoutGroups, colourScaleShown } from "./colour-flyout-model.js";
 import { LABEL_MARK_CHOICES, LABEL_POSITION_CHOICES, labelContext, labelModesFor, labelMarksOf, effectiveLabelMode, cleanLabelMarks, labelPositionsFor, labelPositionOf, cleanLabelPosition } from "./label-marks-model.js";
-import { MARK_BORDER_CHOICES, MARKER_SHAPE_CHOICES, BORDER_TYPES, MARK_BORDER_COLOUR_CHOICES, markerSizeError } from "./mark-style-model.js";
-import { OPACITY_TYPES, OPACITY_CHOICES, cleanMarkOpacity } from "./mark-opacity-model.js";
+import { MARK_BORDER_STOPS, MARKER_SHAPE_CHOICES, MARK_BORDER_COLOUR_CHOICES, markerSizeError } from "./mark-style-model.js";
+import { OPACITY_STOPS, cleanMarkOpacity } from "./mark-opacity-model.js";
 import { addColourField, MULTI_COLOUR_TYPES } from "./colour-fields-model.js";
 import { SIZE_SCALE_TYPES, ZERO_BASED_TYPES, sizeScaleOf, sizeRangeError, cleanSizeScale, VARY_CHOICES, sizeVary, sizeVaryError, sizeEndsEdit, setSizeVary } from "./size-scale-model.js";
 import { targetChoices, effectiveTargetMeasure } from "./bullet-model.js";
@@ -97,7 +98,7 @@ import { toggleDateLabels } from "./date-labels.js";
 // Columns (dimension), Rows (measure) and Filters shelves; the chart renders from a bounded,
 // identifier-safe query. Fields from *different* tables are joined automatically along the
 // relationships drawn in the Data Source (a join path found by BFS over the relationship graph).
-// Chart types whose marks take Format → Marker size / Mark border (scatter family and line markers; bars and cells).
+// Chart types whose marks take Format → Marker size / Border thickness (scatter family and line markers; bars and cells).
 const MARKER_TYPES = new Set(["scatter", "square", "circle", "line", "area", "combo", "heatmap"]);
 const FIELD_MIME = "application/x-ch-field";
 const ANALYTICS_MIME = "application/x-ch-analytics"; // an Analytics pane item dragged onto the chart
@@ -236,12 +237,12 @@ export function initDashboards() {
     statusBar: setStatusBar, notices: sharedNote,
   });
   const runChart = () => sheetView.run();
-  // The continuous colour scale a sheet's last drawing resolved to (Automatic reads the data): Format shows that scale's controls. A change while Format is open redraws the header.
+  // The continuous colour scale a sheet's last drawing resolved to (Automatic reads the data): the Color flyout shows that scale's controls. A change while it is open redraws the flyout.
   const drawnScale = new WeakMap();
-  let panelScale = null; // the scale the Format panel on screen was built for
+  let panelScale = null; // the scale the Color flyout on screen was built for
   const noteColourScale = (sheet, scale) => {
     drawnScale.set(sheet, scale);
-    if (formatOpen && panelScale !== null && sheet.format?.colorScale === "auto" && panelScale !== scale) renderShelves(); // only a real change rebuilds the panel (an input being typed in keeps its focus)
+    if ((formatOpen || openTool === "color") && panelScale !== null && sheet.format?.colorScale === "auto" && panelScale !== scale) renderShelves(); // only a real change rebuilds the panel (an input being typed in keeps its focus)
   };
   // A crosstab header's +/- — flips its key on sheet.collapsed (presentation only: the redraw reads the cached result).
   function collapseHeader(axis, key, valid) {
@@ -833,6 +834,7 @@ export function initDashboards() {
 
     // Motion only for what is new since the last render (every edit re-renders the header).
     mountFly(flyEl);
+    restoreColourFocus();
     const panelKey = toolEl || flyEl ? `tool:${openTool}` : fmtEl ? "format" : null;
     if (panelKey && panelKey !== shownPanel) enter(flyEl ?? toolEl ?? fmtEl, flyEl ? { y: 0, scale: .98 } : undefined);
     shownPanel = panelKey;
@@ -1345,11 +1347,10 @@ export function initDashboards() {
   }
 
   function formatPanel(dash, s) {
-    panelScale = null; // set below when this panel shows the colour-scale controls
+    panelScale = null; // the scale controls live in the Color flyout (colourEditor sets it): nothing for the header to refresh
     const f = s.format ?? (s.format = defaultFormat());
     const isChart = CHART_LIKE.has(s.chartType);              // pie/donut/scatter/… get legend etc.
     const hasAxes = isChart && !NO_AXES.has(s.chartType);
-    const canColourByCat = (s.chartType === "bar" || s.chartType === "scatter") && colorMode(s) !== "continuous"; // a measure on Colour replaces it
     const set = (patch) => { s.format = { ...f, ...patch }; commit(dash, s); };
 
     const panel = el("div", "ws-format");
@@ -1398,27 +1399,17 @@ export function initDashboards() {
         set({ markerSize: v });
       }));
     if (linesTakeStyle(s.chartType)) panel.append(fmtSelect("Marker shape", MARKER_SHAPE_CHOICES, f.markerShape ?? "circle", (v) => set({ markerShape: v })));
-    wireLineControls(panel, s, fmtSelect, (next) => { s.format = next; commit(dash, s); }); // Line pattern, Line markers (each says why when it does nothing)
+    wireLineControls(panel, s, fmtSelect, (next) => { s.format = next; commit(dash, s); }, ["linePattern"]); // Line pattern (says why when it does nothing); Line markers live in the Color flyout
     if (s.marks?.size && SIZE_SCALE_TYPES.has(s.chartType) && sizeChannel(s.chartType, shelfMeasureCount(s), isSizeDimension(s.marks.size)).ok) panel.append(...sizesEditor(f, s, (next) => { // Edit Sizes: the stored shape holds only what differs from the default
       const { value } = cleanSizeScale(next);
       s.format = { ...f };
       if (value) s.format.sizeScale = value; else delete s.format.sizeScale;
       commit(dash, s);
     }));
-    if (BORDER_TYPES.has(s.chartType)) {
-      panel.append(fmtSelect("Mark border", MARK_BORDER_CHOICES, f.markBorder ?? "none", (v) => set({ markBorder: v })));
-      if ((f.markBorder ?? "none") !== "none") panel.append(fmtSelect("Border colour", MARK_BORDER_COLOUR_CHOICES, f.markBorderColor ?? "muted", (v) => set({ markBorderColor: v })));
-    }
     if (shapeMeasureOf(s)) panel.append(fmtSelect("Shape bins", Array.from({ length: SHAPE_BINS_MAX - SHAPE_BINS_MIN + 1 }, (_, i) => [SHAPE_BINS_MIN + i, String(SHAPE_BINS_MIN + i)]), shapeBinsOf(f), (v) => { // equal-width bins of the Shape measure; the stored shape holds only what differs from the default
       const { value } = cleanShapeBins(Number(v));
       s.format = { ...f };
       if (value != null) s.format.shapeBins = value; else delete s.format.shapeBins;
-      commit(dash, s);
-    }));
-    if (OPACITY_TYPES.has(s.chartType)) panel.append(fmtSelect("Opacity", OPACITY_CHOICES, f.markOpacity ?? 100, (v) => { // the stored shape holds only what differs from 100 %
-      const { value } = cleanMarkOpacity(Number(v));
-      s.format = { ...f };
-      if (value != null) s.format.markOpacity = value; else delete s.format.markOpacity;
       commit(dash, s);
     }));
     if (s.period && s.period.compare !== "none")
@@ -1469,38 +1460,7 @@ export function initDashboards() {
         commit(dash, s);
       }));
       wireTooltipControls(panel, s, { fmtCheck, fmtSelect }, (next) => { s.format = next; commit(dash, s); }); // Show tooltips, Command buttons, Tooltip mode (each says why when it does nothing)
-      if (canColourByCat)
-        panel.append(fmtCheck("Colour by category", f.colorByDimension, (v) => set({ colorByDimension: v })));
-      panel.append(fmtCheck("Reverse palette", f.paletteReverse, (v) => set({ paletteReverse: v })), ...(colorMode(s) === "continuous" ? [] : [memberColourEditor(dash, s)]), // a colour measure replaces member colours
-        ...(SCATTER_TYPES.has(s.chartType) && s.marks?.shape && isShapeDimension(s.marks.shape) ? [memberShapeEditor(dash, s)] : [])); // a measure on Shape has bins, not members
-      if (s.chartType === "heatmap" || (colorMode(s) === "continuous" && COLOUR_MEASURE_TYPES.has(s.chartType))) { // the continuous colour scale
-        const range = (key, other, label) => fmtNumber(label, f[key], "auto", (v) => {
-          const err = colourRangeError(...(key === "colorMin" ? [v, f[other]] : [f[other], v]));
-          if (err) { toast(err, "danger"); set({ [key]: f[key] }); return; } // redraw puts the kept value back
-          set({ [key]: v });
-        });
-        panelScale = f.colorScale === "auto" ? drawnScale.get(s) ?? "sequential" : f.colorScale; // Automatic: whichever the data made it
-        const diverging = panelScale === "diverging";
-        panel.append(fmtSelect("Colour scale", SCALE_CHOICES, f.colorScale ?? "sequential", (v) => set({ colorScale: v })),
-          fmtSelect("Steps", STEP_CHOICES, f.colorSteps ?? 0, (v) => set({ colorSteps: Number(v) })),
-          ...(diverging ? [fmtNumber("Colour centre", f.colorCentre, "auto", (v) => { // cool above, warm below; no pins (the ends follow the centre)
-            const err = colourCentreError(v);
-            if (err) { toast(err, "danger"); set({ colorCentre: f.colorCentre }); return; }
-            set({ colorCentre: v });
-          })]
-            : [fmtSelect("Colour ramp", RAMP_CHOICES, f.colorRamp ?? "brand", (v) => set({ colorRamp: v })),
-              range("colorMin", "colorMax", "Colour from"), range("colorMax", "colorMin", "Colour to")]));
-        if (diverging) { // the pair sits on its own line, wide enough for "Green / Violet"
-          const pair = fmtSelect("Diverging colours", DIV_PAIR_CHOICES, f.colorPair ?? "default", (v) => set({ colorPair: v }));
-          pair.classList.add("ws-fmt-field--line"); panel.append(pair);
-          if (!f.colorSteps) { // steps already wear both end colours
-            const full = fmtCheck("Use full colour range", f.colorFullRange === true, (v) => { // off = symmetric about the centre; on = each side its own span
-              s.format = { ...f }; if (v) s.format.colorFullRange = true; else delete s.format.colorFullRange; commit(dash, s);
-            });
-            panel.append(full);
-          }
-        }
-      }
+      if (SCATTER_TYPES.has(s.chartType) && s.marks?.shape && isShapeDimension(s.marks.shape)) panel.append(memberShapeEditor(dash, s)); // a measure on Shape has bins, not members
       if (hasAxes)
         panel.append(
           fmtText("X title", f.xTitle, (v) => set({ xTitle: v })),
@@ -2469,6 +2429,7 @@ export function initDashboards() {
       { key: "color", icon: "color", label: "Color", count: colorFields.length,
         pills: colorFields.map((f, i) => colorPill(dash, s, f, i)), onDrop: (f) => addColor(dash, f),
         hint: "Drop fields — categorical (up to 3, combined) = colour series, numeric = gradient",
+        editor: openTool === "color" ? colourEditor(dash, s) : null, // the palette and effects, like Tableau's Color button
         note: colorFields.length && colorMode(s) === "discrete" && !COLOR_USES.has(s.chartType)
           ? "A categorical Colour field splits Bar, Line, Area, Stacked, Scatter, Pie, Donut, Gantt and Table — or drop a numeric field for a gradient."
           : colorMode(s) === "discrete" && colorFields.length > 1 && !MULTI_COLOUR_TYPES.has(s.chartType) && COLOR_USES.has(s.chartType)
@@ -2566,11 +2527,15 @@ export function initDashboards() {
     if (!tool.pills.length) zone.append(el("span", "ws-shelf__hint", tool.multi ? "drop fields" : "drop a field")); // the long hint stays on the tile's title
     for (const p of tool.pills) zone.append(p);
     wireFieldDrop(zone, tool.onDrop);
-    panel.append(zone, fieldPicker(tool));
+    const slot = slotSection(zone, fieldPicker(tool));
+    if (tool.key === "color" && tool.editor) colourSection(tool.editor).prepend(slot); // the field is what Color paints from: it opens the Color section, not a fourth one
+    else panel.append(slot);
     if (tool.editor) panel.append(tool.editor);
     if (tool.note) panel.append(el("span", "ws-shelf__note", tool.note));
     return panel;
   }
+  // The slot: what the tool holds (its drop zone) and the way to add to it, one section of the flyout.
+  function slotSection(...nodes) { const sec = el("div", "ws-toolpanel__slot"); sec.append(...nodes); return sec; }
   // "Add field": the click and keyboard path to what a drag does. Lists the field pane's fields (grouped by table, searchable) that this slot accepts;
   // choosing one goes through the slot's own drop handler, so every rule and message is the same as for a drag.
   function fieldPicker(tool) {
@@ -2642,7 +2607,7 @@ export function initDashboards() {
   }
   function closeFly({ refocus = true } = {}) {
     const key = openTool;
-    openTool = null; focusFly = false;
+    openTool = null; focusFly = false; colourFocus = null;
     renderShelves();
     if (refocus) marksGrid.querySelector(`.ws-tool[data-tool="${key}"]`)?.focus({ preventScroll: true });
   }
@@ -2799,6 +2764,93 @@ export function initDashboards() {
     memberRedraw = draw;
     draw();
     return box;
+  }
+
+  // --- The Color flyout's controls ----------------------------------
+  // What Format held for colour (the continuous scale, Reverse palette, member colours, Opacity, Border thickness, Line markers) is the Color tile's flyout,
+  // like Tableau's Color button. Which controls show is colour-flyout-model.js; every control keeps its stored key and its commit.
+  // A commit rebuilds the flyout (worksheet:changed → renderShelves), so the control last changed is remembered and focused again.
+  let colourFocus = null;
+  let limitsOpen = false;
+  function restoreColourFocus() {
+    if (!colourFocus || openTool !== "color") return;
+    const key = colourFocus; colourFocus = null;
+    toolFly.querySelector(`[data-colour-ctl="${key}"] select, [data-colour-ctl="${key}"] input`)?.focus({ preventScroll: true });
+  }
+  function colourEditor(dash, s) {
+    panelScale = null; // set below when the flyout shows the colour-scale controls
+    const f = s.format ?? (s.format = defaultFormat());
+    const set = (patch) => { s.format = { ...f, ...patch }; commit(dash, s); };
+    const without = (key, value) => { s.format = { ...f }; if (value != null && value !== false) s.format[key] = value; else delete s.format[key]; commit(dash, s); }; // the stored shape holds only what differs from the default
+    const mode = colorMode(s);
+    const scaleOn = colourScaleShown(s.chartType, mode);
+    if (scaleOn) panelScale = f.colorScale === "auto" ? drawnScale.get(s) ?? "sequential" : f.colorScale; // Automatic: whichever the data made it
+    const groups = colourFlyoutGroups({
+      chartType: s.chartType, isChart: CHART_LIKE.has(s.chartType), mode,
+      canColourByCat: (s.chartType === "bar" || s.chartType === "scatter") && mode !== "continuous", // a measure on Colour replaces it
+      borderOn: (f.markBorder ?? "none") !== "none", scale: panelScale, steps: Boolean(f.colorSteps),
+    });
+    const ctl = (key, node) => { // remembers which control changed (capture: before the control's own handler rebuilds the flyout)
+      node.dataset.colourCtl = key;
+      for (const x of node.querySelectorAll("select, input")) x.addEventListener("change", () => { colourFocus = key; }, true);
+      return node;
+    };
+    const range = (key, other, label) => ctl(key, fmtNumber(label, f[key], "auto", (v) => {
+      const err = colourRangeError(...(key === "colorMin" ? [v, f[other]] : [f[other], v]));
+      if (err) { toast(err, "danger"); set({ [key]: f[key] }); return; } // redraw puts the kept value back
+      set({ [key]: v });
+    }));
+    const lineMarkers = () => { const tmp = el("div"); wireLineControls(tmp, s, fmtSelect, (next) => { s.format = next; commit(dash, s); }, ["lineMarkers"]); return tmp.firstElementChild ? ctl("lineMarkers", tmp.firstElementChild) : null; };
+    const limits = () => { // start / end (or the centre of a diverging scale), closed until asked for
+      const box = el("details", "ws-colourfly__limits"); box.open = limitsOpen;
+      box.addEventListener("toggle", () => { limitsOpen = box.open; });
+      const sum = el("summary"); sum.append(icon("chevron", { size: 14 }), el("span", null, "Limits")); // a chevron, like the field pane's group heads: the text alone would not say it opens
+      box.append(sum);
+      const body = el("div", "ws-colourfly__limitsbody");
+      if (panelScale === "diverging") body.append(ctl("colorCentre", fmtNumber("Colour centre", f.colorCentre, "auto", (v) => { // cool above, warm below; no pins (the ends follow the centre)
+        const err = colourCentreError(v);
+        if (err) { toast(err, "danger"); set({ colorCentre: f.colorCentre }); return; }
+        set({ colorCentre: v });
+      })));
+      else body.append(range("colorMin", "colorMax", "Colour from"), range("colorMax", "colorMin", "Colour to"));
+      box.append(body);
+      return box;
+    };
+    const build = {
+      colourByCategory: () => ctl("colourByCategory", fmtCheck("Colour by category", f.colorByDimension, (v) => set({ colorByDimension: v }))),
+      opacity: () => ctl("opacity", fmtMeter("Opacity", OPACITY_STOPS, f.markOpacity ?? 100, (v) => without("markOpacity", cleanMarkOpacity(Number(v)).value))), // blank at 100 %
+      border: () => ctl("border", fmtMeter("Border thickness", MARK_BORDER_STOPS.map(([, px, text]) => [px, text]), MARK_BORDER_STOPS.find(([key]) => key === (f.markBorder ?? "none"))?.[1] ?? 0, (px) => set({ markBorder: MARK_BORDER_STOPS.find(([, w]) => String(w) === px)[0] }))), // the key is stored, the bar speaks px
+      borderColour: () => ctl("borderColour", fmtSelect("Border colour", MARK_BORDER_COLOUR_CHOICES, f.markBorderColor ?? "muted", (v) => set({ markBorderColor: v }))),
+      lineMarkers,
+      scale: () => ctl("scale", fmtSelect("Colour scale", SCALE_CHOICES.map(([v, t]) => [v, v === "auto" ? `${t} · ${panelScale === "diverging" ? "Diverging" : "Low → high"}` : t]), f.colorScale ?? "sequential", (v) => set({ colorScale: v }))), // Automatic names what the data made it
+      steps: () => ctl("steps", fmtSelect("Steps", STEP_CHOICES, f.colorSteps ?? 0, (v) => set({ colorSteps: Number(v) }))),
+      ramp: () => ctl("ramp", fmtSelect("Colour ramp", RAMP_CHOICES, f.colorRamp ?? "brand", (v) => set({ colorRamp: v }))),
+      pair: () => ctl("pair", fmtSelect("Diverging colours", DIV_PAIR_CHOICES, f.colorPair ?? "default", (v) => set({ colorPair: v }))),
+      fullRange: () => ctl("fullRange", fmtCheck("Use full colour range", f.colorFullRange === true, (v) => without("colorFullRange", v || null))), // off = symmetric about the centre; on = each side its own span
+      reverse: () => ctl("reverse", fmtCheck("Reverse palette", f.paletteReverse, (v) => set({ paletteReverse: v }))),
+      limits,
+      members: () => memberColourEditor(dash, s),
+    };
+    const root = el("div", "ws-colourfly");
+    for (const [label, keys] of [["Color", groups.colour], ["Opacity", groups.opacity], ["Effects", groups.effects]]) {
+      const nodes = keys.map((k) => build[k]()).filter(Boolean);
+      if (!nodes.length) continue;
+      root.append(colourGroup(label, nodes));
+    }
+    return root.childElementCount ? root : null; // a table has nothing here: pills only, no stray divider
+  }
+  function colourGroup(label, nodes = []) {
+    const group = el("div", "ws-colourfly__group");
+    group.setAttribute("role", "group"); group.setAttribute("aria-label", label);
+    group.dataset.section = label;
+    group.append(...nodes);
+    return group;
+  }
+  // The Color section of a flyout built by colourEditor, made (first) when the chart type has no Color controls but has Opacity or Effects.
+  function colourSection(root) {
+    let group = root.querySelector(":scope > [data-section='Color']");
+    if (!group) { group = colourGroup("Color"); root.prepend(group); }
+    return group;
   }
 
   // --- Member shapes ------------------------------------------------
@@ -3400,6 +3452,29 @@ function fmtSelect(labelText, options, current, onPick) {
   sel.title = sel.selectedOptions[0]?.text ?? ""; // the full choice on hover when the closed select clips it
   sel.addEventListener("change", () => onPick(sel.value));
   wrap.append(sel);
+  return wrap;
+}
+// A slider drawn as a progress bar with its value read out, for a setting with a few even steps. `stops` is [[value, readout]] ascending with one
+// step between them; the readout follows the thumb, the change is committed on release (a commit rebuilds the flyout).
+function fmtMeter(labelText, stops, current, onPick) {
+  const wrap = el("label", "ws-fmt-field ws-meter");
+  const head = el("span", "ws-meter__head");
+  const out = el("output", "ws-meter__value");
+  head.append(el("span", "ws-fmt-label", labelText), out);
+  const bar = el("input", "ws-meter__input"); bar.type = "range";
+  const first = stops[0][0], last = stops[stops.length - 1][0];
+  bar.min = first; bar.max = last; bar.step = stops[1][0] - first; bar.value = current;
+  bar.setAttribute("aria-label", labelText);
+  const paint = () => {
+    const text = stops.find(([v]) => String(v) === bar.value)?.[1] ?? bar.value;
+    out.textContent = text;
+    bar.setAttribute("aria-valuetext", text);
+    bar.style.setProperty("--fill", `${((bar.value - first) / (last - first)) * 100}%`);
+  };
+  bar.addEventListener("input", paint);
+  bar.addEventListener("change", () => onPick(bar.value));
+  paint();
+  wrap.append(head, bar);
   return wrap;
 }
 function fmtCheck(labelText, checked, onToggle) {

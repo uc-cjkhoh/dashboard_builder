@@ -1,4 +1,4 @@
-// Browser checks for the Colour channels: Format → Opacity, the Automatic colour scale (Diverging when the data crosses zero) and Use full colour range, a colour measure on several measures / Stacked / Combo, a Colour dimension on Pie / Donut, and several fields on Colour: the real
+// Browser checks for the Colour channels: the Color flyout → Opacity, the Automatic colour scale (Diverging when the data crosses zero) and Use full colour range, a colour measure on several measures / Stacked / Combo, a Colour dimension on Pie / Donut, and several fields on Colour: the real
 // Chromium, driven over the DevTools protocol (tests/live/cdp.mjs), with every /api/* call answered by a mock —
 // nothing reaches a ClickHouse. Run:  node tests/live/marks-colour-ui.mjs   (start the app first:
 //   cd src/DashboardBuilder && dotnet run --no-launch-profile --urls http://localhost:5262 ; stop it with fuser -k 5262/tcp)
@@ -141,8 +141,9 @@ try {
   const opSelect = `document.querySelector('select[aria-label^="Filter operator for"]')`;
   const shot = async (name) => { try { writeFileSync(join(SHOTS, `${name}-${SCHEME}.png`), Buffer.from((await b.send('Page.captureScreenshot', { format: 'png' })).data, 'base64')); } catch { /* optional */ } };
   const fmtTool = `document.querySelector('.ws-viewbar__btn[aria-label="Format"]')`;
+  const colTool = `document.querySelector('.ws-tool[data-tool="color"]')`; // the Colour controls live in the Color tile's flyout (D151)
   const fmtField = (label) => `[...document.querySelectorAll('.ws-fmt-field')].find((l) => l.textContent.includes(${J(label)}))`;
-  const setSelect = (label, v) => ev(`(() => { const s = ${fmtField(label)}.querySelector('select'); s.value = ${J(v)}; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+  const setSelect = (label, v) => ev(`(() => { const s = ${fmtField(label)}.querySelector('select, input[type=range]'); s.value = ${J(v)}; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
   const inst = `window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas'))`;
   const opt = () => ev(`${inst}.getOption()`);
   const hints = () => ev(`[...document.querySelectorAll('#ws-chart .ws-hint')].map((h) => h.textContent)`);
@@ -173,6 +174,9 @@ try {
 
   const setField = (label, v) => ev(`(() => { const i = ${fmtField(label)}.querySelector('input'); i.value = ${J(v)}; i.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
   const toggle = (label) => ev(`${fmtField(label)}.querySelector('input').click()`);
+  const colourOpen = () => ev(`!!document.querySelector('#ws-toolfly:not([hidden]) #ws-toolpanel-color')`);
+  const openColour = async () => { if (!(await colourOpen())) await ev(`${colTool}.click()`); await waitFor(`!!document.querySelector('#ws-toolfly:not([hidden]) #ws-toolpanel-color')`, 'Color flyout open'); }; // a drop on the tile opens it already
+  const closeColour = async () => { if (await colourOpen()) await ev(`${colTool}.click()`); await settle(300); };
   const formatOpen = () => ev(`!!(${fmtField('Number')})`);
   const openFormat = async () => { if (!(await formatOpen())) await ev(`${fmtTool}.click()`); await waitFor(`!!(${fmtField('Number')})`, 'format panel open'); };
   const closeFormat = async () => { if (await formatOpen()) await ev(`${fmtTool}.click()`); await settle(300); };
@@ -193,7 +197,7 @@ try {
   await settle(400);
   await chartType('Bar');
   await check('Opacity: the control is in Format for a bar; 40 % draws the bars at 0.4 on the live chart, 100 % removes the stored key', async () => {
-    await openFormat();
+    await openColour();
     must(await ev(`!!(${fmtField('Opacity')})`), 'an Opacity control');
     must((await seriesOpacity()) == null || (await seriesOpacity()) === 1, 'default draws no opacity: ' + await seriesOpacity());
     await setSelect('Opacity', '40'); await settle(500);
@@ -208,7 +212,7 @@ try {
     must((await seriesOpacity()) == null || (await seriesOpacity()) === 1, 'back to the default: ' + await seriesOpacity());
     await settle(1500);
     must(!/40/.test(await stored()), 'at 100 % the stored key is gone: ' + await stored());
-    await closeFormat();
+    await closeColour();
   });
   // Distinct fill opacities of the drawn marks (SVG paths with a fill): the product of fill-opacity and opacity.
   const fillOpacities = () => ev(`[...new Set([...document.querySelectorAll('#ws-chart svg path, #ws-chart svg rect, #ws-chart svg circle, #ws-chart svg polygon')].filter((n) => { const f = n.getAttribute('fill'); return f && f !== 'none' && f !== 'transparent' && !/^(rgba\\(0, ?0, ?0, ?0\\))$/.test(f) && n.getAttribute('width') !== '100%'; }).map((n) => Math.round(100 * Number(n.getAttribute('fill-opacity') ?? 1) * Number(n.getAttribute('opacity') ?? 1)) / 100))].sort()`);
@@ -221,24 +225,25 @@ try {
       for (const f of su.rows) await dragChip(f, `__t.zone('rows')`);
       if (su.detail) await dragChip(su.detail, toolEl('Detail'));
       await settle(400); await chartType(t); await settle(400);
-      await openFormat(); await setSelect('Opacity', '40'); await settle(500);
+      await openColour(); await setSelect('Opacity', '40'); await settle(500);
       const dim = await fillOpacities(); await shot('opacity-' + t.toLowerCase());
       await setSelect('Opacity', '100'); await settle(500);
       const full = await fillOpacities();
       const fainter = dim.filter((o) => o > 0 && o < 0.5 && !full.includes(o)); // a mark opacity that 100 % does not draw (0 = an invisible helper element)
       must(fainter.length > 0, `${t}: marks fainter at 40 %: ${J(dim)} vs ${J(full)}`);
-      await closeFormat();
+      await closeColour();
     }
   });
   await check('Opacity: offered for a pie, a scatter and a line; not for a Table', async () => {
     for (const t of ['Pie', 'Scatter', 'Line']) {
-      await chartType(t); await openFormat();
+      await chartType(t); await openColour();
       must(await ev(`!!(${fmtField('Opacity')})`), 'Opacity for ' + t);
-      await closeFormat();
+      await closeColour();
     }
-    await chartType('Table'); await openFormat();
+    await chartType('Table'); await openColour();
     must(await ev(`!(${fmtField('Opacity')})`), 'no Opacity for a table');
-    await closeFormat();
+    must(await ev(`!document.querySelector('#ws-toolfly .ws-colourfly')`), 'no colour group for a table: pills only');
+    await closeColour();
   });
 
   // ---- the Automatic colour scale and Use full colour range -------------------------------------------------------------------
@@ -251,7 +256,7 @@ try {
   await chartType('Bar');
   await check('Automatic (a new worksheet): a colour measure crossing zero is Diverging (three stops, "centre 0" named); the control reads Automatic', async () => {
     await dragChip('discount', toolEl('Color')); await settle(600);
-    await openFormat();
+    await openColour();
     must((await ev(`${fmtField('Colour scale')}.querySelector('select').value`)) === 'auto', 'the select reads Automatic');
     must(await ev(`!!(${fmtField('Diverging colours')}) && !!(${fmtField('Colour centre')}) && !(${fmtField('Colour ramp')})`), 'the diverging controls show, not the ramp');
     const v = await vmap();
@@ -270,7 +275,7 @@ try {
     await dragChip('amount', `__t.zone('rows')`);
     await settle(300); await chartType('Bar');
     await dragChip('qty', toolEl('Color')); await settle(600);
-    await openFormat();
+    await openColour();
     must((await ev(`${fmtField('Colour scale')}.querySelector('select').value`)) === 'auto', 'Automatic');
     must(await ev(`!!(${fmtField('Colour ramp')}) && !(${fmtField('Colour centre')})`), 'the ramp controls show');
     const v = await vmap(); must(v.inRange.color.length === 2, 'two stops: ' + J(v.inRange.color));
@@ -281,15 +286,15 @@ try {
     await dragChip('amount', `__t.zone('rows')`);
     await settle(300); await chartType('Bar');
     await dragChip('discount', toolEl('Color')); await settle(500);
-    await openFormat();
+    await openColour();
     await setSelect('Colour scale', 'sequential'); await settle(500);
     must((await vmap()).inRange.color.length === 2, 'explicit Low → high stays sequential with data crossing zero');
     await setSelect('Colour scale', 'auto'); await settle(500);
     must((await vmap()).inRange.color.length === 3, 'Automatic diverges again');
-    await closeFormat();
+    await closeColour();
   });
   await check('Use full colour range (diverging): each side its own span: the legend runs min..max with the centre named, the highest bar wears the high colour; off = symmetric', async () => {
-    await openFormat();
+    await openColour();
     must(await ev(`!!(${fmtField('Use full colour range')})`), 'the checkbox shows for a diverging scale');
     const symFills = await barFills(); const symV = await vmap();
     await toggle('Use full colour range'); await settle(500);
@@ -303,7 +308,7 @@ try {
     await shot('full-range-bar');
     await toggle('Use full colour range'); await settle(500);
     const back = await barFills(); must(J(back) === J(symFills) && (await vmap()).max === symV.max, 'off again = symmetric');
-    await closeFormat();
+    await closeColour();
   });
   await check('Automatic with Format open: when the data starts crossing zero the panel swaps the ramp controls for the diverging ones, with no reload', async () => {
     await newSheet();
@@ -311,22 +316,22 @@ try {
     await dragChip('amount', `__t.zone('rows')`);
     await settle(300); await chartType('Bar');
     await dragChip('qty', toolEl('Color')); await settle(600);
-    await openFormat();
+    await openColour();
     must(await ev(`!!(${fmtField('Colour ramp')}) && !(${fmtField('Colour centre')})`), 'ramp controls while the data is positive');
     await dragChip('discount', toolEl('Color')); await settle(900);
     await waitFor(`!!(${fmtField('Colour centre')})`, 'the diverging controls appear');
     must(await ev(`!(${fmtField('Colour ramp')})`), 'the ramp controls go');
-    await closeFormat();
+    await closeColour();
   });
   await check('Steps ignore Use full colour range: the checkbox is gone while Steps is set', async () => {
-    await openFormat();
+    await openColour();
     await setSelect('Steps', '5'); await settle(500);
     must(await ev(`!(${fmtField('Use full colour range')})`), 'no checkbox with steps');
     await setSelect('Steps', '0'); await settle(400);
-    await closeFormat();
+    await closeColour();
   });
   await check('Clear sheet starts the colour scale Automatic again, as a new worksheet does', async () => {
-    await openFormat(); await setSelect('Colour scale', 'sequential'); await settle(400); await closeFormat();
+    await openColour(); await setSelect('Colour scale', 'sequential'); await settle(400); await closeColour();
     await ev(`document.querySelector('.ws-actions .iconbtn').click()`);
     await ev(`[...document.querySelectorAll('.ws-actions .menu__item')].find((x) => /Clear sheet/.test(x.textContent)).click()`);
     await waitFor(`!!(${confirmOpen})`, 'confirm dialog');
@@ -334,9 +339,9 @@ try {
     await settle(500);
     await dragChip('region', `__t.zone('columns')`); await dragChip('amount', `__t.zone('rows')`); await settle(300); await chartType('Bar');
     await dragChip('discount', toolEl('Color')); await settle(700);
-    await openFormat();
+    await openColour();
     must((await ev(`${fmtField('Colour scale')}.querySelector('select').value`)) === 'auto', 'Automatic after Clear');
-    await closeFormat();
+    await closeColour();
   });
   await check('heatmap and scatter honour Automatic too (a heatmap of a measure that crosses zero is diverging)', async () => {
     await newSheet();
@@ -393,9 +398,9 @@ try {
     must((await hints()).length === 0, 'no hint: ' + J(await hints()));
     const o = await opt();
     must(o.series[0].type === 'bar' && o.series[1].type === 'line' && distinct(await seriesColours(0)) >= 7, 'bars and a line coloured by row');
-    await openFormat();
+    await openColour();
     must(await ev(`!!(${fmtField('Colour scale')}) && !!(${fmtField('Steps')})`), 'the colour scale controls');
-    await closeFormat();
+    await closeColour();
     await shot('colour-measure-combo');
   });
 
@@ -432,7 +437,7 @@ try {
   await check('donut + a Colour field draws the same split; Format lists the Colour members for member colours', async () => {
     await chartType('Donut');
     const d = await pieData(); must(d.length === 24 && distinct(d.map((x) => x.colour)) === 3, 'donut split');
-    await openFormat();
+    await openColour();
     await ev(`document.querySelector('.ws-memcol__toggle').click()`);
     const names = await ev(`[...document.querySelectorAll('.ws-memcol__name')].map((n) => n.textContent)`);
     must(J(names) === J(['web', 'shop', 'app']), 'the member colour editor lists members: ' + J(names));
@@ -440,7 +445,7 @@ try {
     const d2 = await pieData();
     must(d2[0].colour !== d[0].colour && d2[0].colour === d2[3].colour, 'a member colour recolours every sub-slice of the member: ' + J([d[0].colour, d2[0].colour]));
     await ev(`document.querySelector('.ws-memcol__toggle').click()`);
-    await closeFormat();
+    await closeColour();
   });
   await check('a Colour field that is already the slice field adds no group-by: the pie is as before', async () => {
     await newSheet();
@@ -492,7 +497,7 @@ try {
     await ev(`document.querySelector('.ws-select__clear, .ws-select button[aria-label^="Clear"]')?.click()`);
   });
   await check('member colours for a combination: the editor lists "a · b", a pick recolours that series and survives a redraw', async () => {
-    await openFormat();
+    await openColour();
     await ev(`document.querySelector('.ws-memcol__toggle').click()`);
     const names = await ev(`[...document.querySelectorAll('.ws-memcol__name')].map((n) => n.textContent)`);
     must(names.length === 6 && names[0] === 'web · DE', 'combined members listed: ' + J(names));
@@ -501,7 +506,7 @@ try {
     const after = (await opt()).series[0].itemStyle.color;
     must(after !== before && (await opt()).series[1].itemStyle.color !== after, 'only that combination changed: ' + J([before, after]));
     await ev(`document.querySelector('.ws-memcol__toggle').click()`);
-    await closeFormat();
+    await closeColour();
   });
   await check('a third field joins (3 is the cap); a fourth is refused with a message and the Colour fields stay as they were', async () => {
     await dragChip('placed', toolEl('Color')); await settle(700);
@@ -524,6 +529,73 @@ try {
     await dragChip('channel', toolEl('Color')); await dragChip('country', toolEl('Color')); await settle(800);
     const names = await seriesNames();
     must(names.length === 6 && names[0] === 'web · DE', 'scatter combinations: ' + J(names));
+  });
+
+  // ---- the Color flyout itself (D151) --------------------------------------------------------------------------------------
+  await check('after a change in the Color flyout, focus is back on the control that changed (the flyout is rebuilt by every commit)', async () => {
+    await newSheet();
+    await dragChip('region', `__t.zone('columns')`);
+    await dragChip('amount', `__t.zone('rows')`);
+    await settle(400); await chartType('Bar'); await settle(300);
+    await openColour();
+    await setSelect('Opacity', '60'); await settle(500);
+    must(await ev(`document.activeElement?.closest?.('[data-colour-ctl]')?.dataset.colourCtl`) === 'opacity', 'focus after Opacity: ' + await ev(`document.activeElement?.tagName + '.' + document.activeElement?.className`));
+    await setSelect('Opacity', '100'); await settle(400);
+    await closeColour();
+  });
+  await check('Format holds none of the Colour controls, and it and the Color flyout are never open together', async () => {
+    await closeColour(); await openFormat();
+    for (const label of ['Opacity', 'Border thickness', 'Reverse palette', 'Colour by category', 'Colour scale', 'Line markers', 'member colours'])
+      must(await ev(`!(${fmtField(label)}) && ![...document.querySelectorAll('.ws-format .ws-memcol__toggle')].some((x) => /member colours/.test(x.textContent))`), `Format still offers ${label}`);
+    must(!(await colourOpen()), 'the Color flyout is open beside Format');
+    await openColour();
+    must(!(await ev(`!!(${fmtField('Number')})`)), 'Format stayed open beside the Color flyout');
+    must(await ev(`!!(${fmtField('Opacity')}) && !!(${fmtField('Border thickness')}) && !!(${fmtField('Reverse palette')})`), 'the flyout lacks Opacity / Border thickness / Reverse palette for a bar');
+    await closeColour();
+  });
+
+  await check('the Color flyout is three sections in order — Color (opening with the field slot), Opacity, Effects — split by hairlines; a table shows the slot alone', async () => {
+    await chartType('Bar'); await openColour();
+    const secs = () => ev(`J = [...document.querySelectorAll('#ws-toolfly .ws-colourfly > [role=group]')].map((g) => ({ label: g.getAttribute('aria-label'), slot: !!g.querySelector(':scope > .ws-toolpanel__slot'), n: g.children.length })); JSON.stringify(J)`);
+    const bar = JSON.parse(await secs());
+    must(bar.map((x) => x.label).join() === 'Color,Opacity,Effects', 'sections: ' + J(bar));
+    must(bar[0].slot && !bar[1].slot && !bar[2].slot, 'the slot opens the Color section only: ' + J(bar));
+    must(await ev(`document.querySelectorAll('#ws-toolfly .ws-toolpanel > .ws-toolpanel__slot').length === 0`), 'no section of the slot\'s own above Color');
+    must(await ev(`getComputedStyle(document.querySelector('#ws-toolfly .ws-colourfly__group + .ws-colourfly__group')).borderTopWidth === '1px'`), 'a hairline between sections');
+    await closeColour();
+    await chartType('Table'); await openColour();
+    must(await ev(`!!document.querySelector('#ws-toolfly .ws-toolpanel > .ws-toolpanel__slot') && !document.querySelector('#ws-toolfly .ws-colourfly')`), 'a table: the slot alone');
+    await closeColour();
+  });
+
+  await check('design probe: the Color flyout has no alignment, gap, colour, contrast or scale findings (categorical bar, continuous scale, line; light, dark, One Dark; 1400 and 700 px)', async () => {
+    const { designProbe, formatProbe } = await import('./design-probe.mjs');
+    const probe = async (label) => {
+      const r = await designProbe(ev, '#ws-toolfly .ws-colourfly__group > :not(.ws-toolpanel__slot)', { sleep: b.sleep }); // the controls; the field slot (pill, Add field) is the same in every flyout
+      if (r.findings.length) console.log(label + '\n' + formatProbe(r));
+      must(r.findings.length === 0, `${label}: ${r.findings.length} finding(s): ` + J(r.findings.map((x) => x.rule + ': ' + x.msg).slice(0, 4)));
+    };
+    for (const w of [1400, 700]) {
+      await b.send('Emulation.setDeviceMetricsOverride', { width: w, height: 900, deviceScaleFactor: 1, mobile: false });
+      await newSheet();
+      await dragChip('region', `__t.zone('columns')`);
+      await dragChip('amount', `__t.zone('rows')`);
+      await settle(400); await chartType('Bar'); await settle(300);
+      await dragChip('channel', toolEl('Color')); await settle(500);
+      await openColour(); await probe(`categorical bar @${w}`);
+      await dragChip('qty', toolEl('Color')); await settle(600);
+      await openColour(); await ev(`(() => { const d = document.querySelector('.ws-colourfly__limits'); if (d) d.open = true; return true; })()`); await settle(200);
+      await probe(`continuous scale @${w}`);
+      if (w === 1400) for (const sc of ['light', 'dark']) { // looked at, not only measured: the flyout with a measure on Color and Limits open
+        await ev(`(() => { const d = document.documentElement.dataset; if (${J(sc)} === 'light') delete d.scheme; else d.scheme = ${J(sc)}; return true; })()`); await settle(500);
+        await shot(`color-flyout-continuous-${sc}.png`);
+      }
+      await ev(`delete document.documentElement.dataset.scheme`);
+      await chartType('Line'); await settle(400); await openColour();
+      await probe(`line @${w}`);
+      await closeColour();
+    }
+    await b.send('Emulation.setDeviceMetricsOverride', { width: 1400, height: 900, deviceScaleFactor: 1, mobile: false });
   });
 
   if (b.consoleErrors.length) console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  '));

@@ -208,7 +208,7 @@ try {
     await ev(`document.querySelector('.ws-pill--mark button').click()`);
     await settle(500);
     await ev(`${fmtTool}.click()`);
-    await waitFor(`!!(${fmtField('Opacity')})`, 'Format open');
+    await waitFor(`!!(${fmtField('Number')})`, 'Format open');
     must(await ev(`!(${fmtField('Shape bins')})`), 'no Shape bins control once Shape is empty');
     await ev(`${fmtTool}.click()`); await settle(300);
   });
@@ -247,7 +247,7 @@ try {
   const labelTexts = () => ev(`[...document.querySelectorAll('#ws-chart svg text')].map((t) => t.textContent).filter((t) => /[.]37/.test(t))`);
   const labelControl = () => ev(`!!(${fmtField('Label marks')})`);
   const modes = () => ev(`[...${fmtField('Label marks')}.querySelectorAll('option')].map((o) => o.value).join(',')`);
-  const openFormat = async () => { await ev(`${fmtTool}.click()`); await waitFor(`!!(${fmtField('Opacity')}) || !!(${fmtField('Top N')})`, 'Format open'); };
+  const openFormat = async () => { await ev(`${fmtTool}.click()`); await waitFor(`!!(${fmtField('Number')}) || !!(${fmtField('Top N')})`, 'Format open'); };
   const closeFormat = async () => { await ev(`${fmtTool}.click()`); await settle(300); };
   const setMode = async (m) => { await openFormat(); await setSelect('Label marks', m); await settle(600); await closeFormat(); };
   await newSheet();

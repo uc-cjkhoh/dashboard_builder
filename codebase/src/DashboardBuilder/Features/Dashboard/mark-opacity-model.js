@@ -5,9 +5,11 @@
 // tooltips and labels stay at full strength.
 import { BORDER_TYPES } from "./mark-style-model.js";
 
-/** Chart types whose marks take Format → Opacity (the ones with a Mark border, plus lines, areas and small multiples). */
+/** Chart types whose marks take Format → Opacity (the ones with a border, plus lines, areas and small multiples). */
 export const OPACITY_TYPES = new Set([...BORDER_TYPES, "line", "area", "multiples"]);
 /** [value, label] — the percentages Format offers. */
+/** [value, readout] ascending, 0 to 100 in steps of 10 — the stops of the Opacity bar. */
+export const OPACITY_STOPS = Object.freeze(Array.from({ length: 11 }, (_, i) => [i * 10, `${i * 10} %`]));
 export const OPACITY_CHOICES = Object.freeze(Array.from({ length: 11 }, (_, i) => [100 - i * 10, `${100 - i * 10} %`]));
 
 /** Why a stored opacity is refused, or null (a whole percent that is a multiple of 10, 0 to 100). */

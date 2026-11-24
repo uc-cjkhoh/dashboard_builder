@@ -236,29 +236,65 @@
 .ws-cast { flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 0 var(--s1); font-size: var(--fs-body); line-height: 16px; color: var(--ink-2); border: 1px solid var(--line); border-radius: var(--r); white-space: nowrap; }
 /* The open mark tool's editor: a flyout beside the field pane, level with its slot. It floats over the worksheet (the chart never
    shifts), solid like every popover, and stays until ✕ / Esc / its slot is pressed again — a field can be dragged straight onto it. */
-.ws-toolfly { position: absolute; z-index: 5; width: min(320px, calc(100% - 16px)); max-height: calc(100% - 16px); overflow: auto; border-radius: var(--r); }
+.ws-toolfly { position: absolute; z-index: 5; width: min(320px, calc(100% - 16px)); max-height: calc(100% - 16px); overflow: auto; border-radius: var(--r); background: var(--surface); border: 1px solid var(--line-2); box-shadow: var(--elev-28); } /* the frame and the lift sit on the host: a shadow on the panel inside would be clipped by this overflow */
 .ws-toolfly[hidden] { display: none; }
 .ws-toolpanel {
   display: flex; flex-direction: column; gap: var(--s2);
   padding: var(--s2); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r);
 }
-.ws-toolfly .ws-toolpanel { padding: var(--s2) var(--s4) var(--s4); gap: var(--s2); background: var(--surface); border-color: var(--line-2); box-shadow: var(--elev-16); }
-.ws-toolfly .ws-fmt-field { display: grid; gap: var(--s1); }
+/* The flyout is a stack of sections: the title band, then the slot (pills, drop zone, Add field), then the editor's groups. Each section is full-bleed with 16 px
+   gutters, split from the one above by an edge-to-edge hairline; the title band is recessed (--surface-2) and stays put while a long editor scrolls. */
+.ws-toolfly .ws-toolpanel { padding: 0; gap: 0; border: 0; border-radius: 0; background: transparent; }
+.ws-toolfly .ws-toolpanel > :not(.ws-toolpanel__head) { padding: var(--s4); }
+.ws-toolfly .ws-toolpanel > * + * { border-top: 1px solid var(--line); }
+.ws-toolfly .ws-toolpanel > .ws-colourfly { padding: 0; }
+.ws-toolfly .ws-toolpanel > .ws-shelf__note { padding: var(--s2) var(--s4); background: var(--surface-2); }
+.ws-toolfly .ws-toolpanel__head { position: sticky; top: 0; z-index: 1; padding: var(--s1) var(--s4); background: var(--surface-2); }
+.ws-toolpanel__slot { display: grid; gap: var(--s2); }
+.ws-toolfly .ws-fmt-field { display: grid; gap: var(--s1); } /* label over its control: the flyout is too narrow for them side by side */
 .ws-toolfly select, .ws-toolfly .ws-period input[type="date"] { width: 100%; max-width: none; }
 .ws-toolfly .ws-period__row { display: grid; grid-template-columns: 1fr; gap: var(--s2); }
 .ws-toolfly .ws-tipedit__text { height: auto; min-height: 96px; }
-.ws-toolfly .ws-shelf__note { color: var(--ink-3); }
 .ws-picker { display: grid; gap: var(--s2); }
 .ws-picker__btn { justify-self: start; display: inline-flex; align-items: center; gap: var(--s1); height: var(--ctl-h); margin-left: calc(-1 * var(--s2)); padding: 0 var(--s2); border-radius: var(--r); background: transparent; color: var(--ink-2); font-size: var(--fs-body); cursor: pointer; }
+.ws-picker__btn .icon { margin-left: calc(var(--s1) / -2); } /* optical: the plus has ~2 px of empty space inside its 14 px box; its ink, not the box, sits on the flyout's 16 px edge like the zone, selects and labels */
 .ws-picker__btn:hover, .ws-picker__btn[aria-expanded="true"] { background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--ink); }
-/* A hairline between what the slot holds and its own editor. */
-.ws-toolfly .ws-picker + :not(.ws-shelf__note) { padding-top: var(--s2); border-top: 1px solid var(--line); }
 .ws-tipedit__head { display: flex; align-items: center; justify-content: space-between; min-height: var(--ctl-h); margin-top: calc(-1 * var(--s1)); }
 .ws-tipedit__head .ws-tipedit__modal { margin-right: calc(-1 * var(--s2)); height: var(--ctl-h); padding: 0 var(--s2); background: transparent; color: var(--ink-2); font-weight: 400; }
 .ws-tipedit__head .ws-tipedit__modal:hover { background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--ink); }
 .ws-filtercards.is-behind-fly { visibility: hidden; }
-.ws-toolfly .ws-filtercards { flex-direction: column; flex-wrap: nowrap; align-items: stretch; }
-.ws-toolfly .ws-fcard { max-width: none; width: 100%; background: var(--surface-2); }
+.ws-toolfly .ws-filtercards { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: var(--s4); }
+/* A filter card in the flyout is the panel's own content, not a card inside a card: no frame, a hairline between cards. One that is not applied keeps its dashed edge. */
+.ws-toolfly .ws-fcard { max-width: none; width: 100%; }
+.ws-toolfly .ws-fcard:not(.is-invalid) { padding: 0; border: 0; background: transparent; }
+.ws-toolfly .ws-fcard:not(.is-invalid) .ws-fcard__head > .iconbtn:last-child { margin-right: calc(-1 * var(--s2)); } /* ✕ glyph flush with the panel's, as in its head */
+.ws-toolfly .ws-fcard:not(.is-invalid) + .ws-fcard:not(.is-invalid) { padding-top: var(--s4); border-top: 1px solid var(--line); border-radius: 0; }
+/* The Color flyout's controls (colour-flyout-model.js): the Color / Opacity / Effects sections split by a hairline, no visible group labels (each carries an aria-label). */
+.ws-toolfly .ws-fmt-check { display: inline-flex; align-items: center; gap: var(--s2); min-height: var(--s6); } /* a 24 px hit target */
+.ws-colourfly { display: grid; }
+.ws-colourfly__group { display: grid; gap: var(--s2); padding: var(--s4); }
+/* 4 px inside a label-over-control pair, 16 between the rows of a group that holds pairs: each label reads with its own control. */
+.ws-colourfly__group:has(.ws-fmt-field:not(.ws-fmt-check) + .ws-fmt-field:not(.ws-fmt-check)) { gap: var(--s4); }
+.ws-colourfly__group + .ws-colourfly__group { border-top: 1px solid var(--line); }
+/* The Color section opens with the field slot: 16 between it and each control, an even rhythm. */
+.ws-colourfly__group:has(> .ws-toolpanel__slot) { gap: var(--s4); }
+/* A progress bar with its value read out (fmtMeter): the track fills with the accent up to the thumb. */
+.ws-meter__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s2); }
+.ws-meter__value { font-size: var(--fs-body); color: var(--ink); font-variant-numeric: tabular-nums; }
+.ws-meter__input { -webkit-appearance: none; appearance: none; width: 100%; height: var(--s6); margin: 0; background: transparent; cursor: pointer; --fill: 0%; }
+.ws-meter__input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--r); }
+.ws-meter__input::-webkit-slider-runnable-track { height: var(--s2); border-radius: var(--r-pill); border: 1px solid var(--line-2); box-sizing: border-box; background: linear-gradient(to right, var(--accent) var(--fill), var(--surface-3) var(--fill)); }
+.ws-meter__input::-moz-range-track { height: var(--s2); border-radius: var(--r-pill); border: 1px solid var(--line-2); box-sizing: border-box; background: var(--surface-3); }
+.ws-meter__input::-moz-range-progress { height: var(--s2); border-radius: var(--r-pill); background: var(--accent); }
+.ws-meter__input::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: var(--s4); height: var(--s4); margin-top: calc(-1 * var(--s1)); border-radius: 50%; border: 2px solid var(--accent); box-sizing: border-box; background: var(--surface); }
+.ws-meter__input::-moz-range-thumb { width: var(--s4); height: var(--s4); border-radius: 50%; border: 2px solid var(--accent); box-sizing: border-box; background: var(--surface); }
+.ws-colourfly__limits > summary { display: flex; align-items: center; gap: var(--s1); min-height: var(--ctl-h); font-size: var(--fs-body); color: var(--ink-3); cursor: pointer; list-style: none; border-radius: var(--r); }
+.ws-colourfly__limits > summary::-webkit-details-marker { display: none; }
+.ws-colourfly__limits > summary .icon { flex: none; transition: transform var(--dur-fast) var(--ease); }
+.ws-colourfly__limits:not([open]) > summary .icon { transform: rotate(-90deg); }
+.ws-colourfly__limits > summary:hover { color: var(--ink); }
+.ws-colourfly__limits > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ws-colourfly__limitsbody { display: grid; gap: var(--s2); padding-top: var(--s2); }
 .ws-picker__box { display: grid; gap: var(--s1); }
 .ws-picker__box[hidden] { display: none; }
 .ws-picker__list { display: grid; gap: 0; max-height: 220px; overflow: auto; margin: 0 calc(-1 * var(--s2)); }
@@ -266,8 +302,9 @@
 .ws-picker__group[hidden], .ws-picker__item[hidden] { display: none; }
 .ws-picker__item { display: flex; align-items: center; gap: var(--s2); height: var(--ctl-h); padding: 0 var(--s2); border-radius: var(--r); background: transparent; color: var(--ink); text-align: left; cursor: pointer; font-size: var(--fs-body); }
 .ws-picker__item:hover, .ws-picker__item:focus-visible { background: color-mix(in srgb, var(--ink) 7%, transparent); }
+.ws-picker__item .ws-field__type { margin-left: calc(var(--s1) / -2); } /* same optical nudge as the Add field plus: the type glyphs (T, calendar, #) carry 1.5-3 px of empty space inside their box */
 .ws-picker__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ws-picker__empty { padding: var(--s2); color: var(--ink-3); font-size: var(--fs-body); }  /* label over its control: the flyout is too narrow for them side by side */
+.ws-picker__empty { padding: var(--s2); color: var(--ink-3); font-size: var(--fs-body); }
 .ws-toolpanel:focus { outline: none; }
 .ws-toolpanel:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 .ws-toolpanel__head { display: flex; align-items: center; justify-content: space-between; min-height: var(--ctl-h); }
@@ -583,6 +620,7 @@
 /* Tooltip text editor (in the Tooltip tool panel): template, field chips, live preview. */
 .ws-tipedit { display: grid; gap: var(--s2); }
 .ws-tipedit__text { width: 100%; resize: vertical; font-family: inherit; }
+.ws-tipedit__text::placeholder { color: var(--ink-3); opacity: 1; } /* the browser's grey is 3.7:1 on the dark surface */
 .ws-tipedit__chips { display: flex; flex-wrap: wrap; gap: var(--s1); }
 .ws-tipedit__chip { font-size: var(--fs-body); padding: var(--s1) var(--s2); }
 .ws-tipedit__preview { padding: var(--s2) var(--s2); border: 1px solid var(--line-2); border-radius: var(--r); background: var(--surface-2); color: var(--ink); font-size: var(--fs-body); overflow-wrap: anywhere; }

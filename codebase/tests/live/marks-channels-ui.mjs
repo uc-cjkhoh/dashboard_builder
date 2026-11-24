@@ -134,6 +134,10 @@ try {
   const opSelect = `document.querySelector('select[aria-label^="Filter operator for"]')`;
   const shot = async (name) => { try { writeFileSync(join(SHOTS, `${name}-${SCHEME}.png`), Buffer.from((await b.send('Page.captureScreenshot', { format: 'png' })).data, 'base64')); } catch { /* optional */ } };
   const fmtTool = `document.querySelector('.ws-viewbar__btn[aria-label="Format"]')`;
+  const colTool = `document.querySelector('.ws-tool[data-tool="color"]')`; // the Colour controls live in the Color tile's flyout (D151)
+  const colourOpen = () => ev(`!!document.querySelector('#ws-toolfly:not([hidden]) .ws-colourfly')`);
+  const openColour = async () => { if (!(await colourOpen())) await ev(`${colTool}.click()`); await waitFor(`!!document.querySelector('#ws-toolfly .ws-colourfly')`, 'Color flyout open'); }; // a drop on the tile opens it already
+  const closeColour = async () => { if (await colourOpen()) await ev(`${colTool}.click()`); await settle(300); };
   const fmtField = (label) => `[...document.querySelectorAll('.ws-fmt-field')].find((l) => l.textContent.includes(${J(label)}))`;
   const setSelect = (label, v) => ev(`(() => { const s = ${fmtField(label)}.querySelector('select'); s.value = ${J(v)}; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
   const inst = `window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas'))`;
@@ -183,8 +187,8 @@ try {
     must(/v1|qty/.test(tip), 'the tooltip carries the colour value: ' + tip);
     await shot('bar-colour');
   });
-  await check('bar + colour: Format drops Colour by category, keeps the scale controls; Steps gives a stepped legend and four colours; Diverging gives three stops and a centre', async () => {
-    await ev(`${fmtTool}.click()`);
+  await check('bar + colour: the Color flyout drops Colour by category, keeps the scale controls; Steps gives a stepped legend and four colours; Diverging gives three stops and a centre', async () => {
+    await openColour();
     await waitFor(`!!(${fmtField('Colour ramp')})`, 'ramp control');
     must(await ev(`!(${fmtField('Colour by category')})`), 'no Colour by category while a measure is on Colour');
     await setSelect('Steps', '4'); await settle(500);
@@ -196,7 +200,7 @@ try {
     const d = (await opt()).visualMap[0];
     must(d.inRange.color.length === 3 && /centre/.test(J(d.text)), 'diverging: three stops, centre named: ' + J(d.text));
     await setSelect('Colour scale', 'sequential'); await settle(300);
-    await ev(`${fmtTool}.click()`); await settle(300);
+    await closeColour();
   });
   await check('bar + Size: bars become variable-width (readable minimum, grow with the value); the Size legend names the field and its range; colour stays', async () => {
     await dragChip('discount', toolEl('Size'));
@@ -310,9 +314,9 @@ try {
     must((await opt()).series.every((x) => x.type === 'custom'), 'custom bars draw the split');
     must(await ev(`!!document.querySelector('#ws-chart svg, #ws-chart canvas')`), 'the split chart is still drawn');
     await dragChip('qty', toolEl('Color')); await settle(600);
-    await ev(`${fmtTool}.click()`); await waitFor(`!!(${fmtField('Reverse palette')})`, 'format open');
+    await openColour(); await waitFor(`!!(${fmtField('Reverse palette')})`, 'Color flyout open');
     must(await ev(`!document.querySelector('.ws-memcol__toggle')`), 'no member-colour editor while a measure is on Colour');
-    await ev(`${fmtTool}.click()`); await settle(300);
+    await closeColour();
   });
   await newSheet();
   await dragChip('region', `__t.zone('columns')`);
@@ -364,7 +368,7 @@ try {
     const ratio = (a, b) => { const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05); };
     const inks = (await opt()).series[0].data.map((n) => [n.label?.color, n.itemStyle?.color]);
     must(inks.every(([ink, bg]) => /^#[0-9a-f]{6}$/i.test(ink ?? '') && ratio(ink, bg) >= 4.5), 'every tile label is readable on its colour (4.5:1): ' + J(inks));
-    must(/discount|v2/.test(await tipText(0, 1)), 'the tooltip names the size and colour measures');
+    must(/discount|v2/.test(await tipText(0, 0)), 'the tooltip names the size and colour measures'); // tile 0: the tooltip is found by the tile's centre point, and tile 1's centre lands on another element once the chart is 29px taller (the tab strip no longer wraps)
     await shot('treemap-size-colour');
   });
 
@@ -381,7 +385,7 @@ try {
     must(o.legend?.[0]?.data?.length === 8, 'legend lists the members');
     const cols = o.series.map((s) => s.itemStyle.color);
     must(distinct(cols) === 8, 'distinct palette colours: ' + J(cols));
-    await ev(`${fmtTool}.click()`);
+    await openColour();
     await waitFor(`!!document.querySelector('.ws-memcol__toggle') && !document.querySelector('.ws-memcol__toggle').disabled`, 'member colours enabled for scatter groups');
     await ev(`document.querySelector('.ws-memcol__toggle').click()`);
     must(await ev(`document.querySelectorAll('.ws-memcol__row').length`) === 8, 'eight member rows');
@@ -391,7 +395,7 @@ try {
     const after = (await opt()).series[1].itemStyle.color;
     must(after === '#000000' && after !== before, 'the chosen member colour reaches the points: ' + J([before, after]));
     await ev(`document.querySelectorAll('.ws-memcol__row')[1].querySelector('.ws-memcol__reset').click()`); await settle(400);
-    await ev(`${fmtTool}.click()`); await settle(300);
+    await closeColour();
     await shot('scatter-colour');
   });
   await check('scatter + Colour and Shape on different fields: pair series, symbol by Shape member, colour by Colour member; one field on both is one legend', async () => {

@@ -1,4 +1,4 @@
-// The Format panel's Line pattern and Line markers controls: what each shows comes from the pure `lineControlSpecs` (line-style-model.js), so the
+// The Line pattern (Format) and Line markers (Color flyout) controls: what each shows comes from the pure `lineControlSpecs` (line-style-model.js), so the
 // panel and the drawing agree on when a control does something; this file reads the worksheet into those inputs and puts the controls on the panel.
 import { planMeasures, colorMode } from "./sheet-plan.js";
 import { primaryDim } from "./result-model.js";
@@ -46,9 +46,11 @@ export function withLineSetting(format, key, value) {
 /**
  * Append Line pattern / Line markers to `panel` (nothing for a chart that draws no lines). `fmtSelect` is the panel's select builder;
  * `replaceFormat(next)` commits a whole new format. A control that does nothing is disabled and says why (its title); a note rides the same way.
+ * `keys` (optional) limits it to those controls: Format wires `["linePattern"]`, the Color flyout `["lineMarkers"]`; without it both are appended.
  */
-export function wireLineControls(panel, sheet, fmtSelect, replaceFormat) {
+export function wireLineControls(panel, sheet, fmtSelect, replaceFormat, keys) {
   for (const c of lineControlSpecs(controlArgs(sheet))) {
+    if (keys && !keys.includes(c.key)) continue;
     const field = fmtSelect(c.label, c.choices, c.value, (v) => replaceFormat(withLineSetting(sheet.format ?? {}, c.key, v)));
     const select = field.querySelector("select");
     const hint = c.disabled ?? c.note;

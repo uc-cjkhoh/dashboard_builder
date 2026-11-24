@@ -3,6 +3,8 @@ import { MARK_BORDERS, MARK_BORDER_COLOURS, MARKER_SHAPES } from "../Core/sheet-
 
 export const MARK_BORDER_CHOICES = [["none", "None"], ["thin", "Thin"], ["medium", "Medium"], ["thick", "Thick"]];
 const WIDTHS = { none: 0, thin: 1, medium: 2, thick: 3 }; // px
+/** [key, px, readout] in ascending width — the stops of the Border thickness bar (the stored value stays the key). */
+export const MARK_BORDER_STOPS = Object.freeze(MARK_BORDER_CHOICES.map(([key]) => [key, WIDTHS[key], WIDTHS[key] ? `${WIDTHS[key]} px` : "None"]));
 export const MARK_BORDER_COLOUR_CHOICES = [["muted", "Muted"], ["ink", "Ink"], ["surface", "Surface"], ["accent", "Accent"]];
 
 /** The token colour a border colour name picks from the resolved chart tokens `c` (muted when unset or unknown). */
@@ -29,7 +31,7 @@ const SYMBOLS = { circle: "circle", square: "rect", diamond: "diamond", triangle
 /** ECharts' symbol for a marker shape (circle when unset or unknown). */
 export const markerSymbol = (shape) => (MARKER_SHAPES.has(shape) ? SYMBOLS[shape] : "circle");
 
-/** Chart types whose marks take Format → Mark border (gauge has no marks; lines and areas have only markers on line types). */
+/** Chart types whose marks take Border thickness (Color flyout) (gauge has no marks; lines and areas have only markers on line types). */
 export const BORDER_TYPES = new Set(["bar", "stacked", "combo", "scatter", "square", "circle", "heatmap", "pie", "donut", "treemap", "funnel",
   "histogram", "boxplot", "waterfall", "bullet", "gantt", "sankey"]);
 

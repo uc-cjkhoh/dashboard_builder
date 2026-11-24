@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { syncRange, SECONDARY_CHOICES, secondaryKind, dualAxisOn, rightAxisTitle, dualAxisAllowed, seriesAxis } from "../../src/DashboardBuilder/Features/Dashboard/axis-sync-model.js";
 import { buildCartesian } from "../../src/DashboardBuilder/Features/Dashboard/chart.js";
-import { MARK_BORDER_CHOICES, markBorder, MARKER_SIZE, markerSizeError, markerSizeOr, MARKER_SHAPE_CHOICES, markerSymbol, edgeOr, strokeOf, BORDER_TYPES } from "../../src/DashboardBuilder/Features/Dashboard/mark-style-model.js";
+import { MARK_BORDER_CHOICES, MARK_BORDER_STOPS, markBorder, MARKER_SIZE, markerSizeError, markerSizeOr, MARKER_SHAPE_CHOICES, markerSymbol, edgeOr, strokeOf, BORDER_TYPES } from "../../src/DashboardBuilder/Features/Dashboard/mark-style-model.js";
 import { defaultFormat, emptySheet } from "../../src/DashboardBuilder/Features/Core/store.js";
 import { parseWorkbook, serializeWorkbook } from "../../src/DashboardBuilder/Features/Workbook/workbook-model.js";
 
@@ -40,6 +40,12 @@ test("secondary mark type: line, bar, area; anything else is line", () => {
   assert.deepEqual(SECONDARY_CHOICES.map((c) => c[0]), ["line", "bar", "area"]);
   assert.equal(secondaryKind("bar"), "bar"); assert.equal(secondaryKind("area"), "area");
   assert.equal(secondaryKind(undefined), "line"); assert.equal(secondaryKind("radar"), "line");
+});
+
+test("border thickness bar: four ascending stops, the key stays the stored value, the readout is px", () => {
+  assert.deepEqual(MARK_BORDER_STOPS.map(([k]) => k), MARK_BORDER_CHOICES.map(([k]) => k));
+  assert.deepEqual(MARK_BORDER_STOPS.map(([, px, text]) => [px, text]), [[0, "None"], [1, "1 px"], [2, "2 px"], [3, "3 px"]]);
+  for (const [key, px] of MARK_BORDER_STOPS) assert.equal(markBorder(key, "#abc").borderWidth, px, key);
 });
 
 test("mark border: none draws no stroke; thin and thick use the muted border colour", () => {

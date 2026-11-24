@@ -148,7 +148,7 @@ try {
   const shot = async (name) => { try { writeFileSync(join(SHOTS, `${name}-${SCHEME}.png`), Buffer.from((await b.send('Page.captureScreenshot', { format: 'png' })).data, 'base64')); } catch { /* optional */ } };
   const fmtTool = `document.querySelector('.ws-viewbar__btn[aria-label="Format"]')`;
   const fmtField = (label) => `[...document.querySelectorAll('.ws-fmt-field')].find((l) => l.textContent.includes(${J(label)}))`;
-  const setSelect = (label, v) => ev(`(() => { const s = ${fmtField(label)}.querySelector('select'); s.value = ${J(v)}; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+  const setSelect = async (label, v) => { await ensure(label); return ev(`(() => { const s = ${fmtField(label)}.querySelector('select'); s.value = ${J(v)}; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`); };
   const inst = `window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas'))`;
   const opt = () => ev(`${inst}.getOption()`);
   const hints = () => ev(`[...document.querySelectorAll('#ws-chart .ws-hint')].map((h) => h.textContent)`);
@@ -177,11 +177,19 @@ try {
   };
 
 
-  const setField = (label, v) => ev(`(() => { const i = ${fmtField(label)}.querySelector('input'); i.value = ${J(v)}; i.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
-  const toggle = (label) => ev(`${fmtField(label)}.querySelector('input').click()`);
+  const setField = async (label, v) => { await ensure(label); return ev(`(() => { const i = ${fmtField(label)}.querySelector('input'); i.value = ${J(v)}; i.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`); };
+  const toggle = async (label) => { await ensure(label); return ev(`${fmtField(label)}.querySelector('input').click()`); };
+  // Line markers live in the Color tile's flyout (D151): every panel helper here opens and closes that flyout.
+  const colTool = `document.querySelector('.ws-tool[data-tool="color"]')`;
+  const colourOpen = () => ev(`!!document.querySelector('#ws-toolfly:not([hidden]) #ws-toolpanel-color')`);
+  const openColour = async () => { if (!(await colourOpen())) await ev(`${colTool}.click()`); await waitFor(`!!document.querySelector('#ws-toolfly:not([hidden]) #ws-toolpanel-color')`, 'Color flyout open'); };
+  const closeColour = async () => { if (await colourOpen()) await ev(`${colTool}.click()`); await settle(300); };
+  // Data labels, Label marks, Group dates … stay in Format; the two are never open together, so a helper opens the panel that holds its label.
   const formatOpen = () => ev(`!!(${fmtField('Number')})`);
-  const openFormat = async () => { if (!(await formatOpen())) await ev(`${fmtTool}.click()`); await waitFor(`!!(${fmtField('Number')})`, 'format panel open'); };
-  const closeFormat = async () => { if (await formatOpen()) await ev(`${fmtTool}.click()`); await settle(300); };
+  const ensure = async (label) => {
+    if (label === 'Line markers') await openColour();
+    else { if (!(await formatOpen())) await ev(`${fmtTool}.click()`); await waitFor(`!!(${fmtField('Number')})`, 'format panel open'); }
+  };
   // The mock answers rows in REGIONS order; a dimension's steps follow the SORTED members (APAC, CA, EU, JP, LATAM, MEA, UK, US): the expected rank of each row.
   const rankOfRow = REGIONS.map((r) => [...REGIONS].sort().indexOf(r));
   const byMember = (a) => rankOfRow.map((rk, i) => [rk, a[i]]).sort((x, y) => x[0] - y[0]).map((x) => x[1]); // values listed smallest member first
@@ -194,21 +202,21 @@ try {
   const zr = (expr) => ev(`(() => { const z = ${inst}.getZr(); const list = z.storage.getDisplayList(true); return (${expr}); })()`);
   const series0 = async () => (await opt()).series[0];
   const control = (label) => `${fmtField(label)}.querySelector('select')`;
-  const fieldState = async (label) => ev(`(() => { const s = ${control(label)}; return s ? { value: s.value, disabled: s.disabled, title: s.title, options: [...s.options].map((o) => o.value) } : null; })()`);
+  const fieldState = async (label) => { await ensure(label); return ev(`(() => { const s = ${control(label)}; return s ? { value: s.value, disabled: s.disabled, title: s.title, options: [...s.options].map((o) => o.value) } : null; })()`); };
   const pickOpt = async (label, v) => { await setSelect(label, v); await settle(500); };
-  const snap = async (name) => { await closeFormat(); const t = await ev(`document.documentElement.getAttribute('data-scheme') || 'light'`); try {
-    writeFileSync(join(SHOTS, `${name}-${t}.png`), Buffer.from((await b.send('Page.captureScreenshot', { format: 'png' })).data, 'base64')); } catch { /* optional */ } await openFormat(); };
+  const snap = async (name) => { await closeColour(); const t = await ev(`document.documentElement.getAttribute('data-scheme') || 'light'`); try {
+    writeFileSync(join(SHOTS, `${name}-${t}.png`), Buffer.from((await b.send('Page.captureScreenshot', { format: 'png' })).data, 'base64')); } catch { /* optional */ } await openColour(); };
   // The marks zrender really drew on series `si`: { drawn: points with a symbol, visible: points whose symbol is not transparent }.
   const marksOf = (si = 0) => ev(`(() => { const d = ${inst}.getModel().getSeriesByIndex(${si}).getData(); const drawn = [], visible = [];
     for (let k = 0; k < d.count(); k++) { const el = d.getItemGraphicEl(k); if (!el || el.ignore) continue; drawn.push(k); if (d.getItemVisual(k, 'style').fill !== 'transparent') visible.push(k); }
     return { drawn, visible }; })()`);
-  const snapPanel = async (name) => { await ev(`document.querySelector('#ws-toolfly .iconbtn[aria-label="Close editor"]')?.click()`); await openFormat(); const t = await ev(`document.documentElement.getAttribute('data-scheme') || 'light'`); try { writeFileSync(join(SHOTS, `${name}-${t}.png`), Buffer.from((await b.send('Page.captureScreenshot', { format: 'png' })).data, 'base64')); } catch { /* optional */ } }; // with the Format panel open (the disabled choice and its reason)
+  const snapPanel = async (name) => { await ev(`document.querySelector('#ws-toolfly .iconbtn[aria-label="Close editor"]')?.click()`); await openColour(); const t = await ev(`document.documentElement.getAttribute('data-scheme') || 'light'`); try { writeFileSync(join(SHOTS, `${name}-${t}.png`), Buffer.from((await b.send('Page.captureScreenshot', { format: 'png' })).data, 'base64')); } catch { /* optional */ } }; // with the Format panel open (the disabled choice and its reason)
   const visible = async (si = 0) => (await marksOf(si)).visible;
   // A REAL mouse click on point `di` of series `si`, where the chart drew it.
   const pointXY = (di, si = 0) => ev(`(() => { const d = document.querySelector('.ws-chart-canvas'); d.scrollIntoView({ block: 'center' }); const i = ${inst}; const r = d.getBoundingClientRect();
     const raw = i.getOption().series[${si}].data[${di}]; const v = raw !== null && typeof raw === 'object' ? raw.value : raw; const p = i.convertToPixel({ seriesIndex: ${si} }, [${di}, v]);
     return { x: r.left + p[0], y: r.top + p[1] }; })()`);
-  const clickPoint = async (di, si = 0) => { await closeFormat(); const p0 = await pointXY(di, si); await b.sleep(80); const p = await pointXY(di, si); await b.click(p.x, p.y); await settle(700); return p0; };
+  const clickPoint = async (di, si = 0) => { await closeColour(); const p0 = await pointXY(di, si); await b.sleep(80); const p = await pointXY(di, si); await b.click(p.x, p.y); await settle(700); return p0; };
   const hoverDot = async (di) => {
     await ev(`${inst}.dispatchAction({ type: 'showTip', seriesIndex: 0, dataIndex: ${di} })`);
     await ev(`${inst}.dispatchAction({ type: 'highlight', seriesIndex: 0, dataIndex: ${di} })`); await b.sleep(250);
@@ -223,7 +231,7 @@ try {
   await dragChip('region', `__t.zone('columns')`);
   await dragChip('amount', `__t.zone('rows')`);
   await settle(500);
-  await chartType('Line'); await openFormat();
+  await chartType('Line'); await openColour();
 
   await check('Line markers offers Selected beside Automatic / All / None; Automatic is the default and draws a dot on every one of the 8 points as before', async () => {
     const m = await fieldState('Line markers');
@@ -241,7 +249,7 @@ try {
   });
   await check('a real click on a point selects it (no dot exists to click: the hover symbol takes the click); its dot shows, the others stay clear; the redraw keeps Selected', async () => {
     await clickPoint(3);
-    await openFormat();
+    await openColour();
     must(J(await visible()) === J([3]), 'only point 3 shows a dot: ' + J(await marksOf()));
     must((await fieldState('Line markers')).value === 'selected', 'the control still reads Selected');
     const pill = await selectionPill(); must(pill.some((t) => /region = R04/.test(t)), 'the selection is R04: ' + J(pill));
@@ -264,11 +272,11 @@ try {
   });
   await check('with two measures every series shows its dot at the selected category', async () => {
     await dragChip('qty', `__t.zone('rows')`); await settle(700);
-    await openFormat();
+    await openColour();
     must((await fieldState('Line markers')).value === 'selected', 'still Selected');
     const o = (await opt()).series.filter((s) => s.type === 'line');
     must(o.length === 2, 'two lines');
-    await closeFormat();
+    await closeColour();
     must(J(await visible(0)) === J([2]) && J(await visible(1)) === J([2]), 'both series show point 2: ' + J([await visible(0), await visible(1)]));
     await snap('selected-two-series');
     await clickPoint(2, 1);
@@ -277,10 +285,10 @@ try {
     await settle(500);
   });
   await check('Selected is independent of Label marks: Data labels with Label marks All still label every point, the dot follows the selection', async () => {
-    await openFormat();
+    await openColour();
     await toggle('Data labels'); await settle(600);
     const labelled = await zr(`list.filter((e) => e.type === 'tspan' && e.style && String(e.style.text ?? '') !== '' && !e.ignore).length`);
-    await closeFormat(); await clickPoint(1); await openFormat();
+    await closeColour(); await clickPoint(1); await openColour();
     const after = await zr(`list.filter((e) => e.type === 'tspan' && e.style && String(e.style.text ?? '') !== '' && !e.ignore).length`);
     must(labelled >= 8 && after >= 8, `the labels are drawn: ${labelled} / ${after}`);
     must(J(await visible()) === J([1]), 'the dot follows the click: ' + J(await visible()));
@@ -289,59 +297,59 @@ try {
     await clickPoint(1);
   });
   await check('an Area and a Combo take Selected the same way', async () => {
-    await chartType('Area'); await openFormat();
+    await chartType('Area'); await openColour();
     must((await fieldState('Line markers')).options.includes('selected'), 'offered on an area');
     await clickPoint(4); must(J(await visible()) === J([4]), 'area: ' + J(await marksOf()));
     await snap('selected-area');
     await clickPoint(4);
     await dragChip('discount', `__t.zone('rows')`); await settle(500);
-    await chartType('Combo (dual-axis)'); await openFormat();
+    await chartType('Combo (dual-axis)'); await openColour();
     must((await fieldState('Line markers')).options.includes('selected'), 'offered on a combo');
     await clickPoint(5, 1);
     const k = await visible(1);
     must(J(k) === J([5]), 'combo line series 1 shows the dot at point 5: ' + J(await marksOf(1)));
     await snap('selected-combo');
     await clickPoint(5, 1);
-    await chartType('Line'); await openFormat();
+    await chartType('Line'); await openColour();
   });
   await check('Size on an area draws the markers itself: Line markers is disabled with the reason and reads All, even with Selected stored', async () => {
-    await chartType('Area'); await openFormat();
-    await dragChip('discount', toolEl('Size')); await settle(700); await openFormat();
+    await chartType('Area'); await openColour();
+    await dragChip('discount', toolEl('Size')); await settle(700); await openColour();
     const m = await fieldState('Line markers');
     must(m.disabled && /Size/.test(m.title) && m.value === 'all', J(m));
-    await closeFormat();
+    await closeColour();
     must((await visible()).length === 8, 'every marker is drawn, sized by Size: ' + J(await marksOf()));
     await snap('selected-size-disabled');
-    await openFormat();
+    await openColour();
     await ev(`${toolEl('Size')}.click()`); await settle(300);
     await ev(`document.querySelector('#ws-toolfly .ws-pill button[aria-label="Remove field"]').click()`); await settle(700);
-    await chartType('Line'); await openFormat();
+    await chartType('Line'); await openColour();
     must((await fieldState('Line markers')).value === 'selected', 'Size removed: Selected is live again');
   });
   await check('a Bar chart still offers no Line markers control', async () => {
-    await chartType('Bar'); await openFormat();
+    await chartType('Bar'); await openColour();
     must(await ev(`!(${fmtField('Line markers')})`), 'none on a bar');
-    await chartType('Line'); await openFormat();
+    await chartType('Line'); await openColour();
   });
 
   await check('a line over a date column: Auto keeps Selected with a hint above the chart; a grain disables the Selected choice with the reason; Exact selects with a real click', async () => {
     await newSheet();
     await dragChip('placed', `__t.zone('columns')`);
     await dragChip('amount', `__t.zone('rows')`);
-    await settle(700); await chartType('Line'); await openFormat();
+    await settle(700); await chartType('Line'); await openColour();
     must(J((await fieldState('Line markers')).options) === J(['auto', 'selected', 'all', 'none']), 'Selected is offered');
     await pickOpt('Line markers', 'selected');
     const auto = await fieldState('Line markers');
     must(auto.value === 'selected' && !auto.disabled && /Group dates → Auto may group/.test(auto.title), 'Auto: the control is live with a note: ' + J(auto));
     const h = await hints(); must(h.some((t) => /Selected.*dates are grouped into periods.*Group dates → Exact/.test(t)), 'the chart says why no mark selects: ' + J(h));
     await snap('selected-date-auto-hint');
-    await pickOpt('Group dates', 'month');
+    await pickOpt('Group dates', 'month'); await openColour(); // Group dates is in Format, Line markers in the Color flyout
     const optDis = await ev(`(() => { const o = [...${control('Line markers')}.options].find((x) => x.value === 'selected'); return { disabled: o.disabled, title: o.title }; })()`);
     must(optDis.disabled && /Group dates is Month.*Exact/.test(optDis.title), 'a grain: the Selected choice is disabled with the reason: ' + J(optDis));
     must(!(await fieldState('Line markers')).disabled, 'the other choices stay usable');
     must((await fieldState('Line markers')).title.includes('Group dates is Month'), 'a stored Selected says why on the control');
     await snapPanel('selected-date-grain-disabled');
-    await pickOpt('Group dates', 'exact');
+    await pickOpt('Group dates', 'exact'); await openColour();
     must(!(await ev(`[...${control('Line markers')}.options].find((x) => x.value === 'selected').disabled`)), 'Exact: Selected is available again');
     must((await hints()).every((t) => !/dates are grouped/.test(t)), 'and the hint is gone: ' + J(await hints()));
     await clickPoint(2);
@@ -384,7 +392,7 @@ try {
     await newSheet();
     await dragChip('region', `__t.zone('columns')`);
     await dragChip('discount', `__t.zone('rows')`); // a different measure: a different query, so the 70 rows are fetched
-    await settle(600); await chartType('Line'); await openFormat();
+    await settle(600); await chartType('Line'); await openColour();
     must((await marksOf()).drawn.length === 0, 'Automatic: none past 60 points');
     await pickOpt('Line markers', 'selected');
     must((await visible()).length === 0 && (await marksOf()).drawn.length === 0, 'no symbol drawn: ' + (await marksOf()).drawn.length);

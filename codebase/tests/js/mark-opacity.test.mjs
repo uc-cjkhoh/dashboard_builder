@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildCartesian, buildOption } from "../../src/DashboardBuilder/Features/Dashboard/chart.js";
-import { applyMarkOpacity, markOpacityOf, markOpacityError, cleanMarkOpacity, OPACITY_TYPES, OPACITY_CHOICES } from "../../src/DashboardBuilder/Features/Dashboard/mark-opacity-model.js";
+import { applyMarkOpacity, markOpacityOf, markOpacityError, cleanMarkOpacity, OPACITY_TYPES, OPACITY_CHOICES, OPACITY_STOPS } from "../../src/DashboardBuilder/Features/Dashboard/mark-opacity-model.js";
 import { applySelectionDim } from "../../src/DashboardBuilder/Features/Dashboard/selection-dim.js";
 import { sanitizeSheet } from "../../src/DashboardBuilder/Features/Workbook/workbook-model.js";
 import { emptySheet, defaultFormat } from "../../src/DashboardBuilder/Features/Core/store.js";
@@ -23,6 +23,9 @@ test("model: absent or 100 is 1; a multiple of 10 from 0 to 100 is its fraction;
   assert.equal(markOpacityError(70), null);
   assert.deepEqual(cleanMarkOpacity(100), { ok: true, value: null }); assert.deepEqual(cleanMarkOpacity(30), { ok: true, value: 30 }); assert.equal(cleanMarkOpacity(33).ok, false);
   assert.deepEqual(OPACITY_CHOICES.map(([v]) => v), [100, 90, 80, 70, 60, 50, 40, 30, 20, 10, 0]);
+  assert.deepEqual(OPACITY_STOPS.map(([v]) => v), [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]); // the bar runs 0 to 100, one step of 10
+  assert.deepEqual(OPACITY_STOPS[4], [40, "40 %"]);
+  for (const [v] of OPACITY_STOPS) assert.equal(markOpacityError(v), null, String(v));
   assert.ok(OPACITY_TYPES.has("bar") && OPACITY_TYPES.has("line") && OPACITY_TYPES.has("pie") && OPACITY_TYPES.has("treemap") && !OPACITY_TYPES.has("gauge") && !OPACITY_TYPES.has("table"));
 });
 test("opacity 100 / absent leaves the built option deep-equal to today's, for every family", () => {
