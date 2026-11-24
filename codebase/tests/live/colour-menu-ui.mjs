@@ -151,8 +151,15 @@ try {
   await check('empty Colour: no dashed zone, Add field is the slot', async () => {
     await ev(`${colTool}.click()`);
     await waitFor(`!!${fly} && !${fly}.hidden`, 'flyout open');
+    await b.sleep(600); // the flyout's entry motion
     must(await ev(`${fly}.querySelector('.ws-toolpanel__zone') === null`), 'zone present with no pills');
     must(await ev(`${addBtn}.parentElement.classList.contains('ws-toolpanel__slot')`), 'Add field not directly in the slot');
+    const slotR = await rect(group), btnR = await rect(addBtn);
+    const cs = await ev(`(() => { const c = getComputedStyle(${addBtn}, '::before'); return { style: c.borderTopStyle, width: c.borderTopWidth }; })()`);
+    must(cs.style === 'dotted' && cs.width === '1px', `Add field border ${J(cs)}`);
+    const parts = await ev(`(() => { const r = (e) => { const b = e.getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; }; const btn = ${addBtn}; const [bx, by] = r(btn); const kids = [...btn.children].map(r); const l = Math.min(...[...btn.children].map((k) => k.getBoundingClientRect().left)), rr = Math.max(...[...btn.children].map((k) => k.getBoundingClientRect().right)); return { dy: kids.map(([, y]) => y - by), dx: (l + rr) / 2 - bx }; })()`);
+    must(parts.dy.every((d) => Math.abs(d) <= 1) && Math.abs(parts.dx) <= 1, `Add field icon and label not centred in the button ${J(parts)}`);
+    must(Math.abs(btnR.w - (slotR.w - 32)) <= 1 && Math.abs(btnR.l - (slotR.l + 16)) <= 1, `Add field not the slot's full width ${J(btnR)} ${J(slotR)}`);
     must(await ev(`${menu} !== null && ${menu}.hidden && ${menu}.parentElement === document.querySelector('.worksheet')`), 'side menu not mounted hidden beside the flyout');
     await shot('colour-menu-closed');
   });

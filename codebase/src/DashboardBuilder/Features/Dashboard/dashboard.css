@@ -256,7 +256,7 @@
 .ws-toolfly .ws-period__row { display: grid; grid-template-columns: 1fr; gap: var(--s2); }
 .ws-toolfly .ws-tipedit__text { height: auto; min-height: 96px; }
 /* The slot is one dashed drop zone that holds the pills and ends with Add field; the picker list opens under it. The button is a quiet item inside the zone, not a second control beside it.
-   In the Color flyout the zone holds the pills only (absent when there are none), Add field is its own row under it, and its list is a side menu (.ws-picker__box--side) beside the flyout. */
+   In the Color flyout the zone holds the pills only (absent when there are none), Add field is its own full-width row under it with a dotted edge, and its list is a side menu (.ws-picker__box--side) beside the flyout. */
 .ws-picker__btn { display: inline-flex; align-items: center; gap: var(--s1); height: var(--ctl-h); margin-left: calc(-1 * var(--s1)); padding: 0 var(--s2) 0 var(--s1); border-radius: var(--r); background: transparent; color: var(--ink-3); font-size: var(--fs-body); cursor: pointer; }
 .ws-picker__btn .icon { margin-left: calc(var(--s1) / -2); } /* optical: the plus has ~2 px of empty space inside its 14 px box; its ink, not the box, sits on the zone's content edge, level with the pills' */
 .ws-picker__btn:hover, .ws-picker__btn[aria-expanded="true"] { background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--ink); }
@@ -300,7 +300,9 @@
 /* The Color flyout's field menu: a sibling of .ws-toolfly (whose overflow would clip it), its edge on the flyout's right edge, under the flyout's z-index so the flyout's border stays the one hairline. */
 .ws-picker__box--side { position: absolute; z-index: 4; width: 240px; gap: var(--s2); padding: var(--s2); background: var(--surface); border: 1px solid var(--line-2); border-radius: 0 var(--r) var(--r) 0; box-shadow: var(--elev-28); }
 .ws-picker__box--side .ws-picker__search { width: 100%; }
-.ws-toolpanel__slot > .ws-picker__btn { justify-self: start; } /* a quiet item the width of its label, as it was inside the zone, not a bar across the slot */
+.ws-toolpanel__slot > .ws-picker__btn { position: relative; display: flex; align-items: center; justify-content: center; margin-left: 0; padding: 0 var(--s2); } /* the Color flyout's Add field: its own full-width row, icon and label centred both ways, a drop-zone-like target under the pills */
+.ws-toolpanel__slot > .ws-picker__btn::before { content: ""; position: absolute; inset: 0; border: 1px dotted var(--line-2); border-radius: inherit; pointer-events: none; } /* the dotted edge is an overlay: buttons.css sets border: 0 !important on every button */
+.ws-toolpanel__slot > .ws-picker__btn .icon { margin-left: 0; } /* centred with its label, so no optical nudge to a left edge */
 .ws-toolpanel__slot.is-over { border-radius: var(--r); background: var(--accent-soft); box-shadow: 0 0 0 var(--s1) var(--accent-soft); }
 .ws-picker__box[hidden] { display: none; }
 .ws-picker__list { display: grid; gap: 0; max-height: 220px; overflow: auto; margin: 0 calc(-1 * var(--s2)); }
