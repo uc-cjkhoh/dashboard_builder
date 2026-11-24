@@ -13,7 +13,7 @@ Clicking **Color** opens the flyout: up to three sections split by a hairline: *
 |---|---|
 | Color | Colour by category (bar and scatter with no measure on Color). A measure on Color or a heatmap: Colour scale, Steps, Colour ramp (or Diverging colours and Use full colour range), Reverse palette, **Limits** (a closed disclosure: Colour from / to, or the centre). A field: Reverse palette, Edit member colours |
 | Opacity | Opacity, a progress bar from 0 % to 100 % in steps of 10 (the thumb's value is read out beside the label; the change applies on release) |
-| Effects | Border thickness, a progress bar over None / 1 px / 2 px / 3 px (stored as `format.markBorder` `none` / `thin` / `medium` / `thick`); Border colour once a border is set; Line markers (line, area, combo) |
+| Effects | Border thickness, a progress bar over None / 1 px / 2 px / 3 px (stored as `format.markBorder` `none` / `thin` / `medium` / `thick`); Border colour (a four-swatch picker) once a border is set; Line markers (line, area, combo) |
 
 A section with no control for the chart type is left out (with its divider). The sections carry no visible heading: the controls name themselves, and each section has an `aria-label` for screen readers.
 
