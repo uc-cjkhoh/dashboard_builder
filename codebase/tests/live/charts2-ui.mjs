@@ -158,6 +158,10 @@ try {
   const pick = async (label, value) => {
     await ensure(label);
     if (label === 'Border thickness') value = THICKNESS[value];
+    if (label === 'Border colour') { // a swatch group: click the swatch named for the token
+      await ev(`(() => { const g = [...document.querySelectorAll('.ws-fmt-field')].find((l) => l.querySelector('.ws-fmt-label').textContent === ${J(label)}); g.querySelector('.ws-swatch--' + ${J(value)}).click(); return true; })()`);
+      await settle(400); return;
+    }
     await ev(`(() => { const s = [...document.querySelectorAll('.ws-fmt-field')].find((l) => l.querySelector('.ws-fmt-label').textContent === ${J(label)}).querySelector('select, input[type=range]'); s.value = ${J(value)}; s.dispatchEvent(new Event('change')); return true; })()`);
     await settle(400);
   };

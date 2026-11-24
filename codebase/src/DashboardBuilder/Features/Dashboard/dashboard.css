@@ -343,6 +343,14 @@
 }
 .ws-fmt-field { display: inline-flex; align-items: center; gap: var(--s2); font-size: var(--fs-body); color: var(--ink-3); }
 .ws-fmt-check { cursor: pointer; gap: var(--s1); }
+/* A colour picker (fmtSwatches): square swatches filled from the theme variables the chart draws with; the chosen one carries a tick (never colour alone). */
+.ws-swatches { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.ws-swatch { width: var(--s6); height: var(--s6); padding: 0; border-radius: var(--r); font-size: var(--fs-body); line-height: 1; cursor: pointer; } /* no border or shadow: buttons.css strips both from every button, edges are fill and outline */
+.ws-swatch--muted { background: var(--chart-muted); color: var(--surface); }
+.ws-swatch--ink { background: var(--ink); color: var(--surface); }
+.ws-swatch--surface { background: var(--surface); outline: 1px solid var(--ink-3); outline-offset: -1px; color: var(--ink); } /* the same colour as the flyout: only its edge shows it */
+.ws-swatch--accent { background: var(--accent); color: var(--surface); }
+.ws-swatch[aria-pressed="true"] { outline: 2px solid var(--ink); outline-offset: 1px; }
 .ws-fmt-label { font-size: var(--fs-body); color: var(--ink-3); white-space: nowrap; }
 .ws-fmt-select, .ws-fmt-input { height: var(--ctl-h); font-size: var(--fs-body); }
 .ws-fmt-select { padding: 0 var(--s1); max-width: 116px; }

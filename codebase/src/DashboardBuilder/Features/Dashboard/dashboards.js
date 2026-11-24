@@ -2775,7 +2775,7 @@ export function initDashboards() {
   function restoreColourFocus() {
     if (!colourFocus || openTool !== "color") return;
     const key = colourFocus; colourFocus = null;
-    toolFly.querySelector(`[data-colour-ctl="${key}"] select, [data-colour-ctl="${key}"] input`)?.focus({ preventScroll: true });
+    toolFly.querySelector(`[data-colour-ctl="${key}"] select, [data-colour-ctl="${key}"] input, [data-colour-ctl="${key}"] .ws-swatch[aria-pressed="true"]`)?.focus({ preventScroll: true });
   }
   function colourEditor(dash, s) {
     panelScale = null; // set below when the flyout shows the colour-scale controls
@@ -2793,6 +2793,7 @@ export function initDashboards() {
     const ctl = (key, node) => { // remembers which control changed (capture: before the control's own handler rebuilds the flyout)
       node.dataset.colourCtl = key;
       for (const x of node.querySelectorAll("select, input")) x.addEventListener("change", () => { colourFocus = key; }, true);
+      for (const x of node.querySelectorAll('button.ws-swatch[aria-pressed="false"]')) x.addEventListener("click", () => { colourFocus = key; }, true);
       return node;
     };
     const range = (key, other, label) => ctl(key, fmtNumber(label, f[key], "auto", (v) => {
@@ -2820,7 +2821,7 @@ export function initDashboards() {
       colourByCategory: () => ctl("colourByCategory", fmtCheck("Colour by category", f.colorByDimension, (v) => set({ colorByDimension: v }))),
       opacity: () => ctl("opacity", fmtMeter("Opacity", OPACITY_STOPS, f.markOpacity ?? 100, (v) => without("markOpacity", cleanMarkOpacity(Number(v)).value))), // blank at 100 %
       border: () => ctl("border", fmtMeter("Border thickness", MARK_BORDER_STOPS.map(([, px, text]) => [px, text]), MARK_BORDER_STOPS.find(([key]) => key === (f.markBorder ?? "none"))?.[1] ?? 0, (px) => set({ markBorder: MARK_BORDER_STOPS.find(([, w]) => String(w) === px)[0] }))), // the key is stored, the bar speaks px
-      borderColour: () => ctl("borderColour", fmtSelect("Border colour", MARK_BORDER_COLOUR_CHOICES, f.markBorderColor ?? "muted", (v) => set({ markBorderColor: v }))),
+      borderColour: () => ctl("borderColour", fmtSwatches("Border colour", MARK_BORDER_COLOUR_CHOICES, f.markBorderColor ?? "muted", (v) => set({ markBorderColor: v }))),
       lineMarkers,
       scale: () => ctl("scale", fmtSelect("Colour scale", SCALE_CHOICES.map(([v, t]) => [v, v === "auto" ? `${t} · ${panelScale === "diverging" ? "Diverging" : "Low → high"}` : t]), f.colorScale ?? "sequential", (v) => set({ colorScale: v }))), // Automatic names what the data made it
       steps: () => ctl("steps", fmtSelect("Steps", STEP_CHOICES, f.colorSteps ?? 0, (v) => set({ colorSteps: Number(v) }))),
@@ -3454,6 +3455,22 @@ function fmtSelect(labelText, options, current, onPick) {
   wrap.append(sel);
   return wrap;
 }
+// A colour picker: one swatch per choice, [value, name] each, filled from the theme's own colour variable (never a hex), so it follows the theme as the drawn
+// colour does. A div, not a label: a label would forward a click on its text to the first swatch. A button group, the chosen swatch is aria-pressed and carries a tick.
+function fmtSwatches(labelText, options, current, onPick) {
+  const wrap = el("div", "ws-fmt-field ws-fmt-swatches"); wrap.setAttribute("role", "group");
+  const lab = el("span", "ws-fmt-label", labelText); lab.id = `ws-swg-${++swatchGroupSeq}`; wrap.setAttribute("aria-labelledby", lab.id);
+  const row = el("span", "ws-swatches");
+  for (const [val, text] of options) {
+    const on = String(val) === String(current);
+    const b = el("button", `ws-swatch ws-swatch--${val}`, on ? "\u2713" : ""); b.type = "button"; b.setAttribute("aria-pressed", String(on)); b.setAttribute("aria-label", text); b.title = text;
+    if (!on) b.addEventListener("click", () => onPick(String(val)));
+    row.append(b);
+  }
+  wrap.append(lab, row);
+  return wrap;
+}
+let swatchGroupSeq = 0;
 // A slider drawn as a progress bar with its value read out, for a setting with a few even steps. `stops` is [[value, readout]] ascending with one
 // step between them; the readout follows the thumb, the change is committed on release (a commit rebuilds the flyout).
 function fmtMeter(labelText, stops, current, onPick) {
