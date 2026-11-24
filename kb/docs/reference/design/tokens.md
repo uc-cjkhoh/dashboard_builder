@@ -216,7 +216,7 @@ mark wears the series colour.**
 | `--chart-label` | `--ink-2` | primary chart text |
 | `--chart-muted` | `--ink-3` | tick labels |
 | `--chart-div-low` / `--chart-div-high` | light `#d98a4a` / `#2b62b8`; dark `#e2b48c` / `#5a8ad6`; One Dark Pro `#e0b084` / `#5c9ddb` | diverging colour: warm below the centre, cool above (theme-stable; HSL S ≤ 70 %; the warm end is lighter than the cool end, so the pair also differs in lightness: simulated CIE L* gap light 27 / 15, dark 23 / 14 for deuteranopia / protanopia; One Dark Pro is the weakest at 17 / 8) |
-| `--chart-div-amber` / `-violet` / `-green` | light `#b8803a` / `#6b52c9` / `#3f8f5a`; dark `#e0b060` / `#9b86e6` / `#6fc486`; One Dark Pro `#e5c07b` / `#c678dd` / `#98c379`; the hue pairs of Format → Diverging colours (never red) |
+| `--chart-div-amber` / `-violet` / `-green` | light `#b8803a` / `#6b52c9` / `#3f8f5a`; dark `#e0b060` / `#9b86e6` / `#6fc486`; One Dark Pro `#e5c07b` / `#c678dd` / `#98c379`; the hue pairs of Color flyout → Diverging colours (never red) |
 | `--chart-cat-1..8` | light `#72872a` `#b8559c` `#d9a03a` `#7c63d6` `#2f9ea8` `#3f7fd0` `#4aa66a` `#6a6d72`; dark `#a9bd6a` `#d98ac2` `#deb062` `#9b86e6` `#5cc0c8` `#7aa3dc` `#6fc486` `#8e9094` | categorical ramp, fixed order; no red slot — red means danger only ([D97](../../decisions/decisions-dashboards.md#d97--no-red-in-the-categorical-palette-and-a-calm-dark-accent)) |
 
 - **One series** wears the accent. **≥2 series** (multiple measures, or a Colour split) draw
@@ -260,7 +260,7 @@ sizes, and no ad-hoc sizes.
   - `--elev-2`: other cards at rest.
   - `--elev-8`: hovered cards.
   - `--elev-16`: menus, popovers, toast and the card being dragged.
-  - `--elev-28`: dialogs.
+  - `--elev-28`: dialogs and the Marks flyout (`.ws-toolfly`).
 - **Glass:** see [Glass](#glass) — chrome only.
 - **Focus:** no outline or border highlight on `:focus-visible` anywhere (`Core/buttons.css` forces it off). Keyboard focus is a
   neutral ink wash over the element's own fill, so a focused control is still visible in every theme.

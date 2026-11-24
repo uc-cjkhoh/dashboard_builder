@@ -180,12 +180,12 @@ Nothing here reaches the server; dashboards add no endpoint
   | `shapeBins` | optional whole number 2–6 (Format → Shape bins, while Shape holds a measure; absent = 5); an invalid saved value is reset to 5 and reported, never clamped |
   | `labelMarks` | optional `minmax` \| `selected` \| `highlighted` \| `recent` \| `ends` (Format → Label marks; absent = All, every mark labelled); an unknown saved value is reset to All and reported |
   | `labelPosition` | optional `above` \| `below` \| `left` \| `right` (Format → Label position on a line, area or point chart; absent = Automatic); an unknown saved value is reset to Automatic and reported |
-  | `markOpacity` | optional whole percent, a multiple of 10 from 0 to 100 (Format → Opacity; absent = 100); an invalid saved value is reset and reported, never clamped |
+  | `markOpacity` | optional whole percent, a multiple of 10 from 0 to 100 (Color flyout → Opacity; absent = 100); an invalid saved value is reset and reported, never clamped |
   | `markBorder` | `none` \| `thin` \| `medium` \| `thick` (default `none`) |
   | `markBorderColor` | optional: `muted` \| `ink` \| `surface` \| `accent` (absent = `muted`) |
   | `markerShape` | `circle` \| `square` \| `diamond` \| `triangle` (default `circle`) |
   | `linePattern` | optional `dashed` \| `dotted` (Format → Line pattern on a line, area or combo's lines; absent = solid); an unknown saved value is dropped and reported, never clamped |
-  | `lineMarkers` | optional `selected` \| `all` \| `none` (Format → Line markers; absent = Automatic, dots by line length); an unknown saved value is dropped and reported, never clamped |
+  | `lineMarkers` | optional `selected` \| `all` \| `none` (Color flyout → Line markers; absent = Automatic, dots by line length); an unknown saved value is dropped and reported, never clamped |
 | `showTooltips` | optional `false` (Format → Show tooltips off; absent = on); a non-boolean is dropped and reported ([D121](../decisions/decisions-marks.md#d121--tooltip-behaviour-show-tooltips-command-buttons-and-responsive-or-on-hover)) |
 | `tooltipButtons` | optional `true` (Format → command buttons in the tooltip; absent = off); a non-boolean is dropped and reported |
 | `tooltipMode` | optional `hover` (buttons in every hover tooltip; absent = Responsive, a click pins the tooltip); an unknown value is dropped and reported, never coerced |

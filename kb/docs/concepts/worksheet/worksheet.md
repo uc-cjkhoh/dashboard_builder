@@ -21,7 +21,7 @@ Each worksheet tab is one Tableau-style worksheet: a field pane beside shelves y
 
 Data sits on top; view controls sit on the chart ([design/layout.md](../../reference/design/layout.md#worksheet--data-header-and-chart-card)).
 
-1. **Data header** — the **Columns** and **Rows** shelves (full-width lanes, always visible) (a Marks editor opens as a flyout, not in the header). The Marks slots themselves live in the field pane ([worksheet-marks.md](worksheet-marks.md#marks-slots)).
+1. **Data header** — the **Columns** and **Rows** shelves (full-width lanes, always visible) (a Marks editor opens as a flyout, not in the header; the **Color** flyout also holds the colour controls in three sections — **Color** (the field, palette, scale, member colours), **Opacity** (a progress bar), **Effects** (Border thickness, also a progress bar; Line markers) — and Format holds none of them: [worksheet-marks-colour.md § The Color flyout](worksheet-marks-colour.md#the-color-flyout); it is a stack of full-width sections under a recessed title band, lifted off the chart by a shadow; its spacing and the frameless filter cards: [design/layout.md](../../reference/design/layout.md)). The Marks slots themselves live in the field pane ([worksheet-marks.md](worksheet-marks.md#marks-slots)).
 2. **Chart card** — flush (no margin, no radius). Its head is the **view bar**, left to right:
    - field-pane toggle;
    - the one chart-type control (`chartTypePicker`, [worksheet-charts.md](worksheet-charts.md#chart-type-control));
