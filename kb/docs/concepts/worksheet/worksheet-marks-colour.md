@@ -19,8 +19,9 @@ A section with no control for the chart type is left out (with its divider). The
 
 - Reverse palette shows on every chart type, since it also reverses the default series colours.
 - Format has none of these; **Line pattern**, Marker size and shape, Edit Sizes, Shape bins and Edit member shapes stay there. Format and the flyout are never open together.
+- **Add field in the Color flyout** is its own row under the field pills, not an item inside the dashed zone. The dashed zone holds the pills only and is absent while Color is empty (the whole field slot still takes a dropped field). Hovering Add field opens the field list as a **side menu** against the flyout's right edge: a sibling of `.ws-toolfly` (the flyout's overflow would clip a child), sharing its border line, level with the Color section, never over it; it never moves to the flyout's other side (that is the field pane, where fields are dragged from), so a narrow worksheet shrinks it from 240 px down to 120 px instead. The pointer can cross from the button to the menu (a 200 ms grace); hover does not take focus. Click or Enter opens it and focuses the search; Escape, a press outside, a pick, or closing the flyout closes it. Other flyouts keep the list inside the flyout under the zone.
 - Every change rebuilds the flyout, so focus returns to the control that changed. The member list fills in after the chart draws and stays open across redraws.
-- Code: `colourEditor` / `restoreColourFocus` in `Dashboard/dashboards.js`, `.ws-colourfly` in `dashboard.css`; the model above; `wireLineControls(..., ["lineMarkers"])` in `line-controls.js`. Browser checks: `tests/live/marks-colour-ui.mjs` (including the design probe).
+- Code: `colourEditor` / `restoreColourFocus` / `fieldPicker({ side })` / `placeFly` in `Dashboard/dashboards.js`, `.ws-colourfly` in `dashboard.css`; the model above; `wireLineControls(..., ["lineMarkers"])` in `line-controls.js`. Browser checks: `tests/live/marks-colour-ui.mjs` (including the design probe) and `tests/live/colour-menu-ui.mjs` (the side menu: rects, hover, Escape, 900 / 820 / 760 px).
 
 ## One slot, two kinds of content
 
