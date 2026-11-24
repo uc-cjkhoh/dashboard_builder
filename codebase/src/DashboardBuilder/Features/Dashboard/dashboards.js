@@ -2523,28 +2523,39 @@ export function initDashboards() {
     close.addEventListener("click", () => closeFly());
     head.append(close);
     panel.append(head);
-    const zone = el("div", "ws-toolpanel__zone");
-    if (!tool.pills.length) zone.append(el("span", "ws-shelf__hint", tool.multi ? "drop fields" : "drop a field")); // the long hint stays on the tile's title
+    const side = tool.key === "color"; // Color: the dashed zone holds the pills only (none, no zone), Add field is its own row and its list opens beside the flyout
+    const zone = el("div", "ws-toolpanel__zone"); // one component: the pills, then Add field, inside the one dashed drop target
     for (const p of tool.pills) zone.append(p);
-    wireFieldDrop(zone, tool.onDrop);
-    const slot = slotSection(zone, fieldPicker(tool));
+    const picker = fieldPicker(tool, { side });
+    let slot;
+    if (side) {
+      slot = slotSection(...(tool.pills.length ? [zone] : []), picker.btn);
+      wireFieldDrop(slot, tool.onDrop); // the whole slot takes the drop, so an empty one still does
+      panel.sideMenu = picker;
+    } else {
+      zone.append(picker.btn);
+      wireFieldDrop(zone, tool.onDrop);
+      slot = slotSection(zone, picker.box);
+    }
     if (tool.key === "color" && tool.editor) colourSection(tool.editor).prepend(slot); // the field is what Color paints from: it opens the Color section, not a fourth one
     else panel.append(slot);
     if (tool.editor) panel.append(tool.editor);
     if (tool.note) panel.append(el("span", "ws-shelf__note", tool.note));
     return panel;
   }
-  // The slot: what the tool holds (its drop zone) and the way to add to it, one section of the flyout.
+  // The slot: what the tool holds and the way to add to it, one section of the flyout. The drop zone holds the pills and the Add field button; the picker list opens under it.
   function slotSection(...nodes) { const sec = el("div", "ws-toolpanel__slot"); sec.append(...nodes); return sec; }
-  // "Add field": the click and keyboard path to what a drag does. Lists the field pane's fields (grouped by table, searchable) that this slot accepts;
+  // "Add field": the zone's last item, the click and keyboard path to what a drag does. Returns { btn, box } (the button sits in the zone, the list under it). Lists the field pane's fields (grouped by table, searchable) that this slot accepts;
   // choosing one goes through the slot's own drop handler, so every rule and message is the same as for a drag.
-  function fieldPicker(tool) {
-    const wrap = el("div", "ws-picker");
+  // { side: true } (the Color flyout): the list is not inside the flyout (its overflow would clip it) but a sibling menu, mounted by mountFly, that opens on hover as well as on click
+  // and sits border to border with the flyout's right edge (placeFly), never over it.
+  function fieldPicker(tool, { side = false } = {}) {
     const btn = el("button", "ws-picker__btn");
     btn.type = "button";
+    btn.title = "Click to choose a field, or drop one here";
     btn.append(icon("plus", { size: 14 }), el("span", null, !tool.multi && tool.count > 0 ? "Replace field" : "Add field"));
     btn.setAttribute("aria-expanded", "false");
-    const box = el("div", "ws-picker__box");
+    const box = el("div", `ws-picker__box${side ? " ws-picker__box--side" : ""}`);
     box.hidden = true;
     const search = el("input", "input ws-picker__search");
     search.type = "search"; search.placeholder = "Search fields"; search.setAttribute("aria-label", "Search fields");
@@ -2568,26 +2579,44 @@ export function initDashboards() {
       }
       if (!n) list.append(el("div", "ws-picker__empty", tool.accepts ? "No field here fits this slot." : "No fields yet — relate tables in the Data Source."));
     };
-    const setOpen = (open) => {
+    const setOpen = (open, focus = true) => {
+      const was = !box.hidden;
       btn.setAttribute("aria-expanded", String(open));
       box.hidden = !open;
-      if (open) { build(); search.value = ""; search.focus(); }
+      if (open && !was) { build(); search.value = ""; }
+      if (open && focus) search.focus();
+      if (side) placeFly();
     };
-    btn.addEventListener("click", () => setOpen(box.hidden));
+    let timer = 0;
+    const leave = () => { clearTimeout(timer); timer = setTimeout(() => { if (!box.matches(":focus-within")) setOpen(false); }, 200); }; // time to cross from the button to the menu; a search in progress keeps it
+    if (side) {
+      const hold = () => clearTimeout(timer);
+      btn.addEventListener("pointerenter", () => { hold(); if (box.hidden) setOpen(true, false); }); // hover opens without taking focus
+      box.addEventListener("pointerenter", hold);
+      btn.addEventListener("pointerleave", leave);
+      box.addEventListener("pointerleave", leave);
+      btn.addEventListener("click", () => setOpen(true)); // click or Enter: open (it may already be, from hover) and search
+    } else btn.addEventListener("click", () => setOpen(box.hidden));
     search.addEventListener("input", () => {
       const q = search.value.trim().toLowerCase();
       for (const it of list.querySelectorAll(".ws-picker__item")) it.hidden = Boolean(q) && !it.dataset.search.includes(q);
       for (const g of list.querySelectorAll(".ws-picker__group")) { let n = g.nextElementSibling, any = false; while (n && !n.classList.contains("ws-picker__group")) { if (!n.hidden) any = true; n = n.nextElementSibling; } g.hidden = !any; }
     });
     box.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); setOpen(false); btn.focus(); } });
-    wrap.append(btn, box);
-    return wrap;
+    return { btn, box, close: () => setOpen(false) };
   }
+  // The open Color flyout's side menu ({ btn, box, close } from fieldPicker), mounted beside .ws-toolfly in the worksheet.
+  let sideMenu = null;
+  const sideMenuRO = new ResizeObserver(() => placeFly()); // the list shrinks as the search filters it
+  function unmountSideMenu() { if (!sideMenu) return; sideMenuRO.disconnect(); sideMenu.box.remove(); sideMenu = null; }
+  document.addEventListener("pointerdown", (e) => { if (sideMenu && !sideMenu.box.hidden && !sideMenu.box.contains(e.target) && !sideMenu.btn.contains(e.target)) sideMenu.close(); });
   // Show (or clear) the flyout and put it level with its slot.
   function mountFly(panel) {
+    unmountSideMenu();
     if (!panel) { toolFly.hidden = true; toolFly.replaceChildren(); return; }
     toolFly.id = "ws-toolfly";
     toolFly.replaceChildren(panel);
+    if (panel.sideMenu) { sideMenu = panel.sideMenu; worksheetEl.append(sideMenu.box); sideMenuRO.observe(sideMenu.box); }
     toolFly.hidden = false;
     placeFly();
     if (focusFly) { focusFly = false; panel.focus({ preventScroll: true }); }
@@ -2604,6 +2633,15 @@ export function initDashboards() {
     const top = Math.max(8, Math.min(Math.max(wanted, belowShelves), host.height - toolFly.offsetHeight - 8));
     toolFly.style.left = `${left}px`;
     toolFly.style.top = `${top}px`;
+    if (!sideMenu || sideMenu.box.hidden) return;
+    // The side menu: its edge on the flyout's right edge (one shared hairline), level with the Color section. Never on the flyout's other side: that is the field pane, where fields are dragged from.
+    // A narrow worksheet shrinks it (240 px down to 120) rather than moving it.
+    const menu = sideMenu.box, flyRight = left + toolFly.offsetWidth;
+    menu.style.width = `${Math.max(120, Math.min(240, host.width - 8 - (flyRight - 1)))}px`;
+    const anchor = sideMenu.btn.closest(".ws-colourfly__group") ?? sideMenu.btn;
+    const wantedTop = anchor.getBoundingClientRect().top - worksheetEl.getBoundingClientRect().top;
+    menu.style.left = `${flyRight - 1}px`;
+    menu.style.top = `${Math.max(8, Math.min(wantedTop, host.height - menu.offsetHeight - 8))}px`;
   }
   function closeFly({ refocus = true } = {}) {
     const key = openTool;
@@ -2618,6 +2656,7 @@ export function initDashboards() {
     if (e.key === "Escape" && !e.defaultPrevented && !e.target.closest?.("select, input, textarea")) { e.preventDefault(); e.stopPropagation(); closeFly(); }
   });
   fieldsEl.addEventListener("scroll", placeFly, { passive: true });
+  toolFly.addEventListener("scroll", placeFly, { passive: true }); // the Color section moves when the flyout scrolls; its menu follows
   window.addEventListener("resize", placeFly);
   new ResizeObserver(placeFly).observe(toolFly);
   new ResizeObserver(placeFly).observe(fieldsEl);
