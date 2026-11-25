@@ -82,12 +82,13 @@ A `calc` tree becomes SQL in four steps; no formula text and no literal is ever 
 | `COUNTD` → `countDistinct` | `uniqExact(x)` | `uniq(x)` | `uniq(x)` |
 | `MEDIAN`, `PERCENTILE` (also the plain `median` / `percentile` measure) | `quantileExactInclusive(0.5)(x)`, `quantileExactInclusive({p:Float64})(x)` (interpolating) | unscaled | as exact |
 | `STDDEV`, `VARIANCE` → `stddev`, `variance` | `if(count(x) < 2, NULL, stddevSamp(x))` (`varSamp`) | unscaled | as exact |
+| `STDDEVP`, `VARIANCEP` → `stddevpop`, `variancepop` | `if(count(x) = 0, NULL, stddevPop(x))` (`varPop`) | unscaled | as exact |
 | `ATTR` → `attr` | `if(uniqExact(x) = 1, min(x), NULL)` | unscaled | as exact |
 
-- The last four rows are never scaled: on a sampled table they run over the sample (estimates).
+- The last five rows are never scaled: on a sampled table they run over the sample (estimates).
 - The percentile fraction is the only user value, and it is bound: `AggNode.P` or a plain measure's `MeasureRef.P` as `mp{n}`, a Top-N's `topBy.P` as `tp{i}`
   (`Float64`, 0..1 checked again in `BindFraction`; ClickHouse accepts a query parameter as a parametric aggregate's argument). Function names are fixed text.
-- `count(x) < 2` keeps a one-value group NULL (bare `stddevSamp` is NaN, which JSON cannot carry). `min(x)`,
+- `count(x) < 2` keeps a one-value group NULL (bare `stddevSamp` is NaN, which JSON cannot carry). The population forms guard `count(x) = 0` instead: one value is 0, no value is NULL. `min(x)`,
   not `any`, ignores NULL rows in `attr`. `PlainRankSql` (Top-N) uses the same writer.
 
 **As a filter.** A row-level calculation compiles once (prefix `c{n}`) and its SQL is the left side of an ordinary `BuildCondition` in `WHERE` (compared values bound `p{i}`), `AND`ed with the other filters and so inside a Top-N's inner query too: filters run before grouping ([D82](../decisions/decisions-filters.md#d82--a-calculated-field-is-a-row-filter-applied-before-grouping)). `CalcSql.CalcFilterSql` refuses an aggregate tree and maps the calculation's type to the value category (number, text, date, boolean); a boolean is `toBool(…)` like a boolean dimension, and `not in` keeps NULL results as for a plain column.

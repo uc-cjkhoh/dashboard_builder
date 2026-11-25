@@ -83,7 +83,7 @@ every chart from `--chart-*` tokens. Table, Text and KPI stay native DOM.
 - **Why SVG:** the SVG renderer is crisp and enables SVG export.
 - **Rejected:** Vega-Lite — a heavier multi-file stack with less convenient imperative theming and resize.
 - **Series colour:** one series wears the accent (`--accent`). Several series draw the categorical ramp
-  `--chart-cat-1..8` (light and dark values) with a legend.
+  the generated categorical colours ([D164](decisions-marks.md#d164--chart-colours-are-generated-and-edit-member-colours-is-the-one-place-that-sets-them)) with a legend.
 
 ### D19 — MVC in feature folders
 ASP.NET Core MVC with **one folder per feature** under `Features/`: controller, view partial

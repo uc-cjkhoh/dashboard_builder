@@ -3,7 +3,7 @@ components: []
 ---
 # Decisions — calculation functions
 
-D48–D60: aggregations, logic, text and date functions. Lookup: [README.md](README.md#where-each-decision-lives). Behaviour: [calculated-fields-formulas.md](../concepts/worksheet/calculated-fields-formulas.md). Edit an entry in place when it changes.
+D48–D60, D167: aggregations, logic, text and date functions. Lookup: [README.md](README.md#where-each-decision-lives). Behaviour: [calculated-fields-formulas.md](../concepts/worksheet/calculated-fields-formulas.md). Edit an entry in place when it changes.
 
 ### D48 — More aggregations: exact, bound, NULL for "no answer"
 `median`, `stddev`, `variance` and `attr` are plain-measure aggregations. `MEDIAN`, `STDDEV`, `VARIANCE`, `ATTR` and
@@ -112,3 +112,11 @@ A date argument that is text or a number is an error that points at `DATE()`, so
 - **No `TODAY` / `NOW`:** a calculation is a function of the data. Caching, saved workbooks and exports assume the same query
   gives the same answer, and `TODAY` / `NOW` would change that. They wait for a decision (a parameter-style "as of" value).
 - `MAKEDATE` is built, guarded ([D78](decisions-logic.md#d78--makedate-is-null-unless-the-date-exists-datename-is-english)).
+
+### D167 — Population standard deviation and variance
+- **Chosen:** the plain-measure aggregations `stddevPop` and `variancePop` (pill menu: "Standard deviation (pop.)", "Variance (pop.)") and the calculation functions `STDDEVP` and `VARIANCEP`. They are Tableau's *Std. Dev (Pop.)* and *Variance (Pop.)*: the divisor is n, not n − 1, so one value gives 0.
+- **SQL:** `if(count(x) = 0, NULL, stddevPop(x))` (`varPop`). The guard is `= 0`, not `< 2` as for the sample forms: a population statistic of one value is a real answer (0), but of no values ClickHouse returns NaN, which JSON cannot carry. Like the other statistics they are never scaled on a sample.
+- **Names:** the wire name is camelCase from the browser (`stddevPop`, as `countDistinct`) and lowercased by the server (`stddevpop`); a calculation tree uses `stddevp` / `variancep`. The result column is `stddev (pop.) amount`.
+- **Same places as `stddev` / `variance`:** numeric columns only (a 400 otherwise), a Top-N may rank by them, a calculated measure may be aggregated by them (`CalcCatalog.RowLevelAggregations`), and they are refused for **aggregate before the join** (they cannot be recombined).
+- **Rejected:** the Tableau spellings `STDEVP` / `VARP` (the app's own names are `STDDEV` / `VARIANCE`; one family of spellings is easier to learn than two).
+- **Code:** `ClickHouseGateway.AggregateSql`, `CalcCatalog`, `CalcCompiler.AggName`, `CalcSql`, `Calc/calc-types.js`, `function-help.js`, `agg-labels.js`, `filter-rules.js`. Tests: `CalcCompilerTests`, `CalcGatewayTests`, `CalcRulesTests`, `CalcValidatorTests`, `AggregateJoinTests`, `tests/fixtures/calc-cases.json`, `tests/js/*`.

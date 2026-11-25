@@ -82,8 +82,8 @@ inline errors, dropzone hints, the connect-first gate). Inline `display` fights 
 ## 7. Use the design tokens — never hardcode a hex
 
 - All colour, space and type values are CSS custom properties in `Features/Core/core.css` `:root`.
-- A workbook theme may override only the accent set and `--chart-cat-*`, from the checked values in
-  `Core/theme-model.js` ([tokens.md](../reference/design/tokens.md#workbook-themes-p41)).
+- A workbook theme may override only the accent set (and pick the dark look), from the checked values in
+  `Core/theme-model.js`; `--chart-cat-*` are generated there too ([tokens.md](../reference/design/tokens.md#workbook-themes-p41)).
 - The default accent is **blue** (`--accent-*`). **Danger is a separate vermilion** (`--danger-*`)
   and always comes with an icon and words, so a red accent is never mistaken for an error.
 - Success is `--ok-*` and notices are `--warn-*`. Field pills are never red. Charts read `--chart-*` tokens.
@@ -137,9 +137,8 @@ Enforced by `tests/js/tokens.test.mjs`.
    other spacing token exists. The only exceptions are a 1px border compensation or optical nudge, and
    the table's Row height → Compact setting (0 vertical padding).
 3. **One radius.** Inner and outer shapes share `--r` (8px), including chart bars and tooltip swatches
-   (`tokens().radius` in `chart.js`). Only `--r-pill` (pills, dots) differs.
-4. **Saturation ≈ 70 %.** Token colours cap at HSL saturation 70 %. The exception is the Okabe–Ito
-   colour-blind palette, a published standard that keeps its values. JS fallback colours come from `Core/theme-model.js`, never a
+   (`tokens().radius` in `chart.js`). Only `--r-pill` (dots, switches, tracks, thumbs) differs; field pills (`.ws-pill`) use `--r`. Colour swatches (`.ws-swatch`, `.memcol-dot`, `.memcol-custom__swatch`) use `--s1` (4px).
+4. **Saturation ≈ 70 %.** Token colours cap at HSL saturation 70 %, the generated chart colours too. JS fallback colours come from `Core/theme-model.js`, never a
    second hex copy.
 5. **Few font sizes.** `--fs-body` 14 / `--fs-lead` 16 for content, `--fs-title` 24 / `--fs-display` 32
    for titles and KPI numbers. No other screen `font-size` is used; chart text is 14px.

@@ -63,7 +63,7 @@ The current version is **2**; this build also opens version 1. Shapes are in
 - **Older autosaves.** An older build's autosave lives under `…workbook.v1|…`. With no v2 entry yet, that one is read and migrated.
   It is **left in place** (never rewritten or deleted), and the next save writes the v2 key.
 - **Disconnect clears the screen, not the save.**
-  - After the flush, the cards and tabs fade out (~100ms), and the model and every tab are cleared (`clearWorkspace`).
+  - Open dialogs and menus close first ([D163](../../decisions/decisions-connection.md#d163--when-the-session-ends-every-dialog-menu-and-tip-closes-with-the-workspace)); after the flush, the cards and tabs fade out (~100ms), and the model and every tab are cleared (`clearWorkspace`).
   - The stored workbook is untouched, so reconnecting to the same server + user restores it.
   - Reconnecting mid-fade keeps the workspace as it was.
 - **Storage unavailable.** There is no save-status text. When storage is unavailable (private window, blocked), a danger toast says
@@ -108,12 +108,13 @@ The actions:
   - Parameters save with the workbook; disconnecting clears them from the screen.
 - **Appearance** (the first tile of the sidebar foot, bottom left; its glyph shows the mode) opens one card, upward, not a dialog. It stays open while you pick, and Esc, an outside click or Tab closes it. Top to bottom:
   - the mode (Light or Dark, Light by default; kept in this browser, not in the workbook);
-  - **Dark look**: Default or One Dark Pro (dark-mode surfaces; it also picks the One Dark accent and chart colours);
+  - **Dark look**: Default or One Dark Pro (dark-mode surfaces; it also picks the One Dark accent);
   - **Accent**: Signal (the default), Ultramarine, Monospace, Crimson, Blue, Teal, Violet, One Dark and Graphite as swatches (the chosen one carries a tick; the heading names it), then a custom colour (a picker and a `#rrggbb` field, refused with the reason if it can't carry white text; Signal carries dark text on its dark-mode lime);
-  - **Chart colours**: Default, Colour-blind safe, One Dark Pro, Muted, each a strip of its eight colours;
-  - **Reset theme**, which returns the look, accent and chart colours to the default and leaves the mode alone.
+  - **Reset theme**, which returns the look and accent to the default and leaves the mode alone.
 
-  The look, accent and chart colours apply live and save with the workbook. Disconnecting returns the screen to the default theme until the workbook reopens
+  Chart colours are not here: they are generated, and a member's own colour is set in the worksheet's Color flyout → Edit member colours ([D164](../../decisions/decisions-marks.md#d164--chart-colours-are-generated-and-edit-member-colours-is-the-one-place-that-sets-them)).
+
+  The look and accent apply live and save with the workbook. Disconnecting returns the screen to the default theme until the workbook reopens
   ([tokens.md](../../reference/design/tokens.md#workbook-themes-p41), [D146](../../decisions/decisions-design.md#d146--one-appearance-card-replaces-the-mode-menu-and-the-theme-dialog)).
 - **Import workbook…** (a worksheet view-bar icon) opens a `.json` file.
   - It needs a connection, because a workbook opens against the connected server.
@@ -128,6 +129,9 @@ Two more parts save with the workbook but are not managed from this menu:
   - They save as the optional `hierarchies` field of version 2, omitted when there are none.
   - A file without it (every older file) opens with none and **no issue**. `parseWorkbook` ignores fields it doesn't know, so the field needs no version bump.
   - Disconnecting clears them from the screen.
+- **Colour palettes** created in the Edit member colours dialog ([D165](../../decisions/decisions-marks.md#d165--the-workbook-can-hold-imported-colour-palettes-listed-under-titles-beside-the-generated-default)) save as the optional `palettes: [{ name, colours }]`, omitted when there are none.
+  - A file without it (every older file) opens with none and **no issue**; one that is not usable is dropped, with the reason in the issues list, and the rest opens.
+  - Disconnecting clears them from the screen; they return on reconnect with the rest of the workbook.
 - **Calculated fields** save as `calculations: [{ id, name, formula }]`: the formula text only. The tree is rebuilt on open
   ([calculated-fields.md](../worksheet/calculated-fields.md)).
   - `nextCalcId` (the next calculation number) is saved beside them, so deleting the highest id never lets a sheet's old id bind to a new calculation.

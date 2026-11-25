@@ -35,7 +35,7 @@ An invalid field mapping shows a friendly **hint**, never an error (e.g. "A poin
 | Treemap | 1–2 dimensions + 1 measure | nested rectangles sized by the measure, or by the Size measure (then the shelf measure is the label's second line); a colour measure shades the tiles |
 | Histogram | 1 numeric field | equal-width bins; own endpoint. A whole-number column (Int / UInt) bins on whole-number widths and the axis reads "3" or "3–4" (never "1–1.4"); the response carries `whole` |
 | Box plot | 1 numeric field, a column or a row-level calculation (+ optional group dimension, from any related table) | Q1 / median / Q3, whiskers at the 1.5 IQR (interquartile range) fences, outlier points beyond them (hollow rings, ≤ 500); `POST /api/boxplot` |
-| Waterfall | ≥1 dimension + 1 measure | Each value is a change from the running total, then a **Total** bar. Increases `--chart-cat-1`, decreases `--chart-cat-6`, total muted — legend-named, and each step labelled with its sign. May run below zero (drawn as a custom series) |
+| Waterfall | ≥1 dimension + 1 measure | Each value is a change from the running total, then a **Total** bar. Increases `--chart-cat-1`, decreases `--chart-cat-5` (the two slots are held ≥ 90° apart in hue), total muted — legend-named, and each step labelled with its sign. May run below zero (drawn as a custom series) |
 | Funnel | 1 dimension + 1 measure | Stages widest first, each labelled with value and % of the first. Label ink picked per stage |
 | Gauge | 1 measure, no dimension | Arc from 0 to Format → **Target** (else a round maximum). Value and "% of target" written in the middle |
 | Bullet | 1 measure (+ ≤1 dimension), + an optional 2nd measure, + Format → **Target** | Per member: the value bar over three bands (< 50 %, 50–75 %, 75–100 % of target) with the target tick. Format → **Target field** picks the view's second (or later) measure as the target, so each member has its own target (the tooltip shows it and the %). With no field, the fixed **Target** number applies to every member. With neither, a hint |
@@ -193,7 +193,7 @@ On Bar / Line / Area the card opens with a row of **items**: Reference line, Ban
 
 - **Apache ECharts** is vendored at `Features/Core/vendor/echarts.min.js` and loaded as a classic global script **before** the module graph ([D13](../../decisions/decisions-platform.md#d13--charting-via-self-hosted-apache-echarts-svg-renderer-themed-from-tokens)).
 - **`chart.js` is the only module that touches ECharts.**
-  - `renderChart(container, spec)` maps a result to an option and manages **one live instance per container** (SVG renderer). The palette order and member colours are per-container state too.
+  - `renderChart(container, spec)` maps a result to an option and manages **one live instance per container** (SVG renderer). Member colours are per-container state too (the generated colours need none: they follow the member's position).
   - `disposeChart()` tears the instance down before every repaint.
   - It dispatches by family: `buildCartesian`, `buildPie`, `buildScatter`, `buildScatterShapes`, `buildHeatmap`, `buildTreemap`, `buildHistogram`, `buildBoxplot`.
 - **Table, Text and KPI are native DOM**, not ECharts.
@@ -209,7 +209,7 @@ On Bar / Line / Area the card opens with a row of **items**: Reference line, Ban
   - A chart with more categories than fit (e.g. 50 customers on a narrow pane) keeps that size and `#ws-chart` scrolls: sideways for vertical bars / lines / area / combo / histogram / boxplot, down for horizontal bars, both for a heatmap.
   - Category axes label every category (`interval: 0`, no `hideOverlap`). Bottom labels turn upright when they can't sit side by side (re-checked on resize). Bottom labels truncate at 160px (an upright one at about 40 % of a short pane, 48px at least — `rotatedLabelCap`, so a small dashboard widget shows "Philip…" instead of clipping), left labels at 200px; the tooltip carries the full name.
   - Pie, donut, treemap and scatter have no category axis and always fit the pane.
-- **Fit** (P23, `format.fit`) — `applyFitMode` drops the minimum width / height (and the zoom) on the fitted axis. Its labels then thin out (`hideOverlap`) instead of forcing a slot each.
+- **Fit** (P23, `format.fit`) — `applyFitMode` drops the minimum width / height (and the zoom) on the fitted axis. Fit width / Entire view: the **bottom** axis never drops a label — it follows the same level / upright rule as Standard, judged against the shared pane width (`chartFit(…, fittedX)`), so crowded labels stay upright; only a **date** axis thins out (below). Fit height / Entire view: a **left** category axis's labels still thin out (`hideOverlap`) instead of forcing a slot each.
 - **Big charts.**
   - Past **1,000** categories an axis stops growing. A themed **zoom slider** (plus wheel / drag in the plot) shows a pane-width window of categories at a time (`addZoom`).
   - Past **1,500** marks the chart draws on **canvas** instead of SVG. Bars use ECharts' large mode (unless a bar carries its own colour) and lines use LTTB sampling, so peaks survive (`tuneForSize`).

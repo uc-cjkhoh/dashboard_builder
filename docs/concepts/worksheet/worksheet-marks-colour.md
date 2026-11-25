@@ -11,7 +11,7 @@ Clicking **Color** opens the flyout: up to three sections split by a hairline: *
 
 | Section | Controls |
 |---|---|
-| Color | A measure on Color or a heatmap: Colour scale, Steps, Colour ramp (or Diverging colours and Use full colour range), **Limits** (a closed disclosure: Colour from / to, or the centre). A field: Edit member colours… (opens a dialog: palette, member, colour, Save) |
+| Color | A measure on Color or a heatmap: Colour scale, Steps, Colour ramp (or Diverging colours and Use full colour range), **Limits** (a closed disclosure: Colour from / to, or the centre). A field: Edit member colours… (opens a dialog: generated-colour swatches and a custom colour left, members right, pick per member, Save) |
 | Opacity | Opacity, a progress bar from 0 % to 100 % in steps of 1 (the thumb's value is read out beside the label; the change applies on release) |
 | Effects | Border thickness, a progress bar over None, then 0.5 to 3 px in steps of 0.5 (stored as `format.markBorder`: `none` or the px number; [D157](../../decisions/decisions-marks.md#d157--opacity-steps-by-1--and-border-thickness-by-05-px)); Border colour (a four-swatch picker) once a border is set; Line markers (line, area, combo) |
 

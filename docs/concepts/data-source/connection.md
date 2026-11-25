@@ -1,5 +1,5 @@
 ---
-components: [src/DashboardBuilder/ClickHouse/ConnectionRegistry.cs, src/DashboardBuilder/Features/Connection/, src/DashboardBuilder/Features/Core/validate.js]
+components: [src/DashboardBuilder/ClickHouse/ConnectionRegistry.cs, src/DashboardBuilder/Features/Connection/, src/DashboardBuilder/Features/Core/validate.js, src/DashboardBuilder/Features/Core/api.js, src/DashboardBuilder/Features/Core/overlays.js]
 ---
 # Connection panel
 
@@ -108,9 +108,19 @@ takes it — **Host**, or **Password** when a host is kept — so the user can t
      red cross-in-circle = **lost** (two failed probes in a row, or the browser went offline). Lost also dims the host and adds a row
      under the summary — "Connection lost" in danger ink plus **Retry**. A screen-reader status (`#conn-health-text`) mirrors it.
      Rules: `Connection/connection-health.js` (pure, unit-tested).
-   - **Probes:** `GET /api/connection/ping` every 30 s while the tab is visible, on returning to the tab, on `online`, and on Retry.
-     It is silent (no activity-bar entry). If the server answers `connected:false` the session ended (2 h idle, restart), so the UI
-     returns to the form with a toast instead of showing a stale dot. Cancel from "change" keeps the last probe's state.
+   - **Probes:** `GET /api/connection/ping` every 30 s while the tab is visible, on returning to the tab, on `online`, on Retry, and
+     **at once when any API call comes back 409 "Not connected"** (`api.js` fires `connection:check`; the probe confirms the session is gone).
+     It is silent (no activity-bar entry). A probe that gets no answer within 20 s (`PING_TIMEOUT_MS`) counts as one failed probe, so a hung
+     request never blocks the next one. Cancel from "change" keeps the last probe's state. What a probe finds:
+     - **Session gone** (`connected:false`: 2 h idle, restart, a redeploy): the UI returns to the form with a toast, and the cards and tabs fade out and clear
+       (the stored workbook is kept, as for Disconnect). **Everything floating closes first**: every open dialog (Edit member colours, a calculated
+       field, Edit SQL, Settings, a confirm…), the context menu and the hover tip (`dismissOverlays`, [D163](../../decisions/decisions-connection.md#d163--when-the-session-ends-every-dialog-menu-and-tip-closes-with-the-workspace)).
+       Each dialog is closed through its own Esc path, so unsaved edits in it are dropped without asking. Focus then moves to the form's first empty field.
+       "Connection lost" below closes nothing. This happens at the first API call that gets a 409, or at the next probe
+       (up to 30 s while the tab is visible; on return to a hidden tab), whichever comes first. A user only looking at cards makes no request,
+       so the timer is what catches that case
+       ([D162](../../decisions/decisions-connection.md#d162--a-409-not-connected-probes-at-once-and-a-probe-cannot-hang)).
+     - **Unreachable** (`reachable:false`, a timeout or a network error): the session is alive, so the cards stay. Two in a row show "Connection lost" + **Retry**.
    - The summary's actions:
      - **Change connection** (menu) opens the form (with **Cancel**); Cancel returns to the row.
        The existing connection stays active until a new connect succeeds.

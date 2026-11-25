@@ -36,9 +36,10 @@ Data sits on top; view controls sit on the chart ([design/layout.md](../../refer
 - **Sheet actions** (⋯ in the view bar):
   - **Swap Rows and Columns**.
   - **Clear sheet…** — asks to confirm once (`confirmDestructive`, button **Clear**; skipped when the sheet is empty), keeps the chart type.
-  - **Fit** — Standard (a slot per category, the pane scrolls), Fit width, Fit height, Entire view (the fitted axis shares the pane and its labels thin out).
+  - **Fit** — Standard (a slot per category, the pane scrolls), Fit width, Fit height, Entire view (the fitted axis shares the pane; bottom labels stay upright rather than being hidden — only a date axis thins out).
   - **Show title and caption** / **Show filter cards**.
-  - Fit and the two toggles carry only a tick at the end of the row (radio-style for Fit); no icon, no extra text.
+  - **Aggregate Measures** (Tableau's Analysis menu) — ticked: measures are aggregated per group. Unticked: one mark per source row ([Aggregate Measures off](#aggregate-measures-off)). Disabled, and ticked, on a chart type that can't draw it.
+  - Fit and the toggles carry only a tick at the end of the row (radio-style for Fit); no icon, no extra text.
 - **Title and caption** under the view bar — click to edit, `Enter` saves, `Esc` cancels. Empty means the automatic one (the tab name, which follows a tab rename at once — the two always match both ways: renaming the tab replaces a title you had typed (`store.renameTab` clears `sheet.title`), and saving a new title renames the tab (an empty title only goes back to automatic; the title input holds up to 60 characters, the tab-name limit); "sum amount by customers.name · 2 filters"; a histogram says "distribution of orders.qty", a box plot "orders.qty by customers.country"). Printed too.
 - **Status bar** at the foot of the chart card: marks · "N × M table" (Table / Text; distinct from the notice line's "N result rows") · measures · the selection · `Updated hh:mm:ss`. The time is when the data was last read from ClickHouse; a cached result keeps the time it was fetched (`fetchCached` stamps `queriedAt`).
 - **Print header** (`beginPrint`): title, caption, date range, filters, the notice, the update time and the print time. It also lists each calculated field the view uses, and those it refers to, as `Calculation: Name = formula` (cut at 200 characters; `data-notes.js`).
@@ -89,15 +90,16 @@ The pill itself shows its name (a filter: name, operator and value), the cast ta
 
 ### Aggregation
 
-The menus show plain labels (Sum, Average, Minimum, Maximum, Median, Percentile…, Standard deviation, Variance, Count, Count distinct, Count non-empty, Attribute (single value) — `agg-labels.js`); the saved values (`avg`, `countDistinct`…) are unchanged. A measure pill's aggregation radios offer only what the column's type supports (`aggsFor` in `filter-rules.js`):
+The menus show plain labels (Sum, Average, Minimum, Maximum, Median, Percentile…, Standard deviation, Variance, Standard deviation (pop.), Variance (pop.), Count, Count distinct, Count non-empty, Attribute (single value) — `agg-labels.js`); the saved values (`avg`, `countDistinct`…) are unchanged. A measure pill's aggregation radios offer only what the column's type supports (`aggsFor` in `filter-rules.js`):
 
 | Column type | Aggregations |
 |---|---|
-| numbers | `sum/avg/min/max/median/percentile/stddev/variance/count/countDistinct/countNonNull/attr` |
+| numbers | `sum/avg/min/max/median/percentile/stddev/variance/stddevPop/variancePop/count/countDistinct/countNonNull/attr` |
 | text **and dates** | `count/countDistinct/countNonNull/min/max/attr` |
 | otherwise (boolean, compound) | `count/countDistinct/countNonNull` |
 
 - `countDistinct` maps to ClickHouse `uniqExact`.
+- `stddev` / `variance` are the **sample** statistics (n − 1; empty for fewer than two values); `stddevPop` / `variancePop` are the **population** ones (n; one value gives 0; [D167](../../decisions/decisions-calculation-functions.md#d167--population-standard-deviation-and-variance)).
 - Aggregation meanings (median interpolation, sample statistics): [api.md](../../reference/api.md#measure-values-and-aggregations).
 - `attr` is the single value of a group, or empty ([calculated-fields-formulas.md](calculated-fields-formulas.md)).
 - Changing a pill's role to a type that doesn't support its aggregation resets it and says so.
@@ -110,6 +112,15 @@ The menus show plain labels (Sum, Average, Minimum, Maximum, Median, Percentile�
 - A value outside 0–100 shows "Percentile must be between 0 and 100 percent." (warning icon, `aria-invalid`). It is never stored or sent; the view keeps the last good percentile.
 - Two percentiles of one field are separate measures. Leaving percentile drops `p`.
 - Percentile is **not** in a field's default-aggregation menu. A calculated pill keeps its own list (use `PERCENTILE([f], p)`).
+
+#### Aggregate Measures off
+
+Sheet actions (⋯) → **Aggregate Measures**, unticked, draws **one mark per row of the data** instead of one per group ([D168](../../decisions/decisions-dashboards.md#d168--aggregate-measures-off-one-mark-per-source-row-on-the-point-charts)). Each measure is its raw value and its aggregation is ignored.
+
+- **Where:** Scatter, Square and Circle only. On any other chart type the item stays ticked and disabled (its tooltip says it needs a point chart), and a stored setting is ignored.
+- **What changes on screen:** the measure pills lose their aggregation word and their tooltip says "one value per row"; the caption, the sort menu and the axes name the field ("amount", not "sum amount"); a Colour or Detail dimension still groups the marks into series (rows that share keys stay separate marks).
+- **Limits:** the 5,000 cap counts rows (Format → Top-N is ignored while it is off), and a fuller table says "Showing the first 5,000 rows — more exist. Add a filter to narrow it." Measures must be numbers; a calculated measure must be row-level. A filter on a measure, an Other bucket and aggregate before the join are refused with a message naming the field. It is never sampled.
+- **Saved** with the sheet (`disaggregate: true`, present only while off).
 
 ### Quick table calculations (P27)
 

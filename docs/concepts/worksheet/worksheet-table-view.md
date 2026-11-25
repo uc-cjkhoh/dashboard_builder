@@ -20,7 +20,7 @@ Format → Conditional formatting, in the Table and Text views. Set per measure,
 - **Cells:**
   - **None**;
   - **Colour scale** — Low → high (surface → `--chart-div-high`), or **Diverging** (`--chart-div-low` ← surface → `--chart-div-high`, the pair the chart scale uses) around a **Midpoint**. Auto midpoint = 0 when values straddle it, else the middle;
-  - **Data bars** — from zero; negatives extend left in `--chart-cat-6`.
+  - **Data bars** — from zero; negatives extend left in `--chart-cat-5`.
 - **Rules:** up to **5** rules "value op threshold → Good / Bad / Warning / Note". A new rule starts with an empty threshold ("Type a value") and applies to nothing, and shows no key entry, until a value is typed. The first match wins and overrides the scale or bar for that cell. Rules wear the status tokens **and an icon** (✓ / error / warning / info).
 - **Contrast:** scale tints top out at 85%, and each cell's ink is picked for ≥ 4.5:1 (`contrast.js`).
 - **Key:** above the table, showing each scale's low / high (and centre) and each rule. While pages are still loading it says "Scales and bars use the N rows loaded so far."
