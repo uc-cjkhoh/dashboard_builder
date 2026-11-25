@@ -30,7 +30,7 @@ timing, settings, error words), a hook in `Workbook/workbook.js`, the Settings b
 | Case | Why |
 |---|---|
 | An **empty** workbook (no tables, no tabs), even on Back up now | it would push the good copies out |
-| Content **identical** to the last backup of that connection (a hash, kept per connection folder in `localStorage`) | an idle session or a page reload would rotate good copies out; Back up now and a newly chosen folder skip this check |
+| Content **identical** to the last backup of that connection (`contentHash` in `backup-model.js`, kept per connection folder in `localStorage`; it ignores the save time and the Data Source's zoom and pan, so panning or zooming is not a change ([D159](../../decisions/decisions-design.md#d159--the-data-sources-zoom-and-pan-are-saved-in-the-workbook))) | an idle session or a page reload would rotate good copies out; Back up now and a newly chosen folder skip this check |
 | Content changed but the 10 minutes aren't up | a timer writes the newest content when they are (`wait` is the time left) |
 
 A save the workbook module refused (an unreadable stored entry, a partial open) never reaches the backup, because the backup is told
