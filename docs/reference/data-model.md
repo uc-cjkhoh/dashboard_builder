@@ -253,6 +253,7 @@ What [workbook.md](../concepts/workbook/workbook.md) saves to `localStorage` and
   hierarchies?:  [{ id: "hier<n>", name, levels: [{ db, table, column }] }]   // T03-29 — optional, ≤ 20, 2–6 same-table levels; a sheet's drill copies them
   sharedFilters: Filter[]                  // P40 — ≤ 4, applied by every worksheet where their table is in the view
   theme:         { accent: "signal" | "ultramarine" | "monospace" | "blue" | "crimson" | "teal" | "violet" | "graphite" | "#rrggbb", palette: "default" | "okabe" | "muted" }
+  view?:         { zoom: 0.25–2, pan: { x, y } }   // D159 — the Data Source zoom and pan (optional; absent = fit every card on open)
 }
 ```
 
