@@ -62,7 +62,7 @@ A pill is `{ calc: id, db: "", table: "", column: <name at last save>, category,
 **Where it goes.** Calculated pills go on Rows, Columns, Color, and the Size, Label, Path and Detail / Tooltip slots. They may be a Top-N ranking measure and a sort target.
 
 - A calculated dimension is never date-grouped: no date-part picker, and a saved `datePart` is removed.
-- A calculated **measure's** aggregation menu offers only sum, avg, min, max, distinct count and non-null count (`CALC_AGGS`, mirroring the server's `CalcCatalog.RowLevelAggregations`). It never offers `count`, which the server refuses for a calculation; a saved `count` resets to sum on open.
+- A calculated **measure's** aggregation menu offers sum, avg, min, max, median, standard deviation, variance, their population forms, Attribute, distinct count and non-null count (`CALC_AGGS`, mirroring the server's `CalcCatalog.RowLevelAggregations`). It never offers `count`, which the server refuses for a calculation; a saved `count` resets to sum on open.
 
 **Top-N by a calculation.** A Top-N filter ranked by a calculation stores `topBy: { db: "", table: "", column, calc: id, agg? }` and is saved and restored like any other.
 

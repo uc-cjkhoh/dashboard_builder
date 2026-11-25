@@ -251,10 +251,11 @@ What [workbook.md](../concepts/workbook/workbook.md) saves to `localStorage` and
   active:        { kind, index } | null    // null = Data Source
   fields:        { "db.table.column": { alias?, agg?, hidden?, cast?, memberAliases?: { [rawValue]: label } } }   // P28, T02-34, T02-29 — ≤ 2000
   parameters:    [{ id: "prm<n>", name, type: number|text|date, value, allowed: { kind: any|list|range, list?, min?, max?, step? } }]   // P32 — ≤ 20
+  palettes?:     [{ name, colours: ["#rrggbb", …] }]   // D165, D166 — colour palettes made in the Create palette dialog (optional; written only when there is one; ≤ 12, 1–24 colours each)
   hierarchies?:  [{ id: "hier<n>", name, levels: [{ db, table, column }] }]   // T03-29 — optional, ≤ 20, 2–6 same-table levels; a sheet's drill copies them
   sharedFilters: Filter[]                  // P40 — ≤ 4, applied by every worksheet where their table is in the view
   view?:         { zoom: 0.25–2, pan: { x, y } }   // D159 — the Data Source zoom and pan (optional; absent = fit every card on open)
-  theme:         { accent: "signal" | "ultramarine" | "monospace" | "blue" | "crimson" | "teal" | "violet" | "graphite" | "#rrggbb", palette: "default" | "okabe" | "muted" }
+  theme:         { accent: "signal" | "ultramarine" | "monospace" | "blue" | "crimson" | "teal" | "violet" | "graphite" | "#rrggbb", surface?: "onedark" }  // no chart palette: chart colours are generated (D164); an older file's `palette` is ignored
 }
 ```
 

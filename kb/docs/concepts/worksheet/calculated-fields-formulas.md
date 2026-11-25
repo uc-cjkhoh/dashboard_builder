@@ -22,13 +22,13 @@ ref       := "[" name "]" | "[@" parameter "]"                   (a workbook par
 ```
 
 - **Numbers** are decimals with an optional exponent (`12`, `.5`, `1e3`); no `1,000`; a non-finite `1e999` is an error.
-- **Argument types:** `SUM` / `AVG` / `MEDIAN` / `STDDEV` / `VARIANCE` / `PERCENTILE` take a number. `MIN` / `MAX` take a number, date or text. `COUNT` / `COUNTD` / `ATTR` take any type. Arithmetic needs numbers.
+- **Argument types:** `SUM` / `AVG` / `MEDIAN` / `STDDEV` / `VARIANCE` / `STDDEVP` / `VARIANCEP` / `PERCENTILE` take a number. `MIN` / `MAX` take a number, date or text. `COUNT` / `COUNTD` / `ATTR` take any type. Arithmetic needs numbers.
 - An aggregate inside an aggregate is refused.
 - A field of a category other than numeric, text, temporal or boolean can't be used.
 
 ### What a formula can contain
 
-- **Operators** `+ − * /`, parentheses, numbers, and the aggregates `SUM`, `AVG`, `MIN`, `MAX`, `COUNT`, `COUNTD`, `MEDIAN`, `STDDEV`, `VARIANCE`, `PERCENTILE`, `ATTR`. Function names are case-insensitive. The function table lives in `calc-types.js`.
+- **Operators** `+ − * /`, parentheses, numbers, and the aggregates `SUM`, `AVG`, `MIN`, `MAX`, `COUNT`, `COUNTD`, `MEDIAN`, `STDDEV`, `VARIANCE`, `STDDEVP`, `VARIANCEP`, `PERCENTILE`, `ATTR`. Function names are case-insensitive. The function table lives in `calc-types.js`.
 - **Logic** ([below](#logic-functions)): comparisons, `AND` / `OR` / `NOT`, `IN`, `BETWEEN`, `IF` / `IIF` / `CASE`, `IFNULL`, `ISNULL`, `ZN`, text, `TRUE` / `FALSE` and `NULL` literals.
 - **Text** ([below](#text-functions)): `TEXT` (alias `STR`), `LOWER`, `UPPER`, `TRIM`, `LTRIM`, `RTRIM`, `LEN`, `LEFT`, `RIGHT`, `MID`, `FIND`, `REPLACE`, `CONCAT`, `CONTAINS`, `STARTSWITH`, `ENDSWITH`, `ICONTAINS`, `ISTARTSWITH`, `IENDSWITH`, `SPLIT`, `REGEXP_MATCH`, `REGEXP_EXTRACT`, `REGEXP_EXTRACT_NTH`, `REGEXP_REPLACE`.
 - **Date** ([below](#date-functions)): `DATEDIFF`, `DATEADD`, `YEAR`, `MONTH`, `DAY`, `QUARTER`, `WEEK`, `WEEKDAY`, `ISOYEAR`, `DATENAME`, `DATETRUNC`, `FISCALYEAR`, `FISCALQUARTER`, `MAKEDATE`, `DATE`.
@@ -40,8 +40,8 @@ ref       := "[" name "]" | "[@" parameter "]"                   (a workbook par
 
 - **`MEDIAN([f])`** is the exact median of the non-NULL values: linear interpolation between the two middle values, like Excel `PERCENTILE.INC` (1, 2, 3, 4 gives 2.5).
 - **`PERCENTILE([f], p)`** is the same interpolation at fraction `p` (p25 of 1..4 is 1.75). `p` is a **literal** number 0..1, not a field or a formula. `PERCENTILE([f], 0.5)` equals `MEDIAN`; 0 is the minimum, 1 the maximum.
-- **`STDDEV` and `VARIANCE`** are the **sample** statistics (n − 1).
-- **Empty results:** `STDDEV` / `VARIANCE` of fewer than two values, and `MEDIAN` / `PERCENTILE` of no value, are empty (NULL, shown as a dash), never 0 or NaN. A plain field's pill has its own `Percentile…` aggregation ([worksheet.md](worksheet.md#aggregation)); a calculated pill does not list it.
+- **`STDDEV` and `VARIANCE`** are the **sample** statistics (n − 1). **`STDDEVP` and `VARIANCEP`** are the **population** ones (n; [D167](../../decisions/decisions-calculation-functions.md#d167--population-standard-deviation-and-variance)).
+- **Empty results:** `STDDEV` / `VARIANCE` of fewer than two values (`STDDEVP` / `VARIANCEP` of no value), and `MEDIAN` / `PERCENTILE` of no value, are empty (NULL, shown as a dash), never 0 or NaN. A plain field's pill has its own `Percentile…` aggregation ([worksheet.md](worksheet.md#aggregation)); a calculated pill does not list it.
 - **`ATTR([f])`** (Tableau's attribute) is the value when the group has exactly one distinct non-NULL value, else empty (NULL; Tableau shows `*`, here a dash). NULLs are ignored, so a group of `p, p, NULL` is `p`. It keeps the field's type, so a text field stays a text measure (table, text and KPI views only).
 
 ### Clean… (query-time cleaning)

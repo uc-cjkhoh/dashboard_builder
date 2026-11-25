@@ -22,7 +22,7 @@ Grouped by feature folder; each entry is the module, then what it owns.
 
 - `Shell/app.js` — bootstrap
   - hydrates `[data-icon]` placeholders, installs the global `error` / `unhandledrejection` handlers (danger toast "Something went wrong — try again."; aborted queries and the benign `ResizeObserver loop` notice are ignored), wires every module's `init*`, listeners before the initial status check
-- `Shell/appearance.js` — the one **Appearance** card (`#scheme-btn` → `#scheme-list`, in the sidebar foot `#sidebar-foot`; it opens upward from the tile, over the canvas; `wireMenu` with `stayOpen`): mode (Light / Dark, `Core/scheme.js`), dark look, accent (preset swatches + a custom colour) and chart colours (`Core/theme-model.js`), then **Reset theme**. Built once; `sync` repaints the selection and swatches on `scheme:pref`, `scheme:changed` and `theme:changed`. Left / Right move within the mode row and the accent row. The button's glyph + label follow the mode
+- `Shell/appearance.js` — the one **Appearance** card (`#scheme-btn` → `#scheme-list`, in the sidebar foot `#sidebar-foot`; it opens upward from the tile, over the canvas; `wireMenu` with `stayOpen`): mode (Light / Dark, `Core/scheme.js`), dark look and accent (preset swatches + a custom colour) (`Core/theme-model.js`), then **Reset theme** (no chart colours: [D164](../decisions/decisions-marks.md#d164--chart-colours-are-generated-and-edit-member-colours-is-the-one-place-that-sets-them)). Built once; `sync` repaints the selection and swatches on `scheme:pref`, `scheme:changed` and `theme:changed`. Left / Right move within the mode row and the accent row. The button's glyph + label follow the mode
 - `Shell/perf-panel.js` — the sidebar's gauge tile (`#perf-btn`, bottom of the sidebar body; `sidebar.js` takes it out of the DOM on the Data Source tab and puts it back elsewhere) opens the Performance dialog: recent query / render timings newest first (time in the app zone, kind, query ms, rows, cache hit / miss / failed / aborted, render ms) with a one-line summary (counts failed or cancelled queries), **Copy as text** (tab-separated) and **Clear**; a native `<dialog>` (Esc closes, focus returns to the button); updates live while open
 - `Core/timezone.js` — pure: the app time zone (`<meta name="app-timezone">`, [time-zone.md](../reference/time-zone.md)): `clockIn`, `dateIn`, `todayIn`, `offsetLabel`.
 - `Shell/activity-bar.js` — the **activity chip** (`#activity`, bottom-right, solid, `role=status` / `aria-live=polite`): while any API request is in flight it says what the app is waiting on and for how long ("Loading tables in sales… · 3 s"). Shown after 300 ms (no flash on fast requests), refreshed each second, `hidden` when idle.
@@ -148,7 +148,7 @@ Grouped by feature folder; each entry is the module, then what it owns.
 - `Dashboard/date-parts.js` — pure (P26): `DATE_PART_CHOICES`, `stepPart` (+ / −), `partLabel`, `labelParts`
 - `Dashboard/member-labels.js` — pure (T02-29):
   - `aliasOf` / `setAlias` / `cleanMemberAliases` (null-prototype maps, own keys), `keyAliasMaps`, `withMemberLabels` (position-aware category formatter), `labelOf`, `memberRows`, `aliasesFromInputs` — [worksheet.md](../concepts/worksheet/worksheet.md)
-- `Dashboard/member-labels-dialog.js` — DOM: `openMemberLabelsDialog` — the field ⋯ menu's Edit member labels… · `Dashboard/member-colours-dialog.js` — DOM: `openMemberColoursDialog` — the Color flyout's Edit member colours… (palette, member, colour; staged, one `onSave`); the rules are `colour-model.js` (`applyMemberDraft`) — [worksheet-marks.md](../concepts/worksheet/worksheet-marks.md#member-colours-and-palette-order-t01-20-t03-33)
+- `Dashboard/member-labels-dialog.js` — DOM: `openMemberLabelsDialog` — the field ⋯ menu's Edit member labels… · `Dashboard/member-colours-dialog.js` — DOM: `openMemberColoursDialog` — the Color flyout's Edit member colours… (palettes left — the generated Default and the workbook's palettes, each under a title with a hairline between, then a custom colour and Create palette… — members right with a search box above a long list, golden-ratio landscape; staged, one `onSave(map, palettes)`); the rules are `colour-model.js` (`applyMemberDraft`) — [worksheet-marks.md](../concepts/worksheet/worksheet-marks.md#member-colours-and-palette-order-t01-20-t03-33) · `Dashboard/palette-dialog.js` — DOM: `openPaletteDialog` — the Create palette dialog opened from there (D166): a name and a row of colours in creation order, the chosen one edited with the picker or a `#rrggbb`; `onCreate(palette)` hands it back, nothing is stored here · `Core/palette-model.js` — pure (D165, D166): colour palettes — `checkNewPalette` (name, 1–24 colours, limits, with every reason), the draft edits `newPaletteDraft` / `addColour` / `setColour` / `removeColour` / `selectColour`, `cleanPalettes` (on open: drop and report), `assignPalette` (the n-th key the n-th colour, repeating); one hex rule (`isHex6`, `normHex`) shared with the dialog's custom colour field
 
 ### Dashboard/ — encodings, analytics and formatting models
 
@@ -178,7 +178,7 @@ Grouped by feature folder; each entry is the module, then what it owns.
 - `Dashboard/conditional-model.js` — pure (P37):
   - `measureKey`, `extentOf`, `midpointOf`, `scaleColors` (tint + contrast-picked ink), `barGeometry`, `matchRule`, `isActive` — [worksheet-table-view.md](../concepts/worksheet/worksheet-table-view.md#table-view--a-true-rows--columns-crosstab)
 - `Dashboard/colour-model.js` — pure (T01-20, T03-33):
-  - member colour map validation / set / clear / lookup, palette and ramp reversal, swatches — [worksheet-marks.md](../concepts/worksheet/worksheet-marks.md#member-colours-and-palette-order-t01-20-t03-33)
+  - member colour map validation / set / clear / lookup, ramp reversal, swatches — [worksheet-marks.md](../concepts/worksheet/worksheet-marks.md#member-colours-and-palette-order-t01-20-t03-33)
 
 ### Rows/ — row previews, union and unpivot
 
@@ -228,7 +228,7 @@ Grouped by feature folder; each entry is the module, then what it owns.
 ### Core/ — shared helpers
 
 - `Core/parameters-model.js` — pure (P32): `checkValue` (type + allowed values), `checkStep` (positive step size), `checkParamName`, `withParamValue`, `effectiveTopN`, `paramTypeFor`, `cleanParameter`
-- `Core/theme-model.js` — pure (P41): accent presets + palettes (light / dark; each accent's hover and pressed are derived — lifted toward white, with their own text colour, [D134](../decisions/decisions-buttons.md#d134--hover-and-pressed-are-brighter-than-rest-in-every-scheme)), `deriveAccent` (custom colour → contrast-checked set, or a refusal), `themeVars`, `cleanTheme` — [tokens.md](../reference/design/tokens.md#workbook-themes-p41)
+- `Core/theme-model.js` — pure (P41): accent presets (light / dark; each accent's hover and pressed are derived — lifted toward white, with their own text colour, [D134](../decisions/decisions-buttons.md#d134--hover-and-pressed-are-brighter-than-rest-in-every-scheme)), `deriveAccent` (custom colour → contrast-checked set, or a refusal), `themeVars`, `cleanTheme` (an older saved `palette` is ignored), and the generated chart colours: `categoryColour(i, dark)` / `categoryColours(n, dark)` (golden-angle hues, never red, ≥ 3:1 on the surface; [D164](../decisions/decisions-marks.md#d164--chart-colours-are-generated-and-edit-member-colours-is-the-one-place-that-sets-them)) — [tokens.md](../reference/design/tokens.md#workbook-themes-p41)
 - `Core/scheme-model.js` — pure: `SCHEME_PREFS` (light, dark), `normalizePref` — [tokens.md](../reference/design/tokens.md#light-and-dark)
 - `Core/scheme-boot.js` — classic `<head>` script: sets `data-scheme` before first paint (mirrors `normalizePref`)
 - `Core/scheme.js` — owns `<html data-scheme>`: `isDark`, `schemePref`, `setSchemePref` (`localStorage`); never reads the OS; emits `scheme:changed`
@@ -236,7 +236,7 @@ Grouped by feature folder; each entry is the module, then what it owns.
 - `Core/source-model.js` — pure ([query-sources.md](../concepts/data-source/query-sources.md)):
   - `wireSource`, `cleanSource` (workbook re-check), `sourceOfTable(entities, db, table)`, `sourceProblem(keys, entities)` (the mixed-view refusal), `sourceNote`, `distinctPlan` / `distinctMembers` (a filter's member list over a source)
 - `Core/api.js` — `fetch` helpers (JSON, errors, path base, optional `AbortSignal`); `api.sourceColumns(source)` → `POST /api/source/columns`
-- `Core/ui.js` — toast, pill, `show`/`hide`/`toggle`, `fieldError` / `clearFieldError` / `checkField`, `listDialog`, `confirmDialog`, `openDialog`/`closeDialog`, `copyText(text, what)` (clipboard + toast)
+- `Core/ui.js` — toast, pill, `show`/`hide`/`toggle`, `fieldError` / `clearFieldError` / `checkField`, `listDialog`, `confirmDialog`, `openDialog`/`closeDialog`, `copyText(text, what)` (clipboard + toast); its neighbour `Core/overlays.js` `dismissOverlays()` closes every open dialog (through its own `cancel`), the context menu and the hover tip when the session ends, called by `connection.js` ([D163](../decisions/decisions-connection.md))
 - `Core/validate.js` — pure input parsers (`host`, `port`, `text`, `number`, `dateTime`, `filterValue`, `range`, `percent`, with `isFraction` / `percentLabel` for the percentile fraction) returning `{ ok, value }` or `{ ok:false, error }`, plus `LIMITS` and `HOST_MESSAGES`
   - mirror of the server's `ApiLimits` / `RequestRules`
 - `Core/sheet-schema.js` — pure: the allowed values for a saved sheet (chart types, categories, filter ops, formats, Top-N)
@@ -263,8 +263,8 @@ Grouped by feature folder; each entry is the module, then what it owns.
   `filter-rules.js`, `show-me-rules.js`, `toolbar-rules.js`, `pill-options.js`, `fields-pane-model.js`, `context-menu-model.js`, `contrast.js`, `relation-rules.js`, `table-filter.js`,
   `connection-rules.js`, `empty-state.js`, `api.js`'s `basePathFrom`) hold the testable logic and never
   touch the DOM; they run under `node --test` ([testing.md](../how-to/testing.md#test)).
-- **Document events:** `connection:changed` (connection.js → schema.js, workbook.js), `table:add` `{db, table}`
-  (schema.js `＋` → canvas.js).
+- **Document events:** `connection:changed` (connection.js → schema.js, workbook.js), `connection:check` (api.js on a 409 → connection.js probes now),
+  `table:add` `{db, table}` (schema.js `＋` → canvas.js).
 - **Init order:** `schema.js` and `workbook.js` register their `connection:changed` listeners before
   `connection.js` fires the initial `GET /api/connection` — otherwise the schema list and the workbook
   restore miss the first connect.

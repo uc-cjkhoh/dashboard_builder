@@ -26,7 +26,7 @@ credentials. The client (`Core/api.js`) shows `error` as-is. A non-JSON error bo
 | 200 | success | the result |
 | 400 | invalid input: model binding (missing field, wrong type, malformed or empty JSON), a [limit](#limits) broken, a filter value that doesn't fit its column, an aggregation the column can't take, an unknown sort column, or (query/stat routes) an unknown identifier or a table not in the query | `{ error, field? }` |
 | 404 | unknown database / table / column on the **schema** routes (`UnknownIdentifierException`) | `{ error }` |
-| 409 | no connection in this session (`NotConnected`) | `{ error }` |
+| 409 | no connection in this session (`NotConnected`); the browser treats any 409 as "the session may be gone" and probes `ping` at once ([D162](../decisions/decisions-connection.md#d162--a-409-not-connected-probes-at-once-and-a-probe-cannot-hang)) | `{ error }` |
 | 413 | request body over 256 KB | `{ "error": "Request too large." }` |
 | 502 | ClickHouse (or the network / TLS) rejected or failed the query — credential-safe message; only the exception *type* is logged | `{ error }` |
 | 504 | the query hit the server-side time limit (12 s), or the 15 s HTTP timeout on a connection without it — actionable message, see [guards](clickhouse-integration.md#database-level-guards) | `{ error }` |
@@ -61,6 +61,7 @@ so a valid UI never hits these.
 | Joins | ≤ 10 |
 | Filters per query | **≤ 20** (`MaxFilters`). The client allows 8 user filters, and the worksheet appends the shared filters (≤ 4), the drill path (≤ 5), the page, the selection and the date range |
 | Collapsed crosstab headers (client-side only) | ≤ 200 keys per axis, a key ≤ 600 characters (`MAX_COLLAPSED` in `Dashboard/collapse-model.js`) |
+| Colour palettes (client-side only) | ≤ 12 per workbook; 1–24 colours each as `#rrggbb`; a name ≤ 40 characters (unique, not "Default"); (`LIMITS.palettes` / `paletteColours` / `paletteName`, `Core/validate.js`) |
 | Member colours (client-side only) | ≤ 100 coloured members per field, ≤ 20 fields per sheet, member key ≤ 100 characters, colour `#rrggbb` (`LIMITS.memberColors` / `memberColorFields` / `memberField` / `memberKey`); member shapes use the same counts, a value is one of seven shape keys, and Shape bins are 2–6 ([worksheet-marks-shape-label.md](../concepts/worksheet/worksheet-marks-shape-label.md#edit-member-shapes)) |
 | `in` / `notin` values | ≤ 500; a filter value ≤ 1000 characters |
 | `offset` (rows, `/api/rows` and `/api/unpivot`) | 0–100,000 (`MaxRowsOffset`, mirrored by `LIMITS.rowsOffset`) |
@@ -109,7 +110,7 @@ Controller: `Features/Connection/ConnectionController.cs`.
 |---|---|---|
 | `POST /api/connection` | validate and store the session connection (host, port, user, password, secure, allowInvalidCert); steps the guard settings down if the server refuses one; failures name their cause ([Connect errors](#connect-errors)) | `SELECT 1` |
 | `GET /api/connection` | current connection view — password-free | — |
-| `GET /api/connection/ping` | liveness probe → `{ connected, reachable }`; `connected:false` = the session lost its connection; `reachable` = `SELECT 1` succeeded | `SELECT 1` |
+| `GET /api/connection/ping` | liveness probe → `{ connected, reachable }`; `connected:false` = the session lost its connection; `reachable` = `SELECT 1` succeeded; the browser gives up on it after 20 s | `SELECT 1` |
 | `POST /api/connection/disconnect` | drop the session connection; body `{}` (proxy-safe) | — |
 | `DELETE /api/connection` | same, direct to Kestrel only — the `:8443` proxy 403s `DELETE` | — |
 
@@ -232,17 +233,18 @@ rows). Consumers must not assume numbers — [worksheet-charts.md](../concepts/w
 
 - **Aggregations:** `count` (rows), `sum`, `avg`, `min`, `max`, `countDistinct`, `countNonNull` (non-NULL
   values of the column, `count(col)`), `median` (linear interpolation between the two middle values, like
-  Excel `PERCENTILE.INC`), `stddev` / `variance` (sample; NULL for fewer than two values), `attr` (the one
+  Excel `PERCENTILE.INC`), `stddev` / `variance` (sample; NULL for fewer than two values), `stddevPop` / `variancePop` (population; 0 for one value, NULL for none), `attr` (the one
   distinct non-NULL value of the group, else NULL), `percentile`.
-- **Column types:** `sum`, `avg`, `median`, `percentile`, `stddev` and `variance` on a non-numeric column
+- **Column types:** `sum`, `avg`, `median`, `percentile`, `stddev`, `variance`, `stddevPop` and `variancePop` on a non-numeric column
   are a 400. `count` / `countDistinct` / `countNonNull` / `min` / `max` are fine on any column; `attr` on
   any but a compound column.
-- **Result column name:** `<agg> <column>` (`median amount`, `attr status`). A percentile is
+- **Result column name:** `<agg> <column>` (`median amount`, `attr status`; `stddev (pop.) amount` for the population forms). A percentile is
   `p<percent> <column>` (`p90 amount`, `p99.5 amount`).
 - **`p`:** a **`percentile`** measure carries **`p`**, a finite number 0..1 (JSON `0.9`). It is required
   exactly when `agg` is `percentile`, and refused on any other aggregation or on a calculated measure. A
   missing or out-of-range `p` is a 400 at `measures[i].p` (never clamped); a Top-N `topBy` is checked the
   same way at `filters[i].topBy.p`. `p` reaches SQL only as a bound `Float64` and is part of the cache key.
+- **`disaggregate`:** `/api/query` and `/api/query/export.csv` take an optional boolean. `true` is Aggregate Measures off ([D168](../decisions/decisions-dashboards.md#d168--aggregate-measures-off-one-mark-per-source-row-on-the-point-charts)): no `GROUP BY`, one result row per source row, each measure its raw value (`agg` is ignored) and named by its field. It is a 400 with `field` `measures` with no measure, `measures[i]` / `measures[i].calc` for a non-numeric column or an aggregate or non-number calculation, `having`, `otherBucket` or `joins` (an aggregate-before-join relationship). Rows are ordered by the requested sort, then every other key and measure; `limit` and `truncated` count rows; the request is never sampled and the response has no `approx`. It is part of the cache key.
 
 ### Calculated fields (`calc`)
 

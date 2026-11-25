@@ -154,11 +154,11 @@ Inputs on focus get the neutral wash and their caret; the border does not change
 ### Workbook themes (P41)
 
 P41 in the heading is the product phase ID for workbook themes. A workbook may carry a **theme**
-(`{ accent, palette, surface? }`, the **Appearance** card) that overrides the accent set above and
-`--chart-cat-1…8`, and may select a **look** (dark-mode surfaces).
+(`{ accent, surface? }`, the **Appearance** card) that overrides the accent set above, and may select a **look** (dark-mode surfaces).
+The chart's categorical colours are not part of a theme: they are generated ([D164](../../decisions/decisions-marks.md#d164--chart-colours-are-generated-and-edit-member-colours-is-the-one-place-that-sets-them)).
 
 - `Core/theme.js` sets the overrides inline on `:root` and re-applies them on `scheme:changed`. The
-  default theme sets nothing.
+  default theme sets no accent token (`core.css` has them), but `--chart-cat-1…8` are always written from the generator.
 - The values live in `Core/theme-model.js`, the second token source after `core.css :root`.
 
 What a theme can change:
@@ -171,12 +171,11 @@ What a theme can change:
 
   This is unit-tested for every preset and for derived custom colours. A custom colour too light for
   white text is refused with the reason. In dark mode it is lifted until it stands 3:1 off the surface.
-- **Palettes:** Default, **Colour-blind safe** (Okabe–Ito), Muted — eight distinct colours per scheme.
+- **Chart colours:** none to choose. `categoryColour(i, dark)` generates one per member, without a list ([D164](../../decisions/decisions-marks.md#d164--chart-colours-are-generated-and-edit-member-colours-is-the-one-place-that-sets-them)); a member's own colour is set in the Color flyout → Edit member colours.
 - **Look:** Default, or **One Dark Pro**. It is the one thing that changes surfaces, ink, status colours and glass,
   and only in dark mode: `Core/theme.js` sets `<html data-look="onedark">`, and `core.css`
   `:root[data-scheme="dark"][data-look="onedark"]` overrides the dark tokens. Picking it also picks the One Dark accent
-  (`#456fc8`, text `#6aa8e0`) and chart colours (`#6aa8e0` `#98c379` `#c678dd` `#e5c07b` `#56b6c2` `#d19a66` `#abb2bf` `#d68fc0`);
-  both stay changeable. Surfaces are `--bg #181a1f`, `--surface #21252b`, `--surface-2 #282c34`, `--surface-3 #2c313a`;
+  (`#456fc8`, text `#6aa8e0`); it stays changeable. Chart colours are the same generated dark ones. Surfaces are `--bg #181a1f`, `--surface #21252b`, `--surface-2 #282c34`, `--surface-3 #2c313a`;
   ink `#d7dae0` / `#abb2bf` / `#9aa2af`; lines `#3e4451` / `#4b5263`. Blue is desaturated to `#6aa8e0` (rule: HSL S ≤ 70 %),
   and the same AA / 3:1 checks run on this block (`tests/js/contrast.test.mjs`). The default look is Signal on charcoal.
 - A saved theme with no `surface` is the default look (older workbooks open unchanged).
@@ -217,12 +216,12 @@ mark wears the series colour.**
 | `--chart-muted` | `--ink-3` | tick labels |
 | `--chart-div-low` / `--chart-div-high` | light `#d98a4a` / `#2b62b8`; dark `#e2b48c` / `#5a8ad6`; One Dark Pro `#e0b084` / `#5c9ddb` | diverging colour: warm below the centre, cool above (theme-stable; HSL S ≤ 70 %; the warm end is lighter than the cool end, so the pair also differs in lightness: simulated CIE L* gap light 27 / 15, dark 23 / 14 for deuteranopia / protanopia; One Dark Pro is the weakest at 17 / 8) |
 | `--chart-div-amber` / `-violet` / `-green` | light `#b8803a` / `#6b52c9` / `#3f8f5a`; dark `#e0b060` / `#9b86e6` / `#6fc486`; One Dark Pro `#e5c07b` / `#c678dd` / `#98c379`; the hue pairs of Color flyout → Diverging colours (never red) |
-| `--chart-cat-1..8` | light `#72872a` `#b8559c` `#d9a03a` `#7c63d6` `#2f9ea8` `#3f7fd0` `#4aa66a` `#6a6d72`; dark `#a9bd6a` `#d98ac2` `#deb062` `#9b86e6` `#5cc0c8` `#7aa3dc` `#6fc486` `#8e9094` | categorical ramp, fixed order; no red slot — red means danger only ([D97](../../decisions/decisions-dashboards.md#d97--no-red-in-the-categorical-palette-and-a-calm-dark-accent)) |
+| `--chart-cat-1..8` | not in `core.css`: `Core/theme.js` writes the first eight generated colours for the painted scheme (`categoryColour`, [D164](../../decisions/decisions-marks.md#d164--chart-colours-are-generated-and-edit-member-colours-is-the-one-place-that-sets-them)) | the shell's own uses (tab-strip groups, the crosstab's bars) and the fixed chart slots; charts draw the n-th member in the n-th generated colour with no limit; no red — red means danger only ([D97](../../decisions/decisions-dashboards.md#d97--no-red-in-the-categorical-palette-and-a-calm-dark-accent)); every colour ≥ 3:1 on its surface |
 
 - **One series** wears the accent. **≥2 series** (multiple measures, or a Colour split) draw
-  `--chart-cat-*` in order, with a legend. Beyond 8 values the ramp repeats; the legend disambiguates.
+  the generated colours in order (the n-th member the n-th colour, no repeat), with a legend.
 - **Colour-by-category** (Format panel) colours a single-measure bar chart's bars from the same ramp.
-- **Tab-strip groups** underline a dashboard's group in `--chart-cat-1…7` (slot 8 is the neutral grey, skipped), beside the group's name ([tabs.md](../../concepts/workbook/tabs.md#groups)).
+- **Tab-strip groups** underline a dashboard's group in `--chart-cat-1…7` (slot 8 is left unused), beside the group's name ([tabs.md](../../concepts/workbook/tabs.md#groups)).
 - **Heatmap** and **continuous Colour** use a single-hue `--accent-soft` → `--accent` scale.
 - **Treemap tile labels** pick black or white per tile with `Dashboard/contrast.js` (`pickInk`) so the
   label meets contrast on every `--chart-cat-*` fill.
@@ -243,7 +242,7 @@ sizes, and no ad-hoc sizes.
 ## Spacing, radius, sizing
 
 - Spacing: `--s1` 4 · `--s2` 8 · `--s4` 16 · `--s6` 24 — nothing between ([design rule 2](../../development/coding-standards.md#12-design-rules)).
-- Radius: one `--r` 8px for every shape, inner or outer · `--r-pill` 999px.
+- Radius: one `--r` 8px for every shape, inner or outer · `--r-pill` 999px for dots, switches, tracks and thumbs only (a field pill, `.ws-pill`, uses `--r`). Colour swatches (`.ws-swatch`) are the one other exception: `--s1` (4px).
 - `--toast-h`: 42px (`16px + 24px + 2px`) — a one-line toast: its 8px padding twice, the 24px close button and the 1px border twice. Anything that must clear the toast (the Data Source guide pill) offsets by it.
 - `--sidebar-w`: 330px default (resizable — [layout.md](layout.md#sidebar)).
 - `--topbar-h`: 60px — the shared `min-height` of the sidebar brand (`.sidebar__brand`) and the tab bar
