@@ -79,6 +79,19 @@
                         aria-label="Performance timings" title="Performance timings"><span data-icon="chart-gauge"></span></button>
             </div>
 
+            <!-- Foot of the sidebar, outside the body so it stays on the collapsed rail and on every tab's rail: Appearance (Shell/appearance.js: one card for mode
+                 (Light / Dark, kept in this browser), dark look, accent and chart colours (saved with the workbook)) and Settings (Workbook/backup.js: the auto-backup dialog).
+                 Fit all cards is not here: it acts on the canvas, so Canvas/canvas.js puts it at the right end of the tab bar on the Data Source. -->
+            <div class="sidebar__foot" id="sidebar-foot">
+                <div class="menu scheme">
+                    <button type="button" class="iconbtn sidebar__tool" id="scheme-btn" aria-controls="scheme-list"
+                            aria-label="Appearance" title="Appearance"><span data-icon="sun"></span></button>
+                    <div class="menu__list" id="scheme-list" role="menu" aria-label="Appearance" hidden></div>
+                </div>
+                <button type="button" class="iconbtn sidebar__tool" id="settings-dock-btn" data-settings-open aria-haspopup="dialog"
+                        aria-label="Settings" title="Settings"><span data-icon="settings"></span></button>
+            </div>
+
             <!-- Drag to resize the sidebar (up to 30% of the screen). -->
             <div class="resizer sidebar__resizer" id="sidebar-resizer" role="separator"
                  aria-orientation="vertical" aria-label="Resize sidebar" tabindex="0"></div>
@@ -96,15 +109,6 @@
             <partial name="~/Features/Dashboard/_Dashboard.cshtml" />
             <partial name="~/Features/Board/_Board.cshtml" />
             <partial name="~/Features/Story/_Story.cshtml" />
-            <!-- Dock, bottom right over every view: Appearance on top (Shell/appearance.js: one card for mode (Light / Dark, kept in this browser), dark look, accent
-                 and chart colours (saved with the workbook)), Fit all cards below it (Canvas/canvas.js adds it while the Data Source shows cards). -->
-            <div class="canvas__dock" id="canvas-dock">
-                <div class="menu scheme">
-                    <button type="button" class="iconbtn" id="scheme-btn" aria-controls="scheme-list"
-                            aria-label="Appearance" title="Appearance"><span data-icon="sun"></span></button>
-                    <div class="menu__list" id="scheme-list" role="menu" aria-label="Appearance" hidden></div>
-                </div>
-            </div>
         </main>
     </div>
 

@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { syncRange, SECONDARY_CHOICES, secondaryKind, dualAxisOn, rightAxisTitle, dualAxisAllowed, seriesAxis } from "../../src/DashboardBuilder/Features/Dashboard/axis-sync-model.js";
 import { buildCartesian } from "../../src/DashboardBuilder/Features/Dashboard/chart.js";
-import { MARK_BORDER_CHOICES, MARK_BORDER_STOPS, markBorder, MARKER_SIZE, markerSizeError, markerSizeOr, MARKER_SHAPE_CHOICES, markerSymbol, edgeOr, strokeOf, BORDER_TYPES } from "../../src/DashboardBuilder/Features/Dashboard/mark-style-model.js";
+import { MARK_BORDER_CHOICES, MARK_BORDER_STOPS, markBorderError, borderWidthOf, storedBorder, markBorder, MARKER_SIZE, markerSizeError, markerSizeOr, MARKER_SHAPE_CHOICES, markerSymbol, edgeOr, strokeOf, BORDER_TYPES } from "../../src/DashboardBuilder/Features/Dashboard/mark-style-model.js";
 import { defaultFormat, emptySheet } from "../../src/DashboardBuilder/Features/Core/store.js";
 import { parseWorkbook, serializeWorkbook } from "../../src/DashboardBuilder/Features/Workbook/workbook-model.js";
 
@@ -42,10 +42,14 @@ test("secondary mark type: line, bar, area; anything else is line", () => {
   assert.equal(secondaryKind(undefined), "line"); assert.equal(secondaryKind("radar"), "line");
 });
 
-test("border thickness bar: four ascending stops, the key stays the stored value, the readout is px", () => {
-  assert.deepEqual(MARK_BORDER_STOPS.map(([k]) => k), MARK_BORDER_CHOICES.map(([k]) => k));
-  assert.deepEqual(MARK_BORDER_STOPS.map(([, px, text]) => [px, text]), [[0, "None"], [1, "1 px"], [2, "2 px"], [3, "3 px"]]);
-  for (const [key, px] of MARK_BORDER_STOPS) assert.equal(markBorder(key, "#abc").borderWidth, px, key);
+test("border thickness bar: 0 to 3 px in steps of 0.5, the readout is px, the stored value is none or the px", () => {
+  assert.deepEqual(MARK_BORDER_STOPS.map(([px]) => px), [0, 0.5, 1, 1.5, 2, 2.5, 3]);
+  assert.deepEqual(MARK_BORDER_STOPS.map(([, text]) => text), ["None", "0.5 px", "1 px", "1.5 px", "2 px", "2.5 px", "3 px"]);
+  for (const [px] of MARK_BORDER_STOPS) { assert.equal(markBorderError(storedBorder(px)), null, String(px)); assert.equal(markBorder(storedBorder(px), "#abc").borderWidth, px, String(px)); }
+  assert.equal(storedBorder(0), "none"); assert.equal(storedBorder(1.5), 1.5);
+  assert.deepEqual(["thin", "medium", "thick", "none"].map(borderWidthOf), [1, 2, 3, 0]); // older files' keys still draw
+  assert.deepEqual(["thin", "medium", "thick"].map(storedBorder), [1, 2, 3]);
+  for (const v of [0, -1, 0.25, 3.5, 4, "1", "huge", null, NaN]) assert.ok(markBorderError(v), String(v));
 });
 
 test("mark border: none draws no stroke; thin and thick use the muted border colour", () => {
@@ -77,9 +81,9 @@ const roundTrip = (format) => {
   return parseWorkbook(JSON.stringify(serializeWorkbook(state)));
 };
 test("workbook: valid settings round-trip; invalid ones reset with an issue; absent ones open unchanged", () => {
-  const ok = roundTrip({ syncAxes: true, secondaryType: "area", markerSize: 20, markBorder: "thick" });
+  const ok = roundTrip({ syncAxes: true, secondaryType: "area", markerSize: 20, markBorder: 2.5 });
   const f = ok.worksheets[0].sheet.format;
-  assert.deepEqual([f.syncAxes, f.secondaryType, f.markerSize, f.markBorder], [true, "area", 20, "thick"]);
+  assert.deepEqual([f.syncAxes, f.secondaryType, f.markerSize, f.markBorder], [true, "area", 20, 2.5]);
   const bad = roundTrip({ syncAxes: "yes", secondaryType: "radar", markerSize: 99, markBorder: "huge" });
   const g = bad.worksheets[0].sheet.format;
   assert.deepEqual([g.syncAxes, g.secondaryType, g.markerSize, g.markBorder], [false, "line", null, "none"]);
@@ -87,6 +91,10 @@ test("workbook: valid settings round-trip; invalid ones reset with an issue; abs
   const old = roundTrip({ target: 5 });
   assert.equal(old.issues.length, 0, JSON.stringify(old.issues));
   assert.equal(old.worksheets[0].sheet.format.markBorder, "none");
+  const legacy = roundTrip({ markBorder: "thick" }); // an older file's key becomes its px
+  assert.equal(legacy.issues.length, 0); assert.equal(legacy.worksheets[0].sheet.format.markBorder, 3);
+  const off = roundTrip({ markBorder: 2.25 }); // off the step: reset, never rounded
+  assert.equal(off.worksheets[0].sheet.format.markBorder, "none"); assert.ok(off.issues.some((i) => /border thickness/.test(i)), JSON.stringify(off.issues));
 });
 
 test("marker shape (line charts): four shapes, circle by default, unknown falls back to circle", () => {
@@ -199,7 +207,7 @@ test("border width Medium and border colour from palette tokens", () => {
 });
 test("workbook: markBorderColor optional, validated, rejected not clamped", () => {
   const ok = roundTrip({ markBorder: "medium", markBorderColor: "accent" });
-  assert.deepEqual([ok.worksheets[0].sheet.format.markBorder, ok.worksheets[0].sheet.format.markBorderColor], ["medium", "accent"]);
+  assert.deepEqual([ok.worksheets[0].sheet.format.markBorder, ok.worksheets[0].sheet.format.markBorderColor], [2, "accent"]);
   const bad = roundTrip({ markBorderColor: "#ff0000" });
   assert.equal(bad.worksheets[0].sheet.format.markBorderColor, "muted");
   assert.ok(bad.issues.some((i) => /border colour/.test(i)), JSON.stringify(bad.issues));

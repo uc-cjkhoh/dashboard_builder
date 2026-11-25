@@ -211,11 +211,11 @@ try {
     await clickFit();
     must(await ev(`document.querySelectorAll('.rel-svg').length === 2`), 'overlay layers missing');
   });
-  await check('the Appearance card opens upward from the dock: clear of Fit, inside the window', async () => {
+  await check('the Appearance card opens upward from the sidebar foot: above its tile, inside the window, on top of the canvas', async () => {
     await ev(`document.getElementById('scheme-btn').click()`); await b.sleep(450);
-    const r = await ev(`(() => { const f = document.querySelector('.canvas__fit').getBoundingClientRect(), s = document.getElementById('scheme-btn').getBoundingClientRect(), c = document.getElementById('scheme-list').getBoundingClientRect(); return { covers: c.left < f.right && c.right > f.left && c.top < f.bottom && c.bottom > f.top, above: c.bottom <= s.top, inside: c.top >= 0 && c.right <= innerWidth }; })()`);
+    const r = await ev(`(() => { const s = document.getElementById('scheme-btn').getBoundingClientRect(), c = document.getElementById('scheme-list').getBoundingClientRect(), top = document.elementFromPoint(c.left + c.width / 2, c.top + c.height / 2); return { covers: !top?.closest('#scheme-list'), above: c.bottom <= s.top, inside: c.top >= 0 && c.right <= innerWidth }; })()`);
     await ev(`document.getElementById('scheme-btn').click()`); await b.sleep(450);
-    must(!r.covers && r.above && r.inside, `the card is not above the dock and inside the window: ${J(r)}`);
+    must(!r.covers && r.above && r.inside, `the card is not above its tile, inside the window and on top: ${J(r)}`);
   });
   if (b.consoleErrors.length) console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  '));
 } catch (e) {

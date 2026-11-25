@@ -117,6 +117,17 @@ try {
   const until = async (fn, label, timeout = 8000) => { const t0 = Date.now(); while (!fn()) { if (Date.now() - t0 > timeout) throw new Error(`timed out waiting for: ${label}`); await b.sleep(50); } };
   // Wait until no new /api/query has arrived for `quiet` ms (polling, not a fixed sleep).
   const settle = async (quiet = 300) => { let n = -1; for (let i = 0; i < 60 && n !== queries.length; i++) { n = queries.length; await b.sleep(quiet); } };
+
+  // Edit member colours… is a dialog (palette, member, colour, Save): open it, optionally pick, then Save (or Cancel).
+  const memDlg = `document.querySelector('dialog.memcol-dialog[open]')`;
+  const memOpen = async () => { await ev(`document.querySelector('.ws-memcol__open').click()`); await waitFor(`!!${memDlg}`, 'member colours dialog'); };
+  const memNames = () => ev(`[...${memDlg}.querySelectorAll('.memcol-member__name')].map((n) => n.textContent)`);
+  const memPick = async (row, sw, pal = 1) => { // palette 1 = Colour-blind safe: swatch 7 is #000000, swatch 3 #cc79a7
+    await ev(`${memDlg}.querySelectorAll('.memcol-palette')[${pal}].click()`);
+    await ev(`${memDlg}.querySelectorAll('.memcol-member')[${row}].click()`);
+    await ev(`${memDlg}.querySelectorAll('.memcol-swatch')[${sw}].click()`);
+  };
+  const memEnd = async (btn = 'primary') => { await ev(`${memDlg}.querySelector('.dialog__foot .btn${btn === 'primary' ? '--primary' : ':nth-child(2)'}').click()`); await waitFor(`!${memDlg}`, 'member colours dialog closed'); };
   const lastQuery = () => queries[queries.length - 1];
   const hasKey = (o, k) => J(o).includes(`"${k}"`);
 
@@ -438,13 +449,12 @@ try {
     await chartType('Donut');
     const d = await pieData(); must(d.length === 24 && distinct(d.map((x) => x.colour)) === 3, 'donut split');
     await openColour();
-    await ev(`document.querySelector('.ws-memcol__toggle').click()`);
-    const names = await ev(`[...document.querySelectorAll('.ws-memcol__name')].map((n) => n.textContent)`);
+    await memOpen();
+    const names = await memNames();
     must(J(names) === J(['web', 'shop', 'app']), 'the member colour editor lists members: ' + J(names));
-    await ev(`document.querySelectorAll('.ws-memcol__row')[0].querySelectorAll('.ws-memcol__swatch')[3].click()`); await settle(500);
+    await memPick(0, 3); await memEnd(); await settle(500);
     const d2 = await pieData();
     must(d2[0].colour !== d[0].colour && d2[0].colour === d2[3].colour, 'a member colour recolours every sub-slice of the member: ' + J([d[0].colour, d2[0].colour]));
-    await ev(`document.querySelector('.ws-memcol__toggle').click()`);
     await closeColour();
   });
   await check('a Colour field that is already the slice field adds no group-by: the pie is as before', async () => {
@@ -455,6 +465,18 @@ try {
     await dragChip('region', toolEl('Color')); await settle(600);
     must(lastQuery().columnDimensions.length === 1, 'one group-by: ' + J(lastQuery().columnDimensions.map((d) => d.column)));
     must((await opt()).series[0].data.length === 8 && (await hints()).length === 0, '8 slices');
+  });
+  await check('a bar whose Colour field is its own axis field is not split: one group-by, one series, each bar in its member\'s colour (D154)', async () => {
+    await newSheet();
+    await dragChip('region', `__t.zone('columns')`);
+    await dragChip('amount', `__t.zone('rows')`);
+    await settle(300); await chartType('Bar');
+    await dragChip('region', toolEl('Color')); await settle(700);
+    must(lastQuery().columnDimensions.length === 1, 'one group-by: ' + J(lastQuery().columnDimensions.map((d) => d.column)));
+    const o = await opt();
+    must(o.series.length === 1 && (await hints()).length === 0, 'one series, no hint: ' + o.series.length);
+    const fills = o.series[0].data.map((d) => d?.itemStyle?.color);
+    must(fills.length >= 3 && fills.every(Boolean) && new Set(fills).size > 1, 'a colour per bar: ' + J(fills));
   });
 
   // ---- several fields on Colour ----------------------------------------------------------------------------------------------------
@@ -498,14 +520,13 @@ try {
   });
   await check('member colours for a combination: the editor lists "a · b", a pick recolours that series and survives a redraw', async () => {
     await openColour();
-    await ev(`document.querySelector('.ws-memcol__toggle').click()`);
-    const names = await ev(`[...document.querySelectorAll('.ws-memcol__name')].map((n) => n.textContent)`);
+    await memOpen();
+    const names = await memNames();
     must(names.length === 6 && names[0] === 'web · DE', 'combined members listed: ' + J(names));
     const before = (await opt()).series[0].itemStyle.color;
-    await ev(`document.querySelectorAll('.ws-memcol__row')[0].querySelectorAll('.ws-memcol__swatch')[3].click()`); await settle(600);
+    await memPick(0, 3); await memEnd(); await settle(600);
     const after = (await opt()).series[0].itemStyle.color;
     must(after !== before && (await opt()).series[1].itemStyle.color !== after, 'only that combination changed: ' + J([before, after]));
-    await ev(`document.querySelector('.ws-memcol__toggle').click()`);
     await closeColour();
   });
   await check('a third field joins (3 is the cap); a fourth is refused with a message and the Colour fields stay as they were', async () => {
@@ -546,11 +567,11 @@ try {
   await check('Format holds none of the Colour controls, and it and the Color flyout are never open together', async () => {
     await closeColour(); await openFormat();
     for (const label of ['Opacity', 'Border thickness', 'Reverse palette', 'Colour by category', 'Colour scale', 'Line markers', 'member colours'])
-      must(await ev(`!(${fmtField(label)}) && ![...document.querySelectorAll('.ws-format .ws-memcol__toggle')].some((x) => /member colours/.test(x.textContent))`), `Format still offers ${label}`);
+      must(await ev(`!(${fmtField(label)}) && ![...document.querySelectorAll('.ws-format .ws-memcol__open')].some((x) => /member colours/.test(x.textContent))`), `Format still offers ${label}`);
     must(!(await colourOpen()), 'the Color flyout is open beside Format');
     await openColour();
     must(!(await ev(`!!(${fmtField('Number')})`)), 'Format stayed open beside the Color flyout');
-    must(await ev(`!!(${fmtField('Opacity')}) && !!(${fmtField('Border thickness')}) && !!(${fmtField('Reverse palette')})`), 'the flyout lacks Opacity / Border thickness / Reverse palette for a bar');
+    must(await ev(`!!(${fmtField('Opacity')}) && !!(${fmtField('Border thickness')}) && !(${fmtField('Reverse palette')}) && !(${fmtField('Colour by category')})`), 'the flyout holds Opacity and Border thickness for a bar, and neither Reverse palette nor Colour by category');
     await closeColour();
   });
 

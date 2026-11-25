@@ -1,17 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { SWATCHES, memberKey, fieldColorKey, cleanMemberColors, setMemberColor, clearFieldColors, colourOf, colorsByName, orderedPalette, rampStops }
+import { memberKey, fieldColorKey, cleanMemberColors, setMemberColor, clearFieldColors, applyMemberDraft, colourOf, colorsByName, orderedPalette, rampStops }
   from "../../src/DashboardBuilder/Features/Dashboard/colour-model.js";
 import { LIMITS } from "../../src/DashboardBuilder/Features/Core/validate.js";
 import { sanitizeSheet } from "../../src/DashboardBuilder/Features/Workbook/workbook-model.js";
 import { emptySheet, defaultFormat } from "../../src/DashboardBuilder/Features/Core/store.js";
 
 const plain = (x) => JSON.parse(JSON.stringify(x));
-test("swatches are valid distinct #rrggbb", () => {
-  assert.ok(SWATCHES.length >= 12);
-  for (const s of SWATCHES) assert.match(s, /^#[0-9a-f]{6}$/);
-  assert.equal(new Set(SWATCHES).size, SWATCHES.length);
-});
 test("memberKey stringifies, null is its own key", () => {
   assert.equal(memberKey(5), "5");
   assert.equal(memberKey(null), "\u0000null");
@@ -57,19 +52,18 @@ test("orderedPalette reverses a copy; rampStops swaps ends", () => {
   assert.deepEqual(rampStops("lo", "hi", true), ["hi", "lo"]);
   assert.deepEqual(rampStops("lo", "hi", false), ["lo", "hi"]);
 });
-test("sheet round trip: memberColors + paletteReverse; old sheets unchanged", () => {
+test("sheet round trip: memberColors; the removed Reverse palette / Colour by category are dropped and reported", () => {
   const s = emptySheet();
   assert.deepEqual(s.memberColors, {});
-  assert.equal(defaultFormat().paletteReverse, false);
+  assert.equal("paletteReverse" in defaultFormat(), false); assert.equal("colorByDimension" in defaultFormat(), false);
   const issues = [];
-  const out = sanitizeSheet({ ...s, memberColors: { "t.c": { EU: "#ABCDEF", bad: "x" } }, format: { ...s.format, paletteReverse: true } }, "S", issues);
+  const out = sanitizeSheet({ ...s, memberColors: { "t.c": { EU: "#ABCDEF", bad: "x" } }, format: { ...s.format, paletteReverse: true, colorByDimension: true } }, "S", issues);
   assert.deepEqual(plain(out.memberColors), { "t.c": { EU: "#abcdef" } });
-  assert.equal(out.format.paletteReverse, true);
+  assert.equal("paletteReverse" in out.format, false); assert.equal("colorByDimension" in out.format, false);
   assert.ok(issues.some((i) => /colour/i.test(i)));
+  assert.ok(issues.some((i) => /Reverse palette no longer exists/.test(i)) && issues.some((i) => /Colour by category no longer exists/.test(i)));
   const old = sanitizeSheet({ chartType: "bar" }, "S", []);
-  assert.deepEqual(old.memberColors, {}); assert.equal(old.format.paletteReverse, false);
-  const bad = []; sanitizeSheet({ format: { paletteReverse: "yes" } }, "S", bad);
-  assert.ok(bad.some((i) => /paletteReverse/.test(i)));
+  assert.deepEqual(old.memberColors, {});
 });
 test("member names that are Object.prototype members are ordinary keys", () => {
   const names = ["constructor", "toString", "valueOf", "hasOwnProperty", "__proto__"];
@@ -117,4 +111,22 @@ test("an old workbook with a plain Bool field keeps its 'True' member colours an
   assert.deepEqual(plain(out.memberColors), { "shop.orders.active": { True: "#aabbcc", False: "#112233" } });
   const f = sanitizeSheet({ filters: [{ db: "shop", table: "orders", column: "active", op: "in", values: ["True"] }] }, "S", issues);
   assert.deepEqual(f.filters?.[0]?.values, ["True"]);
+});
+
+test("applyMemberDraft applies set and clear in one pass, optionally after clearing the field", () => {
+  const start = setMemberColor(setMemberColor({}, "t.c", "EU", "#111111").value, "t.c", "US", "#222222").value;
+  let r = applyMemberDraft(start, "t.c", { EU: null, APAC: "#AABBCC" });
+  assert.deepEqual(plain(r.value), { "t.c": { US: "#222222", APAC: "#aabbcc" } });
+  r = applyMemberDraft(start, "t.c", { APAC: "#aabbcc" }, true);
+  assert.deepEqual(plain(r.value), { "t.c": { APAC: "#aabbcc" } }, "clearFirst also drops members that are no longer listed");
+  assert.deepEqual(plain(applyMemberDraft(start, "t.c", {}, true).value), {}, "an empty draft with clearFirst clears the field");
+  assert.deepEqual(plain(applyMemberDraft(start, "t.c", {}).value), plain(start), "an empty draft changes nothing");
+  assert.equal(start["t.c"].EU, "#111111", "the input map is never mutated");
+});
+test("applyMemberDraft returns the first error and applies nothing", () => {
+  const r = applyMemberDraft({}, "t.c", { A: "#111111", B: "red" });
+  assert.equal(r.ok, false);
+  assert.match(r.error, /#rrggbb/);
+  const many = Object.fromEntries(Array.from({ length: LIMITS.memberColors + 1 }, (_, i) => [`m${i}`, "#123456"]));
+  assert.equal(applyMemberDraft({}, "t.c", many).ok, false, "the per-field cap still applies");
 });

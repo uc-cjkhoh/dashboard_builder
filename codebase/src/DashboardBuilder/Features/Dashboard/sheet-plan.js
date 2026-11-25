@@ -150,9 +150,13 @@ export function planDims(sheet) {
   // The same field on Shape and Colour groups once (its members carry both the symbol and the colour); a pie / donut's Colour field already on a shelf is that slice field (grouped once).
   const colourFields = colourDimsOf(sheet);
   const onShelf = (f) => [...sheet.rows, ...sheet.columns].some((x) => roleOf(x) === "dimension" && sameColumn(x, f));
-  const colorDiscrete = colourFields.length === 1 && shapeDim.length && sameColumn(shapeDim[0], colourFields[0]) ? []
-    : sheet.chartType === "pie" || sheet.chartType === "donut" ? colourFields.filter((f) => !onShelf(f)) : colourFields;
   const sizeDim = sizeDimensionOf(sheet);
+  // A bar whose one Colour dimension is also its one axis dimension (nothing else grouping it, one measure) needs no split: one bar per member, each in its own colour.
+  const shelfDims = [...rowDims, ...sheet.columns.filter((f) => roleOf(f) === "dimension")];
+  const axisColour = sheet.chartType === "bar" && colourFields.length === 1 && shelfDims.length === 1 && !isCalcPill(shelfDims[0]) && sameColumn(shelfDims[0], colourFields[0]) && !detail.length && !sizeDim
+    && planMeasures(sheet).filter((e) => e.role === "shelf").length === 1; // one measure: with several the split (and its hint) stays
+  const colorDiscrete = axisColour || (colourFields.length === 1 && shapeDim.length && sameColumn(shapeDim[0], colourFields[0])) ? []
+    : sheet.chartType === "pie" || sheet.chartType === "donut" ? colourFields.filter((f) => !onShelf(f)) : colourFields;
   const taken = [...rowDims, ...sheet.columns.filter((f) => roleOf(f) === "dimension"), ...detail, ...shapeDim, ...colorDiscrete];
   const colDims = [
     ...sheet.columns.filter((f) => roleOf(f) === "dimension"),
@@ -161,7 +165,7 @@ export function planDims(sheet) {
     ...shapeDim,
     ...colorDiscrete, // discrete Colour MUST remain the last key (renderColorSplit)
   ];
-  return { rowDims, colDims, keyOrder: [...rowDims, ...colDims], colourDims: colorDiscrete }; // the Colour fields are the last keys, in order
+  return { rowDims, colDims, keyOrder: [...rowDims, ...colDims], colourDims: colorDiscrete, axisColour }; // the Colour fields are the last keys, in order; axisColour: a bar coloured by its own axis field (no split)
 }
 
 /**

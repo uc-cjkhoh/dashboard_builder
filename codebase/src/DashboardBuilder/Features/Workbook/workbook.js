@@ -1,6 +1,6 @@
 import {
   entities, relationships, tabs, bus, currentView,
-  createWorksheet, createDashboard, createStory, setSteps, updateSheet, setWidgets, setDashboardSize, setDashboardRange, setDashboardNotes, nextWidgetId, closeTab, showModel, switchTab, currentTheme, setTheme,
+  createWorksheet, createDashboard, createStory, setSteps, updateSheet, setWidgets, setDashboardSize, setDashboardRange, setDashboardNotes, setGroupSlot, setGroupCollapsed, nextWidgetId, closeTab, showModel, switchTab, currentTheme, setTheme,
   nextCalcId, sharedFilters, setSharedFilters, fieldMeta, setAllFieldMeta, parameters, setParameters, hierarchies, setHierarchies, calculations, setCalculations,
 } from "../Core/store.js";
 import { clearRoleChoices } from "../Calc/calc-pane-model.js";
@@ -36,6 +36,7 @@ let blockedKey = null; // a stored workbook that couldn't be restored — never 
 let warned = ""; // the last not-saved warning shown (a toast once per cause, not on every autosave)
 let switching = 0; // > 0 while one server's workspace is cleared for another's: nothing is saved, so the old model can't land under the new key
 let switchTicket = 0; // latest-wins when connection changes arrive while a switch is fading out
+let connView = null;  // the connection view the stored workbook belongs to (host, port, user): auto-backup names its folder from it
 
 export function initWorkbook() {
   const fileInput = document.getElementById("wb-file");
@@ -45,6 +46,11 @@ export function initWorkbook() {
   for (const type of CHANGE_EVENTS) bus.addEventListener(type, scheduleSave);
 
   bus.addEventListener("workbook:export", exportFile);
+  // Auto-backup (Workbook/backup.js) hands a backup's text back here, so it opens through the same checks as an imported file.
+  bus.addEventListener("workbook:open-text", (e) => {
+    if (!key) { toast("Connect to ClickHouse first — a workbook opens against the connected server.", "info"); return; }
+    importText(String(e.detail?.text ?? ""), String(e.detail?.name ?? "the backup"));
+  });
   // The worksheet view bar's Import button asks for a file here (it has no handle on the picker).
   bus.addEventListener("workbook:import", () => {
     if (!key) { toast("Connect to ClickHouse first — a workbook opens against the connected server.", "info"); return; }
@@ -57,6 +63,7 @@ export function initWorkbook() {
 async function onConnection(view) {
   flushSave(); // finish saving under the previous server's key
   const previous = key, ticket = ++switchTicket;
+  connView = view?.connected ? { host: view.host, port: view.port, user: view.user } : null;
   key = storageKey(view);
   legacyKey = legacyStorageKey(view);
   if (!key) { clearWorkspace(); return; }
@@ -70,7 +77,11 @@ async function onConnection(view) {
   }
   if (!isEmpty()) return;
   const saved = readStorage(key) ?? readStorage(legacyKey);
-  if (!saved) { if (switched) toast("Your workbook for the previous server is saved in this browser and comes back when you connect to it again.", "info"); return; }
+  if (!saved) {
+    if (switched) toast("Your workbook for the previous server is saved in this browser and comes back when you connect to it again.", "info");
+    bus.dispatchEvent(new CustomEvent("workbook:none-stored", { detail: { view: connView } })); // auto-backup may hold one (Workbook/backup.js)
+    return;
+  }
   let wb;
   try { wb = parseWorkbook(saved); } catch (err) { keepUnreadable(saved, err); return; }
   if (!wb.entities.length && !wb.tabs.length) return;
@@ -156,8 +167,10 @@ function save() {
     return;
   }
   try {
-    localStorage.setItem(key, JSON.stringify(serializeWorkbook(currentState())));
+    const json = JSON.stringify(serializeWorkbook(currentState()));
+    localStorage.setItem(key, json);
     warned = "";
+    bus.dispatchEvent(new CustomEvent("workbook:saved", { detail: { json, view: connView, empty: isEmpty() } })); // auto-backup copies it (Workbook/backup.js)
   } catch (e) {
     const full = e?.name === "QuotaExceededError" || e?.code === 22;
     warnNotSaved(full ? "Not saved — browser storage is full (pictures take the most room). Use Export to keep a copy." : "Not saved — browser storage is unavailable. Use Export to keep a copy.");
@@ -218,6 +231,10 @@ function openWorkbook(wb) {
       : w.kind === "spacer" ? { id: nextWidgetId(), kind: "spacer", x: w.x, y: w.y, w: w.w, h: w.h }
       : { id: nextWidgetId(), kind: "text", heading: w.heading, body: w.body, x: w.x, y: w.y, w: w.w, h: w.h }))));
     wb.dashboards.forEach((d, i) => { if (d.size) setDashboardSize(dashboardIds[i], d.size); if (d.range) setDashboardRange(dashboardIds[i], d.range); if (d.notes) setDashboardNotes(dashboardIds[i], d.notes); });
+    // Group colours: saved slots first, then a dashboard without one takes the lowest unused (so it never collides with a later saved slot); collapsed groups last.
+    wb.dashboards.forEach((d, i) => { if (d.groupSlot) setGroupSlot(dashboardIds[i], d.groupSlot); });
+    wb.dashboards.forEach((d, i) => { if (!d.groupSlot) setGroupSlot(dashboardIds[i], null); });
+    wb.dashboards.forEach((d, i) => { if (d.collapsed) setGroupCollapsed(dashboardIds[i], true); });
     const activeId = wb.active ? (wb.active.kind === "worksheet" ? worksheetIds : wb.active.kind === "story" ? storyIds : dashboardIds)[wb.active.index] : null;
     if (activeId) switchTab(activeId);
     else showModel();
@@ -250,8 +267,16 @@ async function importFile(input) {
   input.value = ""; // let the same file be picked again later
   if (!file) return;
   if (file.size > MAX_IMPORT_BYTES) { toast("That file is too large to be a workbook.", "danger"); return; }
+  let text;
+  try { text = await file.text(); } catch { toast("Couldn't read that file.", "danger"); return; }
+  await importText(text, file.name);
+}
+
+/** Opens workbook text (an imported file, or a backup) after the full checks; a non-empty canvas is replaced only after a confirmation. */
+async function importText(text, name) {
+  if (text.length > MAX_IMPORT_BYTES) { toast("That file is too large to be a workbook.", "danger"); return; }
   let wb;
-  try { wb = parseWorkbook(await file.text()); } catch (err) { toast(err.message, "danger"); return; }
+  try { wb = parseWorkbook(text); } catch (err) { toast(err.message, "danger"); return; }
   if (!isEmpty()) {
     const ok = await confirmDestructive(
       "Replace the current workbook? Its tables, relationships, worksheets, dashboards and stories will be removed.",
@@ -262,9 +287,9 @@ async function importFile(input) {
   wb.issues.push(...await catalogIssuesFor(wb)); // an import is deliberate: its summary includes the missing columns
   if (openWorkbook(wb)) blockedKey = null; // a deliberate import replaces whatever was stored
   if (wb.issues.length) {
-    await listDialog(`Opened ${file.name} with ${issueCount(wb.issues.length)}`,
+    await listDialog(`Opened ${name} with ${issueCount(wb.issues.length)}`,
       wb.issues.slice(0, 20).concat(wb.issues.length > 20 ? [`…and ${wb.issues.length - 20} more.`] : []));
-  } else toast(`Opened ${file.name}.`, "ok");
+  } else toast(`Opened ${name}.`, "ok");
 }
 
 // --- helpers -----------------------------------------------------------------

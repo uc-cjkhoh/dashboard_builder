@@ -175,7 +175,7 @@ test("every remaining reset is reported, never silent", () => {
     entities: [e],
     dashboards: [5, { name: 7, sheet: {
       rows: [pill({ role: "bogus" })],
-      format: { dataLabels: "yes", colorByDimension: 1, currencySymbol: 99, xTitle: 5 },
+      format: { dataLabels: "yes", dualAxis: 1, currencySymbol: 99, xTitle: 5 },
     } }],
   }));
   assert.equal(wb.entities[0].x, 0); assert.equal(wb.entities[0].y, 0);
@@ -183,9 +183,9 @@ test("every remaining reset is reported, never silent", () => {
   assert.equal(wb.worksheets.length, 1); assert.equal(wb.worksheets[0].name, "Worksheet");
   const sh = wb.worksheets[0].sheet;
   assert.equal(sh.rows[0].role, undefined);
-  assert.equal(sh.format.dataLabels, false); assert.equal(sh.format.colorByDimension, false);
+  assert.equal(sh.format.dataLabels, false); assert.equal(sh.format.dualAxis, false);
   assert.equal(sh.format.currencySymbol, "$"); assert.equal(sh.format.xTitle, null);
-  for (const re of [/position/, /join key/, /not a worksheet/i, /name/, /role/, /dataLabels/, /colorByDimension/, /currency/, /axis title/i])
+  for (const re of [/position/, /join key/, /not a worksheet/i, /name/, /role/, /dataLabels/, /dualAxis/, /currency/, /axis title/i])
     assert.ok(wb.issues.some((i) => re.test(i)), String(re));
 });
 test("a non-string filter value keeps the filter, resets the value and reports it", () => {

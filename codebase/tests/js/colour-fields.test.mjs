@@ -105,3 +105,20 @@ test("a combination whose field key would not survive a reload is refused when t
   assert.equal(Object.keys(cleanMemberColors({ [fieldColorKey(f)]: { m: "#112233" } }, "S", issues)).length, 0, "and import would have dropped it");
   assert.equal(issues.length, 1);
 });
+
+test("a bar coloured by its own axis field is not split: one bar per member (axisColour); any other Colour field still splits", () => {
+  const own = planDims(sheet({ columns: [dim("a")], rows: [num("v")], color: [dim("a")] }));
+  assert.equal(own.axisColour, true); assert.equal(own.colourDims.length, 0); assert.deepEqual(own.keyOrder.map((f) => f.column), ["a"]);
+  const horizontal = planDims(sheet({ rows: [dim("a")], columns: [num("v")], color: [dim("a")] }));
+  assert.equal(horizontal.axisColour, true); assert.equal(horizontal.colourDims.length, 0);
+  const other = planDims(sheet({ columns: [dim("a")], rows: [num("v")], color: [dim("b")] }));
+  assert.equal(other.axisColour, false); assert.equal(other.colourDims.length, 1); assert.deepEqual(other.keyOrder.map((f) => f.column), ["a", "b"]);
+  const two = planDims(sheet({ columns: [dim("a"), dim("c")], rows: [num("v")], color: [dim("a")] }));
+  assert.equal(two.axisColour, false); assert.equal(two.colourDims.length, 1);
+  const stacked = planDims(sheet({ chartType: "stacked", columns: [dim("a")], rows: [num("v")], color: [dim("a")] }));
+  assert.equal(stacked.axisColour, false); assert.equal(stacked.colourDims.length, 1);
+  const twoMeasures = planDims(sheet({ columns: [dim("a")], rows: [num("v"), num("w")], color: [dim("a")] }));
+  assert.equal(twoMeasures.axisColour, false); assert.equal(twoMeasures.colourDims.length, 1, "several measures keep the split and its hint");
+  const three = planDims(sheet({ columns: [dim("a")], rows: [num("v")], color: [dim("a"), dim("b")] }));
+  assert.equal(three.axisColour, false);
+});

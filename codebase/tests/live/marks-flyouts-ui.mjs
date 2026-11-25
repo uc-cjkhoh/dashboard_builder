@@ -1,4 +1,4 @@
-// Browser checks for the Marks flyouts (D155): every one of the 12 tiles opens the same layout (a full-width Add field row, a side menu), the settings that
+// Browser checks for the Marks flyouts (D155): every one of the 12 tiles opens the same layout (a full-width Drop Field Here row, no field list), the settings that
 // were in Format live on their tile (Size, Shape, Label, Tooltip, Path, Dates), a tile is quiet only while its flyout has nothing for the chart type, and focus returns to the control that changed.
 // Real Chromium over CDP (tests/live/cdp.mjs), /api/* mocked. Run:  node tests/live/marks-flyouts-ui.mjs   (start the app first: cd src/DashboardBuilder && dotnet run --no-launch-profile --urls http://localhost:5180 ; stop it with fuser -k 5180/tcp)
 // Env: APP_URL, SHOTS_DIR (screenshot folder), CDP_PORT (default: a free port), CHROME_BIN.
@@ -173,11 +173,11 @@ try {
   await chartType('Bar');
 
   const KEYS = ['color', 'size', 'label', 'detail', 'tooltip', 'shape', 'path', 'angle', 'filters', 'period', 'drill', 'pages'];
-  await check('all 12 tiles open the same slot: a full-width dotted Add field row and a side menu', async () => {
+  await check('all 12 tiles open the same slot: a full-width dashed Drop Field Here row (a drop target, no field list)', async () => {
     for (const key of KEYS) {
       await openTile(key);
-      const r = await ev(`(() => { const slot = ${fly}.querySelector('.ws-toolpanel__slot'); const btn = slot?.querySelector(':scope > .ws-picker__btn'); const menu = document.querySelector('.ws-picker__box--side'); if (!slot || !btn) return null; const s = slot.getBoundingClientRect(), x = btn.getBoundingClientRect(), cs = getComputedStyle(slot), inner = s.width - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight); return { full: Math.abs(x.width - inner) <= 1, dotted: getComputedStyle(btn, '::before').borderTopStyle, menu: !!menu && menu.hidden }; })()`);
-      must(r && r.full && r.dotted === 'dotted' && r.menu, `${key}: ${J(r)}`);
+      const r = await ev(`(() => { const slot = ${fly}.querySelector('.ws-toolpanel__slot'); const btn = slot?.querySelector(':scope > .ws-addfield'); const menu = document.querySelector('.ws-picker__box, .ws-picker__item'); if (!slot || !btn) return null; const s = slot.getBoundingClientRect(), x = btn.getBoundingClientRect(), cs = getComputedStyle(slot), inner = s.width - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight); return { full: Math.abs(x.width - inner) <= 1, dotted: getComputedStyle(btn, '::before').borderTopStyle, menu: !menu && btn.tagName === 'DIV' }; })()`);
+      must(r && r.full && r.dotted === 'dashed' && r.menu, `${key}: ${J(r)}`);
     }
     await closePanels();
   });
@@ -195,11 +195,32 @@ try {
     for (const l of ['Show tooltips', 'Command buttons', 'Tooltip mode']) must(await inFly(l), l + ' missing');
     must(await ev(`!!${fly}.querySelector('.ws-flyedit__group:first-child .ws-toolpanel__slot')`), 'the slot does not open the first section');
   });
-  await check('Pie: Size, Shape, Path stay quiet and open the slot alone; Angle lights', async () => {
+  await check('Pie: Shape and Path stay quiet and open the slot alone; Size lights with the Size meter; Angle lights', async () => {
     await chartType('Pie');
-    for (const k of ['size', 'shape', 'path']) must(await quiet(k), `${k} not quiet on a pie`);
-    must(!(await quiet('angle')), 'Angle quiet on a pie');
-    for (const k of ['size', 'shape', 'path']) { await openTile(k); must(await slotOnly(), `${k} flyout on a pie is not the slot alone`); }
+    for (const k of ['shape', 'path']) must(await quiet(k), `${k} not quiet on a pie`);
+    must(!(await quiet('size')) && !(await quiet('angle')), 'Size or Angle quiet on a pie');
+    for (const k of ['shape', 'path']) { await openTile(k); must(await slotOnly(), `${k} flyout on a pie is not the slot alone`); }
+    await openTile('size'); must(await inFly('Size') && !(await inFly('Marker size')), 'a pie has the Size meter, not Marker size');
+  });
+  await check('Size meter: dragging it resizes the drawn bar and pie; the leftmost stop is Auto and restores the default', async () => {
+    const chartOpt = `window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas')).getOption()`;
+    const drag = async (v) => { await ev(`(() => { const i = document.querySelector('#ws-toolfly .ws-meter__input'); i.value = ${v}; i.dispatchEvent(new Event('input', { bubbles: true })); i.dispatchEvent(new Event('change', { bubbles: true })); })()`); await settle(500); };
+    const label = () => ev(`document.querySelector('#ws-toolfly .ws-meter__value').textContent`);
+    await chartType('Pie');
+    await openTile('size');
+    const before = await ev(`${chartOpt}.series[0].radius`);
+    await drag(40); must((await label()) === '100%', 'readout at the top stop: ' + (await label()));
+    const big = await ev(`${chartOpt}.series[0].radius`);
+    must(J(big) !== J(before) && J(big).includes('85%'), 'pie radius at the top stop: ' + J(big));
+    await drag(3); must((await label()) === 'Auto', 'leftmost stop reads Auto');
+    must(J(await ev(`${chartOpt}.series[0].radius`)) === J(before), 'Auto restores the default radius');
+    await chartType('Bar');
+    await openTile('size');
+    const cap = await ev(`${chartOpt}.series[0].barMaxWidth`);
+    await drag(40);
+    const gap = await ev(`${chartOpt}.series[0].barCategoryGap`);
+    must(parseInt(gap) < 20 && (await ev(`${chartOpt}.series[0].barMaxWidth`)) > cap, 'bar gap / cap at the top stop: ' + gap);
+    await drag(3);
   });
   await check('Line: Shape lights (Marker shape), Path holds Line style and Line pattern, Size holds Marker size; Format holds none of them', async () => {
     await chartType('Line');
@@ -241,6 +262,59 @@ try {
     await settle(500);
     must(await ev(`!!document.activeElement?.closest?.('[data-fly-ctl="markerSize"]')`), 'focus after Marker size: ' + await ev(`document.activeElement?.tagName + '.' + document.activeElement?.className`));
     must(await ev(`document.querySelector('.ws-tool[data-tool="size"]').getAttribute('aria-expanded') === 'true'`), 'the flyout closed on a change');
+  });
+  await check('Label: Allow labels to overlap other marks shows only while labels are drawn; on by default; off hides overlapping labels on the drawn series', async () => {
+    await chartType('Bar');
+    await openTile('label');
+    await ev(`(() => { const i = ${fly}.querySelector('[data-fly-ctl="dataLabels"] input'); if (i.checked) i.click(); return true; })()`); await settle(500);
+    await openTile('label');
+    must(!(await inFly('Allow labels to overlap')), 'Allow labels to overlap offered while no label is drawn');
+    await ev(`(() => { const i = ${fly}.querySelector('[data-fly-ctl="dataLabels"] input'); if (!i.checked) i.click(); return true; })()`); await settle(500);
+    await openTile('label');
+    must(await inFly('Allow labels to overlap other marks'), 'Allow labels to overlap missing from the Label flyout once labels are drawn');
+    const hide = () => ev(`(() => { const o = window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas')).getOption(); return o.series.filter((s) => s.label?.show).every((s) => s.labelLayout?.hideOverlap === true) && o.series.some((s) => s.label?.show); })()`);
+    must(!(await hide()), 'overlap hidden by default');
+    await openTile('label');
+    await ev(`(() => { const i = ${fly}.querySelector('[data-fly-ctl="labelOverlap"] input'); i.click(); return true; })()`); await settle(500);
+    must(await hide(), 'labels not hidden once overlap is off');
+    must(await ev(`!!document.activeElement?.closest?.('[data-fly-ctl="labelOverlap"]')`), 'focus did not return to the control');
+    await ev(`(() => { const i = ${fly}.querySelector('[data-fly-ctl="labelOverlap"] input'); i.click(); return true; })()`); await settle(500);
+    must(!(await hide()), 'back on: labels draw as before');
+  });
+  await check('Size: Marker size is a meter whose leftmost stop is Auto; a Format-free control with the same stored key', async () => {
+    await chartType('Line');
+    await openTile('size');
+    await ev(`(() => { const i = ${fly}.querySelector('[data-fly-ctl="markerSize"] input'); i.value = '3'; i.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`); await settle(500); // an earlier check may have left a size
+    await openTile('size');
+    const r = await ev(`(() => { const i = ${fly}.querySelector('[data-fly-ctl="markerSize"] input[type=range]'); return i ? [i.min, i.max, i.value, i.closest('label').querySelector('output').textContent] : null; })()`);
+    must(J(r) === J(['3', '40', '3', 'Auto']), 'marker size meter ' + J(r));
+    await ev(`(() => { const i = ${fly}.querySelector('[data-fly-ctl="markerSize"] input'); i.value = '12'; i.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`); await settle(500);
+    must(await ev(`window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas')).getOption().series[0].symbolSize === 12`), 'meter did not set the marker size');
+    await ev(`(() => { const i = ${fly}.querySelector('[data-fly-ctl="markerSize"] input'); i.value = '3'; i.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`); await settle(500);
+    must(await ev(`window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas')).getOption().series[0].symbolSize === 8`), 'Auto did not return the default size');
+  });
+  await check('Pages: the tile has a Speed control once a field is set; Slow/Medium/Fast; Play stays on the worksheet', async () => {
+    await chartType('Bar');
+    await dragChip('channel', tile('pages')); await settle(600);
+    await openTile('pages');
+    must(await inFly('Speed'), 'Speed missing from the Pages flyout');
+    must(await ev(`!!${fly}.querySelector('.ws-flyedit__group:first-child .ws-toolpanel__slot')`), 'the slot does not open the first section');
+    const opts = await ev(`[...${fly}.querySelectorAll('[data-fly-ctl="pageSpeed"] option')].map((o) => o.textContent)`);
+    must(J(opts) === J(['Slow', 'Medium', 'Fast']), 'speed options ' + J(opts));
+    must(!(await inFly('Play')), 'Play moved into the flyout');
+    await ev(`(() => { const s = ${fly}.querySelector('[data-fly-ctl="pageSpeed"] select'); s.value = 'fast'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`); await settle(500);
+    must(await ev(`!!document.querySelector('.ws-pages')`), 'the page control left the worksheet');
+    await openTile('pages');
+    must(await ev(`${fly}.querySelector('[data-fly-ctl="pageSpeed"] select').value === 'fast'`), 'the speed was not kept');
+    // reduced motion hides Play, so Speed does nothing: it is disabled and says why
+    await b.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
+    try {
+      await ev(`${tile('pages')}.click()`); await settle(300); await openTile('pages');
+      const r = await ev(`(() => { const f = ${fly}.querySelector('[data-fly-ctl="pageSpeed"]'); return f ? [f.querySelector('select').disabled, f.title] : null; })()`);
+      must(r && r[0] === true && /reduced motion/.test(r[1]), 'Speed not disabled with a reason under reduced motion: ' + J(r));
+      must(await ev(`!document.querySelector('.ws-pages .ws-pages__btn.is-active') && ![...document.querySelectorAll('.ws-pages button')].some((x) => /Play/.test(x.textContent))`), 'Play still shown under reduced motion');
+    } finally { await b.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] }); }
+    await ev(`(() => { const x = ${fly}.querySelector('.ws-pill .iconbtn, .ws-pill button'); x?.click(); return true; })()`); await settle(500);
   });
   await check('design probe: each tile\'s own controls hold the design rules', async () => {
     const { designProbe, formatProbe } = await import('./design-probe.mjs');

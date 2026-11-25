@@ -5,7 +5,7 @@
 //     relationships between them. There is exactly ONE model, shared across all tabs.
 //   • TABS — one ordered list of two kinds, each built FROM the model's tables:
 //       worksheet: { id: "ws#N", kind: "worksheet", name, sheet }          (the editor; one chart / table)
-//       dashboard: { id: "db#N", kind: "dashboard", name, widgets: [ … ], size }  (a board of worksheet / text / image / spacer / nav widgets; size = null (automatic) or { width, height } px)
+//       dashboard: { id: "db#N", kind: "dashboard", name, widgets: [ … ], size, groupSlot (1..7), collapsed }  (a board of worksheet / text / image / spacer / nav widgets; size = null (automatic) or { width, height } px)
 //     A widget is { id: "w#N", kind: "sheet", sheetId, x, y, w, h }, { id, kind: "text", heading, body, x, y, w, h }, { id, kind: "image", alt, src (a raster data URL), x, y, w, h }, { id, kind: "spacer", x, y, w, h } or { id, kind: "nav", label, tip, target (a tab id | null), x, y, w, h }
 //     (Board/board-model.js owns the geometry rules).
 //       story: { id: "st#N", kind: "story", name, steps: [{ caption, target: <a worksheet or dashboard tab id> }] }  (Story/story-model.js)
@@ -28,6 +28,7 @@ import { dropParamRefs } from "./parameters-model.js";
 import { clearNavTarget } from "../Board/nav-model.js";
 import { removeSheetWidgets, defaultTabName } from "../Board/board-model.js";
 import { dropTarget } from "../Story/story-model.js";
+import { nextGroupSlot, neighbourAfterClose } from "../Tabs/tab-groups-model.js";
 
 export const bus = new EventTarget();
 
@@ -243,7 +244,6 @@ export const defaultMarks = () => ({ size: null, label: null, detail: [], toolti
 //  dateBucket:   "auto" | "exact" | "hour" … "year"            — group a chart's date/time axis by a calendar grain
 //  legend:       "auto" | "hidden" | "top" | "bottom" | "left" | "right"
 //  dataLabels:   show value labels on marks
-//  colorByDimension: colour a single-measure bar chart's bars by their category
 //  xTitle/yTitle: axis titles (null = none)
 //  lineStyle / heatmapShape / targetMeasure / syncAxes / secondaryType / markerSize / markBorder: see the defaults below
 //  sizeScale:    { smallest?, largest?, vary?, start?, end?, reversed?, fromZero? } — Format → Edit Sizes: whole percent 0–100 of the chart's size range, Sizes vary ("range" / "zero"; absent = Automatic, the chart's own default; an older file's `fromZero` boolean reads as the same mode), a typed Start / End value (finite numbers, start below end; a start is not used from zero), Reversed;
@@ -264,8 +264,6 @@ export const defaultFormat = () => ({
   dateBucket: "auto",
   legend: "auto",
   dataLabels: false,
-  colorByDimension: false,
-  paletteReverse: false, // reverse the categorical order and the continuous ramp
   colorRamp: "brand", // brand | blue | green | amber | violet — scatter / heatmap continuous colour
   colorMin: null, // pinned low end of the continuous colour scale (null = the data's)
   colorMax: null, // pinned high end
@@ -286,7 +284,7 @@ export const defaultFormat = () => ({
   syncAxes: false, // a combo's two value axes share one range
   secondaryType: "line", // right-axis marks of a combo: line | bar | area
   markerSize: null, // null (automatic) | whole px 4–40 — scatter / line markers, circle heatmap
-  markBorder: "none", // none | thin | thick — bars, scatter points, heatmap cells, pie, treemap, funnel
+  markBorder: "none", // "none" | px 0.5–3 in steps of 0.5 (older files: thin | medium | thick) — bars, scatter points, heatmap cells, pie, treemap, funnel
   markerShape: "circle", // circle | square | diamond | triangle — line / area / combo markers
   font: "default", // default | serif | mono — the family of the worksheet's chart and table text
   tableAlign: "auto", // auto | left | center | right — a table's value cells
@@ -316,7 +314,7 @@ export function createWorksheet(name) {
 export function createDashboard(name) {
   if (tabLimitError()) return null;
   dbSeq += 1;
-  const tab = { id: `db#${dbSeq}`, kind: "dashboard", name: name || defaultTabName("dashboard", tabs.map((t) => t.name)), widgets: [], size: null, notes: "" };
+  const tab = { id: `db#${dbSeq}`, kind: "dashboard", name: name || defaultTabName("dashboard", tabs.map((t) => t.name)), widgets: [], size: null, notes: "", groupSlot: nextGroupSlot(dashboards().map((d) => d.groupSlot)), collapsed: false };
   tabs.push(tab);
   switchTab(tab.id);
   emit("tabs:changed");
@@ -391,6 +389,22 @@ export function setDashboardRange(dashboardId, range) {
   emit("dashboard:changed", { id: dashboardId });
 }
 
+/** Collapse or open a dashboard's group on the tab strip (Tabs/tab-groups-model.js); a strip change, so "tabs:changed". */
+export function setGroupCollapsed(dashboardId, collapsed) {
+  const tab = tabById(dashboardId);
+  if (!tab || tab.kind !== "dashboard") return;
+  tab.collapsed = collapsed === true;
+  emit("tabs:changed");
+}
+
+/** A dashboard's group colour slot (1..7, the caller has checked it); null = the lowest slot the other dashboards use least. */
+export function setGroupSlot(dashboardId, slot) {
+  const tab = tabById(dashboardId);
+  if (!tab || tab.kind !== "dashboard") return;
+  tab.groupSlot = slot ?? nextGroupSlot(dashboards().filter((d) => d.id !== dashboardId).map((d) => d.groupSlot));
+  emit("tabs:changed");
+}
+
 /** A dashboard's data note ("" = none); the caller has checked it with `validateNotes` (Board/board-notes.js). */
 export function setDashboardNotes(dashboardId, notes) {
   const tab = tabById(dashboardId);
@@ -429,6 +443,7 @@ export function closeTab(id) {
   if (idx < 0) return;
   const closing = tabs[idx];
   const wasActive = activeView.kind !== "model" && activeView.id === id;
+  const nextId = neighbourAfterClose(tabs, id); // the right neighbour as the strip draws it (groups reorder the display), else the left
   tabs.splice(idx, 1);
   for (const d of dashboards()) { // a closed worksheet leaves its widgets; a button that went to the closed tab is unlinked
     const kept = clearNavTarget(closing.kind === "worksheet" ? removeSheetWidgets(d.widgets, id) : d.widgets, id);
@@ -439,7 +454,7 @@ export function closeTab(id) {
     if (kept !== s.steps) { s.steps = kept; emit("story:changed", { id: s.id }); }
   }
   if (wasActive) {
-    const next = tabs[Math.min(idx, tabs.length - 1)];
+    const next = nextId ? tabById(nextId) : null;
     activeView = next ? { kind: next.kind, id: next.id } : { kind: "model" };
     emit("view:changed");
   }

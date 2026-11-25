@@ -1,13 +1,22 @@
 /* Tabs feature — the Data Source tab + the worksheet / dashboard tab strip. */
 
 /* ---- Tabs (worksheets + dashboards) -------------------------------------- */
-.tabs { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; flex: 1; min-width: 0; }
+.tabs { display: flex; align-items: center; gap: var(--s2); flex-wrap: nowrap; flex: 1; min-width: 0; }
+/* One row, never wrapping. The tab list shrinks its tabs (label first, down to the icon), then scrolls inside the bar; Data Source and [+] stay put.
+   The bottom padding holds a group's underline and is taken back by the negative margin, so the bar's height does not change. */
+.tabs__scroll {
+  display: flex; align-items: flex-start; gap: var(--s2); flex: 0 1 auto; min-width: 0;
+  padding-bottom: var(--s1); margin-bottom: calc(var(--s1) * -1);
+  overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+}
+.tabs__scroll::-webkit-scrollbar { display: none; }
 /* Tier-2 glass control: frosted pill + ≥ 3:1 edge on the glass tab bar. */
 .tab {
   display: inline-flex;
   align-items: center;
   gap: var(--s1);
   height: var(--ctl-h);
+  flex: 0 0 auto; max-width: var(--tab-w, none); /* tabs.js sets --tab-w on .tabs__scroll when the tabs outgrow it: the label shrinks first, down to the icon alone */
   padding: 0 var(--s1) 0 var(--s2);
   border: 1px solid var(--ctl-edge);
   border-radius: var(--r);
@@ -23,21 +32,23 @@
 .tab[aria-selected="true"], .tab.is-active {
   background: var(--accent-soft); border-color: var(--accent); color: var(--ink); font-weight: 600;
   box-shadow: var(--elev-2);
+  max-width: none; /* the active tab is never capped: its label and buttons stay readable */
 }
+.tab.is-renaming { max-width: none; }
 .tab__kind { flex: none; color: var(--ink-3); }
 .tab.is-active .tab__kind, .tab:hover .tab__kind { color: var(--accent-ink); }
 /* A worksheet / dashboard tab starts with its kind icon, so tighten the left padding it was given for the bare label. */
 .tab--worksheet, .tab--dashboard, .tab--story { padding-left: var(--s2); }
 .tab__label {
   border: 0; background: transparent; color: inherit; cursor: pointer;
-  font-size: var(--fs-body); font-weight: inherit; max-width: 160px;
+  font-size: var(--fs-body); font-weight: inherit; max-width: 160px; flex: 0 1 auto; min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   padding: 0; height: 100%;
 }
 .tab__close, .tab__dup {
   border: 0; background: transparent; color: var(--ink-3); cursor: pointer;
   border-radius: var(--r-pill); width: 24px; height: 24px; line-height: 1; display: inline-grid; place-items: center; padding: 0;
-  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease); flex: none;
 }
 .tab__dup:hover { background: var(--accent-soft); color: var(--accent-ink); }
 .tab__close:hover { background: var(--danger-bg); color: var(--danger-ink); }
@@ -60,4 +71,36 @@
 .tab-add[aria-expanded="true"] { color: var(--accent-ink); border-style: solid; border-color: var(--accent); }
 .tab-add:active { transform: scale(.96); box-shadow: none; }
 /* The model tab has no close button, so give it symmetric padding to align with the rest. */
-.tab--model { padding: 0 var(--s2); }
+/* The model tab is never capped. */
+.tab--model { padding: 0 var(--s2); max-width: none; }
+/* A crowded strip (tabs--dense, set by tabs.js): inactive tabs show icon + label only; the active tab keeps duplicate / close. */
+.tabs--dense .tab:not(.is-active):not(.tab--model):not(.tab--head) { padding: 0 var(--s2); justify-content: center; }
+.tabs--dense .tab:not(.is-active):not(.tab--model) :is(.tab__dup, .tab__close) { display: none; }
+/* Icon-only: the label collapses to nothing (it stays in the DOM and the tab order, and names the tab for screen readers); keyboard focus shows on the tab as the app's neutral wash (Core/buttons.css), never an outline. */
+.tabs--icons .tab:not(.is-active):not(.tab--model):not(.tab--head) .tab__label { max-width: 0; opacity: 0; }
+.tabs--icons .tab:not(.is-active):not(.tab--model):not(.tab--head):has(.tab__label:focus-visible) {
+  background-image: linear-gradient(color-mix(in srgb, var(--ink) 12%, transparent), color-mix(in srgb, var(--ink) 12%, transparent)); }
+
+/* ---- Dashboard groups: the dashboard's tab (with a fold button) and its worksheets under one coloured underline ---------------- */
+.tab-group { --group: var(--chart-cat-1); position: relative; display: flex; align-items: center; gap: var(--s1); flex: 0 0 auto; }
+.tab-group[data-slot="1"] { --group: var(--chart-cat-1); }
+.tab-group[data-slot="2"] { --group: var(--chart-cat-2); }
+.tab-group[data-slot="3"] { --group: var(--chart-cat-3); }
+.tab-group[data-slot="4"] { --group: var(--chart-cat-4); }
+.tab-group[data-slot="5"] { --group: var(--chart-cat-5); }
+.tab-group[data-slot="6"] { --group: var(--chart-cat-6); }
+.tab-group[data-slot="7"] { --group: var(--chart-cat-7); }
+/* The underline hangs under the tabs inside .tabs__scroll's bottom padding (it cannot sit on a .tab: the shared button styles zero borders and shadows there). */
+.tab-group::after { content: ""; position: absolute; left: 0; right: 0; bottom: calc(var(--s1) * -1); height: 3px; border-radius: var(--r); background: var(--group); }
+/* The group's dashboard tab is its header: never width-capped, with a fold button (collapse toggle) and, when collapsed, a count of the hidden tabs. */
+.tab--head { max-width: none; padding-left: var(--s1); }
+.tab__fold {
+  border: 0; background: transparent; color: var(--ink-3); cursor: pointer; flex: none;
+  border-radius: var(--r-pill); width: 24px; height: 24px; display: inline-grid; place-items: center; padding: 0;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.tab__fold:hover { background: var(--accent-soft); color: var(--accent-ink); }
+/* The chevron icon points down: open as drawn, collapsed turned to point right. */
+.tab__fold-chevron { transition: transform var(--dur-fast) var(--ease); }
+.tab--head[data-state="collapsed"] .tab__fold-chevron { transform: rotate(-90deg); }
+.tab__count { flex: none; padding: 0 var(--s1); border-radius: var(--r); background: var(--glass-ctl-hover); color: var(--ink-2); font-weight: 400; }

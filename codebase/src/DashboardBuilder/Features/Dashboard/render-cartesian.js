@@ -1,7 +1,7 @@
 import { renderChart as drawChart } from "./chart.js";
 import { dateLabelsOf } from "./date-labels.js";
 import { isCalcPill } from "../Calc/calc-pill.js";
-import { SCATTER_TYPES, marksOf, planMeasures, colorMode, colourDimsOf, isSizeDimension, isShapeDimension, isDrillActive, measureName as planMeasureName } from "./sheet-plan.js";
+import { SCATTER_TYPES, marksOf, planMeasures, planDims, colorMode, colourDimsOf, isSizeDimension, isShapeDimension, isDrillActive, measureName as planMeasureName } from "./sheet-plan.js";
 import { shapeBinsOf } from "./shape-model.js";
 import { labelContext, labelMarksOf, effectiveLabelMode, LABEL_MARK_HINT } from "./label-marks-model.js";
 import { memberColourField } from "./colour-fields-model.js";
@@ -208,13 +208,14 @@ export function renderSeries(container, rc, sheet, a) {
     if (A.band && !bb) rc.extraNotice = joinNotices(rc.extraNotice, A.band.kind ? "The band needs more values than the rows shown (at least 2 for a standard deviation)." : "The band's ends are equal — type two different numbers.");
     if ((t || rv != null || bb) && (result.truncated || result.partial)) rc.extraNotice = joinNotices(rc.extraNotice, "Analytics use only the rows shown — more exist.");
   }
-  // Members coloured by a field — pie / donut slices and a single-measure bar coloured by category.
+  // Members coloured by a field — pie / donut slices and a single-measure bar whose Colour field is its own axis field (one bar per member).
   // A colour measure replaces them (the marks wear their value's colour).
-  const byMember = !split && (type === "pie" || type === "donut" || (type === "bar" && format.colorByDimension && series.length === 1 && !compareSeries.length)) && !marks.spec.colorValues && primaryDim(sheet) && !isCalcPill(primaryDim(sheet));
+  const byMember = !split && (type === "pie" || type === "donut" || (type === "bar" && planDims(sheet).axisColour && series.length === 1 && !compareSeries.length)) && !marks.spec.colorValues && primaryDim(sheet) && !isCalcPill(primaryDim(sheet));
+  if (type === "bar" && !byMember && planDims(sheet).axisColour) container.append(hint("Colour by its own axis field needs one measure and no comparison period — the bars keep one colour.")); // the split was skipped, so say why nothing is coloured
   const splitColour = split ? memberColourField(splitFields) : null;
   const memberColourSpec = byMember
     ? memberSpec(rc, sheet, primaryDim(sheet), rowsOrdered.map((r, i) => ({ name: categories[i], raw: r.keys[0], other: r.isOther })).filter((m) => !m.other))
     : splitColour ? memberSpec(rc, sheet, splitColour, split.members.map(({ name, raw }) => ({ name, raw }))) : {};
   const splitSpec = split ? { split: { memberIndex: split.memberIndex, memberNames: split.memberIndex.map((i) => (i >= 0 ? split.members[i].name : null)) } } : {};
-  drawChart(container, { type, symbol: SCATTER_TYPES.has(type) ? scatterSymbol(type) : undefined, categories: catsOut, series: seriesOut, format, onSelect, ...tooltipButtonsSpec(rc, sheet, primaryDim(sheet), type, rawKeys, format, container), selectedIndices, orientation: chartOrientation(sheet), otherIndex, analytics, dateLabels: dateLabelsOf(sheet, primaryDim), ...memberColourSpec, ...legend, ...marks.spec, ...splitSpec, ...lm.spec, ...lk.spec });
+  drawChart(container, { type, symbol: SCATTER_TYPES.has(type) ? scatterSymbol(type) : undefined, colorByCategory: byMember && type === "bar", categories: catsOut, series: seriesOut, format, onSelect, ...tooltipButtonsSpec(rc, sheet, primaryDim(sheet), type, rawKeys, format, container), selectedIndices, orientation: chartOrientation(sheet), otherIndex, analytics, dateLabels: dateLabelsOf(sheet, primaryDim), ...memberColourSpec, ...legend, ...marks.spec, ...splitSpec, ...lm.spec, ...lk.spec });
 }

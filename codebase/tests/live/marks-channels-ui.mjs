@@ -110,6 +110,16 @@ try {
   const until = async (fn, label, timeout = 8000) => { const t0 = Date.now(); while (!fn()) { if (Date.now() - t0 > timeout) throw new Error(`timed out waiting for: ${label}`); await b.sleep(50); } };
   // Wait until no new /api/query has arrived for `quiet` ms (polling, not a fixed sleep).
   const settle = async (quiet = 300) => { let n = -1; for (let i = 0; i < 60 && n !== queries.length; i++) { n = queries.length; await b.sleep(quiet); } };
+
+  // Edit member colours… is a dialog (palette, member, colour, Save): open it, optionally pick, then Save (or Cancel).
+  const memDlg = `document.querySelector('dialog.memcol-dialog[open]')`;
+  const memOpen = async () => { await ev(`document.querySelector('.ws-memcol__open').click()`); await waitFor(`!!${memDlg}`, 'member colours dialog'); };
+  const memPick = async (row, sw, pal = 1) => { // palette 1 = Colour-blind safe: swatch 7 is #000000
+    await ev(`${memDlg}.querySelectorAll('.memcol-palette')[${pal}].click()`);
+    await ev(`${memDlg}.querySelectorAll('.memcol-member')[${row}].click()`);
+    await ev(`${memDlg}.querySelectorAll('.memcol-swatch')[${sw}].click()`);
+  };
+  const memEnd = async () => { await ev(`${memDlg}.querySelector('.dialog__foot .btn--primary').click()`); await waitFor(`!${memDlg}`, 'member colours dialog closed'); };
   const lastQuery = () => queries[queries.length - 1];
   const hasKey = (o, k) => J(o).includes(`"${k}"`);
 
@@ -187,10 +197,10 @@ try {
     must(/v1|qty/.test(tip), 'the tooltip carries the colour value: ' + tip);
     await shot('bar-colour');
   });
-  await check('bar + colour: the Color flyout drops Colour by category, keeps the scale controls; Steps gives a stepped legend and four colours; Diverging gives three stops and a centre', async () => {
+  await check('bar + colour: the Color flyout has no Colour by category, keeps the scale controls; Steps gives a stepped legend and four colours; Diverging gives three stops and a centre', async () => {
     await openColour();
     await waitFor(`!!(${fmtField('Colour ramp')})`, 'ramp control');
-    must(await ev(`!(${fmtField('Colour by category')})`), 'no Colour by category while a measure is on Colour');
+    must(await ev(`!(${fmtField('Colour by category')})`), 'Colour by category no longer exists (the Colour field does it)');
     await setSelect('Steps', '4'); await settle(500);
     const vm = (await opt()).visualMap?.[0];
     must(vm.type === 'piecewise' && vm.pieces.length === 4 && vm.pieces.every((p) => / to /.test(p.label)), 'stepped legend in words: ' + J(vm.pieces?.map((p) => p.label)));
@@ -315,8 +325,8 @@ try {
     must((await opt()).series.every((x) => x.type === 'custom'), 'custom bars draw the split');
     must(await ev(`!!document.querySelector('#ws-chart svg, #ws-chart canvas')`), 'the split chart is still drawn');
     await dragChip('qty', toolEl('Color')); await settle(600);
-    await openColour(); await waitFor(`!!(${fmtField('Reverse palette')})`, 'Color flyout open');
-    must(await ev(`!document.querySelector('.ws-memcol__toggle')`), 'no member-colour editor while a measure is on Colour');
+    await openColour(); await waitFor(`!!(${fmtField('Opacity')})`, 'Color flyout open');
+    must(await ev(`!document.querySelector('.ws-memcol__open')`), 'no member-colour editor while a measure is on Colour');
     await closeColour();
   });
   await newSheet();
@@ -387,15 +397,15 @@ try {
     const cols = o.series.map((s) => s.itemStyle.color);
     must(distinct(cols) === 8, 'distinct palette colours: ' + J(cols));
     await openColour();
-    await waitFor(`!!document.querySelector('.ws-memcol__toggle') && !document.querySelector('.ws-memcol__toggle').disabled`, 'member colours enabled for scatter groups');
-    await ev(`document.querySelector('.ws-memcol__toggle').click()`);
-    must(await ev(`document.querySelectorAll('.ws-memcol__row').length`) === 8, 'eight member rows');
+    await waitFor(`!!document.querySelector('.ws-memcol__open') && !document.querySelector('.ws-memcol__open').disabled`, 'member colours enabled for scatter groups');
+    await memOpen();
+    must(await ev(`${memDlg}.querySelectorAll('.memcol-row').length`) === 8, 'eight member rows');
     const before = (await opt()).series[1].itemStyle.color;
-    await ev(`document.querySelectorAll('.ws-memcol__row')[1].querySelectorAll('.ws-memcol__swatch')[15].click()`); // #000000
+    await memPick(1, 7); await memEnd(); // #000000
     await settle(500);
     const after = (await opt()).series[1].itemStyle.color;
     must(after === '#000000' && after !== before, 'the chosen member colour reaches the points: ' + J([before, after]));
-    await ev(`document.querySelectorAll('.ws-memcol__row')[1].querySelector('.ws-memcol__reset').click()`); await settle(400);
+    await memOpen(); await ev(`${memDlg}.querySelectorAll('.memcol-reset')[1].click()`); await memEnd(); await settle(400);
     await closeColour();
     await shot('scatter-colour');
   });

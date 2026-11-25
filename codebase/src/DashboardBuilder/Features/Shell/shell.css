@@ -12,7 +12,7 @@
 /* ---- Sidebar (chrome) ---------------------------------------------------- */
 .sidebar {
   position: relative;
-  z-index: 2;
+  z-index: 4;                  /* above the tab bar (3) and the data preview (2): the Appearance card opens from the foot over the canvas */
   display: flex;
   flex-direction: column;
   min-height: 0;               /* allow the inner list to scroll, not the page */
@@ -147,20 +147,23 @@
   position: relative; z-index: 3;  /* the Workbook menu must paint above the view below */
 }
 
-/* Dock: Appearance over Fit all cards, a column at the canvas's bottom right (the bar keeps only the tabs and the workbook). The buttons are solid
-   (they float over content) with a hairline for the edge, 8px apart; the dock sits above every view, and the activity chip steps left of it.
-   With the data preview open the dock rides above the panel. The Appearance card opens upward and grows from the button's bottom right. */
-.canvas__dock { position: absolute; right: var(--s4); bottom: var(--s4); z-index: 4; display: flex; flex-direction: column; align-items: flex-end; gap: var(--s2); }
-.canvas.has-ds-preview .canvas__dock { bottom: calc(var(--ds-preview-h, 288px) + var(--s4)); }
-.canvas__dock .iconbtn { background: var(--surface); outline: 1px solid var(--line-2); outline-offset: -1px; } /* buttons carry no shadow (buttons.css): fill + hairline */
-.canvas__dock .menu__list { top: auto; bottom: calc(100% + var(--s2)); transform-origin: bottom right; }
+/* Sidebar foot: Appearance and Settings as two sidebar tool tiles (the perf tile's look, 40px), outside .sidebar__body so they stay when the body is hidden.
+   Wide sidebar (Data Source): its own section under a full-width hairline, a row on the 16px gutter, 8px apart, 16px from the hairline and the bottom. On a rail (collapsed, worksheet, dashboard, story, disconnected, connecting): one centred column.
+   The Appearance card opens upward from its tile and grows from the tile's bottom left, over the canvas; the sidebar sits above the tab bar so the card is never under it. */
+.sidebar__foot { flex: none; margin-top: auto; display: flex; align-items: center; gap: var(--s2); padding: var(--s4); border-top: 1px solid var(--line); } /* margin-top: the foot stays at the bottom when the body is hidden (collapsed rail); border-top: a full-width hairline sets it apart as its own section (the rail has none) */
+.app.is-sidebar-collapsed .sidebar__foot, .app[data-view="sheet"] .sidebar__foot, .app[data-view="board"] .sidebar__foot, .app[data-disconnected] .sidebar__foot, .app[data-connecting] .sidebar__foot {
+  flex-direction: column; justify-content: center; padding: 0 0 var(--s4); border-top: 0; --foot-rise: calc(2 * var(--s6)); } /* the body's 8px bottom padding is the gap to the perf tile */
+.sidebar__foot .menu__list { top: auto; bottom: calc(100% + var(--s2)); left: 0; right: auto; transform-origin: bottom left; }
+/* The Fit all cards button (Canvas/canvas.js), the tab bar's right-most control — on the Data Source tab only (it fits that tab's cards). */
+.canvas__bar .canvas__fit { flex: none; margin-left: auto; }
+.app:not([data-view="model"]) .canvas__fit { display: none; }
 .scheme { flex: none; }
 
 /* The Appearance card (Shell/appearance.js): the `.menu__list` surface, 314px wide so nine 24px accent swatches fill a row with 8px gaps
    (2px edge + 2 × 8px padding + 2 × 8px row inset + 9 × 24 + 8 × 8). Rows, headings, separators and the tick are the menu's own; the selected row is
    bold + ticked, the selected swatch carries a tick. Rhythm: 4px between rows of one group, 8px each side of a separator, and a heading sits with its
    own group (8px above, none below). Every left edge (heading, row, strip, swatch, picker) is 16px in from the card's edge, every right edge 16px. */
-.appearance { width: 314px; padding: var(--s2); max-height: calc(100vh - 2 * var(--s4) - var(--ctl-h) - var(--s2) - var(--s6)); overflow-y: auto; overflow-x: hidden; /* 1px of rounding must not raise a horizontal bar */ }
+.appearance { width: 314px; padding: var(--s2); max-height: calc(100vh - 5 * var(--s4) - var(--foot-rise, 0px)); /* 16 above the card, 8 to the tile, the 40px tile, 16 below it; --foot-rise: on a rail the Settings tile and its gap sit below Appearance too */ overflow-y: auto; overflow-x: hidden; /* 1px of rounding must not raise a horizontal bar */ }
 .appearance .menu__sep { margin-block: var(--s1); }
 .appearance__modes { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--s1); grid-column: 1 / -1; }
 .appearance__mode { display: flex; align-items: center; justify-content: center; gap: var(--s2); height: var(--ctl-h); padding: 0; border: 0; border-radius: var(--r);
@@ -214,8 +217,8 @@
 .perf-summary { margin: 0; padding: var(--s2) var(--s4) 0; color: var(--ink-2); font-size: var(--fs-body); }
 .perf-empty { margin: 0; padding: var(--s2) 0; color: var(--ink-2); }
 
-/* ---- Activity chip: what the app is waiting on. Solid (it floats over content), bottom-right, left of the dock, so the centred toast keeps its place. ---- */
-.activity { position: fixed; right: calc(var(--s4) + var(--ctl-h) + var(--s2)); bottom: var(--s4); z-index: 99; display: flex; align-items: center; gap: var(--s2);
+/* ---- Activity chip: what the app is waiting on. Solid (it floats over content), bottom-right, so the centred toast keeps its place. ---- */
+.activity { position: fixed; right: var(--s4); bottom: var(--s4); z-index: 99; display: flex; align-items: center; gap: var(--s2);
   max-width: min(480px, calc(100vw - 2 * var(--s4))); padding: var(--s2) var(--s4); background: var(--surface); border: 1px solid var(--line-2);
   border-radius: var(--r); box-shadow: var(--elev-16); color: var(--ink-2); font-size: var(--fs-body);
   animation: rise-in var(--dur) var(--ease-out); }

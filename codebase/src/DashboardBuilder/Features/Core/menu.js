@@ -8,7 +8,7 @@ import { placeMenu, opensContext, nextFocus } from "./context-menu-model.js";
 
 export function wireMenu(button, list, { signal, stayOpen = false } = {}) {
   const items = () => [...list.querySelectorAll('[role^="menuitem"]')];
-  const opensUp = () => getComputedStyle(list).top === "auto"; // a card docked at the foot (Shell/shell.css .canvas__dock) opens upward
+  const opensUp = () => getComputedStyle(list).top === "auto"; // a card opened from the sidebar foot (Shell/shell.css .sidebar__foot) opens upward
   let seq = 0; // a newer open/close supersedes a close still fading out
   const setOpen = (open) => {
     const was = !list.hidden;

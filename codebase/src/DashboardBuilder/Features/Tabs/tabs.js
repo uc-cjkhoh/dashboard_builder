@@ -1,7 +1,8 @@
 import {
   tabs, isModelActive, currentView, showModel, createWorksheet, createDashboard, createStory, tabLimitError,
-  switchTab, renameTab, duplicateWorksheet, closeTab, worksheetHasContent, bus,
+  switchTab, renameTab, duplicateWorksheet, closeTab, worksheetHasContent, setGroupCollapsed, bus,
 } from "../Core/store.js";
+import { stripItems, groupKey, fitTabWidth } from "./tab-groups-model.js";
 import { dashboardsUsing } from "../Board/board-model.js";
 import { dashboardsLinking } from "../Board/nav-model.js";
 import { storiesUsing } from "../Story/story-model.js";
@@ -14,6 +15,11 @@ import { text, LIMITS } from "../Core/validate.js";
 // dashboard / story tabs (each with its kind's icon) and a [+] menu — New worksheet / New dashboard / New story. Clicking switches the active
 // view; tabs rename on double-click and close with a confirm when they hold content (a worksheet used by dashboards names
 // them). The model tab is never closable.
+// One row: tabs shrink (label first, down to the icon) and then the tab list scrolls inside the bar; Data Source and [+] stay put.
+// A dashboard that holds worksheets is drawn as a group — the dashboard's tab (with a fold button) + its worksheet tabs under one coloured underline (tab-groups-model.js).
+const MIN_TAB_PX = 36; // an inactive tab never narrows past its icon; the list scrolls instead
+const ICON_PX = 60; // narrower than this an inactive tab is its icon alone (a clipped sliver of label would only be noise)
+const DENSE_PX = 96; // an inactive tab narrower than this drops its duplicate / close buttons (the active tab keeps them)
 const KINDS = {
   worksheet: { icon: "chart-bar", noun: "worksheet", title: "New worksheet" },
   dashboard: { icon: "dashboard", noun: "dashboard", title: "New dashboard" },
@@ -24,11 +30,18 @@ export function initTabs() {
   const strip = document.getElementById("tabs");
   if (!strip) return;
 
+  let lastKey = "";
   bus.addEventListener("tabs:changed", render);
+  // Adding or removing a widget changes which worksheets a dashboard owns but emits only "dashboard:changed"; a drag or resize must not rebuild the strip.
+  bus.addEventListener("dashboard:changed", () => { if (groupKey(tabs) !== lastKey) render(); });
+  new ResizeObserver(() => { const sc = strip.querySelector(".tabs__scroll"); if (!sc) return; fitTabs(sc); revealActive(sc); }).observe(strip);
   // Delegated on the strip, which outlives render(): switching on the first click rebuilds the tabs,
   // so a listener on the old label would never see the double-click.
   strip.addEventListener("dblclick", (event) => {
-    const label = event.target.closest?.(".tab__label[data-tab-id]");
+    // Anywhere on the tab (an icon-only tab's label is 0px wide), except its own buttons.
+    const host = event.target.closest?.(".tab:not(.tab--model)");
+    if (!host || event.target.closest(".tab__close, .tab__dup, .tab__fold, .tab__rename")) return;
+    const label = host.querySelector(".tab__label[data-tab-id]");
     const tab = label && tabs.find((t) => t.id === label.dataset.tabId);
     if (tab) beginRename(tab, label);
   });
@@ -40,10 +53,74 @@ export function initTabs() {
   function render() {
     menuLife?.abort();
     menuLife = new AbortController();
-    strip.replaceChildren();
-    strip.append(modelTab());
-    for (const tab of tabs) strip.append(tabEl(tab));
-    strip.append(addMenu(menuLife.signal));
+    const kept = strip.querySelector(".tabs__scroll")?.scrollLeft ?? 0; // the rebuild must not throw the scroll position away
+    const view = currentView();
+    const scroller = document.createElement("div");
+    scroller.className = "tabs__scroll";
+    for (const item of stripItems(tabs, view.kind === "model" ? null : view.id)) scroller.append(item.kind === "tab" ? tabEl(item.tab) : groupEl(item));
+    scroller.addEventListener("wheel", (event) => { // the scrollbar is hidden: a vertical wheel turn scrolls the tabs sideways (as Chrome's strip does)
+      if (Math.abs(event.deltaY) > Math.abs(event.deltaX) && scroller.scrollWidth > scroller.clientWidth) { scroller.scrollLeft += event.deltaY; event.preventDefault(); }
+    }, { passive: false });
+    strip.replaceChildren(modelTab(), scroller, addMenu(menuLife.signal));
+    lastKey = groupKey(tabs);
+    fitTabs(scroller);
+    scroller.scrollLeft = kept;
+    revealActive(scroller);
+  }
+
+  /** Chrome-style shrinking: measure the inactive tabs at their natural width (buttons shown, nothing capped), solve for one shared cap (`--tab-w`), and mark a
+   *  crowded strip dense. Decided from that natural measurement only, so hiding buttons afterwards cannot flip the answer back. */
+  function fitTabs(scroller) {
+    strip.classList.remove("tabs--dense", "tabs--icons");
+    scroller.style.removeProperty("--tab-w");
+    const inactive = [...scroller.querySelectorAll(".tab:not(.is-active):not(.tab--head)")]; // the active tab and a group's dashboard tab are never capped
+    const naturals = inactive.map((t) => t.getBoundingClientRect().width);
+    const overhead = scroller.scrollWidth - naturals.reduce((a, b) => a + b, 0); // the active tab, group headers, gaps and paddings
+    const cap = fitTabWidth(naturals, scroller.clientWidth - overhead, MIN_TAB_PX);
+    if (cap === null) return;
+    scroller.style.setProperty("--tab-w", `${Math.floor(cap)}px`);
+    strip.classList.toggle("tabs--dense", cap < DENSE_PX);
+    strip.classList.toggle("tabs--icons", cap < ICON_PX);
+  }
+
+  /** Scroll the tab list just enough to show the active tab. By rects on the scroller only: scrollIntoView could scroll the fixed shell. */
+  function revealActive(scroller) {
+    const tab = scroller.querySelector(".tab.is-active");
+    if (!tab) return;
+    const t = tab.getBoundingClientRect(), box = scroller.getBoundingClientRect();
+    if (t.left < box.left) scroller.scrollLeft += t.left - box.left;
+    else if (t.right > box.right) scroller.scrollLeft += t.right - box.right;
+  }
+
+  /** A dashboard group: the dashboard's tab heads it (its fold button collapses the group) and its shown worksheet tabs follow, all under one coloured underline. */
+  function groupEl({ dashboard, members, shown, hidden, collapsed }) {
+    const el = document.createElement("div");
+    el.className = "tab-group";
+    el.dataset.slot = String(dashboard.groupSlot ?? 1);
+    el.dataset.state = collapsed ? "collapsed" : "open";
+    el.setAttribute("role", "presentation"); // transparent to assistive tech: the tablist keeps owning every tab (one position count across the strip); the fold button names the group
+    el.append(...shown.map((tab) => tabEl(tab, tab === dashboard ? { collapsed, hidden, size: members.length } : null)));
+    return el;
+  }
+
+  /** The group's collapse toggle, on the dashboard tab: a chevron (down = open) with `aria-expanded`. */
+  function foldButton(dashboard, { collapsed, size }) {
+    const fold = document.createElement("button");
+    fold.type = "button";
+    fold.className = "tab__fold";
+    fold.dataset.dashboardId = dashboard.id;
+    fold.setAttribute("aria-expanded", String(!collapsed));
+    fold.setAttribute("aria-label", `${dashboard.name} group, ${size} ${size === 1 ? "tab" : "tabs"}, ${collapsed ? "collapsed" : "expanded"}`);
+    fold.title = collapsed ? "Expand group" : "Collapse group";
+    const chevron = icon("chevron", { size: 14 });
+    chevron.classList.add("tab__fold-chevron");
+    fold.append(chevron);
+    fold.addEventListener("click", (event) => {
+      event.stopPropagation();
+      setGroupCollapsed(dashboard.id, !collapsed);
+      strip.querySelector(`.tab__fold[data-dashboard-id="${CSS.escape(dashboard.id)}"]`)?.focus(); // render() rebuilt the strip
+    });
+    return fold;
   }
 
   function modelTab() {
@@ -65,12 +142,15 @@ export function initTabs() {
     return el;
   }
 
-  function tabEl(tab) {
+  /** One tab. `head` (only for a group's dashboard tab): `{ collapsed, hidden, size }` — adds the fold button and, when collapsed, the hidden count. */
+  function tabEl(tab, head = null) {
     const kind = KINDS[tab.kind];
     const active = isActive(tab);
     const el = document.createElement("div");
-    el.className = `tab tab--${tab.kind}${active ? " is-active" : ""}`;
+    el.className = `tab tab--${tab.kind}${active ? " is-active" : ""}${head ? " tab--head" : ""}`;
+    if (head) el.dataset.state = head.collapsed ? "collapsed" : "open";
     el.setAttribute("role", "tab");
+    el.title = `${tab.name} (${kind.noun})`; // an icon-only tab has no visible name: this is how the pointer finds it
     el.setAttribute("aria-selected", String(active));
     if (active) el.setAttribute("aria-current", "true");
 
@@ -82,8 +162,11 @@ export function initTabs() {
     label.dataset.kind = tab.kind;
     label.setAttribute("aria-label", `${tab.name} (${kind.noun})`); // the kind is part of the accessible name; the icon is decoration
     label.title = "Click to switch, double-click to rename";
-    // Already showing: no switch, so no re-render under a double-click.
-    label.addEventListener("click", () => { if (!isActive(tab)) switchTab(tab.id); });
+    // The whole tab switches (at icon-only width the label button can be 0px wide). Already showing: no switch, so no re-render under a double-click.
+    el.addEventListener("click", (event) => {
+      if (event.target.closest(".tab__close, .tab__dup, .tab__rename, .tab__fold")) return;
+      if (!isActive(tab)) switchTab(tab.id);
+    });
 
     const glyph = icon(kind.icon, { size: 14 });
     glyph.classList.add("tab__kind");
@@ -101,7 +184,14 @@ export function initTabs() {
       if (event.key === "F2" || (event.key === "Enter" && active)) { event.preventDefault(); beginRename(tab, label); }
     });
 
+    if (head) el.append(foldButton(tab, head));
     el.append(glyph, label);
+    if (head?.collapsed && head.hidden) {
+      const count = document.createElement("span");
+      count.className = "tab__count";
+      count.textContent = String(head.hidden);
+      el.append(count);
+    }
     if (tab.kind === "worksheet") { // a dashboard is not duplicated (its widgets would share worksheets and layout — build another)
       const dup = document.createElement("button");
       dup.type = "button";
@@ -184,6 +274,7 @@ export function initTabs() {
     input.value = tab.name;
     input.maxLength = LIMITS.tabName;
     input.setAttribute("aria-label", `Rename ${KINDS[tab.kind].noun}`);
+    labelEl.closest(".tab")?.classList.add("is-renaming"); // an inactive tab is width-capped; the input needs its room
     labelEl.replaceWith(input);
     input.focus();
     input.select();
@@ -200,8 +291,7 @@ export function initTabs() {
     };
     // render() rebuilt the strip — put keyboard focus back on this tab's label.
     const refocusLabel = () => {
-      const idx = tabs.findIndex((t) => t.id === tab.id);
-      strip.querySelectorAll(".tab:not(.tab--model) .tab__label")[idx]?.focus();
+      strip.querySelector(`.tab__label[data-tab-id="${CSS.escape(tab.id)}"]`)?.focus(); // by id: groups make the display order differ from `tabs`
     };
     input.addEventListener("blur", (event) => commit(!event.relatedTarget)); // Tab/click to another control keeps its focus
     input.addEventListener("keydown", (event) => {

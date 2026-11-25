@@ -1,16 +1,12 @@
 // Per-member colours and palette order — pure, DOM-free (tests/js/colour-model.test.mjs).
 // A sheet's `memberColors` is { [fieldKey]: { [memberKey]: "#rrggbb" } }: the colour a user gave one member of a
-// discrete colour field (a Colour-shelf member, a pie slice, a bar coloured by category). It is workbook DATA
-// (a validated #rrggbb), unlike the app's own CSS, which uses tokens only. `format.paletteReverse` reverses the
-// categorical order and the continuous ramp.
+// discrete colour field (a Colour-shelf member, a pie slice, a bar whose Colour field is its own axis field). It is workbook DATA
+// (a validated #rrggbb), unlike the app's own CSS, which uses tokens only.
 import { LIMITS } from "../Core/validate.js";
-import { PALETTES } from "../Core/theme-model.js";
 
 
 const HEX = /^#[0-9a-f]{6}$/i;
 const NULL_KEY = "\u0000null";
-/** Fixed swatches the picker offers — the three workbook palettes' light colours, de-duplicated. */
-export const SWATCHES = Object.freeze([...new Set(Object.values(PALETTES).flatMap((p) => p.light))]);
 
 /** The storage key of a member value (null/undefined is its own key). */
 export const memberKey = (raw) => (raw == null ? NULL_KEY : String(raw));
@@ -40,6 +36,22 @@ export function setMemberColor(map, field, member, hex) {
   if (!has(next, field) && Object.keys(next).length >= LIMITS.memberColorFields) return { ok: false, error: `At most ${LIMITS.memberColorFields} fields can have member colours.` };
   next[field] = bare({ ...cur, [member]: hex.toLowerCase() });
   return { ok: true, value: next };
+}
+
+/**
+ * Apply a staged edit of one field's member colours in one pass (the Edit member colours dialog's Save): `draft` is
+ * { [memberKey]: "#rrggbb" | null } (null clears that member), `clearFirst` drops every stored colour of the field first
+ * (also those of members no longer in the view). Every change goes through setMemberColor, so its limits all apply:
+ * { ok, value } with a new map, or the first { ok:false, error }.
+ */
+export function applyMemberDraft(map, field, draft, clearFirst = false) {
+  let cur = clearFirst ? clearFieldColors(map, field).value : map;
+  for (const key of Object.keys(draft ?? {})) {
+    const r = setMemberColor(cur, field, key, draft[key]);
+    if (!r.ok) return r;
+    cur = r.value;
+  }
+  return { ok: true, value: cur };
 }
 
 /** Remove every colour of one field: { ok, value } with a new map. */

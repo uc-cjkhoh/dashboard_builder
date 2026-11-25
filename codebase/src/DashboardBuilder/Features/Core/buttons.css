@@ -45,26 +45,25 @@ button, .btn, .iconbtn, .tab, .tab-add, .ws-tool, [role="button"], [role="tab"] 
 .btn--primary:not(:disabled):active { background: var(--accent-pressed); color: var(--on-accent-pressed); }
 /* Icon buttons are transparent at rest: hover and pressed lift to a solid fill. Excluded: the pill / select / chip clear buttons, which stay flat and turn accent,
    and the Data Source's own icon buttons (the scope below), which have no hover box: the icon's own colour changes. */
-.iconbtn:not(:disabled):not(.iconbtn--danger):not(.ws-pill .iconbtn):not(.ws-select .iconbtn):not(:is(.entity, [id="model-view"], .sidebar__brand, [id="conn-section"], [id="schema-section"], .dialog--rel, .rows-dialog, .col-profile, .ds-preview, .canvas__dock) .iconbtn):not(.is-active):not([aria-pressed="true"]):not([aria-expanded="true"]):hover { background: var(--lift) !important; outline: 1px solid var(--lift-edge); outline-offset: -1px; }
-.iconbtn:not(:disabled):not(.iconbtn--danger):not(.ws-pill .iconbtn):not(.ws-select .iconbtn):not(:is(.entity, [id="model-view"], .sidebar__brand, [id="conn-section"], [id="schema-section"], .dialog--rel, .rows-dialog, .col-profile, .ds-preview, .canvas__dock) .iconbtn):not(.is-active):not([aria-pressed="true"]):not([aria-expanded="true"]):active { background: var(--lift-active) !important; outline: 1px solid var(--lift-edge); outline-offset: -1px; transform: scale(.96); }
-.iconbtn--danger:not(:disabled):not(:is(.entity, [id="model-view"], .sidebar__brand, [id="conn-section"], [id="schema-section"], .dialog--rel, .rows-dialog, .col-profile, .ds-preview, .canvas__dock) .iconbtn):hover { background: var(--danger-lift) !important; outline: 1px solid var(--lift-edge-danger); outline-offset: -1px; }
-.iconbtn--danger:not(:disabled):not(:is(.entity, [id="model-view"], .sidebar__brand, [id="conn-section"], [id="schema-section"], .dialog--rel, .rows-dialog, .col-profile, .ds-preview, .canvas__dock) .iconbtn):active { background: var(--danger-lift) !important; outline: 1px solid var(--lift-edge-danger); outline-offset: -1px; transform: scale(.96); }
+.iconbtn:not(:disabled):not(.iconbtn--danger):not(.ws-pill .iconbtn):not(.ws-select .iconbtn):not(:is(.entity, [id="model-view"], .sidebar__brand, [id="conn-section"], [id="schema-section"], .dialog--rel, .rows-dialog, .col-profile, .ds-preview) .iconbtn):not(.is-active):not([aria-pressed="true"]):not([aria-expanded="true"]):hover { background: var(--lift) !important; outline: 1px solid var(--lift-edge); outline-offset: -1px; }
+.iconbtn:not(:disabled):not(.iconbtn--danger):not(.ws-pill .iconbtn):not(.ws-select .iconbtn):not(:is(.entity, [id="model-view"], .sidebar__brand, [id="conn-section"], [id="schema-section"], .dialog--rel, .rows-dialog, .col-profile, .ds-preview) .iconbtn):not(.is-active):not([aria-pressed="true"]):not([aria-expanded="true"]):active { background: var(--lift-active) !important; outline: 1px solid var(--lift-edge); outline-offset: -1px; transform: scale(.96); }
+.iconbtn--danger:not(:disabled):not(:is(.entity, [id="model-view"], .sidebar__brand, [id="conn-section"], [id="schema-section"], .dialog--rel, .rows-dialog, .col-profile, .ds-preview) .iconbtn):hover { background: var(--danger-lift) !important; outline: 1px solid var(--lift-edge-danger); outline-offset: -1px; }
+.iconbtn--danger:not(:disabled):not(:is(.entity, [id="model-view"], .sidebar__brand, [id="conn-section"], [id="schema-section"], .dialog--rel, .rows-dialog, .col-profile, .ds-preview) .iconbtn):active { background: var(--danger-lift) !important; outline: 1px solid var(--lift-edge-danger); outline-offset: -1px; transform: scale(.96); }
 /* Data Source icon buttons — the cards' caret / ☰ / ✕ / Profile, the sidebar's connection and table-chip buttons and its collapse, the data preview's toolbar, and the
    dialogs opened from there (relationship, rows, column profile) — show hover with no box: the glyph steps from its muted rest ink to a colour chosen by what the
-   button does (--ib-hover, below), pressed also scales to .96. The dock (Appearance, Fit) keeps the fill and hairline it rests in and changes the glyph only.
+   button does (--ib-hover, below), pressed also scales to .96.
    The hue is a second cue, never the only one: every button keeps its icon and its title / aria-label (golden rule 9), and red stays danger alone (rule 7).
      --ib-hover default   --ink          move on or put away: close, previous / next, collapse caret, sidebar collapse
-     --accent-ink         the product's own action: open the ☰ menu, inspect (Profile, peek, preview), edit the connection, refresh / re-run, export, Fit, Appearance
+     --accent-ink         the product's own action: open the ☰ menu, inspect (Profile, peek, preview), edit the connection, refresh / re-run, export
      --ok-ink             add to the model: a table chip's add
      --warn-ink           ends something recoverable: Disconnect
      --danger-ink         removes it: a card's ✕, a key pair's remove, a recent connection's remove */
-.entity__menu, .col-row__profile, .table-chip__peek, [id="conn-change"], [id="ds-preview-refresh"], [id="ds-preview-csv"], .join-check__rerun, .canvas__fit, [id="scheme-btn"] { --ib-hover: var(--accent-ink); }
+.entity__menu, .col-row__profile, .table-chip__peek, [id="conn-change"], [id="ds-preview-refresh"], [id="ds-preview-csv"], .join-check__rerun { --ib-hover: var(--accent-ink); }
 .table-chip__add { --ib-hover: var(--ok-ink); }
 [id="conn-disconnect"] { --ib-hover: var(--warn-ink); }
 .iconbtn--danger, .key-pairs__rm, .conn-recent__remove { --ib-hover: var(--danger-ink); }
 :is(.entity, [id="model-view"], .sidebar__brand, [id="conn-section"], [id="schema-section"], .dialog--rel, .rows-dialog, .col-profile, .ds-preview) .iconbtn:not(:disabled):is(:hover, :active) { color: var(--ib-hover, var(--ink)); background: transparent !important; outline: 0; }
-.canvas__dock .iconbtn:not(:disabled):is(:hover, :active) { color: var(--ib-hover, var(--ink)); background: var(--surface) !important; }
-:is(.entity, [id="model-view"], .sidebar__brand, [id="conn-section"], [id="schema-section"], .dialog--rel, .rows-dialog, .col-profile, .ds-preview, .canvas__dock) .iconbtn:not(:disabled):active { transform: scale(.96); }
+:is(.entity, [id="model-view"], .sidebar__brand, [id="conn-section"], [id="schema-section"], .dialog--rel, .rows-dialog, .col-profile, .ds-preview) .iconbtn:not(:disabled):active { transform: scale(.96); }
 .menu__item:not(:disabled):active { background: color-mix(in srgb, var(--ink) 12%, transparent); }
 .tab:not(:disabled):not(.is-active):not([aria-selected="true"]):active, .tab-add:not(:disabled):active { background: var(--glass-ctl-hover); outline: 1px solid var(--lift-edge); outline-offset: -1px; }
 /* Ghost: no fill at rest — a 1px outline for the edge (buttons have no border and no shadow) — and the same fill as a button on hover. */

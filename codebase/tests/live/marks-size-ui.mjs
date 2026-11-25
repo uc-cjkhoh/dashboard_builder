@@ -172,7 +172,7 @@ try {
   const formatOpen = () => ev(`!!(${fmtField('Number')})`);
   const openFormat = async () => { if (!(await formatOpen())) await ev(`${fmtTool}.click()`); await waitFor(`!!(${fmtField('Number')})`, 'format panel open'); };
   // Edit Sizes and Marker size live in the Size tile's flyout, Line style in the Path tile's (D151); Format and a flyout are never open together, so each helper opens the panel that holds its label.
-  const FLY_TOOL = { 'Marker size (px)': 'size', 'Smallest size': 'size', 'Largest size': 'size', 'Sizes vary': 'size', 'Start value': 'size', 'End value': 'size', 'Reversed': 'size', 'Line style': 'path' };
+  const FLY_TOOL = { 'Marker size': 'size', 'Smallest size': 'size', 'Largest size': 'size', 'Sizes vary': 'size', 'Start value': 'size', 'End value': 'size', 'Reversed': 'size', 'Line style': 'path' };
   const flyOpen = (tool) => ev(`!!document.querySelector('#ws-toolfly:not([hidden]) #ws-toolpanel-${tool}')`);
   const closeFly = async () => { await ev(`document.querySelector('#ws-toolfly:not([hidden]) .iconbtn[aria-label="Close editor"]')?.click()`); };
   const ensure = async (label) => {

@@ -109,3 +109,19 @@ export function mostRecentRaw(raws) {
   return best;
 }
 
+
+// Allow labels to overlap other marks (Label flyout) — `format.labelOverlap`. Absent or true = every label draws, the way labels have always drawn (so older
+// files are untouched); false = a label that would sit on another is hidden, like Tableau's default. Stored only when false.
+export const labelOverlapError = (v) => (typeof v === "boolean" ? null : "Allow labels to overlap must be on or off.");
+export const labelOverlapOf = (format) => format?.labelOverlap !== false;
+/** `format.labelOverlap` as a sheet stores it: -> { ok, value } (value null = nothing to store: on). */
+export function cleanLabelOverlap(v) {
+  const err = labelOverlapError(v);
+  return err ? { ok: false, error: err, value: null } : { ok: true, value: v ? null : false };
+}
+/** The chart option with overlapping labels hidden (every series that shows a label gets ECharts' `labelLayout.hideOverlap`); the option itself when overlap is allowed. */
+export function withLabelOverlap(option, format) {
+  if (!option || labelOverlapOf(format) || !Array.isArray(option.series)) return option;
+  const shows = (s) => s?.label?.show === true || s?.data?.some?.((d) => d?.label?.show === true);
+  return { ...option, series: option.series.map((s) => (shows(s) ? { ...s, labelLayout: { ...s.labelLayout, hideOverlap: true } } : s)) };
+}

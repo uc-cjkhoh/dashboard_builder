@@ -36,13 +36,14 @@ import { tooltipHtml, checkTooltipText, parseTooltip } from "./tooltip-model.js"
 import { openTooltipDialog } from "./tooltip-dialog.js";
 import { checkTooltipStyle, styleAfterTextEdit } from "./tooltip-style.js";
 import { checkTooltipFormats, sampleLookup, pruneFormats } from "./tooltip-formats.js";
-import { SWATCHES, memberKey, fieldColorKey, setMemberColor, clearFieldColors, colourOf } from "./colour-model.js";
+import { memberKey, fieldColorKey } from "./colour-model.js";
 import { SHAPE_CHOICES, SHAPE_BINS_MIN, SHAPE_BINS_MAX, shapeBinsOf, cleanShapeBins, setMemberShape, clearFieldShapes } from "./shape-model.js";
 import { applyToggle, applyAll, allMessage, MAX_COLLAPSED } from "./collapse-model.js";
 import { LINE_STYLE_CHOICES, linesTakeStyle } from "./line-style-model.js";
 import { wireLineControls, lineKeysFor } from "./line-controls.js";
 import { wireTooltipControls, tooltipKeysFor } from "./tooltip-controls.js";
 import { flyoutSections } from "./marks-flyout-model.js";
+import { sizeMeterLabel, sizeMeterStops } from "./element-size-model.js";
 import { HEATMAP_SHAPE_CHOICES } from "./heatmap-model.js";
 import { GANTT_LENGTH_CHOICES } from "./gantt-model.js";
 import { SECONDARY_CHOICES, dualAxisAllowed, dualAxisOn } from "./axis-sync-model.js";
@@ -53,8 +54,9 @@ import { TABLE_ALIGN_CHOICES, TABLE_DENSITY_CHOICES, TABLE_SHADE_CHOICES } from 
 import { COL_ALIGN_CHOICES, tableColumnList, setTableColumn, columnLook, columnWidthError } from "./table-columns-model.js";
 import { sizeChannel, shapeChannel } from "./mark-channel-model.js";
 import { colourFlyoutGroups, colourScaleShown } from "./colour-flyout-model.js";
-import { LABEL_MARK_CHOICES, LABEL_POSITION_CHOICES, labelContext, labelModesFor, labelMarksOf, effectiveLabelMode, cleanLabelMarks, labelPositionsFor, labelPositionOf, cleanLabelPosition } from "./label-marks-model.js";
-import { MARK_BORDER_STOPS, MARKER_SHAPE_CHOICES, MARK_BORDER_COLOUR_CHOICES, markerSizeError } from "./mark-style-model.js";
+import { LABEL_MARK_CHOICES, LABEL_POSITION_CHOICES, labelContext, labelModesFor, labelMarksOf, effectiveLabelMode, cleanLabelMarks, labelPositionsFor, labelPositionOf, cleanLabelPosition, labelOverlapOf, cleanLabelOverlap } from "./label-marks-model.js";
+import { PAGE_SPEEDS, pageSpeedOf, pageIntervalMs, cleanPageSpeed } from "./pages-speed-model.js";
+import { MARK_BORDER_STOPS, borderWidthOf, storedBorder, MARKER_SHAPE_CHOICES, MARK_BORDER_COLOUR_CHOICES, MARKER_SIZE_AUTO } from "./mark-style-model.js";
 import { OPACITY_STOPS, cleanMarkOpacity } from "./mark-opacity-model.js";
 import { addColourField, MULTI_COLOUR_TYPES } from "./colour-fields-model.js";
 import { SIZE_SCALE_TYPES, ZERO_BASED_TYPES, sizeScaleOf, sizeRangeError, cleanSizeScale, VARY_CHOICES, sizeVary, sizeVaryError, sizeEndsEdit, setSizeVary } from "./size-scale-model.js";
@@ -73,6 +75,7 @@ import { openCleanDialog } from "../Calc/clean-dialog.js";
 import { cleanOps } from "../Calc/clean-model.js";
 import { groupCategoryProblem, groupKind } from "../Calc/group-model.js";
 import { openMemberLabelsDialog } from "./member-labels-dialog.js";
+import { openMemberColoursDialog } from "./member-colours-dialog.js";
 import { openRowsDialog } from "../Rows/rows-dialog.js";
 import { buildRowsRequest, firstMeasureTable, viewDataTitle } from "../Rows/rows-model.js";
 import { evaluationInput } from "../Calc/eval-order.js";
@@ -646,7 +649,6 @@ export function initDashboards() {
     if (meta.alias) { nameEl.title = `${meta.alias} — column ${col.name}`; chip.classList.add("is-renamed"); }
     if (meta.hidden) chip.classList.add("is-hidden");
     chip.dataset.search = `${col.name} ${meta.alias ?? ""}`.toLowerCase();
-    chip.dataset.field = JSON.stringify(payload); // the "Add field" picker in a Marks editor lists the pane's fields from this
     chip.append(typeIcon, nameEl);
     if (meta.cast) { chip.classList.add("is-cast"); chip.append(castBadge(meta.cast, col.category, false)); }
     chipOptions(chip, `field:${t.db}.${t.table}.${col.name}`, col.name, () => fieldEntries(payload, col, nameEl));
@@ -2436,13 +2438,12 @@ export function initDashboards() {
         note: drillLevels.length === 1 ? "Add another same-table field to drill." : null },
       { key: "pages", icon: "pages", label: "Pages", count: s.pages ? 1 : 0,
         pills: s.pages ? [pagesPill(dash, s)] : [], onDrop: (f) => addPages(dash, f),
-        hint: "Drop a dimension to step/animate the view through its members" },
+        hint: "Drop a dimension to step/animate the view through its members", editor: openTool === "pages" ? tileEditor(dash, s, "pages") : null },
     ];
-    // For the editor flyout: whether a slot takes several fields, and which fields its Add field list offers.
+    // For the editor flyout: whether a slot takes several fields.
     const multi = new Set(["color", "detail", "tooltip", "filters", "drill"]);
-    const accepts = { period: (f) => f.category === "temporal" };
     const inputs = flyoutInputs(s); // a tile whose flyout has a control for this chart type is not quiet (marks-flyout-model.js)
-    return tools.map((t) => ({ ...t, multi: multi.has(t.key), accepts: accepts[t.key] ?? null, controls: flyoutSections(t.key, inputs).length > 0 }));
+    return tools.map((t) => ({ ...t, multi: multi.has(t.key), controls: flyoutSections(t.key, inputs).length > 0 }));
   }
 
   // A toolbar button: icon + short text, a count badge when it holds field(s), and drop-target + click.
@@ -2488,90 +2489,28 @@ export function initDashboards() {
     panel.append(head);
     const zone = el("div", "ws-toolpanel__zone"); // the dashed drop target holds the pills only (none, no zone)
     for (const p of tool.pills) zone.append(p);
-    const picker = fieldPicker(tool, { side: true }); // Add field is its own full-width row; its list opens as a side menu beside the flyout (every tile, like Color)
-    const slot = slotSection(...(tool.pills.length ? [zone] : []), picker.btn);
+    const slot = slotSection(tool.pills.length ? zone : addFieldRow(tool)); // before a drop the slot is the Drop Field Here row (a target only, no list, D156); once it holds a field, only the pills' zone
     wireFieldDrop(slot, tool.onDrop); // the whole slot takes the drop, so an empty one still does
-    panel.sideMenu = picker;
     if (tool.editor?.classList.contains("ws-flyedit")) firstSection(tool.editor, tool.label).prepend(slot); // the field is what the tile works from: it opens the first section, not an extra one
     else panel.append(slot);
     if (tool.editor) panel.append(tool.editor);
     if (tool.note) panel.append(el("span", "ws-shelf__note", tool.note));
     return panel;
   }
-  // The slot: what the tool holds and the way to add to it, one section of the flyout. The drop zone holds the pills and the Add field button; the picker list opens under it.
+  // The slot: one section of the flyout, either the Drop Field Here row (nothing held yet) or the drop zone holding the pills (never both). The whole slot takes the drop either way.
   function slotSection(...nodes) { const sec = el("div", "ws-toolpanel__slot"); sec.append(...nodes); return sec; }
-  // "Add field": the zone's last item, the click and keyboard path to what a drag does. Returns { btn, box } (the button sits in the zone, the list under it). Lists the field pane's fields (grouped by table, searchable) that this slot accepts;
-  // choosing one goes through the slot's own drop handler, so every rule and message is the same as for a drag.
-  // { side: true } (every Marks flyout): the list is not inside the flyout (its overflow would clip it) but a sibling menu, mounted by mountFly, that opens on hover as well as on click
-  // and sits border to border with the flyout's right edge (placeFly), never over it.
-  function fieldPicker(tool, { side = false } = {}) {
-    const btn = el("button", "ws-picker__btn");
-    btn.type = "button";
-    btn.title = "Click to choose a field, or drop one here";
-    btn.append(icon("plus", { size: 14 }), el("span", null, !tool.multi && tool.count > 0 ? "Replace field" : "Add field"));
-    btn.setAttribute("aria-expanded", "false");
-    const box = el("div", `ws-picker__box${side ? " ws-picker__box--side" : ""}`);
-    box.hidden = true;
-    const search = el("input", "input ws-picker__search");
-    search.type = "search"; search.placeholder = "Search fields"; search.setAttribute("aria-label", "Search fields");
-    const list = el("div", "ws-picker__list");
-    box.append(search, list);
-    const build = () => {
-      list.replaceChildren();
-      let group = null, n = 0;
-      for (const chip of fieldsEl.querySelectorAll(".ws-field[data-field]:not(.is-hidden)")) {
-        const f = JSON.parse(chip.dataset.field);
-        if (tool.accepts && !tool.accepts(f)) continue;
-        const table = chip.closest(".ws-table")?.querySelector(".ws-group__name")?.textContent ?? "";
-        if (table !== group) { group = table; list.append(el("div", "ws-picker__group", table)); }
-        const item = el("button", "ws-picker__item");
-        item.type = "button";
-        item.dataset.search = chip.dataset.search;
-        const t = icon(TYPE_ICONS[f.category] ?? "type-other", { size: 14 }); t.classList.add("ws-field__type");
-        item.append(t, el("span", "ws-picker__name", chip.querySelector(".ws-field__name")?.textContent ?? f.column));
-        item.addEventListener("click", () => { focusFly = true; openTool = tool.key; tool.onDrop(f); });
-        list.append(item); n++;
-      }
-      if (!n) list.append(el("div", "ws-picker__empty", tool.accepts ? "No field here fits this slot." : "No fields yet — relate tables in the Data Source."));
-    };
-    const setOpen = (open, focus = true) => {
-      const was = !box.hidden;
-      btn.setAttribute("aria-expanded", String(open));
-      box.hidden = !open;
-      if (open && !was) { build(); search.value = ""; }
-      if (open && focus) search.focus();
-      if (side) placeFly();
-    };
-    let timer = 0;
-    const leave = () => { clearTimeout(timer); timer = setTimeout(() => { if (!box.matches(":focus-within")) setOpen(false); }, 200); }; // time to cross from the button to the menu; a search in progress keeps it
-    if (side) {
-      const hold = () => clearTimeout(timer);
-      btn.addEventListener("pointerenter", () => { hold(); if (box.hidden) setOpen(true, false); }); // hover opens without taking focus
-      box.addEventListener("pointerenter", hold);
-      btn.addEventListener("pointerleave", leave);
-      box.addEventListener("pointerleave", leave);
-      btn.addEventListener("click", () => setOpen(true)); // click or Enter: open (it may already be, from hover) and search
-    } else btn.addEventListener("click", () => setOpen(box.hidden));
-    search.addEventListener("input", () => {
-      const q = search.value.trim().toLowerCase();
-      for (const it of list.querySelectorAll(".ws-picker__item")) it.hidden = Boolean(q) && !it.dataset.search.includes(q);
-      for (const g of list.querySelectorAll(".ws-picker__group")) { let n = g.nextElementSibling, any = false; while (n && !n.classList.contains("ws-picker__group")) { if (!n.hidden) any = true; n = n.nextElementSibling; } g.hidden = !any; }
-    });
-    box.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); setOpen(false); btn.focus(); } });
-    return { btn, box, close: () => setOpen(false) };
+  // "Drop Field Here": a quiet, non-interactive row, shown only while the tool holds no field, that says where a dragged field lands (the slot's drop handler, wireFieldDrop, does the work).
+  // There is no list to pick from: fields come from the field pane by drag and drop only (D156).
+  function addFieldRow(tool) {
+    const row = el("div", "ws-addfield");
+    row.append(el("span", null, "Drop Field Here"));
+    return row;
   }
-  // The open Color flyout's side menu ({ btn, box, close } from fieldPicker), mounted beside .ws-toolfly in the worksheet.
-  let sideMenu = null;
-  const sideMenuRO = new ResizeObserver(() => placeFly()); // the list shrinks as the search filters it
-  function unmountSideMenu() { if (!sideMenu) return; sideMenuRO.disconnect(); sideMenu.box.remove(); sideMenu = null; }
-  document.addEventListener("pointerdown", (e) => { if (sideMenu && !sideMenu.box.hidden && !sideMenu.box.contains(e.target) && !sideMenu.btn.contains(e.target)) sideMenu.close(); });
   // Show (or clear) the flyout and put it level with its slot.
   function mountFly(panel) {
-    unmountSideMenu();
     if (!panel) { toolFly.hidden = true; toolFly.replaceChildren(); return; }
     toolFly.id = "ws-toolfly";
     toolFly.replaceChildren(panel);
-    if (panel.sideMenu) { sideMenu = panel.sideMenu; worksheetEl.append(sideMenu.box); sideMenuRO.observe(sideMenu.box); }
     toolFly.hidden = false;
     placeFly();
     if (focusFly) { focusFly = false; panel.focus({ preventScroll: true }); }
@@ -2588,15 +2527,6 @@ export function initDashboards() {
     const top = Math.max(8, Math.min(Math.max(wanted, belowShelves), host.height - toolFly.offsetHeight - 8));
     toolFly.style.left = `${left}px`;
     toolFly.style.top = `${top}px`;
-    if (!sideMenu || sideMenu.box.hidden) return;
-    // The side menu: its edge on the flyout's right edge (one shared hairline), level with the Color section. Never on the flyout's other side: that is the field pane, where fields are dragged from.
-    // A narrow worksheet shrinks it (240 px down to 120) rather than moving it.
-    const menu = sideMenu.box, flyRight = left + toolFly.offsetWidth;
-    menu.style.width = `${Math.max(120, Math.min(240, host.width - 8 - (flyRight - 1)))}px`;
-    const anchor = sideMenu.btn.closest(".ws-flyedit__group") ?? sideMenu.btn;
-    const wantedTop = anchor.getBoundingClientRect().top - worksheetEl.getBoundingClientRect().top;
-    menu.style.left = `${flyRight - 1}px`;
-    menu.style.top = `${Math.max(8, Math.min(wantedTop, host.height - menu.offsetHeight - 8))}px`;
   }
   function closeFly({ refocus = true } = {}) {
     const key = openTool;
@@ -2611,7 +2541,7 @@ export function initDashboards() {
     if (e.key === "Escape" && !e.defaultPrevented && !e.target.closest?.("select, input, textarea")) { e.preventDefault(); e.stopPropagation(); closeFly(); }
   });
   fieldsEl.addEventListener("scroll", placeFly, { passive: true });
-  toolFly.addEventListener("scroll", placeFly, { passive: true }); // the Color section moves when the flyout scrolls; its menu follows
+  toolFly.addEventListener("scroll", placeFly, { passive: true }); // the flyout's size can change as it scrolls
   window.addEventListener("resize", placeFly);
   new ResizeObserver(placeFly).observe(toolFly);
   new ResizeObserver(placeFly).observe(fieldsEl);
@@ -2700,61 +2630,37 @@ export function initDashboards() {
 
   // --- Member colours ---------------------------------------------
   // The members the last drawn chart colours by a discrete field ({ field, members: [{ name, raw }] }), keyed
-  // by sheet and cleared at the start of each drawing. The editor lists them; a pick stores a validated #rrggbb
-  // in sheet.memberColors (Dashboard/colour-model.js) and re-draws.
+  // by sheet and cleared at the start of each drawing. "Edit member colours…" opens a dialog (member-colours-dialog.js) that
+  // stages the picks; Save stores them as validated #rrggbb in sheet.memberColors (Dashboard/colour-model.js) with one commit.
   let memberState = { sheet: null, field: null, members: [] };
-  let memberOpen = false;
   let memberRedraw = null;
   const setMemberState = (sheet, field, members) => { memberState = { sheet, field, members }; memberRedraw?.(); };
   function memberColourEditor(dash, s) {
     const box = el("div", "ws-memcol");
-    const head = el("button", "btn btn--ghost ws-memcol__toggle"); head.type = "button";
-    const body = el("div", "ws-memcol__body");
+    const btn = el("button", "btn btn--ghost ws-memcol__open", "Edit member colours\u2026"); btn.type = "button";
     const draw = () => {
-      if (!box.isConnected && body.childElementCount) return;
+      if (!box.isConnected && btn.dataset.drawn) return;
+      btn.dataset.drawn = "1";
       const st = memberState.sheet === s ? memberState : { field: null, members: [] };
-      const fieldKey = st.field ? fieldColorKey(st.field) : "";
-      const colours = Object.prototype.hasOwnProperty.call(s.memberColors ?? {}, fieldKey) ? s.memberColors[fieldKey] : {};
-      head.textContent = `${memberOpen ? "Hide" : "Edit"} member colours`;
-      head.setAttribute("aria-expanded", String(memberOpen));
-      head.disabled = !st.field;
-      head.title = st.field ? "" : "Colour by a field (Colour shelf, Pie slices, or Colour by category) to colour its members";
-      body.hidden = !memberOpen || !st.field;
-      body.replaceChildren();
-      if (body.hidden) return;
-      const pick = (m, hex) => {
-        const r = setMemberColor(s.memberColors, fieldColorKey(st.field), memberKey(m.raw), hex);
-        if (!r.ok) { toast(r.error, "danger"); return; }
-        s.memberColors = r.value; commit(dash, s);
-      };
-      for (const m of st.members.slice(0, LIMITS.memberColors)) {
-        const cur = colourOf(colours, memberKey(m.raw));
-        const row = el("div", "ws-memcol__row");
-        const dot = el("span", "ws-memcol__dot"); dot.dataset.colour = cur ?? "";
-        if (cur) dot.style.backgroundColor = cur;
-        row.append(dot, el("span", "ws-memcol__name", m.name));
-        const sw = el("span", "ws-memcol__swatches");
-        for (const hex of SWATCHES) {
-          const b = el("button", "ws-memcol__swatch"); b.type = "button"; b.style.backgroundColor = hex;
-          b.setAttribute("aria-label", `Colour ${m.name} ${hex}`); b.setAttribute("aria-pressed", String(cur === hex));
-          if (cur === hex) b.textContent = "\u2713";
-          b.addEventListener("click", () => pick(m, hex));
-          sw.append(b);
-        }
-        const reset = el("button", "btn btn--ghost ws-memcol__reset", "Reset"); reset.type = "button"; reset.disabled = !cur;
-        reset.addEventListener("click", () => pick(m, null));
-        row.append(sw, reset);
-        body.append(row);
-      }
-      const stored = Object.keys(colours).length;
-      const clearAll = el("button", "btn btn--ghost ws-memcol__clear", `Reset all for this field (${stored})`); clearAll.type = "button"; clearAll.disabled = !stored;
-      clearAll.title = "Also removes colours of members that are no longer in the view";
-      clearAll.addEventListener("click", () => { s.memberColors = clearFieldColors(s.memberColors, fieldKey).value; commit(dash, s); });
-      body.append(clearAll);
-      if (st.members.length > LIMITS.memberColors) body.append(el("p", "ws-memcol__note", `Only the first ${LIMITS.memberColors} members can be coloured.`));
+      btn.disabled = !st.field;
+      btn.title = st.field ? "" : "Colour by a field (Colour shelf, Pie slices) to colour its members";
     };
-    head.addEventListener("click", () => { memberOpen = !memberOpen; draw(); });
-    box.append(head, body);
+    btn.addEventListener("click", () => {
+      const st = memberState.sheet === s ? memberState : null;
+      if (!st?.field) return;
+      openMemberColoursDialog({
+        fieldKey: fieldColorKey(st.field), members: st.members.map((m) => ({ name: m.name, raw: m.raw })), current: s.memberColors ?? {},
+        onClose: () => { // the commit rebuilds the flyout (after this returns): find the new button then, not the old node
+          const back = () => document.querySelector(".ws-memcol__open")?.focus({ preventScroll: true });
+          back(); requestAnimationFrame(back);
+        },
+        onSave: (map) => {
+          if (JSON.stringify(map) === JSON.stringify(s.memberColors ?? {})) return;
+          s.memberColors = map; commit(dash, s);
+        },
+      });
+    });
+    box.append(btn);
     memberRedraw = draw;
     draw();
     return box;
@@ -2808,10 +2714,12 @@ export function initDashboards() {
       sizeEdit: Boolean(s.marks?.size && SIZE_SCALE_TYPES.has(s.chartType) && sizeChannel(s.chartType, shelfMeasureCount(s), isSizeDimension(s.marks.size)).ok), // Edit Sizes: only while the chart draws the Size it holds
       shapeBins: Boolean(shapeMeasureOf(s)),
       memberShapes: SCATTER_TYPES.has(s.chartType) && Boolean(s.marks?.shape) && isShapeDimension(s.marks.shape), // a measure on Shape has bins, not members
+      labelsDrawn: labelCtx.drawn,
       labelMarks: isChart && labelModesFor(labelCtx).length > 1,
       labelPosition: isChart && labelPositionsFor(labelCtx).length > 0,
       lineKeys: linesTakeStyle(s.chartType) ? lineKeysFor(s) : [],
       tooltipKeys: isChart ? tooltipKeysFor(s) : [],
+      pagesSet: Boolean(s.pages),
       periodSet: Boolean(s.period),
       compare: Boolean(s.period && s.period.compare !== "none"),
     };
@@ -2828,9 +2736,11 @@ export function initDashboards() {
     const wired = (prefix, wire) => { const tmp = el("div"); wire(tmp); return [...tmp.children].map((n, i) => flyCtl(`${prefix}:${i}`, n)); }; // the helpers that append their own controls to a panel
     const labelCtx = labelContext(s);
     const build = {
-      markerSize: () => [flyCtl("markerSize", fmtNumber("Marker size (px)", f.markerSize, "auto", (v) => { // blank = automatic (a heatmap: circles only)
-        if (v != null && markerSizeError(v)) { toast(markerSizeError(v), "danger"); return; }
-        set({ markerSize: v });
+      markerSize: () => [flyCtl("markerSize", fmtMeter(sizeMeterLabel(s.chartType), sizeMeterStops(s.chartType), f.markerSize ?? MARKER_SIZE_AUTO, (v) => { // the leftmost stop is Automatic (a heatmap: circles only)
+        const px = Number(v);
+        s.format = { ...f };
+        if (px === MARKER_SIZE_AUTO) s.format.markerSize = null; else s.format.markerSize = px;
+        commit(dash, s);
       }))],
       editSizes: () => sizesEditor(f, s, (next) => { // Edit Sizes: the stored shape holds only what differs from the default
         const { value } = cleanSizeScale(next);
@@ -2859,6 +2769,22 @@ export function initDashboards() {
         if (value) s.format.labelPosition = value; else delete s.format.labelPosition;
         commit(dash, s);
       }))],
+      labelOverlap: () => [flyCtl("labelOverlap", fmtCheck("Allow labels to overlap other marks", labelOverlapOf(f), (v) => { // off hides a label that would sit on another
+        const { value } = cleanLabelOverlap(v);
+        s.format = { ...f };
+        if (value === false) s.format.labelOverlap = false; else delete s.format.labelOverlap;
+        commit(dash, s);
+      }))],
+      pageSpeed: () => { // how fast Play steps; Play itself stays on the worksheet's page control
+        const pick = fmtSelect("Speed", PAGE_SPEEDS, pageSpeedOf(s.pages), (v) => {
+          const { value } = cleanPageSpeed(v);
+          if (value) s.pages.speed = value; else delete s.pages.speed; // in place: ensurePagesMembers tells a still-current load by this object's identity
+          if (pageTimer) { stopPaging(); } // a running Play restarts at the new pace on the next press
+          commit(dash, s);
+        });
+        if (prefersReducedMotion()) { const i = pick.querySelector("select"); i.disabled = true; pick.title = "Play is off while your system asks for reduced motion, so Speed does nothing."; }
+        return [flyCtl("pageSpeed", pick)];
+      },
       text: () => [tooltipEditor(dash, s)],
       lineStyle: () => [flyCtl("lineStyle", fmtSelect("Line style", LINE_STYLE_CHOICES, f.lineStyle ?? "straight", (v) => set({ lineStyle: v })))],
       linePattern: () => wired("linePattern", (tmp) => wireLineControls(tmp, s, fmtSelect, replaceFormat, ["linePattern"])), // says why when it does nothing
@@ -2879,8 +2805,7 @@ export function initDashboards() {
     if (scaleOn) panelScale = f.colorScale === "auto" ? drawnScale.get(s) ?? "sequential" : f.colorScale; // Automatic: whichever the data made it
     const groups = colourFlyoutGroups({
       chartType: s.chartType, isChart: CHART_LIKE.has(s.chartType), mode,
-      canColourByCat: (s.chartType === "bar" || s.chartType === "scatter") && mode !== "continuous", // a measure on Colour replaces it
-      borderOn: (f.markBorder ?? "none") !== "none", scale: panelScale, steps: Boolean(f.colorSteps),
+      borderOn: borderWidthOf(f.markBorder) > 0, scale: panelScale, steps: Boolean(f.colorSteps),
     });
     const range = (key, other, label) => flyCtl(key, fmtNumber(label, f[key], "auto", (v) => {
       const err = colourRangeError(...(key === "colorMin" ? [v, f[other]] : [f[other], v]));
@@ -2904,9 +2829,8 @@ export function initDashboards() {
       return box;
     };
     const build = {
-      colourByCategory: () => flyCtl("colourByCategory", fmtCheck("Colour by category", f.colorByDimension, (v) => set({ colorByDimension: v }))),
       opacity: () => flyCtl("opacity", fmtMeter("Opacity", OPACITY_STOPS, f.markOpacity ?? 100, (v) => without("markOpacity", cleanMarkOpacity(Number(v)).value))), // blank at 100 %
-      border: () => flyCtl("border", fmtMeter("Border thickness", MARK_BORDER_STOPS.map(([, px, text]) => [px, text]), MARK_BORDER_STOPS.find(([key]) => key === (f.markBorder ?? "none"))?.[1] ?? 0, (px) => set({ markBorder: MARK_BORDER_STOPS.find(([, w]) => String(w) === px)[0] }))), // the key is stored, the bar speaks px
+      border: () => flyCtl("border", fmtMeter("Border thickness", MARK_BORDER_STOPS, borderWidthOf(f.markBorder), (px) => set({ markBorder: storedBorder(Number(px)) }))), // "none" at 0, else the px
       borderColour: () => flyCtl("borderColour", fmtSwatches("Border colour", MARK_BORDER_COLOUR_CHOICES, f.markBorderColor ?? "muted", (v) => set({ markBorderColor: v }))),
       lineMarkers,
       scale: () => flyCtl("scale", fmtSelect("Colour scale", SCALE_CHOICES.map(([v, t]) => [v, v === "auto" ? `${t} · ${panelScale === "diverging" ? "Diverging" : "Low → high"}` : t]), f.colorScale ?? "sequential", (v) => set({ colorScale: v }))), // Automatic names what the data made it
@@ -2914,7 +2838,6 @@ export function initDashboards() {
       ramp: () => flyCtl("ramp", fmtSelect("Colour ramp", RAMP_CHOICES, f.colorRamp ?? "brand", (v) => set({ colorRamp: v }))),
       pair: () => flyCtl("pair", fmtSelect("Diverging colours", DIV_PAIR_CHOICES, f.colorPair ?? "default", (v) => set({ colorPair: v }))),
       fullRange: () => flyCtl("fullRange", fmtCheck("Use full colour range", f.colorFullRange === true, (v) => without("colorFullRange", v || null))), // off = symmetric about the centre; on = each side its own span
-      reverse: () => flyCtl("reverse", fmtCheck("Reverse palette", f.paletteReverse, (v) => set({ paletteReverse: v }))),
       limits,
       members: () => memberColourEditor(dash, s),
     };
@@ -3134,6 +3057,7 @@ export function initDashboards() {
   }
   // The page control: current member + count, ◀ ▶ step (wrapping), and Play/Pause. Play is omitted
   // under prefers-reduced-motion (done-when: no autoplay when reduced motion is set).
+  const prefersReducedMotion = () => Boolean(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
   function pagesControl(dash, s) {
     const p = s.pages;
     const wrap = el("div", "ws-pages");
@@ -3150,8 +3074,7 @@ export function initDashboards() {
     wrap.append(prev, el("span", "ws-pages__member", `${cur == null ? "—" : cur}  ·  ${idx + 1}/${n}`), next);
     if (p.more) wrap.append(el("p", "ws-note", "Showing the first 200 values — more exist."));
 
-    const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (!reduce) {
+    if (!prefersReducedMotion()) {
       const playing = Boolean(pageTimer);
       const play = makeButton(playing ? "❚❚ Pause" : "▶ Play", `ws-pages__btn${playing ? " is-active" : ""}`);
       play.setAttribute("aria-pressed", String(playing));
@@ -3162,7 +3085,7 @@ export function initDashboards() {
           if (!pg || !Array.isArray(pg.members) || !pg.members.length) { stopPaging(); return; }
           pg.index = ((pg.index ?? 0) + 1) % pg.members.length;
           commit(dash, s);
-        }, 1500);
+        }, pageIntervalMs(p));
         commit(dash, s);
       });
       wrap.append(play);
@@ -3540,7 +3463,7 @@ function fmtSwatches(labelText, options, current, onPick) {
   return wrap;
 }
 let swatchGroupSeq = 0;
-// A slider drawn as a progress bar with its value read out, for a setting with a few even steps. `stops` is [[value, readout]] ascending with one
+// A slider drawn as a progress bar with its value read out, for a setting with even steps. `stops` is [[value, readout]] ascending with one
 // step between them; the readout follows the thumb, the change is committed on release (a commit rebuilds the flyout).
 function fmtMeter(labelText, stops, current, onPick) {
   const wrap = el("label", "ws-fmt-field ws-meter");

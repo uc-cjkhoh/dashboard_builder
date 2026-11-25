@@ -268,8 +268,7 @@
 /* The card the panel shows: an accent outline, its name in the panel title and Preview data ticked in its ☰ menu — never colour alone. */
 .entity.entity--previewed { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-/* Overview: the ground itself is focusable (arrows pan, + / − zoom, 0 resets, F fits); Fit sits in the bottom-right dock under Appearance, a solid button
-   like the how-to line (it floats over cards). */
+/* Overview: the ground itself is focusable (arrows pan, + / − zoom, 0 resets, F fits); Fit is an icon button at the right end of the tab bar, off the cards. */
 .view.view--model:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
-.canvas__fit { cursor: pointer; } /* placed and surfaced by the dock (.canvas__dock, Shell/shell.css) */
+.canvas__fit { cursor: pointer; } /* the tab bar's right-most control (placement: Shell/shell.css) */
 .canvas__fit[hidden] { display: none; }

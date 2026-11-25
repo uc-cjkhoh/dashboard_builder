@@ -231,3 +231,47 @@ test("parameters in formulas: formula text and step size round-trip, version unc
   assert.equal(out.version, 2);
   assert.equal(out.calculations[0].formula, "SUM([orders.amount]) * [@Rate]");
 });
+
+// --- dashboard groups on the tab strip: groupSlot + collapsed (optional dashboard fields; no version bump) ----------
+const dbTab = (name, extra = {}) => ({ id: `db#${name}`, kind: "dashboard", name, widgets: [], size: null, notes: "", ...extra });
+const saveTabs = (tabs) => json(serializeWorkbook({ entities: new Map(), relationships: new Map(), tabs, active: null }));
+
+test("serialize writes groupSlot and collapsed only when set", () => {
+  const out = saveTabs([dbTab("A", { groupSlot: 3, collapsed: true }), dbTab("B", { groupSlot: 2, collapsed: false }), dbTab("C")]);
+  assert.equal(out.version, WORKBOOK_VERSION);
+  assert.deepEqual([out.dashboards[0].groupSlot, out.dashboards[0].collapsed], [3, true]);
+  assert.equal(out.dashboards[1].groupSlot, 2);
+  assert.equal("collapsed" in out.dashboards[1], false);
+  assert.equal("groupSlot" in out.dashboards[2] || "collapsed" in out.dashboards[2], false);
+});
+
+test("groupSlot and collapsed round-trip with no issue", () => {
+  const wb = parseWorkbook(JSON.stringify(saveTabs([dbTab("A", { groupSlot: 5, collapsed: true }), dbTab("B", { groupSlot: 1 })])));
+  assert.deepEqual(wb.dashboards.map((d) => [d.groupSlot, d.collapsed]), [[5, true], [1, undefined]]);
+  assert.deepEqual(wb.issues, []);
+});
+
+test("a file saved without the fields opens, and the fields are absent", () => {
+  const wb = parseWorkbook(v2({ dashboards: [{ name: "D", widgets: [] }] }));
+  assert.deepEqual([wb.dashboards[0].groupSlot, wb.dashboards[0].collapsed], [undefined, undefined]);
+  assert.deepEqual(wb.issues, []);
+});
+
+test("a bad groupSlot (0, 8, 2.5, \"3\") is dropped with an issue each and the file still opens", () => {
+  const wb = parseWorkbook(v2({ dashboards: [0, 8, 2.5, "3"].map((s, i) => ({ name: `D${i}`, widgets: [], groupSlot: s })) }));
+  assert.equal(wb.dashboards.length, 4);
+  assert.ok(wb.dashboards.every((d) => d.groupSlot === undefined));
+  assert.equal(wb.issues.filter((m) => m.includes("group colour")).length, 4);
+});
+
+test("collapsed: \"yes\" is dropped with an issue; false is read as open", () => {
+  const wb = parseWorkbook(v2({ dashboards: [{ name: "A", widgets: [], collapsed: "yes" }, { name: "B", widgets: [], collapsed: false }] }));
+  assert.deepEqual(wb.dashboards.map((d) => d.collapsed), [undefined, undefined]);
+  assert.equal(wb.issues.filter((m) => m.includes("collapsed")).length, 1);
+});
+
+test("duplicate slots are kept (more than seven dashboards must repeat colours)", () => {
+  const wb = parseWorkbook(v2({ dashboards: [{ name: "A", widgets: [], groupSlot: 2 }, { name: "B", widgets: [], groupSlot: 2 }] }));
+  assert.deepEqual(wb.dashboards.map((d) => d.groupSlot), [2, 2]);
+  assert.deepEqual(wb.issues, []);
+});

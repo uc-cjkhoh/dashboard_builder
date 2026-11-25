@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildCartesian, buildOption } from "../../src/DashboardBuilder/Features/Dashboard/chart.js";
-import { applyMarkOpacity, markOpacityOf, markOpacityError, cleanMarkOpacity, OPACITY_TYPES, OPACITY_CHOICES, OPACITY_STOPS } from "../../src/DashboardBuilder/Features/Dashboard/mark-opacity-model.js";
+import { applyMarkOpacity, markOpacityOf, markOpacityError, cleanMarkOpacity, OPACITY_TYPES, OPACITY_STOPS } from "../../src/DashboardBuilder/Features/Dashboard/mark-opacity-model.js";
 import { applySelectionDim } from "../../src/DashboardBuilder/Features/Dashboard/selection-dim.js";
 import { sanitizeSheet } from "../../src/DashboardBuilder/Features/Workbook/workbook-model.js";
 import { emptySheet, defaultFormat } from "../../src/DashboardBuilder/Features/Core/store.js";
@@ -15,16 +15,16 @@ window.echarts ??= { color: { parse: (h) => [1, 3, 5].map((i) => parseInt(h.slic
 const S = (name, data = [1, 2, 3]) => ({ name, data });
 const cart = (type, series, extra = {}) => buildCartesian({ type, categories: ["a", "b", "c"], series, format: {}, ...extra });
 
-test("model: absent or 100 is 1; a multiple of 10 from 0 to 100 is its fraction; anything else is refused", () => {
+test("model: absent or 100 is 1; a whole percent from 0 to 100 is its fraction; anything else is refused", () => {
   assert.equal(markOpacityOf({}), 1); assert.equal(markOpacityOf(undefined), 1); assert.equal(markOpacityOf({ markOpacity: 100 }), 1);
   assert.equal(markOpacityOf({ markOpacity: 40 }), 0.4); assert.equal(markOpacityOf({ markOpacity: 0 }), 0);
-  assert.equal(markOpacityOf({ markOpacity: 45 }), 1, "an invalid stored value draws as 100");
-  for (const v of [45, -10, 110, 5.5, "50", NaN]) assert.ok(markOpacityError(v), String(v));
-  assert.equal(markOpacityError(70), null);
-  assert.deepEqual(cleanMarkOpacity(100), { ok: true, value: null }); assert.deepEqual(cleanMarkOpacity(30), { ok: true, value: 30 }); assert.equal(cleanMarkOpacity(33).ok, false);
-  assert.deepEqual(OPACITY_CHOICES.map(([v]) => v), [100, 90, 80, 70, 60, 50, 40, 30, 20, 10, 0]);
-  assert.deepEqual(OPACITY_STOPS.map(([v]) => v), [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]); // the bar runs 0 to 100, one step of 10
-  assert.deepEqual(OPACITY_STOPS[4], [40, "40 %"]);
+  assert.equal(markOpacityOf({ markOpacity: 45 }), 0.45); assert.equal(markOpacityOf({ markOpacity: 7 }), 0.07);
+  assert.equal(markOpacityOf({ markOpacity: 5.5 }), 1, "an invalid stored value draws as 100");
+  for (const v of [-10, -1, 101, 110, 5.5, "50", NaN]) assert.ok(markOpacityError(v), String(v));
+  assert.equal(markOpacityError(70), null); assert.equal(markOpacityError(45), null);
+  assert.deepEqual(cleanMarkOpacity(100), { ok: true, value: null }); assert.deepEqual(cleanMarkOpacity(30), { ok: true, value: 30 }); assert.deepEqual(cleanMarkOpacity(33), { ok: true, value: 33 }); assert.equal(cleanMarkOpacity(33.5).ok, false);
+  assert.deepEqual(OPACITY_STOPS.map(([v]) => v), Array.from({ length: 101 }, (_, i) => i)); // the bar runs 0 to 100, one step of 1
+  assert.deepEqual(OPACITY_STOPS[40], [40, "40 %"]); assert.deepEqual(OPACITY_STOPS[45], [45, "45 %"]);
   for (const [v] of OPACITY_STOPS) assert.equal(markOpacityError(v), null, String(v));
   assert.ok(OPACITY_TYPES.has("bar") && OPACITY_TYPES.has("line") && OPACITY_TYPES.has("pie") && OPACITY_TYPES.has("treemap") && !OPACITY_TYPES.has("gauge") && !OPACITY_TYPES.has("table"));
 });
@@ -99,7 +99,7 @@ test("workbook: absent stays absent; a valid value round-trips; an invalid one i
   assert.equal("markOpacity" in defaultFormat(), false);
   assert.equal("markOpacity" in sanitizeSheet(base, "S", []).format, false);
   assert.equal(sanitizeSheet({ ...base, format: { ...base.format, markOpacity: 40 } }, "S", []).format.markOpacity, 40);
-  for (const bad of [45, 120, -10, "50", 0.5]) {
+  for (const bad of [120, -10, "50", 0.5, 45.5]) {
     const issues = [];
     const s = sanitizeSheet({ ...base, format: { ...base.format, markOpacity: bad } }, "S", issues);
     assert.equal("markOpacity" in s.format, false, `${bad} is dropped, not clamped`);

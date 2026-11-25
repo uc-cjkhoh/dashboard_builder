@@ -137,7 +137,7 @@ try {
   const fills = () => ev(`[...document.querySelectorAll('.ws-chart-canvas svg path')].map((p) => (p.getAttribute('fill') || '').toLowerCase()).filter((f) => /^#[0-9a-f]{6}$/.test(f))`);
   const lum = (h) => { const n = parseInt(h.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255]; };
 
-  await check('a pie colours its members; Format lists them with swatches', async () => {
+  await check('a pie colours its members; the Color flyout opens the member colours dialog', async () => {
     await dragChip('region', `__t.zone('rows')`);
     await dragChip('amount', `__t.zone('columns')`);
     await settle(400);
@@ -146,41 +146,73 @@ try {
     await settle(400);
     await waitFor(`${fmtTool} !== null`, 'format tool');
     await ev(`${fmtTool}.click()`);
-    await waitFor(`!!document.querySelector('.ws-memcol__toggle') && !document.querySelector('.ws-memcol__toggle').disabled`, 'member editor enabled');
-    await ev(`document.querySelector('.ws-memcol__toggle').click()`);
-    must(await ev(`document.querySelectorAll('.ws-memcol__row').length`) === 3, 'three member rows');
-    must(await ev(`document.querySelectorAll('.ws-memcol__row')[0].querySelectorAll('.ws-memcol__swatch').length`) >= 12, 'swatches');
+    const dlg = `document.querySelector('dialog.memcol-dialog[open]')`;
+    const openBtn = `document.querySelector('.ws-memcol__open')`;
+    await waitFor(`!!${openBtn} && !${openBtn}.disabled`, 'Edit member colours enabled');
+    await ev(`${openBtn}.click()`);
+    await waitFor(`!!${dlg}`, 'dialog open');
+    must(await ev(`${dlg}.querySelectorAll('.memcol-palette').length`) === 4, 'four palettes');
+    must(await ev(`${dlg}.querySelectorAll('.memcol-row').length`) === 3, 'three member rows');
+    must(await ev(`${dlg}.querySelector('.memcol-colours').hidden`), 'colours hidden until a palette is chosen');
+    must(await ev(`!!${dlg}.querySelector('.dialog__foot .btn--primary')`) && (await ev(`${dlg}.querySelector('.dialog__foot .btn--primary').textContent`)) === 'Save', 'Save in the footer');
+    await ev(`${dlg}.querySelector('.dialog__foot .btn:nth-child(2)').click()`); // Cancel
+    await waitFor(`!${dlg}`, 'dialog closed by Cancel');
   });
+  const dlgQ = `document.querySelector('dialog.memcol-dialog[open]')`;
+  const openDlg = async () => { await ev(`document.querySelector('.ws-memcol__open').click()`); await waitFor(`!!${dlgQ}`, 'dialog open'); };
+  const choose = async (pal, row, sw) => {
+    await ev(`${dlgQ}.querySelectorAll('.memcol-palette')[${pal}].click()`);
+    await ev(`${dlgQ}.querySelectorAll('.memcol-member')[${row}].click()`);
+    await ev(`${dlgQ}.querySelectorAll('.memcol-swatch')[${sw}].click()`);
+  };
+  const save = async () => { await ev(`${dlgQ}.querySelector('.btn--primary').click()`); await waitFor(`!${dlgQ}`, 'dialog closed by Save'); await settle(400); };
   let before;
-  await check('picking a swatch recolours that slice, persists in the sheet and survives a re-render; Reset restores', async () => {
+  await check('palette, member, colour: nothing changes until Save; Save recolours the slice once and it persists; Cancel discards', async () => {
     before = await fills();
-    await ev(`document.querySelectorAll('.ws-memcol__row')[1].querySelectorAll('.ws-memcol__swatch')[15].click()`); // #000000
-    await settle(400);
-    await waitFor(`document.querySelectorAll('.ws-memcol__row').length === 3`, 'editor still open after redraw');
+    await openDlg();
+    await choose(1, 1, 7); // Colour-blind safe, EU, #000000
+    must(await ev(`${dlgQ}.querySelectorAll('.memcol-palette')[1].getAttribute('aria-checked')`) === 'true', 'palette chosen');
+    must(await ev(`${dlgQ}.querySelectorAll('.memcol-member')[1].classList.contains('is-selected')`), 'member selected');
+    must(await ev(`${dlgQ}.querySelectorAll('.memcol-swatch')[7].textContent`) === '\u2713', 'tick on the chosen colour');
+    must(await ev(`${dlgQ}.querySelectorAll('.memcol-hex')[1].textContent`) === '#000000', 'hex shown on the member');
+    must(!(await fills()).includes('#000000'), 'the chart is untouched before Save');
+    const n = queries.length;
+    await save();
     const after = await fills();
     must(after.includes('#000000') && !before.includes('#000000'), `fills before ${J(before)} after ${J(after)}`);
-    must(await ev(`document.querySelectorAll('.ws-memcol__row')[1].querySelector('.ws-memcol__dot').dataset.colour`) === '#000000', 'dot shows colour');
+    await waitFor(`document.activeElement && document.activeElement.classList.contains('ws-memcol__open')`, 'focus back on the button');
+    await openDlg();
+    must(await ev(`${dlgQ}.querySelectorAll('.memcol-hex')[1].textContent`) === '#000000', 'stored colour shown on reopen');
+    must(await ev(`${dlgQ}.querySelector('.memcol-colours').hidden`), 'a reopened dialog starts without a palette chosen');
+    await ev(`${dlgQ}.querySelectorAll('.memcol-palette')[1].click()`);
+    await ev(`${dlgQ}.querySelectorAll('.memcol-member')[1].click()`);
+    must(await ev(`${dlgQ}.querySelectorAll('.memcol-swatch')[7].getAttribute('aria-pressed')`) === 'true', 'the member\'s stored colour is the pressed swatch');
+    await b.sleep(500); // past the dialog's entrance
+    must(await ev(`(() => { const r = ${dlgQ}.querySelectorAll('.memcol-swatch')[7].getBoundingClientRect(); return r.width > 0 && r.height > 0; })()`), 'the palette colours are visible once a palette is chosen');
     await shot('colour-light.png');
-    await ev(`document.querySelectorAll('.ws-memcol__row')[1].querySelector('.ws-memcol__reset').click()`);
+    const kept = await fills();
+    await choose(1, 0, 0);
+    await ev(`${dlgQ}.querySelector('.dialog__foot .btn:nth-child(2)').click()`); // Cancel
+    await waitFor(`!${dlgQ}`, 'closed');
     await settle(400);
-    must(!(await fills()).includes('#000000'), 'reset restored the palette colour');
+    must(J(await fills()) === J(kept), `Cancel discarded the staged pick: ${J(kept)} -> ${J(await fills())}`);
+    await openDlg();
+    await ev(`${dlgQ}.querySelectorAll('.memcol-reset')[1].click()`);
+    await save();
+    must(!(await fills()).includes('#000000'), 'per-member Reset restored the palette colour');
   });
-  await check('Reset all for this field clears every stored member colour', async () => {
-    const sw = (i, k) => `document.querySelectorAll('.ws-memcol__row')[${i}].querySelectorAll('.ws-memcol__swatch')[${k}].click()`;
-    await ev(sw(0, 15)); await settle(400); await ev(sw(2, 15)); await settle(400);
+  await check('Reset all clears every stored member colour, also after new picks', async () => {
+    await openDlg(); await choose(1, 0, 7); await ev(`${dlgQ}.querySelectorAll('.memcol-member')[2].click()`); await ev(`${dlgQ}.querySelectorAll('.memcol-swatch')[7].click()`); await save();
     must((await fills()).filter((f) => f === '#000000').length >= 2, 'black slices');
-    must((await ev(`document.querySelector('.ws-memcol__clear').textContent`)).includes('(2)'), 'count shown');
-    await ev(`document.querySelector('.ws-memcol__clear').click()`);
-    await settle(400);
+    await openDlg();
+    await ev(`${dlgQ}.querySelector('.memcol-resetall').click()`);
+    must((await ev(`[...${dlgQ}.querySelectorAll('.memcol-hex')].every((h) => h.textContent === '')`)), 'every member shows no colour');
+    await save();
     must(!(await fills()).includes('#000000'), 'all reset');
-    must(await ev(`document.querySelector('.ws-memcol__clear').disabled`), 'button disabled when nothing stored');
   });
-  await check('Reverse palette reverses the slice colours', async () => {
-    const a = await fills();
-    await ev(`[...document.querySelectorAll('.ws-fmt-check, label')].find((l) => l.textContent.includes('Reverse palette')).querySelector('input').click()`);
-    await settle(400);
-    const r = await fills();
-    must(a.length >= 3 && r.length >= 3 && a[0] !== r[0], `a ${J(a)} r ${J(r)}`);
+  await check('Reverse palette is gone from the Color flyout; the dark look still draws the slices', async () => {
+    must(await ev(`![...document.querySelectorAll('.ws-fmt-check, label')].some((l) => l.textContent.includes('Reverse palette'))`), 'Reverse palette no longer exists');
+    must((await fills()).length >= 3, 'slices drawn');
     await ev(`document.documentElement.setAttribute('data-theme', 'dark')`);
     await shot('colour-dark.png');
   });

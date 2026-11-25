@@ -71,12 +71,16 @@ try {
   await ev(`document.dispatchEvent(new CustomEvent('table:add', { detail: { db: 'shop', table: 'orders' } }))`);
   await waitFor(`document.querySelectorAll('.entity').length === 1 && [...document.querySelectorAll('.entity__status')].every((s) => s.hidden)`, 'orders loaded');
 
-  await check('dock: Appearance sits bottom right over Fit; no separate theme button; the perf button is not on the Data Source tab or in the top bar', async () => {
-    const g = await ev(`(() => { const r = (el) => el.getBoundingClientRect(); const c = r(document.getElementById('canvas')); const s = r(document.getElementById('scheme-btn')); const fitEl = document.querySelector('.canvas__fit'); const f = fitEl && r(fitEl); const noTheme = !document.getElementById('settings-btn'); const perfIn = !document.getElementById('perf-btn') && !document.querySelector('.canvas__bar #perf-btn'); const inBar = Boolean(document.querySelector('.canvas__bar #scheme-btn')); return { perfIn, noTheme, inBar, sRight: s.right, sTop: s.top, sBottom: s.bottom, fTop: f?.top, fRight: f?.right, fBottom: f?.bottom, cRight: c.right, cBottom: c.bottom }; })()`);
+  await check('sidebar foot: Appearance then Settings in a row at the foot of the wide sidebar (16px gutter, 8px apart); Fit is the tab bar\'s right-most control; no dock, no separate theme button; the perf button is not on the Data Source tab or in the top bar', async () => {
+    const g = await ev(`(() => { const r = (el) => el.getBoundingClientRect(); const sb = r(document.querySelector('.sidebar')); const foot = document.getElementById('sidebar-foot'); const s = r(document.getElementById('scheme-btn')); const t = r(document.getElementById('settings-dock-btn')); const bar = r(document.querySelector('.canvas__bar')); const fitEl = document.querySelector('.canvas__bar .canvas__fit'); const f = fitEl && r(fitEl);
+      return { noDock: !document.querySelector('.canvas__dock, #canvas-dock'), noTheme: !document.getElementById('settings-btn'), perfIn: !document.getElementById('perf-btn') && !document.querySelector('.canvas__bar #perf-btn'), inBar: Boolean(document.querySelector('.canvas__bar #scheme-btn')),
+        footAfterBody: foot.previousElementSibling === document.getElementById('sidebar-body') || foot.previousElementSibling?.previousElementSibling === document.getElementById('sidebar-body'), footParent: foot.parentElement.classList.contains('sidebar'),
+        sLeft: s.left - sb.left, sBottom: sb.bottom - s.bottom, sTop: s.top, tTop: t.top, gap: t.left - s.right, w: s.width, h: s.height, fRight: f && bar.right - f.right, fHidden: fitEl?.hidden }; })()`);
     must(g.perfIn, 'perf button present on the Data Source tab or in the top bar'); must(g.noTheme, `a separate theme button is back: ${J(g)}`);
-    must(!g.inBar, `Appearance is still in the top bar: ${J(g)}`);
-    must(Math.abs(g.sRight - (g.cRight - 16)) <= 1 && Math.abs(g.fRight - g.sRight) <= 1, `buttons not on the 16px right gutter, one column: ${J(g)}`);
-    must(g.fTop != null && Math.abs(g.fBottom - (g.cBottom - 16)) <= 1 && Math.abs(g.fTop - g.sBottom - 8) <= 1, `Fit is not 8px under Appearance at the foot: ${J(g)}`);
+    must(g.noDock && !g.inBar, `the dock is back or Appearance is in the top bar: ${J(g)}`);
+    must(g.footParent && g.footAfterBody, `the foot is not a sidebar child after the body: ${J(g)}`);
+    must(Math.abs(g.sLeft - 16) <= 1 && Math.abs(g.sBottom - 16) <= 1 && Math.abs(g.sTop - g.tTop) <= 1 && Math.abs(g.gap - 8) <= 1 && g.w === 40 && g.h === 40, `tiles are not 40px, in one row, 8px apart, 16px from the sidebar's left and bottom: ${J(g)}`);
+    must(g.fRight != null && !g.fHidden && Math.abs(g.fRight - 16) <= 1, `Fit is not the tab bar's right-most control on the 16px gutter: ${J(g)}`);
   });
 
   await check('the perf button is removed from the DOM on the Data Source tab', async () => {

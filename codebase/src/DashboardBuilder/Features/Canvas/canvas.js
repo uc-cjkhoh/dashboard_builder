@@ -160,7 +160,7 @@ export function initCanvas() {
     refreshView();
   };
 
-  // Fit is the one overview control with no pointer-only equivalent (the wheel zooms, F is a key): a solid icon button in the bottom-right dock, under Appearance (Shell/Index.cshtml).
+  // Fit is the one overview control with no pointer-only equivalent (the wheel zooms, F is a key): an icon button at the right end of the tab bar, shown only while the Data Source has cards.
   const fitBtn = document.createElement("button");
   fitBtn.type = "button";
   fitBtn.className = "iconbtn canvas__fit";
@@ -169,7 +169,7 @@ export function initCanvas() {
   fitBtn.hidden = true;
   fitBtn.append(icon("expand"));
   fitBtn.addEventListener("click", fit);
-  (document.getElementById("canvas-dock") ?? canvas).append(fitBtn);
+  (document.querySelector(".canvas__bar") ?? canvas).append(fitBtn);
 
   // The ground itself takes focus (cards, rows and inputs keep their own keys): arrows pan (Shift: four steps), + and − zoom, 0 is 100 %, F fits.
   canvas.tabIndex = 0;

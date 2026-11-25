@@ -183,3 +183,20 @@ test("the ECharts position of a choice: auto leaves the chart's own", () => {
   assert.equal(labelPositionSymbol("auto"), null); assert.equal(labelPositionSymbol(undefined), null); assert.equal(labelPositionSymbol("bogus"), null);
   assert.deepEqual(["above", "below", "left", "right"].map(labelPositionSymbol), ["top", "bottom", "left", "right"]);
 });
+
+import { labelOverlapError, labelOverlapOf, cleanLabelOverlap, withLabelOverlap } from "../../src/DashboardBuilder/Features/Dashboard/label-marks-model.js";
+test("Allow labels to overlap: on unless stored off; only off is stored", () => {
+  assert.equal(labelOverlapOf({}), true);
+  assert.equal(labelOverlapOf({ labelOverlap: false }), false);
+  assert.ok(labelOverlapError("no"));
+  assert.deepEqual(cleanLabelOverlap(true), { ok: true, value: null });
+  assert.deepEqual(cleanLabelOverlap(false), { ok: true, value: false });
+  assert.equal(cleanLabelOverlap(0).ok, false);
+});
+test("withLabelOverlap hides overlapping labels only on series that show one, and only when off", () => {
+  const option = { series: [{ type: "bar", label: { show: true } }, { type: "line", label: { show: false } }, { type: "bar", data: [{ label: { show: true } }] }] };
+  assert.equal(withLabelOverlap(option, {}), option);
+  const out = withLabelOverlap(option, { labelOverlap: false });
+  assert.deepEqual(out.series.map((s) => s.labelLayout?.hideOverlap === true), [true, false, true]);
+  assert.equal(option.series[0].labelLayout, undefined);
+});

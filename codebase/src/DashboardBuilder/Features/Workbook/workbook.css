@@ -3,3 +3,27 @@
   display: flex; align-items: center; gap: var(--s2);
   margin-left: auto; flex: none;
 }
+
+/* Settings dialog: auto-backup folder, status, and the backups to restore (Workbook/backup.js). */
+.backup-dialog { width: min(480px, calc(100vw - 2 * var(--s4))); }
+.backup-dialog[open] { display: flex; flex-direction: column; max-height: calc(100vh - 2 * var(--s4)); }
+.backup-dialog__body { display: grid; gap: var(--s2); padding: var(--s4); overflow: auto; min-height: 0; }
+.backup-dialog__heading { margin: 0; font-size: var(--fs-lead); font-weight: 600; }
+.backup-dialog .dialog__foot { flex: none; flex-wrap: wrap; }
+.backup-row { display: flex; align-items: center; gap: var(--s2); }
+.backup-row__label { flex: none; color: var(--ink-2); }
+.backup-row__value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.backup-status { flex: 1; margin: 0; display: flex; align-items: flex-start; gap: var(--s1); }
+.backup-status__icon { flex: none; display: inline-flex; padding-top: var(--s1); }
+.backup-status--ok { color: var(--ok-ink); }
+.backup-status--warn { color: var(--warn-ink); }
+.backup-status--danger { color: var(--danger-ink); }
+.backup-note { margin: 0; color: var(--ink-2); }
+.backup-list { display: grid; gap: var(--s1); max-height: 200px; overflow: auto; }
+.backup-pick { display: flex; align-items: center; gap: var(--s2); padding: var(--s1) var(--s2); border: 1px solid var(--line); border-radius: var(--r); font-variant-numeric: tabular-nums; cursor: pointer; }
+.backup-pick:has(input:checked) { border-color: var(--accent-ink); }
+.backup-pick input { accent-color: var(--accent-ink); } /* the app's accent, not the browser's blue; the darker ink keeps the mark readable on the surface */
+
+/* A paused backup marks both Settings buttons with a dot; their label says why (rule 9: never colour alone). */
+.is-attention[data-settings-open] { position: relative; }
+.is-attention[data-settings-open]::after { content: ""; position: absolute; top: var(--s1); right: var(--s1); width: var(--s2); height: var(--s2); border-radius: var(--r-pill); background: var(--warn-ink); }

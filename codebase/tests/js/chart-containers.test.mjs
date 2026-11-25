@@ -61,11 +61,14 @@ test("member colours are per container and never leak into the next chart", () =
   assert.equal(sliceColour(insts[1], "b"), "#333333");
   assert.equal(sliceColour(insts[2], "a"), undefined, "a chart without member colours draws none");
 });
-test("palette order is per container: reversing one chart's palette leaves the next in the normal order", () => {
-  const bars = (reverse) => ({ type: "bar", categories: ["x"], series: [{ name: "m1", data: [1] }, { name: "m2", data: [2] }], format: { paletteReverse: reverse } });
-  const colours = (inst) => inst.lastSet.series.map((sr) => sr.itemStyle?.color ?? sr.lineStyle?.color);
-  const a = fakeEl(), b = fakeEl(), c = fakeEl();
-  renderChart(a, bars(true)); renderChart(b, bars(false)); renderChart(c, bars(true));
-  assert.notDeepEqual(colours(insts[0]), colours(insts[1]), "reversed vs normal differ");
-  assert.deepEqual(colours(insts[0]), colours(insts[2]), "the same setting draws the same colours, whatever was drawn between");
+
+test("a bar whose Colour field is its own axis field: each bar wears its member's colour (user colour first); without the flag one colour", () => {
+  const bars = (extra) => ({ type: "bar", categories: ["a", "b", "c"], series: [{ name: "v", data: [1, 2, 3] }], format: {}, ...extra });
+  const fills = (inst) => inst.lastSet.series[0].data.map((d) => d?.itemStyle?.color);
+  renderChart(fakeEl(), bars({ colorByCategory: true, memberColors: new Map([["b", "#123456"]]) }));
+  const f = fills(insts[0]);
+  assert.equal(f[1], "#123456", "a member's own colour");
+  assert.ok(f.every(Boolean) && f[0] !== f[2], "every bar coloured, one per member: " + JSON.stringify(f));
+  renderChart(fakeEl(), bars({}));
+  assert.ok(fills(insts[1]).every((x) => x === undefined), "no flag, no per-bar colour");
 });

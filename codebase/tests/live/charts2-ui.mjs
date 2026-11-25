@@ -146,7 +146,7 @@ try {
     await waitFor(`!!document.querySelector('.ws-format')`, 'format panel');
   };
   // The Colour controls live in the Color tile's flyout, Marker size in Size's, Marker shape in Shape's (D151), the rest in Format; Format and a flyout are never open together, so each helper opens the one that holds its label.
-  const FLY_OF = { 'Border thickness': 'color', 'Border colour': 'color', 'Opacity': 'color', 'Line markers': 'color', 'Marker size (px)': 'size', 'Marker shape': 'shape' };
+  const FLY_OF = { 'Border thickness': 'color', 'Border colour': 'color', 'Opacity': 'color', 'Line markers': 'color', 'Marker size': 'size', 'Marker shape': 'shape' };
   const ensure = async (label) => {
     const k = FLY_OF[label];
     if (!k) return openFormat();
@@ -171,6 +171,7 @@ try {
 
   const setNum = async (label, v) => {
     await ensure(label);
+    if (label === 'Marker size' && v === '') v = '3'; // the meter's leftmost stop is Auto
     await ev(`(() => { const i = [...document.querySelectorAll('.ws-fmt-field')].find((l) => l.querySelector('.ws-fmt-label').textContent === ${J(label)}).querySelector('input'); i.value = ${J(v)}; i.dispatchEvent(new Event('change')); return true; })()`);
     await settle(400);
   };
@@ -261,7 +262,7 @@ try {
 
   await check('Border thickness: bars and heatmap cells take thin / thick strokes in the muted theme ink; None keeps the old look', async () => {
     await setType('Bar'); await openFormat(); await chartReady();
-    must(await hasField('Border thickness') && !(await hasField('Marker size (px)')), 'bar has border but no marker size');
+    must(await hasField('Border thickness') && !(await hasField('Marker size')), 'bar has border but no marker size');
     let o = await opt();
     must(!o.series[0].itemStyle.borderWidth, `none: ${o.series[0].itemStyle.borderWidth}`);
     await pick('Border thickness', 'thin'); await chartReady();
@@ -309,34 +310,32 @@ try {
     await setType('Heatmap'); await openFormat(); await chartReady(); // the state the next check expects
   });
 
-  await check('Marker size: scatter, line and circle heatmap use it; out of range is refused; blank is automatic', async () => {
+  await check('Marker size: scatter, line and circle heatmap use it; the meter runs Auto, 4 to 40 px', async () => {
     // circle heatmap
     await pick('Shape', 'circle'); await chartReady();
-    must(await hasField('Marker size (px)'), 'marker size on a heatmap');
+    must(await hasField('Marker size'), 'marker size on a heatmap');
     const symSize = () => ev(`window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas')).getModel().getSeriesByIndex(0).getData().getItemVisual(0, 'symbolSize')`);
-    await setNum('Marker size (px)', '30'); await chartReady();
+    await setNum('Marker size', '30'); await chartReady();
     must((await symSize()) === 30, `circle heatmap size ${await symSize()}`);
     await shot('heatmap-circle-30-light.png');
-    await setNum('Marker size (px)', '99'); await settle(300);
-    must((await tick()).includes('4'), `refusal toast: ${await tick()}`);
-    must((await symSize()) === 30, 'refused value not applied');
-    await setNum('Marker size (px)', ''); await chartReady();
+    must(await ev(`(() => { const i = [...document.querySelectorAll('.ws-fmt-field')].find((l) => l.querySelector('.ws-fmt-label').textContent === 'Marker size').querySelector('input[type=range]'); return i.min === '3' && i.max === '40' && i.closest('label').querySelector('output').textContent === '30 px'; })()`), 'Marker size is a 3..40 meter (3 = Auto) reading 30 px');
+    await setNum('Marker size', ''); await chartReady();
     must((await symSize()) !== 30, 'blank returns to automatic');
     await pick('Shape', 'square');
     // line markers
     await setType('Line'); await openFormat(); await chartReady();
     let o = await opt();
     must(o.series[0].symbolSize === 8, `line default ${o.series[0].symbolSize}`);
-    await setNum('Marker size (px)', '16'); await chartReady();
+    await setNum('Marker size', '16'); await chartReady();
     o = await opt();
     must(o.series[0].symbolSize === 16 && o.series[0].showSymbol === true, `line 16: ${o.series[0].symbolSize}`);
     await shot('line-marker-16-light.png');
-    await setNum('Marker size (px)', '');
+    await setNum('Marker size', '');
     // scatter
     await setType('Scatter'); await openFormat(); await chartReady();
     o = await opt();
     must(o.series[0].type === 'scatter' && o.series[0].symbolSize === 14, `scatter default ${J(o.series[0].symbolSize)}`);
-    await setNum('Marker size (px)', '28'); await chartReady();
+    await setNum('Marker size', '28'); await chartReady();
     o = await opt();
     must(o.series[0].symbolSize === 28, `scatter 28: ${o.series[0].symbolSize}`);
     await pick('Border thickness', 'thick'); await chartReady();
@@ -344,7 +343,7 @@ try {
     must(o.series[0].itemStyle.borderWidth === 3, 'scatter border');
     await shot('scatter-28-thick-light.png');
     await theme('dark'); await shot('scatter-28-thick-dark.png'); await theme('light');
-    await pick('Border thickness', 'none'); await setNum('Marker size (px)', '');
+    await pick('Border thickness', 'none'); await setNum('Marker size', '');
   });
 
   await check('Marker shape: line charts offer four shapes; the symbol follows; bars do not offer it', async () => {
@@ -371,7 +370,7 @@ try {
     for (const [label, pathOf, dflt] of [['Pie', 'series[0].itemStyle', 2], ['Treemap', 'series[0].itemStyle', 2], ['Funnel', 'series[0].itemStyle', 1]]) {
       await setType(label); await openFormat();
       try { await chartReady(); } catch (e) { throw new Error(`${label}: ${e.message}; chart text: ${await chartText()}`); }
-      must(await hasField('Border thickness') && !(await hasField('Marker size (px)')), `${label}: border but no marker size`);
+      must(await hasField('Border thickness') && !(await hasField('Marker size')), `${label}: border but no marker size`);
       let o = await opt();
       must(o.series[0].itemStyle.borderWidth === dflt, `${label} none: ${J(o.series[0].itemStyle)}`);
       const surface = o.series[0].itemStyle.borderColor;

@@ -1,5 +1,5 @@
-// Mark opacity (Format → Opacity) — pure, DOM-free (tests/js/mark-opacity.test.mjs). `format.markOpacity` is a whole percent, a multiple of 10
-// from 0 to 100, kept off `defaultFormat` (absent = 100 = the marks as they have always drawn). The drawing multiplies every opacity a mark
+// Mark opacity (Format → Opacity) — pure, DOM-free (tests/js/mark-opacity.test.mjs). `format.markOpacity` is a whole percent
+// from 0 to 100 (older files: multiples of 10), kept off `defaultFormat` (absent = 100 = the marks as they have always drawn). The drawing multiplies every opacity a mark
 // already carries (a scatter's 0.8, an area's 0.18, a dimmed selection's 0.35) by the setting rather than replacing it, so nothing
 // that opacity already says (a fade for "not selected", a hatched comparison) is lost. Opacity never carries meaning: legends, axes,
 // tooltips and labels stay at full strength.
@@ -7,13 +7,11 @@ import { BORDER_TYPES } from "./mark-style-model.js";
 
 /** Chart types whose marks take Format → Opacity (the ones with a border, plus lines, areas and small multiples). */
 export const OPACITY_TYPES = new Set([...BORDER_TYPES, "line", "area", "multiples"]);
-/** [value, label] — the percentages Format offers. */
-/** [value, readout] ascending, 0 to 100 in steps of 10 — the stops of the Opacity bar. */
-export const OPACITY_STOPS = Object.freeze(Array.from({ length: 11 }, (_, i) => [i * 10, `${i * 10} %`]));
-export const OPACITY_CHOICES = Object.freeze(Array.from({ length: 11 }, (_, i) => [100 - i * 10, `${100 - i * 10} %`]));
+/** [value, readout] ascending, 0 to 100 in steps of 1 — the stops of the Opacity bar. */
+export const OPACITY_STOPS = Object.freeze(Array.from({ length: 101 }, (_, i) => [i, `${i} %`]));
 
-/** Why a stored opacity is refused, or null (a whole percent that is a multiple of 10, 0 to 100). */
-export const markOpacityError = (v) => (Number.isInteger(v) && v >= 0 && v <= 100 && v % 10 === 0 ? null : "Opacity must be 0 to 100 percent in steps of 10.");
+/** Why a stored opacity is refused, or null (a whole percent, 0 to 100). */
+export const markOpacityError = (v) => (Number.isInteger(v) && v >= 0 && v <= 100 ? null : "Opacity must be a whole percent from 0 to 100.");
 /** The opacity as a 0..1 factor; 1 for an absent or (defensively) invalid value. */
 export const markOpacityOf = (format) => { const v = format?.markOpacity; return v !== undefined && v !== null && markOpacityError(v) === null ? v / 100 : 1; };
 

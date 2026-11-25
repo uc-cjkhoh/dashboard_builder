@@ -22,14 +22,15 @@ import { checkTooltipText } from "../Dashboard/tooltip-model.js";
 import { cleanListHeight } from "../Canvas/card-height.js";
 import { checkTooltipStyle } from "../Dashboard/tooltip-style.js";
 import { checkTooltipFormats } from "../Dashboard/tooltip-formats.js";
-import { markerSizeError } from "../Dashboard/mark-style-model.js";
+import { markerSizeError, markBorderError, storedBorder } from "../Dashboard/mark-style-model.js";
 import { linePatternError } from "../Dashboard/line-style-model.js";
 import { lineMarkersError } from "../Dashboard/line-marker-model.js";
 import { showTooltipsError, tooltipButtonsError, tooltipModeError } from "../Dashboard/tooltip-behaviour-model.js";
 import { cleanSizeScale } from "../Dashboard/size-scale-model.js";
 import { markOpacityError } from "../Dashboard/mark-opacity-model.js";
+import { pageSpeedError } from "../Dashboard/pages-speed-model.js";
 import { shapeBinsError, cleanMemberShapes } from "../Dashboard/shape-model.js";
-import { labelMarksError, labelPositionError } from "../Dashboard/label-marks-model.js";
+import { labelMarksError, labelPositionError, labelOverlapError } from "../Dashboard/label-marks-model.js";
 import { cleanColourList } from "../Dashboard/colour-fields-model.js";
 import { RAMP_CHOICES, SCALE_CHOICES, DIV_PAIR_CHOICES, colourCentreError, colourRangeError, colourStepsError } from "../Dashboard/colour-scale-model.js";
 import { cleanParameter, MAX_PARAMS } from "../Core/parameters-model.js";
@@ -39,10 +40,11 @@ import { cleanCalculations } from "../Calc/calc-workbook.js";
 import { cleanWidgets, savedWidgets } from "../Board/board-model.js";
 import { cleanNotes, savedNotes } from "../Board/board-notes.js";
 import { cleanSize, savedSize, cleanRange, savedRange } from "../Board/board-size.js";
+import { cleanGroupSlot, cleanGroupCollapsed } from "../Tabs/tab-groups-model.js";
 import { cleanSteps, savedSteps } from "../Story/story-model.js";
 import { CALC_AGGS } from "../Calc/calc-pill.js";
 import {
-  CHART_TYPE_IDS, CATEGORIES, FILTER_OPS, NUMBER_FORMATS, DATE_FORMATS, LEGENDS, TOP_N, MAX_DECIMALS, DATE_BUCKETS, LINE_STYLES, HEATMAP_SHAPES, GANTT_LENGTHS, SECONDARY_TYPES, MARK_BORDERS, MARK_BORDER_COLOURS, MARKER_SHAPES, MAX_TARGET_MEASURE, TABLE_ALIGNS, BACKGROUNDS, TABLE_DENSITIES, TABLE_SHADES, FONTS,
+  CHART_TYPE_IDS, CATEGORIES, FILTER_OPS, NUMBER_FORMATS, DATE_FORMATS, LEGENDS, TOP_N, MAX_DECIMALS, DATE_BUCKETS, LINE_STYLES, HEATMAP_SHAPES, GANTT_LENGTHS, SECONDARY_TYPES, MARK_BORDER_COLOURS, MARKER_SHAPES, MAX_TARGET_MEASURE, TABLE_ALIGNS, BACKGROUNDS, TABLE_DENSITIES, TABLE_SHADES, FONTS,
   PERIOD_PRESETS, PERIOD_COMPARES, DATE_PARTS, DATE_LABELS, TABLE_CALCS, CALC_ALONG, FIT_MODES, REF_KINDS, TRENDS, FORECASTS, CF_MODES, CF_SCALES, CF_OPS, CF_TONES, CF_MAX_RULES, CF_MAX_MEASURES,
 } from "../Core/sheet-schema.js";
 
@@ -86,12 +88,12 @@ export function serializeWorkbook({ entities, relationships, tabs, active, theme
       ...(r.aggregateFirst === true ? { aggregateFirst: true, ...(r.filterDirection === "single" ? { filterDirection: "single" } : {}) } : {}), // aggregate each table to the key before joining (optional)
     })),
     worksheets: worksheets.map((d) => ({ name: d.name, sheet: savedSheet(d.sheet) })),
-    dashboards: dashboards.map((d) => ({ name: d.name, widgets: savedWidgets(d.widgets, wsIndex, dbIndex), ...savedSize(d.size), ...savedRange(d.range), ...savedNotes(d.notes) })), // size: optional (absent = automatic)
+    dashboards: dashboards.map((d) => ({ name: d.name, widgets: savedWidgets(d.widgets, wsIndex, dbIndex), ...savedSize(d.size), ...savedRange(d.range), ...savedNotes(d.notes), ...(d.groupSlot ? { groupSlot: d.groupSlot } : {}), ...(d.collapsed ? { collapsed: true } : {}) })), // size, groupSlot, collapsed: optional (absent = automatic / unset / open)
     ...(storyTabs.length ? { stories: storyTabs.map((s) => ({ name: s.name, steps: savedSteps(s.steps, wsIndex, dbIndex) })) } : {}), // (optional; absent in older files)
     tabs: order, // the strip's order
+    ...(view ? { view: { zoom: Math.round(view.zoom * 1000) / 1000, pan: { x: Math.round(view.pan.x), y: Math.round(view.pan.y) } } } : {}), // the Data Source's zoom and pan (optional; absent = fit every card on open)
     active: activeIndex !== undefined ? { kind: active.kind, index: activeIndex } : null, // null = the Data Source view
     theme: theme ? { accent: theme.accent, palette: theme.palette, ...(theme.surface && theme.surface !== "default" ? { surface: theme.surface } : {}) } : { ...DEFAULT_THEME },
-    ...(view ? { view: { zoom: Math.round(view.zoom * 1000) / 1000, pan: { x: Math.round(view.pan.x), y: Math.round(view.pan.y) } } } : {}), // the Data Source's zoom and pan (optional; absent = fit every card on open)
     sharedFilters: structuredClone(sharedFilters),
     fields: Object.fromEntries(fieldMeta),
     parameters: structuredClone(parameters),
@@ -268,7 +270,7 @@ export function parseWorkbook(source) {
       stories.push({ name: tabName(stAll[t.index], "Story"), steps: stAll[t.index].steps });
     } else {
       dbMap.set(t.index, dashboards.length); tabs.push({ kind: "dashboard", index: dashboards.length });
-      dashboards.push({ name: tabName(dbAll[t.index], "Dashboard"), widgets: dbAll[t.index].widgets, size: dbAll[t.index].size, range: dbAll[t.index].range, notes: dbAll[t.index].notes });
+      dashboards.push({ name: tabName(dbAll[t.index], "Dashboard"), widgets: dbAll[t.index].widgets, size: dbAll[t.index].size, range: dbAll[t.index].range, notes: dbAll[t.index].notes, groupSlot: dbAll[t.index].groupSlot, collapsed: dbAll[t.index].collapsed });
     }
   }
   // A widget's worksheet is read through the map, so one cut by the 50-tab cap is "missing" like any other dangling index.
@@ -282,6 +284,8 @@ export function parseWorkbook(source) {
     d.size = cleanSize(d.size, `Dashboard "${d.name}"`, issues);
     d.range = cleanRange(d.range, `Dashboard "${d.name}"`, issues);
     d.notes = cleanNotes(d.notes, `Dashboard "${d.name}"`, issues);
+    d.groupSlot = cleanGroupSlot(d.groupSlot, `Dashboard "${d.name}"`, issues);
+    d.collapsed = cleanGroupCollapsed(d.collapsed, `Dashboard "${d.name}"`, issues);
     if (d.size && d.range) { issues.push(`Dashboard "${d.name}": the saved size range was ignored (a fixed size wins).`); d.range = null; }
   });
 
@@ -467,7 +471,7 @@ export function sanitizeSheet(saved, where, issues) {
   sheet.pages = s.pages == null ? null
     : s.pages.calc !== undefined ? (issues.push(`${where}: a calculated field can't be used for pages — removed.`), null)
     : cleanPill(s.pages, `${where} pages`, issues) && Number.isInteger(s.pages.index) && s.pages.index >= 0
-      ? { db: s.pages.db, table: s.pages.table, column: s.pages.column, category: s.pages.category, index: s.pages.index }
+      ? { db: s.pages.db, table: s.pages.table, column: s.pages.column, category: s.pages.category, index: s.pages.index, ...cleanPagesSpeed(s.pages.speed, where, issues) }
       : (issues.push(`${where}: pages cleared.`), null);
   sheet.format = cleanFormat(s.format, where, issues);
   sheet.period = cleanPeriod(s.period, where, issues);
@@ -646,6 +650,13 @@ function cleanPeriod(p, where, issues) {
     compare: p.compare, compareFrom, compareTo, ...(p.anchor === "latest" ? { anchor: "latest", latest } : p.anchor === "today" ? { anchor: "today" } : {}) }; // no anchor = counts from today, as older saves did
 }
 
+/** Pages' playback speed: `{ speed }` when a valid non-default name is stored, `{}` when absent or Medium; a bad value is reset to Medium and the file says so. */
+function cleanPagesSpeed(v, where, issues) {
+  if (v === undefined || v === null || v === "medium") return {};
+  if (pageSpeedError(v) === null) return { speed: v };
+  issues.push(`${where}: pages speed "${v}" — reset to Medium.`);
+  return {};
+}
 function cleanDrill(d, where, issues) {
   if (d == null) return null;
   if (typeof d !== "object") { issues.push(`${where}: drill cleared.`); return null; }
@@ -683,7 +694,9 @@ function cleanFormat(f0, where, issues) {
   if (f.ganttLength !== undefined) out.ganttLength = oneOf(GANTT_LENGTHS, f.ganttLength, "length", w, "Gantt length", issues); // absent (older files) reads Length; kept off defaultFormat
   out.secondaryType = oneOf(SECONDARY_TYPES, f.secondaryType, base.secondaryType, w, "right-axis marks", issues);
   out.markerShape = oneOf(MARKER_SHAPES, f.markerShape, base.markerShape, w, "marker shape", issues);
-  out.markBorder = oneOf(MARK_BORDERS, f.markBorder, base.markBorder, w, "mark border", issues);
+  if (f.markBorder === undefined) out.markBorder = base.markBorder;
+  else if (markBorderError(f.markBorder) === null) out.markBorder = storedBorder(f.markBorder); // "none" or px; an older file's thin / medium / thick become 1 / 2 / 3
+  else { issues.push(`${w}: border thickness "${f.markBorder}" — reset to none.`); out.markBorder = base.markBorder; }
   if (f.markBorderColor !== undefined) out.markBorderColor = oneOf(MARK_BORDER_COLOURS, f.markBorderColor, "muted", w, "border colour", issues); // absent (older files) reads Muted; kept off defaultFormat
   out.font = oneOf(FONTS, f.font, base.font, w, "font", issues);
   if (f.background !== undefined) out.background = oneOf(BACKGROUNDS, f.background, "none", w, "background", issues); // absent (older files) reads None; kept off defaultFormat so a sheet without one round-trips unchanged
@@ -694,6 +707,10 @@ function cleanFormat(f0, where, issues) {
   if (f.markOpacity !== undefined && f.markOpacity !== null) { // Format → Opacity: absent (older files, the default) stays off defaultFormat; a bad value is reset (never clamped)
     if (markOpacityError(f.markOpacity) === null) out.markOpacity = f.markOpacity;
     else issues.push(`${w}: opacity "${f.markOpacity}" — reset to 100 %.`);
+  }
+  if (f.labelOverlap !== undefined && f.labelOverlap !== null) { // Label flyout → Allow labels to overlap: absent or on (the default) stays off defaultFormat; only off is kept
+    if (labelOverlapError(f.labelOverlap) === null) { if (f.labelOverlap === false) out.labelOverlap = false; }
+    else issues.push(`${w}: allow labels to overlap "${f.labelOverlap}" — reset to on.`);
   }
   if (f.shapeBins !== undefined && f.shapeBins !== null) { // Format → Shape bins: absent (older files, the default 5) stays off defaultFormat; a bad value is reset (never clamped)
     if (shapeBinsError(f.shapeBins) === null) out.shapeBins = f.shapeBins;
@@ -748,9 +765,12 @@ function cleanFormat(f0, where, issues) {
   out.colorCentre = f.colorCentre == null ? null : typeof f.colorCentre === "number" && !colourCentreError(f.colorCentre) ? f.colorCentre : (issues.push(`${w}: colour centre "${f.colorCentre}" — cleared.`), null);
   out.targetMeasure = f.targetMeasure == null ? null : Number.isInteger(f.targetMeasure) && f.targetMeasure >= 1 && f.targetMeasure <= MAX_TARGET_MEASURE ? f.targetMeasure
     : (issues.push(`${w}: target measure "${f.targetMeasure}" — cleared.`), null);
-  for (const k of ["dataLabels", "colorByDimension", "syncAxes", "dualAxis", "paletteReverse", "downIsGood", "approximate"]) {
+  for (const k of ["dataLabels", "syncAxes", "dualAxis", "downIsGood", "approximate"]) {
     if (f[k] === undefined || typeof f[k] === "boolean") out[k] = f[k] ?? base[k];
     else issues.push(`${w}: ${k} must be on or off — reset.`);
+  }
+  for (const [k, what] of [["colorByDimension", "Colour by category"], ["paletteReverse", "Reverse palette"]]) { // removed settings: a saved "on" is dropped, and the file says so
+    if (f[k] === true) issues.push(`${w}: ${what} no longer exists — dropped (colour a bar by putting its axis field on Color).`);
   }
   if (f.currencySymbol === undefined) out.currencySymbol = base.currencySymbol;
   else if (typeof f.currencySymbol === "string" && f.currencySymbol.length <= 8) out.currencySymbol = f.currencySymbol;

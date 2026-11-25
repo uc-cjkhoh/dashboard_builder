@@ -11,7 +11,7 @@ import { tipLookup } from "./tooltip-formats.js";
 import { lineStep, lineDash, comparisonDash, effectivePattern, trendDash, linesTakeStyle } from "./line-style-model.js";
 import { markerPlan } from "./line-marker-model.js";
 import { syncRange, secondaryKind, dualAxisOn, rightAxisTitle, seriesAxis } from "./axis-sync-model.js";
-import { markBorder, markerSizeOr, markerSymbol, edgeOr, strokeOf, borderInk } from "./mark-style-model.js";
+import { markBorder, borderWidthOf, markerSizeOr, markerSymbol, edgeOr, strokeOf, borderInk } from "./mark-style-model.js";
 import { circleSize, circleCells, HEATMAP_GUTTER, LABEL_FONT, cellSizeOf, labelsShown } from "./heatmap-model.js";
 import { bandsFor } from "./bullet-model.js";
 import { ganttTime, ganttAxisTime, ganttLabelMargin, ganttSizing, ganttThickness } from "./gantt-model.js";
@@ -21,7 +21,8 @@ import { applySelectionDim } from "./selection-dim.js";
 import { applyTooltipBehaviour } from "./tooltip-behaviour-model.js";
 import { wireTooltipCommands } from "./tooltip-commands.js";
 import { shapeSymbol, symbolAt } from "./shape-model.js";
-import { labelMask, labelPositionSymbol } from "./label-marks-model.js";
+import { labelMask, labelPositionSymbol, withLabelOverlap } from "./label-marks-model.js";
+import { sizeT, slotShare, withElementSize } from "./element-size-model.js";
 import { applyMarkOpacity, markOpacityOf, withAlpha, OPACITY_TYPES, ANALYTICS_ID } from "./mark-opacity-model.js";
 import { dateFitMode } from "./date-labels.js";
 import { histogramLabel } from "./chart-polish.js";
@@ -49,10 +50,8 @@ function stateOf(container) {
 }
 // The container being drawn right now: the option is built synchronously inside renderChart, and builders that need
 // the live chart later (a symbolSize callback) capture it at build time. The render settings — palette
-// order reversed, and displayed member name -> user colour — live in each container's state (st.paletteReverse,
-// st.memberColors), so two live charts never share or clobber them.
+// displayed member name -> user colour — live in each container's state (st.memberColors), so two live charts never share or clobber them.
 let drawing = null;
-const reversed = () => Boolean(drawing?.paletteReverse);
 const memberColors = () => drawing?.memberColors ?? NO_MEMBER_COLORS;
 const NO_MEMBER_COLORS = new Map();
 const memberColor = (name, fallback) => memberColors().get(name) ?? fallback;
@@ -73,7 +72,7 @@ function tokens() {
   // CSS tokens with the validated hexes as fallback. A single-series chart uses the brand accent
   // instead (below), keeping the common case on-brand.
   const catFallback = PALETTES.default.light;
-  const cat = orderedPalette(catFallback.map((hex, i) => t(`--chart-cat-${i + 1}`, hex)), reversed());
+  const cat = orderedPalette(catFallback.map((hex, i) => t(`--chart-cat-${i + 1}`, hex)), false);
   const rampTk = { divLow: t("--chart-div-low", DIV_FALLBACK.low), divHigh: t("--chart-div-high", DIV_FALLBACK.high), accent: t("--accent", ACCENTS.signal.light.accent), accentSoft: t("--accent-soft", ACCENTS.signal.light.soft), surface: t("--surface", "#ffffff"), ink: t("--ink", "#1c1719"), cat: catFallback.map((hex, i) => t(`--chart-cat-${i + 1}`, hex)), hues: Object.fromEntries(Object.entries(DIV_HUE_FALLBACK).map(([h, hex]) => [h, t(`--chart-div-${h}`, hex)])) };
   return {
     series: t("--chart-series", ACCENTS.signal.light.accent),
@@ -90,7 +89,7 @@ function tokens() {
     brand: t("--accent", ACCENTS.signal.light.accent),
     brandSoft: t("--accent-soft", ACCENTS.signal.light.soft),
     // continuous low -> high: the chosen hue from the accent pair or a categorical token
-    ramp: drawing?.colorScale === "diverging" ? divergingColours(rampTk, reversed(), drawing?.colorPair, drawing?.colorAuto === true) : rampColours(drawing?.colorRamp, rampTk, reversed()),
+    ramp: drawing?.colorScale === "diverging" ? divergingColours(rampTk, false, drawing?.colorPair, drawing?.colorAuto === true) : rampColours(drawing?.colorRamp, rampTk, false),
   };
 }
 
@@ -117,7 +116,6 @@ export function resolvedColourScale(container) { return stateOf(container).color
 export function renderChart(container, spec) {
   disposeChart(container);
   const st = stateOf(container);
-  st.paletteReverse = !!spec.format?.paletteReverse;
   st.font = spec.format?.font;
   st.colorSteps = spec.format?.colorSteps ?? 0;
   st.colorScale = effectiveScale(spec.format?.colorScale, colourValuesOf(spec)); // Automatic resolves here, once, against the values the scale reads: nothing below sees "auto"
@@ -418,6 +416,9 @@ export function disposeChart(container) {
 // Dispatch by chart-type family: circular (pie/donut), scatter (two value axes), or the
 // shared cartesian builder (bar/stacked/line/area/combo).
 export function buildOption(spec) {
+  return withLabelOverlap(withElementSize(buildFamily(spec), spec), spec.format); // Label flyout → Allow labels to overlap other marks (off hides a label that would sit on another)
+}
+function buildFamily(spec) {
   if (spec.type === "pie" || spec.type === "donut") return buildPie(spec);
   if (spec.type === "scatterShapes") return buildScatterShapes(spec); // shape-split scatter
   if (spec.type === "scatter" || spec.type === "square" || spec.type === "circle") return buildScatter(spec); // point marks
@@ -458,7 +459,7 @@ function legendFor(format, c, names, defaultOn) {
 // (the default). `orientation` is decided by the caller from the shelves; combo stays vertical (its
 // dual value axis is on y). Axis *titles* name the physical axes (xTitle = bottom, yTitle = left)
 // regardless of orientation, so the Format controls stay literal.
-export function buildCartesian({ type, categories, series, format = {}, orientation = "vertical", pointLabels, seriesLabels, tooltipExtra, tooltipText, tooltipFields, tooltipStyle, tooltipFormats, otherIndex = -1, analytics = null, colorValues, colorName, sizes, sizeName, sizeMembers, sizeOrder, sizeGrid, sizeMembersGrid, labelMarks, selectedMarks }) {
+export function buildCartesian({ type, categories, series, colorByCategory, format = {}, orientation = "vertical", pointLabels, seriesLabels, tooltipExtra, tooltipText, tooltipFields, tooltipStyle, tooltipFormats, otherIndex = -1, analytics = null, colorValues, colorName, sizes, sizeName, sizeMembers, sizeOrder, sizeGrid, sizeMembersGrid, labelMarks, selectedMarks }) {
   const c = tokens();
   const labels = (categories ?? []).map((l) => l ?? "—");
   // Comparison series (compare: true) ride beside their measure: they don't make a chart "multi"
@@ -482,7 +483,7 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
   // a cue of its own (a bar pattern, a line dash and marker; stacked segments are also separated by a surface stroke) and the legend swatches are neutral.
   const cued = Boolean(byValue) && mainCount > 1;
   const cueOf = (i) => (cued && !series[i]?.compare ? measureCue(i, format.markerShape) : null);
-  const colorByDim = type === "bar" && !multi && !!format.colorByDimension && !byValue;
+  const colorByDim = type === "bar" && !multi && !!colorByCategory && !byValue; // the Colour field is the bar's own axis field (render-cartesian: one bar per member, in its colour)
   // Size (a measure, or a dimension's member steps): a bar's thickness (custom series), a straight line's own thickness (a segment overlay), or an
   // area / stepped line's marker size. `sizes` is one value per category shared by every series; `sizeGrid` (beside a Colour split) one per series cell.
   const sz = cartesianSizes({ sizes, sizeGrid, sizeOrder, type, mainCount, format });
@@ -623,7 +624,7 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
       const stroke = byValue ? lineGradient(byValue.colours, horizontal, color) : color;
       const markerSized = Boolean(sizeFr) && sizeMode === "marker"; // an area / stepped line: Size scales the markers (a straight line's thickness is the overlay below)
       const lineData = markerSized || byValue
-        ? s.data.map((v, di) => (v == null ? v : { value: v, ...(markerSized ? { symbolSize: markerSizeFor(sizeFr[i]?.[di]) } : {}), ...(byValue?.colours[di] ? { itemStyle: { color: byValue.colours[di], ...(format.markBorder && format.markBorder !== "none" ? edge : {}) } } : {}) }))
+        ? s.data.map((v, di) => (v == null ? v : { value: v, ...(markerSized ? { symbolSize: markerSizeFor(sizeFr[i]?.[di]) } : {}), ...(byValue?.colours[di] ? { itemStyle: { color: byValue.colours[di], ...(borderWidthOf(format.markBorder) > 0 ? edge : {}) } } : {}) }))
         : s.data;
       if (sizeFr && sizeMode === "width") widthLines.push({ s, i, stroke: byValue ? byValue.colours : null, color, axis: seriesAxis(dual, i, isCombo) });
       // Format → Line markers Selected / All / None decide the dots themselves (`selectedMarks` = the click-selected categories' indexes); a marker that is data (a Size-sized marker, a cued line's marker) always stays.
@@ -631,7 +632,7 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
       const dots = mk ? mk.show : s.data.length <= 60 || format.markerSize != null || markerSized || Boolean(cue); // dots only when they won't crowd (unless a marker size is chosen; a cued line's markers name it)
       // Format → Label marks on a line with no dots (a long one): a label sits on its mark's dot, so only the labelled marks show one (the rest are clear until hovered).
       const labelDots = !mk && !dots && Boolean(mask) && !mask.hover && Boolean(pointLabels || seriesLabels || format.dataLabels);
-      const dotted = labelDots ? lineData.map((d, di) => (d == null ? d : { ...(isObjectItem(d) ? d : { value: d }), ...(mask.at(i, di) ? {} : { itemStyle: { ...(isObjectItem(d) ? d.itemStyle : {}), opacity: 0 }, emphasis: { itemStyle: { opacity: 1 } } }) })) : mk?.clear ? clearDots(lineData, mk.clear, { color, edge: format.markBorder && format.markBorder !== "none" ? edge : null }) : lineData; // an unlabelled mark keeps its normal size but is clear: the hover dot and the tooltip work as on a plain long line (Line markers None: every dot but a lone value's)
+      const dotted = labelDots ? lineData.map((d, di) => (d == null ? d : { ...(isObjectItem(d) ? d : { value: d }), ...(mask.at(i, di) ? {} : { itemStyle: { ...(isObjectItem(d) ? d.itemStyle : {}), opacity: 0 }, emphasis: { itemStyle: { opacity: 1 } } }) })) : mk?.clear ? clearDots(lineData, mk.clear, { color, edge: borderWidthOf(format.markBorder) > 0 ? edge : null }) : lineData; // an unlabelled mark keeps its normal size but is clear: the hover dot and the tooltip work as on a plain long line (Line markers None: every dot but a lone value's)
       const dash = lineDash({ pattern: format.linePattern, cue, thick: patternThick });
       return {
         name: s.name, type: "line", step,
@@ -642,7 +643,7 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
         symbol: cue ? cue.symbol : markerSymbol(format.markerShape), symbolSize: markerSizeOr(format.markerSize, 8), // ≥8px markers (dataviz mark spec) unless Format → Marker size
         areaStyle: type === "area" || (isCombo && secondary === "area") ? { opacity: 0.18, color: stroke } : undefined,
         lineStyle: { width: 2, color: stroke, ...(dash !== undefined ? { type: dash } : {}) }, // a cue's own dash, else Format → Line pattern (solid = no type, as before)
-        itemStyle: { color, ...(format.markBorder && format.markBorder !== "none" ? edge : {}) },
+        itemStyle: { color, ...(borderWidthOf(format.markBorder) > 0 ? edge : {}) },
         label: dataLabel(i, true),
         emphasis: { focus: focusOf, ...hoverLabel },
       };
@@ -653,7 +654,7 @@ export function buildCartesian({ type, categories, series, format = {}, orientat
     // The "Other" bar (everything past the limit) wears the muted ink (≥ 3:1 on the surface, apart from
     // the series hue); its label says what it is.
     // A cued bar keeps its pattern; stacked segments of one bar share a colour, so a surface stroke (unless a border is chosen) separates them.
-    const barEdge = cue && stacked && !(format.markBorder && format.markBorder !== "none") ? { borderColor: c.surface, borderWidth: 1 } : edge;
+    const barEdge = cue && stacked && !(borderWidthOf(format.markBorder) > 0) ? { borderColor: c.surface, borderWidth: 1 } : edge;
     const cueStyle = cue?.decal ? { decal: { ...cue.decal, color: c.surface } } : {};
     const otherItem = (v) => ({ value: v, itemStyle: { color: c.muted, borderRadius: barRadius, ...barEdge } });
     if (sizeFr && type === "bar") {
@@ -770,7 +771,6 @@ function buildScatter({ categories, series, format = {}, sizes, sizeName, sizeMe
   const xName = format.xTitle || series[0]?.name || "x";
   const yName = format.yTitle || series[1]?.name || "y";
   const continuous = Array.isArray(colorValues);
-  const colorByDim = !!format.colorByDimension && !continuous; // continuous colour wins over per-category
   // Each datum: [x, y, size?, colour?] — extra dims feed symbolSize / visualMap by index.
   const sizeDim = Array.isArray(sizes) ? 2 : -1;
   const colorDim = continuous ? (sizeDim >= 0 ? 3 : 2) : -1;
@@ -778,7 +778,7 @@ function buildScatter({ categories, series, format = {}, sizes, sizeName, sizeMe
     const arr = [num(series[0].data[i]), num(series[1].data[i])];
     if (sizeDim >= 0) arr.push(num(sizes[i]));
     if (colorDim >= 0) arr.push(num(colorValues[i]));
-    return { value: arr, name, ...(sizeMembers ? { sizeMember: sizeMembers[i] } : {}), ...(colorByDim ? { itemStyle: { color: memberColor(name, c.cat[i % c.cat.length]) } } : {}) };
+    return { value: arr, name, ...(sizeMembers ? { sizeMember: sizeMembers[i] } : {}) };
   });
   const mask = labelMarks ? labelMask(labelMarks.mode, { series: [series[1].data], selected: labelMarks.selected, recent: labelMarks.recent }) : null; // Format → Label marks, over the Y values
   const symbolSize = sizeDim >= 0 ? sizeScaler(sizes, (v) => v[sizeDim], { format, order: sizeOrder }) : markerSizeOr(format.markerSize, 14); // a Size field wins
@@ -822,7 +822,7 @@ function buildScatter({ categories, series, format = {}, sizes, sizeName, sizeMe
     },
     series: [{
       type: "scatter", data, symbolSize, symbol: symbol || "circle", // square/circle marks
-      itemStyle: { ...(colorByDim || continuous ? {} : { color: c.series, opacity: 0.8 }), ...pointEdge(format, c) },
+      itemStyle: { ...(continuous ? {} : { color: c.series, opacity: 0.8 }), ...pointEdge(format, c) },
       label: (pointLabels || format.dataLabels)
         ? { show: !mask?.hover, position: labelPositionSymbol(format.labelPosition) ?? "top", color: c.muted, fontFamily: c.font, fontSize: 14,
             formatter: (p) => (mask && !mask.at(0, p.dataIndex) ? "" : pointLabels ? String(pointLabels[p.dataIndex] ?? "") : String(p.name ?? "")) }
@@ -907,7 +907,7 @@ function buildHeatmap({ xCats, yCats, cells, format = {} }) {
   const fmtVal = makeValueFormatter(format);
   const circles = format.heatmapShape === "circle";
   // The cell separator stays the surface-coloured hairline unless a border is chosen.
-  const cellEdge = format.markBorder && format.markBorder !== "none" ? markBorder(format.markBorder, borderInk(format.markBorderColor, c))
+  const cellEdge = borderWidthOf(format.markBorder) > 0 ? markBorder(format.markBorder, borderInk(format.markBorderColor, c))
     : { borderColor: drawing?.colorSteps ? c.axis : c.surface, borderWidth: 1 }; // stepped: a visible hairline so a pale step is not a gap
   const vals = cells.map((d) => d[2]).filter((v) => v != null);
   const range = colourScaleRange(vals, true);
@@ -1115,7 +1115,7 @@ const valueAxis = (c, fmtVal, extra = {}) => ({
   splitLine: { lineStyle: { color: c.grid } }, axisLabel: { color: c.muted, formatter: fmtVal }, ...extra,
 });
 // A point mark's stroke — nothing added while the setting is None (keeps the old look).
-const pointEdge = (format, c) => (format.markBorder && format.markBorder !== "none" ? markBorder(format.markBorder, borderInk(format.markBorderColor, c)) : {});
+const pointEdge = (format, c) => (borderWidthOf(format.markBorder) > 0 ? markBorder(format.markBorder, borderInk(format.markBorderColor, c)) : {});
 const catAxis = (c, data, extra = {}) => ({
   type: "category", data, axisLine: { lineStyle: { color: c.axis } }, axisTick: { show: false },
   axisLabel: { color: c.muted, hideOverlap: true }, ...extra,
@@ -1144,6 +1144,7 @@ function buildWaterfall({ categories, series, format = {} }) {
   const c = tokens();
   const fmtVal = makeValueFormatter(format);
   const steps = waterfallSteps(categories ?? [], series[0]?.data ?? []);
+  const sizeSet = sizeT(format);
   const colour = { up: c.cat[0], down: c.cat[5], total: c.muted };
   const names = { up: "Increase", down: "Decrease", total: "Total" };
   const signed = (v) => (v > 0 ? `+${fmtVal(v)}` : v < 0 ? `−${fmtVal(-v)}` : fmtVal(v));
@@ -1161,7 +1162,7 @@ function buildWaterfall({ categories, series, format = {} }) {
         renderItem: (params, api) => {
           const st = steps[params.dataIndex];
           const a = api.coord([api.value(0), api.value(1)]), b = api.coord([api.value(0), api.value(2)]);
-          const w = Math.min(40, api.size([1, 0])[0] * 0.6);
+          const w = sizeSet === null ? Math.min(40, api.size([1, 0])[0] * 0.6) : api.size([1, 0])[0] * slotShare(sizeSet); // Size flyout → the meter sets the share of the slot
           const top = Math.min(a[1], b[1]), h = Math.max(1, Math.abs(a[1] - b[1]));
           return {
             type: "group", children: [
@@ -1279,6 +1280,7 @@ function buildGantt({ categories, gantt, name, format = {}, selectedIndices, onL
   const lists = split ? groups.map((_, gi) => bars.filter((b) => b.group === gi)) : [bars];
   const colourOf = (gi) => (split ? memberColor(groups[gi], c.cat[gi % c.cat.length]) : c.cat[0]);
   const names = split ? groups : [label];
+  const sizeSet = sizeT(format);
   const sizing = sizeName ? ganttSizing(bars, format) : null; // shares[k] / values[k] follow `bars`
   const barIndex = new Map(bars.map((b, k) => [b, k]));
   const sizeNote = sizing ? sizeLegend(sizing.values, sizeName, c, fmtVal, 24, { scale: sizing.scale, zeroDefault: false }) : null;
@@ -1299,7 +1301,7 @@ function buildGantt({ categories, gantt, name, format = {}, selectedIndices, onL
         const b = list[params.dataIndex];
         const a = api.coord([api.value(1), api.value(0)]), e = api.coord([api.value(2), api.value(0)]);
         const slot = api.size([0, 1])[1];
-        const h = sizing ? ganttThickness(sizing.shares[barIndex.get(b)], slot) : Math.min(28, slot * 0.6); // a Size measure: 6 px .. 80% of the slot; else one fixed thickness
+        const h = sizing ? ganttThickness(sizing.shares[barIndex.get(b)], slot) : sizeSet === null ? Math.min(28, slot * 0.6) : slot * slotShare(sizeSet); // a Size measure: 6 px .. 80% of the slot; else one fixed thickness
         const opacity = (keep.size && !keep.has(b.i)) || (split && focus && names[gi] !== focus) ? 0.35 : 1; // a legend-focused member keeps full strength (ECharts does not blur custom marks)
         const z = sizing ? { z2: 1000 - h } : {}; // thick bars sharing a row (Colour members) draw under the thinner ones; ECharts reads z2 on the drawn child, not on its group
         return { type: "group", children: [

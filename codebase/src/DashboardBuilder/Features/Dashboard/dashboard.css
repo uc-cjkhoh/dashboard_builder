@@ -242,7 +242,7 @@
   display: flex; flex-direction: column; gap: var(--s2);
   padding: var(--s2); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r);
 }
-/* The flyout is a stack of sections: the title band, then the slot (pills, drop zone, Add field), then the editor's groups. Each section is full-bleed with 16 px
+/* The flyout is a stack of sections: the title band, then the slot (pills, drop zone, Drop Field Here), then the editor's groups. Each section is full-bleed with 16 px
    gutters, split from the one above by an edge-to-edge hairline; the title band is recessed (--surface-2) and stays put while a long editor scrolls. */
 .ws-toolfly .ws-toolpanel { padding: 0; gap: 0; border: 0; border-radius: 0; background: transparent; }
 .ws-toolfly .ws-toolpanel > :not(.ws-toolpanel__head) { padding: var(--s4); }
@@ -255,11 +255,7 @@
 .ws-toolfly select, .ws-toolfly .ws-period input[type="date"] { width: 100%; max-width: none; }
 .ws-toolfly .ws-period__row { display: grid; grid-template-columns: 1fr; gap: var(--s2); }
 .ws-toolfly .ws-tipedit__text { height: auto; min-height: 96px; }
-/* The slot is one dashed drop zone that holds the pills and ends with Add field; the picker list opens under it. The button is a quiet item inside the zone, not a second control beside it.
-   In the Color flyout the zone holds the pills only (absent when there are none), Add field is its own full-width row under it with a dotted edge, and its list is a side menu (.ws-picker__box--side) beside the flyout. */
-.ws-picker__btn { display: inline-flex; align-items: center; gap: var(--s1); height: var(--ctl-h); margin-left: calc(-1 * var(--s1)); padding: 0 var(--s2) 0 var(--s1); border-radius: var(--r); background: transparent; color: var(--ink-3); font-size: var(--fs-body); cursor: pointer; }
-.ws-picker__btn .icon { margin-left: calc(var(--s1) / -2); } /* optical: the plus has ~2 px of empty space inside its 14 px box; its ink, not the box, sits on the zone's content edge, level with the pills' */
-.ws-picker__btn:hover, .ws-picker__btn[aria-expanded="true"] { background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--ink); }
+/* The slot is the pills (a dashed drop zone, absent when there are none) over the Drop Field Here row. The row is a dashed-edge, full-width, non-interactive target: fields arrive by drag and drop from the field pane only (D156), there is no list to open. */
 .ws-tipedit__head { display: flex; align-items: center; justify-content: space-between; min-height: var(--ctl-h); margin-top: calc(-1 * var(--s1)); }
 .ws-tipedit__head .ws-tipedit__modal { margin-right: calc(-1 * var(--s2)); height: var(--ctl-h); padding: 0 var(--s2); background: transparent; color: var(--ink-2); font-weight: 400; }
 .ws-tipedit__head .ws-tipedit__modal:hover { background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--ink); }
@@ -296,23 +292,14 @@
 .ws-colourfly__limits > summary:hover { color: var(--ink); }
 .ws-colourfly__limits > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .ws-colourfly__limitsbody { display: grid; gap: var(--s2); padding-top: var(--s2); }
-.ws-picker__box { display: grid; gap: var(--s1); }
-/* The Color flyout's field menu: a sibling of .ws-toolfly (whose overflow would clip it), its edge on the flyout's right edge, under the flyout's z-index so the flyout's border stays the one hairline. */
-.ws-picker__box--side { position: absolute; z-index: 4; width: 240px; gap: var(--s2); padding: var(--s2); background: var(--surface); border: 1px solid var(--line-2); border-radius: 0 var(--r) var(--r) 0; box-shadow: var(--elev-28); }
-.ws-picker__box--side .ws-picker__search { width: 100%; }
-.ws-toolpanel__slot > .ws-picker__btn { position: relative; display: flex; align-items: center; justify-content: center; margin-left: 0; padding: 0 var(--s2); } /* the Color flyout's Add field: its own full-width row, icon and label centred both ways, a drop-zone-like target under the pills */
-.ws-toolpanel__slot > .ws-picker__btn::before { content: ""; position: absolute; inset: 0; border: 1px dotted var(--line-2); border-radius: inherit; pointer-events: none; } /* the dotted edge is an overlay: buttons.css sets border: 0 !important on every button */
-.ws-toolpanel__slot > .ws-picker__btn .icon { margin-left: 0; } /* centred with its label, so no optical nudge to a left edge */
+.ws-addfield { position: relative; display: flex; align-items: center; justify-content: center; gap: var(--s1); height: var(--ctl-h); padding: 0 var(--s2); border-radius: var(--r); color: var(--ink-3); font-size: var(--fs-body); } /* its own full-width row, label centred both ways, a drop-zone-like target under the pills */
+.ws-addfield::before { content: ""; position: absolute; inset: 0; border: 1px dashed var(--line-2); border-radius: inherit; pointer-events: none; } /* the dashed edge is an overlay, like the other drop targets */
+.ws-addfield { transition: color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease); }
+.ws-addfield::before { transition: border-color var(--dur-fast) var(--ease); }
+/* Hovering the slot (pills and row) wakes it as a drop target: the row's dashed edge and label darken and it takes the recessed --surface-2 fill, the pills' zone's own; that zone's edge darkens with it. Colours only, so reduced motion (durations 0) just snaps. */
+.ws-toolpanel__slot:hover > .ws-addfield { color: var(--ink-2); background: var(--surface-2); }
+.ws-toolpanel__slot:hover > .ws-addfield::before, .ws-toolpanel__slot:hover > .ws-toolpanel__zone { border-color: var(--ink-3); }
 .ws-toolpanel__slot.is-over { border-radius: var(--r); background: var(--accent-soft); box-shadow: 0 0 0 var(--s1) var(--accent-soft); }
-.ws-picker__box[hidden] { display: none; }
-.ws-picker__list { display: grid; gap: 0; max-height: 220px; overflow: auto; margin: 0 calc(-1 * var(--s2)); }
-.ws-picker__group { padding: var(--s1) var(--s2) 0; color: var(--ink-3); font-size: var(--fs-body); }
-.ws-picker__group[hidden], .ws-picker__item[hidden] { display: none; }
-.ws-picker__item { display: flex; align-items: center; gap: var(--s2); height: var(--ctl-h); padding: 0 var(--s2); border-radius: var(--r); background: transparent; color: var(--ink); text-align: left; cursor: pointer; font-size: var(--fs-body); }
-.ws-picker__item:hover, .ws-picker__item:focus-visible { background: color-mix(in srgb, var(--ink) 7%, transparent); }
-.ws-picker__item .ws-field__type { margin-left: calc(var(--s1) / -2); } /* same optical nudge as the Add field plus: the type glyphs (T, calendar, #) carry 1.5-3 px of empty space inside their box */
-.ws-picker__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ws-picker__empty { padding: var(--s2); color: var(--ink-3); font-size: var(--fs-body); }
 .ws-toolpanel:focus { outline: none; }
 .ws-toolpanel:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 .ws-toolpanel__head { display: flex; align-items: center; justify-content: space-between; min-height: var(--ctl-h); }
@@ -641,17 +628,43 @@
 .ws-tipedit__chip { font-size: var(--fs-body); padding: var(--s1) var(--s2); }
 .ws-tipedit__preview { padding: var(--s2) var(--s2); border: 1px solid var(--line-2); border-radius: var(--r); background: var(--surface-2); color: var(--ink); font-size: var(--fs-body); overflow-wrap: anywhere; }
 
-/* Member colours: a list of members, each with the fixed swatches and Reset. The swatch/dot
-   fill is the user's chosen data colour (workbook data), set inline; chrome uses tokens. */
+/* Member colours: the flyout's "Edit member colours…" button and its dialog (palette, member, colour). The swatch/dot
+   fills are the user's chosen data colours (workbook data), set inline; chrome uses tokens. Selection is never colour alone:
+   a tick on the chosen palette and colour, a marker glyph and outline on the chosen member. */
 .ws-memcol { display: grid; gap: var(--s2); }
+/* The rows below are the Edit member shapes editor's (a symbol per member); the member colours dialog has its own memcol-* rules. */
 .ws-memcol__body { display: grid; gap: var(--s2); max-height: 260px; overflow: auto; }
 .ws-memcol__row { display: grid; grid-template-columns: auto minmax(60px, 120px) 1fr auto; align-items: center; gap: var(--s2); }
-.ws-memcol__dot { width: 16px; height: 16px; border-radius: var(--r-pill); border: 1px solid var(--line-2); background: var(--surface-2); }
 .ws-memcol__name { font-size: var(--fs-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ws-memcol__swatches { display: flex; flex-wrap: wrap; gap: 4px; }
 .ws-memcol__swatch { width: 16px; height: 16px; padding: 0; border: 1px solid var(--line-2); border-radius: var(--r); color: var(--ink); font-size: var(--fs-body); line-height: 1; cursor: pointer; }
 .ws-memcol__swatch[aria-pressed="true"] { outline: 2px solid var(--ink); outline-offset: 1px; }
 .ws-memcol__note { margin: 0; color: var(--ink-3); font-size: var(--fs-body); }
+.memcol-dialog { width: min(520px, calc(100vw - 2 * var(--s4))); }
+.memcol-dialog[open] { display: flex; flex-direction: column; max-height: calc(100vh - 2 * var(--s4)); }
+.memcol-dialog__body { display: grid; gap: var(--s2); overflow: auto; min-height: 0; align-content: start; }
+.memcol-dialog .dialog__foot { flex: none; }
+.memcol-head { margin: 0; font-size: var(--fs-body); font-weight: 600; color: var(--ink-2); }
+.memcol-palettes { display: grid; gap: var(--s1); }
+.memcol-palette { display: flex; align-items: center; gap: var(--s2); width: 100%; padding: var(--s1) var(--s2); border-radius: var(--r); text-align: left; cursor: pointer; }
+.memcol-palette[aria-checked="true"] { outline: 2px solid var(--ink); outline-offset: -2px; }
+.memcol-palette__name { flex: 1; font-size: var(--fs-body); }
+.memcol-tick { width: var(--s4); text-align: center; font-size: var(--fs-body); }
+.memcol-palette[aria-checked="true"] .memcol-tick::before { content: "\2713"; }
+.memcol-members { display: grid; gap: var(--s1); max-height: 240px; overflow: auto; }
+.memcol-row { display: flex; align-items: center; gap: var(--s2); }
+.memcol-member { display: flex; flex: 1; min-width: 0; align-items: center; gap: var(--s2); padding: var(--s1) var(--s2); border-radius: var(--r); text-align: left; cursor: pointer; }
+.memcol-member.is-selected { outline: 2px solid var(--ink); outline-offset: -2px; }
+.memcol-marker { width: var(--s2); font-size: var(--fs-body); }
+.memcol-member.is-selected .memcol-marker::before { content: "\25B8"; }
+.memcol-dot { flex: none; width: var(--s4); height: var(--s4); border-radius: var(--r-pill); border: 1px solid var(--line-2); background: var(--surface-2); }
+.memcol-member__name { flex: 1; min-width: 0; font-size: var(--fs-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.memcol-swatch { color: var(--surface); text-shadow: 0 0 2px var(--ink), 0 0 2px var(--ink); } /* the tick reads on any palette colour, light or dark */
+.memcol-hex { font-family: var(--font-mono); font-size: var(--fs-body); color: var(--ink-3); }
+.memcol-note { margin: 0; color: var(--ink-3); font-size: var(--fs-body); }
+.memcol-error { color: var(--danger-ink); font-size: var(--fs-body); }
+.memcol-error:empty { display: none; }
+.memcol-resetall { margin-right: auto; }
 
 /* Member labels: the filter list's secondary raw value and the "Edit member labels…" dialog. */
 .ws-fcard__raw { color: var(--ink-3); font-size: var(--fs-body); margin-left: var(--s1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

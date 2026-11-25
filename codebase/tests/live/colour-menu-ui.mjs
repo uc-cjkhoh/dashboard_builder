@@ -1,4 +1,4 @@
-// Browser checks for the Color flyout field menu: Add field is its own row, the dashed zone exists only with pills, and the list opens on hover as a side menu border to border with the flyout (right side only, shrinking on a narrow worksheet).
+// Browser checks for the Color flyout's Drop Field Here row: its own full-width dashed row (a drop target, not a control), the dashed zone only with pills, and no field list on hover, click or Enter (D156). Fields arrive by drag and drop.
 // Real Chromium over CDP (tests/live/cdp.mjs), /api/* mocked. Run:  node tests/live/colour-menu-ui.mjs   (start the app first: cd src/DashboardBuilder && dotnet run --no-launch-profile --urls http://localhost:5262 ; stop it with fuser -k 5262/tcp)
 // Env: APP_URL, SHOTS_DIR (screenshot folder), CDP_PORT (default: a free port), CHROME_BIN.
 import { launch } from './cdp.mjs';
@@ -10,7 +10,8 @@ import { join } from 'node:path';
 const APP = process.env.APP_URL ?? 'http://localhost:5262';
 const SHOTS = process.env.SHOTS_DIR ?? join(tmpdir(), 'marks-colour-ui-shots');
 mkdirSync(SHOTS, { recursive: true });
-const SCHEME = process.env.SCHEME === 'dark' ? 'dark' : 'light'; // SCHEME=dark loads the page in the dark scheme (set before load)
+const LOOK = process.env.LOOK === 'onedark' ? 'onedark' : '';
+const SCHEME = LOOK || process.env.SCHEME === 'dark' ? 'dark' : 'light'; // SCHEME=dark loads the page in the dark scheme (set before load)
 
 // ---- the mocked server ------------------------------------------------------------------------------------
 const COLUMNS = {
@@ -137,141 +138,124 @@ try {
 
   const filterTool = `document.querySelector('.ws-tool[aria-label^="Filters"]')`;
   const opSelect = `document.querySelector('select[aria-label^="Filter operator for"]')`;
-  const shot = async (name) => { try { writeFileSync(join(SHOTS, `${name}-${SCHEME}.png`), Buffer.from((await b.send('Page.captureScreenshot', { format: 'png' })).data, 'base64')); } catch { /* optional */ } };
+  if (SCHEME === 'dark') await ev(`document.documentElement.setAttribute('data-scheme', 'dark')${LOOK ? `, document.documentElement.setAttribute('data-look', '${LOOK}')` : ''}`); // the boot script may have reset it
+  const shot = async (name) => { try { writeFileSync(join(SHOTS, `${name}-${LOOK || SCHEME}.png`), Buffer.from((await b.send('Page.captureScreenshot', { format: 'png' })).data, 'base64')); } catch { /* optional */ } };
   const fmtTool = `document.querySelector('.ws-viewbar__btn[aria-label="Format"]')`;
   const colTool = `document.querySelector('.ws-tool[data-tool="color"]')`; // the Colour controls live in the Color tile's flyout (D151)
   const rect = (sel) => ev(`(() => { const e = ${sel}; if (!e) return null; const r = e.getBoundingClientRect(); return { l: r.left, t: r.top, r: r.right, b: r.bottom, w: r.width, h: r.height }; })()`);
   const fly = `document.getElementById('ws-toolfly')`;
-  const addBtn = `${fly}.querySelector('.ws-picker__btn')`;
-  const menu = `document.querySelector('.ws-picker__box--side')`;
+  const addBtn = `${fly}.querySelector('.ws-addfield')`;
+  const slotEl = `${fly}.querySelector('.ws-toolpanel__slot')`;
   const group = `${fly}.querySelector('.ws-flyedit__group')`;
   const mouse = (type, x, y) => b.send('Input.dispatchMouseEvent', { type, x, y, button: 'none', buttons: 0 });
   const centre = (r) => [r.l + r.w / 2, r.t + r.h / 2];
+  const noList = `document.querySelector('.ws-picker__box, .ws-picker__item, .ws-picker__list') === null`; // D156: the field list is gone for good
 
-  await check('empty Colour: no dashed zone, Add field is the slot', async () => {
+  await check('empty Colour: no dashed zone, Drop Field Here is a full-width dashed row in the slot, not a control', async () => {
     await ev(`${colTool}.click()`);
     await waitFor(`!!${fly} && !${fly}.hidden`, 'flyout open');
     await b.sleep(600); // the flyout's entry motion
     must(await ev(`${fly}.querySelector('.ws-toolpanel__zone') === null`), 'zone present with no pills');
-    must(await ev(`${addBtn}.parentElement.classList.contains('ws-toolpanel__slot')`), 'Add field not directly in the slot');
+    must(await ev(`${addBtn}.parentElement.classList.contains('ws-toolpanel__slot')`), 'Drop Field Here not directly in the slot');
+    must(await ev(`${addBtn}.tagName === 'DIV' && !${addBtn}.hasAttribute('tabindex') && ${fly}.querySelector('.ws-toolpanel__slot button') === null`), 'Drop Field Here is a focusable control');
     const slotR = await rect(group), btnR = await rect(addBtn);
-    const cs = await ev(`(() => { const c = getComputedStyle(${addBtn}, '::before'); return { style: c.borderTopStyle, width: c.borderTopWidth }; })()`);
-    must(cs.style === 'dotted' && cs.width === '1px', `Add field border ${J(cs)}`);
-    const parts = await ev(`(() => { const r = (e) => { const b = e.getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; }; const btn = ${addBtn}; const [bx, by] = r(btn); const kids = [...btn.children].map(r); const l = Math.min(...[...btn.children].map((k) => k.getBoundingClientRect().left)), rr = Math.max(...[...btn.children].map((k) => k.getBoundingClientRect().right)); return { dy: kids.map(([, y]) => y - by), dx: (l + rr) / 2 - bx }; })()`);
-    must(parts.dy.every((d) => Math.abs(d) <= 1) && Math.abs(parts.dx) <= 1, `Add field icon and label not centred in the button ${J(parts)}`);
-    must(Math.abs(btnR.w - (slotR.w - 32)) <= 1 && Math.abs(btnR.l - (slotR.l + 16)) <= 1, `Add field not the slot's full width ${J(btnR)} ${J(slotR)}`);
-    must(await ev(`${menu} !== null && ${menu}.hidden && ${menu}.parentElement === document.querySelector('.worksheet')`), 'side menu not mounted hidden beside the flyout');
-    await shot('colour-menu-closed');
+    const cs = await ev(`(() => { const c = getComputedStyle(${addBtn}, '::before'); return { style: c.borderTopStyle, width: c.borderTopWidth, cursor: getComputedStyle(${addBtn}).cursor }; })()`);
+    must(cs.style === 'dashed' && cs.width === '1px', `Drop Field Here border ${J(cs)}`);
+    must(cs.cursor !== 'pointer', 'Drop Field Here looks clickable');
+    const parts = await ev(`(() => { const r = (e) => { const b = e.getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; }; const btn = ${addBtn}; const [bx, by] = r(btn); const kids = [...btn.children].map(r); const xs = kids.map((k) => k[0]); return { dy: kids.map((k) => k[1] - by), dx: (Math.min(...[...btn.children].map((e) => e.getBoundingClientRect().left)) + Math.max(...[...btn.children].map((e) => e.getBoundingClientRect().right))) / 2 - bx }; })()`);
+    must(parts.dy.every((d) => Math.abs(d) <= 1) && Math.abs(parts.dx) <= 1, `Drop Field Here label not centred in the row ${J(parts)}`);
+    must(Math.abs(btnR.w - (slotR.w - 32)) <= 1 && Math.abs(btnR.l - (slotR.l + 16)) <= 1, `Drop Field Here not the slot's full width ${J(btnR)} ${J(slotR)}`);
+    must(await ev(noList), 'a field list is mounted');
+    await shot('colour-addfield-empty');
   });
-  await check('hover opens the menu, border to border with the flyout, level with the Color section', async () => {
-    const r = await rect(addBtn);
-    const [x, y] = centre(r);
-    await mouse('mouseMoved', x, y);
-    await waitFor(`!${menu}.hidden`, 'menu open on hover');
-    const f = await rect(fly), m = await rect(menu), g = await rect(group);
-    must(Math.abs(m.l - (f.r - 1)) <= 1, `menu.left ${m.l} vs fly.right ${f.r}`);
-    must(m.l >= f.r - 1.5, 'menu overlaps the flyout');
-    must(Math.abs(m.t - g.t) <= 1, `menu.top ${m.t} vs group.top ${g.t}`);
-    must(await ev(`document.activeElement !== ${menu}.querySelector('input')`), 'hover stole focus');
-    must((await ev(`${menu}.querySelectorAll('.ws-picker__item').length`)) > 0, 'menu lists no fields');
-    await shot('colour-menu-open');
-  });
-  await check('the pointer can cross from the button to the menu without it closing', async () => {
-    const m = await rect(menu), r = await rect(addBtn);
-    const [x0, y0] = centre(r);
-    const x1 = m.l + 40, y1 = m.t + 60;
-    for (let i = 0; i <= 10; i++) await mouse('mouseMoved', x0 + (x1 - x0) * i / 10, y0 + (y1 - y0) * i / 10);
-    await b.sleep(400);
-    must(await ev(`!${menu}.hidden`), 'menu closed while the pointer was over it');
-    await mouse('mouseMoved', 5, 5);
-    await waitFor(`${menu}.hidden`, 'menu closed after the pointer left');
-  });
-  await check('picking a field closes the menu, shows the pill and puts the zone back', async () => {
+  await check('hover, click and Enter open no list: Drop Field Here takes drops only', async () => {
     const r = await rect(addBtn);
     await mouse('mouseMoved', ...centre(r));
-    await waitFor(`!${menu}.hidden`, 'menu open');
-    await ev(`[...${menu}.querySelectorAll('.ws-picker__item')].find((x) => x.textContent.includes('region')).click()`);
-    await waitFor(`${fly}.querySelector('.ws-toolpanel__zone .ws-pill') !== null`, 'pill in the zone');
-    must(await ev(`${menu}.hidden`), 'menu still open after the pick');
-    must(await ev(`${addBtn}.parentElement.classList.contains('ws-toolpanel__slot') && ${fly}.querySelector('.ws-toolpanel__zone .ws-picker__btn') === null`), 'Add field inside the zone');
-    const z = await rect(`${fly}.querySelector('.ws-toolpanel__zone')`), a = await rect(addBtn);
-    must(a.t >= z.b, 'Add field is not on the row below the zone');
-  });
-  await check('click opens and focuses the search; Escape closes and refocuses the button', async () => {
+    await b.sleep(500);
+    must(await ev(noList), 'hover opened a list');
+    await ev(`${addBtn}.click()`);
+    await b.sleep(300);
+    must(await ev(noList), 'click opened a list');
+    must(await ev(`document.activeElement === null || !${fly}.contains(document.activeElement) || document.activeElement.closest('.ws-toolpanel__slot') === null`), 'focus landed in the slot');
     await mouse('mouseMoved', 5, 5);
-    await b.sleep(400);
-    await ev(`${addBtn}.click()`);
-    await waitFor(`!${menu}.hidden`, 'menu open on click');
-    must(await ev(`document.activeElement === ${menu}.querySelector('input')`), 'search not focused');
-    await b.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
-    await b.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
-    await waitFor(`${menu}.hidden`, 'menu closed on Escape');
-    must(await ev(`document.activeElement === ${addBtn}`), 'button not refocused');
   });
-  await check('closing the flyout removes the menu', async () => {
-    await ev(`${addBtn}.click()`);
+  await check('hovering the slot animates the row: edge and label darken over a transition, and settle back on leaving', async () => {
+    const edge = () => ev(`(() => { const r = ${addBtn}; return { edge: getComputedStyle(r, '::before').borderTopColor, ink: getComputedStyle(r).color, bg: getComputedStyle(r).backgroundColor, dur: getComputedStyle(r).transitionDuration, edgeDur: getComputedStyle(r, '::before').transitionDuration }; })()`);
+    await mouse('mouseMoved', 5, 5); await b.sleep(400);
+    const rest = await edge();
+    await mouse('mouseMoved', ...centre(await rect(addBtn)));
+    await b.sleep(500);
+    const hot = await edge();
+    must(hot.edge !== rest.edge && hot.ink !== rest.ink && hot.bg !== rest.bg, `hover changed nothing ${J(rest)} ${J(hot)}`);
+    must(rest.dur !== '0s' && rest.edgeDur !== '0s', `no transition ${J(rest)}`);
+    await mouse('mouseMoved', 5, 5); await b.sleep(500);
+    must(J(await edge()) === J(rest), 'did not settle back after leaving');
+  });
+  await check('design probe, hovered: the slot with the pointer on it has no alignment, colour or contrast findings (light, dark, One Dark)', async () => {
+    const { designProbe, formatProbe } = await import('./design-probe.mjs');
+    await mouse('mouseMoved', ...centre(await rect(addBtn)));
+    await b.sleep(500);
+    await shot('colour-addfield-hover');
+    const hovered = await ev(`${slotEl}.matches(':hover') && ${addBtn}.matches(':hover')`);
+    must(hovered, 'the slot is not in the :hover state');
+    const r = await designProbe(ev, '#ws-toolfly .ws-toolpanel__slot', { sleep: b.sleep });
+    r.findings = r.findings.filter((x) => !(x.rule === 'target' && /button\.iconbtn/.test(x.msg)));
+    if (r.findings.length) console.log('hovered\n' + formatProbe(r));
+    must(r.findings.length === 0, `hovered: ${r.findings.length} finding(s): ` + J(r.findings.map((x) => x.rule + ': ' + x.msg).slice(0, 4)));
+    await mouse('mouseMoved', 5, 5);
+  });
+  await check('dragging a field onto the Drop Field Here row adds the pill and the zone replaces the row', async () => {
+    await ev(`(() => { const c = __t.chip('region'); if (!c) throw new Error('no field chip region'); __t.drag(c, ${slotEl}); return true; })()`);
+    await waitFor(`${fly}.querySelector('.ws-toolpanel__zone .ws-pill') !== null`, 'pill in the zone');
+    must(await ev(`${fly}.querySelector('.ws-addfield') === null`), 'Drop Field Here still shown beside the filled zone');
+    must(await ev(`${fly}.querySelector('.ws-toolpanel__zone').parentElement.classList.contains('ws-toolpanel__slot')`), 'the zone is not directly in the slot');
+    must(await ev(noList), 'a field list appeared after the drop');
+    await shot('colour-addfield-pill');
+  });
+  await check('closing the flyout leaves no list behind', async () => {
     await ev(`${fly}.querySelector('.iconbtn[aria-label="Close editor"]').click()`);
-    await waitFor(`document.querySelector('.ws-picker__box--side') === null`, 'menu removed');
+    await waitFor(`${fly}.hidden`, 'flyout closed');
+    must(await ev(noList), 'a field list is mounted after closing');
   });
   const narrow = async (width, label) => {
     await b.send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: false });
     await b.sleep(300);
     await ev(`${colTool}.click()`);
     await waitFor(`!${fly}.hidden`, 'flyout open');
-    await ev(`${addBtn}.click()`);
-    await waitFor(`!${menu}.hidden`, 'menu open');
-    await b.sleep(200);
-    const f = await rect(fly), m = await rect(menu), host = await rect(`document.querySelector('.worksheet')`), pane = await rect(`document.getElementById('ws-fields')`);
-    const paneShown = await ev(`!document.getElementById('ws-fields').hidden && document.getElementById('ws-fields').offsetParent !== null`);
-    must(m.l >= host.l && m.r <= host.r + 1, `menu outside the worksheet ${J(m)} ${J(host)}`);
-    must(m.r <= f.l + 1.5 || m.l >= f.r - 1.5, 'menu overlaps the flyout');
-    must(Math.abs(m.r - (f.l + 1)) <= 1 || Math.abs(m.l - (f.r - 1)) <= 1, `menu not touching the flyout ${J(m)} ${J(f)}`);
-    if (paneShown) must(m.l >= pane.r - 1 || m.r <= pane.l + 1, `menu covers the field pane ${J(m)} ${J(pane)}`);
+    await b.sleep(300);
+    const f = await rect(fly), host = await rect(`document.querySelector('.worksheet')`), a = await rect(`${fly}.querySelector('.ws-addfield, .ws-toolpanel__zone')`);
+    must(f.r <= host.r + 1, `flyout outside the worksheet ${J(f)} ${J(host)}`);
+    must(a.w > 0 && a.l >= f.l && a.r <= f.r, `Drop Field Here / zone outside the flyout ${J(a)} ${J(f)}`);
     must(await ev(`document.documentElement.scrollWidth <= window.innerWidth && document.body.scrollWidth <= window.innerWidth`), 'the page scrolls sideways');
     await shot(label);
     await ev(`${fly}.querySelector('.iconbtn[aria-label="Close editor"]').click()`);
-    await waitFor(`document.querySelector('.ws-picker__box--side') === null`, 'menu removed');
-    return { w: m.w, paneShown };
+    await waitFor(`${fly}.hidden`, 'flyout closed');
   };
-  await check('narrow worksheet (900): the menu stays inside the worksheet, touching the flyout without overlap', async () => { await narrow(900, 'colour-menu-900'); });
-  await check('narrower (820): the menu shrinks to fit on the right, never over the field pane', async () => {
-    const r = await narrow(820, 'colour-menu-820');
-    must(r.w >= 120 && r.w < 240, `width ${r.w}`);
-  });
-  await check('narrowest the worksheet allows (760): the narrowest menu, still on the right, page does not scroll', async () => {
-    const r = await narrow(760, 'colour-menu-760');
-    must(r.w >= 120 && r.w < 189, `width ${r.w}`);
-  });
-  await check('design probe: the field slot and the side menu have no alignment, gap, colour, contrast or scale findings (empty and with a pill; light, dark, One Dark; 1400 and 820 px)', async () => {
+  for (const w of [900, 820, 760]) await check(`narrow worksheet (${w}): the flyout and its Drop Field Here row stay inside the worksheet, the page does not scroll`, async () => { await narrow(w, `colour-addfield-${w}`); });
+  await check('design probe: the field slot has no alignment, gap, colour, contrast or scale findings (empty and with a pill; light, dark, One Dark; 1400, 820 and 760 px)', async () => {
     const { designProbe, formatProbe } = await import('./design-probe.mjs');
     const probe = async (label, sel) => {
       const r = await designProbe(ev, sel, { sleep: b.sleep });
-      // Accepted, with reasons (docs/development/design-review.md): the pill's ✕ is the shared 16 px pill remove button, and the Add field plus is nudged 2 px on purpose so its ink,
-      // not its box, sits on the content edge (design rule 1, optical alignment), as are the type glyphs in the list rows (the same nudge the picker list has always had); the open button's 7 % ink tint is the app's one hover tint (a color-mix, so it reads as off-token).
-      r.findings = r.findings.filter((x) => !(x.rule === 'target' && /button\.iconbtn/.test(x.msg)) && !(x.rule === 'align' && /<svg>.*button\.ws-picker__(btn|item)/.test(x.msg)) && !(x.rule === 'colour' && /background.* \/ 0\.07\).*button\.ws-picker__btn/.test(x.msg)));
+      // Accepted, with reasons (docs/development/design-review.md): the pill's ✕ is the shared 16 px pill remove button.
+      r.findings = r.findings.filter((x) => !(x.rule === 'target' && /button\.iconbtn/.test(x.msg)));
       if (r.findings.length) console.log(label + '\n' + formatProbe(r));
       must(r.findings.length === 0, `${label}: ${r.findings.length} finding(s): ` + J(r.findings.map((x) => x.rule + ': ' + x.msg).slice(0, 4)));
     };
-    for (const w of [1400, 820]) {
+    for (const w of [1400, 820, 760]) {
       await b.send('Emulation.setDeviceMetricsOverride', { width: w, height: 900, deviceScaleFactor: 1, mobile: false });
       await b.sleep(300);
       for (const withPill of [false, true]) {
-        if (!withPill && (await ev(`!!${fly} && !${fly}.hidden && !!${fly}.querySelector('.ws-pill button')`))) { // start empty: remove the pill an earlier check left
+        if (await ev(`!${fly} || ${fly}.hidden`)) { await ev(`${colTool}.click()`); await waitFor(`!${fly}.hidden`, 'flyout open'); }
+        if (!withPill && (await ev(`!!${fly}.querySelector('.ws-pill button')`))) { // start empty: remove the pill an earlier check left
           await ev(`${fly}.querySelector('.ws-pill button').click()`);
           await waitFor(`${fly}.querySelector('.ws-toolpanel__zone') === null`, 'pill removed');
         }
-        if (withPill && (await ev(`!${fly}.querySelector('.ws-toolpanel__zone .ws-pill')`))) { // the sheet already holds one from the pick above
-          await ev(`${addBtn}.click()`); await waitFor(`!${menu}.hidden`, 'menu open');
-          await ev(`[...${menu}.querySelectorAll('.ws-picker__item')].find((x) => x.textContent.includes('region')).click()`);
+        if (withPill && (await ev(`!${fly}.querySelector('.ws-toolpanel__zone .ws-pill')`))) {
+          await ev(`(() => { __t.drag(__t.chip('region'), ${slotEl}); return true; })()`);
           await waitFor(`${fly}.querySelector('.ws-toolpanel__zone .ws-pill') !== null`, 'pill');
         }
-        if (await ev(`!${fly} || ${fly}.hidden`)) { await ev(`${colTool}.click()`); await waitFor(`!${fly}.hidden`, 'flyout open'); }
-        await ev(`${addBtn}.click()`); await waitFor(`!${menu}.hidden`, 'menu open'); await b.sleep(200);
-        await mouse('mouseMoved', 5, 5); await b.sleep(400); // the menu stays (focus is in it); the button is not hovered
-        const tag = `${withPill ? 'with a pill' : 'empty'} @${w}`;
-        await probe(`slot, ${tag}`, '#ws-toolfly .ws-toolpanel__slot');
-        await probe(`side menu, ${tag}`, '.ws-picker__box--side');
-        await ev(`${menu}.querySelector('input').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
+        await b.sleep(300);
+        await probe(`slot, ${withPill ? 'with a pill' : 'empty'} @${w}`, '#ws-toolfly .ws-toolpanel__slot');
       }
     }
   });

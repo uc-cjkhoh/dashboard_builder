@@ -334,7 +334,7 @@ try {
     await settle();
     must(queries.length > n, 'the widget did not re-query');
     must(J(lastQuery().measures?.[0]?.calc?.r) === J({ k: 'num', v: 0.9 }), `new literal missing: ${J(lastQuery().measures?.[0])}`);
-    await ev(`document.querySelectorAll('.tab:not(.tab--model) .tab__label')[0].click()`);
+    await ev(`document.querySelector('.tab--worksheet .tab__label').click()`); // by kind: the worksheet is drawn inside its dashboard's group, after the dashboard
     await waitFor(`!document.getElementById('worksheet-view').hidden`, 'worksheet shown again');
   });
 

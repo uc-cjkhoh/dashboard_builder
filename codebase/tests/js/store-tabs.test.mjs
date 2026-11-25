@@ -105,3 +105,59 @@ test("worksheetHasContent is about worksheets", () => {
   assert.equal(st.worksheetHasContent(d.id), false);
   reset();
 });
+
+const sheetWidget = (sheetId) => ({ id: st.nextWidgetId(), kind: "sheet", sheetId, x: 0, y: 0, w: 1, h: 1 });
+
+test("createDashboard assigns the lowest unused groupSlot (1, 2, 3) and collapsed false", () => {
+  reset();
+  const [a, b, c] = [st.createDashboard(), st.createDashboard(), st.createDashboard()];
+  assert.deepEqual([a, b, c].map((d) => d.groupSlot), [1, 2, 3]);
+  assert.deepEqual([a, b, c].map((d) => d.collapsed), [false, false, false]);
+});
+
+test("closing a dashboard leaves the other dashboards' slots alone, and its slot is reused", () => {
+  reset();
+  const [a, b, c] = [st.createDashboard(), st.createDashboard(), st.createDashboard()];
+  st.closeTab(b.id);
+  assert.deepEqual([a.groupSlot, c.groupSlot], [1, 3]);
+  assert.equal(st.createDashboard().groupSlot, 2);
+});
+
+test("setGroupCollapsed flips the flag and emits tabs:changed once", () => {
+  reset();
+  const d = st.createDashboard();
+  const log = events("tabs:changed");
+  st.setGroupCollapsed(d.id, true);
+  assert.equal(d.collapsed, true);
+  assert.equal(log.length, 1);
+  st.setGroupCollapsed(d.id, false);
+  assert.equal(d.collapsed, false);
+});
+
+test("setGroupSlot sets a slot, and null takes the lowest slot the other dashboards leave unused", () => {
+  reset();
+  const [a, b] = [st.createDashboard(), st.createDashboard()];
+  st.setGroupSlot(b.id, 5);
+  assert.equal(b.groupSlot, 5);
+  st.setGroupSlot(b.id, null);
+  assert.equal(b.groupSlot, 2);
+  st.setGroupSlot(a.id, null);
+  assert.equal(a.groupSlot, 1);
+});
+
+test("closeTab activates the display-order neighbour, not the stored-index one", () => {
+  reset();
+  const w1 = st.createWorksheet(), w2 = st.createWorksheet(), d = st.createDashboard();
+  st.setWidgets(d.id, [sheetWidget(w1.id)]); // stored: w1, w2, d — displayed: w2, d, w1
+  st.switchTab(d.id);
+  st.closeTab(d.id);
+  assert.equal(st.currentView().id, w1.id); // the stored-index rule would have picked w2
+  assert.ok(st.tabs.includes(w2));
+});
+
+test("closing the only tab shows the Data Source", () => {
+  reset();
+  const w = st.createWorksheet();
+  st.closeTab(w.id);
+  assert.equal(st.isModelActive(), true);
+});
