@@ -174,6 +174,7 @@ naming the sheet and field ("Sheet "Sales": unknown chart type "radar" — reset
 | Field settings | keys `db.table.column`; `alias` 1–60 characters, `agg` a known aggregation, `hidden` true, `cast` a known cast, `memberAliases` an object of member value (≤ 100 characters) → label (1–80 characters), ≤ 200 entries (a bad entry is dropped and reported per field; a non-object clears it); ≤ 2000; bad ones dropped and counted |
 | Link action | `https://` with a host and `{value}`, ≤ 500 characters; else removed and reported |
 | Theme | `accent` a preset id or a valid custom `#rrggbb`, `palette` a known id; absent = default; else reset and reported |
+| `view` | optional `{ zoom, pan: { x, y } }`: `zoom` a number 0.25–2, `pan` finite numbers within ±1,000,000; absent = the cards are fitted on open; invalid = dropped whole, reported, and the cards are fitted ([D159](../../decisions/decisions-design.md#d159--the-data-sources-zoom-and-pan-are-saved-in-the-workbook)) |
 | `active` | `{ kind, index }` pointing at a kept tab, else the Data Source opens |
 
 Repaired settings never abort the import. An `entities` / `relationships` / `worksheets` / `dashboards` value that
