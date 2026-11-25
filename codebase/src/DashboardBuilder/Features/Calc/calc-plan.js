@@ -91,6 +91,7 @@ export function wireCalcFilter(f, ctx) {
 
 /** The word an aggregation reads as in a measure's name (matches the server's column naming). */
 export const aggWord = (a, p) => (a === "countDistinct" ? "distinct" : a === "countNonNull" ? "non-null"
+  : a === "stddevPop" ? "stddev (pop.)" : a === "variancePop" ? "variance (pop.)"
   : a === "percentile" && isFraction(p) ? `p${percentLabel(p)}` : a);
 
 /** Display name of a measure, matching the server's result column. `alias` is a plain field's name. */
@@ -98,6 +99,7 @@ export function measureLabel(f, calcs, alias) {
   if (isCalcPill(f)) return pillName(f, calcs);
   const a = f.agg ?? "sum";
   const n = alias || f.column;
+  if (f.raw) return n; // Aggregate Measures off: the raw value, named by its field (the server's column name then)
   if (a === "count") return "count";
   return `${aggWord(a, f.p)} ${n}`;
 }

@@ -97,6 +97,8 @@ public static class CalcCatalog
         ["median"] = new(NumberOnly, CalcType.Number),
         ["stddev"] = new(NumberOnly, CalcType.Number),
         ["variance"] = new(NumberOnly, CalcType.Number),
+        ["stddevp"] = new(NumberOnly, CalcType.Number),
+        ["variancep"] = new(NumberOnly, CalcType.Number),
         ["percentile"] = new(NumberOnly, CalcType.Number, Fraction: true),
         ["attr"] = new(Anything, null),
     };
@@ -157,10 +159,10 @@ public static class CalcCatalog
     /// <summary>What a row-level calculation in a measure may be aggregated by (<c>count</c> of rows would ignore it).
     /// The single whitelist <see cref="DashboardBuilder.ClickHouse.RequestRules"/> and the gateway both use.</summary>
     public static readonly IReadOnlySet<string> RowLevelAggregations = new HashSet<string>(StringComparer.Ordinal)
-        { "sum", "avg", "min", "max", "countdistinct", "countnonnull", "median", "stddev", "variance", "attr" };
+        { "sum", "avg", "min", "max", "countdistinct", "countnonnull", "median", "stddev", "variance", "stddevpop", "variancepop", "attr" };
 
     /// <summary>The rejection text for a row-level calculation with no (or an unknown) aggregation; lists <see cref="RowLevelAggregations"/>.</summary>
-    public const string RowLevelHint = "Choose how to aggregate this calculation: sum, average, min, max, median, standard deviation, variance, ATTR, distinct count or non-null count.";
+    public const string RowLevelHint = "Choose how to aggregate this calculation: sum, average, min, max, median, standard deviation, variance, population standard deviation, population variance, ATTR, distinct count or non-null count.";
 
     public static bool IsKnown(string fn) => Aggregates.ContainsKey(fn);
 }

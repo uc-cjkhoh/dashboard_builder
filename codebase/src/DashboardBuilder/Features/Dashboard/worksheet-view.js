@@ -238,7 +238,7 @@ export function createWorksheetView(container, getContext, options = {}) {
       statusBar(s, result);
       // An "Other" mark already says how much is past the limit, so no truncation line on top of it.
       const shownOther = result.other && OTHER_TYPES.has(s.chartType);
-      setNotice(c.noticeEl, joinNotices(filterNote, speedNotice(result, plan), hostNotice(s), periodNotice(s, cmp), extraNotice, shownOther ? null : truncationNotice({ truncated: result.truncated, chartType: s.chartType, limit: plan.limit }), bucketNotice(result.bucket)));
+      setNotice(c.noticeEl, joinNotices(filterNote, speedNotice(result, plan), hostNotice(s), periodNotice(s, cmp), extraNotice, shownOther ? null : truncationNotice({ truncated: result.truncated, chartType: s.chartType, limit: plan.limit, disaggregate: plan.disaggregate === true }), bucketNotice(result.bucket)));
     } catch (err) {
       console.error(err);
       container.replaceChildren(warn("This view couldn't be drawn — try another chart type or remove a field."));

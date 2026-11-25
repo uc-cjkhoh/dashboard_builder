@@ -16,6 +16,7 @@ globalThis.window = { echarts: { init: (host, _t, opts) => {
 
 const { renderChart, disposeChart, hasChartInstance, sizeChart, animateNextChart } =
   await import("../../src/DashboardBuilder/Features/Dashboard/chart.js");
+globalThis.__theme = await import("../../src/DashboardBuilder/Features/Core/theme-model.js");
 const spec = () => ({ type: "bar", categories: ["a", "b"], series: [{ name: "v", data: [1, 2] }] });
 beforeEach(() => { insts.length = 0; });
 
@@ -71,4 +72,21 @@ test("a bar whose Colour field is its own axis field: each bar wears its member'
   assert.ok(f.every(Boolean) && f[0] !== f[2], "every bar coloured, one per member: " + JSON.stringify(f));
   renderChart(fakeEl(), bars({}));
   assert.ok(fills(insts[1]).every((x) => x === undefined), "no flag, no per-bar colour");
+});
+
+test("any number of members: a bar chart coloured by its field gives each of 40 members its own colour, and a ninth never repeats the first", () => {
+  const cats = Array.from({ length: 40 }, (_, i) => `m${i}`);
+  renderChart(fakeEl(), { type: "bar", categories: cats, series: [{ name: "v", data: cats.map((_, i) => i + 1) }], format: {}, colorByCategory: true });
+  const fills = insts[0].lastSet.series[0].data.map((d) => d.itemStyle.color);
+  assert.equal(new Set(fills).size, 40, "forty members, forty colours");
+  assert.notEqual(fills[8], fills[0]);
+  const { categoryColour } = globalThis.__theme;
+  assert.deepEqual(fills.slice(0, 12), Array.from({ length: 12 }, (_, i) => categoryColour(i, false)), "the n-th member wears the n-th generated colour");
+});
+test("a member's own colour still wins over the generated one, and the next members keep their own position's colour", () => {
+  const pie = { type: "pie", categories: ["a", "b", "c"], series: [{ name: "v", data: [1, 2, 3] }], memberColors: new Map([["b", "#123456"]]), format: {} };
+  renderChart(fakeEl(), pie);
+  const { categoryColour } = globalThis.__theme;
+  assert.equal(sliceColour(insts[0], "b"), "#123456");
+  assert.equal(insts[0].lastSet.color[2], categoryColour(2, false), "c keeps the colour of its position (the palette ECharts falls back to)");
 });

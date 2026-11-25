@@ -323,7 +323,7 @@ public class CalcGatewayTests
     }
 
     // Plain measures: the four new aggregations are whitelisted; percentile needs a fraction a plain measure has no field for.
-    [Theory] [InlineData("median")] [InlineData("stddev")] [InlineData("variance")] [InlineData("attr")]
+    [Theory] [InlineData("median")] [InlineData("stddev")] [InlineData("variance")] [InlineData("stddevpop")] [InlineData("variancepop")] [InlineData("attr")]
     public void Plain_measures_accept_the_new_aggregations(string agg) => Assert.Contains(agg, ClickHouseGateway.Aggregations);
 
     [Fact] public void Plain_measures_accept_percentile() => Assert.Contains("percentile", ClickHouseGateway.Aggregations);
@@ -332,6 +332,7 @@ public class CalcGatewayTests
     [InlineData("median", "quantileExactInclusive(0.5)(x)")]
     [InlineData("attr", "if(uniqExact(x) = 1, min(x), NULL)")]
     [InlineData("stddev", "if(count(x) < 2, NULL, stddevSamp(x))")]
+    [InlineData("stddevpop", "if(count(x) = 0, NULL, stddevPop(x))")]
     public void A_top_n_rank_by_a_new_aggregation_uses_the_shared_writer(string agg, string expected)
         => Assert.Equal(expected, ClickHouseGateway.PlainRankSql(agg, "x"));
 
@@ -344,6 +345,8 @@ public class CalcGatewayTests
     [InlineData("median", "amount", "median amount")]
     [InlineData("stddev", "amount", "stddev amount")]
     [InlineData("variance", "amount", "variance amount")]
+    [InlineData("stddevpop", "amount", "stddev (pop.) amount")]
+    [InlineData("variancepop", "amount", "variance (pop.) amount")]
     [InlineData("attr", "status", "attr status")]
     public void MeasureName_names_a_plain_measure_the_way_the_client_labels_it(string agg, string column, string expected)
         => Assert.Equal(expected, ClickHouseGateway.MeasureName(agg, column));

@@ -30,8 +30,10 @@ export function slotFor(base, bars = 1) {
  * @param spec the renderChart spec
  * @param width the pane's current inner width, px
  * @param height the pane's current inner height, px
+ * @param fittedX Fit width / Entire view: the categories share the pane's width, so `rotate` is judged
+ *   against that width (not the slot-per-category minimum the pane would otherwise grow to)
  */
-export function chartFit(spec, width = 0, height = 0) {
+export function chartFit(spec, width = 0, height = 0, fittedX = false) {
   const none = { minWidth: 0, minHeight: 0, rotate: 0, zoom: null, window: 0, windowY: 0 };
   const axes = categoryAxes(spec);
   if (!axes) return none;
@@ -45,7 +47,8 @@ export function chartFit(spec, width = 0, height = 0) {
       out.rotate = labelWidth(labels) + 8 > slot ? 90 : 0;
     } else {
       out.minWidth = labels.length * slot + FIT.gutter;
-      const per = (Math.max(width, out.minWidth) - FIT.gutter) / Math.max(labels.length, 1);
+      const room = fittedX && width > 0 ? width : Math.max(width, out.minWidth);
+      const per = (room - FIT.gutter) / Math.max(labels.length, 1);
       out.rotate = labelWidth(labels) + 8 > per ? 90 : 0;
     }
   }
@@ -67,11 +70,15 @@ export function rotatedLabelCap(height = 0) {
   return Math.max(48, Math.min(FIT.labelMax, Math.round(height * 0.4)));
 }
 
+/** Does this Format → Fit mode fit the width (so the bottom axis shares the pane's width)? */
+export const fitsWidth = (mode) => mode === "width" || mode === "entire";
+
 /** Fit (Format → Fit): "standard" keeps a slot per category (the pane scrolls); "width" / "height" /
- * "entire" fit that direction (or both) to the pane instead — categories share the room and labels may
- * thin out. Returns the adjusted fit plus which axes were fitted. */
+ * "entire" fit that direction (or both) to the pane instead — categories share the room. Bottom labels
+ * keep to the same upright / level rule and are never dropped (only a date axis thins out, see
+ * date-axis.js); a left category axis's labels may thin out. Returns the adjusted fit plus which axes were fitted. */
 export function applyFitMode(fit, mode) {
-  const w = mode === "width" || mode === "entire", h = mode === "height" || mode === "entire";
+  const w = fitsWidth(mode), h = mode === "height" || mode === "entire";
   const out = { ...fit, fittedX: w, fittedY: h };
   if (w) { out.minWidth = 0; if (out.zoom === "x") out.zoom = null; if (out.zoom === "xy") out.zoom = "y"; }
   if (h) { out.minHeight = 0; if (out.zoom === "y") out.zoom = null; if (out.zoom === "xy") out.zoom = "x"; }

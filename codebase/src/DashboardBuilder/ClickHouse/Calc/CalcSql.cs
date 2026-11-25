@@ -84,9 +84,20 @@ internal static class CalcSql
         var a = agg?.ToLowerInvariant();
         if (a is null || !CalcCatalog.RowLevelAggregations.Contains(a))
             throw new RequestValidationException(CalcCatalog.RowLevelHint, field + ".calc");
-        if (a is "sum" or "avg" or "median" or "stddev" or "variance" && c.Info.Type != CalcType.Number)
+        if (a is "sum" or "avg" or "median" or "stddev" or "variance" or "stddevpop" or "variancepop" && c.Info.Type != CalcType.Number)
             throw new RequestValidationException($"{char.ToUpperInvariant(a[0])}{a[1..]} needs a number — this calculation is {c.Info.Type}.", field + ".calc");
-        return (ClickHouseGateway.AggregateSql(a, c.Sql, sampled, approximate), a is "sum" or "avg" or "countdistinct" or "countnonnull" or "median" or "stddev" or "variance" || c.Info.Type == CalcType.Number);
+        return (ClickHouseGateway.AggregateSql(a, c.Sql, sampled, approximate), a is "sum" or "avg" or "countdistinct" or "countnonnull" or "median" or "stddev" or "variance" or "stddevpop" or "variancepop" || c.Info.Type == CalcType.Number);
+    }
+
+    /// <summary>A calculated measure's per-row value (Aggregate Measures off): the row-level expression itself. An aggregate tree has no value per
+    /// row and a non-number can't be plotted, so both are a 400.</summary>
+    internal static string CalcRowSql(CompiledCalc c, string field)
+    {
+        if (c.Info.IsAggregate)
+            throw new RequestValidationException("A calculation that aggregates has no value per row — turn Aggregate Measures back on, or use a row-level calculation.", field + ".calc");
+        if (c.Info.Type != CalcType.Number)
+            throw new RequestValidationException($"Aggregate Measures off needs a number — this calculation is {c.Info.Type}.", field + ".calc");
+        return c.Sql;
     }
 
     /// <summary>A calculated dimension groups by its row-level expression; an aggregate tree there is a 400.</summary>

@@ -136,7 +136,7 @@ test("assignments <-> groups: the dialog's member -> group-name table", () => {
 });
 test("workbook round trip: a group calculation saves its group and no formula text, and loads back", () => {
   const calcs = [{ id: "calc1", name: "Zones", formula: "", group: spec([g("N", "SE", "NO")]) }, { id: "calc2", name: "Plain", formula: "1 + 1" }];
-  const text = JSON.stringify(serializeWorkbook({ entities: new Map(), relationships: new Map(), tabs: [], active: null, theme: { accent: "crimson", palette: "default" }, calculations: calcs, nextCalcId: 3 }));
+  const text = JSON.stringify(serializeWorkbook({ entities: new Map(), relationships: new Map(), tabs: [], active: null, theme: { accent: "crimson" }, calculations: calcs, nextCalcId: 3 }));
   const wb = parseWorkbook(text);
   assert.deepEqual(wb.calculations.find((c) => c.id === "calc1"), { id: "calc1", name: "Zones", formula: "", group: spec([g("N", "SE", "NO")]) });
   assert.deepEqual(wb.calculations.find((c) => c.id === "calc2"), { id: "calc2", name: "Plain", formula: "1 + 1" });

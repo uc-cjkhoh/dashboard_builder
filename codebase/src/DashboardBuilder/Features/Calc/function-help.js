@@ -6,7 +6,7 @@ import { FUNCTIONS, ROW_FUNCTIONS, CALC_LIMITS } from "./calc-types.js";
 
 export const GROUPS = Object.freeze(["Aggregate", "Logic", "Text", "Date"]);
 
-const AGGREGATES = ["sum", "avg", "min", "max", "count", "countd", "median", "stddev", "variance", "percentile", "attr"];
+const AGGREGATES = ["sum", "avg", "min", "max", "count", "countd", "median", "stddev", "variance", "stddevp", "variancep", "percentile", "attr"];
 const TEXT = ["text", "lower", "upper", "trim", "ltrim", "rtrim", "len", "left", "right", "mid", "find", "replace", "concat", "contains", "startswith", "endswith", "icontains", "istartswith", "iendswith", "split", "regexp_match", "regexp_extract", "regexp_extract_nth", "regexp_replace"];
 const DATE = ["datediff", "dateadd", "year", "month", "day", "quarter", "week", "weekday", "date", "isoyear", "datename", "datetrunc", "fiscalyear", "fiscalquarter", "makedate"];
 /** Logic keywords the parser handles itself: name -> { args: display text, result, insert }. */
@@ -45,6 +45,8 @@ const TEXTS = {
   median: ["The middle number of each group (halfway between the two middle ones when the count is even).", "MEDIAN([orders.amount])", "Empty values are skipped; no value gives an empty result."],
   stddev: ["The sample standard deviation of the numbers in each group.", "STDDEV([orders.amount])", "Needs at least two values, otherwise it is empty."],
   variance: ["The sample variance of the numbers in each group.", "VARIANCE([orders.amount])", "Needs at least two values, otherwise it is empty."],
+  stddevp: ["The population standard deviation of the numbers in each group.", "STDDEVP([orders.amount])", "One value gives 0; an empty group is empty."],
+  variancep: ["The population variance of the numbers in each group.", "VARIANCEP([orders.amount])", "One value gives 0; an empty group is empty."],
   percentile: ["The value below which a fraction p of the numbers fall (0 is the minimum, 0.5 the median, 1 the maximum).", "PERCENTILE([orders.amount], 0.9)", "p is a literal number from 0 to 1, not a field. Empty values are skipped."],
   attr: ["The value itself when every row of the group has the same one.", "ATTR([orders.status])", "Empty when the group has more than one distinct value; empty values are ignored."],
   if: ["The second argument when the condition is true, otherwise the third.", "IF([orders.amount] > 100, 'big', 'small')", "A condition that is empty counts as not true, so the else is used. All results must be the same type. Also written IF c THEN a ELSEIF d THEN b ELSE e END."],

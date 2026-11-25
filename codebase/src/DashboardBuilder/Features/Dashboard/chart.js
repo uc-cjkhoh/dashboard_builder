@@ -1,8 +1,7 @@
 import { makeValueFormatter } from "../Core/format.js";
-import { ACCENTS, PALETTES } from "../Core/theme-model.js";
+import { ACCENTS, CATEGORY_SLOTS, categoryColour, categoryColours } from "../Core/theme-model.js";
 import { fontToken } from "./font-model.js";
 import { pickInk } from "./contrast.js";
-import { orderedPalette } from "./colour-model.js";
 import { DIV_FALLBACK, DIV_HUE_FALLBACK, divergingColours, divergingRange, effectiveScale, fullRangeRamp, rampColours, rangeOf, stepPieces, stepColours, stepIndexOf, positionOf, mixHex } from "./colour-scale-model.js";
 import { sizeRange, barThickness, markerSizeFor, drawsSize, lineSizeMode, measureCue } from "./mark-channel-model.js";
 import { sizeScaleOf, measureShareFn, memberShareFn, sizeLegendText, sizeEnds, lineWidthFor } from "./size-scale-model.js";
@@ -16,7 +15,7 @@ import { circleSize, circleCells, HEATMAP_GUTTER, LABEL_FONT, cellSizeOf, labels
 import { bandsFor } from "./bullet-model.js";
 import { ganttTime, ganttAxisTime, ganttLabelMargin, ganttSizing, ganttThickness } from "./gantt-model.js";
 import { boxData, outlierPoints } from "./box-model.js";
-import { chartFit, markCount, applyFitMode, rotatedLabelCap, FIT } from "./chart-fit.js";
+import { chartFit, markCount, applyFitMode, fitsWidth, rotatedLabelCap, FIT } from "./chart-fit.js";
 import { applySelectionDim } from "./selection-dim.js";
 import { applyTooltipBehaviour } from "./tooltip-behaviour-model.js";
 import { wireTooltipCommands } from "./tooltip-commands.js";
@@ -67,16 +66,18 @@ function tokens() {
     if (m) v = cs.getPropertyValue(m[1]).trim();
     return v || fallback;
   };
-  // Categorical slots for multi-series charts (one measure = one series). This is the dataviz
-  // skill's validated 8-hue order (fixed order, never cycled; see references/palette.md) — read from
-  // CSS tokens with the validated hexes as fallback. A single-series chart uses the brand accent
-  // instead (below), keeping the common case on-brand.
-  const catFallback = PALETTES.default.light;
-  const cat = orderedPalette(catFallback.map((hex, i) => t(`--chart-cat-${i + 1}`, hex)), false);
-  const rampTk = { divLow: t("--chart-div-low", DIV_FALLBACK.low), divHigh: t("--chart-div-high", DIV_FALLBACK.high), accent: t("--accent", ACCENTS.signal.light.accent), accentSoft: t("--accent-soft", ACCENTS.signal.light.soft), surface: t("--surface", "#ffffff"), ink: t("--ink", "#1c1719"), cat: catFallback.map((hex, i) => t(`--chart-cat-${i + 1}`, hex)), hues: Object.fromEntries(Object.entries(DIV_HUE_FALLBACK).map(([h, hex]) => [h, t(`--chart-div-${h}`, hex)])) };
+  // Categorical colours for multi-series charts and members: generated (theme-model.js categoryColour), so the n-th member always
+  // has its own colour, however many there are: `catAt(i)` for one, `catList(n)` for ECharts' palette arrays, `cat` the first eight
+  // (fixed slots: waterfall up / down, gauge, colour-scale ramps). A single-series chart uses the brand accent instead (below),
+  // keeping the common case on-brand.
+  const dark = document.documentElement.getAttribute?.("data-scheme") === "dark"; // as Core/scheme.js isDark (optional call: the unit tests stub the element)
+  const cat = categoryColours(CATEGORY_SLOTS, dark);
+  const catAt = (i) => categoryColour(i, dark);
+  const catList = (n) => categoryColours(Math.max(CATEGORY_SLOTS, n), dark);
+  const rampTk = { divLow: t("--chart-div-low", DIV_FALLBACK.low), divHigh: t("--chart-div-high", DIV_FALLBACK.high), accent: t("--accent", ACCENTS.signal.light.accent), accentSoft: t("--accent-soft", ACCENTS.signal.light.soft), surface: t("--surface", "#ffffff"), ink: t("--ink", "#1c1719"), cat, hues: Object.fromEntries(Object.entries(DIV_HUE_FALLBACK).map(([h, hex]) => [h, t(`--chart-div-${h}`, hex)])) };
   return {
     series: t("--chart-series", ACCENTS.signal.light.accent),
-    cat,
+    cat, catAt, catList,
     axis: t("--chart-axis", "#d9cfd1"),
     grid: t("--chart-grid", "#ebe4e5"),
     label: t("--chart-label", "#423a3d"),
@@ -134,7 +135,7 @@ export function renderChart(container, spec) {
   const paneWidth = () => container.clientWidth - inset();
   const paneHeight = () => container.clientHeight - inset();
   const fitMode = dateFitMode(spec.format?.fit ?? "standard", spec.dateLabels, spec.type === "combo" ? "vertical" : spec.orientation); // Format → Fit, date axis per its Show all / Thin out
-  let fit = applyFitMode(chartFit(spec, paneWidth(), paneHeight()), fitMode);
+  let fit = applyFitMode(chartFit(spec, paneWidth(), paneHeight(), fitsWidth(fitMode)), fitMode);
   host.style.setProperty("--chart-min-w", `${fit.minWidth}px`);
   host.style.setProperty("--chart-min-h", `${fit.minHeight}px`);
 
@@ -172,7 +173,7 @@ export function renderChart(container, spec) {
   st.resizeObserver = new ResizeObserver(() => {
     if (st.instance !== instance) return;
     instance.resize();
-    const next = applyFitMode(chartFit(spec, paneWidth(), paneHeight()), fitMode);
+    const next = applyFitMode(chartFit(spec, paneWidth(), paneHeight(), fitsWidth(fitMode)), fitMode);
     if (next.rotate !== fit.rotate) {
       fit = next;
       instance.setOption({ xAxis: [].concat(option.xAxis).map(() => ({ axisLabel: { rotate: fit.rotate, ...(fit.rotate ? { width: rotatedLabelCap(paneHeight()) } : {}) } })) });
@@ -228,10 +229,11 @@ export function tuneForSize(option, spec = {}) {
 function showEveryCategory(option, rotate, fit = {}, height = 0) {
   const fix = (axis, bottom) => {
     if (!axis || axis.type !== "category") return axis;
-    // A fitted axis shares the pane: labels thin out instead of forcing a slot each.
+    // A fitted left axis shares the pane: its labels thin out instead of forcing a slot each. The bottom
+    // axis never drops a label, fitted or not (a date axis thins out in setDateAxisLabels, after this).
     // An upright bottom label is capped by the pane's height (a short widget would otherwise clip it); the ellipsis marks the cut.
     const wide = bottom ? (rotate ? rotatedLabelCap(height) : FIT.labelMax) : FIT.sideMax;
-    if (bottom ? fit.fittedX : fit.fittedY) return { ...axis, axisLabel: { ...axis.axisLabel, hideOverlap: true, width: bottom ? FIT.labelMax : FIT.sideMax, overflow: "truncate" } };
+    if (!bottom && fit.fittedY) return { ...axis, axisLabel: { ...axis.axisLabel, hideOverlap: true, width: bottom ? FIT.labelMax : FIT.sideMax, overflow: "truncate" } };
     return { ...axis, axisLabel: { ...axis.axisLabel, interval: 0, hideOverlap: false,
       width: wide, overflow: "truncate", ...(bottom ? { rotate } : {}) } };
   };
@@ -472,7 +474,7 @@ export function buildCartesian({ type, categories, series, colorByCategory, form
   const horizontal = orientation === "horizontal" && !isCombo && !dual;
   const fmtVal = makeValueFormatter(format); // measure value format (tooltip, axis, labels)
 
-  const colorFor = (i, name) => (multi ? memberColor(name, c.cat[i % c.cat.length]) : c.series);
+  const colorFor = (i, name) => (multi ? memberColor(name, c.catAt(i)) : c.series);
   // Colour-by-dimension: a single-measure bar chart colours each bar by its category. The
   // category axis already labels each bar, so colour restates identity (never colour-alone).
   // A colour measure (one measure only) colours each bar / marker / line stretch by its value: it replaces the palette and Colour by category.
@@ -658,7 +660,7 @@ export function buildCartesian({ type, categories, series, colorByCategory, form
     const cueStyle = cue?.decal ? { decal: { ...cue.decal, color: c.surface } } : {};
     const otherItem = (v) => ({ value: v, itemStyle: { color: c.muted, borderRadius: barRadius, ...barEdge } });
     if (sizeFr && type === "bar") {
-      const fillAt = (di) => (di === otherIndex ? c.muted : byValue?.colours[di] ?? (colorByDim ? memberColor(labels[di], c.cat[di % c.cat.length]) : null));
+      const fillAt = (di) => (di === otherIndex ? c.muted : byValue?.colours[di] ?? (colorByDim ? memberColor(labels[di], c.catAt(di)) : null));
       return variableBars({ s, color, sizeFr: sizeFr[i] ?? [], sizes: sz.grid[i] ?? [], slot: { at: i, of: mainCount }, horizontal, c, edge, fillAt, hover: Boolean(mask?.hover), dataLabel: (pointLabels || seriesLabels || format.dataLabels) ? (di, v) => (mask && !mask.at(i, di) ? "" : pointLabels || seriesLabels ? String(labelAt(i, di) ?? "") : fmtVal(v)) : null });
     }
     return {
@@ -667,7 +669,7 @@ export function buildCartesian({ type, categories, series, colorByCategory, form
       stack: stacked ? "total" : undefined,
       // Colour-by-dimension: per-bar colours; otherwise the series colour.
       data: colorByDim
-        ? s.data.map((v, di) => (di === otherIndex ? otherItem(v) : { value: v, itemStyle: { color: memberColor(labels[di], c.cat[di % c.cat.length]), borderRadius: barRadius, ...edge } }))
+        ? s.data.map((v, di) => (di === otherIndex ? otherItem(v) : { value: v, itemStyle: { color: memberColor(labels[di], c.catAt(di)), borderRadius: barRadius, ...edge } }))
         : s.data.map((v, di) => (di === otherIndex ? otherItem(v) : byValue?.colours[di] ? { value: v, itemStyle: { color: byValue.colours[di], borderRadius: barRadius, ...barEdge } } : v)),
       barMaxWidth: 40,
       itemStyle: { color, borderRadius: barRadius, ...barEdge, ...cueStyle },
@@ -722,7 +724,7 @@ function buildPie({ type, categories, series, format = {}, pointLabels, tooltipE
   const mask = labelMarks ? labelMask(labelMarks.mode, { series: [series[0].data], skip: otherIndex >= 0 ? [otherIndex] : [], selected: labelMarks.selected, recent: labelMarks.recent }) : null; // Format → Label marks
   const noLabel = { label: { show: false }, labelLine: { show: false } }; // a slice that carries no label has no leader line pointing at nothing
   const data = labels.map((full, i) => split
-    ? { name: memberName(i), full, value: series[0].data[i], itemStyle: { color: i === otherIndex || split.memberIndex[i] < 0 ? c.muted : memberColor(split.memberNames[i], c.cat[split.memberIndex[i] % c.cat.length]) } }
+    ? { name: memberName(i), full, value: series[0].data[i], itemStyle: { color: i === otherIndex || split.memberIndex[i] < 0 ? c.muted : memberColor(split.memberNames[i], c.catAt(split.memberIndex[i])) } }
     : { name: full, value: series[0].data[i], ...(i === otherIndex ? { itemStyle: { color: c.muted } } : byValue?.colours[i] ? { itemStyle: { color: byValue.colours[i] } } : !byValue && memberColors().has(full) ? { itemStyle: { color: memberColors().get(full) } } : {}) });
   const markedData = mask && !mask.hover ? data.map((d, i) => (mask.at(0, i) ? d : { ...d, ...noLabel })) : data;
   const fullName = (p) => p.data?.full ?? p.name;
@@ -731,7 +733,7 @@ function buildPie({ type, categories, series, format = {}, pointLabels, tooltipE
   const fewSlices = labels.length <= PIE_PERCENT_SLICES; // few slices: the label adds the share
 
   return {
-    color: c.cat,
+    color: c.catList(data.length),
     textStyle: { fontFamily: c.font, color: c.label },
     legend,
     ...(byValue?.legend ?? {}),
@@ -847,7 +849,7 @@ function buildScatterShapes({ groups, symbol, xName, yName, hasSize, sizeName, s
   const names = groups.map((g) => g.name);
   const { show, pos, legend } = legendFor(format, c, names, true);
   const symbolOf = (g) => (g.shape ? (shapeName ? symbolAt(g.shape.index) : memberShapes.has(g.shape.name) ? shapeSymbol(memberShapes.get(g.shape.name)) : symbolAt(g.shape.index)) : symbol || "circle");
-  const colourOf = (g, i) => (g.colour ? memberColor(g.colour.name, c.cat[g.colour.index % c.cat.length]) : c.cat[i % c.cat.length]);
+  const colourOf = (g, i) => (g.colour ? memberColor(g.colour.name, c.catAt(g.colour.index)) : c.catAt(i));
   if (legend && groups.some((g) => g.shape)) legend.data = groups.map((g) => (g.shape ? { name: g.name, icon: symbolOf(g) } : g.name)); // the legend swatch wears the symbol too
   const sizeNote = hasSize ? sizeLegend(allSizes, sizeName, c, fmtVal, show && pos === "top" ? 24 : 2, { order: sizeOrder, scale: sizeScaleOf(format), zeroDefault: true }) : null;
   // Labels (Data labels, or a Label field written per result row): one per mark, in the member's series. Min & max is per member; Selected and Most recent name result
@@ -994,7 +996,7 @@ function buildTreemap({ tree, sizeName, colourName, shelfName, format = {} }) {
   const paint = (node) => node.children
     ? { ...node, itemStyle: { color: withAlpha(c.grid, k) }, label: { color: c.ink }, children: node.children.map(paint) }
     : { ...node, itemStyle: { color: withAlpha(colourOf.get(node) ?? c.muted, k) }, label: { color: pickInk(seen(colourOf.get(node) ?? c.muted), inks) } };
-  const data = hasColour ? tree.map(paint) : tree.map((n, i) => withInk(n, pickInk(seen(c.cat[i % c.cat.length]), inks)));
+  const data = hasColour ? tree.map(paint) : tree.map((n, i) => withInk(n, pickInk(seen(c.catAt(i)), inks)));
   const sub = (label, v) => (v == null ? "" : `<br><b>${escapeHtml(String(label))}:</b> ${fmtVal(v)}`);
   return {
     textStyle: { fontFamily: c.font, color: c.label },
@@ -1016,7 +1018,7 @@ function buildTreemap({ tree, sizeName, colourName, shelfName, format = {} }) {
       breadcrumb: { show: false },
       label: { show: true, fontFamily: c.font, lineHeight: 16, formatter: (p) => (p.data?.size !== undefined && p.data?.shelf !== undefined ? `${p.name}\n${fmtVal(p.data.shelf)}` : p.name) },
       itemStyle: { ...edgeOr(format.markBorder, borderInk(format.markBorderColor, c), { borderColor: c.surface, borderWidth: 2 }), gapWidth: 2 },
-      levels: hasColour ? [{}] : [{ color: k < 1 ? c.cat.map((h) => withAlpha(h, k)) : c.cat, colorMappingBy: "index" }],
+      levels: hasColour ? [{}] : [{ color: k < 1 ? c.catList(tree.length).map((h) => withAlpha(h, k)) : c.catList(tree.length), colorMappingBy: "index" }],
     }],
   };
 }
@@ -1145,7 +1147,7 @@ function buildWaterfall({ categories, series, format = {} }) {
   const fmtVal = makeValueFormatter(format);
   const steps = waterfallSteps(categories ?? [], series[0]?.data ?? []);
   const sizeSet = sizeT(format);
-  const colour = { up: c.cat[0], down: c.cat[5], total: c.muted };
+  const colour = { up: c.cat[0], down: c.cat[4], total: c.muted }; // slots 1 and 5: far apart in hue (tests/js/theme-model.test.mjs holds them >= 90° apart)
   const names = { up: "Increase", down: "Decrease", total: "Total" };
   const signed = (v) => (v > 0 ? `+${fmtVal(v)}` : v < 0 ? `−${fmtVal(-v)}` : fmtVal(v));
   return {
@@ -1185,11 +1187,11 @@ function buildFunnel({ categories, series, format = {} }) {
   // Each stage's label ink is picked for contrast against its own palette colour (≥ 4.5:1).
   const inks = [c.ink, c.surface, "#000000", "#ffffff"];
   const data = (categories ?? []).map((name, i) => ({ name, value: Number(series[0].data[i]) || 0,
-    label: { color: pickInk(c.cat[i % c.cat.length], inks) } }));
+    label: { color: pickInk(c.catAt(i), inks) } }));
   const top = Math.max(...data.map((d) => d.value), 0) || 1;
   const { legend } = legendFor(format, c, data.map((d) => d.name), false);
   return {
-    color: c.cat, textStyle: { fontFamily: c.font, color: c.label }, legend,
+    color: c.catList(data.length), textStyle: { fontFamily: c.font, color: c.label }, legend,
     tooltip: { trigger: "item", ...tipBox(c), formatter: (p) => `<span style="color:${c.muted}">${escapeHtml(String(p.name))}</span><br><b>${fmtVal(p.value)}</b> (${((p.value / top) * 100).toFixed(1)}% of the first)` },
     series: [{
       type: "funnel", sort: "descending", gap: 2, left: "10%", right: "10%", top: legend ? 36 : 12, bottom: 12, minSize: "8%",
@@ -1278,7 +1280,7 @@ function buildGantt({ categories, gantt, name, format = {}, selectedIndices, onL
   // One series per colour member, else one for all the bars.
   const split = groups.length > 0;
   const lists = split ? groups.map((_, gi) => bars.filter((b) => b.group === gi)) : [bars];
-  const colourOf = (gi) => (split ? memberColor(groups[gi], c.cat[gi % c.cat.length]) : c.cat[0]);
+  const colourOf = (gi) => (split ? memberColor(groups[gi], c.catAt(gi)) : c.cat[0]);
   const names = split ? groups : [label];
   const sizeSet = sizeT(format);
   const sizing = sizeName ? ganttSizing(bars, format) : null; // shares[k] / values[k] follow `bars`
@@ -1320,7 +1322,7 @@ function buildSankey({ links, format = {} }) {
   const nodes = [...new Set(links.flatMap((l) => [l.source, l.target]))].map((n) => ({ name: n }));
   const label = (id) => String(id).slice(2);
   return {
-    color: c.cat, textStyle: { fontFamily: c.font, color: c.label },
+    color: c.catList(nodes.length), textStyle: { fontFamily: c.font, color: c.label },
     tooltip: { trigger: "item", ...tipBox(c),
       formatter: (p) => (p.dataType === "edge"
         ? `${escapeHtml(label(p.data.source))} → ${escapeHtml(label(p.data.target))}<br><b>${fmtVal(p.data.value)}</b>`
@@ -1360,8 +1362,8 @@ function buildMultiples({ panels, xCats, seriesNames, format = {}, width = 800, 
     yAxes.push({ ...valueAxis(c, fmtVal), gridIndex: i, min: yMin, max: yMax, splitNumber: 2, axisLabel: { color: c.muted, formatter: fmtVal, fontSize: 14, show: col === 0 } });
     p.series.forEach((data, si) => series.push({
       type: "line", name: seriesNames[si], xAxisIndex: i, yAxisIndex: i, data, showSymbol: data.length <= 30, symbolSize: 5,
-      lineStyle: { width: 1.5, color: seriesNames.length > 1 ? c.cat[si % c.cat.length] : c.series },
-      itemStyle: { color: seriesNames.length > 1 ? c.cat[si % c.cat.length] : c.series },
+      lineStyle: { width: 1.5, color: seriesNames.length > 1 ? c.catAt(si) : c.series },
+      itemStyle: { color: seriesNames.length > 1 ? c.catAt(si) : c.series },
     }));
   });
   return {

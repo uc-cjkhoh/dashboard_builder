@@ -189,10 +189,10 @@
     "symbolSize": 8,
     "lineStyle": {
      "width": 2,
-     "color": "#72872a"
+     "color": "#8c9a2d"
     },
     "itemStyle": {
-     "color": "#72872a"
+     "color": "#8c9a2d"
     },
     "label": {
      "show": false
@@ -216,10 +216,10 @@
     "symbolSize": 8,
     "lineStyle": {
      "width": 2,
-     "color": "#b8559c"
+     "color": "#7935d4"
     },
     "itemStyle": {
-     "color": "#b8559c"
+     "color": "#7935d4"
     },
     "label": {
      "show": false
@@ -556,7 +556,7 @@
     ],
     "barMaxWidth": 40,
     "itemStyle": {
-     "color": "#72872a",
+     "color": "#8c9a2d",
      "borderRadius": [
       8,
       8,
@@ -572,7 +572,7 @@
     "emphasis": {
      "focus": "series",
      "itemStyle": {
-      "color": "#72872a",
+      "color": "#8c9a2d",
       "opacity": 0.85
      }
     }
@@ -592,10 +592,10 @@
     "symbolSize": 8,
     "lineStyle": {
      "width": 2,
-     "color": "#b8559c"
+     "color": "#7935d4"
     },
     "itemStyle": {
-     "color": "#b8559c"
+     "color": "#7935d4"
     },
     "label": {
      "show": false
@@ -619,10 +619,10 @@
     "symbolSize": 8,
     "lineStyle": {
      "width": 2,
-     "color": "#d9a03a"
+     "color": "#227743"
     },
     "itemStyle": {
-     "color": "#d9a03a"
+     "color": "#227743"
     },
     "label": {
      "show": false
@@ -764,7 +764,7 @@
     ],
     "barMaxWidth": 40,
     "itemStyle": {
-     "color": "#72872a",
+     "color": "#8c9a2d",
      "borderRadius": [
       8,
       8,
@@ -780,7 +780,7 @@
     "emphasis": {
      "focus": "series",
      "itemStyle": {
-      "color": "#72872a",
+      "color": "#8c9a2d",
       "opacity": 0.85
      }
     }
@@ -796,7 +796,7 @@
     ],
     "barMaxWidth": 40,
     "itemStyle": {
-     "color": "#b8559c",
+     "color": "#7935d4",
      "borderRadius": [
       8,
       8,
@@ -812,7 +812,7 @@
     "emphasis": {
      "focus": "series",
      "itemStyle": {
-      "color": "#b8559c",
+      "color": "#7935d4",
       "opacity": 0.85
      }
     }
@@ -950,7 +950,7 @@
     ],
     "barMaxWidth": 40,
     "itemStyle": {
-     "color": "#72872a",
+     "color": "#8c9a2d",
      "borderRadius": [
       8,
       8,
@@ -966,7 +966,7 @@
     "emphasis": {
      "focus": "series",
      "itemStyle": {
-      "color": "#72872a",
+      "color": "#8c9a2d",
       "opacity": 0.85
      }
     }
@@ -986,14 +986,14 @@
     "symbolSize": 8,
     "areaStyle": {
      "opacity": 0.18,
-     "color": "#b8559c"
+     "color": "#7935d4"
     },
     "lineStyle": {
      "width": 2,
-     "color": "#b8559c"
+     "color": "#7935d4"
     },
     "itemStyle": {
-     "color": "#b8559c"
+     "color": "#7935d4"
     },
     "label": {
      "show": false
@@ -3700,10 +3700,10 @@
     "symbolSize": 8,
     "lineStyle": {
      "width": 2,
-     "color": "#72872a"
+     "color": "#8c9a2d"
     },
     "itemStyle": {
-     "color": "#72872a"
+     "color": "#8c9a2d"
     },
     "label": {
      "show": false
@@ -3728,10 +3728,10 @@
     "symbolSize": 8,
     "lineStyle": {
      "width": 2,
-     "color": "#b8559c"
+     "color": "#7935d4"
     },
     "itemStyle": {
-     "color": "#b8559c"
+     "color": "#7935d4"
     },
     "label": {
      "show": false
@@ -4232,11 +4232,11 @@
     "symbolSize": 8,
     "lineStyle": {
      "width": 2,
-     "color": "#72872a",
+     "color": "#8c9a2d",
      "opacity": 0.5
     },
     "itemStyle": {
-     "color": "#72872a",
+     "color": "#8c9a2d",
      "opacity": 0.5
     },
     "label": {
@@ -4261,11 +4261,11 @@
     "symbolSize": 8,
     "lineStyle": {
      "width": 2,
-     "color": "#b8559c",
+     "color": "#7935d4",
      "opacity": 0.5
     },
     "itemStyle": {
-     "color": "#b8559c",
+     "color": "#7935d4",
      "opacity": 0.5
     },
     "label": {

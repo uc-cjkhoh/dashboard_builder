@@ -7,6 +7,10 @@ import { delayFor, placeTip } from "./hover-tip-model.js";
 
 const SEL = 'button[title], [role="button"][title]';
 
+let hideTip = () => {};
+/** Hides the tooltip now (and gives its button its `title` back). A no-op until initHoverTips has run. */
+export const hideHoverTip = () => hideTip();
+
 export function initHoverTips() {
   const tip = document.createElement("div");
   tip.className = "hover-tip";
@@ -27,6 +31,7 @@ export function initHoverTips() {
       hiddenAt = performance.now();
     }
   }
+  hideTip = hide;
   function show() {
     if (!owner?.isConnected) { hide(); return; }
     tip.textContent = held;

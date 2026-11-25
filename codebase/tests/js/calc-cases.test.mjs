@@ -168,7 +168,7 @@ test("the 500-character limit is inclusive; the number limit also covers a huge 
 // ---- Type checker details --------------------------------------------------------------------------------
 
 test("FUNCTIONS is the C# CalcCatalog table", () => {
-  assert.deepEqual(Object.keys(FUNCTIONS), ["sum", "avg", "min", "max", "count", "countd", "median", "stddev", "variance", "percentile", "attr"]);
+  assert.deepEqual(Object.keys(FUNCTIONS), ["sum", "avg", "min", "max", "count", "countd", "median", "stddev", "variance", "stddevp", "variancep", "percentile", "attr"]);
   assert.deepEqual(FUNCTIONS.sum, { accepts: ["number"], result: "number" });
   assert.deepEqual(FUNCTIONS.min, { accepts: ["number", "date", "text"], result: null });
   assert.deepEqual(FUNCTIONS.countd, { accepts: ["number", "date", "text", "boolean"], result: "number" });

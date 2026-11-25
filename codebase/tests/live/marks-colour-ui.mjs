@@ -118,14 +118,13 @@ try {
   // Wait until no new /api/query has arrived for `quiet` ms (polling, not a fixed sleep).
   const settle = async (quiet = 300) => { let n = -1; for (let i = 0; i < 60 && n !== queries.length; i++) { n = queries.length; await b.sleep(quiet); } };
 
-  // Edit member colours… is a dialog (palette, member, colour, Save): open it, optionally pick, then Save (or Cancel).
+  // Edit member colours… is a dialog (palettes left, members right, Save): open it, optionally pick, then Save (or Cancel).
   const memDlg = `document.querySelector('dialog.memcol-dialog[open]')`;
   const memOpen = async () => { await ev(`document.querySelector('.ws-memcol__open').click()`); await waitFor(`!!${memDlg}`, 'member colours dialog'); };
   const memNames = () => ev(`[...${memDlg}.querySelectorAll('.memcol-member__name')].map((n) => n.textContent)`);
-  const memPick = async (row, sw, pal = 1) => { // palette 1 = Colour-blind safe: swatch 7 is #000000, swatch 3 #cc79a7
-    await ev(`${memDlg}.querySelectorAll('.memcol-palette')[${pal}].click()`);
+  const memPick = async (row, hex) => { // a colour typed as #rrggbb in the dialog's custom field: it stages for the selected member (the generated colours are not fixed, so a test names its own)
     await ev(`${memDlg}.querySelectorAll('.memcol-member')[${row}].click()`);
-    await ev(`${memDlg}.querySelectorAll('.memcol-swatch')[${sw}].click()`);
+    await ev(`(() => { const i = ${memDlg}.querySelector('.memcol-custom__hex'); i.value = '${hex}'; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
   };
   const memEnd = async (btn = 'primary') => { await ev(`${memDlg}.querySelector('.dialog__foot .btn${btn === 'primary' ? '--primary' : ':nth-child(2)'}').click()`); await waitFor(`!${memDlg}`, 'member colours dialog closed'); };
   const lastQuery = () => queries[queries.length - 1];
@@ -452,7 +451,7 @@ try {
     await memOpen();
     const names = await memNames();
     must(J(names) === J(['web', 'shop', 'app']), 'the member colour editor lists members: ' + J(names));
-    await memPick(0, 3); await memEnd(); await settle(500);
+    await memPick(0, '#cc79a7'); await memEnd(); await settle(500);
     const d2 = await pieData();
     must(d2[0].colour !== d[0].colour && d2[0].colour === d2[3].colour, 'a member colour recolours every sub-slice of the member: ' + J([d[0].colour, d2[0].colour]));
     await closeColour();
@@ -524,7 +523,7 @@ try {
     const names = await memNames();
     must(names.length === 6 && names[0] === 'web · DE', 'combined members listed: ' + J(names));
     const before = (await opt()).series[0].itemStyle.color;
-    await memPick(0, 3); await memEnd(); await settle(600);
+    await memPick(0, '#cc79a7'); await memEnd(); await settle(600);
     const after = (await opt()).series[0].itemStyle.color;
     must(after !== before && (await opt()).series[1].itemStyle.color !== after, 'only that combination changed: ' + J([before, after]));
     await closeColour();

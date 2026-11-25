@@ -206,13 +206,13 @@ try {
   await check('a theme change redraws every live view from the cache (new chart instance, no query)', async () => {
     const r0 = countBy('region'), c0 = countBy('channel');
     const before = await ev(`[...document.querySelectorAll('.board-widget .ws-chart-canvas')].map((d) => window.echarts.getInstanceByDom(d).getId())`);
-    await store(`st.setTheme({ accent: 'ocean', palette: 'default' }); return true;`);
+    await store(`st.setTheme({ accent: 'ocean' }); return true;`);
     await waitFor(`document.querySelectorAll('.board-widget .ws-chart-canvas svg').length === 2`, 'redrawn');
     await b.sleep(300);
     const after = await ev(`[...document.querySelectorAll('.board-widget .ws-chart-canvas')].map((d) => window.echarts.getInstanceByDom(d)?.getId())`);
     must(after.length === 2 && after.every((id, i) => id && id !== before[i]), `instances not recreated: ${J(before)} -> ${J(after)}`);
     must(countBy('region') === r0 && countBy('channel') === c0, 'a theme change queried a drawn widget');
-    await store(`st.setTheme({ accent: 'crimson', palette: 'default' }); return true;`);
+    await store(`st.setTheme({ accent: 'crimson' }); return true;`);
   });
 
   await check('dark screenshot', async () => { await b.setScheme('dark'); await ev(`document.documentElement.setAttribute('data-theme', 'dark')`); await b.sleep(500); await shot('board-canvas-dark.png'); await ev(`document.documentElement.removeAttribute('data-theme')`); await b.setScheme('light'); });

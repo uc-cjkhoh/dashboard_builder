@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  serializeWorkbook, parseWorkbook, storageKey, WORKBOOK_FORMAT,
+  serializeWorkbook, parseWorkbook, storageKey, WORKBOOK_FORMAT, restoreSheet,
 } from "../../src/DashboardBuilder/Features/Workbook/workbook-model.js";
 import { emptySheet } from "../../src/DashboardBuilder/Features/Core/store.js";
 
@@ -259,9 +259,45 @@ test("conditional formatting (P37) round-trips; bad parts are dropped and report
 
 test("the workbook theme (P41) round-trips; a missing one is the default", () => {
   const st = sampleState();
-  const wb = parseWorkbook(JSON.stringify(serializeWorkbook({ ...st, theme: { accent: "violet", palette: "okabe" } })));
-  assert.deepEqual(wb.theme, { accent: "violet", palette: "okabe" });
-  assert.deepEqual(sheetOf({}).theme, { accent: "signal", palette: "default" });
+  const wb = parseWorkbook(JSON.stringify(serializeWorkbook({ ...st, theme: { accent: "violet" } })));
+  assert.deepEqual(wb.theme, { accent: "violet" });
+  assert.deepEqual(sheetOf({}).theme, { accent: "signal" });
+});
+test("a workbook saved with a chart palette (an older version) opens with its accent and look, no issue, and saves without the palette", () => {
+  const st = sampleState();
+  for (const palette of ["okabe", "onedark", "muted", "default"]) {
+    const saved = JSON.parse(JSON.stringify(serializeWorkbook({ ...st, theme: { accent: "violet", surface: "onedark" } })));
+    saved.theme.palette = palette; // what an older build wrote
+    const wb = parseWorkbook(JSON.stringify(saved));
+    assert.deepEqual(wb.theme, { accent: "violet", surface: "onedark" }, palette);
+    assert.deepEqual(wb.issues.filter((i) => /theme/i.test(i)), [], palette);
+    assert.equal("palette" in serializeWorkbook({ ...st, theme: wb.theme }).theme, false);
+  }
+});
+
+test("imported colour palettes round-trip in order; none are written when there are none; a file without them opens clean", () => {
+  const st = sampleState();
+  const saved = serializeWorkbook({ ...st, palettes: [{ name: "Brand", colours: ["#112233", "#aabbcc"] }, { name: "Dusk", colours: ["#445566"] }] });
+  assert.deepEqual(saved.palettes, [{ name: "Brand", colours: ["#112233", "#aabbcc"] }, { name: "Dusk", colours: ["#445566"] }]);
+  const wb = parseWorkbook(JSON.stringify(saved));
+  assert.deepEqual(wb.palettes, saved.palettes);
+  assert.deepEqual(wb.issues.filter((i) => /palette/i.test(i)), []);
+  assert.equal("palettes" in serializeWorkbook({ ...st, palettes: [] }), false, "nothing written for none");
+  assert.equal("palettes" in serializeWorkbook(st), false);
+  const old = parseWorkbook(JSON.stringify(serializeWorkbook(st)));
+  assert.deepEqual(old.palettes, []);
+  assert.deepEqual(old.issues.filter((i) => /palette/i.test(i)), []);
+});
+test("a saved palette that is not usable is dropped on open with a reason; the others and the rest of the workbook open", () => {
+  const st = sampleState();
+  const saved = JSON.parse(JSON.stringify(serializeWorkbook({ ...st, palettes: [{ name: "Brand", colours: ["#112233"] }] })));
+  saved.palettes.push({ name: "Broken", colours: ["#112233", "blue"] }, "junk");
+  const wb = parseWorkbook(JSON.stringify(saved));
+  assert.deepEqual(wb.palettes, [{ name: "Brand", colours: ["#112233"] }]);
+  assert.equal(wb.issues.filter((i) => /palette/i.test(i)).length, 2);
+  assert.ok(wb.worksheets.length >= 0);
+  saved.palettes = "nope";
+  assert.deepEqual(parseWorkbook(JSON.stringify(saved)).palettes, []);
 });
 
 test("shared filters (P40) round-trip, are checked, and capped at 4", () => {
@@ -804,4 +840,11 @@ test("an invalid saved view is dropped with a note, never half-used", () => {
     assert.equal(wb.view, null, JSON.stringify(bad));
     assert.ok(wb.issues.some((i) => /view/i.test(i)), JSON.stringify(bad));
   }
+});
+
+test("Aggregate Measures off is saved and restored; an older sheet stays aggregated and gains no key", () => {
+  assert.equal(restoreSheet({ ...emptySheet(), disaggregate: true }).disaggregate, true);
+  assert.equal("disaggregate" in restoreSheet({ ...emptySheet() }), false);
+  assert.equal("disaggregate" in restoreSheet({ ...emptySheet(), disaggregate: "yes" }), false, "only true counts");
+  assert.equal("disaggregate" in restoreSheet({ ...emptySheet(), disaggregate: false }), false);
 });

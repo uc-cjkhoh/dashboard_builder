@@ -2,7 +2,7 @@
  "plain": {
   "option": {
    "color": [
-    "#72872a"
+    "#8c9a2d"
    ],
    "textStyle": {
     "fontFamily": "system-ui, sans-serif",
@@ -126,7 +126,7 @@
         "r": 2
        },
        "style": {
-        "fill": "#72872a",
+        "fill": "#8c9a2d",
         "opacity": 1
        },
        "emphasis": {
@@ -164,7 +164,7 @@
         "r": 2
        },
        "style": {
-        "fill": "#72872a",
+        "fill": "#8c9a2d",
         "opacity": 1
        },
        "emphasis": {
@@ -202,7 +202,7 @@
         "r": 2
        },
        "style": {
-        "fill": "#72872a",
+        "fill": "#8c9a2d",
         "opacity": 1
        },
        "emphasis": {
@@ -240,7 +240,7 @@
  "plainTall": {
   "option": {
    "color": [
-    "#72872a"
+    "#8c9a2d"
    ],
    "textStyle": {
     "fontFamily": "system-ui, sans-serif",
@@ -364,7 +364,7 @@
         "r": 2
        },
        "style": {
-        "fill": "#72872a",
+        "fill": "#8c9a2d",
         "opacity": 1
        },
        "emphasis": {
@@ -402,7 +402,7 @@
         "r": 2
        },
        "style": {
-        "fill": "#72872a",
+        "fill": "#8c9a2d",
         "opacity": 1
        },
        "emphasis": {
@@ -440,7 +440,7 @@
         "r": 2
        },
        "style": {
-        "fill": "#72872a",
+        "fill": "#8c9a2d",
         "opacity": 1
        },
        "emphasis": {
@@ -478,7 +478,7 @@
  "oneRow": {
   "option": {
    "color": [
-    "#72872a"
+    "#8c9a2d"
    ],
    "textStyle": {
     "fontFamily": "system-ui, sans-serif",
@@ -590,7 +590,7 @@
         "r": 2
        },
        "style": {
-        "fill": "#72872a",
+        "fill": "#8c9a2d",
         "opacity": 1
        },
        "emphasis": {
@@ -626,7 +626,7 @@
  "oneRowTall": {
   "option": {
    "color": [
-    "#72872a"
+    "#8c9a2d"
    ],
    "textStyle": {
     "fontFamily": "system-ui, sans-serif",
@@ -738,7 +738,7 @@
         "r": 2
        },
        "style": {
-        "fill": "#72872a",
+        "fill": "#8c9a2d",
         "opacity": 1
        },
        "emphasis": {
@@ -774,7 +774,7 @@
  "dates": {
   "option": {
    "color": [
-    "#72872a"
+    "#8c9a2d"
    ],
    "textStyle": {
     "fontFamily": "system-ui, sans-serif",
@@ -892,7 +892,7 @@
         "r": 2
        },
        "style": {
-        "fill": "#72872a",
+        "fill": "#8c9a2d",
         "opacity": 1
        },
        "emphasis": {
@@ -930,7 +930,7 @@
         "r": 2
        },
        "style": {
-        "fill": "#72872a",
+        "fill": "#8c9a2d",
         "opacity": 1
        },
        "emphasis": {
@@ -967,7 +967,7 @@
  "datesTall": {
   "option": {
    "color": [
-    "#72872a"
+    "#8c9a2d"
    ],
    "textStyle": {
     "fontFamily": "system-ui, sans-serif",
@@ -1085,7 +1085,7 @@
         "r": 2
        },
        "style": {
-        "fill": "#72872a",
+        "fill": "#8c9a2d",
         "opacity": 1
        },
        "emphasis": {
@@ -1123,7 +1123,7 @@
         "r": 2
        },
        "style": {
-        "fill": "#72872a",
+        "fill": "#8c9a2d",
         "opacity": 1
        },
        "emphasis": {
@@ -1160,7 +1160,7 @@
  "endMode": {
   "option": {
    "color": [
-    "#72872a"
+    "#8c9a2d"
    ],
    "textStyle": {
     "fontFamily": "system-ui, sans-serif",
@@ -1278,7 +1278,7 @@
         "r": 2
        },
        "style": {
-        "fill": "#72872a",
+        "fill": "#8c9a2d",
         "opacity": 1
        },
        "emphasis": {
@@ -1316,7 +1316,7 @@
         "r": 2
        },
        "style": {
-        "fill": "#72872a",
+        "fill": "#8c9a2d",
         "opacity": 1
        },
        "emphasis": {
@@ -1353,7 +1353,7 @@
  "endModeTall": {
   "option": {
    "color": [
-    "#72872a"
+    "#8c9a2d"
    ],
    "textStyle": {
     "fontFamily": "system-ui, sans-serif",
@@ -1471,7 +1471,7 @@
         "r": 2
        },
        "style": {
-        "fill": "#72872a",
+        "fill": "#8c9a2d",
         "opacity": 1
        },
        "emphasis": {
@@ -1509,7 +1509,7 @@
         "r": 2
        },
        "style": {
-        "fill": "#72872a",
+        "fill": "#8c9a2d",
         "opacity": 1
        },
        "emphasis": {
@@ -1546,7 +1546,7 @@
  "skipped": {
   "option": {
    "color": [
-    "#72872a"
+    "#8c9a2d"
    ],
    "textStyle": {
     "fontFamily": "system-ui, sans-serif",
@@ -1660,7 +1660,7 @@
         "r": 2
        },
        "style": {
-        "fill": "#72872a",
+        "fill": "#8c9a2d",
         "opacity": 1
        },
        "emphasis": {
@@ -1696,7 +1696,7 @@
  "skippedTall": {
   "option": {
    "color": [
-    "#72872a"
+    "#8c9a2d"
    ],
    "textStyle": {
     "fontFamily": "system-ui, sans-serif",
@@ -1810,7 +1810,7 @@
         "r": 2
        },
        "style": {
-        "fill": "#72872a",
+        "fill": "#8c9a2d",
         "opacity": 1
        },
        "emphasis": {
@@ -1846,8 +1846,8 @@
  "split": {
   "option": {
    "color": [
-    "#72872a",
-    "#b8559c"
+    "#8c9a2d",
+    "#7935d4"
    ],
    "textStyle": {
     "fontFamily": "system-ui, sans-serif",
@@ -1987,7 +1987,7 @@
         "r": 2
        },
        "style": {
-        "fill": "#72872a",
+        "fill": "#8c9a2d",
         "opacity": 1
        },
        "emphasis": {
@@ -2025,7 +2025,7 @@
         "r": 2
        },
        "style": {
-        "fill": "#72872a",
+        "fill": "#8c9a2d",
         "opacity": 1
        },
        "emphasis": {
@@ -2065,7 +2065,7 @@
         "r": 2
        },
        "style": {
-        "fill": "#b8559c",
+        "fill": "#7935d4",
         "opacity": 1
        },
        "emphasis": {
@@ -2105,8 +2105,8 @@
  "splitTall": {
   "option": {
    "color": [
-    "#72872a",
-    "#b8559c"
+    "#8c9a2d",
+    "#7935d4"
    ],
    "textStyle": {
     "fontFamily": "system-ui, sans-serif",
@@ -2246,7 +2246,7 @@
         "r": 2
        },
        "style": {
-        "fill": "#72872a",
+        "fill": "#8c9a2d",
         "opacity": 1
        },
        "emphasis": {
@@ -2284,7 +2284,7 @@
         "r": 2
        },
        "style": {
-        "fill": "#72872a",
+        "fill": "#8c9a2d",
         "opacity": 1
        },
        "emphasis": {
@@ -2324,7 +2324,7 @@
         "r": 2
        },
        "style": {
-        "fill": "#b8559c",
+        "fill": "#7935d4",
         "opacity": 1
        },
        "emphasis": {
@@ -2364,7 +2364,7 @@
  "selected": {
   "option": {
    "color": [
-    "#72872a"
+    "#8c9a2d"
    ],
    "textStyle": {
     "fontFamily": "system-ui, sans-serif",
@@ -2488,7 +2488,7 @@
         "r": 2
        },
        "style": {
-        "fill": "#72872a",
+        "fill": "#8c9a2d",
         "opacity": 0.35
        },
        "emphasis": {
@@ -2526,7 +2526,7 @@
         "r": 2
        },
        "style": {
-        "fill": "#72872a",
+        "fill": "#8c9a2d",
         "opacity": 1
        },
        "emphasis": {
@@ -2564,7 +2564,7 @@
         "r": 2
        },
        "style": {
-        "fill": "#72872a",
+        "fill": "#8c9a2d",
         "opacity": 0.35
        },
        "emphasis": {
@@ -2602,7 +2602,7 @@
  "selectedTall": {
   "option": {
    "color": [
-    "#72872a"
+    "#8c9a2d"
    ],
    "textStyle": {
     "fontFamily": "system-ui, sans-serif",
@@ -2726,7 +2726,7 @@
         "r": 2
        },
        "style": {
-        "fill": "#72872a",
+        "fill": "#8c9a2d",
         "opacity": 0.35
        },
        "emphasis": {
@@ -2764,7 +2764,7 @@
         "r": 2
        },
        "style": {
-        "fill": "#72872a",
+        "fill": "#8c9a2d",
         "opacity": 1
        },
        "emphasis": {
@@ -2802,7 +2802,7 @@
         "r": 2
        },
        "style": {
-        "fill": "#72872a",
+        "fill": "#8c9a2d",
         "opacity": 0.35
        },
        "emphasis": {
@@ -2840,7 +2840,7 @@
  "styled": {
   "option": {
    "color": [
-    "#72872a"
+    "#8c9a2d"
    ],
    "textStyle": {
     "fontFamily": "system-ui, sans-serif",
@@ -2958,7 +2958,7 @@
         "r": 2
        },
        "style": {
-        "fill": "#72872a",
+        "fill": "#8c9a2d",
         "opacity": 0.5,
         "stroke": "#6b6165",
         "lineWidth": 1
@@ -2998,7 +2998,7 @@
         "r": 2
        },
        "style": {
-        "fill": "#72872a",
+        "fill": "#8c9a2d",
         "opacity": 0.5,
         "stroke": "#6b6165",
         "lineWidth": 1
@@ -3037,7 +3037,7 @@
  "styledTall": {
   "option": {
    "color": [
-    "#72872a"
+    "#8c9a2d"
    ],
    "textStyle": {
     "fontFamily": "system-ui, sans-serif",
@@ -3155,7 +3155,7 @@
         "r": 2
        },
        "style": {
-        "fill": "#72872a",
+        "fill": "#8c9a2d",
         "opacity": 0.5,
         "stroke": "#6b6165",
         "lineWidth": 1
@@ -3195,7 +3195,7 @@
         "r": 2
        },
        "style": {
-        "fill": "#72872a",
+        "fill": "#8c9a2d",
         "opacity": 0.5,
         "stroke": "#6b6165",
         "lineWidth": 1

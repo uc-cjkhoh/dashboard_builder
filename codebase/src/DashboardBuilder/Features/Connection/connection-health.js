@@ -5,6 +5,9 @@
 // A probe that finds the session itself gone is not "lost": the server forgot the connection, so the UI returns to the form.
 export const LOST_AFTER = 2;
 export const PING_EVERY_MS = 30_000;
+// A probe that gets no answer is a failed probe, not a pending one forever. Longer than the server's own SELECT 1 limit
+// (ClickHouseGateway.HttpTimeoutSeconds = 15) so its answer normally arrives first; shorter than the interval so probes never overlap.
+export const PING_TIMEOUT_MS = 20_000;
 
 export const initialHealth = () => ({ state: "ok", failures: 0 });
 

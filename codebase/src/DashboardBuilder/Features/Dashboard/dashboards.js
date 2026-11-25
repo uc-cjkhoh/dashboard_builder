@@ -9,7 +9,7 @@ import { roleOf, STAT_SINGLE_TABLE, showMeOptions, dimsFor } from "./show-me-rul
 import { toggle, makeButton, toast, fieldError, confirmDestructive, copyText } from "../Core/ui.js";
 import { LIMITS, number, percent, percentLabel, isFraction, PERCENT_MESSAGE, DEFAULT_PERCENTILE } from "../Core/validate.js";
 import { aggsFor, checkAdd, checkFilter, viewCounts, withCategories, opsFor, OP_LABELS } from "./filter-rules.js";
-import { freshSheet, entities, relationships, activeWorksheet, isWorksheetActive, updateSheet, bus, defaultFormat, defaultMarks, sharedFilters, metaOf, nameOf, setFieldMeta, emptySheet, parameters, updateParameter, hierarchies, calculations, worksheets, addCalculation, removeCalculation, renameTab } from "../Core/store.js";
+import { freshSheet, entities, relationships, activeWorksheet, isWorksheetActive, updateSheet, bus, defaultFormat, defaultMarks, sharedFilters, metaOf, nameOf, setFieldMeta, emptySheet, parameters, updateParameter, hierarchies, palettes, setPalettes, calculations, worksheets, addCalculation, removeCalculation, renameTab } from "../Core/store.js";
 import { checkValue, paramTypeFor } from "../Core/parameters-model.js";
 import { exportChart, hasChartInstance, sizeChart, focusSeries } from "./chart.js";
 import { createWorksheetView, periodNotice } from "./worksheet-view.js";
@@ -63,7 +63,7 @@ import { SIZE_SCALE_TYPES, ZERO_BASED_TYPES, sizeScaleOf, sizeRangeError, cleanS
 import { targetChoices, effectiveTargetMeasure } from "./bullet-model.js";
 import { sourceOfTable, wireSource, distinctPlan, distinctPlanSql, distinctMembers, customSqlOf, sqlWire } from "../Core/source-model.js";
 import { heldOutCards } from "../Relations/relation-rules.js";
-import { keyOf, SCATTER_TYPES, COLOR_USES, isSizeDimension, isShapeDimension, shapeMeasureOf, colorMode, isDrillActive, drillActiveDim, planDims, planMeasures, tableMeasures, exportPlan, sortTargets as planSortTargets, measureName as planMeasureName, buildPlan as planQuery, periodFilters as planPeriodFilters, calcContext, appliedShared as planAppliedShared, withParams, toServerFilter, isDateOnlyType } from "./sheet-plan.js";
+import { keyOf, SCATTER_TYPES, DISAGGREGATE_TYPES, isDisaggregated, COLOR_USES, isSizeDimension, isShapeDimension, shapeMeasureOf, colorMode, isDrillActive, drillActiveDim, planDims, planMeasures, tableMeasures, exportPlan, sortTargets as planSortTargets, measureName as planMeasureName, buildPlan as planQuery, periodFilters as planPeriodFilters, calcContext, appliedShared as planAppliedShared, withParams, toServerFilter, isDateOnlyType } from "./sheet-plan.js";
 import { isMissingPill, missingIn, missingMessage } from "./missing-columns.js";
 import { catalogFromEntities } from "../Calc/calc-resolve.js";
 import { newCalcFilter, isCalcPill, makeCalcPill, refusal, syncCalcPills, pillSlots, clearCalcPills, clearFilterCalc, usesCalc, CALC_AGGS } from "../Calc/calc-pill.js";
@@ -1169,10 +1169,24 @@ export function initDashboards() {
       el("div", "menu__sep"),
       tickItem("Show title and caption", s.showTitle !== false, "menuitemcheckbox", () => { s.showTitle = s.showTitle === false; commit(dash, s); }),
       tickItem("Show filter cards", s.showFilterCards !== false, "menuitemcheckbox", () => { s.showFilterCards = s.showFilterCards === false; commit(dash, s); }),
+      aggregateMeasuresItem(dash, s),
     );
     wireMenu(btn, menu, { signal: headerAbort?.signal });
     wrap.append(btn, menu);
     return wrap;
+  }
+  // Aggregate Measures (Tableau's Analysis menu): ticked = measures are aggregated per group; unticked = one mark per source row. Only the point
+  // charts draw per-row marks (isDisaggregated), so on any other type it stays ticked and disabled, with the reason as its tooltip.
+  function aggregateMeasuresItem(dash, s) {
+    const b = tickItem("Aggregate Measures", !isDisaggregated(s), "menuitemcheckbox", () => {
+      if (s.disaggregate === true) delete s.disaggregate; else s.disaggregate = true;
+      commit(dash, s);
+    });
+    if (!DISAGGREGATE_TYPES.has(s.chartType)) {
+      b.disabled = true;
+      b.title = "Turning Aggregate Measures off draws one mark per row. It needs a Scatter, Square or Circle chart.";
+    } else b.title = "Off: one mark per row of the data instead of one per group. Large tables show their first 5,000 rows.";
+    return b;
   }
   function swapShelves(dash, s) {
     [s.columns, s.rows] = [s.rows, s.columns];
@@ -1712,13 +1726,15 @@ export function initDashboards() {
     const shown = isMeasure && !calcPill && f.agg === "percentile" ? `${label} · p${percentLabel(f.p)}` : label; // the pill names its percentile
     const p = pill(shown, remove, controls.childElementCount ? controls : null);
     p.classList.add(isMeasure ? "ws-pill--measure" : "ws-pill--dimension");
-    const marker = pillMarker(f, { measure: isMeasure, calcPill });
+    const rawRows = isMeasure && isDisaggregated(s); // Aggregate Measures off: the pill is the raw value, so it carries no aggregation word
+    const marker = pillMarker(f, { measure: isMeasure && !rawRows, calcPill });
     if (marker) { // the aggregation reads on the pill, and a table calculation is marked (full text on hover)
       const text = p.querySelector(".ws-pill__text");
       text.before(el("span", "ws-pill__agg", aggLabel(f.agg ?? "sum").replace("…", "")));
       if (marker.calc) text.after(el("span", "ws-pill__calc", `· ${marker.calc}`));
     }
     optionsOn(p, ctxId, label, entries);
+    if (rawRows) p.title = `${label} — one value per row (Aggregate Measures is off) — right-click for options`;
     if (marker) p.title = `${aggLabel(f.agg ?? "sum").replace("…", "")} of ${label}${marker.calc ? ` · ${marker.calc}` : ""} — right-click for options`;
 
     // Drag-to-reorder (Columns/Rows). A dedicated grip is the only draggable part, so the agg select /
@@ -2649,12 +2665,13 @@ export function initDashboards() {
       const st = memberState.sheet === s ? memberState : null;
       if (!st?.field) return;
       openMemberColoursDialog({
-        fieldKey: fieldColorKey(st.field), members: st.members.map((m) => ({ name: m.name, raw: m.raw })), current: s.memberColors ?? {},
+        fieldKey: fieldColorKey(st.field), members: st.members.map((m) => ({ name: m.name, raw: m.raw })), current: s.memberColors ?? {}, palettes,
         onClose: () => { // the commit rebuilds the flyout (after this returns): find the new button then, not the old node
           const back = () => document.querySelector(".ws-memcol__open")?.focus({ preventScroll: true });
           back(); requestAnimationFrame(back);
         },
-        onSave: (map) => {
+        onSave: (map, nextPalettes) => {
+          if (JSON.stringify(nextPalettes) !== JSON.stringify(palettes)) setPalettes(nextPalettes); // imported / removed palettes: workbook data, no chart redraw
           if (JSON.stringify(map) === JSON.stringify(s.memberColors ?? {})) return;
           s.memberColors = map; commit(dash, s);
         },

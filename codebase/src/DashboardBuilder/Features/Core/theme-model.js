@@ -1,7 +1,8 @@
 // Workbook themes — pure, DOM-free (unit-tested in tests/js/theme-model.test.mjs). A theme is
-// { accent: <preset id> | "#rrggbb", palette: <palette id> }, saved in the workbook. It overrides the
-// accent and chart-category tokens of Core/core.css in light and dark; everything else (surfaces, ink,
-// status colours) stays. Every accent here keeps white button text ≥ 4.5:1 on the accent, accent text
+// { accent: <preset id> | "#rrggbb", surface?: <look id> }, saved in the workbook. It overrides the
+// accent tokens of Core/core.css in light and dark; everything else (surfaces, ink, status colours) stays.
+// The chart's categorical colours are not part of a theme: they are generated (categoryColour), and a member's own colour
+// is chosen in the worksheet's Color flyout (Edit member colours). Every accent here keeps white button text ≥ 4.5:1 on the accent, accent text
 // ≥ 4.5:1 on the surface and the accent ≥ 3:1 against the surface, in both schemes.
 import { contrastRatio } from "../Dashboard/contrast.js";
 
@@ -54,21 +55,36 @@ export const ACCENTS = Object.freeze({
     dark: A("#6d7582", "#c4cbd6", "#23262c", "#41464f") },
 });
 
-// Eight categorical chart colours per scheme, in a fixed order (never cycled within one chart).
-export const PALETTES = Object.freeze({
-  default: { label: "Default",
-    light: ["#72872a", "#b8559c", "#d9a03a", "#7c63d6", "#2f9ea8", "#3f7fd0", "#4aa66a", "#6a6d72"],
-    dark: ["#a9bd6a", "#d98ac2", "#deb062", "#9b86e6", "#5cc0c8", "#7aa3dc", "#6fc486", "#8e9094"] },
-  okabe: { label: "Colour-blind safe",
-    light: ["#0072b2", "#e69f00", "#009e73", "#cc79a7", "#56b4e9", "#d55e00", "#f0e442", "#000000"],
-    dark: ["#56b4e9", "#e69f00", "#009e73", "#cc79a7", "#0072b2", "#d55e00", "#f0e442", "#bbbbbb"] },
-  onedark: { label: "One Dark Pro",
-    light: ["#2a78d6", "#146f14", "#e87ba4", "#c99424", "#1eac79", "#de6e41", "#4a3aa7", "#b8559c"],
-    dark: ["#6aa8e0", "#98c379", "#c678dd", "#e5c07b", "#56b6c2", "#d19a66", "#abb2bf", "#d68fc0"] },
-  muted: { label: "Muted",
-    light: ["#4e79a7", "#dd8e40", "#59a14f", "#b07aa1", "#76b7b2", "#e1c254", "#9c755f", "#bab0ac"],
-    dark: ["#6b93c0", "#e3a061", "#73b86a", "#c495b6", "#8ccbc6", "#e7ce77", "#b9927c", "#cfc7c3"] },
-});
+// Categorical chart colours: generated, not listed, so a chart with any number of members gets a colour for each. Hues step by the golden
+// ratio around the wheel (20°–340°: never red, which means danger only), so each new colour lands in the largest gap left; saturation
+// and lightness alternate so two near hues still differ; lightness is then moved until the colour holds 3:1 against the surface it is
+// drawn on (white; both dark looks). Saturation stays ≤ 70 % (design rule 4). Pure and deterministic: the n-th colour is always the same.
+// The --chart-cat tokens theme.js writes (from the generator, for the painted scheme) for the shell's own uses: tab groups (1–7), the crosstab's bars (1, 5).
+export const CATEGORY_VARS = Object.freeze(["--chart-cat-1", "--chart-cat-2", "--chart-cat-3", "--chart-cat-4", "--chart-cat-5", "--chart-cat-6", "--chart-cat-7", "--chart-cat-8"]);
+export const CATEGORY_SLOTS = CATEGORY_VARS.length;
+const GOLDEN = 0.6180339887498949;
+const CAT = { start: 0.15, hueFrom: 20, hueSpan: 320, sat: [0.55, 0.65], light: [0.4, 0.52, 0.3], dark: [0.6, 0.72, 0.5], contrast: 3 };
+const hslHex = (h, s, l) => {
+  const k = (n) => (n + h / 30) % 12, a = s * Math.min(l, 1 - l);
+  const f = (n) => l - a * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1));
+  return "#" + [f(0), f(8), f(4)].map((v) => Math.round(v * 255).toString(16).padStart(2, "0")).join("");
+};
+const catCache = new Map();
+/** The n-th (0-based) categorical colour for the light or dark scheme, as #rrggbb. */
+export function categoryColour(i, dark = false) {
+  const n = Number.isFinite(i) ? Math.max(0, Math.trunc(i)) : 0, key = `${dark ? "d" : "l"}${n}`;
+  let c = catCache.get(key);
+  if (c) return c;
+  const hue = CAT.hueFrom + ((CAT.start + n * GOLDEN) % 1) * CAT.hueSpan, sat = CAT.sat[n % CAT.sat.length];
+  let l = (dark ? CAT.dark : CAT.light)[n % 3];
+  const on = dark ? [SURFACE.dark, SURFACES.onedark.swatch[0]] : [SURFACE.light];
+  c = hslHex(hue, sat, l);
+  for (let g = 0; g < 80 && !on.every((b) => contrastRatio(c, b) >= CAT.contrast); g++) { l += dark ? 0.01 : -0.01; c = hslHex(hue, sat, l); }
+  catCache.set(key, c);
+  return c;
+}
+/** The first `count` categorical colours. */
+export const categoryColours = (count, dark = false) => Array.from({ length: Math.max(0, count) }, (_, i) => categoryColour(i, dark));
 
 // Surface looks: the dark-mode backgrounds, text and status colours. "onedark" sets <html data-look="onedark"> (Core/theme.js,
 // core.css); light mode is unchanged by it.
@@ -77,9 +93,9 @@ export const SURFACES = Object.freeze({
   default: { label: "Default", swatch: ["#1a1b1d", "#2e2f32", "#a9bd6a"] },
   onedark: { label: "One Dark Pro", swatch: ["#21252b", "#2c313a", "#456fc8"] },
 });
-/** The One Dark Pro look as one choice: its surface, accent and chart colours together. */
-export const ONE_DARK_THEME = Object.freeze({ accent: "onedark", palette: "onedark", surface: "onedark" });
-export const DEFAULT_THEME = Object.freeze({ accent: "signal", palette: "default" }); // no surface key = the default look (files stay as they were)
+/** The One Dark Pro look as one choice: its surface and accent together. */
+export const ONE_DARK_THEME = Object.freeze({ accent: "onedark", surface: "onedark" });
+export const DEFAULT_THEME = Object.freeze({ accent: "signal" }); // no surface key = the default look (files stay as they were)
 const HEX = /^#[0-9a-f]{6}$/i;
 
 // Step `hex` toward `to` until `ok(colour)` holds (or give up at `to`).
@@ -115,7 +131,7 @@ export function deriveAccent(hex) {
 export function accentSet(theme, dark) {
   const key = dark ? "dark" : "light";
   const a = theme?.accent;
-  if (a && ACCENTS[a]) return ACCENTS[a][key];
+  if (typeof a === "string" && Object.hasOwn(ACCENTS, a)) return ACCENTS[a][key];
   if (HEX.test(a ?? "")) { const d = deriveAccent(a); if (!d.error) return d[key]; }
   return ACCENTS.signal[key];
 }
@@ -123,28 +139,27 @@ export function accentSet(theme, dark) {
 /** The CSS custom properties a theme sets on :root for one scheme. */
 export function themeVars(theme, dark) {
   const s = accentSet(theme, dark);
-  const cats = (PALETTES[theme?.palette] ?? PALETTES.default)[dark ? "dark" : "light"];
   const vars = { "--on-accent": s.on, "--signal": s.signal ?? s.accent, "--accent": s.accent, "--accent-hover": s.hover, "--accent-pressed": s.pressed,
     "--on-accent-hover": s.onHover, "--on-accent-pressed": s.onPressed,
     "--accent-ink": s.ink, "--accent-soft": s.soft, "--accent-line": s.line };
-  cats.forEach((c, i) => { vars[`--chart-cat-${i + 1}`] = c; });
+  categoryColours(CATEGORY_SLOTS, dark).forEach((c, i) => { vars[CATEGORY_VARS[i]] = c; });
   return vars;
 }
 
 /** Whether a theme is the default (nothing to set). */
-export const isDefaultTheme = (t) => !t || (t.accent === DEFAULT_THEME.accent && t.palette === DEFAULT_THEME.palette && surfaceOf(t) === "default");
+export const isDefaultTheme = (t) => !t || (t.accent === DEFAULT_THEME.accent && surfaceOf(t) === "default");
 
 /** The surface look of a theme (older saved themes have none = default). */
-export const surfaceOf = (t) => (SURFACES[t?.surface] ? t.surface : "default");
+export const surfaceOf = (t) => (typeof t?.surface === "string" && Object.hasOwn(SURFACES, t.surface) ? t.surface : "default");
 
-/** A saved theme, checked: known preset or a valid custom colour, known palette — else default + an issue. */
+/** A saved theme, checked: known preset or a valid custom colour, known surface — else default + an issue. A `palette` saved by an older
+ *  version is ignored (chart colours are generated now), so the accent and look it came with are kept. */
 export function cleanTheme(raw, issues = []) {
   if (raw == null) return { ...DEFAULT_THEME };
-  const okAccent = raw && (ACCENTS[raw.accent] || (HEX.test(raw.accent ?? "") && !deriveAccent(raw.accent).error));
-  const okPalette = raw && PALETTES[raw.palette];
-  const okSurface = raw && (raw.surface === undefined || SURFACES[raw.surface]); // absent in themes saved before the look existed
-  if (!okAccent || !okPalette || !okSurface) issues.push("The theme couldn't be used — reset to the default.");
-  return okAccent && okPalette && okSurface
-    ? { accent: ACCENTS[raw.accent] ? raw.accent : raw.accent.toLowerCase(), palette: raw.palette, ...(surfaceOf(raw) === "default" ? {} : { surface: surfaceOf(raw) }) }
+  const okAccent = raw && ((typeof raw.accent === "string" && Object.hasOwn(ACCENTS, raw.accent)) || (HEX.test(raw.accent ?? "") && !deriveAccent(raw.accent).error));
+  const okSurface = raw && (raw.surface === undefined || (typeof raw.surface === "string" && Object.hasOwn(SURFACES, raw.surface))); // absent in themes saved before the look existed
+  if (!okAccent || !okSurface) issues.push("The theme couldn't be used — reset to the default.");
+  return okAccent && okSurface
+    ? { accent: Object.hasOwn(ACCENTS, raw.accent) ? raw.accent : raw.accent.toLowerCase(), ...(surfaceOf(raw) === "default" ? {} : { surface: surfaceOf(raw) }) }
     : { ...DEFAULT_THEME };
 }

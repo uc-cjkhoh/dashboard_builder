@@ -169,8 +169,7 @@
   ],
   "active": 0,
   "theme": {
-    "accent": "signal",
-    "palette": "default"
+    "accent": "signal"
   },
   "sharedFilters": [],
   "bookmarks": [],

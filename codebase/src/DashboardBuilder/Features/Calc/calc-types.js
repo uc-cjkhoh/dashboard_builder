@@ -22,6 +22,8 @@ export const FUNCTIONS = Object.freeze({
   median: { accepts: NUMBER_ONLY, result: "number" },
   stddev: { accepts: NUMBER_ONLY, result: "number" },
   variance: { accepts: NUMBER_ONLY, result: "number" },
+  stddevp: { accepts: NUMBER_ONLY, result: "number" },
+  variancep: { accepts: NUMBER_ONLY, result: "number" },
   percentile: { accepts: NUMBER_ONLY, result: "number", fraction: true }, // takes a literal 0..1 `p` after its argument
   attr: { accepts: ANYTHING, result: null },
 });

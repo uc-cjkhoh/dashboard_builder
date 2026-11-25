@@ -169,7 +169,7 @@ try {
     same(await ev(`(async () => (await ${STORE}).tabs.filter((t) => t.kind === 'dashboard').map((d) => d.groupSlot))()`), [2, 1], 'D2 keeps its saved slot, D1 takes the lowest unused');
   });
 
-  // Dark theme and the colour-blind-safe palette keep the underlines apart.
+  // The dark scheme keeps the underlines apart (the generated category colours, written by theme.js).
   await b.setScheme('dark');
   await check('dark scheme: underlines stay distinct', async () => {
     const colours = await ev(`[...document.querySelectorAll('#tabs .tab-group')].map((g) => getComputedStyle(g, '::after').backgroundColor)`);

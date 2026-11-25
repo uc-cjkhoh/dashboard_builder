@@ -4,7 +4,7 @@ import { isCalc, calcName } from "./table-calc.js";
 
 export const AGG_LABELS = Object.freeze({
   sum: "Sum", avg: "Average", min: "Minimum", max: "Maximum", median: "Median", percentile: "Percentile…",
-  stddev: "Standard deviation", variance: "Variance", count: "Count", countDistinct: "Count distinct",
+  stddev: "Standard deviation", variance: "Variance", stddevPop: "Standard deviation (pop.)", variancePop: "Variance (pop.)", count: "Count", countDistinct: "Count distinct",
   countNonNull: "Count non-empty", attr: "Attribute (single value)",
 });
 export const aggLabel = (a) => AGG_LABELS[a] ?? String(a);

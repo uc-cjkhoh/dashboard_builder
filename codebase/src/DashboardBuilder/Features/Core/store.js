@@ -32,9 +32,9 @@ import { nextGroupSlot, neighbourAfterClose } from "../Tabs/tab-groups-model.js"
 
 export const bus = new EventTarget();
 
-// Workbook theme: { accent: preset id | "#rrggbb", palette } (Core/theme-model.js). Applied to the
+// Workbook theme: { accent: preset id | "#rrggbb", surface? } (Core/theme-model.js). Applied to the
 // :root tokens by Core/theme.js on "theme:changed"; saved with the workbook.
-let theme = { accent: "signal", palette: "default" };
+let theme = { accent: "signal" };
 
 // Shared filters: filter objects (same shape as sheet.filters) that every worksheet applies where
 // their table is in its view. Workbook-level; edited from any worksheet's Filters tool.
@@ -90,6 +90,14 @@ export function removeParameter(id) {
   for (const t of worksheets()) dropParamRefs(t.sheet, id);
   for (const f of sharedFilters) if (f.param === id) delete f.param; // before the event, so the views redraw without it
   emit("parameters:changed");
+}
+
+// Imported colour palettes: workbook-level [{ name, colours: ["#rrggbb", …] }] (Core/palette-model.js), beside the generated Default.
+// Changed only by the Edit member colours dialog's Save; saved with the workbook.
+export const palettes = [];
+export function setPalettes(list) {
+  palettes.splice(0, palettes.length, ...list.map((p) => ({ name: p.name, colours: [...p.colours] })));
+  emit("palettes:changed");
 }
 
 // Named hierarchies: workbook-level { id, name, levels: [{ db, table, column }] } (Dashboard/hierarchy-model.js).
@@ -218,6 +226,7 @@ export const emptySheet = () => ({
   title: null, caption: null, showTitle: true, showFilterCards: true, // title / caption: null = the tab name / an automatic summary; filter cards above the chart
   // collapsed: crosstab headers shown collapsed { rows: [key…], cols: [key…] } (Dashboard/collapse-model.js); the key exists only once a header is collapsed
   analytics: null, // { ref, band, trend, forecast, totals } (Dashboard/analytics-model.js); null = none
+  // disaggregate: true = Aggregate Measures off (sheet actions menu): one mark per source row on a scatter / square / circle (Dashboard/sheet-plan.js isDisaggregated); the key exists only once it is off
   paramAction: null, // { param: id } — "Set <parameter>" on the selection chip (Dashboard/action-model.js)
   urlAction: null, // { label, template } — "Open <label>" on the selection chip (Dashboard/action-model.js)
 });

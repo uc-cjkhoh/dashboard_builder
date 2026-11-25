@@ -89,7 +89,10 @@ public sealed record QueryRequest(
     HavingFilter[]? Having = null,
     // Cards whose rows come from the user's own SELECT instead of the catalog table of the same (Db, Name) (D105; kind "sql" only). Unlike
     // <see cref="Source"/> they take part in joins: wherever the query names that table — as the base or a join side — it reads the derived table.
-    QuerySource[]? Sources = null);
+    QuerySource[]? Sources = null,
+    // Aggregate Measures off (Tableau's Analysis menu): no GROUP BY — one result row per source row, each measure its raw value (the aggregation is
+    // ignored). Needs numeric measures, takes no Having / Other bucket / aggregate-before-join, and is never sampled. Absent or false = aggregated.
+    bool? Disaggregate = null);
 
 /// <summary>A condition on one aggregated measure of the same request, applied to each group after grouping (HAVING).
 /// <see cref="Measure"/> is the index into <see cref="QueryRequest.Measures"/> (0 for the implicit count when there are none);

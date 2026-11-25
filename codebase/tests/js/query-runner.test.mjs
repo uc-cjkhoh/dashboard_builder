@@ -103,3 +103,9 @@ test("each dashboard keeps only its most recent results", () => {
   assert.equal(cache.get("dash#1", "k1"), undefined);
   assert.equal(cache.get("dash#1", "k3"), 3);
 });
+
+test("a truncated per-row result says rows, not groups, and does not offer Top-N", () => {
+  const msg = truncationNotice({ truncated: true, chartType: "scatter", limit: 5000, disaggregate: true });
+  assert.equal(msg, "Showing the first 5,000 rows — more exist. Add a filter to narrow it.");
+  assert.equal(truncationNotice({ truncated: false, chartType: "scatter", limit: 5000, disaggregate: true }), null);
+});

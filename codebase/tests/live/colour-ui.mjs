@@ -6,9 +6,12 @@
 import { launch } from './cdp.mjs';
 import { NEW_CALC, PAGE_CHIP, relateTables } from './model.mjs';
 import { writeFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { categoryColour, categoryColours } from '../../src/DashboardBuilder/Features/Core/theme-model.js';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+const tick = "(c) => getComputedStyle(c.querySelector('svg')).visibility === 'visible'"; // a swatch's tick is a drawn check icon, shown while it is aria-pressed
+const rgb = (hex) => { const n = parseInt(hex.slice(1), 16); return `rgb(${n >> 16}, ${(n >> 8) & 255}, ${n & 255})`; };
 const APP = process.env.APP_URL ?? 'http://localhost:5186';
 const SHOTS = process.env.SHOTS_DIR ?? join(tmpdir(), 'colour-ui-shots');
 mkdirSync(SHOTS, { recursive: true });
@@ -151,64 +154,155 @@ try {
     await waitFor(`!!${openBtn} && !${openBtn}.disabled`, 'Edit member colours enabled');
     await ev(`${openBtn}.click()`);
     await waitFor(`!!${dlg}`, 'dialog open');
-    must(await ev(`${dlg}.querySelectorAll('.memcol-palette').length`) === 4, 'four palettes');
+    must(J(await ev(`[...${dlg}.querySelectorAll('.memcol-palette__name')].map((n) => n.textContent)`)) === J(['Default']), 'the generated Default is the only palette, under its title');
+    must(await ev(`!${dlg}.querySelector('.memcol-palette + .memcol-palette')`), 'one palette, so no divider yet');
+    must(await ev(`${dlg}.querySelector('.memcol-palette__apply').getAttribute('aria-pressed')`) === 'true', 'the Default reads as applied while no member has a colour of its own');
     must(await ev(`${dlg}.querySelectorAll('.memcol-row').length`) === 3, 'three member rows');
-    must(await ev(`${dlg}.querySelector('.memcol-colours').hidden`), 'colours hidden until a palette is chosen');
+    must(await ev(`${dlg}.querySelectorAll('.memcol-cell').length`) === 24, 'a sample of 24 generated colours');
+    must(J(await ev(`[...${dlg}.querySelectorAll('.memcol-cell')].map((c) => c.getAttribute('aria-label').match(/#[0-9a-f]{6}/)[0]).sort()`)) === J([...categoryColours(24, false)].sort()), 'the sample is the first 24 generated colours');
+    must(await ev(`!!${dlg}.querySelector('.memcol-custom__picker') && !!${dlg}.querySelector('.memcol-custom__hex')`), 'a custom colour: picker and #rrggbb field');
+    must(J(await ev(`[...${dlg}.querySelectorAll('.memcol-dot')].map((d) => getComputedStyle(d).backgroundColor)`)) === J([0, 1, 2].map((i) => rgb(categoryColour(i, false)))), 'a member without a colour of its own shows the colour the chart draws for it');
+    // the single truth: the dot the dialog shows for each member is the colour the chart really draws for that member
+    const hexOf = (c) => '#' + c.match(/\d+/g).slice(0, 3).map((n) => (+n).toString(16).padStart(2, '0')).join('');
+    const dotHex = (await ev(`[...${dlg}.querySelectorAll('.memcol-dot')].map((d) => getComputedStyle(d).backgroundColor)`)).map(hexOf);
+    const drawn = [...new Set(await fills())]; // the legend repeats each slice's colour
+    must(J(dotHex) === J(drawn), `the dialog's colours ${J(dotHex)} are the slices' fills ${J(drawn)}`);
+    must(await ev(`${dlg}.querySelectorAll('.memcol-member')[0].getAttribute('aria-pressed')`) === 'true', 'the first member is selected on open');
+    must(await ev(`(() => { const r = [...${dlg}.querySelectorAll('.memcol-cell')].map((c) => parseInt(c.getAttribute('aria-label').match(/#[0-9a-f]{6}/)[0].slice(1), 16)); return r.every((v, i) => i === 0 || r[i - 1] <= v); })()`), 'the swatches are listed by ascending hex');
+    must(await ev(`(() => { const a = ${dlg}.querySelector('.memcol-pane--colours').getBoundingClientRect().width, b = ${dlg}.querySelector('.memcol-pane--members').getBoundingClientRect().width; return Math.abs(b / a - 1.618) < 0.03; })()`), 'the panes split at the golden ratio');
+    must(await ev(`${dlg}.getBoundingClientRect().width > ${dlg}.getBoundingClientRect().height`), 'landscape');
     must(await ev(`!!${dlg}.querySelector('.dialog__foot .btn--primary')`) && (await ev(`${dlg}.querySelector('.dialog__foot .btn--primary').textContent`)) === 'Save', 'Save in the footer');
     await ev(`${dlg}.querySelector('.dialog__foot .btn:nth-child(2)').click()`); // Cancel
     await waitFor(`!${dlg}`, 'dialog closed by Cancel');
   });
   const dlgQ = `document.querySelector('dialog.memcol-dialog[open]')`;
   const openDlg = async () => { await ev(`document.querySelector('.ws-memcol__open').click()`); await waitFor(`!!${dlgQ}`, 'dialog open'); };
-  const choose = async (pal, row, sw) => {
-    await ev(`${dlgQ}.querySelectorAll('.memcol-palette')[${pal}].click()`);
-    await ev(`${dlgQ}.querySelectorAll('.memcol-member')[${row}].click()`);
-    await ev(`${dlgQ}.querySelectorAll('.memcol-swatch')[${sw}].click()`);
-  };
+  const C5 = categoryColour(5, false); // a generated colour no slice of this 3-member pie wears
+  const cellOf = (hex) => `[...${dlgQ}.querySelectorAll('.memcol-cell')].find((c) => c.getAttribute('aria-label').includes('${hex}'))`;
+  const typeHex = (hex) => ev(`(() => { const i = ${dlgQ}.querySelector('.memcol-custom__hex'); i.value = '${hex}'; i.dispatchEvent(new Event('input', { bubbles: true })); })()`); // stages for the selected member, which stays selected
+  const choose = async (row, hex) => { await ev(`${dlgQ}.querySelectorAll('.memcol-member')[${row}].click()`); await typeHex(hex); };
+  const dotColours = () => ev(`[...${dlgQ}.querySelectorAll('.memcol-dot')].map((d) => getComputedStyle(d).backgroundColor)`);
   const save = async () => { await ev(`${dlgQ}.querySelector('.btn--primary').click()`); await waitFor(`!${dlgQ}`, 'dialog closed by Save'); await settle(400); };
   let before;
-  await check('palette, member, colour: nothing changes until Save; Save recolours the slice once and it persists; Cancel discards', async () => {
+  await check('select a member, then a swatch: nothing changes until Save; Save recolours the slice once and it persists; Cancel discards', async () => {
     before = await fills();
     await openDlg();
-    await choose(1, 1, 7); // Colour-blind safe, EU, #000000
-    must(await ev(`${dlgQ}.querySelectorAll('.memcol-palette')[1].getAttribute('aria-checked')`) === 'true', 'palette chosen');
-    must(await ev(`${dlgQ}.querySelectorAll('.memcol-member')[1].classList.contains('is-selected')`), 'member selected');
-    must(await ev(`${dlgQ}.querySelectorAll('.memcol-swatch')[7].textContent`) === '\u2713', 'tick on the chosen colour');
-    must(await ev(`${dlgQ}.querySelectorAll('.memcol-hex')[1].textContent`) === '#000000', 'hex shown on the member');
-    must(!(await fills()).includes('#000000'), 'the chart is untouched before Save');
-    const n = queries.length;
+    await ev(`${dlgQ}.querySelectorAll('.memcol-member')[1].click()`);
+    await ev(`${cellOf(C5)}.click()`);
+    must(await ev(`${dlgQ}.querySelectorAll('.memcol-member')[2].getAttribute('aria-pressed')`) === 'true', 'the pick moved the selection on to the next member');
+    must(await ev(`(${tick})(${cellOf(C5)})`) === false, 'the tick follows the selection, so it is not on the colour just given to the previous member');
+    await ev(`${dlgQ}.querySelectorAll('.memcol-member')[1].click()`);
+    must(await ev(`(${tick})(${cellOf(C5)})`) === true, 'tick (a drawn check icon) on the chosen colour once its member is selected again');
+    must(await ev(`${dlgQ}.querySelector('.memcol-search').hidden`), 'three members: no search box');
+    must(await ev(`${dlgQ}.querySelectorAll('.memcol-hex')[1].textContent`) === C5, 'hex shown on the member');
+    must(!(await fills()).includes(C5), 'the chart is untouched before Save');
     await save();
     const after = await fills();
-    must(after.includes('#000000') && !before.includes('#000000'), `fills before ${J(before)} after ${J(after)}`);
+    must(after.includes(C5) && !before.includes(C5), `fills before ${J(before)} after ${J(after)}`);
     await waitFor(`document.activeElement && document.activeElement.classList.contains('ws-memcol__open')`, 'focus back on the button');
     await openDlg();
-    must(await ev(`${dlgQ}.querySelectorAll('.memcol-hex')[1].textContent`) === '#000000', 'stored colour shown on reopen');
-    must(await ev(`${dlgQ}.querySelector('.memcol-colours').hidden`), 'a reopened dialog starts without a palette chosen');
-    await ev(`${dlgQ}.querySelectorAll('.memcol-palette')[1].click()`);
+    must(await ev(`${dlgQ}.querySelectorAll('.memcol-hex')[1].textContent`) === C5, 'stored colour shown on reopen');
     await ev(`${dlgQ}.querySelectorAll('.memcol-member')[1].click()`);
-    must(await ev(`${dlgQ}.querySelectorAll('.memcol-swatch')[7].getAttribute('aria-pressed')`) === 'true', 'the member\'s stored colour is the pressed swatch');
+    must(await ev(`${cellOf(C5)}.getAttribute('aria-pressed')`) === 'true', 'the member\'s stored colour is the pressed swatch');
     await b.sleep(500); // past the dialog's entrance
-    must(await ev(`(() => { const r = ${dlgQ}.querySelectorAll('.memcol-swatch')[7].getBoundingClientRect(); return r.width > 0 && r.height > 0; })()`), 'the palette colours are visible once a palette is chosen');
+    must(await ev(`(() => { const r = ${cellOf(C5)}.getBoundingClientRect(); return r.width > 0 && r.height > 0; })()`), 'the generated colours are visible');
     await shot('colour-light.png');
     const kept = await fills();
-    await choose(1, 0, 0);
+    await choose(0, '#000000');
     await ev(`${dlgQ}.querySelector('.dialog__foot .btn:nth-child(2)').click()`); // Cancel
     await waitFor(`!${dlgQ}`, 'closed');
     await settle(400);
     must(J(await fills()) === J(kept), `Cancel discarded the staged pick: ${J(kept)} -> ${J(await fills())}`);
     await openDlg();
     await ev(`${dlgQ}.querySelectorAll('.memcol-reset')[1].click()`);
+    must((await dotColours())[1] === rgb(categoryColour(1, false)), 'Reset hands the member back the colour the chart generates for it');
     await save();
-    must(!(await fills()).includes('#000000'), 'per-member Reset restored the palette colour');
+    must(!(await fills()).includes(C5), 'per-member Reset restored the generated colour');
   });
   await check('Reset all clears every stored member colour, also after new picks', async () => {
-    await openDlg(); await choose(1, 0, 7); await ev(`${dlgQ}.querySelectorAll('.memcol-member')[2].click()`); await ev(`${dlgQ}.querySelectorAll('.memcol-swatch')[7].click()`); await save();
+    await openDlg(); await choose(0, '#000000'); await choose(2, '#000000'); await save();
     must((await fills()).filter((f) => f === '#000000').length >= 2, 'black slices');
     await openDlg();
     await ev(`${dlgQ}.querySelector('.memcol-resetall').click()`);
     must((await ev(`[...${dlgQ}.querySelectorAll('.memcol-hex')].every((h) => h.textContent === '')`)), 'every member shows no colour');
     await save();
     must(!(await fills()).includes('#000000'), 'all reset');
+  });
+  await check('a colour typed as #rrggbb is saved for the member; an invalid one is refused; the field follows the selection', async () => {
+    await openDlg();
+    await ev(`${dlgQ}.querySelectorAll('.memcol-member')[0].click()`);
+    await typeHex('#123456');
+    must(await ev(`${dlgQ}.querySelectorAll('.memcol-hex')[0].textContent`) === '#123456', 'a whole hex stages for the selected member as it is typed');
+    must(await ev(`${dlgQ}.querySelectorAll('.memcol-member')[0].getAttribute('aria-pressed')`) === 'true', 'typing does not move the selection');
+    must(await ev(`${dlgQ}.querySelector('.memcol-custom__swatch').dataset.chosen`) === 'true', 'the custom swatch is ticked for a colour of its own');
+    await ev(`(() => { const i = ${dlgQ}.querySelector('.memcol-custom__hex'); i.focus(); i.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); })()`);
+    must(await ev(`${dlgQ}.querySelectorAll('.memcol-member')[1].getAttribute('aria-pressed')`) === 'true', 'Enter sets it and moves on');
+    await ev(`(() => { const i = ${dlgQ}.querySelector('.memcol-custom__hex'); i.value = '#12345'; i.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); })()`);
+    must((await ev(`${dlgQ}.querySelector('.memcol-pane--members .memcol-error').textContent`)).includes('#rrggbb'), 'an invalid hex is refused with the reason');
+    await save();
+    must((await fills()).includes('#123456'), `the typed colour reaches the slice: ${J(await fills())}`);
+    await openDlg();
+    must(await ev(`${dlgQ}.querySelector('.memcol-custom__hex').value`) === '#123456', 'the field shows the selected member\'s colour on reopen');
+    await ev(`${dlgQ}.querySelector('.memcol-resetall').click()`);
+    await save();
+    must(!(await fills()).includes('#123456'), 'Reset all gives every member its generated colour back');
+  });
+  await check('a created palette: made in the Create palette dialog, applied to every member, saved with the workbook; removing it leaves the members\' colours', async () => {
+    const pdQ = `document.querySelector('dialog.palcreate-dialog[open]')`;
+    const setValue = (sel, v) => ev(`(() => { const i = ${pdQ}.querySelector('${sel}'); i.value = ${J(v)}; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    const titles = () => ev(`[...${dlgQ}.querySelectorAll('.memcol-palette__name')].map((n) => n.textContent)`);
+    // the autosaved workbook itself (localStorage, the entry without the ":backup-" suffix), not only the store: the palettes must reach the file
+    const autosaved = () => ev(`(() => { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (!k || k.includes(':backup-')) continue; try { const j = JSON.parse(localStorage.getItem(k)); if (j && Array.isArray(j.worksheets)) return { has: 'palettes' in j, palettes: j.palettes ?? null }; } catch { /* not a workbook */ } } return null; })()`);
+    const stored = () => ev(`(async () => { const st = await import('/features/Core/store.js'); return st.palettes.map((p) => ({ name: p.name, colours: p.colours })); })()`);
+    await openDlg();
+    must(J(await titles()) === J(['Default']), 'only the Default is listed, under its title');
+    must(await ev(`(() => { const b = ${dlgQ}.querySelector('.memcol-pane__foot .memcol-create__open'), p = ${dlgQ}.querySelector('.memcol-pane--colours'); if (!b) return false; const r = b.getBoundingClientRect(), q = p.getBoundingClientRect(); return Math.abs(r.width - (q.width - 32)) <= 1 && Math.abs(q.bottom - ${dlgQ}.querySelector('.memcol-pane__foot').getBoundingClientRect().bottom) <= 1; })()`), 'Create palette… is pinned at the bottom of the left pane and full width');
+    must(await ev(`${dlgQ}.querySelector('.memcol-create__open').textContent.includes('Create palette')`), 'the button is called Create palette…');
+    await ev(`${dlgQ}.querySelector('.memcol-create__open').click()`);
+    must(await ev(`!!${pdQ}`) && await ev(`${pdQ}.querySelector('.btn--primary').disabled`), 'the Create palette dialog opens on top, and Create waits for a name');
+    must(await ev(`${pdQ}.querySelectorAll('.palcreate-swatches .memcol-cell').length`) === 1, 'it starts with one colour');
+    must(await ev(`${pdQ}.querySelector('.palcreate-remove').disabled`), 'the last colour cannot be removed');
+    await ev(`${pdQ}.dispatchEvent(new Event('cancel', { cancelable: true }))`); // Esc, and a session ending, go through here
+    must(!(await ev(`!!${pdQ}`)) && await ev(`!!${dlgQ}`), 'Esc closes the Create palette dialog and leaves Edit member colours open');
+    must(await ev(`document.activeElement === ${dlgQ}.querySelector('.memcol-create__open')`), 'focus returns to Create palette…');
+    await ev(`${dlgQ}.querySelector('.memcol-create__open').click()`);
+    await ev(`${pdQ}.querySelector('.palcreate-add').click()`); await ev(`${pdQ}.querySelector('.palcreate-add').click()`);
+    must(await ev(`${pdQ}.querySelectorAll('.palcreate-swatches .memcol-cell').length`) === 3, '+ adds colours');
+    const colourAt = async (i, hex) => { await ev(`${pdQ}.querySelectorAll('.palcreate-swatches .memcol-cell')[${i}].click()`); await setValue('.memcol-custom__hex', hex); };
+    await colourAt(0, '#112233'); await colourAt(1, '#445566'); await colourAt(2, '#778899');
+    must(J(await ev(`[...${pdQ}.querySelectorAll('.palcreate-swatches .memcol-cell')].map((c) => c.style.backgroundColor)`)) === J(['#112233', '#445566', '#778899'].map(rgb)), 'the swatches keep the order they were made in');
+    must(await ev(`${pdQ}.querySelectorAll('.palcreate-swatches .memcol-cell')[2].getAttribute('aria-pressed')`) === 'true' && await ev(`(${tick})(${pdQ}.querySelectorAll('.palcreate-swatches .memcol-cell')[2])`) === true, 'the chosen colour is ticked, not only outlined');
+    await setValue('.palcreate-name', 'Default');
+    must((await ev(`${pdQ}.querySelector('.memcol-error').textContent`)).includes('already exists') && await ev(`${pdQ}.querySelector('.btn--primary').disabled`), 'the name Default is refused with the reason');
+    await setValue('.palcreate-name', 'Brand');
+    must(!(await ev(`${pdQ}.querySelector('.btn--primary').disabled`)), 'a name and colours enable Create');
+    await ev(`${pdQ}.querySelector('.btn--primary').click()`);
+    must(!(await ev(`!!${pdQ}`)) && await ev(`!!${dlgQ}`), 'Create closes only the Create palette dialog');
+    must(J(await titles()) === J(['Default', 'Brand']), 'Brand is listed under its own title');
+    must(await ev(`!!${dlgQ}.querySelector('.memcol-palette + .memcol-palette')`), 'a divider separates the palettes');
+    await ev(`[...${dlgQ}.querySelectorAll('.memcol-palette__apply')][1].click()`);
+    must(J(await ev(`[...${dlgQ}.querySelectorAll('.memcol-hex')].map((h) => h.textContent)`)) === J(['#112233', '#445566', '#778899']), 'the title applies the palette to every member, in order');
+    must(J(await stored()) === J([]), 'nothing is stored until Save');
+    await save();
+    const f = await fills();
+    must(['#112233', '#445566', '#778899'].every((c) => f.includes(c)), `the slices wear the palette: ${J(f)}`);
+    must(J(await stored()) === J([{ name: 'Brand', colours: ['#112233', '#445566', '#778899'] }]), 'the workbook holds the palette: ' + J(await stored()));
+    await b.sleep(1000); // past the autosave delay
+    const saved1 = await autosaved();
+    must(saved1 && J(saved1.palettes) === J([{ name: 'Brand', colours: ['#112233', '#445566', '#778899'] }]), 'the palette is in the autosaved workbook: ' + J(saved1));
+    await openDlg();
+    must(J(await titles()) === J(['Default', 'Brand']), 'the palette is still there on reopen');
+    must(await ev(`[...${dlgQ}.querySelectorAll('.memcol-palette__apply')][1].getAttribute('aria-pressed')`) === 'true', 'it reads as applied');
+    await ev(`${dlgQ}.querySelector('.memcol-palette__remove').click()`);
+    must(J(await titles()) === J(['Default']), 'removed in the dialog');
+    must(J((await stored()).map((p) => p.name)) === J(['Brand']), 'a removal is staged until Save');
+    await save();
+    must(J(await stored()) === J([]), 'Save stores the removal');
+    await b.sleep(1000);
+    const saved2 = await autosaved();
+    must(saved2 && saved2.has === false, 'with none left the autosaved workbook has no palettes key: ' + J(saved2));
+    must(['#112233', '#445566', '#778899'].every((c) => f.includes(c)) && (await fills()).includes('#112233'), 'the members keep the colours they were given');
+    await openDlg(); await ev(`${dlgQ}.querySelector('.memcol-resetall').click()`); await save();
   });
   await check('Reverse palette is gone from the Color flyout; the dark look still draws the slices', async () => {
     must(await ev(`![...document.querySelectorAll('.ws-fmt-check, label')].some((l) => l.textContent.includes('Reverse palette'))`), 'Reverse palette no longer exists');

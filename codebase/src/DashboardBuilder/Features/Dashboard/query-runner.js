@@ -59,9 +59,10 @@ export function createResultCache({ perScope = 16 } = {}) {
 export const requestKey = (kind, request) => `${kind}:${JSON.stringify(request)}`;
 
 /** The notice for a truncated result, or null when the result is complete. */
-export function truncationNotice({ truncated, chartType, limit }) {
+export function truncationNotice({ truncated, chartType, limit, disaggregate = false }) {
   if (!truncated) return null;
   const n = Number(limit).toLocaleString("en-US");
+  if (disaggregate) return `Showing the first ${n} rows — more exist. Add a filter to narrow it.`; // Aggregate Measures off: marks are source rows, not groups
   if (chartType === "table" || chartType === "text")
     return `Showing the first ${n} rows — more exist. Add a filter to narrow the table.`;
   // "All" asks for the cap: there is no higher Top-N to raise it to.

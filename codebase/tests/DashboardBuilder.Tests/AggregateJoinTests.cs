@@ -54,7 +54,7 @@ public class AggregateJoinTests
         Assert.Single(System.Text.RegularExpressions.Regex.Matches(a.FromSql(" INNER JOIN ", " ON x"), @"sum\(t0\.`x`\)"));
     }
 
-    [Theory] [InlineData("countdistinct")] [InlineData("median")] [InlineData("percentile")] [InlineData("stddev")] [InlineData("variance")] [InlineData("attr")]
+    [Theory] [InlineData("countdistinct")] [InlineData("median")] [InlineData("percentile")] [InlineData("stddev")] [InlineData("variance")] [InlineData("stddevpop")] [InlineData("variancepop")] [InlineData("attr")]
     public void An_aggregate_that_cannot_be_recombined_is_refused_with_its_field(string agg)
     {
         var e = Assert.Throws<RequestValidationException>(() => TwoSides().Measure(agg, "t0", "t0.`v`", "measures[2]"));

@@ -2,7 +2,7 @@
 // its worksheets, drawn together under one coloured underline. Nothing here changes `store.tabs` or the saved tab order; it
 // only derives what the strip shows, so a widget edit never rewrites the workbook's order.
 
-/** Colour slots a group can take: --chart-cat-1 … 7 (slot 8 is the neutral grey, so it is skipped). */
+/** Colour slots a group can take: --chart-cat-1 … 7 (slot 8 is left unused). */
 export const GROUP_SLOTS = 7;
 
 /** The slot for a new dashboard: the lowest one with the fewest uses among `used` (so the first seven are distinct, then they repeat evenly). */

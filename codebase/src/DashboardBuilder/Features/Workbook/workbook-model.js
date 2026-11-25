@@ -13,6 +13,7 @@ import { CASTS } from "../Dashboard/cast-model.js";
 import { ZOOM_MIN, ZOOM_MAX } from "../Canvas/canvas-zoom.js";
 import { cleanMemberAliases } from "../Dashboard/member-labels.js";
 import { cleanTheme, DEFAULT_THEME } from "../Core/theme-model.js";
+import { cleanPalettes } from "../Core/palette-model.js";
 import { normalizeJoinType, relEnds, applyAggregate } from "../Relations/relation-rules.js";
 import { cleanAction, cleanParamAction } from "../Dashboard/action-model.js";
 import { cleanMemberColors } from "../Dashboard/colour-model.js";
@@ -56,7 +57,7 @@ const NOT_A_WORKBOOK = "This file is not a Dashboard Builder workbook.";
 /** Builder state → a plain JSON-safe object. DOM nodes, fetched columns and lazily-loaded page
  *  members are left out (they are re-fetched on open). `tabs` is the store's ordered list (worksheet and dashboard
  *  tabs); `active` is the store's activeView. */
-export function serializeWorkbook({ entities, relationships, tabs, active, theme, sharedFilters = [], fieldMeta = new Map(), parameters = [], calculations = [], nextCalcId, hierarchies = [], view = null }) {
+export function serializeWorkbook({ entities, relationships, tabs, active, theme, sharedFilters = [], fieldMeta = new Map(), parameters = [], calculations = [], nextCalcId, hierarchies = [], palettes = [], view = null }) {
   const worksheets = [], dashboards = [], storyTabs = [], order = [];
   const wsIndex = new Map(), dbIndex = new Map(), stIndex = new Map(); // tab id → index in the saved list
   for (const t of tabs) {
@@ -93,11 +94,12 @@ export function serializeWorkbook({ entities, relationships, tabs, active, theme
     tabs: order, // the strip's order
     ...(view ? { view: { zoom: Math.round(view.zoom * 1000) / 1000, pan: { x: Math.round(view.pan.x), y: Math.round(view.pan.y) } } } : {}), // the Data Source's zoom and pan (optional; absent = fit every card on open)
     active: activeIndex !== undefined ? { kind: active.kind, index: activeIndex } : null, // null = the Data Source view
-    theme: theme ? { accent: theme.accent, palette: theme.palette, ...(theme.surface && theme.surface !== "default" ? { surface: theme.surface } : {}) } : { ...DEFAULT_THEME },
+    theme: theme ? { accent: theme.accent, ...(theme.surface && theme.surface !== "default" ? { surface: theme.surface } : {}) } : { ...DEFAULT_THEME },
     sharedFilters: structuredClone(sharedFilters),
     fields: Object.fromEntries(fieldMeta),
     parameters: structuredClone(parameters),
     ...(hierarchies.length ? { hierarchies: structuredClone(hierarchies) } : {}), // (optional; absent in older files)
+    ...(palettes.length ? { palettes: palettes.map((p) => ({ name: p.name, colours: [...p.colours] })) } : {}), // imported colour palettes (optional; absent = none)
     calculations: calculations.map((c) => ({ id: c.id, name: c.name, formula: c.formula, ...(c.group ? { group: structuredClone(c.group) } : {}) })), // Plan B (no parsed tree); a group field saves its definition
     // The next calculation number, so a deleted highest id is never handed out again (absent when there never were any).
     ...(calculations.length || nextCalcId ? { nextCalcId: Math.max(Number.isInteger(nextCalcId) ? nextCalcId : 0, ...calculations.map((c) => Number(String(c.id).slice(4)) + 1)) } : {}),
@@ -305,6 +307,7 @@ export function parseWorkbook(source) {
     else issues.push("The saved active tab was invalid — the data source view was opened.");
   }
   const theme = cleanTheme(raw.theme, issues); // absent (older workbooks) = the default theme
+  const palettes = cleanPalettes(raw.palettes, issues); // absent = none
   const sharedFilters = cleanFilters(raw.sharedFilters, "Shared filters", issues, LIMITS.sharedFilters, { calc: false });
   const fields = cleanFieldMeta(raw.fields, issues);
   const parameters = cleanParameters(raw.parameters, issues);
@@ -324,7 +327,7 @@ export function parseWorkbook(source) {
     else issues.push("The saved next calculation number was invalid — ignored.");
   }
   const view = cleanView(raw.view, issues);
-  return { entities, relationships, worksheets, dashboards, stories, tabs, active, view, theme, sharedFilters, fields, parameters, hierarchies, calculations, nextCalcId, issues: [...new Set(issues)] };
+  return { entities, relationships, worksheets, dashboards, stories, tabs, active, view, theme, palettes, sharedFilters, fields, parameters, hierarchies, calculations, nextCalcId, issues: [...new Set(issues)] };
 }
 
 const MAX_PAN = 1e6; // model px; far past any real canvas, so a corrupt number cannot park the view in space
@@ -502,6 +505,7 @@ export function sanitizeSheet(saved, where, issues) {
   { const shapes = cleanMemberShapes(s.memberShapes, where, issues); if (shapes) sheet.memberShapes = shapes; } // Edit member shapes: the key exists only once a member has one, so older files round-trip unchanged
   sheet.showFilterCards = s.showFilterCards !== false;
   sheet.analytics = cleanAnalytics(s.analytics, where, issues);
+  if (s.disaggregate === true) sheet.disaggregate = true; // Aggregate Measures off: the key exists only once it is off, so older files round-trip
   { const c = cleanCollapsed(s.collapsed, where, issues); if (c) sheet.collapsed = c; }
   sheet.showTitle = s.showTitle === undefined ? true : s.showTitle === true || (s.showTitle !== false && (issues.push(`${where}: showTitle must be on or off — reset.`), true));
   return sheet;
@@ -614,7 +618,7 @@ function unlinkParams(sheet, ids, where, issues) {
 }
 
 // Field settings: keys "db.table.column"; alias 1–60 characters, a known aggregation, hidden true, a known cast.
-const AGG_NAMES = new Set(["sum", "avg", "min", "max", "median", "stddev", "variance", "attr", "count", "countDistinct", "countNonNull"]);
+const AGG_NAMES = new Set(["sum", "avg", "min", "max", "median", "stddev", "variance", "stddevPop", "variancePop", "attr", "count", "countDistinct", "countNonNull"]);
 function cleanFieldMeta(raw, issues) {
   if (raw == null) return {};
   if (typeof raw !== "object" || Array.isArray(raw)) { issues.push("The field settings weren't readable — cleared."); return {}; }

@@ -416,8 +416,7 @@
   ],
   "active": 2,
   "theme": {
-    "accent": "teal",
-    "palette": "default"
+    "accent": "teal"
   },
   "sharedFilters": [
     {

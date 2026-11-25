@@ -10,6 +10,8 @@ test("every aggregation has a plain label; saved values are untouched", () => {
   assert.equal(aggLabel("countNonNull"), "Count non-empty");
   assert.equal(aggLabel("attr"), "Attribute (single value)");
   assert.equal(aggLabel("stddev"), "Standard deviation");
+  assert.equal(aggLabel("stddevPop"), "Standard deviation (pop.)");
+  assert.equal(aggLabel("variancePop"), "Variance (pop.)");
   assert.equal(aggLabel("percentile"), "Percentile…");
   for (const a of [...AGGS.numeric, ...AGGS.ordered, ...AGGS.other]) assert.ok(/^[A-Z]/.test(aggLabel(a)), a);
   assert.equal(aggLabel("nope"), "nope");

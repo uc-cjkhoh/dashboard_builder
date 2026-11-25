@@ -9,7 +9,7 @@
 //   sum       := term (("+" | "-") term)*
 //   term      := factor (("*" | "/") factor)*
 //   factor    := "-" factor | number | string | datelit | "TRUE" | "FALSE" | "NULL" | "(" expr ")" | aggregate | logic | ref
-//   aggregate := ("SUM" | "AVG" | "MIN" | "MAX" | "COUNT" | "COUNTD" | "MEDIAN" | "STDDEV" | "VARIANCE" | "ATTR") "(" expr ")"
+//   aggregate := ("SUM" | "AVG" | "MIN" | "MAX" | "COUNT" | "COUNTD" | "MEDIAN" | "STDDEV" | "VARIANCE" | "STDDEVP" | "VARIANCEP" | "ATTR") "(" expr ")"
 //              | "PERCENTILE" "(" expr "," number ")"      -- the fraction is a literal number (range-checked by check())
 //   logic     := ("IF" | "IIF") "(" expr "," expr "," expr ")" | "IFNULL" "(" expr "," expr ")"
 //              | "ISNULL" "(" expr ")" | "ZN" "(" expr ")"

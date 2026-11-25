@@ -111,13 +111,12 @@ try {
   // Wait until no new /api/query has arrived for `quiet` ms (polling, not a fixed sleep).
   const settle = async (quiet = 300) => { let n = -1; for (let i = 0; i < 60 && n !== queries.length; i++) { n = queries.length; await b.sleep(quiet); } };
 
-  // Edit member colours… is a dialog (palette, member, colour, Save): open it, optionally pick, then Save (or Cancel).
+  // Edit member colours… is a dialog (palettes left, members right, Save): open it, optionally pick, then Save (or Cancel).
   const memDlg = `document.querySelector('dialog.memcol-dialog[open]')`;
   const memOpen = async () => { await ev(`document.querySelector('.ws-memcol__open').click()`); await waitFor(`!!${memDlg}`, 'member colours dialog'); };
-  const memPick = async (row, sw, pal = 1) => { // palette 1 = Colour-blind safe: swatch 7 is #000000
-    await ev(`${memDlg}.querySelectorAll('.memcol-palette')[${pal}].click()`);
+  const memPick = async (row, hex) => { // a colour typed as #rrggbb in the dialog's custom field: it stages for the selected member (the generated colours are not fixed, so a test names its own)
     await ev(`${memDlg}.querySelectorAll('.memcol-member')[${row}].click()`);
-    await ev(`${memDlg}.querySelectorAll('.memcol-swatch')[${sw}].click()`);
+    await ev(`(() => { const i = ${memDlg}.querySelector('.memcol-custom__hex'); i.value = '${hex}'; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
   };
   const memEnd = async () => { await ev(`${memDlg}.querySelector('.dialog__foot .btn--primary').click()`); await waitFor(`!${memDlg}`, 'member colours dialog closed'); };
   const lastQuery = () => queries[queries.length - 1];
@@ -401,7 +400,7 @@ try {
     await memOpen();
     must(await ev(`${memDlg}.querySelectorAll('.memcol-row').length`) === 8, 'eight member rows');
     const before = (await opt()).series[1].itemStyle.color;
-    await memPick(1, 7); await memEnd(); // #000000
+    await memPick(1, '#000000'); await memEnd();
     await settle(500);
     const after = (await opt()).series[1].itemStyle.color;
     must(after === '#000000' && after !== before, 'the chosen member colour reaches the points: ' + J([before, after]));

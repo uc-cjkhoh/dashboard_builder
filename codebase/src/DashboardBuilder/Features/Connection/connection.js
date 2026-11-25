@@ -3,8 +3,9 @@ import { api } from "../Core/api.js";
 import { show, hide, toggle, toast, fieldError, clearFieldError, checkField, confirmDialog } from "../Core/ui.js";
 import { host, port, text, LIMITS } from "../Core/validate.js";
 import { summaryTitle, summaryDetail, formFromView, secureToggled, trustToggled, certNoteVisible } from "./connection-rules.js";
-import { nextHealth, initialHealth, readProbe, HEALTH_TEXT, PING_EVERY_MS } from "./connection-health.js";
+import { nextHealth, initialHealth, readProbe, HEALTH_TEXT, PING_EVERY_MS, PING_TIMEOUT_MS } from "./connection-health.js";
 import { remember, forget, sanitize, sourceKey, formValues } from "./recent-sources.js";
+import { dismissOverlays } from "../Core/overlays.js";
 
 // Recent sources live in this browser only (localStorage) and hold no secrets — see recent-sources.js.
 const RECENT_KEY = "dashboardbuilder.recent-sources";
@@ -112,8 +113,10 @@ export function initConnection() {
     if (!current || pinging) return;
     pinging = true;
     let result;
-    try { result = readProbe(await api.pingConnection()); } catch { result = "unreachable"; }
-    pinging = false;
+    // The timeout turns a hung request into a failed probe; `pinging` is always released, or no later probe could run.
+    try { result = readProbe(await api.pingConnection(AbortSignal.timeout(PING_TIMEOUT_MS))); }
+    catch { result = "unreachable"; }
+    finally { pinging = false; }
     if (!current) return; // disconnected while the probe ran
     if (result === "gone") {
       applyState({ connected: false });
@@ -128,6 +131,7 @@ export function initConnection() {
   function stopPinging() { clearInterval(pingTimer); pingTimer = null; }
   document.addEventListener("visibilitychange", () => { if (!document.hidden) probe(); });
   window.addEventListener("online", probe);
+  document.addEventListener("connection:check", probe); // an API call came back 409 "Not connected" (Core/api.js): don't wait for the timer
   window.addEventListener("offline", () => { if (current) { health = { state: "lost", failures: 2 }; renderHealth(); } });
   retryBtn?.addEventListener("click", () => { health = { state: "checking", failures: 1 }; renderHealth(); probe(); });
 
@@ -170,10 +174,24 @@ export function initConnection() {
     hostEl.focus();
   }
 
+  // The first empty field (Host, or Password when a host is kept). The form sits in the Data Source canvas, which is not on screen until the
+  // workspace has cleared (a worksheet that was open fades out first, ~100 ms), and a hidden element can't take focus: try again briefly.
+  // Gives up when the user has put focus somewhere real meanwhile (`stale` is the element that held it when the session ended).
+  function focusFormSoon(stale, tries = 20) {
+    if (current || form.hidden) return;
+    const target = hostEl.value.trim() ? passEl : hostEl;
+    const a = document.activeElement;
+    if (a === target) return;
+    if (a && a !== document.body && a !== stale && a.isConnected) return;
+    target.focus({ preventScroll: true });
+    if (document.activeElement !== target && tries > 0) setTimeout(() => focusFormSoon(stale, tries - 1), 50);
+  }
+
   function applyState(view) {
     const connected = Boolean(view && view.connected);
     const sameConnection = connected && view === current; // Cancel re-applies the same view: keep what the last probe proved
     current = connected ? view : null;
+    let dismissed = 0;
 
     if (connected) {
       hostLabel.textContent = view.host;
@@ -193,6 +211,9 @@ export function initConnection() {
       startPinging();
     } else {
       stopPinging();
+      // The session is over, so nothing may stay open over the connect card: close the dialogs and menus now, while the workspace behind
+      // them still exists for their own cleanup to run against (D163).
+      dismissed = dismissOverlays();
       show(form);
       renderRecent();
       hide(section); hide(sectionTitle);
@@ -207,14 +228,14 @@ export function initConnection() {
     toggle(schemaSection, connected);
     toggle(divider, connected);
     toggle(dbHeading, connected);
-    // Disconnected (first load, or after Disconnect): the form is the only thing to do, so start typing in it — the first empty
-    // field (Host, or Password when a host is kept). Never steal focus from something the user is already on.
-    const idle = !document.activeElement || document.activeElement === document.body;
-    if (!connected && idle && !form.hidden) (hostEl.value.trim() ? passEl : hostEl).focus({ preventScroll: true });
-
     document.dispatchEvent(new CustomEvent("connection:changed", {
       detail: view ?? { connected: false },
     }));
+
+    // Disconnected (first load, after Disconnect, a lost session): the form is the only thing to do, so start typing in it. Never steal
+    // focus from something the user is already on; an overlay that just closed (D163) held it, so that does not count.
+    const idle = dismissed > 0 || !document.activeElement || document.activeElement === document.body;
+    if (!connected && idle) focusFormSoon(document.activeElement);
   }
 
   form.addEventListener("submit", async (event) => {

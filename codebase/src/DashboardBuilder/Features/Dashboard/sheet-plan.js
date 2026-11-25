@@ -27,6 +27,10 @@ const EMPTY_MARKS = { size: null, label: null, detail: [], tooltip: [], shape: n
 export const marksOf = (s) => s.marks ?? EMPTY_MARKS;
 // Scatter-family types (scatter + square/circle marks): point charts that plot two measures.
 export const SCATTER_TYPES = new Set(["scatter", "square", "circle"]);
+/** Aggregate Measures off (one mark per source row) draws only where a result row is a mark and nothing merges rows that share keys: the scatter family. */
+export const DISAGGREGATE_TYPES = SCATTER_TYPES;
+/** Whether the sheet's query is disaggregated: the setting is on and the chart type can draw it. */
+export const isDisaggregated = (sheet) => sheet.disaggregate === true && DISAGGREGATE_TYPES.has(sheet.chartType);
 export const isNumericField = (f) => Boolean(f) && f.category === "numeric";
 // Chart types that consume a Color dimension (a group-by); the rest ignore a Color pill (the lane says so).
 export const COLOR_USES = new Set(["bar", "stacked", "line", "area", "table", "gantt", "pie", "donut", ...SCATTER_TYPES]);
@@ -212,7 +216,7 @@ export function sortTargets(sheet, ctx) {
   const shelf = planMeasures(sheet).filter((e) => e.role === "shelf");
   const out = [];
   keyOrder.forEach((f, i) => out.push({ alias: `k${i}`, id: fieldId(f, "dimension"), label: ctx.nameOf(f) }));
-  shelf.forEach((e, i) => out.push({ alias: `v${i}`, id: fieldId(e.field, "measure"), label: measureName(e.field, ctx) }));
+  shelf.forEach((e, i) => out.push({ alias: `v${i}`, id: fieldId(e.field, "measure"), label: measureName(isDisaggregated(sheet) ? { ...e.field, raw: true } : e.field, ctx) }));
   return out;
 }
 
@@ -274,9 +278,10 @@ export function buildPlan(sheet, periodRange, ctx, { crossFilter = null } = {}) 
   }
   const source = sourceOfTable(ctx.entities, db, table); // a union / unpivot the query reads instead of a catalog table
   const sqlSources = sqlSourcesFor(ctx.entities, [{ db, table }, ...joins.flatMap((j) => [j.left, j.right])]); // cards with custom SQL the query reads (D105)
-  const having = havingPlan(mplan); // a filter on an aggregated measure: HAVING, after grouping and before Top-N's cap
-  const scale = scalePlan(sheet.chartType, { ...sheet.format, topN: effectiveTopN(sheet.format, ctx.parameters, LIMITS.rows) }, rowDimensions.length + columnDimensions.length);
-  if (having.length) delete scale.otherBucket; // the "Other" total is of the groups past the cap; with a measure filter it can't be (D84)
+  const raw = isDisaggregated(sheet); // Aggregate Measures off: no groups, so no HAVING and no "Other" total
+  const having = raw ? [] : havingPlan(mplan); // a filter on an aggregated measure: HAVING, after grouping and before Top-N's cap
+  const scale = scalePlan(sheet.chartType, { ...sheet.format, topN: raw ? LIMITS.rows : effectiveTopN(sheet.format, ctx.parameters, LIMITS.rows) }, rowDimensions.length + columnDimensions.length);
+  if (having.length || raw) delete scale.otherBucket; // the "Other" total is of the groups past the cap; with a measure filter it can't be (D84)
   return withCasts({
     from: { db, table },
     ...(source ? { source: wireSource(source) } : {}),
@@ -291,6 +296,7 @@ export function buildPlan(sheet, periodRange, ctx, { crossFilter = null } = {}) 
     ...scale,
     ...(having.length ? { having } : {}),
     ...(sheet.format?.approximate ? { approximate: true } : {}),
+    ...(raw ? { disaggregate: true } : {}),
     sort: { column: sortColumn, desc: sheet.sort?.dir === "desc" },
   }, (f) => ctx.metaOf(f).cast); // each plain column ref carries its field's cast
 }

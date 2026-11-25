@@ -1,7 +1,7 @@
 // The approximate-mode line of the info bar (pure, DOM-free; tests/js/speed-notice.test.mjs).
 // Counts and sums are scaled back up from a sample; these aggregations are not, so the line says so.
-const UNSCALED_AGGS = new Set(["median", "stddev", "variance", "percentile", "attr"]);
-export const UNSCALED_NOTE = "median, percentile, standard deviation, variance and ATTR are computed on the sample, not scaled";
+const UNSCALED_AGGS = new Set(["median", "stddev", "variance", "stddevPop", "variancePop", "stddevp", "variancep", "percentile", "attr"]); // camelCase: a plain pill's name; lowercase: a calculation tree's
+export const UNSCALED_NOTE = "median, percentile, standard deviation, variance (sample and population) and ATTR are computed on the sample, not scaled";
 
 const treeUses = (n) => n !== null && typeof n === "object"
   && ((n.k === "agg" && UNSCALED_AGGS.has(n.fn)) || treeUses(n.arg) || treeUses(n.l) || treeUses(n.r) || (Array.isArray(n.args) && n.args.some(treeUses))

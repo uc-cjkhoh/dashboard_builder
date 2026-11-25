@@ -1,7 +1,7 @@
 import {
   entities, relationships, tabs, bus, currentView,
   createWorksheet, createDashboard, createStory, setSteps, updateSheet, setWidgets, setDashboardSize, setDashboardRange, setDashboardNotes, setGroupSlot, setGroupCollapsed, nextWidgetId, closeTab, showModel, switchTab, currentTheme, setTheme,
-  nextCalcId, sharedFilters, setSharedFilters, fieldMeta, setAllFieldMeta, parameters, setParameters, hierarchies, setHierarchies, calculations, setCalculations,
+  nextCalcId, sharedFilters, setSharedFilters, fieldMeta, setAllFieldMeta, parameters, setParameters, hierarchies, setHierarchies, palettes, setPalettes, calculations, setCalculations,
 } from "../Core/store.js";
 import { clearRoleChoices } from "../Calc/calc-pane-model.js";
 import { DEFAULT_THEME } from "../Core/theme-model.js";
@@ -24,7 +24,7 @@ const SAVE_DELAY_MS = 500;
 const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
 const CHANGE_EVENTS = [
   "entity:added", "entity:moved", "entity:removed", "entity:sql", "entity:sqltext",
-  "rel:changed", "tabs:changed", "worksheet:changed", "dashboard:changed", "story:changed", "theme:changed", "fields:changed", "parameters:changed", "hierarchies:changed", "calculations:changed",
+  "rel:changed", "tabs:changed", "worksheet:changed", "dashboard:changed", "story:changed", "theme:changed", "palettes:changed", "fields:changed", "parameters:changed", "hierarchies:changed", "calculations:changed",
   "canvas:zoomed", // the Data Source view (zoom, pan) is saved too, so a reload keeps it
 ];
 
@@ -117,6 +117,7 @@ async function clearWorkspace({ evenIfConnected = false } = {}) {
     for (const t of [...tabs]) closeTab(t.id);
     showModel();
     setTheme(DEFAULT_THEME); // the saved workbook keeps its theme; it comes back on reconnect
+    setPalettes([]); // and its imported palettes
     setSharedFilters([]);
     setAllFieldMeta({});
     setParameters([]);
@@ -192,6 +193,7 @@ function openWorkbook(wb) {
     setSharedFilters(wb.sharedFilters ?? []); // before the tabs, so a worksheet's first query applies them
     setAllFieldMeta(wb.fields ?? {});
     setHierarchies(wb.hierarchies ?? []);
+    setPalettes(wb.palettes ?? []);
     setParameters(wb.parameters ?? []); // before the tabs, so a worksheet's first query reads them
     clearRoleChoices();
     setCalculations(wb.calculations ?? [], wb.nextCalcId); // likewise: pills read their calculation by id
@@ -302,7 +304,7 @@ async function catalogIssuesFor(wb) {
 }
 
 function currentState() {
-  return { entities, relationships, tabs, active: currentView(), theme: currentTheme(), sharedFilters, fieldMeta, parameters, hierarchies, calculations, nextCalcId: nextCalcId(), view: canvasView() };
+  return { entities, relationships, tabs, active: currentView(), theme: currentTheme(), sharedFilters, fieldMeta, parameters, hierarchies, palettes, calculations, nextCalcId: nextCalcId(), view: canvasView() };
 }
 
 const isEmpty = () => entities.size === 0 && tabs.length === 0;

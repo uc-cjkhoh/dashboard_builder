@@ -34,10 +34,9 @@
   --up: var(--ok-ink); --down: var(--danger-ink);
   /* Charts */
   --print-paper: #ffffff; --print-ink: #000000; /* print: always black on white, whatever the scheme */
+  /* --chart-cat-1..8 (categorical colours) are not set here: Core/theme.js writes them from theme-model.js categoryColour, for the painted scheme. */
   --chart-series: var(--accent); --chart-axis: var(--line-2); --chart-grid: var(--line);
   --chart-label: var(--ink-2); --chart-muted: var(--ink-3);
-  --chart-cat-1: #72872a; --chart-cat-2: #b8559c; --chart-cat-3: #d9a03a; --chart-cat-4: #7c63d6;
-  --chart-cat-5: #2f9ea8; --chart-cat-6: #3f7fd0; --chart-cat-7: #4aa66a; --chart-cat-8: #6a6d72;
   /* Diverging pair (warm below the centre, cool above): theme-stable orange / blue, lighter orange vs darker blue so it reads by lightness too. */
   --chart-div-low: #d98a4a; --chart-div-high: #2b62b8;
   /* Hues for the chosen diverging pairs (Format -> Diverging colours): independent of the categorical palette, never red; each reads against the surface centre. */
@@ -85,8 +84,6 @@
   --dim-bg: #161f33; --dim-ink: #8fb0e0; --dim-line: #2c4a78;
   --meas-bg: #0f2527; --meas-ink: #62c4c9; --meas-line: #1d5a5e;
   --enc-bg: #211c38; --enc-ink: #b6aee8; --enc-line: #4b3c8a;
-  --chart-cat-1: #a9bd6a; --chart-cat-2: #d98ac2; --chart-cat-3: #deb062; --chart-cat-4: #9b86e6;
-  --chart-cat-5: #5cc0c8; --chart-cat-6: #7aa3dc; --chart-cat-7: #6fc486; --chart-cat-8: #8e9094;
   --chart-div-low: #e2b48c; --chart-div-high: #5a8ad6;
   --chart-div-amber: #e0b060; --chart-div-violet: #9b86e6; --chart-div-green: #6fc486;
   --elev-2: 0 1px 2px rgb(0 0 0 / .45); --elev-8: 0 4px 10px rgb(0 0 0 / .45);
@@ -112,8 +109,6 @@
   --dim-bg: #1f2f42; --dim-ink: #6aa8e0; --dim-line: #2f5278;
   --meas-bg: #1f3236; --meas-ink: #56b6c2; --meas-line: #2d5a61;
   --enc-bg: #302538; --enc-ink: #c678dd; --enc-line: #5c3a6b;
-  --chart-cat-1: #6aa8e0; --chart-cat-2: #98c379; --chart-cat-3: #c678dd; --chart-cat-4: #e5c07b;
-  --chart-cat-5: #56b6c2; --chart-cat-6: #d19a66; --chart-cat-7: #abb2bf; --chart-cat-8: #d68fc0;
   --chart-div-low: #e0b084; --chart-div-high: #5c9ddb;
   --chart-div-amber: #e5c07b; --chart-div-violet: #c678dd; --chart-div-green: #98c379;
 }

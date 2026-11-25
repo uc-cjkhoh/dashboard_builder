@@ -135,11 +135,11 @@ try {
     }
     await b.setScheme('light');
   });
-  await check('Appearance is one card: mode, dark look, accent and chart colours; picking keeps it open, Esc closes it', async () => {
+  await check('Appearance is one card: mode, dark look and accent; picking keeps it open, Esc closes it', async () => {
     must(await ev(`!document.getElementById('settings-btn') && !document.querySelector('dialog.theme-dialog')`), 'a separate theme button or dialog is back');
     await ev(`document.getElementById('scheme-btn').click()`);
     await b.waitFor(`!document.getElementById('scheme-list').hidden`, { label: 'appearance card' });
-    must(await ev(`document.querySelectorAll('#scheme-list [data-scheme-pref]').length === 2 && document.querySelectorAll('#scheme-list .appearance__accent').length >= 5 && document.querySelectorAll('#scheme-list .appearance__strip').length >= 4`), 'card is missing mode, accent or colour rows');
+    must(await ev(`document.querySelectorAll('#scheme-list [data-scheme-pref]').length === 2 && document.querySelectorAll('#scheme-list .appearance__accent').length >= 5 && document.querySelectorAll('#scheme-list .appearance__strip').length >= 2 && !/chart colou?rs/i.test(document.getElementById('scheme-list').textContent)`), 'card is missing mode, look or accent rows, or still offers chart colours');
     await ev(`document.querySelector('#scheme-list .appearance__accent[title="Teal"]').click()`);
     must(await ev(`!document.getElementById('scheme-list').hidden && document.querySelector('#scheme-list .appearance__value').textContent === 'Teal'`), 'picking an accent closed the card or did not apply');
     await ev(`[...document.querySelectorAll('#scheme-list [role=menuitem]')].find((x) => x.textContent === 'Reset theme').click()`);

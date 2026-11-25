@@ -32,7 +32,7 @@ public class CalcRulesTests
     }
 
     [Fact] public void A_ratio_measure_with_no_aggregation_passes() => RequestRules.ValidateQuery(Q(measures: [M(Aggregate, null)]));
-    [Theory] [InlineData("sum")] [InlineData("AVG")] [InlineData("min")] [InlineData("max")] [InlineData("countdistinct")] [InlineData("countnonnull")] [InlineData("median")] [InlineData("stddev")] [InlineData("variance")] [InlineData("attr")]
+    [Theory] [InlineData("sum")] [InlineData("AVG")] [InlineData("min")] [InlineData("max")] [InlineData("countdistinct")] [InlineData("countnonnull")] [InlineData("median")] [InlineData("stddev")] [InlineData("variance")] [InlineData("stddevpop")] [InlineData("variancepop")] [InlineData("attr")]
     public void A_row_level_measure_with_a_value_aggregation_passes(string agg) => RequestRules.ValidateQuery(Q(measures: [M(RowLevel, agg)]));
     [Fact] public void A_row_level_dimension_passes() => RequestRules.ValidateQuery(Q(rows: [D(RowLevel)], cols: [D(RowLevel)]));
     [Fact] public void A_calculation_label_may_be_absent() => RequestRules.ValidateQuery(Q(rows: [D(RowLevel, label: null)]));
@@ -103,7 +103,7 @@ public class CalcRulesTests
     }
 
     [Fact] public void Row_level_aggregations_are_the_value_aggregations() =>
-        Assert.True(new HashSet<string> { "sum", "avg", "min", "max", "countdistinct", "countnonnull", "median", "stddev", "variance", "attr" }.SetEquals(CalcCatalog.RowLevelAggregations));
+        Assert.True(new HashSet<string> { "sum", "avg", "min", "max", "countdistinct", "countnonnull", "median", "stddev", "variance", "stddevpop", "variancepop", "attr" }.SetEquals(CalcCatalog.RowLevelAggregations));
     [Theory] [InlineData("count")] [InlineData("mode")] [InlineData("percentile")]
     public void Validate_query_rejects_count_and_unknown_names_with_the_plan_a_message(string agg)
     {

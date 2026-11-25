@@ -33,6 +33,12 @@ test("a wider pane can level labels again", () => {
   assert.equal(chartFit(spec, 500).rotate, 90);
   assert.equal(chartFit(spec, 1600).rotate, 0);
 });
+test("Fit width judges the labels against the shared pane width, so crowded labels turn upright", () => {
+  const spec = { type: "bar", categories: Array.from({ length: 40 }, (_, i) => `c${i % 10}`), series: [{}] };
+  assert.equal(chartFit(spec, 700).rotate, 0); // standard: each category keeps its slot, the pane scrolls
+  assert.equal(chartFit(spec, 700, 0, true).rotate, 90); // fitted: 40 categories in 700px
+  assert.equal(chartFit(spec, 1800, 0, true).rotate, 0); // a wide pane levels them again
+});
 test("combo stays vertical even when the shelves say horizontal", () => {
   const f = chartFit({ type: "combo", orientation: "horizontal", categories: cats(30), series: [{}, {}] }, 700);
   assert.equal(f.minWidth, 30 * FIT.slot + FIT.gutter);

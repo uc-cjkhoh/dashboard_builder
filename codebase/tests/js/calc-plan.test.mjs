@@ -112,6 +112,8 @@ test("measureLabel / aggWord: countNonNull reads as non-null", async () => {
   assert.equal(aggWord("countNonNull"), "non-null");
   assert.equal(aggWord("countDistinct"), "distinct");
   for (const a of ["median", "stddev", "variance", "attr"]) assert.equal(measureLabel({ agg: a, column: "amount" }, []), `${a} amount`);
+  assert.equal(measureLabel({ agg: "stddevPop", column: "amount" }, []), "stddev (pop.) amount");
+  assert.equal(measureLabel({ agg: "variancePop", column: "amount" }, []), "variance (pop.) amount");
 });
 
 const topBySheet = (topBy) => ({ columns: [], rows: [], color: [], marks: {}, filters: [{ db: "shop", table: "orders", column: "status", category: "text", op: "top", value: "3", topBy }] });

@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { contrastRatio, pickInk } from "../../src/DashboardBuilder/Features/Dashboard/contrast.js";
+import { categoryColours } from "../../src/DashboardBuilder/Features/Core/theme-model.js";
 const css = readFileSync(new URL("../../src/DashboardBuilder/Features/Core/core.css", import.meta.url), "utf8");
 
 test("contrastRatio: black on white is 21, identical colours are 1", () => {
@@ -16,14 +17,16 @@ test("white on cat-4 is the known-bad case this helper fixes", () => {
   assert.ok(contrastRatio("#ffffff", "#eda100") < 2.5);
   assert.ok(contrastRatio(pickInk("#eda100", ["#0f172a", "#ffffff"]), "#eda100") >= 4.5);
 });
-test("every chart category colour gets a >=4.5:1 label ink (tokens ink/surface plus pure black/white)", () => {
+test("every generated chart category colour gets a >=4.5:1 label ink (tokens ink/surface plus pure black/white)", () => {
   const light = { ink: "#141516", surface: "#ffffff" }, dark = { ink: "#ececea", surface: "#1a1b1d" };
-  const blocks = css.split(':root[data-scheme="dark"]');
-  for (const [block, pair] of [[blocks[0], light], [blocks[1], dark]]) {
-    const cats = [...block.matchAll(/--chart-cat-\d:\s*(#[0-9a-f]{6})/gi)].map((m) => m[1]);
-    assert.equal(cats.length, 8);
+  for (const [isDark, pair] of [[false, light], [true, dark]]) {
+    const cats = categoryColours(100, isDark);
+    assert.equal(cats.length, 100);
     for (const c of cats) assert.ok(contrastRatio(pickInk(c, [pair.ink, pair.surface, "#000000", "#ffffff"]), c) >= 4.5, c);
   }
+});
+test("core.css lists no categorical colours: the generator (theme-model.js categoryColour) is their only source", () => {
+  assert.equal(/--chart-cat-\d:/.test(css), false);
 });
 
 // Every token text-on-surface pair the UI uses meets WCAG AA (4.5:1) in both themes; the red accent
@@ -67,9 +70,8 @@ test("--ctl-edge holds 3:1 against glass in light and dark", () => {
   }
 });
 
-// D97: red means danger only — no ordinary category colour in the default or One Dark palettes sits in the red hue band, and the
-// dark accent (single-measure bars, primary buttons) stays calm: HSL saturation <= 70 %.
-import { PALETTES } from "../../src/DashboardBuilder/Features/Core/theme-model.js";
+// D97: red means danger only. The generated category colours carry no red and stay at S <= 70 % (tests/js/theme-model.test.mjs); the dark
+// accent (single-measure bars, primary buttons) stays calm: HSL saturation <= 70 %.
 const hsl = (hex) => {
   const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
   const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn, l = (mx + mn) / 2;
@@ -78,21 +80,8 @@ const hsl = (hex) => {
   h = (h * 60 + 360) % 360;
   return { h, s, l };
 };
-test("D97: no default / One Dark category colour is red, and every one stays at S <= 70 %", () => {
-  for (const name of ["default", "onedark"]) for (const mode of ["light", "dark"]) for (const hex of PALETTES[name][mode]) {
-    const { h, s } = hsl(hex);
-    assert.ok(!(s > 0.25 && (h >= 345 || h <= 12)), `${name} ${mode} ${hex} is red (hue ${h.toFixed(0)})`);
-    assert.ok(s <= 0.705, `${name} ${mode} ${hex} S ${s.toFixed(2)}`);
-  }
-});
-test("D97: the core.css category tokens carry no red either, and the dark accent is calm", () => {
+test("D97: the dark accent is calm", () => {
   const blocks = css.split(':root[data-scheme="dark"]');
-  for (const block of blocks.slice(0, 3)) {
-    for (const m of block.matchAll(/--chart-cat-\d:\s*(#[0-9a-f]{6})/gi)) {
-      const { h, s } = hsl(m[1]);
-      assert.ok(!(s > 0.25 && (h >= 345 || h <= 12)), `${m[1]} is red`);
-    }
-  }
   const accent = blocks[1].match(/--accent:\s*(#[0-9a-f]{6})/i)[1];
   assert.ok(hsl(accent).s <= 0.5, `dark accent ${accent} S ${hsl(accent).s.toFixed(2)}`);
 });

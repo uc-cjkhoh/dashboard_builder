@@ -12,7 +12,11 @@ export function errorMessage(status, data) {
   if (data && typeof data.title === "string" && data.title) return data.title;
   return status >= 500 ? `Server error (${status}).` : `Request failed (${status}).`;
 }
+/** 409 is the server's "no connection on this session" (ApiControllerBase.NotConnected) and nothing else: the session is gone.
+ *  Announce it so the sidebar probes now (Connection/connection.js) instead of waiting for its next 30 s ping (D162). */
+export const SESSION_GONE_STATUS = 409;
 function httpError(status, data) {
+  if (status === SESSION_GONE_STATUS && typeof document !== "undefined") document.dispatchEvent(new CustomEvent("connection:check"));
   const e = new Error(errorMessage(status, data));
   e.status = status; e.field = data?.field ?? null;
   if (data?.line != null) { e.line = data.line; e.col = data.col ?? null; e.start = data.start ?? null; } // a query the translator could not read: where
@@ -55,7 +59,7 @@ export const api = {
   /** Current session connection status (password-free). */
   getConnection: () => request("GET", "/api/connection"),
   /** Liveness probe: { connected, reachable? } — silent (no activity-bar entry) because it runs on a timer. */
-  pingConnection: () => request("GET", "/api/connection/ping", undefined, undefined, { silent: true }),
+  pingConnection: (signal) => request("GET", "/api/connection/ping", undefined, signal, { silent: true }),
   /** Validate + store a connection. Resolves to the connection view, or throws with a message. */
   connect: (payload) => request("POST", "/api/connection", payload),
   /** Drop the session connection. Uses POST **with a body** — the Apache proxy 403s DELETE outright and

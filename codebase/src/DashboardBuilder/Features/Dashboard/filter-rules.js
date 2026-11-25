@@ -4,7 +4,7 @@ import { PERIOD_PRESETS } from "../Core/sheet-schema.js";
 import { calcOnTable } from "../Calc/calc-tree.js";
 import { addColourField, colourDimensions } from "./colour-fields-model.js";
 export const AGGS = Object.freeze({
-  numeric: ["sum", "avg", "min", "max", "median", "percentile", "stddev", "variance", "count", "countDistinct", "countNonNull", "attr"],
+  numeric: ["sum", "avg", "min", "max", "median", "percentile", "stddev", "variance", "stddevPop", "variancePop", "count", "countDistinct", "countNonNull", "attr"],
   ordered: ["count", "countDistinct", "countNonNull", "min", "max", "attr"], // text + temporal: min/max/attr come back as text
   other: ["count", "countDistinct", "countNonNull"],                  // boolean, compound, other
 });

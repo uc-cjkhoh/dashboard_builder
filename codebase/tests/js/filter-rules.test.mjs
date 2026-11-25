@@ -4,7 +4,7 @@ import { aggsFor, opsFor, OP_LABELS, serverFilter, checkFilter, statFilters, wit
 const F = (o) => ({ db: "s", table: "orders", column: "amount", category: "numeric", op: "=", value: "", values: null, ...o });
 test("aggregations match the column category", () => {
   assert.ok(aggsFor("numeric").includes("sum"));
-  assert.deepEqual(aggsFor("numeric"), ["sum", "avg", "min", "max", "median", "percentile", "stddev", "variance", "count", "countDistinct", "countNonNull", "attr"]);
+  assert.deepEqual(aggsFor("numeric"), ["sum", "avg", "min", "max", "median", "percentile", "stddev", "variance", "stddevPop", "variancePop", "count", "countDistinct", "countNonNull", "attr"]);
   assert.deepEqual(aggsFor("text"), ["count", "countDistinct", "countNonNull", "min", "max", "attr"]);
   assert.deepEqual(aggsFor("temporal"), ["count", "countDistinct", "countNonNull", "min", "max", "attr"]);
   assert.deepEqual(aggsFor("boolean"), ["count", "countDistinct", "countNonNull"]);

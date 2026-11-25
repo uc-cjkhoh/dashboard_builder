@@ -195,6 +195,8 @@ public static class CalcCompiler
         "sum" or "avg" or "min" or "max" or "median" or "stddev" or "variance" or "percentile" or "attr" => fn,
         "count" => "countnonnull",
         "countd" => "countdistinct",
+        "stddevp" => "stddevpop",
+        "variancep" => "variancepop",
         _ => throw new InvalidOperationException($"Unsupported aggregate '{fn}'."),
     };
 }

@@ -248,6 +248,9 @@ public class CalcCompilerTests
     [InlineData("stddev", false, false, "if(count(x) < 2, NULL, stddevSamp(x))")]
     [InlineData("stddev", true, true, "if(count(x) < 2, NULL, stddevSamp(x))")]
     [InlineData("variance", false, false, "if(count(x) < 2, NULL, varSamp(x))")]
+    [InlineData("stddevpop", false, false, "if(count(x) = 0, NULL, stddevPop(x))")]
+    [InlineData("stddevpop", true, true, "if(count(x) = 0, NULL, stddevPop(x))")]
+    [InlineData("variancepop", false, false, "if(count(x) = 0, NULL, varPop(x))")]
     [InlineData("attr", false, false, "if(uniqExact(x) = 1, min(x), NULL)")]
     [InlineData("attr", true, true, "if(uniqExact(x) = 1, min(x), NULL)")]
     public void AggregateSql_follows_the_table(string agg, bool sampled, bool approximate, string expected)
@@ -272,6 +275,8 @@ public class CalcCompilerTests
     [InlineData("median", "quantileExactInclusive(0.5)(toFloat64(t0.`amount`))")]
     [InlineData("stddev", "if(count(toFloat64(t0.`amount`)) < 2, NULL, stddevSamp(toFloat64(t0.`amount`)))")]
     [InlineData("variance", "if(count(toFloat64(t0.`amount`)) < 2, NULL, varSamp(toFloat64(t0.`amount`)))")]
+    [InlineData("stddevp", "if(count(toFloat64(t0.`amount`)) = 0, NULL, stddevPop(toFloat64(t0.`amount`)))")]
+    [InlineData("variancep", "if(count(toFloat64(t0.`amount`)) = 0, NULL, varPop(toFloat64(t0.`amount`)))")]
     public void The_new_aggregates_compile_over_a_widened_number(string fn, string expected)
     {
         var (sql, ps) = Compile(Agg(fn, F("amount")));

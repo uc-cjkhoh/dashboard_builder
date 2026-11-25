@@ -173,12 +173,12 @@ public class CalcValidatorTests
     }
 
     [Fact]
-    public void Catalog_knows_the_ten_aggregates_only()
+    public void Catalog_knows_these_aggregates_only()
     {
-        foreach (var fn in new[] { "sum", "avg", "min", "max", "count", "countd", "median", "stddev", "variance", "percentile", "attr" }) Assert.True(CalcCatalog.IsKnown(fn));
+        foreach (var fn in new[] { "sum", "avg", "min", "max", "count", "countd", "median", "stddev", "variance", "stddevp", "variancep", "percentile", "attr" }) Assert.True(CalcCatalog.IsKnown(fn));
         Assert.False(CalcCatalog.IsKnown("mode"));
         Assert.False(CalcCatalog.IsKnown("SUM"));
-        Assert.Equal(11, CalcCatalog.Aggregates.Count);
+        Assert.Equal(13, CalcCatalog.Aggregates.Count);
     }
 
     [Fact]

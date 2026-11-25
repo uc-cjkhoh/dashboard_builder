@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildPlan, planDims, planMeasures, sortTargets, fieldId, measureName, periodFilters, isDateOnlyType, colorMode, pagesFilter, drillPathFilters, involvedTables, selectionFilter, keyOf }
+import { buildPlan, planDims, planMeasures, sortTargets, fieldId, measureName, periodFilters, isDateOnlyType, colorMode, pagesFilter, drillPathFilters, involvedTables, selectionFilter, keyOf, isDisaggregated, DISAGGREGATE_TYPES }
   from "../../src/DashboardBuilder/Features/Dashboard/sheet-plan.js";
 
 // The plan reads only its explicit context: two contexts side by side never touch each other.
@@ -192,4 +192,38 @@ test("buildPlan: a plan that never reads the card carries no sources; a joined c
   const p = buildPlan(sheet({ columns: [dim("customers", "region")], rows: [meas("orders", "id")] }), undefined, sqlCtx({ relationships: new Map([["r1", rel]]) }));
   assert.equal(p.joins.length, 1);
   assert.deepEqual(p.sources.map((s) => s.name), ["orders"]);
+});
+
+// ---- Aggregate Measures off (disaggregate) ----------------------------------------------------------------
+const scatter = (over = {}) => sheet({ chartType: "scatter", columns: [meas("orders", "id")], rows: [meas("orders", "id", "avg")], ...over });
+test("disaggregate: only the point charts draw one mark per row", () => {
+  assert.deepEqual([...DISAGGREGATE_TYPES].sort(), ["circle", "scatter", "square"]);
+  assert.equal(isDisaggregated(scatter({ disaggregate: true })), true);
+  assert.equal(isDisaggregated(scatter()), false);
+  assert.equal(isDisaggregated(scatter({ disaggregate: false })), false);
+  assert.equal(isDisaggregated(sheet({ chartType: "bar", disaggregate: true })), false, "a bar chart ignores the setting");
+});
+test("disaggregate: the plan says so, keeps the 5,000 cap, and drops HAVING and Other", () => {
+  const having = { op: ">", value: "5" };
+  const p = buildPlan(scatter({ disaggregate: true, columns: [{ ...meas("orders", "id"), having }] }), undefined, mkCtx());
+  assert.equal(p.disaggregate, true);
+  assert.equal(p.limit, 5000);
+  assert.equal(p.having, undefined);
+  assert.equal(p.otherBucket, undefined);
+  assert.equal(p.measures.length, 2);
+});
+test("disaggregate: off, or on a chart that can't draw it, the plan is the aggregated one", () => {
+  assert.equal("disaggregate" in buildPlan(scatter(), undefined, mkCtx()), false);
+  assert.equal("disaggregate" in buildPlan(scatter({ disaggregate: true, chartType: "bar" }), undefined, mkCtx()), false);
+});
+test("disaggregate: the sort menu and the caption name a measure by its field, not 'sum field'", () => {
+  const ctx = mkCtx();
+  const on = scatter({ disaggregate: true });
+  assert.deepEqual(sortTargets(on, ctx).map((t) => t.label), ["id", "id"]);
+  assert.deepEqual(sortTargets(scatter(), ctx).map((t) => t.label), ["sum id", "avg id"]);
+});
+test("disaggregate: a Top-N counts groups, so it does not cut the rows; aggregated, it still does", () => {
+  const fmt = { topN: 20 };
+  assert.equal(buildPlan(scatter({ disaggregate: true, format: fmt }), undefined, mkCtx()).limit, 5000);
+  assert.equal(buildPlan(scatter({ format: fmt }), undefined, mkCtx()).limit, 20);
 });

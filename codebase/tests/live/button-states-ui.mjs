@@ -49,7 +49,7 @@ try {
     await b.evaluate(`(async () => {
       const { themeVars, ACCENTS } = await import('/features/Core/theme-model.js');
       document.documentElement.dataset.scheme = ${JSON.stringify(scheme)};
-      for (const [k, v] of Object.entries(themeVars({ accent: ${JSON.stringify(accent)}, palette: 'default' }, ${scheme === 'dark'}))) document.documentElement.style.setProperty(k, v);
+      for (const [k, v] of Object.entries(themeVars({ accent: ${JSON.stringify(accent)} }, ${scheme === 'dark'}))) document.documentElement.style.setProperty(k, v);
       return true; })()`);
     for (const [label, markup, where] of CASES) {
       const id = 'c' + Math.random().toString(36).slice(2);

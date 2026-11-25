@@ -340,6 +340,8 @@ public sealed partial class ClickHouseGateway
         "percentile" => $"p{PercentLabel(fraction ?? 0)} {column}",
         "countdistinct" => $"distinct {column}",
         "countnonnull" => $"non-null {column}",
+        "stddevpop" => $"stddev (pop.) {column}",
+        "variancepop" => $"variance (pop.) {column}",
         _ => $"{agg} {column}",
     };
 
@@ -362,8 +364,9 @@ public sealed partial class ClickHouseGateway
     /// and quoted SQL. <c>count</c> counts all rows (no argument); <c>countnonnull</c> counts non-NULL values.
     /// <c>median</c>/<c>percentile</c> are exact and interpolate linearly like Excel PERCENTILE.INC (<c>quantileExactInclusive</c>; <paramref name="fraction"/> is the
     /// already-bound <c>{name:Float64}</c> placeholder, never a literal); <c>stddev</c>/<c>variance</c> are the sample
-    /// statistics, NULL for fewer than two values; <c>attr</c> is the value when the group has exactly one distinct
-    /// non-NULL value, else NULL. None of these four is scaled on a sampled table (they estimate from the sample).
+    /// statistics, NULL for fewer than two values; <c>stddevpop</c>/<c>variancepop</c> are the population statistics (0 for one value, NULL for none);
+    /// <c>attr</c> is the value when the group has exactly one distinct
+    /// non-NULL value, else NULL. None of these six is scaled on a sampled table (they estimate from the sample).
     /// When <paramref name="sampled"/>, counts and sums are scaled back by <c>t0._sample_factor</c>;
     /// <paramref name="approximate"/> estimates distinct counts with <c>uniq</c>.
     /// </summary>
@@ -378,6 +381,8 @@ public sealed partial class ClickHouseGateway
         "percentile" => fraction is null ? throw new InvalidOperationException("percentile needs a bound fraction.") : $"quantileExactInclusive({fraction})({expr})",
         "stddev" => $"if(count({expr}) < 2, NULL, stddevSamp({expr}))",
         "variance" => $"if(count({expr}) < 2, NULL, varSamp({expr}))",
+        "stddevpop" => $"if(count({expr}) = 0, NULL, stddevPop({expr}))",
+        "variancepop" => $"if(count({expr}) = 0, NULL, varPop({expr}))",
         "attr" => $"if(uniqExact({expr}) = 1, min({expr}), NULL)",
         _ => throw new InvalidOperationException($"Unknown aggregate '{agg}'."),
     };
@@ -385,7 +390,7 @@ public sealed partial class ClickHouseGateway
     // "countdistinct" counts unique values — mapped to ClickHouse uniqExact() in the SELECT builders.
     // "countnonnull" counts non-NULL values of the column; "count" counts rows.
     internal static readonly HashSet<string> Aggregations =
-        new(StringComparer.OrdinalIgnoreCase) { "count", "sum", "avg", "min", "max", "countdistinct", "countnonnull", "median", "stddev", "variance", "attr", "percentile" };
+        new(StringComparer.OrdinalIgnoreCase) { "count", "sum", "avg", "min", "max", "countdistinct", "countnonnull", "median", "stddev", "variance", "stddevpop", "variancepop", "attr", "percentile" };
 
     /// <summary>A plain Top-N rank aggregate over an already-quoted column (lowercase whitelisted <paramref name="agg"/>,
     /// not <c>count</c>). Exact and unscaled: only the order matters.</summary>
@@ -1296,7 +1301,7 @@ public sealed partial class ClickHouseGateway
         var anyBeyondInner = joinTypes.Any(IsOuter);
         if (NullsUnavailable(joinTypes, info))
             throw new RequestValidationException("Right and full joins need the server to accept the join_use_nulls setting — this connection's profile refuses settings.", "joins");
-        var sampled = source is null && !derived.ContainsKey(Key(req.From.Db, req.From.Table)) && sample && req.Joins?.Any(j => j.Aggregate == true) != true && CanSample(joinTypes) && await HasSamplingKeyAsync(info, req.From.Db, req.From.Table, ct);
+        var sampled = source is null && !derived.ContainsKey(Key(req.From.Db, req.From.Table)) && sample && req.Disaggregate != true && req.Joins?.Any(j => j.Aggregate == true) != true && CanSample(joinTypes) && await HasSamplingKeyAsync(info, req.From.Db, req.From.Table, ct);
         if (sampled) from.Append(" SAMPLE ").Append(SampleFraction.ToString(CultureInfo.InvariantCulture));
 
         var next = 1;
@@ -1405,6 +1410,25 @@ public sealed partial class ClickHouseGateway
         foreach (var m in req.Measures ?? [])
         {
             var mIdx = measIndex++;
+            if (req.Disaggregate == true)
+            {
+                // Aggregate Measures off: the raw value of each source row (the aggregation is ignored); numbers only, like a scatter's axes.
+                if (m.Calc is { } rawCalc)
+                {
+                    measExprs.Add(CalcSql.CalcRowSql(await CompileCalcAsync(rawCalc, $"measures[{mIdx}]"), $"measures[{mIdx}]"));
+                    measNames.Add(CalcSql.CalcLabel(m.Column));
+                }
+                else
+                {
+                    if (!(await ColumnsOf(m.Db, m.Table)).ContainsKey(m.Column)) throw UnknownIdentifierException.Column(m.Column, m.Db, m.Table);
+                    if (TypeCast.EffectiveCategory((await ColumnsOf(m.Db, m.Table))[m.Column], m.Cast) != ClickHouseType.Numeric)
+                        throw new RequestValidationException($"Aggregate Measures off needs a numeric measure — {m.Column} is not.", $"measures[{mIdx}]");
+                    measExprs.Add(await CastedAsync(m.Db, m.Table, m.Column, m.Cast, $"measures[{mIdx}]"));
+                    measNames.Add(m.Column);
+                }
+                measNumeric.Add(true);
+                continue;
+            }
             if (m.Calc is { } mCalc)
             {
                 // An aggregate tree as is; a row-level tree aggregated by the pill. No "count" default here.
@@ -1419,11 +1443,11 @@ public sealed partial class ClickHouseGateway
             if (mAgg != "count" && !(await ColumnsOf(m.Db, m.Table)).ContainsKey(m.Column))
                 throw UnknownIdentifierException.Column(m.Column, m.Db, m.Table);
             var category = mAgg == "count" ? ClickHouseType.Numeric : TypeCast.EffectiveCategory((await ColumnsOf(m.Db, m.Table)).GetValueOrDefault(m.Column, ClickHouseType.Other), m.Cast);
-            if (mAgg is "sum" or "avg" or "median" or "percentile" or "stddev" or "variance" && category != ClickHouseType.Numeric)
+            if (mAgg is "sum" or "avg" or "median" or "percentile" or "stddev" or "variance" or "stddevpop" or "variancepop" && category != ClickHouseType.Numeric)
                 throw new RequestValidationException($"{char.ToUpperInvariant(mAgg[0])}{mAgg[1..]} needs a numeric column — {m.Column} is {category}.", $"measures[{mIdx}]");
             if (mAgg == "attr" && category is ClickHouseType.Compound or ClickHouseType.Other)
                 throw new RequestValidationException($"Attr can't summarise {m.Column} — it is a compound column.", $"measures[{mIdx}]");
-            measNumeric.Add(mAgg is "count" or "countdistinct" or "countnonnull" or "sum" or "avg" or "median" or "percentile" or "stddev" or "variance" || category == ClickHouseType.Numeric);
+            measNumeric.Add(mAgg is "count" or "countdistinct" or "countnonnull" or "sum" or "avg" or "median" or "percentile" or "stddev" or "variance" or "stddevpop" or "variancepop" || category == ClickHouseType.Numeric);
             // One aggregate writer for plain and calculated measures; sampled sums/counts are scaled back,
             // approximate mode estimates distinct counts (uniq).
             // A percentile's fraction is a bound Float64 parameter (mp{n}), never text.
@@ -1489,7 +1513,7 @@ public sealed partial class ClickHouseGateway
                 byCat = TypeCast.EffectiveCategory(byCat, by.Cast);
                 if (agg == "attr" && byCat is ClickHouseType.Compound or ClickHouseType.Other)
                     throw new RequestValidationException($"Top-N can't rank by attr of {by.Column} — it is a compound column.", $"filters[{i}].topBy");
-                if (agg is "sum" or "avg" or "median" or "percentile" or "stddev" or "variance" && byCat != ClickHouseType.Numeric)
+                if (agg is "sum" or "avg" or "median" or "percentile" or "stddev" or "variance" or "stddevpop" or "variancepop" && byCat != ClickHouseType.Numeric)
                     throw new RequestValidationException($"Top-N can't rank by {agg} of {by.Column} — it isn't numeric.", $"filters[{i}].topBy");
                 var byExpr = await CastedAsync(by.Db, by.Table, by.Column, by.Cast, $"filters[{i}].topBy");
                 rank = PlainRankSql(agg, byExpr, agg == "percentile" ? BindFraction(by.P, $"tp{i}", $"filters[{i}].topBy.p", parameters) : null);
@@ -1544,7 +1568,7 @@ public sealed partial class ClickHouseGateway
         var selects = new List<string>();
         for (var i = 0; i < dimExprs.Count; i++) selects.Add($"{dimExprs[i]} AS k{i}");
         for (var i = 0; i < measExprs.Count; i++) selects.Add($"{measExprs[i]} AS v{i}");
-        var groupBy = dimExprs.Count > 0
+        var groupBy = dimExprs.Count > 0 && req.Disaggregate != true
             ? " GROUP BY " + string.Join(", ", Enumerable.Range(0, dimExprs.Count).Select(i => $"k{i}"))
             : "";
         var grouped = "SELECT " + string.Join(", ", selects) + from + where + groupBy + BuildHaving(req.Having, measExprs.Count, parameters);
@@ -1567,13 +1591,20 @@ public sealed partial class ClickHouseGateway
             var a = $"k{i}";
             if (a != sortCol) orderParts.Add($"{a} ASC");
         }
+        // Per-row marks have no unique key: order by every column, so a page boundary (LIMIT / OFFSET) falls in the same place on every request.
+        if (req.Disaggregate == true)
+            for (var i = 0; i < measExprs.Count; i++)
+            {
+                var a = $"v{i}";
+                if (a != sortCol) orderParts.Add($"{a} ASC");
+            }
         var ordered = grouped + " ORDER BY " + string.Join(", ", orderParts);
         var limit = ProbeLimit(req.Limit, maxLimit);
         var offset = req.Offset is > 0 ? $" OFFSET {req.Offset.Value}" : "";
 
         // The group count runs alongside the page (its own connection), only when asked.
         var totalTask = req.WithTotal == true
-            ? (dimExprs.Count == 0 && req.Having is not { Length: > 0 } ? Task.FromResult<long?>(1) : CountGroupsAsync(info, grouped, parameters, ct, Settings(anyLeft, info)))
+            ? (dimExprs.Count == 0 && req.Having is not { Length: > 0 } && req.Disaggregate != true ? Task.FromResult<long?>(1) : CountGroupsAsync(info, grouped, parameters, ct, Settings(anyLeft, info)))
             : Task.FromResult<long?>(null);
 
         var rows = new List<QueryResultRow>();
@@ -1618,7 +1649,7 @@ public sealed partial class ClickHouseGateway
             }
         }
 
-        var approx = req.Approximate == true
+        var approx = req.Approximate == true && req.Disaggregate != true
             ? new ApproxApplied(CalcSql.UsesDistinctCount(req.Measures ?? []), sampled ? SampleFraction : null)
             : null;
         return new QueryResult(rowDimNames, colDimNames, measNames, rows, truncated, await totalTask, other, bucket, false, approx);

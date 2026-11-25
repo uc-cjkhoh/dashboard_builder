@@ -17,6 +17,9 @@ export const LIMITS = Object.freeze({
   having: 10,        // filters on an aggregated measure per view (server MaxHaving)
   hierarchies: 20,   // named hierarchies per workbook (client-side only)
   hierarchyName: 60, // characters in a hierarchy name
+  palettes: 12,      // colour palettes per workbook (client-side only)
+  paletteColours: 24, // colours in one palette
+  paletteName: 40,   // characters in a palette name
   drillLevels: 6, // keeps user filters (8) + drill path (≤5) + page + selection within the server's 16
   rows: 5000, // groups one chart query returns: Top-N "All" (server MaxRowLimit); the Table pages instead
   viewCells: 50000,   // rows x columns one raw-row read returns (server MaxRowsCells)

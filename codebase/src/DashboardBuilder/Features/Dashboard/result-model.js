@@ -1,5 +1,5 @@
 import { roleOf } from "./show-me-rules.js";
-import { marksOf, planDims, planMeasures, drillActiveDim, colorMode, colourDimsOf, isSizeDimension, sizeKeyIndex } from "./sheet-plan.js";
+import { marksOf, isDisaggregated, planDims, planMeasures, drillActiveDim, colorMode, colourDimsOf, isSizeDimension, sizeKeyIndex } from "./sheet-plan.js";
 import { memberText, memberRaw } from "./colour-fields-model.js";
 import { isCalcPill, sameCalcPill } from "../Calc/calc-pill.js";
 import { aggWord } from "../Calc/calc-plan.js";
@@ -126,7 +126,7 @@ function statCaption(s, names) {
 /** The automatic caption: "sum amount by customers.name, customers.country · 2 filters". `names` = { measureName(f), nameOf(f) }. */
 export function captionText(s, names) {
   if (s.chartType === "histogram" || s.chartType === "boxplot") return statCaption(s, names);
-  const ms = planMeasures(s).filter((e) => e.role === "shelf").map((e) => names.measureName({ ...e.field, agg: e.agg }) + (isCalc(e.field.tableCalc) ? ` · ${calcName(e.field.tableCalc)}` : ""));
+  const ms = planMeasures(s).filter((e) => e.role === "shelf").map((e) => names.measureName({ ...e.field, agg: e.agg, ...(isDisaggregated(s) ? { raw: true } : {}) }) + (isCalc(e.field.tableCalc) ? ` · ${calcName(e.field.tableCalc)}` : ""));
   const ds = planDims(s).keyOrder.filter(Boolean).map(names.nameOf);
   const parts = [];
   if (ms.length || ds.length) parts.push(`${ms.length ? ms.join(", ") : "count"}${ds.length ? ` by ${ds.join(", ")}` : ""}`);

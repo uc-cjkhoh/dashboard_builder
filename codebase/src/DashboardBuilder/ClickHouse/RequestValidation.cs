@@ -247,6 +247,14 @@ public static class RequestRules
                 throw Bad("A top-N filter needs a measure to rank by.", $"filters[{i}].topBy");
             if (f.TopBy is { } by) CheckCalcMeasure(by, $"filters[{i}].topBy");
         }
+        if (r.Disaggregate == true)
+        {
+            // One row per source row: nothing that needs groups.
+            if (measures == 0) throw Bad("Aggregate Measures off needs at least one measure.", "measures");
+            if (r.Having is { Length: > 0 }) throw Bad("A filter on a measure needs aggregated measures — turn Aggregate Measures back on.", "having");
+            if (r.OtherBucket == true) throw Bad("An Other bucket groups rows — turn Aggregate Measures back on.", "otherBucket");
+            if ((r.Joins ?? []).Any(j => j.Aggregate == true)) throw Bad("Aggregating before the join can't be combined with Aggregate Measures off — turn it off on the relationship.", "joins");
+        }
         ValidateHaving(r.Having, Math.Max(1, measures));
         if (r.Having is { Length: > 0 } && r.OtherBucket == true) throw Bad("An Other bucket can't be combined with a filter on a measure.", "otherBucket");
         ValidateRange(r.Limit, maxLimit, "Limit", "limit");

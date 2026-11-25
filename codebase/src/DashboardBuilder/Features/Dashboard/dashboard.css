@@ -108,7 +108,7 @@
 
 .ws-pill {
   display: inline-flex; align-items: center; gap: 8px;
-  min-height: 24px; padding: 0 var(--s1) 0 var(--s2); border-radius: var(--r-pill);
+  min-height: 24px; padding: 0 var(--s1) 0 var(--s2); border-radius: var(--r);
   background: var(--dim-bg); border: 1px solid var(--dim-line);
   color: var(--dim-ink); font-size: var(--fs-body); font-weight: 600; white-space: nowrap;
 }
@@ -340,7 +340,7 @@
 .ws-fmt-check { cursor: pointer; gap: var(--s1); }
 /* A colour picker (fmtSwatches): square swatches filled from the theme variables the chart draws with; the chosen one carries a tick (never colour alone). */
 .ws-swatches { display: flex; flex-wrap: wrap; gap: var(--s2); }
-.ws-swatch { width: var(--s6); height: var(--s6); padding: 0; border-radius: var(--r); font-size: var(--fs-body); line-height: 1; cursor: pointer; } /* no border or shadow: buttons.css strips both from every button, edges are fill and outline */
+.ws-swatch { width: var(--s6); height: var(--s6); padding: 0; border-radius: var(--s1); font-size: var(--fs-body); line-height: 1; cursor: pointer; } /* no border or shadow: buttons.css strips both from every button, edges are fill and outline */
 .ws-swatch--muted { background: var(--chart-muted); color: var(--surface); }
 .ws-swatch--ink { background: var(--ink); color: var(--surface); }
 .ws-swatch--surface { background: var(--surface); outline: 1px solid var(--ink-3); outline-offset: -1px; color: var(--ink); } /* the same colour as the flyout: only its edge shows it */
@@ -508,7 +508,7 @@
 .xt-cf__icon { position: relative; display: inline-flex; vertical-align: -3px; margin-right: var(--s1); }
 .xt-cf__icon .icon { width: 16px; height: 16px; }
 .xt-bar { position: absolute; top: 3px; bottom: 3px; border-radius: var(--r); background: color-mix(in srgb, var(--chart-cat-1) 30%, transparent); }
-.xt-bar--neg { background: color-mix(in srgb, var(--chart-cat-6) 34%, transparent); }
+.xt-bar--neg { background: color-mix(in srgb, var(--chart-cat-5) 34%, transparent); } /* slot 5, with the bars' slot 1: far apart in hue */
 .xt-rule--good { background: var(--ok-bg); color: var(--ok-ink); }
 .xt-rule--bad { background: var(--danger-bg); color: var(--danger-ink); }
 .xt-rule--warn { background: var(--warn-bg); color: var(--warn-ink); }
@@ -640,30 +640,73 @@
 .ws-memcol__swatch { width: 16px; height: 16px; padding: 0; border: 1px solid var(--line-2); border-radius: var(--r); color: var(--ink); font-size: var(--fs-body); line-height: 1; cursor: pointer; }
 .ws-memcol__swatch[aria-pressed="true"] { outline: 2px solid var(--ink); outline-offset: 1px; }
 .ws-memcol__note { margin: 0; color: var(--ink-3); font-size: var(--fs-body); }
-.memcol-dialog { width: min(520px, calc(100vw - 2 * var(--s4))); }
+.dialog.memcol-dialog:not(.dialog--sm) { width: min(840px, calc(100vw - 2 * var(--s4))); aspect-ratio: 1.618; } /* landscape, the golden ratio: the proportions follow φ, the spacing stays on the 4 / 8 / 16 / 24 scale */
+.memcol-dialog { --memcol-swatch: 20px; } /* one size and one radius (--s1) for a palette swatch and a member's swatch */
 .memcol-dialog[open] { display: flex; flex-direction: column; max-height: calc(100vh - 2 * var(--s4)); }
-.memcol-dialog__body { display: grid; gap: var(--s2); overflow: auto; min-height: 0; align-content: start; }
-.memcol-dialog .dialog__foot { flex: none; }
-.memcol-head { margin: 0; font-size: var(--fs-body); font-weight: 600; color: var(--ink-2); }
-.memcol-palettes { display: grid; gap: var(--s1); }
-.memcol-palette { display: flex; align-items: center; gap: var(--s2); width: 100%; padding: var(--s1) var(--s2); border-radius: var(--r); text-align: left; cursor: pointer; }
-.memcol-palette[aria-checked="true"] { outline: 2px solid var(--ink); outline-offset: -2px; }
-.memcol-palette__name { flex: 1; font-size: var(--fs-body); }
-.memcol-tick { width: var(--s4); text-align: center; font-size: var(--fs-body); }
-.memcol-palette[aria-checked="true"] .memcol-tick::before { content: "\2713"; }
-.memcol-members { display: grid; gap: var(--s1); max-height: 240px; overflow: auto; }
-.memcol-row { display: flex; align-items: center; gap: var(--s2); }
-.memcol-member { display: flex; flex: 1; min-width: 0; align-items: center; gap: var(--s2); padding: var(--s1) var(--s2); border-radius: var(--r); text-align: left; cursor: pointer; }
-.memcol-member.is-selected { outline: 2px solid var(--ink); outline-offset: -2px; }
-.memcol-marker { width: var(--s2); font-size: var(--fs-body); }
-.memcol-member.is-selected .memcol-marker::before { content: "\25B8"; }
-.memcol-dot { flex: none; width: var(--s4); height: var(--s4); border-radius: var(--r-pill); border: 1px solid var(--line-2); background: var(--surface-2); }
+.memcol-band { display: flex; flex: none; align-items: center; gap: var(--s2); min-height: var(--ctl-h); padding: var(--s1) var(--s4); background: var(--surface-2); } /* the Color flyout's recessed band (.ws-toolpanel__head) */
+.memcol-band--head { justify-content: space-between; border-bottom: 1px solid var(--line); }
+.memcol-dialog .dialog__foot.memcol-band { padding: var(--s2) var(--s4); border-top: 1px solid var(--line); }
+.memcol-band--head > .iconbtn:last-child { margin-right: calc(-1 * var(--s2)); } /* the ✕ glyph flush with the band's gutter, as in the flyout */
+.memcol-body { display: grid; grid-template-columns: 1fr 1.618fr; flex: 1 1 auto; min-height: 0; overflow: hidden; } /* 38.2 % : 61.8 % */
+.memcol-pane { display: grid; gap: var(--s4); align-content: start; min-height: 0; min-width: 0; padding: var(--s4); overflow: auto; } /* each pane scrolls on its own */
+.memcol-pane + .memcol-pane { border-left: 1px solid var(--line); } /* a hairline between the panes, like the flyout's sections */
+.memcol-palettes { display: grid; gap: var(--s4); }
+.memcol-palette { display: grid; gap: var(--s2); }
+.memcol-palette + .memcol-palette { padding-top: var(--s4); border-top: 1px solid var(--line); } /* a hairline between palettes */
+.memcol-palette__head { display: flex; align-items: center; gap: var(--s2); margin-inline: calc(-1 * var(--s2)); } /* the title's text sits on the swatches' left edge */
+.memcol-palette__apply { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: var(--s2); min-height: var(--ctl-h); padding: var(--s1) var(--s2); border-radius: var(--r); background: transparent; text-align: left; cursor: pointer; } /* the title is a button: it applies the palette to every member */
+.memcol-palette__apply:hover:not(:disabled):not([aria-pressed="true"]) { background: var(--surface-2); }
+.memcol-palette__apply[aria-pressed="true"] { background: var(--surface-3); } /* a fill and the tick: no outline */
+.memcol-palette__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-body); font-weight: 600; color: var(--ink-2); }
+.memcol-tick { flex: none; display: grid; place-items: center; width: var(--s4); height: var(--s4); color: var(--ink); } /* a drawn check icon, shown while the palette is applied (its button is aria-pressed) */
+.memcol-palette__apply:not([aria-pressed="true"]) .memcol-tick { visibility: hidden; }
+.memcol-palette__remove { flex: none; }
+.memcol-swatches { display: flex; flex-wrap: wrap; gap: var(--s1); }
+.memcol-custom { display: flex; align-items: center; gap: var(--s2); padding-top: var(--s4); border-top: 1px solid var(--line); }
+.memcol-pane--colours { display: flex; flex-direction: column; gap: 0; padding: 0; overflow: hidden; } /* the body scrolls; the footer stays at the bottom */
+.memcol-pane__body { display: grid; gap: var(--s4); align-content: start; flex: 1 1 auto; min-height: 0; padding: var(--s4); overflow: auto; }
+.memcol-pane__foot { flex: none; padding: var(--s2) var(--s4); border-top: 1px solid var(--line); } /* the dialog footer's rhythm: 8 / 16 around one control */
+.memcol-pane__foot .memcol-create__open { display: flex; align-items: center; justify-content: center; width: 100%; padding-inline: var(--s2); text-align: center; } /* full width; the icon and the label centred, both ways */
+.memcol-create__label { display: inline-flex; align-items: center; justify-content: center; gap: var(--s2); min-width: 0; }
+.palcreate-dialog { --memcol-swatch: 20px; } /* the same swatch size as the Edit member colours dialog */
+.palcreate-dialog[open] { display: flex; flex-direction: column; max-height: calc(100vh - 2 * var(--s4)); }
+.palcreate-dialog .dialog__foot.memcol-band { padding: var(--s2) var(--s4); border-top: 1px solid var(--line); justify-content: flex-end; }
+.palcreate-body { display: grid; gap: var(--s4); align-content: start; min-height: 0; padding: var(--s4); overflow: auto; }
+.palcreate-swatches { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1); } /* creation order: the n-th member takes the n-th colour */
+.palcreate-edit { display: flex; align-items: center; gap: var(--s2); }
+.memcol-custom__swatch { position: relative; flex: none; display: grid; place-items: center; width: var(--memcol-swatch); height: var(--memcol-swatch); border-radius: var(--s1); background: var(--surface-2); color: var(--print-paper); font-size: var(--fs-body); line-height: 1; cursor: pointer; } /* the same shape as every swatch; the tick marks a colour of its own */
+.memcol-custom__swatch.is-light { color: var(--print-ink); }
+.memcol-custom__tick { visibility: hidden; }
+.memcol-custom__swatch[data-chosen="true"] .memcol-custom__tick { visibility: visible; }
+.memcol-custom__picker { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0; border: 0; background: none; opacity: 0; cursor: pointer; }
+.memcol-custom__hex { flex: 0 1 calc(8 * var(--s4)); min-width: 0; font-family: var(--font-mono); }
+.memcol-pane--members { display: flex; flex-direction: column; gap: var(--s2); overflow: hidden; } /* the search box stays put; only the list scrolls */
+.memcol-search { flex: none; width: 100%; }
+.memcol-scroll { display: grid; gap: var(--s4); align-content: start; flex: 0 1 auto; min-height: 0; overflow: auto; }
+.memcol-members { display: grid; gap: var(--s1); }
+.memcol-row { position: relative; } /* the member button spans the row, so its fill and focus wash reach the right edge; Reset sits on top of it, inside that fill */
+.memcol-member { display: flex; width: 100%; min-width: 0; min-height: var(--ctl-h); align-items: center; gap: var(--s2); padding: var(--s1) calc(var(--ctl-h) + var(--s1)) var(--s1) var(--s2); border-radius: var(--r); background: transparent; text-align: left; cursor: pointer; } /* the right padding keeps the name and hex clear of Reset's column, shown or not, so every row reads the same width */
+.memcol-reset { position: absolute; top: var(--s1); right: var(--s1); width: var(--s6); height: var(--s6); } /* a 24px target inset 4px in the fill, so its hover box does not touch the row's edges */
+.memcol-row:hover > .memcol-member:not(:disabled):not(.is-selected) { background: var(--surface-2); }
+.memcol-member.is-selected { background: var(--surface-3); } /* a fill and the bold name: no outline */
+.memcol-member.is-selected .memcol-member__name { font-weight: 600; }
+.memcol-dot { flex: none; width: var(--memcol-swatch); height: var(--memcol-swatch); border-radius: var(--s1); background: var(--surface-2); } /* the same shape as a palette swatch: 4px radius, no outline */
 .memcol-member__name { flex: 1; min-width: 0; font-size: var(--fs-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.memcol-swatch { color: var(--surface); text-shadow: 0 0 2px var(--ink), 0 0 2px var(--ink); } /* the tick reads on any palette colour, light or dark */
+.memcol-cell { display: grid; place-items: center; width: var(--memcol-swatch); height: var(--memcol-swatch); outline: none; color: var(--print-paper); } /* the tick: white on a dark colour, black (below) on a light one, in every scheme (--print-* are scheme-independent) */
+.memcol-cell[aria-pressed="true"] { outline: none; } /* no outline, chosen or not: the check icon marks the chosen colour (this overrides the shared .ws-swatch[aria-pressed] outline) */
+.memcol-cell:not([aria-pressed="true"]) > .icon { visibility: hidden; }
+.memcol-cell.is-light { color: var(--print-ink); }
 .memcol-hex { font-family: var(--font-mono); font-size: var(--fs-body); color: var(--ink-3); }
 .memcol-note { margin: 0; color: var(--ink-3); font-size: var(--fs-body); }
 .memcol-error { color: var(--danger-ink); font-size: var(--fs-body); }
 .memcol-error:empty { display: none; }
+@media (max-width: 720px) { /* narrow screens: palettes above the members, one scroll, no fixed proportion */
+  .dialog.memcol-dialog:not(.dialog--sm) { aspect-ratio: auto; }
+  .memcol-body { grid-template-columns: minmax(0, 1fr); overflow: auto; }
+  .memcol-pane { overflow: visible; }
+  .memcol-pane--members, .memcol-scroll, .memcol-pane--colours, .memcol-pane__body { overflow: visible; }
+  .memcol-pane + .memcol-pane { border-left: 0; border-top: 1px solid var(--line); }
+}
 .memcol-resetall { margin-right: auto; }
 
 /* Member labels: the filter list's secondary raw value and the "Edit member labels…" dialog. */

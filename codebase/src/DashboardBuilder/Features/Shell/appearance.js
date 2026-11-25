@@ -1,13 +1,13 @@
 // Top-bar Appearance: one icon button (its glyph shows the current mode) opening one card with every look-and-feel choice —
-// mode (Light / Dark, remembered in this browser, Core/scheme.js), the dark look, the accent and the chart colours
-// (saved with the workbook, Core/theme-model.js). Choices apply live and the card stays open; Esc, an outside click or Tab closes it.
+// mode (Light / Dark, remembered in this browser, Core/scheme.js), the dark look and the accent
+// (saved with the workbook, Core/theme-model.js). Chart colours are not here: they are generated, and a member's own colour is set in the worksheet's Color flyout. Choices apply live and the card stays open; Esc, an outside click or Tab closes it.
 // The card is built once; `sync` repaints the selection and the swatches whenever the mode or the theme changes.
 import { wireMenu } from "../Core/menu.js";
 import { icon } from "../Core/icons.js";
 import { bus, currentTheme, setTheme } from "../Core/store.js";
 import { SCHEME_PREFS } from "../Core/scheme-model.js";
 import { schemePref, setSchemePref, isDark } from "../Core/scheme.js";
-import { ACCENTS, PALETTES, SURFACES, DEFAULT_THEME, ONE_DARK_THEME, surfaceOf, deriveAccent, accentSet } from "../Core/theme-model.js";
+import { ACCENTS, SURFACES, DEFAULT_THEME, ONE_DARK_THEME, surfaceOf, deriveAccent, accentSet } from "../Core/theme-model.js";
 
 const el = (tag, cls, text) => {
   const e = document.createElement(tag);
@@ -93,15 +93,6 @@ export function initAppearance() {
   });
   hex.addEventListener("change", () => tryCustom(hex.value));
 
-  // Chart colours: a row per palette, with its eight series colours.
-  const palettes = Object.entries(PALETTES).map(([id, p]) => {
-    const b = radio("menu__item", null, () => setTheme({ ...currentTheme(), palette: id }));
-    const st = strip(p.light);
-    b.append(st, el("span", "menu__label", p.label), tick());
-    rows.push({ node: b, checked: (t) => t.palette === id, colours: (_, dark) => paint(st, p[dark ? "dark" : "light"]) });
-    return b;
-  });
-
   const reset = radio("menu__item", null, () => setTheme(DEFAULT_THEME));
   reset.setAttribute("role", "menuitem"); reset.removeAttribute("aria-checked");
   reset.append(icon("refresh"), el("span", "menu__label", "Reset theme"));
@@ -110,7 +101,7 @@ export function initAppearance() {
   const sep = () => { const s = el("div", "menu__sep"); s.setAttribute("role", "separator"); return s; };
   card.classList.add("appearance");
   card.replaceChildren(modes, sep(), heading("Dark look"), ...looks, sep(), heading("Accent", accentName), accents, custom, err,
-    sep(), heading("Chart colours"), ...palettes, sep(), reset);
+    sep(), reset);
 
   const sync = () => {
     const cur = SCHEME_PREFS.find((p) => p.id === schemePref()), t = currentTheme(), dark = isDark();
