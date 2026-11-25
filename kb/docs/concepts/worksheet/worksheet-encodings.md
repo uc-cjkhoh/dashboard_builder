@@ -98,7 +98,8 @@ In the Table and Text views, a Rows or Columns header that has a next level belo
 The **Pages** tool takes one dimension (`sheet.pages`).
 
 - **Page control** (`.ws-pages`) below the shelves: shows the current member and count, with previous / next stepping (wrapping).
-- **Play / Pause** autoplays every 1.5s — **omitted under `prefers-reduced-motion`**. The autoplay timer is cleared on view switch.
+- **Play / Pause** autoplays every 1.5s by default — **omitted under `prefers-reduced-motion`**. The autoplay timer is cleared on view switch.
+- **Speed** (the Pages flyout's Playback section, shown once a field is set): Slow 3 s, Medium 1.5 s, Fast 0.8 s between pages, stored as `pages.speed` only when not Medium ([D158](../../decisions/decisions-marks.md#d158--tableaus-marks-card-controls-the-flyouts-lacked-a-size-meter-allow-labels-to-overlap-pages-speed)). Disabled, with a reason, under reduced motion, where Play is hidden. Changing it while Play runs stops Play. Play and the page picker stay on the worksheet.
 - **Filtering:** each page applies the current member as a bound `=` filter, only when its table is already in the query.
 - **Members** come from the bounded distinct-values query (shared with `in`), capped at 200 with the same "more exist" notice. A load failure shows the server's message.
 

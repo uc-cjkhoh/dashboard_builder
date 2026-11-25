@@ -30,6 +30,10 @@ Shape flyout → **Edit member shapes** (shown while a Shape **dimension** is on
 - The chosen symbol applies to the member's series and its legend icon, in a pair ("colour · member") and when Colour and Shape are the same field. A member without one keeps the symbol at its position. Two members may share a symbol (the user's choice).
 - A measure on Shape has bins, not members: no editor is offered, and a saved `memberShapes` is kept but not drawn while Shape holds a measure.
 
+## Allow labels to overlap other marks
+
+Label flyout → a checkbox, shown only while a label is drawn, **on by default** (every label draws, as always). Off hides a label that would sit on another: every series that shows a label gets ECharts' `labelLayout.hideOverlap` (`withLabelOverlap` in `buildOption`, so it covers each chart family). Stored as `format.labelOverlap`, only when off. Tableau hides overlapping labels by default; here the default is unchanged so saved workbooks draw as before ([D158](../../decisions/decisions-marks.md#d158--tableaus-marks-card-controls-the-flyouts-lacked-a-size-meter-allow-labels-to-overlap-pages-speed)).
+
 ## Label marks
 
 Label flyout → **Label marks** chooses which marks carry their label (the Label field's text, or the value when Data labels is on). Stored as `format.labelMarks`: absent = **All** (every mark, as labels have always drawn); otherwise one of `minmax`, `selected`, `highlighted`, `recent`, `ends`. An unknown saved value is reset to All and reported on import; a mode this chart cannot offer is **kept** and draws every label with a hint ("Line ends labels apply to Line and Area charts — every mark is labelled"), so switching back to a line restores it.

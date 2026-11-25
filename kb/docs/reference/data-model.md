@@ -158,7 +158,7 @@ Nothing here reaches the server; dashboards add no endpoint
   format: { numberFormat, decimals, currencySymbol, dateFormat, topN, dateBucket, target, downIsGood, conditional, legend,
             dataLabels, xTitle, yTitle,
             lineStyle, heatmapShape, ganttLength?, targetMeasure,
-            syncAxes, dualAxis, secondaryType, markerSize, linePattern?, lineMarkers?, showTooltips?, tooltipButtons?, tooltipMode?, sizeScale?, markOpacity?, shapeBins?, labelMarks?, labelPosition?, markBorder, markBorderColor?, markerShape, font, tableAlign, tableDensity, tableShade, tableCols? }
+            syncAxes, dualAxis, secondaryType, markerSize, linePattern?, lineMarkers?, showTooltips?, tooltipButtons?, tooltipMode?, sizeScale?, markOpacity?, shapeBins?, labelMarks?, labelPosition?, labelOverlap?, markBorder, markBorderColor?, markerShape, font, tableAlign, tableDensity, tableShade, tableCols? }
 }
 ```
 
@@ -175,11 +175,12 @@ Nothing here reaches the server; dashboards add no endpoint
   | `syncAxes` | boolean (default false) |
   | `dualAxis` | boolean (default false; line / area right axis) |
   | `secondaryType` | `line` \| `bar` \| `area` (default `line`) |
-  | `markerSize` | null (automatic) or a whole number 4–40 |
+  | `markerSize` | null (automatic) or a whole number 4–40: the Size meter's position — px on markers, a share of the slot / radius / width on other chart types ([D160](../decisions/decisions-marks.md#d160--the-size-meter-sizes-the-elements-of-every-chart-type-that-has-any)) |
   | `sizeScale` | optional `{ smallest?, largest?, vary?, start?, end?, reversed?, fromZero? }` (Size flyout → Edit Sizes): `smallest` / `largest` whole 0–100 (default 0 / 100, smallest below largest); `vary` `"range"` / `"zero"` (absent = Automatic, the chart's own default); `start` / `end` finite numbers within ±1e12, start below end, no start under From zero; `reversed` boolean; `fromZero` boolean is the older form of `vary` (kept as saved, `vary` wins); only parts that differ from the default are stored |
   | `shapeBins` | optional whole number 2–6 (Shape flyout → Shape bins, while Shape holds a measure; absent = 5); an invalid saved value is reset to 5 and reported, never clamped |
   | `labelMarks` | optional `minmax` \| `selected` \| `highlighted` \| `recent` \| `ends` (Label flyout → Label marks; absent = All, every mark labelled); an unknown saved value is reset to All and reported |
   | `labelPosition` | optional `above` \| `below` \| `left` \| `right` (Label flyout → Label position on a line, area or point chart; absent = Automatic); an unknown saved value is reset to Automatic and reported |
+  | `labelOverlap` | optional `false` only (Label flyout → Allow labels to overlap other marks; absent = on, every label draws); a non-boolean saved value is reset to on and reported |
   | `markOpacity` | optional whole percent from 0 to 100 (Color flyout → Opacity; absent = 100); an invalid saved value is reset and reported, never clamped |
   | `markBorder` | `none` or a width in px, 0.5 to 3 in steps of 0.5 (default `none`); an older file's `thin` / `medium` / `thick` read as 1 / 2 / 3 and import stores the number; an off-step value is reset and reported, never rounded |
   | `markBorderColor` | optional: `muted` \| `ink` \| `surface` \| `accent` (absent = `muted`) |
@@ -222,7 +223,7 @@ Nothing here reaches the server; dashboards add no endpoint
 | `marks.shape` | pill \| null | dimension → point symbols (scatter family) |
 | `marks.path` | pill \| null | orders line/area vertices |
 | `marks.angle` | pill \| null | radial magnitude (pie already maps its measure to angle) |
-| `pages` | `{ db, table, column, category, index, members? }` | the current member `members[index]` filters the view |
+| `pages` | `{ db, table, column, category, index, speed?, members? }` | the current member `members[index]` filters the view; `speed` is `slow` \| `fast` (absent = Medium, 1.5 s per step; Pages flyout → Speed); an unknown saved speed is reset to Medium and reported |
 | `selection` | `{ db, table, column, value, label, action }` | a clicked mark; `action` null \| `"keep"` \| `"exclude"` |
 | `drill` | `{ levels:[pill], depth, path:[{column, value, label}] }` | ≥2 levels from one table; `path.length === depth`; depth clamped to the levels |
 
@@ -252,8 +253,8 @@ What [workbook.md](../concepts/workbook/workbook.md) saves to `localStorage` and
   parameters:    [{ id: "prm<n>", name, type: number|text|date, value, allowed: { kind: any|list|range, list?, min?, max?, step? } }]   // P32 — ≤ 20
   hierarchies?:  [{ id: "hier<n>", name, levels: [{ db, table, column }] }]   // T03-29 — optional, ≤ 20, 2–6 same-table levels; a sheet's drill copies them
   sharedFilters: Filter[]                  // P40 — ≤ 4, applied by every worksheet where their table is in the view
-  theme:         { accent: "signal" | "ultramarine" | "monospace" | "blue" | "crimson" | "teal" | "violet" | "graphite" | "#rrggbb", palette: "default" | "okabe" | "muted" }
   view?:         { zoom: 0.25–2, pan: { x, y } }   // D159 — the Data Source zoom and pan (optional; absent = fit every card on open)
+  theme:         { accent: "signal" | "ultramarine" | "monospace" | "blue" | "crimson" | "teal" | "violet" | "graphite" | "#rrggbb", palette: "default" | "okabe" | "muted" }
 }
 ```
 
