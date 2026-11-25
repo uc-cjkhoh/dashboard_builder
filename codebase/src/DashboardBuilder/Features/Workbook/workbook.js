@@ -8,7 +8,7 @@ import { DEFAULT_THEME } from "../Core/theme-model.js";
 import { exit } from "../Core/motion.js";
 import { toast, confirmDestructive, listDialog } from "../Core/ui.js";
 import { dateIn } from "../Core/timezone.js";
-import { addEntity, clearModel, fitCanvas } from "../Canvas/canvas.js";
+import { addEntity, clearModel, fitCanvas, canvasView, restoreView } from "../Canvas/canvas.js";
 import { restoreRelationship } from "../Relations/relations.js";
 import { serializeWorkbook, parseWorkbook, storageKey, legacyStorageKey, restoredSummary, issueCount } from "./workbook-model.js";
 import { api } from "../Core/api.js";
@@ -25,6 +25,7 @@ const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
 const CHANGE_EVENTS = [
   "entity:added", "entity:moved", "entity:removed", "entity:sql", "entity:sqltext",
   "rel:changed", "tabs:changed", "worksheet:changed", "dashboard:changed", "story:changed", "theme:changed", "fields:changed", "parameters:changed", "hierarchies:changed", "calculations:changed",
+  "canvas:zoomed", // the Data Source view (zoom, pan) is saved too, so a reload keeps it
 ];
 
 let key = null;        // storage key for the connected server + user; null while disconnected
@@ -195,7 +196,8 @@ function openWorkbook(wb) {
         { aggregate: r.aggregateFirst === true, direction: r.filterDirection },
       );
     }
-    fitCanvas(); // every restored card in view (it waits for their columns), whatever size the window was when it was saved
+    if (wb.view) restoreView(wb.view); // the zoom and pan the user left
+    else fitCanvas(); // none saved (a new or older workbook): every restored card in view (it waits for their columns), whatever size the window was when it was saved
 
     // Tabs in strip order; widgets point at worksheets by saved index, so those are wired once every tab exists.
     const worksheetIds = [], dashboardIds = [], storyIds = [];
@@ -275,7 +277,7 @@ async function catalogIssuesFor(wb) {
 }
 
 function currentState() {
-  return { entities, relationships, tabs, active: currentView(), theme: currentTheme(), sharedFilters, fieldMeta, parameters, hierarchies, calculations, nextCalcId: nextCalcId() };
+  return { entities, relationships, tabs, active: currentView(), theme: currentTheme(), sharedFilters, fieldMeta, parameters, hierarchies, calculations, nextCalcId: nextCalcId(), view: canvasView() };
 }
 
 const isEmpty = () => entities.size === 0 && tabs.length === 0;

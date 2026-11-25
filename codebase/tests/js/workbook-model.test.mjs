@@ -781,3 +781,27 @@ test("the MySQL text a custom SQL was written as is saved beside it and opened w
   // a MySQL text without a ClickHouse query is meaningless: it is not written
   delete first.customSql; assert.equal("customSqlMysql" in JSON.parse(JSON.stringify(serializeWorkbook(state))).entities[0], false);
 });
+
+// --- Data Source view (zoom + pan) is saved, so a reload keeps it instead of fitting ---
+test("a saved view round-trips, rounded", () => {
+  const state = { ...sampleState(), view: { zoom: 0.71234567, pan: { x: 12.6, y: -40.2 } } };
+  const saved = serializeWorkbook(state);
+  assert.deepEqual(saved.view, { zoom: 0.712, pan: { x: 13, y: -40 } });
+  assert.deepEqual(parseWorkbook(JSON.stringify(saved)).view, { zoom: 0.712, pan: { x: 13, y: -40 } });
+});
+
+test("no view given: none saved, none read (the canvas fits on open)", () => {
+  const saved = serializeWorkbook(sampleState());
+  assert.equal("view" in saved, false);
+  const wb = parseWorkbook(JSON.stringify(saved));
+  assert.equal(wb.view, null);
+  assert.deepEqual(wb.issues, []);
+});
+
+test("an invalid saved view is dropped with a note, never half-used", () => {
+  for (const bad of [{ zoom: 9, pan: { x: 0, y: 0 } }, { zoom: 0.01, pan: { x: 0, y: 0 } }, { zoom: "1", pan: { x: 0, y: 0 } }, { zoom: 1, pan: { x: NaN, y: 0 } }, { zoom: 1, pan: { x: 1e9, y: 0 } }, { zoom: 1 }, 5, []]) {
+    const wb = parseWorkbook(JSON.stringify({ ...serializeWorkbook(sampleState()), view: bad }));
+    assert.equal(wb.view, null, JSON.stringify(bad));
+    assert.ok(wb.issues.some((i) => /view/i.test(i)), JSON.stringify(bad));
+  }
+});

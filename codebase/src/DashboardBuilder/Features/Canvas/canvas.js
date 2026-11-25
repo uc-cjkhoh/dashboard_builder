@@ -29,6 +29,8 @@ const TABLE_MIME = "application/x-ch-table";
 let createEntityImpl = null;
 let clearModelImpl = null;
 let fitCanvasImpl = null;
+let canvasViewImpl = null;
+let restoreViewImpl = null;
 
 /** Add a table to the Data Source at (x, y). `source` makes it a union / unpivot entity (Core/source-model.js; its `table` is the source's name; it takes no relationship).
  *  `customSql` is a saved SELECT the card reads instead of the table (D105; the card stays an ordinary, relatable table card); `customSqlMysql` the MySQL text it was written as (D106).
@@ -41,6 +43,12 @@ export function clearModel() { clearModelImpl?.(); }
 /** Zoom and pan so every card shows, once the cards have their columns (a card's height settles when they load) and the Data Source is on screen.
  *  Used after a workbook is opened; a pan, zoom or Fit by the user in the meantime cancels it. */
 export function fitCanvas() { fitCanvasImpl?.(); }
+
+/** The Data Source's zoom and pan, for the workbook to save: `{ zoom, pan: { x, y } }`, or null while a fit is still waiting for the cards (that view is a placeholder, not something the user chose). */
+export function canvasView() { return canvasViewImpl?.() ?? null; }
+
+/** Show a saved view (zoom, pan) instead of fitting; cancels a fit that is waiting. Used when a workbook is opened with a saved view. */
+export function restoreView(view) { restoreViewImpl?.(view); }
 
 export function initCanvas() {
   const canvas = document.getElementById("model-view");
@@ -144,6 +152,13 @@ export function initCanvas() {
     fit();
   }
   fitCanvasImpl = () => { pendingFit = true; tryFit(); };
+  canvasViewImpl = () => (pendingFit ? null : { zoom, pan: { x: pan.x, y: pan.y } });
+  restoreViewImpl = (view) => {
+    pendingFit = false;
+    zoom = clampZoom(view.zoom);
+    pan.x = view.pan.x; pan.y = view.pan.y;
+    refreshView();
+  };
 
   // Fit is the one overview control with no pointer-only equivalent (the wheel zooms, F is a key): a solid icon button in the bottom-right dock, under Appearance (Shell/Index.cshtml).
   const fitBtn = document.createElement("button");

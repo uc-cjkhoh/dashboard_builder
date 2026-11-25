@@ -10,6 +10,7 @@ import { emptySheet, defaultFormat } from "../Core/store.js";
 import { LIMITS, text, isFraction } from "../Core/validate.js";
 import { aggsFor } from "../Dashboard/filter-rules.js";
 import { CASTS } from "../Dashboard/cast-model.js";
+import { ZOOM_MIN, ZOOM_MAX } from "../Canvas/canvas-zoom.js";
 import { cleanMemberAliases } from "../Dashboard/member-labels.js";
 import { cleanTheme, DEFAULT_THEME } from "../Core/theme-model.js";
 import { normalizeJoinType, relEnds, applyAggregate } from "../Relations/relation-rules.js";
@@ -53,7 +54,7 @@ const NOT_A_WORKBOOK = "This file is not a Dashboard Builder workbook.";
 /** Builder state → a plain JSON-safe object. DOM nodes, fetched columns and lazily-loaded page
  *  members are left out (they are re-fetched on open). `tabs` is the store's ordered list (worksheet and dashboard
  *  tabs); `active` is the store's activeView. */
-export function serializeWorkbook({ entities, relationships, tabs, active, theme, sharedFilters = [], fieldMeta = new Map(), parameters = [], calculations = [], nextCalcId, hierarchies = [] }) {
+export function serializeWorkbook({ entities, relationships, tabs, active, theme, sharedFilters = [], fieldMeta = new Map(), parameters = [], calculations = [], nextCalcId, hierarchies = [], view = null }) {
   const worksheets = [], dashboards = [], storyTabs = [], order = [];
   const wsIndex = new Map(), dbIndex = new Map(), stIndex = new Map(); // tab id → index in the saved list
   for (const t of tabs) {
@@ -90,6 +91,7 @@ export function serializeWorkbook({ entities, relationships, tabs, active, theme
     tabs: order, // the strip's order
     active: activeIndex !== undefined ? { kind: active.kind, index: activeIndex } : null, // null = the Data Source view
     theme: theme ? { accent: theme.accent, palette: theme.palette, ...(theme.surface && theme.surface !== "default" ? { surface: theme.surface } : {}) } : { ...DEFAULT_THEME },
+    ...(view ? { view: { zoom: Math.round(view.zoom * 1000) / 1000, pan: { x: Math.round(view.pan.x), y: Math.round(view.pan.y) } } } : {}), // the Data Source's zoom and pan (optional; absent = fit every card on open)
     sharedFilters: structuredClone(sharedFilters),
     fields: Object.fromEntries(fieldMeta),
     parameters: structuredClone(parameters),
@@ -317,7 +319,20 @@ export function parseWorkbook(source) {
     if (Number.isInteger(raw.nextCalcId) && raw.nextCalcId >= 1 && raw.nextCalcId <= 999999) nextCalcId = raw.nextCalcId;
     else issues.push("The saved next calculation number was invalid — ignored.");
   }
-  return { entities, relationships, worksheets, dashboards, stories, tabs, active, theme, sharedFilters, fields, parameters, hierarchies, calculations, nextCalcId, issues: [...new Set(issues)] };
+  const view = cleanView(raw.view, issues);
+  return { entities, relationships, worksheets, dashboards, stories, tabs, active, view, theme, sharedFilters, fields, parameters, hierarchies, calculations, nextCalcId, issues: [...new Set(issues)] };
+}
+
+const MAX_PAN = 1e6; // model px; far past any real canvas, so a corrupt number cannot park the view in space
+
+/** The saved Data Source view `{ zoom, pan: { x, y } }`, or null: absent means fit on open; a malformed one is reported and dropped whole (a half-read view could hide every card). */
+function cleanView(v, issues) {
+  if (v === undefined || v === null) return null;
+  const fin = (n) => typeof n === "number" && Number.isFinite(n);
+  const ok = v && typeof v === "object" && !Array.isArray(v) && fin(v.zoom) && v.zoom >= ZOOM_MIN && v.zoom <= ZOOM_MAX
+    && v.pan && typeof v.pan === "object" && fin(v.pan.x) && fin(v.pan.y) && Math.abs(v.pan.x) <= MAX_PAN && Math.abs(v.pan.y) <= MAX_PAN;
+  if (!ok) { issues.push("The saved Data Source view (zoom and position) was invalid — the cards are fitted to the window instead."); return null; }
+  return { zoom: v.zoom, pan: { x: v.pan.x, y: v.pan.y } };
 }
 
 /** A saved list of tab objects; a non-list is reported, and entries that aren't objects are skipped (and reported). */
