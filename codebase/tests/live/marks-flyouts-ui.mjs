@@ -183,9 +183,9 @@ try {
   });
   await check('Bar: Label holds Data labels (not Format); Marker size, Line style, Shape bins are absent; Size is not quiet', async () => {
     await openTile('label');
-    must(await inFly('Data labels'), 'Data labels missing from the Label flyout');
+    must(await inFly('Show mark labels'), 'Data labels missing from the Label flyout');
     await openFormat();
-    must(!(await inFormat('Data labels')) && !(await inFormat('Label marks')) && !(await inFormat('Show tooltips')) && !(await inFormat('Line style')), 'a moved control is still in Format');
+    must(!(await inFormat('Show mark labels')) && !(await inFormat('Label marks')) && !(await inFormat('Show tooltips')) && !(await inFormat('Line style')), 'a moved control is still in Format');
     must(await inFormat('Legend') && await inFormat('Number'), 'Format lost its own controls');
     must(!(await quiet('size')), 'Size is quiet on a bar');
   });
@@ -247,7 +247,7 @@ try {
   });
   await check('a table: Label and Tooltip flyouts hold no chart-only controls', async () => {
     await chartType('Table');
-    await openTile('label'); must(!(await inFly('Data labels')), 'Data labels on a table');
+    await openTile('label'); must(!(await inFly('Show mark labels')), 'Data labels on a table');
     await openTile('tooltip'); must(!(await inFly('Show tooltips')), 'Show tooltips on a table');
   });
   await check('focus returns to the control that changed: Data labels and Marker size', async () => {
@@ -263,15 +263,15 @@ try {
     must(await ev(`!!document.activeElement?.closest?.('[data-fly-ctl="markerSize"]')`), 'focus after Marker size: ' + await ev(`document.activeElement?.tagName + '.' + document.activeElement?.className`));
     must(await ev(`document.querySelector('.ws-tool[data-tool="size"]').getAttribute('aria-expanded') === 'true'`), 'the flyout closed on a change');
   });
-  await check('Label: Allow labels to overlap other marks shows only while labels are drawn; on by default; off hides overlapping labels on the drawn series', async () => {
+  await check('Label: Allow labels to overlap other marks is disabled until labels are drawn; on by default; off hides overlapping labels on the drawn series', async () => {
     await chartType('Bar');
     await openTile('label');
     await ev(`(() => { const i = ${fly}.querySelector('[data-fly-ctl="dataLabels"] input'); if (i.checked) i.click(); return true; })()`); await settle(500);
     await openTile('label');
-    must(!(await inFly('Allow labels to overlap')), 'Allow labels to overlap offered while no label is drawn');
+    must(await ev(`(() => { const i = ${fly}.querySelector('[data-fly-ctl="labelOverlap"] input'); return !!i && i.disabled; })()`), 'Allow labels to overlap should be offered but disabled while no label is drawn');
     await ev(`(() => { const i = ${fly}.querySelector('[data-fly-ctl="dataLabels"] input'); if (!i.checked) i.click(); return true; })()`); await settle(500);
     await openTile('label');
-    must(await inFly('Allow labels to overlap other marks'), 'Allow labels to overlap missing from the Label flyout once labels are drawn');
+    must(await ev(`(() => { const i = ${fly}.querySelector('[data-fly-ctl="labelOverlap"] input'); return !!i && !i.disabled; })()`), 'Allow labels to overlap should be enabled once labels are drawn');
     const hide = () => ev(`(() => { const o = window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas')).getOption(); return o.series.filter((s) => s.label?.show).every((s) => s.labelLayout?.hideOverlap === true) && o.series.some((s) => s.label?.show); })()`);
     must(!(await hide()), 'overlap hidden by default');
     await openTile('label');
@@ -280,6 +280,65 @@ try {
     must(await ev(`!!document.activeElement?.closest?.('[data-fly-ctl="labelOverlap"]')`), 'focus did not return to the control');
     await ev(`(() => { const i = ${fly}.querySelector('[data-fly-ctl="labelOverlap"] input'); i.click(); return true; })()`); await settle(500);
     must(!(await hide()), 'back on: labels draw as before');
+  });
+  await check('Label card (Tableau layout): Show mark labels, then Label Appearance (Text, Font, Alignment), Marks to Label tiles and Options, each headed; the controls reach the chart', async () => {
+    await chartType('Bar');
+    await openTile('label');
+    await ev(`(() => { const i = ${fly}.querySelector('[data-fly-ctl="dataLabels"] input'); if (!i.checked) i.click(); return true; })()`); await settle(500);
+    await openTile('label');
+    const heads = await ev(`[...${fly}.querySelectorAll('.ws-flyedit__heading')].map((h) => h.textContent)`);
+    must(J(heads) === J(['Label Appearance', 'Marks to Label', 'Options']), 'headings ' + J(heads));
+    const tiles = await ev(`[...${fly}.querySelectorAll('[data-fly-ctl="labelMarks"] button')].map((b) => b.textContent.trim() + ':' + b.getAttribute('aria-pressed')).join('|')`);
+    must(tiles === 'All:true|Selected:false|Min & max:false|Highlighted:false', 'tiles ' + tiles);
+    must(await ev(`!!${fly}.querySelector('[data-fly-ctl="labelMarks"] button[aria-pressed="true"] svg')`), 'the chosen tile has no tick (never colour alone)');
+    const fill = await ev(`(() => { const g = (sel) => getComputedStyle(${fly}.querySelector('[data-fly-ctl="labelMarks"] button[aria-pressed="' + sel + '"]')).backgroundColor; return [g('false'), g('true')]; })()`);
+    must(fill[0] !== fill[1] && fill[0] !== 'rgba(0, 0, 0, 0)', 'the chosen tile must read apart from an unchosen one, which has its own fill (buttons carry no border): ' + J(fill));
+    const shotLabel = async (name) => { try { writeFileSync(join(SHOTS, `${name}-${SCHEME}.png`), Buffer.from((await b.send('Page.captureScreenshot', { format: 'png' })).data, 'base64')); } catch { /* optional */ } };
+    if (SCHEME === 'dark') await ev(`document.documentElement.setAttribute('data-scheme', 'dark')${LOOK ? `; document.documentElement.setAttribute('data-look', '${LOOK}')` : ''}`); // the boot script may have reset the scheme set before load
+    await settle(500);
+    await shotLabel('label-card');
+    const opt0 = () => ev(`window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas')).getOption().series[0].label`);
+    must(!('align' in (await opt0())) && !('fontWeight' in (await opt0())), 'an untouched label carries no Font / Alignment');
+    // Alignment, Font (size + bold), Text
+    await ev(`(() => { const s = ${fly}.querySelector('[data-fly-ctl="labelAlign"] select'); s.value = 'center'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`); await settle(500);
+    must((await opt0()).align === 'center', 'Alignment did not reach the label: ' + J(await opt0()));
+    await openTile('label');
+    await ev(`(() => { const s = ${fly}.querySelector('[data-fly-ctl="labelFont"] select[aria-label="Font size"]'); s.value = '16'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`); await settle(500);
+    must(await ev(`document.activeElement?.getAttribute?.('aria-label') === 'Font size'`), 'focus did not return to the Font size select');
+    await ev(`${fly}.querySelector('[data-fly-ctl="labelFont"] button[aria-label="Bold"]').click()`); await settle(500);
+    const l1 = await opt0();
+    must(l1.fontSize === 16 && l1.fontWeight === 600, 'Font did not reach the label: ' + J(l1));
+    await openTile('label');
+    await ev(`(() => { const i = ${fly}.querySelector('[data-fly-ctl="labelText"] input'); i.value = '<orders.region>: <Value>'; i.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`); await settle(600);
+    must(await ev(`[...document.querySelectorAll('#ws-chart svg text')].some((t) => /^APAC: /.test(t.textContent))`), 'the Text template did not reach the labels');
+    await openTile('label'); await shotLabel('label-card-set');
+    // "…" opens the editor; Cancel keeps everything and returns focus
+    await openTile('label');
+    await ev(`${fly}.querySelector('[data-fly-ctl="labelText"] .ws-fmt-dots').click()`); await settle(300);
+    must(await ev(`!!document.querySelector('dialog.tipdlg--label[open] textarea') && document.querySelector('dialog.tipdlg--label textarea').value === '<orders.region>: <Value>'`), 'the editor did not open on the template');
+    must(await ev(`[...document.querySelectorAll('dialog.tipdlg--label .tipdlg__chip')].map((b) => b.textContent)[0] === 'Value'`), 'Value is not the first field chip');
+    // a measure placeholder: take the measure chip's own name from the editor (never a guessed one) and confirm a drawn label shows its number
+    const chipNames = await ev(`[...document.querySelectorAll('dialog.tipdlg--label .tipdlg__chip')].map((b) => b.textContent)`);
+    const measureChip = chipNames.find((n) => n !== 'Value' && !/^orders[.]region$/.test(n));
+    must(!!measureChip, 'no measure chip in the editor: ' + J(chipNames));
+    await ev(`(() => { const t = document.querySelector('dialog.tipdlg--label textarea'); t.value = ${J('M:<' + measureChip + '>')}; t.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`); await settle(200);
+    await ev(`[...document.querySelectorAll('dialog.tipdlg--label .btn')].find((b) => b.textContent === 'Apply').click()`); await settle(600);
+    must(await ev(`[...document.querySelectorAll('#ws-chart svg text')].some((t) => /^M:\\d/.test(t.textContent))`), 'the measure placeholder <' + measureChip + '> did not draw its value: ' + await ev(`[...document.querySelectorAll('#ws-chart svg text')].map((t) => t.textContent).join('|')`));
+    await openTile('label');
+    await ev(`${fly}.querySelector('[data-fly-ctl="labelText"] .ws-fmt-dots').click()`); await settle(300);
+    await ev(`[...document.querySelectorAll('dialog.tipdlg--label .btn')].find((b) => b.textContent === 'Cancel').click()`); await settle(300);
+    must(await ev(`!document.querySelector('dialog.tipdlg--label')`), 'Cancel left the editor open');
+    // back to the defaults: nothing left stored
+    await openTile('label');
+    await ev(`(() => { const i = ${fly}.querySelector('[data-fly-ctl="labelText"] input'); i.value = ''; i.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`); await settle(500);
+    await openTile('label');
+    await ev(`(() => { const s = ${fly}.querySelector('[data-fly-ctl="labelAlign"] select'); s.value = 'auto'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`); await settle(500);
+    await openTile('label');
+    await ev(`(() => { const s = ${fly}.querySelector('[data-fly-ctl="labelFont"] select[aria-label="Font size"]'); s.value = 'auto'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`); await settle(500);
+    await openTile('label');
+    await ev(`${fly}.querySelector('[data-fly-ctl="labelFont"] button[aria-label="Bold"]').click()`); await settle(500);
+    const l2 = await opt0();
+    must(!('align' in l2) && !('fontWeight' in l2) && l2.fontSize === undefined, 'defaults left something on the label: ' + J(l2));
   });
   await check('Size: Marker size is a meter whose leftmost stop is Auto; a Format-free control with the same stored key', async () => {
     await chartType('Line');
@@ -319,12 +378,20 @@ try {
   await check('design probe: each tile\'s own controls hold the design rules', async () => {
     const { designProbe, formatProbe } = await import('./design-probe.mjs');
     await chartType('Bar');
+    await openTile('label'); // labels drawn: the enabled Label card is what gets probed (disabled text is skipped by the probe)
+    await ev(`(() => { const i = ${fly}.querySelector('[data-fly-ctl="dataLabels"] input'); if (!i.checked) i.click(); return true; })()`); await settle(500);
     for (const key of ['label', 'tooltip']) {
       await openTile(key);
       const r = await designProbe(ev, '#ws-toolfly .ws-flyedit__group > :not(.ws-toolpanel__slot)', { sleep: b.sleep });
       if (r.findings.length) console.log(key + '\n' + formatProbe(r));
       must(r.findings.length === 0, `${key}: ${r.findings.length} finding(s): ` + J(r.findings.map((x) => x.rule + ': ' + x.msg).slice(0, 4)));
     }
+    await openTile('label'); // the Edit label text dialog, in every scheme
+    await ev(`${fly}.querySelector('[data-fly-ctl="labelText"] .ws-fmt-dots').click()`); await settle(400);
+    { const r = await designProbe(ev, 'dialog.tipdlg--label', { sleep: b.sleep });
+      if (r.findings.length) console.log('label dialog\n' + formatProbe(r));
+      must(r.findings.length === 0, `label dialog: ${r.findings.length} finding(s): ` + J(r.findings.map((x) => x.rule + ': ' + x.msg).slice(0, 4))); }
+    await ev(`[...document.querySelectorAll('dialog.tipdlg--label .btn')].find((x) => x.textContent === 'Cancel').click()`); await settle(300);
     await chartType('Line');
     for (const key of ['size', 'shape', 'path']) {
       await openTile(key);

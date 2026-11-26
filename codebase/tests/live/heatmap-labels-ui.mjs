@@ -207,11 +207,11 @@ try {
     must((await cellTexts()).length === 320 && (await labelled()) === 0, 'no labels on the tiny cells: ' + await labelled());
     await shot('heatmap-labels-tiny');
     await ev(`document.querySelector('.ws-tool[data-tool="label"]').click()`); // Data labels live in the Label tile's flyout (D151), not in Format
-    await waitFor(`!!document.querySelector('#ws-toolfly:not([hidden]) #ws-toolpanel-label') && !!(${fmtField('Data labels')})`, 'data labels control');
-    await ev(`${fmtField('Data labels')}.querySelector('input').click()`); await settle(600);
+    await waitFor(`!!document.querySelector('#ws-toolfly:not([hidden]) #ws-toolpanel-label') && !!(${fmtField('Show mark labels')})`, 'data labels control');
+    await ev(`${fmtField('Show mark labels')}.querySelector('input').click()`); await settle(600);
     must((await labelled()) === 320, 'forced labels appear on every cell: ' + await labelled());
     await shot('heatmap-labels-forced');
-    await ev(`${fmtField('Data labels')}.querySelector('input').click()`); await settle(500);
+    await ev(`${fmtField('Show mark labels')}.querySelector('input').click()`); await settle(500);
     must((await labelled()) === 0, 'unchecked: back to automatic (none, the cells are tiny)');
     await ev(`document.querySelector('#ws-toolfly:not([hidden]) .iconbtn[aria-label="Close editor"]')?.click()`); await settle(300);
     CHANNELS = 3;

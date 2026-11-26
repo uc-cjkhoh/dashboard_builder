@@ -239,7 +239,7 @@ try {
   await check('a Colour and a Detail dimension still group the marks: rows that share keys stay separate marks, Data labels on', async () => {
     await dragChip('channel', toolEl('Color')); await settle(500);
     await dragChip('region', toolEl('Detail')); await settle(500);
-    must(await ev(`(() => { const t = document.querySelector('.ws-tool[data-tool="label"]'); t.click(); const l = [...document.querySelectorAll('#ws-toolfly label, #ws-toolfly .ws-fmt-field')].find((x) => /Data labels/i.test(x.textContent)); if (!l) return false; const i = l.querySelector('input'); if (!i.checked) i.click(); return true; })()`), 'the Data labels switch');
+    must(await ev(`(() => { const t = document.querySelector('.ws-tool[data-tool="label"]'); t.click(); const l = [...document.querySelectorAll('#ws-toolfly label, #ws-toolfly .ws-fmt-field')].find((x) => /Show mark labels/i.test(x.textContent)); if (!l) return false; const i = l.querySelector('input'); if (!i.checked) i.click(); return true; })()`), 'the Data labels switch');
     await settle(800);
     const q = lastQuery();
     must(q.disaggregate === true && q.rowDimensions.concat(q.columnDimensions).map((d) => d.column).join() === 'region,channel', 'dimensions ride along: ' + J(q.rowDimensions.concat(q.columnDimensions).map((d) => d.column)));

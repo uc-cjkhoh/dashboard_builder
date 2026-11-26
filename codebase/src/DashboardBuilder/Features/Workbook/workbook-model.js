@@ -32,6 +32,7 @@ import { markOpacityError } from "../Dashboard/mark-opacity-model.js";
 import { pageSpeedError } from "../Dashboard/pages-speed-model.js";
 import { shapeBinsError, cleanMemberShapes } from "../Dashboard/shape-model.js";
 import { labelMarksError, labelPositionError, labelOverlapError } from "../Dashboard/label-marks-model.js";
+import { cleanLabelText, cleanLabelFont, cleanLabelAlign } from "../Dashboard/label-appearance-model.js";
 import { cleanColourList } from "../Dashboard/colour-fields-model.js";
 import { RAMP_CHOICES, SCALE_CHOICES, DIV_PAIR_CHOICES, colourCentreError, colourRangeError, colourStepsError } from "../Dashboard/colour-scale-model.js";
 import { cleanParameter, MAX_PARAMS } from "../Core/parameters-model.js";
@@ -720,13 +721,28 @@ function cleanFormat(f0, where, issues) {
     if (shapeBinsError(f.shapeBins) === null) out.shapeBins = f.shapeBins;
     else issues.push(`${w}: shape bins "${f.shapeBins}" — reset to 5.`);
   }
-  if (f.labelMarks !== undefined && f.labelMarks !== null) { // Format → Label marks: absent (older files, All) stays off defaultFormat; a bad value is reset (never clamped)
+  if (f.labelMarks !== undefined && f.labelMarks !== null) { // Label flyout → Marks to Label: absent (older files, All) stays off defaultFormat; a bad value is reset (never clamped)
     if (labelMarksError(f.labelMarks) === null && f.labelMarks !== "all") out.labelMarks = f.labelMarks;
     else if (labelMarksError(f.labelMarks) !== null) issues.push(`${w}: label marks "${f.labelMarks}" — reset to All.`);
   }
-  if (f.labelPosition !== undefined && f.labelPosition !== null) { // Format → Label position: absent (older files, Automatic) stays off defaultFormat; a bad value is reset (never clamped)
+  if (f.labelPosition !== undefined && f.labelPosition !== null) { // Label flyout → Position: absent (older files, Automatic) stays off defaultFormat; a bad value is reset (never clamped)
     if (labelPositionError(f.labelPosition) === null) { if (f.labelPosition !== "auto") out.labelPosition = f.labelPosition; }
     else issues.push(`${w}: label position "${f.labelPosition}" — reset to Automatic.`);
+  }
+  if (f.labelText !== undefined && f.labelText !== null) { // Label flyout → Text: blank / <Value> (the automatic text) stays off defaultFormat; a bad value is reset (never clamped)
+    const r = cleanLabelText(f.labelText);
+    if (r.ok) { if (r.value) out.labelText = r.value; }
+    else issues.push(`${w}: label text — reset to automatic (${r.error}).`);
+  }
+  if (f.labelFont !== undefined && f.labelFont !== null) { // Label flyout → Font: only what differs from the default is kept
+    const r = cleanLabelFont(f.labelFont);
+    if (r.ok) { if (r.value) out.labelFont = r.value; }
+    else issues.push(`${w}: label font — reset to the default (${r.error}).`);
+  }
+  if (f.labelAlign !== undefined && f.labelAlign !== null) { // Label flyout → Alignment: absent (Automatic) stays off defaultFormat
+    const r = cleanLabelAlign(f.labelAlign);
+    if (r.ok) { if (r.value) out.labelAlign = r.value; }
+    else issues.push(`${w}: label alignment "${f.labelAlign}" — reset to Automatic.`);
   }
   if (f.linePattern !== undefined && f.linePattern !== null) { // Format → Line pattern: absent (older files, Solid) stays off defaultFormat; a bad value is reset (never clamped)
     if (linePatternError(f.linePattern) === null) { if (f.linePattern !== "solid") out.linePattern = f.linePattern; }

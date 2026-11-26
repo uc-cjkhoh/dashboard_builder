@@ -227,11 +227,11 @@ try {
   await check('bar + Size + Data labels: each bar carries its value', async () => {
     const labTool = `document.querySelector('.ws-tool[data-tool="label"]')`; // Data labels lives in the Label tile's flyout (D151), not Format
     await ev(`${labTool}.click()`);
-    await waitFor(`!!(${fmtField('Data labels')})`, 'data labels control (Label flyout)');
-    await ev(`${fmtField('Data labels')}.querySelector('input').click()`); await settle(500);
+    await waitFor(`!!(${fmtField('Show mark labels')})`, 'data labels control (Label flyout)');
+    await ev(`${fmtField('Show mark labels')}.querySelector('input').click()`); await settle(500);
     const t = await ev(`[...document.querySelectorAll('.ws-chart-canvas svg text')].map((x) => x.textContent).filter((x) => /^\\d+$/.test(x))`);
     must(['10', '20', '30', '40', '50', '60', '70', '80'].every((v) => t.includes(v)), 'a label per bar: ' + J(t));
-    await ev(`${fmtField('Data labels')}.querySelector('input').click()`); await settle(300);
+    await ev(`${fmtField('Show mark labels')}.querySelector('input').click()`); await settle(300);
     await ev(`${labTool}.click()`); await settle(300);
   });
   await check('bar + Size: a click on a variable-width bar selects its member; the selection dims the others', async () => {

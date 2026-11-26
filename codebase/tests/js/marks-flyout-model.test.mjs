@@ -31,11 +31,17 @@ test("a line gives Shape its Marker shape only; scatter gives bins and members",
 test("a pie gives Shape and Path no section at all", () => {
   for (const tool of ["shape", "path", "angle", "detail", "drill", "pages", "filters", "color"]) assert.deepEqual(keys(tool, { chartType: "pie" }), [], tool);
 });
-test("Label: Data labels only on a chart, Label marks and position when offered", () => {
+test("Label: Show mark labels only on a chart; Label Appearance, Marks to Label and Options by chart type, each under a heading", () => {
   assert.deepEqual(keys("label", { chartType: "table", isChart: false }), []);
-  assert.deepEqual(keys("label", { labelMarks: true, labelPosition: true, labelsDrawn: true }), ["Label:dataLabels+labelMarks+labelPosition+labelOverlap"]);
-  assert.deepEqual(keys("label", {}), ["Label:dataLabels"]); // nothing drawn: Allow labels to overlap would do nothing, so it stays out
-  assert.deepEqual(keys("label", { labelsDrawn: true }), ["Label:dataLabels+labelOverlap"]);
+  assert.deepEqual(keys("label", { labelChart: true, labelMarks: true, labelPosition: true, labelsDrawn: true }),
+    ["Label:dataLabels", "Label Appearance:labelText+labelFont+labelAlign+labelPosition", "Marks to Label:labelMarks", "Options:labelOverlap"]);
+  assert.deepEqual(keys("label", {}), ["Label:dataLabels"]); // a chart that draws no label (a histogram, a box plot): the checkbox alone, as before
+  assert.deepEqual(keys("label", { labelChart: true }), ["Label:dataLabels", "Label Appearance:labelText+labelFont+labelAlign", "Options:labelOverlap"]); // offered, though nothing is drawn yet: the flyout disables them
+});
+test("Label: only the Label tile's sections carry a heading", () => {
+  const withHeading = (tool, i) => flyoutSections(tool, { chartType: "bar", isChart: true, tooltipKeys: [], lineKeys: [], ...i }).filter((s) => s.heading).map((s) => s.label);
+  assert.deepEqual(withHeading("label", { labelChart: true, labelMarks: true, labelPosition: true }), ["Label Appearance", "Marks to Label", "Options"]);
+  for (const tool of ["size", "shape", "tooltip", "path", "pages", "period"]) assert.deepEqual(withHeading(tool, { sizeEdit: true, shapeBins: true, pagesSet: true, periodSet: true, tooltipKeys: ["showTooltips"] }), [], tool);
 });
 test("Tooltip: the text always, Behaviour only with controls", () => {
   assert.deepEqual(keys("tooltip", { chartType: "table", isChart: false }), ["Text:text"]);

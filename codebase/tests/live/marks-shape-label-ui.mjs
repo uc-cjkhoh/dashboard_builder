@@ -139,7 +139,7 @@ try {
   const fmtTool = `document.querySelector('.ws-viewbar__btn[aria-label="Format"]')`;
   const fmtField = (label) => `[...document.querySelectorAll('.ws-fmt-field')].find((l) => l.textContent.includes(${J(label)}))`;
   // Shape bins / Edit member shapes live in the Shape flyout; Data labels / Label marks / Label position in the Label flyout (Marks tiles). Format and a flyout are never open together: opening one closes the other.
-  const OWNER = { 'Shape bins': 'shape', 'Marker shape': 'shape', 'Data labels': 'label', 'Label marks': 'label', 'Label position': 'label' };
+  const OWNER = { 'Shape bins': 'shape', 'Marker shape': 'shape', 'Show mark labels': 'label', 'Marks to Label': 'label', 'Position': 'label' };
   const flyOpen = () => ev(`!!document.querySelector('#ws-toolfly:not([hidden]) .ws-flyedit__group')`);
   const openFly = async (key) => {
     if (!(await ev(`document.querySelector('.ws-tool[data-tool="${key}"]')?.getAttribute('aria-expanded') === 'true'`))) await ev(`document.querySelector('.ws-tool[data-tool="${key}"]').click()`);
@@ -256,21 +256,26 @@ try {
   // ---- Label marks ---------------------------------------------------------------------------------------------------------
   // The drawn label texts that carry a value (the mock's values all end in .37; axis ticks never do).
   const labelTexts = () => ev(`[...document.querySelectorAll('#ws-chart svg text')].map((t) => t.textContent).filter((t) => /[.]37/.test(t))`);
-  const labelControl = () => ev(`!!(${fmtField('Label marks')})`);
-  const modes = () => ev(`[...${fmtField('Label marks')}.querySelectorAll('option')].map((o) => o.value).join(',')`);
+  // Marks to Label is a group of toggle tiles (Label flyout), disabled until a label is drawn; tiles read All, Selected, Min & max, Highlighted, Line ends, Most recent.
+  const MODE_TEXT = { all: 'All', minmax: 'Min & max', selected: 'Selected', highlighted: 'Highlighted', recent: 'Most recent', ends: 'Line ends' };
+  const MODE_ORDER = Object.keys(MODE_TEXT); // the order the assertions below list modes in
+  const tiles = `document.querySelector('#ws-toolfly [data-fly-ctl="labelMarks"]')`;
+  const labelControl = () => ev(`(() => { const t = ${tiles}; return !!t && [...t.querySelectorAll('button')].every((b) => !b.disabled); })()`); // usable: present and enabled
+  const modes = () => ev(`(() => { const t = ${tiles}; return t ? [...t.querySelectorAll('button')].map((b) => b.textContent.trim()) : []; })()`).then((texts) => MODE_ORDER.filter((m) => texts.includes(MODE_TEXT[m])).join(','));
+  const setTile = async (m) => { await openFly('label'); return ev(`(() => { const b = [...${tiles}.querySelectorAll('button')].find((x) => x.textContent.trim() === ${J(MODE_TEXT[m])}); if (!b) return false; if (b.getAttribute('aria-pressed') !== 'true') b.click(); return true; })()`); };
   const openFormat = () => openFly('label'); // the Label flyout (kept under the old name: every caller opens it for Data labels / Label marks / Label position)
   const closeFormat = closeAll;
-  const setMode = async (m) => { await openFormat(); await setSelect('Label marks', m); await settle(600); await closeFormat(); };
+  const setMode = async (m) => { await openFormat(); await setTile(m); await settle(600); await closeFormat(); };
   await newSheet();
   await dragChip('region', `__t.zone('columns')`);
   await dragChip('amount', `__t.zone('rows')`);
   await settle(400);
   await chartType('Bar');
-  await check('Label marks is offered only while labels are drawn: absent without Data labels or a Label field; then All, Min & max, Selected, Highlighted (no date, no line)', async () => {
+  await check('Marks to Label is usable only while labels are drawn: disabled without Show mark labels or a Label field; then All, Min & max, Selected, Highlighted (no date, no line)', async () => {
     await openFormat();
-    must(!(await labelControl()), 'no control while no label is drawn');
-    await ev(`[...document.querySelectorAll('.ws-fmt-field')].find((l) => l.textContent.includes('Data labels')).querySelector('input').click()`); await settle(500);
-    await waitFor(`!!(${fmtField('Label marks')})`, 'the control appears with Data labels');
+    must(!(await labelControl()), 'tiles disabled while no label is drawn');
+    await ev(`[...document.querySelectorAll('.ws-fmt-field')].find((l) => l.textContent.includes('Show mark labels')).querySelector('input').click()`); await settle(500);
+    await waitFor(`!!(${tiles}) && [...${tiles}.querySelectorAll('button')].every((b) => !b.disabled)`, 'the tiles enable with Show mark labels');
     must((await modes()) === 'all,minmax,selected,highlighted', 'modes: ' + await modes());
     await closeFormat();
     must((await labelTexts()).length === 8, 'every bar is labelled by default: ' + J(await labelTexts()));
@@ -314,7 +319,7 @@ try {
     await chartType('Pie');
     await openFormat();
     must((await modes()) === 'all,minmax,selected,highlighted', 'pie modes: ' + await modes());
-    await setSelect('Label marks', 'minmax'); await settle(600); await closeFormat();
+    await setTile('minmax'); await settle(600); await closeFormat();
     const t = await labelTexts();
     must(t.length === 2, 'two slices labelled: ' + J(t));
     const o = await ev(`${inst}.getOption().series[0].data.map((d) => (d.labelLine ? d.labelLine.show : true))`);
@@ -330,12 +335,12 @@ try {
   await settle(400);
   await chartType('Line');
   await openFormat();
-  await ev(`[...document.querySelectorAll('.ws-fmt-field')].find((l) => l.textContent.includes('Data labels')).querySelector('input').click()`); await settle(500);
+  await ev(`[...document.querySelectorAll('.ws-fmt-field')].find((l) => l.textContent.includes('Show mark labels')).querySelector('input').click()`); await settle(500);
   await closeFormat();
   await check('a line over dates offers Most recent and Line ends; Line ends labels the first and the last point', async () => {
     await openFormat();
     must((await modes()) === 'all,minmax,selected,highlighted,recent,ends', 'line modes: ' + await modes());
-    await setSelect('Label marks', 'ends'); await settle(600); await closeFormat();
+    await setTile('ends'); await settle(600); await closeFormat();
     const t = await labelTexts();
     must(t.length === 2 && /^10[.]37/.test(t[0]) && /^60[.]37/.test(t[1]), 'the first (10.37) and last (60.37) points: ' + J(t));
     await shot('label-line-ends');
@@ -363,7 +368,7 @@ try {
   await settle(400);
   await chartType('Bar');
   await openFormat();
-  await ev(`[...document.querySelectorAll('.ws-fmt-field')].find((l) => l.textContent.includes('Data labels')).querySelector('input').click()`); await settle(500);
+  await ev(`[...document.querySelectorAll('.ws-fmt-field')].find((l) => l.textContent.includes('Show mark labels')).querySelector('input').click()`); await settle(500);
   await closeFormat();
   const shownLabels = () => ev(`[...document.querySelectorAll('#ws-chart svg text')].filter((t) => /^[0-9]+[.]37$/.test(t.textContent) && Number(getComputedStyle(t).opacity) > 0 && t.getAttribute('opacity') !== '0' && t.getAttribute('fill-opacity') !== '0').map((t) => t.textContent)`);
   await check('a Size bar chart: Min & max labels two bars; Highlighted hides the labels until a bar is highlighted', async () => {
@@ -388,7 +393,7 @@ try {
     await settle(500);
     await chartType('Line');
     await openFormat();
-    await ev(`[...document.querySelectorAll('.ws-fmt-field')].find((l) => l.textContent.includes('Data labels')).querySelector('input').click()`); await settle(500);
+    await ev(`[...document.querySelectorAll('.ws-fmt-field')].find((l) => l.textContent.includes('Show mark labels')).querySelector('input').click()`); await settle(500);
     await closeFormat();
     const n = await ev(`${inst}.getOption().series[0].data.length`);
     must(n === 200, '200 points drawn: ' + n);
@@ -424,29 +429,29 @@ try {
     await settle(400);
     await chartType('Line');
     await openFormat();
-    await ev(`[...document.querySelectorAll('.ws-fmt-field')].find((l) => l.textContent.includes('Data labels')).querySelector('input').click()`); await settle(500);
-    await waitFor(`!!(${fmtField('Label position')})`, 'Label position appears with labels on a line');
-    must(await ev(`[...${fmtField('Label position')}.querySelectorAll('option')].map((o) => o.value).join(',')`) === 'auto,above,below,left,right', 'five choices');
+    await ev(`[...document.querySelectorAll('.ws-fmt-field')].find((l) => l.textContent.includes('Show mark labels')).querySelector('input').click()`); await settle(500);
+    await waitFor(`!!(${fmtField('Position')})`, 'Label position appears with labels on a line');
+    must(await ev(`[...${fmtField('Position')}.querySelectorAll('option')].map((o) => o.value).join(',')`) === 'auto,above,below,left,right', 'five choices');
     const y = () => ev(`(() => { const t = [...document.querySelectorAll('#ws-chart svg text')].find((x) => /^10[.]37$/.test(x.textContent)); const m = /translate\\(([-0-9.]+) ([-0-9.]+)\\)/.exec(t.getAttribute('transform')); return [Number(m[1]), Number(m[2])]; })()`);
     const above = await y();
-    await setSelect('Label position', 'below'); await settle(600);
+    await setSelect('Position', 'below'); await settle(600);
     const below = await y();
     must(below[1] > above[1] + 8, 'Below sits lower than the automatic (above) place: ' + J([above, below]));
-    await setSelect('Label position', 'right'); await settle(600);
+    await setSelect('Position', 'right'); await settle(600);
     const right = await y();
     must(right[0] > above[0] + 4, 'Right sits to the right: ' + J([above, right]));
     await shot('label-position-right');
-    await setSelect('Label position', 'auto'); await settle(600);
+    await setSelect('Position', 'auto'); await settle(600);
     must(J(await y()) === J(above), 'Automatic is back where it was');
     await closeFormat();
     await chartType('Bar'); await openFormat();
-    must(!(await ev(`!!(${fmtField('Label position')})`)), 'no Label position on a bar');
+    must(!(await ev(`!!(${fmtField('Position')})`)), 'no Label position on a bar');
     await closeFormat();
     await chartType('Area'); await openFormat();
-    must(await ev(`!!(${fmtField('Label position')})`), 'Label position is offered on an area chart');
+    must(await ev(`!!(${fmtField('Position')})`), 'Label position is offered on an area chart');
     await closeFormat();
     await chartType('Pie'); await openFormat();
-    must(!(await ev(`!!(${fmtField('Label position')})`)), 'no Label position on a pie');
+    must(!(await ev(`!!(${fmtField('Position')})`)), 'no Label position on a pie');
     await closeFormat();
   });
 
@@ -462,7 +467,7 @@ try {
     await settle(400);
     await chartType('Scatter');
     await openFormat();
-    await ev(`[...document.querySelectorAll('.ws-fmt-field')].find((l) => l.textContent.includes('Data labels')).querySelector('input').click()`); await settle(500);
+    await ev(`[...document.querySelectorAll('.ws-fmt-field')].find((l) => l.textContent.includes('Show mark labels')).querySelector('input').click()`); await settle(500);
     await closeFormat();
   };
   for (const channel of ['Shape', 'Color']) {
@@ -474,7 +479,7 @@ try {
       must(t.length === 8 && J(t) === J([...REGIONS].sort()), 'all eight points carry their name: ' + J(t));
       await openFormat();
       must((await modes()) === 'all,minmax,selected,highlighted', 'modes: ' + await modes());
-      must(await ev(`!!(${fmtField('Label position')})`), 'Label position is offered');
+      must(await ev(`!!(${fmtField('Position')})`), 'Label position is offered');
       await closeFormat();
       await shot(`split-${channel.toLowerCase()}-all`);
     });
@@ -517,20 +522,20 @@ try {
       const still = async () => { let a = await y(); for (let i = 0; i < 20; i++) { await b.sleep(200); const n = await y(); if (J(n) === J(a)) return n; a = n; } return a; }; // the entrance animation has to finish
       await openFormat(); await settle(600); // the Format pane takes room from the chart: measure with it open
       const above = await still();
-      await setSelect('Label position', 'below'); await settle(600);
+      await setSelect('Position', 'below'); await settle(600);
       const below = await still();
       must(below[1] > above[1] + 8, 'Below sits lower than Above: ' + J([above, below]));
-      await setSelect('Label position', 'right'); await settle(600);
+      await setSelect('Position', 'right'); await settle(600);
       const right = await still();
       must(right[0] > above[0] + 4, 'Right sits to the right: ' + J([above, right]));
       await shot(`split-${channel.toLowerCase()}-right`);
-      await setSelect('Label position', 'auto'); await settle(600);
+      await setSelect('Position', 'auto'); await settle(600);
       await closeFormat();
       must((await pointLabels()).length === 8, 'all eight again');
     });
     await check(`split by ${channel}: Data labels off draws no label and offers no Label marks; points and legend are as they were`, async () => {
       await openFormat();
-      await ev(`[...document.querySelectorAll('.ws-fmt-field')].find((l) => l.textContent.includes('Data labels')).querySelector('input').click()`); await settle(500);
+      await ev(`[...document.querySelectorAll('.ws-fmt-field')].find((l) => l.textContent.includes('Show mark labels')).querySelector('input').click()`); await settle(500);
       must(!(await labelControl()), 'no Label marks without labels');
       await closeFormat();
       must((await pointLabels()).length === 0, 'no label');

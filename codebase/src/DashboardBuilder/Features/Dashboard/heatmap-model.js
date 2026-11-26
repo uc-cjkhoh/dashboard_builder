@@ -27,7 +27,7 @@ export function cellSizeOf(w, h, nx, ny, gutter) {
   return { w: Math.max(0, (w - gutter.x) / nx), h: Math.max(0, (h - gutter.y) / ny) };
 }
 
-/** Draw the value labels? Forced (Format → Data labels) = always; otherwise only when the longest label fits the cell, so the grid is all or nothing. */
+/** Draw the value labels? Forced (Label flyout → Show mark labels) = always; otherwise only when the longest label fits the cell, so the grid is all or nothing. */
 export function labelsShown({ forced, cellW, cellH, texts }) {
   if (forced) return true;
   const longest = texts.reduce((a, t) => (String(t ?? "").length > a.length ? String(t) : a), "");

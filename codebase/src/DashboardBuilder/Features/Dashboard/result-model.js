@@ -4,6 +4,7 @@ import { memberText, memberRaw } from "./colour-fields-model.js";
 import { isCalcPill, sameCalcPill } from "../Calc/calc-pill.js";
 import { aggWord } from "../Calc/calc-plan.js";
 import { tooltipCatalog } from "./tooltip-model.js";
+import { labelTextOf } from "./label-appearance-model.js";
 import { checkFilter } from "./filter-rules.js";
 import { tupleKey, uniqueTuples } from "./grid-model.js";
 import { isCalc, calcName } from "./table-calc.js";
@@ -213,11 +214,23 @@ export function marksChannels(sheet, result, mplan, sizeIdx, colorMeasureIdx, fm
   // Chips offer only placeholders that resolve: group-by / Tooltip fields and the shelf (series) measures.
   const shelfNames = (result.measures ?? []).slice(0, mplan.filter((e) => e.role === "shelf").length);
   const tooltipCat = tooltipCatalog(tipFields, shelfNames, shelfNames.map((_, i) => (rows[0] ? fmtVal(rows[0].values[i]) : "")), shelfNames.map((_, i) => rows[0]?.values[i]));
+  const labelTemplate = labelTextOf(sheet.format); // Label flyout → Text: the template and the same per-mark fields the tooltip template reads
+  if (labelTemplate) { spec.labelText = labelTemplate; spec.labelFields = tipFields; }
   if (sheet.tooltipText) { spec.tooltipText = sheet.tooltipText; spec.tooltipFields = tipFields; if (sheet.tooltipStyle) spec.tooltipStyle = sheet.tooltipStyle; if (sheet.tooltipFormats) spec.tooltipFormats = sheet.tooltipFormats; }
   // Angle: pie/donut already map their measure to slice angle; elsewhere a radial angle has no mark.
   if (m.angle && type !== "pie" && type !== "donut") notes.push("Angle drives a Pie/Donut slice — that mapping is already implicit there.");
 
   return { spec, note: notes.length ? notes.join(" ") : null, tooltipCat };
+}
+
+/**
+ * The fields a label template can name, one value per result row: the group-by fields and the Tooltip fields -> [{ name, values }]. A colour split lays them out per cell
+ * (`sizeGridOf`), a shape-split point chart reads them through each point's result row.
+ */
+export function labelFieldsFor(sheet, rows, mplan, fmtVal, fmtCat, measureName) {
+  const fields = [...planDims(sheet).keyOrder, ...(marksOf(sheet).tooltip ?? [])];
+  const seen = new Set();
+  return fields.map((f) => markFieldValues(sheet, rows, mplan, f, fmtVal, fmtCat, measureName)).filter((t) => t && !seen.has(t.name) && seen.add(t.name)).map((t) => ({ name: t.name, values: t.values }));
 }
 
 /**

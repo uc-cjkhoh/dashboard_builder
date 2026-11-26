@@ -1,6 +1,7 @@
 import { makeValueFormatter } from "../Core/format.js";
 import { ACCENTS, CATEGORY_SLOTS, categoryColour, categoryColours } from "../Core/theme-model.js";
 import { fontToken } from "./font-model.js";
+import { labelStyleOf, labelTextResolver } from "./label-appearance-model.js"; // Label flyout → Text, Font, Alignment
 import { pickInk } from "./contrast.js";
 import { DIV_FALLBACK, DIV_HUE_FALLBACK, divergingColours, divergingRange, effectiveScale, fullRangeRamp, rampColours, rangeOf, stepPieces, stepColours, stepIndexOf, positionOf, mixHex } from "./colour-scale-model.js";
 import { sizeRange, barThickness, markerSizeFor, drawsSize, lineSizeMode, measureCue } from "./mark-channel-model.js";
@@ -85,6 +86,7 @@ function tokens() {
     surface: t("--surface", "#ffffff"),
     ink: t("--ink", "#1c1719"),
     font: t(fontToken(drawing?.font) ?? "--font", "system-ui, sans-serif"),
+    fontOf: (family) => { const tk = fontToken(family); return tk ? t(tk, "") : null; }, // a font family's stack (null for the default), for Label → Font: canvas text cannot use var()
     radius: parseFloat(t("--r", "8")) || 8, // the one corner radius (golden rule 11)
     // Brand stops for the sequential heatmap ramp (single-hue soft→saturated, token-driven).
     brand: t("--accent", ACCENTS.signal.light.accent),
@@ -461,7 +463,7 @@ function legendFor(format, c, names, defaultOn) {
 // (the default). `orientation` is decided by the caller from the shelves; combo stays vertical (its
 // dual value axis is on y). Axis *titles* name the physical axes (xTitle = bottom, yTitle = left)
 // regardless of orientation, so the Format controls stay literal.
-export function buildCartesian({ type, categories, series, colorByCategory, format = {}, orientation = "vertical", pointLabels, seriesLabels, tooltipExtra, tooltipText, tooltipFields, tooltipStyle, tooltipFormats, otherIndex = -1, analytics = null, colorValues, colorName, sizes, sizeName, sizeMembers, sizeOrder, sizeGrid, sizeMembersGrid, labelMarks, selectedMarks }) {
+export function buildCartesian({ type, categories, series, colorByCategory, format = {}, orientation = "vertical", pointLabels, seriesLabels, tooltipExtra, tooltipText, tooltipFields, tooltipStyle, tooltipFormats, otherIndex = -1, analytics = null, colorValues, colorName, sizes, sizeName, sizeMembers, sizeOrder, sizeGrid, sizeMembersGrid, labelMarks, selectedMarks, labelText, labelFields, labelMeasure }) {
   const c = tokens();
   const labels = (categories ?? []).map((l) => l ?? "—");
   // Comparison series (compare: true) ride beside their measure: they don't make a chart "multi"
@@ -506,14 +508,20 @@ export function buildCartesian({ type, categories, series, colorByCategory, form
   const labelPos = horizontal ? "right" : "top";
   // seriesLabels[series][category]: a colour split's Label, laid out per cell; pointLabels[category]: one text per mark.
   const labelAt = (si, di) => (seriesLabels ? seriesLabels[si]?.[di] : pointLabels?.[di]);
-  // Format → Label marks: a mask over each series' marks (Min & max, Selected, Most recent, Line ends, or only while highlighted); null = every mark, as always.
+  // Label flyout → Marks to Label: a mask over each series' marks (Min & max, Selected, Most recent, Line ends, or only while highlighted); null = every mark, as always.
   const mask = labelMarks ? labelMask(labelMarks.mode, { series: series.map((s) => s.data), skip: otherIndex >= 0 ? [otherIndex] : [], selected: labelMarks.selected, recent: labelMarks.recent }) : null;
   const hoverLabel = mask?.hover ? { label: { show: true } } : {}; // Highlighted: the label appears with the mark's emphasis (hover, or a legend item's highlight)
   const focusOf = mask?.hover ? "self" : "series"; // one mark's label on hover, not the whole series'
-  const linePos = type === "line" || type === "area" ? labelPositionSymbol(format.labelPosition) : null; // Format → Label position: a line's label sits on its point; bars keep their own place
+  const linePos = type === "line" || type === "area" ? labelPositionSymbol(format.labelPosition) : null; // Label flyout → Position: a line's label sits on its point; bars keep their own place
+  // Label flyout → Text / Font / Alignment: the template (<Value> = the mark's automatic text below) and the style fragment; both absent leaves every label as it was.
+  const labelStyle = labelStyleOf(format, c.fontOf);
+  const labelFn = labelTextResolver(labelText, labelFields, fmtVal, format);
+  const markText = (si, di, base, v) => (labelFn ? labelFn(si, di, { valueText: base, measures: labelMeasure ? { [labelMeasure]: v } : Object.fromEntries(series.map((s2) => [String(s2.name), s2.data[di]])) }) : base);
+  const baseText = (si, di, v) => ((pointLabels || seriesLabels) ? String(labelAt(si, di) ?? "") : fmtVal(v));
   const dataLabel = (si, onLine = false) => ((pointLabels || seriesLabels || format.dataLabels)
     ? { show: !mask?.hover, position: (onLine && linePos) || (type === "stacked" && seriesLabels ? "inside" : labelPos), // only a colour split's Label sits inside its stack segment color: c.label, fontFamily: c.font, fontSize: 14,
-        formatter: (p) => (mask && !mask.at(si, p.dataIndex) ? "" : (pointLabels || seriesLabels) ? String(labelAt(si, p.dataIndex) ?? "") : fmtVal(p.value)) }
+        ...labelStyle,
+        formatter: (p) => (mask && !mask.at(si, p.dataIndex) ? "" : markText(si, p.dataIndex, baseText(si, p.dataIndex, p.value), p.value)) }
     : { show: false });
 
   // Attach a name to an axis with placement suited to its physical position (bottom vs left).
@@ -632,7 +640,7 @@ export function buildCartesian({ type, categories, series, colorByCategory, form
       // Format → Line markers Selected / All / None decide the dots themselves (`selectedMarks` = the click-selected categories' indexes); a marker that is data (a Size-sized marker, a cued line's marker) always stays.
       const mk = markerPlan({ mode: format.lineMarkers, forced: markerSized || Boolean(cue), labelled: Boolean(pointLabels || seriesLabels || format.dataLabels), data: s.data, selected: selectedMarks });
       const dots = mk ? mk.show : s.data.length <= 60 || format.markerSize != null || markerSized || Boolean(cue); // dots only when they won't crowd (unless a marker size is chosen; a cued line's markers name it)
-      // Format → Label marks on a line with no dots (a long one): a label sits on its mark's dot, so only the labelled marks show one (the rest are clear until hovered).
+      // Label flyout → Marks to Label on a line with no dots (a long one): a label sits on its mark's dot, so only the labelled marks show one (the rest are clear until hovered).
       const labelDots = !mk && !dots && Boolean(mask) && !mask.hover && Boolean(pointLabels || seriesLabels || format.dataLabels);
       const dotted = labelDots ? lineData.map((d, di) => (d == null ? d : { ...(isObjectItem(d) ? d : { value: d }), ...(mask.at(i, di) ? {} : { itemStyle: { ...(isObjectItem(d) ? d.itemStyle : {}), opacity: 0 }, emphasis: { itemStyle: { opacity: 1 } } }) })) : mk?.clear ? clearDots(lineData, mk.clear, { color, edge: borderWidthOf(format.markBorder) > 0 ? edge : null }) : lineData; // an unlabelled mark keeps its normal size but is clear: the hover dot and the tooltip work as on a plain long line (Line markers None: every dot but a lone value's)
       const dash = lineDash({ pattern: format.linePattern, cue, thick: patternThick });
@@ -661,7 +669,7 @@ export function buildCartesian({ type, categories, series, colorByCategory, form
     const otherItem = (v) => ({ value: v, itemStyle: { color: c.muted, borderRadius: barRadius, ...barEdge } });
     if (sizeFr && type === "bar") {
       const fillAt = (di) => (di === otherIndex ? c.muted : byValue?.colours[di] ?? (colorByDim ? memberColor(labels[di], c.catAt(di)) : null));
-      return variableBars({ s, color, sizeFr: sizeFr[i] ?? [], sizes: sz.grid[i] ?? [], slot: { at: i, of: mainCount }, horizontal, c, edge, fillAt, hover: Boolean(mask?.hover), dataLabel: (pointLabels || seriesLabels || format.dataLabels) ? (di, v) => (mask && !mask.at(i, di) ? "" : pointLabels || seriesLabels ? String(labelAt(i, di) ?? "") : fmtVal(v)) : null });
+      return variableBars({ s, color, sizeFr: sizeFr[i] ?? [], sizes: sz.grid[i] ?? [], slot: { at: i, of: mainCount }, horizontal, c, edge, fillAt, hover: Boolean(mask?.hover), dataLabel: (pointLabels || seriesLabels || format.dataLabels) ? (di, v) => (mask && !mask.at(i, di) ? "" : markText(i, di, baseText(i, di, v), v)) : null, labelStyle });
     }
     return {
       name: s.name, type: "bar",
@@ -710,8 +718,8 @@ function addAnalytics(base, a, { c, fmtVal, horizontal, trendDash = "dotted" }) 
 
 // pie / donut — one dimension (slices) × one measure (size). Colour IS the encoding, so a legend
 // shows by default (dataviz: identity never colour-alone; the legend supplies the labels).
-const PIE_PERCENT_SLICES = 6; // with Data labels on, up to this many slices also show their percent
-function buildPie({ type, categories, series, format = {}, pointLabels, tooltipExtra, tooltipText, tooltipFields, tooltipStyle, tooltipFormats, otherIndex = -1, colorValues, colorName, split, labelMarks }) {
+const PIE_PERCENT_SLICES = 6; // with Show mark labels on, up to this many slices also show their percent
+function buildPie({ type, categories, series, format = {}, pointLabels, tooltipExtra, tooltipText, tooltipFields, tooltipStyle, tooltipFormats, otherIndex = -1, colorValues, colorName, split, labelMarks, labelText, labelFields }) {
   const c = tokens();
   const fmtVal = makeValueFormatter(format);
   const labels = (categories ?? []).map((l) => l ?? "—");
@@ -730,6 +738,7 @@ function buildPie({ type, categories, series, format = {}, pointLabels, tooltipE
   const fullName = (p) => p.data?.full ?? p.name;
   const { pos, legend } = legendFor(format, c, split ? [...new Set(data.map((d) => d.name))] : labels, true);
   const showLabels = !!format.dataLabels || !!pointLabels; // Label field forces slice labels on
+  const labelFn = labelTextResolver(labelText, labelFields, fmtVal, format);
   const fewSlices = labels.length <= PIE_PERCENT_SLICES; // few slices: the label adds the share
 
   return {
@@ -754,8 +763,11 @@ function buildPie({ type, categories, series, format = {}, pointLabels, tooltipE
       radius: byValue ? (type === "donut" ? ["35%", "58%"] : "58%") : type === "donut" ? ["45%", "72%"] : "72%",
       center: legend && (pos === "left" || pos === "right") ? ["42%", byValue ? "46%" : "52%"] : ["50%", byValue ? "46%" : "54%"],
       data: markedData,
-      label: { show: showLabels && !mask?.hover, color: c.label, fontFamily: c.font,
-        formatter: (p) => (pointLabels ? String(pointLabels[p.dataIndex] ?? "") : `${fullName(p)}: ${fmtVal(p.value)}${fewSlices ? ` (${p.percent}%)` : ""}`) },
+      label: { show: showLabels && !mask?.hover, color: c.label, fontFamily: c.font, ...labelStyleOf(format, c.fontOf),
+        formatter: (p) => {
+          const base = pointLabels ? String(pointLabels[p.dataIndex] ?? "") : `${fullName(p)}: ${fmtVal(p.value)}${fewSlices ? ` (${p.percent}%)` : ""}`;
+          return labelFn ? labelFn(0, p.dataIndex, { valueText: base, measures: { [String(series[0].name)]: p.value, Percent: `${p.percent}%` } }) : base; // Label flyout → Text
+        } },
       labelLine: { show: showLabels && !mask?.hover },
       itemStyle: edgeOr(format.markBorder, borderInk(format.markBorderColor, c), { borderColor: c.surface, borderWidth: 2 }),
       emphasis: { itemStyle: { shadowBlur: 10, shadowColor: "rgba(0,0,0,0.2)" }, ...(mask?.hover && showLabels ? { label: { show: true }, labelLine: { show: true } } : {}) }, // Highlighted: the label and its leader appear with the slice's emphasis
@@ -766,12 +778,13 @@ function buildPie({ type, categories, series, format = {}, pointLabels, tooltipE
 // scatter — two measures map to the X and Y value axes; dimension keys label the points. marks:
 // `sizes` scales the symbol (bubble), `colorValues` ramps a continuous gradient (visualMap legend),
 // `pointLabels` writes a field on each point, `tooltipExtra` appends field lines to the tooltip.
-function buildScatter({ categories, series, format = {}, sizes, sizeName, sizeMembers, sizeOrder, colorValues, colorName, pointLabels, tooltipExtra, tooltipText, tooltipFields, tooltipStyle, tooltipFormats, symbol, labelMarks }) {
+function buildScatter({ categories, series, format = {}, sizes, sizeName, sizeMembers, sizeOrder, colorValues, colorName, pointLabels, tooltipExtra, tooltipText, tooltipFields, tooltipStyle, tooltipFormats, symbol, labelMarks, labelText, labelFields }) {
   const c = tokens();
   const fmtVal = makeValueFormatter(format);
   const labels = (categories ?? []).map((l) => l ?? "—");
   const xName = format.xTitle || series[0]?.name || "x";
   const yName = format.yTitle || series[1]?.name || "y";
+  const labelFn = labelTextResolver(labelText, labelFields, fmtVal, format);
   const continuous = Array.isArray(colorValues);
   // Each datum: [x, y, size?, colour?] — extra dims feed symbolSize / visualMap by index.
   const sizeDim = Array.isArray(sizes) ? 2 : -1;
@@ -826,8 +839,12 @@ function buildScatter({ categories, series, format = {}, sizes, sizeName, sizeMe
       type: "scatter", data, symbolSize, symbol: symbol || "circle", // square/circle marks
       itemStyle: { ...(continuous ? {} : { color: c.series, opacity: 0.8 }), ...pointEdge(format, c) },
       label: (pointLabels || format.dataLabels)
-        ? { show: !mask?.hover, position: labelPositionSymbol(format.labelPosition) ?? "top", color: c.muted, fontFamily: c.font, fontSize: 14,
-            formatter: (p) => (mask && !mask.at(0, p.dataIndex) ? "" : pointLabels ? String(pointLabels[p.dataIndex] ?? "") : String(p.name ?? "")) }
+        ? { show: !mask?.hover, position: labelPositionSymbol(format.labelPosition) ?? "top", color: c.muted, fontFamily: c.font, fontSize: 14, ...labelStyleOf(format, c.fontOf),
+            formatter: (p) => {
+              if (mask && !mask.at(0, p.dataIndex)) return "";
+              const base = pointLabels ? String(pointLabels[p.dataIndex] ?? "") : String(p.name ?? "");
+              return labelFn ? labelFn(0, p.dataIndex, { valueText: base, measures: { [xName]: p.value[0], [yName]: p.value[1] } }) : base; // Label flyout → Text
+            } }
         : { show: false },
       emphasis: { focus: "self", itemStyle: { borderColor: c.ink, borderWidth: 1 }, ...(mask?.hover && (pointLabels || format.dataLabels) ? { label: { show: true } } : {}) },
     }],
@@ -841,7 +858,7 @@ function buildScatter({ categories, series, format = {}, sizes, sizeName, sizeMe
 // member's colour (a member colour from Format wins over the palette slot); one with a Shape member its symbol; shape alone keeps one palette colour per series.
 // A Shape member wears the symbol chosen for it (`memberShapes`: displayed name -> shape key, Edit member shapes), else the one at its position in the set; a bin of a Shape measure its bin's symbol. `shapeName`
 // names a Shape measure in the tooltip, which then also says the point's exact value.
-function buildScatterShapes({ groups, symbol, xName, yName, hasSize, sizeName, sizeOrder, shapeName, memberShapes = new Map(), format = {}, rowLabels, labelMarks }) {
+function buildScatterShapes({ groups, symbol, xName, yName, hasSize, sizeName, sizeOrder, shapeName, memberShapes = new Map(), format = {}, rowLabels, labelMarks, labelText, labelFields }) {
   const c = tokens();
   const fmtVal = makeValueFormatter(format);
   const allSizes = hasSize ? groups.flatMap((g) => g.points.map((p) => p.value[2])) : null;
@@ -852,15 +869,20 @@ function buildScatterShapes({ groups, symbol, xName, yName, hasSize, sizeName, s
   const colourOf = (g, i) => (g.colour ? memberColor(g.colour.name, c.catAt(g.colour.index)) : c.catAt(i));
   if (legend && groups.some((g) => g.shape)) legend.data = groups.map((g) => (g.shape ? { name: g.name, icon: symbolOf(g) } : g.name)); // the legend swatch wears the symbol too
   const sizeNote = hasSize ? sizeLegend(allSizes, sizeName, c, fmtVal, show && pos === "top" ? 24 : 2, { order: sizeOrder, scale: sizeScaleOf(format), zeroDefault: true }) : null;
-  // Labels (Data labels, or a Label field written per result row): one per mark, in the member's series. Min & max is per member; Selected and Most recent name result
+  // Labels (Show mark labels, or a Label field written per result row): one per mark, in the member's series. Min & max is per member; Selected and Most recent name result
   // rows, which every point carries. A point with no name of its own (Colour or Shape is the only dimension) says its member, so a label is never blank.
   const labelled = Boolean(format.dataLabels || rowLabels);
   const mask = labelled && labelMarks ? labelMask(labelMarks.mode, { series: groups.map((g) => g.points.map((p) => p.value[1])), selected: labelMarks.selected, recent: labelMarks.recent, keyOf: (si, di) => groups[si].points[di]?.row ?? di }) : null;
   const labelPos = labelPositionSymbol(format.labelPosition) ?? "top";
+  const labelFn = labelTextResolver(labelText, labelFields, fmtVal, format);
   const labelOf = (g, mark) => (rowLabels && mark?.row != null ? String(rowLabels[mark.row] ?? "") : mark?.name || g.name);
   const seriesLabel = (g, si) => (labelled ? {
-    show: !mask?.hover, position: labelPos, color: c.muted, fontFamily: c.font, fontSize: 14,
-    formatter: (p) => (mask && !mask.at(si, p.dataIndex) ? "" : labelOf(g, g.points[p.dataIndex])),
+    show: !mask?.hover, position: labelPos, color: c.muted, fontFamily: c.font, fontSize: 14, ...labelStyleOf(format, c.fontOf),
+    formatter: (p) => {
+      if (mask && !mask.at(si, p.dataIndex)) return "";
+      const mark = g.points[p.dataIndex], base = labelOf(g, mark);
+      return labelFn ? labelFn(si, mark?.row ?? p.dataIndex, { valueText: base, measures: { [xName]: p.value[0], [yName]: p.value[1] } }) : base; // Label flyout → Text: fields are per result row here
+    },
   } : undefined);
   return {
     textStyle: { fontFamily: c.font, color: c.label },
@@ -917,7 +939,7 @@ function buildHeatmap({ xCats, yCats, cells, format = {} }) {
   const legendNote = [centreNote(range, fmtVal), outOfRangeNote()].filter(Boolean).join(" · ");
   const chartW = () => live.instance?.getWidth() ?? 800, chartH = () => live.instance?.getHeight() ?? 450;
   const diameter = () => format.markerSize != null ? markerSizeOr(format.markerSize, 6) : circleSize(chartW() - HEATMAP_GUTTER.x, chartH() - HEATMAP_GUTTER.y, xCats.length, yCats.length);
-  // Value labels: Format → Data labels forces them on; otherwise they appear when the longest one fits a cell (read from the live chart on every
+  // Value labels: Label flyout → Show mark labels forces them on; otherwise they appear when the longest one fits a cell (read from the live chart on every
   // draw, so a resize can show or hide them), in the ink that reads on that cell's own colour.
   const forced = !!format.dataLabels;
   const text = (v) => (v == null || !Number.isFinite(Number(v)) ? "" : fmtVal(v));
@@ -1508,7 +1530,7 @@ const clearDots = (items, clear, { color, edge }) => items.map((d, di) => {
 // A bar chart whose bars vary in thickness with a Size measure: ECharts has no per-bar width, so the bars are a custom series that
 // draws each rectangle itself (value = [position, value, size], swapped when horizontal). Rounded growing end, per-item colour (colour
 // measure, Other, Colour by category) from the item's own style, a label per bar, and the same tooltip / click / selection fade as a bar.
-function variableBars({ s, color, sizeFr, sizes, slot = { at: 0, of: 1 }, horizontal, c, edge, fillAt, dataLabel, hover = false }) {
+function variableBars({ s, color, sizeFr, sizes, slot = { at: 0, of: 1 }, horizontal, c, edge, fillAt, dataLabel, hover = false, labelStyle = {} }) {
   const radius = horizontal ? [0, c.radius, c.radius, 0] : [c.radius, c.radius, 0, 0];
   const item = (v, di) => {
     const fill = fillAt(di); // the Other bar, a colour measure's value, or a category's colour; else the series colour
@@ -1531,7 +1553,7 @@ function variableBars({ s, color, sizeFr, sizes, slot = { at: 0, of: 1 }, horizo
         ? { x: Math.min(base[0], tip[0]), y: tip[1] + shift - th / 2, width: Math.abs(tip[0] - base[0]), height: th, r: radius }
         : { x: tip[0] + shift - th / 2, y: Math.min(base[1], tip[1]), width: th, height: Math.abs(base[1] - tip[1]), r: radius };
       return { type: "rect", shape, style: api.style(), emphasis: { style: api.styleEmphasis() },
-        ...(dataLabel ? { textContent: { style: { text: dataLabel(di, v), fill: c.label, font: `14px ${c.font}`, ...(hover ? { opacity: 0 } : {}) }, ...(hover ? { emphasis: { style: { opacity: 1 } } } : {}) }, textConfig: { position: horizontal ? "right" : "top" } } : {}) }; // Highlighted: the label is there but unseen until the bar is highlighted
+        ...(dataLabel ? { textContent: { style: { text: dataLabel(di, v), fill: c.label, font: `${labelStyle.fontWeight ? `${labelStyle.fontWeight} ` : ""}${labelStyle.fontSize ?? 14}px ${labelStyle.fontFamily ?? c.font}`, ...(labelStyle.align ? { textAlign: labelStyle.align } : {}), ...(hover ? { opacity: 0 } : {}) }, ...(hover ? { emphasis: { style: { opacity: 1 } } } : {}) }, textConfig: { position: horizontal ? "right" : "top" } } : {}) }; // Highlighted: the label is there but unseen until the bar is highlighted
     },
   };
 }

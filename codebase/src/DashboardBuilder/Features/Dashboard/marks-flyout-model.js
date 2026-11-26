@@ -1,6 +1,6 @@
 // Which controls each Marks tile's flyout shows (pure, DOM-free; tests/js/marks-flyout-model.test.mjs). Like the Color flyout (colour-flyout-model.js), a tile
-// holds the settings that used to sit in Format: Size (Marker size, Edit Sizes), Shape (Marker shape, Shape bins, member shapes), Label (Data labels, Label marks,
-// Label position), Tooltip (the text, Show tooltips / Command buttons / Tooltip mode), Path (Line style, Line pattern), Dates (the range, A fall is good), and the settings Tableau's card has that Format never held: Label's Allow labels to overlap, Pages' Speed.
+// holds the settings that used to sit in Format: Size (Marker size, Edit Sizes), Shape (Marker shape, Shape bins, member shapes), Label (Show mark labels, Label marks,
+// Label position, Text, Font, Alignment), Tooltip (the text, Show tooltips / Command buttons / Tooltip mode), Path (Line style, Line pattern), Dates (the range, A fall is good), and the settings Tableau's card has that Format never held: Label's Allow labels to overlap, Pages' Speed.
 // What shows depends on the chart type and on what the tile holds, so a control never appears where it would do nothing, and a tile with no control for the
 // chart type stays quiet. dashboards.js builds each key; every stored key (format.markerSize, …) is unchanged.
 import { linesTakeStyle } from "./line-style-model.js";
@@ -16,13 +16,14 @@ const FIELD_SIZED = new Set(["scatter", "square", "circle", "bar", "gantt"]);
  * `tool` is the Marks tile key ("size" | "shape" | "label" | "tooltip" | "path" | "period" | "pages"; any other has no moved controls).
  * `i`: `{ chartType, isChart, heatmapCircle, sizeEdit, shapeBins, memberShapes, labelMarks, labelPosition, lineKeys, tooltipKeys, labelsDrawn, periodSet, compare, pagesSet }` —
  * `sizeEdit` a drawn Size field offers Edit Sizes, `shapeBins` a measure is on Shape, `memberShapes` a Shape dimension has members to give a symbol,
- * `labelMarks` / `labelPosition` the Label controls are offered, `labelsDrawn` a label is drawn (Data labels or a Label field, on a chart that draws them: Allow labels to overlap), `lineKeys` / `tooltipKeys` the keys `lineControlSpecs` / `tooltipControlSpecs` give,
+ * `labelChart` the chart type draws labels (Text, Font, Alignment, Allow labels to overlap), `labelMarks` / `labelPosition` Marks to Label / Position are offered for this chart type, `labelsDrawn` a label is drawn
+ * (Show mark labels or a Label field, on a chart that draws them): the Label controls are offered by chart type and sit disabled until then, never hidden, `lineKeys` / `tooltipKeys` the keys `lineControlSpecs` / `tooltipControlSpecs` give,
  * `periodSet` a Dates field is set, `compare` it compares to another period, `pagesSet` a Pages field is set.
- * Returns `[{ label, keys }]` in display order, a section with no key omitted.
+ * Returns `[{ label, keys, heading? }]` in display order, a section with no key omitted (`heading`: the section shows its label as a visible heading — the Label tile's).
  */
 export function flyoutSections(tool, i) {
   const out = [];
-  const add = (label, keys) => { if (keys.length) out.push({ label, keys }); };
+  const add = (label, keys, heading = false) => { if (keys.length) out.push(heading ? { label, keys, heading } : { label, keys }); };
   switch (tool) {
     case "size":
       add("Size", [
@@ -33,8 +34,11 @@ export function flyoutSections(tool, i) {
     case "shape":
       add("Shape", [...(linesTakeStyle(i.chartType) ? ["markerShape"] : []), ...(i.shapeBins ? ["shapeBins"] : []), ...(i.memberShapes ? ["memberShapes"] : [])]);
       break;
-    case "label":
-      add("Label", [...(i.isChart ? ["dataLabels"] : []), ...(i.labelMarks ? ["labelMarks"] : []), ...(i.labelPosition ? ["labelPosition"] : []), ...(i.labelsDrawn ? ["labelOverlap"] : [])]);
+    case "label": // Tableau's label card: Show mark labels, then Label Appearance (Text, Font, Alignment, Position), Marks to Label and Options — each headed (`heading`)
+      add("Label", i.isChart ? ["dataLabels"] : []);
+      add("Label Appearance", [...(i.labelChart ? ["labelText", "labelFont", "labelAlign"] : []), ...(i.labelPosition ? ["labelPosition"] : [])], true);
+      add("Marks to Label", i.labelMarks ? ["labelMarks"] : [], true);
+      add("Options", i.labelChart ? ["labelOverlap"] : [], true);
       break;
     case "tooltip":
       add("Text", ["text"]);

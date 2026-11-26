@@ -53,7 +53,7 @@ export function renderWorksheet(container, sheet, result, cmp, options = {}) {
   return { extraNotice: rc.extraNotice };
 }
 
-/** Format → Label marks "Most recent": the latest date of the first group-by key, as the drawing will name it once date parts read as labels (null when not asked for, or no date). */
+/** Label flyout → Marks to Label "Most recent": the latest date of the first group-by key, as the drawing will name it once date parts read as labels (null when not asked for, or no date). */
 function recentKeyOf(sheet, result, parts) {
   if (labelMarksOf(sheet.format) !== "recent") return null;
   const raw = mostRecentRaw(result.rows.map((r) => (r.isOther ? null : r.keys[0])));
@@ -65,6 +65,7 @@ function draw(container, rc, sheet, result, cmp) {
   rc.pin = rc.hooks.takePin?.() ?? null; // the mark a click just selected, for the Responsive tooltip pin: used by this drawing only, never by a later one
   container.replaceChildren();
   rc.hooks.onTooltipFields?.(sheet, []);
+  rc.hooks.onLabelFields?.(sheet, []);
   rc.hooks.onMemberColors?.(sheet, null, []);
   rc.hooks.onMemberShapes?.(sheet, null, []);
   // Date-grouped key: its labels are bucket starts, not values a filter could match — no click-to-filter.

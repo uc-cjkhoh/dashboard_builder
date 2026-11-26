@@ -8,6 +8,8 @@ import { memberColourField } from "./colour-fields-model.js";
 import { lineMarkersOf, selectDrawnReason } from "./line-marker-model.js";
 import { linesTakeStyle } from "./line-style-model.js";
 import { makeValueFormatter } from "../Core/format.js";
+import { labelTextOf } from "./label-appearance-model.js";
+import { tooltipCatalog } from "./tooltip-model.js";
 import { REF_CHOICES, TREND_CHOICES, trendProblem, trendRefusal, pWords, refValue, refConstant, trendSeries, pickMeasure, dataValues, bandBounds, bandLabel } from "./analytics-model.js";
 import { parameters } from "../Core/store.js";
 import { effectiveForecast } from "../Core/parameters-model.js";
@@ -19,14 +21,14 @@ import { selectedIndicesOf } from "./dashboard-select.js";
 import { joinNotices } from "./notices.js";
 import { stackedScaleNotice } from "./stack-scale-model.js";
 import { shapeColourNote, splitSizeNote, sizeChannel, lineSizeNote } from "./mark-channel-model.js";
-import { ANALYTICS_TYPES, scatterSymbol, primaryDim, chartOrientation, marksChannels, LABEL_GROUP_NOTE, scatterGroups, colorSplitData, colorSplitLabels, markFieldValues, sizeSteps, sizeGridOf } from "./result-model.js";
+import { ANALYTICS_TYPES, scatterSymbol, primaryDim, chartOrientation, marksChannels, LABEL_GROUP_NOTE, scatterGroups, colorSplitData, colorSplitLabels, markFieldValues, sizeSteps, sizeGridOf, labelFieldsFor } from "./result-model.js";
 
 // The series charts: bar / stacked / line / area / combo, pie / donut, the scatter family (with Shape), and the colour
 // split. Each draws into `container` through chart.js and wires interaction only through the render context `rc`
 // (render-handlers.js), so a non-interactive view draws the same marks without handlers.
 
 /**
- * Format → Label marks as the spec chart.js reads: { spec: { labelMarks: { mode, selected, recent } } | {}, note }. `rawKeys` = each mark's primary-dimension value;
+ * Label flyout → Marks to Label as the spec chart.js reads: { spec: { labelMarks: { mode, selected, recent } } | {}, note }. `rawKeys` = each mark's primary-dimension value;
  * Selected reads the dashboard's selection (a source widget) or else the worksheet's own click selection; Most recent the latest date the worksheet found
  * before its keys became labels (`rc.recentKey`). A stored mode this chart does not offer labels every mark and says so; a mode with nothing to show says why.
  */
@@ -92,7 +94,12 @@ export function renderColorSplit(container, rc, sheet, type, result, format, fmt
   if (lm.note) container.append(hint(lm.note));
   const lk = lineMarkersSpec(rc, sheet, format, rawKeys);
   if (lk.note) container.append(hint(lk.note));
-  drawChart(container, { type, categories, series, format, onSelect, selectedIndices, orientation, seriesLabels, ...sizeSpec, ...memberColourSpec, ...legend, ...lm.spec, ...lk.spec, ...tooltipButtonsSpec(rc, sheet, primaryDim(sheet), type, rawKeys, format, container) });
+  // Label → Text: the template's fields per (series, category) cell, and the split's one measure by name.
+  const splitFields = labelFieldsFor(sheet, result.rows, planMeasures(sheet), makeValueFormatter(format), fmtCat, (f) => planMeasureName(f, rc.plan));
+  const measureName = result.measures[0];
+  rc.hooks.onLabelFields?.(sheet, tooltipCatalog(splitFields, [measureName], [makeValueFormatter(format)(result.rows[0]?.values[0])], [result.rows[0]?.values[0]]));
+  const labelSpec = labelTextOf(format) ? { labelText: labelTextOf(format), labelFields: splitFields.map((f) => ({ name: f.name, grid: true, values: sizeGridOf({ cellRows }, f.values) })), labelMeasure: measureName } : {};
+  drawChart(container, { type, categories, series, format, onSelect, selectedIndices, orientation, seriesLabels, ...labelSpec, ...sizeSpec, ...memberColourSpec, ...legend, ...lm.spec, ...lk.spec, ...tooltipButtonsSpec(rc, sheet, primaryDim(sheet), type, rawKeys, format, container) });
 }
 
 /**
@@ -120,15 +127,18 @@ export function renderScatterShapes(container, rc, sheet, result, seriesIdx, siz
   if (labelField && !texts) container.append(hint(LABEL_GROUP_NOTE)); // a dimension that is not a group-by has no one value per mark: say so, as the unsplit point chart does
   // Marks of a split point chart stay inert (as they always were) unless Label marks is Selected while labels are drawn: only then does a click select the mark's primary-dimension value, so Selected has a way to be set.
   const pick = lm.spec.labelMarks?.mode === "selected" ? selectHandler(rc, sheet, primaryDim(sheet), sheet.chartType, rawKeys) : undefined;
+  const xName = format.xTitle || result.measures[xIdx] || "x", yName = format.yTitle || result.measures[yIdx] || "y";
+  const rowFields = labelFieldsFor(sheet, result.rows, planMeasures(sheet), fmtVal, fmtCat, (f) => planMeasureName(f, rc.plan)); // Label → Text: per result row, which each point knows
+  rc.hooks.onLabelFields?.(sheet, tooltipCatalog(rowFields, [xName, yName], [fmtVal(result.rows[0]?.values[xIdx]), fmtVal(result.rows[0]?.values[yIdx])], [result.rows[0]?.values[xIdx], result.rows[0]?.values[yIdx]]));
   const shapeField = marksOf(sheet).shape;
   const memberShapesSpec = isShapeDimension(shapeField) && !isCalcPill(shapeField) ? memberShapeSpec(rc, sheet, shapeField, shapeMembers) : {}; // a binned measure has no members to choose for
   drawChart(container, {
     ...legendSpec(rc, sheet, legend.field, legend.byName), // legend items are Colour / Shape members
     ...memberColourSpec, ...memberShapesSpec, ...lm.spec,
+    ...(labelTextOf(format) ? { labelText: labelTextOf(format), labelFields: rowFields } : {}),
     ...(texts ? { rowLabels: texts.values } : {}), ...(pick ? { onSelect: (p) => pick({ dataIndex: p.data?.row }) } : {}),
     type: "scatterShapes", symbol: scatterSymbol(sheet.chartType), groups, format,
-    xName: format.xTitle || result.measures[xIdx] || "x",
-    yName: format.yTitle || result.measures[yIdx] || "y",
+    xName, yName,
     hasSize: sizeIdx >= 0 || Boolean(sizeOrder), sizeName: sizeOrder ? sizeName : sizeIdx >= 0 ? result.measures[sizeIdx] : null, sizeOrder,
     shapeName: shapeIdx >= 0 ? result.measures[shapeIdx] : null,
   });
@@ -154,6 +164,7 @@ export function renderSeries(container, rc, sheet, a) {
     marks.note = [marks.note, "Size is not drawn beside a comparison period — remove the comparison to vary bar thickness."].filter(Boolean).join(" ");
   }
   rc.hooks.onTooltipFields?.(sheet, marks.tooltipCat);
+  rc.hooks.onLabelFields?.(sheet, marks.tooltipCat); // Label → Text offers the same fields
   if (type === "stacked") rc.extraNotice = joinNotices(rc.extraNotice, stackedScaleNotice(series)); // a measure far smaller than the rest is a sliver: say so
   noteLinePoints(sheet, series.length * categories.length); // the Format panel's Line pattern / Line markers read it
   const lineNote = marks.spec.sizes ? lineSizeNote(type, format.lineStyle, series.length * categories.length) : null; // a stepped or very long line varies its markers: say so

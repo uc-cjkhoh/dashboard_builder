@@ -1,4 +1,4 @@
-// Label options (Format → Label marks) — pure, DOM-free (tests/js/label-marks.test.mjs). Which marks carry their label: every mark (the way labels
+// Label options (Label flyout → Marks to Label) — pure, DOM-free (tests/js/label-marks.test.mjs). Which marks carry their label: every mark (the way labels
 // have always drawn), the lowest and highest of each series, the selected mark, a mark while it is highlighted, the marks at the latest date, or the
 // first and last point of a line. `format.labelMarks` stores one of the names (absent = All, so older files are untouched); the drawing turns it into a
 // mask over each series' marks with `labelMask`. A mode that does not apply to the chart in hand draws every label, never none.
@@ -6,16 +6,18 @@ import { marksOf, SCATTER_TYPES } from "./sheet-plan.js";
 import { primaryDim } from "./result-model.js";
 import { DATE_PARTS } from "../Core/sheet-schema.js";
 
-/** [value, label] — the choices Format → Label marks can offer (each chart offers the ones that mean something there). */
+/** [value, label] — the choices Label flyout → Marks to Label can offer (each chart offers the ones that mean something there). */
 export const LABEL_MARK_CHOICES = Object.freeze([["all", "All"], ["minmax", "Min & max"], ["selected", "Selected"], ["highlighted", "Highlighted"], ["recent", "Most recent"], ["ends", "Line ends"]]);
 const MODES = new Set(LABEL_MARK_CHOICES.map((c) => c[0]));
-/** Chart types whose marks carry labels from Data labels or a Label field (the point charts too when split by Shape or Colour: one series per member). */
+/** The order the Marks to Label tiles read in, two to a row (Tableau's card): All, Selected / Min & max, Highlighted / Line ends, Most recent. */
+export const LABEL_TILE_ORDER = Object.freeze(["all", "selected", "minmax", "highlighted", "ends", "recent"]);
+/** Chart types whose marks carry labels from Show mark labels or a Label field (the point charts too when split by Shape or Colour: one series per member). */
 export const LABEL_TYPES = new Set(["bar", "stacked", "line", "area", "combo", "pie", "donut", ...SCATTER_TYPES]);
 const LINES = new Set(["line", "area"]);
 // Label position: a label sits on a point over the plot background on a line, an area and the point charts (ink on the surface, so no palette contrast to guard);
 // a bar, stacked segment, combo bar or pie slice keeps its own place (the "inside" positions would put ink on a palette colour).
 const POSITIONED = new Set(["line", "area", ...SCATTER_TYPES]);
-/** [value, label] — Format → Label position. */
+/** [value, label] — Label flyout → Position. */
 export const LABEL_POSITION_CHOICES = Object.freeze([["auto", "Automatic"], ["above", "Above"], ["below", "Below"], ["left", "Left"], ["right", "Right"]]);
 const POSITIONS = { above: "top", below: "bottom", left: "left", right: "right" };
 /** Why a stored position is refused, or null. */
@@ -46,7 +48,7 @@ export function cleanLabelMarks(v) {
 
 /**
  * What a sheet's chart draws labels for: { type, temporal (the first group-by is a point in time — a date, or a date grouped to a day, month, year …, not a part
- * such as month of year), drawn (Data labels or a Label field is on, and the chart draws them) }.
+ * such as month of year), drawn (Show mark labels or a Label field is on, and the chart draws them) }.
  */
 export function labelContext(sheet) {
   const type = sheet.chartType;

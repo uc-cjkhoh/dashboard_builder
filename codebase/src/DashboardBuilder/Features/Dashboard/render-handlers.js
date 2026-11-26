@@ -13,7 +13,7 @@ import { DATE_GROUPED_NOTE } from "./tooltip-behaviour-model.js";
 // false none of the editor handlers exist, so a widget draws marks that cannot be drilled or legend-clicked; `rc.select`
 // (interactive true or "select") additionally lets a mark click select (a dashboard widget selects, never drills). The
 // behaviour itself is the host's: rc.hooks = { onSelect(dimField, raw), onDrill(raw), onLegend({ sheet, field, name, raw,
-// bucketed }), legendFocus(), onTooltipFields(sheet, list), onMemberColors(sheet, field, members), onTooltipCommand(cmd, dimField, raw),
+// bucketed }), legendFocus(), onTooltipFields(sheet, list), onLabelFields(sheet, list), onMemberColors(sheet, field, members), onTooltipCommand(cmd, dimField, raw),
 // takePin() }.
 
 /**

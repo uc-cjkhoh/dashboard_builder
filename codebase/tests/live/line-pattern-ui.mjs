@@ -175,7 +175,7 @@ try {
   const closeFormat = async () => { if (await formatOpen()) await ev(`${fmtTool}.click()`); await closeColour(); await settle(300); }; // both panels: a snapshot shows the bare chart
   // Line pattern and Line style live in the Path tile's flyout, Line markers in the Color flyout, Data labels in the Label flyout (D151); Format and a flyout are never open together,
   // so each helper opens the panel that holds its label (a flyout opens with a tile click and closes with the same click).
-  const FLY_OF = { 'Line markers': 'color', 'Line pattern': 'path', 'Line style': 'path', 'Data labels': 'label' };
+  const FLY_OF = { 'Line markers': 'color', 'Line pattern': 'path', 'Line style': 'path', 'Show mark labels': 'label' };
   const flyTool = (k) => `document.querySelector('.ws-tool[data-tool="${k}"]')`;
   const flyOpen = (k) => ev(`!!document.querySelector('#ws-toolfly:not([hidden]) #ws-toolpanel-${k}')`);
   const closeColour = async () => { for (const k of ['color', 'path', 'label']) if (await flyOpen(k)) await ev(`${flyTool(k)}.click()`); }; // whichever flyout is open
@@ -274,14 +274,14 @@ try {
   await check('Data labels with markers None: the label text is still drawn', async () => {
     await pickOpt('Line markers', 'none');
     const bare = await textCount();
-    await toggle('Data labels'); await settle(600);
+    await toggle('Show mark labels'); await settle(600);
     const labelled = await textCount();
     must(labelled > bare, `the labels draw with markers None: ${bare} texts without, ${labelled} with`);
     must((await drawnSymbols()) === 70, 'the label anchors exist (clear): ' + await drawnSymbols());
     const fill = await ev(`${inst}.getModel().getSeriesByIndex(0).getData().getItemVisual(5, 'style').fill`);
     must(fill === 'transparent', 'the anchor is transparent, not opacity 0 (a label would inherit that): ' + fill);
     await snap('markers-none-labels');
-    await pickOpt('Line markers', 'auto'); await toggle('Data labels'); await settle(400);
+    await pickOpt('Line markers', 'auto'); await toggle('Show mark labels'); await settle(400);
   });
   await check('an Area takes both controls: the border is dashed, the fill is not', async () => {
     await chartType('Area'); await openFormat();

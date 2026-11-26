@@ -54,7 +54,9 @@ import { TABLE_ALIGN_CHOICES, TABLE_DENSITY_CHOICES, TABLE_SHADE_CHOICES } from 
 import { COL_ALIGN_CHOICES, tableColumnList, setTableColumn, columnLook, columnWidthError } from "./table-columns-model.js";
 import { sizeChannel, shapeChannel } from "./mark-channel-model.js";
 import { colourFlyoutGroups, colourScaleShown } from "./colour-flyout-model.js";
-import { LABEL_MARK_CHOICES, LABEL_POSITION_CHOICES, labelContext, labelModesFor, labelMarksOf, effectiveLabelMode, cleanLabelMarks, labelPositionsFor, labelPositionOf, cleanLabelPosition, labelOverlapOf, cleanLabelOverlap } from "./label-marks-model.js";
+import { openLabelTextDialog } from "./label-text-dialog.js";
+import { LABEL_FONT_FAMILIES, LABEL_SIZE_CHOICES, LABEL_ALIGN_CHOICES, labelTextOf, cleanLabelText, labelFontOf, cleanLabelFont, labelAlignOf, cleanLabelAlign } from "./label-appearance-model.js";
+import { LABEL_TILE_ORDER, LABEL_TYPES, LABEL_MARK_CHOICES, LABEL_POSITION_CHOICES, labelContext, labelModesFor, labelMarksOf, effectiveLabelMode, cleanLabelMarks, labelPositionsFor, labelPositionOf, cleanLabelPosition, labelOverlapOf, cleanLabelOverlap } from "./label-marks-model.js";
 import { PAGE_SPEEDS, pageSpeedOf, pageIntervalMs, cleanPageSpeed } from "./pages-speed-model.js";
 import { MARK_BORDER_STOPS, borderWidthOf, storedBorder, MARKER_SHAPE_CHOICES, MARK_BORDER_COLOUR_CHOICES, MARKER_SIZE_AUTO } from "./mark-style-model.js";
 import { OPACITY_STOPS, cleanMarkOpacity } from "./mark-opacity-model.js";
@@ -233,7 +235,7 @@ export function initDashboards() {
     dash: activeWorksheet(), noticeEl, results, plan: planCtx(), categoryOf, castOf,
   }), {
     interactive: true, onSelect: toggleSelection, onTooltipCommand: tooltipCommand, takePin: takeTooltipPin, onDrill: (raw) => drillDown(raw), onLegend: legendClick, legendFocus: () => legendFocus,
-    onTooltipFields: (sheet, list) => setTooltipCat(sheet, list), onMemberColors: (sheet, field, members) => setMemberState(sheet, field, members), onMemberShapes: (sheet, field, members) => setShapeState(sheet, field, members), onColourScale: (sheet, scale) => noteColourScale(sheet, scale),
+    onTooltipFields: (sheet, list) => setTooltipCat(sheet, list), onLabelFields: (sheet, list) => setLabelCat(sheet, list), onMemberColors: (sheet, field, members) => setMemberState(sheet, field, members), onMemberShapes: (sheet, field, members) => setShapeState(sheet, field, members), onColourScale: (sheet, scale) => noteColourScale(sheet, scale),
     onCollapse: (axis, key, valid) => collapseHeader(axis, key, valid), onCollapseAll: (mode, rowKeys, colKeys) => collapseAll(mode, rowKeys, colKeys),
     onColumn: (key, patch) => setColumn(key, patch),
     statusBar: setStatusBar, notices: sharedNote,
@@ -2568,6 +2570,32 @@ export function initDashboards() {
   let tooltipCatState = { sheet: null, list: [] };
   let tooltipRedraw = null; // the open editor's chip/preview redraw (the chart may finish after the panel opened)
   const setTooltipCat = (sheet, list) => { tooltipCatState = { sheet, list }; tooltipRedraw?.(); };
+  // The fields the last drawn chart offers a label template (Label flyout → Text): the same shape as the tooltip's, kept apart because a chart the tooltip template cannot reach (a colour split) still has labels.
+  let labelCatState = { sheet: null, list: [] };
+  const setLabelCat = (sheet, list) => { labelCatState = { sheet, list }; };
+  // Label flyout → Text: the template in a field (typed, or built in the editor behind "…"); empty keeps the automatic text. `store(key, value)` commits.
+  function labelTextControl(dash, s, f, store) {
+    const wrap = el("div", "ws-fmt-field ws-fmt-text");
+    wrap.append(el("span", "ws-fmt-label", "Text"));
+    const row = el("div", "ws-fmt-text__row");
+    const inp = el("input", "input ws-fmt-input ws-fmt-text__input");
+    inp.type = "text"; inp.value = labelTextOf(f) ?? ""; inp.placeholder = "<Value>"; inp.maxLength = LIMITS.labelText; inp.setAttribute("aria-label", "Label text");
+    inp.addEventListener("change", () => {
+      const r = cleanLabelText(inp.value);
+      if (!r.ok) { toast(r.error, "danger"); inp.value = labelTextOf(f) ?? ""; return; } // the redraw puts the kept text back
+      store("labelText", r.value);
+    });
+    const dots = el("button", "btn btn--ghost ws-fmt-dots", "\u2026"); dots.type = "button";
+    dots.setAttribute("aria-label", "Edit label text"); dots.title = "Edit label text\u2026";
+    dots.addEventListener("click", () => openLabelTextDialog({
+      text: labelTextOf(f) ?? "", fields: labelCatState.sheet === s ? labelCatState.list : [],
+      onClose: () => document.querySelector('[data-fly-ctl="labelText"] .ws-fmt-dots')?.focus(),
+      onApply: (text) => { const r = cleanLabelText(text); if (r.ok) store("labelText", r.value); },
+    }));
+    row.append(inp, dots);
+    wrap.append(row);
+    return wrap;
+  }
   function tooltipEditor(dash, s) {
     const cat = () => (tooltipCatState.sheet === s ? tooltipCatState.list : []);
     const box = el("div", "ws-tipedit");
@@ -2689,24 +2717,29 @@ export function initDashboards() {
   // A commit rebuilds the flyout (worksheet:changed → renderShelves), so the control last changed is remembered and focused again.
   let flyFocus = null;
   let limitsOpen = false;
+  let flyFocusSub = null; // which part of a control with several (Font: family, size, bold) changed: its aria-label
   function restoreFlyFocus() {
     if (!flyFocus || !openTool) return;
-    const key = flyFocus; flyFocus = null;
-    toolFly.querySelector(`[data-fly-ctl="${key}"] select, [data-fly-ctl="${key}"] input, [data-fly-ctl="${key}"] .ws-swatch[aria-pressed="true"]`)?.focus({ preventScroll: true });
+    const key = flyFocus, sub = flyFocusSub; flyFocus = null; flyFocusSub = null;
+    const within = (q) => toolFly.querySelector(q.split(",").map((x) => `[data-fly-ctl="${key}"] ${x.trim()}`).join(", ")); // every alternative scoped to this control
+    const target = (sub && within(`[aria-label="${CSS.escape(sub)}"]`)) || within('select, input, .ws-swatch[aria-pressed="true"], .ws-fmt-tile[aria-pressed="true"]');
+    target?.focus({ preventScroll: true });
   }
   // The pieces every Marks flyout is made of (Color's, and each tile's own controls; the keys come from marks-flyout-model.js / colour-flyout-model.js).
   // flyCtl remembers which control changed (capture: before the control's own handler rebuilds the flyout); flySection is one hairline-divided section
   // with an aria-label and no visible heading; flyEditor is the editor's root (null when no section has a control, so the flyout is the slot alone).
   function flyCtl(key, node) {
     node.dataset.flyCtl = key;
-    for (const x of node.querySelectorAll("select, input")) x.addEventListener("change", () => { flyFocus = key; }, true);
-    for (const x of node.querySelectorAll('button.ws-swatch[aria-pressed="false"]')) x.addEventListener("click", () => { flyFocus = key; }, true);
+    for (const x of node.querySelectorAll("select, input")) x.addEventListener("change", () => { flyFocus = key; flyFocusSub = x.getAttribute("aria-label"); }, true);
+    for (const x of node.querySelectorAll('button.ws-swatch[aria-pressed="false"], button.ws-fmt-tile[aria-pressed="false"]')) x.addEventListener("click", () => { flyFocus = key; flyFocusSub = null; }, true);
+    for (const x of node.querySelectorAll("button.ws-fmt-bold")) x.addEventListener("click", () => { flyFocus = key; flyFocusSub = x.getAttribute("aria-label"); }, true);
     return node;
   }
-  function flySection(label, nodes = []) {
+  function flySection(label, nodes = [], heading = false) {
     const group = el("div", "ws-flyedit__group");
     group.setAttribute("role", "group"); group.setAttribute("aria-label", label);
     group.dataset.section = label;
+    if (heading) { const h = el("div", "ws-flyedit__heading", label); h.setAttribute("aria-hidden", "true"); group.append(h); } // the Label tile's sections read like Tableau's card; the group's aria-label names it for a screen reader
     group.append(...nodes);
     return group;
   }
@@ -2732,8 +2765,9 @@ export function initDashboards() {
       shapeBins: Boolean(shapeMeasureOf(s)),
       memberShapes: SCATTER_TYPES.has(s.chartType) && Boolean(s.marks?.shape) && isShapeDimension(s.marks.shape), // a measure on Shape has bins, not members
       labelsDrawn: labelCtx.drawn,
-      labelMarks: isChart && labelModesFor(labelCtx).length > 1,
-      labelPosition: isChart && labelPositionsFor(labelCtx).length > 0,
+      labelChart: isChart && LABEL_TYPES.has(s.chartType), // the chart type draws labels: the Label controls are offered, and sit disabled until a label is drawn
+      labelMarks: isChart && labelModesFor({ ...labelCtx, drawn: true }).length > 1,
+      labelPosition: isChart && labelPositionsFor({ ...labelCtx, drawn: true }).length > 0,
       lineKeys: linesTakeStyle(s.chartType) ? lineKeysFor(s) : [],
       tooltipKeys: isChart ? tooltipKeysFor(s) : [],
       pagesSet: Boolean(s.pages),
@@ -2752,6 +2786,13 @@ export function initDashboards() {
     const replaceFormat = (next) => { s.format = next; commit(dash, s); };
     const wired = (prefix, wire) => { const tmp = el("div"); wire(tmp); return [...tmp.children].map((n, i) => flyCtl(`${prefix}:${i}`, n)); }; // the helpers that append their own controls to a panel
     const labelCtx = labelContext(s);
+    const storeLabel = (key, value) => { s.format = { ...f }; if (value) s.format[key] = value; else delete s.format[key]; commit(dash, s); }; // the stored shape holds only what differs from the default
+    const gated = (node) => { // a control that does nothing until a label is drawn is disabled, with its reason on hover
+      if (labelCtx.drawn) return node;
+      for (const x of node.querySelectorAll("select, input, button")) x.disabled = true;
+      node.classList.add("is-disabled"); node.title = "Turn on Show mark labels (or add a Label field) first";
+      return node;
+    };
     const build = {
       markerSize: () => [flyCtl("markerSize", fmtMeter(sizeMeterLabel(s.chartType), sizeMeterStops(s.chartType), f.markerSize ?? MARKER_SIZE_AUTO, (v) => { // the leftmost stop is Automatic (a heatmap: circles only)
         const px = Number(v);
@@ -2773,25 +2814,34 @@ export function initDashboards() {
         commit(dash, s);
       }))],
       memberShapes: () => [memberShapeEditor(dash, s)],
-      dataLabels: () => [flyCtl("dataLabels", fmtCheck("Data labels", f.dataLabels, (v) => set({ dataLabels: v })))],
-      labelMarks: () => [flyCtl("labelMarks", fmtSelect("Label marks", LABEL_MARK_CHOICES.filter(([v]) => labelModesFor(labelCtx).includes(v)), effectiveLabelMode(labelMarksOf(f), labelCtx), (v) => { // which marks carry their label
+      dataLabels: () => [flyCtl("dataLabels", fmtCheck("Show mark labels", f.dataLabels, (v) => set({ dataLabels: v })))],
+      // The rest of the Label card sits disabled (never hidden) until a label is drawn: Show mark labels on, or a Label field.
+      labelText: () => [gated(flyCtl("labelText", labelTextControl(dash, s, f, storeLabel)))],
+      labelFont: () => [gated(flyCtl("labelFont", labelFontControl(f, (patch) => { // family, size and bold, each stored only off its default
+        const r = cleanLabelFont({ ...labelFontOf(f), ...patch });
+        s.format = { ...f };
+        if (r.ok && r.value) s.format.labelFont = r.value; else delete s.format.labelFont;
+        commit(dash, s);
+      })))],
+      labelAlign: () => [gated(flyCtl("labelAlign", fmtSelect("Alignment", LABEL_ALIGN_CHOICES, labelAlignOf(f), (v) => storeLabel("labelAlign", cleanLabelAlign(v).value))))],
+      labelMarks: () => [gated(flyCtl("labelMarks", fmtTiles("Marks to Label", LABEL_TILE_ORDER.map((m) => LABEL_MARK_CHOICES.find(([v]) => v === m)).filter(([v]) => labelModesFor({ ...labelCtx, drawn: true }).includes(v)), effectiveLabelMode(labelMarksOf(f), { ...labelCtx, drawn: true }), (v) => { // which marks carry their label
         const { value } = cleanLabelMarks(v);
         s.format = { ...f };
         if (value) s.format.labelMarks = value; else delete s.format.labelMarks;
         commit(dash, s);
-      }))],
-      labelPosition: () => [flyCtl("labelPosition", fmtSelect("Label position", LABEL_POSITION_CHOICES, labelPositionOf(f), (v) => { // where a line's or point's label sits
+      })))],
+      labelPosition: () => [gated(flyCtl("labelPosition", fmtSelect("Position", LABEL_POSITION_CHOICES, labelPositionOf(f), (v) => { // where a line's or point's label sits
         const { value } = cleanLabelPosition(v);
         s.format = { ...f };
         if (value) s.format.labelPosition = value; else delete s.format.labelPosition;
         commit(dash, s);
-      }))],
-      labelOverlap: () => [flyCtl("labelOverlap", fmtCheck("Allow labels to overlap other marks", labelOverlapOf(f), (v) => { // off hides a label that would sit on another
+      })))],
+      labelOverlap: () => [gated(flyCtl("labelOverlap", fmtCheck("Allow labels to overlap other marks", labelOverlapOf(f), (v) => { // off hides a label that would sit on another
         const { value } = cleanLabelOverlap(v);
         s.format = { ...f };
         if (value === false) s.format.labelOverlap = false; else delete s.format.labelOverlap;
         commit(dash, s);
-      }))],
+      })))],
       pageSpeed: () => { // how fast Play steps; Play itself stays on the worksheet's page control
         const pick = fmtSelect("Speed", PAGE_SPEEDS, pageSpeedOf(s.pages), (v) => {
           const { value } = cleanPageSpeed(v);
@@ -2808,9 +2858,9 @@ export function initDashboards() {
       period: () => [periodEditor(dash, s)],
       fallGood: () => [flyCtl("fallGood", fmtCheck("A fall is good", f.downIsGood, (v) => set({ downIsGood: v })))],
     };
-    return flyEditor(sections.map(({ label, keys }) => flySection(label, label === "Behaviour"
+    return flyEditor(sections.map(({ label, keys, heading }) => flySection(label, label === "Behaviour"
       ? wired("tooltip", (tmp) => wireTooltipControls(tmp, s, { fmtCheck, fmtSelect }, replaceFormat)) // Show tooltips, Command buttons, Tooltip mode (each says why when it does nothing)
-      : keys.flatMap((k) => build[k]()))));
+      : keys.flatMap((k) => build[k]()), heading)));
   }
   function colourEditor(dash, s) {
     panelScale = null; // set below when the flyout shows the colour-scale controls
@@ -3501,6 +3551,42 @@ function fmtMeter(labelText, stops, current, onPick) {
   bar.addEventListener("change", () => onPick(bar.value));
   paint();
   wrap.append(head, bar);
+  return wrap;
+}
+// A group of toggle tiles, [value, label] each, the chosen one aria-pressed and carrying a tick (never colour alone): Marks to Label.
+function fmtTiles(labelText, options, current, onPick) {
+  const wrap = el("div", "ws-fmt-field ws-fmt-tiles"); wrap.setAttribute("role", "group"); wrap.setAttribute("aria-label", labelText);
+  for (const [val, text] of options) {
+    const on = String(val) === String(current);
+    const b = el("button", "btn ws-fmt-tile"); b.type = "button"; b.setAttribute("aria-pressed", String(on)); // a filled button like every other (buttons.css: no borders)
+    if (on) b.append(icon("check", { size: 14 }));
+    b.append(el("span", null, text));
+    b.addEventListener("click", () => { if (!on) onPick(val); });
+    wrap.append(b);
+  }
+  return wrap;
+}
+// Label flyout → Font: family, size (Automatic, 14 px, 16 px) and bold in one row. `onPatch({ family?, size?, bold? })` commits the change.
+function labelFontControl(f, onPatch) {
+  const cur = labelFontOf(f);
+  const wrap = el("div", "ws-fmt-field ws-fmt-font"); wrap.setAttribute("role", "group"); wrap.setAttribute("aria-label", "Font");
+  wrap.append(el("span", "ws-fmt-label", "Font"));
+  const row = el("div", "ws-fmt-font__row");
+  const pick = (label, options, value, pickIt) => {
+    const sel = el("select", "select select--light ws-fmt-select"); sel.setAttribute("aria-label", label);
+    for (const [v, t] of options) { const o = new Option(t, String(v)); if (String(v) === String(value)) o.selected = true; sel.add(o); }
+    sel.addEventListener("change", () => pickIt(sel.value));
+    return sel;
+  };
+  const bold = el("button", "btn btn--ghost ws-fmt-bold", "B"); bold.type = "button";
+  bold.setAttribute("aria-label", "Bold"); bold.title = "Bold"; bold.setAttribute("aria-pressed", String(cur.bold));
+  bold.addEventListener("click", () => onPatch({ bold: !cur.bold }));
+  row.append(
+    pick("Font family", LABEL_FONT_FAMILIES, cur.family, (v) => onPatch({ family: v })),
+    pick("Font size", LABEL_SIZE_CHOICES, cur.size ?? "auto", (v) => onPatch({ size: v === "auto" ? null : Number(v) })),
+    bold,
+  );
+  wrap.append(row);
   return wrap;
 }
 function fmtCheck(labelText, checked, onToggle) {

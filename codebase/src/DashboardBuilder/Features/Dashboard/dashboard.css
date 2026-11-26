@@ -273,6 +273,26 @@
 /* 4 px inside a label-over-control pair, 16 between the rows of a group that holds pairs: each label reads with its own control. */
 .ws-flyedit__group:has(.ws-fmt-field:not(.ws-fmt-check) + .ws-fmt-field:not(.ws-fmt-check)) { gap: var(--s4); }
 .ws-flyedit__group + .ws-flyedit__group { border-top: 1px solid var(--line); }
+/* The Label tile's sections wear a heading, as Tableau's label card does (marks-flyout-model.js `heading`). */
+.ws-flyedit__heading { font-size: var(--fs-body); font-weight: 600; color: var(--ink); }
+/* Marks to Label: toggle tiles, two to a row; the chosen tile carries a tick and the accent. */
+.ws-toolfly .ws-fmt-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2); }
+.ws-toolfly .ws-fmt-tile { display: inline-flex; align-items: center; justify-content: center; gap: var(--s1); min-height: var(--ctl-h); padding: 0 var(--s2); font-size: var(--fs-body); font-weight: 400; }
+.ws-toolfly .btn.ws-fmt-tile[aria-pressed="true"], .ws-toolfly .btn.ws-fmt-tile[aria-pressed="true"]:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent-ink); }
+.ws-fmt-tile:focus-visible, .ws-fmt-bold:focus-visible, .ws-fmt-dots:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ws-fmt-tile:disabled { cursor: not-allowed; }
+/* Text (field and "…") and Font (family, size, bold) sit on one row under their label. */
+.ws-fmt-text__row, .ws-fmt-font__row { display: flex; align-items: center; gap: var(--s1); }
+.ws-toolfly .ws-fmt-text__input { flex: 1 1 auto; min-width: 0; width: auto; }
+.ws-toolfly .ws-fmt-font__row .ws-fmt-select { flex: 1 1 0; min-width: 0; max-width: none; }
+.ws-fmt-bold, .ws-fmt-dots { min-width: var(--ctl-h); height: var(--ctl-h); padding: 0 var(--s2); flex: none; }
+.ws-fmt-bold { font-weight: 600; }
+.ws-toolfly .btn.ws-fmt-bold[aria-pressed="true"], .ws-toolfly .btn.ws-fmt-bold[aria-pressed="true"]:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent-ink); }
+/* A Label control that does nothing until a label is drawn. */
+.ws-toolfly .is-disabled { opacity: 0.6; }
+.tipdlg--label .tipdlg__body { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }
+.dialog.tipdlg--label:not(.dialog--sm) { width: min(640px, calc(100vw - 2 * var(--s4))); }
+.tipdlg__label { width: 100%; min-width: 0; resize: vertical; }
 /* The first section opens with the field slot: 16 between it and each control, an even rhythm. */
 .ws-flyedit__group:has(> .ws-toolpanel__slot) { gap: var(--s4); }
 /* A progress bar with its value read out (fmtMeter): the track fills with the accent up to the thumb. */

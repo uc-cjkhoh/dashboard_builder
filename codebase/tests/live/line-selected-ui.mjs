@@ -191,7 +191,7 @@ try {
   const formatOpen = () => ev(`!!(${fmtField('Number')})`);
   const ensure = async (label) => {
     if (label === 'Line markers') await openColour();
-    else if (label === 'Data labels') await openLabel();
+    else if (label === 'Show mark labels') await openLabel();
     else { if (!(await formatOpen())) await ev(`${fmtTool}.click()`); await waitFor(`!!(${fmtField('Number')})`, 'format panel open'); }
   };
   // The mock answers rows in REGIONS order; a dimension's steps follow the SORTED members (APAC, CA, EU, JP, LATAM, MEA, UK, US): the expected rank of each row.
@@ -290,14 +290,14 @@ try {
   });
   await check('Selected is independent of Label marks: Data labels with Label marks All still label every point, the dot follows the selection', async () => {
     await openLabel();
-    await toggle('Data labels'); await settle(600);
+    await toggle('Show mark labels'); await settle(600);
     const labelled = await zr(`list.filter((e) => e.type === 'tspan' && e.style && String(e.style.text ?? '') !== '' && !e.ignore).length`);
     await closeColour(); await clickPoint(1); await openLabel();
     const after = await zr(`list.filter((e) => e.type === 'tspan' && e.style && String(e.style.text ?? '') !== '' && !e.ignore).length`);
     must(labelled >= 8 && after >= 8, `the labels are drawn: ${labelled} / ${after}`);
     must(J(await visible()) === J([1]), 'the dot follows the click: ' + J(await visible()));
     await snap('selected-labels');
-    await toggle('Data labels'); await settle(400);
+    await toggle('Show mark labels'); await settle(400);
     await clickPoint(1);
   });
   await check('an Area and a Combo take Selected the same way', async () => {
