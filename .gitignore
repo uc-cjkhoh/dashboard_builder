@@ -8,3 +8,9 @@ keys/
 bin/
 obj/
 node_modules/
+
+# Local-only files (credentials, personal Claude/tool settings, session locks)
+*.local.md
+*.local.json
+scheduled_tasks.lock
+.superpowers/
