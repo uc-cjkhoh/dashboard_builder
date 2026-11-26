@@ -73,15 +73,17 @@ try {
     must(await ev(`document.getAnimations().every((a) => !a.effect.target.matches('g.rel-link'))`), 'an animation sits on the link group (it would fight the focus fade)');
   });
   await check('a redraw mid-arrival resumes the run: the new line carries the link\'s age as a negative delay, not a fresh start', async () => {
-    const ageOf = () => ev(`parseFloat(document.querySelector('.rel-link.is-arriving')?.style.getPropertyValue('--age') ?? '-1')`);
-    const a0 = await ageOf();
+    const a0 = await ev(`parseFloat(document.querySelector('.rel-link.is-arriving')?.style.getPropertyValue('--age') ?? '-1')`);
     await b.sleep(150);
-    await ev(`document.getElementById('model-view').dispatchEvent(new Event('scroll'))`); // render() (relations.js listens to the canvas scroll): replaceChildren
-    await b.sleep(60);
-    const a1 = await ageOf();
+    // redraw and read the new line in the same step: the line animation lasts --dur (200ms), so a later read can find it already finished
+    const r = await ev(`(() => { document.getElementById('model-view').dispatchEvent(new Event('scroll')); // render() (relations.js listens to the canvas scroll): replaceChildren
+      const line = document.querySelector('.rel-link.is-arriving .rel-link__line');
+      return { age: parseFloat(document.querySelector('.rel-link.is-arriving')?.style.getPropertyValue('--age') ?? '-1'),
+        delay: line?.getAnimations().find((a) => a.animationName === 'rel-line-in')?.effect.getComputedTiming().delay ?? null }; })()`);
     // inside the 450ms window the redrawn link is still arriving, and its --age is its real age (a restart would read ~0); past the window it is no longer arriving (-1)
-    must(a1 === -1 || a1 >= 150, `age after the redraw: ${a0} -> ${a1}`);
-    must(a1 === -1 || (await ev(`document.getAnimations().find((a) => a.animationName === 'rel-line-in')?.effect.getComputedTiming().delay ?? 0`)) <= -150, 'the line animation does not carry the negative delay');
+    must(r.age === -1 || r.age >= 150, `age after the redraw: ${a0} -> ${r.age}`);
+    // still running (age under 200ms): it carries the negative delay; from 200ms on it has already finished, which a fresh start never would be
+    must(r.age === -1 || (r.age >= 200 ? r.delay === null || r.delay <= -150 : r.delay !== null && r.delay <= -150), `the line animation does not carry the negative delay: age ${r.age}, delay ${r.delay}`);
   });
   await check('after the window a redraw plays nothing (zoom, drag and resize never replay it)', async () => {
     await b.sleep(700);

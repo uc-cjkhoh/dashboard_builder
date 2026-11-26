@@ -128,6 +128,9 @@ export async function launch({ port, width = 1400, height = 900 } = {}) {
         try { body = p.request.postData ? JSON.parse(p.request.postData) : null; } catch { body = p.request.postData; }
         let out;
         try { out = await handler({ method: p.request.method, path: u.pathname, search: u.search, body }); } catch (e) { out = { status: 500, json: { error: String(e) } }; }
+        // The sidebar probes /api/connection/ping every 30 s; an unanswered probe reads as "session gone" and dismisses every open menu and dialog,
+        // so a check that runs longer than that needs the answer. A test that mocks the ping itself (session-lost-*) wins: this is only the default.
+        if (out == null && u.pathname === '/api/connection/ping') out = { json: { connected: true, reachable: true } };
         out ??= { status: 404, json: { error: `unmocked ${u.pathname}` } };
         const text = out.text ?? JSON.stringify(out.json ?? null);
         await send('Fetch.fulfillRequest', {

@@ -36,6 +36,22 @@ export const PAGE_CHIP = `(name) => {
   return c;
 }`;
 
+/** Browser expression: right-click the calculated chip `name` in the Calculated fields manager and choose `item` from its menu (Edit…, Duplicate, Delete…, Copy …).
+ *  A popup opened from a chip inside the manager lives in that dialog, so the manager must stay open until the item has run: this opens it, picks the item in the same
+ *  step, then closes it again (Done) once the dialog the item opens on top (Edit…, the Delete… confirm) is gone, or at once when the item opens none. */
+export const calcMenuExpr = (name, item) => `(() => { const man = () => document.querySelector('dialog.calc-manager[open]'); const opened = !man();
+  if (opened) document.querySelector('button[aria-label="Calculated fields"]').click();
+  const chip = [...man().querySelectorAll('.ws-field')].find((c) => c.querySelector('.ws-field__name')?.textContent === ${JSON.stringify(name)});
+  chip.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 40 }));
+  [...document.querySelectorAll('.ctx-menu .menu__item')].find((x) => x.textContent.trim() === ${JSON.stringify(item)}).click();
+  const done = () => [...(man()?.querySelectorAll('.dialog__foot button') ?? [])].find((x) => x.textContent === 'Done')?.click();
+  const other = () => [...document.querySelectorAll('dialog[open]')].some((d) => !d.classList.contains('calc-manager'));
+  if (opened) {
+    if (!other()) done(); // the item opened nothing: Duplicate, Copy, a refused Delete…
+    else { const mo = new MutationObserver(() => { if (!other()) { mo.disconnect(); done(); } }); mo.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['open'] }); }
+  }
+  return true; })()`;
+
 /** Browser expression: the text of the Calculated fields manager (every calculation's row), opened and closed again if it was shut. */
 export const CALC_LIST_TEXT = `(() => { let d = document.querySelector('dialog.calc-manager[open]'); const opened = !d;
   if (opened) { document.querySelector('button[aria-label="Calculated fields"]').click(); d = document.querySelector('dialog.calc-manager[open]'); }

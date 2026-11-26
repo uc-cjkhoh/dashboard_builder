@@ -224,12 +224,12 @@ try {
     must(items.includes('Rename…') && items.includes('Hide from the field list'), J(items));
     await ev(`document.querySelector('.ctx-menu').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
   });
-  await check('sheet menu: Fit and the two toggles are tick-only', async () => {
+  await check('sheet menu: Fit and the toggles are tick-only', async () => {
     await ev(`document.querySelector('.ws-actions .iconbtn').click()`);
     const rows = await ev(`[...document.querySelectorAll('.ws-actions [role=menuitemradio], .ws-actions [role=menuitemcheckbox]')].map((x) => [x.textContent.trim(), x.getAttribute('aria-checked'), x.querySelectorAll('svg').length, getComputedStyle(x.querySelector('.menu__check')).visibility])`);
-    must(rows.length === 6, J(rows));
+    must(rows.length === 7, J(rows)); // Fit x4, the two show toggles, Aggregate Measures (ticked, and disabled on a bar chart)
     must(rows.every((r) => r[2] === 1), 'extra icons ' + J(rows));
-    must(J(rows.filter((r) => r[1] === 'true').map((r) => r[0])) === J(['Standard', 'Show title and caption', 'Show filter cards']), J(rows));
+    must(J(rows.filter((r) => r[1] === 'true').map((r) => r[0])) === J(['Standard', 'Show title and caption', 'Show filter cards', 'Aggregate Measures']), J(rows));
     must(rows.every((r) => (r[1] === 'true') === (r[3] === 'visible')), 'tick visibility ' + J(rows));
     await shot('sheet-menu-light.png');
     await ev(`[...document.querySelectorAll('.ws-actions [role=menuitemradio]')].find((x) => x.textContent.trim() === 'Fit width').click()`);

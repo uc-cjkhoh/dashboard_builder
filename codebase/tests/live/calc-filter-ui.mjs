@@ -4,7 +4,7 @@
 //   cd src/DashboardBuilder && dotnet run --no-launch-profile --urls http://localhost:5228 ; stop it with fuser -k 5228/tcp)
 // Env: APP_URL, SHOTS_DIR (screenshot folder), CDP_PORT (default: a free port), CHROME_BIN.
 import { launch } from './cdp.mjs';
-import { NEW_CALC, PAGE_CHIP, relateTables } from './model.mjs';
+import { calcMenuExpr, NEW_CALC, PAGE_CHIP, relateTables } from './model.mjs';
 import { writeFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -199,8 +199,7 @@ try {
   });
 
   await check('the filter goes when its calculation is deleted', async () => {
-    await ev(`(() => { const c = __t.chip('Region calc'); c.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 40 })); return true; })()`);
-    await ev(`[...document.querySelectorAll('.ctx-menu .menu__item')].find((x) => x.textContent.trim() === 'Delete…').click()`);
+    await ev(calcMenuExpr('Region calc', 'Delete…')); // the manager stays open until the confirm has closed (tests/live/model.mjs)
     await waitFor(`!!(${confirmOpen})`, 'confirm dialog');
     const text = await ev(`(${confirmOpen}).textContent`);
     must(/Region calc/.test(text), `confirm text: ${J(text)}`);

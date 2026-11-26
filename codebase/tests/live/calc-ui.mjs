@@ -4,7 +4,7 @@
 //   cd src/DashboardBuilder && dotnet run --no-launch-profile --urls http://localhost:5180 ; stop it with fuser -k 5180/tcp)
 // Env: APP_URL, SHOTS_DIR (screenshot folder), CDP_PORT (default: a free port), CHROME_BIN.
 import { launch } from './cdp.mjs';
-import { NEW_CALC, PAGE_CHIP, relateTables } from './model.mjs';
+import { NEW_CALC, calcMenuExpr, PAGE_CHIP, relateTables } from './model.mjs';
 import { writeFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -101,10 +101,7 @@ try {
     await waitFor(`${dlg} === null`, 'dialog closed after save');
   };
   const newCalc = async (name, formula) => { await openNewDialog(); await fillDialog(name, formula); await saveDialog(); };
-  const calcMenu = async (name, item) => {
-    await ev(`(() => { const c = __t.chip(${J(name)}); c.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 40 })); return true; })()`);
-    await ev(`(() => { const c = __t.chip(${J(name)}); [...document.querySelectorAll('.ctx-menu .menu__item')].find((x) => x.textContent.trim() === ${J(item)}).click(); return true; })()`);
-  };
+  const calcMenu = (name, item) => ev(calcMenuExpr(name, item)); // the manager stays open until the item has run (tests/live/model.mjs)
   const confirmOpen = `[...document.querySelectorAll('dialog[open]')].find((d) => !d.classList.contains('calc-dialog') && !d.classList.contains('calc-manager'))`;
   const chartText = () => ev(`document.getElementById('ws-chart').textContent`);
   const canvasDrawn = () => ev(`!!document.querySelector('#ws-chart canvas, #ws-chart svg')`);

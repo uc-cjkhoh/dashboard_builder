@@ -19,7 +19,8 @@ const busy = (p) => new Promise((res) => { const srv = createServer(); srv.on('e
 if (port === null) port = await freePort();
 if (process.env.UI_PORT) { if (await busy(port)) { console.error(`run-ui-all: port ${port} busy (another run?)`); process.exit(2); } }
 const app = spawn('dotnet', ['run', '--no-launch-profile', '--urls', `http://localhost:${port}`], {
-  cwd: join(root, 'src', 'DashboardBuilder'), stdio: 'ignore', detached: true });
+  cwd: join(root, 'src', 'DashboardBuilder'), stdio: 'ignore', detached: true,
+  env: { ...process.env, ClickHouse__AllowedHosts__0: 'ch.internal' } }); // data-source-guards-ui needs the host allowlist on; every other check mocks /api/connection, so it changes nothing for them
 const killApp = () => { try { process.kill(-app.pid, 'SIGTERM'); } catch { /* gone */ } }; // only the process group this script spawned
 for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { killApp(); process.exit(130); });
 process.on('uncaughtException', (e) => { console.error(e); killApp(); process.exit(1); });
