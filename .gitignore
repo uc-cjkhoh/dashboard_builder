@@ -1,0 +1,10 @@
+# Project-level ignores (one repo per project: codebase/ and kb/ live inside this repo)
+# Live build output and the pre-move/live snapshots (binaries; publish/keys is the key ring)
+/publish/
+/archive/
+
+# Secrets and build output anywhere in the tree
+keys/
+bin/
+obj/
+node_modules/
