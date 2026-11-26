@@ -3,8 +3,8 @@ components: []
 ---
 # Commit and merge
 
-**Ask before every commit and every merge** — in the Dashboard Builder app repo and in this KB repo alike.
-The earlier standing grant to merge the app repo's work branch to `main` once the suites were green was
+**Ask before every commit and every merge** — in the Dashboard Builder project repo (`codebase/` and `kb/` are one repo).
+The earlier standing grant to merge the project repo's work branch to `main` once the suites were green was
 withdrawn on 2026-11-17.
 
 ## Do
@@ -17,4 +17,4 @@ withdrawn on 2026-11-17.
 ## Never
 
 - Commit, merge, stash or reset the user's work without asking.
-- Push.
+- Push, unless the user asks for that push.

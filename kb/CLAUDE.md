@@ -10,7 +10,8 @@ the [`docs/`](docs/README.md) knowledge base — follow the links.
 
 > **This KB is docs only.** The source is at `/unified/user/cj/web_project/dashboard_builder/codebase/`
 > on the build host `10.168.49.20` (same shared filesystem — build it from here). Never scaffold code
-> into the KB. The app folder is a local git repo (no remote); this KB is a separate git repo.
+> into the KB. The project is **one git repo** at `/unified/user/cj/web_project/dashboard_builder/` holding `codebase/` and `kb/`
+> (remote `origin`: `github.com/uc-cjkhoh/dashboard_builder`, branch `main`); `publish/` and `archive/` are git-ignored.
 > **Layout:** one folder per project, `/unified/user/cj/web_project/dashboard_builder/{kb,codebase,publish,archive}`;
 > `kb/` is this KB. Shared knowledge lives in `/unified/user/cj/general_kb/`.
 

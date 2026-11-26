@@ -7,11 +7,13 @@ Checking a change by hand before it is merged. Start the app with the [quickstar
 
 ## Visual review and DOM behaviour
 
-**Visual review:** there is no headless browser on the build host. Look at light **and** dark (the tab
-bar's appearance toggle) on a spare dev port before deploying a UI change.
+**Visual review:** look at light **and** dark (the tab bar's appearance toggle) on a spare dev port before
+deploying a UI change.
 
-**DOM behaviour:** there's no headless browser (Chromium can't launch here), but the real modules can be
-driven in **jsdom** against the rendered page and a fake API.
+**DOM behaviour:** a headless Chromium (Playwright's, under `~/.cache/ms-playwright`, started with `--no-sandbox`)
+launches on the build host, and the `tests/live/*-ui.mjs` checks drive it over CDP ([testing.md](testing.md)).
+For a quick check without a browser, the real modules can also be driven in **jsdom** against the rendered
+page and a fake API.
 
 1. Install jsdom into a scratch directory, not the repo.
 2. Import `Features/Shell/app.js` with jsdom's window objects exposed as globals. Include `CustomEvent`

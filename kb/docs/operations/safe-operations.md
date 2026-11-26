@@ -7,8 +7,8 @@ Rules for an agent touching the build host, the live service or credentials. Com
 [quickstart.md](../getting-started/quickstart.md),
 [live-service.md](live-service.md).
 
-- **This KB is docs only.** Never scaffold code into it; the app source is a separate local git repo on
-  the same shared filesystem, built from there.
+- **This KB is docs only.** Never scaffold code into it; the app source is `codebase/` in the same project repo
+  (same shared filesystem), built from there.
 - **Never `pkill -f DashboardBuilder.dll`** — it matches the live service. Stop dev runs by port.
 - **Server changes to the live service:** stop → copy → start. Never copy a DLL over the running process.
 - **Credentials** (SSH + ClickHouse) live only in the git-ignored
