@@ -1,0 +1,57 @@
+---
+components: [src/DashboardBuilder/Features/Dashboard/chart.js, src/DashboardBuilder/Features/Dashboard/dashboards.js, src/DashboardBuilder/Features/Dashboard/label-marks-model.js, src/DashboardBuilder/Features/Dashboard/mark-channel-model.js, src/DashboardBuilder/Features/Dashboard/render-cartesian.js, src/DashboardBuilder/Features/Dashboard/render-handlers.js, src/DashboardBuilder/Features/Dashboard/result-model.js, src/DashboardBuilder/Features/Dashboard/sheet-plan.js, src/DashboardBuilder/Features/Dashboard/shape-model.js, src/DashboardBuilder/Features/Dashboard/worksheet-render.js, src/DashboardBuilder/Features/Workbook/workbook-model.js]
+---
+# Worksheet marks — Shape and Label in detail
+
+What the Shape and Label slots do beyond the table in [worksheet-marks.md](worksheet-marks.md): a **measure on Shape** (binned symbols), **Edit member shapes**, and **Label marks** (which marks carry their label). Decisions: [D114–D116](../../decisions/decisions-dashboards.md#d114--a-measure-on-shape-is-binned-into-at-most-six-symbols-plus-one-for-a-missing-value). Every setting here is client-side: no query, limit or ClickHouse path changes beyond the one extra aggregate a Shape measure adds.
+
+## Shape: a dimension or a measure
+
+Shape stays on the **scatter family** (Scatter, Square, Circle: [D100](../../decisions/decisions-dashboards.md#d100--shape-stays-on-the-scatter-family-size-on-a-line-is-the-marker-size)); on any other chart type a hint says so (`shapeChannel`). It takes one field:
+
+- **A categorical field** is a group-by: one series per member, each with its own symbol (the seven symbols in order: circle, square, triangle, diamond, rounded square, pin, arrow; the eighth member repeats the first). The legend icons wear the symbol. A calculated field is refused, as before.
+- **A measure** (a numeric field) is **not a group-by**: it rides along as the plan's last measure (`role: "shape"`, after the Size, colour and aux measures, so none of their positions move; `sum` by default like Size and Label) and its values are cut into **equal-width bins** over every point of the view. Each bin is one series with its own symbol, the **bin number is the symbol** (the lowest bin is the circle), so a bin keeps its symbol while the data changes. A numeric field set to Discrete (a dimension) is still binned: the slot decides by the field's type.
+
+### Bins
+
+- **Shape flyout → Shape bins** (`format.shapeBins`, whole **2 to 6**, default 5, shown only while Shape holds a measure on a scatter-family chart). Six at most: the seventh symbol belongs to a **missing value**, so no two groups ever share a symbol. A saved value outside 2 to 6 is reset to 5 and reported on import, never clamped; the default is not stored (older files are unchanged).
+- Bins are cut from the lowest to the highest value (`binShapeValues`): a value **on a boundary belongs to the bin above**, the **largest value belongs to the last bin**, and **flat data** (one value) is one bin named by the value. Bounds are rounded to 15 significant digits (so what the legend says is what decides, and an epoch in milliseconds keeps every digit); the first and last bound are the data's own minimum and maximum, and a span too wide for a double (about ±1e308) still cuts into equal bins.
+- The legend names every bin that holds a point **in words** ("10 to 20"; numbers in the Format number format), lowest first; empty bins are not listed. A **missing value** (`NULL`, or text) is its own group, "No value", last. Two bins whose bounds round to the same text are told apart ("… (bin 3)").
+- The tooltip names the bin and adds the point's **exact Shape value** ("rating: 9"). The legend only **highlights** (a click never becomes a filter on a measure).
+- Beside a **Colour field** the series are pairs ("EU · 10 to 20"): colour by the Colour member, symbol by the bin. A colour *measure* is not drawn while points are split by Shape (the existing hint).
+- **Caps:** a Shape measure counts as a measure (not a group-by) in the view limits (`viewCounts` / `checkAdd`), so it cannot push a view past the 10-measure cap; a view with no Shape, or a dimension on it, plans byte-identically.
+
+## Edit member shapes
+
+Shape flyout → **Edit member shapes** (shown while a Shape **dimension** is on a scatter-family chart; disabled until the chart has drawn members). It lists the Shape field's members, each with its current symbol, the seven symbols as buttons (named by title and `aria-label`, drawn as filled glyphs in the ink colour) and **Reset**; **Reset all for this field** also removes shapes of members no longer in the view.
+
+- Stored as `sheet.memberShapes` = `{ [table.column]: { [member]: shapeKey } }` (`shape-model.js`, kept like `memberColors`): the shape keys are `circle`, `square`, `triangle`, `diamond`, `roundSquare`, `pin`, `arrow`. The key exists **only once a member has a shape** (older files and untouched sheets round-trip unchanged).
+- Limits as for member colours: 100 members per field, 20 fields, a member key ≤ 100 characters, a field key ≤ 200 (`LIMITS.memberColors` / `memberColorFields` / `memberKey` / `memberField`). Maps have no prototype, and a member called `constructor` or `__proto__` is an ordinary key (a member literally named `__proto__` cannot be given a shape). On import an invalid entry (unknown shape key, over a limit, not an object) is **dropped and reported**, never coerced; a map with nothing valid leaves no key.
+- The chosen symbol applies to the member's series and its legend icon, in a pair ("colour · member") and when Colour and Shape are the same field. A member without one keeps the symbol at its position. Two members may share a symbol (the user's choice).
+- A measure on Shape has bins, not members: no editor is offered, and a saved `memberShapes` is kept but not drawn while Shape holds a measure.
+
+## Allow labels to overlap other marks
+
+Label flyout → a checkbox, shown only while a label is drawn, **on by default** (every label draws, as always). Off hides a label that would sit on another: every series that shows a label gets ECharts' `labelLayout.hideOverlap` (`withLabelOverlap` in `buildOption`, so it covers each chart family). Stored as `format.labelOverlap`, only when off. Tableau hides overlapping labels by default; here the default is unchanged so saved workbooks draw as before ([D158](../../decisions/decisions-marks.md#d158--tableaus-marks-card-controls-the-flyouts-lacked-a-size-meter-allow-labels-to-overlap-pages-speed)).
+
+## Label marks
+
+Label flyout → **Label marks** chooses which marks carry their label (the Label field's text, or the value when Data labels is on). Stored as `format.labelMarks`: absent = **All** (every mark, as labels have always drawn); otherwise one of `minmax`, `selected`, `highlighted`, `recent`, `ends`. An unknown saved value is reset to All and reported on import; a mode this chart cannot offer is **kept** and draws every label with a hint ("Line ends labels apply to Line and Area charts — every mark is labelled"), so switching back to a line restores it.
+
+The control is shown only while labels are drawn (**Data labels** on or a **Label field** set) on **Bar, Stacked, Line, Area, Combo, Pie, Donut and the point charts** (`labelContext`). A point chart split by a Shape or Colour dimension (one series per member) draws labels too, one per mark ([D117](../../decisions/decisions-dashboards.md#d117--labels-on-a-point-chart-split-by-shape-or-colour-one-label-per-mark-the-mask-taken-across-the-members)). The modes (`label-marks-model.js`):
+
+| Mode | Marks labelled | Offered on |
+|---|---|---|
+| **All** | every mark | everywhere |
+| **Min & max** | per series, the lowest and the highest mark; a missing value and the "Other" mark are never candidates; a tie takes the first mark; all equal = one mark | everywhere |
+| **Selected** | the mark(s) of the dashboard's selection (a source widget) or else the worksheet's own click selection, on the first group-by; with none in view (nothing clicked, or an Exclude that removed it), no label and a hint says to click a mark | everywhere |
+| **Highlighted** | none at rest; a mark's label (and a pie slice's leader line) appears with its emphasis: hover on the mark, or a legend item's highlight (the whole series). A PNG / SVG export or print shows the chart as it rests, so it carries no label | everywhere (hover uses `focus: "self"` so one mark shows one label) |
+| **Most recent** | the marks at the latest date, in every series | when the first group-by is a date, exact or grouped to a day, month, year … (not a part such as month of year) |
+| **Line ends** | the first and last real point of each line, past leading and trailing gaps | Line and Area |
+
+- A pie / donut mask hides an unlabelled slice's **leader line** too; a bar with Size (a custom series) hides its label with a zero-opacity text that its emphasis restores; a Colour split masks per series (per colour member) and the Label field's text is kept for the marks that are labelled.
+- **A point chart split by Shape or Colour** labels each mark in its member's series: the text is the Label field's value, or with Data labels the point's name (the other group-by keys; the member's name when it has none, never blank). Min & max is per member; Selected / Most recent name the result rows behind the marks (each point carries its `row`), so they label the mark whichever member it sits in; Highlighted shows one mark's label on hover (`focus: "self"`, only then). Label position moves every member's labels. Split marks stay inert as before **unless Label marks is Selected** (with labels drawn): then, on a split **Scatter**, a click on a mark selects its first group-by value, in the editor and on a dashboard widget (Square and Circle never select). Data labels off and no Label field: the series is as before.
+- **A long line has no dots** (past 60 points, unless Marker size is set), and ECharts draws a label on its mark's dot: with a mask on (not Highlighted) the labelled marks show a dot (`showAllSymbol` on; the others keep their normal size but are clear, and appear on hover as on a plain long line, so the tooltip and hover dot work), so Line ends, Min & max, Most recent and Selected draw on a 200-day line. Highlighted keeps ECharts' own hover dot. **All** on such a line draws no label, as before: Data labels on a long line needs a mask.
+- **Most recent** reads the latest ISO date of the first group-by **before** date-part keys become labels (`recentKeyOf` in `worksheet-render.js`), so a date grouped to months is still ordered by time, and the mark may sit anywhere in the drawn order (sorted by value).
+- **Label position.** Label flyout → **Label position** (`format.labelPosition`: absent = Automatic, else `above`, `below`, `left`, `right`; drawn as ECharts `top`, `bottom`, `left`, `right`) moves the label of a **Line, Area or point chart** (a label sitting on a point over the plot background, so ink on the surface with no palette-contrast question), while labels are drawn. A bar, stacked bar, combo bar or pie slice keeps its own place and the control is not offered; a stored position the chart does not take is kept and ignored. An unknown saved value is reset to Automatic and reported on import. The "inside" positions are not offered (backlog).
+- Exports (PNG / SVG) are the live chart, so they match the screen.

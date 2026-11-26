@@ -1,0 +1,299 @@
+---
+components: [src/DashboardBuilder/Features/Board/, src/DashboardBuilder/Features/Calc/, src/DashboardBuilder/Features/Canvas/, src/DashboardBuilder/Features/Connection/, src/DashboardBuilder/Features/Core/, src/DashboardBuilder/Features/Dashboard/, src/DashboardBuilder/Features/Relations/, src/DashboardBuilder/Features/Rows/, src/DashboardBuilder/Features/Schema/, src/DashboardBuilder/Features/Shell/, src/DashboardBuilder/Features/Story/, src/DashboardBuilder/Features/Tabs/, src/DashboardBuilder/Features/Dashboard/marks-flyout-model.js]
+---
+# Frontend modules & patterns
+
+A map of every browser module and what it owns, plus the wiring, fetch and UI-helper conventions they
+share. Read it to find where a piece of frontend behaviour lives before changing it.
+
+The browser code is **vanilla JS ES modules + hand-written CSS**, with no framework and no build step
+([golden rule 10](../development/coding-standards.md#10-self-hosted-framework-free-frontend)). Each
+feature's JS/CSS sits beside its controller and view under `src/DashboardBuilder/Features/<Feature>/`.
+Shared helpers live in `Features/Core/`. Why: [D19](../decisions/decisions-platform.md#d19--mvc-in-feature-folders).
+
+"Pure" below means the module never touches the DOM and runs under `node --test`. Tags such as P26 or
+T02-34 are build-plan (Pnn) and backlog (Tnn-nn) item ids.
+
+## Module map
+
+Grouped by feature folder; each entry is the module, then what it owns.
+
+### Shell/ — page bootstrap and chrome
+
+- `Shell/app.js` — bootstrap
+  - hydrates `[data-icon]` placeholders, installs the global `error` / `unhandledrejection` handlers (danger toast "Something went wrong — try again."; aborted queries and the benign `ResizeObserver loop` notice are ignored), wires every module's `init*`, listeners before the initial status check
+- `Shell/appearance.js` — the one **Appearance** card (`#scheme-btn` → `#scheme-list`, in the sidebar foot `#sidebar-foot`; it opens upward from the tile, over the canvas; `wireMenu` with `stayOpen`): mode (Light / Dark, `Core/scheme.js`), dark look and accent (preset swatches + a custom colour) (`Core/theme-model.js`), then **Reset theme** (no chart colours: [D164](../decisions/decisions-marks.md#d164--chart-colours-are-generated-and-edit-member-colours-is-the-one-place-that-sets-them)). Built once; `sync` repaints the selection and swatches on `scheme:pref`, `scheme:changed` and `theme:changed`. Left / Right move within the mode row and the accent row. The button's glyph + label follow the mode
+- `Shell/perf-panel.js` — the sidebar's gauge tile (`#perf-btn`, bottom of the sidebar body; `sidebar.js` takes it out of the DOM on the Data Source tab and puts it back elsewhere) opens the Performance dialog: recent query / render timings newest first (time in the app zone, kind, query ms, rows, cache hit / miss / failed / aborted, render ms) with a one-line summary (counts failed or cancelled queries), **Copy as text** (tab-separated) and **Clear**; a native `<dialog>` (Esc closes, focus returns to the button); updates live while open
+- `Core/timezone.js` — pure: the app time zone (`<meta name="app-timezone">`, [time-zone.md](../reference/time-zone.md)): `clockIn`, `dateIn`, `todayIn`, `offsetLabel`.
+- `Shell/activity-bar.js` — the **activity chip** (`#activity`, bottom-right, solid, `role=status` / `aria-live=polite`): while any API request is in flight it says what the app is waiting on and for how long ("Loading tables in sales… · 3 s"). Shown after 300 ms (no flash on fast requests), refreshed each second, `hidden` when idle.
+- `Core/activity-model.js` — pure: `describeRequest(method, path)` builds the plain-words label from the method and URL path **only** (database / table / column names; never a request body — golden rule 4); `createActivity()` tracks in-flight requests; `activityLine(snapshot)` is the text (oldest request, "+n more", elapsed, "still waiting on ClickHouse" after 10 s). `api.js` registers every request in `request()` and `exportCsv()` and clears it in `finally`, so success, error and abort all end it.
+- `Core/perf-log.js` — pure: a bounded in-memory ring (200) of timing entries `{ at, kind, ms, rows, cached, renderMs, outcome }` (outcome ok / failed / aborted); only whitelisted numbers / kind are kept — never a request, SQL, value or credential; browser memory only, gone with the tab. `Dashboard/worksheet-view.js` records each fetch (`ms`, rows, cache hit), each comparison-query fetch, and every failed or aborted (cancelled / superseded) fetch (a failed or aborted entry never takes a render time; `record` returns a handle so the draw's render time attaches to the main fetch's entry, not a later comparison entry) and each draw (`renderMs`)
+- `Shell/sidebar.js` — resizable sidebar (`Core/resizer.js` handle → `--sidebar-w`, capped at 30vw) + collapse-to-rail toggle (remembered in `localStorage`); exports `expandSidebar()`
+
+### Connection/
+
+- `Connection/connection.js` — connect form (on the start card), sidebar summary, change / cancel, gating — [connection.md](../concepts/data-source/connection.md)
+- `Connection/recent-sources.js` — pure: `remember` / `forget` / `sanitize` recent connection sources (host as entered, port, user, TLS flags — never a password), most recent first, max 5; `formValues` refills the form from one
+- `Connection/connection-rules.js` — pure: `secureToggled` / `trustToggled` (Secure off clears Trust, on restores it), `certNoteVisible` (the "certificate not checked" note waits), `summaryTitle` / `summaryDetail` (compact-summary tooltip, user · port), `formFromView`
+
+### Schema/ — database tree
+
+- `Schema/schema.js` — the database tree (lazy per-database table listing, search, table rows + drag payload, `schema:open`) — [schema-browser.md](../concepts/data-source/schema-browser.md)
+- `Schema/column-profile-dialog.js`, `Schema/column-profile-model.js` — the column profile dialog (`openColumnProfile(db, table, column)`, opened from a field row on a canvas card) and its pure rules:
+  - `profileRequest`, `formatShare`, `formatNumber`, `roleOf`, `summarize` (incl. the numeric `summary` group), `profileFailure`, `histogramRequest`, `histogramView`, `distributionFailure` — [schema-browser.md](../concepts/data-source/schema-browser.md#column-profile--field-details)
+- `Schema/table-filter.js` (`matchTables`, `listStep`), `Schema/schema-model.js` (`splitDatabases`, `rememberOpen` / `recallOpen`), `Schema/tree-model.js` (`filterTree`, `capRows`, `runLimited`, `initialOpen`) — pure rules
+
+### Canvas/ and Relations/ — the Data Source canvas
+
+- `Canvas/canvas.js` — drop handling, entity cards, card menu and Edit SQL (`sql-dialog.js`, `sql-editor.js`, `Core/sql-check.js`), card movement, list height from an edge drag (`card-height.js`), the column type label (`column-type.js`, pure `cardType`), zoom and pan (`canvas-zoom.js`), empty state, the data preview docked under the canvas (`data-preview.js`, request rule `entityRowsQuery` in `Rows/rows-model.js`; column widths, resize grips and number alignment in `preview-columns.js`) — [canvas.md](../concepts/data-source/canvas.md)
+- `Canvas/empty-state.js` — pure: `emptyState({connected, databaseSelected})` → the sentence, button and control to focus
+- `Relations/relations.js` — drag- and keyboard-to-relate (`link-keys.js`), links, the relationship dialog and its "What this link does" summary (`relation-describe.js`), cardinality, pinned keys — [relationships.md](../concepts/data-source/relationships.md)
+- `Relations/join-preview-model.js`, `Relations/join-check.js` — pure wording and chosen-vs-observed comparison of a join preview (`describePreview`, `observedCardinality`, `joinEvidence`, `suggestionLabel`, `pct`, `previewRequest`); the dialog's Suggestion panel (DOM, `textContent` only): `buildJoinCheck()` returns `{ root, start, rerun, redescribe }`, run on open, re-run on a key-pair change, re-read on a cardinality pick
+- `Relations/link-route.js` — pure: `linkSides` (which card edge each end uses), `linkRoute` (the elbow's corner points, lanes, badge spot), `roundedPath`, `placeBadge` (badge spot that avoids cards and other badges), `assignLanes` / `laneCrossings` (a lane per overlapping link in a gutter, ordered to cross least), `quietBadges` (badges hidden at rest from 4 links) — the link geometry
+- `Relations/key-pairs.js`, `Relations/key-pairs-ui.js` — a compound key: pure `suggestPairs`, `addPair`, `compoundName`, `MAX_EXTRA_PAIRS`; the dialog's "Also match on" section (native controls, `textContent` only)
+- `Relations/relation-rules.js` — pure (`relEnds` lists every column a link uses, extra pairs included): `keysCompatible`, `findDuplicate`, `linkProblem` — what may be linked; `JOIN_TYPES`, `normalizeJoinType`, `joinChoices`, `planJoinType`, `joinBadge` — join types
+
+### Tabs/, Board/ and Story/ — tabs, the dashboard board and stories
+
+- `Tabs/tabs.js` — Data Source tab + one ordered list of worksheet, dashboard and story tabs drawn on one row (shrink, then scroll) with a group per dashboard, the `[+]` menu and the close confirm (`confirmDestructive`) — [tabs.md](../concepts/workbook/tabs.md)
+- `Board/board-model.js` — pure (P24b):
+  - widget geometry and limits — `overlaps`, `inBounds`, `firstFreeSpot`, `placeNew`, `placeAt` (a drop), `checkPlacement`, `explainRefusal` (the refusal in words), the import clean-up `cleanWidgets`, `savedWidgets`, `removeSheetWidgets`, `dashboardsUsing`, `defaultTabName` — [data-model.md](../reference/data-model.md#tabs-and-dashboards)
+- `Story/story-model.js` — pure (node-tested): `validateCaption`, `addStep`, `removeStep`, `moveStep`, `setCaption`, `goTo` (never wraps), `dropTarget` (used by `closeTab`), `offeredTargets`, `targetKind`, `stepName`, `savedSteps`, `cleanSteps` (import: bad steps skipped and reported) — [stories.md](../concepts/workbook/stories.md)
+- `Story/story.js` — the story tab's body (`#story-view`): add row, step strip (tablist), caption editor, step tools, Previous / Next, the stage (a static `createWorksheetView` or a dashboard link), print
+- `Board/board-size.js` — pure (node-tested): dashboard size — `SIZE_PRESETS`, `SIZE_LIMITS`, `sizeError`, `customSizeProblem`, `isPreset`, `cleanSize` (import), `savedSize`, `sizeKey` / `sizeLabel`; size range — `rangeError`, `cleanRange`, `savedRange`, `rangedWidth` / `rangedHeight` — [dashboards.md](../concepts/workbook/dashboards.md#layout)
+- `Board/board-notes.js` — pure (node-tested): dashboard data notes — `validateNotes`, `cleanNotes` (import), `savedNotes`, `printLines` (print header); `Board/widget-note.js` — a worksheet widget's note (`validateWidgetNote`, `cleanWidgetNote`, `widgetNoteLines`) — [dashboard-print-notes.md](../concepts/workbook/dashboard-print-notes.md). `Board/notes-edit.js` — its inline editor (DOM).
+- `Board/board-layout.js` — pure (node-tested):
+  - cell → pixel geometry — `layoutBoard(widgets, panelWidth, { rowH, gap, stack?, fixed? })` → `{ stacked, height, rects }` (`stack` is for print), `fixedRowH`, `columnWidth`, `widgetOrder` (reading order)
+  - pixel → cell: `cellAt`, `snapMove`, `snapResize`, `cellRect` — [dashboards.md](../concepts/workbook/dashboards.md#layout)
+- `Board/board.js` — the dashboard tab's body (`#board-view`):
+  - shows the active dashboard only, reconciles its widgets by id, lays them out from the tokens, add / remove, theme and resize handling, full screen and print — [dashboards.md](../concepts/workbook/dashboards.md)
+- `Board/board-widget.js` · `board-panel.js` — one widget (focusable; header with Edit / Remove over a select-only `createWorksheetView` or a text body; the corner grip; the inline text form) and the side panel (worksheets with Add, draggable with `SHEET_MIME`; Add text)
+- `Board/board-drag.js` — pure: the pointer state machine `createDrag()` (`start` / `move` → ghost / `end` → `commit` \| `revert` \| `none` / `cancel`, `DRAG_THRESHOLD`), `ghostFor`, `dropPlan` (a panel drop)
+- `Board/nav-model.js` · `nav-edit.js` — navigation button: pure `validateNavEdit`, `navTargets`, `navChanged`, `dashboardsLinking`, `clearNavTarget` (used by `closeTab`); `nav-edit.js` builds the inline form (label, tooltip, Goes to)
+- `Board/board-keys.js` · `text-edit.js` · `image-model.js` — pure: `validateImageFile`, `isImageSrc`, `altFromName` (image widgets: raster data URLs only, size-bounded)
+  - `keyStep` (arrow / Shift+arrow → candidate + status, or the refusal), `movedMessage`, `resizedMessage`
+  - `validateTextEdit`, `textChanged`
+- `Board/board-interact.js` — DOM wiring over the pure modules: pointer move / resize with capture, the ghost, keyboard steps, dropping a worksheet from the panel — [dashboards.md](../concepts/workbook/dashboards.md#editing-the-layout)
+- `Tabs/duplicate-model.js` — pure: duplicate-worksheet naming, limit check, sheet copy (node-tested)
+- `Tabs/tab-groups-model.js` — pure: dashboard group membership, strip display order, colour slots, the close neighbour, the shrink solver `fitTabWidth`, and the cleaners for the saved `groupSlot` / `collapsed` (node-tested)
+
+### Dashboard/ — worksheet editor, view and rendering
+
+- `Dashboard/dashboards.js` — the worksheet editor: field pane, shelves, toolbar, status bar, selection / drill / legend handling
+  - owns exactly one worksheet view (exports `planCtx`, `categoryOf`, `castOf` and the shared `sharedResults` cache for the board's widgets) and passes its state in as the view's options (`interactive`, `onSelect`, `onDrill`, `onLegend`, …) — it draws nothing itself — [worksheet.md](../concepts/worksheet/worksheet.md)
+- `Dashboard/worksheet-view.js` — `createWorksheetView(container, getContext, options)` → `{ run, sync, refresh, cancel, destroy }`: plan → latest-wins fetch through the shared result cache → `renderWorksheet` into one container
+  - owns its own gate, table pager, fresh flag and the last drawing's notice line.
+  - `getContext()` supplies `dash`, `noticeEl` (or null), `results`, `plan` (the `sheet-plan.js` context), `categoryOf`, `castOf`.
+  - `options` (static, all optional):
+    - `interactive`: `true` the editor; `"select"` a dashboard widget (marks select, nothing drills, no status bar); `false` static.
+    - `cross()`: the dashboard selection, `{ filter }` or `{ selected }`. `sync()` re-runs only when it changed what the view shows.
+    - Hooks: `onSelect(dimField, raw)`, `onDrill(raw)`, `onLegend({ sheet, field, name, raw, bucketed })`, `legendFocus()`, `onTooltipFields`, `onMemberColors`.
+    - Other: `statusBar`, `notices(sheet)`, `draw` (test seam).
+  - Also the single-table histogram path and the box-plot path (`runBox`, via `box-plan.js`), and re-exports the `notices.js` helpers — [worksheet-query.md](../concepts/worksheet/worksheet-query.md#query-lifecycle)
+- `Dashboard/worksheet-render.js` — `renderWorksheet(container, sheet, result, cmp, { plan, interactive, hooks })` → `{ extraNotice }`:
+  - the one entry point that draws a result — Other mark, date-part labels, display names, P27 table calculations, then dispatches to a family module.
+  - Reads only its arguments (a render context `rc` carries `bucketedKey`, `calcPercent`, `extraNotice`, `interactive`, `hooks`), never the editor, so any view can draw a worksheet
+- `Dashboard/box-model.js` — pure box-plot data: `boxData` (whisker-to-whisker rows), `outlierPoints` (label → category index), `outlierNotice`, `MAX_OUTLIERS` (mirrors `ApiLimits.MaxBoxOutliers`)
+- `Dashboard/render-table.js` · `render-kpi.js` · `render-cartesian.js` · `render-special.js` · `render-handlers.js` · `render-dom.js` — DOM drawing, one family each: crosstab / text table with totals and conditional formatting (P37)
+  - KPI tiles and sparkline
+  - series charts (bar / stacked / line / area / combo, pie / donut, scatter family, shape scatter, colour split, analytics, comparison series)
+  - heatmap, treemap, the P36 types, histogram and box plot
+  - the interaction wiring (`selectHandler`, `legendSpec`, `memberSpec`; with `rc.interactive` false there is no click / drill handler and the legend is highlight-only — a click highlights an item and a second click clears it, nothing is hidden and no host hook runs)
+  - shared `el` / `hint` / `warn` / `iconSpan`
+- `Dashboard/collapse-model.js` — pure (node-tested, T03-29):
+  - `collapseKey`, `rollUp` (distinct tuples → one node per visible row / column under the collapsed headers), `expandNodes`, `leafValue` (a collapsed pair is `combine`d, null for a non-additive measure or partial rows), `headerKeys`, `applyToggle` (prune + cap), `shownValues` (conditional-format extents), `collapsedOf`, `canToggle`, `cleanCollapsed` (import clean-up)
+- `Dashboard/data-notes.js` — pure (node-tested): `updatedText(queriedAt)`, `usedCalculations(sheet, calcs)`, `calcDefinitionLines` — the status bar's update time and the print header's calculation definitions
+- `Dashboard/result-model.js` · `grid-model.js` · `notices.js` — pure (node-tested):
+  - the shaping of a result for drawing — `primaryDim`, `chartOrientation`, `aliasNames`, `pathOrderedRows`, `marksChannels`, `scatterGroups` (`scatterShapeGroups`), `colorSplitData`, `heatmapData`, `treemapTree`, `sankeyLinks`, `multiplesData`, `statusText`, `captionText`
+  - the tuple / leaf / span pivots of the crosstab
+  - the notice text builders (`joinNotices`, `periodNotice`, `speedNotice`, `invalidFilterNotice`)
+- `Dashboard/sheet-plan.js` — pure:
+  - the worksheet query plan from explicit inputs — `buildPlan(sheet, periodRange, ctx, { crossFilter })`, `involvedTables`, `selectionFilter`, `planDims`, `planMeasures`, `sortTargets`, `fieldId`, `measureName`, `periodFilters`, `toServerFilter`, drill / pages filters
+  - `ctx = { calculations, entities, relationships, sharedFilters, parameters, metaOf, nameOf, columnType }` — [worksheet-query.md](../concepts/worksheet/worksheet-query.md#building-the-query)
+- `Dashboard/chart.js` — the only ECharts adapter; one chart per container element (state in a `WeakMap`), every export takes the container first
+  - [worksheet-charts.md](../concepts/worksheet/worksheet-charts.md#rendering--the-echarts-adapter)
+- `Dashboard/contrast.js` — pure: WCAG (Web Content Accessibility Guidelines) `luminance`, `contrastRatio`, `pickInk` (treemap label ink)
+- `Dashboard/mark-channel-model.js` — pure (T03-19 / T03-20 / T03-21): which chart types take a colour measure or Size and the hint when not (`colourChannel`, `sizeChannel`, `COLOUR_MEASURE_TYPES`, `measureCue`), the Size scales (`sizeFractions`, `sizeRange`, `barThickness`, `markerSizeFor`), `lineSizeMode` — [worksheet-marks.md](../concepts/worksheet/worksheet-marks.md#colour-size-and-shape-by-chart-type-t03-19-t03-20-t03-21-t01-21) · `Dashboard/size-scale-model.js` (pure, T03-20): a Size field's mark sizes — a measure's shares (`measureShareFn`), a dimension's member steps (`memberRanks`), Size flyout → Edit Sizes (`sizeScaleOf`, `cleanSizeScale`), line thickness, Table / Text text steps — [worksheet-marks.md](../concepts/worksheet/worksheet-marks.md#size-a-dimension-edit-sizes-text--table-font-size-t03-20)
+- `Dashboard/colour-fields-model.js` — pure: the Colour slot's content and drops (`addColourField`, `colourDimensions`, `cleanColourList`, `COLOUR_FIELDS_MAX`), the combined member's text and storage key (`memberText`, `memberRaw`, `combinedField`, `memberColourField`) · `Dashboard/pie-split-model.js` — pure: a pie / donut's sub-slices per Colour member (`pieSplit`) · `Dashboard/mark-opacity-model.js` — pure: the Color flyout's Opacity (`markOpacityOf`, `applyMarkOpacity`, `withAlpha`, `OPACITY_TYPES`) — [worksheet-marks-colour.md](../concepts/worksheet/worksheet-marks-colour.md) · `Dashboard/colour-scale-model.js` — pure (T03-19): continuous colour ramp hues, diverging colours and symmetric range, the Automatic scale (`effectiveScale`) and full-range ramp (`fullRangeRamp`), pinned range validation and span, colour steps, a value's place on the scale (`positionOf`, `stepIndexOf`) — [worksheet-marks.md](../concepts/worksheet/worksheet-marks.md#member-colours-and-palette-order-t01-20-t03-33) · `Dashboard/shape-model.js` — pure: the seven shape keys and their ECharts symbols (`SHAPE_CHOICES`, `shapeSymbol`, `symbolAt`), a measure on Shape cut into equal-width bins (`binShapeValues`, `shapeBinsOf`, `cleanShapeBins`, `shapeOrder`), and Edit member shapes kept like member colours (`setMemberShape`, `clearFieldShapes`, `cleanMemberShapes`, `shapesByName`) · `Dashboard/label-marks-model.js` — pure: Label flyout → Label marks (`LABEL_MARK_CHOICES`, `labelContext`, `labelModesFor`, `effectiveLabelMode`, `labelMask`, `mostRecentRaw`, `cleanLabelMarks`, `labelPositionsFor`, `labelPositionSymbol`, `cleanLabelPosition`) — [worksheet-marks-shape-label.md](../concepts/worksheet/worksheet-marks-shape-label.md)
+- `Dashboard/marks-flyout-model.js` — pure: which controls each other Marks tile's flyout shows (`flyoutSections(tool, inputs)` → `[{ label, keys }]`, `MARKER_TYPES`), read by `dashboards.js` (`tileEditor`, `flyoutInputs`) and by `toolbar-rules.js` (`controls`: a tile with a control is never quiet) ([D155](../decisions/decisions-marks.md#d155--every-marks-tile-opens-its-own-controls-the-color-flyout-generalised)).
+- `Dashboard/pages-speed-model.js` — pure: the Pages flyout's Speed (`PAGE_SPEEDS`, `pageSpeedOf`, `pageIntervalMs`, `cleanPageSpeed`, `pageSpeedError`; absent = Medium); `label-marks-model.js` also holds Allow labels to overlap (`labelOverlapOf`, `cleanLabelOverlap`, `withLabelOverlap`, applied in `chart.js` `buildOption`)
+- `Dashboard/colour-flyout-model.js` — pure: which controls the Marks card's Color flyout shows (`colourFlyoutGroups` → `{ colour, opacity, effects }` of control keys, `colourScaleShown`), from the chart type, `colorMode`, the resolved scale and Steps; `colourEditor` in `dashboards.js` builds them ([worksheet-marks-colour.md § The Color flyout](../concepts/worksheet/worksheet-marks-colour.md#the-color-flyout), [D151](../decisions/decisions-marks.md#d151--the-color-tile-opens-the-colour-controls-format-keeps-the-rest))
+- `Dashboard/scale-model.js` — pure:
+  - `scalePlan` (limit / paging / Other / date grouping per chart type), `withOther`, `tableProgress`, `needsNextPage`, `bucketNotice` — [worksheet-table-view.md](../concepts/worksheet/worksheet-table-view.md#table-view--a-true-rows--columns-crosstab)
+- `Dashboard/date-axis.js` — pure:
+  - `axisLabelPlan` (which category labels a bottom / left axis draws — evenly spread, first and last kept, none touching, upright when tight), `shortDateLabels`, `parseDateLabel` — [worksheet-charts.md](../concepts/worksheet/worksheet-charts.md#rendering--the-echarts-adapter)
+- `Dashboard/chart-fit.js` — pure:
+  - `chartFit(spec, width, height)` — the room a chart's category axes need (min width/height, label rotation, zoom window), `markCount` (canvas vs SVG), `rotatedLabelCap`; `chart-polish.js` — `fitWords`, `kpiLastNote`, `histogramLabel` — [worksheet-charts.md](../concepts/worksheet/worksheet-charts.md#rendering--the-echarts-adapter)
+- `Dashboard/viewbar-model.js` — pure: `CHART_TYPES`, `chartIcon` / `chartLabel` (the chart-type picker), `sortSummary` (what the sort picker shows)
+- `Dashboard/query-runner.js` — pure: latest-wins gate, per-worksheet result cache, truncation notice — [worksheet-query.md](../concepts/worksheet/worksheet-query.md#query-lifecycle)
+
+### Dashboard/ — field pane, pills and shelves
+
+- `Dashboard/filter-rules.js` — pure: `aggsFor`, `checkFilter`, `statFilters` (applies a calculated filter only when `Calc/calc-tree.js` `calcOnTable` says all its fields sit on the histogram's table), `withCategories`, `viewCounts`, `checkAdd` (drop-time caps) — [worksheet.md](../concepts/worksheet/worksheet.md#drop-time-limits)
+- `Dashboard/show-me-rules.js` — pure:
+  - chart-type field rules (`CHART_NEEDS`, `chartIssue`, the shared hint texts, `roleOf`) and the chart-type menu's cues — `issueFor`, `bestType`, `showMeOptions` — [worksheet-charts.md](../concepts/worksheet/worksheet-charts.md#chart-type-control)
+- `Dashboard/toolbar-rules.js` — pure: `visibleTools(chartType, tools)` — which Marks slots are quiet — [worksheet-marks.md](../concepts/worksheet/worksheet-marks.md#marks-slots)
+- `Dashboard/field-choices.js` — pure: `choicesOf`, `sameRef`, `switchField`, `removeChoice` (a slot's field choices, P40)
+- `Dashboard/placement-model.js` — pure: `defaultShelf(role)` (measures to Rows, dimensions to Columns) for the `＋` button and double-click
+- `Dashboard/having-model.js` — pure: the measure filter (`HAVING_OPS`, `checkHaving`, `cleanHaving`, `havingPlan`, `havingSentence`, `havingNotice`, `havingBadge`, `sliderBounds`, `sliderStep`, `sliderValues` for the range slider)
+- `Dashboard/pill-options.js` — pure: `fieldPillOptions` / `filterPillOptions` (the entries of a pill's context popup), `filterSummary`, `markGrid` (Marks slots in rows of three)
+- `Dashboard/field-group.js` — the one collapsible `<details class="ws-group">` of the field pane (Marks, tables)
+- `Dashboard/fields-pane-model.js` — pure: the field pane's hide / show state (`fieldsPaneView`, `readCollapsed`, storage key)
+- `Dashboard/field-copy-model.js` — `fieldCopies(field)`: the Copy items on a worksheet field's ⋯ menu (name, column name, formula)
+- `Dashboard/hierarchy-model.js` — pure (T03-29):
+  - `checkHierarchyName`, `checkLevels` (2–6, one table, no calc / cast), `checkHierarchy`, `cleanHierarchies` (import clean-up), `drillFromHierarchy` (→ `sheet.drill`), `CAST_REFUSAL`
+- `Dashboard/hierarchy-dialog.js` — T03-29: the Hierarchies dialog (rows with Use, Edit, Delete)
+  - `store.js` holds `hierarchies` + `setHierarchies` / `addHierarchy` / `updateHierarchy` / `removeHierarchy` (`hierarchies:changed`)
+- `Dashboard/cast-model.js` — pure (T02-34): `castChoices`, `effectiveCategory`, `withCasts` (adds `cast` to the plan), `syncCastCategories`, `statCastProblem`
+- `Dashboard/date-parts.js` — pure (P26): `DATE_PART_CHOICES`, `stepPart` (+ / −), `partLabel`, `labelParts`
+- `Dashboard/member-labels.js` — pure (T02-29):
+  - `aliasOf` / `setAlias` / `cleanMemberAliases` (null-prototype maps, own keys), `keyAliasMaps`, `withMemberLabels` (position-aware category formatter), `labelOf`, `memberRows`, `aliasesFromInputs` — [worksheet.md](../concepts/worksheet/worksheet.md)
+- `Dashboard/member-labels-dialog.js` — DOM: `openMemberLabelsDialog` — the field ⋯ menu's Edit member labels… · `Dashboard/member-colours-dialog.js` — DOM: `openMemberColoursDialog` — the Color flyout's Edit member colours… (palettes left — the generated Default and the workbook's palettes, each under a title with a hairline between, then a custom colour and Create palette… — members right with a search box above a long list, golden-ratio landscape; staged, one `onSave(map, palettes)`); the rules are `colour-model.js` (`applyMemberDraft`) — [worksheet-marks.md](../concepts/worksheet/worksheet-marks.md#member-colours-and-palette-order-t01-20-t03-33) · `Dashboard/palette-dialog.js` — DOM: `openPaletteDialog` — the Create palette dialog opened from there (D166): a name and a row of colours in creation order, the chosen one edited with the picker or a `#rrggbb`; `onCreate(palette)` hands it back, nothing is stored here · `Core/palette-model.js` — pure (D165, D166): colour palettes — `checkNewPalette` (name, 1–24 colours, limits, with every reason), the draft edits `newPaletteDraft` / `addColour` / `setColour` / `removeColour` / `selectColour`, `cleanPalettes` (on open: drop and report), `assignPalette` (the n-th key the n-th colour, repeating); one hex rule (`isHex6`, `normHex`) shared with the dialog's custom colour field
+
+### Dashboard/ — encodings, analytics and formatting models
+
+- `Dashboard/dashboard-select.js` · `selection-dim.js` — pure (P24c):
+  - the dashboard selection — `nextSelection`, `selectionRefusal`, `crossFilterOf`, `appliesTo`, `selectedIndexOf`, `crossFor`, `crossSignature`, `stillValid`, the chip and note texts
+  - `applySelectionDim` (fade unselected bar / stacked / pie / donut marks, variable-width bars included) — [dashboards.md](../concepts/workbook/dashboards.md#cross-widget-filtering)
+- `Dashboard/action-model.js` — pure (P39): `templateError`, `buildActionUrl` (https-only, encoded `{value}`), `cleanAction`; the parameter action: `cleanParamAction`, `applyParamAction`
+- `Dashboard/analytics-model.js` — pure (P21):
+  - `refValue`, `refConstant` (a constant line's bound parameter), `trendFit` (linear / log / exp / power / poly2–4 least squares; R², F-test p, n, coefficients), `trendProblem` (why a model cannot fit: exp / power domain, too few values), `trendRefusal` (a cut-off result is not fitted), `pWords`, `trendFormula`, plus `stats-dist.js` (pure: log-gamma, incomplete beta, F survival for the p-value), `trendSeries` (+ forecast), `combine` (totals by aggregation), `bandBounds` / `bandLabel` / `bandChoice` (typed, mean ± kσ and percentile bands), `pickMeasure`, `ANALYTICS_ITEMS` / `itemsFor` / `itemActive` / `addItem` / `removeItem` (the pane's draggable items)
+- `Dashboard/table-calc.js` — pure (P27): `computeCalc` (running / % of total / difference / % difference / compound growth / rank / percentile rank / moving average, partitioned by the other shelf or by the unticked dimensions), `applyTableCalcs`
+- `Dashboard/font-model.js` — pure: `FONT_CHOICES`, `fontToken`, `fontClass` — [worksheet-marks.md](../concepts/worksheet/worksheet-marks.md)
+- `Dashboard/table-style-model.js` — pure: `tableStyleClasses`, `TABLE_ALIGN_CHOICES`, `TABLE_DENSITY_CHOICES`, `TABLE_SHADE_CHOICES`; `Dashboard/table-columns-model.js` — pure: `tableColumnList`, `setTableColumn`, `columnLook`, `nudgeWidth`, `cleanTableCols` (per-column align / width) — [worksheet-encodings.md](../concepts/worksheet/worksheet-encodings.md)
+- `Dashboard/line-style-model.js` / `heatmap-model.js` / `bullet-model.js` — pure: `LINE_STYLE_CHOICES`, `lineStep`, `linesTakeStyle`
+  - `HEATMAP_SHAPE_CHOICES`, `circleSize`, `labelsShown` / `labelFits` / `cellSizeOf` (automatic cell labels); `stack-scale-model.js`: `tinyStackedSeries`, `stackedScaleNotice`
+  - `targetChoices`, `bulletTargets`, `bandsFor`
+  - `axis-sync-model.js` (`syncRange`, `secondaryKind`, `SECONDARY_CHOICES`) and `mark-style-model.js` (`markBorder`, `borderInk`, `edgeOr`, `markerSymbol`, `MARKER_SHAPE_CHOICES`, `markerSizeOr`, `markerSizeError`, `MARKER_SIZE`) — [worksheet-charts.md](../concepts/worksheet/worksheet-charts.md)
+- `Dashboard/element-size-model.js` — pure: the Size meter for every chart type ([D160](../decisions/decisions-marks.md#d160--the-size-meter-sizes-the-elements-of-every-chart-type-that-has-any)): `ELEMENT_SIZE_TYPES`, `sizeT` (meter position, null = Auto), `withElementSize` (applied in `buildOption`), `slotShare`, `sizeMeterStops`, `sizeMeterLabel`
+- `Dashboard/gantt-model.js` — pure: `ganttBars` (start + length or end -> bars, date or number, slots and colour groups, skipped count), `ganttSplit` (the last key as the colour member), `GANTT_LENGTH_CHOICES`, `ganttTime`, `ganttAxisTime`, `ganttLabelMargin`, `ganttNotice`
+- `Dashboard/tooltip-model.js` — pure (T01-19):
+  - `parseTooltip`, `checkTooltipText`, `tooltipHtml` (escaped parts only), `tooltipCatalog` — [worksheet-marks.md](../concepts/worksheet/worksheet-marks.md#tooltip-text-t01-19-and-the-tooltip-modal)
+- `Dashboard/tooltip-style.js` — pure:
+  - `TIP_SIZES`, `TIP_COLOURS` (palette key → CSS token), `checkTooltipStyle`, `lineStyleCss`, and the modal's line model (`toLines`, `fromLines`, `moveLine`, `addLine`, `removeLine`, `insertField`) — [worksheet-marks.md](../concepts/worksheet/worksheet-marks.md#tooltip-text-t01-19-and-the-tooltip-modal)
+- `Dashboard/tooltip-formats.js` — pure: `checkTooltipFormats`, `pruneFormats`, `tipLookup` (raw value -> text with per-field formats, reusing `Core/format.js`), `sampleLookup`, `looksDate`
+- `Dashboard/tooltip-dialog.js` — DOM: the "Edit tooltip…" modal (lines editor, field formats, live preview)
+- `Dashboard/period-model.js` — pure (P35); `Dashboard/filter-hints.js` — pure: `newFilter` (text → `in`), `caseMiss`, `conflicts`, `emptyMessage`, `selectionLabel`:
+  - `resolveRange` (counts from `period.latest` when `anchor` is "latest") / `compareRange` (presets, previous period, last year), `withLatest`, `anchorLabel`, `rangeFilter`, `rangeLabel`, `changeOf` / `toneOf` / `pctText`, `alignCompare`, `targetProgress` — [worksheet-encodings.md](../concepts/worksheet/worksheet-encodings.md#date-range--comparison)
+- `Dashboard/conditional-model.js` — pure (P37):
+  - `measureKey`, `extentOf`, `midpointOf`, `scaleColors` (tint + contrast-picked ink), `barGeometry`, `matchRule`, `isActive` — [worksheet-table-view.md](../concepts/worksheet/worksheet-table-view.md#table-view--a-true-rows--columns-crosstab)
+- `Dashboard/colour-model.js` — pure (T01-20, T03-33):
+  - member colour map validation / set / clear / lookup, ramp reversal, swatches — [worksheet-marks.md](../concepts/worksheet/worksheet-marks.md#member-colours-and-palette-order-t01-20-t03-33)
+
+### Rows/ — row previews, union and unpivot
+
+- `Rows/rows-model.js` — pure:
+  - `tableRowsRequest`, `buildRowsRequest({plan, selection, limit})` (base-table filters + the mark as a bound `=`; `notes` for what couldn't apply), `rowsSummary`, `cellText`, `rowsToCsv`, `DEFAULT_LIMIT` — [worksheet-query.md](../concepts/worksheet/worksheet-query.md#view-data)
+- `Rows/rows-dialog.js` — the rows dialog:
+  - `openTablePreview(db, table)` (schema browser) and `openRowsDialog({title, subtitle, request, notes, filename, load})` (`load` defaults to `api.rows`) — [schema-browser.md](../concepts/data-source/schema-browser.md#row-preview)
+
+### Calc/ — calculated fields
+
+- `Calc/split-model.js` — pure:
+  - `splitPlan({field, sep, pieces, calcs, name})` → `{ ok, calcs: [{name, formula}] }` — one `SPLIT([db.table.col], 'sep', k)` calculation per piece (2–10, separator 1–20 characters, free names, 20-calculation limit)
+- `Calc/split-dialog.js` — `openSplitDialog({field, fieldName})`: separator + pieces, live name list, adds the calculations; opened from a text field's menu **Split…** in `dashboards.js`
+- `Calc/clean-model.js` — pure:
+  - `cleanOps(category)`, `parseRecode(text)`, `cleanPlan({field, category, op, value, pairs, keep, calcs, name})` → `{ ok, calcs: [{name, formula}] }` — one `TRIM` / `IFNULL` / `CASE` / `DATE` calculation (recode ≤ 20 pairs, texts ≤ 100 characters, formula ≤ 500, free name, 20-calculation limit)
+- `Calc/clean-dialog.js` — `openCleanDialog({field, fieldName, category})`: operation select, value or `old = new` lines, live formula preview; opened from a field's menu **Clean…** in `dashboards.js`
+- `Calc/calc-parser.js` — pure:
+  - `parseFormula(text, resolve)` — hand-written tokenizer + recursive descent into wire-shaped nodes (`field`, `num`, `str`, `bool`, `null`, `un`, `bin`, `agg`, `cmp`, `logic`, `not`, `in`, `case`, `ifnull`, `isnull`, `fn` (the text functions); `IF`/`IIF`/`ZN`, the keyword `IF … THEN … END`, the simple `CASE` and `BETWEEN` desugar to `case`/`ifnull`/`cmp`/`logic`) plus client-only `{ k: "calc", name }`
+- `Calc/calc-types.js` — pure: `CALC_LIMITS`, the `FUNCTIONS` table, `check(ast, categoryOf)` → `{ type, isAggregate, tables }` or an error; a twin of the server's `CalcCatalog` / `CalcValidator`, tied by `tests/fixtures/calc-cases.json`
+- `Calc/calc-params.js` — pure: `[@Name]` support — `substituteParams` (param node → `num` / `str` / `date()` literal), `paramLiteral`, `paramRefs`, `calcsUsingParam`, `calcParamNames`, `renameParamInFormulas`
+- `Calc/calc-model.js` — pure: `expandCalcs` (replaces `{ k: "calc" }` references with their trees; cycle and size guard), `roleOfCalc`
+- `Calc/calc-resolve.js` — pure: `catalogFromEntities`, `makeResolve`, `compileCalculation(calc, calcs, catalog, params)` (parse → expand → substitute parameters → check), `calcTables`
+- `Calc/calc-workbook.js` — pure: `checkName`, `mapRefs` (rewrite refs outside text literals), `renameInFormulas`, `usedBy`, `cleanCalculation(s)` — the workbook list rules
+- `Calc/calc-pill.js` — pure:
+  - the calc-pill shape (`makeCalcPill`, `newCalcFilter`, `isCalcPill`, `pillName`), `refusal` (the places a calculated field is refused, [D33](../decisions/decisions-calculated-fields.md#d33--calculated-fields-are-refused-wherever-a-plain-column-is-assumed)), `pillSlots`, `syncCalcPills`, `usesCalc`, `clearCalcPills`
+- `Calc/calc-plan.js` — pure: the worksheet plan seam — `wireDim`, `wireMeasure`, `planTables`, `calcProblem`, `filterCalcProblem` / `wireCalcFilter` (a calculated filter), `measureLabel`, `aggWord(agg, p)` (`p90`), `topByRef` / `wireTopBy` (both carry `p` for a percentile), `resolveSortTarget`
+- `Calc/calc-dialog-model.js` — pure: `evaluateDraft` (validation), `chipFor` (role chip), `suggest` (`[` field, `[@` parameter and function-name autocomplete)
+- `Calc/function-help.js` — pure: the function glossary `FUNCTION_HELP` (derived from `calc-types.js` + the logic keywords), `searchHelp`, `groupHelp`, `functionItems` — the dialog's Functions panel and name autocomplete
+- `Calc/calc-pane-model.js` — pure: `paneState` (group items), `deleteCalcPlan`, `showUseAs` / session Use-as choice, `normaliseFormula`
+- `Calc/group-model.js` — pure (T02-30):
+  - `groupTree` (CASE / OR-of-equals tree), `groupKind` (text / number / boolean / null for a column), `groupCost`, `MAX_GROUP_MEMBERS`, `maxMembersFor`, `otherLabel` (remainder label), `nullLabelOf` (NULL label), `checkGroupSpec`, `cleanGroupSpec`, `groupCalcName`, member ↔ group assignments — [calculated-fields-groups.md](../concepts/worksheet/calculated-fields-groups.md)
+- `Calc/group-dialog.js` — DOM: `openGroupDialog({ field, fieldName, calcId?, kind?, load })` — the Group… dialog
+- `Calc/calc-dialog.js` — DOM: `openCalcDialog(id?)` — the New / Edit calculated-field dialog
+- `Calc/eval-order.js` — pure: `describeEvaluation` (the six stages), `evaluationInput(sheet, …)` — [calculated-fields.md](../concepts/worksheet/calculated-fields.md#how-this-is-computed)
+- `Calc/explain-popover.js` — DOM: `explainControl(getInput, { signal })` — the view bar's "How this is computed" button and popover
+- `Calc/calc.css` — styles for the dialog, the role chip, the pane group and the explainer (tokens only)
+
+### Workbook/ — saving, import/export and workbook dialogs
+
+- `Workbook/parameters-dialog.js` — P32: the Parameters dialog (sidebar Parameters icon)
+- `Workbook/workbook.js` — auto-save, restore on connect, Export/Import — [workbook.md](../concepts/workbook/workbook.md)
+- `Workbook/backup.js` — auto-backup: the picked folder (a handle in IndexedDB), permission, the timed writes of what autosave stored, restore, and the Settings dialog opened by the sidebar foot's Settings tile — [auto-backup.md](../concepts/workbook/auto-backup.md)
+- `Workbook/backup-model.js` — pure: backup file names, `safeSegment` / `connectionFolder`, `namesToPrune` (own names only), `decideWrite` (empty / unchanged / too soon), `hashText`, the saved settings, `describeError`
+- `Workbook/workbook-model.js` — pure (also `restoredSummary`, `issueCount`; `Dashboard/missing-columns.js` prunes pills whose column isn't in the catalog):
+  - workbook serialize (v2) / `parseWorkbook` (full validation + issue list; v1 files via `migrateV1`) / `sanitizeSheet` / storage keys (`storageKey`, `legacyStorageKey`) — [workbook.md](../concepts/workbook/workbook.md#validation-parseworkbook)
+
+### Core/ — shared helpers
+
+- `Core/parameters-model.js` — pure (P32): `checkValue` (type + allowed values), `checkStep` (positive step size), `checkParamName`, `withParamValue`, `effectiveTopN`, `paramTypeFor`, `cleanParameter`
+- `Core/theme-model.js` — pure (P41): accent presets (light / dark; each accent's hover and pressed are derived — lifted toward white, with their own text colour, [D134](../decisions/decisions-buttons.md#d134--hover-and-pressed-are-brighter-than-rest-in-every-scheme)), `deriveAccent` (custom colour → contrast-checked set, or a refusal), `themeVars`, `cleanTheme` (an older saved `palette` is ignored), and the generated chart colours: `categoryColour(i, dark)` / `categoryColours(n, dark)` (golden-angle hues, never red, ≥ 3:1 on the surface; [D164](../decisions/decisions-marks.md#d164--chart-colours-are-generated-and-edit-member-colours-is-the-one-place-that-sets-them)) — [tokens.md](../reference/design/tokens.md#workbook-themes-p41)
+- `Core/scheme-model.js` — pure: `SCHEME_PREFS` (light, dark), `normalizePref` — [tokens.md](../reference/design/tokens.md#light-and-dark)
+- `Core/scheme-boot.js` — classic `<head>` script: sets `data-scheme` before first paint (mirrors `normalizePref`)
+- `Core/scheme.js` — owns `<html data-scheme>`: `isDark`, `schemePref`, `setSchemePref` (`localStorage`); never reads the OS; emits `scheme:changed`
+- `Core/theme.js` — applies the workbook theme's custom properties on `:root` (`theme:changed`, `scheme:changed`)
+- `Core/source-model.js` — pure ([query-sources.md](../concepts/data-source/query-sources.md)):
+  - `wireSource`, `cleanSource` (workbook re-check), `sourceOfTable(entities, db, table)`, `sourceProblem(keys, entities)` (the mixed-view refusal), `sourceNote`, `distinctPlan` / `distinctMembers` (a filter's member list over a source)
+- `Core/api.js` — `fetch` helpers (JSON, errors, path base, optional `AbortSignal`); `api.sourceColumns(source)` → `POST /api/source/columns`
+- `Core/ui.js` — toast, pill, `show`/`hide`/`toggle`, `fieldError` / `clearFieldError` / `checkField`, `listDialog`, `confirmDialog`, `openDialog`/`closeDialog`, `copyText(text, what)` (clipboard + toast); its neighbour `Core/overlays.js` `dismissOverlays()` closes every open dialog (through its own `cancel`), the context menu and the hover tip when the session ends, called by `connection.js` ([D163](../decisions/decisions-connection.md))
+- `Core/validate.js` — pure input parsers (`host`, `port`, `text`, `number`, `dateTime`, `filterValue`, `range`, `percent`, with `isFraction` / `percentLabel` for the percentile fraction) returning `{ ok, value }` or `{ ok:false, error }`, plus `LIMITS` and `HOST_MESSAGES`
+  - mirror of the server's `ApiLimits` / `RequestRules`
+- `Core/sheet-schema.js` — pure: the allowed values for a saved sheet (chart types, categories, filter ops, formats, Top-N)
+- `Core/icons.js` — the inline-SVG icon set — `icon(name, {size, label})`, `PATHS`, `ICON_NAMES`
+- `Core/hover-tip.js` — `initHoverTips()`: one delegated, styled tip for every `button[title]` / `[role=button][title]` (hover rest, keyboard focus; [motion-accessibility.md](../reference/design/motion-accessibility.md#accessibility-posture)); `Core/hover-tip-model.js` — pure `placeTip`, `delayFor`
+- `Core/menu.js` — `wireMenu(button, list)` — keyboard-operable popover menu (`menuitem` / `menuitemradio` items)
+  - `openContextMenu` / `wireContextMenu` — the context popup (also opened under a Data Source card's ☰, `canvas.js`; `onClose` runs however it closes) (right-click, ContextMenu key, `Shift+F10`, `Enter`); opened from inside an open modal `<dialog>` (the Calculated fields dialog) it is appended to that dialog as a `popover="manual"`, so it is in the top layer above the dialog and still clickable
+  - animated open/close via `motion.js`
+- `Core/context-menu-model.js` — pure: `placeMenu` (keep a popup in the viewport), `opensContext` (which keydown opens it), `nextFocus`
+- `Core/motion.js` — `enter` / `exit` (WAAPI, the Web Animations API; opacity + transform, Fluent timing) and `reducedMotion()`; no-ops under reduced motion — [motion-accessibility.md](../reference/design/motion-accessibility.md#motion)
+- `Core/resizer.js` — `wireResizer(handle, …)` — drag / arrow-key width handle (`role="separator"`) used by the sidebar and the field pane; pure `clampWidth`. `Core/edge-resize.js` — `wireEdgeResize(root, …)`: expandable cards (hover a card's bottom border, click and drag to set its height; `Alt+↑/↓` on a header, double-click to reset) for the field pane's table cards; pure `onBottomEdge`, `clampHeight`, `heightStore`
+- `Core/store.js` — shared model + the ordered worksheet / dashboard tabs + active view + event bus — [data-model.md](../reference/data-model.md#client-side--featurescorestorejs)
+- `Core/format.js` — value and category formatters shared by charts, crosstab, KPI
+
+## Wiring
+
+- **Imports** use uniform relative paths: a peer feature `../<Feature>/x.js`, shared `../Core/x.js`.
+  Assets are served at `/features/<Feature>/<file>` and linked from Razor as `~/features/…`.
+- **DOM ownership:** a module mutates only its own region and talks to others through the `store.js`
+  **event bus** or `document` `CustomEvent`s — never by reaching into another module's nodes.
+- **Cross-feature calls:** the Workbook feature rebuilds the model through `canvas.addEntity` /
+  `canvas.clearModel` and `relations.restoreRelationship` — exported functions, not DOM reach-ins.
+- **Pure modules** (for example `query-runner.js`, `sheet-plan.js`, `result-model.js`, `grid-model.js`, `notices.js`, `workbook-model.js`, `board-model.js`, `validate.js`, `sheet-schema.js`,
+  `filter-rules.js`, `show-me-rules.js`, `toolbar-rules.js`, `pill-options.js`, `fields-pane-model.js`, `context-menu-model.js`, `contrast.js`, `relation-rules.js`, `table-filter.js`,
+  `connection-rules.js`, `empty-state.js`, `api.js`'s `basePathFrom`) hold the testable logic and never
+  touch the DOM; they run under `node --test` ([testing.md](../how-to/testing.md#test)).
+- **Document events:** `connection:changed` (connection.js → schema.js, workbook.js), `connection:check` (api.js on a 409 → connection.js probes now),
+  `table:add` `{db, table}` (schema.js `＋` → canvas.js).
+- **Init order:** `schema.js` and `workbook.js` register their `connection:changed` listeners before
+  `connection.js` fires the initial `GET /api/connection` — otherwise the schema list and the workbook
+  restore miss the first connect.
+- **ECharts** is a classic global script loaded before the module graph (`window.echarts`).
+
+## Fetch & errors (`api.js`)
+
+- **JSON in/out.** Every call checks `res.ok` and reads the `{ error }` sentence (`errorMessage`). It
+  defensively also reads a ProblemDetails `title`, else falls back to "Server error (status)." /
+  "Request failed (status).". The message is surfaced via a toast or inline message — never a raw stack
+  or connection string. The error contract: [api.md § Errors](../reference/api.md#errors).
+- **Path-base aware:** every request is prefixed with the base path derived from the module's own URL
+  (`basePathFrom(import.meta.url)` strips the trailing `/features/Core/`), so the same code works at `/`
+  or under `/dashboardbuilder`. If `api.js` ever moves, update that pattern, or every API call 404s.
+- Pass root-relative `/api/...` paths; never prepend a base at a call site.
+- State-changing calls are `POST` with a JSON body — the proxy 403s `DELETE` and body-less requests
+  ([sharp edges](../development/sharp-edges.md#hosting--deploy)).
+
+## UI helpers (`ui.js`)
+
+- **Visibility:** `show(el)` / `hide(el)` / `toggle(el, visible)` flip the `hidden` attribute — never
+  `style.display`.
+- **`copyText(text, what)`** — writes to the clipboard and toasts "Copied <what>." (or a danger toast when the browser blocks it).
+- **`toast(message, kind)`** — `ok | danger | info` (no action button: the app has no Undo, [D133](../decisions/decisions-destructive-actions.md#d133--no-undo-one-confirmation-before-every-destructive-delete)). `info` / `ok` auto-hide after 5 s; **`danger` stays
+  until dismissed** (a close button). The visible `#toast` is not a live region; messages are announced
+  through the persistent visually-hidden `#toast-live`.
+- **`fieldError(input, msg)` / `clearFieldError(input)` / `checkField(input, result)`** — set
+  `aria-invalid` and an inline `.field-error` linked by `aria-describedby`, cleared on the next `input`.
+  `checkField` applies a `validate.js` result and returns the value or `undefined`.
+- **`listDialog(title, items)`** — a titled issue list with one OK button (workbook reports).
+- **Dialogs:** native `<dialog>`. `confirmDialog(message, { danger, confirmText })` replaces `window.confirm`. **`confirmDestructive(message, { confirmText = "Delete" })`** shows one danger `confirmDialog` with `message` followed by "This can't be undone." and the button `confirmText`; it resolves `true` only when confirmed, and Cancel / Esc resolves `false` (`tests/js/confirm-delete.test.mjs`). Every destructive delete uses it ([D133](../decisions/decisions-destructive-actions.md#d133--no-undo-one-confirmation-before-every-destructive-delete)). `openDialog`/`closeDialog`
+  fall back to the `open` attribute where `showModal` is unavailable (e.g. jsdom).

@@ -1,0 +1,112 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/unified/user/cj/knowledge/web_development/dashboard_builder/.claude/hooks/kb-verify.py",
+            "timeout": 15,
+            "statusMessage": "Verifying KB against kb-maintenance.md..."
+          },
+          {
+            "type": "command",
+            "command": "/unified/user/cj/knowledge/web_development/dashboard_builder/.claude/hooks/design-lint.py",
+            "timeout": 10,
+            "statusMessage": "Linting UI changes against design tokens and scales..."
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/unified/user/cj/knowledge/web_development/dashboard_builder/.claude/hooks/update-log.py",
+            "timeout": 15,
+            "statusMessage": "Updating docs/development/updates/change_log.md..."
+          },
+          {
+            "type": "command",
+            "command": "/unified/user/cj/knowledge/web_development/dashboard_builder/.claude/hooks/reap-orphans.sh",
+            "timeout": 10,
+            "statusMessage": "Checking for orphaned Chrome and dev servers..."
+          }
+        ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/unified/user/cj/knowledge/web_development/dashboard_builder/.claude/hooks/permission-ledger.py",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/unified/user/cj/knowledge/web_development/dashboard_builder/.claude/hooks/design-gate.py stop",
+            "timeout": 20,
+            "statusMessage": "Checking whether this turn needs a design review..."
+          },
+          {
+            "type": "command",
+            "command": "/unified/user/cj/knowledge/web_development/dashboard_builder/.claude/hooks/reap-orphans.sh",
+            "timeout": 10,
+            "statusMessage": "Checking for orphaned Chrome and dev servers..."
+          },
+          {
+            "type": "command",
+            "command": "/unified/user/cj/knowledge/web_development/dashboard_builder/.claude/hooks/permission-ledger.py",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/unified/user/cj/knowledge/web_development/dashboard_builder/.claude/hooks/permission-ledger.py",
+            "timeout": 5,
+            "statusMessage": "Checking permission ledger..."
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/unified/user/cj/knowledge/web_development/dashboard_builder/.claude/hooks/permission-ledger.py",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/unified/user/cj/knowledge/web_development/dashboard_builder/.claude/hooks/design-gate.py snapshot",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  },
+  "enabledPlugins": {
+    "humanizer@humanizer": true
+  }
+}
