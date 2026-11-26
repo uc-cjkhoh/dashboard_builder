@@ -232,6 +232,8 @@ Font (`--font`): `"Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacS
 sans-serif`, system fonts only. UI text is weight **400 / 600**. There are two content sizes and two title
 sizes, and no ad-hoc sizes.
 
+Font stacks beyond `--font`, all system fonts with a generic fallback and nothing downloaded: `--font-serif` and `--font-mono` (Format → Font, and Label → Font) and the Microsoft Typography stacks `--font-ms-arial`, `-calibri`, `-cambria`, `-candara`, `-consolas`, `-constantia`, `-corbel`, `-courier-new`, `-georgia`, `-segoe-ui`, `-tahoma`, `-times-new-roman`, `-trebuchet-ms` and `-verdana`, used only by Label flyout → Font ([D169](../../decisions/decisions-marks.md#d169--the-label-flyout-follows-tableaus-label-card-show-mark-labels-label-appearance-text-font-alignment-marks-to-label-options)). A chart label's own size is the one exception to the scale above: Label flyout → Font offers the common 8–72 px list.
+
 | Token | Size | Role |
 |---|---|---|
 | `--fs-title` | 24px | dashboard and worksheet titles, dialog titles |

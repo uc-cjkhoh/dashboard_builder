@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { cleanLabelText, labelTextOf, labelTextError, labelTextResolver, LABEL_VALUE_FIELD, cleanLabelFont, labelFontError, labelFontOf, LABEL_SIZE_CHOICES,
-  cleanLabelAlign, labelAlignError, labelAlignOf, LABEL_ALIGN_CHOICES, labelStyleOf, labelFieldCatalog, labelTextPreview }
+  cleanLabelAlign, labelAlignError, labelAlignOf, LABEL_ALIGN_CHOICES, labelStyleOf, labelFieldCatalog, labelTextPreview, LABEL_FONT_SIZES, LABEL_FONT_FAMILIES, LABEL_FONT_GROUPS, MS_FONT_CHOICES, labelFontToken }
   from "../../src/DashboardBuilder/Features/Dashboard/label-appearance-model.js";
 import { LIMITS } from "../../src/DashboardBuilder/Features/Core/validate.js";
 
@@ -42,13 +42,34 @@ test("font: defaults store nothing, parts are validated and normalised", () => {
   assert.deepEqual(cleanLabelFont({ family: "default", bold: false }), { ok: true, value: null });
   assert.deepEqual(cleanLabelFont({ family: "serif", size: 16, bold: true }), { ok: true, value: { family: "serif", size: 16, bold: true } });
   assert.equal(cleanLabelFont({ size: 15 }).ok, false);
+  assert.equal(cleanLabelFont({ size: 14, family: "ms-calibri" }).ok, true);
   assert.equal(cleanLabelFont({ family: "comic" }).ok, false);
   assert.equal(cleanLabelFont({ bold: "yes" }).ok, false);
   assert.equal(cleanLabelFont([]).ok, false);
-  assert.match(labelFontError({ size: 12 }), /14 or 16/);
+  assert.match(labelFontError({ size: 13 }), /one of 8, 9, 10/);
 });
-test("font: only the 14 / 16 px scale is offered, Automatic first", () => {
-  assert.deepEqual(LABEL_SIZE_CHOICES.map((c) => c[0]), ["auto", 14, 16]);
+test("font: the common point sizes are offered, Automatic first, and each is accepted", () => {
+  assert.deepEqual(LABEL_FONT_SIZES, [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48, 72]);
+  assert.deepEqual(LABEL_SIZE_CHOICES.map((c) => c[0]), ["auto", ...LABEL_FONT_SIZES]);
+  assert.equal(LABEL_SIZE_CHOICES[1][1], "8 px");
+  for (const n of LABEL_FONT_SIZES) assert.deepEqual(cleanLabelFont({ size: n }), { ok: true, value: { size: n } });
+  for (const n of [0, 7, 13, 15, 73, "12", 12.5]) assert.equal(cleanLabelFont({ size: n }).ok, false, String(n));
+});
+test("font: the Microsoft Typography fonts follow the worksheet's three, each with its own token", () => {
+  assert.deepEqual(LABEL_FONT_FAMILIES.slice(0, 3).map((c) => c[0]), ["default", "serif", "mono"]);
+  assert.deepEqual(MS_FONT_CHOICES.map((c) => c[1]), ["Arial", "Calibri", "Cambria", "Candara", "Consolas", "Constantia", "Corbel", "Courier New", "Georgia", "Segoe UI", "Tahoma", "Times New Roman", "Trebuchet MS", "Verdana"]);
+  assert.deepEqual(LABEL_FONT_GROUPS.map((g) => g.label), [null, "Microsoft Typography"]);
+  for (const [id] of MS_FONT_CHOICES) {
+    assert.deepEqual(cleanLabelFont({ family: id }), { ok: true, value: { family: id } }, id);
+    assert.equal(labelFontToken(id), `--font-${id}`);
+  }
+  assert.equal(labelFontToken("default"), null); assert.equal(labelFontToken("serif"), "--font-serif"); assert.equal(labelFontToken("comic"), null);
+  assert.equal(cleanLabelFont({ family: "ms-comic-sans" }).ok, false);
+});
+test("font: every Microsoft family has its stack in core.css", async () => {
+  const { readFileSync } = await import("node:fs");
+  const css = readFileSync(new URL("../../src/DashboardBuilder/Features/Core/core.css", import.meta.url), "utf8");
+  for (const [id] of MS_FONT_CHOICES) assert.match(css, new RegExp(`--font-${id}:\\s*[^;]+;`), id);
 });
 test("font: the format reads back with every part present", () => {
   assert.deepEqual(labelFontOf({}), { family: "default", size: null, bold: false });
@@ -65,10 +86,17 @@ test("alignment: Automatic stores nothing; left / center / right are kept; anyth
   assert.equal(labelAlignOf({ labelAlign: "right" }), "right");
   assert.equal(labelAlignOf({ labelAlign: "x" }), "auto");
 });
+test("alignment: Left and Right swap at drawing — ECharts' align is the side on the anchor, so Left (a label that reads to the left of its mark) anchors the text's right side", () => {
+  assert.equal(labelStyleOf({ labelAlign: "left" }).align, "right");
+  assert.equal(labelStyleOf({ labelAlign: "right" }).align, "left");
+  assert.equal(labelStyleOf({ labelAlign: "center" }).align, "center");
+  assert.equal("align" in labelStyleOf({ labelAlign: "auto" }), false);
+  assert.equal(labelAlignOf({ labelAlign: "left" }), "left"); // what is stored and shown is unchanged
+});
 test("style: an untouched format adds nothing; each set part adds its option", () => {
   const stack = (f) => ({ serif: "Georgia, serif", mono: "monospace" }[f]);
   assert.deepEqual(labelStyleOf({}, stack), {});
-  assert.deepEqual(labelStyleOf({ labelFont: { family: "serif", size: 16, bold: true }, labelAlign: "left" }, stack), { fontFamily: "Georgia, serif", fontSize: 16, fontWeight: 600, align: "left" });
+  assert.deepEqual(labelStyleOf({ labelFont: { family: "serif", size: 16, bold: true }, labelAlign: "left" }, stack), { fontFamily: "Georgia, serif", fontSize: 16, fontWeight: 600, align: "right" });
   assert.deepEqual(labelStyleOf({ labelFont: { size: 14 } }, stack), { fontSize: 14 });
   assert.deepEqual(labelStyleOf({ labelFont: { family: "mono" } }), {}); // no resolver: the chart's own family
 });

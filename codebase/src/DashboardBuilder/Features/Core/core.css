@@ -47,6 +47,21 @@
   --font: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   --font-serif: Charter, "Bitstream Charter", "Sitka Text", Cambria, Georgia, serif;
   --font-mono: ui-monospace, "Cascadia Code", Consolas, monospace;
+  /* Microsoft Typography stacks for chart labels (Label flyout → Font): system fonts only, each with a generic fallback. */
+  --font-ms-arial: Arial, "Helvetica Neue", Helvetica, sans-serif;
+  --font-ms-calibri: Calibri, Carlito, "Segoe UI", sans-serif;
+  --font-ms-cambria: Cambria, Caladea, Georgia, serif;
+  --font-ms-candara: Candara, "Segoe UI", sans-serif;
+  --font-ms-consolas: Consolas, "Cascadia Mono", monospace;
+  --font-ms-constantia: Constantia, Georgia, serif;
+  --font-ms-corbel: Corbel, "Segoe UI", sans-serif;
+  --font-ms-courier-new: "Courier New", Courier, monospace;
+  --font-ms-georgia: Georgia, "Times New Roman", serif;
+  --font-ms-segoe-ui: "Segoe UI", system-ui, sans-serif;
+  --font-ms-tahoma: Tahoma, Geneva, Verdana, sans-serif;
+  --font-ms-times-new-roman: "Times New Roman", Times, serif;
+  --font-ms-trebuchet-ms: "Trebuchet MS", "Lucida Grande", sans-serif;
+  --font-ms-verdana: Verdana, Geneva, sans-serif;
   --fs-body: 14px; --fs-lead: 16px; --fs-title: 24px; --fs-display: 32px;
   --s1: 4px; --s2: 8px; --s4: 16px; --s6: 24px;
   --r: 8px; --r-pill: 999px; --ctl-h: 32px; --sidebar-w: 330px;

@@ -1,7 +1,7 @@
 import { makeValueFormatter } from "../Core/format.js";
 import { ACCENTS, CATEGORY_SLOTS, categoryColour, categoryColours } from "../Core/theme-model.js";
 import { fontToken } from "./font-model.js";
-import { labelStyleOf, labelTextResolver } from "./label-appearance-model.js"; // Label flyout → Text, Font, Alignment
+import { labelStyleOf, labelTextResolver, labelFontToken } from "./label-appearance-model.js"; // Label flyout → Text, Font, Alignment
 import { pickInk } from "./contrast.js";
 import { DIV_FALLBACK, DIV_HUE_FALLBACK, divergingColours, divergingRange, effectiveScale, fullRangeRamp, rampColours, rangeOf, stepPieces, stepColours, stepIndexOf, positionOf, mixHex } from "./colour-scale-model.js";
 import { sizeRange, barThickness, markerSizeFor, drawsSize, lineSizeMode, measureCue } from "./mark-channel-model.js";
@@ -86,7 +86,7 @@ function tokens() {
     surface: t("--surface", "#ffffff"),
     ink: t("--ink", "#1c1719"),
     font: t(fontToken(drawing?.font) ?? "--font", "system-ui, sans-serif"),
-    fontOf: (family) => { const tk = fontToken(family); return tk ? t(tk, "") : null; }, // a font family's stack (null for the default), for Label → Font: canvas text cannot use var()
+    fontOf: (family) => { const tk = labelFontToken(family); return tk ? t(tk, "") : null; }, // a font family's stack (null for the default), for Label → Font: canvas text cannot use var()
     radius: parseFloat(t("--r", "8")) || 8, // the one corner radius (golden rule 11)
     // Brand stops for the sequential heatmap ramp (single-hue soft→saturated, token-driven).
     brand: t("--accent", ACCENTS.signal.light.accent),
@@ -1553,7 +1553,7 @@ function variableBars({ s, color, sizeFr, sizes, slot = { at: 0, of: 1 }, horizo
         ? { x: Math.min(base[0], tip[0]), y: tip[1] + shift - th / 2, width: Math.abs(tip[0] - base[0]), height: th, r: radius }
         : { x: tip[0] + shift - th / 2, y: Math.min(base[1], tip[1]), width: th, height: Math.abs(base[1] - tip[1]), r: radius };
       return { type: "rect", shape, style: api.style(), emphasis: { style: api.styleEmphasis() },
-        ...(dataLabel ? { textContent: { style: { text: dataLabel(di, v), fill: c.label, font: `${labelStyle.fontWeight ? `${labelStyle.fontWeight} ` : ""}${labelStyle.fontSize ?? 14}px ${labelStyle.fontFamily ?? c.font}`, ...(labelStyle.align ? { textAlign: labelStyle.align } : {}), ...(hover ? { opacity: 0 } : {}) }, ...(hover ? { emphasis: { style: { opacity: 1 } } } : {}) }, textConfig: { position: horizontal ? "right" : "top" } } : {}) }; // Highlighted: the label is there but unseen until the bar is highlighted
+        ...(dataLabel ? { textContent: { style: { text: dataLabel(di, v), fill: c.label, font: `${labelStyle.fontWeight ? `${labelStyle.fontWeight} ` : ""}${labelStyle.fontSize ?? 14}px ${labelStyle.fontFamily ?? c.font}`, ...(labelStyle.align ? { align: labelStyle.align } : {}) /* zrender's text style names it `align` (a `textAlign` key is ignored) */, ...(hover ? { opacity: 0 } : {}) }, ...(hover ? { emphasis: { style: { opacity: 1 } } } : {}) }, textConfig: { position: horizontal ? "right" : "top" } } : {}) }; // Highlighted: the label is there but unseen until the bar is highlighted
     },
   };
 }

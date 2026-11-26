@@ -308,6 +308,31 @@ try {
     await ev(`${fly}.querySelector('[data-fly-ctl="labelFont"] button[aria-label="Bold"]').click()`); await settle(500);
     const l1 = await opt0();
     must(l1.fontSize === 16 && l1.fontWeight === 600, 'Font did not reach the label: ' + J(l1));
+    // the family list (a Microsoft Typography group), the common sizes, and a Microsoft font and size reaching the chart
+    await openTile('label');
+    const lists = await ev(`(() => { const f = ${fly}.querySelector('[data-fly-ctl="labelFont"]'); const fam = f.querySelector('select[aria-label="Font family"]'); const sz = f.querySelector('select[aria-label="Font size"]');
+      return { groups: [...fam.querySelectorAll('optgroup')].map((g) => g.label), first: [...fam.options].slice(0, 3).map((o) => o.value), ms: [...fam.querySelectorAll('optgroup option')].map((o) => o.textContent), sizes: [...sz.options].map((o) => o.value) }; })()`);
+    must(J(lists.groups) === J(['Microsoft Typography']) && J(lists.first) === J(['default', 'serif', 'mono']), 'family list ' + J(lists));
+    must(lists.ms.includes('Calibri') && lists.ms.includes('Times New Roman') && lists.ms.length === 14, 'Microsoft fonts ' + J(lists.ms));
+    must(J(lists.sizes) === J(['auto', '8', '9', '10', '11', '12', '14', '16', '18', '20', '24', '28', '32', '36', '48', '72']), 'sizes ' + J(lists.sizes));
+    await ev(`(() => { const s = ${fly}.querySelector('[data-fly-ctl="labelFont"] select[aria-label="Font family"]'); s.value = 'ms-arial'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`); await settle(500);
+    await openTile('label');
+    await ev(`(() => { const s = ${fly}.querySelector('[data-fly-ctl="labelFont"] select[aria-label="Font size"]'); s.value = '24'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`); await settle(500);
+    const l3 = await opt0();
+    must(/Arial/.test(l3.fontFamily ?? '') && l3.fontSize === 24, 'a Microsoft font and a listed size did not reach the label: ' + J(l3));
+    must(await ev(`${fly}.querySelector('[data-fly-ctl="labelFont"] select[aria-label="Font family"]').selectedOptions[0].textContent === 'Arial'`), 'the family select lost its choice');
+    await openTile('label');
+    await ev(`(() => { const s = ${fly}.querySelector('[data-fly-ctl="labelFont"] select[aria-label="Font family"]'); s.value = 'ms-times-new-roman'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`); await settle(500);
+    await openTile('label'); await shotLabel('label-card-font');
+    // Left and Right swap: the stored choice keeps its name, the drawn anchor is the opposite side
+    await openTile('label');
+    await ev(`(() => { const s = ${fly}.querySelector('[data-fly-ctl="labelAlign"] select'); s.value = 'left'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`); await settle(500);
+    must((await opt0()).align === 'right', 'Left should anchor the text by its right side: ' + J((await opt0()).align));
+    await openTile('label');
+    await ev(`(() => { const s = ${fly}.querySelector('[data-fly-ctl="labelAlign"] select'); s.value = 'right'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`); await settle(500);
+    must((await opt0()).align === 'left', 'Right should anchor the text by its left side: ' + J((await opt0()).align));
+    await openTile('label');
+    await ev(`(() => { const s = ${fly}.querySelector('[data-fly-ctl="labelFont"] select[aria-label="Font family"]'); s.value = 'default'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`); await settle(500);
     await openTile('label');
     await ev(`(() => { const i = ${fly}.querySelector('[data-fly-ctl="labelText"] input'); i.value = '<orders.region>: <Value>'; i.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`); await settle(600);
     must(await ev(`[...document.querySelectorAll('#ws-chart svg text')].some((t) => /^APAC: /.test(t.textContent))`), 'the Text template did not reach the labels');
@@ -399,6 +424,28 @@ try {
       if (r.findings.length) console.log(key + '\n' + formatProbe(r));
       must(r.findings.length === 0, `${key}: ${r.findings.length} finding(s): ` + J(r.findings.map((x) => x.rule + ': ' + x.msg).slice(0, 4)));
     }
+  });
+
+  await check('Alignment as drawn: Left anchors the label text by its right side and Right by its left, on a plain bar and on a bar whose thickness follows Size (read from the drawn SVG, not the option)', async () => {
+    await chartType('Bar');
+    await openTile('label');
+    await ev(`(() => { const i = ${fly}.querySelector('[data-fly-ctl="dataLabels"] input'); if (!i.checked) i.click(); return true; })()`); await settle(500);
+    await openTile('label');
+    await ev(`(() => { const i = ${fly}.querySelector('[data-fly-ctl="labelText"] input'); i.value = 'L:<Value>'; i.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`); await settle(600);
+    const anchors = () => ev(`[...new Set([...document.querySelectorAll('#ws-chart svg text')].filter((t) => /^L:/.test(t.textContent)).map((t) => t.getAttribute('text-anchor')))].sort().join(',')`);
+    const setAlign = async (v) => { await openTile('label'); await ev(`(() => { const s = ${fly}.querySelector('[data-fly-ctl="labelAlign"] select'); s.value = ${J(v)}; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`); await settle(500); };
+    const expect = { left: 'end', right: 'start', center: 'middle' };
+    for (const mode of ['plain', 'size']) {
+      if (mode === 'size') { await dragChip('qty', `document.querySelector('.ws-tool[aria-label^="Size"]')`); await settle(600); must(await ev(`window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas')).getOption().series[0].type === 'custom'`), 'the bar did not become a Size (custom) series'); }
+      for (const [v, anchor] of Object.entries(expect)) {
+        await setAlign(v);
+        const got = await anchors();
+        must(got === anchor, `${mode} bar, ${v}: the drawn labels' text-anchor is "${got}", expected "${anchor}"`);
+      }
+    }
+    await setAlign('auto');
+    await openTile('label');
+    await ev(`(() => { const i = ${fly}.querySelector('[data-fly-ctl="labelText"] input'); i.value = ''; i.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`); await settle(500);
   });
 
   if (b.consoleErrors.length) console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  '));

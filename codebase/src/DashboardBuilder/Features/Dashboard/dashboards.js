@@ -55,7 +55,7 @@ import { COL_ALIGN_CHOICES, tableColumnList, setTableColumn, columnLook, columnW
 import { sizeChannel, shapeChannel } from "./mark-channel-model.js";
 import { colourFlyoutGroups, colourScaleShown } from "./colour-flyout-model.js";
 import { openLabelTextDialog } from "./label-text-dialog.js";
-import { LABEL_FONT_FAMILIES, LABEL_SIZE_CHOICES, LABEL_ALIGN_CHOICES, labelTextOf, cleanLabelText, labelFontOf, cleanLabelFont, labelAlignOf, cleanLabelAlign } from "./label-appearance-model.js";
+import { LABEL_FONT_GROUPS, LABEL_SIZE_CHOICES, LABEL_ALIGN_CHOICES, labelTextOf, cleanLabelText, labelFontOf, cleanLabelFont, labelAlignOf, cleanLabelAlign } from "./label-appearance-model.js";
 import { LABEL_TILE_ORDER, LABEL_TYPES, LABEL_MARK_CHOICES, LABEL_POSITION_CHOICES, labelContext, labelModesFor, labelMarksOf, effectiveLabelMode, cleanLabelMarks, labelPositionsFor, labelPositionOf, cleanLabelPosition, labelOverlapOf, cleanLabelOverlap } from "./label-marks-model.js";
 import { PAGE_SPEEDS, pageSpeedOf, pageIntervalMs, cleanPageSpeed } from "./pages-speed-model.js";
 import { MARK_BORDER_STOPS, borderWidthOf, storedBorder, MARKER_SHAPE_CHOICES, MARK_BORDER_COLOUR_CHOICES, MARKER_SIZE_AUTO } from "./mark-style-model.js";
@@ -3572,9 +3572,13 @@ function labelFontControl(f, onPatch) {
   const wrap = el("div", "ws-fmt-field ws-fmt-font"); wrap.setAttribute("role", "group"); wrap.setAttribute("aria-label", "Font");
   wrap.append(el("span", "ws-fmt-label", "Font"));
   const row = el("div", "ws-fmt-font__row");
-  const pick = (label, options, value, pickIt) => {
-    const sel = el("select", "select select--light ws-fmt-select"); sel.setAttribute("aria-label", label);
-    for (const [v, t] of options) { const o = new Option(t, String(v)); if (String(v) === String(value)) o.selected = true; sel.add(o); }
+  const pick = (label, groups, value, pickIt, cls = "") => { // `groups`: [{ label, choices: [[value, text] …] }]; a group with a label is an optgroup
+    const sel = el("select", `select select--light ws-fmt-select${cls ? ` ${cls}` : ""}`); sel.setAttribute("aria-label", label);
+    for (const g of groups) {
+      const into = g.label ? sel.appendChild(Object.assign(document.createElement("optgroup"), { label: g.label })) : sel;
+      for (const [v, t] of g.choices) { const o = new Option(t, String(v)); if (String(v) === String(value)) o.selected = true; into.append(o); }
+    }
+    sel.title = sel.selectedOptions[0]?.text ?? ""; // the full name on hover when the closed select clips it
     sel.addEventListener("change", () => pickIt(sel.value));
     return sel;
   };
@@ -3582,8 +3586,8 @@ function labelFontControl(f, onPatch) {
   bold.setAttribute("aria-label", "Bold"); bold.title = "Bold"; bold.setAttribute("aria-pressed", String(cur.bold));
   bold.addEventListener("click", () => onPatch({ bold: !cur.bold }));
   row.append(
-    pick("Font family", LABEL_FONT_FAMILIES, cur.family, (v) => onPatch({ family: v })),
-    pick("Font size", LABEL_SIZE_CHOICES, cur.size ?? "auto", (v) => onPatch({ size: v === "auto" ? null : Number(v) })),
+    pick("Font family", LABEL_FONT_GROUPS, cur.family, (v) => onPatch({ family: v }), "ws-fmt-font__family"),
+    pick("Font size", [{ label: null, choices: LABEL_SIZE_CHOICES }], cur.size ?? "auto", (v) => onPatch({ size: v === "auto" ? null : Number(v) })),
     bold,
   );
   wrap.append(row);

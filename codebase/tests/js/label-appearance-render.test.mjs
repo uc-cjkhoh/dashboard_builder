@@ -51,7 +51,15 @@ test("Text on top of a Label field: <Value> is that field's text", () => {
 });
 test("Font and Alignment reach the label: a set size, bold, a theme family stack and the anchor", () => {
   const { o } = draw(sheet({ format: { ...on, labelFont: { size: 16, bold: true }, labelAlign: "left" } }));
-  assert.equal(labelOf(o).fontSize, 16); assert.equal(labelOf(o).fontWeight, 600); assert.equal(labelOf(o).align, "left");
+  assert.equal(labelOf(o).fontSize, 16); assert.equal(labelOf(o).fontWeight, 600); assert.equal(labelOf(o).align, "right"); // Left is drawn with the text anchored by its right side
+});
+test("Font family: a Microsoft Typography font resolves through its own token, and a size from the common list reaches the label", () => {
+  const prev = globalThis.getComputedStyle;
+  globalThis.getComputedStyle = () => ({ getPropertyValue: (n) => (n === "--font-ms-calibri" ? "Calibri, Carlito, sans-serif" : "") });
+  try {
+    const l = labelOf(draw(sheet({ format: { ...on, labelFont: { family: "ms-calibri", size: 20 } } })).o);
+    assert.equal(l.fontFamily, "Calibri, Carlito, sans-serif"); assert.equal(l.fontSize, 20);
+  } finally { globalThis.getComputedStyle = prev; }
 });
 test("Font family: a non-default family resolves through the theme token, the default keeps the worksheet's own font", () => {
   const prev = globalThis.getComputedStyle;
@@ -73,7 +81,8 @@ test("a bar with Size draws its labels in a custom series: the template and the 
   const item = o.series[0].renderItem({ dataIndex: 1 }, { size: () => [100], coord: ([a, b]) => [a * 10, b * 10], style: () => ({}), styleEmphasis: () => ({}) });
   assert.equal(item.textContent.style.text, "US");
   assert.equal(item.textContent.style.font, "600 16px system-ui, sans-serif"); // no family chosen: the worksheet's own font
-  assert.equal(item.textContent.style.textAlign, "right");
+  assert.equal(item.textContent.style.align, "left"); // Right swaps with Left, as on every other chart; zrender reads `align`, not `textAlign`
+  assert.equal("textAlign" in item.textContent.style, false);
 });
 test("a pie: the template sees the slice's measure and Percent, and the label takes the font", () => {
   const { o } = draw(sheet({ chartType: "pie", format: { ...on, labelText: "<sum(amount)> (<Percent>)", labelFont: { size: 14 } } }));

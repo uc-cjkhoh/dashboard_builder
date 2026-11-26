@@ -285,6 +285,8 @@
 .ws-fmt-text__row, .ws-fmt-font__row { display: flex; align-items: center; gap: var(--s1); }
 .ws-toolfly .ws-fmt-text__input { flex: 1 1 auto; min-width: 0; width: auto; }
 .ws-toolfly .ws-fmt-font__row .ws-fmt-select { flex: 1 1 0; min-width: 0; max-width: none; }
+.ws-fmt-font__row { flex-wrap: wrap; }
+.ws-toolfly .ws-fmt-font__row .ws-fmt-font__family { flex: 1 1 100%; } /* the family on its own line: "Times New Roman" fits whole; size and bold share the line below */
 .ws-fmt-bold, .ws-fmt-dots { min-width: var(--ctl-h); height: var(--ctl-h); padding: 0 var(--s2); flex: none; }
 .ws-fmt-bold { font-weight: 600; }
 .ws-toolfly .btn.ws-fmt-bold[aria-pressed="true"], .ws-toolfly .btn.ws-fmt-bold[aria-pressed="true"]:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent-ink); }
