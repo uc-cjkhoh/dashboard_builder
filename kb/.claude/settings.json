@@ -6,13 +6,13 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/unified/user/cj/knowledge/web_development/dashboard_builder/.claude/hooks/kb-verify.py",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/kb-verify.py",
             "timeout": 15,
             "statusMessage": "Verifying KB against kb-maintenance.md..."
           },
           {
             "type": "command",
-            "command": "/unified/user/cj/knowledge/web_development/dashboard_builder/.claude/hooks/design-lint.py",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/design-lint.py",
             "timeout": 10,
             "statusMessage": "Linting UI changes against design tokens and scales..."
           }
@@ -23,13 +23,13 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/unified/user/cj/knowledge/web_development/dashboard_builder/.claude/hooks/update-log.py",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/update-log.py",
             "timeout": 15,
             "statusMessage": "Updating docs/development/updates/change_log.md..."
           },
           {
             "type": "command",
-            "command": "/unified/user/cj/knowledge/web_development/dashboard_builder/.claude/hooks/reap-orphans.sh",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/reap-orphans.sh",
             "timeout": 10,
             "statusMessage": "Checking for orphaned Chrome and dev servers..."
           }
@@ -40,7 +40,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/unified/user/cj/knowledge/web_development/dashboard_builder/.claude/hooks/permission-ledger.py",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/permission-ledger.py",
             "timeout": 5
           }
         ]
@@ -51,19 +51,19 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/unified/user/cj/knowledge/web_development/dashboard_builder/.claude/hooks/design-gate.py stop",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/design-gate.py stop",
             "timeout": 20,
             "statusMessage": "Checking whether this turn needs a design review..."
           },
           {
             "type": "command",
-            "command": "/unified/user/cj/knowledge/web_development/dashboard_builder/.claude/hooks/reap-orphans.sh",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/reap-orphans.sh",
             "timeout": 10,
             "statusMessage": "Checking for orphaned Chrome and dev servers..."
           },
           {
             "type": "command",
-            "command": "/unified/user/cj/knowledge/web_development/dashboard_builder/.claude/hooks/permission-ledger.py",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/permission-ledger.py",
             "timeout": 5
           }
         ]
@@ -75,7 +75,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/unified/user/cj/knowledge/web_development/dashboard_builder/.claude/hooks/permission-ledger.py",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/permission-ledger.py",
             "timeout": 5,
             "statusMessage": "Checking permission ledger..."
           }
@@ -88,7 +88,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/unified/user/cj/knowledge/web_development/dashboard_builder/.claude/hooks/permission-ledger.py",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/permission-ledger.py",
             "timeout": 5
           }
         ]
@@ -99,7 +99,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/unified/user/cj/knowledge/web_development/dashboard_builder/.claude/hooks/design-gate.py snapshot",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/design-gate.py snapshot",
             "timeout": 15
           }
         ]

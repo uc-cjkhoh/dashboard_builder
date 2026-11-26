@@ -17,7 +17,7 @@ import json, os, re, subprocess, sys
 from collections import OrderedDict
 
 KB = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-APP = "/unified/user/cj/web_development/prototype/dashboard_builder"
+APP = "/unified/user/cj/web_project/dashboard_builder/codebase"  # a subfolder of the project repo; --relative below limits the log to it
 OUT = os.path.join(KB, "docs", "development", "updates")
 
 def git(*args):
@@ -36,7 +36,7 @@ def split_topic(subject):
 
 def collect():
     days = OrderedDict()
-    for line in git("log", "--no-merges", "--reverse", "--format=%x1e%h%x1f%ad%x1f%s", "--date=format:%Y-%m-%d %H:%M", "--name-only", "main").split("\x1e")[1:]:
+    for line in git("log", "--no-merges", "--reverse", "--format=%x1e%h%x1f%ad%x1f%s", "--date=format:%Y-%m-%d %H:%M", "--name-only", "--relative", "main", "--", ".").split("\x1e")[1:]:
         head, *files = [l for l in line.split("\n") if l.strip()]
         sha, stamp, subject = head.split("\x1f")
         if not shipped(files):

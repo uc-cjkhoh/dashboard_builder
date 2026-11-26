@@ -206,8 +206,8 @@ the bound-filter path — **no new endpoints or query shapes**.
   is available from the AlmaLinux 9 appstream.
 
 ### D9 — App source lives outside the KB, on the build host
-The app is built at `/unified/user/cj/web_development/prototype/dashboard_builder/` on `10.168.49.20`.
-This KB (`…/knowledge/web_development/dashboard_builder`) holds docs only.
+The app is built at `/unified/user/cj/web_project/dashboard_builder/codebase/` on `10.168.49.20`.
+This KB (`…/web_project/dashboard_builder/kb`) holds docs only.
 - Both are on the same shared filesystem, so a KB session can build the app directly.
 - The app folder is a local git repo (so changes can be reviewed as diffs); the KB is the
   documentation of record. See [quickstart.md](../getting-started/quickstart.md).

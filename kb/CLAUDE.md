@@ -8,9 +8,11 @@ the [`docs/`](docs/README.md) knowledge base — follow the links.
 > then the [`docs/`](docs/README.md) file for whatever you're touching. **Update that doc in the same
 > change** — this KB tracks current state, not history ([kb-maintenance.md](docs/development/kb-maintenance.md)).
 
-> **This KB is docs only.** The source is at `/unified/user/cj/web_development/prototype/dashboard_builder/`
+> **This KB is docs only.** The source is at `/unified/user/cj/web_project/dashboard_builder/codebase/`
 > on the build host `10.168.49.20` (same shared filesystem — build it from here). Never scaffold code
 > into the KB. The app folder is a local git repo (no remote); this KB is a separate git repo.
+> **Layout:** one folder per project, `/unified/user/cj/web_project/dashboard_builder/{kb,codebase,publish,archive}`;
+> `kb/` is this KB. Shared knowledge lives in `/unified/user/cj/general_kb/`.
 
 ## Golden rules
 
@@ -45,7 +47,7 @@ and returns JSON. **There is no application database.** Full picture:
 
 ## Build, run, test, deploy
 
-From the solution root `/unified/user/cj/web_development/prototype/dashboard_builder`:
+From the solution root `/unified/user/cj/web_project/dashboard_builder/codebase`:
 
 ```bash
 dotnet build -c Release
@@ -53,7 +55,7 @@ dotnet test                                   # .NET suite; --filter Identifier 
 ~/.nvm/versions/node/v24.20.0/bin/node --test tests/js/*.test.mjs   # JS unit tests
 cd src/DashboardBuilder && dotnet run         # http://localhost:5080
 dotnet run --no-launch-profile --urls http://localhost:5180   # a spare port
-dotnet publish src/DashboardBuilder/DashboardBuilder.csproj -c Release -o publish
+dotnet publish src/DashboardBuilder/DashboardBuilder.csproj -c Release -o /unified/user/cj/web_project/dashboard_builder/publish
 ```
 
 - **Prereqs:** .NET SDK 10 (on the host's `PATH`); a ClickHouse to point at — details and a throwaway

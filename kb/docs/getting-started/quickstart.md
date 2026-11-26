@@ -6,7 +6,7 @@ components: []
 Run the app locally and confirm it answers.
 
 ```bash
-cd /unified/user/cj/web_development/prototype/dashboard_builder/src/DashboardBuilder
+cd /unified/user/cj/web_project/dashboard_builder/codebase/src/DashboardBuilder
 dotnet run                                   # launch profile → http://localhost:5080
 ```
 

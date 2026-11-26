@@ -11,7 +11,7 @@ An inline `design-lint-ignore` comment on a line silences it for that line (say 
 """
 import difflib, glob, os, re
 
-APP = "/unified/user/cj/web_development/prototype/dashboard_builder"
+APP = "/unified/user/cj/web_project/dashboard_builder/codebase"
 FEATURES = os.path.join(APP, "src/DashboardBuilder/Features")
 EXTS = (".css", ".js", ".cshtml")
 SPACE_OK = {0, 1, 2, 4, 8, 16, 24}

@@ -6,7 +6,7 @@ You then build **Tableau-style worksheets**, one per worksheet tab, that chart d
 tables, and add dashboard tabs to arrange them. Read this page first for what the app does and where
 to go next. The knowledge base is the [`docs/`](docs/README.md) folder; agents start at [CLAUDE.md](CLAUDE.md).
 
-**Status:** built and running at `https://10.168.49.20:8443/dashboardbuilder`. This repository is docs only. The source lives at `/unified/user/cj/web_development/prototype/dashboard_builder/`
+**Status:** built and running at `https://10.168.49.20:8443/dashboardbuilder`. This repository is docs only. The source lives at `/unified/user/cj/web_project/dashboard_builder/codebase/`
 ([quickstart.md](docs/getting-started/quickstart.md)). Unbuilt work: [backlog/](docs/development/backlog/index.md).
 
 ## Project statement

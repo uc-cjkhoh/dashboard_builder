@@ -5,7 +5,7 @@ components: []
 
 The rules that apply every time you edit these docs. Read this before adding or changing anything here.
 
-The structure follows the organisation-wide standard `/unified/user/cj/knowledge/general/knowledge_base_structure.md`,
+The structure follows the organisation-wide standard `/unified/user/cj/general_kb/guidelines/knowledge_base_structure.md`,
 which is the source of truth. The sibling MNP Web Portal KB uses the same rules
 (`../mnp_web_portal/docs/conventions/kb-maintenance.md`).
 

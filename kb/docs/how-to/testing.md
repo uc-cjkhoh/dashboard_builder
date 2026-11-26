@@ -8,7 +8,7 @@ How to run the .NET and JS suites, what each covers, and the manual smoke and li
 ## Test
 
 ```bash
-cd /unified/user/cj/web_development/prototype/dashboard_builder
+cd /unified/user/cj/web_project/dashboard_builder/codebase
 dotnet test                                  # .NET suite
 dotnet test --filter Identifier              # one class
 ~/.nvm/versions/node/v24.20.0/bin/node --test tests/js/*.test.mjs   # JS unit tests (pure modules)

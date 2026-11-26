@@ -7,7 +7,7 @@ Where each piece of code lives. Read it before touching code you don't know.
 
 The app is **MVC in feature folders** ([D19](../decisions/decisions-platform.md#d19--mvc-in-feature-folders)):
 each feature owns its controller, view partial, CSS and JS in one folder. Source root:
-`/unified/user/cj/web_development/prototype/dashboard_builder/src/DashboardBuilder/`.
+`/unified/user/cj/web_project/dashboard_builder/codebase/src/DashboardBuilder/`.
 
 | Path | Role |
 |---|---|
