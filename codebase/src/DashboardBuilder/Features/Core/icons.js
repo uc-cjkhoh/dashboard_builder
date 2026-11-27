@@ -25,6 +25,7 @@ export const PATHS = Object.freeze({
   size: "M4 10a6 6 0 1 0 12 0 6 6 0 1 0-12 0M7.5 10a2.5 2.5 0 1 0 5 0 2.5 2.5 0 1 0-5 0",
   label: "M4.5 16L9.5 4h1l5 12M6.3 12h7.4",
   tooltip: "M4 4h12v9H9l-3 3v-3H4z",
+  "clear-format": "M3.5 5h9M8 5v10M12.5 11l4 4.5M16.5 11l-4 4.5",
   detail: "M4 6h12M4 10h12M4 14h8",
   shape: "M3 8a2.5 2.5 0 1 0 5 0 2.5 2.5 0 1 0-5 0M12 5.5h5v5h-5zM7.5 17l3-5 3 5z",
   path: "M3 15c3 0 3-10 7-10s4 10 7 10",

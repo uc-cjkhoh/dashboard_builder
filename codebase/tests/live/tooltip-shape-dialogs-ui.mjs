@@ -178,6 +178,7 @@ try {
   const opt = () => ev(`${inst}.getOption()`);
   const toolEl = (name) => `document.querySelector('.ws-tool[aria-label^="${name}"]')`;
   const tipDlg = `document.querySelector('dialog.tipdlg--rich[open]')`;
+  const docEl = `document.querySelector('dialog.tipdlg--rich .tipdlg__doc')`;
   const shapeDlg = `document.querySelector('dialog.shapedlg[open]')`;
   const click = (sel) => ev(`document.querySelector(${J(sel)}).click()`);
   const setVal = (sel, v) => ev(`(() => { const e = document.querySelector(${J(sel)}); e.value = ${J(v)}; e.dispatchEvent(new Event(e.tagName === 'SELECT' ? 'change' : 'input', { bubbles: true })); return true; })()`);
@@ -219,7 +220,7 @@ try {
       mode: !!d.querySelector('.tipdlg__mode'),
       foot: [...d.querySelectorAll('.dialog__foot button')].map((x) => x.textContent.trim()) }; })()`);
     must(r.title === 'Edit tooltip', 'title ' + r.title);
-    for (const l of ['Font', 'Font size', 'Bold', 'Italic', 'Underline', 'Colour', 'Align left', 'Align center', 'Align right', 'Clear formatting of the selected line']) must(r.bar.includes(l), `toolbar lacks ${l}: ${J(r.bar)}`);
+    for (const l of ['Font', 'Font size', 'Bold', 'Italic', 'Underline', 'Colour', 'Align left', 'Align center', 'Align right', 'Clear formatting of the selected lines']) must(r.bar.includes(l), `toolbar lacks ${l}: ${J(r.bar)}`);
     must(r.bar.includes('Insert'), 'toolbar lacks Insert');
     must(J(r.checks) === '["Show tooltips","Include command buttons"]', 'checkboxes ' + J(r.checks));
     must(r.mode, 'the mode select beside Show tooltips');
@@ -227,18 +228,18 @@ try {
     await shot('tooltip-modal-empty');
   });
   await check('Insert lists the drawn fields; a line takes font, bold, underline and centre; the preview and the chart follow; OK is one commit', async () => {
-    await ev(`${tipDlg}.querySelector('[data-line="0"]').focus()`);
-    await setVal('dialog.tipdlg--rich [data-line="0"]', 'Region: ');
+    await ev(`${docEl}.focus()`);
+    await b.type('Region: ');
     await click('dialog.tipdlg--rich .tipdlg__insertbtn');
     const items = await ev(`[...${tipDlg}.querySelectorAll('.tipdlg__item')].map((x) => x.textContent)`);
     must(items.some((x) => /region$/.test(x)) && items.length >= 2, 'the menu lists the drawn fields: ' + J(items));
     await ev(`[...${tipDlg}.querySelectorAll('.tipdlg__item')].find((x) => /region$/.test(x.textContent)).click()`);
-    must((await ev(`${tipDlg}.querySelector('[data-line="0"]').value`)) === 'Region: <orders.region>', 'the field is inserted at the caret');
+    must((await ev(`${docEl}.children[0].textContent`)) === 'Region: <orders.region>', 'the field is inserted at the caret');
     await click('dialog.tipdlg--rich [aria-label="Bold"]'); await click('dialog.tipdlg--rich [aria-label="Underline"]'); await click('dialog.tipdlg--rich [aria-label="Align center"]');
     await setVal('dialog.tipdlg--rich select[aria-label="Font"]', 'ms-georgia'); await setVal('dialog.tipdlg--rich select[aria-label="Font size"]', '16');
     const pressed = await ev(`['Bold', 'Underline', 'Align center'].map((l) => ${tipDlg}.querySelector('[aria-label="' + l + '"]').getAttribute('aria-pressed'))`);
     must(pressed.join() === 'true,true,true', 'toggles show their state: ' + pressed);
-    const css = await ev(`${tipDlg}.querySelector('[data-line="0"]').style.cssText`);
+    const css = await ev(`${docEl}.children[0].style.cssText`);
     must(/Georgia|font-georgia|ms-georgia/.test(css) && /text-align: center/.test(css) && /underline/.test(css), 'the line shows its own format: ' + css);
     await click('dialog.tipdlg--rich .dialog__foot button:nth-child(2)'); // Preview
     must(await ev(`!${tipDlg}.querySelector('.tipdlg__preview').hidden && ${tipDlg}.querySelector('.tipdlg__preview').innerHTML.includes('text-align:center')`), 'Preview shows the styled tooltip');
@@ -263,7 +264,7 @@ try {
     await openTile('tooltip'); await click('.ws-tipedit__modal'); await waitFor(`${tipDlg} !== null`, 'open');
     await click('dialog.tipdlg--rich .tipdlg__reset');
     must(await ev(`${tipDlg}.querySelector('.tipdlg__check input').checked`), 'Reset turns Show tooltips back on');
-    must((await ev(`${tipDlg}.querySelector('[data-line="0"]').value`)) === '', 'Reset empties the text');
+    must((await ev(`${docEl}.children[0].textContent`)) === '', 'Reset empties the text');
     await click('dialog.tipdlg--rich .btn--primary'); await waitFor(`${tipDlg} === null`, 'closed'); await settle(500);
     must(await ev(`${inst}.getOption().tooltip[0].show !== false`), 'tooltips on again');
   });

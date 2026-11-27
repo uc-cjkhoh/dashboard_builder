@@ -757,13 +757,9 @@
 .tipdlg__edit { display: grid; gap: var(--s2); min-width: 0; }
 .tipdlg__chips { display: flex; flex-wrap: wrap; gap: var(--s1); }
 .tipdlg__chip { font-size: var(--fs-body); padding: var(--s1) var(--s2); }
-.tipdlg__lines { display: grid; gap: var(--s2); }
-.tipdlg__line { display: grid; grid-template-columns: minmax(120px, 1fr) auto auto auto auto auto auto auto; gap: var(--s1); align-items: center; padding: var(--s1); border: 1px solid transparent; border-radius: var(--r); }
-.tipdlg__line--on { border-color: var(--line-2); background: var(--surface-2); }
-.tipdlg__text { min-width: 0; width: 100%; }
 .tipdlg__tog[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent-ink); }
 .tipdlg__tog, .tipdlg__mv { padding: var(--s1) var(--s2); min-width: var(--ctl-h); }
-.tipdlg__tools { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); }
+.tipdlg__tools { display: flex; align-items: center; justify-content: flex-end; gap: var(--s2); }
 .tipdlg__count, .tipdlg__note { color: var(--ink-3); font-size: var(--fs-body); overflow-wrap: anywhere; }
 .tipdlg__error { color: var(--danger-ink); font-size: var(--fs-body); }
 .tipdlg__error:empty { display: none; }
@@ -869,9 +865,14 @@ body.is-resizing-y { cursor: ns-resize; user-select: none; }
 .ws-tip__cmds .ws-select__btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 
 /* Edit tooltip modal, laid out like Tableau's: toolbar, one editor surface, behaviour checkboxes, footer (Reset · Preview · Cancel · OK). */
-.dialog.tipdlg--rich:not(.dialog--sm) { width: min(560px, calc(100vw - 2 * var(--s4))); }
-.tipdlg--rich .tipdlg__body { grid-template-columns: minmax(0, 1fr); gap: var(--s2); align-items: stretch; }
-.tipdlg__bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1); }
+.dialog.tipdlg--rich:not(.dialog--sm) { width: min(840px, calc(100vw - 2 * var(--s4))); aspect-ratio: 1.618; min-height: min(420px, calc(100vh - 2 * var(--s4))); } /* landscape, the golden ratio (as the member colours dialog); a narrow window would make it too short to edit in, so it keeps 420px and is taller than φ there */
+.tipdlg--rich .tipdlg__body { display: flex; flex: 1 1 auto; flex-direction: column; align-items: stretch; gap: var(--s2); }
+.tipdlg--rich .tipdlg__body > * { flex: none; }
+.tipdlg--rich .tipdlg__body > .tipdlg__doc { flex: 1 1 auto; } /* the editor takes the height the landscape shape gives */
+.tipdlg__doc:focus-visible { background-image: linear-gradient(color-mix(in srgb, var(--ink) 6%, transparent), color-mix(in srgb, var(--ink) 6%, transparent)); } /* the app's neutral focus wash for text fields (buttons.css); a contenteditable is not in that rule's list, and the global `outline: none !important` made the old ring dead */
+.tipdlg__doc > div { min-height: 1.5em; }
+.tipdlg__doc[data-empty]::before { content: attr(data-placeholder); position: absolute; color: var(--ink-3); pointer-events: none; } /* the browser's grey is 3.7:1 on the dark surface: --ink-3 */
+.tipdlg__bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); } /* 8px between the groups, 4px inside one (.tipdlg__group) */
 .tipdlg__sel { width: auto; max-width: 160px; }
 .tipdlg__group { display: flex; gap: var(--s1); }
 .tipdlg__tog--b { font-weight: 700; }
@@ -879,14 +880,9 @@ body.is-resizing-y { cursor: ns-resize; user-select: none; }
 .tipdlg__tog--u { text-decoration: underline; }
 .tipdlg__insert { position: relative; }
 .tipdlg__insertbtn { display: inline-flex; align-items: center; gap: var(--s1); }
-.tipdlg__menu { position: absolute; z-index: 5; top: calc(100% + var(--s1)); left: 0; min-width: 200px; max-height: 240px; overflow: auto; display: grid; padding: var(--s1); border: 1px solid var(--line-2); border-radius: var(--r); background: var(--surface); box-shadow: var(--elev-8); }
-.tipdlg__menu[hidden] { display: none; }
-.tipdlg__item { padding: var(--s1) var(--s2); border-radius: var(--r); background: transparent; color: var(--ink); font-size: var(--fs-body); text-align: left; cursor: pointer; }
-.tipdlg__item:hover, .tipdlg__item:focus-visible { background: var(--surface-2); }
-.tipdlg__doc { display: grid; align-content: start; gap: var(--s1); min-height: 160px; padding: var(--s2); border: 1px solid var(--line-2); border-radius: var(--r); background: var(--surface); }
-.tipdlg--rich .tipdlg__line { grid-template-columns: minmax(0, 1fr) auto auto auto; }
-.tipdlg--rich .tipdlg__text { min-height: var(--ctl-h); border-color: transparent; background: transparent; } /* a whole-row target, not the 20px of the text */
-.tipdlg--rich .tipdlg__text:focus-visible { border-color: var(--line-2); }
+.tipdlg__menu { max-height: 240px; max-width: min(320px, calc(100vw - 6 * var(--s4))); grid-template-columns: minmax(0, 1fr); overflow: hidden auto; } /* the shared .menu__list / .menu__item (core.css); only the size is its own: a chart can offer many fields, and a long field name ends in an ellipsis (its title has the whole name) instead of pushing the list past the dialog */
+.tipdlg__menu .tipdlg__note { padding: var(--s2); } /* the empty note sits where an item's label would */
+.tipdlg__doc { position: relative; min-height: 160px; padding: var(--s2) var(--s4); overflow: auto; border: 1px solid var(--line-2); border-radius: var(--r); background: var(--surface); color: var(--ink); font-size: var(--fs-body); white-space: pre-wrap; overflow-wrap: anywhere; cursor: text; } /* the text editor: a block per line, each drawn in its own format */
 .tipdlg__behaviour { display: grid; gap: var(--s2); }
 .tipdlg__behaviour[hidden] { display: none; }
 .tipdlg__brow { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }

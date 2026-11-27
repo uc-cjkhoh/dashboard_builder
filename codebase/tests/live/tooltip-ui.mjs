@@ -150,7 +150,17 @@ try {
   };
   const key = (k, mods = 0) => b.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: k, code: k, windowsVirtualKeyCode: { ArrowUp: 38, ArrowDown: 40, Escape: 27 }[k], modifiers: mods })
     .then(() => b.send('Input.dispatchKeyEvent', { type: 'keyUp', key: k, code: k, windowsVirtualKeyCode: { ArrowUp: 38, ArrowDown: 40, Escape: 27 }[k], modifiers: mods }));
+  const press = async (k, vk, extra = {}) => { await b.send('Input.dispatchKeyEvent', { type: 'keyDown', key: k, code: k, windowsVirtualKeyCode: vk, ...extra }); await b.send('Input.dispatchKeyEvent', { type: 'keyUp', key: k, code: k, windowsVirtualKeyCode: vk }); await b.sleep(80); };
+  const enter = () => press('Enter', 13, { text: '\r' });
+  const backspace = () => press('Backspace', 8);
   const foot = (label) => `[...document.querySelectorAll('.tipdlg .dialog__foot button')].find((x) => x.textContent === ${J(label)})`;
+  // the editor is one contenteditable surface with a block per line (no inputs): lines are read from its blocks, text goes in through real input events
+  const DOC = `document.querySelector('dialog.tipdlg--rich .tipdlg__doc')`;
+  const lineEl = (i) => `${DOC}.children[${i}]`;
+  const lineTexts = () => ev(`[...${DOC}.children].map((d) => d.textContent)`);
+  const selectLine = (i, collapse) => ev(`(() => { const d = ${lineEl(i)}; const r = document.createRange(); r.selectNodeContents(d); if (${J(collapse ?? false)}) r.collapse(false); const s = getSelection(); s.removeAllRanges(); s.addRange(r); return true; })()`);
+  const setLine = async (i, v) => { await ev(`${DOC}.focus()`); await selectLine(i); if (v === '') await backspace(); else await b.type(v); await b.sleep(60); };
+  const caretLine = () => ev(`(() => { let n = getSelection().anchorNode; while (n && n.parentNode !== ${DOC}) n = n.parentNode; return n ? [...${DOC}.children].indexOf(n) : -1; })()`);
   const openModal = async () => {
     if (await ev(`${tdlg} !== null`)) { await ev(`${foot('Cancel')}.click()`); await waitFor(`${tdlg} === null`, 'a stale modal closed'); } // a failed check never leaves one open for the next
     if (!(await ev(`!!document.querySelector('#ws-toolfly .ws-tipedit__modal')`))) { await ev(`${tipTool}.click()`); await waitFor(`!!document.querySelector('#ws-toolfly .ws-tipedit__modal')`, 'Edit tooltip button'); }
@@ -158,10 +168,8 @@ try {
     await waitFor(`${tdlg} !== null`, 'tooltip modal');
   };
   const ok = async () => { await ev(`${foot('OK')}.click()`); await waitFor(`${tdlg} === null`, 'modal closed'); await settle(500); };
-  const setLine = (i, v) => ev(`(() => { const t = document.querySelector('.tipdlg__text[data-line="${i}"]'); t.value = ${J(v)}; t.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
-  const lineTexts = () => ev(`[...document.querySelectorAll('.tipdlg__text')].map((t) => t.value)`);
-  const focusLine = async (i) => { // a real press: a script's focus() does not fire the focus event while the page itself is unfocused
-    const r = await ev(`(() => { const x = document.querySelector('.tipdlg__text[data-line="${i}"]').getBoundingClientRect(); return { x: x.left + 12, y: x.top + x.height / 2 }; })()`);
+  const focusLine = async (i) => { // a real press, so the editor gets focus and its selection
+    const r = await ev(`(() => { const x = ${lineEl(i)}.getBoundingClientRect(); return { x: x.left + 12, y: x.top + x.height / 2 }; })()`);
     await b.click(r.x, r.y);
   };
   const preview = async () => { if (await ev(`document.querySelector('.tipdlg__preview').hidden`)) await ev(`${foot('Preview')}.click()`); };
@@ -180,7 +188,7 @@ try {
     await waitFor(`!!document.querySelector('#ws-toolfly .ws-tipedit__modal')`, 'Edit tooltip button');
     must(await ev(`!document.querySelector('#ws-toolfly textarea, #ws-toolfly .ws-addfield, #ws-toolfly .ws-tipedit__chip, #ws-toolfly .ws-tipedit__preview')`), 'only the button');
     await openModal();
-    must(await ev(`document.activeElement.classList.contains('tipdlg__text')`), 'first line not focused');
+    must(await ev(`document.activeElement.classList.contains('tipdlg__doc')`), 'first line not focused');
     await preview();
     must(await ev(`document.querySelector('.tipdlg__preview').textContent`) === 'Automatic tooltip', 'preview');
     await shot('tooltip-modal-light.png');
@@ -209,24 +217,27 @@ try {
     must(html.includes('EU') && !html.includes('Region'), `automatic tooltip: ${html}`);
   });
 
-  await check('style a line (font, size, bold, italic, underline, colour, centre), add and reorder lines; the preview and the line follow; OK commits them', async () => {
+  await check('type two lines; style them (font, size, bold, italic, underline, colour, centre) and reorder; the preview and the lines follow; OK commits them', async () => {
     await openModal();
     await setLine(0, '<orders.region>');
-    await ev(`document.querySelector('.tipdlg__add').click()`);
-    await setLine(1, 'Total <orders.region>');
+    await enter();
+    await b.type('Total <orders.region>');
+    must((await lineTexts()).join('|') === '<orders.region>|Total <orders.region>', `two lines: ${J(await lineTexts())}`);
     await focusLine(0);
     await setSel('Font size', '24'); await setSel('Colour', 'accent'); await setSel('Font', 'serif');
     for (const l of ['Bold', 'Italic', 'Underline', 'Align center']) await ev(`${tool(l)}.click()`);
+    { const cl = await caretLine(); must(cl === 0, 'the toolbar gave the selection back to line 0: ' + cl + ' ' + J(await lineTexts())); }
     await preview();
     const css = await ev(`document.querySelector('.tipdlg__preview div')?.getAttribute('style')`);
     must(css === 'font-family:var(--font-serif);text-align:center;font-size:24px;font-weight:700;font-style:italic;text-decoration:underline;color:var(--accent-ink)', `preview style: ${css}`);
-    must(await ev(`document.querySelector('.tipdlg__text[data-line="0"]').style.textAlign === 'center'`), 'the line shows its own alignment');
+    must(await ev(`${lineEl(0)}.style.textAlign === 'center'`), 'the line shows its own alignment');
+    must(await ev(`${lineEl(1)}.style.cssText === ''`), 'the other line is untouched');
     // Alt+ArrowDown on line 0 moves it below line 1, with its style
     await key('ArrowDown', 1);
     must((await lineTexts()).join('|') === 'Total <orders.region>|<orders.region>', `order: ${J(await lineTexts())}`);
-    must(await ev(`document.querySelector('.tipdlg__text[data-line="1"]').style.fontSize === '24px'`), 'style moved with its line');
-    must(await ev(`document.activeElement.dataset.line`) === '1', 'focus follows the moved line');
-    must(await ev(`${tool('Font size')}.value`) === '24', 'the toolbar shows the focused line\'s size');
+    must(await ev(`${lineEl(1)}.style.fontSize === '24px'`), 'style moved with its line');
+    must(await caretLine() === 1, 'the caret follows the moved line');
+    must(await ev(`${tool('Font size')}.value`) === '24', 'the toolbar shows the caret line\'s size');
     await shot('tooltip-styled.png');
     await ok();
     await waitFor(`document.activeElement === document.querySelector('.ws-tipedit__modal')`, 'focus returns to Edit tooltip after OK');
@@ -235,15 +246,27 @@ try {
     must(html.includes('<b>EU</b>'), 'values still rendered');
   });
 
-  await check('Clear formatting empties the line\'s style; Backspace on an empty line removes it; Enter adds one below', async () => {
+  await check('the surface is a text editor: Enter continues the format, Backspace joins lines, a selection over lines is replaced, undo and redo, paste is plain text', async () => {
     await openModal();
     await focusLine(1);
-    await ev(`${tool('Clear formatting of the selected line')}.click()`);
-    must(await ev(`document.querySelector('.tipdlg__text[data-line="1"]').style.cssText === ''`), 'style cleared');
-    await ev(`(() => { const t = document.querySelector('.tipdlg__text[data-line="1"]'); t.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); return true; })()`);
+    await ev(`${tool('Clear formatting of the selected lines')}.click()`);
+    must(await ev(`${lineEl(1)}.style.cssText === ''`), 'style cleared');
+    await focusLine(0); await selectLine(0, true);
+    await ev(`${tool('Bold')}.click()`);
+    await enter();
     must((await lineTexts()).length === 3, `Enter adds a line: ${J(await lineTexts())}`);
-    await ev(`document.querySelector('.tipdlg__text[data-line="2"]').dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true }))`);
-    must((await lineTexts()).length === 2, `Backspace removes the empty line: ${J(await lineTexts())}`);
+    must(await ev(`${lineEl(1)}.style.fontWeight === '700'`), 'the new line continues the format of the one it split');
+    await backspace();
+    must((await lineTexts()).length === 2, `Backspace at the start of a line joins it to the one above: ${J(await lineTexts())}`);
+    await ev(`(() => { const r = document.createRange(); r.setStart(${lineEl(0)}.firstChild, 2); r.setEnd(${lineEl(1)}.firstChild, 3); const s = getSelection(); s.removeAllRanges(); s.addRange(r); return true; })()`);
+    await b.type('X');
+    const t = await lineTexts();
+    must(t.length === 1 && t[0].startsWith('To') && t[0].includes('X'), `a selection over two lines is replaced by one edit: ${J(t)}`);
+    await b.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'z', code: 'KeyZ', windowsVirtualKeyCode: 90, modifiers: 2 }); await b.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'z', code: 'KeyZ', windowsVirtualKeyCode: 90, modifiers: 2 }); await b.sleep(80); // Ctrl+Z
+    must((await lineTexts()).length === 2, `undo restores the lines: ${J(await lineTexts())}`);
+    await b.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'y', code: 'KeyY', windowsVirtualKeyCode: 89, modifiers: 2 }); await b.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'y', code: 'KeyY', windowsVirtualKeyCode: 89, modifiers: 2 }); await b.sleep(80);
+    must((await lineTexts()).length === 1, `redo repeats the edit: ${J(await lineTexts())}`);
+    must(await ev(`!${DOC}.querySelector('b, i, span, img, script')`), 'no markup in the surface');
     await key('Escape'); await waitFor(`${tdlg} === null`, 'closed');
   });
 
@@ -272,10 +295,9 @@ try {
     await setLine(0, 'x'.repeat(301));
     must(await ev(`${foot('OK')}.disabled`), 'OK not blocked');
     must(/at most 300/.test(await ev(`document.querySelector('.tipdlg__error').textContent`)), 'no reason shown');
-    await setLine(0, 'a');
-    for (let i = 0; i < 12; i++) await ev(`document.querySelector('.tipdlg__add').click()`);
-    must(await ev(`document.querySelector('.tipdlg__add').disabled`), 'Add line stops at 12');
-    await ev(`document.querySelectorAll('.tipdlg__line').length === 12 || (() => { throw new Error('lines ' + document.querySelectorAll('.tipdlg__line').length); })()`);
+    await setLine(0, 'a' + '\n'.repeat(12));
+    must((await lineTexts()).length === 13 && await ev(`${foot('OK')}.disabled`), 'thirteen lines block OK');
+    must(/at most 12 lines/.test(await ev(`document.querySelector('.tipdlg__error').textContent`)), 'the reason for 13 lines');
     await ev(`document.documentElement.setAttribute('data-scheme', 'dark')`);
     await b.sleep(600);
     await shot('tooltip-modal-dark.png');

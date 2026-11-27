@@ -94,3 +94,47 @@ export function insertField(lines, i, name, a, z) {
   if (total(lines) - t.length + next.length > LIMITS.tooltipText) return lines;
   return lines.map((l, k) => (k === i ? { ...l, text: next } : l));
 }
+
+// ---- the editor surface: one text, a style per line ---------------------------------------------------------------
+// A position is { line, off } (a character offset inside the line); a range runs from `a` to `z`, in either order.
+const STYLE_FIELDS = ["font", "size", "bold", "italic", "underline", "align", "color"];
+const styleOf = (l) => Object.fromEntries(STYLE_FIELDS.filter((k) => l[k] != null).map((k) => [k, l[k]]));
+const before = (a, z) => a.line < z.line || (a.line === z.line && a.off <= z.off);
+/** The range with its start first. */
+export const orderRange = (a, z) => (before(a, z) ? { a, z } : { a: z, z: a });
+/**
+ * Type `text` (it may hold line breaks) over the range a..z -> { lines, caret }. The first line of the range keeps its style and every line the text adds wears it too
+ * (typing goes on in the format you were in); the lines the range ran over are gone, and what followed the range joins the last inserted line. The input is not changed.
+ */
+export function replaceRange(lines, from, to, text) {
+  const { a, z } = orderRange(from, to);
+  const head = lines[a.line].text.slice(0, a.off), tail = lines[z.line].text.slice(z.off);
+  const parts = String(text ?? "").split(/\r\n|\r|\n/), style = styleOf(lines[a.line]);
+  const last = parts.length - 1;
+  const made = parts.map((p, i) => ({ ...style, text: (i === 0 ? head : "") + p + (i === last ? tail : "") }));
+  return { lines: [...lines.slice(0, a.line), ...made, ...lines.slice(z.line + 1)], caret: { line: a.line + last, off: (last === 0 ? head.length : 0) + parts[last].length } };
+}
+/** `patch` ({ key: value | undefined }) applied to lines `from`..`to` (inclusive, any order); undefined removes the key. The input is not changed. */
+export function patchLines(lines, from, to, patch) {
+  const lo = Math.min(from, to), hi = Math.max(from, to);
+  return lines.map((l, i) => {
+    if (i < lo || i > hi) return l;
+    const next = { ...l };
+    for (const [k, v] of Object.entries(patch)) { if (v === undefined) delete next[k]; else next[k] = v; }
+    return next;
+  });
+}
+/** Where Ctrl+Backspace stops: the start of the word before `off` (spaces first, then the word). */
+export function wordStart(text, off) {
+  let i = off;
+  while (i > 0 && /\s/.test(text[i - 1])) i--;
+  while (i > 0 && !/\s/.test(text[i - 1])) i--;
+  return i;
+}
+/** Where Ctrl+Delete stops: the end of the word after `off` (the word first, then the spaces). */
+export function wordEnd(text, off) {
+  let i = off;
+  while (i < text.length && !/\s/.test(text[i])) i++;
+  while (i < text.length && /\s/.test(text[i])) i++;
+  return i;
+}

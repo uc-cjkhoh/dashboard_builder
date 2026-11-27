@@ -1,6 +1,8 @@
 // The "Edit tooltip" modal, laid out like Tableau's Edit Tooltip: a formatting toolbar (font, size, Bold / Italic / Underline, colour, alignment, Insert ▾, clear),
-// the tooltip's lines in one editor surface, the behaviour checkboxes (Show tooltips with its mode, command buttons) and Reset / Preview / OK / Cancel.
-// The stored model stays text with <Field> tokens plus one style per line (tooltip-style.js), so the toolbar formats the line the caret is in — not a run of characters.
+// one text editor, the behaviour checkboxes (Show tooltips with its mode, command buttons) and Reset / Preview / OK / Cancel.
+// The editor is one contenteditable surface with a block per line, and the browser never edits it: every change (typing, Enter, paste, delete, cut, undo) arrives as a
+// `beforeinput`, is applied to the model (tooltip-style.js `replaceRange`: text plus one style per line) and the surface is drawn again from the model, so there is no HTML
+// to read back or to sanitise. The toolbar formats the lines the selection touches, not a run of characters.
 // DOM only — the rules are in tooltip-style.js, tooltip-model.js and tooltip-behaviour-model.js. Everything is a draft until OK (one commit); Esc / Cancel discard.
 import { makeButton, openDialog, closeDialog } from "../Core/ui.js";
 import { icon } from "../Core/icons.js";
@@ -8,13 +10,14 @@ import { LIMITS } from "../Core/validate.js";
 import { tooltipHtml, parseTooltip } from "./tooltip-model.js";
 import { TIP_NUMBER_FORMATS, TIP_DATE_FORMATS, checkTooltipFormats, pruneFormats, looksDate, sampleLookup } from "./tooltip-formats.js";
 import { MAX_DECIMALS } from "../Core/sheet-schema.js";
-import { TIP_SIZES, TIP_COLOURS, TIP_COLOUR_LABELS, TIP_FONTS, lineStyleCss, toLines, fromLines, moveLine, addLine, removeLine, insertField } from "./tooltip-style.js";
+import { TIP_SIZES, TIP_COLOURS, TIP_COLOUR_LABELS, TIP_FONTS, lineStyleCss, toLines, fromLines, moveLine, replaceRange, patchLines, orderRange, wordStart, wordEnd } from "./tooltip-style.js";
 import { tooltipControlSpecs, withTooltipSetting } from "./tooltip-behaviour-model.js";
 
 let seq = 0;
 const el = (tag, cls, t) => { const e = document.createElement(tag); if (cls) e.className = cls; if (t !== undefined) e.textContent = t; return e; };
 const STYLE_KEYS = ["font", "size", "bold", "italic", "underline", "align", "color"];
 const SHOWN_LABEL = { showTooltips: "Show tooltips", tooltipButtons: "Include command buttons" }; // the spec's own labels are the Format panel's; here the checkboxes read like Tableau's
+const HISTORY = 100; // undo steps kept
 
 /** `text` / `style` / `formats`: the sheet's tooltipText / tooltipStyle / tooltipFormats; `format`: the sheet's Format config (the behaviour settings and a field format start from it);
  *  `getFields()`: [{ name, sample, kind }] the drawn chart offers — read each time the Insert menu opens, because the chart can finish drawing after this opens;
@@ -26,7 +29,9 @@ export function openTooltipDialog({ text, style, formats: formats0, format: form
   let lines = toLines(text, style);
   let formats = formats0 ? structuredClone(formats0) : {}; // draft per-field formats { name: { number?, decimals?, date? } }
   let format = { ...(format0 ?? {}) };                     // draft Format (only the tooltip behaviour keys change here)
-  let active = 0;                                           // the line the toolbar formats and Insert writes into
+  const end = { line: lines.length - 1, off: lines.at(-1).text.length };
+  let sel = { start: end, end };                            // the selection, as { line, off } positions in the model: what the toolbar formats and Insert writes over
+  const past = [], future = [];                             // undo / redo: [{ lines, sel }]
   const dropped = new Set();                                // indexes of Tooltip-card fields removed in this draft
   const fields = () => (typeof getFields === "function" ? getFields() : []) ?? [];
 
@@ -36,7 +41,7 @@ export function openTooltipDialog({ text, style, formats: formats0, format: form
   const body = el("div", "dialog__body tipdlg__body");
 
   // --- toolbar ---------------------------------------------------------------------------------------------------------------
-  const bar = el("div", "tipdlg__bar"); bar.setAttribute("role", "toolbar"); bar.setAttribute("aria-label", "Format the selected line");
+  const bar = el("div", "tipdlg__bar"); bar.setAttribute("role", "toolbar"); bar.setAttribute("aria-label", "Format the selected lines");
   const select = (label, options, onChange) => {
     const s = el("select", "input tipdlg__sel"); s.setAttribute("aria-label", label);
     for (const [v, t] of options) s.append(new Option(t, v));
@@ -49,8 +54,9 @@ export function openTooltipDialog({ text, style, formats: formats0, format: form
   };
   const font = select("Font", [["", "Default font"], ...TIP_FONTS], (v) => patch({ font: v || undefined }));
   const size = select("Font size", [["", "Auto"], ...TIP_SIZES.map((s) => [String(s), `${s}px`])], (v) => patch({ size: v ? Number(v) : undefined }));
-  const flag = (key, label, glyph, cls) => { const b = toggle(label, glyph, () => patch({ [key]: lines[active][key] ? undefined : true })); b.classList.add(cls); return b; };
+  const flag = (key, label, glyph, cls) => { const b = toggle(label, glyph, () => toggleFlag(key)); b.classList.add(cls); return b; };
   const bold = flag("bold", "Bold", "B", "tipdlg__tog--b"), italic = flag("italic", "Italic", "I", "tipdlg__tog--i"), underline = flag("underline", "Underline", "U", "tipdlg__tog--u");
+  const styleGroup = el("div", "tipdlg__group"); styleGroup.setAttribute("role", "group"); styleGroup.setAttribute("aria-label", "Text style"); styleGroup.append(bold, italic, underline);
   const colour = select("Colour", [["", "Auto colour"], ...Object.keys(TIP_COLOURS).map((k) => [k, TIP_COLOUR_LABELS[k]])], (v) => patch({ color: v || undefined }));
   const aligns = ["left", "center", "right"].map((a) => { const b = toggle(`Align ${a}`, icon(`align-${a}`, { size: 16 }), () => patch({ align: a === "left" ? undefined : a })); b.dataset.align = a; return b; });
   const alignGroup = el("div", "tipdlg__group"); alignGroup.setAttribute("role", "group"); alignGroup.setAttribute("aria-label", "Alignment"); alignGroup.append(...aligns);
@@ -58,18 +64,20 @@ export function openTooltipDialog({ text, style, formats: formats0, format: form
   const insertWrap = el("div", "tipdlg__insert");
   const insertBtn = el("button", "btn tipdlg__insertbtn"); insertBtn.type = "button";
   insertBtn.append(el("span", null, "Insert"), icon("chevron", { size: 16 })); insertBtn.setAttribute("aria-haspopup", "menu"); insertBtn.setAttribute("aria-expanded", "false");
-  const menu = el("div", "tipdlg__menu"); menu.setAttribute("role", "menu"); menu.setAttribute("aria-label", "Insert a field"); menu.hidden = true;
+  const menu = el("div", "menu__list menu__list--start tipdlg__menu"); menu.setAttribute("role", "menu"); menu.setAttribute("aria-label", "Insert a field"); menu.hidden = true;
   insertWrap.append(insertBtn, menu);
-  const clear = el("button", "btn btn--ghost tipdlg__tog"); clear.type = "button"; clear.title = "Clear formatting"; clear.setAttribute("aria-label", "Clear formatting of the selected line"); clear.append(icon("close", { size: 16 }));
+  const clear = el("button", "btn btn--ghost tipdlg__tog"); clear.type = "button"; clear.title = "Clear formatting"; clear.setAttribute("aria-label", "Clear formatting of the selected lines"); clear.append(icon("clear-format", { size: 16 }));
   clear.addEventListener("click", () => patch(Object.fromEntries(STYLE_KEYS.map((k) => [k, undefined]))));
-  bar.append(font, size, bold, italic, underline, colour, alignGroup, insertWrap, clear);
+  bar.append(font, size, styleGroup, colour, alignGroup, insertWrap, clear);
 
-  // --- editor surface ------------------------------------------------------------------------------------------------------------
-  const doc = el("div", "tipdlg__doc"); doc.setAttribute("role", "list"); doc.setAttribute("aria-label", "Tooltip lines");
+  // --- the text editor -----------------------------------------------------------------------------------------------------------
+  const doc = el("div", "tipdlg__doc");
+  doc.contentEditable = "true"; doc.spellcheck = false;
+  doc.setAttribute("role", "textbox"); doc.setAttribute("aria-multiline", "true"); doc.setAttribute("aria-label", "Tooltip text");
+  doc.dataset.placeholder = "Text and <field> tokens — empty keeps the automatic tooltip";
   const tools = el("div", "tipdlg__tools");
-  const add = makeButton("Add line", "btn btn--ghost tipdlg__add");
   const count = el("span", "tipdlg__count");
-  tools.append(add, count);
+  tools.append(count);
   const err = el("div", "tipdlg__error"); err.setAttribute("role", "alert");
 
   // --- behaviour ---------------------------------------------------------------------------------------------------------------
@@ -95,26 +103,60 @@ export function openTooltipDialog({ text, style, formats: formats0, format: form
   foot.append(reset, previewBtn, cancel, ok);
   dlg.append(title, body, foot);
 
-  // --- state ------------------------------------------------------------------------------------------------------------------------
+  // --- the model <-> the surface -------------------------------------------------------------------------------------------------------
   const known = () => new Map(fields().map((f) => [f.name, f]));
   const sample = () => sampleLookup(fields(), checkTooltipFormats(formats).value, format);
   const totalLen = () => lines.map((l) => l.text).join("\n").length;
-  const patch = (p) => { lines = lines.map((l, k) => (k === active ? { ...l, ...p } : l)); syncBar(); styleRow(active); refresh(); };
+  const lineEls = () => [...doc.children];
+  const lineEl = (l, i) => { // a block per line, drawn in its own format (whitelisted values only); an empty one holds a <br> so it keeps its height
+    const d = el("div"); d.dataset.line = String(i); d.style.cssText = lineStyleCss(l);
+    if (l.text) d.textContent = l.text; else d.append(document.createElement("br"));
+    return d;
+  };
+  const render = () => { doc.replaceChildren(...lines.map(lineEl)); afterChange(); };
+  const styleAll = () => { lineEls().forEach((d, i) => { if (lines[i]) d.style.cssText = lineStyleCss(lines[i]); }); afterChange(); };
+  const afterChange = () => { doc.toggleAttribute("data-empty", lines.length === 1 && !lines[0].text); syncBar(); refresh(); };
+
+  // positions: a DOM point -> { line, off }, and back
+  const lineOf = (node) => { let x = node; while (x && x.parentNode !== doc) x = x.parentNode; return x ? lineEls().indexOf(x) : -1; };
+  const posOf = (node, offset) => {
+    if (node === doc) return offset >= lines.length ? { line: lines.length - 1, off: lines.at(-1).text.length } : { line: Math.max(0, offset), off: 0 };
+    const line = lineOf(node);
+    if (line < 0) return null;
+    const r = document.createRange(); r.setStart(lineEls()[line], 0); r.setEnd(node, offset);
+    return { line, off: Math.min(r.toString().length, lines[line].text.length) };
+  };
+  const readSel = () => {
+    const s = window.getSelection();
+    if (!s || !s.rangeCount || !doc.contains(s.anchorNode) || !doc.contains(s.focusNode)) return null;
+    const a = posOf(s.anchorNode, s.anchorOffset), z = posOf(s.focusNode, s.focusOffset);
+    return a && z ? (() => { const o = orderRange(a, z); return { start: o.a, end: o.z }; })() : null;
+  };
+  const domPoint = ({ line, off }) => { const d = lineEls()[Math.min(line, lines.length - 1)], t = d?.firstChild; return t && t.nodeType === 3 ? [t, Math.min(off, t.length)] : [d, 0]; };
+  const setSel = (start, endPos = start, focus = true) => {
+    sel = { start, end: endPos };
+    if (!doc.isConnected) return;
+    if (focus) doc.focus({ preventScroll: true });
+    const [sn, so] = domPoint(start), [en, eo] = domPoint(endPos), r = document.createRange();
+    r.setStart(sn, so); r.setEnd(en, eo);
+    const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+    syncBar();
+  };
+
+  // history: every change to the model is one undo step
+  const push = () => { past.push({ lines, sel }); if (past.length > HISTORY) past.shift(); future.length = 0; };
+  const restore = (from, to) => { if (!from.length) return; to.push({ lines, sel }); ({ lines, sel } = from.pop()); render(); setSel(sel.start, sel.end); };
+  const edit = (a, z, text) => { push(); const r = replaceRange(lines, a, z, text); lines = r.lines; render(); setSel(r.caret); };
+  const current = () => { const s = readSel(); if (s) sel = s; return sel; } // the selection as it is now: `selectionchange` is queued, so the saved one can trail a click or key that came just before
+  const patch = (p) => { current(); push(); lines = patchLines(lines, sel.start.line, sel.end.line, p); styleAll(); setSel(sel.start, sel.end); };
+  const toggleFlag = (key) => patch({ [key]: lines[current().start.line][key] ? undefined : true });
 
   const syncBar = () => {
-    const l = lines[active] ?? { text: "" };
+    const l = lines[Math.min(sel.start.line, lines.length - 1)] ?? { text: "" };
     font.value = l.font ?? ""; size.value = l.size ? String(l.size) : ""; colour.value = l.color ?? "";
     for (const [b, k] of [[bold, "bold"], [italic, "italic"], [underline, "underline"]]) b.setAttribute("aria-pressed", String(!!l[k]));
     for (const b of aligns) b.setAttribute("aria-pressed", String(b.dataset.align === (l.align ?? "left")));
-    clear.disabled = !STYLE_KEYS.some((k) => l[k] != null);
-  };
-  const styleRow = (i) => { const input = doc.querySelector(`[data-line="${i}"]`); if (input) input.style.cssText = lineStyleCss(lines[i]); }; // the line shows its own format (whitelisted values only)
-  const draw = (focusSel) => {
-    doc.replaceChildren();
-    lines.forEach((l, i) => doc.append(lineRow(l, i)));
-    add.disabled = lines.length >= LIMITS.tooltipLines;
-    syncBar(); refresh();
-    if (focusSel) doc.querySelector(focusSel)?.focus();
+    clear.disabled = !lines.slice(sel.start.line, sel.end.line + 1).some((x) => STYLE_KEYS.some((k) => x[k] != null));
   };
   const refresh = () => {
     const { text: t, style: st } = fromLines(lines);
@@ -132,43 +174,63 @@ export function openTooltipDialog({ text, style, formats: formats0, format: form
     ok.disabled = !!bad;
   };
 
-  // One line: its text, and the ↑ ↓ ✕ that reorder or remove it.
-  const lineRow = (l, i) => {
-    const row = el("div", "tipdlg__line"); row.setAttribute("role", "listitem");
-    const input = el("input", "input tipdlg__text");
-    input.type = "text"; input.autocomplete = "off"; input.value = l.text; input.dataset.line = String(i);
-    input.setAttribute("aria-label", `Line ${i + 1} text`);
-    input.placeholder = i === 0 ? "Text and <field> tokens — empty keeps the automatic tooltip" : "Text and <field> tokens";
-    input.style.cssText = lineStyleCss(l);
-    input.addEventListener("focus", () => { active = i; syncBar(); for (const r of doc.children) r.classList.toggle("tipdlg__line--on", r === row); });
-    input.addEventListener("input", () => { lines = lines.map((x, k) => (k === i ? { ...x, text: input.value } : x)); refresh(); });
-    input.addEventListener("keydown", (e) => {
-      if (e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) { // keyboard reorder
-        e.preventDefault();
-        const d = e.key === "ArrowUp" ? -1 : 1, next = moveLine(lines, i, d);
-        if (next !== lines) { lines = next; active = i + d; draw(`[data-line="${i + d}"]`); }
-      } else if (e.key === "Enter" && lines.length < LIMITS.tooltipLines) { // a new line below, as in any editor
-        e.preventDefault();
-        lines = addLine(lines, i + 1); active = i + 1; draw(`[data-line="${i + 1}"]`);
-      } else if (e.key === "Backspace" && !input.value && lines.length > 1) { // an empty line goes, the caret to the one above
-        e.preventDefault();
-        lines = removeLine(lines, i); active = Math.max(0, i - 1); draw(`[data-line="${active}"]`);
-      }
-    });
-    const mv = (label, glyph, d) => {
-      const b = el("button", "btn btn--ghost tipdlg__mv"); b.type = "button"; b.title = label; b.setAttribute("aria-label", `${label} (line ${i + 1})`);
-      b.append(icon(glyph, { size: 14 }));
-      b.disabled = i + d < 0 || i + d >= lines.length; b.dataset.move = String(d);
-      b.addEventListener("click", () => { lines = moveLine(lines, i, d); active = i + d; draw(`.tipdlg__line:nth-child(${i + d + 1}) [data-move="${d}"]`); });
-      return b;
-    };
-    const del = el("button", "btn btn--ghost tipdlg__mv"); del.type = "button"; del.title = "Remove line"; del.setAttribute("aria-label", `Remove line ${i + 1}`);
-    del.append(icon("close", { size: 14 })); del.disabled = lines.length <= 1;
-    del.addEventListener("click", () => { lines = removeLine(lines, i); active = Math.min(active, lines.length - 1); draw(`[data-line="${Math.min(i, lines.length - 1)}"]`); });
-    row.append(input, mv("Move up", "chevron-up", -1), mv("Move down", "chevron", 1), del);
-    row.classList.toggle("tipdlg__line--on", i === active);
-    return row;
+  // The browser's own edits are cancelled and done on the model. Input methods (composition) are the one exception: the browser edits the line, `input` reads it back.
+  const readDom = () => {
+    const divs = lineEls();
+    lines = divs.length === lines.length
+      ? lines.map((l, i) => ({ ...l, text: divs[i].textContent }))
+      : divs.map((d, i) => ({ ...(lines[Math.min(i, lines.length - 1)]), text: d.textContent })); // a structure the browser changed: its blocks are the lines, the styles follow by index
+    if (!lines.length) lines = [{ text: "" }];
+    const s = readSel(); if (s) sel = s;
+    afterChange();
   };
+  doc.addEventListener("beforeinput", (e) => {
+    const t = e.inputType;
+    if (e.isComposing || /Composition/.test(t)) return;
+    e.preventDefault();
+    current();
+    let a = sel.start, z = sel.end, text = "";
+    const collapsed = a.line === z.line && a.off === z.off;
+    const dir = /Backward$/.test(t) ? -1 : /Forward$/.test(t) ? 1 : 0;
+    if (t === "historyUndo") return restore(past, future);
+    if (t === "historyRedo") return restore(future, past);
+    if (t === "formatBold") return toggleFlag("bold");
+    if (t === "formatItalic") return toggleFlag("italic");
+    if (t === "formatUnderline") return toggleFlag("underline");
+    if (t === "insertText" || t === "insertReplacementText") text = e.data ?? e.dataTransfer?.getData("text/plain") ?? "";
+    else if (t === "insertFromPaste" || t === "insertFromDrop" || t === "insertFromYank") text = e.dataTransfer?.getData("text/plain") ?? e.data ?? "";
+    else if (t === "insertParagraph" || t === "insertLineBreak") text = "\n";
+    else if (t.startsWith("delete")) {
+      if (collapsed && dir) { // one character, a word, or to the end of the line; at a line's edge, the line break
+        const { line, off } = a, txt = lines[line].text, word = /Word/.test(t), whole = /Line/.test(t);
+        if (dir < 0) {
+          if (off > 0) a = { line, off: whole ? 0 : word ? wordStart(txt, off) : off - 1 };
+          else if (line > 0) a = { line: line - 1, off: lines[line - 1].text.length };
+          else return;
+        } else if (off < txt.length) z = { line, off: whole ? txt.length : word ? wordEnd(txt, off) : off + 1 };
+        else if (line < lines.length - 1) z = { line: line + 1, off: 0 };
+        else return;
+      } else if (collapsed) return;
+    } else return;
+    edit(a, z, text);
+  });
+  doc.addEventListener("input", readDom); // only reached for what beforeinput let through (composition)
+  doc.addEventListener("compositionend", readDom);
+  doc.addEventListener("keydown", (e) => {
+    const mod = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
+    if (mod && k === "z") { e.preventDefault(); restore(e.shiftKey ? future : past, e.shiftKey ? past : future); }
+    else if (mod && k === "y") { e.preventDefault(); restore(future, past); }
+    else if (e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) { // keyboard reorder of the caret's line (its style travels with it)
+      e.preventDefault();
+      const i = current().start.line, d = e.key === "ArrowUp" ? -1 : 1, next = moveLine(lines, i, d);
+      if (next === lines) return;
+      push(); lines = next; render();
+      const c = { line: i + d, off: Math.min(sel.start.off, lines[i + d].text.length) };
+      setSel(c);
+    }
+  });
+  const onSel = () => { const s = readSel(); if (s) { sel = s; syncBar(); } }; // the toolbar and Insert keep the last selection made in the editor
+  document.addEventListener("selectionchange", onSel);
 
   // --- Insert menu --------------------------------------------------------------------------------------------------------------
   const closeMenu = () => { menu.hidden = true; insertBtn.setAttribute("aria-expanded", "false"); };
@@ -176,20 +238,14 @@ export function openTooltipDialog({ text, style, formats: formats0, format: form
     menu.replaceChildren();
     const list = fields();
     for (const f of list) {
-      const b = el("button", "tipdlg__item", f.name); b.type = "button"; b.setAttribute("role", "menuitem"); b.title = `Insert <${f.name}>`;
-      b.addEventListener("click", () => {
-        closeMenu();
-        const inp = doc.querySelector(`[data-line="${active}"]`);
-        const a = inp?.selectionStart ?? lines[active].text.length, z = inp?.selectionEnd ?? a;
-        const next = insertField(lines, active, f.name, a, z);
-        if (next === lines) return;
-        lines = next; draw(`[data-line="${active}"]`);
-        const pos = a + f.name.length + 2; doc.querySelector(`[data-line="${active}"]`)?.setSelectionRange(pos, pos);
-      });
+      const b = el("button", "menu__item tipdlg__item"); b.type = "button"; b.setAttribute("role", "menuitem"); b.title = `Insert <${f.name}>`; b.append(el("span", "menu__label", f.name));
+      b.addEventListener("click", () => { closeMenu(); current(); edit(sel.start, sel.end, `<${f.name}>`); }); // over the selection, or at the caret
       menu.append(b);
     }
     if (!list.length) menu.append(el("span", "tipdlg__note", "Add fields to the view to insert them."));
     menu.hidden = false; insertBtn.setAttribute("aria-expanded", "true");
+    const wrap = insertWrap.getBoundingClientRect(), room = bar.getBoundingClientRect(); // starts under the button, shifted left only as far as keeps the list within the toolbar's width, the body's content edges (the toolbar wraps, so the button can be anywhere in a row)
+    menu.style.left = `${Math.max(room.left, Math.min(wrap.left, room.right - menu.offsetWidth)) - wrap.left}px`;
     menu.querySelector("button")?.focus();
   };
   insertBtn.addEventListener("click", () => { if (menu.hidden) openMenu(); else closeMenu(); });
@@ -274,15 +330,14 @@ export function openTooltipDialog({ text, style, formats: formats0, format: form
     }
   };
 
-  add.addEventListener("click", () => { lines = addLine(lines); active = lines.length - 1; draw(`[data-line="${active}"]`); });
   previewBtn.addEventListener("click", () => { preview.hidden = !preview.hidden; previewBtn.setAttribute("aria-pressed", String(!preview.hidden)); });
-  const finish = () => { closeDialog(dlg); setTimeout(() => onClose?.(), 0); };
+  const finish = () => { document.removeEventListener("selectionchange", onSel); closeDialog(dlg); setTimeout(() => onClose?.(), 0); };
   cancel.addEventListener("click", finish);
   dlg.addEventListener("cancel", (e) => { e.preventDefault(); if (!menu.hidden) { closeMenu(); insertBtn.focus(); return; } finish(); }); // Esc closes the open menu first, then discards
   reset.addEventListener("click", () => {
-    lines = [{ text: "" }]; formats = {}; fmtKey = null; active = 0;
+    push(); lines = [{ text: "" }]; formats = {}; fmtKey = null;
     for (const [k, v] of [["showTooltips", true], ["tooltipButtons", false], ["tooltipMode", "responsive"]]) format = withTooltipSetting(format, k, v);
-    drawBehaviour(); draw(`[data-line="0"]`);
+    drawBehaviour(); render(); setSel({ line: 0, off: 0 });
   });
   ok.addEventListener("click", () => {
     if (ok.disabled) return;
@@ -292,5 +347,5 @@ export function openTooltipDialog({ text, style, formats: formats0, format: form
   });
   document.body.append(dlg);
   openDialog(dlg);
-  drawBehaviour(); drawCard(); draw(`[data-line="0"]`);
+  drawBehaviour(); drawCard(); render(); setSel(end);
 }

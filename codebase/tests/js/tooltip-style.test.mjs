@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { tooltipHtml, lookupFrom } from "../../src/DashboardBuilder/Features/Dashboard/tooltip-model.js";
-import { TIP_SIZES, TIP_COLOURS, TIP_FONTS, TIP_ALIGNS, lineStyleCss, lineIsBlock, checkTooltipStyle, toLines, fromLines, moveLine, styleAfterTextEdit, addLine, removeLine, insertField }
+import { TIP_SIZES, TIP_COLOURS, TIP_FONTS, TIP_ALIGNS, lineStyleCss, lineIsBlock, checkTooltipStyle, toLines, fromLines, moveLine, styleAfterTextEdit, replaceRange, patchLines, orderRange, wordStart, wordEnd, addLine, removeLine, insertField }
   from "../../src/DashboardBuilder/Features/Dashboard/tooltip-style.js";
 import { LIMITS } from "../../src/DashboardBuilder/Features/Core/validate.js";
 import { sanitizeSheet } from "../../src/DashboardBuilder/Features/Workbook/workbook-model.js";
@@ -117,4 +117,31 @@ test("every tooltip font has its token in core.css (the style is a var(--font-<k
   const { readFileSync } = await import("node:fs");
   const css = readFileSync(new URL("../../src/DashboardBuilder/Features/Core/core.css", import.meta.url), "utf8");
   for (const [k] of TIP_FONTS) assert.match(css, new RegExp(`--font-${k}:\\s*[^;]+;`), k);
+});
+
+test("replaceRange: typing inside a line, Enter in the middle, joining two lines, deleting across lines", () => {
+  const L = [{ text: "abcd", bold: true }, { text: "efgh", align: "center" }, { text: "ij" }];
+  let r = replaceRange(L, { line: 0, off: 2 }, { line: 0, off: 2 }, "X");
+  assert.deepEqual(r.lines[0], { bold: true, text: "abXcd" }); assert.deepEqual(r.caret, { line: 0, off: 3 });
+  r = replaceRange(L, { line: 0, off: 2 }, { line: 0, off: 2 }, "\n"); // Enter: the new line continues the format
+  assert.deepEqual(r.lines.slice(0, 2), [{ bold: true, text: "ab" }, { bold: true, text: "cd" }]); assert.deepEqual(r.caret, { line: 1, off: 0 });
+  assert.equal(r.lines.length, 4);
+  r = replaceRange(L, { line: 0, off: 4 }, { line: 1, off: 0 }, ""); // Backspace at the start of line 1: it joins line 0, which keeps its style
+  assert.deepEqual(r.lines, [{ bold: true, text: "abcdefgh" }, { text: "ij" }]); assert.deepEqual(r.caret, { line: 0, off: 4 });
+  r = replaceRange(L, { line: 1, off: 2 }, { line: 0, off: 1 }, "Z"); // the range may run backwards
+  assert.deepEqual(r.lines, [{ bold: true, text: "aZgh" }, { text: "ij" }]);
+  r = replaceRange(L, { line: 2, off: 1 }, { line: 2, off: 1 }, "p\nq\r\nr"); // a paste of three lines
+  assert.deepEqual(r.lines.slice(2).map((l) => l.text), ["ip", "q", "rj"]); assert.deepEqual(r.caret, { line: 4, off: 1 });
+  assert.equal(L[0].text, "abcd"); assert.equal(L.length, 3); // the input is untouched
+});
+test("patchLines styles the lines of a selection and removes a key set to undefined", () => {
+  const L = [{ text: "a", bold: true }, { text: "b" }, { text: "c" }];
+  const r = patchLines(L, 2, 1, { align: "right", bold: undefined });
+  assert.deepEqual(r, [{ text: "a", bold: true }, { text: "b", align: "right" }, { text: "c", align: "right" }]);
+  assert.deepEqual(patchLines(L, 0, 0, { bold: undefined })[0], { text: "a" });
+  assert.deepEqual(orderRange({ line: 2, off: 0 }, { line: 1, off: 5 }), { a: { line: 1, off: 5 }, z: { line: 2, off: 0 } });
+});
+test("wordStart / wordEnd: Ctrl+Backspace and Ctrl+Delete", () => {
+  assert.equal(wordStart("one two  three", 14), 9); assert.equal(wordStart("one two  three", 9), 4); assert.equal(wordStart("one", 0), 0);
+  assert.equal(wordEnd("one two  three", 0), 4); assert.equal(wordEnd("one two  three", 4), 9); assert.equal(wordEnd("one", 3), 3);
 });
