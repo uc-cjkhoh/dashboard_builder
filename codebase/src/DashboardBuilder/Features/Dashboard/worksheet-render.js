@@ -3,7 +3,7 @@ import { effectiveWindow } from "../Core/parameters-model.js";
 import { makeValueFormatter, makeCategoryFormatter } from "../Core/format.js";
 import { COLOR_SPLIT_TYPES, chartIssue, dimsFor, TEXT_VALUE_HINT, COLOR_SPLIT_HINT } from "./show-me-rules.js";
 import { TEXT_VALUE_TYPES } from "./filter-rules.js";
-import { marksOf, planDims, planMeasures, colorMode, isSizeDimension, SCATTER_TYPES } from "./sheet-plan.js";
+import { marksOf, planDims, planMeasures, colorMode, isSizeDimension, detailSplitCount, SCATTER_TYPES } from "./sheet-plan.js";
 import { sizeChannel, sizeRange } from "./mark-channel-model.js";
 import { tupleKey } from "./grid-model.js";
 import { sizeScaleOf, measureShares, sizeLegendText, sizeEnds, textStepFor } from "./size-scale-model.js";
@@ -123,6 +123,12 @@ function draw(container, rc, sheet, result, cmp) {
   if (colourKeys > 0 && COLOR_SPLIT_TYPES.has(type)) {
     if (shelfCount !== 1) { container.append(hint(COLOR_SPLIT_HINT)); return; }
     renderColorSplit(container, rc, sheet, type, result, format, fmtCat, sizeIdx, colourKeys);
+    return;
+  }
+  // Detail on a bar / line / area: its members split each mark (stacked segments, one line each) inside the unchanged categories.
+  const detailKeys = colourKeys === 0 && COLOR_SPLIT_TYPES.has(type) ? detailSplitCount(sheet) : 0;
+  if (detailKeys > 0) {
+    renderColorSplit(container, rc, sheet, type, result, format, fmtCat, sizeIdx, detailKeys, true);
     return;
   }
 

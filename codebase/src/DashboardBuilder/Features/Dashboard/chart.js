@@ -463,7 +463,7 @@ function legendFor(format, c, names, defaultOn) {
 // (the default). `orientation` is decided by the caller from the shelves; combo stays vertical (its
 // dual value axis is on y). Axis *titles* name the physical axes (xTitle = bottom, yTitle = left)
 // regardless of orientation, so the Format controls stay literal.
-export function buildCartesian({ type, categories, series, colorByCategory, format = {}, orientation = "vertical", pointLabels, seriesLabels, tooltipExtra, tooltipText, tooltipFields, tooltipStyle, tooltipFormats, otherIndex = -1, analytics = null, colorValues, colorName, sizes, sizeName, sizeMembers, sizeOrder, sizeGrid, sizeMembersGrid, labelMarks, selectedMarks, labelText, labelFields, labelMeasure }) {
+export function buildCartesian({ type, categories, series, colorByCategory, format = {}, orientation = "vertical", pointLabels, seriesLabels, tooltipExtra, tooltipText, tooltipFields, tooltipStyle, tooltipFormats, otherIndex = -1, analytics = null, colorValues, colorName, sizes, sizeName, sizeMembers, sizeOrder, sizeGrid, sizeMembersGrid, labelMarks, selectedMarks, labelText, labelFields, labelMeasure, detailStack }) {
   const c = tokens();
   const labels = (categories ?? []).map((l) => l ?? "—");
   // Comparison series (compare: true) ride beside their measure: they don't make a chart "multi"
@@ -476,11 +476,13 @@ export function buildCartesian({ type, categories, series, colorByCategory, form
   const horizontal = orientation === "horizontal" && !isCombo && !dual;
   const fmtVal = makeValueFormatter(format); // measure value format (tooltip, axis, labels)
 
-  const colorFor = (i, name) => (multi ? memberColor(name, c.catAt(i)) : c.series);
+  // Detail members split each mark but are not a colour: every series wears the one brand colour (detailStack), and no legend names them (the tooltip does).
+  const stackedBars = type === "stacked" || (detailStack && type === "bar"); // Detail on a bar stacks its members into one bar, as Tableau's bar mark does
+  const colorFor = (i, name) => (multi && !detailStack ? memberColor(name, c.catAt(i)) : c.series);
   // Colour-by-dimension: a single-measure bar chart colours each bar by its category. The
   // category axis already labels each bar, so colour restates identity (never colour-alone).
   // A colour measure (one measure only) colours each bar / marker / line stretch by its value: it replaces the palette and Colour by category.
-  const { show: showLegend, pos, legend } = legendFor(format, c, series.map((s) => s.name), multi || dual || hasCompare);
+  const { show: showLegend, pos, legend } = legendFor(format, c, series.map((s) => s.name), (multi && !detailStack) || dual || hasCompare);
   const byValue = Array.isArray(colorValues) && (type === "bar" || type === "stacked" || type === "line" || type === "area" || isCombo)
     ? colourByValue(colorValues, c, fmtVal, colorName, showLegend && pos === "bottom" ? 28 : 0) : null;
   // With several measures every mark of every measure wears its row's colour, so colour no longer says which measure a mark is: each measure gets
@@ -519,7 +521,7 @@ export function buildCartesian({ type, categories, series, colorByCategory, form
   const markText = (si, di, base, v) => (labelFn ? labelFn(si, di, { valueText: base, measures: labelMeasure ? { [labelMeasure]: v } : Object.fromEntries(series.map((s2) => [String(s2.name), s2.data[di]])) }) : base);
   const baseText = (si, di, v) => ((pointLabels || seriesLabels) ? String(labelAt(si, di) ?? "") : fmtVal(v));
   const dataLabel = (si, onLine = false) => ((pointLabels || seriesLabels || format.dataLabels)
-    ? { show: !mask?.hover, position: (onLine && linePos) || (type === "stacked" && seriesLabels ? "inside" : labelPos), // only a colour split's Label sits inside its stack segment color: c.label, fontFamily: c.font, fontSize: 14,
+    ? { show: !mask?.hover, position: (onLine && linePos) || (stackedBars && seriesLabels ? "inside" : labelPos), // only a colour split's Label sits inside its stack segment color: c.label, fontFamily: c.font, fontSize: 14,
         ...labelStyle,
         formatter: (p) => (mask && !mask.at(si, p.dataIndex) ? "" : markText(si, p.dataIndex, baseText(si, p.dataIndex, p.value), p.value)) }
     : { show: false });
@@ -658,13 +660,13 @@ export function buildCartesian({ type, categories, series, colorByCategory, form
         emphasis: { focus: focusOf, ...hoverLabel },
       };
     }
-    const stacked = type === "stacked";
+    const stacked = stackedBars;
     // Round the "growing" end of the bar: top for vertical, right for horizontal; none when stacked.
     const barRadius = stacked ? [0, 0, 0, 0] : (horizontal ? [0, c.radius, c.radius, 0] : [c.radius, c.radius, 0, 0]);
     // The "Other" bar (everything past the limit) wears the muted ink (≥ 3:1 on the surface, apart from
     // the series hue); its label says what it is.
     // A cued bar keeps its pattern; stacked segments of one bar share a colour, so a surface stroke (unless a border is chosen) separates them.
-    const barEdge = cue && stacked && !(borderWidthOf(format.markBorder) > 0) ? { borderColor: c.surface, borderWidth: 1 } : edge;
+    const barEdge = (cue || detailStack) && stacked && !(borderWidthOf(format.markBorder) > 0) ? { borderColor: c.surface, borderWidth: 1 } : edge;
     const cueStyle = cue?.decal ? { decal: { ...cue.decal, color: c.surface } } : {};
     const otherItem = (v) => ({ value: v, itemStyle: { color: c.muted, borderRadius: barRadius, ...barEdge } });
     if (sizeFr && type === "bar") {

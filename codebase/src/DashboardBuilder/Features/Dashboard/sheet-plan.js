@@ -1,4 +1,4 @@
-import { roleOf } from "./show-me-rules.js";
+import { roleOf, COLOR_SPLIT_TYPES } from "./show-me-rules.js";
 import { sizeChannel } from "./mark-channel-model.js";
 import { colourDimensions, MULTI_COLOUR_TYPES } from "./colour-fields-model.js";
 import { checkFilter, serverFilter } from "./filter-rules.js";
@@ -138,6 +138,23 @@ export function sizeDimensionOf(sheet) {
 export function sizeKeyIndex(sheet) {
   const f = sizeDimensionOf(sheet);
   return f ? planDims(sheet).keyOrder.findIndex((k) => sameColumn(k, f)) : -1;
+}
+
+/**
+ * How many trailing group-by keys are Detail dimensions that split each mark instead of adding a category (Tableau: Detail "preserves table structure").
+ * On a bar / stacked / line / area with one measure and no Colour, Size, Path, Tooltip fields, tooltip text, analytics or comparison range, the Detail keys are the LAST keys, so the Colour split machinery
+ * can draw them: one stacked segment (bar) or one line per member inside the unchanged categories, every one in the same colour, no legend. 0 = Detail
+ * stays an ordinary extra category (several measures, a Colour or Size dimension, other chart types).
+ */
+export function detailSplitCount(sheet) {
+  const detail = marksOf(sheet).detail ?? [];
+  if (!detail.length || !COLOR_SPLIT_TYPES.has(sheet.chartType)) return 0;
+  const m = marksOf(sheet);
+  // The split draws only the split's own channels (renderColorSplit): a sheet that also uses anything else keeps the series renderer, which draws them.
+  if (planDims(sheet).colourDims.length || colorMode(sheet) !== "none" || m.size || m.path || (m.tooltip ?? []).length || sheet.tooltipText) return 0;
+  if (sheet.analytics || (sheet.period && sheet.period.compare && sheet.period.compare !== "none")) return 0; // reference line, band, trend, forecast, a comparison range
+  if (planMeasures(sheet).filter((e) => e.role === "shelf").length !== 1) return 0;
+  return detail.length;
 }
 
 /** Group-by dimensions in SELECT key order: [drill?, rows-dims, cols-dims, Detail-dims, Size-dim, Shape-dim, discrete-Color]. Discrete Colour stays last. */

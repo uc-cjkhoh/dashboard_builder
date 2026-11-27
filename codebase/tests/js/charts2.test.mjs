@@ -214,3 +214,26 @@ test("workbook: markBorderColor optional, validated, rejected not clamped", () =
   const old = roundTrip({ markBorder: "thin" });
   assert.equal(old.issues.length, 0); assert.equal(old.worksheets[0].sheet.format.markBorderColor, undefined);
 });
+
+test("buildCartesian: detailStack stacks a bar's Detail members in one colour with no legend; without it members get palette colours and a legend", () => {
+  const two = [S("x"), S("y")];
+  const plain = build("bar", {}, two);
+  const detail = build("bar", {}, two, { detailStack: true });
+  assert.ok(plain.legend, "several series name themselves in a legend");
+  assert.equal(detail.legend, undefined, "Detail members are not a colour: no legend");
+  assert.ok(detail.series.every((s) => s.stack === "total"), "the members stack inside the one bar");
+  assert.ok(plain.series.every((s) => s.stack === undefined));
+  assert.equal(detail.series[0].itemStyle.color, detail.series[1].itemStyle.color, "one colour for every member");
+  assert.equal(detail.series[0].itemStyle.borderWidth, 1, "a surface stroke separates the segments");
+  assert.deepEqual(detail.xAxis.data ?? detail.yAxis.data, ["a", "b", "c"], "the categories are unchanged");
+});
+test("buildCartesian: detailStack gives a line one same-coloured line per member", () => {
+  const o = build("line", {}, [S("x"), S("y")], { detailStack: true });
+  assert.equal(o.series.length, 2);
+  assert.equal(o.series[0].lineStyle.color, o.series[1].lineStyle.color);
+  assert.equal(o.legend, undefined);
+});
+test("buildCartesian: detailStack puts a bar's split labels inside its segments", () => {
+  const o = build("bar", { dataLabels: true }, [S("x"), S("y")], { detailStack: true, seriesLabels: [["1", "2", "3"], ["4", "5", "6"]] });
+  assert.equal(o.series[0].label.position, "inside");
+});

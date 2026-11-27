@@ -58,8 +58,8 @@ export function lineMarkersSpec(rc, sheet, format, rawKeys) {
   return { spec: { selectedMarks: selectedIndicesOf(rawKeys, rc.selected ?? sheet.selection ?? null, dim) }, note };
 }
 
-/** Colour split: one series per colour value (the trailing group-by key); the primary dimension is the first non-colour key. */
-export function renderColorSplit(container, rc, sheet, type, result, format, fmtCat, sizeIdx = -1, colourKeys = 1) {
+/** Colour split: one series per colour value (the trailing group-by key); the primary dimension is the first non-colour key. `detail`: the trailing keys are Detail dimensions, not Colour: the series share one colour and the legend stays off (chart.js `detailStack`). */
+export function renderColorSplit(container, rc, sheet, type, result, format, fmtCat, sizeIdx = -1, colourKeys = 1, detail = false) {
   const sizeNote = splitSizeNote(Boolean(marksOf(sheet).size), type); // a Stacked split can't draw Size: say so
   if (sizeNote) container.append(hint(sizeNote));
   const { categories, series, catTuples, memberRaws, cellRows } = colorSplitData(result, fmtCat, colourKeys);
@@ -99,7 +99,7 @@ export function renderColorSplit(container, rc, sheet, type, result, format, fmt
   const measureName = result.measures[0];
   rc.hooks.onLabelFields?.(sheet, tooltipCatalog(splitFields, [measureName], [makeValueFormatter(format)(result.rows[0]?.values[0])], [result.rows[0]?.values[0]]));
   const labelSpec = labelTextOf(format) ? { labelText: labelTextOf(format), labelFields: splitFields.map((f) => ({ name: f.name, grid: true, values: sizeGridOf({ cellRows }, f.values) })), labelMeasure: measureName } : {};
-  drawChart(container, { type, categories, series, format, onSelect, selectedIndices, orientation, seriesLabels, ...labelSpec, ...sizeSpec, ...memberColourSpec, ...legend, ...lm.spec, ...lk.spec, ...tooltipButtonsSpec(rc, sheet, primaryDim(sheet), type, rawKeys, format, container) });
+  drawChart(container, { type, categories, series, format, onSelect, selectedIndices, orientation, seriesLabels, ...(detail ? { detailStack: true } : {}), ...labelSpec, ...sizeSpec, ...memberColourSpec, ...legend, ...lm.spec, ...lk.spec, ...tooltipButtonsSpec(rc, sheet, primaryDim(sheet), type, rawKeys, format, container) });
 }
 
 /**

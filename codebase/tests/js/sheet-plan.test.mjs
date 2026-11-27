@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildPlan, planDims, planMeasures, sortTargets, fieldId, measureName, periodFilters, isDateOnlyType, colorMode, pagesFilter, drillPathFilters, involvedTables, selectionFilter, keyOf, isDisaggregated, DISAGGREGATE_TYPES }
+import { detailSplitCount, buildPlan, planDims, planMeasures, sortTargets, fieldId, measureName, periodFilters, isDateOnlyType, colorMode, pagesFilter, drillPathFilters, involvedTables, selectionFilter, keyOf, isDisaggregated, DISAGGREGATE_TYPES }
   from "../../src/DashboardBuilder/Features/Dashboard/sheet-plan.js";
 
 // The plan reads only its explicit context: two contexts side by side never touch each other.
@@ -226,4 +226,35 @@ test("disaggregate: a Top-N counts groups, so it does not cut the rows; aggregat
   const fmt = { topN: 20 };
   assert.equal(buildPlan(scatter({ disaggregate: true, format: fmt }), undefined, mkCtx()).limit, 5000);
   assert.equal(buildPlan(scatter({ format: fmt }), undefined, mkCtx()).limit, 20);
+});
+
+test("detailSplitCount: Detail members split a one-measure bar / line inside the unchanged categories", () => {
+  const base = { columns: [dim("orders", "region")], rows: [meas("orders", "id")], marks: { ...sheet().marks, detail: [dim("orders", "channel")] } };
+  assert.equal(detailSplitCount(sheet(base)), 1);
+  assert.equal(detailSplitCount(sheet({ ...base, chartType: "stacked" })), 1);
+  assert.equal(detailSplitCount(sheet({ ...base, chartType: "line" })), 1);
+  assert.deepEqual(planDims(sheet(base)).keyOrder.map((f) => f.column), ["region", "channel"]); // the Detail key is the last key: the split reads it as its series key
+});
+test("detailSplitCount: 0 with no Detail, several measures, a Colour or Size dimension, or a chart type that cannot split", () => {
+  const detail = [dim("orders", "channel")];
+  const marks = { ...sheet().marks, detail };
+  const base = { columns: [dim("orders", "region")], rows: [meas("orders", "id")], marks };
+  assert.equal(detailSplitCount(sheet({ ...base, marks: sheet().marks })), 0);
+  assert.equal(detailSplitCount(sheet({ ...base, rows: [meas("orders", "id"), meas("orders", "qty")] })), 0);
+  assert.equal(detailSplitCount(sheet({ ...base, color: [dim("orders", "country")] })), 0);
+  assert.equal(detailSplitCount(sheet({ ...base, marks: { ...marks, size: dim("orders", "country") } })), 0);
+  assert.equal(detailSplitCount(sheet({ ...base, chartType: "scatter" })), 0);
+  assert.equal(detailSplitCount(sheet({ ...base, chartType: "pie" })), 0);
+});
+test("detailSplitCount: 0 when a channel the split does not draw is in use (Size measure, continuous Colour, Path, Tooltip, tooltip text, analytics, comparison)", () => {
+  const marks = { ...sheet().marks, detail: [dim("orders", "channel")] };
+  const base = { columns: [dim("orders", "region")], rows: [meas("orders", "id")], marks };
+  assert.equal(detailSplitCount(sheet(base)), 1);
+  assert.equal(detailSplitCount(sheet({ ...base, marks: { ...marks, size: meas("orders", "qty") } })), 0);
+  assert.equal(detailSplitCount(sheet({ ...base, color: [meas("orders", "qty")] })), 0);
+  assert.equal(detailSplitCount(sheet({ ...base, marks: { ...marks, path: dim("orders", "placed") } })), 0);
+  assert.equal(detailSplitCount(sheet({ ...base, marks: { ...marks, tooltip: [dim("orders", "country")] } })), 0);
+  assert.equal(detailSplitCount(sheet({ ...base, tooltipText: "x" })), 0);
+  assert.equal(detailSplitCount(sheet({ ...base, analytics: { ref: { kind: "average" } } })), 0);
+  assert.equal(detailSplitCount(sheet({ ...base, period: { compare: "previous" } })), 0);
 });
