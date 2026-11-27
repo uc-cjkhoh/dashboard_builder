@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { tooltipHtml, lookupFrom } from "../../src/DashboardBuilder/Features/Dashboard/tooltip-model.js";
-import { TIP_SIZES, TIP_COLOURS, checkTooltipStyle, toLines, fromLines, moveLine, styleAfterTextEdit, addLine, removeLine, insertField }
+import { TIP_SIZES, TIP_COLOURS, TIP_FONTS, TIP_ALIGNS, lineStyleCss, lineIsBlock, checkTooltipStyle, toLines, fromLines, moveLine, styleAfterTextEdit, addLine, removeLine, insertField }
   from "../../src/DashboardBuilder/Features/Dashboard/tooltip-style.js";
 import { LIMITS } from "../../src/DashboardBuilder/Features/Core/validate.js";
 import { sanitizeSheet } from "../../src/DashboardBuilder/Features/Workbook/workbook-model.js";
@@ -85,4 +85,36 @@ test("styleAfterTextEdit keeps the style by index only when the line count is un
   assert.equal(styleAfterTextEdit("a\nb", "c", st), null);
   assert.equal(styleAfterTextEdit("a", "a\nb", st), null);
   assert.equal(styleAfterTextEdit("a", "b", null), null);
+});
+
+test("font, underline and alignment: validated, left alignment is the default and never stored", () => {
+  assert.deepEqual(checkTooltipStyle([{ font: "ms-arial", underline: true, align: "center" }]), { ok: true, value: [{ font: "ms-arial", underline: true, align: "center" }] });
+  assert.deepEqual(checkTooltipStyle([{ align: "left" }]), { ok: true, value: null });
+  assert.deepEqual(checkTooltipStyle([{ underline: false }]), { ok: true, value: null });
+  for (const bad of [{ font: "comic" }, { font: "default" }, { font: 3 }, { align: "justify" }, { underline: "yes" }]) assert.equal(checkTooltipStyle([bad]).ok, false, JSON.stringify(bad));
+  assert.ok(TIP_FONTS.length >= 16 && TIP_FONTS.every(([k]) => k !== "default"));
+  assert.deepEqual(TIP_ALIGNS, ["left", "center", "right"]);
+});
+test("lineStyleCss: font, underline and alignment come only from the whitelists", () => {
+  assert.equal(lineStyleCss({ font: "serif", underline: true, align: "right" }), "font-family:var(--font-serif);text-align:right;text-decoration:underline");
+  assert.equal(lineStyleCss({ font: "evil;color:red" }), "");
+  assert.equal(lineStyleCss({ align: "left" }), "");
+  assert.equal(lineIsBlock({ align: "center" }), true);
+  assert.equal(lineIsBlock({ bold: true }), false);
+});
+test("tooltipHtml: an aligned line is a block, and a <br> goes only between two inline lines", () => {
+  const look = lookupFrom({ a: "1" });
+  assert.equal(tooltipHtml("x\ny", look), "x<br>y"); // unchanged without alignment
+  assert.equal(tooltipHtml("x\n<a>\nz", look, [null, { align: "center" }]), 'x<div style="text-align:center"><b>1</b></div>z');
+  assert.equal(tooltipHtml("x\n\nz", look, [null, { align: "right" }]), 'x<div style="text-align:right">&#8203;</div>z');
+  assert.equal(tooltipHtml("p\nq\nr", look, [{ align: "right" }, null, null]), '<div style="text-align:right">p</div>q<br>r');
+});
+test("a saved tooltip with the new line-style keys survives import", () => {
+  const sheet = sanitizeSheet({ tooltipText: "a\nb", tooltipStyle: [{ align: "center", underline: true }, { font: "ms-calibri" }] }, "S", []);
+  assert.deepEqual(sheet.tooltipStyle, [{ underline: true, align: "center" }, { font: "ms-calibri" }]);
+});
+test("every tooltip font has its token in core.css (the style is a var(--font-<key>) reference)", async () => {
+  const { readFileSync } = await import("node:fs");
+  const css = readFileSync(new URL("../../src/DashboardBuilder/Features/Core/core.css", import.meta.url), "utf8");
+  for (const [k] of TIP_FONTS) assert.match(css, new RegExp(`--font-${k}:\\s*[^;]+;`), k);
 });

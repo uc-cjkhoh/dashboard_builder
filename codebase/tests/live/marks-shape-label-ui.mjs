@@ -203,7 +203,7 @@ try {
     await ensure('Shape bins');
     await waitFor(`!!(${fmtField('Shape bins')})`, 'the Shape bins control');
     must(await ev(`[...${fmtField('Shape bins')}.querySelectorAll('option')].map((o) => o.value).join(',')`) === '2,3,4,5,6', 'two to six');
-    must(await ev(`!document.querySelector('.ws-memcol__toggle') || ![...document.querySelectorAll('.ws-memcol__toggle')].some((t) => /shapes/.test(t.textContent))`), 'no member shapes while Shape holds a measure');
+    must(await ev(`!document.querySelector('.ws-memshape__open')`), 'no member shapes while Shape holds a measure');
     await setSelect('Shape bins', '3'); await settle(600);
     const o = await opt();
     must(o.series.length === 3 && distinct(o.series.map((s) => s.symbol)) === 3, 'three bins: ' + J(o.series.map((s) => s.name)));
@@ -228,28 +228,32 @@ try {
   await settle(400);
   await chartType('Scatter');
   await dragChip('region', toolEl('Shape')); await settle(600);
-  await check('a dimension on Shape: Edit member shapes lists the members; a pick changes that member\'s symbol and its legend icon; Reset and Reset all undo it', async () => {
+  await check('a dimension on Shape: Edit shapes… opens the Edit Shape dialog; a pick changes that member\'s symbol and its legend icon; Reset undoes it', async () => {
     const before = (await opt()).series.map((s) => s.symbol);
-    must(before.length === 8 && distinct(before) === 7, 'a symbol per member (seven symbols, the eighth repeats): ' + J(before));
+    must(before.length === 8 && distinct(before) === 8, 'a distinct default symbol per member (the Default palette has ten): ' + J(before));
     await ensure('Marker shape');
-    await waitFor(`[...document.querySelectorAll('.ws-memcol__toggle')].some((t) => /member shapes/.test(t.textContent) && !t.disabled)`, 'the member shapes editor is enabled');
+    await waitFor(`!!document.querySelector('.ws-memshape__open') && !document.querySelector('.ws-memshape__open').disabled`, 'the Edit shapes button is enabled');
     must(await ev(`!(${fmtField('Shape bins')})`), 'no bins control for a dimension');
-    await ev(`[...document.querySelectorAll('.ws-memcol__toggle')].find((t) => /member shapes/.test(t.textContent)).click()`);
-    const rows = `[...document.querySelectorAll('.ws-memcol__body')].find((x) => x.querySelector('.ws-memcol__swatch svg')).querySelectorAll('.ws-memcol__row')`;
-    must(await ev(`${rows}.length`) === 8, 'eight member rows');
-    must(await ev(`${rows}[0].querySelectorAll('.ws-memcol__swatch').length`) === 7, 'seven shapes to pick from');
-    must(await ev(`[...${rows}[0].querySelectorAll('.ws-memcol__swatch')].every((s) => s.title && s.getAttribute('aria-label'))`), 'each shape is named, not just drawn');
+    const dlg = `document.querySelector('dialog.shapedlg[open]')`;
+    await ev(`document.querySelector('.ws-memshape__open').click()`);
+    await waitFor(`${dlg} !== null`, 'the Edit Shape dialog');
+    must(await ev(`${dlg}.querySelectorAll('.shapedlg__item').length`) === 8, 'eight members listed');
+    must(await ev(`${dlg}.querySelectorAll('.shapedlg__shape').length`) === 10, 'the ten shapes of the Default palette');
+    must(await ev(`[...${dlg}.querySelectorAll('.shapedlg__shape')].every((s) => s.title && s.getAttribute('aria-label'))`), 'each shape is named, not just drawn');
     await shot('member-shapes-open');
-    await ev(`${rows}[1].querySelectorAll('.ws-memcol__swatch')[5].click()`); await settle(500); // Pin
+    await ev(`${dlg}.querySelectorAll('.shapedlg__item')[1].click()`); // select EU, then give it the Pin
+    await ev(`${dlg}.querySelector('.shapedlg__shape[data-shape="pin"]').click()`);
+    must(J((await opt()).series.map((s) => s.symbol)) === J(before), 'nothing is drawn before OK');
+    await ev(`${dlg}.querySelector('.btn--primary').click()`); await settle(500);
     const after = (await opt()).series.map((s) => s.symbol);
     must(after[1] === 'pin' && after.filter((x, i) => i !== 1).join() === before.filter((x, i) => i !== 1).join(), 'only that member changed: ' + J([before, after]));
     must((await opt()).legend[0].data[1].icon === 'pin' && (await opt()).legend[0].data[0].icon === before[0], 'the legend icon wears the chosen symbol: ' + J((await opt()).legend[0].data.slice(0, 2)));
-    must(await ev(`${rows}[1].querySelectorAll('.ws-memcol__swatch')[5].getAttribute('aria-pressed')`) === 'true', 'the picked shape is marked pressed');
-    await ev(`${rows}[1].querySelector('.ws-memcol__reset').click()`); await settle(500);
-    must(J((await opt()).series.map((s) => s.symbol)) === J(before), 'Reset restores the automatic symbol');
-    await ev(`${rows}[2].querySelectorAll('.ws-memcol__swatch')[6].click()`); await settle(400);
-    await ev(`[...document.querySelectorAll('.ws-memcol__clear')].pop().click()`); await settle(500);
-    must(J((await opt()).series.map((s) => s.symbol)) === J(before), 'Reset all restores them');
+    await ev(`document.querySelector('.ws-memshape__open').click()`);
+    await waitFor(`${dlg} !== null`, 'reopened');
+    await ev(`${dlg}.querySelectorAll('.shapedlg__item')[1].click()`);
+    must(await ev(`${dlg}.querySelector('.shapedlg__shape[data-shape="pin"]').getAttribute('aria-pressed')`) === 'true', 'the picked shape is marked pressed');
+    await ev(`${dlg}.querySelector('.shapedlg__reset').click()`); await ev(`${dlg}.querySelector('.btn--primary').click()`); await settle(500);
+    must(J((await opt()).series.map((s) => s.symbol)) === J(before), 'Reset restores the automatic symbols');
     await closeAll();
   });
 

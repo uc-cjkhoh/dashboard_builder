@@ -32,16 +32,17 @@ import { CF_MODE_CHOICES, CF_SCALE_CHOICES, CF_OP_CHOICES, CF_TONE_CHOICES, CF_M
 import { templateError, buildActionUrl, applyParamAction, MAX_LABEL, MAX_TEMPLATE } from "./action-model.js";
 import { DATE_PART_CHOICES, stepPart } from "./date-parts.js";
 import { CALC_CHOICES, ALONG_CHOICES, WINDOW_CHOICES, RANK_ORDERS, RANK_TIES, isCalc, calcName } from "./table-calc.js";
-import { tooltipHtml, checkTooltipText, parseTooltip } from "./tooltip-model.js";
+import { checkTooltipText } from "./tooltip-model.js";
 import { openTooltipDialog } from "./tooltip-dialog.js";
-import { checkTooltipStyle, styleAfterTextEdit } from "./tooltip-style.js";
-import { checkTooltipFormats, sampleLookup, pruneFormats } from "./tooltip-formats.js";
-import { memberKey, fieldColorKey } from "./colour-model.js";
-import { SHAPE_CHOICES, SHAPE_BINS_MIN, SHAPE_BINS_MAX, shapeBinsOf, cleanShapeBins, setMemberShape, clearFieldShapes } from "./shape-model.js";
+import { checkTooltipStyle } from "./tooltip-style.js";
+import { checkTooltipFormats } from "./tooltip-formats.js";
+import { fieldColorKey } from "./colour-model.js";
+import { SHAPE_BINS_MIN, SHAPE_BINS_MAX, shapeBinsOf, cleanShapeBins } from "./shape-model.js";
+import { openShapeDialog } from "./shape-dialog.js";
 import { applyToggle, applyAll, allMessage, MAX_COLLAPSED } from "./collapse-model.js";
 import { LINE_STYLE_CHOICES, linesTakeStyle } from "./line-style-model.js";
 import { wireLineControls, lineKeysFor } from "./line-controls.js";
-import { wireTooltipControls, tooltipKeysFor } from "./tooltip-controls.js";
+import { buttonGate, buttonNote, gateInputs } from "./tooltip-behaviour-model.js";
 import { flyoutSections } from "./marks-flyout-model.js";
 import { sizeMeterLabel, sizeMeterStops } from "./element-size-model.js";
 import { HEATMAP_SHAPE_CHOICES } from "./heatmap-model.js";
@@ -55,7 +56,7 @@ import { COL_ALIGN_CHOICES, tableColumnList, setTableColumn, columnLook, columnW
 import { sizeChannel, shapeChannel } from "./mark-channel-model.js";
 import { colourFlyoutGroups, colourScaleShown } from "./colour-flyout-model.js";
 import { openLabelTextDialog } from "./label-text-dialog.js";
-import { LABEL_FONT_GROUPS, LABEL_SIZE_CHOICES, LABEL_ALIGN_CHOICES, labelTextOf, cleanLabelText, labelFontOf, cleanLabelFont, labelAlignOf, cleanLabelAlign } from "./label-appearance-model.js";
+import { LABEL_FONT_GROUPS, LABEL_FONT_AUTO_SIZE, LABEL_ALIGN_CHOICES, labelTextOf, cleanLabelText, labelFontOf, cleanLabelFont, labelAlignOf, cleanLabelAlign } from "./label-appearance-model.js";
 import { LABEL_TILE_ORDER, LABEL_TYPES, LABEL_MARK_CHOICES, LABEL_POSITION_CHOICES, labelContext, labelModesFor, labelMarksOf, effectiveLabelMode, cleanLabelMarks, labelPositionsFor, labelPositionOf, cleanLabelPosition, labelOverlapOf, cleanLabelOverlap } from "./label-marks-model.js";
 import { PAGE_SPEEDS, pageSpeedOf, pageIntervalMs, cleanPageSpeed } from "./pages-speed-model.js";
 import { MARK_BORDER_STOPS, borderWidthOf, storedBorder, MARKER_SHAPE_CHOICES, MARK_BORDER_COLOUR_CHOICES, MARKER_SIZE_AUTO } from "./mark-style-model.js";
@@ -2427,7 +2428,8 @@ export function initDashboards() {
         hint: "Drop dimensions to add mark granularity (no visual channel)" },
       { key: "tooltip", icon: "tooltip", label: "Tooltip", count: (m.tooltip ?? []).length,
         pills: (m.tooltip ?? []).map((f, i) => markPill(f, () => { m.tooltip.splice(i, 1); commit(dash, s); })), onDrop: (f) => addMarkList(dash, "tooltip", f),
-        hint: "Drop fields to list in each mark's tooltip", editor: openTool === "tooltip" ? tileEditor(dash, s, "tooltip") : null },
+        hint: "Drop fields to list in each mark's tooltip", editor: openTool === "tooltip" ? tileEditor(dash, s, "tooltip") : null,
+        noSlot: true }, // the flyout is the Edit tooltip button alone: no drop row (the tile itself still takes a dropped field)
       { key: "shape", icon: "shape", label: "Shape", count: m.shape ? 1 : 0,
         pills: one(m.shape, () => { m.shape = null; commit(dash, s); }), onDrop: (f) => addShape(dash, f),
         hint: "Drop a categorical field for per-value point symbols, or a measure to bin its values into symbols (scatter)",
@@ -2505,6 +2507,7 @@ export function initDashboards() {
     close.addEventListener("click", () => closeFly());
     head.append(close);
     panel.append(head);
+    if (tool.noSlot) { if (tool.editor) panel.append(tool.editor); return panel; } // no field slot: the editor is the whole flyout
     const zone = el("div", "ws-toolpanel__zone"); // the dashed drop target holds the pills only (none, no zone)
     for (const p of tool.pills) zone.append(p);
     const slot = slotSection(tool.pills.length ? zone : addFieldRow(tool)); // before a drop the slot is the Drop Field Here row (a target only, no list, D156); once it holds a field, only the pills' zone
@@ -2565,11 +2568,10 @@ export function initDashboards() {
   new ResizeObserver(placeFly).observe(fieldsEl);
 
   // --- Tooltip text ---------------------------------------------
-  // The fields the last drawn chart offers ([{ name, sample }]) — the editor's chips and live preview.
+  // The fields the last drawn chart offers ([{ name, sample }]) — the Edit tooltip modal's Insert menu and live preview.
   // Keyed by sheet and cleared at the start of each drawing (worksheet-render.js), so it only ever holds the drawn view's fields.
   let tooltipCatState = { sheet: null, list: [] };
-  let tooltipRedraw = null; // the open editor's chip/preview redraw (the chart may finish after the panel opened)
-  const setTooltipCat = (sheet, list) => { tooltipCatState = { sheet, list }; tooltipRedraw?.(); };
+  const setTooltipCat = (sheet, list) => { tooltipCatState = { sheet, list }; };
   // The fields the last drawn chart offers a label template (Label flyout → Text): the same shape as the tooltip's, kept apart because a chart the tooltip template cannot reach (a colour split) still has labels.
   let labelCatState = { sheet: null, list: [] };
   const setLabelCat = (sheet, list) => { labelCatState = { sheet, list }; };
@@ -2596,79 +2598,36 @@ export function initDashboards() {
     wrap.append(row);
     return wrap;
   }
+  // The Tooltip flyout holds one button: "Edit tooltip…" opens the Edit Tooltip modal (tooltip-dialog.js), which owns the text, its formatting, the field formats and the behaviour
+  // (Show tooltips, mode, command buttons) as one draft and commits once on OK. The Tooltip card's own fields (marks.tooltip) are listed, and removable, inside that modal.
   function tooltipEditor(dash, s) {
-    const cat = () => (tooltipCatState.sheet === s ? tooltipCatState.list : []);
     const box = el("div", "ws-tipedit");
-    const head = el("div", "ws-tipedit__head"); // the label, with the full editor one click away at its right
-    head.append(el("span", "ws-fmt-label", "Tooltip text"));
-    const ta = el("textarea", "input ws-tipedit__text");
-    ta.setAttribute("aria-label", "Tooltip text");
-    ta.rows = 3;
-    ta.maxLength = LIMITS.tooltipText;
-    ta.placeholder = "Sales for <field>: <measure> — empty keeps the automatic tooltip";
-    ta.value = s.tooltipText ?? "";
-    box.append(head, ta);
-    const chips = el("div", "ws-tipedit__chips");
-    const drawChips = () => {
-    chips.replaceChildren();
-    for (const f of cat()) {
-      const b = el("button", "btn btn--ghost ws-tipedit__chip", f.name);
-      b.type = "button";
-      b.title = `Insert <${f.name}>`;
-      b.addEventListener("click", () => {
-        const a = ta.selectionStart ?? ta.value.length, z = ta.selectionEnd ?? a;
-        ta.value = `${ta.value.slice(0, a)}<${f.name}>${ta.value.slice(z)}`.slice(0, LIMITS.tooltipText);
-        ta.focus(); refresh(); save();
-      });
-      chips.append(b);
-    }
-    if (!cat().length) chips.append(el("span", "ws-shelf__note", "Add fields to the view to insert them."));
-    };
-    box.append(chips);
-    const preview = el("div", "ws-tipedit__preview");
-    preview.setAttribute("aria-label", "Tooltip preview");
-    const note = el("span", "ws-shelf__note");
-    const refresh = () => {
-      const r = checkTooltipText(ta.value);
-      const sample = sampleLookup(cat(), s.tooltipFormats, s.format);
-      preview.innerHTML = r.ok && r.value ? tooltipHtml(r.value, sample, s.tooltipStyle) : ""; // escaped parts only (tooltip-model.js)
-      if (!r.ok || !r.value) preview.textContent = "Automatic tooltip";
-      const unknown = r.ok && r.value ? parseTooltip(r.value).fields.filter((n) => sample(n) === undefined) : [];
-      note.title = "Automatic tooltip kept on Table, Text, KPI, Heatmap, Treemap, discrete-colour splits, Scatter with Shape and the other special chart types";
-      note.textContent = r.ok ? `${ta.value.length}/${LIMITS.tooltipText} · automatic tooltip kept on special chart types${unknown.length ? ` · not in this view: ${unknown.map((n) => `<${n}>`).join(" ")}` : ""}` : r.error;
-    };
-    const save = () => {
-      const r = checkTooltipText(ta.value);
-      if (!r.ok || r.value === (s.tooltipText ?? null)) return;
-      const st = r.value ? styleAfterTextEdit(s.tooltipText, r.value, s.tooltipStyle) : null; // the line count changed -> the style is cleared
-      const cleared = s.tooltipStyle && !st;
-      s.tooltipText = r.value; if (st) s.tooltipStyle = st; else delete s.tooltipStyle;
-      const kept = r.value ? pruneFormats(s.tooltipFormats, parseTooltip(r.value).fields) : null;
-      if (kept) s.tooltipFormats = kept; else delete s.tooltipFormats;
-      if (cleared) note.textContent = "Line styles cleared — the number of lines changed."; else refresh();
-      commit(dash, s);
-    };
-    ta.addEventListener("input", refresh);
-    ta.addEventListener("change", save);
-    const modal = el("button", "ws-tipedit__modal", "Edit tooltip…");
+    const modal = el("button", "btn ws-tipedit__modal", "Edit tooltip\u2026");
     modal.type = "button";
-    modal.addEventListener("click", () => openTooltipDialog({
-      text: s.tooltipText ?? "", style: s.tooltipStyle ?? null, formats: s.tooltipFormats ?? null, format: s.format, fields: cat(),
-      onClose: () => document.querySelector(".ws-tipedit__modal")?.focus(),
-      onApply: ({ text, style, formats }) => { // one commit
-        const t = checkTooltipText(text), st = checkTooltipStyle(style), fm = checkTooltipFormats(formats);
-        if (!t.ok || !st.ok || !fm.ok) return;
-        const nextStyle = t.value ? st.value : null, nextFormats = t.value ? fm.value : null;
-        if (t.value === (s.tooltipText ?? null) && JSON.stringify(nextStyle) === JSON.stringify(s.tooltipStyle ?? null) && JSON.stringify(nextFormats) === JSON.stringify(s.tooltipFormats ?? null)) return;
-        s.tooltipText = t.value; if (nextStyle) s.tooltipStyle = nextStyle; else delete s.tooltipStyle;
-        if (nextFormats) s.tooltipFormats = nextFormats; else delete s.tooltipFormats; ta.value = t.value ?? ""; refresh(); commit(dash, s);
-      } }));
-    head.append(modal);
-    box.append(el("span", "ws-fmt-label", "Preview"), preview, note);
-    const redraw = () => { if (!box.isConnected) return; drawChips(); refresh(); };
-    tooltipRedraw = redraw;
-    drawChips();
-    refresh();
+    modal.addEventListener("click", () => {
+      const marks = s.marks?.tooltip ?? [];
+      const inputs = gateInputs(s);
+      openTooltipDialog({
+        text: s.tooltipText ?? "", style: s.tooltipStyle ?? null, formats: s.tooltipFormats ?? null, format: s.format ?? {},
+        getFields: () => (tooltipCatState.sheet === s ? tooltipCatState.list : []), // read when the Insert menu opens: the chart may finish drawing after the modal did
+        behaviour: CHART_LIKE.has(s.chartType) ? { type: s.chartType, gate: buttonGate(inputs), note: buttonNote(inputs) } : null,
+        markFields: marks.map((f) => nameOf(f)),
+        onClose: () => document.querySelector(".ws-tipedit__modal")?.focus(),
+        onApply: ({ text, style, formats, format, dropMarkFields }) => { // one commit
+          const t = checkTooltipText(text), st = checkTooltipStyle(style), fm = checkTooltipFormats(formats);
+          if (!t.ok || !st.ok || !fm.ok) return;
+          const nextStyle = t.value ? st.value : null, nextFormats = t.value ? fm.value : null;
+          const same = (a, z) => JSON.stringify(a ?? null) === JSON.stringify(z ?? null);
+          if (t.value === (s.tooltipText ?? null) && same(nextStyle, s.tooltipStyle) && same(nextFormats, s.tooltipFormats) && same(format, s.format ?? {}) && !dropMarkFields.length) return; // an untouched OK changes nothing: no redraw, no dirty workbook
+          s.tooltipText = t.value; if (t.value) { if (nextStyle) s.tooltipStyle = nextStyle; else delete s.tooltipStyle; } else { delete s.tooltipStyle; }
+          if (nextFormats) s.tooltipFormats = nextFormats; else delete s.tooltipFormats;
+          s.format = format;
+          for (const i of [...dropMarkFields].sort((x, y) => y - x)) s.marks?.tooltip?.splice(i, 1);
+          commit(dash, s);
+        },
+      });
+    });
+    box.append(modal);
     return box;
   }
 
@@ -2732,7 +2691,7 @@ export function initDashboards() {
     node.dataset.flyCtl = key;
     for (const x of node.querySelectorAll("select, input")) x.addEventListener("change", () => { flyFocus = key; flyFocusSub = x.getAttribute("aria-label"); }, true);
     for (const x of node.querySelectorAll('button.ws-swatch[aria-pressed="false"], button.ws-fmt-tile[aria-pressed="false"]')) x.addEventListener("click", () => { flyFocus = key; flyFocusSub = null; }, true);
-    for (const x of node.querySelectorAll("button.ws-fmt-bold")) x.addEventListener("click", () => { flyFocus = key; flyFocusSub = x.getAttribute("aria-label"); }, true);
+    for (const x of node.querySelectorAll("button.ws-fmt-bold, button.ws-fmt-step")) x.addEventListener("click", () => { flyFocus = key; flyFocusSub = x.getAttribute("aria-label"); }, true);
     return node;
   }
   function flySection(label, nodes = [], heading = false) {
@@ -2769,7 +2728,6 @@ export function initDashboards() {
       labelMarks: isChart && labelModesFor({ ...labelCtx, drawn: true }).length > 1,
       labelPosition: isChart && labelPositionsFor({ ...labelCtx, drawn: true }).length > 0,
       lineKeys: linesTakeStyle(s.chartType) ? lineKeysFor(s) : [],
-      tooltipKeys: isChart ? tooltipKeysFor(s) : [],
       pagesSet: Boolean(s.pages),
       periodSet: Boolean(s.period),
       compare: Boolean(s.period && s.period.compare !== "none"),
@@ -2858,9 +2816,7 @@ export function initDashboards() {
       period: () => [periodEditor(dash, s)],
       fallGood: () => [flyCtl("fallGood", fmtCheck("A fall is good", f.downIsGood, (v) => set({ downIsGood: v })))],
     };
-    return flyEditor(sections.map(({ label, keys, heading }) => flySection(label, label === "Behaviour"
-      ? wired("tooltip", (tmp) => wireTooltipControls(tmp, s, { fmtCheck, fmtSelect }, replaceFormat)) // Show tooltips, Command buttons, Tooltip mode (each says why when it does nothing)
-      : keys.flatMap((k) => build[k]()), heading)));
+    return flyEditor(sections.map(({ label, keys, heading }) => flySection(label, keys.flatMap((k) => build[k]()), heading)));
   }
   function colourEditor(dash, s) {
     panelScale = null; // set below when the flyout shows the colour-scale controls
@@ -2914,68 +2870,38 @@ export function initDashboards() {
     );
   }
   // --- Member shapes ------------------------------------------------
-  // The Shape members the last drawn chart gave a symbol ({ field, members: [{ name, raw }] }), kept like the member colours; the editor lists them and a
-  // pick stores a validated shape key in sheet.memberShapes (Dashboard/shape-model.js) and re-draws.
+  // The Shape members the last drawn chart gave a symbol ({ field, members: [{ name, raw }] }), kept like the member colours. "Edit shapes…" opens the Edit Shape dialog
+  // (shape-dialog.js): a symbol per member from a palette, staged in a draft; OK stores validated shape keys in sheet.memberShapes (Dashboard/shape-model.js) with one commit.
   let shapeState = { sheet: null, field: null, members: [] };
-  let shapeOpen = false;
   let shapeRedraw = null;
   const setShapeState = (sheet, field, members) => { shapeState = { sheet, field, members }; shapeRedraw?.(); };
-  const shapeGlyph = (d) => { // a filled 20-unit glyph in the ink colour (never colour alone: the shape is the message)
-    const NS = "http://www.w3.org/2000/svg", svg = document.createElementNS(NS, "svg"), p = document.createElementNS(NS, "path");
-    for (const [k, v] of Object.entries({ viewBox: "0 0 20 20", width: 12, height: 12, fill: "currentColor", "aria-hidden": "true" })) svg.setAttribute(k, String(v));
-    p.setAttribute("d", d); svg.append(p); svg.classList.add("ws-memcol__glyph-svg");
-    return svg;
-  };
   function memberShapeEditor(dash, s) {
-    const box = el("div", "ws-memcol");
-    const head = el("button", "btn btn--ghost ws-memcol__toggle"); head.type = "button";
-    const body = el("div", "ws-memcol__body");
+    const box = el("div", "ws-memshape");
+    const btn = el("button", "btn btn--ghost ws-memshape__open", "Edit shapes\u2026"); btn.type = "button";
     const draw = () => {
-      if (!box.isConnected && body.childElementCount) return;
+      if (!box.isConnected && btn.dataset.drawn) return;
+      btn.dataset.drawn = "1";
       const st = shapeState.sheet === s ? shapeState : { field: null, members: [] };
-      const fieldKey = st.field ? fieldColorKey(st.field) : "";
-      const shapes = Object.prototype.hasOwnProperty.call(s.memberShapes ?? {}, fieldKey) ? s.memberShapes[fieldKey] : {};
-      head.textContent = `${shapeOpen ? "Hide" : "Edit"} member shapes`;
-      head.setAttribute("aria-expanded", String(shapeOpen));
-      head.disabled = !st.field;
-      head.title = st.field ? "" : "Add a second measure (X and Y) to a point chart to give its Shape members a symbol";
-      body.hidden = !shapeOpen || !st.field;
-      body.replaceChildren();
-      if (body.hidden) return;
-      const store = (next) => { if (Object.keys(next).length) s.memberShapes = next; else delete s.memberShapes; commit(dash, s); }; // the key stays off the sheet when none is set
-      const pick = (m, key) => {
-        const r = setMemberShape(s.memberShapes, fieldKey, memberKey(m.raw), key);
-        if (!r.ok) { toast(r.error, "danger"); return; }
-        store(r.value);
-      };
-      for (const [mi, m] of st.members.slice(0, LIMITS.memberColors).entries()) {
-        const stored = Object.prototype.hasOwnProperty.call(shapes, memberKey(m.raw)) ? shapes[memberKey(m.raw)] : null;
-        const row = el("div", "ws-memcol__row");
-        const now = el("span", "ws-memcol__glyph"); now.title = "Its symbol now"; // the symbol the chart draws for this member: the chosen one, else the one at its position
-        now.append(shapeGlyph(SHAPE_CHOICES.find((c) => c[0] === (stored ?? SHAPE_CHOICES[mi % SHAPE_CHOICES.length][0]))[3]));
-        row.append(now, el("span", "ws-memcol__name", m.name));
-        const sw = el("span", "ws-memcol__swatches");
-        for (const [key, name, , path] of SHAPE_CHOICES) {
-          const b = el("button", "ws-memcol__swatch"); b.type = "button"; b.title = name;
-          b.setAttribute("aria-label", `Shape ${m.name} ${name}`); b.setAttribute("aria-pressed", String(stored === key));
-          b.append(shapeGlyph(path));
-          b.addEventListener("click", () => pick(m, key));
-          sw.append(b);
-        }
-        const reset = el("button", "btn btn--ghost ws-memcol__reset", "Reset"); reset.type = "button"; reset.disabled = stored === null;
-        reset.addEventListener("click", () => pick(m, null));
-        row.append(sw, reset);
-        body.append(row);
-      }
-      const count = Object.keys(shapes).length;
-      const clearAll = el("button", "btn btn--ghost ws-memcol__clear", `Reset all for this field (${count})`); clearAll.type = "button"; clearAll.disabled = !count;
-      clearAll.title = "Also removes shapes of members that are no longer in the view";
-      clearAll.addEventListener("click", () => store(clearFieldShapes(s.memberShapes, fieldKey).value));
-      body.append(clearAll);
-      if (st.members.length > LIMITS.memberColors) body.append(el("p", "ws-memcol__note", `Only the first ${LIMITS.memberColors} members can be given a shape.`));
+      btn.disabled = !st.field;
+      btn.title = st.field ? "" : "Add a second measure (X and Y) to a point chart to give its Shape members a symbol";
     };
-    head.addEventListener("click", () => { shapeOpen = !shapeOpen; draw(); });
-    box.append(head, body);
+    btn.addEventListener("click", () => {
+      const st = shapeState.sheet === s ? shapeState : null;
+      if (!st?.field) return;
+      openShapeDialog({
+        fieldKey: fieldColorKey(st.field), members: st.members.map((m) => ({ name: m.name, raw: m.raw })), current: s.memberShapes ?? {},
+        onClose: () => { // the commit rebuilds the flyout (after this returns): find the new button then, not the old node
+          const back = () => document.querySelector(".ws-memshape__open")?.focus({ preventScroll: true });
+          back(); requestAnimationFrame(back);
+        },
+        onSave: (map) => {
+          if (JSON.stringify(map) === JSON.stringify(s.memberShapes ?? {})) return;
+          if (Object.keys(map).length) s.memberShapes = map; else delete s.memberShapes; // the key stays off the sheet when none is set
+          commit(dash, s);
+        },
+      });
+    });
+    box.append(btn);
     shapeRedraw = draw;
     draw();
     return box;
@@ -3566,7 +3492,7 @@ function fmtTiles(labelText, options, current, onPick) {
   }
   return wrap;
 }
-// Label flyout → Font: family, size (Automatic, 14 px, 16 px) and bold in one row. `onPatch({ family?, size?, bold? })` commits the change.
+// Label flyout → Font: family, size (any whole px, typed or stepped with the arrows; empty = Automatic) and bold in one row. `onPatch({ family?, size?, bold? })` commits the change.
 function labelFontControl(f, onPatch) {
   const cur = labelFontOf(f);
   const wrap = el("div", "ws-fmt-field ws-fmt-font"); wrap.setAttribute("role", "group"); wrap.setAttribute("aria-label", "Font");
@@ -3582,12 +3508,32 @@ function labelFontControl(f, onPatch) {
     sel.addEventListener("change", () => pickIt(sel.value));
     return sel;
   };
+  // Size: a number field (empty = Automatic) with an up and a down arrow; the arrows start from the size a label draws at when it is Automatic.
+  const size = el("div", "ws-fmt-size");
+  const sizeIn = el("input", "input ws-fmt-input ws-fmt-size__input"); sizeIn.type = "number"; sizeIn.inputMode = "numeric";
+  sizeIn.min = String(LIMITS.labelFontMin); sizeIn.max = String(LIMITS.labelFontMax); sizeIn.step = "1";
+  sizeIn.placeholder = "Auto"; sizeIn.title = "Font size (px); empty keeps the automatic size"; sizeIn.setAttribute("aria-label", "Font size");
+  sizeIn.value = cur.size == null ? "" : String(cur.size);
+  sizeIn.addEventListener("change", () => {
+    const raw = sizeIn.value.trim();
+    const r = cleanLabelFont({ ...cur, size: raw === "" ? null : Number(raw) });
+    if (!r.ok) { toast(r.error, "danger"); sizeIn.value = cur.size == null ? "" : String(cur.size); return; } // out of range is refused, never clamped
+    onPatch({ size: raw === "" ? null : Number(raw) });
+  });
+  const stepBtn = (name, glyph, delta, disabled) => {
+    const b = el("button", "btn ws-fmt-step"); b.type = "button"; b.append(icon(glyph, { size: 20 }));
+    b.setAttribute("aria-label", name); b.title = name; b.disabled = disabled;
+    b.addEventListener("click", () => onPatch({ size: (cur.size ?? LABEL_FONT_AUTO_SIZE) + delta }));
+    return b;
+  };
+  const atMax = cur.size != null && cur.size >= LIMITS.labelFontMax, atMin = cur.size != null && cur.size <= LIMITS.labelFontMin;
+  size.append(sizeIn, stepBtn("Increase font size", "chevron-up", 1, atMax), stepBtn("Decrease font size", "chevron", -1, atMin));
   const bold = el("button", "btn btn--ghost ws-fmt-bold", "B"); bold.type = "button";
   bold.setAttribute("aria-label", "Bold"); bold.title = "Bold"; bold.setAttribute("aria-pressed", String(cur.bold));
   bold.addEventListener("click", () => onPatch({ bold: !cur.bold }));
   row.append(
     pick("Font family", LABEL_FONT_GROUPS, cur.family, (v) => onPatch({ family: v }), "ws-fmt-font__family"),
-    pick("Font size", [{ label: null, choices: LABEL_SIZE_CHOICES }], cur.size ?? "auto", (v) => onPatch({ size: v === "auto" ? null : Number(v) })),
+    size,
     bold,
   );
   wrap.append(row);

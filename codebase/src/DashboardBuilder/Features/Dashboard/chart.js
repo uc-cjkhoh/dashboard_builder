@@ -20,7 +20,7 @@ import { chartFit, markCount, applyFitMode, fitsWidth, rotatedLabelCap, FIT } fr
 import { applySelectionDim } from "./selection-dim.js";
 import { applyTooltipBehaviour } from "./tooltip-behaviour-model.js";
 import { wireTooltipCommands } from "./tooltip-commands.js";
-import { shapeSymbol, symbolAt } from "./shape-model.js";
+import { shapeSymbol, symbolAt, baseSymbolAt } from "./shape-model.js";
 import { labelMask, labelPositionSymbol, withLabelOverlap } from "./label-marks-model.js";
 import { sizeT, slotShare, withElementSize } from "./element-size-model.js";
 import { applyMarkOpacity, markOpacityOf, withAlpha, OPACITY_TYPES, ANALYTICS_ID } from "./mark-opacity-model.js";
@@ -521,7 +521,9 @@ export function buildCartesian({ type, categories, series, colorByCategory, form
   const markText = (si, di, base, v) => (labelFn ? labelFn(si, di, { valueText: base, measures: labelMeasure ? { [labelMeasure]: v } : Object.fromEntries(series.map((s2) => [String(s2.name), s2.data[di]])) }) : base);
   const baseText = (si, di, v) => ((pointLabels || seriesLabels) ? String(labelAt(si, di) ?? "") : fmtVal(v));
   const dataLabel = (si, onLine = false) => ((pointLabels || seriesLabels || format.dataLabels)
-    ? { show: !mask?.hover, position: (onLine && linePos) || (stackedBars && seriesLabels ? "inside" : labelPos), // only a colour split's Label sits inside its stack segment color: c.label, fontFamily: c.font, fontSize: 14,
+    ? { show: !mask?.hover, position: (onLine && linePos) || (stackedBars && seriesLabels ? "inside" : labelPos), // only a colour split's Label sits inside its stack segment
+        color: stackedBars && seriesLabels && !(onLine && linePos) ? pickInk(colorFor(si, series[si]?.name), [c.ink, c.surface, "#000000", "#ffffff"]) : c.label, // inside a segment: the ink with contrast against the segment's own colour
+        fontFamily: c.font, fontSize: 14, textBorderWidth: 0, // textBorderWidth 0: no light outline around the text (the halo ECharts draws when the colour is not set)
         ...labelStyle,
         formatter: (p) => (mask && !mask.at(si, p.dataIndex) ? "" : markText(si, p.dataIndex, baseText(si, p.dataIndex, p.value), p.value)) }
     : { show: false });
@@ -701,18 +703,18 @@ function addAnalytics(base, a, { c, fmtVal, horizontal, trendDash = "dotted" }) 
   if (a.ref) {
     s0.markLine = { silent: true, symbol: "none", animation: false,
       lineStyle: { color: c.ink, type: "dashed", width: 1.5 },
-      label: { formatter: `${a.ref.name}: ${fmtVal(a.ref.value)}`, color: c.label, fontFamily: c.font, position: "insideEndTop", distance: 6, backgroundColor: c.surface, padding: [2, 4], borderRadius: c.radius }, // sits above the line on a surface backing, never across it
+      label: { formatter: `${a.ref.name}: ${fmtVal(a.ref.value)}`, color: c.label, fontFamily: c.font, position: "insideEndTop", distance: 6 }, // sits above the line, never across it; no box behind the text
       data: [{ [axis]: a.ref.value }] };
   }
   if (a.band) {
     s0.markArea = { silent: true, animation: false, itemStyle: { color: c.grid, opacity: 0.7 },
-      label: { show: true, formatter: `${a.band.name ?? "Band"} ${fmtVal(a.band.from)}–${fmtVal(a.band.to)}`, color: c.muted, fontFamily: c.font, position: "insideTopLeft", backgroundColor: c.surface, padding: [2, 4], borderRadius: c.radius },
+      label: { show: true, formatter: `${a.band.name ?? "Band"} ${fmtVal(a.band.from)}–${fmtVal(a.band.to)}`, color: c.muted, fontFamily: c.font, position: "insideTopLeft" },
       data: [[{ [axis]: a.band.from }, { [axis]: a.band.to }]] };
   }
   if (a.trend) {
     base.series.push({ id: `${ANALYTICS_ID}trend`, name: a.trend.name, type: "line", data: a.trend.data, showSymbol: false, z: 4, animation: false,
       lineStyle: { width: 2, type: trendDash, color: c.muted }, itemStyle: { color: c.muted },
-      endLabel: { show: true, formatter: a.trend.short ?? a.trend.name, color: c.muted, backgroundColor: c.surface, padding: [2, 4], fontFamily: c.font, fontSize: 14 },
+      endLabel: { show: true, formatter: a.trend.short ?? a.trend.name, color: c.muted, fontFamily: c.font, fontSize: 14 },
       tooltip: { valueFormatter: fmtVal } });
     base.grid.right = (Number(base.grid.right) || 0) + Math.max(84, Math.ceil((a.trend.short ?? a.trend.name).length * 8) + 8); // room for the short end label (14px text, ~8px a character)
   }
@@ -765,7 +767,7 @@ function buildPie({ type, categories, series, format = {}, pointLabels, tooltipE
       radius: byValue ? (type === "donut" ? ["35%", "58%"] : "58%") : type === "donut" ? ["45%", "72%"] : "72%",
       center: legend && (pos === "left" || pos === "right") ? ["42%", byValue ? "46%" : "52%"] : ["50%", byValue ? "46%" : "54%"],
       data: markedData,
-      label: { show: showLabels && !mask?.hover, color: c.label, fontFamily: c.font, ...labelStyleOf(format, c.fontOf),
+      label: { show: showLabels && !mask?.hover, color: c.label, fontFamily: c.font, textBorderWidth: 0, ...labelStyleOf(format, c.fontOf),
         formatter: (p) => {
           const base = pointLabels ? String(pointLabels[p.dataIndex] ?? "") : `${fullName(p)}: ${fmtVal(p.value)}${fewSlices ? ` (${p.percent}%)` : ""}`;
           return labelFn ? labelFn(0, p.dataIndex, { valueText: base, measures: { [String(series[0].name)]: p.value, Percent: `${p.percent}%` } }) : base; // Label flyout → Text
@@ -841,7 +843,7 @@ function buildScatter({ categories, series, format = {}, sizes, sizeName, sizeMe
       type: "scatter", data, symbolSize, symbol: symbol || "circle", // square/circle marks
       itemStyle: { ...(continuous ? {} : { color: c.series, opacity: 0.8 }), ...pointEdge(format, c) },
       label: (pointLabels || format.dataLabels)
-        ? { show: !mask?.hover, position: labelPositionSymbol(format.labelPosition) ?? "top", color: c.muted, fontFamily: c.font, fontSize: 14, ...labelStyleOf(format, c.fontOf),
+        ? { show: !mask?.hover, position: labelPositionSymbol(format.labelPosition) ?? "top", color: c.muted, fontFamily: c.font, fontSize: 14, textBorderWidth: 0, ...labelStyleOf(format, c.fontOf),
             formatter: (p) => {
               if (mask && !mask.at(0, p.dataIndex)) return "";
               const base = pointLabels ? String(pointLabels[p.dataIndex] ?? "") : String(p.name ?? "");
@@ -867,7 +869,7 @@ function buildScatterShapes({ groups, symbol, xName, yName, hasSize, sizeName, s
   const symbolSize = hasSize ? sizeScaler(allSizes, (v) => v[2], { format, order: sizeOrder }) : markerSizeOr(format.markerSize, 12);
   const names = groups.map((g) => g.name);
   const { show, pos, legend } = legendFor(format, c, names, true);
-  const symbolOf = (g) => (g.shape ? (shapeName ? symbolAt(g.shape.index) : memberShapes.has(g.shape.name) ? shapeSymbol(memberShapes.get(g.shape.name)) : symbolAt(g.shape.index)) : symbol || "circle");
+  const symbolOf = (g) => (g.shape ? (shapeName ? baseSymbolAt(g.shape.index) : memberShapes.has(g.shape.name) ? shapeSymbol(memberShapes.get(g.shape.name)) : symbolAt(g.shape.index)) : symbol || "circle");
   const colourOf = (g, i) => (g.colour ? memberColor(g.colour.name, c.catAt(g.colour.index)) : c.catAt(i));
   if (legend && groups.some((g) => g.shape)) legend.data = groups.map((g) => (g.shape ? { name: g.name, icon: symbolOf(g) } : g.name)); // the legend swatch wears the symbol too
   const sizeNote = hasSize ? sizeLegend(allSizes, sizeName, c, fmtVal, show && pos === "top" ? 24 : 2, { order: sizeOrder, scale: sizeScaleOf(format), zeroDefault: true }) : null;
@@ -879,7 +881,7 @@ function buildScatterShapes({ groups, symbol, xName, yName, hasSize, sizeName, s
   const labelFn = labelTextResolver(labelText, labelFields, fmtVal, format);
   const labelOf = (g, mark) => (rowLabels && mark?.row != null ? String(rowLabels[mark.row] ?? "") : mark?.name || g.name);
   const seriesLabel = (g, si) => (labelled ? {
-    show: !mask?.hover, position: labelPos, color: c.muted, fontFamily: c.font, fontSize: 14, ...labelStyleOf(format, c.fontOf),
+    show: !mask?.hover, position: labelPos, color: c.muted, fontFamily: c.font, fontSize: 14, textBorderWidth: 0, ...labelStyleOf(format, c.fontOf),
     formatter: (p) => {
       if (mask && !mask.at(si, p.dataIndex)) return "";
       const mark = g.points[p.dataIndex], base = labelOf(g, mark);
@@ -916,7 +918,7 @@ function buildScatterShapes({ groups, symbol, xName, yName, hasSize, sizeName, s
       splitLine: { lineStyle: { color: c.grid } }, axisLabel: { color: c.muted, formatter: fmtVal },
     },
     series: groups.map((g, i) => ({
-      name: g.name, type: "scatter", symbol: g.shape || g.colour ? symbolOf(g) : symbolAt(i), symbolSize,
+      name: g.name, type: "scatter", symbol: g.shape || g.colour ? symbolOf(g) : baseSymbolAt(i), symbolSize,
       data: g.points, itemStyle: { color: colourOf(g, i), opacity: 0.85, ...pointEdge(format, c) },
       ...(labelled ? { label: seriesLabel(g, i) } : {}),
       emphasis: { focus: mask?.hover ? "self" : "series", itemStyle: { borderColor: c.ink, borderWidth: 1 }, ...(mask?.hover ? { label: { show: true } } : {}) }, // Highlighted: a label appears with its own mark's emphasis, so the focus is the mark, not the member

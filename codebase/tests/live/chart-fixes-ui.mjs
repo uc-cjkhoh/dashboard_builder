@@ -61,7 +61,7 @@ try {
       must(r[0] === true && r[1] === true, 'axes use scale: ' + JSON.stringify(r));
     });
 
-    await check(`${scheme}: reference line and band labels sit on a surface backing, the trend names its fit in words`, async () => {
+    await check(`${scheme}: reference line and band labels sit above their line with no box behind them, the trend names its fit in words`, async () => {
       await b.evaluate(`(() => { const h = ${host(640, 360)};
         const cats = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug'];
         window.__chart.renderChart(h, { type: 'line', categories: cats, format: {}, series: [{ name: 'sum quantity', data: [1700, 1500, 1800, 1200, 1900, 1100, 1600, 1750] }],
@@ -71,7 +71,7 @@ try {
       await wait();
       await b.screenshot(join(SHOTS, `analytics-${scheme}.png`));
       const o = await b.evaluate(`(() => { const s = window.echarts.getInstanceByDom(document.querySelector('#cf-host .ws-chart-canvas')).getOption().series[0]; return { line: s.markLine.label[0] ?? s.markLine.label, area: s.markArea.label[0] ?? s.markArea.label }; })()`);
-      must(o.line.backgroundColor && o.area.backgroundColor, 'labels carry a backing');
+      must(!o.line.backgroundColor && !o.area.backgroundColor, 'labels have no box behind the text');
       must((await texts()).some((x) => x.includes('poor fit (R² -0.12)')), 'trend says poor fit');
     });
 

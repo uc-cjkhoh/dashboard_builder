@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { flyoutSections, MARKER_TYPES } from "../../src/DashboardBuilder/Features/Dashboard/marks-flyout-model.js";
 
-const base = { chartType: "bar", isChart: true, heatmapCircle: false, sizeEdit: false, shapeBins: false, memberShapes: false, labelMarks: false, labelPosition: false, lineKeys: [], tooltipKeys: [], labelsDrawn: false, periodSet: false, compare: false, pagesSet: false };
+const base = { chartType: "bar", isChart: true, heatmapCircle: false, sizeEdit: false, shapeBins: false, memberShapes: false, labelMarks: false, labelPosition: false, lineKeys: [], labelsDrawn: false, periodSet: false, compare: false, pagesSet: false };
 const keys = (tool, i) => flyoutSections(tool, { ...base, ...i }).map((s) => `${s.label}:${s.keys.join("+")}`);
 
 test("a bar has the Size meter; with a drawn Size field the field sets the sizes, so Edit Sizes replaces the meter", () => {
@@ -39,13 +39,13 @@ test("Label: Show mark labels only on a chart; Label Appearance, Marks to Label 
   assert.deepEqual(keys("label", { labelChart: true }), ["Label:dataLabels", "Label Appearance:labelText+labelFont+labelAlign", "Options:labelOverlap"]); // offered, though nothing is drawn yet: the flyout disables them
 });
 test("Label: only the Label tile's sections carry a heading", () => {
-  const withHeading = (tool, i) => flyoutSections(tool, { chartType: "bar", isChart: true, tooltipKeys: [], lineKeys: [], ...i }).filter((s) => s.heading).map((s) => s.label);
+  const withHeading = (tool, i) => flyoutSections(tool, { chartType: "bar", isChart: true, lineKeys: [], ...i }).filter((s) => s.heading).map((s) => s.label);
   assert.deepEqual(withHeading("label", { labelChart: true, labelMarks: true, labelPosition: true }), ["Label Appearance", "Marks to Label", "Options"]);
-  for (const tool of ["size", "shape", "tooltip", "path", "pages", "period"]) assert.deepEqual(withHeading(tool, { sizeEdit: true, shapeBins: true, pagesSet: true, periodSet: true, tooltipKeys: ["showTooltips"] }), [], tool);
+  for (const tool of ["size", "shape", "tooltip", "path", "pages", "period"]) assert.deepEqual(withHeading(tool, { sizeEdit: true, shapeBins: true, pagesSet: true, periodSet: true }), [], tool);
 });
-test("Tooltip: the text always, Behaviour only with controls", () => {
+test("Tooltip: one control (the Edit tooltip button) on every chart type; the behaviour lives in the modal", () => {
   assert.deepEqual(keys("tooltip", { chartType: "table", isChart: false }), ["Text:text"]);
-  assert.deepEqual(keys("tooltip", { tooltipKeys: ["showTooltips", "tooltipButtons"] }), ["Text:text", "Behaviour:showTooltips+tooltipButtons"]);
+  assert.deepEqual(keys("tooltip", {}), ["Text:text"]);
 });
 test("Path: Line style on line, area and combo, Line pattern when offered", () => {
   assert.deepEqual(keys("path", { chartType: "combo", lineKeys: ["linePattern", "lineMarkers"] }), ["Line:lineStyle+linePattern"]);

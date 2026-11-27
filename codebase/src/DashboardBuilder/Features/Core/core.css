@@ -404,5 +404,3 @@ input[type="checkbox"], input[type="radio"] { margin: 0; }
 /* in print the table is set in 8pt (dashboard.css), so the steps scale relative to it: 16/14 and 24/14, not the screen px tokens */
 @media print { .xtab td.xt-fs-1 { font-size: 1.15em; } .xtab td.xt-fs-2 { font-size: 1.7em; } }
 /* ---- Edit member shapes: the symbol a member wears now, drawn in the ink colour beside its name (the colour editor's ring dot, without the ring) ---- */
-.ws-memcol__glyph { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; color: var(--ink); }
-.ws-memcol__swatch .ws-memcol__glyph-svg { display: block; margin: auto; }

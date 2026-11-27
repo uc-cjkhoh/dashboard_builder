@@ -33,7 +33,7 @@ test("defaults are not stored: blank text, <Value> alone, an all-default font, A
 test("bad values are reset to the default and reported, never clamped", () => {
   const long = roundTrip({ ...defaultFormat(), labelText: "x".repeat(LIMITS.labelText + 1) });
   assert.equal("labelText" in fmt(long), false); assert.equal(long.issues.filter((i) => /label text/.test(i)).length, 1);
-  for (const bad of [{ size: 15 }, { family: "comic" }, { bold: "yes" }, [], "big"]) {
+  for (const bad of [{ size: 7 }, { size: 200 }, { size: 12.5 }, { family: "comic" }, { bold: "yes" }, [], "big"]) {
     const r = roundTrip({ ...defaultFormat(), labelFont: bad });
     assert.equal("labelFont" in fmt(r), false, JSON.stringify(bad)); assert.equal(r.issues.filter((i) => /label font/.test(i)).length, 1, JSON.stringify(bad));
   }

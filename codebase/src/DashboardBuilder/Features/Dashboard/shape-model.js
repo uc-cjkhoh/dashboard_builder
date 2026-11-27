@@ -3,7 +3,7 @@
 import { LIMITS } from "../Core/validate.js";
 import { memberKey, bare, has } from "./colour-model.js";
 
-/** [key, name in words, ECharts symbol, glyph path on a 20-unit grid] — the seven symbols a Shape member or bin can wear, in the order they are handed out. */
+/** [key, name in words, ECharts symbol, glyph path on a 20-unit grid] — the seven symbols a measure's bins wear, in the order they are handed out (the Default palette starts with them). */
 export const SHAPE_CHOICES = Object.freeze([
   ["circle", "Circle", "circle", "M10 3.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13z"],
   ["square", "Square", "rect", "M4 4h12v12H4z"],
@@ -14,13 +14,65 @@ export const SHAPE_CHOICES = Object.freeze([
   ["arrow", "Arrow", "arrow", "M10 2.5l6.5 7H12.5v8h-5v-8H3.5z"],
 ].map((c) => Object.freeze(c)));
 export const SHAPE_KEYS = Object.freeze(SHAPE_CHOICES.map((c) => c[0]));
-const SYMBOLS = Object.freeze(Object.fromEntries(SHAPE_CHOICES.map((c) => [c[0], c[2]])));
-const KEYS = new Set(SHAPE_KEYS);
+
+// --- palettes (Tableau's Edit Shape: Select Shape Palette) ----------------------------------------------------------
+// A glyph is a path on the 20-unit grid; the chart draws a shape that ECharts has no name for as `path://<glyph>` (it fits the path to the mark's box).
+const f2 = (x) => String(Math.round(x * 100) / 100);
+const poly = (pts) => `M${pts.map(([x, y]) => `${f2(x)} ${f2(y)}`).join("L")}z`;
+const rotate = (pts, deg, [cx, cy] = [10, 10]) => { const t = (deg * Math.PI) / 180, c = Math.cos(t), s = Math.sin(t); return pts.map(([x, y]) => [cx + (x - cx) * c - (y - cy) * s, cy + (x - cx) * s + (y - cy) * c]); };
+const ngon = (n, r, start = -90, [cx, cy] = [10, 10]) => Array.from({ length: n }, (_, i) => { const t = ((start + (360 / n) * i) * Math.PI) / 180; return [cx + r * Math.cos(t), cy + r * Math.sin(t)]; });
+const starPts = (n, ro, ri) => Array.from({ length: n * 2 }, (_, i) => { const t = ((-90 + (180 / n) * i) * Math.PI) / 180, r = i % 2 ? ri : ro; return [10 + r * Math.cos(t), 10 + r * Math.sin(t)]; });
+/** A hollow shape: the outline, and the same outline pulled in toward its centre and wound the other way, which the fill leaves empty. */
+const ring = (pts, k = 0.56) => `${poly(pts)}${poly(pts.map(([x, y]) => [10 + (x - 10) * k, 10 + (y - 10) * k]).reverse())}`;
+const bar = (w, h, deg) => rotate([[10 - w / 2, 10 - h / 2], [10 + w / 2, 10 - h / 2], [10 + w / 2, 10 + h / 2], [10 - w / 2, 10 + h / 2]], deg);
+const PLUS = [[8, 3], [12, 3], [12, 8], [17, 8], [17, 12], [12, 12], [12, 17], [8, 17], [8, 12], [3, 12], [3, 8], [8, 8]];
+const ARROW_UP = [[10, 2.5], [16.5, 9.5], [12.5, 9.5], [12.5, 17.5], [7.5, 17.5], [7.5, 9.5], [3.5, 9.5]];
+const DIRECTIONS = [["n", "up", 0], ["ne", "up-right", 45], ["e", "right", 90], ["se", "down-right", 135], ["s", "down", 180], ["sw", "down-left", 225], ["w", "left", 270], ["nw", "up-left", 315]];
+const shape = (key, name, glyph) => Object.freeze([key, name, `path://${glyph}`, glyph]);
+
+/** { key, name, shapes: [[key, name, ECharts symbol, glyph]] } — Default (ten shapes: the seven above, then a plus, a cross and a star), Outline, Arrows and Weather. Shape keys are unique across palettes, so a member stores its key alone. */
+export const SHAPE_PALETTES = Object.freeze([
+  { key: "default", name: "Default", shapes: [...SHAPE_CHOICES, shape("plus", "Plus", poly(PLUS)), shape("cross", "Cross", poly(rotate(PLUS, 45))), shape("star", "Star", poly(starPts(5, 8, 3.4)))] },
+  { key: "outline", name: "Outline", shapes: [
+    shape("o-circle", "Circle outline", "M10 3.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM10 6.9a3.1 3.1 0 1 1 0 6.2 3.1 3.1 0 0 1 0-6.2z"),
+    shape("o-square", "Square outline", ring([[4, 4], [16, 4], [16, 16], [4, 16]])),
+    shape("o-triangle", "Triangle outline", ring([[10, 3.5], [17, 16], [3, 16]], 0.5)),
+    shape("o-diamond", "Diamond outline", ring([[10, 2.5], [17, 10], [10, 17.5], [3, 10]])),
+    shape("o-pentagon", "Pentagon outline", ring(ngon(5, 7.5))),
+    shape("o-hexagon", "Hexagon outline", ring(ngon(6, 7.5, 0))),
+    shape("o-star", "Star outline", ring(starPts(5, 8, 3.4), 0.5)),
+  ] },
+  { key: "arrows", name: "Arrows", shapes: DIRECTIONS.map(([d, name, deg]) => shape(`arrow-${d}`, `Arrow ${name}`, poly(rotate(ARROW_UP, deg)))) },
+  { key: "weather", name: "Weather", shapes: [
+    shape("sun", "Sun", poly(starPts(8, 8.2, 5))),
+    shape("cloud", "Cloud", "M6 15.5a3.5 3.5 0 0 1-.3-7 4.5 4.5 0 0 1 8.6-1.2 3.8 3.8 0 0 1-.3 8.2z"),
+    shape("moon", "Moon", "M13.5 3.5A7 7 0 1 0 16.5 12 5.5 5.5 0 0 1 13.5 3.5z"),
+    shape("snowflake", "Snowflake", [bar(1.8, 15, 0), bar(1.8, 15, 60), bar(1.8, 15, 120)].map(poly).join("")),
+    shape("bolt", "Lightning", "M11.5 2L4.5 11h4.5l-1 7 7-9.5h-4.5z"),
+    shape("drop", "Raindrop", "M10 2.5C7 6.5 4.5 9.2 4.5 12a5.5 5.5 0 0 0 11 0c0-2.8-2.5-5.5-5.5-9.5z"),
+  ] },
+].map((p) => Object.freeze({ ...p, shapes: Object.freeze(p.shapes) })));
+export const SHAPE_PALETTE_DEFAULT = SHAPE_PALETTES[0];
+const ALL = new Map(SHAPE_PALETTES.flatMap((p) => p.shapes).map((c) => [c[0], c]));
+/** The shape ([key, name, symbol, glyph]) of a key, or undefined. */
+export const shapeOf = (key) => ALL.get(key);
+/** The default shape at position `i` of the Default palette (it wraps): what a member or bin wears until it is given one. */
+export const defaultShapeAt = (i) => { const n = SHAPE_PALETTE_DEFAULT.shapes.length; return SHAPE_PALETTE_DEFAULT.shapes[((i % n) + n) % n]; };
 /** The ECharts symbol of a shape key (a circle for an unknown one). */
-export const shapeSymbol = (key) => (KEYS.has(key) ? SYMBOLS[key] : "circle");
-/** The ECharts symbol of the symbol at position `i` of the set (it wraps), so a member or bin keeps the same symbol while the data changes. */
-export const symbolAt = (i) => SHAPE_CHOICES[((i % SHAPE_CHOICES.length) + SHAPE_CHOICES.length) % SHAPE_CHOICES.length][2];
-export const isShapeKey = (k) => typeof k === "string" && KEYS.has(k);
+export const shapeSymbol = (key) => ALL.get(key)?.[2] ?? "circle";
+/** The ECharts symbol of the symbol at position `i` of the Default palette (it wraps), so a member or bin keeps the same symbol while the data changes. */
+export const symbolAt = (i) => defaultShapeAt(i)[2];
+/** The symbol at position `i` of the first seven (it wraps): the symbols of a measure's bins and of a scatter's groups that have no Shape of their own, which the ten-shape Default palette (D172) does not change. */
+export const baseSymbolAt = (i) => SHAPE_CHOICES[((i % SHAPE_CHOICES.length) + SHAPE_CHOICES.length) % SHAPE_CHOICES.length][2];
+export const isShapeKey = (k) => typeof k === "string" && ALL.has(k);
+
+/** Assign Palette: the palette's shapes handed to `members` (memberKeys) in order, repeating from the first when the members outnumber the shapes -> { [memberKey]: shapeKey }. */
+export function assignPalette(palette, members) {
+  const shapes = palette?.shapes ?? [];
+  const out = bare();
+  if (shapes.length) members.forEach((m, i) => { if (m !== "__proto__") out[m] = shapes[i % shapes.length][0]; });
+  return out;
+}
 
 // --- a measure on Shape: equal-width bins ---------------------------------------
 // Six bins at most: the seventh symbol is kept for a missing value, so no two groups ever share a symbol.
@@ -90,6 +142,13 @@ export function setMemberShape(map, field, member, shape) {
   if (!has(next, field) && Object.keys(next).length >= LIMITS.memberColorFields) return { ok: false, error: `At most ${LIMITS.memberColorFields} fields can have member shapes.` };
   next[field] = bare({ ...cur, [member]: shape });
   return { ok: true, value: next };
+}
+
+/** Replace one field's member shapes with `entries` ({ [memberKey]: shapeKey }; empty = none) -> { ok, value } with a new map, or { ok:false, error } at the first entry a limit or a bad key refuses. */
+export function setFieldShapes(map, field, entries) {
+  let cur = { ok: true, value: clearFieldShapes(map, field).value };
+  for (const [m, shape] of Object.entries(entries ?? {})) { cur = setMemberShape(cur.value, field, m, shape); if (!cur.ok) return cur; }
+  return cur;
 }
 
 /** Remove every shape of one field: { ok, value } with a new map. */

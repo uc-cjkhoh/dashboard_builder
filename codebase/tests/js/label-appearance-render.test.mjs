@@ -66,7 +66,7 @@ test("Font family: a non-default family resolves through the theme token, the de
   globalThis.getComputedStyle = () => ({ getPropertyValue: (n) => (n === "--font-serif" ? "Georgia, serif" : "") });
   try {
     assert.equal(labelOf(draw(sheet({ format: { ...on, labelFont: { family: "serif" } } })).o).fontFamily, "Georgia, serif");
-    assert.equal("fontFamily" in labelOf(draw(sheet({ format: on })).o), false);
+    assert.notEqual(labelOf(draw(sheet({ format: on })).o).fontFamily, "Georgia, serif"); // the default draws in the chart's own font (c.font), not a Label family
   } finally { globalThis.getComputedStyle = prev; }
 });
 test("a line takes Text, Font and Alignment as well, beside its Label position", () => {
@@ -108,6 +108,20 @@ test("a Colour split: fields are laid out per (series, category) cell and the on
   const { o } = draw(s, res);
   assert.equal(lbl(o, 0, 1, 9), "US/web=9");
   assert.equal(lbl(o, 1, 0, 2), "EU/shop=2");
+});
+test("a stacked Colour split draws its inside label in an ink that contrasts with the segment (no halo to lean on)", async () => {
+  const { contrastRatio } = await import("../../src/DashboardBuilder/Features/Dashboard/contrast.js");
+  const s = sheet({ chartType: "stacked", columns: [dim("region")], color: [dim("channel")], format: { dataLabels: true } });
+  s.marks = { ...s.marks, label: dim("channel") }; // a Label field is what lays text out per colour segment
+  const rows = [["EU", "web", 5], ["US", "web", 9], ["EU", "shop", 2], ["US", "shop", 4]];
+  const res = { rowDimensions: ["region"], columnDimensions: ["channel"], measures: ["a"], rows: rows.map(([r, ch, v]) => ({ keys: [r, ch], values: [v] })), truncated: false };
+  const { o } = draw(s, res);
+  for (const se of o.series.filter((x) => x.label?.show)) {
+    assert.equal(se.label.position, "inside");
+    assert.equal(se.label.textBorderWidth, 0);
+    const fill = se.itemStyle?.color;
+    if (typeof fill === "string" && /^#[0-9a-f]{6}$/i.test(fill) && /^#[0-9a-f]{6}$/i.test(se.label.color)) assert.ok(contrastRatio(se.label.color, fill) >= 4.5, `${se.label.color} on ${fill}`);
+  }
 });
 test("a shape-split point chart reads the template through each point's result row", () => {
   const s = sheet({ chartType: "scatter", columns: [dim("region"), meas("amount")], rows: [meas("qty")], format: { ...on, labelText: "<orders.region>:<a>" } });

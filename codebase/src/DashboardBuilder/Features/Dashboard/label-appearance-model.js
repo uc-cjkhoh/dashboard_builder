@@ -1,9 +1,9 @@
 // Label appearance (Label flyout → Text, Font, Alignment) — pure, DOM-free (tests/js/label-appearance.test.mjs). Three stored keys on `sheet.format`, each absent
 // at its default so older files draw exactly as before: `labelText` (a template with <Field> placeholders, absent = the automatic text), `labelFont`
-// ({ family?, size?, bold? }: a family from the worksheet's fonts or Microsoft Typography, a common point size, bold), `labelAlign` (left | center | right, absent = Automatic).
+// ({ family?, size?, bold? }: a family from the worksheet's fonts or Microsoft Typography, a whole-number px size, bold), `labelAlign` (left | center | right, absent = Automatic).
 // A chart label is canvas text, so the template renders to plain text here (no HTML, no escaping) and the style is a fragment of ECharts label options.
 import { LIMITS } from "../Core/validate.js";
-import { FONT_CHOICES } from "./font-model.js";
+import { FONT_CHOICES, MS_FONT_CHOICES } from "./font-model.js";
 import { parseTooltip } from "./tooltip-model.js";
 import { tipLookup } from "./tooltip-formats.js";
 
@@ -60,24 +60,22 @@ export function labelTextPreview(template, catalog) {
 }
 
 // ---- Font -------------------------------------------------------------------------------------------------------------------------------------------
-/** [value, label] — the Microsoft Typography fonts a label can wear (the ClearType collection and the core web fonts), each a system stack in core.css (`--font-ms-*`) with a generic fallback: nothing is downloaded (golden rule 10), so a machine without the font draws the fallback. */
-export const MS_FONT_CHOICES = Object.freeze([["ms-arial", "Arial"], ["ms-calibri", "Calibri"], ["ms-cambria", "Cambria"], ["ms-candara", "Candara"], ["ms-consolas", "Consolas"], ["ms-constantia", "Constantia"],
-  ["ms-corbel", "Corbel"], ["ms-courier-new", "Courier New"], ["ms-georgia", "Georgia"], ["ms-segoe-ui", "Segoe UI"], ["ms-tahoma", "Tahoma"], ["ms-times-new-roman", "Times New Roman"], ["ms-trebuchet-ms", "Trebuchet MS"], ["ms-verdana", "Verdana"]]);
-/** The family choices as the select lists them: the worksheet's own three, then a Microsoft Typography group. */
-export const LABEL_FONT_GROUPS = Object.freeze([{ label: null, choices: FONT_CHOICES }, { label: "Microsoft Typography", choices: MS_FONT_CHOICES }]);
+export { MS_FONT_CHOICES }; // the Microsoft Typography fonts live in font-model.js (the tooltip modal offers them too)
 export const LABEL_FONT_FAMILIES = Object.freeze([...FONT_CHOICES, ...MS_FONT_CHOICES]);
+/** The family choices as the select lists them: the worksheet's own three, then the Microsoft fonts, all on one level (no group title). */
+export const LABEL_FONT_GROUPS = Object.freeze([{ label: null, choices: LABEL_FONT_FAMILIES }]);
 const LABEL_FAMILIES = new Set(LABEL_FONT_FAMILIES.map((c) => c[0]));
 /** The CSS custom property holding a family's stack; null for the default (the worksheet's own font). */
 export const labelFontToken = (family) => (family !== "default" && LABEL_FAMILIES.has(family) ? `--font-${family}` : null);
-/** The common point sizes (Microsoft Office's list), in px; Automatic keeps the chart's own size. */
-export const LABEL_FONT_SIZES = Object.freeze([8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48, 72]);
-/** [value, label] — Automatic first, then every size. */
-export const LABEL_SIZE_CHOICES = Object.freeze([["auto", "Automatic"], ...LABEL_FONT_SIZES.map((n) => [n, `${n} px`])]);
+/** The size a chart label draws at when Font size is Automatic, in px: where the size arrows start from. */
+export const LABEL_FONT_AUTO_SIZE = 14;
+/** Any whole number of px from LIMITS.labelFontMin to LIMITS.labelFontMax; no size set keeps the chart's own (Automatic). */
+export const labelFontSizeOk = (n) => Number.isInteger(n) && n >= LIMITS.labelFontMin && n <= LIMITS.labelFontMax;
 /** Why a stored font is refused, or null. */
 export function labelFontError(v) {
   if (typeof v !== "object" || v === null || Array.isArray(v)) return "Label font must be an object.";
   if (v.family != null && !LABEL_FAMILIES.has(v.family)) return "Label font family must be one of the listed fonts.";
-  if (v.size != null && !LABEL_FONT_SIZES.includes(v.size)) return `Label font size must be one of ${LABEL_FONT_SIZES.join(", ")} px.`;
+  if (v.size != null && !labelFontSizeOk(v.size)) return `Label font size must be a whole number from ${LIMITS.labelFontMin} to ${LIMITS.labelFontMax} px.`;
   if (v.bold != null && typeof v.bold !== "boolean") return "Label font bold must be on or off.";
   return null;
 }
@@ -92,7 +90,7 @@ export function cleanLabelFont(v) {
   if (v.bold) out.bold = true;
   return { ok: true, value: Object.keys(out).length ? out : null };
 }
-/** The font a format asks for, every part present: { family: "default" | …, size: 14 | 16 | null (automatic), bold }. */
+/** The font a format asks for, every part present: { family: "default" | …, size: a px number | null (automatic), bold }. */
 export function labelFontOf(format) {
   const v = format?.labelFont;
   const ok = v != null && labelFontError(v) === null;

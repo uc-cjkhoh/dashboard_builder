@@ -1,12 +1,17 @@
 // Tooltip line styles + editor line model (tooltip modal) — pure, DOM-free (unit-tested under tests/js/).
 // A sheet's `tooltipStyle` is null or an array aligned to the lines of `tooltipText` (split on "\n"):
-// [{ size?: 14|16|24, bold?: true, italic?: true, color?: <TIP_COLOURS key> }]. Sizes come from the type scale and
-// colours are design-token keys, so no user value is ever written into a style attribute.
+// [{ font?: <TIP_FONTS key>, size?: 14|16|24, bold?: true, italic?: true, underline?: true, align?: "left"|"center"|"right", color?: <TIP_COLOURS key> }].
+// Sizes come from the type scale, colours and fonts are design-token keys, so no user value is ever written into a style attribute.
 import { LIMITS } from "../Core/validate.js";
+import { FONT_CHOICES, MS_FONT_CHOICES } from "./font-model.js";
 
 export const TIP_SIZES = [14, 16, 24];
 /** Palette key → the CSS token it resolves to (the tooltip is DOM, so var() follows the theme). */
 export const TIP_COLOURS = { ink: "--ink", muted: "--ink-3", accent: "--accent-ink", ok: "--ok-ink", warn: "--warn-ink", dim: "--dim-ink", meas: "--meas-ink", enc: "--enc-ink" };
+/** [key, label] — the families a line can wear: the worksheet's own three and the Microsoft Typography fonts (the Label flyout's list); the default (the app's font) is "no key". */
+export const TIP_FONTS = Object.freeze([...FONT_CHOICES, ...MS_FONT_CHOICES].filter((c) => c[0] !== "default"));
+const FONT_KEYS = new Set(TIP_FONTS.map((c) => c[0]));
+export const TIP_ALIGNS = ["left", "center", "right"];
 export const TIP_COLOUR_LABELS = { ink: "Text", muted: "Muted", accent: "Accent", ok: "Green", warn: "Amber", dim: "Blue", meas: "Teal", enc: "Violet" };
 
 const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
@@ -22,7 +27,9 @@ export function checkTooltipStyle(raw) {
     if (typeof e !== "object" || Array.isArray(e)) return { ok: false, error: "Each tooltip line style must be an object." };
     const s = {};
     if (e.size != null) { if (!TIP_SIZES.includes(e.size)) return { ok: false, error: `Tooltip font size must be one of ${TIP_SIZES.join(", ")}.` }; s.size = e.size; }
-    for (const k of ["bold", "italic"]) if (e[k] != null) { if (typeof e[k] !== "boolean") return { ok: false, error: `Tooltip ${k} must be on or off.` }; if (e[k]) s[k] = true; }
+    if (e.font != null) { if (typeof e.font !== "string" || !FONT_KEYS.has(e.font)) return { ok: false, error: "Tooltip font must be one of the listed fonts." }; s.font = e.font; }
+    if (e.align != null) { if (!TIP_ALIGNS.includes(e.align)) return { ok: false, error: `Tooltip alignment must be one of ${TIP_ALIGNS.join(", ")}.` }; if (e.align !== "left") s.align = e.align; } // left is the default: never stored
+    for (const k of ["bold", "italic", "underline"]) if (e[k] != null) { if (typeof e[k] !== "boolean") return { ok: false, error: `Tooltip ${k} must be on or off.` }; if (e[k]) s[k] = true; }
     if (e.color != null) { if (typeof e.color !== "string" || !has(TIP_COLOURS, e.color)) return { ok: false, error: "Tooltip colour must be one of the palette colours." }; s.color = e.color; }
     out.push(s);
   }
@@ -30,13 +37,19 @@ export function checkTooltipStyle(raw) {
   return { ok: true, value: out.length ? out : null };
 }
 
+/** Whether a line is drawn as its own block (an aligned line needs a box to align in: `text-align` does nothing on an inline span). */
+export const lineIsBlock = (s) => Boolean(s) && typeof s === "object" && (s.align === "center" || s.align === "right");
+
 /** The inline style for one line ("" when unstyled). Only whitelisted values reach the string. */
 export function lineStyleCss(s) {
   if (!s || typeof s !== "object") return "";
   const css = [];
+  if (typeof s.font === "string" && FONT_KEYS.has(s.font)) css.push(`font-family:var(--font-${s.font})`); // design-lint-ignore: one --font-<key> token per whitelisted TIP_FONTS key, all defined in core.css (tests/js/label-appearance.test.mjs checks each)
+  if (s.align === "center" || s.align === "right") css.push(`text-align:${s.align}`);
   if (TIP_SIZES.includes(s.size)) css.push(`font-size:${s.size}px`);
   if (s.bold === true) css.push("font-weight:700");
   if (s.italic === true) css.push("font-style:italic");
+  if (s.underline === true) css.push("text-decoration:underline");
   if (typeof s.color === "string" && has(TIP_COLOURS, s.color)) css.push(`color:var(${TIP_COLOURS[s.color]})`);
   return css.join(";");
 }

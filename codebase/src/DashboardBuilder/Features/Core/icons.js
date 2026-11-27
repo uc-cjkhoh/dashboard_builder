@@ -48,6 +48,10 @@ export const PATHS = Object.freeze({
   sidebar: "M3 4h14v12H3zM8 4v12",
   dashboard: "M3 3.5h6.5v6H3zM11.5 3.5H17v3.5h-5.5zM11.5 9H17v7.5h-5.5zM3 11.5h6.5v5H3z", // a board of tiles (the dashboard tab)
   chevron: "M7 8l3 3 3-3",
+  "align-left": "M3 5h14M3 8.5h9M3 12h14M3 15.5h9",
+  "align-center": "M3 5h14M5.5 8.5h9M3 12h14M5.5 15.5h9",
+  "align-right": "M3 5h14M8 8.5h9M3 12h14M8 15.5h9",
+  "chevron-up": "M7 12l3-3 3 3",
   "chevron-left": "M12 6l-4 4 4 4",
   "chevron-right": "M8 6l4 4-4 4",
   "arrow-right": "M4 10h12M11 5l5 5-5 5",

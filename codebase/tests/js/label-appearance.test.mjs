@@ -1,8 +1,8 @@
 // Label appearance (Label flyout → Text, Font, Alignment): the pure model, no browser.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cleanLabelText, labelTextOf, labelTextError, labelTextResolver, LABEL_VALUE_FIELD, cleanLabelFont, labelFontError, labelFontOf, LABEL_SIZE_CHOICES,
-  cleanLabelAlign, labelAlignError, labelAlignOf, LABEL_ALIGN_CHOICES, labelStyleOf, labelFieldCatalog, labelTextPreview, LABEL_FONT_SIZES, LABEL_FONT_FAMILIES, LABEL_FONT_GROUPS, MS_FONT_CHOICES, labelFontToken }
+import { cleanLabelText, labelTextOf, labelTextError, labelTextResolver, LABEL_VALUE_FIELD, cleanLabelFont, labelFontError, labelFontOf, LABEL_FONT_AUTO_SIZE, labelFontSizeOk,
+  cleanLabelAlign, labelAlignError, labelAlignOf, LABEL_ALIGN_CHOICES, labelStyleOf, labelFieldCatalog, labelTextPreview, LABEL_FONT_FAMILIES, LABEL_FONT_GROUPS, MS_FONT_CHOICES, labelFontToken }
   from "../../src/DashboardBuilder/Features/Dashboard/label-appearance-model.js";
 import { LIMITS } from "../../src/DashboardBuilder/Features/Core/validate.js";
 
@@ -41,24 +41,24 @@ test("font: defaults store nothing, parts are validated and normalised", () => {
   assert.deepEqual(cleanLabelFont(null), { ok: true, value: null });
   assert.deepEqual(cleanLabelFont({ family: "default", bold: false }), { ok: true, value: null });
   assert.deepEqual(cleanLabelFont({ family: "serif", size: 16, bold: true }), { ok: true, value: { family: "serif", size: 16, bold: true } });
-  assert.equal(cleanLabelFont({ size: 15 }).ok, false);
+  assert.equal(cleanLabelFont({ size: 7 }).ok, false);
   assert.equal(cleanLabelFont({ size: 14, family: "ms-calibri" }).ok, true);
   assert.equal(cleanLabelFont({ family: "comic" }).ok, false);
   assert.equal(cleanLabelFont({ bold: "yes" }).ok, false);
   assert.equal(cleanLabelFont([]).ok, false);
-  assert.match(labelFontError({ size: 13 }), /one of 8, 9, 10/);
+  assert.match(labelFontError({ size: 7 }), /whole number from 8 to 72/);
 });
-test("font: the common point sizes are offered, Automatic first, and each is accepted", () => {
-  assert.deepEqual(LABEL_FONT_SIZES, [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48, 72]);
-  assert.deepEqual(LABEL_SIZE_CHOICES.map((c) => c[0]), ["auto", ...LABEL_FONT_SIZES]);
-  assert.equal(LABEL_SIZE_CHOICES[1][1], "8 px");
-  for (const n of LABEL_FONT_SIZES) assert.deepEqual(cleanLabelFont({ size: n }), { ok: true, value: { size: n } });
-  for (const n of [0, 7, 13, 15, 73, "12", 12.5]) assert.equal(cleanLabelFont({ size: n }).ok, false, String(n));
+test("font: any whole size from 8 to 72 px is accepted, Automatic is 14, and the rest is refused (never clamped)", () => {
+  assert.equal(LABEL_FONT_AUTO_SIZE, 14);
+  for (const n of [8, 9, 13, 15, 17, 40, 72]) assert.deepEqual(cleanLabelFont({ size: n }), { ok: true, value: { size: n } }, String(n));
+  for (const n of [0, 7, 73, 200, -1, "12", 12.5, NaN]) { assert.equal(cleanLabelFont({ size: n }).ok, false, String(n)); assert.equal(labelFontSizeOk(n), false, String(n)); }
+  assert.deepEqual(cleanLabelFont({ size: null }), { ok: true, value: null });
 });
 test("font: the Microsoft Typography fonts follow the worksheet's three, each with its own token", () => {
   assert.deepEqual(LABEL_FONT_FAMILIES.slice(0, 3).map((c) => c[0]), ["default", "serif", "mono"]);
   assert.deepEqual(MS_FONT_CHOICES.map((c) => c[1]), ["Arial", "Calibri", "Cambria", "Candara", "Consolas", "Constantia", "Corbel", "Courier New", "Georgia", "Segoe UI", "Tahoma", "Times New Roman", "Trebuchet MS", "Verdana"]);
-  assert.deepEqual(LABEL_FONT_GROUPS.map((g) => g.label), [null, "Microsoft Typography"]);
+  assert.deepEqual(LABEL_FONT_GROUPS.map((g) => g.label), [null]); // one level: no "Microsoft Typography" title
+  assert.deepEqual(LABEL_FONT_GROUPS[0].choices.map((c) => c[0]), LABEL_FONT_FAMILIES.map((c) => c[0]));
   for (const [id] of MS_FONT_CHOICES) {
     assert.deepEqual(cleanLabelFont({ family: id }), { ok: true, value: { family: id } }, id);
     assert.equal(labelFontToken(id), `--font-${id}`);

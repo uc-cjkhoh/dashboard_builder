@@ -3,7 +3,7 @@
 // The chart tooltip is HTML, so every part (literal text AND substituted values) is escaped here; nothing
 // the user typed ever reaches the tooltip as markup.
 import { LIMITS } from "../Core/validate.js";
-import { lineStyleCss } from "./tooltip-style.js";
+import { lineStyleCss, lineIsBlock } from "./tooltip-style.js";
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
 
@@ -57,7 +57,15 @@ export function tooltipHtml(text, lookup, style = null) {
       lines[lines.length - 1] += v === undefined || v === null ? esc(`<${p.field}>`) : `<b>${esc(v)}</b>`;
     }
   }
-  return lines.map((h, i) => { const css = lineStyleCss(style?.[i]); return css ? `<span style="${css}">${h}</span>` : h; }).join("<br>");
+  // An aligned line is a block (text-align needs a box); a block already ends its line, so a <br> goes only between two inline lines.
+  let out = "", prevBlock = true;
+  lines.forEach((h, i) => {
+    const css = lineStyleCss(style?.[i]), block = lineIsBlock(style?.[i]);
+    if (i && !block && !prevBlock) out += "<br>";
+    out += block ? `<div style="${css}">${h || "&#8203;"}</div>` : css ? `<span style="${css}">${h}</span>` : h;
+    prevBlock = block;
+  });
+  return out;
 }
 
 /** The fields an editor can offer, with a sample (first mark) value (measures also their raw value, for per-field formats): group-by / mark fields

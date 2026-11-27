@@ -254,11 +254,7 @@
 .ws-toolfly .ws-fmt-field { display: grid; gap: var(--s1); } /* label over its control: the flyout is too narrow for them side by side */
 .ws-toolfly select, .ws-toolfly .ws-period input[type="date"] { width: 100%; max-width: none; }
 .ws-toolfly .ws-period__row { display: grid; grid-template-columns: 1fr; gap: var(--s2); }
-.ws-toolfly .ws-tipedit__text { height: auto; min-height: 96px; }
 /* The slot is the pills (a dashed drop zone, absent when there are none) over the Drop Field Here row. The row is a dashed-edge, full-width, non-interactive target: fields arrive by drag and drop from the field pane only (D156), there is no list to open. */
-.ws-tipedit__head { display: flex; align-items: center; justify-content: space-between; min-height: var(--ctl-h); margin-top: calc(-1 * var(--s1)); }
-.ws-tipedit__head .ws-tipedit__modal { margin-right: calc(-1 * var(--s2)); height: var(--ctl-h); padding: 0 var(--s2); background: transparent; color: var(--ink-2); font-weight: 400; }
-.ws-tipedit__head .ws-tipedit__modal:hover { background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--ink); }
 .ws-filtercards.is-behind-fly { visibility: hidden; }
 .ws-toolfly .ws-filtercards { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: var(--s4); }
 /* A filter card in the flyout is the panel's own content, not a card inside a card: no frame, a hairline between cards. One that is not applied keeps its dashed edge. */
@@ -275,12 +271,13 @@
 .ws-flyedit__group + .ws-flyedit__group { border-top: 1px solid var(--line); }
 /* The Label tile's sections wear a heading, as Tableau's label card does (marks-flyout-model.js `heading`). */
 .ws-flyedit__heading { font-size: var(--fs-body); font-weight: 600; color: var(--ink); }
+.ws-flyedit__group:has(.ws-fmt-field:not(.ws-fmt-check) + .ws-fmt-field:not(.ws-fmt-check)) > .ws-flyedit__heading { margin-bottom: calc(-1 * var(--s2)); } /* 8 from the heading to its first control in every section, not the 16 that separates the pairs below it */
 /* Marks to Label: toggle tiles, two to a row; the chosen tile carries a tick and the accent. */
 .ws-toolfly .ws-fmt-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2); }
 .ws-toolfly .ws-fmt-tile { display: inline-flex; align-items: center; justify-content: center; gap: var(--s1); min-height: var(--ctl-h); padding: 0 var(--s2); font-size: var(--fs-body); font-weight: 400; }
 .ws-toolfly .btn.ws-fmt-tile[aria-pressed="true"], .ws-toolfly .btn.ws-fmt-tile[aria-pressed="true"]:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent-ink); }
-.ws-fmt-tile:focus-visible, .ws-fmt-bold:focus-visible, .ws-fmt-dots:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-.ws-fmt-tile:disabled { cursor: not-allowed; }
+.ws-toolfly .ws-fmt-tile:last-child:nth-child(odd) { grid-column: 1 / -1; } /* five tiles: the fifth spans the row instead of hanging off the left */
+.ws-toolfly .btn.ws-fmt-tile[aria-pressed="true"] { font-weight: 600; outline: 1px solid color-mix(in srgb, var(--accent-ink) 40%, transparent); outline-offset: -1px; }
 /* Text (field and "…") and Font (family, size, bold) sit on one row under their label. */
 .ws-fmt-text__row, .ws-fmt-font__row { display: flex; align-items: center; gap: var(--s1); }
 .ws-toolfly .ws-fmt-text__input { flex: 1 1 auto; min-width: 0; width: auto; }
@@ -289,9 +286,16 @@
 .ws-toolfly .ws-fmt-font__row .ws-fmt-font__family { flex: 1 1 100%; } /* the family on its own line: "Times New Roman" fits whole; size and bold share the line below */
 .ws-fmt-bold, .ws-fmt-dots { min-width: var(--ctl-h); height: var(--ctl-h); padding: 0 var(--s2); flex: none; }
 .ws-fmt-bold { font-weight: 600; }
+/* Size: one field, the input and its two arrows split by hairlines (the track is the 1 px gap, so the lines are a token and never a border). */
+.ws-fmt-size { display: flex; align-items: stretch; gap: 1px; flex: 1 1 0; min-width: 0; height: var(--ctl-h); padding: 1px; border-radius: var(--r); background: var(--line-2); overflow: hidden; transition: background var(--dur-fast) var(--ease); }
+.ws-fmt-size:hover:not(:has(:disabled)) { background: var(--ink-3); }
+.ws-toolfly .ws-fmt-size__input { flex: 1 1 auto; min-width: 0; width: auto; height: auto; border: 0; border-radius: 0; -moz-appearance: textfield; appearance: textfield; } /* our own arrows replace the browser's spinner */
+.ws-fmt-size__input::-webkit-outer-spin-button, .ws-fmt-size__input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.ws-toolfly .ws-fmt-size .btn.ws-fmt-step { flex: none; width: calc(var(--ctl-h) - var(--s1)); height: auto; min-width: 0; padding: 0; border-radius: 0; } /* fill and hover come from the stock button ladder (buttons.css) */
 .ws-toolfly .btn.ws-fmt-bold[aria-pressed="true"], .ws-toolfly .btn.ws-fmt-bold[aria-pressed="true"]:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent-ink); }
 /* A Label control that does nothing until a label is drawn. */
-.ws-toolfly .is-disabled { opacity: 0.6; }
+.ws-toolfly .is-disabled { opacity: 0.55; }
+.ws-toolfly .is-disabled :disabled { opacity: 1; } /* the wrapper already fades it: a control's own :disabled fade on top left selects and tiles near-invisible while the text fields stayed bold */
 .tipdlg--label .tipdlg__body { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }
 .dialog.tipdlg--label:not(.dialog--sm) { width: min(640px, calc(100vw - 2 * var(--s4))); }
 .tipdlg__label { width: 100%; min-width: 0; resize: vertical; }
@@ -642,26 +646,14 @@
 .ws-pill__paramsel { height: 24px; font-size: var(--fs-body); max-width: 170px; }
 .ws-pill__param[aria-pressed="true"] { color: var(--accent-ink); background: var(--accent-soft); }
 
-/* Tooltip text editor (in the Tooltip tool panel): template, field chips, live preview. */
-.ws-tipedit { display: grid; gap: var(--s2); }
-.ws-tipedit__text { width: 100%; resize: vertical; font-family: inherit; }
-.ws-tipedit__text::placeholder { color: var(--ink-3); opacity: 1; } /* the browser's grey is 3.7:1 on the dark surface */
-.ws-tipedit__chips { display: flex; flex-wrap: wrap; gap: var(--s1); }
-.ws-tipedit__chip { font-size: var(--fs-body); padding: var(--s1) var(--s2); }
-.ws-tipedit__preview { padding: var(--s2) var(--s2); border: 1px solid var(--line-2); border-radius: var(--r); background: var(--surface-2); color: var(--ink); font-size: var(--fs-body); overflow-wrap: anywhere; }
+/* The Tooltip flyout: the Edit tooltip button alone (the modal is .tipdlg--rich). */
+.ws-tipedit { display: grid; }
+.ws-tipedit__modal { width: 100%; justify-content: center; }
 
 /* Member colours: the flyout's "Edit member colours…" button and its dialog (palette, member, colour). The swatch/dot
    fills are the user's chosen data colours (workbook data), set inline; chrome uses tokens. Selection is never colour alone:
    a tick on the chosen palette and colour, a marker glyph and outline on the chosen member. */
-.ws-memcol { display: grid; gap: var(--s2); }
-/* The rows below are the Edit member shapes editor's (a symbol per member); the member colours dialog has its own memcol-* rules. */
-.ws-memcol__body { display: grid; gap: var(--s2); max-height: 260px; overflow: auto; }
-.ws-memcol__row { display: grid; grid-template-columns: auto minmax(60px, 120px) 1fr auto; align-items: center; gap: var(--s2); }
-.ws-memcol__name { font-size: var(--fs-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ws-memcol__swatches { display: flex; flex-wrap: wrap; gap: 4px; }
-.ws-memcol__swatch { width: 16px; height: 16px; padding: 0; border: 1px solid var(--line-2); border-radius: var(--r); color: var(--ink); font-size: var(--fs-body); line-height: 1; cursor: pointer; }
-.ws-memcol__swatch[aria-pressed="true"] { outline: 2px solid var(--ink); outline-offset: 1px; }
-.ws-memcol__note { margin: 0; color: var(--ink-3); font-size: var(--fs-body); }
+.ws-memcol, .ws-memshape { display: grid; gap: var(--s2); }
 .dialog.memcol-dialog:not(.dialog--sm) { width: min(840px, calc(100vw - 2 * var(--s4))); aspect-ratio: 1.618; } /* landscape, the golden ratio: the proportions follow φ, the spacing stays on the 4 / 8 / 16 / 24 scale */
 .memcol-dialog { --memcol-swatch: 20px; } /* one size and one radius (--s1) for a palette swatch and a member's swatch */
 .memcol-dialog[open] { display: flex; flex-direction: column; max-height: calc(100vh - 2 * var(--s4)); }
@@ -875,3 +867,59 @@ body.is-resizing-y { cursor: ns-resize; user-select: none; }
 .ws-tip__cmds { display: flex; gap: var(--s2); margin-top: var(--s2); padding-top: var(--s2); border-top: 1px solid var(--line); }
 .ws-tip__cmds .ws-select__btn { white-space: nowrap; }
 .ws-tip__cmds .ws-select__btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+
+/* Edit tooltip modal, laid out like Tableau's: toolbar, one editor surface, behaviour checkboxes, footer (Reset · Preview · Cancel · OK). */
+.dialog.tipdlg--rich:not(.dialog--sm) { width: min(560px, calc(100vw - 2 * var(--s4))); }
+.tipdlg--rich .tipdlg__body { grid-template-columns: minmax(0, 1fr); gap: var(--s2); align-items: stretch; }
+.tipdlg__bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1); }
+.tipdlg__sel { width: auto; max-width: 160px; }
+.tipdlg__group { display: flex; gap: var(--s1); }
+.tipdlg__tog--b { font-weight: 700; }
+.tipdlg__tog--i { font-style: italic; }
+.tipdlg__tog--u { text-decoration: underline; }
+.tipdlg__insert { position: relative; }
+.tipdlg__insertbtn { display: inline-flex; align-items: center; gap: var(--s1); }
+.tipdlg__menu { position: absolute; z-index: 5; top: calc(100% + var(--s1)); left: 0; min-width: 200px; max-height: 240px; overflow: auto; display: grid; padding: var(--s1); border: 1px solid var(--line-2); border-radius: var(--r); background: var(--surface); box-shadow: var(--elev-8); }
+.tipdlg__menu[hidden] { display: none; }
+.tipdlg__item { padding: var(--s1) var(--s2); border-radius: var(--r); background: transparent; color: var(--ink); font-size: var(--fs-body); text-align: left; cursor: pointer; }
+.tipdlg__item:hover, .tipdlg__item:focus-visible { background: var(--surface-2); }
+.tipdlg__doc { display: grid; align-content: start; gap: var(--s1); min-height: 160px; padding: var(--s2); border: 1px solid var(--line-2); border-radius: var(--r); background: var(--surface); }
+.tipdlg--rich .tipdlg__line { grid-template-columns: minmax(0, 1fr) auto auto auto; }
+.tipdlg--rich .tipdlg__text { min-height: var(--ctl-h); border-color: transparent; background: transparent; } /* a whole-row target, not the 20px of the text */
+.tipdlg--rich .tipdlg__text:focus-visible { border-color: var(--line-2); }
+.tipdlg__behaviour { display: grid; gap: var(--s2); }
+.tipdlg__behaviour[hidden] { display: none; }
+.tipdlg__brow { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
+.tipdlg__check { display: inline-flex; align-items: center; gap: var(--s2); min-height: var(--ctl-h); } /* the label is the hit target of its checkbox */
+.tipdlg__mode { width: auto; }
+.tipdlg__more { display: block; }
+.tipdlg__more[hidden] { display: none; }
+.tipdlg__more > summary { display: flex; align-items: center; gap: var(--s1); min-height: var(--ctl-h); cursor: pointer; font-weight: 600; }
+.tipdlg__more > summary svg { transform: rotate(-90deg); }
+.tipdlg__more[open] > summary svg { transform: none; }
+.tipdlg__morebody { display: grid; gap: var(--s2); padding-top: var(--s1); }
+.tipdlg__cardrow { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); }
+
+/* Edit Shape dialog (Tableau's layout): Select Data Item on the left, Select Shape Palette on the right. */
+.dialog.shapedlg:not(.dialog--sm) { width: min(640px, calc(100vw - 2 * var(--s4))); }
+.shapedlg[open] { display: flex; flex-direction: column; max-height: calc(100vh - 2 * var(--s4)); }
+.shapedlg__body { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: var(--s4); padding: var(--s4); min-height: 0; overflow: auto; }
+.shapedlg__pane { display: grid; align-content: start; gap: var(--s2); min-width: 0; }
+.shapedlg__head { font-weight: 600; min-height: var(--ctl-h); display: flex; align-items: center; }
+.shapedlg__head--bar { justify-content: space-between; gap: var(--s2); }
+.shapedlg__palette { width: auto; max-width: 160px; }
+.shapedlg__items { display: grid; gap: var(--s1); max-height: 320px; overflow: auto; padding: var(--s1); border: 1px solid var(--line-2); border-radius: var(--r); background: var(--surface); }
+.shapedlg__item { display: flex; align-items: center; gap: var(--s2); min-height: var(--ctl-h); padding: var(--s1) var(--s2); border-radius: var(--r); background: transparent; color: var(--ink); font-size: var(--fs-body); text-align: left; cursor: pointer; }
+.shapedlg__item:hover:not(:disabled) { background: var(--surface-2); }
+.shapedlg__item[aria-selected="true"] { background: var(--accent-soft); color: var(--accent-ink); }
+.shapedlg__item:disabled { color: var(--ink-3); cursor: not-allowed; }
+.shapedlg__now { flex: none; display: grid; place-items: center; width: var(--s4); height: var(--s4); }
+.shapedlg__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.shapedlg__grid { display: grid; grid-template-columns: repeat(auto-fill, var(--ctl-h)); gap: var(--s1); padding: var(--s1); border: 1px solid var(--line-2); border-radius: var(--r); background: var(--surface); }
+.shapedlg__shape { display: grid; place-items: center; height: var(--ctl-h); border: 1px solid transparent; border-radius: var(--r); background: transparent; color: var(--ink); cursor: pointer; }
+.shapedlg__shape:hover { background: var(--surface-2); }
+.shapedlg__shape[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent-ink); }
+.shapedlg__assign { justify-self: start; }
+.shapedlg__note { margin: 0; color: var(--ink-3); font-size: var(--fs-body); }
+.shapedlg__error { padding: 0 var(--s4); }
+.shapedlg__reset { margin-right: auto; }

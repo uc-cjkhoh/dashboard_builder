@@ -7,6 +7,7 @@ import { LIMITS } from "../../src/DashboardBuilder/Features/Core/validate.js";
 const plain = (x) => JSON.parse(JSON.stringify(x));
 const fmt = (v) => String(v);
 
+import { baseSymbolAt, SHAPE_PALETTES, SHAPE_PALETTE_DEFAULT, shapeOf, defaultShapeAt, symbolAt, assignPalette, setFieldShapes, isShapeKey } from "../../src/DashboardBuilder/Features/Dashboard/shape-model.js";
 test("the symbol set is seven distinct shapes in a fixed order", () => {
   assert.deepEqual(SHAPE_KEYS, ["circle", "square", "triangle", "diamond", "roundSquare", "pin", "arrow"]);
   assert.equal(new Set(SHAPE_CHOICES.map((c) => c[1])).size, 7); // distinct names in words
@@ -142,4 +143,41 @@ test("bounds beyond ±1e12 keep every digit of the data's own minimum and maximu
   const wide = binShapeValues([-5e14, 5e14], 4, fmt);
   assert.deepEqual(wide.binOf, [0, 3]);
   assert.deepEqual(wide.bins.map((b) => b.name), ["-500000000000000 to -250000000000000", "250000000000000 to 500000000000000"]);
+});
+
+test("palettes: Default (ten shapes, the old seven first), Outline, Arrows, Weather; every key is unique and valid", () => {
+  assert.deepEqual(SHAPE_PALETTES.map((p) => p.name), ["Default", "Outline", "Arrows", "Weather"]);
+  assert.equal(SHAPE_PALETTE_DEFAULT.shapes.length, 10);
+  assert.deepEqual(SHAPE_PALETTE_DEFAULT.shapes.slice(0, 7).map((c) => c[0]), SHAPE_KEYS); // saved shapes keep their keys and the first seven keep their order
+  const keys = SHAPE_PALETTES.flatMap((p) => p.shapes.map((c) => c[0]));
+  assert.equal(new Set(keys).size, keys.length);
+  for (const k of keys) { assert.ok(isShapeKey(k), k); assert.match(shapeOf(k)[3], /^M[-\d.\s,MmLlHhVvCcAaZz]+$/, k); } // a glyph is a plain path on the 20-unit grid
+  assert.equal(isShapeKey("nope"), false);
+});
+test("a built-in symbol keeps its ECharts name; the others are drawn from their glyph path", () => {
+  assert.equal(shapeSymbol("pin"), "pin");
+  assert.equal(shapeSymbol("star"), `path://${shapeOf("star")[3]}`);
+  assert.equal(shapeSymbol("o-circle").startsWith("path://M"), true);
+});
+test("the default shape wraps over the ten of the Default palette; a bin never leaves the first seven", () => {
+  assert.equal(defaultShapeAt(0)[0], "circle"); assert.equal(defaultShapeAt(9)[0], "star"); assert.equal(defaultShapeAt(10)[0], "circle"); assert.equal(defaultShapeAt(-1)[0], "star");
+  assert.equal(symbolAt(2), "triangle"); assert.equal(symbolAt(9), shapeSymbol("star"));
+  assert.equal(baseSymbolAt(9), "triangle"); assert.equal(baseSymbolAt(7), "circle"); // bins and shapeless groups still wrap over the first seven
+  assert.ok(SHAPE_BINS_MAX + 1 <= 7); // six bins and the missing group: the first seven symbols
+});
+test("Assign Palette hands the palette's shapes to the members in order and repeats from the first", () => {
+  const arrows = SHAPE_PALETTES.find((p) => p.key === "arrows");
+  const r = assignPalette(arrows, ["a", "b", "c", "d", "e", "f", "g", "h", "i"]);
+  assert.equal(r.a, "arrow-n"); assert.equal(r.h, "arrow-nw"); assert.equal(r.i, "arrow-n");
+  assert.deepEqual({ ...assignPalette({ shapes: [] }, ["a"]) }, {});
+  assert.equal(Object.getPrototypeOf(assignPalette(arrows, ["__proto__", "x"])), null); // a bare map, and __proto__ is never a key
+  assert.equal("__proto__" in {}, true); assert.equal(Object.keys(assignPalette(arrows, ["__proto__", "x"])).join(), "x");
+});
+test("setFieldShapes replaces one field's shapes, keeps the others, and refuses a bad key or a limit", () => {
+  const start = { f1: { a: "circle" }, f2: { z: "pin" } };
+  const r = setFieldShapes(start, "f1", { b: "star", c: "o-hexagon" });
+  assert.equal(r.ok, true); assert.deepEqual({ ...r.value.f1 }, { b: "star", c: "o-hexagon" }); assert.deepEqual({ ...r.value.f2 }, { z: "pin" });
+  assert.equal(setFieldShapes(start, "f1", {}).value.f1, undefined); // empty = the field's shapes are gone
+  assert.equal(setFieldShapes(start, "f1", { b: "hexagon" }).ok, false);
+  assert.deepEqual({ ...start.f1 }, { a: "circle" }); // the input is never changed
 });

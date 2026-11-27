@@ -5565,7 +5565,11 @@
       },
       "label": {
        "show": true,
-       "position": "top"
+       "position": "top",
+       "color": "#423a3d",
+       "fontFamily": "system-ui, sans-serif",
+       "fontSize": 14,
+       "textBorderWidth": 0
       },
       "emphasis": {
        "focus": "series"
@@ -5816,7 +5820,11 @@
       },
       "label": {
        "show": true,
-       "position": "top"
+       "position": "top",
+       "color": "#423a3d",
+       "fontFamily": "system-ui, sans-serif",
+       "fontSize": 14,
+       "textBorderWidth": 0
       },
       "emphasis": {
        "focus": "series"
@@ -6867,7 +6875,11 @@
       },
       "label": {
        "show": true,
-       "position": "top"
+       "position": "top",
+       "color": "#423a3d",
+       "fontFamily": "system-ui, sans-serif",
+       "fontSize": 14,
+       "textBorderWidth": 0
       },
       "emphasis": {
        "focus": "series"
@@ -6965,7 +6977,11 @@
       },
       "label": {
        "show": true,
-       "position": "top"
+       "position": "top",
+       "color": "#423a3d",
+       "fontFamily": "system-ui, sans-serif",
+       "fontSize": 14,
+       "textBorderWidth": 0
       },
       "emphasis": {
        "focus": "series"
@@ -7062,7 +7078,11 @@
       },
       "label": {
        "show": true,
-       "position": "top"
+       "position": "top",
+       "color": "#423a3d",
+       "fontFamily": "system-ui, sans-serif",
+       "fontSize": 14,
+       "textBorderWidth": 0
       },
       "emphasis": {
        "focus": "series"
@@ -7189,7 +7209,11 @@
       },
       "label": {
        "show": true,
-       "position": "top"
+       "position": "top",
+       "color": "#423a3d",
+       "fontFamily": "system-ui, sans-serif",
+       "fontSize": 14,
+       "textBorderWidth": 0
       },
       "emphasis": {
        "focus": "series"
@@ -12980,13 +13004,7 @@
         "color": "#423a3d",
         "fontFamily": "system-ui, sans-serif",
         "position": "insideEndTop",
-        "distance": 6,
-        "backgroundColor": "#ffffff",
-        "padding": [
-         2,
-         4
-        ],
-        "borderRadius": 8
+        "distance": 6
        },
        "data": [
         {
@@ -13019,11 +13037,6 @@
        "show": true,
        "formatter": "T",
        "color": "#6b6165",
-       "backgroundColor": "#ffffff",
-       "padding": [
-        2,
-        4
-       ],
        "fontFamily": "system-ui, sans-serif",
        "fontSize": 14
       },
@@ -13138,13 +13151,7 @@
         "color": "#423a3d",
         "fontFamily": "system-ui, sans-serif",
         "position": "insideEndTop",
-        "distance": 6,
-        "backgroundColor": "#ffffff",
-        "padding": [
-         2,
-         4
-        ],
-        "borderRadius": 8
+        "distance": 6
        },
        "data": [
         {
@@ -13177,11 +13184,6 @@
        "show": true,
        "formatter": "T",
        "color": "#6b6165",
-       "backgroundColor": "#ffffff",
-       "padding": [
-        2,
-        4
-       ],
        "fontFamily": "system-ui, sans-serif",
        "fontSize": 14
       },
@@ -13295,13 +13297,7 @@
         "color": "#423a3d",
         "fontFamily": "system-ui, sans-serif",
         "position": "insideEndTop",
-        "distance": 6,
-        "backgroundColor": "#ffffff",
-        "padding": [
-         2,
-         4
-        ],
-        "borderRadius": 8
+        "distance": 6
        },
        "data": [
         {
@@ -13334,11 +13330,6 @@
        "show": true,
        "formatter": "T",
        "color": "#6b6165",
-       "backgroundColor": "#ffffff",
-       "padding": [
-        2,
-        4
-       ],
        "fontFamily": "system-ui, sans-serif",
        "fontSize": 14
       },
@@ -13438,7 +13429,11 @@
       },
       "label": {
        "show": true,
-       "position": "top"
+       "position": "top",
+       "color": "#423a3d",
+       "fontFamily": "system-ui, sans-serif",
+       "fontSize": 14,
+       "textBorderWidth": 0
       },
       "emphasis": {
        "focus": "series"
@@ -13535,7 +13530,11 @@
       },
       "label": {
        "show": true,
-       "position": "top"
+       "position": "top",
+       "color": "#423a3d",
+       "fontFamily": "system-ui, sans-serif",
+       "fontSize": 14,
+       "textBorderWidth": 0
       },
       "emphasis": {
        "focus": "series"
@@ -13662,7 +13661,11 @@
       },
       "label": {
        "show": true,
-       "position": "top"
+       "position": "top",
+       "color": "#423a3d",
+       "fontFamily": "system-ui, sans-serif",
+       "fontSize": 14,
+       "textBorderWidth": 0
       },
       "emphasis": {
        "focus": "series"
@@ -13760,7 +13763,11 @@
       },
       "label": {
        "show": true,
-       "position": "top"
+       "position": "top",
+       "color": "#423a3d",
+       "fontFamily": "system-ui, sans-serif",
+       "fontSize": 14,
+       "textBorderWidth": 0
       },
       "emphasis": {
        "focus": "series"
@@ -13857,7 +13864,11 @@
       },
       "label": {
        "show": true,
-       "position": "top"
+       "position": "top",
+       "color": "#423a3d",
+       "fontFamily": "system-ui, sans-serif",
+       "fontSize": 14,
+       "textBorderWidth": 0
       },
       "emphasis": {
        "focus": "series"
@@ -13984,7 +13995,11 @@
       },
       "label": {
        "show": true,
-       "position": "top"
+       "position": "top",
+       "color": "#423a3d",
+       "fontFamily": "system-ui, sans-serif",
+       "fontSize": 14,
+       "textBorderWidth": 0
       },
       "emphasis": {
        "focus": "series"
@@ -14096,7 +14111,11 @@
       },
       "label": {
        "show": true,
-       "position": "top"
+       "position": "top",
+       "color": "#423a3d",
+       "fontFamily": "system-ui, sans-serif",
+       "fontSize": 14,
+       "textBorderWidth": 0
       },
       "emphasis": {
        "focus": "series"
@@ -14124,7 +14143,11 @@
       },
       "label": {
        "show": true,
-       "position": "top"
+       "position": "top",
+       "color": "#423a3d",
+       "fontFamily": "system-ui, sans-serif",
+       "fontSize": 14,
+       "textBorderWidth": 0
       },
       "emphasis": {
        "focus": "series"
@@ -14235,7 +14258,11 @@
       },
       "label": {
        "show": true,
-       "position": "top"
+       "position": "top",
+       "color": "#423a3d",
+       "fontFamily": "system-ui, sans-serif",
+       "fontSize": 14,
+       "textBorderWidth": 0
       },
       "emphasis": {
        "focus": "series"
@@ -14264,7 +14291,11 @@
       },
       "label": {
        "show": true,
-       "position": "top"
+       "position": "top",
+       "color": "#423a3d",
+       "fontFamily": "system-ui, sans-serif",
+       "fontSize": 14,
+       "textBorderWidth": 0
       },
       "emphasis": {
        "focus": "series"
@@ -14405,7 +14436,11 @@
       },
       "label": {
        "show": true,
-       "position": "top"
+       "position": "top",
+       "color": "#423a3d",
+       "fontFamily": "system-ui, sans-serif",
+       "fontSize": 14,
+       "textBorderWidth": 0
       },
       "emphasis": {
        "focus": "series"
@@ -14464,7 +14499,11 @@
       },
       "label": {
        "show": true,
-       "position": "top"
+       "position": "top",
+       "color": "#423a3d",
+       "fontFamily": "system-ui, sans-serif",
+       "fontSize": 14,
+       "textBorderWidth": 0
       },
       "emphasis": {
        "focus": "series"
@@ -15501,7 +15540,11 @@
       },
       "label": {
        "show": true,
-       "position": "top"
+       "position": "top",
+       "color": "#423a3d",
+       "fontFamily": "system-ui, sans-serif",
+       "fontSize": 14,
+       "textBorderWidth": 0
       },
       "emphasis": {
        "focus": "series"
@@ -15752,7 +15795,11 @@
       },
       "label": {
        "show": true,
-       "position": "top"
+       "position": "top",
+       "color": "#423a3d",
+       "fontFamily": "system-ui, sans-serif",
+       "fontSize": 14,
+       "textBorderWidth": 0
       },
       "emphasis": {
        "focus": "series"
@@ -16803,7 +16850,11 @@
       },
       "label": {
        "show": true,
-       "position": "top"
+       "position": "top",
+       "color": "#423a3d",
+       "fontFamily": "system-ui, sans-serif",
+       "fontSize": 14,
+       "textBorderWidth": 0
       },
       "emphasis": {
        "focus": "series"
@@ -16905,7 +16956,11 @@
       },
       "label": {
        "show": true,
-       "position": "top"
+       "position": "top",
+       "color": "#423a3d",
+       "fontFamily": "system-ui, sans-serif",
+       "fontSize": 14,
+       "textBorderWidth": 0
       },
       "emphasis": {
        "focus": "series"
@@ -17006,7 +17061,11 @@
       },
       "label": {
        "show": true,
-       "position": "top"
+       "position": "top",
+       "color": "#423a3d",
+       "fontFamily": "system-ui, sans-serif",
+       "fontSize": 14,
+       "textBorderWidth": 0
       },
       "emphasis": {
        "focus": "series"
@@ -17137,7 +17196,11 @@
       },
       "label": {
        "show": true,
-       "position": "top"
+       "position": "top",
+       "color": "#423a3d",
+       "fontFamily": "system-ui, sans-serif",
+       "fontSize": 14,
+       "textBorderWidth": 0
       },
       "emphasis": {
        "focus": "series"
@@ -17290,7 +17353,11 @@
       },
       "label": {
        "show": true,
-       "position": "top"
+       "position": "top",
+       "color": "#423a3d",
+       "fontFamily": "system-ui, sans-serif",
+       "fontSize": 14,
+       "textBorderWidth": 0
       },
       "emphasis": {
        "focus": "series",
@@ -17322,7 +17389,11 @@
       },
       "label": {
        "show": true,
-       "position": "top"
+       "position": "top",
+       "color": "#423a3d",
+       "fontFamily": "system-ui, sans-serif",
+       "fontSize": 14,
+       "textBorderWidth": 0
       },
       "emphasis": {
        "focus": "series"
@@ -17473,7 +17544,11 @@
       },
       "label": {
        "show": true,
-       "position": "top"
+       "position": "top",
+       "color": "#423a3d",
+       "fontFamily": "system-ui, sans-serif",
+       "fontSize": 14,
+       "textBorderWidth": 0
       },
       "emphasis": {
        "focus": "series",
@@ -17506,7 +17581,11 @@
       },
       "label": {
        "show": true,
-       "position": "top"
+       "position": "top",
+       "color": "#423a3d",
+       "fontFamily": "system-ui, sans-serif",
+       "fontSize": 14,
+       "textBorderWidth": 0
       },
       "emphasis": {
        "focus": "series"
@@ -17657,7 +17736,11 @@
       },
       "label": {
        "show": true,
-       "position": "top"
+       "position": "top",
+       "color": "#423a3d",
+       "fontFamily": "system-ui, sans-serif",
+       "fontSize": 14,
+       "textBorderWidth": 0
       },
       "emphasis": {
        "focus": "series",
@@ -17720,7 +17803,11 @@
       },
       "label": {
        "show": true,
-       "position": "top"
+       "position": "top",
+       "color": "#423a3d",
+       "fontFamily": "system-ui, sans-serif",
+       "fontSize": 14,
+       "textBorderWidth": 0
       },
       "emphasis": {
        "focus": "series"

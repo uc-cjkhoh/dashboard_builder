@@ -105,3 +105,12 @@ Gotchas that have bitten (or will bite) this app. Read before touching the area 
   field pane stays empty and the check times out at "field pane filled". Calculated fields and hierarchies
   are not in the pane: drive them through the sidebar dialogs, and close any popup or dialog before a real
   mouse click on a mark.
+- **A `//` comment inside an object literal hides every property after it on that line.** A bar label's `color`,
+  `fontFamily` and `fontSize` sat behind one in `chart.js` and silently fell back to ECharts' defaults (a dark fill with
+  a white outline). Put the comment at the end of the line, and check the option a chart really receives, not the source.
+- **A flyout control disabled inside `.is-disabled` fades twice.** `.btn:disabled` (.5) and `.ws-fmt-select:disabled` (.55)
+  stack on the wrapper's own fade, so selects and tiles went near-invisible while text inputs (no `:disabled` fade) looked
+  almost enabled. `.ws-toolfly .is-disabled :disabled { opacity: 1 }` leaves the wrapper's single fade; keep new Label
+  controls inside a wrapper that `gated()` marks.
+- **A script's `focus()` and `click()` are not a user.** In headless Chromium the page itself is unfocused, so `el.focus()` fires no `focus` event (the Edit tooltip modal's "active line" follows `focus`), and Esc on a `<dialog>` is only cancelable after a real press: a handler that `preventDefault`s the `cancel` event (the Insert menu closing before the modal) sees the dialog close anyway. Browser checks press with `b.click(x, y)` first (`tests/live/tooltip-ui.mjs` `focusLine`, `tooltip-shape-dialogs-ui.mjs`). A check that fails with a modal open must not leave it open for the next one (`openModal` cancels a stale one), or every later check fails with it.
+- **An aligned tooltip line is a block, the others are inline.** `text-align` does nothing on the `<span>` a styled line is, so `tooltipHtml` (`tooltip-model.js`) emits a `<div>` for a centred or right-aligned line and a `<br>` only between two inline lines. Add a line style that needs a box the same way, and keep the no-style output byte-identical (`tooltip-golden.json`).

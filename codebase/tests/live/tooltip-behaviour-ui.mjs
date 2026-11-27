@@ -1,4 +1,4 @@
-// Browser checks for the tooltip behaviour in the Tooltip flyout's Behaviour section (Show tooltips, Command buttons, Tooltip mode; D151 moved them out of Format, where Group dates stays): the controls and their gates, a REAL mouse hovering a bar, line,
+// Browser checks for the tooltip behaviour in the Edit tooltip modal (Show tooltips, Include command buttons, the mode; D151 moved them out of Format, where Group dates stays, and D171 moved them into the modal): the controls and their gates, a REAL mouse hovering a bar, line,
 // point and pie mark (the tooltip is enterable: the pointer walks onto it, the buttons run Keep only / Exclude / View data, and nothing is left stuck after a hide), the
 // Responsive pin (a click pins the tooltip until Esc, an empty-chart click, the mark again or a command; a redraw never re-opens it), Show tooltips off, the PNG / SVG
 // export (never has a tooltip in it) and screenshots (run once with SCHEME=dark for the dark set). The real dev app in headless Chromium, driven over the DevTools
@@ -128,27 +128,39 @@ try {
     await waitFor(`!document.getElementById('worksheet-view').hidden && !!__t.chip('region') && !document.querySelector('.ws-shelf--columns .ws-pill')`, 'a fresh worksheet');
     await ev(`document.documentElement.${SCHEME === 'dark' ? "setAttribute('data-scheme', 'dark')" : "removeAttribute('data-scheme')"}`);
   };
-  // Show tooltips / Command buttons / Tooltip mode live in the Tooltip flyout (Behaviour section); everything else (Number, Group dates ...) stays in Format.
-  // Format and a flyout are never open together: opening one closes the other, so each helper opens the panel that owns its label.
+  // Show tooltips / Command buttons / Tooltip mode live in the Edit tooltip modal (the Tooltip flyout is its button alone); everything else (Number, Group dates ...) stays in Format.
+  // Reading a control opens the modal and cancels it; changing one opens it, changes it and presses OK (one commit). The modal covers Format, so each helper closes the other first.
   const TIP_LABELS = ['Show tooltips', 'Command buttons', 'Tooltip mode'];
   const tipTool = `document.querySelector('.ws-tool[data-tool="tooltip"]')`;
+  const tipDlg = `document.querySelector('dialog.tipdlg--rich[open]')`;
   const formatOpen = () => ev(`!!(${fmtField('Number')})`);
-  const flyOpen = () => ev(`!!document.querySelector('#ws-toolfly:not([hidden]) .ws-flyedit__group')`);
-  const openFormat = async () => { if (!(await formatOpen())) await ev(`${fmtTool}.click()`); await waitFor(`!!(${fmtField('Number')})`, 'format panel open'); };
-  const openTip = async () => { // tolerant: a chart with no tooltip controls (a table) opens nothing, and the caller then reads null
+  const modalOpen = () => ev(`${tipDlg} !== null`);
+  const flyOpen = () => ev(`!!document.querySelector('#ws-toolfly:not([hidden]) .ws-toolpanel')`);
+  const openFormat = async () => { if (await modalOpen()) await closeModal(false); if (!(await formatOpen())) await ev(`${fmtTool}.click()`); await waitFor(`!!(${fmtField('Number')})`, 'format panel open'); };
+  const closeModal = async (apply) => {
+    await ev(`document.querySelector('dialog.tipdlg--rich ${apply ? '.btn--primary' : '.dialog__foot button:nth-child(3)'}').click()`);
+    await waitFor(`${tipDlg} === null`, 'modal closed'); await b.sleep(80);
+  };
+  const openTip = async () => { // tolerant: a chart with no tooltip controls (a table) still opens the modal, and the caller then reads null
+    if (await modalOpen()) return;
+    if (await formatOpen()) await ev(`${fmtTool}.click()`);
     if (!(await flyOpen())) await ev(`${tipTool}.click()`);
-    for (let i = 0; i < 20 && !(await flyOpen()); i++) await b.sleep(50);
-    await b.sleep(50);
+    await waitFor(`!!document.querySelector('#ws-toolfly .ws-tipedit__modal')`, 'Edit tooltip button');
+    await ev(`document.querySelector('#ws-toolfly .ws-tipedit__modal').click()`);
+    await waitFor(`${tipDlg} !== null`, 'Edit tooltip modal');
   };
   const ensure = async (label) => { if (TIP_LABELS.includes(label)) await openTip(); else await openFormat(); };
-  const closeFormat = async () => { // both panels: a snapshot / a hover needs the bare chart (a flyout floats over the chart's corner)
+  const closeFormat = async () => { // every panel: a snapshot / a hover needs the bare chart (a flyout floats over the chart's corner)
+    if (await modalOpen()) await closeModal(false);
     if (await formatOpen()) await ev(`${fmtTool}.click()`);
     if (await flyOpen()) await ev(`document.querySelector('#ws-toolfly .iconbtn[aria-label="Close editor"]')?.click()`);
     await settle(300); };
-  const ctl = (label) => `(${fmtField(label)})?.querySelector('input, select')`;
-  const state = async (label) => { await ensure(label); return ev(`(() => { const c = ${ctl(label)}; return c ? { checked: c.checked, value: c.value, disabled: c.disabled, title: c.title } : null; })()`); };
-  const flip = async (label) => { await ensure(label); await ev(`${ctl(label)}.click()`); await settle(400); };
-  const pick = async (label, v) => { await ensure(label); await ev(`(() => { const s = ${ctl(label)}; s.value = ${J(v)}; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`); await settle(400); };
+  const tipCtl = (label) => label === 'Tooltip mode' ? `${tipDlg}?.querySelector('.tipdlg__mode')`
+    : `[...(${tipDlg}?.querySelectorAll('.tipdlg__check') ?? [])].find((l) => l.textContent.toLowerCase().includes(${J(label === 'Command buttons' ? 'command buttons' : label.toLowerCase())}))?.querySelector('input')`;
+  const ctl = (label) => TIP_LABELS.includes(label) ? tipCtl(label) : `(${fmtField(label)})?.querySelector('input, select')`;
+  const state = async (label) => { await ensure(label); const r = await ev(`(() => { const c = ${ctl(label)}; return c ? { checked: c.checked, value: c.value, disabled: c.disabled, title: c.title } : null; })()`); if (TIP_LABELS.includes(label)) await closeModal(false); return r; };
+  const flip = async (label) => { await ensure(label); await ev(`${ctl(label)}.click()`); if (TIP_LABELS.includes(label)) await closeModal(true); await settle(400); };
+  const pick = async (label, v) => { await ensure(label); await ev(`(() => { const s = ${ctl(label)}; s.value = ${J(v)}; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`); if (TIP_LABELS.includes(label)) await closeModal(true); await settle(400); };
 
   // real mouse: positions of marks read from the live chart, moves and clicks through Input.dispatchMouseEvent
   const mv = (x, y) => b.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, buttons: 0 });
@@ -232,7 +244,7 @@ try {
     must(c.checked === true && !c.disabled, J(c));
     must(!m.disabled && m.value === 'responsive', J(m));
     await ensure('Tooltip mode');
-    must(await ev(`!!(${fmtField('Tooltip mode')}).querySelector('select option[value=hover]')`), 'On hover offered');
+    must(await ev(`!!${ctl('Tooltip mode')}.querySelector('option[value=hover]')`), 'On hover offered');
     await closeFormat();
   });
 
@@ -404,8 +416,7 @@ try {
     await dragChip('placed', `__t.zone('columns')`);
     await ev(`(() => { const pills = [...document.querySelectorAll('.ws-shelf--columns .ws-pill')]; pills.find((p) => /region/.test(p.textContent))?.querySelector('[aria-label^="Remove"]')?.click(); return true; })()`);
     await settle(600); await chartType('Line'); await openFormat();
-    await ensure('Command buttons');
-    await ev(`(() => { const c = ${ctl('Command buttons')}; if (!c.checked) c.click(); return true; })()`); await settle(500);
+    if (!(await state('Command buttons')).checked) await flip('Command buttons');
     const auto = await state('Command buttons');
     must(auto && auto.checked && !auto.disabled && /Group dates/.test(auto.title), 'Auto: enabled with a note: ' + J(auto));
     const hintText = () => ev(`[...document.querySelectorAll('#ws-chart .ws-hint')].map((h) => h.textContent).join(' | ')`);

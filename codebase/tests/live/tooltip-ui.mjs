@@ -1,4 +1,4 @@
-// Browser checks for the Tooltip text editor (T01-19): the real dev app (APP_URL, default http://localhost:5184) in headless
+// Browser checks for the Edit tooltip modal (T01-19): the Tooltip flyout is one button; the modal is Tableau's Edit Tooltip (toolbar, lines, Insert menu, behaviour, Reset / Preview / Cancel / OK). The real dev app (APP_URL, default http://localhost:5184) in headless
 // Chromium, driven over the DevTools protocol (tests/live/cdp.mjs), with every /api/* call answered by a mock —
 // nothing reaches a ClickHouse. Run:  node tests/live/tooltip-ui.mjs   (start the app first:
 //   cd src/DashboardBuilder && dotnet run --no-launch-profile --urls http://localhost:5184 ; stop it with fuser -k 5180/tcp)
@@ -134,10 +134,7 @@ try {
   const shot = async (name) => { try { writeFileSync(join(SHOTS, name), Buffer.from((await b.send('Page.captureScreenshot', { format: 'png' })).data, 'base64')); } catch { /* optional */ } };
 
   const tipTool = `document.querySelector('.ws-tool[aria-label^="Tooltip"]')`;
-  const tipText = async (value) => {
-    await ev(`(() => { const t = document.querySelector('.ws-tipedit__text'); t.value = ${J(value)}; t.dispatchEvent(new Event('input', { bubbles: true })); t.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
-    await settle(300);
-  };
+  const tdlg = `document.querySelector('dialog.tipdlg--rich[open]')`;
   const showTip = async () => {
     await waitFor(`!!document.querySelector('.ws-chart-canvas') && !!window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas'))`, 'chart drawn');
     for (let i = 0; i < 6; i++) {
@@ -151,27 +148,53 @@ try {
   const tipHtml = () => {
     return ev(`(() => { const t = [...document.querySelectorAll('.ws-chart-canvas div')].find((d) => d.style.position === 'absolute' && d.textContent.trim() && getComputedStyle(d).opacity !== '0' && d.querySelector('b, span')); return t ? t.innerHTML : ''; })()`);
   };
+  const key = (k, mods = 0) => b.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: k, code: k, windowsVirtualKeyCode: { ArrowUp: 38, ArrowDown: 40, Escape: 27 }[k], modifiers: mods })
+    .then(() => b.send('Input.dispatchKeyEvent', { type: 'keyUp', key: k, code: k, windowsVirtualKeyCode: { ArrowUp: 38, ArrowDown: 40, Escape: 27 }[k], modifiers: mods }));
+  const foot = (label) => `[...document.querySelectorAll('.tipdlg .dialog__foot button')].find((x) => x.textContent === ${J(label)})`;
+  const openModal = async () => {
+    if (await ev(`${tdlg} !== null`)) { await ev(`${foot('Cancel')}.click()`); await waitFor(`${tdlg} === null`, 'a stale modal closed'); } // a failed check never leaves one open for the next
+    if (!(await ev(`!!document.querySelector('#ws-toolfly .ws-tipedit__modal')`))) { await ev(`${tipTool}.click()`); await waitFor(`!!document.querySelector('#ws-toolfly .ws-tipedit__modal')`, 'Edit tooltip button'); }
+    await ev(`document.querySelector('#ws-toolfly .ws-tipedit__modal').click()`);
+    await waitFor(`${tdlg} !== null`, 'tooltip modal');
+  };
+  const ok = async () => { await ev(`${foot('OK')}.click()`); await waitFor(`${tdlg} === null`, 'modal closed'); await settle(500); };
+  const setLine = (i, v) => ev(`(() => { const t = document.querySelector('.tipdlg__text[data-line="${i}"]'); t.value = ${J(v)}; t.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
+  const lineTexts = () => ev(`[...document.querySelectorAll('.tipdlg__text')].map((t) => t.value)`);
+  const focusLine = async (i) => { // a real press: a script's focus() does not fire the focus event while the page itself is unfocused
+    const r = await ev(`(() => { const x = document.querySelector('.tipdlg__text[data-line="${i}"]').getBoundingClientRect(); return { x: x.left + 12, y: x.top + x.height / 2 }; })()`);
+    await b.click(r.x, r.y);
+  };
+  const preview = async () => { if (await ev(`document.querySelector('.tipdlg__preview').hidden`)) await ev(`${foot('Preview')}.click()`); };
+  const tool = (label) => `document.querySelector('.tipdlg [aria-label=${J(label)}]')`;
+  const setSel = (label, v) => ev(`(() => { const s = ${tool(label)}; if (!s) throw new Error('no control ${label}'); s.value = ${J(v)}; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+  const insert = async (name) => {
+    await ev(`document.querySelector('.tipdlg__insertbtn').click()`);
+    await ev(`[...document.querySelectorAll('.tipdlg__item')].find((x) => x.textContent === ${J(name)}).click()`);
+  };
 
-  await check('the Tooltip tool shows the text editor with field chips and an automatic preview', async () => {
+  await check('the Tooltip flyout is one button; the modal opens with the first line focused and an automatic preview', async () => {
     await dragChip('region', `__t.zone('rows')`);
     await dragChip('amount', `__t.zone('columns')`);
     await settle(400);
     await ev(`${tipTool}.click()`);
-    await waitFor(`!!document.querySelector('.ws-tipedit__text')`, 'tooltip editor');
-    must(await ev(`document.querySelector('.ws-tipedit__preview').textContent`) === 'Automatic tooltip', 'preview');
-    const chips = await ev(`[...document.querySelectorAll('.ws-tipedit__chip')].map((c) => c.textContent)`);
-    must(chips.length >= 2, `chips: ${J(chips)}`);
+    await waitFor(`!!document.querySelector('#ws-toolfly .ws-tipedit__modal')`, 'Edit tooltip button');
+    must(await ev(`!document.querySelector('#ws-toolfly textarea, #ws-toolfly .ws-addfield, #ws-toolfly .ws-tipedit__chip, #ws-toolfly .ws-tipedit__preview')`), 'only the button');
+    await openModal();
+    must(await ev(`document.activeElement.classList.contains('tipdlg__text')`), 'first line not focused');
+    await preview();
+    must(await ev(`document.querySelector('.tipdlg__preview').textContent`) === 'Automatic tooltip', 'preview');
+    await shot('tooltip-modal-light.png');
   });
 
-  await check('a chip inserts <field>; the live preview shows the sample value', async () => {
-    await ev(`document.querySelector('.ws-tipedit__chip').click()`);
-    const v = await ev(`document.querySelector('.ws-tipedit__text').value`);
-    must(/^<.+>$/.test(v), `text: ${v}`);
-    must(await ev(`document.querySelector('.ws-tipedit__preview b')?.textContent`) === 'APAC', 'sample is the first mark value');
+  await check('Insert adds <field> at the caret; the live preview shows the sample value', async () => {
+    await insert('orders.region');
+    must((await lineTexts())[0] === '<orders.region>', `text: ${J(await lineTexts())}`);
+    must(await ev(`document.querySelector('.tipdlg__preview b')?.textContent`) === 'APAC', 'sample is the first mark value');
   });
 
   await check('the chart tooltip renders the template; user HTML is escaped', async () => {
-    await tipText('Region <orders.region> / <script>alert(1)</script> "q" <nope>');
+    await setLine(0, 'Region <orders.region> / <script>alert(1)</script> "q" <nope>');
+    await ok();
     const html = await showTip();
     must(html.includes('<b>EU</b>'), `tooltip: ${html}`);
     must(!/<script/i.test(html), `raw script in tooltip: ${html}`);
@@ -180,170 +203,136 @@ try {
     await shot('tooltip-light.png');
   });
 
-  await check('an empty template falls back to the automatic tooltip; over-long text is refused', async () => {
-    await tipText('');
+  await check('an empty template falls back to the automatic tooltip', async () => {
+    await openModal(); await setLine(0, ''); await ok();
     const html = await showTip();
     must(html.includes('EU') && !html.includes('Region'), `automatic tooltip: ${html}`);
-    must(await ev(`document.querySelector('.ws-tipedit__text').maxLength`) === 300, 'maxlength 300');
   });
 
-  const tdlg = `document.querySelector('dialog.tipdlg[open]')`;
-  const key = (k, mods = 0) => b.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: k, code: k, windowsVirtualKeyCode: { ArrowUp: 38, ArrowDown: 40, Escape: 27 }[k], modifiers: mods })
-    .then(() => b.send('Input.dispatchKeyEvent', { type: 'keyUp', key: k, code: k, windowsVirtualKeyCode: { ArrowUp: 38, ArrowDown: 40, Escape: 27 }[k], modifiers: mods }));
-  const setLine = (i, v) => ev(`(() => { const t = document.querySelector('.tipdlg__text[data-line="${i}"]'); t.value = ${J(v)}; t.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
-  const lineTexts = () => ev(`[...document.querySelectorAll('.tipdlg__text')].map((t) => t.value)`);
-
-  await check('Edit tooltip... opens a side-by-side modal: editor left, live preview right, first line focused', async () => {
-    await tipText('<orders.region>');
-    await ev(`document.querySelector('.ws-tipedit__modal').click()`);
-    await waitFor(`${tdlg} !== null`, 'tooltip modal');
-    must(await ev(`document.activeElement.classList.contains('tipdlg__text')`), 'first line not focused');
-    const r = await ev(`(() => { const a = document.querySelector('.tipdlg__edit').getBoundingClientRect(), p = document.querySelector('.tipdlg__side').getBoundingClientRect(); return { left: a.left < p.left, sameRow: Math.abs(a.top - p.top) < 8 }; })()`);
-    must(r.left && r.sameRow, `not side by side: ${J(r)}`);
-    must(await ev(`document.querySelector('.tipdlg__preview b')?.textContent`) === 'APAC', 'preview uses the chart sample');
-    await shot('tooltip-modal-light.png');
-  });
-
-  await check('style a line (size, bold, italic, colour), add and reorder lines; the preview follows; Apply commits them; editing the text back to one line clears the style', async () => {
+  await check('style a line (font, size, bold, italic, underline, colour, centre), add and reorder lines; the preview and the line follow; OK commits them', async () => {
+    await openModal();
+    await setLine(0, '<orders.region>');
     await ev(`document.querySelector('.tipdlg__add').click()`);
     await setLine(1, 'Total <orders.region>');
-    await ev(`(() => { const r = document.querySelectorAll('.tipdlg__line')[0]; const sz = r.querySelector('.tipdlg__size'); sz.value = '24'; sz.dispatchEvent(new Event('change')); r.querySelector('.tipdlg__tog').click(); const c = r.querySelector('.tipdlg__colour'); c.value = 'accent'; c.dispatchEvent(new Event('change')); return true; })()`);
-    let css = await ev(`document.querySelector('.tipdlg__preview span')?.getAttribute('style')`);
-    must(css === 'font-size:24px;font-weight:700;color:var(--accent-ink)', `preview style: ${css}`);
+    await focusLine(0);
+    await setSel('Font size', '24'); await setSel('Colour', 'accent'); await setSel('Font', 'serif');
+    for (const l of ['Bold', 'Italic', 'Underline', 'Align center']) await ev(`${tool(l)}.click()`);
+    await preview();
+    const css = await ev(`document.querySelector('.tipdlg__preview div')?.getAttribute('style')`);
+    must(css === 'font-family:var(--font-serif);text-align:center;font-size:24px;font-weight:700;font-style:italic;text-decoration:underline;color:var(--accent-ink)', `preview style: ${css}`);
+    must(await ev(`document.querySelector('.tipdlg__text[data-line="0"]').style.textAlign === 'center'`), 'the line shows its own alignment');
     // Alt+ArrowDown on line 0 moves it below line 1, with its style
-    await ev(`document.querySelector('.tipdlg__text[data-line="0"]').focus()`);
     await key('ArrowDown', 1);
     must((await lineTexts()).join('|') === 'Total <orders.region>|<orders.region>', `order: ${J(await lineTexts())}`);
-    must(await ev(`document.querySelectorAll('.tipdlg__line')[1].querySelector('.tipdlg__size').value`) === '24', 'style moved with its line');
+    must(await ev(`document.querySelector('.tipdlg__text[data-line="1"]').style.fontSize === '24px'`), 'style moved with its line');
     must(await ev(`document.activeElement.dataset.line`) === '1', 'focus follows the moved line');
-    await ev(`[...document.querySelectorAll('.tipdlg .dialog__foot button')].find((x) => x.textContent === 'Apply').click()`);
-    await waitFor(`${tdlg} === null`, 'modal closed');
-    await waitFor(`document.activeElement === document.querySelector('.ws-tipedit__modal')`, 'focus returns to Edit tooltip after Apply');
-    must(await ev(`document.querySelector('.ws-tipedit__text').value`) === 'Total <orders.region>\n<orders.region>', 'panel text updated');
-    const html = await showTip();
-    must(html.includes('font-size:24px') && html.includes('font-weight:700') && html.includes('var(--accent-ink)'), `tooltip style: ${html}`);
-    must(html.includes('<b>EU</b>'), 'values still rendered');
+    must(await ev(`${tool('Font size')}.value`) === '24', 'the toolbar shows the focused line\'s size');
     await shot('tooltip-styled.png');
-    await tipText('<orders.region>'); // back to one plain line: the line count changed, so the styles go
-    must(await ev(`document.querySelector('.ws-tipedit__text')?.value`) === '<orders.region>', 'the text is back');
-    const html2 = await showTip();
-    must(!html2.includes('font-size:24px'), `the style is cleared with the line count: ${html2}`);
+    await ok();
+    await waitFor(`document.activeElement === document.querySelector('.ws-tipedit__modal')`, 'focus returns to Edit tooltip after OK');
+    const html = await showTip();
+    must(html.includes('font-size:24px') && html.includes('font-weight:700') && html.includes('text-decoration:underline') && html.includes('text-align:center') && html.includes('var(--accent-ink)'), `tooltip style: ${html}`);
+    must(html.includes('<b>EU</b>'), 'values still rendered');
   });
 
-  await check('Escape discards the draft and returns focus; Reset ("Automatic") applies an empty tooltip', async () => {
-    await ev(`document.querySelector('.ws-tipedit__modal').click()`);
-    await waitFor(`${tdlg} !== null`, 'tooltip modal');
+  await check('Clear formatting empties the line\'s style; Backspace on an empty line removes it; Enter adds one below', async () => {
+    await openModal();
+    await focusLine(1);
+    await ev(`${tool('Clear formatting of the selected line')}.click()`);
+    must(await ev(`document.querySelector('.tipdlg__text[data-line="1"]').style.cssText === ''`), 'style cleared');
+    await ev(`(() => { const t = document.querySelector('.tipdlg__text[data-line="1"]'); t.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); return true; })()`);
+    must((await lineTexts()).length === 3, `Enter adds a line: ${J(await lineTexts())}`);
+    await ev(`document.querySelector('.tipdlg__text[data-line="2"]').dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true }))`);
+    must((await lineTexts()).length === 2, `Backspace removes the empty line: ${J(await lineTexts())}`);
+    await key('Escape'); await waitFor(`${tdlg} === null`, 'closed');
+  });
+
+  await check('Escape discards the draft and returns focus; Reset applies an empty tooltip', async () => {
+    await openModal();
     await setLine(0, 'discarded');
     await key('Escape');
     await waitFor(`${tdlg} === null`, 'closed by Escape');
     await waitFor(`document.activeElement === document.querySelector('.ws-tipedit__modal')`, 'focus returns to Edit tooltip after Escape');
-    must(await ev(`document.querySelector('.ws-tipedit__text').value`) === '<orders.region>', 'Escape discarded');
-    await ev(`document.querySelector('.ws-tipedit__modal').click()`);
-    await waitFor(`${tdlg} !== null`, 'reopened');
+    await openModal();
+    must((await lineTexts())[0] !== 'discarded', 'Escape discarded');
     await ev(`document.querySelector('.tipdlg__reset').click()`);
+    await preview();
     must(await ev(`document.querySelector('.tipdlg__preview').textContent`) === 'Automatic tooltip', 'reset previews automatic');
-    await ev(`[...document.querySelectorAll('.tipdlg .dialog__foot button')].find((x) => x.textContent === 'Apply').click()`);
-    await waitFor(`${tdlg} === null`, 'closed');
-    must(await ev(`document.querySelector('.ws-tipedit__text').value`) === '', 'template cleared');
+    await ok();
+    await openModal();
+    must((await lineTexts()).join('|') === '', 'template cleared');
+    await key('Escape'); await waitFor(`${tdlg} === null`, 'closed');
   });
 
-  await check('field chips insert at the selected line; text over the limit blocks Apply; HTML stays escaped in the preview', async () => {
-    await ev(`document.querySelector('.ws-tipedit__modal').click()`);
-    await waitFor(`${tdlg} !== null`, 'modal');
+  await check('text over the limit and more than 12 lines block OK with a reason; HTML stays escaped in the preview', async () => {
+    await openModal();
     await setLine(0, '<img src=x onerror=1> ');
+    await preview();
     must(await ev(`document.querySelector('.tipdlg__preview img') === null`), 'raw img in preview');
-    await ev(`document.querySelector('.tipdlg__chip').click()`);
-    must((await lineTexts())[0].endsWith('<orders.region>'), `chip: ${J(await lineTexts())}`);
     await setLine(0, 'x'.repeat(301));
-    must(await ev(`[...document.querySelectorAll('.tipdlg .dialog__foot button')].find((x) => x.textContent === 'Apply').disabled`), 'Apply not blocked');
-    await key('Escape');
-    await waitFor(`${tdlg} === null`, 'closed');
-  });
-
-  await check('more than 12 lines from the textarea block Apply with a reason; the textarea clears styles when the line count changes', async () => {
-    await tipText(Array.from({ length: 13 }, (_, i) => 'L' + i).join('\n'));
-    await ev(`document.querySelector('.ws-tipedit__modal').click()`);
-    await waitFor(`${tdlg} !== null`, 'modal');
-    must(await ev(`[...document.querySelectorAll('.tipdlg .dialog__foot button')].find((x) => x.textContent === 'Apply').disabled`), 'Apply not blocked at 13 lines');
-    must(/at most 12 lines/.test(await ev(`document.querySelector('.tipdlg__error').textContent`)), 'no reason shown');
-    await ev(`document.querySelectorAll('.tipdlg__line')[12].querySelector('button[aria-label^="Remove"]').click()`);
-    must(!(await ev(`[...document.querySelectorAll('.tipdlg .dialog__foot button')].find((x) => x.textContent === 'Apply').disabled`)), 'Apply still blocked at 12');
-    await ev(`(() => { const r = document.querySelectorAll('.tipdlg__line')[0]; const c = r.querySelector('.tipdlg__colour'); c.value = 'ok'; c.dispatchEvent(new Event('change')); return true; })()`);
+    must(await ev(`${foot('OK')}.disabled`), 'OK not blocked');
+    must(/at most 300/.test(await ev(`document.querySelector('.tipdlg__error').textContent`)), 'no reason shown');
+    await setLine(0, 'a');
+    for (let i = 0; i < 12; i++) await ev(`document.querySelector('.tipdlg__add').click()`);
+    must(await ev(`document.querySelector('.tipdlg__add').disabled`), 'Add line stops at 12');
+    await ev(`document.querySelectorAll('.tipdlg__line').length === 12 || (() => { throw new Error('lines ' + document.querySelectorAll('.tipdlg__line').length); })()`);
     await ev(`document.documentElement.setAttribute('data-scheme', 'dark')`);
     await b.sleep(600);
     await shot('tooltip-modal-dark.png');
-    const dark = await ev(`(() => { const d = document.querySelector('.tipdlg'); return getComputedStyle(d).backgroundColor !== 'rgb(255, 255, 255)' && getComputedStyle(document.querySelector('.tipdlg__preview')).backgroundColor !== 'rgb(255, 255, 255)'; })()`);
-    must(dark, 'modal keeps light colours in dark theme');
+    must(await ev(`getComputedStyle(document.querySelector('.tipdlg')).backgroundColor !== 'rgb(255, 255, 255)'`), 'modal keeps light colours in dark theme');
     await ev(`document.documentElement.removeAttribute('data-scheme')`);
-    await ev(`[...document.querySelectorAll('.tipdlg .dialog__foot button')].find((x) => x.textContent === 'Apply').click()`);
-    await waitFor(`${tdlg} === null`, 'closed');
-    await tipText('only one line');
-    const html = await showTip();
-    must(!html.includes('var(--ok-ink)'), `style should be cleared when the line count changed: ${html}`);
+    await key('Escape'); await waitFor(`${tdlg} === null`, 'closed');
   });
 
-  const applyBtn = `[...document.querySelectorAll('.tipdlg .dialog__foot button')].find((x) => x.textContent === 'Apply')`;
   const fsel = (label, v) => ev(`(() => { const s = document.querySelector('.tipdlg select[aria-label=${J(label)}]'); if (!s) throw new Error('no select ${label}'); s.value = ${J(v)}; s.dispatchEvent(new Event('change')); return true; })()`);
   let measureName = '';
   await check('the modal offers a per-field number format for a measure; preview and chart tooltip apply it', async () => {
-    await tipText('<orders.region>: <v0>'); // the mock names the measure v0
-    await ev(`document.querySelector('.ws-tipedit__modal').click()`);
-    await waitFor(`${tdlg} !== null`, 'modal');
+    await openModal(); await setLine(0, '<orders.region>: <v0>'); // the mock names the measure v0
+    await ev(`document.querySelector('.tipdlg__formats').open = true`);
     const sels = await ev(`[...document.querySelectorAll('.tipdlg__formats select')].map((s) => s.getAttribute('aria-label'))`);
     measureName = (sels.find((l) => l.startsWith('Number format for ')) ?? '').slice('Number format for '.length);
     must(measureName && sels.includes(`Decimals for ${measureName}`), `format controls: ${J(sels)}`);
     must(!sels.some((l) => l.startsWith('Date format')), 'a text group-by gets no date format');
+    await preview();
     const before = await ev(`document.querySelector('.tipdlg__preview').textContent`);
     await fsel(`Number format for ${measureName}`, 'percent');
     await fsel(`Decimals for ${measureName}`, '1');
     const after = await ev(`document.querySelector('.tipdlg__preview').textContent`);
     must(after !== before && after.includes('%') && after.includes('.0%'), `preview: ${before} -> ${after}`);
     await shot('tooltip-formats-light.png');
-    await ev(`${applyBtn}.click()`);
-    await waitFor(`${tdlg} === null`, 'closed');
+    await ok();
     const html = await showTip();
     must(html.includes('<b>EU</b>') && html.includes('2,000.0%'), `chart tooltip: ${html}`);
   });
 
-  await check('a date group-by gets a date format; dark theme; formats are dropped when the field leaves the template', async () => {
+  await check('a date group-by gets a date format; formats are dropped when the field leaves the template', async () => {
     await ev(`(() => { const c = __t.chip('placed'); __t.drag(c, __t.zone('rows')); return true; })()`);
     await settle(500);
-    await ev(`document.querySelector('.ws-tipedit__modal').click()`);
-    await waitFor(`${tdlg} !== null`, 'modal');
-    await ev(`document.querySelector('.tipdlg__chips button[title*="placed"]').click()`);
+    await openModal();
+    await insert('orders.placed');
+    await ev(`document.querySelector('.tipdlg__formats').open = true`);
     const sels = await ev(`[...document.querySelectorAll('.tipdlg__formats select')].map((s) => s.getAttribute('aria-label'))`);
     must(sels.some((l) => l.startsWith('Date format for ')), `date control: ${J(sels)}`);
     await fsel(sels.find((l) => l.startsWith('Date format for ')), 'year');
-    must(/\b2024\b/.test(await ev(`document.querySelector('.tipdlg__preview').textContent`)) && !(await ev(`document.querySelector('.tipdlg__preview').textContent`)).includes('2024-'), 'preview shows the year only');
-    await ev(`document.documentElement.setAttribute('data-scheme', 'dark')`);
-    await b.sleep(500);
+    await preview();
+    const txt = await ev(`document.querySelector('.tipdlg__preview').textContent`);
+    must(/\b2024\b/.test(txt) && !txt.includes('2024-'), 'preview shows the year only: ' + txt);
     await shot('tooltip-formats-dark.png');
-    await ev(`document.documentElement.removeAttribute('data-scheme')`);
-    await ev(`${applyBtn}.click()`);
-    await waitFor(`${tdlg} === null`, 'closed');
-    await tipText('only <orders.region>');
-    await ev(`document.querySelector('.ws-tipedit__modal').click()`);
-    await waitFor(`${tdlg} !== null`, 'modal');
+    await ok();
+    await openModal(); await setLine(0, 'only <orders.region>');
     must(await ev(`document.querySelector('.tipdlg__formats').hidden`), 'no field to format -> the section is hidden');
     await ev(`document.querySelector('.tipdlg__reset').click()`);
-    await key('Escape');
-    await waitFor(`${tdlg} === null`, 'closed');
+    await key('Escape'); await waitFor(`${tdlg} === null`, 'closed');
   });
 
-  await check('dark theme renders the editor', async () => {
-    await tipText('<orders.region>: <orders.amount>');
-    await ev(`document.documentElement.setAttribute('data-theme', 'dark')`);
-    await shot('tooltip-dark.png');
-  });
-
-  await check('an empty sheet offers no stale chips; the note names the views that keep the automatic tooltip', async () => {
+  await check('an empty sheet offers no stale fields in Insert', async () => {
     await ev(`document.querySelector('.tab-add').click(); document.querySelector('[data-new-tab=worksheet]').click()`);
     await settle(400);
-    await ev(`${tipTool}.click()`);
-    await waitFor(`!!document.querySelector('.ws-tipedit__text')`, 'tooltip editor on the new sheet');
-    must(await ev(`document.querySelectorAll('.ws-tipedit__chip').length`) === 0, 'stale chips offered');
-    must((await ev(`document.querySelector('.ws-tipedit__chips').textContent`)).includes('Add fields'), 'empty state text');
-    must((await ev(`document.querySelector('.ws-tipedit__preview + .ws-shelf__note').textContent`)).includes('automatic tooltip kept on'), 'automatic-views note');
+    await openModal();
+    await ev(`document.querySelector('.tipdlg__insertbtn').click()`);
+    must(await ev(`document.querySelectorAll('.tipdlg__item').length`) === 0, 'stale fields offered');
+    must((await ev(`document.querySelector('.tipdlg__menu').textContent`)).includes('Add fields'), 'empty state text');
+    await key('Escape'); await key('Escape');
   });
 
   if (b.consoleErrors.length) console.log('page exceptions:\n  ' + b.consoleErrors.join('\n  '));

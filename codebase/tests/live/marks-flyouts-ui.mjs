@@ -173,8 +173,10 @@ try {
   await chartType('Bar');
 
   const KEYS = ['color', 'size', 'label', 'detail', 'tooltip', 'shape', 'path', 'angle', 'filters', 'period', 'drill', 'pages'];
-  await check('all 12 tiles open the same slot: a full-width dashed Drop Field Here row (a drop target, no field list)', async () => {
-    for (const key of KEYS) {
+  await check('11 tiles open the same slot: a full-width dashed Drop Field Here row (a drop target, no field list); the Tooltip tile\'s flyout has none (the tile itself takes the drop)', async () => {
+    await openTile('tooltip');
+    must(await ev(`!${fly}.querySelector('.ws-toolpanel__slot, .ws-addfield')`), 'the Tooltip flyout still has a slot');
+    for (const key of KEYS.filter((k) => k !== 'tooltip')) {
       await openTile(key);
       const r = await ev(`(() => { const slot = ${fly}.querySelector('.ws-toolpanel__slot'); const btn = slot?.querySelector(':scope > .ws-addfield'); const menu = document.querySelector('.ws-picker__box, .ws-picker__item'); if (!slot || !btn) return null; const s = slot.getBoundingClientRect(), x = btn.getBoundingClientRect(), cs = getComputedStyle(slot), inner = s.width - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight); return { full: Math.abs(x.width - inner) <= 1, dotted: getComputedStyle(btn, '::before').borderTopStyle, menu: !menu && btn.tagName === 'DIV' }; })()`);
       must(r && r.full && r.dotted === 'dashed' && r.menu, `${key}: ${J(r)}`);
@@ -189,11 +191,11 @@ try {
     must(await inFormat('Legend') && await inFormat('Number'), 'Format lost its own controls');
     must(!(await quiet('size')), 'Size is quiet on a bar');
   });
-  await check('Tooltip: a Text section and a Behaviour section hold Show tooltips, Command buttons, Tooltip mode', async () => {
+  await check('Tooltip: one Text section holding the Edit tooltip button; the behaviour controls live in its modal', async () => {
     await openTile('tooltip');
-    must(J(await ev(`[...${fly}.querySelectorAll('.ws-flyedit__group')].map((g) => g.dataset.section)`)) === J(['Text', 'Behaviour']), 'sections ' + J(await ev(`[...${fly}.querySelectorAll('.ws-flyedit__group')].map((g) => g.dataset.section)`)));
-    for (const l of ['Show tooltips', 'Command buttons', 'Tooltip mode']) must(await inFly(l), l + ' missing');
-    must(await ev(`!!${fly}.querySelector('.ws-flyedit__group:first-child .ws-toolpanel__slot')`), 'the slot does not open the first section');
+    must(J(await ev(`[...${fly}.querySelectorAll('.ws-flyedit__group')].map((g) => g.dataset.section)`)) === J(['Text']), 'sections ' + J(await ev(`[...${fly}.querySelectorAll('.ws-flyedit__group')].map((g) => g.dataset.section)`)));
+    must(J(await ev(`[...${fly}.querySelectorAll('.ws-flyedit button')].map((x) => x.textContent.trim())`)) === J(['Edit tooltip…']), 'the one button');
+    for (const l of ['Show tooltips', 'Command buttons', 'Tooltip mode']) must(!(await inFly(l)), l + ' is in the flyout');
   });
   await check('Pie: Shape and Path stay quiet and open the slot alone; Size lights with the Size meter; Angle lights', async () => {
     await chartType('Pie');
@@ -303,21 +305,30 @@ try {
     await ev(`(() => { const s = ${fly}.querySelector('[data-fly-ctl="labelAlign"] select'); s.value = 'center'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`); await settle(500);
     must((await opt0()).align === 'center', 'Alignment did not reach the label: ' + J(await opt0()));
     await openTile('label');
-    await ev(`(() => { const s = ${fly}.querySelector('[data-fly-ctl="labelFont"] select[aria-label="Font size"]'); s.value = '16'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`); await settle(500);
-    must(await ev(`document.activeElement?.getAttribute?.('aria-label') === 'Font size'`), 'focus did not return to the Font size select');
+    await ev(`(() => { const s = ${fly}.querySelector('[data-fly-ctl="labelFont"] input[aria-label="Font size"]'); s.value = '16'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`); await settle(500);
+    must(await ev(`document.activeElement?.getAttribute?.('aria-label') === 'Font size'`), 'focus did not return to the Font size field');
     await ev(`${fly}.querySelector('[data-fly-ctl="labelFont"] button[aria-label="Bold"]').click()`); await settle(500);
     const l1 = await opt0();
     must(l1.fontSize === 16 && l1.fontWeight === 600, 'Font did not reach the label: ' + J(l1));
     // the family list (a Microsoft Typography group), the common sizes, and a Microsoft font and size reaching the chart
     await openTile('label');
-    const lists = await ev(`(() => { const f = ${fly}.querySelector('[data-fly-ctl="labelFont"]'); const fam = f.querySelector('select[aria-label="Font family"]'); const sz = f.querySelector('select[aria-label="Font size"]');
-      return { groups: [...fam.querySelectorAll('optgroup')].map((g) => g.label), first: [...fam.options].slice(0, 3).map((o) => o.value), ms: [...fam.querySelectorAll('optgroup option')].map((o) => o.textContent), sizes: [...sz.options].map((o) => o.value) }; })()`);
-    must(J(lists.groups) === J(['Microsoft Typography']) && J(lists.first) === J(['default', 'serif', 'mono']), 'family list ' + J(lists));
-    must(lists.ms.includes('Calibri') && lists.ms.includes('Times New Roman') && lists.ms.length === 14, 'Microsoft fonts ' + J(lists.ms));
-    must(J(lists.sizes) === J(['auto', '8', '9', '10', '11', '12', '14', '16', '18', '20', '24', '28', '32', '36', '48', '72']), 'sizes ' + J(lists.sizes));
+    const lists = await ev(`(() => { const f = ${fly}.querySelector('[data-fly-ctl="labelFont"]'); const fam = f.querySelector('select[aria-label="Font family"]');
+      return { groups: fam.querySelectorAll('optgroup').length, first: [...fam.options].slice(0, 3).map((o) => o.value), all: [...fam.options].map((o) => o.textContent), up: !!f.querySelector('button[aria-label="Increase font size"]'), down: !!f.querySelector('button[aria-label="Decrease font size"]') }; })()`);
+    must(lists.groups === 0 && J(lists.first) === J(['default', 'serif', 'mono']), 'family list is one level ' + J(lists));
+    must(lists.all.includes('Calibri') && lists.all.includes('Times New Roman') && lists.all.length === 17, 'fonts ' + J(lists.all));
+    must(lists.up && lists.down, 'the size arrows are missing');
+    // the arrows step one px, starting from the automatic 14
+    await ev(`(() => { const s = ${fly}.querySelector('[data-fly-ctl="labelFont"] input[aria-label="Font size"]'); s.value = ''; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`); await settle(500);
+    await openTile('label');
+    await ev(`${fly}.querySelector('[data-fly-ctl="labelFont"] button[aria-label="Decrease font size"]').click()`); await settle(500);
+    must((await opt0()).fontSize === 13, 'Decrease from Automatic should draw 13: ' + J(await opt0()));
+    await openTile('label');
+    await ev(`${fly}.querySelector('[data-fly-ctl="labelFont"] button[aria-label="Increase font size"]').click()`); await settle(500);
+    must((await opt0()).fontSize === 14, 'Increase should draw 14: ' + J(await opt0()));
+    await openTile('label');
     await ev(`(() => { const s = ${fly}.querySelector('[data-fly-ctl="labelFont"] select[aria-label="Font family"]'); s.value = 'ms-arial'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`); await settle(500);
     await openTile('label');
-    await ev(`(() => { const s = ${fly}.querySelector('[data-fly-ctl="labelFont"] select[aria-label="Font size"]'); s.value = '24'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`); await settle(500);
+    await ev(`(() => { const s = ${fly}.querySelector('[data-fly-ctl="labelFont"] input[aria-label="Font size"]'); s.value = '24'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`); await settle(500);
     const l3 = await opt0();
     must(/Arial/.test(l3.fontFamily ?? '') && l3.fontSize === 24, 'a Microsoft font and a listed size did not reach the label: ' + J(l3));
     must(await ev(`${fly}.querySelector('[data-fly-ctl="labelFont"] select[aria-label="Font family"]').selectedOptions[0].textContent === 'Arial'`), 'the family select lost its choice');
@@ -359,11 +370,11 @@ try {
     await openTile('label');
     await ev(`(() => { const s = ${fly}.querySelector('[data-fly-ctl="labelAlign"] select'); s.value = 'auto'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`); await settle(500);
     await openTile('label');
-    await ev(`(() => { const s = ${fly}.querySelector('[data-fly-ctl="labelFont"] select[aria-label="Font size"]'); s.value = 'auto'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`); await settle(500);
+    await ev(`(() => { const s = ${fly}.querySelector('[data-fly-ctl="labelFont"] input[aria-label="Font size"]'); s.value = ''; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`); await settle(500);
     await openTile('label');
     await ev(`${fly}.querySelector('[data-fly-ctl="labelFont"] button[aria-label="Bold"]').click()`); await settle(500);
     const l2 = await opt0();
-    must(!('align' in l2) && !('fontWeight' in l2) && l2.fontSize === undefined, 'defaults left something on the label: ' + J(l2));
+    must(!('align' in l2) && !('fontWeight' in l2) && l2.fontSize === 14, 'defaults left something on the label: ' + J(l2));
   });
   await check('Size: Marker size is a meter whose leftmost stop is Auto; a Format-free control with the same stored key', async () => {
     await chartType('Line');

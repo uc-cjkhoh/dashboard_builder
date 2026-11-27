@@ -14,10 +14,10 @@ const FIELD_SIZED = new Set(["scatter", "square", "circle", "bar", "gantt"]);
 
 /**
  * `tool` is the Marks tile key ("size" | "shape" | "label" | "tooltip" | "path" | "period" | "pages"; any other has no moved controls).
- * `i`: `{ chartType, isChart, heatmapCircle, sizeEdit, shapeBins, memberShapes, labelMarks, labelPosition, lineKeys, tooltipKeys, labelsDrawn, periodSet, compare, pagesSet }` —
+ * `i`: `{ chartType, isChart, heatmapCircle, sizeEdit, shapeBins, memberShapes, labelMarks, labelPosition, lineKeys, labelsDrawn, periodSet, compare, pagesSet }` —
  * `sizeEdit` a drawn Size field offers Edit Sizes, `shapeBins` a measure is on Shape, `memberShapes` a Shape dimension has members to give a symbol,
  * `labelChart` the chart type draws labels (Text, Font, Alignment, Allow labels to overlap), `labelMarks` / `labelPosition` Marks to Label / Position are offered for this chart type, `labelsDrawn` a label is drawn
- * (Show mark labels or a Label field, on a chart that draws them): the Label controls are offered by chart type and sit disabled until then, never hidden, `lineKeys` / `tooltipKeys` the keys `lineControlSpecs` / `tooltipControlSpecs` give,
+ * (Show mark labels or a Label field, on a chart that draws them): the Label controls are offered by chart type and sit disabled until then, never hidden, `lineKeys` the keys `lineControlSpecs` gives,
  * `periodSet` a Dates field is set, `compare` it compares to another period, `pagesSet` a Pages field is set.
  * Returns `[{ label, keys, heading? }]` in display order, a section with no key omitted (`heading`: the section shows its label as a visible heading — the Label tile's).
  */
@@ -41,8 +41,7 @@ export function flyoutSections(tool, i) {
       add("Options", i.labelChart ? ["labelOverlap"] : [], true);
       break;
     case "tooltip":
-      add("Text", ["text"]);
-      add("Behaviour", i.tooltipKeys);
+      add("Text", ["text"]); // one button: the Edit tooltip modal owns the text, its format and the behaviour
       break;
     case "path":
       add("Line", [...(linesTakeStyle(i.chartType) ? ["lineStyle"] : []), ...(i.lineKeys.includes("linePattern") ? ["linePattern"] : [])]);
