@@ -855,6 +855,8 @@ body.is-resizing-y { cursor: ns-resize; user-select: none; }
 .ws-tip__cmds .ws-select__btn { white-space: nowrap; }
 .ws-tip__cmds .ws-select__btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 
+/* An icon-only button in a flyout editor is centred both ways: core's `.btn:has(> .icon:first-child)` pads an icon that leads a label (8px before, 16px after), which pushed a lone icon 4px left of centre. */
+.ws-flyedit .btn:has(> .icon:only-child) { padding-inline: var(--s2); }
 /* The Tooltip tile's editor (tooltip-editor.js), laid out like Tableau's Edit Tooltip inside the Marks flyout: toolbar, one editor surface, preview, behaviour checkboxes, field formats. It is a
    .ws-flyedit like the other tiles', in a wider flyout (the toolbar and the text need it); each section is one .ws-flyedit__group. */
 .ws-toolfly--wide { width: min(480px, calc(100% - 16px)); }

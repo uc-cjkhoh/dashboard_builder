@@ -29,7 +29,7 @@ const COMMIT_DELAY = 400;  // ms of quiet after an edit before the text group is
  *  Format config; `fields`: [{ name, sample, kind }] the drawn chart offers; `behaviour`: { type, gate, note } for tooltipControlSpecs (null: no behaviour controls);
  *  `markFields`: the names of the fields held on the Tooltip card (each can be removed).
  *  `commit(patch)` receives one group at a time: { text, style, formats } (the validated text group; "" / null = the automatic tooltip), { format } (the whole next Format),
- *  or { dropMarkFields: [index] } (an index into `markFields`). `section(label, nodes)` builds one `.ws-flyedit__group`.
+ *  or { dropMarkFields: [index] } (an index into `markFields`). `section(label, nodes, heading)` builds one `.ws-flyedit__group`; only Preview shows its title (a bordered box with no label would read as a second text field), every other section is named by its own controls.
  *  Returns { root, sync, focus, flush, destroy }. */
 export function createTooltipEditor({ state, commit, section }) {
   const n = ++seq;
@@ -99,7 +99,7 @@ export function createTooltipEditor({ state, commit, section }) {
 
   const preview = el("div", "ws-tipedit__preview"); preview.setAttribute("aria-label", "Tooltip preview"); preview.setAttribute("role", "group");
   const behavSec = section("Behaviour", [behav]);
-  root.append(section("Text", [bar, doc, count, err]), section("Preview", [preview]), behavSec, section("More", [fmtBox, cardBox, reset]));
+  root.append(section("Text", [bar, doc, count, err]), section("Preview", [preview], true), behavSec, section("More", [fmtBox, cardBox, reset]));
 
   // --- the model <-> the surface -------------------------------------------------------------------------------------------------------
   const known = () => new Map(fields().map((f) => [f.name, f]));

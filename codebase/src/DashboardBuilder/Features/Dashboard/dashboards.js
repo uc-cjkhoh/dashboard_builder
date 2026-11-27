@@ -2709,7 +2709,8 @@ export function initDashboards() {
   }
   // The pieces every Marks flyout is made of (Color's, and each tile's own controls; the keys come from marks-flyout-model.js / colour-flyout-model.js).
   // flyCtl remembers which control changed (capture: before the control's own handler rebuilds the flyout); flySection is one hairline-divided section
-  // with an aria-label and no visible heading; flyEditor is the editor's root (null when no section has a control, so the flyout is the slot alone).
+  // with an aria-label, and a visible heading only when `heading` asks for one (its controls do not name it); flyEditor is the editor's root (null when no section has a control,
+  // so the flyout is the slot alone). A heading tells sections apart, so a flyout left with one section shows none: the title band names it.
   function flyCtl(key, node) {
     node.dataset.flyCtl = key;
     for (const x of node.querySelectorAll("select, input")) x.addEventListener("change", () => { flyFocus = key; flyFocusSub = x.getAttribute("aria-label"); }, true);
@@ -2721,13 +2722,14 @@ export function initDashboards() {
     const group = el("div", "ws-flyedit__group");
     group.setAttribute("role", "group"); group.setAttribute("aria-label", label);
     group.dataset.section = label;
-    if (heading) { const h = el("div", "ws-flyedit__heading", label); h.setAttribute("aria-hidden", "true"); group.append(h); } // the Label tile's sections read like Tableau's card; the group's aria-label names it for a screen reader
+    if (heading) { const h = el("div", "ws-flyedit__heading", label); h.setAttribute("aria-hidden", "true"); group.append(h); } // the group's aria-label names it for a screen reader
     group.append(...nodes);
     return group;
   }
   function flyEditor(sections, extraClass = "") {
     const root = el("div", `ws-flyedit${extraClass ? ` ${extraClass}` : ""}`);
     for (const s of sections) if (s?.childElementCount) root.append(s);
+    if (root.childElementCount < 2) for (const h of root.querySelectorAll(".ws-flyedit__heading")) h.remove(); // one section: nothing to tell apart from
     return root.childElementCount ? root : null;
   }
   // The first section of a flyout editor (the one the field slot opens), made when the editor has none under that label.

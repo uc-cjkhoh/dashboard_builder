@@ -19,7 +19,7 @@ const FIELD_SIZED = new Set(["scatter", "square", "circle", "bar", "gantt"]);
  * `labelChart` the chart type draws labels (Text, Font, Alignment, Allow labels to overlap), `labelMarks` / `labelPosition` Marks to Label / Position are offered for this chart type, `labelsDrawn` a label is drawn
  * (Show mark labels or a Label field, on a chart that draws them): the Label controls are offered by chart type and sit disabled until then, never hidden, `lineKeys` the keys `lineControlSpecs` gives,
  * `periodSet` a Dates field is set, `compare` it compares to another period, `pagesSet` a Pages field is set.
- * Returns `[{ label, keys, heading? }]` in display order, a section with no key omitted (`heading`: the section shows its label as a visible heading — the Label tile's).
+ * Returns `[{ label, keys, heading? }]` in display order, a section with no key omitted (`heading`: the section shows its label as a visible heading, set only where its controls do not name it — the Label tile's later sections — and dropped by `flyEditor` when a flyout has one section).
  */
 export function flyoutSections(tool, i) {
   const out = [];

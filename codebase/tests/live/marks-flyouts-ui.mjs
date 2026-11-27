@@ -199,6 +199,13 @@ try {
     must(J(await ev(`[...${fly}.querySelectorAll('.ws-tipedit__check')].map((x) => x.textContent.trim())`)) === J(['Show tooltips', 'Include command buttons']), 'the behaviour checkboxes');
     must(await ev(`!!${fly}.querySelector('.ws-tipedit__mode')`), 'the mode select');
   });
+  await check('section titles only where a section is not named by its controls: the Tooltip titles Preview; Color, Size and Path (named by their own controls, or one section) have none', async () => {
+    const heads = async (tile) => { await openTile(tile); return ev(`[...${fly}.querySelectorAll('.ws-flyedit__heading')].map((h) => h.textContent)`); };
+    must(J(await heads('tooltip')) === J(['Preview']), 'tooltip headings ' + J(await heads('tooltip')));
+    for (const tile of ['color', 'size', 'path']) must(J(await heads(tile)) === '[]', `${tile} shows a heading: ${J(await heads(tile))}`);
+    await openTile('tooltip');
+    must(await ev(`getComputedStyle(${fly}.querySelector('.ws-flyedit__heading')).fontWeight === '600'`), 'the Preview title wears the flyout heading style');
+  });
   await check('Pie: Shape and Path stay quiet and open the slot alone; Size lights with the Size meter; Angle lights', async () => {
     await chartType('Pie');
     for (const k of ['shape', 'path']) must(await quiet(k), `${k} not quiet on a pie`);
