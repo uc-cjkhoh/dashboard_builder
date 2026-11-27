@@ -43,9 +43,9 @@ test("Label: only the Label tile's sections carry a heading", () => {
   assert.deepEqual(withHeading("label", { labelChart: true, labelMarks: true, labelPosition: true }), ["Label Appearance", "Marks to Label", "Options"]);
   for (const tool of ["size", "shape", "tooltip", "path", "pages", "period"]) assert.deepEqual(withHeading(tool, { sizeEdit: true, shapeBins: true, pagesSet: true, periodSet: true }), [], tool);
 });
-test("Tooltip: one control (the Edit tooltip button) on every chart type; the behaviour lives in the modal", () => {
-  assert.deepEqual(keys("tooltip", { chartType: "table", isChart: false }), ["Text:text"]);
-  assert.deepEqual(keys("tooltip", {}), ["Text:text"]);
+test("Tooltip: no model sections (tooltip-editor.js builds the whole editor), on every chart type", () => {
+  assert.deepEqual(keys("tooltip", { chartType: "table", isChart: false }), []);
+  assert.deepEqual(keys("tooltip", {}), []);
 });
 test("Path: Line style on line, area and combo, Line pattern when offered", () => {
   assert.deepEqual(keys("path", { chartType: "combo", lineKeys: ["linePattern", "lineMarkers"] }), ["Line:lineStyle+linePattern"]);

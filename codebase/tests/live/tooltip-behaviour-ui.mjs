@@ -1,4 +1,4 @@
-// Browser checks for the tooltip behaviour in the Edit tooltip modal (Show tooltips, Include command buttons, the mode; D151 moved them out of Format, where Group dates stays, and D171 moved them into the modal): the controls and their gates, a REAL mouse hovering a bar, line,
+// Browser checks for the tooltip behaviour in the Edit tooltip editor (the Tooltip flyout) (Show tooltips, Include command buttons, the mode; D151 moved them out of Format, where Group dates stays, and D171 into the modal, and D173 back into the flyout as part of the editor): the controls and their gates, a REAL mouse hovering a bar, line,
 // point and pie mark (the tooltip is enterable: the pointer walks onto it, the buttons run Keep only / Exclude / View data, and nothing is left stuck after a hide), the
 // Responsive pin (a click pins the tooltip until Esc, an empty-chart click, the mark again or a command; a redraw never re-opens it), Show tooltips off, the PNG / SVG
 // export (never has a tooltip in it) and screenshots (run once with SCHEME=dark for the dark set). The real dev app in headless Chromium, driven over the DevTools
@@ -128,39 +128,33 @@ try {
     await waitFor(`!document.getElementById('worksheet-view').hidden && !!__t.chip('region') && !document.querySelector('.ws-shelf--columns .ws-pill')`, 'a fresh worksheet');
     await ev(`document.documentElement.${SCHEME === 'dark' ? "setAttribute('data-scheme', 'dark')" : "removeAttribute('data-scheme')"}`);
   };
-  // Show tooltips / Command buttons / Tooltip mode live in the Edit tooltip modal (the Tooltip flyout is its button alone); everything else (Number, Group dates ...) stays in Format.
-  // Reading a control opens the modal and cancels it; changing one opens it, changes it and presses OK (one commit). The modal covers Format, so each helper closes the other first.
+  // Show tooltips / Command buttons / Tooltip mode live in the Edit tooltip editor (the Tooltip flyout); everything else (Number, Group dates ...) stays in Format.
+  // A control there commits at once. The flyout covers Format's panel, so each helper closes the other first.
   const TIP_LABELS = ['Show tooltips', 'Command buttons', 'Tooltip mode'];
   const tipTool = `document.querySelector('.ws-tool[data-tool="tooltip"]')`;
-  const tipDlg = `document.querySelector('dialog.tipdlg--rich[open]')`;
+  const tipDlg = `document.querySelector('#ws-toolfly .ws-tipedit')`;
   const formatOpen = () => ev(`!!(${fmtField('Number')})`);
   const modalOpen = () => ev(`${tipDlg} !== null`);
   const flyOpen = () => ev(`!!document.querySelector('#ws-toolfly:not([hidden]) .ws-toolpanel')`);
-  const openFormat = async () => { if (await modalOpen()) await closeModal(false); if (!(await formatOpen())) await ev(`${fmtTool}.click()`); await waitFor(`!!(${fmtField('Number')})`, 'format panel open'); };
-  const closeModal = async (apply) => {
-    await ev(`document.querySelector('dialog.tipdlg--rich ${apply ? '.btn--primary' : '.dialog__foot button:nth-child(3)'}').click()`);
-    await waitFor(`${tipDlg} === null`, 'modal closed'); await b.sleep(80);
-  };
-  const openTip = async () => { // tolerant: a chart with no tooltip controls (a table) still opens the modal, and the caller then reads null
+  const closeFly = async () => { await ev(`document.querySelector('#ws-toolfly .iconbtn[aria-label="Close editor"]')?.click()`); await settle(300); };
+  const openFormat = async () => { if (await flyOpen()) await closeFly(); if (!(await formatOpen())) await ev(`${fmtTool}.click()`); await waitFor(`!!(${fmtField('Number')})`, 'format panel open'); };
+  const openTip = async () => {
     if (await modalOpen()) return;
     if (await formatOpen()) await ev(`${fmtTool}.click()`);
-    if (!(await flyOpen())) await ev(`${tipTool}.click()`);
-    await waitFor(`!!document.querySelector('#ws-toolfly .ws-tipedit__modal')`, 'Edit tooltip button');
-    await ev(`document.querySelector('#ws-toolfly .ws-tipedit__modal').click()`);
-    await waitFor(`${tipDlg} !== null`, 'Edit tooltip modal');
+    await ev(`${tipTool}.click()`);
+    await waitFor(`${tipDlg} !== null`, 'the Tooltip editor');
   };
   const ensure = async (label) => { if (TIP_LABELS.includes(label)) await openTip(); else await openFormat(); };
   const closeFormat = async () => { // every panel: a snapshot / a hover needs the bare chart (a flyout floats over the chart's corner)
-    if (await modalOpen()) await closeModal(false);
     if (await formatOpen()) await ev(`${fmtTool}.click()`);
-    if (await flyOpen()) await ev(`document.querySelector('#ws-toolfly .iconbtn[aria-label="Close editor"]')?.click()`);
+    if (await flyOpen()) await closeFly();
     await settle(300); };
-  const tipCtl = (label) => label === 'Tooltip mode' ? `${tipDlg}?.querySelector('.tipdlg__mode')`
-    : `[...(${tipDlg}?.querySelectorAll('.tipdlg__check') ?? [])].find((l) => l.textContent.toLowerCase().includes(${J(label === 'Command buttons' ? 'command buttons' : label.toLowerCase())}))?.querySelector('input')`;
+  const tipCtl = (label) => label === 'Tooltip mode' ? `${tipDlg}?.querySelector('.ws-tipedit__mode')`
+    : `[...(${tipDlg}?.querySelectorAll('.ws-tipedit__check') ?? [])].find((l) => l.textContent.toLowerCase().includes(${J(label === 'Command buttons' ? 'command buttons' : label.toLowerCase())}))?.querySelector('input')`;
   const ctl = (label) => TIP_LABELS.includes(label) ? tipCtl(label) : `(${fmtField(label)})?.querySelector('input, select')`;
-  const state = async (label) => { await ensure(label); const r = await ev(`(() => { const c = ${ctl(label)}; return c ? { checked: c.checked, value: c.value, disabled: c.disabled, title: c.title } : null; })()`); if (TIP_LABELS.includes(label)) await closeModal(false); return r; };
-  const flip = async (label) => { await ensure(label); await ev(`${ctl(label)}.click()`); if (TIP_LABELS.includes(label)) await closeModal(true); await settle(400); };
-  const pick = async (label, v) => { await ensure(label); await ev(`(() => { const s = ${ctl(label)}; s.value = ${J(v)}; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`); if (TIP_LABELS.includes(label)) await closeModal(true); await settle(400); };
+  const state = async (label) => { await ensure(label); return ev(`(() => { const c = ${ctl(label)}; return c ? { checked: c.checked, value: c.value, disabled: c.disabled, title: c.title } : null; })()`); };
+  const flip = async (label) => { await ensure(label); await ev(`${ctl(label)}.click()`); await settle(400); };
+  const pick = async (label, v) => { await ensure(label); await ev(`(() => { const s = ${ctl(label)}; s.value = ${J(v)}; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`); await settle(400); };
 
   // real mouse: positions of marks read from the live chart, moves and clicks through Input.dispatchMouseEvent
   const mv = (x, y) => b.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, buttons: 0 });

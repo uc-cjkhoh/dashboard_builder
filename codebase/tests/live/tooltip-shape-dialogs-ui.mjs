@@ -1,5 +1,5 @@
-// Browser checks for the Edit tooltip modal and the Edit Shape dialog: the Tooltip flyout is one button (no drop row, no text box, no chips), the modal follows Tableau's Edit Tooltip
-// (toolbar, lines, behaviour checkboxes, Reset / Preview / OK / Cancel) and the Shape flyout opens a palette dialog (Select Data Item, Select Shape Palette, Assign palette, Reset).
+// Browser checks for the Edit tooltip editor (the Tooltip flyout: no drop row, no text box, no chips; Tableau's Edit Tooltip as a .ws-flyedit that commits live)
+// and the Edit Shape dialog: the Shape flyout opens a palette dialog (Select Data Item, Select Shape Palette, Assign palette, Reset).
 // Real Chromium over CDP (tests/live/cdp.mjs), /api/* mocked. Run:  node tests/live/marks-flyouts-ui.mjs   (start the app first: cd src/DashboardBuilder && dotnet run --no-launch-profile --urls http://localhost:5180 ; stop it with fuser -k 5180/tcp)
 // Env: APP_URL, SHOTS_DIR (screenshot folder), CDP_PORT (default: a free port), CHROME_BIN.
 import { launch } from './cdp.mjs';
@@ -177,8 +177,8 @@ try {
   const inst = `window.echarts.getInstanceByDom(document.querySelector('.ws-chart-canvas'))`;
   const opt = () => ev(`${inst}.getOption()`);
   const toolEl = (name) => `document.querySelector('.ws-tool[aria-label^="${name}"]')`;
-  const tipDlg = `document.querySelector('dialog.tipdlg--rich[open]')`;
-  const docEl = `document.querySelector('dialog.tipdlg--rich .tipdlg__doc')`;
+  const tipDlg = `document.querySelector('#ws-toolfly .ws-tipedit')`;
+  const docEl = `document.querySelector('#ws-toolfly .ws-tipedit__doc')`;
   const shapeDlg = `document.querySelector('dialog.shapedlg[open]')`;
   const click = (sel) => ev(`document.querySelector(${J(sel)}).click()`);
   const setVal = (sel, v) => ev(`(() => { const e = document.querySelector(${J(sel)}); e.value = ${J(v)}; e.dispatchEvent(new Event(e.tagName === 'SELECT' ? 'change' : 'input', { bubbles: true })); return true; })()`);
@@ -186,98 +186,88 @@ try {
   const tipHtml = (di) => ev(`(() => { const o = ${inst}.getOption(); const f = o.tooltip[0].formatter; const s = o.series[0]; return typeof f === 'function' ? String(f(Array.isArray(f.length) ? {} : [{ dataIndex: ${di}, seriesName: s.name, value: s.data[${di}], axisValue: 'x', name: 'x', seriesIndex: 0, componentType: 'series', marker: '' }])) : ''; })()`);
 
   // ---- Tooltip -------------------------------------------------------------------------------------------------------
-  await check('the Tooltip flyout is the Edit tooltip button alone: no Drop Field Here row, no text box, no chips, no Behaviour section', async () => {
+  const tipSel = (q) => `#ws-toolfly .ws-tipedit ${q}`;
+  const commitWait = async () => { await b.sleep(700); await settle(500); }; // the text group commits a moment after typing stops
+  await check('the Tooltip flyout is the editor: toolbar, text, preview, behaviour; no Drop Field Here row, no text box, no chips, no modal', async () => {
     await openTile('tooltip');
-    const r = await ev(`(() => { const f = document.getElementById('ws-toolfly'); return { slot: !!f.querySelector('.ws-toolpanel__slot, .ws-addfield, .ws-toolpanel__zone'), ta: !!f.querySelector('textarea'), chips: !!f.querySelector('.ws-tipedit__chip'), preview: !!f.querySelector('.ws-tipedit__preview'), behaviour: !!f.querySelector('.ws-flyedit__group[data-section="Behaviour"]'), buttons: [...f.querySelectorAll('.ws-toolpanel > .ws-flyedit button')].map((x) => x.textContent.trim()) }; })()`);
-    must(!r.slot && !r.ta && !r.chips && !r.preview && !r.behaviour, 'leftovers in the flyout: ' + J(r));
-    must(J(r.buttons) === '["Edit tooltip…"]', 'the one button: ' + J(r.buttons));
+    const r = await ev(`(() => { const f = document.getElementById('ws-toolfly'); return { slot: !!f.querySelector('.ws-toolpanel__slot, .ws-addfield, .ws-toolpanel__zone'), ta: !!f.querySelector('textarea'), modalBtn: !!f.querySelector('.ws-tipedit__modal'), dialogs: document.querySelectorAll('dialog[open]').length, root: !!f.querySelector('.ws-flyedit.ws-tipedit'), sections: [...f.querySelectorAll('.ws-flyedit__group')].map((g) => g.dataset.section), wide: f.getBoundingClientRect().width }; })()`);
+    must(!r.slot && !r.ta && !r.modalBtn && r.dialogs === 0 && r.root, 'leftovers in the flyout: ' + J(r));
+    must(J(r.sections) === '["Text","Preview","Behaviour","More"]', 'sections: ' + J(r.sections));
+    must(r.wide > 400, 'the Tooltip flyout is wider than the other tiles\': ' + r.wide);
     await shot('tooltip-flyout');
   });
-  await check('the tile still takes a dropped field (it is listed in the modal, where it can be removed)', async () => {
+  await check('the tile still takes a dropped field (it is listed in the editor, where it can be removed at once)', async () => {
     await closePanels();
     await dragChip('channel', toolEl('Tooltip')); await settle(500);
     await openTile('tooltip');
     must(await ev(`!document.getElementById('ws-toolfly').querySelector('.ws-toolpanel__slot')`), 'still no slot after a drop');
-    await click('.ws-tipedit__modal');
-    await waitFor(`${tipDlg} !== null`, 'modal open');
-    must(await ev(`!!${tipDlg}.querySelector('.tipdlg__cardfields:not([hidden])') && ${tipDlg}.querySelector('.tipdlg__cardfields').textContent.includes('channel')`), 'the card field is listed');
-    await ev(`${tipDlg}.querySelector('.tipdlg__cardfields').open = true`);
-    await click('dialog.tipdlg--rich .tipdlg__cardrow button');
-    await click('dialog.tipdlg--rich .btn--primary');
-    await waitFor(`${tipDlg} === null`, 'modal closed');
+    must(await ev(`!!${tipDlg}.querySelector('.ws-tipedit__cardfields:not([hidden])') && ${tipDlg}.querySelector('.ws-tipedit__cardfields').textContent.includes('channel')`), 'the card field is listed');
+    await ev(`${tipDlg}.querySelector('.ws-tipedit__cardfields').open = true`);
+    await click(tipSel('.ws-tipedit__cardrow button'));
     await settle(500);
-    await openTile('tooltip'); await click('.ws-tipedit__modal'); await waitFor(`${tipDlg} !== null`, 'modal reopened');
-    must(await ev(`${tipDlg}.querySelector('.tipdlg__cardfields').hidden`), 'the removed card field is gone from the sheet (the modal lists none)');
-    await click('dialog.tipdlg--rich .dialog__foot button:nth-child(3)'); await waitFor(`${tipDlg} === null`, 'closed');
+    must(await ev(`${tipDlg}.querySelector('.ws-tipedit__cardfields').hidden`), 'the removed card field leaves the list at once');
+    await openTile('tooltip');
+    must(await ev(`${tipDlg}.querySelector('.ws-tipedit__cardfields').hidden`), 'the removed card field is gone from the sheet (the editor lists none)');
   });
-  await check('the modal follows Tableau\'s Edit Tooltip: toolbar, lines, behaviour checkboxes, Reset / Preview / Cancel / OK', async () => {
-    await openTile('tooltip'); await click('.ws-tipedit__modal');
-    await waitFor(`${tipDlg} !== null`, 'modal open');
-    const r = await ev(`(() => { const d = ${tipDlg}; const t = d.querySelector('.tipdlg__bar'); return {
-      title: d.querySelector('.dialog__title').textContent,
+  await check('the editor follows Tableau\'s Edit Tooltip: toolbar, lines, preview, behaviour checkboxes, Reset', async () => {
+    await openTile('tooltip');
+    const r = await ev(`(() => { const d = ${tipDlg}; const t = d.querySelector('.ws-tipedit__bar'); return {
       bar: [...t.querySelectorAll('select, button')].map((x) => x.getAttribute('aria-label') || x.textContent.trim()),
-      checks: [...d.querySelectorAll('.tipdlg__check')].map((x) => x.textContent.trim()),
-      mode: !!d.querySelector('.tipdlg__mode'),
-      foot: [...d.querySelectorAll('.dialog__foot button')].map((x) => x.textContent.trim()) }; })()`);
-    must(r.title === 'Edit tooltip', 'title ' + r.title);
+      checks: [...d.querySelectorAll('.ws-tipedit__check')].map((x) => x.textContent.trim()),
+      mode: !!d.querySelector('.ws-tipedit__mode'),
+      preview: d.querySelector('.ws-tipedit__preview').textContent,
+      reset: d.querySelector('.ws-tipedit__reset').textContent }; })()`);
     for (const l of ['Font', 'Font size', 'Bold', 'Italic', 'Underline', 'Colour', 'Align left', 'Align center', 'Align right', 'Clear formatting of the selected lines']) must(r.bar.includes(l), `toolbar lacks ${l}: ${J(r.bar)}`);
     must(r.bar.includes('Insert'), 'toolbar lacks Insert');
     must(J(r.checks) === '["Show tooltips","Include command buttons"]', 'checkboxes ' + J(r.checks));
     must(r.mode, 'the mode select beside Show tooltips');
-    must(J(r.foot) === '["Reset","Preview","Cancel","OK"]', 'footer ' + J(r.foot));
+    must(r.preview === 'Automatic tooltip' && r.reset === 'Reset', J(r));
     await shot('tooltip-modal-empty');
   });
-  await check('Insert lists the drawn fields; a line takes font, bold, underline and centre; the preview and the chart follow; OK is one commit', async () => {
+  await check('Insert lists the drawn fields; a line takes font, bold, underline and centre; the preview and the chart follow', async () => {
     await ev(`${docEl}.focus()`);
     await b.type('Region: ');
-    await click('dialog.tipdlg--rich .tipdlg__insertbtn');
-    const items = await ev(`[...${tipDlg}.querySelectorAll('.tipdlg__item')].map((x) => x.textContent)`);
+    await click(tipSel('.ws-tipedit__insertbtn'));
+    const items = await ev(`[...${tipDlg}.querySelectorAll('.ws-tipedit__item')].map((x) => x.textContent)`);
     must(items.some((x) => /region$/.test(x)) && items.length >= 2, 'the menu lists the drawn fields: ' + J(items));
-    await ev(`[...${tipDlg}.querySelectorAll('.tipdlg__item')].find((x) => /region$/.test(x.textContent)).click()`);
+    await ev(`[...${tipDlg}.querySelectorAll('.ws-tipedit__item')].find((x) => /region$/.test(x.textContent)).click()`);
     must((await ev(`${docEl}.children[0].textContent`)) === 'Region: <orders.region>', 'the field is inserted at the caret');
-    await click('dialog.tipdlg--rich [aria-label="Bold"]'); await click('dialog.tipdlg--rich [aria-label="Underline"]'); await click('dialog.tipdlg--rich [aria-label="Align center"]');
-    await setVal('dialog.tipdlg--rich select[aria-label="Font"]', 'ms-georgia'); await setVal('dialog.tipdlg--rich select[aria-label="Font size"]', '16');
+    await click(tipSel('[aria-label="Bold"]')); await click(tipSel('[aria-label="Underline"]')); await click(tipSel('[aria-label="Align center"]'));
+    await setVal(tipSel('select[aria-label="Font"]'), 'ms-georgia'); await setVal(tipSel('select[aria-label="Font size"]'), '16');
     const pressed = await ev(`['Bold', 'Underline', 'Align center'].map((l) => ${tipDlg}.querySelector('[aria-label="' + l + '"]').getAttribute('aria-pressed'))`);
     must(pressed.join() === 'true,true,true', 'toggles show their state: ' + pressed);
     const css = await ev(`${docEl}.children[0].style.cssText`);
     must(/Georgia|font-georgia|ms-georgia/.test(css) && /text-align: center/.test(css) && /underline/.test(css), 'the line shows its own format: ' + css);
-    await click('dialog.tipdlg--rich .dialog__foot button:nth-child(2)'); // Preview
-    must(await ev(`!${tipDlg}.querySelector('.tipdlg__preview').hidden && ${tipDlg}.querySelector('.tipdlg__preview').innerHTML.includes('text-align:center')`), 'Preview shows the styled tooltip');
+    must(await ev(`${tipDlg}.querySelector('.ws-tipedit__preview').innerHTML.includes('text-align:center')`), 'the preview shows the styled tooltip');
     await shot('tooltip-modal-styled');
-    await click('dialog.tipdlg--rich .btn--primary');
-    await waitFor(`${tipDlg} === null`, 'closed');
-    await settle(600);
+    await commitWait();
     const html = await tipHtml(0);
     must(html.includes('text-align:center') && html.includes('text-decoration:underline') && html.includes('font-weight:700') && html.includes('--font-ms-georgia'), 'the chart tooltip is styled: ' + html);
   });
-  await check('behaviour in the modal: Show tooltips off disables the rest; commit lands on OK only; Cancel discards', async () => {
-    await openTile('tooltip'); await click('.ws-tipedit__modal'); await waitFor(`${tipDlg} !== null`, 'open');
-    await ev(`${tipDlg}.querySelector('.tipdlg__check input').click()`); // Show tooltips off
-    must(await ev(`[...${tipDlg}.querySelectorAll('.tipdlg__check input')].slice(1).every((x) => x.disabled) && ${tipDlg}.querySelector('.tipdlg__mode').disabled`), 'the other controls are disabled');
-    await click('dialog.tipdlg--rich .dialog__foot button:nth-child(3)'); // Cancel
-    await waitFor(`${tipDlg} === null`, 'closed'); await settle(300);
-    must(await ev(`${inst}.getOption().tooltip[0].show !== false`), 'Cancel kept tooltips on');
-    await openTile('tooltip'); await click('.ws-tipedit__modal'); await waitFor(`${tipDlg} !== null`, 'open');
-    await ev(`${tipDlg}.querySelector('.tipdlg__check input').click()`);
-    await click('dialog.tipdlg--rich .btn--primary'); await waitFor(`${tipDlg} === null`, 'closed'); await settle(500);
-    must(await ev(`${inst}.getOption().tooltip[0].show === false`), 'OK turned tooltips off');
-    await openTile('tooltip'); await click('.ws-tipedit__modal'); await waitFor(`${tipDlg} !== null`, 'open');
-    await click('dialog.tipdlg--rich .tipdlg__reset');
-    must(await ev(`${tipDlg}.querySelector('.tipdlg__check input').checked`), 'Reset turns Show tooltips back on');
+  await check('behaviour: Show tooltips off disables the rest and takes effect at once; Reset asks once and turns it back on', async () => {
+    await openTile('tooltip');
+    await ev(`${tipDlg}.querySelector('.ws-tipedit__check input').click()`); // Show tooltips off
+    await settle(500);
+    must(await ev(`[...${tipDlg}.querySelectorAll('.ws-tipedit__check input')].slice(1).every((x) => x.disabled) && ${tipDlg}.querySelector('.ws-tipedit__mode').disabled`), 'the other controls are disabled');
+    must(await ev(`${inst}.getOption().tooltip[0].show === false`), 'off at once: no OK to press');
+    await click(tipSel('.ws-tipedit__reset'));
+    await waitFor(`!!(${confirmOpen})`, 'Reset asks first');
+    await ev(`[...(${confirmOpen}).querySelectorAll('button')].find((x) => x.textContent === 'Reset').click()`);
+    await waitFor(`!(${confirmOpen})`, 'confirm closed'); await settle(500);
+    must(await ev(`${tipDlg}.querySelector('.ws-tipedit__check input').checked`), 'Reset turns Show tooltips back on');
     must((await ev(`${docEl}.children[0].textContent`)) === '', 'Reset empties the text');
-    await click('dialog.tipdlg--rich .btn--primary'); await waitFor(`${tipDlg} === null`, 'closed'); await settle(500);
     must(await ev(`${inst}.getOption().tooltip[0].show !== false`), 'tooltips on again');
   });
-  await check('Esc closes the Insert menu first, then the modal (a draft: nothing is stored)', async () => {
-    await openTile('tooltip'); await click('.ws-tipedit__modal'); await waitFor(`${tipDlg} !== null`, 'open');
-    const r = await ev(`(() => { const x = ${tipDlg}.querySelector('.tipdlg__insertbtn').getBoundingClientRect(); return { x: x.left + x.width / 2, y: x.top + x.height / 2 }; })()`);
-    await b.click(r.x, r.y); // a real press: the browser's close watcher only lets a page cancel Esc after a user activation
-    await b.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
-    await b.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
-    await b.sleep(150);
-    const st = await ev(`({ open: ${tipDlg} !== null, menuHidden: ${tipDlg}?.querySelector('.tipdlg__menu').hidden, dialogs: document.querySelectorAll('dialog[open]').length })`);
-    must(st.open && st.menuHidden, 'the menu closed, the modal stayed: ' + J(st));
-    await click('dialog.tipdlg--rich .dialog__foot button:nth-child(3)'); await waitFor(`${tipDlg} === null`, 'closed');
+  await check('Esc closes the Insert menu first, then the flyout', async () => {
+    await openTile('tooltip');
+    const r = await ev(`(() => { const x = ${tipDlg}.querySelector('.ws-tipedit__insertbtn').getBoundingClientRect(); return { x: x.left + x.width / 2, y: x.top + x.height / 2 }; })()`);
+    await b.click(r.x, r.y);
+    const press = async () => { await b.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 }); await b.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 }); await b.sleep(200); };
+    await press();
+    const st = await ev(`({ open: !document.getElementById('ws-toolfly').hidden, menuHidden: ${tipDlg}?.querySelector('.ws-tipedit__menu').hidden })`);
+    must(st.open && st.menuHidden, 'the menu closed, the flyout stayed: ' + J(st));
+    await press();
+    must(await ev(`document.getElementById('ws-toolfly').hidden`), 'the second Esc closed the flyout');
   });
 
   // ---- Shape -----------------------------------------------------------------------------------------------------------
@@ -328,11 +318,11 @@ try {
     const back = (await opt()).series.map((s) => s.symbol);
     must(distinct(back) === 8 && back[0] === 'circle', 'default symbols again: ' + J(back.map((s) => String(s).slice(0, 12))));
   });
-  await check('an untouched OK on the tooltip modal changes nothing: no query, no redraw', async () => {
-    await openTile('tooltip'); await click('.ws-tipedit__modal'); await waitFor(`${tipDlg} !== null`, 'open');
+  await check('opening and closing the Tooltip flyout untouched changes nothing: no query, no redraw', async () => {
+    await openTile('tooltip');
     const n = queries.length;
-    await click('dialog.tipdlg--rich .btn--primary'); await waitFor(`${tipDlg} === null`, 'closed'); await settle(500);
-    must(queries.length === n, 'an untouched OK ran a query');
+    await closePanels(); await settle(700);
+    must(queries.length === n, 'an untouched close ran a query');
   });
   await check('Cancel and Esc discard the draft', async () => {
     await openTile('shape'); await click('.ws-memshape__open'); await waitFor(`${shapeDlg} !== null`, 'open');

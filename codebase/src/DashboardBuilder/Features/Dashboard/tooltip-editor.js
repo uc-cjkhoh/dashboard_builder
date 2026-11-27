@@ -1,10 +1,15 @@
-// The "Edit tooltip" modal, laid out like Tableau's Edit Tooltip: a formatting toolbar (font, size, Bold / Italic / Underline, colour, alignment, Insert ▾, clear),
-// one text editor, the behaviour checkboxes (Show tooltips with its mode, command buttons) and Reset / Preview / OK / Cancel.
+// The Tooltip tile's editor, laid out like Tableau's Edit Tooltip inside the Marks flyout (`div.ws-flyedit`): a formatting toolbar (font, size, Bold / Italic / Underline, colour,
+// alignment, Insert ▾, clear), one text editor, the always-visible preview, the behaviour checkboxes (Show tooltips with its mode, command buttons), the field formats and the
+// Tooltip card's fields, and Reset.
 // The editor is one contenteditable surface with a block per line, and the browser never edits it: every change (typing, Enter, paste, delete, cut, undo) arrives as a
 // `beforeinput`, is applied to the model (tooltip-style.js `replaceRange`: text plus one style per line) and the surface is drawn again from the model, so there is no HTML
 // to read back or to sanitise. The toolbar formats the lines the selection touches, not a run of characters.
-// DOM only — the rules are in tooltip-style.js, tooltip-model.js and tooltip-behaviour-model.js. Everything is a draft until OK (one commit); Esc / Cancel discard.
-import { makeButton, openDialog, closeDialog } from "../Core/ui.js";
+// It commits live, like every flyout: the text group (text, styles, field formats) a moment after typing stops, on leaving the editor, and on close (`flush`); the behaviour
+// checkboxes, a field format and a card-field removal at once. An invalid draft is never committed (the error line says why; closing with one reverts it, with a toast).
+// A commit re-renders the worksheet, which rebuilds the flyout: this editor is built once per sheet and its nodes are kept in place (dashboards.js `tooltipFly`), so the caret,
+// the selection, an open Insert menu, the undo steps and a composition survive; `sync()` re-reads what the sheet owns (behaviour, card fields, the drawn fields).
+// DOM only — the rules are in tooltip-style.js, tooltip-model.js and tooltip-behaviour-model.js.
+import { confirmDestructive } from "../Core/ui.js";
 import { icon } from "../Core/icons.js";
 import { LIMITS } from "../Core/validate.js";
 import { tooltipHtml, parseTooltip } from "./tooltip-model.js";
@@ -17,95 +22,88 @@ let seq = 0;
 const el = (tag, cls, t) => { const e = document.createElement(tag); if (cls) e.className = cls; if (t !== undefined) e.textContent = t; return e; };
 const STYLE_KEYS = ["font", "size", "bold", "italic", "underline", "align", "color"];
 const SHOWN_LABEL = { showTooltips: "Show tooltips", tooltipButtons: "Include command buttons" }; // the spec's own labels are the Format panel's; here the checkboxes read like Tableau's
-const HISTORY = 100; // undo steps kept
+const HISTORY = 100;       // undo steps kept
+const COMMIT_DELAY = 400;  // ms of quiet after an edit before the text group is committed
 
-/** `text` / `style` / `formats`: the sheet's tooltipText / tooltipStyle / tooltipFormats; `format`: the sheet's Format config (the behaviour settings and a field format start from it);
- *  `getFields()`: [{ name, sample, kind }] the drawn chart offers — read each time the Insert menu opens, because the chart can finish drawing after this opens;
- *  `behaviour`: { type, gate, note } for tooltipControlSpecs (the chart type, and why command buttons would do nothing); `markFields`: the names of the fields held on the Tooltip card (each can be removed);
- *  `onClose()` runs after the dialog closes (focus return); `onApply({ text, style, formats, format, dropMarkFields })` receives the validated result
- *  ({ text: "", style: null, formats: null } = the automatic tooltip; `format`: the whole next Format; `dropMarkFields`: indexes into `markFields`). */
-export function openTooltipDialog({ text, style, formats: formats0, format: format0, getFields, behaviour, markFields = [], onApply, onClose }) {
+/** `state()` is read each time it is needed, never captured: { text, style, formats, format, fields, behaviour, markFields } — the sheet's tooltipText / tooltipStyle / tooltipFormats and
+ *  Format config; `fields`: [{ name, sample, kind }] the drawn chart offers; `behaviour`: { type, gate, note } for tooltipControlSpecs (null: no behaviour controls);
+ *  `markFields`: the names of the fields held on the Tooltip card (each can be removed).
+ *  `commit(patch)` receives one group at a time: { text, style, formats } (the validated text group; "" / null = the automatic tooltip), { format } (the whole next Format),
+ *  or { dropMarkFields: [index] } (an index into `markFields`). `section(label, nodes)` builds one `.ws-flyedit__group`.
+ *  Returns { root, sync, focus, flush, destroy }. */
+export function createTooltipEditor({ state, commit, section }) {
   const n = ++seq;
-  let lines = toLines(text, style);
-  let formats = formats0 ? structuredClone(formats0) : {}; // draft per-field formats { name: { number?, decimals?, date? } }
-  let format = { ...(format0 ?? {}) };                     // draft Format (only the tooltip behaviour keys change here)
+  const st0 = state();
+  let lines = toLines(st0.text ?? "", st0.style ?? null);
+  let formats = st0.formats ? structuredClone(st0.formats) : {}; // draft per-field formats { name: { number?, decimals?, date? } }
   const end = { line: lines.length - 1, off: lines.at(-1).text.length };
-  let sel = { start: end, end };                            // the selection, as { line, off } positions in the model: what the toolbar formats and Insert writes over
-  const past = [], future = [];                             // undo / redo: [{ lines, sel }]
-  const dropped = new Set();                                // indexes of Tooltip-card fields removed in this draft
-  const fields = () => (typeof getFields === "function" ? getFields() : []) ?? [];
+  let sel = { start: end, end };                                  // the selection, as { line, off } positions in the model: what the toolbar formats and Insert writes over
+  const past = [], future = [];                                   // undo / redo: [{ lines, sel }]
+  const fields = () => state().fields ?? [];
+  const curFormat = () => state().format ?? {};
+  let composing = false, timer = 0, bad = "", fmtKey = null;
 
-  const dlg = el("dialog", "dialog tipdlg tipdlg--rich");
-  const title = el("h3", "dialog__title", "Edit tooltip"); title.id = `tipdlg-title-${n}`;
-  dlg.setAttribute("aria-labelledby", title.id);
-  const body = el("div", "dialog__body tipdlg__body");
+  const root = el("div", "ws-flyedit ws-tipedit");
 
   // --- toolbar ---------------------------------------------------------------------------------------------------------------
-  const bar = el("div", "tipdlg__bar"); bar.setAttribute("role", "toolbar"); bar.setAttribute("aria-label", "Format the selected lines");
+  const bar = el("div", "ws-tipedit__bar"); bar.setAttribute("role", "toolbar"); bar.setAttribute("aria-label", "Format the selected lines");
   const select = (label, options, onChange) => {
-    const s = el("select", "input tipdlg__sel"); s.setAttribute("aria-label", label);
+    const s = el("select", "input ws-tipedit__sel"); s.setAttribute("aria-label", label);
     for (const [v, t] of options) s.append(new Option(t, v));
     s.addEventListener("change", () => onChange(s.value)); return s;
   };
   const toggle = (label, glyph, onClick) => {
-    const b = el("button", "btn btn--ghost tipdlg__tog"); b.type = "button"; b.title = label; b.setAttribute("aria-label", label); b.setAttribute("aria-pressed", "false");
+    const b = el("button", "btn btn--ghost ws-tipedit__tog"); b.type = "button"; b.title = label; b.setAttribute("aria-label", label); b.setAttribute("aria-pressed", "false");
     if (typeof glyph === "string") b.textContent = glyph; else b.append(glyph);
     b.addEventListener("click", onClick); return b;
   };
   const font = select("Font", [["", "Default font"], ...TIP_FONTS], (v) => patch({ font: v || undefined }));
   const size = select("Font size", [["", "Auto"], ...TIP_SIZES.map((s) => [String(s), `${s}px`])], (v) => patch({ size: v ? Number(v) : undefined }));
   const flag = (key, label, glyph, cls) => { const b = toggle(label, glyph, () => toggleFlag(key)); b.classList.add(cls); return b; };
-  const bold = flag("bold", "Bold", "B", "tipdlg__tog--b"), italic = flag("italic", "Italic", "I", "tipdlg__tog--i"), underline = flag("underline", "Underline", "U", "tipdlg__tog--u");
-  const styleGroup = el("div", "tipdlg__group"); styleGroup.setAttribute("role", "group"); styleGroup.setAttribute("aria-label", "Text style"); styleGroup.append(bold, italic, underline);
+  const bold = flag("bold", "Bold", "B", "ws-tipedit__tog--b"), italic = flag("italic", "Italic", "I", "ws-tipedit__tog--i"), underline = flag("underline", "Underline", "U", "ws-tipedit__tog--u");
+  const styleGroup = el("div", "ws-tipedit__group"); styleGroup.setAttribute("role", "group"); styleGroup.setAttribute("aria-label", "Text style"); styleGroup.append(bold, italic, underline);
   const colour = select("Colour", [["", "Auto colour"], ...Object.keys(TIP_COLOURS).map((k) => [k, TIP_COLOUR_LABELS[k]])], (v) => patch({ color: v || undefined }));
   const aligns = ["left", "center", "right"].map((a) => { const b = toggle(`Align ${a}`, icon(`align-${a}`, { size: 16 }), () => patch({ align: a === "left" ? undefined : a })); b.dataset.align = a; return b; });
-  const alignGroup = el("div", "tipdlg__group"); alignGroup.setAttribute("role", "group"); alignGroup.setAttribute("aria-label", "Alignment"); alignGroup.append(...aligns);
+  const alignGroup = el("div", "ws-tipedit__group"); alignGroup.setAttribute("role", "group"); alignGroup.setAttribute("aria-label", "Alignment"); alignGroup.append(...aligns);
   // Insert ▾: the drawn chart's fields, read when the menu opens
-  const insertWrap = el("div", "tipdlg__insert");
-  const insertBtn = el("button", "btn tipdlg__insertbtn"); insertBtn.type = "button";
+  const insertWrap = el("div", "ws-tipedit__insert");
+  const insertBtn = el("button", "btn ws-tipedit__insertbtn"); insertBtn.type = "button";
   insertBtn.append(el("span", null, "Insert"), icon("chevron", { size: 16 })); insertBtn.setAttribute("aria-haspopup", "menu"); insertBtn.setAttribute("aria-expanded", "false");
-  const menu = el("div", "menu__list menu__list--start tipdlg__menu"); menu.setAttribute("role", "menu"); menu.setAttribute("aria-label", "Insert a field"); menu.hidden = true;
+  const menu = el("div", "menu__list menu__list--start ws-tipedit__menu"); menu.setAttribute("role", "menu"); menu.setAttribute("aria-label", "Insert a field"); menu.hidden = true;
   insertWrap.append(insertBtn, menu);
-  const clear = el("button", "btn btn--ghost tipdlg__tog"); clear.type = "button"; clear.title = "Clear formatting"; clear.setAttribute("aria-label", "Clear formatting of the selected lines"); clear.append(icon("clear-format", { size: 16 }));
+  const clear = el("button", "btn btn--ghost ws-tipedit__tog"); clear.type = "button"; clear.title = "Clear formatting"; clear.setAttribute("aria-label", "Clear formatting of the selected lines"); clear.append(icon("clear-format", { size: 16 }));
   clear.addEventListener("click", () => patch(Object.fromEntries(STYLE_KEYS.map((k) => [k, undefined]))));
   bar.append(font, size, styleGroup, colour, alignGroup, insertWrap, clear);
 
   // --- the text editor -----------------------------------------------------------------------------------------------------------
-  const doc = el("div", "tipdlg__doc");
+  const doc = el("div", "ws-tipedit__doc");
   doc.contentEditable = "true"; doc.spellcheck = false;
   doc.setAttribute("role", "textbox"); doc.setAttribute("aria-multiline", "true"); doc.setAttribute("aria-label", "Tooltip text");
   doc.dataset.placeholder = "Text and <field> tokens — empty keeps the automatic tooltip";
-  const tools = el("div", "tipdlg__tools");
-  const count = el("span", "tipdlg__count");
-  tools.append(count);
-  const err = el("div", "tipdlg__error"); err.setAttribute("role", "alert");
+  const count = el("span", "ws-tipedit__count");
+  const err = el("div", "ws-tipedit__error"); err.setAttribute("role", "alert");
 
   // --- behaviour ---------------------------------------------------------------------------------------------------------------
-  const behav = el("div", "tipdlg__behaviour"); behav.setAttribute("role", "group"); behav.setAttribute("aria-label", "Tooltip behaviour");
+  const behav = el("div", "ws-tipedit__behaviour");
 
-  // --- more: field formats, tooltip-card fields ------------------------------------------------------------------------------
-  const fmtBox = el("details", "tipdlg__more tipdlg__formats");
+  // --- more: field formats, tooltip-card fields, reset ------------------------------------------------------------------------
+  const fmtBox = el("details", "ws-tipedit__more ws-tipedit__formats");
   const fmtSum = el("summary"); fmtSum.append(icon("chevron", { size: 14 }), el("span", null, "Field formats"));
-  const fmtBody = el("div", "tipdlg__morebody"); fmtBody.setAttribute("role", "group"); fmtBody.setAttribute("aria-label", "Field formats");
+  const fmtBody = el("div", "ws-tipedit__morebody"); fmtBody.setAttribute("role", "group"); fmtBody.setAttribute("aria-label", "Field formats");
   fmtBox.append(fmtSum, fmtBody);
-  const cardBox = el("details", "tipdlg__more tipdlg__cardfields");
+  const cardBox = el("details", "ws-tipedit__more ws-tipedit__cardfields");
   const cardSum = el("summary"); cardSum.append(icon("chevron", { size: 14 }), el("span", null, "Fields on the Tooltip card"));
-  const cardBody = el("div", "tipdlg__morebody");
+  const cardBody = el("div", "ws-tipedit__morebody");
   cardBox.append(cardSum, cardBody);
+  const reset = el("button", "btn ws-tipedit__reset", "Reset"); reset.type = "button"; reset.title = "Back to the automatic tooltip and the default behaviour";
 
-  const preview = el("div", "tipdlg__preview"); preview.setAttribute("aria-label", "Tooltip preview"); preview.hidden = true;
-  body.append(bar, doc, tools, err, behav, fmtBox, cardBox, preview);
-
-  const foot = el("div", "dialog__foot");
-  const reset = makeButton("Reset", "btn tipdlg__reset"), previewBtn = makeButton("Preview", "btn"), cancel = makeButton("Cancel", "btn"), ok = makeButton("OK", "btn btn--primary");
-  reset.title = "Back to the automatic tooltip and the default behaviour";
-  previewBtn.setAttribute("aria-pressed", "false"); previewBtn.setAttribute("aria-controls", `tipdlg-preview-${n}`); preview.id = `tipdlg-preview-${n}`;
-  foot.append(reset, previewBtn, cancel, ok);
-  dlg.append(title, body, foot);
+  const preview = el("div", "ws-tipedit__preview"); preview.setAttribute("aria-label", "Tooltip preview"); preview.setAttribute("role", "group");
+  const behavSec = section("Behaviour", [behav]);
+  root.append(section("Text", [bar, doc, count, err]), section("Preview", [preview]), behavSec, section("More", [fmtBox, cardBox, reset]));
 
   // --- the model <-> the surface -------------------------------------------------------------------------------------------------------
   const known = () => new Map(fields().map((f) => [f.name, f]));
-  const sample = () => sampleLookup(fields(), checkTooltipFormats(formats).value, format);
+  const sample = () => sampleLookup(fields(), checkTooltipFormats(formats).value, curFormat());
   const totalLen = () => lines.map((l) => l.text).join("\n").length;
   const lineEls = () => [...doc.children];
   const lineEl = (l, i) => { // a block per line, drawn in its own format (whitelisted values only); an empty one holds a <br> so it keeps its height
@@ -115,7 +113,7 @@ export function openTooltipDialog({ text, style, formats: formats0, format: form
   };
   const render = () => { doc.replaceChildren(...lines.map(lineEl)); afterChange(); };
   const styleAll = () => { lineEls().forEach((d, i) => { if (lines[i]) d.style.cssText = lineStyleCss(lines[i]); }); afterChange(); };
-  const afterChange = () => { doc.toggleAttribute("data-empty", lines.length === 1 && !lines[0].text); syncBar(); refresh(); };
+  const afterChange = () => { doc.toggleAttribute("data-empty", lines.length === 1 && !lines[0].text); syncBar(); refresh(); schedule(); };
 
   // positions: a DOM point -> { line, off }, and back
   const lineOf = (node) => { let x = node; while (x && x.parentNode !== doc) x = x.parentNode; return x ? lineEls().indexOf(x) : -1; };
@@ -168,11 +166,30 @@ export function openTooltipDialog({ text, style, formats: formats0, format: form
     const unknown = used.filter((f) => look(f) === undefined);
     count.textContent = `${totalLen()}/${LIMITS.tooltipText}${unknown.length ? ` · not in this view: ${unknown.map((f) => `<${f}>`).join(" ")}` : ""}`;
     const fmtCheck = checkTooltipFormats(pruneFormats(formats, used));
-    const bad = !fmtCheck.ok ? fmtCheck.error : totalLen() > LIMITS.tooltipText ? `Tooltip text must be at most ${LIMITS.tooltipText} characters.`
+    bad = !fmtCheck.ok ? fmtCheck.error : totalLen() > LIMITS.tooltipText ? `Tooltip text must be at most ${LIMITS.tooltipText} characters.`
       : lines.length > LIMITS.tooltipLines ? `A styled tooltip has at most ${LIMITS.tooltipLines} lines — remove ${lines.length - LIMITS.tooltipLines} to apply.` : "";
     err.textContent = bad;
-    ok.disabled = !!bad;
   };
+
+  // --- committing: the text group (text, styles, field formats) --------------------------------------------------------------------------
+  const textGroup = () => {
+    const r = fromLines(lines);
+    return { text: r.text, style: r.style, formats: r.text ? checkTooltipFormats(pruneFormats(formats, parseTooltip(r.text).fields)).value : null };
+  };
+  let committedKey = JSON.stringify(textGroup());           // what the sheet holds now: an unchanged draft commits nothing, so a re-render or a blur never loops back into a commit
+  const schedule = () => { clearTimeout(timer); timer = setTimeout(() => flush(), COMMIT_DELAY); };
+  /** Commit the text group now (a pending edit, or on leaving). Never while composing (unless `final`: the flyout is closing), never an invalid draft. */
+  function flush({ final = false } = {}) {
+    clearTimeout(timer); timer = 0;
+    const g = textGroup(), key = JSON.stringify(g);
+    if (key === committedKey) return;
+    if (composing && !final) { schedule(); return; }
+    if (bad) return;
+    committedKey = key;
+    commit(g);
+  }
+  /** Why the draft would be lost if the editor were dropped now: "" unless it is invalid and differs from what the sheet holds (the owner says so before it destroys the editor). */
+  const unsaved = () => (bad && JSON.stringify(textGroup()) !== committedKey ? bad : "");
 
   // The browser's own edits are cancelled and done on the model. Input methods (composition) are the one exception: the browser edits the line, `input` reads it back.
   const readDom = () => {
@@ -215,7 +232,8 @@ export function openTooltipDialog({ text, style, formats: formats0, format: form
     edit(a, z, text);
   });
   doc.addEventListener("input", readDom); // only reached for what beforeinput let through (composition)
-  doc.addEventListener("compositionend", readDom);
+  doc.addEventListener("compositionstart", () => { composing = true; });
+  doc.addEventListener("compositionend", () => { composing = false; readDom(); });
   doc.addEventListener("keydown", (e) => {
     const mod = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
     if (mod && k === "z") { e.preventDefault(); restore(e.shiftKey ? future : past, e.shiftKey ? past : future); }
@@ -231,6 +249,7 @@ export function openTooltipDialog({ text, style, formats: formats0, format: form
   });
   const onSel = () => { const s = readSel(); if (s) { sel = s; syncBar(); } }; // the toolbar and Insert keep the last selection made in the editor
   document.addEventListener("selectionchange", onSel);
+  root.addEventListener("focusout", (e) => { if (!root.contains(e.relatedTarget)) flush(); }); // leaving the editor (the chart, another tile, the window) commits a pending edit
 
   // --- Insert menu --------------------------------------------------------------------------------------------------------------
   const closeMenu = () => { menu.hidden = true; insertBtn.setAttribute("aria-expanded", "false"); };
@@ -238,13 +257,13 @@ export function openTooltipDialog({ text, style, formats: formats0, format: form
     menu.replaceChildren();
     const list = fields();
     for (const f of list) {
-      const b = el("button", "menu__item tipdlg__item"); b.type = "button"; b.setAttribute("role", "menuitem"); b.title = `Insert <${f.name}>`; b.append(el("span", "menu__label", f.name));
+      const b = el("button", "menu__item ws-tipedit__item"); b.type = "button"; b.setAttribute("role", "menuitem"); b.title = `Insert <${f.name}>`; b.append(el("span", "menu__label", f.name));
       b.addEventListener("click", () => { closeMenu(); current(); edit(sel.start, sel.end, `<${f.name}>`); }); // over the selection, or at the caret
       menu.append(b);
     }
-    if (!list.length) menu.append(el("span", "tipdlg__note", "Add fields to the view to insert them."));
+    if (!list.length) menu.append(el("span", "ws-tipedit__note", "Add fields to the view to insert them."));
     menu.hidden = false; insertBtn.setAttribute("aria-expanded", "true");
-    const wrap = insertWrap.getBoundingClientRect(), room = bar.getBoundingClientRect(); // starts under the button, shifted left only as far as keeps the list within the toolbar's width, the body's content edges (the toolbar wraps, so the button can be anywhere in a row)
+    const wrap = insertWrap.getBoundingClientRect(), room = bar.getBoundingClientRect(); // starts under the button, shifted left only as far as keeps the list within the toolbar's width (the toolbar wraps, so the button can be anywhere in a row)
     menu.style.left = `${Math.max(room.left, Math.min(wrap.left, room.right - menu.offsetWidth)) - wrap.left}px`;
     menu.querySelector("button")?.focus();
   };
@@ -254,37 +273,47 @@ export function openTooltipDialog({ text, style, formats: formats0, format: form
     if (e.key === "ArrowDown") { e.preventDefault(); items[(at + 1) % items.length]?.focus(); }
     else if (e.key === "ArrowUp") { e.preventDefault(); items[(at - 1 + items.length) % items.length]?.focus(); }
   });
-  dlg.addEventListener("pointerdown", (e) => { if (!menu.hidden && !insertWrap.contains(e.target)) closeMenu(); });
+  root.addEventListener("keydown", (e) => { // Esc closes the open Insert list first; the flyout's own Esc (close, which commits) takes the next one
+    if (e.key === "Escape" && !menu.hidden) { e.preventDefault(); e.stopPropagation(); closeMenu(); insertBtn.focus(); }
+  });
+  const onPointer = (e) => { if (!menu.hidden && !insertWrap.contains(e.target)) closeMenu(); };
+  document.addEventListener("pointerdown", onPointer);
 
-  // --- behaviour (Show tooltips + mode, command buttons): the Format panel's rules (tooltip-behaviour-model.js), read off the draft ------------------------
+  // --- behaviour (Show tooltips + mode, command buttons): the Format panel's rules (tooltip-behaviour-model.js), committed as they change ---------------------------
+  let behavKey = null, cardKey = null; // what is drawn: a render that changes neither leaves the controls alone (an open select would close)
   const drawBehaviour = () => {
+    const b = state().behaviour, format = curFormat();
+    const specs = b ? tooltipControlSpecs({ type: b.type, format, gate: b.gate ?? null, note: b.note ?? null }) : [];
+    const key = JSON.stringify(specs);
+    if (key === behavKey) return;
+    behavKey = key;
+    const had = behav.contains(document.activeElement) ? document.activeElement.dataset.key : null; // a rebuild keeps the focused control focused
     behav.replaceChildren();
-    const specs = behaviour ? tooltipControlSpecs({ type: behaviour.type, format, gate: behaviour.gate ?? null, note: behaviour.note ?? null }) : [];
-    behav.hidden = !specs.length;
-    const set = (key, v) => { format = withTooltipSetting(format, key, v); drawBehaviour(); };
+    behavSec.hidden = !specs.length;
+    const set = (key, v) => { commit({ format: withTooltipSetting(curFormat(), key, v) }); drawBehaviour(); };
     const note = (c, ...nodes) => { const why = c.disabled ?? c.note; if (why) for (const x of nodes) { x.title = why; x.setAttribute("aria-description", why); } };
     const check = (c) => {
-      const lab = el("label", "tipdlg__check"), box = el("input"); box.type = "checkbox"; box.checked = !!c.value; box.disabled = !!c.disabled;
+      const lab = el("label", "ws-tipedit__check"), box = el("input"); box.type = "checkbox"; box.checked = !!c.value; box.disabled = !!c.disabled; box.dataset.key = c.key;
       box.addEventListener("change", () => set(c.key, box.checked));
       lab.append(box, el("span", null, SHOWN_LABEL[c.key] ?? c.label)); note(c, box, lab);
       return lab;
     };
     for (const c of specs) {
       if (c.kind === "check") {
-        const row = el("div", "tipdlg__brow"); row.append(check(c));
+        const row = el("div", "ws-tipedit__brow"); row.append(check(c));
         if (c.key === "showTooltips") { // the mode sits beside Show tooltips, as in Tableau's dialog
           const m = specs.find((x) => x.key === "tooltipMode");
-          if (m) { const s = select(m.label, m.choices, (v) => set("tooltipMode", v)); s.value = m.value; s.disabled = !!m.disabled; s.classList.add("tipdlg__mode"); note(m, s); row.append(s); }
+          if (m) { const s = select(m.label, m.choices, (v) => set("tooltipMode", v)); s.value = m.value; s.disabled = !!m.disabled; s.dataset.key = "tooltipMode"; s.classList.add("ws-tipedit__mode"); note(m, s); row.append(s); }
         }
         behav.append(row);
       }
     }
+    if (had) behav.querySelector(`[data-key="${had}"]`)?.focus({ preventScroll: true });
   };
 
   // --- field formats ---------------------------------------------------------------------------------------------------------------
-  let fmtKey = null;
   const fmtSelect = (label, options, value, onChange) => {
-    const s = el("select", "input tipdlg__fsel"); s.setAttribute("aria-label", label);
+    const s = el("select", "input ws-tipedit__fsel"); s.setAttribute("aria-label", label);
     for (const [v, t] of options) s.append(new Option(t, v));
     s.value = value; s.addEventListener("change", () => onChange(s.value)); return s;
   };
@@ -292,7 +321,7 @@ export function openTooltipDialog({ text, style, formats: formats0, format: form
     const next = { ...(formats[name] ?? {}), ...p };
     for (const k of Object.keys(next)) if (next[k] === "" || next[k] == null) delete next[k];
     if (Object.keys(next).length) formats = { ...formats, [name]: next }; else { formats = { ...formats }; delete formats[name]; }
-    refresh();
+    refresh(); flush(); // a format is a choice from a list: committed at once
   };
   const drawFormats = (used) => {
     const byName = known();
@@ -304,7 +333,7 @@ export function openTooltipDialog({ text, style, formats: formats0, format: form
     fmtBox.hidden = !rows.length;
     for (const nm of rows) {
       const f = byName.get(nm), cur = formats[nm] ?? {};
-      const row = el("div", "tipdlg__fmt"); row.append(el("span", "tipdlg__fname", `<${nm}>`));
+      const row = el("div", "ws-tipedit__fmt"); row.append(el("span", "ws-tipedit__fname", `<${nm}>`));
       if (f.kind === "measure") {
         row.append(
           fmtSelect(`Number format for ${nm}`, [["", "View format"], ...TIP_NUMBER_FORMATS.map((v) => [v, v[0].toUpperCase() + v.slice(1)])], cur.number ?? "", (v) => setFmt(nm, { number: v || null })),
@@ -317,35 +346,39 @@ export function openTooltipDialog({ text, style, formats: formats0, format: form
     }
   };
 
-  // --- the fields held on the Tooltip card: each can be removed (the card's drop target no longer lists them) ---------------------------------------
+  // --- the fields held on the Tooltip card: each can be removed at once (the card's drop target no longer lists them) -----------------------------------
   const drawCard = () => {
+    const names = state().markFields ?? [];
+    const key = JSON.stringify(names);
+    if (key === cardKey) return;
+    cardKey = key;
     cardBody.replaceChildren();
-    const left = markFields.map((name, i) => [name, i]).filter(([, i]) => !dropped.has(i));
-    cardBox.hidden = !left.length;
-    for (const [name, i] of left) {
-      const row = el("div", "tipdlg__cardrow"); row.append(el("span", "tipdlg__fname", name));
-      const rm = el("button", "btn btn--ghost tipdlg__mv"); rm.type = "button"; rm.title = `Remove ${name}`; rm.setAttribute("aria-label", `Remove ${name} from the Tooltip card`); rm.append(icon("close", { size: 14 }));
-      rm.addEventListener("click", () => { dropped.add(i); drawCard(); cardBox.querySelector("button")?.focus(); });
+    cardBox.hidden = !names.length;
+    names.forEach((name, i) => {
+      const row = el("div", "ws-tipedit__cardrow"); row.append(el("span", "ws-tipedit__fname", name));
+      const rm = el("button", "btn btn--ghost ws-tipedit__mv"); rm.type = "button"; rm.title = `Remove ${name}`; rm.setAttribute("aria-label", `Remove ${name} from the Tooltip card`); rm.append(icon("close", { size: 14 }));
+      rm.addEventListener("click", () => { commit({ dropMarkFields: [i] }); drawCard(); cardBox.querySelector("button")?.focus(); });
       row.append(rm); cardBody.append(row);
-    }
+    });
   };
 
-  previewBtn.addEventListener("click", () => { preview.hidden = !preview.hidden; previewBtn.setAttribute("aria-pressed", String(!preview.hidden)); });
-  const finish = () => { document.removeEventListener("selectionchange", onSel); closeDialog(dlg); setTimeout(() => onClose?.(), 0); };
-  cancel.addEventListener("click", finish);
-  dlg.addEventListener("cancel", (e) => { e.preventDefault(); if (!menu.hidden) { closeMenu(); insertBtn.focus(); return; } finish(); }); // Esc closes the open menu first, then discards
-  reset.addEventListener("click", () => {
-    push(); lines = [{ text: "" }]; formats = {}; fmtKey = null;
+  reset.addEventListener("click", async () => {
+    if (!(await confirmDestructive("Reset the tooltip text, its formats and its behaviour to the automatic tooltip?", { confirmText: "Reset" }))) { doc.focus({ preventScroll: true }); return; }
+    clearTimeout(timer);
+    push(); lines = [{ text: "" }]; formats = {}; fmtKey = null; render(); setSel({ line: 0, off: 0 });
+    let format = curFormat();
     for (const [k, v] of [["showTooltips", true], ["tooltipButtons", false], ["tooltipMode", "responsive"]]) format = withTooltipSetting(format, k, v);
-    drawBehaviour(); render(); setSel({ line: 0, off: 0 });
+    committedKey = JSON.stringify(textGroup());
+    commit({ text: "", style: null, formats: null });
+    commit({ format });
+    drawBehaviour();
   });
-  ok.addEventListener("click", () => {
-    if (ok.disabled) return;
-    const r = fromLines(lines);
-    onApply({ ...r, formats: r.text ? checkTooltipFormats(pruneFormats(formats, parseTooltip(r.text).fields)).value : null, format, dropMarkFields: [...dropped].sort((a, b) => a - b) });
-    finish();
-  });
-  document.body.append(dlg);
-  openDialog(dlg);
-  drawBehaviour(); drawCard(); render(); setSel(end);
+
+  /** Re-read what the sheet owns (a commit, a drop on the tile, the Format panel, the chart finishing a draw) without touching the editor's text, caret or history. */
+  function sync() { fmtKey = null; drawBehaviour(); drawCard(); refresh(); }
+  function focus() { setSel(sel.start, sel.end); }
+  function destroy() { clearTimeout(timer); document.removeEventListener("selectionchange", onSel); document.removeEventListener("pointerdown", onPointer); }
+
+  render(); drawBehaviour(); drawCard();
+  return { root, sync, focus, flush, unsaved, destroy };
 }

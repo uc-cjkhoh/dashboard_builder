@@ -40,8 +40,7 @@ export function flyoutSections(tool, i) {
       add("Marks to Label", i.labelMarks ? ["labelMarks"] : [], true);
       add("Options", i.labelChart ? ["labelOverlap"] : [], true);
       break;
-    case "tooltip":
-      add("Text", ["text"]); // one button: the Edit tooltip modal owns the text, its format and the behaviour
+    case "tooltip": // no sections here: the whole editor (text, preview, behaviour, formats) is built by tooltip-editor.js and kept in place across renders (dashboards.js tooltipFly)
       break;
     case "path":
       add("Line", [...(linesTakeStyle(i.chartType) ? ["lineStyle"] : []), ...(i.lineKeys.includes("linePattern") ? ["linePattern"] : [])]);

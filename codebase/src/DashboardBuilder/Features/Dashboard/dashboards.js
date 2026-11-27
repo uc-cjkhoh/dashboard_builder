@@ -33,7 +33,7 @@ import { templateError, buildActionUrl, applyParamAction, MAX_LABEL, MAX_TEMPLAT
 import { DATE_PART_CHOICES, stepPart } from "./date-parts.js";
 import { CALC_CHOICES, ALONG_CHOICES, WINDOW_CHOICES, RANK_ORDERS, RANK_TIES, isCalc, calcName } from "./table-calc.js";
 import { checkTooltipText } from "./tooltip-model.js";
-import { openTooltipDialog } from "./tooltip-dialog.js";
+import { createTooltipEditor } from "./tooltip-editor.js";
 import { checkTooltipStyle } from "./tooltip-style.js";
 import { checkTooltipFormats } from "./tooltip-formats.js";
 import { fieldColorKey } from "./colour-model.js";
@@ -811,6 +811,7 @@ export function initDashboards() {
     const children = [columns, rows];
     const active = tools.find((t) => t.key === openTool);
     const toolEl = calcFor ? calcPanel(dash, s) : choicesFor ? choicesPanel(dash, s) : null; // inline editors under the shelves
+    if (tipFly && (openTool !== "tooltip" || tipFly.sheet !== s || toolEl)) disposeTipFly();
     const flyEl = !toolEl && active ? toolPanel(dash, s, active) : null;                    // the open mark tool's flyout
     if (toolEl) children.push(toolEl);
     // Active-interaction chips (thin status bars for live drill / pages / click-selection state).
@@ -2494,6 +2495,7 @@ export function initDashboards() {
   const filtersInFly = (s) => openTool === "filters" && !calcFor && !choicesFor && s.showFilterCards !== false;
   // The editor panel for the open tool: its title, the field pills it holds over a drop zone, then its own editor / note.
   function toolPanel(dash, s, tool) {
+    if (tool.key === "tooltip" && tipFly?.sheet === s && tipFly.panel) return tipFly.panel; // the same nodes, so the editor inside is never detached (its caret and selection survive a commit)
     const panel = el("div", "ws-toolpanel");
     panel.tabIndex = -1;
     panel.setAttribute("role", "group");
@@ -2507,7 +2509,7 @@ export function initDashboards() {
     close.addEventListener("click", () => closeFly());
     head.append(close);
     panel.append(head);
-    if (tool.noSlot) { if (tool.editor) panel.append(tool.editor); return panel; } // no field slot: the editor is the whole flyout
+    if (tool.noSlot) { if (tool.editor) panel.append(tool.editor); if (tool.key === "tooltip" && tipFly?.sheet === s) tipFly.panel = panel; return panel; } // no field slot: the editor is the whole flyout
     const zone = el("div", "ws-toolpanel__zone"); // the dashed drop target holds the pills only (none, no zone)
     for (const p of tool.pills) zone.append(p);
     const slot = slotSection(tool.pills.length ? zone : addFieldRow(tool)); // before a drop the slot is the Drop Field Here row (a target only, no list, D156); once it holds a field, only the pills' zone
@@ -2531,10 +2533,11 @@ export function initDashboards() {
   function mountFly(panel) {
     if (!panel) { toolFly.hidden = true; toolFly.replaceChildren(); return; }
     toolFly.id = "ws-toolfly";
-    toolFly.replaceChildren(panel);
+    toolFly.classList.toggle("ws-toolfly--wide", openTool === "tooltip"); // the Tooltip editor's toolbar and text need more than the 320px the other tiles' controls do
+    if (toolFly.firstElementChild !== panel || toolFly.childElementCount !== 1) toolFly.replaceChildren(panel); // the kept Tooltip panel stays attached: re-attaching it would drop the editor's focus
     toolFly.hidden = false;
     placeFly();
-    if (focusFly) { focusFly = false; panel.focus({ preventScroll: true }); }
+    if (focusFly) { focusFly = false; if (tipFly?.panel === panel) tipFly.editor.focus(); else panel.focus({ preventScroll: true }); }
   }
   // Right of the field pane, level with the open slot but below the shelves, kept inside the worksheet. Reads layout, so it also runs on scroll / resize.
   function placeFly() {
@@ -2546,10 +2549,12 @@ export function initDashboards() {
     const wanted = paneShown ? tile.getBoundingClientRect().top - host.top : 8;
     const belowShelves = shelvesEl.getBoundingClientRect().bottom - host.top + 8; // Columns and Rows stay uncovered: they are drop targets too
     const top = Math.max(8, Math.min(Math.max(wanted, belowShelves), host.height - toolFly.offsetHeight - 8));
+    toolFly.style.maxWidth = `${Math.max(240, host.width - left - 8)}px`; // never past the worksheet's right edge: the wider Tooltip flyout would otherwise run off a narrow window
     toolFly.style.left = `${left}px`;
     toolFly.style.top = `${top}px`;
   }
   function closeFly({ refocus = true } = {}) {
+    tipFly?.editor.flush({ final: true }); // the last typing is committed first (an invalid draft is reverted, with a toast, when the editor is dropped: disposeTipFly)
     const key = openTool;
     openTool = null; focusFly = false; flyFocus = null;
     renderShelves();
@@ -2598,37 +2603,55 @@ export function initDashboards() {
     wrap.append(row);
     return wrap;
   }
-  // The Tooltip flyout holds one button: "Edit tooltip…" opens the Edit Tooltip modal (tooltip-dialog.js), which owns the text, its formatting, the field formats and the behaviour
-  // (Show tooltips, mode, command buttons) as one draft and commits once on OK. The Tooltip card's own fields (marks.tooltip) are listed, and removable, inside that modal.
-  function tooltipEditor(dash, s) {
-    const box = el("div", "ws-tipedit");
-    const modal = el("button", "btn ws-tipedit__modal", "Edit tooltip\u2026");
-    modal.type = "button";
-    modal.addEventListener("click", () => {
-      const marks = s.marks?.tooltip ?? [];
-      const inputs = gateInputs(s);
-      openTooltipDialog({
-        text: s.tooltipText ?? "", style: s.tooltipStyle ?? null, formats: s.tooltipFormats ?? null, format: s.format ?? {},
-        getFields: () => (tooltipCatState.sheet === s ? tooltipCatState.list : []), // read when the Insert menu opens: the chart may finish drawing after the modal did
-        behaviour: CHART_LIKE.has(s.chartType) ? { type: s.chartType, gate: buttonGate(inputs), note: buttonNote(inputs) } : null,
-        markFields: marks.map((f) => nameOf(f)),
-        onClose: () => document.querySelector(".ws-tipedit__modal")?.focus(),
-        onApply: ({ text, style, formats, format, dropMarkFields }) => { // one commit
-          const t = checkTooltipText(text), st = checkTooltipStyle(style), fm = checkTooltipFormats(formats);
-          if (!t.ok || !st.ok || !fm.ok) return;
-          const nextStyle = t.value ? st.value : null, nextFormats = t.value ? fm.value : null;
-          const same = (a, z) => JSON.stringify(a ?? null) === JSON.stringify(z ?? null);
-          if (t.value === (s.tooltipText ?? null) && same(nextStyle, s.tooltipStyle) && same(nextFormats, s.tooltipFormats) && same(format, s.format ?? {}) && !dropMarkFields.length) return; // an untouched OK changes nothing: no redraw, no dirty workbook
-          s.tooltipText = t.value; if (t.value) { if (nextStyle) s.tooltipStyle = nextStyle; else delete s.tooltipStyle; } else { delete s.tooltipStyle; }
-          if (nextFormats) s.tooltipFormats = nextFormats; else delete s.tooltipFormats;
-          s.format = format;
-          for (const i of [...dropMarkFields].sort((x, y) => y - x)) s.marks?.tooltip?.splice(i, 1);
-          commit(dash, s);
-        },
-      });
+  // The Tooltip flyout is the whole Edit Tooltip editor (tooltip-editor.js: text and its formatting, the preview, the behaviour, the field formats, the card's fields), committing live.
+  // A commit re-renders the worksheet and so rebuilds the flyout, which would drop the caret, the selection, an open Insert list and the undo steps: so the editor is built once per
+  // sheet and its panel is kept in place (renderShelves reuses it, mountFly does not re-attach it) for as long as the Tooltip flyout stays open on that sheet.
+  let tipFly = null; // { sheet, dash, editor, panel }
+  function disposeTipFly() { // every way out of the Tooltip flyout ends here: an invalid draft that was never committed is reverted, and says so
+    if (!tipFly) return;
+    const t = tipFly; tipFly = null;
+    const why = t.editor.unsaved();
+    t.editor.destroy();
+    if (why) toast(`Tooltip text not saved: ${why}`);
+  }
+  function tooltipFly(dash, s) {
+    if (tipFly && tipFly.sheet === s) { tipFly.dash = dash; tipFly.editor.sync(); return tipFly; }
+    disposeTipFly();
+    const t = { sheet: s, dash, editor: null, panel: null };
+    t.editor = createTooltipEditor({
+      section: flySection,
+      state: () => { // read each time: the Format panel, a drop on the tile and the chart's drawing all change these under the editor
+        const sh = t.sheet, inputs = gateInputs(sh);
+        return {
+          text: sh.tooltipText ?? "", style: sh.tooltipStyle ?? null, formats: sh.tooltipFormats ?? null, format: sh.format ?? {},
+          fields: tooltipCatState.sheet === sh ? tooltipCatState.list : [],
+          behaviour: CHART_LIKE.has(sh.chartType) ? { type: sh.chartType, gate: buttonGate(inputs), note: buttonNote(inputs) } : null,
+          markFields: (sh.marks?.tooltip ?? []).map((f) => nameOf(f)),
+        };
+      },
+      commit: (patch) => applyTooltip(t.dash, t.sheet, patch),
     });
-    box.append(modal);
-    return box;
+    tipFly = t;
+    return t;
+  }
+  // One group of the editor at a time: the text group (text, styles, field formats), the whole next Format, or one Tooltip-card field to drop. An unchanged group changes nothing: no redraw, no dirty workbook.
+  function applyTooltip(dash, s, p) {
+    const same = (a, z) => JSON.stringify(a ?? null) === JSON.stringify(z ?? null);
+    let changed = false;
+    if ("text" in p) {
+      const t = checkTooltipText(p.text), st = checkTooltipStyle(p.style), fm = checkTooltipFormats(p.formats);
+      if (!t.ok || !st.ok || !fm.ok) return;
+      const nextStyle = t.value ? st.value : null, nextFormats = t.value ? fm.value : null;
+      if (!(t.value === (s.tooltipText ?? null) && same(nextStyle, s.tooltipStyle) && same(nextFormats, s.tooltipFormats))) {
+        s.tooltipText = t.value;
+        if (t.value && nextStyle) s.tooltipStyle = nextStyle; else delete s.tooltipStyle;
+        if (nextFormats) s.tooltipFormats = nextFormats; else delete s.tooltipFormats;
+        changed = true;
+      }
+    }
+    if (p.format && !same(p.format, s.format ?? {})) { s.format = p.format; changed = true; }
+    for (const i of [...(p.dropMarkFields ?? [])].sort((x, y) => y - x)) { s.marks?.tooltip?.splice(i, 1); changed = true; }
+    if (changed) commit(dash, s);
   }
 
   // --- Member colours ---------------------------------------------
@@ -2737,6 +2760,7 @@ export function initDashboards() {
   // Each tile's own controls (marks-flyout-model.js decides which show for this chart type): what Format held for Size, Shape, Label, Tooltip, Path and Dates.
   // Every control keeps its stored key and its commit; only where it lives changed (D155). Returns a flyout editor, or null when the tile has none (the slot alone).
   function tileEditor(dash, s, key) {
+    if (key === "tooltip") return tooltipFly(dash, s).editor.root; // the whole editor, kept in place across renders (tooltipFly)
     const sections = flyoutSections(key, flyoutInputs(s));
     if (!sections.length) return null;
     const f = s.format ?? (s.format = defaultFormat());
@@ -2810,7 +2834,6 @@ export function initDashboards() {
         if (prefersReducedMotion()) { const i = pick.querySelector("select"); i.disabled = true; pick.title = "Play is off while your system asks for reduced motion, so Speed does nothing."; }
         return [flyCtl("pageSpeed", pick)];
       },
-      text: () => [tooltipEditor(dash, s)],
       lineStyle: () => [flyCtl("lineStyle", fmtSelect("Line style", LINE_STYLE_CHOICES, f.lineStyle ?? "straight", (v) => set({ lineStyle: v })))],
       linePattern: () => wired("linePattern", (tmp) => wireLineControls(tmp, s, fmtSelect, replaceFormat, ["linePattern"])), // says why when it does nothing
       period: () => [periodEditor(dash, s)],

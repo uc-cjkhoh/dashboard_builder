@@ -191,11 +191,13 @@ try {
     must(await inFormat('Legend') && await inFormat('Number'), 'Format lost its own controls');
     must(!(await quiet('size')), 'Size is quiet on a bar');
   });
-  await check('Tooltip: one Text section holding the Edit tooltip button; the behaviour controls live in its modal', async () => {
+  await check('Tooltip: the whole editor is the flyout: Text, Preview, Behaviour and More sections, no Edit tooltip button; the behaviour controls live in it', async () => {
     await openTile('tooltip');
-    must(J(await ev(`[...${fly}.querySelectorAll('.ws-flyedit__group')].map((g) => g.dataset.section)`)) === J(['Text']), 'sections ' + J(await ev(`[...${fly}.querySelectorAll('.ws-flyedit__group')].map((g) => g.dataset.section)`)));
-    must(J(await ev(`[...${fly}.querySelectorAll('.ws-flyedit button')].map((x) => x.textContent.trim())`)) === J(['Edit tooltip…']), 'the one button');
-    for (const l of ['Show tooltips', 'Command buttons', 'Tooltip mode']) must(!(await inFly(l)), l + ' is in the flyout');
+    const sections = await ev(`[...${fly}.querySelectorAll('.ws-flyedit__group')].map((g) => g.dataset.section)`);
+    must(J(sections) === J(['Text', 'Preview', 'Behaviour', 'More']), 'sections ' + J(sections));
+    must(!(await ev(`[...${fly}.querySelectorAll('button')].some((x) => x.textContent.trim() === 'Edit tooltip…')`)), 'an Edit tooltip button is left');
+    must(J(await ev(`[...${fly}.querySelectorAll('.ws-tipedit__check')].map((x) => x.textContent.trim())`)) === J(['Show tooltips', 'Include command buttons']), 'the behaviour checkboxes');
+    must(await ev(`!!${fly}.querySelector('.ws-tipedit__mode')`), 'the mode select');
   });
   await check('Pie: Shape and Path stay quiet and open the slot alone; Size lights with the Size meter; Angle lights', async () => {
     await chartType('Pie');
